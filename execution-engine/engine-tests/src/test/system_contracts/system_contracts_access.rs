@@ -146,8 +146,7 @@ fn should_overwrite_system_contract_uref_as_system() {
         .exec_error_message(0)
         .expect("should execute pos overwrite with error");
 
-    let type_mismatch =
-        TypeMismatch::new("Value::Contract".to_string(), "Value::String".to_string());
+    let type_mismatch = TypeMismatch::new("Contract".to_string(), "String".to_string());
     let expected_error = execution::Error::TypeMismatch(type_mismatch);
     assert_eq!(error_msg, expected_error.to_string());
 }

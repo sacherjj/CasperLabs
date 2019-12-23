@@ -8,6 +8,7 @@ use failure::Fail;
 use crate::{
     bytesrepr::{self, FromBytes, ToBytes},
     system_contracts::mint::purse_id::PurseIdError,
+    value::{CLType, CLTyped},
 };
 
 /// An enum error that is capable of carrying a value across FFI-Host
@@ -47,6 +48,12 @@ impl From<PurseIdError> for Error {
                 Error::InvalidAccessRights
             }
         }
+    }
+}
+
+impl CLTyped for Error {
+    fn cl_type() -> CLType {
+        CLType::U8
     }
 }
 

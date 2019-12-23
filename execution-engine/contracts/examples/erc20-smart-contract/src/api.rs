@@ -2,9 +2,9 @@ use alloc::string::String;
 
 use contract_ffi::{
     bytesrepr::FromBytes,
-    contract_api::{account::PublicKey, runtime, ContractRef},
+    contract_api::{runtime, ContractRef},
     unwrap_or_revert::UnwrapOrRevert,
-    value::{account::PurseId, U512},
+    value::{account::PublicKey, CLTyped, U512},
 };
 
 use crate::error::Error;
@@ -43,7 +43,7 @@ pub enum Api {
     Sell(PurseId, U512),
 }
 
-fn get_arg<T: FromBytes>(i: u32) -> T {
+fn get_arg<T: CLTyped + FromBytes>(i: u32) -> T {
     runtime::get_arg(i)
         .unwrap_or_revert_with(Error::missing_argument(i))
         .unwrap_or_revert_with(Error::invalid_argument(i))

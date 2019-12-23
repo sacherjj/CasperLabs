@@ -7,7 +7,7 @@ use alloc::vec;
 use contract_ffi::{
     contract_api::{runtime, system, Error},
     unwrap_or_revert::UnwrapOrRevert,
-    value::uint::U512,
+    value::U512,
 };
 
 const UNBOND_METHOD_NAME: &str = "unbond";
@@ -28,5 +28,5 @@ pub extern "C" fn call() {
         .unwrap_or_revert_with(Error::MissingArgument)
         .unwrap_or_revert_with(Error::InvalidArgument);
 
-    runtime::call_contract(pos_pointer, &(UNBOND_METHOD_NAME, unbond_amount), &vec![])
+    runtime::call_contract(pos_pointer, (UNBOND_METHOD_NAME, unbond_amount), vec![])
 }

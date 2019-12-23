@@ -4,8 +4,8 @@ use lmdb::DatabaseFlags;
 use proptest::{collection::vec, prelude::proptest};
 use tempfile::tempdir;
 
-use contract_ffi::{bytesrepr::ToBytes, key::Key, value::Value};
-use engine_shared::newtypes::Blake2bHash;
+use contract_ffi::{bytesrepr::ToBytes, key::Key};
+use engine_shared::{newtypes::Blake2bHash, stored_value::StoredValue};
 
 use crate::{
     store::tests as store_tests,
@@ -27,7 +27,7 @@ fn get_range() -> RangeInclusive<usize> {
     RangeInclusive::new(start, end)
 }
 
-fn in_memory_roundtrip_succeeds(inputs: Vec<Trie<Key, Value>>) -> bool {
+fn in_memory_roundtrip_succeeds(inputs: Vec<Trie<Key, StoredValue>>) -> bool {
     use crate::{
         transaction_source::in_memory::InMemoryEnvironment,
         trie_store::in_memory::InMemoryTrieStore,
@@ -36,7 +36,7 @@ fn in_memory_roundtrip_succeeds(inputs: Vec<Trie<Key, Value>>) -> bool {
     let env = InMemoryEnvironment::new();
     let store = InMemoryTrieStore::new(&env, None);
 
-    let inputs: BTreeMap<Blake2bHash, Trie<Key, Value>> = inputs
+    let inputs: BTreeMap<Blake2bHash, Trie<Key, StoredValue>> = inputs
         .into_iter()
         .map(|trie| (Blake2bHash::new(&trie.to_bytes().unwrap()), trie))
         .collect();
@@ -44,14 +44,14 @@ fn in_memory_roundtrip_succeeds(inputs: Vec<Trie<Key, Value>>) -> bool {
     store_tests::roundtrip_succeeds(&env, &store, inputs).unwrap()
 }
 
-fn lmdb_roundtrip_succeeds(inputs: Vec<Trie<Key, Value>>) -> bool {
+fn lmdb_roundtrip_succeeds(inputs: Vec<Trie<Key, StoredValue>>) -> bool {
     use crate::{transaction_source::lmdb::LmdbEnvironment, trie_store::lmdb::LmdbTrieStore};
 
     let tmp_dir = tempdir().unwrap();
     let env = LmdbEnvironment::new(&tmp_dir.path().to_path_buf(), *TEST_MAP_SIZE).unwrap();
     let store = LmdbTrieStore::new(&env, None, DatabaseFlags::empty()).unwrap();
 
-    let inputs: BTreeMap<Blake2bHash, Trie<Key, Value>> = inputs
+    let inputs: BTreeMap<Blake2bHash, Trie<Key, StoredValue>> = inputs
         .into_iter()
         .map(|trie| (Blake2bHash::new(&trie.to_bytes().unwrap()), trie))
         .collect();

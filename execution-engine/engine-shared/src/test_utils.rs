@@ -9,9 +9,11 @@ use parity_wasm::{
 use contract_ffi::{
     key::Key,
     uref::{AccessRights, URef},
-    value::{account::PurseId, Account, Value},
+    value::account::PurseId,
 };
 use engine_wasm_prep::wasm_costs::WasmCosts;
+
+use crate::{account::Account, stored_value::StoredValue};
 
 /// Returns the serialized form of an empty Wasm Module
 pub fn create_empty_wasm_module_bytes() -> Vec<u8> {
@@ -24,10 +26,10 @@ pub fn create_empty_wasm_module_bytes() -> Vec<u8> {
 }
 
 /// Returns an account value paired with its key
-pub fn mocked_account(account_addr: [u8; 32]) -> Vec<(Key, Value)> {
+pub fn mocked_account(account_addr: [u8; 32]) -> Vec<(Key, StoredValue)> {
     let purse_id = PurseId::new(URef::new([0u8; 32], AccessRights::READ_ADD_WRITE));
     let account = Account::create(account_addr, BTreeMap::new(), purse_id);
-    vec![(Key::Account(account_addr), Value::Account(account))]
+    vec![(Key::Account(account_addr), StoredValue::Account(account))]
 }
 
 pub fn wasm_costs_mock() -> WasmCosts {

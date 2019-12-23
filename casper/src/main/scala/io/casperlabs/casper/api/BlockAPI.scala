@@ -25,6 +25,7 @@ import io.casperlabs.storage.deploy.{DeployStorage, DeployStorageReader}
 import cats.Applicative
 import io.casperlabs.casper.MultiParentCasperImpl.Broadcaster
 import io.casperlabs.mempool.DeployBuffer
+import io.casperlabs.storage.dag.DagStorage
 
 object BlockAPI {
 
@@ -125,7 +126,11 @@ object BlockAPI {
           } yield result
 
         case false =>
-          raise(Aborted("There is another propose in progress."))
+          raise(
+            Aborted(
+              "There is another propose in progress, or node hasn't synced yet. Try again later."
+            )
+          )
       }
     }
   }
@@ -164,9 +169,10 @@ object BlockAPI {
         }
       }
 
-  def getBlockInfoWithDeploys[F[_]: MonadThrowable: MultiParentCasperRef: BlockStorage: DeployStorage](
+  def getBlockInfoWithDeploys[F[_]: MonadThrowable: MultiParentCasperRef: BlockStorage: DeployStorage: DagStorage](
       blockHash: BlockHash,
-      maybeDeployView: Option[DeployInfo.View]
+      maybeDeployView: Option[DeployInfo.View],
+      blockView: BlockInfo.View
   ): F[BlockAndMaybeDeploys] =
     for {
       blockInfo <- BlockStorage[F]
@@ -179,37 +185,55 @@ object BlockAPI {
                           )
                       )(_.pure[F])
                     )
-      withDeploys <- maybeWithDeploys[F](blockInfo, maybeDeployView)
+      withDeploys <- withViews[F](blockInfo, maybeDeployView, blockView)
     } yield withDeploys
 
-  def getBlockInfoWithDeploysOpt[F[_]: Monad: BlockStorage: DeployStorage](
+  def getBlockInfoWithDeploysOpt[F[_]: Monad: BlockStorage: DeployStorage: DagStorage](
       blockHashBase16: String,
-      maybeDeployView: Option[DeployInfo.View]
+      maybeDeployView: Option[DeployInfo.View],
+      blockView: BlockInfo.View
   ): F[Option[BlockAndMaybeDeploys]] =
     BlockStorage[F]
       .getBlockInfoByPrefix(blockHashBase16)
       .flatMap(
         _.traverse(
-          maybeWithDeploys[F](_, maybeDeployView)
+          withViews[F](_, maybeDeployView, blockView)
         )
       )
 
-  private def maybeWithDeploys[F[_]: Applicative: DeployStorage](
+  private def withViews[F[_]: Monad: DeployStorage: DagStorage](
       blockInfo: BlockInfo,
-      maybeDeployView: Option[DeployInfo.View]
-  ): F[BlockAndMaybeDeploys] =
-    maybeDeployView.fold((blockInfo -> none[List[Block.ProcessedDeploy]]).pure[F]) { implicit dv =>
-      DeployStorageReader[F]
-        .getProcessedDeploys(blockInfo.getSummary.blockHash)
-        .map { deploys =>
-          blockInfo -> deploys.some
-        }
+      maybeDeployView: Option[DeployInfo.View],
+      blockView: BlockInfo.View
+  ): F[BlockAndMaybeDeploys] = {
+    val deploysF = maybeDeployView.fold((none[List[Block.ProcessedDeploy]]).pure[F]) {
+      implicit dv =>
+        DeployStorageReader[F]
+          .getProcessedDeploys(blockInfo.getSummary.blockHash)
+          .map(_.some)
     }
 
-  def getBlockInfo[F[_]: MonadThrowable: Log: MultiParentCasperRef: BlockStorage: DeployStorage](
-      blockHashBase16: String
+    val childrenF = blockView match {
+      case BlockInfo.View.BASIC | BlockInfo.View.Unrecognized(_) =>
+        List.empty[ByteString].pure[F]
+      case BlockInfo.View.FULL =>
+        for {
+          dag      <- DagStorage[F].getRepresentation
+          children <- dag.children(blockInfo.getSummary.blockHash)
+        } yield children.toList
+    }
+
+    (deploysF, childrenF).mapN {
+      case (maybeDeploys, maybeChildren) =>
+        blockInfo.withStatus(blockInfo.getStatus.withChildHashes(maybeChildren)) -> maybeDeploys
+    }
+  }
+
+  def getBlockInfo[F[_]: MonadThrowable: Log: BlockStorage: DeployStorage: DagStorage](
+      blockHashBase16: String,
+      blockView: BlockInfo.View
   ): F[BlockInfo] =
-    getBlockInfoWithDeploysOpt[F](blockHashBase16, None).flatMap(
+    getBlockInfoWithDeploysOpt[F](blockHashBase16, None, blockView).flatMap(
       _.fold(
         MonadThrowable[F]
           .raiseError[BlockInfo](
@@ -221,10 +245,11 @@ object BlockAPI {
   /** Return block infos and maybe the corresponding deploy summaries in the a slice of the DAG.
     * Use `maxRank` 0 to get the top slice,
     * then we pass previous ranks to paginate backwards. */
-  def getBlockInfosWithDeploys[F[_]: MonadThrowable: Log: MultiParentCasperRef: DeployStorage: Fs2Compiler](
+  def getBlockInfosWithDeploys[F[_]: MonadThrowable: Log: MultiParentCasperRef: DeployStorage: DagStorage: Fs2Compiler](
       depth: Int,
-      maxRank: Long = 0,
-      maybeDeployView: Option[DeployInfo.View]
+      maxRank: Long,
+      maybeDeployView: Option[DeployInfo.View],
+      blockView: BlockInfo.View
   ): F[List[BlockAndMaybeDeploys]] =
     unsafeWithCasper[F, List[BlockAndMaybeDeploys]]("Could not show blocks.") { implicit casper =>
       casper.dag flatMap { dag =>
@@ -247,16 +272,17 @@ object BlockAPI {
           MonadThrowable[F].raiseError(InvalidArgument(ex.getMessage))
       } flatMap { infosByRank =>
         infosByRank.flatten.reverse.toList.traverse { info =>
-          maybeWithDeploys[F](info, maybeDeployView)
+          withViews[F](info, maybeDeployView, blockView)
         }
       }
     }
 
   /** Return block infos in the a slice of the DAG. Use `maxRank` 0 to get the top slice,
     * then we pass previous ranks to paginate backwards. */
-  def getBlockInfos[F[_]: MonadThrowable: Log: MultiParentCasperRef: DeployStorage: Fs2Compiler](
+  def getBlockInfos[F[_]: MonadThrowable: Log: MultiParentCasperRef: DeployStorage: DagStorage: Fs2Compiler](
       depth: Int,
-      maxRank: Long = 0
+      maxRank: Long = 0,
+      blockView: BlockInfo.View = BlockInfo.View.BASIC
   ): F[List[BlockInfo]] =
-    getBlockInfosWithDeploys[F](depth, maxRank, None).map(_.map(_._1))
+    getBlockInfosWithDeploys[F](depth, maxRank, None, blockView).map(_.map(_._1))
 }

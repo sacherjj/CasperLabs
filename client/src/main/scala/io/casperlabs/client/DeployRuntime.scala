@@ -275,7 +275,7 @@ object DeployRuntime {
   def transferCLI[F[_]: Sync: DeployService: FilesAPI](
       deployConfig: DeployConfig,
       privateKeyFile: File,
-      recipientPublicKeyBase64: String,
+      recipientPublicKey: PublicKey,
       amount: Long
   ): F[Unit] =
     for {
@@ -296,7 +296,7 @@ object DeployRuntime {
             deployConfig,
             publicKey,
             privateKey,
-            recipientPublicKeyBase64,
+            recipientPublicKey,
             amount
           )
     } yield ()
@@ -305,31 +305,23 @@ object DeployRuntime {
       deployConfig: DeployConfig,
       senderPublicKey: PublicKey,
       senderPrivateKey: PrivateKey,
-      recipientPublicKeyBase64: String,
+      recipientPublicKey: PublicKey,
       amount: Long,
       exit: Boolean = true,
       ignoreOutput: Boolean = false
   ): F[Unit] =
-    for {
-      account <- MonadThrowable[F].fromOption(
-                  Base64.tryDecode(recipientPublicKeyBase64),
-                  new IllegalArgumentException(
-                    s"Failed to parse base64 encoded account: $recipientPublicKeyBase64"
-                  )
-                )
-      _ <- deployFileProgram[F](
-            from = None,
-            deployConfig.withSessionResource(TRANSFER_WASM_FILE),
-            maybeEitherPublicKey = senderPublicKey.asRight[String].some,
-            maybeEitherPrivateKey = senderPrivateKey.asRight[String].some,
-            List(
-              bytesArg("account", account),
-              longArg("amount", amount)
-            ),
-            exit,
-            ignoreOutput
-          )
-    } yield ()
+    deployFileProgram[F](
+      from = None,
+      deployConfig.withSessionResource(TRANSFER_WASM_FILE),
+      maybeEitherPublicKey = senderPublicKey.asRight[String].some,
+      maybeEitherPrivateKey = senderPrivateKey.asRight[String].some,
+      List(
+        bytesArg("account", recipientPublicKey),
+        longArg("amount", amount)
+      ),
+      exit,
+      ignoreOutput
+    )
 
   private def readKey[F[_]: Sync, A](keyFile: File, keyType: String, f: String => Option[A]): F[A] =
     readFileAsString[F](keyFile) >>= { key =>
@@ -363,7 +355,7 @@ object DeployRuntime {
   /** Constructs a [[Deploy]] from the provided arguments and writes it to a file (or STDOUT).
     */
   def makeDeploy[F[_]: Sync](
-      from: ByteString,
+      from: PublicKey,
       deployConfig: DeployConfig,
       sessionArgs: Seq[Deploy.Arg]
   ): Deploy = {
@@ -381,7 +373,7 @@ object DeployRuntime {
         consensus.Deploy
           .Header()
           .withTimestamp(System.currentTimeMillis)
-          .withAccountPublicKey(from)
+          .withAccountPublicKey(ByteString.copyFrom(from))
           .withGasPrice(deployConfig.gasPrice)
           .withTtlMillis(deployConfig.timeToLive.getOrElse(0))
           .withDependencies(deployConfig.dependencies)
@@ -433,7 +425,7 @@ object DeployRuntime {
     }
 
   def deployFileProgram[F[_]: Sync: DeployService](
-      from: Option[String],
+      from: Option[PublicKey],
       deployConfig: DeployConfig,
       maybeEitherPublicKey: Option[Either[String, PublicKey]],
       maybeEitherPrivateKey: Option[Either[String, PrivateKey]],
@@ -453,9 +445,7 @@ object DeployRuntime {
 
     val deploy = for {
       accountPublicKey <- Sync[F].fromOption(
-                           from
-                             .map(account => ByteString.copyFrom(Base16.decode(account)))
-                             .orElse(maybePublicKey.map(ByteString.copyFrom)),
+                           from orElse maybePublicKey,
                            new IllegalArgumentException("--from or --public-key must be presented")
                          )
     } yield {

@@ -21,6 +21,7 @@ The open-source CasperLabs project is building a decentralized, economic, censor
 
 ## Getting Help
 
+- [Discord Server](https://discord.gg/mpZ9AYD)
 - [CasperLabs Community Forum](https://forums.casperlabs.io/)
 - [Telegram Channel](https://t.me/CasperLabs)
 

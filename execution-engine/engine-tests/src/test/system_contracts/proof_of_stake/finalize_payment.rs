@@ -3,7 +3,7 @@ use std::convert::TryInto;
 use contract_ffi::{
     key::Key,
     value::{
-        account::{Account, PublicKey, PurseId},
+        account::{PublicKey, PurseId},
         U512,
     },
 };
@@ -11,7 +11,7 @@ use engine_core::engine_state::{
     genesis::{POS_PAYMENT_PURSE, POS_REWARDS_PURSE},
     CONV_RATE,
 };
-use engine_shared::{gas::Gas, motes::Motes};
+use engine_shared::{account::Account, gas::Gas, motes::Motes};
 
 use crate::{
     support::test_support::{

@@ -1,12 +1,12 @@
 use contract_ffi::{
     key::Key,
-    value::{account::PublicKey, ProtocolVersion, Value, U512},
+    value::{account::PublicKey, ProtocolVersion, U512},
 };
 use engine_core::engine_state::{
     genesis::{GenesisAccount, GenesisConfig},
     SYSTEM_ACCOUNT_ADDR,
 };
-use engine_shared::motes::Motes;
+use engine_shared::{motes::Motes, stored_value::StoredValue};
 
 use crate::{
     support::test_support::{self, InMemoryWasmTestBuilder},
@@ -95,13 +95,14 @@ fn should_run_genesis() {
     let mint_contract_uref = builder.get_mint_contract_uref();
     let pos_contract_uref = builder.get_pos_contract_uref();
 
-    if let Some(Value::Contract(_)) = builder.query(None, Key::URef(mint_contract_uref), &[]) {
+    if let Some(StoredValue::Contract(_)) = builder.query(None, Key::URef(mint_contract_uref), &[])
+    {
         // Contract exists at mint contract URef
     } else {
         panic!("contract not found at mint uref");
     }
 
-    if let Some(Value::Contract(_)) = builder.query(None, Key::URef(pos_contract_uref), &[]) {
+    if let Some(StoredValue::Contract(_)) = builder.query(None, Key::URef(pos_contract_uref), &[]) {
         // Contract exists at pos contract URef
     } else {
         panic!("contract not found at pos uref");

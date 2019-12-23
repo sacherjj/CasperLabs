@@ -2,15 +2,13 @@
 
 extern crate alloc;
 
-use alloc::{
-    string::{String, ToString},
-    vec,
-};
+use alloc::{string::String, vec};
 
 use contract_ffi::{
-    contract_api::{runtime, storage, system, Error, TURef},
+    contract_api::{runtime, storage, system, Error},
     unwrap_or_revert::UnwrapOrRevert,
     uref::URef,
+    value::CLValue,
 };
 
 const ENTRY_FUNCTION_NAME: &str = "apply_method";
@@ -62,13 +60,13 @@ pub extern "C" fn apply_method() {
         METHOD_ADD => {
             let purse_name = purse_name();
             let purse_id = system::create_purse();
-            runtime::put_key(&purse_name, &purse_id.value().into());
+            runtime::put_key(&purse_name, purse_id.value().into());
         }
         METHOD_REMOVE => {
             let purse_name = purse_name();
             runtime::remove_key(&purse_name);
         }
-        METHOD_VERSION => runtime::ret(VERSION.to_string(), vec![]),
+        METHOD_VERSION => runtime::ret(CLValue::from_t(VERSION).unwrap_or_revert(), vec![]),
         _ => runtime::revert(CustomError::UnknownMethodName),
     }
 }
@@ -79,12 +77,10 @@ pub extern "C" fn call() {
         .unwrap_or_revert_with(CustomError::MissingPurseHolderURefArg)
         .unwrap_or_revert_with(CustomError::InvalidPurseHolderURefArg);
 
-    let turef = TURef::from_uref(uref).unwrap_or_revert();
-
     // this should overwrite the previous contract obj with the new contract obj at the same uref
-    runtime::upgrade_contract_at_uref(ENTRY_FUNCTION_NAME, turef);
+    runtime::upgrade_contract_at_uref(ENTRY_FUNCTION_NAME, uref);
 
     // set new version
-    let version_key = storage::new_turef(VERSION.to_string()).into();
-    runtime::put_key(METHOD_VERSION, &version_key);
+    let version_key = storage::new_turef(VERSION).into();
+    runtime::put_key(METHOD_VERSION, version_key);
 }

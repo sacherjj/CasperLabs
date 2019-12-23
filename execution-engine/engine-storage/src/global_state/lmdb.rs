@@ -2,13 +2,11 @@ use std::{ops::Deref, sync::Arc};
 
 use lmdb;
 
-use contract_ffi::{
-    key::Key,
-    value::{ProtocolVersion, Value},
-};
+use contract_ffi::{key::Key, value::ProtocolVersion};
 use engine_shared::{
     additive_map::AdditiveMap,
     newtypes::{Blake2bHash, CorrelationId},
+    stored_value::StoredValue,
     transform::Transform,
 };
 
@@ -48,7 +46,7 @@ impl LmdbGlobalState {
         protocol_data_store: Arc<LmdbProtocolDataStore>,
     ) -> Result<Self, error::Error> {
         let root_hash: Blake2bHash = {
-            let (root_hash, root) = create_hashed_empty_trie::<Key, Value>()?;
+            let (root_hash, root) = create_hashed_empty_trie::<Key, StoredValue>()?;
             let mut txn = environment.create_read_write_txn()?;
             trie_store.put(&mut txn, &root_hash, &root)?;
             txn.commit()?;
@@ -79,12 +77,16 @@ impl LmdbGlobalState {
     }
 }
 
-impl StateReader<Key, Value> for LmdbGlobalStateView {
+impl StateReader<Key, StoredValue> for LmdbGlobalStateView {
     type Error = error::Error;
 
-    fn read(&self, correlation_id: CorrelationId, key: &Key) -> Result<Option<Value>, Self::Error> {
+    fn read(
+        &self,
+        correlation_id: CorrelationId,
+        key: &Key,
+    ) -> Result<Option<StoredValue>, Self::Error> {
         let txn = self.environment.create_read_txn()?;
-        let ret = match read::<Key, Value, lmdb::RoTransaction, LmdbTrieStore, Self::Error>(
+        let ret = match read::<Key, StoredValue, lmdb::RoTransaction, LmdbTrieStore, Self::Error>(
             correlation_id,
             &txn,
             self.store.deref(),
@@ -107,7 +109,7 @@ impl StateProvider for LmdbGlobalState {
 
     fn checkout(&self, state_hash: Blake2bHash) -> Result<Option<Self::Reader>, Self::Error> {
         let txn = self.environment.create_read_txn()?;
-        let maybe_root: Option<Trie<Key, Value>> = self.trie_store.get(&txn, &state_hash)?;
+        let maybe_root: Option<Trie<Key, StoredValue>> = self.trie_store.get(&txn, &state_hash)?;
         let maybe_state = maybe_root.map(|_| LmdbGlobalStateView {
             environment: Arc::clone(&self.environment),
             store: Arc::clone(&self.trie_store),
@@ -164,6 +166,8 @@ mod tests {
     use lmdb::DatabaseFlags;
     use tempfile::tempdir;
 
+    use contract_ffi::value::CLValue;
+
     use crate::{
         trie_store::operations::{write, WriteResult},
         TEST_MAP_SIZE,
@@ -174,33 +178,35 @@ mod tests {
     #[derive(Debug, Clone)]
     struct TestPair {
         key: Key,
-        value: Value,
+        value: StoredValue,
     }
 
-    const TEST_PAIRS: [TestPair; 2] = [
-        TestPair {
-            key: Key::Account([1u8; 32]),
-            value: Value::Int32(1),
-        },
-        TestPair {
-            key: Key::Account([2u8; 32]),
-            value: Value::Int32(2),
-        },
-    ];
+    fn create_test_pairs() -> [TestPair; 2] {
+        [
+            TestPair {
+                key: Key::Account([1_u8; 32]),
+                value: StoredValue::CLValue(CLValue::from_t(1_i32).unwrap()),
+            },
+            TestPair {
+                key: Key::Account([2_u8; 32]),
+                value: StoredValue::CLValue(CLValue::from_t(2_i32).unwrap()),
+            },
+        ]
+    }
 
     fn create_test_pairs_updated() -> [TestPair; 3] {
         [
             TestPair {
                 key: Key::Account([1u8; 32]),
-                value: Value::String("one".to_string()),
+                value: StoredValue::CLValue(CLValue::from_t("one".to_string()).unwrap()),
             },
             TestPair {
                 key: Key::Account([2u8; 32]),
-                value: Value::String("two".to_string()),
+                value: StoredValue::CLValue(CLValue::from_t("two".to_string()).unwrap()),
             },
             TestPair {
                 key: Key::Account([3u8; 32]),
-                value: Value::Int32(3),
+                value: StoredValue::CLValue(CLValue::from_t(3_i32).unwrap()),
             },
         ]
     }
@@ -221,7 +227,7 @@ mod tests {
         {
             let mut txn = ret.environment.create_read_write_txn().unwrap();
 
-            for TestPair { key, value } in &TEST_PAIRS {
+            for TestPair { key, value } in &create_test_pairs() {
                 match write::<_, _, _, LmdbTrieStore, error::Error>(
                     correlation_id,
                     &mut txn,
@@ -250,7 +256,7 @@ mod tests {
         let correlation_id = CorrelationId::new();
         let (state, root_hash) = create_test_state();
         let checkout = state.checkout(root_hash).unwrap().unwrap();
-        for TestPair { key, value } in TEST_PAIRS.iter().cloned() {
+        for TestPair { key, value } in create_test_pairs().iter().cloned() {
             assert_eq!(Some(value), checkout.read(correlation_id, &key).unwrap());
         }
     }
@@ -322,7 +328,7 @@ mod tests {
         }
 
         let original_checkout = state.checkout(root_hash).unwrap().unwrap();
-        for TestPair { key, value } in TEST_PAIRS.iter().cloned() {
+        for TestPair { key, value } in create_test_pairs().iter().cloned() {
             assert_eq!(
                 Some(value),
                 original_checkout.read(correlation_id, &key).unwrap()

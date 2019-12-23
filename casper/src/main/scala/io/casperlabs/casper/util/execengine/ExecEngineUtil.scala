@@ -8,7 +8,8 @@ import cats.{Foldable, Monad, MonadError}
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.DeploySelection.DeploySelection
 import io.casperlabs.casper._
-import io.casperlabs.casper.consensus.state.{Key, Value}
+import io.casperlabs.casper.consensus.state.CLType.Variants
+import io.casperlabs.casper.consensus.state.{CLType, CLValue, Key, StoredValue, Value}
 import io.casperlabs.casper.consensus.{state, Block, Deploy}
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
 import io.casperlabs.casper.util.execengine.Op.{OpMap, OpMapAddComm}
@@ -418,7 +419,7 @@ object ExecEngineUtil {
       } yield MergeResult.Result[T, A](blocks.head, nonFirstEffect, nonFirstParents)
   }
 
-  def merge[F[_]: MonadThrowable: BlockStorage](
+  def merge[F[_]: MonadThrowable: BlockStorage: Metrics](
       candidateParentBlocks: NonEmptyList[Block],
       dag: DagRepresentation[F]
   ): F[MergeResult.Result[TransformMap, Block]] = {
@@ -461,14 +462,18 @@ object ExecEngineUtil {
           // writes to its own deploy hash, to generate conflicts between blocks
           // that have the same deploy in their bodies.
           val deployHashTransforms =
-            blockWithTransforms.getBlockMessage.getBody.deploys.map(_.getDeploy).map { deploy =>
-              val k = Key(Key.Value.Hash(Key.Hash(deploy.deployHash)))
-              val t = Transform(
-                Transform.TransformInstance.Write(
-                  TransformWrite().withValue(Value(Value.Value.BytesValue(blockHash)))
+            blockWithTransforms.getBlockMessage.getBody.deploys.map(_.getDeploy).map {
+              deploy =>
+                val key: Key     = Key(Key.Value.Hash(Key.Hash(deploy.deployHash)))
+                val tyU8: CLType = CLType(CLType.Variants.SimpleType(CLType.Simple.U8))
+                val tyByteArray32: CLType =
+                  CLType(CLType.Variants.FixedListType(CLType.FixedList(Some(tyU8), 32)))
+                val blockHashValue: CLValue = CLValue(Some(tyByteArray32), blockHash)
+                val transform = Transform(
+                  Transform.TransformInstance
+                    .Write(TransformWrite().withValue(StoredValue().withClValue(blockHashValue)))
                 )
-              )
-              TransformEntry().withKey(k).withTransform(t)
+                TransformEntry().withKey(key).withTransform(transform)
             }
 
           transforms ++ deployHashTransforms
@@ -498,6 +503,7 @@ object ExecEngineUtil {
                )
       // TODO: Aren't these parents already in `candidateParentBlocks`?
       blocks <- merged.parents.traverse(block => ProtoUtil.unsafeGetBlock[F](block.messageHash))
+      _      <- Metrics[F].record("mergedBlocks", blocks.size.toLong)
     } yield MergeResult.Result(blocks.head, merged.nonFirstParentsCombinedEffect, blocks.tail)
   }
 }

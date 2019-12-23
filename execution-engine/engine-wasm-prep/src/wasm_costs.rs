@@ -2,10 +2,10 @@ use std::collections::BTreeMap;
 
 use pwasm_utils::rules::{InstructionType, Metering, Set};
 
-use contract_ffi::bytesrepr::{self, FromBytes, ToBytes, U32_SIZE};
+use contract_ffi::bytesrepr::{self, FromBytes, ToBytes, U32_SERIALIZED_LENGTH};
 
 const NUM_FIELDS: usize = 10;
-pub const WASM_COSTS_SIZE_SERIALIZED: usize = NUM_FIELDS * U32_SIZE;
+pub const WASM_COSTS_SERIALIZED_LENGTH: usize = NUM_FIELDS * U32_SERIALIZED_LENGTH;
 
 // Taken (partially) from parity-ethereum
 #[derive(Debug, Default, Copy, Clone, PartialEq, Eq)]
@@ -53,7 +53,7 @@ impl WasmCosts {
 
 impl ToBytes for WasmCosts {
     fn to_bytes(&self) -> Result<Vec<u8>, bytesrepr::Error> {
-        let mut ret: Vec<u8> = Vec::with_capacity(WASM_COSTS_SIZE_SERIALIZED);
+        let mut ret: Vec<u8> = Vec::with_capacity(WASM_COSTS_SERIALIZED_LENGTH);
         ret.append(&mut self.regular.to_bytes()?);
         ret.append(&mut self.div.to_bytes()?);
         ret.append(&mut self.mul.to_bytes()?);

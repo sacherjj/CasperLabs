@@ -195,8 +195,16 @@ private[configuration] final case class Options private (
       gen[Int]("Maximum size of message that can be sent via transport layer.")
 
     @scallop
+    val serverEngineParallelism =
+      gen[Int]("Target parallelism for execution engine requests.")
+
+    @scallop
     val serverChunkSize =
       gen[Int]("Size of chunks to split larger payloads into when streamed via transport layer.")
+
+    @scallop
+    val serverEventStreamBufferSize =
+      gen[Int]("Size of the buffer to store emitted block events")
 
     @scallop
     val grpcPortInternal =
@@ -476,6 +484,11 @@ private[configuration] final case class Options private (
     @scallop
     val blockstorageCacheNeighborhoodAfter = gen[Int](
       "How far to go to the future (by ranks) for caching neighborhood of looked up block"
+    )
+
+    @scallop
+    val blockstorageDeployStreamChunkSize = gen[Int](
+      "How many records to pull from the DB in a chunk of a stream."
     )
 
     @scallop

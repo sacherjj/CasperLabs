@@ -289,11 +289,8 @@ abstract class HashSetCasperTest
   }
 
   it should "not request invalid blocks from peers" in effectTest {
-    val dummyContract =
-      ByteString.readFrom(getClass.getResourceAsStream("/helloname.wasm"))
-
-    val data0 = ProtoUtil.deploy(1, dummyContract)
-    val data1 = ProtoUtil.deploy(2, dummyContract)
+    val data0 = ProtoUtil.deploy(1, ByteString.EMPTY)
+    val data1 = ProtoUtil.deploy(2, ByteString.EMPTY)
 
     for {
       nodes              <- networkEff(validatorKeys.take(2), genesis, transforms)
@@ -308,7 +305,7 @@ abstract class HashSetCasperTest
                             )
                         }
       _ <- node0.casperEff.addBlock(unsignedBlock)
-      _ <- node1.clearMessages() //node1 misses this block
+      _ <- node0.casperEff.contains(unsignedBlock) shouldBeF false
 
       signedBlock <- (node0.deployBuffer.addDeploy(data1) *> node0.casperEff.createBlock)
                       .map { case Created(block) => block }
@@ -317,9 +314,13 @@ abstract class HashSetCasperTest
       _ = signedBlock.getBody.deploys.map(_.getDeploy) should contain only (data0, data1)
 
       _ <- node0.casperEff.addBlock(signedBlock)
+      _ <- node0.casperEff.contains(signedBlock) shouldBeF true
+      // Broadcast signedBlock to peers.
+      _ <- node0.broadcaster.networkEffects(signedBlock, Valid)
       _ <- node1.receive() //receives block1; should not ask for block0
 
       _ <- node0.casperEff.contains(unsignedBlock) shouldBeF false
+      _ <- node1.casperEff.contains(signedBlock) shouldBeF true
       _ <- node1.casperEff.contains(unsignedBlock) shouldBeF false
 
     } yield ()
@@ -1048,15 +1049,6 @@ abstract class HashSetCasperTest
     val BlockMsgWithTransform(Some(genesisWithEqualBonds), transformsWithEqualBonds) =
       buildGenesis(Map.empty, equalBonds, 0L)
 
-    def checkLastFinalizedBlock(
-        node: HashSetCasperTestNode[Task],
-        expected: Block
-    )(implicit pos: org.scalactic.source.Position): Task[Unit] =
-      node.casperEff.lastFinalizedBlock map { block =>
-        PrettyPrinter.buildString(block) shouldBe PrettyPrinter.buildString(expected)
-        ()
-      }
-
     for {
       nodes <- networkEff(
                 validatorKeys.take(3),
@@ -1066,31 +1058,31 @@ abstract class HashSetCasperTest
               )
       deployDatas <- (1L to 10L).toList.traverse(_ => ProtoUtil.basicDeploy[Task]())
 
-      _ <- nodes(0).deployBuffer.addDeploy(deployDatas(0)) *> nodes(0).propose()
+      _ <- nodes(0).deployAndPropose(deployDatas(0))
       _ <- nodes(1).receive()
       _ <- nodes(2).receive()
 
-      block2 <- nodes(1).deployBuffer.addDeploy(deployDatas(1)) *> nodes(1).propose()
+      block2 <- nodes(1).deployAndPropose(deployDatas(1))
       _      <- nodes(0).receive()
       _      <- nodes(2).receive()
 
-      block3 <- nodes(2).deployBuffer.addDeploy(deployDatas(2)) *> nodes(2).propose()
+      block3 <- nodes(2).deployAndPropose(deployDatas(2))
       _      <- nodes(0).receive()
       _      <- nodes(1).receive()
 
-      block4 <- nodes(0).deployBuffer.addDeploy(deployDatas(3)) *> nodes(0).propose()
+      block4 <- nodes(0).deployAndPropose(deployDatas(3))
       _      <- nodes(1).receive()
       _      <- nodes(2).receive()
 
-      block5 <- nodes(1).deployBuffer.addDeploy(deployDatas(4)) *> nodes(1).propose()
+      block5 <- nodes(1).deployAndPropose(deployDatas(4))
       _      <- nodes(0).receive()
       _      <- nodes(2).receive()
 
-      block6 <- nodes(2).deployBuffer.addDeploy(deployDatas(5)) *> nodes(2).propose()
+      block6 <- nodes(2).deployAndPropose(deployDatas(5))
       _      <- nodes(0).receive()
       _      <- nodes(1).receive()
 
-      _                     <- checkLastFinalizedBlock(nodes(0), block2)
+      _                     <- nodes(0).casperEff.lastFinalizedBlock shouldBeF block2
       pendingOrProcessedNum <- nodes(0).deployStorage.reader.sizePendingOrProcessed()
       _                     = pendingOrProcessedNum should be(1)
 
@@ -1098,7 +1090,7 @@ abstract class HashSetCasperTest
       _ <- nodes(1).receive()
       _ <- nodes(2).receive()
 
-      _                     <- checkLastFinalizedBlock(nodes(0), block3)
+      _                     <- nodes(0).casperEff.lastFinalizedBlock shouldBeF block3
       pendingOrProcessedNum <- nodes(0).deployStorage.reader.sizePendingOrProcessed()
       _                     = pendingOrProcessedNum should be(2) // deploys contained in block 4 and block 7
 
@@ -1106,7 +1098,7 @@ abstract class HashSetCasperTest
       _ <- nodes(0).receive()
       _ <- nodes(2).receive()
 
-      _                     <- checkLastFinalizedBlock(nodes(0), block4)
+      _                     <- nodes(0).casperEff.lastFinalizedBlock shouldBeF block4
       pendingOrProcessedNum <- nodes(0).deployStorage.reader.sizePendingOrProcessed()
       _                     = pendingOrProcessedNum should be(1) // deploys contained in block 7
 
@@ -1114,7 +1106,7 @@ abstract class HashSetCasperTest
       _ <- nodes(0).receive()
       _ <- nodes(1).receive()
 
-      _                     <- checkLastFinalizedBlock(nodes(0), block5)
+      _                     <- nodes(0).casperEff.lastFinalizedBlock shouldBeF block5
       pendingOrProcessedNum <- nodes(0).deployStorage.reader.sizePendingOrProcessed()
       _                     = pendingOrProcessedNum should be(1) // deploys contained in block 7
 
@@ -1122,7 +1114,7 @@ abstract class HashSetCasperTest
       _ <- nodes(1).receive()
       _ <- nodes(2).receive()
 
-      _                     <- checkLastFinalizedBlock(nodes(0), block6)
+      _                     <- nodes(0).casperEff.lastFinalizedBlock shouldBeF block6
       pendingOrProcessedNum <- nodes(0).deployStorage.reader.sizePendingOrProcessed()
       _                     = pendingOrProcessedNum should be(2) // deploys contained in block 7 and block 10
 
@@ -1158,12 +1150,26 @@ abstract class HashSetCasperTest
       _               <- nodes(0).casperEff.addBlock(blockB) shouldBeF Valid
       // nodes(1) should have more weight than nodes(0) so it should take over
       // Need to propose a new block, it should again contain deployA
+      // Since requeuing of orphans happens in the background fiber, trigerred during `createBlock`,
+      // the very first `createBlock` most likely returns `NoNewDeploys` because background fiber
+      // hasn't yet finished.
+      _ <- (eventuallyIncludes(nodes(0), deployA)).timeout(500.millis)
+      // Do another call to `createBlock` since now it should have requeuened orphaned deployA.
       createC         <- nodes(0).casperEff.createBlock
       Created(blockC) = createC
       _               = blockC.getBody.deploys.map(_.getDeploy) should contain(deployA)
       _               <- nodes.map(_.tearDown()).toList.sequence
     } yield ()
   }
+
+  def eventuallyIncludes(node: TestNode[Task], deploy: Deploy): Task[Assertion] =
+    node.casperEff.createBlock flatMap {
+      case NoNewDeploys => eventuallyIncludes(node, deploy)
+      case Created(block) =>
+        if (block.getBody.deploys.map(_.getDeploy) contains deploy) {
+          Task.now(assert(true))
+        } else Task.now(assert(false, "Block did not include expected deploy"))
+    }
 
   it should "not execute deploys until dependencies are met" in effectTest {
     import io.casperlabs.models.DeployImplicits._

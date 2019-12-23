@@ -67,7 +67,9 @@ object Configuration extends ParserImplicits {
       dataDir: Path,
       maxNumOfConnections: Int,
       maxMessageSize: Int,
-      chunkSize: Int,
+      eventStreamBufferSize: Int Refined Positive,
+      engineParallelism: Int Refined Positive,
+      chunkSize: Int Refined Positive,
       relayFactor: Int,
       relaySaturation: Int,
       approvalRelayFactor: Int,
@@ -100,7 +102,8 @@ object Configuration extends ParserImplicits {
   case class BlockStorage(
       cacheMaxSizeBytes: Long,
       cacheNeighborhoodBefore: Int,
-      cacheNeighborhoodAfter: Int
+      cacheNeighborhoodAfter: Int,
+      deployStreamChunkSize: Int
   ) extends SubConfig
 
   case class Grpc(

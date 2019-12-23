@@ -22,21 +22,24 @@ use parity_wasm::elements::Module;
 
 use contract_ffi::{
     args_parser::ArgsParser,
+    block_time::BlockTime,
     bytesrepr::ToBytes,
     execution::Phase,
-    key::{Key, HASH_SIZE},
+    key::{Key, KEY_HASH_LENGTH},
     system_contracts::mint,
-    uref::{AccessRights, URef, UREF_ADDR_SIZE},
+    uref::{AccessRights, URef, UREF_ADDR_LENGTH},
     value::{
-        account::{BlockTime, PublicKey, PurseId},
-        Account, ProtocolVersion, Value, U512,
+        account::{PublicKey, PurseId},
+        ProtocolVersion, U512,
     },
 };
 use engine_shared::{
+    account::Account,
     additive_map::AdditiveMap,
     gas::Gas,
     motes::Motes,
     newtypes::{Blake2bHash, CorrelationId},
+    stored_value::StoredValue,
     transform::Transform,
 };
 use engine_storage::{
@@ -159,7 +162,7 @@ where
         let key = Key::Account(SYSTEM_ACCOUNT_ADDR);
         let value = {
             let virtual_system_account = virtual_system_account.clone();
-            Value::Account(virtual_system_account)
+            StoredValue::Account(virtual_system_account)
         };
 
         tracking_copy.borrow_mut().write(key, value);
@@ -173,7 +176,7 @@ where
         let install_deploy_hash = {
             let name: &[u8] = genesis_config.name().as_bytes();
             let timestamp: &[u8] = &genesis_config.timestamp().to_le_bytes();
-            let wasm_costs_bytes: &[u8] = &wasm_costs.to_bytes()?;
+            let wasm_costs_bytes: &[u8] = &wasm_costs.into_bytes()?;
             let bytes: Vec<u8> = {
                 let mut ret = Vec::new();
                 ret.extend_from_slice(name);
@@ -205,7 +208,7 @@ where
 
             executor.better_exec(
                 mint_installer_module,
-                &args,
+                args,
                 &mut named_keys,
                 initial_base_key,
                 &virtual_system_account,
@@ -238,9 +241,10 @@ where
                     .map(|(k, v)| (k, v.value()))
                     .collect();
                 let args = (mint_reference, bonded_validators);
-                ArgsParser::parse(&args)
-                    .and_then(|args| args.to_bytes())
-                    .expect("args should parse")
+                ArgsParser::parse(args)
+                    .expect("args should convert to `Vec<CLValue>`")
+                    .into_bytes()
+                    .expect("args should serialize")
             };
             let mut named_keys = BTreeMap::new();
             let authorization_keys: BTreeSet<PublicKey> = BTreeSet::new();
@@ -260,7 +264,7 @@ where
 
             executor.better_exec(
                 proof_of_stake_installer_module,
-                &args,
+                args,
                 &mut named_keys,
                 initial_base_key,
                 &virtual_system_account,
@@ -351,9 +355,10 @@ where
                 let args = {
                     let motes = account.balance().value();
                     let args = (MINT_METHOD_NAME, motes);
-                    ArgsParser::parse(&args)
-                        .and_then(|args| args.to_bytes())
-                        .expect("args should parse")
+                    ArgsParser::parse(args)
+                        .expect("args should convert to `Vec<CLValue>`")
+                        .into_bytes()
+                        .expect("args should serialize")
                 };
                 let tracking_copy_exec = Rc::clone(&tracking_copy);
                 let tracking_copy_write = Rc::clone(&tracking_copy);
@@ -371,7 +376,7 @@ where
                 // ...call the Mint's "mint" endpoint to create purse with tokens...
                 let mint_result: Result<URef, mint::Error> = executor.better_exec(
                     module,
-                    &args,
+                    args,
                     &mut named_keys_exec,
                     base_key,
                     &virtual_system_account,
@@ -393,7 +398,7 @@ where
                 let value = {
                     let account_main_purse = mint_result?;
                     let purse_id = PurseId::new(account_main_purse);
-                    Value::Account(Account::create(
+                    StoredValue::Account(Account::create(
                         account_public_key.value(),
                         named_keys,
                         purse_id,
@@ -499,15 +504,15 @@ where
                 // currently there are no expected args for an upgrade installer but args are
                 // supported
                 let args = match upgrade_config.upgrade_installer_args() {
-                    Some(args) => args,
-                    None => &[],
+                    Some(args) => args.to_vec(),
+                    None => vec![],
                 };
 
                 // execute as system account
                 let system_account = {
                     let key = Key::Account(SYSTEM_ACCOUNT_ADDR);
                     match tracking_copy.borrow_mut().read(correlation_id, &key) {
-                        Ok(Some(Value::Account(account))) => account,
+                        Ok(Some(StoredValue::Account(account))) => account,
                         Ok(_) => panic!("system account must exist"),
                         Err(error) => return Err(Error::ExecError(error.into())),
                     }
@@ -529,7 +534,7 @@ where
                     let bytes: Vec<u8> = upgrade_config
                         .new_protocol_version()
                         .value()
-                        .to_bytes()?
+                        .into_bytes()?
                         .to_vec();
                     Blake2bHash::new(&bytes).into()
                 };
@@ -546,7 +551,7 @@ where
 
                 Executor.better_exec(
                     upgrade_installer_module,
-                    &args,
+                    args,
                     &mut keys,
                     initial_base_key,
                     &system_account,
@@ -625,13 +630,13 @@ where
             }
             ExecutableDeployItem::StoredContractByHash { hash, .. } => {
                 let hash_len = hash.len();
-                if hash_len != HASH_SIZE {
+                if hash_len != KEY_HASH_LENGTH {
                     return Err(error::Error::InvalidHashLength {
-                        expected: HASH_SIZE,
+                        expected: KEY_HASH_LENGTH,
                         actual: hash_len,
                     });
                 }
-                let mut arr = [0u8; HASH_SIZE];
+                let mut arr = [0u8; KEY_HASH_LENGTH];
                 arr.copy_from_slice(&hash);
                 Key::Hash(arr)
             }
@@ -650,14 +655,14 @@ where
             }
             ExecutableDeployItem::StoredContractByURef { uref, .. } => {
                 let len = uref.len();
-                if len != UREF_ADDR_SIZE {
+                if len != UREF_ADDR_LENGTH {
                     return Err(error::Error::InvalidHashLength {
-                        expected: UREF_ADDR_SIZE,
+                        expected: UREF_ADDR_LENGTH,
                         actual: len,
                     });
                 }
                 let read_only_uref = {
-                    let mut arr = [0u8; UREF_ADDR_SIZE];
+                    let mut arr = [0u8; UREF_ADDR_LENGTH];
                     arr.copy_from_slice(&uref);
                     URef::new(arr, AccessRights::READ)
                 };
@@ -722,11 +727,11 @@ where
     ) -> Result<ExecutionResult, RootNotFound> {
         // spec: https://casperlabs.atlassian.net/wiki/spaces/EN/pages/123404576/Payment+code+execution+specification
 
-        let session = deploy_item.session();
-        let payment = deploy_item.payment();
-        let address = Key::Account(deploy_item.address().value());
-        let authorization_keys = deploy_item.authorization_keys();
-        let deploy_hash = deploy_item.deploy_hash();
+        let session = deploy_item.session;
+        let payment = deploy_item.payment;
+        let address = Key::Account(deploy_item.address.value());
+        let authorization_keys = deploy_item.authorization_keys;
+        let deploy_hash = deploy_item.deploy_hash;
 
         // Create tracking copy (which functions as a deploy context)
         // validation_spec_2: prestate_hash check
@@ -763,7 +768,7 @@ where
 
         // Authorize using provided authorization keys
         // validation_spec_3: account validity
-        if !account.can_authorize(authorization_keys) {
+        if !account.can_authorize(&authorization_keys) {
             return Ok(ExecutionResult::precondition_failure(
                 crate::engine_state::error::Error::AuthorizationError,
             ));
@@ -771,7 +776,7 @@ where
 
         // Check total key weight against deploy threshold
         // validation_spec_4: deploy validity
-        if !account.can_deploy_with(authorization_keys) {
+        if !account.can_deploy_with(&authorization_keys) {
             return Ok(ExecutionResult::precondition_failure(
                 // TODO?:this doesn't happen in execution any longer, should error variant be moved
                 execution::Error::DeploymentAuthorizationFailure.into(),
@@ -952,7 +957,7 @@ where
             // payment_code_spec_2: execute payment code
             executor.exec(
                 payment_module,
-                payment.args(),
+                payment.take_args(),
                 address,
                 &account,
                 authorization_keys.clone(),
@@ -1032,7 +1037,7 @@ where
 
             executor.exec(
                 session_module,
-                session.args(),
+                session.take_args(),
                 address,
                 &account,
                 authorization_keys.clone(),
@@ -1071,7 +1076,7 @@ where
                     Some(module) => module,
                     None => {
                         let module =
-                            match engine_wasm_prep::deserialize(&proof_of_stake_contract.bytes()) {
+                            match engine_wasm_prep::deserialize(proof_of_stake_contract.bytes()) {
                                 Ok(module) => module,
                                 Err(error) => {
                                     return Ok(ExecutionResult::precondition_failure(error.into()))
@@ -1087,9 +1092,10 @@ where
                 //((gas spent during payment code execution) + (gas spent during session code execution)) * conv_rate
                 let finalize_cost_motes: Motes = Motes::from_gas(execution_result_builder.total_cost(), CONV_RATE).expect("motes overflow");
                 let args = ("finalize_payment", finalize_cost_motes.value(), account_addr);
-                ArgsParser::parse(&args)
-                    .and_then(|args| args.to_bytes())
-                    .expect("args should parse")
+                ArgsParser::parse(args)
+                    .expect("args should convert to `Vec<CLValue>`")
+                    .into_bytes()
+                    .expect("args should serialize")
             };
 
             // The PoS keys may have changed because of effects during payment and/or
@@ -1110,7 +1116,7 @@ where
 
             executor.exec_direct(
                 proof_of_stake_module,
-                &proof_of_stake_args,
+                proof_of_stake_args,
                 &mut proof_of_stake_keys,
                 base_key,
                 &system_account,
@@ -1192,7 +1198,7 @@ where
         };
 
         let contract = match reader.read(correlation_id, &proof_of_stake)? {
-            Some(Value::Contract(contract)) => contract,
+            Some(StoredValue::Contract(contract)) => contract,
             _ => return Err(MissingSystemContractError("proof of stake".to_string())),
         };
 

@@ -1,9 +1,9 @@
 use alloc::vec::Vec;
 
 use contract_ffi::{
-    contract_api::{account::PublicKey, runtime, storage, system},
+    contract_api::{runtime, storage},
     unwrap_or_revert::UnwrapOrRevert,
-    value::{account::PurseId, U512},
+    value::{account::PublicKey, CLValue, U512},
 };
 
 use erc20_logic::{ERC20BurnError, ERC20Trait, ERC20TransferError, ERC20TransferFromError};
@@ -20,7 +20,7 @@ struct ERC20Token;
 impl ERC20Trait<U512, PublicKey> for ERC20Token {
     fn read_balance(&mut self, address: &PublicKey) -> Option<U512> {
         let key = balance_key(address);
-        storage::read_local(key).unwrap_or_revert()
+        storage::read_local(&key).unwrap_or_revert()
     }
 
     fn save_balance(&mut self, address: &PublicKey, balance: U512) {
@@ -29,7 +29,7 @@ impl ERC20Trait<U512, PublicKey> for ERC20Token {
     }
 
     fn read_total_supply(&mut self) -> Option<U512> {
-        storage::read_local(TOTAL_SUPPLY_KEY).unwrap_or_revert()
+        storage::read_local(&TOTAL_SUPPLY_KEY).unwrap_or_revert()
     }
 
     fn save_total_supply(&mut self, total_supply: U512) {
@@ -38,7 +38,7 @@ impl ERC20Trait<U512, PublicKey> for ERC20Token {
 
     fn read_allowance(&mut self, owner: &PublicKey, spender: &PublicKey) -> Option<U512> {
         let key = allowance_key(owner, spender);
-        storage::read_local(key).unwrap_or_revert()
+        storage::read_local(&key).unwrap_or_revert()
     }
 
     fn save_allowance(&mut self, owner: &PublicKey, spender: &PublicKey, amount: U512) {
@@ -102,7 +102,7 @@ fn entry_point() {
 }
 
 fn is_not_initialized() -> bool {
-    let flag: Option<i32> = storage::read_local(INIT_FLAG_KEY).unwrap_or_revert();
+    let flag: Option<i32> = storage::read_local(&INIT_FLAG_KEY).unwrap_or_revert();
     flag.is_none()
 }
 
