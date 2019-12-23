@@ -145,7 +145,7 @@ export class Key {
     key.value = uref;
     return key;
   }
-  
+
   toBytes(): Array<u8> {
     var bytes = new Array<u8>();
     bytes.push(<u8>this.variant)
@@ -165,6 +165,43 @@ export function toBytesU32(num: u32): u8[] {
   ];
 }
 
+enum CLTypeTag {
+  Bool = 0,
+  I32 = 1,
+  I64 = 2,
+  U8 = 3,
+  U32 = 4,
+  U64 = 5,
+  U128 = 6,
+  U256 = 7,
+  U512 = 8,
+  Unit = 9,
+  String = 10,
+  Key = 11,
+  Uref = 12,
+  Option = 13,
+  List = 14,
+  Fixed_list = 15,
+  Result = 16,
+  Map = 17,
+  Tuple1 = 18,
+  Tuple2 = 19,
+  Tuple3 = 20,
+  Any = 21,
+}
+
+export class CLValue {
+  bytes: u8[];
+  tag: u8;
+  constructor(bytes: u8[], tag: u8) {
+    this.bytes = bytes;
+    this.tag = tag;
+  }
+  static fromString(s: String): CLValue {
+    return new CLValue(toBytesString(s), <u8>CLTypeTag.String);
+  }
+}
+
 export function toBytesString(s: String): u8[] {
   var prefix = toBytesU32(<u32>s.length);
   for (var i = 0; i < s.length; i++) {
@@ -180,16 +217,17 @@ export function toBytesArrayU8(arr: Array<u8>): u8[] {
   return prefix.concat(arr);
 }
 
-export function serializeArguments(values: Array<u8>[]): Array<u8> {
+export function serializeArguments(values: CLValue[]): Array<u8> {
   var prefix = toBytesU32(<u32>values.length);
   for (var i = 0; i < values.length; i++) {
-    prefix = prefix.concat(toBytesArrayU8(values[i]));
+    prefix = prefix.concat(toBytesArrayU8(values[i].bytes));
+    prefix.push(values[i].tag);
   }
   return prefix;
 }
 
 
-export function callContract(key: Key, args: Array<u8>[]): Uint8Array | null {
+export function callContract(key: Key, args: CLValue[]): Uint8Array | null {
   var keyBytes = key.toBytes();
   var argBytes = serializeArguments(args);
   var extraURefs = serializeArguments([]);
@@ -206,7 +244,7 @@ export function callContract(key: Key, args: Array<u8>[]): Uint8Array | null {
     extraURefs.length,
     resultSize.dataStart,
   );
-  
+
   if (ret > 0) {
     return null;
   }
@@ -230,7 +268,7 @@ export function readHostBuffer(count: u32): Uint8Array | null {
 export function transferFromPurseToPurse(source: URef, target: URef, amount: Uint8Array): i32 {
   var sourceBytes = source.toBytes();
   var targetBytes = target.toBytes();
-  
+
   var ret = externals.transfer_from_purse_to_purse(
     sourceBytes.dataStart,
     sourceBytes.length,

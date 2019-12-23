@@ -1,5 +1,5 @@
 import "assemblyscript/std/portable";
-import {URef, decodeOptional, toBytesU32, serializeArguments, Key, toBytesString } from "../assembly";
+import {URef, decodeOptional, toBytesU32, serializeArguments, Key, toBytesString, CLValue } from "../assembly";
 
 import test from "ava";
 import {hex2bin} from "./utils";
@@ -74,9 +74,9 @@ test("key of uref variant serializes", t => {
 
 test("serialize args", t => {
     // let args = ("get_payment_purse",).parse().unwrap().to_bytes().unwrap();
-    var truth = hex2bin("0100000015000000110000006765745f7061796d656e745f7075727365");
+    var truth = hex2bin("0100000015000000110000006765745f7061796d656e745f70757273650a");
     var serialized = serializeArguments([
-        toBytesString("get_payment_purse"),
+        CLValue.fromString("get_payment_purse"),
     ]);
     t.deepEqual(Array.from(serialized), Array.from(truth));
 })

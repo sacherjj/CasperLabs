@@ -21,7 +21,7 @@ export function call(): void {
 
   var key = CL.Key.fromURef(<CL.URef>proofOfStake);
   var output = CL.callContract(key, [
-    CL.toBytesString("get_payment_purse"),
+    CL.CLValue.fromString("get_payment_purse"),
   ]);
 
   if (output == null) {
@@ -33,7 +33,7 @@ export function call(): void {
   if (paymentPurse == null) {
     CL.revert(5);
   }
-  
+
   var ret = CL.transferFromPurseToPurse(
     mainPurse,
     <CL.URef>(paymentPurse),
