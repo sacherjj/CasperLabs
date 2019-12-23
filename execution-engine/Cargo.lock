@@ -8,6 +8,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "add-gas-subcall"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.21.0",
+]
+
+[[package]]
 name = "add-update-associated-key"
 version = "0.1.0"
 dependencies = [

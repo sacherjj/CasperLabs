@@ -187,6 +187,11 @@ where
 
     let result = instance.invoke_export("call", &[], &mut runtime);
 
+    // TODO: To account for the gas used in a subcall, we should uncomment the following lines
+    // if !current_runtime.charge_gas(runtime.context.gas_counter()) {
+    //     return Err(Error::GasLimit);
+    // }
+
     match result {
         // If `Ok` and the `host_buf` is `None`, the contract's execution succeeded but did not
         // explicitly call `runtime::ret()`.  Treat as though the execution returned the unit type
