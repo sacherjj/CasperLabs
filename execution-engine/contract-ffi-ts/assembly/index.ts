@@ -200,6 +200,11 @@ export class CLValue {
   static fromString(s: String): CLValue {
     return new CLValue(toBytesString(s), <u8>CLTypeTag.String);
   }
+  toBytes(): u8[] {
+    var data = toBytesArrayU8(this.bytes);
+    data.push(<u8>this.tag);
+    return data;
+  }
 }
 
 export function toBytesString(s: String): u8[] {
@@ -220,8 +225,7 @@ export function toBytesArrayU8(arr: Array<u8>): u8[] {
 export function serializeArguments(values: CLValue[]): Array<u8> {
   var prefix = toBytesU32(<u32>values.length);
   for (var i = 0; i < values.length; i++) {
-    prefix = prefix.concat(toBytesArrayU8(values[i].bytes));
-    prefix.push(values[i].tag);
+    prefix = prefix.concat(values[i].toBytes());
   }
   return prefix;
 }
