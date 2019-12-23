@@ -114,7 +114,7 @@ steps:
 - name: as-compile-test-pr
   commands:
   - "cd execution-engine"
-  - "make setup-ts"
+  - "make setup"
   - "make test-ts test-contracts-ts"
   image: "casperlabs/buildenv:latest"
   when:
