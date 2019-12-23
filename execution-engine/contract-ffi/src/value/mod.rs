@@ -262,6 +262,20 @@ impl Value {
             _ => None,
         }
     }
+
+    pub fn as_contract(&self) -> Option<&Contract> {
+        match self {
+            Value::Contract(contract) => Some(contract),
+            _ => None,
+        }
+    }
+
+    pub fn as_u512(&self) -> Option<&U512> {
+        match self {
+            Value::UInt512(value) => Some(value),
+            _ => None,
+        }
+    }
 }
 
 macro_rules! from_try_from_impl {

@@ -953,6 +953,10 @@ where
         self.exec_responses.get(index)
     }
 
+    pub fn get_exec_responses_count(&self) -> usize {
+        self.exec_responses.len()
+    }
+
     pub fn get_upgrade_response(&self, index: usize) -> Option<&UpgradeResponse> {
         self.upgrade_responses.get(index)
     }

@@ -18,6 +18,11 @@ pub enum ERC20TransferFromError {
     NotEnoughAllowance,
 }
 
+#[derive(PartialEq, Debug)]
+pub enum ERC20BurnError {
+    NotEnoughBalance,
+}
+
 impl From<ERC20TransferError> for ERC20TransferFromError {
     fn from(error: ERC20TransferError) -> ERC20TransferFromError {
         ERC20TransferFromError::TransferError(error)
@@ -41,6 +46,18 @@ pub trait ERC20Trait<
         let total_supply = self.total_supply();
         self.save_balance(&address, address_balance + amount);
         self.save_total_supply(total_supply + amount);
+    }
+
+    fn burn(&mut self, address: &Address, amount: Amount) -> Result<(), ERC20BurnError> {
+        let address_balance = self.balance_of(address);
+        if address_balance < amount {
+            Err(ERC20BurnError::NotEnoughBalance)
+        } else {
+            let total_supply = self.total_supply();
+            self.save_balance(&address, address_balance - amount);
+            self.save_total_supply(total_supply - amount);
+            Ok(())
+        }
     }
 
     fn transfer(
@@ -97,7 +114,7 @@ pub trait ERC20Trait<
 // Tests start with an example implementation of ERC20Trait.
 #[cfg(test)]
 mod tests {
-    use super::{ERC20Trait, ERC20TransferError, ERC20TransferFromError};
+    use super::{ERC20BurnError, ERC20Trait, ERC20TransferError, ERC20TransferFromError};
 
     use std::collections::HashMap;
 
@@ -166,6 +183,24 @@ mod tests {
         assert_eq!(token.balance_of(&ADDRESS_1), 10);
         assert_eq!(token.balance_of(&ADDRESS_2), 0);
         assert_eq!(token.total_supply(), 10);
+    }
+
+    #[test]
+    fn test_burn() {
+        let mut token = Token::new();
+        token.mint(&ADDRESS_1, 10);
+        let result = token.burn(&ADDRESS_1, 5);
+        assert!(result.is_ok());
+        assert_eq!(token.balance_of(&ADDRESS_1), 5);
+        assert_eq!(token.total_supply(), 5);
+    }
+
+    #[test]
+    fn test_burn_too_much() {
+        let mut token = Token::new();
+        token.mint(&ADDRESS_1, 10);
+        let result = token.burn(&ADDRESS_1, 15);
+        assert_eq!(result.unwrap_err(), ERC20BurnError::NotEnoughBalance);
     }
 
     #[test]

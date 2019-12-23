@@ -2,9 +2,9 @@ use alloc::string::String;
 
 use contract_ffi::{
     bytesrepr::FromBytes,
-    contract_api::{account::PublicKey, runtime, ContractRef, Error as ApiError},
+    contract_api::{account::PublicKey, runtime, ContractRef},
     unwrap_or_revert::UnwrapOrRevert,
-    value::U512,
+    value::{account::PurseId, U512},
 };
 
 use crate::error::Error;
@@ -20,6 +20,10 @@ pub const ASSERT_BALLANCE: &str = "assert_balance";
 pub const ASSERT_TOTAL_SUPPLY: &str = "assert_total_supply";
 pub const ASSERT_ALLOWANCE: &str = "assert_allowance";
 pub const ALLOWANCE: &str = "allowance";
+pub const BUY_PROXY: &str = "buy_proxy";
+pub const BUY: &str = "buy";
+pub const SELL_PROXY: &str = "sell_proxy";
+pub const SELL: &str = "sell";
 
 pub enum Api {
     Deploy(String, U512),
@@ -33,12 +37,16 @@ pub enum Api {
     AssertBalance(PublicKey, U512),
     AssertTotalSupply(U512),
     AssertAllowance(PublicKey, PublicKey, U512),
+    BuyProxy(U512),
+    Buy(PurseId),
+    SellProxy(U512),
+    Sell(PurseId, U512),
 }
 
 fn get_arg<T: FromBytes>(i: u32) -> T {
     runtime::get_arg(i)
-        .unwrap_or_revert_with(ApiError::MissingArgument)
-        .unwrap_or_revert_with(ApiError::InvalidArgument)
+        .unwrap_or_revert_with(Error::missing_argument(i))
+        .unwrap_or_revert_with(Error::invalid_argument(i))
 }
 
 impl Api {
@@ -102,6 +110,23 @@ impl Api {
                 let owner = get_arg(arg_shift + 1);
                 let spender = get_arg(arg_shift + 2);
                 Api::Allowance(owner, spender)
+            }
+            BUY_PROXY => {
+                let clx_amount = get_arg(arg_shift + 1);
+                Api::BuyProxy(clx_amount)
+            }
+            BUY => {
+                let purse = get_arg(arg_shift + 1);
+                Api::Buy(purse)
+            }
+            SELL_PROXY => {
+                let token_amount = get_arg(arg_shift + 1);
+                Api::SellProxy(token_amount)
+            }
+            SELL => {
+                let purse = get_arg(arg_shift + 1);
+                let amount = get_arg(arg_shift + 2);
+                Api::Sell(purse, amount)
             }
             _ => runtime::revert(Error::UnknownApiCommand),
         }

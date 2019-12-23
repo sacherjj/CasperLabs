@@ -41,12 +41,26 @@ command_help () {
     echo ""
     echo "Commands:"
     echo "  deploy <deployer>"
+    echo "                           Deploy ERC20 smart contract."
     echo "  balance <deployer> <owner>" 
+    echo "                           Check the balance of <owner> account."
     echo "  transfer <deployer> <owner> <recipient> <amount>"
+    echo "                           Transfer tokens from <owner> to <recipient>."
     echo "  approve <deployer> <owner> <spender> <amount>"
+    echo "                           Approve <spender> account to transfer <amount>"
+    echo "                           tokens from <owner> account."
     echo "  allowance <deployer> <owner> <spender>"
+    echo "                           Check the allowance of <spender> account for"
+    echo "                           <owner> account."
     echo "  transferFrom <deployer> <spender> <owner> <recipient> <amount>"
+    echo "                           Transfer <amount> tokens from <owner> account"
+    echo "                           to <recipient> account using <spender> account."
+    echo "  buy <deployer> <owner> <amount>"
+    echo "                           Exchange CLX for tokens."
+    echo "  sell <deployer> <owner> <amount>"
+    echo "                           Exchange tokens for CLX."
     echo "  help"
+    echo "                           Print this message."
     echo ""
     echo "<deployer>, <recipient>, <owner>, <spender> are directories,"
     echo "and should contain '${ACCOUNT_PRIVATE_FILE}' and '${ACCOUNT_ID_HEX_FILE}' files."
@@ -212,6 +226,56 @@ command_transfer_from () {
     $CLIENT --host $HOST show-deploy $DEPLOY_HASH   
 }
 
+command_buy () {
+    DEPLOYER_PUBLIC_HEX=$(cat ${1}/${ACCOUNT_ID_HEX_FILE})
+    BUYER_PRIVATE_KEY="${2}/${ACCOUNT_PRIVATE_FILE}"
+    AMOUNT=$3
+    BLOCK_HASH=$(last_block)
+    TOKEN_HASH=$(contract_hash_by_name ${DEPLOYER_PUBLIC_HEX} ${TOKEN_NAME} ${BLOCK_HASH})
+    PROXY_HASH=$(contract_hash_by_name ${DEPLOYER_PUBLIC_HEX} ${PROXY_NAME} ${BLOCK_HASH})
+    ARGS="[\
+        {\"name\": \"erc20\", \"value\": {\"bytes_value\": \"${TOKEN_HASH}\"}}, \
+        {\"name\": \"method\", \"value\": {\"string_value\": \"buy_proxy\"}}, \
+        {\"name\": \"amount\", \"value\": {\"big_int\": {\"value\": \"${AMOUNT}\", \"bit_width\": 512}}} \
+    ]"
+    RESPONSE=$($CLIENT --host ${HOST} deploy \
+        --private-key ${BUYER_PRIVATE_KEY} \
+        --payment-amount 10000000 \
+        --session-hash ${PROXY_HASH} \
+        --session-args "${ARGS}"
+    )
+    DEPLOY_HASH=$(echo $RESPONSE | awk '{print $3}')
+    log "ERC20 buy deployed with hash ${DEPLOY_HASH}"
+    propose_block_if_enabled
+    log "Checking buy status."
+    $CLIENT --host $HOST show-deploy $DEPLOY_HASH   
+}
+
+command_sell () {
+    DEPLOYER_PUBLIC_HEX=$(cat ${1}/${ACCOUNT_ID_HEX_FILE})
+    SELLER_PRIVATE_KEY="${2}/${ACCOUNT_PRIVATE_FILE}"
+    AMOUNT=$3
+    BLOCK_HASH=$(last_block)
+    TOKEN_HASH=$(contract_hash_by_name ${DEPLOYER_PUBLIC_HEX} ${TOKEN_NAME} ${BLOCK_HASH})
+    PROXY_HASH=$(contract_hash_by_name ${DEPLOYER_PUBLIC_HEX} ${PROXY_NAME} ${BLOCK_HASH})
+    ARGS="[\
+        {\"name\": \"erc20\", \"value\": {\"bytes_value\": \"${TOKEN_HASH}\"}}, \
+        {\"name\": \"method\", \"value\": {\"string_value\": \"sell_proxy\"}}, \
+        {\"name\": \"amount\", \"value\": {\"big_int\": {\"value\": \"${AMOUNT}\", \"bit_width\": 512}}} \
+    ]"
+    RESPONSE=$($CLIENT --host ${HOST} deploy \
+        --private-key ${SELLER_PRIVATE_KEY} \
+        --payment-amount 10000000 \
+        --session-hash ${PROXY_HASH} \
+        --session-args "${ARGS}"
+    )
+    DEPLOY_HASH=$(echo $RESPONSE | awk '{print $3}')
+    log "ERC20 sell deployed with hash ${DEPLOY_HASH}"
+    propose_block_if_enabled
+    log "Checking sell status."
+    $CLIENT --host $HOST show-deploy $DEPLOY_HASH   
+}
+
 COMMAND=${1:-"help"}
 case $COMMAND in
     deploy)
@@ -231,6 +295,12 @@ case $COMMAND in
         ;;
     transferFrom)
         command_transfer_from $2 $3 $4 $5 $6
+        ;;
+    buy)
+        command_buy $2 $3 $4
+        ;;
+    sell)
+        command_sell $2 $3 $4
         ;;
     help)
         command_help
