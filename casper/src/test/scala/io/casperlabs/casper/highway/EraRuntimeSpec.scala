@@ -1,13 +1,19 @@
 package io.casperlabs.casper.highway
 
-import cats.Id
+import cats._
+import cats.implicits._
+import cats.effect.Clock
 import com.google.protobuf.ByteString
 import java.util.concurrent.TimeUnit
-import io.casperlabs.casper.consensus.BlockSummary
+import io.casperlabs.casper.consensus.{Block, BlockSummary, Bond}
+import io.casperlabs.casper.consensus.state
+import io.casperlabs.crypto.Keys.{PublicKey, PublicKeyBS}
 import org.scalatest._
+import scala.concurrent.duration._
 
-class EraRuntimeSpec extends WordSpec with Matchers with TickUtils {
+class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUtils {
   import HighwayConf._
+  import EraRuntime.Agenda
 
   val conf = HighwayConf(
     tickUnit = TimeUnit.MILLISECONDS,
@@ -18,11 +24,44 @@ class EraRuntimeSpec extends WordSpec with Matchers with TickUtils {
     postEraVotingDuration = VotingDuration.FixedLength(days(2))
   )
 
-  val genesis = BlockSummary().withBlockHash(ByteString.copyFromUtf8("genesis"))
+  val genesis = BlockSummary()
+    .withBlockHash(ByteString.copyFromUtf8("genesis"))
+    .withHeader(
+      Block
+        .Header()
+        .withState(
+          Block
+            .GlobalState()
+            .withBonds(
+              List(
+                Bond(validatorKey("Alice")).withStake(state.BigInt("3000")),
+                Bond(validatorKey("Bob")).withStake(state.BigInt("4000")),
+                Bond(validatorKey("Charlie")).withStake(state.BigInt("5000"))
+              )
+            )
+        )
+    )
+
+  // Let's say we are right at the beginning of the era by default.
+  implicit def defaultClock: Clock[Id] = new TestClock[Id](date(2019, 12, 9))
+
+  def genesisEraRuntime(validator: Option[String] = none, roundExponent: Int = 0)(
+      implicit C: Clock[Id]
+  ) =
+    EraRuntime.fromGenesis[Id](
+      conf,
+      genesis,
+      validator.map(validatorKey),
+      initRoundExponent = roundExponent
+    )(Monad[Id], C)
+
+  def validatorKey(name: String) =
+    PublicKey(ByteString.copyFromUtf8(name))
 
   "EraRuntime" when {
     "started with the genesis block" should {
-      val runtime = EraRuntime.fromGenesis[Id](conf, genesis)
+      val runtime =
+        EraRuntime.fromGenesis[Id](conf, genesis, maybeValidatorId = none, initRoundExponent = 0)
 
       "use the genesis ticks for the era" in {
         conf.toInstant(Ticks(runtime.era.startTick)) shouldBe conf.genesisEraStart
@@ -88,13 +127,43 @@ class EraRuntimeSpec extends WordSpec with Matchers with TickUtils {
 
   "initAgenda" when {
     "the validator is bonded in the era" should {
-      "schedule the first round" in (pending)
+      "schedule the first round" in {
+        val runtime = genesisEraRuntime(validator = "Alice".some)
+
+        val agenda = runtime.initAgenda
+        agenda should have size 1
+        agenda.head.tick shouldBe runtime.startTick
+        agenda.head.action shouldBe Agenda.StartRound(runtime.startTick)
+      }
+      "schedule the first round at the next available round exponent" in {
+        // Say this validator is starting a bit late.
+        val now = conf.genesisEraStart plus 5.hours
+        val exp = 10
+
+        implicit val clock = new TestClock[Id](now)
+        val runtime        = genesisEraRuntime(validator = "Alice".some, roundExponent = exp)
+
+        val millisRound = math.pow(2.0, exp.toDouble).toLong
+        val millisNow   = now.toEpochMilli
+        val millisNext  = millisNow + (millisRound - millisNow % millisRound)
+
+        val agenda = runtime.initAgenda
+        agenda should have size 1
+        agenda.head.tick shouldBe millisNext
+        agenda.head.action shouldBe Agenda.StartRound(Ticks(millisNext))
+      }
     }
     "the validator is not bonded in the era" should {
-      "not schedule anything" in (pending)
+      "not schedule anything" in {
+        genesisEraRuntime("Dave".some).initAgenda shouldBe empty
+        genesisEraRuntime(none).initAgenda shouldBe empty
+      }
     }
     "the era is already over" should {
-      "not schedule anything" in (pending)
+      "not schedule anything" in {
+        implicit val clock = new TestClock[Id](conf.genesisEraStart plus 700.days)
+        genesisEraRuntime(validator = "Alice".some).initAgenda shouldBe empty
+      }
     }
   }
 

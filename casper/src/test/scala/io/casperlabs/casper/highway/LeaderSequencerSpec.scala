@@ -39,7 +39,7 @@ class LeaderSequencerSpec extends WordSpec with Matchers with Inspectors {
     }
   }
 
-  "makeSequencer" should {
+  "apply" should {
     val bonds = NonEmptyList.of(
       Bond(ByteString.copyFromUtf8("Alice")).withStake(state.BigInt("1000")),
       Bond(ByteString.copyFromUtf8("Bob")).withStake(state.BigInt("2000")),

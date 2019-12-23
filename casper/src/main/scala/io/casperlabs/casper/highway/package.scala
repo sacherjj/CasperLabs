@@ -4,6 +4,7 @@ import cats.data.WriterT
 import java.time.Instant
 import scala.concurrent.duration.FiniteDuration
 import shapeless.tag.@@
+import scala.annotation.tailrec
 
 package highway {
   sealed trait TimestampTag
@@ -18,7 +19,12 @@ package object highway {
 
   /** Ticks since Unix epoch in the Highway specific time unit. */
   type Ticks = Long @@ TicksTag
-  def Ticks(t: Long) = t.asInstanceOf[Ticks]
+  object Ticks {
+    def apply(t: Long) = t.asInstanceOf[Ticks]
+
+    /** Calculate round length. */
+    def roundLength(exponent: Int) = Ticks(pow(2L, exponent))
+  }
 
   implicit class InstantOps(val a: Instant) extends AnyVal {
     def plus(b: FiniteDuration) =
@@ -35,4 +41,10 @@ package object highway {
     * playback mode).
     */
   type HighwayLog[F[_], T] = WriterT[F, Vector[HighwayEvent], T]
+
+  @tailrec
+  private def pow(base: Long, exp: Int, acc: Long = 1L): Long =
+    if (exp <= 0) acc
+    else if (exp % 2 == 0) pow(base * base, exp / 2, acc)
+    else pow(base, exp - 1, acc * base)
 }

@@ -1,5 +1,8 @@
 package io.casperlabs.casper.highway
 
+import cats._
+import cats.implicits._
+import cats.effect.Clock
 import java.time.Instant
 import io.casperlabs.casper.consensus.{BlockSummary, Era}
 import io.casperlabs.crypto.Keys.PublicKeyBS
@@ -23,11 +26,18 @@ import io.casperlabs.models.Message
   * and it's up to the supervisor protocol to send them out. Should
   * make testing easier as well.
   */
-class EraRuntime[F[_]](conf: HighwayConf, val era: Era) {
-  import EraRuntime.Agenda
+class EraRuntime[F[_]: Monad: Clock](
+    conf: HighwayConf,
+    val era: Era,
+    maybeValidatorId: Option[PublicKeyBS],
+    initRoundExponent: Int
+) {
+  import EraRuntime.Agenda, Agenda._
 
-  val start = conf.toInstant(Ticks(era.startTick))
-  val end   = conf.toInstant(Ticks(era.endTick))
+  val startTick = Ticks(era.startTick)
+  val endTick   = Ticks(era.endTick)
+  val start     = conf.toInstant(startTick)
+  val end       = conf.toInstant(endTick)
 
   val bookingBoundaries =
     conf.criticalBoundaries(start, end, delayDuration = conf.bookingDuration)
@@ -57,8 +67,48 @@ class EraRuntime[F[_]](conf: HighwayConf, val era: Era) {
     */
   val isSwitchBoundary = (mpbr: Instant, br: Instant) => mpbr.isBefore(end) && !br.isBefore(end)
 
+  /** Whether the validator is bonded depends on the booking block. Only bonded validators
+    * have to produce blocks and ballots in the era.
+    * TODO: Decide if unbonded validators need to maintain round statistics about finalized lambda messages.
+    */
+  val isBonded =
+    maybeValidatorId.fold(false)(id => era.bonds.exists(b => b.validatorPublicKey == id))
+
+  private def currentTick =
+    Clock[F].realTime(conf.tickUnit).map(Ticks(_))
+
+  /** Check if the era is finished yet, including the post-era voting period. */
+  private def isFinished(tick: Ticks): F[Boolean] =
+    if (tick < endTick) false.pure[F]
+    else {
+      conf.postEraVotingDuration match {
+        case HighwayConf.VotingDuration.FixedLength(duration) =>
+          (end plus duration).isBefore(conf.toInstant(tick)).pure[F]
+
+        case HighwayConf.VotingDuration.SummitLevel(_) =>
+          ???
+      }
+    }
+
+  /** Calculate the next tick where the round ID matches the exponent. */
+  private def nextRoundId(tick: Ticks): Ticks = {
+    val length = Ticks.roundLength(initRoundExponent)
+    if (tick % length == 0) tick else Ticks(tick + length - tick % length)
+  }
+
   /** Produce a starting agenda, depending on whether the validator is bonded or not. */
-  def initAgenda: F[Agenda] = ???
+  def initAgenda: F[Agenda] =
+    if (!isBonded) Agenda.empty[F]
+    else
+      currentTick flatMap { tick =>
+        isFinished(tick) flatMap {
+          case true =>
+            Agenda.empty[F]
+          case false =>
+            val roundId = nextRoundId(tick)
+            Agenda[F](roundId -> StartRound(roundId))
+        }
+      }
 
   /** Handle a block or ballot coming from another validator. For example:
     * - if it's a lambda message, create a lambda response
@@ -84,7 +134,12 @@ class EraRuntime[F[_]](conf: HighwayConf, val era: Era) {
 
 object EraRuntime {
 
-  def fromGenesis[F[_]](conf: HighwayConf, genesis: BlockSummary): EraRuntime[F] =
+  def fromGenesis[F[_]: Monad: Clock](
+      conf: HighwayConf,
+      genesis: BlockSummary,
+      maybeValidatorId: Option[PublicKeyBS],
+      initRoundExponent: Int
+  ): EraRuntime[F] =
     new EraRuntime[F](
       conf,
       Era(
@@ -93,7 +148,9 @@ object EraRuntime {
         startTick = conf.toTicks(conf.genesisEraStart),
         endTick = conf.toTicks(conf.genesisEraEnd),
         bonds = genesis.getHeader.getState.bonds
-      )
+      ),
+      maybeValidatorId,
+      initRoundExponent
     )
 
   /** List of future actions to take. */
@@ -115,5 +172,12 @@ object EraRuntime {
 
     /** Create an Omega message, some time during the round */
     case class CreateOmegaMessage(roundId: Ticks) extends Action
+
+    def apply[F[_]: Applicative](
+        actions: (Ticks, Action)*
+    ): F[Agenda] =
+      actions.map(DelayedAction.tupled).toVector.pure[F]
+
+    def empty[F[_]: Applicative] = apply[F]()
   }
 }
