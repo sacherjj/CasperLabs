@@ -83,6 +83,16 @@ where
                 Ok(None)
             }
 
+            FunctionIndex::AddLocalFuncIndex => {
+                // args(0) = pointer to key in Wasm memory
+                // args(1) = size of key
+                // args(2) = pointer to value
+                // args(3) = size of value
+                let (key_bytes_ptr, key_bytes_size, value_ptr, value_size) = Args::parse(args)?;
+                self.add_local(key_bytes_ptr, key_bytes_size, value_ptr, value_size)?;
+                Ok(None)
+            }
+
             FunctionIndex::NewFuncIndex => {
                 // args(0) = pointer to key destination in Wasm memory
                 // args(1) = pointer to initial value

@@ -11,6 +11,7 @@ pub enum FunctionIndex {
     ReadFuncIndex = 2,
     ReadLocalFuncIndex = 3,
     AddFuncIndex = 4,
+    AddLocalFuncIndex = 37, // TODO: discuss whether this should be 37 or 5
     NewFuncIndex = 5,
     RetFuncIndex = 6,
     CallContractFuncIndex = 7,

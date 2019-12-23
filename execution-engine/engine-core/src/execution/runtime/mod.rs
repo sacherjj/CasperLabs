@@ -741,6 +741,22 @@ where
             .map_err(Into::into)
     }
 
+    /// Adds `value` to the cell pointed to by  a key derived from `key` in the "local cluster" of
+    /// GlobalState
+    pub fn add_local(
+        &mut self,
+        key_ptr: u32,
+        key_size: u32,
+        value_ptr: u32,
+        value_size: u32,
+    ) -> Result<(), Trap> {
+        let key_bytes = self.bytes_from_mem(key_ptr, key_size as usize)?;
+        let cl_value = self.cl_value_from_mem(value_ptr, value_size)?;
+        self.context
+            .add_ls(&key_bytes, cl_value)
+            .map_err(Into::into)
+    }
+
     /// Reads value from the GS living under key specified by `key_ptr` and
     /// `key_size`. Wasm and host communicate through memory that Wasm
     /// module exports. If contract wants to pass data to the host, it has
