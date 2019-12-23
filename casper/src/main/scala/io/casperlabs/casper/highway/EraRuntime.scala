@@ -3,8 +3,28 @@ package io.casperlabs.casper.highway
 import java.time.Instant
 import io.casperlabs.casper.consensus.{BlockSummary, Era}
 import io.casperlabs.crypto.Keys.PublicKeyBS
+import io.casperlabs.models.Message
 
+/** Class to encapsulate the message handling logic of messages in an era.
+  *
+  * It can create blocks/ballots and persist them, even new eras,
+  * but it should not have externally visible side effects, i.e.
+  * not communicate over the network.
+  *
+  * Persisting messages is fine: if we want to handle messages concurrently
+  * we have to keep track of the validator sequence number and make sure
+  * we cite our own previous messages. But it's best not to communicate
+  * the changes to the outside world right here. We may want to replicate
+  * them first in a master-slave environment, in which case we have to
+  * make sure the slave has everything persisted as well, so that in the
+  * even it has to take over, it won't equivocate.
+  *
+  * Therefore the handler methods will return a list of domain events,
+  * and it's up to the supervisor protocol to send them out. Should
+  * make testing easier as well.
+  */
 class EraRuntime[F[_]](conf: HighwayConf, val era: Era) {
+  import EraRuntime.Agenda
 
   val start = conf.toInstant(Ticks(era.startTick))
   val end   = conf.toInstant(Ticks(era.endTick))
@@ -31,17 +51,39 @@ class EraRuntime[F[_]](conf: HighwayConf, val era: Era) {
 
   /** Switch blocks are the first blocks which are created _after_ the era ends.
     * They are still created by the validators of this era, and they signal the
-    * end of the era. Otherwise there might be just one more millisecond round
-    * in the era that you have to wait for. Switch blocks are what the child
-    * era is going to build on, however, the validators of _this_ era are the
-    * ones that can finalize it by building ballots on top of it. The cannot
-    * build more blocks on them though.
+    * end of the era. Switch blocks are what the child era is going to build on,
+    * however, the validators of _this_ era are the ones that can finalize it by
+    * building ballots on top of it. They cannot build more blocks on them though.
     */
   val isSwitchBoundary = (mpbr: Instant, br: Instant) => mpbr.isBefore(end) && !br.isBefore(end)
+
+  /** Produce a starting agenda, depending on whether the validator is bonded or not. */
+  def initAgenda: F[Agenda] = ???
+
+  /** Handle a block or ballot coming from another validator. For example:
+    * - if it's a lambda message, create a lambda response
+    * - if it's a switch block, create a new era, unless it exists already.
+    * Returns a list of events that happened during the persisting of changes.
+    * This method is always called as a reaction to an incoming message,
+    * so it doesn't return a future agenda of its own.
+    */
+  def handleMessage(message: Message): HighwayLog[F, Unit] = ???
+
+  /** Handle something that happens during a round:
+    * - in rounds when we are leading, create a lambda message
+    * - if it's a booking block, execute the auction
+    * - if the main parent is a switch block, create a ballot instead
+    * - midway through the round, create an omega message
+    * - if we're beyond the voting period after the end of the era, stop.
+    * Returns a list of events that took place, as well as its future agenda,
+    * telling the caller when it has to be scheduled again.
+    */
+  def handleAgenda(action: Agenda.Action): HighwayLog[F, Agenda] = ???
 
 }
 
 object EraRuntime {
+
   def fromGenesis[F[_]](conf: HighwayConf, genesis: BlockSummary): EraRuntime[F] =
     new EraRuntime[F](
       conf,
@@ -53,4 +95,25 @@ object EraRuntime {
         bonds = genesis.getHeader.getState.bonds
       )
     )
+
+  /** List of future actions to take. */
+  type Agenda = Vector[Agenda.DelayedAction]
+
+  object Agenda {
+    sealed trait Action
+
+    /** What action to take and when. */
+    case class DelayedAction(tick: Ticks, action: Action)
+
+    /** Handle one round:
+      * - in rounds when we are leading, create a lambda message
+      * - if it's a booking block, execute the auction
+      * - if the main parent is a switch block, create a ballot instead
+      * - if we're beyond the voting period after the end of the era, stop.
+      */
+    case class StartRound(roundId: Ticks) extends Action
+
+    /** Create an Omega message, some time during the round */
+    case class CreateOmegaMessage(roundId: Ticks) extends Action
+  }
 }

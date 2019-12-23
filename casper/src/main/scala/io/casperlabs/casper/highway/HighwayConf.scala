@@ -130,7 +130,7 @@ object HighwayConf {
   object EraDuration {
 
     /** Fixed length eras are easy to deal with, but over the years can accumulate leap seconds
-      * which menas they will eventually move away from starting at the desired midnight.
+      * which means they will eventually move away from starting at the desired midnight.
       * In practice this shouldn't be a problem with the Java time library because it spreads
       * leap seconds throughout the day so that they appear to be exactly 86400 seconds.
       */

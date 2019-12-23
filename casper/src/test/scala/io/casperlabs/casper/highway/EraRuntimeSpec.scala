@@ -6,7 +6,7 @@ import java.util.concurrent.TimeUnit
 import io.casperlabs.casper.consensus.BlockSummary
 import org.scalatest._
 
-class EraRuntimeConfSpec extends WordSpec with Matchers with TickUtils {
+class EraRuntimeSpec extends WordSpec with Matchers with TickUtils {
   import HighwayConf._
 
   val conf = HighwayConf(
@@ -86,4 +86,80 @@ class EraRuntimeConfSpec extends WordSpec with Matchers with TickUtils {
     }
   }
 
+  "initAgenda" when {
+    "the validator is bonded in the era" should {
+      "schedule the first round" in (pending)
+    }
+    "the validator is not bonded in the era" should {
+      "not schedule anything" in (pending)
+    }
+    "the era is already over" should {
+      "not schedule anything" in (pending)
+    }
+  }
+
+  "handleMessage" when {
+    "the validator is bonded" when {
+      "given a lambda message" when {
+        "it is from the leader" should {
+          "create a lambda response" in (pending)
+          "remember that a lambda message was received in this round" in (pending)
+        }
+        "it is not from the leader" should {
+          "not respond" in (pending)
+        }
+        "it is a switch block" should {
+          "create an era" in (pending)
+        }
+      }
+      "given a ballot" should {
+        "not respond" in (pending)
+      }
+    }
+    "the validator is not bonded" when {
+      "given a lambda message" should {
+        "not respond" in (pending)
+      }
+      "given a switch block" should {
+        "create an era" in (pending)
+      }
+    }
+  }
+
+  "handleAgenda" when {
+    "starting a round" when {
+      "in the active period of the era" when {
+        "the validator is the leader" should {
+          "create a lambda message" in (pending)
+          "schedule another round" in (pending)
+          "schedule an omega message" in (pending)
+        }
+        "the validator is not leading" should {
+          "not create a lambda message" in (pending)
+          "schedule another round" in (pending)
+          "schedule an omega message" in (pending)
+        }
+      }
+      "right after the era-end" when {
+        "no previous switch block has been seen" should {
+          "create a switch block" in (pending)
+        }
+        "already found a switch block" should {
+          "only create ballots" in (pending)
+        }
+      }
+      "in the post-era voting period" when {
+        "the validator is the leader" should {
+          "a ballot instead of a lambda message" in (pending)
+        }
+        "the voting is still going" should {
+          "schedule an omega message" in (pending)
+          "schedule another round" in (pending)
+        }
+        "the voting period is over" should {
+          "not schedule anything" in (pending)
+        }
+      }
+    }
+  }
 }
