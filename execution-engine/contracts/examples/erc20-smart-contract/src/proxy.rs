@@ -69,16 +69,16 @@ pub extern "C" fn erc20_proxy() {
                 .unwrap_or_revert_with(Error::PurseTransferError);
             runtime::call_contract::<_, ()>(
                 token_ref.clone(),
-                &(api::BUY, new_purse),
-                &vec![new_purse.value().into()],
+                (api::BUY, new_purse),
+                vec![new_purse.value().into()],
             );
         }
         Api::SellProxy(tokens_amount) => {
             let new_purse = system::create_purse();
             runtime::call_contract::<_, ()>(
                 token_ref.clone(),
-                &(api::SELL, new_purse, tokens_amount),
-                &vec![new_purse.value().into()],
+                (api::SELL, new_purse, tokens_amount),
+                vec![new_purse.value().into()],
             );
             let main_purse = account::get_main_purse();
             system::transfer_from_purse_to_purse(new_purse, main_purse, tokens_amount)

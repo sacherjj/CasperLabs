@@ -4,7 +4,10 @@ use contract_ffi::{
     bytesrepr::FromBytes,
     contract_api::{runtime, ContractRef},
     unwrap_or_revert::UnwrapOrRevert,
-    value::{account::PublicKey, CLTyped, U512},
+    value::{
+        account::{PublicKey, PurseId},
+        CLTyped, U512,
+    },
 };
 
 use crate::error::Error;

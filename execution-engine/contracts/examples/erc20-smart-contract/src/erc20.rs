@@ -1,9 +1,12 @@
 use alloc::vec::Vec;
 
 use contract_ffi::{
-    contract_api::{runtime, storage},
+    contract_api::{runtime, storage, system},
     unwrap_or_revert::UnwrapOrRevert,
-    value::{account::PublicKey, CLValue, U512},
+    value::{
+        account::{PublicKey, PurseId},
+        CLValue, U512,
+    },
 };
 
 use erc20_logic::{ERC20BurnError, ERC20Trait, ERC20TransferError, ERC20TransferFromError};
@@ -80,11 +83,18 @@ fn entry_point() {
             };
         }
         Api::Approve(spender, amount) => token.approve(&runtime::get_caller(), &spender, amount),
-        Api::BalanceOf(address) => runtime::ret(token.balance_of(&address), Vec::new()),
-        Api::TotalSupply => runtime::ret(token.total_supply(), Vec::new()),
-        Api::Allowance(owner, spender) => {
-            runtime::ret(token.allowance(&owner, &spender), Vec::new())
-        }
+        Api::BalanceOf(address) => runtime::ret(
+            CLValue::from_t(token.balance_of(&address)).unwrap_or_revert(),
+            Vec::new(),
+        ),
+        Api::TotalSupply => runtime::ret(
+            CLValue::from_t(token.total_supply()).unwrap_or_revert(),
+            Vec::new(),
+        ),
+        Api::Allowance(owner, spender) => runtime::ret(
+            CLValue::from_t(token.allowance(&owner, &spender)).unwrap_or_revert(),
+            Vec::new(),
+        ),
         Api::Buy(purse) => {
             let transfered_amount = transfer_in_clx_from_purse(purse);
             token.mint(&runtime::get_caller(), transfered_amount);

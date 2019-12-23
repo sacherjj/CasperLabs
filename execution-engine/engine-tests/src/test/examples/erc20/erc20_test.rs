@@ -1,4 +1,4 @@
-use std::convert::TryInto;
+use std::convert::{TryFrom, TryInto};
 
 use engine_shared::{gas::Gas, motes::Motes};
 
@@ -11,12 +11,10 @@ use crate::support::test_support;
 use contract_ffi::{
     bytesrepr::ToBytes,
     key::Key,
-    value::{Value, U512},
+    value::{account::PurseId, CLValue, U512},
 };
 
 use crate::support::test_support::{ExecuteRequestBuilder, InMemoryWasmTestBuilder as TestBuilder};
-
-use contract_ffi::value::account::PurseId;
 
 use crate::test::DEFAULT_GENESIS_CONFIG;
 
@@ -57,12 +55,13 @@ impl ERC20Test {
 
     pub fn query_contract_hash(&self, account: [u8; 32], name: &str) -> [u8; 32] {
         let account_key = Key::Account(account);
-        let value: Value = self.builder.query(None, account_key, &[name]).unwrap();
-        if let Value::Key(Key::Hash(contract_hash)) = value {
-            contract_hash
-        } else {
-            panic!("Can't extract contract hash.");
-        }
+        let value: CLValue = self
+            .builder
+            .query(None, account_key, &[name])
+            .and_then(|v| CLValue::try_from(v).ok())
+            .expect("should have named uref.");
+        let key: Key = value.into_t().unwrap();
+        key.as_hash().unwrap()
     }
 
     pub fn deploy_erc20_contract(mut self, sender: [u8; 32], init_balance: U512) -> Self {
@@ -256,11 +255,12 @@ impl ERC20Test {
     }
 
     pub fn assert_clx_contract_balance(self, expected: U512) -> Self {
-        let token_contract: Value = self
+        let token_contract_value = self
             .builder
             .query(None, Key::Hash(self.get_token_hash()), &[])
-            .unwrap();
-        let purse_uref = token_contract
+            .expect("should have token contract.");
+
+        let purse_uref = token_contract_value
             .as_contract()
             .unwrap()
             .named_keys()
@@ -278,13 +278,14 @@ impl ERC20Test {
         balance_bytes.extend(&[1]);
         balance_bytes.extend(&address);
         let balance_key = Key::local(self.get_token_hash(), &balance_bytes.to_bytes().unwrap());
-        let value: Value = self
+        let value: CLValue = self
             .builder
             .query(None, balance_key.clone(), &[])
-            .unwrap_or_else(|| panic!("Local value not found."));
-        let balance = value.as_u512().unwrap();
+            .and_then(|v| CLValue::try_from(v).ok())
+            .expect("should have local value.");
+        let balance: U512 = value.into_t().unwrap();
         assert_eq!(
-            balance, &expected,
+            balance, expected,
             "Balance assertion failure for {:?}",
             address
         );
@@ -293,12 +294,13 @@ impl ERC20Test {
 
     pub fn assert_erc20_total_supply(self, expected: U512) -> Self {
         let total_supply_key = Key::local(self.get_token_hash(), &[255u8; 32]);
-        let value: Value = self
+        let value: CLValue = self
             .builder
             .query(None, total_supply_key.clone(), &[])
-            .unwrap_or_else(|| panic!("Total supply value not found."));
-        let total_supply = value.as_u512().unwrap();
-        assert_eq!(total_supply, &expected);
+            .and_then(|v| CLValue::try_from(v).ok())
+            .expect("should have total supply key.");
+        let total_supply: U512 = value.into_t().unwrap();
+        assert_eq!(total_supply, expected, "Total supply assertion failure.");
         self
     }
 
@@ -312,12 +314,17 @@ impl ERC20Test {
         allowance_bytes.extend(&owner);
         allowance_bytes.extend(&spender);
         let allowance_key = Key::local(self.get_token_hash(), &allowance_bytes.to_bytes().unwrap());
-        let value: Value = self
+        let value: CLValue = self
             .builder
             .query(None, allowance_key.clone(), &[])
-            .unwrap_or_else(|| panic!("Local value not found."));
-        let allowance = value.as_u512().unwrap();
-        assert_eq!(allowance, &expected);
+            .and_then(|v| CLValue::try_from(v).ok())
+            .expect("should have allowance key.");
+        let allowance: U512 = value.into_t().unwrap();
+        assert_eq!(
+            allowance, expected,
+            "Allowance assertion failure for {:?}",
+            owner
+        );
         self
     }
 
