@@ -16,7 +16,11 @@ final case class HighwayConf(
     /** Amount of time to wait after the booking before we pick the key block, collecting the magic bits along the way. */
     entropyDuration: FiniteDuration,
     /** Stopping condition for producing ballots after the end of the era. */
-    postEraVotingDuration: HighwayConf.VotingDuration
+    postEraVotingDuration: HighwayConf.VotingDuration,
+    /** Fraction of time through the round after which we can create an omega message. */
+    omegaMessageTimeStart: Double,
+    /** Fraction of time through the round before which we must have created the omega message. */
+    omegaMessageTimeEnd: Double
 ) {
   import HighwayConf._
 

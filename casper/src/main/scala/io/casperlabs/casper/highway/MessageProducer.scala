@@ -15,8 +15,22 @@ trait MessageProducer[F[_]] {
   def validatorId: PublicKeyBS
 
   def ballot(
+      eraId: BlockHash,
+      roundId: Ticks,
       target: BlockHash,
-      justifications: Map[PublicKeyBS, Set[BlockHash]],
-      roundId: Ticks
+      // For lambda responses we want to limit the justifications to just direct ones.
+      justifications: Map[PublicKeyBS, Set[BlockHash]]
   ): F[Message.Ballot]
+
+  /** Pick whatever secondary parents are compatible with the chosen main parent
+    * and the justifications selected when the caller started their operation,
+    * select deploys from the buffer, and create a (possibly empty) block,
+    * persisting it to the block store.
+    */
+  def block(
+      eraId: BlockHash,
+      roundId: Ticks,
+      mainParent: BlockHash,
+      justifications: Map[PublicKeyBS, Set[BlockHash]]
+  ): F[Message.Block]
 }

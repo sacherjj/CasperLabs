@@ -14,6 +14,7 @@ import io.casperlabs.models.Message
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.storage.block.BlockStorage.BlockHash
 import org.scalatest._
+import org.scalactic.source
 import scala.concurrent.duration._
 
 class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUtils {
@@ -31,7 +32,9 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
     eraDuration = EraDuration.FixedLength(days(7)),
     bookingDuration = days(10),
     entropyDuration = hours(3),
-    postEraVotingDuration = VotingDuration.FixedLength(days(2))
+    postEraVotingDuration = VotingDuration.FixedLength(days(2)),
+    omegaMessageTimeStart = 0.5,
+    omegaMessageTimeEnd = 0.75
   )
 
   val genesis = BlockSummary()
@@ -68,6 +71,24 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
       isSyncedRef.get,
       leaderSequencer
     )(Sync[Id], C)
+
+  def assertEvent(
+      events: Vector[HighwayEvent]
+  )(test: PartialFunction[HighwayEvent, Unit])(implicit pos: source.Position) =
+    events.filter(test.isDefinedAt(_)) match {
+      case Vector(event) => test(event)
+      case Vector()      => fail(s"Could not find matching event in $events")
+      case _             => fail(s"Multiple matching events found in $events")
+    }
+
+  def assertAgenda(
+      agenda: Agenda
+  )(test: PartialFunction[Agenda.DelayedAction, Unit])(implicit pos: source.Position) =
+    agenda.filter(test.isDefinedAt(_)) match {
+      case Vector(action) => test(action)
+      case Vector()       => fail(s"Could not find matching action in $agenda")
+      case _              => fail(s"Multiple matching actions found in $agenda")
+    }
 
   "EraRuntime" when {
     "started with the genesis block" should {
@@ -197,11 +218,10 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
             val msg    = makeBlock(leader, runtime.era.keyBlockHash, runtime.startTick)
             val events = runtime.handleMessage(msg).written
             events should have size 1
-            events.head shouldBe a[HighwayEvent.CreatedLambdaResponse]
-            events.head
-              .asInstanceOf[HighwayEvent.CreatedLambdaResponse]
-              .message
-              .parentBlock shouldBe msg.messageHash
+            assertEvent(events) {
+              case event: HighwayEvent.CreatedLambdaResponse =>
+                event.message.parentBlock shouldBe msg.messageHash
+            }
           }
 
           "remember that a lambda message was received in this round" in {
@@ -288,16 +308,59 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
     "received a StartRound action" when {
       "in the active period of the era" when {
         "the validator is the leader" should {
-          "create a lambda message" in (pending)
-          "schedule another round" in (pending)
-          "schedule an omega message" in (pending)
+          val exponent    = 15
+          val roundLength = math.pow(2.0, exponent.toDouble).toLong.millis
+          val now         = conf.genesisEraStart plus (roundLength * 20)
+          val roundId     = conf.toTicks(now)
+          val nextRoundId = Ticks(roundId + roundLength.toMillis)
+
+          implicit val clock = new TestClock[Id](now)
+
+          val runtime = genesisEraRuntime(
+            "Alice".some,
+            leaderSequencer = mockSequencer("Alice"),
+            roundExponent = exponent
+          )
+
+          val (events, agenda) = runtime.handleAgenda(Agenda.StartRound(roundId)).run
+
+          "create a lambda message" in {
+            events should have size 1
+            assertEvent(events) {
+              case event: HighwayEvent.CreatedLambdaMessage =>
+                event.message.roundId shouldBe roundId
+            }
+          }
+
+          "not schedule more than 1 round" in {
+            agenda should have size (2)
+          }
+
+          "schedule another round" in {
+            assertAgenda(agenda) {
+              case Agenda.DelayedAction(tick, start: Agenda.StartRound) =>
+                tick shouldBe nextRoundId
+                start.roundId shouldBe nextRoundId
+            }
+          }
+
+          "schedule an omega message" in {
+            assertAgenda(agenda) {
+              case Agenda.DelayedAction(tick, omega: Agenda.CreateOmegaMessage) =>
+                tick should be >= (roundId + (nextRoundId - roundId) * conf.omegaMessageTimeStart).toLong
+                tick should be < (roundId + (nextRoundId - roundId) * conf.omegaMessageTimeEnd).toLong
+                omega.roundId shouldBe roundId
+            }
+          }
         }
+
         "the validator is not leading" should {
           "not create a lambda message" in (pending)
           "schedule another round" in (pending)
           "schedule an omega message" in (pending)
         }
       }
+
       "right after the era-end" when {
         "no previous switch block has been seen" should {
           "create a switch block" in (pending)
@@ -306,6 +369,7 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
           "only create ballots" in (pending)
         }
       }
+
       "in the post-era voting period" when {
         "the validator is the leader" should {
           "a ballot instead of a lambda message" in (pending)
@@ -318,15 +382,48 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
           "not schedule anything" in (pending)
         }
       }
+
       "during initial sync" should {
-        "not create a lambda message" in (pending)
-        "schedule another round" in (pending)
-        "schedule an omega message" in (pending)
+        val runtime = genesisEraRuntime(
+          "Alice".some,
+          leaderSequencer = mockSequencer("Alice"),
+          isSyncedRef = Ref.of[Id, Boolean](false)
+        )
+
+        val (events, agenda) = runtime.handleAgenda(Agenda.StartRound(runtime.startTick)).run
+
+        "not create a lambda message" in {
+          events shouldBe empty
+        }
+        "schedule another round" in {
+          forExactly(1, agenda) { a =>
+            a.action shouldBe an[Agenda.StartRound]
+          }
+        }
+        "schedule an omega message" in {
+          forExactly(1, agenda) { a =>
+            a.action shouldBe an[Agenda.CreateOmegaMessage]
+          }
+        }
+      }
+
+      "creating the lambda message takes longer than around" should {
+        "skip to the next active round" in (pending)
       }
     }
     "received a CreateOmegaMessage action" when {
-      "still doing the initial sync" should {
-        "not create an omega message" in (pending)
+      "during initial sync" should {
+        "not create an omega message" in {
+          val runtime = genesisEraRuntime(
+            "Alice".some,
+            isSyncedRef = Ref.of[Id, Boolean](false)
+          )
+          val (events, agenda) =
+            runtime.handleAgenda(Agenda.CreateOmegaMessage(runtime.startTick)).run
+
+          events shouldBe empty
+          agenda shouldBe empty
+        }
       }
       "the era is active" should {
         "create an omega message" in (pending)
@@ -375,9 +472,10 @@ object EraRuntimeSpec {
     override val validatorId = validatorKey(validator)
 
     override def ballot(
+        eraId: ByteString,
+        roundId: Ticks,
         target: ByteString,
-        justifications: Map[PublicKeyBS, Set[BlockHash]],
-        roundId: Ticks
+        justifications: Map[PublicKeyBS, Set[BlockHash]]
     ): F[Message.Ballot] =
       BlockSummary()
         .withHeader(
@@ -393,9 +491,34 @@ object EraRuntimeSpec {
               } yield Block.Justification(kv._1, h)
             )
             .withRoundId(roundId)
+            .withKeyBlockHash(eraId)
         )
         .pure[F]
         .map(Message.fromBlockSummary(_).get.asInstanceOf[Message.Ballot])
+
+    override def block(
+        eraId: ByteString,
+        roundId: Ticks,
+        mainParent: ByteString,
+        justifications: Map[PublicKeyBS, Set[BlockHash]]
+    ): F[Message.Block] =
+      BlockSummary()
+        .withHeader(
+          Block
+            .Header()
+            .withValidatorPublicKey(validatorId)
+            .withParentHashes(List(mainParent))
+            .withJustifications(
+              for {
+                kv <- justifications.toList
+                h  <- kv._2.toList
+              } yield Block.Justification(kv._1, h)
+            )
+            .withRoundId(roundId)
+            .withKeyBlockHash(eraId)
+        )
+        .pure[F]
+        .map(Message.fromBlockSummary(_).get.asInstanceOf[Message.Block])
   }
 
   def mockSequencer(validator: String) = new LeaderSequencer {
