@@ -7,7 +7,7 @@ import cats.effect.{Clock, Sync}
 import cats.effect.concurrent.Ref
 import com.google.protobuf.ByteString
 import java.time.Instant
-import io.casperlabs.casper.consensus.{BlockSummary, Era}
+import io.casperlabs.casper.consensus.{Block, BlockSummary, Era}
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.crypto.Keys.{PublicKey, PublicKeyBS}
 import io.casperlabs.models.Message
@@ -167,7 +167,9 @@ class EraRuntime[F[_]: MonadThrowable: Clock](
               // TODO: Execute the fork choice.
               mainParent = ByteString.EMPTY,
               // TODO: Get all justifications
-              justifications = Map.empty
+              justifications = Map.empty,
+              // TODO: Detect boundary based on main parent
+              isBookingBlock = false
             )
           }
       _ <- HighwayLog.tell[F](

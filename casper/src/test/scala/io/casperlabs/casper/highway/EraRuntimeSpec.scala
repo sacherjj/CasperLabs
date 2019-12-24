@@ -447,6 +447,10 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
           }
         }
       }
+
+      "crossing a booking block boundary" should {
+        "pass the information to the message producer" in (pending)
+      }
     }
     "given a CreateOmegaMessage action" when {
       "during initial sync" should {
@@ -545,7 +549,8 @@ object EraRuntimeSpec {
         eraId: ByteString,
         roundId: Ticks,
         mainParent: ByteString,
-        justifications: Map[PublicKeyBS, Set[BlockHash]]
+        justifications: Map[PublicKeyBS, Set[BlockHash]],
+        isBookingBlock: Boolean
     ): F[Message.Block] =
       BlockSummary()
         .withHeader(

@@ -31,6 +31,7 @@ trait MessageProducer[F[_]] {
       eraId: BlockHash,
       roundId: Ticks,
       mainParent: BlockHash,
-      justifications: Map[PublicKeyBS, Set[BlockHash]]
+      justifications: Map[PublicKeyBS, Set[BlockHash]],
+      isBookingBlock: Boolean
   ): F[Message.Block]
 }
