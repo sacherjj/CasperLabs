@@ -355,9 +355,25 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
         }
 
         "the validator is not leading" should {
-          "not create a lambda message" in (pending)
-          "schedule another round" in (pending)
-          "schedule an omega message" in (pending)
+          val runtime = genesisEraRuntime(
+            "Alice".some,
+            leaderSequencer = mockSequencer("Bob")
+          )
+          val (events, agenda) = runtime.handleAgenda(Agenda.StartRound(runtime.startTick)).run
+
+          "not create a lambda message" in {
+            events shouldBe empty
+          }
+          "schedule another round" in {
+            forExactly(1, agenda) { a =>
+              a.action shouldBe an[Agenda.StartRound]
+            }
+          }
+          "schedule an omega message" in {
+            forExactly(1, agenda) { a =>
+              a.action shouldBe an[Agenda.CreateOmegaMessage]
+            }
+          }
         }
       }
 

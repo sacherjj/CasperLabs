@@ -285,8 +285,11 @@ class EraRuntime[F[_]: MonadThrowable: Clock](
             omega ++ next
           }
 
-        withProducer(noop) {
-          createLambdaMessage(_, roundId)
+        withProducer(noop) { mp =>
+          if (leaderFunction(roundId) == mp.validatorId)
+            createLambdaMessage(mp, roundId)
+          else
+            noop
         } >> HighwayLog.liftF(agenda)
 
       case Agenda.CreateOmegaMessage(roundId) =>
