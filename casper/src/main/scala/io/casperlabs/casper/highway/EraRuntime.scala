@@ -34,7 +34,12 @@ class EraRuntime[F[_]: MonadThrowable: Clock](
     val era: Era,
     leaderFunction: LeaderFunction,
     roundExponentRef: Ref[F, Int],
-    maybeMessageProducer: Option[MessageProducer[F]]
+    maybeMessageProducer: Option[MessageProducer[F]],
+    // Tell when the system has caught up with other. Before that, responding
+    // to messages risks creating an equivocation, in case some state was somehow
+    // lost after a restart. It could also force others to react to handle messages
+    // which are long in the past.
+    isSynced: => F[Boolean]
 ) {
   import EraRuntime.Agenda, Agenda._
   type HWL[A] = HighwayLog[F, A]
@@ -154,36 +159,43 @@ class EraRuntime[F[_]: MonadThrowable: Clock](
     * This method is always called as a reaction to an incoming message,
     * so it doesn't return a future agenda of its own.
     */
-  def handleMessage(message: Message): HWL[Unit] =
-    message match {
-      case _: Message.Ballot =>
-        HighwayLog.unit
-
-      case b: Message.Block =>
-        val roundId = Ticks(b.roundId)
-        withProducer(HighwayLog.unit[F]) { mp =>
-          if (mp.validatorId == b.validatorId) {
-            MonadThrowable[HWL].raiseError(
-              new IllegalStateException("Shouldn't receive our own messages!")
-            )
-          } else if (b.keyBlockHash != era.keyBlockHash) {
-            MonadThrowable[HWL].raiseError(
-              new IllegalStateException("Shouldn't receive messages from other eras!")
-            )
-          } else if (leaderFunction(roundId) != b.validatorId) {
-            HighwayLog.unit
-          } else {
-            // TODO: Verify if it's okay not to send a response to a message where we *did*
-            // participate in the round it belongs to, but we moved on to a newer round.
-            HighwayLog.liftF(currentTick.flatMap(roundBoundariesAt)).flatMap {
-              case (from, _) if from == roundId =>
-                createLambdaResponse(mp, b)
-              case _ =>
-                HighwayLog.unit
+  def handleMessage(message: Message): HWL[Unit] = {
+    val noop = HighwayLog.unit[F]
+    // Before we are fully synced, silence is golden.
+    HighwayLog.liftF(isSynced) >>= {
+      case false =>
+        noop
+      case true =>
+        message match {
+          case _: Message.Ballot =>
+            noop
+          case b: Message.Block =>
+            val roundId = Ticks(b.roundId)
+            withProducer(noop) { mp =>
+              if (mp.validatorId == b.validatorId) {
+                MonadThrowable[HWL].raiseError(
+                  new IllegalStateException("Shouldn't receive our own messages!")
+                )
+              } else if (b.keyBlockHash != era.keyBlockHash) {
+                MonadThrowable[HWL].raiseError(
+                  new IllegalStateException("Shouldn't receive messages from other eras!")
+                )
+              } else if (leaderFunction(roundId) != b.validatorId) {
+                noop
+              } else {
+                // TODO: Verify if it's okay not to send a response to a message where we *did*
+                // participate in the round it belongs to, but we moved on to a newer round.
+                HighwayLog.liftF(currentTick.flatMap(roundBoundariesAt)).flatMap {
+                  case (from, _) if from == roundId =>
+                    createLambdaResponse(mp, b)
+                  case _ =>
+                    noop
+                }
+              }
             }
-          }
         }
     }
+  }
 
   /** Handle something that happens during a round:
     * - in rounds when we are leading, create a lambda message
@@ -205,6 +217,7 @@ object EraRuntime {
       genesis: BlockSummary,
       maybeMessageProducer: Option[MessageProducer[F]],
       initRoundExponent: Int,
+      isSynced: => F[Boolean],
       leaderSequencer: LeaderSequencer = LeaderSequencer
   ): F[EraRuntime[F]] = {
     val era = Era(
@@ -223,7 +236,8 @@ object EraRuntime {
         era,
         leaderFunction,
         roundExponentRef,
-        maybeMessageProducer
+        maybeMessageProducer,
+        isSynced
       )
     }
   }

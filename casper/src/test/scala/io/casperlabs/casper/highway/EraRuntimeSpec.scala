@@ -4,6 +4,7 @@ import cats.{Applicative, Id}
 import cats.syntax.option._
 import cats.syntax.applicative._
 import cats.effect.{Clock, Sync}
+import cats.effect.concurrent.Ref
 import com.google.protobuf.ByteString
 import java.util.concurrent.TimeUnit
 import io.casperlabs.casper.consensus.{Block, BlockSummary, Bond, Era}
@@ -54,7 +55,8 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
   def genesisEraRuntime(
       validator: Option[String] = none,
       roundExponent: Int = 0,
-      leaderSequencer: LeaderSequencer = LeaderSequencer
+      leaderSequencer: LeaderSequencer = LeaderSequencer,
+      isSyncedRef: Ref[Id, Boolean] = Ref.of[Id, Boolean](true)
   )(
       implicit C: Clock[Id]
   ) =
@@ -63,14 +65,13 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
       genesis,
       validator.map(mockMessageProducer[Id](_)),
       roundExponent,
+      isSyncedRef.get,
       leaderSequencer
     )(Sync[Id], C)
 
   "EraRuntime" when {
     "started with the genesis block" should {
-      val runtime =
-        EraRuntime
-          .fromGenesis[Id](conf, genesis, maybeMessageProducer = none, initRoundExponent = 0)
+      val runtime = genesisEraRuntime()
 
       "use the genesis ticks for the era" in {
         conf.toInstant(Ticks(runtime.era.startTick)) shouldBe conf.genesisEraStart
@@ -203,11 +204,15 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
               .parentBlock shouldBe msg.messageHash
           }
 
-          "remember that a lambda message was received in this round" in (pending)
+          "remember that a lambda message was received in this round" in {
+            // This will be relevant when for round exponent adjustments.
+            pending
+          }
         }
 
         "it is not from the leader" should {
           "not respond" in {
+            // TODO: Should this block be saved at all?
             val msg = makeBlock("Bob", runtime.era.keyBlockHash, runtime.startTick)
             runtime.handleMessage(msg).written shouldBe empty
           }
@@ -263,12 +268,24 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
     }
 
     "the message is played back during initial sync" should {
-      "not respond" in (pending)
+      "not respond" in {
+        val leader      = "Alice"
+        val isSyncedRef = Ref.of[Id, Boolean](false)
+        val runtime = genesisEraRuntime(
+          "Bob".some,
+          isSyncedRef = isSyncedRef,
+          leaderSequencer = mockSequencer(leader)
+        )
+        val msg = makeBlock(leader, runtime.era.keyBlockHash, runtime.startTick)
+        runtime.handleMessage(msg).written shouldBe empty
+        isSyncedRef.set(true) // Works with `Id` only because of the `=> F[Boolean]`
+        runtime.handleMessage(msg).written should not be empty
+      }
     }
   }
 
   "handleAgenda" when {
-    "starting a round" when {
+    "received a StartRound action" when {
       "in the active period of the era" when {
         "the validator is the leader" should {
           "create a lambda message" in (pending)
@@ -300,6 +317,22 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
         "the voting period is over" should {
           "not schedule anything" in (pending)
         }
+      }
+      "during initial sync" should {
+        "not create a lambda message" in (pending)
+        "schedule another round" in (pending)
+        "schedule an omega message" in (pending)
+      }
+    }
+    "received a CreateOmegaMessage action" when {
+      "still doing the initial sync" should {
+        "not create an omega message" in (pending)
+      }
+      "the era is active" should {
+        "create an omega message" in (pending)
+      }
+      "in the post-era voting period" should {
+        "create an omega message" in (pending)
       }
     }
   }
