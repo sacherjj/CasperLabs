@@ -1,11 +1,14 @@
 package io.casperlabs.casper.highway
 
 import cats._
+import cats.data.WriterT
 import cats.implicits._
-import cats.effect.Clock
+import cats.effect.{Clock, Sync}
+import cats.effect.concurrent.Ref
 import java.time.Instant
 import io.casperlabs.casper.consensus.{BlockSummary, Era}
-import io.casperlabs.crypto.Keys.PublicKeyBS
+import io.casperlabs.catscontrib.MonadThrowable
+import io.casperlabs.crypto.Keys.{PublicKey, PublicKeyBS}
 import io.casperlabs.models.Message
 
 /** Class to encapsulate the message handling logic of messages in an era.
@@ -26,13 +29,15 @@ import io.casperlabs.models.Message
   * and it's up to the supervisor protocol to send them out. Should
   * make testing easier as well.
   */
-class EraRuntime[F[_]: Monad: Clock](
+class EraRuntime[F[_]: MonadThrowable: Clock](
     conf: HighwayConf,
     val era: Era,
-    maybeValidatorId: Option[PublicKeyBS],
-    initRoundExponent: Int
+    leaderFunction: LeaderFunction,
+    roundExponentRef: Ref[F, Int],
+    maybeMessageProducer: Option[MessageProducer[F]]
 ) {
   import EraRuntime.Agenda, Agenda._
+  type HWL[A] = HighwayLog[F, A]
 
   val startTick = Ticks(era.startTick)
   val endTick   = Ticks(era.endTick)
@@ -71,14 +76,19 @@ class EraRuntime[F[_]: Monad: Clock](
     * have to produce blocks and ballots in the era.
     * TODO: Decide if unbonded validators need to maintain round statistics about finalized lambda messages.
     */
-  val isBonded =
-    maybeValidatorId.fold(false)(id => era.bonds.exists(b => b.validatorPublicKey == id))
+  private def withProducer[G[_], A](default: G[A])(f: MessageProducer[F] => G[A]): G[A] =
+    maybeMessageProducer match {
+      case Some(mp) if era.bonds.exists(b => b.validatorPublicKey == mp.validatorId) =>
+        f(mp)
+      case _ =>
+        default
+    }
 
   private def currentTick =
     Clock[F].realTime(conf.tickUnit).map(Ticks(_))
 
   /** Check if the era is finished yet, including the post-era voting period. */
-  private def isFinished(tick: Ticks): F[Boolean] =
+  private def isOverAt(tick: Ticks): F[Boolean] =
     if (tick < endTick) false.pure[F]
     else {
       conf.postEraVotingDuration match {
@@ -90,25 +100,52 @@ class EraRuntime[F[_]: Monad: Clock](
       }
     }
 
-  /** Calculate the next tick where the round ID matches the exponent. */
-  private def nextRoundId(tick: Ticks): Ticks = {
-    val length = Ticks.roundLength(initRoundExponent)
-    if (tick % length == 0) tick else Ticks(tick + length - tick % length)
-  }
+  private def roundLength: F[Ticks] =
+    // TODO: We should be able to tell about each past tick what the exponent at the time was.
+    roundExponentRef.get.map(Ticks.roundLength(_))
+
+  /** Calculate the beginnin and the end of this round,
+    * based on the current tick and the round length. */
+  private def roundBoundariesAt(tick: Ticks): F[(Ticks, Ticks)] =
+    roundLength map { length =>
+      val start = if (tick % length == 0) tick else Ticks(tick + length - tick % length)
+      start -> Ticks(start + length)
+    }
+
+  private def createLambdaResponse(
+      messageProducer: MessageProducer[F],
+      lambdaMessage: Message.Block
+  ): HWL[Unit] =
+    // TODO: Create persistent block.
+    for {
+      b <- HighwayLog.liftF {
+            messageProducer.ballot(
+              target = lambdaMessage.messageHash,
+              // TODO: Get our own latest message. Get the latest message from the storage, in case they equivocated.
+              justifications =
+                Map(PublicKey(lambdaMessage.validatorId) -> Set(lambdaMessage.messageHash)),
+              roundId = Ticks(lambdaMessage.roundId)
+            )
+          }
+      _ <- HighwayLog.tell[F](
+            HighwayEvent.CreatedLambdaResponse(b)
+          )
+    } yield ()
 
   /** Produce a starting agenda, depending on whether the validator is bonded or not. */
   def initAgenda: F[Agenda] =
-    if (!isBonded) Agenda.empty[F]
-    else
+    withProducer(Agenda.empty[F]) { _ =>
       currentTick flatMap { tick =>
-        isFinished(tick) flatMap {
-          case true =>
-            Agenda.empty[F]
-          case false =>
-            val roundId = nextRoundId(tick)
-            Agenda[F](roundId -> StartRound(roundId))
-        }
+        isOverAt(tick).ifM(
+          Agenda.empty[F],
+          roundBoundariesAt(tick) flatMap {
+            case (from, to) =>
+              val roundId = if (from >= tick) from else to
+              Agenda[F](roundId -> StartRound(roundId))
+          }
+        )
       }
+    }
 
   /** Handle a block or ballot coming from another validator. For example:
     * - if it's a lambda message, create a lambda response
@@ -117,7 +154,36 @@ class EraRuntime[F[_]: Monad: Clock](
     * This method is always called as a reaction to an incoming message,
     * so it doesn't return a future agenda of its own.
     */
-  def handleMessage(message: Message): HighwayLog[F, Unit] = ???
+  def handleMessage(message: Message): HWL[Unit] =
+    message match {
+      case _: Message.Ballot =>
+        HighwayLog.unit
+
+      case b: Message.Block =>
+        val roundId = Ticks(b.roundId)
+        withProducer(HighwayLog.unit[F]) { mp =>
+          if (mp.validatorId == b.validatorId) {
+            MonadThrowable[HWL].raiseError(
+              new IllegalStateException("Shouldn't receive our own messages!")
+            )
+          } else if (b.keyBlockHash != era.keyBlockHash) {
+            MonadThrowable[HWL].raiseError(
+              new IllegalStateException("Shouldn't receive messages from other eras!")
+            )
+          } else if (leaderFunction(roundId) != b.validatorId) {
+            HighwayLog.unit
+          } else {
+            // TODO: Verify if it's okay not to send a response to a message where we *did*
+            // participate in the round it belongs to, but we moved on to a newer round.
+            HighwayLog.liftF(currentTick.flatMap(roundBoundariesAt)).flatMap {
+              case (from, _) if from == roundId =>
+                createLambdaResponse(mp, b)
+              case _ =>
+                HighwayLog.unit
+            }
+          }
+        }
+    }
 
   /** Handle something that happens during a round:
     * - in rounds when we are leading, create a lambda message
@@ -134,24 +200,33 @@ class EraRuntime[F[_]: Monad: Clock](
 
 object EraRuntime {
 
-  def fromGenesis[F[_]: Monad: Clock](
+  def fromGenesis[F[_]: Sync: Clock](
       conf: HighwayConf,
       genesis: BlockSummary,
-      maybeValidatorId: Option[PublicKeyBS],
-      initRoundExponent: Int
-  ): EraRuntime[F] =
-    new EraRuntime[F](
-      conf,
-      Era(
-        keyBlockHash = genesis.blockHash,
-        bookingBlockHash = genesis.blockHash,
-        startTick = conf.toTicks(conf.genesisEraStart),
-        endTick = conf.toTicks(conf.genesisEraEnd),
-        bonds = genesis.getHeader.getState.bonds
-      ),
-      maybeValidatorId,
-      initRoundExponent
+      maybeMessageProducer: Option[MessageProducer[F]],
+      initRoundExponent: Int,
+      leaderSequencer: LeaderSequencer = LeaderSequencer
+  ): F[EraRuntime[F]] = {
+    val era = Era(
+      keyBlockHash = genesis.blockHash,
+      bookingBlockHash = genesis.blockHash,
+      startTick = conf.toTicks(conf.genesisEraStart),
+      endTick = conf.toTicks(conf.genesisEraEnd),
+      bonds = genesis.getHeader.getState.bonds
     )
+    for {
+      leaderFunction   <- leaderSequencer[F](era)
+      roundExponentRef <- Ref.of[F, Int](initRoundExponent)
+    } yield {
+      new EraRuntime[F](
+        conf,
+        era,
+        leaderFunction,
+        roundExponentRef,
+        maybeMessageProducer
+      )
+    }
+  }
 
   /** List of future actions to take. */
   type Agenda = Vector[Agenda.DelayedAction]

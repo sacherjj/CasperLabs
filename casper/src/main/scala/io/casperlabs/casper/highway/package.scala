@@ -1,10 +1,13 @@
 package io.casperlabs.casper
 
+import cats._
+import cats.implicits._
 import cats.data.WriterT
+import io.casperlabs.crypto.Keys.PublicKeyBS
 import java.time.Instant
-import scala.concurrent.duration.FiniteDuration
 import shapeless.tag.@@
 import scala.annotation.tailrec
+import scala.concurrent.duration.FiniteDuration
 
 package highway {
   sealed trait TimestampTag
@@ -41,6 +44,19 @@ package object highway {
     * playback mode).
     */
   type HighwayLog[F[_], T] = WriterT[F, Vector[HighwayEvent], T]
+
+  object HighwayLog {
+    def liftF[F[_]: Applicative, T](value: F[T]): HighwayLog[F, T] =
+      WriterT.liftF(value)
+
+    def unit[F[_]: Applicative]: HighwayLog[F, Unit] =
+      ().pure[HighwayLog[F, *]]
+
+    def tell[F[_]: Applicative](events: HighwayEvent*) =
+      WriterT.tell[F, Vector[HighwayEvent]](events.toVector)
+  }
+
+  type LeaderFunction = Ticks => PublicKeyBS
 
   @tailrec
   private def pow(base: Long, exp: Int, acc: Long = 1L): Long =

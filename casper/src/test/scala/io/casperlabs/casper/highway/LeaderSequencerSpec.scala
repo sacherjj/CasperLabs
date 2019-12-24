@@ -46,7 +46,7 @@ class LeaderSequencerSpec extends WordSpec with Matchers with Inspectors {
       Bond(ByteString.copyFromUtf8("Charlie")).withStake(state.BigInt("3000"))
     )
 
-    val leaderOf = LeaderSequencer.makeSequencer("leader-seed".getBytes, bonds)
+    val leaderOf = LeaderSequencer("leader-seed".getBytes, bonds)
 
     "create a deterministic function" in {
       val tick = Ticks(System.currentTimeMillis)
@@ -73,7 +73,7 @@ class LeaderSequencerSpec extends WordSpec with Matchers with Inspectors {
     }
 
     "work with an empty seed" in {
-      val genesisLeader = LeaderSequencer.makeSequencer(Array.empty[Byte], bonds)
+      val genesisLeader = LeaderSequencer(Array.empty[Byte], bonds)
       genesisLeader(Ticks(System.currentTimeMillis))
     }
   }

@@ -1,19 +1,28 @@
 package io.casperlabs.casper.highway
 
-import cats._
-import cats.implicits._
-import cats.effect.Clock
+import cats.{Applicative, Id}
+import cats.syntax.option._
+import cats.syntax.applicative._
+import cats.effect.{Clock, Sync}
 import com.google.protobuf.ByteString
 import java.util.concurrent.TimeUnit
-import io.casperlabs.casper.consensus.{Block, BlockSummary, Bond}
+import io.casperlabs.casper.consensus.{Block, BlockSummary, Bond, Era}
 import io.casperlabs.casper.consensus.state
 import io.casperlabs.crypto.Keys.{PublicKey, PublicKeyBS}
+import io.casperlabs.models.Message
+import io.casperlabs.catscontrib.MonadThrowable
+import io.casperlabs.storage.block.BlockStorage.BlockHash
 import org.scalatest._
 import scala.concurrent.duration._
 
 class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUtils {
+  import EraRuntimeSpec._
   import HighwayConf._
   import EraRuntime.Agenda
+  import io.casperlabs.catscontrib.effect.implicits.syncId
+
+  // Let's say we are right at the beginning of the era by default.
+  implicit def defaultClock: Clock[Id] = new TestClock[Id](date(2019, 12, 9))
 
   val conf = HighwayConf(
     tickUnit = TimeUnit.MILLISECONDS,
@@ -42,26 +51,26 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
         )
     )
 
-  // Let's say we are right at the beginning of the era by default.
-  implicit def defaultClock: Clock[Id] = new TestClock[Id](date(2019, 12, 9))
-
-  def genesisEraRuntime(validator: Option[String] = none, roundExponent: Int = 0)(
+  def genesisEraRuntime(
+      validator: Option[String] = none,
+      roundExponent: Int = 0,
+      leaderSequencer: LeaderSequencer = LeaderSequencer
+  )(
       implicit C: Clock[Id]
   ) =
     EraRuntime.fromGenesis[Id](
       conf,
       genesis,
-      validator.map(validatorKey),
-      initRoundExponent = roundExponent
-    )(Monad[Id], C)
-
-  def validatorKey(name: String) =
-    PublicKey(ByteString.copyFromUtf8(name))
+      validator.map(mockMessageProducer[Id](_)),
+      roundExponent,
+      leaderSequencer
+    )(Sync[Id], C)
 
   "EraRuntime" when {
     "started with the genesis block" should {
       val runtime =
-        EraRuntime.fromGenesis[Id](conf, genesis, maybeValidatorId = none, initRoundExponent = 0)
+        EraRuntime
+          .fromGenesis[Id](conf, genesis, maybeMessageProducer = none, initRoundExponent = 0)
 
       "use the genesis ticks for the era" in {
         conf.toInstant(Ticks(runtime.era.startTick)) shouldBe conf.genesisEraStart
@@ -135,6 +144,7 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
         agenda.head.tick shouldBe runtime.startTick
         agenda.head.action shouldBe Agenda.StartRound(runtime.startTick)
       }
+
       "schedule the first round at the next available round exponent" in {
         // Say this validator is starting a bit late.
         val now = conf.genesisEraStart plus 5.hours
@@ -153,12 +163,14 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
         agenda.head.action shouldBe Agenda.StartRound(Ticks(millisNext))
       }
     }
+
     "the validator is not bonded in the era" should {
       "not schedule anything" in {
-        genesisEraRuntime("Dave".some).initAgenda shouldBe empty
+        genesisEraRuntime("Anonymous".some).initAgenda shouldBe empty
         genesisEraRuntime(none).initAgenda shouldBe empty
       }
     }
+
     "the era is already over" should {
       "not schedule anything" in {
         implicit val clock = new TestClock[Id](conf.genesisEraStart plus 700.days)
@@ -169,29 +181,89 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
 
   "handleMessage" when {
     "the validator is bonded" when {
+
+      val leader = "Charlie"
+      val runtime = genesisEraRuntime(
+        "Alice".some,
+        leaderSequencer = mockSequencer(leader),
+        roundExponent = 1 // Every 2nd second.
+      )
+
       "given a lambda message" when {
+
         "it is from the leader" should {
-          "create a lambda response" in (pending)
+          "create a lambda response" in {
+            val msg    = makeBlock(leader, runtime.era.keyBlockHash, runtime.startTick)
+            val events = runtime.handleMessage(msg).written
+            events should have size 1
+            events.head shouldBe a[HighwayEvent.CreatedLambdaResponse]
+            events.head
+              .asInstanceOf[HighwayEvent.CreatedLambdaResponse]
+              .message
+              .parentBlock shouldBe msg.messageHash
+          }
+
           "remember that a lambda message was received in this round" in (pending)
         }
+
         "it is not from the leader" should {
-          "not respond" in (pending)
+          "not respond" in {
+            val msg = makeBlock("Bob", runtime.era.keyBlockHash, runtime.startTick)
+            runtime.handleMessage(msg).written shouldBe empty
+          }
         }
+
         "it is a switch block" should {
           "create an era" in (pending)
         }
+
+        "in a round which is not corresponding to the validator's current round ID" should {
+          "not respond" in {
+            val msg =
+              makeBlock(leader, runtime.era.keyBlockHash, roundId = Ticks(runtime.startTick + 1))
+            runtime.handleMessage(msg).written shouldBe empty
+          }
+        }
+
+        "it is from the validator itself" should {
+          "throw IllegalStateException" in {
+            an[IllegalStateException] shouldBe thrownBy {
+              val msg = makeBlock(validator = "Alice", runtime.era.keyBlockHash, runtime.startTick)
+              runtime.handleMessage(msg)
+            }
+          }
+        }
       }
+
       "given a ballot" should {
-        "not respond" in (pending)
+        "not respond" in {
+          val msg = makeBallot(leader, runtime.era.keyBlockHash, runtime.startTick)
+          runtime.handleMessage(msg).written shouldBe empty
+        }
       }
     }
+
     "the validator is not bonded" when {
+      val leader = "Alice"
+      val runtime = genesisEraRuntime(
+        "Anonymous".some,
+        leaderSequencer = mockSequencer(leader)
+      )
+
       "given a lambda message" should {
-        "not respond" in (pending)
+        "not respond" in {
+          val msg = makeBlock(leader, runtime.era.keyBlockHash, runtime.startTick)
+          runtime.handleMessage(msg).written shouldBe empty
+        }
       }
+
       "given a switch block" should {
         "create an era" in (pending)
       }
+    }
+
+    "the message is played back during initial sync" should {
+      "not respond" in (pending)
     }
   }
 
@@ -230,5 +302,71 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
         }
       }
     }
+  }
+}
+
+object EraRuntimeSpec {
+  import cats.implicits._
+
+  def validatorKey(name: String) =
+    PublicKey(ByteString.copyFromUtf8(name))
+
+  def makeBlock(validator: String, eraId: ByteString, roundId: Ticks) =
+    Message.fromBlockSummary {
+      BlockSummary()
+        .withHeader(
+          Block
+            .Header()
+            .withValidatorPublicKey(validatorKey(validator))
+            .withKeyBlockHash(eraId)
+            .withRoundId(roundId)
+        )
+        .withBlockHash(ByteString.copyFromUtf8(System.currentTimeMillis.toString))
+    }.get
+
+  def makeBallot(validator: String, eraId: ByteString, roundId: Ticks) =
+    Message.fromBlockSummary {
+      BlockSummary()
+        .withHeader(
+          Block
+            .Header()
+            .withMessageType(Block.MessageType.BALLOT)
+            .withKeyBlockHash(eraId)
+            .withRoundId(roundId)
+            .withValidatorPublicKey(validatorKey(validator))
+        )
+        .withBlockHash(ByteString.copyFromUtf8(System.currentTimeMillis.toString))
+    }.get
+
+  def mockMessageProducer[F[_]: Applicative](validator: String) = new MessageProducer[F] {
+    override val validatorId = validatorKey(validator)
+
+    override def ballot(
+        target: ByteString,
+        justifications: Map[PublicKeyBS, Set[BlockHash]],
+        roundId: Ticks
+    ): F[Message.Ballot] =
+      BlockSummary()
+        .withHeader(
+          Block
+            .Header()
+            .withMessageType(Block.MessageType.BALLOT)
+            .withValidatorPublicKey(validatorId)
+            .withParentHashes(List(target))
+            .withJustifications(
+              for {
+                kv <- justifications.toList
+                h  <- kv._2.toList
+              } yield Block.Justification(kv._1, h)
+            )
+            .withRoundId(roundId)
+        )
+        .pure[F]
+        .map(Message.fromBlockSummary(_).get.asInstanceOf[Message.Ballot])
+  }
+
+  def mockSequencer(validator: String) = new LeaderSequencer {
+    def apply[F[_]: MonadThrowable](era: Era): F[LeaderFunction] =
+      ((_: Ticks) => validatorKey(validator)).pure[F]
   }
 }
