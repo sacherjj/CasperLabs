@@ -305,7 +305,7 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
   }
 
   "handleAgenda" when {
-    "received a StartRound action" when {
+    "given a StartRound action" when {
       "in the active period of the era" when {
         "the validator is the leader" should {
           val exponent    = 15
@@ -423,11 +423,32 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
         }
       }
 
-      "creating the lambda message takes longer than around" should {
-        "skip to the next active round" in (pending)
+      "creating the lambda message takes longer than a round" should {
+        "skip to the next active round" in {
+          val exponent       = 15 // ~30s
+          val roundLength    = math.pow(2.0, exponent.toDouble).toLong.millis
+          val roundStart     = conf.genesisEraStart plus 60 * roundLength
+          val now            = roundStart plus 3 * roundLength
+          implicit val clock = new TestClock[Id](now)
+
+          val runtime = genesisEraRuntime(none, roundExponent = exponent)
+
+          // Executing this round that was supposed to have been done a while ago.
+          val roundId = conf.toTicks(roundStart)
+          val agenda  = runtime.handleAgenda(Agenda.StartRound(roundId)).value
+
+          agenda should have size 1
+          assertAgenda(agenda) {
+            case Agenda.DelayedAction(tick, Agenda.StartRound(nextRoundId)) =>
+              val currentTick = conf.toTicks(now)
+              tick should be > currentTick.toLong
+              nextRoundId should be > currentTick.toLong
+              nextRoundId should be > roundId + roundLength.toMillis
+          }
+        }
       }
     }
-    "received a CreateOmegaMessage action" when {
+    "given a CreateOmegaMessage action" when {
       "during initial sync" should {
         "not create an omega message" in {
           val runtime = genesisEraRuntime(
@@ -442,7 +463,15 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
         }
       }
       "the era is active" should {
-        "create an omega message" in (pending)
+        "create an omega message" in {
+          val runtime = genesisEraRuntime("Alice".some)
+          val events =
+            runtime.handleAgenda(Agenda.CreateOmegaMessage(runtime.startTick)).written
+
+          assertEvent(events) {
+            case HighwayEvent.CreatedOmegaMessage(_) =>
+          }
+        }
       }
       "in the post-era voting period" should {
         "create an omega message" in (pending)
