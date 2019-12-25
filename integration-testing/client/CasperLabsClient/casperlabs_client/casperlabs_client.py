@@ -912,6 +912,17 @@ class CasperLabsClient:
             )
         )
 
+    def cli(self, *arguments) -> int:
+        return cli(
+            "--host",
+            self.host,
+            "--port",
+            self.port,
+            "--port-internal",
+            self.port_internal,
+            *arguments,
+        )
+
 
 def guarded_command(function):
     """
