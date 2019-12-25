@@ -981,12 +981,6 @@ def _set_session(args, file_name):
 
 
 @guarded_command
-def no_command(casperlabs_client, args):
-    print("You must provide a command. --help for documentation of commands.")
-    return 1
-
-
-@guarded_command
 def bond_command(casperlabs_client, args):
     logging.info(f"BOND {args}")
     _set_session(args, "bonding.wasm")
@@ -1360,14 +1354,18 @@ def deploy_options(keys_required=False, private_key_accepted=True):
 # fmt:on
 
 
-def main():
+def cli(*arguments) -> int:
     """
-    Parse command line and call an appropriate command.
+    Parse list of command line arguments and call appropriate command.
     """
 
     class Parser:
         def __init__(self):
-            self.parser = argparse.ArgumentParser(add_help=False)
+            # The --help option added by default has a short version -h, which conflicts
+            # with short version of --host, so we need to disable it.
+            self.parser = argparse.ArgumentParser(
+                prog="casperlabs_client", add_help=False
+            )
             self.parser.add_argument(
                 "--help",
                 action="help",
@@ -1411,6 +1409,13 @@ def main():
             )
             self.sp = self.parser.add_subparsers(help="Choose a request")
 
+            def no_command(casperlabs_client, args):
+                print(
+                    "You must provide a command. --help for documentation of commands."
+                )
+                self.parser.print_usage()
+                return 1
+
             self.parser.set_defaults(function=no_command)
 
         def addCommand(self, command: str, function, help, arguments):
@@ -1419,12 +1424,8 @@ def main():
             for (args, options) in arguments:
                 command_parser.add_argument(*args, **options)
 
-        def run(self):
-            if len(sys.argv) < 2:
-                self.parser.print_usage()
-                return 1
-
-            args = self.parser.parse_args()
+        def run(self, argv):
+            args = self.parser.parse_args(argv)
             return args.function(
                 CasperLabsClient(
                     args.host,
@@ -1515,7 +1516,7 @@ def main():
                       [[('directory',), dict(type=check_directory, help="Output directory for keys. Should already exists.")]])
 
     # fmt:on
-    sys.exit(parser.run())
+    return parser.run([str(a) for a in arguments])
 
 
 def check_bundled_contracts():
@@ -1525,5 +1526,9 @@ def check_bundled_contracts():
         raise Exception(f"No bundled contract {p}")
 
 
+def main():
+    return cli(*sys.argv[1:])
+
+
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
