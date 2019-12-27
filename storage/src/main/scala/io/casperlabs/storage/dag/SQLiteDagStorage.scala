@@ -26,6 +26,7 @@ class SQLiteDagStorage[F[_]: Bracket[*[_], Throwable]](
     writeXa: Transactor[F]
 ) extends DagStorage[F]
     with DagRepresentation[F]
+    with FinalityStorage[F]
     with DoobieCodecs {
   import SQLiteDagStorage.StreamOps
 
@@ -232,6 +233,35 @@ class SQLiteDagStorage[F[_]: Bracket[*[_], Throwable]](
       .flatMap(_.traverse { case (v, bs) => toMessageSummaryF(bs).map(v -> _) })
       .map(_.groupBy(_._1).mapValues(_.map(_._2).toSet))
 
+  override def markAsFinalized(
+      mainParent: BlockHash,
+      secondary: Set[BlockHash],
+      quorum: Int
+  ): F[Unit] = {
+    val mainPQuery =
+      sql"""UPDATE block_metadata SET is_finalized=TRUE, is_main_chain=TRUE, quorum=$quorum WHERE block_hash=$mainParent""".update.run
+    val secondaryQuery = NonEmptyList.fromList(secondary.toList).fold(doobie.free.connection.unit) {
+      nel =>
+        val q = fr"""UPDATE block_metadata SET is_finalized=TRUE, quorum=$quorum WHERE """ ++ Fragments
+          .in(fr"block_hash", nel)
+
+        q.update.run.map(_ => ())
+    }
+
+    val transaction = for {
+      _ <- mainPQuery
+      _ <- secondaryQuery
+    } yield ()
+
+    transaction.transact(writeXa)
+  }
+
+  override def isFinalized(block: BlockHash): F[Boolean] =
+    sql"""SELECT is_finalized FROM block_metadata WHERE block_hash=$block"""
+      .query[Boolean]
+      .unique
+      .transact(readXa)
+
   private val toMessageSummaryF: BlockSummary => F[Message] = bs =>
     MonadThrowable[F].fromTry(Message.fromBlockSummary(bs))
 }
@@ -302,17 +332,18 @@ object SQLiteDagStorage {
   private[storage] def create[F[_]: Sync](readXa: Transactor[F], writeXa: Transactor[F])(
       implicit
       met: Metrics[F]
-  ): F[DagStorage[F] with DagRepresentation[F]] =
+  ): F[DagStorage[F] with DagRepresentation[F] with FinalityStorage[F]] =
     for {
       dagStorage <- Sync[F].delay(
                      new SQLiteDagStorage[F](readXa, writeXa)
                        with MeteredDagStorage[F]
-                       with MeteredDagRepresentation[F] {
+                       with MeteredDagRepresentation[F]
+                       with FinalityStorage[F] {
                        override implicit val m: Metrics[F] = met
                        override implicit val ms: Source =
                          Metrics.Source(DagStorageMetricsSource, "sqlite")
                        override implicit val a: Apply[F] = Sync[F]
                      }
                    )
-    } yield dagStorage: DagStorage[F] with DagRepresentation[F]
+    } yield dagStorage: DagStorage[F] with DagRepresentation[F] with FinalityStorage[F]
 }

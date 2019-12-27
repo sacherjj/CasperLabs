@@ -22,14 +22,15 @@ class CachingDagStorage[F[_]: Concurrent](
     neighborhoodBefore: Int,
     // How far to go to the future (by ranks) for caching neighborhood of looked up block
     neighborhoodAfter: Int,
-    underlying: DagStorage[F] with DagRepresentation[F],
+    underlying: DagStorage[F] with DagRepresentation[F] with FinalityStorage[F],
     private[dag] val childrenCache: Cache[BlockHash, Set[BlockHash]],
     private[dag] val justificationCache: Cache[BlockHash, Set[BlockHash]],
     private[dag] val messagesCache: Cache[BlockHash, Message],
     private[dag] val ranksRanges: TrieMap[Rank, Unit],
     semaphore: Semaphore[F]
 ) extends DagStorage[F]
-    with DagRepresentation[F] {
+    with DagRepresentation[F]
+    with FinalityStorage[F] {
 
   /** Unsafe to be invoked concurrently */
   private def unsafeUpdateRanks(start: Rank, end: Rank): F[Unit] = Sync[F].delay {
@@ -164,13 +165,23 @@ class CachingDagStorage[F[_]: Concurrent](
     underlying.latestMessageHashes
 
   override def latestMessages: F[Map[Validator, Set[Message]]] = underlying.latestMessages
+
+  override def markAsFinalized(
+      mainParent: BlockHash,
+      secondary: Set[BlockHash],
+      quorum: Int
+  ): F[Unit] =
+    underlying.markAsFinalized(mainParent, secondary, quorum)
+
+  override def isFinalized(block: BlockHash): F[Boolean] =
+    underlying.isFinalized(block)
 }
 
 object CachingDagStorage {
   type Rank = Long
 
   def apply[F[_]: Concurrent: Metrics](
-      underlying: DagStorage[F] with DagRepresentation[F],
+      underlying: DagStorage[F] with DagRepresentation[F] with FinalityStorage[F],
       maxSizeBytes: Long,
       // How far to go to the past (by ranks) for caching neighborhood of looked up block
       neighborhoodBefore: Int,
