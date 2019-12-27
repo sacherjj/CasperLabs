@@ -376,7 +376,7 @@ class InsecureGRPCService:
 
     def __getattr__(self, name):
 
-        logging.warning(
+        logging.debug(
             f"Creating insecure connection to {self.address} ({self.serviceStub})"
         )
 
@@ -1026,7 +1026,11 @@ def transfer_command(casperlabs_client, args):
     if not args.session_args:
         target_account_bytes = base64.b64decode(args.target_account)
         if len(target_account_bytes) != 32:
-            raise Exception("--target_account must be 32 bytes base64 encoded")
+            target_account_bytes = bytes.fromhex(args.target_account)
+            if len(target_account_bytes) != 32:
+                raise Exception(
+                    "--target_account must be 32 bytes base64 or base32 encoded"
+                )
 
         args.session_args = ABI.args_to_json(
             ABI.args(

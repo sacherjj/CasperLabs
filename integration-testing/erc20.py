@@ -34,9 +34,10 @@ class Node:
 class Agent:
     def __init__(self, name):
         self.name = name
+        print(f"Agent {str(self)}")
 
     def __str__(self):
-        return self.name
+        return f"{self.name}: {self.public_key_hex}"
 
     def on(self, node):
         return BoundAgent(self, node)
@@ -96,9 +97,7 @@ class SmartContract:
             )
             arguments = ABI.args(args)
 
-            arguments_string = (
-                f"{name}({','.join(f'{p}={kwargs[p]}' for p in parameters)})"
-            )
+            arguments_string = f"{name}({','.join(f'{p}={type(kwargs[p]) == bytes and kwargs[p].hex() or kwargs[p]}' for p in parameters)})"
 
             def deploy_and_propose(bound_agent, **session_reference):
                 kwargs = dict(
@@ -112,11 +111,12 @@ class SmartContract:
                 else:
                     kwargs["session"] = self.file_name
                 _, deploy_hash = bound_agent.node.client.deploy(**kwargs)
+                print(f"Call {arguments_string}")
                 block_hash = bound_agent.node.client.propose().block_hash.hex()
-                for deployInfo in bound_agent.node.client.showDeploys(block_hash):
-                    if deployInfo.is_error:
+                for deploy_info in bound_agent.node.client.showDeploys(block_hash):
+                    if deploy_info.is_error:
                         raise Exception(
-                            f"Deploy {deploy_hash.hex()} [{arguments_string}] error_message: {deployInfo.error_message}"
+                            f"Deploy {deploy_hash.hex()} [{arguments_string}] error_message: {deploy_info.error_message}"
                         )
                 return deploy_hash
 
@@ -193,8 +193,6 @@ class ERC20(SmartContract):
         amount,
         block_hash_hex,
     ):
-        method_transfer = self.method("transfer")
-
         def execute(bound_agent):
             token_hash = self.token_hash(
                 bound_agent, deployer_public_hex, block_hash_hex
@@ -202,17 +200,42 @@ class ERC20(SmartContract):
             proxy_hash = self.proxy_hash(
                 bound_agent, deployer_public_hex, block_hash_hex
             )
-            transfer = method_transfer(
+            return self.method("transfer")(
                 erc20=token_hash,
                 recipient=bytes.fromhex(recipient_public_key_hex),
                 amount=amount,
-            )
-            response = transfer(
-                bound_agent, private_key=sender_private_key, session_hash=proxy_hash
-            )
-            return response  # TODO
+            )(bound_agent, private_key=sender_private_key, session_hash=proxy_hash)
 
         return execute
+
+
+def last_block_hash(node):
+    return next(node.client.showBlocks(1)).summary.block_hash.hex()
+
+
+def transfer_clx(sender, recipient_public_hex, amount):
+    args = [
+        "transfer",
+        "--private-key",
+        sender.agent.private_key,
+        "--payment-amount",
+        1000000000,
+        "--from",
+        sender.agent.public_key_hex,
+        "-t",
+        recipient_public_hex,
+        "-a",
+        amount,
+    ]
+    str_args = " ".join(map(str, args))
+    print(str_args)
+    rc = sender.node.client.cli(*args)
+    if rc != 0:
+        raise Exception(f"FAILED: {str_args} => {rc}")
+    block_hash = sender.node.client.propose().block_hash.hex()
+    for deploy_info in sender.node.client.showDeploys(block_hash):
+        if deploy_info.is_error:
+            raise Exception(f"FAILED: {str_args} => {deploy_info.error_message}")
 
 
 node = Node("localhost")
@@ -222,33 +245,37 @@ agent1 = Agent("account-1")
 agent2 = Agent("account-2")
 faucet = Agent("faucet-account")
 
-abc = ERC20("ABC")
-
 boss = faucet.on(node)
+
+for a in (agent0, agent1, agent2):
+    transfer_clx(boss, a.public_key_hex, 10 * 10 ** 6)
+
+abc = ERC20("ABC")
 
 boss.call_contract(abc.deploy(initial_balance=TOTAL_SUPPLY))
 print(f"Deployed ERC20")
-block_hash_hex = next(node.client.showBlocks(1)).summary.block_hash.hex()
-# import pdb; pdb.set_trace()
+
 balance = boss.call_contract(
-    abc.balance(faucet.public_key_hex, faucet.public_key_hex, block_hash_hex)
+    abc.balance(faucet.public_key_hex, faucet.public_key_hex, last_block_hash(node))
 )
 print(f"{faucet} balance={balance}")
 
-boss.call_contract(
+block_hash_hex = boss.call_contract(
     abc.transfer(
         deployer_public_hex=faucet.public_key_hex,
         sender_private_key=faucet.private_key,
         recipient_public_key_hex=agent0.public_key_hex,
         amount=50,
-        block_hash_hex=block_hash_hex,
+        block_hash_hex=last_block_hash(node),
     )
 )
 
-block_hash_hex = next(node.client.showBlocks(1)).summary.block_hash.hex()
-# balance = boss.call_contract(abc.balance(agent0.public_key_hex, agent0.public_key_hex, block_hash_hex))
-# print(f"{agent0} balance={balance}")
 balance = boss.call_contract(
-    abc.balance(faucet.public_key_hex, faucet.public_key_hex, block_hash_hex)
+    abc.balance(faucet.public_key_hex, agent0.public_key_hex, last_block_hash(node))
+)
+print(f"{agent0} balance={balance}")
+
+balance = boss.call_contract(
+    abc.balance(faucet.public_key_hex, faucet.public_key_hex, last_block_hash(node))
 )
 print(f"{faucet} balance={balance}")
