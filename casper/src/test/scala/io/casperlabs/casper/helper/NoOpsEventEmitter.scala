@@ -28,7 +28,7 @@ object NoOpsEventEmitter {
 
 object TestEventEmitter {
   // Can't reuse production version because it couples `EventEmitter` with `EventStream`.
-  def create[F[_]: Sync: DeployStorage: BlockStorage: FinalityStorage[F]: Log: Metrics]
+  def create[F[_]: Sync: DeployStorage: BlockStorage: FinalityStorage: Log: Metrics]
       : EventEmitter[F] =
     new EventEmitter[F] {
       // Production `EventEmitter` publishes `BlockAdded` event to the observable.
