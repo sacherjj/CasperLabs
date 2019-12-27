@@ -2,6 +2,17 @@ import pytest
 import random
 from erc20 import Node, Agent, ERC20, last_block_hash, transfer_clx
 
+# This is a pytest test that works with docker node.
+#
+# To run, start node with:
+#
+# $ cd ~/CasperLabs/hack/docker
+# $ make node-0/up
+#
+# Then run the test with py.test:
+#
+# $ py.test testerc20.py
+
 # ABC is the name of out test ERC20 token
 TOKEN_NAME = "ABC"
 TOTAL_TOKEN_SUPPLY = 20000
