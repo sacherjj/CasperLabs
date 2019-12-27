@@ -20,13 +20,14 @@ import monix.reactive.subjects.ConcurrentSubject
 import simulacrum.typeclass
 import io.casperlabs.shared.Log
 import io.casperlabs.catscontrib.effect.implicits.fiberSyntax
+import io.casperlabs.storage.dag.FinalityStorage
 
 @typeclass trait EventStream[F[_]] extends EventEmitter[F] {
   def subscribe(request: StreamEventsRequest): Observable[Event]
 }
 
 object EventStream {
-  def create[F[_]: Concurrent: DeployStorage: BlockStorage: Log: Metrics](
+  def create[F[_]: Concurrent: DeployStorage: BlockStorage: FinalityStorage: Log: Metrics](
       scheduler: Scheduler,
       eventStreamBufferSize: Int
   ): EventStream[F] = {
@@ -50,7 +51,8 @@ object EventStream {
         }
 
       override def newLFB(lfb: BlockHash, indirectlyFinalized: Set[BlockHash]): F[Unit] =
-        DeployBuffer.removeFinalizedDeploys(indirectlyFinalized + lfb).forkAndLog
+        FinalityStorage[F].markAsFinalized(lfb, indirectlyFinalized, 0) >>
+          DeployBuffer.removeFinalizedDeploys(indirectlyFinalized + lfb).forkAndLog
     }
   }
 }
