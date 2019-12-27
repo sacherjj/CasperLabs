@@ -41,7 +41,7 @@ import io.casperlabs.shared._
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.BlockMsgWithTransform
 import io.casperlabs.storage.block.BlockStorage
-import io.casperlabs.storage.dag.{DagRepresentation, DagStorage}
+import io.casperlabs.storage.dag.{DagRepresentation, DagStorage, FinalityStorage}
 import io.casperlabs.storage.deploy.{DeployStorage, DeployStorageReader, DeployStorageWriter}
 import simulacrum.typeclass
 
@@ -494,7 +494,7 @@ class MultiParentCasperImpl[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: 
 
 object MultiParentCasperImpl {
 
-  def create[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: DagStorage: DeployBuffer: ExecutionEngineService: LastFinalizedBlockHashContainer: DeployStorage: Validation: CasperLabsProtocol: Cell[
+  def create[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: DagStorage: DeployBuffer: FinalityStorage: ExecutionEngineService: LastFinalizedBlockHashContainer: DeployStorage: Validation: CasperLabsProtocol: Cell[
     *[_],
     CasperState
   ]: DeploySelection: EventEmitter](
@@ -509,25 +509,19 @@ object MultiParentCasperImpl {
   ): F[MultiParentCasper[F]] =
     for {
       dag <- DagStorage[F].getRepresentation
-      lmh <- dag.latestMessageHashes
-      // A stopgap solution to initialize the Last Finalized Block while we don't have the finality streams
-      // that we can use to mark every final block in the database and just look up the latest upon restart.
-      lca <- NonEmptyList.fromList(lmh.values.flatten.toList).fold(genesis.blockHash.pure[F]) {
-              hashes =>
-                DagOperations.latestCommonAncestorsMainParent[F](dag, hashes).map(_.messageHash)
-            }
+      lfb <- FinalityStorage[F].getLFB
       finalityDetector <- FinalityDetectorVotingMatrix
                            .of[F](
                              dag,
-                             lca,
+                             lfb,
                              faultToleranceThreshold
                            )
       implicit0(multiParentFinalizer: MultiParentFinalizer[F]) <- MultiParentFinalizer.empty[F](
                                                                    dag,
-                                                                   lca,
+                                                                   lfb,
                                                                    finalityDetector
                                                                  )
-      _ <- LastFinalizedBlockHashContainer[F].set(lca)
+      _ <- LastFinalizedBlockHashContainer[F].set(lfb)
     } yield new MultiParentCasperImpl[F](
       semaphoreMap,
       statelessExecutor,

@@ -217,6 +217,9 @@ object ProtoUtil {
   def weightMapTotal(weights: Map[ByteString, Weight]): Weight =
     weights.values.sum
 
+  def totalWeight(block: Block): Weight =
+    weightMapTotal(weightMap(block))
+
   private def mainParent[F[_]: Monad: BlockStorage](
       header: Block.Header
   ): F[Option[BlockSummary]] = {

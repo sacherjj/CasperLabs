@@ -66,7 +66,7 @@ package object gossiping {
   private implicit val metricsSource: Metrics.Source =
     Metrics.Source(Metrics.Source(Metrics.BaseSource, "node"), "gossiping")
 
-  def apply[F[_]: Parallel: ConcurrentEffect: Log: Metrics: Time: Timer: BlockStorage: DagStorage: NodeDiscovery: NodeAsk: MultiParentCasperRef: ExecutionEngineService: LastFinalizedBlockHashContainer: FilesAPI: DeployStorage: Validation: DeployBuffer: EventStream](
+  def apply[F[_]: Parallel: ConcurrentEffect: Log: Metrics: Time: Timer: BlockStorage: DagStorage: FinalityStorage: NodeDiscovery: NodeAsk: MultiParentCasperRef: ExecutionEngineService: LastFinalizedBlockHashContainer: FilesAPI: DeployStorage: Validation: DeployBuffer: EventStream](
       port: Int,
       conf: Configuration,
       chainSpec: ChainSpec,
@@ -163,7 +163,12 @@ package object gossiping {
                                                s"Cannot retrieve ${show(genesisBlockHash) -> "genesis"}"
                                              )
                                            )
-                            genesis    = genesisStore.getBlockMessage
+                            genesis = genesisStore.getBlockMessage
+                            _ <- FinalityStorage[F].markAsFinalized(
+                                  genesis.blockHash,
+                                  Set.empty,
+                                  ProtoUtil.totalWeight(genesis)
+                                )
                             prestate   = ProtoUtil.preStateHash(genesis)
                             transforms = genesisStore.transformEntry
                             casper <- MultiParentCasper.fromGossipServices(
