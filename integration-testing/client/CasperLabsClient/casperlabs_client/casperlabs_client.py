@@ -1029,7 +1029,7 @@ def transfer_command(casperlabs_client, args):
             target_account_bytes = bytes.fromhex(args.target_account)
             if len(target_account_bytes) != 32:
                 raise Exception(
-                    "--target_account must be 32 bytes base64 or base32 encoded"
+                    "--target_account must be 32 bytes base64 or base16 encoded"
                 )
 
         args.session_args = ABI.args_to_json(
@@ -1479,7 +1479,7 @@ def cli(*arguments) -> int:
 
     parser.addCommand('transfer', transfer_command, 'Transfers funds between accounts',
                       [[('-a', '--amount'), dict(required=False, default=None, type=int, help='Amount of motes to transfer. Note: a mote is the smallest, indivisible unit of a token.')],
-                       [('-t', '--target-account'), dict(required=True, type=str, help="base64 representation of target account's public key")],
+                       [('-t', '--target-account'), dict(required=True, type=str, help="base64 or base16 representation of target account's public key")],
                        ] + deploy_options(keys_required=False, private_key_accepted=True))
 
     parser.addCommand('propose', propose_command, 'Force a node to propose a block based on its accumulated deploys.', [])
