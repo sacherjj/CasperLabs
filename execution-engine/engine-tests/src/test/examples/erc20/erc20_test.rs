@@ -273,7 +273,7 @@ impl ERC20Test {
         self
     }
 
-    /// Balances are stored in the local storage and are represented as 33 bytes arrays where: 
+    /// Balances are stored in the local storage and are represented as 33 bytes arrays where:
     /// - the first byte is "1";
     /// - the rest is 32 bytes of the account's public key.
     pub fn assert_erc20_balance(self, address: [u8; 32], expected: U512) -> Self {
@@ -308,8 +308,8 @@ impl ERC20Test {
         self
     }
 
-    /// Allowances are stored in the local storage and are represented are 64 bytes arrays where: 
-    /// - the first 32 bytes are token owner's public key; 
+    /// Allowances are stored in the local storage and are represented are 64 bytes arrays where:
+    /// - the first 32 bytes are token owner's public key;
     /// - the second 32 bytes are token spender's public key.
     pub fn assert_erc20_allowance(
         self,
