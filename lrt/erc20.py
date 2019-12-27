@@ -6,8 +6,6 @@ from casperlabs_client import ABI
 
 BASE_PATH = Path(os.path.dirname(os.path.abspath(__file__))).parent
 ERC20_WASM = f"{BASE_PATH}/execution-engine/target/wasm32-unknown-unknown/release/erc20_smart_contract.wasm"
-TOTAL_SUPPLY = 20000
-TOKEN_NAME = "ABC"
 
 
 # At the beginning of a serialized version of Rust's Vec<u8>, first 4 bytes represent the size of the vector.
@@ -239,46 +237,3 @@ def transfer_clx(sender, recipient_public_hex, amount):
     for deploy_info in sender.node.client.showDeploys(block_hash):
         if deploy_info.is_error:
             raise Exception(f"FAILED: {str_args} => {deploy_info.error_message}")
-
-
-node = Node("localhost")
-
-agent0 = Agent("account-0")
-agent1 = Agent("account-1")
-agent2 = Agent("account-2")
-faucet = Agent("faucet-account")
-
-boss = faucet.on(node)
-
-for a in (agent0, agent1, agent2):
-    transfer_clx(boss, a.public_key_hex, 10 * 10 ** 6)
-
-abc = ERC20("ABC")
-
-boss.call_contract(abc.deploy(initial_balance=TOTAL_SUPPLY))
-print(f"Deployed ERC20")
-
-balance = boss.call_contract(
-    abc.balance(faucet.public_key_hex, faucet.public_key_hex, last_block_hash(node))
-)
-print(f"{faucet} balance={balance}")
-
-block_hash_hex = boss.call_contract(
-    abc.transfer(
-        deployer_public_hex=faucet.public_key_hex,
-        sender_private_key=faucet.private_key,
-        recipient_public_key_hex=agent0.public_key_hex,
-        amount=50,
-        block_hash_hex=last_block_hash(node),
-    )
-)
-
-balance = boss.call_contract(
-    abc.balance(faucet.public_key_hex, agent0.public_key_hex, last_block_hash(node))
-)
-print(f"{agent0} balance={balance}")
-
-balance = boss.call_contract(
-    abc.balance(faucet.public_key_hex, faucet.public_key_hex, last_block_hash(node))
-)
-print(f"{faucet} balance={balance}")
