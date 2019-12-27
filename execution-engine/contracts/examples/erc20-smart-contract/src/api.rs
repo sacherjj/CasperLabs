@@ -19,7 +19,7 @@ pub const TOTAL_SUPPLY: &str = "total_supply";
 pub const TRANSFER: &str = "transfer";
 pub const TRANSFER_FROM: &str = "transfer_from";
 pub const APPROVE: &str = "approve";
-pub const ASSERT_BALLANCE: &str = "assert_balance";
+pub const ASSERT_BALANCE: &str = "assert_balance";
 pub const ASSERT_TOTAL_SUPPLY: &str = "assert_total_supply";
 pub const ASSERT_ALLOWANCE: &str = "assert_allowance";
 pub const ALLOWANCE: &str = "allowance";
@@ -61,7 +61,7 @@ impl Api {
         Self::from_args_with_shift(1)
     }
 
-    pub fn from_args_with_shift(arg_shift: u32) -> Api {
+    fn from_args_with_shift(arg_shift: u32) -> Api {
         let method_name: String = get_arg(arg_shift);
         match method_name.as_str() {
             DEPLOY => {
@@ -94,7 +94,7 @@ impl Api {
                 let amount = get_arg(arg_shift + 2);
                 Api::Approve(spender, amount)
             }
-            ASSERT_BALLANCE => {
+            ASSERT_BALANCE => {
                 let address = get_arg(arg_shift + 1);
                 let amount = get_arg(arg_shift + 2);
                 Api::AssertBalance(address, amount)

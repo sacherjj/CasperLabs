@@ -21,7 +21,7 @@ use crate::test::DEFAULT_GENESIS_CONFIG;
 const ERC_20_CONTRACT_WASM: &str = "erc20_smart_contract.wasm";
 const TRANFER_TO_ACCOUNT_WASM: &str = "transfer_to_account.wasm";
 const METHOD_DEPLOY: &str = "deploy";
-const METHOD_ASSERT_BALLANCE: &str = "assert_balance";
+const METHOD_ASSERT_BALANCE: &str = "assert_balance";
 const METHOD_ASSERT_TOTAL_SUPPLY: &str = "assert_total_supply";
 const METHOD_ASSERT_ALLOWANCE: &str = "assert_allowance";
 const METHOD_TRANSFER: &str = "transfer";
@@ -97,7 +97,7 @@ impl ERC20Test {
             self.get_proxy_hash(),
             (
                 self.get_token_hash(),
-                METHOD_ASSERT_BALLANCE,
+                METHOD_ASSERT_BALANCE,
                 sender,
                 expected_amount,
             ),
@@ -273,6 +273,9 @@ impl ERC20Test {
         self
     }
 
+    /// Balances are stored in the local storage and are represented as 33 bytes arrays where: 
+    /// - the first byte is "1";
+    /// - the rest is 32 bytes of the account's public key.
     pub fn assert_erc20_balance(self, address: [u8; 32], expected: U512) -> Self {
         let mut balance_bytes: Vec<u8> = Vec::with_capacity(33);
         balance_bytes.extend(&[1]);
@@ -292,6 +295,7 @@ impl ERC20Test {
         self
     }
 
+    /// Total supply value is stored in the local storage under the [255u8; 32] key.
     pub fn assert_erc20_total_supply(self, expected: U512) -> Self {
         let total_supply_key = Key::local(self.get_token_hash(), &[255u8; 32]);
         let value: CLValue = self
@@ -304,15 +308,16 @@ impl ERC20Test {
         self
     }
 
+    /// Allowances are stored in the local storage and are represented are 64 bytes arrays where: 
+    /// - the first 32 bytes are token owner's public key; 
+    /// - the second 32 bytes are token spender's public key.
     pub fn assert_erc20_allowance(
         self,
         owner: [u8; 32],
         spender: [u8; 32],
         expected: U512,
     ) -> Self {
-        let mut allowance_bytes: Vec<u8> = Vec::with_capacity(33);
-        allowance_bytes.extend(&owner);
-        allowance_bytes.extend(&spender);
+        let allowance_bytes: Vec<u8> = owner.iter().chain(spender.iter()).copied().collect();
         let allowance_key = Key::local(self.get_token_hash(), &allowance_bytes.to_bytes().unwrap());
         let value: CLValue = self
             .builder
