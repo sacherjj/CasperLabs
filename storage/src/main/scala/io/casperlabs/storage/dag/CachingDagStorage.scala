@@ -175,6 +175,8 @@ class CachingDagStorage[F[_]: Concurrent](
 
   override def isFinalized(block: BlockHash): F[Boolean] =
     underlying.isFinalized(block)
+
+  override def getLFB: F[BlockHash] = underlying.getLFB
 }
 
 object CachingDagStorage {

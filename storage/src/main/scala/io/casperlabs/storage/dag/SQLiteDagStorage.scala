@@ -262,6 +262,12 @@ class SQLiteDagStorage[F[_]: Bracket[*[_], Throwable]](
       .unique
       .transact(readXa)
 
+  override def getLFB: F[BlockHash] =
+    sql"""SELECT block_hash FROM block_metadata WHERE is_finalized=TRUE AND is_main_chain=TRUE ORDER BY rank DESC LIMIT 1"""
+      .query[BlockHash]
+      .unique
+      .transact(readXa)
+
   private val toMessageSummaryF: BlockSummary => F[Message] = bs =>
     MonadThrowable[F].fromTry(Message.fromBlockSummary(bs))
 }
