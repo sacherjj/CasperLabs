@@ -169,7 +169,7 @@ class CachingDagStorage[F[_]: Concurrent](
   override def markAsFinalized(
       mainParent: BlockHash,
       secondary: Set[BlockHash],
-      quorum: Int
+      quorum: BigInt
   ): F[Unit] =
     underlying.markAsFinalized(mainParent, secondary, quorum)
 

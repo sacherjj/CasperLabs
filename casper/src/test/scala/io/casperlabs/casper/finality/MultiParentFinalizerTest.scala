@@ -42,14 +42,20 @@ class MultiParentFinalizerTest extends FlatSpec with BlockGenerator with Storage
                                )
         a                     <- createAndStoreBlockFull[Task](v1, Seq(genesis), Seq.empty, bonds)
         b                     <- createAndStoreBlockFull[Task](v2, Seq(genesis, a), Seq.empty, bonds)
-        newlyFinalizedBlocksA <- multiParentFinalizer.onNewBlockAdded(b)
+        newlyFinalizedBlocksA <- multiParentFinalizer.onNewBlockAdded(b).map(_.get)
         // `b` is in main chain, `a` is secondary parent.
-        _ = assert(newlyFinalizedBlocksA.contains(FinalizedBlocks(b.blockHash, Set(a.blockHash))))
+        _ = assert(
+          newlyFinalizedBlocksA.mainChain == b.blockHash && newlyFinalizedBlocksA.secondaryParents == Set(
+            a.blockHash
+          )
+        )
         c <- createAndStoreBlockFull[Task](v1, Seq(b, a), Seq.empty, bonds)
         // `c`'s main parent is `b`, secondary is a. Since `a` was already finalized through `b`,
         // it should not be returned now.
-        newlyFinalizedBlocksB <- multiParentFinalizer.onNewBlockAdded(c)
-        _                     = assert(newlyFinalizedBlocksB.contains(FinalizedBlocks(c.blockHash)))
+        newlyFinalizedBlocksB <- multiParentFinalizer.onNewBlockAdded(c).map(_.get)
+        _ = assert(
+          newlyFinalizedBlocksB.mainChain == c.blockHash && newlyFinalizedBlocksB.secondaryParents.isEmpty
+        )
       } yield ()
   }
 
@@ -79,8 +85,8 @@ class MultiParentFinalizerTest extends FlatSpec with BlockGenerator with Storage
         b <- MultiParentFinalizerTest
               .finalizeBlock[Task](a.blockHash, nelBonds)
               .flatMap(ProtoUtil.unsafeGetBlock[Task](_))
-        finalizedA <- multiParentFinalizer.onNewBlockAdded(b)
-        _          = assert(finalizedA.contains(FinalizedBlocks(a.blockHash)))
+        finalizedA <- multiParentFinalizer.onNewBlockAdded(b).map(_.get)
+        _          = assert(finalizedA.mainChain == a.blockHash && finalizedA.secondaryParents.isEmpty)
 
         // `aPrime` is sibiling of `a`, another child of Genesis.
         // Since `a` has already been finalized `aPrime` should never become chosen as new LFB.

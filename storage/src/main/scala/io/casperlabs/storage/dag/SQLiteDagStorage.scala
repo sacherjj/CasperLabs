@@ -236,13 +236,13 @@ class SQLiteDagStorage[F[_]: Bracket[*[_], Throwable]](
   override def markAsFinalized(
       mainParent: BlockHash,
       secondary: Set[BlockHash],
-      quorum: Int
+      quorum: BigInt
   ): F[Unit] = {
     val mainPQuery =
-      sql"""UPDATE block_metadata SET is_finalized=TRUE, is_main_chain=TRUE, quorum=$quorum WHERE block_hash=$mainParent""".update.run
+      sql"""UPDATE block_metadata SET is_finalized=TRUE, is_main_chain=TRUE, quorum=${quorum.toLong} WHERE block_hash=$mainParent""".update.run
     val secondaryQuery = NonEmptyList.fromList(secondary.toList).fold(doobie.free.connection.unit) {
       nel =>
-        val q = fr"""UPDATE block_metadata SET is_finalized=TRUE, quorum=$quorum WHERE """ ++ Fragments
+        val q = fr"""UPDATE block_metadata SET is_finalized=TRUE, quorum=${quorum.toLong} WHERE """ ++ Fragments
           .in(fr"block_hash", nel)
 
         q.update.run.map(_ => ())

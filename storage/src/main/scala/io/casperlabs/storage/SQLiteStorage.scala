@@ -155,7 +155,7 @@ object SQLiteStorage {
       override def markAsFinalized(
           mainParent: BlockHash,
           secondary: Set[BlockHash],
-          quorum: Int
+          quorum: BigInt
       ): F[Unit] =
         dagStorage.markAsFinalized(mainParent, secondary, quorum)
 
