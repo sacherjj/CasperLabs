@@ -80,6 +80,12 @@ class SmartContract:
     def __getattr__(self, name):
         return self.method(name)
 
+    def abi_encode_args(self, method_name, parameters, kwargs):
+        args = [ABI.string_value("method", method_name)] + [
+            parameters[p](p, kwargs[p]) for p in parameters
+        ]
+        return ABI.args(args)
+
     def method(self, name):
         if name not in self.methods:
             raise Exception(f"unknown method {name}")
@@ -90,14 +96,7 @@ class SmartContract:
                 raise Exception(
                     f"Arguments ({kwargs.keys()}) don't match parameters ({parameters.keys()}) of method {name}"
                 )
-            # If using proxy make sure that token_hash ('erc20') is the first argument
-            args = (
-                [parameters[p](p, kwargs[p]) for p in parameters if p == "erc20"]
-                + [ABI.string_value("method", name)]
-                + [parameters[p](p, kwargs[p]) for p in parameters if p != "erc20"]
-            )
-            arguments = ABI.args(args)
-
+            arguments = self.abi_encode_args(name, parameters, kwargs)
             arguments_string = f"{name}({','.join(f'{p}={type(kwargs[p]) == bytes and kwargs[p].hex() or kwargs[p]}' for p in parameters)})"
 
             def deploy_and_propose(bound_agent, **session_reference):
@@ -151,6 +150,15 @@ class ERC20(SmartContract):
         super().__init__(ERC20_WASM, ERC20.methods)
         self.token_name = token_name
         self.proxy_name = "erc20_proxy"
+
+    def abi_encode_args(self, method_name, parameters, kwargs):
+        # When using proxy make sure that token_hash ('erc20') is the first argument
+        args = (
+            [parameters[p](p, kwargs[p]) for p in parameters if p == "erc20"]
+            + [ABI.string_value("method", method_name)]
+            + [parameters[p](p, kwargs[p]) for p in parameters if p != "erc20"]
+        )
+        return ABI.args(args)
 
     def proxy_hash(self, bound_agent, deployer_public_hex, block_hash):
         return self.contract_hash_by_name(
