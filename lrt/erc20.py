@@ -1,7 +1,10 @@
+import os
+from pathlib import Path
+
 import casperlabs_client
 from casperlabs_client import ABI
 
-BASE_PATH = "/home/piotr/CasperLabs"
+BASE_PATH = Path(os.path.dirname(os.path.abspath(__file__))).parent
 ERC20_WASM = f"{BASE_PATH}/execution-engine/target/wasm32-unknown-unknown/release/erc20_smart_contract.wasm"
 TOTAL_SUPPLY = 20000
 TOKEN_NAME = "ABC"
