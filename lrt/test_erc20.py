@@ -11,7 +11,7 @@ from erc20 import Node, Agent, ERC20, last_block_hash, transfer_clx
 #
 # Then run the test with py.test:
 #
-# $ py.test testerc20.py
+# $ py.test test_erc20.py
 
 # ABC is the name of out test ERC20 token
 TOKEN_NAME = "ABC"
