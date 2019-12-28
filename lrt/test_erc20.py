@@ -1,6 +1,6 @@
 import pytest
 import random
-from erc20 import Node, Agent, ERC20, last_block_hash, transfer_clx
+from erc20 import Node, Agent, ERC20, transfer_clx
 
 # This is a pytest test that works with docker node.
 #
@@ -39,25 +39,20 @@ def agents(faucet, node):
 
 def check_total_token_amount(node, abc, deployer, agents, amount):
     n = sum(
-        deployer.on(node).call_contract(
-            abc.balance(
-                deployer.public_key_hex, agent.public_key_hex, last_block_hash(node)
-            )
-        )
+        deployer.on(node).call_contract(abc.balance(agent.public_key_hex))
         for agent in agents + [deployer]
     )
     assert n == amount
 
 
 def test_erc20(node, faucet, agents):
-    abc = ERC20(TOKEN_NAME)
     boss = faucet.on(node)
-
-    boss.call_contract(abc.deploy(initial_balance=TOTAL_TOKEN_SUPPLY))
-
-    balance = boss.call_contract(
-        abc.balance(faucet.public_key_hex, faucet.public_key_hex, last_block_hash(node))
+    abc = boss.call_contract(
+        ERC20(TOKEN_NAME).deploy(initial_balance=TOTAL_TOKEN_SUPPLY)
     )
+
+    balance = boss.call_contract(abc.balance(faucet.public_key_hex))
+
     # Initially deployer's balance should be equal the total token supply
     assert balance == TOTAL_TOKEN_SUPPLY
 
@@ -66,18 +61,12 @@ def test_erc20(node, faucet, agents):
     for agent in agents:
         boss.call_contract(
             abc.transfer(
-                deployer_public_hex=faucet.public_key_hex,
                 sender_private_key=faucet.private_key,
                 recipient_public_key_hex=agent.public_key_hex,
                 amount=n,
-                block_hash_hex=last_block_hash(node),
             )
         )
-        balance = boss.call_contract(
-            abc.balance(
-                faucet.public_key_hex, agent.public_key_hex, last_block_hash(node)
-            )
-        )
+        balance = boss.call_contract(abc.balance(agent.public_key_hex))
         assert balance == n
 
     check_total_token_amount(node, abc, faucet, agents, TOTAL_TOKEN_SUPPLY)
@@ -87,11 +76,9 @@ def test_erc20(node, faucet, agents):
         sender, recipient = random.sample(agents, 2)
         sender.on(node).call_contract(
             abc.transfer(
-                deployer_public_hex=faucet.public_key_hex,
                 sender_private_key=sender.private_key,
                 recipient_public_key_hex=recipient.public_key_hex,
                 amount=1,
-                block_hash_hex=last_block_hash(node),
             )
         )
         check_total_token_amount(node, abc, faucet, agents, TOTAL_TOKEN_SUPPLY)

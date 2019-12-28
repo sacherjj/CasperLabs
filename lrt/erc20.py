@@ -125,6 +125,34 @@ class SmartContract:
         return method
 
 
+class DeployedERC20:
+    def __init__(self, erc20, token_hash, proxy_hash):
+        self.erc20 = erc20
+        self.token_hash = token_hash
+        self.proxy_hash = proxy_hash
+
+    def balance(self, account_public_hex):
+        def execute(bound_agent):
+            key = f"{self.token_hash.hex()}:{BALANCE_KEY_SIZE_HEX}{BALANCE_BYTE}{account_public_hex}"
+            block_hash_hex = last_block_hash(bound_agent.node)
+            response = bound_agent.node.client.queryState(
+                block_hash_hex, key=key, path="", keyType="local"
+            )
+            return int(response.big_int.value)
+
+        return execute
+
+    def transfer(self, sender_private_key, recipient_public_key_hex, amount):
+        def execute(bound_agent):
+            return self.erc20.method("transfer")(
+                erc20=self.token_hash,
+                recipient=bytes.fromhex(recipient_public_key_hex),
+                amount=amount,
+            )(bound_agent, private_key=sender_private_key, session_hash=self.proxy_hash)
+
+        return execute
+
+
 class ERC20(SmartContract):
     methods = {
         "deploy": {"token_name": ABI.string_value, "initial_balance": ABI.big_int},
@@ -171,49 +199,21 @@ class ERC20(SmartContract):
         )
 
     def deploy(self, initial_balance=None):
-        deploy = self.method("deploy")(
-            token_name=self.token_name, initial_balance=initial_balance
-        )
-
         def execute(bound_agent):
-            deploy_hash = deploy(bound_agent)
-            return deploy_hash.hex()
-
-        return execute
-
-    def balance(self, deployer_public_hex, account_public_hex, block_hash_hex):
-        def execute(bound_agent):
-            token_hash = self.token_hash(
-                bound_agent, deployer_public_hex, block_hash_hex
+            deploy_hash = self.method("deploy")(
+                token_name=self.token_name, initial_balance=initial_balance
+            )(bound_agent)
+            deploy_hash = deploy_hash
+            block_hash = last_block_hash(bound_agent.node)
+            return DeployedERC20(
+                self,
+                self.token_hash(
+                    bound_agent, bound_agent.agent.public_key_hex, block_hash
+                ),
+                self.proxy_hash(
+                    bound_agent, bound_agent.agent.public_key_hex, block_hash
+                ),
             )
-            key = f"{token_hash.hex()}:{BALANCE_KEY_SIZE_HEX}{BALANCE_BYTE}{account_public_hex}"
-            response = bound_agent.node.client.queryState(
-                block_hash_hex, key=key, path="", keyType="local"
-            )
-            return int(response.big_int.value)
-
-        return execute
-
-    def transfer(
-        self,
-        deployer_public_hex,
-        sender_private_key,
-        recipient_public_key_hex,
-        amount,
-        block_hash_hex,
-    ):
-        def execute(bound_agent):
-            token_hash = self.token_hash(
-                bound_agent, deployer_public_hex, block_hash_hex
-            )
-            proxy_hash = self.proxy_hash(
-                bound_agent, deployer_public_hex, block_hash_hex
-            )
-            return self.method("transfer")(
-                erc20=token_hash,
-                recipient=bytes.fromhex(recipient_public_key_hex),
-                amount=amount,
-            )(bound_agent, private_key=sender_private_key, session_hash=proxy_hash)
 
         return execute
 
