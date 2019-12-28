@@ -26,10 +26,18 @@ BALANCE_BYTE = "01"
 
 
 class Node:
-    def __init__(self, host):
-        # self.port = port  # TODO
+    def __init__(
+        self,
+        host,
+        port=casperlabs_client.DEFAULT_PORT,
+        port_internal=casperlabs_client.DEFAULT_INTERNAL_PORT,
+    ):
         self.host = host
-        self.client = casperlabs_client.CasperLabsClient(host=self.host)
+        self.port = port
+        self.port_internal = port_internal
+        self.client = casperlabs_client.CasperLabsClient(
+            host=self.host, port=port, port_internal=port_internal
+        )
 
 
 class Agent:

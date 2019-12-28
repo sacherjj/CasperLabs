@@ -16,7 +16,7 @@ from erc20 import Node, Agent, ERC20, transfer_clx
 # ABC is the name of out test ERC20 token
 TOKEN_NAME = "ABC"
 TOTAL_TOKEN_SUPPLY = 20000
-INITIAL_AGENT_CLX_FUNDS = 10 * 10 ** 6
+INITIAL_AGENT_CLX_FUNDS = 10 ** 7
 
 
 @pytest.fixture()
