@@ -75,9 +75,10 @@ class BoundAgent:
 
 
 class SmartContract:
-    def __init__(self, file_name, methods):
+    def __init__(self, file_name, methods, propose_after_deploy=True):
         self.file_name = file_name
         self.methods = methods
+        self.propose_after_deploy = propose_after_deploy
 
     def contract_hash_by_name(self, bound_agent, deployer, contract_name, block_hash):
         response = bound_agent.node.client.queryState(
@@ -107,7 +108,7 @@ class SmartContract:
             arguments = self.abi_encode_args(name, parameters, kwargs)
             arguments_string = f"{name}({','.join(f'{p}={type(kwargs[p]) == bytes and kwargs[p].hex() or kwargs[p]}' for p in parameters)})"
 
-            def deploy_and_propose(bound_agent, **session_reference):
+            def deploy_and_maybe_propose(bound_agent, **session_reference):
                 kwargs = dict(
                     public_key=bound_agent.agent.public_key,
                     private_key=bound_agent.agent.private_key,
@@ -118,17 +119,18 @@ class SmartContract:
                     kwargs.update(session_reference)
                 else:
                     kwargs["session"] = self.file_name
-                _, deploy_hash = bound_agent.node.client.deploy(**kwargs)
                 print(f"Call {arguments_string}")
-                block_hash = bound_agent.node.client.propose().block_hash.hex()
-                for deploy_info in bound_agent.node.client.showDeploys(block_hash):
-                    if deploy_info.is_error:
-                        raise Exception(
-                            f"Deploy {deploy_hash.hex()} [{arguments_string}] error_message: {deploy_info.error_message}"
-                        )
+                _, deploy_hash = bound_agent.node.client.deploy(**kwargs)
+                if self.propose_after_deploy:
+                    block_hash = bound_agent.node.client.propose().block_hash.hex()
+                    for deploy_info in bound_agent.node.client.showDeploys(block_hash):
+                        if deploy_info.is_error:
+                            raise Exception(
+                                f"Deploy {deploy_hash.hex()} [{arguments_string}] error_message: {deploy_info.error_message}"
+                            )
                 return deploy_hash
 
-            return deploy_and_propose
+            return deploy_and_maybe_propose
 
         return method
 
