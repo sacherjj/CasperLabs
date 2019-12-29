@@ -2,10 +2,10 @@ import React from 'react';
 import { observer } from 'mobx-react';
 
 import AuthContainer from '../containers/AuthContainer';
-import { RefreshableComponent, Button, IconButton, ListInline } from './Utils';
+import { Button, IconButton, ListInline, RefreshableComponent } from './Utils';
 import DataTable from './DataTable';
 import Modal from './Modal';
-import { Form, TextField } from './Forms';
+import { FileSelect, Form, TextField } from './Forms';
 import { base64to16, encodeBase16 } from 'casperlabs-sdk';
 import { ObservableValue } from '../lib/ObservableValueMap';
 
@@ -22,6 +22,7 @@ export default class Accounts extends RefreshableComponent<Props, {}> {
 
   render() {
     const newAccount = this.props.auth.newAccountForm;
+    const importAccount = this.props.auth.importAccountForm;
     return (
       <div>
         <DataTable
@@ -71,9 +72,13 @@ export default class Accounts extends RefreshableComponent<Props, {}> {
             title="Create Account Key"
             onClick={() => this.props.auth.configureNewAccount()}
           />
+          <Button
+            onClick={() => this.props.auth.configureImportAccount()}
+            title="Import Account Key"
+          />
         </ListInline>
 
-        {newAccount && (
+        {this.props.auth.showNewAccountForm && newAccount !== null && (
           <Modal
             id="new-account"
             title="Create Account Key"
@@ -116,6 +121,44 @@ export default class Accounts extends RefreshableComponent<Props, {}> {
                 id="id-private-key-base16"
                 label="Private Key (Base16)"
                 value={base64to16(newAccount.privateKeyBase64!)}
+                readonly={true}
+              />
+            </Form>
+          </Modal>
+        )}
+
+        {this.props.auth.showImportingAccountForm && importAccount !== null && (
+          <Modal
+            id="import-account"
+            title="Import Account Key"
+            submitLabel="Save"
+            onSubmit={() => this.props.auth.importAccount()}
+            onClose={() => {
+              this.props.auth.importAccountForm = null;
+            }}
+            error={importAccount.error}
+          >
+            <Form>
+              <FileSelect
+                id="id-file-select"
+                label={importAccount.fileName || 'Choose File'}
+                handleFileSelect={e => {
+                  importAccount.handleFileSelect(e);
+                }}
+              />
+              <TextField
+                id="id-account-name"
+                label="Name"
+                value={importAccount.name || ''}
+                placeholder="Human readable alias"
+                onChange={x => {
+                  importAccount.name = x;
+                }}
+              />
+              <TextField
+                id="id-public-key-base64"
+                label="Public Key (Base64)"
+                value={importAccount.publicKeyBase64 || ''}
                 readonly={true}
               />
             </Form>

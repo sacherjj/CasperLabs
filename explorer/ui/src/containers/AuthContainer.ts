@@ -1,11 +1,13 @@
-import { observable } from 'mobx';
+import { computed, observable, runInAction } from 'mobx';
 import * as nacl from 'tweetnacl-ts';
+import { validateBase64 } from 'tweetnacl-ts';
 import { saveAs } from 'file-saver';
 import ErrorContainer from './ErrorContainer';
 import { CleanableFormData } from './FormData';
 import AuthService from '../services/AuthService';
 import {
   BalanceService,
+  base64to16,
   CasperService,
   decodeBase64,
   encodeBase64
@@ -17,12 +19,22 @@ import ObservableValueMap from '../lib/ObservableValueMap';
 
 type AccountB64 = string;
 
+enum ShowedForm {
+  NEW_ACCOUNT,
+  IMPORT_ACCOUNT
+}
+
 export class AuthContainer {
   @observable user: User | null = null;
   @observable accounts: UserAccount[] | null = null;
 
   // An account we are creating, while we're configuring it.
   @observable newAccountForm: NewAccountFormData | null = null;
+
+  // An account we are importing, while we're configuring it.
+  @observable importAccountForm: ImportAccountFormData | null = null;
+
+  @observable showedForm: ShowedForm | null = null;
 
   @observable selectedAccount: UserAccount | null = null;
 
@@ -119,7 +131,29 @@ export class AuthContainer {
 
   // Open a new account creation form.
   configureNewAccount() {
+    this.showedForm = ShowedForm.NEW_ACCOUNT;
     this.newAccountForm = new NewAccountFormData(this.accounts!);
+  }
+
+  // Open a form for importing account.
+  configureImportAccount() {
+    this.showedForm = ShowedForm.IMPORT_ACCOUNT;
+    this.importAccountForm = new ImportAccountFormData(this.accounts!);
+  }
+
+  @computed
+  get showNewAccountForm() {
+    return (
+      this.showedForm === ShowedForm.NEW_ACCOUNT && this.newAccountForm !== null
+    );
+  }
+
+  @computed
+  get showImportingAccountForm() {
+    return (
+      this.showedForm === ShowedForm.IMPORT_ACCOUNT &&
+      this.importAccountForm !== null
+    );
   }
 
   async createAccount(): Promise<boolean> {
@@ -129,6 +163,19 @@ export class AuthContainer {
       saveToFile(form.privateKeyBase64, `${form.name}.private.key`);
       saveToFile(form.publicKeyBase64, `${form.name}.public.key`);
       // Add the public key to the accounts and save it to Auth0.
+      await this.addAccount({
+        name: form.name,
+        publicKeyBase64: form.publicKeyBase64
+      });
+      return true;
+    } else {
+      return false;
+    }
+  }
+
+  async importAccount(): Promise<boolean> {
+    let form = this.importAccountForm!;
+    if (form.clean()) {
       await this.addAccount({
         name: form.name,
         publicKeyBase64: form.publicKeyBase64
@@ -167,18 +214,13 @@ function saveToFile(content: string, filename: string) {
   saveAs(blob, filename);
 }
 
-class NewAccountFormData extends CleanableFormData {
-  constructor(private accounts: UserAccount[]) {
-    super();
-    // Generate key pair and assign to public and private keys.
-    const keys = nacl.sign_keyPair();
-    this.publicKeyBase64 = encodeBase64(keys.publicKey);
-    this.privateKeyBase64 = encodeBase64(keys.secretKey);
-  }
-
+class AccountFormData extends CleanableFormData {
   @observable name: string = '';
   @observable publicKeyBase64: string = '';
-  @observable privateKeyBase64: string = '';
+
+  constructor(private accounts: UserAccount[]) {
+    super();
+  }
 
   protected check() {
     if (this.name === '') return 'Name cannot be empty!';
@@ -193,6 +235,74 @@ class NewAccountFormData extends CleanableFormData {
       return 'An account with this public key already exists.';
 
     return null;
+  }
+}
+
+class NewAccountFormData extends AccountFormData {
+  @observable privateKeyBase64: string = '';
+
+  constructor(accounts: UserAccount[]) {
+    super(accounts);
+    // Generate key pair and assign to public and private keys.
+    const keys = nacl.sign_keyPair();
+    this.publicKeyBase64 = encodeBase64(keys.publicKey);
+    this.privateKeyBase64 = encodeBase64(keys.secretKey);
+  }
+}
+
+class ImportAccountFormData extends AccountFormData {
+  @observable file: File | null = null;
+  @observable fileContent: string | null = null;
+
+  handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    if (e.target.files) {
+      this.file = e.target.files[0];
+      const reader = new FileReader();
+      reader.readAsText(this.file);
+      reader.onload = e => {
+        this.fileContent = reader.result as string;
+        runInAction(() => {
+          this.error = this.checkFileContent();
+          if (this.error === null) {
+            this.name = this.fileName!.split('.')[0];
+            this.publicKeyBase64 = this.fileContent!;
+          }
+        });
+      };
+    }
+  }
+
+  @computed
+  get fileName(): string | null {
+    if (this.file) {
+      return this.file.name;
+    }
+    return null;
+  }
+
+  checkFileContent() {
+    if (!this.fileContent) {
+      return 'The content of imported file cannot be empty!';
+    }
+
+    try {
+      validateBase64(this.fileContent);
+    } catch (e) {
+      return 'The content of imported file is not base64 encoded.';
+    }
+
+    if (base64to16(this.fileContent).length !== 64) {
+      return 'The length of imported account public key is not correct.';
+    }
+    return null;
+  }
+
+  protected check() {
+    let errorMsg = this.checkFileContent();
+    if (errorMsg !== null) {
+      return errorMsg;
+    }
+    return super.check();
   }
 }
 
