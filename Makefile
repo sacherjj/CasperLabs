@@ -284,7 +284,7 @@ execution-engine/target/system-contracts.tar.gz: $(RUST_SRC) .make/rustup-update
 # in the EE project all the contracts appear individually in the cargo workspace.
 .make/contracts/%: $(RUST_SRC) .make/rustup-update
 	$(eval CONTRACT=$(subst _,-,$*))
-	$(MAKE) -C execution-engine build-contract/$(CONTRACT)
+	$(MAKE) -C execution-engine build-contract-rs/$(CONTRACT)
 	mkdir -p $(dir $@) && touch $@
 
 # Compile a contract and put it in the CLI client resources so they get packaged with the JAR.

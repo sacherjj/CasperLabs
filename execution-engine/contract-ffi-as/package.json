@@ -1,0 +1,35 @@
+{
+  "name": "casperlabs-contract-ffi",
+  "version": "0.0.1",
+  "description": "Library for developing CasperLabs smart contracts.",
+  "main": "index.js",
+  "ascMain": "assembly/index.ts",
+  "dependencies": {},
+  "devDependencies": {
+    "assemblyscript": "^0.8.1",
+    "ava": "^2.4.0",
+    "ts-loader": "^6.2.1",
+    "ts-node": "^8.5.4",
+    "typescript": "^3.7.3"
+  },
+  "scripts": {
+    "test": "ava -v --serial",
+    "asbuild:untouched": "asc assembly/index.ts -b build/untouched.wasm -t build/untouched.wat --sourceMap --validate --debug --use abort=",
+    "asbuild:optimized": "asc assembly/index.ts -b build/optimized.wasm -t build/optimized.wat --sourceMap --validate --optimize --use abort=",
+    "asbuild": "npm run asbuild:untouched && npm run asbuild:optimized"
+  },
+  "author": "Michał Papierski <michal@papierski.net>",
+  "license": "Apache-2.0",
+  "ava": {
+    "compileEnhancements": true,
+    "extensions": [
+      "ts"
+    ],
+    "require": [
+      "ts-node/register/transpile-only"
+    ],
+    "files": [
+      "tests/**/*.spec.ts"
+    ]
+  }
+}
