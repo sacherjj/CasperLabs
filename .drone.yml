@@ -185,8 +185,6 @@ steps:
       - "**/.drone.yml"
       - "integration-testing/**"
 
-
-
 # This section is for bors' branches only
 
 #NOTE: allowing failures here since we've seen site temporarily go down and cause
