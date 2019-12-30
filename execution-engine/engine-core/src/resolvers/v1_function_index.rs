@@ -11,6 +11,7 @@ pub enum FunctionIndex {
     ReadFuncIndex,
     ReadLocalFuncIndex,
     AddFuncIndex,
+    AddLocalFuncIndex,
     NewFuncIndex,
     RetFuncIndex,
     CallContractFuncIndex,
