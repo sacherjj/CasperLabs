@@ -19,20 +19,6 @@ object Runtime {
     val program = for {
       peersRP <- DiagnosticsService[F].listPeers
       _       <- ConsoleIO[F].println(showPeers(peersRP, "connected"))
-      peersND <- DiagnosticsService[F].listDiscoveredPeers
-      _       <- ConsoleIO[F].println(showPeers(peersND, "discovered"))
-      core    <- DiagnosticsService[F].nodeCoreMetrics
-      _       <- ConsoleIO[F].println(showNodeCoreMetrics(core))
-      cpu     <- DiagnosticsService[F].processCpu
-      _       <- ConsoleIO[F].println(showProcessCpu(cpu))
-      mem     <- DiagnosticsService[F].memoryUsage
-      _       <- ConsoleIO[F].println(showMemoryUsage(mem))
-      pools   <- DiagnosticsService[F].memoryPools
-      _       <- ConsoleIO[F].println(showMemoryPools(pools))
-      gc      <- DiagnosticsService[F].garbageCollectors
-      _       <- ConsoleIO[F].println(showGarbageCollectors(gc))
-      threads <- DiagnosticsService[F].threads
-      _       <- ConsoleIO[F].println(showThreads(threads))
     } yield ()
 
     for {

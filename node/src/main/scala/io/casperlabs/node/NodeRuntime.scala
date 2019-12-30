@@ -104,9 +104,7 @@ class NodeRuntime private[node] (
       Option(SslContexts.forServer(cert, key, ClientAuth.NONE))
     } else None
 
-    implicit val metrics     = diagnostics.effects.metrics[Task]
-    implicit val nodeMetrics = diagnostics.effects.nodeCoreMetrics[Task]
-    implicit val jvmMetrics  = diagnostics.effects.jvmMetrics[Task]
+    implicit val metrics = diagnostics.effects.metrics[Task]
 
     val resources = for {
       implicit0(executionEngineService: ExecutionEngineService[Task]) <- GrpcExecutionEngineService[
