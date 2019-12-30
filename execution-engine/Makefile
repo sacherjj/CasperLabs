@@ -123,10 +123,11 @@ test-contracts-rs: build-contracts-rs
 
 .PHONY: test-contracts-ts
 test-contracts-ts: build-contracts-rs build-contracts-ts
-	$(CARGO) test $(CARGO_FLAGS) -p casperlabs-engine-tests -- --ignored --nocapture
+	@# see https://github.com/rust-lang/cargo/issues/5015#issuecomment-515544290
+	$(CARGO) test $(CARGO_FLAGS) --manifest-path "engine-tests/Cargo.toml" --features "use_as_wasm" -- --ignored --nocapture
 
 .PHONY: test-contracts
-test-contracts: tests-contracts-rs test-contracts-ts
+test-contracts: test-contracts-rs test-contracts-ts
 
 .PHONY: check-format
 check-format:

@@ -77,6 +77,10 @@ const DEFAULT_LMDB_PAGES: usize = 2560;
 /// the behavior of `get_data_dir()` in "engine-grpc-server/src/main.rs".
 const GLOBAL_STATE_DIR: &str = "global_state";
 
+lazy_static! {
+    static ref WASM_PATHS: Vec<PathBuf> = get_compiled_wasm_paths();
+}
+
 pub type InMemoryWasmTestBuilder = WasmTestBuilder<InMemoryGlobalState>;
 pub type LmdbWasmTestBuilder = WasmTestBuilder<LmdbGlobalState>;
 
@@ -1033,7 +1037,8 @@ fn get_default_wasm_path() -> PathBuf {
 }
 
 /// Constructs a path to TypeScript compiled WASM files
-fn get_typescript_wasm_path() -> PathBuf {
+#[cfg(feature = "use_as_wasm")]
+fn get_assembly_script_wasm_path() -> PathBuf {
     get_relative_path(COMPILED_WASM_TYPESCRIPT_PATH)
 }
 
@@ -1041,7 +1046,8 @@ fn get_typescript_wasm_path() -> PathBuf {
 fn get_compiled_wasm_paths() -> Vec<PathBuf> {
     vec![
         // Contracts compiled with typescript are tried first
-        get_typescript_wasm_path(),
+        #[cfg(feature = "use_as_wasm")]
+        get_assembly_script_wasm_path(),
         // As a fallback rust contracts are tried
         get_default_wasm_path(),
     ]
@@ -1049,10 +1055,6 @@ fn get_compiled_wasm_paths() -> Vec<PathBuf> {
 
 /// Reads a given compiled contract file based on path
 pub fn read_wasm_file_bytes<T: AsRef<Path>>(contract_file: T) -> Vec<u8> {
-    lazy_static! {
-        static ref WASM_PATHS: Vec<PathBuf> = get_compiled_wasm_paths();
-    };
-
     // Find first path to a given file found in a list of paths
     for wasm_path in WASM_PATHS.iter() {
         let mut filename = wasm_path.clone();
