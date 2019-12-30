@@ -10,7 +10,7 @@ from .errors import (
     UnexpectedProposeOutputFormatError,
     UnexpectedShowBlocksOutputFormatError,
 )
-from casperlabs_client import ABI
+from casperlabs_client.cli import ABI
 
 
 class Contract:

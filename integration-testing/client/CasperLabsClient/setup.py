@@ -252,8 +252,6 @@ setup(
         "Readme": "https://github.com/CasperLabs/CasperLabs/blob/dev/integration-testing/client/CasperLabsClient/README.md",
     },
     entry_points={
-        "console_scripts": [
-            "casperlabs_client = casperlabs_client.casperlabs_client:main"
-        ]
+        "console_scripts": ["casperlabs_client = casperlabs_client.cli:main"]
     },
 )

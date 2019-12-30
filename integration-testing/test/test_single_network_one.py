@@ -20,7 +20,8 @@ from casperlabs_local_net.wait import (
     wait_for_genesis_block,
     wait_for_block_hash_propagated_to_all_nodes,
 )
-from casperlabs_client import ABI, blake2b_hash
+from casperlabs_client import blake2b_hash
+from casperlabs_client.abi import ABI
 from casperlabs_client.consensus_pb2 import Deploy
 from casperlabs_local_net.cli import CLI, DockerCLI, CLIErrorExit
 
