@@ -126,7 +126,6 @@ export function getSystemContract(system_contract: SystemContract): URef | null 
   return URef.fromBytes(data);
 }
 
-
 enum KeyVariant {
   ACCOUNT_ID = 0,
   HASH_ID = 1,
@@ -232,7 +231,6 @@ export function serializeArguments(values: CLValue[]): Array<u8> {
   return prefix;
 }
 
-
 export function callContract(key: Key, args: CLValue[]): Uint8Array | null {
   let keyBytes = key.toBytes();
   let argBytes = serializeArguments(args);
@@ -250,19 +248,16 @@ export function callContract(key: Key, args: CLValue[]): Uint8Array | null {
     extraURefs.length,
     resultSize.dataStart,
   );
-
   if (ret > 0) {
     return null;
   }
 
   let hostBufSize = resultSize[0];
-
   return readHostBuffer(hostBufSize);
 }
 
 export function readHostBuffer(count: u32): Uint8Array | null {
   let result = new Uint8Array(count);
-
   let resultSize = new Uint32Array(1);
   let ret = externals.read_host_buffer(result.dataStart, result.length, resultSize.dataStart);
   if (ret > 0) {
