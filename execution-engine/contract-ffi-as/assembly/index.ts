@@ -259,6 +259,7 @@ export function callContract(key: Key, args: CLValue[]): Uint8Array | null {
 export function readHostBuffer(count: u32): Uint8Array | null {
   let result = new Uint8Array(count);
   let resultSize = new Uint32Array(1);
+
   let ret = externals.read_host_buffer(result.dataStart, result.length, resultSize.dataStart);
   if (ret > 0) {
     return null;

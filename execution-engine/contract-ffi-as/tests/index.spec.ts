@@ -64,8 +64,7 @@ test("serialize string", t => {
 test("key of uref variant serializes", t => {
     // URef with access rights
     const truth = hex2bin("022a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a0107");
-
-    let urefBytes = hex2bin("2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a");
+    const urefBytes = hex2bin("2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a");
     let uref = new URef(urefBytes, 0x07);
     let key = Key.fromURef(uref);
     let serialized = key.toBytes();
