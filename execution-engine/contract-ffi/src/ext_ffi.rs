@@ -30,7 +30,6 @@ extern "C" {
         hash_ptr: *const u8,
     );
     pub fn load_named_keys(total_keys: *mut usize, result_size: *mut usize) -> i32;
-    pub fn load_arg(i: u32) -> isize;
     pub fn get_arg(index: usize, dest_ptr: *mut u8, dest_size: usize) -> i32;
     pub fn get_arg_size(index: usize, dest_size: *mut usize) -> i32;
     pub fn ret(
@@ -50,7 +49,6 @@ extern "C" {
         extra_urefs_size: usize,
         result_size: *mut usize,
     ) -> i32;
-    pub fn get_call_result(res_ptr: *mut u8); //can only be called after `call_contract`
     pub fn get_key(
         name_ptr: *const u8,
         name_size: usize,
@@ -111,5 +109,4 @@ extern "C" {
     ) -> i32;
     pub fn get_main_purse(dest_ptr: *mut u8);
     pub fn read_host_buffer(dest_ptr: *mut u8, dest_size: usize, bytes_written: *mut usize) -> i32;
-
 }
