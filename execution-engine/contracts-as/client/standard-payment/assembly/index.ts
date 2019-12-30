@@ -1,26 +1,26 @@
 import * as CL from "../../../../contract-ffi-as/assembly";
 
 export function call(): void {
-  var amountBytes = CL.getArg(0);
+  let amountBytes = CL.getArg(0);
   if (amountBytes == null) {
     CL.revert(1);
     return;
   }
 
-  var mainPurse = CL.getMainPurse();
+  let mainPurse = CL.getMainPurse();
   if (mainPurse == null) {
     CL.revert(2);
     return;
   }
 
-  var proofOfStake = CL.getSystemContract(CL.SystemContract.ProofOfStake);
+  let proofOfStake = CL.getSystemContract(CL.SystemContract.ProofOfStake);
   if (proofOfStake == null) {
     CL.revert(3);
     return;
   }
 
-  var key = CL.Key.fromURef(<CL.URef>proofOfStake);
-  var output = CL.callContract(key, [
+  let key = CL.Key.fromURef(<CL.URef>proofOfStake);
+  let output = CL.callContract(key, [
     CL.CLValue.fromString("get_payment_purse"),
   ]);
   if (output == null) {
@@ -28,12 +28,12 @@ export function call(): void {
     return;
   }
 
-  var paymentPurse = CL.URef.fromBytes(output);
+  let paymentPurse = CL.URef.fromBytes(output);
   if (paymentPurse == null) {
     CL.revert(5);
   }
 
-  var ret = CL.transferFromPurseToPurse(
+  let ret = CL.transferFromPurseToPurse(
     mainPurse,
     <CL.URef>(paymentPurse),
     amountBytes,

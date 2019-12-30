@@ -7,10 +7,10 @@ export function revert(code: i32): void {
 
 export function getArgSize(i: u32): U32 | null {
   // TODO: Docs aren't clear on pointers, but perhaps `var size = <u32>0; changetype<usize>(size);` might take a pointer of a value we could pass
-  var size = new Array<u32>(1);
+  let size = new Array<u32>(1);
   size[0] = 0;
 
-  var ret = externals.get_arg_size(i, size.dataStart);
+  let ret = externals.get_arg_size(i, size.dataStart);
   if (ret > 0) {
     return null;
   }
@@ -18,13 +18,13 @@ export function getArgSize(i: u32): U32 | null {
 }
 
 export function getArg(i: u32): Uint8Array | null {
-  var arg_size = getArgSize(i);
+  let arg_size = getArgSize(i);
   if (arg_size == null) {
     return null;
   }
-  var arg_size_u32 = <u32>(arg_size);
-  var data = new Uint8Array(arg_size_u32);
-  var ret = externals.get_arg(i, data.dataStart, arg_size_u32);
+  let arg_size_u32 = <u32>(arg_size);
+  let data = new Uint8Array(arg_size_u32);
+  let ret = externals.get_arg(i, data.dataStart, arg_size_u32);
   if (ret > 0) {
     // TODO: Error handling with standarized errors enum
     return null;
@@ -61,12 +61,12 @@ export class URef {
   }
 
   static fromBytes(bytes: Uint8Array): URef | null {
-    var urefBytes = bytes.subarray(0, UREF_ADDR_LENGTH);
+    let urefBytes = bytes.subarray(0, UREF_ADDR_LENGTH);
 
-    var accessRightsBytes = decodeOptional(bytes.subarray(UREF_ADDR_LENGTH));
+    let accessRightsBytes = decodeOptional(bytes.subarray(UREF_ADDR_LENGTH));
     if (accessRightsBytes != null) {
-      var accessRights = <U8>(<Uint8Array>accessRightsBytes)[0];
-      var uref = new URef(urefBytes, accessRights);
+      let accessRights = <U8>(<Uint8Array>accessRightsBytes)[0];
+      let uref = new URef(urefBytes, accessRights);
       return uref;
     }
     else {
@@ -75,8 +75,8 @@ export class URef {
   }
 
   toBytes(): Array<u8> {
-    var result = new Array<u8>(this.bytes.length);
-    for (var i = 0; i < this.bytes.length; i++) {
+    let result = new Array<u8>(this.bytes.length);
+    for (let i = 0; i < this.bytes.length; i++) {
       result[i] = this.bytes[i];
     }
     // var result = Object.assign([], this.toBytes); // NOTE: Clone?
@@ -105,7 +105,7 @@ export function decodeOptional(bytes: Uint8Array): Uint8Array | null {
 }
 
 export function getMainPurse(): URef | null {
-  var data = new Uint8Array(PURSE_ID_SERIALIZED_LENGTH);
+  let data = new Uint8Array(PURSE_ID_SERIALIZED_LENGTH);
   data.fill(0);
   externals.get_main_purse(data.dataStart);
   return URef.fromBytes(data);
@@ -117,8 +117,8 @@ export const enum SystemContract {
 }
 
 export function getSystemContract(system_contract: SystemContract): URef | null {
-  var data = new Uint8Array(UREF_SERIALIZED_LENGTH);
-  var ret = externals.get_system_contract(<u32>system_contract, data.dataStart, data.length);
+  let data = new Uint8Array(UREF_SERIALIZED_LENGTH);
+  let ret = externals.get_system_contract(<u32>system_contract, data.dataStart, data.length);
   if (ret > 0) {
     // TODO: revert
     return null;
@@ -139,14 +139,14 @@ export class Key {
   value: URef; // NOTE: For simplicity I treat this as bytes of "union"
 
   static fromURef(uref: URef): Key {
-    var key = new Key();
+    let key = new Key();
     key.variant = KeyVariant.UREF_ID;
     key.value = uref;
     return key;
   }
 
   toBytes(): Array<u8> {
-    var bytes = new Array<u8>();
+    let bytes = new Array<u8>();
     bytes.push(<u8>this.variant)
     bytes = bytes.concat(this.value.toBytes());
     return bytes;
@@ -203,16 +203,16 @@ export class CLValue {
   }
 
   toBytes(): u8[] {
-    var data = toBytesArrayU8(this.bytes);
+    let data = toBytesArrayU8(this.bytes);
     data.push(<u8>this.tag);
     return data;
   }
 }
 
 export function toBytesString(s: String): u8[] {
-  var prefix = toBytesU32(<u32>s.length);
-  for (var i = 0; i < s.length; i++) {
-    var charCode = s.charCodeAt(i);
+  let prefix = toBytesU32(<u32>s.length);
+  for (let i = 0; i < s.length; i++) {
+    let charCode = s.charCodeAt(i);
     // Assumes ascii encoding (i.e. charCode < 0x80)
     prefix.push(<u8>charCode);
   }
@@ -220,13 +220,13 @@ export function toBytesString(s: String): u8[] {
 }
 
 export function toBytesArrayU8(arr: Array<u8>): u8[] {
-  var prefix = toBytesU32(<u32>arr.length);
+  let prefix = toBytesU32(<u32>arr.length);
   return prefix.concat(arr);
 }
 
 export function serializeArguments(values: CLValue[]): Array<u8> {
-  var prefix = toBytesU32(<u32>values.length);
-  for (var i = 0; i < values.length; i++) {
+  let prefix = toBytesU32(<u32>values.length);
+  for (let i = 0; i < values.length; i++) {
     prefix = prefix.concat(values[i].toBytes());
   }
   return prefix;
@@ -234,14 +234,14 @@ export function serializeArguments(values: CLValue[]): Array<u8> {
 
 
 export function callContract(key: Key, args: CLValue[]): Uint8Array | null {
-  var keyBytes = key.toBytes();
-  var argBytes = serializeArguments(args);
-  var extraURefs = serializeArguments([]);
+  let keyBytes = key.toBytes();
+  let argBytes = serializeArguments(args);
+  let extraURefs = serializeArguments([]);
 
-  var resultSize = new Uint32Array(1);
+  let resultSize = new Uint32Array(1);
   resultSize.fill(0);
 
-  var ret = externals.call_contract(
+  let ret = externals.call_contract(
     <usize>keyBytes.dataStart,
     keyBytes.length,
     argBytes.dataStart,
@@ -255,16 +255,16 @@ export function callContract(key: Key, args: CLValue[]): Uint8Array | null {
     return null;
   }
 
-  var hostBufSize = resultSize[0];
+  let hostBufSize = resultSize[0];
 
   return readHostBuffer(hostBufSize);
 }
 
 export function readHostBuffer(count: u32): Uint8Array | null {
-  var result = new Uint8Array(count);
+  let result = new Uint8Array(count);
 
-  var resultSize = new Uint32Array(1);
-  var ret = externals.read_host_buffer(result.dataStart, result.length, resultSize.dataStart);
+  let resultSize = new Uint32Array(1);
+  let ret = externals.read_host_buffer(result.dataStart, result.length, resultSize.dataStart);
   if (ret > 0) {
     return null;
   }
@@ -272,10 +272,10 @@ export function readHostBuffer(count: u32): Uint8Array | null {
 }
 
 export function transferFromPurseToPurse(source: URef, target: URef, amount: Uint8Array): i32 {
-  var sourceBytes = source.toBytes();
-  var targetBytes = target.toBytes();
+  let sourceBytes = source.toBytes();
+  let targetBytes = target.toBytes();
 
-  var ret = externals.transfer_from_purse_to_purse(
+  let ret = externals.transfer_from_purse_to_purse(
     sourceBytes.dataStart,
     sourceBytes.length,
     targetBytes.dataStart,
