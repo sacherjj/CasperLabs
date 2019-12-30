@@ -1,4 +1,5 @@
 import random
+import threading
 from erc20 import ERC20, DeployedERC20, transfer_clx
 
 
@@ -82,6 +83,33 @@ def transfer_tokens_between_agents(
         check_total_token_amount(node, abc, faucet, agents, total_token_supply)
 
 
+def run_agent(
+    agent,
+    nodes,
+    faucet,
+    agents,
+    token_name,
+    total_token_supply,
+    number_of_iterations,
+    max_transfer,
+):
+    """
+    Transfer random amount of tokens to a random agent, repeat number_of_iterations times.
+    """
+    abc = DeployedERC20.create(faucet.on(nodes[0]), token_name)
+    for i in range(number_of_iterations):
+        recipient = random.sample(agents, 1)[0]
+        node = random_node(nodes)
+        agent.on(node).call_contract(
+            abc.transfer(
+                sender_private_key=agent.private_key,
+                recipient_public_key_hex=recipient.public_key_hex,
+                amount=random.randint(1, max_transfer),
+            )
+        )
+        check_total_token_amount(node, abc, faucet, agents, total_token_supply)
+
+
 def run_erc20_simulation(
     nodes,
     faucet,
@@ -102,12 +130,25 @@ def run_erc20_simulation(
         initial_agent_clx_funds,
         tokens_per_agent,
     )
-    transfer_tokens_between_agents(
-        nodes,
-        faucet,
-        agents,
-        token_name,
-        total_token_supply,
-        number_of_iterations,
-        max_transfer,
-    )
+
+    threads = [
+        threading.Thread(
+            target=run_agent,
+            args=(
+                agent,
+                nodes,
+                faucet,
+                [a for a in agents if a != agent],
+                token_name,
+                total_token_supply,
+                number_of_iterations,
+                max_transfer,
+            ),
+        )
+        for agent in agents
+    ]
+
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
