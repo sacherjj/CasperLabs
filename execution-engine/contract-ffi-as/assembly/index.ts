@@ -91,7 +91,6 @@ export class URef {
   }
 }
 
-
 export function decodeOptional(bytes: Uint8Array): Uint8Array | null {
   if (bytes.length < 1) {
     return null;
@@ -193,13 +192,16 @@ enum CLTypeTag {
 export class CLValue {
   bytes: u8[];
   tag: u8;
+
   constructor(bytes: u8[], tag: u8) {
     this.bytes = bytes;
     this.tag = tag;
   }
+
   static fromString(s: String): CLValue {
     return new CLValue(toBytesString(s), <u8>CLTypeTag.String);
   }
+
   toBytes(): u8[] {
     var data = toBytesArrayU8(this.bytes);
     data.push(<u8>this.tag);
