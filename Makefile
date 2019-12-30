@@ -197,13 +197,15 @@ cargo-native-packager/%:
 			$(DIR_IN)/google/protobuf/empty.proto \
 			$(DIR_IN)/io/casperlabs/casper/consensus/consensus.proto \
 			$(DIR_IN)/io/casperlabs/casper/consensus/info.proto \
-			$(DIR_IN)/io/casperlabs/casper/consensus/state.proto ; \
+			$(DIR_IN)/io/casperlabs/casper/consensus/state.proto \
+			$(DIR_IN)/io/casperlabs/comm/discovery/node.proto ; \
 		protoc \
 				-I=$(DIR_IN) \
 			--plugin=protoc-gen-ts=./explorer/grpc/node_modules/ts-protoc-gen/bin/protoc-gen-ts \
 			--js_out=import_style=commonjs,binary:$(DIR_OUT) \
 			--ts_out=service=true:$(DIR_OUT) \
 			$(DIR_IN)/io/casperlabs/node/api/casper.proto \
+			$(DIR_IN)/io/casperlabs/node/api/diagnostics.proto ; \
 		"
 	# Annotations were only required for the REST gateway. Remove them from Typescript.
 	for f in $(DIR_OUT)/io/casperlabs/node/api/casper_pb* ; do \

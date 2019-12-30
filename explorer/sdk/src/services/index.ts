@@ -1,4 +1,5 @@
 import BalanceService from './BalanceService';
 import CasperService from './CasperService';
-export {CasperService, BalanceService};
+import DiagnosticsService from './DiagnosticsService';
+export {CasperService, BalanceService, DiagnosticsService};
 export {GrpcError} from "./Errors";
