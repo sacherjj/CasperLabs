@@ -16,6 +16,7 @@ import io.casperlabs.metrics.Metrics
 import io.casperlabs.node._
 import io.casperlabs.node.api.casper.CasperGrpcMonix
 import io.casperlabs.node.api.control.ControlGrpcMonix
+import io.casperlabs.node.api.diagnostics.DiagnosticsGrpcMonix
 import io.casperlabs.node.api.graphql.{FinalizedBlocksStream, GraphQL}
 import io.casperlabs.node.configuration.Configuration
 import io.casperlabs.node.diagnostics.NewPrometheusReporter
@@ -79,7 +80,7 @@ object Servers {
   }
 
   /** Start a gRPC server with services meant for users and dApp developers. */
-  def externalServersR[F[_]: Concurrent: TaskLike: Log: MultiParentCasperRef: Metrics: BlockStorage: ExecutionEngineService: DeployStorage: Validation: Fs2Compiler: DeployBuffer: DagStorage: EventStream](
+  def externalServersR[F[_]: Concurrent: TaskLike: Log: MultiParentCasperRef: Metrics: BlockStorage: ExecutionEngineService: DeployStorage: Validation: Fs2Compiler: DeployBuffer: DagStorage: EventStream: NodeDiscovery](
       port: Int,
       maxMessageSize: Int,
       ingressScheduler: Scheduler,
@@ -91,6 +92,10 @@ object Servers {
       port = port,
       maxMessageSize = Some(maxMessageSize),
       services = List(
+        (_: Scheduler) =>
+          GrpcDiagnosticsService() map {
+            DiagnosticsGrpcMonix.bindService(_, ingressScheduler)
+          },
         (_: Scheduler) =>
           GrpcCasperService(isReadOnlyNode) map {
             CasperGrpcMonix.bindService(_, ingressScheduler)

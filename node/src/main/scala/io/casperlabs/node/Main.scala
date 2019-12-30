@@ -6,7 +6,6 @@ import io.casperlabs.catscontrib.effect.implicits.syncId
 import io.casperlabs.ipc.ChainSpec
 import io.casperlabs.node.configuration._
 import io.casperlabs.node.configuration.Configuration.Command.Run
-import io.casperlabs.node.diagnostics.client.GrpcDiagnosticsService
 import io.casperlabs.shared._
 import monix.eval.Task
 import monix.execution.Scheduler
@@ -70,21 +69,12 @@ object Main {
       logId: Log[Id],
       ueh: UncaughtExceptionHandler
   ): Task[Unit] = {
-    implicit val diagnosticsService: GrpcDiagnosticsService =
-      new diagnostics.client.GrpcDiagnosticsService(
-        conf.server.host.getOrElse("localhost"),
-        conf.grpc.portInternal,
-        conf.server.maxMessageSize
-      )
 
     val program = command match {
       case Run => nodeProgram(conf, chainSpec)
     }
 
     program
-      .guarantee {
-        Task.delay(diagnosticsService.close())
-      }
       .doOnFinish {
         case Some(ex) =>
           log.error(s"Unexpected error: $ex") *>

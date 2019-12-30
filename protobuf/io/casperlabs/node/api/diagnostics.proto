@@ -3,7 +3,7 @@ syntax = "proto3";
 package io.casperlabs.node.api.diagnostics;
 
 import "google/protobuf/empty.proto";
-import "google/protobuf/wrappers.proto";
+import "io/casperlabs/comm/discovery/node.proto";
 
 message NodeCoreMetrics {
   int64 pingReceiverCount = 1;
@@ -22,11 +22,5 @@ service Diagnostics {
 }
 
 message Peers {
-  repeated Peer peers = 1;
-}
-
-message Peer {
-  string host = 1;
-  int32  port = 2;
-  bytes  key  = 3;
+  repeated io.casperlabs.comm.discovery.Node peers = 1;
 }
