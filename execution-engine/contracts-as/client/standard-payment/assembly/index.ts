@@ -23,7 +23,6 @@ export function call(): void {
   var output = CL.callContract(key, [
     CL.CLValue.fromString("get_payment_purse"),
   ]);
-
   if (output == null) {
     CL.revert(4);
     return;
