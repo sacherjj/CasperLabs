@@ -71,7 +71,7 @@ def transfer_tokens_between_agents(
     """
     Execute transfers between random agents, check total tokens in the system stays the same.
     """
-    abc = DeployedERC20.create(faucet.on(nodes[0]), token_name)
+    abc = DeployedERC20.create(faucet.on(nodes[0]), token_name, True)
     for i in range(number_of_iterations):
         node = random_node(nodes)
         sender, recipient = random.sample(agents, 2)
@@ -98,7 +98,7 @@ def run_agent(
     """
     Transfer random amount of tokens to a random agent, repeat number_of_iterations times.
     """
-    abc = DeployedERC20.create(faucet.on(nodes[0]), token_name)
+    abc = DeployedERC20.create(faucet.on(nodes[0]), token_name, False)
     for i in range(number_of_iterations):
         recipient = random.sample(agents, 1)[0]
         node = random_node(nodes)
@@ -166,14 +166,17 @@ def run_erc20_simulation(
 
 
 if __name__ == "__main__":
+    node = Node("localhost")
+    faucet = Agent("faucet-account")
     run_erc20_simulation(
-        [Node("localhost")],
-        Agent("faucet-account"),
+        [node],
+        faucet,
         [Agent("account-0"), Agent("account-1"), Agent("account-2")],
         "ABC",
         5000,
-        10 ** 7,
+        10 ** 8,
         500,
         50,
         3,
     )
+    faucet.on(node).node.client.propose()

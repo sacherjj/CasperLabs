@@ -148,8 +148,10 @@ class DeployedERC20:
         self.proxy_hash = proxy_hash
 
     @classmethod
-    def create(cls, deployer: BoundAgent, token_name: str):
-        erc20 = ERC20(token_name)
+    def create(
+        cls, deployer: BoundAgent, token_name: str, propose_after_deploy: bool = True
+    ):
+        erc20 = ERC20(token_name, propose_after_deploy)
         block_hash = last_block_hash(deployer.node)
         return DeployedERC20(
             erc20,
@@ -200,8 +202,8 @@ class ERC20(SmartContract):
         },
     }
 
-    def __init__(self, token_name):
-        super().__init__(ERC20_WASM, ERC20.methods)
+    def __init__(self, token_name, propose_after_deploy=True):
+        super().__init__(ERC20_WASM, ERC20.methods, propose_after_deploy)
         self.token_name = token_name
         self.proxy_name = "erc20_proxy"
 
