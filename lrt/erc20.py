@@ -141,6 +141,16 @@ class DeployedERC20:
         self.token_hash = token_hash
         self.proxy_hash = proxy_hash
 
+    @classmethod
+    def create(cls, deployer: BoundAgent, token_name: str):
+        erc20 = ERC20(token_name)
+        block_hash = last_block_hash(deployer.node)
+        return DeployedERC20(
+            erc20,
+            erc20.token_hash(deployer, deployer.agent.public_key_hex, block_hash),
+            erc20.proxy_hash(deployer, deployer.agent.public_key_hex, block_hash),
+        )
+
     def balance(self, account_public_hex):
         def execute(bound_agent):
             key = f"{self.token_hash.hex()}:{BALANCE_KEY_SIZE_HEX}{BALANCE_BYTE}{account_public_hex}"
