@@ -1,6 +1,17 @@
 // The entry file of your WebAssembly module.
 import * as externals from "./externals";
 
+const OPTION_TAG_SERIALIZED_LENGTH = 1;
+const ACCESS_RIGHTS_SERIALIZED_LENGTH = 1;
+const UREF_ADDR_LENGTH = 32;
+const UREF_SERIALIZED_LENGTH = UREF_ADDR_LENGTH + OPTION_TAG_SERIALIZED_LENGTH + ACCESS_RIGHTS_SERIALIZED_LENGTH;
+const PURSE_ID_SERIALIZED_LENGTH = UREF_SERIALIZED_LENGTH;
+
+export const enum SystemContract {
+  Mint = 0,
+  ProofOfStake = 1,
+}
+
 export function revert(code: i32): void {
   externals.revert(code);
 }
@@ -31,12 +42,6 @@ export function getArg(i: u32): Uint8Array | null {
   }
   return data;
 }
-
-const OPTION_TAG_SERIALIZED_LENGTH = 1;
-const ACCESS_RIGHTS_SERIALIZED_LENGTH = 1;
-const UREF_ADDR_LENGTH = 32;
-const UREF_SERIALIZED_LENGTH = UREF_ADDR_LENGTH + OPTION_TAG_SERIALIZED_LENGTH + ACCESS_RIGHTS_SERIALIZED_LENGTH;
-const PURSE_ID_SERIALIZED_LENGTH = UREF_SERIALIZED_LENGTH;
 
 // NOTE: interfaces aren't supported in AS yet: https://github.com/AssemblyScript/assemblyscript/issues/146#issuecomment-399130960
 // interface ToBytes {
@@ -109,11 +114,6 @@ export function getMainPurse(): URef | null {
   data.fill(0);
   externals.get_main_purse(data.dataStart);
   return URef.fromBytes(data);
-}
-
-export const enum SystemContract {
-  Mint = 0,
-  ProofOfStake = 1,
 }
 
 export function getSystemContract(system_contract: SystemContract): URef | null {
