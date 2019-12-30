@@ -741,7 +741,7 @@ where
             .map_err(Into::into)
     }
 
-    /// Adds `value` to the cell pointed to by  a key derived from `key` in the "local cluster" of
+    /// Adds `value` to the cell pointed to by a key derived from `key` in the "local cluster" of
     /// GlobalState
     pub fn add_local(
         &mut self,
