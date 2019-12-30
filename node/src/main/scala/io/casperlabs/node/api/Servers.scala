@@ -19,7 +19,7 @@ import io.casperlabs.node.api.control.ControlGrpcMonix
 import io.casperlabs.node.api.diagnostics.DiagnosticsGrpcMonix
 import io.casperlabs.node.api.graphql.{FinalizedBlocksStream, GraphQL}
 import io.casperlabs.node.configuration.Configuration
-import io.casperlabs.node.diagnostics.NewPrometheusReporter
+import io.casperlabs.node.diagnostics.{GrpcDiagnosticsService, NewPrometheusReporter}
 import io.casperlabs.shared._
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.block._
