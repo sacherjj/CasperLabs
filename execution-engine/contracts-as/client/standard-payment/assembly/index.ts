@@ -1,4 +1,4 @@
-import * as CL from "../../../../contract-ffi-ts/assembly";
+import * as CL from "../../../../contract-ffi-as/assembly";
 
 export function call(): void {
   var amountBytes = CL.getArg(0);

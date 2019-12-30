@@ -30,9 +30,9 @@ SYSTEM_CONTRACTS    := $(patsubst %, build-contract-rs/%, $(SYSTEM_CONTRACTS))
 TEST_CONTRACTS      := $(patsubst %, build-contract-rs/%, $(TEST_CONTRACTS))
 
 # AssemblyScript Contracts
-CLIENT_CONTRACTS_TS = $(shell find ./contracts-ts/client   -mindepth 1 -maxdepth 1 -type d)
+CLIENT_CONTRACTS_AS = $(shell find ./contracts-as/client   -mindepth 1 -maxdepth 1 -type d)
 
-CLIENT_CONTRACTS_TS := $(patsubst %, build-contract-ts/%, $(CLIENT_CONTRACTS_TS))
+CLIENT_CONTRACTS_AS := $(patsubst %, build-contract-as/%, $(CLIENT_CONTRACTS_AS))
 
 INTEGRATION_CONTRACTS += \
 	bonding-call \
@@ -70,7 +70,7 @@ build-contract-rs/%:
 		--package $* \
 		--target wasm32-unknown-unknown
 
-build-contract-ts/%:
+build-contract-as/%:
 	cd $* && $(NPM) run asbuild
 
 build-integration-contract/%:
@@ -93,12 +93,12 @@ build-contracts-rs: \
 	$(SYSTEM_CONTRACTS) \
 	$(TEST_CONTRACTS)
 
-.PHONY: build-contracts-ts
-build-contracts-ts: \
-	$(CLIENT_CONTRACTS_TS)
+.PHONY: build-contracts-as
+build-contracts-as: \
+	$(CLIENT_CONTRACTS_AS)
 
 .PHONY: build-contracts
-build-contracts: build-contracts-rs build-contracts-ts
+build-contracts: build-contracts-rs build-contracts-as
 
 .PHONY: build-integration-contracts
 build-integration-contracts: $(INTEGRATION_CONTRACTS)
@@ -110,24 +110,24 @@ build-example-contracts: $(EXAMPLE_CONTRACTS)
 test-rs:
 	$(CARGO) test $(CARGO_FLAGS) --all -- --nocapture
 
-.PHONY: test-ts
-test-ts:
-	cd contract-ffi-ts && npm run asbuild && npm run test
+.PHONY: test-as
+test-as:
+	cd contract-ffi-as && npm run asbuild && npm run test
 
 .PHONY: test
-test: test-rs test-ts
+test: test-rs test-as
 
 .PHONY: test-contracts-rs
 test-contracts-rs: build-contracts-rs
 	$(CARGO) test $(CARGO_FLAGS) -p casperlabs-engine-tests -- --ignored --nocapture
 
-.PHONY: test-contracts-ts
-test-contracts-ts: build-contracts-rs build-contracts-ts
+.PHONY: test-contracts-as
+test-contracts-as: build-contracts-rs build-contracts-as
 	@# see https://github.com/rust-lang/cargo/issues/5015#issuecomment-515544290
 	$(CARGO) test $(CARGO_FLAGS) --manifest-path "engine-tests/Cargo.toml" --features "use_as_wasm" -- --ignored --nocapture
 
 .PHONY: test-contracts
-test-contracts: test-contracts-rs test-contracts-ts
+test-contracts: test-contracts-rs test-contracts-as
 
 .PHONY: check-format
 check-format:
@@ -200,9 +200,9 @@ setup-rs: rust-toolchain
 	$(RUSTUP) target add --toolchain $(RUST_TOOLCHAIN) wasm32-unknown-unknown
 	$(RUSTUP) component add --toolchain $(RUST_TOOLCHAIN) rustfmt clippy
 
-.PHONY: setup-ts
-setup-ts: contract-ffi-ts/package.json
-	cd contract-ffi-ts && $(NPM) install
+.PHONY: setup-as
+setup-as: contract-ffi-as/package.json
+	cd contract-ffi-as && $(NPM) install
 
 .PHONY: setup
-setup: setup-rs setup-ts
+setup: setup-rs setup-as
