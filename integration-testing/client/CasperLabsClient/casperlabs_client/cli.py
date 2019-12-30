@@ -16,18 +16,18 @@ from cryptography.hazmat.primitives import serialization
 from Crypto.Hash import keccak
 from cryptography.hazmat.primitives.asymmetric import ed25519 as cryptography_ed25519
 from casperlabs_client import hexify
-from casperlabs_client.abi import (
-    ABI,
+from casperlabs_client import (
     CasperLabsClient,
-    bundled_contract,
-    private_to_public_key,
-    consensus,
-    read_pem_key,
     DEFAULT_HOST,
     DEFAULT_PORT,
     DEFAULT_INTERNAL_PORT,
-    pkg_resources,
+    bundled_contract,
+    private_to_public_key,
+    read_pem_key,
 )
+from casperlabs_client.abi import ABI
+from . import consensus_pb2 as consensus
+import pkg_resources
 
 DOT_FORMATS = "canon,cmap,cmapx,cmapx_np,dot,dot_json,eps,fig,gd,gd2,gif,gv,imap,imap_np,ismap,jpe,jpeg,jpg,json,json0,mp,pdf,pic,plain,plain-ext,png,pov,ps,ps2,svg,svgz,tk,vml,vmlz,vrml,wbmp,x11,xdot,xdot1.2,xdot1.4,xdot_json,xlib"
 
