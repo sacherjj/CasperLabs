@@ -1,6 +1,8 @@
+#!/usr/bin/env python3
+
 import random
 import threading
-from erc20 import ERC20, DeployedERC20, transfer_clx
+from erc20 import ERC20, Node, Agent, DeployedERC20, transfer_clx
 
 
 def check_total_token_amount(node, abc, deployer, agents, amount):
@@ -107,7 +109,9 @@ def run_agent(
                 amount=random.randint(1, max_transfer),
             )
         )
-        check_total_token_amount(node, abc, faucet, agents, total_token_supply)
+        check_total_token_amount(
+            node, abc, faucet, [agent] + agents, total_token_supply
+        )
 
 
 def run_erc20_simulation(
@@ -121,6 +125,7 @@ def run_erc20_simulation(
     number_of_iterations,
     max_transfer,
 ):
+    print("Deploy ERC20 and initialize simulation")
     initialize_erc20_simulation(
         nodes[0],
         faucet,
@@ -147,8 +152,28 @@ def run_erc20_simulation(
         )
         for agent in agents
     ]
+    print(f"Created {len(threads)} threads")
 
     for t in threads:
         t.start()
+
+    print("Started all threads.")
+
     for t in threads:
         t.join()
+
+    print("End of simulation.")
+
+
+if __name__ == "__main__":
+    run_erc20_simulation(
+        [Node("localhost")],
+        Agent("faucet-account"),
+        [Agent("account-0"), Agent("account-1"), Agent("account-2")],
+        "ABC",
+        5000,
+        10 ** 7,
+        500,
+        50,
+        3,
+    )

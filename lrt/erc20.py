@@ -1,4 +1,5 @@
 import os
+import threading
 from pathlib import Path
 
 import casperlabs_client
@@ -7,6 +8,8 @@ from casperlabs_client import ABI
 BASE_PATH = Path(os.path.dirname(os.path.abspath(__file__))).parent
 ERC20_WASM = f"{BASE_PATH}/execution-engine/target/wasm32-unknown-unknown/release/erc20_smart_contract.wasm"
 
+
+PROPOSE_LOCK = threading.Lock()
 
 # At the beginning of a serialized version of Rust's Vec<u8>, first 4 bytes represent the size of the vector.
 #
@@ -109,26 +112,29 @@ class SmartContract:
             arguments_string = f"{name}({','.join(f'{p}={type(kwargs[p]) == bytes and kwargs[p].hex() or kwargs[p]}' for p in parameters)})"
 
             def deploy_and_maybe_propose(bound_agent, **session_reference):
-                kwargs = dict(
-                    public_key=bound_agent.agent.public_key,
-                    private_key=bound_agent.agent.private_key,
-                    payment_amount=10000000,
-                    session_args=arguments,
-                )
-                if session_reference:
-                    kwargs.update(session_reference)
-                else:
-                    kwargs["session"] = self.file_name
-                print(f"Call {arguments_string}")
-                _, deploy_hash = bound_agent.node.client.deploy(**kwargs)
-                if self.propose_after_deploy:
-                    block_hash = bound_agent.node.client.propose().block_hash.hex()
-                    for deploy_info in bound_agent.node.client.showDeploys(block_hash):
-                        if deploy_info.is_error:
-                            raise Exception(
-                                f"Deploy {deploy_hash.hex()} [{arguments_string}] error_message: {deploy_info.error_message}"
-                            )
-                return deploy_hash
+                with PROPOSE_LOCK:
+                    kwargs = dict(
+                        public_key=bound_agent.agent.public_key,
+                        private_key=bound_agent.agent.private_key,
+                        payment_amount=10000000,
+                        session_args=arguments,
+                    )
+                    if session_reference:
+                        kwargs.update(session_reference)
+                    else:
+                        kwargs["session"] = self.file_name
+                    print(f"Call {arguments_string}")
+                    _, deploy_hash = bound_agent.node.client.deploy(**kwargs)
+                    if self.propose_after_deploy:
+                        block_hash = bound_agent.node.client.propose().block_hash.hex()
+                        for deploy_info in bound_agent.node.client.showDeploys(
+                            block_hash
+                        ):
+                            if deploy_info.is_error:
+                                raise Exception(
+                                    f"Deploy {deploy_hash.hex()} [{arguments_string}] error_message: {deploy_info.error_message}"
+                                )
+                    return deploy_hash
 
             return deploy_and_maybe_propose
 
