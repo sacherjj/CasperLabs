@@ -12,16 +12,16 @@ from casperlabs_client import (
     DEFAULT_PORT,
     DEFAULT_INTERNAL_PORT,
     bundled_contract,
-    private_to_public_key,
-    read_pem_key,
     hexify,
 )
 from . import consensus_pb2 as consensus
 import pkg_resources
 from casperlabs_client.abi import ABI
 from casperlabs_client.crypto import (
+    read_pem_key,
     generate_key_pair,
     public_address,
+    private_to_public_key,
     generate_certificates,
 )
 from cryptography.hazmat.primitives import serialization

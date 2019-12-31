@@ -18,9 +18,6 @@ import grpc
 from grpc._channel import _Rendezvous
 import ssl
 import functools
-from pyblake2 import blake2b
-import ed25519
-import base64
 import logging
 import pkg_resources
 import tempfile
@@ -31,8 +28,6 @@ from pathlib import Path
 import google.protobuf.text_format
 
 CEscape = google.protobuf.text_format.text_encoding.CEscape
-
-base64_b64decode = base64.b64decode
 
 
 def _hex(text, as_utf8):
@@ -60,18 +55,12 @@ from . import info_pb2 as info
 
 from . import vdag
 from . import abi
+from . import crypto
 
 
 DEFAULT_HOST = "localhost"
 DEFAULT_PORT = 40401
 DEFAULT_INTERNAL_PORT = 40402
-
-
-def read_pem_key(file_name: str):
-    with open(file_name) as f:
-        s = [l for l in f.readlines() if l and not l.startswith("-----")][0].strip()
-        r = base64_b64decode(s)
-        return len(r) % 32 == 0 and r[:32] or r[-32:]
 
 
 class InternalError(Exception):
@@ -115,12 +104,6 @@ def api(function):
     return wrapper
 
 
-def blake2b_hash(data: bytes) -> bytes:
-    h = blake2b(digest_size=32)
-    h.update(data)
-    return h.digest()
-
-
 def _read_binary(file_name: str):
     with open(file_name, "rb") as f:
         return f.read()
@@ -140,17 +123,6 @@ def _encode_contract(contract_options, contract_args):
     if uref:
         return C(uref=uref, args=contract_args)
     raise Exception("One of wasm, hash, name or uref is required")
-
-
-def signature(private_key, data: bytes):
-    return private_key and consensus.Signature(
-        sig_algorithm="ed25519",
-        sig=ed25519.SigningKey(read_pem_key(private_key)).sign(data),
-    )
-
-
-def private_to_public_key(private_key) -> bytes:
-    return ed25519.SigningKey(read_pem_key(private_key)).get_verifying_key().to_bytes()
 
 
 def _serialize(o) -> bytes:
@@ -401,10 +373,11 @@ class CasperLabsClient:
         )
 
         header = consensus.Deploy.Header(
-            account_public_key=from_addr or (public_key and read_pem_key(public_key)),
+            account_public_key=from_addr
+            or (public_key and crypto.read_pem_key(public_key)),
             timestamp=int(1000 * time.time()),
             gas_price=gas_price,
-            body_hash=blake2b_hash(_serialize(body)),
+            body_hash=crypto.blake2b_hash(_serialize(body)),
             ttl_millis=ttl_millis,
             dependencies=dependencies
             and [bytes.fromhex(d) for d in dependencies]
@@ -412,7 +385,7 @@ class CasperLabsClient:
             chain_name=chain_name or "",
         )
 
-        deploy_hash = blake2b_hash(_serialize(header))
+        deploy_hash = crypto.blake2b_hash(_serialize(header))
 
         return consensus.Deploy(deploy_hash=deploy_hash, header=header, body=body)
 
@@ -422,7 +395,7 @@ class CasperLabsClient:
             [
                 consensus.Approval(
                     approver_public_key=public_key,
-                    signature=signature(private_key_file, deploy.deploy_hash),
+                    signature=crypto.signature(private_key_file, deploy.deploy_hash),
                 )
             ]
         )
@@ -507,9 +480,9 @@ class CasperLabsClient:
         )
 
         pk = (
-            (public_key and read_pem_key(public_key))
+            (public_key and crypto.read_pem_key(public_key))
             or from_addr
-            or private_to_public_key(private_key)
+            or crypto.private_to_public_key(private_key)
         )
         deploy = self.sign_deploy(deploy, pk, private_key)
 
