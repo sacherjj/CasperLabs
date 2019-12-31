@@ -462,7 +462,7 @@ steps:
     CARGO_FLAGS: "--locked"
   commands:
   - "cd execution-engine"
-  - "make setup"
+  - "make setup-rs"
   - "make build"
   image: "casperlabs/buildenv:latest"
   when:
@@ -476,7 +476,7 @@ steps:
 - name: docker-build-ee-merge
   commands:
   - "export DOCKER_LATEST_TAG=DRONE-${DRONE_BUILD_NUMBER}"
-  - "make setup -C ./execution-engine"
+  - "make setup-rs -C ./execution-engine"
   - "make docker-build/execution-engine"
   environment:
     _JAVA_OPTIONS: "-Xms2G -Xmx2G -XX:MaxMetaspaceSize=1G"
