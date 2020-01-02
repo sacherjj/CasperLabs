@@ -260,10 +260,20 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
         }
       }
 
-      "given a ballot" should {
-        "not respond" in {
-          val msg = makeBallot(leader, runtime.era.keyBlockHash, runtime.startTick)
-          runtime.handleMessage(msg).written shouldBe empty
+      "given a ballot" when {
+        "in the normal era period" should {
+          "not respond" in {
+            val msg = makeBallot(leader, runtime.era.keyBlockHash, runtime.startTick)
+            runtime.handleMessage(msg).written shouldBe empty
+          }
+        }
+        "in the post-era voting period" when {
+          "coming from the leader" should {
+            "create a lambda response" in (pending)
+          }
+          "coming from a non-leader" should {
+            "not respond" in (pending)
+          }
         }
       }
     }

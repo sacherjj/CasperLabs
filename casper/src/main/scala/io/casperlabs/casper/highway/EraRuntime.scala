@@ -37,7 +37,7 @@ class EraRuntime[F[_]: MonadThrowable: Clock](
     leaderFunction: LeaderFunction,
     roundExponentRef: Ref[F, Int],
     maybeMessageProducer: Option[MessageProducer[F]],
-    // Tell when the system has caught up with other. Before that, responding
+    // Tell when the system has caught up with others nodes. Before that, responding
     // to messages risks creating an equivocation, in case some state was somehow
     // lost after a restart. It could also force others to react to handle messages
     // which are long in the past.
@@ -81,18 +81,6 @@ class EraRuntime[F[_]: MonadThrowable: Clock](
     */
   val isSwitchBoundary = (mpbr: Instant, br: Instant) => mpbr.isBefore(end) && !br.isBefore(end)
 
-  /** Whether the validator is bonded depends on the booking block. Only bonded validators
-    * have to produce blocks and ballots in the era.
-    * TODO: Decide if unbonded validators need to maintain round statistics about finalized lambda messages.
-    */
-  private def withProducer[G[_], A](default: G[A])(f: MessageProducer[F] => G[A]): G[A] =
-    maybeMessageProducer match {
-      case Some(mp) if era.bonds.exists(b => b.validatorPublicKey == mp.validatorId) =>
-        f(mp)
-      case _ =>
-        default
-    }
-
   private def currentTick =
     Clock[F].realTime(conf.tickUnit).map(Ticks(_))
 
@@ -110,10 +98,10 @@ class EraRuntime[F[_]: MonadThrowable: Clock](
     }
 
   private def roundLength: F[Ticks] =
-    // TODO: We should be able to tell about each past tick what the exponent at the time was.
+    // TODO (round_parameter_storage): We should be able to tell about each past tick what the exponent at the time was.
     roundExponentRef.get.map(Ticks.roundLength(_))
 
-  /** Calculate the beginnin and the end of this round,
+  /** Calculate the beginning and the end of this round,
     * based on the current tick and the round length. */
   private def roundBoundariesAt(tick: Ticks): F[(Ticks, Ticks)] =
     roundLength map { length =>
@@ -135,6 +123,7 @@ class EraRuntime[F[_]: MonadThrowable: Clock](
 
   private def createLambdaResponse(
       messageProducer: MessageProducer[F],
+      // TODO: Lambda message will be a ballot during voting.
       lambdaMessage: Message.Block
   ): HWL[Unit] = ifSynced {
     // TODO: Create persistent block.
@@ -161,6 +150,7 @@ class EraRuntime[F[_]: MonadThrowable: Clock](
   ): HWL[Unit] = ifSynced {
     for {
       b <- HighwayLog.liftF {
+            // TODO: Create ballot during voting-only.
             messageProducer.block(
               eraId = era.keyBlockHash,
               roundId = roundId,
@@ -208,7 +198,7 @@ class EraRuntime[F[_]: MonadThrowable: Clock](
 
   /** Produce a starting agenda, depending on whether the validator is bonded or not. */
   def initAgenda: F[Agenda] =
-    withProducer(Agenda.empty.pure[F]) { _ =>
+    maybeMessageProducer.fold(Agenda.empty.pure[F]) { _ =>
       currentTick flatMap { tick =>
         isOverAt(tick).ifM(
           Agenda.empty.pure[F],
@@ -230,11 +220,12 @@ class EraRuntime[F[_]: MonadThrowable: Clock](
     */
   def handleMessage(message: Message): HWL[Unit] =
     message match {
+      // TODO: Respond to lambda-ballots during voting.
       case _: Message.Ballot =>
         noop
       case b: Message.Block =>
         val roundId = Ticks(b.roundId)
-        withProducer(noop) { mp =>
+        maybeMessageProducer.fold(noop) { mp =>
           if (mp.validatorId == b.validatorId) {
             MonadThrowable[HWL].raiseError(
               new IllegalStateException("Shouldn't receive our own messages!")
@@ -246,8 +237,8 @@ class EraRuntime[F[_]: MonadThrowable: Clock](
           } else if (leaderFunction(roundId) != b.validatorId) {
             noop
           } else {
-            // TODO: Verify if it's okay not to send a response to a message where we *did*
-            // participate in the round it belongs to, but we moved on to a newer round.
+            // It's okay not to send a response to a message where we *did* participate
+            // in the round it belongs to, but we moved on to a newer round.
             HighwayLog.liftF(currentTick.flatMap(roundBoundariesAt)) flatMap {
               case (from, _) if from == roundId =>
                 createLambdaResponse(mp, b)
@@ -287,7 +278,7 @@ class EraRuntime[F[_]: MonadThrowable: Clock](
             omega ++ next
           }
 
-        withProducer(noop) { mp =>
+        maybeMessageProducer.fold(noop) { mp =>
           if (leaderFunction(roundId) == mp.validatorId)
             createLambdaMessage(mp, roundId)
           else
@@ -295,7 +286,7 @@ class EraRuntime[F[_]: MonadThrowable: Clock](
         } >> HighwayLog.liftF(agenda)
 
       case Agenda.CreateOmegaMessage(roundId) =>
-        withProducer(noop) {
+        maybeMessageProducer.fold(noop) {
           createOmegaMessage(_, roundId)
         } >> HighwayLog.liftF(Agenda.empty.pure[F])
     }
@@ -319,6 +310,17 @@ object EraRuntime {
       endTick = conf.toTicks(conf.genesisEraEnd),
       bonds = genesis.getHeader.getState.bonds
     )
+    fromEra[F](conf, era, maybeMessageProducer, initRoundExponent, isSynced, leaderSequencer)
+  }
+
+  def fromEra[F[_]: Sync: Clock](
+      conf: HighwayConf,
+      era: Era,
+      maybeMessageProducer: Option[MessageProducer[F]],
+      initRoundExponent: Int,
+      isSynced: => F[Boolean],
+      leaderSequencer: LeaderSequencer = LeaderSequencer
+  ): F[EraRuntime[F]] =
     for {
       leaderFunction   <- leaderSequencer[F](era)
       roundExponentRef <- Ref.of[F, Int](initRoundExponent)
@@ -328,11 +330,14 @@ object EraRuntime {
         era,
         leaderFunction,
         roundExponentRef,
-        maybeMessageProducer,
+        // Whether the validator is bonded depends on the booking block. Only bonded validators
+        // have to produce blocks and ballots in the era.
+        maybeMessageProducer.filter { mp =>
+          era.bonds.exists(b => b.validatorPublicKey == mp.validatorId)
+        },
         isSynced
       )
     }
-  }
 
   /** List of future actions to take. */
   type Agenda = Vector[Agenda.DelayedAction]
