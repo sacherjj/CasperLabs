@@ -8,6 +8,6 @@ import simulacrum.typeclass
   def blockAdded(blockInfo: BlockInfo): F[Unit]
   def newLastFinalizedBlock(
       lfb: BlockHash,
-      indirectlyFinalized: Set[BlockHash] = Set.empty
+      indirectlyFinalized: Set[BlockHash]
   ): F[Unit]
 }
