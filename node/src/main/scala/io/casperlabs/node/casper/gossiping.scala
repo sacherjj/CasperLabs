@@ -166,8 +166,7 @@ package object gossiping {
                             genesis = genesisStore.getBlockMessage
                             _ <- FinalityStorage[F].markAsFinalized(
                                   genesis.blockHash,
-                                  Set.empty,
-                                  ProtoUtil.totalWeight(genesis)
+                                  Set.empty
                                 )
                             prestate   = ProtoUtil.preStateHash(genesis)
                             transforms = genesisStore.transformEntry

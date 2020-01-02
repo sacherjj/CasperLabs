@@ -73,7 +73,7 @@ class FinalityStorageTest
       for {
         _   <- blocks.traverse_(storage.insert(_))
         _   <- assertNotFinalized(storage, blocks.map(_.blockHash): _*)
-        _   <- blocks.traverse_(block => storage.markAsFinalized(block.blockHash, Set.empty, 10))
+        _   <- blocks.traverse_(block => storage.markAsFinalized(block.blockHash, Set.empty))
         _   <- assertFinalized(storage, blocks.map(_.blockHash): _*)
         lfb <- storage.getLFB
       } yield assert(lfb == blocks.last.blockHash)
