@@ -44,6 +44,7 @@ import io.casperlabs.storage.util.fileIO.IOError._
 import io.netty.handler.ssl.ClientAuth
 import monix.eval.Task
 import monix.execution.Scheduler
+import monix.execution.atomic.AtomicLong
 import org.flywaydb.core.Flyway
 import org.flywaydb.core.api.Location
 
@@ -193,11 +194,15 @@ class NodeRuntime private[node] (
                                                                         FinalizedBlocksStream
                                                                           .of[Task]
                                                                       )
+      lfbIdx <- Resource.liftF[Task, AtomicLong](
+                 storage.getLastFinalizedBlock.map(_._1).map(AtomicLong(_))
+               )
       implicit0(eventsStream: EventStream[Task]) <- Resource.pure[Task, EventStream[Task]](
                                                      EventStream
                                                        .create[Task](
                                                          ingressScheduler,
-                                                         conf.server.eventStreamBufferSize.value
+                                                         conf.server.eventStreamBufferSize.value,
+                                                         lfbIdx
                                                        )
                                                    )
 

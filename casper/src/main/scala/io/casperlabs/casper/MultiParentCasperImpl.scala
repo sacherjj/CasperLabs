@@ -508,8 +508,9 @@ object MultiParentCasperImpl {
       faultToleranceThreshold: Double = 0.1
   ): F[MultiParentCasper[F]] =
     for {
-      dag <- DagStorage[F].getRepresentation
-      lfb <- FinalityStorage[F].getLastFinalizedBlock
+      dag      <- DagStorage[F].getRepresentation
+      result   <- FinalityStorage[F].getLastFinalizedBlock
+      (_, lfb) = result
       finalityDetector <- FinalityDetectorVotingMatrix
                            .of[F](
                              dag,

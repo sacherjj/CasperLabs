@@ -20,6 +20,8 @@ import io.casperlabs.storage.block.SQLiteBlockStorage.blockInfoCols
 import io.casperlabs.storage.dag.DagRepresentation.Validator
 import io.casperlabs.storage.dag.DagStorage.{MeteredDagRepresentation, MeteredDagStorage}
 import io.casperlabs.storage.util.DoobieCodecs
+import com.google.protobuf.ByteString
+import scala.collection.JavaConverters._
 
 class SQLiteDagStorage[F[_]: Bracket[*[_], Throwable]](
     readXa: Transactor[F],
@@ -247,9 +249,14 @@ class SQLiteDagStorage[F[_]: Bracket[*[_], Throwable]](
         q.update.run.void
     }
 
+    val lfbChainQuery =
+      sql"""INSERT INTO lfb_chain (block_hash, indirectly_finalized)
+             VALUES ($mainParent, ${ByteString.copyFrom(secondary.asJava)})""".update.run.void
+
     val transaction = for {
       _ <- mainPQuery
       _ <- secondaryQuery
+      _ <- lfbChainQuery
     } yield ()
 
     transaction.transact(writeXa)
@@ -261,9 +268,9 @@ class SQLiteDagStorage[F[_]: Bracket[*[_], Throwable]](
       .unique
       .transact(readXa)
 
-  override def getLastFinalizedBlock: F[BlockHash] =
-    sql"""SELECT block_hash FROM block_metadata WHERE is_finalized=TRUE AND is_main_chain=TRUE ORDER BY rank DESC LIMIT 1"""
-      .query[BlockHash]
+  override def getLastFinalizedBlock: F[(Long, BlockHash)] =
+    sql"""SELECT event_id, block_hash FROM lfb_chain ORDER BY event_id DESC LIMIT 1"""
+      .query[(Long, BlockHash)]
       .unique
       .transact(readXa)
 

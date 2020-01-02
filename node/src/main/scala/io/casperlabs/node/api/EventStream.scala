@@ -31,7 +31,7 @@ object EventStream {
   def create[F[_]: Concurrent: DeployStorage: BlockStorage: FinalityStorage: Log: Metrics](
       scheduler: Scheduler,
       eventStreamBufferSize: Int,
-      lfbIdx: AtomicLong = AtomicLong(0) // TODO: Pull from the DB
+      lfbIdx: AtomicLong
   ): EventStream[F] = {
     val source =
       ConcurrentSubject.publish[Event](OverflowStrategy.DropOld(eventStreamBufferSize))(scheduler)
