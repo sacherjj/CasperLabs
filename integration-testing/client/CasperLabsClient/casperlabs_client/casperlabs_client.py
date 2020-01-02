@@ -3,14 +3,12 @@
 CasperLabs Client API library and command line tool.
 """
 
-# Hack to fix the relative imports problems #
-import sys
 from pathlib import Path
 
-file = Path(__file__).resolve()
-parent, root = file.parent, file.parents[1]
-sys.path.append(str(root))
+# Hack to fix the relative imports problems #
+import sys
 
+sys.path.append(str(Path(__file__).resolve().parents[1]))
 # end of hack #
 import os
 import time
@@ -21,7 +19,6 @@ import functools
 import logging
 import pkg_resources
 import tempfile
-from pathlib import Path
 
 # Monkey patching of google.protobuf.text_encoding.CEscape
 # to get keys and signatures in hex when printed

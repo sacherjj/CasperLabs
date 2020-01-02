@@ -1,3 +1,7 @@
+"""
+Command line interface for CasperLabsClient.
+"""
+
 import argparse
 import textwrap
 import base64

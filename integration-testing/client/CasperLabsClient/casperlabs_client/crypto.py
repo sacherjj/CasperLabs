@@ -1,4 +1,9 @@
+"""
+Cryptography related code used in the CasperLabs client.
+"""
+
 import datetime
+import base64
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ec
@@ -10,7 +15,6 @@ from Crypto.Hash import keccak
 from pyblake2 import blake2b
 import ed25519
 from . import consensus_pb2 as consensus
-import base64
 
 
 def generate_validators_keys():
