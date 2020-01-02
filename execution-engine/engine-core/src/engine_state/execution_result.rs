@@ -53,7 +53,7 @@ pub enum ExecutionResult {
 pub enum ForcedTransferResult {
     /// Payment code ran out of gas during execution
     InsufficientPayment,
-    /// Payment code executing resulted in an error
+    /// Payment code execution resulted in an error
     PaymentFailure,
 }
 
