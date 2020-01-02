@@ -132,11 +132,14 @@ impl ExecutionResult {
         &self,
         payment_purse_balance: Motes,
     ) -> Option<ForcedTransferResult> {
-        let payment_result_cost = self.cost();
+        let payment_result_cost = match Motes::from_gas(self.cost(), CONV_RATE) {
+            Some(cost) => cost,
+            // Multiplying cost by CONV_RATE overflowed the U512 range
+            None => return Some(ForcedTransferResult::InsufficientPayment),
+        };
         // payment_code_spec_3_b_ii: if (balance of PoS pay purse) < (gas spent during
         // payment code execution) * conv_rate, no session
-        let insufficient_balance_to_continue =
-            payment_purse_balance < Motes::from_gas(payment_result_cost, CONV_RATE)?;
+        let insufficient_balance_to_continue = payment_purse_balance < payment_result_cost;
 
         match self {
             ExecutionResult::Success { .. } if insufficient_balance_to_continue => {
