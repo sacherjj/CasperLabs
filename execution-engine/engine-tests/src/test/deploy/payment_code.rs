@@ -167,9 +167,9 @@ fn should_raise_insufficient_payment_when_payment_code_does_not_pay_enough() {
 
 #[ignore]
 #[test]
-fn should_raise_insufficient_payment_when_payment_code_fails() {
+fn should_raise_insufficient_payment_error_when_out_of_gas() {
     let account_1_public_key = PublicKey::new(ACCOUNT_1_ADDR);
-    let payment_purse_amount: U512 = U512::from(1_000_000);
+    let payment_purse_amount: U512 = U512::from(1);
     let transferred_amount = U512::from(1);
     let expected_transfers_count = 2;
 
@@ -177,7 +177,7 @@ fn should_raise_insufficient_payment_when_payment_code_fails() {
         let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_deploy_hash([1; 32])
-            .with_payment_code("revert.wasm", (payment_purse_amount,))
+            .with_payment_code(STANDARD_PAYMENT_WASM, (payment_purse_amount,))
             .with_session_code(
                 "transfer_purse_to_account.wasm",
                 (account_1_public_key, transferred_amount),
@@ -253,6 +253,178 @@ fn should_raise_insufficient_payment_when_payment_code_fails() {
         error_message, "Insufficient payment",
         "expected insufficient payment"
     );
+}
+
+#[ignore]
+#[test]
+fn should_forward_payment_execution_runtime_error() {
+    let account_1_public_key = PublicKey::new(ACCOUNT_1_ADDR);
+    let transferred_amount = U512::from(1);
+    let expected_transfers_count = 2;
+
+    let exec_request = {
+        let deploy = DeployItemBuilder::new()
+            .with_address(DEFAULT_ACCOUNT_ADDR)
+            .with_deploy_hash([1; 32])
+            .with_payment_code("revert.wasm", ())
+            .with_session_code(
+                "transfer_purse_to_account.wasm",
+                (account_1_public_key, transferred_amount),
+            )
+            .with_authorization_keys(&[*DEFAULT_ACCOUNT_KEY])
+            .build();
+
+        ExecuteRequestBuilder::new().push_deploy(deploy).build()
+    };
+
+    let transfer_result = InMemoryWasmTestBuilder::default()
+        .run_genesis(&DEFAULT_GENESIS_CONFIG)
+        .exec(exec_request)
+        .commit()
+        .finish();
+
+    let transforms = transfer_result.builder().get_transforms();
+    let transform = &transforms[0];
+
+    assert_eq!(
+        transform.len(),
+        expected_transfers_count,
+        "unexpected forced transfer transforms count"
+    );
+
+    let initial_balance: U512 = U512::from(DEFAULT_ACCOUNT_INITIAL_BALANCE);
+    let expected_reward_balance: U512 = U512::from(MAX_PAYMENT);
+    let mut modified_balance: Option<U512> = None;
+    let mut reward_balance: Option<U512> = None;
+
+    for t in transform.values() {
+        if let Transform::Write(StoredValue::CLValue(cl_value)) = t {
+            if let Ok(v) = cl_value.to_owned().into_t() {
+                modified_balance = Some(v);
+            }
+        }
+        if let Transform::AddUInt512(v) = t {
+            reward_balance = Some(*v);
+        }
+    }
+
+    let modified_balance = modified_balance.expect("modified balance should be present");
+
+    assert_eq!(
+        modified_balance,
+        initial_balance - expected_reward_balance,
+        "modified balance is incorrect"
+    );
+
+    let reward_balance = reward_balance.expect("reward balance should be present");
+
+    assert_eq!(
+        reward_balance, expected_reward_balance,
+        "reward balance is incorrect"
+    );
+
+    assert_eq!(
+        initial_balance,
+        (modified_balance + reward_balance),
+        "no net resources should be gained or lost post-distribution"
+    );
+
+    let response = transfer_result
+        .builder()
+        .get_exec_response(0)
+        .expect("there should be a response")
+        .clone();
+
+    let execution_result = test_support::get_success_result(&response);
+    let error_message = test_support::get_error_message(execution_result);
+
+    assert_eq!(error_message, "Exit code: 65636", "expected payment error",);
+}
+
+#[ignore]
+#[test]
+fn should_forward_payment_execution_gas_limit_error() {
+    let account_1_public_key = PublicKey::new(ACCOUNT_1_ADDR);
+    let transferred_amount = U512::from(1);
+    let expected_transfers_count = 2;
+
+    let exec_request = {
+        let deploy = DeployItemBuilder::new()
+            .with_address(DEFAULT_ACCOUNT_ADDR)
+            .with_deploy_hash([1; 32])
+            .with_payment_code("endless_loop.wasm", ())
+            .with_session_code(
+                "transfer_purse_to_account.wasm",
+                (account_1_public_key, transferred_amount),
+            )
+            .with_authorization_keys(&[*DEFAULT_ACCOUNT_KEY])
+            .build();
+
+        ExecuteRequestBuilder::new().push_deploy(deploy).build()
+    };
+
+    let transfer_result = InMemoryWasmTestBuilder::default()
+        .run_genesis(&DEFAULT_GENESIS_CONFIG)
+        .exec(exec_request)
+        .commit()
+        .finish();
+
+    let transforms = transfer_result.builder().get_transforms();
+    let transform = &transforms[0];
+
+    assert_eq!(
+        transform.len(),
+        expected_transfers_count,
+        "unexpected forced transfer transforms count"
+    );
+
+    let initial_balance: U512 = U512::from(DEFAULT_ACCOUNT_INITIAL_BALANCE);
+    let expected_reward_balance: U512 = U512::from(MAX_PAYMENT);
+    let mut modified_balance: Option<U512> = None;
+    let mut reward_balance: Option<U512> = None;
+
+    for t in transform.values() {
+        if let Transform::Write(StoredValue::CLValue(cl_value)) = t {
+            if let Ok(v) = cl_value.to_owned().into_t() {
+                modified_balance = Some(v);
+            }
+        }
+        if let Transform::AddUInt512(v) = t {
+            reward_balance = Some(*v);
+        }
+    }
+
+    let modified_balance = modified_balance.expect("modified balance should be present");
+
+    assert_eq!(
+        modified_balance,
+        initial_balance - expected_reward_balance,
+        "modified balance is incorrect"
+    );
+
+    let reward_balance = reward_balance.expect("reward balance should be present");
+
+    assert_eq!(
+        reward_balance, expected_reward_balance,
+        "reward balance is incorrect"
+    );
+
+    assert_eq!(
+        initial_balance,
+        (modified_balance + reward_balance),
+        "no net resources should be gained or lost post-distribution"
+    );
+
+    let response = transfer_result
+        .builder()
+        .get_exec_response(0)
+        .expect("there should be a response")
+        .clone();
+
+    let execution_result = test_support::get_success_result(&response);
+    let error_message = test_support::get_error_message(execution_result);
+
+    assert_eq!(error_message, "GasLimit", "expected gas limit error");
 }
 
 #[ignore]

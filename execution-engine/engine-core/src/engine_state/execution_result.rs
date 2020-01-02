@@ -1,3 +1,4 @@
+use super::{error, execution_effect::ExecutionEffect, op::Op, CONV_RATE};
 use contract_ffi::{key::Key, value::CLValue};
 use engine_shared::{
     additive_map::AdditiveMap, gas::Gas, motes::Motes, newtypes::CorrelationId,
@@ -5,7 +6,37 @@ use engine_shared::{
 };
 use engine_storage::global_state::StateReader;
 
-use super::{error, execution_effect::ExecutionEffect, op::Op, CONV_RATE};
+fn make_payment_error_effects(
+    max_payment_cost: Motes,
+    account_main_purse_balance: Motes,
+    account_main_purse: Key,
+    rewards_purse: Key,
+) -> ExecutionEffect {
+    let mut ops = AdditiveMap::new();
+    let mut transforms = AdditiveMap::new();
+
+    let new_balance = account_main_purse_balance - max_payment_cost;
+    // from_t for U512 is assumed to never panic
+    let new_balance_clvalue = CLValue::from_t(new_balance.value()).unwrap();
+    let new_balance_value = StoredValue::CLValue(new_balance_clvalue);
+
+    let account_main_purse_normalize = account_main_purse.normalize();
+    let rewards_purse_normalize = rewards_purse.normalize();
+
+    ops.insert(account_main_purse_normalize, Op::Write);
+    transforms.insert(
+        account_main_purse_normalize,
+        Transform::Write(new_balance_value),
+    );
+
+    ops.insert(rewards_purse_normalize, Op::Add);
+    transforms.insert(
+        rewards_purse_normalize,
+        Transform::AddUInt512(max_payment_cost.value()),
+    );
+
+    ExecutionEffect::new(ops, transforms)
+}
 
 #[derive(Debug)]
 pub enum ExecutionResult {
@@ -17,6 +48,13 @@ pub enum ExecutionResult {
     },
     /// Execution was finished successfully
     Success { effect: ExecutionEffect, cost: Gas },
+}
+
+pub enum ForcedTransferResult {
+    /// Payment code ran out of gas during execution
+    InsufficientPayment,
+    /// Payment code executing resulted in an error
+    PaymentFailure,
 }
 
 impl ExecutionResult {
@@ -78,6 +116,62 @@ impl ExecutionResult {
                 cost,
             },
             ExecutionResult::Success { cost, .. } => ExecutionResult::Success { effect, cost },
+        }
+    }
+
+    /// Consumes [`ExecutionResult`] instance and optionally returns [`error::Error`] instance for
+    /// [`ExecutionResult::Failure`] variant.
+    pub fn take_error(self) -> Option<error::Error> {
+        match self {
+            ExecutionResult::Failure { error, .. } => Some(error),
+            ExecutionResult::Success { .. } => None,
+        }
+    }
+
+    pub fn check_forced_transfer(
+        &self,
+        payment_purse_balance: Motes,
+    ) -> Option<ForcedTransferResult> {
+        let payment_result_cost = self.cost();
+        // payment_code_spec_3_b_ii: if (balance of PoS pay purse) < (gas spent during
+        // payment code execution) * conv_rate, no session
+        let insufficient_balance_to_continue =
+            payment_purse_balance < Motes::from_gas(payment_result_cost, CONV_RATE)?;
+
+        match self {
+            ExecutionResult::Success { .. } if insufficient_balance_to_continue => {
+                // payment_code_spec_4: insufficient payment
+                Some(ForcedTransferResult::InsufficientPayment)
+            }
+            ExecutionResult::Success { .. } => {
+                // payment_code_spec_3_b_ii: continue execution
+                None
+            }
+            ExecutionResult::Failure { .. } => {
+                // payment_code_spec_3_a: report payment error in the deploy response
+                Some(ForcedTransferResult::PaymentFailure)
+            }
+        }
+    }
+
+    pub fn new_payment_code_error(
+        error: error::Error,
+        max_payment_cost: Motes,
+        account_main_purse_balance: Motes,
+        account_main_purse: Key,
+        rewards_purse: Key,
+    ) -> ExecutionResult {
+        let effect = make_payment_error_effects(
+            max_payment_cost,
+            account_main_purse_balance,
+            account_main_purse,
+            rewards_purse,
+        );
+        let cost = Gas::from_motes(max_payment_cost, CONV_RATE).unwrap_or_default();
+        ExecutionResult::Failure {
+            error,
+            effect,
+            cost,
         }
     }
 }
@@ -143,63 +237,6 @@ impl ExecutionResultBuilder {
             .map(ExecutionResult::cost)
             .unwrap_or_default();
         payment_cost + session_cost
-    }
-
-    pub fn check_forced_transfer(
-        &mut self,
-        max_payment_cost: Motes,
-        account_main_purse_balance: Motes,
-        payment_purse_balance: Motes,
-        account_main_purse: Key,
-        rewards_purse: Key,
-    ) -> Option<ExecutionResult> {
-        let payment_result = match self.payment_execution_result.as_ref() {
-            Some(result) => result,
-            None => return None,
-        };
-        let payment_result_cost = payment_result.cost();
-        let payment_result_is_failure = payment_result.is_failure();
-
-        // payment_code_spec_3_b_ii: if (balance of PoS pay purse) < (gas spent during
-        // payment code execution) * conv_rate, no session
-        let insufficient_balance_to_continue =
-            payment_purse_balance < Motes::from_gas(payment_result_cost, CONV_RATE)?;
-
-        // payment_code_spec_4: insufficient payment
-        if !(insufficient_balance_to_continue || payment_result_is_failure) {
-            return None;
-        }
-
-        let mut ops = AdditiveMap::new();
-        let mut transforms = AdditiveMap::new();
-
-        let new_balance = account_main_purse_balance - max_payment_cost;
-        let new_balance_value = StoredValue::CLValue(CLValue::from_t(new_balance.value()).ok()?);
-
-        let account_main_purse_normalize = account_main_purse.normalize();
-        let rewards_purse_normalize = rewards_purse.normalize();
-
-        ops.insert(account_main_purse_normalize, Op::Write);
-        transforms.insert(
-            account_main_purse_normalize,
-            Transform::Write(new_balance_value),
-        );
-
-        ops.insert(rewards_purse_normalize, Op::Add);
-        transforms.insert(
-            rewards_purse_normalize,
-            Transform::AddUInt512(max_payment_cost.value()),
-        );
-
-        let error = error::Error::InsufficientPaymentError;
-        let effect = ExecutionEffect::new(ops, transforms);
-        let cost = Gas::from_motes(max_payment_cost, CONV_RATE).unwrap_or_default();
-
-        Some(ExecutionResult::Failure {
-            error,
-            effect,
-            cost,
-        })
     }
 
     pub fn build<R: StateReader<Key, StoredValue>>(
