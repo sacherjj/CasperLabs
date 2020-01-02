@@ -25,7 +25,7 @@ object MultiParentFinalizer {
   final case class FinalizedBlocks(
       mainChain: BlockHash,
       quorum: BigInt,
-      secondaryParents: Set[BlockHash] = Set.empty
+      secondaryParents: Set[BlockHash]
   ) {
     def finalizedBlocks: Set[BlockHash] = secondaryParents + mainChain
   }

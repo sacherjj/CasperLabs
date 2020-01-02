@@ -45,7 +45,7 @@ class FinalityStorageTest
     for {
       _ <- storage.insert(sampleBlock)
       _ <- assertNotFinalized(storage, sampleBlock.blockHash)
-      _ <- storage.markAsFinalized(sampleBlock.blockHash, Set.empty, 100)
+      _ <- storage.markAsFinalized(sampleBlock.blockHash, Set.empty)
       _ <- assertFinalized(storage, sampleBlock.blockHash)
     } yield ()
   }
@@ -58,7 +58,7 @@ class FinalityStorageTest
     for {
       _ <- blocks.traverse_(storage.insert(_))
       _ <- assertNotFinalized(storage, blocks.map(_.blockHash): _*)
-      _ <- storage.markAsFinalized(mainParent, secondaryParents, 100)
+      _ <- storage.markAsFinalized(mainParent, secondaryParents)
       _ <- assertFinalized(storage, blocks.map(_.blockHash): _*)
     } yield ()
   }

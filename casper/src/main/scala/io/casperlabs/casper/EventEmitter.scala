@@ -6,9 +6,8 @@ import simulacrum.typeclass
 
 @typeclass trait EventEmitter[F[_]] {
   def blockAdded(blockInfo: BlockInfo): F[Unit]
-  def newLFB(
+  def newLastFinalizedBlock(
       lfb: BlockHash,
-      quorum: BigInt,
-      indirectlyFinalized: Set[BlockHash] = Set.empty
+      indirectlyFinalized: Set[BlockHash]
   ): F[Unit]
 }
