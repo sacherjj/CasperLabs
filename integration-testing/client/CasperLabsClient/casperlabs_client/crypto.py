@@ -1,23 +1,42 @@
 import datetime
 from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.hazmat.primitives.asymmetric import ed25519 as cryptography_ed25519
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes
 from cryptography.x509.oid import NameOID
-from cryptography.hazmat.primitives import serialization
 from Crypto.Hash import keccak
 from pyblake2 import blake2b
 import ed25519
 from . import consensus_pb2 as consensus
 import base64
 
-base64_b64decode = base64.b64decode
+
+def generate_validators_keys():
+    validator_private = cryptography_ed25519.Ed25519PrivateKey.generate()
+    validator_public = validator_private.public_key()
+
+    validator_private_pem = validator_private.private_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PrivateFormat.PKCS8,
+        encryption_algorithm=serialization.NoEncryption(),
+    )
+
+    validator_public_pem = validator_public.public_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PublicFormat.SubjectPublicKeyInfo,
+    )
+    validator_public_bytes = validator_public.public_bytes(
+        encoding=serialization.Encoding.Raw, format=serialization.PublicFormat.Raw
+    )
+    return validator_private_pem, validator_public_pem, validator_public_bytes
 
 
 def read_pem_key(file_name: str):
     with open(file_name) as f:
         s = [l for l in f.readlines() if l and not l.startswith("-----")][0].strip()
-        r = base64_b64decode(s)
+        r = base64.b64decode(s)
         return len(r) % 32 == 0 and r[:32] or r[-32:]
 
 

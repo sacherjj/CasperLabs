@@ -19,13 +19,12 @@ import pkg_resources
 from casperlabs_client.abi import ABI
 from casperlabs_client.crypto import (
     read_pem_key,
+    generate_validators_keys,
     generate_key_pair,
     public_address,
     private_to_public_key,
     generate_certificates,
 )
-from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.primitives.asymmetric import ed25519 as cryptography_ed25519
 
 DOT_FORMATS = "canon,cmap,cmapx,cmapx_np,dot,dot_json,eps,fig,gd,gd2,gif,gv,imap,imap_np,ismap,jpe,jpeg,jpg,json,json0,mp,pdf,pic,plain,plain-ext,png,pov,ps,ps2,svg,svgz,tk,vml,vmlz,vrml,wbmp,x11,xdot,xdot1.2,xdot1.4,xdot_json,xlib"
 
@@ -309,23 +308,9 @@ def keygen_command(casperlabs_client, args):
     node_cert_path = directory / "node.certificate.pem"
     node_id_path = directory / "node-id"
 
-    validator_private = cryptography_ed25519.Ed25519PrivateKey.generate()
-    validator_public = validator_private.public_key()
-
-    validator_private_pem = validator_private.private_bytes(
-        encoding=serialization.Encoding.PEM,
-        format=serialization.PrivateFormat.PKCS8,
-        encryption_algorithm=serialization.NoEncryption(),
+    validator_private_pem, validator_public_pem, validator_public_bytes = (
+        generate_validators_keys()
     )
-
-    validator_public_pem = validator_public.public_bytes(
-        encoding=serialization.Encoding.PEM,
-        format=serialization.PublicFormat.SubjectPublicKeyInfo,
-    )
-    validator_public_bytes = validator_public.public_bytes(
-        encoding=serialization.Encoding.Raw, format=serialization.PublicFormat.Raw
-    )
-
     write_file_binary(validator_private_path, validator_private_pem)
     write_file_binary(validator_pub_path, validator_public_pem)
     write_file(validator_id_path, encode_base64(validator_public_bytes))
