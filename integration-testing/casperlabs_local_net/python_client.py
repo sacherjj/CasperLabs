@@ -6,7 +6,8 @@ from pathlib import Path  # noqa: F401
 from casperlabs_local_net import LoggingMixin
 from casperlabs_local_net.common import Contract, DEFAULT_PAYMENT_ABI
 from casperlabs_local_net.client_base import CasperLabsClientBase
-from casperlabs_client import CasperLabsClient, ABI, InternalError, extract_common_name
+from casperlabs_client import CasperLabsClient, InternalError, extract_common_name
+from casperlabs_client.abi import ABI
 
 
 class PythonClient(CasperLabsClientBase, LoggingMixin):

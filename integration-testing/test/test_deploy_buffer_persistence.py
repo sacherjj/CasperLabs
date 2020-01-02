@@ -1,4 +1,4 @@
-from casperlabs_client import ABI
+from casperlabs_client.abi import ABI
 from casperlabs_local_net.casperlabs_accounts import Account
 from casperlabs_local_net.common import Contract
 from casperlabs_local_net.wait import wait_for_good_bye, wait_for_node_started

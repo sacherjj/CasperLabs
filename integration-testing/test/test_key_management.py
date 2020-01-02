@@ -2,7 +2,7 @@ import pytest
 import json
 import time
 
-from casperlabs_client import ABI
+from casperlabs_client.abi import ABI
 from casperlabs_local_net.casperlabs_accounts import Account
 from casperlabs_local_net.casperlabs_network import TrillionPaymentNodeNetwork
 from casperlabs_local_net.common import Contract

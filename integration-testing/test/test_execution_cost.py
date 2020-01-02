@@ -9,7 +9,7 @@ from casperlabs_local_net.common import (
     MAX_PAYMENT_ABI,
     MAX_PAYMENT_COST,
 )
-from casperlabs_client import ABI
+from casperlabs_client.abi import ABI
 
 
 def account_state(_block_hash: str, account: str, node0: DockerNode):
