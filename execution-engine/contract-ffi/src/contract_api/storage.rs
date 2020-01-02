@@ -67,15 +67,13 @@ pub fn write<T: CLTyped + ToBytes>(turef: TURef<T>, value: T) {
 
 /// Writes `value` under `key` in the context-local partition of global state.
 pub fn write_local<K: ToBytes, V: CLTyped + ToBytes>(key: K, value: V) {
-    let key_bytes = key.to_bytes().unwrap_or_revert();
-    let key_bytes_ptr = key_bytes.as_ptr();
-    let key_bytes_size = key_bytes.len();
+    let (key_ptr, key_size, _bytes1) = contract_api::to_ptr(key);
 
     let cl_value = CLValue::from_t(value).unwrap_or_revert();
     let (cl_value_ptr, cl_value_size, _bytes) = contract_api::to_ptr(cl_value);
 
     unsafe {
-        ext_ffi::write_local(key_bytes_ptr, key_bytes_size, cl_value_ptr, cl_value_size);
+        ext_ffi::write_local(key_ptr, key_size, cl_value_ptr, cl_value_size);
     }
 }
 
@@ -90,6 +88,18 @@ pub fn add<T: CLTyped + ToBytes>(turef: TURef<T>, value: T) {
     unsafe {
         // Could panic if `value` cannot be added to the given value in memory.
         ext_ffi::add(key_ptr, key_size, cl_value_ptr, cl_value_size);
+    }
+}
+
+/// Adds `value` to the one currently under `key` in the global state.
+pub fn add_local<K: ToBytes, V: CLTyped + ToBytes>(key: K, value: V) {
+    let (key_ptr, key_size, _bytes1) = contract_api::to_ptr(key);
+
+    let cl_value = CLValue::from_t(value).unwrap_or_revert();
+    let (cl_value_ptr, cl_value_size, _bytes) = contract_api::to_ptr(cl_value);
+
+    unsafe {
+        ext_ffi::add_local(key_ptr, key_size, cl_value_ptr, cl_value_size);
     }
 }
 

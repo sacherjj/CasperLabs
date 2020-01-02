@@ -95,8 +95,8 @@ steps:
     CARGO_FLAGS: "--locked"
   commands:
   - "cd execution-engine/"
-  - "make setup"
-  - "make test test-contracts"
+  - "make setup-rs"
+  - "make test-rs test-contracts-rs"
   image: "casperlabs/buildenv:latest"
   when:
     event:
@@ -110,6 +110,22 @@ steps:
       - "**/Cargo.toml"
       - "**/casperlabs-engine-grpc-server.spec"
       - "**/rustfmt.toml"
+
+- name: as-compile-test-pr
+  commands:
+  - "cd execution-engine"
+  - "make setup"
+  - "make test-ts test-contracts-ts"
+  image: "casperlabs/buildenv:latest"
+  when:
+    event:
+    - pull_request
+    changeset:
+      includes:
+      - "**/contract-ffi-ts/**"
+      - "**/contracts-ts/**"
+  depends_on:
+  - rust-compile-test-pr
 
 - name: run-cargo-fmt-pr
   commands:
@@ -446,7 +462,7 @@ steps:
     CARGO_FLAGS: "--locked"
   commands:
   - "cd execution-engine"
-  - "make setup"
+  - "make setup-rs"
   - "make build"
   image: "casperlabs/buildenv:latest"
   when:
@@ -460,7 +476,7 @@ steps:
 - name: docker-build-ee-merge
   commands:
   - "export DOCKER_LATEST_TAG=DRONE-${DRONE_BUILD_NUMBER}"
-  - "make setup -C ./execution-engine"
+  - "make setup-rs -C ./execution-engine"
   - "make docker-build/execution-engine"
   environment:
     _JAVA_OPTIONS: "-Xms2G -Xmx2G -XX:MaxMetaspaceSize=1G"

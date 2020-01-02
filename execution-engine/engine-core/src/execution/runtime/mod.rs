@@ -326,29 +326,14 @@ where
         }
     }
 
-    pub fn is_valid_uref(&mut self, uref_ptr: u32, uref_size: u32) -> Result<bool, Trap> {
+    fn is_valid_uref(&mut self, uref_ptr: u32, uref_size: u32) -> Result<bool, Trap> {
         let bytes = self.bytes_from_mem(uref_ptr, uref_size as usize)?;
         let uref: URef = bytesrepr::deserialize(bytes).map_err(Error::BytesRepr)?;
         let key = Key::URef(uref);
         Ok(self.context.validate_key(&key).is_ok())
     }
 
-    /// Load the i-th argument invoked as part of a `sub_call` into
-    /// the runtime buffer so that a subsequent `get_arg` can return it
-    /// to the caller.
-    pub fn load_arg(&mut self, i: usize) -> isize {
-        self.host_buf = self.context.args().get(i).cloned();
-        match self.host_buf.as_ref() {
-            Some(cl_value) => cl_value.inner_bytes().len() as isize,
-            None => -1,
-        }
-    }
-
-    pub fn get_arg_size(
-        &mut self,
-        index: usize,
-        size_ptr: u32,
-    ) -> Result<Result<(), ApiError>, Trap> {
+    fn get_arg_size(&mut self, index: usize, size_ptr: u32) -> Result<Result<(), ApiError>, Trap> {
         let arg_size = match self.context.args().get(index) {
             Some(arg) if arg.inner_bytes().len() > u32::max_value() as usize => {
                 return Ok(Err(ApiError::OutOfMemoryError))
@@ -366,7 +351,7 @@ where
         Ok(Ok(()))
     }
 
-    pub fn get_arg(
+    fn get_arg(
         &mut self,
         index: usize,
         output_ptr: u32,
@@ -392,7 +377,7 @@ where
     }
 
     /// Load the uref known by the given name into the Wasm memory
-    pub fn load_key(
+    fn load_key(
         &mut self,
         name_ptr: u32,
         name_size: u32,
@@ -433,7 +418,7 @@ where
         Ok(Ok(()))
     }
 
-    pub fn has_key(&mut self, name_ptr: u32, name_size: u32) -> Result<i32, Trap> {
+    fn has_key(&mut self, name_ptr: u32, name_size: u32) -> Result<i32, Trap> {
         let name = self.string_from_mem(name_ptr, name_size)?;
         if self.context.named_keys_contains_key(&name) {
             Ok(0)
@@ -442,7 +427,7 @@ where
         }
     }
 
-    pub fn put_key(
+    fn put_key(
         &mut self,
         name_ptr: u32,
         name_size: u32,
@@ -502,7 +487,7 @@ where
 
     /// Return some bytes from the memory and terminate the current `sub_call`. Note that the return
     /// type is `Trap`, indicating that this function will always kill the current Wasm instance.
-    pub fn ret(
+    fn ret(
         &mut self,
         value_ptr: u32,
         value_size: usize,
@@ -531,7 +516,7 @@ where
     }
 
     /// Calls contract living under a `key`, with supplied `args` and extra `urefs`.
-    pub fn call_contract(
+    fn call_contract(
         &mut self,
         key: Key,
         args_bytes: Vec<u8>,
@@ -586,7 +571,7 @@ where
         Ok(result)
     }
 
-    pub fn call_contract_host_buf(
+    fn call_contract_host_buf(
         &mut self,
         key: Key,
         args_bytes: Vec<u8>,
@@ -650,7 +635,7 @@ where
         Ok(Ok(()))
     }
 
-    pub fn store_function(
+    fn store_function(
         &mut self,
         fn_bytes: Vec<u8>,
         named_keys: BTreeMap<String, Key>,
@@ -665,7 +650,7 @@ where
     /// Tries to store a function, represented as bytes from the Wasm memory,
     /// into the GlobalState and writes back a function's hash at `hash_ptr`
     /// in the Wasm memory.
-    pub fn store_function_at_hash(
+    fn store_function_at_hash(
         &mut self,
         fn_bytes: Vec<u8>,
         named_keys: BTreeMap<String, Key>,
@@ -687,7 +672,7 @@ where
 
     /// Generates new unforgable reference and adds it to the context's
     /// access_rights set.
-    pub fn new_uref(&mut self, key_ptr: u32, value_ptr: u32, value_size: u32) -> Result<(), Trap> {
+    fn new_uref(&mut self, key_ptr: u32, value_ptr: u32, value_size: u32) -> Result<(), Trap> {
         let cl_value = self.cl_value_from_mem(value_ptr, value_size)?; // read initial value from memory
         let key = self.context.new_uref(StoredValue::CLValue(cl_value))?;
         self.memory
@@ -696,7 +681,7 @@ where
     }
 
     /// Writes `value` under `key` in GlobalState.
-    pub fn write(
+    fn write(
         &mut self,
         key_ptr: u32,
         key_size: u32,
@@ -712,7 +697,7 @@ where
 
     /// Writes `value` under a key derived from `key` in the "local cluster" of
     /// GlobalState
-    pub fn write_local(
+    fn write_local(
         &mut self,
         key_ptr: u32,
         key_size: u32,
@@ -727,7 +712,7 @@ where
     }
 
     /// Adds `value` to the cell that `key` points at.
-    pub fn add(
+    fn add(
         &mut self,
         key_ptr: u32,
         key_size: u32,
@@ -741,12 +726,28 @@ where
             .map_err(Into::into)
     }
 
+    /// Adds `value` to the cell pointed to by a key derived from `key` in the "local cluster" of
+    /// GlobalState
+    pub fn add_local(
+        &mut self,
+        key_ptr: u32,
+        key_size: u32,
+        value_ptr: u32,
+        value_size: u32,
+    ) -> Result<(), Trap> {
+        let key_bytes = self.bytes_from_mem(key_ptr, key_size as usize)?;
+        let cl_value = self.cl_value_from_mem(value_ptr, value_size)?;
+        self.context
+            .add_ls(&key_bytes, cl_value)
+            .map_err(Into::into)
+    }
+
     /// Reads value from the GS living under key specified by `key_ptr` and
     /// `key_size`. Wasm and host communicate through memory that Wasm
     /// module exports. If contract wants to pass data to the host, it has
     /// to tell it [the host] where this data lives in the exported memory
     /// (pass its pointer and length).
-    pub fn read(
+    fn read(
         &mut self,
         key_ptr: u32,
         key_size: u32,
@@ -778,7 +779,7 @@ where
 
     /// Similar to `read`, this function is for reading from the "local cluster"
     /// of global state
-    pub fn read_local(
+    fn read_local(
         &mut self,
         key_ptr: u32,
         key_size: u32,
@@ -810,12 +811,8 @@ where
     }
 
     /// Reverts contract execution with a status specified.
-    pub fn revert(&mut self, status: u32) -> Trap {
+    fn revert(&mut self, status: u32) -> Trap {
         Error::Revert(status).into()
-    }
-
-    pub fn take_context(self) -> RuntimeContext<'a, R> {
-        self.context
     }
 
     fn add_associated_key(&mut self, public_key_ptr: u32, weight_value: u8) -> Result<i32, Trap> {
@@ -908,7 +905,7 @@ where
     /// Looks up the public mint contract key in the context's protocol data.
     ///
     /// Returned URef is already attenuated depending on the calling account.
-    pub fn get_mint_contract_uref(&mut self) -> URef {
+    fn get_mint_contract_uref(&mut self) -> URef {
         let mint = self.context.protocol_data().mint();
         self.context.attenuate_uref(mint)
     }
@@ -916,7 +913,7 @@ where
     /// Looks up the public PoS contract key in the context's protocol data
     ///
     /// Returned URef is already attenuated depending on the calling account.
-    pub fn get_pos_contract_uref(&mut self) -> URef {
+    fn get_pos_contract_uref(&mut self) -> URef {
         let pos = self.context.protocol_data().proof_of_stake();
         self.context.attenuate_uref(pos)
     }
@@ -1198,7 +1195,7 @@ where
 
     /// If key is in named_keys with AccessRights::Write, processes bytes from calling contract
     /// and writes them at the provided uref, overwriting existing value if any
-    pub fn upgrade_contract_at_uref(
+    fn upgrade_contract_at_uref(
         &mut self,
         name_ptr: u32,
         name_size: u32,

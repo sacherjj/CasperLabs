@@ -83,6 +83,16 @@ where
                 Ok(None)
             }
 
+            FunctionIndex::AddLocalFuncIndex => {
+                // args(0) = pointer to key in Wasm memory
+                // args(1) = size of key
+                // args(2) = pointer to value
+                // args(3) = size of value
+                let (key_bytes_ptr, key_bytes_size, value_ptr, value_size) = Args::parse(args)?;
+                self.add_local(key_bytes_ptr, key_bytes_size, value_ptr, value_size)?;
+                Ok(None)
+            }
+
             FunctionIndex::NewFuncIndex => {
                 // args(0) = pointer to key destination in Wasm memory
                 // args(1) = pointer to initial value
@@ -90,12 +100,6 @@ where
                 let (key_ptr, value_ptr, value_size) = Args::parse(args)?;
                 self.new_uref(key_ptr, value_ptr, value_size)?;
                 Ok(None)
-            }
-            FunctionIndex::LoadArgFuncIndex => {
-                // args(0) = index of host runtime arg to load
-                let i: u32 = Args::parse(args)?;
-                let size = self.load_arg(i as usize);
-                Ok(Some(RuntimeValue::I32(size as i32)))
             }
 
             FunctionIndex::GetArgSizeFuncIndex => {

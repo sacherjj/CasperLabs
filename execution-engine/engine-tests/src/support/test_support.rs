@@ -3,12 +3,13 @@ use std::{
     convert::{TryFrom, TryInto},
     ffi::OsStr,
     fs,
-    path::PathBuf,
+    path::{Path, PathBuf},
     rc::Rc,
     sync::Arc,
 };
 
 use grpc::RequestOptions;
+use lazy_static::lazy_static;
 use lmdb::DatabaseFlags;
 use protobuf::RepeatedField;
 use rand::Rng;
@@ -61,10 +62,10 @@ use crate::test::{
 };
 
 pub const STANDARD_PAYMENT_CONTRACT: &str = "standard_payment.wasm";
-
+pub const COMPILED_WASM_DEFAULT_PATH: &str = "../target/wasm32-unknown-unknown/release";
+pub const COMPILED_WASM_TYPESCRIPT_PATH: &str = "../target-as";
 pub const DEFAULT_BLOCK_TIME: u64 = 0;
 pub const MOCKED_ACCOUNT_ADDRESS: [u8; 32] = [48u8; 32];
-pub const COMPILED_WASM_PATH: &str = "../target/wasm32-unknown-unknown/release";
 pub const GENESIS_INITIAL_BALANCE: u64 = 100_000_000_000;
 
 /// LMDB initial map size is calculated based on DEFAULT_LMDB_PAGES and systems page size.
@@ -75,6 +76,10 @@ const DEFAULT_LMDB_PAGES: usize = 2560;
 /// This is appended to the data dir path provided to the `LmdbWasmTestBuilder` in order to match
 /// the behavior of `get_data_dir()` in "engine-grpc-server/src/main.rs".
 const GLOBAL_STATE_DIR: &str = "global_state";
+
+lazy_static! {
+    static ref WASM_PATHS: Vec<PathBuf> = get_compiled_wasm_paths();
+}
 
 pub type InMemoryWasmTestBuilder = WasmTestBuilder<InMemoryGlobalState>;
 pub type LmdbWasmTestBuilder = WasmTestBuilder<LmdbGlobalState>;
@@ -939,6 +944,10 @@ where
         self.exec_responses.get(index)
     }
 
+    pub fn get_exec_responses_count(&self) -> usize {
+        self.exec_responses.len()
+    }
+
     pub fn get_upgrade_response(&self, index: usize) -> Option<&UpgradeResponse> {
         self.upgrade_responses.get(index)
     }
@@ -1020,19 +1029,50 @@ where
     }
 }
 
-fn get_compiled_wasm_path(contract_file: PathBuf) -> PathBuf {
-    let mut path = std::env::current_dir().expect("should get working directory");
-    path.push(PathBuf::from(COMPILED_WASM_PATH));
-    path.push(contract_file);
-    path
+fn get_relative_path<T: AsRef<Path>>(path: T) -> PathBuf {
+    let mut base_path = std::env::current_dir().expect("should get working directory");
+    base_path.push(path);
+    base_path
 }
 
-/// Reads a given compiled contract file from [`COMPILED_WASM_PATH`].
-pub fn read_wasm_file_bytes(contract_file: &str) -> Vec<u8> {
-    let contract_file = PathBuf::from(contract_file);
-    let path = get_compiled_wasm_path(contract_file);
-    std::fs::read(path.clone())
-        .unwrap_or_else(|_| panic!("should read bytes from disk: {:?}", path))
+/// Constructs a default path to WASM files contained in this cargo workspace.
+fn get_default_wasm_path() -> PathBuf {
+    get_relative_path(COMPILED_WASM_DEFAULT_PATH)
+}
+
+/// Constructs a path to TypeScript compiled WASM files
+#[cfg(feature = "use_as_wasm")]
+fn get_assembly_script_wasm_path() -> PathBuf {
+    get_relative_path(COMPILED_WASM_TYPESCRIPT_PATH)
+}
+
+/// Constructs a list of paths that should be considered while looking for a compiled wasm file.
+fn get_compiled_wasm_paths() -> Vec<PathBuf> {
+    vec![
+        // Contracts compiled with typescript are tried first
+        #[cfg(feature = "use_as_wasm")]
+        get_assembly_script_wasm_path(),
+        // As a fallback rust contracts are tried
+        get_default_wasm_path(),
+    ]
+}
+
+/// Reads a given compiled contract file based on path
+pub fn read_wasm_file_bytes<T: AsRef<Path>>(contract_file: T) -> Vec<u8> {
+    // Find first path to a given file found in a list of paths
+    for wasm_path in WASM_PATHS.iter() {
+        let mut filename = wasm_path.clone();
+        filename.push(contract_file.as_ref());
+        if let Ok(wasm_bytes) = std::fs::read(filename) {
+            return wasm_bytes;
+        }
+    }
+
+    panic!(
+        "should read {:?} bytes from disk from possible locations {:?}",
+        contract_file.as_ref(),
+        &*WASM_PATHS
+    );
 }
 
 pub fn create_genesis_config(accounts: Vec<GenesisAccount>) -> GenesisConfig {

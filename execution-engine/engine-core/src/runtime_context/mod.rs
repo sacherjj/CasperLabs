@@ -320,7 +320,7 @@ where
         let named_key_value = StoredValue::CLValue(CLValue::from_t((name.clone(), key))?);
         self.validate_value(&named_key_value)?;
 
-        self.add_gs_unsafe(self.base_key(), named_key_value)?;
+        self.add_unsafe(self.base_key(), named_key_value)?;
         self.insert_key(name, key);
         Ok(())
     }
@@ -647,10 +647,16 @@ where
         self.validate_addable(&key)?;
         self.validate_key(&key)?;
         self.validate_value(&value)?;
-        self.add_gs_unsafe(key, value)
+        self.add_unsafe(key, value)
     }
 
-    fn add_gs_unsafe(&mut self, key: Key, value: StoredValue) -> Result<(), Error> {
+    pub fn add_ls(&mut self, key_bytes: &[u8], cl_value: CLValue) -> Result<(), Error> {
+        let seed = self.seed();
+        let key = Key::local(seed, key_bytes);
+        self.add_unsafe(key, StoredValue::CLValue(cl_value))
+    }
+
+    fn add_unsafe(&mut self, key: Key, value: StoredValue) -> Result<(), Error> {
         match self.state.borrow_mut().add(self.correlation_id, key, value) {
             Err(storage_error) => Err(storage_error.into()),
             Ok(AddResult::Success) => Ok(()),
