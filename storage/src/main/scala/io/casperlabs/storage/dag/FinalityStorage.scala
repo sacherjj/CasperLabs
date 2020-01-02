@@ -11,5 +11,5 @@ import simulacrum.typeclass
     *
     * A block with the highest rank from the main chain.
     */
-  def getLFB: F[BlockHash]
+  def getLastFinalizedBlock: F[BlockHash]
 }

@@ -509,7 +509,7 @@ object MultiParentCasperImpl {
   ): F[MultiParentCasper[F]] =
     for {
       dag <- DagStorage[F].getRepresentation
-      lfb <- FinalityStorage[F].getLFB
+      lfb <- FinalityStorage[F].getLastFinalizedBlock
       finalityDetector <- FinalityDetectorVotingMatrix
                            .of[F](
                              dag,
