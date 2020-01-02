@@ -18,7 +18,7 @@ object NoOpsEventEmitter {
     new EventEmitter[F] {
       override def blockAdded(block: BlockInfo): F[Unit] = ().pure[F]
 
-      override def newLFB(
+      override def newLastFinalizedBlock(
           lfb: BlockHash,
           indirectlyFinalized: Set[BlockHash]
       ): F[Unit] = ().pure[F]
@@ -36,7 +36,7 @@ object TestEventEmitter {
 
       // Mimicks production `EventEmitter` impl.
       // Some tests depend on what is being done there.
-      override def newLFB(
+      override def newLastFinalizedBlock(
           lfb: BlockHash,
           indirectlyFinalized: Set[BlockHash]
       ): F[Unit] =

@@ -50,7 +50,7 @@ object EventStream {
           source.onNext(event)
         }
 
-      override def newLFB(
+      override def newLastFinalizedBlock(
           lfb: BlockHash,
           indirectlyFinalized: Set[BlockHash]
       ): F[Unit] =

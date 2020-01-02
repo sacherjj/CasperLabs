@@ -176,7 +176,7 @@ class MultiParentCasperImpl[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: 
                 Log[F].info(
                   s"New last finalized block hashes are ${mainParentFinalizedStr -> null}, ${secondaryParentsFinalizedStr -> null}."
                 ) >> LastFinalizedBlockHashContainer[F].set(mainParent) *> EventEmitter[F]
-                  .newLFB(mainParent, secondary)
+                  .newLastFinalizedBlock(mainParent, secondary)
               }
             }
       } yield ()
