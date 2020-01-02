@@ -62,4 +62,21 @@ class FinalityStorageTest
       _ <- assertFinalized(storage, blocks.map(_.blockHash): _*)
     } yield ()
   }
+
+  it should "return last finalized block (highest ranked block from the main chain)" in withFinalityStorage {
+    storage =>
+      val blocks = List.fill(10)(sample(arbBlock.arbitrary)).zipWithIndex.map {
+        case (block, idx) =>
+          block.update(_.header.rank := idx.toLong)
+      }
+
+      for {
+        _   <- blocks.traverse_(storage.insert(_))
+        _   <- assertNotFinalized(storage, blocks.map(_.blockHash): _*)
+        _   <- blocks.traverse_(block => storage.markAsFinalized(block.blockHash, Set.empty))
+        _   <- assertFinalized(storage, blocks.map(_.blockHash): _*)
+        lfb <- storage.getLastFinalizedBlock
+      } yield assert(lfb == blocks.last.blockHash)
+
+  }
 }
