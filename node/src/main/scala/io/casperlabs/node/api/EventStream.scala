@@ -52,10 +52,9 @@ object EventStream {
 
       override def newLFB(
           lfb: BlockHash,
-          quorum: BigInt,
           indirectlyFinalized: Set[BlockHash]
       ): F[Unit] =
-        FinalityStorage[F].markAsFinalized(lfb, indirectlyFinalized, quorum) >>
+        FinalityStorage[F].markAsFinalized(lfb, indirectlyFinalized) >>
           DeployBuffer.removeFinalizedDeploys(indirectlyFinalized + lfb).forkAndLog
     }
   }

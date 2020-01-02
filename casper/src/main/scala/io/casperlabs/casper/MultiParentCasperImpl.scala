@@ -167,7 +167,7 @@ class MultiParentCasperImpl[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: 
       for {
         result <- MultiParentFinalizer[F].onNewBlockAdded(block)
         _ <- result.traverse {
-              case fb @ FinalizedBlocks(mainParent, quorum, secondary) => {
+              case fb @ FinalizedBlocks(mainParent, _, secondary) => {
                 val mainParentFinalizedStr = PrettyPrinter.buildString(
                   mainParent
                 )
@@ -176,7 +176,7 @@ class MultiParentCasperImpl[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: 
                 Log[F].info(
                   s"New last finalized block hashes are ${mainParentFinalizedStr -> null}, ${secondaryParentsFinalizedStr -> null}."
                 ) >> LastFinalizedBlockHashContainer[F].set(mainParent) *> EventEmitter[F]
-                  .newLFB(mainParent, quorum, secondary)
+                  .newLFB(mainParent, secondary)
               }
             }
       } yield ()

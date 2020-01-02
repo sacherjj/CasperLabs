@@ -8,7 +8,6 @@ import simulacrum.typeclass
   def blockAdded(blockInfo: BlockInfo): F[Unit]
   def newLFB(
       lfb: BlockHash,
-      quorum: BigInt,
       indirectlyFinalized: Set[BlockHash] = Set.empty
   ): F[Unit]
 }

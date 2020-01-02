@@ -20,7 +20,6 @@ object NoOpsEventEmitter {
 
       override def newLFB(
           lfb: BlockHash,
-          quorum: BigInt,
           indirectlyFinalized: Set[BlockHash]
       ): F[Unit] = ().pure[F]
     }
@@ -39,10 +38,9 @@ object TestEventEmitter {
       // Some tests depend on what is being done there.
       override def newLFB(
           lfb: BlockHash,
-          quorum: BigInt,
           indirectlyFinalized: Set[BlockHash]
       ): F[Unit] =
-        FinalityStorage[F].markAsFinalized(lfb, indirectlyFinalized, quorum) >>
+        FinalityStorage[F].markAsFinalized(lfb, indirectlyFinalized) >>
           DeployBuffer.removeFinalizedDeploys[F](indirectlyFinalized + lfb)
     }
 }
