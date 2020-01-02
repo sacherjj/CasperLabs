@@ -1468,7 +1468,7 @@ object HashSetCasperTest {
     StorageFixture
       .createStorages[Task]()
       .flatMap {
-        case (implicit0(blockStorage: BlockStorage[Task]), _, _) =>
+        case (implicit0(blockStorage: BlockStorage[Task]), _, _, _) =>
           Genesis.fromChainSpec[Task](spec)
       }
       .unsafeRunSync

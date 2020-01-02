@@ -24,7 +24,8 @@ import simulacrum.typeclass
 object MultiParentFinalizer {
   final case class FinalizedBlocks(
       mainChain: BlockHash,
-      secondaryParents: Set[BlockHash] = Set.empty
+      quorum: BigInt,
+      secondaryParents: Set[BlockHash]
   ) {
     def finalizedBlocks: Set[BlockHash] = secondaryParents + mainChain
   }
@@ -48,7 +49,7 @@ object MultiParentFinalizer {
           previousLFB    <- lfbCache.get
           finalizedBlock <- finalityDetector.onNewBlockAddedToTheBlockDag(dag, block, previousLFB)
           finalized <- finalizedBlock.fold(Applicative[F].pure(None: Option[FinalizedBlocks])) {
-                        case CommitteeWithConsensusValue(_, _, newLFB) =>
+                        case CommitteeWithConsensusValue(_, quorum, newLFB) =>
                           for {
                             _              <- lfbCache.set(newLFB)
                             finalizedSoFar <- finalizedBlocksCache.get
@@ -58,7 +59,7 @@ object MultiParentFinalizer {
                                               dag
                                             )
                             _ <- finalizedBlocksCache.update(_ ++ justFinalized + newLFB)
-                          } yield Some(FinalizedBlocks(newLFB, justFinalized))
+                          } yield Some(FinalizedBlocks(newLFB, quorum, justFinalized))
                       }
         } yield finalized)
     }

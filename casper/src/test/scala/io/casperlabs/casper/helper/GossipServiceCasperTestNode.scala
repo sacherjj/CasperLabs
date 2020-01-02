@@ -51,6 +51,7 @@ class GossipServiceCasperTestNode[F[_]](
     concurrentF: Concurrent[F],
     blockStorage: BlockStorage[F],
     dagStorage: DagStorage[F],
+    finalityStorage: FinalityStorage[F],
     deployStorage: DeployStorage[F],
     deployBuffer: DeployBuffer[F],
     finalityDetector: MultiParentFinalizer[F],
@@ -141,7 +142,7 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
     )
 
     initStorage() flatMap {
-      case (blockStorage, dagStorage, deployStorage) =>
+      case (blockStorage, dagStorage, deployStorage, finalityStorage) =>
         implicit val ds = deployStorage
         for {
           casperState  <- Cell.mvarCell[F, CasperState](CasperState())
@@ -173,6 +174,7 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
             concurrentF,
             blockStorage,
             dagStorage,
+            finalityStorage,
             deployStorage,
             deployBuffer,
             multiParentFinalizer,
@@ -240,7 +242,7 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
           )
 
           initStorage() flatMap {
-            case (blockStorage, dagStorage, deployStorage) =>
+            case (blockStorage, dagStorage, deployStorage, finalityStorage) =>
               implicit val ds = deployStorage
               for {
                 casperState <- Cell.mvarCell[F, CasperState](
@@ -274,6 +276,7 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
                   concurrentF,
                   blockStorage,
                   dagStorage,
+                  finalityStorage,
                   deployStorage,
                   deployBuffer,
                   multiParentFinalizer,
