@@ -6,7 +6,7 @@ import cats.syntax.functor._
 import cats.syntax.apply._
 import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.consensus.info.{BlockInfo, Event}
-import io.casperlabs.casper.{EventEmitter, LastFinalizedBlockHashContainer}
+import io.casperlabs.casper.EventEmitter
 import io.casperlabs.casper.consensus.info.Event.{BlockAdded, NewFinalizedBlock, Value}
 import io.casperlabs.mempool.DeployBuffer
 import io.casperlabs.metrics.Metrics

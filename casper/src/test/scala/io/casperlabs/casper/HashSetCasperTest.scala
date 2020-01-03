@@ -217,7 +217,7 @@ abstract class HashSetCasperTest
       dag                 <- MultiParentCasper[Task].dag
       latestMessageHashes <- dag.latestMessageHashes
       equivocators        <- dag.getEquivocators
-      lfbHash             <- LastFinalizedBlockHashContainer[Task].get
+      lfbHash             <- node.lastFinalizedBlockHashContainer.get
       estimate            <- MultiParentCasper[Task].estimator(dag, lfbHash, latestMessageHashes, equivocators)
       _                   = estimate.toList shouldBe List(signedBlock.blockHash)
       _                   = node.tearDown()
@@ -245,7 +245,7 @@ abstract class HashSetCasperTest
       dag                 <- MultiParentCasper[Task].dag
       latestMessageHashes <- dag.latestMessageHashes
       equivocators        <- dag.getEquivocators
-      lfbHash             <- LastFinalizedBlockHashContainer[Task].get
+      lfbHash             <- node.lastFinalizedBlockHashContainer.get
       estimate            <- MultiParentCasper[Task].estimator(dag, lfbHash, latestMessageHashes, equivocators)
 
       _ = estimate.toList shouldBe List(signedBlock2.blockHash)
