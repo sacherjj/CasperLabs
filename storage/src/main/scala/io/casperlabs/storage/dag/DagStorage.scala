@@ -7,7 +7,7 @@ import io.casperlabs.casper.consensus.{Block, BlockSummary}
 import io.casperlabs.casper.consensus.info.BlockInfo
 import io.casperlabs.metrics.Metered
 import io.casperlabs.models.Message
-import io.casperlabs.storage.block.BlockStorage.BlockHash
+import io.casperlabs.storage.BlockHash
 import io.casperlabs.storage.dag.DagRepresentation.Validator
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.crypto.codec.Base16

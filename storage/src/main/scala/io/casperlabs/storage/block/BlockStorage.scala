@@ -7,13 +7,12 @@ import io.casperlabs.casper.consensus.{Block, BlockSummary}
 import io.casperlabs.casper.consensus.info.BlockInfo
 import io.casperlabs.ipc.TransformEntry
 import io.casperlabs.metrics.Metered
-import io.casperlabs.storage.BlockMsgWithTransform
-import io.casperlabs.storage.block.BlockStorage.DeployHash
+import io.casperlabs.storage.{BlockHash, BlockMsgWithTransform, DeployHash}
 
 import scala.language.higherKinds
 
 trait BlockStorage[F[_]] {
-  import BlockStorage.{BlockHash, BlockMessage}
+  import BlockStorage.BlockMessage
 
   def put(
       blockMsgWithTransform: BlockMsgWithTransform
@@ -128,7 +127,4 @@ object BlockStorage {
       blockStorage.get(blockHash).map(_.map(_.transformEntry))
   }
   def apply[F[_]](implicit ev: BlockStorage[F]): BlockStorage[F] = ev
-
-  type BlockHash  = ByteString
-  type DeployHash = ByteString
 }

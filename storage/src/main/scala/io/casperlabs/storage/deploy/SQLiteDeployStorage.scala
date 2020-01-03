@@ -16,7 +16,7 @@ import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.Metrics.Source
 import io.casperlabs.shared.Time
 import io.casperlabs.storage.DeployStorageMetricsSource
-import io.casperlabs.storage.block.BlockStorage.DeployHash
+import io.casperlabs.storage.DeployHash
 import io.casperlabs.storage.block.SQLiteBlockStorage.blockInfoCols
 import io.casperlabs.storage.util.DoobieCodecs
 
