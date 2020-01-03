@@ -181,15 +181,9 @@ impl FromBytes for i64 {
 
 impl FromBytes for Vec<u8> {
     fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
-        let (size, mut stream): (u32, &[u8]) = FromBytes::from_bytes(bytes)?;
-        let mut result: Vec<u8> = Vec::new();
-        result.try_reserve_exact(size as usize)?;
-        for _ in 0..size {
-            let (t, rem): (u8, &[u8]) = FromBytes::from_bytes(stream)?;
-            result.push(t);
-            stream = rem;
-        }
-        Ok((result, stream))
+        let (size, rest) = u32::from_bytes(bytes)?;
+        let (vec_data, rest) = safe_split_at(&rest, size as usize)?;
+        Ok((vec_data.to_vec(), rest))
     }
 }
 
@@ -734,8 +728,10 @@ mod tests {
 mod proptests {
     use proptest::{collection::vec, prelude::*};
 
-    use crate::{bytesrepr, gens::*};
-
+    use crate::{
+        bytesrepr::{self, FromBytes, ToBytes, U32_SERIALIZED_LENGTH},
+        gens::*,
+    };
     proptest! {
         #[test]
         fn test_bool(u in any::<bool>()) {
@@ -886,5 +882,14 @@ mod proptests {
         fn test_tuple3(t in (any::<u8>(),any::<u32>(),any::<i32>())) {
             bytesrepr::test_serialization_roundtrip(&t)
         }
+    }
+
+    #[test]
+    fn vec_u8_from_bytes() {
+        let data: Vec<u8> = vec![1, 2, 3, 4, 5];
+        let data_bytes = data.to_bytes().unwrap();
+        assert!(Vec::<u8>::from_bytes(&data_bytes[..U32_SERIALIZED_LENGTH / 2]).is_err());
+        assert!(Vec::<u8>::from_bytes(&data_bytes[..U32_SERIALIZED_LENGTH]).is_err());
+        assert!(Vec::<u8>::from_bytes(&data_bytes[..U32_SERIALIZED_LENGTH + 2]).is_err());
     }
 }
