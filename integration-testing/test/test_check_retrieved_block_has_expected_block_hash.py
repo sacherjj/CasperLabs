@@ -33,12 +33,17 @@ class RemoveSignatureGossipInterceptor(grpc_proxy.GossipInterceptor):
             yield r
 
 
-def test_check_deploy_signatures(intercepted_two_node_network):
+def test_check_retrieved_block_has_expected_block_hash(intercepted_two_node_network):
     """
     This test uses an interceptor that modifies block retrieved
     by node-1 from node-0 with GetBlockChunked method of the gossip service
     and removes approvals from deploys in the block.
-    node-1 should not accept this block.
+
+    The test originally checked that the block was rejected by the node
+    due to no having the required signatures.
+
+    Now, however, it is rejected because the modification changes the block's hash.
+    Currently node rejects the block because it has a different hash than requested.
     """
     nodes = intercepted_two_node_network.docker_nodes
     for node in nodes:
@@ -73,4 +78,4 @@ def test_check_deploy_signatures(intercepted_two_node_network):
     with raises(Exception):
         wait_for_block_hash_propagated_to_all_nodes(nodes, block_hash)
 
-    assert "InvalidDeploySignature" in nodes[1].logs()
+    assert "Retrieved block has unexpected block hash." in nodes[1].logs()
