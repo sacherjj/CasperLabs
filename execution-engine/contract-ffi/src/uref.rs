@@ -1,3 +1,5 @@
+//! Home of [`URef`](crate::uref::URef), which represents an unforgeable reference.
+
 use alloc::{format, string::String, vec::Vec};
 
 use base16;
@@ -7,6 +9,7 @@ use hex_fmt::HexFmt;
 use crate::{
     bytesrepr::{self, OPTION_TAG_SERIALIZED_LENGTH, U32_SERIALIZED_LENGTH},
     contract_api::TURef,
+    value::CLTyped,
 };
 
 pub const UREF_ADDR_LENGTH: usize = 32;
@@ -102,7 +105,7 @@ impl URef {
 
     /// Creates a [`URef`] from an id and optional access rights.  [`URef::new`]
     /// is the preferred constructor for most common use-cases.
-    #[cfg(feature = "gens")]
+    #[cfg(any(test, feature = "gens"))]
     pub(crate) fn unsafe_new(
         id: [u8; UREF_ADDR_LENGTH],
         maybe_access_rights: Option<AccessRights>,
@@ -228,7 +231,7 @@ impl bytesrepr::ToBytes for Vec<URef> {
     }
 }
 
-impl<T> From<TURef<T>> for URef {
+impl<T: CLTyped> From<TURef<T>> for URef {
     fn from(input: TURef<T>) -> Self {
         URef(input.addr(), Some(input.access_rights()))
     }

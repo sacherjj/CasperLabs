@@ -210,7 +210,7 @@ class CDevelop(DevelopCommand):
 
 setup(
     name=NAME,
-    version="0.7.4",
+    version="0.7.7",
     packages=find_packages(exclude=["tests"]),
     setup_requires=[
         "protobuf==3.9.1",
@@ -252,8 +252,6 @@ setup(
         "Readme": "https://github.com/CasperLabs/CasperLabs/blob/dev/integration-testing/client/CasperLabsClient/README.md",
     },
     entry_points={
-        "console_scripts": [
-            "casperlabs_client = casperlabs_client.casperlabs_client:main"
-        ]
+        "console_scripts": ["casperlabs_client = casperlabs_client.cli:main"]
     },
 )

@@ -4,14 +4,19 @@ pub(self) mod meter;
 #[cfg(test)]
 mod tests;
 
-use std::collections::{BTreeMap, HashMap};
+use std::{collections::HashMap, convert::From, iter};
 
 use linked_hash_map::LinkedHashMap;
 
-use contract_ffi::{key::Key, value::Value};
+use contract_ffi::{
+    bytesrepr,
+    key::Key,
+    value::{self, CLType, CLValueError},
+};
 use engine_shared::{
     additive_map::AdditiveMap,
     newtypes::CorrelationId,
+    stored_value::StoredValue,
     transform::{self, Transform, TypeMismatch},
 };
 use engine_storage::global_state::StateReader;
@@ -23,7 +28,7 @@ use self::meter::{heap_meter::HeapSize, Meter};
 
 #[derive(Debug)]
 pub enum TrackingCopyQueryResult {
-    Success(Value),
+    Success(StoredValue),
     ValueNotFound(String),
 }
 
@@ -33,12 +38,12 @@ pub enum TrackingCopyQueryResult {
 pub struct TrackingCopyCache<M> {
     max_cache_size: usize,
     current_cache_size: usize,
-    reads_cached: LinkedHashMap<Key, Value>,
-    muts_cached: HashMap<Key, Value>,
+    reads_cached: LinkedHashMap<Key, StoredValue>,
+    muts_cached: HashMap<Key, StoredValue>,
     meter: M,
 }
 
-impl<M: Meter<Key, Value>> TrackingCopyCache<M> {
+impl<M: Meter<Key, StoredValue>> TrackingCopyCache<M> {
     /// Creates instance of `TrackingCopyCache` with specified `max_cache_size`,
     /// above which least-recently-used elements of the cache are invalidated.
     /// Measurements of elements' "size" is done with the usage of `Meter`
@@ -54,7 +59,7 @@ impl<M: Meter<Key, Value>> TrackingCopyCache<M> {
     }
 
     /// Inserts `key` and `value` pair to Read cache.
-    pub fn insert_read(&mut self, key: Key, value: Value) {
+    pub fn insert_read(&mut self, key: Key, value: StoredValue) {
         let element_size = Meter::measure(&self.meter, &key, &value);
         self.reads_cached.insert(key, value);
         self.current_cache_size += element_size;
@@ -70,12 +75,12 @@ impl<M: Meter<Key, Value>> TrackingCopyCache<M> {
     }
 
     /// Inserts `key` and `value` pair to Write/Add cache.
-    pub fn insert_write(&mut self, key: Key, value: Value) {
+    pub fn insert_write(&mut self, key: Key, value: StoredValue) {
         self.muts_cached.insert(key, value.clone());
     }
 
     /// Gets value from `key` in the cache.
-    pub fn get(&mut self, key: &Key) -> Option<&Value> {
+    pub fn get(&mut self, key: &Key) -> Option<&StoredValue> {
         if let Some(value) = self.muts_cached.get(&key) {
             return Some(value);
         };
@@ -96,9 +101,23 @@ pub enum AddResult {
     Success,
     KeyNotFound(Key),
     TypeMismatch(TypeMismatch),
+    Serialization(bytesrepr::Error),
 }
 
-impl<R: StateReader<Key, Value>> TrackingCopy<R> {
+impl From<CLValueError> for AddResult {
+    fn from(error: CLValueError) -> Self {
+        match error {
+            CLValueError::Serialization(error) => AddResult::Serialization(error),
+            CLValueError::Type(type_mismatch) => {
+                let expected = format!("{:?}", type_mismatch.expected);
+                let found = format!("{:?}", type_mismatch.found);
+                AddResult::TypeMismatch(TypeMismatch::new(expected, found))
+            }
+        }
+    }
+}
+
+impl<R: StateReader<Key, StoredValue>> TrackingCopy<R> {
     pub fn new(reader: R) -> TrackingCopy<R> {
         TrackingCopy {
             reader,
@@ -134,7 +153,7 @@ impl<R: StateReader<Key, Value>> TrackingCopy<R> {
         &mut self,
         correlation_id: CorrelationId,
         key: &Key,
-    ) -> Result<Option<Value>, R::Error> {
+    ) -> Result<Option<StoredValue>, R::Error> {
         if let Some(value) = self.cache.get(key) {
             return Ok(Some(value.to_owned()));
         }
@@ -150,7 +169,7 @@ impl<R: StateReader<Key, Value>> TrackingCopy<R> {
         &mut self,
         correlation_id: CorrelationId,
         key: &Key,
-    ) -> Result<Option<Value>, R::Error> {
+    ) -> Result<Option<StoredValue>, R::Error> {
         let normalized_key = key.normalize();
         if let Some(value) = self.get(correlation_id, &normalized_key)? {
             self.ops.insert_add(normalized_key, Op::Read);
@@ -161,7 +180,7 @@ impl<R: StateReader<Key, Value>> TrackingCopy<R> {
         }
     }
 
-    pub fn write(&mut self, key: Key, value: Value) {
+    pub fn write(&mut self, key: Key, value: StoredValue) {
         let normalized_key = key.normalize();
         self.cache.insert_write(normalized_key, value.clone());
         self.ops.insert_add(normalized_key, Op::Write);
@@ -176,41 +195,72 @@ impl<R: StateReader<Key, Value>> TrackingCopy<R> {
         &mut self,
         correlation_id: CorrelationId,
         key: Key,
-        value: Value,
+        value: StoredValue,
     ) -> Result<AddResult, R::Error> {
         let normalized_key = key.normalize();
-        match self.get(correlation_id, &normalized_key)? {
-            None => Ok(AddResult::KeyNotFound(normalized_key)),
-            Some(current_value) => {
-                let t = match value {
-                    Value::Int32(i) => Transform::AddInt32(i),
-                    Value::UInt128(i) => Transform::AddUInt128(i),
-                    Value::UInt256(i) => Transform::AddUInt256(i),
-                    Value::UInt512(i) => Transform::AddUInt512(i),
-                    Value::NamedKey(n, k) => {
-                        let mut map = BTreeMap::new();
-                        map.insert(n, k);
-                        Transform::AddKeys(map)
-                    }
-                    other => {
-                        return Ok(AddResult::TypeMismatch(TypeMismatch::new(
-                            "Int32 or UInt* or NamedKey".to_string(),
-                            other.type_string(),
-                        )))
-                    }
-                };
-                match t.clone().apply(current_value) {
-                    Ok(new_value) => {
-                        self.cache.insert_write(normalized_key, new_value);
-                        self.ops.insert_add(normalized_key, Op::Add);
-                        self.fns.insert_add(normalized_key, t);
-                        Ok(AddResult::Success)
-                    }
-                    Err(transform::Error::TypeMismatch(type_mismatch)) => {
-                        Ok(AddResult::TypeMismatch(type_mismatch))
+        let current_value = match self.get(correlation_id, &normalized_key)? {
+            None => return Ok(AddResult::KeyNotFound(normalized_key)),
+            Some(current_value) => current_value,
+        };
+
+        let type_name = value.type_name();
+        let mismatch = || {
+            Ok(AddResult::TypeMismatch(TypeMismatch::new(
+                "I32, U64, U128, U256, U512 or (String, Key) tuple".to_string(),
+                type_name,
+            )))
+        };
+
+        let transform = match value {
+            StoredValue::CLValue(cl_value) => match *cl_value.cl_type() {
+                CLType::I32 => match cl_value.into_t() {
+                    Ok(value) => Transform::AddInt32(value),
+                    Err(error) => return Ok(AddResult::from(error)),
+                },
+                CLType::U64 => match cl_value.into_t() {
+                    Ok(value) => Transform::AddUInt64(value),
+                    Err(error) => return Ok(AddResult::from(error)),
+                },
+                CLType::U128 => match cl_value.into_t() {
+                    Ok(value) => Transform::AddUInt128(value),
+                    Err(error) => return Ok(AddResult::from(error)),
+                },
+                CLType::U256 => match cl_value.into_t() {
+                    Ok(value) => Transform::AddUInt256(value),
+                    Err(error) => return Ok(AddResult::from(error)),
+                },
+                CLType::U512 => match cl_value.into_t() {
+                    Ok(value) => Transform::AddUInt512(value),
+                    Err(error) => return Ok(AddResult::from(error)),
+                },
+                _ => {
+                    if *cl_value.cl_type() == value::named_key_type() {
+                        match cl_value.into_t() {
+                            Ok(name_and_key) => {
+                                let map = iter::once(name_and_key).collect();
+                                Transform::AddKeys(map)
+                            }
+                            Err(error) => return Ok(AddResult::from(error)),
+                        }
+                    } else {
+                        return mismatch();
                     }
                 }
+            },
+            _ => return mismatch(),
+        };
+
+        match transform.clone().apply(current_value) {
+            Ok(new_value) => {
+                self.cache.insert_write(normalized_key, new_value);
+                self.ops.insert_add(normalized_key, Op::Add);
+                self.fns.insert_add(normalized_key, transform);
+                Ok(AddResult::Success)
             }
+            Err(transform::Error::TypeMismatch(type_mismatch)) => {
+                Ok(AddResult::TypeMismatch(type_mismatch))
+            }
+            Err(transform::Error::Serialization(error)) => Ok(AddResult::Serialization(error)),
         }
     }
 
@@ -239,9 +289,9 @@ impl<R: StateReader<Key, Value>> TrackingCopy<R> {
                     // QueryResult::ValueNotFound and Err(_) corresponds to
                     // a storage-related error. The information in the Ok(_) case is used
                     // to build an informative error message about why the query was not successful.
-                    |current_value, (i, name)| -> Result<Value, Result<(usize, String), R::Error>> {
+                    |current_value, (i, name)| -> Result<StoredValue, Result<(usize, String), R::Error>> {
                         match current_value {
-                            Value::Account(account) => {
+                            StoredValue::Account(account) => {
                                 if let Some(key) = account.named_keys().get(name) {
                                     self.read_key_or_stop(correlation_id, *key, i)
                                 } else {
@@ -249,7 +299,7 @@ impl<R: StateReader<Key, Value>> TrackingCopy<R> {
                                 }
                             }
 
-                            Value::Contract(contract) => {
+                            StoredValue::Contract(contract) => {
                                 if let Some(key) = contract.named_keys().get(name) {
                                     self.read_key_or_stop(correlation_id, *key, i)
                                 } else {
@@ -280,7 +330,7 @@ impl<R: StateReader<Key, Value>> TrackingCopy<R> {
         correlation_id: CorrelationId,
         key: Key,
         i: usize,
-    ) -> Result<Value, Result<(usize, String), R::Error>> {
+    ) -> Result<StoredValue, Result<(usize, String), R::Error>> {
         match self.read(correlation_id, &key) {
             // continue recursion
             Ok(Some(value)) => Ok(value),
@@ -313,10 +363,14 @@ impl<R: StateReader<Key, Value>> TrackingCopy<R> {
 /// any transforms it has accumulated) can be read using an immutable
 /// reference to that TrackingCopy via this trait implementation. See
 /// `TrackingCopy::fork` for more information.
-impl<R: StateReader<Key, Value>> StateReader<Key, Value> for &TrackingCopy<R> {
+impl<R: StateReader<Key, StoredValue>> StateReader<Key, StoredValue> for &TrackingCopy<R> {
     type Error = R::Error;
 
-    fn read(&self, correlation_id: CorrelationId, key: &Key) -> Result<Option<Value>, Self::Error> {
+    fn read(
+        &self,
+        correlation_id: CorrelationId,
+        key: &Key,
+    ) -> Result<Option<StoredValue>, Self::Error> {
         if let Some(value) = self.cache.muts_cached.get(key) {
             return Ok(Some(value.to_owned()));
         }

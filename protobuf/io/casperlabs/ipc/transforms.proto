@@ -37,7 +37,7 @@ message TransformAddKeys {
     repeated io.casperlabs.casper.consensus.state.NamedKey value = 1;
 }
 message TransformWrite {
-    io.casperlabs.casper.consensus.state.Value value = 1;
+    io.casperlabs.casper.consensus.state.StoredValue value = 1;
 }
 message TransformFailure {
     oneof failure_instance {

@@ -7,7 +7,15 @@ import com.google.protobuf.ByteString
 import io.casperlabs.casper.DeploySelection.DeploySelection
 import io.casperlabs.casper.DeploySelectionTest._
 import io.casperlabs.casper.consensus.Deploy
-import io.casperlabs.casper.consensus.state.{BigInt, Key, ProtocolVersion, Value}
+import io.casperlabs.casper.consensus.state.{
+  BigInt,
+  CLType,
+  CLValue,
+  Key,
+  ProtocolVersion,
+  StoredValue,
+  Value
+}
 import io.casperlabs.casper.util.execengine.{DeployEffects, ExecutionEngineServiceStub}
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.catscontrib.TaskContrib.TaskOps
@@ -15,7 +23,7 @@ import io.casperlabs.ipc
 import io.casperlabs.ipc.DeployResult.Value.{ExecutionResult, PreconditionFailure}
 import io.casperlabs.ipc._
 import io.casperlabs.models.ArbitraryConsensus
-import io.casperlabs.smartcontracts.ExecutionEngineService
+import io.casperlabs.smartcontracts.{Abi, ExecutionEngineService}
 import io.casperlabs.smartcontracts.ExecutionEngineService.CommitResult
 import monix.eval.Task
 import monix.eval.Task._
@@ -212,11 +220,16 @@ object DeploySelectionTest {
   }
 
   private val writeTransform: (OpEntry, TransformEntry) = {
+    val tyI32: CLType = CLType(CLType.Variants.SimpleType(CLType.Simple.I32))
+    val ten_bytes     = Abi.toBytes[Int](10).get
+    val ten: CLValue  = CLValue(Some(tyI32), ByteString.copyFrom(ten_bytes))
+    val value         = StoredValue().withClValue(ten)
+
     val (op, transform) =
       Op(Op.OpInstance.Write(WriteOp())) ->
         Transform(
           Transform.TransformInstance.Write(
-            TransformWrite().withValue(Value(Value.Value.IntValue(10)))
+            TransformWrite().withValue(value)
           )
         )
 

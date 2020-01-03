@@ -1,7 +1,7 @@
-use alloc::vec;
+use alloc::{collections::BTreeMap, string::String, vec};
 
 use contract_ffi::{
-    contract_api::{runtime, storage, ContractRef, TURef},
+    contract_api::{runtime, storage, system, ContractRef, TURef},
     key::Key,
     value::U512,
 };
@@ -13,7 +13,7 @@ use crate::{
 
 // ERC20 smart contract.
 #[allow(unused_imports)]
-use crate::erc20::erc20;
+use crate::erc20::{erc20, PURSE_NAME};
 
 // Proxy smart contract.
 #[allow(unused_imports)]
@@ -33,22 +33,26 @@ pub fn deploy() {
 }
 
 fn deploy_token(name: &str, initial_balance: U512) {
+    // Create a smart contract purse.
+    let token_purse = system::create_purse();
+    let mut token_urefs: BTreeMap<String, Key> = BTreeMap::new();
+    token_urefs.insert(String::from(PURSE_NAME), token_purse.value().into());
+
     // Create erc20 token instance.
-    let token_ref: ContractRef =
-        storage::store_function_at_hash(ERC20_CONTRACT_NAME, Default::default());
+    let token_ref: ContractRef = storage::store_function_at_hash(ERC20_CONTRACT_NAME, token_urefs);
 
     // Initialize erc20 contract.
     runtime::call_contract::<_, ()>(
         token_ref.clone(),
-        &(api::INIT_ERC20, initial_balance),
-        &vec![],
+        (api::INIT_ERC20, initial_balance),
+        vec![],
     );
 
     // Save it under a new TURef.
     let token_turef: TURef<Key> = storage::new_turef(token_ref.into());
 
-    // Save TURef under readalbe name.
-    runtime::put_key(&name, &token_turef.into());
+    // Save TURef under readable name.
+    runtime::put_key(&name, token_turef.into());
 }
 
 fn deploy_proxy() {
@@ -59,6 +63,6 @@ fn deploy_proxy() {
     // Save it under a new TURef.
     let proxy_turef: TURef<Key> = storage::new_turef(proxy_ref.into());
 
-    // Save TURef under readalbe name.
-    runtime::put_key(ERC20_PROXY_CONTRACT_NAME, &proxy_turef.into());
+    // Save TURef under readable name.
+    runtime::put_key(ERC20_PROXY_CONTRACT_NAME, proxy_turef.into());
 }

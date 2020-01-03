@@ -12,10 +12,10 @@ from casperlabs_client import (
     gossiping_pb2_grpc,
     kademlia_pb2_grpc,
     extract_common_name,
-    blake2b_hash,
     consensus_pb2 as consensus,
     gossiping_pb2 as gossiping,
 )
+from casperlabs_client.crypto import blake2b_hash
 import ed25519
 import lz4.block
 

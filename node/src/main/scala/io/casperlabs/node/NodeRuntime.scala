@@ -42,6 +42,7 @@ import io.casperlabs.storage.deploy.{DeployStorage, DeployStorageWriter}
 import io.casperlabs.storage.util.fileIO._
 import io.casperlabs.storage.util.fileIO.IOError._
 import io.netty.handler.ssl.ClientAuth
+import java.util.concurrent.TimeUnit
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.flywaydb.core.Flyway
@@ -125,10 +126,13 @@ class NodeRuntime private[node] (
       _ <- Resource.liftF(runRdmbsMigrations(conf.server.dataDir))
 
       implicit0(
-        storage: BlockStorage[Task] with DagStorage[Task] with DeployStorage[Task]
+        storage: BlockStorage[Task] with DagStorage[Task] with DeployStorage[Task] with FinalityStorage[
+          Task
+        ]
       ) <- Resource.liftF(
             SQLiteStorage.create[Task](
               deployStorageChunkSize = conf.blockstorage.deployStreamChunkSize,
+              tickUnit = TimeUnit.MILLISECONDS,
               readXa = readTransactor,
               writeXa = writeTransactor,
               wrapBlockStorage = (underlyingBlockStorage: BlockStorage[Task]) =>
@@ -136,18 +140,19 @@ class NodeRuntime private[node] (
                   underlyingBlockStorage,
                   maxSizeBytes = conf.blockstorage.cacheMaxSizeBytes
                 ),
-              wrapDagStorage =
-                (underlyingDagStorage: DagStorage[Task] with DagRepresentation[Task]) =>
-                  CachingDagStorage[Task](
-                    underlyingDagStorage,
-                    maxSizeBytes = conf.blockstorage.cacheMaxSizeBytes,
-                    neighborhoodAfter = conf.blockstorage.cacheNeighborhoodAfter,
-                    neighborhoodBefore = conf.blockstorage.cacheNeighborhoodBefore
-                  ).map(
-                    cache =>
-                      // Compiler fails to infer the proper type without this
-                      cache: DagStorage[Task] with DagRepresentation[Task]
-                  )
+              wrapDagStorage = (underlyingDagStorage: DagStorage[Task]
+                with DagRepresentation[Task]
+                with FinalityStorage[Task]) =>
+                CachingDagStorage[Task](
+                  underlyingDagStorage,
+                  maxSizeBytes = conf.blockstorage.cacheMaxSizeBytes,
+                  neighborhoodAfter = conf.blockstorage.cacheNeighborhoodAfter,
+                  neighborhoodBefore = conf.blockstorage.cacheNeighborhoodBefore
+                ).map(
+                  cache =>
+                    // Compiler fails to infer the proper type without this
+                    cache: DagStorage[Task] with DagRepresentation[Task] with FinalityStorage[Task]
+                )
             )
           )
 

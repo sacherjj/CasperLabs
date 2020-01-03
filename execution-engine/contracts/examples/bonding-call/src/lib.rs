@@ -8,7 +8,7 @@ use contract_ffi::{
     contract_api::{account, runtime, system, Error},
     key::Key,
     unwrap_or_revert::UnwrapOrRevert,
-    value::uint::U512,
+    value::U512,
 };
 
 const BOND_METHOD_NAME: &str = "bond";
@@ -35,7 +35,7 @@ pub extern "C" fn call() {
 
     runtime::call_contract::<_, ()>(
         pos_pointer,
-        &(BOND_METHOD_NAME, bond_amount, bonding_purse),
-        &vec![Key::URef(bonding_purse.value())],
+        (BOND_METHOD_NAME, bond_amount, bonding_purse),
+        vec![Key::URef(bonding_purse.value())],
     );
 }

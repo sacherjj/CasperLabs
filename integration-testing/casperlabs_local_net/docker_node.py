@@ -20,7 +20,8 @@ from casperlabs_local_net.casperlabs_accounts import (
     GENESIS_ACCOUNT,
 )
 from casperlabs_local_net.graphql import GraphQL
-from casperlabs_client import extract_common_name, ABI
+from casperlabs_client import extract_common_name
+from casperlabs_client.abi import ABI
 from casperlabs_local_net import grpc_proxy
 from casperlabs_local_net.grpc_proxy import KademliaInterceptor, GossipInterceptor
 

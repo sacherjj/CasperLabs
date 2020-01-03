@@ -5,14 +5,13 @@ import json
 import subprocess
 from operator import add
 from functools import reduce
-
 from casperlabs_local_net.client_parser import (
     parse_show_blocks,
     parse_show_deploys,
     parse,
 )
 from casperlabs_local_net.common import DEFAULT_PAYMENT_COST, resources_path
-from casperlabs_client import ABI
+from casperlabs_client.abi import ABI
 
 
 class CLIErrorExit(Exception):

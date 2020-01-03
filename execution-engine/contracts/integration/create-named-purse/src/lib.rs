@@ -30,5 +30,5 @@ pub extern "C" fn call() {
     system::transfer_from_purse_to_purse(main_purse, new_purse, amount).unwrap_or_revert();
 
     let new_purse_key: Key = new_purse.value().into();
-    runtime::put_key(&name, &new_purse_key);
+    runtime::put_key(&name, new_purse_key);
 }

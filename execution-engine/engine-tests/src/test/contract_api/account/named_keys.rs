@@ -1,8 +1,5 @@
-use contract_ffi::{
-    key::Key,
-    value::{Value, U512},
-};
-use engine_shared::transform::Transform;
+use contract_ffi::{key::Key, value::U512};
+use engine_shared::{stored_value::StoredValue, transform::Transform};
 
 use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG};
 
@@ -35,7 +32,8 @@ fn should_run_named_keys_contract() {
     let string_value = transform
         .iter()
         .filter_map(|(k, v)| {
-            if let Transform::Write(Value::String(s)) = v {
+            if let Transform::Write(StoredValue::CLValue(cl_value)) = v {
+                let s = cl_value.to_owned().into_t::<String>().ok()?;
                 if let Key::URef(_) = k {
                     return Some(s);
                 }
@@ -48,11 +46,12 @@ fn should_run_named_keys_contract() {
     let u512_value = transform
         .iter()
         .filter_map(|(k, v)| {
-            if let Transform::Write(Value::UInt512(value)) = v {
+            if let Transform::Write(StoredValue::CLValue(cl_value)) = v {
+                let value = cl_value.to_owned().into_t::<U512>().ok()?;
                 if let Key::URef(_) = k {
                     // Since payment code is enabled by default there are multiple writes of Uint512
                     // type, so we narrow it down to the expected value.
-                    if value == &U512::from(EXPECTED_UREF_VALUE) {
+                    if value == U512::from(EXPECTED_UREF_VALUE) {
                         return Some(());
                     }
                 }
