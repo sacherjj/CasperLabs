@@ -111,7 +111,7 @@ test-rs:
 	$(CARGO) test $(CARGO_FLAGS) --all -- --nocapture
 
 .PHONY: test-as
-test-as:
+test-as: setup-as
 	cd contract-ffi-as && npm run asbuild && npm run test
 
 .PHONY: test
