@@ -58,7 +58,7 @@ abstract class HashSetCasperTestNode[F[_]](
   implicit val timeEff: LogicalTime[F]
 
   implicit val casperEff: MultiParentCasperImpl[F]
-  implicit val lastFinalizedBlockHashContainer: LastFinalizedBlockHashContainer[F] =
+  implicit val lastFinalizedBlockHashContainer =
     NoOpsLastFinalizedBlockHashContainer.create[F](genesis.blockHash)
   implicit val broadcaster: Broadcaster[F]
 

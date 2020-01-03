@@ -12,6 +12,7 @@ import cats.syntax.flatMap._
 import cats.syntax.functor._
 import cats.syntax.show._
 import com.olegpy.meow.effects._
+import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper._
 import io.casperlabs.casper.MultiParentCasperImpl.Broadcaster
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
@@ -190,13 +191,13 @@ class NodeRuntime private[node] (
       implicit0(nodeAsk: NodeAsk[Task])            = effects.peerNodeAsk(state)
       implicit0(boostrapsAsk: BootstrapsAsk[Task]) = effects.bootstrapsAsk(state)
 
-      implicit0(finalizedBlocksStream: FinalizedBlocksStream[Task]) <- Resource.liftF(
-                                                                        FinalizedBlocksStream
-                                                                          .of[Task]
-                                                                      )
-      lfbIdx <- Resource.liftF[Task, AtomicLong](
-                 storage.getLastFinalizedBlock.map(_._1).map(AtomicLong(_))
-               )
+      (lfbIdx, lfb) <- Resource.liftF[Task, (AtomicLong, BlockHash)](
+                        storage.getLastFinalizedBlock.map {
+                          case (lfbIdx, lfbHash) =>
+                            (AtomicLong(lfbIdx), lfbHash)
+                        }
+                      )
+
       implicit0(eventsStream: EventStream[Task]) <- Resource.pure[Task, EventStream[Task]](
                                                      EventStream
                                                        .create[Task](
@@ -205,6 +206,11 @@ class NodeRuntime private[node] (
                                                          lfbIdx
                                                        )
                                                    )
+
+      implicit0(finalizedBlocksStream: FinalizedBlocksStream[Task]) <- Resource.liftF(
+                                                                        FinalizedBlocksStream
+                                                                          .of[Task](lfb)
+                                                                      )
 
       implicit0(nodeDiscovery: NodeDiscovery[Task]) <- effects.nodeDiscovery(
                                                         id,
