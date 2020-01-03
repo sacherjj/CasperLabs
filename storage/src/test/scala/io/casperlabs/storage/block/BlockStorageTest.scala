@@ -4,7 +4,7 @@ import cats.implicits._
 import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
 import io.casperlabs.crypto.codec.Base16
-import io.casperlabs.storage.block.BlockStorage.{BlockHash, DeployHash}
+import io.casperlabs.storage.{BlockHash, DeployHash}
 import io.casperlabs.storage.{
   ArbitraryStorageData,
   BlockMsgWithTransform,

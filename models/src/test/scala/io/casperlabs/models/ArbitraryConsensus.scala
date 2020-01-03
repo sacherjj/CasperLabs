@@ -57,6 +57,8 @@ trait ArbitraryConsensus {
     loop(10)
   }
 
+  def sample[T](implicit a: Arbitrary[T]): T = sample(arbitrary[T])
+
   private def protoHash[T <: scalapb.GeneratedMessage](proto: T): ByteString =
     ByteString.copyFrom(Blake2b256.hash(proto.toByteArray))
 
@@ -372,6 +374,29 @@ trait ArbitraryConsensus {
         ),
         1
       )
+    }
+  }
+
+  implicit val arbEra: Arbitrary[Era] = Arbitrary {
+    for {
+      keyBlockHash       <- genHash
+      bookingBlockHash   <- genHash
+      parentKeyBlockHash <- Gen.oneOf(Gen.const(ByteString.EMPTY), genHash)
+      length             <- Gen.choose(1, 168).map(_ * 60 * 60 * 1000)
+      now                = System.currentTimeMillis
+      startTick          <- Gen.choose(now - length, now)
+      endTick            = startTick + length
+      bonds              <- arbitrary[List[Bond]]
+      seed               <- genHash
+    } yield {
+      Era()
+        .withKeyBlockHash(keyBlockHash)
+        .withParentKeyBlockHash(parentKeyBlockHash)
+        .withBookingBlockHash(bookingBlockHash)
+        .withStartTick(startTick)
+        .withEndTick(endTick)
+        .withBonds(bonds)
+        .withLeaderSeed(seed)
     }
   }
 

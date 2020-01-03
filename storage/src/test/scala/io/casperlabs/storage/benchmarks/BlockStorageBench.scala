@@ -1,7 +1,7 @@
 package io.casperlabs.storage.benchmarks
 
 import io.casperlabs.storage.benchmarks.StorageBenchSuite._
-import io.casperlabs.storage.block.BlockStorage.BlockHash
+import io.casperlabs.storage.BlockHash
 import io.casperlabs.storage.block._
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
