@@ -1,7 +1,7 @@
 package io.casperlabs.casper.highway
 
 import cats._
-import cats.data.WriterT
+import cats.data.{EitherT, WriterT}
 import cats.implicits._
 import cats.effect.{Clock, Sync}
 import cats.effect.concurrent.Ref
@@ -196,6 +196,27 @@ class EraRuntime[F[_]: MonadThrowable: Clock](
     Ticks(roundStart + ((roundEnd - roundStart) * r).toLong)
   }
 
+  /** Preliminary check before the block is executed. Invalid blocks can be dropped. */
+  def validate(message: Message): EitherT[F, String, Unit] = {
+    val ok = EitherT.rightT[F, String](())
+
+    def check(c: F[Boolean], msg: String) = EitherT {
+      c.ifM(ok.value, msg.asLeft[Unit].pure[F])
+    }
+
+    message match {
+      case b: Message.Block =>
+        val roundId = Ticks(b.roundId)
+        check(
+          (leaderFunction(roundId) == b.validatorId).pure[F],
+          "The block is not coming from the leader of the round."
+        )
+      // TODO: Check that we haven't received a block from the same validator in this round.
+      case _ =>
+        ok
+    }
+  }
+
   /** Produce a starting agenda, depending on whether the validator is bonded or not. */
   def initAgenda: F[Agenda] =
     maybeMessageProducer.fold(Agenda.empty.pure[F]) { _ =>
@@ -218,7 +239,10 @@ class EraRuntime[F[_]: MonadThrowable: Clock](
     * This method is always called as a reaction to an incoming message,
     * so it doesn't return a future agenda of its own.
     */
-  def handleMessage(message: Message): HWL[Unit] =
+  def handleMessage(message: Message): HWL[Unit] = {
+    def illegal(msg: String) =
+      MonadThrowable[HWL].raiseError[Unit](new IllegalStateException(msg))
+
     message match {
       // TODO: Respond to lambda-ballots during voting.
       case _: Message.Ballot =>
@@ -227,15 +251,12 @@ class EraRuntime[F[_]: MonadThrowable: Clock](
         val roundId = Ticks(b.roundId)
         maybeMessageProducer.fold(noop) { mp =>
           if (mp.validatorId == b.validatorId) {
-            MonadThrowable[HWL].raiseError(
-              new IllegalStateException("Shouldn't receive our own messages!")
-            )
+            illegal("Shouldn't receive our own messages!")
           } else if (b.keyBlockHash != era.keyBlockHash) {
-            MonadThrowable[HWL].raiseError(
-              new IllegalStateException("Shouldn't receive messages from other eras!")
-            )
+            illegal("Shouldn't receive messages from other eras!")
           } else if (leaderFunction(roundId) != b.validatorId) {
-            noop
+            // These blocks should fail validation and not be passed here.
+            illegal("Shouldn't try to handle messages from non-leaders!")
           } else {
             // It's okay not to send a response to a message where we *did* participate
             // in the round it belongs to, but we moved on to a newer round.
@@ -248,6 +269,7 @@ class EraRuntime[F[_]: MonadThrowable: Clock](
           }
         }
     }
+  }
 
   /** Handle something that happens during a round:
     * - in rounds when we are leading, create a lambda message

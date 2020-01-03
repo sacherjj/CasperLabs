@@ -156,6 +156,24 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
     }
   }
 
+  "validate" should {
+    "reject a block is received from a non-leader" in {
+      val runtime = genesisEraRuntime(
+        "Alice".some,
+        leaderSequencer = mockSequencer("Bob")
+      )
+      val message = makeBlock(
+        validator = "Charlie",
+        eraId = runtime.era.keyBlockHash,
+        roundId = runtime.startTick
+      )
+      runtime.validate(message).value shouldBe Left(
+        "The block is not coming from the leader of the round."
+      )
+    }
+    "reject a second block received from the leader in the same round" in (pending)
+  }
+
   "initAgenda" when {
     "the validator is bonded in the era" should {
       "schedule the first round" in {
@@ -228,13 +246,16 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
             // This will be relevant when for round exponent adjustments.
             pending
           }
+
+          "reject further lambda messages in this round" in (pending)
         }
 
         "it is not from the leader" should {
-          "not respond" in {
-            // TODO: Should this block be saved at all?
+          "reject the block" in {
             val msg = makeBlock("Bob", runtime.era.keyBlockHash, runtime.startTick)
-            runtime.handleMessage(msg).written shouldBe empty
+            an[IllegalStateException] should be thrownBy {
+              runtime.handleMessage(msg)
+            }
           }
         }
 
