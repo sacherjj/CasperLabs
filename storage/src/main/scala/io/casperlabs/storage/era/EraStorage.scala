@@ -11,17 +11,19 @@ trait EraStorage[F[_]] {
   def addEra(era: Era): F[Unit]
 
   /** Retrieve the era, if it exists, by its key block hash. */
-  def getEra(eraId: BlockHash): F[Option[Era]]
+  def getEra(keyBlockHash: BlockHash): F[Option[Era]]
 
   /** Retrieve the era, or raise an error if it's not found. */
-  def getEraUnsafe(eraId: BlockHash)(implicit E: MonadThrowable[F]): F[Era] =
-    getEra(eraId) flatMap {
+  def getEraUnsafe(keyBlockHash: BlockHash)(implicit E: MonadThrowable[F]): F[Era] =
+    getEra(keyBlockHash) flatMap {
       MonadThrowable[F].fromOption(
         _,
-        new NoSuchElementException(s"Era ${Base16.encode(eraId.toByteArray)} could not be found.")
+        new NoSuchElementException(
+          s"Era ${Base16.encode(keyBlockHash.toByteArray)} could not be found."
+        )
       )
     }
 
   /** Retrieve the child eras from the era tree. */
-  def getChildEras(eraId: BlockHash): F[Set[Era]]
+  def getChildEras(keyBlockHash: BlockHash): F[Set[Era]]
 }

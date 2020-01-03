@@ -19,23 +19,26 @@ class SQLiteEraStorage[F[_]: Sync](
     with DoobieCodecs {
 
   override def addEra(era: Era): F[Unit] = {
-    val eraId         = era.keyBlockHash
-    val maybeParentId = Option(era.parentKeyBlockHash).filterNot(_.isEmpty)
-    val startMillis   = TimeUnit.MILLISECONDS.convert(era.startTick, tickUnit)
-    val endMillis     = TimeUnit.MILLISECONDS.convert(era.endTick, tickUnit)
+    val hash        = era.keyBlockHash
+    val parentHash  = Option(era.parentKeyBlockHash).filterNot(_.isEmpty)
+    val startMillis = TimeUnit.MILLISECONDS.convert(era.startTick, tickUnit)
+    val endMillis   = TimeUnit.MILLISECONDS.convert(era.endTick, tickUnit)
 
     val insert =
       sql"""INSERT OR IGNORE INTO eras (hash, parent_hash, start_millis, end_millis, data)
-            VALUES ($eraId, $maybeParentId, $startMillis, $endMillis, $era)""".update.run
+            VALUES ($hash, $parentHash, $startMillis, $endMillis, $era)""".update.run
 
     insert.transact(writeXa).void
   }
 
-  override def getEra(eraId: BlockHash): F[Option[Era]] =
-    sql"""SELECT data FROM eras WHERE hash=$eraId""".query[Era].option.transact(readXa)
+  override def getEra(keyBlockHash: BlockHash): F[Option[Era]] =
+    sql"""SELECT data FROM eras WHERE hash=$keyBlockHash""".query[Era].option.transact(readXa)
 
-  override def getChildEras(eraId: BlockHash): F[Set[Era]] =
-    sql"""SELECT data FROM eras WHERE parent_hash=$eraId""".query[Era].to[Set].transact(readXa)
+  override def getChildEras(keyBlockHash: BlockHash): F[Set[Era]] =
+    sql"""SELECT data FROM eras WHERE parent_hash=$keyBlockHash"""
+      .query[Era]
+      .to[Set]
+      .transact(readXa)
 }
 
 object SQLiteEraStorage {
