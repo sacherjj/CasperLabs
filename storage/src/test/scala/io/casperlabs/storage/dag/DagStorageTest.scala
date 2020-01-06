@@ -97,6 +97,7 @@ trait DagStorageTest
                 blockMsgWithTransform => dagStorage.insert(blockMsgWithTransform.getBlockMessage)
               )
           dag <- dagStorage.getRepresentation
+          tip <- dag.latestGlobal
           // Test that we can lookup all blocks that we've just inserted.
           _ <- blockElements.traverse {
                 case BlockMsgWithTransform(Some(b), _) =>
@@ -108,8 +109,8 @@ trait DagStorageTest
           _ <- latestBlocksByValidator.toList.traverse {
                 case (validator, latestBlocks) =>
                   for {
-                    latestMessageHash <- dag.latestMessageHash(validator)
-                    latestMessage     <- dag.latestMessage(validator)
+                    latestMessageHash <- tip.latestMessageHash(validator)
+                    latestMessage     <- tip.latestMessage(validator)
                   } yield {
                     latestMessage should contain theSameElementsAs latestBlocks
                       .map(_.getBlockMessage)
@@ -126,13 +127,13 @@ trait DagStorageTest
                   }
                 case _ => ???
               }
-          _ <- dag.latestMessageHashes.map { got =>
+          _ <- tip.latestMessageHashes.map { got =>
                 got.toList should contain theSameElementsAs latestBlocksByValidator
                   .mapValues(
                     _.map(_.getBlockMessage.blockHash).toSet
                   )
               }
-          _ <- dag.latestMessages.map { got =>
+          _ <- tip.latestMessages.map { got =>
                 val expected = latestBlocksByValidator
                   .mapValues(
                     _.map(_.getBlockMessage).map(Message.fromBlock(_).get)
@@ -187,15 +188,17 @@ class SQLiteDagStorageTest extends DagStorageTest with SQLiteFixture[DagStorage[
         // This is an equivocation. Should not replace `validator_latest_message` entry in the database but add a new one.
         val equivBlock = update(c, validator, ByteString.EMPTY)
 
-        val readLatestMessages = storage.getRepresentation.flatMap(
-          dag =>
-            (
-              dag.latestMessageHashes,
-              dag.latestMessages,
-              dag.latestMessage(validator),
-              dag.latestMessageHash(validator)
-            ).mapN((_, _, _, _))
-        )
+        val readLatestMessages = storage.getRepresentation
+          .flatMap(_.latestGlobal)
+          .flatMap(
+            tip =>
+              (
+                tip.latestMessageHashes,
+                tip.latestMessages,
+                tip.latestMessage(validator),
+                tip.latestMessageHash(validator)
+              ).mapN((_, _, _, _))
+          )
 
         for {
           _ <- storage.insert(initial)

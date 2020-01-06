@@ -18,13 +18,18 @@ import io.casperlabs.storage.DagStorageMetricsSource
 import io.casperlabs.storage.BlockHash
 import io.casperlabs.storage.block.SQLiteBlockStorage.blockInfoCols
 import io.casperlabs.storage.dag.DagRepresentation.Validator
-import io.casperlabs.storage.dag.DagStorage.{MeteredDagRepresentation, MeteredDagStorage}
+import io.casperlabs.storage.dag.DagStorage.{
+  MeteredDagRepresentation,
+  MeteredDagStorage,
+  MeteredTipRepresentation
+}
 import io.casperlabs.storage.util.DoobieCodecs
 
-class SQLiteDagStorage[F[_]: Bracket[*[_], Throwable]](
+class SQLiteDagStorage[F[_]: Sync](
     readXa: Transactor[F],
     writeXa: Transactor[F]
-) extends DagStorage[F]
+)(implicit met: Metrics[F])
+    extends DagStorage[F]
     with DagRepresentation[F]
     with FinalityStorage[F]
     with DoobieCodecs {
@@ -195,43 +200,59 @@ class SQLiteDagStorage[F[_]: Bracket[*[_], Throwable]](
       .transact(readXa)
       .groupByRank
 
-  override def latestMessageHash(validator: Validator): F[Set[BlockHash]] =
-    sql"""|SELECT block_hash
+  override def latestInEra(keyBlockHash: BlockHash): F[TipRepresentation[F]] = ???
+
+  override def latestGlobal: F[TipRepresentation[F]] =
+    globalTipRepresentation.value.pure[F]
+
+  private val globalTipRepresentation = Eval.later {
+    new SQLiteTipRepresentation() with MeteredTipRepresentation[F] {
+      override implicit val m: Metrics[F] = met
+      override implicit val ms: Source    = SQLiteDagStorage.MetricsSource
+      override implicit val a: Apply[F]   = Sync[F]
+    }: TipRepresentation[F]
+  }
+
+  class SQLiteTipRepresentation() extends TipRepresentation[F] {
+
+    override def latestMessageHash(validator: Validator): F[Set[BlockHash]] =
+      sql"""|SELECT block_hash
           |FROM validator_latest_messages
           |WHERE validator=$validator""".stripMargin
-      .query[BlockHash]
-      .to[Set]
-      .transact(readXa)
+        .query[BlockHash]
+        .to[Set]
+        .transact(readXa)
 
-  override def latestMessage(validator: Validator): F[Set[Message]] =
-    sql"""|SELECT m.data
+    override def latestMessage(validator: Validator): F[Set[Message]] =
+      sql"""|SELECT m.data
           |FROM validator_latest_messages v
           |INNER JOIN block_metadata m
           |ON v.validator=$validator AND v.block_hash=m.block_hash""".stripMargin
-      .query[BlockSummary]
-      .to[List]
-      .transact(readXa)
-      .flatMap(_.traverse(toMessageSummaryF))
-      .map(_.toSet)
+        .query[BlockSummary]
+        .to[List]
+        .transact(readXa)
+        .flatMap(_.traverse(toMessageSummaryF))
+        .map(_.toSet)
 
-  override def latestMessageHashes: F[Map[Validator, Set[BlockHash]]] =
-    sql"""|SELECT *
+    override def latestMessageHashes: F[Map[Validator, Set[BlockHash]]] =
+      sql"""|SELECT *
           |FROM validator_latest_messages""".stripMargin
-      .query[(Validator, BlockHash)]
-      .to[List]
-      .transact(readXa)
-      .map(_.groupBy(_._1).mapValues(_.map(_._2).toSet))
+        .query[(Validator, BlockHash)]
+        .to[List]
+        .transact(readXa)
+        .map(_.groupBy(_._1).mapValues(_.map(_._2).toSet))
 
-  override def latestMessages: F[Map[Validator, Set[Message]]] =
-    sql"""|SELECT v.validator, m.data
+    override def latestMessages: F[Map[Validator, Set[Message]]] =
+      sql"""|SELECT v.validator, m.data
           |FROM validator_latest_messages v
           |INNER JOIN block_metadata m
           |ON m.block_hash=v.block_hash""".stripMargin
-      .query[(Validator, BlockSummary)]
-      .to[List]
-      .transact(readXa)
-      .flatMap(_.traverse { case (v, bs) => toMessageSummaryF(bs).map(v -> _) })
-      .map(_.groupBy(_._1).mapValues(_.map(_._2).toSet))
+        .query[(Validator, BlockSummary)]
+        .to[List]
+        .transact(readXa)
+        .flatMap(_.traverse { case (v, bs) => toMessageSummaryF(bs).map(v -> _) })
+        .map(_.groupBy(_._1).mapValues(_.map(_._2).toSet))
+  }
 
   override def markAsFinalized(
       mainParent: BlockHash,
@@ -272,6 +293,8 @@ class SQLiteDagStorage[F[_]: Bracket[*[_], Throwable]](
 }
 
 object SQLiteDagStorage {
+
+  private val MetricsSource = Metrics.Source(DagStorageMetricsSource, "sqlite")
 
   private case class Fs2State(
       buffer: Vector[BlockInfo] = Vector.empty,
@@ -345,9 +368,8 @@ object SQLiteDagStorage {
                        with MeteredDagRepresentation[F]
                        with FinalityStorage[F] {
                        override implicit val m: Metrics[F] = met
-                       override implicit val ms: Source =
-                         Metrics.Source(DagStorageMetricsSource, "sqlite")
-                       override implicit val a: Apply[F] = Sync[F]
+                       override implicit val ms: Source    = MetricsSource
+                       override implicit val a: Apply[F]   = Sync[F]
                      }
                    )
     } yield dagStorage: DagStorage[F] with DagRepresentation[F] with FinalityStorage[F]
