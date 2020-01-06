@@ -32,7 +32,8 @@ object FinalizedBlocksStream {
               EventStream[F]
                 .subscribe(StreamEventsRequest(blockFinalized = true))
                 .collect {
-                  case event if event.value.isNewLfb => event.getNewLfb.blockHash
+                  case event if event.value.isNewFinalizedBlock =>
+                    event.getNewFinalizedBlock.blockHash
                 }
                 .consumeWith(monix.reactive.Consumer.foreachEval(topic.publish1(_)))
             )

@@ -40,9 +40,9 @@ object EventStream {
         import Event.Value._
         source.filter {
           _.value match {
-            case Empty               => false
-            case Value.BlockAdded(_) => request.blockAdded
-            case Value.NewLfb(_)     => request.blockFinalized
+            case Empty                      => false
+            case Value.BlockAdded(_)        => request.blockAdded
+            case Value.NewFinalizedBlock(_) => request.blockFinalized
           }
         }
       }
@@ -60,7 +60,7 @@ object EventStream {
         FinalityStorage[F].markAsFinalized(lfb, indirectlyFinalized) >>
           DeployBuffer.removeFinalizedDeploys(indirectlyFinalized + lfb).forkAndLog >>
           Sync[F].delay {
-            val event = Event().withNewLfb(
+            val event = Event().withNewFinalizedBlock(
               NewFinalizedBlock(lfbIdx.getAndIncrement(), lfb, indirectlyFinalized.toSeq)
             )
             source.onNext(event)
