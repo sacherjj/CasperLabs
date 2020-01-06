@@ -81,7 +81,7 @@ export default class Accounts extends RefreshableComponent<Props, {}> {
       modalAccountForm = (
           <Modal
             id="import-account"
-            title="Import Account Key"
+            title="Import Account Public Key"
             submitLabel="Save"
             onSubmit={() => this.props.auth.importAccount()}
             onClose={() => {
@@ -92,7 +92,7 @@ export default class Accounts extends RefreshableComponent<Props, {}> {
             <Form>
               <FileSelect
                 id="id-file-select"
-                label={importAccountForm.fileName || 'Choose File'}
+                label={importAccountForm.fileName || 'Choose Public Key File'}
                 handleFileSelect={e => {
                   importAccountForm.handleFileSelect(e);
                 }}

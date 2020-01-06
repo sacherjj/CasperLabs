@@ -1,6 +1,6 @@
 import ErrorContainer from './ErrorContainer';
 import { DiagnosticsService } from 'casperlabs-sdk';
-import { observable, runInAction } from 'mobx';
+import { observable } from 'mobx';
 import { Node } from 'casperlabs-grpc/io/casperlabs/comm/discovery/node_pb';
 
 
@@ -15,9 +15,7 @@ export class ConnectedPeersContainer {
 
   async refreshPeers() {
     let peers = await this.diagnosticsService.listPeers();
-    runInAction(() => {
-      this.peers = peers.getPeersList();
-    });
+    this.peers = peers.getPeersList();
   }
 }
 
