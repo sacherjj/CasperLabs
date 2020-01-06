@@ -22,8 +22,7 @@ enum Error {
 fn mint_purse(amount: U512) -> Result<PurseId, mint::Error> {
     let mint = system::get_mint();
 
-    let result: Result<URef, mint::Error> =
-        runtime::call_contract(mint, &("mint", amount), &vec![]);
+    let result: Result<URef, mint::Error> = runtime::call_contract(mint, ("mint", amount), vec![]);
 
     result.map(PurseId::new)
 }
@@ -37,8 +36,8 @@ pub extern "C" fn call() {
 
     let balance: Option<U512> = runtime::call_contract(
         mint,
-        &("balance", new_purse),
-        &vec![Key::URef(new_purse.value())],
+        ("balance", new_purse),
+        vec![Key::URef(new_purse.value())],
     );
 
     match balance {

@@ -114,7 +114,7 @@ class NodeRuntime private[node] (
                                                                         ](
                                                                           conf.grpc.socket,
                                                                           conf.server.maxMessageSize,
-                                                                          conf.server.engineParallelism
+                                                                          conf.server.engineParallelism.value
                                                                         )
       //TODO: We may want to adjust threading model for better performance
       (writeTransactor, readTransactor) <- effects.doobieTransactors(
@@ -125,7 +125,9 @@ class NodeRuntime private[node] (
       _ <- Resource.liftF(runRdmbsMigrations(conf.server.dataDir))
 
       implicit0(
-        storage: BlockStorage[Task] with DagStorage[Task] with DeployStorage[Task]
+        storage: BlockStorage[Task] with DagStorage[Task] with DeployStorage[Task] with FinalityStorage[
+          Task
+        ]
       ) <- Resource.liftF(
             SQLiteStorage.create[Task](
               deployStorageChunkSize = conf.blockstorage.deployStreamChunkSize,
@@ -136,18 +138,19 @@ class NodeRuntime private[node] (
                   underlyingBlockStorage,
                   maxSizeBytes = conf.blockstorage.cacheMaxSizeBytes
                 ),
-              wrapDagStorage =
-                (underlyingDagStorage: DagStorage[Task] with DagRepresentation[Task]) =>
-                  CachingDagStorage[Task](
-                    underlyingDagStorage,
-                    maxSizeBytes = conf.blockstorage.cacheMaxSizeBytes,
-                    neighborhoodAfter = conf.blockstorage.cacheNeighborhoodAfter,
-                    neighborhoodBefore = conf.blockstorage.cacheNeighborhoodBefore
-                  ).map(
-                    cache =>
-                      // Compiler fails to infer the proper type without this
-                      cache: DagStorage[Task] with DagRepresentation[Task]
-                  )
+              wrapDagStorage = (underlyingDagStorage: DagStorage[Task]
+                with DagRepresentation[Task]
+                with FinalityStorage[Task]) =>
+                CachingDagStorage[Task](
+                  underlyingDagStorage,
+                  maxSizeBytes = conf.blockstorage.cacheMaxSizeBytes,
+                  neighborhoodAfter = conf.blockstorage.cacheNeighborhoodAfter,
+                  neighborhoodBefore = conf.blockstorage.cacheNeighborhoodBefore
+                ).map(
+                  cache =>
+                    // Compiler fails to infer the proper type without this
+                    cache: DagStorage[Task] with DagRepresentation[Task] with FinalityStorage[Task]
+                )
             )
           )
 

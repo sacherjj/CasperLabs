@@ -138,10 +138,10 @@ fn delegate() -> Result<(), Error> {
             };
             // Install the contract with associated owner-related keys
             let contract_ref = storage::store_function_at_hash(TRANSFER_FUNDS_EXT, known_keys);
-            runtime::put_key(TRANSFER_FUNDS_KEY, &contract_ref.into());
+            runtime::put_key(TRANSFER_FUNDS_KEY, contract_ref.into());
             // For easy access in outside world here `donation_box` purse is also attached
             // to the account
-            runtime::put_key(DONATION_BOX_COPY, &donation_box.value().into());
+            runtime::put_key(DONATION_BOX_COPY, donation_box.value().into());
         }
         METHOD_CALL => {
             // This comes from outside i.e. after deploying the contract, this key is queried, and
@@ -149,7 +149,9 @@ fn delegate() -> Result<(), Error> {
             let contract_key: Key = runtime::get_arg(DelegateArg::ContractKey as u32)
                 .ok_or(Error::MissingArgument)?
                 .map_err(|_| Error::InvalidArgument)?;
-            let contract_ref = contract_key.to_c_ptr().ok_or(Error::UnexpectedKeyVariant)?;
+            let contract_ref = contract_key
+                .to_contract_ref()
+                .ok_or(Error::UnexpectedKeyVariant)?;
             // This is a method that's gets forwarded into the sub contract
             let subcontract_method: String =
                 runtime::get_arg(DelegateArg::SubContractMethodFwd as u32)
@@ -157,7 +159,7 @@ fn delegate() -> Result<(), Error> {
                     .map_err(|_| Error::InvalidArgument)?;
 
             let subcontract_args = (subcontract_method,);
-            runtime::call_contract::<_, ()>(contract_ref, &subcontract_args, &Vec::new());
+            runtime::call_contract::<_, ()>(contract_ref, subcontract_args, Vec::new());
         }
         _ => return Err(ContractError::InvalidDelegateMethod.into()),
     }

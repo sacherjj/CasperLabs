@@ -6,9 +6,9 @@ use contract_ffi::{
         Error,
     },
     key::Key,
-    value::{account::PublicKey, Value, U512},
+    value::{account::PublicKey, U512},
 };
-use engine_shared::transform::Transform;
+use engine_shared::{stored_value::StoredValue, transform::Transform};
 
 use crate::{
     support::test_support::{ExecuteRequestBuilder, InMemoryWasmTestBuilder},
@@ -66,8 +66,11 @@ fn should_run_purse_to_account_transfer() {
 
     // Obtain main purse's balance
     let final_balance = &transform[&default_account.named_keys()["final_balance"].normalize()];
-    let final_balance = if let Transform::Write(Value::UInt512(balance)) = final_balance {
-        balance
+    let final_balance = if let Transform::Write(StoredValue::CLValue(cl_value)) = final_balance {
+        cl_value
+            .to_owned()
+            .into_t::<U512>()
+            .expect("should be U512")
     } else {
         panic!(
             "Purse transfer result is expected to contain Write with Uint512 value, got {:?}",
@@ -75,7 +78,7 @@ fn should_run_purse_to_account_transfer() {
         );
     };
     assert_eq!(
-        *final_balance,
+        final_balance,
         U512::from(DEFAULT_ACCOUNT_INITIAL_BALANCE) - (*DEFAULT_PAYMENT * 2) - 42
     );
 
@@ -83,15 +86,18 @@ fn should_run_purse_to_account_transfer() {
     let transfer_result_transform =
         &transform[&default_account.named_keys()["transfer_result"].normalize()];
     let transfer_result_string =
-        if let Transform::Write(Value::String(s)) = transfer_result_transform {
-            s
+        if let Transform::Write(StoredValue::CLValue(cl_value)) = transfer_result_transform {
+            cl_value
+                .to_owned()
+                .into_t::<String>()
+                .expect("should be String")
         } else {
             panic!("Purse transfer result is expected to contain Write with String value");
         };
     // Main assertion for the result of `transfer_from_purse_to_purse`
     assert_eq!(
         transfer_result_string,
-        &format!("{:?}", TransferResult::Ok(TransferredTo::NewAccount))
+        format!("{:?}", TransferResult::Ok(TransferredTo::NewAccount))
     );
 
     // Get transforms output for new account
@@ -100,14 +106,15 @@ fn should_run_purse_to_account_transfer() {
         .expect("Unable to find transforms for a genesis account");
 
     // Inspect AddKeys for that new account to find it's purse id
-    let new_account = if let Transform::Write(Value::Account(account)) = new_account_transforms {
-        account
-    } else {
-        panic!(
-            "Transform {:?} is not a Transform with a Value(Account)",
-            new_account_transforms
-        );
-    };
+    let new_account =
+        if let Transform::Write(StoredValue::Account(account)) = new_account_transforms {
+            account
+        } else {
+            panic!(
+                "Transform {:?} is not a Transform with a Value(Account)",
+                new_account_transforms
+            );
+        };
 
     let new_purse_id = new_account.purse_id();
     // This is the new PurseId lookup key that will be present in AddKeys for a mint
@@ -133,14 +140,16 @@ fn should_run_purse_to_account_transfer() {
 
     let new_purse_transform = &transform[&new_account_purse_uref.normalize()];
     let purse_secondary_balance =
-        if let Transform::Write(Value::UInt512(value)) = new_purse_transform {
-            value
+        if let Transform::Write(StoredValue::CLValue(cl_value)) = new_purse_transform {
+            cl_value
+                .to_owned()
+                .into_t::<U512>()
+                .expect("should be U512")
         } else {
             panic!("actual purse uref should be a Write of UInt512 type");
         };
-    assert_eq!(*purse_secondary_balance, *ACCOUNT_1_INITIAL_FUND);
+    assert_eq!(purse_secondary_balance, *ACCOUNT_1_INITIAL_FUND);
 
-    //
     // Exec 2 - Transfer from new account back to genesis to verify
     // TransferToExisting
 
@@ -154,29 +163,35 @@ fn should_run_purse_to_account_transfer() {
 
     // Obtain main purse's balance
     let final_balance = &transform[&account_1.named_keys()["final_balance"].normalize()];
-    let final_balance = if let Transform::Write(Value::UInt512(balance)) = final_balance {
-        balance
+    let final_balance = if let Transform::Write(StoredValue::CLValue(cl_value)) = final_balance {
+        cl_value
+            .to_owned()
+            .into_t::<U512>()
+            .expect("should be U512")
     } else {
         panic!(
             "Purse transfer result is expected to contain Write with Uint512 value, got {:?}",
             final_balance
         );
     };
-    assert_eq!(final_balance, &U512::from(41));
+    assert_eq!(final_balance, U512::from(41));
 
     // Get the `transfer_result` for a given account
     let transfer_result_transform =
         &transform[&account_1.named_keys()["transfer_result"].normalize()];
     let transfer_result_string =
-        if let Transform::Write(Value::String(s)) = transfer_result_transform {
-            s
+        if let Transform::Write(StoredValue::CLValue(cl_value)) = transfer_result_transform {
+            cl_value
+                .to_owned()
+                .into_t::<String>()
+                .expect("should be String")
         } else {
             panic!("Purse transfer result is expected to contain Write with String value");
         };
     // Main assertion for the result of `transfer_from_purse_to_purse`
     assert_eq!(
         transfer_result_string,
-        &format!("{:?}", TransferResult::Ok(TransferredTo::ExistingAccount))
+        format!("{:?}", TransferResult::Ok(TransferredTo::ExistingAccount))
     );
 
     // Get transforms output for genesis
@@ -192,11 +207,16 @@ fn should_run_purse_to_account_transfer() {
     let balance_uref = genesis_transforms
         .iter()
         .find_map(|(k, t)| match (k, t) {
-            (uref @ Key::URef(_), Transform::Write(Value::UInt512(x)))
-                if *x == U512::from(100_000_000_000i64) =>
-            // 1_000_000 is the initial balance of genesis
+            (uref @ Key::URef(_), Transform::Write(StoredValue::CLValue(cl_value))) =>
+            // 100_000_000_000i64 is the initial balance of genesis
             {
-                Some(*uref)
+                if cl_value.to_owned().into_t::<U512>().unwrap_or_default()
+                    == U512::from(100_000_000_000i64)
+                {
+                    Some(*uref)
+                } else {
+                    None
+                }
             }
             _ => None,
         })
@@ -235,8 +255,11 @@ fn should_fail_when_sending_too_much_from_purse_to_account() {
 
     // Obtain main purse's balance
     let final_balance = &transform[&default_account.named_keys()["final_balance"].normalize()];
-    let final_balance = if let Transform::Write(Value::UInt512(balance)) = final_balance {
-        balance
+    let final_balance = if let Transform::Write(StoredValue::CLValue(cl_value)) = final_balance {
+        cl_value
+            .to_owned()
+            .into_t::<U512>()
+            .expect("should be U512")
     } else {
         panic!(
             "Purse transfer result is expected to contain Write with Uint512 value, got {:?}",
@@ -245,7 +268,7 @@ fn should_fail_when_sending_too_much_from_purse_to_account() {
     };
     // When trying to send too much coins the balance is left unchanged
     assert_eq!(
-        *final_balance,
+        final_balance,
         U512::from(100_000_000_000u64) - *DEFAULT_PAYMENT,
         "final balance incorrect"
     );
@@ -254,8 +277,11 @@ fn should_fail_when_sending_too_much_from_purse_to_account() {
     let transfer_result_transform =
         &transform[&default_account.named_keys()["transfer_result"].normalize()];
     let transfer_result_string =
-        if let Transform::Write(Value::String(s)) = transfer_result_transform {
-            s
+        if let Transform::Write(StoredValue::CLValue(cl_value)) = transfer_result_transform {
+            cl_value
+                .to_owned()
+                .into_t::<String>()
+                .expect("should be String")
         } else {
             panic!("Purse transfer result is expected to contain Write with String value");
         };
@@ -263,7 +289,7 @@ fn should_fail_when_sending_too_much_from_purse_to_account() {
     // Main assertion for the result of `transfer_from_purse_to_purse`
     assert_eq!(
         transfer_result_string,
-        &format!("{:?}", Result::<(), Error>::Err(Error::Transfer)),
+        format!("{:?}", Result::<(), Error>::Err(Error::Transfer)),
         "TransferError incorrect"
     );
 }

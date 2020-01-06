@@ -99,3 +99,25 @@ where
         Ok((a0, a1, a2, a3, a4, a5))
     }
 }
+
+impl<T1, T2, T3, T4, T5, T6, T7> Args for (T1, T2, T3, T4, T5, T6, T7)
+where
+    T1: FromRuntimeValue + Sized,
+    T2: FromRuntimeValue + Sized,
+    T3: FromRuntimeValue + Sized,
+    T4: FromRuntimeValue + Sized,
+    T5: FromRuntimeValue + Sized,
+    T6: FromRuntimeValue + Sized,
+    T7: FromRuntimeValue + Sized,
+{
+    fn parse(args: RuntimeArgs) -> Result<Self, Trap> {
+        let a0: T1 = args.nth_checked(0)?;
+        let a1: T2 = args.nth_checked(1)?;
+        let a2: T3 = args.nth_checked(2)?;
+        let a3: T4 = args.nth_checked(3)?;
+        let a4: T5 = args.nth_checked(4)?;
+        let a5: T6 = args.nth_checked(5)?;
+        let a6: T7 = args.nth_checked(6)?;
+        Ok((a0, a1, a2, a3, a4, a5, a6))
+    }
+}

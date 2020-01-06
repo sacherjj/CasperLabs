@@ -6,46 +6,43 @@ use num_traits::{FromPrimitive, ToPrimitive};
 #[derive(Debug, PartialEq, FromPrimitive, ToPrimitive)]
 #[repr(usize)]
 pub enum FunctionIndex {
-    WriteFuncIndex = 0,
-    WriteLocalFuncIndex = 1,
-    ReadFuncIndex = 2,
-    ReadLocalFuncIndex = 3,
-    AddFuncIndex = 4,
-    NewFuncIndex = 5,
-    GetReadFuncIndex = 6,
-    GetFnFuncIndex = 7,
-    LoadArgFuncIndex = 8,
-    GetArgFuncIndex = 9,
-    RetFuncIndex = 10,
-    GetCallResultFuncIndex = 11,
-    CallContractFuncIndex = 12,
-    GetKeyFuncIndex = 13,
-    GasFuncIndex = 14,
-    HasKeyFuncIndex = 15,
-    PutKeyFuncIndex = 16,
-    StoreFnIndex = 17,
-    StoreFnAtHashIndex = 18,
-    IsValidFnIndex = 19,
-    RevertFuncIndex = 20,
-    AddAssociatedKeyFuncIndex = 21,
-    RemoveAssociatedKeyFuncIndex = 22,
-    UpdateAssociatedKeyFuncIndex = 23,
-    SetActionThresholdFuncIndex = 24,
-    SerNamedKeysFuncIndex = 25,
-    ListNamedKeysFuncIndex = 26,
-    RemoveKeyFuncIndex = 27,
-    GetCallerIndex = 28,
-    GetBlocktimeIndex = 29,
-    CreatePurseIndex = 30,
-    TransferToAccountIndex = 31,
-    TransferFromPurseToAccountIndex = 32,
-    TransferFromPurseToPurseIndex = 33,
-    GetBalanceIndex = 34,
-    GetPhaseIndex = 35,
-    UpgradeContractAtURefIndex = 36,
-    GetSystemContractIndex = 37,
-    GetMainPurseIndex = 38,
-    GetArgSizeFuncIndex = 39,
+    WriteFuncIndex,
+    WriteLocalFuncIndex,
+    ReadFuncIndex,
+    ReadLocalFuncIndex,
+    AddFuncIndex,
+    AddLocalFuncIndex,
+    NewFuncIndex,
+    RetFuncIndex,
+    CallContractFuncIndex,
+    GetArgFuncIndex,
+    GetKeyFuncIndex,
+    GasFuncIndex,
+    HasKeyFuncIndex,
+    PutKeyFuncIndex,
+    StoreFnIndex,
+    StoreFnAtHashIndex,
+    IsValidURefFnIndex,
+    RevertFuncIndex,
+    AddAssociatedKeyFuncIndex,
+    RemoveAssociatedKeyFuncIndex,
+    UpdateAssociatedKeyFuncIndex,
+    SetActionThresholdFuncIndex,
+    LoadNamedKeysFuncIndex,
+    RemoveKeyFuncIndex,
+    GetCallerIndex,
+    GetBlocktimeIndex,
+    CreatePurseIndex,
+    TransferToAccountIndex,
+    TransferFromPurseToAccountIndex,
+    TransferFromPurseToPurseIndex,
+    GetBalanceIndex,
+    GetPhaseIndex,
+    UpgradeContractAtURefIndex,
+    GetSystemContractIndex,
+    GetMainPurseIndex,
+    GetArgSizeFuncIndex,
+    ReadHostBufferIndex,
 }
 
 impl Into<usize> for FunctionIndex {
@@ -70,18 +67,17 @@ mod tests {
 
     #[test]
     fn primitive_to_enum() {
-        let element = FunctionIndex::try_from(19).expect("Unable to create enum from number");
-        assert_eq!(element, FunctionIndex::IsValidFnIndex);
+        FunctionIndex::try_from(19).expect("Unable to create enum from number");
     }
+
     #[test]
     fn enum_to_primitive() {
-        let element = FunctionIndex::IsValidFnIndex;
-        let primitive: usize = element.into();
-        assert_eq!(primitive, 19usize);
+        let element = FunctionIndex::UpdateAssociatedKeyFuncIndex;
+        let _primitive: usize = element.into();
     }
+
     #[test]
-    #[should_panic]
     fn invalid_index() {
-        FunctionIndex::try_from(123_456_789usize).unwrap();
+        assert!(FunctionIndex::try_from(123_456_789usize).is_err());
     }
 }

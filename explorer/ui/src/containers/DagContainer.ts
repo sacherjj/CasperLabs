@@ -2,7 +2,10 @@ import { action, autorun, observable, runInAction } from 'mobx';
 
 import ErrorContainer from './ErrorContainer';
 import { CasperService } from 'casperlabs-sdk';
-import { BlockInfo, Event } from 'casperlabs-grpc/io/casperlabs/casper/consensus/info_pb';
+import {
+  BlockInfo,
+  Event
+} from 'casperlabs-grpc/io/casperlabs/casper/consensus/info_pb';
 import { Subscription } from 'rxjs';
 import { ToggleStore } from '../components/ToggleButton';
 

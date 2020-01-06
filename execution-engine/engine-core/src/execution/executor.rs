@@ -7,15 +7,15 @@ use std::{
 use parity_wasm::elements::Module;
 
 use contract_ffi::{
+    block_time::BlockTime,
     bytesrepr::{self, FromBytes},
     execution::Phase,
     key::Key,
-    value::{
-        account::{BlockTime, PublicKey},
-        Account, ProtocolVersion, Value,
-    },
+    value::{account::PublicKey, CLType, CLTyped, CLValue, ProtocolVersion},
 };
-use engine_shared::{gas::Gas, newtypes::CorrelationId};
+use engine_shared::{
+    account::Account, gas::Gas, newtypes::CorrelationId, stored_value::StoredValue,
+};
 use engine_storage::{global_state::StateReader, protocol_data::ProtocolData};
 
 use super::{extract_access_rights_from_keys, instance_and_memory, Error, Runtime};
@@ -68,10 +68,10 @@ pub struct Executor;
 
 #[allow(clippy::too_many_arguments)]
 impl Executor {
-    pub fn exec<R: StateReader<Key, Value>>(
+    pub fn exec<R>(
         &self,
         parity_module: Module,
-        args: &[u8],
+        args: Vec<u8>,
         base_key: Key,
         account: &Account,
         authorized_keys: BTreeSet<PublicKey>,
@@ -86,6 +86,7 @@ impl Executor {
         system_contract_cache: SystemContractCache,
     ) -> ExecutionResult
     where
+        R: StateReader<Key, StoredValue>,
         R::Error: Into<Error>,
     {
         let (instance, memory) =
@@ -114,12 +115,14 @@ impl Executor {
         } else {
             // TODO: figure out how this works with the cost model
             // https://casperlabs.atlassian.net/browse/EE-239
-            on_fail_charge!(
-                bytesrepr::deserialize(args),
-                Gas::new(args.len().into()),
-                effects_snapshot
-            )
+            let gas = Gas::new(args.len().into());
+            on_fail_charge!(bytesrepr::deserialize(args), gas, effects_snapshot)
         };
+
+        let arguments = arguments
+            .into_iter()
+            .map(|bytes: Vec<u8>| CLValue::from_components(CLType::Any, bytes))
+            .collect();
 
         let context = RuntimeContext::new(
             tc,
@@ -154,10 +157,10 @@ impl Executor {
         }
     }
 
-    pub fn exec_direct<R: StateReader<Key, Value>>(
+    pub fn exec_direct<R>(
         &self,
         parity_module: Module,
-        args: &[u8],
+        args: Vec<u8>,
         named_keys: &mut BTreeMap<String, Key>,
         base_key: Key,
         account: &Account,
@@ -173,6 +176,7 @@ impl Executor {
         system_contract_cache: SystemContractCache,
     ) -> ExecutionResult
     where
+        R: StateReader<Key, StoredValue>,
         R::Error: Into<Error>,
     {
         let mut named_keys = named_keys.clone();
@@ -195,14 +199,11 @@ impl Executor {
         // can be returned.
         let effects_snapshot = state.borrow().effect();
 
-        let args: Vec<Vec<u8>> = if args.is_empty() {
+        let args: Vec<CLValue> = if args.is_empty() {
             Vec::new()
         } else {
-            on_fail_charge!(
-                bytesrepr::deserialize(args),
-                Gas::new(args.len().into()),
-                effects_snapshot
-            )
+            let gas = Gas::new(args.len().into());
+            on_fail_charge!(bytesrepr::deserialize(args), gas, effects_snapshot)
         };
 
         let context = RuntimeContext::new(
@@ -274,10 +275,10 @@ impl Executor {
         }
     }
 
-    pub fn better_exec<R: StateReader<Key, Value>, T>(
+    pub fn better_exec<R, T>(
         &self,
         module: Module,
-        args: &[u8],
+        args: Vec<u8>,
         keys: &mut BTreeMap<String, Key>,
         base_key: Key,
         account: &Account,
@@ -294,8 +295,9 @@ impl Executor {
         system_contract_cache: SystemContractCache,
     ) -> Result<T, Error>
     where
+        R: StateReader<Key, StoredValue>,
         R::Error: Into<Error>,
-        T: FromBytes,
+        T: FromBytes + CLTyped,
     {
         let access_rights =
             {
@@ -306,7 +308,7 @@ impl Executor {
                 extract_access_rights_from_keys(keys)
             };
 
-        let args: Vec<Vec<u8>> = if args.is_empty() {
+        let args: Vec<CLValue> = if args.is_empty() {
             Vec::new()
         } else {
             bytesrepr::deserialize(args)?
@@ -342,21 +344,27 @@ impl Executor {
             Err(error) => error,
             Ok(_) => {
                 // This duplicates the behavior of sub_call, but is admittedly rather questionable.
-                let ret = bytesrepr::deserialize(runtime.result())?;
+                //
+                // If `instance.invoke_export` returns `Ok` and the `host_buf` is `None`, the
+                // contract's execution succeeded but did not explicitly call `runtime::ret()`.
+                // Treat as though the execution returned the unit type `()` as per Rust functions
+                // which don't specify a return value.
+                let result = runtime.take_host_buf().unwrap_or(CLValue::from_t(())?);
+                let ret = result.into_t()?;
                 return Ok(ret);
             }
         };
 
-        let return_value_bytes: &[u8] = match return_error
+        let return_value: CLValue = match return_error
             .as_host_error()
             .and_then(|host_error| host_error.downcast_ref::<Error>())
         {
-            Some(Error::Ret(_)) => runtime.result(),
+            Some(Error::Ret(_)) => runtime.take_host_buf().ok_or(Error::ExpectedReturnValue)?,
             Some(Error::Revert(code)) => return Err(Error::Revert(*code)),
             _ => return Err(Error::Interpreter(return_error)),
         };
 
-        let ret = bytesrepr::deserialize(return_value_bytes)?;
+        let ret = return_value.into_t()?;
         Ok(ret)
     }
 }

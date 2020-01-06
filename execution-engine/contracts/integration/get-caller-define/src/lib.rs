@@ -35,5 +35,5 @@ pub extern "C" fn call() {
     // works in session code
     test_get_caller();
     let pointer = storage::store_function_at_hash(GET_CALLER_EXT, BTreeMap::new());
-    runtime::put_key(GET_CALLER_KEY, &pointer.into());
+    runtime::put_key(GET_CALLER_KEY, pointer.into());
 }

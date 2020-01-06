@@ -47,6 +47,26 @@ object PrettyPrinter {
     case NamedKey(name, Some(key)) => s"NamedKey($name, ${buildString(key)})"
   }
 
+  def buildString(v: StoredValue): String = v.variants match {
+    case StoredValue.Variants.Account(
+        Account(
+          pk,
+          urefs,
+          purseId,
+          associatedKeys,
+          actionThresholds
+        )
+        ) =>
+      s"Account(${buildString(pk)}, {${urefs.map(buildString).mkString(",")}}, ${purseId
+        .map(buildString)}, {${associatedKeys
+        .map(buildString)
+        .mkString(",")}, {${actionThresholds.map(buildString)}})"
+    case StoredValue.Variants.Contract(Contract(body, urefs, protocolVersion)) =>
+      s"Contract(${buildString(body)}, {${urefs.map(buildString).mkString(",")}}, ${buildString(protocolVersion)})"
+    case StoredValue.Variants.ClValue(_) => "ClValue"
+    case StoredValue.Variants.Empty      => "Empty"
+  }
+
   def buildString(v: Value): String = v.value match {
     case Value.Value.Empty => "ValueEmpty"
     case Value.Value.Account(

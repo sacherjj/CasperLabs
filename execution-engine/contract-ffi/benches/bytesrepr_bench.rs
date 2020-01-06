@@ -7,19 +7,21 @@ use std::{collections::BTreeMap, iter};
 use test::{black_box, Bencher};
 
 use casperlabs_contract_ffi::{
-    bytesrepr::{FromBytes, ToBytes},
+    bytesrepr::{self, FromBytes, ToBytes},
     key::Key,
     uref::{AccessRights, URef},
-    value::{
-        account::{Account, AssociatedKeys, PublicKey, PurseId, Weight},
-        contract::Contract,
-        uint::{U128, U256, U512},
-        ProtocolVersion, Value,
-    },
+    value::{CLTyped, CLValue, U128, U256, U512},
 };
 
 static KB: usize = 1024;
 static BATCH: usize = 4 * KB;
+
+const TEST_I32: i32 = 123_456_789;
+const TEST_U128: U128 = U128([123_456_789, 0]);
+const TEST_U256: U256 = U256([123_456_789, 0, 0, 0]);
+const TEST_U512: U512 = U512([123_456_789, 0, 0, 0, 0, 0, 0, 0]);
+const TEST_STR_1: &str = "String One";
+const TEST_STR_2: &str = "String Two";
 
 fn prepare_vector(size: usize) -> Vec<i32> {
     (0..size as i32).collect()
@@ -278,246 +280,163 @@ fn deserialize_vec_of_keys(b: &mut Bencher) {
 }
 
 #[bench]
-fn serialize_accessrights_read(b: &mut Bencher) {
+fn serialize_access_rights_read(b: &mut Bencher) {
     b.iter(|| AccessRights::READ.to_bytes());
 }
 #[bench]
-fn deserialize_accessrights_read(b: &mut Bencher) {
+fn deserialize_access_rights_read(b: &mut Bencher) {
     let data = AccessRights::READ.to_bytes().unwrap();
     b.iter(|| AccessRights::from_bytes(&data));
 }
 #[bench]
-fn serialize_accessrights_write(b: &mut Bencher) {
+fn serialize_access_rights_write(b: &mut Bencher) {
     b.iter(|| AccessRights::WRITE.to_bytes());
 }
 #[bench]
-fn deserialize_accessrights_write(b: &mut Bencher) {
+fn deserialize_access_rights_write(b: &mut Bencher) {
     let data = AccessRights::WRITE.to_bytes().unwrap();
     b.iter(|| AccessRights::from_bytes(&data));
 }
 #[bench]
-fn serialize_accessrights_add(b: &mut Bencher) {
+fn serialize_access_rights_add(b: &mut Bencher) {
     b.iter(|| AccessRights::ADD.to_bytes());
 }
 #[bench]
-fn deserialize_accessrights_add(b: &mut Bencher) {
+fn deserialize_access_rights_add(b: &mut Bencher) {
     let data = AccessRights::ADD.to_bytes().unwrap();
     b.iter(|| AccessRights::from_bytes(&data));
 }
 #[bench]
-fn serialize_accessrights_read_add(b: &mut Bencher) {
+fn serialize_access_rights_read_add(b: &mut Bencher) {
     b.iter(|| AccessRights::READ_ADD.to_bytes());
 }
 #[bench]
-fn deserialize_accessrights_read_add(b: &mut Bencher) {
+fn deserialize_access_rights_read_add(b: &mut Bencher) {
     let data = AccessRights::READ_ADD.to_bytes().unwrap();
     b.iter(|| AccessRights::from_bytes(&data));
 }
 #[bench]
-fn serialize_accessrights_read_write(b: &mut Bencher) {
+fn serialize_access_rights_read_write(b: &mut Bencher) {
     b.iter(|| AccessRights::READ_WRITE.to_bytes());
 }
 #[bench]
-fn deserialize_accessrights_read_write(b: &mut Bencher) {
+fn deserialize_access_rights_read_write(b: &mut Bencher) {
     let data = AccessRights::READ_WRITE.to_bytes().unwrap();
     b.iter(|| AccessRights::from_bytes(&data));
 }
 #[bench]
-fn serialize_accessrights_add_write(b: &mut Bencher) {
+fn serialize_access_rights_add_write(b: &mut Bencher) {
     b.iter(|| AccessRights::ADD_WRITE.to_bytes());
 }
 #[bench]
-fn deserialize_accessrights_add_write(b: &mut Bencher) {
+fn deserialize_access_rights_add_write(b: &mut Bencher) {
     let data = AccessRights::ADD_WRITE.to_bytes().unwrap();
     b.iter(|| AccessRights::from_bytes(&data));
 }
 
-fn make_named_keys() -> BTreeMap<String, Key> {
-    let mut named_keys = BTreeMap::new();
-    named_keys.insert(
-        "ref1".to_string(),
-        Key::URef(URef::new([0u8; 32], AccessRights::READ)),
-    );
-    named_keys.insert(
-        "ref2".to_string(),
-        Key::URef(URef::new([1u8; 32], AccessRights::WRITE)),
-    );
-    named_keys.insert(
-        "ref3".to_string(),
-        Key::URef(URef::new([2u8; 32], AccessRights::ADD)),
-    );
-    named_keys
-}
-
-fn make_purse_id() -> PurseId {
-    PurseId::new(URef::new([0u8; 32], AccessRights::READ_ADD_WRITE))
-}
-
-fn make_contract() -> Contract {
-    let named_keys = make_named_keys();
-    Contract::new(vec![0u8; 1024], named_keys, ProtocolVersion::V1_0_0)
-}
-
-fn make_account() -> Account {
-    let named_keys = make_named_keys();
-    let purse_id = make_purse_id();
-    let associated_keys = AssociatedKeys::new(PublicKey::new([0u8; 32]), Weight::new(1));
-    let action_thresholds = Default::default();
-    Account::new(
-        [0u8; 32],
-        named_keys,
-        purse_id,
-        associated_keys,
-        action_thresholds,
-    )
-}
-
-#[bench]
-fn serialize_account(b: &mut Bencher) {
-    let account = make_account();
-
-    b.iter(|| ToBytes::to_bytes(black_box(&account)))
-}
-
-#[bench]
-fn deserialize_account(b: &mut Bencher) {
-    let account = make_account();
-    let account_bytes = account.clone().to_bytes().unwrap();
-
-    b.iter(|| Account::from_bytes(black_box(&account_bytes)))
-}
-
-#[bench]
-fn serialize_value_int32(b: &mut Bencher) {
-    b.iter(|| Value::Int32(123_456_789i32))
-}
-#[bench]
-fn deserialize_value_int32(b: &mut Bencher) {
-    let data = Value::Int32(123_456_789i32).to_bytes().unwrap();
-    b.iter(|| Value::from_bytes(&data));
-}
-#[bench]
-fn serialize_value_uint128(b: &mut Bencher) {
-    let value = Value::UInt128(123_456_789u128.into());
-    b.iter(|| value.to_bytes());
-}
-#[bench]
-fn deserialize_value_uint128(b: &mut Bencher) {
-    let data = Value::UInt128(123_456_789u128.into()).to_bytes().unwrap();
-    b.iter(|| Value::from_bytes(&data));
-}
-#[bench]
-fn serialize_value_uint256(b: &mut Bencher) {
-    let value = Value::UInt256(123_456_789u64.into());
-    b.iter(|| value.to_bytes());
-}
-#[bench]
-fn deserialize_value_uint256(b: &mut Bencher) {
-    let data = Value::UInt256(123_456_789u64.into()).to_bytes().unwrap();
-    b.iter(|| Value::from_bytes(&data));
-}
-#[bench]
-fn serialize_value_uint512(b: &mut Bencher) {
-    let value = Value::UInt512(12_345_679u64.into());
-    b.iter(|| value.to_bytes());
-}
-#[bench]
-fn deserialize_value_uint512(b: &mut Bencher) {
-    let data = Value::UInt512(12_345_679u64.into()).to_bytes().unwrap();
-    b.iter(|| Value::from_bytes(&data));
-}
-#[bench]
-fn serialize_value_bytearray(b: &mut Bencher) {
-    let value = Value::ByteArray((0..255).collect());
-    b.iter(|| value.to_bytes());
-}
-#[bench]
-fn deserialize_value_bytearray(b: &mut Bencher) {
-    let data = Value::ByteArray((0..255).collect()).to_bytes().unwrap();
-    b.iter(|| Value::from_bytes(&data));
-}
-#[bench]
-fn serialize_value_listint32(b: &mut Bencher) {
-    let value = Value::ListInt32((0..1024).collect());
-    b.iter(|| value.to_bytes());
-}
-
-#[bench]
-fn deserialize_value_listint32(b: &mut Bencher) {
-    let data = Value::ListInt32((0..1024).collect()).to_bytes().unwrap();
-    b.iter(|| Value::from_bytes(&data));
-}
-#[bench]
-fn serialize_value_string(b: &mut Bencher) {
-    let value = Value::String("Hello, world!".to_string());
-    b.iter(|| value.to_bytes());
-}
-#[bench]
-fn deserialize_value_string(b: &mut Bencher) {
-    let data = Value::String("Hello, world!".to_string())
+fn serialize_cl_value<T: CLTyped + ToBytes>(raw_value: T) -> Vec<u8> {
+    CLValue::from_t(raw_value)
+        .expect("should create CLValue")
         .to_bytes()
-        .unwrap();
-    b.iter(|| Value::from_bytes(&data));
+        .expect("should serialize CLValue")
 }
-#[bench]
-fn serialize_value_liststring(b: &mut Bencher) {
-    let value = Value::ListString(vec!["Hello".to_string(), "World".to_string()]);
-    b.iter(|| value.to_bytes());
-}
-#[bench]
-fn deserialize_value_liststring(b: &mut Bencher) {
-    let data = Value::ListString(vec!["Hello".to_string(), "World".to_string()])
-        .to_bytes()
-        .unwrap();
-    b.iter(|| Value::from_bytes(&data));
-}
-#[bench]
-fn serialize_value_namedkey(b: &mut Bencher) {
-    let value = Value::NamedKey("Key".to_string(), Key::Account([0xffu8; 32]));
-    b.iter(|| value.to_bytes());
-}
-#[bench]
-fn deserialize_value_namedkey(b: &mut Bencher) {
-    let value = Value::NamedKey("Key".to_string(), Key::Account([0xffu8; 32]))
-        .to_bytes()
-        .unwrap();
-    b.iter(|| Value::from_bytes(&value));
+
+fn benchmark_deserialization<T: CLTyped + ToBytes + FromBytes>(b: &mut Bencher, raw_value: T) {
+    let serialized_value = serialize_cl_value(raw_value);
+    b.iter(|| {
+        let cl_value: CLValue = bytesrepr::deserialize(serialized_value.clone()).unwrap();
+        let _raw_value: T = cl_value.into_t().unwrap();
+    });
 }
 
 #[bench]
-fn serialize_value_account(b: &mut Bencher) {
-    let value = Value::Account(make_account());
-    b.iter(|| value.to_bytes());
-}
-#[bench]
-fn deserialize_value_account(b: &mut Bencher) {
-    let data = Value::Account(make_account()).to_bytes().unwrap();
-    b.iter(|| Value::from_bytes(&data));
-}
-#[bench]
-fn serialize_value_contract(b: &mut Bencher) {
-    let value = Value::Contract(make_contract());
-    b.iter(|| value.to_bytes());
-}
-#[bench]
-fn deserialize_value_contract(b: &mut Bencher) {
-    let data = Value::Contract(make_contract()).to_bytes().unwrap();
-    b.iter(|| Value::from_bytes(&data));
+fn serialize_cl_value_int32(b: &mut Bencher) {
+    b.iter(|| serialize_cl_value(TEST_I32));
 }
 
 #[bench]
-fn serialize_contract(b: &mut Bencher) {
-    let contract = make_contract();
-
-    b.iter(|| ToBytes::to_bytes(black_box(&contract)))
+fn deserialize_cl_value_int32(b: &mut Bencher) {
+    benchmark_deserialization(b, TEST_I32);
 }
 
 #[bench]
-fn deserialize_contract(b: &mut Bencher) {
-    let contract = make_contract();
-    let contract_bytes = contract.clone().to_bytes().unwrap();
+fn serialize_cl_value_uint128(b: &mut Bencher) {
+    b.iter(|| serialize_cl_value(TEST_U128));
+}
 
-    b.iter(|| Contract::from_bytes(black_box(&contract_bytes)))
+#[bench]
+fn deserialize_cl_value_uint128(b: &mut Bencher) {
+    benchmark_deserialization(b, TEST_U128);
+}
+
+#[bench]
+fn serialize_cl_value_uint256(b: &mut Bencher) {
+    b.iter(|| serialize_cl_value(TEST_U256));
+}
+
+#[bench]
+fn deserialize_cl_value_uint256(b: &mut Bencher) {
+    benchmark_deserialization(b, TEST_U256);
+}
+
+#[bench]
+fn serialize_cl_value_uint512(b: &mut Bencher) {
+    b.iter(|| serialize_cl_value(TEST_U512));
+}
+
+#[bench]
+fn deserialize_cl_value_uint512(b: &mut Bencher) {
+    benchmark_deserialization(b, TEST_U512);
+}
+
+#[bench]
+fn serialize_cl_value_bytearray(b: &mut Bencher) {
+    b.iter(|| serialize_cl_value((0..255).collect::<Vec<u8>>()));
+}
+
+#[bench]
+fn deserialize_cl_value_bytearray(b: &mut Bencher) {
+    benchmark_deserialization(b, (0..255).collect::<Vec<u8>>());
+}
+
+#[bench]
+fn serialize_cl_value_listint32(b: &mut Bencher) {
+    b.iter(|| serialize_cl_value((0..1024).collect::<Vec<i32>>()));
+}
+
+#[bench]
+fn deserialize_cl_value_listint32(b: &mut Bencher) {
+    benchmark_deserialization(b, (0..1024).collect::<Vec<i32>>());
+}
+
+#[bench]
+fn serialize_cl_value_string(b: &mut Bencher) {
+    b.iter(|| serialize_cl_value(TEST_STR_1.to_string()));
+}
+
+#[bench]
+fn deserialize_cl_value_string(b: &mut Bencher) {
+    benchmark_deserialization(b, TEST_STR_1.to_string());
+}
+
+#[bench]
+fn serialize_cl_value_liststring(b: &mut Bencher) {
+    b.iter(|| serialize_cl_value(vec![TEST_STR_1.to_string(), TEST_STR_2.to_string()]));
+}
+
+#[bench]
+fn deserialize_cl_value_liststring(b: &mut Bencher) {
+    benchmark_deserialization(b, vec![TEST_STR_1.to_string(), TEST_STR_2.to_string()]);
+}
+
+#[bench]
+fn serialize_cl_value_namedkey(b: &mut Bencher) {
+    b.iter(|| serialize_cl_value((TEST_STR_1.to_string(), Key::Account([0xffu8; 32]))));
+}
+
+#[bench]
+fn deserialize_cl_value_namedkey(b: &mut Bencher) {
+    benchmark_deserialization(b, (TEST_STR_1.to_string(), Key::Account([0xffu8; 32])));
 }
 
 #[bench]

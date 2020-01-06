@@ -4,13 +4,15 @@ pub mod lmdb;
 use std::{collections::HashMap, fmt, hash::BuildHasher, time::Instant};
 
 use contract_ffi::{
+    bytesrepr,
     key::Key,
-    value::{account::PublicKey, ProtocolVersion, Value, U512},
+    value::{account::PublicKey, ProtocolVersion, U512},
 };
 use engine_shared::{
     additive_map::AdditiveMap,
     logging::{log_duration, log_metric, GAUGE},
     newtypes::{Blake2bHash, CorrelationId},
+    stored_value::StoredValue,
     transform::{self, Transform, TypeMismatch},
 };
 
@@ -49,6 +51,7 @@ pub enum CommitResult {
     },
     KeyNotFound(Key),
     TypeMismatch(TypeMismatch),
+    Serialization(bytesrepr::Error),
 }
 
 impl fmt::Display for CommitResult {
@@ -67,6 +70,7 @@ impl fmt::Display for CommitResult {
             CommitResult::TypeMismatch(type_mismatch) => {
                 write!(f, "Type mismatch: {:?}", type_mismatch)
             }
+            CommitResult::Serialization(error) => write!(f, "Serialization: {:?}", error),
         }
     }
 }
@@ -77,13 +81,14 @@ impl From<transform::Error> for CommitResult {
             transform::Error::TypeMismatch(type_mismatch) => {
                 CommitResult::TypeMismatch(type_mismatch)
             }
+            transform::Error::Serialization(error) => CommitResult::Serialization(error),
         }
     }
 }
 
 pub trait StateProvider {
     type Error;
-    type Reader: StateReader<Key, Value, Error = Self::Error>;
+    type Reader: StateReader<Key, StoredValue, Error = Self::Error>;
 
     /// Checkouts to the post state of a specific block.
     fn checkout(&self, state_hash: Blake2bHash) -> Result<Option<Self::Reader>, Self::Error>;
@@ -120,7 +125,7 @@ pub fn commit<'a, R, S, H, E>(
 ) -> Result<CommitResult, E>
 where
     R: TransactionSource<'a, Handle = S::Handle>,
-    S: TrieStore<Key, Value>,
+    S: TrieStore<Key, StoredValue>,
     S::Error: From<R::Error>,
     E: From<R::Error> + From<S::Error> + From<contract_ffi::bytesrepr::Error>,
     H: BuildHasher,
@@ -128,7 +133,7 @@ where
     let mut txn = environment.create_read_write_txn()?;
     let mut state_root = prestate_hash;
 
-    let maybe_root: Option<Trie<Key, Value>> = store.get(&txn, &state_root)?;
+    let maybe_root: Option<Trie<Key, StoredValue>> = store.get(&txn, &state_root)?;
 
     if maybe_root.is_none() {
         return Ok(CommitResult::RootNotFound);

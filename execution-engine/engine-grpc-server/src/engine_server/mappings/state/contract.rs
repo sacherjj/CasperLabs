@@ -1,6 +1,6 @@
 use std::convert::{TryFrom, TryInto};
 
-use contract_ffi::value::Contract;
+use engine_shared::contract::Contract;
 
 use super::NamedKeyMap;
 use crate::engine_server::{
@@ -35,7 +35,7 @@ impl TryFrom<state::Contract> for Contract {
 mod tests {
     use proptest::proptest;
 
-    use contract_ffi::gens;
+    use engine_shared::contract::gens;
 
     use super::*;
     use crate::engine_server::mappings::test_utils;

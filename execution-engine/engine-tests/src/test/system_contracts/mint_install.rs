@@ -1,5 +1,5 @@
-use contract_ffi::{key::Key, uref::URef, value::Value};
-use engine_shared::transform::Transform;
+use contract_ffi::{key::Key, uref::URef};
+use engine_shared::{stored_value::StoredValue, transform::Transform};
 
 use crate::{
     support::{
@@ -37,7 +37,7 @@ fn should_run_mint_install_contract() {
         .transforms
         .get(&Key::URef(ret_value.remove_access_rights()))
     {
-        Some(Transform::Write(Value::Contract(_))) => (),
+        Some(Transform::Write(StoredValue::Contract(_))) => (),
 
         _ => panic!("Expected contract to be written under the key"),
     }

@@ -210,7 +210,7 @@ class CDevelop(DevelopCommand):
 
 setup(
     name=NAME,
-    version="0.7.1",
+    version="0.7.7",
     packages=find_packages(exclude=["tests"]),
     setup_requires=[
         "protobuf==3.9.1",
@@ -223,6 +223,8 @@ setup(
         "grpcio>=1.20",
         "pyblake2==1.1.2",
         "ed25519==1.4",
+        "cryptography==2.8",
+        "pycryptodome==3.9.4",
     ],
     cmdclass={"install": CInstall, "develop": CDevelop},
     description="Python Client for interacting with a CasperLabs Node",
@@ -250,8 +252,6 @@ setup(
         "Readme": "https://github.com/CasperLabs/CasperLabs/blob/dev/integration-testing/client/CasperLabsClient/README.md",
     },
     entry_points={
-        "console_scripts": [
-            "casperlabs_client = casperlabs_client.casperlabs_client:main"
-        ]
+        "console_scripts": ["casperlabs_client = casperlabs_client.cli:main"]
     },
 )
