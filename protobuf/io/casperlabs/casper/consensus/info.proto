@@ -84,14 +84,9 @@ message Event{
     }
 
     message NewFinalizedBlock {
-        // An index of the element in the LFB chain.
-        // It will increment monotonically as chain advances
-        // and decrease in the face of the equivocation catastrophe
-        // that rolls back the LFB chain.
-        uint64 lfb_idx = 1;
         // Hash of the newly finalized block.
-        bytes block_hash = 2;
+        bytes block_hash = 1;
         // Set of blocks that were finalized indirectly (secondary parents of the new main-chain LFB).
-        repeated bytes indirectly_finalized_block_hashes = 3;
+        repeated bytes indirectly_finalized_block_hashes = 2;
     }
 }

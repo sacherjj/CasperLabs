@@ -21,7 +21,6 @@ import simulacrum.typeclass
 import io.casperlabs.shared.Log
 import io.casperlabs.catscontrib.effect.implicits.fiberSyntax
 import io.casperlabs.storage.dag.FinalityStorage
-import monix.execution.atomic.AtomicLong
 
 @typeclass trait EventStream[F[_]] extends EventEmitter[F] {
   def subscribe(request: StreamEventsRequest): Observable[Event]
@@ -30,8 +29,7 @@ import monix.execution.atomic.AtomicLong
 object EventStream {
   def create[F[_]: Concurrent: DeployStorage: BlockStorage: FinalityStorage: Log: Metrics](
       scheduler: Scheduler,
-      eventStreamBufferSize: Int,
-      lfbIdx: AtomicLong
+      eventStreamBufferSize: Int
   ): EventStream[F] = {
     val source =
       ConcurrentSubject.publish[Event](OverflowStrategy.DropOld(eventStreamBufferSize))(scheduler)
@@ -61,7 +59,7 @@ object EventStream {
           DeployBuffer.removeFinalizedDeploys(indirectlyFinalized + lfb).forkAndLog >>
           Sync[F].delay {
             val event = Event().withNewFinalizedBlock(
-              NewFinalizedBlock(lfbIdx.getAndIncrement(), lfb, indirectlyFinalized.toSeq)
+              NewFinalizedBlock(lfb, indirectlyFinalized.toSeq)
             )
             source.onNext(event)
           }

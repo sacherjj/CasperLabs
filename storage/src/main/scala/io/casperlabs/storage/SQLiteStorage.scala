@@ -158,7 +158,7 @@ object SQLiteStorage {
       ): F[Unit] =
         dagStorage.markAsFinalized(mainParent, secondary)
 
-      override def getLastFinalizedBlock: F[(Long, BlockHash)] = dagStorage.getLastFinalizedBlock
+      override def getLastFinalizedBlock: F[BlockHash] = dagStorage.getLastFinalizedBlock
 
       override def isFinalized(block: BlockHash): F[Boolean] =
         dagStorage.isFinalized(block)

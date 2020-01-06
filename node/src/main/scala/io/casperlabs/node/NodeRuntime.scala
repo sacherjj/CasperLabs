@@ -191,19 +191,15 @@ class NodeRuntime private[node] (
       implicit0(nodeAsk: NodeAsk[Task])            = effects.peerNodeAsk(state)
       implicit0(boostrapsAsk: BootstrapsAsk[Task]) = effects.bootstrapsAsk(state)
 
-      (lfbIdx, lfb) <- Resource.liftF[Task, (AtomicLong, BlockHash)](
-                        storage.getLastFinalizedBlock.map {
-                          case (lfbIdx, lfbHash) =>
-                            (AtomicLong(lfbIdx), lfbHash)
-                        }
-                      )
+      lfb <- Resource.liftF[Task, BlockHash](
+              storage.getLastFinalizedBlock
+            )
 
       implicit0(eventsStream: EventStream[Task]) <- Resource.pure[Task, EventStream[Task]](
                                                      EventStream
                                                        .create[Task](
                                                          ingressScheduler,
-                                                         conf.server.eventStreamBufferSize.value,
-                                                         lfbIdx
+                                                         conf.server.eventStreamBufferSize.value
                                                        )
                                                    )
 

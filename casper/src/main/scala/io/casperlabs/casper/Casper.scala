@@ -68,7 +68,7 @@ sealed abstract class MultiParentCasperInstances {
       upgrades: Seq[ipc.ChainSpec.UpgradePoint]
   ): F[MultiParentCasper[F]] =
     for {
-      lfbRef <- FinalityStorage[F].getLastFinalizedBlock.map(_._2).flatMap(Ref.of(_))
+      lfbRef <- FinalityStorage[F].getLastFinalizedBlock.flatMap(Ref.of(_))
       implicit0(casperState: Cell[F, CasperState]) <- init(
                                                        genesis,
                                                        genesisPreState,

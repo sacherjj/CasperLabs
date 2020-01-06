@@ -3,7 +3,6 @@
 -- from the table. Because the chain of finalized block is continuous, the removal will always drop
 -- blocks from the tail.
 CREATE TABLE lfb_chain (
-    event_id integer primary key,
     block_hash blob NOT NULL,
     indirectly_finalized blob
 );
