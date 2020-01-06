@@ -1,16 +1,15 @@
-import { computed, observable, runInAction } from 'mobx';
+import { computed, observable } from 'mobx';
 import * as nacl from 'tweetnacl-ts';
-import { validateBase64 } from 'tweetnacl-ts';
 import { saveAs } from 'file-saver';
 import ErrorContainer from './ErrorContainer';
 import { CleanableFormData } from './FormData';
 import AuthService from '../services/AuthService';
 import {
   BalanceService,
-  base64to16,
   CasperService,
   decodeBase64,
-  encodeBase64
+  encodeBase64,
+  Keys
 } from 'casperlabs-sdk';
 import ObservableValueMap from '../lib/ObservableValueMap';
 
@@ -18,11 +17,6 @@ import ObservableValueMap from '../lib/ObservableValueMap';
 // https://tweetnacl.js.org/#/sign
 
 type AccountB64 = string;
-
-enum ShowedForm {
-  NEW_ACCOUNT,
-  IMPORT_ACCOUNT
-}
 
 export class AuthContainer {
   @observable user: User | null = null;
@@ -231,6 +225,7 @@ export class NewAccountFormData extends AccountFormData {
 export class ImportAccountFormData extends AccountFormData {
   @observable file: File | null = null;
   @observable fileContent: string | null = null;
+  @observable key: ByteArray | null = null;
 
   handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
     if (e.target.files) {
@@ -239,13 +234,11 @@ export class ImportAccountFormData extends AccountFormData {
       reader.readAsText(this.file);
       reader.onload = e => {
         this.fileContent = reader.result as string;
-        runInAction(() => {
-          this.error = this.checkFileContent();
-          if (this.error === null) {
-            this.name = this.fileName!.split('.')[0];
-            this.publicKeyBase64 = this.fileContent!;
-          }
-        });
+        this.error = this.checkFileContent();
+        if (this.error === null) {
+          this.name = this.fileName!.split('.')[0];
+          this.publicKeyBase64 = encodeBase64(this.key!);
+        }
       };
     }
   }
@@ -262,15 +255,10 @@ export class ImportAccountFormData extends AccountFormData {
     if (!this.fileContent) {
       return 'The content of imported file cannot be empty!';
     }
-
     try {
-      validateBase64(this.fileContent);
+      this.key = Keys.Ed25519.parsePublicKey(Keys.Ed25519.readBase64WithPEM(this.fileContent));
     } catch (e) {
-      return 'The content of imported file is not base64 encoded.';
-    }
-
-    if (base64to16(this.fileContent).length !== 64) {
-      return 'The length of imported account public key is not correct.';
+      return e.message;
     }
     return null;
   }

@@ -32,11 +32,11 @@ export class Ed25519 {
   }
 
   public static parsePrivateKeyFile(path: string): ByteArray {
-    return Ed25519.parsePrivateKey(readBase64File(path));
+    return Ed25519.parsePrivateKey(Ed25519.readBase64File(path));
   }
 
   public static parsePublicKeyFile(path: string): ByteArray {
-    return Ed25519.parsePublicKey(readBase64File(path));
+    return Ed25519.parsePublicKey(Ed25519.readBase64File(path));
   }
 
   public static parsePrivateKey(bytes: ByteArray) {
@@ -45,6 +45,22 @@ export class Ed25519 {
 
   public static parsePublicKey(bytes: ByteArray) {
     return Ed25519.parseKey(bytes, 32, 64);
+  }
+
+  /** Get rid of PEM frames */
+  public static readBase64WithPEM(content: string): ByteArray {
+    const base64 = content
+      .split('\n')
+      .filter(x => !x.startsWith('---'))
+      .join('');
+    const bytes = decodeBase64(base64);
+    return bytes;
+  }
+
+  /** Read the Base64 content of a file, get rid of PEM frames. */
+  private static readBase64File(path: string): ByteArray {
+    const content = fs.readFileSync(path).toString();
+    return Ed25519.readBase64WithPEM(content);
   }
 
   private static parseKey(bytes: ByteArray, from: number, to: number) {
@@ -60,15 +76,4 @@ export class Ed25519 {
     }
     return key;
   }
-}
-
-/** Read the Base64 content of a file, get rid of PEM frames. */
-function readBase64File(path: string): ByteArray {
-  const content = fs.readFileSync(path).toString();
-  const base64 = content
-    .split('\n')
-    .filter(x => !x.startsWith('---'))
-    .join('');
-  const bytes = decodeBase64(base64);
-  return bytes;
 }
