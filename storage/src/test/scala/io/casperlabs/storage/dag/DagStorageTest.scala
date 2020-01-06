@@ -145,7 +145,7 @@ trait DagStorageTest
     }
   }
 
-  "DAG Storage" should "be able to properly (de)serialize data" in {
+  it should "be able to properly (de)serialize data" in {
     forAll { b: Block =>
       withDagStorage { storage =>
         val before = BlockSummary.fromBlock(b).toByteArray
@@ -162,17 +162,8 @@ trait DagStorageTest
       }
     }
   }
-}
 
-class SQLiteDagStorageTest extends DagStorageTest with SQLiteFixture[DagStorage[Task]] {
-  override def withDagStorage[R](f: DagStorage[Task] => Task[R]): R = runSQLiteTest[R](f)
-
-  override def db: String = "/tmp/dag_storage.db"
-
-  override def createTestResource: Task[DagStorage[Task]] =
-    SQLiteStorage.create[Task](readXa = xa, writeXa = xa)
-
-  "SQLite DAG Storage" should "override validator's latest block hash only if new messages quotes the previous one" in {
+  it should "override validator's latest block hash only if new messages quotes the previous one" in {
     forAll { (initial: Block, a: Block, c: Block) =>
       withDagStorage { storage =>
         def update(b: Block, validator: ByteString, prevHash: ByteString): Block =
@@ -242,4 +233,13 @@ class SQLiteDagStorageTest extends DagStorageTest with SQLiteFixture[DagStorage[
       }
     }
   }
+}
+
+class SQLiteDagStorageTest extends DagStorageTest with SQLiteFixture[DagStorage[Task]] {
+  override def withDagStorage[R](f: DagStorage[Task] => Task[R]): R = runSQLiteTest[R](f)
+
+  override def db: String = "/tmp/dag_storage.db"
+
+  override def createTestResource: Task[DagStorage[Task]] =
+    SQLiteStorage.create[Task](readXa = xa, writeXa = xa)
 }
