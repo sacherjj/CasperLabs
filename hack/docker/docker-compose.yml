@@ -68,6 +68,7 @@ services:
       - --backend_tls=false
       - --backend_tls_noverify
       - --use_websockets
+      - --websocket_ping_interval=30s
       - --backend_max_call_recv_msg_size=16777216
       - --allow_all_origins
       - --server_tls_cert_file=/etc/tls/certificate.pem
