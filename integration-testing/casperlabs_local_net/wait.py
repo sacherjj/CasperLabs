@@ -355,22 +355,21 @@ def wait_on_using_wall_clock_time(
     start_time = time.time()
     iteration_duration = 0
     epsilon = 0.10
+    logging.info(f"Waiting for {predicate} for up to {timeout_seconds}s...")
     while elapsed < timeout_seconds:
-        is_satisfied = predicate.is_satisfied()
-        if is_satisfied:
-            logging.info("SATISFIED {}".format(predicate))
+        if predicate.is_satisfied():
+            logging.info(f"SATISFIED {predicate} after {round(elapsed, 2)}s")
             return
 
         iteration_duration += epsilon
         # Don't wait more than half a second.
         iteration_duration = min(iteration_duration, 0.5)
 
-        logging.info(f"{predicate} Sleeping {iteration_duration} s {elapsed}")
         time.sleep(iteration_duration)
 
         elapsed = time.time() - start_time
 
-    raise WaitTimeoutError(f"Failed to satisfy {predicate} after {elapsed}s")
+    raise WaitTimeoutError(f"Failed to satisfy {predicate} after {round(elapsed, 2)}s")
 
 
 def wait_for_block_contains(
