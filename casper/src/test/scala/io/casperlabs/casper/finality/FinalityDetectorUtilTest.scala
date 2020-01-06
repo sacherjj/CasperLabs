@@ -12,7 +12,7 @@ import monix.eval.Task
 import org.scalatest.FlatSpec
 import io.casperlabs.casper.scalatestcontrib._
 import io.casperlabs.models.Message
-import io.casperlabs.storage.dag.{DagRepresentation, TipRepresentation}
+import io.casperlabs.storage.dag.{DagRepresentation, EraTipRepresentation, TipRepresentation}
 import io.casperlabs.storage.dag.DagRepresentation.Validator
 
 class FinalityDetectorUtilTest extends FlatSpec with BlockGenerator with StorageFixture {
@@ -160,7 +160,8 @@ object FinalityDetectorUtilTest {
         ???
       override def latestInEra(
           keyBlockHash: BlockHash
-      ): StateT[F, Map[BlockHash, Int], TipRepresentation[StateT[F, Map[BlockHash, Int], *]]] = ???
+      ): StateT[F, Map[BlockHash, Int], EraTipRepresentation[StateT[F, Map[BlockHash, Int], *]]] =
+        ???
 
     }
 }

@@ -98,6 +98,16 @@ trait TipRepresentation[F[_]] {
   def latestMessages: F[Map[Validator, Set[Message]]]
 }
 
+trait EraTipRepresentation[F[_]] extends TipRepresentation[F] {
+  // TODO: These methods should move here from DagRepresentationRich,
+  // to make sure we never try to detect equivocators on the global
+  // representation, however for that we need lots of updates in
+  // the casper codebase.
+
+  // def getEquivocators: F[Set[Validator]] = ???
+  // def getEquivocations: F[Map[Validator, Set[Message]]] = ???
+}
+
 trait DagRepresentation[F[_]] {
   def children(blockHash: BlockHash): F[Set[BlockHash]]
 
@@ -137,6 +147,8 @@ trait DagRepresentation[F[_]] {
     * records for eras that have already finished (their last ballots are no longer
     * relevant tips).
     *
+    * This will not reflect equivocations in the presence of parallel eras.
+    *
     * Doesn't guarantee to return immutable representation.
     */
   def latestGlobal: F[TipRepresentation[F]]
@@ -146,7 +158,7 @@ trait DagRepresentation[F[_]] {
     * in sibling eras are also invisible to each other. The DAG itself, i.e. the parent
     * child relationships are unaffected.
     */
-  def latestInEra(keyBlockHash: BlockHash): F[TipRepresentation[F]]
+  def latestInEra(keyBlockHash: BlockHash): F[EraTipRepresentation[F]]
 }
 
 object DagRepresentation {

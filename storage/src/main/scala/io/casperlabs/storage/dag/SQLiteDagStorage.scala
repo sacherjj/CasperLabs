@@ -4,6 +4,7 @@ import cats._
 import cats.data._
 import cats.effect._
 import cats.implicits._
+import com.google.protobuf.ByteString
 import doobie._
 import doobie.implicits._
 import io.casperlabs.casper.consensus.info.BlockInfo
@@ -49,13 +50,14 @@ class SQLiteDagStorage[F[_]: Sync](
         deploys
           .map(d => d.cost * d.getDeploy.getHeader.gasPrice)
           .sum / deployCostTotal
-    val blockMetadataQuery =
+
+    val insertBlockMetadata =
       (fr"""INSERT OR IGNORE INTO block_metadata
             (block_hash, validator, rank, """ ++ blockInfoCols() ++ fr""")
             VALUES (${block.blockHash}, ${block.validatorPublicKey}, ${block.rank}, ${blockSummary.toByteString}, ${block.serializedSize}, $deployErrorCount, $deployCostTotal, $deployGasPriceAvg)
             """).update.run
 
-    val justificationsQuery =
+    val insertJustifications =
       Update[(BlockHash, BlockHash)](
         """|INSERT OR IGNORE INTO block_justifications
            |(justification_block_hash, block_hash)
@@ -66,7 +68,27 @@ class SQLiteDagStorage[F[_]: Sync](
           .toList
       )
 
-    val latestMessagesQuery =
+    // The key block may or may not be an actual era ID, depending on whether
+    // we're using Highway or NCB. We can find out if we select all the eras
+    // that need updating. This requires that the era already exists, but
+    // that should be fine, because the switch block that triggers the creation
+    // of the era is processed before any block in the child era is downloaded.
+    val keyBlockHash = block.getHeader.keyBlockHash
+
+    val selectEras =
+      sql"""WITH RECURSIVE
+            descendant_eras(hash) AS (
+              SELECT hash FROM eras WHERE hash = $keyBlockHash
+              UNION
+              SELECT e.hash
+              FROM   eras e
+              JOIN   descendant_eras d ON e.parent_hash = d.hash
+            )
+            SELECT hash FROM descendant_eras"""
+        .query[BlockHash]
+        .to[List]
+
+    def upsertLatestMessages(keyBlockHash: BlockHash): ConnectionIO[Unit] =
       if (!block.isGenesisLike) {
         // CON-557 will add a validity condition that a block cannot cite multiple latest messages
         // from its creator, i.e. merging of swimlane is not allowed.
@@ -74,40 +96,45 @@ class SQLiteDagStorage[F[_]: Sync](
           Option(blockSummary.getHeader.validatorPrevBlockHash).filterNot(_.isEmpty)
 
         val insertQuery =
-          sql""" INSERT OR IGNORE INTO validator_latest_messages (validator, block_hash)
-                 VALUES (${blockSummary.validatorPublicKey}, ${blockSummary.blockHash})""".stripMargin
+          sql""" INSERT OR IGNORE INTO validator_latest_messages (key_block_hash, validator, block_hash)
+                 VALUES ($keyBlockHash, ${blockSummary.validatorPublicKey}, ${blockSummary.blockHash})""".stripMargin
 
         validatorPreviousMessage
           .fold {
             // No previous message visible from the justifications.
             // This is the first block from this validator (at least according to the creator of the message).
-            insertQuery.update.run
+            insertQuery.update.run.void
           } { lastMessageHash =>
             // Delete previous entry if the new block cites it.
             // Insert new one.
-            sql"""|DELETE FROM validator_latest_messages
-                  |WHERE validator = ${blockSummary.validatorPublicKey}
-                  |AND block_hash = $lastMessageHash""".stripMargin.update.run >>
-              insertQuery.update.run
+            sql"""DELETE FROM validator_latest_messages
+                  WHERE key_block_hash = $keyBlockHash
+                  AND validator = ${blockSummary.validatorPublicKey}
+                  AND block_hash = $lastMessageHash""".update.run >>
+              insertQuery.update.run.void
           }
       } else ().pure[ConnectionIO]
 
-    val topologicalSortingQuery =
+    val insertTopologicalSorting =
       if (block.isGenesisLike) {
         ().pure[ConnectionIO]
       } else {
         Update[(BlockHash, BlockHash)](
-          """|INSERT OR IGNORE INTO block_parents
-             |(parent_block_hash, child_block_hash)
-             |VALUES (?, ?)""".stripMargin
+          """INSERT OR IGNORE INTO block_parents
+             (parent_block_hash, child_block_hash)
+             VALUES (?, ?)"""
         ).updateMany(blockSummary.parentHashes.map((_, blockSummary.blockHash)).toList).void
       }
 
     val transaction = for {
-      _ <- blockMetadataQuery
-      _ <- justificationsQuery
-      _ <- latestMessagesQuery
-      _ <- topologicalSortingQuery
+      _ <- insertBlockMetadata
+      _ <- insertJustifications
+      _ <- insertTopologicalSorting
+      // Maintain a version of latest messages across the whole DAG, independent of eras.
+      _ <- upsertLatestMessages(ByteString.EMPTY)
+      // Update era-specific latest messages in this and all descendant eras.
+      eras <- selectEras
+      _    <- eras.traverse(upsertLatestMessages)
     } yield ()
 
     for {
@@ -200,34 +227,35 @@ class SQLiteDagStorage[F[_]: Sync](
       .transact(readXa)
       .groupByRank
 
-  override def latestInEra(keyBlockHash: BlockHash): F[TipRepresentation[F]] = ???
+  override def latestInEra(keyBlockHash: BlockHash): F[EraTipRepresentation[F]] = Sync[F].delay {
+    SQLiteTipRepresentation(keyBlockHash): EraTipRepresentation[F]
+  }
 
   override def latestGlobal: F[TipRepresentation[F]] =
     globalTipRepresentation.value.pure[F]
 
   private val globalTipRepresentation = Eval.later {
-    new SQLiteTipRepresentation() with MeteredTipRepresentation[F] {
-      override implicit val m: Metrics[F] = met
-      override implicit val ms: Source    = SQLiteDagStorage.MetricsSource
-      override implicit val a: Apply[F]   = Sync[F]
-    }: TipRepresentation[F]
+    SQLiteTipRepresentation(keyBlockHash = ByteString.EMPTY): TipRepresentation[F]
   }
 
-  class SQLiteTipRepresentation() extends TipRepresentation[F] {
+  // There will be a global representation with an empty key block hash,
+  // and the era-specific versions. We can use the global for gossiping,
+  // without having to worry about filtering for which era is active.
+  class SQLiteTipRepresentation(keyBlockHash: BlockHash) extends EraTipRepresentation[F] {
 
     override def latestMessageHash(validator: Validator): F[Set[BlockHash]] =
-      sql"""|SELECT block_hash
-          |FROM validator_latest_messages
-          |WHERE validator=$validator""".stripMargin
+      sql"""SELECT block_hash
+            FROM validator_latest_messages
+            WHERE key_block_hash = $keyBlockHash AND validator = $validator"""
         .query[BlockHash]
         .to[Set]
         .transact(readXa)
 
     override def latestMessage(validator: Validator): F[Set[Message]] =
-      sql"""|SELECT m.data
-          |FROM validator_latest_messages v
-          |INNER JOIN block_metadata m
-          |ON v.validator=$validator AND v.block_hash=m.block_hash""".stripMargin
+      sql"""SELECT m.data
+            FROM validator_latest_messages v
+            INNER JOIN block_metadata m ON v.block_hash=m.block_hash
+            WHERE v.key_block_hash = $keyBlockHash AND v.validator = $validator"""
         .query[BlockSummary]
         .to[List]
         .transact(readXa)
@@ -235,23 +263,32 @@ class SQLiteDagStorage[F[_]: Sync](
         .map(_.toSet)
 
     override def latestMessageHashes: F[Map[Validator, Set[BlockHash]]] =
-      sql"""|SELECT *
-          |FROM validator_latest_messages""".stripMargin
+      sql"""SELECT validator, block_hash
+            FROM validator_latest_messages
+            WHERE key_block_hash = $keyBlockHash"""
         .query[(Validator, BlockHash)]
         .to[List]
         .transact(readXa)
         .map(_.groupBy(_._1).mapValues(_.map(_._2).toSet))
 
     override def latestMessages: F[Map[Validator, Set[Message]]] =
-      sql"""|SELECT v.validator, m.data
-          |FROM validator_latest_messages v
-          |INNER JOIN block_metadata m
-          |ON m.block_hash=v.block_hash""".stripMargin
+      sql"""SELECT v.validator, m.data
+            FROM validator_latest_messages v
+            INNER JOIN block_metadata m ON m.block_hash = v.block_hash
+            WHERE v.key_block_hash = $keyBlockHash"""
         .query[(Validator, BlockSummary)]
         .to[List]
         .transact(readXa)
         .flatMap(_.traverse { case (v, bs) => toMessageSummaryF(bs).map(v -> _) })
         .map(_.groupBy(_._1).mapValues(_.map(_._2).toSet))
+  }
+  object SQLiteTipRepresentation {
+    def apply(keyBlockHash: BlockHash) =
+      new SQLiteTipRepresentation(keyBlockHash) with MeteredTipRepresentation[F] {
+        override implicit val m: Metrics[F] = met
+        override implicit val ms: Source    = SQLiteDagStorage.MetricsSource
+        override implicit val a: Apply[F]   = Sync[F]
+      }
   }
 
   override def markAsFinalized(
