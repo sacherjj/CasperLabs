@@ -203,7 +203,7 @@ class NodeRuntime private[node] (
                                                        )
                                                    )
 
-      implicit0(finalizedBlocksStream: FinalizedBlocksStream[Task]) <- Resource.liftF(
+      implicit0(finalizedBlocksStream: FinalizedBlocksStream[Task]) <- Resource.suspend(
                                                                         FinalizedBlocksStream
                                                                           .of[Task](lfb)
                                                                       )
