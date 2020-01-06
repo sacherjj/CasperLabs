@@ -18,6 +18,9 @@ trait FinalizedBlocksStream[F[_]] {
 
 object FinalizedBlocksStream {
 
+  private final case class FinalizedBlockStream[F[_]](subscribe: Stream[F, BlockHash])
+      extends FinalizedBlocksStream[F]
+
   def apply[F[_]](implicit FBS: FinalizedBlocksStream[F]): FinalizedBlocksStream[F] = FBS
 
   def of[F[_]: Concurrent: TaskLike: TaskLift: EventStream: Log](
@@ -39,8 +42,6 @@ object FinalizedBlocksStream {
             .consumeWith(monix.reactive.Consumer.foreachEval(topic.publish1(_)))
         )
         .start
-        .tupleLeft(new FinalizedBlocksStream[F] {
-          override def subscribe: Stream[F, BlockHash] = topic.subscribe(maxQueued)
-        })
+        .tupleLeft(FinalizedBlockStream[F](topic.subscribe(maxQueued)))
     } yield Resource.make(subscription)(_._2.cancel).map(_._1)
 }
