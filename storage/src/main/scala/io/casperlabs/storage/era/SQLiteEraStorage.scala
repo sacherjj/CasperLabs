@@ -25,8 +25,10 @@ class SQLiteEraStorage[F[_]: Sync](
     val endMillis   = TimeUnit.MILLISECONDS.convert(era.endTick, tickUnit)
 
     val insert =
-      sql"""INSERT OR IGNORE INTO eras (hash, parent_hash, start_millis, end_millis, data)
-            VALUES ($hash, $parentHash, $startMillis, $endMillis, $era)""".update.run
+      sql"""INSERT OR IGNORE INTO eras
+            (hash, parent_hash, start_millis, end_millis, start_tick, end_tick, data)
+            VALUES ($hash, $parentHash, $startMillis, $endMillis, ${era.startTick}, ${era.endTick}, $era)
+            """.update.run
 
     insert.transact(writeXa).void
   }

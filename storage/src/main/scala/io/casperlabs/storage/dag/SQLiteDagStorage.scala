@@ -74,8 +74,24 @@ class SQLiteDagStorage[F[_]: Sync](
     // that should be fine, because the switch block that triggers the creation
     // of the era is processed before any block in the child era is downloaded.
     val keyBlockHash = block.getHeader.keyBlockHash
+    val roundId      = block.getHeader.roundId
 
-    val selectEras =
+    // Ballots that only vote on switch block don't need to be propagated
+    // to child eras because they would appear as equivocations.
+    // Only the messages that lead up to the switch block should be visible.
+    val selectIsVisible: ConnectionIO[Option[Boolean]] = {
+      sql"""SELECT CASE WHEN $roundId < end_tick THEN true ELSE false END
+            FROM   eras
+            WHERE  hash = $keyBlockHash"""
+        .query[Boolean]
+        .option
+        .map {
+          case Some(false) => block.getHeader.messageType.isBlock.some
+          case other       => other
+        }
+    }
+
+    def selectEras(isVisible: Boolean): ConnectionIO[List[BlockHash]] =
       sql"""WITH RECURSIVE
             descendant_eras(hash) AS (
               SELECT hash FROM eras WHERE hash = $keyBlockHash
@@ -83,6 +99,7 @@ class SQLiteDagStorage[F[_]: Sync](
               SELECT e.hash
               FROM   eras e
               JOIN   descendant_eras d ON e.parent_hash = d.hash
+              WHERE  $isVisible = true
             )
             SELECT hash FROM descendant_eras"""
         .query[BlockHash]
@@ -133,8 +150,12 @@ class SQLiteDagStorage[F[_]: Sync](
       // Maintain a version of latest messages across the whole DAG, independent of eras.
       _ <- upsertLatestMessages(ByteString.EMPTY)
       // Update era-specific latest messages in this and all descendant eras.
-      eras <- selectEras
-      _    <- eras.traverse(upsertLatestMessages)
+      maybeIsVisible <- selectIsVisible
+      _ <- maybeIsVisible.fold(().pure[ConnectionIO]) { isVisible =>
+            selectEras(isVisible) flatMap { eras =>
+              eras.traverse(upsertLatestMessages).void
+            }
+          }
     } yield ()
 
     for {
