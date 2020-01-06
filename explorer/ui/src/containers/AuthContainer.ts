@@ -28,13 +28,8 @@ export class AuthContainer {
   @observable user: User | null = null;
   @observable accounts: UserAccount[] | null = null;
 
-  // An account we are creating, while we're configuring it.
-  @observable newAccountForm: NewAccountFormData | null = null;
-
-  // An account we are importing, while we're configuring it.
-  @observable importAccountForm: ImportAccountFormData | null = null;
-
-  @observable showedForm: ShowedForm | null = null;
+  // An account we are creating or importing, while we're configuring it.
+  @observable accountForm: NewAccountFormData | ImportAccountFormData | null = null;
 
   @observable selectedAccount: UserAccount | null = null;
 
@@ -131,34 +126,17 @@ export class AuthContainer {
 
   // Open a new account creation form.
   configureNewAccount() {
-    this.showedForm = ShowedForm.NEW_ACCOUNT;
-    this.newAccountForm = new NewAccountFormData(this.accounts!);
+    this.accountForm = new NewAccountFormData(this.accounts!);
   }
 
   // Open a form for importing account.
   configureImportAccount() {
-    this.showedForm = ShowedForm.IMPORT_ACCOUNT;
-    this.importAccountForm = new ImportAccountFormData(this.accounts!);
-  }
-
-  @computed
-  get showNewAccountForm() {
-    return (
-      this.showedForm === ShowedForm.NEW_ACCOUNT && this.newAccountForm !== null
-    );
-  }
-
-  @computed
-  get showImportingAccountForm() {
-    return (
-      this.showedForm === ShowedForm.IMPORT_ACCOUNT &&
-      this.importAccountForm !== null
-    );
+    this.accountForm = new ImportAccountFormData(this.accounts!);
   }
 
   async createAccount(): Promise<boolean> {
-    let form = this.newAccountForm!;
-    if (form.clean()) {
+    let form = this.accountForm!;
+    if (form instanceof NewAccountFormData && form.clean()) {
       // Save the private and public keys to disk.
       saveToFile(form.privateKeyBase64, `${form.name}.private.key`);
       saveToFile(form.publicKeyBase64, `${form.name}.public.key`);
@@ -174,8 +152,8 @@ export class AuthContainer {
   }
 
   async importAccount(): Promise<boolean> {
-    let form = this.importAccountForm!;
-    if (form.clean()) {
+    let form = this.accountForm!;
+    if (form instanceof ImportAccountFormData && form.clean()) {
       await this.addAccount({
         name: form.name,
         publicKeyBase64: form.publicKeyBase64
@@ -238,7 +216,7 @@ class AccountFormData extends CleanableFormData {
   }
 }
 
-class NewAccountFormData extends AccountFormData {
+export class NewAccountFormData extends AccountFormData {
   @observable privateKeyBase64: string = '';
 
   constructor(accounts: UserAccount[]) {
@@ -250,7 +228,7 @@ class NewAccountFormData extends AccountFormData {
   }
 }
 
-class ImportAccountFormData extends AccountFormData {
+export class ImportAccountFormData extends AccountFormData {
   @observable file: File | null = null;
   @observable fileContent: string | null = null;
 
