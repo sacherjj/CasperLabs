@@ -4,7 +4,7 @@ import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.Block.Justification
 import io.casperlabs.crypto.Keys.PublicKeyBS
 import io.casperlabs.models.Message
-import io.casperlabs.storage.block.BlockStorage.BlockHash
+import io.casperlabs.storage.BlockHash
 
 /** Produce a signed message, persisted message.
   * The producer should the thread safe, so that when it's

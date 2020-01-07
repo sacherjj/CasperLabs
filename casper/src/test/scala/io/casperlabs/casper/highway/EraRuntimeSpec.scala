@@ -12,7 +12,7 @@ import io.casperlabs.casper.consensus.state
 import io.casperlabs.crypto.Keys.{PublicKey, PublicKeyBS}
 import io.casperlabs.models.Message
 import io.casperlabs.catscontrib.MonadThrowable
-import io.casperlabs.storage.block.BlockStorage.BlockHash
+import io.casperlabs.storage.BlockHash
 import org.scalatest._
 import org.scalactic.source
 import scala.concurrent.duration._
