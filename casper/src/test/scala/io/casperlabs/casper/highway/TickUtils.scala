@@ -19,11 +19,20 @@ trait TickUtils {
   def hours(h: Long)               = h.hours
   def date(y: Int, m: Int, d: Int) = Instant.ofEpochMilli(dateTimestamp(y, m, d))
 
-  class TestClock[F[_]: Applicative](t: Instant) extends Clock[F] {
-    override def realTime(unit: TimeUnit): F[Long] =
-      unit.convert(t.toEpochMilli, MILLISECONDS).pure[F]
+  object TestClock {
+    // Strangely if I returned just a `new Clock` it would conflict with the
+    // default `implicit def defaultClock` in tests that want to shadow it,
+    // but if it's a class then it's happy.
+    class Mock[F[_]: Applicative](init: Instant) extends Clock[F] {
+      override def realTime(unit: TimeUnit): F[Long] =
+        unit.convert(init.toEpochMilli, MILLISECONDS).pure[F]
 
-    override def monotonic(unit: TimeUnit): F[Long] =
-      ???
+      override def monotonic(unit: TimeUnit): F[Long] =
+        ???
+    }
+
+    /** A clock that keeps serving the same time. */
+    def frozen[F[_]: Applicative](t: Instant) = new Mock[F](t)
   }
+
 }

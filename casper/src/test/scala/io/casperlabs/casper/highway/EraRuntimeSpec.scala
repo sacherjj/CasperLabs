@@ -24,7 +24,7 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
   import io.casperlabs.catscontrib.effect.implicits.syncId
 
   // Let's say we are right at the beginning of the era by default.
-  implicit def defaultClock: Clock[Id] = new TestClock[Id](date(2019, 12, 9))
+  implicit def defaultClock: Clock[Id] = TestClock.frozen[Id](date(2019, 12, 9))
 
   val conf = HighwayConf(
     tickUnit = TimeUnit.MILLISECONDS,
@@ -157,7 +157,7 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
   }
 
   "validate" should {
-    "reject a block is received from a non-leader" in {
+    "reject a block received from a non-leader" in {
       val runtime = genesisEraRuntime(
         "Alice".some,
         leaderSequencer = mockSequencer("Bob")
@@ -190,7 +190,7 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
         val now = conf.genesisEraStart plus 5.hours
         val exp = 10
 
-        implicit val clock = new TestClock[Id](now)
+        implicit val clock = TestClock.frozen[Id](now)
         val runtime        = genesisEraRuntime(validator = "Alice".some, roundExponent = exp)
 
         val millisRound = math.pow(2.0, exp.toDouble).toLong
@@ -213,7 +213,7 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
 
     "the era is already over" should {
       "not schedule anything" in {
-        implicit val clock = new TestClock[Id](conf.genesisEraStart plus 700.days)
+        implicit val clock = TestClock.frozen[Id](conf.genesisEraStart plus 700.days)
         genesisEraRuntime(validator = "Alice".some).initAgenda shouldBe empty
       }
     }
@@ -345,7 +345,7 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
           val roundId     = conf.toTicks(now)
           val nextRoundId = Ticks(roundId + roundLength.toMillis)
 
-          implicit val clock = new TestClock[Id](now)
+          implicit val clock = TestClock.frozen[Id](now)
 
           val runtime = genesisEraRuntime(
             "Alice".some,
@@ -460,7 +460,7 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
           val roundLength    = math.pow(2.0, exponent.toDouble).toLong.millis
           val roundStart     = conf.genesisEraStart plus 60 * roundLength
           val now            = roundStart plus 3 * roundLength
-          implicit val clock = new TestClock[Id](now)
+          implicit val clock = TestClock.frozen[Id](now)
 
           val runtime = genesisEraRuntime(none, roundExponent = exponent)
 

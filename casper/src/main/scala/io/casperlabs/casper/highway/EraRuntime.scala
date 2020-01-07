@@ -21,15 +21,14 @@ import scala.util.Random
   *
   * Persisting messages is fine: if we want to handle messages concurrently
   * we have to keep track of the validator sequence number and make sure
-  * we cite our own previous messages. But it's best not to communicate
-  * the changes to the outside world right here. We may want to replicate
-  * them first in a master-slave environment, in which case we have to
-  * make sure the slave has everything persisted as well, so that in the
-  * even it has to take over, it won't equivocate.
+  * we cite our own previous messages.
   *
-  * Therefore the handler methods will return a list of domain events,
-  * and it's up to the supervisor protocol to send them out. Should
-  * make testing easier as well.
+  * The handler methods will return a list of domain events,
+  * and a list of future actions in the form of an ADT;
+  * it's up to the supervisor protocol to broadcast them
+  * and schedule followup actions.
+  *
+  * This should make testing easier: the return values are not opaque.
   */
 class EraRuntime[F[_]: MonadThrowable: Clock](
     conf: HighwayConf,
@@ -37,10 +36,12 @@ class EraRuntime[F[_]: MonadThrowable: Clock](
     leaderFunction: LeaderFunction,
     roundExponentRef: Ref[F, Int],
     maybeMessageProducer: Option[MessageProducer[F]],
-    // Tell when the system has caught up with others nodes. Before that, responding
-    // to messages risks creating an equivocation, in case some state was somehow
-    // lost after a restart. It could also force others to react to handle messages
-    // which are long in the past.
+    // Indicate whether the initial syncing mechanism that runs when the node is started
+    // is still ongoing, or it has concluded and the node is caught up with its peers.
+    // Before that, responding to messages risks creating an equivocation, in case some
+    // state was somehow lost after a restart. It could also force others to deal with
+    // messages build on blocks long gone and check a huge swathe of the DAG for merge
+    // conflicts.
     isSynced: => F[Boolean],
     rng: Random = new Random()
 ) {
@@ -123,17 +124,16 @@ class EraRuntime[F[_]: MonadThrowable: Clock](
 
   private def createLambdaResponse(
       messageProducer: MessageProducer[F],
-      // TODO: Lambda message will be a ballot during voting.
+      // TODO (NODE-1102): Lambda message will be a ballot during voting.
       lambdaMessage: Message.Block
   ): HWL[Unit] = ifSynced {
-    // TODO: Create persistent block.
     for {
       b <- HighwayLog.liftF {
             messageProducer.ballot(
               eraId = era.keyBlockHash,
               roundId = Ticks(lambdaMessage.roundId),
               target = lambdaMessage.messageHash,
-              // TODO: Fetch our own last message ID.
+              // TODO (NODE-1102): Fetch our own last message ID.
               justifications =
                 Map(PublicKey(lambdaMessage.validatorId) -> Set(lambdaMessage.messageHash))
             )
@@ -150,15 +150,15 @@ class EraRuntime[F[_]: MonadThrowable: Clock](
   ): HWL[Unit] = ifSynced {
     for {
       b <- HighwayLog.liftF {
-            // TODO: Create ballot during voting-only.
+            // TODO (NODE-1102): Create ballot during voting-only.
             messageProducer.block(
               eraId = era.keyBlockHash,
               roundId = roundId,
-              // TODO: Execute the fork choice.
+              // TODO (NODE-1102): Execute the fork choice.
               mainParent = ByteString.EMPTY,
-              // TODO: Get all justifications
+              // TODO (NODE-1102): Get all justifications
               justifications = Map.empty,
-              // TODO: Detect boundary based on main parent
+              // TODO (NODE-1102): Detect boundary based on main parent
               isBookingBlock = false
             )
           }
@@ -177,9 +177,9 @@ class EraRuntime[F[_]: MonadThrowable: Clock](
             messageProducer.ballot(
               eraId = era.keyBlockHash,
               roundId = roundId,
-              // TODO: Execute the fork choice.
+              // TODO (NODE-1102): Execute the fork choice.
               target = ByteString.EMPTY,
-              // TODO: Get all justifications
+              // TODO (NODE-1102): Get all justifications
               justifications = Map.empty
             )
           }
@@ -211,7 +211,7 @@ class EraRuntime[F[_]: MonadThrowable: Clock](
           (leaderFunction(roundId) == b.validatorId).pure[F],
           "The block is not coming from the leader of the round."
         )
-      // TODO: Check that we haven't received a block from the same validator in this round.
+      // TODO (NODE-1102): Check that we haven't received a block from the same validator in this round.
       case _ =>
         ok
     }
@@ -244,7 +244,7 @@ class EraRuntime[F[_]: MonadThrowable: Clock](
       MonadThrowable[HWL].raiseError[Unit](new IllegalStateException(msg))
 
     message match {
-      // TODO: Respond to lambda-ballots during voting.
+      // TODO (NODE-1102): Respond to lambda-ballots during voting.
       case _: Message.Ballot =>
         noop
       case b: Message.Block =>
@@ -275,11 +275,11 @@ class EraRuntime[F[_]: MonadThrowable: Clock](
     * - in rounds when we are leading, create a lambda message
     * - if it's a booking block, execute the auction
     * - if the main parent is a switch block, create a ballot instead
-    * - midway through the round, create an omega message
+    * - sometime through the round, create an omega message
     * - if we're beyond the voting period after the end of the era, stop.
     *
     * Returns a list of events that took place, as well as its future agenda,
-    * telling the caller when it has to be scheduled again.
+    * telling the caller (a supervisor) when it has to be scheduled again.
     */
   def handleAgenda(action: Agenda.Action): HWL[Agenda] =
     action match {
