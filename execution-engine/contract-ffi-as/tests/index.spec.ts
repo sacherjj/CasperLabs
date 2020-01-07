@@ -1,6 +1,6 @@
 import "assemblyscript/std/portable";
 import {toBytesU32, toBytesMap, serializeArguments, toBytesString, toBytesPair } from "../assembly/bytesrepr";
-import {URef} from "../assembly/uref";
+import {AccessRights, URef} from "../assembly/uref";
 import {Option} from "../assembly/option";
 import {Key} from "../assembly/key";
 import {CLValue} from "../assembly/clvalue";
@@ -50,7 +50,7 @@ test("decode uref from bytes without access rights", t => {
         42, 42, 42, 42, 42, 42, 42, 42, 42, 42,
         42, 42,
     ]);
-    t.is(uref.getAccessRights(), null);
+    t.is(uref.getAccessRights(), AccessRights.NONE);
     let serialized = uref.toBytes();
     t.deepEqual(Array.from(serialized), Array.from(truth));
 })
@@ -71,7 +71,9 @@ test("key of uref variant serializes", t => {
     // URef with access rights
     const truth = hex2bin("022a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a0107");
     const urefBytes = hex2bin("2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a");
-    let uref = new URef(urefBytes, 0x07);
+    let uref = new URef(urefBytes, AccessRights.READ_ADD_WRITE);
+
+
     let key = Key.fromURef(uref);
     let serialized = key.toBytes();
     t.deepEqual(Array.from(serialized), Array.from(truth));

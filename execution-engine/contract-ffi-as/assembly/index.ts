@@ -1,5 +1,5 @@
 import * as externals from "./externals";
-import { UREF_SERIALIZED_LENGTH , URef} from "./uref";
+import {UREF_SERIALIZED_LENGTH, URef, AccessRights} from "./uref";
 import {CLValue} from "./clvalue";
 import {Key} from "./key";
 import {serializeArguments, toBytesString} from "./bytesrepr";
@@ -63,6 +63,20 @@ export function getSystemContract(system_contract: SystemContract): URef | null 
     return null;
   }
   return URef.fromBytes(data);
+}
+
+export function storeFunction(name: String, namedKeysBytes: u8[]): Key | null {
+  var nameBytes = toBytesString(name);
+  var addr = new Uint8Array(ADDR_LENGTH);
+  externals.store_function_at_hash(
+      <usize>nameBytes.dataStart,
+      nameBytes.length,
+      <usize>namedKeysBytes.dataStart,
+      namedKeysBytes.length,
+      <usize>addr.dataStart
+  );
+  let uref = new URef(addr, AccessRights.READ_ADD_WRITE);
+  return uref.asKey();
 }
 
 export function storeFunctionAtHash(name: String, namedKeysBytes: u8[]): Key | null {
