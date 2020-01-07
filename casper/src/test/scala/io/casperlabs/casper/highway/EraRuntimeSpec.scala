@@ -385,10 +385,26 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
 
           "schedule an omega message" in {
             assertAgenda(agenda) {
-              case Agenda.DelayedAction(tick, omega: Agenda.CreateOmegaMessage) =>
-                tick should be >= (roundId + (nextRoundId - roundId) * conf.omegaMessageTimeStart).toLong
-                tick should be < (roundId + (nextRoundId - roundId) * conf.omegaMessageTimeEnd).toLong
+              case Agenda.DelayedAction(_, omega: Agenda.CreateOmegaMessage) =>
                 omega.roundId shouldBe roundId
+            }
+          }
+
+          "randomize the omega delay" in {
+            val ticks: List[Long] = List
+              .fill(10) {
+                runtime.handleAgenda(Agenda.StartRound(roundId)).value.collect {
+                  case Agenda.DelayedAction(tick, _: Agenda.CreateOmegaMessage) =>
+                    tick
+                }
+              }
+              .flatten
+
+            ticks.toSet.size should be > 1
+
+            forAll(ticks) { tick =>
+              tick should be >= (roundId + (nextRoundId - roundId) * conf.omegaMessageTimeStart).toLong
+              tick should be < (roundId + (nextRoundId - roundId) * conf.omegaMessageTimeEnd).toLong
             }
           }
         }

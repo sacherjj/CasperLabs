@@ -191,9 +191,10 @@ class EraRuntime[F[_]: MonadThrowable: Clock](
 
   /** Pick a time during the round to send the omega message. */
   private def chooseOmegaTick(roundStart: Ticks, roundEnd: Ticks): Ticks = {
-    val r = conf.omegaMessageTimeStart + (conf.omegaMessageTimeEnd - conf.omegaMessageTimeEnd) * rng
-      .nextDouble()
-    Ticks(roundStart + ((roundEnd - roundStart) * r).toLong)
+    val r = rng.nextDouble()
+    val o = conf.omegaMessageTimeStart + r * (conf.omegaMessageTimeEnd - conf.omegaMessageTimeStart)
+    val t = roundStart + o * (roundEnd - roundStart)
+    Ticks(t.toLong)
   }
 
   /** Preliminary check before the block is executed. Invalid blocks can be dropped. */
