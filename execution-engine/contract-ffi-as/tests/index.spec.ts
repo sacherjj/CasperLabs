@@ -1,5 +1,5 @@
 import "assemblyscript/std/portable";
-import {toBytesU32, toBytesMap, serializeArguments, toBytesString, toBytesPair } from "../assembly";
+import {toBytesU32, toBytesMap, serializeArguments, toBytesString, toBytesPair } from "../assembly/bytesrepr";
 import {URef} from "../assembly/uref";
 import {Option} from "../assembly/option";
 import {Key} from "../assembly/key";

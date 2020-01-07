@@ -1,8 +1,8 @@
-// The entry file of your WebAssembly module.
 import * as externals from "./externals";
 import { UREF_SERIALIZED_LENGTH , URef} from "./uref";
 import {CLValue} from "./clvalue";
 import {Key} from "./key";
+import {serializeArguments, toBytesString} from "./bytesrepr";
 
 // NOTE: interfaces aren't supported in AS yet: https://github.com/AssemblyScript/assemblyscript/issues/146#issuecomment-399130960
 // interface ToBytes {
@@ -44,15 +44,15 @@ export function getArg(i: u32): Uint8Array | null {
   return data;
 }
 
-// export class Hash{
-//
-// }
+export function readHostBuffer(count: u32): Uint8Array | null {
+  let result = new Uint8Array(count);
+  let resultSize = new Uint32Array(1);
 
-export function getMainPurse(): URef | null {
-  let data = new Uint8Array(PURSE_ID_SERIALIZED_LENGTH);
-  data.fill(0);
-  externals.get_main_purse(data.dataStart);
-  return URef.fromBytes(data);
+  let ret = externals.read_host_buffer(result.dataStart, result.length, resultSize.dataStart);
+  if (ret > 0) {
+    return null;
+  }
+  return result;
 }
 
 export function getSystemContract(system_contract: SystemContract): URef | null {
@@ -63,57 +63,6 @@ export function getSystemContract(system_contract: SystemContract): URef | null 
     return null;
   }
   return URef.fromBytes(data);
-}
-
-
-export function toBytesU32(num: u32): u8[] {
-  // Converts u32 to little endian
-  // NOTE: AS apparently has store<i32> which could work for us but looks like AS portable stdlib doesn't provide it
-  return [
-    <u8>(num & 0x000000ff),
-    <u8>((num & 0x0000ff00) >> 8) & 255,
-    <u8>((num & 0x00ff0000) >> 16) & 255,
-    <u8>((num & 0xff000000) >> 24) & 255,
-  ];
-}
-
-export function toBytesPair(key: u8[], value: u8[]): u8[] {
-  return key.concat(value);
-}
-
-export function toBytesMap(pairs: u8[][]): u8[] {
-  // https://github.com/AssemblyScript/docs/blob/master/standard-library/map.md#methods
-  // Gets the keys contained in this map as an array, in insertion order. This is preliminary while iterators are not supported.
-  // See https://github.com/AssemblyScript/assemblyscript/issues/166
-  var result = toBytesU32(<u32>pairs.length);
-  for (var i = 0; i < pairs.length; i++) {
-    var pairBytes = pairs[i];
-    result = result.concat(pairBytes);
-  }
-  return result;
-}
-
-export function toBytesString(s: String): u8[] {
-  let prefix = toBytesU32(<u32>s.length);
-  for (let i = 0; i < s.length; i++) {
-    let charCode = s.charCodeAt(i);
-    // Assumes ascii encoding (i.e. charCode < 0x80)
-    prefix.push(<u8>charCode);
-  }
-  return prefix;
-}
-
-export function toBytesArrayU8(arr: Array<u8>): u8[] {
-  let prefix = toBytesU32(<u32>arr.length);
-  return prefix.concat(arr);
-}
-
-export function serializeArguments(values: CLValue[]): Array<u8> {
-  let prefix = toBytesU32(<u32>values.length);
-  for (let i = 0; i < values.length; i++) {
-    prefix = prefix.concat(values[i].toBytes());
-  }
-  return prefix;
 }
 
 export function storeFunctionAtHash(name: String, namedKeysBytes: u8[]): Key | null {
@@ -154,15 +103,11 @@ export function callContract(key: Key, args: CLValue[]): Uint8Array | null {
   return readHostBuffer(hostBufSize);
 }
 
-export function readHostBuffer(count: u32): Uint8Array | null {
-  let result = new Uint8Array(count);
-  let resultSize = new Uint32Array(1);
-
-  let ret = externals.read_host_buffer(result.dataStart, result.length, resultSize.dataStart);
-  if (ret > 0) {
-    return null;
-  }
-  return result;
+export function getMainPurse(): URef | null {
+  let data = new Uint8Array(PURSE_ID_SERIALIZED_LENGTH);
+  data.fill(0);
+  externals.get_main_purse(data.dataStart);
+  return URef.fromBytes(data);
 }
 
 export function transferFromPurseToPurse(source: URef, target: URef, amount: Uint8Array): i32 {

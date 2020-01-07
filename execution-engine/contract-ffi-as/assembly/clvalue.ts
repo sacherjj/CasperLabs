@@ -1,4 +1,4 @@
-import {toBytesArrayU8, toBytesString} from "./index";
+import {toBytesArrayU8, toBytesString} from "./bytesrepr";
 
 export enum CLTypeTag {
     Bool = 0,
