@@ -269,7 +269,7 @@ class SQLiteDagStorage[F[_]: Bracket[*[_], Throwable]](
       .transact(readXa)
 
   override def getLastFinalizedBlock: F[BlockHash] =
-    sql"""SELECT block_hash FROM lfb_chain ORDER BY event_id DESC LIMIT 1"""
+    sql"""SELECT block_hash FROM lfb_chain ORDER BY id DESC LIMIT 1"""
       .query[BlockHash]
       .unique
       .transact(readXa)
