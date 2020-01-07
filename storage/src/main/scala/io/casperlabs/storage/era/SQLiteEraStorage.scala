@@ -24,13 +24,26 @@ class SQLiteEraStorage[F[_]: Sync](
     val startMillis = TimeUnit.MILLISECONDS.convert(era.startTick, tickUnit)
     val endMillis   = TimeUnit.MILLISECONDS.convert(era.endTick, tickUnit)
 
-    val insert =
+    val insertEra =
       sql"""INSERT OR IGNORE INTO eras
             (hash, parent_hash, start_millis, end_millis, start_tick, end_tick, data)
             VALUES ($hash, $parentHash, $startMillis, $endMillis, ${era.startTick}, ${era.endTick}, $era)
             """.update.run
 
-    insert.transact(writeXa).void
+    val insertLatestMessages =
+      sql"""INSERT OR IGNORE INTO validator_latest_messages
+            (key_block_hash, validator, block_hash)
+            SELECT $hash, validator, block_hash
+            FROM   validator_latest_messages
+            WHERE  key_block_hash = $parentHash
+            """.update.run
+
+    val transaction = for {
+      _ <- insertEra
+      _ <- insertLatestMessages
+    } yield ()
+
+    transaction.transact(writeXa).void
   }
 
   override def getEra(keyBlockHash: BlockHash): F[Option[Era]] =

@@ -51,6 +51,24 @@ trait DagStorageTest
 
   def withDagStorage[R](f: DagStorage[Task] with EraStorage[Task] => Task[R]): R
 
+  def setParent(p: Era)(e: Era): Era =
+    e.withParentKeyBlockHash(p.keyBlockHash)
+      .withStartTick(p.endTick)
+      .withEndTick(p.endTick + (e.endTick - e.startTick))
+
+  def setEra(e: Era)(b: Block): Block =
+    b.update(_.header.keyBlockHash := e.keyBlockHash)
+
+  def setRoundId(r: Long)(b: Block): Block =
+    b.update(_.header.roundId := r)
+
+  def setPrev(p: Block)(b: Block): Block =
+    b.update(_.header.validatorPublicKey := p.getHeader.validatorPublicKey)
+      .update(_.header.validatorPrevBlockHash := p.blockHash)
+      .update(
+        _.header.justifications := Seq(Justification(p.getHeader.validatorPublicKey, p.blockHash))
+      )
+
   behavior of "DAG Storage"
 
   it should "be able to lookup a stored block" in {
@@ -239,24 +257,6 @@ trait DagStorageTest
   }
 
   it should "override the validator's latest block has in child eras" in {
-    def setParent(p: Era)(e: Era): Era =
-      e.withParentKeyBlockHash(p.keyBlockHash)
-        .withStartTick(p.endTick)
-        .withEndTick(p.endTick + (e.endTick - e.startTick))
-
-    def setEra(e: Era)(b: Block): Block =
-      b.update(_.header.keyBlockHash := e.keyBlockHash)
-
-    def setRoundId(r: Long)(b: Block): Block =
-      b.update(_.header.roundId := r)
-
-    def setPrev(p: Block)(b: Block): Block =
-      b.update(_.header.validatorPublicKey := p.getHeader.validatorPublicKey)
-        .update(_.header.validatorPrevBlockHash := p.blockHash)
-        .update(
-          _.header.justifications := Seq(Justification(p.getHeader.validatorPublicKey, p.blockHash))
-        )
-
     val data = for {
       // Era tree:
       // e0 - e1   e3
@@ -327,6 +327,32 @@ trait DagStorageTest
             lmh <- storage.getRepresentation.flatMap(_.latestGlobal).flatMap(_.latestMessageHashes)
             _   = lmh should have size 1
             _   = lmh(v) shouldBe blocks.takeRight(3).map(_.blockHash).toSet
+          } yield ()
+        }
+    }
+  }
+
+  it should "inherit the parent era latest messages onto the child era" in {
+    val data = for {
+      e0 <- arbitrary[Era]
+      e1 <- arbitrary[Era].map(setParent(e0))
+      b0 <- arbitrary[Block].map(setEra(e0))
+    } yield (e0, e1, b0)
+
+    forAll(data) {
+      case (e0, e1, b0) =>
+        withDagStorage { storage =>
+          for {
+            _ <- storage.addEra(e0)
+            _ <- storage.insert(b0)
+            _ <- storage.addEra(e1)
+
+            dag <- storage.getRepresentation
+            tip <- dag.latestInEra(e1.keyBlockHash)
+
+            lmh <- tip.latestMessageHashes
+            _   = lmh should not be empty
+            _   = lmh(b0.getHeader.validatorPublicKey) shouldBe Set(b0.blockHash)
           } yield ()
         }
     }
