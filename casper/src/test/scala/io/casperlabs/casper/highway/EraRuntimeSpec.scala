@@ -157,6 +157,14 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
   }
 
   "validate" should {
+    "reject a block received from a doppelganger" in {
+      val runtime = genesisEraRuntime("Alice".some)
+      val message =
+        makeBlock("Alice", eraId = runtime.era.keyBlockHash, roundId = runtime.startTick)
+      runtime.validate(message).value shouldBe Left(
+        "The block is coming from a doppelganger."
+      )
+    }
     "reject a block received from a non-leader" in {
       val runtime = genesisEraRuntime(
         "Alice".some,

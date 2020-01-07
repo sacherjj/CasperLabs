@@ -200,20 +200,26 @@ class EraRuntime[F[_]: MonadThrowable: Clock](
   def validate(message: Message): EitherT[F, String, Unit] = {
     val ok = EitherT.rightT[F, String](())
 
-    def check(c: F[Boolean], msg: String) = EitherT {
+    def checkF(c: F[Boolean], msg: String) = EitherT {
       c.ifM(ok.value, msg.asLeft[Unit].pure[F])
     }
+    def check(c: Boolean, msg: String) = checkF(c.pure[F], msg)
 
-    message match {
-      case b: Message.Block =>
-        val roundId = Ticks(b.roundId)
-        check(
-          (leaderFunction(roundId) == b.validatorId).pure[F],
-          "The block is not coming from the leader of the round."
-        )
-      // TODO (NODE-1102): Check that we haven't received a block from the same validator in this round.
-      case _ =>
-        ok
+    check(
+      !maybeMessageProducer.map(_.validatorId).contains(message.validatorId),
+      "The block is coming from a doppelganger."
+    ) >> {
+      message match {
+        case b: Message.Block =>
+          val roundId = Ticks(b.roundId)
+          check(
+            (leaderFunction(roundId) == b.validatorId),
+            "The block is not coming from the leader of the round."
+          )
+        // TODO (NODE-1102): Check that we haven't received a block from the same validator in this round.
+        case _ =>
+          ok
+      }
     }
   }
 
