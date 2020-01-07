@@ -181,9 +181,9 @@ impl FromBytes for i64 {
 
 impl FromBytes for Vec<u8> {
     fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
-        let (size, rest) = u32::from_bytes(bytes)?;
-        let (vec_data, rest) = safe_split_at(&rest, size as usize)?;
-        Ok((vec_data.to_vec(), rest))
+        let (size, rem) = u32::from_bytes(bytes)?;
+        let (vec_data, rem) = safe_split_at(&rem, size as usize)?;
+        Ok((vec_data.to_vec(), rem))
     }
 }
 
