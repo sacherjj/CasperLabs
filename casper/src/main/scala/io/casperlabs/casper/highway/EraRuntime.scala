@@ -98,19 +98,16 @@ class EraRuntime[F[_]: MonadThrowable: Clock](
       }
     }
 
-  private def roundLength: F[Ticks] =
-    // TODO (round_parameter_storage): We should be able to tell about each past tick what the exponent at the time was.
-    roundExponentRef.get.map(Ticks.roundLength(_))
-
   /** Calculate the beginning and the end of this round,
     * based on the current tick and the round length. */
   private def roundBoundariesAt(tick: Ticks): F[(Ticks, Ticks)] =
-    roundLength map { length =>
+    // TODO (round_parameter_storage): We should be able to tell about each past tick what the exponent at the time was.
+    roundExponentRef.get map { exp =>
       // The era start may not be divisible by the round length.
-      val fromEraStart       = tick - startTick
-      val roundStartRelative = fromEraStart - fromEraStart % length
-      val roundStartAbsolute = startTick + roundStartRelative
-      Ticks(roundStartAbsolute) -> Ticks(roundStartAbsolute + length)
+      // We should be okay to use `Ticks.roundBoundaries` here if we follow the
+      // rules of when we can update the round exponent, that is, when the higher
+      // and lower speeds align themselves.
+      Ticks.roundBoundaries(startTick, exp)(tick)
     }
 
   /** Only produce messages once we are synced. */

@@ -27,7 +27,21 @@ package object highway {
     def apply(t: Long) = t.asInstanceOf[Ticks]
 
     /** Calculate round length as 2^exp */
-    def roundLength(exponent: Int) = Ticks(ArithmeticUtils.pow(2L, exponent))
+    def roundLength(exp: Int): Ticks = Ticks(ArithmeticUtils.pow(2L, exp))
+
+    /** Calculate the next round tick. */
+    def nextRound(epoch: Ticks, exp: Int)(now: Ticks): Ticks =
+      roundBoundaries(epoch, exp)(now)._2
+
+    /** Calculate the round boundaries, given regular round lengths from an epoch. */
+    def roundBoundaries(epoch: Ticks, exp: Int)(now: Ticks): (Ticks, Ticks) = {
+      val length        = roundLength(exp)
+      val elapsed       = now - epoch
+      val relativeStart = elapsed - elapsed % length
+      val absoluteStart = epoch + relativeStart
+      val absoluteEnd   = absoluteStart + length
+      Ticks(absoluteStart) -> Ticks(absoluteEnd)
+    }
   }
 
   implicit class InstantOps(val a: Instant) extends AnyVal {

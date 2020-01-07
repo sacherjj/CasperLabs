@@ -201,9 +201,7 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
         implicit val clock = TestClock.frozen[Id](now)
         val runtime        = genesisEraRuntime(validator = "Alice".some, roundExponent = exp)
 
-        val millisRound = math.pow(2.0, exp.toDouble).toLong
-        val millisNow   = now.toEpochMilli
-        val millisNext  = millisNow + (millisRound - millisNow % millisRound)
+        val millisNext = Ticks.nextRound(runtime.startTick, exp)(Ticks(now.toEpochMilli))
 
         val agenda = runtime.initAgenda
         agenda should have size 1
@@ -348,10 +346,11 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
       "in the active period of the era" when {
         "the validator is the leader" should {
           val exponent    = 15
-          val roundLength = math.pow(2.0, exponent.toDouble).toLong.millis
+          val roundLength = Ticks.roundLength(exponent).millis
           val now         = conf.genesisEraStart plus (roundLength * 20)
           val roundId     = conf.toTicks(now)
-          val nextRoundId = Ticks(roundId + roundLength.toMillis)
+          val nextRoundId =
+            Ticks.nextRound(Ticks(conf.genesisEraStart.toEpochMilli), exponent)(roundId)
 
           implicit val clock = TestClock.frozen[Id](now)
 
@@ -481,7 +480,7 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
       "creating the lambda message takes longer than a round" should {
         "skip to the next active round" in {
           val exponent       = 15 // ~30s
-          val roundLength    = math.pow(2.0, exponent.toDouble).toLong.millis
+          val roundLength    = Ticks.roundLength(exponent).millis
           val roundStart     = conf.genesisEraStart plus 60 * roundLength
           val now            = roundStart plus 3 * roundLength
           implicit val clock = TestClock.frozen[Id](now)
