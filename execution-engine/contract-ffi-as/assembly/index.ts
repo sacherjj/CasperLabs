@@ -1,26 +1,21 @@
 // The entry file of your WebAssembly module.
 import * as externals from "./externals";
-import * as error from "./error";
+import { UREF_SERIALIZED_LENGTH , URef} from "./uref";
+import {CLValue} from "./clvalue";
+import {Key} from "./key";
 
 // NOTE: interfaces aren't supported in AS yet: https://github.com/AssemblyScript/assemblyscript/issues/146#issuecomment-399130960
 // interface ToBytes {
 //   fromBytes(bytes: Uint8Array): ToBytes;
 // }
 
-const OPTION_TAG_NONE: u8 = 0;
-const OPTION_TAG_SOME: u8 = 1;
-const OPTION_TAG_SERIALIZED_LENGTH = 1;
-const ACCESS_RIGHTS_SERIALIZED_LENGTH = 1;
 const ADDR_LENGTH = 32;
-const UREF_ADDR_LENGTH = 32;
-const UREF_SERIALIZED_LENGTH = UREF_ADDR_LENGTH + OPTION_TAG_SERIALIZED_LENGTH + ACCESS_RIGHTS_SERIALIZED_LENGTH;
 const PURSE_ID_SERIALIZED_LENGTH = UREF_SERIALIZED_LENGTH;
 
 export const enum SystemContract {
   Mint = 0,
   ProofOfStake = 1,
 }
-
 
 export function getArgSize(i: u32): U32 | null {
   // TODO: Docs aren't clear on pointers, but perhaps `var size = <u32>0; changetype<usize>(size);` might take a pointer of a value we could pass
@@ -49,111 +44,9 @@ export function getArg(i: u32): Uint8Array | null {
   return data;
 }
 
-// TODO: explore Option<T> (without interfaces to constrain T with, is it practical?)
-export class Option{
-  private bytes: Uint8Array | null;
-
-  constructor(bytes: Uint8Array | null) {
-    this.bytes = bytes;
-  }
-
-  isNone(): bool{
-    return this.bytes === null;
-  }
-
-  isSome() : bool{
-    return this.bytes != null;
-  }
-
-  unwrap(): Uint8Array | null{
-    return this.bytes;
-  }
-
-  toBytes(): Array<u8>{
-    if (this.bytes === null){
-      let result = new Array<u8>(1);
-      result[0] = OPTION_TAG_NONE;
-      return result;
-    }
-
-    let result = new Array<u8>(this.bytes.length + 1);
-    result[0] = OPTION_TAG_SOME;
-    for (let i = 0; i < this.bytes.length; i++) {
-      result[i+1] = this.bytes[i];
-    }
-
-    return result;
-  }
-
-  static fromBytes(bytes: Uint8Array): Option{
-    // check SOME / NONE flag at head
-    // TODO: what if length is exactly 1?
-    if (bytes.length >= 1 && bytes[0] === 1)
-      return new Option(bytes.subarray(1));
-
-    return new Option(null);
-  }
-}
-
-export class Unit{
-  toBytes(): Array<u8> {
-    return  new Array<u8>(0);
-  }
-
-  static fromBytes(bytes: Uint8Array): Unit{
-    return new Unit();
-  }
-}
-
 // export class Hash{
 //
 // }
-
-export class URef {
-  private bytes: Uint8Array;
-  private accessRights: U8 | null = null; // NOTE: Optional access rights are currently marked as "null"
-
-  constructor(bytes: Uint8Array, accessRights: U8 | null) {
-    this.bytes = bytes;
-    this.accessRights = accessRights;
-  }
-
-  public getBytes(): Uint8Array {
-    return this.bytes;
-  }
-
-  public getAccessRights(): U8 | null {
-    return this.accessRights;
-  }
-
-  static fromBytes(bytes: Uint8Array): URef | null {
-    let urefBytes = bytes.subarray(0, UREF_ADDR_LENGTH);
-    let accessRightsBytes =  Option.fromBytes(bytes.subarray(UREF_ADDR_LENGTH));
-    if(accessRightsBytes.isNone())
-      return new URef(urefBytes, <U8>null);
-
-    let accessRights = <U8>(<Uint8Array>accessRightsBytes.unwrap())[0];
-    return new URef(urefBytes, accessRights);
-  }
-
-  toBytes(): Array<u8> {
-    let result = new Array<u8>(this.bytes.length);
-    for (let i = 0; i < this.bytes.length; i++) {
-      result[i] = this.bytes[i];
-    }
-    // var result = Object.assign([], this.toBytes); // NOTE: Clone?
-    if (this.accessRights == null) {
-      result.push(0);
-    }
-    else {
-      result.push(1);
-      result.push(<u8>this.accessRights);
-    }
-    return result;
-  }
-
-  //read():CLValue{}
-}
 
 export function getMainPurse(): URef | null {
   let data = new Uint8Array(PURSE_ID_SERIALIZED_LENGTH);
@@ -172,49 +65,6 @@ export function getSystemContract(system_contract: SystemContract): URef | null 
   return URef.fromBytes(data);
 }
 
-enum KeyVariant {
-  ACCOUNT_ID = 0,
-  HASH_ID = 1,
-  UREF_ID = 2,
-  LOCAL_ID = 3,
-}
-
-export class Key {
-  variant: KeyVariant;
-  value: Uint8Array;
-  uref: URef;
-
-  static fromURef(uref: URef): Key {
-    let key = new Key();
-    key.variant = KeyVariant.UREF_ID;
-    key.value = uref.getBytes();
-    key.uref = uref;
-    return key;
-  }
-
-  static fromHash(hash: Uint8Array): Key{
-    let key = new Key();
-    key.variant = KeyVariant.HASH_ID;
-    key.value = hash;
-    return key;
-  }
-
-  toBytes(): Array<u8> {
-    if(this.variant === KeyVariant.UREF_ID){
-      let bytes = new Array<u8>();
-      bytes.push(<u8>this.variant)
-      bytes = bytes.concat(this.uref.toBytes());
-      return bytes;
-    }
-
-    const len = this.value.length;
-    let result = new Array<u8>(len);
-    for (let i = 0; i < len; i++) {
-      result[i] = this.value[i];
-    }
-    return result;
-  }
-}
 
 export function toBytesU32(num: u32): u8[] {
   // Converts u32 to little endian
@@ -241,60 +91,6 @@ export function toBytesMap(pairs: u8[][]): u8[] {
     result = result.concat(pairBytes);
   }
   return result;
-}
-
-enum CLTypeTag {
-  Bool = 0,
-  I32 = 1,
-  I64 = 2,
-  U8 = 3,
-  U32 = 4,
-  U64 = 5,
-  U128 = 6,
-  U256 = 7,
-  U512 = 8,
-  Unit = 9,
-  String = 10,
-  Key = 11,
-  Uref = 12,
-  Option = 13,
-  List = 14,
-  Fixed_list = 15,
-  Result = 16,
-  Map = 17,
-  Tuple1 = 18,
-  Tuple2 = 19,
-  Tuple3 = 20,
-  Any = 21,
-}
-
-export class CLValue {
-  bytes: u8[];
-  tag: u8;
-
-  constructor(bytes: u8[], tag: u8) {
-    this.bytes = bytes;
-    this.tag = tag;
-  }
-
-  static fromString(s: String): CLValue {
-    return new CLValue(toBytesString(s), <u8>CLTypeTag.String);
-  }
-
-  // static fromOption(o: Option): CLValue{
-  //
-  // }
-
-  toBytes(): u8[] {
-    let data = toBytesArrayU8(this.bytes);
-    data.push(<u8>this.tag);
-    return data;
-  }
-
-  // new_turef equivalent
-  // write(): URef{
-  //   // make call to write passing this CLValue and the provided URef
-  // }
 }
 
 export function toBytesString(s: String): u8[] {

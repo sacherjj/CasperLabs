@@ -1,5 +1,7 @@
 import * as CL from "../../../../contract-ffi-as/assembly";
 import {Error, ErrorCode} from "../../../../contract-ffi-as/assembly/error";
+import {URef} from "../../../../contract-ffi-as/assembly/uref";
+import {CLValue} from "../../../../contract-ffi-as/assembly/clvalue";
 
 const POS_ACTION = "get_payment_purse";
 
@@ -22,26 +24,28 @@ export function call(): void {
     return;
   }
 
-  let key = CL.Key.fromURef(<CL.URef>proofOfStake);
+  let key = proofOfStake.asKey();
   let output = CL.callContract(key, [
-    CL.CLValue.fromString(POS_ACTION),
+    CLValue.fromString(POS_ACTION),
   ]);
   if (output == null) {
     Error.fromErrorCode(ErrorCode.PurseNotCreated).revert();
     return;
   }
 
-  let paymentPurse = CL.URef.fromBytes(output);
+  let paymentPurse = URef.fromBytes(output);
   if (paymentPurse == null) {
     Error.fromErrorCode(ErrorCode.InvalidPurse).revert();
+    return;
   }
 
   let ret = CL.transferFromPurseToPurse(
     mainPurse,
-    <CL.URef>(paymentPurse),
+    <URef>(paymentPurse),
     amountBytes,
   );
   if (ret > 0) {
     Error.fromErrorCode(ErrorCode.Transfer).revert();
+    return;
   }
 }

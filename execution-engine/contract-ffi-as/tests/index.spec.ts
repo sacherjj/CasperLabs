@@ -1,5 +1,9 @@
 import "assemblyscript/std/portable";
-import {URef, Option, toBytesU32, toBytesMap, serializeArguments, Key, toBytesString, toBytesPair, CLValue } from "../assembly";
+import {toBytesU32, toBytesMap, serializeArguments, toBytesString, toBytesPair } from "../assembly";
+import {URef} from "../assembly/uref";
+import {Option} from "../assembly/option";
+import {Key} from "../assembly/key";
+import {CLValue} from "../assembly/clvalue";
 
 import test from "ava";
 import {hex2bin} from "./utils";
