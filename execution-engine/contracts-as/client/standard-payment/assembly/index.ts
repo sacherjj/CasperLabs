@@ -1,36 +1,39 @@
 import * as CL from "../../../../contract-ffi-as/assembly";
+import {Error, ErrorCode} from "../../../../contract-ffi-as/assembly/error";
+
+const POS_ACTION = "get_payment_purse";
 
 export function call(): void {
+  let proofOfStake = CL.getSystemContract(CL.SystemContract.ProofOfStake);
+  if (proofOfStake == null) {
+    Error.fromErrorCode(ErrorCode.InvalidSystemContract).revert();
+    return;
+  }
+
   let amountBytes = CL.getArg(0);
   if (amountBytes == null) {
-    CL.revert(1);
+    Error.fromErrorCode(ErrorCode.MissingArgument).revert();
     return;
   }
 
   let mainPurse = CL.getMainPurse();
   if (mainPurse == null) {
-    CL.revert(2);
-    return;
-  }
-
-  let proofOfStake = CL.getSystemContract(CL.SystemContract.ProofOfStake);
-  if (proofOfStake == null) {
-    CL.revert(3);
+    Error.fromErrorCode(ErrorCode.MissingArgument).revert();
     return;
   }
 
   let key = CL.Key.fromURef(<CL.URef>proofOfStake);
   let output = CL.callContract(key, [
-    CL.CLValue.fromString("get_payment_purse"),
+    CL.CLValue.fromString(POS_ACTION),
   ]);
   if (output == null) {
-    CL.revert(4);
+    Error.fromErrorCode(ErrorCode.PurseNotCreated).revert();
     return;
   }
 
   let paymentPurse = CL.URef.fromBytes(output);
   if (paymentPurse == null) {
-    CL.revert(5);
+    Error.fromErrorCode(ErrorCode.InvalidPurse).revert();
   }
 
   let ret = CL.transferFromPurseToPurse(
@@ -39,6 +42,6 @@ export function call(): void {
     amountBytes,
   );
   if (ret > 0) {
-    CL.revert(6);
+    Error.fromErrorCode(ErrorCode.Transfer).revert();
   }
 }

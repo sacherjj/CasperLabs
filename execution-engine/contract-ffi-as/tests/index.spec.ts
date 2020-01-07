@@ -1,5 +1,5 @@
 import "assemblyscript/std/portable";
-import {URef, decodeOptional, toBytesU32, toBytesMap, serializeArguments, Key, toBytesString, toBytesPair, CLValue } from "../assembly";
+import {URef, Option, toBytesU32, toBytesMap, serializeArguments, Key, toBytesString, toBytesPair, CLValue } from "../assembly";
 
 import test from "ava";
 import {hex2bin} from "./utils";
@@ -9,16 +9,18 @@ test('decoded optional is some', t => {
     for (let i = 0; i < 10; i++) {
         optionalSome[i] = i + 1;
     }
-    let res = decodeOptional(optionalSome);
+    let res = Option.fromBytes(optionalSome);
     t.not(res, null);
-    t.deepEqual(Array.from(res), [2, 3, 4, 5, 6, 7, 8, 9, 10]);
+    let unwrapped = res.unwrap();
+    t.not(unwrapped, null, "unwrapped should not be null");
+    t.deepEqual(Array.from(unwrapped.values()), [2, 3, 4, 5, 6, 7, 8, 9, 10]);
 });
 
 test('decoded optional is none', t => {
     let optionalSome = new Uint8Array(10);
     optionalSome[0] = 0;
-    let res = decodeOptional(optionalSome);
-    t.is(res, null);
+    let res = Option.fromBytes(optionalSome);
+    t.assert(res.isNone(), "option should be NONE");
 });
 
 test("decode uref from bytes with access rights", t => {

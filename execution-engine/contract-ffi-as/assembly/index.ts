@@ -1,6 +1,14 @@
 // The entry file of your WebAssembly module.
 import * as externals from "./externals";
+import * as error from "./error";
 
+// NOTE: interfaces aren't supported in AS yet: https://github.com/AssemblyScript/assemblyscript/issues/146#issuecomment-399130960
+// interface ToBytes {
+//   fromBytes(bytes: Uint8Array): ToBytes;
+// }
+
+const OPTION_TAG_NONE: u8 = 0;
+const OPTION_TAG_SOME: u8 = 1;
 const OPTION_TAG_SERIALIZED_LENGTH = 1;
 const ACCESS_RIGHTS_SERIALIZED_LENGTH = 1;
 const ADDR_LENGTH = 32;
@@ -13,9 +21,6 @@ export const enum SystemContract {
   ProofOfStake = 1,
 }
 
-export function revert(code: i32): void {
-  externals.revert(code);
-}
 
 export function getArgSize(i: u32): U32 | null {
   // TODO: Docs aren't clear on pointers, but perhaps `var size = <u32>0; changetype<usize>(size);` might take a pointer of a value we could pass
@@ -44,9 +49,64 @@ export function getArg(i: u32): Uint8Array | null {
   return data;
 }
 
-// NOTE: interfaces aren't supported in AS yet: https://github.com/AssemblyScript/assemblyscript/issues/146#issuecomment-399130960
-// interface ToBytes {
-//   fromBytes(bytes: Uint8Array): ToBytes;
+// TODO: explore Option<T> (without interfaces to constrain T with, is it practical?)
+export class Option{
+  private bytes: Uint8Array | null;
+
+  constructor(bytes: Uint8Array | null) {
+    this.bytes = bytes;
+  }
+
+  isNone(): bool{
+    return this.bytes === null;
+  }
+
+  isSome() : bool{
+    return this.bytes != null;
+  }
+
+  unwrap(): Uint8Array | null{
+    return this.bytes;
+  }
+
+  toBytes(): Array<u8>{
+    if (this.bytes === null){
+      let result = new Array<u8>(1);
+      result[0] = OPTION_TAG_NONE;
+      return result;
+    }
+
+    let result = new Array<u8>(this.bytes.length + 1);
+    result[0] = OPTION_TAG_SOME;
+    for (let i = 0; i < this.bytes.length; i++) {
+      result[i+1] = this.bytes[i];
+    }
+
+    return result;
+  }
+
+  static fromBytes(bytes: Uint8Array): Option{
+    // check SOME / NONE flag at head
+    // TODO: what if length is exactly 1?
+    if (bytes.length >= 1 && bytes[0] === 1)
+      return new Option(bytes.subarray(1));
+
+    return new Option(null);
+  }
+}
+
+export class Unit{
+  toBytes(): Array<u8> {
+    return  new Array<u8>(0);
+  }
+
+  static fromBytes(bytes: Uint8Array): Unit{
+    return new Unit();
+  }
+}
+
+// export class Hash{
+//
 // }
 
 export class URef {
@@ -68,16 +128,12 @@ export class URef {
 
   static fromBytes(bytes: Uint8Array): URef | null {
     let urefBytes = bytes.subarray(0, UREF_ADDR_LENGTH);
-
-    let accessRightsBytes = decodeOptional(bytes.subarray(UREF_ADDR_LENGTH));
-    if (accessRightsBytes != null) {
-      let accessRights = <U8>(<Uint8Array>accessRightsBytes)[0];
-      let uref = new URef(urefBytes, accessRights);
-      return uref;
-    }
-    else {
+    let accessRightsBytes =  Option.fromBytes(bytes.subarray(UREF_ADDR_LENGTH));
+    if(accessRightsBytes.isNone())
       return new URef(urefBytes, <U8>null);
-    }
+
+    let accessRights = <U8>(<Uint8Array>accessRightsBytes.unwrap())[0];
+    return new URef(urefBytes, accessRights);
   }
 
   toBytes(): Array<u8> {
@@ -95,19 +151,8 @@ export class URef {
     }
     return result;
   }
-}
 
-export function decodeOptional(bytes: Uint8Array): Uint8Array | null {
-  if (bytes.length < 1) {
-    return null;
-  }
-
-  if (bytes[0] == 1) {
-    return bytes.subarray(1);
-  }
-  else {
-    return null;
-  }
+  //read():CLValue{}
 }
 
 export function getMainPurse(): URef | null {
@@ -236,11 +281,20 @@ export class CLValue {
     return new CLValue(toBytesString(s), <u8>CLTypeTag.String);
   }
 
+  // static fromOption(o: Option): CLValue{
+  //
+  // }
+
   toBytes(): u8[] {
     let data = toBytesArrayU8(this.bytes);
     data.push(<u8>this.tag);
     return data;
   }
+
+  // new_turef equivalent
+  // write(): URef{
+  //   // make call to write passing this CLValue and the provided URef
+  // }
 }
 
 export function toBytesString(s: String): u8[] {
