@@ -1,5 +1,5 @@
 import "assemblyscript/std/portable";
-import {URef, decodeOptional, toBytesU32, serializeArguments, Key, toBytesString, CLValue } from "../assembly";
+import {URef, decodeOptional, toBytesU32, toBytesMap, serializeArguments, Key, toBytesString, toBytesPair, CLValue } from "../assembly";
 
 import test from "ava";
 import {hex2bin} from "./utils";
@@ -77,5 +77,22 @@ test("serialize args", t => {
     let serialized = serializeArguments([
         CLValue.fromString("get_payment_purse"),
     ]);
+    t.deepEqual(Array.from(serialized), Array.from(truth));
+})
+
+test("serialize map", t => {
+    // let mut m = BTreeMap::new();
+    // m.insert("Key1".to_string(), "Value1".to_string());
+    // m.insert("Key2".to_string(), "Value2".to_string());
+    // let truth = m.to_bytes().unwrap();
+    const truth = hex2bin(
+        "02000000040000004b6579310600000056616c756531040000004b6579320600000056616c756532"
+    );
+    const map = [
+        toBytesPair(toBytesString("Key1"), toBytesString("Value1")),
+        toBytesPair(toBytesString("Key2"), toBytesString("Value2")),
+    ];
+
+    const serialized = toBytesMap(map);
     t.deepEqual(Array.from(serialized), Array.from(truth));
 })

@@ -182,6 +182,22 @@ export function toBytesU32(num: u32): u8[] {
   ];
 }
 
+export function toBytesPair(key: u8[], value: u8[]): u8[] {
+  return key.concat(value);
+}
+
+export function toBytesMap(pairs: u8[][]): u8[] {
+  // https://github.com/AssemblyScript/docs/blob/master/standard-library/map.md#methods
+  // Gets the keys contained in this map as an array, in insertion order. This is preliminary while iterators are not supported.
+  // See https://github.com/AssemblyScript/assemblyscript/issues/166
+  var result = toBytesU32(<u32>pairs.length);
+  for (var i = 0; i < pairs.length; i++) {
+    var pairBytes = pairs[i];
+    result = result.concat(pairBytes);
+  }
+  return result;
+}
+
 enum CLTypeTag {
   Bool = 0,
   I32 = 1,
@@ -250,22 +266,16 @@ export function serializeArguments(values: CLValue[]): Array<u8> {
   return prefix;
 }
 
-export function store_function_at_hash(name: String, namedKeys: Map<String, Key>): Key | null {
-  let nameBytes = name.toBytes();
-  let namedKeyBytes = namedKeys.toBytes();
-  let addr = new Uint8Array(ADDR_LENGTH);
-
-  let ret = externals.store_function_at_hash(
+export function storeFunctionAtHash(name: String, namedKeysBytes: u8[]): Key | null {
+  var nameBytes = toBytesString(name);
+  var addr = new Uint8Array(ADDR_LENGTH);
+  externals.store_function_at_hash(
       <usize>nameBytes.dataStart,
       nameBytes.length,
-      <usize>namedKeyBytes.dataStart,
-      namedKeyBytes.length,
+      <usize>namedKeysBytes.dataStart,
+      namedKeysBytes.length,
       <usize>addr.dataStart
   );
-  if (ret > 0) {
-    return null;
-  }
-
   return Key.fromHash(addr);
 }
 

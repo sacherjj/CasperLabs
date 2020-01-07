@@ -24,7 +24,7 @@ export declare function get_main_purse(dest_ptr: usize): void;
 export declare function get_system_contract(system_contract_index: u32, dest_ptr: usize, dest_size: u32): i32;
 
 @external("env", "store_function_at_hash")
-export declare function store_function_at_hash(function_name_ptr: usize, function_name_size: usize, named_keys_ptr: u8, named_keys_size: usize, hash_ptr: u8): i32;
+export declare function store_function_at_hash(function_name_ptr: usize, function_name_size: usize, named_keys_ptr: usize, named_keys_size: usize, hash_ptr: usize): i32;
 
 @external("env", "call_contract")
 export declare function call_contract(key_ptr: usize, key_size: u32, args_ptr: usize, args_size: u32, extra_urefs_ptr: usize, extra_urefs_size: usize, result_size: usize): i32;
