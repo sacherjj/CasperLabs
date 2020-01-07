@@ -22,11 +22,13 @@ sealed trait Message {
   val messageHash: Id
   val validatorId: ByteString
   val timestamp: Long
+  val rank: Long
   val parentBlock: Id
   val justifications: Seq[consensus.Block.Justification]
-  val rank: Long
   val validatorMsgSeqNum: Int
   val signature: consensus.Signature
+  val roundId: Long
+  val keyBlockHash: Id
 
   val parents: Seq[Id]
   val blockSummary: BlockSummary
@@ -42,6 +44,8 @@ object Message {
       messageHash: Message#Id,
       validatorId: ByteString,
       timestamp: Long,
+      roundId: Long,
+      keyBlockHash: Message#Id,
       parentBlock: Message#Id,
       justifications: Seq[consensus.Block.Justification],
       rank: Long,
@@ -67,6 +71,8 @@ object Message {
       messageHash: Message#Id,
       validatorId: ByteString,
       timestamp: Long,
+      roundId: Long,
+      keyBlockHash: Message#Id,
       parentBlock: Message#Id,
       justifications: Seq[consensus.Block.Justification],
       rank: Long,
@@ -82,6 +88,8 @@ object Message {
       val messageHash        = b.blockHash
       val header             = b.getHeader
       val timestamp          = header.timestamp
+      val roundId            = header.roundId
+      val keyBlockHash       = header.keyBlockHash
       val parentBlock        = header.parentHashes.headOption.getOrElse(ByteString.EMPTY)
       val validatorId        = header.validatorPublicKey
       val justifications     = header.justifications
@@ -97,6 +105,8 @@ object Message {
               messageHash,
               validatorId,
               timestamp,
+              roundId,
+              keyBlockHash,
               parentBlock,
               justifications,
               rank,
@@ -111,6 +121,8 @@ object Message {
               messageHash,
               validatorId,
               timestamp,
+              roundId,
+              keyBlockHash,
               parentBlock,
               justifications,
               rank,

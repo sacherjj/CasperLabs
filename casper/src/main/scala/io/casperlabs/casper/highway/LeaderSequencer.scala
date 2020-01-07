@@ -1,13 +1,32 @@
 package io.casperlabs.casper.highway
 
+import cats._
+import cats.implicits._
 import cats.data.NonEmptyList
 import io.casperlabs.crypto.hash.Blake2b256
 import io.casperlabs.crypto.Keys.{PublicKey, PublicKeyBS}
-import io.casperlabs.casper.consensus.Bond
+import io.casperlabs.casper.consensus.{Bond, Era}
+import io.casperlabs.catscontrib.MonadThrowable
 import java.security.SecureRandom
 import java.nio.{ByteBuffer, ByteOrder}
 
-object LeaderSequencer {
+trait LeaderSequencer {
+  def apply[F[_]: MonadThrowable](era: Era): F[LeaderFunction]
+}
+
+object LeaderSequencer extends LeaderSequencer {
+
+  override def apply[F[_]: MonadThrowable](era: Era): F[LeaderFunction] =
+    MonadThrowable[F].fromOption(
+      NonEmptyList
+        .fromList {
+          era.bonds.filterNot(x => x.getStake.value.isEmpty || x.getStake.value == "0").toList
+        }
+        .map { bonds =>
+          apply(era.bookingBlockHash.toByteArray, bonds)
+        },
+      new IllegalStateException("There must be some bonded validators in the era!")
+    )
 
   /** Concatentate all the magic bits into a byte array,
     * padding them with zeroes on the right.
@@ -30,7 +49,7 @@ object LeaderSequencer {
 
   /** Make a function that assigns a leader to each round, deterministically,
     * with a relative frequency based on their weight. */
-  def makeSequencer(leaderSeed: Array[Byte], bonds: NonEmptyList[Bond]): Ticks => PublicKeyBS = {
+  def apply(leaderSeed: Array[Byte], bonds: NonEmptyList[Bond]): LeaderFunction = {
     // Make a list of (validator, from, to) triplets.
     type ValidatorRange = (PublicKeyBS, BigInt, BigInt)
 
