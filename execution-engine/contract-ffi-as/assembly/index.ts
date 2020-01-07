@@ -3,6 +3,7 @@ import * as externals from "./externals";
 
 const OPTION_TAG_SERIALIZED_LENGTH = 1;
 const ACCESS_RIGHTS_SERIALIZED_LENGTH = 1;
+const ADDR_LENGTH = 32;
 const UREF_ADDR_LENGTH = 32;
 const UREF_SERIALIZED_LENGTH = UREF_ADDR_LENGTH + OPTION_TAG_SERIALIZED_LENGTH + ACCESS_RIGHTS_SERIALIZED_LENGTH;
 const PURSE_ID_SERIALIZED_LENGTH = UREF_SERIALIZED_LENGTH;
@@ -135,20 +136,38 @@ enum KeyVariant {
 
 export class Key {
   variant: KeyVariant;
-  value: URef; // NOTE: For simplicity I treat this as bytes of "union"
+  value: Uint8Array;
+  uref: URef;
 
   static fromURef(uref: URef): Key {
     let key = new Key();
     key.variant = KeyVariant.UREF_ID;
-    key.value = uref;
+    key.value = uref.getBytes();
+    key.uref = uref;
+    return key;
+  }
+
+  static fromHash(hash: Uint8Array): Key{
+    let key = new Key();
+    key.variant = KeyVariant.HASH_ID;
+    key.value = hash;
     return key;
   }
 
   toBytes(): Array<u8> {
-    let bytes = new Array<u8>();
-    bytes.push(<u8>this.variant)
-    bytes = bytes.concat(this.value.toBytes());
-    return bytes;
+    if(this.variant === KeyVariant.UREF_ID){
+      let bytes = new Array<u8>();
+      bytes.push(<u8>this.variant)
+      bytes = bytes.concat(this.uref.toBytes());
+      return bytes;
+    }
+
+    const len = this.value.length;
+    let result = new Array<u8>(len);
+    for (let i = 0; i < len; i++) {
+      result[i] = this.value[i];
+    }
+    return result;
   }
 }
 
@@ -229,6 +248,25 @@ export function serializeArguments(values: CLValue[]): Array<u8> {
     prefix = prefix.concat(values[i].toBytes());
   }
   return prefix;
+}
+
+export function store_function_at_hash(name: String, namedKeys: Map<String, Key>): Key | null {
+  let nameBytes = name.toBytes();
+  let namedKeyBytes = namedKeys.toBytes();
+  let addr = new Uint8Array(ADDR_LENGTH);
+
+  let ret = externals.store_function_at_hash(
+      <usize>nameBytes.dataStart,
+      nameBytes.length,
+      <usize>namedKeyBytes.dataStart,
+      namedKeyBytes.length,
+      <usize>addr.dataStart
+  );
+  if (ret > 0) {
+    return null;
+  }
+
+  return Key.fromHash(addr);
 }
 
 export function callContract(key: Key, args: CLValue[]): Uint8Array | null {
