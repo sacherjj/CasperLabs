@@ -243,7 +243,8 @@ lazy val node = (project in file("node"))
     includeFilter in PB.generate := new SimpleFileFilter(
       protobufPathFilter(
         "google/api",
-        "io/casperlabs/node/api"
+        "io/casperlabs/node/api",
+        "io/casperlabs/comm/discovery"
       )
     ),
     // Generating into /protobuf because of a clash with sbt-buildinfo: https://github.com/thesamet/sbt-protoc/issues/8
@@ -498,7 +499,8 @@ lazy val client = (project in file("client"))
     includeFilter in PB.generate := new SimpleFileFilter(
       protobufPathFilter(
         "google/api",
-        "io/casperlabs/node/api"
+        "io/casperlabs/node/api",
+        "io/casperlabs/comm/discovery"
       )
     ),
     // Generating into /protobuf because of a clash with sbt-buildinfo: https://github.com/thesamet/sbt-protoc/issues/8
