@@ -18,10 +18,9 @@ trait DagStorage[F[_]] {
   def getRepresentation: F[DagRepresentation[F]]
 
   /** Insert a block into the DAG and update the latest messages.
-    *
-    * If the key block hash corresponds to an era, then update descendant eras as well,
-    * so that they can pick up blocks that arrived late and incorporate them into their DAG.
-    * Ballots that only arrive to finalize switch blocks are not propagated to child eras.
+    * In the presence of eras, the block only affects the latest messages
+    * of the era which the block is part of. To detect equivocations
+    * or the tips, the caller needs to look at multiple eras along the tree.
     */
   private[storage] def insert(block: Block): F[DagRepresentation[F]]
 
@@ -104,6 +103,20 @@ trait EraTipRepresentation[F[_]] extends TipRepresentation[F] {
   // representation, however for that we need lots of updates in
   // the casper codebase.
 
+  // Equivocation will be defined as the set of validators who
+  // equivocated in the eras between the key block and the current era,
+  // but it will be up to the caller to aggregate this information,
+  // i.e. to decide how far to look back, before forgiveness kicks in.
+
+  // Since latest messages are restricted to this era, when looking
+  // to build a new block, one has to reduce the tips of multiple eras
+  // into the final set of childless blocks.
+
+  // The justifications of a new block can be chosen as the reduced set of:
+  // * the latest messages in the era,
+  // * the parent block candidate hashes, and
+  // * the justifications of the parent block candidates.
+
   // def getEquivocators: F[Set[Validator]] = ???
   // def getEquivocations: F[Map[Validator, Set[Message]]] = ???
 }
@@ -153,10 +166,15 @@ trait DagRepresentation[F[_]] {
     */
   def latestGlobal: F[TipRepresentation[F]]
 
-  /** Get a representation restricted to a given era, which means the latest messages
-    * of the ancestor eras affect the child eras, but not vice versa. Latest messages
-    * in sibling eras are also invisible to each other. The DAG itself, i.e. the parent
-    * child relationships are unaffected.
+  /** Get a representation restricted to a given era, which mean anyone
+    * with more than 1 entry in their latest messages must have equivocated
+    * in *this* era. If they equivocated in an ancestor era, that has to be
+    * detected separately in the application layer by walking backward on
+    * the era tree, according to the forgiveness settings.
+    *
+    * Messages in sibling eras are invisible to each other.
+    *
+    * The DAG itself, i.e. the parent child relationships are unaffected.
     */
   def latestInEra(keyBlockHash: BlockHash): F[EraTipRepresentation[F]]
 }

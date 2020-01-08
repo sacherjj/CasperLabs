@@ -30,20 +30,7 @@ class SQLiteEraStorage[F[_]: Sync](
             VALUES ($hash, $parentHash, $startMillis, $endMillis, ${era.startTick}, ${era.endTick}, $era)
             """.update.run
 
-    val insertLatestMessages =
-      sql"""INSERT OR IGNORE INTO validator_latest_messages
-            (key_block_hash, validator, block_hash)
-            SELECT $hash, validator, block_hash
-            FROM   validator_latest_messages
-            WHERE  key_block_hash = $parentHash
-            """.update.run
-
-    val transaction = for {
-      _ <- insertEra
-      _ <- insertLatestMessages
-    } yield ()
-
-    transaction.transact(writeXa).void
+    insertEra.transact(writeXa).void
   }
 
   override def getEra(keyBlockHash: BlockHash): F[Option[Era]] =

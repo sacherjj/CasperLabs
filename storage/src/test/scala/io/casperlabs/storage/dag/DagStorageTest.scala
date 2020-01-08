@@ -2,6 +2,7 @@ package io.casperlabs.storage.dag
 
 import cats.implicits._
 import com.google.protobuf.ByteString
+import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.casper.consensus.Block.Justification
 import io.casperlabs.casper.consensus.{Block, BlockSummary, Era}
 import io.casperlabs.models.BlockImplicits._
@@ -58,6 +59,7 @@ trait DagStorageTest
 
   def setEra(e: Era)(b: Block): Block =
     b.update(_.header.keyBlockHash := e.keyBlockHash)
+      .update(_.header.roundId := e.startTick)
 
   def setRoundId(r: Long)(b: Block): Block =
     b.update(_.header.roundId := r)
@@ -256,7 +258,7 @@ trait DagStorageTest
     }
   }
 
-  it should "override the validator's latest block has in child eras" in {
+  it should "not propagate the validator's latest block to child eras" in {
     val data = for {
       // Era tree:
       // e0 - e1   e3
@@ -265,26 +267,29 @@ trait DagStorageTest
       //         \
       //           e5
       e0 <- arbitrary[Era]
-      e1 <- arbitrary[Era].map(setParent(e0))
-      e2 <- arbitrary[Era].map(setParent(e0))
-      e3 <- arbitrary[Era].map(setParent(e2))
-      e4 <- arbitrary[Era].map(setParent(e2))
-      e5 <- arbitrary[Era].map(setParent(e2))
-      // A block in the era
-      b20 <- arbitrary[Block].map(setEra(e2)).map(setRoundId(e2.startTick))
-      b21 <- arbitrary[Block].map(setEra(e2)).map(setRoundId(e2.startTick)).map(setPrev(b20))
-      // A ballot after the era
-      b22 <- arbitrary[Block].map(setEra(e2)).map(setPrev(b21)).map(setRoundId(e2.endTick)).map {
+      e1 <- arbitrary[Era] map setParent(e0)
+      e2 <- arbitrary[Era] map setParent(e0)
+      e3 <- arbitrary[Era] map setParent(e2)
+      e4 <- arbitrary[Era] map setParent(e2)
+      e5 <- arbitrary[Era] map setParent(e2)
+      // Blocks in era 2
+      b20 <- arbitrary[Block] map setEra(e2)
+      b21 <- arbitrary[Block] map setEra(e2) map setPrev(b20)
+      // A ballot after the era.
+      b22 <- arbitrary[Block] map setEra(e2) map setPrev(b21) map setRoundId(e2.endTick) map {
               _.update(_.header.messageType := Block.MessageType.BALLOT)
             }
-      // A block in the era
-      b41 <- arbitrary[Block].map(setEra(e4)).map(setPrev(b21)).map(setRoundId(e4.startTick))
-      // An equivocation, because it builds on b20, not b21
-      b51 <- arbitrary[Block].map(setEra(e5)).map(setPrev(b20)).map(setRoundId(e5.startTick))
-    } yield List(e0, e1, e2, e3, e4, e5) -> List(b20, b21, b22, b41, b51)
+      // A block in era 4
+      b41 <- arbitrary[Block] map setEra(e4) map setPrev(b21)
+      // An equivocation in era 5, because they don't form a chain of justifications
+      b51 <- arbitrary[Block] map setEra(e5) map setPrev(b20)
+      b52 <- arbitrary[Block] map setEra(e5) map setPrev(b21)
+      // An equivocation in era 2, because it doesn't cite b22
+      b23 <- arbitrary[Block] map setEra(e2) map setPrev(b21)
+    } yield List(e0, e1, e2, e3, e4, e5) -> List(b20, b21, b22, b41, b51, b52, b23)
 
     forAll(data) {
-      case (eras: List[Era], blocks: List[Block]) =>
+      case (eras: List[Era], blocks @ List(_, _, b22, b41, b51, b52, b23)) =>
         withDagStorage { storage =>
           def latestMessageHashes(eraIdx: Int) =
             storage.getRepresentation.flatMap { dag =>
@@ -307,32 +312,32 @@ trait DagStorageTest
             lmh1 <- latestMessageHashes(1)
             _    = lmh1 shouldBe empty
 
-            // The voting ballot in the era itself.
+            // The voting ballot in the era itself, plus the equivocation
             lmh2 <- latestMessageHashes(2)
-            _    = lmh2(v) shouldBe Set(blocks(2).blockHash)
+            _    = lmh2(v) shouldBe Set(b22.blockHash, b23.blockHash)
 
-            // The last block in the parent era.
+            // Not in an empty child
             lmh3 <- latestMessageHashes(3)
-            _    = lmh3(v) shouldBe Set(blocks(1).blockHash)
+            _    = lmh3 shouldBe empty
 
             // The block created in the child era.
             lmh4 <- latestMessageHashes(4)
-            _    = lmh4(v) shouldBe Set(blocks(3).blockHash)
+            _    = lmh4(v) shouldBe Set(b41.blockHash)
 
             // Both blocks that didn't cite each other
             lmh5 <- latestMessageHashes(5)
-            _    = lmh5(v) shouldBe Set(blocks(1).blockHash, blocks(4).blockHash)
+            _    = lmh5(v) shouldBe Set(b51.blockHash, b52.blockHash)
 
-            // Overall there are 2 tips
+            // Overall there are 5 tips
             lmh <- storage.getRepresentation.flatMap(_.latestGlobal).flatMap(_.latestMessageHashes)
             _   = lmh should have size 1
-            _   = lmh(v) shouldBe blocks.takeRight(3).map(_.blockHash).toSet
+            _   = lmh(v) shouldBe List(b23, b52, b51, b41, b22).map(_.blockHash).toSet
           } yield ()
         }
     }
   }
 
-  it should "inherit the parent era latest messages onto the child era" in {
+  it should "not inherit the parent era latest messages onto the child era" in {
     val data = for {
       e0 <- arbitrary[Era]
       e1 <- arbitrary[Era].map(setParent(e0))
@@ -351,8 +356,7 @@ trait DagStorageTest
             tip <- dag.latestInEra(e1.keyBlockHash)
 
             lmh <- tip.latestMessageHashes
-            _   = lmh should not be empty
-            _   = lmh(b0.getHeader.validatorPublicKey) shouldBe Set(b0.blockHash)
+            _   = lmh shouldBe empty
           } yield ()
         }
     }
