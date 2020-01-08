@@ -37,8 +37,8 @@ class FinalityDetectorByVotingMatrixTest
     validation.raiseValidateErrorThroughApplicativeError[Task]
 
   it should "detect finality as appropriate" in withStorage {
-    implicit blockStore => implicit dagStorage =>
-      implicit deployStorage =>
+    implicit blockStore => implicit dagStorage => implicit deployStorage =>
+      _ =>
         /* The DAG looks like:
          *
          *
@@ -106,8 +106,8 @@ class FinalityDetectorByVotingMatrixTest
   }
 
   it should "finalize blocks properly with only one validator" in withStorage {
-    implicit blockStore => implicit dagStorage =>
-      implicit deployStorage =>
+    implicit blockStore => implicit dagStorage => implicit deployStorage =>
+      _ =>
         /* The DAG looks like:
          *
          *    b4
@@ -171,8 +171,8 @@ class FinalityDetectorByVotingMatrixTest
   }
 
   it should "increment last finalized block as appropriate in round robin" in withStorage {
-    implicit blockStore => implicit dagStorage =>
-      implicit deployStorage =>
+    implicit blockStore => implicit dagStorage => implicit deployStorage =>
+      _ =>
         /* The DAG looks like:
          *
          *
@@ -271,7 +271,7 @@ class FinalityDetectorByVotingMatrixTest
 
   // See [[casper/src/test/resources/casper/finalityDetectorWithEquivocations.png]]
   it should "exclude the weight of validator who have been detected equivocating when searching for the committee" in withStorage {
-    implicit blockStore => implicit blockDagStorage => _ =>
+    implicit blockStore => implicit blockDagStorage => _ => _ =>
       val v1     = generateValidator("V1")
       val v2     = generateValidator("V2")
       val v3     = generateValidator("V3")
@@ -341,7 +341,7 @@ class FinalityDetectorByVotingMatrixTest
 
   // See [[casper/src/test/resources/casper/equivocatingBlockGetFinalized.png]]
   it should "finalize equivocator's block when enough honest validators votes for it" in withStorage {
-    implicit blockStore => implicit blockDagStorage => _ =>
+    implicit blockStore => implicit blockDagStorage => _ => _ =>
       val v1     = generateValidator("V1")
       val v2     = generateValidator("V2")
       val v3     = generateValidator("V3")
@@ -411,7 +411,7 @@ class FinalityDetectorByVotingMatrixTest
 
   // See [[casper/src/test/resources/casper/equivocatingBlockCantGetFinalized.png]]
   it should "not finalize equivocator's blocks, no matter how many votes equivocating validators cast" in withStorage {
-    implicit blockStore => implicit blockDagStorage => _ =>
+    implicit blockStore => implicit blockDagStorage => _ => _ =>
       val v1     = generateValidator("V1")
       val v2     = generateValidator("V2")
       val v3     = generateValidator("V3")

@@ -98,7 +98,7 @@ class EquivocationDetectorTest
     } yield block
 
   "EquivocationDetector" should "detect simple equivocation" in withStorage {
-    implicit blockStorage => implicit dagStorage =>
+    implicit blockStorage => implicit dagStorage => _ =>
       _ =>
         /*
          * The Dag looks like
@@ -145,7 +145,7 @@ class EquivocationDetectorTest
   }
 
   it should "not report equivocation when references a message creating an equivocation that was created by other validator" in withStorage {
-    implicit blockStorage => implicit dagStorage =>
+    implicit blockStorage => implicit dagStorage => _ =>
       _ =>
         /*
          * The Dag looks like
@@ -192,7 +192,7 @@ class EquivocationDetectorTest
   }
 
   it should "not report equivocation when block indirectly references previous creator's block" in withStorage {
-    implicit blockStorage => implicit dagStorage =>
+    implicit blockStorage => implicit dagStorage => _ =>
       _ =>
         /*
          * The Dag looks like
@@ -257,7 +257,7 @@ class EquivocationDetectorTest
   }
 
   it should "should detect equivocation when receiving a block created by a validator who has been detected equivocating" in withStorage {
-    implicit blockStorage => implicit dagStorage =>
+    implicit blockStorage => implicit dagStorage => _ =>
       _ =>
         /*
          * The Dag looks like
@@ -315,7 +315,7 @@ class EquivocationDetectorTest
   }
 
   it should "detect equivocation and update the rank of lowest base block correctly when receiving a block created by a validator who has been detected equivocating" in withStorage {
-    implicit blockStorage => implicit dagStorage =>
+    implicit blockStorage => implicit dagStorage => _ =>
       _ =>
         /*
          * The Dag looks like
@@ -386,7 +386,7 @@ class EquivocationDetectorTest
 
   // See [[casper/src/test/resources/casper/tipsHavingEquivocations.png]]
   "detectVisibleFromJustificationMsgHashes" should "find validators who has equivocated from the j-past-cone of block's justifications" in withStorage {
-    implicit blockStorage => implicit dagStorage => _ =>
+    implicit blockStorage => implicit dagStorage => _ => _ =>
       implicit val logEff = LogStub[Task]()
       val v1              = generateValidator("V1")
       val v2              = generateValidator("V2")

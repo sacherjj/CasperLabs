@@ -33,7 +33,7 @@ class ExecEngineUtilTest extends FlatSpec with Matchers with BlockGenerator with
     HashSetCasperTestNode.simpleEEApi[Task](Map.empty)
 
   "computeBlockCheckpoint" should "compute the final post-state of a chain properly" in withStorage {
-    implicit blockStorage => implicit dagStorage => implicit deployStorage =>
+    implicit blockStorage => implicit dagStorage => implicit deployStorage => _ =>
       val genesisDeploys = Vector(ProtoUtil.deploy(System.currentTimeMillis))
       val genesisDeploysCost =
         genesisDeploys.map(d => ProcessedDeploy().withDeploy(d).withCost(1))
@@ -133,8 +133,8 @@ class ExecEngineUtilTest extends FlatSpec with Matchers with BlockGenerator with
     } yield result
 
   "computeDeploysCheckpoint" should "aggregate the result of deploying multiple programs within the block" in withStorage {
-    _ => _ =>
-      implicit deployStorage =>
+    _ => _ => implicit deployStorage =>
+      _ =>
         // reference costs
         // deploy each Rholang program separately and record its cost
         val deploy1 = ProtoUtil.deploy(
@@ -162,7 +162,7 @@ class ExecEngineUtilTest extends FlatSpec with Matchers with BlockGenerator with
   }
 
   "computeDeploysCheckpoint" should "throw exception when EE Service Failed" in withStorage {
-    implicit blockStorage => implicit dagStorage => implicit deployStorage =>
+    implicit blockStorage => implicit dagStorage => implicit deployStorage => _ =>
       val failedExecEEService: ExecutionEngineService[Task] =
         mock[Task](
           (_) => new Throwable("failed when run genesis").asLeft.pure[Task],

@@ -27,7 +27,7 @@ class FinalityDetectorUtilTest extends FlatSpec with BlockGenerator with Storage
   val bonds  = Seq(v1Bond, v2Bond)
 
   "finalizedIndirectly" should "finalize blocks in the p-past-cone of the block from the main chain" in withStorage {
-    implicit blockStorage => implicit dagStorage =>
+    implicit blockStorage => implicit dagStorage => _ =>
       _ =>
         //
         // G=A= = =B
@@ -49,7 +49,7 @@ class FinalityDetectorUtilTest extends FlatSpec with BlockGenerator with Storage
   }
 
   it should "not consider previously finalized blocks" in withStorage {
-    implicit blockStorage => implicit dagStorage => _ =>
+    implicit blockStorage => implicit dagStorage => _ => _ =>
       import FinalityDetectorUtilTest._
       // Record how many times (if any) each node was visited.
       type G[A] = StateT[Task, Map[BlockHash, Int], A]

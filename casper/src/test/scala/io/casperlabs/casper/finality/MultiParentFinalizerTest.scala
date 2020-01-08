@@ -31,7 +31,7 @@ class MultiParentFinalizerTest extends FlatSpec with BlockGenerator with Storage
   val bonds  = Seq(v1Bond, v2Bond)
 
   it should "cache block finalization so it doesn't revisit already finalized blocks." in withStorage {
-    implicit blockStorage => implicit dagStorage => _ =>
+    implicit blockStorage => implicit dagStorage => _ => _ =>
       for {
         genesis <- createAndStoreBlock[Task](Seq(), ByteString.EMPTY, bonds)
         dag     <- dagStorage.getRepresentation
@@ -60,7 +60,7 @@ class MultiParentFinalizerTest extends FlatSpec with BlockGenerator with Storage
   }
 
   it should "cache LFB from the main chain; not return LFB when new block doesn't vote on LFB's child" in withStorage {
-    implicit blockStorage => implicit dagStorage => _ =>
+    implicit blockStorage => implicit dagStorage => _ => _ =>
       implicit val noopLog = LogStub[Task]()
 
       /** `B` is LFB but `C` doesn't vote for any of `B`'s children (empty vote).
