@@ -42,3 +42,6 @@ export declare function transfer_from_purse_to_purse(
   amount_ptr: usize,
   amount_size: u32,
 ): i32;
+
+@external("env", "put_key")
+export declare function put_key(name_ptr: usize, name_size: usize, key_ptr: usize, key_size: usize): void;

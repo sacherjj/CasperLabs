@@ -1,5 +1,5 @@
 import "assemblyscript/std/portable";
-import {toBytesU32, toBytesMap, serializeArguments, toBytesString, toBytesPair } from "../assembly/bytesrepr";
+import {toBytesU32, fromBytesU32, toBytesMap, serializeArguments, toBytesString, fromBytesString, toBytesPair } from "../assembly/bytesrepr";
 import {AccessRights, URef} from "../assembly/uref";
 import {Option} from "../assembly/option";
 import {Key} from "../assembly/key";
@@ -55,16 +55,23 @@ test("decode uref from bytes without access rights", t => {
     t.deepEqual(Array.from(serialized), Array.from(truth));
 })
 
-test("serializes u32", t => {
+test("serialize u32", t => {
     const truth = [239, 190, 173, 222];
     let res = toBytesU32(3735928559);
     t.deepEqual(Array.from(res), truth);
+
+    t.deepEqual(fromBytesU32(res), 0xdeadbeef);
 })
 
 test("serialize string", t => {
     // Rust: let bytes = "hello_world".to_bytes().unwrap();
     const truth = hex2bin("0b00000068656c6c6f5f776f726c64");
-    t.deepEqual(toBytesString("hello_world"), Array.from(truth));
+
+    var res = toBytesString("hello_world");
+    t.deepEqual(res, Array.from(truth));
+
+    var res = fromBytesString(res);
+    t.deepEqual(res, "hello_world");
 })
 
 test("key of uref variant serializes", t => {

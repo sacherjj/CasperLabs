@@ -65,10 +65,10 @@ export function getSystemContract(system_contract: SystemContract): URef | null 
   return URef.fromBytes(data);
 }
 
-export function storeFunction(name: String, namedKeysBytes: u8[]): Key | null {
+export function storeFunction(name: String, namedKeysBytes: u8[]): Key {
   var nameBytes = toBytesString(name);
   var addr = new Uint8Array(ADDR_LENGTH);
-  externals.store_function_at_hash(
+  externals.store_function(
       <usize>nameBytes.dataStart,
       nameBytes.length,
       <usize>namedKeysBytes.dataStart,
@@ -138,4 +138,14 @@ export function transferFromPurseToPurse(source: URef, target: URef, amount: Uin
     amount.length,
   );
   return ret;
+}
+
+export function putKey(name: String, key: Key): void {
+  var nameBytes = toBytesString(name);
+  var keyBytes = key.toBytes();
+  externals.put_key(
+    nameBytes.dataStart,
+    nameBytes.length,
+    keyBytes.dataStart,
+    keyBytes.length);
 }

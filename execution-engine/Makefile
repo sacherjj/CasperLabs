@@ -31,8 +31,10 @@ TEST_CONTRACTS      := $(patsubst %, build-contract-rs/%, $(TEST_CONTRACTS))
 
 # AssemblyScript Contracts
 CLIENT_CONTRACTS_AS = $(shell find ./contracts-as/client   -mindepth 1 -maxdepth 1 -type d)
+TEST_CONTRACTS_TS   = $(shell find ./contracts-as/test   -mindepth 1 -maxdepth 1 -type d)
 
 CLIENT_CONTRACTS_AS := $(patsubst %, build-contract-as/%, $(CLIENT_CONTRACTS_AS))
+TEST_CONTRACTS_TS   := $(patsubst %, build-contract-as/%, $(TEST_CONTRACTS_TS))
 
 INTEGRATION_CONTRACTS += \
 	bonding-call \
@@ -95,7 +97,8 @@ build-contracts-rs: \
 
 .PHONY: build-contracts-as
 build-contracts-as: \
-	$(CLIENT_CONTRACTS_AS)
+	$(CLIENT_CONTRACTS_AS) \
+	$(TEST_CONTRACTS_TS)
 
 .PHONY: build-contracts
 build-contracts: build-contracts-rs build-contracts-as

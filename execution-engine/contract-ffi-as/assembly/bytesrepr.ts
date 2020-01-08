@@ -11,6 +11,18 @@ export function toBytesU32(num: u32): u8[] {
     ];
 }
 
+export function fromBytesU32(bytes: Uint8Array): U32 | null {
+    if (bytes.length < 4) {
+        return null;
+    }
+    // NOTE: For whatever reason << and | doesn't produce unsigned integers, so I turned `a << N` into `a * (1<<N)` and bitshift or `|` into addition.
+    const number = bytes[0] +
+        (bytes[1] * (1 << 8)) +
+        (bytes[2] * (1 << 16)) +
+        (bytes[3] * (1 << 24));
+    return <U32>number;
+}
+
 export function toBytesPair(key: u8[], value: u8[]): u8[] {
     return key.concat(value);
 }
@@ -35,6 +47,21 @@ export function toBytesString(s: String): u8[] {
         bytes.push(<u8>charCode);
     }
     return bytes;
+}
+
+export function fromBytesString(s: Uint8Array): String | null {
+    var len = fromBytesU32(s);
+    if (len === null) {
+        return null;
+    }
+    if (<u32>len < <u32>s.length - 4) {
+        return null;
+    }
+    var result = "";
+    for (var i = 4; i < s.length; i++) {
+        result += String.fromCharCode(s[i]);
+    }
+    return result;
 }
 
 export function toBytesArrayU8(arr: Array<u8>): u8[] {
