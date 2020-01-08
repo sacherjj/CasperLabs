@@ -164,11 +164,7 @@ package object gossiping {
                                                s"Cannot retrieve ${show(genesisBlockHash) -> "genesis"}"
                                              )
                                            )
-                            genesis = genesisStore.getBlockMessage
-                            _ <- FinalityStorage[F].markAsFinalized(
-                                  genesis.blockHash,
-                                  Set.empty
-                                )
+                            genesis    = genesisStore.getBlockMessage
                             prestate   = ProtoUtil.preStateHash(genesis)
                             transforms = genesisStore.transformEntry
                             casper <- MultiParentCasper.fromGossipServices(

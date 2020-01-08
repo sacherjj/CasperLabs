@@ -432,7 +432,8 @@ class NodeRuntime private[node] (
   private def makeGenesis[F[_]: MonadThrowable](chainSpec: ChainSpec)(
       implicit E: ExecutionEngineService[F],
       L: Log[F],
-      B: BlockStorage[F]
+      B: BlockStorage[F],
+      FS: FinalityStorage[F]
   ): Resource[F, Block] =
     Resource.liftF[F, Block] {
       for {
