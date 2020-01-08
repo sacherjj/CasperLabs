@@ -199,6 +199,13 @@ impl Key {
         }
     }
 
+    pub fn into_uref(self) -> Option<URef> {
+        match self {
+            Key::URef(uref) => Some(uref),
+            _ => None,
+        }
+    }
+
     pub fn as_hash(&self) -> Option<[u8; KEY_HASH_LENGTH]> {
         match self {
             Key::Hash(hash) => Some(*hash),
