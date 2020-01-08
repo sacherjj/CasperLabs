@@ -281,8 +281,8 @@ pub mod gens {
                     pub_key,
                     urefs,
                     purse_id,
-                    associated_keys.clone(),
-                    thresholds.clone(),
+                    associated_keys,
+                    thresholds,
                 )
         }
     }
@@ -587,7 +587,6 @@ mod tests {
         // variant b) decrease total weight by 3 (total 9) - fail
         assert_eq!(
             account
-                .clone()
                 .update_associated_key(key_3, Weight::new(1))
                 .unwrap_err(),
             UpdateKeyFailure::ThresholdViolation

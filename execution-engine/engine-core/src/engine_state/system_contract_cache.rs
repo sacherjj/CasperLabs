@@ -98,7 +98,7 @@ mod tests {
         };
         let module = Module::default();
 
-        cache.insert(reference, module.clone());
+        cache.insert(reference, module);
 
         assert!(cache.has(&reference))
     }
@@ -113,7 +113,7 @@ mod tests {
         };
         let module = Module::default();
 
-        cache.insert(reference, module.clone());
+        cache.insert(reference, module);
 
         assert!(cache.has(&reference.with_access_rights(AccessRights::ADD_WRITE)))
     }
@@ -130,7 +130,7 @@ mod tests {
 
         cache.insert(
             reference.with_access_rights(AccessRights::ADD_WRITE),
-            module.clone(),
+            module,
         );
 
         assert!(cache.has(&reference))
@@ -185,7 +185,7 @@ mod tests {
 
         let result = cache.get(&reference.with_access_rights(AccessRights::ADD_WRITE));
 
-        assert_eq!(result, Some(module.clone()))
+        assert_eq!(result, Some(module))
     }
 
     #[test]
@@ -209,7 +209,7 @@ mod tests {
 
         let result = cache.get(&reference.remove_access_rights());
 
-        assert_eq!(result, Some(module.clone()))
+        assert_eq!(result, Some(module))
     }
 
     #[test]

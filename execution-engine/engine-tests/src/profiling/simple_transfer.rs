@@ -22,16 +22,14 @@ use casperlabs_engine_tests::{
 use contract_ffi::value::U512;
 use engine_core::engine_state::EngineConfig;
 
-const ABOUT: &str =
-    "Executes a simple contract which transfers an amount between two accounts.  \
-     Note that the 'state-initializer' executable should be run first to set up the \
-     required global state.";
+const ABOUT: &str = "Executes a simple contract which transfers an amount between two accounts.  \
+     Note that the 'state-initializer' executable should be run first to set up the required \
+     global state.";
 
 const ROOT_HASH_ARG_NAME: &str = "root-hash";
 const ROOT_HASH_ARG_VALUE_NAME: &str = "HEX-ENCODED HASH";
 const ROOT_HASH_ARG_HELP: &str =
-    "Initial root hash; the output of running the 'state-initializer' \
-     executable";
+    "Initial root hash; the output of running the 'state-initializer' executable";
 
 const VERBOSE_ARG_NAME: &str = "verbose";
 const VERBOSE_ARG_SHORT: &str = "v";

@@ -67,21 +67,13 @@ build:
 	$(CARGO) build $(CARGO_FLAGS)
 
 build-contract-rs/%:
-	$(CARGO) build \
-		--release $(filter-out --release, $(CARGO_FLAGS)) \
-		--package $* \
-		--target wasm32-unknown-unknown
+	$(CARGO) build --release $(filter-out --release, $(CARGO_FLAGS)) --package $* --target wasm32-unknown-unknown
 
 build-contract-as/%:
 	cd $* && $(NPM) run asbuild
 
 build-integration-contract/%:
-	$(CARGO) build \
-		-Z unstable-options \
-		--release $(filter-out --release, $(CARGO_FLAGS)) \
-		--package $* \
-		--target wasm32-unknown-unknown \
-		--out-dir $(IT_RES_DIR)
+	$(CARGO) build -Z unstable-options --release $(filter-out --release, $(CARGO_FLAGS)) --package $* --target wasm32-unknown-unknown --out-dir $(IT_RES_DIR)
 
 .PHONY: build-contracts-rs
 build-contracts-rs: \

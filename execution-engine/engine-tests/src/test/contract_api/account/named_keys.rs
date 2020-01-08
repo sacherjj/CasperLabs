@@ -40,7 +40,7 @@ fn should_run_named_keys_contract() {
             }
             None
         })
-        .nth(0)
+        .next()
         .expect("Should have write string");
     assert_eq!(string_value, "Hello, world!");
     let u512_value = transform
@@ -58,7 +58,7 @@ fn should_run_named_keys_contract() {
             }
             None
         })
-        .nth(0);
+        .next();
 
     assert!(u512_value.is_some(), "should have write uin512");
 

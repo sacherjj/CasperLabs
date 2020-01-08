@@ -1,4 +1,4 @@
-#![feature(result_map_or_else, never_type)]
+#![feature(never_type)]
 
 pub mod additive_map;
 #[macro_use]

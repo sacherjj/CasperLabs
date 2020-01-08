@@ -328,7 +328,7 @@ impl ExecutionResultBuilder {
                 Some(Transform::Write(_)) => reader
                     .read(correlation_id, k)
                     .ok()
-                    .and_then(|maybe_v| maybe_v.map(|v| (*k, v.clone()))),
+                    .and_then(|maybe_v| maybe_v.map(|v| (*k, v))),
                 _ => None,
             })
             .collect();

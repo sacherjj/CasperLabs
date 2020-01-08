@@ -98,7 +98,7 @@ mod tests {
         );
         assert_eq!(
             expected_error,
-            CLValue::try_from(invalid_pb_big_int.clone()).unwrap_err()
+            CLValue::try_from(invalid_pb_big_int).unwrap_err()
         );
     }
 
@@ -119,7 +119,7 @@ mod tests {
         );
         assert_eq!(
             expected_error,
-            CLValue::try_from(invalid_pb_big_int.clone()).unwrap_err()
+            CLValue::try_from(invalid_pb_big_int).unwrap_err()
         );
     }
 

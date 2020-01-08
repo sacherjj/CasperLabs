@@ -174,7 +174,7 @@ fn deserialize_treemap(b: &mut Bencher) {
         res.insert("1234".to_string(), "5678".to_string());
         res
     };
-    let data = data.clone().to_bytes().unwrap();
+    let data = data.to_bytes().unwrap();
     b.iter(|| BTreeMap::<String, String>::from_bytes(black_box(&data)));
 }
 
@@ -196,7 +196,7 @@ fn deserialize_string(b: &mut Bencher) {
 fn serialize_vec_of_string(b: &mut Bencher) {
     let lorem = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.".to_string();
     let array_of_lorem: Vec<String> = lorem.split(' ').map(Into::into).collect();
-    let data = array_of_lorem.clone();
+    let data = array_of_lorem;
     b.iter(|| ToBytes::to_bytes(black_box(&data)));
 }
 
@@ -275,7 +275,7 @@ fn deserialize_vec_of_keys(b: &mut Bencher) {
     let keys: Vec<Key> = (0..32)
         .map(|i| Key::URef(URef::new([i; 32], AccessRights::ADD_WRITE)))
         .collect();
-    let keys_bytes = keys.clone().to_bytes().unwrap();
+    let keys_bytes = keys.to_bytes().unwrap();
     b.iter(|| Vec::<Key>::from_bytes(black_box(&keys_bytes)));
 }
 

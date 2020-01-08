@@ -1123,7 +1123,7 @@ where
                 &mut proof_of_stake_keys,
                 base_key,
                 &system_account,
-                authorization_keys.clone(),
+                authorization_keys,
                 blocktime,
                 deploy_hash,
                 gas_limit,

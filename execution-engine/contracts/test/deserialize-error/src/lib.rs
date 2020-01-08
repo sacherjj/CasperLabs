@@ -65,5 +65,5 @@ fn my_call_contract<A: ArgsParser>(c_ptr: ContractRef, args: A) {
 #[no_mangle]
 pub extern "C" fn call() {
     let do_nothing: ContractRef = storage::store_function_at_hash("do_nothing", BTreeMap::new());
-    my_call_contract(do_nothing.clone(), ());
+    my_call_contract(do_nothing, ());
 }

@@ -419,7 +419,7 @@ fn should_maintain_local_state_across_upgrade() {
             Transform::Write(StoredValue::CLValue(cl_value)) => {
                 let s = cl_value.to_owned().into_t::<String>().unwrap_or_default();
                 if s.contains(HELLO) {
-                    Some((*key, s.clone()))
+                    Some((*key, s))
                 } else {
                     None
                 }

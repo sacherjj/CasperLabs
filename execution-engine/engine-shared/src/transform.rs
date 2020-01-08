@@ -406,7 +406,7 @@ mod tests {
         let apply_overflow = Transform::AddInt32(1).apply(max_value.clone());
 
         let apply_overflow_uint = one_transform.clone().apply(max_value.clone());
-        let apply_underflow = Transform::AddInt32(-1).apply(min_value.clone());
+        let apply_underflow = Transform::AddInt32(-1).apply(min_value);
 
         let transform_overflow = max_transform.clone() + Transform::AddInt32(1);
         let transform_overflow_uint = max_transform + one_transform;

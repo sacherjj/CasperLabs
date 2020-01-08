@@ -33,7 +33,7 @@ fn get_purse_key_from_mint_transform(mint_transform: &Transform) -> Key {
 
     // Exactly one new key which is the new purse created
     assert_eq!(keys.len(), 1);
-    let (map_key, map_value) = keys.iter().nth(0).unwrap();
+    let (map_key, map_value) = keys.iter().next().unwrap();
 
     // Decode uref name
     assert!(

@@ -76,7 +76,7 @@ impl<M: Meter<Key, StoredValue>> TrackingCopyCache<M> {
 
     /// Inserts `key` and `value` pair to Write/Add cache.
     pub fn insert_write(&mut self, key: Key, value: StoredValue) {
-        self.muts_cached.insert(key, value.clone());
+        self.muts_cached.insert(key, value);
     }
 
     /// Gets value from `key` in the cache.

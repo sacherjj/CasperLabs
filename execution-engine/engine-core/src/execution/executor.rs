@@ -319,9 +319,9 @@ impl Executor {
         let runtime_context = RuntimeContext::new(
             state,
             keys,
-            access_rights.clone(),
+            access_rights,
             args,
-            authorization_keys.clone(),
+            authorization_keys,
             account,
             base_key,
             blocktime,
