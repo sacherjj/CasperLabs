@@ -24,6 +24,7 @@ import io.casperlabs.p2p.EffectsTestInstances.LogicalTime
 import io.casperlabs.shared.LogStub
 import io.casperlabs.storage.BlockMsgWithTransform
 import io.casperlabs.storage.block.BlockStorage
+import io.casperlabs.storage.dag.FinalityStorage
 import monix.eval.Task
 import monix.execution.Scheduler
 import monix.execution.Scheduler.Implicits.global
@@ -1468,7 +1469,12 @@ object HashSetCasperTest {
     StorageFixture
       .createStorages[Task]()
       .flatMap {
-        case (implicit0(blockStorage: BlockStorage[Task]), _, _, _) =>
+        case (
+            implicit0(blockStorage: BlockStorage[Task]),
+            _,
+            _,
+            implicit0(fs: FinalityStorage[Task])
+            ) =>
           Genesis.fromChainSpec[Task](spec)
       }
       .unsafeRunSync

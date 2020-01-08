@@ -37,7 +37,7 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with Sto
   }
 
   "isInMainChain and votedBranch" should "classify appropriately when using the same block" in withStorage {
-    implicit blockStorage => implicit dagStorage => _ =>
+    implicit blockStorage => implicit dagStorage => _ => _ =>
       for {
         b      <- createAndStoreBlock[Task](Seq())
         dag    <- dagStorage.getRepresentation
@@ -47,7 +47,7 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with Sto
   }
 
   it should "classify appropriately" in withStorage {
-    implicit blockStorage => implicit dagStorage =>
+    implicit blockStorage => implicit dagStorage => _ =>
       _ =>
         /**
           * The DAG looks like:
@@ -76,7 +76,7 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with Sto
   }
 
   it should "classify diamond DAGs appropriately" in withStorage {
-    implicit blockStorage => implicit dagStorage =>
+    implicit blockStorage => implicit dagStorage => _ =>
       _ =>
         /**
           * The dag looks like:
@@ -104,7 +104,7 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with Sto
   }
 
   it should "classify complicated chains appropriately" in withStorage {
-    implicit blockStorage => implicit dagStorage => _ =>
+    implicit blockStorage => implicit dagStorage => _ => _ =>
       val v1 = generateValidator("V1")
       val v2 = generateValidator("V2")
 
@@ -158,7 +158,7 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with Sto
 
   // See [[casper/src/test/resources/casper/panoramaForEquivocatorSwimlaneIsEmpty.png]]
   "panoramaDagLevelsOfBlock" should "properly return the panorama of message B" in withStorage {
-    implicit blockStorage => implicit dagStorage => _ =>
+    implicit blockStorage => implicit dagStorage => _ => _ =>
       val v0         = generateValidator("V0")
       val v1         = generateValidator("V1")
       val v2         = generateValidator("V2")
@@ -280,7 +280,7 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with Sto
 
   // See [[casper/src/test/resources/casper/panoramaForEquivocatorSwimlaneIsEmpty.png]]
   "panoramaM" should "properly return the panorama of message B, and when V(j)-swimlane is empty or V(j) happens to be an equivocator, puts 0 in the corresponding cell." in withStorage {
-    implicit blockStorage => implicit blockDagStorage => _ =>
+    implicit blockStorage => implicit blockDagStorage => _ => _ =>
       val v0                = generateValidator("V0")
       val v1                = generateValidator("V1")
       val v2                = generateValidator("V2")
