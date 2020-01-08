@@ -11,6 +11,10 @@ import io.casperlabs.casper.consensus.{Block, BlockSummary, Era}
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.crypto.Keys.{PublicKey, PublicKeyBS}
 import io.casperlabs.models.Message
+import io.casperlabs.storage.BlockHash
+import io.casperlabs.storage.dag.{DagRepresentation, DagStorage}
+import io.casperlabs.storage.era.EraStorage
+import io.casperlabs.casper.util.DagOperations
 import scala.util.Random
 
 /** Class to encapsulate the message handling logic of messages in an era.
@@ -30,7 +34,7 @@ import scala.util.Random
   *
   * This should make testing easier: the return values are not opaque.
   */
-class EraRuntime[F[_]: MonadThrowable: Clock](
+class EraRuntime[F[_]: MonadThrowable: Clock: EraStorage](
     conf: HighwayConf,
     val era: Era,
     leaderFunction: LeaderFunction,
@@ -43,9 +47,13 @@ class EraRuntime[F[_]: MonadThrowable: Clock](
     // messages build on blocks long gone and check a huge swathe of the DAG for merge
     // conflicts.
     isSynced: => F[Boolean],
+    dag: DagRepresentation[F],
+    // Random number generator used to pick the omega delay.
     rng: Random = new Random()
 ) {
   import EraRuntime.Agenda, Agenda._
+  import EraRuntime.isCrossing
+
   type HWL[A] = HighwayLog[F, A]
   private val noop = HighwayLog.unit[F]
 
@@ -67,9 +75,9 @@ class EraRuntime[F[_]: MonadThrowable: Clock](
     * while their main parent was still before the deadline.
     */
   private def isBoundary(boundaries: List[Instant])(
-      mainParentBlockRoundId: Instant,
-      blockRoundId: Instant
-  ) = boundaries.exists(t => mainParentBlockRoundId.isBefore(t) && !blockRoundId.isBefore(t))
+      mainParentBlockRound: Instant,
+      blockRound: Instant
+  ) = boundaries.exists(isCrossing(_)(mainParentBlockRound, blockRound))
 
   val isBookingBoundary = isBoundary(bookingBoundaries)(_, _)
   val isKeyBoundary     = isBoundary(keyBoundaries)(_, _)
@@ -80,8 +88,13 @@ class EraRuntime[F[_]: MonadThrowable: Clock](
     * however, the validators of _this_ era are the ones that can finalize it by
     * building ballots on top of it. They cannot build more blocks on them though.
     */
-  val isSwitchBoundary = (mpbr: Instant, br: Instant) => mpbr.isBefore(end) && !br.isBefore(end)
+  val isSwitchBoundary = isCrossing(end)(_, _)
 
+  private implicit class MessageOps(msg: Message) {
+    def roundInstant = conf.toInstant(Ticks(msg.roundId))
+  }
+
+  /** Current tick based on wall clock time. */
   private def currentTick =
     Clock[F].realTime(conf.tickUnit).map(Ticks(_))
 
@@ -186,6 +199,60 @@ class EraRuntime[F[_]: MonadThrowable: Clock](
     } yield ()
   }
 
+  /** Trace the lineage of the switch block back to find a key block,
+    * then the corresponding booking block.
+    */
+  private def createEra(
+      switchBlock: Message
+  ): HWL[Unit] = {
+    val keyBlockBoundary     = end minus conf.keyDuration
+    val bookingBlockBoundary = end minus conf.bookingDuration
+
+    val childEra: F[Era] = for {
+      keyBlock     <- findBlockCrossingBoundary(switchBlock, isCrossing(keyBlockBoundary))
+      bookingBlock <- findBlockCrossingBoundary(keyBlock, isCrossing(bookingBlockBoundary))
+      magicBits <- DagOperations
+                    .bfTraverseF(List(keyBlock)) { msg =>
+                      dag.lookupUnsafe(msg.parentBlock).map(List(_))
+                    }
+                    .takeUntil(_.messageHash == bookingBlock.messageHash)
+                    .map(_.blockSummary.getHeader.magicBit)
+                    .toList
+                    .map(_.reverse)
+
+      childEra = Era(
+        parentKeyBlockHash = era.keyBlockHash,
+        keyBlockHash = keyBlock.messageHash,
+        bookingBlockHash = bookingBlock.messageHash,
+        startTick = conf.toTicks(end),
+        endTick = conf.toTicks(conf.eraEnd(end)),
+        bonds = bookingBlock.blockSummary.getHeader.getState.bonds,
+        leaderSeed =
+          ByteString.copyFrom(LeaderSequencer.seed(era.leaderSeed.toByteArray, magicBits))
+      )
+      _ <- EraStorage[F].addEra(childEra)
+    } yield childEra
+
+    HighwayLog.liftF(childEra) map (HighwayEvent.CreatedEra(_)) flatMap (HighwayLog.tell[F](_))
+  }
+
+  /** Find a block in the ancestry where the parent is before a time,
+    * but the block is after the time. */
+  private def findBlockCrossingBoundary(
+      descendant: Message,
+      isBoundary: (Instant, Instant) => Boolean
+  ): F[Message] = {
+    def loop(child: Message, childTime: Instant): F[Message] =
+      dag.lookupUnsafe(child.parentBlock).flatMap { parent =>
+        val parentTime = parent.roundInstant
+        if (isBoundary(parentTime, childTime))
+          child.pure[F]
+        else
+          loop(parent, parentTime)
+      }
+    loop(descendant, descendant.roundInstant)
+  }
+
   /** Pick a time during the round to send the omega message. */
   private def chooseOmegaTick(roundStart: Ticks, roundEnd: Ticks): Ticks = {
     val r = rng.nextDouble()
@@ -253,7 +320,8 @@ class EraRuntime[F[_]: MonadThrowable: Clock](
         noop
       case b: Message.Block =>
         val roundId = Ticks(b.roundId)
-        maybeMessageProducer.fold(noop) { mp =>
+
+        val response = maybeMessageProducer.fold(noop) { mp =>
           if (mp.validatorId == b.validatorId) {
             illegal("Shouldn't receive our own messages!")
           } else if (b.keyBlockHash != era.keyBlockHash) {
@@ -272,6 +340,8 @@ class EraRuntime[F[_]: MonadThrowable: Clock](
             }
           }
         }
+
+        response >> handleCriticalBlocks(b)
     }
   }
 
@@ -317,11 +387,23 @@ class EraRuntime[F[_]: MonadThrowable: Clock](
         } >> HighwayLog.liftF(Agenda.empty.pure[F])
     }
 
+  private def handleCriticalBlocks(block: Message.Block): HWL[Unit] =
+    if (block.parentBlock.isEmpty) noop
+    else {
+      for {
+        parent <- HighwayLog.liftF[F, Message] {
+                   dag.lookupUnsafe(block.parentBlock)
+                 }
+        parentTime = parent.roundInstant
+        childTime  = block.roundInstant
+        _          <- createEra(block).whenA(isSwitchBoundary(parentTime, childTime))
+      } yield ()
+    }
 }
 
 object EraRuntime {
 
-  def fromGenesis[F[_]: Sync: Clock](
+  def fromGenesis[F[_]: Sync: Clock: DagStorage: EraStorage](
       conf: HighwayConf,
       genesis: BlockSummary,
       maybeMessageProducer: Option[MessageProducer[F]],
@@ -339,7 +421,7 @@ object EraRuntime {
     fromEra[F](conf, era, maybeMessageProducer, initRoundExponent, isSynced, leaderSequencer)
   }
 
-  def fromEra[F[_]: Sync: Clock](
+  def fromEra[F[_]: Sync: Clock: DagStorage: EraStorage](
       conf: HighwayConf,
       era: Era,
       maybeMessageProducer: Option[MessageProducer[F]],
@@ -350,6 +432,7 @@ object EraRuntime {
     for {
       leaderFunction   <- leaderSequencer[F](era)
       roundExponentRef <- Ref.of[F, Int](initRoundExponent)
+      dag              <- DagStorage[F].getRepresentation
     } yield {
       new EraRuntime[F](
         conf,
@@ -361,7 +444,8 @@ object EraRuntime {
         maybeMessageProducer.filter { mp =>
           era.bonds.exists(b => b.validatorPublicKey == mp.validatorId)
         },
-        isSynced
+        isSynced,
+        dag
       )
     }
 
@@ -392,4 +476,8 @@ object EraRuntime {
 
     val empty = apply()
   }
+
+  /** Check that a parent timestamp is before, while the child is at or after a given boundary. */
+  private def isCrossing(boundary: Instant)(parent: Instant, child: Instant): Boolean =
+    parent.isBefore(boundary) && !child.isBefore(boundary)
 }

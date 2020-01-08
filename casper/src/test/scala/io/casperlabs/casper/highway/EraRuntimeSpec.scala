@@ -1,6 +1,7 @@
 package io.casperlabs.casper.highway
 
-import cats.{Applicative, Id}
+import cats.{Applicative, Id, Show}
+import cats.syntax.show._
 import cats.syntax.option._
 import cats.syntax.applicative._
 import cats.effect.{Clock, Sync}
@@ -13,8 +14,12 @@ import io.casperlabs.crypto.Keys.{PublicKey, PublicKeyBS}
 import io.casperlabs.models.Message
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.storage.BlockHash
+import io.casperlabs.storage.dag.DagStorage
+import io.casperlabs.storage.era.EraStorage
+import io.casperlabs.casper.highway.mocks.{MockDagStorage, MockEraStorage}
 import org.scalatest._
 import org.scalactic.source
+import org.scalactic.Prettifier
 import scala.concurrent.duration._
 
 class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUtils {
@@ -23,7 +28,6 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
   import EraRuntime.Agenda
   import io.casperlabs.catscontrib.effect.implicits.syncId
 
-  // Let's say we are right at the beginning of the era by default.
   implicit def defaultClock: Clock[Id] = TestClock.frozen[Id](date(2019, 12, 9))
 
   val conf = HighwayConf(
@@ -61,7 +65,11 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
       leaderSequencer: LeaderSequencer = LeaderSequencer,
       isSyncedRef: Ref[Id, Boolean] = Ref.of[Id, Boolean](true)
   )(
-      implicit C: Clock[Id]
+      implicit
+      // Let's say we are right at the beginning of the era by default.
+      C: Clock[Id] = TestClock.frozen[Id](date(2019, 12, 9)),
+      DS: DagStorage[Id] = MockDagStorage[Id],
+      ES: EraStorage[Id] = MockEraStorage[Id]
   ) =
     EraRuntime.fromGenesis[Id](
       conf,
@@ -70,7 +78,7 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
       roundExponent,
       isSyncedRef.get,
       leaderSequencer
-    )(Sync[Id], C)
+    )(Sync[Id], C, DS, ES)
 
   def assertEvent(
       events: Vector[HighwayEvent]
@@ -160,7 +168,7 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
     "reject a block received from a doppelganger" in {
       val runtime = genesisEraRuntime("Alice".some)
       val message =
-        makeBlock("Alice", eraId = runtime.era.keyBlockHash, roundId = runtime.startTick)
+        makeBlock("Alice", runtime.era, roundId = runtime.startTick)
       runtime.validate(message).value shouldBe Left(
         "The block is coming from a doppelganger."
       )
@@ -172,7 +180,7 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
       )
       val message = makeBlock(
         validator = "Charlie",
-        eraId = runtime.era.keyBlockHash,
+        era = runtime.era,
         roundId = runtime.startTick
       )
       runtime.validate(message).value shouldBe Left(
@@ -239,7 +247,7 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
 
         "it is from the leader" should {
           "create a lambda response" in {
-            val msg    = makeBlock(leader, runtime.era.keyBlockHash, runtime.startTick)
+            val msg    = makeBlock(leader, runtime.era, runtime.startTick)
             val events = runtime.handleMessage(msg).written
             events should have size 1
             assertEvent(events) {
@@ -258,7 +266,7 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
 
         "it is not from the leader" should {
           "reject the block" in {
-            val msg = makeBlock("Bob", runtime.era.keyBlockHash, runtime.startTick)
+            val msg = makeBlock("Bob", runtime.era, runtime.startTick)
             an[IllegalStateException] should be thrownBy {
               runtime.handleMessage(msg)
             }
@@ -266,13 +274,61 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
         }
 
         "it is a switch block" should {
-          "create an era" in (pending)
+          "create an era" in {
+            implicit val ds = MockDagStorage[Id]
+            implicit val es = MockEraStorage[Id]
+
+            // The genesis era is going to be 2 weeks long
+            val runtime = genesisEraRuntime("Alice".some, leaderSequencer = mockSequencer(leader))
+
+            // Let the leader make one block every hour. At the end of the genesis era,
+            // the right key block should be picked for the child era.
+            val blocks = Stream
+              .iterate(runtime.start)(_ plus 1.hour)
+              .takeWhile(t => !t.isAfter(runtime.end))
+              .foldLeft(List.empty[Message]) {
+                case (msgs, t) =>
+                  val b = makeBlock(
+                    leader,
+                    runtime.era,
+                    roundId = conf.toTicks(t),
+                    mainParent = msgs.headOption.map(_.messageHash).getOrElse(ByteString.EMPTY)
+                  )
+                  b :: msgs
+              }
+              .reverse
+              .toVector
+
+            blocks.foreach(msg => ds.insert(msg.toBlock))
+
+            // The last block should be the switch block.
+            val events = runtime.handleMessage(blocks.last).written
+
+            assertEvent(events) {
+              case HighwayEvent.CreatedEra(era) =>
+                era.parentKeyBlockHash shouldBe runtime.era.keyBlockHash
+                era.startTick shouldBe runtime.era.endTick
+
+                // Booking block is 10 days before the end of the era,
+                val bookingIdx = 4 * 24
+                // The key block is 3 hours later than the booking block.
+                val keyIdx = bookingIdx + 3
+
+                era.bookingBlockHash shouldBe blocks(bookingIdx).messageHash
+                era.keyBlockHash shouldBe blocks(keyIdx).messageHash
+
+                era.leaderSeed.toByteArray shouldBe LeaderSequencer.seed(
+                  runtime.era.leaderSeed.toByteArray,
+                  blocks.slice(bookingIdx, keyIdx + 1).map(_.blockSummary.getHeader.magicBit)
+                )
+            }
+          }
         }
 
         "in a round which is not corresponding to the validator's current round ID" should {
           "not respond" in {
             val msg =
-              makeBlock(leader, runtime.era.keyBlockHash, roundId = Ticks(runtime.startTick + 1))
+              makeBlock(leader, runtime.era, roundId = Ticks(runtime.startTick + 1))
             runtime.handleMessage(msg).written shouldBe empty
           }
         }
@@ -280,7 +336,7 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
         "it is from the validator itself" should {
           "throw IllegalStateException" in {
             an[IllegalStateException] shouldBe thrownBy {
-              val msg = makeBlock(validator = "Alice", runtime.era.keyBlockHash, runtime.startTick)
+              val msg = makeBlock(validator = "Alice", runtime.era, runtime.startTick)
               runtime.handleMessage(msg)
             }
           }
@@ -290,7 +346,7 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
       "given a ballot" when {
         "in the normal era period" should {
           "not respond" in {
-            val msg = makeBallot(leader, runtime.era.keyBlockHash, runtime.startTick)
+            val msg = makeBallot(leader, runtime.era, runtime.startTick)
             runtime.handleMessage(msg).written shouldBe empty
           }
         }
@@ -314,7 +370,7 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
 
       "given a lambda message" should {
         "not respond" in {
-          val msg = makeBlock(leader, runtime.era.keyBlockHash, runtime.startTick)
+          val msg = makeBlock(leader, runtime.era, runtime.startTick)
           runtime.handleMessage(msg).written shouldBe empty
         }
       }
@@ -333,7 +389,7 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
           isSyncedRef = isSyncedRef,
           leaderSequencer = mockSequencer(leader)
         )
-        val msg = makeBlock(leader, runtime.era.keyBlockHash, runtime.startTick)
+        val msg = makeBlock(leader, runtime.era, runtime.startTick)
         runtime.handleMessage(msg).written shouldBe empty
         isSyncedRef.set(true) // Works with `Id` only because of the `=> F[Boolean]`
         runtime.handleMessage(msg).written should not be empty
@@ -544,31 +600,53 @@ object EraRuntimeSpec {
   def validatorKey(name: String) =
     PublicKey(ByteString.copyFromUtf8(name))
 
-  def makeBlock(validator: String, eraId: ByteString, roundId: Ticks) =
+  implicit class MessageOps(msg: Message) {
+    def toBlock: Block = {
+      val s = msg.blockSummary
+      Block(s.blockHash, s.header, None, s.signature)
+    }
+  }
+
+  private val blockHashes =
+    Stream.iterate(0)(_ + 1).map(i => ByteString.copyFromUtf8(i.toString)).iterator
+
+  implicit val prettifier = Prettifier {
+    case x: ByteString => new String(x.toByteArray)
+    case other         => Prettifier.default(other)
+  }
+
+  def makeBlock(
+      validator: String,
+      era: Era,
+      roundId: Ticks,
+      mainParent: ByteString = ByteString.EMPTY
+  ) =
     Message.fromBlockSummary {
       BlockSummary()
         .withHeader(
           Block
             .Header()
             .withValidatorPublicKey(validatorKey(validator))
-            .withKeyBlockHash(eraId)
+            .withKeyBlockHash(era.keyBlockHash)
             .withRoundId(roundId)
+            .withParentHashes(List(mainParent).filterNot(_.isEmpty))
+            .withMagicBit(scala.util.Random.nextBoolean())
         )
-        .withBlockHash(ByteString.copyFromUtf8(System.currentTimeMillis.toString))
+        .withBlockHash(blockHashes.next())
     }.get
 
-  def makeBallot(validator: String, eraId: ByteString, roundId: Ticks) =
+  def makeBallot(validator: String, era: Era, roundId: Ticks) =
     Message.fromBlockSummary {
       BlockSummary()
         .withHeader(
           Block
             .Header()
             .withMessageType(Block.MessageType.BALLOT)
-            .withKeyBlockHash(eraId)
+            .withKeyBlockHash(era.keyBlockHash)
             .withRoundId(roundId)
             .withValidatorPublicKey(validatorKey(validator))
         )
-        .withBlockHash(ByteString.copyFromUtf8(System.currentTimeMillis.toString))
+        .withBlockHash(blockHashes.next())
     }.get
 
   def mockMessageProducer[F[_]: Applicative](validator: String) = new MessageProducer[F] {

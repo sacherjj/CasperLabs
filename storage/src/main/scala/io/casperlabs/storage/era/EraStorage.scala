@@ -6,7 +6,9 @@ import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.casper.consensus.Era
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.storage.BlockHash
+import simulacrum.typeclass
 
+@typeclass
 trait EraStorage[F[_]] {
   def addEra(era: Era): F[Unit]
 
