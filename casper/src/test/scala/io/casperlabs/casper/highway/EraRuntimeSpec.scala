@@ -80,6 +80,29 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
       leaderSequencer
     )(Sync[Id], C, DS, ES)
 
+  /** Fill the DagStorage with blocks at a fixed interval long the era. */
+  def makeFullChain(validator: String, runtime: EraRuntime[Id], interval: FiniteDuration) =
+    Stream
+      .iterate(runtime.start)(_ plus interval)
+      .takeWhile(t => !t.isAfter(runtime.end))
+      .foldLeft(List.empty[Message]) {
+        case (msgs, t) =>
+          val b = makeBlock(
+            validator,
+            runtime.era,
+            roundId = conf.toTicks(t),
+            mainParent = msgs.headOption.map(_.messageHash).getOrElse(ByteString.EMPTY)
+          )
+          b :: msgs
+      }
+      .reverse
+      .toVector
+
+  def insertAll(messages: Seq[Message])(implicit ds: MockDagStorage[Id]) = {
+    messages.map(_.toBlock).foreach(ds.insert)
+    messages
+  }
+
   def assertEvent(
       events: Vector[HighwayEvent]
   )(test: PartialFunction[HighwayEvent, Unit])(implicit pos: source.Position) =
@@ -295,23 +318,7 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
 
           // Let the leader make one block every hour. At the end of the genesis era,
           // the right key block should be picked for the child era.
-          val blocks = Stream
-            .iterate(runtime.start)(_ plus 1.hour)
-            .takeWhile(t => !t.isAfter(runtime.end))
-            .foldLeft(List.empty[Message]) {
-              case (msgs, t) =>
-                val b = makeBlock(
-                  leader,
-                  runtime.era,
-                  roundId = conf.toTicks(t),
-                  mainParent = msgs.headOption.map(_.messageHash).getOrElse(ByteString.EMPTY)
-                )
-                b :: msgs
-            }
-            .reverse
-            .toVector
-
-          blocks.foreach(msg => ds.insert(msg.toBlock))
+          val blocks = insertAll(makeFullChain(leader, runtime, 1.hour))
 
           "create an era" in {
             implicit val es = MockEraStorage[Id]
@@ -394,21 +401,26 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
     }
 
     "the validator is not bonded" when {
-      val leader = "Alice"
+      val leader      = "Alice"
+      implicit val ds = MockDagStorage[Id]
       val runtime = genesisEraRuntime(
         "Anonymous".some,
         leaderSequencer = mockSequencer(leader)
       )
+      val blocks = insertAll(makeFullChain(leader, runtime, 24.hours))
 
       "given a lambda message" should {
         "not respond" in {
-          val msg = makeBlock(leader, runtime.era, runtime.startTick)
-          runtime.handleMessage(msg).written shouldBe empty
+          runtime.handleMessage(blocks.head).written shouldBe empty
         }
       }
 
       "given a switch block" should {
-        "create an era" in (pending)
+        "create an era" in {
+          assertEvent(runtime.handleMessage(blocks.last).written) {
+            case _: HighwayEvent.CreatedEra =>
+          }
+        }
       }
     }
 
