@@ -279,8 +279,6 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
             // This will be relevant when for round exponent adjustments.
             pending
           }
-
-          "reject further lambda messages in this round" in (pending)
         }
 
         "it is not from the leader" should {
