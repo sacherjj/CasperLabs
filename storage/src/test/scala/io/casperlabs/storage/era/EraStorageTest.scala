@@ -40,6 +40,21 @@ trait EraStorageTest extends FlatSpecLike with Matchers with ArbitraryConsensus 
     } yield ()
   }
 
+  it should "return whether the era already existed" in withStorage { db =>
+    val era = sample[Era]
+    for {
+      a <- db.containsEra(era.keyBlockHash)
+      b <- db.addEra(era)
+      c <- db.containsEra(era.keyBlockHash)
+      d <- db.addEra(era)
+    } yield {
+      a shouldBe false
+      b shouldBe true
+      c shouldBe true
+      d shouldBe false
+    }
+  }
+
   it should "find the children of an era" in withStorage { db =>
     val e0 = sample[Era]
     val e1 = sample[Era].withParentKeyBlockHash(e0.keyBlockHash)

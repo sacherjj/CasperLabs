@@ -11,8 +11,10 @@ import io.casperlabs.storage.era.EraStorage
 class MockEraStorage[F[_]: Applicative](
     erasRef: Ref[F, Map[BlockHash, Era]]
 ) extends EraStorage[F] {
-  def addEra(era: Era): F[Unit] =
-    erasRef.update(_.updated(era.keyBlockHash, era))
+  def addEra(era: Era): F[Boolean] =
+    erasRef.modify { es =>
+      es.updated(era.keyBlockHash, era) -> !es.contains(era.keyBlockHash)
+    }
 
   def getEra(keyBlockHash: BlockHash): F[Option[Era]] =
     erasRef.get.map(_.get(keyBlockHash))

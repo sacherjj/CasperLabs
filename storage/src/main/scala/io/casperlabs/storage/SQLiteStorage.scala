@@ -156,9 +156,9 @@ object SQLiteStorage {
       override def latestInEra(keyBlockHash: BlockHash) =
         dagStorage.getRepresentation.flatMap(_.latestInEra(keyBlockHash))
 
-      override def addEra(era: Era): F[Unit]                   = eraStorage.addEra(era)
-      override def getEra(eraId: BlockHash): F[Option[Era]]    = eraStorage.getEra(eraId)
-      override def getChildEras(eraId: BlockHash): F[Set[Era]] = eraStorage.getChildEras(eraId)
+      override def addEra(era: Era)               = eraStorage.addEra(era)
+      override def getEra(eraId: BlockHash)       = eraStorage.getEra(eraId)
+      override def getChildEras(eraId: BlockHash) = eraStorage.getChildEras(eraId)
 
       override def markAsFinalized(
           mainParent: BlockHash,

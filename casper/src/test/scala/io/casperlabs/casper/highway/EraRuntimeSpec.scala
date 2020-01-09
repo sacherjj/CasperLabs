@@ -293,32 +293,33 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
         }
 
         "it is a switch block" should {
+          implicit val ds = MockDagStorage[Id]
+
+          // Let the leader make one block every hour. At the end of the genesis era,
+          // the right key block should be picked for the child era.
+          val blocks = Stream
+            .iterate(runtime.start)(_ plus 1.hour)
+            .takeWhile(t => !t.isAfter(runtime.end))
+            .foldLeft(List.empty[Message]) {
+              case (msgs, t) =>
+                val b = makeBlock(
+                  leader,
+                  runtime.era,
+                  roundId = conf.toTicks(t),
+                  mainParent = msgs.headOption.map(_.messageHash).getOrElse(ByteString.EMPTY)
+                )
+                b :: msgs
+            }
+            .reverse
+            .toVector
+
+          blocks.foreach(msg => ds.insert(msg.toBlock))
+
           "create an era" in {
-            implicit val ds = MockDagStorage[Id]
             implicit val es = MockEraStorage[Id]
 
             // The genesis era is going to be 2 weeks long
             val runtime = genesisEraRuntime("Alice".some, leaderSequencer = mockSequencer(leader))
-
-            // Let the leader make one block every hour. At the end of the genesis era,
-            // the right key block should be picked for the child era.
-            val blocks = Stream
-              .iterate(runtime.start)(_ plus 1.hour)
-              .takeWhile(t => !t.isAfter(runtime.end))
-              .foldLeft(List.empty[Message]) {
-                case (msgs, t) =>
-                  val b = makeBlock(
-                    leader,
-                    runtime.era,
-                    roundId = conf.toTicks(t),
-                    mainParent = msgs.headOption.map(_.messageHash).getOrElse(ByteString.EMPTY)
-                  )
-                  b :: msgs
-              }
-              .reverse
-              .toVector
-
-            blocks.foreach(msg => ds.insert(msg.toBlock))
 
             // The last block should be the switch block.
             val events = runtime.handleMessage(blocks.last).written
@@ -340,6 +341,20 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
                   runtime.era.leaderSeed.toByteArray,
                   blocks.slice(bookingIdx, keyIdx + 1).map(_.blockSummary.getHeader.magicBit)
                 )
+            }
+          }
+
+          "not create an era if it already exists" in {
+            implicit val es = MockEraStorage[Id]
+            // The genesis era is going to be 2 weeks long
+            val runtime = genesisEraRuntime("Alice".some, leaderSequencer = mockSequencer(leader))
+            // The first time it's executed the switch block should create an era.
+            assertEvent(runtime.handleMessage(blocks.last).written) {
+              case HighwayEvent.CreatedEra(_) =>
+            }
+            // The second time, it should pass.
+            runtime.handleMessage(blocks.last).written.collect {
+              case HighwayEvent.CreatedEra(_) => fail("Should not have created an era again!")
             }
           }
         }

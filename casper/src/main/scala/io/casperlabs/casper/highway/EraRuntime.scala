@@ -4,7 +4,7 @@ import cats._
 import cats.data.{EitherT, WriterT}
 import cats.implicits._
 import cats.effect.{Clock, Sync}
-import cats.effect.concurrent.Ref
+import cats.effect.concurrent.{Ref, Semaphore}
 import com.google.protobuf.ByteString
 import java.time.Instant
 import io.casperlabs.casper.consensus.{Block, BlockSummary, Era}
@@ -208,32 +208,48 @@ class EraRuntime[F[_]: MonadThrowable: Clock: EraStorage](
     val keyBlockBoundary     = end minus conf.keyDuration
     val bookingBlockBoundary = end minus conf.bookingDuration
 
-    val childEra: F[Era] = for {
-      keyBlock     <- findBlockCrossingBoundary(switchBlock, isCrossing(keyBlockBoundary))
-      bookingBlock <- findBlockCrossingBoundary(keyBlock, isCrossing(bookingBlockBoundary))
-      magicBits <- DagOperations
-                    .bfTraverseF(List(keyBlock)) { msg =>
-                      dag.lookupUnsafe(msg.parentBlock).map(List(_))
-                    }
-                    .takeUntil(_.messageHash == bookingBlock.messageHash)
-                    .map(_.blockSummary.getHeader.magicBit)
-                    .toList
-                    .map(_.reverse)
+    // Trace back to the corresponding key block.
+    val keyBlockF = findBlockCrossingBoundary(switchBlock, isCrossing(keyBlockBoundary))
 
-      childEra = Era(
-        parentKeyBlockHash = era.keyBlockHash,
-        keyBlockHash = keyBlock.messageHash,
-        bookingBlockHash = bookingBlock.messageHash,
-        startTick = conf.toTicks(end),
-        endTick = conf.toTicks(conf.eraEnd(end)),
-        bonds = bookingBlock.blockSummary.getHeader.getState.bonds,
-        leaderSeed =
-          ByteString.copyFrom(LeaderSequencer.seed(era.leaderSeed.toByteArray, magicBits))
-      )
-      _ <- EraStorage[F].addEra(childEra)
-    } yield childEra
+    val maybeChildEra = keyBlockF flatMap { keyBlock =>
+      // Checking if the era exist; if it does, we don't need to look up the booking block.
+      EraStorage[F]
+        .containsEra(keyBlock.messageHash)
+        .ifM(
+          none[Era].pure[F],
+          for {
+            bookingBlock <- findBlockCrossingBoundary(
+                             keyBlock,
+                             isCrossing(bookingBlockBoundary)
+                           )
+            magicBits <- DagOperations
+                          .bfTraverseF(List(keyBlock)) { msg =>
+                            dag.lookupUnsafe(msg.parentBlock).map(List(_))
+                          }
+                          .takeUntil(_.messageHash == bookingBlock.messageHash)
+                          .map(_.blockSummary.getHeader.magicBit)
+                          .toList
+                          .map(_.reverse)
+            childEra = Era(
+              parentKeyBlockHash = era.keyBlockHash,
+              keyBlockHash = keyBlock.messageHash,
+              bookingBlockHash = bookingBlock.messageHash,
+              startTick = conf.toTicks(end),
+              endTick = conf.toTicks(conf.eraEnd(end)),
+              bonds = bookingBlock.blockSummary.getHeader.getState.bonds,
+              leaderSeed = ByteString.copyFrom(
+                LeaderSequencer.seed(era.leaderSeed.toByteArray, magicBits)
+              )
+            )
+            isNew <- EraStorage[F].addEra(childEra)
+          } yield childEra.some.filter(_ => isNew)
+        )
+    }
 
-    HighwayLog.liftF(childEra) map (HighwayEvent.CreatedEra(_)) flatMap (HighwayLog.tell[F](_))
+    HighwayLog.liftF(maybeChildEra) flatMap {
+      case Some(era) => HighwayLog.tell[F](HighwayEvent.CreatedEra(era))
+      case None      => noop
+    }
   }
 
   /** Find a block in the ancestry where the parent is before a time,

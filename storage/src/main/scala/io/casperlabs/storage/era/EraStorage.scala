@@ -10,10 +10,16 @@ import simulacrum.typeclass
 
 @typeclass
 trait EraStorage[F[_]] {
-  def addEra(era: Era): F[Unit]
+
+  /** Persist an era. Return whether it already existed. */
+  def addEra(era: Era): F[Boolean]
 
   /** Retrieve the era, if it exists, by its key block hash. */
   def getEra(keyBlockHash: BlockHash): F[Option[Era]]
+
+  /** Check if an era already exists. */
+  def containsEra(keyBlockHash: BlockHash)(implicit A: Applicative[F]): F[Boolean] =
+    getEra(keyBlockHash).map(_.isDefined)
 
   /** Retrieve the era, or raise an error if it's not found. */
   def getEraUnsafe(keyBlockHash: BlockHash)(implicit E: MonadThrowable[F]): F[Era] =
@@ -28,4 +34,5 @@ trait EraStorage[F[_]] {
 
   /** Retrieve the child eras from the era tree. */
   def getChildEras(keyBlockHash: BlockHash): F[Set[Era]]
+
 }

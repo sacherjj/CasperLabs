@@ -18,7 +18,7 @@ class SQLiteEraStorage[F[_]: Sync](
 ) extends EraStorage[F]
     with DoobieCodecs {
 
-  override def addEra(era: Era): F[Unit] = {
+  override def addEra(era: Era): F[Boolean] = {
     val hash        = era.keyBlockHash
     val parentHash  = Option(era.parentKeyBlockHash).filterNot(_.isEmpty)
     val startMillis = TimeUnit.MILLISECONDS.convert(era.startTick, tickUnit)
@@ -30,7 +30,7 @@ class SQLiteEraStorage[F[_]: Sync](
             VALUES ($hash, $parentHash, $startMillis, $endMillis, ${era.startTick}, ${era.endTick}, $era)
             """.update.run
 
-    insertEra.transact(writeXa).void
+    insertEra.transact(writeXa).map(_ > 0)
   }
 
   override def getEra(keyBlockHash: BlockHash): F[Option[Era]] =
