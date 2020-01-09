@@ -1,7 +1,7 @@
 import * as CL from "../../../../contract-ffi-as/assembly";
 import {Error, ErrorCode} from "../../../../contract-ffi-as/assembly/error";
-import {URef} from "../../../../contract-ffi-as/assembly/uref";
 import {CLValue} from "../../../../contract-ffi-as/assembly/clvalue";
+import {PurseId} from "../../../../contract-ffi-as/assembly/purseid";
 
 const POS_ACTION = "get_payment_purse";
 
@@ -18,7 +18,7 @@ export function call(): void {
     return;
   }
 
-  let mainPurse = CL.getMainPurse();
+  let mainPurse = PurseId.getMainPurse();
   if (mainPurse == null) {
     Error.fromErrorCode(ErrorCode.MissingArgument).revert();
     return;
@@ -33,15 +33,14 @@ export function call(): void {
     return;
   }
 
-  let paymentPurse = URef.fromBytes(output);
+  let paymentPurse = PurseId.fromBytes(output);
   if (paymentPurse == null) {
     Error.fromErrorCode(ErrorCode.InvalidPurse).revert();
     return;
   }
 
-  let ret = CL.transferFromPurseToPurse(
-    mainPurse,
-    <URef>(paymentPurse),
+  let ret = mainPurse.transferToPurse(
+    <PurseId>(paymentPurse),
     amountBytes,
   );
   if (ret > 0) {

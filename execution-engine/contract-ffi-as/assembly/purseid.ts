@@ -1,46 +1,102 @@
-// TODO: do we want to port PurseId or not bother as it adds additional cruft for little value?
-// import {UREF_SERIALIZED_LENGTH, URef} from "./uref";
-// import * as externals from "./externals";
-//
-// export const PURSE_ID_SERIALIZED_LENGTH = UREF_SERIALIZED_LENGTH;
-//
-// export class PurseId {
-//     private uref: URef;
-//
-//     constructor(uref: URef) {
-//         this.uref = uref;
-//     }
-//
-//     toBytes(): Array<u8>{
-//         const bytes = this.uref.getBytes();
-//         const len = bytes.length;
-//         let result = new Array<u8>(len);
-//         for (let i = 0; i < len; i++) {
-//             result[i] = bytes[i];
-//         }
-//         return result;
-//     }
-//
-//     static fromBytes(bytes: Uint8Array): PurseId | null {
-//         let uref = URef.fromBytes(bytes);
-//         if(uref === null)
-//             return null;
-//         return new PurseId(uref);
-//     }
-//
-//     transferToPurse(target: PurseId, amount: Uint8Array): i32 {
-//         let sourceBytes = this.uref.toBytes();
-//         let targetBytes = target.toBytes();
-//
-//         let ret = externals.transfer_from_purse_to_purse(
-//             sourceBytes.dataStart,
-//             sourceBytes.length,
-//             targetBytes.dataStart,
-//             targetBytes.length,
-//             // NOTE: amount has U512 type but is not deserialized throughout the execution, as there's no direct replacement for big ints
-//             amount.dataStart,
-//             amount.length,
-//         );
-//         return ret;
-//     }
-// }
+import {UREF_SERIALIZED_LENGTH, URef} from "./uref";
+import * as externals from "./externals";
+import {fromBytesU32} from "./bytesrepr";
+import {readHostBuffer} from "./index";
+
+export const PURSE_ID_SERIALIZED_LENGTH = UREF_SERIALIZED_LENGTH;
+
+export class PurseId {
+    private uref: URef;
+
+    constructor(uref: URef) {
+        this.uref = uref;
+    }
+
+    static getMainPurse(): PurseId | null {
+        let data = new Uint8Array(PURSE_ID_SERIALIZED_LENGTH);
+        data.fill(0);
+        externals.get_main_purse(data.dataStart);
+        let uref = URef.fromBytes(data);
+        if (uref == null)
+            return null;
+        let purseId = new PurseId(uref);
+        return purseId;
+    }
+
+    toBytes(): Array<u8>{
+        return this.uref.toBytes();
+    }
+
+    static fromBytes(bytes: Uint8Array): PurseId | null {
+        let uref = URef.fromBytes(bytes);
+        if(uref === null)
+            return null;
+        return new PurseId(uref);
+    }
+
+    asURef(): URef{
+        return this.uref;
+    }
+
+    getBalance(): u32 | null {
+        let sourceBytes = this.toBytes();
+        let balanceSize = new Array<u32>(1);
+        balanceSize[0] = 0;
+
+        let retBalance = externals.get_balance(
+            sourceBytes.dataStart,
+            sourceBytes.length,
+            balanceSize.dataStart,
+        );
+        if (retBalance > 0) {
+            return null;
+        }
+
+        let bytes = readHostBuffer(balanceSize[0]);
+        if (bytes == null) {
+            return null;
+        }
+
+        let balance = fromBytesU32(bytes);
+        if (balance == null) {
+            return null;
+        }
+
+        return <u32>balance;
+    }
+
+    transferToAccount(target: Uint8Array, amount: Uint8Array): i32 {
+        let sourceBytes = this.toBytes();
+        let targetBytes = new Array<u8>(target.length);
+        for (let i = 0; i < target.length; i++) {
+            targetBytes[i] = target[i];
+        }
+
+        let ret = externals.transfer_from_purse_to_account(
+            sourceBytes.dataStart,
+            sourceBytes.length,
+            targetBytes.dataStart,
+            targetBytes.length,
+            // NOTE: amount has U512 type but is not deserialized throughout the execution, as there's no direct replacement for big ints
+            amount.dataStart,
+            amount.length,
+        );
+        return ret;
+    }
+
+    transferToPurse(target: PurseId, amount: Uint8Array): i32 {
+        let sourceBytes = this.toBytes();
+        let targetBytes = target.toBytes();
+
+        let ret = externals.transfer_from_purse_to_purse(
+            sourceBytes.dataStart,
+            sourceBytes.length,
+            targetBytes.dataStart,
+            targetBytes.length,
+            // NOTE: amount has U512 type but is not deserialized throughout the execution, as there's no direct replacement for big ints
+            amount.dataStart,
+            amount.length,
+        );
+        return ret;
+    }
+}

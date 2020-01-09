@@ -10,7 +10,6 @@ import {serializeArguments, toBytesString} from "./bytesrepr";
 // }
 
 const ADDR_LENGTH = 32;
-const PURSE_ID_SERIALIZED_LENGTH = UREF_SERIALIZED_LENGTH;
 
 export const enum SystemContract {
   Mint = 0,
@@ -117,29 +116,6 @@ export function callContract(key: Key, args: CLValue[]): Uint8Array | null {
   return readHostBuffer(hostBufSize);
 }
 
-export function getMainPurse(): URef | null {
-  let data = new Uint8Array(PURSE_ID_SERIALIZED_LENGTH);
-  data.fill(0);
-  externals.get_main_purse(data.dataStart);
-  return URef.fromBytes(data);
-}
-
-export function transferFromPurseToPurse(source: URef, target: URef, amount: Uint8Array): i32 {
-  let sourceBytes = source.toBytes();
-  let targetBytes = target.toBytes();
-
-  let ret = externals.transfer_from_purse_to_purse(
-    sourceBytes.dataStart,
-    sourceBytes.length,
-    targetBytes.dataStart,
-    targetBytes.length,
-    // NOTE: amount has U512 type but is not deserialized throughout the execution, as there's no direct replacement for big ints
-    amount.dataStart,
-    amount.length,
-  );
-  return ret;
-}
-
 export function putKey(name: String, key: Key): void {
   var nameBytes = toBytesString(name);
   var keyBytes = key.toBytes();
@@ -148,4 +124,20 @@ export function putKey(name: String, key: Key): void {
     nameBytes.length,
     keyBytes.dataStart,
     keyBytes.length);
+}
+
+export function transferToAccount(target: Uint8Array, amount: Uint8Array): i32 {
+  let targetBytes = new Array<u8>(target.length);
+  for (let i = 0; i < target.length; i++) {
+    targetBytes[i] = target[i];
+  }
+
+  let ret = externals.transfer_to_account(
+      targetBytes.dataStart,
+      targetBytes.length,
+      // NOTE: amount has U512 type but is not deserialized throughout the execution, as there's no direct replacement for big ints
+      amount.dataStart,
+      amount.length,
+  );
+  return ret;
 }
