@@ -173,21 +173,40 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
         "The block is coming from a doppelganger."
       )
     }
+
     "reject a block received from a non-leader" in {
       val runtime = genesisEraRuntime(
         "Alice".some,
         leaderSequencer = mockSequencer("Bob")
       )
-      val message = makeBlock(
-        validator = "Charlie",
-        era = runtime.era,
-        roundId = runtime.startTick
-      )
+      val message = makeBlock("Charlie", runtime.era, runtime.startTick)
       runtime.validate(message).value shouldBe Left(
         "The block is not coming from the leader of the round."
       )
     }
-    "reject a second block received from the leader in the same round" in (pending)
+    "reject a second block received from the leader in the same round" in {
+      implicit val ds = MockDagStorage[Id]
+      val runtime = genesisEraRuntime(
+        "Alice".some,
+        leaderSequencer = mockSequencer("Bob")
+      )
+      val message0 = makeBlock("Bob", runtime.era, roundId = runtime.startTick)
+      val message1 = makeBlock(
+        "Bob",
+        runtime.era,
+        roundId = runtime.startTick,
+        mainParent = message0.messageHash,
+        justifications = Map(
+          message0.validatorId -> message0.messageHash
+        )
+      )
+
+      ds.insert(message0.toBlock)
+
+      runtime.validate(message1).value shouldBe Left(
+        "The leader has already sent a lambda message in this round."
+      )
+    }
   }
 
   "initAgenda" when {
@@ -619,7 +638,8 @@ object EraRuntimeSpec {
       validator: String,
       era: Era,
       roundId: Ticks,
-      mainParent: ByteString = ByteString.EMPTY
+      mainParent: ByteString = ByteString.EMPTY,
+      justifications: Map[ByteString, ByteString] = Map.empty
   ) =
     Message.fromBlockSummary {
       BlockSummary()
@@ -631,6 +651,11 @@ object EraRuntimeSpec {
             .withRoundId(roundId)
             .withParentHashes(List(mainParent).filterNot(_.isEmpty))
             .withMagicBit(scala.util.Random.nextBoolean())
+            .withJustifications(
+              justifications.toSeq.map {
+                case (v, b) => Block.Justification(v, b)
+              }
+            )
         )
         .withBlockHash(blockHashes.next())
     }.get

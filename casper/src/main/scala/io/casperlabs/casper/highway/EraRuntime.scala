@@ -261,27 +261,59 @@ class EraRuntime[F[_]: MonadThrowable: Clock: EraStorage](
     Ticks(t.toLong)
   }
 
+  /** Check if a message cites another in the same round, which would mean it's not a lambda message.*/
+  private def hasJustificationInOwnRound(message: Message): F[Boolean] =
+    message.justifications.toList.findM[F] { j =>
+      dag.lookupUnsafe(j.latestBlockHash).map { jmsg =>
+        jmsg.keyBlockHash == message.keyBlockHash && jmsg.roundId == message.roundId
+      }
+    } map (_.isEmpty)
+
   /** Preliminary check before the block is executed. Invalid blocks can be dropped. */
   def validate(message: Message): EitherT[F, String, Unit] = {
     val ok = EitherT.rightT[F, String](())
 
-    def checkF(c: F[Boolean], msg: String) = EitherT {
-      c.ifM(ok.value, msg.asLeft[Unit].pure[F])
+    def checkF(errorMessage: String, errorCondition: F[Boolean]) = EitherT {
+      errorCondition.ifM(errorMessage.asLeft[Unit].pure[F], ok.value)
     }
-    def check(c: Boolean, msg: String) = checkF(c.pure[F], msg)
+    def check(errorMessage: String, errorCondition: Boolean) =
+      checkF(errorMessage, errorCondition.pure[F])
 
     check(
-      !maybeMessageProducer.map(_.validatorId).contains(message.validatorId),
-      "The block is coming from a doppelganger."
+      "The block is coming from a doppelganger.",
+      maybeMessageProducer.map(_.validatorId).contains(message.validatorId)
     ) >> {
       message match {
         case b: Message.Block =>
           val roundId = Ticks(b.roundId)
           check(
-            (leaderFunction(roundId) == b.validatorId),
-            "The block is not coming from the leader of the round."
-          )
-        // TODO (NODE-1102): Check that we haven't received a block from the same validator in this round.
+            "The block is not coming from the leader of the round.",
+            leaderFunction(roundId) != b.validatorId
+          ) >>
+            checkF(
+              "The leader has already sent a lambda message in this round.",
+              DagOperations
+                .swimlaneV[F](
+                  message.validatorId,
+                  message,
+                  dag
+                )
+                .filter(_.messageHash != message.validatorId)
+                .takeWhile { x =>
+                  x.roundId == message.roundId && x.keyBlockHash == message.keyBlockHash
+                }
+                .findF {
+                  case _: Message.Block =>
+                    // We established that this validator is the lead, so this is a lambda block.
+                    true.pure[F]
+                  case b: Message.Ballot if b.roundId > endTick =>
+                    // Ballots can be lambdas in the voting only period.
+                    hasJustificationInOwnRound(b).map(!_)
+                  case _ =>
+                    false.pure[F]
+                }
+                .map(_.isDefined)
+            )
         case _ =>
           ok
       }
