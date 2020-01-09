@@ -13,10 +13,17 @@ import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.crypto.codec.Base16
 
 trait DagStorage[F[_]] {
-  //TODO: Get rid of DagRepresentation if SQLite works out
-  /* Doesn't guarantee to return immutable representation */
+
+  /** Doesn't guarantee to return immutable representation. */
   def getRepresentation: F[DagRepresentation[F]]
+
+  /** Insert a block into the DAG and update the latest messages.
+    * In the presence of eras, the block only affects the latest messages
+    * of the era which the block is part of. To detect equivocations
+    * or the tips, the caller needs to look at multiple eras along the tree.
+    */
   private[storage] def insert(block: Block): F[DagRepresentation[F]]
+
   def checkpoint(): F[Unit]
   def clear(): F[Unit]
   def close(): F[Unit]
@@ -36,7 +43,6 @@ object DagStorage {
   }
 
   trait MeteredDagRepresentation[F[_]] extends DagRepresentation[F] with Metered[F] {
-    // Not measuring 'latestMessage*' because they return fs2.Stream which doesn't work with 'incAndMeasure'
 
     abstract override def children(blockHash: BlockHash): F[Set[BlockHash]] =
       incAndMeasure("children", super.children(blockHash))
@@ -49,18 +55,6 @@ object DagStorage {
 
     abstract override def contains(blockHash: BlockHash): F[Boolean] =
       incAndMeasure("contains", super.contains(blockHash))
-
-    abstract override def latestMessageHash(validator: Validator): F[Set[BlockHash]] =
-      incAndMeasure("latestMessageHash", super.latestMessageHash(validator))
-
-    abstract override def latestMessage(validator: Validator): F[Set[Message]] =
-      incAndMeasure("latestMessage", super.latestMessage(validator))
-
-    abstract override def latestMessageHashes: F[Map[Validator, Set[BlockHash]]] =
-      incAndMeasure("latestMessageHashes", super.latestMessageHashes)
-
-    abstract override def latestMessages: F[Map[Validator, Set[Message]]] =
-      incAndMeasure("latestMessages", super.latestMessages)
 
     abstract override def topoSort(
         startBlockNumber: Long,
@@ -79,7 +73,52 @@ object DagStorage {
       super.incAndMeasure("topoSortTail", super.topoSortTail(tailLength))
   }
 
+  trait MeteredTipRepresentation[F[_]] extends TipRepresentation[F] with Metered[F] {
+    abstract override def latestMessageHash(validator: Validator): F[Set[BlockHash]] =
+      incAndMeasure("latestMessageHash", super.latestMessageHash(validator))
+
+    abstract override def latestMessage(validator: Validator): F[Set[Message]] =
+      incAndMeasure("latestMessage", super.latestMessage(validator))
+
+    abstract override def latestMessageHashes: F[Map[Validator, Set[BlockHash]]] =
+      incAndMeasure("latestMessageHashes", super.latestMessageHashes)
+
+    abstract override def latestMessages: F[Map[Validator, Set[Message]]] =
+      incAndMeasure("latestMessages", super.latestMessages)
+  }
+
   def apply[F[_]](implicit B: DagStorage[F]): DagStorage[F] = B
+}
+
+trait TipRepresentation[F[_]] {
+  def latestMessageHash(validator: Validator): F[Set[BlockHash]]
+  def latestMessage(validator: Validator): F[Set[Message]]
+  def latestMessageHashes: F[Map[Validator, Set[BlockHash]]]
+  def latestMessages: F[Map[Validator, Set[Message]]]
+}
+
+trait EraTipRepresentation[F[_]] extends TipRepresentation[F] {
+  // TODO: These methods should move here from DagRepresentationRich,
+  // to make sure we never try to detect equivocators on the global
+  // representation, however for that we need lots of updates in
+  // the casper codebase.
+
+  // Equivocation will be defined as the set of validators who
+  // equivocated in the eras between the key block and the current era,
+  // but it will be up to the caller to aggregate this information,
+  // i.e. to decide how far to look back, before forgiveness kicks in.
+
+  // Since latest messages are restricted to this era, when looking
+  // to build a new block, one has to reduce the tips of multiple eras
+  // into the final set of childless blocks.
+
+  // The justifications of a new block can be chosen as the reduced set of:
+  // * the latest messages in the era,
+  // * the parent block candidate hashes, and
+  // * the justifications of the parent block candidates.
+
+  // def getEquivocators: F[Set[Validator]] = ???
+  // def getEquivocations: F[Map[Validator, Set[Message]]] = ???
 }
 
 trait DagRepresentation[F[_]] {
@@ -111,21 +150,44 @@ trait DagRepresentation[F[_]] {
 
   def topoSortTail(tailLength: Int): fs2.Stream[F, Vector[BlockInfo]]
 
-  def latestMessageHash(validator: Validator): F[Set[BlockHash]]
-  def latestMessage(validator: Validator): F[Set[Message]]
-  def latestMessageHashes: F[Map[Validator, Set[BlockHash]]]
-  def latestMessages: F[Map[Validator, Set[Message]]]
+  /** Get a global representation, which can be used in:
+    * 1) naive casper mode, without eras
+    * 2) in the gossiping, when nodes ask each other for their latest blocks
+    *
+    * Latest messages would be that of any era which is considered active,
+    * so that pull based gossiping can pull ballots of eras still being finalized
+    * as well as the child era which is already started, but we stop returning
+    * records for eras that have already finished (their last ballots are no longer
+    * relevant tips).
+    *
+    * This will not reflect equivocations in the presence of parallel eras.
+    *
+    * Doesn't guarantee to return immutable representation.
+    */
+  def latestGlobal: F[TipRepresentation[F]]
+
+  /** Get a representation restricted to a given era, which mean anyone
+    * with more than 1 entry in their latest messages must have equivocated
+    * in *this* era. If they equivocated in an ancestor era, that has to be
+    * detected separately in the application layer by walking backward on
+    * the era tree, according to the forgiveness settings.
+    *
+    * Messages in sibling eras are invisible to each other.
+    *
+    * The DAG itself, i.e. the parent child relationships are unaffected.
+    */
+  def latestInEra(keyBlockHash: BlockHash): F[EraTipRepresentation[F]]
 }
 
 object DagRepresentation {
   type Validator = ByteString
 
-  implicit class DagRepresentationRich[F[_]](
+  implicit class DagRepresentationRich[F[_]: Monad](
       dagRepresentation: DagRepresentation[F]
   ) {
     def getMainChildren(
         blockHash: BlockHash
-    )(implicit monad: Monad[F]): F[List[BlockHash]] =
+    ): F[List[BlockHash]] =
       dagRepresentation
         .children(blockHash)
         .flatMap(
@@ -141,16 +203,31 @@ object DagRepresentation {
         )
 
     // Returns a set of validators that this node has seen equivocating.
-    def getEquivocators(implicit M: Monad[F]): F[Set[Validator]] =
+    def getEquivocators: F[Set[Validator]] =
       getEquivocations.map(_.keySet)
 
+    // NOTE: These extension methods are here so the Naive-Casper codebase doesn't have to do another
+    // step (i.e. `.latestGlobal.flatMap { tip => ... }`)  but in Highway we should first specify the era.
+
+    def latestMessageHash(validator: Validator): F[Set[BlockHash]] =
+      dagRepresentation.latestGlobal.flatMap(_.latestMessageHash(validator))
+
+    def latestMessage(validator: Validator): F[Set[Message]] =
+      dagRepresentation.latestGlobal.flatMap(_.latestMessage(validator))
+
+    def latestMessageHashes: F[Map[Validator, Set[BlockHash]]] =
+      dagRepresentation.latestGlobal.flatMap(_.latestMessageHashes)
+
+    def latestMessages: F[Map[Validator, Set[Message]]] =
+      dagRepresentation.latestGlobal.flatMap(_.latestMessages)
+
     // Returns a mapping between equivocators and their messages.
-    def getEquivocations(implicit M: Monad[F]): F[Map[Validator, Set[Message]]] =
-      dagRepresentation.latestMessages.map(_.filter(_._2.size > 1))
+    def getEquivocations: F[Map[Validator, Set[Message]]] =
+      latestMessages.map(_.filter(_._2.size > 1))
 
     // Returns latest messages from honest validators
-    def latestMessagesHonestValidators(implicit M: Monad[F]): F[Map[Validator, Message]] =
-      dagRepresentation.latestMessages.map { latestMessages =>
+    def latestMessagesHonestValidators: F[Map[Validator, Message]] =
+      latestMessages.map { latestMessages =>
         latestMessages.collect {
           case (v, messages) if messages.size == 1 =>
             (v, messages.head)
