@@ -1,5 +1,5 @@
 import "assemblyscript/std/portable";
-import {toBytesU32, fromBytesU32, fromBytesU64, toBytesMap, serializeArguments, toBytesString, fromBytesString, toBytesPair } from "../assembly/bytesrepr";
+import {toBytesU32, toBytesU64, fromBytesU32, fromBytesU64, toBytesMap, serializeArguments, toBytesString, fromBytesString, toBytesPair } from "../assembly/bytesrepr";
 import {AccessRights, URef} from "../assembly/uref";
 import {Option} from "../assembly/option";
 import {Key} from "../assembly/key";
@@ -111,3 +111,31 @@ test("serialize map", t => {
     const serialized = toBytesMap(map);
     t.deepEqual(Array.from(serialized), Array.from(truth));
 })
+
+test("serialize u64", t => {
+    // 2**32-1 represented as 64 bit little endian bytes
+    const truth1 = hex2bin("0004000000000000");
+    var value1 = fromBytesU64(truth1);
+    t.deepEqual(value1, 1024);
+
+    const bytes1 = toBytesU64(value1);
+    t.deepEqual(Array.from(bytes1), Array.from(truth1));
+
+    //
+
+    const truth2 = hex2bin("0000000000000000");
+    const value2 = fromBytesU64(truth2);
+    t.deepEqual(value2, 0);
+
+    const bytes2 = toBytesU64(value2);
+    t.deepEqual(Array.from(bytes2), Array.from(truth2));
+
+    //
+
+    const truth3 = hex2bin("ffffffff00000000");
+    const value3 = fromBytesU64(truth3);
+    t.deepEqual(value3, 0xffffffff);
+
+    const bytes3 = toBytesU64(value3);
+    t.deepEqual(Array.from(bytes3), Array.from(truth3));
+});
