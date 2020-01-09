@@ -1,5 +1,5 @@
 const fs = require("fs");
-const compiled = new WebAssembly.Module(fs.readFileSync(__dirname + "/build/optimized.wasm"));
+const compiled = new WebAssembly.Module(fs.readFileSync(__dirname + "/build/do_nothing_stored.wasm"));
 const imports = {
   env: {
     abort(_msg, _file, line, column) {

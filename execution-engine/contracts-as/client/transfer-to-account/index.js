@@ -1,5 +1,5 @@
 const fs = require("fs");
-const compiled = new WebAssembly.Module(fs.readFileSync(__dirname + "/build/standard_payment_stored.wasm"));
+const compiled = new WebAssembly.Module(fs.readFileSync(__dirname + "/build/transfer_to_account.wasm"));
 const imports = {
   env: {
     abort(_msg, _file, line, column) {
