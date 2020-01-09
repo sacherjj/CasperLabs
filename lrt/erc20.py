@@ -1,15 +1,13 @@
 import os
-import threading
+import time
 from pathlib import Path
 
 import casperlabs_client
-from casperlabs_client import ABI
+from casperlabs_client.abi import ABI
 
 BASE_PATH = Path(os.path.dirname(os.path.abspath(__file__))).parent
 ERC20_WASM = f"{BASE_PATH}/execution-engine/target/wasm32-unknown-unknown/release/erc20_smart_contract.wasm"
 
-
-PROPOSE_LOCK = threading.Lock()
 
 # At the beginning of a serialized version of Rust's Vec<u8>, first 4 bytes represent the size of the vector.
 #
@@ -74,14 +72,27 @@ class BoundAgent:
         self.node = node
 
     def call_contract(self, method):
+        deploy_hash = method(self)
+        wait_for_deploy_processed(self, deploy_hash)
+        return deploy_hash
+
+    def query(self, method):
         return method(self)
 
 
+def wait_for_deploy_processed(bound_agent, deploy_hash):
+    while True:
+        result = bound_agent.node.client.showDeploy(deploy_hash)
+        if result.status.state != 1:  # PENDING
+            break
+        # result.status.state == PROCESSED (2)
+        time.sleep(1)
+
+
 class SmartContract:
-    def __init__(self, file_name, methods, propose_after_deploy=True):
+    def __init__(self, file_name, methods):
         self.file_name = file_name
         self.methods = methods
-        self.propose_after_deploy = propose_after_deploy
 
     def contract_hash_by_name(self, bound_agent, deployer, contract_name, block_hash):
         response = bound_agent.node.client.queryState(
@@ -102,7 +113,7 @@ class SmartContract:
         if name not in self.methods:
             raise Exception(f"unknown method {name}")
 
-        def method(**kwargs):
+        def callable_method(**kwargs):
             parameters = self.methods[name]
             if set(kwargs.keys()) != set(parameters.keys()):
                 raise Exception(
@@ -111,34 +122,29 @@ class SmartContract:
             arguments = self.abi_encode_args(name, parameters, kwargs)
             arguments_string = f"{name}({','.join(f'{p}={type(kwargs[p]) == bytes and kwargs[p].hex() or kwargs[p]}' for p in parameters)})"
 
-            def deploy_and_maybe_propose(bound_agent, **session_reference):
-                with PROPOSE_LOCK:
-                    kwargs = dict(
-                        public_key=bound_agent.agent.public_key,
-                        private_key=bound_agent.agent.private_key,
-                        payment_amount=10000000,
-                        session_args=arguments,
-                    )
-                    if session_reference:
-                        kwargs.update(session_reference)
-                    else:
-                        kwargs["session"] = self.file_name
-                    print(f"Call {arguments_string}")
-                    _, deploy_hash = bound_agent.node.client.deploy(**kwargs)
-                    if self.propose_after_deploy:
-                        block_hash = bound_agent.node.client.propose().block_hash.hex()
-                        for deploy_info in bound_agent.node.client.showDeploys(
-                            block_hash
-                        ):
-                            if deploy_info.is_error:
-                                raise Exception(
-                                    f"Deploy {deploy_hash.hex()} [{arguments_string}] error_message: {deploy_info.error_message}"
-                                )
-                    return deploy_hash
+            def deploy(bound_agent, **session_reference):
+                kwargs = dict(
+                    public_key=bound_agent.agent.public_key,
+                    private_key=bound_agent.agent.private_key,
+                    payment_amount=10000000,
+                    session_args=arguments,
+                )
+                if session_reference:
+                    kwargs.update(session_reference)
+                else:
+                    kwargs["session"] = self.file_name
+                print(f"Call {arguments_string}")
+                # TODO: deploy will soon return just the deploy_hash only
+                _, deploy_hash = bound_agent.node.client.deploy(**kwargs)
+                deploy_hash = deploy_hash.hex()
 
-            return deploy_and_maybe_propose
+                wait_for_deploy_processed(bound_agent, deploy_hash)
 
-        return method
+                return deploy_hash
+
+            return deploy
+
+        return callable_method
 
 
 class DeployedERC20:
@@ -148,10 +154,8 @@ class DeployedERC20:
         self.proxy_hash = proxy_hash
 
     @classmethod
-    def create(
-        cls, deployer: BoundAgent, token_name: str, propose_after_deploy: bool = True
-    ):
-        erc20 = ERC20(token_name, propose_after_deploy)
+    def create(cls, deployer: BoundAgent, token_name: str):
+        erc20 = ERC20(token_name)
         block_hash = last_block_hash(deployer.node)
         return DeployedERC20(
             erc20,
@@ -202,8 +206,8 @@ class ERC20(SmartContract):
         },
     }
 
-    def __init__(self, token_name, propose_after_deploy=True):
-        super().__init__(ERC20_WASM, ERC20.methods, propose_after_deploy)
+    def __init__(self, token_name):
+        super().__init__(ERC20_WASM, ERC20.methods)
         self.token_name = token_name
         self.proxy_name = "erc20_proxy"
 
@@ -231,7 +235,7 @@ class ERC20(SmartContract):
             deploy_hash = self.method("deploy")(
                 token_name=self.token_name, initial_balance=initial_balance
             )(bound_agent)
-            deploy_hash = deploy_hash
+            return deploy_hash
             block_hash = last_block_hash(bound_agent.node)
             return DeployedERC20(
                 self,
@@ -251,25 +255,11 @@ def last_block_hash(node):
 
 
 def transfer_clx(sender, recipient_public_hex, amount):
-    args = [
-        "transfer",
-        "--private-key",
-        sender.agent.private_key,
-        "--payment-amount",
-        1000000000,
-        "--from",
-        sender.agent.public_key_hex,
-        "-t",
+    deploy_hash = sender.node.client.transfer(
         recipient_public_hex,
-        "-a",
         amount,
-    ]
-    str_args = " ".join(map(str, args))
-    print(str_args)
-    rc = sender.node.client.cli(*args)
-    if rc != 0:
-        raise Exception(f"FAILED: {str_args} => {rc}")
-    block_hash = sender.node.client.propose().block_hash.hex()
-    for deploy_info in sender.node.client.showDeploys(block_hash):
-        if deploy_info.is_error:
-            raise Exception(f"FAILED: {str_args} => {deploy_info.error_message}")
+        payment_amount=1000000000,
+        from_addr=sender.agent.public_key_hex,
+        private_key=sender.agent.private_key,
+    )
+    wait_for_deploy_processed(sender, deploy_hash)
