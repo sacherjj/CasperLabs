@@ -100,6 +100,19 @@ export function toBytesArrayU8(arr: Array<u8>): u8[] {
     return bytes.concat(arr);
 }
 
+export function fromBytesArrayU8(arr: Uint8Array): Uint8Array | null {
+    var len = fromBytesU32(arr);
+    if (len === null) {
+        return null;
+    }
+
+    if (<u32>len < <u32>arr.length - 4) {
+        return null;
+    }
+
+    return arr.subarray(4);
+}
+
 export function serializeArguments(values: CLValue[]): Array<u8> {
     let bytes = toBytesU32(<u32>values.length);
     for (let i = 0; i < values.length; i++) {

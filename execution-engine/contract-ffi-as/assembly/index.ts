@@ -2,7 +2,8 @@ import * as externals from "./externals";
 import {UREF_SERIALIZED_LENGTH, URef, AccessRights} from "./uref";
 import {CLValue} from "./clvalue";
 import {Key} from "./key";
-import {serializeArguments, toBytesString} from "./bytesrepr";
+import {serializeArguments, toBytesString, toBytesArrayU8} from "./bytesrepr";
+import {U512} from "./bignum";
 
 // NOTE: interfaces aren't supported in AS yet: https://github.com/AssemblyScript/assemblyscript/issues/146#issuecomment-399130960
 // interface ToBytes {
@@ -126,18 +127,15 @@ export function putKey(name: String, key: Key): void {
     keyBytes.length);
 }
 
-export function transferToAccount(target: Uint8Array, amount: Uint8Array): i32 {
-  let targetBytes = new Array<u8>(target.length);
-  for (let i = 0; i < target.length; i++) {
-    targetBytes[i] = target[i];
-  }
+export function transferToAccount(target: Uint8Array, amount: U512): i32 {
+  // var targetBytes = (target);
+  let amountBytes = amount.toBytes();
 
   let ret = externals.transfer_to_account(
-      targetBytes.dataStart,
-      targetBytes.length,
-      // NOTE: amount has U512 type but is not deserialized throughout the execution, as there's no direct replacement for big ints
-      amount.dataStart,
-      amount.length,
+      target.dataStart,
+      target.length,
+      amountBytes.dataStart,
+      amountBytes.length,
   );
   return ret;
 }

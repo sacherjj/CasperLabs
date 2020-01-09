@@ -1,13 +1,13 @@
-import {fromBytesU32, toBytesU32} from "./bytesrepr";
+import {fromBytesU64, toBytesU64} from "./bytesrepr";
 
 export class U512 {
-    private value: u32;
+    private value: U64;
 
-    constructor(value: u32) {
+    constructor(value: U64) {
         this.value = value;
     }
 
-    getValue(): u32 {
+    getValue(): U64 {
         return this.value;
     }
 
@@ -16,19 +16,19 @@ export class U512 {
             return null;
         }
 
-        const lengthPrefix = bytes[0];
+        const lengthPrefix = <i32>bytes[0];
 
-        let shift = 0;
-        var result = 0;
-        for (var i = 0; i < lengthPrefix; i++) {
-            result += (bytes[i + 1] * (1 << shift));
+        let shift = <u32>0;
+        var result = <u64>0;
+        for (var i = <i32>0; i < lengthPrefix; i++) {
+            result += (bytes[i + 1] * (<u32>1 << shift));
             shift += 8;
         }
-        return new U512(result);
+        return new U512(<U64>result);
     }
 
     toBytes(): Array<u8> {
-        var bytes = toBytesU32(this.value);
+        var bytes = toBytesU64(<u64>this.value);
         
         var zerosAtBack = bytes.length - 1;
         while (bytes[zerosAtBack] == 0) {
@@ -36,7 +36,7 @@ export class U512 {
         }
 
         var nonZeroBytes = zerosAtBack + 1;
-        var result = new Array(nonZeroBytes + 1);
+        var result = new Array<u8>(nonZeroBytes + 1);
 
         result[0] = <u8>nonZeroBytes;
 

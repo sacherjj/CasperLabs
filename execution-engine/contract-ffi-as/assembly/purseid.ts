@@ -2,6 +2,7 @@ import {UREF_SERIALIZED_LENGTH, URef} from "./uref";
 import * as externals from "./externals";
 import {fromBytesU32} from "./bytesrepr";
 import {readHostBuffer} from "./index";
+import {U512} from "./bignum";
 
 export const PURSE_ID_SERIALIZED_LENGTH = UREF_SERIALIZED_LENGTH;
 
@@ -65,12 +66,14 @@ export class PurseId {
         return <u32>balance;
     }
 
-    transferToAccount(target: Uint8Array, amount: Uint8Array): i32 {
+    transferToAccount(target: Uint8Array, amount: U512): i32 {
         let sourceBytes = this.toBytes();
         let targetBytes = new Array<u8>(target.length);
         for (let i = 0; i < target.length; i++) {
             targetBytes[i] = target[i];
         }
+
+        let amountBytes = amount.toBytes();
 
         let ret = externals.transfer_from_purse_to_account(
             sourceBytes.dataStart,
@@ -78,24 +81,24 @@ export class PurseId {
             targetBytes.dataStart,
             targetBytes.length,
             // NOTE: amount has U512 type but is not deserialized throughout the execution, as there's no direct replacement for big ints
-            amount.dataStart,
-            amount.length,
+            amountBytes.dataStart,
+            amountBytes.length,
         );
         return ret;
     }
 
-    transferToPurse(target: PurseId, amount: Uint8Array): i32 {
+    transferToPurse(target: PurseId, amount: U512): i32 {
         let sourceBytes = this.toBytes();
         let targetBytes = target.toBytes();
+        let amountBytes = amount.toBytes();
 
         let ret = externals.transfer_from_purse_to_purse(
             sourceBytes.dataStart,
             sourceBytes.length,
             targetBytes.dataStart,
             targetBytes.length,
-            // NOTE: amount has U512 type but is not deserialized throughout the execution, as there's no direct replacement for big ints
-            amount.dataStart,
-            amount.length,
+            amountBytes.dataStart,
+            amountBytes.length,
         );
         return ret;
     }
