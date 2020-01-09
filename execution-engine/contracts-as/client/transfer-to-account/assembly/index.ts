@@ -26,8 +26,11 @@ export function call(): void {
   let amount512 = new U512(<U64>amount);
 
   let transferRet = transferToAccount(accountBytes, amount512);
-  if (transferRet > 0) {
+  if (transferRet == null) {
     Error.fromErrorCode(ErrorCode.Transfer).revert();
     return;
   }
+
+  // let foo = new Error(10000);
+  // foo.revert();
 }

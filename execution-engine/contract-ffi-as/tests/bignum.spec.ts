@@ -1,6 +1,7 @@
 import "assemblyscript/std/portable";
 import {hex2bin} from "./utils";
 import {U512} from "../assembly/bignum";
+import {fromBytesU64} from "../assembly/bytesrepr";
 
 import test from "ava";
 
@@ -39,3 +40,18 @@ test('serialize u512 1 byte wide', t => {
     var bytes = num.toBytes();
     t.deepEqual(Array.from(bytes), Array.from(truth));
 });
+
+test('serialize 100m times 10', t => {
+
+    let source = hex2bin("00ca9a3b00000000");
+    let val = fromBytesU64(source);
+    t.not(val, null);
+    
+    let u512_val = new U512(val);
+
+    let truth = hex2bin("0400ca9a3b");
+    let bytes = u512_val.toBytes();
+    t.not(bytes, null);
+    t.deepEqual(Array.from(bytes), Array.from(bytes));
+    t.deepEqual(u512_val.getValue(), 100000000*10);
+})

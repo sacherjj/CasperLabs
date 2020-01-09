@@ -46,16 +46,20 @@ export const enum ErrorCode{
 export class Error{
     private errorCodeValue: u32;
 
-    constructor(userErrorCodeValue: u32) {
+    static fromUserError(userErrorCodeValue: u32): Error {
+        let error = new Error();
         if(userErrorCodeValue <= USER_ERROR_CODE_OFFSET) {
-            this.errorCodeValue = userErrorCodeValue + USER_ERROR_CODE_OFFSET;
+            error.errorCodeValue = userErrorCodeValue + USER_ERROR_CODE_OFFSET;
         }else{
-            this.errorCodeValue = userErrorCodeValue;
+            error.errorCodeValue = userErrorCodeValue;
         }
+        return error;
     }
 
     static fromErrorCode(errorCode: ErrorCode): Error {
-        return new Error(<u32>errorCode);
+        let error = new Error();
+        error.errorCodeValue = <u32>errorCode;
+        return error;
     }
 
     value(): u32{

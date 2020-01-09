@@ -1,3 +1,5 @@
+
+
 import * as externals from "./externals";
 import {UREF_SERIALIZED_LENGTH, URef, AccessRights} from "./uref";
 import {CLValue} from "./clvalue";
@@ -127,7 +129,12 @@ export function putKey(name: String, key: Key): void {
     keyBytes.length);
 }
 
-export function transferToAccount(target: Uint8Array, amount: U512): i32 {
+export enum TransferredTo {
+  ExistingAccount = 0,
+  NewAccount = 1,
+}
+
+export function transferToAccount(target: Uint8Array, amount: U512): U32 | null {
   // var targetBytes = (target);
   let amountBytes = amount.toBytes();
 
@@ -137,5 +144,11 @@ export function transferToAccount(target: Uint8Array, amount: U512): i32 {
       amountBytes.dataStart,
       amountBytes.length,
   );
-  return ret;
+
+  if (ret <= 1) {
+    return <U32>ret;
+  }
+  else {
+    return null;
+  }
 }

@@ -46,8 +46,7 @@ export function call(): void {
     CL.putKey(CONTRACT_NAME, key);
   }
   else {
-    const unknownDestination = new Error(1);
-    unknownDestination.revert();
+    Error.fromUserError(1).revert();
   }
 
 }
