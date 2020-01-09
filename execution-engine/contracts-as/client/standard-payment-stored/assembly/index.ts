@@ -2,58 +2,15 @@ import * as CL from "../../../../contract-ffi-as/assembly";
 import {Error, ErrorCode} from "../../../../contract-ffi-as/assembly/error";
 import {fromBytesString, toBytesMap} from "../../../../contract-ffi-as/assembly/bytesrepr";
 import {Key} from "../../../../contract-ffi-as/assembly/key";
-import {CLValue} from "../../../../contract-ffi-as/assembly/clvalue";
-import {PurseId} from "../../../../contract-ffi-as/assembly/purseid";
+import * as StandardPayment from "../../standard-payment/assembly/index"
 
-const POS_ACTION = "get_payment_purse";
-const PAY_FUNCTION_NAME = "pay";
 
 const CONTRACT_NAME = "standard_payment";
 const DESTINATION_HASH = "hash";
 const DESTINATION_UREF = "uref";
 
 export function delegate(): void {
-  let proofOfStake = CL.getSystemContract(CL.SystemContract.ProofOfStake);
-  if (proofOfStake == null) {
-    Error.fromErrorCode(ErrorCode.InvalidSystemContract).revert();
-    return;
-  }
-
-  let amountBytes = CL.getArg(0);
-  if (amountBytes == null) {
-    Error.fromErrorCode(ErrorCode.MissingArgument).revert();
-    return;
-  }
-
-  let mainPurse = PurseId.getMainPurse();
-  if (mainPurse == null) {
-    Error.fromErrorCode(ErrorCode.MissingArgument).revert();
-    return;
-  }
-
-  let key = proofOfStake.asKey();
-  let output = CL.callContract(key, [
-    CLValue.fromString(POS_ACTION),
-  ]);
-  if (output == null) {
-    Error.fromErrorCode(ErrorCode.PurseNotCreated).revert();
-    return;
-  }
-
-  let paymentPurse = PurseId.fromBytes(output);
-  if (paymentPurse == null) {
-    Error.fromErrorCode(ErrorCode.InvalidPurse).revert();
-    return;
-  }
-
-  let ret = mainPurse.transferToPurse(
-      <PurseId>(paymentPurse),
-      amountBytes,
-  );
-  if (ret > 0) {
-    Error.fromErrorCode(ErrorCode.Transfer).revert();
-    return;
-  }
+  StandardPayment.call();
 }
 
 function storeAtHash(): Key {
