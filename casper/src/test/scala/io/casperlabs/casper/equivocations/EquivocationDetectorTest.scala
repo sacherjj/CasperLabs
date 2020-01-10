@@ -102,7 +102,7 @@ class EquivocationDetectorTest
           ) shouldBeF visibleEquivocatorExpected
     } yield block
 
-  "EquivocationDetector" should "detect simple equivocation" in withStorage {
+  def simpleEquivocation(leftBallot: Boolean, rightBallot: Boolean) = withStorage {
     implicit blockStorage => implicit dagStorage => _ =>
       _ =>
         /*
@@ -137,17 +137,27 @@ class EquivocationDetectorTest
                 genesis,
                 v0,
                 justifications = HashMap(v0 -> b1.blockHash),
-                rankOfLowestBaseBlockExpect = None
+                rankOfLowestBaseBlockExpect = None,
+                isBallot = leftBallot
               )
           _ <- createMessageAndTestEquivocateDetector(
                 Seq(b1.blockHash),
                 genesis,
                 v0,
                 justifications = HashMap(v0 -> b1.blockHash),
-                rankOfLowestBaseBlockExpect = b1.getHeader.rank.some
+                rankOfLowestBaseBlockExpect = b1.getHeader.rank.some,
+                isBallot = rightBallot
               )
         } yield ()
   }
+
+  behavior of "EquivocationDetector"
+
+  it should "detect simple equivocation with blocks" in simpleEquivocation(false, false)
+
+  it should "detect simple equivocation with ballots" in simpleEquivocation(true, true)
+
+  it should "detect simple equivocation with block and ballot" in simpleEquivocation(false, true)
 
   it should "not report equivocation when references a message creating an equivocation that was created by other validator" in withStorage {
     implicit blockStorage => implicit dagStorage => _ =>
