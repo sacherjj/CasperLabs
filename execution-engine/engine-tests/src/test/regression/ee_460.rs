@@ -1,9 +1,7 @@
 use contract_ffi::value::U512;
 use engine_shared::transform::Transform;
-
-use crate::{
-    support::test_support::{ExecuteRequestBuilder, InMemoryWasmTestBuilder},
-    test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG},
+use engine_test_support::low_level::{
+    ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG,
 };
 
 const CONTRACT_EE_460_REGRESSION: &str = "ee_460_regression.wasm";

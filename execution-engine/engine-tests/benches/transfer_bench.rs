@@ -1,13 +1,6 @@
 use criterion::{criterion_group, criterion_main, Criterion, Throughput};
 use tempfile::TempDir;
 
-use casperlabs_engine_tests::{
-    support::test_support::{
-        DeployItemBuilder, ExecuteRequestBuilder, LmdbWasmTestBuilder, WasmTestResult,
-        STANDARD_PAYMENT_CONTRACT,
-    },
-    test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT},
-};
 use contract_ffi::{
     key::Key,
     value::{
@@ -17,6 +10,10 @@ use contract_ffi::{
 };
 use engine_core::engine_state::EngineConfig;
 use engine_storage::global_state::lmdb::LmdbGlobalState;
+use engine_test_support::low_level::{
+    DeployItemBuilder, ExecuteRequestBuilder, LmdbWasmTestBuilder, WasmTestResult,
+    DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT, STANDARD_PAYMENT_CONTRACT,
+};
 
 const CONTRACT_CREATE_ACCOUNTS: &str = "create_accounts.wasm";
 const CONTRACT_CREATE_PURSES: &str = "create_purses.wasm";

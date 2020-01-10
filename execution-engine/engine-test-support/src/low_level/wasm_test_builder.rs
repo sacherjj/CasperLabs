@@ -3,45 +3,34 @@ use std::{
     convert::{TryFrom, TryInto},
     ffi::OsStr,
     fs,
-    path::{Path, PathBuf},
+    path::PathBuf,
     rc::Rc,
     sync::Arc,
 };
 
 use grpc::RequestOptions;
-use lazy_static::lazy_static;
 use lmdb::DatabaseFlags;
-use protobuf::RepeatedField;
-use rand::Rng;
 
 use contract_ffi::{
-    args_parser::ArgsParser,
     bytesrepr::ToBytes,
     key::Key,
     uref::URef,
     value::{
         account::{PublicKey, PurseId},
-        CLValue, SemVer, U512,
+        CLValue, U512,
     },
 };
 use engine_core::{
-    engine_state::{
-        genesis::{GenesisAccount, GenesisConfig},
-        EngineConfig, EngineState, SYSTEM_ACCOUNT_ADDR,
-    },
+    engine_state::{genesis::GenesisConfig, EngineConfig, EngineState, SYSTEM_ACCOUNT_ADDR},
     execution,
 };
 use engine_grpc_server::engine_server::{
     ipc::{
-        ChainSpec_ActivationPoint, ChainSpec_CostTable_WasmCosts, ChainSpec_UpgradePoint,
-        CommitRequest, CommitResponse, DeployCode, DeployItem, DeployPayload, DeployResult,
-        DeployResult_ExecutionResult, DeployResult_PreconditionFailure, ExecuteRequest,
-        ExecuteResponse, GenesisResponse, QueryRequest, StoredContractHash, StoredContractName,
-        StoredContractURef, UpgradeRequest, UpgradeResponse,
+        CommitRequest, CommitResponse, ExecuteRequest, ExecuteResponse, GenesisResponse,
+        QueryRequest, UpgradeRequest, UpgradeResponse,
     },
     ipc_grpc::ExecutionEngineService,
     mappings::{MappingError, TransformMap},
-    state::{self, ProtocolVersion},
     transforms::TransformEntry,
 };
 use engine_shared::{
@@ -54,19 +43,8 @@ use engine_storage::{
     transaction_source::lmdb::LmdbEnvironment,
     trie_store::lmdb::LmdbTrieStore,
 };
-use engine_wasm_prep::wasm_costs::WasmCosts;
 
-use crate::test::{
-    CONTRACT_MINT_INSTALL, CONTRACT_POS_INSTALL, CONTRACT_STANDARD_PAYMENT, DEFAULT_CHAIN_NAME,
-    DEFAULT_GENESIS_TIMESTAMP, DEFAULT_PAYMENT, DEFAULT_PROTOCOL_VERSION, DEFAULT_WASM_COSTS,
-};
-
-pub const STANDARD_PAYMENT_CONTRACT: &str = "standard_payment.wasm";
-pub const COMPILED_WASM_DEFAULT_PATH: &str = "../target/wasm32-unknown-unknown/release";
-pub const COMPILED_WASM_TYPESCRIPT_PATH: &str = "../target-as";
-pub const DEFAULT_BLOCK_TIME: u64 = 0;
-pub const MOCKED_ACCOUNT_ADDRESS: [u8; 32] = [48u8; 32];
-pub const GENESIS_INITIAL_BALANCE: u64 = 100_000_000_000;
+use crate::low_level::utils;
 
 /// LMDB initial map size is calculated based on DEFAULT_LMDB_PAGES and systems page size.
 ///
@@ -77,370 +55,8 @@ const DEFAULT_LMDB_PAGES: usize = 2560;
 /// the behavior of `get_data_dir()` in "engine-grpc-server/src/main.rs".
 const GLOBAL_STATE_DIR: &str = "global_state";
 
-lazy_static! {
-    static ref WASM_PATHS: Vec<PathBuf> = get_compiled_wasm_paths();
-}
-
 pub type InMemoryWasmTestBuilder = WasmTestBuilder<InMemoryGlobalState>;
 pub type LmdbWasmTestBuilder = WasmTestBuilder<LmdbGlobalState>;
-
-pub struct DeployItemBuilder {
-    deploy_item: DeployItem,
-}
-
-impl DeployItemBuilder {
-    pub fn new() -> Self {
-        Default::default()
-    }
-
-    pub fn with_address(mut self, address: [u8; 32]) -> Self {
-        self.deploy_item.set_address(address.to_vec());
-        self
-    }
-
-    pub fn with_payment_code(mut self, file_name: &str, args: impl ArgsParser) -> Self {
-        let wasm_bytes = read_wasm_file_bytes(file_name);
-        let args = Self::serialize_args(args);
-        let mut deploy_code = DeployCode::new();
-        deploy_code.set_args(args);
-        deploy_code.set_code(wasm_bytes);
-        let mut payment = DeployPayload::new();
-        payment.set_deploy_code(deploy_code);
-        self.deploy_item.set_payment(payment);
-        self
-    }
-
-    pub fn with_stored_payment_hash(mut self, hash: Vec<u8>, args: impl ArgsParser) -> Self {
-        let args = Self::serialize_args(args);
-        let mut item = StoredContractHash::new();
-        item.set_args(args);
-        item.set_hash(hash);
-        let mut payment = DeployPayload::new();
-        payment.set_stored_contract_hash(item);
-        self.deploy_item.set_payment(payment);
-        self
-    }
-
-    pub fn with_stored_payment_uref(mut self, uref: URef, args: impl ArgsParser) -> Self {
-        let args = Self::serialize_args(args);
-        let mut item = StoredContractURef::new();
-        item.set_args(args);
-        item.set_uref(uref.addr().to_vec());
-        let mut payment = DeployPayload::new();
-        payment.set_stored_contract_uref(item);
-        self.deploy_item.set_payment(payment);
-        self
-    }
-
-    pub fn with_stored_payment_named_key(mut self, uref_name: &str, args: impl ArgsParser) -> Self {
-        let args = Self::serialize_args(args);
-        let mut item = StoredContractName::new();
-        item.set_args(args);
-        item.set_stored_contract_name(uref_name.to_owned()); // <-- named uref
-        let mut payment = DeployPayload::new();
-        payment.set_stored_contract_name(item);
-        self.deploy_item.set_payment(payment);
-        self
-    }
-
-    pub fn with_session_code(mut self, file_name: &str, args: impl ArgsParser) -> Self {
-        let wasm_bytes = read_wasm_file_bytes(file_name);
-        let args = Self::serialize_args(args);
-        let mut deploy_code = DeployCode::new();
-        deploy_code.set_code(wasm_bytes);
-        deploy_code.set_args(args);
-        let mut session = DeployPayload::new();
-        session.set_deploy_code(deploy_code);
-        self.deploy_item.set_session(session);
-        self
-    }
-
-    pub fn with_stored_session_hash(mut self, hash: Vec<u8>, args: impl ArgsParser) -> Self {
-        let args = Self::serialize_args(args);
-        let mut item: StoredContractHash = StoredContractHash::new();
-        item.set_args(args);
-        item.set_hash(hash);
-        let mut session = DeployPayload::new();
-        session.set_stored_contract_hash(item);
-        self.deploy_item.set_session(session);
-        self
-    }
-
-    pub fn with_stored_session_uref(mut self, uref: URef, args: impl ArgsParser) -> Self {
-        let args = Self::serialize_args(args);
-        let mut item: StoredContractURef = StoredContractURef::new();
-        item.set_args(args);
-        item.set_uref(uref.addr().to_vec());
-        let mut payment = DeployPayload::new();
-        payment.set_stored_contract_uref(item);
-        self.deploy_item.set_session(payment);
-        self
-    }
-
-    pub fn with_stored_session_named_key(mut self, uref_name: &str, args: impl ArgsParser) -> Self {
-        let args = Self::serialize_args(args);
-        let mut item = StoredContractName::new();
-        item.set_args(args);
-        item.set_stored_contract_name(uref_name.to_owned()); // <-- named uref
-        let mut session = DeployPayload::new();
-        session.set_stored_contract_name(item);
-        self.deploy_item.set_session(session);
-        self
-    }
-
-    pub fn with_authorization_keys(mut self, authorization_keys: &[PublicKey]) -> Self {
-        let authorization_keys = authorization_keys
-            .iter()
-            .map(|public_key| public_key.value().to_vec())
-            .collect();
-        self.deploy_item.set_authorization_keys(authorization_keys);
-        self
-    }
-
-    pub fn with_deploy_hash(mut self, hash: [u8; 32]) -> Self {
-        self.deploy_item.set_deploy_hash(hash.to_vec());
-        self
-    }
-
-    pub fn build(self) -> DeployItem {
-        self.deploy_item
-    }
-
-    fn serialize_args(args: impl ArgsParser) -> Vec<u8> {
-        args.parse_to_vec_u8()
-            .expect("should convert to `Vec<CLValue>`")
-            .into_bytes()
-            .expect("should serialize args")
-    }
-}
-
-impl Default for DeployItemBuilder {
-    fn default() -> Self {
-        let mut deploy_item = DeployItem::new();
-        deploy_item.set_gas_price(1);
-        DeployItemBuilder { deploy_item }
-    }
-}
-
-pub struct ExecuteRequestBuilder {
-    deploy_items: Vec<DeployItem>,
-    execute_request: ExecuteRequest,
-}
-
-impl ExecuteRequestBuilder {
-    pub fn new() -> Self {
-        Default::default()
-    }
-
-    pub fn from_deploy_item(deploy_item: DeployItem) -> Self {
-        ExecuteRequestBuilder::new().push_deploy(deploy_item)
-    }
-
-    pub fn push_deploy(mut self, deploy: DeployItem) -> Self {
-        self.deploy_items.push(deploy);
-        self
-    }
-
-    pub fn with_pre_state_hash(mut self, pre_state_hash: &[u8]) -> Self {
-        self.execute_request
-            .set_parent_state_hash(pre_state_hash.to_vec());
-        self
-    }
-
-    pub fn with_block_time(mut self, block_time: u64) -> Self {
-        self.execute_request.set_block_time(block_time);
-        self
-    }
-
-    pub fn with_protocol_version(
-        mut self,
-        protocol_version: contract_ffi::value::ProtocolVersion,
-    ) -> Self {
-        let mut protocol = state::ProtocolVersion::new();
-        protocol.set_major(protocol_version.value().major);
-        protocol.set_minor(protocol_version.value().minor);
-        protocol.set_patch(protocol_version.value().patch);
-        self.execute_request.set_protocol_version(protocol);
-        self
-    }
-
-    pub fn build(mut self) -> ExecuteRequest {
-        let mut deploys = RepeatedField::<DeployItem>::new();
-        for deploy in self.deploy_items {
-            deploys.push(deploy);
-        }
-        self.execute_request.set_deploys(deploys);
-        self.execute_request
-    }
-
-    pub fn standard(addr: [u8; 32], session_file: &str, session_args: impl ArgsParser) -> Self {
-        let mut rng = rand::thread_rng();
-        let deploy_hash: [u8; 32] = rng.gen();
-
-        let deploy = DeployItemBuilder::new()
-            .with_address(addr)
-            .with_session_code(session_file, session_args)
-            .with_payment_code(CONTRACT_STANDARD_PAYMENT, (*DEFAULT_PAYMENT,))
-            .with_authorization_keys(&[PublicKey::new(addr)])
-            .with_deploy_hash(deploy_hash)
-            .build();
-
-        ExecuteRequestBuilder::new().push_deploy(deploy)
-    }
-
-    pub fn contract_call_by_hash(
-        sender: [u8; 32],
-        contract_hash: [u8; 32],
-        args: impl ArgsParser,
-    ) -> Self {
-        let mut rng = rand::thread_rng();
-        let deploy_hash: [u8; 32] = rng.gen();
-
-        let deploy = DeployItemBuilder::new()
-            .with_address(sender)
-            .with_stored_session_hash(contract_hash.to_vec(), args)
-            .with_payment_code(CONTRACT_STANDARD_PAYMENT, (*DEFAULT_PAYMENT,))
-            .with_authorization_keys(&[PublicKey::new(sender)])
-            .with_deploy_hash(deploy_hash)
-            .build();
-
-        ExecuteRequestBuilder::new().push_deploy(deploy)
-    }
-}
-
-impl Default for ExecuteRequestBuilder {
-    fn default() -> Self {
-        let deploy_items = vec![];
-        let mut execute_request = ExecuteRequest::new();
-        execute_request.set_block_time(DEFAULT_BLOCK_TIME);
-        execute_request.set_protocol_version(get_protocol_version());
-        ExecuteRequestBuilder {
-            deploy_items,
-            execute_request,
-        }
-    }
-}
-
-pub fn get_protocol_version() -> ProtocolVersion {
-    let mut protocol_version: ProtocolVersion = ProtocolVersion::new();
-    let sem_ver = SemVer::V1_0_0;
-    protocol_version.set_major(sem_ver.major);
-    protocol_version.set_minor(sem_ver.minor);
-    protocol_version.set_patch(sem_ver.patch);
-    protocol_version
-}
-
-pub struct UpgradeRequestBuilder {
-    pre_state_hash: Vec<u8>,
-    current_protocol_version: ProtocolVersion,
-    new_protocol_version: ProtocolVersion,
-    upgrade_installer: DeployCode,
-    new_costs: Option<ChainSpec_CostTable_WasmCosts>,
-    activation_point: ChainSpec_ActivationPoint,
-}
-
-impl UpgradeRequestBuilder {
-    pub fn new() -> Self {
-        Default::default()
-    }
-
-    pub fn with_pre_state_hash(mut self, pre_state_hash: &[u8]) -> Self {
-        self.pre_state_hash = pre_state_hash.to_vec();
-        self
-    }
-
-    pub fn with_current_protocol_version(
-        mut self,
-        protocol_version: contract_ffi::value::ProtocolVersion,
-    ) -> Self {
-        self.current_protocol_version = {
-            let mut protocol = ProtocolVersion::new();
-            protocol.set_major(protocol_version.value().major);
-            protocol.set_minor(protocol_version.value().minor);
-            protocol.set_patch(protocol_version.value().patch);
-            protocol
-        };
-        self
-    }
-
-    pub fn with_new_protocol_version(
-        mut self,
-        protocol_version: contract_ffi::value::ProtocolVersion,
-    ) -> Self {
-        self.new_protocol_version = {
-            let mut protocol = ProtocolVersion::new();
-            protocol.set_major(protocol_version.value().major);
-            protocol.set_minor(protocol_version.value().minor);
-            protocol.set_patch(protocol_version.value().patch);
-            protocol
-        };
-        self
-    }
-
-    pub fn with_installer_code(mut self, upgrade_installer: DeployCode) -> Self {
-        self.upgrade_installer = upgrade_installer;
-        self
-    }
-
-    pub fn with_new_costs(mut self, wasm_costs: WasmCosts) -> Self {
-        let mut new_costs = ChainSpec_CostTable_WasmCosts::new();
-        new_costs.set_regular(wasm_costs.regular);
-        new_costs.set_opcodes_mul(wasm_costs.opcodes_mul);
-        new_costs.set_opcodes_div(wasm_costs.opcodes_div);
-        new_costs.set_mul(wasm_costs.mul);
-        new_costs.set_div(wasm_costs.div);
-        new_costs.set_grow_mem(wasm_costs.grow_mem);
-        new_costs.set_initial_mem(wasm_costs.initial_mem);
-        new_costs.set_max_stack_height(wasm_costs.max_stack_height);
-        new_costs.set_mem(wasm_costs.mem);
-        new_costs.set_memcpy(wasm_costs.memcpy);
-        self.new_costs = Some(new_costs);
-        self
-    }
-
-    pub fn with_activation_point(mut self, rank: u64) -> Self {
-        self.activation_point = {
-            let mut ret = ChainSpec_ActivationPoint::new();
-            ret.set_rank(rank);
-            ret
-        };
-        self
-    }
-
-    pub fn build(self) -> UpgradeRequest {
-        let mut upgrade_point = ChainSpec_UpgradePoint::new();
-        upgrade_point.set_activation_point(self.activation_point);
-        match self.new_costs {
-            None => {}
-            Some(new_costs) => {
-                let mut cost_table =
-                    engine_grpc_server::engine_server::ipc::ChainSpec_CostTable::new();
-                cost_table.set_wasm(new_costs);
-                upgrade_point.set_new_costs(cost_table);
-            }
-        }
-        upgrade_point.set_protocol_version(self.new_protocol_version);
-        upgrade_point.set_upgrade_installer(self.upgrade_installer);
-
-        let mut upgrade_request = UpgradeRequest::new();
-        upgrade_request.set_protocol_version(self.current_protocol_version);
-        upgrade_request.set_upgrade_point(upgrade_point);
-        upgrade_request
-    }
-}
-
-impl Default for UpgradeRequestBuilder {
-    fn default() -> Self {
-        UpgradeRequestBuilder {
-            pre_state_hash: Default::default(),
-            current_protocol_version: Default::default(),
-            new_protocol_version: Default::default(),
-            upgrade_installer: Default::default(),
-            new_costs: None,
-            activation_point: Default::default(),
-        }
-    }
-}
 
 /// Builder for simple WASM test
 pub struct WasmTestBuilder<S> {
@@ -693,7 +309,7 @@ where
         let transforms = get_genesis_transforms(&genesis_response);
 
         let genesis_account =
-            get_account(&transforms, &system_account).expect("Unable to get system account");
+            utils::get_account(&transforms, &system_account).expect("Unable to get system account");
 
         let maybe_protocol_data = self
             .engine_state
@@ -1012,13 +628,13 @@ where
         let exec_response = self
             .get_exec_response(index)
             .expect("should have exec response");
-        get_exec_costs(exec_response)
+        utils::get_exec_costs(exec_response)
     }
 
     pub fn exec_error_message(&self, index: usize) -> Option<String> {
         let response = self.get_exec_response(index)?;
-        let execution_result = get_success_result(&response);
-        Some(get_error_message(execution_result))
+        let execution_result = utils::get_success_result(&response);
+        Some(utils::get_error_message(execution_result))
     }
 
     pub fn exec_commit_finish(&mut self, execute_request: ExecuteRequest) -> WasmTestResult<S> {
@@ -1029,71 +645,7 @@ where
     }
 }
 
-fn get_relative_path<T: AsRef<Path>>(path: T) -> PathBuf {
-    let mut base_path = std::env::current_dir().expect("should get working directory");
-    base_path.push(path);
-    base_path
-}
-
-/// Constructs a default path to WASM files contained in this cargo workspace.
-fn get_default_wasm_path() -> PathBuf {
-    get_relative_path(COMPILED_WASM_DEFAULT_PATH)
-}
-
-/// Constructs a path to TypeScript compiled WASM files
-#[cfg(feature = "use_as_wasm")]
-fn get_assembly_script_wasm_path() -> PathBuf {
-    get_relative_path(COMPILED_WASM_TYPESCRIPT_PATH)
-}
-
-/// Constructs a list of paths that should be considered while looking for a compiled wasm file.
-fn get_compiled_wasm_paths() -> Vec<PathBuf> {
-    vec![
-        // Contracts compiled with typescript are tried first
-        #[cfg(feature = "use_as_wasm")]
-        get_assembly_script_wasm_path(),
-        // As a fallback rust contracts are tried
-        get_default_wasm_path(),
-    ]
-}
-
-/// Reads a given compiled contract file based on path
-pub fn read_wasm_file_bytes<T: AsRef<Path>>(contract_file: T) -> Vec<u8> {
-    // Find first path to a given file found in a list of paths
-    for wasm_path in WASM_PATHS.iter() {
-        let mut filename = wasm_path.clone();
-        filename.push(contract_file.as_ref());
-        if let Ok(wasm_bytes) = std::fs::read(filename) {
-            return wasm_bytes;
-        }
-    }
-
-    panic!(
-        "should read {:?} bytes from disk from possible locations {:?}",
-        contract_file.as_ref(),
-        &*WASM_PATHS
-    );
-}
-
-pub fn create_genesis_config(accounts: Vec<GenesisAccount>) -> GenesisConfig {
-    let name = DEFAULT_CHAIN_NAME.to_string();
-    let timestamp = DEFAULT_GENESIS_TIMESTAMP;
-    let mint_installer_bytes = read_wasm_file_bytes(CONTRACT_MINT_INSTALL);
-    let proof_of_stake_installer_bytes = read_wasm_file_bytes(CONTRACT_POS_INSTALL);
-    let protocol_version = *DEFAULT_PROTOCOL_VERSION;
-    let wasm_costs = *DEFAULT_WASM_COSTS;
-    GenesisConfig::new(
-        name,
-        timestamp,
-        protocol_version,
-        mint_installer_bytes,
-        proof_of_stake_installer_bytes,
-        accounts,
-        wasm_costs,
-    )
-}
-
-pub fn create_query_request(post_state: Vec<u8>, base_key: Key, path: Vec<String>) -> QueryRequest {
+fn create_query_request(post_state: Vec<u8>, base_key: Key, path: Vec<String>) -> QueryRequest {
     let mut query_request = QueryRequest::new();
 
     query_request.set_state_hash(post_state);
@@ -1104,7 +656,7 @@ pub fn create_query_request(post_state: Vec<u8>, base_key: Key, path: Vec<String
 }
 
 #[allow(clippy::implicit_hasher)]
-pub fn create_commit_request(
+fn create_commit_request(
     prestate_hash: &[u8],
     effects: &AdditiveMap<Key, Transform>,
 ) -> CommitRequest {
@@ -1120,7 +672,7 @@ pub fn create_commit_request(
 }
 
 #[allow(clippy::implicit_hasher)]
-pub fn get_genesis_transforms(genesis_response: &GenesisResponse) -> AdditiveMap<Key, Transform> {
+fn get_genesis_transforms(genesis_response: &GenesisResponse) -> AdditiveMap<Key, Transform> {
     let commit_transforms: TransformMap = genesis_response
         .get_success()
         .get_effect()
@@ -1129,121 +681,4 @@ pub fn get_genesis_transforms(genesis_response: &GenesisResponse) -> AdditiveMap
         .try_into()
         .expect("should convert");
     commit_transforms.into_inner()
-}
-
-pub fn get_exec_costs(exec_response: &ExecuteResponse) -> Vec<Gas> {
-    let deploy_results: &[DeployResult] = exec_response.get_success().get_deploy_results();
-
-    deploy_results
-        .iter()
-        .map(|deploy_result| {
-            let execution_result = deploy_result.get_execution_result();
-            let cost = execution_result
-                .get_cost()
-                .clone()
-                .try_into()
-                .expect("cost should map to U512");
-            Gas::new(cost)
-        })
-        .collect()
-}
-
-#[allow(clippy::implicit_hasher)]
-pub fn get_account(transforms: &AdditiveMap<Key, Transform>, account: &Key) -> Option<Account> {
-    transforms.get(account).and_then(|transform| {
-        if let Transform::Write(StoredValue::Account(account)) = transform {
-            Some(account.to_owned())
-        } else {
-            None
-        }
-    })
-}
-
-pub fn get_success_result(response: &ExecuteResponse) -> DeployResult_ExecutionResult {
-    let result = response.get_success();
-
-    result
-        .get_deploy_results()
-        .first()
-        .expect("should have a deploy result")
-        .get_execution_result()
-        .to_owned()
-}
-
-pub fn get_precondition_failure(response: &ExecuteResponse) -> DeployResult_PreconditionFailure {
-    let result = response.get_success();
-
-    result
-        .get_deploy_results()
-        .first()
-        .expect("should have a deploy result")
-        .get_precondition_failure()
-        .to_owned()
-}
-
-pub fn get_error_message(execution_result: DeployResult_ExecutionResult) -> String {
-    let error = execution_result.get_error();
-
-    if error.has_gas_error() {
-        "Gas limit".to_string()
-    } else {
-        error.get_exec_error().get_message().to_string()
-    }
-}
-
-/// Represents the difference between two [`HashMap`]s.
-#[derive(Debug, Default, PartialEq, Eq)]
-pub struct Diff {
-    left: AdditiveMap<Key, Transform>,
-    both: AdditiveMap<Key, Transform>,
-    right: AdditiveMap<Key, Transform>,
-}
-
-impl Diff {
-    /// Creates a diff from two [`HashMap`]s.
-    pub fn new(left: AdditiveMap<Key, Transform>, right: AdditiveMap<Key, Transform>) -> Diff {
-        let both = Default::default();
-        let left_clone = left.clone();
-        let mut ret = Diff { left, both, right };
-
-        for key in left_clone.keys() {
-            let l = ret.left.remove_entry(key);
-            let r = ret.right.remove_entry(key);
-
-            match (l, r) {
-                (Some(le), Some(re)) => {
-                    if le == re {
-                        ret.both.insert(*key, re.1);
-                    } else {
-                        ret.left.insert(*key, le.1);
-                        ret.right.insert(*key, re.1);
-                    }
-                }
-                (None, Some(re)) => {
-                    ret.right.insert(*key, re.1);
-                }
-                (Some(le), None) => {
-                    ret.left.insert(*key, le.1);
-                }
-                (None, None) => unreachable!(),
-            }
-        }
-
-        ret
-    }
-
-    /// Returns the entries that are unique to the `left` input.
-    pub fn left(&self) -> &AdditiveMap<Key, Transform> {
-        &self.left
-    }
-
-    /// Returns the entries that are unique to the `right` input.
-    pub fn right(&self) -> &AdditiveMap<Key, Transform> {
-        &self.right
-    }
-
-    /// Returns the entries shared by both inputs.
-    pub fn both(&self) -> &AdditiveMap<Key, Transform> {
-        &self.both
-    }
 }

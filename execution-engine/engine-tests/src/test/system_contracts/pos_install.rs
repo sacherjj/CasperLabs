@@ -1,9 +1,5 @@
 use std::collections::BTreeMap;
 
-use crate::support::{
-    exec_with_return,
-    test_support::{ExecuteRequestBuilder, WasmTestBuilder, DEFAULT_BLOCK_TIME},
-};
 use contract_ffi::{
     key::Key,
     uref::{AccessRights, URef},
@@ -13,8 +9,10 @@ use contract_ffi::{
     },
 };
 use engine_shared::{stored_value::StoredValue, transform::Transform};
-
-use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG};
+use engine_test_support::low_level::{
+    exec_with_return, ExecuteRequestBuilder, WasmTestBuilder, DEFAULT_ACCOUNT_ADDR,
+    DEFAULT_BLOCK_TIME, DEFAULT_GENESIS_CONFIG,
+};
 
 const CONTRACT_TRANSFER_TO_ACCOUNT_01: &str = "transfer_to_account_01.wasm";
 const SYSTEM_ADDR: [u8; 32] = [0u8; 32];

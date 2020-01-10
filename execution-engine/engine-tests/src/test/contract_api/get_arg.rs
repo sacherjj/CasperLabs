@@ -1,7 +1,8 @@
-use crate::support::test_support::{self, ExecuteRequestBuilder, InMemoryWasmTestBuilder};
 use contract_ffi::{args_parser::ArgsParser, contract_api::Error, value::U512};
-
-use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG};
+use engine_test_support::low_level::{
+    utils, ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_ACCOUNT_ADDR,
+    DEFAULT_GENESIS_CONFIG,
+};
 
 #[derive(Debug)]
 #[repr(u16)]
@@ -38,8 +39,8 @@ fn call_get_arg(args: impl ArgsParser) -> Result<(), String> {
         .to_owned();
 
     let error_message = {
-        let execution_result = test_support::get_success_result(&response);
-        test_support::get_error_message(execution_result)
+        let execution_result = utils::get_success_result(&response);
+        utils::get_error_message(execution_result)
     };
 
     Err(error_message)

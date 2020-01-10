@@ -13,10 +13,8 @@ use engine_core::engine_state::{
 };
 use engine_grpc_server::engine_server::ipc::ExecuteResponse;
 use engine_shared::{gas::Gas, motes::Motes};
-
-use crate::{
-    support::test_support::{self, ExecuteRequestBuilder, InMemoryWasmTestBuilder},
-    test::{DEFAULT_ACCOUNTS, DEFAULT_ACCOUNT_ADDR},
+use engine_test_support::low_level::{
+    utils, ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_ACCOUNTS, DEFAULT_ACCOUNT_ADDR,
 };
 
 const CONTRACT_DO_NOTHING: &str = "do_nothing.wasm";
@@ -41,7 +39,7 @@ fn get_pos_purse_id_by_name(
 }
 
 fn get_cost(response: &ExecuteResponse) -> U512 {
-    let mut success_result = test_support::get_success_result(response);
+    let mut success_result = utils::get_success_result(response);
     let cost = success_result
         .take_cost()
         .try_into()
@@ -71,7 +69,7 @@ fn should_not_be_able_to_unbond_reward() {
         tmp
     };
 
-    let genesis_config = test_support::create_genesis_config(accounts);
+    let genesis_config = utils::create_genesis_config(accounts);
     builder.run_genesis(&genesis_config);
 
     // First request to put some funds in the reward purse

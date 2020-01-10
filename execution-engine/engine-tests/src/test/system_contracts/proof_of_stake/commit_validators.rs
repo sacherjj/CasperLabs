@@ -4,10 +4,8 @@ use std::collections::HashMap;
 use contract_ffi::value::{account::PublicKey, U512};
 use engine_core::engine_state::genesis::GenesisAccount;
 use engine_shared::motes::Motes;
-
-use crate::{
-    support::test_support::{self, ExecuteRequestBuilder, InMemoryWasmTestBuilder},
-    test::{DEFAULT_ACCOUNTS, DEFAULT_ACCOUNT_ADDR},
+use engine_test_support::low_level::{
+    utils, ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_ACCOUNTS, DEFAULT_ACCOUNT_ADDR,
 };
 
 const CONTRACT_LOCAL_STATE: &str = "local_state.wasm";
@@ -39,7 +37,7 @@ fn should_return_bonded_validators() {
         tmp
     };
 
-    let genesis_config = test_support::create_genesis_config(accounts.clone());
+    let genesis_config = utils::create_genesis_config(accounts.clone());
 
     let exec_request =
         ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, CONTRACT_LOCAL_STATE, ()).build();

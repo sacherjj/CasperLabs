@@ -5,14 +5,11 @@ use contract_ffi::{
 use engine_core::engine_state::{upgrade::ActivationPoint, Error};
 use engine_grpc_server::engine_server::ipc::DeployCode;
 use engine_shared::{stored_value::StoredValue, transform::Transform};
-use engine_wasm_prep::wasm_costs::WasmCosts;
-
-use crate::{
-    support::test_support::{
-        self, ExecuteRequestBuilder, InMemoryWasmTestBuilder, UpgradeRequestBuilder,
-    },
-    test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG, DEFAULT_WASM_COSTS},
+use engine_test_support::low_level::{
+    utils, ExecuteRequestBuilder, InMemoryWasmTestBuilder, UpgradeRequestBuilder,
+    DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG, DEFAULT_WASM_COSTS,
 };
+use engine_wasm_prep::wasm_costs::WasmCosts;
 
 const PROTOCOL_VERSION: ProtocolVersion = ProtocolVersion::V1_0_0;
 const DEFAULT_ACTIVATION_POINT: ActivationPoint = 1;
@@ -84,7 +81,7 @@ fn should_upgrade_system_contract() {
     builder.run_genesis(&*DEFAULT_GENESIS_CONFIG);
 
     let mut upgrade_request = {
-        let bytes = test_support::read_wasm_file_bytes(MODIFIED_SYSTEM_UPGRADER_CONTRACT_NAME);
+        let bytes = utils::read_wasm_file_bytes(MODIFIED_SYSTEM_UPGRADER_CONTRACT_NAME);
         let mut installer_code = DeployCode::new();
         installer_code.set_code(bytes);
         UpgradeRequestBuilder::new()
@@ -162,7 +159,7 @@ fn should_upgrade_system_contract_on_patch_bump() {
     builder.run_genesis(&*DEFAULT_GENESIS_CONFIG);
 
     let mut upgrade_request = {
-        let bytes = test_support::read_wasm_file_bytes(MODIFIED_SYSTEM_UPGRADER_CONTRACT_NAME);
+        let bytes = utils::read_wasm_file_bytes(MODIFIED_SYSTEM_UPGRADER_CONTRACT_NAME);
         let mut installer_code = DeployCode::new();
         installer_code.set_code(bytes);
         UpgradeRequestBuilder::new()
@@ -240,7 +237,7 @@ fn should_upgrade_system_contract_on_minor_bump() {
     builder.run_genesis(&*DEFAULT_GENESIS_CONFIG);
 
     let mut upgrade_request = {
-        let bytes = test_support::read_wasm_file_bytes(MODIFIED_SYSTEM_UPGRADER_CONTRACT_NAME);
+        let bytes = utils::read_wasm_file_bytes(MODIFIED_SYSTEM_UPGRADER_CONTRACT_NAME);
         let mut installer_code = DeployCode::new();
         installer_code.set_code(bytes);
         UpgradeRequestBuilder::new()
@@ -361,7 +358,7 @@ fn should_allow_only_wasm_costs_minor_version() {
     let new_costs = get_upgraded_wasm_costs();
 
     let mut upgrade_request = {
-        let bytes = test_support::read_wasm_file_bytes(MODIFIED_SYSTEM_UPGRADER_CONTRACT_NAME);
+        let bytes = utils::read_wasm_file_bytes(MODIFIED_SYSTEM_UPGRADER_CONTRACT_NAME);
         let mut installer_code = DeployCode::new();
         installer_code.set_code(bytes);
         UpgradeRequestBuilder::new()
@@ -405,7 +402,7 @@ fn should_upgrade_system_contract_and_wasm_costs_major() {
     let new_costs = get_upgraded_wasm_costs();
 
     let mut upgrade_request = {
-        let bytes = test_support::read_wasm_file_bytes(MODIFIED_SYSTEM_UPGRADER_CONTRACT_NAME);
+        let bytes = utils::read_wasm_file_bytes(MODIFIED_SYSTEM_UPGRADER_CONTRACT_NAME);
         let mut installer_code = DeployCode::new();
         installer_code.set_code(bytes);
         UpgradeRequestBuilder::new()
@@ -489,7 +486,7 @@ fn should_not_downgrade() {
     let new_protocol_version = ProtocolVersion::from_parts(2, 0, 0);
 
     let mut upgrade_request = {
-        let bytes = test_support::read_wasm_file_bytes(MODIFIED_SYSTEM_UPGRADER_CONTRACT_NAME);
+        let bytes = utils::read_wasm_file_bytes(MODIFIED_SYSTEM_UPGRADER_CONTRACT_NAME);
         let mut installer_code = DeployCode::new();
         installer_code.set_code(bytes);
         UpgradeRequestBuilder::new()

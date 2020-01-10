@@ -22,9 +22,7 @@ use engine_shared::{gas::Gas, newtypes::CorrelationId};
 use engine_storage::{global_state::StateProvider, protocol_data::ProtocolData};
 use engine_wasm_prep::Preprocessor;
 
-use crate::support::test_support::{self, WasmTestBuilder};
-
-use crate::test::DEFAULT_WASM_COSTS;
+use crate::low_level::{utils, WasmTestBuilder, DEFAULT_WASM_COSTS};
 
 const INIT_FN_STORE_ID: u32 = 0;
 
@@ -104,7 +102,7 @@ where
         ProtocolData::default(),
     );
 
-    let wasm_bytes = test_support::read_wasm_file_bytes(wasm_file);
+    let wasm_bytes = utils::read_wasm_file_bytes(wasm_file);
     let deploy_item = ExecutableDeployItem::ModuleBytes {
         module_bytes: wasm_bytes,
         args: Vec::new(),

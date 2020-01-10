@@ -6,13 +6,9 @@ use contract_ffi::{
 };
 use engine_core::engine_state::genesis::GenesisAccount;
 use engine_shared::motes::Motes;
-
-use crate::{
-    support::test_support::{
-        self, DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder,
-        STANDARD_PAYMENT_CONTRACT,
-    },
-    test::{DEFAULT_ACCOUNTS, DEFAULT_ACCOUNT_ADDR, DEFAULT_PAYMENT},
+use engine_test_support::low_level::{
+    utils, DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_ACCOUNTS,
+    DEFAULT_ACCOUNT_ADDR, DEFAULT_PAYMENT, STANDARD_PAYMENT_CONTRACT,
 };
 
 const CONTRACT_POS_BONDING: &str = "pos_bonding.wasm";
@@ -39,7 +35,7 @@ fn should_fail_unboding_more_than_it_was_staked_ee_598_regression() {
         tmp
     };
 
-    let genesis_config = test_support::create_genesis_config(accounts);
+    let genesis_config = utils::create_genesis_config(accounts);
 
     let exec_request_1 = ExecuteRequestBuilder::standard(
         DEFAULT_ACCOUNT_ADDR,
@@ -77,8 +73,8 @@ fn should_fail_unboding_more_than_it_was_staked_ee_598_regression() {
         .expect("should have a response")
         .to_owned();
     let error_message = {
-        let execution_result = test_support::get_success_result(&response);
-        test_support::get_error_message(execution_result)
+        let execution_result = utils::get_success_result(&response);
+        utils::get_error_message(execution_result)
     };
     // Error::UnbondTooLarge => 7,
     assert_eq!(

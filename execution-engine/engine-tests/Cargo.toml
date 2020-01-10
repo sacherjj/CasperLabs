@@ -11,25 +11,22 @@ contract-ffi = { path = "../contract-ffi", package = "casperlabs-contract-ffi" }
 crossbeam-channel = "0.4.0"
 engine-core = { path = "../engine-core", package = "casperlabs-engine-core" }
 engine-grpc-server = { path = "../engine-grpc-server", package = "casperlabs-engine-grpc-server" }
-engine-shared = { path = "../engine-shared", package = "casperlabs-engine-shared" }
-engine-storage = { path = "../engine-storage", package = "casperlabs-engine-storage" }
-engine-wasm-prep = { path = "../engine-wasm-prep", package = "casperlabs-engine-wasm-prep" }
+engine-test-support = { path = "../engine-test-support", package = "casperlabs-engine-test-support" }
 env_logger = "0.7.1"
 grpc = "0.6.1"
-lazy_static = "1"
-lmdb = "0.8.0"
 log = "0.4.8"
-num-traits = "0.2.10"
-rand = "0.7.2"
-protobuf = "=2.8"
-tempfile = "3"
 
 [dev-dependencies]
 criterion = "0.3.0"
+engine-shared = { path = "../engine-shared", package = "casperlabs-engine-shared" }
+engine-storage = { path = "../engine-storage", package = "casperlabs-engine-storage" }
+engine-wasm-prep = { path = "../engine-wasm-prep", package = "casperlabs-engine-wasm-prep" }
+lazy_static = "1"
+num-traits = "0.2.10"
+tempfile = "3"
 
 [features]
-default = []
-use_as_wasm = []
+use-as-wasm = ["engine-test-support/use-as-wasm"]
 
 [lib]
 bench = false

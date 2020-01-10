@@ -6,10 +6,9 @@ use contract_ffi::{
     value::{account::PurseId, U512},
 };
 use engine_shared::transform::Transform;
-
-use crate::{
-    support::test_support::{ExecuteRequestBuilder, WasmTestBuilder},
-    test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT},
+use engine_test_support::low_level::{
+    ExecuteRequestBuilder, WasmTestBuilder, DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG,
+    DEFAULT_PAYMENT,
 };
 
 const CONTRACT_CREATE_PURSE_01: &str = "create_purse_01.wasm";

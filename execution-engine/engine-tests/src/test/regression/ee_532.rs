@@ -1,8 +1,6 @@
 use engine_core::engine_state::Error;
-
-use crate::{
-    support::test_support::{ExecuteRequestBuilder, InMemoryWasmTestBuilder},
-    test::DEFAULT_GENESIS_CONFIG,
+use engine_test_support::low_level::{
+    ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_GENESIS_CONFIG,
 };
 
 const CONTRACT_EE_532_REGRESSION: &str = "ee_532_regression.wasm";

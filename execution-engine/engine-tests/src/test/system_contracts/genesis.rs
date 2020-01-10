@@ -7,11 +7,7 @@ use engine_core::engine_state::{
     SYSTEM_ACCOUNT_ADDR,
 };
 use engine_shared::{motes::Motes, stored_value::StoredValue};
-
-use crate::{
-    support::test_support::{self, InMemoryWasmTestBuilder},
-    test::DEFAULT_WASM_COSTS,
-};
+use engine_test_support::low_level::{utils, InMemoryWasmTestBuilder, DEFAULT_WASM_COSTS};
 
 const MINT_INSTALL: &str = "mint_install.wasm";
 const POS_INSTALL: &str = "pos_install.wasm";
@@ -52,8 +48,8 @@ fn should_run_genesis() {
     };
 
     let name = CHAIN_NAME.to_string();
-    let mint_installer_bytes = test_support::read_wasm_file_bytes(MINT_INSTALL);
-    let pos_installer_bytes = test_support::read_wasm_file_bytes(POS_INSTALL);
+    let mint_installer_bytes = utils::read_wasm_file_bytes(MINT_INSTALL);
+    let pos_installer_bytes = utils::read_wasm_file_bytes(POS_INSTALL);
     let accounts = vec![account_1, account_2];
     let protocol_version = ProtocolVersion::V1_0_0;
     let wasm_costs = *DEFAULT_WASM_COSTS;
@@ -135,8 +131,8 @@ fn should_fail_if_bad_mint_install_contract_is_provided() {
             )
         };
         let name = CHAIN_NAME.to_string();
-        let mint_installer_bytes = test_support::read_wasm_file_bytes(BAD_INSTALL);
-        let pos_installer_bytes = test_support::read_wasm_file_bytes(POS_INSTALL);
+        let mint_installer_bytes = utils::read_wasm_file_bytes(BAD_INSTALL);
+        let pos_installer_bytes = utils::read_wasm_file_bytes(POS_INSTALL);
         let accounts = vec![account_1, account_2];
         let protocol_version = ProtocolVersion::V1_0_0;
         let wasm_costs = *DEFAULT_WASM_COSTS;
@@ -183,8 +179,8 @@ fn should_fail_if_bad_pos_install_contract_is_provided() {
             )
         };
         let name = CHAIN_NAME.to_string();
-        let mint_installer_bytes = test_support::read_wasm_file_bytes(MINT_INSTALL);
-        let pos_installer_bytes = test_support::read_wasm_file_bytes(BAD_INSTALL);
+        let mint_installer_bytes = utils::read_wasm_file_bytes(MINT_INSTALL);
+        let pos_installer_bytes = utils::read_wasm_file_bytes(BAD_INSTALL);
         let accounts = vec![account_1, account_2];
         let protocol_version = ProtocolVersion::V1_0_0;
         let wasm_costs = *DEFAULT_WASM_COSTS;

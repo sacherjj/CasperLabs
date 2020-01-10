@@ -10,15 +10,9 @@ use contract_ffi::{
 };
 use engine_core::engine_state::{genesis::POS_REWARDS_PURSE, CONV_RATE, MAX_PAYMENT};
 use engine_shared::{gas::Gas, motes::Motes, stored_value::StoredValue, transform::Transform};
-
-use crate::{
-    support::test_support::{
-        self, DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder,
-    },
-    test::{
-        DEFAULT_ACCOUNT_ADDR, DEFAULT_ACCOUNT_INITIAL_BALANCE, DEFAULT_ACCOUNT_KEY,
-        DEFAULT_GENESIS_CONFIG,
-    },
+use engine_test_support::low_level::{
+    utils, DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_ACCOUNT_ADDR,
+    DEFAULT_ACCOUNT_INITIAL_BALANCE, DEFAULT_ACCOUNT_KEY, DEFAULT_GENESIS_CONFIG,
 };
 
 const ACCOUNT_1_ADDR: [u8; 32] = [42u8; 32];
@@ -61,8 +55,8 @@ fn should_raise_insufficient_payment_when_caller_lacks_minimum_balance() {
         .to_owned();
 
     let error_message = {
-        let execution_result = test_support::get_success_result(&account_1_response);
-        test_support::get_error_message(execution_result)
+        let execution_result = utils::get_success_result(&account_1_response);
+        utils::get_error_message(execution_result)
     };
 
     assert_eq!(
@@ -156,8 +150,8 @@ fn should_raise_insufficient_payment_when_payment_code_does_not_pay_enough() {
         .expect("there should be a response")
         .clone();
 
-    let execution_result = test_support::get_success_result(&response);
-    let error_message = test_support::get_error_message(execution_result);
+    let execution_result = utils::get_success_result(&response);
+    let error_message = utils::get_error_message(execution_result);
 
     assert_eq!(
         error_message, "Insufficient payment",
@@ -246,8 +240,8 @@ fn should_raise_insufficient_payment_error_when_out_of_gas() {
         .expect("there should be a response")
         .clone();
 
-    let execution_result = test_support::get_success_result(&response);
-    let error_message = test_support::get_error_message(execution_result);
+    let execution_result = utils::get_success_result(&response);
+    let error_message = utils::get_error_message(execution_result);
 
     assert_eq!(
         error_message, "Insufficient payment",
@@ -335,8 +329,8 @@ fn should_forward_payment_execution_runtime_error() {
         .expect("there should be a response")
         .clone();
 
-    let execution_result = test_support::get_success_result(&response);
-    let error_message = test_support::get_error_message(execution_result);
+    let execution_result = utils::get_success_result(&response);
+    let error_message = utils::get_error_message(execution_result);
 
     assert_eq!(error_message, "Exit code: 65636", "expected payment error",);
 }
@@ -421,8 +415,8 @@ fn should_forward_payment_execution_gas_limit_error() {
         .expect("there should be a response")
         .clone();
 
-    let execution_result = test_support::get_success_result(&response);
-    let error_message = test_support::get_error_message(execution_result);
+    let execution_result = utils::get_success_result(&response);
+    let error_message = utils::get_error_message(execution_result);
 
     assert_eq!(error_message, "GasLimit", "expected gas limit error");
 }
@@ -463,8 +457,8 @@ fn should_run_out_of_gas_when_session_code_exceeds_gas_limit() {
         .expect("there should be a response")
         .clone();
 
-    let execution_result = test_support::get_success_result(&response);
-    let error_message = test_support::get_error_message(execution_result);
+    let execution_result = utils::get_success_result(&response);
+    let error_message = utils::get_error_message(execution_result);
 
     assert_eq!(error_message, "GasLimit", "expected gas limit");
 }
@@ -514,7 +508,7 @@ fn should_correctly_charge_when_session_code_runs_out_of_gas() {
         .expect("there should be a response")
         .clone();
 
-    let mut success_result = test_support::get_success_result(&response);
+    let mut success_result = utils::get_success_result(&response);
     let cost = success_result
         .take_cost()
         .try_into()
@@ -529,8 +523,8 @@ fn should_correctly_charge_when_session_code_runs_out_of_gas() {
         "no net resources should be gained or lost post-distribution"
     );
 
-    let execution_result = test_support::get_success_result(&response);
-    let error_message = test_support::get_error_message(execution_result);
+    let execution_result = utils::get_success_result(&response);
+    let error_message = utils::get_error_message(execution_result);
 
     assert_eq!(error_message, "GasLimit", "expected gas limit");
 }
@@ -585,7 +579,7 @@ fn should_correctly_charge_when_session_code_fails() {
         .expect("there should be a response")
         .clone();
 
-    let mut success_result = test_support::get_success_result(&response);
+    let mut success_result = utils::get_success_result(&response);
     let cost = success_result
         .take_cost()
         .try_into()
@@ -651,7 +645,7 @@ fn should_correctly_charge_when_session_code_succeeds() {
         .expect("there should be a response")
         .clone();
 
-    let mut success_result = test_support::get_success_result(&response);
+    let mut success_result = utils::get_success_result(&response);
     let cost = success_result
         .take_cost()
         .try_into()
@@ -928,7 +922,7 @@ fn should_charge_non_main_purse() {
         .expect("there should be a response")
         .clone();
 
-    let mut result = test_support::get_success_result(&response);
+    let mut result = utils::get_success_result(&response);
     let cost = result.take_cost().try_into().expect("should map to U512");
     let gas = Gas::new(cost);
     let motes = Motes::from_gas(gas, CONV_RATE).expect("should have motes");

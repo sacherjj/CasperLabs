@@ -7,12 +7,10 @@ use contract_ffi::{
         U512,
     },
 };
-
 use engine_shared::account::Account;
-
-use crate::{
-    support::test_support::{ExecuteRequestBuilder, InMemoryWasmTestBuilder},
-    test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT},
+use engine_test_support::low_level::{
+    utils, ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_ACCOUNT_ADDR,
+    DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT,
 };
 
 const CONTRACT_ADD_UPDATE_ASSOCIATED_KEY: &str = "add_update_associated_key.wasm";
@@ -57,8 +55,7 @@ fn should_manage_associated_key() {
     let account_1: Account = {
         let tmp = builder.clone();
         let transforms = tmp.get_transforms();
-        crate::support::test_support::get_account(&transforms[1], &account_key)
-            .expect("should get account")
+        utils::get_account(&transforms[1], &account_key).expect("should get account")
     };
 
     let gen_weight = account_1
@@ -80,8 +77,7 @@ fn should_manage_associated_key() {
     let account_1: Account = {
         let tmp = builder.clone();
         let transforms = tmp.get_transforms();
-        crate::support::test_support::get_account(&transforms[2], &account_key)
-            .expect("should get account")
+        utils::get_account(&transforms[2], &account_key).expect("should get account")
     };
 
     assert_eq!(
