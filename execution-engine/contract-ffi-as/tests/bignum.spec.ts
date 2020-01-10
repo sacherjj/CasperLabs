@@ -9,7 +9,7 @@ test.skip('serialize u512 4 bytes wide', t => {
     let truth = hex2bin("04efbeadde");
     let num = U512.fromBytes(truth);
     t.deepEqual(num.getValue(), 0xdeadbeef);
-   
+
     var bytes = num.toBytes();
     t.deepEqual(Array.from(bytes), Array.from(truth));
 });
@@ -46,7 +46,7 @@ test.skip('serialize 100m times 10', t => {
     let source = hex2bin("00ca9a3b00000000");
     let val = fromBytesU64(source);
     t.not(val, null);
-    
+
     let u512_val = new U512(val);
 
     let truth = hex2bin("0400ca9a3b");

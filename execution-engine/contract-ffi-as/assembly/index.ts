@@ -31,7 +31,7 @@ export function getArgSize(i: u32): U32 | null {
 
 export function getArg(i: u32): Uint8Array | null {
   let arg_size = getArgSize(i);
-  if (arg_size == null) {
+  if (arg_size === null) {
     return null;
   }
   let arg_size_u32 = <u32>(arg_size);

@@ -40,7 +40,7 @@ export class Option{
     static fromBytes(bytes: Uint8Array): Option{
         // check SOME / NONE flag at head
         // TODO: what if length is exactly 1?
-        if (bytes.length >= 1 && bytes[0] === 1)
+        if (bytes.length >= 1 && bytes[0] == 1)
             return new Option(bytes.subarray(1));
 
         return new Option(null);

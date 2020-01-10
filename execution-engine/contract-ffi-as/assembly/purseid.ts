@@ -19,7 +19,7 @@ export class PurseId {
         data.fill(0);
         externals.get_main_purse(data.dataStart);
         let uref = URef.fromBytes(data);
-        if (uref == null)
+        if (uref === null)
             return null;
         let purseId = new PurseId(uref);
         return purseId;
@@ -31,7 +31,7 @@ export class PurseId {
 
     static fromBytes(bytes: Uint8Array): PurseId | null {
         let uref = URef.fromBytes(bytes);
-        if(uref == null)
+        if(uref === null)
             return null;
         return new PurseId(uref);
     }
@@ -48,7 +48,7 @@ export class PurseId {
         }
 
         let uref = URef.fromBytes(bytes);
-        if(uref == null){
+        if(uref === null){
             Error.fromErrorCode(ErrorCode.PurseNotCreated).revert();
             return null;
         }
@@ -75,12 +75,12 @@ export class PurseId {
         }
 
         let bytes = readHostBuffer(balanceSize[0]);
-        if (bytes == null) {
+        if (bytes === null) {
             return null;
         }
 
         let balance = fromBytesU32(bytes);
-        if (balance == null) {
+        if (balance === null) {
             return null;
         }
 
