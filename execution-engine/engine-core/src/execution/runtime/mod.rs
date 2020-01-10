@@ -2507,3 +2507,162 @@ where
         Ok(Ok(()))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::extract_urefs;
+    use contract_ffi::{
+        gens::*,
+        key::Key,
+        uref::URef,
+        value::{CLType, CLValue},
+    };
+    use proptest::{
+        array,
+        collection::{btree_map, vec},
+        option,
+        prelude::*,
+        result,
+    };
+
+    fn cl_value_with_urefs_arb() -> impl Strategy<Value = (CLValue, Vec<URef>)> {
+        // If compiler brings you here it most probably means you've added a variant to `CLType`
+        // enum but forgot to add generator for it.
+        let stub: Option<CLType> = None;
+        if let Some(cl_type) = stub {
+            match cl_type {
+                CLType::Bool
+                | CLType::I32
+                | CLType::I64
+                | CLType::U8
+                | CLType::U32
+                | CLType::U64
+                | CLType::U128
+                | CLType::U256
+                | CLType::U512
+                | CLType::Unit
+                | CLType::String
+                | CLType::Key
+                | CLType::URef
+                | CLType::Option(_)
+                | CLType::List(_)
+                | CLType::FixedList(..)
+                | CLType::Result { .. }
+                | CLType::Map { .. }
+                | CLType::Tuple1(_)
+                | CLType::Tuple2(_)
+                | CLType::Tuple3(_)
+                | CLType::Any => (),
+            }
+        };
+
+        prop_oneof![
+            Just((CLValue::from_t(()).expect("should create CLValue"), vec![])),
+            any::<bool>()
+                .prop_map(|x| (CLValue::from_t(x).expect("should create CLValue"), vec![])),
+            any::<i32>().prop_map(|x| (CLValue::from_t(x).expect("should create CLValue"), vec![])),
+            any::<i64>().prop_map(|x| (CLValue::from_t(x).expect("should create CLValue"), vec![])),
+            any::<u8>().prop_map(|x| (CLValue::from_t(x).expect("should create CLValue"), vec![])),
+            any::<u32>().prop_map(|x| (CLValue::from_t(x).expect("should create CLValue"), vec![])),
+            any::<u64>().prop_map(|x| (CLValue::from_t(x).expect("should create CLValue"), vec![])),
+            u128_arb().prop_map(|x| (CLValue::from_t(x).expect("should create CLValue"), vec![])),
+            u256_arb().prop_map(|x| (CLValue::from_t(x).expect("should create CLValue"), vec![])),
+            u512_arb().prop_map(|x| (CLValue::from_t(x).expect("should create CLValue"), vec![])),
+            key_arb().prop_map(|x| {
+                let urefs = x.as_uref().into_iter().cloned().collect();
+                (CLValue::from_t(x).expect("should create CLValue"), urefs)
+            }),
+            uref_arb().prop_map(|x| (CLValue::from_t(x).expect("should create CLValue"), vec![x])),
+            ".*".prop_map(|x: String| (CLValue::from_t(x).expect("should create CLValue"), vec![])),
+            option::of(any::<u64>())
+                .prop_map(|x| (CLValue::from_t(x).expect("should create CLValue"), vec![])),
+            option::of(uref_arb()).prop_map(|x| {
+                let urefs = x.iter().cloned().collect();
+                (CLValue::from_t(x).expect("should create CLValue"), urefs)
+            }),
+            option::of(key_arb()).prop_map(|x| {
+                let urefs = x.iter().filter_map(Key::as_uref).cloned().collect();
+                (CLValue::from_t(x).expect("should create CLValue"), urefs)
+            }),
+            vec(any::<i32>(), 0..100)
+                .prop_map(|x| (CLValue::from_t(x).expect("should create CLValue"), vec![])),
+            vec(uref_arb(), 0..100).prop_map(|x| (
+                CLValue::from_t(x.clone()).expect("should create CLValue"),
+                x
+            )),
+            vec(key_arb(), 0..100).prop_map(|x| (
+                CLValue::from_t(x.clone()).expect("should create CLValue"),
+                x.into_iter().filter_map(Key::into_uref).collect()
+            )),
+            [any::<u64>(); 32]
+                .prop_map(|x| (CLValue::from_t(x).expect("should create CLValue"), vec![])),
+            array::uniform8(uref_arb()).prop_map(|x| {
+                let urefs = x.to_vec();
+                (CLValue::from_t(x).expect("should create CLValue"), urefs)
+            }),
+            array::uniform8(key_arb()).prop_map(|x| {
+                let urefs = x.iter().filter_map(Key::as_uref).cloned().collect();
+                (CLValue::from_t(x).expect("should create CLValue"), urefs)
+            }),
+            result::maybe_err(key_arb(), ".*").prop_map(|x| {
+                let urefs = match &x {
+                    Ok(key) => key.as_uref().into_iter().cloned().collect(),
+                    Err(_) => vec![],
+                };
+                (CLValue::from_t(x).expect("should create CLValue"), urefs)
+            }),
+            result::maybe_ok(".*", uref_arb()).prop_map(|x| {
+                let urefs = match &x {
+                    Ok(_) => vec![],
+                    Err(uref) => vec![*uref],
+                };
+                (CLValue::from_t(x).expect("should create CLValue"), urefs)
+            }),
+            btree_map(".*", u512_arb(), 0..100)
+                .prop_map(|x| (CLValue::from_t(x).expect("should create CLValue"), vec![])),
+            btree_map(uref_arb(), u512_arb(), 0..100).prop_map(|x| {
+                let urefs = x.keys().cloned().collect();
+                (CLValue::from_t(x).expect("should create CLValue"), urefs)
+            }),
+            btree_map(".*", uref_arb(), 0..100).prop_map(|x| {
+                let urefs = x.values().cloned().collect();
+                (CLValue::from_t(x).expect("should create CLValue"), urefs)
+            }),
+            btree_map(uref_arb(), key_arb(), 0..100).prop_map(|x| {
+                let mut urefs: Vec<URef> = x.keys().cloned().collect();
+                urefs.extend(x.values().filter_map(Key::as_uref).cloned());
+                (CLValue::from_t(x).expect("should create CLValue"), urefs)
+            }),
+            (any::<bool>())
+                .prop_map(|x| (CLValue::from_t(x).expect("should create CLValue"), vec![])),
+            (uref_arb())
+                .prop_map(|x| (CLValue::from_t(x).expect("should create CLValue"), vec![x])),
+            (any::<bool>(), any::<i32>())
+                .prop_map(|x| (CLValue::from_t(x).expect("should create CLValue"), vec![])),
+            (uref_arb(), any::<i32>()).prop_map(|x| {
+                let uref = x.0;
+                (
+                    CLValue::from_t(x).expect("should create CLValue"),
+                    vec![uref],
+                )
+            }),
+            (any::<i32>(), key_arb()).prop_map(|x| {
+                let urefs = x.1.as_uref().into_iter().cloned().collect();
+                (CLValue::from_t(x).expect("should create CLValue"), urefs)
+            }),
+            (uref_arb(), key_arb()).prop_map(|x| {
+                let mut urefs = vec![x.0];
+                urefs.extend(x.1.as_uref().into_iter().cloned());
+                (CLValue::from_t(x).expect("should create CLValue"), urefs)
+            }),
+        ]
+    }
+
+    proptest! {
+        #[test]
+        fn should_extract_urefs((cl_value, urefs) in cl_value_with_urefs_arb()) {
+            let extracted_urefs = extract_urefs(&cl_value).unwrap();
+            assert_eq!(extracted_urefs, urefs);
+        }
+    }
+}
