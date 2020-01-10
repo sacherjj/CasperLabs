@@ -6,15 +6,15 @@ import cats.syntax.functor._
 import cats.syntax.apply._
 import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.consensus.info.{BlockInfo, Event}
-import io.casperlabs.casper.{EventEmitter, LastFinalizedBlockHashContainer}
-import io.casperlabs.casper.consensus.info.Event.{BlockAdded, Value}
+import io.casperlabs.casper.EventEmitter
+import io.casperlabs.casper.consensus.info.Event.{BlockAdded, NewFinalizedBlock, Value}
 import io.casperlabs.mempool.DeployBuffer
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.node.api.casper.StreamEventsRequest
 import io.casperlabs.node.api.graphql.FinalizedBlocksStream
 import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.storage.deploy.DeployStorage
-import monix.execution.Scheduler
+import monix.execution.{Ack, Scheduler}
 import monix.reactive.{Observable, OverflowStrategy}
 import monix.reactive.subjects.ConcurrentSubject
 import simulacrum.typeclass
@@ -38,8 +38,9 @@ object EventStream {
         import Event.Value._
         source.filter {
           _.value match {
-            case Empty               => false
-            case Value.BlockAdded(_) => request.blockAdded
+            case Empty                      => false
+            case Value.BlockAdded(_)        => request.blockAdded
+            case Value.NewFinalizedBlock(_) => request.blockFinalized
           }
         }
       }
@@ -55,7 +56,13 @@ object EventStream {
           indirectlyFinalized: Set[BlockHash]
       ): F[Unit] =
         FinalityStorage[F].markAsFinalized(lfb, indirectlyFinalized) >>
-          DeployBuffer.removeFinalizedDeploys(indirectlyFinalized + lfb).forkAndLog
+          DeployBuffer.removeFinalizedDeploys(indirectlyFinalized + lfb).forkAndLog >>
+          Sync[F].delay {
+            val event = Event().withNewFinalizedBlock(
+              NewFinalizedBlock(lfb, indirectlyFinalized.toSeq)
+            )
+            source.onNext(event)
+          }
     }
   }
 }

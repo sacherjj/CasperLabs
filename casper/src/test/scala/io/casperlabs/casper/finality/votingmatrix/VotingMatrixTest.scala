@@ -79,8 +79,8 @@ class VotingMatrixTest extends FlatSpec with Matchers with BlockGenerator with S
     } yield result
 
   it should "detect finality as appropriate" in withStorage {
-    implicit blockStore => implicit dagStorage =>
-      implicit deployStorage =>
+    implicit blockStore => implicit dagStorage => implicit deployStorage =>
+      _ =>
         /*
          * The Dag looks like
          *

@@ -19,7 +19,7 @@ import scala.util.Random
 class ManyValidatorsTest extends FlatSpec with Matchers with BlockGenerator with StorageFixture {
 
   "Show blocks" should "be processed quickly for a node with 300 validators" in withStorage {
-    implicit blockStorage => implicit dagStorage => implicit deployStorage =>
+    implicit blockStorage => implicit dagStorage => implicit deployStorage => _ =>
       val bonds = Seq
         .fill(300)(
           ByteString.copyFromUtf8(Random.nextString(20)).substring(0, 32)

@@ -2,7 +2,7 @@ package io.casperlabs.casper
 
 import cats.data.NonEmptyList
 import cats.effect.{Concurrent, Sync}
-import cats.effect.concurrent.Semaphore
+import cats.effect.concurrent.{Ref, Semaphore}
 import cats.implicits._
 import cats.mtl.FunctorRaise
 import cats.Applicative
@@ -59,14 +59,15 @@ final case class CasperState(
 )
 
 @silent("is never used")
-class MultiParentCasperImpl[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: DagStorage: DeployBuffer: ExecutionEngineService: LastFinalizedBlockHashContainer: MultiParentFinalizer: DeployStorage: Validation: Fs2Compiler: DeploySelection: CasperLabsProtocol: EventEmitter](
+class MultiParentCasperImpl[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: DagStorage: DeployBuffer: ExecutionEngineService: MultiParentFinalizer: DeployStorage: Validation: Fs2Compiler: DeploySelection: CasperLabsProtocol: EventEmitter](
     validatorSemaphoreMap: SemaphoreMap[F, ByteString],
     statelessExecutor: MultiParentCasperImpl.StatelessExecutor[F],
     validatorId: Option[ValidatorIdentity],
     genesis: Block,
     chainName: String,
     minTtl: FiniteDuration,
-    upgrades: Seq[ipc.ChainSpec.UpgradePoint]
+    upgrades: Seq[ipc.ChainSpec.UpgradePoint],
+    lfbRef: Ref[F, BlockHash]
 )(implicit state: Cell[F, CasperState])
     extends MultiParentCasper[F] {
 
@@ -147,7 +148,7 @@ class MultiParentCasperImpl[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: 
       ) => F[BlockStatus]
   ): F[BlockStatus] = Metrics[F].timer("addBlock") {
     for {
-      lastFinalizedBlockHash <- LastFinalizedBlockHashContainer[F].get
+      lastFinalizedBlockHash <- lfbRef.get
       status <- validateAndAddBlock(
                  StatelessExecutor.Context(genesis, lastFinalizedBlockHash).some,
                  block
@@ -175,7 +176,7 @@ class MultiParentCasperImpl[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: 
                   secondary.map(PrettyPrinter.buildString).mkString("{", ", ", "}")
                 Log[F].info(
                   s"New last finalized block hashes are ${mainParentFinalizedStr -> null}, ${secondaryParentsFinalizedStr -> null}."
-                ) >> LastFinalizedBlockHashContainer[F].set(mainParent) *> EventEmitter[F]
+                ) >> lfbRef.set(mainParent) >> EventEmitter[F]
                   .newLastFinalizedBlock(mainParent, secondary)
               }
             }
@@ -225,7 +226,7 @@ class MultiParentCasperImpl[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: 
           latestMessages      <- dag.latestMessages
           latestMessageHashes = latestMessages.mapValues(_.map(_.messageHash))
           equivocators        <- dag.getEquivocators
-          lfbHash             <- LastFinalizedBlockHashContainer[F].get
+          lfbHash             <- lfbRef.get
           // Tips can be either ballots or blocks.
           tipHashes <- estimator(dag, lfbHash, latestMessageHashes, equivocators)
           tips      <- tipHashes.traverse(ProtoUtil.unsafeGetBlock[F])
@@ -297,7 +298,7 @@ class MultiParentCasperImpl[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: 
 
   def lastFinalizedBlock: F[Block] =
     for {
-      lastFinalizedBlockHash <- LastFinalizedBlockHashContainer[F].get
+      lastFinalizedBlockHash <- lfbRef.get
       block                  <- ProtoUtil.unsafeGetBlock[F](lastFinalizedBlockHash)
     } yield block
 
@@ -494,7 +495,7 @@ class MultiParentCasperImpl[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: 
 
 object MultiParentCasperImpl {
 
-  def create[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: DagStorage: DeployBuffer: FinalityStorage: ExecutionEngineService: LastFinalizedBlockHashContainer: DeployStorage: Validation: CasperLabsProtocol: Cell[
+  def create[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: DagStorage: DeployBuffer: FinalityStorage: ExecutionEngineService: DeployStorage: Validation: CasperLabsProtocol: Cell[
     *[_],
     CasperState
   ]: DeploySelection: EventEmitter](
@@ -505,11 +506,12 @@ object MultiParentCasperImpl {
       chainName: String,
       minTtl: FiniteDuration,
       upgrades: Seq[ipc.ChainSpec.UpgradePoint],
-      faultToleranceThreshold: Double = 0.1
+      faultToleranceThreshold: Double = 0.1,
+      lfbRef: Ref[F, BlockHash]
   ): F[MultiParentCasper[F]] =
     for {
       dag <- DagStorage[F].getRepresentation
-      lfb <- FinalityStorage[F].getLastFinalizedBlock
+      lfb <- lfbRef.get
       finalityDetector <- FinalityDetectorVotingMatrix
                            .of[F](
                              dag,
@@ -521,7 +523,6 @@ object MultiParentCasperImpl {
                                                                    lfb,
                                                                    finalityDetector
                                                                  )
-      _ <- LastFinalizedBlockHashContainer[F].set(lfb)
     } yield new MultiParentCasperImpl[F](
       semaphoreMap,
       statelessExecutor,
@@ -529,12 +530,13 @@ object MultiParentCasperImpl {
       genesis,
       chainName,
       minTtl,
-      upgrades
+      upgrades,
+      lfbRef
     )
 
   /** Component purely to validate, execute and store blocks.
     * Even the Genesis, to create it in the first place. */
-  class StatelessExecutor[F[_]: MonadThrowable: Time: Log: BlockStorage: DagStorage: DeployStorage: ExecutionEngineService: Metrics: DeployStorageWriter: Validation: LastFinalizedBlockHashContainer: CasperLabsProtocol: Fs2Compiler: EventEmitter](
+  class StatelessExecutor[F[_]: MonadThrowable: Time: Log: BlockStorage: DagStorage: DeployStorage: ExecutionEngineService: Metrics: DeployStorageWriter: Validation: CasperLabsProtocol: Fs2Compiler: EventEmitter](
       validatorId: Option[Keys.PublicKey],
       chainName: String,
       upgrades: Seq[ipc.ChainSpec.UpgradePoint],
@@ -765,7 +767,7 @@ object MultiParentCasperImpl {
       Metrics[F].incrementCounter("gas_spent", 0L)
     }
 
-    def create[F[_]: Concurrent: Time: Log: BlockStorage: DagStorage: ExecutionEngineService: Metrics: DeployStorage: Validation: LastFinalizedBlockHashContainer: CasperLabsProtocol: Fs2Compiler: EventEmitter](
+    def create[F[_]: Concurrent: Time: Log: BlockStorage: DagStorage: ExecutionEngineService: Metrics: DeployStorage: Validation: CasperLabsProtocol: Fs2Compiler: EventEmitter](
         validatorId: Option[Keys.PublicKey],
         chainName: String,
         upgrades: Seq[ipc.ChainSpec.UpgradePoint]

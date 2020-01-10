@@ -1,13 +1,13 @@
 import React from 'react';
 import { observer } from 'mobx-react';
 
-import AuthContainer from '../containers/AuthContainer';
-import { RefreshableComponent, Button, IconButton, ListInline } from './Utils';
-import DataTable from './DataTable';
+import AuthContainer, { ImportAccountFormData, NewAccountFormData } from '../containers/AuthContainer';
+import { Button, IconButton, ListInline, RefreshableComponent } from './Utils';
 import Modal from './Modal';
-import { Form, TextField } from './Forms';
+import { FileSelect, Form, TextField } from './Forms';
 import { base64to16, encodeBase16 } from 'casperlabs-sdk';
 import { ObservableValue } from '../lib/ObservableValueMap';
+import DataTable from './DataTable';
 
 interface Props {
   auth: AuthContainer;
@@ -21,7 +21,101 @@ export default class Accounts extends RefreshableComponent<Props, {}> {
   }
 
   render() {
-    const newAccount = this.props.auth.newAccountForm;
+    const accountForm = this.props.auth.accountForm;
+
+    let modalAccountForm;
+    if (accountForm instanceof NewAccountFormData) {
+      // Help IDE infer that the type of accountForm is NewAccountFormData
+      let newAccountForm = accountForm;
+      modalAccountForm = (
+        <Modal
+          id="new-account"
+          title="Create Account Key"
+          submitLabel="Save"
+          onSubmit={() => this.props.auth.createAccount()}
+          onClose={() => {
+            this.props.auth.accountForm = null;
+          }}
+          error={newAccountForm.error}
+        >
+          <Form>
+            <TextField
+              id="id-account-name"
+              label="Name"
+              value={newAccountForm.name}
+              placeholder="Human readable alias"
+              onChange={x => {
+                newAccountForm.name = x;
+              }}
+            />
+            <TextField
+              id="id-public-key-base64"
+              label="Public Key (Base64)"
+              value={newAccountForm.publicKeyBase64!}
+              readonly={true}
+            />
+            <TextField
+              id="id-public-key-base16"
+              label="Public Key (Base16)"
+              value={base64to16(newAccountForm.publicKeyBase64!)}
+              readonly={true}
+            />
+            <TextField
+              id="id-private-key-base64"
+              label="Private Key (Base64)"
+              value={newAccountForm.privateKeyBase64}
+              readonly={true}
+            />
+            <TextField
+              id="id-private-key-base16"
+              label="Private Key (Base16)"
+              value={base64to16(newAccountForm.privateKeyBase64!)}
+              readonly={true}
+            />
+          </Form>
+        </Modal>
+      );
+    } else if(accountForm instanceof ImportAccountFormData) {
+      // Help IDE infer that the type of accountForm is ImportAccountFormData
+      let importAccountForm = accountForm;
+      modalAccountForm = (
+          <Modal
+            id="import-account"
+            title="Import Account Public Key"
+            submitLabel="Save"
+            onSubmit={() => this.props.auth.importAccount()}
+            onClose={() => {
+              this.props.auth.accountForm = null;
+            }}
+            error={importAccountForm.error}
+          >
+            <Form>
+              <FileSelect
+                id="id-file-select"
+                label={importAccountForm.fileName || 'Choose Public Key File'}
+                handleFileSelect={e => {
+                  importAccountForm.handleFileSelect(e);
+                }}
+              />
+              <TextField
+                id="id-account-name"
+                label="Name"
+                value={importAccountForm.name || ''}
+                placeholder="Human readable alias"
+                onChange={x => {
+                  importAccountForm.name = x;
+                }}
+              />
+              <TextField
+                id="id-public-key-base64"
+                label="Public Key (Base64)"
+                value={importAccountForm.publicKeyBase64 || ''}
+                readonly={true}
+              />
+            </Form>
+          </Modal>
+        );
+    }
     return (
       <div>
         <DataTable
@@ -45,7 +139,7 @@ export default class Accounts extends RefreshableComponent<Props, {}> {
                 <td>{account.publicKeyBase64}</td>
                 <td>{base64to16(account.publicKeyBase64)}</td>
                 <td>
-                  <Balance balance={balance} />
+                  <Balance balance={balance}/>
                 </td>
                 <td className="text-center">
                   <IconButton
@@ -65,62 +159,17 @@ export default class Accounts extends RefreshableComponent<Props, {}> {
             </span>
           }
         />
-
+        {modalAccountForm}
         <ListInline>
           <Button
             title="Create Account Key"
             onClick={() => this.props.auth.configureNewAccount()}
           />
+          <Button
+            onClick={() => this.props.auth.configureImportAccount()}
+            title="Import Account Key"
+          />
         </ListInline>
-
-        {newAccount && (
-          <Modal
-            id="new-account"
-            title="Create Account Key"
-            submitLabel="Save"
-            onSubmit={() => this.props.auth.createAccount()}
-            onClose={() => {
-              this.props.auth.newAccountForm = null;
-            }}
-            error={newAccount.error}
-          >
-            <Form>
-              <TextField
-                id="id-account-name"
-                label="Name"
-                value={newAccount.name}
-                placeholder="Human readable alias"
-                onChange={x => {
-                  newAccount.name = x;
-                }}
-              />
-              <TextField
-                id="id-public-key-base64"
-                label="Public Key (Base64)"
-                value={newAccount.publicKeyBase64!}
-                readonly={true}
-              />
-              <TextField
-                id="id-public-key-base16"
-                label="Public Key (Base16)"
-                value={base64to16(newAccount.publicKeyBase64!)}
-                readonly={true}
-              />
-              <TextField
-                id="id-private-key-base64"
-                label="Private Key (Base64)"
-                value={newAccount.privateKeyBase64!}
-                readonly={true}
-              />
-              <TextField
-                id="id-private-key-base16"
-                label="Private Key (Base16)"
-                value={base64to16(newAccount.privateKeyBase64!)}
-                readonly={true}
-              />
-            </Form>
-          </Modal>
-        )}
       </div>
     );
   }

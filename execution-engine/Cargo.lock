@@ -8,6 +8,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "add-gas-subcall"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.21.0",
+]
+
+[[package]]
 name = "add-update-associated-key"
 version = "0.1.0"
 dependencies = [
@@ -267,7 +274,7 @@ dependencies = [
 
 [[package]]
 name = "casperlabs-engine-grpc-server"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "casperlabs-contract-ffi 0.21.0",
  "casperlabs-engine-core 0.1.0",
@@ -346,7 +353,7 @@ dependencies = [
  "base16 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "casperlabs-contract-ffi 0.21.0",
  "casperlabs-engine-core 0.1.0",
- "casperlabs-engine-grpc-server 0.10.0",
+ "casperlabs-engine-grpc-server 0.11.0",
  "casperlabs-engine-shared 0.2.0",
  "casperlabs-engine-storage 0.1.0",
  "casperlabs-engine-wasm-prep 0.1.0",

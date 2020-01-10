@@ -28,12 +28,14 @@ trait StorageFixture { self: Suite =>
   implicit val log: Log[Task]         = Log.NOPLog[Task]
 
   def withStorage[R](
-      f: BlockStorage[Task] => IndexedDagStorage[Task] => DeployStorage[Task] => Task[R]
+      f: BlockStorage[Task] => IndexedDagStorage[Task] => DeployStorage[Task] => FinalityStorage[
+        Task
+      ] => Task[R]
   ): R = {
 
     val testProgram = StorageFixture.createStorages[Task]().flatMap {
-      case (blockStorage, dagStorage, deployStorage, _) =>
-        f(blockStorage)(dagStorage)(deployStorage)
+      case (blockStorage, dagStorage, deployStorage, finalityStorage) =>
+        f(blockStorage)(dagStorage)(deployStorage)(finalityStorage)
     }
     testProgram.unsafeRunSync(scheduler)
   }

@@ -93,11 +93,7 @@ export default class Explorer extends RefreshableComponent<Props, {}> {
                 block={dag.selectedBlock}
                 blocks={dag.blocks!}
                 onSelect={blockHashBase16 => {
-                  dag.selectedBlock = dag.blocks!.find(
-                    x =>
-                      encodeBase16(x.getSummary()!.getBlockHash_asU8()) ===
-                      blockHashBase16
-                  );
+                  dag.selectByBlockHashBase16(blockHashBase16);
                 }}
               />
             </div>
@@ -120,7 +116,7 @@ class BlockDetails extends React.Component<{
   block: BlockInfo;
   blocks: BlockInfo[];
   onSelect: (blockHash: string) => void;
-}> {
+}, {}> {
   ref: HTMLElement | null = null;
 
   render() {

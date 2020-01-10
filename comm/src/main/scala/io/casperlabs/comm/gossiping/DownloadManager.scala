@@ -518,6 +518,9 @@ class DownloadManagerImpl[F[_]: Concurrent: Log: Timer: Metrics](
                   }
 
         block <- Sync[F].delay(Block.parseFrom(content))
+        _ <- Sync[F]
+              .raiseError(invalid("Retrieved block has unexpected block hash."))
+              .whenA(block.blockHash != blockHash)
       } yield block
 
     // Indicate how many fetches we are trying to do at a time. If it's larger then the semaphore

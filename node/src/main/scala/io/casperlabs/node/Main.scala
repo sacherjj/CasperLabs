@@ -2,15 +2,11 @@ package io.casperlabs.node
 
 import cats.Id
 import cats.implicits._
-import io.casperlabs.catscontrib._
-import io.casperlabs.comm._
-import io.casperlabs.ipc.ChainSpec
-import io.casperlabs.node.configuration.Configuration.Command.{Diagnostics, Run}
-import io.casperlabs.node.configuration._
-import io.casperlabs.node.diagnostics.client.GrpcDiagnosticsService
-import io.casperlabs.node.effects._
-import io.casperlabs.shared._
 import io.casperlabs.catscontrib.effect.implicits.syncId
+import io.casperlabs.ipc.ChainSpec
+import io.casperlabs.node.configuration._
+import io.casperlabs.node.configuration.Configuration.Command.Run
+import io.casperlabs.shared._
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.slf4j.bridge.SLF4JBridgeHandler
@@ -73,24 +69,12 @@ object Main {
       logId: Log[Id],
       ueh: UncaughtExceptionHandler
   ): Task[Unit] = {
-    implicit val diagnosticsService: GrpcDiagnosticsService =
-      new diagnostics.client.GrpcDiagnosticsService(
-        conf.server.host.getOrElse("localhost"),
-        conf.grpc.portInternal,
-        conf.server.maxMessageSize
-      )
-
-    implicit val consoleIO: ConsoleIO[Task] = (str: String) => Task(println(str))
 
     val program = command match {
-      case Diagnostics => diagnostics.client.Runtime.diagnosticsProgram[Task]
-      case Run         => nodeProgram(conf, chainSpec)
+      case Run => nodeProgram(conf, chainSpec)
     }
 
     program
-      .guarantee {
-        Task.delay(diagnosticsService.close())
-      }
       .doOnFinish {
         case Some(ex) =>
           log.error(s"Unexpected error: $ex") *>
