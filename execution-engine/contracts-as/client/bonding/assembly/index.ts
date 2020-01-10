@@ -3,6 +3,7 @@ import {Error, ErrorCode, PosErrorCode} from "../../../../contract-ffi-as/assemb
 import {PurseId} from "../../../../contract-ffi-as/assembly/purseid";
 import {U512} from "../../../../contract-ffi-as/assembly/bignum";
 import {CLValue} from "../../../../contract-ffi-as/assembly/clvalue";
+import {Key} from "../../../../contract-ffi-as/assembly/key";
 
 const POS_ACTION = "bond";
 
@@ -47,7 +48,7 @@ export function call(): void {
     }
 
     let bondingPurseValue = CLValue.fromURef(bondingPurse.asURef());
-    let key = proofOfStake.asKey();
+    let key = Key.fromURef(proofOfStake);
     let args: CLValue[] = [
         CLValue.fromString(POS_ACTION),
         CLValue.fromU512(<U512>amount),

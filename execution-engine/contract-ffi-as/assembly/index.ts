@@ -1,8 +1,7 @@
 import * as externals from "./externals";
 import {UREF_SERIALIZED_LENGTH, URef, AccessRights} from "./uref";
 import {CLValue} from "./clvalue";
-import {Key} from "./key";
-import {serializeArguments, toBytesString, toBytesArrayU8} from "./bytesrepr";
+import {Key, KEY_UREF_SERIALIZED_LENGTH} from "./key";
 import {U512} from "./bignum";
 
 // NOTE: interfaces aren't supported in AS yet: https://github.com/AssemblyScript/assemblyscript/issues/146#issuecomment-399130960
@@ -76,7 +75,7 @@ export function storeFunction(name: String, namedKeysBytes: u8[]): Key {
       <usize>addr.dataStart
   );
   let uref = new URef(addr, AccessRights.READ_ADD_WRITE);
-  return uref.asKey();
+  return Key.fromURef(uref);
 }
 
 export function storeFunctionAtHash(name: String, namedKeysBytes: u8[]): Key | null {
@@ -135,7 +134,7 @@ export function putKey(name: String, key: Key): void {
 
 export function getKey(name: String): Key | null {
   var nameBytes = toBytesString(name);
-  let keyBytes = new Uint8Array(UREF_SERIALIZED_LENGTH); // TODO: some equivalent of Key::serialized_size_hint() ?
+  let keyBytes = new Uint8Array(KEY_UREF_SERIALIZED_LENGTH); // TODO: some equivalent of Key::serialized_size_hint() ?
   let resultSize = new Uint32Array(1);
   let ret =  externals.get_key(
       nameBytes.dataStart,
@@ -144,7 +143,7 @@ export function getKey(name: String): Key | null {
       keyBytes.length,
       resultSize.dataStart,
   );
-  if (ret == 0) {
+  if (ret > 0) {
     return null;
   }
   let key = Key.fromBytes(keyBytes.slice(0, <i32>resultSize[0])); // total guess

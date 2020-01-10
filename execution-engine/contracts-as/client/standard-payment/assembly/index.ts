@@ -3,6 +3,7 @@ import {Error, ErrorCode} from "../../../../contract-ffi-as/assembly/error";
 import {CLValue} from "../../../../contract-ffi-as/assembly/clvalue";
 import {PurseId} from "../../../../contract-ffi-as/assembly/purseid";
 import {U512} from "../../../../contract-ffi-as/assembly/bignum";
+import {Key} from "../../../../contract-ffi-as/assembly/key";
 
 const POS_ACTION = "get_payment_purse";
 
@@ -31,7 +32,7 @@ export function call(): void {
     return;
   }
 
-  let key = proofOfStake.asKey();
+  let key = Key.fromURef(proofOfStake);
   let output = CL.callContract(key, [
     CLValue.fromString(POS_ACTION),
   ]);

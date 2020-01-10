@@ -55,7 +55,7 @@ export function call(): void {
     return;
   }
 
-  let proofOfStakeKey = proofOfStake.asKey();
+  let proofOfStakeKey = Key.fromURef(proofOfStake);
 
   // Get Payment Purse
   let paymentPurseOutput = CL.callContract(proofOfStakeKey, [

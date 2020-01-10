@@ -1,9 +1,8 @@
 import {Option} from "./option";
-import {Key} from "./key";
 
-const UREF_ADDR_LENGTH = 32;
-const OPTION_TAG_SERIALIZED_LENGTH = 1;
-const ACCESS_RIGHTS_SERIALIZED_LENGTH = 1;
+export const UREF_ADDR_LENGTH = 32;
+export const OPTION_TAG_SERIALIZED_LENGTH = 1;
+export const ACCESS_RIGHTS_SERIALIZED_LENGTH = 1;
 export const UREF_SERIALIZED_LENGTH = UREF_ADDR_LENGTH + OPTION_TAG_SERIALIZED_LENGTH + ACCESS_RIGHTS_SERIALIZED_LENGTH;
 
 export enum AccessRights{
@@ -32,10 +31,6 @@ export class URef {
 
     public getAccessRights(): AccessRights {
         return this.accessRights;
-    }
-
-    public asKey(): Key{
-        return Key.fromURef(this);
     }
 
     static fromBytes(bytes: Uint8Array): URef | null {
