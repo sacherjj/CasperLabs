@@ -37,6 +37,7 @@ class MockDagStorage[F[_]: Monad](
   class MockDagRepresentation extends DagRepresentation[F] {
     override def lookup(blockHash: BlockHash) =
       messagesRef.get.map(_.get(blockHash))
+
     override def children(blockHash: BlockHash)                         = ???
     override def justificationToBlocks(blockHash: BlockHash)            = ???
     override def contains(blockHash: BlockHash)                         = ???
