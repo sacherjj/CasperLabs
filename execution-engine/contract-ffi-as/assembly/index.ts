@@ -234,7 +234,6 @@ export function serializeArguments(values: CLValue[]): Array<u8> {
 export function callContract(key: Key, args: CLValue[]): Uint8Array | null {
   let keyBytes = key.toBytes();
   let argBytes = serializeArguments(args);
-  let extraURefs = serializeArguments([]);
 
   let resultSize = new Uint32Array(1);
   resultSize.fill(0);
@@ -244,8 +243,6 @@ export function callContract(key: Key, args: CLValue[]): Uint8Array | null {
     keyBytes.length,
     argBytes.dataStart,
     argBytes.length,
-    extraURefs.dataStart,
-    extraURefs.length,
     resultSize.dataStart,
   );
   if (ret > 0) {
