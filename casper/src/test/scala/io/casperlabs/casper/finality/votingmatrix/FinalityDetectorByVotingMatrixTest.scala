@@ -63,7 +63,7 @@ class FinalityDetectorByVotingMatrixTest
           implicit0(casperState: Cell[Task, CasperState]) <- Cell.mvarCell[Task, CasperState](
                                                               CasperState()
                                                             )
-          genesis <- createAndStoreBlock[Task](Seq(), ByteString.EMPTY, bonds)
+          genesis <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bonds)
           dag     <- dagStorage.getRepresentation
           implicit0(detector: FinalityDetectorVotingMatrix[Task]) <- FinalityDetectorVotingMatrix
                                                                       .of[Task](
@@ -128,7 +128,7 @@ class FinalityDetectorByVotingMatrixTest
           implicit0(casperState: Cell[Task, CasperState]) <- Cell.mvarCell[Task, CasperState](
                                                               CasperState()
                                                             )
-          genesis <- createAndStoreBlock[Task](Seq(), ByteString.EMPTY, bonds)
+          genesis <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bonds)
           dag     <- dagStorage.getRepresentation
           implicit0(detector: FinalityDetectorVotingMatrix[Task]) <- FinalityDetectorVotingMatrix
                                                                       .of[Task](
@@ -204,7 +204,7 @@ class FinalityDetectorByVotingMatrixTest
           implicit0(casperState: Cell[Task, CasperState]) <- Cell.mvarCell[Task, CasperState](
                                                               CasperState()
                                                             )
-          genesis <- createAndStoreBlock[Task](Seq(), ByteString.EMPTY, bonds)
+          genesis <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bonds)
           dag     <- dagStorage.getRepresentation
           implicit0(detector: FinalityDetectorVotingMatrix[Task]) <- FinalityDetectorVotingMatrix
                                                                       .of[Task](
@@ -285,7 +285,7 @@ class FinalityDetectorByVotingMatrixTest
         implicit0(casperState: Cell[Task, CasperState]) <- Cell.mvarCell[Task, CasperState](
                                                             CasperState()
                                                           )
-        genesis <- createAndStoreBlock[Task](Seq(), ByteString.EMPTY, bonds)
+        genesis <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bonds)
         dag     <- blockDagStorage.getRepresentation
         implicit0(detector: FinalityDetectorVotingMatrix[Task]) <- FinalityDetectorVotingMatrix
                                                                     .of[Task](
@@ -355,7 +355,7 @@ class FinalityDetectorByVotingMatrixTest
         implicit0(casperState: Cell[Task, CasperState]) <- Cell.mvarCell[Task, CasperState](
                                                             CasperState()
                                                           )
-        genesis <- createAndStoreBlock[Task](Seq(), ByteString.EMPTY, bonds)
+        genesis <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bonds)
         dag     <- blockDagStorage.getRepresentation
         implicit0(detector: FinalityDetectorVotingMatrix[Task]) <- FinalityDetectorVotingMatrix
                                                                     .of[Task](
@@ -424,7 +424,7 @@ class FinalityDetectorByVotingMatrixTest
         implicit0(casperState: Cell[Task, CasperState]) <- Cell.mvarCell[Task, CasperState](
                                                             CasperState()
                                                           )
-        genesis <- createAndStoreBlock[Task](Seq(), ByteString.EMPTY, bonds)
+        genesis <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bonds)
         dag     <- blockDagStorage.getRepresentation
         implicit0(detector: FinalityDetectorVotingMatrix[Task]) <- FinalityDetectorVotingMatrix
                                                                     .of[Task](
@@ -510,7 +510,7 @@ class FinalityDetectorByVotingMatrixTest
       implicit casperState: Cell[F, CasperState]
   ): F[(Block, Option[CommitteeWithConsensusValue])] =
     for {
-      block <- createBlock[F](
+      block <- createMessage[F](
                 parentsHashList,
                 lastFinalizedBlockHash,
                 creator,

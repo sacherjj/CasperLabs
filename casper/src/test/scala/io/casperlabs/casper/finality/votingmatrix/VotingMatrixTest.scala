@@ -100,7 +100,7 @@ class VotingMatrixTest extends FlatSpec with Matchers with BlockGenerator with S
         val v2Bond = Bond(v2, 10)
         val bonds  = Seq(v1Bond, v2Bond)
         for {
-          genesis <- createAndStoreBlock[Task](Seq(), bonds = bonds)
+          genesis <- createAndStoreMessage[Task](Seq(), bonds = bonds)
           dag     <- dagStorage.getRepresentation
           implicit0(votingMatrix: VotingMatrix[Task]) <- VotingMatrix
                                                           .create[Task](
@@ -257,7 +257,7 @@ class VotingMatrixTest extends FlatSpec with Matchers with BlockGenerator with S
       implicit votingMatrix: VotingMatrix[F]
   ): F[Block] =
     for {
-      b <- createAndStoreBlock[F](
+      b <- createAndStoreMessage[F](
             parentsHashList,
             creator,
             bonds,
