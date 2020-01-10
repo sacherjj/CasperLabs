@@ -80,13 +80,20 @@ class BoundAgent:
         return method(self)
 
 
-def wait_for_deploy_processed(bound_agent, deploy_hash):
+def wait_for_deploy_processed(bound_agent, deploy_hash, check_deploy_status=True):
+    result = None
     while True:
         result = bound_agent.node.client.showDeploy(deploy_hash)
         if result.status.state != 1:  # PENDING
             break
         # result.status.state == PROCESSED (2)
-        time.sleep(1)
+        time.sleep(0.2)
+    if check_deploy_status:
+        for p in result.processing_results:
+            if p.is_error:
+                raise Exception(
+                    f"Deploy {deploy_hash} execution error: {p.error_message}"
+                )
 
 
 class SmartContract:
