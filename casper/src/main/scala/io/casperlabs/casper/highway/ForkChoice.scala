@@ -17,6 +17,15 @@ trait ForkChoice[F[_]] {
     * - go from the switch block using the next era's validators to the end of the next era
     * - repeat until the we arrive at the tips
     * - return the fork choice block along with all the justifications taken into account.
+    *
+    * `keyBlockHash` is the identifier of the era in which we are seeking the
+    * fork choice. The key block itself will have an era ID, which the implementation
+    * can use to consult the `DagStorage` to find out the latest messages in that era.
+    *
+    * All the switch blocks based on the same keyblock lead to the same child era.
+    * At some point the algorithm can find which switch block is the fork choice,
+    * and carry on towards the latest messages in the era corresponding to `keyBlockHash`,
+    * but stop there, without recursing into potential child eras.
     */
   def fromKeyBlock(keyBlockHash: BlockHash): F[ForkChoice.Result]
 

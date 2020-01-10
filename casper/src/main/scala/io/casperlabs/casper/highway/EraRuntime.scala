@@ -4,7 +4,7 @@ import cats._
 import cats.data.{EitherT, WriterT}
 import cats.implicits._
 import cats.effect.{Clock, Sync}
-import cats.effect.concurrent.{Ref, Semaphore}
+import cats.effect.concurrent.Ref
 import com.google.protobuf.ByteString
 import java.time.Instant
 import io.casperlabs.casper.consensus.{Block, BlockSummary, Era}
@@ -16,8 +16,6 @@ import io.casperlabs.storage.dag.{DagRepresentation, DagStorage}
 import io.casperlabs.storage.era.EraStorage
 import io.casperlabs.casper.util.DagOperations
 import scala.util.Random
-
-import io.casperlabs.crypto.codec.Base16
 
 /** Class to encapsulate the message handling logic of messages in an era.
   *
