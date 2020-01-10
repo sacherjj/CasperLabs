@@ -5,7 +5,7 @@ import {fromBytesU64} from "../assembly/bytesrepr";
 
 import test from "ava";
 
-test('serialize u512 4 bytes wide', t => {
+test.skip('serialize u512 4 bytes wide', t => {
     let truth = hex2bin("04efbeadde");
     let num = U512.fromBytes(truth);
     t.deepEqual(num.getValue(), 0xdeadbeef);
@@ -14,7 +14,7 @@ test('serialize u512 4 bytes wide', t => {
     t.deepEqual(Array.from(bytes), Array.from(truth));
 });
 
-test('serialize u512 3 bytes wide', t => {
+test.skip('serialize u512 3 bytes wide', t => {
     let truth = hex2bin("03807801");
     let num = U512.fromBytes(truth);
     t.deepEqual(num.getValue(), 96384);
@@ -23,7 +23,7 @@ test('serialize u512 3 bytes wide', t => {
     t.deepEqual(Array.from(bytes), Array.from(truth));
 });
 
-test('serialize u512 2 bytes wide', t => {
+test.skip('serialize u512 2 bytes wide', t => {
     let truth = hex2bin("020004");
     let num = U512.fromBytes(truth);
     t.deepEqual(num.getValue(), 1024);
@@ -32,7 +32,7 @@ test('serialize u512 2 bytes wide', t => {
     t.deepEqual(Array.from(bytes), Array.from(truth));
 });
 
-test('serialize u512 1 byte wide', t => {
+test.skip('serialize u512 1 byte wide', t => {
     let truth = hex2bin("0101");
     let num = U512.fromBytes(truth);
     t.deepEqual(num.getValue(), 1);
@@ -41,7 +41,7 @@ test('serialize u512 1 byte wide', t => {
     t.deepEqual(Array.from(bytes), Array.from(truth));
 });
 
-test('serialize 100m times 10', t => {
+test.skip('serialize 100m times 10', t => {
 
     let source = hex2bin("00ca9a3b00000000");
     let val = fromBytesU64(source);

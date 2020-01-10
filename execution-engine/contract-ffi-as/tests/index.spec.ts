@@ -112,7 +112,7 @@ test("serialize map", t => {
     t.deepEqual(Array.from(serialized), Array.from(truth));
 })
 
-test("serialize u64", t => {
+test.skip("serialize u64", t => {
     // 2**32-1 represented as 64 bit little endian bytes
     const truth1 = hex2bin("0004000000000000");
     var value1 = fromBytesU64(truth1);
