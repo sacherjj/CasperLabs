@@ -39,7 +39,7 @@ class EquivocationDetectorTest
       creator: Validator = ByteString.EMPTY,
       justifications: collection.Map[Validator, BlockHash] = HashMap.empty[Validator, BlockHash],
       rankOfLowestBaseBlockExpect: Option[Long],
-      isBallot: Boolean = false
+      messageType: Block.MessageType = Block.MessageType.BLOCK
   )(
       implicit dagStorage: IndexedDagStorage[Task],
       blockStorage: BlockStorage[Task],
@@ -52,7 +52,7 @@ class EquivocationDetectorTest
             keyBlockHash = lfb.blockHash,
             creator,
             justifications = justifications,
-            messageType = if (isBallot) Block.MessageType.BALLOT else Block.MessageType.BLOCK
+            messageType = messageType
           )
       message <- Task.fromTry(Message.fromBlock(b))
       blockStatus <- EquivocationDetector
@@ -102,62 +102,70 @@ class EquivocationDetectorTest
           ) shouldBeF visibleEquivocatorExpected
     } yield block
 
-  def simpleEquivocation(leftBallot: Boolean, rightBallot: Boolean) = withStorage {
-    implicit blockStorage => implicit dagStorage => _ =>
-      _ =>
-        /*
-         * The Dag looks like
-         *
-         *     |      v0     |
-         *     |             |
-         *     |             |
-         *     |    b2   b3  |
-         *     |     \  /    |
-         *     |      b1     |
-         *             \
-         *               genesis
-         *
-         */
-        implicit val logEff = LogStub[Task]()
-        val v0              = generateValidator("V0")
+  def simpleEquivocation(leftMessageType: Block.MessageType, rightMessageType: Block.MessageType) =
+    withStorage { implicit blockStorage => implicit dagStorage => _ => _ =>
+      /*
+       * The Dag looks like
+       *
+       *     |      v0     |
+       *     |             |
+       *     |             |
+       *     |    b2   b3  |
+       *     |     \  /    |
+       *     |      b1     |
+       *             \
+       *               genesis
+       *
+       */
+      implicit val logEff = LogStub[Task]()
+      val v0              = generateValidator("V0")
 
-        for {
-          genesis <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY)
-          implicit0(casperState: Cell[Task, CasperState]) <- Cell.mvarCell[Task, CasperState](
-                                                              CasperState()
-                                                            )
-          b1 <- createMessageAndTestEquivocateDetector(
-                 Seq(genesis.blockHash),
-                 genesis,
-                 v0,
-                 rankOfLowestBaseBlockExpect = None
-               )
-          _ <- createMessageAndTestEquivocateDetector(
-                Seq(b1.blockHash),
-                genesis,
-                v0,
-                justifications = HashMap(v0 -> b1.blockHash),
-                rankOfLowestBaseBlockExpect = None,
-                isBallot = leftBallot
-              )
-          _ <- createMessageAndTestEquivocateDetector(
-                Seq(b1.blockHash),
-                genesis,
-                v0,
-                justifications = HashMap(v0 -> b1.blockHash),
-                rankOfLowestBaseBlockExpect = b1.getHeader.rank.some,
-                isBallot = rightBallot
-              )
-        } yield ()
-  }
+      for {
+        genesis <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY)
+        implicit0(casperState: Cell[Task, CasperState]) <- Cell.mvarCell[Task, CasperState](
+                                                            CasperState()
+                                                          )
+        b1 <- createMessageAndTestEquivocateDetector(
+               Seq(genesis.blockHash),
+               genesis,
+               v0,
+               rankOfLowestBaseBlockExpect = None
+             )
+        _ <- createMessageAndTestEquivocateDetector(
+              Seq(b1.blockHash),
+              genesis,
+              v0,
+              justifications = HashMap(v0 -> b1.blockHash),
+              rankOfLowestBaseBlockExpect = None,
+              messageType = leftMessageType
+            )
+        _ <- createMessageAndTestEquivocateDetector(
+              Seq(b1.blockHash),
+              genesis,
+              v0,
+              justifications = HashMap(v0 -> b1.blockHash),
+              rankOfLowestBaseBlockExpect = b1.getHeader.rank.some,
+              messageType = rightMessageType
+            )
+      } yield ()
+    }
 
   behavior of "EquivocationDetector"
 
-  it should "detect simple equivocation with blocks" in simpleEquivocation(false, false)
+  it should "detect simple equivocation with blocks" in simpleEquivocation(
+    Block.MessageType.BLOCK,
+    Block.MessageType.BLOCK
+  )
 
-  it should "detect simple equivocation with ballots" in simpleEquivocation(true, true)
+  it should "detect simple equivocation with ballots" in simpleEquivocation(
+    Block.MessageType.BALLOT,
+    Block.MessageType.BALLOT
+  )
 
-  it should "detect simple equivocation with block and ballot" in simpleEquivocation(false, true)
+  it should "detect simple equivocation with block and ballot" in simpleEquivocation(
+    Block.MessageType.BLOCK,
+    Block.MessageType.BALLOT
+  )
 
   it should "not report equivocation when references a message creating an equivocation that was created by other validator" in withStorage {
     implicit blockStorage => implicit dagStorage => _ =>
