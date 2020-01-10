@@ -8,6 +8,7 @@ import cats.mtl.DefaultApplicativeAsk
 import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
 import io.casperlabs.casper
+import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.consensus.{Block, BlockSummary}
 import io.casperlabs.casper.MultiParentCasperImpl.Broadcaster
 import io.casperlabs.casper.finality.MultiParentFinalizer
@@ -66,7 +67,8 @@ class GossipServiceCasperTestNode[F[_]](
       maybeMakeEE
     ) (concurrentF, blockStorage, dagStorage, deployStorage, deployBuffer, metricEff, casperState) {
 
-  implicit val raiseInvalidBlock = casper.validation.raiseValidateErrorThroughApplicativeError[F]
+  val lastFinalizedBlockHashContainer = Ref.unsafe(genesis.blockHash)
+  implicit val raiseInvalidBlock      = casper.validation.raiseValidateErrorThroughApplicativeError[F]
   implicit val broadcaster: Broadcaster[F] =
     Broadcaster.fromGossipServices(Some(validatorId), relaying)
   implicit val deploySelection   = DeploySelection.create[F](5 * 1024 * 1024)
@@ -90,7 +92,8 @@ class GossipServiceCasperTestNode[F[_]](
       genesis,
       chainName,
       minTTL,
-      upgrades = Nil
+      upgrades = Nil,
+      lfbRef = lastFinalizedBlockHashContainer
     )
 
   /** Allow RPC calls intended for this node to be processed and enqueue responses. */

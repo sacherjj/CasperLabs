@@ -1,7 +1,7 @@
 import { observable } from 'mobx';
 
 import ErrorContainer from './ErrorContainer';
-import { CasperService } from 'casperlabs-sdk';
+import { CasperService, encodeBase16 } from 'casperlabs-sdk';
 import {
   BlockInfo,
   Event
@@ -75,6 +75,24 @@ export class DagContainer {
 
   get hasBlocks() {
     return this.blocks ? this.blocks.length > 0 : false;
+  }
+
+  async selectByBlockHashBase16(blockHashBase16: string) {
+    let selectedBlock = this.blocks!.find(
+      x =>
+        encodeBase16(x.getSummary()!.getBlockHash_asU8()) ===
+        blockHashBase16
+    );
+    if (selectedBlock) {
+      this.selectedBlock = selectedBlock;
+    } else {
+      await this.errors.capture(
+        this.casperService.getBlockInfo(blockHashBase16, 0).then(block => {
+          this.selectedBlock = block;
+          this.blocks!.push(block);
+        })
+      );
+    }
   }
 
   step = new DagStep(this);

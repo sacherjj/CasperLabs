@@ -30,7 +30,7 @@ class ForkchoiceTest
     with StorageFixture {
 
   "Estimator on empty latestMessages" should "return the genesis regardless of DAG" in withStorage {
-    implicit blockStorage => implicit dagStorage => implicit deployStorage =>
+    implicit blockStorage => implicit dagStorage => implicit deployStorage => _ =>
       val v1     = generateValidator("V1")
       val v2     = generateValidator("V2")
       val v1Bond = Bond(v1, 2)
@@ -92,7 +92,7 @@ class ForkchoiceTest
   }
 
   "Estimator" should "not consider messages older than LFB" in withStorage {
-    implicit blockStorage => implicit dagStorage => implicit deployStorage =>
+    implicit blockStorage => implicit dagStorage => implicit deployStorage => _ =>
       val v1     = generateValidator("V1")
       val v2     = generateValidator("V2")
       val v3     = generateValidator("V3")
@@ -135,7 +135,7 @@ class ForkchoiceTest
 
   // See https://docs.google.com/presentation/d/1znz01SF1ljriPzbMoFV0J127ryPglUYLFyhvsb-ftQk/edit?usp=sharing slide 29 for diagram
   "Estimator on Simple DAG" should "return the appropriate score map and forkchoice" in withStorage {
-    implicit blockStorage => implicit dagStorage => implicit deployStorage =>
+    implicit blockStorage => implicit dagStorage => implicit deployStorage => _ =>
       val v1     = generateValidator("V1")
       val v2     = generateValidator("V2")
       val v1Bond = Bond(v1, 2)
@@ -201,7 +201,7 @@ class ForkchoiceTest
 
   // See [[/docs/casper/images/no_finalizable_block_mistake_with_no_disagreement_check.png]]
   "Estimator on flipping forkchoice DAG" should "return the appropriate score map and forkchoice" in withStorage {
-    implicit blockStorage => implicit dagStorage => implicit deployStorage =>
+    implicit blockStorage => implicit dagStorage => implicit deployStorage => _ =>
       val v1     = generateValidator("V1")
       val v2     = generateValidator("V2")
       val v3     = generateValidator("V3")
@@ -269,7 +269,7 @@ class ForkchoiceTest
 
   // See [[casper/src/test/resources/casper/tipsHavingEquivocating.png]]
   "Estimator on DAG having validators equivocated" should "return the appropriate score map and main parent" in withStorage {
-    implicit blockStorage => implicit dagStorage => _ =>
+    implicit blockStorage => implicit dagStorage => _ => _ =>
       val v1     = generateValidator("V1")
       val v2     = generateValidator("V2")
       val v1Bond = Bond(v1, 5)
@@ -313,7 +313,7 @@ class ForkchoiceTest
   }
 
   it should "not use blocks from equivocators as secondary parents" in withStorage {
-    implicit blockStorage => implicit dagStorage => implicit deployStorage =>
+    implicit blockStorage => implicit dagStorage => implicit deployStorage => _ =>
       val v1    = generateValidator("v1")
       val v2    = generateValidator("v2")
       val bonds = Seq(Bond(v1, 10), Bond(v2, 10))
@@ -333,7 +333,7 @@ class ForkchoiceTest
   }
 
   "Estimator on DAG with latest messages having secondary parents in the path (NODE-943)" should "propagate 0 scores to secondary parents and choose the right tips" in withStorage {
-    implicit blockStorage => implicit dagStorage => implicit deployStorage =>
+    implicit blockStorage => implicit dagStorage => implicit deployStorage => _ =>
       val v1 = generateValidator("V1")
       val v2 = generateValidator("V2")
       val v3 = generateValidator("V3")
@@ -442,8 +442,8 @@ class ForkchoiceTest
   }
 
   "lmdScoring" should "propagate fixed weights on a tree" in withStorage {
-    implicit blockStorage => implicit dagStorage =>
-      implicit deployStorage =>
+    implicit blockStorage => implicit dagStorage => implicit deployStorage =>
+      _ =>
         /* The DAG looks like (|| is a main parent)
          *
          *
@@ -490,8 +490,8 @@ class ForkchoiceTest
   }
 
   it should "propagate fixed weights on a DAG" in withStorage {
-    implicit blockStorage => implicit dagStorage =>
-      implicit deployStorage =>
+    implicit blockStorage => implicit dagStorage => implicit deployStorage =>
+      _ =>
         /* The DAG looks like:
          *
          *
@@ -547,8 +547,8 @@ class ForkchoiceTest
   }
 
   it should "stop traversing DAG when reaches the stop hash" in withStorage {
-    implicit blockStorage => implicit dagStorage =>
-      implicit deployStorage =>
+    implicit blockStorage => implicit dagStorage => implicit deployStorage =>
+      _ =>
         /* The DAG looks like:
          *
          *          m
@@ -615,8 +615,8 @@ class ForkchoiceTest
   }
 
   "lmdMainchainGhost" should "pick the correct fork choice tip" in withStorage {
-    implicit blockStorage => implicit dagStorage =>
-      implicit deployStorage =>
+    implicit blockStorage => implicit dagStorage => implicit deployStorage =>
+      _ =>
         /* The DAG looks like:
          *
          *

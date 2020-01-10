@@ -30,8 +30,8 @@ class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator with 
   }
 
   "bfToposortTraverseF" should "lazily breadth-first and order by rank when traverse a DAG with effectful neighbours" in withStorage {
-    implicit blockStorage => implicit dagStorage =>
-      implicit deployStorage =>
+    implicit blockStorage => implicit dagStorage => implicit deployStorage =>
+      _ =>
         /*
          * DAG Looks like this:
          *
@@ -79,8 +79,8 @@ class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator with 
   }
 
   "Greatest common ancestor" should "be computed properly" in withStorage {
-    implicit blockStorage => implicit dagStorage =>
-      implicit deployStorage =>
+    implicit blockStorage => implicit dagStorage => implicit deployStorage =>
+      _ =>
         /*
          * DAG Looks like this:
          *
@@ -115,7 +115,7 @@ class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator with 
   }
 
   "Latest Common Ancestor" should "be computed properly for various j-DAGs" in withStorage {
-    implicit blockStorage => implicit dagStorage => implicit deployStorage =>
+    implicit blockStorage => implicit dagStorage => implicit deployStorage => _ =>
       val v1 = generateValidator("One")
       val v2 = generateValidator("Two")
       val v3 = generateValidator("Three")
@@ -289,8 +289,8 @@ class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator with 
   }
 
   "uncommon ancestors" should "be computed properly" in withStorage {
-    implicit blockStorage => implicit dagStorage =>
-      implicit deployStorage =>
+    implicit blockStorage => implicit dagStorage => implicit deployStorage =>
+      _ =>
         /*
          *  DAG Looks like this:
          *
@@ -346,7 +346,7 @@ class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator with 
 
   "anyDescendantPathExists" should
     "return whether there is a path from any of the possible ancestor blocks to any of the potential descendants" in withStorage {
-    implicit blockStorage => implicit dagStorage => implicit deployStorage =>
+    implicit blockStorage => implicit dagStorage => implicit deployStorage => _ =>
       def anyDescendantPathExists(
           dag: DagRepresentation[Task],
           start: Set[Block],
@@ -399,7 +399,7 @@ class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator with 
 
   "collectWhereDescendantPathExists" should
     "return from the possible ancestor blocks the ones which have a path to any of the potential descendants" in withStorage {
-    implicit blockStorage => implicit dagStorage => implicit deployStorage =>
+    implicit blockStorage => implicit dagStorage => implicit deployStorage => _ =>
       def collect(
           dag: DagRepresentation[Task],
           start: Set[Block],
@@ -452,7 +452,7 @@ class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator with 
   }
 
   "swimlaneV" should "return correct stream of blocks even if they are referenced indirectly" in withStorage {
-    implicit blockStorage => implicit dagStorage => _ =>
+    implicit blockStorage => implicit dagStorage => _ => _ =>
       val v1    = generateValidator("v1")
       val v2    = generateValidator("v2")
       val bonds = Seq(Bond(v1, 10), Bond(v2, 10))

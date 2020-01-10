@@ -243,7 +243,7 @@ class GrpcGossipServiceSpec
               val queueSize     = 10
               val minSuccessful = 2
 
-              implicit val patienceConfig = PatienceConfig(7.second, 500.millis)
+              implicit val patienceConfig = PatienceConfig(10.seconds, 500.millis)
 
               test(block, queueSize) { stub =>
                 val success = Atomic(0)
