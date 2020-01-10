@@ -38,8 +38,10 @@ class MockDagStorage[F[_]: Monad](
 }
 
 object MockDagStorage {
-  def apply[F[_]: Sync] =
+  def apply[F[_]: Sync](blocks: Block*) =
     for {
-      messagesRef <- Ref.of[F, Map[BlockHash, Message]](Map.empty)
+      messagesRef <- Ref.of[F, Map[BlockHash, Message]](
+                      blocks.map(b => b.blockHash -> Message.fromBlock(b).get).toMap
+                    )
     } yield new MockDagStorage(messagesRef)
 }

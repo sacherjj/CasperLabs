@@ -17,6 +17,8 @@ import io.casperlabs.storage.era.EraStorage
 import io.casperlabs.casper.util.DagOperations
 import scala.util.Random
 
+import io.casperlabs.crypto.codec.Base16
+
 /** Class to encapsulate the message handling logic of messages in an era.
   *
   * It can create blocks/ballots and persist them, even new eras,
@@ -148,9 +150,9 @@ class EraRuntime[F[_]: MonadThrowable: Clock: EraStorage: ForkChoice](
                 Map(PublicKey(lambdaMessage.validatorId) -> Set(lambdaMessage.messageHash))
             )
           }
-      _ <- HighwayLog.tell[F](
+      _ <- HighwayLog.tell[F] {
             HighwayEvent.CreatedLambdaResponse(b)
-          )
+          }
     } yield ()
   }
 
@@ -175,9 +177,10 @@ class EraRuntime[F[_]: MonadThrowable: Clock: EraStorage: ForkChoice](
                         )
             } yield message
           }
-      _ <- HighwayLog.tell[F](
+      _ <- HighwayLog.tell[F] {
             HighwayEvent.CreatedLambdaMessage(b)
-          )
+          }
+      _ <- handleCriticalBlocks(b)
     } yield ()
   }
 
@@ -228,7 +231,7 @@ class EraRuntime[F[_]: MonadThrowable: Clock: EraStorage: ForkChoice](
                            )
             magicBits <- DagOperations
                           .bfTraverseF(List(keyBlock)) { msg =>
-                            dag.lookupUnsafe(msg.parentBlock).map(List(_))
+                            List(msg.parentBlock).filterNot(_.isEmpty).traverse(dag.lookupUnsafe)
                           }
                           .takeUntil(_.messageHash == bookingBlock.messageHash)
                           .map(_.blockSummary.getHeader.magicBit)
@@ -263,12 +266,15 @@ class EraRuntime[F[_]: MonadThrowable: Clock: EraStorage: ForkChoice](
       isBoundary: (Instant, Instant) => Boolean
   ): F[Message] = {
     def loop(child: Message, childTime: Instant): F[Message] =
-      dag.lookupUnsafe(child.parentBlock).flatMap { parent =>
-        val parentTime = parent.roundInstant
-        if (isBoundary(parentTime, childTime))
-          child.pure[F]
-        else
-          loop(parent, parentTime)
+      if (child.parentBlock.isEmpty) child.pure[F]
+      else {
+        dag.lookupUnsafe(child.parentBlock).flatMap { parent =>
+          val parentTime = parent.roundInstant
+          if (isBoundary(parentTime, childTime))
+            child.pure[F]
+          else
+            loop(parent, parentTime)
+        }
       }
     loop(descendant, descendant.roundInstant)
   }

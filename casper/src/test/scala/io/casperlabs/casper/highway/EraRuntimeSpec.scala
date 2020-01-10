@@ -63,6 +63,9 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
     )
     .get
 
+  def defaultDagStorage = MockDagStorage[Id](genesis.toBlock)
+  def defaultForkChoide = MockForkChoice[Id](genesis)
+
   def genesisEraRuntime(
       validator: Option[String] = none,
       roundExponent: Int = 0,
@@ -73,9 +76,9 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
       implicit
       // Let's say we are right at the beginning of the era by default.
       C: Clock[Id] = TestClock.frozen[Id](date(2019, 12, 9)),
-      DS: DagStorage[Id] = MockDagStorage[Id],
+      DS: DagStorage[Id] = defaultDagStorage,
       ES: EraStorage[Id] = MockEraStorage[Id],
-      FC: ForkChoice[Id] = MockForkChoice[Id](genesis)
+      FC: ForkChoice[Id] = defaultForkChoide
   ) =
     EraRuntime.fromGenesis[Id](
       conf,
@@ -217,7 +220,7 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
       )
     }
     "reject a second block received from the leader in the same round" in {
-      implicit val ds = MockDagStorage[Id]
+      implicit val ds = defaultDagStorage
       val runtime = genesisEraRuntime(
         "Alice".some,
         leaderSequencer = mockSequencer("Bob")
@@ -323,7 +326,7 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
         }
 
         "it is a switch block" should {
-          implicit val ds = MockDagStorage[Id]
+          implicit val ds = defaultDagStorage
 
           // Let the leader make one block every hour. At the end of the genesis era,
           // the right key block should be picked for the child era.
@@ -411,7 +414,7 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
 
     "the validator is not bonded" when {
       val leader      = "Alice"
-      implicit val ds = MockDagStorage[Id]
+      implicit val ds = defaultDagStorage
       val runtime = genesisEraRuntime(
         "Anonymous".some,
         leaderSequencer = mockSequencer(leader)
@@ -542,7 +545,16 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
 
       "right after the era-end" when {
         "no previous switch block has been seen" should {
-          "create a switch block" in (pending)
+          "create a switch block and an era" in {
+            val runtime = genesisEraRuntime("Alice".some, leaderSequencer = mockSequencer("Alice"))
+            val events  = runtime.handleAgenda(Agenda.StartRound(runtime.endTick)).written
+            assertEvent(events) {
+              case _: HighwayEvent.CreatedEra =>
+            }
+            assertEvent(events) {
+              case HighwayEvent.CreatedLambdaMessage(_: Message.Block) =>
+            }
+          }
         }
         "already found a switch block" should {
           "only create ballots" in (pending)
@@ -613,7 +625,7 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
 
       "crossing the booking block boundary" should {
         "pass the flag to the message producer" in {
-          implicit val ds = MockDagStorage[Id]
+          implicit val ds = defaultDagStorage
           implicit val fc = MockForkChoice[Id](genesis)
 
           val messageProducer = new MockMessageProducer[Id]("Alice") {
