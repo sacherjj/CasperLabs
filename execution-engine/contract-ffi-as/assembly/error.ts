@@ -84,9 +84,9 @@ export class Error{
 
     static fromUserError(userErrorCodeValue: u32): Error {
         let error = new Error();
-        if(userErrorCodeValue <= USER_ERROR_CODE_OFFSET) {
-            error.errorCodeValue = userErrorCodeValue + USER_ERROR_CODE_OFFSET;
-        }else{
+        if (userErrorCodeValue <= USER_ERROR_CODE_OFFSET) {
+            error.errorCodeValue = USER_ERROR_CODE_OFFSET + 1 + userErrorCodeValue;
+        } else {
             error.errorCodeValue = userErrorCodeValue;
         }
         return error;
