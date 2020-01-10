@@ -10,6 +10,7 @@ import io.casperlabs.casper.helper.{BlockGenerator, StorageFixture}
 import io.casperlabs.casper.scalatestcontrib._
 import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.casper.validation.Errors.ValidateErrorWrapper
+import io.casperlabs.models.Message
 import io.casperlabs.shared.LogStub
 import io.casperlabs.shared.Cell
 import io.casperlabs.storage.block.BlockStorage
@@ -17,6 +18,7 @@ import io.casperlabs.storage.dag.IndexedDagStorage
 import monix.eval.Task
 import org.scalatest.{FlatSpec, Matchers}
 import logstage.LogIO
+
 import scala.collection.immutable.HashMap
 
 class EquivocationDetectorTest
@@ -50,8 +52,9 @@ class EquivocationDetectorTest
             creator,
             justifications = justifications
           )
+      message <- Task.fromTry(Message.fromBlock(b))
       blockStatus <- EquivocationDetector
-                      .checkEquivocationWithUpdate(dag, b)
+                      .checkEquivocationWithUpdate(dag, message)
                       .attempt
 
       _ = rankOfLowestBaseBlockExpect match {
