@@ -28,6 +28,9 @@ export declare function call_contract(key_ptr: usize, key_size: u32, args_ptr: u
 @external("env", "read_host_buffer")
 export declare function read_host_buffer(dest_ptr: usize, dest_size: u32, bytes_written: usize): i32;
 
+@external("env", "create_purse")
+export declare function create_purse(purse_id_ptr: usize, purse_id_size: u32): i32;
+
 @external("env", "transfer_to_account")
 export declare function transfer_to_account(
     target_ptr: usize,

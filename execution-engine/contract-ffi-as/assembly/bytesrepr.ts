@@ -33,7 +33,6 @@ export function toBytesU64(num: u64): u8[] {
     }
     return result;
 
-
     // return [
     //     <u8>(num &  0x00000000000000ff),
     //     <u8>((num & 0x000000000000ff00) >> 8) & 255,

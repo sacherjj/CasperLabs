@@ -3,6 +3,7 @@ import * as externals from "./externals";
 import {fromBytesU32} from "./bytesrepr";
 import {readHostBuffer} from "./index";
 import {U512} from "./bignum";
+import {Error, ErrorCode} from "./error";
 
 export const PURSE_ID_SERIALIZED_LENGTH = UREF_SERIALIZED_LENGTH;
 
@@ -30,8 +31,28 @@ export class PurseId {
 
     static fromBytes(bytes: Uint8Array): PurseId | null {
         let uref = URef.fromBytes(bytes);
-        if(uref === null)
+        if(uref == null)
             return null;
+        return new PurseId(uref);
+    }
+
+    static createPurse(): PurseId | null {
+        let bytes = new Uint8Array(PURSE_ID_SERIALIZED_LENGTH);
+        let ret = externals.create_purse(
+            bytes.dataStart,
+            bytes.length
+            );
+        if (ret == 0){
+            Error.fromErrorCode(ErrorCode.PurseNotCreated).revert();
+            return null;
+        }
+
+        let uref = URef.fromBytes(bytes);
+        if(uref == null){
+            Error.fromErrorCode(ErrorCode.PurseNotCreated).revert();
+            return null;
+        }
+
         return new PurseId(uref);
     }
 

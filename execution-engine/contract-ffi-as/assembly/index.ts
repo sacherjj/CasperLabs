@@ -1,5 +1,3 @@
-
-
 import * as externals from "./externals";
 import {UREF_SERIALIZED_LENGTH, URef, AccessRights} from "./uref";
 import {CLValue} from "./clvalue";
@@ -95,21 +93,26 @@ export function storeFunctionAtHash(name: String, namedKeysBytes: u8[]): Key | n
 }
 
 export function callContract(key: Key, args: CLValue[]): Uint8Array | null {
+  let extraUrefs: CLValue[] = [];
+  return callContractExt(key, args, extraUrefs);
+}
+
+export function callContractExt(key: Key, args: CLValue[], extraUrefs: CLValue[]): Uint8Array | null {
   let keyBytes = key.toBytes();
   let argBytes = serializeArguments(args);
-  let extraURefs = serializeArguments([]);
+  let extraURefsBytes = serializeArguments(extraUrefs);
 
   let resultSize = new Uint32Array(1);
   resultSize.fill(0);
 
   let ret = externals.call_contract(
-    <usize>keyBytes.dataStart,
-    keyBytes.length,
-    argBytes.dataStart,
-    argBytes.length,
-    extraURefs.dataStart,
-    extraURefs.length,
-    resultSize.dataStart,
+      <usize>keyBytes.dataStart,
+      keyBytes.length,
+      argBytes.dataStart,
+      argBytes.length,
+      extraURefsBytes.dataStart,
+      extraURefsBytes.length,
+      resultSize.dataStart,
   );
   if (ret > 0) {
     return null;

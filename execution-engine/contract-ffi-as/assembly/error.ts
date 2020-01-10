@@ -1,9 +1,10 @@
 import * as externals from "./externals";
 
 const SYSTEM_CONTRACT_ERROR_CODE_OFFSET: u32 = 65024;
+const POS_ERROR_CODE_OFFSET: u32 = 65280;
 const USER_ERROR_CODE_OFFSET: u32 = 65535;
 
-export const enum ErrorCode{
+export const enum ErrorCode {
     None = 1,
     MissingArgument = 2,
     InvalidArgument = 3,
@@ -43,6 +44,41 @@ export const enum ErrorCode{
     HostBufferFull = 37,
 }
 
+export const enum PosErrorCode {
+    NotBonded = 0,
+    TooManyEventsInQueue = 1,
+    CannotUnbondLastValidator = 2,
+    SpreadTooHigh = 3,
+    MultipleRequests = 4,
+    BondTooSmall = 5,
+    BondTooLarge = 6,
+    UnbondTooLarge = 7,
+    BondTransferFailed = 8,
+    UnbondTransferFailed = 9,
+    MissingArgument = 10,
+    InvalidArgument = 11,
+    TimeWentBackwards = 12,
+    StakesNotFound = 13,
+    PaymentPurseNotFound = 14,
+    PaymentPurseKeyUnexpectedType = 15,
+    PaymentPurseBalanceNotFound = 16,
+    BondingPurseNotFound = 17,
+    BondingPurseKeyUnexpectedType = 18,
+    RefundPurseKeyUnexpectedType = 19,
+    RewardsPurseNotFound = 20,
+    RewardsPurseKeyUnexpectedType = 21,
+    QueueNotStoredAsByteArray = 22,
+    QueueDeserializationFailed = 23,
+    QueueDeserializationExtraBytes = 24,
+    StakesKeyDeserializationFailed = 25,
+    StakesDeserializationFailed = 26,
+    SystemFunctionCalledByUserAccount = 27,
+    InsufficientPaymentForAmountSpent = 28,
+    FailedTransferToRewardsPurse = 29,
+    FailedTransferToAccountPurse = 30,
+    SetRefundPurseCalledOutsidePayment = 31,
+}
+
 export class Error{
     private errorCodeValue: u32;
 
@@ -59,6 +95,12 @@ export class Error{
     static fromErrorCode(errorCode: ErrorCode): Error {
         let error = new Error();
         error.errorCodeValue = <u32>errorCode;
+        return error;
+    }
+
+    static fromPosErrorCode(errorCode: PosErrorCode): Error {
+        let error = new Error();
+        error.errorCodeValue = <u32>errorCode + POS_ERROR_CODE_OFFSET;
         return error;
     }
 

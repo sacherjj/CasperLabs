@@ -1,4 +1,6 @@
 import {toBytesArrayU8, toBytesString} from "./bytesrepr";
+import {U512} from "./bignum";
+import {URef} from "./uref";
 
 export enum CLTypeTag {
     Bool = 0,
@@ -38,9 +40,13 @@ export class CLValue {
         return new CLValue(toBytesString(s), <u8>CLTypeTag.String);
     }
 
-    // static fromOption(o: Option): CLValue{
-    //
-    // }
+    static fromU512(value: U512): CLValue {
+        return new CLValue(value.toBytes(), <u8>CLTypeTag.U512);
+    }
+
+    static fromURef(uref: URef): CLValue {
+        return new CLValue(uref.toBytes(), <u8>CLTypeTag.Uref);
+    }
 
     toBytes(): u8[] {
         let data = toBytesArrayU8(this.bytes);
