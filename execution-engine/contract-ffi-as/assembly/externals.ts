@@ -61,3 +61,12 @@ export declare function transfer_from_purse_to_account(
 
 @external("env", "put_key")
 export declare function put_key(name_ptr: usize, name_size: usize, key_ptr: usize, key_size: usize): void;
+
+@external("env", "get_key")
+export declare function get_key(
+    name_ptr: usize,
+    name_size: usize,
+    output_ptr: usize,
+    output_size: usize,
+    bytes_written_ptr: usize,
+): i32;

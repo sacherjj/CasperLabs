@@ -1,6 +1,7 @@
 import {toBytesArrayU8, toBytesString} from "./bytesrepr";
 import {U512} from "./bignum";
 import {URef} from "./uref";
+import {Key} from "./key";
 
 export enum CLTypeTag {
     Bool = 0,
@@ -42,6 +43,10 @@ export class CLValue {
 
     static fromU512(value: U512): CLValue {
         return new CLValue(value.toBytes(), <u8>CLTypeTag.U512);
+    }
+
+    static fromKey(key: Key): CLValue{
+        return new CLValue(key.toBytes(), <u8>CLTypeTag.Key);
     }
 
     static fromURef(uref: URef): CLValue {
