@@ -141,14 +141,21 @@ class EraRuntime[F[_]: MonadThrowable: Clock: EraStorage: ForkChoice](
   ): HWL[Unit] = ifSynced {
     for {
       b <- HighwayLog.liftF {
-            messageProducer.ballot(
-              eraId = era.keyBlockHash,
-              roundId = Ticks(lambdaMessage.roundId),
-              target = lambdaMessage.messageHash,
-              // TODO (NODE-1102): Fetch our own last message ID.
-              justifications =
-                Map(PublicKey(lambdaMessage.validatorId) -> Set(lambdaMessage.messageHash))
-            )
+            for {
+              // We need to cite the target, and our own latest message.
+              // NOTE: This will be empty until the validator produces something in this era.
+              tips                    <- dag.latestInEra(era.keyBlockHash)
+              validatorLatestMessages <- tips.latestMessageHash(messageProducer.validatorId)
+              message <- messageProducer.ballot(
+                          eraId = era.keyBlockHash,
+                          roundId = Ticks(lambdaMessage.roundId),
+                          target = lambdaMessage.messageHash,
+                          justifications = List(
+                            PublicKey(lambdaMessage.validatorId) -> Set(lambdaMessage.messageHash),
+                            messageProducer.validatorId          -> validatorLatestMessages
+                          ).filterNot(_._2.isEmpty).toMap
+                        )
+            } yield message
           }
       _ <- HighwayLog.tell[F] {
             HighwayEvent.CreatedLambdaResponse(b)

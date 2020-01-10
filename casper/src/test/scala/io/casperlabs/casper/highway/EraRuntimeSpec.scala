@@ -305,8 +305,31 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
             val events = runtime.handleMessage(msg).written
             events should have size 1
             assertEvent(events) {
-              case event: HighwayEvent.CreatedLambdaResponse =>
-                event.message.parentBlock shouldBe msg.messageHash
+              case HighwayEvent.CreatedLambdaResponse(response) =>
+                response.parentBlock shouldBe msg.messageHash
+            }
+          }
+
+          "only cite the lambda mesage and validators own latest message" in {
+            implicit val ds = defaultDagStorage
+            val runtime =
+              genesisEraRuntime("Alice".some, leaderSequencer = mockSequencer("Charlie"))
+
+            val msgA = insert(makeBallot("Alice", runtime.era, runtime.startTick))
+            val msgC = insert(makeBlock("Charlie", runtime.era, runtime.startTick))
+            insert(makeBallot("Bob", runtime.era, runtime.startTick))
+            insert(makeBallot("Charlie", runtime.era, runtime.startTick))
+
+            val events = runtime.handleMessage(msgC).written
+
+            assertEvent(events) {
+              case HighwayEvent.CreatedLambdaResponse(response) =>
+                response.justifications should have size 2
+                val jmap = response.justifications.map { j =>
+                  j.validatorPublicKey -> j.latestBlockHash
+                }.toMap
+                jmap(validatorKey("Alice")) shouldBe msgA.messageHash
+                jmap(validatorKey("Charlie")) shouldBe msgC.messageHash
             }
           }
 
@@ -693,10 +716,8 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
           val runtime = genesisEraRuntime("Alice".some)
           val events =
             runtime.handleAgenda(Agenda.CreateOmegaMessage(runtime.startTick)).written
-
           assertEvent(events) {
             case HighwayEvent.CreatedOmegaMessage(_) =>
-            // TODO (NODE-1102): Verify justifications
           }
         }
       }
