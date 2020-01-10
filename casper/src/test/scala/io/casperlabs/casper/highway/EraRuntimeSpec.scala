@@ -64,7 +64,7 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
     .get
 
   def defaultDagStorage = MockDagStorage[Id](genesis.toBlock)
-  def defaultForkChoide = MockForkChoice[Id](genesis)
+  def defaultForkChoice = MockForkChoice[Id](genesis)
 
   def genesisEraRuntime(
       validator: Option[String] = none,
@@ -78,7 +78,7 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
       C: Clock[Id] = TestClock.frozen[Id](date(2019, 12, 9)),
       DS: DagStorage[Id] = defaultDagStorage,
       ES: EraStorage[Id] = MockEraStorage[Id],
-      FC: ForkChoice[Id] = defaultForkChoide
+      FC: ForkChoice[Id] = defaultForkChoice
   ) =
     EraRuntime.fromGenesis[Id](
       conf,
@@ -557,7 +557,18 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
           }
         }
         "already found a switch block" should {
-          "only create ballots" in (pending)
+          "only create ballots" in {
+            implicit val fc = defaultForkChoice
+            val runtime     = genesisEraRuntime("Alice".some, leaderSequencer = mockSequencer("Alice"))
+            val switch =
+              makeBlock("Alice", runtime.era, runtime.endTick, mainParent = genesis.messageHash)
+            fc.set(switch)
+            // TODO (NODE-1116): return ballots in voting period
+            //val events = runtime.handleAgenda(Agenda.StartRound(Ticks(runtime.endTick + 1))).written
+            // assertEvent(events) {
+            //   case HighwayEvent.CreatedLambdaMessage(_: Message.Ballot) =>
+            // }
+          }
         }
       }
 
@@ -685,6 +696,7 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
 
           assertEvent(events) {
             case HighwayEvent.CreatedOmegaMessage(_) =>
+            // TODO (NODE-1102): Verify justifications
           }
         }
       }

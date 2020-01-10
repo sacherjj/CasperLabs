@@ -136,7 +136,7 @@ class EraRuntime[F[_]: MonadThrowable: Clock: EraStorage: ForkChoice](
 
   private def createLambdaResponse(
       messageProducer: MessageProducer[F],
-      // TODO (NODE-1102): Lambda message will be a ballot during voting.
+      // TODO (NODE-1116): Lambda message will be a ballot during voting.
       lambdaMessage: Message.Block
   ): HWL[Unit] = ifSynced {
     for {
@@ -164,7 +164,7 @@ class EraRuntime[F[_]: MonadThrowable: Clock: EraStorage: ForkChoice](
       b <- HighwayLog.liftF {
             for {
               choice <- ForkChoice[F].fromKeyBlock(era.keyBlockHash)
-              // TODO (NODE-1102): Create ballot during voting-only.
+              // TODO (NODE-1116): Create ballot during voting-only.
               message <- messageProducer.block(
                           eraId = era.keyBlockHash,
                           roundId = roundId,
@@ -373,7 +373,7 @@ class EraRuntime[F[_]: MonadThrowable: Clock: EraStorage: ForkChoice](
       MonadThrowable[HWL].raiseError[Unit](new IllegalStateException(msg))
 
     message match {
-      // TODO (NODE-1102): Respond to lambda-ballots during voting.
+      // TODO (NODE-1116): Respond to lambda-ballots during voting.
       case _: Message.Ballot =>
         noop
       case b: Message.Block =>

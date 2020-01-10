@@ -16,6 +16,9 @@ class MockForkChoice[F[_]](
 
   def set(result: ForkChoice.Result): F[Unit] =
     resultRef.set(result)
+
+  def set(message: Message): F[Unit] =
+    resultRef.set(ForkChoice.Result(message, Set.empty))
 }
 
 object MockForkChoice {
