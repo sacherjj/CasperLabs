@@ -2,6 +2,7 @@ import * as externals from "./externals";
 import {UREF_SERIALIZED_LENGTH, URef, AccessRights} from "./uref";
 import {CLValue} from "./clvalue";
 import {Key, KEY_UREF_SERIALIZED_LENGTH} from "./key";
+import {serializeArguments, serializeKeys, toBytesString, toBytesArrayU8} from "./bytesrepr";
 import {U512} from "./bignum";
 
 // NOTE: interfaces aren't supported in AS yet: https://github.com/AssemblyScript/assemblyscript/issues/146#issuecomment-399130960
@@ -92,14 +93,14 @@ export function storeFunctionAtHash(name: String, namedKeysBytes: u8[]): Key | n
 }
 
 export function callContract(key: Key, args: CLValue[]): Uint8Array | null {
-  let extraUrefs: CLValue[] = [];
+  let extraUrefs: Key[] = [];
   return callContractExt(key, args, extraUrefs);
 }
 
-export function callContractExt(key: Key, args: CLValue[], extraUrefs: CLValue[]): Uint8Array | null {
+export function callContractExt(key: Key, args: CLValue[], extraUrefs: Key[]): Uint8Array | null {
   let keyBytes = key.toBytes();
   let argBytes = serializeArguments(args);
-  let extraURefsBytes = serializeArguments(extraUrefs);
+  let extraURefsBytes = serializeKeys(extraUrefs);
 
   let resultSize = new Uint32Array(1);
   resultSize.fill(0);

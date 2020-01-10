@@ -6,7 +6,7 @@ import {PurseId} from "../../../../contract-ffi-as/assembly/purseid";
 import {U512} from "../../../../contract-ffi-as/assembly/bignum";
 import {fromBytesString} from "../../../../contract-ffi-as/assembly/bytesrepr";
 import {URef} from "../../../../contract-ffi-as/assembly/uref";
-import {KeyVariant} from "../../../../contract-ffi-as/assembly/key";
+import {Key, KeyVariant} from "../../../../contract-ffi-as/assembly/key";
 
 const GET_PAYMENT_PURSE = "get_payment_purse";
 const SET_REFUND_PURSE= "set_refund_purse";
@@ -73,7 +73,7 @@ export function call(): void {
 
   // Set Refund Purse
   let args: CLValue[] = [CLValue.fromString(SET_REFUND_PURSE), CLValue.fromURef(purseId.asURef())];
-  let extraUrefs: CLValue[] = [CLValue.fromKey(purseKey)];
+  let extraUrefs: Key[] = [purseKey];
   let refundPurseOutput = CL.callContractExt(proofOfStakeKey, args, extraUrefs);
   if (refundPurseOutput === null) {
     Error.fromPosErrorCode(PosErrorCode.RefundPurseKeyUnexpectedType).revert(); // TODO: might not be the correct error code

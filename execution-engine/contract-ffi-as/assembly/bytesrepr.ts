@@ -1,4 +1,5 @@
 import {CLValue} from "./clvalue";
+import {Key} from "./key";
 
 export function toBytesU32(num: u32): u8[] {
     // Converts u32 to little endian
@@ -126,6 +127,16 @@ export function serializeArguments(values: CLValue[]): Array<u8> {
     let bytes = toBytesU32(<u32>values.length);
     for (let i = 0; i < values.length; i++) {
         bytes = bytes.concat(values[i].toBytes());
+    }
+    return bytes;
+}
+
+
+export function serializeKeys(keys: Key[]): Array<u8> {
+    // NOTE: Copied and pasted
+    let bytes = toBytesU32(<u32>keys.length);
+    for (let i = 0; i < keys.length; i++) {
+        bytes = bytes.concat(keys[i].toBytes());
     }
     return bytes;
 }
