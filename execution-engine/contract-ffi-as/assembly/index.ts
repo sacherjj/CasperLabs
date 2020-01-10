@@ -136,8 +136,7 @@ export function putKey(name: String, key: Key): void {
 export function getKey(name: String): Key | null {
   var nameBytes = toBytesString(name);
   let keyBytes = new Uint8Array(UREF_SERIALIZED_LENGTH); // TODO: some equivalent of Key::serialized_size_hint() ?
-  //let resultSize = new Uint32Array(1);
-  let resultSize: usize = 0;
+  let resultSize = new Uint32Array(1);
   let ret =  externals.get_key(
       nameBytes.dataStart,
       nameBytes.length,
@@ -148,7 +147,7 @@ export function getKey(name: String): Key | null {
   if (ret == 0) {
     return null;
   }
-  let key = Key.fromBytes(keyBytes.slice(0, resultSize)); // total guess
+  let key = Key.fromBytes(keyBytes.slice(0, <i32>resultSize[0])); // total guess
   return key;
 }
 
