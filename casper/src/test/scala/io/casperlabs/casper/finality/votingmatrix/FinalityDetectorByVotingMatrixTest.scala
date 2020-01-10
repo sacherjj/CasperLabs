@@ -525,10 +525,11 @@ class FinalityDetectorByVotingMatrixTest
             EquivocationDetector
               .checkEquivocationWithUpdate(dag, message)
           )
-      _ <- BlockStorage[F].put(block.blockHash, block, Seq.empty)
-      finalizedBlockOpt <- FinalityDetectorVotingMatrix[F].onNewBlockAddedToTheBlockDag(
+      _   <- BlockStorage[F].put(block.blockHash, block, Seq.empty)
+      msg <- Sync[F].fromTry(Message.fromBlock(block))
+      finalizedBlockOpt <- FinalityDetectorVotingMatrix[F].onNewMessageAddedToTheBlockDag(
                             dag,
-                            block,
+                            msg,
                             lastFinalizedBlockHash
                           )
     } yield block -> finalizedBlockOpt

@@ -13,6 +13,7 @@ import io.casperlabs.casper.helper.BlockUtil.generateValidator
 import io.casperlabs.casper.helper.{BlockGenerator, StorageFixture}
 import io.casperlabs.casper.util.BondingUtil.Bond
 import io.casperlabs.casper.util.ProtoUtil
+import io.casperlabs.models.Message
 import io.casperlabs.shared.{LogStub, Time}
 import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.storage.dag.{DagRepresentation, IndexedDagStorage}
@@ -38,21 +39,23 @@ class MultiParentFinalizerTest extends FlatSpec with BlockGenerator with Storage
         multiParentFinalizer <- MultiParentFinalizer.empty[Task](
                                  dag,
                                  genesis.blockHash,
-                                 MultiParentFinalizerTest.immediateFinality
+                                 MultiParentFinalizerTest.immediateFinalityStub
                                )
         a                     <- createAndStoreBlockFull[Task](v1, Seq(genesis), Seq.empty, bonds)
         b                     <- createAndStoreBlockFull[Task](v2, Seq(genesis, a), Seq.empty, bonds)
-        newlyFinalizedBlocksA <- multiParentFinalizer.onNewBlockAdded(b).map(_.get)
+        aMsg                  <- Task.fromTry(Message.fromBlock(a))
+        newlyFinalizedBlocksA <- multiParentFinalizer.onNewMessageAdded(aMsg).map(_.get)
         // `b` is in main chain, `a` is secondary parent.
         _ = assert(
           newlyFinalizedBlocksA.mainChain == b.blockHash && newlyFinalizedBlocksA.secondaryParents == Set(
             a.blockHash
           )
         )
-        c <- createAndStoreBlockFull[Task](v1, Seq(b, a), Seq.empty, bonds)
+        c    <- createAndStoreBlockFull[Task](v1, Seq(b, a), Seq.empty, bonds)
+        cMsg <- Task.fromTry(Message.fromBlock(c))
         // `c`'s main parent is `b`, secondary is a. Since `a` was already finalized through `b`,
         // it should not be returned now.
-        newlyFinalizedBlocksB <- multiParentFinalizer.onNewBlockAdded(c).map(_.get)
+        newlyFinalizedBlocksB <- multiParentFinalizer.onNewMessageAdded(cMsg).map(_.get)
         _ = assert(
           newlyFinalizedBlocksB.mainChain == c.blockHash && newlyFinalizedBlocksB.secondaryParents.isEmpty
         )
@@ -85,7 +88,8 @@ class MultiParentFinalizerTest extends FlatSpec with BlockGenerator with Storage
         b <- MultiParentFinalizerTest
               .finalizeBlock[Task](a.blockHash, nelBonds)
               .flatMap(ProtoUtil.unsafeGetBlock[Task](_))
-        finalizedA <- multiParentFinalizer.onNewBlockAdded(b).map(_.get)
+        bMsg       <- Task.fromTry(Message.fromBlock(b))
+        finalizedA <- multiParentFinalizer.onNewMessageAdded(bMsg).map(_.get)
         _          = assert(finalizedA.mainChain == a.blockHash && finalizedA.secondaryParents.isEmpty)
 
         // `aPrime` is sibiling of `a`, another child of Genesis.
@@ -95,7 +99,8 @@ class MultiParentFinalizerTest extends FlatSpec with BlockGenerator with Storage
         bPrime <- MultiParentFinalizerTest
                    .finalizeBlock[Task](aPrime.blockHash, nelBonds)
                    .flatMap(ProtoUtil.unsafeGetBlock[Task](_))
-        finalizedB <- multiParentFinalizer.onNewBlockAdded(bPrime)
+        bPrimeMsg  <- Task.fromTry(Message.fromBlock(bPrime))
+        finalizedB <- multiParentFinalizer.onNewMessageAdded(bPrimeMsg)
         _          = assert(finalizedB.isEmpty)
       } yield ()
   }
@@ -156,20 +161,22 @@ object MultiParentFinalizerTest extends BlockGenerator {
       // Update Finalizer to know about how DAG advanced.
       _ <- chain.traverse_(
             hash =>
-              ProtoUtil.unsafeGetBlock[F](hash) >>= { block =>
-                MultiParentFinalizer[F].onNewBlockAdded(block)
-              }
+              for {
+                block <- ProtoUtil.unsafeGetBlock[F](hash)
+                msg   <- MonadThrowable[F].fromTry(Message.fromBlock(block))
+                res   <- MultiParentFinalizer[F].onNewMessageAdded(msg)
+              } yield res
           )
       b <- createAndStoreMessage[F](Seq(chain.head), bonds.head.validatorPublicKey) // Create level-1 summit
     } yield b.blockHash
 
   // Finalizes block it receives as argument.
-  val immediateFinality = new FinalityDetector[Task] {
-    override def onNewBlockAddedToTheBlockDag(
+  val immediateFinalityStub = new FinalityDetector[Task] {
+    override def onNewMessageAddedToTheBlockDag(
         dag: DagRepresentation[Task],
-        block: Block,
+        message: Message,
         latestFinalizedBlock: BlockHash
     ): Task[Option[CommitteeWithConsensusValue]] =
-      Task(Some(CommitteeWithConsensusValue(Set.empty, 1L, block.blockHash)))
+      Task(Some(CommitteeWithConsensusValue(Set.empty, 1L, message.messageHash)))
   }
 }
