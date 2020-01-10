@@ -16,7 +16,7 @@ import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.storage.BlockHash
 import io.casperlabs.storage.dag.DagStorage
 import io.casperlabs.storage.era.EraStorage
-import io.casperlabs.casper.highway.mocks.{MockDagStorage, MockEraStorage}
+import io.casperlabs.casper.highway.mocks.{MockDagStorage, MockEraStorage, MockForkChoice}
 import org.scalatest._
 import org.scalactic.source
 import org.scalactic.Prettifier
@@ -41,44 +41,50 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
     omegaMessageTimeEnd = 0.75
   )
 
-  val genesis = BlockSummary()
-    .withBlockHash(ByteString.copyFromUtf8("genesis"))
-    .withHeader(
-      Block
-        .Header()
-        .withState(
+  val genesis = Message
+    .fromBlockSummary(
+      BlockSummary()
+        .withBlockHash(ByteString.copyFromUtf8("genesis"))
+        .withHeader(
           Block
-            .GlobalState()
-            .withBonds(
-              List(
-                Bond(validatorKey("Alice")).withStake(state.BigInt("3000")),
-                Bond(validatorKey("Bob")).withStake(state.BigInt("4000")),
-                Bond(validatorKey("Charlie")).withStake(state.BigInt("5000"))
-              )
+            .Header()
+            .withState(
+              Block
+                .GlobalState()
+                .withBonds(
+                  List(
+                    Bond(validatorKey("Alice")).withStake(state.BigInt("3000")),
+                    Bond(validatorKey("Bob")).withStake(state.BigInt("4000")),
+                    Bond(validatorKey("Charlie")).withStake(state.BigInt("5000"))
+                  )
+                )
             )
         )
     )
+    .get
 
   def genesisEraRuntime(
       validator: Option[String] = none,
       roundExponent: Int = 0,
       leaderSequencer: LeaderSequencer = LeaderSequencer,
-      isSyncedRef: Ref[Id, Boolean] = Ref.of[Id, Boolean](true)
+      isSyncedRef: Ref[Id, Boolean] = Ref.of[Id, Boolean](true),
+      messageProducer: String => MessageProducer[Id] = new MockMessageProducer[Id](_)
   )(
       implicit
       // Let's say we are right at the beginning of the era by default.
       C: Clock[Id] = TestClock.frozen[Id](date(2019, 12, 9)),
       DS: DagStorage[Id] = MockDagStorage[Id],
-      ES: EraStorage[Id] = MockEraStorage[Id]
+      ES: EraStorage[Id] = MockEraStorage[Id],
+      FC: ForkChoice[Id] = MockForkChoice[Id](genesis)
   ) =
     EraRuntime.fromGenesis[Id](
       conf,
-      genesis,
-      validator.map(mockMessageProducer[Id](_)),
+      genesis.blockSummary,
+      validator.map(messageProducer),
       roundExponent,
       isSyncedRef.get,
       leaderSequencer
-    )(Sync[Id], C, DS, ES)
+    )(syncId, C, DS, ES, FC)
 
   /** Fill the DagStorage with blocks at a fixed interval long the era. */
   def makeFullChain(validator: String, runtime: EraRuntime[Id], interval: FiniteDuration) =
@@ -98,9 +104,12 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
       .reverse
       .toVector
 
-  def insertAll(messages: Seq[Message])(implicit ds: MockDagStorage[Id]) = {
-    messages.map(_.toBlock).foreach(ds.insert)
-    messages
+  def insert(messages: Seq[Message])(implicit ds: MockDagStorage[Id]): Seq[Message] =
+    messages.map(insert)
+
+  def insert(message: Message)(implicit ds: MockDagStorage[Id]): Message = {
+    ds.insert(message.toBlock)
+    message
   }
 
   def assertEvent(
@@ -131,8 +140,8 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
       }
 
       "use the genesis block as key and booking block" in {
-        runtime.era.keyBlockHash shouldBe genesis.blockHash
-        runtime.era.bookingBlockHash shouldBe genesis.blockHash
+        runtime.era.keyBlockHash shouldBe genesis.messageHash
+        runtime.era.bookingBlockHash shouldBe genesis.messageHash
         runtime.era.leaderSeed shouldBe ByteString.EMPTY
       }
 
@@ -318,7 +327,7 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
 
           // Let the leader make one block every hour. At the end of the genesis era,
           // the right key block should be picked for the child era.
-          val blocks = insertAll(makeFullChain(leader, runtime, 1.hour))
+          val blocks = insert(makeFullChain(leader, runtime, 1.hour))
 
           "create an era" in {
             implicit val es = MockEraStorage[Id]
@@ -407,7 +416,7 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
         "Anonymous".some,
         leaderSequencer = mockSequencer(leader)
       )
-      val blocks = insertAll(makeFullChain(leader, runtime, 24.hours))
+      val blocks = insert(makeFullChain(leader, runtime, 24.hours))
 
       "given a lambda message" should {
         "not respond" in {
@@ -602,10 +611,46 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
         }
       }
 
-      "crossing a booking block boundary" should {
-        "pass the information to the message producer" in (pending)
+      "crossing the booking block boundary" should {
+        "pass the flag to the message producer" in {
+          implicit val ds = MockDagStorage[Id]
+          implicit val fc = MockForkChoice[Id](genesis)
+
+          val messageProducer = new MockMessageProducer[Id]("Alice") {
+            override def block(
+                eraId: ByteString,
+                roundId: Ticks,
+                mainParent: ByteString,
+                justifications: Map[PublicKeyBS, Set[BlockHash]],
+                isBookingBlock: Boolean
+            ): Id[Message.Block] = {
+              isBookingBlock shouldBe true
+              mainParent shouldBe fc.fromKeyBlock(eraId).mainParent.messageHash
+              justifications shouldBe fc.fromKeyBlock(eraId).justificationsMap
+
+              super.block(eraId, roundId, mainParent, justifications, isBookingBlock)
+            }
+          }
+
+          val runtime = genesisEraRuntime(
+            "Alice".some,
+            leaderSequencer = mockSequencer("Alice"),
+            messageProducer = _ => messageProducer
+          )
+
+          val prev = insert(makeBlock("Alice", runtime.era, runtime.startTick))
+          fc.set(ForkChoice.Result(prev, Set(prev)))
+
+          // Do a round which is surely after the booking time.
+          val events = runtime.handleAgenda(Agenda.StartRound(runtime.endTick)).written
+
+          assertEvent(events) {
+            case _: HighwayEvent.CreatedLambdaMessage =>
+          }
+        }
       }
     }
+
     "given a CreateOmegaMessage action" when {
       "during initial sync" should {
         "not create an omega message" in {
@@ -699,7 +744,9 @@ object EraRuntimeSpec {
         .withBlockHash(blockHashes.next())
     }.get
 
-  def mockMessageProducer[F[_]: Applicative](validator: String) = new MessageProducer[F] {
+  class MockMessageProducer[F[_]: Applicative](
+      validator: String
+  ) extends MessageProducer[F] {
     override val validatorId = validatorKey(validator)
 
     override def ballot(
@@ -751,6 +798,7 @@ object EraRuntimeSpec {
         )
         .pure[F]
         .map(Message.fromBlockSummary(_).get.asInstanceOf[Message.Block])
+
   }
 
   def mockSequencer(validator: String) = new LeaderSequencer {

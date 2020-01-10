@@ -34,7 +34,7 @@ import scala.util.Random
   *
   * This should make testing easier: the return values are not opaque.
   */
-class EraRuntime[F[_]: MonadThrowable: Clock: EraStorage](
+class EraRuntime[F[_]: MonadThrowable: Clock: EraStorage: ForkChoice](
     conf: HighwayConf,
     val era: Era,
     leaderFunction: LeaderFunction,
@@ -160,17 +160,20 @@ class EraRuntime[F[_]: MonadThrowable: Clock: EraStorage](
   ): HWL[Unit] = ifSynced {
     for {
       b <- HighwayLog.liftF {
-            // TODO (NODE-1102): Create ballot during voting-only.
-            messageProducer.block(
-              eraId = era.keyBlockHash,
-              roundId = roundId,
-              // TODO (NODE-1102): Execute the fork choice.
-              mainParent = ByteString.EMPTY,
-              // TODO (NODE-1102): Get all justifications
-              justifications = Map.empty,
-              // TODO (NODE-1102): Detect boundary based on main parent
-              isBookingBlock = false
-            )
+            for {
+              choice <- ForkChoice[F].fromKeyBlock(era.keyBlockHash)
+              // TODO (NODE-1102): Create ballot during voting-only.
+              message <- messageProducer.block(
+                          eraId = era.keyBlockHash,
+                          roundId = roundId,
+                          mainParent = choice.mainParent.messageHash,
+                          justifications = choice.justificationsMap,
+                          isBookingBlock = isBookingBoundary(
+                            choice.mainParent.roundInstant,
+                            conf.toInstant(roundId)
+                          )
+                        )
+            } yield message
           }
       _ <- HighwayLog.tell[F](
             HighwayEvent.CreatedLambdaMessage(b)
@@ -184,14 +187,15 @@ class EraRuntime[F[_]: MonadThrowable: Clock: EraStorage](
   ): HWL[Unit] = ifSynced {
     for {
       b <- HighwayLog.liftF {
-            messageProducer.ballot(
-              eraId = era.keyBlockHash,
-              roundId = roundId,
-              // TODO (NODE-1102): Execute the fork choice.
-              target = ByteString.EMPTY,
-              // TODO (NODE-1102): Get all justifications
-              justifications = Map.empty
-            )
+            for {
+              choice <- ForkChoice[F].fromKeyBlock(era.keyBlockHash)
+              message <- messageProducer.ballot(
+                          eraId = era.keyBlockHash,
+                          roundId = roundId,
+                          target = choice.mainParent.messageHash,
+                          justifications = choice.justificationsMap
+                        )
+            } yield message
           }
       _ <- HighwayLog.tell[F](
             HighwayEvent.CreatedOmegaMessage(b)
@@ -451,7 +455,7 @@ class EraRuntime[F[_]: MonadThrowable: Clock: EraStorage](
 
 object EraRuntime {
 
-  def fromGenesis[F[_]: Sync: Clock: DagStorage: EraStorage](
+  def fromGenesis[F[_]: Sync: Clock: DagStorage: EraStorage: ForkChoice](
       conf: HighwayConf,
       genesis: BlockSummary,
       maybeMessageProducer: Option[MessageProducer[F]],
@@ -469,7 +473,7 @@ object EraRuntime {
     fromEra[F](conf, era, maybeMessageProducer, initRoundExponent, isSynced, leaderSequencer)
   }
 
-  def fromEra[F[_]: Sync: Clock: DagStorage: EraStorage](
+  def fromEra[F[_]: Sync: Clock: DagStorage: EraStorage: ForkChoice](
       conf: HighwayConf,
       era: Era,
       maybeMessageProducer: Option[MessageProducer[F]],
