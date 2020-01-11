@@ -348,8 +348,7 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
             val events = runtime.handleMessage(msg).written
             events should have size 1
             assertEvent(events) {
-              case HighwayEvent.CreatedLambdaResponse(response) =>
-                response.parentBlock shouldBe msg.messageHash
+              case HighwayEvent.CreatedLambdaResponse(_) =>
             }
           }
 
@@ -373,6 +372,31 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
                 }.toMap
                 jmap(validatorKey("Alice")) shouldBe msgA.messageHash
                 jmap(validatorKey("Charlie")) shouldBe msgC.messageHash
+                jmap.keys should not contain (validatorKey("Bob"))
+            }
+          }
+
+          "target the fork choice, not necessarily the lambda message" in {
+            implicit val ds = defaultDagStorage
+            implicit val fc = defaultForkChoice
+            val runtime =
+              genesisEraRuntime("Alice".some, leaderSequencer = mockSequencer("Charlie"))
+
+            val msgB = insert(makeBlock("Bob", runtime.era, runtime.startTick))
+            val msgC = insert(makeBlock("Charlie", runtime.era, runtime.startTick))
+            insert(makeBallot("Alice", runtime.era, runtime.startTick, target = msgB.messageHash))
+
+            fc.set(msgB)
+
+            val events = runtime.handleMessage(msgC).written
+
+            assertEvent(events) {
+              case HighwayEvent.CreatedLambdaResponse(response) =>
+                response.justifications.map(_.validatorPublicKey) should contain theSameElementsAs List(
+                  validatorKey("Alice"),
+                  validatorKey("Charlie")
+                )
+                response.parentBlock shouldBe msgB.messageHash
             }
           }
 

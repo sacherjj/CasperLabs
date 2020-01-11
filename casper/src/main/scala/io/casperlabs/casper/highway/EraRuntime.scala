@@ -139,18 +139,25 @@ class EraRuntime[F[_]: MonadThrowable: Clock: EraStorage: ForkChoice](
     for {
       b <- HighwayLog.liftF {
             for {
-              // We need to cite the target, and our own latest message.
-              // NOTE: This will be empty until the validator produces something in this era.
+              // We need to cite the lambda message, and our own latest message.
+              // NOTE: The latter will be empty until the validator produces something in this era.
               tips                    <- dag.latestInEra(era.keyBlockHash)
               validatorLatestMessages <- tips.latestMessageHash(messageProducer.validatorId)
+              justifications = List(
+                PublicKey(lambdaMessage.validatorId) -> Set(lambdaMessage.messageHash),
+                messageProducer.validatorId          -> validatorLatestMessages
+              ).filterNot(_._2.isEmpty).toMap
+              // See what the fork choice is, given the lambda and our own latest message, that is our target.
+              // In the voting period the lambda message is a ballot, so can't be a target,
+              // but in any case our own latest message might point at something with more weight already.
+              choice <- ForkChoice[F].fromJustifications(
+                         justifications.values.flatten.toSet
+                       )
               message <- messageProducer.ballot(
                           eraId = era.keyBlockHash,
                           roundId = Ticks(lambdaMessage.roundId),
-                          target = lambdaMessage.messageHash,
-                          justifications = List(
-                            PublicKey(lambdaMessage.validatorId) -> Set(lambdaMessage.messageHash),
-                            messageProducer.validatorId          -> validatorLatestMessages
-                          ).filterNot(_._2.isEmpty).toMap
+                          target = choice.mainParent.messageHash,
+                          justifications = justifications
                         )
             } yield message
           }

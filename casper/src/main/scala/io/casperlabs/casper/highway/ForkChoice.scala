@@ -29,8 +29,12 @@ trait ForkChoice[F[_]] {
     */
   def fromKeyBlock(keyBlockHash: BlockHash): F[ForkChoice.Result]
 
-  // There will be another method to validate a fork choice of an incoming block,
-  // which will have as input the justifications of the message.
+  /** Calculate the fork choice from a set of known blocks. This can be used
+    * either to validate the main parent of an incoming block, or to pick a
+    * target for a lambda response, given the lambda message and the validator's
+    * own latest message as justifications.
+    */
+  def fromJustifications(justifications: Set[BlockHash]): F[ForkChoice.Result]
 }
 object ForkChoice {
   case class Result(
