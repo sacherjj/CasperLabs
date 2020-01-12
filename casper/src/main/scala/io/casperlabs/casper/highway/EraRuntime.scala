@@ -241,7 +241,7 @@ class EraRuntime[F[_]: MonadThrowable: Clock: EraStorage: ForkChoice](
                              isCrossing(bookingBlockBoundary)
                            )
             magicBits <- collectMagicBits(dag, bookingBlock, keyBlock)
-            seed      = LeaderSequencer.seed(era.leaderSeed.toByteArray, magicBits)
+            seed      = LeaderSequencer.seed(bookingBlock.messageHash.toByteArray, magicBits)
             childEra = Era(
               parentKeyBlockHash = era.keyBlockHash,
               keyBlockHash = keyBlock.messageHash,

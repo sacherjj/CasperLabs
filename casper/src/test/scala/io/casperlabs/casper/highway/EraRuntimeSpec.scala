@@ -446,10 +446,13 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
                 era.bookingBlockHash shouldBe blocks(bookingIdx).messageHash
                 era.keyBlockHash shouldBe blocks(keyIdx).messageHash
 
-                era.leaderSeed.toByteArray shouldBe LeaderSequencer.seed(
-                  runtime.era.leaderSeed.toByteArray,
+                val expectedSeed = LeaderSequencer.seed(
+                  // NOTE: The white paper says to use key block, the math paper booking block hash.
+                  blocks(bookingIdx).messageHash.toByteArray,
                   blocks.slice(bookingIdx, keyIdx + 1).map(_.blockSummary.getHeader.magicBit)
                 )
+
+                era.leaderSeed.toByteArray shouldBe expectedSeed
             }
           }
 
