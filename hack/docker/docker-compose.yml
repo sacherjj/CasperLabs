@@ -68,7 +68,8 @@ services:
       - --backend_tls=false
       - --backend_tls_noverify
       - --backend_max_call_recv_msg_size=16777216
-      - --server_http_max_write_timeout=10000s
+      # Timeout for server-side streaming
+      - --server_http_max_write_timeout=1h
       - --allow_all_origins
       - --server_tls_cert_file=/etc/tls/certificate.pem
       - --server_tls_key_file=/etc/tls/key.pem
