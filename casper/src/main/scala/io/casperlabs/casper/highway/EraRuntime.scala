@@ -542,6 +542,12 @@ object EraRuntime {
       .toList
       .map(_.reverse)
 
+  /** Check that two messages are in the same round. Different eras (e.g. the parent and the child)
+    * can share a round ID, but they are still different rounds.
+    */
+  def isSameRoundAs(a: Message)(b: Message): Boolean =
+    a.keyBlockHash == b.keyBlockHash && a.roundId == b.roundId
+
   /** Check if a message cites another in the same round, which would mean it's not a lambda message.
     * The lambda message is created by the leader of the round; under normal cirumstances it comes
     * before the omega message, and therefore it only won't have a justification in the same round,
@@ -553,14 +559,15 @@ object EraRuntime {
   ): F[Boolean] =
     message.justifications.toList
       .findM[F] { j =>
-        dag.lookupUnsafe(j.latestBlockHash).map { jmsg =>
-          jmsg.keyBlockHash == message.keyBlockHash && jmsg.roundId == message.roundId
-        }
+        dag.lookupUnsafe(j.latestBlockHash).map(isSameRoundAs(message))
       }
       .map(_.isDefined)
 
-  /** Check that a ballot from a leader looks like a lambda message, that is,
-    * it only cites messages from earlier rounds.
+  /** Given a ballot which we already established is coming from the leader of its round,
+    * check whether it looks like a lambda message (rather than an omega): a lambda message
+    * normally only cites messages from different rounds than its own, because it starts at
+    * the beginning of the block, and it shouldn't have time to receive stray omega messages
+    * from the same round even from validators running with very low round exponents.
     */
   def isLambdaLikeBallot[F[_]: MonadThrowable](
       dag: DagRepresentation[F],
@@ -585,26 +592,21 @@ object EraRuntime {
         message,
         dag
       )
-      .filter {
-        // We know this one is a lambda message.
-        _.messageHash != message.messageHash
-      }
-      .takeWhile { x =>
-        // Only look at messages in this round, in this era.
-        x.roundId == message.roundId && x.keyBlockHash == message.keyBlockHash
-      }
+      // We know this one is a lambda message.
+      .filter(_.messageHash != message.messageHash)
+      // Only look at messages in this round, in this era.
+      .takeWhile(isSameRoundAs(message))
       // Try to find a lambda message.
       .findF {
         case _: Message.Block =>
           // We established that this validator is the lead, so a block from them is a lambda.
           true.pure[F]
-        case b: Message.Ballot if b.roundId >= eraEndTick =>
+        case b: Message.Ballot =>
           // The era is over, so this is a voting only period message.
           // In the active period, it's easy to know that a ballot is either a lambda response or an omega.
           // In the voting only period, however, lambda messages are ballots too.
-          // The only way to tell if a ballot might be a lambda may be a lambda message
-          // is that it cites nothing from this round.
-          hasJustificationInOwnRound(dag, b).map(!_)
+          // The only way to tell if a ballot might be a lambda message is that it cites nothing from this round.
+          isLambdaLikeBallot(dag, b, eraEndTick)
         case _ =>
           false.pure[F]
       }

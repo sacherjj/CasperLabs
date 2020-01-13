@@ -226,9 +226,7 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
         "Bob",
         runtime.era,
         roundId = Ticks(message0.roundId),
-        justifications = Map(
-          message0.validatorId -> message0.messageHash
-        )
+        justifications = toJustifications(message0)
       )
       runtime.validate(message1).value shouldBe Left(
         "The leader has already sent a lambda message in this round."
@@ -249,41 +247,47 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
 
     "accept a second lambda ballot received from the leader in the same round during the voting-only period" in {
       implicit val ds = defaultDagStorage
-      val runtime     = genesisEraRuntime("Alice".some, leaderSequencer = mockSequencer("Bob"))
-      val message0    = insert(makeBallot("Bob", runtime.era, roundId = runtime.endTick))
-      val message1 = makeBallot(
-        "Bob",
-        runtime.era,
-        roundId = runtime.endTick,
-        justifications = Map(
-          message0.validatorId -> message0.messageHash
+      val leader      = "Bob"
+      val runtime     = genesisEraRuntime("Alice".some, leaderSequencer = mockSequencer(leader))
+
+      def leaderBallot(roundId: Ticks, justifications: Map[ByteString, ByteString]) =
+        makeBallot(leader, runtime.era, roundId, justifications = justifications)
+
+      // These are just here to check the helper methods during the active period.
+      val message0 = leaderBallot(runtime.startTick, Map.empty)
+      val message1 = leaderBallot(runtime.startTick, toJustifications(message0))
+
+      // This is the voting period.
+      val message2 = leaderBallot(runtime.endTick, toJustifications(message1))
+      val message3 = leaderBallot(runtime.endTick, toJustifications(message2))
+
+      val messages =
+        insert(List(message0, message1, message2, message3)).map(_.asInstanceOf[Message.Ballot])
+
+      messages map {
+        EraRuntime.isLambdaLikeBallot[Id](
+          ds.getRepresentation,
+          _,
+          runtime.endTick
         )
-      )
+      } shouldBe List(false, false, true, false)
 
-      EraRuntime.isLambdaLikeBallot[Id](
-        ds.getRepresentation,
-        message0.asInstanceOf[Message.Ballot],
-        runtime.endTick
-      ) shouldBe true
+      messages map {
+        EraRuntime.hasJustificationInOwnRound[Id](
+          ds.getRepresentation,
+          _
+        )
+      } shouldBe List(false, true, false, true)
 
-      EraRuntime.isLambdaLikeBallot[Id](
-        ds.getRepresentation,
-        message1.asInstanceOf[Message.Ballot],
-        runtime.endTick
-      ) shouldBe false
+      messages map {
+        EraRuntime.hasOtherLambdaMessageInSameRound[Id](
+          ds.getRepresentation,
+          _,
+          runtime.endTick
+        )
+      } shouldBe List(false, false, false, true)
 
-      EraRuntime.hasJustificationInOwnRound[Id](
-        ds.getRepresentation,
-        message1
-      ) shouldBe true
-
-      EraRuntime.hasOtherLambdaMessageInSameRound[Id](
-        ds.getRepresentation,
-        message1,
-        runtime.endTick
-      ) shouldBe true
-
-      runtime.validate(message1).value shouldBe Right(())
+      runtime.validate(message3).value shouldBe Right(())
     }
   }
 
@@ -382,9 +386,13 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
             val runtime =
               genesisEraRuntime("Alice".some, leaderSequencer = mockSequencer("Charlie"))
 
+            // Bob makes a block, on top of which Alice sends a ballot.
+            // Then Alice gets Charlie's lambda block, and responds with a ballot,
+            // but the fork choice indicates Bob's block is still the one to target.
+
             val msgB = insert(makeBlock("Bob", runtime.era, runtime.startTick))
-            val msgC = insert(makeBlock("Charlie", runtime.era, runtime.startTick))
             insert(makeBallot("Alice", runtime.era, runtime.startTick, target = msgB.messageHash))
+            val msgC = insert(makeBlock("Charlie", runtime.era, runtime.startTick))
 
             fc.set(msgB)
 
@@ -830,6 +838,19 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
       }
     }
   }
+
+  "isSameRoundAs" should {
+    "take the era into account" in {
+      val runtime = genesisEraRuntime()
+      val a       = makeBlock("Alice", runtime.era, runtime.startTick)
+      val b       = makeBlock("Bob", runtime.era, runtime.startTick)
+      val c       = makeBlock("Charlie", runtime.era, runtime.endTick)
+      val d       = makeBlock("Alice", runtime.era.copy(keyBlockHash = c.messageHash), runtime.startTick)
+      EraRuntime.isSameRoundAs(a)(b) shouldBe true
+      EraRuntime.isSameRoundAs(a)(c) shouldBe false
+      EraRuntime.isSameRoundAs(a)(d) shouldBe false
+    }
+  }
 }
 
 object EraRuntimeSpec {
@@ -905,6 +926,9 @@ object EraRuntimeSpec {
         )
         .withBlockHash(blockHashes.next())
     }.get
+
+  def toJustifications(messages: Message*): Map[ByteString, ByteString] =
+    messages.map(m => m.validatorId -> m.messageHash).toMap
 
   class MockMessageProducer[F[_]: Applicative](
       validator: String
