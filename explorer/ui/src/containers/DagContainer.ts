@@ -1,11 +1,8 @@
-import { action, autorun, observable, runInAction } from 'mobx';
+import { action, observable, reaction, runInAction } from 'mobx';
 
 import ErrorContainer from './ErrorContainer';
 import { CasperService, encodeBase16 } from 'casperlabs-sdk';
-import {
-  BlockInfo,
-  Event
-} from 'casperlabs-grpc/io/casperlabs/casper/consensus/info_pb';
+import { BlockInfo, Event } from 'casperlabs-grpc/io/casperlabs/casper/consensus/info_pb';
 import { Subscription } from 'rxjs';
 import { ToggleStore } from '../components/ToggleButton';
 
@@ -59,7 +56,7 @@ export class DagStep {
 enum SubscribeState {
   UN_INIT,
   ON,
- OFF
+  OFF
 }
 
 export class DagContainer {
@@ -77,7 +74,10 @@ export class DagContainer {
     private casperService: CasperService
   ) {
     // so that change of subscribeToggleStore can trigger `setUpSubscriber`
-    autorun(() => this.setUpSubscriber(this.subscribeToggleStore.isPressed), {
+    reaction(() => this.subscribeToggleStore.isPressed, (isPressed, reaction) => {
+      this.setUpSubscriber(isPressed);
+    }, {
+      fireImmediately: false,
       delay: 100
     });
   }
