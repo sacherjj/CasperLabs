@@ -42,6 +42,10 @@ class Node:
 
 
 class Agent:
+    """
+    An account that will be used to call contracts.
+    """
+
     def __init__(self, name):
         self.name = name
         print(f"Agent {str(self)}")
@@ -50,6 +54,9 @@ class Agent:
         return f"{self.name}: {self.public_key_hex}"
 
     def on(self, node):
+        """
+        Bind agent to a node.
+        """
         return BoundAgent(self, node)
 
     @property
@@ -67,6 +74,10 @@ class Agent:
 
 
 class BoundAgent:
+    """
+    An agent that is bound to a node. Can be used to call a contract or issue a query.
+    """
+
     def __init__(self, agent, node):
         self.agent = agent
         self.node = node
@@ -88,7 +99,7 @@ def wait_for_deploy_processed(bound_agent, deploy_hash, check_deploy_status=True
         if result.status.state != 1:  # PENDING
             break
         # result.status.state == PROCESSED (2)
-        time.sleep(0.2)
+        time.sleep(0.1)
     if check_deploy_status:
         for p in result.processing_results:
             if p.is_error:
@@ -98,7 +109,17 @@ def wait_for_deploy_processed(bound_agent, deploy_hash, check_deploy_status=True
 
 
 class SmartContract:
+    """
+    Python interface for calling smart contracts.
+    """
+
     def __init__(self, file_name, methods):
+        """
+        :param file_name: Path to WASM file with smart contract.
+        :param methods:   Dictionary mapping contract methods to
+                          their signatures: names and types of
+                          their parameters. See ERC20 for an example.
+        """
         self.file_name = file_name
         self.methods = methods
 
@@ -118,6 +139,15 @@ class SmartContract:
         return ABI.args(args)
 
     def method(self, name):
+        """
+        Returns a function representing a smart contract's method.
+
+        The function returned can be called with keyword arguments matching
+        the smart contract's parameters and it will return a function that
+        accepts a BoundAgent and actually call the smart contract on a node.
+
+        :param name:  name of the smart contract's method
+        """
         if name not in self.methods:
             raise Exception(f"unknown method {name}")
 
@@ -153,13 +183,25 @@ class SmartContract:
 
 
 class DeployedERC20:
+    """
+    Interface to an already deployed ERC20 smart contract.
+    """
+
     def __init__(self, erc20, token_hash, proxy_hash):
+        """
+        This constructor is not to be used directly, use
+        DeployedERC20.create instead.
+        """
         self.erc20 = erc20
         self.token_hash = token_hash
         self.proxy_hash = proxy_hash
 
     @classmethod
     def create(cls, deployer: BoundAgent, token_name: str):
+        """
+        Returns DeployedERC20 object that provides interface to
+        a deployed ERC20 smart contract.
+        """
         erc20 = ERC20(token_name)
         block_hash = last_block_hash(deployer.node)
         return DeployedERC20(
@@ -169,6 +211,11 @@ class DeployedERC20:
         )
 
     def balance(self, account_public_hex):
+        """
+        Returns function that can be passed a bound agent to return
+        the amount of ERC20 tokens deposited in the given account.
+        """
+
         def execute(bound_agent):
             key = f"{self.token_hash.hex()}:{BALANCE_KEY_SIZE_HEX}{BALANCE_BYTE}{account_public_hex}"
             block_hash_hex = last_block_hash(bound_agent.node)
@@ -180,6 +227,11 @@ class DeployedERC20:
         return execute
 
     def transfer(self, sender_private_key, recipient_public_key_hex, amount):
+        """
+        Returns a function that can be passed a bound agent and transfer
+        given amount of ERC20 tokens from sender to recipient.
+        """
+
         def execute(bound_agent):
             return self.erc20.method("transfer")(
                 erc20=self.token_hash,
