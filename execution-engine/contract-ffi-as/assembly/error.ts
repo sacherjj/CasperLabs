@@ -82,26 +82,20 @@ export const enum PosErrorCode {
 export class Error{
     private errorCodeValue: u32;
 
-    static fromUserError(userErrorCodeValue: u32): Error {
-        let error = new Error();
-        if (userErrorCodeValue <= USER_ERROR_CODE_OFFSET) {
-            error.errorCodeValue = USER_ERROR_CODE_OFFSET + 1 + userErrorCodeValue;
-        } else {
-            error.errorCodeValue = userErrorCodeValue;
-        }
-        return error;
+    constructor(value: u32) {
+        this.errorCodeValue = value;
+    }
+
+    static fromUserError(userErrorCodeValue: u16): Error {
+        return new Error(USER_ERROR_CODE_OFFSET + 1 + userErrorCodeValue);
     }
 
     static fromErrorCode(errorCode: ErrorCode): Error {
-        let error = new Error();
-        error.errorCodeValue = <u32>errorCode;
-        return error;
+        return new Error(<u32>errorCode);
     }
 
     static fromPosErrorCode(errorCode: PosErrorCode): Error {
-        let error = new Error();
-        error.errorCodeValue = <u32>errorCode + POS_ERROR_CODE_OFFSET;
-        return error;
+        return new Error(<u32>errorCode + POS_ERROR_CODE_OFFSET);
     }
 
     value(): u32{
