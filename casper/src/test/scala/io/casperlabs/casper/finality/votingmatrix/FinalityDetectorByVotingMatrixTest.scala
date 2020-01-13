@@ -77,7 +77,8 @@ class FinalityDetectorByVotingMatrixTest
                        genesis.blockHash,
                        v1,
                        bonds,
-                       HashMap(v1 -> genesis.blockHash)
+                       HashMap(v1 -> genesis.blockHash),
+                       messageType = Block.MessageType.BLOCK
                      )
           _ = c1 shouldBe None
           (b1, c2) <- createBlockAndUpdateFinalityDetector[Task](
@@ -85,7 +86,8 @@ class FinalityDetectorByVotingMatrixTest
                        genesis.blockHash,
                        v2,
                        bonds,
-                       HashMap(v1 -> a1.blockHash)
+                       HashMap(v1 -> a1.blockHash),
+                       messageType = Block.MessageType.BLOCK
                      )
           _ = c2 shouldBe None
           (ballot, c3) <- createBlockAndUpdateFinalityDetector[Task](
@@ -93,7 +95,8 @@ class FinalityDetectorByVotingMatrixTest
                            genesis.blockHash,
                            v1,
                            bonds,
-                           HashMap(v1 -> b1.blockHash)
+                           HashMap(v1 -> b1.blockHash),
+                           messageType = Block.MessageType.BALLOT
                          )
           _ = c3 shouldBe Some(CommitteeWithConsensusValue(Set(v1, v2), 20, a1.blockHash))
         } yield ()
@@ -567,7 +570,8 @@ class FinalityDetectorByVotingMatrixTest
       creator: Validator,
       bonds: Seq[Bond] = Seq.empty[Bond],
       justifications: collection.Map[Validator, BlockHash] = HashMap.empty[Validator, BlockHash],
-      postStateHash: ByteString = ByteString.copyFromUtf8(scala.util.Random.nextString(64))
+      postStateHash: ByteString = ByteString.copyFromUtf8(scala.util.Random.nextString(64)),
+      messageType: Block.MessageType = Block.MessageType.BLOCK
   )(
       implicit casperState: Cell[F, CasperState]
   ): F[(Block, Option[CommitteeWithConsensusValue])] =
@@ -578,7 +582,8 @@ class FinalityDetectorByVotingMatrixTest
                 creator,
                 bonds,
                 justifications,
-                postStateHash = postStateHash
+                postStateHash = postStateHash,
+                messageType = messageType
               )
       dag     <- IndexedDagStorage[F].getRepresentation
       message <- Sync[F].fromTry(Message.fromBlock(block))
