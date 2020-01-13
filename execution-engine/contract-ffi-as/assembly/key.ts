@@ -1,8 +1,5 @@
 import {URef} from "./uref";
-import {UREF_SERIALIZED_LENGTH} from "./uref";
-
-const KEY_ID_SERIALIZED_LENGTH: usize = 1; // u8 used to determine the ID
-export const KEY_UREF_SERIALIZED_LENGTH = KEY_ID_SERIALIZED_LENGTH + UREF_SERIALIZED_LENGTH;
+import {UREF_SERIALIZED_LENGTH, KEY_ID_SERIALIZED_LENGTH, KEY_UREF_SERIALIZED_LENGTH} from "./constants";
 
 export enum KeyVariant {
     ACCOUNT_ID = 0,

@@ -1,9 +1,10 @@
 import * as externals from "./externals";
-import {UREF_SERIALIZED_LENGTH, URef, AccessRights} from "./uref";
+import {URef, AccessRights} from "./uref";
 import {CLValue} from "./clvalue";
-import {Key, KEY_UREF_SERIALIZED_LENGTH} from "./key";
+import {Key} from "./key";
 import {serializeArguments, serializeKeys, toBytesString, toBytesArrayU8} from "./bytesrepr";
 import {U512} from "./bignum";
+import {UREF_SERIALIZED_LENGTH, KEY_UREF_SERIALIZED_LENGTH} from "./constants";
 
 // NOTE: interfaces aren't supported in AS yet: https://github.com/AssemblyScript/assemblyscript/issues/146#issuecomment-399130960
 // interface ToBytes {

@@ -1,11 +1,11 @@
-import {UREF_SERIALIZED_LENGTH, URef} from "./uref";
+import {URef} from "./uref";
 import * as externals from "./externals";
 import {fromBytesU32} from "./bytesrepr";
 import {readHostBuffer} from "./index";
 import {U512} from "./bignum";
 import {Error, ErrorCode} from "./error";
+import {UREF_SERIALIZED_LENGTH, PURSE_ID_SERIALIZED_LENGTH} from "./constants";
 
-export const PURSE_ID_SERIALIZED_LENGTH = UREF_SERIALIZED_LENGTH;
 
 export class PurseId {
     private uref: URef;

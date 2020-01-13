@@ -1,9 +1,6 @@
 import {Option} from "./option";
-
-export const UREF_ADDR_LENGTH = 32;
-export const OPTION_TAG_SERIALIZED_LENGTH = 1;
-export const ACCESS_RIGHTS_SERIALIZED_LENGTH = 1;
-export const UREF_SERIALIZED_LENGTH = UREF_ADDR_LENGTH + OPTION_TAG_SERIALIZED_LENGTH + ACCESS_RIGHTS_SERIALIZED_LENGTH;
+import {CLValue} from "./clvalue";
+import {UREF_ADDR_LENGTH, OPTION_TAG_SERIALIZED_LENGTH, ACCESS_RIGHTS_SERIALIZED_LENGTH, UREF_SERIALIZED_LENGTH} from "./constants";
 
 export enum AccessRights{
     NONE = 0x0,
