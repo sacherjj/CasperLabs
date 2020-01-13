@@ -1,44 +1,58 @@
 import * as CL from "../../../../contract-ffi-as/assembly";
+import {Error, ErrorCode} from "../../../../contract-ffi-as/assembly/error";
+import {CLValue} from "../../../../contract-ffi-as/assembly/clvalue";
+import {PurseId} from "../../../../contract-ffi-as/assembly/purseid";
+import {U512} from "../../../../contract-ffi-as/assembly/bignum";
+import {Key} from "../../../../contract-ffi-as/assembly/key";
+
+const POS_ACTION = "get_payment_purse";
 
 export function call(): void {
-  let amountBytes = CL.getArg(0);
-  if (amountBytes == null) {
-    CL.revert(1);
-    return;
-  }
-
-  let mainPurse = CL.getMainPurse();
-  if (mainPurse == null) {
-    CL.revert(2);
-    return;
-  }
-
   let proofOfStake = CL.getSystemContract(CL.SystemContract.ProofOfStake);
   if (proofOfStake == null) {
-    CL.revert(3);
+    Error.fromErrorCode(ErrorCode.InvalidSystemContract).revert();
     return;
   }
 
-  let key = CL.Key.fromURef(<CL.URef>proofOfStake);
+  let amountBytes = CL.getArg(0);
+  if (amountBytes == null) {
+    Error.fromErrorCode(ErrorCode.MissingArgument).revert();
+    return;
+  }
+
+  let amount = U512.fromBytes(amountBytes);
+  if (amount == null) {
+    Error.fromErrorCode(ErrorCode.InvalidArgument).revert();
+    return;
+  }
+
+  let mainPurse = PurseId.getMainPurse();
+  if (mainPurse == null) {
+    Error.fromErrorCode(ErrorCode.MissingArgument).revert();
+    return;
+  }
+
+  let key = Key.fromURef(proofOfStake);
   let output = CL.callContract(key, [
-    CL.CLValue.fromString("get_payment_purse"),
+    CLValue.fromString(POS_ACTION),
   ]);
   if (output == null) {
-    CL.revert(4);
+    Error.fromErrorCode(ErrorCode.PurseNotCreated).revert();
     return;
   }
 
-  let paymentPurse = CL.URef.fromBytes(output);
+  let paymentPurse = PurseId.fromBytes(output);
   if (paymentPurse == null) {
-    CL.revert(5);
+    Error.fromErrorCode(ErrorCode.InvalidPurse).revert();
+    return;
   }
 
-  let ret = CL.transferFromPurseToPurse(
-    mainPurse,
-    <CL.URef>(paymentPurse),
-    amountBytes,
+  let ret = mainPurse.transferToPurse(
+    <PurseId>(paymentPurse),
+    amount,
   );
   if (ret > 0) {
-    CL.revert(6);
+    Error.fromErrorCode(ErrorCode.Transfer).revert();
+    return;
   }
 }

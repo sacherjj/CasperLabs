@@ -39,7 +39,7 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with Sto
   "isInMainChain and votedBranch" should "classify appropriately when using the same block" in withStorage {
     implicit blockStorage => implicit dagStorage => _ => _ =>
       for {
-        b      <- createAndStoreBlock[Task](Seq())
+        b      <- createAndStoreMessage[Task](Seq())
         dag    <- dagStorage.getRepresentation
         _      <- isInMainChain(dag, b.blockHash, b.blockHash) shouldBeF true
         result <- votedBranch(dag, b.blockHash, b.blockHash) shouldBeF None
@@ -60,9 +60,9 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with Sto
           *
           */
         for {
-          genesis <- createAndStoreBlock[Task](Seq())
-          b2      <- createAndStoreBlock[Task](Seq(genesis.blockHash))
-          b3      <- createAndStoreBlock[Task](Seq(b2.blockHash))
+          genesis <- createAndStoreMessage[Task](Seq())
+          b2      <- createAndStoreMessage[Task](Seq(genesis.blockHash))
+          b3      <- createAndStoreMessage[Task](Seq(b2.blockHash))
 
           implicit0(dag: DagRepresentation[Task]) <- dagStorage.getRepresentation
 
@@ -88,10 +88,10 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with Sto
           *          genesis
           */
         for {
-          genesis <- createAndStoreBlock[Task](Seq())
-          b2      <- createAndStoreBlock[Task](Seq(genesis.blockHash))
-          b3      <- createAndStoreBlock[Task](Seq(genesis.blockHash))
-          b4      <- createAndStoreBlock[Task](Seq(b2.blockHash, b3.blockHash))
+          genesis <- createAndStoreMessage[Task](Seq())
+          b2      <- createAndStoreMessage[Task](Seq(genesis.blockHash))
+          b3      <- createAndStoreMessage[Task](Seq(genesis.blockHash))
+          b4      <- createAndStoreMessage[Task](Seq(b2.blockHash, b3.blockHash))
 
           implicit0(dag: DagRepresentation[Task]) <- dagStorage.getRepresentation
 
@@ -126,14 +126,14 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with Sto
         *
         */
       for {
-        genesis <- createAndStoreBlock[Task](Seq(), ByteString.EMPTY)
-        b2      <- createAndStoreBlock[Task](Seq(genesis.blockHash), v2)
-        b3      <- createAndStoreBlock[Task](Seq(genesis.blockHash), v1)
-        b4      <- createAndStoreBlock[Task](Seq(b2.blockHash), v2)
-        b5      <- createAndStoreBlock[Task](Seq(b2.blockHash), v1)
-        b6      <- createAndStoreBlock[Task](Seq(b4.blockHash), v2)
-        b7      <- createAndStoreBlock[Task](Seq(b4.blockHash), v1)
-        b8      <- createAndStoreBlock[Task](Seq(b7.blockHash), v1)
+        genesis <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY)
+        b2      <- createAndStoreMessage[Task](Seq(genesis.blockHash), v2)
+        b3      <- createAndStoreMessage[Task](Seq(genesis.blockHash), v1)
+        b4      <- createAndStoreMessage[Task](Seq(b2.blockHash), v2)
+        b5      <- createAndStoreMessage[Task](Seq(b2.blockHash), v1)
+        b6      <- createAndStoreMessage[Task](Seq(b4.blockHash), v2)
+        b7      <- createAndStoreMessage[Task](Seq(b4.blockHash), v1)
+        b8      <- createAndStoreMessage[Task](Seq(b7.blockHash), v1)
 
         implicit0(dag: DagRepresentation[Task]) <- dagStorage.getRepresentation
 
@@ -169,45 +169,45 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with Sto
       val bonds = validators.map(v => Bond(v, 1))
 
       for {
-        genesis <- createAndStoreBlock[Task](Seq(), ByteString.EMPTY)
-        b1 <- createAndStoreBlock[Task](
+        genesis <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY)
+        b1 <- createAndStoreMessage[Task](
                Seq(genesis.blockHash),
                v0,
                bonds,
                Map(v0 -> genesis.blockHash)
              )
-        b2 <- createAndStoreBlock[Task](
+        b2 <- createAndStoreMessage[Task](
                Seq(genesis.blockHash),
                v3,
                bonds,
                Map(v3 -> genesis.blockHash)
              )
-        b3 <- createAndStoreBlock[Task](
+        b3 <- createAndStoreMessage[Task](
                Seq(b1.blockHash),
                v1,
                bonds,
                Map(v0 -> b1.blockHash, v1 -> genesis.blockHash)
              )
-        b4 <- createAndStoreBlock[Task](
+        b4 <- createAndStoreMessage[Task](
                Seq(b1.blockHash),
                v0,
                bonds,
                Map(v0 -> b1.blockHash)
              )
         // b5 votes for b2 instead of b1
-        b5 <- createAndStoreBlock[Task](
+        b5 <- createAndStoreMessage[Task](
                Seq(b2.blockHash),
                v3,
                bonds,
                Map(v1 -> b3.blockHash, v3 -> b2.blockHash)
              )
-        b6 <- createAndStoreBlock[Task](
+        b6 <- createAndStoreMessage[Task](
                Seq(b4.blockHash),
                v2,
                bonds,
                Map(v0 -> b4.blockHash, v2 -> genesis.blockHash, v3 -> b5.blockHash)
              )
-        b7 <- createAndStoreBlock[Task](
+        b7 <- createAndStoreMessage[Task](
                Seq(b6.blockHash),
                v2,
                bonds,
@@ -292,49 +292,49 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with Sto
       val bonds = validators.map(v => Bond(v, 1))
 
       for {
-        genesis <- createAndStoreBlock[Task](Seq(), ByteString.EMPTY)
-        b1 <- createAndStoreBlock[Task](
+        genesis <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY)
+        b1 <- createAndStoreMessage[Task](
                Seq(genesis.blockHash),
                v0,
                bonds
              )
-        b2 <- createAndStoreBlock[Task](
+        b2 <- createAndStoreMessage[Task](
                Seq(genesis.blockHash),
                v3,
                bonds
              )
-        _ <- createAndStoreBlock[Task](
+        _ <- createAndStoreMessage[Task](
               Seq(b1.blockHash),
               v1,
               bonds,
               Map(v0 -> b1.blockHash)
             )
-        b4 <- createAndStoreBlock[Task](
+        b4 <- createAndStoreMessage[Task](
                Seq(b1.blockHash),
                v0,
                bonds,
                Map(v0 -> b1.blockHash)
              )
         // b5 votes for b2 instead of b1
-        b5 <- createAndStoreBlock[Task](
+        b5 <- createAndStoreMessage[Task](
                Seq(b2.blockHash),
                v3,
                bonds,
                Map(v3 -> b2.blockHash)
              )
-        b6 <- createAndStoreBlock[Task](
+        b6 <- createAndStoreMessage[Task](
                Seq(b4.blockHash),
                v2,
                bonds,
                Map(v0 -> b4.blockHash, v3 -> b5.blockHash)
              )
-        b7 <- createAndStoreBlock[Task](
+        b7 <- createAndStoreMessage[Task](
                Seq(b6.blockHash),
                v2,
                bonds,
                Map(v2 -> b6.blockHash)
              )
-        _ <- createAndStoreBlock[Task](
+        _ <- createAndStoreMessage[Task](
               Seq(b7.blockHash),
               v1,
               bonds,

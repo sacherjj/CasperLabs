@@ -610,9 +610,10 @@ object MultiParentCasperImpl {
                   block,
                   casperState.invalidBlockTracker
                 )
-          _ <- Log[F].debug(s"Checking equivocation for ${hashPrefix -> "block"}")
+          _       <- Log[F].debug(s"Checking equivocation for ${hashPrefix -> "block"}")
+          message <- MonadThrowable[F].fromTry(Message.fromBlock(block))
           _ <- EquivocationDetector
-                .checkEquivocationWithUpdate[F](dag, block)
+                .checkEquivocationWithUpdate[F](dag, message)
                 .timer("checkEquivocationsWithUpdate")
           _ <- Log[F].debug(s"Block effects calculated for ${hashPrefix -> "block"}")
         } yield blockEffects).attempt

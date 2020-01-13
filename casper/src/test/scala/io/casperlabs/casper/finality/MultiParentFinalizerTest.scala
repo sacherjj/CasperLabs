@@ -33,7 +33,7 @@ class MultiParentFinalizerTest extends FlatSpec with BlockGenerator with Storage
   it should "cache block finalization so it doesn't revisit already finalized blocks." in withStorage {
     implicit blockStorage => implicit dagStorage => _ => _ =>
       for {
-        genesis <- createAndStoreBlock[Task](Seq(), ByteString.EMPTY, bonds)
+        genesis <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bonds)
         dag     <- dagStorage.getRepresentation
         multiParentFinalizer <- MultiParentFinalizer.empty[Task](
                                  dag,
@@ -71,7 +71,7 @@ class MultiParentFinalizerTest extends FlatSpec with BlockGenerator with Storage
         *      \\= C
         */
       for {
-        genesis   <- createAndStoreBlock[Task](Seq(), ByteString.EMPTY, bonds)
+        genesis   <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bonds)
         dag       <- dagStorage.getRepresentation
         finalizer <- FinalityDetectorVotingMatrix.of[Task](dag, genesis.blockHash, 0.1)
         implicit0(multiParentFinalizer: MultiParentFinalizer[Task]) <- MultiParentFinalizer
@@ -136,7 +136,7 @@ object MultiParentFinalizerTest extends BlockGenerator {
     bonds.map(_.validatorPublicKey).toList.foldLeftM(start :: Nil) {
       case (chain, validatorId) =>
         for {
-          block <- createAndStoreBlock[F](Seq(chain.head), validatorId, bonds.toList)
+          block <- createAndStoreMessage[F](Seq(chain.head), validatorId, bonds.toList)
         } yield block.blockHash :: chain
     }
 
@@ -160,7 +160,7 @@ object MultiParentFinalizerTest extends BlockGenerator {
                 MultiParentFinalizer[F].onNewBlockAdded(block)
               }
           )
-      b <- createAndStoreBlock[F](Seq(chain.head), bonds.head.validatorPublicKey) // Create level-1 summit
+      b <- createAndStoreMessage[F](Seq(chain.head), bonds.head.validatorPublicKey) // Create level-1 summit
     } yield b.blockHash
 
   // Finalizes block it receives as argument.
