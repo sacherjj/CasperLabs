@@ -5,9 +5,6 @@ extern crate alloc;
 mod queue;
 mod stakes;
 
-// Can be removed once https://github.com/rust-lang/rustfmt/issues/3362 is resolved.
-#[rustfmt::skip]
-use alloc::vec;
 use alloc::{string::String, vec::Vec};
 
 use contract_ffi::{
@@ -320,7 +317,7 @@ pub fn delegate() {
             let rights_controlled_purse =
                 PurseId::new(URef::new(purse.value().addr(), AccessRights::READ_ADD));
             let return_value = CLValue::from_t(rights_controlled_purse).unwrap_or_revert();
-            runtime::ret(return_value, vec![rights_controlled_purse.value()]);
+            runtime::ret(return_value);
         }
         "set_refund_purse" => {
             let purse_id: PurseId = runtime::get_arg(1)
@@ -332,14 +329,10 @@ pub fn delegate() {
             // We purposely choose to remove the access rights so that we do not
             // accidentally give rights for a purse to some contract that is not
             // supposed to have it.
-            let maybe_purse_uref = get_refund_purse().map(|p| p.value().remove_access_rights());
-            if let Some(uref) = maybe_purse_uref {
-                let return_value = CLValue::from_t(Some(PurseId::new(uref))).unwrap_or_revert();
-                runtime::ret(return_value, vec![uref]);
-            } else {
-                let return_value = CLValue::from_t::<Option<URef>>(None).unwrap_or_revert();
-                runtime::ret(return_value, Vec::new());
-            }
+            let maybe_purse_uref =
+                get_refund_purse().map(|p| PurseId::new(p.value().remove_access_rights()));
+            let return_value = CLValue::from_t(maybe_purse_uref).unwrap_or_revert();
+            runtime::ret(return_value);
         }
         "finalize_payment" => {
             let amount_spent: U512 = runtime::get_arg(1)

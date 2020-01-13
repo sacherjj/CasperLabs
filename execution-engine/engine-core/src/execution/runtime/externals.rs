@@ -122,17 +122,9 @@ where
             FunctionIndex::RetFuncIndex => {
                 // args(0) = pointer to value
                 // args(1) = size of value
-                // args(2) = pointer to extra returned urefs
-                // args(3) = size of extra urefs
-                let (value_ptr, value_size, extra_urefs_ptr, extra_urefs_size): (_, u32, _, u32) =
-                    Args::parse(args)?;
+                let (value_ptr, value_size): (_, u32) = Args::parse(args)?;
 
-                Err(self.ret(
-                    value_ptr,
-                    value_size as usize,
-                    extra_urefs_ptr,
-                    extra_urefs_size as usize,
-                ))
+                Err(self.ret(value_ptr, value_size as usize))
             }
 
             FunctionIndex::CallContractFuncIndex => {
@@ -140,35 +132,14 @@ where
                 // args(1) = size of key
                 // args(2) = pointer to function arguments in Wasm memory
                 // args(3) = size of arguments
-                // args(4) = pointer to extra supplied urefs
-                // args(5) = size of extra urefs
-                // args(6) = pointer to result size (output)
-                let (
-                    key_ptr,
-                    key_size,
-                    args_ptr,
-                    args_size,
-                    extra_urefs_ptr,
-                    extra_urefs_size,
-                    result_size_ptr,
-                ) = Args::parse(args)?;
-
-                // We have to explicitly tell rustc what type we expect as it cannot infer it
-                // otherwise.
-                let _args_size_u32: u32 = args_size;
-                let _extra_urefs_size_u32: u32 = extra_urefs_size;
+                // args(4) = pointer to result size (output)
+                let (key_ptr, key_size, args_ptr, args_size, result_size_ptr): (_, _, _, u32, _) =
+                    Args::parse(args)?;
 
                 let key_contract: Key = self.key_from_mem(key_ptr, key_size)?;
                 let args_bytes: Vec<u8> = self.bytes_from_mem(args_ptr, args_size as usize)?;
-                let urefs_bytes =
-                    self.bytes_from_mem(extra_urefs_ptr, extra_urefs_size as usize)?;
 
-                let ret = self.call_contract_host_buf(
-                    key_contract,
-                    args_bytes,
-                    urefs_bytes,
-                    result_size_ptr,
-                )?;
+                let ret = self.call_contract_host_buf(key_contract, args_bytes, result_size_ptr)?;
                 Ok(Some(RuntimeValue::I32(contract_api::i32_from(ret))))
             }
 

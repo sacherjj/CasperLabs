@@ -100,7 +100,6 @@ export function callContract(key: Key, args: CLValue[]): Uint8Array | null {
 export function callContractExt(key: Key, args: CLValue[], extraUrefs: Key[]): Uint8Array | null {
   let keyBytes = key.toBytes();
   let argBytes = serializeArguments(args);
-  let extraURefsBytes = serializeKeys(extraUrefs);
 
   let resultSize = new Uint32Array(1);
   resultSize.fill(0);
@@ -110,8 +109,6 @@ export function callContractExt(key: Key, args: CLValue[], extraUrefs: Key[]): U
       keyBytes.length,
       argBytes.dataStart,
       argBytes.length,
-      extraURefsBytes.dataStart,
-      extraURefsBytes.length,
       resultSize.dataStart,
   );
   if (ret > 0) {

@@ -4,7 +4,7 @@ extern crate alloc;
 
 #[cfg(not(feature = "lib"))]
 use alloc::collections::BTreeMap;
-use alloc::{string::String, vec};
+use alloc::string::String;
 
 use contract_ffi::{
     contract_api::{runtime, storage, system, Error},
@@ -50,7 +50,7 @@ pub extern "C" fn apply_method() {
             let purse_id = system::create_purse();
             runtime::put_key(&purse_name, purse_id.value().into());
         }
-        METHOD_VERSION => runtime::ret(CLValue::from_t(VERSION).unwrap_or_revert(), vec![]),
+        METHOD_VERSION => runtime::ret(CLValue::from_t(VERSION).unwrap_or_revert()),
         _ => runtime::revert(Error::User(CustomError::UnknownMethodName as u16)),
     }
 }

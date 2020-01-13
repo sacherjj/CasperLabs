@@ -1,9 +1,5 @@
 #![no_std]
 
-extern crate alloc;
-
-use alloc::vec::Vec;
-
 use contract_ffi::{
     contract_api::{account, runtime, system, Error as ApiError},
     unwrap_or_revert::UnwrapOrRevert,
@@ -27,8 +23,7 @@ pub extern "C" fn call() {
     let payment_fund: U512 = runtime::get_arg(0)
         .unwrap_or_revert_with(ApiError::MissingArgument)
         .unwrap_or_revert_with(ApiError::InvalidArgument);
-    let payment_purse: PurseId =
-        runtime::call_contract(pos_pointer, ("get_payment_purse",), Vec::new());
+    let payment_purse: PurseId = runtime::call_contract(pos_pointer, ("get_payment_purse",));
 
     // can deposit
     system::transfer_from_purse_to_purse(source_purse, payment_purse, payment_amount)

@@ -32,21 +32,12 @@ extern "C" {
     pub fn load_named_keys(total_keys: *mut usize, result_size: *mut usize) -> i32;
     pub fn get_arg(index: usize, dest_ptr: *mut u8, dest_size: usize) -> i32;
     pub fn get_arg_size(index: usize, dest_size: *mut usize) -> i32;
-    pub fn ret(
-        value_ptr: *const u8,
-        value_size: usize,
-        // extra urefs known by the current contract to make available to the caller
-        extra_urefs_ptr: *const u8,
-        extra_urefs_size: usize,
-    ) -> !;
+    pub fn ret(value_ptr: *const u8, value_size: usize) -> !;
     pub fn call_contract(
         key_ptr: *const u8,
         key_size: usize,
         args_ptr: *const u8,
         args_size: usize,
-        // extra urefs known by the caller to make available to the callee
-        extra_urefs_ptr: *const u8,
-        extra_urefs_size: usize,
         result_size: *mut usize,
     ) -> i32;
     pub fn get_key(

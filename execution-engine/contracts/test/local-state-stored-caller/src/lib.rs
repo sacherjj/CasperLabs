@@ -1,9 +1,5 @@
 #![no_std]
 
-extern crate alloc;
-
-use alloc::vec;
-
 use contract_ffi::{
     contract_api::{runtime, ContractRef, Error},
     unwrap_or_revert::UnwrapOrRevert,
@@ -30,5 +26,5 @@ pub extern "C" fn call() {
         ContractRef::URef(URef::new(local_state_uref.addr(), AccessRights::READ));
 
     // call do_nothing_stored
-    runtime::call_contract::<_, ()>(local_state_contract_pointer, (), vec![]);
+    runtime::call_contract(local_state_contract_pointer, ())
 }
