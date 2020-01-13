@@ -33,14 +33,14 @@ def poll_new_blocks():
         # for new blocks with the current node API.
         # Ideally, we would say something like:
         # "Give me blocks newer than <block_hash>"
-        for block_info in NODE.client.showBlocks(1000):
+        for block_info in NODE.client.showBlocks(100):
             block_hash = block_info.summary.block_hash.hex()
             if block_hash not in seen:
                 # Convert protobuf object to dictionary because
                 # parameters passed to actors must be JSON serializable.
                 new_block(MessageToDict(block_info))
                 seen.add(block_hash)
-                time.sleep(0.1)
+            time.sleep(0.1)
 
 
 if __name__ == "__main__":

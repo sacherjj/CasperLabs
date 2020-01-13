@@ -3,6 +3,8 @@
 This directory contains Python code that is intended to be used
 in the new long running tests framework to simulate an ERC20 sale.
 
+The ERC20 token used in the simulation is called ABC.
+
 # Goals and objectives
 
 Following goals and objectives were guiding design of the code:
@@ -10,7 +12,7 @@ Following goals and objectives were guiding design of the code:
 - provide a Python interface to CasperLabs smart contracts that allows
   to call them as if they were ordinary Python object's methods,
 - assume test network is running in auto-propose mode, client must not call
-  propose.
+  propose,
 - a separate process is used to poll node for new blocks and check status of deploys.
 
 # Smart contract interface

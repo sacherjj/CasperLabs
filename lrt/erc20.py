@@ -1,6 +1,7 @@
 import os
 import time
 from pathlib import Path
+import logging
 
 import casperlabs_client
 from casperlabs_client.abi import ABI
@@ -48,7 +49,7 @@ class Agent:
 
     def __init__(self, name):
         self.name = name
-        print(f"Agent {str(self)}")
+        logging.debug(f"Agent {str(self)}")
 
     def __str__(self):
         return f"{self.name}: {self.public_key_hex}"
@@ -85,26 +86,37 @@ class BoundAgent:
     def call_contract(self, method, wait_for_processed=True):
         deploy_hash = method(self)
         if wait_for_processed:
-            wait_for_deploy_processed(self, deploy_hash)
+            self.wait_for_deploy_processed(deploy_hash)
         return deploy_hash
 
     def query(self, method):
         return method(self)
 
+    def transfer_clx(self, recipient_public_hex, amount, wait_for_processed=False):
+        deploy_hash = self.node.client.transfer(
+            recipient_public_hex,
+            amount,
+            payment_amount=1000000000,
+            from_addr=self.agent.public_key_hex,
+            private_key=self.agent.private_key,
+        )
+        if wait_for_processed:
+            self.wait_for_deploy_processed(deploy_hash)
+        return deploy_hash
 
-def wait_for_deploy_processed(bound_agent, deploy_hash, check_deploy_status=True):
-    result = None
-    while True:
-        result = bound_agent.node.client.showDeploy(deploy_hash)
-        if result.status.state != 1:  # PENDING
-            break
-        # result.status.state == PROCESSED (2)
-        time.sleep(0.1)
-    if check_deploy_status:
-        for p in result.processing_results:
-            if p.is_error:
+    def wait_for_deploy_processed(self, deploy_hash, on_error_raise=True):
+        result = None
+        while True:
+            result = self.node.client.showDeploy(deploy_hash)
+            if result.status.state != 1:  # PENDING
+                break
+            # result.status.state == PROCESSED (2)
+            time.sleep(0.1)
+        if on_error_raise:
+            last_processing_result = result.processing_results[0]
+            if last_processing_result.is_error:
                 raise Exception(
-                    f"Deploy {deploy_hash} execution error: {p.error_message}"
+                    f"Deploy {deploy_hash} execution error: {last_processing_result.error_message}"
                 )
 
 
@@ -171,7 +183,7 @@ class SmartContract:
                     kwargs.update(session_reference)
                 else:
                     kwargs["session"] = self.file_name
-                print(f"Call {arguments_string}")
+                logging.debug(f"Call {arguments_string}")
                 # TODO: deploy will soon return just the deploy_hash only
                 _, deploy_hash = bound_agent.node.client.deploy(**kwargs)
                 deploy_hash = deploy_hash.hex()
@@ -299,15 +311,3 @@ class ERC20(SmartContract):
 
 def last_block_hash(node):
     return next(node.client.showBlocks(1)).summary.block_hash.hex()
-
-
-def transfer_clx(sender, recipient_public_hex, amount):
-    deploy_hash = sender.node.client.transfer(
-        recipient_public_hex,
-        amount,
-        payment_amount=1000000000,
-        from_addr=sender.agent.public_key_hex,
-        private_key=sender.agent.private_key,
-    )
-    wait_for_deploy_processed(sender, deploy_hash)
-    return deploy_hash

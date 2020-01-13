@@ -2,7 +2,7 @@ import argparse
 import logging
 import random
 from dramatiq import actor
-from erc20 import ERC20, Node, Agent, DeployedERC20, transfer_clx
+from erc20 import ERC20, Node, Agent, DeployedERC20
 
 AGENTS = [Agent("account-0"), Agent("account-1"), Agent("account-2")]
 NODES = [Node("localhost")]
@@ -17,13 +17,13 @@ INITIAL_AGENT_CLX_FUNDS = 10 ** 7
 
 
 @actor
-def transfer_tokens(sender_name, recipient_name, amount):
+def transfer_tokens(sender_name, recipient_name, amount, token_name=TOKEN_NAME):
     try:
         sender = Agent(sender_name)
         recipient = Agent(recipient_name)
 
         deployer = FAUCET.on(NODES[0])
-        abc = DeployedERC20.create(deployer, TOKEN_NAME)
+        abc = DeployedERC20.create(deployer, token_name)
 
         sender.on(random.sample(NODES, 1)[0]).call_contract(
             abc.transfer(
@@ -34,7 +34,7 @@ def transfer_tokens(sender_name, recipient_name, amount):
             wait_for_processed=False,
         )
     except Exception as e:
-        logging.info(
+        logging.error(
             f"transfer_tokens({sender_name}, {recipient_name}, {amount}) => {str(e)}"
         )
 
@@ -55,7 +55,7 @@ def initialize_erc20_simulation(
     """
     deployer = faucet.on(node)
     deployer.call_contract(ERC20(token_name).deploy(initial_balance=total_token_supply))
-    abc = DeployedERC20.create(deployer, TOKEN_NAME)
+    abc = DeployedERC20.create(deployer, token_name)
 
     balance = deployer.query(abc.balance(faucet.public_key_hex))
 
@@ -63,7 +63,7 @@ def initialize_erc20_simulation(
     assert balance == total_token_supply
 
     for agent in agents:
-        transfer_clx(faucet.on(node), agent.public_key_hex, initial_agent_clx_funds)
+        faucet.on(node).transfer_clx(agent.public_key_hex, initial_agent_clx_funds)
 
     # Transfer tokens from deployer to agents
     for agent in agents:
