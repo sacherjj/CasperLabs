@@ -71,9 +71,10 @@ class BoundAgent:
         self.agent = agent
         self.node = node
 
-    def call_contract(self, method):
+    def call_contract(self, method, wait_for_processed=True):
         deploy_hash = method(self)
-        wait_for_deploy_processed(self, deploy_hash)
+        if wait_for_processed:
+            wait_for_deploy_processed(self, deploy_hash)
         return deploy_hash
 
     def query(self, method):
@@ -144,9 +145,6 @@ class SmartContract:
                 # TODO: deploy will soon return just the deploy_hash only
                 _, deploy_hash = bound_agent.node.client.deploy(**kwargs)
                 deploy_hash = deploy_hash.hex()
-
-                wait_for_deploy_processed(bound_agent, deploy_hash)
-
                 return deploy_hash
 
             return deploy
@@ -243,16 +241,6 @@ class ERC20(SmartContract):
                 token_name=self.token_name, initial_balance=initial_balance
             )(bound_agent)
             return deploy_hash
-            block_hash = last_block_hash(bound_agent.node)
-            return DeployedERC20(
-                self,
-                self.token_hash(
-                    bound_agent, bound_agent.agent.public_key_hex, block_hash
-                ),
-                self.proxy_hash(
-                    bound_agent, bound_agent.agent.public_key_hex, block_hash
-                ),
-            )
 
         return execute
 
@@ -270,3 +258,4 @@ def transfer_clx(sender, recipient_public_hex, amount):
         private_key=sender.agent.private_key,
     )
     wait_for_deploy_processed(sender, deploy_hash)
+    return deploy_hash
