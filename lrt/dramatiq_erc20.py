@@ -17,7 +17,9 @@ INITIAL_AGENT_CLX_FUNDS = 10 ** 7
 
 
 @actor
-def transfer_tokens(sender_name, recipient_name, amount, token_name=TOKEN_NAME):
+def transfer_tokens(
+    sender_name, recipient_name, amount, token_name=TOKEN_NAME, wait_for_processed=False
+):
     try:
         sender = Agent(sender_name)
         recipient = Agent(recipient_name)
@@ -31,7 +33,7 @@ def transfer_tokens(sender_name, recipient_name, amount, token_name=TOKEN_NAME):
                 recipient_public_key_hex=recipient.public_key_hex,
                 amount=amount,
             ),
-            wait_for_processed=False,
+            wait_for_processed=wait_for_processed,
         )
     except Exception as e:
         logging.error(
