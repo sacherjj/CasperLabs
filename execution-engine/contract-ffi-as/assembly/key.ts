@@ -46,6 +46,17 @@ export class Key {
         return <Key>key;
     }
 
+    add(value: CLValue): void {
+        const keyBytes = this.toBytes();
+        const valueBytes = value.toBytes();
+
+        externals.add(
+            keyBytes.dataStart,
+            keyBytes.length,
+            valueBytes.dataStart,
+            valueBytes.length);
+    }
+
     static fromBytes(bytes: Uint8Array): Key | null {
         if (bytes.length == 0) {
             return null;

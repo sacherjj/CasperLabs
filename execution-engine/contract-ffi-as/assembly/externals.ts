@@ -73,3 +73,6 @@ export declare function get_key(
 
 @external("env", "new_uref")
 export declare function new_uref(key_ptr: usize, value_ptr: usize, value_size: usize): void;
+
+@external("env", "add")
+export declare function add(key_ptr: usize, key_size: usize, value_ptr: usize, value_size: usize): void;
