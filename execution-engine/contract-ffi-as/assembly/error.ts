@@ -86,6 +86,14 @@ export class Error{
         this.errorCodeValue = value;
     }
 
+    static fromResult(result: u32): Error | null {
+        if (result == 0) {
+            // Ok
+            return null;
+        }
+        return new Error(result);
+    }
+
     static fromUserError(userErrorCodeValue: u16): Error {
         return new Error(USER_ERROR_CODE_OFFSET + 1 + userErrorCodeValue);
     }

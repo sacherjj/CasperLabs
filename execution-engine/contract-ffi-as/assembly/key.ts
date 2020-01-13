@@ -1,7 +1,9 @@
 import {URef} from "./uref";
 import {CLValue} from "./clvalue";
+import {Error} from "./error";
 import {UREF_SERIALIZED_LENGTH, KEY_ID_SERIALIZED_LENGTH, KEY_UREF_SERIALIZED_LENGTH} from "./constants";
 import * as externals from "./externals";
+import { readHostBuffer } from ".";
 
 export enum KeyVariant {
     ACCOUNT_ID = 0,
@@ -55,6 +57,20 @@ export class Key {
             keyBytes.length,
             valueBytes.dataStart,
             valueBytes.length);
+    }
+
+    read(): Uint8Array | null {
+        const keyBytes = this.toBytes();
+        let valueSize = new Uint8Array(1);
+        const ret = externals.read_value(keyBytes.dataStart, keyBytes.length, valueSize.dataStart);
+        const error = Error.fromResult(ret);
+        if (error != null) {
+            // TODO: How do we differentiate lack of value from other errors?
+            error.revert();
+            return null;
+        }
+        // TODO: How can we have `read<T>` that would deserialize host bytes into T?
+        return readHostBuffer(valueSize[0]);
     }
 
     static fromBytes(bytes: Uint8Array): Key | null {

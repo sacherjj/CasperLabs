@@ -76,3 +76,6 @@ export declare function new_uref(key_ptr: usize, value_ptr: usize, value_size: u
 
 @external("env", "add")
 export declare function add(key_ptr: usize, key_size: usize, value_ptr: usize, value_size: usize): void;
+
+@external("env", "read_value")
+export declare function read_value(key_ptr: usize, key_size: usize, value_size: usize): i32;
