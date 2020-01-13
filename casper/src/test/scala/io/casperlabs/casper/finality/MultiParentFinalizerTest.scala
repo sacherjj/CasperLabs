@@ -43,8 +43,8 @@ class MultiParentFinalizerTest extends FlatSpec with BlockGenerator with Storage
                                )
         a                     <- createAndStoreBlockFull[Task](v1, Seq(genesis), Seq.empty, bonds)
         b                     <- createAndStoreBlockFull[Task](v2, Seq(genesis, a), Seq.empty, bonds)
-        aMsg                  <- Task.fromTry(Message.fromBlock(a))
-        newlyFinalizedBlocksA <- multiParentFinalizer.onNewMessageAdded(aMsg).map(_.get)
+        bMsg                  <- Task.fromTry(Message.fromBlock(b))
+        newlyFinalizedBlocksA <- multiParentFinalizer.onNewMessageAdded(bMsg).map(_.get)
         // `b` is in main chain, `a` is secondary parent.
         _ = assert(
           newlyFinalizedBlocksA.mainChain == b.blockHash && newlyFinalizedBlocksA.secondaryParents == Set(
