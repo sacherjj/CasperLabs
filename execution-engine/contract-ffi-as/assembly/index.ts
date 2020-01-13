@@ -2,7 +2,7 @@ import * as externals from "./externals";
 import {URef, AccessRights} from "./uref";
 import {CLValue} from "./clvalue";
 import {Key} from "./key";
-import {serializeArguments, serializeKeys, toBytesString, toBytesArrayU8} from "./bytesrepr";
+import {serializeArguments, serializeKeys, toBytesString, toBytesArrayU8, toBytesU32} from "./bytesrepr";
 import {U512} from "./bignum";
 import {UREF_SERIALIZED_LENGTH, KEY_UREF_SERIALIZED_LENGTH} from "./constants";
 
@@ -174,4 +174,12 @@ export function transferToAccount(target: Uint8Array, amount: U512): U32 | null 
   else {
     return null;
   }
+}
+
+export function ret(value: CLValue): void {
+  const valueBytes = value.toBytes();
+  // TODO: This should be toBytesURefs
+  const extraURefs = toBytesU32(0); // 0 length prefix acts as an empty vector of T
+  externals.ret(valueBytes.dataStart, valueBytes.length, extraURefs.dataStart, extraURefs.length);
+  unreachable();
 }
