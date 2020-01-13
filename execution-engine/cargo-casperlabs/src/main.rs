@@ -2,13 +2,14 @@
 
 #![deny(warnings)]
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use clap::{crate_version, App, Arg};
 use lazy_static::lazy_static;
 
 pub mod common;
 mod contract_package;
+pub mod dependency;
 mod tests_package;
 
 const APP_NAME: &str = "cargo-casperlabs";
@@ -17,9 +18,12 @@ const ABOUT: &str =
      CasperLabs network.";
 const TOOLCHAIN: &str = "nightly-2020-01-08";
 
-const PATH_ARG_NAME: &str = "path";
-const PATH_ARG_VALUE_NAME: &str = "path";
-const PATH_ARG_HELP: &str = "Path to new folder for contract and tests";
+const ROOT_PATH_ARG_NAME: &str = "path";
+const ROOT_PATH_ARG_VALUE_NAME: &str = "path";
+const ROOT_PATH_ARG_HELP: &str = "Path to new folder for contract and tests";
+
+const WORKSPACE_PATH_ARG_NAME: &str = "workspace-path";
+const WORKSPACE_PATH_ARG_LONG: &str = "workspace-path";
 
 const FAILURE_EXIT_CODE: i32 = 101;
 
@@ -32,35 +36,68 @@ lazy_static! {
     cargo run"#,
         TOOLCHAIN
     );
-    static ref ROOT_PATH: PathBuf = {
-        let path_arg = Arg::with_name(PATH_ARG_NAME)
+    static ref ARGS: Args = Args::new();
+}
+
+#[derive(Debug)]
+struct Args {
+    root_path: PathBuf,
+    workspace_path: Option<PathBuf>,
+}
+
+impl Args {
+    fn new() -> Self {
+        let root_path_arg = Arg::with_name(ROOT_PATH_ARG_NAME)
             .required(true)
-            .value_name(PATH_ARG_VALUE_NAME)
-            .help(PATH_ARG_HELP);
+            .value_name(ROOT_PATH_ARG_VALUE_NAME)
+            .help(ROOT_PATH_ARG_HELP);
+
+        let workspace_path_arg = Arg::with_name(WORKSPACE_PATH_ARG_NAME)
+            .long(WORKSPACE_PATH_ARG_LONG)
+            .takes_value(true)
+            .hidden(true);
 
         let arg_matches = App::new(APP_NAME)
             .version(crate_version!())
             .about(ABOUT)
             .usage(USAGE.as_str())
-            .arg(path_arg)
+            .arg(root_path_arg)
+            .arg(workspace_path_arg)
             .get_matches();
 
-        arg_matches
-            .value_of(PATH_ARG_NAME)
+        let root_path = arg_matches
+            .value_of(ROOT_PATH_ARG_NAME)
             .expect("expected path")
-            .into()
-    };
+            .into();
+
+        let workspace_path = arg_matches
+            .value_of(WORKSPACE_PATH_ARG_NAME)
+            .map(PathBuf::from);
+
+        Args {
+            root_path,
+            workspace_path,
+        }
+    }
+
+    pub fn root_path(&self) -> &Path {
+        &self.root_path
+    }
+
+    pub fn workspace_path(&self) -> Option<&Path> {
+        self.workspace_path.as_ref().map(PathBuf::as_path)
+    }
 }
 
 fn main() {
-    if ROOT_PATH.exists() {
+    if ARGS.root_path().exists() {
         common::print_error_and_exit(&format!(
             ": destination '{}' already exists",
-            ROOT_PATH.display()
+            ARGS.root_path().display()
         ));
     }
 
-    common::create_dir_all(&*ROOT_PATH);
+    common::create_dir_all(ARGS.root_path());
 
     contract_package::run_cargo_new();
     contract_package::update_cargo_toml();

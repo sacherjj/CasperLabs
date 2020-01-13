@@ -1,10 +1,13 @@
+//! Consts and functions used to generate the files comprising the "contract" package when running
+//! the tool.
+
 use std::path::PathBuf;
 
 use lazy_static::lazy_static;
 
 use crate::{
-    common::{self, CL_CONTRACT_VERSION},
-    ROOT_PATH, TOOLCHAIN,
+    common::{self, CL_CONTRACT},
+    ARGS, TOOLCHAIN,
 };
 
 const PACKAGE_NAME: &str = "contract";
@@ -50,14 +53,13 @@ target = "wasm32-unknown-unknown"
 "#;
 
 lazy_static! {
-    pub static ref CARGO_TOML: PathBuf = ROOT_PATH.join(PACKAGE_NAME).join("Cargo.toml");
-    pub static ref RUST_TOOLCHAIN: PathBuf = ROOT_PATH.join(PACKAGE_NAME).join("rust-toolchain");
-    pub static ref MAIN_RS: PathBuf = ROOT_PATH.join(PACKAGE_NAME).join("src/main.rs");
-    pub static ref LIB_RS: PathBuf = ROOT_PATH.join(PACKAGE_NAME).join("src/lib.rs");
-    pub static ref CONFIG: PathBuf = ROOT_PATH.join(PACKAGE_NAME).join(".cargo/config");
-    // TODO(Fraser): Update dependencies to use crates.io, not relative paths.
+    static ref CARGO_TOML: PathBuf = ARGS.root_path().join(PACKAGE_NAME).join("Cargo.toml");
+    static ref RUST_TOOLCHAIN: PathBuf = ARGS.root_path().join(PACKAGE_NAME).join("rust-toolchain");
+    static ref MAIN_RS: PathBuf = ARGS.root_path().join(PACKAGE_NAME).join("src/main.rs");
+    static ref LIB_RS: PathBuf = ARGS.root_path().join(PACKAGE_NAME).join("src/lib.rs");
+    static ref CONFIG: PathBuf = ARGS.root_path().join(PACKAGE_NAME).join(".cargo/config");
     static ref CARGO_TOML_ADDITIONAL_CONTENTS: String = format!(
-        r#"casperlabs-contract = {{ version = "{cl_contract_version}", path = "../../../CasperLabs/execution-engine/contract" }}
+        r#"{}
 
 [lib]
 crate-type = ["cdylib"]
@@ -68,7 +70,7 @@ test = false
 [features]
 default = ["casperlabs-contract/std"]
 "#,
-        cl_contract_version = CL_CONTRACT_VERSION
+        *CL_CONTRACT,
     );
 }
 

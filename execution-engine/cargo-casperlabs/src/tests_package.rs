@@ -1,20 +1,17 @@
+//! Consts and functions used to generate the files comprising the "tests" package when running the
+//! tool.
+
 use std::path::PathBuf;
 
 use lazy_static::lazy_static;
 
 use crate::{
-    common::{self, CL_CONTRACT_VERSION},
-    ROOT_PATH, TOOLCHAIN,
+    common::{self, CL_CONTRACT},
+    dependency::Dependency,
+    ARGS, TOOLCHAIN,
 };
 
 const PACKAGE_NAME: &str = "tests";
-
-const ENGINE_CORE_VERSION: &str = "0.1.0";
-const ENGINE_GRPC_SERVER_VERSION: &str = "0.11.0";
-const ENGINE_SHARED_VERSION: &str = "0.2.0";
-const ENGINE_STORAGE_VERSION: &str = "0.1.0";
-const ENGINE_WASM_PREP_VERSION: &str = "0.1.0";
-const ENGINE_TESTS_VERSION: &str = "0.1.0";
 
 const INTEGRATION_TESTS_RS_CONTENTS: &str = r#"// import KEY constant
 
@@ -93,22 +90,40 @@ fn main() {
 "#;
 
 lazy_static! {
-    pub static ref CARGO_TOML: PathBuf = ROOT_PATH.join(PACKAGE_NAME).join("Cargo.toml");
-    pub static ref RUST_TOOLCHAIN: PathBuf = ROOT_PATH.join(PACKAGE_NAME).join("rust-toolchain");
-    pub static ref BUILD_RS: PathBuf = ROOT_PATH.join(PACKAGE_NAME).join("build.rs");
-    pub static ref MAIN_RS: PathBuf = ROOT_PATH.join(PACKAGE_NAME).join("src/main.rs");
-    pub static ref INTEGRATION_TESTS_RS: PathBuf = ROOT_PATH
+    static ref CARGO_TOML: PathBuf = ARGS.root_path().join(PACKAGE_NAME).join("Cargo.toml");
+    static ref RUST_TOOLCHAIN: PathBuf = ARGS.root_path().join(PACKAGE_NAME).join("rust-toolchain");
+    static ref BUILD_RS: PathBuf = ARGS.root_path().join(PACKAGE_NAME).join("build.rs");
+    static ref MAIN_RS: PathBuf = ARGS.root_path().join(PACKAGE_NAME).join("src/main.rs");
+    static ref INTEGRATION_TESTS_RS: PathBuf = ARGS
+        .root_path()
         .join(PACKAGE_NAME)
         .join("src/integration_tests.rs");
-    // TODO(Fraser): Update dependencies to use crates.io, not relative paths.
+    static ref ENGINE_CORE: Dependency =
+        Dependency::new("casperlabs-engine-core", "0.1.0", "engine-core");
+    static ref ENGINE_GRPC_SERVER: Dependency = Dependency::new(
+        "casperlabs-engine-grpc-server",
+        "0.11.0",
+        "engine-grpc-server"
+    );
+    static ref ENGINE_SHARED: Dependency =
+        Dependency::new("casperlabs-engine-shared", "0.2.0", "engine-shared");
+    static ref ENGINE_STORAGE: Dependency =
+        Dependency::new("casperlabs-engine-storage", "0.1.0", "engine-storage");
+    static ref ENGINE_WASM_PREP: Dependency =
+        Dependency::new("casperlabs-engine-wasm-prep", "0.1.0", "engine-wasm-prep");
+    static ref ENGINE_TEST_SUPPORT: Dependency = Dependency::new(
+        "casperlabs-engine-test-support",
+        "0.1.0",
+        "engine-test-support"
+    );
     static ref CARGO_TOML_ADDITIONAL_CONTENTS: String = format!(
-        r#"casperlabs-contract = {{ version = "{cl_contract_version}", path = "../../../CasperLabs/execution-engine/contract" }}
-casperlabs-engine-core = {{ version = "{engine_core_version}", path = "../../../CasperLabs/execution-engine/engine-core" }}
-casperlabs-engine-grpc-server = {{ version = "{engine_grpc_server_version}", path = "../../../CasperLabs/execution-engine/engine-grpc-server" }}
-casperlabs-engine-shared = {{ version = "{engine_shared_version}", path = "../../../CasperLabs/execution-engine/engine-shared" }}
-casperlabs-engine-storage = {{ version = "{engine_storage_version}", path = "../../../CasperLabs/execution-engine/engine-storage" }}
-casperlabs-engine-wasm-prep = {{ version = "{engine_wasm_prep_version}", path = "../../../CasperLabs/execution-engine/engine-wasm-prep" }}
-casperlabs-engine-tests = {{ version = "{engine_tests_version}", path = "../../../CasperLabs/execution-engine/engine-tests" }}
+        r#"{}
+{}
+{}
+{}
+{}
+{}
+{}
 
 [[bin]]
 name = "integration-tests"
@@ -117,13 +132,13 @@ path = "src/integration_tests.rs"
 [features]
 default = ["casperlabs-contract/std"]
 "#,
-        cl_contract_version = CL_CONTRACT_VERSION,
-        engine_core_version = ENGINE_CORE_VERSION,
-        engine_grpc_server_version = ENGINE_GRPC_SERVER_VERSION,
-        engine_shared_version = ENGINE_SHARED_VERSION,
-        engine_storage_version = ENGINE_STORAGE_VERSION,
-        engine_wasm_prep_version = ENGINE_WASM_PREP_VERSION,
-        engine_tests_version = ENGINE_TESTS_VERSION,
+        *CL_CONTRACT,
+        *ENGINE_CORE,
+        *ENGINE_GRPC_SERVER,
+        *ENGINE_SHARED,
+        *ENGINE_STORAGE,
+        *ENGINE_WASM_PREP,
+        *ENGINE_TEST_SUPPORT,
     );
 }
 
@@ -157,38 +172,35 @@ pub mod tests {
     const ENGINE_SHARED_TOML_PATH: &str = "engine-shared/Cargo.toml";
     const ENGINE_STORAGE_TOML_PATH: &str = "engine-storage/Cargo.toml";
     const ENGINE_WASM_PREP_TOML_PATH: &str = "engine-wasm-prep/Cargo.toml";
-    const ENGINE_TESTS_TOML_PATH: &str = "engine-tests/Cargo.toml";
+    const ENGINE_TEST_SUPPORT_TOML_PATH: &str = "engine-test-support/Cargo.toml";
 
     #[test]
     fn check_engine_core_version() {
-        common::tests::check_package_version(ENGINE_CORE_VERSION, ENGINE_CORE_TOML_PATH);
+        common::tests::check_package_version(&*ENGINE_CORE, ENGINE_CORE_TOML_PATH);
     }
 
     #[test]
     fn check_engine_grpc_server_version() {
-        common::tests::check_package_version(
-            ENGINE_GRPC_SERVER_VERSION,
-            ENGINE_GRPC_SERVER_TOML_PATH,
-        );
+        common::tests::check_package_version(&*ENGINE_GRPC_SERVER, ENGINE_GRPC_SERVER_TOML_PATH);
     }
 
     #[test]
     fn check_engine_shared_version() {
-        common::tests::check_package_version(ENGINE_SHARED_VERSION, ENGINE_SHARED_TOML_PATH);
+        common::tests::check_package_version(&*ENGINE_SHARED, ENGINE_SHARED_TOML_PATH);
     }
 
     #[test]
     fn check_engine_storage_version() {
-        common::tests::check_package_version(ENGINE_STORAGE_VERSION, ENGINE_STORAGE_TOML_PATH);
+        common::tests::check_package_version(&*ENGINE_STORAGE, ENGINE_STORAGE_TOML_PATH);
     }
 
     #[test]
     fn check_engine_wasm_prep_version() {
-        common::tests::check_package_version(ENGINE_WASM_PREP_VERSION, ENGINE_WASM_PREP_TOML_PATH);
+        common::tests::check_package_version(&*ENGINE_WASM_PREP, ENGINE_WASM_PREP_TOML_PATH);
     }
 
     #[test]
     fn check_engine_tests_version() {
-        common::tests::check_package_version(ENGINE_TESTS_VERSION, ENGINE_TESTS_TOML_PATH);
+        common::tests::check_package_version(&*ENGINE_TEST_SUPPORT, ENGINE_TEST_SUPPORT_TOML_PATH);
     }
 }

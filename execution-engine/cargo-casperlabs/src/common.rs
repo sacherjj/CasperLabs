@@ -7,10 +7,14 @@ use std::{
 };
 
 use colour::red;
+use lazy_static::lazy_static;
 
-use super::{FAILURE_EXIT_CODE, ROOT_PATH};
+use crate::{dependency::Dependency, ARGS, FAILURE_EXIT_CODE};
 
-pub const CL_CONTRACT_VERSION: &str = "0.22.0";
+lazy_static! {
+    pub static ref CL_CONTRACT: Dependency =
+        Dependency::new("casperlabs-contract", "0.22.0", "contract");
+}
 
 pub fn print_error_and_exit(msg: &str) -> ! {
     red!("error");
@@ -23,7 +27,7 @@ pub fn run_cargo_new(package_name: &str) {
     command
         .args(&["new", "--vcs", "none"])
         .arg(package_name)
-        .current_dir(&*ROOT_PATH);
+        .current_dir(ARGS.root_path());
 
     let output = match command.output() {
         Ok(output) => output,
@@ -96,7 +100,7 @@ pub mod tests {
 
     use toml::Value;
 
-    use super::CL_CONTRACT_VERSION;
+    use super::*;
 
     const CL_CONTRACT_TOML_PATH: &str = "contract/Cargo.toml";
     const PACKAGE_FIELD_NAME: &str = "package";
@@ -114,8 +118,8 @@ pub mod tests {
     }
 
     /// Checks the version of the package specified by the Cargo.toml at `toml_path` is equal to
-    /// the hard-coded one specified in `local_version`.
-    pub fn check_package_version(local_version: &str, toml_path: &str) {
+    /// the hard-coded one specified in `dep.version()`.
+    pub fn check_package_version(dep: &Dependency, toml_path: &str) {
         let toml_path = full_path_from_path_relative_to_ee(toml_path);
 
         let raw_toml_contents =
@@ -126,17 +130,20 @@ pub mod tests {
         let expected_version = toml[PACKAGE_FIELD_NAME][VERSION_FIELD_NAME]
             .as_str()
             .unwrap();
-        // If this fails, ensure `local_version` is updated to match the value in the Cargo.toml at
+        // If this fails, ensure `dep.version()` is updated to match the value in the Cargo.toml at
         // `toml_path`.
         assert_eq!(
-            expected_version, local_version,
-            "\n\nEnsure local version is updated to {} as defined in {}\n\n",
-            expected_version, toml_path
+            expected_version,
+            dep.version(),
+            "\n\nEnsure local version of {:?} is updated to {} as defined in {}\n\n",
+            dep,
+            expected_version,
+            toml_path
         );
     }
 
     #[test]
     fn check_cl_contract_version() {
-        check_package_version(CL_CONTRACT_VERSION, CL_CONTRACT_TOML_PATH);
+        check_package_version(&*CL_CONTRACT, CL_CONTRACT_TOML_PATH);
     }
 }
