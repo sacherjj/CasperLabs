@@ -70,3 +70,6 @@ export declare function get_key(
     output_size: usize,
     bytes_written_ptr: usize,
 ): i32;
+
+@external("env", "new_uref")
+export declare function new_uref(key_ptr: usize, value_ptr: usize, value_size: usize): void;

@@ -1,5 +1,7 @@
 import {URef} from "./uref";
+import {CLValue} from "./clvalue";
 import {UREF_SERIALIZED_LENGTH, KEY_ID_SERIALIZED_LENGTH, KEY_UREF_SERIALIZED_LENGTH} from "./constants";
+import * as externals from "./externals";
 
 export enum KeyVariant {
     ACCOUNT_ID = 0,
@@ -25,6 +27,23 @@ export class Key {
         key.variant = KeyVariant.HASH_ID;
         key.hash = hash;
         return key;
+    }
+
+    static newInitialized(value: CLValue): Key | null {
+        const valueBytes = value.toBytes();
+        let keyBytes = new Uint8Array(KEY_UREF_SERIALIZED_LENGTH);
+        externals.new_uref(
+            keyBytes.dataStart,
+            valueBytes.dataStart,
+            valueBytes.length);
+        const key = Key.fromBytes(keyBytes);
+        if (key === null) {
+            return null;
+        }
+        if (key.variant != KeyVariant.UREF_ID) {
+            return null;
+        }
+        return <Key>key;
     }
 
     static fromBytes(bytes: Uint8Array): Key | null {
