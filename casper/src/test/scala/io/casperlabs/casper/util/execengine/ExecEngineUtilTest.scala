@@ -60,10 +60,10 @@ class ExecEngineUtilTest extends FlatSpec with Matchers with BlockGenerator with
        */
 
       for {
-        genesis         <- createAndStoreBlock[Task](Seq.empty, deploys = genesisDeploysCost)
-        b1              <- createAndStoreBlock[Task](Seq(genesis.blockHash), deploys = b1DeploysCost)
-        b2              <- createAndStoreBlock[Task](Seq(b1.blockHash), deploys = b2DeploysCost)
-        b3              <- createAndStoreBlock[Task](Seq(b2.blockHash), deploys = b3DeploysCost)
+        genesis         <- createAndStoreMessage[Task](Seq.empty, deploys = genesisDeploysCost)
+        b1              <- createAndStoreMessage[Task](Seq(genesis.blockHash), deploys = b1DeploysCost)
+        b2              <- createAndStoreMessage[Task](Seq(b1.blockHash), deploys = b2DeploysCost)
+        b3              <- createAndStoreMessage[Task](Seq(b2.blockHash), deploys = b3DeploysCost)
         dag1            <- dagStorage.getRepresentation
         blockCheckpoint <- computeBlockCheckpointFromDeploys(genesis, genesis, dag1)
         _ <- injectPostStateHash[Task](
@@ -243,12 +243,15 @@ class ExecEngineUtilTest extends FlatSpec with Matchers with BlockGenerator with
         } yield postB1StateHash
 
       for {
-        genesis <- createAndStoreBlock[Task](Seq.empty, deploys = genesisDeploysWithCost)
-        b1      <- createAndStoreBlock[Task](Seq(genesis.blockHash), deploys = b1DeploysWithCost)
-        b2      <- createAndStoreBlock[Task](Seq(genesis.blockHash), deploys = b2DeploysWithCost)
-        _       <- createAndStoreBlock[Task](Seq(b1.blockHash, b2.blockHash), deploys = b3DeploysWithCost)
-        _       <- step(1, genesis)
-        _       <- step(2, genesis)
+        genesis <- createAndStoreMessage[Task](Seq.empty, deploys = genesisDeploysWithCost)
+        b1      <- createAndStoreMessage[Task](Seq(genesis.blockHash), deploys = b1DeploysWithCost)
+        b2      <- createAndStoreMessage[Task](Seq(genesis.blockHash), deploys = b2DeploysWithCost)
+        _ <- createAndStoreMessage[Task](
+              Seq(b1.blockHash, b2.blockHash),
+              deploys = b3DeploysWithCost
+            )
+        _ <- step(1, genesis)
+        _ <- step(2, genesis)
         r1 <- step(2, genesis)(failedExecEEService).onErrorHandleWith { ex =>
                Task.now {
                  ex.getMessage should startWith("failed when exec")

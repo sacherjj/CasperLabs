@@ -37,44 +37,44 @@ class ForkchoiceTest
       val v2Bond = Bond(v2, 3)
       val bonds  = Seq(v1Bond, v2Bond)
       for {
-        genesis <- createAndStoreBlock[Task](Seq(), ByteString.EMPTY, bonds)
-        b2 <- createAndStoreBlock[Task](
+        genesis <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bonds)
+        b2 <- createAndStoreMessage[Task](
                Seq(genesis.blockHash),
                v2,
                bonds,
                HashMap(v1 -> genesis.blockHash, v2 -> genesis.blockHash)
              )
-        b3 <- createAndStoreBlock[Task](
+        b3 <- createAndStoreMessage[Task](
                Seq(genesis.blockHash),
                v1,
                bonds,
                HashMap(v1 -> genesis.blockHash, v2 -> genesis.blockHash)
              )
-        b4 <- createAndStoreBlock[Task](
+        b4 <- createAndStoreMessage[Task](
                Seq(b2.blockHash),
                v2,
                bonds,
                HashMap(v1 -> genesis.blockHash, v2 -> b2.blockHash)
              )
-        b5 <- createAndStoreBlock[Task](
+        b5 <- createAndStoreMessage[Task](
                Seq(b2.blockHash),
                v1,
                bonds,
                HashMap(v1 -> b3.blockHash, v2 -> b2.blockHash)
              )
-        b6 <- createAndStoreBlock[Task](
+        b6 <- createAndStoreMessage[Task](
                Seq(b4.blockHash),
                v2,
                bonds,
                HashMap(v1 -> b5.blockHash, v2 -> b4.blockHash)
              )
-        b7 <- createAndStoreBlock[Task](
+        b7 <- createAndStoreMessage[Task](
                Seq(b4.blockHash),
                v1,
                bonds,
                HashMap(v1 -> b5.blockHash, v2 -> b4.blockHash)
              )
-        b8 <- createAndStoreBlock[Task](
+        b8 <- createAndStoreMessage[Task](
                Seq(b7.blockHash),
                v1,
                bonds,
@@ -101,20 +101,20 @@ class ForkchoiceTest
       val v3Bond = Bond(v2, 4)
       val bonds  = Seq(v1Bond, v2Bond, v3Bond)
       for {
-        genesis <- createAndStoreBlock[Task](Seq(), ByteString.EMPTY, bonds)
-        b1 <- createAndStoreBlock[Task](
+        genesis <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bonds)
+        b1 <- createAndStoreMessage[Task](
                Seq(genesis.blockHash),
                v3,
                bonds,
                keyBlockHash = genesis.blockHash
              )
-        b2 <- createAndStoreBlock[Task](
+        b2 <- createAndStoreMessage[Task](
                Seq(genesis.blockHash),
                v2,
                bonds,
                keyBlockHash = genesis.blockHash
              )
-        b3 <- createAndStoreBlock[Task](
+        b3 <- createAndStoreMessage[Task](
                Seq(b2.blockHash),
                v1,
                bonds,
@@ -142,44 +142,44 @@ class ForkchoiceTest
       val v2Bond = Bond(v2, 3)
       val bonds  = Seq(v1Bond, v2Bond)
       for {
-        genesis <- createAndStoreBlock[Task](Seq(), ByteString.EMPTY, bonds)
-        b2 <- createAndStoreBlock[Task](
+        genesis <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bonds)
+        b2 <- createAndStoreMessage[Task](
                Seq(genesis.blockHash),
                v2,
                bonds,
                HashMap(v1 -> genesis.blockHash, v2 -> genesis.blockHash)
              )
-        b3 <- createAndStoreBlock[Task](
+        b3 <- createAndStoreMessage[Task](
                Seq(genesis.blockHash),
                v1,
                bonds,
                HashMap(v1 -> genesis.blockHash, v2 -> genesis.blockHash)
              )
-        b4 <- createAndStoreBlock[Task](
+        b4 <- createAndStoreMessage[Task](
                Seq(b2.blockHash),
                v2,
                bonds,
                HashMap(v1 -> genesis.blockHash, v2 -> b2.blockHash)
              )
-        b5 <- createAndStoreBlock[Task](
+        b5 <- createAndStoreMessage[Task](
                Seq(b2.blockHash),
                v1,
                bonds,
                HashMap(v1 -> b3.blockHash, v2 -> b2.blockHash)
              )
-        b6 <- createAndStoreBlock[Task](
+        b6 <- createAndStoreMessage[Task](
                Seq(b4.blockHash),
                v2,
                bonds,
                HashMap(v1 -> b5.blockHash, v2 -> b4.blockHash)
              )
-        b7 <- createAndStoreBlock[Task](
+        b7 <- createAndStoreMessage[Task](
                Seq(b4.blockHash),
                v1,
                bonds,
                HashMap(v1 -> b5.blockHash, v2 -> b4.blockHash)
              )
-        b8 <- createAndStoreBlock[Task](
+        b8 <- createAndStoreMessage[Task](
                Seq(b7.blockHash),
                v1,
                bonds,
@@ -210,44 +210,44 @@ class ForkchoiceTest
       val v3Bond = Bond(v3, 15)
       val bonds  = Seq(v1Bond, v2Bond, v3Bond)
       for {
-        genesis <- createAndStoreBlock[Task](Seq(), ByteString.EMPTY, bonds)
-        b2 <- createAndStoreBlock[Task](
+        genesis <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bonds)
+        b2 <- createAndStoreMessage[Task](
                Seq(genesis.blockHash),
                v2,
                bonds,
                HashMap(v1 -> genesis.blockHash, v2 -> genesis.blockHash, v3 -> genesis.blockHash)
              )
-        b3 <- createAndStoreBlock[Task](
+        b3 <- createAndStoreMessage[Task](
                Seq(genesis.blockHash),
                v1,
                bonds,
                HashMap(v1 -> genesis.blockHash, v2 -> genesis.blockHash, v3 -> genesis.blockHash)
              )
-        b4 <- createAndStoreBlock[Task](
+        b4 <- createAndStoreMessage[Task](
                Seq(b2.blockHash),
                v3,
                bonds,
                HashMap(v1 -> genesis.blockHash, v2 -> b2.blockHash, v3 -> b2.blockHash)
              )
-        b5 <- createAndStoreBlock[Task](
+        b5 <- createAndStoreMessage[Task](
                Seq(b3.blockHash),
                v2,
                bonds,
                HashMap(v1 -> b3.blockHash, v2 -> b2.blockHash, v3 -> genesis.blockHash)
              )
-        b6 <- createAndStoreBlock[Task](
+        b6 <- createAndStoreMessage[Task](
                Seq(b4.blockHash),
                v1,
                bonds,
                HashMap(v1 -> b3.blockHash, v2 -> b2.blockHash, v3 -> b4.blockHash)
              )
-        b7 <- createAndStoreBlock[Task](
+        b7 <- createAndStoreMessage[Task](
                Seq(b5.blockHash),
                v3,
                bonds,
                HashMap(v1 -> b3.blockHash, v2 -> b5.blockHash, v3 -> b4.blockHash)
              )
-        b8 <- createAndStoreBlock[Task](
+        b8 <- createAndStoreMessage[Task](
                Seq(b6.blockHash),
                v2,
                bonds,
@@ -277,11 +277,11 @@ class ForkchoiceTest
       val bonds  = Seq(v1Bond, v2Bond)
 
       for {
-        genesis <- createAndStoreBlock[Task](Seq(), ByteString.EMPTY, bonds)
-        a1      <- createAndStoreBlock[Task](Seq(genesis.blockHash), v1, bonds)
-        a2      <- createAndStoreBlock[Task](Seq(genesis.blockHash), v1, bonds)
-        b       <- createAndStoreBlock[Task](Seq(a2.blockHash), v2, bonds, Map(v1 -> a2.blockHash))
-        c       <- createAndStoreBlock[Task](Seq(b.blockHash), v1, bonds, Map(v1 -> a1.blockHash))
+        genesis <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bonds)
+        a1      <- createAndStoreMessage[Task](Seq(genesis.blockHash), v1, bonds)
+        a2      <- createAndStoreMessage[Task](Seq(genesis.blockHash), v1, bonds)
+        b       <- createAndStoreMessage[Task](Seq(a2.blockHash), v2, bonds, Map(v1 -> a2.blockHash))
+        c       <- createAndStoreMessage[Task](Seq(b.blockHash), v1, bonds, Map(v1 -> a1.blockHash))
         dag     <- dagStorage.getRepresentation
 
         latestMessageHashes <- dag.latestMessageHashes
@@ -319,11 +319,11 @@ class ForkchoiceTest
       val bonds = Seq(Bond(v1, 10), Bond(v2, 10))
 
       for {
-        genesis <- createAndStoreBlock[Task](Seq(), ByteString.EMPTY, bonds)
+        genesis <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bonds)
         // v1 equivocates
-        a1                  <- createAndStoreBlock[Task](Seq(genesis.blockHash), v1, bonds)
-        a2                  <- createAndStoreBlock[Task](Seq(genesis.blockHash), v1, bonds)
-        b                   <- createAndStoreBlock[Task](Seq(genesis.blockHash), v2, bonds)
+        a1                  <- createAndStoreMessage[Task](Seq(genesis.blockHash), v1, bonds)
+        a2                  <- createAndStoreMessage[Task](Seq(genesis.blockHash), v1, bonds)
+        b                   <- createAndStoreMessage[Task](Seq(genesis.blockHash), v2, bonds)
         dag                 <- dagStorage.getRepresentation
         equivocators        <- dag.getEquivocators
         latestMessageHashes <- dag.latestMessageHashes
@@ -353,26 +353,26 @@ class ForkchoiceTest
       // so we ended up with tips [B4, B1] instead of [B4]
 
       for {
-        genesis <- createAndStoreBlock[Task](Seq(), ByteString.EMPTY, bonds)
-        b1 <- createAndStoreBlock[Task](
+        genesis <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bonds)
+        b1 <- createAndStoreMessage[Task](
                Seq(genesis.blockHash),
                v1,
                bonds,
                HashMap(v1 -> genesis.blockHash, v2 -> genesis.blockHash, v3 -> genesis.blockHash)
              )
-        b2 <- createAndStoreBlock[Task](
+        b2 <- createAndStoreMessage[Task](
                Seq(genesis.blockHash),
                v2,
                bonds,
                HashMap(v1 -> genesis.blockHash, v2 -> genesis.blockHash, v3 -> genesis.blockHash)
              )
-        b3 <- createAndStoreBlock[Task](
+        b3 <- createAndStoreMessage[Task](
                Seq(b1.blockHash),
                v3,
                bonds,
                HashMap(v1 -> b1.blockHash, v2 -> genesis.blockHash, v3 -> genesis.blockHash)
              )
-        b4 <- createAndStoreBlock[Task](
+        b4 <- createAndStoreMessage[Task](
                Seq(b2.blockHash, b3.blockHash),
                v3,
                bonds,
@@ -463,13 +463,13 @@ class ForkchoiceTest
         val v3Bond = Bond(v3, 3)
         val bonds  = Seq(v1Bond, v2Bond, v3Bond)
         for {
-          genesis      <- createAndStoreBlock[Task](Seq(), ByteString.EMPTY, bonds)
-          a            <- createAndStoreBlock[Task](Seq(genesis.blockHash), v1, bonds)
-          b            <- createAndStoreBlock[Task](Seq(genesis.blockHash), v2, bonds)
-          c            <- createAndStoreBlock[Task](Seq(genesis.blockHash), v3, bonds)
-          d            <- createAndStoreBlock[Task](Seq(a.blockHash), v1, bonds)
-          e            <- createAndStoreBlock[Task](Seq(a.blockHash, c.blockHash), v3, bonds)
-          f            <- createAndStoreBlock[Task](Seq(b.blockHash), v2, bonds)
+          genesis      <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bonds)
+          a            <- createAndStoreMessage[Task](Seq(genesis.blockHash), v1, bonds)
+          b            <- createAndStoreMessage[Task](Seq(genesis.blockHash), v2, bonds)
+          c            <- createAndStoreMessage[Task](Seq(genesis.blockHash), v3, bonds)
+          d            <- createAndStoreMessage[Task](Seq(a.blockHash), v1, bonds)
+          e            <- createAndStoreMessage[Task](Seq(a.blockHash, c.blockHash), v3, bonds)
+          f            <- createAndStoreMessage[Task](Seq(b.blockHash), v2, bonds)
           dag          <- dagStorage.getRepresentation
           latestBlocks <- dag.latestMessageHashes
           supportersWithoutEquivocating = Map(
@@ -514,16 +514,16 @@ class ForkchoiceTest
         val bonds  = Seq(v1Bond, v2Bond, v3Bond)
 
         for {
-          genesis      <- createAndStoreBlock[Task](Seq(), ByteString.EMPTY, bonds)
-          a            <- createAndStoreBlock[Task](Seq(genesis.blockHash), v1, bonds)
-          b            <- createAndStoreBlock[Task](Seq(genesis.blockHash), v2, bonds)
-          c            <- createAndStoreBlock[Task](Seq(genesis.blockHash), v3, bonds)
-          d            <- createAndStoreBlock[Task](Seq(a.blockHash, b.blockHash), v1, bonds)
-          e            <- createAndStoreBlock[Task](Seq(b.blockHash), v2, bonds)
-          f            <- createAndStoreBlock[Task](Seq(c.blockHash), v3, bonds)
-          g            <- createAndStoreBlock[Task](Seq(d.blockHash, e.blockHash), v1, bonds)
-          h            <- createAndStoreBlock[Task](Seq(e.blockHash, f.blockHash), v2, bonds)
-          i            <- createAndStoreBlock[Task](Seq(g.blockHash, f.blockHash), v3, bonds)
+          genesis      <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bonds)
+          a            <- createAndStoreMessage[Task](Seq(genesis.blockHash), v1, bonds)
+          b            <- createAndStoreMessage[Task](Seq(genesis.blockHash), v2, bonds)
+          c            <- createAndStoreMessage[Task](Seq(genesis.blockHash), v3, bonds)
+          d            <- createAndStoreMessage[Task](Seq(a.blockHash, b.blockHash), v1, bonds)
+          e            <- createAndStoreMessage[Task](Seq(b.blockHash), v2, bonds)
+          f            <- createAndStoreMessage[Task](Seq(c.blockHash), v3, bonds)
+          g            <- createAndStoreMessage[Task](Seq(d.blockHash, e.blockHash), v1, bonds)
+          h            <- createAndStoreMessage[Task](Seq(e.blockHash, f.blockHash), v2, bonds)
+          i            <- createAndStoreMessage[Task](Seq(g.blockHash, f.blockHash), v3, bonds)
           dag          <- dagStorage.getRepresentation
           latestBlocks <- dag.latestMessageHashes
 
@@ -576,25 +576,25 @@ class ForkchoiceTest
         val bonds  = Seq(v1Bond, v2Bond, v3Bond)
 
         for {
-          genesis <- createAndStoreBlock[Task](Seq(), ByteString.EMPTY)
-          a       <- createAndStoreBlock[Task](Seq(genesis.blockHash), v1, bonds)
-          b       <- createAndStoreBlock[Task](Seq(genesis.blockHash), v2, bonds)
-          c       <- createAndStoreBlock[Task](Seq(genesis.blockHash), v3, bonds)
-          d       <- createAndStoreBlock[Task](Seq(a.blockHash), v1, bonds)
-          e       <- createAndStoreBlock[Task](Seq(b.blockHash, c.blockHash), v2, bonds)
-          f       <- createAndStoreBlock[Task](Seq(d.blockHash, e.blockHash), v2, bonds)
-          g       <- createAndStoreBlock[Task](Seq(f.blockHash), v1, bonds, Map(v1 -> d.blockHash))
-          h       <- createAndStoreBlock[Task](Seq(f.blockHash), v2, bonds)
-          i       <- createAndStoreBlock[Task](Seq(f.blockHash), v3, bonds, Map(v3 -> c.blockHash))
-          j       <- createAndStoreBlock[Task](Seq(g.blockHash, h.blockHash), v1, bonds)
-          k       <- createAndStoreBlock[Task](Seq(h.blockHash), v2, bonds)
-          l <- createAndStoreBlock[Task](
+          genesis <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY)
+          a       <- createAndStoreMessage[Task](Seq(genesis.blockHash), v1, bonds)
+          b       <- createAndStoreMessage[Task](Seq(genesis.blockHash), v2, bonds)
+          c       <- createAndStoreMessage[Task](Seq(genesis.blockHash), v3, bonds)
+          d       <- createAndStoreMessage[Task](Seq(a.blockHash), v1, bonds)
+          e       <- createAndStoreMessage[Task](Seq(b.blockHash, c.blockHash), v2, bonds)
+          f       <- createAndStoreMessage[Task](Seq(d.blockHash, e.blockHash), v2, bonds)
+          g       <- createAndStoreMessage[Task](Seq(f.blockHash), v1, bonds, Map(v1 -> d.blockHash))
+          h       <- createAndStoreMessage[Task](Seq(f.blockHash), v2, bonds)
+          i       <- createAndStoreMessage[Task](Seq(f.blockHash), v3, bonds, Map(v3 -> c.blockHash))
+          j       <- createAndStoreMessage[Task](Seq(g.blockHash, h.blockHash), v1, bonds)
+          k       <- createAndStoreMessage[Task](Seq(h.blockHash), v2, bonds)
+          l <- createAndStoreMessage[Task](
                 Seq(i.blockHash),
                 v3,
                 bonds,
                 justifications = Map(v3 -> i.blockHash)
               )
-          m            <- createAndStoreBlock[Task](Seq(j.blockHash, k.blockHash, l.blockHash), v2, bonds)
+          m            <- createAndStoreMessage[Task](Seq(j.blockHash, k.blockHash, l.blockHash), v2, bonds)
           dag          <- dagStorage.getRepresentation
           latestBlocks <- dag.latestMessageHashes
           supportersWithoutEquivocating = Map(
@@ -639,16 +639,16 @@ class ForkchoiceTest
         val bonds  = Seq(v1Bond, v2Bond, v3Bond)
 
         for {
-          genesis      <- createAndStoreBlock[Task](Seq(), ByteString.EMPTY, bonds)
-          a            <- createAndStoreBlock[Task](Seq(genesis.blockHash), v1, bonds)
-          b            <- createAndStoreBlock[Task](Seq(genesis.blockHash), v2, bonds)
-          c            <- createAndStoreBlock[Task](Seq(genesis.blockHash), v3, bonds)
-          d            <- createAndStoreBlock[Task](Seq(a.blockHash, b.blockHash), v1, bonds)
-          e            <- createAndStoreBlock[Task](Seq(b.blockHash), v2, bonds)
-          f            <- createAndStoreBlock[Task](Seq(c.blockHash), v3, bonds)
-          g            <- createAndStoreBlock[Task](Seq(d.blockHash, e.blockHash), v1, bonds)
-          h            <- createAndStoreBlock[Task](Seq(e.blockHash, f.blockHash), v2, bonds)
-          i            <- createAndStoreBlock[Task](Seq(g.blockHash, f.blockHash), v3, bonds)
+          genesis      <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bonds)
+          a            <- createAndStoreMessage[Task](Seq(genesis.blockHash), v1, bonds)
+          b            <- createAndStoreMessage[Task](Seq(genesis.blockHash), v2, bonds)
+          c            <- createAndStoreMessage[Task](Seq(genesis.blockHash), v3, bonds)
+          d            <- createAndStoreMessage[Task](Seq(a.blockHash, b.blockHash), v1, bonds)
+          e            <- createAndStoreMessage[Task](Seq(b.blockHash), v2, bonds)
+          f            <- createAndStoreMessage[Task](Seq(c.blockHash), v3, bonds)
+          g            <- createAndStoreMessage[Task](Seq(d.blockHash, e.blockHash), v1, bonds)
+          h            <- createAndStoreMessage[Task](Seq(e.blockHash, f.blockHash), v2, bonds)
+          i            <- createAndStoreMessage[Task](Seq(g.blockHash, f.blockHash), v3, bonds)
           dag          <- dagStorage.getRepresentation
           latestBlocks <- dag.latestMessageHashes
           equivocators <- dag.getEquivocators

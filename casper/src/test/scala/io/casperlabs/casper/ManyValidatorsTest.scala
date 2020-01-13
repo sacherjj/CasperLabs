@@ -27,8 +27,8 @@ class ManyValidatorsTest extends FlatSpec with Matchers with BlockGenerator with
         .map(Bond(_, 10))
       val v1 = bonds.head.validatorPublicKey
       for {
-        genesis <- createAndStoreBlock[Task](Seq(), ByteString.EMPTY, bonds)
-        _ <- createAndStoreBlock[Task](Seq(genesis.blockHash), v1, bonds, bonds.map {
+        genesis <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bonds)
+        _ <- createAndStoreMessage[Task](Seq(genesis.blockHash), v1, bonds, bonds.map {
               case Bond(validator, _) => validator -> genesis.blockHash
             }.toMap)
         dag                 <- dagStorage.getRepresentation

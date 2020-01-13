@@ -35,7 +35,7 @@ class FinalityDetectorUtilTest extends FlatSpec with BlockGenerator with Storage
         // When B gets finalized A1 gets finalized indirectly.
 
         for {
-          genesis <- createAndStoreBlock[Task](Seq(), ByteString.EMPTY, bonds)
+          genesis <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bonds)
           a       <- createAndStoreBlockFull[Task](v1, Seq(genesis), Seq.empty, bonds)
           a1      <- createAndStoreBlockFull[Task](v2, Seq(a), Seq.empty, bonds)
           b       <- createAndStoreBlockFull[Task](v1, Seq(a, a1), Seq.empty, bonds)
@@ -72,7 +72,7 @@ class FinalityDetectorUtilTest extends FlatSpec with BlockGenerator with Storage
         *  i.e. since A is finalized with C, `finalizedIndirectly(F)` should not visit that node.
         */
       for {
-        genesis   <- createAndStoreBlock[Task](Seq(), ByteString.EMPTY, bonds)
+        genesis   <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bonds)
         a         <- createAndStoreBlockFull[Task](v1, Seq(genesis), Seq.empty, bonds)
         b         <- createAndStoreBlockFull[Task](v1, Seq(a), Seq.empty, bonds)
         c         <- createAndStoreBlockFull[Task](v1, Seq(genesis, a), Seq.empty, bonds)
