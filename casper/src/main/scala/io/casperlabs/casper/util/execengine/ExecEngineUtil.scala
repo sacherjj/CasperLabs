@@ -44,7 +44,7 @@ object ExecEngineUtil {
 
   import io.casperlabs.smartcontracts.GrpcExecutionEngineService.EngineMetricsSource
 
-  def computeDeploysCheckpoint[F[_]: Sync: DeployStorage: Log: ExecutionEngineService: DeploySelection: Metrics](
+  def computeDeploysCheckpoint[F[_]: MonadThrowable: DeployStorage: Log: ExecutionEngineService: DeploySelection: Metrics](
       merged: MergeResult[TransformMap, Block],
       deployStream: fs2.Stream[F, Deploy],
       blocktime: Long,
@@ -63,16 +63,6 @@ object ExecEngineUtil {
       commitResult <- ExecutionEngineService[F]
                        .commit(preStateHash, transforms.flatten, protocolVersion)
                        .rethrow
-      //TODO: Remove this logging at some point
-      msgBody = transforms.flatten
-        .map(t => {
-          val k    = PrettyPrinter.buildString(t.key.get)
-          val tStr = PrettyPrinter.buildString(t.transform.get)
-          s"$k :: $tStr"
-        })
-        .mkString("\n")
-      _ <- Log[F]
-            .info(s"Block created with effects:\n$msgBody")
     } yield DeploysCheckpoint(
       preStateHash,
       commitResult.postStateHash,
@@ -101,10 +91,6 @@ object ExecEngineUtil {
                              acc.copy(preconditionFailures = d :: acc.preconditionFailures)
                            }
                        }
-      // We don't have to put InvalidNonce deploys back to the buffer,
-      // as by default buffer is cleared when deploy gets included in
-      // the finalized block. If that strategy ever changes, we will have to
-      // put them back into the buffer explicitly.
       _ <- DeployStorageWriter[F]
             .markAsDiscarded(
               invalidDeploys.preconditionFailures.map(pf => (pf.deploy, pf.errorMessage))
@@ -231,7 +217,7 @@ object ExecEngineUtil {
     * the secondary parents they made on top of the main parent. Then apply any
     * upgrades which were activated at the point we are building the next block on.
     */
-  def computePrestate[F[_]: MonadError[*[_], Throwable]: ExecutionEngineService: Log](
+  def computePrestate[F[_]: MonadThrowable: ExecutionEngineService: Log](
       merged: MergeResult[TransformMap, Block],
       rank: Long, // Rank of the block we are creating on top of the parents; can be way ahead because of justifications.
       upgrades: Seq[ChainSpec.UpgradePoint]
