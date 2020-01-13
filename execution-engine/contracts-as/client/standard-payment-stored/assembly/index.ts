@@ -37,6 +37,7 @@ export function call(): void {
   let destination = fromBytesString(destinationBytes);
   if (destination === null) {
     Error.fromErrorCode(ErrorCode.InvalidArgument);
+    return;
   }
 
   if (destination == DESTINATION_HASH) {

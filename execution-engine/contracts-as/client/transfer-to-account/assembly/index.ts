@@ -30,7 +30,4 @@ export function call(): void {
     Error.fromErrorCode(ErrorCode.Transfer).revert();
     return;
   }
-
-  // let foo = new Error(10000);
-  // foo.revert();
 }
