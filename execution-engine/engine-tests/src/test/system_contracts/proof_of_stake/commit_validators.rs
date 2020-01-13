@@ -1,7 +1,7 @@
 use num_traits::Zero;
 use std::collections::HashMap;
 
-use contract_ffi::value::{account::PublicKey, U512};
+use contract::value::{account::PublicKey, U512};
 use engine_core::engine_state::genesis::GenesisAccount;
 use engine_shared::motes::Motes;
 use engine_test_support::low_level::{

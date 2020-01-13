@@ -9,7 +9,7 @@ mod wasm_test_builder;
 use lazy_static::lazy_static;
 use num_traits::identities::Zero;
 
-use contract_ffi::value::{account::PublicKey, ProtocolVersion, U512};
+use contract::value::{account::PublicKey, ProtocolVersion, U512};
 use engine_core::engine_state::genesis::{GenesisAccount, GenesisConfig};
 use engine_shared::{motes::Motes, test_utils};
 use engine_wasm_prep::wasm_costs::WasmCosts;

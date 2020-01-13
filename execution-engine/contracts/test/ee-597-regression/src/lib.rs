@@ -1,6 +1,6 @@
 #![no_std]
 
-use contract_ffi::{
+use contract::{
     contract_api::{account, runtime, system, ContractRef},
     value::{account::PurseId, U512},
 };

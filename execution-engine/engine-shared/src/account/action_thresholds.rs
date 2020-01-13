@@ -1,4 +1,4 @@
-use contract_ffi::{
+use contract::{
     bytesrepr::{Error, FromBytes, ToBytes},
     value::account::{ActionType, SetThresholdFailure, Weight, WEIGHT_SERIALIZED_LENGTH},
 };

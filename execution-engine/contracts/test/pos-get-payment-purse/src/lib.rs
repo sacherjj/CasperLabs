@@ -1,6 +1,6 @@
 #![no_std]
 
-use contract_ffi::{
+use contract::{
     contract_api::{account, runtime, system, Error as ApiError},
     unwrap_or_revert::UnwrapOrRevert,
     value::{account::PurseId, U512},

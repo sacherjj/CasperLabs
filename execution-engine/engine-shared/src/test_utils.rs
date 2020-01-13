@@ -6,7 +6,7 @@ use parity_wasm::{
     elements::{MemorySection, MemoryType, Module, Section, Serialize},
 };
 
-use contract_ffi::{
+use contract::{
     key::Key,
     uref::{AccessRights, URef},
     value::account::PurseId,

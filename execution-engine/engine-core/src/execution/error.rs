@@ -3,7 +3,7 @@ use core::fmt;
 use parity_wasm::elements;
 use wasmi;
 
-use contract_ffi::{
+use contract::{
     bytesrepr,
     key::Key,
     system_contracts,

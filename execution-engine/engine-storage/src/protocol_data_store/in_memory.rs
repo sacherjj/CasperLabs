@@ -1,4 +1,4 @@
-use contract_ffi::value::ProtocolVersion;
+use contract::value::ProtocolVersion;
 
 use crate::{
     error::in_memory::Error,

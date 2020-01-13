@@ -1,4 +1,4 @@
-use contract_ffi::{execution::Phase, value::account::PublicKey};
+use contract::{execution::Phase, value::account::PublicKey};
 use engine_test_support::low_level::{
     DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_ACCOUNT_ADDR,
     DEFAULT_GENESIS_CONFIG,

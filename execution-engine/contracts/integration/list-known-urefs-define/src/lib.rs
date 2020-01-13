@@ -5,7 +5,7 @@ extern crate alloc;
 use alloc::{borrow::ToOwned, collections::BTreeMap, string::String};
 use core::iter;
 
-use contract_ffi::{
+use contract::{
     contract_api::{runtime, storage, Error},
     key::Key,
     unwrap_or_revert::UnwrapOrRevert,

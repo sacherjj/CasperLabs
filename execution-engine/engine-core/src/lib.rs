@@ -1,6 +1,6 @@
 #![feature(never_type)]
 
-use contract_ffi::key::Key;
+use contract::key::Key;
 use std::collections::BTreeMap;
 
 pub mod engine_state;

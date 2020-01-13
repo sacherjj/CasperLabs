@@ -1,6 +1,6 @@
 #![no_std]
 
-use contract_ffi::{
+use contract::{
     contract_api::{runtime, system, Error},
     unwrap_or_revert::UnwrapOrRevert,
     value::{account::PublicKey, U512},

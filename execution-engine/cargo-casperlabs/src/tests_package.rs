@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use lazy_static::lazy_static;
 
 use crate::{
-    common::{self, CONTRACT_FFI_VERSION},
+    common::{self, CL_CONTRACT_VERSION},
     ROOT_PATH, TOOLCHAIN,
 };
 
@@ -102,7 +102,7 @@ lazy_static! {
         .join("src/integration_tests.rs");
     // TODO(Fraser): Update dependencies to use crates.io, not relative paths.
     static ref CARGO_TOML_ADDITIONAL_CONTENTS: String = format!(
-        r#"casperlabs-contract-ffi = "{contract_ffi_version}"
+        r#"casperlabs-contract = {{ version = "{cl_contract_version}", path = "../../../CasperLabs/execution-engine/contract" }}
 casperlabs-engine-core = {{ version = "{engine_core_version}", path = "../../../CasperLabs/execution-engine/engine-core" }}
 casperlabs-engine-grpc-server = {{ version = "{engine_grpc_server_version}", path = "../../../CasperLabs/execution-engine/engine-grpc-server" }}
 casperlabs-engine-shared = {{ version = "{engine_shared_version}", path = "../../../CasperLabs/execution-engine/engine-shared" }}
@@ -115,9 +115,9 @@ name = "integration-tests"
 path = "src/integration_tests.rs"
 
 [features]
-default = ["casperlabs-contract-ffi/std"]
+default = ["casperlabs-contract/std"]
 "#,
-        contract_ffi_version = CONTRACT_FFI_VERSION,
+        cl_contract_version = CL_CONTRACT_VERSION,
         engine_core_version = ENGINE_CORE_VERSION,
         engine_grpc_server_version = ENGINE_GRPC_SERVER_VERSION,
         engine_shared_version = ENGINE_SHARED_VERSION,

@@ -1,4 +1,4 @@
-use contract_ffi::value::ProtocolVersion;
+use contract::value::ProtocolVersion;
 use engine_grpc_server::engine_server::{
     ipc::{
         ChainSpec_ActivationPoint, ChainSpec_CostTable_WasmCosts, ChainSpec_UpgradePoint,

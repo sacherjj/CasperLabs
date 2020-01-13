@@ -1,4 +1,4 @@
-use contract_ffi::key::Key;
+use contract::key::Key;
 use engine_shared::stored_value::StoredValue;
 use engine_test_support::low_level::{
     ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG,

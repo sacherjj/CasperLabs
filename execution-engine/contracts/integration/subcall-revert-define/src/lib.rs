@@ -4,7 +4,7 @@ extern crate alloc;
 
 use alloc::collections::BTreeMap;
 
-use contract_ffi::contract_api::{runtime, storage, Error};
+use contract::contract_api::{runtime, storage, Error};
 
 const REVERT_TEST_EXT: &str = "revert_test_ext";
 const REVERT_TEST_KEY: &str = "revert_test";

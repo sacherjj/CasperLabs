@@ -1,7 +1,7 @@
 use engine_shared::gas::Gas;
 
 use super::Error;
-use contract_ffi::value::U512;
+use contract::value::U512;
 
 use crate::engine_state::execution_result::ExecutionResult;
 
@@ -40,7 +40,7 @@ fn on_fail_charge_err_laziness_test() {
 #[test]
 fn on_fail_charge_with_action() {
     use crate::engine_state::{execution_effect::ExecutionEffect, op::Op};
-    use contract_ffi::key::Key;
+    use contract::key::Key;
     use engine_shared::transform::Transform;
     let f = || {
         let input: Result<(), Error> = Err(Error::GasLimit);

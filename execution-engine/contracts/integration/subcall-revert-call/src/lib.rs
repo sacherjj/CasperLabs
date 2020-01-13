@@ -1,6 +1,6 @@
 #![no_std]
 
-use contract_ffi::{
+use contract::{
     contract_api::{runtime, ContractRef, Error},
     key::Key,
     unwrap_or_revert::UnwrapOrRevert,

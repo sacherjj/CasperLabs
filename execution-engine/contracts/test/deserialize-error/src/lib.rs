@@ -7,7 +7,7 @@ extern crate alloc;
 use alloc::vec;
 use alloc::{collections::BTreeMap, vec::Vec};
 
-use contract_ffi::{
+use contract::{
     args_parser::ArgsParser,
     bytesrepr::ToBytes,
     contract_api::{storage, ContractRef},

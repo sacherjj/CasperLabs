@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use pwasm_utils::rules::{InstructionType, Metering, Set};
 
-use contract_ffi::bytesrepr::{self, FromBytes, ToBytes, U32_SERIALIZED_LENGTH};
+use contract::bytesrepr::{self, FromBytes, ToBytes, U32_SERIALIZED_LENGTH};
 
 const NUM_FIELDS: usize = 10;
 pub const WASM_COSTS_SERIALIZED_LENGTH: usize = NUM_FIELDS * U32_SERIALIZED_LENGTH;
@@ -134,7 +134,7 @@ pub mod gens {
 mod tests {
     use proptest::proptest;
 
-    use contract_ffi::bytesrepr;
+    use contract::bytesrepr;
     use engine_shared::test_utils;
 
     use super::gens;

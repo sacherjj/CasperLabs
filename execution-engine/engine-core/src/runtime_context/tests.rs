@@ -7,7 +7,7 @@ use std::{
 
 use rand::RngCore;
 
-use contract_ffi::{
+use contract::{
     block_time::BlockTime,
     execution::Phase,
     key::{Key, LOCAL_SEED_LENGTH},

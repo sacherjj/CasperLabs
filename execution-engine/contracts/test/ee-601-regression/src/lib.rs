@@ -4,7 +4,7 @@ extern crate alloc;
 
 use alloc::string::{String, ToString};
 
-use contract_ffi::{
+use contract::{
     contract_api::{account, runtime, storage, system, Error as ApiError},
     unwrap_or_revert::UnwrapOrRevert,
     value::{account::PurseId, U512},
@@ -25,7 +25,7 @@ enum Error {
 #[no_mangle]
 pub extern "C" fn call() {
     let phase = runtime::get_phase();
-    if phase == contract_ffi::execution::Phase::Payment {
+    if phase == contract::execution::Phase::Payment {
         let amount: U512 = runtime::get_arg(Arg::Amount as u32)
             .unwrap_or_revert_with(ApiError::MissingArgument)
             .unwrap_or_revert_with(ApiError::InvalidArgument);
@@ -41,8 +41,8 @@ pub extern "C" fn call() {
 
     let value: Option<&str> = {
         match phase {
-            contract_ffi::execution::Phase::Payment => Some("payment"),
-            contract_ffi::execution::Phase::Session => Some("session"),
+            contract::execution::Phase::Payment => Some("payment"),
+            contract::execution::Phase::Session => Some("session"),
             _ => None,
         }
     };

@@ -1,6 +1,6 @@
 use lazy_static::lazy_static;
 
-use contract_ffi::value::{
+use contract::value::{
     account::{PublicKey, PurseId},
     U512,
 };

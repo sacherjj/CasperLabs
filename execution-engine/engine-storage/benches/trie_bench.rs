@@ -5,7 +5,7 @@ extern crate test;
 use test::{black_box, Bencher};
 
 use casperlabs_engine_storage::trie::{Pointer, PointerBlock, Trie};
-use contract_ffi::{
+use contract::{
     bytesrepr::{FromBytes, ToBytes},
     key::Key,
     value::CLValue,

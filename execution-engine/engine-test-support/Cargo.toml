@@ -5,7 +5,7 @@ authors = ["Fraser Hutchison <fraser@casperlabs.io>"]
 edition = "2018"
 
 [dependencies]
-contract-ffi = { path = "../contract-ffi", package = "casperlabs-contract-ffi" }
+contract = { path = "../contract", package = "casperlabs-contract" }
 engine-core = { path = "../engine-core", package = "casperlabs-engine-core" }
 engine-grpc-server = { path = "../engine-grpc-server", package = "casperlabs-engine-grpc-server" }
 engine-shared = { path = "../engine-shared", package = "casperlabs-engine-shared" }

@@ -4,7 +4,7 @@ extern crate alloc;
 
 use alloc::string::String;
 
-use contract_ffi::{contract_api::runtime, key::Key, value::U512};
+use contract::{contract_api::runtime, key::Key, value::U512};
 
 #[no_mangle]
 pub extern "C" fn call() {

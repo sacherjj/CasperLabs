@@ -7,7 +7,7 @@ mod stakes;
 
 use alloc::{string::String, vec::Vec};
 
-use contract_ffi::{
+use contract::{
     block_time::BlockTime,
     contract_api::{runtime, system},
     execution::Phase,
@@ -357,7 +357,7 @@ pub extern "C" fn call() {
 mod tests {
     use std::{cell::RefCell, iter};
 
-    use contract_ffi::{
+    use contract::{
         block_time::BlockTime,
         system_contracts::pos::Result,
         value::{account::PublicKey, U512},

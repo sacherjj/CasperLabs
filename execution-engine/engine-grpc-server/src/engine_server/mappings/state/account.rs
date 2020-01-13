@@ -4,7 +4,7 @@ use std::{
     mem,
 };
 
-use contract_ffi::value::account::{PublicKey, PurseId, Weight};
+use contract::value::account::{PublicKey, PurseId, Weight};
 use engine_shared::account::{Account, ActionThresholds, AssociatedKeys};
 
 use super::NamedKeyMap;

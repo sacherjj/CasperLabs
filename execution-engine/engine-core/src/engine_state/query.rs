@@ -1,4 +1,4 @@
-use contract_ffi::key::Key;
+use contract::key::Key;
 use engine_shared::{newtypes::Blake2bHash, stored_value::StoredValue};
 
 use crate::tracking_copy::TrackingCopyQueryResult;

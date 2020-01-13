@@ -7,7 +7,7 @@ edition = "2018"
 [dependencies]
 base16 = "0.2.1"
 clap = "2"
-contract-ffi = { path = "../contract-ffi", package = "casperlabs-contract-ffi" }
+contract = { path = "../contract", package = "casperlabs-contract" }
 crossbeam-channel = "0.4.0"
 engine-core = { path = "../engine-core", package = "casperlabs-engine-core" }
 engine-grpc-server = { path = "../engine-grpc-server", package = "casperlabs-engine-grpc-server" }

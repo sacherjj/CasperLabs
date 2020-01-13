@@ -1,6 +1,6 @@
-//! A store for persisting [`ProtocolData`](contract_ffi::value::ProtocolVersion) values at their
+//! A store for persisting [`ProtocolData`](contract::value::ProtocolVersion) values at their
 //! protocol versions.
-use contract_ffi::value::ProtocolVersion;
+use contract::value::ProtocolVersion;
 
 pub mod in_memory;
 pub mod lmdb;

@@ -12,9 +12,9 @@ test = false
 
 [features]
 default = []
-std = ["contract-ffi/std"]
+std = ["contract/std"]
 
 [dependencies]
-contract-ffi = { path = "../../../contract-ffi", package = "casperlabs-contract-ffi" }
+contract = { path = "../../../contract", package = "casperlabs-contract" }
 pos = { path = "../../system/pos", default-features = false, features = ["lib"] }
 modified-mint = { path = "../modified-mint", default-features = false, features = ["lib"] }

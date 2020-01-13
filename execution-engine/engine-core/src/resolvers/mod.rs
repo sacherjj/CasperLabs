@@ -3,7 +3,7 @@ pub mod memory_resolver;
 pub mod v1_function_index;
 mod v1_resolver;
 
-use contract_ffi::value::ProtocolVersion;
+use contract::value::ProtocolVersion;
 use wasmi::ModuleImportResolver;
 
 use self::error::ResolverError;

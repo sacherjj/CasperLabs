@@ -1,6 +1,6 @@
 use std::convert::{TryFrom, TryInto};
 
-use contract_ffi::value::{account::PublicKey, U512};
+use contract::value::{account::PublicKey, U512};
 
 use crate::engine_server::{ipc::Bond, mappings::MappingError};
 
@@ -32,7 +32,7 @@ impl TryFrom<Bond> for (PublicKey, U512) {
 mod tests {
     use proptest::proptest;
 
-    use contract_ffi::gens;
+    use contract::gens;
 
     use super::*;
     use crate::engine_server::mappings::test_utils;

@@ -1,6 +1,6 @@
 #![no_std]
 
-use contract_ffi::contract_api::{runtime, system, ContractRef, Error};
+use contract::contract_api::{runtime, system, ContractRef, Error};
 
 #[repr(u16)]
 enum CustomError {

@@ -1,6 +1,6 @@
 use std::convert::{TryFrom, TryInto};
 
-use contract_ffi::{
+use contract::{
     bytesrepr::ToBytes,
     key::Key,
     value::{

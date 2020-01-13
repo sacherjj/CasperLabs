@@ -4,7 +4,7 @@ extern crate alloc;
 
 use alloc::string::String;
 
-use contract_ffi::{
+use contract::{
     contract_api::{runtime, system, ContractRef, Error as ApiError},
     unwrap_or_revert::UnwrapOrRevert,
     value::{account::PurseId, U512},

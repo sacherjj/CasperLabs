@@ -6,7 +6,7 @@ use core::fmt::Write;
 
 use base16;
 
-use contract_ffi::{
+use contract::{
     contract_api::runtime,
     key::Key,
     system_contracts::pos::{Error, Result},
@@ -202,7 +202,7 @@ impl Stakes {
 
 #[cfg(test)]
 mod tests {
-    use contract_ffi::{
+    use contract::{
         system_contracts::pos::Error,
         value::{account::PublicKey, U512},
     };

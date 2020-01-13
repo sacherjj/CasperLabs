@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use contract_ffi::{
+use contract::{
     key::Key,
     uref::{AccessRights, URef},
     value::{

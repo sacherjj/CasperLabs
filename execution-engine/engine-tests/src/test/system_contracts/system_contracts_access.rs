@@ -1,6 +1,6 @@
 use lazy_static::lazy_static;
 
-use contract_ffi::{uref::URef, value::U512};
+use contract::{uref::URef, value::U512};
 use engine_core::{engine_state::Error, execution};
 use engine_shared::transform::TypeMismatch;
 use engine_test_support::low_level::{

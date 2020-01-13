@@ -3,9 +3,9 @@
 #[macro_use]
 extern crate alloc;
 
-extern crate contract_ffi;
+extern crate contract;
 
-use contract_ffi::{
+use contract::{
     contract_api::{account, runtime, system, Error},
     unwrap_or_revert::UnwrapOrRevert,
     value::U512,

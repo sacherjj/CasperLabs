@@ -1,4 +1,4 @@
-use contract_ffi::{key::Key, value::U512};
+use contract::{key::Key, value::U512};
 use engine_shared::stored_value::StoredValue;
 use engine_test_support::low_level::{
     utils, ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_ACCOUNT_ADDR,

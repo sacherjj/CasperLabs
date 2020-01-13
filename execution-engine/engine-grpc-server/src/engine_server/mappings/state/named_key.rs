@@ -3,7 +3,7 @@ use std::{
     convert::{TryFrom, TryInto},
 };
 
-use contract_ffi::key::Key;
+use contract::key::Key;
 
 use crate::engine_server::{mappings::ParsingError, state::NamedKey};
 
@@ -65,7 +65,7 @@ impl TryFrom<Vec<NamedKey>> for NamedKeyMap {
 mod tests {
     use proptest::proptest;
 
-    use contract_ffi::gens;
+    use contract::gens;
 
     use super::*;
     use crate::engine_server::mappings::test_utils;

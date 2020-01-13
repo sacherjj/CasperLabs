@@ -3,7 +3,7 @@ use std::{
     convert::TryInto,
 };
 
-use contract_ffi::{
+use contract::{
     key::Key,
     value::{account::PublicKey, ProtocolVersion, U512},
 };

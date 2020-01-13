@@ -1,6 +1,6 @@
 use proptest::{collection::vec, option, prelude::*};
 
-use contract_ffi::{gens::key_arb, key::Key};
+use contract::{gens::key_arb, key::Key};
 use engine_shared::{
     newtypes::Blake2bHash,
     stored_value::{gens::stored_value_arb, StoredValue},

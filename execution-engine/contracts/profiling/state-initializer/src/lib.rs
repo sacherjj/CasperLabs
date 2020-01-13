@@ -2,7 +2,7 @@
 //! account.
 #![no_std]
 
-use contract_ffi::{
+use contract::{
     contract_api::{
         runtime,
         system::{self, TransferredTo},

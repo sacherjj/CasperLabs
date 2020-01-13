@@ -1,4 +1,4 @@
-use contract_ffi::value::account::Weight;
+use contract::value::account::Weight;
 use engine_test_support::low_level::{
     ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG,
 };

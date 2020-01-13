@@ -1,7 +1,7 @@
 use alloc::{boxed::Box, vec::Vec};
 use core::result;
 
-use contract_ffi::{
+use contract::{
     block_time::BlockTime,
     bytesrepr::{self, FromBytes, ToBytes},
     contract_api::storage,
@@ -171,7 +171,7 @@ impl CLTyped for Queue {
 
 #[cfg(test)]
 mod tests {
-    use contract_ffi::{
+    use contract::{
         block_time::BlockTime,
         system_contracts::pos::Error,
         value::{account::PublicKey, U512},

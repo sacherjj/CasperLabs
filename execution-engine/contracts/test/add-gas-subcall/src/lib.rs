@@ -4,7 +4,7 @@ extern crate alloc;
 
 use alloc::{collections::BTreeMap, string::String};
 
-use contract_ffi::{
+use contract::{
     contract_api::{runtime, storage, Error},
     unwrap_or_revert::UnwrapOrRevert,
 };

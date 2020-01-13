@@ -3,7 +3,7 @@ use std::{
     convert::{TryFrom, TryInto},
 };
 
-use contract_ffi::value::account::PublicKey;
+use contract::value::account::PublicKey;
 use engine_core::engine_state::deploy_item::DeployItem;
 
 use crate::engine_server::{ipc, mappings::MappingError};

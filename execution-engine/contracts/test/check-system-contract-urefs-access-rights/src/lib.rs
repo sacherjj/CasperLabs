@@ -1,6 +1,6 @@
 #![no_std]
 
-use contract_ffi::{contract_api::runtime, key::Key, uref::URef};
+use contract::{contract_api::runtime, key::Key, uref::URef};
 
 #[allow(clippy::redundant_closure)]
 #[no_mangle]

@@ -1,5 +1,5 @@
+use contract::{contract_api, system_contracts::mint::PurseIdError, uref::URef};
 use contract_api::runtime;
-use contract_ffi::{contract_api, system_contracts::mint::PurseIdError, uref::URef};
 
 pub struct WithdrawId([u8; 32]);
 

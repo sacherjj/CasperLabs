@@ -1,6 +1,6 @@
 use std::{cell::RefCell, collections::BTreeSet, convert::TryInto, rc::Rc};
 
-use contract_ffi::{
+use contract::{
     args_parser::ArgsParser,
     block_time::BlockTime,
     bytesrepr::FromBytes,

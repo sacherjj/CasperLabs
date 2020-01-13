@@ -1,6 +1,6 @@
 use std::convert::{TryFrom, TryInto};
 
-use contract_ffi::{
+use contract::{
     bytesrepr::ToBytes,
     key::Key,
     value::{CLType, CLTyped, CLValue, U128, U256, U512},
@@ -149,7 +149,7 @@ impl TryFrom<Value> for StoredValue {
 mod tests {
     use proptest::proptest;
 
-    use contract_ffi::gens::cl_value_arb;
+    use contract::gens::cl_value_arb;
     use engine_shared::{account::gens::account_arb, contract::gens::contract_arb};
 
     use super::*;

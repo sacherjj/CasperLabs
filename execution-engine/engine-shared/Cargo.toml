@@ -8,7 +8,7 @@ edition = "2018"
 base16 = "0.2.1"
 blake2 = "0.8.1"
 chrono = "0.4.10"
-contract-ffi = { path = "../contract-ffi", features = ["std", "gens"], package = "casperlabs-contract-ffi" }
+contract = { path = "../contract", features = ["std", "gens"], package = "casperlabs-contract" }
 engine-wasm-prep = { path = "../engine-wasm-prep", package = "casperlabs-engine-wasm-prep" }
 hostname = "0.3.0"
 lazy_static = "1"

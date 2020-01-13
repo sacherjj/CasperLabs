@@ -15,7 +15,7 @@ pub mod mint;
 use alloc::string::String;
 use core::convert::TryInto;
 
-use contract_ffi::{
+use contract::{
     contract_api::{runtime, storage, Error as ApiError},
     key::Key,
     system_contracts::mint::{Error, PurseIdError},

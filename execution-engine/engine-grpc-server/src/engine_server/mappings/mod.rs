@@ -10,7 +10,7 @@ use std::{
     string::ToString,
 };
 
-use contract_ffi::value::account::PUBLIC_KEY_LENGTH;
+use contract::value::account::PUBLIC_KEY_LENGTH;
 use engine_core::{engine_state, DEPLOY_HASH_LENGTH};
 
 pub use transforms::TransformMap;

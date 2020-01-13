@@ -1,6 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 
-use contract_ffi::{
+use contract::{
     bytesrepr::{Error, FromBytes, ToBytes},
     value::account::{
         AddKeyFailure, PublicKey, RemoveKeyFailure, UpdateKeyFailure, Weight, MAX_KEYS,
@@ -127,7 +127,7 @@ impl FromBytes for AssociatedKeys {
 pub mod gens {
     use proptest::prelude::*;
 
-    use contract_ffi::gens::{public_key_arb, weight_arb};
+    use contract::gens::{public_key_arb, weight_arb};
 
     use super::AssociatedKeys;
 
@@ -146,9 +146,7 @@ pub mod gens {
 mod tests {
     use std::{collections::BTreeSet, iter::FromIterator};
 
-    use contract_ffi::value::account::{
-        AddKeyFailure, PublicKey, Weight, MAX_KEYS, PUBLIC_KEY_LENGTH,
-    };
+    use contract::value::account::{AddKeyFailure, PublicKey, Weight, MAX_KEYS, PUBLIC_KEY_LENGTH};
 
     use super::AssociatedKeys;
 

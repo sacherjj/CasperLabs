@@ -1,4 +1,4 @@
-use contract_ffi::bytesrepr::{FromBytes, ToBytes};
+use contract::bytesrepr::{FromBytes, ToBytes};
 
 use crate::{
     store::Store,

@@ -6,7 +6,7 @@ use std::{
 
 use parity_wasm::elements::Module;
 
-use contract_ffi::{
+use contract::{
     block_time::BlockTime,
     bytesrepr::{self, FromBytes},
     execution::Phase,

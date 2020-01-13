@@ -1,4 +1,4 @@
-use contract_ffi::{
+use contract::{
     bytesrepr::{self, FromBytes, ToBytes},
     uref::{AccessRights, URef, UREF_SERIALIZED_LENGTH},
 };
@@ -95,7 +95,7 @@ impl FromBytes for ProtocolData {
 pub(crate) mod gens {
     use proptest::prop_compose;
 
-    use contract_ffi::gens;
+    use contract::gens;
     use engine_wasm_prep::wasm_costs::gens as wasm_costs_gens;
 
     use super::ProtocolData;
@@ -119,7 +119,7 @@ pub(crate) mod gens {
 mod tests {
     use proptest::proptest;
 
-    use contract_ffi::{
+    use contract::{
         bytesrepr,
         uref::{AccessRights, URef},
     };

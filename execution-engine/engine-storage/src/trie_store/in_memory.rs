@@ -9,7 +9,7 @@
 //! use casperlabs_engine_storage::trie::{Pointer, PointerBlock, Trie};
 //! use casperlabs_engine_storage::trie_store::TrieStore;
 //! use casperlabs_engine_storage::trie_store::in_memory::InMemoryTrieStore;
-//! use contract_ffi::bytesrepr::ToBytes;
+//! use contract::bytesrepr::ToBytes;
 //! use engine_shared::newtypes::Blake2bHash;
 //!
 //! // Create some leaves

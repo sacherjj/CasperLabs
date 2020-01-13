@@ -12,7 +12,7 @@ use itertools::Itertools;
 use parity_wasm::elements::Module;
 use wasmi::{ImportsBuilder, MemoryRef, ModuleInstance, ModuleRef, Trap, TrapKind};
 
-use contract_ffi::{
+use contract::{
     args_parser::ArgsParser,
     bytesrepr::{self, ToBytes},
     contract_api::{
@@ -2510,13 +2510,6 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::extract_urefs;
-    use contract_ffi::{
-        gens::*,
-        key::Key,
-        uref::URef,
-        value::{CLType, CLValue},
-    };
     use proptest::{
         array,
         collection::{btree_map, vec},
@@ -2524,6 +2517,15 @@ mod tests {
         prelude::*,
         result,
     };
+
+    use contract::{
+        gens::*,
+        key::Key,
+        uref::URef,
+        value::{CLType, CLValue},
+    };
+
+    use super::extract_urefs;
 
     fn cl_value_with_urefs_arb() -> impl Strategy<Value = (CLValue, Vec<URef>)> {
         // If compiler brings you here it most probably means you've added a variant to `CLType`

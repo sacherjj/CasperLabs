@@ -20,7 +20,7 @@ use std::{
 use num_traits::Zero;
 use parity_wasm::elements::Module;
 
-use contract_ffi::{
+use contract::{
     args_parser::ArgsParser,
     block_time::BlockTime,
     bytesrepr::ToBytes,

@@ -1,6 +1,6 @@
 use proptest::{arbitrary, array, collection, prop_oneof, strategy::Strategy};
 
-use contract_ffi::{
+use contract::{
     bytesrepr::{self, FromBytes, ToBytes},
     gens,
     key::LOCAL_SEED_LENGTH,

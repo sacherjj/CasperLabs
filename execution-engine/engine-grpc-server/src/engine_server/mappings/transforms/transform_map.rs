@@ -1,6 +1,6 @@
 use std::convert::{TryFrom, TryInto};
 
-use contract_ffi::key::Key;
+use contract::key::Key;
 use engine_shared::{additive_map::AdditiveMap, transform::Transform};
 
 use crate::engine_server::{mappings::ParsingError, transforms::TransformEntry};
@@ -28,7 +28,7 @@ impl TryFrom<Vec<TransformEntry>> for TransformMap {
 
 #[cfg(test)]
 mod tests {
-    use contract_ffi::value::CLValue;
+    use contract::value::CLValue;
     use engine_shared::stored_value::StoredValue;
 
     use super::*;

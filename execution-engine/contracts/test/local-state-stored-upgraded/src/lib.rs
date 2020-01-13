@@ -4,7 +4,7 @@ extern crate alloc;
 
 use alloc::string::String;
 
-use contract_ffi::{
+use contract::{
     contract_api::{storage, Error},
     unwrap_or_revert::UnwrapOrRevert,
 };
@@ -53,5 +53,5 @@ pub extern "C" fn call() {
         .unwrap_or_revert_with(Error::UnexpectedContractRefVariant)
         .into();
 
-    contract_ffi::contract_api::runtime::put_key(CONTRACT_NAME, key);
+    contract::contract_api::runtime::put_key(CONTRACT_NAME, key);
 }

@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use contract_ffi::{
+use contract::{
     contract_api::system::{MINT_NAME, POS_NAME},
     key::Key,
 };

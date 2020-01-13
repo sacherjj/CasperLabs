@@ -1,6 +1,6 @@
 use alloc::{collections::BTreeMap, string::String};
 
-use contract_ffi::{
+use contract::{
     contract_api::{runtime, storage, system, ContractRef, TURef},
     key::Key,
     value::U512,

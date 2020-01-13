@@ -1,4 +1,4 @@
-use contract_ffi::key::Key;
+use contract::key::Key;
 use engine_shared::{additive_map::AdditiveMap, transform::Transform};
 
 /// Represents the difference between two `AdditiveMap`s.

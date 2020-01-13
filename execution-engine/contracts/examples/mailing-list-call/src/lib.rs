@@ -5,7 +5,7 @@ extern crate alloc;
 use alloc::{string::String, vec::Vec};
 use core::convert::From;
 
-use contract_ffi::{
+use contract::{
     contract_api::{runtime, storage, Error as ApiError, TURef},
     key::Key,
     unwrap_or_revert::UnwrapOrRevert,

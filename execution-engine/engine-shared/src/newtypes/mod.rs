@@ -11,7 +11,7 @@ use blake2::{
 use serde::Serialize;
 use uuid::Uuid;
 
-use contract_ffi::bytesrepr::{self, FromBytes, ToBytes};
+use contract::bytesrepr::{self, FromBytes, ToBytes};
 
 pub const BLAKE2B_DIGEST_LENGTH: usize = 32;
 

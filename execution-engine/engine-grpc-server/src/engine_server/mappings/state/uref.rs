@@ -1,6 +1,6 @@
 use std::convert::TryFrom;
 
-use contract_ffi::uref::{AccessRights, URef};
+use contract::uref::{AccessRights, URef};
 
 use crate::engine_server::{
     mappings::{self, ParsingError},
@@ -63,7 +63,7 @@ impl TryFrom<Key_URef> for URef {
 mod tests {
     use rand;
 
-    use contract_ffi::uref::UREF_ADDR_LENGTH;
+    use contract::uref::UREF_ADDR_LENGTH;
 
     use super::*;
     use crate::engine_server::mappings::test_utils;

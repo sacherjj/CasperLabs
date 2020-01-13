@@ -1,6 +1,6 @@
 #![no_std]
 
-use contract_ffi::{
+use contract::{
     contract_api::{runtime, storage, Error as ApiError, TURef},
     unwrap_or_revert::UnwrapOrRevert,
     uref::{AccessRights, URef},

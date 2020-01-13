@@ -100,7 +100,7 @@ mod tests {
             let turef: TURef<Key> = TURef::new(addr_array, AccessRights::READ_ADD_WRITE);
             assert_eq!(
                 turef.to_string(),
-                "TURef(3030303030303030303030303030303030303030303030303030303030303030, READ_ADD_WRITE; casperlabs_contract_ffi::key::Key)"
+                "TURef(3030303030303030303030303030303030303030303030303030303030303030, READ_ADD_WRITE; casperlabs_contract::key::Key)"
             );
         }
     }

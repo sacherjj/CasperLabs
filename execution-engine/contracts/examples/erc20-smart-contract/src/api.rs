@@ -1,6 +1,6 @@
 use alloc::string::String;
 
-use contract_ffi::{
+use contract::{
     bytesrepr::FromBytes,
     contract_api::{runtime, ContractRef},
     unwrap_or_revert::UnwrapOrRevert,

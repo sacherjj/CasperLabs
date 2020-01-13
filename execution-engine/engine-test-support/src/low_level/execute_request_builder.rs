@@ -1,7 +1,7 @@
 use protobuf::RepeatedField;
 use rand::Rng;
 
-use contract_ffi::{
+use contract::{
     args_parser::ArgsParser,
     value::{account::PublicKey, ProtocolVersion},
 };

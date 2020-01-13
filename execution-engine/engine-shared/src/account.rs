@@ -3,7 +3,7 @@ mod associated_keys;
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use contract_ffi::{
+use contract::{
     bytesrepr::{Error, FromBytes, ToBytes, U32_SERIALIZED_LENGTH, U8_SERIALIZED_LENGTH},
     key::{Key, KEY_UREF_SERIALIZED_LENGTH},
     uref::{AccessRights, URef},
@@ -257,7 +257,7 @@ impl FromBytes for Account {
 pub mod gens {
     use proptest::prelude::*;
 
-    use contract_ffi::{
+    use contract::{
         gens::{named_keys_arb, u8_slice_32, uref_arb},
         value::account::MAX_KEYS,
     };
@@ -292,7 +292,7 @@ pub mod gens {
 mod proptests {
     use proptest::prelude::*;
 
-    use contract_ffi::bytesrepr;
+    use contract::bytesrepr;
 
     use super::*;
 
@@ -311,7 +311,7 @@ mod tests {
         iter::FromIterator,
     };
 
-    use contract_ffi::{
+    use contract::{
         uref::{AccessRights, URef},
         value::account::{
             ActionType, PublicKey, PurseId, RemoveKeyFailure, SetThresholdFailure,

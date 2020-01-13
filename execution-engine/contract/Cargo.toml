@@ -1,5 +1,5 @@
 [package]
-name = "casperlabs-contract-ffi"
+name = "casperlabs-contract"
 version = "0.22.0"
 authors = ["Michael Birch <birchmd@casperlabs.io>", "Mateusz Górski <gorski.mateusz@protonmail.ch>"]
 edition = "2018"

@@ -1,4 +1,4 @@
-use contract_ffi::value::account::{PublicKey, Weight};
+use contract::value::account::{PublicKey, Weight};
 use engine_core::{engine_state, execution};
 use engine_test_support::low_level::{
     DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_ACCOUNT_ADDR,

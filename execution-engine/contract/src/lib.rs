@@ -6,10 +6,10 @@
 //! reference.  It then stores the unforgeable reference under a name in context-local storage.
 //!
 //! ```rust,no_run
-//! use casperlabs_contract_ffi::contract_api::{storage, runtime, Error, TURef};
-//! use casperlabs_contract_ffi::key::Key;
-//! use casperlabs_contract_ffi::unwrap_or_revert::UnwrapOrRevert;
-//! use casperlabs_contract_ffi::uref::URef;
+//! use casperlabs_contract::contract_api::{storage, runtime, Error, TURef};
+//! use casperlabs_contract::key::Key;
+//! use casperlabs_contract::unwrap_or_revert::UnwrapOrRevert;
+//! use casperlabs_contract::uref::URef;
 //!
 //! const KEY: &str = "special_value";
 //!

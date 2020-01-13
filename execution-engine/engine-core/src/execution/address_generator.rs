@@ -5,13 +5,13 @@ use blake2::{
 use rand::{RngCore, SeedableRng};
 use rand_chacha::ChaChaRng;
 
-use contract_ffi::execution::Phase;
+use contract::execution::Phase;
 
 use crate::{Address, ADDRESS_LENGTH};
 
 const SEED_LENGTH: usize = 32;
 
-/// An [`AddressGenerator`] generates [`URef`](contract_ffi::uref::URef) addresses
+/// An [`AddressGenerator`] generates [`URef`](contract::uref::URef) addresses
 pub struct AddressGenerator(ChaChaRng);
 
 impl AddressGenerator {
@@ -57,7 +57,7 @@ impl AddressGeneratorBuilder {
 
 #[cfg(test)]
 mod tests {
-    use contract_ffi::execution::Phase;
+    use contract::execution::Phase;
 
     use super::AddressGenerator;
 

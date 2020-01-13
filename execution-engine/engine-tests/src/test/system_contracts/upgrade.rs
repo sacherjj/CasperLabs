@@ -1,4 +1,4 @@
-use contract_ffi::{
+use contract::{
     key::Key,
     value::{CLValue, ProtocolVersion, U512},
 };

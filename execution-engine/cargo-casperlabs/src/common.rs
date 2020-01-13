@@ -10,7 +10,7 @@ use colour::red;
 
 use super::{FAILURE_EXIT_CODE, ROOT_PATH};
 
-pub const CONTRACT_FFI_VERSION: &str = "0.21.0";
+pub const CL_CONTRACT_VERSION: &str = "0.22.0";
 
 pub fn print_error_and_exit(msg: &str) -> ! {
     red!("error");
@@ -96,9 +96,9 @@ pub mod tests {
 
     use toml::Value;
 
-    use super::CONTRACT_FFI_VERSION;
+    use super::CL_CONTRACT_VERSION;
 
-    const CONTRACT_FFI_TOML_PATH: &str = "contract-ffi/Cargo.toml";
+    const CL_CONTRACT_TOML_PATH: &str = "contract/Cargo.toml";
     const PACKAGE_FIELD_NAME: &str = "package";
     const VERSION_FIELD_NAME: &str = "version";
 
@@ -136,7 +136,7 @@ pub mod tests {
     }
 
     #[test]
-    fn check_contract_ffi_version() {
-        check_package_version(CONTRACT_FFI_VERSION, CONTRACT_FFI_TOML_PATH);
+    fn check_cl_contract_version() {
+        check_package_version(CL_CONTRACT_VERSION, CL_CONTRACT_TOML_PATH);
     }
 }

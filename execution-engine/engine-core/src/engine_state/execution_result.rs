@@ -1,5 +1,5 @@
 use super::{error, execution_effect::ExecutionEffect, op::Op, CONV_RATE};
-use contract_ffi::{key::Key, value::CLValue};
+use contract::{key::Key, value::CLValue};
 use engine_shared::{
     additive_map::AdditiveMap, gas::Gas, motes::Motes, newtypes::CorrelationId,
     stored_value::StoredValue, transform::Transform,

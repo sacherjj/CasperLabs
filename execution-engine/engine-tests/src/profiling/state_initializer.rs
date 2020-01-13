@@ -7,7 +7,7 @@ use std::{env, path::PathBuf};
 use base16;
 use clap::{crate_version, App};
 
-use contract_ffi::value::account::PublicKey;
+use contract::value::account::PublicKey;
 use engine_test_support::low_level::{
     DeployItemBuilder, ExecuteRequestBuilder, LmdbWasmTestBuilder, DEFAULT_ACCOUNT_ADDR,
     DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT,

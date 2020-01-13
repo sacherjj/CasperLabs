@@ -12,8 +12,8 @@ test = false
 
 [features]
 default = []
-std = ["contract-ffi/std"]
+std = ["contract/std"]
 lib = []
 
 [dependencies]
-contract-ffi = { path = "../../../contract-ffi", package = "casperlabs-contract-ffi" }
+contract = { path = "../../../contract", package = "casperlabs-contract" }

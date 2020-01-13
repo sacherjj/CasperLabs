@@ -1,7 +1,7 @@
 use base16;
 use lazy_static::lazy_static;
 
-use contract_ffi::{
+use contract::{
     key::Key,
     value::{account::PurseId, U512},
 };

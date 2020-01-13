@@ -1,4 +1,4 @@
-use contract_ffi::{
+use contract::{
     args_parser::ArgsParser, bytesrepr::ToBytes, uref::URef, value::account::PublicKey,
 };
 use engine_grpc_server::engine_server::ipc::{

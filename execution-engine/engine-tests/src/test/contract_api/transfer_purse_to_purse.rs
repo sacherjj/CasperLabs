@@ -1,4 +1,4 @@
-use contract_ffi::{contract_api::Error, key::Key, value::U512};
+use contract::{contract_api::Error, key::Key, value::U512};
 use engine_shared::{stored_value::StoredValue, transform::Transform};
 
 use engine_test_support::low_level::{

@@ -169,15 +169,15 @@ package-system-contracts: target/system-contracts.tar.gz
 
 .PHONY: package
 package:
-	cd contract-ffi && $(CARGO) package
+	cd contract && $(CARGO) package
 
 .PHONY: publish
 publish:
-	cd contract-ffi && $(CARGO) publish
+	cd contract && $(CARGO) publish
 
 .PHONY: check-publish
 check-publish:
-	cd contract-ffi && $(CARGO) publish --dry-run
+	cd contract && $(CARGO) publish --dry-run
 
 .PHONY: bench
 bench: build-contracts-rs

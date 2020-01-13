@@ -6,7 +6,7 @@ use rand::{
     Rng,
 };
 
-use contract_ffi::{
+use contract::{
     bytesrepr,
     key::Key,
     value::{account::PublicKey, ProtocolVersion, U512},

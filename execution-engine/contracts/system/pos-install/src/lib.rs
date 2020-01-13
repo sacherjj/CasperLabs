@@ -5,7 +5,7 @@ extern crate alloc;
 use alloc::{collections::BTreeMap, string::String};
 use core::fmt::Write;
 
-use contract_ffi::{
+use contract::{
     contract_api::{runtime, storage, ContractRef, Error},
     key::Key,
     system_contracts::mint,

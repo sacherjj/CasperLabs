@@ -2,7 +2,7 @@ mod concurrent;
 mod proptests;
 mod simple;
 
-use contract_ffi::bytesrepr::ToBytes;
+use contract::bytesrepr::ToBytes;
 use engine_shared::newtypes::Blake2bHash;
 
 use crate::trie::{Pointer, PointerBlock, Trie};

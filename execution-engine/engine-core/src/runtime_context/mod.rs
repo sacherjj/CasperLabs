@@ -11,7 +11,7 @@ use blake2::{
     VarBlake2b,
 };
 
-use contract_ffi::{
+use contract::{
     block_time::BlockTime,
     bytesrepr::{deserialize, ToBytes},
     execution::Phase,

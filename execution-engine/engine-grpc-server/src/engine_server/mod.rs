@@ -16,7 +16,7 @@ use std::{
 
 use grpc::{RequestOptions, ServerBuilder, SingleResponse};
 
-use contract_ffi::{block_time::BlockTime, value::ProtocolVersion};
+use contract::{block_time::BlockTime, value::ProtocolVersion};
 use engine_core::{
     engine_state::{
         deploy_item::DeployItem,

@@ -1,4 +1,4 @@
-use contract_ffi::key::Key;
+use contract::key::Key;
 use engine_core::engine_state::{execution_effect::ExecutionEffect, op::Op};
 
 use crate::engine_server::{

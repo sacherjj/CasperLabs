@@ -1,6 +1,6 @@
 use lazy_static::lazy_static;
 
-use contract_ffi::{
+use contract::{
     contract_api::{
         system::{TransferResult, TransferredTo},
         Error,

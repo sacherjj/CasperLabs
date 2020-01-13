@@ -9,7 +9,7 @@ use std::{
 
 use num::traits::{AsPrimitive, WrappingAdd};
 
-use contract_ffi::{
+use contract::{
     bytesrepr::{self, FromBytes, ToBytes},
     key::Key,
     value::{CLType, CLTyped, CLValue, CLValueError, U128, U256, U512},
@@ -311,7 +311,7 @@ pub mod gens {
 mod tests {
     use num::{Bounded, Num};
 
-    use contract_ffi::{
+    use contract::{
         uref::{AccessRights, URef},
         value::{account::PurseId, ProtocolVersion, U128, U256, U512},
     };

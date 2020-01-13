@@ -5,7 +5,7 @@ use std::{
 };
 
 use chrono::{DateTime, SecondsFormat, Utc};
-use contract_ffi::value::SemVer;
+use contract::value::SemVer;
 use serde::{Serialize, Serializer};
 
 use crate::logging::{

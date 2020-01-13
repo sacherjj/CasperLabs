@@ -1,6 +1,6 @@
 use std::convert::{TryFrom, TryInto};
 
-use contract_ffi::value::{CLType, CLValue, U128, U256, U512};
+use contract::value::{CLType, CLValue, U128, U256, U512};
 use engine_shared::{
     stored_value::StoredValue,
     transform::{Error as TransformError, Transform},

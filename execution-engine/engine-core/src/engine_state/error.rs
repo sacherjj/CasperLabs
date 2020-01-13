@@ -2,10 +2,10 @@ use failure::Fail;
 
 use engine_shared::newtypes::Blake2bHash;
 
-use contract_ffi::{bytesrepr, system_contracts::mint};
+use contract::{bytesrepr, system_contracts::mint};
 
 use crate::execution;
-use contract_ffi::value::ProtocolVersion;
+use contract::value::ProtocolVersion;
 
 #[derive(Fail, Debug)]
 pub enum Error {

@@ -2,7 +2,7 @@ use std::convert::TryFrom;
 
 use wasmi::{Externals, RuntimeArgs, RuntimeValue, Trap};
 
-use contract_ffi::{
+use contract::{
     bytesrepr::{self, ToBytes},
     contract_api::{self, system::TransferredTo},
     key::Key,

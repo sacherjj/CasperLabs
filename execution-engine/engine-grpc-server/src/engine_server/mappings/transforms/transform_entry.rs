@@ -1,6 +1,6 @@
 use std::convert::{TryFrom, TryInto};
 
-use contract_ffi::key::Key;
+use contract::key::Key;
 use engine_shared::transform::Transform;
 
 use crate::engine_server::{mappings::ParsingError, transforms::TransformEntry};
@@ -46,7 +46,7 @@ mod tests {
     proptest! {
         #[test]
         fn round_trip(
-            key in contract_ffi::gens::key_arb(),
+            key in contract::gens::key_arb(),
             transform in transform::gens::transform_arb()
         ) {
             test_utils::protobuf_round_trip::<(Key, Transform), TransformEntry>((key, transform));

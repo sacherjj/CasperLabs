@@ -8,7 +8,7 @@ use std::{collections::HashMap, convert::From, iter};
 
 use linked_hash_map::LinkedHashMap;
 
-use contract_ffi::{
+use contract::{
     bytesrepr,
     key::Key,
     value::{self, CLType, CLValueError},

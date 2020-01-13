@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use lazy_static::lazy_static;
 
 use crate::{
-    common::{self, CONTRACT_FFI_VERSION},
+    common::{self, CL_CONTRACT_VERSION},
     ROOT_PATH, TOOLCHAIN,
 };
 
@@ -11,7 +11,7 @@ const PACKAGE_NAME: &str = "contract";
 
 const LIB_RS_CONTENTS: &str = r#"#![cfg_attr(not(target_arch = "wasm32"), crate_type = "target arch should be wasm32")]
 
-use casperlabs_contract_ffi::{
+use casperlabs_contract::{
     contract_api::{runtime, storage, Error},
     key::Key,
     unwrap_or_revert::UnwrapOrRevert,
@@ -27,7 +27,7 @@ fn store(value: String) {
     let value_key: Key = value_ref.into();
 
     // Store this key under the name "special_value" in context-local storage.
-    runtime::put_key(KEY, &value_key);
+    runtime::put_key(KEY, value_key);
 }
 
 // All session code must have a `call` entrypoint.
@@ -55,8 +55,9 @@ lazy_static! {
     pub static ref MAIN_RS: PathBuf = ROOT_PATH.join(PACKAGE_NAME).join("src/main.rs");
     pub static ref LIB_RS: PathBuf = ROOT_PATH.join(PACKAGE_NAME).join("src/lib.rs");
     pub static ref CONFIG: PathBuf = ROOT_PATH.join(PACKAGE_NAME).join(".cargo/config");
+    // TODO(Fraser): Update dependencies to use crates.io, not relative paths.
     static ref CARGO_TOML_ADDITIONAL_CONTENTS: String = format!(
-        r#"casperlabs-contract-ffi = "{contract_ffi_version}"
+        r#"casperlabs-contract = {{ version = "{cl_contract_version}", path = "../../../CasperLabs/execution-engine/contract" }}
 
 [lib]
 crate-type = ["cdylib"]
@@ -65,9 +66,9 @@ doctest = false
 test = false
 
 [features]
-default = ["casperlabs-contract-ffi/std"]
+default = ["casperlabs-contract/std"]
 "#,
-        contract_ffi_version = CONTRACT_FFI_VERSION
+        cl_contract_version = CL_CONTRACT_VERSION
     );
 }
 

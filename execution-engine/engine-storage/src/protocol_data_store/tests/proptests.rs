@@ -1,6 +1,6 @@
 use std::{collections::BTreeMap, ops::RangeInclusive};
 
-use contract_ffi::{gens as gens_ext, value::ProtocolVersion};
+use contract::{gens as gens_ext, value::ProtocolVersion};
 use lmdb::DatabaseFlags;
 use proptest::{collection, prelude::proptest};
 use tempfile;

@@ -1,4 +1,4 @@
-use contract_ffi::{key::Key, uref::URef, value::account::PublicKey};
+use contract::{key::Key, uref::URef, value::account::PublicKey};
 use engine_shared::transform::Transform;
 use engine_test_support::low_level::{
     DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_ACCOUNT_ADDR,

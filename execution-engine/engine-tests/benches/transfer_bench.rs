@@ -1,7 +1,7 @@
 use criterion::{criterion_group, criterion_main, Criterion, Throughput};
 use tempfile::TempDir;
 
-use contract_ffi::{
+use contract::{
     key::Key,
     value::{
         account::{PublicKey, PurseId},

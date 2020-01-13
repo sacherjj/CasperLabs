@@ -5,7 +5,7 @@ use std::{
 
 use parity_wasm::elements::Module;
 
-use contract_ffi::uref::URef;
+use contract::uref::URef;
 
 /// A cache of deserialized contracts.
 #[derive(Clone, Default, Debug)]
@@ -45,7 +45,7 @@ mod tests {
     use lazy_static::lazy_static;
     use parity_wasm::elements::{Module, ModuleNameSection, NameSection, Section};
 
-    use contract_ffi::uref::{AccessRights, URef};
+    use contract::uref::{AccessRights, URef};
 
     use crate::{
         engine_state::system_contract_cache::SystemContractCache,

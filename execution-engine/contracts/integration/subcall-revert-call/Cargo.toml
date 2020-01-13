@@ -11,4 +11,4 @@ doctest = false
 test = false
 
 [dependencies]
-contract-ffi = {package = "casperlabs-contract-ffi", path = "../../../../execution-engine/contract-ffi" }
+contract = {package = "casperlabs-contract", path = "../../../contract" }

@@ -5,7 +5,7 @@ authors = ["Michael Birch <birchmd@casperlabs.io>", "Mateusz Górski <gorski.mat
 edition = "2018"
 
 [dependencies]
-contract-ffi = { path = "../contract-ffi",  package = "casperlabs-contract-ffi", features = ["std", "gens"] }
+contract = { path = "../contract",  package = "casperlabs-contract", features = ["std", "gens"] }
 parity-wasm = "0.31.3"
 proptest = "0.9.4"
 pwasm-utils = "0.6.2"

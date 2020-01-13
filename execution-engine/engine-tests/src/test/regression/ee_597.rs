@@ -1,4 +1,4 @@
-use contract_ffi::contract_api::Error;
+use contract::contract_api::Error;
 use engine_test_support::low_level::{
     utils, ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_ACCOUNT_ADDR,
     DEFAULT_GENESIS_CONFIG,

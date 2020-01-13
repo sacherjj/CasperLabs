@@ -5,7 +5,7 @@ use std::{
 
 use lazy_static::lazy_static;
 
-use contract_ffi::key::Key;
+use contract::key::Key;
 use engine_core::engine_state::genesis::{GenesisAccount, GenesisConfig};
 use engine_grpc_server::engine_server::ipc::{
     DeployResult, DeployResult_ExecutionResult, DeployResult_PreconditionFailure, ExecuteResponse,

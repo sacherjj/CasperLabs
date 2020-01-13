@@ -2,7 +2,7 @@ use std::fmt;
 
 use num::Zero;
 
-use contract_ffi::value::U512;
+use contract::value::U512;
 
 use crate::gas::Gas;
 
@@ -84,7 +84,7 @@ impl Zero for Motes {
 #[cfg(test)]
 mod tests {
     use crate::{gas::Gas, motes::Motes};
-    use contract_ffi::value::U512;
+    use contract::value::U512;
 
     #[test]
     fn should_be_able_to_get_instance_of_motes() {

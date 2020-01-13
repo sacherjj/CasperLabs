@@ -165,7 +165,7 @@ mod detail {
 mod tests {
     use std::convert::TryInto;
 
-    use contract_ffi::{
+    use contract::{
         bytesrepr::Error as BytesReprError,
         key::Key,
         uref::{AccessRights, URef},

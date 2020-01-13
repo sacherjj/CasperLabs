@@ -11,7 +11,7 @@ use std::{
 use grpc::RequestOptions;
 use lmdb::DatabaseFlags;
 
-use contract_ffi::{
+use contract::{
     bytesrepr::ToBytes,
     key::Key,
     uref::URef,

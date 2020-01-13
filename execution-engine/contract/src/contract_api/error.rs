@@ -33,7 +33,7 @@ const MINT_ERROR_OFFSET: u32 = (POS_ERROR_OFFSET - 1) - u8::MAX as u32; // 65024
 /// Users can specify a C-style enum and implement `From` to ease usage of
 /// `runtime::revert()`, e.g.
 /// ```
-/// use casperlabs_contract_ffi::contract_api::Error;
+/// use casperlabs_contract::contract_api::Error;
 ///
 /// #[repr(u16)]
 /// enum FailureCode {

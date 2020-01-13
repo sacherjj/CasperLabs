@@ -1,4 +1,4 @@
-use contract_ffi::{
+use contract::{
     contract_api::{account, runtime, system},
     unwrap_or_revert::UnwrapOrRevert,
     value::U512,

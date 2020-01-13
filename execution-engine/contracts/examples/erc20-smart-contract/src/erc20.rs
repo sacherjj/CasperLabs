@@ -1,6 +1,6 @@
 use alloc::vec::Vec;
 
-use contract_ffi::{
+use contract::{
     contract_api::{runtime, storage, system},
     unwrap_or_revert::UnwrapOrRevert,
     value::{

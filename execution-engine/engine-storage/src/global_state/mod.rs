@@ -3,7 +3,7 @@ pub mod lmdb;
 
 use std::{collections::HashMap, fmt, hash::BuildHasher, time::Instant};
 
-use contract_ffi::{
+use contract::{
     bytesrepr,
     key::Key,
     value::{account::PublicKey, ProtocolVersion, U512},
@@ -127,7 +127,7 @@ where
     R: TransactionSource<'a, Handle = S::Handle>,
     S: TrieStore<Key, StoredValue>,
     S::Error: From<R::Error>,
-    E: From<R::Error> + From<S::Error> + From<contract_ffi::bytesrepr::Error>,
+    E: From<R::Error> + From<S::Error> + From<contract::bytesrepr::Error>,
     H: BuildHasher,
 {
     let mut txn = environment.create_read_write_txn()?;

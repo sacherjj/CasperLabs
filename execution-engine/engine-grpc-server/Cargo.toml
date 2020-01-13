@@ -8,7 +8,7 @@ edition = "2018"
 
 [dependencies]
 clap = "2"
-contract-ffi = { path = "../contract-ffi", package = "casperlabs-contract-ffi" }
+contract = { path = "../contract", package = "casperlabs-contract" }
 ctrlc = "3"
 dirs = "2"
 engine-core = { path = "../engine-core", package = "casperlabs-engine-core" }

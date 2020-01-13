@@ -4,7 +4,7 @@ extern crate alloc;
 
 use alloc::string::ToString;
 
-use contract_ffi::{
+use contract::{
     contract_api::{runtime, storage, ContractRef, Error, TURef},
     key::Key,
     unwrap_or_revert::UnwrapOrRevert,

@@ -1,6 +1,6 @@
 #![no_std]
 
-use contract_ffi::contract_api::{runtime, Error};
+use contract::contract_api::{runtime, Error};
 
 #[no_mangle]
 pub extern "C" fn call() {

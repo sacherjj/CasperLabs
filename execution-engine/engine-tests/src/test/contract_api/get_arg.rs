@@ -1,4 +1,4 @@
-use contract_ffi::{args_parser::ArgsParser, contract_api::Error, value::U512};
+use contract::{args_parser::ArgsParser, contract_api::Error, value::U512};
 use engine_test_support::low_level::{
     utils, ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_ACCOUNT_ADDR,
     DEFAULT_GENESIS_CONFIG,
