@@ -40,7 +40,7 @@ def poll_new_blocks():
                 # parameters passed to actors must be JSON serializable.
                 new_block(MessageToDict(block_info))
                 seen.add(block_hash)
-            time.sleep(0.1)
+        time.sleep(0.1)
 
 
 if __name__ == "__main__":
