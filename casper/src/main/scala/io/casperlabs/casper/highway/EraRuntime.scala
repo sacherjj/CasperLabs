@@ -348,7 +348,18 @@ class EraRuntime[F[_]: MonadThrowable: Clock: EraStorage: ForkChoice](
               // can only be an equivocation, otherwise the 2nd one cites the first
               // and that means it's not lambda-like.
               hasOtherLambdaMessageInSameRound[F](dag, b, endTick)
+            ) >>
+            checkF(
+              "The block is built on top of a switch block.",
+              dag.lookupUnsafe(message.parentBlock).flatMap(_.isSwitchBlock)
             )
+
+        case b: Message.Ballot if b.roundId >= endTick =>
+          checkF(
+            "The ballot is not built on top of a switch block.",
+            dag.lookupUnsafe(b.parentBlock).flatMap(_.isSwitchBlock).map(!_)
+          )
+
         case _ =>
           ok
       }

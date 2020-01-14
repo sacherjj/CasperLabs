@@ -297,29 +297,72 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
       }
     }
 
-    "reject a block built on a switch block" in (pending)                    // NODE-1116
-    "reject a ballot from a leader not built on a switch block" in (pending) // NODE-1116
+    "reject a block built on a switch block" in {
+      implicit val ds = defaultDagStorage
+      val leader      = "Alice"
+      val runtime     = genesisEraRuntime(none, leaderSequencer = mockSequencer(leader))
+      val build: (Ticks, BlockHash) => Message =
+        makeBlock(leader, runtime.era, _, _)
+      val msg1 = insert(build(runtime.startTick, genesis.messageHash))
+      val msg2 = insert(build(runtime.endTick, msg1.messageHash))
+      val msg3 = build(Ticks(runtime.endTick + 1), msg2.messageHash)
+      runtime.validate(msg3).value shouldBe Left(
+        "The block is built on top of a switch block."
+      )
+    }
 
-    "accept a second lambda ballot received from the leader in the same round during the voting-only period" in {
+    "reject a ballot from a leader not built on a switch block during the voting period" in {
+      implicit val ds = defaultDagStorage
+      val leader      = "Alice"
+      val runtime     = genesisEraRuntime(none, leaderSequencer = mockSequencer(leader))
+      val msg1        = insert(makeBlock(leader, runtime.era, runtime.startTick))
+      val msg2        = makeBallot(leader, runtime.era, runtime.endTick, target = msg1.messageHash)
+      runtime.validate(msg2).value shouldBe Left(
+        "The ballot is not built on top of a switch block."
+      )
+    }
+
+    "accept a second ballot received from the leader in the same round during the voting-only period" in {
       implicit val ds = defaultDagStorage
       val leader      = "Bob"
       val runtime     = genesisEraRuntime("Alice".some, leaderSequencer = mockSequencer(leader))
 
-      def leaderBallot(roundId: Ticks, justifications: Map[ByteString, ByteString]) =
-        makeBallot(leader, runtime.era, roundId, justifications = justifications)
-
       // These are just here to check the helper methods during the active period.
-      val message0 = leaderBallot(runtime.startTick, Map.empty)
-      val message1 = leaderBallot(runtime.startTick, toJustifications(message0))
+      val ballot0 = makeBallot(leader, runtime.era, runtime.startTick)
+
+      val ballot1 = makeBallot(
+        leader,
+        runtime.era,
+        runtime.startTick,
+        justifications = toJustifications(ballot0)
+      )
 
       // This is the voting period.
-      val message2 = leaderBallot(runtime.endTick, toJustifications(message1))
-      val message3 = leaderBallot(runtime.endTick, toJustifications(message2))
+      val switch =
+        makeBlock(leader, runtime.era, runtime.endTick, justifications = toJustifications(ballot1))
 
-      val messages =
-        insert(List(message0, message1, message2, message3)).map(_.asInstanceOf[Message.Ballot])
+      val ballot2 = makeBallot(
+        leader,
+        runtime.era,
+        Ticks(runtime.endTick + 1),
+        target = switch.messageHash,
+        justifications = toJustifications(switch)
+      )
 
-      messages map {
+      val ballot3 = makeBallot(
+        leader,
+        runtime.era,
+        Ticks(runtime.endTick + 1),
+        target = switch.messageHash,
+        justifications = toJustifications(ballot2)
+      )
+
+      val ballots =
+        insert(List(ballot0, ballot1, switch, ballot2, ballot3)).collect {
+          case b: Message.Ballot => b
+        }
+
+      ballots map {
         EraRuntime.isLambdaLikeBallot[Id](
           ds.getRepresentation,
           _,
@@ -327,14 +370,14 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
         )
       } shouldBe List(false, false, true, false)
 
-      messages map {
+      ballots map {
         EraRuntime.hasJustificationInOwnRound[Id](
           ds.getRepresentation,
           _
         )
       } shouldBe List(false, true, false, true)
 
-      messages map {
+      ballots map {
         EraRuntime.hasOtherLambdaMessageInSameRound[Id](
           ds.getRepresentation,
           _,
@@ -342,7 +385,7 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
         )
       } shouldBe List(false, false, false, true)
 
-      runtime.validate(message3).value shouldBe Right(())
+      runtime.validate(ballot3).value shouldBe Right(())
     }
   }
 
