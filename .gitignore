@@ -57,6 +57,7 @@ integration-testing.log
 *.sublime-workspace
 .metals/
 .vscode/
+project/metals.sbt
 
 # Library Cargo.lock files
 execution-engine/common/*.lock
