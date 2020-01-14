@@ -10,8 +10,9 @@ const INC_METHOD = "inc";
 
 export function call(): void {
     let counterKey = getKey(COUNTER_KEY);
-    if (counterKey == null) {
+    if (counterKey === null) {
         Error.fromErrorCode(ErrorCode.GetKey).revert();
+        return;
     }
     
     callContract(<Key>counterKey, [

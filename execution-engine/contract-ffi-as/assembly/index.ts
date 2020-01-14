@@ -1,5 +1,6 @@
 import * as externals from "./externals";
 import {URef, AccessRights} from "./uref";
+import {Error} from "./error";
 import {CLValue} from "./clvalue";
 import {Key} from "./key";
 import {serializeArguments, serializeKeys, toBytesString, toBytesArrayU8, toBytesU32} from "./bytesrepr";
@@ -145,7 +146,9 @@ export function getKey(name: String): Key | null {
       keyBytes.length,
       resultSize.dataStart,
   );
-  if (ret > 0) {
+  const error = Error.fromResult(ret);
+  if (error !== null) {
+    error.revert();
     return null;
   }
   let key = Key.fromBytes(keyBytes.slice(0, <i32>resultSize[0])); // total guess

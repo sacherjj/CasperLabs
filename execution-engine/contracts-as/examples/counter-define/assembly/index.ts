@@ -3,7 +3,7 @@ import {putKey, getKey, getArg, callContract, storeFunctionAtHash, ret} from "..
 import {Key} from "../../../../contract-ffi-as/assembly/key";
 import {CLValue} from "../../../../contract-ffi-as/assembly/clvalue";
 import {serializeArguments, fromBytesU64, toBytesString, toBytesMap, toBytesPair} from "../../../../contract-ffi-as/assembly/bytesrepr";
-import {fromBytesString} from "../../../../contract-ffi-as/assembly/bytesrepr";
+import {fromBytesString, fromBytesI32} from "../../../../contract-ffi-as/assembly/bytesrepr";
 import {U512} from "../../../../contract-ffi-as/assembly/bignum";
 
 const COUNT_KEY = "count";
@@ -17,7 +17,7 @@ enum Arg {
 }
 
 export function counter_ext(): void {
-    const countKey = getKey(COUNTER_KEY);
+    const countKey = getKey(COUNT_KEY);
     if (countKey === null) {
         Error.fromErrorCode(ErrorCode.GetKey).revert();
         return;
@@ -47,13 +47,13 @@ export function counter_ext(): void {
             return;
         }
 
-        let valueU512 = U512.fromBytes(valueBytes);
-        if (valueU512 === null) {
+        let valueI32 = fromBytesI32(valueBytes);
+        if (valueI32 === null) {
             Error.fromUserError(4).revert();
             return;
         }
         
-        let returnValue = CLValue.fromU512(valueU512);
+        let returnValue = CLValue.fromI32(<i32>valueI32);
         ret(returnValue);
     }
     else {
@@ -62,8 +62,7 @@ export function counter_ext(): void {
 }
 
 export function call(): void {
-    let initValue = new U512(<U64>123);
-    let init = CLValue.fromU512(initValue);
+    let init = CLValue.fromI32(0);
     const maybeCounterLocalKey = Key.newInitialized(init);
     if (maybeCounterLocalKey === null) {
         Error.fromUserError(1).revert();
@@ -80,5 +79,5 @@ export function call(): void {
         return;
     }
 
-    putKey(COUNTER_KEY, pointer);
+    putKey(COUNTER_KEY, <Key>pointer);
 }
