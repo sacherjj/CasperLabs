@@ -1,6 +1,6 @@
 {
   "name": "casperlabs-sdk",
-  "version": "0.4.0",
+  "version": "0.6.0",
   "description": "SDK to interact with the CasperLabs blockchain using gRPC",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -46,7 +46,7 @@
     "tsconfig-paths": "^3.9.0",
     "tslint": "^5.20.0",
     "tslint-config-prettier": "^1.18.0",
-    "typescript": "^3.5.3"
+    "typescript": "^3.7.3"
   },
   "dependencies": {
     "@improbable-eng/grpc-web": "^0.9.6",

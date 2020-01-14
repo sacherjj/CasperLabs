@@ -26,7 +26,13 @@ interface Props {
 @observer
 export default class Explorer extends RefreshableComponent<Props, {}> {
   async refresh() {
-    this.props.dag.refreshBlockDag();
+    await this.props.dag.refreshBlockDagAndSetupSubscriber();
+  }
+
+  componentWillUnmount() {
+    super.componentWillUnmount();
+    // release websocket if necessary
+    this.props.dag.unsubscribe();
   }
 
   render() {
@@ -37,12 +43,13 @@ export default class Explorer extends RefreshableComponent<Props, {}> {
           <div className={`col-sm-12 col-lg-${dag.selectedBlock ? 8 : 12}`}>
             <BlockDAG
               title={
-                dag.maxRank === 0
+                dag.isLatestDag
                   ? 'Latest Block DAG'
                   : `Block DAG from rank ${dag.minRank} to ${dag.maxRank}`
               }
               blocks={dag.blocks}
               refresh={() => this.refresh()}
+              subscribeToggleStore={dag.subscribeToggleStore}
               footerMessage={
                 <ListInline>
                   <DagStepButtons step={dag.step} />

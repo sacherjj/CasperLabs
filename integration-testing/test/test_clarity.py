@@ -27,7 +27,6 @@ def test_create_account_key(one_node_network_with_clarity):
     driver = one_node_network_with_clarity.selenium_driver
     driver.get(clarity_host)
     driver.set_window_size(1280, 800)
-    driver.implicitly_wait(10)
 
     # We are using Mock Auth0 Service
     sign_in_button = driver.find_element(By.LINK_TEXT, "Sign In")
@@ -47,7 +46,8 @@ def test_create_account_key(one_node_network_with_clarity):
         len(driver.find_elements(By.XPATH, f"//td[contains(., '{account_name}')]")) >= 1
     )
 
-    # Request tokens
+    time.sleep(10)
+
     driver.find_element(By.LINK_TEXT, "Faucet").click()
     select = Select(driver.find_element(By.ID, "id-account-name"))
     select.select_by_visible_text(account_name)

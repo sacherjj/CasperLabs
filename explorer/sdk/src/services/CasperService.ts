@@ -283,8 +283,7 @@ export default class CasperService {
   subscribeEvents(subscribeTopics: SubscribeTopics): Observable<Event> {
     return new Observable(obs => {
       const client = grpc.client(GrpcCasperService.StreamEvents, {
-        host: this.url,
-        transport: grpc.WebsocketTransport()
+        host: this.url
       });
       client.onMessage((msg: Event) => {
         obs.next(msg);
@@ -296,7 +295,6 @@ export default class CasperService {
 
       client.start();
       client.send(req);
-      client.finishSend();
 
       return function unsubscribe() {
         client.close();
