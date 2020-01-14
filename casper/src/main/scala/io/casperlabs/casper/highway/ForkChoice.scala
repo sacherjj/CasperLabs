@@ -33,8 +33,19 @@ trait ForkChoice[F[_]] {
     * either to validate the main parent of an incoming block, or to pick a
     * target for a lambda response, given the lambda message and the validator's
     * own latest message as justifications.
+    *
+    * `keyBlockHash` is passed because in order to be able to validate that a
+    * fork choice is correct we need to know what era it started the evaluation
+    * from; for example if we don't have a block in the child era yet, just
+    * the ballots that vote on the switch block in the parent era, we have to
+    * know that the fork choice was run from the grandparent or the great-
+    * grandparent era, and the parent-era justifications on their own don't
+    * indicate this.
     */
-  def fromJustifications(justifications: Set[BlockHash]): F[ForkChoice.Result]
+  def fromJustifications(
+      keyBlockHash: BlockHash,
+      justifications: Set[BlockHash]
+  ): F[ForkChoice.Result]
 }
 object ForkChoice {
   case class Result(

@@ -151,6 +151,7 @@ class EraRuntime[F[_]: MonadThrowable: Clock: EraStorage: ForkChoice](
               // In the voting period the lambda message is a ballot, so can't be a target,
               // but in any case our own latest message might point at something with more weight already.
               choice <- ForkChoice[F].fromJustifications(
+                         lambdaMessage.keyBlockHash,
                          justifications.values.flatten.toSet
                        )
               message <- messageProducer.ballot(
@@ -301,9 +302,6 @@ class EraRuntime[F[_]: MonadThrowable: Clock: EraStorage: ForkChoice](
     def check(errorMessage: String, errorCondition: Boolean) =
       checkF(errorMessage, errorCondition.pure[F])
 
-    val roundId      = Ticks(message.roundId)
-    val isFromLeader = leaderFunction(roundId) == message.validatorId
-
     check(
       "The block is coming from a doppelganger.",
       maybeMessageProducer.map(_.validatorId).contains(message.validatorId)
@@ -312,7 +310,7 @@ class EraRuntime[F[_]: MonadThrowable: Clock: EraStorage: ForkChoice](
         case b: Message.Block =>
           check(
             "The block is not coming from the leader of the round.",
-            !isFromLeader
+            leaderFunction(Ticks(message.roundId)) != message.validatorId
           ) >>
             checkF(
               "The leader has already sent a lambda message in this round.",

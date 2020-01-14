@@ -356,7 +356,7 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
             }
           }
 
-          "only cite the lambda mesage and validators own latest message" in {
+          "only cite the lambda message and validators own latest message" in {
             implicit val ds = defaultDagStorage
             val runtime =
               genesisEraRuntime("Alice".some, leaderSequencer = mockSequencer("Charlie"))

@@ -14,7 +14,10 @@ class MockForkChoice[F[_]](
   override def fromKeyBlock(keyBlockHash: BlockHash): F[ForkChoice.Result] =
     resultRef.get
 
-  override def fromJustifications(justifications: Set[BlockHash]): F[ForkChoice.Result] =
+  override def fromJustifications(
+      keyBlockHash: BlockHash,
+      justifications: Set[BlockHash]
+  ): F[ForkChoice.Result] =
     resultRef.get
 
   def set(result: ForkChoice.Result): F[Unit] =
