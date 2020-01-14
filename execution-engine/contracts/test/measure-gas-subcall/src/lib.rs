@@ -2,12 +2,13 @@
 
 extern crate alloc;
 
-use alloc::{collections::BTreeMap, string::String, vec::Vec};
+use alloc::{collections::BTreeMap, string::String};
 
 use contract_ffi::{
     contract_api::{runtime, storage, Error},
     execution::Phase,
     unwrap_or_revert::UnwrapOrRevert,
+    value::CLValue,
 };
 
 #[repr(u16)]
@@ -19,12 +20,12 @@ enum CustomError {
 #[no_mangle]
 pub extern "C" fn get_phase_ext() {
     let phase = runtime::get_phase();
-    runtime::ret(phase, Vec::new())
+    runtime::ret(CLValue::from_t(phase).unwrap_or_revert())
 }
 
 #[no_mangle]
 pub extern "C" fn noop_ext() {
-    runtime::ret((), Vec::new())
+    runtime::ret(CLValue::from_t(()).unwrap_or_revert())
 }
 
 #[no_mangle]
@@ -44,11 +45,11 @@ pub extern "C" fn call() {
         }
         "do-nothing" => {
             let reference = storage::store_function_at_hash(NOOP_EXT, BTreeMap::new());
-            runtime::call_contract::<_, ()>(reference, &(), &Vec::new());
+            runtime::call_contract::<_, ()>(reference, ());
         }
         "do-something" => {
             let reference = storage::store_function_at_hash(GET_PHASE_EXT, BTreeMap::new());
-            let phase: Phase = runtime::call_contract(reference, &(), &Vec::new());
+            let phase: Phase = runtime::call_contract(reference, ());
             if phase != Phase::Session {
                 runtime::revert(Error::User(CustomError::UnexpectedPhaseSub as u16))
             }

@@ -27,6 +27,8 @@ import DeployInfoListDetails from './DeployInfoListDetails';
 import { DeployInfoListContainer } from '../containers/DeployInfoListContainer';
 import AccountSelector from './AccountSelector';
 import AccountSelectorContainer from '../containers/AccountSelectorContainer';
+import ConnectedPeersContainer from '../containers/ConnectedPeersContainer';
+import ConnectedPeers from './ConnectedPeers';
 
 // https://medium.com/@pshrmn/a-simple-react-router-v4-tutorial-7f23ff27adf
 
@@ -47,7 +49,8 @@ const SideMenuItems: MenuItem[] = [
   new MenuItem(Pages.Explorer, 'Explorer', 'project-diagram'),
   new MenuItem(Pages.Blocks, 'Blocks', 'th-large'),
   new MenuItem(Pages.Deploys, 'Deploys', 'tasks'),
-  new MenuItem(Pages.Search, 'Search', 'search')
+  new MenuItem(Pages.Search, 'Search', 'search'),
+  new MenuItem(Pages.ConnectedPeers, "Connected Peers", 'network-wired'),
 ];
 
 export interface AppProps {
@@ -59,6 +62,7 @@ export interface AppProps {
   deploy: DeployContainer;
   deployInfoList: DeployInfoListContainer;
   accountSelectorContainer: AccountSelectorContainer;
+  connectedPeersContainer: ConnectedPeersContainer;
   search: SearchContainer;
 }
 
@@ -297,6 +301,7 @@ const Content = (props: AppProps) => {
               render={_ => <AccountSelector {...props} />}
             />
             <Route path={Pages.Search} render={_ => <Search {...props} />} />
+            <Route path={Pages.ConnectedPeers} render={_ => <ConnectedPeers {...props}/>} />
           </Switch>
         </div>
       </div>

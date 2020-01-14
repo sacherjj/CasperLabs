@@ -1,9 +1,5 @@
 #![no_std]
 
-extern crate alloc;
-
-use alloc::vec;
-
 use contract_ffi::{
     contract_api::{account, runtime, system, Error},
     unwrap_or_revert::UnwrapOrRevert,
@@ -25,8 +21,7 @@ pub fn delegate() {
 
     let pos_pointer = system::get_proof_of_stake();
 
-    let payment_purse: PurseId =
-        runtime::call_contract(pos_pointer, &(GET_PAYMENT_PURSE,), &vec![]);
+    let payment_purse: PurseId = runtime::call_contract(pos_pointer, (GET_PAYMENT_PURSE,));
 
     system::transfer_from_purse_to_purse(main_purse, payment_purse, amount).unwrap_or_revert();
 }

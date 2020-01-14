@@ -36,16 +36,15 @@ impl From<Error> for ApiError {
 pub extern "C" fn call() {
     let contract_key = runtime::get_key(MAILING_KEY).unwrap_or_revert_with(ApiError::GetKey);
     let contract_ref = contract_key
-        .to_c_ptr()
+        .to_contract_ref()
         .unwrap_or_revert_with(ApiError::UnexpectedKeyVariant);
 
     let name = "CasperLabs";
     let args = (SUB_METHOD, name);
-    let sub_key =
-        runtime::call_contract::<_, Option<Key>>(contract_ref.clone(), &args, &Vec::new())
-            .unwrap_or_revert_with(Error::NoSubKey);
+    let sub_key = runtime::call_contract::<_, Option<Key>>(contract_ref.clone(), args)
+        .unwrap_or_revert_with(Error::NoSubKey);
 
-    runtime::put_key(MAIL_FEED_KEY, &sub_key);
+    runtime::put_key(MAIL_FEED_KEY, sub_key);
 
     let key_name_uref =
         runtime::get_key(MAIL_FEED_KEY).unwrap_or_revert_with(Error::GetKeyNameURef);
@@ -55,7 +54,7 @@ pub extern "C" fn call() {
 
     let message = "Hello, World!";
     let args = (PUB_METHOD, message);
-    runtime::call_contract::<_, ()>(contract_ref, &args, &Vec::new());
+    runtime::call_contract::<_, ()>(contract_ref, args);
 
     let list_key: TURef<Vec<String>> = sub_key
         .to_turef()

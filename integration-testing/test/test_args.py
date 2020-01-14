@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 import json
-from casperlabs_client import ABI
+from casperlabs_client.abi import ABI
 
 
 account = bytes(range(32))

@@ -32,3 +32,5 @@ mod ee_598;
 mod ee_599;
 #[cfg(test)]
 mod ee_601;
+#[cfg(test)]
+mod ee_803;

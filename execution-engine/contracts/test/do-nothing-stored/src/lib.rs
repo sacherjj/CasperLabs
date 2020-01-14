@@ -41,7 +41,7 @@ fn store_at_hash() -> Key {
 
 fn store_at_uref() -> Key {
     storage::store_function(ENTRY_FUNCTION_NAME, BTreeMap::new())
-        .into_turef()
+        .into_uref()
         .unwrap_or_revert_with(ApiError::UnexpectedContractRefVariant)
         .into()
 }
@@ -57,5 +57,5 @@ pub extern "C" fn call() {
         DESTINATION_UREF => store_at_uref(),
         _ => runtime::revert(Error::UnknownDestination),
     };
-    runtime::put_key(CONTRACT_NAME, &key);
+    runtime::put_key(CONTRACT_NAME, key);
 }

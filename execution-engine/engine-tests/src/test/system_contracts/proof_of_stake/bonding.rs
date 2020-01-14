@@ -5,14 +5,14 @@ use contract_ffi::{
     key::Key,
     value::{
         account::{PublicKey, PurseId},
-        Value, U512,
+        U512,
     },
 };
 use engine_core::engine_state::{
     genesis::{GenesisAccount, POS_BONDING_PURSE},
     CONV_RATE,
 };
-use engine_shared::{motes::Motes, transform::Transform};
+use engine_shared::{motes::Motes, stored_value::StoredValue, transform::Transform};
 
 use crate::{
     support::test_support::{self, ExecuteRequestBuilder, InMemoryWasmTestBuilder},
@@ -106,7 +106,7 @@ fn should_run_successful_bond_and_unbond() {
     let pos_transform = &transforms[&Key::from(pos).normalize()];
 
     // Verify that genesis account is in validator queue
-    let contract = if let Transform::Write(Value::Contract(contract)) = pos_transform {
+    let contract = if let Transform::Write(StoredValue::Contract(contract)) = pos_transform {
         contract
     } else {
         panic!(
@@ -178,7 +178,7 @@ fn should_run_successful_bond_and_unbond() {
     let pos_transform = &transforms[&Key::from(pos).normalize()];
 
     // Verify that genesis account is in validator queue
-    let contract = if let Transform::Write(Value::Contract(contract)) = pos_transform {
+    let contract = if let Transform::Write(StoredValue::Contract(contract)) = pos_transform {
         contract
     } else {
         panic!(

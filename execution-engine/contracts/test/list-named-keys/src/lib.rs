@@ -33,7 +33,7 @@ pub extern "C" fn call() {
     let mut expected_named_keys = expected_initial_named_keys;
 
     for (key, value) in new_named_keys {
-        runtime::put_key(&key, &value);
+        runtime::put_key(&key, value);
         assert!(expected_named_keys.insert(key, value).is_none());
         let actual_named_keys = runtime::list_named_keys();
         assert_eq!(expected_named_keys, actual_named_keys);

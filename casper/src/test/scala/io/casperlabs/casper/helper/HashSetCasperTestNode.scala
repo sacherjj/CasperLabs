@@ -1,9 +1,11 @@
 package io.casperlabs.casper.helper
 
+import cats.effect.concurrent.Ref
 import cats.effect.{Concurrent, ContextShift, Timer}
 import cats.implicits._
 import cats.{~>, Applicative, Defer, Parallel}
 import com.google.protobuf.ByteString
+import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.MultiParentCasperImpl.Broadcaster
 import io.casperlabs.casper._
 import io.casperlabs.casper.consensus.state.{BigInt => _, Unit => _, _}
@@ -24,7 +26,7 @@ import io.casperlabs.metrics.Metrics
 import io.casperlabs.models.Weight
 import io.casperlabs.p2p.EffectsTestInstances._
 import io.casperlabs.shared.{Cell, Log, Time}
-import io.casperlabs.smartcontracts.ExecutionEngineService
+import io.casperlabs.smartcontracts.{Abi, ExecutionEngineService}
 import io.casperlabs.storage.block._
 import io.casperlabs.storage.dag._
 import io.casperlabs.storage.deploy.DeployStorage
@@ -58,9 +60,9 @@ abstract class HashSetCasperTestNode[F[_]](
   implicit val timeEff: LogicalTime[F]
 
   implicit val casperEff: MultiParentCasperImpl[F]
-  implicit val lastFinalizedBlockHashContainer: LastFinalizedBlockHashContainer[F] =
-    NoOpsLastFinalizedBlockHashContainer.create[F](genesis.blockHash)
   implicit val broadcaster: Broadcaster[F]
+
+  val lastFinalizedBlockHashContainer: Ref[F, BlockHash]
 
   val validatorId = ValidatorIdentity(Ed25519.tryToPublic(sk).get, sk, Ed25519)
 
@@ -202,7 +204,7 @@ trait HashSetCasperTestNodeFactory {
     )
 
   protected def initStorage[F[_]: Concurrent: Log: Metrics: ContextShift: Time]()
-      : F[(BlockStorage[F], IndexedDagStorage[F], DeployStorage[F])] =
+      : F[(BlockStorage[F], IndexedDagStorage[F], DeployStorage[F], FinalityStorage[F])] =
     StorageFixture.createStorages[F]()
 }
 
@@ -238,6 +240,10 @@ object HashSetCasperTestNode {
             code
           case _ => sys.error("Expected DeployPayload.Code")
         }
+        val tyI32: CLType = CLType(CLType.Variants.SimpleType(CLType.Simple.I32))
+        val zero_bytes    = Abi.toBytes[Int](0).get
+        val zero: CLValue = CLValue(Some(tyI32), ByteString.copyFrom(zero_bytes))
+        val value         = StoredValue().withClValue(zero)
         val key = Key(
           Key.Value.Hash(Key.Hash(code))
         )
@@ -248,9 +254,7 @@ object HashSetCasperTestNode {
           Op(Op.OpInstance.Write(WriteOp())) ->
             Transform(
               Transform.TransformInstance.Write(
-                TransformWrite(
-                  state.Value(state.Value.Value.IntValue(0)).some
-                )
+                TransformWrite().withValue(value)
               )
             )
         }

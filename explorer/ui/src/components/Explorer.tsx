@@ -26,7 +26,13 @@ interface Props {
 @observer
 export default class Explorer extends RefreshableComponent<Props, {}> {
   async refresh() {
-    this.props.dag.refreshBlockDag();
+    await this.props.dag.refreshBlockDagAndSetupSubscriber();
+  }
+
+  componentWillUnmount() {
+    super.componentWillUnmount();
+    // release websocket if necessary
+    this.props.dag.unsubscribe();
   }
 
   render() {
@@ -37,12 +43,13 @@ export default class Explorer extends RefreshableComponent<Props, {}> {
           <div className={`col-sm-12 col-lg-${dag.selectedBlock ? 8 : 12}`}>
             <BlockDAG
               title={
-                dag.maxRank === 0
+                dag.isLatestDag
                   ? 'Latest Block DAG'
                   : `Block DAG from rank ${dag.minRank} to ${dag.maxRank}`
               }
               blocks={dag.blocks}
               refresh={() => this.refresh()}
+              subscribeToggleStore={dag.subscribeToggleStore}
               footerMessage={
                 <ListInline>
                   <DagStepButtons step={dag.step} />
@@ -86,11 +93,7 @@ export default class Explorer extends RefreshableComponent<Props, {}> {
                 block={dag.selectedBlock}
                 blocks={dag.blocks!}
                 onSelect={blockHashBase16 => {
-                  dag.selectedBlock = dag.blocks!.find(
-                    x =>
-                      encodeBase16(x.getSummary()!.getBlockHash_asU8()) ===
-                      blockHashBase16
-                  );
+                  dag.selectByBlockHashBase16(blockHashBase16);
                 }}
               />
             </div>
@@ -113,7 +116,7 @@ class BlockDetails extends React.Component<{
   block: BlockInfo;
   blocks: BlockInfo[];
   onSelect: (blockHash: string) => void;
-}> {
+}, {}> {
   ref: HTMLElement | null = null;
 
   render() {

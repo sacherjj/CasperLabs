@@ -4,9 +4,8 @@ use std::{
     mem,
 };
 
-use contract_ffi::value::account::{
-    Account, ActionThresholds, AssociatedKeys, PublicKey, PurseId, Weight,
-};
+use contract_ffi::value::account::{PublicKey, PurseId, Weight};
+use engine_shared::account::{Account, ActionThresholds, AssociatedKeys};
 
 use super::NamedKeyMap;
 use crate::engine_server::{
@@ -141,7 +140,7 @@ fn weight_from(value: u32, value_name: &str) -> Result<Weight, ParsingError> {
 mod tests {
     use proptest::proptest;
 
-    use contract_ffi::gens;
+    use engine_shared::account::gens;
 
     use super::*;
     use crate::engine_server::mappings::test_utils;

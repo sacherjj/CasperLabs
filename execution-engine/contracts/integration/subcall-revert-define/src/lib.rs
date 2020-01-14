@@ -19,5 +19,5 @@ pub extern "C" fn revert_test_ext() {
 #[no_mangle]
 pub extern "C" fn call() {
     let pointer = storage::store_function_at_hash(REVERT_TEST_EXT, BTreeMap::new());
-    runtime::put_key(REVERT_TEST_KEY, &pointer.into())
+    runtime::put_key(REVERT_TEST_KEY, pointer.into())
 }

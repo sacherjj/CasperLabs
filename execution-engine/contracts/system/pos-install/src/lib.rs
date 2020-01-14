@@ -2,18 +2,18 @@
 
 extern crate alloc;
 
-use alloc::{collections::BTreeMap, string::String, vec};
+use alloc::{collections::BTreeMap, string::String};
 use core::fmt::Write;
 
 use contract_ffi::{
-    contract_api::{runtime, storage, ContractRef, Error, TURef},
+    contract_api::{runtime, storage, ContractRef, Error},
     key::Key,
     system_contracts::mint,
     unwrap_or_revert::UnwrapOrRevert,
     uref::{AccessRights, URef},
     value::{
         account::{PublicKey, PurseId},
-        U512,
+        CLValue, U512,
     },
 };
 
@@ -39,13 +39,12 @@ pub extern "C" fn call() {
     let mint_uref: URef = runtime::get_arg(Args::MintURef as u32)
         .unwrap_or_revert_with(Error::MissingArgument)
         .unwrap_or_revert_with(Error::InvalidArgument);
-    let mint = ContractRef::TURef(TURef::new(mint_uref.addr(), AccessRights::READ));
+    let mint = ContractRef::URef(URef::new(mint_uref.addr(), AccessRights::READ));
 
     let genesis_validators: BTreeMap<PublicKey, U512> =
         runtime::get_arg(Args::GenesisValidators as u32)
             .unwrap_or_revert_with(Error::MissingArgument)
             .unwrap_or_revert_with(Error::InvalidArgument);
-
     // Add genesis validators to PoS contract object.
     // For now, we are storing validators in `named_keys` map of the PoS contract
     // in the form: key: "v_{validator_pk}_{validator_stake}", value: doesn't
@@ -83,17 +82,16 @@ pub extern "C" fn call() {
         named_keys.insert(String::from(*name), Key::URef(*uref));
     });
 
-    let uref = storage::store_function(POS_FUNCTION_NAME, named_keys)
-        .into_turef()
-        .unwrap_or_revert_with(Error::UnexpectedContractRefVariant)
-        .into();
+    let uref: URef = storage::store_function(POS_FUNCTION_NAME, named_keys)
+        .into_uref()
+        .unwrap_or_revert_with(Error::UnexpectedContractRefVariant);
+    let return_value = CLValue::from_t(uref).unwrap_or_revert();
 
-    runtime::ret(uref, vec![uref]);
+    runtime::ret(return_value);
 }
 
 fn mint_purse(mint: &ContractRef, amount: U512) -> PurseId {
-    let result: Result<URef, mint::Error> =
-        runtime::call_contract(mint.clone(), &("mint", amount), &vec![]);
+    let result: Result<URef, mint::Error> = runtime::call_contract(mint.clone(), ("mint", amount));
 
     result.map(PurseId::new).unwrap_or_revert()
 }

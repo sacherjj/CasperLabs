@@ -76,9 +76,17 @@ message DeployInfo {
 message Event{
     oneof value {
         BlockAdded block_added = 1;
+        NewFinalizedBlock new_finalized_block = 2;
     }
 
     message BlockAdded {
         BlockInfo block = 1;
+    }
+
+    message NewFinalizedBlock {
+        // Hash of the newly finalized block.
+        bytes block_hash = 1;
+        // Set of blocks that were finalized indirectly (secondary parents of the new main-chain LFB).
+        repeated bytes indirectly_finalized_block_hashes = 2;
     }
 }

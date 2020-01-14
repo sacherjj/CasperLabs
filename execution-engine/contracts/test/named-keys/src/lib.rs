@@ -22,14 +22,14 @@ pub extern "C" fn call() {
 
     // Add new urefs
     let hello_world_key: Key = storage::new_turef(String::from("Hello, world!")).into();
-    runtime::put_key("hello-world", &hello_world_key);
+    runtime::put_key("hello-world", hello_world_key);
     assert_eq!(runtime::list_named_keys().len(), initi_uref_num + 1);
 
     // Verify if the uref is present
     assert!(runtime::has_key("hello-world"));
 
     let big_value_key: Key = storage::new_turef(U512::max_value()).into();
-    runtime::put_key("big-value", &big_value_key);
+    runtime::put_key("big-value", big_value_key);
 
     assert_eq!(runtime::list_named_keys().len(), initi_uref_num + 2);
 

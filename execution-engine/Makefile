@@ -1,12 +1,14 @@
 # This supports environments where $HOME/.cargo/env has not been sourced (CI, CLion Makefile runner)
 CARGO  = $(or $(shell which cargo),  $(HOME)/.cargo/bin/cargo)
 RUSTUP = $(or $(shell which rustup), $(HOME)/.cargo/bin/rustup)
+NPM    = $(or $(shell which npm),    /usr/bin/npm)
 
 RUST_TOOLCHAIN := $(shell cat rust-toolchain)
 
 EE_DIR     = $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
 IT_RES_DIR = $(realpath $(EE_DIR)/../integration-testing/resources)
 
+# Rust Contracts
 # Directory names should match crate names
 BENCH_CONTRACTS       = $(shell find ./contracts/bench       -mindepth 1 -maxdepth 1 -type d -exec basename {} \;)
 CLIENT_CONTRACTS      = $(shell find ./contracts/client      -mindepth 1 -maxdepth 1 -type d -exec basename {} \;)
@@ -18,14 +20,21 @@ SRE_CONTRACTS         = $(shell find ./contracts/SRE         -mindepth 1 -maxdep
 SYSTEM_CONTRACTS      = $(shell find ./contracts/system      -mindepth 1 -maxdepth 1 -type d -exec basename {} \;)
 TEST_CONTRACTS        = $(shell find ./contracts/test        -mindepth 1 -maxdepth 1 -type d -exec basename {} \;)
 
-BENCH_CONTRACTS     := $(patsubst %, build-contract/%, $(BENCH_CONTRACTS))
-CLIENT_CONTRACTS    := $(patsubst %, build-contract/%, $(CLIENT_CONTRACTS))
-EXAMPLE_CONTRACTS   := $(patsubst %, build-contract/%, $(EXAMPLE_CONTRACTS))
-EXPLORER_CONTRACTS  := $(patsubst %, build-contract/%, $(EXPLORER_CONTRACTS))
-PROFILING_CONTRACTS := $(patsubst %, build-contract/%, $(PROFILING_CONTRACTS))
-SRE_CONTRACTS       := $(patsubst %, build-contract/%, $(SRE_CONTRACTS))
-SYSTEM_CONTRACTS    := $(patsubst %, build-contract/%, $(SYSTEM_CONTRACTS))
-TEST_CONTRACTS      := $(patsubst %, build-contract/%, $(TEST_CONTRACTS))
+BENCH_CONTRACTS     := $(patsubst %, build-contract-rs/%, $(BENCH_CONTRACTS))
+CLIENT_CONTRACTS    := $(patsubst %, build-contract-rs/%, $(CLIENT_CONTRACTS))
+EXAMPLE_CONTRACTS   := $(patsubst %, build-contract-rs/%, $(EXAMPLE_CONTRACTS))
+EXPLORER_CONTRACTS  := $(patsubst %, build-contract-rs/%, $(EXPLORER_CONTRACTS))
+PROFILING_CONTRACTS := $(patsubst %, build-contract-rs/%, $(PROFILING_CONTRACTS))
+SRE_CONTRACTS       := $(patsubst %, build-contract-rs/%, $(SRE_CONTRACTS))
+SYSTEM_CONTRACTS    := $(patsubst %, build-contract-rs/%, $(SYSTEM_CONTRACTS))
+TEST_CONTRACTS      := $(patsubst %, build-contract-rs/%, $(TEST_CONTRACTS))
+
+# AssemblyScript Contracts
+CLIENT_CONTRACTS_AS = $(shell find ./contracts-as/client   -mindepth 1 -maxdepth 1 -type d)
+TEST_CONTRACTS_AS   = $(shell find ./contracts-as/test   -mindepth 1 -maxdepth 1 -type d)
+
+CLIENT_CONTRACTS_AS := $(patsubst %, build-contract-as/%, $(CLIENT_CONTRACTS_AS))
+TEST_CONTRACTS_AS   := $(patsubst %, build-contract-as/%, $(TEST_CONTRACTS_AS))
 
 INTEGRATION_CONTRACTS += \
 	bonding-call \
@@ -44,10 +53,10 @@ INTEGRATION_CONTRACTS += \
 	transfer-to-account \
 	unbonding-call
 
-
 INTEGRATION_CONTRACTS := $(patsubst %, build-integration-contract/%, $(INTEGRATION_CONTRACTS))
 
 CONTRACT_TARGET_DIR       = target/wasm32-unknown-unknown/release
+CONTRACT_TARGET_DIR_AS    = target-as
 PACKAGED_SYSTEM_CONTRACTS = mint_install.wasm pos_install.wasm
 
 .PHONY: all
@@ -57,11 +66,14 @@ all: build build-contracts
 build:
 	$(CARGO) build $(CARGO_FLAGS)
 
-build-contract/%:
+build-contract-rs/%:
 	$(CARGO) build \
 		--release $(filter-out --release, $(CARGO_FLAGS)) \
 		--package $* \
 		--target wasm32-unknown-unknown
+
+build-contract-as/%:
+	cd $* && $(NPM) run asbuild
 
 build-integration-contract/%:
 	$(CARGO) build \
@@ -71,8 +83,8 @@ build-integration-contract/%:
 		--target wasm32-unknown-unknown \
 		--out-dir $(IT_RES_DIR)
 
-.PHONY: build-contracts
-build-contracts: \
+.PHONY: build-contracts-rs
+build-contracts-rs: \
 	$(BENCH_CONTRACTS) \
 	$(CLIENT_CONTRACTS) \
 	$(EXAMPLE_CONTRACTS) \
@@ -83,19 +95,42 @@ build-contracts: \
 	$(SYSTEM_CONTRACTS) \
 	$(TEST_CONTRACTS)
 
+.PHONY: build-contracts-as
+build-contracts-as: \
+	$(CLIENT_CONTRACTS_AS) \
+	$(TEST_CONTRACTS_AS)
+
+.PHONY: build-contracts
+build-contracts: build-contracts-rs build-contracts-as
+
 .PHONY: build-integration-contracts
 build-integration-contracts: $(INTEGRATION_CONTRACTS)
 
 .PHONY: build-example-contracts
 build-example-contracts: $(EXAMPLE_CONTRACTS)
 
-.PHONY: test
-test:
+.PHONY: test-rs
+test-rs:
 	$(CARGO) test $(CARGO_FLAGS) --all -- --nocapture
 
-.PHONY: test-contracts
-test-contracts: build-contracts
+.PHONY: test-as
+test-as: setup-as
+	cd contract-ffi-as && npm run asbuild && npm run test
+
+.PHONY: test
+test: test-rs test-as
+
+.PHONY: test-contracts-rs
+test-contracts-rs: build-contracts-rs
 	$(CARGO) test $(CARGO_FLAGS) -p casperlabs-engine-tests -- --ignored --nocapture
+
+.PHONY: test-contracts-as
+test-contracts-as: build-contracts-rs build-contracts-as
+	@# see https://github.com/rust-lang/cargo/issues/5015#issuecomment-515544290
+	$(CARGO) test $(CARGO_FLAGS) --manifest-path "engine-tests/Cargo.toml" --features "use_as_wasm" -- --ignored --nocapture
+
+.PHONY: test-contracts
+test-contracts: test-contracts-rs test-contracts-as
 
 .PHONY: check-format
 check-format:
@@ -120,6 +155,7 @@ check: \
 .PHONY: clean
 clean:
 	rm -f comm/.rpm
+	rm -rf $(CONTRACT_TARGET_DIR_AS)
 	$(CARGO) clean
 
 .PHONY: deb
@@ -152,7 +188,7 @@ check-publish:
 	cd contract-ffi && $(CARGO) publish --dry-run
 
 .PHONY: bench
-bench: build-contracts
+bench: build-contracts-rs
 	$(CARGO) bench
 
 .PHONY: setup-cargo-packagers
@@ -160,9 +196,16 @@ setup-cargo-packagers:
 	$(CARGO) install cargo-rpm || exit 0
 	$(CARGO) install cargo-deb || exit 0
 
-.PHONY: setup
-setup: rust-toolchain
+.PHONY: setup-rs
+setup-rs: rust-toolchain
 	$(RUSTUP) update
 	$(RUSTUP) toolchain install $(RUST_TOOLCHAIN)
 	$(RUSTUP) target add --toolchain $(RUST_TOOLCHAIN) wasm32-unknown-unknown
 	$(RUSTUP) component add --toolchain $(RUST_TOOLCHAIN) rustfmt clippy
+
+.PHONY: setup-as
+setup-as: contract-ffi-as/package.json
+	cd contract-ffi-as && $(NPM) install
+
+.PHONY: setup
+setup: setup-rs setup-as

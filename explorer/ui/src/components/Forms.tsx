@@ -35,6 +35,12 @@ interface FormProps {
   onSubmit?: () => void;
 }
 
+interface FileUploaderProps {
+  id: string;
+  label: string;
+  handleFileSelect: (e: React.ChangeEvent<HTMLInputElement>) => void;
+}
+
 function controlClass(props: FieldProps) {
   let validity =
     props.valid == null || props.valid === undefined
@@ -126,6 +132,22 @@ export const RadioField = observer((props: RadioProps) => (
     }
   </div>
 ));
+
+export const FileSelect = (props: FileUploaderProps) => (
+  <div className="custom-file">
+    <input
+      type="file"
+      className="custom-file-input"
+      id={props.id}
+      onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+        props.handleFileSelect(e)
+      }
+    />
+    <label className="custom-file-label" htmlFor={props.id}>
+      {props.label}
+    </label>
+  </div>
+);
 
 export const Form = (props: FormProps) => (
   <form

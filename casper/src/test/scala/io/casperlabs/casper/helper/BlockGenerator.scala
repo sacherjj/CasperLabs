@@ -100,7 +100,7 @@ object BlockGenerator {
 }
 
 trait BlockGenerator {
-  def createBlock[F[_]: MonadThrowable: Time: IndexedDagStorage](
+  def createMessage[F[_]: MonadThrowable: Time: IndexedDagStorage](
       parentsHashList: Seq[BlockHash],
       keyBlockHash: ByteString = ByteString.EMPTY,
       creator: Validator = ByteString.EMPTY,
@@ -112,7 +112,7 @@ trait BlockGenerator {
       preStateHash: ByteString = ByteString.EMPTY,
       messageType: Block.MessageType = Block.MessageType.BLOCK
   ): F[Block] =
-    createBlockNew[F](
+    createMessageNew[F](
       parentsHashList,
       keyBlockHash,
       creator,
@@ -125,7 +125,7 @@ trait BlockGenerator {
       messageType
     )
 
-  def createBlockNew[F[_]: MonadThrowable: Time: IndexedDagStorage](
+  def createMessageNew[F[_]: MonadThrowable: Time: IndexedDagStorage](
       parentsHashList: Seq[BlockHash],
       keyBlockHash: BlockHash,
       creator: Validator = ByteString.EMPTY,
@@ -138,7 +138,9 @@ trait BlockGenerator {
       messageType: Block.MessageType = Block.MessageType.BLOCK,
       maybeValidatorPrevBlockHash: Option[BlockHash] = None,
       maybeValidatorBlockSeqNum: Option[Int] = None
-  ): F[Block] =
+  ): F[Block] = {
+    if (messageType == Block.MessageType.BALLOT)
+      require(parentsHashList.size == 1, "A ballot can only have one parent.")
     for {
       now <- Time[F].currentMillis
       postState = Block
@@ -214,8 +216,9 @@ trait BlockGenerator {
       block = ProtoUtil.unsignedBlockProto(body, header)
       _     <- IndexedDagStorage[F].index(block)
     } yield block
+  }
 
-  def createAndStoreBlock[F[_]: MonadThrowable: Time: BlockStorage: IndexedDagStorage](
+  def createAndStoreMessage[F[_]: MonadThrowable: Time: BlockStorage: IndexedDagStorage](
       parentsHashList: Seq[BlockHash],
       creator: Validator = ByteString.EMPTY,
       bonds: Seq[Bond] = Seq.empty[Bond],
@@ -226,22 +229,28 @@ trait BlockGenerator {
       preStateHash: ByteString = ByteString.EMPTY,
       maybeValidatorPrevBlockHash: Option[BlockHash] = None,
       maybeValidatorBlockSeqNum: Option[Int] = None,
-      keyBlockHash: BlockHash = ByteString.EMPTY
-  ): F[Block] = createAndStoreBlockNew[F](
-    parentsHashList,
-    keyBlockHash,
-    creator,
-    bonds,
-    justifications.mapValues(Set(_)),
-    deploys,
-    postStateHash,
-    chainName,
-    preStateHash,
-    maybeValidatorPrevBlockHash,
-    maybeValidatorBlockSeqNum
-  )
+      keyBlockHash: BlockHash = ByteString.EMPTY,
+      messageType: Block.MessageType = Block.MessageType.BLOCK
+  ): F[Block] = {
+    if (messageType == Block.MessageType.BALLOT)
+      require(parentsHashList.size == 1, "A ballot can only have one parent.")
+    createAndStoreMessageNew[F](
+      parentsHashList,
+      keyBlockHash,
+      creator,
+      bonds,
+      justifications.mapValues(Set(_)),
+      deploys,
+      postStateHash,
+      chainName,
+      preStateHash,
+      maybeValidatorPrevBlockHash,
+      maybeValidatorBlockSeqNum,
+      messageType
+    )
+  }
 
-  def createAndStoreBlockNew[F[_]: MonadThrowable: Time: BlockStorage: IndexedDagStorage](
+  def createAndStoreMessageNew[F[_]: MonadThrowable: Time: BlockStorage: IndexedDagStorage](
       parentsHashList: Seq[BlockHash],
       keyBlockHash: ByteString,
       creator: Validator = ByteString.EMPTY,
@@ -252,10 +261,11 @@ trait BlockGenerator {
       chainName: String = "casperlabs",
       preStateHash: ByteString = ByteString.EMPTY,
       maybeValidatorPrevBlockHash: Option[BlockHash] = None,
-      maybeValidatorBlockSeqNum: Option[Int] = None
+      maybeValidatorBlockSeqNum: Option[Int] = None,
+      messageType: Block.MessageType = Block.MessageType.BLOCK
   ): F[Block] =
     for {
-      block <- createBlockNew[F](
+      block <- createMessageNew[F](
                 parentsHashList = parentsHashList,
                 creator = creator,
                 bonds = bonds,
@@ -266,7 +276,8 @@ trait BlockGenerator {
                 preStateHash = preStateHash,
                 maybeValidatorPrevBlockHash = maybeValidatorPrevBlockHash,
                 maybeValidatorBlockSeqNum = maybeValidatorBlockSeqNum,
-                keyBlockHash = keyBlockHash
+                keyBlockHash = keyBlockHash,
+                messageType = messageType
               )
       _ <- BlockStorage[F].put(block.blockHash, block, Seq.empty)
     } yield block
@@ -284,7 +295,7 @@ trait BlockGenerator {
       maybeValidatorPrevBlockHash: Option[BlockHash] = None,
       maybeValidatorBlockSeqNum: Option[Int] = None
   ): F[Block] =
-    createAndStoreBlock[F](
+    createAndStoreMessage[F](
       parentsHashList = parents.map(_.blockHash),
       creator = creator,
       bonds = bonds,

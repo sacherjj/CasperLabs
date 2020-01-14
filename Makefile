@@ -197,13 +197,15 @@ cargo-native-packager/%:
 			$(DIR_IN)/google/protobuf/empty.proto \
 			$(DIR_IN)/io/casperlabs/casper/consensus/consensus.proto \
 			$(DIR_IN)/io/casperlabs/casper/consensus/info.proto \
-			$(DIR_IN)/io/casperlabs/casper/consensus/state.proto ; \
+			$(DIR_IN)/io/casperlabs/casper/consensus/state.proto \
+			$(DIR_IN)/io/casperlabs/comm/discovery/node.proto ; \
 		protoc \
 				-I=$(DIR_IN) \
 			--plugin=protoc-gen-ts=./explorer/grpc/node_modules/ts-protoc-gen/bin/protoc-gen-ts \
 			--js_out=import_style=commonjs,binary:$(DIR_OUT) \
 			--ts_out=service=true:$(DIR_OUT) \
 			$(DIR_IN)/io/casperlabs/node/api/casper.proto \
+			$(DIR_IN)/io/casperlabs/node/api/diagnostics.proto ; \
 		"
 	# Annotations were only required for the REST gateway. Remove them from Typescript.
 	for f in $(DIR_OUT)/io/casperlabs/node/api/casper_pb* ; do \
@@ -284,7 +286,7 @@ execution-engine/target/system-contracts.tar.gz: $(RUST_SRC) .make/rustup-update
 # in the EE project all the contracts appear individually in the cargo workspace.
 .make/contracts/%: $(RUST_SRC) .make/rustup-update
 	$(eval CONTRACT=$(subst _,-,$*))
-	$(MAKE) -C execution-engine build-contract/$(CONTRACT)
+	$(MAKE) -C execution-engine build-contract-rs/$(CONTRACT)
 	mkdir -p $(dir $@) && touch $@
 
 # Compile a contract and put it in the CLI client resources so they get packaged with the JAR.

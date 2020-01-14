@@ -29,6 +29,10 @@ criterion = "0.3"
 lmdb = "0.8.0"
 protobuf = "2"
 
+[features]
+default = []
+use_as_wasm = []
+
 [lib]
 bench = false
 

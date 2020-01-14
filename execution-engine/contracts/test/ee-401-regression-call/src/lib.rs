@@ -19,9 +19,7 @@ pub extern "C" fn call() {
         _ => runtime::revert(Error::UnexpectedKeyVariant),
     };
 
-    let extra_urefs = [].to_vec();
-
-    let result: URef = runtime::call_contract(contract_pointer, &(), &extra_urefs);
+    let result: URef = runtime::call_contract(contract_pointer, ());
 
     let value = storage::read(TURef::from_uref(result).unwrap());
 

@@ -24,6 +24,7 @@ import io.casperlabs.p2p.EffectsTestInstances.LogicalTime
 import io.casperlabs.shared.LogStub
 import io.casperlabs.storage.BlockMsgWithTransform
 import io.casperlabs.storage.block.BlockStorage
+import io.casperlabs.storage.dag.FinalityStorage
 import monix.eval.Task
 import monix.execution.Scheduler
 import monix.execution.Scheduler.Implicits.global
@@ -217,7 +218,7 @@ abstract class HashSetCasperTest
       dag                 <- MultiParentCasper[Task].dag
       latestMessageHashes <- dag.latestMessageHashes
       equivocators        <- dag.getEquivocators
-      lfbHash             <- LastFinalizedBlockHashContainer[Task].get
+      lfbHash             <- node.lastFinalizedBlockHashContainer.get
       estimate            <- MultiParentCasper[Task].estimator(dag, lfbHash, latestMessageHashes, equivocators)
       _                   = estimate.toList shouldBe List(signedBlock.blockHash)
       _                   = node.tearDown()
@@ -245,7 +246,7 @@ abstract class HashSetCasperTest
       dag                 <- MultiParentCasper[Task].dag
       latestMessageHashes <- dag.latestMessageHashes
       equivocators        <- dag.getEquivocators
-      lfbHash             <- LastFinalizedBlockHashContainer[Task].get
+      lfbHash             <- node.lastFinalizedBlockHashContainer.get
       estimate            <- MultiParentCasper[Task].estimator(dag, lfbHash, latestMessageHashes, equivocators)
 
       _ = estimate.toList shouldBe List(signedBlock2.blockHash)
@@ -1049,15 +1050,6 @@ abstract class HashSetCasperTest
     val BlockMsgWithTransform(Some(genesisWithEqualBonds), transformsWithEqualBonds) =
       buildGenesis(Map.empty, equalBonds, 0L)
 
-    def checkLastFinalizedBlock(
-        node: HashSetCasperTestNode[Task],
-        expected: Block
-    )(implicit pos: org.scalactic.source.Position): Task[Unit] =
-      node.casperEff.lastFinalizedBlock map { block =>
-        PrettyPrinter.buildString(block) shouldBe PrettyPrinter.buildString(expected)
-        ()
-      }
-
     for {
       nodes <- networkEff(
                 validatorKeys.take(3),
@@ -1067,31 +1059,31 @@ abstract class HashSetCasperTest
               )
       deployDatas <- (1L to 10L).toList.traverse(_ => ProtoUtil.basicDeploy[Task]())
 
-      _ <- nodes(0).deployBuffer.addDeploy(deployDatas(0)) *> nodes(0).propose()
+      _ <- nodes(0).deployAndPropose(deployDatas(0))
       _ <- nodes(1).receive()
       _ <- nodes(2).receive()
 
-      block2 <- nodes(1).deployBuffer.addDeploy(deployDatas(1)) *> nodes(1).propose()
+      block2 <- nodes(1).deployAndPropose(deployDatas(1))
       _      <- nodes(0).receive()
       _      <- nodes(2).receive()
 
-      block3 <- nodes(2).deployBuffer.addDeploy(deployDatas(2)) *> nodes(2).propose()
+      block3 <- nodes(2).deployAndPropose(deployDatas(2))
       _      <- nodes(0).receive()
       _      <- nodes(1).receive()
 
-      block4 <- nodes(0).deployBuffer.addDeploy(deployDatas(3)) *> nodes(0).propose()
+      block4 <- nodes(0).deployAndPropose(deployDatas(3))
       _      <- nodes(1).receive()
       _      <- nodes(2).receive()
 
-      block5 <- nodes(1).deployBuffer.addDeploy(deployDatas(4)) *> nodes(1).propose()
+      block5 <- nodes(1).deployAndPropose(deployDatas(4))
       _      <- nodes(0).receive()
       _      <- nodes(2).receive()
 
-      block6 <- nodes(2).deployBuffer.addDeploy(deployDatas(5)) *> nodes(2).propose()
+      block6 <- nodes(2).deployAndPropose(deployDatas(5))
       _      <- nodes(0).receive()
       _      <- nodes(1).receive()
 
-      _                     <- checkLastFinalizedBlock(nodes(0), block2)
+      _                     <- nodes(0).casperEff.lastFinalizedBlock shouldBeF block2
       pendingOrProcessedNum <- nodes(0).deployStorage.reader.sizePendingOrProcessed()
       _                     = pendingOrProcessedNum should be(1)
 
@@ -1099,7 +1091,7 @@ abstract class HashSetCasperTest
       _ <- nodes(1).receive()
       _ <- nodes(2).receive()
 
-      _                     <- checkLastFinalizedBlock(nodes(0), block3)
+      _                     <- nodes(0).casperEff.lastFinalizedBlock shouldBeF block3
       pendingOrProcessedNum <- nodes(0).deployStorage.reader.sizePendingOrProcessed()
       _                     = pendingOrProcessedNum should be(2) // deploys contained in block 4 and block 7
 
@@ -1107,7 +1099,7 @@ abstract class HashSetCasperTest
       _ <- nodes(0).receive()
       _ <- nodes(2).receive()
 
-      _                     <- checkLastFinalizedBlock(nodes(0), block4)
+      _                     <- nodes(0).casperEff.lastFinalizedBlock shouldBeF block4
       pendingOrProcessedNum <- nodes(0).deployStorage.reader.sizePendingOrProcessed()
       _                     = pendingOrProcessedNum should be(1) // deploys contained in block 7
 
@@ -1115,7 +1107,7 @@ abstract class HashSetCasperTest
       _ <- nodes(0).receive()
       _ <- nodes(1).receive()
 
-      _                     <- checkLastFinalizedBlock(nodes(0), block5)
+      _                     <- nodes(0).casperEff.lastFinalizedBlock shouldBeF block5
       pendingOrProcessedNum <- nodes(0).deployStorage.reader.sizePendingOrProcessed()
       _                     = pendingOrProcessedNum should be(1) // deploys contained in block 7
 
@@ -1123,7 +1115,7 @@ abstract class HashSetCasperTest
       _ <- nodes(1).receive()
       _ <- nodes(2).receive()
 
-      _                     <- checkLastFinalizedBlock(nodes(0), block6)
+      _                     <- nodes(0).casperEff.lastFinalizedBlock shouldBeF block6
       pendingOrProcessedNum <- nodes(0).deployStorage.reader.sizePendingOrProcessed()
       _                     = pendingOrProcessedNum should be(2) // deploys contained in block 7 and block 10
 
@@ -1477,7 +1469,12 @@ object HashSetCasperTest {
     StorageFixture
       .createStorages[Task]()
       .flatMap {
-        case (implicit0(blockStorage: BlockStorage[Task]), _, _) =>
+        case (
+            implicit0(blockStorage: BlockStorage[Task]),
+            _,
+            _,
+            implicit0(fs: FinalityStorage[Task])
+            ) =>
           Genesis.fromChainSpec[Task](spec)
       }
       .unsafeRunSync

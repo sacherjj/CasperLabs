@@ -1,7 +1,10 @@
-use crate::support::test_support::{ExecuteRequestBuilder, InMemoryWasmTestBuilder};
-use contract_ffi::{key::Key, value::Value};
+use contract_ffi::key::Key;
+use engine_shared::stored_value::StoredValue;
 
-use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT};
+use crate::{
+    support::test_support::{ExecuteRequestBuilder, InMemoryWasmTestBuilder},
+    test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT},
+};
 
 const CONTRACT_MAIN_PURSE: &str = "main_purse.wasm";
 const CONTRACT_TRANSFER_PURSE_TO_ACCOUNT: &str = "transfer_purse_to_account.wasm";
@@ -14,7 +17,7 @@ fn should_run_main_purse_contract_default_account() {
 
     let builder = builder.run_genesis(&DEFAULT_GENESIS_CONFIG);
 
-    let default_account = if let Some(Value::Account(account)) =
+    let default_account = if let Some(StoredValue::Account(account)) =
         builder.query(None, Key::Account(DEFAULT_ACCOUNT_ADDR), &[])
     {
         account

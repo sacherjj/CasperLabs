@@ -1,4 +1,4 @@
-import { observable } from 'mobx';
+import { computed, observable } from 'mobx';
 import * as nacl from 'tweetnacl-ts';
 import { saveAs } from 'file-saver';
 import ErrorContainer from './ErrorContainer';
@@ -8,7 +8,8 @@ import {
   BalanceService,
   CasperService,
   decodeBase64,
-  encodeBase64
+  encodeBase64,
+  Keys
 } from 'casperlabs-sdk';
 import ObservableValueMap from '../lib/ObservableValueMap';
 
@@ -21,8 +22,8 @@ export class AuthContainer {
   @observable user: User | null = null;
   @observable accounts: UserAccount[] | null = null;
 
-  // An account we are creating, while we're configuring it.
-  @observable newAccountForm: NewAccountFormData | null = null;
+  // An account we are creating or importing, while we're configuring it.
+  @observable accountForm: NewAccountFormData | ImportAccountFormData | null = null;
 
   @observable selectedAccount: UserAccount | null = null;
 
@@ -119,16 +120,34 @@ export class AuthContainer {
 
   // Open a new account creation form.
   configureNewAccount() {
-    this.newAccountForm = new NewAccountFormData(this.accounts!);
+    this.accountForm = new NewAccountFormData(this.accounts!);
+  }
+
+  // Open a form for importing account.
+  configureImportAccount() {
+    this.accountForm = new ImportAccountFormData(this.accounts!);
   }
 
   async createAccount(): Promise<boolean> {
-    let form = this.newAccountForm!;
-    if (form.clean()) {
+    let form = this.accountForm!;
+    if (form instanceof NewAccountFormData && form.clean()) {
       // Save the private and public keys to disk.
       saveToFile(form.privateKeyBase64, `${form.name}.private.key`);
       saveToFile(form.publicKeyBase64, `${form.name}.public.key`);
       // Add the public key to the accounts and save it to Auth0.
+      await this.addAccount({
+        name: form.name,
+        publicKeyBase64: form.publicKeyBase64
+      });
+      return true;
+    } else {
+      return false;
+    }
+  }
+
+  async importAccount(): Promise<boolean> {
+    let form = this.accountForm!;
+    if (form instanceof ImportAccountFormData && form.clean()) {
       await this.addAccount({
         name: form.name,
         publicKeyBase64: form.publicKeyBase64
@@ -167,18 +186,13 @@ function saveToFile(content: string, filename: string) {
   saveAs(blob, filename);
 }
 
-class NewAccountFormData extends CleanableFormData {
-  constructor(private accounts: UserAccount[]) {
-    super();
-    // Generate key pair and assign to public and private keys.
-    const keys = nacl.sign_keyPair();
-    this.publicKeyBase64 = encodeBase64(keys.publicKey);
-    this.privateKeyBase64 = encodeBase64(keys.secretKey);
-  }
-
+class AccountFormData extends CleanableFormData {
   @observable name: string = '';
   @observable publicKeyBase64: string = '';
-  @observable privateKeyBase64: string = '';
+
+  constructor(private accounts: UserAccount[]) {
+    super();
+  }
 
   protected check() {
     if (this.name === '') return 'Name cannot be empty!';
@@ -193,6 +207,68 @@ class NewAccountFormData extends CleanableFormData {
       return 'An account with this public key already exists.';
 
     return null;
+  }
+}
+
+export class NewAccountFormData extends AccountFormData {
+  @observable privateKeyBase64: string = '';
+
+  constructor(accounts: UserAccount[]) {
+    super(accounts);
+    // Generate key pair and assign to public and private keys.
+    const keys = nacl.sign_keyPair();
+    this.publicKeyBase64 = encodeBase64(keys.publicKey);
+    this.privateKeyBase64 = encodeBase64(keys.secretKey);
+  }
+}
+
+export class ImportAccountFormData extends AccountFormData {
+  @observable file: File | null = null;
+  @observable fileContent: string | null = null;
+  @observable key: ByteArray | null = null;
+
+  handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    if (e.target.files) {
+      this.file = e.target.files[0];
+      const reader = new FileReader();
+      reader.readAsText(this.file);
+      reader.onload = e => {
+        this.fileContent = reader.result as string;
+        this.error = this.checkFileContent();
+        if (this.error === null) {
+          this.name = this.fileName!.split('.')[0];
+          this.publicKeyBase64 = encodeBase64(this.key!);
+        }
+      };
+    }
+  }
+
+  @computed
+  get fileName(): string | null {
+    if (this.file) {
+      return this.file.name;
+    }
+    return null;
+  }
+
+  checkFileContent() {
+    if (!this.fileContent) {
+      return 'The content of imported file cannot be empty!';
+    }
+    try {
+      this.key = Keys.Ed25519.parsePublicKey(Keys.Ed25519.readBase64WithPEM(this.fileContent));
+    } catch (e) {
+      return e.message;
+    }
+    return null;
+  }
+
+  protected check() {
+    let errorMsg = this.checkFileContent();
+    if (errorMsg !== null) {
+      return errorMsg;
+    }
+    return super.check();
   }
 }
 

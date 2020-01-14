@@ -24,6 +24,7 @@ import io.casperlabs.shared.Sorting._
 import io.casperlabs.shared.{FilesAPI, Log, LogSource, Sorting}
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.BlockMsgWithTransform
+import io.casperlabs.storage.dag.FinalityStorage
 
 import scala.util._
 import scala.util.control.NoStackTrace
@@ -32,7 +33,7 @@ object Genesis {
   import Sorting.byteArrayOrdering
 
   // https://casperlabs.atlassian.net/wiki/spaces/EN/pages/135528449/Genesis+Process+Specification
-  def fromChainSpec[F[_]: MonadThrowable: Log: ExecutionEngineService: BlockStorage](
+  def fromChainSpec[F[_]: MonadThrowable: Log: ExecutionEngineService: BlockStorage: FinalityStorage](
       genesisConfig: ipc.ChainSpec.GenesisConfig
   ): F[BlockMsgWithTransform] =
     for {
@@ -92,5 +93,6 @@ object Genesis {
 
       // And store the block as well since we won't have any other means of retrieving its effects.
       _ <- BlockStorage[F].put(genesis)
+      _ <- FinalityStorage[F].markAsFinalized(genesis.getBlockMessage.blockHash, Set.empty)
     } yield genesis
 }

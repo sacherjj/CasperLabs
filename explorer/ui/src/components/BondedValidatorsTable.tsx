@@ -4,10 +4,16 @@ import DataTable from './DataTable';
 import { BlockInfo } from 'casperlabs-grpc/io/casperlabs/casper/consensus/info_pb';
 import { encodeBase16 } from 'casperlabs-sdk';
 import { Icon } from './Utils';
+import { Bond } from 'casperlabs-grpc/io/casperlabs/casper/consensus/consensus_pb';
 
 export const BondedValidatorsTable = observer(
   (props: { block: BlockInfo; lastFinalizedBlock: BlockInfo | undefined }) => {
     let finalizedBondedValidators = new Set();
+
+    // Since js doesn't support taking tuple as the key of map/set, we need encode it.
+    // The char `_` is not used in Base64, so it is safe to use it as separator.
+    let key = (b: Bond) => `${b.getValidatorPublicKey_asB64()}_${b.getStake()}`;
+
     if (props.lastFinalizedBlock) {
       let finalizedBonds = props.lastFinalizedBlock
         .getSummary()!
@@ -15,7 +21,7 @@ export const BondedValidatorsTable = observer(
         .getState()!
         .getBondsList();
       finalizedBondedValidators = new Set(
-        finalizedBonds.map(bond => bond.getValidatorPublicKey_asB64())
+        finalizedBonds.map(bond => key(bond))
       );
     }
     let bondsList = props.block
@@ -27,9 +33,7 @@ export const BondedValidatorsTable = observer(
       <DataTable
         title={`Bonded Validators List (${bondsList.length})`}
         headers={['Validator', 'Stake', 'Finalized']}
-        rows={
-          bondsList
-        }
+        rows={bondsList}
         renderRow={(bond, i) => {
           return (
             <tr key={i}>
@@ -41,18 +45,17 @@ export const BondedValidatorsTable = observer(
               </td>
               <td className="text-center">
                 {finalizedBondedValidators.has(
-                  bond.getValidatorPublicKey_asB64()
+                  key(bond)
                 ) ? (
-                  <Icon name="check-circle" color="green"/>
+                  <Icon name="check-circle" color="green" />
                 ) : (
-                  <Icon name="clock"/>
+                  <Icon name="clock" />
                 )}
               </td>
             </tr>
           );
         }}
       />
-    )
-      ;
+    );
   }
 );

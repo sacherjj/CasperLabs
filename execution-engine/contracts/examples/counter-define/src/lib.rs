@@ -2,12 +2,13 @@
 
 extern crate alloc;
 
-use alloc::{collections::BTreeMap, string::String, vec::Vec};
+use alloc::{collections::BTreeMap, string::String};
 
 use contract_ffi::{
     contract_api::{runtime, storage, Error as ApiError, TURef},
     key::Key,
     unwrap_or_revert::UnwrapOrRevert,
+    value::CLValue,
 };
 
 const COUNT_KEY: &str = "count";
@@ -48,7 +49,8 @@ pub extern "C" fn counter_ext() {
             let result = storage::read(turef)
                 .unwrap_or_revert_with(ApiError::Read)
                 .unwrap_or_revert_with(ApiError::ValueNotFound);
-            runtime::ret(result, Vec::new());
+            let return_value = CLValue::from_t(result).unwrap_or_revert();
+            runtime::ret(return_value);
         }
         _ => runtime::revert(Error::UnknownMethodName),
     }
@@ -64,5 +66,5 @@ pub extern "C" fn call() {
     counter_urefs.insert(key_name, counter_local_key.into());
 
     let pointer = storage::store_function_at_hash(COUNTER_EXT, counter_urefs);
-    runtime::put_key(COUNTER_KEY, &pointer.into());
+    runtime::put_key(COUNTER_KEY, pointer.into());
 }

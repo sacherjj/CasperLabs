@@ -1,13 +1,9 @@
 #![no_std]
 
-extern crate alloc;
-
-use alloc::vec;
-
 use contract_ffi::{
-    contract_api::{runtime, ContractRef, Error, TURef},
+    contract_api::{runtime, ContractRef, Error},
     unwrap_or_revert::UnwrapOrRevert,
-    uref::URef,
+    uref::{AccessRights, URef},
 };
 
 #[repr(u32)]
@@ -26,11 +22,9 @@ pub extern "C" fn call() {
         .unwrap_or_revert_with(Error::User(CustomError::MissingLocalStateURefArg as u16))
         .unwrap_or_revert_with(Error::InvalidArgument);
 
-    let local_state_contract_pointer = ContractRef::TURef(TURef::new(
-        local_state_uref.addr(),
-        contract_ffi::uref::AccessRights::READ,
-    ));
+    let local_state_contract_pointer =
+        ContractRef::URef(URef::new(local_state_uref.addr(), AccessRights::READ));
 
     // call do_nothing_stored
-    runtime::call_contract::<_, ()>(local_state_contract_pointer.clone(), &(), &vec![]);
+    runtime::call_contract(local_state_contract_pointer, ())
 }

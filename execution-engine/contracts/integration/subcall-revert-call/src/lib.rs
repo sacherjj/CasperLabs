@@ -1,9 +1,5 @@
 #![no_std]
 
-extern crate alloc;
-
-use alloc::vec::Vec;
-
 use contract_ffi::{
     contract_api::{runtime, ContractRef, Error},
     key::Key,
@@ -21,5 +17,5 @@ pub extern "C" fn call() {
         _ => runtime::revert(Error::UnexpectedKeyVariant),
     };
 
-    runtime::call_contract::<_, ()>(contract_ref, &(), &Vec::new());
+    runtime::call_contract(contract_ref, ())
 }

@@ -1,6 +1,8 @@
-use alloc::vec;
-
-use contract_ffi::{contract_api::runtime, value::U512};
+use contract_ffi::{
+    contract_api::{account, runtime, system},
+    unwrap_or_revert::UnwrapOrRevert,
+    value::U512,
+};
 
 use crate::{
     api::{self, Api},
@@ -12,55 +14,56 @@ pub extern "C" fn erc20_proxy() {
     let token_ref = Api::destination_contract();
     match Api::from_args_in_proxy() {
         Api::Transfer(recipient, amount) => {
-            runtime::call_contract::<_, ()>(
-                token_ref.clone(),
-                &(api::TRANSFER, recipient, amount),
-                &vec![],
-            );
+            runtime::call_contract::<_, ()>(token_ref.clone(), (api::TRANSFER, recipient, amount));
         }
         Api::TransferFrom(owner, recipient, amount) => {
             runtime::call_contract::<_, ()>(
                 token_ref.clone(),
-                &(api::TRANSFER_FROM, owner, recipient, amount),
-                &vec![],
+                (api::TRANSFER_FROM, owner, recipient, amount),
             );
         }
         Api::Approve(spender, amount) => {
-            runtime::call_contract::<_, ()>(
-                token_ref.clone(),
-                &(api::APPROVE, spender, amount),
-                &vec![],
-            );
+            runtime::call_contract::<_, ()>(token_ref.clone(), (api::APPROVE, spender, amount));
         }
         Api::AssertBalance(address, expected_amount) => {
-            let balance = runtime::call_contract::<_, U512>(
-                token_ref.clone(),
-                &(api::BALANCE_OF, address),
-                &vec![],
-            );
-            if balance != expected_amount {
+            let balance =
+                runtime::call_contract::<_, U512>(token_ref.clone(), (api::BALANCE_OF, address));
+            if expected_amount != balance {
                 runtime::revert(Error::BalanceAssertionFailure)
             }
         }
         Api::AssertTotalSupply(expected_total_supply) => {
-            let total_supply = runtime::call_contract::<_, U512>(
-                token_ref.clone(),
-                &(api::TOTAL_SUPPLY,),
-                &vec![],
-            );
-            if total_supply != expected_total_supply {
+            let total_supply =
+                runtime::call_contract::<_, U512>(token_ref.clone(), (api::TOTAL_SUPPLY,));
+            if expected_total_supply != total_supply {
                 runtime::revert(Error::TotalSupplyAssertionFailure)
             }
         }
         Api::AssertAllowance(owner, spender, expected_amount) => {
             let allowance = runtime::call_contract::<_, U512>(
                 token_ref.clone(),
-                &(api::ALLOWANCE, owner, spender),
-                &vec![],
+                (api::ALLOWANCE, owner, spender),
             );
-            if allowance != expected_amount {
+            if expected_amount != allowance {
                 runtime::revert(Error::AllowanceAssertionFailure)
             }
+        }
+        Api::BuyProxy(clx_amount) => {
+            let main_purse = account::get_main_purse();
+            let new_purse = system::create_purse();
+            system::transfer_from_purse_to_purse(main_purse, new_purse, clx_amount)
+                .unwrap_or_revert_with(Error::PurseTransferError);
+            runtime::call_contract::<_, ()>(token_ref.clone(), (api::BUY, new_purse));
+        }
+        Api::SellProxy(tokens_amount) => {
+            let new_purse = system::create_purse();
+            runtime::call_contract::<_, ()>(
+                token_ref.clone(),
+                (api::SELL, new_purse, tokens_amount),
+            );
+            let main_purse = account::get_main_purse();
+            system::transfer_from_purse_to_purse(new_purse, main_purse, tokens_amount)
+                .unwrap_or_revert_with(Error::PurseTransferError);
         }
         _ => runtime::revert(Error::UnknownProxyCommand),
     }

@@ -50,7 +50,7 @@ impl ModuleImportResolver for RuntimeModuleImportResolver {
             ),
             "load_named_keys" => FuncInstance::alloc_host(
                 Signature::new(&[ValueType::I32; 2][..], Some(ValueType::I32)),
-                FunctionIndex::SerNamedKeysFuncIndex.into(),
+                FunctionIndex::LoadNamedKeysFuncIndex.into(),
             ),
             "write" => FuncInstance::alloc_host(
                 Signature::new(&[ValueType::I32; 4][..], None),
@@ -64,13 +64,13 @@ impl ModuleImportResolver for RuntimeModuleImportResolver {
                 Signature::new(&[ValueType::I32; 4][..], None),
                 FunctionIndex::AddFuncIndex.into(),
             ),
+            "add_local" => FuncInstance::alloc_host(
+                Signature::new(&[ValueType::I32; 4][..], None),
+                FunctionIndex::AddLocalFuncIndex.into(),
+            ),
             "new_uref" => FuncInstance::alloc_host(
                 Signature::new(&[ValueType::I32; 3][..], None),
                 FunctionIndex::NewFuncIndex.into(),
-            ),
-            "load_arg" => FuncInstance::alloc_host(
-                Signature::new(&[ValueType::I32; 1][..], Some(ValueType::I32)),
-                FunctionIndex::LoadArgFuncIndex.into(),
             ),
             "get_arg_size" => FuncInstance::alloc_host(
                 Signature::new(&[ValueType::I32; 2][..], Some(ValueType::I32)),
@@ -81,11 +81,11 @@ impl ModuleImportResolver for RuntimeModuleImportResolver {
                 FunctionIndex::GetArgFuncIndex.into(),
             ),
             "ret" => FuncInstance::alloc_host(
-                Signature::new(&[ValueType::I32; 4][..], None),
+                Signature::new(&[ValueType::I32; 2][..], None),
                 FunctionIndex::RetFuncIndex.into(),
             ),
             "call_contract" => FuncInstance::alloc_host(
-                Signature::new(&[ValueType::I32; 7][..], Some(ValueType::I32)),
+                Signature::new(&[ValueType::I32; 5][..], Some(ValueType::I32)),
                 FunctionIndex::CallContractFuncIndex.into(),
             ),
             "get_key" => FuncInstance::alloc_host(
@@ -112,9 +112,9 @@ impl ModuleImportResolver for RuntimeModuleImportResolver {
                 Signature::new(&[ValueType::I32; 5][..], None),
                 FunctionIndex::StoreFnAtHashIndex.into(),
             ),
-            "is_valid" => FuncInstance::alloc_host(
+            "is_valid_uref" => FuncInstance::alloc_host(
                 Signature::new(&[ValueType::I32; 2][..], Some(ValueType::I32)),
-                FunctionIndex::IsValidFnIndex.into(),
+                FunctionIndex::IsValidURefFnIndex.into(),
             ),
             "revert" => FuncInstance::alloc_host(
                 Signature::new(&[ValueType::I32; 1][..], None),

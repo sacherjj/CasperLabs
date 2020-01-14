@@ -2,10 +2,7 @@
 
 extern crate alloc;
 
-use alloc::{
-    string::{String, ToString},
-    vec,
-};
+use alloc::string::{String, ToString};
 
 use contract_ffi::{
     contract_api::{account, runtime, storage, system, Error as ApiError},
@@ -37,8 +34,7 @@ pub extern "C" fn call() {
 
         let pos_pointer = system::get_proof_of_stake();
 
-        let payment_purse: PurseId =
-            runtime::call_contract(pos_pointer, &(GET_PAYMENT_PURSE,), &vec![]);
+        let payment_purse: PurseId = runtime::call_contract(pos_pointer, (GET_PAYMENT_PURSE,));
 
         system::transfer_from_purse_to_purse(main_purse, payment_purse, amount).unwrap_or_revert()
     }
@@ -55,5 +51,5 @@ pub extern "C" fn call() {
     let mut uref_name: String = NEW_UREF_RESULT_UREF_NAME.to_string();
     uref_name.push_str("-");
     uref_name.push_str(value);
-    runtime::put_key(&uref_name, &result_key);
+    runtime::put_key(&uref_name, result_key);
 }
