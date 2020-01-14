@@ -1,4 +1,4 @@
-import {toBytesArrayU8, toBytesString} from "./bytesrepr";
+import {toBytesArrayU8, toBytesString, toBytesI32} from "./bytesrepr";
 import {U512} from "./bignum";
 import {URef} from "./uref";
 import {Key} from "./key";
@@ -43,6 +43,10 @@ export class CLValue {
 
     static fromU512(value: U512): CLValue {
         return new CLValue(value.toBytes(), <u8>CLTypeTag.U512);
+    }
+
+    static fromI32(value: i32): CLValue {
+        return new CLValue(toBytesI32(value), <u8>CLTypeTag.I32);
     }
 
     static fromKey(key: Key): CLValue{

@@ -24,6 +24,23 @@ export function fromBytesU32(bytes: Uint8Array): U32 | null {
     return <U32>number;
 }
 
+export function toBytesI32(num: i32): u8[] {
+    let bytes = new Uint8Array(4);
+    store<i32>(bytes.dataStart, num);
+    let result = new Array<u8>(4);
+    for (var i = 0; i < 4; i++) {
+        result[i] = bytes[i];
+    }
+    return result;
+}
+
+export function fromBytesI32(bytes: Uint8Array): I32 | null {
+    if (bytes.length < 4) {
+        return null;
+    }
+    return <I32>(<i32>load<i32>(bytes.dataStart));
+}
+
 export function toBytesU64(num: u64): u8[] {
     // NOTE: Overflows on unit tests for ranges >= 2**32
     let bytes = new Uint8Array(8);
