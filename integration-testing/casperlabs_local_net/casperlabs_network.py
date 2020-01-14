@@ -9,6 +9,7 @@ from typing import Callable, Dict, List
 from docker import DockerClient
 from docker.errors import NotFound
 from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
 from selenium.webdriver.remote.webdriver import WebDriver
 
@@ -216,8 +217,11 @@ class CasperLabsNetwork:
                 remote_drive = f"http://{self.selenium_node.name}:4444/wd/hub"
             else:
                 remote_drive = f"http://127.0.0.1:4444/wd/hub"
+            chrome_options = Options()
+            prefs = {"profile.default_content_setting_values.automatic_downloads": 1}
+            chrome_options.add_experimental_option("prefs", prefs)
             self.selenium_driver = webdriver.Remote(
-                remote_drive, DesiredCapabilities.CHROME
+                remote_drive, DesiredCapabilities.CHROME, options=chrome_options
             )
             self.selenium_driver.implicitly_wait(30)
 
