@@ -38,6 +38,7 @@ import org.scalatest.prop.GeneratorDrivenPropertyChecks
 import org.scalatest.{FlatSpec, Matchers}
 
 import scala.util.Either
+import io.casperlabs.casper.DeploySelection.DeploySelectionResult
 
 @silent("is never used")
 class DeploySelectionTest
@@ -86,7 +87,7 @@ class DeploySelectionTest
       val test = for {
         selected <- deploySelection
                      .select((prestate, blocktime, protocolVersion, countedStream.stream))
-                     .map(_.map(_.deploy))
+                     .map(_.commuting.map(_.deploy))
         // If we will consume whole stream, before condition is met, that's how many
         // elements we expect to pull from the stream.
         // Otherwise we expect one more pull than elements, because we have to pull
@@ -132,7 +133,36 @@ class DeploySelectionTest
       test.unsafeRunSync
   }
 
-  it should "return conflicting deploys along the commuting ones if they fit the block size limit" in (pending)
+  it should "return conflicting deploys along the commuting ones if they fit the block size limit" in forAll(
+    Gen.zip(
+      Gen.listOfN(deploysInSmallBlock, arbDeploy.arbitrary),
+      Gen.listOfN(deploysInSmallBlock, arbDeploy.arbitrary)
+    )
+  ) {
+    case (conflicting, commuting) =>
+      val allDeploys = conflicting ++ commuting
+      val stream = fs2.Stream
+        .fromIterator(conflicting.toIterator)
+        .interleave(fs2.Stream.fromIterator(commuting.toIterator))
+
+      val counter                                   = AtomicInt(1)
+      implicit val ee: ExecutionEngineService[Task] = eeExecMock(everyOtherCommutesExec(counter) _)
+
+      // Since we generate two streams of `smallBlockSizeBytes` size
+      // A block with twice as big size limit should fit both streams.
+      val bigBlockSize = smallBlockSizeBytes * 2
+
+      val deploySelection = DeploySelection.create[Task](bigBlockSize * 2)
+
+      val test = deploySelection
+        .select((prestate, blocktime, protocolVersion, stream))
+        .map {
+          case DeploySelectionResult(commuting, conflicting) =>
+            (commuting.map(_.deploy) ++ conflicting) should contain theSameElementsAs allDeploys
+        }
+
+      test.unsafeRunSync
+  }
 
   it should "consume the whole stream if all deploys commute and fit block size limit" in forAll(
     Gen
@@ -152,7 +182,7 @@ class DeploySelectionTest
 
       val test = deploySelection
         .select((prestate, blocktime, protocolVersion, stream))
-        .map(_.map(_.deploy))
+        .map(_.commuting.map(_.deploy))
         .map(_ should contain theSameElementsAs cappedDeploys)
 
       test.unsafeRunSync
@@ -181,7 +211,7 @@ class DeploySelectionTest
       .select((prestate, blocktime, protocolVersion, stream))
       .map(results => {
         // Partition the output stream to invalid deploys and commuting deploys.
-        val (invalidDeploys, chosenDeploys) = results.partition(!_.isInstanceOf[DeployEffects])
+        val (invalidDeploys, chosenDeploys) = ProcessedDeployResult.split(results.commuting)
         // Assert that all invalid deploys are a subset of the input set of invalid deploys.
         assert(invalidDeploys.map(_.deploy.deployHash).forall(invalid.contains(_)))
         // Assert that commuting deploys are as expected.

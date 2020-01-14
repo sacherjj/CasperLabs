@@ -1,5 +1,7 @@
 package io.casperlabs.casper
 
+import cats.effect.Sync
+import cats.effect.concurrent.Ref
 import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.state.{Key, ProtocolVersion}
@@ -24,10 +26,15 @@ trait Select[F[_]] {
 
 object DeploySelection {
 
+  final case class DeploySelectionResult(
+      commuting: List[ProcessedDeployResult],
+      conflicting: List[Deploy]
+  )
+
   trait DeploySelection[F[_]] extends Select[F] {
     // prestate hash, block time, protocol version, stream of deploys.
     type A = (ByteString, Long, ProtocolVersion, fs2.Stream[F, Deploy])
-    type B = List[ProcessedDeployResult]
+    type B = DeploySelectionResult
   }
 
   def apply[F[_]](implicit ev: DeploySelection[F]): DeploySelection[F] = ev
@@ -58,7 +65,7 @@ object DeploySelection {
     }
   }
 
-  def createMetered[F[_]: MonadThrowable: ExecutionEngineService: Fs2Compiler: Metrics](
+  def createMetered[F[_]: Sync: ExecutionEngineService: Fs2Compiler: Metrics](
       sizeLimitBytes: Int
   ): DeploySelection[F] = {
     import io.casperlabs.smartcontracts.GrpcExecutionEngineService.EngineMetricsSource
@@ -66,24 +73,25 @@ object DeploySelection {
     new DeploySelection[F] {
       override def select(
           in: (DeployHash, Long, ProtocolVersion, fs2.Stream[F, Deploy])
-      ): F[List[ProcessedDeployResult]] =
+      ): F[DeploySelectionResult] =
         Metrics[F].timer("deploySelection")(underlying.select(in))
     }
 
   }
 
-  def create[F[_]: MonadThrowable: ExecutionEngineService: Fs2Compiler](
+  def create[F[_]: Sync: ExecutionEngineService: Fs2Compiler](
       sizeLimitBytes: Int
   ): DeploySelection[F] =
     new DeploySelection[F] {
       override def select(
           in: (DeployHash, Long, ProtocolVersion, fs2.Stream[F, Deploy])
-      ): F[List[ProcessedDeployResult]] = {
+      ): F[DeploySelectionResult] = {
         val (prestate, blocktime, protocolVersion, deploys) = in
 
         def go(
             state: IntermediateState,
-            stream: fs2.Stream[F, Deploy]
+            stream: fs2.Stream[F, Deploy],
+            conflicting: Ref[F, List[Deploy]]
         ): fs2.Pull[F, List[ProcessedDeployResult], Unit] =
           stream.pull.uncons.flatMap {
             case Some((chunk, streamTail)) =>
@@ -122,21 +130,29 @@ object DeploySelection {
                 .flatMap {
                   // Block size limit reached. Output whatever was accumulated in the chunk and stop consuming.
                   case Left(deploys) =>
-                    fs2.Pull.output(fs2.Chunk(deploys.diff.reverse)) >> fs2.Pull.done
+                    fs2.Pull.output(fs2.Chunk(deploys.diff.reverse)).covary[F] >>
+                      fs2.Pull.eval(conflicting.set(deploys.conflicting)).void >>
+                      fs2.Pull.done
                   case Right(deploys) =>
                     // Output what was chosen in the chunk and continue consuming the stream.
-                    fs2.Pull.output(fs2.Chunk(deploys.diff.reverse)) >> go(
+                    fs2.Pull.output(fs2.Chunk(deploys.diff.reverse)).covary[F] >> go(
                       // We're emptying whatever was accumulated in the previous chunk,
                       // but we leave the total accumulated state, so we only pick deploys
                       // that commute with whatever was already chosen.
                       deploys.copy(diff = List.empty),
-                      streamTail
+                      streamTail,
+                      conflicting
                     )
                 }
-            case None => fs2.Pull.done
+            case None => fs2.Pull.eval(conflicting.set(state.conflicting)).void >> fs2.Pull.done
           }
 
-        go(IntermediateState(), deploys).stream.compile.toList.map(_.flatten)
+        for {
+          conflictingRef <- Ref[F].of(List.empty[Deploy])
+          commutingDeploys <- go(IntermediateState(), deploys, conflictingRef).stream.compile.toList
+                               .map(_.flatten)
+          conflictingDeploys <- conflictingRef.get
+        } yield DeploySelectionResult(commutingDeploys, conflictingDeploys)
       }
     }
 }

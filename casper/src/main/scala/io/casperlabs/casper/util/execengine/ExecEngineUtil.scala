@@ -4,12 +4,11 @@ import cats.effect._
 import cats.implicits._
 import cats.kernel.Monoid
 import cats.data.NonEmptyList
-import cats.{Foldable, Monad, MonadError}
+import cats.{Foldable, Monad}
 import com.google.protobuf.ByteString
-import io.casperlabs.casper.DeploySelection.DeploySelection
+import io.casperlabs.casper.DeploySelection.{DeploySelection, DeploySelectionResult}
 import io.casperlabs.casper._
-import io.casperlabs.casper.consensus.state.CLType.Variants
-import io.casperlabs.casper.consensus.state.{CLType, CLValue, Key, StoredValue, Value}
+import io.casperlabs.casper.consensus.state.{CLType, CLValue, Key, StoredValue}
 import io.casperlabs.casper.consensus.{state, Block, Deploy}
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
 import io.casperlabs.casper.util.execengine.Op.{OpMap, OpMapAddComm}
@@ -17,8 +16,7 @@ import io.casperlabs.casper.util.{CasperLabsProtocol, DagOperations, ProtoUtil}
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.ipc._
 import io.casperlabs.metrics.Metrics
-import io.casperlabs.models.Message
-import io.casperlabs.models.{DeployResult => _}
+import io.casperlabs.models.{Message, SmartContractEngineError, DeployResult => _}
 import io.casperlabs.shared.Log
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.block.BlockStorage
@@ -44,6 +42,63 @@ object ExecEngineUtil {
 
   import io.casperlabs.smartcontracts.GrpcExecutionEngineService.EngineMetricsSource
 
+  /** Takes a list of deploys and executes them one after the other, using a post state hash of a previous
+    * deploy as pre state hash of the current deploy.
+    *
+    * In essence, this simulates sequential execution EE should be providing natively.
+    */
+  private def commitDeploysSequentially[F[_]: MonadThrowable: Log: Metrics: DeployStorage: ExecutionEngineService: DeploySelection](
+      prestateHash: ByteString,
+      deploys: NonEmptyList[Deploy],
+      blocktime: Long,
+      protocolVersion: state.ProtocolVersion
+  ): F[DeploysCheckpoint] = {
+
+    def go(idx: Int, prestate: ByteString, deploy: Deploy): F[DeploysCheckpoint] =
+      for {
+        deployResult <- processDeploys[F](prestate, blocktime, Seq(deploy), protocolVersion)
+                         .flatMap { dpr =>
+                           if (dpr.size != 1)
+                             MonadThrowable[F].raiseError[DeployResult](
+                               SmartContractEngineError(
+                                 "ExecutionEngine returned more than 1 result for single deploy."
+                               )
+                             )
+                           else dpr.head.pure[F]
+                         }
+        (invalidDeploys, deployEffects) = ProcessedDeployResult.split(
+          List(ProcessedDeployResult(deploy, deployResult))
+        )
+        _ <- handleInvalidDeploys[F](invalidDeploys)
+        (deploysForBlock, transforms) = ExecEngineUtil
+          .unzipEffectsAndDeploys(deployEffects, stage = idx)
+          .unzip
+        commitResult <- ExecutionEngineService[F]
+                         .commit(prestate, transforms.flatten, protocolVersion)
+                         .rethrow
+      } yield DeploysCheckpoint(
+        prestate,
+        commitResult.postStateHash,
+        commitResult.bondedValidators,
+        deploysForBlock,
+        protocolVersion
+      )
+
+    for {
+      first <- go(idx = 0, prestateHash, deploys.head)
+      deploysCheckpoint <- deploys.zipWithIndex.tail.foldLeftM(first) {
+                            case (prevRes, (deploy, idx)) =>
+                              go(idx, prevRes.postStateHash, deploy)
+                                .map(newRes => {
+                                  newRes.copy(
+                                    preStateHash = prevRes.preStateHash,
+                                    deploysForBlock = prevRes.deploysForBlock ++ newRes.deploysForBlock
+                                  )
+                                })
+                          }
+    } yield deploysCheckpoint
+  }
+
   def computeDeploysCheckpoint[F[_]: MonadThrowable: DeployStorage: Log: ExecutionEngineService: DeploySelection: Metrics](
       merged: MergeResult[TransformMap, Block],
       deployStream: fs2.Stream[F, Deploy],
@@ -54,22 +109,44 @@ object ExecEngineUtil {
   ): F[DeploysCheckpoint] = Metrics[F].timer("computeDeploysCheckpoint") {
     for {
       preStateHash <- computePrestate[F](merged, rank, upgrades).timer("computePrestate")
-      pdr <- DeploySelection[F].select(
-              (preStateHash, blocktime, protocolVersion, deployStream)
-            )
-      (invalidDeploys, deployEffects) = ProcessedDeployResult.split(pdr)
-      _                               <- handleInvalidDeploys[F](invalidDeploys)
-      (deploysForBlock, transforms)   = ExecEngineUtil.unzipEffectsAndDeploys(deployEffects).unzip
-      commitResult <- ExecutionEngineService[F]
-                       .commit(preStateHash, transforms.flatten, protocolVersion)
-                       .rethrow
-    } yield DeploysCheckpoint(
-      preStateHash,
-      commitResult.postStateHash,
-      commitResult.bondedValidators,
-      deploysForBlock,
-      protocolVersion
-    )
+      result <- DeploySelection[F].select(
+                 (preStateHash, blocktime, protocolVersion, deployStream)
+               )
+      DeploySelectionResult(pdr, conflicting) = result
+      (invalidDeploys, deployEffects)         = ProcessedDeployResult.split(pdr)
+      _                                       <- handleInvalidDeploys[F](invalidDeploys)
+      (deploysForBlock, transforms)           = ExecEngineUtil.unzipEffectsAndDeploys(deployEffects).unzip
+      parResult <- ExecutionEngineService[F]
+                    .commit(preStateHash, transforms.flatten, protocolVersion)
+                    .rethrow
+      result <- NonEmptyList
+                 .fromList(conflicting)
+                 .fold(
+                   DeploysCheckpoint(
+                     preStateHash,
+                     parResult.postStateHash,
+                     parResult.bondedValidators,
+                     deploysForBlock,
+                     protocolVersion
+                   ).pure[F]
+                 )(
+                   nelDeploys =>
+                     commitDeploysSequentially[F](
+                       parResult.postStateHash,
+                       nelDeploys,
+                       blocktime,
+                       protocolVersion
+                     ).map { sequentialResult =>
+                       DeploysCheckpoint(
+                         preStateHash,
+                         sequentialResult.postStateHash,
+                         parResult.bondedValidators,
+                         deploysForBlock ++ sequentialResult.deploysForBlock,
+                         protocolVersion
+                       )
+                     }
+                 )
+    } yield result
   }
 
   // Discard deploys that will never be included because they failed some precondition.
@@ -147,21 +224,24 @@ object ExecEngineUtil {
     deploys.zip(results).map((ProcessedDeployResult.apply _).tupled)
 
   def unzipEffectsAndDeploys(
-      commutingEffects: Seq[DeployEffects]
+      commutingEffects: Seq[DeployEffects],
+      stage: Int = 0
   ): Seq[(Block.ProcessedDeploy, Seq[TransformEntry])] =
     commutingEffects map {
       case ExecutionSuccessful(deploy, effects, cost) =>
         Block.ProcessedDeploy(
           Some(deploy),
           cost,
-          false
+          false,
+          stage = stage
         ) -> effects.transformMap
       case ExecutionError(deploy, error, effects, cost) =>
         Block.ProcessedDeploy(
           Some(deploy),
           cost,
           true,
-          utils.deployErrorsShow.show(error)
+          utils.deployErrorsShow.show(error),
+          stage = stage
         ) -> effects.transformMap
     }
 
