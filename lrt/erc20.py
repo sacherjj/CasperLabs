@@ -25,6 +25,7 @@ ERC20_WASM = f"{BASE_PATH}/execution-engine/target/wasm32-unknown-unknown/releas
 BALANCE_KEY_SIZE_HEX = "21000000"
 ALLOWANCE_KEY_SIZE_HEX = "40000000"
 BALANCE_BYTE = "01"
+PAYMENT_AMOUNT = 10 ** 7
 
 
 class Node:
@@ -96,7 +97,7 @@ class BoundAgent:
         deploy_hash = self.node.client.transfer(
             recipient_public_hex,
             amount,
-            payment_amount=1000000000,
+            payment_amount=PAYMENT_AMOUNT,
             from_addr=self.agent.public_key_hex,
             private_key=self.agent.private_key,
         )
@@ -176,7 +177,7 @@ class SmartContract:
                 kwargs = dict(
                     public_key=bound_agent.agent.public_key,
                     private_key=bound_agent.agent.private_key,
-                    payment_amount=10000000,
+                    payment_amount=PAYMENT_AMOUNT,
                     session_args=arguments,
                 )
                 if session_reference:
