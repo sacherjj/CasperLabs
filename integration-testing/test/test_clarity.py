@@ -1,5 +1,6 @@
 import time
 
+from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.select import Select
 from selenium.webdriver.support.wait import WebDriverWait
@@ -48,6 +49,9 @@ def test_create_account_key(one_node_network_with_clarity):
     )
 
     # Request tokens
+    WebDriverWait(driver, 60).until(
+        EC.element_to_be_clickable((By.LINK_TEXT, "Faucet"))
+    )
     driver.find_element(By.LINK_TEXT, "Faucet").click()
     select = Select(driver.find_element(By.ID, "id-account-name"))
     select.select_by_visible_text(account_name)
