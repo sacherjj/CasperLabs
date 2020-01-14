@@ -61,14 +61,14 @@ object DagOperations {
 
   /** Traverses j-past-cone of the block and returns messages by specified validator.
     */
-  def swimlaneV[F[_]: Monad](
+  def swimlaneV[F[_]: MonadThrowable](
       validator: ByteString,
       message: Message,
       dag: DagRepresentation[F]
   ): StreamT[F, Message] = {
     // Messages visible in the direct justifications of the block.
     val messagePanorama =
-      message.justifications.toList.traverse(j => dag.lookup(j.latestBlockHash)).map(_.flatten)
+      message.justifications.toList.traverse(j => dag.lookupUnsafe(j.latestBlockHash))
     val tail = StreamT.lift(messagePanorama).flatMap { jTips =>
       toposortJDagDesc[F](dag, jTips).filter(_.validatorId == validator)
     }

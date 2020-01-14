@@ -11,6 +11,10 @@ import io.casperlabs.casper.consensus.{Block, BlockSummary, Era}
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.crypto.Keys.{PublicKey, PublicKeyBS}
 import io.casperlabs.models.Message
+import io.casperlabs.storage.BlockHash
+import io.casperlabs.storage.dag.{DagRepresentation, DagStorage}
+import io.casperlabs.storage.era.EraStorage
+import io.casperlabs.casper.util.DagOperations
 import scala.util.Random
 
 /** Class to encapsulate the message handling logic of messages in an era.
@@ -30,7 +34,7 @@ import scala.util.Random
   *
   * This should make testing easier: the return values are not opaque.
   */
-class EraRuntime[F[_]: MonadThrowable: Clock](
+class EraRuntime[F[_]: MonadThrowable: Clock: EraStorage: ForkChoice](
     conf: HighwayConf,
     val era: Era,
     leaderFunction: LeaderFunction,
@@ -43,9 +47,12 @@ class EraRuntime[F[_]: MonadThrowable: Clock](
     // messages build on blocks long gone and check a huge swathe of the DAG for merge
     // conflicts.
     isSynced: => F[Boolean],
+    dag: DagRepresentation[F],
+    // Random number generator used to pick the omega delay.
     rng: Random = new Random()
 ) {
-  import EraRuntime.Agenda, Agenda._
+  import EraRuntime._, Agenda._
+
   type HWL[A] = HighwayLog[F, A]
   private val noop = HighwayLog.unit[F]
 
@@ -67,9 +74,9 @@ class EraRuntime[F[_]: MonadThrowable: Clock](
     * while their main parent was still before the deadline.
     */
   private def isBoundary(boundaries: List[Instant])(
-      mainParentBlockRoundId: Instant,
-      blockRoundId: Instant
-  ) = boundaries.exists(t => mainParentBlockRoundId.isBefore(t) && !blockRoundId.isBefore(t))
+      mainParentBlockRound: Instant,
+      blockRound: Instant
+  ) = boundaries.exists(isCrossing(_)(mainParentBlockRound, blockRound))
 
   val isBookingBoundary = isBoundary(bookingBoundaries)(_, _)
   val isKeyBoundary     = isBoundary(keyBoundaries)(_, _)
@@ -80,8 +87,13 @@ class EraRuntime[F[_]: MonadThrowable: Clock](
     * however, the validators of _this_ era are the ones that can finalize it by
     * building ballots on top of it. They cannot build more blocks on them though.
     */
-  val isSwitchBoundary = (mpbr: Instant, br: Instant) => mpbr.isBefore(end) && !br.isBefore(end)
+  val isSwitchBoundary = isCrossing(end)(_, _)
 
+  private implicit class MessageOps(msg: Message) {
+    def roundInstant = conf.toInstant(Ticks(msg.roundId))
+  }
+
+  /** Current tick based on wall clock time. */
   private def currentTick =
     Clock[F].realTime(conf.tickUnit).map(Ticks(_))
 
@@ -121,23 +133,38 @@ class EraRuntime[F[_]: MonadThrowable: Clock](
 
   private def createLambdaResponse(
       messageProducer: MessageProducer[F],
-      // TODO (NODE-1102): Lambda message will be a ballot during voting.
+      // TODO (NODE-1116): Lambda message will be a ballot during voting.
       lambdaMessage: Message.Block
   ): HWL[Unit] = ifSynced {
     for {
       b <- HighwayLog.liftF {
-            messageProducer.ballot(
-              eraId = era.keyBlockHash,
-              roundId = Ticks(lambdaMessage.roundId),
-              target = lambdaMessage.messageHash,
-              // TODO (NODE-1102): Fetch our own last message ID.
-              justifications =
-                Map(PublicKey(lambdaMessage.validatorId) -> Set(lambdaMessage.messageHash))
-            )
+            for {
+              // We need to cite the lambda message, and our own latest message.
+              // NOTE: The latter will be empty until the validator produces something in this era.
+              tips                    <- dag.latestInEra(era.keyBlockHash)
+              validatorLatestMessages <- tips.latestMessageHash(messageProducer.validatorId)
+              justifications = List(
+                PublicKey(lambdaMessage.validatorId) -> Set(lambdaMessage.messageHash),
+                messageProducer.validatorId          -> validatorLatestMessages
+              ).filterNot(_._2.isEmpty).toMap
+              // See what the fork choice is, given the lambda and our own latest message, that is our target.
+              // In the voting period the lambda message is a ballot, so can't be a target,
+              // but in any case our own latest message might point at something with more weight already.
+              choice <- ForkChoice[F].fromJustifications(
+                         lambdaMessage.keyBlockHash,
+                         justifications.values.flatten.toSet
+                       )
+              message <- messageProducer.ballot(
+                          eraId = era.keyBlockHash,
+                          roundId = Ticks(lambdaMessage.roundId),
+                          target = choice.mainParent.messageHash,
+                          justifications = justifications
+                        )
+            } yield message
           }
-      _ <- HighwayLog.tell[F](
+      _ <- HighwayLog.tell[F] {
             HighwayEvent.CreatedLambdaResponse(b)
-          )
+          }
     } yield ()
   }
 
@@ -147,21 +174,25 @@ class EraRuntime[F[_]: MonadThrowable: Clock](
   ): HWL[Unit] = ifSynced {
     for {
       b <- HighwayLog.liftF {
-            // TODO (NODE-1102): Create ballot during voting-only.
-            messageProducer.block(
-              eraId = era.keyBlockHash,
-              roundId = roundId,
-              // TODO (NODE-1102): Execute the fork choice.
-              mainParent = ByteString.EMPTY,
-              // TODO (NODE-1102): Get all justifications
-              justifications = Map.empty,
-              // TODO (NODE-1102): Detect boundary based on main parent
-              isBookingBlock = false
-            )
+            for {
+              choice <- ForkChoice[F].fromKeyBlock(era.keyBlockHash)
+              // TODO (NODE-1116): Create ballot during voting-only.
+              message <- messageProducer.block(
+                          eraId = era.keyBlockHash,
+                          roundId = roundId,
+                          mainParent = choice.mainParent.messageHash,
+                          justifications = choice.justificationsMap,
+                          isBookingBlock = isBookingBoundary(
+                            choice.mainParent.roundInstant,
+                            conf.toInstant(roundId)
+                          )
+                        )
+            } yield message
           }
-      _ <- HighwayLog.tell[F](
+      _ <- HighwayLog.tell[F] {
             HighwayEvent.CreatedLambdaMessage(b)
-          )
+          }
+      _ <- handleCriticalBlocks(b)
     } yield ()
   }
 
@@ -171,19 +202,86 @@ class EraRuntime[F[_]: MonadThrowable: Clock](
   ): HWL[Unit] = ifSynced {
     for {
       b <- HighwayLog.liftF {
-            messageProducer.ballot(
-              eraId = era.keyBlockHash,
-              roundId = roundId,
-              // TODO (NODE-1102): Execute the fork choice.
-              target = ByteString.EMPTY,
-              // TODO (NODE-1102): Get all justifications
-              justifications = Map.empty
-            )
+            for {
+              choice <- ForkChoice[F].fromKeyBlock(era.keyBlockHash)
+              message <- messageProducer.ballot(
+                          eraId = era.keyBlockHash,
+                          roundId = roundId,
+                          target = choice.mainParent.messageHash,
+                          justifications = choice.justificationsMap
+                        )
+            } yield message
           }
       _ <- HighwayLog.tell[F](
             HighwayEvent.CreatedOmegaMessage(b)
           )
     } yield ()
+  }
+
+  /** Trace the lineage of the switch block back to find a key block,
+    * then the corresponding booking block.
+    */
+  private def createEra(
+      switchBlock: Message
+  ): HWL[Unit] = {
+    val keyBlockBoundary     = end minus conf.keyDuration
+    val bookingBlockBoundary = end minus conf.bookingDuration
+
+    // Trace back to the corresponding key block.
+    val keyBlockF = findBlockCrossingBoundary(switchBlock, isCrossing(keyBlockBoundary))
+
+    val maybeChildEra = keyBlockF flatMap { keyBlock =>
+      // Checking if the era exist; if it does, we don't need to look up the booking block.
+      EraStorage[F]
+        .containsEra(keyBlock.messageHash)
+        .ifM(
+          none[Era].pure[F],
+          for {
+            bookingBlock <- findBlockCrossingBoundary(
+                             keyBlock,
+                             isCrossing(bookingBlockBoundary)
+                           )
+            magicBits <- collectMagicBits(dag, bookingBlock, keyBlock)
+            seed      = LeaderSequencer.seed(bookingBlock.messageHash.toByteArray, magicBits)
+            childEra = Era(
+              parentKeyBlockHash = era.keyBlockHash,
+              keyBlockHash = keyBlock.messageHash,
+              bookingBlockHash = bookingBlock.messageHash,
+              startTick = conf.toTicks(end),
+              endTick = conf.toTicks(conf.eraEnd(end)),
+              bonds = bookingBlock.blockSummary.getHeader.getState.bonds,
+              leaderSeed = ByteString.copyFrom(seed)
+            )
+            isNew <- EraStorage[F].addEra(childEra)
+          } yield childEra.some.filter(_ => isNew)
+        )
+    }
+
+    HighwayLog.liftF(maybeChildEra) flatMap {
+      case Some(era) => HighwayLog.tell[F](HighwayEvent.CreatedEra(era))
+      case None      => noop
+    }
+  }
+
+  /** Find a block in the ancestry where the parent is before a time,
+    * but the block is after the time. */
+  private def findBlockCrossingBoundary(
+      descendant: Message,
+      isBoundary: (Instant, Instant) => Boolean
+  ): F[Message] = {
+    def loop(child: Message, childTime: Instant): F[Message] =
+      // If we reached Genesis, for any reason, use it, there's nothing else further back.
+      if (child.parentBlock.isEmpty) child.pure[F]
+      else {
+        dag.lookupUnsafe(child.parentBlock).flatMap { parent =>
+          val parentTime = parent.roundInstant
+          if (isBoundary(parentTime, childTime))
+            child.pure[F]
+          else
+            loop(parent, parentTime)
+        }
+      }
+    loop(descendant, descendant.roundInstant)
   }
 
   /** Pick a time during the round to send the omega message. */
@@ -198,23 +296,29 @@ class EraRuntime[F[_]: MonadThrowable: Clock](
   def validate(message: Message): EitherT[F, String, Unit] = {
     val ok = EitherT.rightT[F, String](())
 
-    def checkF(c: F[Boolean], msg: String) = EitherT {
-      c.ifM(ok.value, msg.asLeft[Unit].pure[F])
+    def checkF(errorMessage: String, errorCondition: F[Boolean]) = EitherT {
+      errorCondition.ifM(errorMessage.asLeft[Unit].pure[F], ok.value)
     }
-    def check(c: Boolean, msg: String) = checkF(c.pure[F], msg)
+    def check(errorMessage: String, errorCondition: Boolean) =
+      checkF(errorMessage, errorCondition.pure[F])
 
     check(
-      !maybeMessageProducer.map(_.validatorId).contains(message.validatorId),
-      "The block is coming from a doppelganger."
+      "The block is coming from a doppelganger.",
+      maybeMessageProducer.map(_.validatorId).contains(message.validatorId)
     ) >> {
       message match {
         case b: Message.Block =>
-          val roundId = Ticks(b.roundId)
           check(
-            (leaderFunction(roundId) == b.validatorId),
-            "The block is not coming from the leader of the round."
-          )
-        // TODO (NODE-1102): Check that we haven't received a block from the same validator in this round.
+            "The block is not coming from the leader of the round.",
+            leaderFunction(Ticks(message.roundId)) != message.validatorId
+          ) >>
+            checkF(
+              "The leader has already sent a lambda message in this round.",
+              // Not going to check this for ballots: two lambda-like ballots
+              // can only be an equivocation, otherwise the 2nd one cites the first
+              // and that means it's not lambda-like.
+              hasOtherLambdaMessageInSameRound[F](dag, b, endTick)
+            )
         case _ =>
           ok
       }
@@ -248,12 +352,13 @@ class EraRuntime[F[_]: MonadThrowable: Clock](
       MonadThrowable[HWL].raiseError[Unit](new IllegalStateException(msg))
 
     message match {
-      // TODO (NODE-1102): Respond to lambda-ballots during voting.
+      // TODO (NODE-1116): Respond to lambda-ballots during voting.
       case _: Message.Ballot =>
         noop
       case b: Message.Block =>
         val roundId = Ticks(b.roundId)
-        maybeMessageProducer.fold(noop) { mp =>
+
+        val response = maybeMessageProducer.fold(noop) { mp =>
           if (mp.validatorId == b.validatorId) {
             illegal("Shouldn't receive our own messages!")
           } else if (b.keyBlockHash != era.keyBlockHash) {
@@ -272,6 +377,8 @@ class EraRuntime[F[_]: MonadThrowable: Clock](
             }
           }
         }
+
+        response >> handleCriticalBlocks(b)
     }
   }
 
@@ -317,11 +424,30 @@ class EraRuntime[F[_]: MonadThrowable: Clock](
         } >> HighwayLog.liftF(Agenda.empty.pure[F])
     }
 
+  /** Do any kind of special logic when we encounter a "critical" block in the protocol:
+    * - booking blocks should execute the auction, but that should be in their
+    *   post state hash as well, so we pass the flag to the message producer
+    * - key blocks don't need special handling when they are made
+    * - switch blocks might be the ones that grant the rewards,
+    *   according to how many blocks were finalized on time during the era
+    */
+  private def handleCriticalBlocks(block: Message.Block): HWL[Unit] =
+    if (block.parentBlock.isEmpty) noop
+    else {
+      for {
+        parent <- HighwayLog.liftF[F, Message] {
+                   dag.lookupUnsafe(block.parentBlock)
+                 }
+        parentTime = parent.roundInstant
+        childTime  = block.roundInstant
+        _          <- createEra(block).whenA(isSwitchBoundary(parentTime, childTime))
+      } yield ()
+    }
 }
 
 object EraRuntime {
 
-  def fromGenesis[F[_]: Sync: Clock](
+  def fromGenesis[F[_]: Sync: Clock: DagStorage: EraStorage: ForkChoice](
       conf: HighwayConf,
       genesis: BlockSummary,
       maybeMessageProducer: Option[MessageProducer[F]],
@@ -339,7 +465,7 @@ object EraRuntime {
     fromEra[F](conf, era, maybeMessageProducer, initRoundExponent, isSynced, leaderSequencer)
   }
 
-  def fromEra[F[_]: Sync: Clock](
+  def fromEra[F[_]: Sync: Clock: DagStorage: EraStorage: ForkChoice](
       conf: HighwayConf,
       era: Era,
       maybeMessageProducer: Option[MessageProducer[F]],
@@ -350,6 +476,7 @@ object EraRuntime {
     for {
       leaderFunction   <- leaderSequencer[F](era)
       roundExponentRef <- Ref.of[F, Int](initRoundExponent)
+      dag              <- DagStorage[F].getRepresentation
     } yield {
       new EraRuntime[F](
         conf,
@@ -361,7 +488,8 @@ object EraRuntime {
         maybeMessageProducer.filter { mp =>
           era.bonds.exists(b => b.validatorPublicKey == mp.validatorId)
         },
-        isSynced
+        isSynced,
+        dag
       )
     }
 
@@ -392,4 +520,93 @@ object EraRuntime {
 
     val empty = apply()
   }
+
+  /** Check that a parent timestamp is before, while the child is at or after a given boundary. */
+  def isCrossing(boundary: Instant)(parent: Instant, child: Instant): Boolean =
+    parent.isBefore(boundary) && !child.isBefore(boundary)
+
+  /** Collect the magic bits between the booking block and the key block, */
+  def collectMagicBits[F[_]: MonadThrowable](
+      dag: DagRepresentation[F],
+      bookingBlock: Message,
+      keyBlock: Message
+  ): F[Seq[Boolean]] =
+    DagOperations
+      .bfTraverseF(List(keyBlock)) { msg =>
+        List(msg.parentBlock).filterNot(_.isEmpty).traverse(dag.lookupUnsafe)
+      }
+      .takeUntil(_.messageHash == bookingBlock.messageHash)
+      .map(_.blockSummary.getHeader.magicBit)
+      .toList
+      .map(_.reverse)
+
+  /** Check that two messages are in the same round. Different eras (e.g. the parent and the child)
+    * can share a round ID, but they are still different rounds.
+    */
+  def isSameRoundAs(a: Message)(b: Message): Boolean =
+    a.keyBlockHash == b.keyBlockHash && a.roundId == b.roundId
+
+  /** Check if a message cites another in the same round, which would mean it's not a lambda message.
+    * The lambda message is created by the leader of the round; under normal cirumstances it comes
+    * before the omega message, and therefore it only won't have a justification in the same round,
+    * because all other validators are not leaders.
+    */
+  def hasJustificationInOwnRound[F[_]: MonadThrowable](
+      dag: DagRepresentation[F],
+      message: Message
+  ): F[Boolean] =
+    message.justifications.toList
+      .findM[F] { j =>
+        dag.lookupUnsafe(j.latestBlockHash).map(isSameRoundAs(message))
+      }
+      .map(_.isDefined)
+
+  /** Given a ballot which we already established is coming from the leader of its round,
+    * check whether it looks like a lambda message (rather than an omega): a lambda message
+    * normally only cites messages from different rounds than its own, because it starts at
+    * the beginning of the block, and it shouldn't have time to receive stray omega messages
+    * from the same round even from validators running with very low round exponents.
+    */
+  def isLambdaLikeBallot[F[_]: MonadThrowable](
+      dag: DagRepresentation[F],
+      ballot: Message.Ballot,
+      eraEndTick: Ticks
+  ): F[Boolean] =
+    if (ballot.roundId < eraEndTick) false.pure[F]
+    else hasJustificationInOwnRound(dag, ballot).map(!_)
+
+  /** Given a lambda message from the leader of a round, check if the validator has sent
+    * another lambda message already in the same round. Ignores equivocations, just the
+    * checks the legal j-DAG.
+    */
+  def hasOtherLambdaMessageInSameRound[F[_]: MonadThrowable](
+      dag: DagRepresentation[F],
+      message: Message,
+      eraEndTick: Ticks
+  ): F[Boolean] =
+    DagOperations
+      .swimlaneV[F](
+        message.validatorId,
+        message,
+        dag
+      )
+      // We know this one is a lambda message.
+      .filter(_.messageHash != message.messageHash)
+      // Only look at messages in this round, in this era.
+      .takeWhile(isSameRoundAs(message))
+      // Try to find a lambda message.
+      .findF {
+        case _: Message.Block =>
+          // We established that this validator is the lead, so a block from them is a lambda.
+          true.pure[F]
+        case b: Message.Ballot =>
+          // The era is over, so this is a voting only period message.
+          // In the active period, it's easy to know that a ballot is either a lambda response or an omega.
+          // In the voting only period, however, lambda messages are ballots too.
+          // The only way to tell if a ballot might be a lambda message is that it cites nothing from this round.
+          isLambdaLikeBallot(dag, b, eraEndTick)
+        case _ =>
+          false.pure[F]
+      }
+      .map(_.isDefined)
 }
