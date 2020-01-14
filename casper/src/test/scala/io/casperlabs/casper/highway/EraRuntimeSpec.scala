@@ -14,9 +14,14 @@ import io.casperlabs.crypto.Keys.{PublicKey, PublicKeyBS}
 import io.casperlabs.models.Message
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.storage.BlockHash
-import io.casperlabs.storage.dag.DagStorage
+import io.casperlabs.storage.dag.{DagStorage, FinalityStorage}
 import io.casperlabs.storage.era.EraStorage
-import io.casperlabs.casper.highway.mocks.{MockDagStorage, MockEraStorage, MockForkChoice}
+import io.casperlabs.casper.highway.mocks.{
+  MockDagStorage,
+  MockEraStorage,
+  MockFinalityStorage,
+  MockForkChoice
+}
 import org.scalatest._
 import org.scalactic.source
 import org.scalactic.Prettifier
@@ -120,31 +125,34 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
         .withBlockHash(blockHashes.next())
     }.get
 
-  def defaultDagStorage = MockDagStorage[Id](genesis.toBlock)
-  def defaultForkChoice = MockForkChoice[Id](genesis)
+  def defaultDagStorage      = MockDagStorage[Id](genesis.toBlock)
+  def defaultForkChoice      = MockForkChoice[Id](genesis)
+  def defaultFinalityStorage = MockFinalityStorage[Id](genesis.messageHash)
 
   def genesisEraRuntime(
       validator: Option[String] = none,
       roundExponent: Int = 0,
       leaderSequencer: LeaderSequencer = LeaderSequencer,
       isSyncedRef: Ref[Id, Boolean] = Ref.of[Id, Boolean](true),
-      messageProducer: String => MessageProducer[Id] = new MockMessageProducer[Id](_)
+      messageProducer: String => MessageProducer[Id] = new MockMessageProducer[Id](_),
+      config: HighwayConf = conf
   )(
       implicit
       // Let's say we are right at the beginning of the era by default.
       C: Clock[Id] = TestClock.frozen[Id](date(2019, 12, 9)),
       DS: DagStorage[Id] = defaultDagStorage,
       ES: EraStorage[Id] = MockEraStorage[Id],
+      FS: FinalityStorage[Id] = defaultFinalityStorage,
       FC: ForkChoice[Id] = defaultForkChoice
   ) =
     EraRuntime.fromGenesis[Id](
-      conf,
+      config,
       genesis.blockSummary,
       validator.map(messageProducer),
       roundExponent,
       isSyncedRef.get,
       leaderSequencer
-    )(syncId, C, DS, ES, FC)
+    )(syncId, C, DS, ES, FS, FC)
 
   /** Fill the DagStorage with blocks at a fixed interval along the era,
     * right up to and including the switch block. */
@@ -862,7 +870,7 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
             new PostEraFixture(postEraElapsed = postEraVotingDuration minus 1.second) {
               handle.value.map(_.action).collect {
                 case Agenda.StartRound(_) =>
-                  fail("Should not schedule after the voting ends.")
+                  fail("Should not schedule more rounds after the voting ends.")
               }
             }
           }
@@ -875,7 +883,28 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
           }
         }
         "the summit based voting is finalized" should {
-          "not schedule anything" in (pending) // NODE-1116
+          "not schedule any more rounds" in {
+            val summitConf = conf.copy(
+              postEraVotingDuration = VotingDuration.SummitLevel(1)
+            )
+            implicit val clock = TestClock.frozen(summitConf.genesisEraEnd)
+            implicit val fs    = defaultFinalityStorage
+            implicit val ds    = defaultDagStorage
+            implicit val fc    = defaultForkChoice
+
+            val runtime = genesisEraRuntime(validator = "Alice".some, config = summitConf)
+
+            val switch = insert(makeBlock("Alice", runtime.era, runtime.endTick))
+            fc.set(switch)
+            fs.markAsFinalized(switch.messageHash, secondary = Set.empty)
+
+            val agenda = runtime.handleAgenda(Agenda.StartRound(Ticks(runtime.endTick))).value
+
+            agenda.map(_.action) collect {
+              case Agenda.StartRound(_) =>
+                fail("Should not schedule more rounds after the switch block is finalized.")
+            }
+          }
         }
       }
 

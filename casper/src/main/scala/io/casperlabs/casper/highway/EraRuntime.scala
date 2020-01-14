@@ -12,7 +12,7 @@ import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.crypto.Keys.{PublicKey, PublicKeyBS}
 import io.casperlabs.models.Message
 import io.casperlabs.storage.BlockHash
-import io.casperlabs.storage.dag.{DagRepresentation, DagStorage}
+import io.casperlabs.storage.dag.{DagRepresentation, DagStorage, FinalityStorageReader}
 import io.casperlabs.storage.era.EraStorage
 import io.casperlabs.casper.util.DagOperations
 import scala.util.Random
@@ -34,7 +34,7 @@ import scala.util.Random
   *
   * This should make testing easier: the return values are not opaque.
   */
-class EraRuntime[F[_]: MonadThrowable: Clock: EraStorage: ForkChoice](
+class EraRuntime[F[_]: MonadThrowable: Clock: EraStorage: FinalityStorageReader: ForkChoice](
     conf: HighwayConf,
     val era: Era,
     leaderFunction: LeaderFunction,
@@ -90,9 +90,12 @@ class EraRuntime[F[_]: MonadThrowable: Clock: EraStorage: ForkChoice](
   val isSwitchBoundary = isCrossing(end)(_, _)
 
   private implicit class MessageOps(msg: Message) {
+
+    /** Convert the round of the message to a time equivalent for comparisons with critical block boundaries. */
     def roundInstant: Instant =
       conf.toInstant(Ticks(msg.roundId))
 
+    /** Check if this block is the first in its main-chain that crosses the end of the era. */
     def isSwitchBlock: F[Boolean] =
       if (msg.parentBlock.isEmpty)
         false.pure[F]
@@ -114,7 +117,19 @@ class EraRuntime[F[_]: MonadThrowable: Clock: EraStorage: ForkChoice](
         case HighwayConf.VotingDuration.FixedLength(duration) =>
           (conf.toTicks(end plus duration) <= tick).pure[F]
 
+        case HighwayConf.VotingDuration.SummitLevel(1) =>
+          // We have to keep voting until the switch block given by the fork choice
+          // in *this* era is finalized.
+          ForkChoice[F].fromKeyBlock(era.keyBlockHash).flatMap { choice =>
+            choice.mainParent.isSwitchBlock.ifM(
+              FinalityStorageReader[F].isFinalized(choice.mainParent.messageHash),
+              false.pure[F]
+            )
+          }
+
         case HighwayConf.VotingDuration.SummitLevel(_) =>
+          // Don't know how to do this for higher levels of k, we'll have to figure it out,
+          // run multiple instances of higher level finalizers or something.
           ???
       }
     }
@@ -432,6 +447,9 @@ class EraRuntime[F[_]: MonadThrowable: Clock: EraStorage: ForkChoice](
       case Agenda.StartRound(roundId) =>
         // Only create the agenda at the end, so if it takes too long to produce
         // a block we schedule the *next* round, possibly skipping a bunch.
+        // Alternatively `StartRound` could just return a `CreateLambdaMessage`,
+        // a `CreateOmegaMessage` and another `StartRound` to make them all
+        // independently scheduleable.
         def agenda =
           for {
             now                           <- currentTick
@@ -442,6 +460,7 @@ class EraRuntime[F[_]: MonadThrowable: Clock: EraStorage: ForkChoice](
               Agenda(nextRoundId -> Agenda.StartRound(nextRoundId))
             } else Agenda.empty
 
+            // Only bother with the omega if we're still in the same round which we started.
             val omega = if (currentRoundId == roundId) {
               val omegaTick = chooseOmegaTick(roundId, nextRoundId)
               Agenda(omegaTick -> Agenda.CreateOmegaMessage(roundId))
@@ -489,7 +508,7 @@ class EraRuntime[F[_]: MonadThrowable: Clock: EraStorage: ForkChoice](
 
 object EraRuntime {
 
-  def fromGenesis[F[_]: Sync: Clock: DagStorage: EraStorage: ForkChoice](
+  def fromGenesis[F[_]: Sync: Clock: DagStorage: EraStorage: FinalityStorageReader: ForkChoice](
       conf: HighwayConf,
       genesis: BlockSummary,
       maybeMessageProducer: Option[MessageProducer[F]],
@@ -507,7 +526,7 @@ object EraRuntime {
     fromEra[F](conf, era, maybeMessageProducer, initRoundExponent, isSynced, leaderSequencer)
   }
 
-  def fromEra[F[_]: Sync: Clock: DagStorage: EraStorage: ForkChoice](
+  def fromEra[F[_]: Sync: Clock: DagStorage: EraStorage: FinalityStorageReader: ForkChoice](
       conf: HighwayConf,
       era: Era,
       maybeMessageProducer: Option[MessageProducer[F]],
