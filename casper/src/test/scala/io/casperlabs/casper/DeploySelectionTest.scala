@@ -16,7 +16,11 @@ import io.casperlabs.casper.consensus.state.{
   StoredValue,
   Value
 }
-import io.casperlabs.casper.util.execengine.{DeployEffects, ExecutionEngineServiceStub}
+import io.casperlabs.casper.util.execengine.{
+  DeployEffects,
+  ExecutionEngineServiceStub,
+  ProcessedDeployResult
+}
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.catscontrib.TaskContrib.TaskOps
 import io.casperlabs.ipc
@@ -97,30 +101,38 @@ class DeploySelectionTest
     }
   }
 
-  it should "skip elements that don't commute and continue consuming the stream" in forAll(
+  it should "skip elements that won't be included in a block (precondition failures)" +
+    " and continue consuming the stream" in forAll(
     Gen.zip(
       Gen.listOfN(deploysInSmallBlock * 2, arbDeploy.arbitrary),
       Gen.listOfN(deploysInSmallBlock * 2, arbDeploy.arbitrary)
     )
   ) {
-    case (conflicting, commuting) =>
+    case (preconditionFailures, commuting) =>
       val stream = fs2.Stream
         .fromIterator(commuting.toIterator)
-        .interleave(fs2.Stream.fromIterator(conflicting.toIterator))
+        .interleave(fs2.Stream.fromIterator(preconditionFailures.toIterator))
 
       val cappedEffects = takeUnlessTooBig(smallBlockSizeBytes)(commuting)
 
-      val counter                                   = AtomicInt(0)
-      implicit val ee: ExecutionEngineService[Task] = eeExecMock(everyOtherCommutesExec(counter) _)
+      val counter = AtomicInt(1)
+      implicit val ee: ExecutionEngineService[Task] =
+        eeExecMock(everyOtherInvalidDeploy(counter) _)
+
       val deploySelection: DeploySelection[Task] =
         DeploySelection.create[Task](smallBlockSizeBytes)
 
       val test = deploySelection
         .select((prestate, blocktime, protocolVersion, stream))
-        .map(results => assert(results.map(_.deploy) == cappedEffects))
+        .map(results => {
+          val (_, commuting) = ProcessedDeployResult.split(results.commuting)
+          assert(commuting.map(_.deploy) == cappedEffects)
+        })
 
       test.unsafeRunSync
   }
+
+  it should "return conflicting deploys along the commuting ones if they fit the block size limit" in (pending)
 
   it should "consume the whole stream if all deploys commute and fit block size limit" in forAll(
     Gen

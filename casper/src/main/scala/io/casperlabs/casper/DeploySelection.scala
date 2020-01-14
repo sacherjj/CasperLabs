@@ -35,12 +35,16 @@ object DeploySelection {
   private case class IntermediateState(
       accumulated: List[DeployEffects] = List.empty,
       diff: List[ProcessedDeployResult] = List.empty,
-      accumulatedOps: OpMap[Key] = Map.empty
+      accumulatedOps: OpMap[Key] = Map.empty,
+      conflicting: List[Deploy] = List.empty
   ) {
     def effectsCommutativity: (List[DeployEffects], OpMap[state.Key]) =
       (accumulated, accumulatedOps)
 
-    def size: Int = accumulated.map(_.deploy.serializedSize).sum
+    // We have to take into account conflicting deploys as well since they will
+    // also be included in a block in SEQ sections.
+    def size: Int =
+      accumulated.map(_.deploy.serializedSize).sum + conflicting.map(_.serializedSize).sum
 
     // Appends new element to the intermediate state if it commutes with it.
     // Otherwise returns initial state.
@@ -50,7 +54,7 @@ object DeploySelection {
       if (accOps ~ ops)
         IntermediateState(deploysEffects :: accEffects, deploysEffects :: diff, accOps + ops)
       else
-        this
+        copy(conflicting = deploysEffects.deploy :: this.conflicting)
     }
   }
 
