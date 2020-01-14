@@ -90,7 +90,16 @@ class EraRuntime[F[_]: MonadThrowable: Clock: EraStorage: ForkChoice](
   val isSwitchBoundary = isCrossing(end)(_, _)
 
   private implicit class MessageOps(msg: Message) {
-    def roundInstant = conf.toInstant(Ticks(msg.roundId))
+    def roundInstant: Instant =
+      conf.toInstant(Ticks(msg.roundId))
+
+    def isSwitchBlock: F[Boolean] =
+      if (msg.parentBlock.isEmpty)
+        false.pure[F]
+      else
+        dag.lookupUnsafe(msg.parentBlock).map { parent =>
+          isSwitchBoundary(parent.roundInstant, msg.roundInstant)
+        }
   }
 
   /** Current tick based on wall clock time. */
@@ -122,30 +131,37 @@ class EraRuntime[F[_]: MonadThrowable: Clock: EraStorage: ForkChoice](
       Ticks.roundBoundaries(startTick, exp)(tick)
     }
 
-  /** Only produce messages once we are synced. */
-  private def ifSynced(block: HWL[Unit]): HWL[Unit] =
+  /** Only produce messages once we have finished the initial syncing when the node starts. */
+  private def ifSynced(thunk: HWL[Unit]): HWL[Unit] =
     HighwayLog
       .liftF(isSynced)
-      .ifM(
-        block,
-        HighwayLog.unit[F]
-      )
+      .ifM(thunk, noop)
+
+  /** Execute some action unless we have already moved on from the round it was in. */
+  private def ifCurrentRound(roundId: Ticks)(thunk: HWL[Unit]): HWL[Unit] =
+    // It's okay not to send a response to a message where we *did* participate
+    // in the round it belongs to, but we moved on to a newer round.
+    HighwayLog.liftF(currentTick.flatMap(roundBoundariesAt)) flatMap {
+      case (from, _) if from == roundId =>
+        thunk
+      case _ =>
+        noop
+    }
 
   private def createLambdaResponse(
       messageProducer: MessageProducer[F],
-      // TODO (NODE-1116): Lambda message will be a ballot during voting.
-      lambdaMessage: Message.Block
+      lambdaMessage: Message
   ): HWL[Unit] = ifSynced {
     for {
       b <- HighwayLog.liftF {
             for {
               // We need to cite the lambda message, and our own latest message.
               // NOTE: The latter will be empty until the validator produces something in this era.
-              tips                    <- dag.latestInEra(era.keyBlockHash)
-              validatorLatestMessages <- tips.latestMessageHash(messageProducer.validatorId)
+              tips              <- dag.latestInEra(era.keyBlockHash)
+              ownLatestMessages <- tips.latestMessageHash(messageProducer.validatorId)
               justifications = List(
                 PublicKey(lambdaMessage.validatorId) -> Set(lambdaMessage.messageHash),
-                messageProducer.validatorId          -> validatorLatestMessages
+                messageProducer.validatorId          -> ownLatestMessages
               ).filterNot(_._2.isEmpty).toMap
               // See what the fork choice is, given the lambda and our own latest message, that is our target.
               // In the voting period the lambda message is a ballot, so can't be a target,
@@ -172,27 +188,43 @@ class EraRuntime[F[_]: MonadThrowable: Clock: EraStorage: ForkChoice](
       messageProducer: MessageProducer[F],
       roundId: Ticks
   ): HWL[Unit] = ifSynced {
+    val message: F[Message] = for {
+      choice <- ForkChoice[F].fromKeyBlock(era.keyBlockHash)
+      // In the active period we create a block, but during voting
+      // it can only be a ballot, after the switch block has been created.
+      block = messageProducer
+        .block(
+          eraId = era.keyBlockHash,
+          roundId = roundId,
+          mainParent = choice.mainParent.messageHash,
+          justifications = choice.justificationsMap,
+          isBookingBlock = isBookingBoundary(
+            choice.mainParent.roundInstant,
+            conf.toInstant(roundId)
+          )
+        )
+        .widen[Message]
+
+      ballot = messageProducer
+        .ballot(
+          eraId = era.keyBlockHash,
+          roundId = roundId,
+          target = choice.mainParent.messageHash,
+          justifications = choice.justificationsMap
+        )
+        .widen[Message]
+
+      message <- if (roundId < endTick) {
+                  block
+                } else {
+                  choice.mainParent.isSwitchBlock.ifM(ballot, block)
+                }
+    } yield message
+
     for {
-      b <- HighwayLog.liftF {
-            for {
-              choice <- ForkChoice[F].fromKeyBlock(era.keyBlockHash)
-              // TODO (NODE-1116): Create ballot during voting-only.
-              message <- messageProducer.block(
-                          eraId = era.keyBlockHash,
-                          roundId = roundId,
-                          mainParent = choice.mainParent.messageHash,
-                          justifications = choice.justificationsMap,
-                          isBookingBlock = isBookingBoundary(
-                            choice.mainParent.roundInstant,
-                            conf.toInstant(roundId)
-                          )
-                        )
-            } yield message
-          }
-      _ <- HighwayLog.tell[F] {
-            HighwayEvent.CreatedLambdaMessage(b)
-          }
-      _ <- handleCriticalBlocks(b)
+      m <- HighwayLog.liftF(message)
+      _ <- HighwayLog.tell[F](HighwayEvent.CreatedLambdaMessage(m))
+      _ <- handleCriticalMessages(m)
     } yield ()
   }
 
@@ -348,38 +380,32 @@ class EraRuntime[F[_]: MonadThrowable: Clock: EraStorage: ForkChoice](
     * so it doesn't return a future agenda of its own.
     */
   def handleMessage(message: Message): HWL[Unit] = {
-    def illegal(msg: String) =
-      MonadThrowable[HWL].raiseError[Unit](new IllegalStateException(msg))
+    def check(ok: Boolean, error: String) =
+      if (ok) noop else MonadThrowable[HWL].raiseError[Unit](new IllegalStateException(error))
 
-    message match {
-      // TODO (NODE-1116): Respond to lambda-ballots during voting.
-      case _: Message.Ballot =>
-        noop
-      case b: Message.Block =>
-        val roundId = Ticks(b.roundId)
+    val roundId = Ticks(message.roundId)
 
-        val response = maybeMessageProducer.fold(noop) { mp =>
-          if (mp.validatorId == b.validatorId) {
-            illegal("Shouldn't receive our own messages!")
-          } else if (b.keyBlockHash != era.keyBlockHash) {
-            illegal("Shouldn't receive messages from other eras!")
-          } else if (leaderFunction(roundId) != b.validatorId) {
-            // These blocks should fail validation and not be passed here.
-            illegal("Shouldn't try to handle messages from non-leaders!")
-          } else {
-            // It's okay not to send a response to a message where we *did* participate
-            // in the round it belongs to, but we moved on to a newer round.
-            HighwayLog.liftF(currentTick.flatMap(roundBoundariesAt)) flatMap {
-              case (from, _) if from == roundId =>
-                createLambdaResponse(mp, b)
-              case _ =>
-                noop
+    check(message.keyBlockHash == era.keyBlockHash, "Shouldn't receive messages from other eras!") >>
+      maybeMessageProducer.fold(noop) { mp =>
+        check(message.validatorId != mp.validatorId, "Shouldn't receive our own messages!") >>
+          ifCurrentRound(roundId) {
+            val maybeLambda = Option(message)
+              .filter {
+                _.validatorId == leaderFunction(roundId)
+              }
+              .filterA {
+                case ballot: Message.Ballot =>
+                  isLambdaLikeBallot(dag, ballot, endTick)
+                case _ =>
+                  true.pure[F]
+              }
+
+            HighwayLog.liftF(maybeLambda).flatMap {
+              _.fold(noop)(createLambdaResponse(mp, _))
             }
           }
-        }
-
-        response >> handleCriticalBlocks(b)
-    }
+      } >>
+      handleCriticalMessages(message)
   }
 
   /** Handle something that happens during a round:
@@ -411,12 +437,11 @@ class EraRuntime[F[_]: MonadThrowable: Clock: EraStorage: ForkChoice](
             omega ++ next
           }
 
-        maybeMessageProducer.fold(noop) { mp =>
-          if (leaderFunction(roundId) == mp.validatorId)
-            createLambdaMessage(mp, roundId)
-          else
-            noop
-        } >> HighwayLog.liftF(agenda)
+        maybeMessageProducer
+          .filter(_.validatorId == leaderFunction(roundId))
+          .fold(noop) {
+            createLambdaMessage(_, roundId)
+          } >> HighwayLog.liftF(agenda)
 
       case Agenda.CreateOmegaMessage(roundId) =>
         maybeMessageProducer.fold(noop) {
@@ -431,17 +456,21 @@ class EraRuntime[F[_]: MonadThrowable: Clock: EraStorage: ForkChoice](
     * - switch blocks might be the ones that grant the rewards,
     *   according to how many blocks were finalized on time during the era
     */
-  private def handleCriticalBlocks(block: Message.Block): HWL[Unit] =
-    if (block.parentBlock.isEmpty) noop
-    else {
-      for {
-        parent <- HighwayLog.liftF[F, Message] {
-                   dag.lookupUnsafe(block.parentBlock)
-                 }
-        parentTime = parent.roundInstant
-        childTime  = block.roundInstant
-        _          <- createEra(block).whenA(isSwitchBoundary(parentTime, childTime))
-      } yield ()
+  private def handleCriticalMessages(message: Message): HWL[Unit] =
+    message match {
+      case _: Message.Ballot => noop
+      case block: Message.Block =>
+        if (block.parentBlock.isEmpty) noop
+        else {
+          for {
+            parent <- HighwayLog.liftF[F, Message] {
+                       dag.lookupUnsafe(block.parentBlock)
+                     }
+            parentTime = parent.roundInstant
+            childTime  = block.roundInstant
+            _          <- createEra(block).whenA(isSwitchBoundary(parentTime, childTime))
+          } yield ()
+        }
     }
 }
 

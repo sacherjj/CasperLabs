@@ -11,15 +11,15 @@ sealed trait HighwayEvent
 
 object HighwayEvent {
 
-  /** Created a lambda message; only happens if this validator was leader in the round. Needs to be broadcasted. */
-  case class CreatedLambdaMessage(message: Message.Block) extends HighwayEvent
+  /** Created a lambda message; only happens if this validator was leader in the round. */
+  case class CreatedLambdaMessage(message: Message) extends HighwayEvent
 
-  /** Created a response to a lambda message received from a leader. Needs to be broadcasted. */
+  /** Created a response to a lambda message received from a leader. */
   case class CreatedLambdaResponse(message: Message.Ballot) extends HighwayEvent
 
   /** Created an omega message, some time during the round. */
   case class CreatedOmegaMessage(message: Message.Ballot) extends HighwayEvent
 
-  /** Create a new era based on a previously unused key block. Needs to be started. */
+  /** Create a new era based on a previously unused key block. */
   case class CreatedEra(era: Era) extends HighwayEvent
 }

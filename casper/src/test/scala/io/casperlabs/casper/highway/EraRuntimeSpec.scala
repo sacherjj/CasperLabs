@@ -245,6 +245,8 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
       }
     }
 
+    "reject a block build on a switch block" in (pending) // NODE-1116
+
     "accept a second lambda ballot received from the leader in the same round during the voting-only period" in {
       implicit val ds = defaultDagStorage
       val leader      = "Bob"
@@ -415,11 +417,10 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
         }
 
         "it is not from the leader" should {
-          "reject the block" in {
+          "ignore the block" in {
             val msg = makeBlock("Bob", runtime.era, runtime.startTick)
-            an[IllegalStateException] should be thrownBy {
-              runtime.handleMessage(msg)
-            }
+            // These will fail validation but in case they didn't, don't repond.
+            runtime.handleMessage(msg).written shouldBe empty
           }
         }
 
@@ -506,10 +507,10 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
         }
         "in the post-era voting period" when {
           "coming from the leader" should {
-            "create a lambda response" in (pending)
+            "create a lambda response" in (pending) // NODE-1116
           }
           "coming from a non-leader" should {
-            "not respond" in (pending)
+            "not respond" in (pending) // NODE-1116
           }
         }
       }
@@ -680,14 +681,14 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
 
       "in the post-era voting period" when {
         "the validator is the leader" should {
-          "a ballot instead of a lambda message" in (pending)
+          "a ballot instead of a lambda message" in (pending) // NODE-1116
         }
         "the voting is still going" should {
-          "schedule an omega message" in (pending)
-          "schedule another round" in (pending)
+          "schedule an omega message" in (pending) // NODE-1116
+          "schedule another round" in (pending)    // NODE-1116
         }
-        "the voting period is over" should {
-          "not schedule anything" in (pending)
+        "voting period is over" should {
+          "not schedule anything " in (pending) // NODE-1116
         }
       }
 
@@ -805,7 +806,7 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
         }
       }
       "in the post-era voting period" should {
-        "create an omega message" in (pending)
+        "create an omega message" in (pending) // NODE-1116
       }
     }
   }
