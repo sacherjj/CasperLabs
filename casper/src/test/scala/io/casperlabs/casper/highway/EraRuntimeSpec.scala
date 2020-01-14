@@ -68,6 +68,58 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
     )
     .get
 
+  def makeBlock(
+      validator: String,
+      era: Era,
+      roundId: Ticks,
+      mainParent: ByteString = genesis.messageHash,
+      justifications: Map[ByteString, ByteString] = Map.empty
+  ) =
+    Message.fromBlockSummary {
+      BlockSummary()
+        .withHeader(
+          Block
+            .Header()
+            .withValidatorPublicKey(validatorKey(validator))
+            .withKeyBlockHash(era.keyBlockHash)
+            .withRoundId(roundId)
+            .withParentHashes(List(mainParent).filterNot(_.isEmpty))
+            .withMagicBit(scala.util.Random.nextBoolean())
+            .withJustifications(
+              justifications.toSeq.map {
+                case (v, b) => Block.Justification(v, b)
+              }
+            )
+        )
+        .withBlockHash(blockHashes.next())
+    }.get
+
+  def makeBallot(
+      validator: String,
+      era: Era,
+      roundId: Ticks,
+      target: ByteString = genesis.messageHash,
+      justifications: Map[ByteString, ByteString] = Map.empty
+  ) =
+    Message.fromBlockSummary {
+      BlockSummary()
+        .withHeader(
+          Block
+            .Header()
+            .withMessageType(Block.MessageType.BALLOT)
+            .withKeyBlockHash(era.keyBlockHash)
+            .withRoundId(roundId)
+            .withValidatorPublicKey(validatorKey(validator))
+            .withParentHashes(List(target).filterNot(_.isEmpty))
+            .withJustifications(
+              justifications.toSeq.map {
+                case (v, b) => Block.Justification(v, b)
+              }
+            )
+        )
+        .withBlockHash(blockHashes.next())
+    }.get
+
   def defaultDagStorage = MockDagStorage[Id](genesis.toBlock)
   def defaultForkChoice = MockForkChoice[Id](genesis)
 
@@ -245,7 +297,8 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
       }
     }
 
-    "reject a block build on a switch block" in (pending) // NODE-1116
+    "reject a block built on a switch block" in (pending)                    // NODE-1116
+    "reject a ballot from a leader not built on a switch block" in (pending) // NODE-1116
 
     "accept a second lambda ballot received from the leader in the same round during the voting-only period" in {
       implicit val ds = defaultDagStorage
@@ -506,11 +559,23 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
           }
         }
         "in the post-era voting period" when {
+          implicit val clock = TestClock.frozen[Id](conf.genesisEraEnd)
+          val runtime        = genesisEraRuntime("Alice".some, leaderSequencer = mockSequencer("Bob"))
+
           "coming from the leader" should {
-            "create a lambda response" in (pending) // NODE-1116
+            "create a lambda response" in {
+              val msg = makeBallot("Bob", runtime.era, runtime.endTick)
+              assertEvent(runtime.handleMessage(msg).written) {
+                case HighwayEvent.CreatedLambdaResponse(ballot: Message.Ballot) =>
+                  ballot.roundId shouldBe msg.roundId
+              }
+            }
           }
           "coming from a non-leader" should {
-            "not respond" in (pending) // NODE-1116
+            "not respond" in {
+              val msg = makeBallot("Charlie", runtime.era, runtime.endTick)
+              runtime.handleMessage(msg).written shouldBe empty
+            }
           }
         }
       }
@@ -680,15 +745,94 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
       }
 
       "in the post-era voting period" when {
+        class PostEraFixture(
+            isLeader: Boolean = false,
+            postEraElapsed: FiniteDuration = 20.seconds
+        ) {
+          val exponent       = 14 // ~15 seconds
+          val now            = conf.genesisEraEnd plus postEraElapsed
+          implicit val clock = TestClock.frozen(now)
+          implicit val ds    = defaultDagStorage
+          implicit val fc    = defaultForkChoice
+          val leader         = "Alice"
+          val validator      = if (isLeader) leader else "Bob"
+          val runtime = genesisEraRuntime(
+            validator.some,
+            roundExponent = exponent,
+            leaderSequencer = mockSequencer(leader)
+          )
+          // Pick the beginning of the round where `now` is included
+          val roundId = Ticks.roundBoundaries(runtime.startTick, exponent)(conf.toTicks(now))._1
+
+          def handle = runtime.handleAgenda(Agenda.StartRound(roundId))
+        }
         "the validator is the leader" should {
-          "a ballot instead of a lambda message" in (pending) // NODE-1116
+          "create a switch block if it builds on a non-switch block" in {
+            new PostEraFixture(isLeader = true) {
+              val nonSwitch =
+                fc.set(insert(makeBlock(validator, runtime.era, runtime.startTick)))
+
+              assertEvent(handle.written) {
+                case HighwayEvent.CreatedLambdaMessage(switch: Message.Block) =>
+                  switch.roundId shouldBe roundId
+                  switch.parentBlock shouldBe nonSwitch.messageHash
+              }
+            }
+          }
+          "create a ballot instead of a block when already building on a switch block" in {
+            new PostEraFixture(isLeader = true) {
+              val switch =
+                fc.set(insert(makeBlock(validator, runtime.era, runtime.endTick)))
+
+              assertEvent(handle.written) {
+                case HighwayEvent.CreatedLambdaMessage(ballot: Message.Ballot) =>
+                  ballot.roundId shouldBe roundId
+                  ballot.parentBlock shouldBe switch.messageHash
+              }
+            }
+          }
         }
         "the voting is still going" should {
-          "schedule an omega message" in (pending) // NODE-1116
-          "schedule another round" in (pending)    // NODE-1116
+          "schedule an omega message" in {
+            new PostEraFixture {
+              assertAgenda(handle.value) {
+                case Agenda.DelayedAction(_, a: Agenda.CreateOmegaMessage) =>
+                  a.roundId shouldBe roundId
+              }
+            }
+          }
+          "schedule another round" in {
+            new PostEraFixture {
+              assertAgenda(handle.value) {
+                case Agenda.DelayedAction(_, a: Agenda.StartRound) =>
+                  a.roundId should be > roundId.toLong
+              }
+            }
+          }
         }
-        "voting period is over" should {
-          "not schedule anything " in (pending) // NODE-1116
+        "the fixed voting period is almost over" should {
+          val postEraVotingDuration = conf.postEraVotingDuration match {
+            case VotingDuration.FixedLength(d) => d
+            case _                             => fail("Expected fixed duration.")
+          }
+          "not schedule a next round after the end" in {
+            new PostEraFixture(postEraElapsed = postEraVotingDuration minus 1.second) {
+              handle.value.map(_.action).collect {
+                case Agenda.StartRound(_) =>
+                  fail("Should not schedule after the voting ends.")
+              }
+            }
+          }
+          "schedule an omega message for the last round" in {
+            new PostEraFixture(postEraElapsed = postEraVotingDuration minus 1.second) {
+              assertAgenda(handle.value) {
+                case Agenda.DelayedAction(_, Agenda.CreateOmegaMessage(_)) =>
+              }
+            }
+          }
+        }
+        "the summit based voting is finalized" should {
+          "not schedule anything" in (pending) // NODE-1116
         }
       }
 
@@ -806,7 +950,15 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
         }
       }
       "in the post-era voting period" should {
-        "create an omega message" in (pending) // NODE-1116
+        "create an omega message" in {
+          implicit val clock = TestClock.frozen(conf.genesisEraEnd)
+          val runtime        = genesisEraRuntime("Alice".some)
+          val events =
+            runtime.handleAgenda(Agenda.CreateOmegaMessage(runtime.endTick)).written
+          assertEvent(events) {
+            case HighwayEvent.CreatedOmegaMessage(_) =>
+          }
+        }
       }
     }
   }
@@ -875,58 +1027,6 @@ object EraRuntimeSpec {
     case x: ByteString => new String(x.toByteArray)
     case other         => Prettifier.default(other)
   }
-
-  def makeBlock(
-      validator: String,
-      era: Era,
-      roundId: Ticks,
-      mainParent: ByteString = ByteString.EMPTY,
-      justifications: Map[ByteString, ByteString] = Map.empty
-  ) =
-    Message.fromBlockSummary {
-      BlockSummary()
-        .withHeader(
-          Block
-            .Header()
-            .withValidatorPublicKey(validatorKey(validator))
-            .withKeyBlockHash(era.keyBlockHash)
-            .withRoundId(roundId)
-            .withParentHashes(List(mainParent).filterNot(_.isEmpty))
-            .withMagicBit(scala.util.Random.nextBoolean())
-            .withJustifications(
-              justifications.toSeq.map {
-                case (v, b) => Block.Justification(v, b)
-              }
-            )
-        )
-        .withBlockHash(blockHashes.next())
-    }.get
-
-  def makeBallot(
-      validator: String,
-      era: Era,
-      roundId: Ticks,
-      target: ByteString = ByteString.EMPTY,
-      justifications: Map[ByteString, ByteString] = Map.empty
-  ) =
-    Message.fromBlockSummary {
-      BlockSummary()
-        .withHeader(
-          Block
-            .Header()
-            .withMessageType(Block.MessageType.BALLOT)
-            .withKeyBlockHash(era.keyBlockHash)
-            .withRoundId(roundId)
-            .withValidatorPublicKey(validatorKey(validator))
-            .withParentHashes(List(target).filterNot(_.isEmpty))
-            .withJustifications(
-              justifications.toSeq.map {
-                case (v, b) => Block.Justification(v, b)
-              }
-            )
-        )
-        .withBlockHash(blockHashes.next())
-    }.get
 
   def toJustifications(messages: Message*): Map[ByteString, ByteString] =
     messages.map(m => m.validatorId -> m.messageHash).toMap

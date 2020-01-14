@@ -112,7 +112,7 @@ class EraRuntime[F[_]: MonadThrowable: Clock: EraStorage: ForkChoice](
     else {
       conf.postEraVotingDuration match {
         case HighwayConf.VotingDuration.FixedLength(duration) =>
-          (end plus duration).isBefore(conf.toInstant(tick)).pure[F]
+          (conf.toTicks(end plus duration) <= tick).pure[F]
 
         case HighwayConf.VotingDuration.SummitLevel(_) =>
           ???
@@ -142,10 +142,8 @@ class EraRuntime[F[_]: MonadThrowable: Clock: EraStorage: ForkChoice](
     // It's okay not to send a response to a message where we *did* participate
     // in the round it belongs to, but we moved on to a newer round.
     HighwayLog.liftF(currentTick.flatMap(roundBoundariesAt)) flatMap {
-      case (from, _) if from == roundId =>
-        thunk
-      case _ =>
-        noop
+      case (from, _) if from == roundId => thunk
+      case _                            => noop
     }
 
   private def createLambdaResponse(
@@ -427,8 +425,12 @@ class EraRuntime[F[_]: MonadThrowable: Clock: EraStorage: ForkChoice](
           for {
             now                           <- currentTick
             (currentRoundId, nextRoundId) <- roundBoundariesAt(now)
+            isOverAtNext                  <- isOverAt(nextRoundId)
           } yield {
-            val next = Agenda(nextRoundId -> Agenda.StartRound(nextRoundId))
+            val next = if (!isOverAtNext) {
+              Agenda(nextRoundId -> Agenda.StartRound(nextRoundId))
+            } else Agenda.empty
+
             val omega = if (currentRoundId == roundId) {
               val omegaTick = chooseOmegaTick(roundId, nextRoundId)
               Agenda(omegaTick -> Agenda.CreateOmegaMessage(roundId))
