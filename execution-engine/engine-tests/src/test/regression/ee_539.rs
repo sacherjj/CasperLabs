@@ -1,7 +1,7 @@
-use contract::value::account::Weight;
 use engine_test_support::low_level::{
     ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG,
 };
+use types::account::Weight;
 
 const CONTRACT_EE_539_REGRESSION: &str = "ee_539_regression.wasm";
 

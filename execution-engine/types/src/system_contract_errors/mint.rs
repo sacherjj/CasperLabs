@@ -1,18 +1,15 @@
-/// Implementation of error codes that are shared between contract
-/// implementation and FFI.
-use alloc::vec::Vec;
+/// Implementation of error codes that are shared between contract implementation and FFI.
+use alloc::{fmt, vec::Vec};
 use core::convert::{TryFrom, TryInto};
 
 use failure::Fail;
 
 use crate::{
     bytesrepr::{self, FromBytes, ToBytes},
-    system_contracts::mint::purse_id::PurseIdError,
-    value::{CLType, CLTyped},
+    AccessRights, CLType, CLTyped,
 };
 
-/// An enum error that is capable of carrying a value across FFI-Host
-/// boundary.
+/// An enum error that is capable of carrying a value across FFI-Host boundary.
 #[derive(Fail, Debug, Copy, Clone, PartialEq, Eq)]
 #[repr(u8)]
 pub enum Error {
@@ -41,10 +38,9 @@ impl From<PurseIdError> for Error {
         match purse_id_error {
             PurseIdError::InvalidURef => Error::InvalidURef,
             PurseIdError::InvalidAccessRights(_) => {
-                // This one does not carry state from PurseIdError to the
-                // new Error enum. The reason is that Error is supposed to
-                // be simple in serialization and deserialization, so extra
-                // state is currently discarded.
+                // This one does not carry state from PurseIdError to the new Error enum. The reason
+                // is that Error is supposed to be simple in serialization and deserialization, so
+                // extra state is currently discarded.
                 Error::InvalidAccessRights
             }
         }
@@ -57,7 +53,7 @@ impl CLTyped for Error {
     }
 }
 
-/// The error type returned when a construction
+/// The error type returned when construction from `u8` fails
 pub struct TryFromU8ForError(());
 
 impl TryFrom<u8> for Error {
@@ -92,10 +88,26 @@ impl FromBytes for Error {
         let (value, rem): (u8, _) = FromBytes::from_bytes(bytes)?;
         let error: Error = value
             .try_into()
-            // In case an Error variant is unable to be determined it would
-            // return a FormattingError as if its unable to be correctly
-            // deserialized.
+            // In case an Error variant is unable to be determined it would return a FormattingError
+            // as if its unable to be correctly deserialized.
             .map_err(|_| bytesrepr::Error::FormattingError)?;
         Ok((error, rem))
+    }
+}
+
+#[derive(Debug, Copy, Clone)]
+pub enum PurseIdError {
+    InvalidURef,
+    InvalidAccessRights(Option<AccessRights>),
+}
+
+impl fmt::Display for PurseIdError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        match self {
+            PurseIdError::InvalidURef => write!(f, "invalid uref"),
+            PurseIdError::InvalidAccessRights(maybe_access_rights) => {
+                write!(f, "invalid access rights: {:?}", maybe_access_rights)
+            }
+        }
     }
 }

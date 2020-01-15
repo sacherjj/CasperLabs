@@ -1,16 +1,11 @@
 use std::convert::TryInto;
 
-use contract::{
-    bytesrepr::ToBytes,
-    key::Key,
-    uref::URef,
-    value::{CLValue, U512},
-};
 use engine_shared::{
     account::Account, contract::Contract, motes::Motes, newtypes::CorrelationId,
     stored_value::StoredValue, transform::TypeMismatch,
 };
 use engine_storage::global_state::StateReader;
+use types::{bytesrepr::ToBytes, CLValue, Key, URef, U512};
 
 use crate::{
     execution,

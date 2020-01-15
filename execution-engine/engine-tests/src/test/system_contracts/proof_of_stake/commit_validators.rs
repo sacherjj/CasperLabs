@@ -1,12 +1,12 @@
 use num_traits::Zero;
 use std::collections::HashMap;
 
-use contract::value::{account::PublicKey, U512};
 use engine_core::engine_state::genesis::GenesisAccount;
 use engine_shared::motes::Motes;
 use engine_test_support::low_level::{
     utils, ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_ACCOUNTS, DEFAULT_ACCOUNT_ADDR,
 };
+use types::{account::PublicKey, U512};
 
 const CONTRACT_LOCAL_STATE: &str = "local_state.wasm";
 const ACCOUNT_1_ADDR: [u8; 32] = [1u8; 32];

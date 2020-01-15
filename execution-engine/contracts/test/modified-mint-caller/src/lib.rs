@@ -4,10 +4,8 @@ extern crate alloc;
 
 use alloc::string::String;
 
-use contract::{
-    contract_api::{runtime, storage, system},
-    key::Key,
-};
+use contract::contract_api::{runtime, storage, system};
+use types::Key;
 
 const NEW_ENDPOINT_NAME: &str = "version";
 const RESULT_TUREF_NAME: &str = "output_version";

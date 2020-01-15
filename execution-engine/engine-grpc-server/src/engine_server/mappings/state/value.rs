@@ -1,11 +1,7 @@
 use std::convert::{TryFrom, TryInto};
 
-use contract::{
-    bytesrepr::ToBytes,
-    key::Key,
-    value::{CLType, CLTyped, CLValue, U128, U256, U512},
-};
 use engine_shared::stored_value::StoredValue;
+use types::{bytesrepr::ToBytes, CLType, CLTyped, CLValue, Key, U128, U256, U512};
 
 use crate::engine_server::{
     mappings::ParsingError,
@@ -149,8 +145,8 @@ impl TryFrom<Value> for StoredValue {
 mod tests {
     use proptest::proptest;
 
-    use contract::gens::cl_value_arb;
     use engine_shared::{account::gens::account_arb, contract::gens::contract_arb};
+    use types::gens::cl_value_arb;
 
     use super::*;
 

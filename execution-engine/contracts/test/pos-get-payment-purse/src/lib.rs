@@ -1,10 +1,10 @@
 #![no_std]
 
 use contract::{
-    contract_api::{account, runtime, system, Error as ApiError},
+    contract_api::{account, runtime, system},
     unwrap_or_revert::UnwrapOrRevert,
-    value::{account::PurseId, U512},
 };
+use types::{account::PurseId, ApiError, U512};
 
 #[repr(u16)]
 enum Error {

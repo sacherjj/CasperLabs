@@ -5,9 +5,12 @@ extern crate alloc;
 use alloc::string::String;
 
 use contract::{
-    contract_api::{account, runtime, Error as ApiError},
+    contract_api::{account, runtime},
     unwrap_or_revert::UnwrapOrRevert,
-    value::account::{ActionType, PublicKey, Weight},
+};
+use types::{
+    account::{ActionType, PublicKey, Weight},
+    ApiError,
 };
 
 enum Arg {

@@ -4,11 +4,9 @@ use core::convert::Into;
 
 use contract::{
     contract_api::{runtime, storage, TURef},
-    key::Key,
     unwrap_or_revert::UnwrapOrRevert,
-    uref::{AccessRights, URef},
-    value::CLValue,
 };
+use types::{AccessRights, CLValue, Key, URef};
 
 const DATA: &str = "data";
 const CONTRACT_NAME: &str = "create";

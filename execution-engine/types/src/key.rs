@@ -1,4 +1,4 @@
-//! Home of [`Key`](crate::key::Key), the type for indexing all data stored on the CasperLabs
+//! Home of [`Key`](crate::Key), the type for indexing all data stored on the CasperLabs
 //! Platform.
 
 use alloc::{format, vec::Vec};
@@ -12,9 +12,7 @@ use hex_fmt::HexFmt;
 
 use crate::{
     bytesrepr::{Error, FromBytes, ToBytes},
-    contract_api::{ContractRef, TURef},
-    uref::{AccessRights, URef, UREF_SERIALIZED_LENGTH},
-    value::CLTyped,
+    AccessRights, ContractRef, URef, UREF_SERIALIZED_LENGTH,
 };
 
 const ACCOUNT_ID: u8 = 0;
@@ -131,14 +129,6 @@ fn decode_from_hex(input: &str) -> Option<[u8; KEY_HASH_LENGTH]> {
 }
 
 impl Key {
-    pub fn to_turef<T: CLTyped>(self) -> Option<TURef<T>> {
-        if let Key::URef(uref) = self {
-            TURef::from_uref(uref).ok()
-        } else {
-            None
-        }
-    }
-
     pub fn to_contract_ref(self) -> Option<ContractRef> {
         match self {
             Key::URef(uref) => Some(ContractRef::URef(uref)),
@@ -223,13 +213,6 @@ impl Key {
 
 impl From<URef> for Key {
     fn from(uref: URef) -> Key {
-        Key::URef(uref)
-    }
-}
-
-impl<T: CLTyped> From<TURef<T>> for Key {
-    fn from(turef: TURef<T>) -> Self {
-        let uref = URef::new(turef.addr(), turef.access_rights());
         Key::URef(uref)
     }
 }
@@ -324,23 +307,15 @@ impl ToBytes for Vec<Key> {
 
 #[cfg(test)]
 mod tests {
-    // Can be removed once https://github.com/rust-lang/rustfmt/issues/3362 is resolved.
-    #[rustfmt::skip]
-    use alloc::vec;
-    use alloc::{format, string::String, vec::Vec};
-
     use proptest::{
         prelude::*,
         string::{string_regex, RegexGeneratorStrategy},
     };
 
+    use super::*;
     use crate::{
         bytesrepr::{Error, FromBytes, ToBytes},
-        key::{
-            Key, KEY_ACCOUNT_SERIALIZED_LENGTH, KEY_HASH_LENGTH, KEY_HASH_SERIALIZED_LENGTH,
-            KEY_LOCAL_LENGTH, KEY_LOCAL_SERIALIZED_LENGTH, KEY_UREF_SERIALIZED_LENGTH,
-        },
-        uref::{AccessRights, URef},
+        AccessRights, URef,
     };
 
     fn test_readable(right: AccessRights, is_true: bool) {

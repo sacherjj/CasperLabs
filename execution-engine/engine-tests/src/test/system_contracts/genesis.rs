@@ -1,13 +1,10 @@
-use contract::{
-    key::Key,
-    value::{account::PublicKey, ProtocolVersion, U512},
-};
 use engine_core::engine_state::{
     genesis::{GenesisAccount, GenesisConfig},
     SYSTEM_ACCOUNT_ADDR,
 };
 use engine_shared::{motes::Motes, stored_value::StoredValue};
 use engine_test_support::low_level::{utils, InMemoryWasmTestBuilder, DEFAULT_WASM_COSTS};
+use types::{account::PublicKey, Key, ProtocolVersion, U512};
 
 const MINT_INSTALL: &str = "mint_install.wasm";
 const POS_INSTALL: &str = "pos_install.wasm";

@@ -3,7 +3,7 @@ use core::u32;
 
 use crate::{
     bytesrepr::{self, FromBytes, ToBytes, U32_SERIALIZED_LENGTH},
-    value::cl_type::{CLType, CLTyped},
+    CLType, CLTyped,
 };
 
 #[derive(PartialEq, Eq, Clone, Debug)]
@@ -154,9 +154,10 @@ impl FromBytes for Vec<CLValue> {
 
 #[cfg(test)]
 mod tests {
+    use std::{collections::BTreeMap, string::String};
+
     use super::*;
     use crate::bytesrepr::deserialize;
-    use alloc::collections::BTreeMap;
 
     #[test]
     fn ser_cl_value() {

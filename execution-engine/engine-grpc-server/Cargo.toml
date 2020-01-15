@@ -8,7 +8,6 @@ edition = "2018"
 
 [dependencies]
 clap = "2"
-contract = { path = "../contract", package = "casperlabs-contract" }
 ctrlc = "3"
 dirs = "2"
 engine-core = { path = "../engine-core", package = "casperlabs-engine-core" }
@@ -20,6 +19,7 @@ lazy_static = "1"
 lmdb = "0.8"
 proptest = "0.9.4"
 protobuf = "=2.8"
+types = { path = "../types", package = "casperlabs-types", features = ["std", "gens"] }
 wabt = "0.9"
 
 [build-dependencies]

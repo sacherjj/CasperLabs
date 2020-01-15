@@ -1,12 +1,5 @@
 use std::convert::TryInto;
 
-use contract::{
-    key::Key,
-    value::{
-        account::{PublicKey, PurseId},
-        U512,
-    },
-};
 use engine_core::engine_state::{
     genesis::{GenesisAccount, POS_REWARDS_PURSE},
     CONV_RATE,
@@ -15,6 +8,10 @@ use engine_grpc_server::engine_server::ipc::ExecuteResponse;
 use engine_shared::{gas::Gas, motes::Motes};
 use engine_test_support::low_level::{
     utils, ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_ACCOUNTS, DEFAULT_ACCOUNT_ADDR,
+};
+use types::{
+    account::{PublicKey, PurseId},
+    Key, U512,
 };
 
 const CONTRACT_DO_NOTHING: &str = "do_nothing.wasm";

@@ -3,13 +3,13 @@
 extern crate alloc;
 
 use alloc::string::{String, ToString};
+use core::convert::TryInto;
 
 use contract::{
-    contract_api::{runtime, storage, Error},
-    key::Key,
+    contract_api::{runtime, storage},
     unwrap_or_revert::UnwrapOrRevert,
-    value::U512,
 };
+use types::{ApiError, Key, U512};
 
 #[no_mangle]
 pub extern "C" fn call() {
@@ -17,7 +17,7 @@ pub extern "C" fn call() {
 
     // Account starts with two known urefs: mint uref & pos uref
     if runtime::list_named_keys().len() != initi_uref_num {
-        runtime::revert(Error::User(201));
+        runtime::revert(ApiError::User(201));
     }
 
     // Add new urefs
@@ -38,7 +38,8 @@ pub extern "C" fn call() {
         runtime::list_named_keys()
             .get("hello-world")
             .expect("Unable to get hello-world")
-            .to_turef()
+            .clone()
+            .try_into()
             .expect("Unable to convert to turef"),
     )
     .expect("Unable to deserialize TURef")
@@ -48,7 +49,7 @@ pub extern "C" fn call() {
     // Read data through dedicated FFI function
     let uref1 = runtime::get_key("hello-world").unwrap_or_revert();
 
-    let turef = uref1.to_turef().unwrap_or_revert_with(Error::User(101));
+    let turef = uref1.try_into().unwrap_or_revert_with(ApiError::User(101));
     let hello_world = storage::read(turef);
     assert_eq!(hello_world, Ok(Some("Hello, world!".to_string())));
 
@@ -60,10 +61,8 @@ pub extern "C" fn call() {
     assert!(runtime::has_key("big-value"));
 
     // Get the big value back
-    let big_value_key = runtime::get_key("big-value").unwrap_or_revert_with(Error::User(102));
-    let big_value_ref = big_value_key
-        .to_turef()
-        .expect("Unable to get turef for big-value");
+    let big_value_key = runtime::get_key("big-value").unwrap_or_revert_with(ApiError::User(102));
+    let big_value_ref = big_value_key.try_into().unwrap_or_revert();
     let big_value = storage::read(big_value_ref);
     assert_eq!(big_value, Ok(Some(U512::max_value())));
 

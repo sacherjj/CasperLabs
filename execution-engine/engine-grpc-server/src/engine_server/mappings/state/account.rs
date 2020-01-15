@@ -4,8 +4,8 @@ use std::{
     mem,
 };
 
-use contract::value::account::{PublicKey, PurseId, Weight};
 use engine_shared::account::{Account, ActionThresholds, AssociatedKeys};
+use types::account::{PublicKey, PurseId, Weight};
 
 use super::NamedKeyMap;
 use crate::engine_server::{

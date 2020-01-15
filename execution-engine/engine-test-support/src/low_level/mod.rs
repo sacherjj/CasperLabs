@@ -9,10 +9,10 @@ mod wasm_test_builder;
 use lazy_static::lazy_static;
 use num_traits::identities::Zero;
 
-use contract::value::{account::PublicKey, ProtocolVersion, U512};
 use engine_core::engine_state::genesis::{GenesisAccount, GenesisConfig};
 use engine_shared::{motes::Motes, test_utils};
 use engine_wasm_prep::wasm_costs::WasmCosts;
+use types::{account::PublicKey, ProtocolVersion, U512};
 
 pub use additive_map_diff::AdditiveMapDiff;
 pub use deploy_item_builder::DeployItemBuilder;

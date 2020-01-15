@@ -17,12 +17,12 @@ use crossbeam_channel::{Iter, Receiver, Sender};
 use grpc::{ClientStubExt, RequestOptions};
 use log::info;
 
-use contract::value::U512;
 use engine_grpc_server::engine_server::{
     ipc::ExecuteRequest,
     ipc_grpc::{ExecutionEngineService, ExecutionEngineServiceClient},
 };
 use engine_test_support::low_level::ExecuteRequestBuilder;
+use types::U512;
 
 use casperlabs_engine_tests::profiling;
 

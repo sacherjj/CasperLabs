@@ -3,13 +3,13 @@
 extern crate alloc;
 
 use alloc::{string::String, vec::Vec};
-use core::convert::From;
+use core::convert::{From, TryInto};
 
 use contract::{
-    contract_api::{runtime, storage, Error as ApiError, TURef},
-    key::Key,
+    contract_api::{runtime, storage, TURef},
     unwrap_or_revert::UnwrapOrRevert,
 };
+use types::{ApiError, Key};
 
 const MAIL_FEED_KEY: &str = "mail_feed";
 const MAILING_KEY: &str = "mailing";
@@ -56,9 +56,7 @@ pub extern "C" fn call() {
     let args = (PUB_METHOD, message);
     runtime::call_contract::<_, ()>(contract_ref, args);
 
-    let list_key: TURef<Vec<String>> = sub_key
-        .to_turef()
-        .unwrap_or_revert_with(ApiError::UnexpectedKeyVariant);
+    let list_key: TURef<Vec<String>> = sub_key.try_into().unwrap_or_revert();
     let messages = storage::read(list_key)
         .unwrap_or_revert_with(Error::GetMessagesURef)
         .unwrap_or_revert_with(Error::FindMessagesURef);

@@ -1,15 +1,12 @@
 use lazy_static::lazy_static;
 
-use contract::{
-    contract_api::Error,
-    value::{account::PublicKey, U512},
-};
 use engine_core::engine_state::genesis::GenesisAccount;
 use engine_shared::motes::Motes;
 use engine_test_support::low_level::{
     utils, DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_ACCOUNTS,
     DEFAULT_ACCOUNT_ADDR, DEFAULT_PAYMENT, STANDARD_PAYMENT_CONTRACT,
 };
+use types::{account::PublicKey, ApiError, U512};
 
 const CONTRACT_POS_BONDING: &str = "pos_bonding.wasm";
 const ACCOUNT_1_ADDR: [u8; 32] = [7u8; 32];
@@ -79,6 +76,6 @@ fn should_fail_unboding_more_than_it_was_staked_ee_598_regression() {
     // Error::UnbondTooLarge => 7,
     assert_eq!(
         error_message,
-        format!("Exit code: {}", u32::from(Error::ProofOfStake(7)))
+        format!("Exit code: {}", u32::from(ApiError::ProofOfStake(7)))
     );
 }

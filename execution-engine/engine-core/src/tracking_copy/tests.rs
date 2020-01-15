@@ -3,15 +3,6 @@ use std::{cell::Cell, collections::BTreeMap, iter, rc::Rc};
 use matches::assert_matches;
 use proptest::{collection::vec, prelude::*};
 
-use contract::{
-    gens::*,
-    key::Key,
-    uref::{AccessRights, URef},
-    value::{
-        account::{PublicKey, PurseId, Weight, PUBLIC_KEY_LENGTH},
-        CLValue, ProtocolVersion,
-    },
-};
 use engine_shared::{
     account::{Account, AssociatedKeys},
     contract::Contract,
@@ -20,6 +11,11 @@ use engine_shared::{
     transform::Transform,
 };
 use engine_storage::global_state::{in_memory::InMemoryGlobalState, StateProvider, StateReader};
+use types::{
+    account::{PublicKey, PurseId, Weight, PUBLIC_KEY_LENGTH},
+    gens::*,
+    AccessRights, CLValue, Key, ProtocolVersion, URef,
+};
 
 use super::{
     meter::count_meter::Count, AddResult, TrackingCopy, TrackingCopyCache, TrackingCopyQueryResult,

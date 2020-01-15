@@ -1,15 +1,15 @@
 #![no_std]
 
 use contract::{
-    contract_api::{account, runtime, Error},
+    contract_api::{account, runtime},
     unwrap_or_revert::UnwrapOrRevert,
-    value::account::PublicKey,
 };
+use types::{account::PublicKey, ApiError};
 
 #[no_mangle]
 pub extern "C" fn call() {
     let account: PublicKey = runtime::get_arg(0)
-        .unwrap_or_revert_with(Error::MissingArgument)
-        .unwrap_or_revert_with(Error::InvalidArgument);
-    account::remove_associated_key(account).unwrap_or_revert_with(Error::User(0))
+        .unwrap_or_revert_with(ApiError::MissingArgument)
+        .unwrap_or_revert_with(ApiError::InvalidArgument);
+    account::remove_associated_key(account).unwrap_or_revert_with(ApiError::User(0))
 }

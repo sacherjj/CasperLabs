@@ -4,11 +4,8 @@ extern crate alloc;
 
 use alloc::string::String;
 
-use contract::{
-    contract_api::{runtime, Error as ApiError},
-    unwrap_or_revert::UnwrapOrRevert,
-    value::U512,
-};
+use contract::{contract_api::runtime, unwrap_or_revert::UnwrapOrRevert};
+use types::{ApiError, U512};
 
 #[repr(u16)]
 enum Error {

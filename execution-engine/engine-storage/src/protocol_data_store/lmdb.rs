@@ -1,5 +1,5 @@
-use contract::value::ProtocolVersion;
 use lmdb::{Database, DatabaseFlags};
+use types::ProtocolVersion;
 
 use crate::{
     error,

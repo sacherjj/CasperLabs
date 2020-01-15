@@ -1,15 +1,11 @@
 use alloc::{collections::BTreeMap, string::String};
 
-use contract::{
-    contract_api::{runtime, storage, system, ContractRef, TURef},
-    key::Key,
-    value::U512,
-};
-
 use crate::{
     api::{self, Api},
     error::Error,
 };
+use contract::contract_api::{runtime, storage, system, TURef};
+use types::{ContractRef, Key, U512};
 
 // ERC20 smart contract.
 #[allow(unused_imports)]

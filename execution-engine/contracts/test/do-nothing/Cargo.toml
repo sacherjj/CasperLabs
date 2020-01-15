@@ -11,8 +11,7 @@ doctest = false
 test = false
 
 [features]
-default = []
-std = ["contract/std" ]
+std = ["contract/std"]
 lib = []
 
 [dependencies]

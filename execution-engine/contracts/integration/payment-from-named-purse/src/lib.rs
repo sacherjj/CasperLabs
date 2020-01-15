@@ -5,10 +5,10 @@ extern crate alloc;
 use alloc::string::String;
 
 use contract::{
-    contract_api::{runtime, system, Error as ApiError},
+    contract_api::{runtime, system},
     unwrap_or_revert::UnwrapOrRevert,
-    value::{account::PurseId, U512},
 };
+use types::{account::PurseId, ApiError, U512};
 
 const GET_PAYMENT_PURSE: &str = "get_payment_purse";
 const SET_REFUND_PURSE: &str = "set_refund_purse";

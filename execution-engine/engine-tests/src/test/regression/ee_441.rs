@@ -1,9 +1,9 @@
-use contract::{key::Key, uref::URef, value::account::PublicKey};
 use engine_shared::transform::Transform;
 use engine_test_support::low_level::{
     DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_ACCOUNT_ADDR,
     DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT, STANDARD_PAYMENT_CONTRACT,
 };
+use types::{account::PublicKey, Key, URef};
 
 fn get_uref(key: Key) -> URef {
     match key {

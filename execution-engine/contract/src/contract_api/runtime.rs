@@ -4,25 +4,15 @@ use alloc::vec;
 use alloc::{collections::BTreeMap, string::String, vec::Vec};
 use core::mem::MaybeUninit;
 
-use crate::{
-    args_parser::ArgsParser,
-    block_time::{BlockTime, BLOCKTIME_SERIALIZED_LENGTH},
+use casperlabs_types::{
+    account::{PublicKey, PUBLIC_KEY_SERIALIZED_LENGTH},
+    api_error,
     bytesrepr::{self, FromBytes},
-    contract_api::{
-        self,
-        error::{self, Error},
-        ContractRef,
-    },
-    execution::{Phase, PHASE_SERIALIZED_LENGTH},
-    ext_ffi,
-    key::Key,
-    unwrap_or_revert::UnwrapOrRevert,
-    uref::URef,
-    value::{
-        account::{PublicKey, PUBLIC_KEY_SERIALIZED_LENGTH},
-        CLTyped, CLValue,
-    },
+    ApiError, BlockTime, CLTyped, CLValue, ContractRef, Key, Phase, URef,
+    BLOCKTIME_SERIALIZED_LENGTH, PHASE_SERIALIZED_LENGTH,
 };
+
+use crate::{args_parser::ArgsParser, contract_api, ext_ffi, unwrap_or_revert::UnwrapOrRevert};
 
 /// Returns `value` to the host, terminating the currently running module.
 ///
@@ -36,7 +26,7 @@ pub fn ret(value: CLValue) -> ! {
 }
 
 /// Stops execution of a contract and reverts execution effects with a given reason.
-pub fn revert<T: Into<Error>>(error: T) -> ! {
+pub fn revert<T: Into<ApiError>>(error: T) -> ! {
     unsafe {
         ext_ffi::revert(error.into().into());
     }
@@ -65,7 +55,7 @@ pub fn call_contract<A: ArgsParser, T: CLTyped + FromBytes>(c_ptr: ContractRef, 
                 bytes_written.as_mut_ptr(),
             )
         };
-        error::result_from(ret).unwrap_or_revert();
+        api_error::result_from(ret).unwrap_or_revert();
         unsafe { bytes_written.assume_init() }
     };
 
@@ -86,7 +76,7 @@ pub fn upgrade_contract_at_uref(name: &str, uref: URef) {
     let (key_ptr, key_size, _bytes) = contract_api::to_ptr(key);
     let result_value =
         unsafe { ext_ffi::upgrade_contract_at_uref(name_ptr, name_size, key_ptr, key_size) };
-    match error::result_from(result_value) {
+    match api_error::result_from(result_value) {
         Ok(()) => (),
         Err(error) => revert(error),
     }
@@ -95,9 +85,9 @@ pub fn upgrade_contract_at_uref(name: &str, uref: URef) {
 fn get_arg_size(i: u32) -> Option<usize> {
     let mut arg_size: usize = 0;
     let ret = unsafe { ext_ffi::get_arg_size(i as usize, &mut arg_size as *mut usize) };
-    match error::result_from(ret) {
+    match api_error::result_from(ret) {
         Ok(_) => Some(arg_size),
-        Err(Error::MissingArgument) => None,
+        Err(ApiError::MissingArgument) => None,
         Err(e) => revert(e),
     }
 }
@@ -113,7 +103,7 @@ pub fn get_arg<T: FromBytes>(i: u32) -> Option<Result<T, bytesrepr::Error>> {
             let data_ptr = contract_api::alloc_bytes(arg_size);
             let ret = unsafe { ext_ffi::get_arg(i as usize, data_ptr, arg_size) };
             let data = unsafe { Vec::from_raw_parts(data_ptr, arg_size, arg_size) };
-            error::result_from(ret).map(|_| data)
+            api_error::result_from(ret).map(|_| data)
         };
         // Assumed to be safe as `get_arg_size` checks the argument already
         res.unwrap_or_revert()
@@ -175,9 +165,9 @@ pub fn get_key(name: &str) -> Option<Key> {
             &mut total_bytes as *mut usize,
         )
     };
-    match error::result_from(ret) {
+    match api_error::result_from(ret) {
         Ok(_) => {}
-        Err(Error::MissingKey) => return None,
+        Err(ApiError::MissingKey) => return None,
         Err(e) => revert(e),
     }
     key_bytes.truncate(total_bytes);
@@ -212,7 +202,7 @@ pub fn list_named_keys() -> BTreeMap<String, Key> {
         let ret = unsafe {
             ext_ffi::load_named_keys(total_keys.as_mut_ptr(), &mut result_size as *mut usize)
         };
-        error::result_from(ret).unwrap_or_revert();
+        api_error::result_from(ret).unwrap_or_revert();
         let total_keys = unsafe { total_keys.assume_init() };
         (total_keys, result_size)
     };
@@ -230,7 +220,7 @@ pub fn is_valid_uref(uref: URef) -> bool {
     result != 0
 }
 
-fn read_host_buffer_into(dest: &mut [u8]) -> Result<usize, Error> {
+fn read_host_buffer_into(dest: &mut [u8]) -> Result<usize, ApiError> {
     let mut bytes_written = MaybeUninit::uninit();
     let ret = unsafe {
         ext_ffi::read_host_buffer(dest.as_mut_ptr(), dest.len(), bytes_written.as_mut_ptr())
@@ -238,11 +228,11 @@ fn read_host_buffer_into(dest: &mut [u8]) -> Result<usize, Error> {
     // NOTE: When rewriting below expression as `result_from(ret).map(|_| unsafe { ... })`, and the
     // caller ignores the return value, execution of the contract becomes unstable and ultimately
     // leads to `Unreachable` error.
-    error::result_from(ret)?;
+    api_error::result_from(ret)?;
     Ok(unsafe { bytes_written.assume_init() })
 }
 
-pub(crate) fn read_host_buffer(size: usize) -> Result<Vec<u8>, Error> {
+pub(crate) fn read_host_buffer(size: usize) -> Result<Vec<u8>, ApiError> {
     let bytes_ptr = contract_api::alloc_bytes(size);
     let mut dest: Vec<u8> = unsafe { Vec::from_raw_parts(bytes_ptr, size, size) };
     read_host_buffer_into(&mut dest)?;

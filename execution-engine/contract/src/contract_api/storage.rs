@@ -1,14 +1,16 @@
 use alloc::{collections::BTreeMap, string::String, vec::Vec};
 use core::{convert::From, mem::MaybeUninit};
 
-use crate::{
+use casperlabs_types::{
+    api_error,
     bytesrepr::{self, FromBytes, ToBytes},
-    contract_api::{self, error, runtime, ContractRef, Error, TURef},
+    AccessRights, ApiError, CLTyped, CLValue, ContractRef, Key, URef, KEY_UREF_SERIALIZED_LENGTH,
+};
+
+use crate::{
+    contract_api::{self, runtime, TURef},
     ext_ffi,
-    key::{Key, KEY_UREF_SERIALIZED_LENGTH},
     unwrap_or_revert::UnwrapOrRevert,
-    uref::{AccessRights, URef},
-    value::{CLTyped, CLValue},
 };
 
 /// Reads value under `turef` in the global state.
@@ -19,9 +21,9 @@ pub fn read<T: CLTyped + FromBytes>(turef: TURef<T>) -> Result<Option<T>, bytesr
     let value_size = {
         let mut value_size = MaybeUninit::uninit();
         let ret = unsafe { ext_ffi::read_value(key_ptr, key_size, value_size.as_mut_ptr()) };
-        match error::result_from(ret) {
+        match api_error::result_from(ret) {
             Ok(_) => unsafe { value_size.assume_init() },
-            Err(Error::ValueNotFound) => return Ok(None),
+            Err(ApiError::ValueNotFound) => return Ok(None),
             Err(e) => runtime::revert(e),
         }
     };
@@ -41,9 +43,9 @@ pub fn read_local<K: ToBytes, V: CLTyped + FromBytes>(
         let ret = unsafe {
             ext_ffi::read_value_local(key_bytes.as_ptr(), key_bytes.len(), value_size.as_mut_ptr())
         };
-        match error::result_from(ret) {
+        match api_error::result_from(ret) {
             Ok(_) => unsafe { value_size.assume_init() },
-            Err(Error::ValueNotFound) => return Ok(None),
+            Err(ApiError::ValueNotFound) => return Ok(None),
             Err(e) => runtime::revert(e),
         }
     };
@@ -143,6 +145,6 @@ pub fn new_turef<T: CLTyped + ToBytes>(init: T) -> TURef<T> {
     if let Key::URef(uref) = key {
         TURef::from_uref(uref).unwrap_or_revert()
     } else {
-        runtime::revert(Error::UnexpectedKeyVariant);
+        runtime::revert(ApiError::UnexpectedKeyVariant);
     }
 }

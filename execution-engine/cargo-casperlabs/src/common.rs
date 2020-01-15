@@ -14,6 +14,7 @@ use crate::{dependency::Dependency, ARGS, FAILURE_EXIT_CODE};
 lazy_static! {
     pub static ref CL_CONTRACT: Dependency =
         Dependency::new("casperlabs-contract", "0.22.0", "contract");
+    pub static ref CL_TYPES: Dependency = Dependency::new("casperlabs-types", "0.1.0", "types");
 }
 
 pub fn print_error_and_exit(msg: &str) -> ! {
@@ -103,6 +104,7 @@ pub mod tests {
     use super::*;
 
     const CL_CONTRACT_TOML_PATH: &str = "contract/Cargo.toml";
+    const CL_TYPES_TOML_PATH: &str = "types/Cargo.toml";
     const PACKAGE_FIELD_NAME: &str = "package";
     const VERSION_FIELD_NAME: &str = "version";
 
@@ -145,5 +147,10 @@ pub mod tests {
     #[test]
     fn check_cl_contract_version() {
         check_package_version(&*CL_CONTRACT, CL_CONTRACT_TOML_PATH);
+    }
+
+    #[test]
+    fn check_cl_types_version() {
+        check_package_version(&*CL_TYPES, CL_TYPES_TOML_PATH);
     }
 }

@@ -1,8 +1,8 @@
-use contract::value::{account::PublicKey, U512};
 use engine_test_support::low_level::{
     DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_ACCOUNT_ADDR,
     DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT,
 };
+use types::{account::PublicKey, U512};
 
 const CONTRACT_TRANSFER_PURSE_TO_ACCOUNT: &str = "transfer_purse_to_account.wasm";
 const ACCOUNT_1_ADDR: [u8; 32] = [1u8; 32];

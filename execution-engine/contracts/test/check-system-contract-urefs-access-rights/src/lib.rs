@@ -1,6 +1,7 @@
 #![no_std]
 
-use contract::{contract_api::runtime, key::Key, uref::URef};
+use contract::contract_api::runtime;
+use types::{Key, URef};
 
 #[allow(clippy::redundant_closure)]
 #[no_mangle]

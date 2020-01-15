@@ -1,7 +1,7 @@
 use std::{collections::BTreeMap, mem};
 
-use contract::key::Key;
 use engine_shared::{account::Account, contract::Contract, stored_value::StoredValue};
+use types::Key;
 
 /// Returns byte size of the element - both heap size and stack size.
 pub trait ByteSize {
@@ -105,7 +105,7 @@ impl HeapSizeOf for String {
 mod tests {
     use std::{collections::BTreeMap, mem};
 
-    use contract::key::Key;
+    use types::Key;
 
     use super::ByteSize;
 

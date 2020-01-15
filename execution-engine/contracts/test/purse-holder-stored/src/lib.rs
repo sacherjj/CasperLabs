@@ -7,10 +7,10 @@ use alloc::collections::BTreeMap;
 use alloc::string::String;
 
 use contract::{
-    contract_api::{runtime, storage, system, Error},
+    contract_api::{runtime, storage, system},
     unwrap_or_revert::UnwrapOrRevert,
-    value::CLValue,
 };
+use types::{ApiError, CLValue};
 
 const ENTRY_FUNCTION_NAME: &str = "apply_method";
 const CONTRACT_NAME: &str = "purse_holder_stored";
@@ -35,15 +35,15 @@ enum CustomError {
 
 fn purse_name() -> String {
     runtime::get_arg(Args::PurseName as u32)
-        .unwrap_or_revert_with(Error::User(CustomError::MissingPurseNameArg as u16))
-        .unwrap_or_revert_with(Error::User(CustomError::InvalidPurseNameArg as u16))
+        .unwrap_or_revert_with(ApiError::User(CustomError::MissingPurseNameArg as u16))
+        .unwrap_or_revert_with(ApiError::User(CustomError::InvalidPurseNameArg as u16))
 }
 
 #[no_mangle]
 pub extern "C" fn apply_method() {
     let method_name: String = runtime::get_arg(Args::MethodName as u32)
-        .unwrap_or_revert_with(Error::User(CustomError::MissingMethodNameArg as u16))
-        .unwrap_or_revert_with(Error::User(CustomError::InvalidMethodNameArg as u16));
+        .unwrap_or_revert_with(ApiError::User(CustomError::MissingMethodNameArg as u16))
+        .unwrap_or_revert_with(ApiError::User(CustomError::InvalidMethodNameArg as u16));
     match method_name.as_str() {
         METHOD_ADD => {
             let purse_name = purse_name();
@@ -51,7 +51,7 @@ pub extern "C" fn apply_method() {
             runtime::put_key(&purse_name, purse_id.value().into());
         }
         METHOD_VERSION => runtime::ret(CLValue::from_t(VERSION).unwrap_or_revert()),
-        _ => runtime::revert(Error::User(CustomError::UnknownMethodName as u16)),
+        _ => runtime::revert(ApiError::User(CustomError::UnknownMethodName as u16)),
     }
 }
 
@@ -60,7 +60,7 @@ pub extern "C" fn apply_method() {
 pub extern "C" fn call() {
     let key = storage::store_function(ENTRY_FUNCTION_NAME, BTreeMap::new())
         .into_uref()
-        .unwrap_or_revert_with(Error::UnexpectedContractRefVariant)
+        .unwrap_or_revert_with(ApiError::UnexpectedContractRefVariant)
         .into();
 
     runtime::put_key(CONTRACT_NAME, key);

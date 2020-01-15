@@ -1,9 +1,10 @@
 #![no_std]
 
 use contract::{
-    contract_api::{runtime, system, ContractRef, Error},
+    contract_api::{runtime, system},
     unwrap_or_revert::UnwrapOrRevert,
 };
+use types::{ApiError, ContractRef};
 
 #[repr(u16)]
 enum CustomError {
@@ -26,7 +27,7 @@ pub extern "C" fn pos_ext() {
 fn upgrade_turef(name: &str, contract_ref: ContractRef) {
     let uref = contract_ref
         .into_uref()
-        .ok_or(Error::User(CustomError::ContractPointerHash as u16))
+        .ok_or(ApiError::User(CustomError::ContractPointerHash as u16))
         .unwrap_or_revert();
     runtime::upgrade_contract_at_uref(name, uref);
 }

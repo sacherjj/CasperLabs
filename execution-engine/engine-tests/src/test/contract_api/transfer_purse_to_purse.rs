@@ -1,5 +1,5 @@
-use contract::{contract_api::Error, key::Key, value::U512};
 use engine_shared::{stored_value::StoredValue, transform::Transform};
+use types::{ApiError, Key, U512};
 
 use engine_test_support::low_level::{
     ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_ACCOUNT_ADDR,
@@ -52,7 +52,7 @@ fn should_run_purse_to_purse_transfer() {
     // Main assertion for the result of `transfer_from_purse_to_purse`
     assert_eq!(
         purse_transfer_result,
-        format!("{:?}", Result::<(), Error>::Ok(()),)
+        format!("{:?}", Result::<_, ApiError>::Ok(()),)
     );
 
     let main_purse_balance =
@@ -160,7 +160,7 @@ fn should_run_purse_to_purse_transfer_with_error() {
     // Main assertion for the result of `transfer_from_purse_to_purse`
     assert_eq!(
         purse_transfer_result,
-        format!("{:?}", Result::<(), Error>::Err(Error::Transfer)),
+        format!("{:?}", Result::<(), _>::Err(ApiError::Transfer)),
     );
 
     // Obtain main purse's balance

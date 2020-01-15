@@ -1,8 +1,9 @@
-use contract::{args_parser::ArgsParser, contract_api::Error, value::U512};
+use contract::args_parser::ArgsParser;
 use engine_test_support::low_level::{
     utils, ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_ACCOUNT_ADDR,
     DEFAULT_GENESIS_CONFIG,
 };
+use types::{ApiError, U512};
 
 #[derive(Debug)]
 #[repr(u16)]
@@ -60,14 +61,14 @@ fn should_revert_with_missing_arg() {
         call_get_arg(()).expect_err("should fail"),
         format!(
             "Exit code: {}",
-            u32::from(Error::User(GetArgContractError::MissingArgument0 as u16))
+            u32::from(ApiError::User(GetArgContractError::MissingArgument0 as u16))
         )
     );
     assert_eq!(
         call_get_arg((String::from(ARG0_VALUE),)).expect_err("should fail"),
         format!(
             "Exit code: {}",
-            u32::from(Error::User(GetArgContractError::MissingArgument1 as u16))
+            u32::from(ApiError::User(GetArgContractError::MissingArgument1 as u16))
         )
     );
 }
@@ -79,7 +80,7 @@ fn should_revert_with_invalid_argument() {
         call_get_arg((U512::from(123),)).expect_err("should fail"),
         format!(
             "Exit code: {}",
-            u32::from(Error::User(GetArgContractError::InvalidArgument0 as u16))
+            u32::from(ApiError::User(GetArgContractError::InvalidArgument0 as u16))
         )
     );
     assert_eq!(
@@ -90,7 +91,7 @@ fn should_revert_with_invalid_argument() {
         .expect_err("should fail"),
         format!(
             "Exit code: {}",
-            u32::from(Error::User(GetArgContractError::InvalidArgument1 as u16))
+            u32::from(ApiError::User(GetArgContractError::InvalidArgument1 as u16))
         )
     );
 }

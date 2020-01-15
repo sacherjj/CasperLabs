@@ -1,18 +1,15 @@
 use criterion::{criterion_group, criterion_main, Criterion, Throughput};
 use tempfile::TempDir;
 
-use contract::{
-    key::Key,
-    value::{
-        account::{PublicKey, PurseId},
-        U512,
-    },
-};
 use engine_core::engine_state::EngineConfig;
 use engine_storage::global_state::lmdb::LmdbGlobalState;
 use engine_test_support::low_level::{
     DeployItemBuilder, ExecuteRequestBuilder, LmdbWasmTestBuilder, WasmTestResult,
     DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT, STANDARD_PAYMENT_CONTRACT,
+};
+use types::{
+    account::{PublicKey, PurseId},
+    Key, U512,
 };
 
 const CONTRACT_CREATE_ACCOUNTS: &str = "create_accounts.wasm";

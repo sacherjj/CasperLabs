@@ -1,8 +1,8 @@
-use contract::{bytesrepr::ToBytes, key::Key, value::CLValue};
 use engine_shared::{stored_value::StoredValue, transform::Transform};
 use engine_test_support::low_level::{
     ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG,
 };
+use types::{bytesrepr::ToBytes, CLValue, Key};
 
 const CONTRACT_LOCAL_STATE: &str = "local_state.wasm";
 

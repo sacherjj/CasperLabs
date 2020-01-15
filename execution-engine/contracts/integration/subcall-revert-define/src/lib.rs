@@ -4,7 +4,8 @@ extern crate alloc;
 
 use alloc::collections::BTreeMap;
 
-use contract::contract_api::{runtime, storage, Error};
+use contract::contract_api::{runtime, storage};
+use types::ApiError;
 
 const REVERT_TEST_EXT: &str = "revert_test_ext";
 const REVERT_TEST_KEY: &str = "revert_test";
@@ -13,7 +14,7 @@ const REVERT_TEST_KEY: &str = "revert_test";
 pub extern "C" fn revert_test_ext() {
     // Call revert with an application specific non-zero exit code.
     // It is 2 because another contract used by test_revert.py calls revert with 1.
-    runtime::revert(Error::User(2));
+    runtime::revert(ApiError::User(2));
 }
 
 #[no_mangle]

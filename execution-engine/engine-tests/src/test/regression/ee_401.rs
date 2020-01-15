@@ -1,7 +1,7 @@
-use contract::value::account::PublicKey;
 use engine_test_support::low_level::{
     ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG,
 };
+use types::account::PublicKey;
 
 const CONTRACT_EE_401_REGRESSION: &str = "ee_401_regression.wasm";
 const CONTRACT_EE_401_REGRESSION_CALL: &str = "ee_401_regression_call.wasm";

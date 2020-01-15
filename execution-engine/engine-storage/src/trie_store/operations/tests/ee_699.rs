@@ -1,12 +1,10 @@
 use proptest::{arbitrary, array, collection, prop_oneof, strategy::Strategy};
 
-use contract::{
-    bytesrepr::{self, FromBytes, ToBytes},
-    gens,
-    key::LOCAL_SEED_LENGTH,
-    uref::URef,
-};
 use engine_shared::{make_array_newtype, newtypes::Blake2bHash};
+use types::{
+    bytesrepr::{self, FromBytes, ToBytes},
+    gens, URef, LOCAL_SEED_LENGTH,
+};
 
 use super::{HashedTrie, TestValue};
 use crate::trie::Trie;

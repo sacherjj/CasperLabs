@@ -11,13 +11,8 @@ use proptest::{
 };
 
 use crate::{
-    execution::Phase,
-    key::*,
-    uref::{AccessRights, URef},
-    value::{
-        account::{PublicKey, Weight},
-        CLType, CLValue, ProtocolVersion, SemVer, U128, U256, U512,
-    },
+    account::{PublicKey, Weight},
+    AccessRights, CLType, CLValue, Key, Phase, ProtocolVersion, SemVer, URef, U128, U256, U512,
 };
 
 pub fn u8_slice_32() -> impl Strategy<Value = [u8; 32]> {

@@ -1,11 +1,11 @@
 use num_traits::cast::AsPrimitive;
 
-use contract::value::U512;
 use engine_core::engine_state::CONV_RATE;
 use engine_test_support::low_level::{
     ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG,
     DEFAULT_PAYMENT,
 };
+use types::U512;
 
 #[ignore]
 #[test]

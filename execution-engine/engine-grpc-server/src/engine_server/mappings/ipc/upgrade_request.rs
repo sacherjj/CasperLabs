@@ -1,7 +1,7 @@
 use std::convert::{TryFrom, TryInto};
 
-use contract::value::ProtocolVersion;
 use engine_core::engine_state::upgrade::UpgradeConfig;
+use types::ProtocolVersion;
 
 use crate::engine_server::{ipc::UpgradeRequest, mappings::MappingError};
 

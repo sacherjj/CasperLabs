@@ -10,8 +10,8 @@ use std::{
     string::ToString,
 };
 
-use contract::value::account::PUBLIC_KEY_LENGTH;
 use engine_core::{engine_state, DEPLOY_HASH_LENGTH};
+use types::account::PUBLIC_KEY_LENGTH;
 
 pub use transforms::TransformMap;
 

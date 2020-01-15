@@ -1,11 +1,10 @@
 #![no_std]
 
 use contract::{
-    contract_api::{runtime, storage, Error as ApiError, TURef},
-    key::Key,
+    contract_api::{runtime, storage, TURef},
     unwrap_or_revert::UnwrapOrRevert,
-    uref::{AccessRights, URef},
 };
+use types::{AccessRights, ApiError, Key, URef};
 
 const CONTRACT_POINTER: u32 = 0;
 

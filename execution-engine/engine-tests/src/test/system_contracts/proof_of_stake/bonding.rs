@@ -1,13 +1,5 @@
 use base16;
 
-use contract::{
-    contract_api::Error,
-    key::Key,
-    value::{
-        account::{PublicKey, PurseId},
-        U512,
-    },
-};
 use engine_core::engine_state::{
     genesis::{GenesisAccount, POS_BONDING_PURSE},
     CONV_RATE,
@@ -16,6 +8,10 @@ use engine_shared::{motes::Motes, stored_value::StoredValue, transform::Transfor
 use engine_test_support::low_level::{
     utils, ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_ACCOUNTS, DEFAULT_ACCOUNT_ADDR,
     DEFAULT_ACCOUNT_INITIAL_BALANCE, DEFAULT_PAYMENT,
+};
+use types::{
+    account::{PublicKey, PurseId},
+    ApiError, Key, U512,
 };
 
 const CONTRACT_POS_BONDING: &str = "pos_bonding.wasm";
@@ -506,7 +502,7 @@ fn should_fail_bonding_with_insufficient_funds() {
     // pos::Error::BondTransferFailed => 8
     assert_eq!(
         error_message,
-        format!("Exit code: {}", u32::from(Error::ProofOfStake(8)))
+        format!("Exit code: {}", u32::from(ApiError::ProofOfStake(8)))
     );
 }
 
@@ -552,6 +548,6 @@ fn should_fail_unbonding_validator_without_bonding_first() {
     // pos::Error::NotBonded => 0
     assert_eq!(
         error_message,
-        format!("Exit code: {}", u32::from(Error::ProofOfStake(0)))
+        format!("Exit code: {}", u32::from(ApiError::ProofOfStake(0)))
     );
 }

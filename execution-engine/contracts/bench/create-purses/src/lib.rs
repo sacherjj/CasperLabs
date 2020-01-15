@@ -6,10 +6,10 @@ extern crate alloc;
 extern crate contract;
 
 use contract::{
-    contract_api::{account, runtime, system, Error},
+    contract_api::{account, runtime, system},
     unwrap_or_revert::UnwrapOrRevert,
-    value::U512,
 };
+use types::{ApiError, U512};
 
 enum Arg {
     TotalPurses = 0,
@@ -19,11 +19,11 @@ enum Arg {
 #[no_mangle]
 pub extern "C" fn call() {
     let total_purses: u64 = runtime::get_arg(Arg::TotalPurses as u32)
-        .unwrap_or_revert_with(Error::MissingArgument)
-        .unwrap_or_revert_with(Error::InvalidArgument);
+        .unwrap_or_revert_with(ApiError::MissingArgument)
+        .unwrap_or_revert_with(ApiError::InvalidArgument);
     let seed_amount: U512 = runtime::get_arg(Arg::SeedAmount as u32)
-        .unwrap_or_revert_with(Error::MissingArgument)
-        .unwrap_or_revert_with(Error::InvalidArgument);
+        .unwrap_or_revert_with(ApiError::MissingArgument)
+        .unwrap_or_revert_with(ApiError::InvalidArgument);
 
     for i in 0..total_purses {
         let new_purse = system::create_purse();

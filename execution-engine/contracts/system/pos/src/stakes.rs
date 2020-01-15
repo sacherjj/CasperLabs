@@ -6,11 +6,11 @@ use core::fmt::Write;
 
 use base16;
 
-use contract::{
-    contract_api::runtime,
-    key::Key,
-    system_contracts::pos::{Error, Result},
-    value::{account::PublicKey, U512},
+use contract::contract_api::runtime;
+use types::{
+    account::PublicKey,
+    system_contract_errors::pos::{Error, Result},
+    Key, U512,
 };
 
 use super::{MAX_DECREASE, MAX_INCREASE, MAX_REL_DECREASE, MAX_REL_INCREASE, MAX_SPREAD};
@@ -202,10 +202,7 @@ impl Stakes {
 
 #[cfg(test)]
 mod tests {
-    use contract::{
-        system_contracts::pos::Error,
-        value::{account::PublicKey, U512},
-    };
+    use types::{account::PublicKey, system_contract_errors::pos::Error, U512};
 
     use crate::stakes::Stakes;
 

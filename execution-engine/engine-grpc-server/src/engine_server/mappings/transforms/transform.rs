@@ -1,10 +1,10 @@
 use std::convert::{TryFrom, TryInto};
 
-use contract::value::{CLType, CLValue, U128, U256, U512};
 use engine_shared::{
     stored_value::StoredValue,
     transform::{Error as TransformError, Transform},
 };
+use types::{CLType, CLValue, U128, U256, U512};
 
 use crate::engine_server::{
     mappings::{state::NamedKeyMap, ParsingError},

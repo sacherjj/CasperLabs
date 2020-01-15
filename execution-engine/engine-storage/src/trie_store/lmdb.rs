@@ -9,7 +9,7 @@
 //! use casperlabs_engine_storage::trie::{Pointer, PointerBlock, Trie};
 //! use casperlabs_engine_storage::trie_store::TrieStore;
 //! use casperlabs_engine_storage::trie_store::lmdb::LmdbTrieStore;
-//! use contract::bytesrepr::ToBytes;
+//! use types::bytesrepr::ToBytes;
 //! use lmdb::DatabaseFlags;
 //! use engine_shared::newtypes::Blake2bHash;
 //! use tempfile::tempdir;

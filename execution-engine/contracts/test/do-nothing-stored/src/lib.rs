@@ -5,10 +5,10 @@ extern crate alloc;
 use alloc::{collections::BTreeMap, string::String};
 
 use contract::{
-    contract_api::{runtime, storage, Error as ApiError},
-    key::Key,
+    contract_api::{runtime, storage},
     unwrap_or_revert::UnwrapOrRevert,
 };
+use types::{ApiError, Key};
 
 const CONTRACT_NAME: &str = "do_nothing_stored";
 const DESTINATION_HASH: &str = "hash";

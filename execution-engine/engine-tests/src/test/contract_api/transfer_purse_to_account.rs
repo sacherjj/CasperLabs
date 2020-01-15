@@ -1,18 +1,11 @@
 use lazy_static::lazy_static;
 
-use contract::{
-    contract_api::{
-        system::{TransferResult, TransferredTo},
-        Error,
-    },
-    key::Key,
-    value::{account::PublicKey, U512},
-};
 use engine_shared::{stored_value::StoredValue, transform::Transform};
 use engine_test_support::low_level::{
     ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_ACCOUNT_ADDR,
     DEFAULT_ACCOUNT_INITIAL_BALANCE, DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT,
 };
+use types::{account::PublicKey, ApiError, Key, TransferResult, TransferredTo, U512};
 
 const CONTRACT_TRANSFER_PURSE_TO_ACCOUNT: &str = "transfer_purse_to_account.wasm";
 const ACCOUNT_1_ADDR: [u8; 32] = [42u8; 32];
@@ -285,7 +278,7 @@ fn should_fail_when_sending_too_much_from_purse_to_account() {
     // Main assertion for the result of `transfer_from_purse_to_purse`
     assert_eq!(
         transfer_result_string,
-        format!("{:?}", Result::<(), Error>::Err(Error::Transfer)),
+        format!("{:?}", Result::<(), _>::Err(ApiError::Transfer)),
         "TransferError incorrect"
     );
 }

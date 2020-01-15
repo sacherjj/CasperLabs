@@ -1,17 +1,13 @@
 use std::collections::BTreeMap;
 
-use contract::{
-    key::Key,
-    uref::{AccessRights, URef},
-    value::{
-        account::{PublicKey, PurseId},
-        U512,
-    },
-};
 use engine_shared::{stored_value::StoredValue, transform::Transform};
 use engine_test_support::low_level::{
     exec_with_return, ExecuteRequestBuilder, WasmTestBuilder, DEFAULT_ACCOUNT_ADDR,
     DEFAULT_BLOCK_TIME, DEFAULT_GENESIS_CONFIG,
+};
+use types::{
+    account::{PublicKey, PurseId},
+    AccessRights, Key, URef, U512,
 };
 
 const CONTRACT_TRANSFER_TO_ACCOUNT_01: &str = "transfer_to_account_01.wasm";

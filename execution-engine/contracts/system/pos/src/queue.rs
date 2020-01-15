@@ -1,12 +1,12 @@
 use alloc::{boxed::Box, vec::Vec};
 use core::result;
 
-use contract::{
-    block_time::BlockTime,
+use contract::contract_api::storage;
+use types::{
+    account::PublicKey,
     bytesrepr::{self, FromBytes, ToBytes},
-    contract_api::storage,
-    system_contracts::pos::{Error, Result},
-    value::{account::PublicKey, CLType, CLTyped, U512},
+    system_contract_errors::pos::{Error, Result},
+    BlockTime, CLType, CLTyped, U512,
 };
 
 const BONDING_KEY: u8 = 1;
@@ -171,11 +171,7 @@ impl CLTyped for Queue {
 
 #[cfg(test)]
 mod tests {
-    use contract::{
-        block_time::BlockTime,
-        system_contracts::pos::Error,
-        value::{account::PublicKey, U512},
-    };
+    use types::{account::PublicKey, system_contract_errors::pos::Error, BlockTime, U512};
 
     use crate::queue::{Queue, QueueEntry};
 

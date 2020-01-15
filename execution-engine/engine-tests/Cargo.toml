@@ -7,7 +7,7 @@ edition = "2018"
 [dependencies]
 base16 = "0.2.1"
 clap = "2"
-contract = { path = "../contract", package = "casperlabs-contract" }
+contract = { path = "../contract",  package = "casperlabs-contract", features = ["std"] }
 crossbeam-channel = "0.4.0"
 engine-core = { path = "../engine-core", package = "casperlabs-engine-core" }
 engine-grpc-server = { path = "../engine-grpc-server", package = "casperlabs-engine-grpc-server" }
@@ -15,6 +15,7 @@ engine-test-support = { path = "../engine-test-support", package = "casperlabs-e
 env_logger = "0.7.1"
 grpc = "0.6.1"
 log = "0.4.8"
+types = { path = "../types", package = "casperlabs-types", features = ["std"] }
 
 [dev-dependencies]
 criterion = "0.3.0"

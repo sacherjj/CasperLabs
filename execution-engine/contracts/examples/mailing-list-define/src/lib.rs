@@ -6,13 +6,13 @@ extern crate alloc;
 #[rustfmt::skip]
 use alloc::vec;
 use alloc::{collections::BTreeMap, string::String, vec::Vec};
+use core::convert::TryInto;
 
 use contract::{
-    contract_api::{runtime, storage, Error as ApiError, TURef},
-    key::Key,
+    contract_api::{runtime, storage, TURef},
     unwrap_or_revert::UnwrapOrRevert,
-    value::CLValue,
 };
+use types::{ApiError, CLValue, Key};
 
 const LIST_KEY: &str = "list";
 const MAILING_KEY: &str = "mailing";
@@ -36,8 +36,7 @@ impl Into<ApiError> for Error {
 
 fn get_list_key(name: &str) -> TURef<Vec<String>> {
     let key = runtime::get_key(name).unwrap_or_revert_with(ApiError::GetKey);
-    key.to_turef()
-        .unwrap_or_revert_with(ApiError::UnexpectedKeyVariant)
+    key.try_into().unwrap_or_revert()
 }
 
 fn update_list(name: String) {

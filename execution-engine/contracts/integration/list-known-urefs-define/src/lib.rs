@@ -6,10 +6,10 @@ use alloc::{borrow::ToOwned, collections::BTreeMap, string::String};
 use core::iter;
 
 use contract::{
-    contract_api::{runtime, storage, Error},
-    key::Key,
+    contract_api::{runtime, storage},
     unwrap_or_revert::UnwrapOrRevert,
 };
+use types::{ApiError, Key};
 
 const BAR_KEY: &str = "Bar";
 const FOO_KEY: &str = "Foo";
@@ -19,7 +19,7 @@ const TEST_TUREF: &str = "Test";
 
 #[no_mangle]
 pub extern "C" fn list_named_keys_ext() {
-    let passed_in_uref = runtime::get_key(FOO_KEY).unwrap_or_revert_with(Error::GetKey);
+    let passed_in_uref = runtime::get_key(FOO_KEY).unwrap_or_revert_with(ApiError::GetKey);
     let uref = storage::new_turef(TEST_TUREF);
     runtime::put_key(BAR_KEY, uref.clone().into());
     let contracts_named_keys = runtime::list_named_keys();

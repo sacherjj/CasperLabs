@@ -1,6 +1,10 @@
-use uint::core_::fmt;
+use alloc::vec::Vec;
+use core::fmt;
 
-use super::SemVer;
+use crate::{
+    bytesrepr::{Error, FromBytes, ToBytes},
+    SemVer,
+};
 
 #[derive(Copy, Clone, Debug, Default, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(SemVer);
@@ -110,6 +114,21 @@ impl ProtocolVersion {
     }
 }
 
+impl ToBytes for ProtocolVersion {
+    fn to_bytes(&self) -> Result<Vec<u8>, Error> {
+        let value_bytes = self.value().to_bytes()?;
+        Ok(value_bytes.to_vec())
+    }
+}
+
+impl FromBytes for ProtocolVersion {
+    fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
+        let (version, rem): (SemVer, &[u8]) = FromBytes::from_bytes(bytes)?;
+        let protocol_version = ProtocolVersion::new(version);
+        Ok((protocol_version, rem))
+    }
+}
+
 impl fmt::Display for ProtocolVersion {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         self.0.fmt(f)
@@ -119,7 +138,7 @@ impl fmt::Display for ProtocolVersion {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::value::semver::SemVer;
+    use crate::SemVer;
 
     #[test]
     fn should_follow_version_with_optional_code() {

@@ -1,14 +1,14 @@
 use lazy_static::lazy_static;
 
-use contract::value::{
-    account::{PublicKey, PurseId},
-    U512,
-};
 use engine_core::engine_state::CONV_RATE;
 use engine_shared::motes::Motes;
 use engine_test_support::low_level::{
     utils, ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_ACCOUNT_ADDR,
     DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT,
+};
+use types::{
+    account::{PublicKey, PurseId},
+    U512,
 };
 
 const CONTRACT_EE_599_REGRESSION: &str = "ee_599_regression.wasm";

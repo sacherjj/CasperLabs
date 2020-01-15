@@ -1,8 +1,8 @@
-use contract::contract_api::Error;
 use engine_test_support::low_level::{
     utils, ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_ACCOUNT_ADDR,
     DEFAULT_GENESIS_CONFIG,
 };
+use types::ApiError;
 
 const CONTRACT_EE_597_REGRESSION: &str = "ee_597_regression.wasm";
 
@@ -32,6 +32,6 @@ fn should_fail_when_bonding_amount_is_zero_ee_597_regression() {
     // Error::BondTooSmall => 5,
     assert_eq!(
         error_message,
-        format!("Exit code: {}", u32::from(Error::ProofOfStake(5)))
+        format!("Exit code: {}", u32::from(ApiError::ProofOfStake(5)))
     );
 }

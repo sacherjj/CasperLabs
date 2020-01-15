@@ -12,11 +12,11 @@ use std::{env, io, path::PathBuf};
 use base16;
 use clap::{crate_version, App, Arg};
 
-use contract::value::U512;
 use engine_core::engine_state::EngineConfig;
 use engine_test_support::low_level::{
     DeployItemBuilder, ExecuteRequestBuilder, LmdbWasmTestBuilder, DEFAULT_PAYMENT,
 };
+use types::U512;
 
 use casperlabs_engine_tests::profiling;
 

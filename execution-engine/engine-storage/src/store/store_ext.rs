@@ -1,4 +1,4 @@
-use contract::bytesrepr::{FromBytes, ToBytes};
+use types::bytesrepr::{FromBytes, ToBytes};
 
 use crate::{
     store::Store,

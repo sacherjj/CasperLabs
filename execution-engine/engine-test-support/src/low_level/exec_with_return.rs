@@ -1,14 +1,6 @@
 use std::{cell::RefCell, collections::BTreeSet, convert::TryInto, rc::Rc};
 
-use contract::{
-    args_parser::ArgsParser,
-    block_time::BlockTime,
-    bytesrepr::FromBytes,
-    execution::Phase,
-    key::Key,
-    uref::URef,
-    value::{CLTyped, CLValue, ProtocolVersion, U512},
-};
+use contract::args_parser::ArgsParser;
 use engine_core::{
     engine_state::{
         executable_deploy_item::ExecutableDeployItem, execution_effect::ExecutionEffect,
@@ -21,6 +13,9 @@ use engine_grpc_server::engine_server::ipc_grpc::ExecutionEngineService;
 use engine_shared::{gas::Gas, newtypes::CorrelationId};
 use engine_storage::{global_state::StateProvider, protocol_data::ProtocolData};
 use engine_wasm_prep::Preprocessor;
+use types::{
+    bytesrepr::FromBytes, BlockTime, CLTyped, CLValue, Key, Phase, ProtocolVersion, URef, U512,
+};
 
 use crate::low_level::{utils, WasmTestBuilder, DEFAULT_WASM_COSTS};
 

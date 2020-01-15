@@ -1,6 +1,6 @@
 use std::convert::{TryFrom, TryInto};
 
-use contract::value::CLType;
+use types::CLType;
 
 use crate::engine_server::{
     mappings::ParsingError,

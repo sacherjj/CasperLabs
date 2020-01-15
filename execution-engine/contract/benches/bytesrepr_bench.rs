@@ -6,11 +6,9 @@ use std::{collections::BTreeMap, iter};
 
 use test::{black_box, Bencher};
 
-use casperlabs_contract::{
+use casperlabs_types::{
     bytesrepr::{self, FromBytes, ToBytes},
-    key::Key,
-    uref::{AccessRights, URef},
-    value::{CLTyped, CLValue, U128, U256, U512},
+    AccessRights, CLTyped, CLValue, Key, URef, U128, U256, U512,
 };
 
 static KB: usize = 1024;

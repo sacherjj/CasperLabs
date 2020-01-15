@@ -6,9 +6,9 @@
 use alloc::vec;
 use alloc::vec::Vec;
 
-use crate::{
+use casperlabs_types::{
     bytesrepr::{Error, ToBytes},
-    value::{CLTyped, CLValue, CLValueError},
+    CLTyped, CLValue, CLValueError,
 };
 
 /// Types which implement [`ArgsParser`] can be parsed into an ABI-compliant byte representation

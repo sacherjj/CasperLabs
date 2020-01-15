@@ -1,9 +1,7 @@
 #![no_std]
 
-use contract::{
-    contract_api::{runtime, storage},
-    key::Key,
-};
+use contract::contract_api::{runtime, storage};
+use types::Key;
 
 #[no_mangle]
 pub extern "C" fn call() {

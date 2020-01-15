@@ -1,8 +1,8 @@
-use contract::value::account::PublicKey;
 use engine_test_support::low_level::{
     ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG,
     DEFAULT_PAYMENT,
 };
+use types::account::PublicKey;
 
 const CONTRACT_GET_CALLER: &str = "get_caller.wasm";
 const CONTRACT_GET_CALLER_SUBCALL: &str = "get_caller_subcall.wasm";

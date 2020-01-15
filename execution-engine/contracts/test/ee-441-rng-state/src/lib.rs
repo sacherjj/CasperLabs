@@ -5,12 +5,10 @@ extern crate alloc;
 use alloc::{collections::BTreeMap, string::String};
 
 use contract::{
-    contract_api::{runtime, storage, ContractRef, Error},
-    key::Key,
+    contract_api::{runtime, storage},
     unwrap_or_revert::UnwrapOrRevert,
-    uref::URef,
-    value::{CLValue, U512},
 };
+use types::{ApiError, CLValue, ContractRef, Key, URef, U512};
 
 #[no_mangle]
 pub extern "C" fn do_nothing() {
@@ -31,8 +29,8 @@ pub extern "C" fn do_something() {
 #[no_mangle]
 pub extern "C" fn call() {
     let flag: String = runtime::get_arg(0)
-        .unwrap_or_revert_with(Error::MissingArgument)
-        .unwrap_or_revert_with(Error::InvalidArgument);
+        .unwrap_or_revert_with(ApiError::MissingArgument)
+        .unwrap_or_revert_with(ApiError::InvalidArgument);
     let do_nothing: ContractRef = storage::store_function_at_hash("do_nothing", BTreeMap::new());
     let do_something: ContractRef =
         storage::store_function_at_hash("do_something", BTreeMap::new());

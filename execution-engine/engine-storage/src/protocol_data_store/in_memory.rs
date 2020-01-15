@@ -1,4 +1,4 @@
-use contract::value::ProtocolVersion;
+use types::ProtocolVersion;
 
 use crate::{
     error::in_memory::Error,

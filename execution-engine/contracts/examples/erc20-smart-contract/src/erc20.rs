@@ -3,15 +3,14 @@ use alloc::vec::Vec;
 use contract::{
     contract_api::{runtime, storage, system},
     unwrap_or_revert::UnwrapOrRevert,
-    value::{
-        account::{PublicKey, PurseId},
-        CLValue, U512,
-    },
+};
+use types::{
+    account::{PublicKey, PurseId},
+    CLValue, U512,
 };
 
-use erc20_logic::{ERC20BurnError, ERC20Trait, ERC20TransferError, ERC20TransferFromError};
-
 use crate::{api::Api, error::Error};
+use erc20_logic::{ERC20BurnError, ERC20Trait, ERC20TransferError, ERC20TransferFromError};
 
 pub const INIT_FLAG_KEY: [u8; 32] = [1u8; 32];
 pub const TOTAL_SUPPLY_KEY: [u8; 32] = [255u8; 32];

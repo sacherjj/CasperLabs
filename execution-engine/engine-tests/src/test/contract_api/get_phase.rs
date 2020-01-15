@@ -1,8 +1,8 @@
-use contract::{execution::Phase, value::account::PublicKey};
 use engine_test_support::low_level::{
     DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_ACCOUNT_ADDR,
     DEFAULT_GENESIS_CONFIG,
 };
+use types::{account::PublicKey, Phase};
 
 #[ignore]
 #[test]

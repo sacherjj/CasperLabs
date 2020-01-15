@@ -9,10 +9,7 @@ use hex_fmt::HexFmt;
 
 use crate::{
     bytesrepr::{Error, FromBytes, ToBytes, U8_SERIALIZED_LENGTH},
-    contract_api::{runtime, Error as ApiError},
-    unwrap_or_revert::UnwrapOrRevert,
-    uref::{URef, UREF_SERIALIZED_LENGTH},
-    value::cl_type::{CLType, CLTyped},
+    CLType, CLTyped, URef, UREF_SERIALIZED_LENGTH,
 };
 
 pub const PURSE_ID_SERIALIZED_LENGTH: usize = UREF_SERIALIZED_LENGTH;
@@ -20,28 +17,8 @@ pub const PURSE_ID_SERIALIZED_LENGTH: usize = UREF_SERIALIZED_LENGTH;
 #[derive(Debug)]
 pub struct TryFromIntError(());
 
-impl<T> UnwrapOrRevert<T> for Result<T, TryFromIntError> {
-    fn unwrap_or_revert(self) -> T {
-        self.unwrap_or_else(|_| runtime::revert(ApiError::Unhandled))
-    }
-
-    fn unwrap_or_revert_with<E: Into<ApiError>>(self, error: E) -> T {
-        self.unwrap_or_else(|_| runtime::revert(error.into()))
-    }
-}
-
 #[derive(Debug)]
 pub struct TryFromSliceForPublicKeyError(());
-
-impl<T> UnwrapOrRevert<T> for Result<T, TryFromSliceForPublicKeyError> {
-    fn unwrap_or_revert(self) -> T {
-        self.unwrap_or_else(|_| runtime::revert(ApiError::Deserialize))
-    }
-
-    fn unwrap_or_revert_with<E: Into<ApiError>>(self, error: E) -> T {
-        self.unwrap_or_else(|_| runtime::revert(error.into()))
-    }
-}
 
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct PurseId(URef);
@@ -394,8 +371,7 @@ impl TryFrom<i32> for UpdateKeyFailure {
 
 #[cfg(test)]
 mod tests {
-    use alloc::vec::Vec;
-    use core::convert::TryFrom;
+    use std::{convert::TryFrom, vec::Vec};
 
     use super::PublicKey;
 

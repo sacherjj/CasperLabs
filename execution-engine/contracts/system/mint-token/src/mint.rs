@@ -1,4 +1,4 @@
-use contract::{system_contracts::mint::Error, value::U512};
+use types::{system_contract_errors::mint::Error, U512};
 
 use crate::capabilities::{Addable, Readable, Writable};
 
@@ -43,7 +43,7 @@ mod tests {
     use alloc::{collections::BTreeMap, rc::Rc};
     use core::cell::{Cell, RefCell};
 
-    use contract::value::U512;
+    use types::U512;
 
     use crate::{
         capabilities::{Addable, Readable, Writable},

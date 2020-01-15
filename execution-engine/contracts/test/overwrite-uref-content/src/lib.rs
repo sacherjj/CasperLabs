@@ -1,10 +1,10 @@
 #![no_std]
 
 use contract::{
-    contract_api::{runtime, storage, Error as ApiError, TURef},
+    contract_api::{runtime, storage, TURef},
     unwrap_or_revert::UnwrapOrRevert,
-    uref::{AccessRights, URef},
 };
+use types::{AccessRights, ApiError, URef};
 
 const CONTRACT_UREF: u32 = 0;
 

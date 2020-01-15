@@ -1,6 +1,7 @@
 #![no_std]
 
-use contract::contract_api::{runtime, system, ContractRef, Error};
+use contract::contract_api::{runtime, system};
+use types::{ApiError, ContractRef};
 
 #[repr(u16)]
 enum CustomError {
@@ -20,7 +21,7 @@ pub extern "C" fn call() {
 
     let mint_uref = match mint_pointer {
         ContractRef::Hash(_) => {
-            runtime::revert(Error::User(CustomError::ContractPointerHash as u16))
+            runtime::revert(ApiError::User(CustomError::ContractPointerHash as u16))
         }
         ContractRef::URef(uref) => uref,
     };

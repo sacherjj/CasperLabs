@@ -2,7 +2,7 @@ mod store_ext;
 #[cfg(test)]
 pub(crate) mod tests;
 
-use contract::bytesrepr::{self, FromBytes, ToBytes};
+use types::bytesrepr::{self, FromBytes, ToBytes};
 
 pub use self::store_ext::StoreExt;
 use crate::transaction_source::{Readable, Writable};

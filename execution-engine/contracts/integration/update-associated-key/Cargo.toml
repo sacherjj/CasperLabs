@@ -11,8 +11,8 @@ doctest = false
 test = false
 
 [features]
-default = []
-std = ["contract/std" ]
+std = ["contract/std", "types/std"]
 
 [dependencies]
-contract = { package = "casperlabs-contract", path = "../../../contract" }
+contract = { path = "../../../contract", package = "casperlabs-contract" }
+types = { path = "../../../types", package = "casperlabs-types" }

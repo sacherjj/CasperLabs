@@ -1,8 +1,8 @@
-use contract::value::account::PublicKey;
 use engine_test_support::low_level::{
     DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_ACCOUNT_ADDR,
     DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT, STANDARD_PAYMENT_CONTRACT,
 };
+use types::account::PublicKey;
 
 const PASS_INIT_REMOVE: &str = "init_remove";
 const PASS_TEST_REMOVE: &str = "test_remove";

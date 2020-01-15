@@ -1,10 +1,10 @@
 #![no_std]
 
 use contract::{
-    contract_api::{account, runtime, system, ContractRef, Error},
+    contract_api::{account, runtime, system},
     unwrap_or_revert::UnwrapOrRevert,
-    value::{account::PurseId, U512},
 };
+use types::{account::PurseId, ApiError, ContractRef, U512};
 
 const POS_BOND: &str = "bond";
 const POS_UNBOND: &str = "unbond";
@@ -21,8 +21,8 @@ fn unbond(pos: ContractRef, amount: Option<U512>) {
 pub extern "C" fn call() {
     let pos_pointer = system::get_proof_of_stake();
     let amount: U512 = runtime::get_arg(0)
-        .unwrap_or_revert_with(Error::MissingArgument)
-        .unwrap_or_revert_with(Error::InvalidArgument);
+        .unwrap_or_revert_with(ApiError::MissingArgument)
+        .unwrap_or_revert_with(ApiError::InvalidArgument);
     bond(pos_pointer.clone(), amount, account::get_main_purse());
     unbond(pos_pointer, Some(amount + 1));
 }

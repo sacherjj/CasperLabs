@@ -5,11 +5,10 @@ extern crate alloc;
 use alloc::string::String;
 
 use contract::{
-    contract_api::{runtime, storage, system, Error},
+    contract_api::{runtime, storage, system},
     unwrap_or_revert::UnwrapOrRevert,
-    uref::URef,
-    value::CLValue,
 };
+use types::{ApiError, CLValue, URef};
 
 const ENTRY_FUNCTION_NAME: &str = "apply_method";
 pub const METHOD_ADD: &str = "add";
@@ -39,9 +38,9 @@ enum CustomError {
     UnknownMethodName = 6,
 }
 
-impl From<CustomError> for Error {
+impl From<CustomError> for ApiError {
     fn from(error: CustomError) -> Self {
-        Error::User(error as u16)
+        ApiError::User(error as u16)
     }
 }
 

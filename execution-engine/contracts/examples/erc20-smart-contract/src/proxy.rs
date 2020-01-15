@@ -1,13 +1,12 @@
-use contract::{
-    contract_api::{account, runtime, system},
-    unwrap_or_revert::UnwrapOrRevert,
-    value::U512,
-};
-
 use crate::{
     api::{self, Api},
     error::Error,
 };
+use contract::{
+    contract_api::{account, runtime, system},
+    unwrap_or_revert::UnwrapOrRevert,
+};
+use types::U512;
 
 #[no_mangle]
 pub extern "C" fn erc20_proxy() {

@@ -1,18 +1,15 @@
 use std::convert::{TryFrom, TryInto};
 
-use contract::{
-    bytesrepr::ToBytes,
-    key::Key,
-    value::{
-        account::{PublicKey, PurseId},
-        CLValue, U512,
-    },
-};
 use engine_core::engine_state::{genesis::POS_REWARDS_PURSE, CONV_RATE, MAX_PAYMENT};
 use engine_shared::{gas::Gas, motes::Motes, stored_value::StoredValue, transform::Transform};
 use engine_test_support::low_level::{
     utils, DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_ACCOUNT_ADDR,
     DEFAULT_ACCOUNT_INITIAL_BALANCE, DEFAULT_ACCOUNT_KEY, DEFAULT_GENESIS_CONFIG,
+};
+use types::{
+    account::{PublicKey, PurseId},
+    bytesrepr::ToBytes,
+    CLValue, Key, U512,
 };
 
 const ACCOUNT_1_ADDR: [u8; 32] = [42u8; 32];

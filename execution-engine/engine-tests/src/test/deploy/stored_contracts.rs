@@ -3,10 +3,6 @@ use std::{
     convert::TryInto,
 };
 
-use contract::{
-    key::Key,
-    value::{account::PublicKey, ProtocolVersion, U512},
-};
 use engine_core::engine_state::{upgrade::ActivationPoint, CONV_RATE};
 use engine_grpc_server::engine_server::ipc::DeployCode;
 use engine_shared::{
@@ -18,6 +14,7 @@ use engine_test_support::low_level::{
     UpgradeRequestBuilder, DEFAULT_ACCOUNT_ADDR, DEFAULT_ACCOUNT_INITIAL_BALANCE,
     DEFAULT_ACCOUNT_KEY, DEFAULT_GENESIS_CONFIG,
 };
+use types::{account::PublicKey, Key, ProtocolVersion, U512};
 
 const ACCOUNT_1_ADDR: [u8; 32] = [42u8; 32];
 const DEFAULT_ACTIVATION_POINT: ActivationPoint = 1;

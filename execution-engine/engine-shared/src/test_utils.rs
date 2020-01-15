@@ -6,12 +6,8 @@ use parity_wasm::{
     elements::{MemorySection, MemoryType, Module, Section, Serialize},
 };
 
-use contract::{
-    key::Key,
-    uref::{AccessRights, URef},
-    value::account::PurseId,
-};
 use engine_wasm_prep::wasm_costs::WasmCosts;
+use types::{account::PurseId, AccessRights, Key, URef};
 
 use crate::{account::Account, stored_value::StoredValue};
 

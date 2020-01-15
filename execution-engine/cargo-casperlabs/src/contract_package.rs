@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use lazy_static::lazy_static;
 
 use crate::{
-    common::{self, CL_CONTRACT},
+    common::{self, CL_CONTRACT, CL_TYPES},
     ARGS, TOOLCHAIN,
 };
 
@@ -15,10 +15,10 @@ const PACKAGE_NAME: &str = "contract";
 const LIB_RS_CONTENTS: &str = r#"#![cfg_attr(not(target_arch = "wasm32"), crate_type = "target arch should be wasm32")]
 
 use casperlabs_contract::{
-    contract_api::{runtime, storage, Error},
-    key::Key,
+    contract_api::{runtime, storage},
     unwrap_or_revert::UnwrapOrRevert,
 };
+use casperlabs_types::{Key, ApiError};
 
 const KEY: &str = "special_value";
 
@@ -39,10 +39,10 @@ pub extern "C" fn call() {
     // Get the optional first argument supplied to the argument.
     let value: String = runtime::get_arg(0)
         // Unwrap the `Option`, returning an error if there was no argument supplied.
-        .unwrap_or_revert_with(Error::MissingArgument)
+        .unwrap_or_revert_with(ApiError::MissingArgument)
         // Unwrap the `Result` containing the deserialized argument or return an error if there was
         // a deserialization error.
-        .unwrap_or_revert_with(Error::InvalidArgument);
+        .unwrap_or_revert_with(ApiError::InvalidArgument);
 
     store(value);
 }
@@ -60,6 +60,7 @@ lazy_static! {
     static ref CONFIG: PathBuf = ARGS.root_path().join(PACKAGE_NAME).join(".cargo/config");
     static ref CARGO_TOML_ADDITIONAL_CONTENTS: String = format!(
         r#"{}
+{}
 
 [lib]
 crate-type = ["cdylib"]
@@ -68,9 +69,9 @@ doctest = false
 test = false
 
 [features]
-default = ["casperlabs-contract/std"]
+default = ["casperlabs-contract/std", "casperlabs-types/std"]
 "#,
-        *CL_CONTRACT,
+        *CL_CONTRACT, *CL_TYPES,
     );
 }
 

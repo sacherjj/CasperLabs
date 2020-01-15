@@ -1,10 +1,10 @@
 use super::{error, execution_effect::ExecutionEffect, op::Op, CONV_RATE};
-use contract::{key::Key, value::CLValue};
 use engine_shared::{
     additive_map::AdditiveMap, gas::Gas, motes::Motes, newtypes::CorrelationId,
     stored_value::StoredValue, transform::Transform,
 };
 use engine_storage::global_state::StateReader;
+use types::{CLValue, Key};
 
 fn make_payment_error_effects(
     max_payment_cost: Motes,

@@ -1,10 +1,7 @@
 #![no_std]
 
-use contract::{
-    contract_api::{runtime, system, Error as ApiError},
-    uref::AccessRights,
-    value::account::PublicKey,
-};
+use contract::contract_api::{runtime, system};
+use types::{account::PublicKey, AccessRights, ApiError};
 
 #[repr(u16)]
 enum Error {

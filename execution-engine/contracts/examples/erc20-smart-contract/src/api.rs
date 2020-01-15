@@ -1,13 +1,10 @@
 use alloc::string::String;
 
-use contract::{
+use contract::{contract_api::runtime, unwrap_or_revert::UnwrapOrRevert};
+use types::{
+    account::{PublicKey, PurseId},
     bytesrepr::FromBytes,
-    contract_api::{runtime, ContractRef},
-    unwrap_or_revert::UnwrapOrRevert,
-    value::{
-        account::{PublicKey, PurseId},
-        CLTyped, U512,
-    },
+    CLTyped, ContractRef, U512,
 };
 
 use crate::error::Error;

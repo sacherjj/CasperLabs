@@ -12,23 +12,17 @@ use itertools::Itertools;
 use parity_wasm::elements::Module;
 use wasmi::{ImportsBuilder, MemoryRef, ModuleInstance, ModuleRef, Trap, TrapKind};
 
-use contract::{
-    args_parser::ArgsParser,
-    bytesrepr::{self, ToBytes},
-    contract_api::{
-        system::{TransferResult, TransferredTo},
-        Error as ApiError,
-    },
-    key::Key,
-    system_contracts::{self, mint, SystemContract},
-    uref::{AccessRights, URef},
-    value::{
-        account::{ActionType, PublicKey, PurseId, Weight, PUBLIC_KEY_SERIALIZED_LENGTH},
-        CLType, CLValue, ProtocolVersion, U128, U256, U512,
-    },
-};
+use contract::args_parser::ArgsParser;
 use engine_shared::{account::Account, contract::Contract, gas::Gas, stored_value::StoredValue};
 use engine_storage::global_state::StateReader;
+use types::{
+    account::{ActionType, PublicKey, PurseId, Weight, PUBLIC_KEY_SERIALIZED_LENGTH},
+    bytesrepr::{self, ToBytes},
+    system_contract_errors,
+    system_contract_errors::mint,
+    AccessRights, ApiError, CLType, CLValue, Key, ProtocolVersion, SystemContractType,
+    TransferResult, TransferredTo, URef, U128, U256, U512,
+};
 
 use super::{Error, MINT_NAME, POS_NAME};
 use crate::{
@@ -2170,7 +2164,7 @@ where
 
         let result = self.call_contract(mint_contract_key, args_bytes)?;
         let result: Result<(), mint::Error> = result.into_t()?;
-        Ok(result.map_err(system_contracts::Error::from)?)
+        Ok(result.map_err(system_contract_errors::Error::from)?)
     }
 
     /// Creates a new account at a given public key, transferring a given amount
@@ -2437,9 +2431,9 @@ where
         dest_ptr: u32,
         _dest_size: u32,
     ) -> Result<Result<(), ApiError>, Trap> {
-        let attenuated_uref = match SystemContract::try_from(system_contract_index) {
-            Ok(SystemContract::Mint) => self.get_mint_contract_uref(),
-            Ok(SystemContract::ProofOfStake) => self.get_pos_contract_uref(),
+        let attenuated_uref = match SystemContractType::try_from(system_contract_index) {
+            Ok(SystemContractType::Mint) => self.get_mint_contract_uref(),
+            Ok(SystemContractType::ProofOfStake) => self.get_pos_contract_uref(),
             Err(error) => return Ok(Err(error)),
         };
 
@@ -2518,12 +2512,7 @@ mod tests {
         result,
     };
 
-    use contract::{
-        gens::*,
-        key::Key,
-        uref::URef,
-        value::{CLType, CLValue},
-    };
+    use types::{gens::*, CLType, CLValue, Key, URef};
 
     use super::extract_urefs;
 

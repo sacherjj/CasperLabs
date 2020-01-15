@@ -1,29 +1,22 @@
 use alloc::vec::Vec;
-use core::{fmt::Debug, mem::MaybeUninit};
+use core::mem::MaybeUninit;
 
-use crate::{
-    bytesrepr::deserialize,
-    contract_api::{
-        self,
-        error::{self, Error},
-        runtime, ContractRef,
-    },
-    ext_ffi,
-    system_contracts::SystemContract,
-    unwrap_or_revert::UnwrapOrRevert,
-    uref::{URef, UREF_SERIALIZED_LENGTH},
-    value::{
-        account::{PublicKey, PurseId, PURSE_ID_SERIALIZED_LENGTH},
-        U512,
-    },
+use casperlabs_types::{
+    account::{PublicKey, PurseId, PURSE_ID_SERIALIZED_LENGTH},
+    api_error, bytesrepr, ApiError, ContractRef, SystemContractType, TransferResult, TransferredTo,
+    URef, U512, UREF_SERIALIZED_LENGTH,
 };
 
-pub type TransferResult = Result<TransferredTo, Error>;
+use crate::{
+    contract_api::{self, runtime},
+    ext_ffi,
+    unwrap_or_revert::UnwrapOrRevert,
+};
 
 pub const MINT_NAME: &str = "mint";
 pub const POS_NAME: &str = "pos";
 
-fn get_system_contract(system_contract: SystemContract) -> ContractRef {
+fn get_system_contract(system_contract: SystemContractType) -> ContractRef {
     let system_contract_index = system_contract.into();
     let uref: URef = {
         let result = {
@@ -35,15 +28,15 @@ fn get_system_contract(system_contract: SystemContract) -> ContractRef {
                     uref_data_raw.len(),
                 )
             };
-            error::result_from(value).map(|_| uref_data_raw)
+            api_error::result_from(value).map(|_| uref_data_raw)
         };
         // Revert for any possible error that happened on host side
         let uref_bytes = result.unwrap_or_else(|e| runtime::revert(e));
         // Deserializes a valid URef passed from the host side
-        deserialize(uref_bytes.to_vec()).unwrap_or_revert()
+        bytesrepr::deserialize(uref_bytes.to_vec()).unwrap_or_revert()
     };
     if uref.access_rights().is_none() {
-        runtime::revert(Error::NoAccessRights);
+        runtime::revert(ApiError::NoAccessRights);
     }
     ContractRef::URef(uref)
 }
@@ -51,13 +44,13 @@ fn get_system_contract(system_contract: SystemContract) -> ContractRef {
 /// Returns a read-only pointer to the Mint Contract.  Any failure will trigger `revert()` with a
 /// `contract_api::Error`.
 pub fn get_mint() -> ContractRef {
-    get_system_contract(SystemContract::Mint)
+    get_system_contract(SystemContractType::Mint)
 }
 
 /// Returns a read-only pointer to the Proof of Stake Contract.  Any failure will trigger `revert()`
 /// with a `contract_api::Error`.
 pub fn get_proof_of_stake() -> ContractRef {
-    get_system_contract(SystemContract::ProofOfStake)
+    get_system_contract(SystemContractType::ProofOfStake)
 }
 
 pub fn create_purse() -> PurseId {
@@ -70,9 +63,9 @@ pub fn create_purse() -> PurseId {
                 PURSE_ID_SERIALIZED_LENGTH,
                 PURSE_ID_SERIALIZED_LENGTH,
             );
-            deserialize(bytes).unwrap_or_revert()
+            bytesrepr::deserialize(bytes).unwrap_or_revert()
         } else {
-            runtime::revert(Error::PurseNotCreated)
+            runtime::revert(ApiError::PurseNotCreated)
         }
     }
 }
@@ -85,39 +78,15 @@ pub fn get_balance(purse_id: PurseId) -> Option<U512> {
         let mut output_size = MaybeUninit::uninit();
         let ret =
             unsafe { ext_ffi::get_balance(purse_id_ptr, purse_id_size, output_size.as_mut_ptr()) };
-        match error::result_from(ret) {
+        match api_error::result_from(ret) {
             Ok(_) => unsafe { output_size.assume_init() },
-            Err(Error::InvalidPurse) => return None,
+            Err(ApiError::InvalidPurse) => return None,
             Err(error) => runtime::revert(error),
         }
     };
     let value_bytes = runtime::read_host_buffer(value_size).unwrap_or_revert();
-    let value: U512 = deserialize(value_bytes).unwrap_or_revert();
+    let value: U512 = bytesrepr::deserialize(value_bytes).unwrap_or_revert();
     Some(value)
-}
-
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-#[repr(i32)]
-pub enum TransferredTo {
-    ExistingAccount = 0,
-    NewAccount = 1,
-}
-
-impl TransferredTo {
-    fn result_from(value: i32) -> TransferResult {
-        match value {
-            x if x == TransferredTo::ExistingAccount as i32 => Ok(TransferredTo::ExistingAccount),
-            x if x == TransferredTo::NewAccount as i32 => Ok(TransferredTo::NewAccount),
-            _ => Err(Error::Transfer),
-        }
-    }
-
-    pub fn i32_from(result: TransferResult) -> i32 {
-        match result {
-            Ok(transferred_to) => transferred_to as i32,
-            Err(_) => 2,
-        }
-    }
 }
 
 /// Transfers `amount` of motes from default purse of the account to `target`
@@ -158,7 +127,7 @@ pub fn transfer_from_purse_to_purse(
     source: PurseId,
     target: PurseId,
     amount: U512,
-) -> Result<(), Error> {
+) -> Result<(), ApiError> {
     let (source_ptr, source_size, _bytes1) = contract_api::to_ptr(source);
     let (target_ptr, target_size, _bytes2) = contract_api::to_ptr(target);
     let (amount_ptr, amount_size, _bytes3) = contract_api::to_ptr(amount);
@@ -175,6 +144,6 @@ pub fn transfer_from_purse_to_purse(
     if result == 0 {
         Ok(())
     } else {
-        Err(Error::Transfer)
+        Err(ApiError::Transfer)
     }
 }

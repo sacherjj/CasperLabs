@@ -1,13 +1,12 @@
 #![no_std]
 
 use contract::{
-    contract_api::{account, runtime, system, ContractRef, Error},
-    key::Key,
+    contract_api::{account, runtime, system},
     unwrap_or_revert::UnwrapOrRevert,
-    value::{
-        account::{PublicKey, PurseId},
-        U512,
-    },
+};
+use types::{
+    account::{PublicKey, PurseId},
+    ApiError, ContractRef, Key, U512,
 };
 
 fn set_refund_purse(pos: &ContractRef, p: &PurseId) {
@@ -33,17 +32,17 @@ pub extern "C" fn call() {
     let pos_pointer = system::get_proof_of_stake();
 
     let payment_amount: U512 = runtime::get_arg(0)
-        .unwrap_or_revert_with(Error::MissingArgument)
-        .unwrap_or_revert_with(Error::InvalidArgument);
+        .unwrap_or_revert_with(ApiError::MissingArgument)
+        .unwrap_or_revert_with(ApiError::InvalidArgument);
     let refund_purse_flag: u8 = runtime::get_arg(1)
-        .unwrap_or_revert_with(Error::MissingArgument)
-        .unwrap_or_revert_with(Error::InvalidArgument);
+        .unwrap_or_revert_with(ApiError::MissingArgument)
+        .unwrap_or_revert_with(ApiError::InvalidArgument);
     let maybe_amount_spent: Option<U512> = runtime::get_arg(2)
-        .unwrap_or_revert_with(Error::MissingArgument)
-        .unwrap_or_revert_with(Error::InvalidArgument);
+        .unwrap_or_revert_with(ApiError::MissingArgument)
+        .unwrap_or_revert_with(ApiError::InvalidArgument);
     let maybe_account: Option<PublicKey> = runtime::get_arg(3)
-        .unwrap_or_revert_with(Error::MissingArgument)
-        .unwrap_or_revert_with(Error::InvalidArgument);
+        .unwrap_or_revert_with(ApiError::MissingArgument)
+        .unwrap_or_revert_with(ApiError::InvalidArgument);
 
     submit_payment(&pos_pointer, payment_amount);
     if refund_purse_flag != 0 {

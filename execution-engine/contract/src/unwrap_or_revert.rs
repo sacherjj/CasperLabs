@@ -1,7 +1,9 @@
 //! Home of [`UnwrapOrRevert`](crate::unwrap_or_revert::UnwrapOrRevert), a convenience trait for
 //! unwrapping values.
 
-use crate::contract_api::{runtime, Error};
+use casperlabs_types::ApiError;
+
+use crate::contract_api::runtime;
 
 /// A trait which provides syntactic sugar for unwrapping a type or calling
 /// `runtime::revert()` if this fails.  It is implemented for `Result` and `Option`.
@@ -12,25 +14,25 @@ pub trait UnwrapOrRevert<T> {
 
     /// Unwraps the value into its inner type or calls `runtime::revert()` with the
     /// provided `error` on failure.
-    fn unwrap_or_revert_with<E: Into<Error>>(self, error: E) -> T;
+    fn unwrap_or_revert_with<E: Into<ApiError>>(self, error: E) -> T;
 }
 
-impl<T, E: Into<Error>> UnwrapOrRevert<T> for Result<T, E> {
+impl<T, E: Into<ApiError>> UnwrapOrRevert<T> for Result<T, E> {
     fn unwrap_or_revert(self) -> T {
         self.unwrap_or_else(|error| runtime::revert(error.into()))
     }
 
-    fn unwrap_or_revert_with<F: Into<Error>>(self, error: F) -> T {
+    fn unwrap_or_revert_with<F: Into<ApiError>>(self, error: F) -> T {
         self.unwrap_or_else(|_| runtime::revert(error.into()))
     }
 }
 
 impl<T> UnwrapOrRevert<T> for Option<T> {
     fn unwrap_or_revert(self) -> T {
-        self.unwrap_or_else(|| runtime::revert(Error::None))
+        self.unwrap_or_else(|| runtime::revert(ApiError::None))
     }
 
-    fn unwrap_or_revert_with<E: Into<Error>>(self, error: E) -> T {
+    fn unwrap_or_revert_with<E: Into<ApiError>>(self, error: E) -> T {
         self.unwrap_or_else(|| runtime::revert(error.into()))
     }
 }

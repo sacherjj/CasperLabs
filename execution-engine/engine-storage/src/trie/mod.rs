@@ -2,8 +2,8 @@
 
 use std::{mem::size_of, ops::Deref};
 
-use contract::bytesrepr::{self, FromBytes, ToBytes};
 use engine_shared::newtypes::Blake2bHash;
+use types::bytesrepr::{self, FromBytes, ToBytes};
 
 #[cfg(test)]
 pub mod gens;
@@ -319,8 +319,8 @@ impl<K: FromBytes, V: FromBytes> FromBytes for Trie<K, V> {
 
 pub(crate) mod operations {
     use crate::trie::Trie;
-    use contract::bytesrepr::{self, ToBytes};
     use engine_shared::newtypes::Blake2bHash;
+    use types::bytesrepr::{self, ToBytes};
 
     /// Creates a tuple containing an empty root hash and an empty root (a node
     /// with an empty pointer block)

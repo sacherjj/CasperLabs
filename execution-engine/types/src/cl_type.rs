@@ -8,9 +8,7 @@ use core::mem;
 
 use crate::{
     bytesrepr::{self, FromBytes, ToBytes},
-    key::Key,
-    uref::URef,
-    value::{U128, U256, U512},
+    Key, URef, U128, U256, U512,
 };
 
 const CL_TYPE_TAG_BOOL: u8 = 0;
@@ -443,14 +441,12 @@ impl<T1: CLTyped, T2: CLTyped, T3: CLTyped> CLTyped for (T1, T2, T3) {
 
 #[cfg(test)]
 mod tests {
-    use alloc::string::String;
-    use core::fmt::Debug;
+    use std::{fmt::Debug, string::ToString};
 
     use super::*;
     use crate::{
         bytesrepr::{FromBytes, ToBytes},
-        uref::AccessRights,
-        value::CLValue,
+        AccessRights, CLValue,
     };
 
     fn round_trip<T: CLTyped + FromBytes + ToBytes + PartialEq + Debug + Clone>(value: &T) {

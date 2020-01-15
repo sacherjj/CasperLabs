@@ -1,4 +1,3 @@
-use contract::value::ProtocolVersion;
 use engine_grpc_server::engine_server::{
     ipc::{
         ChainSpec_ActivationPoint, ChainSpec_CostTable_WasmCosts, ChainSpec_UpgradePoint,
@@ -7,6 +6,7 @@ use engine_grpc_server::engine_server::{
     state,
 };
 use engine_wasm_prep::wasm_costs::WasmCosts;
+use types::ProtocolVersion;
 
 pub struct UpgradeRequestBuilder {
     pre_state_hash: Vec<u8>,

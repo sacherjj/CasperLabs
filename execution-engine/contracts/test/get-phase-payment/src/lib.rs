@@ -1,11 +1,10 @@
 #![no_std]
 
 use contract::{
-    contract_api::{account, runtime, system, Error},
-    execution::Phase,
+    contract_api::{account, runtime, system},
     unwrap_or_revert::UnwrapOrRevert,
-    value::{account::PurseId, U512},
 };
+use types::{account::PurseId, ApiError, Phase, U512};
 
 const GET_PAYMENT_PURSE: &str = "get_payment_purse";
 
@@ -22,8 +21,8 @@ fn standard_payment(amount: U512) {
 #[no_mangle]
 pub extern "C" fn call() {
     let known_phase: Phase = runtime::get_arg(0)
-        .unwrap_or_revert_with(Error::MissingArgument)
-        .unwrap_or_revert_with(Error::InvalidArgument);
+        .unwrap_or_revert_with(ApiError::MissingArgument)
+        .unwrap_or_revert_with(ApiError::InvalidArgument);
     let get_phase = runtime::get_phase();
     assert_eq!(
         get_phase, known_phase,

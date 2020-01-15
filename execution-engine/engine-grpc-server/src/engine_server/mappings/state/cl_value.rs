@@ -1,6 +1,6 @@
 use std::convert::{TryFrom, TryInto};
 
-use contract::value::CLValue;
+use types::CLValue;
 
 use crate::engine_server::{mappings::ParsingError, state};
 
@@ -29,7 +29,7 @@ impl TryFrom<state::CLValue> for CLValue {
 mod tests {
     use proptest::proptest;
 
-    use contract::gens;
+    use types::gens;
 
     use super::*;
     use crate::engine_server::mappings::test_utils;

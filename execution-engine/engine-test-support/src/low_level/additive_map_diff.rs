@@ -1,5 +1,5 @@
-use contract::key::Key;
 use engine_shared::{additive_map::AdditiveMap, transform::Transform};
+use types::Key;
 
 /// Represents the difference between two `AdditiveMap`s.
 #[derive(Debug, Default, PartialEq, Eq)]

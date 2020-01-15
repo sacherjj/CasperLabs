@@ -1,5 +1,5 @@
-use contract::key::Key;
 use engine_core::engine_state::{execution_effect::ExecutionEffect, op::Op};
+use types::Key;
 
 use crate::engine_server::{
     ipc::{self, AddOp, NoOp, OpEntry, ReadOp, WriteOp},

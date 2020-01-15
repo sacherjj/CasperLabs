@@ -1,14 +1,12 @@
 use protobuf::RepeatedField;
 use rand::Rng;
 
-use contract::{
-    args_parser::ArgsParser,
-    value::{account::PublicKey, ProtocolVersion},
-};
+use contract::args_parser::ArgsParser;
 use engine_grpc_server::engine_server::{
     ipc::{DeployItem, ExecuteRequest},
     state,
 };
+use types::{account::PublicKey, ProtocolVersion};
 
 use crate::low_level::{
     DeployItemBuilder, DEFAULT_BLOCK_TIME, DEFAULT_PAYMENT, STANDARD_PAYMENT_CONTRACT,

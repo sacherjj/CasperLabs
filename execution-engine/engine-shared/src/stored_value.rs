@@ -1,8 +1,8 @@
 use std::{convert::TryFrom, mem, u32};
 
-use contract::{
+use types::{
     bytesrepr::{self, FromBytes, ToBytes},
-    value::CLValue,
+    CLValue,
 };
 
 use crate::{account::Account, contract::Contract, transform::TypeMismatch};
@@ -134,7 +134,7 @@ impl FromBytes for StoredValue {
 pub mod gens {
     use proptest::prelude::*;
 
-    use contract::gens::cl_value_arb;
+    use types::gens::cl_value_arb;
 
     use super::StoredValue;
     use crate::{account::gens::account_arb, contract::gens::contract_arb};

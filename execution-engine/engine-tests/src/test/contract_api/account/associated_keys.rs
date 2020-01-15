@@ -1,16 +1,13 @@
 use lazy_static::lazy_static;
 
-use contract::{
-    key::Key,
-    value::{
-        account::{PublicKey, Weight},
-        U512,
-    },
-};
 use engine_shared::account::Account;
 use engine_test_support::low_level::{
     utils, ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_ACCOUNT_ADDR,
     DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT,
+};
+use types::{
+    account::{PublicKey, Weight},
+    Key, U512,
 };
 
 const CONTRACT_ADD_UPDATE_ASSOCIATED_KEY: &str = "add_update_associated_key.wasm";

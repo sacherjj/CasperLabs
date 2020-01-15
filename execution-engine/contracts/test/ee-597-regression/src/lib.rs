@@ -1,9 +1,7 @@
 #![no_std]
 
-use contract::{
-    contract_api::{account, runtime, system, ContractRef},
-    value::{account::PurseId, U512},
-};
+use contract::contract_api::{account, runtime, system};
+use types::{account::PurseId, ContractRef, U512};
 
 const POS_BOND: &str = "bond";
 

@@ -1,4 +1,5 @@
-use super::{mint, pos};
+pub mod mint;
+pub mod pos;
 
 /// An aggregate enum error with variants for each system contract's error.
 #[derive(Debug)]

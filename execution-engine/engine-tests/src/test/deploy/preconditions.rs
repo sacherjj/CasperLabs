@@ -1,8 +1,8 @@
-use contract::value::{account::PublicKey, U512};
 use engine_test_support::low_level::{
     utils, DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_ACCOUNT_ADDR,
     DEFAULT_GENESIS_CONFIG, STANDARD_PAYMENT_CONTRACT,
 };
+use types::{account::PublicKey, U512};
 
 const ACCOUNT_1_ADDR: [u8; 32] = [42u8; 32];
 

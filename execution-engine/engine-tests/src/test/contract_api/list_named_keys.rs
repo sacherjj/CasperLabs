@@ -1,12 +1,10 @@
 use std::collections::BTreeMap;
 
-use contract::{
-    contract_api::system::{MINT_NAME, POS_NAME},
-    key::Key,
-};
+use contract::contract_api::system::{MINT_NAME, POS_NAME};
 use engine_test_support::low_level::{
     ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG,
 };
+use types::Key;
 
 const CONTRACT_LIST_NAMED_KEYS: &str = "list_named_keys.wasm";
 const NEW_NAME_ACCOUNT: &str = "Account";

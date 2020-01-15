@@ -1,12 +1,12 @@
 use lazy_static::lazy_static;
 
-use contract::{uref::URef, value::U512};
 use engine_core::{engine_state::Error, execution};
 use engine_shared::transform::TypeMismatch;
 use engine_test_support::low_level::{
     ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG,
     DEFAULT_PAYMENT,
 };
+use types::{URef, U512};
 
 const CONTRACT_SYSTEM_CONTRACTS_ACCESS: &str = "system_contracts_access.wasm";
 const CONTRACT_OVERWRITE_UREF_CONTENT: &str = "overwrite_uref_content.wasm";

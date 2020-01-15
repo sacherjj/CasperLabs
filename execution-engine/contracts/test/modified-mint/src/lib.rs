@@ -5,16 +5,17 @@ extern crate alloc;
 use alloc::string::String;
 
 use contract::{
-    contract_api::{runtime, storage, Error as ApiError},
-    system_contracts::mint::{Error, PurseIdError},
+    contract_api::{runtime, storage},
     unwrap_or_revert::UnwrapOrRevert,
-    uref::{AccessRights, URef},
-    value::{CLValue, U512},
 };
 use mint_token::{
     internal_purse_id::{DepositId, WithdrawId},
     mint::Mint,
     CLMint,
+};
+use types::{
+    system_contract_errors::mint::{Error, PurseIdError},
+    AccessRights, ApiError, CLValue, URef, U512,
 };
 
 const VERSION: &str = "1.1.0";

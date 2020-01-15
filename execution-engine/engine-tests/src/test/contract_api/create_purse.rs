@@ -1,15 +1,12 @@
 use base16;
 use lazy_static::lazy_static;
 
-use contract::{
-    key::Key,
-    value::{account::PurseId, U512},
-};
 use engine_shared::transform::Transform;
 use engine_test_support::low_level::{
     ExecuteRequestBuilder, WasmTestBuilder, DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG,
     DEFAULT_PAYMENT,
 };
+use types::{account::PurseId, Key, U512};
 
 const CONTRACT_CREATE_PURSE_01: &str = "create_purse_01.wasm";
 const CONTRACT_TRANSFER_PURSE_TO_ACCOUNT: &str = "transfer_purse_to_account.wasm";

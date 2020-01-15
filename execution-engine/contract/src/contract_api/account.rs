@@ -1,16 +1,16 @@
 use alloc::vec::Vec;
 use core::convert::TryFrom;
 
-use super::to_ptr;
-use crate::{
-    bytesrepr::deserialize,
-    contract_api, ext_ffi,
-    unwrap_or_revert::UnwrapOrRevert,
-    value::account::{
+use casperlabs_types::{
+    account::{
         ActionType, AddKeyFailure, PublicKey, PurseId, RemoveKeyFailure, SetThresholdFailure,
         UpdateKeyFailure, Weight, PURSE_ID_SERIALIZED_LENGTH,
     },
+    bytesrepr,
 };
+
+use super::to_ptr;
+use crate::{contract_api, ext_ffi, unwrap_or_revert::UnwrapOrRevert};
 
 pub fn get_main_purse() -> PurseId {
     let dest_ptr = contract_api::alloc_bytes(PURSE_ID_SERIALIZED_LENGTH);
@@ -22,7 +22,7 @@ pub fn get_main_purse() -> PurseId {
             PURSE_ID_SERIALIZED_LENGTH,
         )
     };
-    deserialize(bytes).unwrap_or_revert()
+    bytesrepr::deserialize(bytes).unwrap_or_revert()
 }
 
 pub fn set_action_threshold(

@@ -4,8 +4,8 @@ use lmdb::DatabaseFlags;
 use proptest::{collection::vec, prelude::proptest};
 use tempfile::tempdir;
 
-use contract::{bytesrepr::ToBytes, key::Key};
 use engine_shared::{newtypes::Blake2bHash, stored_value::StoredValue};
+use types::{bytesrepr::ToBytes, Key};
 
 use crate::{
     store::tests as store_tests,

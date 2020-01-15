@@ -5,9 +5,10 @@ extern crate alloc;
 use alloc::{collections::BTreeMap, string::String};
 
 use contract::{
-    contract_api::{runtime, storage, Error},
+    contract_api::{runtime, storage},
     unwrap_or_revert::UnwrapOrRevert,
 };
+use types::ApiError;
 
 // This is making use of the undocumented "FFI" function `gas()` which is used by the Wasm
 // interpreter to charge gas for upcoming interpreted instructions.  For further info on this, see
@@ -28,8 +29,8 @@ enum Args {
 #[no_mangle]
 pub extern "C" fn add_gas() {
     let amount: i32 = runtime::get_arg(Args::GasAmount as u32)
-        .unwrap_or_revert_with(Error::MissingArgument)
-        .unwrap_or_revert_with(Error::InvalidArgument);
+        .unwrap_or_revert_with(ApiError::MissingArgument)
+        .unwrap_or_revert_with(ApiError::InvalidArgument);
 
     unsafe {
         gas(amount);
@@ -39,12 +40,12 @@ pub extern "C" fn add_gas() {
 #[no_mangle]
 pub extern "C" fn call() {
     let amount: i32 = runtime::get_arg(Args::GasAmount as u32)
-        .unwrap_or_revert_with(Error::MissingArgument)
-        .unwrap_or_revert_with(Error::InvalidArgument);
+        .unwrap_or_revert_with(ApiError::MissingArgument)
+        .unwrap_or_revert_with(ApiError::InvalidArgument);
 
     let method_name: String = runtime::get_arg(Args::MethodName as u32)
-        .unwrap_or_revert_with(Error::MissingArgument)
-        .unwrap_or_revert_with(Error::InvalidArgument);
+        .unwrap_or_revert_with(ApiError::MissingArgument)
+        .unwrap_or_revert_with(ApiError::InvalidArgument);
 
     match method_name.as_str() {
         ADD_GAS_FROM_SESSION => unsafe {
@@ -54,6 +55,6 @@ pub extern "C" fn call() {
             let reference = storage::store_function_at_hash(SUBCALL_NAME, BTreeMap::new());
             runtime::call_contract::<_, ()>(reference, (amount,));
         }
-        _ => runtime::revert(Error::InvalidArgument),
+        _ => runtime::revert(ApiError::InvalidArgument),
     }
 }

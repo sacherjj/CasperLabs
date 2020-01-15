@@ -1,8 +1,8 @@
-use contract::value::CLValue;
 use engine_shared::{stored_value::StoredValue, transform::Transform};
 use engine_test_support::low_level::{
     ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG,
 };
+use types::CLValue;
 
 const DO_NOTHING_STORED_CALLER_CONTRACT_NAME: &str = "do_nothing_stored_caller";
 const DO_NOTHING_STORED_CONTRACT_NAME: &str = "do_nothing_stored";

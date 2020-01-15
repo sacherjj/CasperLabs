@@ -1,22 +1,21 @@
 //! Contains support for writing smart contracts.
 
 pub mod account;
-mod contract_ref;
-mod error;
 pub mod runtime;
 pub mod storage;
 pub mod system;
 mod turef;
+
+pub use turef::TURef;
 
 use alloc::{
     alloc::{Alloc, Global},
     vec::Vec,
 };
 
-use crate::{bytesrepr::ToBytes, unwrap_or_revert::UnwrapOrRevert};
-pub use contract_ref::ContractRef;
-pub use error::{i32_from, result_from, Error};
-pub use turef::TURef;
+use casperlabs_types::{bytesrepr::ToBytes, ApiError};
+
+use crate::unwrap_or_revert::UnwrapOrRevert;
 
 #[allow(clippy::zero_ptr)]
 fn alloc_bytes(n: usize) -> *mut u8 {
@@ -26,7 +25,7 @@ fn alloc_bytes(n: usize) -> *mut u8 {
     } else {
         Global
             .alloc_array(n)
-            .map_err(|_| Error::OutOfMemoryError)
+            .map_err(|_| ApiError::OutOfMemoryError)
             .unwrap_or_revert()
             .as_ptr()
     }

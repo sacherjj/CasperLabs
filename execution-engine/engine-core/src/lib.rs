@@ -1,13 +1,14 @@
 #![feature(never_type)]
 
-use contract::key::Key;
-use std::collections::BTreeMap;
-
 pub mod engine_state;
 pub mod execution;
 pub mod resolvers;
 pub mod runtime_context;
 pub(crate) mod tracking_copy;
+
+use std::collections::BTreeMap;
+
+use types::Key;
 
 pub const ADDRESS_LENGTH: usize = 32;
 pub const DEPLOY_HASH_LENGTH: usize = 32;

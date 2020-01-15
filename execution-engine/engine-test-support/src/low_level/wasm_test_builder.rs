@@ -11,15 +11,6 @@ use std::{
 use grpc::RequestOptions;
 use lmdb::DatabaseFlags;
 
-use contract::{
-    bytesrepr::ToBytes,
-    key::Key,
-    uref::URef,
-    value::{
-        account::{PublicKey, PurseId},
-        CLValue, U512,
-    },
-};
 use engine_core::{
     engine_state::{genesis::GenesisConfig, EngineConfig, EngineState, SYSTEM_ACCOUNT_ADDR},
     execution,
@@ -42,6 +33,11 @@ use engine_storage::{
     protocol_data_store::lmdb::LmdbProtocolDataStore,
     transaction_source::lmdb::LmdbEnvironment,
     trie_store::lmdb::LmdbTrieStore,
+};
+use types::{
+    account::{PublicKey, PurseId},
+    bytesrepr::ToBytes,
+    CLValue, Key, URef, U512,
 };
 
 use crate::low_level::utils;

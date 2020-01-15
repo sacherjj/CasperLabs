@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use lazy_static::lazy_static;
 
 use crate::{
-    common::{self, CL_CONTRACT},
+    common::{self, CL_CONTRACT, CL_TYPES},
     dependency::Dependency,
     ARGS, TOOLCHAIN,
 };
@@ -98,19 +98,6 @@ lazy_static! {
         .root_path()
         .join(PACKAGE_NAME)
         .join("src/integration_tests.rs");
-    static ref ENGINE_CORE: Dependency =
-        Dependency::new("casperlabs-engine-core", "0.1.0", "engine-core");
-    static ref ENGINE_GRPC_SERVER: Dependency = Dependency::new(
-        "casperlabs-engine-grpc-server",
-        "0.11.0",
-        "engine-grpc-server"
-    );
-    static ref ENGINE_SHARED: Dependency =
-        Dependency::new("casperlabs-engine-shared", "0.2.0", "engine-shared");
-    static ref ENGINE_STORAGE: Dependency =
-        Dependency::new("casperlabs-engine-storage", "0.1.0", "engine-storage");
-    static ref ENGINE_WASM_PREP: Dependency =
-        Dependency::new("casperlabs-engine-wasm-prep", "0.1.0", "engine-wasm-prep");
     static ref ENGINE_TEST_SUPPORT: Dependency = Dependency::new(
         "casperlabs-engine-test-support",
         "0.1.0",
@@ -120,25 +107,15 @@ lazy_static! {
         r#"{}
 {}
 {}
-{}
-{}
-{}
-{}
 
 [[bin]]
 name = "integration-tests"
 path = "src/integration_tests.rs"
 
 [features]
-default = ["casperlabs-contract/std"]
+default = ["casperlabs-contract/std", "casperlabs-types/std"]
 "#,
-        *CL_CONTRACT,
-        *ENGINE_CORE,
-        *ENGINE_GRPC_SERVER,
-        *ENGINE_SHARED,
-        *ENGINE_STORAGE,
-        *ENGINE_WASM_PREP,
-        *ENGINE_TEST_SUPPORT,
+        *CL_CONTRACT, *CL_TYPES, *ENGINE_TEST_SUPPORT,
     );
 }
 
@@ -167,40 +144,10 @@ pub fn replace_main_rs() {
 pub mod tests {
     use super::*;
 
-    const ENGINE_CORE_TOML_PATH: &str = "engine-core/Cargo.toml";
-    const ENGINE_GRPC_SERVER_TOML_PATH: &str = "engine-grpc-server/Cargo.toml";
-    const ENGINE_SHARED_TOML_PATH: &str = "engine-shared/Cargo.toml";
-    const ENGINE_STORAGE_TOML_PATH: &str = "engine-storage/Cargo.toml";
-    const ENGINE_WASM_PREP_TOML_PATH: &str = "engine-wasm-prep/Cargo.toml";
     const ENGINE_TEST_SUPPORT_TOML_PATH: &str = "engine-test-support/Cargo.toml";
 
     #[test]
-    fn check_engine_core_version() {
-        common::tests::check_package_version(&*ENGINE_CORE, ENGINE_CORE_TOML_PATH);
-    }
-
-    #[test]
-    fn check_engine_grpc_server_version() {
-        common::tests::check_package_version(&*ENGINE_GRPC_SERVER, ENGINE_GRPC_SERVER_TOML_PATH);
-    }
-
-    #[test]
-    fn check_engine_shared_version() {
-        common::tests::check_package_version(&*ENGINE_SHARED, ENGINE_SHARED_TOML_PATH);
-    }
-
-    #[test]
-    fn check_engine_storage_version() {
-        common::tests::check_package_version(&*ENGINE_STORAGE, ENGINE_STORAGE_TOML_PATH);
-    }
-
-    #[test]
-    fn check_engine_wasm_prep_version() {
-        common::tests::check_package_version(&*ENGINE_WASM_PREP, ENGINE_WASM_PREP_TOML_PATH);
-    }
-
-    #[test]
-    fn check_engine_tests_version() {
+    fn check_engine_test_support_version() {
         common::tests::check_package_version(&*ENGINE_TEST_SUPPORT, ENGINE_TEST_SUPPORT_TOML_PATH);
     }
 }

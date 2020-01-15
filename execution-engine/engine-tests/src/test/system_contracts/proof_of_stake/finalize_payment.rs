@@ -1,12 +1,5 @@
 use std::convert::TryInto;
 
-use contract::{
-    key::Key,
-    value::{
-        account::{PublicKey, PurseId},
-        U512,
-    },
-};
 use engine_core::engine_state::{
     genesis::{POS_PAYMENT_PURSE, POS_REWARDS_PURSE},
     CONV_RATE,
@@ -15,6 +8,10 @@ use engine_shared::{account::Account, gas::Gas, motes::Motes};
 use engine_test_support::low_level::{
     utils, DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_ACCOUNT_ADDR,
     DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT,
+};
+use types::{
+    account::{PublicKey, PurseId},
+    Key, U512,
 };
 
 const CONTRACT_FINALIZE_PAYMENT: &str = "pos_finalize_payment.wasm";

@@ -3,11 +3,11 @@ mod tests;
 
 use std::time::Instant;
 
-use contract::bytesrepr::{self, FromBytes, ToBytes};
 use engine_shared::{
     logging::{log_duration, log_metric, GAUGE},
     newtypes::{Blake2bHash, CorrelationId},
 };
+use types::bytesrepr::{self, FromBytes, ToBytes};
 
 use crate::{
     transaction_source::{Readable, Writable},
@@ -48,7 +48,7 @@ where
     T: Readable<Handle = S::Handle>,
     S: TrieStore<K, V>,
     S::Error: From<T::Error>,
-    E: From<S::Error> + From<contract::bytesrepr::Error>,
+    E: From<S::Error> + From<types::bytesrepr::Error>,
 {
     let path: Vec<u8> = key.to_bytes()?;
 
@@ -226,7 +226,7 @@ where
     T: Readable<Handle = S::Handle>,
     S: TrieStore<K, V>,
     S::Error: From<T::Error>,
-    E: From<S::Error> + From<contract::bytesrepr::Error>,
+    E: From<S::Error> + From<types::bytesrepr::Error>,
 {
     let start = Instant::now();
     let mut get_counter: i32 = 0;
@@ -631,7 +631,7 @@ where
     T: Readable<Handle = S::Handle> + Writable<Handle = S::Handle>,
     S: TrieStore<K, V>,
     S::Error: From<T::Error>,
-    E: From<S::Error> + From<contract::bytesrepr::Error>,
+    E: From<S::Error> + From<types::bytesrepr::Error>,
 {
     let start = Instant::now();
     let mut put_counter: i32 = 0;
@@ -749,7 +749,7 @@ where
     T: Readable<Handle = S::Handle>,
     S: TrieStore<K, V>,
     S::Error: From<T::Error>,
-    E: From<S::Error> + From<contract::bytesrepr::Error>,
+    E: From<S::Error> + From<types::bytesrepr::Error>,
 {
     let mut ret = Vec::new();
 

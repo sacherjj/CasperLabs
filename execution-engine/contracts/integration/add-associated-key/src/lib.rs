@@ -1,9 +1,12 @@
 #![no_std]
 
 use contract::{
-    contract_api::{account, runtime, Error as ApiError},
+    contract_api::{account, runtime},
     unwrap_or_revert::UnwrapOrRevert,
-    value::account::{PublicKey, Weight},
+};
+use types::{
+    account::{PublicKey, Weight},
+    ApiError,
 };
 
 enum Arg {

@@ -5,7 +5,6 @@ use std::{
 
 use lazy_static::lazy_static;
 
-use contract::key::Key;
 use engine_core::engine_state::genesis::{GenesisAccount, GenesisConfig};
 use engine_grpc_server::engine_server::ipc::{
     DeployResult, DeployResult_ExecutionResult, DeployResult_PreconditionFailure, ExecuteResponse,
@@ -14,6 +13,7 @@ use engine_shared::{
     account::Account, additive_map::AdditiveMap, gas::Gas, stored_value::StoredValue,
     transform::Transform,
 };
+use types::Key;
 
 use crate::low_level::{
     DEFAULT_CHAIN_NAME, DEFAULT_GENESIS_TIMESTAMP, DEFAULT_PROTOCOL_VERSION, DEFAULT_WASM_COSTS,

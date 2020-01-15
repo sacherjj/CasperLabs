@@ -1,10 +1,10 @@
 #![no_std]
 
 use contract::{
-    contract_api::{runtime, system, Error},
+    contract_api::{runtime, system},
     unwrap_or_revert::UnwrapOrRevert,
-    value::U512,
 };
+use types::{ApiError, U512};
 
 const UNBOND_METHOD_NAME: &str = "unbond";
 
@@ -18,8 +18,8 @@ pub extern "C" fn call() {
     let pos_pointer = system::get_proof_of_stake();
 
     let arg_0: Option<u64> = runtime::get_arg(0)
-        .unwrap_or_revert_with(Error::MissingArgument)
-        .unwrap_or_revert_with(Error::InvalidArgument);
+        .unwrap_or_revert_with(ApiError::MissingArgument)
+        .unwrap_or_revert_with(ApiError::InvalidArgument);
     let unbond_amount: Option<U512> = arg_0.map(Into::into);
 
     runtime::call_contract(pos_pointer, (UNBOND_METHOD_NAME, unbond_amount))

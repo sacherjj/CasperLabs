@@ -1,9 +1,9 @@
 use std::fmt;
 
-use contract::{bytesrepr, key::Key, value::ProtocolVersion};
 use engine_shared::{newtypes::Blake2bHash, transform::TypeMismatch};
 use engine_storage::global_state::CommitResult;
 use engine_wasm_prep::wasm_costs::WasmCosts;
+use types::{bytesrepr, Key, ProtocolVersion};
 
 use crate::engine_state::execution_effect::ExecutionEffect;
 

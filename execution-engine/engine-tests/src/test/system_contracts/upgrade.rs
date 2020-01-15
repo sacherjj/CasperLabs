@@ -1,7 +1,3 @@
-use contract::{
-    key::Key,
-    value::{CLValue, ProtocolVersion, U512},
-};
 use engine_core::engine_state::{upgrade::ActivationPoint, Error};
 use engine_grpc_server::engine_server::ipc::DeployCode;
 use engine_shared::{stored_value::StoredValue, transform::Transform};
@@ -10,6 +6,7 @@ use engine_test_support::low_level::{
     DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG, DEFAULT_WASM_COSTS,
 };
 use engine_wasm_prep::wasm_costs::WasmCosts;
+use types::{CLValue, Key, ProtocolVersion, U512};
 
 const PROTOCOL_VERSION: ProtocolVersion = ProtocolVersion::V1_0_0;
 const DEFAULT_ACTIVATION_POINT: ActivationPoint = 1;

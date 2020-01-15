@@ -9,10 +9,9 @@ use std::{
 
 use num::traits::{AsPrimitive, WrappingAdd};
 
-use contract::{
+use types::{
     bytesrepr::{self, FromBytes, ToBytes},
-    key::Key,
-    value::{CLType, CLTyped, CLValue, CLValueError, U128, U256, U512},
+    CLType, CLTyped, CLValue, CLValueError, Key, U128, U256, U512,
 };
 
 use crate::stored_value::StoredValue;
@@ -282,9 +281,10 @@ impl Default for Transform {
 }
 
 pub mod gens {
+    use proptest::{collection::vec, prelude::*};
+
     use super::Transform;
     use crate::stored_value::gens::stored_value_arb;
-    use proptest::{collection::vec, prelude::*};
 
     pub fn transform_arb() -> impl Strategy<Value = Transform> {
         prop_oneof![
@@ -311,10 +311,7 @@ pub mod gens {
 mod tests {
     use num::{Bounded, Num};
 
-    use contract::{
-        uref::{AccessRights, URef},
-        value::{account::PurseId, ProtocolVersion, U128, U256, U512},
-    };
+    use types::{account::PurseId, AccessRights, ProtocolVersion, URef, U128, U256, U512};
 
     use super::*;
     use crate::{

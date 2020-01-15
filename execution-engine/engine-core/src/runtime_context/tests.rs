@@ -7,19 +7,6 @@ use std::{
 
 use rand::RngCore;
 
-use contract::{
-    block_time::BlockTime,
-    execution::Phase,
-    key::{Key, LOCAL_SEED_LENGTH},
-    uref::{AccessRights, URef},
-    value::{
-        account::{
-            ActionType, AddKeyFailure, PublicKey, PurseId, RemoveKeyFailure, SetThresholdFailure,
-            Weight,
-        },
-        CLValue, ProtocolVersion,
-    },
-};
 use engine_shared::{
     account::{Account, AssociatedKeys},
     additive_map::AdditiveMap,
@@ -32,6 +19,13 @@ use engine_shared::{
 use engine_storage::global_state::{
     in_memory::{InMemoryGlobalState, InMemoryGlobalStateView},
     CommitResult, StateProvider,
+};
+use types::{
+    account::{
+        ActionType, AddKeyFailure, PublicKey, PurseId, RemoveKeyFailure, SetThresholdFailure,
+        Weight,
+    },
+    AccessRights, BlockTime, CLValue, Key, Phase, ProtocolVersion, URef, LOCAL_SEED_LENGTH,
 };
 
 use super::{attenuate_uref_for_account, Address, Error, RuntimeContext};

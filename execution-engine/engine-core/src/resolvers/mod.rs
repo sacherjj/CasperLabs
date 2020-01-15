@@ -3,8 +3,9 @@ pub mod memory_resolver;
 pub mod v1_function_index;
 mod v1_resolver;
 
-use contract::value::ProtocolVersion;
 use wasmi::ModuleImportResolver;
+
+use types::ProtocolVersion;
 
 use self::error::ResolverError;
 use crate::resolvers::memory_resolver::MemoryResolver;

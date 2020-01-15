@@ -1,5 +1,5 @@
-use contract::key::Key;
 use engine_shared::{additive_map::AdditiveMap, transform::Transform};
+use types::Key;
 
 use super::op::Op;
 

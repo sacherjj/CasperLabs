@@ -1,9 +1,9 @@
-use contract::{key::Key, uref::URef};
 use engine_shared::{stored_value::StoredValue, transform::Transform};
 use engine_test_support::low_level::{
     exec_with_return, WasmTestBuilder, DEFAULT_ACCOUNT_ADDR, DEFAULT_BLOCK_TIME,
     DEFAULT_GENESIS_CONFIG,
 };
+use types::{Key, URef};
 
 const DEPLOY_HASH_1: [u8; 32] = [1u8; 32];
 

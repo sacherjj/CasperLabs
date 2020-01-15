@@ -1,4 +1,4 @@
-use crate::{key::Key, uref::URef};
+use crate::{Key, URef};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ContractRef {

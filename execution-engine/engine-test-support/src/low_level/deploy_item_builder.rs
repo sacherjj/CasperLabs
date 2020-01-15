@@ -1,10 +1,9 @@
-use contract::{
-    args_parser::ArgsParser, bytesrepr::ToBytes, uref::URef, value::account::PublicKey,
-};
+use contract::args_parser::ArgsParser;
 use engine_grpc_server::engine_server::ipc::{
     DeployCode, DeployItem, DeployPayload, StoredContractHash, StoredContractName,
     StoredContractURef,
 };
+use types::{account::PublicKey, bytesrepr::ToBytes, URef};
 
 use crate::low_level::utils;
 

@@ -6,10 +6,13 @@
 //! reference.  It then stores the unforgeable reference under a name in context-local storage.
 //!
 //! ```rust,no_run
-//! use casperlabs_contract::contract_api::{storage, runtime, Error, TURef};
-//! use casperlabs_contract::key::Key;
-//! use casperlabs_contract::unwrap_or_revert::UnwrapOrRevert;
-//! use casperlabs_contract::uref::URef;
+//! #![no_std]
+//!
+//! use casperlabs_contract::{
+//!     contract_api::{runtime, storage, TURef},
+//!     unwrap_or_revert::UnwrapOrRevert,
+//! };
+//! use casperlabs_types::{ApiError, Key, URef};
 //!
 //! const KEY: &str = "special_value";
 //!
@@ -30,13 +33,14 @@
 //!     // Get the optional first argument supplied to the argument.
 //!     let value: i32 = runtime::get_arg(0)
 //!         // Unwrap the `Option`, returning an error if there was no argument supplied.
-//!         .unwrap_or_revert_with(Error::MissingArgument)
+//!         .unwrap_or_revert_with(ApiError::MissingArgument)
 //!         // Unwrap the `Result` containing the deserialized argument or return an error
 //!         // if there was a deserialization error.
-//!         .unwrap_or_revert_with(Error::InvalidArgument);
+//!         .unwrap_or_revert_with(ApiError::InvalidArgument);
 //!
 //!     store(value);
 //! }
+//! # fn main() {}
 //! ```
 //!
 //! # Writing Smart Contracts
@@ -44,33 +48,20 @@
 //! module and its submodules.
 
 #![cfg_attr(not(feature = "std"), no_std)]
-#![feature(
-    allocator_api,
-    core_intrinsics,
-    lang_items,
-    alloc_error_handler,
-    specialization,
-    try_reserve
-)]
+#![feature(alloc_error_handler, allocator_api, core_intrinsics, lang_items)]
 
 extern crate alloc;
+#[cfg(any(feature = "std", test))]
+#[macro_use]
+extern crate std;
 
-#[cfg(not(feature = "std"))]
+#[cfg(not(any(feature = "std", test)))]
 #[global_allocator]
 pub static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
 
 pub mod args_parser;
-pub mod block_time;
-pub mod bytesrepr;
 pub mod contract_api;
-pub mod execution;
 pub mod ext_ffi;
-#[cfg(any(test, feature = "gens"))]
-pub mod gens;
-#[cfg(not(feature = "std"))]
+#[cfg(not(any(feature = "std", test)))]
 pub mod handlers;
-pub mod key;
-pub mod system_contracts;
 pub mod unwrap_or_revert;
-pub mod uref;
-pub mod value;

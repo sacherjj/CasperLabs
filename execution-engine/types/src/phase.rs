@@ -1,4 +1,4 @@
-//! Home of [`Phase`](crate::execution::Phase), which represents the phase in which a given contract
+//! Home of [`Phase`](crate::Phase), which represents the phase in which a given contract
 //! is executing.
 
 // Can be removed once https://github.com/rust-lang/rustfmt/issues/3362 is resolved.
@@ -11,7 +11,7 @@ use num_traits::{FromPrimitive, ToPrimitive};
 
 use crate::{
     bytesrepr::{Error, FromBytes, ToBytes},
-    value::{CLType, CLTyped},
+    CLType, CLTyped,
 };
 
 pub const PHASE_SERIALIZED_LENGTH: usize = 1;

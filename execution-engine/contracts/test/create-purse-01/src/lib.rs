@@ -5,9 +5,10 @@ extern crate alloc;
 use alloc::string::String;
 
 use contract::{
-    contract_api::{runtime, system, Error},
+    contract_api::{runtime, system},
     unwrap_or_revert::UnwrapOrRevert,
 };
+use types::ApiError;
 
 #[repr(u32)]
 enum Args {
@@ -16,8 +17,8 @@ enum Args {
 
 pub fn delegate() {
     let purse_name: String = runtime::get_arg(Args::PurseName as u32)
-        .unwrap_or_revert_with(Error::MissingArgument)
-        .unwrap_or_revert_with(Error::InvalidArgument);
+        .unwrap_or_revert_with(ApiError::MissingArgument)
+        .unwrap_or_revert_with(ApiError::InvalidArgument);
     let purse_id = system::create_purse();
     runtime::put_key(&purse_name, purse_id.value().into());
 }

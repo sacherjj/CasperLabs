@@ -1,8 +1,8 @@
-use contract::value::account::PublicKey;
 use engine_test_support::low_level::{
     DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_ACCOUNT_ADDR,
     DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT, STANDARD_PAYMENT_CONTRACT,
 };
+use types::account::PublicKey;
 
 const CONTRACT_KEY_MANAGEMENT_THRESHOLDS: &str = "key_management_thresholds.wasm";
 
