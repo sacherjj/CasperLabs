@@ -115,4 +115,33 @@ export class Key {
             throw 123;
         }
     }
+
+    @operator("==")
+    equalsTo(other: Key): bool {
+        if (this.variant === KeyVariant.UREF_ID) {
+            if (other.variant == KeyVariant.UREF_ID) {
+                return <URef>this.uref == <URef>other.uref;
+            }
+            else {
+                return false;
+            }
+        }
+        else if (this.variant == KeyVariant.HASH_ID) {
+            if (other.variant == KeyVariant.HASH_ID) {
+                return <Uint8Array>this.hash == <Uint8Array>other.hash;
+            }
+            else {
+                return false;
+            }
+        }
+        else {
+            unreachable();
+            return false;
+        }
+    }
+
+    @operator("!=")
+    notEqualsTo(other: Key): bool {
+        return !this.equalsTo(other);
+    }
 }

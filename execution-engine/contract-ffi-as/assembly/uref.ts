@@ -56,5 +56,25 @@ export class URef {
         return result;
     }
 
+    @operator("==")
+    equalsTo(other: URef): bool {
+        if (this.bytes.length != other.bytes.length) {
+            return false;
+        }
+        if (this.accessRights != other.accessRights) {
+            return false;
+        }
+        for (let i = 0; i < this.bytes.length; i++) {
+            if (this.bytes[i] != other.bytes[i]) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    @operator("!=")
+    notEqualsTo(other: URef): bool {
+        return !this.equalsTo(other);
+    }
     //TODO: read():CLValue{}
 }
