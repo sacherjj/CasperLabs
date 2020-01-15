@@ -8,6 +8,15 @@ interface Props {
   size: 'lg' | 'sm' | 'xs';
 }
 
+/**
+ * State of ToggleButton.
+ * There are two ways to use it:
+ *   1. use `ToggleStore.isPressed` in JSX so tht when state changed, react will re-render.
+ *      @see Explorer.tsx
+ *
+ *   2. use `mobx.autorun` to observer it, mobx will call the passed function when `ToggleStore.pressed` updated.
+ *      @see DagContainer.subscribeToggleStore
+ */
 export class ToggleStore {
   @observable pressed: boolean = false;
 

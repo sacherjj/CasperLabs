@@ -4,7 +4,7 @@ import cats.Applicative
 import cats.effect.Sync
 import cats.implicits._
 import io.casperlabs.casper.Estimator.BlockHash
-import io.casperlabs.casper.{EventEmitter, LastFinalizedBlockHashContainer}
+import io.casperlabs.casper.EventEmitter
 import io.casperlabs.casper.consensus.info.BlockInfo
 import io.casperlabs.mempool.DeployBuffer
 import io.casperlabs.metrics.Metrics

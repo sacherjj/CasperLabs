@@ -115,8 +115,7 @@ object Configuration extends ParserImplicits {
 
   sealed trait Command extends Product with Serializable
   object Command {
-    final case object Diagnostics extends Command
-    final case object Run         extends Command
+    final case object Run extends Command
   }
 
   def parse(

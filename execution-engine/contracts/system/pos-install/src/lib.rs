@@ -2,7 +2,7 @@
 
 extern crate alloc;
 
-use alloc::{collections::BTreeMap, string::String, vec};
+use alloc::{collections::BTreeMap, string::String};
 use core::fmt::Write;
 
 use contract_ffi::{
@@ -87,12 +87,11 @@ pub extern "C" fn call() {
         .unwrap_or_revert_with(Error::UnexpectedContractRefVariant);
     let return_value = CLValue::from_t(uref).unwrap_or_revert();
 
-    runtime::ret(return_value, vec![uref]);
+    runtime::ret(return_value);
 }
 
 fn mint_purse(mint: &ContractRef, amount: U512) -> PurseId {
-    let result: Result<URef, mint::Error> =
-        runtime::call_contract(mint.clone(), ("mint", amount), vec![]);
+    let result: Result<URef, mint::Error> = runtime::call_contract(mint.clone(), ("mint", amount));
 
     result.map(PurseId::new).unwrap_or_revert()
 }

@@ -33,6 +33,8 @@ sealed trait Message {
   val parents: Seq[Id]
   val blockSummary: BlockSummary
 
+  val validatorPrevMessageHash: Id
+
   def isGenesisLike: Boolean =
     this.parents.isEmpty &&
       this.validatorId.isEmpty &&
@@ -51,7 +53,8 @@ object Message {
       rank: Long,
       validatorMsgSeqNum: Int,
       signature: consensus.Signature,
-      blockSummary: BlockSummary
+      blockSummary: BlockSummary,
+      validatorPrevMessageHash: Message#Id
   ) extends Message {
     // For Genesis block we expect it to have no parents.
     // We could either encode it as separate ADT variant or keep the assumptions.
@@ -78,7 +81,8 @@ object Message {
       rank: Long,
       validatorMsgSeqNum: Int,
       signature: consensus.Signature,
-      blockSummary: BlockSummary
+      blockSummary: BlockSummary,
+      validatorPrevMessageHash: Message#Id
   ) extends Message {
     override val parents: Seq[Id] = Seq(parentBlock)
   }
@@ -97,6 +101,7 @@ object Message {
       val validatorMsgSeqNum = header.validatorBlockSeqNum
       val role               = header.messageType
       val signature          = b.getSignature
+      val prevMsgHash        = header.validatorPrevBlockHash
 
       role match {
         case BALLOT =>
@@ -112,7 +117,8 @@ object Message {
               rank,
               validatorMsgSeqNum,
               signature,
-              b
+              b,
+              prevMsgHash
             )
           )
         case BLOCK =>
@@ -128,7 +134,8 @@ object Message {
               rank,
               validatorMsgSeqNum,
               signature,
-              b
+              b,
+              prevMsgHash
             )
           )
         case Unrecognized(_) =>

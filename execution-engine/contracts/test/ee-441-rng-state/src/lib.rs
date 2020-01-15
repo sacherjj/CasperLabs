@@ -2,7 +2,7 @@
 
 extern crate alloc;
 
-use alloc::{collections::BTreeMap, string::String, vec};
+use alloc::{collections::BTreeMap, string::String};
 
 use contract_ffi::{
     contract_api::{runtime, storage, ContractRef, Error},
@@ -15,7 +15,7 @@ use contract_ffi::{
 #[no_mangle]
 pub extern "C" fn do_nothing() {
     // Doesn't advance RNG of the runtime
-    runtime::ret(CLValue::from_t("Hello, world!").unwrap_or_revert(), vec![])
+    runtime::ret(CLValue::from_t("Hello, world!").unwrap_or_revert())
 }
 
 #[no_mangle]
@@ -23,9 +23,9 @@ pub extern "C" fn do_something() {
     // Advances RNG of the runtime
     let test_string = String::from("Hello, world!");
 
-    let test_uref = storage::new_turef(test_string).into();
+    let test_uref = URef::from(storage::new_turef(test_string));
     let return_value = CLValue::from_t(test_uref).unwrap_or_revert();
-    runtime::ret(return_value, vec![test_uref])
+    runtime::ret(return_value)
 }
 
 #[no_mangle]
@@ -46,7 +46,7 @@ pub extern "C" fn call() {
         let uref1: URef = storage::new_turef(U512::from(0)).into();
         runtime::put_key("uref1", Key::URef(uref1));
         // do_nothing doesn't do anything. It SHOULD not forward the internal RNG.
-        let result: String = runtime::call_contract(do_nothing.clone(), (), vec![]);
+        let result: String = runtime::call_contract(do_nothing.clone(), ());
         assert_eq!(result, "Hello, world!");
         let uref2: URef = storage::new_turef(U512::from(1)).into();
         runtime::put_key("uref2", Key::URef(uref2));
@@ -54,7 +54,7 @@ pub extern "C" fn call() {
         let uref1: URef = storage::new_turef(U512::from(0)).into();
         runtime::put_key("uref1", Key::URef(uref1));
         // do_something returns a new uref, and it should forward the internal RNG.
-        let uref2: URef = runtime::call_contract(do_something.clone(), (), vec![]);
+        let uref2: URef = runtime::call_contract(do_something.clone(), ());
         runtime::put_key("uref2", Key::URef(uref2));
     }
 }

@@ -83,18 +83,13 @@ fn entry_point() {
             };
         }
         Api::Approve(spender, amount) => token.approve(&runtime::get_caller(), &spender, amount),
-        Api::BalanceOf(address) => runtime::ret(
-            CLValue::from_t(token.balance_of(&address)).unwrap_or_revert(),
-            Vec::new(),
-        ),
-        Api::TotalSupply => runtime::ret(
-            CLValue::from_t(token.total_supply()).unwrap_or_revert(),
-            Vec::new(),
-        ),
-        Api::Allowance(owner, spender) => runtime::ret(
-            CLValue::from_t(token.allowance(&owner, &spender)).unwrap_or_revert(),
-            Vec::new(),
-        ),
+        Api::BalanceOf(address) => {
+            runtime::ret(CLValue::from_t(token.balance_of(&address)).unwrap_or_revert())
+        }
+        Api::TotalSupply => runtime::ret(CLValue::from_t(token.total_supply()).unwrap_or_revert()),
+        Api::Allowance(owner, spender) => {
+            runtime::ret(CLValue::from_t(token.allowance(&owner, &spender)).unwrap_or_revert())
+        }
         Api::Buy(purse) => {
             let transfered_amount = transfer_in_clx_from_purse(purse);
             token.mint(&runtime::get_caller(), transfered_amount);

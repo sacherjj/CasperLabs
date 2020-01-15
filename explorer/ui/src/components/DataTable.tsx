@@ -1,10 +1,13 @@
 import * as React from 'react';
 
-import { RefreshButton, Loading } from './Utils';
+import { Loading, RefreshButton } from './Utils';
+import { ToggleButton, ToggleStore } from './ToggleButton';
+import { observer } from 'mobx-react';
 
 export interface Props<T> {
   title: string;
   refresh?: () => void;
+  subscribeToggleStore?: ToggleStore;
   headers: string[];
   rows: T[] | null;
   emptyMessage?: any;
@@ -13,12 +16,22 @@ export interface Props<T> {
   footerMessage?: any;
 }
 
+@observer
 export default class DataTable<T> extends React.Component<Props<T>> {
   render() {
     return (
       <div className="card mb-3">
         <div className="card-header">
           <span>{this.props.title}</span>
+          {this.props.subscribeToggleStore && (
+            <div className="float-right">
+              <ToggleButton
+                title="Subscribe to latest changes"
+                toggleStore={this.props.subscribeToggleStore}
+                size="sm"
+              />
+            </div>
+          )}
           {this.props.refresh && (
             <div className="float-right">
               <RefreshButton refresh={() => this.props.refresh!()} />

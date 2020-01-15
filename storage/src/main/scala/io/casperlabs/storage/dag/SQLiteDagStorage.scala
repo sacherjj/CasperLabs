@@ -25,6 +25,8 @@ import io.casperlabs.storage.dag.DagStorage.{
   MeteredTipRepresentation
 }
 import io.casperlabs.storage.util.DoobieCodecs
+import com.google.protobuf.ByteString
+import scala.collection.JavaConverters._
 
 class SQLiteDagStorage[F[_]: Sync](
     readXa: Transactor[F],
@@ -305,9 +307,14 @@ class SQLiteDagStorage[F[_]: Sync](
         q.update.run.void
     }
 
+    val lfbChainQuery =
+      sql"""INSERT INTO lfb_chain (block_hash, indirectly_finalized)
+             VALUES ($mainParent, ${ByteString.copyFrom(secondary.asJava)})""".update.run.void
+
     val transaction = for {
       _ <- mainPQuery
       _ <- secondaryQuery
+      _ <- lfbChainQuery
     } yield ()
 
     transaction.transact(writeXa)
@@ -320,7 +327,7 @@ class SQLiteDagStorage[F[_]: Sync](
       .transact(readXa)
 
   override def getLastFinalizedBlock: F[BlockHash] =
-    sql"""SELECT block_hash FROM block_metadata WHERE is_finalized=TRUE AND is_main_chain=TRUE ORDER BY rank DESC LIMIT 1"""
+    sql"""SELECT block_hash FROM lfb_chain ORDER BY id DESC LIMIT 1"""
       .query[BlockHash]
       .unique
       .transact(readXa)

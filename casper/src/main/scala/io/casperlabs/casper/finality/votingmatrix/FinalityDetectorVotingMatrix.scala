@@ -23,30 +23,29 @@ class FinalityDetectorVotingMatrix[F[_]: Concurrent: Log] private (rFTT: Double)
   /**
     * Incremental update voting matrix when a new block added to the dag
     * @param dag block dag
-    * @param block the new added block
+    * @param message the new added block
     * @param latestFinalizedBlock latest finalized block
     * @return
     */
-  override def onNewBlockAddedToTheBlockDag(
+  override def onNewMessageAddedToTheBlockDag(
       dag: DagRepresentation[F],
-      block: Block,
+      message: Message,
       latestFinalizedBlock: BlockHash
   ): F[Option[CommitteeWithConsensusValue]] =
     dag.getEquivocators
-      .map(_.contains(block.getHeader.validatorPublicKey))
+      .map(_.contains(message.validatorId))
       .ifM(
         none[CommitteeWithConsensusValue].pure[F], {
           matrix
             .withPermit(
               for {
-                votedBranch <- ProtoUtil.votedBranch(dag, latestFinalizedBlock, block.blockHash)
+                votedBranch <- ProtoUtil.votedBranch(dag, latestFinalizedBlock, message.messageHash)
                 result <- votedBranch match {
                            case Some(branch) =>
                              for {
-                               msgSummary <- MonadThrowable[F].fromTry(Message.fromBlock(block))
                                _ <- updateVoterPerspective[F](
                                      dag,
-                                     msgSummary,
+                                     message,
                                      branch
                                    )
                                result <- checkForCommittee[F](dag, rFTT)
@@ -66,8 +65,8 @@ class FinalityDetectorVotingMatrix[F[_]: Concurrent: Log] private (rFTT: Double)
                            case None =>
                              Log[F]
                                .info(
-                                 s"The ${PrettyPrinter.buildString(block.blockHash) -> "block"} doesn't vote any main child of ${PrettyPrinter
-                                   .buildString(latestFinalizedBlock)               -> "latestFinalizedBlock"}"
+                                 s"The ${PrettyPrinter.buildString(message.messageHash) -> "message"} doesn't vote any main child of ${PrettyPrinter
+                                   .buildString(latestFinalizedBlock)                   -> "latestFinalizedBlock"}"
                                )
                                .as(none[CommitteeWithConsensusValue])
                          }

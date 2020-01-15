@@ -12,6 +12,7 @@ import cats.syntax.flatMap._
 import cats.syntax.functor._
 import cats.syntax.show._
 import com.olegpy.meow.effects._
+import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper._
 import io.casperlabs.casper.MultiParentCasperImpl.Broadcaster
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
@@ -45,6 +46,7 @@ import io.netty.handler.ssl.ClientAuth
 import java.util.concurrent.TimeUnit
 import monix.eval.Task
 import monix.execution.Scheduler
+import monix.execution.atomic.AtomicLong
 import org.flywaydb.core.Flyway
 import org.flywaydb.core.api.Location
 
@@ -105,9 +107,7 @@ class NodeRuntime private[node] (
       Option(SslContexts.forServer(cert, key, ClientAuth.NONE))
     } else None
 
-    implicit val metrics     = diagnostics.effects.metrics[Task]
-    implicit val nodeMetrics = diagnostics.effects.nodeCoreMetrics[Task]
-    implicit val jvmMetrics  = diagnostics.effects.jvmMetrics[Task]
+    implicit val metrics = diagnostics.effects.metrics[Task]
 
     val resources = for {
       implicit0(executionEngineService: ExecutionEngineService[Task]) <- GrpcExecutionEngineService[
@@ -191,10 +191,10 @@ class NodeRuntime private[node] (
       implicit0(nodeAsk: NodeAsk[Task])            = effects.peerNodeAsk(state)
       implicit0(boostrapsAsk: BootstrapsAsk[Task]) = effects.bootstrapsAsk(state)
 
-      implicit0(finalizedBlocksStream: FinalizedBlocksStream[Task]) <- Resource.liftF(
-                                                                        FinalizedBlocksStream
-                                                                          .of[Task]
-                                                                      )
+      lfb <- Resource.liftF[Task, BlockHash](
+              storage.getLastFinalizedBlock
+            )
+
       implicit0(eventsStream: EventStream[Task]) <- Resource.pure[Task, EventStream[Task]](
                                                      EventStream
                                                        .create[Task](
@@ -202,6 +202,11 @@ class NodeRuntime private[node] (
                                                          conf.server.eventStreamBufferSize.value
                                                        )
                                                    )
+
+      implicit0(finalizedBlocksStream: FinalizedBlocksStream[Task]) <- Resource.suspend(
+                                                                        FinalizedBlocksStream
+                                                                          .of[Task](lfb)
+                                                                      )
 
       implicit0(nodeDiscovery: NodeDiscovery[Task]) <- effects.nodeDiscovery(
                                                         id,
@@ -427,7 +432,8 @@ class NodeRuntime private[node] (
   private def makeGenesis[F[_]: MonadThrowable](chainSpec: ChainSpec)(
       implicit E: ExecutionEngineService[F],
       L: Log[F],
-      B: BlockStorage[F]
+      B: BlockStorage[F],
+      FS: FinalityStorage[F]
   ): Resource[F, Block] =
     Resource.liftF[F, Block] {
       for {

@@ -1,12 +1,5 @@
 #![no_std]
 
-extern crate alloc;
-
-// Can be removed once https://github.com/rust-lang/rustfmt/issues/3362 is resolved.
-#[rustfmt::skip]
-use alloc::vec;
-use alloc::vec::Vec;
-
 use contract_ffi::{
     contract_api::{account, runtime, system, ContractRef, Error},
     key::Key,
@@ -17,16 +10,12 @@ use contract_ffi::{
     },
 };
 
-fn purse_to_key(p: &PurseId) -> Key {
-    Key::URef(p.value())
-}
-
 fn set_refund_purse(pos: &ContractRef, p: &PurseId) {
-    runtime::call_contract(pos.clone(), ("set_refund_purse", *p), vec![purse_to_key(p)])
+    runtime::call_contract(pos.clone(), ("set_refund_purse", *p))
 }
 
 fn get_payment_purse(pos: &ContractRef) -> PurseId {
-    runtime::call_contract(pos.clone(), ("get_payment_purse",), Vec::new())
+    runtime::call_contract(pos.clone(), ("get_payment_purse",))
 }
 
 fn submit_payment(pos: &ContractRef, amount: U512) {
@@ -36,11 +25,7 @@ fn submit_payment(pos: &ContractRef, amount: U512) {
 }
 
 fn finalize_payment(pos: &ContractRef, amount_spent: U512, account: PublicKey) {
-    runtime::call_contract(
-        pos.clone(),
-        ("finalize_payment", amount_spent, account),
-        Vec::new(),
-    )
+    runtime::call_contract(pos.clone(), ("finalize_payment", amount_spent, account))
 }
 
 #[no_mangle]
