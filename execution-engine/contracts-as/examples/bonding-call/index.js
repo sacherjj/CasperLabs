@@ -1,5 +1,5 @@
 const fs = require("fs");
-const compiled = new WebAssembly.Module(fs.readFileSync(__dirname + "/build/counter_call.wasm"));
+const compiled = new WebAssembly.Module(fs.readFileSync(__dirname + "/build/bonding_call.wasm"));
 const imports = {
   env: {
     abort(_msg, _file, line, column) {

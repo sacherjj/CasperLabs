@@ -2,7 +2,7 @@ use crate::{
     support::test_support::{ExecuteRequestBuilder, InMemoryWasmTestBuilder},
     test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG},
 };
-use contract_ffi::{key::Key};
+use contract_ffi::key::Key;
 
 const CONTRACT_COUNTER_CALL: &str = "counter_call.wasm";
 const CONTRACT_COUNTER_DEFINE: &str = "counter_define.wasm";

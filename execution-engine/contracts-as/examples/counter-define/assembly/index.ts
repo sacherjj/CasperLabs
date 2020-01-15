@@ -1,8 +1,8 @@
 import {Error, ErrorCode} from "../../../../contract-ffi-as/assembly/error";
-import {putKey, getKey, getArg, callContract, storeFunctionAtHash, ret} from "../../../../contract-ffi-as/assembly";
+import {putKey, getKey, getArg, storeFunctionAtHash, ret} from "../../../../contract-ffi-as/assembly";
 import {Key} from "../../../../contract-ffi-as/assembly/key";
 import {CLValue} from "../../../../contract-ffi-as/assembly/clvalue";
-import {serializeArguments, fromBytesU64, toBytesString, toBytesMap, toBytesPair} from "../../../../contract-ffi-as/assembly/bytesrepr";
+import {toBytesString, toBytesMap, toBytesPair} from "../../../../contract-ffi-as/assembly/bytesrepr";
 import {fromBytesString, fromBytesI32} from "../../../../contract-ffi-as/assembly/bytesrepr";
 import {U512} from "../../../../contract-ffi-as/assembly/bignum";
 
