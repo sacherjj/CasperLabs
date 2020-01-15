@@ -121,8 +121,8 @@ class EraRuntime[F[_]: MonadThrowable: Clock: EraStorage: FinalityStorageReader:
           // We have to keep voting until the switch block given by the fork choice
           // in *this* era is finalized.
           ForkChoice[F].fromKeyBlock(era.keyBlockHash).flatMap { choice =>
-            choice.mainParent.isSwitchBlock.ifM(
-              FinalityStorageReader[F].isFinalized(choice.mainParent.messageHash),
+            choice.block.isSwitchBlock.ifM(
+              FinalityStorageReader[F].isFinalized(choice.block.messageHash),
               false.pure[F]
             )
           }
@@ -186,7 +186,7 @@ class EraRuntime[F[_]: MonadThrowable: Clock: EraStorage: FinalityStorageReader:
               message <- messageProducer.ballot(
                           eraId = era.keyBlockHash,
                           roundId = Ticks(lambdaMessage.roundId),
-                          target = choice.mainParent.messageHash,
+                          target = choice.block.messageHash,
                           justifications = justifications
                         )
             } yield message
@@ -209,10 +209,10 @@ class EraRuntime[F[_]: MonadThrowable: Clock: EraStorage: FinalityStorageReader:
         .block(
           eraId = era.keyBlockHash,
           roundId = roundId,
-          mainParent = choice.mainParent.messageHash,
+          mainParent = choice.block.messageHash,
           justifications = choice.justificationsMap,
           isBookingBlock = isBookingBoundary(
-            choice.mainParent.roundInstant,
+            choice.block.roundInstant,
             conf.toInstant(roundId)
           )
         )
@@ -222,7 +222,7 @@ class EraRuntime[F[_]: MonadThrowable: Clock: EraStorage: FinalityStorageReader:
         .ballot(
           eraId = era.keyBlockHash,
           roundId = roundId,
-          target = choice.mainParent.messageHash,
+          target = choice.block.messageHash,
           justifications = choice.justificationsMap
         )
         .widen[Message]
@@ -230,7 +230,7 @@ class EraRuntime[F[_]: MonadThrowable: Clock: EraStorage: FinalityStorageReader:
       message <- if (roundId < endTick) {
                   block
                 } else {
-                  choice.mainParent.isSwitchBlock.ifM(ballot, block)
+                  choice.block.isSwitchBlock.ifM(ballot, block)
                 }
     } yield message
 
@@ -252,7 +252,7 @@ class EraRuntime[F[_]: MonadThrowable: Clock: EraStorage: FinalityStorageReader:
               message <- messageProducer.ballot(
                           eraId = era.keyBlockHash,
                           roundId = roundId,
-                          target = choice.mainParent.messageHash,
+                          target = choice.block.messageHash,
                           justifications = choice.justificationsMap
                         )
             } yield message

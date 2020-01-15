@@ -23,12 +23,12 @@ class MockForkChoice[F[_]: Applicative](
   def set(result: ForkChoice.Result): F[Unit] =
     resultRef.set(result)
 
-  def set(message: Message): F[Message] =
-    resultRef.set(ForkChoice.Result(message, Set.empty)).as(message)
+  def set(block: Message.Block): F[Message.Block] =
+    resultRef.set(ForkChoice.Result(block, Set.empty)).as(block)
 }
 
 object MockForkChoice {
-  def apply[F[_]: Sync](init: Message) =
+  def apply[F[_]: Sync](init: Message.Block) =
     for {
       ref <- Ref.of[F, ForkChoice.Result](ForkChoice.Result(init, Set.empty))
     } yield new MockForkChoice[F](ref)

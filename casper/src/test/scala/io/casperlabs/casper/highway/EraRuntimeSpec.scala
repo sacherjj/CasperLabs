@@ -72,6 +72,7 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
         )
     )
     .get
+    .asInstanceOf[Message.Block]
 
   def makeBlock(
       validator: String,
@@ -80,24 +81,27 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
       mainParent: ByteString = genesis.messageHash,
       justifications: Map[ByteString, ByteString] = Map.empty
   ) =
-    Message.fromBlockSummary {
-      BlockSummary()
-        .withHeader(
-          Block
-            .Header()
-            .withValidatorPublicKey(validatorKey(validator))
-            .withKeyBlockHash(era.keyBlockHash)
-            .withRoundId(roundId)
-            .withParentHashes(List(mainParent).filterNot(_.isEmpty))
-            .withMagicBit(scala.util.Random.nextBoolean())
-            .withJustifications(
-              justifications.toSeq.map {
-                case (v, b) => Block.Justification(v, b)
-              }
-            )
-        )
-        .withBlockHash(blockHashes.next())
-    }.get
+    Message
+      .fromBlockSummary {
+        BlockSummary()
+          .withHeader(
+            Block
+              .Header()
+              .withValidatorPublicKey(validatorKey(validator))
+              .withKeyBlockHash(era.keyBlockHash)
+              .withRoundId(roundId)
+              .withParentHashes(List(mainParent).filterNot(_.isEmpty))
+              .withMagicBit(scala.util.Random.nextBoolean())
+              .withJustifications(
+                justifications.toSeq.map {
+                  case (v, b) => Block.Justification(v, b)
+                }
+              )
+          )
+          .withBlockHash(blockHashes.next())
+      }
+      .get
+      .asInstanceOf[Message.Block]
 
   def makeBallot(
       validator: String,
@@ -106,24 +110,27 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
       target: ByteString = genesis.messageHash,
       justifications: Map[ByteString, ByteString] = Map.empty
   ) =
-    Message.fromBlockSummary {
-      BlockSummary()
-        .withHeader(
-          Block
-            .Header()
-            .withMessageType(Block.MessageType.BALLOT)
-            .withKeyBlockHash(era.keyBlockHash)
-            .withRoundId(roundId)
-            .withValidatorPublicKey(validatorKey(validator))
-            .withParentHashes(List(target).filterNot(_.isEmpty))
-            .withJustifications(
-              justifications.toSeq.map {
-                case (v, b) => Block.Justification(v, b)
-              }
-            )
-        )
-        .withBlockHash(blockHashes.next())
-    }.get
+    Message
+      .fromBlockSummary {
+        BlockSummary()
+          .withHeader(
+            Block
+              .Header()
+              .withMessageType(Block.MessageType.BALLOT)
+              .withKeyBlockHash(era.keyBlockHash)
+              .withRoundId(roundId)
+              .withValidatorPublicKey(validatorKey(validator))
+              .withParentHashes(List(target).filterNot(_.isEmpty))
+              .withJustifications(
+                justifications.toSeq.map {
+                  case (v, b) => Block.Justification(v, b)
+                }
+              )
+          )
+          .withBlockHash(blockHashes.next())
+      }
+      .get
+      .asInstanceOf[Message.Ballot]
 
   def defaultDagStorage      = MockDagStorage[Id](genesis.toBlock)
   def defaultForkChoice      = MockForkChoice[Id](genesis)
@@ -971,7 +978,7 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
                 isBookingBlock: Boolean
             ): Id[Message.Block] = {
               isBookingBlock shouldBe true
-              mainParent shouldBe fc.fromKeyBlock(eraId).mainParent.messageHash
+              mainParent shouldBe fc.fromKeyBlock(eraId).block.messageHash
               justifications shouldBe fc.fromKeyBlock(eraId).justificationsMap
 
               super.block(eraId, roundId, mainParent, justifications, isBookingBlock)
@@ -1165,9 +1172,11 @@ object EraRuntimeSpec {
       ((_: Ticks) => validatorKey(validator)).pure[F]
   }
 
-  def insert[F[_]: Monad](messages: Seq[Message])(implicit ds: MockDagStorage[F]): F[Seq[Message]] =
-    messages.toList.traverse(insert[F]).map(_.toSeq)
+  def insert[F[_]: Monad, A <: Message](
+      messages: Seq[A]
+  )(implicit ds: MockDagStorage[F]): F[Seq[A]] =
+    messages.toList.traverse(insert[F, A]).map(_.toSeq)
 
-  def insert[F[_]: Monad](message: Message)(implicit ds: MockDagStorage[F]): F[Message] =
+  def insert[F[_]: Monad, A <: Message](message: A)(implicit ds: MockDagStorage[F]): F[A] =
     ds.insert(message.toBlock).as(message)
 }
