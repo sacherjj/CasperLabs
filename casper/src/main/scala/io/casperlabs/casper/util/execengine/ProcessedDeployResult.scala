@@ -18,7 +18,7 @@ sealed trait NoEffectsFailure extends ProcessedDeployResult
 final case class PreconditionFailure(deploy: Deploy, errorMessage: String) extends NoEffectsFailure
 
 // Represents errors during execution of the program.
-// These errors do have effects in the form of increasing account's nonce and execution of payment code.
+// These errors do have effects in the form of payment code execution.
 final case class ExecutionError(
     deploy: Deploy,
     error: ipc.DeployError,
@@ -56,9 +56,9 @@ object ProcessedDeployResult {
       case ipc.DeployResult(ipc.DeployResult.Value.Empty) => ???
     }
 
-  // All the deploys that do not change the global state in a way that can conflict with others:
-  // which can be only`ExecutionError` now as `InvalidNonce` and `PreconditionFailure` has been
-  // filtered out when creating block and when we're validating block it shouldn't include those either.
+  // All the deploys that do not change the global state in a way that can conflict with others,
+  // which can only be a `PreconditionFailure`, has been filtered out when creating block.
+  // We're validating block it shouldn't include those either.
   def split(l: List[ProcessedDeployResult]): (List[NoEffectsFailure], List[DeployEffects]) =
     l.foldRight(
       (List.empty[NoEffectsFailure], List.empty[DeployEffects])

@@ -40,9 +40,14 @@ object DeploySelection {
   def apply[F[_]](implicit ev: DeploySelection[F]): DeploySelection[F] = ev
 
   private case class IntermediateState(
+      // Chosen deploys that commute.
       accumulated: List[DeployEffects] = List.empty,
       diff: List[ProcessedDeployResult] = List.empty,
+      // For quicker commutativity test.
+      // New deploy has to commute with all the effects accumulated so far.
       accumulatedOps: OpMap[Key] = Map.empty,
+      // Deploys that conflict with `accumulated` but will be included
+      // as SEQ deploys.
       conflicting: List[Deploy] = List.empty
   ) {
     def effectsCommutativity: (List[DeployEffects], OpMap[state.Key]) =
@@ -61,6 +66,8 @@ object DeploySelection {
       if (accOps ~ ops)
         IntermediateState(deploysEffects :: accEffects, deploysEffects :: diff, accOps + ops)
       else
+        // We're not updating the `diff` here since its elements are pushed
+        // to the stream and we do that for commuting elements.
         copy(conflicting = deploysEffects.deploy :: this.conflicting)
     }
   }

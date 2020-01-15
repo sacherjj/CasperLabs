@@ -166,12 +166,17 @@ class DeploySelectionTest
 
   it should "consume the whole stream if all deploys commute and fit block size limit" in forAll(
     Gen
-      .listOf(arbDeploy.arbitrary),
-    Gen.chooseNum(1 * 1024 * 1024, 3 * 1024 * 1024)
+      .chooseNum(1 * 1024 * 1024, 3 * 1024 * 1024)
+      .flatMap(
+        size =>
+          Gen
+            .listOf(arbDeploy.arbitrary)
+            .map(takeUnlessTooBig(size)(_))
+            .tupleRight(size)
+      )
   ) {
     case (deploys, maxBlockSizeMb) =>
-      val cappedDeploys = takeUnlessTooBig(maxBlockSizeMb)(deploys)
-      assert(cappedDeploys.size == deploys.size)
+      val cappedDeploys = deploys
 
       implicit val ee: ExecutionEngineService[Task] = eeExecMock(everythingCommutesExec _)
 
@@ -350,12 +355,12 @@ object DeploySelectionTest {
   private def raiseNotImplemented[F[_], A](implicit F: MonadThrowable[F]): F[A] =
     F.raiseError[A](new IllegalArgumentException("Not implemented in this mock."))
 
-  private def takeUnlessTooBig(sizeLimitMb: Int)(deploys: List[Deploy]): List[Deploy] =
+  private def takeUnlessTooBig(sizeLimitBytes: Int)(deploys: List[Deploy]): List[Deploy] =
     deploys
       .foldLeftM(List.empty[Deploy]) {
         case (state, element) =>
           val newState = element :: state
-          if (deploysSize(newState) > (0.9 * sizeLimitMb)) {
+          if (deploysSize(newState) > (0.9 * sizeLimitBytes)) {
             Left(state)
           } else {
             Right(newState)
