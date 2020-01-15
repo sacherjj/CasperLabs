@@ -322,7 +322,7 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
       val msg2 = insert(build(runtime.endTick, msg1.messageHash))
       val msg3 = build(Ticks(runtime.endTick + 1), msg2.messageHash)
       runtime.validate(msg3).value shouldBe Left(
-        "The block is built on top of a switch block."
+        "Only ballots should be build on top of a switch block in the current era."
       )
     }
 
@@ -333,7 +333,7 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
       val msg1        = insert(makeBlock(leader, runtime.era, runtime.startTick))
       val msg2        = makeBallot(leader, runtime.era, runtime.endTick, target = msg1.messageHash)
       runtime.validate(msg2).value shouldBe Left(
-        "The ballot is not built on top of a switch block."
+        "A ballot during the voting-only period can only be built on top of a switch block."
       )
     }
 

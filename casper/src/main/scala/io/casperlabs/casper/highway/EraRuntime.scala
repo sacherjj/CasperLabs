@@ -375,13 +375,13 @@ class EraRuntime[F[_]: MonadThrowable: Clock: EraStorage: FinalityStorageReader:
               hasOtherLambdaMessageInSameRound[F](dag, b, endTick)
             ) >>
             checkF(
-              "The block is built on top of a switch block.",
+              "Only ballots should be build on top of a switch block in the current era.",
               dag.lookupUnsafe(message.parentBlock).flatMap(_.isSwitchBlock)
             )
 
         case b: Message.Ballot if b.roundId >= endTick =>
           checkF(
-            "The ballot is not built on top of a switch block.",
+            "A ballot during the voting-only period can only be built on top of a switch block.",
             dag.lookupUnsafe(b.parentBlock).flatMap(_.isSwitchBlock).map(!_)
           )
 
