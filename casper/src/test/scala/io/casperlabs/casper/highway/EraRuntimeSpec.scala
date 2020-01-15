@@ -941,6 +941,7 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
           val roundLength    = Ticks.roundLength(exponent).millis
           val roundStart     = conf.genesisEraStart plus 60 * roundLength
           val now            = roundStart plus 3 * roundLength
+          val currentTick    = conf.toTicks(now)
           implicit val clock = TestClock.frozen[Id](now)
 
           val runtime = genesisEraRuntime(none, roundExponent = exponent)
@@ -949,13 +950,20 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
           val roundId = conf.toTicks(roundStart)
           val agenda  = runtime.handleAgenda(Agenda.StartRound(roundId)).value
 
-          agenda should have size 1
+          // Next round should be in the future.
           assertAgenda(agenda) {
             case Agenda.DelayedAction(tick, Agenda.StartRound(nextRoundId)) =>
-              val currentTick = conf.toTicks(now)
               tick should be > currentTick.toLong
               nextRoundId should be > currentTick.toLong
               nextRoundId should be > roundId + roundLength.toMillis
+          }
+
+          // Omega should be for this round.
+          assertAgenda(agenda) {
+            case Agenda.DelayedAction(tick, Agenda.CreateOmegaMessage(currentRoundId)) =>
+              tick should be > currentRoundId.toLong
+              currentRoundId should be <= currentTick.toLong
+              conf.toInstant(currentRoundId) should be >= (now minus roundLength)
           }
         }
       }

@@ -462,11 +462,13 @@ class EraRuntime[F[_]: MonadThrowable: Clock: EraStorage: FinalityStorageReader:
               Agenda(nextRoundId -> Agenda.StartRound(nextRoundId))
             } else Agenda.empty
 
-            // Only bother with the omega if we're still in the same round which we started.
-            val omega = if (currentRoundId == roundId) {
-              val omegaTick = chooseOmegaTick(roundId, nextRoundId)
-              Agenda(omegaTick -> Agenda.CreateOmegaMessage(roundId))
-            } else Agenda.empty
+            // Schedule the omega for whatever the current round is, don't bother
+            // with the old one if the block production was so slow that it pushed
+            // us into the next round already. We can still participate in this one.
+            val omega = {
+              val omegaTick = chooseOmegaTick(currentRoundId, nextRoundId)
+              Agenda(omegaTick -> Agenda.CreateOmegaMessage(currentRoundId))
+            }
 
             omega ++ next
           }
