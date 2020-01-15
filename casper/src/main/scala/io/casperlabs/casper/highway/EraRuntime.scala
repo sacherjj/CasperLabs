@@ -267,7 +267,7 @@ class EraRuntime[F[_]: MonadThrowable: Clock: EraStorage: FinalityStorageReader:
     * then the corresponding booking block.
     */
   private def createEra(
-      switchBlock: Message
+      switchBlock: Message.Block
   ): HWL[Unit] = {
     val keyBlockBoundary     = end minus conf.keyDuration
     val bookingBlockBoundary = end minus conf.bookingDuration
@@ -490,19 +490,10 @@ class EraRuntime[F[_]: MonadThrowable: Clock: EraStorage: FinalityStorageReader:
     */
   private def handleCriticalMessages(message: Message): HWL[Unit] =
     message match {
-      case _: Message.Ballot => noop
+      case _: Message.Ballot =>
+        noop
       case block: Message.Block =>
-        if (block.parentBlock.isEmpty) noop
-        else {
-          for {
-            parent <- HighwayLog.liftF[F, Message] {
-                       dag.lookupUnsafe(block.parentBlock)
-                     }
-            parentTime = parent.roundInstant
-            childTime  = block.roundInstant
-            _          <- createEra(block).whenA(isSwitchBoundary(parentTime, childTime))
-          } yield ()
-        }
+        HighwayLog.liftF(block.isSwitchBlock).ifM(createEra(block), noop)
     }
 }
 
