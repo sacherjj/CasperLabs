@@ -614,7 +614,11 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
         }
         "in the post-era voting period" when {
           implicit val clock = TestClock.frozen[Id](conf.genesisEraEnd)
+          implicit val ds    = defaultDagStorage
+          implicit val fc    = defaultForkChoice
           val runtime        = genesisEraRuntime("Alice".some, leaderSequencer = mockSequencer("Bob"))
+
+          val switch = fc.set(insert(makeBlock("Bob", runtime.era, runtime.endTick)))
 
           "coming from the leader" should {
             "create a lambda response" in {
@@ -622,6 +626,7 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
               assertEvent(runtime.handleMessage(msg).written) {
                 case HighwayEvent.CreatedLambdaResponse(ballot: Message.Ballot) =>
                   ballot.roundId shouldBe msg.roundId
+                  ballot.parentBlock shouldBe switch.messageHash
               }
             }
           }
