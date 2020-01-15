@@ -16,12 +16,8 @@ import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.storage.BlockHash
 import io.casperlabs.storage.dag.{DagStorage, FinalityStorage}
 import io.casperlabs.storage.era.EraStorage
-import io.casperlabs.casper.highway.mocks.{
-  MockDagStorage,
-  MockEraStorage,
-  MockFinalityStorage,
-  MockForkChoice
-}
+import io.casperlabs.casper.mocks.{MockFinalityStorage}
+import io.casperlabs.casper.highway.mocks.{MockDagStorage, MockEraStorage, MockForkChoice}
 import org.scalatest._
 import org.scalactic.source
 import org.scalactic.Prettifier
