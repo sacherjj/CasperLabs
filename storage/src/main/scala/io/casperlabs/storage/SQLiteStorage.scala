@@ -159,6 +159,7 @@ object SQLiteStorage {
       override def addEra(era: Era)               = eraStorage.addEra(era)
       override def getEra(eraId: BlockHash)       = eraStorage.getEra(eraId)
       override def getChildEras(eraId: BlockHash) = eraStorage.getChildEras(eraId)
+      override def getChildlessEras               = eraStorage.getChildlessEras
 
       override def markAsFinalized(
           mainParent: BlockHash,

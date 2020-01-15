@@ -67,6 +67,22 @@ trait EraStorageTest extends FlatSpecLike with Matchers with ArbitraryConsensus 
       _  = es should contain theSameElementsAs List(e1, e2)
     } yield ()
   }
+
+  it should "find childless eras" in withStorage { db =>
+    // e0 - e1
+    //    \ e2 - e3
+    //         \ e4
+    val e0 = sample[Era]
+    val e1 = sample[Era].withParentKeyBlockHash(e0.keyBlockHash)
+    val e2 = sample[Era].withParentKeyBlockHash(e0.keyBlockHash)
+    val e3 = sample[Era].withParentKeyBlockHash(e2.keyBlockHash)
+    val e4 = sample[Era].withParentKeyBlockHash(e2.keyBlockHash)
+    for {
+      _  <- List(e0, e1, e2, e3, e4).traverse(db.addEra)
+      es <- db.getChildlessEras
+      _  = es should contain theSameElementsAs List(e1, e3, e4)
+    } yield ()
+  }
 }
 
 class SQLiteEraStorageTest extends EraStorageTest with SQLiteFixture[EraStorage[Task]] {
