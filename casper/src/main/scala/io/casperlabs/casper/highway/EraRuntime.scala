@@ -417,21 +417,21 @@ class EraRuntime[F[_]: MonadThrowable: Clock: EraStorage: FinalityStorageReader:
     def check(ok: Boolean, error: String) =
       if (ok) noop else MonadThrowable[HWL].raiseError[Unit](new IllegalStateException(error))
 
-    val roundId = Ticks(message.roundId)
-    check(
-      message.keyBlockHash == era.keyBlockHash,
-      "Shouldn't receive messages from other eras!"
-    ) >>
-      maybeMessageProducer.fold(noop) { mp =>
-        check(message.validatorId != mp.validatorId, "Shouldn't receive our own messages!") >>
-          ifCurrentRound(roundId) {
-            val maybeLambda = Option(message).filterA(_.isLambdaMessage)
-            HighwayLog.liftF(maybeLambda).flatMap {
-              _.fold(noop)(createLambdaResponse(mp, _))
-            }
+    for {
+      _ <- check(
+            message.keyBlockHash == era.keyBlockHash,
+            "Shouldn't receive messages from other eras!"
+          )
+      _ <- maybeMessageProducer.fold(noop) { mp =>
+            check(message.validatorId != mp.validatorId, "Shouldn't receive our own messages!") >>
+              ifCurrentRound(Ticks(message.roundId)) {
+                HighwayLog
+                  .liftF(message.isLambdaMessage)
+                  .ifM(createLambdaResponse(mp, message), noop)
+              }
           }
-      } >>
-      handleCriticalMessages(message)
+      _ <- handleCriticalMessages(message)
+    } yield ()
   }
 
   /** Handle something that happens during a round:
