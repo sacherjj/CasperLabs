@@ -602,16 +602,21 @@ object EraRuntime {
   def isSameRoundAs(a: Message)(b: Message): Boolean =
     a.keyBlockHash == b.keyBlockHash && a.roundId == b.roundId
 
-  /** Check if a message cites another in the same round, which would mean it's not a lambda message.
-    * The lambda message is created by the leader of the round; under normal cirumstances it comes
-    * before the omega message, and therefore it only won't have a justification in the same round,
-    * because all other validators are not leaders.
+  /** Check if a message from a validator cites their own message in the same round as the message itself.
+    * If it does, that would mean that this message was not the first in that round. In the voting period,
+    * that is enough to distinguish between two potential ballots from the leader to pick the lambda.
+    *
+    * A lambda block may cite an omega block from the same validator if they were made concurrently,
+    * or an omega from a different validator, if that validator works a lot faster and pushed out a ballot
+    * even faster than the lambda block's justifications were established, although this is unlikely.
     */
-  def hasJustificationInOwnRound[F[_]: MonadThrowable](
+  def citesOwnMessageInSameRound[F[_]: MonadThrowable](
       dag: DagRepresentation[F],
       message: Message
   ): F[Boolean] =
-    message.justifications.toList
+    message.justifications
+      .filter(_.validatorPublicKey == message.validatorId)
+      .toList
       .findM[F] { j =>
         dag.lookupUnsafe(j.latestBlockHash).map(isSameRoundAs(message))
       }
@@ -629,7 +634,7 @@ object EraRuntime {
       eraEndTick: Ticks
   ): F[Boolean] =
     if (ballot.roundId < eraEndTick) false.pure[F]
-    else hasJustificationInOwnRound(dag, ballot).map(!_)
+    else citesOwnMessageInSameRound(dag, ballot).map(!_)
 
   /** Given a lambda message from the leader of a round, check if the validator has sent
     * another lambda message already in the same round. Ignores equivocations, just the

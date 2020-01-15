@@ -382,7 +382,7 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
       } shouldBe List(false, false, true, false)
 
       ballots map {
-        EraRuntime.hasJustificationInOwnRound[Id](
+        EraRuntime.citesOwnMessageInSameRound[Id](
           ds.getRepresentation,
           _
         )
