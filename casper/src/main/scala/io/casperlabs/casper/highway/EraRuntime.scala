@@ -97,7 +97,7 @@ class EraRuntime[F[_]: MonadThrowable: Clock: EraStorage: FinalityStorageReader:
 
     /** Check if this block is the first in its main-chain that crosses the end of the era. */
     def isSwitchBlock: F[Boolean] =
-      if (msg.parentBlock.isEmpty)
+      if (msg.parentBlock.isEmpty || !msg.isInstanceOf[Message.Block])
         false.pure[F]
       else
         dag.lookupUnsafe(msg.parentBlock).map { parent =>
