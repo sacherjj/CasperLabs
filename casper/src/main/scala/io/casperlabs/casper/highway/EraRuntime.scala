@@ -110,28 +110,30 @@ class EraRuntime[F[_]: MonadThrowable: Clock: EraStorage: FinalityStorageReader:
     Clock[F].realTime(conf.tickUnit).map(Ticks(_))
 
   /** Check if the era is finished yet, including the post-era voting period. */
-  private def isOverAt(tick: Ticks): F[Boolean] =
-    if (tick < endTick) false.pure[F]
-    else {
-      conf.postEraVotingDuration match {
-        case HighwayConf.VotingDuration.FixedLength(duration) =>
-          (conf.toTicks(end plus duration) <= tick).pure[F]
+  private val isOverAt: Ticks => F[Boolean] =
+    conf.postEraVotingDuration match {
+      case HighwayConf.VotingDuration.FixedLength(duration) =>
+        val votingEndTick = conf.toTicks(end plus duration)
+        tick => (tick >= votingEndTick).pure[F]
 
-        case HighwayConf.VotingDuration.SummitLevel(1) =>
-          // We have to keep voting until the switch block given by the fork choice
-          // in *this* era is finalized.
-          ForkChoice[F].fromKeyBlock(era.keyBlockHash).flatMap { choice =>
-            choice.block.isSwitchBlock.ifM(
-              FinalityStorageReader[F].isFinalized(choice.block.messageHash),
-              false.pure[F]
-            )
+      case HighwayConf.VotingDuration.SummitLevel(1) =>
+        // We have to keep voting until the switch block given by the fork choice
+        // in *this* era is finalized.
+        tick =>
+          if (tick < endTick) false.pure[F]
+          else {
+            ForkChoice[F].fromKeyBlock(era.keyBlockHash).flatMap { choice =>
+              choice.block.isSwitchBlock.ifM(
+                FinalityStorageReader[F].isFinalized(choice.block.messageHash),
+                false.pure[F]
+              )
+            }
           }
 
-        case HighwayConf.VotingDuration.SummitLevel(_) =>
-          // Don't know how to do this for higher levels of k, we'll have to figure it out,
-          // run multiple instances of higher level finalizers or something.
-          ???
-      }
+      case HighwayConf.VotingDuration.SummitLevel(_) =>
+        // Don't know how to do this for higher levels of k, we'll have to figure it out,
+        // run multiple instances of higher level finalizers or something.
+        ???
     }
 
   /** Calculate the beginning and the end of this round,
