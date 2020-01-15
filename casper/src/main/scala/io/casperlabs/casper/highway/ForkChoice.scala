@@ -49,7 +49,7 @@ trait ForkChoice[F[_]] {
 }
 object ForkChoice {
   case class Result(
-      mainParent: Message,
+      block: Message.Block,
       // The fork choice must take into account messages from the parent
       // era's voting period as well, in order to be able to tell which
       // switch block in the end of the era to build on, and so which

@@ -8,7 +8,7 @@ import io.casperlabs.models.Message
 import io.casperlabs.storage.BlockHash
 import io.casperlabs.casper.highway.ForkChoice
 
-class MockForkChoice[F[_]](
+class MockForkChoice[F[_]: Applicative](
     resultRef: Ref[F, ForkChoice.Result]
 ) extends ForkChoice[F] {
   override def fromKeyBlock(keyBlockHash: BlockHash): F[ForkChoice.Result] =
@@ -23,12 +23,12 @@ class MockForkChoice[F[_]](
   def set(result: ForkChoice.Result): F[Unit] =
     resultRef.set(result)
 
-  def set(message: Message): F[Unit] =
-    resultRef.set(ForkChoice.Result(message, Set.empty))
+  def set(block: Message.Block): F[Message.Block] =
+    resultRef.set(ForkChoice.Result(block, Set.empty)).as(block)
 }
 
 object MockForkChoice {
-  def apply[F[_]: Sync](init: Message) =
+  def apply[F[_]: Sync](init: Message.Block) =
     for {
       ref <- Ref.of[F, ForkChoice.Result](ForkChoice.Result(init, Set.empty))
     } yield new MockForkChoice[F](ref)
