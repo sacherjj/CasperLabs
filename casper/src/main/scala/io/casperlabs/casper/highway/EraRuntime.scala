@@ -103,14 +103,22 @@ class EraRuntime[F[_]: MonadThrowable: Clock: EraStorage: FinalityStorageReader:
         dag.lookupUnsafe(msg.parentBlock).map { parent =>
           isSwitchBoundary(parent.roundInstant, msg.roundInstant)
         }
+
+    def isLambdaMessage: F[Boolean] =
+      if (leaderFunction(Ticks(msg.roundId)) == msg.validatorId)
+        msg match {
+          case _: Message.Block  => true.pure[F]
+          case b: Message.Ballot => isLambdaLikeBallot(dag, b, endTick)
+        }
+      else false.pure[F]
   }
 
   /** Current tick based on wall clock time. */
   private def currentTick =
     Clock[F].realTime(conf.tickUnit).map(Ticks(_))
 
-  /** Check if the era is finished yet, including the post-era voting period. */
-  private val isOverAt: Ticks => F[Boolean] =
+  /** Check if the era is finished at a given tick, including the post-era voting period. */
+  private val isEraOverAt: Ticks => F[Boolean] =
     conf.postEraVotingDuration match {
       case HighwayConf.VotingDuration.FixedLength(duration) =>
         val votingEndTick = conf.toTicks(end plus duration)
@@ -387,7 +395,7 @@ class EraRuntime[F[_]: MonadThrowable: Clock: EraStorage: FinalityStorageReader:
   def initAgenda: F[Agenda] =
     maybeMessageProducer.fold(Agenda.empty.pure[F]) { _ =>
       currentTick flatMap { tick =>
-        isOverAt(tick).ifM(
+        isEraOverAt(tick).ifM(
           Agenda.empty.pure[F],
           roundBoundariesAt(tick) flatMap {
             case (from, to) =>
@@ -410,22 +418,14 @@ class EraRuntime[F[_]: MonadThrowable: Clock: EraStorage: FinalityStorageReader:
       if (ok) noop else MonadThrowable[HWL].raiseError[Unit](new IllegalStateException(error))
 
     val roundId = Ticks(message.roundId)
-
-    check(message.keyBlockHash == era.keyBlockHash, "Shouldn't receive messages from other eras!") >>
+    check(
+      message.keyBlockHash == era.keyBlockHash,
+      "Shouldn't receive messages from other eras!"
+    ) >>
       maybeMessageProducer.fold(noop) { mp =>
         check(message.validatorId != mp.validatorId, "Shouldn't receive our own messages!") >>
           ifCurrentRound(roundId) {
-            val maybeLambda = Option(message)
-              .filter {
-                _.validatorId == leaderFunction(roundId)
-              }
-              .filterA {
-                case ballot: Message.Ballot =>
-                  isLambdaLikeBallot(dag, ballot, endTick)
-                case _ =>
-                  true.pure[F]
-              }
-
+            val maybeLambda = Option(message).filterA(_.isLambdaMessage)
             HighwayLog.liftF(maybeLambda).flatMap {
               _.fold(noop)(createLambdaResponse(mp, _))
             }
@@ -456,7 +456,7 @@ class EraRuntime[F[_]: MonadThrowable: Clock: EraStorage: FinalityStorageReader:
           for {
             now                           <- currentTick
             (currentRoundId, nextRoundId) <- roundBoundariesAt(now)
-            isOverAtNext                  <- isOverAt(nextRoundId)
+            isOverAtNext                  <- isEraOverAt(nextRoundId)
           } yield {
             val next = if (!isOverAtNext) {
               Agenda(nextRoundId -> Agenda.StartRound(nextRoundId))
