@@ -3,8 +3,8 @@ name = "cargo-casperlabs"
 version = "0.1.0"
 authors = ["Fraser Hutchison <fraser@casperlabs.io>"]
 edition = "2018"
-description = "Command line tool for creating a Wasm contract and tests for use on the CasperLabs network."
-license = "Apache-2.0"
+description = "Command line tool for creating a Wasm smart contract and tests for use on the CasperLabs network."
+readme = "README.md"
 
 [dependencies]
 clap = "2"

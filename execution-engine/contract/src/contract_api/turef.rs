@@ -107,7 +107,7 @@ impl From<Error> for ApiError {
     fn from(error: Error) -> Self {
         match error {
             Error::NoAccessRights => ApiError::NoAccessRights,
-            Error::NotURef => ApiError::None,
+            Error::NotURef => ApiError::UnexpectedKeyVariant,
         }
     }
 }

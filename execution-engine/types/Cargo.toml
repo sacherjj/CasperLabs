@@ -4,7 +4,7 @@ version = "0.1.0"
 authors = ["Fraser Hutchison <fraser@casperlabs.io>"]
 edition = "2018"
 description = "Types used to allow creation of Wasm contracts and tests for use on the CasperLabs network."
-license = "Apache-2.0"
+readme = "README.md"
 
 [features]
 default = ["base16/alloc"]
