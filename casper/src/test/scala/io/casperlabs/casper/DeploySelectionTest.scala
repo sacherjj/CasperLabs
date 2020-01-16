@@ -68,99 +68,88 @@ class DeploySelectionTest
   // see: https://gist.github.com/davidallsopp/f65d73fea8b5e5165fc3
   implicit def noShrink[T]: Shrink[T] = Shrink.shrinkAny
 
-  it should "stop consuming the stream when block size limit is reached" in forAll(
-    Gen.listOfN(deploysInSmallBlock * 2, arbDeploy.arbitrary)
-  ) { deploys =>
-    {
-      val expected = takeUnlessTooBig(smallBlockSizeBytes)(deploys)
-      assert(expected.size <= deploys.size)
+  it should "stop consuming the stream when block size limit is reached" in {
+    val deploys  = List.fill(deploysInSmallBlock * 2)(sample(arbDeploy.arbitrary))
+    val expected = takeUnlessTooBig(smallBlockSizeBytes)(deploys)
+    assert(expected.size <= deploys.size)
 
-      assert(deploysSize(expected) <= (0.9 * smallBlockSizeBytes))
+    assert(deploysSize(expected) <= (0.9 * smallBlockSizeBytes))
 
-      val countedStream = CountedStream(fs2.Stream.fromIterator(deploys.toIterator))
+    val countedStream = CountedStream(fs2.Stream.fromIterator(deploys.toIterator))
 
-      implicit val ee: ExecutionEngineService[Task] = eeExecMock(everythingCommutesExec _)
+    implicit val ee: ExecutionEngineService[Task] = eeExecMock(everythingCommutesExec _)
 
-      val deploySelection: DeploySelection[Task] =
-        DeploySelection.create[Task](smallBlockSizeBytes)
+    val deploySelection: DeploySelection[Task] =
+      DeploySelection.create[Task](smallBlockSizeBytes)
 
-      val test = for {
-        selected <- deploySelection
-                     .select((prestate, blocktime, protocolVersion, countedStream.stream))
-                     .map(_.commuting.map(_.deploy))
-        // If we will consume whole stream, before condition is met, that's how many
-        // elements we expect to pull from the stream.
-        // Otherwise we expect one more pull than elements, because we have to pull
-        // from the stream first before we decide we're full.
-        expectedPulls = if (expected.size == deploys.size) {
-          expected.size
-        } else expected.size + 1
-        _ <- Task.delay(assert(countedStream.getCount() == expectedPulls))
-      } yield selected should contain theSameElementsAs expected
+    val test = for {
+      selected <- deploySelection
+                   .select((prestate, blocktime, protocolVersion, countedStream.stream))
+                   .map(_.commuting.map(_.deploy))
+      // If we will consume whole stream, before condition is met, that's how many
+      // elements we expect to pull from the stream.
+      // Otherwise we expect one more pull than elements, because we have to pull
+      // from the stream first before we decide we're full.
+      expectedPulls = if (expected.size == deploys.size) {
+        expected.size
+      } else expected.size + 1
+      _ <- Task.delay(assert(countedStream.getCount() == expectedPulls))
+    } yield selected should contain theSameElementsAs expected
 
-      test.unsafeRunSync
-    }
+    test.unsafeRunSync
   }
 
   it should "skip elements that won't be included in a block (precondition failures)" +
-    " and continue consuming the stream" in forAll(
-    Gen.zip(
-      Gen.listOfN(deploysInSmallBlock * 2, arbDeploy.arbitrary),
-      Gen.listOfN(deploysInSmallBlock * 2, arbDeploy.arbitrary)
-    )
-  ) {
-    case (preconditionFailures, commuting) =>
-      val stream = fs2.Stream
-        .fromIterator(commuting.toIterator)
-        .interleave(fs2.Stream.fromIterator(preconditionFailures.toIterator))
+    " and continue consuming the stream" in {
+    val preconditionFailures = List.fill(deploysInSmallBlock * 2)(sample(arbDeploy.arbitrary))
+    val commuting            = List.fill(deploysInSmallBlock * 2)(sample(arbDeploy.arbitrary))
+    val stream = fs2.Stream
+      .fromIterator(commuting.toIterator)
+      .interleave(fs2.Stream.fromIterator(preconditionFailures.toIterator))
 
-      val cappedEffects = takeUnlessTooBig(smallBlockSizeBytes)(commuting)
+    val cappedEffects = takeUnlessTooBig(smallBlockSizeBytes)(commuting)
 
-      val counter = AtomicInt(1)
-      implicit val ee: ExecutionEngineService[Task] =
-        eeExecMock(everyOtherInvalidDeploy(counter) _)
+    val counter = AtomicInt(1)
+    implicit val ee: ExecutionEngineService[Task] =
+      eeExecMock(everyOtherInvalidDeploy(counter) _)
 
-      val deploySelection: DeploySelection[Task] =
-        DeploySelection.create[Task](smallBlockSizeBytes)
+    val deploySelection: DeploySelection[Task] =
+      DeploySelection.create[Task](smallBlockSizeBytes)
 
-      val test = deploySelection
-        .select((prestate, blocktime, protocolVersion, stream))
-        .map(results => {
-          assert(results.commuting.map(_.deploy) == cappedEffects)
-        })
+    val test = deploySelection
+      .select((prestate, blocktime, protocolVersion, stream))
+      .map(results => {
+        assert(results.commuting.map(_.deploy) == cappedEffects)
+      })
 
-      test.unsafeRunSync
+    test.unsafeRunSync
   }
 
-  it should "return conflicting deploys along the commuting ones if they fit the block size limit" in forAll(
-    Gen.zip(
-      Gen.listOfN(deploysInSmallBlock, arbDeploy.arbitrary),
-      Gen.listOfN(deploysInSmallBlock, arbDeploy.arbitrary)
-    )
-  ) {
-    case (conflicting, commuting) =>
-      val allDeploys = conflicting ++ commuting
-      val stream = fs2.Stream
-        .fromIterator(conflicting.toIterator)
-        .interleave(fs2.Stream.fromIterator(commuting.toIterator))
+  it should "return conflicting deploys along the commuting ones if they fit the block size limit" in {
+    val conflicting = List.fill(deploysInSmallBlock)(sample(arbDeploy.arbitrary))
+    val commuting   = List.fill(deploysInSmallBlock)(sample(arbDeploy.arbitrary))
+    val allDeploys  = conflicting ++ commuting
+    val stream = fs2.Stream
+      .fromIterator(conflicting.toIterator)
+      .interleave(fs2.Stream.fromIterator(commuting.toIterator))
 
-      val counter                                   = AtomicInt(1)
-      implicit val ee: ExecutionEngineService[Task] = eeExecMock(everyOtherCommutesExec(counter) _)
+    val counter                                   = AtomicInt(1)
+    implicit val ee: ExecutionEngineService[Task] = eeExecMock(everyOtherCommutesExec(counter) _)
 
-      // Since we generate two streams of `smallBlockSizeBytes` size
-      // A block with twice as big size limit should fit both streams.
-      val bigBlockSize = smallBlockSizeBytes * 2
+    // Since we generate two streams of `smallBlockSizeBytes` size
+    // A block with twice as big size limit should fit both streams.
+    val bigBlockSize = smallBlockSizeBytes * 2
 
-      val deploySelection = DeploySelection.create[Task](bigBlockSize * 2)
+    val deploySelection = DeploySelection.create[Task](bigBlockSize * 2)
 
-      val test = deploySelection
-        .select((prestate, blocktime, protocolVersion, stream))
-        .map {
-          case DeploySelectionResult(commuting, conflicting, _) =>
-            (commuting.map(_.deploy) ++ conflicting) should contain theSameElementsAs allDeploys
-        }
+    val test = deploySelection
+      .select((prestate, blocktime, protocolVersion, stream))
+      .map {
+        case DeploySelectionResult(commuting, conflicting, _) =>
+          (commuting.map(_.deploy) ++ conflicting) should contain theSameElementsAs allDeploys
+      }
 
-      test.unsafeRunSync
+    test.unsafeRunSync
   }
 
   it should "consume the whole stream if all deploys commute and fit block size limit" in forAll(
@@ -192,9 +181,8 @@ class DeploySelectionTest
       test.unsafeRunSync
   }
 
-  it should "push NoEffectsFailure elements to output stream" in forAll(
-    Gen.listOfN(deploysInSmallBlock * 2, arbDeploy.arbitrary)
-  ) { deploys =>
+  it should "push NoEffectsFailure elements to output stream" in {
+    val deploys = List.fill(deploysInSmallBlock * 2)(sample(arbDeploy.arbitrary))
     val (invalid, effects) = {
       val (invalidIdx, effectsIdx) = deploys.toStream.zipWithIndex.partition {
         case (_, idx) => idx % 2 == 0
