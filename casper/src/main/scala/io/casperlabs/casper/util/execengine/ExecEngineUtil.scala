@@ -111,12 +111,17 @@ object ExecEngineUtil {
   ): F[DeploysCheckpoint] = Metrics[F].timer("computeDeploysCheckpoint") {
     for {
       preStateHash <- computePrestate[F](merged, rank, upgrades).timer("computePrestate")
-      result <- DeploySelection[F].select(
-                 (preStateHash, blocktime, protocolVersion, deployStream)
-               )
-      DeploySelectionResult(commuting, conflicting, preconditionFailures) = result
-      _                                                                   <- handleInvalidDeploys[F](preconditionFailures)
-      (deploysForBlock, transforms)                                       = ExecEngineUtil.unzipEffectsAndDeploys(commuting).unzip
+      DeploySelectionResult(commuting, conflicting, preconditionFailures) <- DeploySelection[F]
+                                                                              .select(
+                                                                                (
+                                                                                  preStateHash,
+                                                                                  blocktime,
+                                                                                  protocolVersion,
+                                                                                  deployStream
+                                                                                )
+                                                                              )
+      _                             <- handleInvalidDeploys[F](preconditionFailures)
+      (deploysForBlock, transforms) = ExecEngineUtil.unzipEffectsAndDeploys(commuting).unzip
       parResult <- ExecutionEngineService[F]
                     .commit(preStateHash, transforms.flatten, protocolVersion)
                     .rethrow
