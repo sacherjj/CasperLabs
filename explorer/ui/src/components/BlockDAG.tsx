@@ -28,6 +28,8 @@ export interface Props {
 export class BlockDAG extends React.Component<Props, {}> {
   svg: SVGSVGElement | null = null;
   hint: HTMLDivElement | null = null;
+  xTrans: d3.ScaleLinear<number, number> | null = null;
+  yTrans: d3.ScaleLinear<number, number> | null = null;
   initialized = false;
 
   render() {
@@ -119,17 +121,19 @@ export class BlockDAG extends React.Component<Props, {}> {
 
     // see https://www.d3-graph-gallery.com/graph/interactivity_zoom.html#axisZoom
     // using axis transform function to simplify transform
-    const xTrans: d3.ScaleLinear<number, number> = d3
+    const initXTrans: d3.ScaleLinear<number, number> = d3
       .scaleLinear()
       .domain([0, width])
       .range([0, width]);
-    const yTrans: d3.ScaleLinear<number, number> = d3
+    const initYTrans: d3.ScaleLinear<number, number> = d3
       .scaleLinear()
       .domain([0, height])
       .range([0, height]);
 
     // Append items that will not change.
     if (!this.initialized) {
+      this.xTrans = initXTrans;
+      this.yTrans = initYTrans;
       // Add the zoomable container.
       svg.append('g').attr('class', 'container');
 
@@ -137,9 +141,9 @@ export class BlockDAG extends React.Component<Props, {}> {
         .zoom()
         .scaleExtent([0.1, 4])
         .on('zoom', () => {
-          const newXTrana = d3.event.transform.rescaleX(xTrans);
-          const newYTrans = d3.event.transform.rescaleY(yTrans);
-          updatePositions(newXTrana, newYTrans);
+          this.xTrans = d3.event.transform.rescaleX(initXTrans);
+          this.yTrans = d3.event.transform.rescaleY(initXTrans);
+          updatePositions();
         });
 
       svg.call(zoom);
@@ -254,10 +258,9 @@ export class BlockDAG extends React.Component<Props, {}> {
     node.on('mouseover', focus).on('mouseout', unfocus);
     node.on('click', select);
 
-    const updatePositions = (
-      x: d3.ScaleLinear<number, number>,
-      y: d3.ScaleLinear<number, number>
-    ) => {
+    const updatePositions = () => {
+      const x = this.xTrans ?? initYTrans;
+      const y = this.yTrans ?? initYTrans;
       // update position of node
       container
         .selectAll('circle.node')
@@ -278,7 +281,7 @@ export class BlockDAG extends React.Component<Props, {}> {
         .attr('y1', (d: any) => y(d.source.y))
         .attr('x2', (d: any) => {
           // We want the radius of Node keep the same after scaling, so we need use invert function to calculate that before scaling.
-          const newRInX= x.invert(CircleRadius + 2) - x.invert(0);
+          const newRInX = x.invert(CircleRadius + 2) - x.invert(0);
           return x(
             d.source.x + (d.target.x - d.source.x) * shorten(d, newRInX)
           );
@@ -292,7 +295,7 @@ export class BlockDAG extends React.Component<Props, {}> {
         });
     };
 
-    updatePositions(xTrans, yTrans);
+    updatePositions();
   }
 }
 
@@ -438,7 +441,6 @@ const calculateCoordinates = (graph: Graph, width: number, height: number) => {
     // (validators.indexOf(node.validator) + 0.5) * verticalStep is the y of the baseline of swimlane of node.validator
     node.y = (validators.indexOf(node.validator) + 0.5 + step) * verticalStep;
     node.x = (node.rank - minRank + 1) * horizontalStep;
-    console.log(node.x, node.y);
   });
 
   return graph;
