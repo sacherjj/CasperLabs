@@ -48,7 +48,7 @@ class EraSupervisorSpec extends FlatSpec with Matchers with StorageFixture {
           // Set the clock forward to where e3 and e4 is voting.
           // Their parent eras will have their voting over, and
           // their children should be active.
-          _      <- clock.set(conf.toInstant(Ticks(e3.endTick)) plus 1.hour)
+          _      <- clock.set(conf.toInstant(Ticks(e3.endTick)) plus postEraVotingDuration / 2)
           active <- EraSupervisor.collectActiveEras[Task](makeRuntime)
         } yield {
           active.map(_._1.era) should contain theSameElementsAs List(e3, e4, e5)
@@ -61,13 +61,15 @@ object EraSupervisorSpec extends TickUtils with ArbitraryConsensus {
 
   import HighwayConf.{EraDuration, VotingDuration}
 
+  val postEraVotingDuration = days(2)
+
   val defaultConf = HighwayConf(
     tickUnit = TimeUnit.SECONDS,
     genesisEraStart = date(2019, 12, 30),
     eraDuration = EraDuration.FixedLength(days(7)),
     bookingDuration = days(10),
     entropyDuration = hours(3),
-    postEraVotingDuration = VotingDuration.FixedLength(days(2)),
+    postEraVotingDuration = VotingDuration.FixedLength(postEraVotingDuration),
     omegaMessageTimeStart = 0.5,
     omegaMessageTimeEnd = 0.75
   )
