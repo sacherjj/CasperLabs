@@ -178,3 +178,12 @@ export function fromBytesStringList(arr: Uint8Array): String[] | null {
 
     return result;
 }
+
+export function toBytesStringList(arr: String[]): u8[] {
+    let data = toBytesU32(arr.length);
+    for (let i = 0; i < arr.length; i++) {
+        const strBytes = toBytesString(arr[i]);
+        data = data.concat(strBytes);
+    }
+    return data;
+}
