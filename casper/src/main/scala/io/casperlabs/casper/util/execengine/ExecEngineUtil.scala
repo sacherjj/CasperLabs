@@ -85,8 +85,10 @@ object ExecEngineUtil {
       )
 
     for {
-      first <- go(idx = 0, prestateHash, deploys.head)
-      deploysCheckpoint <- deploys.zipWithIndex.tail.foldLeftM(first) {
+      deploysCheckpoint <- deploys.zipWithIndex.reduceLeftM {
+                            case (deploy, idx) =>
+                              go(idx, prestateHash, deploy)
+                          } {
                             case (prevRes, (deploy, idx)) =>
                               go(idx, prevRes.postStateHash, deploy)
                                 .map(newRes => {
