@@ -1,5 +1,5 @@
 import "assemblyscript/std/portable";
-import {toBytesU32, toBytesU64, fromBytesU32, fromBytesU64, toBytesMap, serializeArguments, toBytesString, fromBytesString, toBytesPair } from "../assembly/bytesrepr";
+import {toBytesU32, toBytesU64, fromBytesU32, fromBytesU64, toBytesMap, serializeArguments, toBytesString, fromBytesString, toBytesPair, fromBytesStringList } from "../assembly/bytesrepr";
 import {AccessRights, URef} from "../assembly/uref";
 import {Option} from "../assembly/option";
 import {Key} from "../assembly/key";
@@ -138,4 +138,15 @@ test.skip("serialize u64", t => {
 
     const bytes3 = toBytesU64(value3);
     t.deepEqual(Array.from(bytes3), Array.from(truth3));
+});
+
+test("deserialize list of strings", t => {
+    let truth = hex2bin("03000000030000006162630a0000003132333435363738393006000000717765727479");
+    let result = fromBytesStringList(truth);
+    t.truthy(result);
+    t.deepEqual(result, [
+        "abc",
+        "1234567890",
+        "qwerty",
+    ]);
 });

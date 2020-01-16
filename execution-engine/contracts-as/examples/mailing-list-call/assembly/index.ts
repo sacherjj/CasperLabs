@@ -78,13 +78,13 @@ export function call(): void {
 
     // TODO: Decode list of strings and do the check (currently fails)
 
-    // const messageBytes = <Uint8Array>maybeMessagesBytes;
-    // const messages = fromBytesStringList(messageBytes);
-    // if (messages === null) {
-    //     Error.fromUserError(<u16>UserError.FindMessagesURef).revert();
-    // }
+    const messageBytes = <Uint8Array>maybeMessagesBytes;
+    const messages = fromBytesStringList(messageBytes);
+    if (messages === null) {
+        Error.fromUserError(<u16>UserError.FindMessagesURef).revert();
+    }
 
-    // if (messages.length == 0) {
-    //     Error.fromUserError(<u16>UserError.NoMessages).revert();
-    // }
+    if ((<String[]>messages).length == 0) {
+        Error.fromUserError(<u16>UserError.NoMessages).revert();
+    }
 }

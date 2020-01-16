@@ -112,12 +112,12 @@ export function fromBytesString(s: Uint8Array): String | null {
     if (len === null) {
         return null;
     }
-    if (<u32>len < <u32>s.length - 4) {
+    if (<i32>len > <i32>s.length - 4) {
         return null;
     }
     var result = "";
-    for (var i = 4; i < s.length; i++) {
-        result += String.fromCharCode(s[i]);
+    for (var i = 0; i < <i32>len; i++) {
+        result += String.fromCharCode(s[4 + i]);
     }
     return result;
 }
@@ -156,4 +156,25 @@ export function serializeKeys(keys: Key[]): Array<u8> {
         bytes = bytes.concat(keys[i].toBytes());
     }
     return bytes;
+}
+
+export function fromBytesStringList(arr: Uint8Array): String[] | null {
+    var len = fromBytesU32(arr);
+    if (len === null) {
+        return null;
+    }
+
+    let head = arr.subarray(4);
+    let result: String[] = [];
+
+    for (let i = 0; i < <i32>len; ++i) {
+        let str = fromBytesString(head);
+        if (str === null) {
+            return null;
+        }
+        result.push(str);
+        head = head.subarray(4 + str.length);
+    }
+
+    return result;
 }
