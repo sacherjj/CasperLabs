@@ -115,15 +115,15 @@ steps:
   commands:
   - "cd execution-engine"
   - "make setup"
-  - "make test-ts test-contracts-ts"
+  - "make test-as test-contracts-as"
   image: "casperlabs/buildenv:latest"
   when:
     event:
     - pull_request
     changeset:
       includes:
-      - "**/contract-ffi-ts/**"
-      - "**/contracts-ts/**"
+      - "**/contract-ffi-as/**"
+      - "**/contracts-as/**"
   depends_on:
   - rust-compile-test-pr
 
@@ -1039,12 +1039,11 @@ steps:
     channel: alerts
     template:
     - |
-      macOS Build Status: {{#success build.status}}✔{{ else }}✘ @sreteam {{/success}}*{{ uppercasefirst build.status }}*
+      macOS Build Status: *{{ uppercasefirst build.status }}*
       Drone Build: <{{ build.link }}|#{{ build.number }}>
   when:
     status:
     - failure
-    - success
 
 trigger:
   cron: [ mac-hourly-cron ]

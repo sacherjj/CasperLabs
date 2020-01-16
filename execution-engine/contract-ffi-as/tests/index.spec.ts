@@ -1,5 +1,9 @@
 import "assemblyscript/std/portable";
-import {URef, decodeOptional, toBytesU32, serializeArguments, Key, toBytesString, CLValue } from "../assembly";
+import {toBytesU32, toBytesU64, fromBytesU32, fromBytesU64, toBytesMap, serializeArguments, toBytesString, fromBytesString, toBytesPair } from "../assembly/bytesrepr";
+import {AccessRights, URef} from "../assembly/uref";
+import {Option} from "../assembly/option";
+import {Key} from "../assembly/key";
+import {CLValue} from "../assembly/clvalue";
 
 import test from "ava";
 import {hex2bin} from "./utils";
@@ -9,16 +13,18 @@ test('decoded optional is some', t => {
     for (let i = 0; i < 10; i++) {
         optionalSome[i] = i + 1;
     }
-    let res = decodeOptional(optionalSome);
+    let res = Option.fromBytes(optionalSome);
     t.not(res, null);
-    t.deepEqual(Array.from(res), [2, 3, 4, 5, 6, 7, 8, 9, 10]);
+    let unwrapped = res.unwrap();
+    t.not(unwrapped, null, "unwrapped should not be null");
+    t.deepEqual(Array.from(unwrapped.values()), [2, 3, 4, 5, 6, 7, 8, 9, 10]);
 });
 
 test('decoded optional is none', t => {
     let optionalSome = new Uint8Array(10);
     optionalSome[0] = 0;
-    let res = decodeOptional(optionalSome);
-    t.is(res, null);
+    let res = Option.fromBytes(optionalSome);
+    t.assert(res.isNone(), "option should be NONE");
 });
 
 test("decode uref from bytes with access rights", t => {
@@ -44,28 +50,37 @@ test("decode uref from bytes without access rights", t => {
         42, 42, 42, 42, 42, 42, 42, 42, 42, 42,
         42, 42,
     ]);
-    t.is(uref.getAccessRights(), null);
+    t.is(uref.getAccessRights(), AccessRights.NONE);
     let serialized = uref.toBytes();
     t.deepEqual(Array.from(serialized), Array.from(truth));
 })
 
-test("serializes u32", t => {
+test("serialize u32", t => {
     const truth = [239, 190, 173, 222];
     let res = toBytesU32(3735928559);
     t.deepEqual(Array.from(res), truth);
+
+    t.deepEqual(fromBytesU32(res), 0xdeadbeef);
 })
 
 test("serialize string", t => {
     // Rust: let bytes = "hello_world".to_bytes().unwrap();
     const truth = hex2bin("0b00000068656c6c6f5f776f726c64");
-    t.deepEqual(toBytesString("hello_world"), Array.from(truth));
+
+    var res = toBytesString("hello_world");
+    t.deepEqual(res, Array.from(truth));
+
+    var res = fromBytesString(res);
+    t.deepEqual(res, "hello_world");
 })
 
 test("key of uref variant serializes", t => {
     // URef with access rights
     const truth = hex2bin("022a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a0107");
     const urefBytes = hex2bin("2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a");
-    let uref = new URef(urefBytes, 0x07);
+    let uref = new URef(urefBytes, AccessRights.READ_ADD_WRITE);
+
+
     let key = Key.fromURef(uref);
     let serialized = key.toBytes();
     t.deepEqual(Array.from(serialized), Array.from(truth));
@@ -79,3 +94,48 @@ test("serialize args", t => {
     ]);
     t.deepEqual(Array.from(serialized), Array.from(truth));
 })
+
+test("serialize map", t => {
+    // let mut m = BTreeMap::new();
+    // m.insert("Key1".to_string(), "Value1".to_string());
+    // m.insert("Key2".to_string(), "Value2".to_string());
+    // let truth = m.to_bytes().unwrap();
+    const truth = hex2bin(
+        "02000000040000004b6579310600000056616c756531040000004b6579320600000056616c756532"
+    );
+    const map = [
+        toBytesPair(toBytesString("Key1"), toBytesString("Value1")),
+        toBytesPair(toBytesString("Key2"), toBytesString("Value2")),
+    ];
+
+    const serialized = toBytesMap(map);
+    t.deepEqual(Array.from(serialized), Array.from(truth));
+})
+
+test.skip("serialize u64", t => {
+    // 2**32-1 represented as 64 bit little endian bytes
+    const truth1 = hex2bin("0004000000000000");
+    var value1 = fromBytesU64(truth1);
+    t.deepEqual(value1, 1024);
+
+    const bytes1 = toBytesU64(value1);
+    t.deepEqual(Array.from(bytes1), Array.from(truth1));
+
+    //
+
+    const truth2 = hex2bin("0000000000000000");
+    const value2 = fromBytesU64(truth2);
+    t.deepEqual(value2, 0);
+
+    const bytes2 = toBytesU64(value2);
+    t.deepEqual(Array.from(bytes2), Array.from(truth2));
+
+    //
+
+    const truth3 = hex2bin("ffffffff00000000");
+    const value3 = fromBytesU64(truth3);
+    t.deepEqual(value3, 0xffffffff);
+
+    const bytes3 = toBytesU64(value3);
+    t.deepEqual(Array.from(bytes3), Array.from(truth3));
+});

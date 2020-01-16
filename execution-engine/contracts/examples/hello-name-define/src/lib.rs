@@ -2,7 +2,7 @@
 
 extern crate alloc;
 
-use alloc::{collections::BTreeMap, string::String, vec::Vec};
+use alloc::{collections::BTreeMap, string::String};
 
 use contract_ffi::{
     contract_api::{runtime, storage, Error},
@@ -29,7 +29,7 @@ pub extern "C" fn hello_name_ext() {
         .unwrap_or_revert_with(Error::MissingArgument)
         .unwrap_or_revert_with(Error::InvalidArgument);
     let return_value = CLValue::from_t(hello_name(&name)).unwrap_or_revert();
-    runtime::ret(return_value, Vec::new());
+    runtime::ret(return_value);
 }
 
 #[no_mangle]

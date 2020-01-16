@@ -56,8 +56,7 @@ fn get_cost(response: &ExecuteResponse) -> U512 {
 // bonding step and we should be asserting that
 #[test]
 #[ignore]
-// TODO: uncomment this when the issue is fixed
-// #[should_panic]
+#[should_panic]
 fn should_not_be_able_to_unbond_reward() {
     let mut builder = InMemoryWasmTestBuilder::default();
 

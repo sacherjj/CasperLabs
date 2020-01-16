@@ -21,7 +21,13 @@ interface Props {
 @observer
 export default class BlockList extends RefreshableComponent<Props, {}> {
   async refresh() {
-    this.props.dag.refreshBlockDag();
+    await this.props.dag.refreshBlockDagAndSetupSubscriber();
+  }
+
+  componentWillUnmount() {
+    super.componentWillUnmount();
+    // release websocket if necessary
+    this.props.dag.unsubscribe();
   }
 
   render() {
@@ -34,6 +40,7 @@ export default class BlockList extends RefreshableComponent<Props, {}> {
             : `Blocks from rank ${dag.minRank} to ${dag.maxRank}`
         }
         refresh={() => this.refresh()}
+        subscribeToggleStore={dag.subscribeToggleStore}
         headers={['Block hash', 'Rank', 'Timestamp', 'Validator']}
         rows={dag.blocks}
         renderRow={(block: BlockInfo) => {

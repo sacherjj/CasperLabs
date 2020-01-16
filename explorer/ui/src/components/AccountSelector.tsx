@@ -13,11 +13,11 @@ interface Props extends RouteComponentProps {
   accountSelectorContainer: AccountSelectorContainer;
 }
 
-function ArrowIcon(props:{isOpen: boolean}){
-  if(props.isOpen) {
-    return <i className="fas fa-angle-up"/>
-  }else{
-    return <i className="fas fa-angle-down"/>
+function ArrowIcon(props: { isOpen: boolean }) {
+  if (props.isOpen) {
+    return <i className="fas fa-angle-up" />;
+  } else {
+    return <i className="fas fa-angle-down" />;
   }
 }
 
@@ -41,14 +41,14 @@ class _AccountSelector extends React.Component<Props, {}> {
             onStateChange={accountSelectorContainer.handleStateChange}
           >
             {({
-                getInputProps,
-                getToggleButtonProps,
-                getItemProps,
-                isOpen,
-                selectedItem,
-                inputValue,
-                highlightedIndex
-              }) => (
+              getInputProps,
+              getToggleButtonProps,
+              getItemProps,
+              isOpen,
+              selectedItem,
+              inputValue,
+              highlightedIndex
+            }) => (
               <div>
                 <div style={{ position: 'relative' }}>
                   <input
@@ -70,7 +70,7 @@ class _AccountSelector extends React.Component<Props, {}> {
                       className="controller-button"
                       {...getToggleButtonProps()}
                     >
-                      <ArrowIcon isOpen={isOpen}/>
+                      <ArrowIcon isOpen={isOpen} />
                     </button>
                   )}
                 </div>
@@ -79,21 +79,21 @@ class _AccountSelector extends React.Component<Props, {}> {
                   <ul className={`pop-list ${isOpen ? 'is-open' : ''}`}>
                     {isOpen
                       ? accountSelectorContainer
-                        .getStringItems(inputValue)
-                        .map((item, index) => (
-                          <li
-                            key={index}
-                            className={`option ${
-                              highlightedIndex === index ? 'is-active' : ''
-                            }`}
-                            {...getItemProps({
-                              item,
-                              index
-                            })}
-                          >
-                            {item}
-                          </li>
-                        ))
+                          .getStringItems(inputValue)
+                          .map((item, index) => (
+                            <li
+                              key={index}
+                              className={`option ${
+                                highlightedIndex === index ? 'is-active' : ''
+                              }`}
+                              {...getItemProps({
+                                item,
+                                index
+                              })}
+                            >
+                              {item}
+                            </li>
+                          ))
                       : null}
                   </ul>
                 </div>

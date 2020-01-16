@@ -28,11 +28,10 @@ use crate::{
 ///
 /// Note this function is only relevant to contracts stored on chain which return a value to their
 /// caller. The return value of a directly deployed contract is never looked at.
-pub fn ret(value: CLValue, extra_urefs: Vec<URef>) -> ! {
+pub fn ret(value: CLValue) -> ! {
     let (ptr, size, _bytes) = contract_api::to_ptr(value);
-    let (urefs_ptr, urefs_size, _bytes2) = contract_api::to_ptr(extra_urefs);
     unsafe {
-        ext_ffi::ret(ptr, size, urefs_ptr, urefs_size);
+        ext_ffi::ret(ptr, size);
     }
 }
 
@@ -48,17 +47,12 @@ pub fn revert<T: Into<Error>>(error: T) -> ! {
 /// execution. The value returned from the contract call (see `ret` above) is
 /// returned from this function.
 #[allow(clippy::ptr_arg)]
-pub fn call_contract<A: ArgsParser, T: CLTyped + FromBytes>(
-    c_ptr: ContractRef,
-    args: A,
-    extra_urefs: Vec<Key>,
-) -> T {
+pub fn call_contract<A: ArgsParser, T: CLTyped + FromBytes>(c_ptr: ContractRef, args: A) -> T {
     let contract_key: Key = c_ptr.into();
     let (key_ptr, key_size, _bytes1) = contract_api::to_ptr(contract_key);
     let (args_ptr, args_size, _bytes2) = ArgsParser::parse(args)
         .map(contract_api::to_ptr)
         .unwrap_or_revert();
-    let (urefs_ptr, urefs_size, _bytes3) = contract_api::to_ptr(extra_urefs);
 
     let bytes_written = {
         let mut bytes_written = MaybeUninit::uninit();
@@ -68,8 +62,6 @@ pub fn call_contract<A: ArgsParser, T: CLTyped + FromBytes>(
                 key_size,
                 args_ptr,
                 args_size,
-                urefs_ptr,
-                urefs_size,
                 bytes_written.as_mut_ptr(),
             )
         };

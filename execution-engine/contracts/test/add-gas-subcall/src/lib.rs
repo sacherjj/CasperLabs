@@ -2,7 +2,7 @@
 
 extern crate alloc;
 
-use alloc::{collections::BTreeMap, string::String, vec::Vec};
+use alloc::{collections::BTreeMap, string::String};
 
 use contract_ffi::{
     contract_api::{runtime, storage, Error},
@@ -52,7 +52,7 @@ pub extern "C" fn call() {
         },
         ADD_GAS_VIA_SUBCALL => {
             let reference = storage::store_function_at_hash(SUBCALL_NAME, BTreeMap::new());
-            runtime::call_contract::<_, ()>(reference, (amount,), Vec::new());
+            runtime::call_contract::<_, ()>(reference, (amount,));
         }
         _ => runtime::revert(Error::InvalidArgument),
     }

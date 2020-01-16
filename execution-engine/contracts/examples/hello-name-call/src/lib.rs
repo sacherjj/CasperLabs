@@ -2,7 +2,7 @@
 
 extern crate alloc;
 
-use alloc::{string::String, vec::Vec};
+use alloc::string::String;
 
 use contract_ffi::{
     contract_api::{runtime, storage, Error},
@@ -20,7 +20,7 @@ pub extern "C" fn call() {
         .unwrap_or_revert_with(Error::UnexpectedKeyVariant);
 
     let args = ("World",);
-    let result: String = runtime::call_contract(contract_ref, args, Vec::new());
+    let result: String = runtime::call_contract(contract_ref, args);
     assert_eq!("Hello, World", result);
 
     // Store the result at a uref so it can be seen as an effect on the global state

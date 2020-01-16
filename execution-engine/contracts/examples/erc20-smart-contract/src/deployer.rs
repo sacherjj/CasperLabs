@@ -1,4 +1,4 @@
-use alloc::{collections::BTreeMap, string::String, vec};
+use alloc::{collections::BTreeMap, string::String};
 
 use contract_ffi::{
     contract_api::{runtime, storage, system, ContractRef, TURef},
@@ -42,11 +42,7 @@ fn deploy_token(name: &str, initial_balance: U512) {
     let token_ref: ContractRef = storage::store_function_at_hash(ERC20_CONTRACT_NAME, token_urefs);
 
     // Initialize erc20 contract.
-    runtime::call_contract::<_, ()>(
-        token_ref.clone(),
-        (api::INIT_ERC20, initial_balance),
-        vec![],
-    );
+    runtime::call_contract::<_, ()>(token_ref.clone(), (api::INIT_ERC20, initial_balance));
 
     // Save it under a new TURef.
     let token_turef: TURef<Key> = storage::new_turef(token_ref.into());

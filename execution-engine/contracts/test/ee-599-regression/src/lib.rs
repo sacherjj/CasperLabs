@@ -1,9 +1,8 @@
 #![no_std]
 
 extern crate alloc;
-extern crate contract_ffi;
 
-use alloc::{collections::BTreeMap, string::String, vec::Vec};
+use alloc::{collections::BTreeMap, string::String};
 use contract_ffi::{
     contract_api::{account, runtime, storage, system, Error},
     key::Key,
@@ -159,7 +158,7 @@ fn delegate() -> Result<(), Error> {
                     .map_err(|_| Error::InvalidArgument)?;
 
             let subcontract_args = (subcontract_method,);
-            runtime::call_contract::<_, ()>(contract_ref, subcontract_args, Vec::new());
+            runtime::call_contract::<_, ()>(contract_ref, subcontract_args);
         }
         _ => return Err(ContractError::InvalidDelegateMethod.into()),
     }

@@ -81,11 +81,11 @@ impl ModuleImportResolver for RuntimeModuleImportResolver {
                 FunctionIndex::GetArgFuncIndex.into(),
             ),
             "ret" => FuncInstance::alloc_host(
-                Signature::new(&[ValueType::I32; 4][..], None),
+                Signature::new(&[ValueType::I32; 2][..], None),
                 FunctionIndex::RetFuncIndex.into(),
             ),
             "call_contract" => FuncInstance::alloc_host(
-                Signature::new(&[ValueType::I32; 7][..], Some(ValueType::I32)),
+                Signature::new(&[ValueType::I32; 5][..], Some(ValueType::I32)),
                 FunctionIndex::CallContractFuncIndex.into(),
             ),
             "get_key" => FuncInstance::alloc_host(

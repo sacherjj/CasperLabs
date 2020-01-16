@@ -388,6 +388,13 @@ class CasperLabsClient:
 
     @api
     def sign_deploy(self, deploy, public_key, private_key_file):
+        # import pdb; pdb.set_trace()
+        # See if this is hex encoded
+        try:
+            public_key = bytes.fromhex(public_key)
+        except TypeError:
+            pass
+
         deploy.approvals.extend(
             [
                 consensus.Approval(
@@ -485,6 +492,19 @@ class CasperLabsClient:
 
         # TODO: Return only deploy_hash
         return self.send_deploy(deploy), deploy.deploy_hash
+
+    @api
+    def transfer(self, target_account_hex, amount, **deploy_args):
+        target_account_bytes = bytes.fromhex(target_account_hex)
+        deploy_args["session"] = bundled_contract("transfer_to_account.wasm")
+        deploy_args["session_args"] = abi.ABI.args(
+            [
+                abi.ABI.account("account", target_account_bytes),
+                abi.ABI.long_value("amount", amount),
+            ]
+        )
+        _, deploy_hash_bytes = self.deploy(**deploy_args)
+        return deploy_hash_bytes.hex()
 
     @api
     def send_deploy(self, deploy):
