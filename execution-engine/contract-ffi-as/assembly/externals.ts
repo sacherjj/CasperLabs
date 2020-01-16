@@ -85,3 +85,6 @@ export declare function ret(value_ptr: usize, value_size: usize, extra_urefs_ptr
 
 @external("env", "write")
 export declare function write(key_ptr: usize, key_size: usize, value_ptr: usize, value_size: usize): void;
+
+@external("env", "has_key")
+export declare function has_key(name_ptr: usize, name_size: usize): i32;

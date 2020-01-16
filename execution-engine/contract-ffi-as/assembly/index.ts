@@ -186,3 +186,9 @@ export function ret(value: CLValue): void {
   externals.ret(valueBytes.dataStart, valueBytes.length, extraURefs.dataStart, extraURefs.length);
   unreachable();
 }
+
+export function hasKey(name: String): bool {
+  const nameBytes = toBytesString(name);
+  let ret = externals.has_key(nameBytes.dataStart, nameBytes.length);
+  return ret == 0;
+}
