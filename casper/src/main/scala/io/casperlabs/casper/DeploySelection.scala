@@ -10,11 +10,11 @@ import io.casperlabs.casper.util.execengine.ExecEngineUtil.{processDeploys, zipD
 import io.casperlabs.casper.util.execengine.Op.OpMap
 import io.casperlabs.casper.util.execengine.{
   DeployEffects,
-  NoEffectsFailure,
   Op,
+  PreconditionFailure,
   ProcessedDeployResult
 }
-import io.casperlabs.catscontrib.{Fs2Compiler, MonadThrowable}
+import io.casperlabs.catscontrib.Fs2Compiler
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.smartcontracts.ExecutionEngineService
 
@@ -27,8 +27,9 @@ trait Select[F[_]] {
 object DeploySelection {
 
   final case class DeploySelectionResult(
-      commuting: List[ProcessedDeployResult],
-      conflicting: List[Deploy]
+      commuting: List[DeployEffects],
+      conflicting: List[Deploy],
+      preconditionFailures: List[PreconditionFailure]
   )
 
   trait DeploySelection[F[_]] extends Select[F] {
@@ -42,13 +43,14 @@ object DeploySelection {
   private case class IntermediateState(
       // Chosen deploys that commute.
       accumulated: List[DeployEffects] = List.empty,
-      diff: List[ProcessedDeployResult] = List.empty,
+      diff: List[DeployEffects] = List.empty,
       // For quicker commutativity test.
       // New deploy has to commute with all the effects accumulated so far.
       accumulatedOps: OpMap[Key] = Map.empty,
       // Deploys that conflict with `accumulated` but will be included
       // as SEQ deploys.
-      conflicting: List[Deploy] = List.empty
+      conflicting: List[Deploy] = List.empty,
+      preconditionFailures: List[PreconditionFailure] = List.empty
   ) {
     def effectsCommutativity: (List[DeployEffects], OpMap[state.Key]) =
       (accumulated, accumulatedOps)
@@ -70,6 +72,9 @@ object DeploySelection {
         // to the stream and we do that for commuting elements.
         copy(conflicting = deploysEffects.deploy :: this.conflicting)
     }
+
+    def addPreconditionFailure(failure: PreconditionFailure): IntermediateState =
+      copy(preconditionFailures = failure :: this.preconditionFailures)
   }
 
   def createMetered[F[_]: Sync: ExecutionEngineService: Fs2Compiler: Metrics](
@@ -98,8 +103,9 @@ object DeploySelection {
         def go(
             state: IntermediateState,
             stream: fs2.Stream[F, Deploy],
-            conflicting: Ref[F, List[Deploy]]
-        ): fs2.Pull[F, List[ProcessedDeployResult], Unit] =
+            conflictingRef: Ref[F, List[Deploy]],
+            preconditionFailuresRef: Ref[F, List[PreconditionFailure]]
+        ): fs2.Pull[F, List[DeployEffects], Unit] =
           stream.pull.uncons.flatMap {
             case Some((chunk, streamTail)) =>
               // Fold over elements of the chunk, picking deploys that commute,
@@ -125,10 +131,10 @@ object DeploySelection {
                         // and continue for `Right`
                         accState.asLeft[IntermediateState]
                       } else newState.asRight[IntermediateState]
-                    case (accState, element: NoEffectsFailure) =>
-                      // InvalidDeploy-s should be pushed into the stream
+                    case (accState, element: PreconditionFailure) =>
+                      // PreconditionFailure-s should be pushed into the stream
                       // for later handling (like discarding invalid deploys).
-                      accState.copy(diff = element :: accState.diff).asRight[IntermediateState]
+                      accState.addPreconditionFailure(element).asRight[IntermediateState]
                   }
                 }
 
@@ -136,9 +142,12 @@ object DeploySelection {
                 .eval(chunkResults)
                 .flatMap {
                   // Block size limit reached. Output whatever was accumulated in the chunk and stop consuming.
-                  case Left(deploys) =>
-                    fs2.Pull.output(fs2.Chunk(deploys.diff.reverse)).covary[F] >>
-                      fs2.Pull.eval(conflicting.set(deploys.conflicting)).void >>
+                  case Left(intermediateState) =>
+                    fs2.Pull.output(fs2.Chunk(intermediateState.diff.reverse)).covary[F] >>
+                      fs2.Pull.eval(conflictingRef.set(intermediateState.conflicting)).void >>
+                      fs2.Pull
+                        .eval(preconditionFailuresRef.set(intermediateState.preconditionFailures))
+                        .void >>
                       fs2.Pull.done
                   case Right(deploys) =>
                     // Output what was chosen in the chunk and continue consuming the stream.
@@ -148,18 +157,29 @@ object DeploySelection {
                       // that commute with whatever was already chosen.
                       deploys.copy(diff = List.empty),
                       streamTail,
-                      conflicting
+                      conflictingRef,
+                      preconditionFailuresRef
                     )
                 }
-            case None => fs2.Pull.eval(conflicting.set(state.conflicting)).void >> fs2.Pull.done
+            case None =>
+              fs2.Pull.eval(conflictingRef.set(state.conflicting)).void >>
+                fs2.Pull.eval(preconditionFailuresRef.set(state.preconditionFailures)).void >>
+                fs2.Pull.done
           }
 
         for {
-          conflictingRef <- Ref[F].of(List.empty[Deploy])
-          commutingDeploys <- go(IntermediateState(), deploys, conflictingRef).stream.compile.toList
+          conflictingRef          <- Ref[F].of(List.empty[Deploy])
+          preconditionFailuresRef <- Ref[F].of(List.empty[PreconditionFailure])
+          commutingDeploys <- go(
+                               IntermediateState(),
+                               deploys,
+                               conflictingRef,
+                               preconditionFailuresRef
+                             ).stream.compile.toList
                                .map(_.flatten)
-          conflictingDeploys <- conflictingRef.get
-        } yield DeploySelectionResult(commutingDeploys, conflictingDeploys)
+          conflictingDeploys   <- conflictingRef.get
+          preconditionFailures <- preconditionFailuresRef.get
+        } yield DeploySelectionResult(commutingDeploys, conflictingDeploys, preconditionFailures)
       }
     }
 }

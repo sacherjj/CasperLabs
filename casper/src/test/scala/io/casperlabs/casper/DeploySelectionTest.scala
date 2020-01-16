@@ -126,8 +126,7 @@ class DeploySelectionTest
       val test = deploySelection
         .select((prestate, blocktime, protocolVersion, stream))
         .map(results => {
-          val (_, commuting) = ProcessedDeployResult.split(results.commuting)
-          assert(commuting.map(_.deploy) == cappedEffects)
+          assert(results.commuting.map(_.deploy) == cappedEffects)
         })
 
       test.unsafeRunSync
@@ -157,7 +156,7 @@ class DeploySelectionTest
       val test = deploySelection
         .select((prestate, blocktime, protocolVersion, stream))
         .map {
-          case DeploySelectionResult(commuting, conflicting) =>
+          case DeploySelectionResult(commuting, conflicting, _) =>
             (commuting.map(_.deploy) ++ conflicting) should contain theSameElementsAs allDeploys
         }
 
@@ -214,14 +213,14 @@ class DeploySelectionTest
 
     val test = deploySelection
       .select((prestate, blocktime, protocolVersion, stream))
-      .map(results => {
-        // Partition the output stream to invalid deploys and commuting deploys.
-        val (invalidDeploys, chosenDeploys) = ProcessedDeployResult.split(results.commuting)
-        // Assert that all invalid deploys are a subset of the input set of invalid deploys.
-        assert(invalidDeploys.map(_.deploy.deployHash).forall(invalid.contains(_)))
-        // Assert that commuting deploys are as expected.
-        assert(chosenDeploys.map(_.deploy) == cappedEffects)
-      })
+      .map {
+        case DeploySelectionResult(chosenDeploys, _, invalidDeploys) => {
+          // Assert that all invalid deploys are a subset of the input set of invalid deploys.
+          assert(invalidDeploys.map(_.deploy.deployHash).forall(invalid.contains(_)))
+          // Assert that commuting deploys are as expected.
+          assert(chosenDeploys.map(_.deploy) == cappedEffects)
+        }
+      }
 
     test.unsafeRunSync
   }

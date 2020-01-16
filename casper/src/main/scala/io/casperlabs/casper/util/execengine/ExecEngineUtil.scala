@@ -112,10 +112,9 @@ object ExecEngineUtil {
       result <- DeploySelection[F].select(
                  (preStateHash, blocktime, protocolVersion, deployStream)
                )
-      DeploySelectionResult(pdr, conflicting) = result
-      (invalidDeploys, deployEffects)         = ProcessedDeployResult.split(pdr)
-      _                                       <- handleInvalidDeploys[F](invalidDeploys)
-      (deploysForBlock, transforms)           = ExecEngineUtil.unzipEffectsAndDeploys(deployEffects).unzip
+      DeploySelectionResult(commuting, conflicting, preconditionFailures) = result
+      _                                                                   <- handleInvalidDeploys[F](preconditionFailures)
+      (deploysForBlock, transforms)                                       = ExecEngineUtil.unzipEffectsAndDeploys(commuting).unzip
       parResult <- ExecutionEngineService[F]
                     .commit(preStateHash, transforms.flatten, protocolVersion)
                     .rethrow
@@ -156,22 +155,19 @@ object ExecEngineUtil {
   // turns up again for some reason, we'll treat it again as a pending deploy and try to include it.
   // At that point the EE will discard it as the nonce is in the past and we'll drop it here.
   def handleInvalidDeploys[F[_]: MonadThrowable: DeployStorage: Log: Metrics](
-      invalidDeploys: List[NoEffectsFailure]
+      invalidDeploys: List[PreconditionFailure]
   ): F[Unit] = Metrics[F].timer("handleInvalidDeploys") {
     for {
-      invalidDeploys <- invalidDeploys.foldM[F, InvalidDeploys](InvalidDeploys(Nil)) {
-                         case (acc, d: PreconditionFailure) =>
-                           // Log precondition failures as we will be getting rid of them.
-                           Log[F].warn(
-                             s"${PrettyPrinter.buildString(d.deploy.deployHash) -> "deploy"} failed precondition error: ${d.errorMessage}"
-                           ) as {
-                             acc.copy(preconditionFailures = d :: acc.preconditionFailures)
-                           }
-                       }
+      _ <- invalidDeploys.traverse { d =>
+            // Log precondition failures as we will be getting rid of them.
+            Log[F].warn(
+              s"${PrettyPrinter.buildString(d.deploy.deployHash) -> "deploy"} failed precondition error: ${d.errorMessage}"
+            )
+          }
       _ <- DeployStorageWriter[F]
             .markAsDiscarded(
-              invalidDeploys.preconditionFailures.map(pf => (pf.deploy, pf.errorMessage))
-            ) whenA invalidDeploys.preconditionFailures.nonEmpty
+              invalidDeploys.map(pf => (pf.deploy, pf.errorMessage))
+            ) whenA invalidDeploys.nonEmpty
     } yield ()
   }
 
