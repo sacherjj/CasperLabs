@@ -51,7 +51,7 @@ from . import info_pb2 as info
 from . import vdag
 from . import abi
 from . import crypto
-from casperlabs_client.utils import bundled_contract, extract_common_name
+from casperlabs_client.utils import bundled_contract, extract_common_name, key_variant
 
 
 DEFAULT_HOST = "localhost"
@@ -234,16 +234,6 @@ class CasperLabsClient:
     """
     gRPC CasperLabs client.
     """
-
-    # Note, there is also casper.StateQuery.KeyVariant.KEY_VARIANT_UNSPECIFIED,
-    # but it doesn't seem to have an official string representation
-    # ("key_variant_unspecified"? "unspecified"?) and is not used by the client.
-    STATE_QUERY_KEY_VARIANT = {
-        "hash": casper.StateQuery.KeyVariant.HASH,
-        "uref": casper.StateQuery.KeyVariant.UREF,
-        "address": casper.StateQuery.KeyVariant.ADDRESS,
-        "local": casper.StateQuery.KeyVariant.LOCAL,
-    }
 
     def __init__(
         self,
@@ -628,25 +618,7 @@ class CasperLabsClient:
                                   where both parts are hex encoded."
         :return:                  QueryStateResponse object
         """
-
-        def key_variant(keyType):
-            variant = self.STATE_QUERY_KEY_VARIANT.get(keyType.lower(), None)
-            if variant is None:
-                raise InternalError(
-                    "query-state", f"{keyType} is not a known query-state key type"
-                )
-            return variant
-
-        def encode_local_key(key: str) -> str:
-            seed, rest = key.split(":")
-            abi_encoded_rest = bytes.fromhex(rest).hex()
-            r = f"{seed}:{abi_encoded_rest}"
-            logging.info(f"encode_local_key => {r}")
-            return r
-
-        key_value = encode_local_key(key) if keyType.lower() == "local" else key
-
-        q = casper.StateQuery(key_variant=key_variant(keyType), key_base16=key_value)
+        q = casper.StateQuery(key_variant=key_variant(keyType), key_base16=key)
         q.path_segments.extend([name for name in path.split("/") if name])
         return self.casperService.GetBlockState(
             casper.GetBlockStateRequest(block_hash_base16=blockHash, query=q)
