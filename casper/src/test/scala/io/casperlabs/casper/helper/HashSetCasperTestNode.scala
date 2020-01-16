@@ -1,7 +1,7 @@
 package io.casperlabs.casper.helper
 
 import cats.effect.concurrent.Ref
-import cats.effect.{Concurrent, ContextShift, Timer}
+import cats.effect.{Concurrent, ContextShift, Resource, Timer}
 import cats.implicits._
 import cats.{~>, Applicative, Defer, Parallel}
 import com.google.protobuf.ByteString
@@ -205,7 +205,7 @@ trait HashSetCasperTestNodeFactory {
 
   protected def initStorage[F[_]: Concurrent: Log: Metrics: ContextShift: Time]()
       : F[(BlockStorage[F], IndexedDagStorage[F], DeployStorage[F], FinalityStorage[F])] =
-    StorageFixture.createStorages[F]()
+    StorageFixture.createFileStorages[F]()
 }
 
 object HashSetCasperTestNode {
