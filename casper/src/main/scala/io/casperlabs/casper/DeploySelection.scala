@@ -117,7 +117,7 @@ object DeploySelection {
                   blocktime,
                   batch,
                   protocolVersion
-                ) map { pdr =>
+                )((ExecutionEngineService[F].exec _)) map { pdr =>
                   pdr.foldLeftM(state) {
                     case (accState, element: DeployEffects) =>
                       // newState is either `accState` if `element` doesn't commute,

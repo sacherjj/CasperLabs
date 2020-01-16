@@ -8,7 +8,7 @@ import cats.{Foldable, Monad}
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.DeploySelection.{DeploySelection, DeploySelectionResult}
 import io.casperlabs.casper._
-import io.casperlabs.casper.consensus.state.{CLType, CLValue, Key, StoredValue}
+import io.casperlabs.casper.consensus.state.{CLType, CLValue, Key, ProtocolVersion, StoredValue}
 import io.casperlabs.casper.consensus.{state, Block, Deploy}
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
 import io.casperlabs.casper.util.execengine.Op.{OpMap, OpMapAddComm}
@@ -24,6 +24,8 @@ import io.casperlabs.storage.dag.DagRepresentation
 import io.casperlabs.storage.deploy.{DeployStorage, DeployStorageWriter}
 import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.metrics.implicits._
+
+import scala.util.Either
 
 case class DeploysCheckpoint(
     preStateHash: StateHash,
@@ -42,14 +44,29 @@ object ExecEngineUtil {
 
   import io.casperlabs.smartcontracts.GrpcExecutionEngineService.EngineMetricsSource
 
-  private def singleDeploy[F[_]: MonadThrowable: ExecutionEngineService](
+  type EEExecFun[F[_]] = (
+      ByteString,
+      Long,
+      Seq[DeployItem],
+      state.ProtocolVersion
+  ) => F[Either[Throwable, Seq[DeployResult]]]
+  type EECommitFun[F[_]] = (
+      ByteString,
+      Seq[TransformEntry],
+      ProtocolVersion
+  ) => F[Either[Throwable, ExecutionEngineService.CommitResult]]
+
+  protected[execengine] def singleDeploy[F[_]: MonadThrowable](
       stage: Int,
       prestate: ByteString,
       blocktime: Long,
       protocolVersion: state.ProtocolVersion,
       deploy: Deploy
+  )(
+      eeExec: EEExecFun[F],
+      eeCommit: EECommitFun[F]
   ): F[Either[PreconditionFailure, DeploysCheckpoint]] =
-    processDeploys[F](prestate, blocktime, Seq(deploy), protocolVersion)
+    processDeploys[F](prestate, blocktime, Seq(deploy), protocolVersion)(eeExec)
       .flatMap { pdr =>
         if (pdr.size != 1)
           MonadThrowable[F].raiseError[ProcessedDeployResult](
@@ -64,9 +81,7 @@ object ExecEngineUtil {
           val (deploysForBlock, transforms) = ExecEngineUtil
             .unzipEffectsAndDeploys(Seq(de), stage)
             .unzip
-          ExecutionEngineService[F]
-            .commit(prestate, transforms.flatten, protocolVersion)
-            .rethrow
+          eeCommit(prestate, transforms.flatten, protocolVersion).rethrow
             .map { commitResult =>
               DeploysCheckpoint(
                 prestate,
@@ -86,12 +101,12 @@ object ExecEngineUtil {
     *
     * In essence, this simulates sequential execution EE should be providing natively.
     */
-  private def commitDeploysSequentially[F[_]: MonadThrowable: Log: Metrics: DeployStorage: ExecutionEngineService: DeploySelection](
+  protected[execengine] def commitDeploysSequentially[F[_]: MonadThrowable: Log: Metrics: DeployStorage: ExecutionEngineService](
       prestateHash: ByteString,
-      deploys: NonEmptyList[Deploy],
       blocktime: Long,
-      protocolVersion: state.ProtocolVersion
-  ): F[DeploysCheckpoint] = {
+      protocolVersion: state.ProtocolVersion,
+      deploys: NonEmptyList[Deploy]
+  )(eeExec: EEExecFun[F], eeCommit: EECommitFun[F]): F[DeploysCheckpoint] = {
 
     final case class State(
         preconditionFailures: List[PreconditionFailure],
@@ -112,19 +127,21 @@ object ExecEngineUtil {
     for {
       state <- deploysWithStage.foldLeftM(State.init) {
                 case (state, (deploy, stage)) =>
-                  singleDeploy[F](stage, state.postStateHash, blocktime, protocolVersion, deploy)
-                    .map {
-                      case Left(preconditionFailure) =>
-                        state.copy(
-                          preconditionFailures = preconditionFailure :: state.preconditionFailures
-                        )
-                      case Right(deploysCheckpoint) =>
-                        state.copy(
-                          postStateHash = deploysCheckpoint.postStateHash,
-                          blockEffects = state.blockEffects ++ deploysCheckpoint.deploysForBlock,
-                          bondedValidators = deploysCheckpoint.bondedValidators
-                        )
-                    }
+                  singleDeploy[F](stage, state.postStateHash, blocktime, protocolVersion, deploy)(
+                    eeExec,
+                    eeCommit
+                  ).map {
+                    case Left(preconditionFailure) =>
+                      state.copy(
+                        preconditionFailures = preconditionFailure :: state.preconditionFailures
+                      )
+                    case Right(deploysCheckpoint) =>
+                      state.copy(
+                        postStateHash = deploysCheckpoint.postStateHash,
+                        blockEffects = state.blockEffects ++ deploysCheckpoint.deploysForBlock,
+                        bondedValidators = deploysCheckpoint.bondedValidators
+                      )
+                  }
               }
       _ <- handleInvalidDeploys[F](state.preconditionFailures)
             .whenA(state.preconditionFailures.nonEmpty)
@@ -176,9 +193,12 @@ object ExecEngineUtil {
                    nelDeploys =>
                      commitDeploysSequentially[F](
                        parResult.postStateHash,
-                       nelDeploys,
                        blocktime,
-                       protocolVersion
+                       protocolVersion,
+                       nelDeploys
+                     )(
+                       (ExecutionEngineService[F].exec _),
+                       (ExecutionEngineService[F].commit _)
                      ).map { sequentialResult =>
                          DeploysCheckpoint(
                            preStateHash,
@@ -216,17 +236,15 @@ object ExecEngineUtil {
     } yield ()
   }
 
-  def processDeploys[F[_]: MonadThrowable: ExecutionEngineService](
+  def processDeploys[F[_]: MonadThrowable](
       prestate: StateHash,
       blocktime: Long,
       deploys: Seq[Deploy],
       protocolVersion: state.ProtocolVersion
-  ): F[List[ProcessedDeployResult]] =
+  )(eeExec: EEExecFun[F]): F[List[ProcessedDeployResult]] =
     for {
       eeDeploys <- deploys.toList.traverse(ProtoUtil.deployDataToEEDeploy[F](_))
-      results <- ExecutionEngineService[F]
-                  .exec(prestate, blocktime, eeDeploys, protocolVersion)
-                  .rethrow
+      results   <- eeExec(prestate, blocktime, eeDeploys, protocolVersion).rethrow
     } yield zipDeploysResults(deploys, results)
 
   /** Chooses a set of commuting effects.
@@ -324,7 +342,7 @@ object ExecEngineUtil {
                           blocktime,
                           deploys,
                           protocolVersion
-                        )
+                        )(ExecutionEngineService[F].exec _)
         effectfulDeploys = ProcessedDeployResult.split(deployEffects)._2
         transformMap = unzipEffectsAndDeploys(findCommutingEffects(effectfulDeploys))
           .flatMap(_._2)
