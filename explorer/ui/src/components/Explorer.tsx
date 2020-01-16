@@ -1,6 +1,5 @@
 import React from 'react';
 import { observer } from 'mobx-react';
-import DagContainer from '../containers/DagContainer';
 import {
   LinkButton,
   ListInline,

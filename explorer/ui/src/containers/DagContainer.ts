@@ -82,6 +82,7 @@ export class DagContainer {
     });
   }
 
+  @action
   updateMaxRankAndDepth(rank: number, depth: number){
     this.maxRank = rank;
     this.depth = depth;
@@ -130,7 +131,7 @@ export class DagContainer {
   step = new DagStep(this);
 
   unsubscribe() {
-    if (this.subscriberState == SubscribeState.ON) {
+    if (this.subscriberState === SubscribeState.ON) {
       this.eventsSubscriber!.unsubscribe();
     }
   }
