@@ -82,3 +82,6 @@ export declare function read_value(key_ptr: usize, key_size: usize, value_size: 
 
 @external("env", "ret")
 export declare function ret(value_ptr: usize, value_size: usize, extra_urefs_ptr: usize, extra_urefs_size: usize): void;
+
+@external("env", "write")
+export declare function write(key_ptr: usize, key_size: usize, value_ptr: usize, value_size: usize): void;

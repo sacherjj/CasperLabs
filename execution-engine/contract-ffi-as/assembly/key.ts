@@ -139,4 +139,14 @@ export class Key {
             return false;
         }
     }
+
+    write(value: CLValue): void {
+        const keyBytes = this.toBytes();
+        const valueBytes = value.toBytes();
+        externals.write(
+            keyBytes.dataStart,
+            keyBytes.length,
+            valueBytes.dataStart,
+            valueBytes.length);
+    }
 }
