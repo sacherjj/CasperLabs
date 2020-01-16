@@ -491,7 +491,7 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
                 }.toMap
                 jmap("Alice") shouldBe msgA.messageHash
                 jmap("Charlie") shouldBe msgC.messageHash
-                jmap.keys should not contain ("Bob")
+                jmap.get("Bob") shouldBe empty
             }
           }
 
