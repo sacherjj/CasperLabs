@@ -16,15 +16,15 @@ export class DagStep {
     this.container.selectedBlock = undefined;
   };
 
-  private get maxRank() {
+  get maxRank() {
     return this.container.maxRank;
   }
 
-  private get depth() {
+  get depth() {
     return this.container.depth;
   }
 
-  private set maxRank(rank: number) {
+  set maxRank(rank: number) {
     this.container.maxRank = rank;
   }
 
@@ -80,6 +80,11 @@ export class DagContainer {
       fireImmediately: false,
       delay: 100
     });
+  }
+
+  updateMaxRankAndDepth(rank: number, depth: number){
+    this.maxRank = rank;
+    this.depth = depth;
   }
 
   get minRank() {
