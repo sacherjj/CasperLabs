@@ -16,10 +16,8 @@ from casperlabs_client import (
     DEFAULT_PORT,
     DEFAULT_INTERNAL_PORT,
     bundled_contract,
-    hexify,
 )
-from . import consensus_pb2 as consensus
-import pkg_resources
+from casperlabs_client.utils import hexify
 from casperlabs_client.abi import ABI
 from casperlabs_client.crypto import (
     read_pem_key,
@@ -29,6 +27,7 @@ from casperlabs_client.crypto import (
     private_to_public_key,
     generate_certificates,
 )
+from . import consensus_pb2 as consensus
 
 DOT_FORMATS = "canon,cmap,cmapx,cmapx_np,dot,dot_json,eps,fig,gd,gd2,gif,gv,imap,imap_np,ismap,jpe,jpeg,jpg,json,json0,mp,pdf,pic,plain,plain-ext,png,pov,ps,ps2,svg,svgz,tk,vml,vmlz,vrml,wbmp,x11,xdot,xdot1.2,xdot1.4,xdot_json,xlib"
 
@@ -556,13 +555,6 @@ def cli(*arguments) -> int:
 
     # fmt:on
     return parser.run([str(a) for a in arguments])
-
-
-def check_bundled_contracts():
-    print(dir(pkg_resources))
-    p = pkg_resources.resource_filename(__name__, "bonding.wasm")
-    if not os.path.exists(p):
-        raise Exception(f"No bundled contract {p}")
 
 
 def main():

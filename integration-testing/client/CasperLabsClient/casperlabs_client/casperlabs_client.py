@@ -14,10 +14,8 @@ import os
 import time
 import grpc
 from grpc._channel import _Rendezvous
-import ssl
 import functools
 import logging
-import pkg_resources
 import tempfile
 
 # Monkey patching of google.protobuf.text_encoding.CEscape
@@ -53,6 +51,7 @@ from . import info_pb2 as info
 from . import vdag
 from . import abi
 from . import crypto
+from casperlabs_client.utils import bundled_contract, extract_common_name
 
 
 DEFAULT_HOST = "localhost"
@@ -192,15 +191,6 @@ class InsecureGRPCService:
                 )
 
         return name.endswith("_stream") and unary_stream or unary_unary
-
-
-def extract_common_name(certificate_file: str) -> str:
-    cert_dict = ssl._ssl._test_decode_cert(certificate_file)
-    return [t[0][1] for t in cert_dict["subject"] if t[0][0] == "commonName"][0]
-
-
-def abi_byte_array(a: bytes) -> bytes:
-    return a
 
 
 class SecureGRPCService:
@@ -649,7 +639,7 @@ class CasperLabsClient:
 
         def encode_local_key(key: str) -> str:
             seed, rest = key.split(":")
-            abi_encoded_rest = abi_byte_array(bytes.fromhex(rest)).hex()
+            abi_encoded_rest = bytes.fromhex(rest).hex()
             r = f"{seed}:{abi_encoded_rest}"
             logging.info(f"encode_local_key => {r}")
             return r
@@ -736,20 +726,3 @@ class CasperLabsClient:
             self.port_internal,
             *arguments,
         )
-
-
-def hexify(o):
-    """
-    Convert protobuf message to text format with cryptographic keys and signatures in base 16.
-    """
-    return google.protobuf.text_format.MessageToString(o)
-
-
-def bundled_contract(file_name):
-    """
-    Return path to contract file bundled with the package.
-    """
-    p = pkg_resources.resource_filename(__name__, file_name)
-    if not os.path.exists(p):
-        raise Exception(f"Missing bundled contract {file_name} ({p})")
-    return p
