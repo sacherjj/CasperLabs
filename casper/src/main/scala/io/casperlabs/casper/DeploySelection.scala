@@ -117,8 +117,7 @@ object DeploySelection {
                   blocktime,
                   batch,
                   protocolVersion
-                ) map { deployResults =>
-                  val pdr = zipDeploysResults(batch, deployResults).toList
+                ) map { pdr =>
                   pdr.foldLeftM(state) {
                     case (accState, element: DeployEffects) =>
                       // newState is either `accState` if `element` doesn't commute,

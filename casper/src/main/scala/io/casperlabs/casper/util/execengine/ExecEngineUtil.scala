@@ -60,14 +60,14 @@ object ExecEngineUtil {
         deploy: Deploy
     ): F[Either[PreconditionFailure, DeploysCheckpoint]] =
       processDeploys[F](prestate, blocktime, Seq(deploy), protocolVersion)
-        .flatMap { dpr =>
-          if (dpr.size != 1)
+        .flatMap { pdr =>
+          if (pdr.size != 1)
             MonadThrowable[F].raiseError[ProcessedDeployResult](
               SmartContractEngineError(
                 "ExecutionEngine returned more than 1 result for single deploy."
               )
             )
-          else ProcessedDeployResult(deploy, dpr.head).pure[F]
+          else pdr.head.pure[F]
         }
         .flatMap {
           case de: DeployEffects => {
@@ -216,13 +216,13 @@ object ExecEngineUtil {
       blocktime: Long,
       deploys: Seq[Deploy],
       protocolVersion: state.ProtocolVersion
-  ): F[Seq[DeployResult]] =
+  ): F[List[ProcessedDeployResult]] =
     for {
       eeDeploys <- deploys.toList.traverse(ProtoUtil.deployDataToEEDeploy[F](_))
       results <- ExecutionEngineService[F]
                   .exec(prestate, blocktime, eeDeploys, protocolVersion)
                   .rethrow
-    } yield results
+    } yield zipDeploysResults(deploys, results)
 
   /** Chooses a set of commuting effects.
     *
@@ -256,8 +256,8 @@ object ExecEngineUtil {
   def zipDeploysResults(
       deploys: Seq[Deploy],
       results: Seq[DeployResult]
-  ): Seq[ProcessedDeployResult] =
-    deploys.zip(results).map((ProcessedDeployResult.apply _).tupled)
+  ): List[ProcessedDeployResult] =
+    deploys.zip(results).map((ProcessedDeployResult.apply _).tupled).toList
 
   def unzipEffectsAndDeploys(
       commutingEffects: Seq[DeployEffects],
@@ -314,14 +314,13 @@ object ExecEngineUtil {
     } else {
       for {
         protocolVersion <- CasperLabsProtocol[F].protocolFromBlock(block)
-        processedDeploys <- processDeploys[F](
+        deployEffects <- processDeploys[F](
                              prestate,
                              blocktime,
                              deploys,
                              protocolVersion
                            )
-        deployEffects    = zipDeploysResults(deploys, processedDeploys)
-        effectfulDeploys = ProcessedDeployResult.split(deployEffects.toList)._2
+        effectfulDeploys = ProcessedDeployResult.split(deployEffects)._2
         transformMap = unzipEffectsAndDeploys(findCommutingEffects(effectfulDeploys))
           .flatMap(_._2)
       } yield transformMap
