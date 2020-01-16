@@ -2,7 +2,8 @@ package io.casperlabs.casper.highway
 
 import cats._
 import cats.implicits._
-import cats.effect.Clock
+import cats.effect.{Clock, Sync}
+import cats.effect.concurrent.Ref
 import java.util.Calendar
 import java.time.Instant
 import scala.concurrent.duration._
@@ -23,16 +24,23 @@ trait TickUtils {
     // Strangely if I returned just a `new Clock` it would conflict with the
     // default `implicit def defaultClock` in tests that want to shadow it,
     // but if it's a class then it's happy.
-    class Mock[F[_]: Applicative](init: Instant) extends Clock[F] {
+    class Mock[F[_]: Applicative](protected val now: Ref[F, Instant]) extends Clock[F] {
       override def realTime(unit: TimeUnit): F[Long] =
-        unit.convert(init.toEpochMilli, MILLISECONDS).pure[F]
+        now.get.map(t => unit.convert(t.toEpochMilli, MILLISECONDS))
 
       override def monotonic(unit: TimeUnit): F[Long] =
         ???
     }
 
+    class AdjustableMock[F[_]: Sync](now: Ref[F, Instant]) extends Mock[F](now) {
+      def set(t: Instant): F[Unit] = now.set(t)
+    }
+
     /** A clock that keeps serving the same time. */
-    def frozen[F[_]: Applicative](t: Instant) = new Mock[F](t)
+    def frozen[F[_]: Sync](t: Instant) = new Mock[F](Ref.unsafe(t))
+
+    /** A clock we can move. */
+    def adjustable[F[_]: Sync](t: Instant) = new AdjustableMock[F](Ref.unsafe(t))
   }
 
 }

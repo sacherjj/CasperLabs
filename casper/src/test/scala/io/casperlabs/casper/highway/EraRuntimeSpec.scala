@@ -17,7 +17,12 @@ import io.casperlabs.storage.BlockHash
 import io.casperlabs.storage.dag.{DagStorage, FinalityStorage}
 import io.casperlabs.storage.era.EraStorage
 import io.casperlabs.casper.mocks.{MockFinalityStorage}
-import io.casperlabs.casper.highway.mocks.{MockDagStorage, MockEraStorage, MockForkChoice}
+import io.casperlabs.casper.highway.mocks.{
+  MockDagStorage,
+  MockEraStorage,
+  MockForkChoice,
+  MockMessageProducer
+}
 import org.scalatest._
 import org.scalactic.source
 import org.scalactic.Prettifier
@@ -59,9 +64,9 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
                 .GlobalState()
                 .withBonds(
                   List(
-                    Bond(validatorKey("Alice")).withStake(state.BigInt("3000")),
-                    Bond(validatorKey("Bob")).withStake(state.BigInt("4000")),
-                    Bond(validatorKey("Charlie")).withStake(state.BigInt("5000"))
+                    Bond("Alice").withStake(state.BigInt("3000")),
+                    Bond("Bob").withStake(state.BigInt("4000")),
+                    Bond("Charlie").withStake(state.BigInt("5000"))
                   )
                 )
             )
@@ -83,7 +88,7 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
           .withHeader(
             Block
               .Header()
-              .withValidatorPublicKey(validatorKey(validator))
+              .withValidatorPublicKey(validator)
               .withKeyBlockHash(era.keyBlockHash)
               .withRoundId(roundId)
               .withParentHashes(List(mainParent).filterNot(_.isEmpty))
@@ -115,7 +120,7 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
               .withMessageType(Block.MessageType.BALLOT)
               .withKeyBlockHash(era.keyBlockHash)
               .withRoundId(roundId)
-              .withValidatorPublicKey(validatorKey(validator))
+              .withValidatorPublicKey(validator)
               .withParentHashes(List(target).filterNot(_.isEmpty))
               .withJustifications(
                 justifications.toSeq.map {
@@ -137,7 +142,8 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
       roundExponent: Int = 0,
       leaderSequencer: LeaderSequencer = LeaderSequencer,
       isSyncedRef: Ref[Id, Boolean] = Ref.of[Id, Boolean](true),
-      messageProducer: String => MessageProducer[Id] = new MockMessageProducer[Id](_),
+      messageProducer: String => MessageProducer[Id] = validator =>
+        new MockMessageProducer[Id](validator),
       config: HighwayConf = conf
   )(
       implicit
@@ -483,9 +489,9 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
                 val jmap = response.justifications.map { j =>
                   j.validatorPublicKey -> j.latestBlockHash
                 }.toMap
-                jmap(validatorKey("Alice")) shouldBe msgA.messageHash
-                jmap(validatorKey("Charlie")) shouldBe msgC.messageHash
-                jmap.keys should not contain (validatorKey("Bob"))
+                jmap("Alice") shouldBe msgA.messageHash
+                jmap("Charlie") shouldBe msgC.messageHash
+                jmap.keys should not contain ("Bob")
             }
           }
 
@@ -1098,7 +1104,7 @@ object EraRuntimeSpec {
   import cats.Monad
   import cats.implicits._
 
-  def validatorKey(name: String) =
+  implicit def validatorKey(name: String): PublicKeyBS =
     PublicKey(ByteString.copyFromUtf8(name))
 
   implicit class MessageOps(msg: Message) {
@@ -1118,63 +1124,6 @@ object EraRuntimeSpec {
 
   def toJustifications(messages: Message*): Map[ByteString, ByteString] =
     messages.map(m => m.validatorId -> m.messageHash).toMap
-
-  class MockMessageProducer[F[_]: Applicative](
-      validator: String
-  ) extends MessageProducer[F] {
-    override val validatorId = validatorKey(validator)
-
-    override def ballot(
-        eraId: ByteString,
-        roundId: Ticks,
-        target: ByteString,
-        justifications: Map[PublicKeyBS, Set[BlockHash]]
-    ): F[Message.Ballot] =
-      BlockSummary()
-        .withHeader(
-          Block
-            .Header()
-            .withMessageType(Block.MessageType.BALLOT)
-            .withValidatorPublicKey(validatorId)
-            .withParentHashes(List(target))
-            .withJustifications(
-              for {
-                kv <- justifications.toList
-                h  <- kv._2.toList
-              } yield Block.Justification(kv._1, h)
-            )
-            .withRoundId(roundId)
-            .withKeyBlockHash(eraId)
-        )
-        .pure[F]
-        .map(Message.fromBlockSummary(_).get.asInstanceOf[Message.Ballot])
-
-    override def block(
-        eraId: ByteString,
-        roundId: Ticks,
-        mainParent: ByteString,
-        justifications: Map[PublicKeyBS, Set[BlockHash]],
-        isBookingBlock: Boolean
-    ): F[Message.Block] =
-      BlockSummary()
-        .withHeader(
-          Block
-            .Header()
-            .withValidatorPublicKey(validatorId)
-            .withParentHashes(List(mainParent))
-            .withJustifications(
-              for {
-                kv <- justifications.toList
-                h  <- kv._2.toList
-              } yield Block.Justification(kv._1, h)
-            )
-            .withRoundId(roundId)
-            .withKeyBlockHash(eraId)
-        )
-        .pure[F]
-        .map(Message.fromBlockSummary(_).get.asInstanceOf[Message.Block])
-
-  }
 
   def mockSequencer(validator: String) = new LeaderSequencer {
     def apply[F[_]: MonadThrowable](era: Era): F[LeaderFunction] =

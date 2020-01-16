@@ -43,6 +43,13 @@ trait StorageFixture { self: Suite =>
     }
     testProgram.unsafeRunSync(scheduler)
   }
+
+  def withCombinedStorage(f: SQLiteStorage.CombinedStorage[Task] => Task[_]) = {
+    val testProgram = StorageFixture.createMemoryStorage[Task](scheduler).use { storage =>
+      f(storage)
+    }
+    testProgram.unsafeRunSync(scheduler)
+  }
 }
 
 object StorageFixture {
@@ -71,18 +78,28 @@ object StorageFixture {
   ): Resource[
     F,
     (BlockStorage[F], IndexedDagStorage[F], DeployStorage[F], FinalityStorage[F])
-  ] = {
-    val dataSourceR = Resource[F, DataSource] {
-      Concurrent[F].delay {
-        val ds = new InMemoryDataSource()
-        ds -> Concurrent[F].delay(ds.connection.doClose())
-      }
-    }
+  ] =
     for {
-      ds       <- dataSourceR
+      ds       <- inMemoryDataSource
       storages <- Resource.liftF(createStorages[F](ds, connectEC))
     } yield storages
-  }
+
+  def createMemoryStorage[F[_]: Metrics: Concurrent: ContextShift: Fs2Compiler: Time](
+      connectEC: ExecutionContext = Scheduler.Implicits.global
+  ): Resource[
+    F,
+    SQLiteStorage.CombinedStorage[F]
+  ] =
+    for {
+      ds <- inMemoryDataSource
+      storage <- Resource.liftF {
+                  for {
+                    _       <- initTables(ds)
+                    xa      = createTransactor(ds, connectEC)
+                    storage <- SQLiteStorage.create[F](readXa = xa, writeXa = xa)
+                  } yield storage
+                }
+    } yield storage
 
   private def createStorages[F[_]: Metrics: Concurrent: ContextShift: Fs2Compiler: Time](
       ds: DataSource,
@@ -111,6 +128,14 @@ object StorageFixture {
   private def createTransactor[F[_]: Async: ContextShift](ds: DataSource, ec: ExecutionContext) =
     Transactor
       .fromDataSource[F](ds, ec, Blocker.liftExecutionContext(ExecutionContexts.synchronous))
+
+  private def inMemoryDataSource[F[_]: Concurrent] =
+    Resource[F, DataSource] {
+      Concurrent[F].delay {
+        val ds = new InMemoryDataSource()
+        ds -> Concurrent[F].delay(ds.connection.doClose())
+      }
+    }
 
   private class InMemoryDataSource extends SQLiteDataSource {
     setUrl("jdbc:sqlite::memory:")
