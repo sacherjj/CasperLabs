@@ -142,7 +142,7 @@ export class BlockDAG extends React.Component<Props, {}> {
         .scaleExtent([0.1, 4])
         .on('zoom', () => {
           this.xTrans = d3.event.transform.rescaleX(initXTrans);
-          this.yTrans = d3.event.transform.rescaleY(initXTrans);
+          this.yTrans = d3.event.transform.rescaleY(initYTrans);
           updatePositions();
         });
 
@@ -259,7 +259,7 @@ export class BlockDAG extends React.Component<Props, {}> {
     node.on('click', select);
 
     const updatePositions = () => {
-      const x = this.xTrans ?? initYTrans;
+      const x = this.xTrans ?? initXTrans;
       const y = this.yTrans ?? initYTrans;
       // update position of node
       container
