@@ -55,13 +55,13 @@ trait StorageFixture { self: Suite =>
 object StorageFixture {
 
   type Storages[F[_]] =
-    F[(BlockStorage[F], IndexedDagStorage[F], DeployStorage[F], FinalityStorage[F])]
+    (BlockStorage[F], IndexedDagStorage[F], DeployStorage[F], FinalityStorage[F])
 
   // The HashSetCasperTests are not closing the connections properly, so we are better off
   // storing data in temporary files, rather than fill up the memory with unclosed databases.
   def createFileStorages[F[_]: Metrics: Concurrent: ContextShift: Fs2Compiler: Time](
       connectEC: ExecutionContext = Scheduler.Implicits.global
-  ): Storages[F] = {
+  ): F[Storages[F]] = {
     val createDbFile = Concurrent[F].delay(Files.createTempFile("casperlabs-storages-test-", ".db"))
 
     for {
@@ -75,10 +75,7 @@ object StorageFixture {
   // Tests using in-memory storage are faster.
   def createMemoryStorages[F[_]: Metrics: Concurrent: ContextShift: Fs2Compiler: Time](
       connectEC: ExecutionContext = Scheduler.Implicits.global
-  ): Resource[
-    F,
-    (BlockStorage[F], IndexedDagStorage[F], DeployStorage[F], FinalityStorage[F])
-  ] =
+  ): Resource[F, Storages[F]] =
     for {
       ds       <- inMemoryDataSource
       storages <- Resource.liftF(createStorages[F](ds, connectEC))
@@ -86,10 +83,7 @@ object StorageFixture {
 
   def createMemoryStorage[F[_]: Metrics: Concurrent: ContextShift: Fs2Compiler: Time](
       connectEC: ExecutionContext = Scheduler.Implicits.global
-  ): Resource[
-    F,
-    SQLiteStorage.CombinedStorage[F]
-  ] =
+  ): Resource[F, SQLiteStorage.CombinedStorage[F]] =
     for {
       ds <- inMemoryDataSource
       storage <- Resource.liftF {

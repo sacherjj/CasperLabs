@@ -1,7 +1,7 @@
 package io.casperlabs.casper.helper
 
 import cats.effect.concurrent.Ref
-import cats.effect.{Concurrent, ContextShift, Resource, Timer}
+import cats.effect.{Concurrent, ContextShift, Timer}
 import cats.implicits._
 import cats.{~>, Applicative, Defer, Parallel}
 import com.google.protobuf.ByteString
