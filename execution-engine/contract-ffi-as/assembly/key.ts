@@ -116,11 +116,11 @@ export class Key {
         }
     }
 
-    @operator("==")
+    // @operator("==")
     equalsTo(other: Key): bool {
         if (this.variant === KeyVariant.UREF_ID) {
             if (other.variant == KeyVariant.UREF_ID) {
-                return <URef>this.uref == <URef>other.uref;
+                return (<URef>this.uref).equalsTo(<URef>other.uref);
             }
             else {
                 return false;
@@ -138,10 +138,5 @@ export class Key {
             unreachable();
             return false;
         }
-    }
-
-    @operator("!=")
-    notEqualsTo(other: Key): bool {
-        return !this.equalsTo(other);
     }
 }

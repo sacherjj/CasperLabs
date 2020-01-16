@@ -56,7 +56,7 @@ export class URef {
         return result;
     }
 
-    @operator("==")
+    // @operator("==")
     equalsTo(other: URef): bool {
         if (this.bytes.length != other.bytes.length) {
             return false;
@@ -72,9 +72,5 @@ export class URef {
         return true;
     }
 
-    @operator("!=")
-    notEqualsTo(other: URef): bool {
-        return !this.equalsTo(other);
-    }
     //TODO: read():CLValue{}
 }
