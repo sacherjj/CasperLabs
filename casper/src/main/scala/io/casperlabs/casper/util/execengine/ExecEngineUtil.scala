@@ -54,51 +54,82 @@ object ExecEngineUtil {
       protocolVersion: state.ProtocolVersion
   ): F[DeploysCheckpoint] = {
 
-    def go(idx: Int, prestate: ByteString, deploy: Deploy): F[DeploysCheckpoint] =
-      for {
-        deployResult <- processDeploys[F](prestate, blocktime, Seq(deploy), protocolVersion)
-                         .flatMap { dpr =>
-                           if (dpr.size != 1)
-                             MonadThrowable[F].raiseError[DeployResult](
-                               SmartContractEngineError(
-                                 "ExecutionEngine returned more than 1 result for single deploy."
-                               )
-                             )
-                           else dpr.head.pure[F]
-                         }
-        (invalidDeploys, deployEffects) = ProcessedDeployResult.split(
-          List(ProcessedDeployResult(deploy, deployResult))
-        )
-        _ <- handleInvalidDeploys[F](invalidDeploys)
-        (deploysForBlock, transforms) = ExecEngineUtil
-          .unzipEffectsAndDeploys(deployEffects, stage = idx)
-          .unzip
-        commitResult <- ExecutionEngineService[F]
-                         .commit(prestate, transforms.flatten, protocolVersion)
-                         .rethrow
-      } yield DeploysCheckpoint(
-        prestate,
-        commitResult.postStateHash,
-        commitResult.bondedValidators,
-        deploysForBlock,
-        protocolVersion
-      )
+    def singleDeploy(
+        idx: Int,
+        prestate: ByteString,
+        deploy: Deploy
+    ): F[Either[PreconditionFailure, DeploysCheckpoint]] =
+      processDeploys[F](prestate, blocktime, Seq(deploy), protocolVersion)
+        .flatMap { dpr =>
+          if (dpr.size != 1)
+            MonadThrowable[F].raiseError[ProcessedDeployResult](
+              SmartContractEngineError(
+                "ExecutionEngine returned more than 1 result for single deploy."
+              )
+            )
+          else ProcessedDeployResult(deploy, dpr.head).pure[F]
+        }
+        .flatMap {
+          case de: DeployEffects => {
+            val (deploysForBlock, transforms) = ExecEngineUtil
+              .unzipEffectsAndDeploys(Seq(de), stage = idx)
+              .unzip
+            ExecutionEngineService[F]
+              .commit(prestate, transforms.flatten, protocolVersion)
+              .rethrow
+              .map { commitResult =>
+                DeploysCheckpoint(
+                  prestate,
+                  commitResult.postStateHash,
+                  commitResult.bondedValidators,
+                  deploysForBlock,
+                  protocolVersion
+                ).asRight[PreconditionFailure]
+              }
+          }
+          case pf: PreconditionFailure =>
+            Either.left[PreconditionFailure, DeploysCheckpoint](pf).pure[F]
+        }
+
+    final case class State(
+        preconditionFailures: List[PreconditionFailure],
+        postStateHash: ByteString,
+        blockEffects: Seq[Block.ProcessedDeploy],
+        bondedValidators: Seq[io.casperlabs.casper.consensus.Bond]
+    )
+
+    object State {
+      def init: State = State(List.empty, prestateHash, Seq.empty, Seq.empty)
+    }
+
+    // We have to move idx one to the right (start with `1`) as `0` is reserved for commuting deploys.
+    val deploysWithStage = deploys.zipWithIndex.map { case (deploy, idx) => deploy -> (idx + 1) }
 
     for {
-      deploysCheckpoint <- deploys.zipWithIndex.reduceLeftM {
-                            case (deploy, idx) =>
-                              go(idx, prestateHash, deploy)
-                          } {
-                            case (prevRes, (deploy, idx)) =>
-                              go(idx, prevRes.postStateHash, deploy)
-                                .map(newRes => {
-                                  newRes.copy(
-                                    preStateHash = prevRes.preStateHash,
-                                    deploysForBlock = prevRes.deploysForBlock ++ newRes.deploysForBlock
-                                  )
-                                })
-                          }
-    } yield deploysCheckpoint
+      state <- deploysWithStage.foldLeftM(State.init) {
+                case (state, (deploy, idx)) =>
+                  singleDeploy(idx, state.postStateHash, deploy)
+                    .map {
+                      case Left(preconditionFailure) =>
+                        state.copy(
+                          preconditionFailures = preconditionFailure :: state.preconditionFailures
+                        )
+                      case Right(deploysCheckpoint) =>
+                        state.copy(
+                          postStateHash = deploysCheckpoint.postStateHash,
+                          blockEffects = state.blockEffects ++ deploysCheckpoint.deploysForBlock,
+                          bondedValidators = deploysCheckpoint.bondedValidators
+                        )
+                    }
+              }
+      _ <- handleInvalidDeploys[F](state.preconditionFailures)
+    } yield DeploysCheckpoint(
+      prestateHash,
+      state.postStateHash,
+      state.bondedValidators,
+      state.blockEffects,
+      protocolVersion
+    )
   }
 
   def computeDeploysCheckpoint[F[_]: MonadThrowable: DeployStorage: Log: ExecutionEngineService: DeploySelection: Metrics](
@@ -128,6 +159,7 @@ object ExecEngineUtil {
       result <- NonEmptyList
                  .fromList(conflicting)
                  .fold(
+                   // All deploys in the block commute.
                    DeploysCheckpoint(
                      preStateHash,
                      parResult.postStateHash,
@@ -135,7 +167,7 @@ object ExecEngineUtil {
                      deploysForBlock,
                      protocolVersion
                    ).pure[F]
-                 )(
+                 )( // Execute conflicting deploys in a sequence.
                    nelDeploys =>
                      commitDeploysSequentially[F](
                        parResult.postStateHash,
@@ -146,7 +178,7 @@ object ExecEngineUtil {
                        DeploysCheckpoint(
                          preStateHash,
                          sequentialResult.postStateHash,
-                         parResult.bondedValidators,
+                         sequentialResult.bondedValidators,
                          deploysForBlock ++ sequentialResult.deploysForBlock,
                          protocolVersion
                        )
