@@ -175,14 +175,15 @@ object ExecEngineUtil {
                        blocktime,
                        protocolVersion
                      ).map { sequentialResult =>
-                       DeploysCheckpoint(
-                         preStateHash,
-                         sequentialResult.postStateHash,
-                         sequentialResult.bondedValidators,
-                         deploysForBlock ++ sequentialResult.deploysForBlock,
-                         protocolVersion
-                       )
-                     }
+                         DeploysCheckpoint(
+                           preStateHash,
+                           sequentialResult.postStateHash,
+                           sequentialResult.bondedValidators,
+                           deploysForBlock ++ sequentialResult.deploysForBlock,
+                           protocolVersion
+                         )
+                       }
+                       .timer("commitDeploysSequentially")
                  )
     } yield result
   }
