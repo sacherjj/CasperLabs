@@ -22,16 +22,11 @@ class CasperLabsClientAIO:
         self.port = port
 
     async def show_blocks(self, depth=1, max_rank=0, full_view=True):
+        view = full_view and info.BlockInfo.View.FULL or info.BlockInfo.View.BASIC
         channel = Channel(self.host, self.port)
         service = casper_grpc.CasperServiceStub(channel)
         result = await service.StreamBlockInfos(
-            casper.StreamBlockInfosRequest(
-                depth=depth,
-                max_rank=max_rank,
-                view=(
-                    full_view and info.BlockInfo.View.FULL or info.BlockInfo.View.BASIC
-                ),
-            )
+            casper.StreamBlockInfosRequest(depth=depth, max_rank=max_rank, view=view)
         )
         channel.close()
         return result

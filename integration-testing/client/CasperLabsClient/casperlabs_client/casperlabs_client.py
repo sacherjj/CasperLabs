@@ -51,7 +51,12 @@ from . import info_pb2 as info
 from . import vdag
 from . import abi
 from . import crypto
-from casperlabs_client.utils import bundled_contract, extract_common_name, key_variant
+from casperlabs_client.utils import (
+    bundled_contract,
+    extract_common_name,
+    key_variant,
+    make_deploy,
+)
 
 
 DEFAULT_HOST = "localhost"
@@ -98,31 +103,6 @@ def api(function):
             raise InternalError(details=str(e)) from e
 
     return wrapper
-
-
-def _read_binary(file_name: str):
-    with open(file_name, "rb") as f:
-        return f.read()
-
-
-def _encode_contract(contract_options, contract_args):
-    """
-    """
-    file_name, hash, name, uref = contract_options
-    C = consensus.Deploy.Code
-    if file_name:
-        return C(wasm=_read_binary(file_name), args=contract_args)
-    if hash:
-        return C(hash=hash, args=contract_args)
-    if name:
-        return C(name=name, args=contract_args)
-    if uref:
-        return C(uref=uref, args=contract_args)
-    raise Exception("One of wasm, hash, name or uref is required")
-
-
-def _serialize(o) -> bytes:
-    return o.SerializeToString()
 
 
 NUMBER_OF_RETRIES = 5
@@ -307,68 +287,28 @@ class CasperLabsClient:
         """
         Create a protobuf deploy object. See deploy for description of parameters.
         """
-        # Convert from hex to binary.
-        if from_addr and len(from_addr) == 64:
-            from_addr = bytes.fromhex(from_addr)
-
-        if from_addr and len(from_addr) != 32:
-            raise Exception(f"from_addr must be 32 bytes")
-
-        if payment_amount:
-            payment_args = abi.ABI.args(
-                [abi.ABI.big_int("amount", int(payment_amount))]
-            )
-
-        # Unless one of payment* options supplied use bundled standard-payment
-        if not any((payment, payment_name, payment_hash, payment_uref)):
-            payment = bundled_contract("standard_payment.wasm")
-
-        session_options = (session, session_hash, session_name, session_uref)
-        payment_options = (payment, payment_hash, payment_name, payment_uref)
-
-        # Compatibility mode, should be removed when payment is obligatory
-        if len(list(filter(None, payment_options))) == 0:
-            logging.info("No payment contract provided, using session as payment")
-            payment_options = session_options
-
-        if len(list(filter(None, session_options))) != 1:
-            raise TypeError(
-                "deploy: only one of session, session_hash, session_name, session_uref must be provided"
-            )
-
-        if len(list(filter(None, payment_options))) != 1:
-            raise TypeError(
-                "deploy: only one of payment, payment_hash, payment_name, payment_uref must be provided"
-            )
-
-        # session_args must go to payment as well for now cause otherwise we'll get GASLIMIT error,
-        # if payment is same as session:
-        # https://github.com/CasperLabs/CasperLabs/blob/dev/casper/src/main/scala/io/casperlabs/casper/util/ProtoUtil.scala#L463
-        body = consensus.Deploy.Body(
-            session=_encode_contract(session_options, session_args),
-            payment=_encode_contract(payment_options, payment_args),
-        )
-
-        header = consensus.Deploy.Header(
-            account_public_key=from_addr
-            or (public_key and crypto.read_pem_key(public_key)),
-            timestamp=int(1000 * time.time()),
+        return make_deploy(
+            from_addr=from_addr,
             gas_price=gas_price,
-            body_hash=crypto.blake2b_hash(_serialize(body)),
+            payment=payment,
+            session=session,
+            public_key=public_key,
+            session_args=session_args,
+            payment_args=payment_args,
+            payment_amount=payment_amount,
+            payment_hash=payment_hash,
+            payment_name=payment_name,
+            payment_uref=payment_uref,
+            session_hash=session_hash,
+            session_name=session_name,
+            session_uref=session_uref,
             ttl_millis=ttl_millis,
-            dependencies=dependencies
-            and [bytes.fromhex(d) for d in dependencies]
-            or [],
-            chain_name=chain_name or "",
+            dependencies=dependencies,
+            chain_name=chain_name,
         )
-
-        deploy_hash = crypto.blake2b_hash(_serialize(header))
-
-        return consensus.Deploy(deploy_hash=deploy_hash, header=header, body=body)
 
     @api
     def sign_deploy(self, deploy, public_key, private_key_file):
-        # import pdb; pdb.set_trace()
         # See if this is hex encoded
         try:
             public_key = bytes.fromhex(public_key)
