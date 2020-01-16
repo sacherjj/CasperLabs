@@ -1,9 +1,7 @@
 import * as React from 'react';
 import { BlockInfo } from 'casperlabs-grpc/io/casperlabs/casper/consensus/info_pb';
-import { RefreshButton, Loading, ListInline } from './Utils';
+import { ListInline, Loading, RefreshButton, shortHash } from './Utils';
 import * as d3 from 'd3';
-import $ from 'jquery';
-import { shortHash } from './Utils';
 import { encodeBase16 } from 'casperlabs-sdk';
 import { ToggleButton, ToggleStore } from './ToggleButton';
 
@@ -112,23 +110,41 @@ export class BlockDAG extends React.Component<Props, {}> {
       this.initialized = false;
       return;
     }
-
     const svg = d3.select(this.svg);
     const hint = d3.select(this.hint);
     const color = consistentColor();
+    // See what the actual width and height is.
+    const width = $(this.svg!).width()!;
+    const height = $(this.svg!).height()!;
+
+    // see https://www.d3-graph-gallery.com/graph/interactivity_zoom.html#axisZoom
+    // using axis transform function to simplify transform
+    const xTrans: d3.ScaleLinear<number, number> = d3
+      .scaleLinear()
+      .domain([0, width])
+      .range([0, width]);
+    const yTrans: d3.ScaleLinear<number, number> = d3
+      .scaleLinear()
+      .domain([0, height])
+      .range([0, height]);
 
     // Append items that will not change.
     if (!this.initialized) {
       // Add the zoomable container.
-      const container = svg.append('g');
+      svg.append('g').attr('class', 'container');
 
       const zoom: any = d3
         .zoom()
         .scaleExtent([0.1, 4])
-        .on('zoom', () => container.attr('transform', d3.event.transform));
+        .on('zoom', () => {
+          const newXTrana = d3.event.transform.rescaleX(xTrans);
+          const newYTrans = d3.event.transform.rescaleY(yTrans);
+          updatePositions(newXTrana, newYTrans);
+        });
+
       svg.call(zoom);
 
-      // Draw an arrow at the end of the lines to point at parents.
+      // add the defs of arrow which can be used to draw an arrow at the end of the lines to point at parents later
       svg
         .append('svg:defs')
         .append('svg:marker')
@@ -145,14 +161,11 @@ export class BlockDAG extends React.Component<Props, {}> {
       this.initialized = true;
     }
 
-    const container = svg.select('g');
+    // The container are the root layer to draw all node/label/line components
+    const container = svg.select('.container');
 
     // Clear previous contents.
     container.selectAll('g').remove();
-
-    // See what the actual width and height is.
-    const width = $(this.svg!).width()!;
-    const height = $(this.svg!).height()!;
 
     let graph: Graph = toGraph(this.props.blocks);
     graph = calculateCoordinates(graph, width, height);
@@ -168,7 +181,7 @@ export class BlockDAG extends React.Component<Props, {}> {
       .append('line')
       .attr('stroke', LineColor)
       .attr('stroke-width', (d: d3Link) => (d.isMainParent ? 3 : 1))
-      .attr('marker-end', 'url(#arrow)')
+      .attr('marker-end', 'url(#arrow)') // use the Arrow created above
       .attr('stroke-dasharray', (d: d3Link) =>
         d.isJustification ? '3, 3' : null
       )
@@ -184,6 +197,7 @@ export class BlockDAG extends React.Component<Props, {}> {
 
     node
       .append('circle')
+      .attr('class', 'node')
       .attr('r', CircleRadius)
       .attr('stroke', (d: d3Node) =>
         selectedId && d.id === selectedId ? '#E00' : '#fff'
@@ -193,11 +207,11 @@ export class BlockDAG extends React.Component<Props, {}> {
       )
       .attr('fill', (d: d3Node) => color(d.validator));
 
+    // Append a node-label to each node
     const label = node
       .append('text')
+      .attr('class', 'node-label')
       .text((d: d3Node) => d.title)
-      .attr('x', 9)
-      .attr('y', 12)
       .style('font-family', 'Arial')
       .style('font-size', 12)
       .style('pointer-events', 'none') // to prevent mouseover/drag capture
@@ -240,26 +254,45 @@ export class BlockDAG extends React.Component<Props, {}> {
     node.on('mouseover', focus).on('mouseout', unfocus);
     node.on('click', select);
 
-    const updatePositions = () => {
-      link
-        .attr('x1', (d: any) => d.source.x)
-        .attr('y1', (d: any) => d.source.y)
-        .attr(
-          'x2',
-          (d: any) =>
-            d.source.x +
-            (d.target.x - d.source.x) * shorten(d, CircleRadius + 2)
-        )
-        .attr(
-          'y2',
-          (d: any) =>
-            d.source.y +
-            (d.target.y - d.source.y) * shorten(d, CircleRadius + 2)
-        );
-      node.attr('transform', (d: any) => 'translate(' + d.x + ',' + d.y + ')');
+    const updatePositions = (
+      x: d3.ScaleLinear<number, number>,
+      y: d3.ScaleLinear<number, number>
+    ) => {
+      // update position of node
+      container
+        .selectAll('circle.node')
+        .attr('cx', (d: any) => x(d.x))
+        .attr('cy', (d: any) => y(d.y));
+
+      // update position of label
+      container
+        .selectAll('text.node-label')
+        .attr('x', (d: any) => x(d.x) + 9)
+        .attr('y', (d: any) => y(d.y) + 12)
+        .style('transform-origin', (d: any) => `${x(d.x)}px ${y(d.y)}px`);
+
+      // update positions of line
+      container
+        .selectAll('line')
+        .attr('x1', (d: any) => x(d.source.x))
+        .attr('y1', (d: any) => y(d.source.y))
+        .attr('x2', (d: any) => {
+          // We want the radius of Node keep the same after scaling, so we need use invert function to calculate that before scaling.
+          const newRInX= x.invert(CircleRadius + 2) - x.invert(0);
+          return x(
+            d.source.x + (d.target.x - d.source.x) * shorten(d, newRInX)
+          );
+        })
+        .attr('y2', (d: any) => {
+          // We want the radius of Node keep the same after scaling, so we need use invert function to calculate that before scaling.
+          const newRInY = y.invert(CircleRadius + 2) - y.invert(0);
+          return y(
+            d.source.y + (d.target.y - d.source.y) * shorten(d, newRInY)
+          );
+        });
     };
 
-    updatePositions();
+    updatePositions(xTrans, yTrans);
   }
 }
 
@@ -405,6 +438,7 @@ const calculateCoordinates = (graph: Graph, width: number, height: number) => {
     // (validators.indexOf(node.validator) + 0.5) * verticalStep is the y of the baseline of swimlane of node.validator
     node.y = (validators.indexOf(node.validator) + 0.5 + step) * verticalStep;
     node.x = (node.rank - minRank + 1) * horizontalStep;
+    console.log(node.x, node.y);
   });
 
   return graph;
