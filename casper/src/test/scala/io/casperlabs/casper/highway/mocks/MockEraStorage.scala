@@ -20,6 +20,7 @@ class MockEraStorage[F[_]: Applicative](
     erasRef.get.map(_.get(keyBlockHash))
 
   def getChildEras(keyBlockHash: BlockHash): F[Set[Era]] = ???
+  def getChildlessEras: F[Set[Era]]                      = ???
 }
 
 object MockEraStorage {

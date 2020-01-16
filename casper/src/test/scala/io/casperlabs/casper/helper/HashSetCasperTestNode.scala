@@ -205,7 +205,7 @@ trait HashSetCasperTestNodeFactory {
 
   protected def initStorage[F[_]: Concurrent: Log: Metrics: ContextShift: Time]()
       : F[(BlockStorage[F], IndexedDagStorage[F], DeployStorage[F], FinalityStorage[F])] =
-    StorageFixture.createStorages[F]()
+    StorageFixture.createFileStorages[F]()
 }
 
 object HashSetCasperTestNode {

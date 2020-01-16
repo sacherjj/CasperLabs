@@ -41,6 +41,15 @@ class SQLiteEraStorage[F[_]: Sync](
       .query[Era]
       .to[Set]
       .transact(readXa)
+
+  override def getChildlessEras: F[Set[Era]] =
+    sql"""SELECT data
+          FROM   eras e
+          WHERE  NOT EXISTS (
+            SELECT 1 FROM eras c
+            WHERE  c.parent_hash = e.hash
+          )
+      """.query[Era].to[Set].transact(readXa)
 }
 
 object SQLiteEraStorage {

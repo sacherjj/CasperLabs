@@ -61,7 +61,7 @@ object LeaderSequencer extends LeaderSequencer {
             val stake = BigInt(bond.getStake.value)
             // This should be trivial; the auction should not allow 0 bids,
             // but if it did, there would be no way to pick between them.
-            require(stake > 0, "Bonds must be positive.")
+            require(stake > 0, s"Bonds must be positive: $stake")
             val from = total
             val to   = total + stake
             ((key, from, to) :: ranges) -> to

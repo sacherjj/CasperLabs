@@ -35,4 +35,6 @@ trait EraStorage[F[_]] {
   /** Retrieve the child eras from the era tree. */
   def getChildEras(keyBlockHash: BlockHash): F[Set[Era]]
 
+  /** Retrieve childless eras, which are the leaves of the era tree. */
+  def getChildlessEras: F[Set[Era]]
 }

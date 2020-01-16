@@ -1467,8 +1467,8 @@ object HashSetCasperTest {
       })
 
     StorageFixture
-      .createStorages[Task]()
-      .flatMap {
+      .createMemoryStorages[Task]()
+      .use {
         case (
             implicit0(blockStorage: BlockStorage[Task]),
             _,
