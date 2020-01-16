@@ -460,7 +460,7 @@ class CasperLabsClient:
         :chain_name:          Name of the chain to optionally restrict the
                               deploy from being accidentally included
                               anywhere else.
-        :return:              Tuple: (deserialized DeployServiceResponse object, deploy_hash)
+        :return:              deploy hash in base16 format
         """
 
         deploy = self.make_deploy(
@@ -489,9 +489,8 @@ class CasperLabsClient:
             or crypto.private_to_public_key(private_key)
         )
         deploy = self.sign_deploy(deploy, pk, private_key)
-
-        # TODO: Return only deploy_hash
-        return self.send_deploy(deploy), deploy.deploy_hash
+        self.send_deploy(deploy)
+        return deploy.deploy_hash.hex()
 
     @api
     def transfer(self, target_account_hex, amount, **deploy_args):
@@ -503,14 +502,11 @@ class CasperLabsClient:
                 abi.ABI.long_value("amount", amount),
             ]
         )
-        _, deploy_hash_bytes = self.deploy(**deploy_args)
-        return deploy_hash_bytes.hex()
+        return self.deploy(**deploy_args)
 
     @api
     def send_deploy(self, deploy):
-        # TODO: Deploy returns Empty, error handling via exceptions, apparently,
-        # so no point in returning it.
-        return self.casperService.Deploy(casper.DeployRequest(deploy=deploy))
+        self.casperService.Deploy(casper.DeployRequest(deploy=deploy))
 
     @api
     def showBlocks(self, depth: int = 1, max_rank=0, full_view=True):

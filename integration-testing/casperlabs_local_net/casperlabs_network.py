@@ -254,6 +254,7 @@ class CasperLabsNetwork:
             wait_for_approved_block_received_handler_state(
                 node, node.config.command_timeout
             )
+            wait_for_genesis_block(self.docker_nodes[node_number])
 
     def wait_for_peers(self) -> None:
         if self.node_count < 2:

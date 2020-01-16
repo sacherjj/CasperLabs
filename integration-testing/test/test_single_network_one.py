@@ -470,7 +470,7 @@ def test_deploy_with_args(one_node_network, genesis_public_signing_key):
         (resources_path() / Contract.ARGS_U512, ABI.big_int),
     ]:
         for number in [1, 12, 256, 1024]:
-            response, deploy_hash = client.deploy(
+            deploy_hash = client.deploy(
                 session=wasm,
                 session_args=ABI.args([encode("number", number)]),
                 payment=resources_path() / Contract.STANDARD_PAYMENT,
@@ -479,7 +479,7 @@ def test_deploy_with_args(one_node_network, genesis_public_signing_key):
                 private_key=GENESIS_ACCOUNT.private_key_path,
             )
             logging.info(
-                f"DEPLOY RESPONSE: {response} deploy_hash: {deploy_hash.hex()}"
+                f"DEPLOY RESPONSE: deploy_hash: {deploy_hash}"
             )
 
             response = client.propose()
@@ -496,7 +496,7 @@ def test_deploy_with_args(one_node_network, genesis_public_signing_key):
     number = 1000
     total_sum = sum([1, 2, 3, 4, 5, 6, 7, 8]) * 4 + number
 
-    response, deploy_hash = client.deploy(
+    deploy_hash = client.deploy(
         session=wasm,
         session_args=ABI.args(
             [ABI.account("account", account_hex), ABI.u32("number", number)]
@@ -506,7 +506,7 @@ def test_deploy_with_args(one_node_network, genesis_public_signing_key):
         public_key=GENESIS_ACCOUNT.public_key_path,
         private_key=GENESIS_ACCOUNT.private_key_path,
     )
-    logging.info(f"DEPLOY RESPONSE: {response} deploy_hash: {deploy_hash.hex()}")
+    logging.info(f"DEPLOY RESPONSE: deploy_hash: {deploy_hash}")
     response = client.propose()
 
     block_hash = response.block_hash.hex()

@@ -228,8 +228,8 @@ def send_deploy_command(casperlabs_client, args):
 @guarded_command
 def deploy_command(casperlabs_client, args):
     kwargs = _deploy_kwargs(args)
-    _, deploy_hash = casperlabs_client.deploy(**kwargs)
-    print(f"Success! Deploy {deploy_hash.hex()} deployed")
+    deploy_hash = casperlabs_client.deploy(**kwargs)
+    print(f"Success! Deploy {deploy_hash} deployed")
 
 
 @guarded_command
