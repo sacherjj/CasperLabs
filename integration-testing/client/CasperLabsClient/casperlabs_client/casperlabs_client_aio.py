@@ -11,7 +11,9 @@ from casperlabs_client.utils import (
     make_deploy,
     sign_deploy,
     get_public_key,
+    bundled_contract,
 )
+from . import abi
 
 DEFAULT_HOST = "localhost"
 DEFAULT_PORT = 40401
@@ -128,6 +130,43 @@ class CasperLabsClientAIO:
         )
         channel.close()
         return response
+
+    async def transfer(self, target_account_hex, amount, **deploy_args):
+        target_account_bytes = bytes.fromhex(target_account_hex)
+        deploy_args["session"] = bundled_contract("transfer_to_account.wasm")
+        deploy_args["session_args"] = abi.ABI.args(
+            [
+                abi.ABI.account("account", target_account_bytes),
+                abi.ABI.long_value("amount", amount),
+            ]
+        )
+        return await self.deploy(**deploy_args)
+
+    async def balance(self, address: str, block_hash: str):
+        value = await self.query_state(block_hash, address, "", "address")
+        account = None
+        try:
+            account = value.account
+        except AttributeError:
+            return Exception(f"balance: Expected Account type value under {address}.")
+
+        urefs = [u for u in account.named_keys if u.name == "mint"]
+        if len(urefs) == 0:
+            raise Exception(
+                "balance: Account's named_keys map did not contain Mint contract address."
+            )
+
+        mint_public = urefs[0]
+
+        mint_public_hex = mint_public.key.uref.uref.hex()
+        purse_addr_hex = account.purse_id.uref.hex()
+        local_key_value = f"{mint_public_hex}:{purse_addr_hex}"
+
+        balance_uref = await self.query_state(block_hash, local_key_value, "", "local")
+        balance = await self.query_state(
+            block_hash, balance_uref.key.uref.uref.hex(), "", "uref"
+        )
+        return int(balance.big_int.value)
 
     async def show_block(self, block_hash_base16: str, full_view=True):
         view = full_view and info.BlockInfo.View.FULL or info.BlockInfo.View.BASIC

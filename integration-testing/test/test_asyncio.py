@@ -2,7 +2,9 @@ import pytest
 
 from casperlabs_local_net.common import Contract
 from casperlabs_client.casperlabs_client_aio import CasperLabsClientAIO
-from casperlabs_local_net.casperlabs_accounts import GENESIS_ACCOUNT
+from casperlabs_local_net.casperlabs_accounts import Account, GENESIS_ACCOUNT
+
+PAYMENT_AMOUNT = 10 ** 7
 
 
 @pytest.fixture
@@ -22,13 +24,13 @@ async def test_show_blocks(client):
 
 
 @pytest.mark.asyncio
-async def test_deploy_show_block(node, client):
+async def test_deploy_show_block_and_show_deploys(node, client):
     deploy_hash = await client.deploy(
         session=node.resources_folder / Contract.COUNTER_DEFINE,
         from_addr=GENESIS_ACCOUNT.public_key_hex,
         public_key=GENESIS_ACCOUNT.public_key_path,
         private_key=GENESIS_ACCOUNT.private_key_path,
-        payment_amount=10 ** 7,
+        payment_amount=PAYMENT_AMOUNT,
     )
     deploy_info = await client.wait_for_deploy_processed(deploy_hash)
     processing_result = deploy_info.processing_results[0]
@@ -41,3 +43,26 @@ async def test_deploy_show_block(node, client):
 
     processing_results = await client.show_deploys(block_hash)
     assert deploy_hash in [p.deploy.deploy_hash.hex() for p in processing_results]
+
+
+@pytest.mark.asyncio
+async def test_transfer_and_balance(node, client):
+    test_account = Account(1)
+
+    block_infos = await client.show_blocks()
+    block_hash = block_infos[0].summary.block_hash.hex()
+    await client.balance(GENESIS_ACCOUNT.public_key_hex, block_hash)
+
+    transfer_amount = 10 ** 7
+    deploy_hash = await client.transfer(
+        test_account.public_key_hex,
+        transfer_amount,
+        from_addr=GENESIS_ACCOUNT.public_key_hex,
+        public_key=GENESIS_ACCOUNT.public_key_path,
+        private_key=GENESIS_ACCOUNT.private_key_path,
+        payment_amount=PAYMENT_AMOUNT,
+    )
+    deploy_info = await client.wait_for_deploy_processed(deploy_hash)
+    block_hash = deploy_info.processing_results[0].block_info.summary.block_hash.hex()
+    test_account_balance = await client.balance(test_account.public_key_hex, block_hash)
+    assert test_account_balance == transfer_amount
