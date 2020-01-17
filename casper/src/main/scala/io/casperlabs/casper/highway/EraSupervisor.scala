@@ -160,13 +160,15 @@ class EraSupervisor[F[_]: Concurrent: EraStorage: Relaying](
     }
 
   /** Update descendant eras' latest messages. */
-  private def propagateLatestMessageToDescendantEras(message: Message): F[Unit] =
+  private def propagateLatestMessageToDescendantEras(message: Message): F[Unit] = {
+    def children(keyBlockHash: BlockHash) =
+      eraTreeRef.get.map(_(keyBlockHash).toList)
     for {
-      childEras <- eraTreeRef.get.map(_(message.keyBlockHash))
-      _ <- childEras.toList.traverse { childKeyBlockHash =>
-            forkChoiceManager.updateLatestMessage(childKeyBlockHash, message)
-          }
+      childEras      <- children(message.keyBlockHash)
+      descendantEras <- DagOperations.bfTraverseF(childEras)(children).toList
+      _              <- descendantEras.traverse(forkChoiceManager.updateLatestMessage(_, message))
     } yield ()
+  }
 }
 
 object EraSupervisor {
