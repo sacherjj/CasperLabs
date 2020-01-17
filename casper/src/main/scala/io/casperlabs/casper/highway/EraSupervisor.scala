@@ -57,8 +57,8 @@ class EraSupervisor[F[_]: Concurrent: Timer: EraStorage: Relaying](
       _ <- propagateLatestMessageToDescendantEras(message)
 
       // See what reactions the protocol dictates.
-      events <- entry.runtime.handleMessage(message).written
-      _      <- handleEvents(events)
+      (events, ()) <- entry.runtime.handleMessage(message).run
+      _            <- handleEvents(events)
     } yield ()
 
   private def ensureNotShutdown: F[Unit] =
@@ -106,27 +106,26 @@ class EraSupervisor[F[_]: Concurrent: Timer: EraStorage: Relaying](
   }
 
   private def schedule(runtime: EraRuntime[F], agenda: Agenda): F[Unit] =
-    agenda.traverse(schedule(runtime, _)).void
+    agenda.traverse { delayed =>
+      val key = (runtime.era.keyBlockHash, delayed)
+      for {
+        fiber <- scheduleAt(delayed.tick) {
+                  for {
+                    _                <- scheduleRef.update(_ - key)
+                    (events, agenda) <- runtime.handleAgenda(delayed.action).run
+                    _                <- handleEvents(events)
+                    _                <- schedule(runtime, agenda)
+                  } yield ()
+                }
+        _ <- scheduleRef.update { s =>
+              // Sanity check that we're not leaking fibers.
+              require(!s.contains(key), "Shouldn't schedule the same thing twice!")
+              s.updated(key, fiber)
+            }
+      } yield ()
+    } void
 
-  private def schedule(runtime: EraRuntime[F], delayed: Agenda.DelayedAction): F[Unit] = {
-    val key = (runtime.era.keyBlockHash, delayed)
-    for {
-      fiber <- scheduleAt(delayed.tick) {
-                for {
-                  _                <- scheduleRef.update(_ - key)
-                  (events, agenda) <- runtime.handleAgenda(delayed.action).run
-                  _                <- handleEvents(events)
-                  _                <- schedule(runtime, agenda)
-                } yield ()
-              }
-      _ <- scheduleRef.update { s =>
-            // Sanity check that we're not leaking fibers.
-            require(!s.contains(key), "Shouldn't schedule the same thing twice!")
-            s.updated(key, fiber)
-          }
-    } yield ()
-  }
-
+  /** Execute an effect later, asynchronously. */
   private def scheduleAt[A](ticks: Ticks)(effect: F[A]): F[Fiber[F, A]] =
     for {
       now   <- Timer[F].clock.realTime(conf.tickUnit)
@@ -136,28 +135,27 @@ class EraSupervisor[F[_]: Concurrent: Timer: EraStorage: Relaying](
               }
     } yield fiber
 
-  private def handleEvents(events: Vector[HighwayEvent]): F[Unit] =
-    events.traverse(handleEvent(_)).void
-
-  private def handleEvent(event: HighwayEvent): F[Unit] = event match {
-    case HighwayEvent.CreatedEra(era) =>
+  /** Handle the domain events coming out of the execution of the protocol. */
+  private def handleEvents(events: Vector[HighwayEvent]): F[Unit] = {
+    def handleCreatedMessage(message: Message) =
       for {
-        // Schedule the child era.
-        child <- load(era.keyBlockHash)
-        // Remember the offspring.
-        _ <- addToParent(child)
+        _ <- Relaying[F].relay(List(message.messageHash))
+        _ <- propagateLatestMessageToDescendantEras(message)
       } yield ()
-    case HighwayEvent.CreatedLambdaMessage(m)  => handleCreatedMessage(m)
-    case HighwayEvent.CreatedLambdaResponse(m) => handleCreatedMessage(m)
-    case HighwayEvent.CreatedOmegaMessage(m)   => handleCreatedMessage(m)
-  }
 
-  /** Handle a message created by this node. */
-  private def handleCreatedMessage(message: Message): F[Unit] =
-    for {
-      _ <- Relaying[F].relay(List(message.messageHash))
-      _ <- propagateLatestMessageToDescendantEras(message)
-    } yield ()
+    events.traverse {
+      case HighwayEvent.CreatedEra(era) =>
+        for {
+          // Schedule the child era.
+          child <- load(era.keyBlockHash)
+          // Remember the offspring.
+          _ <- addToParent(child)
+        } yield ()
+      case HighwayEvent.CreatedLambdaMessage(m)  => handleCreatedMessage(m)
+      case HighwayEvent.CreatedLambdaResponse(m) => handleCreatedMessage(m)
+      case HighwayEvent.CreatedOmegaMessage(m)   => handleCreatedMessage(m)
+    } void
+  }
 
   /** Update descendant eras' latest messages. */
   private def propagateLatestMessageToDescendantEras(message: Message): F[Unit] =
