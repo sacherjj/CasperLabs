@@ -43,7 +43,7 @@ object ExecEngineUtil {
   import io.casperlabs.smartcontracts.GrpcExecutionEngineService.EngineMetricsSource
 
   private def singleDeploy[F[_]: MonadThrowable: ExecutionEngineService](
-      idx: Int,
+      stage: Int,
       prestate: ByteString,
       blocktime: Long,
       protocolVersion: state.ProtocolVersion,
@@ -62,7 +62,7 @@ object ExecEngineUtil {
       .flatMap {
         case de: DeployEffects => {
           val (deploysForBlock, transforms) = ExecEngineUtil
-            .unzipEffectsAndDeploys(Seq(de), stage = idx)
+            .unzipEffectsAndDeploys(Seq(de), stage)
             .unzip
           ExecutionEngineService[F]
             .commit(prestate, transforms.flatten, protocolVersion)
@@ -105,12 +105,14 @@ object ExecEngineUtil {
     }
 
     // We have to move idx one to the right (start with `1`) as `0` is reserved for commuting deploys.
-    val deploysWithStage = deploys.zipWithIndex.map { case (deploy, idx) => deploy -> (idx + 1) }
+    val deploysWithStage = deploys.sortBy(_.getHeader.timestamp).zipWithIndex.map {
+      case (deploy, idx) => deploy -> (idx + 1)
+    }
 
     for {
       state <- deploysWithStage.foldLeftM(State.init) {
-                case (state, (deploy, idx)) =>
-                  singleDeploy[F](idx, state.postStateHash, blocktime, protocolVersion, deploy)
+                case (state, (deploy, stage)) =>
+                  singleDeploy[F](stage, state.postStateHash, blocktime, protocolVersion, deploy)
                     .map {
                       case Left(preconditionFailure) =>
                         state.copy(
