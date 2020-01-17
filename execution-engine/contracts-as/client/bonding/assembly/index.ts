@@ -9,31 +9,31 @@ const POS_ACTION = "bond";
 
 export function call(): void {
     let proofOfStake = CL.getSystemContract(CL.SystemContract.ProofOfStake);
-    if (proofOfStake == null) {
+    if (proofOfStake === null) {
         Error.fromErrorCode(ErrorCode.InvalidSystemContract).revert();
         return;
     }
 
     let mainPurse = PurseId.getMainPurse();
-    if (mainPurse == null) {
+    if (mainPurse === null) {
         Error.fromErrorCode(ErrorCode.MissingArgument).revert();
         return;
     }
 
     let bondingPurse = PurseId.createPurse();
-    if (bondingPurse == null) {
+    if (bondingPurse === null) {
         Error.fromErrorCode(ErrorCode.PurseNotCreated).revert();
         return;
     }
 
     let amountBytes = CL.getArg(0);
-    if (amountBytes == null) {
+    if (amountBytes === null) {
         Error.fromErrorCode(ErrorCode.MissingArgument).revert();
         return;
     }
 
     let amount = U512.fromBytes(amountBytes);
-    if (amount == null) {
+    if (amount === null) {
         Error.fromErrorCode(ErrorCode.InvalidArgument).revert();
         return;
     }
@@ -56,7 +56,7 @@ export function call(): void {
     ];
     let extraUrefs: Key[] = [Key.fromURef(bondingPurse.asURef())];
     let output = CL.callContractExt(key, args, extraUrefs);
-    if (output == null) {
+    if (output === null) {
         Error.fromPosErrorCode(PosErrorCode.BondTransferFailed).revert();
         return;
     }

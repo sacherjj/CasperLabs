@@ -59,7 +59,7 @@ export function call(): void {
 
     const mailFeedKey = <Key>maybeMailFeedKey;
 
-    if (!subKey.equalsTo(mailFeedKey)) {
+    if (subKey != mailFeedKey) {
         Error.fromUserError(<u16>UserError.BadSubKey).revert();
         return;
     }

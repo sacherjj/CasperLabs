@@ -6,19 +6,19 @@ import {U512} from "../../../../contract-ffi-as/assembly/bignum";
 
 export function call(): void {
   let accountBytes = CL.getArg(0);
-  if (accountBytes == null) {
+  if (accountBytes === null) {
     Error.fromErrorCode(ErrorCode.MissingArgument).revert();
     return;
   }
 
   let amountBytes = CL.getArg(1);
-  if (amountBytes == null) {
+  if (amountBytes === null) {
     Error.fromErrorCode(ErrorCode.MissingArgument).revert();
     return;
   }
 
   let amount = fromBytesU64(amountBytes);
-  if (amount == null) {
+  if (amount === null) {
     Error.fromErrorCode(ErrorCode.InvalidArgument).revert();
     return;
   }
@@ -26,7 +26,7 @@ export function call(): void {
   let amount512 = new U512(<U64>amount);
 
   let transferRet = transferToAccount(accountBytes, amount512);
-  if (transferRet == null) {
+  if (transferRet === null) {
     Error.fromErrorCode(ErrorCode.Transfer).revert();
     return;
   }
