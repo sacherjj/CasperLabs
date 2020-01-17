@@ -52,6 +52,7 @@ class EraRuntime[F[_]: MonadThrowable: Clock: EraStorage: FinalityStorageReader:
     rng: Random = new Random()
 ) {
   import EraRuntime._, Agenda._
+  import HighwayConf.VotingDuration
 
   type HWL[A] = HighwayLog[F, A]
   private val noop = HighwayLog.unit[F]
@@ -120,11 +121,11 @@ class EraRuntime[F[_]: MonadThrowable: Clock: EraStorage: FinalityStorageReader:
   /** Check if the era is finished at a given tick, including the post-era voting period. */
   private val isEraOverAt: Ticks => F[Boolean] =
     conf.postEraVotingDuration match {
-      case HighwayConf.VotingDuration.FixedLength(duration) =>
+      case VotingDuration.FixedLength(duration) =>
         val votingEndTick = conf.toTicks(end plus duration)
         tick => (tick >= votingEndTick).pure[F]
 
-      case HighwayConf.VotingDuration.SummitLevel(1) =>
+      case VotingDuration.SummitLevel(1) =>
         // We have to keep voting until the switch block given by the fork choice
         // in *this* era is finalized.
         tick =>
@@ -138,7 +139,7 @@ class EraRuntime[F[_]: MonadThrowable: Clock: EraStorage: FinalityStorageReader:
             }
           }
 
-      case HighwayConf.VotingDuration.SummitLevel(_) =>
+      case VotingDuration.SummitLevel(_) =>
         // Don't know how to do this for higher levels of k, we'll have to figure it out,
         // run multiple instances of higher level finalizers or something.
         ???
@@ -360,7 +361,22 @@ class EraRuntime[F[_]: MonadThrowable: Clock: EraStorage: FinalityStorageReader:
     check(
       "The block is coming from a doppelganger.",
       maybeMessageProducer.map(_.validatorId).contains(message.validatorId)
-    ) >> {
+    ) >>
+      check(
+        "The round ID is before the start of the era.",
+        message.roundId < startTick
+      ) >>
+      check(
+        "The round ID is after the end of the voting period.",
+        conf.postEraVotingDuration match {
+          case VotingDuration.FixedLength(d) => conf.toTicks(end plus d) < message.roundId
+          case _                             => false
+        }
+      ) >>
+      check(
+        "The validator is not bonded in the era.",
+        era.bonds.find(_.validatorPublicKey == message.validatorId).isEmpty
+      ) >> {
       message match {
         case b: Message.Block =>
           check(
@@ -456,19 +472,22 @@ class EraRuntime[F[_]: MonadThrowable: Clock: EraStorage: FinalityStorageReader:
           for {
             now                           <- currentTick
             (currentRoundId, nextRoundId) <- roundBoundariesAt(now)
-            isOverAtNext                  <- isEraOverAt(nextRoundId)
+            // NOTE: These will potentially ask for the fork choice in this era;
+            // it would be good if it was cached and updated only when new messages are added.
+            isOverAtCurrent <- isEraOverAt(currentRoundId)
+            isOverAtNext    <- isEraOverAt(nextRoundId)
           } yield {
+            val omega = if (!isOverAtCurrent) {
+              // Schedule the omega for whatever the current round is, don't bother
+              // with the old one if the block production was so slow that it pushed
+              // us into the next round already. We can still participate in this one.
+              val omegaTick = chooseOmegaTick(currentRoundId, nextRoundId)
+              Agenda(omegaTick -> Agenda.CreateOmegaMessage(currentRoundId))
+            } else Agenda.empty
+
             val next = if (!isOverAtNext) {
               Agenda(nextRoundId -> Agenda.StartRound(nextRoundId))
             } else Agenda.empty
-
-            // Schedule the omega for whatever the current round is, don't bother
-            // with the old one if the block production was so slow that it pushed
-            // us into the next round already. We can still participate in this one.
-            val omega = {
-              val omegaTick = chooseOmegaTick(currentRoundId, nextRoundId)
-              Agenda(omegaTick -> Agenda.CreateOmegaMessage(currentRoundId))
-            }
 
             omega ++ next
           }

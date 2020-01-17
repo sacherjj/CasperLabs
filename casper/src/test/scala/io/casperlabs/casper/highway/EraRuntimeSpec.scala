@@ -41,13 +41,15 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
 
   implicit def defaultClock: Clock[Id] = TestClock.frozen[Id](date(2019, 12, 9))
 
+  val postEraVotingDuration = days(2)
+
   val conf = HighwayConf(
     tickUnit = TimeUnit.MILLISECONDS,
     genesisEraStart = date(2019, 12, 9),
     eraDuration = EraDuration.FixedLength(days(7)),
     bookingDuration = days(10),
     entropyDuration = hours(3),
-    postEraVotingDuration = VotingDuration.FixedLength(days(2)),
+    postEraVotingDuration = VotingDuration.FixedLength(postEraVotingDuration),
     omegaMessageTimeStart = 0.5,
     omegaMessageTimeEnd = 0.75
   )
@@ -267,6 +269,37 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
   }
 
   "validate" should {
+    "reject a message from an unbonded validator" in {
+      val runtime = genesisEraRuntime()
+      val message =
+        makeBlock("Anonymous", runtime.era, roundId = runtime.startTick)
+      runtime.validate(message).value shouldBe Left(
+        "The validator is not bonded in the era."
+      )
+    }
+
+    "reject a message before the era starts" in {
+      val runtime = genesisEraRuntime()
+      val message =
+        makeBlock("Alice", runtime.era, roundId = Ticks(runtime.startTick - 1))
+      runtime.validate(message).value shouldBe Left(
+        "The round ID is before the start of the era."
+      )
+    }
+
+    "reject a message after the era ends" in {
+      val runtime = genesisEraRuntime()
+      val message =
+        makeBlock(
+          "Alice",
+          runtime.era,
+          roundId = conf.toTicks(conf.genesisEraEnd plus postEraVotingDuration plus 1.hour)
+        )
+      runtime.validate(message).value shouldBe Left(
+        "The round ID is after the end of the voting period."
+      )
+    }
+
     "reject a block received from a doppelganger" in {
       val runtime = genesisEraRuntime("Alice".some)
       val message =
@@ -876,10 +909,6 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
           }
         }
         "the fixed voting period is almost over" should {
-          val postEraVotingDuration = conf.postEraVotingDuration match {
-            case VotingDuration.FixedLength(d) => d
-            case _                             => fail("Expected fixed duration.")
-          }
           "not schedule a next round after the end" in {
             new PostEraFixture(postEraElapsed = postEraVotingDuration minus 1.second) {
               handle.value.map(_.action).collect {
@@ -947,7 +976,7 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
       }
 
       "creating the lambda message takes longer than a round" should {
-        "skip to the next active round" in {
+        "skip to the lambda in the next active round but schedule an omega for it" in {
           val exponent       = 15 // ~30s
           val roundLength    = Ticks.roundLength(exponent).millis
           val roundStart     = conf.genesisEraStart plus 60 * roundLength
@@ -955,7 +984,7 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
           val currentTick    = conf.toTicks(now)
           implicit val clock = TestClock.frozen[Id](now)
 
-          val runtime = genesisEraRuntime(none, roundExponent = exponent)
+          val runtime = genesisEraRuntime("Alice".some, roundExponent = exponent)
 
           // Executing this round that was supposed to have been done a while ago.
           val roundId = conf.toTicks(roundStart)
@@ -976,6 +1005,16 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
               currentRoundId should be <= currentTick.toLong
               conf.toInstant(currentRoundId) should be >= (now minus roundLength)
           }
+        }
+
+        "not schedule an omega if it's after the end of the voting period" in {
+          val now            = conf.genesisEraEnd plus postEraVotingDuration plus 1.hour
+          implicit val clock = TestClock.frozen[Id](now)
+          val roundId        = conf.toTicks(now)
+          val runtime        = genesisEraRuntime("Alice".some)
+          val agenda         = runtime.handleAgenda(Agenda.StartRound(roundId)).value
+
+          agenda shouldBe empty
         }
       }
 
