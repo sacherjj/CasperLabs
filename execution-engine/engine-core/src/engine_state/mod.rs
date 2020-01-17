@@ -2,6 +2,7 @@ pub mod deploy_item;
 pub mod engine_config;
 mod error;
 pub mod executable_deploy_item;
+pub mod execute_request;
 pub mod execution_effect;
 pub mod execution_result;
 pub mod genesis;
