@@ -91,13 +91,6 @@ export function testDeSerEmptyListOfStrings(): bool {
     const truth = hex2bin("00000000");
     const maybeResult = fromBytesStringList(truth);
     return isArraysEqual(<String[]>maybeResult, <String[]>[]);
-    // const result = <String[]>maybeResult;
-
-    // assert(isArraysEqual(result, <String[]>[]));
-    
-    // let lhs = toBytesStringList(result);
-    // let rhs = typedToArray(truth);
-    // return isArraysEqual(lhs, rhs);
 };
 
 export function testSerializeMap(): bool {
