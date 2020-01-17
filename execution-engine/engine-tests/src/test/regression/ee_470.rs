@@ -1,9 +1,7 @@
-use crate::{
-    support::test_support::{ExecuteRequestBuilder, InMemoryWasmTestBuilder},
-    test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG},
-};
-
 use engine_storage::global_state::in_memory::InMemoryGlobalState;
+use engine_test_support::low_level::{
+    ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG,
+};
 
 const CONTRACT_LOCAL_STATE: &str = "local_state.wasm";
 

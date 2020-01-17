@@ -1,7 +1,7 @@
 use lmdb::DatabaseFlags;
 use tempfile::tempdir;
 
-use contract_ffi::bytesrepr::{FromBytes, ToBytes};
+use types::bytesrepr::{FromBytes, ToBytes};
 
 use super::TestData;
 use crate::{
@@ -260,7 +260,7 @@ where
     S: TrieStore<Vec<u8>, Vec<u8>>,
     X: TransactionSource<'a, Handle = S::Handle>,
     S::Error: From<X::Error>,
-    E: From<S::Error> + From<X::Error> + From<contract_ffi::bytesrepr::Error>,
+    E: From<S::Error> + From<X::Error> + From<types::bytesrepr::Error>,
 {
     let TestData(leaf_1_hash, leaf_1) = &super::create_data()[0..1][0];
 
@@ -312,7 +312,7 @@ where
     S: TrieStore<Vec<u8>, Vec<u8>>,
     X: TransactionSource<'a, Handle = S::Handle>,
     S::Error: From<X::Error>,
-    E: From<S::Error> + From<X::Error> + From<contract_ffi::bytesrepr::Error>,
+    E: From<S::Error> + From<X::Error> + From<types::bytesrepr::Error>,
 {
     let data = super::create_data();
     let TestData(ref leaf_1_hash, ref leaf_1) = data[0];
@@ -368,7 +368,7 @@ where
     S: TrieStore<Vec<u8>, Vec<u8>>,
     X: TransactionSource<'a, Handle = S::Handle>,
     S::Error: From<X::Error>,
-    E: From<S::Error> + From<X::Error> + From<contract_ffi::bytesrepr::Error>,
+    E: From<S::Error> + From<X::Error> + From<types::bytesrepr::Error>,
 {
     let data = super::create_data();
     let TestData(ref leaf_1_hash, ref leaf_1) = data[0];
@@ -435,7 +435,7 @@ where
     S: TrieStore<Vec<u8>, Vec<u8>>,
     X: TransactionSource<'a, Handle = S::Handle>,
     S::Error: From<X::Error>,
-    E: From<S::Error> + From<X::Error> + From<contract_ffi::bytesrepr::Error>,
+    E: From<S::Error> + From<X::Error> + From<types::bytesrepr::Error>,
 {
     let data = super::create_data();
     let TestData(ref leaf_1_hash, ref leaf_1) = data[0];
@@ -498,7 +498,7 @@ where
     S: TrieStore<Vec<u8>, Vec<u8>>,
     X: TransactionSource<'a, Handle = S::Handle>,
     S::Error: From<X::Error>,
-    E: From<S::Error> + From<X::Error> + From<contract_ffi::bytesrepr::Error>,
+    E: From<S::Error> + From<X::Error> + From<types::bytesrepr::Error>,
 {
     let data = super::create_data();
     let TestData(ref leaf_1_hash, ref leaf_1) = data[0];

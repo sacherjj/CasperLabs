@@ -1,6 +1,6 @@
 #![no_std]
 
-use contract_ffi::contract_api::{runtime, system};
+use contract::contract_api::{runtime, system};
 
 const SET_REFUND_PURSE: &str = "set_refund_purse";
 

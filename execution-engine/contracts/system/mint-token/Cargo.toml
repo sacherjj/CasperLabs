@@ -10,9 +10,9 @@ bench = false
 doctest = false
 
 [features]
-default = []
-std = ["contract-ffi/std"]
+std = ["contract/std", "types/std"]
 lib = []
 
 [dependencies]
-contract-ffi = { path = "../../../contract-ffi", package = "casperlabs-contract-ffi" }
+contract = { path = "../../../contract", package = "casperlabs-contract" }
+types = { path = "../../../types", package = "casperlabs-types" }

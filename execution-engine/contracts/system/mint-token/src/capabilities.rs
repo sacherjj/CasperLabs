@@ -1,12 +1,9 @@
 use core::{convert::TryFrom, marker::PhantomData};
 
-use contract_api::storage;
-use contract_ffi::{
+use contract::contract_api::{storage, TURef};
+use types::{
     bytesrepr::{FromBytes, ToBytes},
-    contract_api::{self, TURef},
-    key::Key,
-    uref::AccessRights,
-    value::CLTyped,
+    AccessRights, CLTyped, Key,
 };
 
 /// Trait representing the ability to read a value. Use case: a key

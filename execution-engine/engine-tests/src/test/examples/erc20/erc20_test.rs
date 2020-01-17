@@ -1,22 +1,12 @@
 use std::convert::{TryFrom, TryInto};
 
-use engine_shared::{gas::Gas, motes::Motes};
-
-use engine_grpc_server::engine_server::ipc::ExecuteResponse;
-
 use engine_core::engine_state::CONV_RATE;
-
-use crate::support::test_support;
-
-use contract_ffi::{
-    bytesrepr::ToBytes,
-    key::Key,
-    value::{account::PurseId, CLValue, U512},
+use engine_grpc_server::engine_server::ipc::ExecuteResponse;
+use engine_shared::{gas::Gas, motes::Motes};
+use engine_test_support::low_level::{
+    utils, ExecuteRequestBuilder, InMemoryWasmTestBuilder as TestBuilder, DEFAULT_GENESIS_CONFIG,
 };
-
-use crate::support::test_support::{ExecuteRequestBuilder, InMemoryWasmTestBuilder as TestBuilder};
-
-use crate::test::DEFAULT_GENESIS_CONFIG;
+use types::{account::PurseId, bytesrepr::ToBytes, CLValue, Key, U512};
 
 const ERC_20_CONTRACT_WASM: &str = "erc20_smart_contract.wasm";
 const TRANFER_TO_ACCOUNT_WASM: &str = "transfer_to_account.wasm";
@@ -351,7 +341,7 @@ impl ERC20Test {
 }
 
 fn get_cost(response: &ExecuteResponse) -> U512 {
-    let mut success_result = test_support::get_success_result(response);
+    let mut success_result = utils::get_success_result(response);
     let cost = success_result
         .take_cost()
         .try_into()

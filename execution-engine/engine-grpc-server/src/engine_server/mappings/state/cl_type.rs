@@ -1,6 +1,6 @@
 use std::convert::{TryFrom, TryInto};
 
-use contract_ffi::value::CLType;
+use types::CLType;
 
 use crate::engine_server::{
     mappings::ParsingError,
@@ -45,16 +45,19 @@ impl From<CLType> for state::CLType {
                 pb_map.set_key((*key).into());
                 pb_map.set_value((*value).into());
             }
+            #[allow(clippy::redundant_clone)]
             CLType::Tuple1(types) => {
                 pb_type
                     .mut_tuple1_type()
                     .set_type0((*types[0].clone()).into());
             }
+            #[allow(clippy::redundant_clone)]
             CLType::Tuple2(types) => {
                 let pb_tuple2 = pb_type.mut_tuple2_type();
                 pb_tuple2.set_type0((*types[0].clone()).into());
                 pb_tuple2.set_type1((*types[1].clone()).into());
             }
+            #[allow(clippy::redundant_clone)]
             CLType::Tuple3(types) => {
                 let pb_tuple3 = pb_type.mut_tuple3_type();
                 pb_tuple3.set_type0((*types[0].clone()).into());

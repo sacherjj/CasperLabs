@@ -11,9 +11,9 @@ doctest = false
 test = false
 
 [features]
-default = []
-std = ["contract-ffi/std" ]
+std = ["contract/std", "types/std"]
 
 [dependencies]
-contract-ffi = { path = "../../../contract-ffi", package = "casperlabs-contract-ffi" }
+contract = { path = "../../../contract", package = "casperlabs-contract" }
 create-purse-01 = { path = "../create-purse-01", default-features = false, features = ["lib"] }
+types = { path = "../../../types", package = "casperlabs-types" }

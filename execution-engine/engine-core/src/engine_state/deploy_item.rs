@@ -1,6 +1,6 @@
 use std::collections::BTreeSet;
 
-use contract_ffi::value::account::PublicKey;
+use types::account::PublicKey;
 
 use crate::{engine_state::executable_deploy_item::ExecutableDeployItem, DeployHash};
 

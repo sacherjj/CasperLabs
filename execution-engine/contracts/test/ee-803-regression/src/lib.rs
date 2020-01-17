@@ -4,11 +4,11 @@ extern crate alloc;
 
 use alloc::string::String;
 
-use contract_ffi::{
-    contract_api::{runtime, system, ContractRef, Error as ApiError},
+use contract::{
+    contract_api::{runtime, system},
     unwrap_or_revert::UnwrapOrRevert,
-    value::{account::PurseId, U512},
 };
+use types::{account::PurseId, ApiError, ContractRef, U512};
 
 const POS_BOND: &str = "bond";
 const POS_UNBOND: &str = "unbond";

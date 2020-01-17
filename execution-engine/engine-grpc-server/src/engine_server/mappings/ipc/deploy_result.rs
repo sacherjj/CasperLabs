@@ -165,13 +165,8 @@ mod detail {
 mod tests {
     use std::convert::TryInto;
 
-    use contract_ffi::{
-        bytesrepr::Error as BytesReprError,
-        key::Key,
-        uref::{AccessRights, URef},
-        value::U512,
-    };
     use engine_shared::{additive_map::AdditiveMap, transform::Transform};
+    use types::{bytesrepr::Error as BytesReprError, AccessRights, Key, URef, U512};
 
     use super::*;
 

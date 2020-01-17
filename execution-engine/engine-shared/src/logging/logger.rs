@@ -285,7 +285,7 @@ mod tests {
 
         let _r = handle.join();
 
-        if let Ok(guard) = message_id.clone().lock() {
+        if let Ok(guard) = Arc::clone(&message_id).lock() {
             assert!(guard.is_some(), "should not be None");
 
             let key = guard.clone().unwrap();

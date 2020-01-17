@@ -3,12 +3,13 @@
 %define debug_package %{nil}
 
 Name: casperlabs-engine-grpc-server
-Summary: WASM execution engine for CasperLabs smart contracts
+Summary: Wasm execution engine for CasperLabs smart contracts.
 Version: @@VERSION@@
-Release: 1
-License: ASL 2.0
+Release: @@RELEASE@@
+License: CasperLabs Open Source License (COSL)
 Group: Applications/System
 Source0: %{name}-%{version}.tar.gz
+URL: https://casperlabs.io
 
 BuildRoot: %{_tmppath}/%{name}-%{version}-%{release}-root
 

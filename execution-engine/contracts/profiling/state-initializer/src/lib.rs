@@ -2,15 +2,11 @@
 //! account.
 #![no_std]
 
-use contract_ffi::{
-    contract_api::{
-        runtime,
-        system::{self, TransferredTo},
-        Error as ApiError,
-    },
+use contract::{
+    contract_api::{runtime, system},
     unwrap_or_revert::UnwrapOrRevert,
-    value::{account::PublicKey, U512},
 };
+use types::{account::PublicKey, ApiError, TransferredTo, U512};
 
 enum Arg {
     Account1PublicKey = 0,

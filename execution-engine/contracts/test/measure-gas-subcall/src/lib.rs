@@ -4,12 +4,11 @@ extern crate alloc;
 
 use alloc::{collections::BTreeMap, string::String};
 
-use contract_ffi::{
-    contract_api::{runtime, storage, Error},
-    execution::Phase,
+use contract::{
+    contract_api::{runtime, storage},
     unwrap_or_revert::UnwrapOrRevert,
-    value::CLValue,
 };
+use types::{ApiError, CLValue, Phase};
 
 #[repr(u16)]
 enum CustomError {
@@ -34,13 +33,13 @@ pub extern "C" fn call() {
     const GET_PHASE_EXT: &str = "get_phase_ext";
 
     let method_name: String = runtime::get_arg(0)
-        .unwrap_or_revert_with(Error::MissingArgument)
-        .unwrap_or_revert_with(Error::InvalidArgument);
+        .unwrap_or_revert_with(ApiError::MissingArgument)
+        .unwrap_or_revert_with(ApiError::InvalidArgument);
     match method_name.as_str() {
         "no-subcall" => {
             let phase = runtime::get_phase();
             if phase != Phase::Session {
-                runtime::revert(Error::User(CustomError::UnexpectedPhaseInline as u16))
+                runtime::revert(ApiError::User(CustomError::UnexpectedPhaseInline as u16))
             }
         }
         "do-nothing" => {
@@ -51,7 +50,7 @@ pub extern "C" fn call() {
             let reference = storage::store_function_at_hash(GET_PHASE_EXT, BTreeMap::new());
             let phase: Phase = runtime::call_contract(reference, ());
             if phase != Phase::Session {
-                runtime::revert(Error::User(CustomError::UnexpectedPhaseSub as u16))
+                runtime::revert(ApiError::User(CustomError::UnexpectedPhaseSub as u16))
             }
         }
         _ => {}
