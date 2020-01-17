@@ -4,7 +4,7 @@ import { fromBytesU64, toBytesU64,
          toBytesMap,
          toBytesPair,
          toBytesString, fromBytesString,
-         serializeArguments } from "../../assembly/bytesrepr";
+         toBytesVecT } from "../../assembly/bytesrepr";
 import { CLValue } from "../../assembly/clvalue";
 import { Key, KeyVariant } from "../../assembly/key";
 import { URef, AccessRights } from "../../assembly/uref";
@@ -116,10 +116,10 @@ export function testSerializeMap(): bool {
     return isArraysEqual(serialized, typedToArray(truth));
 }
 
-export function testSerializeArgs(): bool {
+export function testToBytesVecT(): bool {
     // let args = ("get_payment_purse",).parse().unwrap().to_bytes().unwrap();
     const truth = hex2bin("0100000015000000110000006765745f7061796d656e745f70757273650a");
-    let serialized = serializeArguments([
+    let serialized = toBytesVecT<CLValue>([
         CLValue.fromString("get_payment_purse"),
     ]);
     return isArraysEqual(serialized, typedToArray(truth));

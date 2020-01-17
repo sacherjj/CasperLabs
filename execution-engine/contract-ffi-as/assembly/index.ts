@@ -3,7 +3,10 @@ import {URef, AccessRights} from "./uref";
 import {Error} from "./error";
 import {CLValue} from "./clvalue";
 import {Key} from "./key";
-import {serializeArguments, serializeKeys, toBytesString, toBytesArrayU8, toBytesU32} from "./bytesrepr";
+import {toBytesString,
+        toBytesArrayU8,
+        toBytesU32,
+        toBytesVecT} from "./bytesrepr";
 import {U512} from "./bignum";
 import {UREF_SERIALIZED_LENGTH, KEY_UREF_SERIALIZED_LENGTH} from "./constants";
 
@@ -101,8 +104,8 @@ export function callContract(key: Key, args: CLValue[]): Uint8Array | null {
 
 export function callContractExt(key: Key, args: CLValue[], extraUrefs: Key[]): Uint8Array | null {
   let keyBytes = key.toBytes();
-  let argBytes = serializeArguments(args);
-  let extraURefsBytes = serializeKeys(extraUrefs);
+  let argBytes = toBytesVecT(args);
+  let extraURefsBytes = toBytesVecT(extraUrefs);
 
   let resultSize = new Uint32Array(1);
   resultSize.fill(0);
@@ -180,10 +183,17 @@ export function transferToAccount(target: Uint8Array, amount: U512): U32 | null 
 }
 
 export function ret(value: CLValue): void {
+  retEx(value, []);
+}
+
+export function retEx(value: CLValue, extraURefs: URef[]): void {
   const valueBytes = value.toBytes();
-  // TODO: This should be toBytesURefs
-  const extraURefs = toBytesU32(0); // 0 length prefix acts as an empty vector of T
-  externals.ret(valueBytes.dataStart, valueBytes.length, extraURefs.dataStart, extraURefs.length);
+  const extraURefsBytes = toBytesVecT(extraURefs);
+  externals.ret(
+    valueBytes.dataStart,
+    valueBytes.length,
+    extraURefsBytes.dataStart,
+    extraURefsBytes.length);
   unreachable();
 }
 

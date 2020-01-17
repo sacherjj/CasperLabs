@@ -2,7 +2,6 @@ import {Error, ErrorCode} from "../../../../contract-ffi-as/assembly/error";
 import {getKey, callContract} from "../../../../contract-ffi-as/assembly";
 import {CLValue} from "../../../../contract-ffi-as/assembly/clvalue";
 import {Key} from "../../../../contract-ffi-as/assembly/key";
-import {serializeArguments} from "../../../../contract-ffi-as/assembly/bytesrepr";
 
 const COUNTER_KEY = "counter";
 const GET_METHOD = "get";

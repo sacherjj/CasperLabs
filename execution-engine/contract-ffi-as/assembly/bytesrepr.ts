@@ -116,20 +116,10 @@ export function fromBytesArrayU8(arr: Uint8Array): Uint8Array | null {
     return arr.subarray(4);
 }
 
-export function serializeArguments(values: CLValue[]): Array<u8> {
-    let bytes = toBytesU32(<u32>values.length);
-    for (let i = 0; i < values.length; i++) {
-        bytes = bytes.concat(values[i].toBytes());
-    }
-    return bytes;
-}
-
-
-export function serializeKeys(keys: Key[]): Array<u8> {
-    // NOTE: Copied and pasted
-    let bytes = toBytesU32(<u32>keys.length);
-    for (let i = 0; i < keys.length; i++) {
-        bytes = bytes.concat(keys[i].toBytes());
+export function toBytesVecT<T>(ts: T[]): Array<u8> {
+    let bytes = toBytesU32(<u32>ts.length);
+    for (let i = 0; i < ts.length; i++) {
+        bytes = bytes.concat(ts[i].toBytes());
     }
     return bytes;
 }
