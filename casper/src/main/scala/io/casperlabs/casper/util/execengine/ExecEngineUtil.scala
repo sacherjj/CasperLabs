@@ -42,6 +42,45 @@ object ExecEngineUtil {
 
   import io.casperlabs.smartcontracts.GrpcExecutionEngineService.EngineMetricsSource
 
+  private def singleDeploy[F[_]: MonadThrowable: ExecutionEngineService](
+      idx: Int,
+      prestate: ByteString,
+      blocktime: Long,
+      protocolVersion: state.ProtocolVersion,
+      deploy: Deploy
+  ): F[Either[PreconditionFailure, DeploysCheckpoint]] =
+    processDeploys[F](prestate, blocktime, Seq(deploy), protocolVersion)
+      .flatMap { pdr =>
+        if (pdr.size != 1)
+          MonadThrowable[F].raiseError[ProcessedDeployResult](
+            SmartContractEngineError(
+              "ExecutionEngine returned more than 1 result for single deploy."
+            )
+          )
+        else pdr.head.pure[F]
+      }
+      .flatMap {
+        case de: DeployEffects => {
+          val (deploysForBlock, transforms) = ExecEngineUtil
+            .unzipEffectsAndDeploys(Seq(de), stage = idx)
+            .unzip
+          ExecutionEngineService[F]
+            .commit(prestate, transforms.flatten, protocolVersion)
+            .rethrow
+            .map { commitResult =>
+              DeploysCheckpoint(
+                prestate,
+                commitResult.postStateHash,
+                commitResult.bondedValidators,
+                deploysForBlock,
+                protocolVersion
+              ).asRight[PreconditionFailure]
+            }
+        }
+        case pf: PreconditionFailure =>
+          Either.left[PreconditionFailure, DeploysCheckpoint](pf).pure[F]
+      }
+
   /** Takes a list of deploys and executes them one after the other, using a post state hash of a previous
     * deploy as pre state hash of the current deploy.
     *
@@ -53,43 +92,6 @@ object ExecEngineUtil {
       blocktime: Long,
       protocolVersion: state.ProtocolVersion
   ): F[DeploysCheckpoint] = {
-
-    def singleDeploy(
-        idx: Int,
-        prestate: ByteString,
-        deploy: Deploy
-    ): F[Either[PreconditionFailure, DeploysCheckpoint]] =
-      processDeploys[F](prestate, blocktime, Seq(deploy), protocolVersion)
-        .flatMap { pdr =>
-          if (pdr.size != 1)
-            MonadThrowable[F].raiseError[ProcessedDeployResult](
-              SmartContractEngineError(
-                "ExecutionEngine returned more than 1 result for single deploy."
-              )
-            )
-          else pdr.head.pure[F]
-        }
-        .flatMap {
-          case de: DeployEffects => {
-            val (deploysForBlock, transforms) = ExecEngineUtil
-              .unzipEffectsAndDeploys(Seq(de), stage = idx)
-              .unzip
-            ExecutionEngineService[F]
-              .commit(prestate, transforms.flatten, protocolVersion)
-              .rethrow
-              .map { commitResult =>
-                DeploysCheckpoint(
-                  prestate,
-                  commitResult.postStateHash,
-                  commitResult.bondedValidators,
-                  deploysForBlock,
-                  protocolVersion
-                ).asRight[PreconditionFailure]
-              }
-          }
-          case pf: PreconditionFailure =>
-            Either.left[PreconditionFailure, DeploysCheckpoint](pf).pure[F]
-        }
 
     final case class State(
         preconditionFailures: List[PreconditionFailure],
@@ -108,7 +110,7 @@ object ExecEngineUtil {
     for {
       state <- deploysWithStage.foldLeftM(State.init) {
                 case (state, (deploy, idx)) =>
-                  singleDeploy(idx, state.postStateHash, deploy)
+                  singleDeploy[F](idx, state.postStateHash, blocktime, protocolVersion, deploy)
                     .map {
                       case Left(preconditionFailure) =>
                         state.copy(
@@ -123,6 +125,7 @@ object ExecEngineUtil {
                     }
               }
       _ <- handleInvalidDeploys[F](state.preconditionFailures)
+            .whenA(state.preconditionFailures.nonEmpty)
     } yield DeploysCheckpoint(
       prestateHash,
       state.postStateHash,
@@ -315,11 +318,11 @@ object ExecEngineUtil {
       for {
         protocolVersion <- CasperLabsProtocol[F].protocolFromBlock(block)
         deployEffects <- processDeploys[F](
-                             prestate,
-                             blocktime,
-                             deploys,
-                             protocolVersion
-                           )
+                          prestate,
+                          blocktime,
+                          deploys,
+                          protocolVersion
+                        )
         effectfulDeploys = ProcessedDeployResult.split(deployEffects)._2
         transformMap = unzipEffectsAndDeploys(findCommutingEffects(effectfulDeploys))
           .flatMap(_._2)
