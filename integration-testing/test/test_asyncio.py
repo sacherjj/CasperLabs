@@ -22,7 +22,7 @@ async def test_show_blocks(client):
 
 
 @pytest.mark.asyncio
-async def test_deploy_and_show_block(node, client):
+async def test_deploy_show_block(node, client):
     deploy_hash = await client.deploy(
         session=node.resources_folder / Contract.COUNTER_DEFINE,
         from_addr=GENESIS_ACCOUNT.public_key_hex,
@@ -35,5 +35,9 @@ async def test_deploy_and_show_block(node, client):
     assert not processing_result.is_error
     assert processing_result.cost > 0
     block_hash = processing_result.block_info.summary.block_hash.hex()
-    # TODO: test show_block
-    block_hash = block_hash
+
+    block_info = await client.show_block(block_hash)
+    assert block_info.summary.block_hash.hex() == block_hash
+
+    processing_results = await client.show_deploys(block_hash)
+    assert deploy_hash in [p.deploy.deploy_hash.hex() for p in processing_results]

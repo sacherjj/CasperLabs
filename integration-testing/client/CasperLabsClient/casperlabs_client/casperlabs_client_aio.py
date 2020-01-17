@@ -123,8 +123,30 @@ class CasperLabsClientAIO:
 
         channel = Channel(self.host, self.port)
         service = casper_grpc.CasperServiceStub(channel)
-        reply = await service.GetBlockState(
+        response = await service.GetBlockState(
             casper.GetBlockStateRequest(block_hash_base16=block_hash, query=q)
         )
         channel.close()
-        return reply
+        return response
+
+    async def show_block(self, block_hash_base16: str, full_view=True):
+        view = full_view and info.BlockInfo.View.FULL or info.BlockInfo.View.BASIC
+        channel = Channel(self.host, self.port)
+        service = casper_grpc.CasperServiceStub(channel)
+        block_info = await service.GetBlockInfo(
+            casper.GetBlockInfoRequest(block_hash_base16=block_hash_base16, view=view)
+        )
+        channel.close()
+        return block_info
+
+    async def show_deploys(self, block_hash_base16: str, full_view=True):
+        view = full_view and info.DeployInfo.View.FULL or info.DeployInfo.View.BASIC
+        channel = Channel(self.host, self.port)
+        service = casper_grpc.CasperServiceStub(channel)
+        response = await service.StreamBlockDeploys(
+            casper.StreamBlockDeploysRequest(
+                block_hash_base16=block_hash_base16, view=view
+            )
+        )
+        channel.close()
+        return response
