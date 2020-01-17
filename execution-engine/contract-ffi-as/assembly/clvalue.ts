@@ -2,6 +2,7 @@ import {toBytesArrayU8, toBytesString, toBytesI32, toBytesStringList} from "./by
 import {U512} from "./bignum";
 import {URef} from "./uref";
 import {Key} from "./key";
+import {Option} from "./option";
 
 export enum CLTypeTag {
     Bool = 0,
@@ -61,6 +62,13 @@ export class CLValue {
         return new CLValue(toBytesStringList(values), [
             <u8>CLTypeTag.List,
             <u8>CLTypeTag.String,
+        ]);
+    }
+
+    static fromOption(value: Option, nestedT: CLTypeTag): CLValue {
+        return new CLValue(value.toBytes(), [
+            <u8>CLTypeTag.Option,
+            <u8>nestedT,
         ]);
     }
 

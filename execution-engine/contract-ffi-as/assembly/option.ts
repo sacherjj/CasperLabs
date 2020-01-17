@@ -27,11 +27,12 @@ export class Option{
             result[0] = OPTION_TAG_NONE;
             return result;
         }
+        const bytes = <Uint8Array>this.bytes;
 
-        let result = new Array<u8>(this.bytes.length + 1);
+        let result = new Array<u8>(bytes.length + 1);
         result[0] = OPTION_TAG_SOME;
-        for (let i = 0; i < this.bytes.length; i++) {
-            result[i+1] = this.bytes[i];
+        for (let i = 0; i < bytes.length; i++) {
+            result[i+1] = bytes[i];
         }
 
         return result;

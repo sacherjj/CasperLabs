@@ -140,6 +140,10 @@ export class Key {
         }
     }
 
+    isURef(): bool {
+        return this.variant == KeyVariant.UREF_ID;
+    }
+
     write(value: CLValue): void {
         const keyBytes = this.toBytes();
         const valueBytes = value.toBytes();
@@ -148,5 +152,9 @@ export class Key {
             keyBytes.length,
             valueBytes.dataStart,
             valueBytes.length);
+    }
+
+    toURef(): URef {
+        return <URef>this.uref;
     }
 }
