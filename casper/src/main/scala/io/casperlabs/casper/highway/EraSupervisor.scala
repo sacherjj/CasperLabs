@@ -162,7 +162,17 @@ class EraSupervisor[F[_]: Concurrent: EraStorage: Relaying](
   /** Update descendant eras' latest messages. */
   private def propagateLatestMessageToDescendantEras(message: Message): F[Unit] = {
     def children(keyBlockHash: BlockHash) =
-      eraTreeRef.get.map(_(keyBlockHash).toList)
+      for {
+        childEras <- eraTreeRef.get.map(_(keyBlockHash).toList)
+        // Make sure the child tree is loaded into memory, so we traverse
+        // even the ones that were inactive when the supervisor started,
+        // which could happen for example if the validator is bonded in the
+        // grandparent and the child era but in the parent, and suddenly
+        // there's a stray message in the grandparent: if we don't have
+        // the parent loaded, the child won't be notified.
+        _ <- childEras.traverse(getOrStart)
+      } yield childEras
+
     for {
       childEras      <- children(message.keyBlockHash)
       descendantEras <- DagOperations.bfTraverseF(childEras)(children).toList
