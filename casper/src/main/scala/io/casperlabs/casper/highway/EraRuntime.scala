@@ -522,6 +522,17 @@ class EraRuntime[F[_]: MonadThrowable: Clock: EraStorage: FinalityStorageReader:
 
 object EraRuntime {
 
+  def genesisEra(
+      conf: HighwayConf,
+      genesis: BlockSummary
+  ): Era = Era(
+    keyBlockHash = genesis.blockHash,
+    bookingBlockHash = genesis.blockHash,
+    startTick = conf.toTicks(conf.genesisEraStart),
+    endTick = conf.toTicks(conf.genesisEraEnd),
+    bonds = genesis.getHeader.getState.bonds
+  )
+
   def fromGenesis[F[_]: Sync: Clock: DagStorage: EraStorage: FinalityStorageReader: ForkChoice](
       conf: HighwayConf,
       genesis: BlockSummary,
@@ -530,13 +541,7 @@ object EraRuntime {
       isSynced: => F[Boolean],
       leaderSequencer: LeaderSequencer = LeaderSequencer
   ): F[EraRuntime[F]] = {
-    val era = Era(
-      keyBlockHash = genesis.blockHash,
-      bookingBlockHash = genesis.blockHash,
-      startTick = conf.toTicks(conf.genesisEraStart),
-      endTick = conf.toTicks(conf.genesisEraEnd),
-      bonds = genesis.getHeader.getState.bonds
-    )
+    val era = genesisEra(conf, genesis)
     fromEra[F](conf, era, maybeMessageProducer, initRoundExponent, isSynced, leaderSequencer)
   }
 

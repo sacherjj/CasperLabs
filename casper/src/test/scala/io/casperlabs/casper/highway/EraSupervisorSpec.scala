@@ -112,13 +112,7 @@ object EraSupervisorSpec extends TickUtils with ArbitraryConsensus {
     implicit val forkchoice = MockForkChoice[Task](genesis).runSyncUnsafe(5.seconds)
 
     def addGenesisEra(): Task[Era] = {
-      val era = Era(
-        keyBlockHash = genesis.messageHash,
-        bookingBlockHash = genesis.messageHash,
-        startTick = conf.toTicks(conf.genesisEraStart),
-        endTick = conf.toTicks(conf.genesisEraEnd),
-        bonds = genesis.blockSummary.getHeader.getState.bonds
-      )
+      val era = EraRuntime.genesisEra(conf, genesis.blockSummary)
       db.addEra(era).as(era)
     }
 
