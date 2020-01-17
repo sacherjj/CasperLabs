@@ -20,12 +20,12 @@ class EraSupervisor[F[_]: Concurrent: Timer: EraStorage: Relaying](
     isShutdownRef: Ref[F, Boolean],
     // Help ensure we only create one runtime per era.
     semaphore: Semaphore[F],
-    runtimesRef: Ref[F, Map[BlockHash, EraRuntime[F]]],
+    erasRef: Ref[F, Map[BlockHash, EraSupervisor.Entry[F]]],
     scheduleRef: Ref[F, Map[(BlockHash, Agenda.DelayedAction), Fiber[F, Unit]]],
-    eraTreeRef: Ref[F, Map[BlockHash, Set[BlockHash]]],
     makeRuntime: Era => F[EraRuntime[F]],
     forkChoiceManager: EraSupervisor.ForkChoiceManager[F]
 ) {
+  import EraSupervisor.Entry
 
   private def shutdown(): F[Unit] =
     for {
@@ -40,8 +40,8 @@ class EraSupervisor[F[_]: Concurrent: Timer: EraStorage: Relaying](
     for {
       _       <- ensureNotShutdown
       message <- Sync[F].fromTry(Message.fromBlock(block))
-      runtime <- getOrStart(message.keyBlockHash)
-      _ <- runtime.validate(message).value.flatMap {
+      entry   <- load(message.keyBlockHash)
+      _ <- entry.runtime.validate(message).value.flatMap {
             _.fold(
               error =>
                 Sync[F].raiseError[Unit](
@@ -57,7 +57,7 @@ class EraSupervisor[F[_]: Concurrent: Timer: EraStorage: Relaying](
       _ <- propagateLatestMessageToDescendantEras(message)
 
       // See what reactions the protocol dictates.
-      events <- runtime.handleMessage(message).written
+      events <- entry.runtime.handleMessage(message).written
       _      <- handleEvents(events)
     } yield ()
 
@@ -68,11 +68,11 @@ class EraSupervisor[F[_]: Concurrent: Timer: EraStorage: Relaying](
       Sync[F].unit
     )
 
-  private def getOrStart(keyBlockHash: BlockHash): F[EraRuntime[F]] =
-    runtimesRef.get >>= {
+  private def load(keyBlockHash: BlockHash): F[Entry[F]] =
+    erasRef.get >>= {
       _.get(keyBlockHash).fold {
         semaphore.withPermit {
-          runtimesRef.get >>= {
+          erasRef.get >>= {
             _.get(keyBlockHash).fold(start(keyBlockHash))(_.pure[F])
           }
         }
@@ -80,7 +80,7 @@ class EraSupervisor[F[_]: Concurrent: Timer: EraStorage: Relaying](
     }
 
   /** Create a runtime and schedule its initial agenda. */
-  private def start(keyBlockHash: BlockHash): F[EraRuntime[F]] =
+  private def start(keyBlockHash: BlockHash): F[Entry[F]] =
     for {
       // We should already have seen the switch block that created this block's era,
       // or it should be in the genesis era. If we can't find it, the Download Manager
@@ -88,23 +88,21 @@ class EraSupervisor[F[_]: Concurrent: Timer: EraStorage: Relaying](
       era     <- EraStorage[F].getEraUnsafe(keyBlockHash)
       runtime <- makeRuntime(era)
       agenda  <- runtime.initAgenda
-      _       <- start(runtime, agenda)
-    } yield runtime
+      entry   <- start(runtime, agenda)
+    } yield entry
 
-  private def start(runtime: EraRuntime[F], agenda: Agenda): F[Unit] = {
+  private def start(runtime: EraRuntime[F], agenda: Agenda): F[Entry[F]] = {
     val key = runtime.era.keyBlockHash
     for {
-      _ <- runtimesRef.update { rs =>
-            // Sanity check that the semaphore is applied.
-            require(!rs.contains(key), "Shouldn't start eras more than once!")
-            rs.updated(key, runtime)
-          }
       childEras <- EraStorage[F].getChildEras(key)
-      _ <- childEras.toList.traverse { era =>
-            addChild(key, era.keyBlockHash)
+      entry     = Entry[F](runtime, childEras.map(_.keyBlockHash))
+      _ <- erasRef.update { eras =>
+            // Sanity check that the semaphore is applied.
+            require(!eras.contains(key), "Shouldn't start eras more than once!")
+            eras.updated(key, entry)
           }
       _ <- schedule(runtime, agenda)
-    } yield ()
+    } yield entry
   }
 
   private def schedule(runtime: EraRuntime[F], agenda: Agenda): F[Unit] =
@@ -144,8 +142,10 @@ class EraSupervisor[F[_]: Concurrent: Timer: EraStorage: Relaying](
   private def handleEvent(event: HighwayEvent): F[Unit] = event match {
     case HighwayEvent.CreatedEra(era) =>
       for {
-        _ <- addChild(era.parentKeyBlockHash, era.keyBlockHash)
-        _ <- getOrStart(era.keyBlockHash)
+        // Schedule the child era.
+        child <- load(era.keyBlockHash)
+        // Remember the offspring.
+        _ <- addToParent(child)
       } yield ()
     case HighwayEvent.CreatedLambdaMessage(m)  => handleCreatedMessage(m)
     case HighwayEvent.CreatedLambdaResponse(m) => handleCreatedMessage(m)
@@ -159,36 +159,49 @@ class EraSupervisor[F[_]: Concurrent: Timer: EraStorage: Relaying](
       _ <- propagateLatestMessageToDescendantEras(message)
     } yield ()
 
-  /** Add a parent-child era association to the tree of eras, so that we can update
-    * the descendant eras when new messages come in to the ancestors, which is required
-    * for things like rewarding voting-only ballots that are created in the parent,
-    * with the rewards being added to some blocks in the child era.
-    */
-  private def addChild(parentKeyBlockHash: BlockHash, childKeyBlockHash: BlockHash): F[Unit] =
-    eraTreeRef.update { tree =>
-      tree.updated(parentKeyBlockHash, tree(parentKeyBlockHash) + childKeyBlockHash)
-    }
-
   /** Update descendant eras' latest messages. */
-  private def propagateLatestMessageToDescendantEras(message: Message): F[Unit] = {
-    def children(keyBlockHash: BlockHash) =
+  private def propagateLatestMessageToDescendantEras(message: Message): F[Unit] =
+    for {
+      ds <- loadDescendants(message.keyBlockHash)
+      _  <- ds.traverse(d => forkChoiceManager.updateLatestMessage(d.keyBlockHash, message))
+    } yield ()
+
+  private def loadDescendants(keyBlockHash: BlockHash): F[List[Entry[F]]] = {
+    def loadChildren(keyBlockHash: BlockHash): F[List[Entry[F]]] =
       for {
-        childEras <- eraTreeRef.get.map(_(keyBlockHash).toList)
+        childEras <- erasRef.get.map(_(keyBlockHash).children.toList)
         // Make sure the child tree is loaded into memory, so we traverse
         // even the ones that were inactive when the supervisor started,
         // which could happen for example if the validator is bonded in the
         // grandparent and the child era but in the parent, and suddenly
         // there's a stray message in the grandparent: if we don't have
         // the parent loaded, the child won't be notified.
-        _ <- childEras.traverse(getOrStart)
-      } yield childEras
-
+        childEntries <- childEras.traverse(load)
+      } yield childEntries
     for {
-      childEras      <- children(message.keyBlockHash)
-      descendantEras <- DagOperations.bfTraverseF(childEras)(children).toList
-      _              <- descendantEras.traverse(forkChoiceManager.updateLatestMessage(_, message))
-    } yield ()
+      children <- loadChildren(keyBlockHash)
+      descendants <- DagOperations
+                      .bfTraverseF[F, Entry[F]](children) { entry =>
+                        loadChildren(entry.keyBlockHash)
+                      }
+                      .toList
+    } yield descendants
   }
+
+  /** Add a parent-child era association to the tree of eras, so that we can update
+    * the descendant eras when new messages come in to the ancestors, which is required
+    * for things like rewarding voting-only ballots that are created in the parent,
+    * with the rewards being added to some blocks in the child era.
+    */
+  private def addToParent(child: Entry[F]): F[Unit] =
+    erasRef.update { eras =>
+      val parentKeyBlockHash = child.runtime.era.parentKeyBlockHash
+      val parent             = eras(parentKeyBlockHash)
+      eras.updated(
+        parentKeyBlockHash,
+        parent.copy(children = parent.children + child.runtime.era.keyBlockHash)
+      )
+    }
 }
 
 object EraSupervisor {
@@ -203,9 +216,8 @@ object EraSupervisor {
     Resource.make {
       for {
         isShutdownRef <- Ref.of(false)
-        runtimesRef   <- Ref.of(Map.empty[BlockHash, EraRuntime[F]])
+        erasRef       <- Ref.of(Map.empty[BlockHash, Entry[F]])
         scheduleRef   <- Ref.of(Map.empty[(BlockHash, Agenda.DelayedAction), Fiber[F, Unit]])
-        eraTreeRef    <- Ref.of(Map.empty[BlockHash, Set[BlockHash]].withDefaultValue(Set.empty))
         semaphore     <- Semaphore[F](1)
 
         implicit0(forkChoiceManager: ForkChoiceManager[F]) = new ForkChoiceManager[F]()
@@ -223,9 +235,8 @@ object EraSupervisor {
           conf,
           isShutdownRef,
           semaphore,
-          runtimesRef,
+          erasRef,
           scheduleRef,
-          eraTreeRef,
           makeRuntime,
           forkChoiceManager
         )
@@ -241,6 +252,17 @@ object EraSupervisor {
             }
       } yield supervisor
     }(_.shutdown())
+
+  case class Entry[F[_]](
+      runtime: EraRuntime[F],
+      children: Set[BlockHash]
+  ) {
+    def keyBlockHash = runtime.era.keyBlockHash
+  }
+  object Entry {
+    implicit def `Key[Entry]`[F[_]]: Key[Entry[F]] =
+      Key.instance[Entry[F], BlockHash](_.keyBlockHash)
+  }
 
   // Fork choice should be something that we can update for each child era when there are new messages coming in.
   class ForkChoiceManager[F[_]] extends ForkChoice[F] {
