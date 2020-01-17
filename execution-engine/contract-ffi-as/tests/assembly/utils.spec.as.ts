@@ -1,4 +1,5 @@
-import { hex2bin, isArraysEqual, typedToArray } from "../utils/helpers";
+import { hex2bin, isArraysEqual } from "../utils/helpers";
+import { typedToArray } from "../../assembly/utils";
 
 export function testHex2Bin(): bool {
     let truth = hex2bin("deadbeef");

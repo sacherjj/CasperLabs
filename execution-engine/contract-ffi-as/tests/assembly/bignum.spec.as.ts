@@ -1,6 +1,7 @@
-import { hex2bin, isArraysEqual, typedToArray } from "../utils/helpers";
+import { hex2bin, isArraysEqual } from "../utils/helpers";
 import { U512 } from "../../assembly/bignum";
 import { fromBytesU64 } from "../../assembly/bytesrepr";
+import { typedToArray } from "../../assembly/utils";
 
 export function testSerializeU512_3BytesWide(): bool {
     let truth = hex2bin("03807801");

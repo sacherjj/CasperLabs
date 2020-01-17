@@ -9,7 +9,8 @@ import { CLValue } from "../../assembly/clvalue";
 import { Key, KeyVariant } from "../../assembly/key";
 import { URef, AccessRights } from "../../assembly/uref";
 import { Option } from "../../assembly/option";
-import { hex2bin, typedToArray, arrayToTyped, isArraysEqual } from "../utils/helpers";
+import { hex2bin, isArraysEqual } from "../utils/helpers";
+import { typedToArray, arrayToTyped } from "../../assembly/utils";
 
 // ERROR: TypeError: Cannot create property 'shouldSerializeU64' on number '3' in @assemblyscript/loader
 // export class BytesReprTest {
