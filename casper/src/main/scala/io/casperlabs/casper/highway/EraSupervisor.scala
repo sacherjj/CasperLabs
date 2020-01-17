@@ -12,8 +12,10 @@ import io.casperlabs.models.Message
 import io.casperlabs.storage.BlockHash
 import io.casperlabs.storage.dag.{DagRepresentation, DagStorage, FinalityStorageReader}
 import io.casperlabs.storage.era.EraStorage
+import scala.concurrent.duration.FiniteDuration
 
-class EraSupervisor[F[_]: Concurrent: EraStorage: Relaying](
+class EraSupervisor[F[_]: Concurrent: Timer: EraStorage: Relaying](
+    conf: HighwayConf,
     // Once the supervisor is shut down, reject incoming messages.
     isShutdownRef: Ref[F, Boolean],
     // Help ensure we only create one runtime per era.
@@ -22,7 +24,6 @@ class EraSupervisor[F[_]: Concurrent: EraStorage: Relaying](
     scheduleRef: Ref[F, Map[(BlockHash, Agenda.DelayedAction), Fiber[F, Unit]]],
     eraTreeRef: Ref[F, Map[BlockHash, Set[BlockHash]]],
     makeRuntime: Era => F[EraRuntime[F]],
-    scheduler: TickScheduler[F],
     forkChoiceManager: EraSupervisor.ForkChoiceManager[F]
 ) {
 
@@ -112,7 +113,7 @@ class EraSupervisor[F[_]: Concurrent: EraStorage: Relaying](
   private def schedule(runtime: EraRuntime[F], delayed: Agenda.DelayedAction): F[Unit] = {
     val key = (runtime.era.keyBlockHash, delayed)
     for {
-      fiber <- scheduler.scheduleAt(delayed.tick) {
+      fiber <- scheduleAt(delayed.tick) {
                 for {
                   _                <- scheduleRef.update(_ - key)
                   (events, agenda) <- runtime.handleAgenda(delayed.action).run
@@ -127,6 +128,15 @@ class EraSupervisor[F[_]: Concurrent: EraStorage: Relaying](
           }
     } yield ()
   }
+
+  private def scheduleAt[A](ticks: Ticks)(effect: F[A]): F[Fiber[F, A]] =
+    for {
+      now   <- Timer[F].clock.realTime(conf.tickUnit)
+      delay = math.max(ticks - now, 0L)
+      fiber <- Concurrent[F].start {
+                Timer[F].sleep(FiniteDuration(delay, conf.tickUnit)) >> effect
+              }
+    } yield fiber
 
   private def handleEvents(events: Vector[HighwayEvent]): F[Unit] =
     events.traverse(handleEvent(_)).void
@@ -209,16 +219,14 @@ object EraSupervisor {
             isSynced
           )
 
-        scheduler = new TickScheduler[F](conf.tickUnit)
-
         supervisor = new EraSupervisor[F](
+          conf,
           isShutdownRef,
           semaphore,
           runtimesRef,
           scheduleRef,
           eraTreeRef,
           makeRuntime,
-          scheduler,
           forkChoiceManager
         )
 
