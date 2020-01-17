@@ -87,10 +87,10 @@ class EraSupervisor[F[_]: Concurrent: EraStorage: Relaying](
       era     <- EraStorage[F].getEraUnsafe(keyBlockHash)
       runtime <- makeRuntime(era)
       agenda  <- runtime.initAgenda
-      runner  <- start(runtime, agenda)
-    } yield runner
+      _       <- start(runtime, agenda)
+    } yield runtime
 
-  private def start(runtime: EraRuntime[F], agenda: Agenda): F[EraRuntime[F]] = {
+  private def start(runtime: EraRuntime[F], agenda: Agenda): F[Unit] = {
     val key = runtime.era.keyBlockHash
     for {
       _ <- runtimesRef.update { rs =>
@@ -103,7 +103,7 @@ class EraSupervisor[F[_]: Concurrent: EraStorage: Relaying](
             addChild(key, era.keyBlockHash)
           }
       _ <- schedule(runtime, agenda)
-    } yield runtime
+    } yield ()
   }
 
   private def schedule(runtime: EraRuntime[F], agenda: Agenda): F[Unit] =
