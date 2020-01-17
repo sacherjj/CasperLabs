@@ -116,7 +116,7 @@ export class Key {
         }
     }
 
-    // @operator("==")
+    @operator("==")
     equalsTo(other: Key): bool {
         if (this.variant === KeyVariant.UREF_ID) {
             if (other.variant == KeyVariant.UREF_ID) {
@@ -138,6 +138,11 @@ export class Key {
             unreachable();
             return false;
         }
+    }
+
+    @operator("!=")
+    notEqualsTo(other: Key): bool {
+        return !this.equalsTo(other);
     }
 
     isURef(): bool {
