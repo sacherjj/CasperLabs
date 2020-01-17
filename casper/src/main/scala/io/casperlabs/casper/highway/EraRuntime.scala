@@ -477,14 +477,19 @@ class EraRuntime[F[_]: MonadThrowable: Clock: EraStorage: FinalityStorageReader:
             isOverAtCurrent <- isEraOverAt(currentRoundId)
             isOverAtNext    <- isEraOverAt(nextRoundId)
           } yield {
-            // Schedule the omega for whatever the current round is, don't bother
-            // with the old one if the block production was so slow that it pushed
-            // us into the next round already. We can still participate in this one.
-            val omegaTick = chooseOmegaTick(currentRoundId, nextRoundId)
-            val omega     = Agenda(omegaTick -> Agenda.CreateOmegaMessage(currentRoundId))
-            val next      = Agenda(nextRoundId -> Agenda.StartRound(nextRoundId))
+            val omega = if (!isOverAtCurrent) {
+              // Schedule the omega for whatever the current round is, don't bother
+              // with the old one if the block production was so slow that it pushed
+              // us into the next round already. We can still participate in this one.
+              val omegaTick = chooseOmegaTick(currentRoundId, nextRoundId)
+              Agenda(omegaTick -> Agenda.CreateOmegaMessage(currentRoundId))
+            } else Agenda.empty
 
-            omega.filterNot(_ => isOverAtCurrent) ++ next.filterNot(_ => isOverAtNext)
+            val next = if (!isOverAtNext) {
+              Agenda(nextRoundId -> Agenda.StartRound(nextRoundId))
+            } else Agenda.empty
+
+            omega ++ next
           }
 
         maybeMessageProducer
