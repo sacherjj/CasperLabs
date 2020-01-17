@@ -185,7 +185,15 @@ publish:
 
 .PHONY: check-publish
 check-publish:
-	cd contract && $(CARGO) publish --dry-run
+	cd cargo-casperlabs && $(CARGO) publish --dry-run
+#	cd contract && $(CARGO) publish --dry-run
+#	cd engine-core && $(CARGO) publish --dry-run
+#	cd engine-grpc-server && $(CARGO) publish --dry-run
+#	cd engine-shared && $(CARGO) publish --dry-run
+#	cd engine-storage && $(CARGO) publish --dry-run
+#	cd engine-test-support && $(CARGO) publish --dry-run
+#	cd engine-wasm-prep && $(CARGO) publish --dry-run
+	cd types && $(CARGO) publish --dry-run
 
 .PHONY: bench
 bench: build-contracts-rs
