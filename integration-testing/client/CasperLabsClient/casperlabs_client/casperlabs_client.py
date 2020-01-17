@@ -42,20 +42,18 @@ from . import control_pb2 as control
 from . import casper_pb2 as casper
 from . import casper_pb2_grpc
 
-# ~/CasperLabs/protobuf/io/casperlabs/casper/consensus/consensus.proto
-from . import consensus_pb2 as consensus
-
 # ~/CasperLabs/protobuf/io/casperlabs/casper/consensus/info.proto
 from . import info_pb2 as info
 
 from . import vdag
 from . import abi
-from . import crypto
 from casperlabs_client.utils import (
     bundled_contract,
     extract_common_name,
     key_variant,
     make_deploy,
+    sign_deploy,
+    get_public_key,
 )
 
 
@@ -309,21 +307,7 @@ class CasperLabsClient:
 
     @api
     def sign_deploy(self, deploy, public_key, private_key_file):
-        # See if this is hex encoded
-        try:
-            public_key = bytes.fromhex(public_key)
-        except TypeError:
-            pass
-
-        deploy.approvals.extend(
-            [
-                consensus.Approval(
-                    approver_public_key=public_key,
-                    signature=crypto.signature(private_key_file, deploy.deploy_hash),
-                )
-            ]
-        )
-        return deploy
+        return sign_deploy(deploy, public_key, private_key_file)
 
     @api
     def deploy(
@@ -403,12 +387,9 @@ class CasperLabsClient:
             chain_name=chain_name,
         )
 
-        pk = (
-            (public_key and crypto.read_pem_key(public_key))
-            or from_addr
-            or crypto.private_to_public_key(private_key)
+        deploy = self.sign_deploy(
+            deploy, get_public_key(public_key, from_addr, private_key), private_key
         )
-        deploy = self.sign_deploy(deploy, pk, private_key)
         self.send_deploy(deploy)
         return deploy.deploy_hash.hex()
 

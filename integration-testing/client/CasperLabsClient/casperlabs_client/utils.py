@@ -152,3 +152,29 @@ def make_deploy(
     deploy_hash = crypto.blake2b_hash(_serialize(header))
 
     return consensus.Deploy(deploy_hash=deploy_hash, header=header, body=body)
+
+
+def sign_deploy(deploy, public_key, private_key_file):
+    # See if this is hex encoded
+    try:
+        public_key = bytes.fromhex(public_key)
+    except TypeError:
+        pass
+
+    deploy.approvals.extend(
+        [
+            consensus.Approval(
+                approver_public_key=public_key,
+                signature=crypto.signature(private_key_file, deploy.deploy_hash),
+            )
+        ]
+    )
+    return deploy
+
+
+def get_public_key(public_key, from_addr, private_key):
+    return (
+        (public_key and crypto.read_pem_key(public_key))
+        or from_addr
+        or crypto.private_to_public_key(private_key)
+    )
