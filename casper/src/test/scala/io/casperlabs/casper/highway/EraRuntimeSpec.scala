@@ -269,7 +269,16 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
   }
 
   "validate" should {
-    "reject a block before the era starts" in {
+    "reject a message from an unbonded validator" in {
+      val runtime = genesisEraRuntime()
+      val message =
+        makeBlock("Anonymous", runtime.era, roundId = runtime.startTick)
+      runtime.validate(message).value shouldBe Left(
+        "The validator is not bonded in the era."
+      )
+    }
+
+    "reject a message before the era starts" in {
       val runtime = genesisEraRuntime()
       val message =
         makeBlock("Alice", runtime.era, roundId = Ticks(runtime.startTick - 1))
@@ -278,7 +287,7 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
       )
     }
 
-    "reject a block after the era ends" in {
+    "reject a message after the era ends" in {
       val runtime = genesisEraRuntime()
       val message =
         makeBlock(

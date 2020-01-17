@@ -372,6 +372,10 @@ class EraRuntime[F[_]: MonadThrowable: Clock: EraStorage: FinalityStorageReader:
           case VotingDuration.FixedLength(d) => conf.toTicks(end plus d) < message.roundId
           case _                             => false
         }
+      ) >>
+      check(
+        "The validator is not bonded in the era.",
+        era.bonds.find(_.validatorPublicKey == message.validatorId).isEmpty
       ) >> {
       message match {
         case b: Message.Block =>
