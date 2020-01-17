@@ -98,7 +98,7 @@ class EraSupervisor[F[_]: Concurrent: EraStorage: Relaying](
             require(!rs.contains(key), "Shouldn't start eras more than once!")
             rs.updated(key, runtime)
           }
-      childEras <- EraStorage[F].getChildEras(runtime.era.keyBlockHash)
+      childEras <- EraStorage[F].getChildEras(key)
       _ <- childEras.toList.traverse { era =>
             addChild(key, era.keyBlockHash)
           }
@@ -133,7 +133,10 @@ class EraSupervisor[F[_]: Concurrent: EraStorage: Relaying](
 
   private def handleEvent(event: HighwayEvent): F[Unit] = event match {
     case HighwayEvent.CreatedEra(era) =>
-      addChild(era.parentKeyBlockHash, era.keyBlockHash) *> getOrStart(era.keyBlockHash).void
+      for {
+        _ <- addChild(era.parentKeyBlockHash, era.keyBlockHash)
+        _ <- getOrStart(era.keyBlockHash)
+      } yield ()
     case HighwayEvent.CreatedLambdaMessage(m)  => handleCreatedMessage(m)
     case HighwayEvent.CreatedLambdaResponse(m) => handleCreatedMessage(m)
     case HighwayEvent.CreatedOmegaMessage(m)   => handleCreatedMessage(m)
