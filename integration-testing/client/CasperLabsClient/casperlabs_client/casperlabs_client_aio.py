@@ -57,9 +57,10 @@ class CasperLabsClientAIO(object):
         return Channel(self.host, self.port)
 
     async def show_blocks(self, depth=1, max_rank=0, full_view=True):
-        view = full_view and info.BlockInfo.View.FULL or info.BlockInfo.View.BASIC
         return await self.casper_service.StreamBlockInfos(
-            casper.StreamBlockInfosRequest(depth=depth, max_rank=max_rank, view=view)
+            casper.StreamBlockInfosRequest(
+                depth=depth, max_rank=max_rank, view=self._block_info_view(full_view)
+            )
         )
 
     async def deploy(
@@ -130,10 +131,10 @@ class CasperLabsClientAIO(object):
         return result
 
     async def show_deploy(self, deploy_hash_base16: str, full_view=True):
-        view = full_view and info.DeployInfo.View.FULL or info.DeployInfo.View.BASIC
         return await self.casper_service.GetDeployInfo(
             casper.GetDeployInfoRequest(
-                deploy_hash_base16=deploy_hash_base16, view=view
+                deploy_hash_base16=deploy_hash_base16,
+                view=self._deploy_info_view(full_view),
             )
         )
 
@@ -181,15 +182,23 @@ class CasperLabsClientAIO(object):
         return int(balance.big_int.value)
 
     async def show_block(self, block_hash_base16: str, full_view=True):
-        view = full_view and info.BlockInfo.View.FULL or info.BlockInfo.View.BASIC
         return await self.casper_service.GetBlockInfo(
-            casper.GetBlockInfoRequest(block_hash_base16=block_hash_base16, view=view)
+            casper.GetBlockInfoRequest(
+                block_hash_base16=block_hash_base16,
+                view=self._block_info_view(full_view),
+            )
         )
 
     async def show_deploys(self, block_hash_base16: str, full_view=True):
-        view = full_view and info.DeployInfo.View.FULL or info.DeployInfo.View.BASIC
         return await self.casper_service.StreamBlockDeploys(
             casper.StreamBlockDeploysRequest(
-                block_hash_base16=block_hash_base16, view=view
+                block_hash_base16=block_hash_base16,
+                view=self._deploy_info_view(full_view),
             )
         )
+
+    def _deploy_info_view(self, full_view):
+        return full_view and info.DeployInfo.View.FULL or info.DeployInfo.View.BASIC
+
+    def _block_info_view(self, full_view):
+        return full_view and info.BlockInfo.View.FULL or info.BlockInfo.View.BASIC
