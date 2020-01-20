@@ -50,6 +50,9 @@ trait StorageFixture { self: Suite =>
       ec: Scheduler = scheduler,
       timeout: FiniteDuration = 10.seconds
   )(f: SQLiteStorage.CombinedStorage[Task] => Task[_]) = {
+    // NOTE: When using the TestScheduler, we have to pass it as `ec` so that
+    // the transactors use the same execution as the one we're exercising in
+    // the test. Otherwise the tests will wait on the SQL queries until they time out.
     val testProgram = StorageFixture.createMemoryStorage[Task](ec).use { storage =>
       f(storage)
     }
