@@ -942,7 +942,7 @@ def check_dependencies_not_met(cli):
     with raises(Exception) as excinfo:
         propose_check_no_errors(cli)
 
-    expected = "OUT_OF_RANGE: No new deploys"
+    expected = "No new deploys"
     assert expected in str(excinfo.value) or expected in excinfo.value.output
 
 
@@ -1012,7 +1012,7 @@ def check_ttl_late(cli, temp_dir):
     with raises(Exception) as excinfo:
         propose_check_no_errors(cli)
 
-    expected = "OUT_OF_RANGE: No new deploys"
+    expected = "No new deploys"
     assert expected in str(excinfo.value) or expected in excinfo.value.output
 
 
