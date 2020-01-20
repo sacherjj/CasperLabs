@@ -68,12 +68,13 @@ publish() {
     local CRATE_NAME=$(cat $EE_DIR/$DIR_IN_EE/Cargo.toml | python3 -c "import sys, toml; print(toml.load(sys.stdin)['package']['name'])")
     max_version_in_crates_io $CRATE_NAME
 
-    if [[ "$DEV_VERSION" != "$CRATES_IO_VERSION" ]]; then
+    if [[ "$DEV_VERSION" == "$CRATES_IO_VERSION" ]]; then
+        printf "Skipping '%s'\n" $CRATE_NAME
+    else
         printf "Publishing '%s'\n" $CRATE_NAME
         cd $EE_DIR/$DIR_IN_EE
         cargo publish
         printf "Published '%s' at version %s\n" $CRATE_NAME $DEV_VERSION
-        printf "================================================================================\n\n"
     fi
 }
 
@@ -82,4 +83,5 @@ check_python_has_toml
 
 for PACKAGE_DIR in "${PACKAGE_DIRS[@]}"; do
     publish $PACKAGE_DIR
+    printf "================================================================================\n\n"
 done
