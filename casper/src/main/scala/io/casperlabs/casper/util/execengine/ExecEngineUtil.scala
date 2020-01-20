@@ -6,7 +6,12 @@ import cats.kernel.Monoid
 import cats.data.NonEmptyList
 import cats.{Foldable, Monad}
 import com.google.protobuf.ByteString
-import io.casperlabs.casper.DeploySelection.{DeploySelection, DeploySelectionResult}
+import io.casperlabs.casper.DeploySelection.{
+  CommutingDeploys,
+  DeploySelection,
+  DeploySelectionResult
+}
+import CommutingDeploys._
 import io.casperlabs.casper._
 import io.casperlabs.casper.consensus.state.{CLType, CLValue, Key, ProtocolVersion, StoredValue}
 import io.casperlabs.casper.consensus.{state, Block, Deploy}
@@ -56,30 +61,33 @@ object ExecEngineUtil {
       ProtocolVersion
   ) => F[Either[Throwable, ExecutionEngineService.CommitResult]]
 
-  protected[execengine] def singleDeploy[F[_]: MonadThrowable](
+  protected[execengine] def parDeployEffects[F[_]: MonadThrowable](
       stage: Int,
       prestate: ByteString,
       blocktime: Long,
       protocolVersion: state.ProtocolVersion,
-      deploy: Deploy
+      deploys: CommutingDeploys
   )(
       eeExec: EEExecFun[F],
       eeCommit: EECommitFun[F]
-  ): F[Either[PreconditionFailure, DeploysCheckpoint]] =
-    processDeploys[F](prestate, blocktime, Seq(deploy), protocolVersion)(eeExec)
+  ): F[Either[List[PreconditionFailure], DeploysCheckpoint]] =
+    processDeploys[F](prestate, blocktime, deploys.getDeploys.toList, protocolVersion)(eeExec)
       .flatMap { pdr =>
-        if (pdr.size != 1)
-          MonadThrowable[F].raiseError[ProcessedDeployResult](
+        if (pdr.size != deploys.size)
+          MonadThrowable[F].raiseError[List[ProcessedDeployResult]](
             SmartContractEngineError(
-              "ExecutionEngine returned more than 1 result for single deploy."
+              s"Unexpected number of results (${pdr.size} vs ${deploys.size} expected."
             )
           )
-        else pdr.head.pure[F]
+        else pdr.pure[F]
       }
-      .flatMap {
-        case de: DeployEffects => {
+      .flatMap { results =>
+        val (failures, deployEffects) = ProcessedDeployResult.split(results)
+        if (failures.nonEmpty)
+          MonadThrowable[F].pure(failures.asLeft[DeploysCheckpoint])
+        else {
           val (deploysForBlock, transforms) = ExecEngineUtil
-            .unzipEffectsAndDeploys(Seq(de), stage)
+            .unzipEffectsAndDeploys(deployEffects, stage)
             .unzip
           eeCommit(prestate, transforms.flatten, protocolVersion).rethrow
             .map { commitResult =>
@@ -89,11 +97,9 @@ object ExecEngineUtil {
                 commitResult.bondedValidators,
                 deploysForBlock,
                 protocolVersion
-              ).asRight[PreconditionFailure]
+              ).asRight[List[PreconditionFailure]]
             }
         }
-        case pf: PreconditionFailure =>
-          Either.left[PreconditionFailure, DeploysCheckpoint](pf).pure[F]
       }
 
   /** Takes a list of deploys and executes them one after the other, using a post state hash of a previous
@@ -127,13 +133,19 @@ object ExecEngineUtil {
     for {
       state <- deploysWithStage.foldLeftM(State.init) {
                 case (state, (deploy, stage)) =>
-                  singleDeploy[F](stage, state.postStateHash, blocktime, protocolVersion, deploy)(
+                  parDeployEffects[F](
+                    stage,
+                    state.postStateHash,
+                    blocktime,
+                    protocolVersion,
+                    CommutingDeploys(deploy)
+                  )(
                     eeExec,
                     eeCommit
                   ).map {
-                    case Left(preconditionFailure) =>
+                    case Left(preconditionFailures) =>
                       state.copy(
-                        preconditionFailures = preconditionFailure :: state.preconditionFailures
+                        preconditionFailures = preconditionFailures ::: state.preconditionFailures
                       )
                     case Right(deploysCheckpoint) =>
                       state.copy(

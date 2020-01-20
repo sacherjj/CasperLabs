@@ -1,5 +1,6 @@
 package io.casperlabs.casper
 
+import cats.data.NonEmptyList
 import cats.effect.Sync
 import cats.effect.concurrent.Ref
 import cats.implicits._
@@ -17,6 +18,7 @@ import io.casperlabs.casper.util.execengine.{
 import io.casperlabs.catscontrib.Fs2Compiler
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.smartcontracts.ExecutionEngineService
+import shapeless.tag.@@
 
 trait Select[F[_]] {
   type A
@@ -25,6 +27,24 @@ trait Select[F[_]] {
 }
 
 object DeploySelection {
+
+  sealed trait CommutingDeploysTag
+
+  type CommutingDeploys = NonEmptyList[Deploy] @@ CommutingDeploysTag
+  object CommutingDeploys {
+    def apply(deploys: NonEmptyList[Deploy]): CommutingDeploys =
+      deploys.asInstanceOf[CommutingDeploys]
+
+    def apply(deploy: Deploy): CommutingDeploys =
+      NonEmptyList.one(deploy).asInstanceOf[CommutingDeploys]
+
+    class CommutingDeploysOps(deploys: CommutingDeploys) {
+      def getDeploys: NonEmptyList[Deploy] = deploys
+    }
+
+    implicit def commutingDeploysOps(commutingDeploys: CommutingDeploys): CommutingDeploysOps =
+      new CommutingDeploysOps(commutingDeploys)
+  }
 
   final case class DeploySelectionResult(
       commuting: List[DeployEffects],
