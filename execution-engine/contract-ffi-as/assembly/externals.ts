@@ -88,3 +88,9 @@ export declare function write(key_ptr: usize, key_size: usize, value_ptr: usize,
 
 @external("env", "has_key")
 export declare function has_key(name_ptr: usize, name_size: usize): i32;
+
+@external("env", "add_associated_key")
+export declare function add_associated_key(public_key_ptr: usize, weight: i32): i32;
+
+@external("env", "set_action_threshold")
+export declare function set_action_threshold(permission_level: u32, threshold: i32): i32;
