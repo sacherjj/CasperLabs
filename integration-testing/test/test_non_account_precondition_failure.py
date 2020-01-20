@@ -23,5 +23,4 @@ def test_non_account_precondition_failure(trillion_payment_node_network):
         node.p_client.propose()
 
     # Verify reason for propose failure
-    assert e.typename == "InternalError"
-    assert str(e.value) == "StatusCode.OUT_OF_RANGE: No new deploys."
+    assert "No new deploys." in str(e.value)
