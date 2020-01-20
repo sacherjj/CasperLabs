@@ -69,7 +69,7 @@ class ExecEngineUtilTest extends FlatSpec with Matchers with BlockGenerator with
         b2              <- createAndStoreMessage[Task](Seq(b1.blockHash), deploys = b2DeploysCost)
         b3              <- createAndStoreMessage[Task](Seq(b2.blockHash), deploys = b3DeploysCost)
         dag1            <- dagStorage.getRepresentation
-        blockCheckpoint <- computeBlockCheckpointFromDeploys(genesis, genesis, dag1)
+        blockCheckpoint <- computeBlockCheckpointFromDeploys(genesis, dag1)
         _ <- injectPostStateHash[Task](
               0,
               genesis,
@@ -77,7 +77,7 @@ class ExecEngineUtilTest extends FlatSpec with Matchers with BlockGenerator with
               blockCheckpoint.deploysForBlock
             )
         dag2         <- dagStorage.getRepresentation
-        b1Checkpoint <- computeBlockCheckpointFromDeploys(b1, genesis, dag2)
+        b1Checkpoint <- computeBlockCheckpointFromDeploys(b1, dag2)
         _ <- injectPostStateHash[Task](
               1,
               b1,
@@ -87,7 +87,6 @@ class ExecEngineUtilTest extends FlatSpec with Matchers with BlockGenerator with
         dag3 <- dagStorage.getRepresentation
         b2Checkpoint <- computeBlockCheckpointFromDeploys(
                          b2,
-                         genesis,
                          dag3
                        )
         _ <- injectPostStateHash[Task](
@@ -100,7 +99,6 @@ class ExecEngineUtilTest extends FlatSpec with Matchers with BlockGenerator with
         dag4 <- dagStorage.getRepresentation
         _ <- computeBlockCheckpointFromDeploys(
               b3,
-              genesis,
               dag4
             )
 //          b3PostState          = runtimeManager.storageRepr(postb3StateHash).get
@@ -225,7 +223,7 @@ class ExecEngineUtilTest extends FlatSpec with Matchers with BlockGenerator with
        *         genesis
        */
 
-      def step(index: Int, genesis: Block)(
+      def step(index: Int)(
           implicit executionEngineService: ExecutionEngineService[Task]
       ) =
         for {
@@ -233,7 +231,6 @@ class ExecEngineUtilTest extends FlatSpec with Matchers with BlockGenerator with
           dag <- dagStorage.getRepresentation
           computeBlockCheckpointResult <- computeBlockCheckpointFromDeploys(
                                            b1,
-                                           genesis,
                                            dag
                                          )
           postB1StateHash        = computeBlockCheckpointResult.postStateHash
@@ -254,16 +251,16 @@ class ExecEngineUtilTest extends FlatSpec with Matchers with BlockGenerator with
               Seq(b1.blockHash, b2.blockHash),
               deploys = b3DeploysWithCost
             )
-        _ <- step(1, genesis)
-        _ <- step(2, genesis)
-        r1 <- step(2, genesis)(failedExecEEService).onErrorHandleWith { ex =>
+        _ <- step(1)
+        _ <- step(2)
+        r1 <- step(2)(failedExecEEService).onErrorHandleWith { ex =>
                Task.now {
                  ex.getMessage should startWith("failed when exec")
                  ByteString.copyFromUtf8("succeed")
                }
              }
         _ = r1 should be(ByteString.copyFromUtf8("succeed"))
-        _ <- step(2, genesis)(failedCommitEEService).onErrorHandleWith { ex =>
+        _ <- step(2)(failedCommitEEService).onErrorHandleWith { ex =>
               Task.now {
                 ex.getMessage should startWith("failed when commit")
                 ByteString.copyFromUtf8("succeed")

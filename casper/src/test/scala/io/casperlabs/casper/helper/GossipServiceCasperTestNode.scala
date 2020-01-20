@@ -116,7 +116,6 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
 
   override def standaloneF[F[_]](
       genesis: consensus.Block,
-      transforms: Seq[TransformEntry],
       sk: PrivateKey,
       storageSize: Long = 1024L * 1024 * 10,
       faultToleranceThreshold: Double = 0.1
@@ -194,7 +193,6 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
   override def networkF[F[_]](
       sks: IndexedSeq[PrivateKey],
       genesis: consensus.Block,
-      transforms: Seq[TransformEntry],
       storageSize: Long = 1024L * 1024 * 10,
       faultToleranceThreshold: Double = 0.1,
       maybeMakeEE: Option[HashSetCasperTestNode.MakeExecutionEngineService[F]] = None

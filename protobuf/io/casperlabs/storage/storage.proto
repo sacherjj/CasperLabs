@@ -27,4 +27,3 @@ message BlockMetadataInternal {
     int64 rank                        = 6;
     int32 validator_block_seq_num     = 7;
 }
-

@@ -138,7 +138,6 @@ trait HashSetCasperTestNodeFactory {
 
   def standaloneF[F[_]](
       genesis: Block,
-      transforms: Seq[TransformEntry],
       sk: PrivateKey,
       storageSize: Long = 1024L * 1024 * 10,
       faultToleranceThreshold: Double = 0.1
@@ -152,14 +151,13 @@ trait HashSetCasperTestNodeFactory {
 
   def standaloneEff(
       genesis: Block,
-      transforms: Seq[TransformEntry],
       sk: PrivateKey,
       storageSize: Long = 1024L * 1024 * 10,
       faultToleranceThreshold: Double = 0.1
   )(
       implicit scheduler: Scheduler
   ): TestNode[Task] =
-    standaloneF[Task](genesis, transforms, sk, storageSize, faultToleranceThreshold)(
+    standaloneF[Task](genesis, sk, storageSize, faultToleranceThreshold)(
       Concurrent[Task],
       Parallel[Task],
       Timer[Task],
@@ -169,7 +167,6 @@ trait HashSetCasperTestNodeFactory {
   def networkF[F[_]](
       sks: IndexedSeq[PrivateKey],
       genesis: Block,
-      transforms: Seq[TransformEntry],
       storageSize: Long = 1024L * 1024 * 10,
       faultToleranceThreshold: Double = 0.1,
       maybeMakeEE: Option[HashSetCasperTestNode.MakeExecutionEngineService[F]] = None
@@ -184,7 +181,6 @@ trait HashSetCasperTestNodeFactory {
   def networkEff(
       sks: IndexedSeq[PrivateKey],
       genesis: Block,
-      transforms: Seq[TransformEntry],
       storageSize: Long = 1024L * 1024 * 10,
       faultToleranceThreshold: Double = 0.1,
       maybeMakeEE: Option[MakeExecutionEngineService[Task]] = None
@@ -192,7 +188,6 @@ trait HashSetCasperTestNodeFactory {
     networkF[Task](
       sks,
       genesis,
-      transforms,
       storageSize,
       faultToleranceThreshold,
       maybeMakeEE
