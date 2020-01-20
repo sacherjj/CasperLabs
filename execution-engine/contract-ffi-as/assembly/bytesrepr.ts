@@ -1,6 +1,17 @@
 import {CLValue} from "./clvalue";
 import {Key} from "./key";
 
+export function toBytesU8(num: u8): u8[] {
+    return [num];
+}
+
+export function fromBytesU8(bytes: Uint8Array): U8 | null {
+    if (bytes.length < 1) {
+        return null;
+    }
+    return <U8>load<u8>(bytes.dataStart);
+}
+
 // Converts u32 to little endian
 export function toBytesU32(num: u32): u8[] {
     let bytes = new Uint8Array(4);

@@ -1,6 +1,7 @@
 import { fromBytesU64, toBytesU64,
          fromBytesStringList, toBytesStringList,
          fromBytesU32, toBytesU32,
+         fromBytesU8, toBytesU8,
          toBytesMap,
          toBytesPair,
          toBytesString, fromBytesString,
@@ -14,6 +15,25 @@ import { typedToArray, arrayToTyped } from "../../assembly/utils";
 
 // ERROR: TypeError: Cannot create property 'shouldSerializeU64' on number '3' in @assemblyscript/loader
 // export class BytesReprTest {
+
+export function testDeSerU8(): bool {
+    const truth: u8[] = [222];
+    let ser = toBytesU8(222);
+    assert(isArraysEqual(ser, truth));
+    let deser = fromBytesU8(arrayToTyped(ser));
+    assert(ser !== null);
+    return <u8>deser == <u8>222;
+}
+
+export function xtestDeSerU8_Zero(): bool {
+    // Used for deserializng Weight (for example)
+    // NOTE: Currently probably unable to check if `foo(): U8 | null` result is null
+    const truth: u8[] = [0];
+    let ser = toBytesU8(0);
+    assert(isArraysEqual(ser, truth));
+    let deser = fromBytesU8(arrayToTyped(ser));
+    return deser == <U8>0;
+}
 
 export function testDeSerU32(): bool {
     const truth: u8[] = [239, 190, 173, 222];
