@@ -26,6 +26,8 @@ import org.flywaydb.core.api.Location
 import org.scalatest.Suite
 import org.sqlite.{SQLiteConnection, SQLiteDataSource}
 import scala.concurrent.ExecutionContext
+import scala.concurrent.duration.FiniteDuration
+import scala.concurrent.duration._
 
 trait StorageFixture { self: Suite =>
   val scheduler: SchedulerService     = Scheduler.fixedPool("storage-fixture-scheduler", 4)
@@ -44,11 +46,15 @@ trait StorageFixture { self: Suite =>
     testProgram.unsafeRunSync(scheduler)
   }
 
-  def withCombinedStorage(f: SQLiteStorage.CombinedStorage[Task] => Task[_]) = {
-    val testProgram = StorageFixture.createMemoryStorage[Task](scheduler).use { storage =>
+  def withCombinedStorage(
+      ec: Scheduler = scheduler,
+      timeout: FiniteDuration = 10.seconds
+  )(f: SQLiteStorage.CombinedStorage[Task] => Task[_]) = {
+    val testProgram = StorageFixture.createMemoryStorage[Task](ec).use { storage =>
       f(storage)
     }
-    testProgram.unsafeRunSync(scheduler)
+    implicit val s = scheduler
+    testProgram.runSyncUnsafe(timeout)
   }
 }
 

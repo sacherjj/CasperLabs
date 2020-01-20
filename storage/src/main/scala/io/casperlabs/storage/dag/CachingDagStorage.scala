@@ -107,7 +107,7 @@ class CachingDagStorage[F[_]: Concurrent](
   override def getRepresentation: F[DagRepresentation[F]] =
     (this: DagRepresentation[F]).pure[F]
 
-  override private[storage] def insert(block: Block): F[DagRepresentation[F]] =
+  private[storage] override def insert(block: Block): F[DagRepresentation[F]] =
     for {
       dag     <- underlying.insert(block)
       message <- Sync[F].fromTry(Message.fromBlock(block))

@@ -10,9 +10,11 @@ import io.casperlabs.metrics.Metered
 import io.casperlabs.storage.{BlockHash, BlockMsgWithTransform, DeployHash}
 
 import scala.language.higherKinds
+import simulacrum.typeclass
 
-trait BlockStorage[F[_]] {
-  import BlockStorage.BlockMessage
+@typeclass
+trait BlockStorageWriter[F[_]] {
+  def put(blockHash: BlockHash, blockMsgWithTransform: BlockMsgWithTransform): F[Unit]
 
   def put(
       blockMsgWithTransform: BlockMsgWithTransform
@@ -23,18 +25,21 @@ trait BlockStorage[F[_]] {
 
   def put(
       blockHash: BlockHash,
-      blockMessage: BlockMessage,
+      blockMessage: Block,
       transforms: Seq[TransformEntry]
   ): F[Unit] =
     put(blockHash, BlockMsgWithTransform(Some(blockMessage), transforms))
+}
+
+@typeclass
+trait BlockStorage[F[_]] extends BlockStorageWriter[F] {
+  import BlockStorage.BlockMessage
 
   def get(blockHash: BlockHash): F[Option[BlockMsgWithTransform]]
 
   def getByPrefix(blockHashPrefix: String): F[Option[BlockMsgWithTransform]]
 
   def isEmpty: F[Boolean]
-
-  def put(blockHash: BlockHash, blockMsgWithTransform: BlockMsgWithTransform): F[Unit]
 
   def apply(blockHash: BlockHash)(implicit applicativeF: Applicative[F]): F[BlockMsgWithTransform] =
     get(blockHash).map(_.get)
@@ -126,5 +131,4 @@ object BlockStorage {
     )(implicit applicative: Applicative[F]): F[Option[Seq[TransformEntry]]] =
       blockStorage.get(blockHash).map(_.map(_.transformEntry))
   }
-  def apply[F[_]](implicit ev: BlockStorage[F]): BlockStorage[F] = ev
 }

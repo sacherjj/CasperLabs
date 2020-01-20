@@ -2,6 +2,7 @@ package io.casperlabs.casper.highway
 
 import cats._
 import cats.implicits._
+import cats.syntax.show
 import cats.effect.{Concurrent, Fiber, Resource, Sync, Timer}
 import cats.effect.concurrent.{Ref, Semaphore}
 import io.casperlabs.casper.consensus.{Block, BlockSummary, Era}
@@ -9,12 +10,14 @@ import io.casperlabs.casper.util.DagOperations, DagOperations.Key
 import io.casperlabs.casper.highway.EraRuntime.Agenda
 import io.casperlabs.comm.gossiping.Relaying
 import io.casperlabs.models.Message
+import io.casperlabs.shared.Log
 import io.casperlabs.storage.BlockHash
 import io.casperlabs.storage.dag.{DagRepresentation, DagStorage, FinalityStorageReader}
 import io.casperlabs.storage.era.EraStorage
 import scala.concurrent.duration.FiniteDuration
+import scala.util.control.NonFatal
 
-class EraSupervisor[F[_]: Concurrent: Timer: EraStorage: Relaying](
+class EraSupervisor[F[_]: Concurrent: Timer: Log: EraStorage: Relaying: ForkChoiceManager](
     conf: HighwayConf,
     // Once the supervisor is shut down, reject incoming messages.
     isShutdownRef: Ref[F, Boolean],
@@ -22,8 +25,7 @@ class EraSupervisor[F[_]: Concurrent: Timer: EraStorage: Relaying](
     semaphore: Semaphore[F],
     erasRef: Ref[F, Map[BlockHash, EraSupervisor.Entry[F]]],
     scheduleRef: Ref[F, Map[(BlockHash, Agenda.DelayedAction), Fiber[F, Unit]]],
-    makeRuntime: Era => F[EraRuntime[F]],
-    forkChoiceManager: EraSupervisor.ForkChoiceManager[F]
+    makeRuntime: Era => F[EraRuntime[F]]
 ) {
   import EraSupervisor.Entry
 
@@ -68,6 +70,9 @@ class EraSupervisor[F[_]: Concurrent: Timer: EraStorage: Relaying](
       Sync[F].unit
     )
 
+  def eras: F[Set[Entry[F]]] =
+    erasRef.get.map(_.values.toSet)
+
   private def load(keyBlockHash: BlockHash): F[Entry[F]] =
     erasRef.get >>= {
       _.get(keyBlockHash).fold {
@@ -98,7 +103,7 @@ class EraSupervisor[F[_]: Concurrent: Timer: EraStorage: Relaying](
       entry     = Entry[F](runtime, childEras.map(_.keyBlockHash))
       _ <- erasRef.update { eras =>
             // Sanity check that the semaphore is applied.
-            require(!eras.contains(key), "Shouldn't start eras more than once!")
+            assert(!eras.contains(key), "Shouldn't start eras more than once!")
             eras.updated(key, entry)
           }
       _ <- schedule(runtime, agenda)
@@ -106,23 +111,31 @@ class EraSupervisor[F[_]: Concurrent: Timer: EraStorage: Relaying](
   }
 
   private def schedule(runtime: EraRuntime[F], agenda: Agenda): F[Unit] =
-    agenda.traverse { delayed =>
-      val key = (runtime.era.keyBlockHash, delayed)
-      for {
-        fiber <- scheduleAt(delayed.tick) {
-                  for {
-                    _                <- scheduleRef.update(_ - key)
-                    (events, agenda) <- runtime.handleAgenda(delayed.action).run
-                    _                <- handleEvents(events)
-                    _                <- schedule(runtime, agenda)
-                  } yield ()
-                }
-        _ <- scheduleRef.update { s =>
-              // Sanity check that we're not leaking fibers.
-              require(!s.contains(key), "Shouldn't schedule the same thing twice!")
-              s.updated(key, fiber)
-            }
-      } yield ()
+    agenda.traverse {
+      case delayed @ Agenda.DelayedAction(tick, action) =>
+        val key = (runtime.era.keyBlockHash, delayed)
+        for {
+          fiber <- scheduleAt(tick) {
+                    val exec = for {
+                      _                <- Log[F].debug(s"Executing $action in ${key._1.show -> "era"}")
+                      _                <- scheduleRef.update(_ - key)
+                      (events, agenda) <- runtime.handleAgenda(action).run
+                      _                <- handleEvents(events)
+                      _                <- schedule(runtime, agenda)
+                    } yield ()
+
+                    exec.recoverWith {
+                      case NonFatal(ex) =>
+                        val era = runtime.era.keyBlockHash.show
+                        Log[F].error(s"Error executing $action in $era: $ex")
+                    }
+                  }
+          _ <- scheduleRef.update { s =>
+                // Sanity check that we're not leaking fibers.
+                assert(!s.contains(key), "Shouldn't schedule the same thing twice!")
+                s.updated(key, fiber)
+              }
+        } yield ()
     } void
 
   /** Execute an effect later, asynchronously. */
@@ -131,7 +144,9 @@ class EraSupervisor[F[_]: Concurrent: Timer: EraStorage: Relaying](
       now   <- Timer[F].clock.realTime(conf.tickUnit)
       delay = math.max(ticks - now, 0L)
       fiber <- Concurrent[F].start {
-                Timer[F].sleep(FiniteDuration(delay, conf.tickUnit)) >> effect
+                Timer[F].sleep(FiniteDuration(delay, conf.tickUnit)) >> effect.onError {
+                  case NonFatal(ex) => Log[F].error(s"Error executing fiber: $ex")
+                }
               }
     } yield fiber
 
@@ -139,13 +154,23 @@ class EraSupervisor[F[_]: Concurrent: Timer: EraStorage: Relaying](
   private def handleEvents(events: Vector[HighwayEvent]): F[Unit] = {
     def handleCreatedMessage(message: Message) =
       for {
+        _ <- Log[F].debug(
+              s"Created ${message.messageHash.show -> "message"} at ${message.roundId -> "tick"} on top of ${message.parentBlock.show -> "parent"} in ${message.keyBlockHash.show -> "era"}"
+            )
         _ <- Relaying[F].relay(List(message.messageHash))
         _ <- propagateLatestMessageToDescendantEras(message)
       } yield ()
 
     events.traverse {
       case HighwayEvent.CreatedEra(era) =>
+        val eraHash    = era.keyBlockHash.show
+        val parentHash = era.parentKeyBlockHash.show
+        val tick       = era.startTick
+        val start      = conf.toInstant(Ticks(era.startTick))
         for {
+          _ <- Log[F].info(
+                s"Creating ${eraHash -> "era"} starting at ${tick -> "tick"} or ${start -> "instant"} following ${parentHash -> "parent"}"
+              )
           // Schedule the child era.
           child <- load(era.keyBlockHash)
           // Remember the offspring.
@@ -160,8 +185,9 @@ class EraSupervisor[F[_]: Concurrent: Timer: EraStorage: Relaying](
   /** Update descendant eras' latest messages. */
   private def propagateLatestMessageToDescendantEras(message: Message): F[Unit] =
     for {
+      _  <- ForkChoiceManager[F].updateLatestMessage(message.keyBlockHash, message)
       ds <- loadDescendants(message.keyBlockHash)
-      _  <- ds.traverse(d => forkChoiceManager.updateLatestMessage(d.keyBlockHash, message))
+      _  <- ds.traverse(d => ForkChoiceManager[F].updateLatestMessage(d.keyBlockHash, message))
     } yield ()
 
   private def loadDescendants(keyBlockHash: BlockHash): F[List[Entry[F]]] = {
@@ -204,7 +230,7 @@ class EraSupervisor[F[_]: Concurrent: Timer: EraStorage: Relaying](
 
 object EraSupervisor {
 
-  def apply[F[_]: Concurrent: Timer: EraStorage: DagStorage: FinalityStorageReader: Relaying](
+  def apply[F[_]: Concurrent: Timer: Log: EraStorage: DagStorage: FinalityStorageReader: Relaying: ForkChoiceManager](
       conf: HighwayConf,
       genesis: BlockSummary,
       maybeMessageProducer: Option[MessageProducer[F]],
@@ -217,8 +243,6 @@ object EraSupervisor {
         erasRef       <- Ref.of(Map.empty[BlockHash, Entry[F]])
         scheduleRef   <- Ref.of(Map.empty[(BlockHash, Agenda.DelayedAction), Fiber[F, Unit]])
         semaphore     <- Semaphore[F](1)
-
-        implicit0(forkChoiceManager: ForkChoiceManager[F]) = new ForkChoiceManager[F]()
 
         makeRuntime = (era: Era) =>
           EraRuntime.fromEra[F](
@@ -235,8 +259,7 @@ object EraSupervisor {
           semaphore,
           erasRef,
           scheduleRef,
-          makeRuntime,
-          forkChoiceManager
+          makeRuntime
         )
 
         // Make sure we have the genesis era in storage. We'll resume if it's the first one.
@@ -260,24 +283,6 @@ object EraSupervisor {
   object Entry {
     implicit def `Key[Entry]`[F[_]]: Key[Entry[F]] =
       Key.instance[Entry[F], BlockHash](_.keyBlockHash)
-  }
-
-  // Fork choice should be something that we can update for each child era when there are new messages coming in.
-  class ForkChoiceManager[F[_]] extends ForkChoice[F] {
-
-    /** Tell the fork choice that deals with a given era that an ancestor era has a new message. */
-    def updateLatestMessage(
-        // The era in which we want to update the latest message.
-        keyBlockHash: BlockHash,
-        // The latest message in the ancestor era that must be taken into account from now.
-        message: Message
-    ): F[Unit] = ???
-
-    override def fromKeyBlock(keyBlockHash: BlockHash): F[ForkChoice.Result] = ???
-    override def fromJustifications(
-        keyBlockHash: BlockHash,
-        justifications: Set[BlockHash]
-    ): F[ForkChoice.Result] = ???
   }
 
   // Return type for the initialization of active eras along the era tree.

@@ -2,10 +2,13 @@ package io.casperlabs.casper.highway
 
 import cats._
 import cats.implicits._
-import cats.effect.{Clock, Sync}
+import cats.effect.{Clock, Concurrent, Sync, Timer}
 import cats.effect.concurrent.Ref
+import monix.execution.ExecutionModel
+import monix.execution.schedulers.TestScheduler
 import java.util.Calendar
 import java.time.Instant
+import java.util.concurrent.TimeUnit
 import scala.concurrent.duration._
 
 trait TickUtils {
@@ -41,6 +44,28 @@ trait TickUtils {
 
     /** A clock we can move. */
     def adjustable[F[_]: Sync](t: Instant) = new AdjustableMock[F](Ref.unsafe(t))
+  }
+
+  /** Create a TestScheduler adjusted to a given tick in time that we can use with
+    * wall clock time based eras. Adjustments can be made with `ctx.setInstant` or `ctx.tick`.
+    */
+  implicit class TestSchedulerCompanionOps(typ: TestScheduler.type) {
+    def fromInstant(t: Instant): TestScheduler = {
+      val ctx = TestScheduler()
+      ctx.tick(t.toEpochMilli.millis)
+      ctx
+    }
+  }
+
+  implicit class TestSchedulerOps(ctx: TestScheduler) {
+
+    /** Set the clock forward and execute all queued tasks. */
+    def forwardTo(t: Instant): Unit = {
+      val currentMillis = ctx.clockRealTime(TimeUnit.MILLISECONDS)
+      val delay         = t.toEpochMilli - currentMillis
+      assert(delay >= 0, "Cannot wind the clock backwards!")
+      ctx.tick(delay.millis)
+    }
   }
 
 }

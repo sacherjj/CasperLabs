@@ -101,9 +101,11 @@ class EraRuntime[F[_]: MonadThrowable: Clock: EraStorage: FinalityStorageReader:
       if (msg.parentBlock.isEmpty || !msg.isInstanceOf[Message.Block])
         false.pure[F]
       else
-        dag.lookupUnsafe(msg.parentBlock).map { parent =>
-          isSwitchBoundary(parent.roundInstant, msg.roundInstant)
-        }
+        dag
+          .lookupUnsafe(msg.parentBlock)
+          .map { parent =>
+            isSwitchBoundary(parent.roundInstant, msg.roundInstant)
+          }
 
     def isLambdaMessage: F[Boolean] =
       if (leaderFunction(Ticks(msg.roundId)) == msg.validatorId)

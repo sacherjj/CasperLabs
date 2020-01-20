@@ -60,6 +60,9 @@ trait LogPackage {
 object Log {
   def apply[F[_]](implicit L: Log[F]): Log[F] = L
 
+  val Level = IzLog.Level
+  type Level = IzLog.Level
+
   // This should only be used in testing, it disables all logging even SLF4j
   // Otherwise we see output from http4s during tests, something that used
   // to be disabled by having a test version of logback.xml
