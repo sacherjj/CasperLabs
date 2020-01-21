@@ -13,6 +13,16 @@ export enum AddKeyFailure {
     PermissionDenied = 3,
 }
 
+export enum UpdateKeyFailure {
+    Ok = 0,
+    // Key does not exist in the list of associated keys.
+    MissingKey = 1,
+    // Unable to add new associated key due to insufficient permissions
+    PermissionDenied = 2,
+    // Unable to update weight that would fall below any of action thresholds
+    ThresholdViolation = 3,
+}
+
 export enum SetThresholdFailure {
     Ok = 0,
     // New threshold should be lower or equal than deployment threshold
@@ -42,4 +52,10 @@ export function addAssociatedKey(publicKey: Array<u8>, weight: i32): AddKeyFailu
 export function setActionThreshold(actionType: ActionType, thresholdValue: u8): SetThresholdFailure {
     const ret = externals.set_action_threshold(<i32>actionType, thresholdValue);
     return <SetThresholdFailure>ret;
+}
+
+export function updateAssociatedKey(publicKey: Array<u8>, weight: i32): UpdateKeyFailure {
+    const publicKeyBytes = arrayToTyped(publicKey);
+    const ret = externals.update_associated_key(publicKeyBytes.dataStart, weight);
+    return <UpdateKeyFailure>ret;
 }
