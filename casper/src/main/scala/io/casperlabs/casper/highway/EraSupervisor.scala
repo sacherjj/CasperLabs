@@ -131,10 +131,10 @@ class EraSupervisor[F[_]: Concurrent: Timer: Log: BlockStorageWriter: EraStorage
                     val era = runtime.era.keyBlockHash.show
                     val exec = for {
                       _                <- Log[F].debug(s"Executing $action in $era")
-                      _                <- scheduleRef.update(_ - key)
                       (events, agenda) <- runtime.handleAgenda(action).run
-                      _                <- handleEvents(events)
+                      _                <- scheduleRef.update(_ - key)
                       _                <- schedule(runtime, agenda)
+                      _                <- handleEvents(events)
                     } yield ()
 
                     exec.recoverWith {
