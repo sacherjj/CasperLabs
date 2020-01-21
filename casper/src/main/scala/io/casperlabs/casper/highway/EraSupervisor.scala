@@ -120,8 +120,9 @@ class EraSupervisor[F[_]: Concurrent: Timer: Log: EraStorage: Relaying: ForkChoi
         val key = (runtime.era.keyBlockHash, delayed)
         for {
           fiber <- scheduleAt(tick) {
+                    val era = runtime.era.keyBlockHash.show
                     val exec = for {
-                      _                <- Log[F].debug(s"Executing $action in ${key._1.show -> "era"}")
+                      _                <- Log[F].debug(s"Executing $action in $era")
                       _                <- scheduleRef.update(_ - key)
                       (events, agenda) <- runtime.handleAgenda(action).run
                       _                <- handleEvents(events)
@@ -130,7 +131,6 @@ class EraSupervisor[F[_]: Concurrent: Timer: Log: EraStorage: Relaying: ForkChoi
 
                     exec.recoverWith {
                       case NonFatal(ex) =>
-                        val era = runtime.era.keyBlockHash.show
                         Log[F].error(s"Error executing $action in $era: $ex")
                     }
                   }
