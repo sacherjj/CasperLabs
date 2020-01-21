@@ -1,6 +1,7 @@
 DOCKER_USERNAME ?= casperlabs
 DOCKER_PUSH_LATEST ?= false
 DOCKER_LATEST_TAG ?= latest
+$(eval DATA_DIR = $(shell echo $$(pwd)/data-dir))
 # Use the git tag / hash as version. Easy to pinpoint. `git tag` can return more than 1 though. `git rev-parse --short HEAD` would just be the commit.
 $(eval TAGS_OR_SHA = $(shell git tag -l --points-at HEAD | grep -e . || git describe --tags --always --long))
 # Try to use the semantic version with any leading `v` stripped.
@@ -34,6 +35,92 @@ all: \
 # Push the local artifacts to repositories.
 publish: docker-push-all
 	$(MAKE) -C execution-engine publish
+
+define wait_until
+	@while ! grep --silent '$(2)' "$(DATA_DIR)/$(1)"; do \
+	sleep 1; done
+	@echo Done
+endef
+
+# Runs the engine and node in the background using incremental compilation.
+start: \
+	.make/run/generate-keys \
+	.make/run/bsp \
+	.make/run/start
+
+# Runs Bloop server with SBT and updates BSP configuration on build configuration changes.
+# To stop them run 'make stop-bsp'.
+# Make sure Bloop version at least 1.4.0-RC1 installed https://scalacenter.github.io/bloop/setup
+.make/run/bsp:
+	@echo "Starting background sbt..."
+	@sbt -mem 1024 '~bloopInstall' &> "$(DATA_DIR)/sbt.log" &
+	$(call wait_until,sbt.log,Monitoring source files for casperlabs)
+	@echo "Starting bloop server..."
+	@bloop server &> "$(DATA_DIR)/bloop.log" &
+	$(call wait_until,bloop.log,started on address)
+	@mkdir -p $(dir $@) && touch $@
+
+stop-bsp: stop
+	@echo "Stopping backgroung sbt.."
+	@ps aux | grep bloopInstall | grep -v 'grep' | awk '{print $$2}' | xargs -I _ kill -9 _
+	@rm -rf "$(DATA_DIR)/sbt.log"
+	@echo Done
+	@echo "Stopping bloop server.."
+	@bloop ng-stop &> /dev/null || true
+	@rm -rf "$(DATA_DIR)/bloop.log"
+	@rm -rf .make/run/bsp
+	@echo Done
+
+.make/run/generate-keys:
+	@echo "Data directory is $(DATA_DIR)"
+	@echo "Generating keys..."
+	@mkdir -p "$(DATA_DIR)"
+	@./hack/key-management/docker-gen-keys.sh "$(DATA_DIR)"
+	@mkdir -p $(dir $@) && touch $@
+
+.make/run/start:
+	@echo "Running engine..."
+	@$(eval PROJECT_DIR = $(shell pwd))
+	@echo "" > "$(DATA_DIR)/engine.log"
+	@cd execution-engine/engine-grpc-server && cargo run -- "$(DATA_DIR)/.casper-node.sock" &> "$(DATA_DIR)/engine.log" &
+	@cd "$(PROJECT_DIR)"
+	$(call wait_until,engine.log,is listening on socket)
+	@echo "Running node..."
+	@bloop run node \
+	--args run \
+	--args "--casper-standalone" \
+	--args "--server-host=0.0.0.0" \
+	--args "--server-no-upnp" \
+	--args "--server-data-dir=$(DATA_DIR)" \
+	--args "--casper-validator-sig-algorithm=ed25519" \
+	--args "--casper-validator-public-key-path=$(DATA_DIR)/validator-public.pem" \
+	--args "--casper-validator-private-key-path=$(DATA_DIR)/validator-private.pem" &> "$(DATA_DIR)/node.log" &
+	$(call wait_until,node.log,Listening for traffic on)
+	@mkdir -p $(dir $@) && touch $@
+
+stop:
+	@echo 'Stopping engine...'
+	@ps aux | grep cargo | grep -v 'grep' | awk '{print $$2}' | xargs -I _ kill -9 _
+	@echo 'Done'
+	@echo 'Stopping node...'
+	@ps aux | grep -i casperlabs | grep bloop | grep run | grep args | grep -v 'grep' | awk '{print $$2}' | xargs -I _ kill -9 _
+	@echo 'Done'
+	@echo 'Cleaning the state...'
+	$(shell rm -rf $(DATA_DIR)/engine.log $(DATA_DIR)/node.log $(DATA_DIR)/global_state $(DATA_DIR)/sqlite* $(DATA_DIR)/.casper-node.sock)
+	@rm -rf .make/run/start
+	@echo 'Done'
+
+attach-sbt:
+	tail -f "$(DATA_DIR)/sbt.log" || true
+
+attach-bloop:
+	tail -f "$(DATA_DIR)/bloop.log" || true
+
+attach-node:
+	tail -f "$(DATA_DIR)/node.log" || true
+
+attach-engine:
+	tail -f "$(DATA_DIR)/engine.log" || true
 
 clean:
 	$(MAKE) -C execution-engine clean

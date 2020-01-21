@@ -65,3 +65,6 @@ explorer/contracts/**/*.wasm
 integration-testing/**/*.wasm
 
 .make
+# default for 'make start', 'make stop', 'make stop-incremental-compilation'
+/data-dir/
+
