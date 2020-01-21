@@ -12,12 +12,14 @@ import io.casperlabs.comm.gossiping.Relaying
 import io.casperlabs.models.Message
 import io.casperlabs.shared.Log
 import io.casperlabs.storage.BlockHash
+import io.casperlabs.storage.BlockMsgWithTransform
+import io.casperlabs.storage.block.BlockStorageWriter
 import io.casperlabs.storage.dag.{DagRepresentation, DagStorage, FinalityStorageReader}
 import io.casperlabs.storage.era.EraStorage
 import scala.concurrent.duration.FiniteDuration
 import scala.util.control.NonFatal
 
-class EraSupervisor[F[_]: Concurrent: Timer: Log: EraStorage: Relaying: ForkChoiceManager](
+class EraSupervisor[F[_]: Concurrent: Timer: Log: BlockStorageWriter: EraStorage: Relaying: ForkChoiceManager](
     conf: HighwayConf,
     // Once the supervisor is shut down, reject incoming messages.
     isShutdownRef: Ref[F, Boolean],
@@ -42,7 +44,10 @@ class EraSupervisor[F[_]: Concurrent: Timer: Log: EraStorage: Relaying: ForkChoi
     for {
       _       <- ensureNotShutdown
       message <- Sync[F].fromTry(Message.fromBlock(block))
-      entry   <- load(message.keyBlockHash)
+      _ <- Log[F].debug(
+            s"Handling incoming ${message.messageHash.show -> "message"} from ${message.validatorId.show -> "validator"} in ${message.roundId -> "round"} ${message.keyBlockHash.show -> "era"}"
+          )
+      entry <- load(message.keyBlockHash)
       _ <- entry.runtime.validate(message).value.flatMap {
             _.fold(
               error =>
@@ -53,7 +58,10 @@ class EraSupervisor[F[_]: Concurrent: Timer: Log: EraStorage: Relaying: ForkChoi
             )
           }
 
-      // TODO: Validate and execute the block, store it in the block store and DAG store.
+      // TODO (NODE-1128): Validate and execute the block, store it in the block store and DAG store.
+      // Pass the `isBookingBlock` flag as well. For now just store the incoming blocks so they
+      // are available in the DAG when we produce messages on top of them.
+      _ <- BlockStorageWriter[F].put(BlockMsgWithTransform().withBlockMessage(block))
 
       // Tell descendant eras for the next time they create a block that this era received a message.
       // NOTE: If the events create an era it will only be loaded later, so the first time
@@ -156,10 +164,10 @@ class EraSupervisor[F[_]: Concurrent: Timer: Log: EraStorage: Relaying: ForkChoi
 
   /** Handle the domain events coming out of the execution of the protocol. */
   private def handleEvents(events: Vector[HighwayEvent]): F[Unit] = {
-    def handleCreatedMessage(message: Message) =
+    def handleCreatedMessage(message: Message, kind: String) =
       for {
         _ <- Log[F].debug(
-              s"Created ${message.messageHash.show -> "message"} at ${message.roundId -> "tick"} on top of ${message.parentBlock.show -> "parent"} in ${message.keyBlockHash.show -> "era"}"
+              s"Created $kind ${message.messageHash.show -> "message"} in ${message.roundId -> "round"} ${message.keyBlockHash.show -> "era"} child of ${message.parentBlock.show -> "parent"}"
             )
         _ <- Relaying[F].relay(List(message.messageHash))
         _ <- propagateLatestMessageToDescendantEras(message)
@@ -173,16 +181,17 @@ class EraSupervisor[F[_]: Concurrent: Timer: Log: EraStorage: Relaying: ForkChoi
         val start      = conf.toInstant(Ticks(era.startTick))
         for {
           _ <- Log[F].info(
-                s"Creating ${eraHash -> "era"} starting at ${tick -> "tick"} or ${start -> "instant"} following ${parentHash -> "parent"}"
+                s"Created ${eraHash -> "era"} starting at ${tick -> "tick"} ${start -> "instant"} child of ${parentHash -> "parent"}"
               )
           // Schedule the child era.
           child <- load(era.keyBlockHash)
           // Remember the offspring.
           _ <- addToParent(child)
         } yield ()
-      case HighwayEvent.CreatedLambdaMessage(m)  => handleCreatedMessage(m)
-      case HighwayEvent.CreatedLambdaResponse(m) => handleCreatedMessage(m)
-      case HighwayEvent.CreatedOmegaMessage(m)   => handleCreatedMessage(m)
+
+      case HighwayEvent.CreatedLambdaMessage(m)  => handleCreatedMessage(m, "lambda")
+      case HighwayEvent.CreatedLambdaResponse(m) => handleCreatedMessage(m, "lambda-response")
+      case HighwayEvent.CreatedOmegaMessage(m)   => handleCreatedMessage(m, "omega")
     } void
   }
 
@@ -234,7 +243,7 @@ class EraSupervisor[F[_]: Concurrent: Timer: Log: EraStorage: Relaying: ForkChoi
 
 object EraSupervisor {
 
-  def apply[F[_]: Concurrent: Timer: Log: EraStorage: DagStorage: FinalityStorageReader: Relaying: ForkChoiceManager](
+  def apply[F[_]: Concurrent: Timer: Log: EraStorage: BlockStorageWriter: DagStorage: FinalityStorageReader: Relaying: ForkChoiceManager](
       conf: HighwayConf,
       genesis: BlockSummary,
       maybeMessageProducer: Option[MessageProducer[F]],

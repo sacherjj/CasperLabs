@@ -46,19 +46,30 @@ trait StorageFixture { self: Suite =>
     testProgram.unsafeRunSync(scheduler)
   }
 
-  def withCombinedStorage(
+  /** Create a number of in-memory storages and run a test against them. */
+  def withCombinedStorages(
       ec: Scheduler = scheduler,
-      timeout: FiniteDuration = 10.seconds
-  )(f: SQLiteStorage.CombinedStorage[Task] => Task[_]) = {
+      timeout: FiniteDuration = 10.seconds,
+      numStorages: Int = 1
+  )(f: List[SQLiteStorage.CombinedStorage[Task]] => Task[_]): Unit = {
     // NOTE: When using the TestScheduler, we have to pass it as `ec` so that
     // the transactors use the same execution as the one we're exercising in
     // the test. Otherwise the tests will wait on the SQL queries until they time out.
-    val testProgram = StorageFixture.createMemoryStorage[Task](ec).use { storage =>
-      f(storage)
-    }
+    val testProgram = StorageFixture
+      .createMemoryStorage[Task](ec)
+      .replicateA(numStorages)
+      .use { storages =>
+        f(storages)
+      }
     implicit val s = scheduler
     testProgram.runSyncUnsafe(timeout)
   }
+
+  def withCombinedStorage(
+      ec: Scheduler = scheduler,
+      timeout: FiniteDuration = 10.seconds
+  )(f: SQLiteStorage.CombinedStorage[Task] => Task[_]): Unit =
+    withCombinedStorages(ec, timeout, numStorages = 1)(dbs => f(dbs.head))
 }
 
 object StorageFixture {

@@ -29,30 +29,34 @@ import org.scalatest._
 import scala.concurrent.duration._
 import io.casperlabs.casper.PrettyPrinter
 
-class EraSupervisorSpec extends FlatSpec with Matchers with StorageFixture {
+class EraSupervisorSpec extends FlatSpec with Matchers with Inspectors with StorageFixture {
   import EraSupervisorSpec._
 
-  def testFixture(f: Timer[Task] => SQLiteStorage.CombinedStorage[Task] => Fixture) = {
+  def testFixtures(numStorages: Int)(
+      f: Timer[Task] => List[SQLiteStorage.CombinedStorage[Task]] => FixtureLike
+  ): Unit = {
     val ctx   = TestScheduler()
     val timer = SchedulerEffect.timer[Task](ctx)
-    withCombinedStorage(ctx) { db =>
-      val fix   = f(timer)(db)
-      val start = fix.conf.genesisEraStart
-      val end   = start plus fix.length
-
+    withCombinedStorages(ctx, numStorages = numStorages) { dbs =>
       Task.async[Unit] { cb =>
+        val fix = f(timer)(dbs)
         // TestScheduler allows us to manually forward time.
         // To get meaningful round IDs, we must start from the genesis.
-        ctx.forwardTo(start)
+        ctx.forwardTo(fix.start)
         // Without an extra delay the TestScheduler executes tasks immediately.
         fix.test.delayExecution(0.seconds).runAsync(cb)(ctx)
         // Now allow the tests to run forward until the end.
-        ctx.forwardTo(end)
+        ctx.forwardTo(fix.start plus fix.length)
         // There shouldn't be any uncaught exceptions.
         ctx.state.lastReportedError shouldBe null
       }
     }
   }
+
+  def testFixture(f: Timer[Task] => SQLiteStorage.CombinedStorage[Task] => FixtureLike): Unit =
+    testFixtures(numStorages = 1) { timer => dbs =>
+      f(timer)(dbs.head)
+    }
 
   behavior of "collectActiveEras"
 
@@ -87,7 +91,7 @@ class EraSupervisorSpec extends FlatSpec with Matchers with StorageFixture {
     implicit timer => implicit db =>
       new Fixture(
         length = eraDuration * 2 + postEraVotingDuration,
-        initRoundExponent = 15 // ~ 8 hours; so we don't get that many blocks
+        initRoundExponent = 15 // ~ 8 hours; so we don't get that many blocks,
       ) {
         override def test =
           makeSupervisor().use { supervisor =>
@@ -100,19 +104,95 @@ class EraSupervisorSpec extends FlatSpec with Matchers with StorageFixture {
           }
       }
   }
+
+  it should "relay created messages to other nodes" in testFixtures(3) { implicit timer => dbs =>
+    new FixtureLike {
+      override val start  = genesisEraStart
+      override val length = days(5)
+
+      // Once created, store all supervisors here for relaying.
+      @volatile var supervisors: Map[String, EraSupervisor[Task]] = Map.empty
+      // Don't create messages until we add all supervisors to this collection,
+      // otherwise they might miss some messages and there's no synchronizer here.
+      val isSyncedRef: Ref[Task, Boolean] = Ref.unsafe(false)
+
+      class RelayFixture(validator: String, db: SQLiteStorage.CombinedStorage[Task])
+          extends Fixture(
+            length,
+            validator = validator,
+            initRoundExponent = 15,
+            isSyncedRef = isSyncedRef
+          ) (timer, db) {
+
+        val validatorId: PublicKeyBS              = validator
+        val relayedRef: Ref[Task, Set[BlockHash]] = Ref.unsafe(Set.empty)
+
+        override val relaying = new Relaying[Task] {
+          override def relay(hashes: List[BlockHash]): Task[WaitHandle[Task]] =
+            for {
+              _      <- relayedRef.update(_ ++ hashes)
+              blocks <- hashes.traverse(h => db.getBlockMessage(h)).map(_.flatten)
+              _      = blocks should not be empty
+              _ <- supervisors
+                    .filterKeys(_ != validator)
+                    .values
+                    .toList
+                    .traverse(s => blocks.traverse(b => s.validateAndAddBlock(b)))
+            } yield ().pure[Task]
+        }
+
+        override val test = for {
+          _        <- sleepUntil(start plus length)
+          relayed  <- relayedRef.get
+          dag      <- db.getRepresentation
+          messages <- relayed.toList.traverse(dag.lookupUnsafe)
+          parents  <- messages.traverse(m => dag.lookupUnsafe(m.parentBlock))
+        } yield {
+          messages should not be empty
+          atLeast(1, messages) shouldBe a[Message.Ballot]
+          atLeast(1, messages) shouldBe a[Message.Block]
+
+          // Validators should only try to relay their own messages.
+          forAll(messages) { m =>
+            m.validatorId shouldBe validatorId
+          }
+          // There should be some responses to other validators' messages.
+          forAtLeast(1, parents) { p =>
+            p.validatorId should not be empty
+            p.validatorId should not be validatorId
+          }
+        }
+      }
+
+      val fixtures = List("Alice", "Bob", "Charlie").zipWithIndex.map {
+        case (validator, idx) => new RelayFixture(validator, dbs(idx))
+      }
+
+      override def test = fixtures.traverse(_.makeSupervisor()).use { ss =>
+        supervisors = ss.zipWithIndex.map {
+          case (s, idx) => fixtures(idx).validator -> s
+        }.toMap
+
+        for {
+          _ <- isSyncedRef.set(true)
+          _ <- fixtures.traverse(_.test)
+        } yield ()
+      }
+    }
+  }
 }
 
 object EraSupervisorSpec extends TickUtils with ArbitraryConsensus {
 
   import HighwayConf.{EraDuration, VotingDuration}
 
-  val startInstant          = date(2019, 12, 30)
+  val genesisEraStart       = date(2019, 12, 30)
   val eraDuration           = days(10)
   val postEraVotingDuration = days(2)
 
   val defaultConf = HighwayConf(
     tickUnit = TimeUnit.SECONDS,
-    genesisEraStart = startInstant,
+    genesisEraStart = genesisEraStart,
     eraDuration = EraDuration.FixedLength(days(7)),
     bookingDuration = eraDuration,
     entropyDuration = hours(3),
@@ -121,23 +201,32 @@ object EraSupervisorSpec extends TickUtils with ArbitraryConsensus {
     omegaMessageTimeEnd = 0.75
   )
 
+  trait FixtureLike {
+    // Where to set the TestScheduler to go from.
+    def start: Instant
+    // How long a time to simulate in the TestScheduler.
+    def length: FiniteDuration
+    // Override this value to make sure the assertions are executed.
+    def test: Task[Unit]
+  }
+
   abstract class Fixture(
-      // How long a time to simulate in the test scheduler.
-      val length: FiniteDuration,
+      override val length: FiniteDuration,
       val conf: HighwayConf = defaultConf,
       val validator: String = "Alice",
       val initRoundExponent: Int = 0,
-      val isSynced: Ref[Task, Boolean] = Ref.unsafe(true),
+      val isSyncedRef: Ref[Task, Boolean] = Ref.unsafe(true),
       printLevel: Log.Level = Log.Level.Error
   )(
       implicit
       timer: Timer[Task],
       db: SQLiteStorage.CombinedStorage[Task]
-  ) {
-    // Override this value to make sure the assertions are executed.
-    def test: Task[Unit]
+  ) extends FixtureLike {
 
-    implicit def `String => PublicKeyBS`(s: String) = PublicKey(ByteString.copyFromUtf8(s))
+    override val start = conf.genesisEraStart
+
+    implicit def `String => PublicKeyBS`(s: String): PublicKeyBS =
+      PublicKey(ByteString.copyFromUtf8(s))
 
     val genesis = Message
       .fromBlockSummary(
@@ -163,7 +252,11 @@ object EraSupervisorSpec extends TickUtils with ArbitraryConsensus {
       .asInstanceOf[Message.Block]
 
     implicit val log: Log[Task] with LogStub =
-      LogStub[Task](printEnabled = true, printLevel = printLevel)
+      LogStub[Task](
+        prefix = validator.padTo(10, " ").mkString(""),
+        printEnabled = true,
+        printLevel = printLevel
+      )
 
     implicit val forkchoice  = MockForkChoice.unsafe[Task](genesis)
     val maybeMessageProducer = new MockMessageProducer[Task](validator).some
@@ -195,7 +288,7 @@ object EraSupervisorSpec extends TickUtils with ArbitraryConsensus {
         era,
         maybeMessageProducer,
         initRoundExponent,
-        isSynced.get
+        isSyncedRef.get
       )
 
     def makeSupervisor(): Resource[Task, EraSupervisor[Task]] =
@@ -214,7 +307,7 @@ object EraSupervisorSpec extends TickUtils with ArbitraryConsensus {
                        genesis.blockSummary,
                        maybeMessageProducer,
                        initRoundExponent,
-                       isSynced.get
+                       isSyncedRef.get
                      )
       } yield supervisor
 
