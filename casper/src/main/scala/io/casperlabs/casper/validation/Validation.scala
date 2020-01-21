@@ -12,6 +12,7 @@ import io.casperlabs.casper.util.execengine.ExecEngineUtil
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
 import io.casperlabs.casper.util.{CasperLabsProtocol, DagOperations, ProtoUtil}
 import io.casperlabs.casper.validation.Errors.DropErrorWrapper
+import io.casperlabs.casper.validation.Validation.BlockEffects
 import io.casperlabs.crypto.Keys.{PublicKey, Signature}
 import io.casperlabs.catscontrib.Fs2Compiler
 import io.casperlabs.ipc
@@ -22,6 +23,7 @@ import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.signatures.SignatureAlgorithm
 import io.casperlabs.ipc.ChainSpec.{DeployConfig => IPCDeployConfig}
+import io.casperlabs.ipc.TransformEntry
 import io.casperlabs.models.Message
 import io.casperlabs.shared._
 import io.casperlabs.models.BlockImplicits._
@@ -60,8 +62,12 @@ trait Validation[F[_]] {
   def transactions(
       block: Block,
       preStateHash: StateHash,
-      effects: Seq[ipc.TransformEntry]
-  )(implicit ee: ExecutionEngineService[F]): F[Unit]
+      effects: BlockEffects
+  )(
+      implicit ee: ExecutionEngineService[F],
+      bs: BlockStorage[F],
+      clp: CasperLabsProtocol[F]
+  ): F[Unit]
 
   /** Check the block without executing deploys. */
   def blockFull(
@@ -86,6 +92,19 @@ object Validation {
 
   type BlockHeight = Long
   type Data        = Array[Byte]
+
+  /** Represents block's effects indexed by deploy's `stage` value.
+    * Deploys with the same `stage` value can be run in parallel.
+    * Execution must be ordered from lowest stage to the highest.
+    */
+  final case class BlockEffects(effects: Map[Int, Seq[TransformEntry]])
+
+  object BlockEffects {
+    def apply(effects: Seq[TransformEntry]): BlockEffects =
+      BlockEffects(Map(0 -> effects))
+
+    def empty: BlockEffects = BlockEffects(Map.empty[Int, Seq[TransformEntry]])
+  }
 
   val DRIFT = 15000 // 15 seconds
 

@@ -13,8 +13,7 @@ import io.casperlabs.casper.util.ProtoUtil.bonds
 import io.casperlabs.casper.util.execengine.ExecEngineUtil
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.{StateHash, TransformMap}
 import io.casperlabs.casper.util.{CasperLabsProtocol, ProtoUtil}
-import io.casperlabs.catscontrib.{Fs2Compiler, MonadThrowable}
-import io.casperlabs.ipc
+import io.casperlabs.catscontrib.Fs2Compiler
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.models.Weight
 import io.casperlabs.shared._
@@ -22,15 +21,16 @@ import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.storage.dag.DagRepresentation
 import Validation._
-import io.casperlabs.ipc.TransformEntry
+import cats.effect.Sync
+import io.casperlabs.casper.consensus.state.ProtocolVersion
+import io.casperlabs.smartcontracts.ExecutionEngineService.CommitResult
 
 object ValidationImpl {
   def apply[F[_]](implicit ev: ValidationImpl[F]): Validation[F] = ev
 
   implicit val metricsSource = CasperMetricsSource / "validation"
 
-  def metered[F[_]: MonadThrowable: FunctorRaise[*[_], InvalidBlock]: Log: Time: Metrics]
-      : Validation[F] = {
+  def metered[F[_]: Sync: FunctorRaise[*[_], InvalidBlock]: Log: Time: Metrics]: Validation[F] = {
 
     val underlying = new ValidationImpl[F]
 
@@ -51,8 +51,12 @@ object ValidationImpl {
       override def transactions(
           block: Block,
           preStateHash: StateHash,
-          effects: Seq[TransformEntry]
-      )(implicit ee: ExecutionEngineService[F]): F[Unit] =
+          effects: BlockEffects
+      )(
+          implicit ee: ExecutionEngineService[F],
+          bs: BlockStorage[F],
+          clp: CasperLabsProtocol[F]
+      ): F[Unit] =
         Metrics[F].timer("transactions")(underlying.transactions(block, preStateHash, effects))
 
       override def blockFull(
@@ -75,7 +79,7 @@ object ValidationImpl {
   }
 }
 
-class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[*[_], InvalidBlock]: Log: Time: Metrics]
+class ValidationImpl[F[_]: Sync: FunctorRaise[*[_], InvalidBlock]: Log: Time: Metrics]
     extends Validation[F] {
   import io.casperlabs.models.BlockImplicits._
 
@@ -178,6 +182,25 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[*[_], InvalidBlock]: Log
     } yield merged
   }
 
+  /** Commit effects against ExecutionEngine as described by `blockEffects`.
+    *
+    * Sends effects in an ordered sequence as defined by `stage` index of each batch in [[BlockEffects]].
+    *
+    * @param initPreStateHash initial pre-state hash
+    * @param protocolVersion protocol version for ALL deploys' effects
+    * @param blockEffects block's effects to commit.
+    * @return Result of committing deploys. Returns the first error it encounters or last [[io.casperlabs.smartcontracts.ExecutionEngineService.CommitResult]].
+    */
+  private def commitEffects(
+      initPreStateHash: ByteString,
+      protocolVersion: ProtocolVersion,
+      blockEffects: BlockEffects
+  )(implicit E: ExecutionEngineService[F]): F[ExecutionEngineService.CommitResult] =
+    blockEffects.effects.toList.sortBy(_._1).foldM(CommitResult(initPreStateHash, Seq.empty)) {
+      case (state, (_, transforms)) =>
+        E.commit(state.postStateHash, transforms, protocolVersion).rethrow
+    }
+
   // Validates whether received block is valid (according to that nodes logic):
   // 1) Validates whether pre state hashes match
   // 2) Runs deploys from the block
@@ -186,17 +209,21 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[*[_], InvalidBlock]: Log
   override def transactions(
       block: Block,
       preStateHash: StateHash,
-      effects: Seq[ipc.TransformEntry]
-  )(implicit ee: ExecutionEngineService[F]): F[Unit] = {
+      blockEffects: BlockEffects
+  )(
+      implicit ee: ExecutionEngineService[F],
+      bs: BlockStorage[F],
+      clp: CasperLabsProtocol[F]
+  ): F[Unit] = {
     val blockPreState  = ProtoUtil.preStateHash(block)
     val blockPostState = ProtoUtil.postStateHash(block)
     if (preStateHash == blockPreState) {
       for {
-        possibleCommitResult <- ExecutionEngineService[F].commit(
+        possibleCommitResult <- commitEffects(
                                  preStateHash,
-                                 effects,
-                                 block.getHeader.getProtocolVersion
-                               )
+                                 block.getHeader.getProtocolVersion,
+                                 blockEffects
+                               ).attempt
         //TODO: distinguish "internal errors" and "user errors"
         _ <- possibleCommitResult match {
               case Left(ex) =>

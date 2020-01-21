@@ -12,6 +12,7 @@ import io.casperlabs.casper.util.CasperLabsProtocol
 import io.casperlabs.casper.util.execengine.ExecEngineUtil
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
 import io.casperlabs.casper.validation.Validation
+import io.casperlabs.casper.validation.Validation.BlockEffects
 import io.casperlabs.ipc
 import io.casperlabs.mempool.DeployBuffer
 import io.casperlabs.metrics.Metrics
@@ -45,13 +46,13 @@ object MultiParentCasper extends MultiParentCasperInstances {
 
 sealed abstract class MultiParentCasperInstances {
 
-  private def init[F[_]: Concurrent: Log: BlockStorage: DagStorage: ExecutionEngineService: Validation](
+  private def init[F[_]: Concurrent: Log: BlockStorage: DagStorage: ExecutionEngineService: Validation: CasperLabsProtocol](
       genesis: Block,
       genesisPreState: StateHash,
       genesisEffects: ExecEngineUtil.TransformMap
   ) =
     for {
-      _ <- Validation[F].transactions(genesis, genesisPreState, genesisEffects)
+      _ <- Validation[F].transactions(genesis, genesisPreState, BlockEffects(genesisEffects))
       casperState <- Cell.mvarCell[F, CasperState](
                       CasperState()
                     )
