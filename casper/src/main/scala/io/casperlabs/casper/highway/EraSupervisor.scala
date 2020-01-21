@@ -56,6 +56,10 @@ class EraSupervisor[F[_]: Concurrent: Timer: Log: EraStorage: Relaying: ForkChoi
       // TODO: Validate and execute the block, store it in the block store and DAG store.
 
       // Tell descendant eras for the next time they create a block that this era received a message.
+      // NOTE: If the events create an era it will only be loaded later, so the first time
+      // the fork choice will be asked about that era it will not have been notified about
+      // this message. The fork choice manager should load the latest messages from the
+      // parent era the first time it's asked, and only rely on incremental updates later.
       _ <- propagateLatestMessageToDescendantEras(message)
 
       // See what reactions the protocol dictates.
