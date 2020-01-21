@@ -59,11 +59,13 @@ class SQLiteBlockStorage[F[_]: Bracket[*[_], Throwable]: Fs2Compiler](
                    }
                    Block.Body(processedDeploys)
                  }
-        transforms <- sql"""|SELECT data
+        transforms <- sql"""|SELECT stage, data
                             |FROM transforms
                             |WHERE block_hash=$blockHash""".stripMargin
-                       .query[TransformEntry]
+                       .query[(Int, TransformEntry)]
                        .to[List]
+                       .map(_.groupBy(_._1).mapValues(_.map(_._2)))
+                       .map(BlockStorage.blockEffectsMapToProto(_))
       } yield BlockMsgWithTransform(
         Block(blockSummary.blockHash, blockSummary.header, body.some, blockSummary.signature).some,
         transforms
@@ -139,10 +141,16 @@ class SQLiteBlockStorage[F[_]: Bracket[*[_], Throwable]: Fs2Compiler](
     sql"SELECT COUNT(*) FROM blocks".query[Long].unique.map(_ == 0L).transact(readXa)
 
   override def put(blockHash: BlockHash, blockMsg: BlockMsgWithTransform): F[Unit] =
-    Update[(BlockHash, TransformEntry)]("""|INSERT OR IGNORE INTO transforms
-                                           |(block_hash, data)
-                                           |VALUES (?, ?)""".stripMargin)
-      .updateMany(blockMsg.transformEntry.map(t => (blockHash, t)).toList)
+    Update[(BlockHash, Int, TransformEntry)]("""|INSERT OR IGNORE INTO transforms
+                                           |(block_hash, stage, data)
+                                           |VALUES (?, ?, ?)""".stripMargin)
+      .updateMany(
+        blockMsg.blockEffects
+          .flatMap(
+            effectsGroup => effectsGroup.effects.toList.map(t => (blockHash, effectsGroup.stage, t))
+          )
+          .toList
+      )
       .transact(writeXa)
       .void
 

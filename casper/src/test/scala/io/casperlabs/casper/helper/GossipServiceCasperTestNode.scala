@@ -154,7 +154,7 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
           minTTL       = 1.minute
           deployBuffer = DeployBuffer.create[F](chainName, minTTL)
           dag          <- dagStorage.getRepresentation
-          _            <- blockStorage.put(genesis.blockHash, genesis, Seq.empty)
+          _            <- blockStorage.put(genesis.blockHash, genesis, Map.empty)
           finalityDetector <- FinalityDetectorVotingMatrix
                                .of[F](dag, genesis.blockHash, faultToleranceThreshold)
           multiParentFinalizer <- MultiParentFinalizer.empty(
@@ -251,7 +251,7 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
                               )
                 semaphoreMap     <- SemaphoreMap[F, ByteString](1)
                 semaphore        <- Semaphore[F](1)
-                _                <- blockStorage.put(genesis.blockHash, genesis, Seq.empty)
+                _                <- blockStorage.put(genesis.blockHash, genesis, Map.empty)
                 dag              <- dagStorage.getRepresentation
                 finalityDetector <- FinalityDetectorVotingMatrix.of[F](dag, genesis.blockHash, 0.1)
                 multiParentFinalizer <- MultiParentFinalizer.empty(

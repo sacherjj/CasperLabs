@@ -592,7 +592,7 @@ class FinalityDetectorByVotingMatrixTest
             EquivocationDetector
               .checkEquivocationWithUpdate(dag, message)
           )
-      _   <- BlockStorage[F].put(block.blockHash, block, Seq.empty)
+      _   <- BlockStorage[F].put(block.blockHash, block, Map.empty)
       msg <- Sync[F].fromTry(Message.fromBlock(block))
       finalizedBlockOpt <- FinalityDetectorVotingMatrix[F].onNewMessageAddedToTheBlockDag(
                             dag,
