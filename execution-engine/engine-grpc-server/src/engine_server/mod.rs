@@ -16,24 +16,19 @@ use std::{
 
 use grpc::{RequestOptions, ServerBuilder, SingleResponse};
 
-use engine_core::{
-    engine_state::{
-        execute_request::ExecuteRequest,
-        execution_result::ExecutionResult,
-        genesis::{GenesisConfig, GenesisResult},
-        query::{QueryRequest, QueryResult},
-        upgrade::{UpgradeConfig, UpgradeResult},
-        EngineState, Error as EngineError,
-    },
-    execution::Executor,
+use engine_core::engine_state::{
+    execute_request::ExecuteRequest,
+    genesis::{GenesisConfig, GenesisResult},
+    query::{QueryRequest, QueryResult},
+    upgrade::{UpgradeConfig, UpgradeResult},
+    EngineState, Error as EngineError,
 };
 use engine_shared::{
     logging::{self, log_duration, log_info, log_level::LogLevel},
     newtypes::{Blake2bHash, CorrelationId},
 };
 use engine_storage::global_state::{CommitResult, StateProvider};
-use engine_wasm_prep::Preprocessor;
-use types::{BlockTime, ProtocolVersion};
+use types::ProtocolVersion;
 
 use self::{
     ipc::{
@@ -156,55 +151,31 @@ where
         let start = Instant::now();
         let correlation_id = CorrelationId::new();
 
-        let mut exec_request: ExecuteRequest = match exec_request.try_into() {
+        let exec_request: ExecuteRequest = match exec_request.try_into() {
             Ok(ret) => ret,
             Err(err) => {
                 return SingleResponse::completed(err);
             }
         };
 
-        // TODO: do not unwrap
-        let wasm_costs = self
-            .wasm_costs(exec_request.protocol_version)
-            .unwrap()
-            .unwrap();
-        let executor = Executor;
-        let preprocessor = Preprocessor::new(wasm_costs);
-
         let mut exec_response = ExecuteResponse::new();
-        let mut results: Vec<ExecutionResult> = Vec::new();
 
-        for deploy_item in exec_request.take_deploys() {
-            let result = match deploy_item {
-                Ok(deploy_item) => self.deploy(
+        let results = match self.run_execute(correlation_id, exec_request) {
+            Ok(results) => results,
+            Err(error) => {
+                logging::log_error("deploy results error: RootNotFound");
+                exec_response
+                    .mut_missing_parent()
+                    .set_hash(error.0.to_vec());
+                log_duration(
                     correlation_id,
-                    &executor,
-                    &preprocessor,
-                    exec_request.protocol_version,
-                    exec_request.parent_state_hash,
-                    BlockTime::new(exec_request.block_time),
-                    deploy_item,
-                ),
-                Err(exec_result) => Ok(exec_result), /* this will get pushed into the results vec
-                                                      * below */
-            };
-            match result {
-                Ok(result) => results.push(result),
-                Err(error) => {
-                    logging::log_error("deploy results error: RootNotFound");
-                    exec_response
-                        .mut_missing_parent()
-                        .set_hash(error.0.to_vec());
-                    log_duration(
-                        correlation_id,
-                        METRIC_DURATION_EXEC,
-                        TAG_RESPONSE_EXEC,
-                        start.elapsed(),
-                    );
-                    return SingleResponse::completed(exec_response);
-                }
-            };
-        }
+                    METRIC_DURATION_EXEC,
+                    TAG_RESPONSE_EXEC,
+                    start.elapsed(),
+                );
+                return SingleResponse::completed(exec_response);
+            }
+        };
 
         let protobuf_results_iter = results.into_iter().map(Into::into);
         exec_response

@@ -58,6 +58,7 @@ pub use self::{
 use crate::{
     engine_state::{
         error::Error::MissingSystemContractError,
+        execute_request::ExecuteRequest,
         query::{QueryRequest, QueryResult},
         upgrade::{UpgradeConfig, UpgradeResult},
     },
@@ -608,6 +609,46 @@ where
             .query(correlation_id, query_request.key(), query_request.path())
             .map_err(|err| Error::ExecError(err.into()))?
             .into())
+    }
+
+    pub fn run_execute(
+        &self,
+        correlation_id: CorrelationId,
+        mut exec_request: ExecuteRequest,
+    ) -> Result<Vec<ExecutionResult>, RootNotFound> {
+        // TODO: do not unwrap
+        let wasm_costs = self
+            .wasm_costs(exec_request.protocol_version)
+            .unwrap()
+            .unwrap();
+        let executor = Executor;
+        let preprocessor = Preprocessor::new(wasm_costs);
+
+        let mut results = Vec::new();
+
+        for deploy_item in exec_request.take_deploys() {
+            let result = match deploy_item {
+                Ok(deploy_item) => self.deploy(
+                    correlation_id,
+                    &executor,
+                    &preprocessor,
+                    exec_request.protocol_version,
+                    exec_request.parent_state_hash,
+                    BlockTime::new(exec_request.block_time),
+                    deploy_item,
+                ),
+                Err(exec_result) => Ok(exec_result), /* this will get pushed into the results vec
+                                                      * below */
+            };
+            match result {
+                Ok(result) => results.push(result),
+                Err(error) => {
+                    return Err(error);
+                }
+            };
+        }
+
+        Ok(results)
     }
 
     pub fn get_module(
