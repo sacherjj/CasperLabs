@@ -61,5 +61,5 @@ trait ArbitraryStorageData extends ArbitraryConsensus {
       n          <- transformsNum
       stage      = 0
       transforms <- Gen.listOfN(n, arbitrary[TransformEntry]).map(StageEffects(stage, _))
-    } yield BlockMsgWithTransform(Option(b), Seq(transforms))
+    } yield BlockMsgWithTransform(Option(b), if (n == 0) Seq.empty else Seq(transforms))
 }
