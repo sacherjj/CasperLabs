@@ -182,25 +182,6 @@ class ValidationImpl[F[_]: Sync: FunctorRaise[*[_], InvalidBlock]: Log: Time: Me
     } yield merged
   }
 
-  /** Commit effects against ExecutionEngine as described by `blockEffects`.
-    *
-    * Sends effects in an ordered sequence as defined by `stage` index of each batch in [[BlockEffects]].
-    *
-    * @param initPreStateHash initial pre-state hash
-    * @param protocolVersion protocol version for ALL deploys' effects
-    * @param blockEffects block's effects to commit.
-    * @return Result of committing deploys. Returns the first error it encounters or last [[io.casperlabs.smartcontracts.ExecutionEngineService.CommitResult]].
-    */
-  private def commitEffects(
-      initPreStateHash: ByteString,
-      protocolVersion: ProtocolVersion,
-      blockEffects: BlockEffects
-  )(implicit E: ExecutionEngineService[F]): F[ExecutionEngineService.CommitResult] =
-    blockEffects.effects.toList.sortBy(_._1).foldM(CommitResult(initPreStateHash, Seq.empty)) {
-      case (state, (_, transforms)) =>
-        E.commit(state.postStateHash, transforms, protocolVersion).rethrow
-    }
-
   // Validates whether received block is valid (according to that nodes logic):
   // 1) Validates whether pre state hashes match
   // 2) Runs deploys from the block
@@ -219,11 +200,13 @@ class ValidationImpl[F[_]: Sync: FunctorRaise[*[_], InvalidBlock]: Log: Time: Me
     val blockPostState = ProtoUtil.postStateHash(block)
     if (preStateHash == blockPreState) {
       for {
-        possibleCommitResult <- commitEffects(
-                                 preStateHash,
-                                 block.getHeader.getProtocolVersion,
-                                 blockEffects
-                               ).attempt
+        possibleCommitResult <- ExecEngineUtil
+                                 .commitEffects[F](
+                                   preStateHash,
+                                   block.getHeader.getProtocolVersion,
+                                   blockEffects
+                                 )
+                                 .attempt
         //TODO: distinguish "internal errors" and "user errors"
         _ <- possibleCommitResult match {
               case Left(ex) =>

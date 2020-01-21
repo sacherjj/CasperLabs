@@ -31,6 +31,7 @@ import io.casperlabs.storage.dag.DagRepresentation
 import io.casperlabs.storage.deploy.{DeployStorage, DeployStorageWriter}
 import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.metrics.implicits._
+import io.casperlabs.smartcontracts.ExecutionEngineService.CommitResult
 
 import scala.util.Either
 
@@ -62,6 +63,25 @@ object ExecEngineUtil {
       Seq[TransformEntry],
       ProtocolVersion
   ) => F[Either[Throwable, ExecutionEngineService.CommitResult]]
+
+  /** Commit effects against ExecutionEngine as described by `blockEffects`.
+    *
+    * Sends effects in an ordered sequence as defined by `stage` index of each batch in [[BlockEffects]].
+    *
+    * @param initPreStateHash initial pre-state hash
+    * @param protocolVersion protocol version for ALL deploys' effects
+    * @param blockEffects block's effects to commit.
+    * @return Result of committing deploys. Returns the first error it encounters or last [[io.casperlabs.smartcontracts.ExecutionEngineService.CommitResult]].
+    */
+  def commitEffects[F[_]: MonadThrowable](
+      initPreStateHash: ByteString,
+      protocolVersion: ProtocolVersion,
+      blockEffects: BlockEffects
+  )(implicit E: ExecutionEngineService[F]): F[ExecutionEngineService.CommitResult] =
+    blockEffects.effects.toList.sortBy(_._1).foldM(CommitResult(initPreStateHash, Seq.empty)) {
+      case (state, (_, transforms)) =>
+        E.commit(state.postStateHash, transforms.toList, protocolVersion).rethrow
+    }
 
   /**
     * Sends a group of commuting deploys to EE.exec endpoint and then commits their effects.
