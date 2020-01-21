@@ -4,6 +4,7 @@ import cats.effect._
 import cats.implicits._
 import cats.kernel.Monoid
 import cats.data.NonEmptyList
+import cats.effect.concurrent.Ref
 import cats.{Foldable, Monad}
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.DeploySelection.{
@@ -18,6 +19,7 @@ import io.casperlabs.casper.consensus.{state, Block, Deploy}
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
 import io.casperlabs.casper.util.execengine.Op.{OpMap, OpMapAddComm}
 import io.casperlabs.casper.util.{CasperLabsProtocol, DagOperations, ProtoUtil}
+import io.casperlabs.casper.validation.Validation.BlockEffects
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.ipc._
 import io.casperlabs.metrics.Metrics
@@ -61,7 +63,14 @@ object ExecEngineUtil {
       ProtocolVersion
   ) => F[Either[Throwable, ExecutionEngineService.CommitResult]]
 
-  protected[execengine] def parDeployEffects[F[_]: MonadThrowable](
+  /**
+    * Sends a group of commuting deploys to EE.exec endpoint and then commits their effects.
+    * Any error is raised to `MonadThrowable` context.
+    *
+    * Returns either a list of precondition failures if any of the deploys fail execution,
+    * or result of committing the effects.
+    */
+  protected[execengine] def execCommitParDeploys[F[_]: MonadThrowable](
       stage: Int,
       prestate: ByteString,
       blocktime: Long,
@@ -124,7 +133,7 @@ object ExecEngineUtil {
     for {
       state <- deploysWithStage.foldLeftM(State.init) {
                 case (state, (deploy, stage)) =>
-                  parDeployEffects[F](
+                  execCommitParDeploys[F](
                     stage,
                     state.postStateHash,
                     blocktime,
@@ -331,12 +340,12 @@ object ExecEngineUtil {
     * @param prestate prestate hash of the GlobalState on top of which to run deploys.
     * @return Effects of running deploys from the block
     */
-  def effectsForBlock[F[_]: MonadThrowable: ExecutionEngineService: BlockStorage: CasperLabsProtocol](
+  def effectsForBlock[F[_]: Sync: ExecutionEngineService: BlockStorage: CasperLabsProtocol](
       block: Block,
       prestate: StateHash
-  ): F[Seq[TransformEntry]] = {
-    val deploys   = ProtoUtil.deploys(block).flatMap(_.deploy)
-    val blocktime = block.getHeader.timestamp
+  ): F[BlockEffects] = {
+    val deploysGrouped = ProtoUtil.deploys(block)
+    val blocktime      = block.getHeader.timestamp
 
     if (block.isGenesisLike) {
       // The new Genesis definition is that there's a chain spec that everyone's supposed to
@@ -349,21 +358,48 @@ object ExecEngineUtil {
             )
           )
         case Some(genesis) =>
-          genesis.transformEntry.pure[F]
+          BlockEffects(genesis.blockEffects.map(se => (se.stage, se.effects)).toMap).pure[F]
       }
     } else {
       for {
         protocolVersion <- CasperLabsProtocol[F].protocolFromBlock(block)
-        deployEffects <- processDeploys[F](
-                          prestate,
-                          blocktime,
-                          deploys,
-                          protocolVersion
-                        )(ExecutionEngineService[F].exec _)
-        effectfulDeploys = ProcessedDeployResult.split(deployEffects)._2
-        transformMap = unzipEffectsAndDeploys(findCommutingEffects(effectfulDeploys))
-          .flatMap(_._2)
-      } yield transformMap
+        effectsRef      <- Ref[F].of(Map.empty[Int, Seq[TransformEntry]])
+        _ <- deploysGrouped.toList.foldLeftM(prestate) {
+              case (preStateHash, (stage, deploys)) =>
+                val eeCommitCaptureEffects: EECommitFun[F] =
+                  (preState, transforms, protocol) =>
+                    for {
+                      _ <- effectsRef.update(_.updated(stage, transforms))
+                      commitResult <- ExecutionEngineService[F].commit(
+                                       preState,
+                                       transforms,
+                                       protocol
+                                     )
+                    } yield commitResult
+
+                execCommitParDeploys[F](
+                  stage,
+                  preStateHash,
+                  blocktime,
+                  protocolVersion,
+                  CommutingDeploys(deploys.map(_.deploy.get))
+                )(
+                  ExecutionEngineService[F].exec _,
+                  eeCommitCaptureEffects
+                ).flatMap {
+                    case Left(_) =>
+                      MonadThrowable[F].raiseError[DeploysCheckpoint](
+                        new IllegalArgumentException(
+                          s"Block ${PrettyPrinter.buildString(block.blockHash)} contained deploys that failed with PreconditionFailure error."
+                        )
+                      )
+                    case Right(dc) => dc.pure[F]
+                  }
+                  .map(_.postStateHash)
+            }
+
+        blockEffects <- effectsRef.get.map(BlockEffects(_))
+      } yield blockEffects
     }
   }
 
@@ -598,7 +634,7 @@ object ExecEngineUtil {
         .get(blockMeta.messageHash)
         .map(_.map { blockWithTransforms =>
           val blockHash  = blockWithTransforms.getBlockMessage.blockHash
-          val transforms = blockWithTransforms.transformEntry
+          val transforms = blockWithTransforms.blockEffects.flatMap(_.effects)
           // To avoid the possibility of duplicate deploys, pretend that a deploy
           // writes to its own deploy hash, to generate conflicts between blocks
           // that have the same deploy in their bodies.
