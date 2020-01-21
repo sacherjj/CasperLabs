@@ -400,7 +400,7 @@ where
 
     /// Sends raw commit request to the current engine response.
     ///
-    /// Can be used where result is not necesary
+    /// Can be used where result is not necessary
     pub fn commit_transforms(
         &self,
         prestate_hash: Vec<u8>,
