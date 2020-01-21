@@ -7,7 +7,7 @@ import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.state.{Key, ProtocolVersion}
 import io.casperlabs.casper.consensus.{state, Deploy}
-import io.casperlabs.casper.util.execengine.ExecEngineUtil.{processDeploys, zipDeploysResults}
+import io.casperlabs.casper.util.execengine.ExecEngineUtil.eeExecuteDeploys
 import io.casperlabs.casper.util.execengine.Op.OpMap
 import io.casperlabs.casper.util.execengine.{
   DeployEffects,
@@ -132,7 +132,7 @@ object DeploySelection {
               // stop as soon as maximum block size limit is reached.
               val batch = chunk.toList
               val chunkResults =
-                processDeploys[F](
+                eeExecuteDeploys[F](
                   prestate,
                   blocktime,
                   batch,

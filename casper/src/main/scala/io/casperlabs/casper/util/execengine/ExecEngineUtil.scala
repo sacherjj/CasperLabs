@@ -71,16 +71,7 @@ object ExecEngineUtil {
       eeExec: EEExecFun[F],
       eeCommit: EECommitFun[F]
   ): F[Either[List[PreconditionFailure], DeploysCheckpoint]] =
-    processDeploys[F](prestate, blocktime, deploys.getDeploys.toList, protocolVersion)(eeExec)
-      .flatMap { pdr =>
-        if (pdr.size != deploys.size)
-          MonadThrowable[F].raiseError[List[ProcessedDeployResult]](
-            SmartContractEngineError(
-              s"Unexpected number of results (${pdr.size} vs ${deploys.size} expected."
-            )
-          )
-        else pdr.pure[F]
-      }
+    eeExecuteDeploys[F](prestate, blocktime, deploys.getDeploys.toList, protocolVersion)(eeExec)
       .flatMap { results =>
         val (failures, deployEffects) = ProcessedDeployResult.split(results)
         if (failures.nonEmpty)
@@ -248,16 +239,30 @@ object ExecEngineUtil {
     } yield ()
   }
 
-  def processDeploys[F[_]: MonadThrowable](
+  /** Executes set of deploys using provided `eeExec` function.
+    *
+    * @return List of execution results.
+    */
+  def eeExecuteDeploys[F[_]: MonadThrowable](
       prestate: StateHash,
       blocktime: Long,
       deploys: Seq[Deploy],
       protocolVersion: state.ProtocolVersion
   )(eeExec: EEExecFun[F]): F[List[ProcessedDeployResult]] =
     for {
-      eeDeploys <- deploys.toList.traverse(ProtoUtil.deployDataToEEDeploy[F](_))
-      results   <- eeExec(prestate, blocktime, eeDeploys, protocolVersion).rethrow
-    } yield zipDeploysResults(deploys, results)
+      eeDeploys <- MonadThrowable[F].fromTry(
+                    deploys.toList.traverse(ProtoUtil.deployDataToEEDeploy[F](_))
+                  )
+      results <- eeExec(prestate, blocktime, eeDeploys, protocolVersion).rethrow
+      _ <- MonadThrowable[F]
+            .raiseError[List[ProcessedDeployResult]](
+              SmartContractEngineError(
+                s"Unexpected number of results (${results.size} vs ${deploys.size} expected."
+              )
+            )
+            .whenA(results.size != deploys.size)
+      pdr = zipDeploysResults(deploys, results)
+    } yield pdr
 
   /** Chooses a set of commuting effects.
     *
