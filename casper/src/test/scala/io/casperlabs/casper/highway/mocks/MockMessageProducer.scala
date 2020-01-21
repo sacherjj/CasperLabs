@@ -14,6 +14,7 @@ import io.casperlabs.storage.BlockMsgWithTransform
 import io.casperlabs.storage.block.BlockStorageWriter
 import io.casperlabs.storage.dag.DagStorage
 import io.casperlabs.models.Message
+import scala.util.control.NonFatal
 
 class MockMessageProducer[F[_]: Sync: BlockStorageWriter: DagStorage](
     val validatorId: PublicKeyBS
@@ -48,9 +49,9 @@ class MockMessageProducer[F[_]: Sync: BlockStorageWriter: DagStorage](
     for {
       dag <- DagStorage[F].getRepresentation
       parent <- dag.lookupUnsafe(parentBlockHash).recoverWith {
-                 case ex =>
+                 case NonFatal(ex) =>
                    Sync[F].raiseError(
-                     new IllegalArgumentException(
+                     new IllegalStateException(
                        s"Couldn't look up parent in MockMessageProducer: $ex"
                      )
                    )
@@ -90,7 +91,6 @@ class MockMessageProducer[F[_]: Sync: BlockStorageWriter: DagStorage](
     Sync[F]
       .fromTry(Message.fromBlockSummary(signed))
       .map(_.asInstanceOf[Message.Ballot])
-      .flatTap(insert)
   }
 
   override def block(
@@ -122,6 +122,8 @@ class MockMessageProducer[F[_]: Sync: BlockStorageWriter: DagStorage](
       val hash   = ProtoUtil.protoHash(unsigned)
       val signed = unsigned.withBlockHash(hash)
 
-      Sync[F].fromTry(Message.fromBlockSummary(signed)).map(_.asInstanceOf[Message.Block])
+      Sync[F]
+        .fromTry(Message.fromBlockSummary(signed))
+        .map(_.asInstanceOf[Message.Block])
     }
 }

@@ -198,6 +198,10 @@ class EraSupervisor[F[_]: Concurrent: Timer: Log: BlockStorageWriter: EraStorage
   /** Update descendant eras' latest messages. */
   private def propagateLatestMessageToDescendantEras(message: Message): F[Unit] =
     for {
+      // Let this era know as well. You'd expect that the message production will
+      // keep this updated, when the fork choice is implemented, but for now in
+      // tests if produce a block in a leaf era this makes sure that the next round
+      // will build on it, and it seems to make sense anyway.
       _  <- ForkChoiceManager[F].updateLatestMessage(message.keyBlockHash, message)
       ds <- loadDescendants(message.keyBlockHash)
       _  <- ds.traverse(d => ForkChoiceManager[F].updateLatestMessage(d.keyBlockHash, message))
