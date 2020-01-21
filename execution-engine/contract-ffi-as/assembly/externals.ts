@@ -97,3 +97,6 @@ export declare function set_action_threshold(permission_level: u32, threshold: i
 
 @external("env", "update_associated_key")
 export declare function update_associated_key(public_key_ptr: usize, weight: i32): i32;
+
+@external("env", "remove_associated_key")
+export declare function remove_associated_key(public_key_ptr: usize): i32;

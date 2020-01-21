@@ -23,6 +23,16 @@ export enum UpdateKeyFailure {
     ThresholdViolation = 3,
 }
 
+export enum RemoveKeyFailure {
+    Ok = 0,
+    // Key does not exist in the list of associated keys.
+    MissingKey = 1,
+    // Unable to remove associated key due to insufficient permissions
+    PermissionDenied = 2,
+    // Unable to remove a key which would violate action threshold constraints
+    ThresholdViolation = 3,
+}
+
 export enum SetThresholdFailure {
     Ok = 0,
     // New threshold should be lower or equal than deployment threshold
@@ -58,4 +68,10 @@ export function updateAssociatedKey(publicKey: Array<u8>, weight: i32): UpdateKe
     const publicKeyBytes = arrayToTyped(publicKey);
     const ret = externals.update_associated_key(publicKeyBytes.dataStart, weight);
     return <UpdateKeyFailure>ret;
+}
+
+export function removeAssociatedKey(publicKey: Array<u8>): RemoveKeyFailure {
+    const publicKeyBytes = arrayToTyped(publicKey);
+    const ret = externals.remove_associated_key(publicKeyBytes.dataStart);
+    return <RemoveKeyFailure>ret;
 }
