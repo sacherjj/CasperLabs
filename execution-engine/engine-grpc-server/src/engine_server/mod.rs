@@ -16,7 +16,6 @@ use std::{
 
 use grpc::{RequestOptions, ServerBuilder, SingleResponse};
 
-use contract_ffi::{block_time::BlockTime, value::ProtocolVersion};
 use engine_core::{
     engine_state::{
         deploy_item::DeployItem,
@@ -34,6 +33,7 @@ use engine_shared::{
 };
 use engine_storage::global_state::{CommitResult, StateProvider};
 use engine_wasm_prep::Preprocessor;
+use types::{BlockTime, ProtocolVersion};
 
 use self::{
     ipc::{

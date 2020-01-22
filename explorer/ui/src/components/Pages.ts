@@ -11,6 +11,7 @@ export default class Pages {
     '/accounts/:accountPublicKeyBase16/deploys';
   static readonly Deploy = '/deploys/:deployHashBase16';
   static readonly Search = '/search';
+  static readonly ConnectedPeers = '/peers';
 
   static readonly block = (blockHashBase16: string) =>
     `/blocks/${blockHashBase16}`;
@@ -25,4 +26,14 @@ export default class Pages {
     const url = `/accounts/${accountHashBase16}/deploys`;
     return pageToken ? `${url}?pageToken=${pageToken}` : url;
   };
+
+  static readonly explorerWithMaxRankAndDepth = (
+    maxRank: number,
+    depth: number
+  ) => `${Pages.Explorer}?maxRank=${maxRank}&depth=${depth}`;
+
+  static readonly blocksWithMaxRankAndDepth = (
+    maxRank: number,
+    depth: number
+  ) => `${Pages.Blocks}?maxRank=${maxRank}&depth=${depth}`;
 }

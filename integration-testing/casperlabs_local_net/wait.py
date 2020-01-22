@@ -5,7 +5,6 @@ from casperlabs_local_net.errors import NonZeroExitCodeError
 from typing import List
 import typing_extensions
 
-from casperlabs_local_net.client_parser import parse_show_blocks
 from casperlabs_local_net.docker_node import DockerNode
 
 
@@ -18,10 +17,7 @@ class PredicateProtocol(typing_extensions.Protocol):
 
 
 class WaitTimeoutError(Exception):
-    def __init__(self, predicate: PredicateProtocol, timeout: int) -> None:
-        super().__init__()
-        self.predicate = predicate
-        self.timeout = timeout
+    pass
 
 
 class LogsContainMessage:
@@ -341,8 +337,8 @@ class AllNodesHaveBlockHashes:
             (
                 self.block_hashes.issubset(
                     set(
-                        b.summary.block_hash[:n]
-                        for b in parse_show_blocks(node.d_client.show_blocks(1000))
+                        b.summary.block_hash.hex()[:n]
+                        for b in node.p_client.show_blocks(1000)
                     )
                 )
                 for node in self.nodes
@@ -356,26 +352,24 @@ def wait_on_using_wall_clock_time(
     logging.info("AWAITING {}".format(predicate))
 
     elapsed = 0
+    start_time = time.time()
+    iteration_duration = 0
+    epsilon = 0.10
+    logging.info(f"Waiting for {predicate} for up to {timeout_seconds}s...")
     while elapsed < timeout_seconds:
-        start_time = time.time()
-
-        is_satisfied = predicate.is_satisfied()
-        if is_satisfied:
-            logging.info("SATISFIED {}".format(predicate))
+        if predicate.is_satisfied():
+            logging.info(f"SATISFIED {predicate} after {round(elapsed, 2)}s")
             return
 
-        condition_evaluation_duration = time.time() - start_time
-        elapsed = int(elapsed + condition_evaluation_duration)
-        time_left = timeout_seconds - elapsed
-
-        # iteration duration is 15% of remaining timeout
-        # but no more than 10s and no less than 1s
-        iteration_duration = int(min(10, max(1, int(0.15 * time_left))))
+        iteration_duration += epsilon
+        # Don't wait more than half a second.
+        iteration_duration = min(iteration_duration, 0.5)
 
         time.sleep(iteration_duration)
-        elapsed = elapsed + iteration_duration
 
-    raise Exception("Failed to satisfy {} after {}s".format(predicate, elapsed))
+        elapsed = time.time() - start_time
+
+    raise WaitTimeoutError(f"Failed to satisfy {predicate} after {round(elapsed, 2)}s")
 
 
 def wait_for_block_contains(
@@ -511,38 +505,12 @@ def wait_using_wall_clock_time_or_fail(
 ) -> None:
     while True:
         try:
-            wait_using_wall_clock_time(predicate, timeout)
+            wait_on_using_wall_clock_time(predicate, timeout)
             return
         except WaitTimeoutError:
             raise Exception("Failed to satisfy {} after {}s".format(predicate, timeout))
         except NonZeroExitCodeError:
             logging.info("not ready")
-
-
-def wait_using_wall_clock_time(predicate: PredicateProtocol, timeout: int) -> None:
-    logging.info("AWAITING {}".format(predicate))
-
-    elapsed = 0
-    while elapsed < timeout:
-        start_time = time.time()
-
-        is_satisfied = predicate.is_satisfied()
-        if is_satisfied:
-            logging.info("SATISFIED {}".format(predicate))
-            return
-
-        condition_evaluation_duration = time.time() - start_time
-        elapsed = int(elapsed + condition_evaluation_duration)
-        time_left = timeout - elapsed
-
-        # iteration duration is 15% of remaining timeout
-        # but no more than 10s and no less than 1s
-        iteration_duration = int(min(10, max(1, int(0.15 * time_left))))
-
-        time.sleep(iteration_duration)
-        elapsed = elapsed + iteration_duration
-    logging.info("TIMEOUT %s", predicate)
-    raise WaitTimeoutError(predicate, timeout)
 
 
 def wait_for_connected_to_node(

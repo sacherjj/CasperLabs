@@ -4,11 +4,11 @@ extern crate alloc;
 
 use alloc::{collections::BTreeMap, string::String};
 
-use contract_ffi::{
-    contract_api::{runtime, storage, Error as ApiError},
-    key::Key,
+use contract::{
+    contract_api::{runtime, storage},
     unwrap_or_revert::UnwrapOrRevert,
 };
+use types::{ApiError, Key};
 
 const DESTINATION_HASH: &str = "hash";
 const DESTINATION_UREF: &str = "uref";

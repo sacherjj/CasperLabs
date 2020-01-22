@@ -44,19 +44,18 @@ object EquivocationDetector {
     * creates equivocations. And the base block of b5 is b1, whose rank is smaller than that of b2, so
     * we will update the `equivocationsTracker`, setting the value of key v1 to be rank of b1.
     */
-  def checkEquivocationWithUpdate[F[_]: MonadThrowable: Log: FunctorRaise[*[_], InvalidBlock]](
+  def checkEquivocationWithUpdate[F[_]: Monad: Log: FunctorRaise[*[_], InvalidBlock]](
       dag: DagRepresentation[F],
-      block: Block
+      message: Message
   ): F[Unit] =
     for {
       equivocators <- dag.getEquivocators
-      creator      = block.getHeader.validatorPublicKey
-      equivocated <- if (equivocators.contains(creator)) {
+      equivocated <- if (equivocators.contains(message.validatorId)) {
                       Log[F].debug(
-                        s"The creator of ${PrettyPrinter.buildString(block.blockHash) -> "block"} has equivocated before"
+                        s"The creator of ${PrettyPrinter.buildString(message.messageHash) -> "message"} has equivocated before"
                       ) *> true.pure[F]
                     } else {
-                      checkEquivocations(dag, block)
+                      checkEquivocations(dag, message)
                     }
       _ <- FunctorRaise[F, InvalidBlock].raise[Unit](EquivocatedBlock).whenA(equivocated)
     } yield ()
@@ -82,12 +81,12 @@ object EquivocationDetector {
     *   then when adding B4, this method doesn't work, it return false but actually B4
     *   equivocated with B2.
     */
-  private def checkEquivocations[F[_]: MonadThrowable: Log](
+  private def checkEquivocations[F[_]: Monad: Log](
       dag: DagRepresentation[F],
-      block: Block
+      message: Message
   ): F[Boolean] =
     for {
-      validatorLatestMessages <- dag.latestMessage(block.getHeader.validatorPublicKey)
+      validatorLatestMessages <- dag.latestMessage(message.validatorId)
       equivocated <- validatorLatestMessages.toList match {
                       case Nil =>
                         // It is the first message by that validator.
@@ -98,20 +97,20 @@ object EquivocationDetector {
                         // And we've also validated that message creator is not merging his swimlane,
                         // a message creates an equivocation iff latest message (as seen by local node)
                         // is different from what new message cites as the previous one.
-                        if (block.getHeader.validatorPrevBlockHash != head.messageHash) {
+                        if (message.validatorPrevMessageHash != head.messageHash) {
                           Log[F]
                             .warn(
                               s"Found equivocation: justifications of ${PrettyPrinter
-                                .buildString(block.blockHash)                    -> "block"} don't cite the latest message by ${PrettyPrinter
-                                .buildString(block.getHeader.validatorPublicKey) -> "validator"}: ${PrettyPrinter
-                                .buildString(head.messageHash)                   -> "latestMessage"}"
+                                .buildString(message.messageHash) -> "message"} don't cite the latest message by ${PrettyPrinter
+                                .buildString(message.validatorId) -> "validator"}: ${PrettyPrinter
+                                .buildString(head.messageHash)    -> "latestMessage"}"
                             )
                             .as(true)
                         } else false.pure[F]
                       case _ =>
                         Log[F]
                           .warn(
-                            s"${PrettyPrinter.buildString(block.getHeader.validatorPublicKey) -> "validator"} has already equivocated in the past."
+                            s"${PrettyPrinter.buildString(message.validatorId) -> "validator"} has already equivocated in the past."
                           )
                           .as(true)
                     }

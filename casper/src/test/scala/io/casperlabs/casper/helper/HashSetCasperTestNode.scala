@@ -1,9 +1,11 @@
 package io.casperlabs.casper.helper
 
+import cats.effect.concurrent.Ref
 import cats.effect.{Concurrent, ContextShift, Timer}
 import cats.implicits._
 import cats.{~>, Applicative, Defer, Parallel}
 import com.google.protobuf.ByteString
+import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.MultiParentCasperImpl.Broadcaster
 import io.casperlabs.casper._
 import io.casperlabs.casper.consensus.state.{BigInt => _, Unit => _, _}
@@ -58,9 +60,9 @@ abstract class HashSetCasperTestNode[F[_]](
   implicit val timeEff: LogicalTime[F]
 
   implicit val casperEff: MultiParentCasperImpl[F]
-  implicit val lastFinalizedBlockHashContainer: LastFinalizedBlockHashContainer[F] =
-    NoOpsLastFinalizedBlockHashContainer.create[F](genesis.blockHash)
   implicit val broadcaster: Broadcaster[F]
+
+  val lastFinalizedBlockHashContainer: Ref[F, BlockHash]
 
   val validatorId = ValidatorIdentity(Ed25519.tryToPublic(sk).get, sk, Ed25519)
 
@@ -202,7 +204,7 @@ trait HashSetCasperTestNodeFactory {
     )
 
   protected def initStorage[F[_]: Concurrent: Log: Metrics: ContextShift: Time]()
-      : F[(BlockStorage[F], IndexedDagStorage[F], DeployStorage[F])] =
+      : F[(BlockStorage[F], IndexedDagStorage[F], DeployStorage[F], FinalityStorage[F])] =
     StorageFixture.createStorages[F]()
 }
 

@@ -1,8 +1,6 @@
-use crate::{
-    support::test_support::{ExecuteRequestBuilder, WasmTestBuilder},
-    test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG},
+use engine_test_support::low_level::{
+    ExecuteRequestBuilder, WasmTestBuilder, DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG,
 };
-
 const CONTRACT_MINT_PURSE: &str = "mint_purse.wasm";
 const CONTRACT_TRANSFER_TO_ACCOUNT_01: &str = "transfer_to_account_01.wasm";
 const SYSTEM_ADDR: [u8; 32] = [0u8; 32];

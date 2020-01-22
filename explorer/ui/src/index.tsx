@@ -18,7 +18,7 @@ import FaucetContainer from './containers/FaucetContainer';
 import AuthContainer from './containers/AuthContainer';
 import ErrorContainer from './containers/ErrorContainer';
 import FaucetService from './services/FaucetService';
-import { CasperService, BalanceService } from 'casperlabs-sdk';
+import { BalanceService, CasperService, DiagnosticsService } from 'casperlabs-sdk';
 import { Auth0Service, MockAuthService } from './services/AuthService';
 import DagContainer from './containers/DagContainer';
 import BlockContainer from './containers/BlockContainer';
@@ -26,6 +26,7 @@ import DeployContainer from './containers/DeployContainer';
 import SearchContainer from './containers/SearchContainer';
 import { DeployInfoListContainer } from './containers/DeployInfoListContainer';
 import AccountSelectorContainer from './containers/AccountSelectorContainer';
+import ConnectedPeersContainer from './containers/ConnectedPeersContainer';
 
 let w = window as any;
 w.$ = w.jQuery = jQuery;
@@ -39,6 +40,9 @@ const casperService = new CasperService(
   window.config.grpc.url || window.origin
 );
 const balanceService = new BalanceService(casperService);
+const diagnosticsService = new DiagnosticsService(
+  window.config.grpc.url || window.origin
+);
 
 // State containers.
 const errors = new ErrorContainer();
@@ -61,6 +65,7 @@ const deploy = new DeployContainer(errors, casperService, balanceService);
 const deployInfoList = new DeployInfoListContainer(errors, casperService);
 const search = new SearchContainer(errors, casperService);
 const accountSelectorContainer = new AccountSelectorContainer();
+const connectedPeersContainer = new ConnectedPeersContainer(errors, diagnosticsService);
 
 ReactDOM.render(
   <HashRouter>
@@ -73,6 +78,7 @@ ReactDOM.render(
       deploy={deploy}
       deployInfoList={deployInfoList}
       accountSelectorContainer={accountSelectorContainer}
+      connectedPeersContainer={connectedPeersContainer}
       search={search}
     />
   </HashRouter>,

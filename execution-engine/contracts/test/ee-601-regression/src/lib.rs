@@ -2,16 +2,13 @@
 
 extern crate alloc;
 
-use alloc::{
-    string::{String, ToString},
-    vec,
-};
+use alloc::string::{String, ToString};
 
-use contract_ffi::{
-    contract_api::{account, runtime, storage, system, Error as ApiError},
+use contract::{
+    contract_api::{account, runtime, storage, system},
     unwrap_or_revert::UnwrapOrRevert,
-    value::{account::PurseId, U512},
 };
+use types::{account::PurseId, ApiError, Phase, U512};
 
 const GET_PAYMENT_PURSE: &str = "get_payment_purse";
 const NEW_UREF_RESULT_UREF_NAME: &str = "new_uref_result";
@@ -28,7 +25,7 @@ enum Error {
 #[no_mangle]
 pub extern "C" fn call() {
     let phase = runtime::get_phase();
-    if phase == contract_ffi::execution::Phase::Payment {
+    if phase == Phase::Payment {
         let amount: U512 = runtime::get_arg(Arg::Amount as u32)
             .unwrap_or_revert_with(ApiError::MissingArgument)
             .unwrap_or_revert_with(ApiError::InvalidArgument);
@@ -37,16 +34,15 @@ pub extern "C" fn call() {
 
         let pos_pointer = system::get_proof_of_stake();
 
-        let payment_purse: PurseId =
-            runtime::call_contract(pos_pointer, (GET_PAYMENT_PURSE,), vec![]);
+        let payment_purse: PurseId = runtime::call_contract(pos_pointer, (GET_PAYMENT_PURSE,));
 
         system::transfer_from_purse_to_purse(main_purse, payment_purse, amount).unwrap_or_revert()
     }
 
     let value: Option<&str> = {
         match phase {
-            contract_ffi::execution::Phase::Payment => Some("payment"),
-            contract_ffi::execution::Phase::Session => Some("session"),
+            Phase::Payment => Some("payment"),
+            Phase::Session => Some("session"),
             _ => None,
         }
     };

@@ -2,19 +2,17 @@
 
 extern crate alloc;
 
-use alloc::{collections::BTreeMap, string::String, vec};
+use alloc::{collections::BTreeMap, string::String};
 use core::fmt::Write;
 
-use contract_ffi::{
-    contract_api::{runtime, storage, ContractRef, Error},
-    key::Key,
-    system_contracts::mint,
+use contract::{
+    contract_api::{runtime, storage},
     unwrap_or_revert::UnwrapOrRevert,
-    uref::{AccessRights, URef},
-    value::{
-        account::{PublicKey, PurseId},
-        CLValue, U512,
-    },
+};
+use types::{
+    account::{PublicKey, PurseId},
+    system_contract_errors::mint,
+    AccessRights, ApiError, CLValue, ContractRef, Key, URef, U512,
 };
 
 const PLACEHOLDER_KEY: Key = Key::Hash([0u8; 32]);
@@ -37,14 +35,14 @@ pub extern "C" fn pos_ext() {
 #[no_mangle]
 pub extern "C" fn call() {
     let mint_uref: URef = runtime::get_arg(Args::MintURef as u32)
-        .unwrap_or_revert_with(Error::MissingArgument)
-        .unwrap_or_revert_with(Error::InvalidArgument);
+        .unwrap_or_revert_with(ApiError::MissingArgument)
+        .unwrap_or_revert_with(ApiError::InvalidArgument);
     let mint = ContractRef::URef(URef::new(mint_uref.addr(), AccessRights::READ));
 
     let genesis_validators: BTreeMap<PublicKey, U512> =
         runtime::get_arg(Args::GenesisValidators as u32)
-            .unwrap_or_revert_with(Error::MissingArgument)
-            .unwrap_or_revert_with(Error::InvalidArgument);
+            .unwrap_or_revert_with(ApiError::MissingArgument)
+            .unwrap_or_revert_with(ApiError::InvalidArgument);
     // Add genesis validators to PoS contract object.
     // For now, we are storing validators in `named_keys` map of the PoS contract
     // in the form: key: "v_{validator_pk}_{validator_stake}", value: doesn't
@@ -84,15 +82,14 @@ pub extern "C" fn call() {
 
     let uref: URef = storage::store_function(POS_FUNCTION_NAME, named_keys)
         .into_uref()
-        .unwrap_or_revert_with(Error::UnexpectedContractRefVariant);
+        .unwrap_or_revert_with(ApiError::UnexpectedContractRefVariant);
     let return_value = CLValue::from_t(uref).unwrap_or_revert();
 
-    runtime::ret(return_value, vec![uref]);
+    runtime::ret(return_value);
 }
 
 fn mint_purse(mint: &ContractRef, amount: U512) -> PurseId {
-    let result: Result<URef, mint::Error> =
-        runtime::call_contract(mint.clone(), ("mint", amount), vec![]);
+    let result: Result<URef, mint::Error> = runtime::call_contract(mint.clone(), ("mint", amount));
 
     result.map(PurseId::new).unwrap_or_revert()
 }

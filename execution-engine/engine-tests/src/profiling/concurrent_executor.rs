@@ -17,12 +17,14 @@ use crossbeam_channel::{Iter, Receiver, Sender};
 use grpc::{ClientStubExt, RequestOptions};
 use log::info;
 
-use casperlabs_engine_tests::support::{profiling_common, test_support::ExecuteRequestBuilder};
-use contract_ffi::value::U512;
 use engine_grpc_server::engine_server::{
     ipc::ExecuteRequest,
     ipc_grpc::{ExecutionEngineService, ExecutionEngineServiceClient},
 };
+use engine_test_support::low_level::ExecuteRequestBuilder;
+use types::U512;
+
+use casperlabs_engine_tests::profiling;
 
 const APP_NAME: &str = "Concurrent Executor";
 const ABOUT: &str =
@@ -330,8 +332,8 @@ impl Drop for ClientPool {
 
 fn new_execute_request(args: &Args) -> ExecuteRequest {
     let amount = U512::one();
-    let account_1_public_key = profiling_common::account_1_public_key();
-    let account_2_public_key = profiling_common::account_2_public_key();
+    let account_1_public_key = profiling::account_1_public_key();
+    let account_2_public_key = profiling::account_2_public_key();
     ExecuteRequestBuilder::standard(
         account_1_public_key.value(),
         CONTRACT_NAME,

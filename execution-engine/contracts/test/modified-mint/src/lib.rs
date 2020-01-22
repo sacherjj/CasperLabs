@@ -2,19 +2,20 @@
 
 extern crate alloc;
 
-use alloc::{string::String, vec};
+use alloc::string::String;
 
-use contract_ffi::{
-    contract_api::{runtime, storage, Error as ApiError},
-    system_contracts::mint::{Error, PurseIdError},
+use contract::{
+    contract_api::{runtime, storage},
     unwrap_or_revert::UnwrapOrRevert,
-    uref::{AccessRights, URef},
-    value::{CLValue, U512},
 };
 use mint_token::{
     internal_purse_id::{DepositId, WithdrawId},
     mint::Mint,
     CLMint,
+};
+use types::{
+    system_contract_errors::mint::{Error, PurseIdError},
+    AccessRights, ApiError, CLValue, URef, U512,
 };
 
 const VERSION: &str = "1.1.0";
@@ -38,18 +39,14 @@ pub fn delegate() {
                 .map(|purse_id| URef::new(purse_id.raw_id(), AccessRights::READ_ADD_WRITE));
             let return_value = CLValue::from_t(maybe_purse_key).unwrap_or_revert();
 
-            if let Ok(purse_key) = maybe_purse_key {
-                runtime::ret(return_value, vec![purse_key])
-            } else {
-                runtime::ret(return_value, vec![])
-            }
+            runtime::ret(return_value)
         }
 
         "create" => {
             let purse_id = mint.create();
             let purse_key = URef::new(purse_id.raw_id(), AccessRights::READ_ADD_WRITE);
             let return_value = CLValue::from_t(purse_key).unwrap_or_revert();
-            runtime::ret(return_value, vec![purse_key])
+            runtime::ret(return_value)
         }
 
         "balance" => {
@@ -61,7 +58,7 @@ pub fn delegate() {
             let balance: Option<U512> =
                 balance_uref.and_then(|uref| storage::read(uref.into()).unwrap_or_default());
             let return_value = CLValue::from_t(balance).unwrap_or_revert();
-            runtime::ret(return_value, vec![])
+            runtime::ret(return_value)
         }
 
         "transfer" => {
@@ -78,7 +75,7 @@ pub fn delegate() {
             let return_error = |error: PurseIdError| -> ! {
                 let transfer_result: Result<(), Error> = Err(error.into());
                 let return_value = CLValue::from_t(transfer_result).unwrap_or_revert();
-                runtime::ret(return_value, vec![])
+                runtime::ret(return_value)
             };
 
             let source: WithdrawId = match WithdrawId::from_uref(source) {
@@ -93,10 +90,10 @@ pub fn delegate() {
 
             let transfer_result = mint.transfer(source, target, amount);
             let return_value = CLValue::from_t(transfer_result).unwrap_or_revert();
-            runtime::ret(return_value, vec![]);
+            runtime::ret(return_value);
         }
         "version" => {
-            runtime::ret(CLValue::from_t(VERSION).unwrap_or_revert(), vec![]);
+            runtime::ret(CLValue::from_t(VERSION).unwrap_or_revert());
         }
 
         _ => panic!("Unknown method name!"),

@@ -37,11 +37,11 @@
     "react": "^16.8.6",
     "react-dom": "^16.8.6",
     "react-router-dom": "^5.1.0",
-    "react-scripts": "^3.2.0",
+    "react-scripts": "^3.3.0-next.80",
     "rxjs": "^6.5.3",
     "tweetnacl-ts": "^1.0.3",
     "tweetnacl-util": "^0.15.0",
-    "typescript": "3.5.2"
+    "typescript": "^3.7.0"
   },
   "scripts": {
     "start": "react-scripts start",

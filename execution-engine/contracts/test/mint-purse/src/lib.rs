@@ -1,17 +1,10 @@
 #![no_std]
 
-extern crate alloc;
-
-use alloc::vec;
-
-use contract_ffi::{
-    contract_api::{runtime, system, Error as ApiError},
-    key::Key,
-    system_contracts::mint,
+use contract::{
+    contract_api::{runtime, system},
     unwrap_or_revert::UnwrapOrRevert,
-    uref::URef,
-    value::{account::PurseId, U512},
 };
+use types::{account::PurseId, system_contract_errors::mint, ApiError, URef, U512};
 
 #[repr(u16)]
 enum Error {
@@ -22,7 +15,7 @@ enum Error {
 fn mint_purse(amount: U512) -> Result<PurseId, mint::Error> {
     let mint = system::get_mint();
 
-    let result: Result<URef, mint::Error> = runtime::call_contract(mint, ("mint", amount), vec![]);
+    let result: Result<URef, mint::Error> = runtime::call_contract(mint, ("mint", amount));
 
     result.map(PurseId::new)
 }
@@ -34,11 +27,7 @@ pub extern "C" fn call() {
 
     let mint = system::get_mint();
 
-    let balance: Option<U512> = runtime::call_contract(
-        mint,
-        ("balance", new_purse),
-        vec![Key::URef(new_purse.value())],
-    );
+    let balance: Option<U512> = runtime::call_contract(mint, ("balance", new_purse));
 
     match balance {
         None => runtime::revert(ApiError::User(Error::BalanceNotFound as u16)),

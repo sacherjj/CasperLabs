@@ -12,23 +12,17 @@ use itertools::Itertools;
 use parity_wasm::elements::Module;
 use wasmi::{ImportsBuilder, MemoryRef, ModuleInstance, ModuleRef, Trap, TrapKind};
 
-use contract_ffi::{
-    args_parser::ArgsParser,
-    bytesrepr::{self, ToBytes},
-    contract_api::{
-        system::{TransferResult, TransferredTo},
-        Error as ApiError,
-    },
-    key::Key,
-    system_contracts::{self, mint, SystemContract},
-    uref::{AccessRights, URef},
-    value::{
-        account::{ActionType, PublicKey, PurseId, Weight, PUBLIC_KEY_SERIALIZED_LENGTH},
-        CLType, CLValue, ProtocolVersion, U512,
-    },
-};
+use contract::args_parser::ArgsParser;
 use engine_shared::{account::Account, contract::Contract, gas::Gas, stored_value::StoredValue};
 use engine_storage::global_state::StateReader;
+use types::{
+    account::{ActionType, PublicKey, PurseId, Weight, PUBLIC_KEY_SERIALIZED_LENGTH},
+    bytesrepr::{self, ToBytes},
+    system_contract_errors,
+    system_contract_errors::mint,
+    AccessRights, ApiError, CLType, CLValue, Key, ProtocolVersion, SystemContractType,
+    TransferResult, TransferredTo, URef, U128, U256, U512,
+};
 
 use super::{Error, MINT_NAME, POS_NAME};
 use crate::{
@@ -132,6 +126,1213 @@ pub fn extract_access_rights_from_keys<I: IntoIterator<Item = Key>>(
         .collect()
 }
 
+#[allow(clippy::cognitive_complexity)]
+fn extract_urefs(cl_value: &CLValue) -> Result<Vec<URef>, Error> {
+    match cl_value.cl_type() {
+        CLType::Bool
+        | CLType::I32
+        | CLType::I64
+        | CLType::U8
+        | CLType::U32
+        | CLType::U64
+        | CLType::U128
+        | CLType::U256
+        | CLType::U512
+        | CLType::Unit
+        | CLType::String
+        | CLType::Any => Ok(vec![]),
+        CLType::Option(ty) => match **ty {
+            CLType::URef => {
+                let opt: Option<URef> = cl_value.to_owned().into_t()?;
+                Ok(opt.into_iter().collect())
+            }
+            CLType::Key => {
+                let opt: Option<Key> = cl_value.to_owned().into_t()?;
+                Ok(opt.into_iter().flat_map(Key::into_uref).collect())
+            }
+            _ => Ok(vec![]),
+        },
+        CLType::List(ty) => match **ty {
+            CLType::URef => Ok(cl_value.to_owned().into_t()?),
+            CLType::Key => {
+                let keys: Vec<Key> = cl_value.to_owned().into_t()?;
+                Ok(keys.into_iter().filter_map(Key::into_uref).collect())
+            }
+            _ => Ok(vec![]),
+        },
+        CLType::FixedList(ty, 1) => match **ty {
+            CLType::URef => {
+                let arr: [URef; 1] = cl_value.to_owned().into_t()?;
+                Ok(arr.to_vec())
+            }
+            CLType::Key => {
+                let arr: [Key; 1] = cl_value.to_owned().into_t()?;
+                Ok(arr.iter().filter_map(Key::as_uref).cloned().collect())
+            }
+            _ => Ok(vec![]),
+        },
+        CLType::FixedList(ty, 2) => match **ty {
+            CLType::URef => {
+                let arr: [URef; 2] = cl_value.to_owned().into_t()?;
+                Ok(arr.to_vec())
+            }
+            CLType::Key => {
+                let arr: [Key; 2] = cl_value.to_owned().into_t()?;
+                Ok(arr.iter().filter_map(Key::as_uref).cloned().collect())
+            }
+            _ => Ok(vec![]),
+        },
+        CLType::FixedList(ty, 3) => match **ty {
+            CLType::URef => {
+                let arr: [URef; 3] = cl_value.to_owned().into_t()?;
+                Ok(arr.to_vec())
+            }
+            CLType::Key => {
+                let arr: [Key; 3] = cl_value.to_owned().into_t()?;
+                Ok(arr.iter().filter_map(Key::as_uref).cloned().collect())
+            }
+            _ => Ok(vec![]),
+        },
+        CLType::FixedList(ty, 4) => match **ty {
+            CLType::URef => {
+                let arr: [URef; 4] = cl_value.to_owned().into_t()?;
+                Ok(arr.to_vec())
+            }
+            CLType::Key => {
+                let arr: [Key; 4] = cl_value.to_owned().into_t()?;
+                Ok(arr.iter().filter_map(Key::as_uref).cloned().collect())
+            }
+            _ => Ok(vec![]),
+        },
+        CLType::FixedList(ty, 5) => match **ty {
+            CLType::URef => {
+                let arr: [URef; 5] = cl_value.to_owned().into_t()?;
+                Ok(arr.to_vec())
+            }
+            CLType::Key => {
+                let arr: [Key; 5] = cl_value.to_owned().into_t()?;
+                Ok(arr.iter().filter_map(Key::as_uref).cloned().collect())
+            }
+            _ => Ok(vec![]),
+        },
+        CLType::FixedList(ty, 6) => match **ty {
+            CLType::URef => {
+                let arr: [URef; 6] = cl_value.to_owned().into_t()?;
+                Ok(arr.to_vec())
+            }
+            CLType::Key => {
+                let arr: [Key; 6] = cl_value.to_owned().into_t()?;
+                Ok(arr.iter().filter_map(Key::as_uref).cloned().collect())
+            }
+            _ => Ok(vec![]),
+        },
+        CLType::FixedList(ty, 7) => match **ty {
+            CLType::URef => {
+                let arr: [URef; 7] = cl_value.to_owned().into_t()?;
+                Ok(arr.to_vec())
+            }
+            CLType::Key => {
+                let arr: [Key; 7] = cl_value.to_owned().into_t()?;
+                Ok(arr.iter().filter_map(Key::as_uref).cloned().collect())
+            }
+            _ => Ok(vec![]),
+        },
+        CLType::FixedList(ty, 8) => match **ty {
+            CLType::URef => {
+                let arr: [URef; 8] = cl_value.to_owned().into_t()?;
+                Ok(arr.to_vec())
+            }
+            CLType::Key => {
+                let arr: [Key; 8] = cl_value.to_owned().into_t()?;
+                Ok(arr.iter().filter_map(Key::as_uref).cloned().collect())
+            }
+            _ => Ok(vec![]),
+        },
+        CLType::FixedList(ty, 9) => match **ty {
+            CLType::URef => {
+                let arr: [URef; 9] = cl_value.to_owned().into_t()?;
+                Ok(arr.to_vec())
+            }
+            CLType::Key => {
+                let arr: [Key; 9] = cl_value.to_owned().into_t()?;
+                Ok(arr.iter().filter_map(Key::as_uref).cloned().collect())
+            }
+            _ => Ok(vec![]),
+        },
+        CLType::FixedList(ty, 10) => match **ty {
+            CLType::URef => {
+                let arr: [URef; 10] = cl_value.to_owned().into_t()?;
+                Ok(arr.to_vec())
+            }
+            CLType::Key => {
+                let arr: [Key; 10] = cl_value.to_owned().into_t()?;
+                Ok(arr.iter().filter_map(Key::as_uref).cloned().collect())
+            }
+            _ => Ok(vec![]),
+        },
+        CLType::FixedList(ty, 11) => match **ty {
+            CLType::URef => {
+                let arr: [URef; 11] = cl_value.to_owned().into_t()?;
+                Ok(arr.to_vec())
+            }
+            CLType::Key => {
+                let arr: [Key; 11] = cl_value.to_owned().into_t()?;
+                Ok(arr.iter().filter_map(Key::as_uref).cloned().collect())
+            }
+            _ => Ok(vec![]),
+        },
+        CLType::FixedList(ty, 12) => match **ty {
+            CLType::URef => {
+                let arr: [URef; 12] = cl_value.to_owned().into_t()?;
+                Ok(arr.to_vec())
+            }
+            CLType::Key => {
+                let arr: [Key; 12] = cl_value.to_owned().into_t()?;
+                Ok(arr.iter().filter_map(Key::as_uref).cloned().collect())
+            }
+            _ => Ok(vec![]),
+        },
+        CLType::FixedList(ty, 13) => match **ty {
+            CLType::URef => {
+                let arr: [URef; 13] = cl_value.to_owned().into_t()?;
+                Ok(arr.to_vec())
+            }
+            CLType::Key => {
+                let arr: [Key; 13] = cl_value.to_owned().into_t()?;
+                Ok(arr.iter().filter_map(Key::as_uref).cloned().collect())
+            }
+            _ => Ok(vec![]),
+        },
+        CLType::FixedList(ty, 14) => match **ty {
+            CLType::URef => {
+                let arr: [URef; 14] = cl_value.to_owned().into_t()?;
+                Ok(arr.to_vec())
+            }
+            CLType::Key => {
+                let arr: [Key; 14] = cl_value.to_owned().into_t()?;
+                Ok(arr.iter().filter_map(Key::as_uref).cloned().collect())
+            }
+            _ => Ok(vec![]),
+        },
+        CLType::FixedList(ty, 15) => match **ty {
+            CLType::URef => {
+                let arr: [URef; 15] = cl_value.to_owned().into_t()?;
+                Ok(arr.to_vec())
+            }
+            CLType::Key => {
+                let arr: [Key; 15] = cl_value.to_owned().into_t()?;
+                Ok(arr.iter().filter_map(Key::as_uref).cloned().collect())
+            }
+            _ => Ok(vec![]),
+        },
+        CLType::FixedList(ty, 16) => match **ty {
+            CLType::URef => {
+                let arr: [URef; 16] = cl_value.to_owned().into_t()?;
+                Ok(arr.to_vec())
+            }
+            CLType::Key => {
+                let arr: [Key; 16] = cl_value.to_owned().into_t()?;
+                Ok(arr.iter().filter_map(Key::as_uref).cloned().collect())
+            }
+            _ => Ok(vec![]),
+        },
+        CLType::FixedList(ty, 17) => match **ty {
+            CLType::URef => {
+                let arr: [URef; 17] = cl_value.to_owned().into_t()?;
+                Ok(arr.to_vec())
+            }
+            CLType::Key => {
+                let arr: [Key; 17] = cl_value.to_owned().into_t()?;
+                Ok(arr.iter().filter_map(Key::as_uref).cloned().collect())
+            }
+            _ => Ok(vec![]),
+        },
+        CLType::FixedList(ty, 18) => match **ty {
+            CLType::URef => {
+                let arr: [URef; 18] = cl_value.to_owned().into_t()?;
+                Ok(arr.to_vec())
+            }
+            CLType::Key => {
+                let arr: [Key; 18] = cl_value.to_owned().into_t()?;
+                Ok(arr.iter().filter_map(Key::as_uref).cloned().collect())
+            }
+            _ => Ok(vec![]),
+        },
+        CLType::FixedList(ty, 19) => match **ty {
+            CLType::URef => {
+                let arr: [URef; 19] = cl_value.to_owned().into_t()?;
+                Ok(arr.to_vec())
+            }
+            CLType::Key => {
+                let arr: [Key; 19] = cl_value.to_owned().into_t()?;
+                Ok(arr.iter().filter_map(Key::as_uref).cloned().collect())
+            }
+            _ => Ok(vec![]),
+        },
+        CLType::FixedList(ty, 20) => match **ty {
+            CLType::URef => {
+                let arr: [URef; 20] = cl_value.to_owned().into_t()?;
+                Ok(arr.to_vec())
+            }
+            CLType::Key => {
+                let arr: [Key; 20] = cl_value.to_owned().into_t()?;
+                Ok(arr.iter().filter_map(Key::as_uref).cloned().collect())
+            }
+            _ => Ok(vec![]),
+        },
+        CLType::FixedList(ty, 21) => match **ty {
+            CLType::URef => {
+                let arr: [URef; 21] = cl_value.to_owned().into_t()?;
+                Ok(arr.to_vec())
+            }
+            CLType::Key => {
+                let arr: [Key; 21] = cl_value.to_owned().into_t()?;
+                Ok(arr.iter().filter_map(Key::as_uref).cloned().collect())
+            }
+            _ => Ok(vec![]),
+        },
+        CLType::FixedList(ty, 22) => match **ty {
+            CLType::URef => {
+                let arr: [URef; 22] = cl_value.to_owned().into_t()?;
+                Ok(arr.to_vec())
+            }
+            CLType::Key => {
+                let arr: [Key; 22] = cl_value.to_owned().into_t()?;
+                Ok(arr.iter().filter_map(Key::as_uref).cloned().collect())
+            }
+            _ => Ok(vec![]),
+        },
+        CLType::FixedList(ty, 23) => match **ty {
+            CLType::URef => {
+                let arr: [URef; 23] = cl_value.to_owned().into_t()?;
+                Ok(arr.to_vec())
+            }
+            CLType::Key => {
+                let arr: [Key; 23] = cl_value.to_owned().into_t()?;
+                Ok(arr.iter().filter_map(Key::as_uref).cloned().collect())
+            }
+            _ => Ok(vec![]),
+        },
+        CLType::FixedList(ty, 24) => match **ty {
+            CLType::URef => {
+                let arr: [URef; 24] = cl_value.to_owned().into_t()?;
+                Ok(arr.to_vec())
+            }
+            CLType::Key => {
+                let arr: [Key; 24] = cl_value.to_owned().into_t()?;
+                Ok(arr.iter().filter_map(Key::as_uref).cloned().collect())
+            }
+            _ => Ok(vec![]),
+        },
+        CLType::FixedList(ty, 25) => match **ty {
+            CLType::URef => {
+                let arr: [URef; 25] = cl_value.to_owned().into_t()?;
+                Ok(arr.to_vec())
+            }
+            CLType::Key => {
+                let arr: [Key; 25] = cl_value.to_owned().into_t()?;
+                Ok(arr.iter().filter_map(Key::as_uref).cloned().collect())
+            }
+            _ => Ok(vec![]),
+        },
+        CLType::FixedList(ty, 26) => match **ty {
+            CLType::URef => {
+                let arr: [URef; 26] = cl_value.to_owned().into_t()?;
+                Ok(arr.to_vec())
+            }
+            CLType::Key => {
+                let arr: [Key; 26] = cl_value.to_owned().into_t()?;
+                Ok(arr.iter().filter_map(Key::as_uref).cloned().collect())
+            }
+            _ => Ok(vec![]),
+        },
+        CLType::FixedList(ty, 27) => match **ty {
+            CLType::URef => {
+                let arr: [URef; 27] = cl_value.to_owned().into_t()?;
+                Ok(arr.to_vec())
+            }
+            CLType::Key => {
+                let arr: [Key; 27] = cl_value.to_owned().into_t()?;
+                Ok(arr.iter().filter_map(Key::as_uref).cloned().collect())
+            }
+            _ => Ok(vec![]),
+        },
+        CLType::FixedList(ty, 28) => match **ty {
+            CLType::URef => {
+                let arr: [URef; 28] = cl_value.to_owned().into_t()?;
+                Ok(arr.to_vec())
+            }
+            CLType::Key => {
+                let arr: [Key; 28] = cl_value.to_owned().into_t()?;
+                Ok(arr.iter().filter_map(Key::as_uref).cloned().collect())
+            }
+            _ => Ok(vec![]),
+        },
+        CLType::FixedList(ty, 29) => match **ty {
+            CLType::URef => {
+                let arr: [URef; 29] = cl_value.to_owned().into_t()?;
+                Ok(arr.to_vec())
+            }
+            CLType::Key => {
+                let arr: [Key; 29] = cl_value.to_owned().into_t()?;
+                Ok(arr.iter().filter_map(Key::as_uref).cloned().collect())
+            }
+            _ => Ok(vec![]),
+        },
+        CLType::FixedList(ty, 30) => match **ty {
+            CLType::URef => {
+                let arr: [URef; 30] = cl_value.to_owned().into_t()?;
+                Ok(arr.to_vec())
+            }
+            CLType::Key => {
+                let arr: [Key; 30] = cl_value.to_owned().into_t()?;
+                Ok(arr.iter().filter_map(Key::as_uref).cloned().collect())
+            }
+            _ => Ok(vec![]),
+        },
+        CLType::FixedList(ty, 31) => match **ty {
+            CLType::URef => {
+                let arr: [URef; 31] = cl_value.to_owned().into_t()?;
+                Ok(arr.to_vec())
+            }
+            CLType::Key => {
+                let arr: [Key; 31] = cl_value.to_owned().into_t()?;
+                Ok(arr.iter().filter_map(Key::as_uref).cloned().collect())
+            }
+            _ => Ok(vec![]),
+        },
+        CLType::FixedList(ty, 32) => match **ty {
+            CLType::URef => {
+                let arr: [URef; 32] = cl_value.to_owned().into_t()?;
+                Ok(arr.to_vec())
+            }
+            CLType::Key => {
+                let arr: [Key; 32] = cl_value.to_owned().into_t()?;
+                Ok(arr.iter().filter_map(Key::as_uref).cloned().collect())
+            }
+            _ => Ok(vec![]),
+        },
+        CLType::FixedList(ty, 64) => match **ty {
+            CLType::URef => {
+                let arr: [URef; 64] = cl_value.to_owned().into_t()?;
+                Ok(arr.to_vec())
+            }
+            CLType::Key => {
+                let arr: [Key; 64] = cl_value.to_owned().into_t()?;
+                Ok(arr.iter().filter_map(Key::as_uref).cloned().collect())
+            }
+            _ => Ok(vec![]),
+        },
+        CLType::FixedList(ty, 128) => match **ty {
+            CLType::URef => {
+                let arr: [URef; 128] = cl_value.to_owned().into_t()?;
+                Ok(arr.to_vec())
+            }
+            CLType::Key => {
+                let arr: [Key; 128] = cl_value.to_owned().into_t()?;
+                Ok(arr.iter().filter_map(Key::as_uref).cloned().collect())
+            }
+            _ => Ok(vec![]),
+        },
+        CLType::FixedList(ty, 256) => match **ty {
+            CLType::URef => {
+                let arr: [URef; 256] = cl_value.to_owned().into_t()?;
+                Ok(arr.to_vec())
+            }
+            CLType::Key => {
+                let arr: [Key; 256] = cl_value.to_owned().into_t()?;
+                Ok(arr.iter().filter_map(Key::as_uref).cloned().collect())
+            }
+            _ => Ok(vec![]),
+        },
+        CLType::FixedList(ty, 512) => match **ty {
+            CLType::URef => {
+                let arr: [URef; 512] = cl_value.to_owned().into_t()?;
+                Ok(arr.to_vec())
+            }
+            CLType::Key => {
+                let arr: [Key; 512] = cl_value.to_owned().into_t()?;
+                Ok(arr.iter().filter_map(Key::as_uref).cloned().collect())
+            }
+            _ => Ok(vec![]),
+        },
+        CLType::FixedList(_ty, _) => Ok(vec![]),
+        CLType::Result { ok, err } => match (&**ok, &**err) {
+            (CLType::URef, CLType::Bool) => {
+                let res: Result<URef, bool> = cl_value.to_owned().into_t()?;
+                match res {
+                    Ok(uref) => Ok(vec![uref]),
+                    Err(_) => Ok(vec![]),
+                }
+            }
+            (CLType::URef, CLType::I32) => {
+                let res: Result<URef, i32> = cl_value.to_owned().into_t()?;
+                match res {
+                    Ok(uref) => Ok(vec![uref]),
+                    Err(_) => Ok(vec![]),
+                }
+            }
+            (CLType::URef, CLType::I64) => {
+                let res: Result<URef, i64> = cl_value.to_owned().into_t()?;
+                match res {
+                    Ok(uref) => Ok(vec![uref]),
+                    Err(_) => Ok(vec![]),
+                }
+            }
+            (CLType::URef, CLType::U8) => {
+                let res: Result<URef, u8> = cl_value.to_owned().into_t()?;
+                match res {
+                    Ok(uref) => Ok(vec![uref]),
+                    Err(_) => Ok(vec![]),
+                }
+            }
+            (CLType::URef, CLType::U32) => {
+                let res: Result<URef, u32> = cl_value.to_owned().into_t()?;
+                match res {
+                    Ok(uref) => Ok(vec![uref]),
+                    Err(_) => Ok(vec![]),
+                }
+            }
+            (CLType::URef, CLType::U64) => {
+                let res: Result<URef, u64> = cl_value.to_owned().into_t()?;
+                match res {
+                    Ok(uref) => Ok(vec![uref]),
+                    Err(_) => Ok(vec![]),
+                }
+            }
+            (CLType::URef, CLType::U128) => {
+                let res: Result<URef, U128> = cl_value.to_owned().into_t()?;
+                match res {
+                    Ok(uref) => Ok(vec![uref]),
+                    Err(_) => Ok(vec![]),
+                }
+            }
+            (CLType::URef, CLType::U256) => {
+                let res: Result<URef, U256> = cl_value.to_owned().into_t()?;
+                match res {
+                    Ok(uref) => Ok(vec![uref]),
+                    Err(_) => Ok(vec![]),
+                }
+            }
+            (CLType::URef, CLType::U512) => {
+                let res: Result<URef, U512> = cl_value.to_owned().into_t()?;
+                match res {
+                    Ok(uref) => Ok(vec![uref]),
+                    Err(_) => Ok(vec![]),
+                }
+            }
+            (CLType::URef, CLType::Unit) => {
+                let res: Result<URef, ()> = cl_value.to_owned().into_t()?;
+                match res {
+                    Ok(uref) => Ok(vec![uref]),
+                    Err(_) => Ok(vec![]),
+                }
+            }
+            (CLType::URef, CLType::String) => {
+                let res: Result<URef, String> = cl_value.to_owned().into_t()?;
+                match res {
+                    Ok(uref) => Ok(vec![uref]),
+                    Err(_) => Ok(vec![]),
+                }
+            }
+            (CLType::URef, CLType::Key) => {
+                let res: Result<URef, Key> = cl_value.to_owned().into_t()?;
+                match res {
+                    Ok(uref) => Ok(vec![uref]),
+                    Err(key) => Ok(key.into_uref().into_iter().collect()),
+                }
+            }
+            (CLType::URef, CLType::URef) => {
+                let res: Result<URef, URef> = cl_value.to_owned().into_t()?;
+                match res {
+                    Ok(uref) => Ok(vec![uref]),
+                    Err(uref) => Ok(vec![uref]),
+                }
+            }
+            (CLType::Key, CLType::Bool) => {
+                let res: Result<Key, bool> = cl_value.to_owned().into_t()?;
+                match res {
+                    Ok(key) => Ok(key.into_uref().into_iter().collect()),
+                    Err(_) => Ok(vec![]),
+                }
+            }
+            (CLType::Key, CLType::I32) => {
+                let res: Result<Key, i32> = cl_value.to_owned().into_t()?;
+                match res {
+                    Ok(key) => Ok(key.into_uref().into_iter().collect()),
+                    Err(_) => Ok(vec![]),
+                }
+            }
+            (CLType::Key, CLType::I64) => {
+                let res: Result<Key, i64> = cl_value.to_owned().into_t()?;
+                match res {
+                    Ok(key) => Ok(key.into_uref().into_iter().collect()),
+                    Err(_) => Ok(vec![]),
+                }
+            }
+            (CLType::Key, CLType::U8) => {
+                let res: Result<Key, u8> = cl_value.to_owned().into_t()?;
+                match res {
+                    Ok(key) => Ok(key.into_uref().into_iter().collect()),
+                    Err(_) => Ok(vec![]),
+                }
+            }
+            (CLType::Key, CLType::U32) => {
+                let res: Result<Key, u32> = cl_value.to_owned().into_t()?;
+                match res {
+                    Ok(key) => Ok(key.into_uref().into_iter().collect()),
+                    Err(_) => Ok(vec![]),
+                }
+            }
+            (CLType::Key, CLType::U64) => {
+                let res: Result<Key, u64> = cl_value.to_owned().into_t()?;
+                match res {
+                    Ok(key) => Ok(key.into_uref().into_iter().collect()),
+                    Err(_) => Ok(vec![]),
+                }
+            }
+            (CLType::Key, CLType::U128) => {
+                let res: Result<Key, U128> = cl_value.to_owned().into_t()?;
+                match res {
+                    Ok(key) => Ok(key.into_uref().into_iter().collect()),
+                    Err(_) => Ok(vec![]),
+                }
+            }
+            (CLType::Key, CLType::U256) => {
+                let res: Result<Key, U256> = cl_value.to_owned().into_t()?;
+                match res {
+                    Ok(key) => Ok(key.into_uref().into_iter().collect()),
+                    Err(_) => Ok(vec![]),
+                }
+            }
+            (CLType::Key, CLType::U512) => {
+                let res: Result<Key, U512> = cl_value.to_owned().into_t()?;
+                match res {
+                    Ok(key) => Ok(key.into_uref().into_iter().collect()),
+                    Err(_) => Ok(vec![]),
+                }
+            }
+            (CLType::Key, CLType::Unit) => {
+                let res: Result<Key, ()> = cl_value.to_owned().into_t()?;
+                match res {
+                    Ok(key) => Ok(key.into_uref().into_iter().collect()),
+                    Err(_) => Ok(vec![]),
+                }
+            }
+            (CLType::Key, CLType::String) => {
+                let res: Result<Key, String> = cl_value.to_owned().into_t()?;
+                match res {
+                    Ok(key) => Ok(key.into_uref().into_iter().collect()),
+                    Err(_) => Ok(vec![]),
+                }
+            }
+            (CLType::Key, CLType::URef) => {
+                let res: Result<Key, URef> = cl_value.to_owned().into_t()?;
+                match res {
+                    Ok(key) => Ok(key.into_uref().into_iter().collect()),
+                    Err(uref) => Ok(vec![uref]),
+                }
+            }
+            (CLType::Key, CLType::Key) => {
+                let res: Result<Key, Key> = cl_value.to_owned().into_t()?;
+                match res {
+                    Ok(key) => Ok(key.into_uref().into_iter().collect()),
+                    Err(key) => Ok(key.into_uref().into_iter().collect()),
+                }
+            }
+            (CLType::Bool, CLType::URef) => {
+                let res: Result<bool, URef> = cl_value.to_owned().into_t()?;
+                match res {
+                    Ok(_) => Ok(vec![]),
+                    Err(uref) => Ok(vec![uref]),
+                }
+            }
+            (CLType::I32, CLType::URef) => {
+                let res: Result<i32, URef> = cl_value.to_owned().into_t()?;
+                match res {
+                    Ok(_) => Ok(vec![]),
+                    Err(uref) => Ok(vec![uref]),
+                }
+            }
+            (CLType::I64, CLType::URef) => {
+                let res: Result<i64, URef> = cl_value.to_owned().into_t()?;
+                match res {
+                    Ok(_) => Ok(vec![]),
+                    Err(uref) => Ok(vec![uref]),
+                }
+            }
+            (CLType::U8, CLType::URef) => {
+                let res: Result<u8, URef> = cl_value.to_owned().into_t()?;
+                match res {
+                    Ok(_) => Ok(vec![]),
+                    Err(uref) => Ok(vec![uref]),
+                }
+            }
+            (CLType::U32, CLType::URef) => {
+                let res: Result<u32, URef> = cl_value.to_owned().into_t()?;
+                match res {
+                    Ok(_) => Ok(vec![]),
+                    Err(uref) => Ok(vec![uref]),
+                }
+            }
+            (CLType::U64, CLType::URef) => {
+                let res: Result<u64, URef> = cl_value.to_owned().into_t()?;
+                match res {
+                    Ok(_) => Ok(vec![]),
+                    Err(uref) => Ok(vec![uref]),
+                }
+            }
+            (CLType::U128, CLType::URef) => {
+                let res: Result<U128, URef> = cl_value.to_owned().into_t()?;
+                match res {
+                    Ok(_) => Ok(vec![]),
+                    Err(uref) => Ok(vec![uref]),
+                }
+            }
+            (CLType::U256, CLType::URef) => {
+                let res: Result<U256, URef> = cl_value.to_owned().into_t()?;
+                match res {
+                    Ok(_) => Ok(vec![]),
+                    Err(uref) => Ok(vec![uref]),
+                }
+            }
+            (CLType::U512, CLType::URef) => {
+                let res: Result<U512, URef> = cl_value.to_owned().into_t()?;
+                match res {
+                    Ok(_) => Ok(vec![]),
+                    Err(uref) => Ok(vec![uref]),
+                }
+            }
+            (CLType::Unit, CLType::URef) => {
+                let res: Result<(), URef> = cl_value.to_owned().into_t()?;
+                match res {
+                    Ok(_) => Ok(vec![]),
+                    Err(uref) => Ok(vec![uref]),
+                }
+            }
+            (CLType::String, CLType::URef) => {
+                let res: Result<String, URef> = cl_value.to_owned().into_t()?;
+                match res {
+                    Ok(_) => Ok(vec![]),
+                    Err(uref) => Ok(vec![uref]),
+                }
+            }
+            (CLType::Bool, CLType::Key) => {
+                let res: Result<bool, Key> = cl_value.to_owned().into_t()?;
+                match res {
+                    Ok(_) => Ok(vec![]),
+                    Err(key) => Ok(key.into_uref().into_iter().collect()),
+                }
+            }
+            (CLType::I32, CLType::Key) => {
+                let res: Result<i32, Key> = cl_value.to_owned().into_t()?;
+                match res {
+                    Ok(_) => Ok(vec![]),
+                    Err(key) => Ok(key.into_uref().into_iter().collect()),
+                }
+            }
+            (CLType::I64, CLType::Key) => {
+                let res: Result<i64, Key> = cl_value.to_owned().into_t()?;
+                match res {
+                    Ok(_) => Ok(vec![]),
+                    Err(key) => Ok(key.into_uref().into_iter().collect()),
+                }
+            }
+            (CLType::U8, CLType::Key) => {
+                let res: Result<u8, Key> = cl_value.to_owned().into_t()?;
+                match res {
+                    Ok(_) => Ok(vec![]),
+                    Err(key) => Ok(key.into_uref().into_iter().collect()),
+                }
+            }
+            (CLType::U32, CLType::Key) => {
+                let res: Result<u32, Key> = cl_value.to_owned().into_t()?;
+                match res {
+                    Ok(_) => Ok(vec![]),
+                    Err(key) => Ok(key.into_uref().into_iter().collect()),
+                }
+            }
+            (CLType::U64, CLType::Key) => {
+                let res: Result<u64, Key> = cl_value.to_owned().into_t()?;
+                match res {
+                    Ok(_) => Ok(vec![]),
+                    Err(key) => Ok(key.into_uref().into_iter().collect()),
+                }
+            }
+            (CLType::U128, CLType::Key) => {
+                let res: Result<U128, Key> = cl_value.to_owned().into_t()?;
+                match res {
+                    Ok(_) => Ok(vec![]),
+                    Err(key) => Ok(key.into_uref().into_iter().collect()),
+                }
+            }
+            (CLType::U256, CLType::Key) => {
+                let res: Result<U256, Key> = cl_value.to_owned().into_t()?;
+                match res {
+                    Ok(_) => Ok(vec![]),
+                    Err(key) => Ok(key.into_uref().into_iter().collect()),
+                }
+            }
+            (CLType::U512, CLType::Key) => {
+                let res: Result<U512, Key> = cl_value.to_owned().into_t()?;
+                match res {
+                    Ok(_) => Ok(vec![]),
+                    Err(key) => Ok(key.into_uref().into_iter().collect()),
+                }
+            }
+            (CLType::Unit, CLType::Key) => {
+                let res: Result<(), Key> = cl_value.to_owned().into_t()?;
+                match res {
+                    Ok(_) => Ok(vec![]),
+                    Err(key) => Ok(key.into_uref().into_iter().collect()),
+                }
+            }
+            (CLType::String, CLType::Key) => {
+                let res: Result<String, Key> = cl_value.to_owned().into_t()?;
+                match res {
+                    Ok(_) => Ok(vec![]),
+                    Err(key) => Ok(key.into_uref().into_iter().collect()),
+                }
+            }
+            (_, _) => Ok(vec![]),
+        },
+        CLType::Map { key, value } => match (&**key, &**value) {
+            (CLType::URef, CLType::Bool) => {
+                let map: BTreeMap<URef, bool> = cl_value.to_owned().into_t()?;
+                Ok(map.keys().cloned().collect())
+            }
+            (CLType::URef, CLType::I32) => {
+                let map: BTreeMap<URef, i32> = cl_value.to_owned().into_t()?;
+                Ok(map.keys().cloned().collect())
+            }
+            (CLType::URef, CLType::I64) => {
+                let map: BTreeMap<URef, i64> = cl_value.to_owned().into_t()?;
+                Ok(map.keys().cloned().collect())
+            }
+            (CLType::URef, CLType::U8) => {
+                let map: BTreeMap<URef, u8> = cl_value.to_owned().into_t()?;
+                Ok(map.keys().cloned().collect())
+            }
+            (CLType::URef, CLType::U32) => {
+                let map: BTreeMap<URef, u32> = cl_value.to_owned().into_t()?;
+                Ok(map.keys().cloned().collect())
+            }
+            (CLType::URef, CLType::U64) => {
+                let map: BTreeMap<URef, u64> = cl_value.to_owned().into_t()?;
+                Ok(map.keys().cloned().collect())
+            }
+            (CLType::URef, CLType::U128) => {
+                let map: BTreeMap<URef, U128> = cl_value.to_owned().into_t()?;
+                Ok(map.keys().cloned().collect())
+            }
+            (CLType::URef, CLType::U256) => {
+                let map: BTreeMap<URef, U256> = cl_value.to_owned().into_t()?;
+                Ok(map.keys().cloned().collect())
+            }
+            (CLType::URef, CLType::U512) => {
+                let map: BTreeMap<URef, U512> = cl_value.to_owned().into_t()?;
+                Ok(map.keys().cloned().collect())
+            }
+            (CLType::URef, CLType::Unit) => {
+                let map: BTreeMap<URef, ()> = cl_value.to_owned().into_t()?;
+                Ok(map.keys().cloned().collect())
+            }
+            (CLType::URef, CLType::String) => {
+                let map: BTreeMap<URef, String> = cl_value.to_owned().into_t()?;
+                Ok(map.keys().cloned().collect())
+            }
+            (CLType::URef, CLType::Key) => {
+                let map: BTreeMap<URef, Key> = cl_value.to_owned().into_t()?;
+                Ok(map
+                    .keys()
+                    .cloned()
+                    .chain(map.values().cloned().filter_map(Key::into_uref))
+                    .collect())
+            }
+            (CLType::URef, CLType::URef) => {
+                let map: BTreeMap<URef, URef> = cl_value.to_owned().into_t()?;
+                Ok(map.keys().cloned().chain(map.values().cloned()).collect())
+            }
+            (CLType::Key, CLType::Bool) => {
+                let map: BTreeMap<Key, bool> = cl_value.to_owned().into_t()?;
+                Ok(map.keys().cloned().filter_map(Key::into_uref).collect())
+            }
+            (CLType::Key, CLType::I32) => {
+                let map: BTreeMap<Key, i32> = cl_value.to_owned().into_t()?;
+                Ok(map.keys().cloned().filter_map(Key::into_uref).collect())
+            }
+            (CLType::Key, CLType::I64) => {
+                let map: BTreeMap<Key, i64> = cl_value.to_owned().into_t()?;
+                Ok(map.keys().cloned().filter_map(Key::into_uref).collect())
+            }
+            (CLType::Key, CLType::U8) => {
+                let map: BTreeMap<Key, u8> = cl_value.to_owned().into_t()?;
+                Ok(map.keys().cloned().filter_map(Key::into_uref).collect())
+            }
+            (CLType::Key, CLType::U32) => {
+                let map: BTreeMap<Key, u32> = cl_value.to_owned().into_t()?;
+                Ok(map.keys().cloned().filter_map(Key::into_uref).collect())
+            }
+            (CLType::Key, CLType::U64) => {
+                let map: BTreeMap<Key, u64> = cl_value.to_owned().into_t()?;
+                Ok(map.keys().cloned().filter_map(Key::into_uref).collect())
+            }
+            (CLType::Key, CLType::U128) => {
+                let map: BTreeMap<Key, U128> = cl_value.to_owned().into_t()?;
+                Ok(map.keys().cloned().filter_map(Key::into_uref).collect())
+            }
+            (CLType::Key, CLType::U256) => {
+                let map: BTreeMap<Key, U256> = cl_value.to_owned().into_t()?;
+                Ok(map.keys().cloned().filter_map(Key::into_uref).collect())
+            }
+            (CLType::Key, CLType::U512) => {
+                let map: BTreeMap<Key, U512> = cl_value.to_owned().into_t()?;
+                Ok(map.keys().cloned().filter_map(Key::into_uref).collect())
+            }
+            (CLType::Key, CLType::Unit) => {
+                let map: BTreeMap<Key, ()> = cl_value.to_owned().into_t()?;
+                Ok(map.keys().cloned().filter_map(Key::into_uref).collect())
+            }
+            (CLType::Key, CLType::String) => {
+                let map: BTreeMap<Key, String> = cl_value.to_owned().into_t()?;
+                Ok(map.keys().cloned().filter_map(Key::into_uref).collect())
+            }
+            (CLType::Key, CLType::URef) => {
+                let map: BTreeMap<Key, URef> = cl_value.to_owned().into_t()?;
+                Ok(map
+                    .keys()
+                    .cloned()
+                    .filter_map(Key::into_uref)
+                    .chain(map.values().cloned())
+                    .collect())
+            }
+            (CLType::Key, CLType::Key) => {
+                let map: BTreeMap<Key, Key> = cl_value.to_owned().into_t()?;
+                Ok(map
+                    .keys()
+                    .cloned()
+                    .filter_map(Key::into_uref)
+                    .chain(map.values().cloned().filter_map(Key::into_uref))
+                    .collect())
+            }
+            (CLType::Bool, CLType::URef) => {
+                let map: BTreeMap<bool, URef> = cl_value.to_owned().into_t()?;
+                Ok(map.values().cloned().collect())
+            }
+            (CLType::I32, CLType::URef) => {
+                let map: BTreeMap<i32, URef> = cl_value.to_owned().into_t()?;
+                Ok(map.values().cloned().collect())
+            }
+            (CLType::I64, CLType::URef) => {
+                let map: BTreeMap<i64, URef> = cl_value.to_owned().into_t()?;
+                Ok(map.values().cloned().collect())
+            }
+            (CLType::U8, CLType::URef) => {
+                let map: BTreeMap<u8, URef> = cl_value.to_owned().into_t()?;
+                Ok(map.values().cloned().collect())
+            }
+            (CLType::U32, CLType::URef) => {
+                let map: BTreeMap<u32, URef> = cl_value.to_owned().into_t()?;
+                Ok(map.values().cloned().collect())
+            }
+            (CLType::U64, CLType::URef) => {
+                let map: BTreeMap<u64, URef> = cl_value.to_owned().into_t()?;
+                Ok(map.values().cloned().collect())
+            }
+            (CLType::U128, CLType::URef) => {
+                let map: BTreeMap<U128, URef> = cl_value.to_owned().into_t()?;
+                Ok(map.values().cloned().collect())
+            }
+            (CLType::U256, CLType::URef) => {
+                let map: BTreeMap<U256, URef> = cl_value.to_owned().into_t()?;
+                Ok(map.values().cloned().collect())
+            }
+            (CLType::U512, CLType::URef) => {
+                let map: BTreeMap<U512, URef> = cl_value.to_owned().into_t()?;
+                Ok(map.values().cloned().collect())
+            }
+            (CLType::Unit, CLType::URef) => {
+                let map: BTreeMap<(), URef> = cl_value.to_owned().into_t()?;
+                Ok(map.values().cloned().collect())
+            }
+            (CLType::String, CLType::URef) => {
+                let map: BTreeMap<String, URef> = cl_value.to_owned().into_t()?;
+                Ok(map.values().cloned().collect())
+            }
+            (CLType::Bool, CLType::Key) => {
+                let map: BTreeMap<bool, Key> = cl_value.to_owned().into_t()?;
+                Ok(map.values().cloned().filter_map(Key::into_uref).collect())
+            }
+            (CLType::I32, CLType::Key) => {
+                let map: BTreeMap<i32, Key> = cl_value.to_owned().into_t()?;
+                Ok(map.values().cloned().filter_map(Key::into_uref).collect())
+            }
+            (CLType::I64, CLType::Key) => {
+                let map: BTreeMap<i64, Key> = cl_value.to_owned().into_t()?;
+                Ok(map.values().cloned().filter_map(Key::into_uref).collect())
+            }
+            (CLType::U8, CLType::Key) => {
+                let map: BTreeMap<u8, Key> = cl_value.to_owned().into_t()?;
+                Ok(map.values().cloned().filter_map(Key::into_uref).collect())
+            }
+            (CLType::U32, CLType::Key) => {
+                let map: BTreeMap<u32, Key> = cl_value.to_owned().into_t()?;
+                Ok(map.values().cloned().filter_map(Key::into_uref).collect())
+            }
+            (CLType::U64, CLType::Key) => {
+                let map: BTreeMap<u64, Key> = cl_value.to_owned().into_t()?;
+                Ok(map.values().cloned().filter_map(Key::into_uref).collect())
+            }
+            (CLType::U128, CLType::Key) => {
+                let map: BTreeMap<U128, Key> = cl_value.to_owned().into_t()?;
+                Ok(map.values().cloned().filter_map(Key::into_uref).collect())
+            }
+            (CLType::U256, CLType::Key) => {
+                let map: BTreeMap<U256, Key> = cl_value.to_owned().into_t()?;
+                Ok(map.values().cloned().filter_map(Key::into_uref).collect())
+            }
+            (CLType::U512, CLType::Key) => {
+                let map: BTreeMap<U512, Key> = cl_value.to_owned().into_t()?;
+                Ok(map.values().cloned().filter_map(Key::into_uref).collect())
+            }
+            (CLType::Unit, CLType::Key) => {
+                let map: BTreeMap<(), Key> = cl_value.to_owned().into_t()?;
+                Ok(map.values().cloned().filter_map(Key::into_uref).collect())
+            }
+            (CLType::String, CLType::Key) => {
+                let map: BTreeMap<String, Key> = cl_value.to_owned().into_t()?;
+                Ok(map.values().cloned().filter_map(Key::into_uref).collect())
+            }
+            (_, _) => Ok(vec![]),
+        },
+        CLType::Tuple1([ty]) => match **ty {
+            CLType::URef => {
+                let val: (URef,) = cl_value.to_owned().into_t()?;
+                Ok(vec![val.0])
+            }
+            CLType::Key => {
+                let val: (Key,) = cl_value.to_owned().into_t()?;
+                Ok(val.0.into_uref().into_iter().collect())
+            }
+            _ => Ok(vec![]),
+        },
+        CLType::Tuple2([ty1, ty2]) => match (&**ty1, &**ty2) {
+            (CLType::URef, CLType::Bool) => {
+                let val: (URef, bool) = cl_value.to_owned().into_t()?;
+                Ok(vec![val.0])
+            }
+            (CLType::URef, CLType::I32) => {
+                let val: (URef, i32) = cl_value.to_owned().into_t()?;
+                Ok(vec![val.0])
+            }
+            (CLType::URef, CLType::I64) => {
+                let val: (URef, i64) = cl_value.to_owned().into_t()?;
+                Ok(vec![val.0])
+            }
+            (CLType::URef, CLType::U8) => {
+                let val: (URef, u8) = cl_value.to_owned().into_t()?;
+                Ok(vec![val.0])
+            }
+            (CLType::URef, CLType::U32) => {
+                let val: (URef, u32) = cl_value.to_owned().into_t()?;
+                Ok(vec![val.0])
+            }
+            (CLType::URef, CLType::U64) => {
+                let val: (URef, u64) = cl_value.to_owned().into_t()?;
+                Ok(vec![val.0])
+            }
+            (CLType::URef, CLType::U128) => {
+                let val: (URef, U128) = cl_value.to_owned().into_t()?;
+                Ok(vec![val.0])
+            }
+            (CLType::URef, CLType::U256) => {
+                let val: (URef, U256) = cl_value.to_owned().into_t()?;
+                Ok(vec![val.0])
+            }
+            (CLType::URef, CLType::U512) => {
+                let val: (URef, U512) = cl_value.to_owned().into_t()?;
+                Ok(vec![val.0])
+            }
+            (CLType::URef, CLType::Unit) => {
+                let val: (URef, ()) = cl_value.to_owned().into_t()?;
+                Ok(vec![val.0])
+            }
+            (CLType::URef, CLType::String) => {
+                let val: (URef, String) = cl_value.to_owned().into_t()?;
+                Ok(vec![val.0])
+            }
+            (CLType::URef, CLType::Key) => {
+                let val: (URef, Key) = cl_value.to_owned().into_t()?;
+                let mut res = vec![val.0];
+                res.extend(val.1.into_uref().into_iter());
+                Ok(res)
+            }
+            (CLType::URef, CLType::URef) => {
+                let val: (URef, URef) = cl_value.to_owned().into_t()?;
+                Ok(vec![val.0, val.1])
+            }
+            (CLType::Key, CLType::Bool) => {
+                let val: (Key, bool) = cl_value.to_owned().into_t()?;
+                Ok(val.0.into_uref().into_iter().collect())
+            }
+            (CLType::Key, CLType::I32) => {
+                let val: (Key, i32) = cl_value.to_owned().into_t()?;
+                Ok(val.0.into_uref().into_iter().collect())
+            }
+            (CLType::Key, CLType::I64) => {
+                let val: (Key, i64) = cl_value.to_owned().into_t()?;
+                Ok(val.0.into_uref().into_iter().collect())
+            }
+            (CLType::Key, CLType::U8) => {
+                let val: (Key, u8) = cl_value.to_owned().into_t()?;
+                Ok(val.0.into_uref().into_iter().collect())
+            }
+            (CLType::Key, CLType::U32) => {
+                let val: (Key, u32) = cl_value.to_owned().into_t()?;
+                Ok(val.0.into_uref().into_iter().collect())
+            }
+            (CLType::Key, CLType::U64) => {
+                let val: (Key, u64) = cl_value.to_owned().into_t()?;
+                Ok(val.0.into_uref().into_iter().collect())
+            }
+            (CLType::Key, CLType::U128) => {
+                let val: (Key, U128) = cl_value.to_owned().into_t()?;
+                Ok(val.0.into_uref().into_iter().collect())
+            }
+            (CLType::Key, CLType::U256) => {
+                let val: (Key, U256) = cl_value.to_owned().into_t()?;
+                Ok(val.0.into_uref().into_iter().collect())
+            }
+            (CLType::Key, CLType::U512) => {
+                let val: (Key, U512) = cl_value.to_owned().into_t()?;
+                Ok(val.0.into_uref().into_iter().collect())
+            }
+            (CLType::Key, CLType::Unit) => {
+                let val: (Key, ()) = cl_value.to_owned().into_t()?;
+                Ok(val.0.into_uref().into_iter().collect())
+            }
+            (CLType::Key, CLType::String) => {
+                let val: (Key, String) = cl_value.to_owned().into_t()?;
+                Ok(val.0.into_uref().into_iter().collect())
+            }
+            (CLType::Key, CLType::URef) => {
+                let val: (Key, URef) = cl_value.to_owned().into_t()?;
+                let mut res: Vec<URef> = val.0.into_uref().into_iter().collect();
+                res.push(val.1);
+                Ok(res)
+            }
+            (CLType::Key, CLType::Key) => {
+                let val: (Key, Key) = cl_value.to_owned().into_t()?;
+                Ok(val
+                    .0
+                    .into_uref()
+                    .into_iter()
+                    .chain(val.1.into_uref().into_iter())
+                    .collect())
+            }
+            (CLType::Bool, CLType::URef) => {
+                let val: (bool, URef) = cl_value.to_owned().into_t()?;
+                Ok(vec![val.1])
+            }
+            (CLType::I32, CLType::URef) => {
+                let val: (i32, URef) = cl_value.to_owned().into_t()?;
+                Ok(vec![val.1])
+            }
+            (CLType::I64, CLType::URef) => {
+                let val: (i64, URef) = cl_value.to_owned().into_t()?;
+                Ok(vec![val.1])
+            }
+            (CLType::U8, CLType::URef) => {
+                let val: (u8, URef) = cl_value.to_owned().into_t()?;
+                Ok(vec![val.1])
+            }
+            (CLType::U32, CLType::URef) => {
+                let val: (u32, URef) = cl_value.to_owned().into_t()?;
+                Ok(vec![val.1])
+            }
+            (CLType::U64, CLType::URef) => {
+                let val: (u64, URef) = cl_value.to_owned().into_t()?;
+                Ok(vec![val.1])
+            }
+            (CLType::U128, CLType::URef) => {
+                let val: (U128, URef) = cl_value.to_owned().into_t()?;
+                Ok(vec![val.1])
+            }
+            (CLType::U256, CLType::URef) => {
+                let val: (U256, URef) = cl_value.to_owned().into_t()?;
+                Ok(vec![val.1])
+            }
+            (CLType::U512, CLType::URef) => {
+                let val: (U512, URef) = cl_value.to_owned().into_t()?;
+                Ok(vec![val.1])
+            }
+            (CLType::Unit, CLType::URef) => {
+                let val: ((), URef) = cl_value.to_owned().into_t()?;
+                Ok(vec![val.1])
+            }
+            (CLType::String, CLType::URef) => {
+                let val: (String, URef) = cl_value.to_owned().into_t()?;
+                Ok(vec![val.1])
+            }
+            (CLType::Bool, CLType::Key) => {
+                let val: (bool, Key) = cl_value.to_owned().into_t()?;
+                Ok(val.1.into_uref().into_iter().collect())
+            }
+            (CLType::I32, CLType::Key) => {
+                let val: (i32, Key) = cl_value.to_owned().into_t()?;
+                Ok(val.1.into_uref().into_iter().collect())
+            }
+            (CLType::I64, CLType::Key) => {
+                let val: (i64, Key) = cl_value.to_owned().into_t()?;
+                Ok(val.1.into_uref().into_iter().collect())
+            }
+            (CLType::U8, CLType::Key) => {
+                let val: (u8, Key) = cl_value.to_owned().into_t()?;
+                Ok(val.1.into_uref().into_iter().collect())
+            }
+            (CLType::U32, CLType::Key) => {
+                let val: (u32, Key) = cl_value.to_owned().into_t()?;
+                Ok(val.1.into_uref().into_iter().collect())
+            }
+            (CLType::U64, CLType::Key) => {
+                let val: (u64, Key) = cl_value.to_owned().into_t()?;
+                Ok(val.1.into_uref().into_iter().collect())
+            }
+            (CLType::U128, CLType::Key) => {
+                let val: (U128, Key) = cl_value.to_owned().into_t()?;
+                Ok(val.1.into_uref().into_iter().collect())
+            }
+            (CLType::U256, CLType::Key) => {
+                let val: (U256, Key) = cl_value.to_owned().into_t()?;
+                Ok(val.1.into_uref().into_iter().collect())
+            }
+            (CLType::U512, CLType::Key) => {
+                let val: (U512, Key) = cl_value.to_owned().into_t()?;
+                Ok(val.1.into_uref().into_iter().collect())
+            }
+            (CLType::Unit, CLType::Key) => {
+                let val: ((), Key) = cl_value.to_owned().into_t()?;
+                Ok(val.1.into_uref().into_iter().collect())
+            }
+            (CLType::String, CLType::Key) => {
+                let val: (String, Key) = cl_value.to_owned().into_t()?;
+                Ok(val.1.into_uref().into_iter().collect())
+            }
+            (_, _) => Ok(vec![]),
+        },
+        // TODO: nested matches for Tuple3?
+        CLType::Tuple3(_) => Ok(vec![]),
+        CLType::Key => {
+            let key: Key = cl_value.to_owned().into_t()?; // TODO: optimize?
+            Ok(key.into_uref().into_iter().collect())
+        }
+        CLType::URef => {
+            let uref: URef = cl_value.to_owned().into_t()?; // TODO: optimize?
+            Ok(vec![uref])
+        }
+    }
+}
+
 fn sub_call<R>(
     parity_module: Module,
     args: Vec<CLValue>,
@@ -186,6 +1387,11 @@ where
     };
 
     let result = instance.invoke_export("call", &[], &mut runtime);
+
+    // TODO: To account for the gas used in a subcall, we should uncomment the following lines
+    // if !current_runtime.charge_gas(runtime.context.gas_counter()) {
+    //     return Err(Error::GasLimit);
+    // }
 
     match result {
         // If `Ok` and the `host_buf` is `None`, the contract's execution succeeded but did not
@@ -326,29 +1532,14 @@ where
         }
     }
 
-    pub fn is_valid_uref(&mut self, uref_ptr: u32, uref_size: u32) -> Result<bool, Trap> {
+    fn is_valid_uref(&mut self, uref_ptr: u32, uref_size: u32) -> Result<bool, Trap> {
         let bytes = self.bytes_from_mem(uref_ptr, uref_size as usize)?;
         let uref: URef = bytesrepr::deserialize(bytes).map_err(Error::BytesRepr)?;
         let key = Key::URef(uref);
         Ok(self.context.validate_key(&key).is_ok())
     }
 
-    /// Load the i-th argument invoked as part of a `sub_call` into
-    /// the runtime buffer so that a subsequent `get_arg` can return it
-    /// to the caller.
-    pub fn load_arg(&mut self, i: usize) -> isize {
-        self.host_buf = self.context.args().get(i).cloned();
-        match self.host_buf.as_ref() {
-            Some(cl_value) => cl_value.inner_bytes().len() as isize,
-            None => -1,
-        }
-    }
-
-    pub fn get_arg_size(
-        &mut self,
-        index: usize,
-        size_ptr: u32,
-    ) -> Result<Result<(), ApiError>, Trap> {
+    fn get_arg_size(&mut self, index: usize, size_ptr: u32) -> Result<Result<(), ApiError>, Trap> {
         let arg_size = match self.context.args().get(index) {
             Some(arg) if arg.inner_bytes().len() > u32::max_value() as usize => {
                 return Ok(Err(ApiError::OutOfMemoryError))
@@ -366,7 +1557,7 @@ where
         Ok(Ok(()))
     }
 
-    pub fn get_arg(
+    fn get_arg(
         &mut self,
         index: usize,
         output_ptr: u32,
@@ -392,7 +1583,7 @@ where
     }
 
     /// Load the uref known by the given name into the Wasm memory
-    pub fn load_key(
+    fn load_key(
         &mut self,
         name_ptr: u32,
         name_size: u32,
@@ -433,7 +1624,7 @@ where
         Ok(Ok(()))
     }
 
-    pub fn has_key(&mut self, name_ptr: u32, name_size: u32) -> Result<i32, Trap> {
+    fn has_key(&mut self, name_ptr: u32, name_size: u32) -> Result<i32, Trap> {
         let name = self.string_from_mem(name_ptr, name_size)?;
         if self.context.named_keys_contains_key(&name) {
             Ok(0)
@@ -442,7 +1633,7 @@ where
         }
     }
 
-    pub fn put_key(
+    fn put_key(
         &mut self,
         name_ptr: u32,
         name_size: u32,
@@ -502,41 +1693,33 @@ where
 
     /// Return some bytes from the memory and terminate the current `sub_call`. Note that the return
     /// type is `Trap`, indicating that this function will always kill the current Wasm instance.
-    pub fn ret(
-        &mut self,
-        value_ptr: u32,
-        value_size: usize,
-        extra_urefs_ptr: u32,
-        extra_urefs_size: usize,
-    ) -> Trap {
+    fn ret(&mut self, value_ptr: u32, value_size: usize) -> Trap {
         self.host_buf = None;
         let mem_get = self
             .memory
             .get(value_ptr, value_size)
-            .map_err(Error::Interpreter)
-            .and_then(|x| {
-                let urefs_bytes = self.bytes_from_mem(extra_urefs_ptr, extra_urefs_size)?;
-                let urefs = self.context.deserialize_urefs(urefs_bytes)?;
-                Ok((x, urefs))
-            });
+            .map_err(Error::Interpreter);
         match mem_get {
-            Ok((buf, urefs)) => {
+            Ok(buf) => {
                 // Set the result field in the runtime and return the proper element of the `Error`
                 // enum indicating that the reason for exiting the module was a call to ret.
                 self.host_buf = bytesrepr::deserialize(buf).ok();
-                Error::Ret(urefs).into()
+
+                let urefs = match &self.host_buf {
+                    Some(buf) => extract_urefs(buf),
+                    None => Ok(vec![]),
+                };
+                match urefs {
+                    Ok(urefs) => Error::Ret(urefs).into(),
+                    Err(e) => e.into(),
+                }
             }
             Err(e) => e.into(),
         }
     }
 
-    /// Calls contract living under a `key`, with supplied `args` and extra `urefs`.
-    pub fn call_contract(
-        &mut self,
-        key: Key,
-        args_bytes: Vec<u8>,
-        urefs_bytes: Vec<u8>,
-    ) -> Result<CLValue, Error> {
+    /// Calls contract living under a `key`, with supplied `args`.
+    fn call_contract(&mut self, key: Key, args_bytes: Vec<u8>) -> Result<CLValue, Error> {
         let contract = match self.context.read_gs(&key)? {
             Some(StoredValue::Contract(contract)) => contract,
             Some(_) => {
@@ -570,7 +1753,18 @@ where
             None => parity_wasm::deserialize_buffer(contract.bytes())?,
         };
 
-        let extra_urefs = self.context.deserialize_keys(urefs_bytes)?;
+        let mut extra_urefs = vec![];
+        // A loop is needed to be able to use the '?' operator
+        for arg in &args {
+            extra_urefs.extend(
+                extract_urefs(arg)?
+                    .into_iter()
+                    .map(<Key as From<URef>>::from),
+            );
+        }
+        for key in &extra_urefs {
+            self.context.validate_key(key)?;
+        }
 
         let mut refs = contract.take_named_keys();
 
@@ -586,11 +1780,10 @@ where
         Ok(result)
     }
 
-    pub fn call_contract_host_buf(
+    fn call_contract_host_buf(
         &mut self,
         key: Key,
         args_bytes: Vec<u8>,
-        urefs_bytes: Vec<u8>,
         result_size_ptr: u32,
     ) -> Result<Result<(), ApiError>, Error> {
         if !self.can_write_to_host_buf() {
@@ -598,7 +1791,7 @@ where
             return Ok(Err(ApiError::HostBufferFull));
         }
 
-        let result = self.call_contract(key, args_bytes, urefs_bytes)?;
+        let result = self.call_contract(key, args_bytes)?;
         let result_size = result.inner_bytes().len() as u32; // considered to be safe
 
         if let Err(error) = self.write_host_buf(result) {
@@ -650,7 +1843,7 @@ where
         Ok(Ok(()))
     }
 
-    pub fn store_function(
+    fn store_function(
         &mut self,
         fn_bytes: Vec<u8>,
         named_keys: BTreeMap<String, Key>,
@@ -665,7 +1858,7 @@ where
     /// Tries to store a function, represented as bytes from the Wasm memory,
     /// into the GlobalState and writes back a function's hash at `hash_ptr`
     /// in the Wasm memory.
-    pub fn store_function_at_hash(
+    fn store_function_at_hash(
         &mut self,
         fn_bytes: Vec<u8>,
         named_keys: BTreeMap<String, Key>,
@@ -687,7 +1880,7 @@ where
 
     /// Generates new unforgable reference and adds it to the context's
     /// access_rights set.
-    pub fn new_uref(&mut self, key_ptr: u32, value_ptr: u32, value_size: u32) -> Result<(), Trap> {
+    fn new_uref(&mut self, key_ptr: u32, value_ptr: u32, value_size: u32) -> Result<(), Trap> {
         let cl_value = self.cl_value_from_mem(value_ptr, value_size)?; // read initial value from memory
         let key = self.context.new_uref(StoredValue::CLValue(cl_value))?;
         self.memory
@@ -696,7 +1889,7 @@ where
     }
 
     /// Writes `value` under `key` in GlobalState.
-    pub fn write(
+    fn write(
         &mut self,
         key_ptr: u32,
         key_size: u32,
@@ -712,7 +1905,7 @@ where
 
     /// Writes `value` under a key derived from `key` in the "local cluster" of
     /// GlobalState
-    pub fn write_local(
+    fn write_local(
         &mut self,
         key_ptr: u32,
         key_size: u32,
@@ -727,7 +1920,7 @@ where
     }
 
     /// Adds `value` to the cell that `key` points at.
-    pub fn add(
+    fn add(
         &mut self,
         key_ptr: u32,
         key_size: u32,
@@ -741,12 +1934,28 @@ where
             .map_err(Into::into)
     }
 
+    /// Adds `value` to the cell pointed to by a key derived from `key` in the "local cluster" of
+    /// GlobalState
+    pub fn add_local(
+        &mut self,
+        key_ptr: u32,
+        key_size: u32,
+        value_ptr: u32,
+        value_size: u32,
+    ) -> Result<(), Trap> {
+        let key_bytes = self.bytes_from_mem(key_ptr, key_size as usize)?;
+        let cl_value = self.cl_value_from_mem(value_ptr, value_size)?;
+        self.context
+            .add_ls(&key_bytes, cl_value)
+            .map_err(Into::into)
+    }
+
     /// Reads value from the GS living under key specified by `key_ptr` and
     /// `key_size`. Wasm and host communicate through memory that Wasm
     /// module exports. If contract wants to pass data to the host, it has
     /// to tell it [the host] where this data lives in the exported memory
     /// (pass its pointer and length).
-    pub fn read(
+    fn read(
         &mut self,
         key_ptr: u32,
         key_size: u32,
@@ -778,7 +1987,7 @@ where
 
     /// Similar to `read`, this function is for reading from the "local cluster"
     /// of global state
-    pub fn read_local(
+    fn read_local(
         &mut self,
         key_ptr: u32,
         key_size: u32,
@@ -810,12 +2019,8 @@ where
     }
 
     /// Reverts contract execution with a status specified.
-    pub fn revert(&mut self, status: u32) -> Trap {
+    fn revert(&mut self, status: u32) -> Trap {
         Error::Revert(status).into()
-    }
-
-    pub fn take_context(self) -> RuntimeContext<'a, R> {
-        self.context
     }
 
     fn add_associated_key(&mut self, public_key_ptr: u32, weight_value: u8) -> Result<i32, Trap> {
@@ -908,7 +2113,7 @@ where
     /// Looks up the public mint contract key in the context's protocol data.
     ///
     /// Returned URef is already attenuated depending on the calling account.
-    pub fn get_mint_contract_uref(&mut self) -> URef {
+    fn get_mint_contract_uref(&mut self) -> URef {
         let mint = self.context.protocol_data().mint();
         self.context.attenuate_uref(mint)
     }
@@ -916,7 +2121,7 @@ where
     /// Looks up the public PoS contract key in the context's protocol data
     ///
     /// Returned URef is already attenuated depending on the calling account.
-    pub fn get_pos_contract_uref(&mut self) -> URef {
+    fn get_pos_contract_uref(&mut self) -> URef {
         let pos = self.context.protocol_data().proof_of_stake();
         self.context.attenuate_uref(pos)
     }
@@ -929,9 +2134,7 @@ where
             ArgsParser::parse(args)?.into_bytes()?
         };
 
-        let urefs_bytes = Vec::<Key>::new().into_bytes()?;
-
-        let result = self.call_contract(mint_contract_key, args_bytes, urefs_bytes)?;
+        let result = self.call_contract(mint_contract_key, args_bytes)?;
         let purse_uref = result.into_t()?;
 
         Ok(PurseId::new(purse_uref))
@@ -959,11 +2162,9 @@ where
             ArgsParser::parse(args)?.into_bytes()?
         };
 
-        let urefs_bytes = vec![Key::URef(source_value), Key::URef(target_value)].into_bytes()?;
-
-        let result = self.call_contract(mint_contract_key, args_bytes, urefs_bytes)?;
+        let result = self.call_contract(mint_contract_key, args_bytes)?;
         let result: Result<(), mint::Error> = result.into_t()?;
-        Ok(result.map_err(system_contracts::Error::from)?)
+        Ok(result.map_err(system_contract_errors::Error::from)?)
     }
 
     /// Creates a new account at a given public key, transferring a given amount
@@ -1198,7 +2399,7 @@ where
 
     /// If key is in named_keys with AccessRights::Write, processes bytes from calling contract
     /// and writes them at the provided uref, overwriting existing value if any
-    pub fn upgrade_contract_at_uref(
+    fn upgrade_contract_at_uref(
         &mut self,
         name_ptr: u32,
         name_size: u32,
@@ -1230,9 +2431,9 @@ where
         dest_ptr: u32,
         _dest_size: u32,
     ) -> Result<Result<(), ApiError>, Trap> {
-        let attenuated_uref = match SystemContract::try_from(system_contract_index) {
-            Ok(SystemContract::Mint) => self.get_mint_contract_uref(),
-            Ok(SystemContract::ProofOfStake) => self.get_pos_contract_uref(),
+        let attenuated_uref = match SystemContractType::try_from(system_contract_index) {
+            Ok(SystemContractType::Mint) => self.get_mint_contract_uref(),
+            Ok(SystemContractType::ProofOfStake) => self.get_pos_contract_uref(),
             Err(error) => return Ok(Err(error)),
         };
 
@@ -1298,5 +2499,161 @@ where
         }
 
         Ok(Ok(()))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use proptest::{
+        array,
+        collection::{btree_map, vec},
+        option,
+        prelude::*,
+        result,
+    };
+
+    use types::{gens::*, CLType, CLValue, Key, URef};
+
+    use super::extract_urefs;
+
+    fn cl_value_with_urefs_arb() -> impl Strategy<Value = (CLValue, Vec<URef>)> {
+        // If compiler brings you here it most probably means you've added a variant to `CLType`
+        // enum but forgot to add generator for it.
+        let stub: Option<CLType> = None;
+        if let Some(cl_type) = stub {
+            match cl_type {
+                CLType::Bool
+                | CLType::I32
+                | CLType::I64
+                | CLType::U8
+                | CLType::U32
+                | CLType::U64
+                | CLType::U128
+                | CLType::U256
+                | CLType::U512
+                | CLType::Unit
+                | CLType::String
+                | CLType::Key
+                | CLType::URef
+                | CLType::Option(_)
+                | CLType::List(_)
+                | CLType::FixedList(..)
+                | CLType::Result { .. }
+                | CLType::Map { .. }
+                | CLType::Tuple1(_)
+                | CLType::Tuple2(_)
+                | CLType::Tuple3(_)
+                | CLType::Any => (),
+            }
+        };
+
+        prop_oneof![
+            Just((CLValue::from_t(()).expect("should create CLValue"), vec![])),
+            any::<bool>()
+                .prop_map(|x| (CLValue::from_t(x).expect("should create CLValue"), vec![])),
+            any::<i32>().prop_map(|x| (CLValue::from_t(x).expect("should create CLValue"), vec![])),
+            any::<i64>().prop_map(|x| (CLValue::from_t(x).expect("should create CLValue"), vec![])),
+            any::<u8>().prop_map(|x| (CLValue::from_t(x).expect("should create CLValue"), vec![])),
+            any::<u32>().prop_map(|x| (CLValue::from_t(x).expect("should create CLValue"), vec![])),
+            any::<u64>().prop_map(|x| (CLValue::from_t(x).expect("should create CLValue"), vec![])),
+            u128_arb().prop_map(|x| (CLValue::from_t(x).expect("should create CLValue"), vec![])),
+            u256_arb().prop_map(|x| (CLValue::from_t(x).expect("should create CLValue"), vec![])),
+            u512_arb().prop_map(|x| (CLValue::from_t(x).expect("should create CLValue"), vec![])),
+            key_arb().prop_map(|x| {
+                let urefs = x.as_uref().into_iter().cloned().collect();
+                (CLValue::from_t(x).expect("should create CLValue"), urefs)
+            }),
+            uref_arb().prop_map(|x| (CLValue::from_t(x).expect("should create CLValue"), vec![x])),
+            ".*".prop_map(|x: String| (CLValue::from_t(x).expect("should create CLValue"), vec![])),
+            option::of(any::<u64>())
+                .prop_map(|x| (CLValue::from_t(x).expect("should create CLValue"), vec![])),
+            option::of(uref_arb()).prop_map(|x| {
+                let urefs = x.iter().cloned().collect();
+                (CLValue::from_t(x).expect("should create CLValue"), urefs)
+            }),
+            option::of(key_arb()).prop_map(|x| {
+                let urefs = x.iter().filter_map(Key::as_uref).cloned().collect();
+                (CLValue::from_t(x).expect("should create CLValue"), urefs)
+            }),
+            vec(any::<i32>(), 0..100)
+                .prop_map(|x| (CLValue::from_t(x).expect("should create CLValue"), vec![])),
+            vec(uref_arb(), 0..100).prop_map(|x| (
+                CLValue::from_t(x.clone()).expect("should create CLValue"),
+                x
+            )),
+            vec(key_arb(), 0..100).prop_map(|x| (
+                CLValue::from_t(x.clone()).expect("should create CLValue"),
+                x.into_iter().filter_map(Key::into_uref).collect()
+            )),
+            [any::<u64>(); 32]
+                .prop_map(|x| (CLValue::from_t(x).expect("should create CLValue"), vec![])),
+            array::uniform8(uref_arb()).prop_map(|x| {
+                let urefs = x.to_vec();
+                (CLValue::from_t(x).expect("should create CLValue"), urefs)
+            }),
+            array::uniform8(key_arb()).prop_map(|x| {
+                let urefs = x.iter().filter_map(Key::as_uref).cloned().collect();
+                (CLValue::from_t(x).expect("should create CLValue"), urefs)
+            }),
+            result::maybe_err(key_arb(), ".*").prop_map(|x| {
+                let urefs = match &x {
+                    Ok(key) => key.as_uref().into_iter().cloned().collect(),
+                    Err(_) => vec![],
+                };
+                (CLValue::from_t(x).expect("should create CLValue"), urefs)
+            }),
+            result::maybe_ok(".*", uref_arb()).prop_map(|x| {
+                let urefs = match &x {
+                    Ok(_) => vec![],
+                    Err(uref) => vec![*uref],
+                };
+                (CLValue::from_t(x).expect("should create CLValue"), urefs)
+            }),
+            btree_map(".*", u512_arb(), 0..100)
+                .prop_map(|x| (CLValue::from_t(x).expect("should create CLValue"), vec![])),
+            btree_map(uref_arb(), u512_arb(), 0..100).prop_map(|x| {
+                let urefs = x.keys().cloned().collect();
+                (CLValue::from_t(x).expect("should create CLValue"), urefs)
+            }),
+            btree_map(".*", uref_arb(), 0..100).prop_map(|x| {
+                let urefs = x.values().cloned().collect();
+                (CLValue::from_t(x).expect("should create CLValue"), urefs)
+            }),
+            btree_map(uref_arb(), key_arb(), 0..100).prop_map(|x| {
+                let mut urefs: Vec<URef> = x.keys().cloned().collect();
+                urefs.extend(x.values().filter_map(Key::as_uref).cloned());
+                (CLValue::from_t(x).expect("should create CLValue"), urefs)
+            }),
+            (any::<bool>())
+                .prop_map(|x| (CLValue::from_t(x).expect("should create CLValue"), vec![])),
+            (uref_arb())
+                .prop_map(|x| (CLValue::from_t(x).expect("should create CLValue"), vec![x])),
+            (any::<bool>(), any::<i32>())
+                .prop_map(|x| (CLValue::from_t(x).expect("should create CLValue"), vec![])),
+            (uref_arb(), any::<i32>()).prop_map(|x| {
+                let uref = x.0;
+                (
+                    CLValue::from_t(x).expect("should create CLValue"),
+                    vec![uref],
+                )
+            }),
+            (any::<i32>(), key_arb()).prop_map(|x| {
+                let urefs = x.1.as_uref().into_iter().cloned().collect();
+                (CLValue::from_t(x).expect("should create CLValue"), urefs)
+            }),
+            (uref_arb(), key_arb()).prop_map(|x| {
+                let mut urefs = vec![x.0];
+                urefs.extend(x.1.as_uref().into_iter().cloned());
+                (CLValue::from_t(x).expect("should create CLValue"), urefs)
+            }),
+        ]
+    }
+
+    proptest! {
+        #[test]
+        fn should_extract_urefs((cl_value, urefs) in cl_value_with_urefs_arb()) {
+            let extracted_urefs = extract_urefs(&cl_value).unwrap();
+            assert_eq!(extracted_urefs, urefs);
+        }
     }
 }

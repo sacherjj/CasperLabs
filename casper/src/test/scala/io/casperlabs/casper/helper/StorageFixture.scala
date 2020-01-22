@@ -13,7 +13,7 @@ import io.casperlabs.metrics.Metrics.MetricsNOP
 import io.casperlabs.shared.{Log, Time}
 import io.casperlabs.storage.SQLiteStorage
 import io.casperlabs.storage.block.BlockStorage
-import io.casperlabs.storage.dag.IndexedDagStorage
+import io.casperlabs.storage.dag.{FinalityStorage, IndexedDagStorage}
 import io.casperlabs.storage.deploy.DeployStorage
 import monix.eval.Task
 import monix.execution.Scheduler
@@ -28,11 +28,14 @@ trait StorageFixture { self: Suite =>
   implicit val log: Log[Task]         = Log.NOPLog[Task]
 
   def withStorage[R](
-      f: BlockStorage[Task] => IndexedDagStorage[Task] => DeployStorage[Task] => Task[R]
+      f: BlockStorage[Task] => IndexedDagStorage[Task] => DeployStorage[Task] => FinalityStorage[
+        Task
+      ] => Task[R]
   ): R = {
 
     val testProgram = StorageFixture.createStorages[Task]().flatMap {
-      case (blockStorage, dagStorage, deployStorage) => f(blockStorage)(dagStorage)(deployStorage)
+      case (blockStorage, dagStorage, deployStorage, finalityStorage) =>
+        f(blockStorage)(dagStorage)(deployStorage)(finalityStorage)
     }
     testProgram.unsafeRunSync(scheduler)
   }
@@ -40,7 +43,7 @@ trait StorageFixture { self: Suite =>
 
 object StorageFixture {
   def createStorages[F[_]: Metrics: Concurrent: ContextShift: Fs2Compiler: Time]()
-      : F[(BlockStorage[F], IndexedDagStorage[F], DeployStorage[F])] = {
+      : F[(BlockStorage[F], IndexedDagStorage[F], DeployStorage[F], FinalityStorage[F])] = {
     val createDbFile = Concurrent[F].delay(Files.createTempFile("casperlabs-storages-test-", ".db"))
 
     def createJdbcUrl(p: Path): String = s"jdbc:sqlite:$p"
@@ -75,6 +78,6 @@ object StorageFixture {
       _                 <- initTables(jdbcUrl)
       storage           <- SQLiteStorage.create[F](readXa = xa, writeXa = xa)
       indexedDagStorage <- IndexedDagStorage.create[F](storage)
-    } yield (storage, indexedDagStorage, storage)
+    } yield (storage, indexedDagStorage, storage, storage)
   }
 }

@@ -1,2 +1,1 @@
-#[cfg(test)]
-pub mod erc20;
+mod erc20;

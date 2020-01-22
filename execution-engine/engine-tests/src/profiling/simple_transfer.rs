@@ -12,26 +12,22 @@ use std::{env, io, path::PathBuf};
 use base16;
 use clap::{crate_version, App, Arg};
 
-use casperlabs_engine_tests::{
-    support::{
-        profiling_common,
-        test_support::{DeployItemBuilder, ExecuteRequestBuilder, LmdbWasmTestBuilder},
-    },
-    test::DEFAULT_PAYMENT,
-};
-use contract_ffi::value::U512;
 use engine_core::engine_state::EngineConfig;
+use engine_test_support::low_level::{
+    DeployItemBuilder, ExecuteRequestBuilder, LmdbWasmTestBuilder, DEFAULT_PAYMENT,
+};
+use types::U512;
 
-const ABOUT: &str =
-    "Executes a simple contract which transfers an amount between two accounts.  \
-     Note that the 'state-initializer' executable should be run first to set up the \
-     required global state.";
+use casperlabs_engine_tests::profiling;
+
+const ABOUT: &str = "Executes a simple contract which transfers an amount between two accounts.  \
+     Note that the 'state-initializer' executable should be run first to set up the required \
+     global state.";
 
 const ROOT_HASH_ARG_NAME: &str = "root-hash";
 const ROOT_HASH_ARG_VALUE_NAME: &str = "HEX-ENCODED HASH";
 const ROOT_HASH_ARG_HELP: &str =
-    "Initial root hash; the output of running the 'state-initializer' \
-     executable";
+    "Initial root hash; the output of running the 'state-initializer' executable";
 
 const VERBOSE_ARG_NAME: &str = "verbose";
 const VERBOSE_ARG_SHORT: &str = "v";
@@ -68,8 +64,8 @@ struct Args {
 
 impl Args {
     fn new() -> Self {
-        let exe_name = profiling_common::exe_name();
-        let data_dir_arg = profiling_common::data_dir_arg();
+        let exe_name = profiling::exe_name();
+        let data_dir_arg = profiling::data_dir_arg();
         let arg_matches = App::new(&exe_name)
             .version(crate_version!())
             .about(ABOUT)
@@ -78,7 +74,7 @@ impl Args {
             .arg(verbose_arg())
             .get_matches();
         let root_hash = arg_matches.value_of(ROOT_HASH_ARG_NAME).map(parse_hash);
-        let data_dir = profiling_common::data_dir(&arg_matches);
+        let data_dir = profiling::data_dir(&arg_matches);
         let verbose = arg_matches.is_present(VERBOSE_ARG_NAME);
         Args {
             root_hash,
@@ -99,8 +95,8 @@ fn main() {
         parse_hash(input.trim_end())
     });
 
-    let account_1_public_key = profiling_common::account_1_public_key();
-    let account_2_public_key = profiling_common::account_2_public_key();
+    let account_1_public_key = profiling::account_1_public_key();
+    let account_2_public_key = profiling::account_2_public_key();
 
     let exec_request = {
         let deploy = DeployItemBuilder::new()

@@ -3,14 +3,13 @@ mod associated_keys;
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use contract_ffi::{
-    bytesrepr::{Error, FromBytes, ToBytes, U32_SERIALIZED_LENGTH, U8_SERIALIZED_LENGTH},
-    key::{Key, KEY_UREF_SERIALIZED_LENGTH},
-    uref::{AccessRights, URef},
-    value::account::{
+use types::{
+    account::{
         ActionType, AddKeyFailure, PublicKey, PurseId, RemoveKeyFailure, SetThresholdFailure,
         UpdateKeyFailure, Weight, PUBLIC_KEY_SERIALIZED_LENGTH, WEIGHT_SERIALIZED_LENGTH,
     },
+    bytesrepr::{Error, FromBytes, ToBytes, U32_SERIALIZED_LENGTH, U8_SERIALIZED_LENGTH},
+    AccessRights, Key, URef, KEY_UREF_SERIALIZED_LENGTH,
 };
 
 pub use action_thresholds::ActionThresholds;
@@ -257,9 +256,9 @@ impl FromBytes for Account {
 pub mod gens {
     use proptest::prelude::*;
 
-    use contract_ffi::{
+    use types::{
+        account::MAX_KEYS,
         gens::{named_keys_arb, u8_slice_32, uref_arb},
-        value::account::MAX_KEYS,
     };
 
     use super::*;
@@ -281,8 +280,8 @@ pub mod gens {
                     pub_key,
                     urefs,
                     purse_id,
-                    associated_keys.clone(),
-                    thresholds.clone(),
+                    associated_keys,
+                    thresholds,
                 )
         }
     }
@@ -292,7 +291,7 @@ pub mod gens {
 mod proptests {
     use proptest::prelude::*;
 
-    use contract_ffi::bytesrepr;
+    use types::bytesrepr;
 
     use super::*;
 
@@ -311,12 +310,12 @@ mod tests {
         iter::FromIterator,
     };
 
-    use contract_ffi::{
-        uref::{AccessRights, URef},
-        value::account::{
+    use types::{
+        account::{
             ActionType, PublicKey, PurseId, RemoveKeyFailure, SetThresholdFailure,
             UpdateKeyFailure, Weight,
         },
+        AccessRights, URef,
     };
 
     use super::*;
@@ -587,7 +586,6 @@ mod tests {
         // variant b) decrease total weight by 3 (total 9) - fail
         assert_eq!(
             account
-                .clone()
                 .update_associated_key(key_3, Weight::new(1))
                 .unwrap_err(),
             UpdateKeyFailure::ThresholdViolation

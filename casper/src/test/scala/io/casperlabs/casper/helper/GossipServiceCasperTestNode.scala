@@ -8,6 +8,7 @@ import cats.mtl.DefaultApplicativeAsk
 import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
 import io.casperlabs.casper
+import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.consensus.{Block, BlockSummary}
 import io.casperlabs.casper.MultiParentCasperImpl.Broadcaster
 import io.casperlabs.casper.finality.MultiParentFinalizer
@@ -51,6 +52,7 @@ class GossipServiceCasperTestNode[F[_]](
     concurrentF: Concurrent[F],
     blockStorage: BlockStorage[F],
     dagStorage: DagStorage[F],
+    finalityStorage: FinalityStorage[F],
     deployStorage: DeployStorage[F],
     deployBuffer: DeployBuffer[F],
     finalityDetector: MultiParentFinalizer[F],
@@ -65,7 +67,8 @@ class GossipServiceCasperTestNode[F[_]](
       maybeMakeEE
     ) (concurrentF, blockStorage, dagStorage, deployStorage, deployBuffer, metricEff, casperState) {
 
-  implicit val raiseInvalidBlock = casper.validation.raiseValidateErrorThroughApplicativeError[F]
+  val lastFinalizedBlockHashContainer = Ref.unsafe(genesis.blockHash)
+  implicit val raiseInvalidBlock      = casper.validation.raiseValidateErrorThroughApplicativeError[F]
   implicit val broadcaster: Broadcaster[F] =
     Broadcaster.fromGossipServices(Some(validatorId), relaying)
   implicit val deploySelection   = DeploySelection.create[F](5 * 1024 * 1024)
@@ -89,7 +92,8 @@ class GossipServiceCasperTestNode[F[_]](
       genesis,
       chainName,
       minTTL,
-      upgrades = Nil
+      upgrades = Nil,
+      lfbRef = lastFinalizedBlockHashContainer
     )
 
   /** Allow RPC calls intended for this node to be processed and enqueue responses. */
@@ -141,7 +145,7 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
     )
 
     initStorage() flatMap {
-      case (blockStorage, dagStorage, deployStorage) =>
+      case (blockStorage, dagStorage, deployStorage, finalityStorage) =>
         implicit val ds = deployStorage
         for {
           casperState  <- Cell.mvarCell[F, CasperState](CasperState())
@@ -173,6 +177,7 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
             concurrentF,
             blockStorage,
             dagStorage,
+            finalityStorage,
             deployStorage,
             deployBuffer,
             multiParentFinalizer,
@@ -240,7 +245,7 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
           )
 
           initStorage() flatMap {
-            case (blockStorage, dagStorage, deployStorage) =>
+            case (blockStorage, dagStorage, deployStorage, finalityStorage) =>
               implicit val ds = deployStorage
               for {
                 casperState <- Cell.mvarCell[F, CasperState](
@@ -274,6 +279,7 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
                   concurrentF,
                   blockStorage,
                   dagStorage,
+                  finalityStorage,
                   deployStorage,
                   deployBuffer,
                   multiParentFinalizer,

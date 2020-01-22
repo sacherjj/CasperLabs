@@ -2,14 +2,13 @@
 
 extern crate alloc;
 
-use alloc::{string::String, vec};
+use alloc::string::String;
 
-use contract_ffi::{
-    contract_api::{runtime, system, Error as ApiError},
-    key::Key,
+use contract::{
+    contract_api::{runtime, system},
     unwrap_or_revert::UnwrapOrRevert,
-    value::{account::PurseId, U512},
 };
+use types::{account::PurseId, ApiError, U512};
 
 const GET_PAYMENT_PURSE: &str = "get_payment_purse";
 const SET_REFUND_PURSE: &str = "set_refund_purse";
@@ -42,14 +41,9 @@ pub extern "C" fn call() {
     let purse: PurseId = get_named_purse(&name).unwrap_or_revert_with(Error::PosNotFound);
 
     let pos_pointer = system::get_proof_of_stake();
-    let payment_purse: PurseId =
-        runtime::call_contract(pos_pointer.clone(), (GET_PAYMENT_PURSE,), vec![]);
+    let payment_purse: PurseId = runtime::call_contract(pos_pointer.clone(), (GET_PAYMENT_PURSE,));
 
-    runtime::call_contract::<_, ()>(
-        pos_pointer,
-        (SET_REFUND_PURSE, purse),
-        vec![Key::URef(purse.value())],
-    );
+    runtime::call_contract::<_, ()>(pos_pointer, (SET_REFUND_PURSE, purse));
 
     system::transfer_from_purse_to_purse(purse, payment_purse, amount).unwrap_or_revert();
 }

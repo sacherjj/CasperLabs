@@ -4,10 +4,8 @@ extern crate alloc;
 
 use alloc::string::String;
 
-use contract_ffi::{
-    contract_api::{storage, Error},
-    unwrap_or_revert::UnwrapOrRevert,
-};
+use contract::{contract_api::storage, unwrap_or_revert::UnwrapOrRevert};
+use types::ApiError;
 
 pub const ENTRY_FUNCTION_NAME: &str = "delegate";
 pub const CONTRACT_NAME: &str = "local_state_stored";
@@ -33,8 +31,10 @@ pub extern "C" fn delegate() {
 
     // Read back
     let res: String = storage::read_local(&local_state::LOCAL_KEY)
-        .unwrap_or_revert_with(Error::User(CustomError::UnableToReadMutatedLocalKey as u16))
-        .unwrap_or_revert_with(Error::User(
+        .unwrap_or_revert_with(ApiError::User(
+            CustomError::UnableToReadMutatedLocalKey as u16,
+        ))
+        .unwrap_or_revert_with(ApiError::User(
             CustomError::LocalKeyReadMutatedBytesRepr as u16,
         ));
 
@@ -50,8 +50,8 @@ pub extern "C" fn delegate() {
 pub extern "C" fn call() {
     let key = storage::store_function(ENTRY_FUNCTION_NAME, Default::default())
         .into_uref()
-        .unwrap_or_revert_with(Error::UnexpectedContractRefVariant)
+        .unwrap_or_revert_with(ApiError::UnexpectedContractRefVariant)
         .into();
 
-    contract_ffi::contract_api::runtime::put_key(CONTRACT_NAME, key);
+    contract::contract_api::runtime::put_key(CONTRACT_NAME, key);
 }

@@ -8,6 +8,7 @@ import cats.effect.concurrent.{Ref, Semaphore}
 import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.consensus.Block
 import io.casperlabs.casper.finality.MultiParentFinalizer.FinalizedBlocks
+import io.casperlabs.models.Message
 import io.casperlabs.storage.dag.DagRepresentation
 import simulacrum.typeclass
 
@@ -15,16 +16,17 @@ import simulacrum.typeclass
 
   /** Returns set of finalized blocks.
     *
-    * NOTE: This mimicks [[FinalityDetectorVotingMatrix]] API because we are working with the multi-parent
+    * NOTE: This mimicks [[io.casperlabs.casper.finality.votingmatrix.FinalityDetectorVotingMatrix]] API because we are working with the multi-parent
     * fork choice.
     */
-  def onNewBlockAdded(block: Block): F[Option[FinalizedBlocks]]
+  def onNewMessageAdded(message: Message): F[Option[FinalizedBlocks]]
 }
 
 object MultiParentFinalizer {
   final case class FinalizedBlocks(
       mainChain: BlockHash,
-      secondaryParents: Set[BlockHash] = Set.empty
+      quorum: BigInt,
+      secondaryParents: Set[BlockHash]
   ) {
     def finalizedBlocks: Set[BlockHash] = secondaryParents + mainChain
   }
@@ -43,12 +45,13 @@ object MultiParentFinalizer {
     } yield new MultiParentFinalizer[F] {
 
       /** Returns set of finalized blocks */
-      override def onNewBlockAdded(block: Block): F[Option[FinalizedBlocks]] =
+      override def onNewMessageAdded(message: Message): F[Option[FinalizedBlocks]] =
         semaphore.withPermit(for {
-          previousLFB    <- lfbCache.get
-          finalizedBlock <- finalityDetector.onNewBlockAddedToTheBlockDag(dag, block, previousLFB)
+          previousLFB <- lfbCache.get
+          finalizedBlock <- finalityDetector
+                             .onNewMessageAddedToTheBlockDag(dag, message, previousLFB)
           finalized <- finalizedBlock.fold(Applicative[F].pure(None: Option[FinalizedBlocks])) {
-                        case CommitteeWithConsensusValue(_, _, newLFB) =>
+                        case CommitteeWithConsensusValue(_, quorum, newLFB) =>
                           for {
                             _              <- lfbCache.set(newLFB)
                             finalizedSoFar <- finalizedBlocksCache.get
@@ -58,7 +61,7 @@ object MultiParentFinalizer {
                                               dag
                                             )
                             _ <- finalizedBlocksCache.update(_ ++ justFinalized + newLFB)
-                          } yield Some(FinalizedBlocks(newLFB, justFinalized))
+                          } yield Some(FinalizedBlocks(newLFB, quorum, justFinalized))
                       }
         } yield finalized)
     }

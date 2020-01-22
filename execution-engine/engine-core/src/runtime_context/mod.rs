@@ -11,26 +11,19 @@ use blake2::{
     VarBlake2b,
 };
 
-use contract_ffi::{
-    block_time::BlockTime,
-    bytesrepr::{deserialize, ToBytes},
-    execution::Phase,
-    key::{Key, LOCAL_SEED_LENGTH},
-    uref::{AccessRights, URef},
-    value::{
-        self,
-        account::{
-            ActionType, AddKeyFailure, PublicKey, PurseId, RemoveKeyFailure, SetThresholdFailure,
-            UpdateKeyFailure, Weight,
-        },
-        CLType, CLValue, ProtocolVersion,
-    },
-};
 use engine_shared::{
     account::Account, contract::Contract, gas::Gas, newtypes::CorrelationId,
     stored_value::StoredValue,
 };
 use engine_storage::{global_state::StateReader, protocol_data::ProtocolData};
+use types::{
+    account::{
+        ActionType, AddKeyFailure, PublicKey, PurseId, RemoveKeyFailure, SetThresholdFailure,
+        UpdateKeyFailure, Weight,
+    },
+    bytesrepr::{self, ToBytes},
+    AccessRights, BlockTime, CLType, CLValue, Key, Phase, ProtocolVersion, URef, LOCAL_SEED_LENGTH,
+};
 
 use crate::{
     engine_state::{execution_effect::ExecutionEffect, SYSTEM_ACCOUNT_ADDR},
@@ -320,7 +313,7 @@ where
         let named_key_value = StoredValue::CLValue(CLValue::from_t((name.clone(), key))?);
         self.validate_value(&named_key_value)?;
 
-        self.add_gs_unsafe(self.base_key(), named_key_value)?;
+        self.add_unsafe(self.base_key(), named_key_value)?;
         self.insert_key(name, key);
         Ok(())
     }
@@ -500,7 +493,7 @@ where
                     let uref: URef = cl_value.to_owned().into_t()?; // TODO: optimize?
                     self.validate_uref(&uref)
                 }
-                tuple @ CLType::Tuple2(_) if *tuple == value::named_key_type() => {
+                tuple @ CLType::Tuple2(_) if *tuple == types::named_key_type() => {
                     let (_name, key): (String, Key) = cl_value.to_owned().into_t()?; // TODO: optimize?
                     self.validate_key(&key)
                 }
@@ -569,13 +562,13 @@ where
     }
 
     pub fn deserialize_keys(&self, bytes: Vec<u8>) -> Result<Vec<Key>, Error> {
-        let keys: Vec<Key> = deserialize(bytes)?;
+        let keys: Vec<Key> = bytesrepr::deserialize(bytes)?;
         keys.iter().try_for_each(|k| self.validate_key(k))?;
         Ok(keys)
     }
 
     pub fn deserialize_urefs(&self, bytes: Vec<u8>) -> Result<Vec<URef>, Error> {
-        let keys: Vec<URef> = deserialize(bytes)?;
+        let keys: Vec<URef> = bytesrepr::deserialize(bytes)?;
         keys.iter().try_for_each(|k| self.validate_uref(k))?;
         Ok(keys)
     }
@@ -647,10 +640,16 @@ where
         self.validate_addable(&key)?;
         self.validate_key(&key)?;
         self.validate_value(&value)?;
-        self.add_gs_unsafe(key, value)
+        self.add_unsafe(key, value)
     }
 
-    fn add_gs_unsafe(&mut self, key: Key, value: StoredValue) -> Result<(), Error> {
+    pub fn add_ls(&mut self, key_bytes: &[u8], cl_value: CLValue) -> Result<(), Error> {
+        let seed = self.seed();
+        let key = Key::local(seed, key_bytes);
+        self.add_unsafe(key, StoredValue::CLValue(cl_value))
+    }
+
+    fn add_unsafe(&mut self, key: Key, value: StoredValue) -> Result<(), Error> {
         match self.state.borrow_mut().add(self.correlation_id, key, value) {
             Err(storage_error) => Err(storage_error.into()),
             Ok(AddResult::Success) => Ok(()),

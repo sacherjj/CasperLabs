@@ -3,13 +3,13 @@
 extern crate alloc;
 
 use alloc::{string::String, vec::Vec};
-use core::convert::From;
+use core::convert::{From, TryInto};
 
-use contract_ffi::{
-    contract_api::{runtime, storage, Error as ApiError, TURef},
-    key::Key,
+use contract::{
+    contract_api::{runtime, storage, TURef},
     unwrap_or_revert::UnwrapOrRevert,
 };
+use types::{ApiError, Key};
 
 const MAIL_FEED_KEY: &str = "mail_feed";
 const MAILING_KEY: &str = "mailing";
@@ -41,7 +41,7 @@ pub extern "C" fn call() {
 
     let name = "CasperLabs";
     let args = (SUB_METHOD, name);
-    let sub_key = runtime::call_contract::<_, Option<Key>>(contract_ref.clone(), args, Vec::new())
+    let sub_key = runtime::call_contract::<_, Option<Key>>(contract_ref.clone(), args)
         .unwrap_or_revert_with(Error::NoSubKey);
 
     runtime::put_key(MAIL_FEED_KEY, sub_key);
@@ -54,11 +54,9 @@ pub extern "C" fn call() {
 
     let message = "Hello, World!";
     let args = (PUB_METHOD, message);
-    runtime::call_contract::<_, ()>(contract_ref, args, Vec::new());
+    runtime::call_contract::<_, ()>(contract_ref, args);
 
-    let list_key: TURef<Vec<String>> = sub_key
-        .to_turef()
-        .unwrap_or_revert_with(ApiError::UnexpectedKeyVariant);
+    let list_key: TURef<Vec<String>> = sub_key.try_into().unwrap_or_revert();
     let messages = storage::read(list_key)
         .unwrap_or_revert_with(Error::GetMessagesURef)
         .unwrap_or_revert_with(Error::FindMessagesURef);

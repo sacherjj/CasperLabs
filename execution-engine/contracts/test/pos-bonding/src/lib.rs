@@ -2,19 +2,15 @@
 
 extern crate alloc;
 
-// Can be removed once https://github.com/rust-lang/rustfmt/issues/3362 is resolved.
-#[rustfmt::skip]
-use alloc::vec;
-use alloc::{string::String, vec::Vec};
+use alloc::string::String;
 
-use contract_ffi::{
-    contract_api::{account, runtime, system, ContractRef, Error as ApiError},
-    key::Key,
+use contract::{
+    contract_api::{account, runtime, system},
     unwrap_or_revert::UnwrapOrRevert,
-    value::{
-        account::{PublicKey, PurseId},
-        U512,
-    },
+};
+use types::{
+    account::{PublicKey, PurseId},
+    ApiError, ContractRef, U512,
 };
 
 #[repr(u16)]
@@ -23,20 +19,12 @@ enum Error {
     UnknownCommand,
 }
 
-fn purse_to_key(p: PurseId) -> Key {
-    Key::URef(p.value())
-}
-
 fn bond(pos: &ContractRef, amount: &U512, source: PurseId) {
-    runtime::call_contract::<_, ()>(
-        pos.clone(),
-        (POS_BOND, *amount, source),
-        vec![purse_to_key(source)],
-    );
+    runtime::call_contract::<_, ()>(pos.clone(), (POS_BOND, *amount, source));
 }
 
 fn unbond(pos: &ContractRef, amount: Option<U512>) {
-    runtime::call_contract::<_, ()>(pos.clone(), (POS_UNBOND, amount), Vec::<Key>::new());
+    runtime::call_contract::<_, ()>(pos.clone(), (POS_UNBOND, amount));
 }
 
 const POS_BOND: &str = "bond";

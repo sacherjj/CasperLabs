@@ -1,6 +1,6 @@
 use std::convert::TryFrom;
 
-use contract_ffi::value::{CLValue, U128, U256, U512};
+use types::{CLValue, U128, U256, U512};
 
 use crate::engine_server::{mappings::ParsingError, state::BigInt};
 
@@ -60,7 +60,7 @@ mod tests {
 
     use proptest::proptest;
 
-    use contract_ffi::gens;
+    use types::gens;
 
     use super::*;
     use crate::engine_server::mappings::test_utils;
@@ -98,7 +98,7 @@ mod tests {
         );
         assert_eq!(
             expected_error,
-            CLValue::try_from(invalid_pb_big_int.clone()).unwrap_err()
+            CLValue::try_from(invalid_pb_big_int).unwrap_err()
         );
     }
 
@@ -119,7 +119,7 @@ mod tests {
         );
         assert_eq!(
             expected_error,
-            CLValue::try_from(invalid_pb_big_int.clone()).unwrap_err()
+            CLValue::try_from(invalid_pb_big_int).unwrap_err()
         );
     }
 

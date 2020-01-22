@@ -1,0 +1,19 @@
+[package]
+name = "local-state-add"
+version = "0.1.0"
+authors = ["Bartłomiej Kamiński <bart@casperlabs.io>"]
+edition = "2018"
+
+[lib]
+crate-type = ["lib", "cdylib"]
+bench = false
+doctest = false
+test = false
+
+[features]
+std = ["contract/std", "types/std"]
+lib = []
+
+[dependencies]
+contract = { path = "../../../contract", package = "casperlabs-contract" }
+types = { path = "../../../types", package = "casperlabs-types" }

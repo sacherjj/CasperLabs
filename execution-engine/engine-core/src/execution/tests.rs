@@ -1,9 +1,10 @@
-use engine_shared::gas::Gas;
+use engine_shared::{gas::Gas, transform::Transform};
+use types::{Key, U512};
 
 use super::Error;
-use contract_ffi::value::U512;
-
-use crate::engine_state::execution_result::ExecutionResult;
+use crate::engine_state::{
+    execution_effect::ExecutionEffect, execution_result::ExecutionResult, op::Op,
+};
 
 fn on_fail_charge_test_helper<T>(
     f: impl Fn() -> Result<T, Error>,
@@ -39,9 +40,6 @@ fn on_fail_charge_err_laziness_test() {
 }
 #[test]
 fn on_fail_charge_with_action() {
-    use crate::engine_state::{execution_effect::ExecutionEffect, op::Op};
-    use contract_ffi::key::Key;
-    use engine_shared::transform::Transform;
     let f = || {
         let input: Result<(), Error> = Err(Error::GasLimit);
         on_fail_charge!(input, Gas::new(U512::from(456)), {

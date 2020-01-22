@@ -13,6 +13,7 @@ import io.casperlabs.casper.helper.BlockUtil.generateValidator
 import io.casperlabs.casper.helper.{BlockGenerator, StorageFixture}
 import io.casperlabs.casper.util.BondingUtil.Bond
 import io.casperlabs.casper.util.ProtoUtil
+import io.casperlabs.models.Message
 import io.casperlabs.shared.{LogStub, Time}
 import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.storage.dag.{DagRepresentation, IndexedDagStorage}
@@ -31,30 +32,38 @@ class MultiParentFinalizerTest extends FlatSpec with BlockGenerator with Storage
   val bonds  = Seq(v1Bond, v2Bond)
 
   it should "cache block finalization so it doesn't revisit already finalized blocks." in withStorage {
-    implicit blockStorage => implicit dagStorage => _ =>
+    implicit blockStorage => implicit dagStorage => _ => _ =>
       for {
-        genesis <- createAndStoreBlock[Task](Seq(), ByteString.EMPTY, bonds)
+        genesis <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bonds)
         dag     <- dagStorage.getRepresentation
         multiParentFinalizer <- MultiParentFinalizer.empty[Task](
                                  dag,
                                  genesis.blockHash,
-                                 MultiParentFinalizerTest.immediateFinality
+                                 MultiParentFinalizerTest.immediateFinalityStub
                                )
         a                     <- createAndStoreBlockFull[Task](v1, Seq(genesis), Seq.empty, bonds)
         b                     <- createAndStoreBlockFull[Task](v2, Seq(genesis, a), Seq.empty, bonds)
-        newlyFinalizedBlocksA <- multiParentFinalizer.onNewBlockAdded(b)
+        bMsg                  <- Task.fromTry(Message.fromBlock(b))
+        newlyFinalizedBlocksA <- multiParentFinalizer.onNewMessageAdded(bMsg).map(_.get)
         // `b` is in main chain, `a` is secondary parent.
-        _ = assert(newlyFinalizedBlocksA.contains(FinalizedBlocks(b.blockHash, Set(a.blockHash))))
-        c <- createAndStoreBlockFull[Task](v1, Seq(b, a), Seq.empty, bonds)
+        _ = assert(
+          newlyFinalizedBlocksA.mainChain == b.blockHash && newlyFinalizedBlocksA.secondaryParents == Set(
+            a.blockHash
+          )
+        )
+        c    <- createAndStoreBlockFull[Task](v1, Seq(b, a), Seq.empty, bonds)
+        cMsg <- Task.fromTry(Message.fromBlock(c))
         // `c`'s main parent is `b`, secondary is a. Since `a` was already finalized through `b`,
         // it should not be returned now.
-        newlyFinalizedBlocksB <- multiParentFinalizer.onNewBlockAdded(c)
-        _                     = assert(newlyFinalizedBlocksB.contains(FinalizedBlocks(c.blockHash)))
+        newlyFinalizedBlocksB <- multiParentFinalizer.onNewMessageAdded(cMsg).map(_.get)
+        _ = assert(
+          newlyFinalizedBlocksB.mainChain == c.blockHash && newlyFinalizedBlocksB.secondaryParents.isEmpty
+        )
       } yield ()
   }
 
   it should "cache LFB from the main chain; not return LFB when new block doesn't vote on LFB's child" in withStorage {
-    implicit blockStorage => implicit dagStorage => _ =>
+    implicit blockStorage => implicit dagStorage => _ => _ =>
       implicit val noopLog = LogStub[Task]()
 
       /** `B` is LFB but `C` doesn't vote for any of `B`'s children (empty vote).
@@ -65,7 +74,7 @@ class MultiParentFinalizerTest extends FlatSpec with BlockGenerator with Storage
         *      \\= C
         */
       for {
-        genesis   <- createAndStoreBlock[Task](Seq(), ByteString.EMPTY, bonds)
+        genesis   <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bonds)
         dag       <- dagStorage.getRepresentation
         finalizer <- FinalityDetectorVotingMatrix.of[Task](dag, genesis.blockHash, 0.1)
         implicit0(multiParentFinalizer: MultiParentFinalizer[Task]) <- MultiParentFinalizer
@@ -79,8 +88,9 @@ class MultiParentFinalizerTest extends FlatSpec with BlockGenerator with Storage
         b <- MultiParentFinalizerTest
               .finalizeBlock[Task](a.blockHash, nelBonds)
               .flatMap(ProtoUtil.unsafeGetBlock[Task](_))
-        finalizedA <- multiParentFinalizer.onNewBlockAdded(b)
-        _          = assert(finalizedA.contains(FinalizedBlocks(a.blockHash)))
+        bMsg       <- Task.fromTry(Message.fromBlock(b))
+        finalizedA <- multiParentFinalizer.onNewMessageAdded(bMsg).map(_.get)
+        _          = assert(finalizedA.mainChain == a.blockHash && finalizedA.secondaryParents.isEmpty)
 
         // `aPrime` is sibiling of `a`, another child of Genesis.
         // Since `a` has already been finalized `aPrime` should never become chosen as new LFB.
@@ -89,7 +99,8 @@ class MultiParentFinalizerTest extends FlatSpec with BlockGenerator with Storage
         bPrime <- MultiParentFinalizerTest
                    .finalizeBlock[Task](aPrime.blockHash, nelBonds)
                    .flatMap(ProtoUtil.unsafeGetBlock[Task](_))
-        finalizedB <- multiParentFinalizer.onNewBlockAdded(bPrime)
+        bPrimeMsg  <- Task.fromTry(Message.fromBlock(bPrime))
+        finalizedB <- multiParentFinalizer.onNewMessageAdded(bPrimeMsg)
         _          = assert(finalizedB.isEmpty)
       } yield ()
   }
@@ -130,7 +141,7 @@ object MultiParentFinalizerTest extends BlockGenerator {
     bonds.map(_.validatorPublicKey).toList.foldLeftM(start :: Nil) {
       case (chain, validatorId) =>
         for {
-          block <- createAndStoreBlock[F](Seq(chain.head), validatorId, bonds.toList)
+          block <- createAndStoreMessage[F](Seq(chain.head), validatorId, bonds.toList)
         } yield block.blockHash :: chain
     }
 
@@ -150,20 +161,22 @@ object MultiParentFinalizerTest extends BlockGenerator {
       // Update Finalizer to know about how DAG advanced.
       _ <- chain.traverse_(
             hash =>
-              ProtoUtil.unsafeGetBlock[F](hash) >>= { block =>
-                MultiParentFinalizer[F].onNewBlockAdded(block)
-              }
+              for {
+                block <- ProtoUtil.unsafeGetBlock[F](hash)
+                msg   <- MonadThrowable[F].fromTry(Message.fromBlock(block))
+                res   <- MultiParentFinalizer[F].onNewMessageAdded(msg)
+              } yield res
           )
-      b <- createAndStoreBlock[F](Seq(chain.head), bonds.head.validatorPublicKey) // Create level-1 summit
+      b <- createAndStoreMessage[F](Seq(chain.head), bonds.head.validatorPublicKey) // Create level-1 summit
     } yield b.blockHash
 
   // Finalizes block it receives as argument.
-  val immediateFinality = new FinalityDetector[Task] {
-    override def onNewBlockAddedToTheBlockDag(
+  val immediateFinalityStub = new FinalityDetector[Task] {
+    override def onNewMessageAddedToTheBlockDag(
         dag: DagRepresentation[Task],
-        block: Block,
+        message: Message,
         latestFinalizedBlock: BlockHash
     ): Task[Option[CommitteeWithConsensusValue]] =
-      Task(Some(CommitteeWithConsensusValue(Set.empty, 1L, block.blockHash)))
+      Task(Some(CommitteeWithConsensusValue(Set.empty, 1L, message.messageHash)))
   }
 }

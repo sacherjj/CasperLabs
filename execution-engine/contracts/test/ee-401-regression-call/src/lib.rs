@@ -4,24 +4,21 @@ extern crate alloc;
 
 use alloc::string::ToString;
 
-use contract_ffi::{
-    contract_api::{runtime, storage, ContractRef, Error, TURef},
-    key::Key,
+use contract::{
+    contract_api::{runtime, storage, TURef},
     unwrap_or_revert::UnwrapOrRevert,
-    uref::URef,
 };
+use types::{ApiError, ContractRef, Key, URef};
 
 #[no_mangle]
 pub extern "C" fn call() {
-    let contract_key: Key = runtime::get_key("hello_ext").unwrap_or_revert_with(Error::GetKey);
+    let contract_key: Key = runtime::get_key("hello_ext").unwrap_or_revert_with(ApiError::GetKey);
     let contract_pointer: ContractRef = match contract_key {
         Key::Hash(hash) => ContractRef::Hash(hash),
-        _ => runtime::revert(Error::UnexpectedKeyVariant),
+        _ => runtime::revert(ApiError::UnexpectedKeyVariant),
     };
 
-    let extra_urefs = [].to_vec();
-
-    let result: URef = runtime::call_contract(contract_pointer, (), extra_urefs);
+    let result: URef = runtime::call_contract(contract_pointer, ());
 
     let value = storage::read(TURef::from_uref(result).unwrap());
 

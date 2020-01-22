@@ -91,12 +91,10 @@ steps:
 
 #Adding dependency on sbt due to sbt hanging frequently running in parallel with this step
 - name: rust-compile-test-pr
-  environment:
-    CARGO_FLAGS: "--locked"
   commands:
   - "cd execution-engine/"
-  - "make setup"
-  - "make test test-contracts"
+  - "make setup-rs"
+  - "make test-rs test-contracts-rs"
   image: "casperlabs/buildenv:latest"
   when:
     event:
@@ -110,6 +108,22 @@ steps:
       - "**/Cargo.toml"
       - "**/casperlabs-engine-grpc-server.spec"
       - "**/rustfmt.toml"
+
+- name: as-compile-test-pr
+  commands:
+  - "cd execution-engine"
+  - "make setup"
+  - "make test-as test-contracts-as"
+  image: "casperlabs/buildenv:latest"
+  when:
+    event:
+    - pull_request
+    changeset:
+      includes:
+      - "**/contract-ffi-as/**"
+      - "**/contracts-as/**"
+  depends_on:
+  - rust-compile-test-pr
 
 - name: run-cargo-fmt-pr
   commands:
@@ -224,8 +238,6 @@ steps:
 
 #Adding dependency on sbt due to sbt hanging frequently running in parallel with this step
 - name: rust-compile-test-bors
-  environment:
-    CARGO_FLAGS: "--locked"
   commands:
   - "cd execution-engine/"
   - "make setup"
@@ -312,8 +324,9 @@ steps:
 
 - name: run-rust-benchmarks-bors
   commands:
-  - "cd execution-engine/"
-  - "rustup target add --toolchain $(cat rust-toolchain) wasm32-unknown-unknown"
+  - "cd execution-engine"
+  - "~/.cargo/bin/rustup toolchain install $(cat rust-toolchain)"
+  - "~/.cargo/bin/rustup target add --toolchain $(cat rust-toolchain) wasm32-unknown-unknown"
   - "make bench"
   image: "casperlabs/buildenv:latest"
   when:
@@ -442,11 +455,9 @@ steps:
 
 # The below section is for post-bors push webhooks
 - name: rust-compile-for-make
-  environment:
-    CARGO_FLAGS: "--locked"
   commands:
   - "cd execution-engine"
-  - "make setup"
+  - "make setup-rs"
   - "make build"
   image: "casperlabs/buildenv:latest"
   when:
@@ -460,7 +471,7 @@ steps:
 - name: docker-build-ee-merge
   commands:
   - "export DOCKER_LATEST_TAG=DRONE-${DRONE_BUILD_NUMBER}"
-  - "make setup -C ./execution-engine"
+  - "make setup-rs -C ./execution-engine"
   - "make docker-build/execution-engine"
   environment:
     _JAVA_OPTIONS: "-Xms2G -Xmx2G -XX:MaxMetaspaceSize=1G"
@@ -1023,12 +1034,11 @@ steps:
     channel: alerts
     template:
     - |
-      macOS Build Status: {{#success build.status}}✔{{ else }}✘ @sreteam {{/success}}*{{ uppercasefirst build.status }}*
+      macOS Build Status: *{{ uppercasefirst build.status }}*
       Drone Build: <{{ build.link }}|#{{ build.number }}>
   when:
     status:
     - failure
-    - success
 
 trigger:
   cron: [ mac-hourly-cron ]

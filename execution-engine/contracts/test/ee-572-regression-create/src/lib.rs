@@ -1,17 +1,12 @@
 #![no_std]
 
-extern crate alloc;
-
-use alloc::vec;
 use core::convert::Into;
 
-use contract_ffi::{
+use contract::{
     contract_api::{runtime, storage, TURef},
-    key::Key,
     unwrap_or_revert::UnwrapOrRevert,
-    uref::{AccessRights, URef},
-    value::CLValue,
 };
+use types::{AccessRights, CLValue, Key, URef};
 
 const DATA: &str = "data";
 const CONTRACT_NAME: &str = "create";
@@ -26,10 +21,7 @@ pub extern "C" fn create() {
         ret.into()
     };
     let return_value = CLValue::from_t(read_only_reference).unwrap_or_revert();
-
-    let extra_urefs = vec![read_only_reference];
-
-    runtime::ret(return_value, extra_urefs)
+    runtime::ret(return_value)
 }
 
 #[no_mangle]

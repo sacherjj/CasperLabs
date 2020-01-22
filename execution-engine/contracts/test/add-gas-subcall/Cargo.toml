@@ -1,0 +1,18 @@
+[package]
+name = "add-gas-subcall"
+version = "0.1.0"
+authors = ["Fraser Hutchison <fraser@casperlabs.io>"]
+edition = "2018"
+
+[lib]
+crate-type = ["cdylib"]
+bench = false
+doctest = false
+test = false
+
+[features]
+std = ["contract/std", "types/std"]
+
+[dependencies]
+contract = { path = "../../../contract", package = "casperlabs-contract" }
+types = { path = "../../../types", package = "casperlabs-types" }

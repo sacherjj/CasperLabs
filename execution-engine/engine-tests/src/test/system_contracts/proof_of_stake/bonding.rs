@@ -1,22 +1,17 @@
 use base16;
 
-use contract_ffi::{
-    contract_api::Error,
-    key::Key,
-    value::{
-        account::{PublicKey, PurseId},
-        U512,
-    },
-};
 use engine_core::engine_state::{
     genesis::{GenesisAccount, POS_BONDING_PURSE},
     CONV_RATE,
 };
 use engine_shared::{motes::Motes, stored_value::StoredValue, transform::Transform};
-
-use crate::{
-    support::test_support::{self, ExecuteRequestBuilder, InMemoryWasmTestBuilder},
-    test::{DEFAULT_ACCOUNTS, DEFAULT_ACCOUNT_ADDR, DEFAULT_PAYMENT},
+use engine_test_support::low_level::{
+    utils, ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_ACCOUNTS, DEFAULT_ACCOUNT_ADDR,
+    DEFAULT_ACCOUNT_INITIAL_BALANCE, DEFAULT_PAYMENT,
+};
+use types::{
+    account::{PublicKey, PurseId},
+    ApiError, Key, U512,
 };
 
 const CONTRACT_POS_BONDING: &str = "pos_bonding.wasm";
@@ -69,7 +64,7 @@ fn should_run_successful_bond_and_unbond() {
         tmp
     };
 
-    let genesis_config = test_support::create_genesis_config(accounts);
+    let genesis_config = utils::create_genesis_config(accounts);
 
     let result = InMemoryWasmTestBuilder::default()
         .run_genesis(&genesis_config)
@@ -99,7 +94,7 @@ fn should_run_successful_bond_and_unbond() {
         .builder()
         .get_exec_response(0)
         .expect("should have exec response");
-    let mut genesis_gas_cost = test_support::get_exec_costs(&exec_response)[0];
+    let mut genesis_gas_cost = utils::get_exec_costs(&exec_response)[0];
 
     let transforms = &result.builder().get_transforms()[0];
 
@@ -164,7 +159,7 @@ fn should_run_successful_bond_and_unbond() {
         .builder()
         .get_exec_response(0)
         .expect("should have exec response");
-    genesis_gas_cost = genesis_gas_cost + test_support::get_exec_costs(&exec_response)[0];
+    genesis_gas_cost = genesis_gas_cost + utils::get_exec_costs(&exec_response)[0];
 
     let account_1 = result
         .builder()
@@ -227,7 +222,7 @@ fn should_run_successful_bond_and_unbond() {
         .builder()
         .get_exec_response(0)
         .expect("should have exec response");
-    let gas_cost_b = Motes::from_gas(test_support::get_exec_costs(&exec_response)[0], CONV_RATE)
+    let gas_cost_b = Motes::from_gas(utils::get_exec_costs(&exec_response)[0], CONV_RATE)
         .expect("should convert");
 
     assert_eq!(
@@ -283,14 +278,14 @@ fn should_run_successful_bond_and_unbond() {
         .builder()
         .get_exec_response(0)
         .expect("should have exec response");
-    genesis_gas_cost = genesis_gas_cost + test_support::get_exec_costs(&exec_response)[0];
+    genesis_gas_cost = genesis_gas_cost + utils::get_exec_costs(&exec_response)[0];
 
     assert_eq!(
         result
             .builder()
             .get_purse_balance(default_account.purse_id()),
         U512::from(
-            test_support::GENESIS_INITIAL_BALANCE
+            DEFAULT_ACCOUNT_INITIAL_BALANCE
                 - Motes::from_gas(genesis_gas_cost, CONV_RATE)
                     .expect("should convert")
                     .value()
@@ -332,7 +327,7 @@ fn should_run_successful_bond_and_unbond() {
         .builder()
         .get_exec_response(0)
         .expect("should have exec response");
-    let gas_cost_b = Motes::from_gas(test_support::get_exec_costs(&exec_response)[0], CONV_RATE)
+    let gas_cost_b = Motes::from_gas(utils::get_exec_costs(&exec_response)[0], CONV_RATE)
         .expect("should convert");
 
     assert_eq!(
@@ -379,7 +374,7 @@ fn should_run_successful_bond_and_unbond() {
         .builder()
         .get_exec_response(0)
         .expect("should have exec response");
-    genesis_gas_cost = genesis_gas_cost + test_support::get_exec_costs(&exec_response)[0];
+    genesis_gas_cost = genesis_gas_cost + utils::get_exec_costs(&exec_response)[0];
 
     // Back to original after funding account1's pursee
     assert_eq!(
@@ -387,7 +382,7 @@ fn should_run_successful_bond_and_unbond() {
             .builder()
             .get_purse_balance(default_account.purse_id()),
         U512::from(
-            test_support::GENESIS_INITIAL_BALANCE
+            DEFAULT_ACCOUNT_INITIAL_BALANCE
                 - Motes::from_gas(genesis_gas_cost, CONV_RATE)
                     .expect("should convert")
                     .value()
@@ -464,7 +459,7 @@ fn should_fail_bonding_with_insufficient_funds() {
         tmp
     };
 
-    let genesis_config = test_support::create_genesis_config(accounts);
+    let genesis_config = utils::create_genesis_config(accounts);
 
     let exec_request_1 = ExecuteRequestBuilder::standard(
         DEFAULT_ACCOUNT_ADDR,
@@ -501,13 +496,13 @@ fn should_fail_bonding_with_insufficient_funds() {
         .to_owned();
 
     let error_message = {
-        let execution_result = crate::support::test_support::get_success_result(&response);
-        test_support::get_error_message(execution_result)
+        let execution_result = utils::get_success_result(&response);
+        utils::get_error_message(execution_result)
     };
     // pos::Error::BondTransferFailed => 8
     assert_eq!(
         error_message,
-        format!("Exit code: {}", u32::from(Error::ProofOfStake(8)))
+        format!("Exit code: {}", u32::from(ApiError::ProofOfStake(8)))
     );
 }
 
@@ -525,7 +520,7 @@ fn should_fail_unbonding_validator_without_bonding_first() {
         tmp
     };
 
-    let genesis_config = test_support::create_genesis_config(accounts);
+    let genesis_config = utils::create_genesis_config(accounts);
 
     let exec_request = ExecuteRequestBuilder::standard(
         DEFAULT_ACCOUNT_ADDR,
@@ -547,12 +542,12 @@ fn should_fail_unbonding_validator_without_bonding_first() {
         .to_owned();
 
     let error_message = {
-        let execution_result = crate::support::test_support::get_success_result(&response);
-        test_support::get_error_message(execution_result)
+        let execution_result = utils::get_success_result(&response);
+        utils::get_error_message(execution_result)
     };
     // pos::Error::NotBonded => 0
     assert_eq!(
         error_message,
-        format!("Exit code: {}", u32::from(Error::ProofOfStake(0)))
+        format!("Exit code: {}", u32::from(ApiError::ProofOfStake(0)))
     );
 }

@@ -20,19 +20,7 @@ use std::{
 use num_traits::Zero;
 use parity_wasm::elements::Module;
 
-use contract_ffi::{
-    args_parser::ArgsParser,
-    block_time::BlockTime,
-    bytesrepr::ToBytes,
-    execution::Phase,
-    key::{Key, KEY_HASH_LENGTH},
-    system_contracts::mint,
-    uref::{AccessRights, URef, UREF_ADDR_LENGTH},
-    value::{
-        account::{PublicKey, PurseId},
-        ProtocolVersion, U512,
-    },
-};
+use contract::args_parser::ArgsParser;
 use engine_shared::{
     account::Account,
     additive_map::AdditiveMap,
@@ -47,11 +35,18 @@ use engine_storage::{
     protocol_data::ProtocolData,
 };
 use engine_wasm_prep::{wasm_costs::WasmCosts, Preprocessor};
+use types::{
+    account::{PublicKey, PurseId},
+    bytesrepr::ToBytes,
+    system_contract_errors::mint,
+    AccessRights, BlockTime, Key, Phase, ProtocolVersion, URef, KEY_HASH_LENGTH, U512,
+    UREF_ADDR_LENGTH,
+};
 
 use self::{
     deploy_item::DeployItem,
     executable_deploy_item::ExecutableDeployItem,
-    execution_result::ExecutionResult,
+    execution_result::{ExecutionResult, ForcedTransferResult},
     genesis::{GenesisAccount, GenesisConfig, GenesisResult, POS_PAYMENT_PURSE, POS_REWARDS_PURSE},
     system_contract_cache::SystemContractCache,
 };
@@ -1008,18 +1003,21 @@ where
             }
         };
 
-        if let Some(failure) = execution_result_builder
-            .set_payment_execution_result(payment_result)
-            .check_forced_transfer(
+        if let Some(forced_transfer) = payment_result.check_forced_transfer(payment_purse_balance) {
+            let error = match forced_transfer {
+                ForcedTransferResult::InsufficientPayment => Error::InsufficientPaymentError,
+                ForcedTransferResult::PaymentFailure => payment_result.take_error().unwrap(),
+            };
+            return Ok(ExecutionResult::new_payment_code_error(
+                error,
                 max_payment_cost,
                 account_main_purse_balance,
-                payment_purse_balance,
                 account_main_purse_balance_key,
                 rewards_purse_balance_key,
-            )
-        {
-            return Ok(failure);
+            ));
         }
+
+        execution_result_builder.set_payment_execution_result(payment_result);
 
         let post_payment_tc = tracking_copy.borrow();
         let session_tc = Rc::new(RefCell::new(post_payment_tc.fork()));
@@ -1120,7 +1118,7 @@ where
                 &mut proof_of_stake_keys,
                 base_key,
                 &system_account,
-                authorization_keys.clone(),
+                authorization_keys,
                 blocktime,
                 deploy_hash,
                 gas_limit,

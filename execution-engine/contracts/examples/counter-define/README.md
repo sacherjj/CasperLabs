@@ -25,6 +25,14 @@ $ casperlabs-client --host $HOST deploy \
     --session $COUNTER_DEFINE_WASM
 ```
 
+Increment the counter.
+```
+$ casperlabs-client --host $HOST deploy \
+    --private-key $PRIVATE_KEY_PATH \
+    --payment-amount 10000000 \
+    --session-name counter_inc
+```
+
 ## Check counter's value
 
 Query global state to check counter's value.

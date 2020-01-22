@@ -1,0 +1,20 @@
+[package]
+name = "casperlabs-contract"
+version = "0.22.0"
+authors = ["Michael Birch <birchmd@casperlabs.io>", "Mateusz Górski <gorski.mateusz@protonmail.ch>"]
+edition = "2018"
+description = "Library for developing CasperLabs smart contracts."
+readme = "README.md"
+documentation = "https://docs.rs/casperlabs-contract"
+homepage = "https://casperlabs.io"
+repository = "https://github.com/CasperLabs/CasperLabs/tree/master/execution-engine/contract"
+
+[features]
+default = []
+std = ["casperlabs-types/std"]
+
+[dependencies]
+casperlabs-types = { version = "0.1.0", path = "../types" }
+failure = { version = "0.1.6", default-features = false, features = ["failure_derive"] }
+hex_fmt = "0.3.0"
+wee_alloc = "0.4.5"

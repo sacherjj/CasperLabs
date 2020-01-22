@@ -1,16 +1,12 @@
 use lazy_static::lazy_static;
 
-use contract_ffi::value::U512;
 use engine_core::engine_state::CONV_RATE;
 use engine_shared::motes::Motes;
-
-use crate::{
-    support::test_support::{self, ExecuteRequestBuilder, InMemoryWasmTestBuilder},
-    test::{
-        DEFAULT_ACCOUNT_ADDR, DEFAULT_ACCOUNT_INITIAL_BALANCE, DEFAULT_GENESIS_CONFIG,
-        DEFAULT_PAYMENT,
-    },
+use engine_test_support::low_level::{
+    utils, ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_ACCOUNT_ADDR,
+    DEFAULT_ACCOUNT_INITIAL_BALANCE, DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT,
 };
+use types::U512;
 
 const CONTRACT_TRANSFER_PURSE_TO_ACCOUNT: &str = "transfer_purse_to_account.wasm";
 const CONTRACT_TRANSFER_TO_ACCOUNT_01: &str = "transfer_to_account_01.wasm";
@@ -124,7 +120,7 @@ fn should_transfer_from_account_to_account() {
 
     let genesis_balance = builder.get_purse_balance(default_account_purse_id);
 
-    let gas_cost = Motes::from_gas(test_support::get_exec_costs(&exec_1_response)[0], CONV_RATE)
+    let gas_cost = Motes::from_gas(utils::get_exec_costs(&exec_1_response)[0], CONV_RATE)
         .expect("should convert");
 
     assert_eq!(
@@ -166,7 +162,7 @@ fn should_transfer_from_account_to_account() {
 
     let account_1_balance = builder.get_purse_balance(account_1_purse_id);
 
-    let gas_cost = Motes::from_gas(test_support::get_exec_costs(&exec_2_response)[0], CONV_RATE)
+    let gas_cost = Motes::from_gas(utils::get_exec_costs(&exec_2_response)[0], CONV_RATE)
         .expect("should convert");
 
     assert_eq!(
@@ -327,7 +323,7 @@ fn should_fail_when_insufficient_funds() {
 #[ignore]
 #[test]
 fn should_transfer_total_amount() {
-    let mut builder = test_support::InMemoryWasmTestBuilder::default();
+    let mut builder = InMemoryWasmTestBuilder::default();
 
     let exec_request_1 = ExecuteRequestBuilder::standard(
         DEFAULT_ACCOUNT_ADDR,
