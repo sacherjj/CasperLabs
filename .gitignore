@@ -67,4 +67,5 @@ integration-testing/**/*.wasm
 .make
 # default for 'make start', 'make stop', 'make stop-incremental-compilation'
 /data-dir/
-
+# temporary sbt file with automatic build reloading configuration
+/reload.sbt

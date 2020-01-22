@@ -53,6 +53,8 @@ start: \
 # Make sure Bloop version at least 1.4.0-RC1 installed https://scalacenter.github.io/bloop/setup
 .make/run/bsp:
 	@echo "Starting background sbt..."
+	@echo "//automatically reloads sbt on build files changes" > reload.sbt
+	@echo "Global / onChangedBuildSource := ReloadOnSourceChanges" >> reload.sbt
 	@sbt -mem 1024 '~bloopInstall' &> "$(DATA_DIR)/sbt.log" &
 	$(call wait_until,sbt.log,Monitoring source files for casperlabs)
 	@echo "Starting bloop server..."
@@ -69,6 +71,7 @@ stop-bsp: stop
 	@bloop ng-stop &> /dev/null || true
 	@rm -rf "$(DATA_DIR)/bloop.log"
 	@rm -rf .make/run/bsp
+	@rm -rf reload.sbt
 	@echo Done
 
 .make/run/generate-keys:

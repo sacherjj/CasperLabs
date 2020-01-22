@@ -4,9 +4,6 @@ import com.typesafe.sbt.packager.docker._
 //allow stopping sbt tasks using ctrl+c without killing sbt itself
 Global / cancelable := true
 
-//automatically reloads sbt on build files changes
-Global / onChangedBuildSource := ReloadOnSourceChanges
-
 //to show library sources if using Bloop in IDEA
 bloopExportJarClassifiers.in(Global) := Some(Set("sources"))
 
