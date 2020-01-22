@@ -36,6 +36,14 @@ all: \
 publish: docker-push-all
 	$(MAKE) -C execution-engine publish
 
+# Blocks until a line appears in a file
+#
+# Parameters:
+# 1) File to read under DATA_DIR directory
+# 2) Line to wait
+#
+# call it as '@call(wait_until,some_file.log,A line I'm waiting for)'
+# Pay attention it doesn't have a timeout, so will block forever if line doesn't appear
 define wait_until
 	@while ! grep --silent '$(2)' "$(DATA_DIR)/$(1)"; do \
 	sleep 1; done
