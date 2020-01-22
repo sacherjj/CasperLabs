@@ -53,8 +53,8 @@ As a validator you will want to add a few more:
 
 #### CasperLabs Node Unit File
 
-By default this file points to the `example-configuration.toml`. You will want
-want to update this in `/etc/systemd/system/casperlabs-node.service` to point 
+By default this file points to the `example-configuration.toml`. You will want 
+to update this in `/etc/systemd/system/casperlabs-node.service` to point 
 to the configuration you updated for youself. In the below, case I changed it 
 to point to `prod-configuration.toml`:
 
