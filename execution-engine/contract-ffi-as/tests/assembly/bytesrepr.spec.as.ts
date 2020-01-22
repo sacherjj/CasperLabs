@@ -2,7 +2,7 @@ import { fromBytesU64, toBytesU64,
          fromBytesStringList, toBytesStringList,
          fromBytesU32, toBytesU32,
          fromBytesU8, toBytesU8,
-         toBytesMap,
+         toBytesMap, fromBytesMap,
          toBytesPair,
          toBytesString, fromBytesString,
          toBytesVecT } from "../../assembly/bytesrepr";
@@ -127,7 +127,18 @@ export function testSerializeMap(): bool {
     ];
 
     const serialized = toBytesMap(map);
-    return isArraysEqual(serialized, typedToArray(truth));
+    assert(isArraysEqual(serialized, typedToArray(truth)));
+
+    const deser = fromBytesMap<String, String>(
+        arrayToTyped(serialized),
+        fromBytesString,
+        toBytesString,
+        fromBytesString,
+        toBytesString);
+
+    assert(deser.get("Key1") == "Value1");
+    assert(deser.get("Key2") == "Value2");
+    return deser.size == 2;
 }
 
 export function testToBytesVecT(): bool {

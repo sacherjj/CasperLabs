@@ -84,6 +84,47 @@ export function toBytesMap(pairs: u8[][]): u8[] {
     return bytes;
 }
 
+export function fromBytesMap<K, V>(bytes: Uint8Array,
+                                   decodeKey: (bytes1: Uint8Array) => K | null,
+                                   encodeKey: (key: K) => u8[],
+                                   decodeValue: (bytes2: Uint8Array) => V | null,
+                                   encodeValue: (value: V) => u8[]): Map<K, V> | null {
+    const length = fromBytesU32(bytes);
+
+    let result = new Map<K, V>();
+
+    if (length === <U32>0) {
+        return result;
+    }
+    if (length === null) {
+        return null;
+    }
+
+    let bytes = bytes.subarray(4);
+
+    for (let i = 0; i < <i32>length; i++) {
+        let key = decodeKey(bytes);
+        if (key === null) {
+            return null;
+        }
+        // NOTE: Here I'm using encodeKey/encodeValue to serialize the decoded value again to obtain the number of bytes we have to skip in the input stream
+        // Not ideal, but otherwise it would be hard to model something like `fromBytesXYZ(inputStream) => [T, outputStream]`
+        let keySize = encodeKey(key);
+        bytes = bytes.subarray(keySize.length);
+
+        let value = decodeValue(bytes);
+        if (value === null) {
+            return null;
+        }
+        let valueBytes = encodeValue(value);
+        bytes = bytes.subarray(valueBytes.length);
+
+        result.set(key, value);
+    }
+
+    return result;
+}
+
 export function toBytesString(s: String): u8[] {
     let bytes = toBytesU32(<u32>s.length);
     for (let i = 0; i < s.length; i++) {
