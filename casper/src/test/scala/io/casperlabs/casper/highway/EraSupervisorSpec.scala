@@ -111,7 +111,7 @@ class EraSupervisorSpec extends FlatSpec with Matchers with Inspectors with Stor
       override val length = days(5)
 
       // Once created, store all supervisors here for relaying.
-      @volatile var supervisors: Map[String, EraSupervisor[Task]] = Map.empty
+      val supervisorsRef: Ref[Task, Map[String, EraSupervisor[Task]]] = Ref.unsafe(Map.empty)
       // Don't create messages until we add all supervisors to this collection,
       // otherwise they might miss some messages and there's no synchronizer here.
       val isSyncedRef: Ref[Task, Boolean] = Ref.unsafe(false)
@@ -131,9 +131,10 @@ class EraSupervisorSpec extends FlatSpec with Matchers with Inspectors with Stor
         override val relaying = new Relaying[Task] {
           override def relay(hashes: List[BlockHash]): Task[WaitHandle[Task]] =
             for {
-              _      <- relayedRef.update(_ ++ hashes)
-              blocks <- hashes.traverse(h => db.getBlockMessage(h)).map(_.flatten)
-              _      = blocks should not be empty
+              _           <- relayedRef.update(_ ++ hashes)
+              blocks      <- hashes.traverse(h => db.getBlockMessage(h)).map(_.flatten)
+              _           = blocks should not be empty
+              supervisors <- supervisorsRef.get
               _ <- supervisors
                     .filterKeys(_ != validator)
                     .values
@@ -173,12 +174,13 @@ class EraSupervisorSpec extends FlatSpec with Matchers with Inspectors with Stor
 
       // Override the main `FixtureLike` that's ultimately going to be executed by `testFixtures`.
       override def test = fixtures.traverse(_.makeSupervisor()).use { ss =>
-        // Register the supervisors so they can all communicate.
-        supervisors = ss.zipWithIndex.map {
-          case (s, idx) => fixtures(idx).validator -> s
-        }.toMap
-
         for {
+          // Register the supervisors so they can all communicate.
+          _ <- supervisorsRef.set {
+                ss.zipWithIndex.map {
+                  case (s, idx) => fixtures(idx).validator -> s
+                }.toMap
+              }
           // Enable message production, now that the supervisors are registered.
           _ <- isSyncedRef.set(true)
           // Run individual tests. There could be common ones as well.
