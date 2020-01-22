@@ -125,13 +125,6 @@ class EraSupervisorSpec extends FlatSpec with Matchers with Inspectors with Stor
         val validatorId: PublicKeyBS              = validator
         val relayedRef: Ref[Task, Set[BlockHash]] = Ref.unsafe(Set.empty)
 
-        // Register the supervisor when it's created.
-        override def makeSupervisor() =
-          for {
-            s <- super.makeSupervisor()
-            _ <- Resource.liftF(supervisorsRef.update(_.updated(validator, s)))
-          } yield s
-
         override val relaying = new Relaying[Task] {
           override def relay(hashes: List[BlockHash]): Task[WaitHandle[Task]] =
             for {
@@ -171,23 +164,24 @@ class EraSupervisorSpec extends FlatSpec with Matchers with Inspectors with Stor
         }
       }
 
-      override def test: Task[Unit] =
+      def network(validators: List[String]) =
         for {
           // Don't create messages until we add all supervisors to this collection,
           // otherwise they might miss some messages and there's no synchronizer here.
-          isSyncedRef    <- Ref[Task].of(false)
-          supervisorsRef <- Ref[Task].of(Map.empty[String, EraSupervisor[Task]])
-          fixtures = List("Alice", "Bob", "Charlie").zipWithIndex.map {
+          isSyncedRef    <- Resource.liftF(Ref[Task].of(false))
+          supervisorsRef <- Resource.liftF(Ref[Task].of(Map.empty[String, EraSupervisor[Task]]))
+          fixtures = validators.zipWithIndex.map {
             case (validator, idx) =>
               new RelayFixture(validator, dbs(idx), supervisorsRef, isSyncedRef)
           }
-          _ <- fixtures.traverse(_.makeSupervisor()).use { _ =>
-                for {
-                  _ <- isSyncedRef.set(true)
-                  _ <- fixtures.traverse(_.test)
-                } yield ()
+          supervisors <- fixtures.traverse(_.makeSupervisor())
+          _ <- Resource.liftF {
+                supervisorsRef.set(validators zip supervisors toMap) *> isSyncedRef.set(true)
               }
-        } yield ()
+        } yield fixtures
+
+      override def test: Task[Unit] =
+        network(List("Alice", "Bob", "Charlie")).use(_.traverse(_.test).void)
     }
   }
 }
