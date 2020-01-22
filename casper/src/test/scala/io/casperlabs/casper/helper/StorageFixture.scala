@@ -61,6 +61,8 @@ trait StorageFixture { self: Suite =>
       .use { storages =>
         f(storages)
       }
+    // NOTE: When using the TestScheduler we can't call `runSyncUnsafe` on it, it will time out,
+    // so we still have to use the normal Scheduler we have here to wait on the test.
     implicit val s = scheduler
     testProgram.runSyncUnsafe(timeout)
   }
