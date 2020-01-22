@@ -182,7 +182,7 @@ class EraSupervisor[F[_]: Concurrent: Timer: Log: BlockStorageWriter: EraStorage
         val eraHash    = era.keyBlockHash.show
         val parentHash = era.parentKeyBlockHash.show
         val tick       = era.startTick
-        val start      = conf.toInstant(Ticks(era.startTick))
+        val start      = conf.toInstant(Ticks(tick))
         for {
           _ <- Log[F].info(
                 s"Created ${eraHash -> "era"} starting at ${tick -> "tick"} ${start -> "instant"} child of ${parentHash -> "parent"}"
