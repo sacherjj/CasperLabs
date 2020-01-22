@@ -2,26 +2,30 @@ package io.casperlabs.casper.util.execengine
 
 import cats.{Id, MonadError}
 import cats.data.NonEmptyList
+import cats.effect.Sync
 import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.DeploySelection.DeploySelection
 import io.casperlabs.casper.consensus.Block.ProcessedDeploy
+import io.casperlabs.casper.consensus.state.Key.Hash
 import io.casperlabs.casper.consensus.state._
 import io.casperlabs.casper.consensus.{state, Block, Deploy}
 import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.helper._
-import io.casperlabs.casper.util.ProtoUtil
+import io.casperlabs.casper.util.{CasperLabsProtocol, ProtoUtil}
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.{EECommitFun, EEExecFun}
 import io.casperlabs.casper.util.execengine.ExecEngineUtilTest._
 import io.casperlabs.casper.util.execengine.ExecutionEngineServiceStub.mock
 import io.casperlabs.casper.util.execengine.Op.OpMap
 import io.casperlabs.casper.{consensus, DeploySelection}
-import io.casperlabs.catscontrib.MonadThrowableInstances
 import io.casperlabs.ipc
 import io.casperlabs.ipc.DeployResult.ExecutionResult
+import io.casperlabs.ipc.Op.OpInstance
 import io.casperlabs.ipc._
-import io.casperlabs.models.SmartContractEngineError
-import io.casperlabs.shared.LogStub
+import io.casperlabs.metrics.Metrics
+import io.casperlabs.models.{ArbitraryConsensus, SmartContractEngineError}
+import io.casperlabs.p2p.EffectsTestInstances.LogicalTime
+import io.casperlabs.shared.{LogStub, Time}
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.deploy._
 import monix.eval.Task
@@ -29,7 +33,12 @@ import monix.execution.Scheduler
 import monix.execution.atomic.{AtomicInt, AtomicLong}
 import org.scalatest.{Assertion, FlatSpec, Matchers}
 
-class ExecEngineUtilTest extends FlatSpec with Matchers with BlockGenerator with StorageFixture {
+class ExecEngineUtilTest
+    extends FlatSpec
+    with Matchers
+    with BlockGenerator
+    with ArbitraryConsensus
+    with StorageFixture {
 
   implicit val logEff = LogStub[Task]()
 
@@ -110,7 +119,7 @@ class ExecEngineUtilTest extends FlatSpec with Matchers with BlockGenerator with
   }
 
   def computeSingleProcessedDeploy(
-      deploy: Seq[consensus.Deploy],
+      deploys: Seq[consensus.Deploy],
       protocolVersion: state.ProtocolVersion = state.ProtocolVersion(1)
   )(
       implicit executionEngineService: ExecutionEngineService[Task],
@@ -121,11 +130,11 @@ class ExecEngineUtilTest extends FlatSpec with Matchers with BlockGenerator with
       implicit0(deploySelection: DeploySelection[Task]) = DeploySelection.create[Task](
         5 * 1024 * 1024
       )
-      _ <- deployStorage.writer.addAsPending(deploy.toList)
+      _ <- deployStorage.writer.addAsPending(deploys.toList)
       computeResult <- ExecEngineUtil
                         .computeDeploysCheckpoint[Task](
                           ExecEngineUtil.MergeResult.empty,
-                          fs2.Stream.fromIterator[Task](deploy.toIterator),
+                          fs2.Stream.fromIterator[Task](deploys.toIterator),
                           blocktime,
                           protocolVersion,
                           rank = 0,
@@ -163,7 +172,7 @@ class ExecEngineUtilTest extends FlatSpec with Matchers with BlockGenerator with
         } yield batchResult should contain theSameElementsAs singleResults
   }
 
-  "computeDeploysCheckpoint" should "throw exception when EE Service Failed" in withStorage {
+  it should "throw exception when EE Service Failed" in withStorage {
     implicit blockStorage => implicit dagStorage => implicit deployStorage => _ =>
       val failedExecEEService: ExecutionEngineService[Task] =
         mock[Task](
@@ -270,9 +279,212 @@ class ExecEngineUtilTest extends FlatSpec with Matchers with BlockGenerator with
       } yield ()
   }
 
-  it should "include conflicting deploys in the result" in (pending)
+  it should "include conflicting deploys in the result" in withStorage {
+    _ => _ => implicit deployStorage => _ =>
+      val nonConflictingDeploys = List.fill(5)(ProtoUtil.basicDeploy[Task]()).sequence
+      // Deploys' transforms depend on their code and `basicDeploy` parses timestamp
+      // as session code. By replicating the same deploy we get multiple deploys with the same effects.
+      val conflictingDeploys =
+        ProtoUtil.basicDeploy[Task]().map(List.fill(3)(_))
 
-  it should "use post-state hash and bonded validators values of the last deploy execution" in (pending)
+      for {
+        deploys      <- Task.parMap2(nonConflictingDeploys, conflictingDeploys)(_ ++ _)
+        blockDeploys <- computeSingleProcessedDeploy(deploys)
+      } yield {
+        blockDeploys.map(_.getDeploy) should contain theSameElementsAs (deploys)
+      }
+  }
+
+  it should "use post-state hash and bonded validators values of the last deploy execution" in withStorage {
+    _ => _ => implicit deployStorage => _ =>
+      import cats.implicits._
+
+      import monix.execution.Scheduler.Implicits.global
+
+      val processedDeploys = {
+        val nonConflictingDeploys = ProtoUtil.basicDeploy[Task]().runSyncUnsafe()
+        val conflictingDeploys = {
+          val deploy = ProtoUtil.basicDeploy[Task]().runSyncUnsafe()
+          List.fill(3)(deploy)
+        }
+
+        assert(
+          conflictingDeploys
+            .forall(_.deployHash == conflictingDeploys.head.deployHash),
+          "All conflicting deploys should have the same deploy hash"
+        )
+
+        (nonConflictingDeploys +: conflictingDeploys).zipWithIndex.map {
+          case (deploy, stage) => ProcessedDeploy(Some(deploy), stage = stage)
+        }
+      }
+
+      // Prepare deploys' effects so that we know what EE stub will return.
+      // Since effects are the thing that gets sent to EE.commit we can make an association
+      // between deploy and CommitResult.
+      val deployToEffect: Map[ByteString, (Int, Seq[TransformEntry])] =
+        processedDeploys.map { deploy =>
+          val deployHash = deploy.getDeploy.deployHash
+          deployHash -> (deploy.stage -> Seq(
+            TransformEntry()
+              .withKey(Key().withHash(Hash(deployHash)))
+              .withTransform(
+                Transform()
+                  .withWrite(TransformWrite().withValue(StoredValue().withAccount(Account())))
+              )
+          ))
+        }.toMap
+
+      // Mapping between deploy stage and its effects.
+      val stageEffects = deployToEffect.values
+        .map(Map(_))
+        .map(_.mapValues(_.toSet))
+        .foldLeft(Map.empty[Int, Set[TransformEntry]])(_ |+| _)
+
+      def isLastCommit(transforms: Seq[TransformEntry]): Boolean =
+        stageEffects.toList.sortBy(_._1).last._2 == transforms.toSet
+      def isLastButOne(transforms: Seq[TransformEntry]): Boolean =
+        stageEffects.toList.sortBy(_._1).dropRight(1).last._2 == transforms.toSet
+      val lastPreStateHash  = ByteString.copyFromUtf8("TheLastPreState")
+      val lastPostStateHash = ByteString.copyFromUtf8("TheLastPostState")
+      val lastBondedValidators = Seq(
+        io.casperlabs.casper.consensus
+          .Bond(ByteString.copyFromUtf8("LastBondedValidator"), Some(BigInt("1000")))
+      )
+
+      def deployHashToKey(deployHash: ByteString) =
+        Key().withHash(Hash(deployHash))
+      val writeOp = io.casperlabs.ipc.Op(OpInstance.Write(WriteOp()))
+      def writeOpEntry(deployHash: ByteString) =
+        OpEntry().withKey(deployHashToKey(deployHash)).withOperation(writeOp)
+
+      def deployToDeployResult(deployItem: DeployItem): DeployResult =
+        DeployResult()
+          .withExecutionResult(
+            ExecutionResult().withEffects(
+              ExecutionEffect()
+                .withOpMap(Seq(writeOpEntry(deployItem.deployHash)))
+                .withTransformMap(deployToEffect(deployItem.deployHash)._2)
+            )
+          )
+
+      implicit val ee = mock[Task](
+        _ => new Throwable("Keep calm.").asLeft.pure[Task],
+        (_, _, _) => new Throwable("Keep calm.").asLeft.pure[Task],
+        (_, _, deploys, _) =>
+          Task.now(
+            deploys.map(deployToDeployResult).asRight[Throwable]
+          ),
+        (_, transforms) =>
+          Task {
+            if (isLastButOne(transforms)) {
+              ExecutionEngineService.CommitResult(lastPreStateHash, Seq.empty).asRight[Throwable]
+            } else if (isLastCommit(transforms)) {
+              ExecutionEngineService
+                .CommitResult(lastPostStateHash, lastBondedValidators)
+                .asRight[Throwable]
+            } else {
+              ExecutionEngineService
+                .CommitResult(ByteString.copyFromUtf8("testPostState"), Seq.empty)
+                .asRight[Throwable]
+            }
+          },
+        (_, _, _) => new Throwable("Keep calm.").asLeft.pure[Task]
+      )
+
+      implicit val deploySelection = DeploySelection.create[Task](
+        5 * 1024 * 1024
+      )(Sync[Task], ee, fs2.Stream.Compiler.syncInstance[Task])
+
+      ExecEngineUtil
+        .computeDeploysCheckpoint[Task](
+          ExecEngineUtil.MergeResult.empty,
+          fs2.Stream.fromIterator[Task](processedDeploys.map(_.getDeploy).toIterator),
+          0L,
+          ProtocolVersion(1),
+          rank = 0,
+          upgrades = Nil
+        )(Sync[Task], deployStorage, logEff, ee, deploySelection, Metrics[Task])
+        .map { result =>
+          assert(result.postStateHash == lastPostStateHash)
+          assert(result.bondedValidators == lastBondedValidators)
+        }
+  }
+
+  "effectsForBlock" should "extract block's effects properly" in withStorage {
+    implicit bs => _ => _ => _ =>
+      import io.casperlabs.catscontrib.effect.implicits._
+      import cats.implicits._
+
+      implicit val timeEff: Time[Id] = new LogicalTime[Id]
+      implicit val cc                = ConsensusConfig()
+
+      val processedDeploys = (0 to 5).toList.traverse { stage =>
+        val deploysNum = scala.util.Random.nextInt(10)
+        List
+          .fill(deploysNum)(ProtoUtil.basicProcessedDeploy[Id].map(_.withStage(stage)))
+          .sequence
+      }.flatten
+
+      val deployToEffect: Map[ByteString, (Int, Seq[TransformEntry])] =
+        processedDeploys.map { deploy =>
+          val deployHash = deploy.getDeploy.deployHash
+          deployHash -> (deploy.stage -> Seq(
+            TransformEntry()
+              .withKey(Key().withHash(Hash(deployHash)))
+              .withTransform(Transform().withAddI32(TransformAddInt32(deploy.stage)))
+          ))
+        }.toMap
+
+      val stageEffects = deployToEffect.values
+        .map(Map(_))
+        .map(_.mapValues(_.toSet))
+        .foldLeft(Map.empty[Int, Set[TransformEntry]])(_ |+| _)
+
+      implicit val cl = CasperLabsProtocol.unsafe[Task]((0, ProtocolVersion(1), None))
+
+      implicit val ee = mock[Task](
+        _ => new Throwable("Keep calm.").asLeft.pure[Task],
+        (_, _, _) => new Throwable("Keep calm.").asLeft.pure[Task],
+        (_, _, deploys, _) =>
+          Task.now(
+            deploys
+              .map { item =>
+                DeployResult()
+                  .withExecutionResult(
+                    ExecutionResult().withEffects(
+                      ExecutionEffect().withTransformMap(deployToEffect(item.deployHash)._2)
+                    )
+                  )
+              }
+              .asRight[Throwable]
+          ),
+        (_, _) =>
+          Task.now(
+            ExecutionEngineService
+              .CommitResult(ByteString.copyFromUtf8("testPostState"), Seq.empty)
+              .asRight[Throwable]
+          ),
+        (_, _, _) => new Throwable("Keep calm.").asLeft.pure[Task]
+      )
+
+      val block = sample(arbBlock.arbitrary).update(_.body.update(_.deploys := processedDeploys))
+      for {
+        blockEffects <- ExecEngineUtil
+                         .effectsForBlock[Task](block, ByteString.EMPTY)(
+                           Sync[Task],
+                           ee,
+                           bs,
+                           cl
+                         )
+        _ <- Task {
+              assert(
+                stageEffects == blockEffects.effects.mapValues(_.toSet),
+                "Expected the same per-stage effects."
+              )
+            }
+      } yield ()
+  }
 
   "abstractMerge" should "do nothing in the case of zero or one candidates" in {
     val genesis = OpDagNode.genesis(Map(1     -> Op.Read))

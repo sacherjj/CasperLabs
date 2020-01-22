@@ -1325,10 +1325,6 @@ class ValidationTest
       } yield postStateHash should be(computedPostStateHash)
   }
 
-  it should "correctly replay transactions that are sequential" in (pending)
-
-  it should "correctly replay mix of parallel and sequential transactions" in (pending)
-
   "j-past-cone of the block" should "not merge equivocator's swimlane" in withStorage {
     implicit blockStorage => implicit dagStorage => _ => _ =>
       val v0 = generateValidator("v0")

@@ -186,6 +186,8 @@ object ExecEngineUtil {
     )
   }
 
+  /** Given a set of chosen parents create a "deploy checkpoint".
+    */
   def computeDeploysCheckpoint[F[_]: MonadThrowable: DeployStorage: Log: ExecutionEngineService: DeploySelection: Metrics](
       merged: MergeResult[TransformMap, Block],
       deployStream: fs2.Stream[F, Deploy],
