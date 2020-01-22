@@ -116,16 +116,16 @@ stop:
 	@echo 'Done'
 
 attach-sbt:
-	tail -f "$(DATA_DIR)/sbt.log" || true
+	tail -f "$(DATA_DIR)/sbt.log"
 
 attach-bloop:
-	tail -f "$(DATA_DIR)/bloop.log" || true
+	tail -f "$(DATA_DIR)/bloop.log"
 
 attach-node:
-	tail -f "$(DATA_DIR)/node.log" || true
+	tail -f "$(DATA_DIR)/node.log"
 
 attach-engine:
-	tail -f "$(DATA_DIR)/engine.log" || true
+	tail -f "$(DATA_DIR)/engine.log"
 
 clean:
 	$(MAKE) -C execution-engine clean
