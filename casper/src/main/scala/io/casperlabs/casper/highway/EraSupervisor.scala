@@ -39,7 +39,7 @@ class EraSupervisor[F[_]: Concurrent: Timer: Log: BlockStorageWriter: EraStorage
     for {
       _        <- isShutdownRef.set(true)
       schedule <- scheduleRef.get
-      _        <- schedule.values.toList.map(_.cancel.attempt).sequence.void
+      _        <- schedule.values.toList.traverse(_.cancel.attempt)
     } yield ()
 
   /** Handle a block coming from the DownloadManager. No need to broadcast the block itself,
