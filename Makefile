@@ -39,7 +39,6 @@ publish: docker-push-all
 define wait_until
 	@while ! grep --silent '$(2)' "$(DATA_DIR)/$(1)"; do \
 	sleep 1; done
-	@echo Done
 endef
 
 # Runs the engine and node in the background using incremental compilation.
@@ -66,7 +65,6 @@ stop-bsp: stop
 	@echo "Stopping backgroung sbt.."
 	@ps aux | grep bloopInstall | grep -v 'grep' | awk '{print $$2}' | xargs -I _ kill -9 _
 	@rm -rf "$(DATA_DIR)/sbt.log"
-	@echo Done
 	@echo "Stopping bloop server.."
 	@bloop ng-stop &> /dev/null || true
 	@rm -rf "$(DATA_DIR)/bloop.log"
@@ -104,10 +102,8 @@ stop-bsp: stop
 stop:
 	@echo 'Stopping engine...'
 	@ps aux | grep cargo | grep -v 'grep' | awk '{print $$2}' | xargs -I _ kill -9 _
-	@echo 'Done'
 	@echo 'Stopping node...'
 	@ps aux | grep -i casperlabs | grep bloop | grep run | grep args | grep -v 'grep' | awk '{print $$2}' | xargs -I _ kill -9 _
-	@echo 'Done'
 	@echo 'Cleaning the state...'
 	$(shell rm -rf $(DATA_DIR)/engine.log $(DATA_DIR)/node.log $(DATA_DIR)/global_state $(DATA_DIR)/sqlite* $(DATA_DIR)/.casper-node.sock)
 	@rm -rf .make/run/start
