@@ -193,9 +193,9 @@ class EraSupervisor[F[_]: Concurrent: Timer: Log: BlockStorageWriter: EraStorage
           _ <- addToParent(child)
         } yield ()
 
-      case HighwayEvent.CreatedLambdaMessage(m)  => handleCreatedMessage(m, "lambda")
+      case HighwayEvent.CreatedLambdaMessage(m)  => handleCreatedMessage(m, "lambda-message")
       case HighwayEvent.CreatedLambdaResponse(m) => handleCreatedMessage(m, "lambda-response")
-      case HighwayEvent.CreatedOmegaMessage(m)   => handleCreatedMessage(m, "omega")
+      case HighwayEvent.CreatedOmegaMessage(m)   => handleCreatedMessage(m, "omega-message")
     } void
   }
 
