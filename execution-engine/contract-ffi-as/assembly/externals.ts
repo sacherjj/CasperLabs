@@ -103,3 +103,6 @@ export declare function remove_associated_key(public_key_ptr: usize): i32;
 
 @external("env", "get_blocktime")
 export declare function get_blocktime(dest_ptr: usize): void;
+
+@external("env", "get_caller")
+export declare function get_caller(dest_ptr: usize): void;

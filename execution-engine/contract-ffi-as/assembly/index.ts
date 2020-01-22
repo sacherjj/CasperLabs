@@ -10,6 +10,7 @@ import {toBytesString,
         fromBytesArrayU8} from "./bytesrepr";
 import {U512} from "./bignum";
 import {UREF_SERIALIZED_LENGTH, KEY_UREF_SERIALIZED_LENGTH} from "./constants";
+import { typedToArray } from "./utils";
 
 // NOTE: interfaces aren't supported in AS yet: https://github.com/AssemblyScript/assemblyscript/issues/146#issuecomment-399130960
 // interface ToBytes {
@@ -208,4 +209,10 @@ export function getBlockTime(): u64 {
   let bytes = new Uint64Array(1);
   externals.get_blocktime(bytes.dataStart);
   return <u64>bytes[0];
+}
+
+export function getCaller(): Uint8Array {
+  let bytes = new Uint8Array(32);
+  externals.get_caller(bytes.dataStart);
+  return bytes;
 }
