@@ -51,3 +51,22 @@ impl TryFrom<ipc::ExecuteRequest> for ExecuteRequest {
         ))
     }
 }
+
+impl From<ExecuteRequest> for ipc::ExecuteRequest {
+    fn from(req: ExecuteRequest) -> Self {
+        let mut result = ipc::ExecuteRequest::new();
+        result.set_parent_state_hash(req.parent_state_hash.to_vec());
+        result.set_block_time(req.block_time);
+        result.set_deploys(
+            req.deploys
+                .into_iter()
+                .map(|res| match res {
+                    Ok(deploy_item) => deploy_item.into(),
+                    Err(_) => ipc::DeployItem::new(),
+                })
+                .collect(),
+        );
+        result.set_protocol_version(req.protocol_version.into());
+        result
+    }
+}
