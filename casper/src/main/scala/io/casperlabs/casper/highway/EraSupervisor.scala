@@ -20,7 +20,7 @@ import scala.concurrent.duration.FiniteDuration
 import scala.util.control.NonFatal
 
 /** The supervisor loads all the active eras when it starts and does the following things:
-  * - acts as a gateway for the rest of the system to execute blocks by passin gthem to the right era
+  * - acts as a gateway for the rest of the system to execute blocks by passing them to the right era
   * - manages the scheduling of the agendas of the eras by acting as a trampoline for them
   * - propagates messages received or created by parent eras to the descendants to keep the latest messsages up to date.
   */
