@@ -110,15 +110,12 @@ class EraSupervisorSpec extends FlatSpec with Matchers with Inspectors with Stor
       override val start  = genesisEraStart
       override val length = days(5)
 
-      // Once created, store all supervisors here for relaying.
-      val supervisorsRef: Ref[Task, Map[String, EraSupervisor[Task]]] = Ref.unsafe(Map.empty)
-      // Don't create messages until we add all supervisors to this collection,
-      // otherwise they might miss some messages and there's no synchronizer here.
-      val isSyncedRef: Ref[Task, Boolean] = Ref.unsafe(false)
-
-      // Nested fixture, similar to a node, for a given validator, isolated from the others in this test.
-      class RelayFixture(validator: String, db: SQLiteStorage.CombinedStorage[Task])
-          extends Fixture(
+      class RelayFixture(
+          validator: String,
+          db: SQLiteStorage.CombinedStorage[Task],
+          supervisorsRef: Ref[Task, Map[String, EraSupervisor[Task]]],
+          isSyncedRef: Ref[Task, Boolean]
+      ) extends Fixture(
             length,
             validator = validator,
             initRoundExponent = 15,
@@ -143,7 +140,6 @@ class EraSupervisorSpec extends FlatSpec with Matchers with Inspectors with Stor
             } yield ().pure[Task]
         }
 
-        // Test a single validators point of view.
         override val test = for {
           _        <- sleepUntil(start plus length)
           relayed  <- relayedRef.get
@@ -167,26 +163,27 @@ class EraSupervisorSpec extends FlatSpec with Matchers with Inspectors with Stor
         }
       }
 
-      // Create multiple fixtures, one for each validator all of which talk to each other.
-      val fixtures = List("Alice", "Bob", "Charlie").zipWithIndex.map {
-        case (validator, idx) => new RelayFixture(validator, dbs(idx))
-      }
-
-      // Override the main `FixtureLike` that's ultimately going to be executed by `testFixtures`.
-      override def test = fixtures.traverse(_.makeSupervisor()).use { ss =>
+      override def test: Task[Unit] =
         for {
-          // Register the supervisors so they can all communicate.
-          _ <- supervisorsRef.set {
-                ss.zipWithIndex.map {
-                  case (s, idx) => fixtures(idx).validator -> s
-                }.toMap
+          // Don't create messages until we add all supervisors to this collection,
+          // otherwise they might miss some messages and there's no synchronizer here.
+          isSyncedRef    <- Ref[Task].of(false)
+          supervisorsRef <- Ref[Task].of(Map.empty[String, EraSupervisor[Task]])
+          fixtures = List("Alice", "Bob", "Charlie").zipWithIndex.map {
+            case (validator, idx) =>
+              new RelayFixture(validator, dbs(idx), supervisorsRef, isSyncedRef)
+          }
+          _ <- fixtures.traverse(_.makeSupervisor()).use { ss =>
+                for {
+                  _ <- supervisorsRef.set(ss.zipWithIndex.map {
+                        case (s, idx) =>
+                          fixtures(idx).validator -> s
+                      }.toMap)
+                  _ <- isSyncedRef.set(true)
+                  _ <- fixtures.traverse(_.test)
+                } yield ()
               }
-          // Enable message production, now that the supervisors are registered.
-          _ <- isSyncedRef.set(true)
-          // Run individual tests. There could be common ones as well.
-          _ <- fixtures.traverse(_.test)
         } yield ()
-      }
     }
   }
 }
