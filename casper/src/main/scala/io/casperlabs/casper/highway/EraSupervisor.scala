@@ -28,8 +28,7 @@ class EraSupervisor[F[_]: Concurrent: Timer: Log: BlockStorageWriter: EraStorage
     conf: HighwayConf,
     // Once the supervisor is shut down, reject incoming messages.
     isShutdownRef: Ref[F, Boolean],
-    // Help ensure we only create one runtime per era.
-    semaphore: Semaphore[F],
+    eraStartSemaphore: Semaphore[F],
     erasRef: Ref[F, Map[BlockHash, EraSupervisor.Entry[F]]],
     scheduleRef: Ref[F, Map[(BlockHash, Agenda.DelayedAction), Fiber[F, Unit]]],
     makeRuntime: Era => F[EraRuntime[F]]
@@ -93,7 +92,7 @@ class EraSupervisor[F[_]: Concurrent: Timer: Log: BlockStorageWriter: EraStorage
   private def load(keyBlockHash: BlockHash): F[Entry[F]] =
     erasRef.get >>= {
       _.get(keyBlockHash).fold {
-        semaphore.withPermit {
+        eraStartSemaphore.withPermit {
           erasRef.get >>= {
             _.get(keyBlockHash).fold(start(keyBlockHash))(_.pure[F])
           }
@@ -262,9 +261,9 @@ object EraSupervisor {
     Resource.make {
       for {
         isShutdownRef <- Ref.of(false)
+        erasSemaphore <- Semaphore[F](1)
         erasRef       <- Ref.of(Map.empty[BlockHash, Entry[F]])
         scheduleRef   <- Ref.of(Map.empty[(BlockHash, Agenda.DelayedAction), Fiber[F, Unit]])
-        semaphore     <- Semaphore[F](1)
 
         makeRuntime = (era: Era) =>
           EraRuntime.fromEra[F](
@@ -278,7 +277,7 @@ object EraSupervisor {
         supervisor = new EraSupervisor[F](
           conf,
           isShutdownRef,
-          semaphore,
+          erasSemaphore,
           erasRef,
           scheduleRef,
           makeRuntime
