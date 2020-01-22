@@ -20,19 +20,7 @@ use std::{
 use num_traits::Zero;
 use parity_wasm::elements::Module;
 
-use contract_ffi::{
-    args_parser::ArgsParser,
-    block_time::BlockTime,
-    bytesrepr::ToBytes,
-    execution::Phase,
-    key::{Key, KEY_HASH_LENGTH},
-    system_contracts::mint,
-    uref::{AccessRights, URef, UREF_ADDR_LENGTH},
-    value::{
-        account::{PublicKey, PurseId},
-        ProtocolVersion, U512,
-    },
-};
+use contract::args_parser::ArgsParser;
 use engine_shared::{
     account::Account,
     additive_map::AdditiveMap,
@@ -47,6 +35,13 @@ use engine_storage::{
     protocol_data::ProtocolData,
 };
 use engine_wasm_prep::{wasm_costs::WasmCosts, Preprocessor};
+use types::{
+    account::{PublicKey, PurseId},
+    bytesrepr::ToBytes,
+    system_contract_errors::mint,
+    AccessRights, BlockTime, Key, Phase, ProtocolVersion, URef, KEY_HASH_LENGTH, U512,
+    UREF_ADDR_LENGTH,
+};
 
 use self::{
     deploy_item::DeployItem,
@@ -1123,7 +1118,7 @@ where
                 &mut proof_of_stake_keys,
                 base_key,
                 &system_account,
-                authorization_keys.clone(),
+                authorization_keys,
                 blocktime,
                 deploy_hash,
                 gas_limit,

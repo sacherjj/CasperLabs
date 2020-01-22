@@ -3,24 +3,18 @@ use std::{
     convert::TryInto,
 };
 
-use contract_ffi::{
-    key::Key,
-    value::{account::PublicKey, ProtocolVersion, U512},
-};
 use engine_core::engine_state::{upgrade::ActivationPoint, CONV_RATE};
 use engine_grpc_server::engine_server::ipc::DeployCode;
 use engine_shared::{
     additive_map::AdditiveMap, gas::Gas, motes::Motes, stored_value::StoredValue,
     transform::Transform,
 };
-
-use crate::{
-    support::test_support::{
-        self, DeployItemBuilder, Diff, ExecuteRequestBuilder, InMemoryWasmTestBuilder,
-        UpgradeRequestBuilder, GENESIS_INITIAL_BALANCE,
-    },
-    test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_ACCOUNT_KEY, DEFAULT_GENESIS_CONFIG},
+use engine_test_support::low_level::{
+    utils, AdditiveMapDiff, DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder,
+    UpgradeRequestBuilder, DEFAULT_ACCOUNT_ADDR, DEFAULT_ACCOUNT_INITIAL_BALANCE,
+    DEFAULT_ACCOUNT_KEY, DEFAULT_GENESIS_CONFIG,
 };
+use types::{account::PublicKey, Key, ProtocolVersion, U512};
 
 const ACCOUNT_1_ADDR: [u8; 32] = [42u8; 32];
 const DEFAULT_ACTIVATION_POINT: ActivationPoint = 1;
@@ -43,7 +37,7 @@ fn make_upgrade_request(
     code: &str,
 ) -> UpgradeRequestBuilder {
     let installer_code = {
-        let bytes = test_support::read_wasm_file_bytes(code);
+        let bytes = utils::read_wasm_file_bytes(code);
         let mut deploy_code = DeployCode::new();
         deploy_code.set_code(bytes);
         deploy_code
@@ -94,7 +88,7 @@ fn should_exec_non_stored_code() {
         .expect("should get genesis account");
     let modified_balance: U512 = builder.get_purse_balance(default_account.purse_id());
 
-    let initial_balance: U512 = U512::from(GENESIS_INITIAL_BALANCE);
+    let initial_balance: U512 = U512::from(DEFAULT_ACCOUNT_INITIAL_BALANCE);
 
     assert_ne!(
         modified_balance, initial_balance,
@@ -107,7 +101,7 @@ fn should_exec_non_stored_code() {
         .expect("there should be a response")
         .clone();
 
-    let mut success_result = test_support::get_success_result(&response);
+    let mut success_result = utils::get_success_result(&response);
     let cost = success_result
         .take_cost()
         .try_into()
@@ -167,7 +161,7 @@ fn should_exec_stored_code_by_hash() {
         "stored_payment_contract_hash should exist"
     );
 
-    let mut result = test_support::get_success_result(&response);
+    let mut result = utils::get_success_result(&response);
     let cost = result.take_cost().try_into().expect("should map to U512");
     let gas = Gas::new(cost);
     let motes_alpha = Motes::from_gas(gas, CONV_RATE).expect("should have motes");
@@ -205,7 +199,7 @@ fn should_exec_stored_code_by_hash() {
 
     let modified_balance_bravo: U512 = builder.get_purse_balance(default_account.purse_id());
 
-    let initial_balance: U512 = U512::from(GENESIS_INITIAL_BALANCE);
+    let initial_balance: U512 = U512::from(DEFAULT_ACCOUNT_INITIAL_BALANCE);
 
     let response = test_result
         .builder()
@@ -213,7 +207,7 @@ fn should_exec_stored_code_by_hash() {
         .expect("there should be a response")
         .clone();
 
-    result = test_support::get_success_result(&response);
+    result = utils::get_success_result(&response);
     let cost = result.take_cost().try_into().expect("should map to U512");
     let gas = Gas::new(cost);
     let motes_bravo = Motes::from_gas(gas, CONV_RATE).expect("should have motes");
@@ -263,7 +257,7 @@ fn should_exec_stored_code_by_named_hash() {
         .expect("there should be a response")
         .clone();
 
-    let mut result = test_support::get_success_result(&response);
+    let mut result = utils::get_success_result(&response);
     let cost = result.take_cost().try_into().expect("should map to U512");
     let gas = Gas::new(cost);
     let motes_alpha = Motes::from_gas(gas, CONV_RATE).expect("should have motes");
@@ -302,7 +296,7 @@ fn should_exec_stored_code_by_named_hash() {
         .expect("should get genesis account");
     let modified_balance_bravo: U512 = builder.get_purse_balance(default_account.purse_id());
 
-    let initial_balance: U512 = U512::from(GENESIS_INITIAL_BALANCE);
+    let initial_balance: U512 = U512::from(DEFAULT_ACCOUNT_INITIAL_BALANCE);
 
     let response = test_result
         .builder()
@@ -310,7 +304,7 @@ fn should_exec_stored_code_by_named_hash() {
         .expect("there should be a response")
         .clone();
 
-    result = test_support::get_success_result(&response);
+    result = utils::get_success_result(&response);
     let cost = result.take_cost().try_into().expect("should map to U512");
     let gas = Gas::new(cost);
     let motes_bravo = Motes::from_gas(gas, CONV_RATE).expect("should have motes");
@@ -371,7 +365,7 @@ fn should_exec_stored_code_by_named_uref() {
         .expect("there should be a response")
         .clone();
 
-    let mut result = test_support::get_success_result(&response);
+    let mut result = utils::get_success_result(&response);
     let cost = result.take_cost().try_into().expect("should map to U512");
     let gas = Gas::new(cost);
     let motes_alpha = Motes::from_gas(gas, CONV_RATE).expect("should have motes");
@@ -407,7 +401,7 @@ fn should_exec_stored_code_by_named_uref() {
 
     let modified_balance_bravo: U512 = builder.get_purse_balance(default_account.purse_id());
 
-    let initial_balance: U512 = U512::from(GENESIS_INITIAL_BALANCE);
+    let initial_balance: U512 = U512::from(DEFAULT_ACCOUNT_INITIAL_BALANCE);
 
     let response = test_result
         .builder()
@@ -415,7 +409,7 @@ fn should_exec_stored_code_by_named_uref() {
         .expect("there should be a response")
         .clone();
 
-    result = test_support::get_success_result(&response);
+    result = utils::get_success_result(&response);
     let cost = result.take_cost().try_into().expect("should map to U512");
     let gas = Gas::new(cost);
     let motes_bravo = Motes::from_gas(gas, CONV_RATE).expect("should have motes");
@@ -465,7 +459,7 @@ fn should_exec_payment_and_session_stored_code() {
         .expect("there should be a response")
         .clone();
 
-    let mut result = test_support::get_success_result(&response);
+    let mut result = utils::get_success_result(&response);
     let cost = result.take_cost().try_into().expect("should map to U512");
     let gas = Gas::new(cost);
     let motes_alpha = Motes::from_gas(gas, CONV_RATE).expect("should have motes");
@@ -497,7 +491,7 @@ fn should_exec_payment_and_session_stored_code() {
         .expect("there should be a response")
         .clone();
 
-    result = test_support::get_success_result(&response);
+    result = utils::get_success_result(&response);
     let cost = result.take_cost().try_into().expect("should map to U512");
     let gas = Gas::new(cost);
     let motes_bravo = Motes::from_gas(gas, CONV_RATE).expect("should have motes");
@@ -533,7 +527,7 @@ fn should_exec_payment_and_session_stored_code() {
         .expect("there should be a response")
         .clone();
 
-    result = test_support::get_success_result(&response);
+    result = utils::get_success_result(&response);
     let cost = result.take_cost().try_into().expect("should map to U512");
     let gas = Gas::new(cost);
     let motes_charlie = Motes::from_gas(gas, CONV_RATE).expect("should have motes");
@@ -543,7 +537,7 @@ fn should_exec_payment_and_session_stored_code() {
         .expect("should get genesis account");
     let modified_balance: U512 = builder.get_purse_balance(default_account.purse_id());
 
-    let initial_balance: U512 = U512::from(GENESIS_INITIAL_BALANCE);
+    let initial_balance: U512 = U512::from(DEFAULT_ACCOUNT_INITIAL_BALANCE);
 
     let tally = motes_alpha.value()
         + motes_bravo.value()
@@ -822,7 +816,7 @@ fn should_have_equivalent_transforms_with_stored_contract_pointers() {
             .to_owned()
     };
 
-    let diff = Diff::new(provided_transforms, stored_transforms);
+    let diff = AdditiveMapDiff::new(provided_transforms, stored_transforms);
 
     let left: BTreeMap<&Key, &Transform> = diff.left().iter().collect();
     let right: BTreeMap<&Key, &Transform> = diff.right().iter().collect();

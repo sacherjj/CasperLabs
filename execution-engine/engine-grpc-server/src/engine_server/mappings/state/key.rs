@@ -1,6 +1,6 @@
 use std::convert::{TryFrom, TryInto};
 
-use contract_ffi::key::Key;
+use types::Key;
 
 use crate::engine_server::{
     mappings::{self, ParsingError},
@@ -68,7 +68,7 @@ impl TryFrom<state::Key> for Key {
 mod tests {
     use proptest::proptest;
 
-    use contract_ffi::gens;
+    use types::gens;
 
     use super::*;
     use crate::engine_server::mappings::test_utils;

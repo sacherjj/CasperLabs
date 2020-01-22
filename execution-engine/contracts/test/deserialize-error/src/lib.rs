@@ -7,12 +7,8 @@ extern crate alloc;
 use alloc::vec;
 use alloc::{collections::BTreeMap, vec::Vec};
 
-use contract_ffi::{
-    args_parser::ArgsParser,
-    bytesrepr::ToBytes,
-    contract_api::{storage, ContractRef},
-    key::Key,
-};
+use contract::{args_parser::ArgsParser, contract_api::storage};
+use types::{bytesrepr::ToBytes, ContractRef, Key};
 
 #[no_mangle]
 pub extern "C" fn do_nothing() {
@@ -65,5 +61,5 @@ fn my_call_contract<A: ArgsParser>(c_ptr: ContractRef, args: A) {
 #[no_mangle]
 pub extern "C" fn call() {
     let do_nothing: ContractRef = storage::store_function_at_hash("do_nothing", BTreeMap::new());
-    my_call_contract(do_nothing.clone(), ());
+    my_call_contract(do_nothing, ());
 }

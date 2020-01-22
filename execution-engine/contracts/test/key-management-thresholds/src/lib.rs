@@ -4,20 +4,23 @@ extern crate alloc;
 
 use alloc::string::String;
 
-use contract_ffi::{
-    contract_api::{account, runtime, Error},
+use contract::{
+    contract_api::{account, runtime},
     unwrap_or_revert::UnwrapOrRevert,
-    value::account::{
+};
+use types::{
+    account::{
         ActionType, AddKeyFailure, PublicKey, RemoveKeyFailure, SetThresholdFailure,
         UpdateKeyFailure, Weight,
     },
+    ApiError,
 };
 
 #[no_mangle]
 pub extern "C" fn call() {
     let stage: String = runtime::get_arg(0)
-        .unwrap_or_revert_with(Error::MissingArgument)
-        .unwrap_or_revert_with(Error::InvalidArgument);
+        .unwrap_or_revert_with(ApiError::MissingArgument)
+        .unwrap_or_revert_with(ApiError::InvalidArgument);
 
     if stage == "init" {
         // executed with weight >= 1
@@ -31,26 +34,26 @@ pub extern "C" fn call() {
     } else if stage == "test-permission-denied" {
         // Has to be executed with keys of total weight < 255
         match account::add_associated_key(PublicKey::new([44; 32]), Weight::new(1)) {
-            Ok(_) => runtime::revert(Error::User(200)),
+            Ok(_) => runtime::revert(ApiError::User(200)),
             Err(AddKeyFailure::PermissionDenied) => {}
-            Err(_) => runtime::revert(Error::User(201)),
+            Err(_) => runtime::revert(ApiError::User(201)),
         }
 
         match account::update_associated_key(PublicKey::new([43; 32]), Weight::new(2)) {
-            Ok(_) => runtime::revert(Error::User(300)),
+            Ok(_) => runtime::revert(ApiError::User(300)),
             Err(UpdateKeyFailure::PermissionDenied) => {}
-            Err(_) => runtime::revert(Error::User(301)),
+            Err(_) => runtime::revert(ApiError::User(301)),
         }
         match account::remove_associated_key(PublicKey::new([43; 32])) {
-            Ok(_) => runtime::revert(Error::User(400)),
+            Ok(_) => runtime::revert(ApiError::User(400)),
             Err(RemoveKeyFailure::PermissionDenied) => {}
-            Err(_) => runtime::revert(Error::User(401)),
+            Err(_) => runtime::revert(ApiError::User(401)),
         }
 
         match account::set_action_threshold(ActionType::KeyManagement, Weight::new(255)) {
-            Ok(_) => runtime::revert(Error::User(500)),
+            Ok(_) => runtime::revert(ApiError::User(500)),
             Err(SetThresholdFailure::PermissionDeniedError) => {}
-            Err(_) => runtime::revert(Error::User(501)),
+            Err(_) => runtime::revert(ApiError::User(501)),
         }
     } else if stage == "test-key-mgmnt-succeed" {
         // Has to be executed with keys of total weight >= 254
@@ -63,6 +66,6 @@ pub extern "C" fn call() {
         account::set_action_threshold(ActionType::KeyManagement, Weight::new(100))
             .unwrap_or_revert();
     } else {
-        runtime::revert(Error::User(1))
+        runtime::revert(ApiError::User(1))
     }
 }

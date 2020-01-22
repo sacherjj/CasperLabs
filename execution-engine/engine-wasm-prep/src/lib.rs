@@ -1,9 +1,6 @@
 pub mod wasm_costs;
 
-use std::{
-    error::Error,
-    fmt::{self, Display, Formatter},
-};
+use std::fmt::{self, Display, Formatter};
 
 use parity_wasm::elements::{self, Module};
 use pwasm_utils::{self, stack_height};
@@ -22,7 +19,7 @@ pub enum PreprocessingError {
 
 impl From<elements::Error> for PreprocessingError {
     fn from(error: elements::Error) -> Self {
-        PreprocessingError::DeserializeError(error.description().to_string())
+        PreprocessingError::DeserializeError(error.to_string())
     }
 }
 

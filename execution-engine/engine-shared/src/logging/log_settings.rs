@@ -272,9 +272,9 @@ lazy_static! {
 }
 
 fn get_hostname() -> String {
-    match hostname::get_hostname() {
-        Some(h) => h.to_string(),
-        None => "unknown-host".to_owned(),
+    match hostname::get() {
+        Ok(hostname) => hostname.to_string_lossy().to_string(),
+        Err(_) => "unknown-host".to_owned(),
     }
 }
 

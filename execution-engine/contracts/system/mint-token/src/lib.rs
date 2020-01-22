@@ -15,18 +15,18 @@ pub mod mint;
 use alloc::string::String;
 use core::convert::TryInto;
 
-use contract_ffi::{
-    contract_api::{runtime, storage, Error as ApiError},
-    key::Key,
-    system_contracts::mint::{Error, PurseIdError},
-    unwrap_or_revert::UnwrapOrRevert,
-    uref::{AccessRights, URef},
-    value::{account::PUBLIC_KEY_LENGTH, CLValue, U512},
-};
-
 use capabilities::{RefWithAddRights, RefWithReadAddWriteRights};
+use contract::{
+    contract_api::{runtime, storage},
+    unwrap_or_revert::UnwrapOrRevert,
+};
 use internal_purse_id::{DepositId, WithdrawId};
 use mint::Mint;
+use types::{
+    account::PUBLIC_KEY_LENGTH,
+    system_contract_errors::mint::{Error, PurseIdError},
+    AccessRights, ApiError, CLValue, Key, URef, U512,
+};
 
 const SYSTEM_ACCOUNT: [u8; PUBLIC_KEY_LENGTH] = [0u8; PUBLIC_KEY_LENGTH];
 

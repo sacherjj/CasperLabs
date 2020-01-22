@@ -8,11 +8,6 @@ use std::{collections::HashMap, convert::From, iter};
 
 use linked_hash_map::LinkedHashMap;
 
-use contract_ffi::{
-    bytesrepr,
-    key::Key,
-    value::{self, CLType, CLValueError},
-};
 use engine_shared::{
     additive_map::AdditiveMap,
     newtypes::CorrelationId,
@@ -20,6 +15,7 @@ use engine_shared::{
     transform::{self, Transform, TypeMismatch},
 };
 use engine_storage::global_state::StateReader;
+use types::{bytesrepr, CLType, CLValueError, Key};
 
 use crate::engine_state::{execution_effect::ExecutionEffect, op::Op};
 
@@ -76,7 +72,7 @@ impl<M: Meter<Key, StoredValue>> TrackingCopyCache<M> {
 
     /// Inserts `key` and `value` pair to Write/Add cache.
     pub fn insert_write(&mut self, key: Key, value: StoredValue) {
-        self.muts_cached.insert(key, value.clone());
+        self.muts_cached.insert(key, value);
     }
 
     /// Gets value from `key` in the cache.
@@ -234,7 +230,7 @@ impl<R: StateReader<Key, StoredValue>> TrackingCopy<R> {
                     Err(error) => return Ok(AddResult::from(error)),
                 },
                 _ => {
-                    if *cl_value.cl_type() == value::named_key_type() {
+                    if *cl_value.cl_type() == types::named_key_type() {
                         match cl_value.into_t() {
                             Ok(name_and_key) => {
                                 let map = iter::once(name_and_key).collect();

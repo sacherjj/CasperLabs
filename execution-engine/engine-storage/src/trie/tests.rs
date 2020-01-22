@@ -51,7 +51,7 @@ mod pointer_block {
 mod proptests {
     use proptest::prelude::proptest;
 
-    use contract_ffi::bytesrepr;
+    use types::bytesrepr;
 
     use crate::trie::gens::*;
 

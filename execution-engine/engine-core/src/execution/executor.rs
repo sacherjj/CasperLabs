@@ -6,17 +6,15 @@ use std::{
 
 use parity_wasm::elements::Module;
 
-use contract_ffi::{
-    block_time::BlockTime,
-    bytesrepr::{self, FromBytes},
-    execution::Phase,
-    key::Key,
-    value::{account::PublicKey, CLType, CLTyped, CLValue, ProtocolVersion},
-};
 use engine_shared::{
     account::Account, gas::Gas, newtypes::CorrelationId, stored_value::StoredValue,
 };
 use engine_storage::{global_state::StateReader, protocol_data::ProtocolData};
+use types::{
+    account::PublicKey,
+    bytesrepr::{self, FromBytes},
+    BlockTime, CLType, CLTyped, CLValue, Key, Phase, ProtocolVersion,
+};
 
 use super::{extract_access_rights_from_keys, instance_and_memory, Error, Runtime};
 use crate::{
@@ -319,9 +317,9 @@ impl Executor {
         let runtime_context = RuntimeContext::new(
             state,
             keys,
-            access_rights.clone(),
+            access_rights,
             args,
-            authorization_keys.clone(),
+            authorization_keys,
             account,
             base_key,
             blocktime,

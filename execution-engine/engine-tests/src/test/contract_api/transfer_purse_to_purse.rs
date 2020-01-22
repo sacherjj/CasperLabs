@@ -1,12 +1,9 @@
-use contract_ffi::{contract_api::Error, key::Key, value::U512};
 use engine_shared::{stored_value::StoredValue, transform::Transform};
+use types::{ApiError, Key, U512};
 
-use crate::{
-    support::test_support::{ExecuteRequestBuilder, InMemoryWasmTestBuilder},
-    test::{
-        DEFAULT_ACCOUNT_ADDR, DEFAULT_ACCOUNT_INITIAL_BALANCE, DEFAULT_GENESIS_CONFIG,
-        DEFAULT_PAYMENT,
-    },
+use engine_test_support::low_level::{
+    ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_ACCOUNT_ADDR,
+    DEFAULT_ACCOUNT_INITIAL_BALANCE, DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT,
 };
 
 const CONTRACT_TRANSFER_PURSE_TO_PURSE: &str = "transfer_purse_to_purse.wasm";
@@ -55,7 +52,7 @@ fn should_run_purse_to_purse_transfer() {
     // Main assertion for the result of `transfer_from_purse_to_purse`
     assert_eq!(
         purse_transfer_result,
-        format!("{:?}", Result::<(), Error>::Ok(()),)
+        format!("{:?}", Result::<_, ApiError>::Ok(()),)
     );
 
     let main_purse_balance =
@@ -163,7 +160,7 @@ fn should_run_purse_to_purse_transfer_with_error() {
     // Main assertion for the result of `transfer_from_purse_to_purse`
     assert_eq!(
         purse_transfer_result,
-        format!("{:?}", Result::<(), Error>::Err(Error::Transfer)),
+        format!("{:?}", Result::<(), _>::Err(ApiError::Transfer)),
     );
 
     // Obtain main purse's balance

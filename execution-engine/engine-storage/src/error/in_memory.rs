@@ -2,7 +2,7 @@ use std::sync;
 
 use failure::Fail;
 
-use contract_ffi::bytesrepr;
+use types::bytesrepr;
 
 #[derive(Debug, Fail, PartialEq, Eq)]
 pub enum Error {

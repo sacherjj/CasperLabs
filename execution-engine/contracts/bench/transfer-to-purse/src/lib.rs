@@ -1,12 +1,10 @@
 #![no_std]
 
-extern crate contract_ffi;
-
-use contract_ffi::{
-    contract_api::{account, runtime, system, Error as ApiError},
+use contract::{
+    contract_api::{account, runtime, system},
     unwrap_or_revert::UnwrapOrRevert,
-    value::{account::PurseId, U512},
 };
+use types::{account::PurseId, ApiError, U512};
 
 enum Arg {
     TargetPurse = 0,

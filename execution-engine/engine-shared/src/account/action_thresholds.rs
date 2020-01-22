@@ -1,6 +1,6 @@
-use contract_ffi::{
+use types::{
+    account::{ActionType, SetThresholdFailure, Weight, WEIGHT_SERIALIZED_LENGTH},
     bytesrepr::{Error, FromBytes, ToBytes},
-    value::account::{ActionType, SetThresholdFailure, Weight, WEIGHT_SERIALIZED_LENGTH},
 };
 
 /// Thresholds that have to be met when executing an action of a certain type.

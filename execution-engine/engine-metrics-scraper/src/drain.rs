@@ -99,7 +99,7 @@ mod tests {
         let empty = {
             let mut runtime = current_thread::Runtime::new().expect("should create runtime");
             runtime
-                .block_on(fetch_url(endpoint.to_owned()))
+                .block_on(fetch_url(endpoint))
                 .expect("should block on future")
         };
 
