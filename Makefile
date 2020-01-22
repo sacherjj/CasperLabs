@@ -1,7 +1,7 @@
 DOCKER_USERNAME ?= casperlabs
 DOCKER_PUSH_LATEST ?= false
 DOCKER_LATEST_TAG ?= latest
-$(eval DATA_DIR = $(shell echo $$(pwd)/data-dir))
+$(eval MAKE_START_DATA_DIR = $(shell echo $$(pwd)/.make/run/data-dir))
 # Use the git tag / hash as version. Easy to pinpoint. `git tag` can return more than 1 though. `git rev-parse --short HEAD` would just be the commit.
 $(eval TAGS_OR_SHA = $(shell git tag -l --points-at HEAD | grep -e . || git describe --tags --always --long))
 # Try to use the semantic version with any leading `v` stripped.
@@ -52,13 +52,15 @@ endef
 # Runs the engine and node in the background using incremental compilation.
 start: \
 	.make/run/generate-keys \
-	.make/run/bsp \
 	.make/run/start
 
-# Runs Bloop server with SBT and updates BSP configuration on build configuration changes.
-# To stop them run 'make stop-bsp'.
+# Runs Bloop server with SBT in background,
+# and automatically updates Bloop configuration on SBT build configuration changes.
+# To stop them run 'make stop-background-scala-compiler'.
 # Make sure Bloop version at least 1.4.0-RC1 installed https://scalacenter.github.io/bloop/setup
-.make/run/bsp:
+start-background-scala-compiler: .make/run/background-scala-compiler
+
+.make/run/background-scala-compiler:
 	@echo "Starting background sbt..."
 	@echo "// Automatically reloads sbt on build files changes" > project/reload.sbt
 	@echo "// Created by the 'make start'" >> project/reload.sbt
@@ -70,14 +72,14 @@ start: \
 	$(call wait_until,bloop.log,started on address)
 	@mkdir -p $(dir $@) && touch $@
 
-stop-bsp: stop
+stop-background-scala-compiler: stop
 	@echo "Stopping backgroung sbt.."
 	@ps aux | grep bloopInstall | grep -v 'grep' | awk '{print $$2}' | xargs -I _ kill -9 _
 	@rm -rf "$(DATA_DIR)/sbt.log"
 	@echo "Stopping bloop server.."
 	@bloop ng-stop &> /dev/null || true
 	@rm -rf "$(DATA_DIR)/bloop.log"
-	@rm -rf .make/run/bsp
+	@rm -rf .make/run/background-scala-compiler
 	@rm -rf project/reload.sbt
 	@echo Done
 
@@ -89,22 +91,27 @@ stop-bsp: stop
 	@mkdir -p $(dir $@) && touch $@
 
 .make/run/start:
-	@echo "Running engine..."
-	@echo "" > "$(DATA_DIR)/engine.log"
-	@cd execution-engine/engine-grpc-server && cargo run -- "$(DATA_DIR)/.casper-node.sock" &> "$(DATA_DIR)/engine.log" &
-	$(call wait_until,engine.log,is listening on socket)
-	@echo "Running node..."
-	@bloop run node \
-	--args run \
-	--args "--casper-standalone" \
-	--args "--server-host=0.0.0.0" \
-	--args "--server-no-upnp" \
-	--args "--server-data-dir=$(DATA_DIR)" \
-	--args "--casper-validator-sig-algorithm=ed25519" \
-	--args "--casper-validator-public-key-path=$(DATA_DIR)/validator-public.pem" \
-	--args "--casper-validator-private-key-path=$(DATA_DIR)/validator-private.pem" &> "$(DATA_DIR)/node.log" &
-	$(call wait_until,node.log,Listening for traffic on)
-	@mkdir -p $(dir $@) && touch $@
+	ifneq ("$(wildcard .make/run/background-scala-compiler)","")
+		@echo "Running engine..."
+		@echo "" > "$(DATA_DIR)/engine.log"
+		@cd execution-engine/engine-grpc-server && cargo run -- "$(DATA_DIR)/.casper-node.sock" &> "$(DATA_DIR)/engine.log" &
+		$(call wait_until,engine.log,is listening on socket)
+		@echo "Running node..."
+		@bloop run node \
+		--args run \
+		--args "--casper-standalone" \
+		--args "--server-host=0.0.0.0" \
+		--args "--server-no-upnp" \
+		--args "--server-data-dir=$(DATA_DIR)" \
+		--args "--casper-validator-sig-algorithm=ed25519" \
+		--args "--casper-validator-public-key-path=$(DATA_DIR)/validator-public.pem" \
+		--args "--casper-validator-private-key-path=$(DATA_DIR)/validator-private.pem" &> "$(DATA_DIR)/node.log" &
+		$(call wait_until,node.log,Listening for traffic on)
+		@mkdir -p $(dir $@) && touch $@
+	else
+		@echo 'Can't find background Scala compiler to run incremental compilation'
+		@echo 'Run \'make start-background-scala-compiler\' first'
+	endif
 
 stop:
 	@echo 'Stopping engine...'
