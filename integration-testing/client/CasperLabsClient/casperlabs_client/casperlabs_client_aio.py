@@ -35,16 +35,34 @@ class ScopedChannel(object):
 
 
 class CasperService(object):
-    def __init__(self, client):
-        self.client = client
+    def __init__(self, host, port, certificate_file, private_key_file):
+        self.host = host
+        self.port = port
+        self.certificate_file = certificate_file
+        self.private_key_file = private_key_file
+        self.node_id = (
+            certificate_file and extract_common_name(certificate_file) or None
+        )
 
     def __getattr__(self, name):
         async def method(*args):
-            with ScopedChannel(self.client.channel()) as channel:
+            with ScopedChannel(self.channel()) as channel:
                 service = casper_grpc.CasperServiceStub(channel)
                 return await getattr(service, name)(*args)
 
         return method
+
+    def channel(self):
+        ssl = False
+        if self.certificate_file:
+            ssl = create_default_context(Purpose.SERVER_AUTH)
+            # ssl.load_default_certs()
+            ssl.load_cert_chain(self.certificate_file, self.private_key_file)
+            ssl.verify_mode = CERT_REQUIRED
+            ssl.check_hostname = True
+        return SecureChannel(
+            self.host, self.port, ssl=ssl, server_hostname=self.node_id
+        )
 
 
 class SecureChannel(Channel):
@@ -84,25 +102,8 @@ class CasperLabsClientAIO(object):
         certificate_file: str = None,
         private_key_file: str = None,
     ):
-        self.host = host
-        self.port = port
-        self.casper_service = CasperService(self)
-        self.certificate_file = certificate_file
-        self.private_key_file = private_key_file
-        self.node_id = (
-            certificate_file and extract_common_name(certificate_file) or None
-        )
-
-    def channel(self):
-        ssl = False
-        if self.certificate_file:
-            ssl = create_default_context(Purpose.SERVER_AUTH)
-            # ssl.load_default_certs()
-            ssl.load_cert_chain(self.certificate_file, self.private_key_file)
-            ssl.verify_mode = CERT_REQUIRED
-            ssl.check_hostname = True
-        return SecureChannel(
-            self.host, self.port, ssl=ssl, server_hostname=self.node_id
+        self.casper_service = CasperService(
+            host, port, certificate_file, private_key_file
         )
 
     async def show_blocks(self, depth=1, max_rank=0, full_view=True):
