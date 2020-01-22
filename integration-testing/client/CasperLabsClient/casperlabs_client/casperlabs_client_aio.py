@@ -75,6 +75,8 @@ class CasperLabsClientAIO(object):
     gRPC asyncio CasperLabs client.
     """
 
+    DEPLOY_STATUS_CHECK_DELAY = 0.5
+
     def __init__(
         self,
         host: str = DEFAULT_HOST,
@@ -160,16 +162,20 @@ class CasperLabsClientAIO(object):
     async def send_deploy(self, deploy):
         return await self.casper_service.Deploy(casper.DeployRequest(deploy=deploy))
 
-    async def wait_for_deploy_processed(self, deploy_hash, on_error_raise=True):
+    async def wait_for_deploy_processed(
+        self, deploy_hash, on_error_raise=True, delay=DEPLOY_STATUS_CHECK_DELAY
+    ):
         result = None
         while True:
             result = await self.show_deploy(deploy_hash)
             if result.status.state != 1:  # PENDING
                 break
-            # result.status.state == PROCESSED (2)
-            await asyncio.sleep(0.1)
+            await asyncio.sleep(delay)
 
         if on_error_raise:
+            if len(result.processing_results) == 0:
+                raise Exception(f"Deploy {deploy_hash} status: {result.status}")
+
             last_processing_result = result.processing_results[0]
             if last_processing_result.is_error:
                 raise Exception(
@@ -236,7 +242,7 @@ class CasperLabsClientAIO(object):
             )
         )
 
-    async def show_deploys(self, block_hash_base16: str, full_view=True):
+    async def show_deploys(self, block_hash_base16: str, full_view=False):
         return await self.casper_service.StreamBlockDeploys(
             casper.StreamBlockDeploysRequest(
                 block_hash_base16=block_hash_base16,

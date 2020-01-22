@@ -56,7 +56,10 @@ async def test_transfer_and_balance(node, client):
 
     block_infos = await client.show_blocks()
     block_hash = block_infos[0].summary.block_hash.hex()
-    await client.balance(GENESIS_ACCOUNT.public_key_hex, block_hash)
+    genesis_account_balance = await client.balance(
+        GENESIS_ACCOUNT.public_key_hex, block_hash
+    )
+    assert genesis_account_balance > 0
 
     transfer_amount = 10 ** 7
     deploy_hash = await client.transfer(
