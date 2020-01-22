@@ -179,6 +179,10 @@ package-system-contracts: target/system-contracts.tar.gz
 package:
 	cd contract && $(CARGO) package
 
+.PHONY: publish
+publish:
+	./publish.sh
+
 .PHONY: check-publish
 check-publish:
 	cd cargo-casperlabs && $(CARGO) publish --dry-run
