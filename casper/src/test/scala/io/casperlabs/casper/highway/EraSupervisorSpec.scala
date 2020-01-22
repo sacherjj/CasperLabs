@@ -125,6 +125,13 @@ class EraSupervisorSpec extends FlatSpec with Matchers with Inspectors with Stor
         val validatorId: PublicKeyBS              = validator
         val relayedRef: Ref[Task, Set[BlockHash]] = Ref.unsafe(Set.empty)
 
+        // Register the supervisor when it's created.
+        override def makeSupervisor() =
+          for {
+            s <- super.makeSupervisor()
+            _ <- Resource.liftF(supervisorsRef.update(_.updated(validator, s)))
+          } yield s
+
         override val relaying = new Relaying[Task] {
           override def relay(hashes: List[BlockHash]): Task[WaitHandle[Task]] =
             for {
@@ -132,6 +139,7 @@ class EraSupervisorSpec extends FlatSpec with Matchers with Inspectors with Stor
               blocks      <- hashes.traverse(h => db.getBlockMessage(h)).map(_.flatten)
               _           = blocks should not be empty
               supervisors <- supervisorsRef.get
+              // Notify other supervisors.
               _ <- supervisors
                     .filterKeys(_ != validator)
                     .values
@@ -173,12 +181,8 @@ class EraSupervisorSpec extends FlatSpec with Matchers with Inspectors with Stor
             case (validator, idx) =>
               new RelayFixture(validator, dbs(idx), supervisorsRef, isSyncedRef)
           }
-          _ <- fixtures.traverse(_.makeSupervisor()).use { ss =>
+          _ <- fixtures.traverse(_.makeSupervisor()).use { _ =>
                 for {
-                  _ <- supervisorsRef.set(ss.zipWithIndex.map {
-                        case (s, idx) =>
-                          fixtures(idx).validator -> s
-                      }.toMap)
                   _ <- isSyncedRef.set(true)
                   _ <- fixtures.traverse(_.test)
                 } yield ()
