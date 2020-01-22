@@ -1,6 +1,9 @@
 import asyncio
 
 from grpclib.client import Channel
+from grpclib.protocol import H2Protocol
+from ssl import create_default_context, Purpose, CERT_REQUIRED
+from typing import cast
 
 from . import casper_pb2 as casper
 from . import casper_grpc
@@ -12,6 +15,7 @@ from casperlabs_client.utils import (
     sign_deploy,
     get_public_key,
     bundled_contract,
+    extract_common_name,
 )
 from . import abi
 
@@ -43,18 +47,61 @@ class CasperService(object):
         return method
 
 
+class SecureChannel(Channel):
+    def __init__(self, host, port, ssl, server_hostname):
+        self.server_hostname = server_hostname
+        super().__init__(host, port, ssl=ssl)
+
+    async def _create_connection(self) -> H2Protocol:
+        if self._path is not None:
+            _, protocol = await self._loop.create_unix_connection(
+                self._protocol_factory, self._path, ssl=self._ssl
+            )
+        else:
+            _, protocol = await self._loop.create_connection(
+                self._protocol_factory,
+                self._host,
+                self._port,
+                # passing server_hostname to create_connection is the reason we subclass Channel,
+                # the base class doesn't do it.
+                server_hostname=self.server_hostname,
+                ssl=self._ssl,
+            )
+        return cast(H2Protocol, protocol)
+
+
 class CasperLabsClientAIO(object):
     """
     gRPC asyncio CasperLabs client.
     """
 
-    def __init__(self, host: str = DEFAULT_HOST, port: int = DEFAULT_PORT):
+    def __init__(
+        self,
+        host: str = DEFAULT_HOST,
+        port: int = DEFAULT_PORT,
+        certificate_file: str = None,
+        private_key_file: str = None,
+    ):
         self.host = host
         self.port = port
         self.casper_service = CasperService(self)
+        self.certificate_file = certificate_file
+        self.private_key_file = private_key_file
+        self.node_id = (
+            certificate_file and extract_common_name(certificate_file) or None
+        )
 
     def channel(self):
-        return Channel(self.host, self.port)
+        ssl = False
+        if self.certificate_file:
+            ssl = create_default_context(Purpose.SERVER_AUTH)
+            # ssl.load_default_certs()
+            ssl.load_cert_chain(self.certificate_file, self.private_key_file)
+            ssl.verify_mode = CERT_REQUIRED
+            ssl.check_hostname = True
+        return SecureChannel(
+            self.host, self.port, ssl=ssl, server_hostname=self.node_id
+        )
 
     async def show_blocks(self, depth=1, max_rank=0, full_view=True):
         return await self.casper_service.StreamBlockInfos(

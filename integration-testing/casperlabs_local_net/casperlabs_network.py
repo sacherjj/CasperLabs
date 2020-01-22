@@ -442,6 +442,8 @@ class OneNodeWithGRPCEncryption(OneNodeNetwork):
 
 class OneNodeWithAutoPropose(OneNodeNetwork):
     auto_propose = True
+    # TODO: enable encryption once asyncio client's gRPC encryption fixed
+    # grpc_encryption = True
 
 
 class OneNodeWithClarity(OneNodeNetwork):

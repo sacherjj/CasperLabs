@@ -14,7 +14,12 @@ def node(one_node_network_with_auto_propose):
 
 @pytest.fixture
 def client(node):
-    return CasperLabsClientAIO(node.node_host, node.grpc_external_docker_port)
+    return CasperLabsClientAIO(
+        node.node_host,
+        node.grpc_external_docker_port,
+        # node.config.tls_certificate_local_path(),
+        # node.config.tls_key_local_path()
+    )
 
 
 @pytest.mark.asyncio
