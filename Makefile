@@ -89,10 +89,8 @@ stop-bsp: stop
 
 .make/run/start:
 	@echo "Running engine..."
-	@$(eval PROJECT_DIR = $(shell pwd))
 	@echo "" > "$(DATA_DIR)/engine.log"
 	@cd execution-engine/engine-grpc-server && cargo run -- "$(DATA_DIR)/.casper-node.sock" &> "$(DATA_DIR)/engine.log" &
-	@cd "$(PROJECT_DIR)"
 	$(call wait_until,engine.log,is listening on socket)
 	@echo "Running node..."
 	@bloop run node \
