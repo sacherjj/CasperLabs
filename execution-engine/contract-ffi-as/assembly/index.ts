@@ -6,7 +6,8 @@ import {Key} from "./key";
 import {toBytesString,
         toBytesArrayU8,
         toBytesU32,
-        toBytesVecT} from "./bytesrepr";
+        toBytesVecT,
+        fromBytesArrayU8} from "./bytesrepr";
 import {U512} from "./bignum";
 import {UREF_SERIALIZED_LENGTH, KEY_UREF_SERIALIZED_LENGTH} from "./constants";
 
@@ -201,4 +202,10 @@ export function hasKey(name: String): bool {
   const nameBytes = toBytesString(name);
   let ret = externals.has_key(nameBytes.dataStart, nameBytes.length);
   return ret == 0;
+}
+
+export function getBlockTime(): u64 {
+  let bytes = new Uint64Array(1);
+  externals.get_blocktime(bytes.dataStart);
+  return <u64>bytes[0];
 }

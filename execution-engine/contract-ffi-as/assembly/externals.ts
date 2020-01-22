@@ -100,3 +100,6 @@ export declare function update_associated_key(public_key_ptr: usize, weight: i32
 
 @external("env", "remove_associated_key")
 export declare function remove_associated_key(public_key_ptr: usize): i32;
+
+@external("env", "get_blocktime")
+export declare function get_blocktime(dest_ptr: usize): void;
