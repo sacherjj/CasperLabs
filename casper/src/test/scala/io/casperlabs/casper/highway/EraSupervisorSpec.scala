@@ -116,6 +116,7 @@ class EraSupervisorSpec extends FlatSpec with Matchers with Inspectors with Stor
       // otherwise they might miss some messages and there's no synchronizer here.
       val isSyncedRef: Ref[Task, Boolean] = Ref.unsafe(false)
 
+      // Nested fixture, similar to a node, for a given validator, isolated from the others in this test.
       class RelayFixture(validator: String, db: SQLiteStorage.CombinedStorage[Task])
           extends Fixture(
             length,
@@ -141,6 +142,7 @@ class EraSupervisorSpec extends FlatSpec with Matchers with Inspectors with Stor
             } yield ().pure[Task]
         }
 
+        // Test a single validators point of view.
         override val test = for {
           _        <- sleepUntil(start plus length)
           relayed  <- relayedRef.get
@@ -164,17 +166,22 @@ class EraSupervisorSpec extends FlatSpec with Matchers with Inspectors with Stor
         }
       }
 
+      // Create multiple fixtures, one for each validator all of which talk to each other.
       val fixtures = List("Alice", "Bob", "Charlie").zipWithIndex.map {
         case (validator, idx) => new RelayFixture(validator, dbs(idx))
       }
 
+      // Override the main `FixtureLike` that's ultimately going to be executed by `testFixtures`.
       override def test = fixtures.traverse(_.makeSupervisor()).use { ss =>
+        // Register the supervisors so they can all communicate.
         supervisors = ss.zipWithIndex.map {
           case (s, idx) => fixtures(idx).validator -> s
         }.toMap
 
         for {
+          // Enable message production, now that the supervisors are registered.
           _ <- isSyncedRef.set(true)
+          // Run individual tests. There could be common ones as well.
           _ <- fixtures.traverse(_.test)
         } yield ()
       }
