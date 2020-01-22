@@ -216,3 +216,17 @@ export function getCaller(): Uint8Array {
   externals.get_caller(bytes.dataStart);
   return bytes;
 }
+
+export enum Phase {
+  System = 0,
+  Payment = 1,
+  Session = 2,
+  FinalizePayment = 3,
+}
+
+export function getPhase(): Phase {
+  let bytes = new Uint8Array(1);
+  externals.get_phase(bytes.dataStart);
+  const phase = bytes[0];
+  return <Phase>phase;
+}

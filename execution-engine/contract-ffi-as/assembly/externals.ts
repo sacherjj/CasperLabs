@@ -106,3 +106,6 @@ export declare function get_blocktime(dest_ptr: usize): void;
 
 @external("env", "get_caller")
 export declare function get_caller(dest_ptr: usize): void;
+
+@external("env", "get_phase")
+export declare function get_phase(dest_ptr: usize): void;
