@@ -8,6 +8,7 @@ edition = "2018"
 crate-type = ["cdylib"]
 doctest = false
 test = false
+bench = false
 
 [dependencies]
 contract = { path = "../../../contract", package = "casperlabs-contract" }

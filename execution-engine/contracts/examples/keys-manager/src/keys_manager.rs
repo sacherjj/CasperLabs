@@ -27,8 +27,7 @@ fn add_key(key: PublicKey, weight: Weight) -> Result<(), Error> {
 
 fn remove_key_if_exists(key: PublicKey) -> Result<(), Error> {
     match account::remove_associated_key(key) {
-        Ok(()) => Ok(()),
-        Err(RemoveKeyFailure::MissingKey) => Ok(()),
+        Ok(()) | Err(RemoveKeyFailure::MissingKey) => Ok(()),
         Err(RemoveKeyFailure::PermissionDenied) => Err(Error::PermissionDenied),
         Err(RemoveKeyFailure::ThresholdViolation) => Err(Error::ThresholdViolation),
     }

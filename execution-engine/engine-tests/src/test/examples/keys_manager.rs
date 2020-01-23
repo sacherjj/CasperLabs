@@ -64,15 +64,14 @@ impl KeysManagerTest {
         keys.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
 
         // Sort and parse expected keys.
-        let mut expected_mut = expected;
-        let mut expected_mut_parsed: Vec<(PublicKey, Weight)> = expected_mut
-            .iter_mut()
-            .map(|pair| (PublicKey::new(pair.0), Weight::new(pair.1)))
+        let mut expected_parsed: Vec<(PublicKey, Weight)> = expected
+            .iter()
+            .map(|(key, weight)| (PublicKey::new(*key), Weight::new(*weight)))
             .collect();
-        expected_mut_parsed.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
+        expected_parsed.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
 
         // Compare keys.
-        assert_eq!(keys, expected_mut_parsed, "Associated keys don't match.");
+        assert_eq!(keys, expected_parsed, "Associated keys don't match.");
         self
     }
 
