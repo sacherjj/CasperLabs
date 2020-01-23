@@ -54,6 +54,7 @@ fn should_raise_precondition_authorization_failure_invalid_account() {
 #[ignore]
 #[test]
 fn should_raise_precondition_authorization_failure_empty_authorized_keys() {
+    let empty_keys: [PublicKey; 0] = [];
     let exec_request = {
         let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
@@ -61,7 +62,7 @@ fn should_raise_precondition_authorization_failure_empty_authorized_keys() {
             .with_payment_code(STANDARD_PAYMENT_CONTRACT, ())
             .with_deploy_hash([1; 32])
             // empty authorization keys to force error
-            .with_authorization_keys(&[])
+            .with_authorization_keys(&empty_keys)
             .build();
 
         ExecuteRequestBuilder::new().push_deploy(deploy).build()

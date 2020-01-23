@@ -14,6 +14,7 @@ use engine_shared::{motes::Motes, test_utils};
 use engine_wasm_prep::wasm_costs::WasmCosts;
 use types::{account::PublicKey, ProtocolVersion, U512};
 
+use super::{DEFAULT_ACCOUNT_ADDR, DEFAULT_ACCOUNT_INITIAL_BALANCE};
 pub use additive_map_diff::AdditiveMapDiff;
 pub use deploy_item_builder::DeployItemBuilder;
 pub use execute_request_builder::ExecuteRequestBuilder;
@@ -21,7 +22,6 @@ pub use upgrade_request_builder::UpgradeRequestBuilder;
 pub use wasm_test_builder::{
     InMemoryWasmTestBuilder, LmdbWasmTestBuilder, WasmTestBuilder, WasmTestResult,
 };
-use super::{DEFAULT_ACCOUNT_ADDR, DEFAULT_ACCOUNT_INITIAL_BALANCE};
 
 pub const MINT_INSTALL_CONTRACT: &str = "mint_install.wasm";
 pub const POS_INSTALL_CONTRACT: &str = "pos_install.wasm";

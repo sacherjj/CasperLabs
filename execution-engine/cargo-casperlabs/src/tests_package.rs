@@ -13,37 +13,33 @@ use crate::{
 
 const PACKAGE_NAME: &str = "tests";
 
-const INTEGRATION_TESTS_RS_CONTENTS: &str = r#"// import KEY constant
+const INTEGRATION_TESTS_RS_CONTENTS: &str = r#"use casperlabs_engine_test_support::{TestContextBuilder, SessionBuilder, Value, Error, Code};
+use casperlabs_types::U512;
 
 const MY_ACCOUNT: [u8; 32] = [7u8; 32];
+// import KEY constant
 const KEY: &str = "special_value";
-
-fn check_value(value: Value) -> bool {
-    // ...
-}
+const VALUE: &str = "hello world";
 
 fn main() {
     let mut context = TestContextBuilder::new()
         .with_account(MY_ACCOUNT, U512::from(128_000_000))
         .build();
 
-    let session = SessionBuilder::new()
+    let session_code = Code::from("contract.wasm");
+    let session_args = (VALUE,);
+    let session = SessionBuilder::new(session_code, session_args)
         .with_address(MY_ACCOUNT)
-        .with_session_code("my_session.wasm", ("hello world",))
-        .build();
-
-    let query = QueryBuilder::new()
-        .with_base_key(MY_ACCOUNT)
-        .with_path([KEY])
         .build();
 
     let result_of_query: Result<Value, Error> = context
         .run(session)
-        .query(query);
+        .query(MY_ACCOUNT, &[KEY]);
 
-    let value = result_of_query.expect("should be a value");
+    let returned_value = result_of_query.expect("should be a value");
 
-    assert!(check_value(value));
+    let expected_value = Value::from_t(VALUE.to_string()).expect("should construct Value");
+    assert_eq!(expected_value, returned_value);
 }
 
 #[test]

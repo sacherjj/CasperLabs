@@ -1,12 +1,7 @@
-// TODO(Fraser) - remove
-#![allow(unused)]
-
-use std::path::Path;
-
 use rand::Rng;
 
 use contract::args_parser::ArgsParser;
-use engine_core::engine_state::{deploy_item::DeployItem, execute_request::ExecuteRequest};
+use engine_core::engine_state::execute_request::ExecuteRequest;
 use types::ProtocolVersion;
 
 use crate::{
