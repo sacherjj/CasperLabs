@@ -15,17 +15,15 @@ impl TryFrom<ipc::ExecuteRequest> for ExecuteRequest {
             let parent_state_hash = request.take_parent_state_hash();
             let length = parent_state_hash.len();
             if length != BLAKE2B_DIGEST_LENGTH {
-                let mut error = ipc::RootNotFound::new();
-                error.set_hash(parent_state_hash);
                 let mut result = ipc::ExecuteResponse::new();
-                result.set_missing_parent(error);
+                result.mut_missing_parent().set_hash(parent_state_hash);
                 return Err(result);
             }
             parent_state_hash.as_slice().try_into().map_err(|_| {
-                let mut error = ipc::RootNotFound::new();
-                error.set_hash(parent_state_hash.clone());
                 let mut result = ipc::ExecuteResponse::new();
-                result.set_missing_parent(error);
+                result
+                    .mut_missing_parent()
+                    .set_hash(parent_state_hash.clone());
                 result
             })?
         };
