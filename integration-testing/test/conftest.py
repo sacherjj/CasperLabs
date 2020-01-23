@@ -27,6 +27,15 @@ from casperlabs_local_net.casperlabs_network import (
 from docker.client import DockerClient
 
 
+def pytest_addoption(parser):
+    parser.addoption("--unique_run_num", action="store", default="0")
+
+
+@pytest.fixture(scope="session")
+def unique_run_num(pytestconfig):
+    return int(pytestconfig.getoption("unique_run_num"))
+
+
 @pytest.fixture(scope="function")
 def temp_dir():
     directory = make_tempdir(random_string(6))
@@ -35,8 +44,9 @@ def temp_dir():
 
 
 @pytest.fixture(scope="session")
-def docker_client_fixture() -> Generator[DockerClient, None, None]:
+def docker_client_fixture(unique_run_num) -> Generator[DockerClient, None, None]:
     docker_client = docker_py.from_env()
+    docker_client.cl_unique_run_num = unique_run_num
     try:
         yield docker_client
     finally:

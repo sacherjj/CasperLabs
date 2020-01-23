@@ -12,6 +12,7 @@ class CasperLabsNode:
     """
 
     def __init__(self, network, config):
+        self.network = network
         self.config = config
         self.config.socket_volume = self.create_socket_volume()
         self.execution_engine = DockerExecutionEngine(config)

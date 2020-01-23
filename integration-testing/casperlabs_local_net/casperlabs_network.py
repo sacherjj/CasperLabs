@@ -151,7 +151,12 @@ class CasperLabsNetwork:
 
     def create_docker_network(self) -> str:
         with self._lock:
-            tag_name = os.environ.get("TAG_NAME") or "test"
+            tag_name = os.environ.get("TAG_NAME") or "latest"
+            try:
+                tag_name += f"-{self.docker_client.cl_unique_run_num}"
+            except KeyError:
+                # if not an attribute, running single and don't need appended number
+                pass
             network_name = f"casperlabs_{random_string(5)}_{tag_name}"
             self._created_networks.append(network_name)
             self.docker_client.networks.create(network_name, driver="bridge")
