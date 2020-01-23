@@ -230,3 +230,8 @@ export function getPhase(): Phase {
   const phase = bytes[0];
   return <Phase>phase;
 }
+
+export function removeKey(name: String): void{
+  var nameBytes = toBytesString(name);
+  externals.remove_key(nameBytes.dataStart, nameBytes.length);
+}

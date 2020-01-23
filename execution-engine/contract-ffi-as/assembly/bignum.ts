@@ -1,4 +1,4 @@
-import {fromBytesU64, toBytesU64} from "./bytesrepr";
+import {toBytesU64} from "./bytesrepr";
 
 export class U512 {
     private value: U64;

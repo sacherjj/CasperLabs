@@ -1,6 +1,3 @@
-import {CLValue} from "./clvalue";
-import {Key} from "./key";
-
 export function toBytesU8(num: u8): u8[] {
     return [num];
 }
@@ -84,11 +81,13 @@ export function toBytesMap(pairs: u8[][]): u8[] {
     return bytes;
 }
 
-export function fromBytesMap<K, V>(bytes: Uint8Array,
-                                   decodeKey: (bytes1: Uint8Array) => K | null,
-                                   encodeKey: (key: K) => u8[],
-                                   decodeValue: (bytes2: Uint8Array) => V | null,
-                                   encodeValue: (value: V) => u8[]): Map<K, V> | null {
+export function fromBytesMap<K, V>(
+        bytes: Uint8Array,
+        decodeKey: (bytes1: Uint8Array) => K | null,
+        encodeKey: (key: K) => u8[],
+        decodeValue: (bytes2: Uint8Array) => V | null,
+        encodeValue: (value: V) => u8[]
+): Map<K, V> | null {
     const length = fromBytesU32(bytes);
 
     let result = new Map<K, V>();

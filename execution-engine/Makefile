@@ -100,7 +100,7 @@ build-contracts-rs: \
 .PHONY: build-contracts-as
 build-contracts-as: \
 	$(CLIENT_CONTRACTS_AS) \
-	$(TEST_CONTRACTS_TS) \
+	$(TEST_CONTRACTS_AS) \
 	$(EXAMPLE_CONTRACTS_AS)
 
 .PHONY: build-contracts

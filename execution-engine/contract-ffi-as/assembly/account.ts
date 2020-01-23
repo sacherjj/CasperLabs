@@ -1,5 +1,4 @@
 import * as externals from "./externals";
-import {toBytesArrayU8} from "./bytesrepr";
 import {arrayToTyped} from "./utils";
 
 export enum AddKeyFailure {
