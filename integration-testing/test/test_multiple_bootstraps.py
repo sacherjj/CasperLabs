@@ -30,8 +30,7 @@ def test_multiple_bootstraps(three_node_network_with_two_bootstraps):
     # Stop node-2 and node-0, leave node-1 running.
     # Clear state of node-2 before stopping it so when we restart it
     # it has to download the genesis block again.
-    rc, output = nodes[2].exec_run("rm /root/.casperlabs/sqlite.db")
-    assert rc == 0
+    nodes[2].clear_state()
     net.stop_cl_node(2)
     net.stop_cl_node(0)
 
