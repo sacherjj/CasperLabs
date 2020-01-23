@@ -284,7 +284,7 @@ class DeployThread(threading.Thread):
 
 @pytest.mark.parametrize(
     "contract_paths,expected_deploy_counts_in_blocks",
-    [([[Contract.HELLO_NAME_DEFINE]], [1, 1, 1, 1])],
+    [([[Contract.HELLO_NAME_DEFINE]], [1, 5, 1, 1])],
 )
 # Nodes deploy one or more contracts followed by propose.
 def test_multiple_deploys_at_once(
