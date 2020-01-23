@@ -1,4 +1,4 @@
-use std::collections::BTreeSet;
+use std::{collections::BTreeSet, path::Path};
 
 use contract::args_parser::ArgsParser;
 use engine_core::{
@@ -33,7 +33,11 @@ impl DeployItemBuilder {
         self
     }
 
-    pub fn with_payment_code(mut self, file_name: &str, args: impl ArgsParser) -> Self {
+    pub fn with_payment_code<T: AsRef<Path>>(
+        mut self,
+        file_name: T,
+        args: impl ArgsParser,
+    ) -> Self {
         let wasm_bytes = utils::read_wasm_file_bytes(file_name);
         let args = Self::serialize_args(args);
         self.deploy_item.payment_code = Some(ExecutableDeployItem::ModuleBytes {
@@ -47,6 +51,19 @@ impl DeployItemBuilder {
         let args = Self::serialize_args(args);
         self.deploy_item.payment_code =
             Some(ExecutableDeployItem::StoredContractByHash { hash, args });
+        self
+    }
+
+    pub(crate) fn with_stored_payment_uref_addr(
+        mut self,
+        uref_addr: Vec<u8>,
+        args: impl ArgsParser,
+    ) -> Self {
+        let args = Self::serialize_args(args);
+        self.deploy_item.payment_code = Some(ExecutableDeployItem::StoredContractByURef {
+            uref: uref_addr,
+            args,
+        });
         self
     }
 
@@ -68,7 +85,11 @@ impl DeployItemBuilder {
         self
     }
 
-    pub fn with_session_code(mut self, file_name: &str, args: impl ArgsParser) -> Self {
+    pub fn with_session_code<T: AsRef<Path>>(
+        mut self,
+        file_name: T,
+        args: impl ArgsParser,
+    ) -> Self {
         let wasm_bytes = utils::read_wasm_file_bytes(file_name);
         let args = Self::serialize_args(args);
         self.deploy_item.session_code = Some(ExecutableDeployItem::ModuleBytes {
@@ -82,6 +103,19 @@ impl DeployItemBuilder {
         let args = Self::serialize_args(args);
         self.deploy_item.session_code =
             Some(ExecutableDeployItem::StoredContractByHash { hash, args });
+        self
+    }
+
+    pub(crate) fn with_stored_session_uref_addr(
+        mut self,
+        uref_addr: Vec<u8>,
+        args: impl ArgsParser,
+    ) -> Self {
+        let args = Self::serialize_args(args);
+        self.deploy_item.session_code = Some(ExecutableDeployItem::StoredContractByURef {
+            uref: uref_addr,
+            args,
+        });
         self
     }
 
@@ -103,8 +137,20 @@ impl DeployItemBuilder {
         self
     }
 
-    pub fn with_authorization_keys(mut self, authorization_keys: &[PublicKey]) -> Self {
-        self.deploy_item.authorization_keys = authorization_keys.iter().cloned().collect();
+    pub fn with_authorization_keys<T: Clone + Into<PublicKey>>(
+        mut self,
+        authorization_keys: &[T],
+    ) -> Self {
+        self.deploy_item.authorization_keys = authorization_keys
+            .iter()
+            .cloned()
+            .map(|v| v.into())
+            .collect();
+        self
+    }
+
+    pub fn with_gas_price(mut self, gas_price: u64) -> Self {
+        self.deploy_item.gas_price = gas_price;
         self
     }
 

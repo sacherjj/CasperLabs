@@ -1,11 +1,20 @@
 // TODO(Fraser) - remove
 #![allow(unused)]
 
+use std::path::Path;
+
+use rand::Rng;
+
 use contract::args_parser::ArgsParser;
 use engine_core::engine_state::{deploy_item::DeployItem, execute_request::ExecuteRequest};
 use types::ProtocolVersion;
 
-use crate::{Address, Code};
+use crate::{
+    low_level::{
+        DeployItemBuilder, ExecuteRequestBuilder, DEFAULT_PAYMENT, STANDARD_PAYMENT_CONTRACT,
+    },
+    Address, Code,
+};
 
 /// A single session, i.e. a single request to execute a single deploy within the test context.
 pub struct Session {
@@ -14,8 +23,8 @@ pub struct Session {
 
 /// Builder for a [`Session`].
 pub struct SessionBuilder {
-    inner: DeployItem,
-    protocol_version: ProtocolVersion,
+    er_builder: ExecuteRequestBuilder,
+    di_builder: DeployItemBuilder,
 }
 
 impl SessionBuilder {
@@ -23,37 +32,70 @@ impl SessionBuilder {
     /// session args, and with default values for the account address, payment code, payment code
     /// args, gas price, authorization keys and protocol version.
     pub fn new(session_code: Code, session_args: impl ArgsParser) -> Self {
-        unimplemented!()
+        let di_builder = DeployItemBuilder::new()
+            .with_payment_code(STANDARD_PAYMENT_CONTRACT, (*DEFAULT_PAYMENT,));
+        let di_builder = match session_code {
+            Code::Path(path) => di_builder.with_session_code(path, session_args),
+            Code::NamedKey(name) => di_builder.with_stored_session_named_key(&name, session_args),
+            Code::URef(uref) => {
+                di_builder.with_stored_session_uref_addr(uref.to_vec(), session_args)
+            }
+            Code::Hash(hash) => di_builder.with_stored_session_hash(hash.to_vec(), session_args),
+        };
+        Self {
+            er_builder: Default::default(),
+            di_builder,
+        }
     }
 
     /// Returns `self` with the provided account address set.
     pub fn with_address(mut self, address: Address) -> Self {
-        unimplemented!()
+        self.di_builder = self.di_builder.with_address(address);
+        self
     }
 
     /// Returns `self` with the provided payment code and args set.
     pub fn with_payment_code(mut self, code: Code, args: impl ArgsParser) -> Self {
-        unimplemented!()
+        self.di_builder = match code {
+            Code::Path(path) => self.di_builder.with_payment_code(path, args),
+            Code::NamedKey(name) => self.di_builder.with_stored_payment_named_key(&name, args),
+            Code::URef(uref) => self
+                .di_builder
+                .with_stored_payment_uref_addr(uref.to_vec(), args),
+            Code::Hash(hash) => self
+                .di_builder
+                .with_stored_payment_hash(hash.to_vec(), args),
+        };
+        self
     }
 
     /// Returns `self` with the provided gas price set.
     pub fn with_gas_price(mut self, price: u64) -> Self {
-        unimplemented!()
+        self.di_builder = self.di_builder.with_gas_price(price);
+        self
     }
 
     /// Returns `self` with the provided authorization keys set.
     pub fn with_authorization_keys(mut self, keys: &[Address]) -> Self {
-        unimplemented!()
+        self.di_builder = self.di_builder.with_authorization_keys(keys);
+        self
     }
 
     /// Returns `self` with the provided protocol version set.
     pub fn with_protocol_version(mut self, version: ProtocolVersion) -> Self {
-        unimplemented!()
+        self.er_builder = self.er_builder.with_protocol_version(version);
+        self
     }
 
     /// Builds the [`Session`].
     pub fn build(self) -> Session {
-        // self.inner.deploy_hash should be generated here (based on?)
-        unimplemented!()
+        let mut rng = rand::thread_rng();
+        let execute_request = self
+            .er_builder
+            .push_deploy(self.di_builder.with_deploy_hash(rng.gen()).build())
+            .build();
+        Session {
+            inner: execute_request,
+        }
     }
 }
