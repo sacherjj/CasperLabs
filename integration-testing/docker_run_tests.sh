@@ -66,7 +66,10 @@ done
 # Using ||TAG|| as replacable element in docker-compose.yml.template
 mkdir RUN${UNIQUE_RUN_NUM}
 cp Dockerfile RUN${UNIQUE_RUN_NUM}/
+# Replacing tags which need UNIQUE_RUN_NUM
 sed 's/||TAG||/'"${TAG_NAME}-RUN${UNIQUE_RUN_NUM}"'/g' docker-compose.yml.template > RUN${UNIQUE_RUN_NUM}/docker-compose.yml
+# Replacing IMAGE_TAG which should not have UNIQUE_RUN_NUM
+sed -i.bak 's/||IMAGE_TAG||/'"${TAG_NAME}"'/g' RUN${UNIQUE_RUN_NUM}/docker-compose.yml
 
 cd RUN${UNIQUE_RUN_NUM}
 docker-compose up --exit-code-from test --abort-on-container-exit

@@ -28,7 +28,7 @@ networks:
 
 services:
   test:
-    image: casperlabs/integration-testing:||TAG||
+    image: casperlabs/integration-testing:||IMAGE_TAG||
     container_name: test-||TAG||
     hostname: test-||TAG||
     volumes:
