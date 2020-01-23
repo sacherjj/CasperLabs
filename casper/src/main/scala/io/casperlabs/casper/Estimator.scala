@@ -30,33 +30,7 @@ object Estimator {
       lfbHash: BlockHash,
       latestMessageHashes: Map[Validator, Set[BlockHash]],
       equivocators: Set[Validator]
-  ): F[NonEmptyList[BlockHash]] = {
-
-    /** Eliminate any latest message which has a descendant which is a latest message
-      * of another validator, because in that case those descendants should be the tips. */
-    def tipsOfLatestMessages(
-        latestMessages: NonEmptyList[BlockHash],
-        stopHash: BlockHash
-    ): F[List[Message]] = {
-      // Start from the highest latest messages and traverse backwards
-      implicit val ord = DagOperations.blockTopoOrderingDesc
-      for {
-        latestMessagesMeta <- latestMessages.traverse(dag.lookupUnsafe(_))
-        tips <- DagOperations
-                 .bfToposortTraverseF[F](latestMessagesMeta.toList)(
-                   _.parents.toList.traverse(dag.lookupUnsafe(_))
-                 )
-                 .takeUntil(_.messageHash == stopHash)
-                 // We start with the tips and remove any message
-                 // that is reachable through the parent-child link from other tips.
-                 // This should leave us only with the tips that cannot be reached from others.
-                 .foldLeft(latestMessagesMeta.toList.toSet) {
-                   case (tips, message) =>
-                     tips.filterNot(msg => message.parents.toSet.contains(msg.messageHash))
-                 }
-      } yield tips.toList
-    }
-
+  ): F[NonEmptyList[BlockHash]] =
     for {
       lfb <- dag.lookupUnsafe(lfbHash)
       latestMessages <- latestMessageHashes.values.flatten.toList
@@ -73,7 +47,8 @@ object Estimator {
                  equivocators
                ).timer("lmdScoring")
       newMainParent <- forkChoiceTip(dag, lfb.messageHash, scores).timer("forkChoiceTip")
-      parents <- tipsOfLatestMessages(
+      parents <- tipsOfLatestMessages[F](
+                  dag,
                   latestMessages.map(_.messageHash),
                   lfb.messageHash
                 ).timer("tipsOfLatestMessages")
@@ -90,6 +65,31 @@ object Estimator {
         .sortBy(b => scores.getOrElse(b.messageHash, Zero) -> b.messageHash.toStringUtf8)
         .reverse
     } yield NonEmptyList(newMainParent, sortedSecParents.map(_.messageHash))
+
+  /** Eliminate any latest message which has a descendant which is a latest message
+    * of another validator, because in that case those descendants should be the tips. */
+  def tipsOfLatestMessages[F[_]: MonadThrowable](
+      dag: DagRepresentation[F],
+      latestMessages: NonEmptyList[BlockHash],
+      stopHash: BlockHash
+  ): F[List[Message]] = {
+    // Start from the highest latest messages and traverse backwards
+    implicit val ord = DagOperations.blockTopoOrderingDesc
+    for {
+      latestMessagesMeta <- latestMessages.traverse(dag.lookupUnsafe(_))
+      tips <- DagOperations
+               .bfToposortTraverseF[F](latestMessagesMeta.toList)(
+                 _.parents.toList.traverse(dag.lookupUnsafe(_))
+               )
+               .takeUntil(_.messageHash == stopHash)
+               // We start with the tips and remove any message
+               // that is reachable through the parent-child link from other tips.
+               // This should leave us only with the tips that cannot be reached from others.
+               .foldLeft(latestMessagesMeta.toList.toSet) {
+                 case (tips, message) =>
+                   tips.filterNot(msg => message.parents.toSet.contains(msg.messageHash))
+               }
+    } yield tips.toList
   }
 
   /** Computes scores for LMD GHOST.
