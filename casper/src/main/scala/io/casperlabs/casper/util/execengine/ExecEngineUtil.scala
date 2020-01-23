@@ -32,7 +32,8 @@ case class DeploysCheckpoint(
     postStateHash: StateHash,
     bondedValidators: Seq[io.casperlabs.casper.consensus.Bond],
     deploysForBlock: Seq[Block.ProcessedDeploy],
-    protocolVersion: state.ProtocolVersion
+    protocolVersion: state.ProtocolVersion,
+    transformMap: ExecEngineUtil.TransformMap
 )
 
 object ExecEngineUtil {
@@ -60,8 +61,9 @@ object ExecEngineUtil {
       (invalidDeploys, deployEffects) = ProcessedDeployResult.split(pdr)
       _                               <- handleInvalidDeploys[F](invalidDeploys)
       (deploysForBlock, transforms)   = ExecEngineUtil.unzipEffectsAndDeploys(deployEffects).unzip
+      transformMap                    = transforms.flatten
       commitResult <- ExecutionEngineService[F]
-                       .commit(preStateHash, transforms.flatten, protocolVersion)
+                       .commit(preStateHash, transformMap, protocolVersion)
                        .rethrow
       //TODO: Remove this logging at some point
       msgBody = transforms.flatten
@@ -78,7 +80,8 @@ object ExecEngineUtil {
       commitResult.postStateHash,
       commitResult.bondedValidators,
       deploysForBlock,
-      protocolVersion
+      protocolVersion,
+      transformMap
     )
   }
 

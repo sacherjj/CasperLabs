@@ -1305,6 +1305,7 @@ class ValidationTest
           computedPostStateHash,
           bondedValidators,
           processedDeploys,
+          _,
           _
         ) = deploysCheckpoint
         block <- createAndStoreMessage[Task](

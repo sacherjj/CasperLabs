@@ -197,7 +197,7 @@ class EraRuntime[F[_]: MonadThrowable: Clock: EraStorage: FinalityStorageReader:
                          justifications.values.flatten.toSet
                        )
               message <- messageProducer.ballot(
-                          eraId = era.keyBlockHash,
+                          keyBlockHash = era.keyBlockHash,
                           roundId = Ticks(lambdaMessage.roundId),
                           target = choice.block.messageHash,
                           justifications = justifications
@@ -220,7 +220,7 @@ class EraRuntime[F[_]: MonadThrowable: Clock: EraStorage: FinalityStorageReader:
       // it can only be a ballot, after the switch block has been created.
       block = messageProducer
         .block(
-          eraId = era.keyBlockHash,
+          keyBlockHash = era.keyBlockHash,
           roundId = roundId,
           mainParent = choice.block.messageHash,
           justifications = choice.justificationsMap,
@@ -233,7 +233,7 @@ class EraRuntime[F[_]: MonadThrowable: Clock: EraStorage: FinalityStorageReader:
 
       ballot = messageProducer
         .ballot(
-          eraId = era.keyBlockHash,
+          keyBlockHash = era.keyBlockHash,
           roundId = roundId,
           target = choice.block.messageHash,
           justifications = choice.justificationsMap
@@ -263,7 +263,7 @@ class EraRuntime[F[_]: MonadThrowable: Clock: EraStorage: FinalityStorageReader:
             for {
               choice <- ForkChoice[F].fromKeyBlock(era.keyBlockHash)
               message <- messageProducer.ballot(
-                          eraId = era.keyBlockHash,
+                          keyBlockHash = era.keyBlockHash,
                           roundId = roundId,
                           target = choice.block.messageHash,
                           justifications = choice.justificationsMap
