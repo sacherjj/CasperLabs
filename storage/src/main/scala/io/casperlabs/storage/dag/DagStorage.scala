@@ -1,6 +1,6 @@
 package io.casperlabs.storage.dag
 
-import cats.Monad
+import cats.{Applicative, Monad}
 import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.{Block, BlockSummary}
@@ -117,8 +117,11 @@ trait EraTipRepresentation[F[_]] extends TipRepresentation[F] {
   // * the parent block candidate hashes, and
   // * the justifications of the parent block candidates.
 
-  // def getEquivocators: F[Set[Validator]] = ???
-  // def getEquivocations: F[Map[Validator, Set[Message]]] = ???
+  def getEquivocations(implicit A: Applicative[F]): F[Map[Validator, Set[Message]]] =
+    latestMessages.map(_.filter(_._2.size > 1))
+
+  def getEquivocators(implicit A: Applicative[F]): F[Set[Validator]] =
+    getEquivocations.map(_.keySet)
 }
 
 trait DagRepresentation[F[_]] {

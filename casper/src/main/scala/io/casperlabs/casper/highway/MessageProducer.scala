@@ -17,12 +17,13 @@ import io.casperlabs.crypto.Keys.{PublicKey, PublicKeyBS}
 import io.casperlabs.models.Message
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.storage.{BlockHash, BlockMsgWithTransform}
+import io.casperlabs.storage.era.EraStorage
 import io.casperlabs.storage.dag.{DagRepresentation, DagStorage}
 import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.storage.deploy.{DeployStorage, DeployStorageReader}
 import io.casperlabs.casper.util.execengine.ExecEngineUtil
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.{MergeResult, TransformMap}
-import io.casperlabs.casper.util.{CasperLabsProtocol, ProtoUtil}
+import io.casperlabs.casper.util.{CasperLabsProtocol, DagOperations, ProtoUtil}
 import io.casperlabs.casper.util.ProtocolVersions.Config
 import io.casperlabs.shared.Log
 import io.casperlabs.shared.Sorting.byteStringOrdering
@@ -61,7 +62,7 @@ trait MessageProducer[F[_]] {
 }
 
 object MessageProducer {
-  def apply[F[_]: Concurrent: Clock: Log: Metrics: DagStorage: BlockStorage: DeployBuffer: DeployStorage: CasperLabsProtocol: ExecutionEngineService: DeploySelection](
+  def apply[F[_]: Concurrent: Clock: Log: Metrics: DagStorage: BlockStorage: DeployBuffer: DeployStorage: EraStorage: CasperLabsProtocol: ExecutionEngineService: DeploySelection](
       validatorIdentity: ValidatorIdentity,
       chainName: String,
       upgrades: Seq[ipc.ChainSpec.UpgradePoint]
@@ -247,7 +248,7 @@ object MessageProducer {
   )
 
   /** Pick secondary parents that don't conflict with the already chosen fork choice. */
-  def selectParents[F[_]: MonadThrowable: Metrics: BlockStorage](
+  def selectParents[F[_]: MonadThrowable: Metrics: BlockStorage: DagStorage: EraStorage](
       dag: DagRepresentation[F],
       keyBlockHash: BlockHash,
       mainParent: BlockHash,
@@ -256,8 +257,7 @@ object MessageProducer {
     for {
       latestMessages <- NonEmptyList(mainParent, justifications.values.flatten.toList).pure[F]
       tips           <- Estimator.tipsOfLatestMessages[F](dag, latestMessages, stopHash = keyBlockHash)
-      // TODO: Get equivocators based on the eras.
-      equivocators = Set.empty[ByteString]
+      equivocators   <- getEquivocators[F](keyBlockHash)
       // TODO: There are no scores here for ordering secondary parents.
       secondaries = tips
         .filterNot(m => equivocators(m.validatorId) || m.messageHash == mainParent)
@@ -267,4 +267,27 @@ object MessageProducer {
       blocks     <- candidates.traverse(BlockStorage[F].getBlockUnsafe)
       merged     <- ExecEngineUtil.merge[F](blocks, dag)
     } yield merged
+
+  /** Gather all the equivocators that are in eras between the era of the key block and the era
+    * defined _by_ the keyblock itself (typically that means grandparent, parent and child era).
+    */
+  def getEquivocators[F[_]: MonadThrowable: EraStorage: DagStorage](
+      keyBlockHash: BlockHash
+  ): F[Set[ByteString]] =
+    for {
+      dag      <- DagStorage[F].getRepresentation
+      keyBlock <- dag.lookupUnsafe(keyBlockHash)
+
+      keyBlockHashes <- DagOperations
+                         .bfTraverseF(List(keyBlockHash)) { h =>
+                           EraStorage[F].getEraUnsafe(h).map(e => List(e.parentKeyBlockHash))
+                         }
+                         .takeUntil(_ == keyBlock.keyBlockHash)
+                         .toList
+
+      equivocatorsPerEra <- keyBlockHashes.traverse { h =>
+                             dag.latestInEra(h) >>= (_.getEquivocators)
+                           }
+      equivocators = equivocatorsPerEra.flatten.toSet
+    } yield equivocators
 }
