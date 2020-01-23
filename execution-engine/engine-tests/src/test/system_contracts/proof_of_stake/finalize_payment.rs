@@ -4,7 +4,7 @@ use engine_core::engine_state::{
     genesis::{POS_PAYMENT_PURSE, POS_REWARDS_PURSE},
     CONV_RATE,
 };
-use engine_shared::{account::Account, gas::Gas, motes::Motes};
+use engine_shared::{account::Account, motes::Motes};
 use engine_test_support::low_level::{
     utils, DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_ACCOUNT_ADDR,
     DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT,
@@ -125,12 +125,8 @@ fn finalize_payment_should_refund_to_specified_purse() {
             .get_exec_response(0)
             .expect("there should be a response");
 
-        let mut success_result = utils::get_success_result(response);
-        let cost = success_result
-            .take_cost()
-            .try_into()
-            .expect("should map to U512");
-        Motes::from_gas(Gas::new(cost), CONV_RATE)
+        let success_result = utils::get_success_result(response);
+        Motes::from_gas(success_result.cost(), CONV_RATE)
             .expect("should have motes")
             .value()
     };

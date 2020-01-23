@@ -5,6 +5,7 @@ mod bond;
 mod deploy_item;
 mod deploy_result;
 mod executable_deploy_item;
+mod execute_request;
 mod execution_effect;
 mod genesis_account;
 mod genesis_config;

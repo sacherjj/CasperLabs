@@ -341,6 +341,7 @@ fn new_execute_request(args: &Args) -> ExecuteRequest {
     )
     .with_pre_state_hash(&args.pre_state_hash)
     .build()
+    .into()
 }
 
 fn main() {
