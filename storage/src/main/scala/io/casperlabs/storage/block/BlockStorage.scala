@@ -5,10 +5,11 @@ import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.{Block, BlockSummary}
 import io.casperlabs.casper.consensus.info.BlockInfo
+import io.casperlabs.catscontrib.MonadThrowable
+import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.ipc.TransformEntry
 import io.casperlabs.metrics.Metered
 import io.casperlabs.storage.{BlockHash, BlockMsgWithTransform, DeployHash}
-
 import scala.language.higherKinds
 import simulacrum.typeclass
 
@@ -32,9 +33,7 @@ trait BlockStorageWriter[F[_]] {
 }
 
 @typeclass
-trait BlockStorage[F[_]] extends BlockStorageWriter[F] {
-  import BlockStorage.BlockMessage
-
+trait BlockStorageReader[F[_]] extends BlockStorageWriter[F] {
   def get(blockHash: BlockHash): F[Option[BlockMsgWithTransform]]
 
   def getByPrefix(blockHashPrefix: String): F[Option[BlockMsgWithTransform]]
@@ -60,6 +59,41 @@ trait BlockStorage[F[_]] extends BlockStorageWriter[F] {
   def findBlockHashesWithDeployHashes(
       deployHashes: List[DeployHash]
   ): F[Map[DeployHash, Set[BlockHash]]]
+
+  def getBlockMessage(
+      blockHash: BlockHash
+  )(implicit applicative: Applicative[F]): F[Option[Block]] =
+    get(blockHash).map(_.flatMap(_.blockMessage))
+
+  def getTransforms(
+      blockHash: BlockHash
+  )(implicit applicative: Applicative[F]): F[Option[Seq[TransformEntry]]] =
+    get(blockHash).map(_.map(_.transformEntry))
+
+  def getUnsafe(hash: BlockHash)(implicit MT: MonadThrowable[F]): F[BlockMsgWithTransform] =
+    unsafe(hash, get)
+
+  def getBlockUnsafe(hash: BlockHash)(implicit MT: MonadThrowable[F]): F[Block] =
+    getUnsafe(hash).map(_.getBlockMessage)
+
+  def getBlockSummaryUnsafe(hash: BlockHash)(implicit MT: MonadThrowable[F]): F[BlockSummary] =
+    unsafe(hash, getBlockSummary)
+
+  private def unsafe[A](hash: BlockHash, f: BlockHash => F[Option[A]])(
+      implicit MT: MonadThrowable[F]
+  ): F[A] =
+    f(hash) flatMap { maybeA =>
+      MT.fromOption(
+        maybeA,
+        new NoSuchElementException(
+          s"BlockStorage is missing hash ${Base16.encode(hash.toByteArray)}"
+        )
+      )
+    }
+}
+
+@typeclass
+trait BlockStorage[F[_]] extends BlockStorageWriter[F] with BlockStorageReader[F] {
 
   def checkpoint(): F[Unit]
 
@@ -118,17 +152,5 @@ object BlockStorage {
         "findBlockHashesWithDeployHashes",
         super.findBlockHashesWithDeployHashes(deployHashes)
       )
-  }
-
-  implicit class RichBlockStorage[F[_]](blockStorage: BlockStorage[F]) {
-    def getBlockMessage(
-        blockHash: BlockHash
-    )(implicit applicative: Applicative[F]): F[Option[BlockMessage]] =
-      blockStorage.get(blockHash).map(it => it.flatMap(_.blockMessage))
-
-    def getTransforms(
-        blockHash: BlockHash
-    )(implicit applicative: Applicative[F]): F[Option[Seq[TransformEntry]]] =
-      blockStorage.get(blockHash).map(_.map(_.transformEntry))
   }
 }
