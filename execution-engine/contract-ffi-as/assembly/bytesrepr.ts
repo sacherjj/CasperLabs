@@ -1,3 +1,5 @@
+import {Pair} from "./pair";
+
 export function toBytesU8(num: u8): u8[] {
     return [num];
 }
@@ -87,10 +89,10 @@ export function fromBytesMap<K, V>(
         encodeKey: (key: K) => u8[],
         decodeValue: (bytes2: Uint8Array) => V | null,
         encodeValue: (value: V) => u8[]
-): Map<K, V> | null {
+): Array<Pair<K, V>> | null {
     const length = fromBytesU32(bytes);
 
-    let result = new Map<K, V>();
+    let result = new Array<Pair<K, V>>();
 
     if (length === <U32>0) {
         return result;
@@ -118,7 +120,8 @@ export function fromBytesMap<K, V>(
         let valueBytes = encodeValue(value);
         bytes = bytes.subarray(valueBytes.length);
 
-        result.set(key, value);
+        let pair = new Pair<K, V>(key, value);
+        result.push(pair);
     }
 
     return result;

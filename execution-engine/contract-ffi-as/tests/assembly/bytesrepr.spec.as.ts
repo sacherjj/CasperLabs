@@ -12,6 +12,7 @@ import { URef, AccessRights } from "../../assembly/uref";
 import { Option } from "../../assembly/option";
 import { hex2bin, isArraysEqual } from "../utils/helpers";
 import { typedToArray, arrayToTyped } from "../../assembly/utils";
+import { Pair } from "../../assembly/pair";
 
 // ERROR: TypeError: Cannot create property 'shouldSerializeU64' on number '3' in @assemblyscript/loader
 // export class BytesReprTest {
@@ -129,16 +130,30 @@ export function testSerializeMap(): bool {
     const serialized = toBytesMap(map);
     assert(isArraysEqual(serialized, typedToArray(truth)));
 
-    const deser = fromBytesMap<String, String>(
+    const maybeDeser = fromBytesMap<String, String>(
         arrayToTyped(serialized),
         fromBytesString,
         toBytesString,
         fromBytesString,
         toBytesString);
+    
+    assert(maybeDeser !== null);
+    let deser = <Array<Pair<String, String>>>maybeDeser;
+    
 
-    assert(deser.get("Key1") == "Value1");
-    assert(deser.get("Key2") == "Value2");
-    return deser.size == 2;
+    let res1 = false;
+    let res2 = false;
+    for (let i = 0; i < deser.length; i++) {
+        if (deser[i].first == "Key1" && deser[i].second == "Value1") {
+            res1 = true;
+        }
+        if (deser[i].first == "Key2" && deser[i].second == "Value2") {
+            res2 = true;
+        }
+    }
+    assert(res1);
+    assert(res2);
+    return deser.length == 2;
 }
 
 export function testToBytesVecT(): bool {

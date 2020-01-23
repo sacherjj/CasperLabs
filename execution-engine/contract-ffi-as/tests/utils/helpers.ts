@@ -30,3 +30,14 @@ export function isArraysEqual<T>(a: Array<T>, b: Array<T>, len: i32 = 0): bool {
   }
   return true;
 }
+
+export function checkItemsEqual<T>(a: Array<T>, b: Array<T>): bool {
+  for (var i = 0; i < a.length; i++) {
+    const idx = b.indexOf(a[i]);
+    if (idx == -1) {
+      return false;
+    }
+    b.splice(idx, 1);
+  }
+  return b.length === 0;
+}
