@@ -26,6 +26,8 @@ import org.flywaydb.core.api.Location
 import org.scalatest.Suite
 import org.sqlite.{SQLiteConnection, SQLiteDataSource}
 import scala.concurrent.ExecutionContext
+import scala.concurrent.duration.FiniteDuration
+import scala.concurrent.duration._
 
 trait StorageFixture { self: Suite =>
   val scheduler: SchedulerService     = Scheduler.fixedPool("storage-fixture-scheduler", 4)
@@ -44,12 +46,32 @@ trait StorageFixture { self: Suite =>
     testProgram.unsafeRunSync(scheduler)
   }
 
-  def withCombinedStorage(f: SQLiteStorage.CombinedStorage[Task] => Task[_]) = {
-    val testProgram = StorageFixture.createMemoryStorage[Task](scheduler).use { storage =>
-      f(storage)
-    }
-    testProgram.unsafeRunSync(scheduler)
+  /** Create a number of in-memory storages and run a test against them. */
+  def withCombinedStorages(
+      ec: Scheduler = scheduler,
+      timeout: FiniteDuration = 10.seconds,
+      numStorages: Int = 1
+  )(f: List[SQLiteStorage.CombinedStorage[Task]] => Task[_]): Unit = {
+    // NOTE: When using the TestScheduler, we have to pass it as `ec` so that
+    // the transactors use the same execution as the one we're exercising in
+    // the test. Otherwise the tests will wait on the SQL queries until they time out.
+    val testProgram = StorageFixture
+      .createMemoryStorage[Task](ec)
+      .replicateA(numStorages)
+      .use { storages =>
+        f(storages)
+      }
+    // NOTE: When using the TestScheduler we can't call `runSyncUnsafe` on it, it will time out,
+    // so we still have to use the normal Scheduler we have here to wait on the test.
+    implicit val s = scheduler
+    testProgram.runSyncUnsafe(timeout)
   }
+
+  def withCombinedStorage(
+      ec: Scheduler = scheduler,
+      timeout: FiniteDuration = 10.seconds
+  )(f: SQLiteStorage.CombinedStorage[Task] => Task[_]): Unit =
+    withCombinedStorages(ec, timeout, numStorages = 1)(dbs => f(dbs.head))
 }
 
 object StorageFixture {

@@ -4,11 +4,13 @@ import cats._
 import cats.implicits._
 import cats.data.WriterT
 import io.casperlabs.crypto.Keys.PublicKeyBS
+import io.casperlabs.storage.BlockHash
 import java.time.Instant
-import shapeless.tag.@@
+import java.util.concurrent.TimeUnit
+import org.apache.commons.math3.util.ArithmeticUtils
 import scala.annotation.tailrec
 import scala.concurrent.duration.FiniteDuration
-import org.apache.commons.math3.util.ArithmeticUtils
+import shapeless.tag.@@
 
 package highway {
   sealed trait TimestampTag
@@ -72,4 +74,7 @@ package object highway {
   }
 
   type LeaderFunction = Ticks => PublicKeyBS
+
+  implicit val `Show[BlockHash]` =
+    Show.show[BlockHash](PrettyPrinter.buildString(_))
 }

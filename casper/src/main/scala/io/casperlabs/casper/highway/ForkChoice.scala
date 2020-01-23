@@ -64,3 +64,16 @@ object ForkChoice {
         .mapValues(_.map(_._2).toSet)
   }
 }
+
+/** A component which can be notified when an era higher up in the tree has a new message. */
+@typeclass
+trait ForkChoiceManager[F[_]] extends ForkChoice[F] {
+
+  /** Tell the fork choice that deals with a given era that an ancestor era has a new message. */
+  def updateLatestMessage(
+      // The era in which we want to update the latest message.
+      keyBlockHash: BlockHash,
+      // The latest message in the ancestor era that must be taken into account from now.
+      message: Message
+  ): F[Unit]
+}

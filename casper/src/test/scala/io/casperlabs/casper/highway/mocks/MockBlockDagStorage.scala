@@ -7,19 +7,25 @@ import cats.effect.concurrent.Ref
 import io.casperlabs.casper.consensus.Block
 import io.casperlabs.models.Message
 import io.casperlabs.storage.BlockHash
+import io.casperlabs.storage.block.BlockStorageWriter
 import io.casperlabs.storage.dag.{DagRepresentation, DagStorage}, DagRepresentation.Validator
 import io.casperlabs.storage.dag.EraTipRepresentation
 import com.google.protobuf.ByteString
+import io.casperlabs.storage.BlockMsgWithTransform
 
-class MockDagStorage[F[_]: Monad](
+class MockBlockDagStorage[F[_]: Monad](
     messagesRef: Ref[F, Map[BlockHash, Message]],
     // Just keep the last message from everyone, per era.
     latestRef: Ref[F, Map[BlockHash, Map[Validator, Message]]]
-) extends DagStorage[F] {
+) extends BlockStorageWriter[F]
+    with DagStorage[F] {
   override val getRepresentation: F[DagRepresentation[F]] =
     (new MockDagRepresentation(): DagRepresentation[F]).pure[F]
 
-  def insert(block: Block): F[DagRepresentation[F]] = {
+  override def put(blockHash: BlockHash, blockMsgWithTransform: BlockMsgWithTransform): F[Unit] =
+    insert(blockMsgWithTransform.getBlockMessage).void
+
+  override def insert(block: Block): F[DagRepresentation[F]] = {
     val message = Message.fromBlock(block).get
     messagesRef.update(_.updated(message.messageHash, message)) >>
       latestRef.update { m =>
@@ -64,14 +70,14 @@ class MockDagStorage[F[_]: Monad](
   }
 }
 
-object MockDagStorage {
+object MockBlockDagStorage {
   def apply[F[_]: Sync](blocks: Block*) =
     for {
       messagesRef <- Ref.of[F, Map[BlockHash, Message]](Map.empty)
       latestRef <- Ref.of[F, Map[BlockHash, Map[Validator, Message]]](
                     Map.empty.withDefaultValue(Map.empty)
                   )
-      storage = new MockDagStorage(messagesRef, latestRef)
+      storage = new MockBlockDagStorage(messagesRef, latestRef)
       _       <- blocks.toList.traverse(storage.insert)
     } yield storage
 }

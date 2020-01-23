@@ -6,11 +6,11 @@ import cats.effect._
 import cats.effect.concurrent.Ref
 import io.casperlabs.models.Message
 import io.casperlabs.storage.BlockHash
-import io.casperlabs.casper.highway.ForkChoice
+import io.casperlabs.casper.highway.{ForkChoice, ForkChoiceManager}
 
 class MockForkChoice[F[_]: Applicative](
     resultRef: Ref[F, ForkChoice.Result]
-) extends ForkChoice[F] {
+) extends ForkChoiceManager[F] {
   override def fromKeyBlock(keyBlockHash: BlockHash): F[ForkChoice.Result] =
     resultRef.get
 
@@ -20,6 +20,14 @@ class MockForkChoice[F[_]: Applicative](
   ): F[ForkChoice.Result] =
     resultRef.get
 
+  def updateLatestMessage(
+      keyBlockHash: BlockHash,
+      message: Message
+  ): F[Unit] = message match {
+    case block: Message.Block => set(block).void
+    case _: Message.Ballot    => ().pure[F]
+  }
+
   def set(result: ForkChoice.Result): F[Unit] =
     resultRef.set(result)
 
@@ -28,8 +36,9 @@ class MockForkChoice[F[_]: Applicative](
 }
 
 object MockForkChoice {
-  def apply[F[_]: Sync](init: Message.Block) =
-    for {
-      ref <- Ref.of[F, ForkChoice.Result](ForkChoice.Result(init, Set.empty))
-    } yield new MockForkChoice[F](ref)
+  def apply[F[_]: Sync](init: Message.Block) = Sync[F].delay(unsafe(init))
+  def unsafe[F[_]: Sync](init: Message.Block) = {
+    val ref = Ref.unsafe[F, ForkChoice.Result](ForkChoice.Result(init, Set.empty))
+    new MockForkChoice[F](ref)
+  }
 }

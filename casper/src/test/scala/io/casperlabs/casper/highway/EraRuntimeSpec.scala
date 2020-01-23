@@ -14,11 +14,12 @@ import io.casperlabs.crypto.Keys.{PublicKey, PublicKeyBS}
 import io.casperlabs.models.Message
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.storage.BlockHash
+import io.casperlabs.storage.block.BlockStorageWriter
 import io.casperlabs.storage.dag.{DagStorage, FinalityStorage}
 import io.casperlabs.storage.era.EraStorage
 import io.casperlabs.casper.mocks.{MockFinalityStorage}
 import io.casperlabs.casper.highway.mocks.{
-  MockDagStorage,
+  MockBlockDagStorage,
   MockEraStorage,
   MockForkChoice,
   MockMessageProducer
@@ -36,6 +37,8 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
   import HighwayConf._
   import EraRuntime.Agenda
   import io.casperlabs.catscontrib.effect.implicits.syncId
+
+  type BlockDagStorage[F[_]] = BlockStorageWriter[F] with DagStorage[F]
 
   implicit def noShrink[T] = Shrink[T](_ => Stream.empty)
 
@@ -135,23 +138,29 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
       .get
       .asInstanceOf[Message.Ballot]
 
-  def defaultDagStorage      = MockDagStorage[Id](genesis.toBlock)
+  def defaultBlockDagStorage = MockBlockDagStorage[Id](genesis.toBlock)
   def defaultForkChoice      = MockForkChoice[Id](genesis)
   def defaultFinalityStorage = MockFinalityStorage[Id](genesis.messageHash)
+
+  def defaultMessageProducer(
+      validator: String
+  )(st: BlockDagStorage[Id]): MockMessageProducer[Id] = {
+    implicit val store = st
+    new MockMessageProducer[Id](validator)
+  }
 
   def genesisEraRuntime(
       validator: Option[String] = none,
       roundExponent: Int = 0,
       leaderSequencer: LeaderSequencer = LeaderSequencer,
       isSyncedRef: Ref[Id, Boolean] = Ref.of[Id, Boolean](true),
-      messageProducer: String => MessageProducer[Id] = validator =>
-        new MockMessageProducer[Id](validator),
+      messageProducer: String => BlockDagStorage[Id] => MessageProducer[Id] = defaultMessageProducer,
       config: HighwayConf = conf
   )(
       implicit
       // Let's say we are right at the beginning of the era by default.
       C: Clock[Id] = TestClock.frozen[Id](date(2019, 12, 9)),
-      DS: DagStorage[Id] = defaultDagStorage,
+      DS: BlockDagStorage[Id] = defaultBlockDagStorage,
       ES: EraStorage[Id] = MockEraStorage[Id],
       FS: FinalityStorage[Id] = defaultFinalityStorage,
       FC: ForkChoice[Id] = defaultForkChoice
@@ -159,7 +168,7 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
     EraRuntime.fromGenesis[Id](
       config,
       genesis.blockSummary,
-      validator.map(messageProducer),
+      validator.map(v => messageProducer(v)(DS)),
       roundExponent,
       isSyncedRef.get,
       leaderSequencer
@@ -321,7 +330,7 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
     }
 
     def testRejectSecondLambdaBlock(firstMessage: EraRuntime[Id] => Message) = {
-      implicit val ds = defaultDagStorage
+      implicit val ds = defaultBlockDagStorage
       val runtime     = genesisEraRuntime("Alice".some, leaderSequencer = mockSequencer("Bob"))
       val message0    = insert(firstMessage(runtime))
       val message1 = makeBlock(
@@ -348,7 +357,7 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
     }
 
     "reject a block built on a switch block" in {
-      implicit val ds = defaultDagStorage
+      implicit val ds = defaultBlockDagStorage
       val leader      = "Alice"
       val runtime     = genesisEraRuntime(none, leaderSequencer = mockSequencer(leader))
       val build: (Ticks, BlockHash) => Message =
@@ -362,7 +371,7 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
     }
 
     "reject a ballot from a leader not built on a switch block during the voting period" in {
-      implicit val ds = defaultDagStorage
+      implicit val ds = defaultBlockDagStorage
       val leader      = "Alice"
       val runtime     = genesisEraRuntime(none, leaderSequencer = mockSequencer(leader))
       val msg1        = insert(makeBlock(leader, runtime.era, runtime.startTick))
@@ -373,7 +382,7 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
     }
 
     "accept a second ballot received from the leader in the same round during the voting-only period" in {
-      implicit val ds = defaultDagStorage
+      implicit val ds = defaultBlockDagStorage
       val leader      = "Bob"
       val runtime     = genesisEraRuntime("Alice".some, leaderSequencer = mockSequencer(leader))
 
@@ -505,7 +514,7 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
           }
 
           "only cite the lambda message and validators own latest message" in {
-            implicit val ds = defaultDagStorage
+            implicit val ds = defaultBlockDagStorage
             val runtime =
               genesisEraRuntime("Alice".some, leaderSequencer = mockSequencer("Charlie"))
 
@@ -529,7 +538,7 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
           }
 
           "target the fork choice, not necessarily the lambda message" in {
-            implicit val ds = defaultDagStorage
+            implicit val ds = defaultBlockDagStorage
             implicit val fc = defaultForkChoice
             val runtime =
               genesisEraRuntime("Alice".some, leaderSequencer = mockSequencer("Charlie"))
@@ -571,7 +580,7 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
         }
 
         "it is a switch block" should {
-          implicit val ds = defaultDagStorage
+          implicit val ds = defaultBlockDagStorage
 
           // Let the leader make one block every hour. At the end of the genesis era,
           // the right key block should be picked for the child era.
@@ -653,7 +662,7 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
         }
         "in the post-era voting period" when {
           implicit val clock = TestClock.frozen[Id](conf.genesisEraEnd)
-          implicit val ds    = defaultDagStorage
+          implicit val ds    = defaultBlockDagStorage
           implicit val fc    = defaultForkChoice
           val runtime        = genesisEraRuntime("Alice".some, leaderSequencer = mockSequencer("Bob"))
 
@@ -681,7 +690,7 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
 
     "the validator is not bonded" when {
       val leader      = "Alice"
-      implicit val ds = defaultDagStorage
+      implicit val ds = defaultBlockDagStorage
       val runtime = genesisEraRuntime(
         "Anonymous".some,
         leaderSequencer = mockSequencer(leader)
@@ -850,7 +859,7 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
           val exponent       = 14 // ~15 seconds
           val now            = conf.genesisEraEnd plus postEraElapsed
           implicit val clock = TestClock.frozen(now)
-          implicit val ds    = defaultDagStorage
+          implicit val ds    = defaultBlockDagStorage
           implicit val fc    = defaultForkChoice
           val leader         = "Alice"
           val validator      = if (isLeader) leader else "Bob"
@@ -932,7 +941,7 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
             )
             implicit val clock = TestClock.frozen(summitConf.genesisEraEnd)
             implicit val fs    = defaultFinalityStorage
-            implicit val ds    = defaultDagStorage
+            implicit val ds    = defaultBlockDagStorage
             implicit val fc    = defaultForkChoice
 
             val runtime = genesisEraRuntime(validator = "Alice".some, config = summitConf)
@@ -1020,7 +1029,7 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
 
       "crossing the booking block boundary" should {
         "pass the flag to the message producer" in {
-          implicit val ds = defaultDagStorage
+          implicit val ds = defaultBlockDagStorage
           implicit val fc = MockForkChoice[Id](genesis)
 
           val messageProducer = new MockMessageProducer[Id]("Alice") {
@@ -1042,7 +1051,7 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
           val runtime = genesisEraRuntime(
             "Alice".some,
             leaderSequencer = mockSequencer("Alice"),
-            messageProducer = _ => messageProducer
+            messageProducer = _ => _ => messageProducer
           )
 
           val prev = insert(makeBlock("Alice", runtime.era, runtime.startTick))
@@ -1098,7 +1107,7 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
 
   "collectMagicBits" should {
     "collect bits from the booking to the key block" in {
-      implicit val ds = defaultDagStorage
+      implicit val ds = defaultBlockDagStorage
       val runtime     = genesisEraRuntime()
       // Any chain will do.
       val blocks = insert(makeFullChain("Bob", runtime, 8.hours))
@@ -1171,9 +1180,9 @@ object EraRuntimeSpec {
 
   def insert[F[_]: Monad, A <: Message](
       messages: Seq[A]
-  )(implicit ds: MockDagStorage[F]): F[Seq[A]] =
+  )(implicit ds: MockBlockDagStorage[F]): F[Seq[A]] =
     messages.toList.traverse(insert[F, A]).map(_.toSeq)
 
-  def insert[F[_]: Monad, A <: Message](message: A)(implicit ds: MockDagStorage[F]): F[A] =
+  def insert[F[_]: Monad, A <: Message](message: A)(implicit ds: MockBlockDagStorage[F]): F[A] =
     ds.insert(message.toBlock).as(message)
 }

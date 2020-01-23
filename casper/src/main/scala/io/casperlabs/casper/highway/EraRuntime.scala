@@ -101,9 +101,11 @@ class EraRuntime[F[_]: MonadThrowable: Clock: EraStorage: FinalityStorageReader:
       if (msg.parentBlock.isEmpty || !msg.isInstanceOf[Message.Block])
         false.pure[F]
       else
-        dag.lookupUnsafe(msg.parentBlock).map { parent =>
-          isSwitchBoundary(parent.roundInstant, msg.roundInstant)
-        }
+        dag
+          .lookupUnsafe(msg.parentBlock)
+          .map { parent =>
+            isSwitchBoundary(parent.roundInstant, msg.roundInstant)
+          }
 
     def isLambdaMessage: F[Boolean] =
       if (leaderFunction(Ticks(msg.roundId)) == msg.validatorId)
@@ -522,6 +524,17 @@ class EraRuntime[F[_]: MonadThrowable: Clock: EraStorage: FinalityStorageReader:
 
 object EraRuntime {
 
+  def genesisEra(
+      conf: HighwayConf,
+      genesis: BlockSummary
+  ): Era = Era(
+    keyBlockHash = genesis.blockHash,
+    bookingBlockHash = genesis.blockHash,
+    startTick = conf.toTicks(conf.genesisEraStart),
+    endTick = conf.toTicks(conf.genesisEraEnd),
+    bonds = genesis.getHeader.getState.bonds
+  )
+
   def fromGenesis[F[_]: Sync: Clock: DagStorage: EraStorage: FinalityStorageReader: ForkChoice](
       conf: HighwayConf,
       genesis: BlockSummary,
@@ -530,13 +543,7 @@ object EraRuntime {
       isSynced: => F[Boolean],
       leaderSequencer: LeaderSequencer = LeaderSequencer
   ): F[EraRuntime[F]] = {
-    val era = Era(
-      keyBlockHash = genesis.blockHash,
-      bookingBlockHash = genesis.blockHash,
-      startTick = conf.toTicks(conf.genesisEraStart),
-      endTick = conf.toTicks(conf.genesisEraEnd),
-      bonds = genesis.getHeader.getState.bonds
-    )
+    val era = genesisEra(conf, genesis)
     fromEra[F](conf, era, maybeMessageProducer, initRoundExponent, isSynced, leaderSequencer)
   }
 
