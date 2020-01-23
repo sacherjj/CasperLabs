@@ -2,7 +2,10 @@
 
 #![deny(warnings)]
 
-use std::path::{Path, PathBuf};
+use std::{
+    env,
+    path::{Path, PathBuf},
+};
 
 use clap::{crate_version, App, Arg};
 use lazy_static::lazy_static;
@@ -33,7 +36,7 @@ lazy_static! {
     rustup install {0}
     rustup target add --toolchain {0} wasm32-unknown-unknown
     cd <path>/tests
-    cargo run"#,
+    cargo test"#,
         TOOLCHAIN
     );
     static ref ARGS: Args = Args::new();
@@ -47,6 +50,20 @@ struct Args {
 
 impl Args {
     fn new() -> Self {
+        // If run normally, the args passed are 'cargo-casperlabs', '<target dir>'.  However, if run
+        // as a cargo subcommand (i.e. cargo casperlabs <target dir>), then cargo injects a new arg:
+        // 'cargo-casperlabs', 'casperlabs', '<target dir>'.  We need to filter this extra arg out,
+        // but also cater for the case where a user calls the binary directly (not as a cargo
+        // subcommand) and passes 'casperlabs' as the target dir.
+        let unfiltered_args_count = env::args().count();
+        let filtered_args_iter = env::args().enumerate().filter_map(|(index, value)| {
+            if index == 1 && unfiltered_args_count != 2 && value.as_str() == "casperlabs" {
+                None
+            } else {
+                Some(value)
+            }
+        });
+
         let root_path_arg = Arg::with_name(ROOT_PATH_ARG_NAME)
             .required(true)
             .value_name(ROOT_PATH_ARG_VALUE_NAME)
@@ -63,7 +80,7 @@ impl Args {
             .usage(USAGE.as_str())
             .arg(root_path_arg)
             .arg(workspace_path_arg)
-            .get_matches();
+            .get_matches_from(filtered_args_iter);
 
         let root_path = arg_matches
             .value_of(ROOT_PATH_ARG_NAME)
@@ -110,6 +127,7 @@ fn main() {
     tests_package::add_rust_toolchain();
     tests_package::add_build_rs();
     tests_package::replace_main_rs();
+    tests_package::copy_wasm_files();
 }
 
 #[cfg(test)]

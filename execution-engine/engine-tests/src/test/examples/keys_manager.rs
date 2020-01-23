@@ -1,6 +1,8 @@
-use engine_test_support::low_level::{
-    ExecuteRequestBuilder, InMemoryWasmTestBuilder as TestBuilder, DEFAULT_ACCOUNT_ADDR,
-    DEFAULT_GENESIS_CONFIG,
+use engine_test_support::{
+    low_level::{
+        ExecuteRequestBuilder, InMemoryWasmTestBuilder as TestBuilder, DEFAULT_GENESIS_CONFIG,
+    },
+    DEFAULT_ACCOUNT_ADDR,
 };
 use types::account::{PublicKey, Weight};
 
