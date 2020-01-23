@@ -1,4 +1,4 @@
-use contract_ffi::contract_api::Error as ApiError;
+use types::ApiError;
 
 #[repr(u16)]
 pub enum Error {

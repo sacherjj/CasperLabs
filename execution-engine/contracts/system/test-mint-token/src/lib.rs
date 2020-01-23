@@ -4,7 +4,8 @@ extern crate alloc;
 
 use alloc::string::String;
 
-use contract_ffi::{contract_api::runtime, key::Key, value::U512};
+use contract::contract_api::runtime;
+use types::{Key, U512};
 
 #[no_mangle]
 pub extern "C" fn call() {
@@ -28,7 +29,7 @@ pub extern "C" fn call() {
     assert!(&result == "Success!");
 
     let new_amount1: Option<U512> = runtime::call_contract(mint.clone(), ("balance", purse1));
-    let new_amount2: Option<U512> = runtime::call_contract(mint.clone(), ("balance", purse2));
+    let new_amount2: Option<U512> = runtime::call_contract(mint, ("balance", purse2));
 
     assert!(new_amount1.unwrap() == U512::from(30));
     assert!(new_amount2.unwrap() == U512::from(370));

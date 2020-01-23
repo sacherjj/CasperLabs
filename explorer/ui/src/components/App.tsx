@@ -50,7 +50,7 @@ const SideMenuItems: MenuItem[] = [
   new MenuItem(Pages.Blocks, 'Blocks', 'th-large'),
   new MenuItem(Pages.Deploys, 'Deploys', 'tasks'),
   new MenuItem(Pages.Search, 'Search', 'search'),
-  new MenuItem(Pages.ConnectedPeers, "Connected Peers", 'network-wired'),
+  new MenuItem(Pages.ConnectedPeers, 'Connected Peers', 'network-wired')
 ];
 
 export interface AppProps {
@@ -284,13 +284,28 @@ const Content = (props: AppProps) => {
             />
             <Route
               path={Pages.Explorer}
-              render={_ => <Explorer {...props} />}
+              render={_ => (
+                <Explorer
+                  maxRank={query.get('maxRank')}
+                  depth={query.get('depth')}
+                  {...props}
+                />
+              )}
             />
             <Route
               path={Pages.Block}
               render={_ => <BlockDetails {...props} />}
             />
-            <Route path={Pages.Blocks} render={_ => <BlockList {...props} />} />
+            <Route
+              path={Pages.Blocks}
+              render={_ => (
+                <BlockList
+                  maxRank={query.get('maxRank')}
+                  depth={query.get('depth')}
+                  {...props}
+                />
+              )}
+            />
             <Route
               path={Pages.Deploy}
               render={_ => <DeployDetails {...props} />}

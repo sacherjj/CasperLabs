@@ -1,8 +1,8 @@
-use contract_ffi::{
-    bytesrepr::{self, FromBytes, ToBytes},
-    uref::{AccessRights, URef, UREF_SERIALIZED_LENGTH},
-};
 use engine_wasm_prep::wasm_costs::{WasmCosts, WASM_COSTS_SERIALIZED_LENGTH};
+use types::{
+    bytesrepr::{self, FromBytes, ToBytes},
+    AccessRights, URef, UREF_SERIALIZED_LENGTH,
+};
 
 const PROTOCOL_DATA_SERIALIZED_LENGTH: usize =
     WASM_COSTS_SERIALIZED_LENGTH + UREF_SERIALIZED_LENGTH + UREF_SERIALIZED_LENGTH;
@@ -95,8 +95,8 @@ impl FromBytes for ProtocolData {
 pub(crate) mod gens {
     use proptest::prop_compose;
 
-    use contract_ffi::gens;
     use engine_wasm_prep::wasm_costs::gens as wasm_costs_gens;
+    use types::gens;
 
     use super::ProtocolData;
 
@@ -119,11 +119,8 @@ pub(crate) mod gens {
 mod tests {
     use proptest::proptest;
 
-    use contract_ffi::{
-        bytesrepr,
-        uref::{AccessRights, URef},
-    };
     use engine_shared::test_utils;
+    use types::{bytesrepr, AccessRights, URef};
 
     use super::{gens, ProtocolData};
 

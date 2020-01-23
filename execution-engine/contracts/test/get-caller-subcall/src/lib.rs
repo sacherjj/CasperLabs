@@ -4,11 +4,11 @@ extern crate alloc;
 
 use alloc::collections::BTreeMap;
 
-use contract_ffi::{
-    contract_api::{runtime, storage, Error},
+use contract::{
+    contract_api::{runtime, storage},
     unwrap_or_revert::UnwrapOrRevert,
-    value::{account::PublicKey, CLValue},
 };
+use types::{account::PublicKey, ApiError, CLValue};
 
 #[no_mangle]
 pub extern "C" fn check_caller_ext() {
@@ -20,8 +20,8 @@ pub extern "C" fn check_caller_ext() {
 #[no_mangle]
 pub extern "C" fn call() {
     let known_public_key: PublicKey = runtime::get_arg(0)
-        .unwrap_or_revert_with(Error::MissingArgument)
-        .unwrap_or_revert_with(Error::InvalidArgument);
+        .unwrap_or_revert_with(ApiError::MissingArgument)
+        .unwrap_or_revert_with(ApiError::InvalidArgument);
     let caller_public_key: PublicKey = runtime::get_caller();
     assert_eq!(
         caller_public_key, known_public_key,

@@ -73,12 +73,8 @@ pub fn log_details(
         return None;
     }
 
-    let log_message = LogMessage::new_props(
-        log_settings_provider,
-        log_level,
-        message_format.to_owned(),
-        properties.to_owned(),
-    );
+    let log_message =
+        LogMessage::new_props(log_settings_provider, log_level, message_format, properties);
 
     let json = jsonify(&log_message, false);
 

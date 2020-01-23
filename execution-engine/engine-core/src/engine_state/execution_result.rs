@@ -1,10 +1,10 @@
 use super::{error, execution_effect::ExecutionEffect, op::Op, CONV_RATE};
-use contract_ffi::{key::Key, value::CLValue};
 use engine_shared::{
     additive_map::AdditiveMap, gas::Gas, motes::Motes, newtypes::CorrelationId,
     stored_value::StoredValue, transform::Transform,
 };
 use engine_storage::global_state::StateReader;
+use types::{CLValue, Key};
 
 fn make_payment_error_effects(
     max_payment_cost: Motes,
@@ -328,7 +328,7 @@ impl ExecutionResultBuilder {
                 Some(Transform::Write(_)) => reader
                     .read(correlation_id, k)
                     .ok()
-                    .and_then(|maybe_v| maybe_v.map(|v| (*k, v.clone()))),
+                    .and_then(|maybe_v| maybe_v.map(|v| (*k, v))),
                 _ => None,
             })
             .collect();

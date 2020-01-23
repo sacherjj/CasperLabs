@@ -1,16 +1,7 @@
-#[cfg(test)]
-pub mod genesis;
-#[cfg(test)]
+mod genesis;
 mod mint_install;
-#[cfg(test)]
 mod pos_install;
-#[cfg(test)]
+mod proof_of_stake;
 mod system_contract_urefs_access_rights;
-#[cfg(test)]
+mod system_contracts_access;
 mod upgrade;
-
-#[cfg(test)]
-pub mod proof_of_stake;
-
-#[cfg(test)]
-pub mod system_contracts_access;

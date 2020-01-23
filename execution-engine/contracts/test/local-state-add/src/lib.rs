@@ -4,10 +4,11 @@ extern crate alloc;
 
 use alloc::string::String;
 
-use contract_ffi::{
-    contract_api::{runtime, storage, Error as ApiError},
+use contract::{
+    contract_api::{runtime, storage},
     unwrap_or_revert::UnwrapOrRevert,
 };
+use types::ApiError;
 
 pub const LOCAL_KEY: [u8; 32] = [66u8; 32];
 

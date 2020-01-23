@@ -1,9 +1,8 @@
 use std::collections::BTreeMap;
 
-use contract_ffi::{
+use types::{
     bytesrepr::{Error, FromBytes, ToBytes, U32_SERIALIZED_LENGTH, U64_SERIALIZED_LENGTH},
-    key::{Key, KEY_UREF_SERIALIZED_LENGTH},
-    value::ProtocolVersion,
+    Key, ProtocolVersion, KEY_UREF_SERIALIZED_LENGTH,
 };
 
 #[derive(PartialEq, Eq, Clone, Debug)]
@@ -97,7 +96,7 @@ impl FromBytes for Contract {
 pub mod gens {
     use proptest::{collection::vec, prelude::*};
 
-    use contract_ffi::gens::{named_keys_arb, protocol_version_arb};
+    use types::gens::{named_keys_arb, protocol_version_arb};
 
     use super::Contract;
 

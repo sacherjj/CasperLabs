@@ -11,12 +11,15 @@ use engine_shared::{
     test_utils,
 };
 use engine_storage::global_state::in_memory::InMemoryGlobalState;
+use engine_test_support::low_level::{InMemoryWasmTestBuilder, MOCKED_ACCOUNT_ADDRESS};
 
-use crate::support::test_support::{self, InMemoryWasmTestBuilder};
+const PROC_NAME: &str = "ee-shared-lib-tests";
 
-pub const PROC_NAME: &str = "ee-shared-lib-tests";
+lazy_static! {
+    static ref LOG_SETTINGS: LogSettings = get_log_settings(LogLevel::Debug);
+}
 
-pub fn get_log_settings(log_level: LogLevel) -> LogSettings {
+fn get_log_settings(log_level: LogLevel) -> LogSettings {
     let log_level_filter = LogLevelFilter::new(log_level);
     LogSettings::new(PROC_NAME, log_level_filter)
 }
@@ -26,15 +29,11 @@ fn setup() {
     log_settings::set_log_settings_provider(&*LOG_SETTINGS);
 }
 
-lazy_static! {
-    static ref LOG_SETTINGS: LogSettings = get_log_settings(LogLevel::Debug);
-}
-
 #[test]
 fn should_commit_with_metrics() {
     setup();
     let correlation_id = CorrelationId::new();
-    let mocked_account = test_utils::mocked_account(test_support::MOCKED_ACCOUNT_ADDRESS);
+    let mocked_account = test_utils::mocked_account(MOCKED_ACCOUNT_ADDRESS);
     let (global_state, root_hash) =
         InMemoryGlobalState::from_pairs(correlation_id, &mocked_account).unwrap();
 

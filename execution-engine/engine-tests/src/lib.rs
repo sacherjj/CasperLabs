@@ -1,2 +1,3 @@
-pub mod support;
-pub mod test;
+pub mod profiling;
+#[cfg(test)]
+mod test;

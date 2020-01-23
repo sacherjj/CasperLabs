@@ -1,10 +1,9 @@
-use contract_ffi::{key::Key, value::U512};
 use engine_shared::stored_value::StoredValue;
-
-use crate::{
-    support::test_support::{ExecuteRequestBuilder, InMemoryWasmTestBuilder},
-    test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT},
+use engine_test_support::low_level::{
+    utils, ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_ACCOUNT_ADDR,
+    DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT,
 };
+use types::{Key, U512};
 
 const CONTRACT_CREATE: &str = "ee_572_regression_create.wasm";
 const CONTRACT_ESCALATE: &str = "ee_572_regression_escalate.wasm";
@@ -77,8 +76,8 @@ fn should_run_ee_572_regression() {
         .to_owned();
 
     let error_message = {
-        let execution_result = crate::support::test_support::get_success_result(&response);
-        crate::support::test_support::get_error_message(execution_result)
+        let execution_result = utils::get_success_result(&response);
+        utils::get_error_message(execution_result)
     };
 
     assert!(error_message.contains("ForgedReference"));

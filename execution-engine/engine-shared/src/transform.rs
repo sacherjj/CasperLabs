@@ -9,10 +9,9 @@ use std::{
 
 use num::traits::{AsPrimitive, WrappingAdd};
 
-use contract_ffi::{
+use types::{
     bytesrepr::{self, FromBytes, ToBytes},
-    key::Key,
-    value::{CLType, CLTyped, CLValue, CLValueError, U128, U256, U512},
+    CLType, CLTyped, CLValue, CLValueError, Key, U128, U256, U512,
 };
 
 use crate::stored_value::StoredValue;
@@ -282,9 +281,10 @@ impl Default for Transform {
 }
 
 pub mod gens {
+    use proptest::{collection::vec, prelude::*};
+
     use super::Transform;
     use crate::stored_value::gens::stored_value_arb;
-    use proptest::{collection::vec, prelude::*};
 
     pub fn transform_arb() -> impl Strategy<Value = Transform> {
         prop_oneof![
@@ -311,10 +311,7 @@ pub mod gens {
 mod tests {
     use num::{Bounded, Num};
 
-    use contract_ffi::{
-        uref::{AccessRights, URef},
-        value::{account::PurseId, ProtocolVersion, U128, U256, U512},
-    };
+    use types::{account::PurseId, AccessRights, ProtocolVersion, URef, U128, U256, U512};
 
     use super::*;
     use crate::{
@@ -406,7 +403,7 @@ mod tests {
         let apply_overflow = Transform::AddInt32(1).apply(max_value.clone());
 
         let apply_overflow_uint = one_transform.clone().apply(max_value.clone());
-        let apply_underflow = Transform::AddInt32(-1).apply(min_value.clone());
+        let apply_underflow = Transform::AddInt32(-1).apply(min_value);
 
         let transform_overflow = max_transform.clone() + Transform::AddInt32(1);
         let transform_overflow_uint = max_transform + one_transform;

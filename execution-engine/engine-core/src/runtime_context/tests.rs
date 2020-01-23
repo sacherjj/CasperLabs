@@ -7,19 +7,6 @@ use std::{
 
 use rand::RngCore;
 
-use contract_ffi::{
-    block_time::BlockTime,
-    execution::Phase,
-    key::{Key, LOCAL_SEED_LENGTH},
-    uref::{AccessRights, URef},
-    value::{
-        account::{
-            ActionType, AddKeyFailure, PublicKey, PurseId, RemoveKeyFailure, SetThresholdFailure,
-            Weight,
-        },
-        CLValue, ProtocolVersion,
-    },
-};
 use engine_shared::{
     account::{Account, AssociatedKeys},
     additive_map::AdditiveMap,
@@ -32,6 +19,13 @@ use engine_shared::{
 use engine_storage::global_state::{
     in_memory::{InMemoryGlobalState, InMemoryGlobalStateView},
     CommitResult, StateProvider,
+};
+use types::{
+    account::{
+        ActionType, AddKeyFailure, PublicKey, PurseId, RemoveKeyFailure, SetThresholdFailure,
+        Weight,
+    },
+    AccessRights, BlockTime, CLValue, Key, Phase, ProtocolVersion, URef, LOCAL_SEED_LENGTH,
 };
 
 use super::{attenuate_uref_for_account, Address, Error, RuntimeContext};
@@ -48,7 +42,7 @@ fn mock_tc(init_key: Key, init_account: Account) -> TrackingCopy<InMemoryGlobalS
     let correlation_id = CorrelationId::new();
     let hist = InMemoryGlobalState::empty().unwrap();
     let root_hash = hist.empty_root_hash;
-    let transform = Transform::Write(StoredValue::Account(init_account.clone()));
+    let transform = Transform::Write(StoredValue::Account(init_account));
 
     let mut m = AdditiveMap::new();
     m.insert(init_key, transform);
@@ -371,8 +365,7 @@ fn account_key_addable_valid() {
 
         rc.add_gs(base_key, named_key).expect("Adding should work.");
 
-        let named_key_transform =
-            Transform::AddKeys(iter::once((uref_name.clone(), uref)).collect());
+        let named_key_transform = Transform::AddKeys(iter::once((uref_name, uref)).collect());
 
         assert_eq!(
             *rc.effect().transforms.get(&base_key).unwrap(),
@@ -533,7 +526,7 @@ fn contract_key_addable_invalid() {
     );
 
     let uref_name = "NewURef".to_owned();
-    let named_key = StoredValue::CLValue(CLValue::from_t((uref_name.clone(), uref)).unwrap());
+    let named_key = StoredValue::CLValue(CLValue::from_t((uref_name, uref)).unwrap());
 
     let result = runtime_context.add_gs(contract_key, named_key);
 

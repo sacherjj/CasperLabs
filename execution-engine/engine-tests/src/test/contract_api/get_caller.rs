@@ -1,9 +1,8 @@
-use contract_ffi::value::account::PublicKey;
-
-use crate::{
-    support::test_support::{ExecuteRequestBuilder, InMemoryWasmTestBuilder},
-    test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT},
+use engine_test_support::low_level::{
+    ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG,
+    DEFAULT_PAYMENT,
 };
+use types::account::PublicKey;
 
 const CONTRACT_GET_CALLER: &str = "get_caller.wasm";
 const CONTRACT_GET_CALLER_SUBCALL: &str = "get_caller_subcall.wasm";

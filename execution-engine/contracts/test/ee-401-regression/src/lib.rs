@@ -4,12 +4,11 @@ extern crate alloc;
 
 use alloc::{collections::BTreeMap, string::String};
 
-use contract_ffi::{
-    contract_api::{runtime, storage, ContractRef},
+use contract::{
+    contract_api::{runtime, storage},
     unwrap_or_revert::UnwrapOrRevert,
-    uref::URef,
-    value::CLValue,
 };
+use types::{CLValue, ContractRef, URef};
 
 #[no_mangle]
 pub extern "C" fn hello_ext() {

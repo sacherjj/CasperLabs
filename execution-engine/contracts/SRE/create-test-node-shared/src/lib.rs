@@ -2,15 +2,11 @@
 
 use base16;
 
-use contract_ffi::{
-    contract_api::{
-        runtime,
-        system::{self, TransferredTo},
-        Error as ApiError,
-    },
+use contract::{
+    contract_api::{runtime, system},
     unwrap_or_revert::UnwrapOrRevert,
-    value::{account::PublicKey, U512},
 };
+use types::{account::PublicKey, ApiError, TransferredTo, U512};
 
 #[repr(u16)]
 enum Error {
