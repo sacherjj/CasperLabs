@@ -187,7 +187,7 @@ export class DagContainer {
               }
             } else if (event.hasNewFinalizedBlock()) {
               this.errors.capture(
-                this.casperService.getLatestBlockInfo().then(block => {
+                this.casperService.getLastFinalizedBlockInfo().then(block => {
                   this.lastFinalizedBlock = block;
                 })
               );
@@ -217,7 +217,7 @@ export class DagContainer {
     );
 
     await this.errors.capture(
-      this.casperService.getLatestBlockInfo().then(block => {
+      this.casperService.getLastFinalizedBlockInfo().then(block => {
         this.lastFinalizedBlock = block;
       })
     );
