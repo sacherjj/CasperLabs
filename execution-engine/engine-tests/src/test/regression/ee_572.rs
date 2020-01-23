@@ -1,7 +1,10 @@
 use engine_shared::stored_value::StoredValue;
-use engine_test_support::low_level::{
-    utils, ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_ACCOUNT_ADDR,
-    DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT,
+use engine_test_support::{
+    low_level::{
+        utils, ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_GENESIS_CONFIG,
+        DEFAULT_PAYMENT,
+    },
+    DEFAULT_ACCOUNT_ADDR,
 };
 use types::{Key, U512};
 
@@ -56,7 +59,7 @@ fn should_run_ee_572_regression() {
 
     let contract: Key = {
         let account = match builder.query(None, Key::Account(ACCOUNT_1_ADDR), &[]) {
-            Some(StoredValue::Account(account)) => account,
+            Ok(StoredValue::Account(account)) => account,
             _ => panic!("Could not find account at: {:?}", ACCOUNT_1_ADDR),
         };
         *account

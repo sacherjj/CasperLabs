@@ -5,9 +5,12 @@ use engine_core::engine_state::{
     CONV_RATE,
 };
 use engine_shared::{account::Account, motes::Motes};
-use engine_test_support::low_level::{
-    utils, DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_ACCOUNT_ADDR,
-    DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT,
+use engine_test_support::{
+    low_level::{
+        utils, DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder,
+        DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT,
+    },
+    DEFAULT_ACCOUNT_ADDR,
 };
 use types::{
     account::{PublicKey, PurseId},
@@ -205,7 +208,7 @@ fn get_named_account_balance(
 
     let account: Account = builder
         .query(None, account_key, &[])
-        .and_then(|v| v.try_into().ok())
+        .and_then(|v| v.try_into().map_err(|error| format!("{:?}", error)))
         .expect("should find balance uref");
 
     let purse_id = account

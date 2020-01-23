@@ -1,3 +1,6 @@
+// TODO(Fraser) - remove
+#![allow(unused)]
+
 use contract::args_parser::ArgsParser;
 use engine_core::engine_state::{deploy_item::DeployItem, execute_request::ExecuteRequest};
 use types::ProtocolVersion;

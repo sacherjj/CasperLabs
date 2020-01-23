@@ -47,7 +47,7 @@ impl ERC20Test {
         let value: CLValue = self
             .builder
             .query(None, account_key, &[name])
-            .and_then(|v| CLValue::try_from(v).ok())
+            .and_then(|v| CLValue::try_from(v).map_err(|error| format!("{:?}", error)))
             .expect("should have named uref.");
         let key: Key = value.into_t().unwrap();
         key.as_hash().unwrap()
@@ -273,7 +273,7 @@ impl ERC20Test {
         let value: CLValue = self
             .builder
             .query(None, balance_key.clone(), &[])
-            .and_then(|v| CLValue::try_from(v).ok())
+            .and_then(|v| CLValue::try_from(v).map_err(|error| format!("{:?}", error)))
             .expect("should have local value.");
         let balance: U512 = value.into_t().unwrap();
         assert_eq!(
@@ -290,7 +290,7 @@ impl ERC20Test {
         let value: CLValue = self
             .builder
             .query(None, total_supply_key.clone(), &[])
-            .and_then(|v| CLValue::try_from(v).ok())
+            .and_then(|v| CLValue::try_from(v).map_err(|error| format!("{:?}", error)))
             .expect("should have total supply key.");
         let total_supply: U512 = value.into_t().unwrap();
         assert_eq!(total_supply, expected, "Total supply assertion failure.");
@@ -311,7 +311,7 @@ impl ERC20Test {
         let value: CLValue = self
             .builder
             .query(None, allowance_key.clone(), &[])
-            .and_then(|v| CLValue::try_from(v).ok())
+            .and_then(|v| CLValue::try_from(v).map_err(|error| format!("{:?}", error)))
             .expect("should have allowance key.");
         let allowance: U512 = value.into_t().unwrap();
         assert_eq!(

@@ -2,9 +2,12 @@ use lazy_static::lazy_static;
 
 use engine_core::engine_state::genesis::GenesisAccount;
 use engine_shared::motes::Motes;
-use engine_test_support::low_level::{
-    utils, DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_ACCOUNTS,
-    DEFAULT_ACCOUNT_ADDR, DEFAULT_PAYMENT, STANDARD_PAYMENT_CONTRACT,
+use engine_test_support::{
+    low_level::{
+        utils, DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_ACCOUNTS,
+        DEFAULT_PAYMENT, STANDARD_PAYMENT_CONTRACT,
+    },
+    DEFAULT_ACCOUNT_ADDR,
 };
 use types::{account::PublicKey, ApiError, U512};
 

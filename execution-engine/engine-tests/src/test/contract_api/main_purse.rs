@@ -1,7 +1,9 @@
 use engine_shared::stored_value::StoredValue;
-use engine_test_support::low_level::{
-    ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG,
-    DEFAULT_PAYMENT,
+use engine_test_support::{
+    low_level::{
+        ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT,
+    },
+    DEFAULT_ACCOUNT_ADDR,
 };
 use types::Key;
 
@@ -16,7 +18,7 @@ fn should_run_main_purse_contract_default_account() {
 
     let builder = builder.run_genesis(&DEFAULT_GENESIS_CONFIG);
 
-    let default_account = if let Some(StoredValue::Account(account)) =
+    let default_account = if let Ok(StoredValue::Account(account)) =
         builder.query(None, Key::Account(DEFAULT_ACCOUNT_ADDR), &[])
     {
         account
