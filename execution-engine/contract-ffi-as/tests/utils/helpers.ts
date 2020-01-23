@@ -14,30 +14,3 @@ export function hex2bin(hex: String): Uint8Array {
   }
   return bin;
 }
-
-// Checks if two arrays are equal
-export function isArraysEqual<T>(a: Array<T>, b: Array<T>, len: i32 = 0): bool {
-  if (!len) {
-    len = a.length;
-    if (len != b.length) return false;
-    if (a === b) return true;
-  }
-  for (let i = 0; i < len; i++) {
-    if (isFloat<T>()) {
-      if (isNaN(a[i]) && isNaN(b[i])) continue;
-    }
-    if (a[i] != b[i]) return false;
-  }
-  return true;
-}
-
-export function checkItemsEqual<T>(a: Array<T>, b: Array<T>): bool {
-  for (var i = 0; i < a.length; i++) {
-    const idx = b.indexOf(a[i]);
-    if (idx == -1) {
-      return false;
-    }
-    b.splice(idx, 1);
-  }
-  return b.length === 0;
-}

@@ -10,7 +10,8 @@ import { CLValue } from "../../assembly/clvalue";
 import { Key, KeyVariant } from "../../assembly/key";
 import { URef, AccessRights } from "../../assembly/uref";
 import { Option } from "../../assembly/option";
-import { hex2bin, isArraysEqual } from "../utils/helpers";
+import { hex2bin } from "../utils/helpers";
+import { checkArraysEqual } from "../../assembly/utils";
 import { typedToArray, arrayToTyped } from "../../assembly/utils";
 import { Pair } from "../../assembly/pair";
 
@@ -20,7 +21,7 @@ import { Pair } from "../../assembly/pair";
 export function testDeSerU8(): bool {
     const truth: u8[] = [222];
     let ser = toBytesU8(222);
-    assert(isArraysEqual(ser, truth));
+    assert(checkArraysEqual(ser, truth));
     let deser = fromBytesU8(arrayToTyped(ser));
     assert(ser !== null);
     return <u8>deser == <u8>222;
@@ -31,7 +32,7 @@ export function xtestDeSerU8_Zero(): bool {
     // NOTE: Currently probably unable to check if `foo(): U8 | null` result is null
     const truth: u8[] = [0];
     let ser = toBytesU8(0);
-    assert(isArraysEqual(ser, truth));
+    assert(checkArraysEqual(ser, truth));
     let deser = fromBytesU8(arrayToTyped(ser));
     return deser == <U8>0;
 }
@@ -39,7 +40,7 @@ export function xtestDeSerU8_Zero(): bool {
 export function testDeSerU32(): bool {
     const truth: u8[] = [239, 190, 173, 222];
     let deser = toBytesU32(3735928559);
-    assert(isArraysEqual(deser, truth));
+    assert(checkArraysEqual(deser, truth));
     let ser = fromBytesU32(arrayToTyped(deser));
     assert(ser !== null);
     return <u32>ser == <u32>0xdeadbeef;
@@ -48,7 +49,7 @@ export function testDeSerU32(): bool {
 export function testDeSerZeroU32(): bool {
     const truth: u8[] = [0, 0, 0, 0];
     let ser = toBytesU32(0);
-    assert(isArraysEqual(ser, truth));
+    assert(checkArraysEqual(ser, truth));
     let deser = fromBytesU32(arrayToTyped(ser));
     // WTF: `ser !== null` is false when ser === <U32>0
     assert(ser != null);
@@ -97,7 +98,7 @@ export function testDeSerListOfStrings(): bool {
     assert(maybeResult != null);
     const result = <String[]>maybeResult;
 
-    assert(isArraysEqual(result, <String[]>[
+    assert(checkArraysEqual(result, <String[]>[
         "abc",
         "1234567890",
         "qwerty",
@@ -105,13 +106,13 @@ export function testDeSerListOfStrings(): bool {
     
     let lhs = toBytesStringList(result);
     let rhs = typedToArray(truth);
-    return isArraysEqual(lhs, rhs);
+    return checkArraysEqual(lhs, rhs);
 };
 
 export function testDeSerEmptyListOfStrings(): bool {
     const truth = hex2bin("00000000");
     const maybeResult = fromBytesStringList(truth);
-    return isArraysEqual(<String[]>maybeResult, <String[]>[]);
+    return checkArraysEqual(<String[]>maybeResult, <String[]>[]);
 };
 
 export function testSerializeMap(): bool {
@@ -128,7 +129,7 @@ export function testSerializeMap(): bool {
     ];
 
     const serialized = toBytesMap(map);
-    assert(isArraysEqual(serialized, typedToArray(truth)));
+    assert(checkArraysEqual(serialized, typedToArray(truth)));
 
     const maybeDeser = fromBytesMap<String, String>(
         arrayToTyped(serialized),
@@ -162,7 +163,7 @@ export function testToBytesVecT(): bool {
     let serialized = toBytesVecT<CLValue>([
         CLValue.fromString("get_payment_purse"),
     ]);
-    return isArraysEqual(serialized, typedToArray(truth));
+    return checkArraysEqual(serialized, typedToArray(truth));
 }
 
 export function testKeyOfURefVariantSerializes(): bool {
@@ -173,7 +174,7 @@ export function testKeyOfURefVariantSerializes(): bool {
     let key = Key.fromURef(uref);
     let serialized = key.toBytes();
 
-    return isArraysEqual(serialized, typedToArray(truth));
+    return checkArraysEqual(serialized, typedToArray(truth));
 };
 
 export function testDeSerString(): bool {
@@ -181,7 +182,7 @@ export function testDeSerString(): bool {
     const truth = hex2bin("0b00000068656c6c6f5f776f726c64");
 
     const ser = toBytesString("hello_world");
-    assert(isArraysEqual(ser, typedToArray(truth)));
+    assert(checkArraysEqual(ser, typedToArray(truth)));
 
     const deser = fromBytesString(arrayToTyped(ser));
     assert(deser !== null);
@@ -192,7 +193,7 @@ export function testDecodeURefFromBytesWithoutAccessRights(): bool {
     const truth = hex2bin("2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a00");
     let uref = URef.fromBytes(truth);
     assert(uref !== null);
-    assert(isArraysEqual(typedToArray(uref.getBytes()), <u8[]>[
+    assert(checkArraysEqual(typedToArray(uref.getBytes()), <u8[]>[
         42, 42, 42, 42, 42, 42, 42, 42, 42, 42,
         42, 42, 42, 42, 42, 42, 42, 42, 42, 42,
         42, 42, 42, 42, 42, 42, 42, 42, 42, 42,
@@ -200,7 +201,7 @@ export function testDecodeURefFromBytesWithoutAccessRights(): bool {
     ]));
     assert(uref.getAccessRights() === AccessRights.NONE);
     let serialized = uref.toBytes();
-    return isArraysEqual(serialized, typedToArray(truth));
+    return checkArraysEqual(serialized, typedToArray(truth));
 }
 
 export function testDecodeURefFromBytesWithAccessRights(): bool {
@@ -208,7 +209,7 @@ export function testDecodeURefFromBytesWithAccessRights(): bool {
     const maybeURef = URef.fromBytes(truth);
     assert(maybeURef !== null);
     const uref = <URef>maybeURef;
-    assert(isArraysEqual(typedToArray(uref.getBytes()), <u8[]>[
+    assert(checkArraysEqual(typedToArray(uref.getBytes()), <u8[]>[
         42, 42, 42, 42, 42, 42, 42, 42, 42, 42,
         42, 42, 42, 42, 42, 42, 42, 42, 42, 42,
         42, 42, 42, 42, 42, 42, 42, 42, 42, 42,
@@ -235,5 +236,5 @@ export function testDecodedOptionalIsSome(): bool {
     let unwrapped = res.unwrap();
     assert(unwrapped !== null, "unwrapped should not be null");
     let values = <Uint8Array>unwrapped;
-    return isArraysEqual(typedToArray(values), [2, 3, 4, 5, 6, 7, 8, 9, 10]);
+    return checkArraysEqual(typedToArray(values), [2, 3, 4, 5, 6, 7, 8, 9, 10]);
 };

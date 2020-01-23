@@ -1,16 +1,17 @@
-import { hex2bin, isArraysEqual, checkItemsEqual } from "../utils/helpers";
+import { hex2bin } from "../utils/helpers";
+import { checkArraysEqual, checkItemsEqual } from "../../assembly/utils";
 import { typedToArray } from "../../assembly/utils";
 import { Pair } from "../../assembly/pair";
 
 export function testHex2Bin(): bool {
     let truth = hex2bin("deadbeef");
-    return isArraysEqual(typedToArray(truth), [222, 173, 190, 239]);
+    return checkArraysEqual(typedToArray(truth), [222, 173, 190, 239]);
 }
 
-export function testIsArraysEqual(): bool {
-    assert(isArraysEqual(<u8[]>[], []));
-    assert(!isArraysEqual(<u8[]>[1, 2, 3], [1]));
-    return isArraysEqual(<u8[]>[1, 2, 3], [1, 2, 3]);
+export function testcheckArraysEqual(): bool {
+    assert(checkArraysEqual(<u8[]>[], []));
+    assert(!checkArraysEqual(<u8[]>[1, 2, 3], [1]));
+    return checkArraysEqual(<u8[]>[1, 2, 3], [1, 2, 3]);
 }
 
 export function testItemsEqual(): bool {

@@ -1,5 +1,6 @@
-import { hex2bin, isArraysEqual } from "../utils/helpers";
+import { hex2bin } from "../utils/helpers";
 import { U512 } from "../../assembly/bignum";
+import { checkArraysEqual } from "../../assembly/utils";
 import { fromBytesU64 } from "../../assembly/bytesrepr";
 import { typedToArray } from "../../assembly/utils";
 
@@ -8,7 +9,7 @@ export function testSerializeU512_3BytesWide(): bool {
     let num = U512.fromBytes(truth);
     assert(num.getValue() === <U64>96384);
     const bytes = num.toBytes();
-    return isArraysEqual(bytes, typedToArray(truth));
+    return checkArraysEqual(bytes, typedToArray(truth));
 };
 
 export function testSerializeU512_2BytesWide(): bool {
@@ -16,7 +17,7 @@ export function testSerializeU512_2BytesWide(): bool {
     let num = U512.fromBytes(truth);
     assert(num.getValue() === <U64>1024);
     const bytes = num.toBytes();
-    return isArraysEqual(bytes, typedToArray(truth));
+    return checkArraysEqual(bytes, typedToArray(truth));
 };
 
 export function testSerializeU512_1BytesWide(): bool {
@@ -24,7 +25,7 @@ export function testSerializeU512_1BytesWide(): bool {
     let num = U512.fromBytes(truth);
     assert(num.getValue() === <U64>1);
     const bytes = num.toBytes();
-    return isArraysEqual(bytes, typedToArray(truth));
+    return checkArraysEqual(bytes, typedToArray(truth));
 };
 
 export function testSerialize100mTimes10(): bool {
@@ -39,6 +40,6 @@ export function testSerialize100mTimes10(): bool {
     let truth = hex2bin("0400ca9a3b");
     let bytes = valU512.toBytes();
     assert(bytes !== null)
-    assert(isArraysEqual(bytes, typedToArray(truth)));
+    assert(checkArraysEqual(bytes, typedToArray(truth)));
     return valU512.getValue() === <U64>(100000000*10);
 }
