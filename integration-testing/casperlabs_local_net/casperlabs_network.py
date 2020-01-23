@@ -56,8 +56,6 @@ class CasperLabsNetwork:
     CasperLabsNetwork is the base object for a network of 0-many CasperLabNodes.
 
     A subclass should implement `_create_cl_network` to stand up the type of network it needs.
-
-    Convention is naming the bootstrap as number 0 and all others increment from that point.
     """
 
     grpc_encryption = False
@@ -187,8 +185,6 @@ class CasperLabsNetwork:
         return account
 
     def add_bootstrap(self, config: DockerConfig) -> None:
-        if self.node_count > 0:
-            raise Exception("There can be only one bootstrap")
         config.is_bootstrap = True
         self._add_cl_node(config)
         self.wait_method(wait_for_node_started, 0)
@@ -226,12 +222,18 @@ class CasperLabsNetwork:
             self.selenium_driver.implicitly_wait(30)
 
     def add_cl_node(
-        self, config: DockerConfig, network_with_bootstrap: bool = True
+        self,
+        config: DockerConfig,
+        network_with_bootstrap: bool = True,
+        bootstrap_address: str = None,
     ) -> None:
         with self._lock:
             if self.node_count == 0:
                 raise Exception("Must create bootstrap first")
-            config.bootstrap_address = self.cl_nodes[0].node.address
+            config.bootstrap_address = (
+                bootstrap_address or self.cl_nodes[0].node.address
+            )
+            # TODO: what is config.network ?
             if network_with_bootstrap:
                 config.network = self.cl_nodes[0].node.config.network
             self._add_cl_node(config)
@@ -588,6 +590,40 @@ class ThreeNodeNetwork(CasperLabsNetwork):
             self.wait_method(
                 wait_for_approved_block_received_handler_state, node_number
             )
+        self.wait_for_peers()
+
+
+class ThreeNodeNetworkWithTwoBootstraps(CasperLabsNetwork):
+    """
+    A three nodes network where the node-0 is a standalone node,
+    and node-2 is setup to bootstrap from node-0 and node-1.
+    """
+
+    def get_node_config(self):
+        kp = self.get_key()
+        return DockerConfig(
+            self.docker_client,
+            node_private_key=kp.private_key,
+            node_public_key=kp.public_key,
+            network=self.create_docker_network(),
+            node_account=kp,
+        )
+
+    def create_cl_network(self):
+        self.add_bootstrap(self.get_node_config())
+        self.add_cl_node(self.get_node_config())
+
+        for node in self.docker_nodes:
+            wait_for_node_started(node, 30, 1)
+
+        config = self.get_node_config()
+        self.add_cl_node(
+            config,
+            bootstrap_address=f'"{self.cl_nodes[0].node.address} {self.cl_nodes[1].node.address}"',
+        )
+
+        for i in range(3):
+            self.wait_method(wait_for_approved_block_received_handler_state, i)
         self.wait_for_peers()
 
 
