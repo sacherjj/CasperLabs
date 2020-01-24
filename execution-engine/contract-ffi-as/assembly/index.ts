@@ -180,17 +180,11 @@ export function transferToAccount(target: Uint8Array, amount: U512): U32 | null 
 }
 
 export function ret(value: CLValue): void {
-  retEx(value, []);
-}
-
-export function retEx(value: CLValue, extraURefs: URef[]): void {
   const valueBytes = value.toBytes();
-  const extraURefsBytes = toBytesVecT(extraURefs);
   externals.ret(
     valueBytes.dataStart,
-    valueBytes.length,
-    extraURefsBytes.dataStart,
-    extraURefsBytes.length);
+    valueBytes.length
+  );
   unreachable();
 }
 

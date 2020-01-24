@@ -1,5 +1,5 @@
 import {Error, ErrorCode} from "../../../../contract-ffi-as/assembly/error";
-import {putKey, getKey, hasKey, getArg, storeFunctionAtHash, ret, retEx} from "../../../../contract-ffi-as/assembly";
+import {putKey, getKey, hasKey, getArg, storeFunctionAtHash, ret} from "../../../../contract-ffi-as/assembly";
 import {Key} from "../../../../contract-ffi-as/assembly/key";
 import {CLValue, CLTypeTag} from "../../../../contract-ffi-as/assembly/clvalue";
 import {toBytesString, toBytesMap, toBytesPair} from "../../../../contract-ffi-as/assembly/bytesrepr";
@@ -139,9 +139,7 @@ export function mailing_list_ext(): void {
         let key = <Key>maybeKey;
         let keyBytes = key.toBytes();
         let opt = new Option(arrayToTyped(keyBytes));
-        retEx(CLValue.fromOption(opt, CLTypeTag.Key), [
-            key.toURef()
-        ]);
+        ret(CLValue.fromOption(opt, CLTypeTag.Key));
     }
     else if (methodName == "pub") {
         publish(arg1);

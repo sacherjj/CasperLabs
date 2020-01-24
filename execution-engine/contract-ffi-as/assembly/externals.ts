@@ -17,7 +17,7 @@ export declare function get_arg(index: u32, dest_ptr: usize, dest_size: u32): i3
 @external("env", "get_arg_size")
 export declare function get_arg_size(index: u32, dest_size: u32): i32;
 @external("env", "ret")
-export declare function ret(value_ptr: usize, value_size: usize, extra_urefs_ptr: usize, extra_urefs_size: usize): void;
+export declare function ret(value_ptr: usize, value_size: usize): void;
 @external("env", "call_contract")
 export declare function call_contract(key_ptr: usize, key_size: u32, args_ptr: usize, args_size: u32, result_size: usize): i32;
 @external("env", "get_key")
