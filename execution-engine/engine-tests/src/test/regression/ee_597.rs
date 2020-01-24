@@ -25,13 +25,7 @@ fn should_fail_when_bonding_amount_is_zero_ee_597_regression() {
         .expect("should have a response")
         .to_owned();
 
-    let error_message = {
-        let execution_result = utils::get_success_result(&response);
-        utils::get_error_message(execution_result)
-    };
+    let error_message = utils::get_error_message(response);
     // Error::BondTooSmall => 5,
-    assert_eq!(
-        error_message,
-        format!("Exit code: {}", u32::from(ApiError::ProofOfStake(5)))
-    );
+    assert!(error_message.contains(&format!("Revert({})", u32::from(ApiError::ProofOfStake(5)))));
 }

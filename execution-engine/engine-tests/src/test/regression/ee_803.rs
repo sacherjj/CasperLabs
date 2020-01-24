@@ -1,11 +1,11 @@
-use std::convert::TryInto;
+use std::rc::Rc;
 
 use engine_core::engine_state::{
+    execution_result::ExecutionResult,
     genesis::{GenesisAccount, POS_REWARDS_PURSE},
     CONV_RATE,
 };
-use engine_grpc_server::engine_server::ipc::ExecuteResponse;
-use engine_shared::{gas::Gas, motes::Motes};
+use engine_shared::motes::Motes;
 use engine_test_support::low_level::{
     utils, ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_ACCOUNTS, DEFAULT_ACCOUNT_ADDR,
 };
@@ -35,14 +35,14 @@ fn get_pos_purse_id_by_name(
         .map(|u| PurseId::new(*u))
 }
 
-fn get_cost(response: &ExecuteResponse) -> U512 {
-    let mut success_result = utils::get_success_result(response);
-    let cost = success_result
-        .take_cost()
-        .try_into()
-        .expect("should map to U512");
-    let gas = Gas::new(cost);
-    let motes = Motes::from_gas(gas, CONV_RATE).expect("should have motes");
+fn get_cost(response: &[Rc<ExecutionResult>]) -> U512 {
+    let motes = Motes::from_gas(
+        utils::get_exec_costs(response)
+            .into_iter()
+            .fold(Default::default(), |i, acc| i + acc),
+        CONV_RATE,
+    )
+    .expect("should convert");
     motes.value()
 }
 

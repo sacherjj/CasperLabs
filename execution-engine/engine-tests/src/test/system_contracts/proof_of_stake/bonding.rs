@@ -94,7 +94,7 @@ fn should_run_successful_bond_and_unbond() {
         .builder()
         .get_exec_response(0)
         .expect("should have exec response");
-    let mut genesis_gas_cost = utils::get_exec_costs(&exec_response)[0];
+    let mut genesis_gas_cost = utils::get_exec_costs(exec_response)[0];
 
     let transforms = &result.builder().get_transforms()[0];
 
@@ -159,7 +159,7 @@ fn should_run_successful_bond_and_unbond() {
         .builder()
         .get_exec_response(0)
         .expect("should have exec response");
-    genesis_gas_cost = genesis_gas_cost + utils::get_exec_costs(&exec_response)[0];
+    genesis_gas_cost = genesis_gas_cost + utils::get_exec_costs(exec_response)[0];
 
     let account_1 = result
         .builder()
@@ -222,7 +222,7 @@ fn should_run_successful_bond_and_unbond() {
         .builder()
         .get_exec_response(0)
         .expect("should have exec response");
-    let gas_cost_b = Motes::from_gas(utils::get_exec_costs(&exec_response)[0], CONV_RATE)
+    let gas_cost_b = Motes::from_gas(utils::get_exec_costs(exec_response)[0], CONV_RATE)
         .expect("should convert");
 
     assert_eq!(
@@ -278,7 +278,7 @@ fn should_run_successful_bond_and_unbond() {
         .builder()
         .get_exec_response(0)
         .expect("should have exec response");
-    genesis_gas_cost = genesis_gas_cost + utils::get_exec_costs(&exec_response)[0];
+    genesis_gas_cost = genesis_gas_cost + utils::get_exec_costs(exec_response)[0];
 
     assert_eq!(
         result
@@ -327,7 +327,7 @@ fn should_run_successful_bond_and_unbond() {
         .builder()
         .get_exec_response(0)
         .expect("should have exec response");
-    let gas_cost_b = Motes::from_gas(utils::get_exec_costs(&exec_response)[0], CONV_RATE)
+    let gas_cost_b = Motes::from_gas(utils::get_exec_costs(exec_response)[0], CONV_RATE)
         .expect("should convert");
 
     assert_eq!(
@@ -374,7 +374,7 @@ fn should_run_successful_bond_and_unbond() {
         .builder()
         .get_exec_response(0)
         .expect("should have exec response");
-    genesis_gas_cost = genesis_gas_cost + utils::get_exec_costs(&exec_response)[0];
+    genesis_gas_cost = genesis_gas_cost + utils::get_exec_costs(exec_response)[0];
 
     // Back to original after funding account1's pursee
     assert_eq!(
@@ -495,15 +495,9 @@ fn should_fail_bonding_with_insufficient_funds() {
         .expect("should have a response")
         .to_owned();
 
-    let error_message = {
-        let execution_result = utils::get_success_result(&response);
-        utils::get_error_message(execution_result)
-    };
+    let error_message = utils::get_error_message(response);
     // pos::Error::BondTransferFailed => 8
-    assert_eq!(
-        error_message,
-        format!("Exit code: {}", u32::from(ApiError::ProofOfStake(8)))
-    );
+    assert!(error_message.contains(&format!("Revert({})", u32::from(ApiError::ProofOfStake(8)))));
 }
 
 #[ignore]
@@ -541,13 +535,7 @@ fn should_fail_unbonding_validator_without_bonding_first() {
         .expect("should have a response")
         .to_owned();
 
-    let error_message = {
-        let execution_result = utils::get_success_result(&response);
-        utils::get_error_message(execution_result)
-    };
+    let error_message = utils::get_error_message(response);
     // pos::Error::NotBonded => 0
-    assert_eq!(
-        error_message,
-        format!("Exit code: {}", u32::from(ApiError::ProofOfStake(0)))
-    );
+    assert!(error_message.contains(&format!("Revert({})", u32::from(ApiError::ProofOfStake(0)))));
 }

@@ -38,13 +38,12 @@ fn should_raise_precondition_authorization_failure_invalid_account() {
     let response = transfer_result
         .builder()
         .get_exec_response(0)
-        .expect("there should be a response")
-        .clone();
+        .expect("there should be a response");
 
-    let precondition_failure = utils::get_precondition_failure(&response);
+    let precondition_failure = utils::get_precondition_failure(response);
 
     assert_eq!(
-        precondition_failure.message, "Authorization failure: not authorized.",
+        precondition_failure, "Authorization failure: not authorized.",
         "expected authorization failure"
     );
 }
@@ -73,13 +72,12 @@ fn should_raise_precondition_authorization_failure_empty_authorized_keys() {
     let response = transfer_result
         .builder()
         .get_exec_response(0)
-        .expect("there should be a response")
-        .clone();
+        .expect("there should be a response");
 
-    let precondition_failure = utils::get_precondition_failure(&response);
+    let precondition_failure = utils::get_precondition_failure(response);
 
     assert_eq!(
-        precondition_failure.message, "Authorization failure: not authorized.",
+        precondition_failure, "Authorization failure: not authorized.",
         "expected authorization failure"
     );
 }
@@ -116,13 +114,12 @@ fn should_raise_precondition_authorization_failure_invalid_authorized_keys() {
     let response = transfer_result
         .builder()
         .get_exec_response(0)
-        .expect("there should be a response")
-        .clone();
+        .expect("there should be a response");
 
-    let precondition_failure = utils::get_precondition_failure(&response);
+    let precondition_failure = utils::get_precondition_failure(response);
 
     assert_eq!(
-        precondition_failure.message, "Authorization failure: not authorized.",
+        precondition_failure, "Authorization failure: not authorized.",
         "expected authorization failure"
     );
 }
