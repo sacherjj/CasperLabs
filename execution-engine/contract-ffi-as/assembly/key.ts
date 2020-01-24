@@ -4,6 +4,7 @@ import {Error} from "./error";
 import {UREF_SERIALIZED_LENGTH, KEY_ID_SERIALIZED_LENGTH, KEY_UREF_SERIALIZED_LENGTH} from "./constants";
 import * as externals from "./externals";
 import { readHostBuffer } from ".";
+import {GetDecodedBytesCount, AddDecodedBytesCount, SetDecodedBytesCount} from "./bytesrepr";
 
 export enum KeyVariant {
     ACCOUNT_ID = 0,
@@ -74,20 +75,30 @@ export class Key {
     }
 
     static fromBytes(bytes: Uint8Array): Key | null {
-        if (bytes.length == 0) {
+        if (bytes.length < 1) {
             return null;
         }
         const tag = bytes[0];
+        SetDecodedBytesCount(1);
         if (tag == KeyVariant.HASH_ID) {
-            var hashBytes = bytes.subarray(1);
+            var hashBytes = bytes.subarray(1, 32 + 1);
+            AddDecodedBytesCount(32);
             return Key.fromHash(hashBytes);
         }
         else if (tag == KeyVariant.UREF_ID) {
             var urefBytes = bytes.subarray(1);
+
+            let savedOffset = GetDecodedBytesCount();
+
             var uref = URef.fromBytes(urefBytes);
             if (uref === null) {
                 return null;
             }
+
+            let decodedBytes = GetDecodedBytesCount();
+            SetDecodedBytesCount(savedOffset);
+            AddDecodedBytesCount(decodedBytes);
+
             return Key.fromURef(<URef>uref);
         }
         else {

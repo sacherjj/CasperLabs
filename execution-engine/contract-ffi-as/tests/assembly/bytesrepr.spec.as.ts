@@ -5,7 +5,8 @@ import { fromBytesU64, toBytesU64,
          toBytesMap, fromBytesMap,
          toBytesPair,
          toBytesString, fromBytesString,
-         toBytesVecT } from "../../assembly/bytesrepr";
+         toBytesVecT,
+         GetDecodedBytesCount } from "../../assembly/bytesrepr";
 import { CLValue } from "../../assembly/clvalue";
 import { Key, KeyVariant } from "../../assembly/key";
 import { URef, AccessRights } from "../../assembly/uref";
@@ -115,6 +116,17 @@ export function testDeSerEmptyListOfStrings(): bool {
     return checkArraysEqual(<String[]>maybeResult, <String[]>[]);
 };
 
+export function testDeSerEmptyMap(): bool {
+    const truth = hex2bin("00000000");
+    const maybeResult = fromBytesMap<String, Key>(
+        truth,
+        fromBytesString,
+        Key.fromBytes);
+    assert(maybeResult !== null);
+    return checkArraysEqual(<Array<Pair<String, Key>>>maybeResult, <Array<Pair<String, Key>>>[]);
+};
+
+
 export function testSerializeMap(): bool {
     // let mut m = BTreeMap::new();
     // m.insert("Key1".to_string(), "Value1".to_string());
@@ -134,9 +146,7 @@ export function testSerializeMap(): bool {
     const maybeDeser = fromBytesMap<String, String>(
         arrayToTyped(serialized),
         fromBytesString,
-        toBytesString,
-        fromBytesString,
-        toBytesString);
+        fromBytesString);
     
     assert(maybeDeser !== null);
     let deser = <Array<Pair<String, String>>>maybeDeser;
@@ -193,12 +203,11 @@ export function testDecodeURefFromBytesWithoutAccessRights(): bool {
     const truth = hex2bin("2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a00");
     let uref = URef.fromBytes(truth);
     assert(uref !== null);
-    assert(checkArraysEqual(typedToArray(uref.getBytes()), <u8[]>[
-        42, 42, 42, 42, 42, 42, 42, 42, 42, 42,
-        42, 42, 42, 42, 42, 42, 42, 42, 42, 42,
-        42, 42, 42, 42, 42, 42, 42, 42, 42, 42,
-        42, 42,
-    ]));
+
+    let urefBytes = new Array<u8>(32);
+    urefBytes.fill(42);
+
+    assert(checkArraysEqual(typedToArray(uref.getBytes()), urefBytes));
     assert(uref.getAccessRights() === AccessRights.NONE);
     let serialized = uref.toBytes();
     return checkArraysEqual(serialized, typedToArray(truth));

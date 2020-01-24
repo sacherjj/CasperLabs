@@ -1,5 +1,6 @@
 import {Option} from "./option";
 import {CLValue} from "./clvalue";
+import {GetDecodedBytesCount, AddDecodedBytesCount, SetDecodedBytesCount} from "./bytesrepr";
 import {UREF_ADDR_LENGTH, OPTION_TAG_SERIALIZED_LENGTH, ACCESS_RIGHTS_SERIALIZED_LENGTH, UREF_SERIALIZED_LENGTH} from "./constants";
 
 export enum AccessRights{
@@ -31,13 +32,24 @@ export class URef {
     }
 
     static fromBytes(bytes: Uint8Array): URef | null {
+        if (bytes.length < 33) {
+            return null;
+        }
+        
         let urefBytes = bytes.subarray(0, UREF_ADDR_LENGTH);
-        let accessRightsBytes =  Option.fromBytes(bytes.subarray(UREF_ADDR_LENGTH));
-        if(accessRightsBytes.isNone())
+        SetDecodedBytesCount(33);
+        if (bytes[UREF_ADDR_LENGTH] == 1) {
+            if (bytes.length < 34) {
+                return null;
+            }
+            let accessRights = bytes[UREF_ADDR_LENGTH + 1];
+            AddDecodedBytesCount(1);
+            return new URef(urefBytes, accessRights);
+        }
+        else {
+            let urefBytes = bytes.subarray(0, UREF_ADDR_LENGTH);
             return new URef(urefBytes, AccessRights.NONE);
-
-        let accessRights = <u8>(<Uint8Array>accessRightsBytes.unwrap())[0];
-        return new URef(urefBytes, accessRights);
+        }
     }
 
     toBytes(): Array<u8> {
