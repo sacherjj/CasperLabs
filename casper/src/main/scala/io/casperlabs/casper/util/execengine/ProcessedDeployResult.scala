@@ -57,7 +57,7 @@ object ProcessedDeployResult {
 
   // All the deploys that do not change the global state in a way that can conflict with others,
   // which can only be a `PreconditionFailure`, has been filtered out when creating block.
-  // We're validating block it shouldn't include those either.
+  // When we're validating block it shouldn't include those either.
   def split(l: List[ProcessedDeployResult]): (List[PreconditionFailure], List[DeployEffects]) =
     l.foldRight(
       (List.empty[PreconditionFailure], List.empty[DeployEffects])
