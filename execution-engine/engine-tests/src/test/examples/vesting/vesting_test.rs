@@ -1,0 +1,347 @@
+use std::convert::{TryFrom, TryInto};
+
+use engine_core::engine_state::CONV_RATE;
+use engine_grpc_server::engine_server::ipc::ExecuteResponse;
+use engine_shared::{gas::Gas, motes::Motes};
+use engine_test_support::low_level::{
+    utils, ExecuteRequestBuilder, InMemoryWasmTestBuilder as TestBuilder, DEFAULT_GENESIS_CONFIG,
+};
+use types::{account::{PurseId}, bytesrepr::{ToBytes, FromBytes}, CLValue, Key, U512, CLTyped};
+
+const TRANFER_TO_ACCOUNT_WASM: &str = "transfer_to_account.wasm";
+const VESTING_CONTRACT_WASM: &str = "vesting_smart_contract.wasm";
+const VESTING_PROXY_CONTRACT_NAME: &str = "vesting_proxy";
+const VESTING_CONTRACT_NAME: &str = "vesting_01";
+
+mod method {
+    pub const DEPLOY: &str = "deploy";
+    pub const PAUSE: &str = "pause";
+    pub const UNPAUSE: &str = "unpause";
+    pub const WITHDRAW_PROXY: &str = "withdraw_proxy";
+    pub const ADMIN_RELEASE_PROXY: &str = "admin_release_proxy";
+}
+
+pub mod key {
+    pub const CLIFF_TIME: &str = "cliff_time";
+    pub const CLIFF_AMOUNT: &str = "cliff_amount";
+    pub const DRIP_PERIOD: &str = "drip_period";
+    pub const DRIP_AMOUNT: &str = "drip_amount";
+    pub const TOTAL_AMOUNT: &str = "total_amount";
+    pub const RELEASED_AMOUNT: &str = "released_amount";
+    pub const ADMIN_RELEASE_PERIOD: &str = "admin_release_period";
+    pub const PAUSE_FLAG: &str = "is_paused";
+    pub const ON_PAUSE_PERIOD: &str = "on_pause_period";
+    pub const LAST_PAUSE_TIME: &str = "last_pause_time";
+    pub const PURSE_NAME: &str = "vesting_main_purse";
+}
+
+pub struct VestingConfig {
+    pub cliff_time: U512, 
+    pub cliff_amount: U512,
+    pub drip_period: U512,
+    pub drip_amount: U512,
+    pub total_amount: U512,
+    pub admin_release_period: U512
+}
+
+impl Default for VestingConfig {
+    fn default() -> VestingConfig {
+        VestingConfig {
+            cliff_time: 10.into(), 
+            cliff_amount: 2.into(),
+            drip_period: 3.into(),
+            drip_amount: 5.into(),
+            total_amount: 1000.into(),
+            admin_release_period: 123.into()
+        }
+    }
+}
+
+pub struct VestingTest {
+    pub builder: TestBuilder,
+    pub vesting_hash: Option<[u8; 32]>,
+    pub proxy_hash: Option<[u8; 32]>,
+    pub current_time: u64
+}
+
+impl VestingTest {
+    pub fn new(sender: [u8; 32], admin: [u8; 32], recipient: [u8; 32],
+        vesting_config: &VestingConfig) -> VestingTest {
+        let mut builder = TestBuilder::default();
+        builder.run_genesis(&DEFAULT_GENESIS_CONFIG).commit();
+        let test = VestingTest {
+            builder,
+            vesting_hash: None,
+            proxy_hash: None,
+            current_time: 0
+        };
+        test.deploy_vesting_contract(sender, admin, recipient, vesting_config)
+            .assert_success_status_and_commit()
+            .with_contract(sender, VESTING_CONTRACT_NAME)
+    }
+
+    pub fn assert_success_status_and_commit(mut self) -> Self {
+        self.builder.expect_success().commit();
+        self
+    }
+
+    pub fn assert_failure_with_exit_code(self, code: u32) -> Self {
+        let last_deploy_index = self.builder.get_exec_responses_count();
+        let deploy_error = self
+            .builder
+            .exec_error_message(last_deploy_index - 1)
+            .unwrap();
+        let expected_message = format!("Exit code: {:?}", code);
+        assert_eq!(deploy_error, expected_message);
+        self
+    }
+
+    pub fn with_contract(mut self, sender: [u8; 32], vesting_contract_name: &str) -> Self {
+        self.vesting_hash = Some(self.query_contract_hash(sender, vesting_contract_name));
+        self.proxy_hash = Some(self.query_contract_hash(sender, VESTING_PROXY_CONTRACT_NAME));
+        self
+    }
+
+    pub fn with_block_time(mut self, time: u64) -> Self {
+        self.current_time = time;
+        self
+    } 
+
+    pub fn get_vesting_hash(&self) -> [u8; 32] {
+        self.vesting_hash
+            .unwrap_or_else(|| panic!("Field vesting_hash not set."))
+    }
+
+    pub fn get_proxy_hash(&self) -> [u8; 32] {
+        self.proxy_hash
+            .unwrap_or_else(|| panic!("Field proxy_hash not set."))
+    }
+
+    pub fn query_contract_hash(&self, account: [u8; 32], name: &str) -> [u8; 32] {
+        let account_key = Key::Account(account);
+        let value: CLValue = self
+            .builder
+            .query(None, account_key, &[name])
+            .and_then(|v| CLValue::try_from(v).ok())
+            .expect("should have named uref in the account space.");
+        let key: Key = value.into_t().unwrap();
+        key.as_hash().unwrap()
+    }
+
+    pub fn deploy_vesting_contract(mut self, sender: [u8; 32], admin: [u8; 32], 
+        recipient: [u8; 32], vesting_config: &VestingConfig) -> Self {
+        let request = ExecuteRequestBuilder::standard(
+            sender,
+            VESTING_CONTRACT_WASM,
+            (method::DEPLOY, VESTING_CONTRACT_NAME, admin, recipient,
+                vesting_config.cliff_time, 
+                vesting_config.cliff_amount, 
+                vesting_config.drip_period, 
+                vesting_config.drip_amount, 
+                vesting_config.total_amount, 
+                vesting_config.admin_release_period
+            ),
+        )
+        .with_block_time(self.current_time)
+        .build();
+        self.builder.exec(request);
+        self
+    }
+
+    pub fn call_vesting_pause(
+        mut self,
+        sender: [u8; 32]
+    ) -> Self {
+        let request = ExecuteRequestBuilder::contract_call_by_hash(
+            sender,
+            self.get_proxy_hash(),
+            (self.get_vesting_hash(), method::PAUSE),
+        )
+        .with_block_time(self.current_time)
+        .build();
+        self.builder.exec(request);
+        self
+    }
+
+    pub fn call_vesting_unpause(
+        mut self,
+        sender: [u8; 32]
+    ) -> Self {
+        let request = ExecuteRequestBuilder::contract_call_by_hash(
+            sender,
+            self.get_proxy_hash(),
+            (self.get_vesting_hash(), method::UNPAUSE),
+        )
+        .with_block_time(self.current_time)
+        .build();
+        self.builder.exec(request);
+        self
+    }
+
+    pub fn call_withdraw(
+        mut self,
+        sender: [u8; 32],
+        amount: U512
+    ) -> Self {
+        let request = ExecuteRequestBuilder::contract_call_by_hash(
+            sender,
+            self.get_proxy_hash(),
+            (self.get_vesting_hash(), method::WITHDRAW_PROXY, amount),
+        )
+        .with_block_time(self.current_time)
+        .build();
+        self.builder.exec(request);
+        self
+    }
+    
+    pub fn call_admin_release(
+        mut self,
+        sender: [u8; 32]
+    ) -> Self {
+        let request = ExecuteRequestBuilder::contract_call_by_hash(
+            sender,
+            self.get_proxy_hash(),
+            (self.get_vesting_hash(), method::ADMIN_RELEASE_PROXY),
+        )
+        .with_block_time(self.current_time)
+        .build();
+        self.builder.exec(request);
+        self
+    }
+
+    pub fn call_clx_transfer_with_success(
+        mut self,
+        sender: [u8; 32],
+        recipient: [u8; 32],
+        amount: U512,
+    ) -> Self {
+        let request = ExecuteRequestBuilder::standard(
+            sender,
+            TRANFER_TO_ACCOUNT_WASM,
+            (recipient, amount.as_u64()),
+        )
+        .with_block_time(self.current_time)
+        .build();
+        self.builder.exec(request).expect_success().commit();
+        self
+    }
+
+    pub fn assert_clx_vesting_balance(self, expected: &U512) -> Self {
+        let token_contract_value = self
+            .builder
+            .query(None, Key::Hash(self.get_vesting_hash()), &[])
+            .expect("should have token contract.");
+
+        let purse_uref = token_contract_value
+            .as_contract()
+            .unwrap()
+            .named_keys()
+            .get(key::PURSE_NAME)
+            .unwrap()
+            .as_uref()
+            .unwrap();
+        let contract_balance = self.builder.get_purse_balance(PurseId::new(*purse_uref));
+        assert_eq!(&contract_balance, expected);
+        self
+    }
+
+    pub fn assert_clx_account_balance_no_gas(self, account: [u8; 32], expected: U512) -> Self {
+        let account_purse = self.builder.get_account(account).unwrap().purse_id();
+        let mut account_balance = self.builder.get_purse_balance(account_purse);
+        let last_deploy_index = self.builder.get_exec_responses_count();
+        let execution_costs = (0..last_deploy_index)
+            .map(|i| self.builder.get_exec_response(i).unwrap())
+            .map(|response| get_cost(response))
+            .fold(U512::zero(), |sum, cost| sum + cost);
+        account_balance += execution_costs;
+        assert_eq!(account_balance, expected);
+        self
+    }
+
+    fn get_value<T: FromBytes + CLTyped>(&self, name: &str) -> T {
+        let local_key = Key::local(self.get_vesting_hash(), &name.to_bytes().unwrap());
+        let value: CLValue = self
+            .builder
+            .query(None, local_key.clone(), &[])
+            .and_then(|v| CLValue::try_from(v).ok())
+            .expect(format!("should have local value for {} key", name).as_str());
+        value.into_t().unwrap()
+    }
+
+    pub fn assert_cliff_time(self, expected: &U512) -> Self {
+        let value: U512 = self.get_value(key::CLIFF_TIME);
+        assert_eq!(&value, expected, "cliff_time assertion failure");
+        self
+    }
+
+    pub fn assert_cliff_amount(self, expected: &U512) -> Self {
+        let value: U512 = self.get_value(key::CLIFF_AMOUNT);
+        assert_eq!(&value, expected, "cliff_amount assertion failure");
+        self
+    }
+
+    pub fn assert_drip_period(self, expected: &U512) -> Self {
+        let value: U512 = self.get_value(key::DRIP_PERIOD);
+        assert_eq!(&value, expected, "drip_period assertion failure");
+        self
+    }
+
+    pub fn assert_drip_amount(self, expected: &U512) -> Self {
+        let value: U512 = self.get_value(key::DRIP_AMOUNT);
+        assert_eq!(&value, expected, "drip_amount assertion failure");
+        self
+    }
+
+    pub fn assert_total_amount(self, expected: &U512) -> Self {
+        let value: U512 = self.get_value(key::TOTAL_AMOUNT);
+        assert_eq!(&value, expected, "total_amount assertion failure");
+        self
+    }
+
+    pub fn assert_released_amount(self, expected: &U512) -> Self {
+        let value: U512 = self.get_value(key::RELEASED_AMOUNT);
+        assert_eq!(&value, expected, "released_amount assertion failure");
+        self
+    }
+
+    pub fn assert_admin_release_period(self, expected: &U512) -> Self {
+        let value: U512 = self.get_value(key::ADMIN_RELEASE_PERIOD);
+        assert_eq!(&value, expected, "admin_release_period assertion failure");
+        self
+    }
+
+    pub fn assert_on_pause_period(self, expected: &U512) -> Self {
+        let value: U512 = self.get_value(key::ON_PAUSE_PERIOD);
+        assert_eq!(&value, expected, "on_pause_period assertion failure");
+        self
+    }
+
+    pub fn assert_last_pause_time(self, expected: &U512) -> Self {
+        let value: U512 = self.get_value(key::LAST_PAUSE_TIME);
+        assert_eq!(&value, expected, "last_pause_time assertion failure");
+        self
+    }
+
+    pub fn assert_paused(self) -> Self {
+        let value: U512 = self.get_value(key::PAUSE_FLAG);
+        assert_eq!(value, 1.into(), "contract is not paused");
+        self
+    }
+
+    pub fn assert_unpaused(self) -> Self {
+        let value: U512 = self.get_value(key::PAUSE_FLAG);
+        assert_eq!(value, 0.into(), "contract is not paused");
+        self
+    }
+}
+
+fn get_cost(response: &ExecuteResponse) -> U512 {
+    let mut success_result = utils::get_success_result(response);
+    let cost = success_result
+        .take_cost()
+        .try_into()
+        .expect("should map to U512");
+    let gas = Gas::new(cost);
+    let motes = Motes::from_gas(gas, CONV_RATE).expect("should have motes");
+    motes.value()
+}
