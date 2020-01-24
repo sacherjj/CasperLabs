@@ -292,8 +292,7 @@ object ExecEngineUtil {
               )
             )
             .whenA(results.size != deploys.size)
-      pdr = zipDeploysResults(deploys, results)
-    } yield pdr
+    } yield zipDeploysResults(deploys, results)
 
   /** Chooses a set of commuting effects.
     *

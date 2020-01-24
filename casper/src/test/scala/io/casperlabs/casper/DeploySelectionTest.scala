@@ -128,7 +128,6 @@ class DeploySelectionTest
   it should "return conflicting deploys along the commuting ones if they fit the block size limit" in {
     val conflicting = List.fill(deploysInSmallBlock)(sample(arbDeploy.arbitrary))
     val commuting   = List.fill(deploysInSmallBlock)(sample(arbDeploy.arbitrary))
-    val allDeploys  = conflicting ++ commuting
     val stream = fs2.Stream
       .fromIterator(conflicting.toIterator)
       .interleave(fs2.Stream.fromIterator(commuting.toIterator))
@@ -137,16 +136,22 @@ class DeploySelectionTest
     implicit val ee: ExecutionEngineService[Task] = eeExecMock(everyOtherCommutesExec(counter) _)
 
     // Since we generate two streams of `smallBlockSizeBytes` size
-    // A block with twice as big size limit should fit both streams.
-    val bigBlockSize = smallBlockSizeBytes * 2
+    // A block with thrice as big size limit should fit both streams.
+    val bigBlockSize = smallBlockSizeBytes * 3
 
-    val deploySelection = DeploySelection.create[Task](bigBlockSize * 2)
+    val deploySelection = DeploySelection.create[Task](bigBlockSize)
+
+    // The very first WRITE doesn't conflict
+    val expectedCommuting = conflicting.head +: commuting
+    // Because first WRITE doesn't conflict we will get 1 less of them in conflicting section
+    val expectedConflicting = conflicting.drop(1)
 
     val test = deploySelection
       .select((prestate, blocktime, protocolVersion, stream))
       .map {
-        case DeploySelectionResult(commuting, conflicting, _) =>
-          (commuting.map(_.deploy) ++ conflicting) should contain theSameElementsAs allDeploys
+        case DeploySelectionResult(commutingRes, conflictingRes, _) =>
+          conflictingRes should contain theSameElementsAs expectedConflicting
+          commutingRes.map(_.deploy) should contain theSameElementsAs expectedCommuting
       }
 
     test.unsafeRunSync
@@ -243,13 +248,20 @@ object DeploySelectionTest {
     Key.Value.Hash(Key.Hash(ByteString.EMPTY))
   )
 
-  private val readTransform: (OpEntry, TransformEntry) = {
+  // Random key to generate commuting READs
+  private def readKey() = Key(
+    Key.Value.Hash(Key.Hash(ByteString.copyFromUtf8(scala.util.Random.nextString(10))))
+  )
+
+  private def readTransform(): (OpEntry, TransformEntry) = {
     val (op, transform) =
       Op(Op.OpInstance.Read(ReadOp())) ->
         Transform(Transform.TransformInstance.Identity(TransformIdentity()))
 
-    val transformEntry = TransformEntry(Some(key), Some(transform))
-    val opEntry        = OpEntry(Some(key), Some(op))
+    val rKey = readKey()
+
+    val transformEntry = TransformEntry(Some(rKey), Some(transform))
+    val opEntry        = OpEntry(Some(rKey), Some(op))
     (opEntry, transformEntry)
   }
 
@@ -306,7 +318,7 @@ object DeploySelectionTest {
       .fill(deploys.size) {
         val counterValue = counter.getAndIncrement()
         val (opEntry, transformEntry) =
-          if (counterValue % 2 == 0) readTransform
+          if (counterValue % 2 == 0) readTransform()
           else writeTransform
         val effect = ExecutionEffect(Seq(opEntry), Seq(transformEntry))
         DeployResult(

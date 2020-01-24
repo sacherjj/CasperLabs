@@ -85,9 +85,13 @@ object DeploySelection {
     def addCommuting(deploysEffects: DeployEffects): IntermediateState = {
       val ops                  = Op.fromIpcEntry(deploysEffects.effects.opMap)
       val (accEffects, accOps) = effectsCommutativity
-      if (accOps ~ ops)
-        IntermediateState(deploysEffects :: accEffects, deploysEffects :: diff, accOps + ops)
-      else
+      if (accOps ~ ops) {
+        copy(
+          accumulated = deploysEffects :: accEffects,
+          diff = deploysEffects :: diff,
+          accumulatedOps = accOps + ops
+        )
+      } else
         // We're not updating the `diff` here since its elements are pushed
         // to the stream and we do that for commuting elements.
         copy(conflicting = deploysEffects.deploy :: this.conflicting)
@@ -137,8 +141,8 @@ object DeploySelection {
                   blocktime,
                   batch,
                   protocolVersion
-                )((ExecutionEngineService[F].exec _)) map { pdr =>
-                  pdr.foldLeftM(state) {
+                )(ExecutionEngineService[F].exec _) map {
+                  _.foldLeftM(state) {
                     case (accState, element: DeployEffects) =>
                       // newState is either `accState` if `element` doesn't commute,
                       // or contains `element` if it does.
@@ -149,7 +153,8 @@ object DeploySelection {
                         // foldM will short-circuit for `Left`
                         // and continue for `Right`
                         accState.asLeft[IntermediateState]
-                      } else newState.asRight[IntermediateState]
+                      } else
+                        newState.asRight[IntermediateState]
                     case (accState, element: PreconditionFailure) =>
                       // PreconditionFailure-s should be pushed into the stream
                       // for later handling (like discarding invalid deploys).
@@ -180,6 +185,8 @@ object DeploySelection {
                       preconditionFailuresRef
                     )
                 }
+
+            // Reached the end of a stream. Return results.
             case None =>
               fs2.Pull.eval(conflictingRef.set(state.conflicting)).void >>
                 fs2.Pull.eval(preconditionFailuresRef.set(state.preconditionFailures)).void >>
