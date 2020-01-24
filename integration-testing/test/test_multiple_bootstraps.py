@@ -39,3 +39,14 @@ def test_multiple_bootstraps(three_node_network_with_two_bootstraps):
 
     block_hash = deploy_and_propose(nodes[1], Contract.HELLO_NAME_DEFINE)
     wait_for_block_hash_propagated_to_all_nodes([nodes[1], nodes[2]], block_hash)
+
+
+def test_standalone_nodes_bootstrap_from_each_other(
+    three_node_network_with_two_bootstraps
+):
+    net = three_node_network_with_two_bootstraps
+    nodes = net.docker_nodes
+
+    nodes[0].clear_state()
+    net.stop_cl_node(0)
+    net.start_cl_node(0)

@@ -41,6 +41,7 @@ from casperlabs_local_net.wait import (
     wait_for_peers_count_at_least,
     wait_for_selenium_started,
 )
+from casperlabs_client import extract_common_name
 
 
 def test_name():
@@ -184,8 +185,11 @@ class CasperLabsNetwork:
         self.wait_for_peers()
         return account
 
-    def add_bootstrap(self, config: DockerConfig) -> None:
+    def add_bootstrap(
+        self, config: DockerConfig, bootstrap_address: str = None
+    ) -> None:
         config.is_bootstrap = True
+        config.bootstrap_address = bootstrap_address
         self._add_cl_node(config)
         self.wait_method(wait_for_node_started, 0)
         wait_for_genesis_block(self.docker_nodes[0])
@@ -595,11 +599,13 @@ class ThreeNodeNetwork(CasperLabsNetwork):
 
 class ThreeNodeNetworkWithTwoBootstraps(CasperLabsNetwork):
     """
-    A three nodes network where the node-0 is a standalone node,
-    and node-2 is setup to bootstrap from node-0 and node-1.
+    A three nodes network where
+    - node-0 is a standalone node, bootstrapping from node-1 if node-1 is available,
+    - node-1 is a standalone node, bootstrapping from node-0 if node-0 is available,
+    - node-2 is setup to bootstrap from node-0 and node-1.
     """
 
-    def get_node_config(self):
+    def get_node_config(self, number):
         kp = self.get_key()
         return DockerConfig(
             self.docker_client,
@@ -607,16 +613,39 @@ class ThreeNodeNetworkWithTwoBootstraps(CasperLabsNetwork):
             node_public_key=kp.public_key,
             network=self.create_docker_network(),
             node_account=kp,
+            number=number,
         )
 
+    def _docker_tag(self, config):
+        return os.environ.get("TAG_NAME") or config.custom_docker_tag or "latest"
+
+    def _node_address(self, config):
+        node_id = extract_common_name(config.tls_certificate_local_path())
+        return f"casperlabs://{node_id}@node-{config.number}-{config.rand_str}-{self._docker_tag(config)}?protocol=40400&discovery=40404"
+
     def create_cl_network(self):
-        self.add_bootstrap(self.get_node_config())
-        self.add_cl_node(self.get_node_config())
+        node_0_config = self.get_node_config(0)
+        node_1_config = self.get_node_config(1)
+
+        node_0_bootstrap_address = self._node_address(node_1_config)
+        node_1_bootstrap_address = self._node_address(node_0_config)
+
+        self.add_bootstrap(node_0_config, bootstrap_address=node_0_bootstrap_address)
+        self.add_cl_node(node_1_config, bootstrap_address=node_1_bootstrap_address)
 
         for node in self.docker_nodes:
             wait_for_node_started(node, 30, 1)
 
-        config = self.get_node_config()
+        assert (
+            self.docker_nodes[1].config.bootstrap_address
+            == self.docker_nodes[0].address
+        )
+        assert (
+            self.docker_nodes[0].config.bootstrap_address
+            == self.docker_nodes[1].address
+        )
+
+        config = self.get_node_config(2)
         self.add_cl_node(
             config,
             bootstrap_address=f'"{self.cl_nodes[0].node.address} {self.cl_nodes[1].node.address}"',
@@ -624,6 +653,7 @@ class ThreeNodeNetworkWithTwoBootstraps(CasperLabsNetwork):
 
         for i in range(3):
             self.wait_method(wait_for_approved_block_received_handler_state, i)
+
         self.wait_for_peers()
 
 
