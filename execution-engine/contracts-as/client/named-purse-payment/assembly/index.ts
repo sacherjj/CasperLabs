@@ -73,8 +73,7 @@ export function call(): void {
 
   // Set Refund Purse
   let args: CLValue[] = [CLValue.fromString(SET_REFUND_PURSE), CLValue.fromURef(purseId.asURef())];
-  let extraUrefs: Key[] = [purseKey];
-  let refundPurseOutput = CL.callContractExt(proofOfStakeKey, args, extraUrefs);
+  let refundPurseOutput = CL.callContract(proofOfStakeKey, args);
   if (refundPurseOutput === null) {
     Error.fromPosErrorCode(PosErrorCode.RefundPurseKeyUnexpectedType).revert(); // TODO: might not be the correct error code
     return;

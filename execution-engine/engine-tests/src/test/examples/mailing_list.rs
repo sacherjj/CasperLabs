@@ -1,8 +1,7 @@
-use crate::{
-    support::test_support::{ExecuteRequestBuilder, InMemoryWasmTestBuilder},
-    test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG},
+use engine_test_support::low_level::{
+    ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG,
 };
-use contract_ffi::key::Key;
+use types::key::Key;
 
 const MAILING_CALL: &str = "mailing_list_call.wasm";
 const MAILING_DEFINE: &str = "mailing_list_define.wasm";

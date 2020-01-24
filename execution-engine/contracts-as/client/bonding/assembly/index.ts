@@ -54,8 +54,7 @@ export function call(): void {
         CLValue.fromU512(<U512>amount),
         bondingPurseValue
     ];
-    let extraUrefs: Key[] = [Key.fromURef(bondingPurse.asURef())];
-    let output = CL.callContractExt(key, args, extraUrefs);
+    let output = CL.callContract(key, args);
     if (output === null) {
         Error.fromPosErrorCode(PosErrorCode.BondTransferFailed).revert();
         return;

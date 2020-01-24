@@ -1,5 +1,5 @@
 import {Error, ErrorCode} from "../../../../contract-ffi-as/assembly/error";
-import {getKey, callContract, callContractExt, putKey} from "../../../../contract-ffi-as/assembly";
+import {getKey, callContract, putKey} from "../../../../contract-ffi-as/assembly";
 import {CLValue} from "../../../../contract-ffi-as/assembly/clvalue";
 import {Key} from "../../../../contract-ffi-as/assembly/key";
 import {fromBytesStringList} from "../../../../contract-ffi-as/assembly/bytesrepr";

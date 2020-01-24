@@ -103,14 +103,8 @@ export function storeFunctionAtHash(name: String, namedKeysBytes: u8[]): Key | n
 }
 
 export function callContract(key: Key, args: CLValue[]): Uint8Array | null {
-  let extraUrefs: Key[] = [];
-  return callContractExt(key, args, extraUrefs);
-}
-
-export function callContractExt(key: Key, args: CLValue[], extraUrefs: Key[]): Uint8Array | null {
   let keyBytes = key.toBytes();
   let argBytes = toBytesVecT(args);
-  let extraURefsBytes = toBytesVecT(extraUrefs);
 
   let resultSize = new Uint32Array(1);
   resultSize.fill(0);
