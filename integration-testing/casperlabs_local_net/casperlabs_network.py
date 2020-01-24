@@ -237,7 +237,6 @@ class CasperLabsNetwork:
             config.bootstrap_address = (
                 bootstrap_address or self.cl_nodes[0].node.address
             )
-            # TODO: what is config.network ?
             if network_with_bootstrap:
                 config.network = self.cl_nodes[0].node.config.network
             self._add_cl_node(config)
@@ -605,15 +604,15 @@ class ThreeNodeNetworkWithTwoBootstraps(CasperLabsNetwork):
     - node-2 is setup to bootstrap from node-0 and node-1.
     """
 
-    def get_node_config(self, number):
+    def get_node_config(self, number, network):
         kp = self.get_key()
         return DockerConfig(
             self.docker_client,
             node_private_key=kp.private_key,
             node_public_key=kp.public_key,
-            network=self.create_docker_network(),
             node_account=kp,
             number=number,
+            network=network,
         )
 
     def _docker_tag(self, config):
@@ -624,14 +623,20 @@ class ThreeNodeNetworkWithTwoBootstraps(CasperLabsNetwork):
         return f"casperlabs://{node_id}@node-{config.number}-{config.rand_str}-{self._docker_tag(config)}?protocol=40400&discovery=40404"
 
     def create_cl_network(self):
-        node_0_config = self.get_node_config(0)
-        node_1_config = self.get_node_config(1)
+
+        network = self.create_docker_network()
+        node_0_config = self.get_node_config(0, network)
+        node_1_config = self.get_node_config(1, network)
 
         node_0_bootstrap_address = self._node_address(node_1_config)
         node_1_bootstrap_address = self._node_address(node_0_config)
 
         self.add_bootstrap(node_0_config, bootstrap_address=node_0_bootstrap_address)
-        self.add_cl_node(node_1_config, bootstrap_address=node_1_bootstrap_address)
+        self.add_cl_node(
+            node_1_config,
+            network_with_bootstrap=False,
+            bootstrap_address=node_1_bootstrap_address,
+        )
 
         for node in self.docker_nodes:
             wait_for_node_started(node, 30, 1)
@@ -645,7 +650,7 @@ class ThreeNodeNetworkWithTwoBootstraps(CasperLabsNetwork):
             == self.docker_nodes[1].address
         )
 
-        config = self.get_node_config(2)
+        config = self.get_node_config(2, network)
         self.add_cl_node(
             config,
             bootstrap_address=f'"{self.cl_nodes[0].node.address} {self.cl_nodes[1].node.address}"',
