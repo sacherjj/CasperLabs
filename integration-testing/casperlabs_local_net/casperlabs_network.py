@@ -147,7 +147,7 @@ class CasperLabsNetwork:
         """
         Should be implemented with each network class to setup custom nodes and networks.
         """
-        raise NotImplementedError("Must implement '_create_network' in subclass.")
+        raise NotImplementedError("Must implement 'create_cl_network' in subclass.")
 
     def create_docker_network(self) -> str:
         with self._lock:

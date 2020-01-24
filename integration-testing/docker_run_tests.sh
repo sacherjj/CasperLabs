@@ -32,7 +32,10 @@ esac
 done
 
 echo "UNIQUE_RUN_NUM  = ${UNIQUE_RUN_NUM}"
-
+RUN_NAME="${UNIQUE_RUN_NUM}"
+echo "RUN_NAME = ${RUN_NAME}"
+RUN_TAG_NAME="${TAG_NAME}-${RUN_NAME}"
+echo "RUN_TAG_NAME = ${RUN_TAG_NAME}"
 # We need networks for the Python Client to talk directly to the DockerNode.
 # We cannot share a network as we might have DockerNodes partitioned.
 # This number of networks is the count of CasperLabNodes we can have active at one time.
@@ -43,7 +46,7 @@ cleanup() {
     for num in $(seq 0 $MAX_NODE_COUNT)
     do
         # Network might get tore down with docker-compose rm, so "|| true" to ignore failure
-        docker network rm cl-${TAG_NAME}-RUN${UNIQUE_RUN_NUM}-${num} || true
+        docker network rm "cl-${RUN_TAG_NAME}-${num}" || true
     done
 
     docker network prune --force || true
@@ -52,26 +55,26 @@ cleanup() {
 
     # Eliminate this for next run
     cd ..
-    rm -r RUN${UNIQUE_RUN_NUM}
+    rm -r "${RUN_NAME}"
 }
 trap cleanup 0
 
 echo "Setting up networks for Python Client..."
 for num in $(seq 0 $MAX_NODE_COUNT)
 do
-    docker network create cl-${TAG_NAME}-RUN${UNIQUE_RUN_NUM}-${num}
+    docker network create "cl-${RUN_TAG_NAME}-${num}"
 done
 
 # Need to make network names in docker-compose.yml match tag based network.
 # Using ||TAG|| as replacable element in docker-compose.yml.template
-mkdir RUN${UNIQUE_RUN_NUM}
-cp Dockerfile RUN${UNIQUE_RUN_NUM}/
+mkdir "${RUN_NAME}"
+cp Dockerfile "${RUN_NAME}/"
 # Replacing tags which need UNIQUE_RUN_NUM
-sed 's/||TAG||/'"${TAG_NAME}-RUN${UNIQUE_RUN_NUM}"'/g' docker-compose.yml.template > RUN${UNIQUE_RUN_NUM}/docker-compose.yml
+sed 's/||TAG||/'"${RUN_TAG_NAME}"'/g' docker-compose.yml.template > "${RUN_NAME}/docker-compose.yml"
 # Replacing IMAGE_TAG which should not have UNIQUE_RUN_NUM
-sed -i.bak 's/||IMAGE_TAG||/'"${TAG_NAME}"'/g' RUN${UNIQUE_RUN_NUM}/docker-compose.yml
+sed -i.bak 's/||IMAGE_TAG||/'"${TAG_NAME}"'/g' "${RUN_NAME}/docker-compose.yml"
 
-cd RUN${UNIQUE_RUN_NUM}
+cd "${RUN_NAME}"
 docker-compose up --exit-code-from test --abort-on-container-exit
 result_code=$?
 exit ${result_code}
