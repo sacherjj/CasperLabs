@@ -28,7 +28,19 @@ import io.casperlabs.storage.deploy.DeployStorage
 import io.casperlabs.storage.dag.DagStorage
 import sangria.schema._
 
-private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream: Log: RunToFuture: MultiParentCasperRef: BlockStorage: FinalizedBlocksStream: MonadThrowable: ExecutionEngineService: DeployStorage: DagStorage: Fs2Compiler] {
+// format: off
+private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream
+                                                : Log
+                                                : RunToFuture
+                                                : MultiParentCasperRef
+                                                : BlockStorage
+                                                : FinalizedBlocksStream
+                                                : MonadThrowable
+                                                : ExecutionEngineService
+                                                : DeployStorage
+                                                : DagStorage
+                                                : Fs2Compiler] {
+// format: on
 
   // GraphQL projections don't expose the body.
   val deployView = DeployInfo.View.BASIC
