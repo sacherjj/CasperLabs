@@ -152,10 +152,16 @@ class GraphQLBlockTypes[F[_]: MonadThrowable
 
   val blockFetcher = Fetcher.caching(
     { (_: Unit, hashes: Seq[BlockHash]) =>
-      // TODO: will be slow due to:
-      // 1) One-by-one reading from database
-      // 2) Reading a full block
-      // 3) Seq->List conversion
+      // Fetches only unique blocks without repetitive reading of the same block many times.
+      //
+      // TODO: However, it still will be slow due to (in decreasing priority):
+      // 1) One-by-one reading from database: update underlying API to accept multiple block hashes using 'WHERE block_hash IN ...'
+      //
+      // 2) Reading a full block: make use of Sangria Projections, although, not clear if it's possible to do without modifying the library's source code
+      // UPDATE: It reads full blocks only if a query contains 'children' anywhere.
+      // On the other hand, it still will read all blocks as FULL otherwise which is non optimal.
+      //
+      // 3) Seq->List conversion: least critical, must be ignored until the above 2 issues are solved
       RunToFuture[F].unsafeToFuture(
         hashes.toList
           .traverse { hash =>
