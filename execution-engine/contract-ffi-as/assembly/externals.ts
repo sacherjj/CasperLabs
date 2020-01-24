@@ -10,8 +10,8 @@ export declare function new_uref(key_ptr: usize, value_ptr: usize, value_size: u
 export declare function store_function(function_name_ptr: usize, function_name_size: usize, named_keys_ptr: usize, named_keys_size: usize, uref_addr_ptr: usize): void;
 @external("env", "store_function_at_hash")
 export declare function store_function_at_hash(function_name_ptr: usize, function_name_size: usize, named_keys_ptr: usize, named_keys_size: usize, hash_ptr: usize): void;
-//@external("env", "load_named_keys")
-// TODO: load_named_keys
+@external("env", "load_named_keys")
+export declare function load_named_keys(total_keys: usize, result_size: usize): i32;
 @external("env", "get_arg")
 export declare function get_arg(index: u32, dest_ptr: usize, dest_size: u32): i32;
 @external("env", "get_arg_size")
@@ -33,7 +33,7 @@ export declare function has_key(name_ptr: usize, name_size: usize): i32;
 @external("env", "put_key")
 export declare function put_key(name_ptr: usize, name_size: usize, key_ptr: usize, key_size: usize): void;
 @external("env", "remove_key")
-export declare function remove_key(name_ptr: usize, name_size: u32): i32;
+export declare function remove_key(name_ptr: usize, name_size: u32): void;
 @external("env", "revert")
 export declare function revert(err_code: i32): void;
 // TODO: is_valid_uref

@@ -2,6 +2,7 @@ import {Option} from "./option";
 import {CLValue} from "./clvalue";
 import {GetDecodedBytesCount, AddDecodedBytesCount, SetDecodedBytesCount} from "./bytesrepr";
 import {UREF_ADDR_LENGTH, OPTION_TAG_SERIALIZED_LENGTH, ACCESS_RIGHTS_SERIALIZED_LENGTH, UREF_SERIALIZED_LENGTH} from "./constants";
+import {checkTypedArrayEqual} from "./utils";
 
 export enum AccessRights{
     NONE = 0x0,
@@ -70,18 +71,7 @@ export class URef {
 
     @operator("==")
     equalsTo(other: URef): bool {
-        if (this.bytes.length != other.bytes.length) {
-            return false;
-        }
-        if (this.accessRights != other.accessRights) {
-            return false;
-        }
-        for (let i = 0; i < this.bytes.length; i++) {
-            if (this.bytes[i] != other.bytes[i]) {
-                return false;
-            }
-        }
-        return true;
+        return checkTypedArrayEqual(this.bytes, other.bytes) && this.accessRights == other.accessRights;
     }
 
 

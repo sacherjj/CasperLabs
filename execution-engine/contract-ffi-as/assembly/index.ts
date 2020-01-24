@@ -1,16 +1,19 @@
 import * as externals from "./externals";
 import {URef, AccessRights} from "./uref";
-import {Error} from "./error";
+import {Error, ErrorCode} from "./error";
 import {CLValue} from "./clvalue";
 import {Key} from "./key";
 import {toBytesString,
         toBytesArrayU8,
         toBytesU32,
         toBytesVecT,
-        fromBytesArrayU8} from "./bytesrepr";
+        fromBytesArrayU8,
+        fromBytesMap,
+        fromBytesString} from "./bytesrepr";
 import {U512} from "./bignum";
 import {UREF_SERIALIZED_LENGTH, KEY_UREF_SERIALIZED_LENGTH} from "./constants";
 import { typedToArray } from "./utils";
+import {Pair} from "./pair";
 
 // NOTE: interfaces aren't supported in AS yet: https://github.com/AssemblyScript/assemblyscript/issues/146#issuecomment-399130960
 // interface ToBytes {
@@ -234,4 +237,36 @@ export function getPhase(): Phase {
 export function removeKey(name: String): void{
   var nameBytes = toBytesString(name);
   externals.remove_key(nameBytes.dataStart, nameBytes.length);
+}
+
+export function listNamedKeys(): Array<Pair<String, Key>> {
+  let totalKeys = new Uint32Array(1);
+  let resultSize = new Uint32Array(1);
+
+  const res = externals.load_named_keys(totalKeys.dataStart, resultSize.dataStart);
+  const error = Error.fromResult(res);
+  if (error != null) {
+    error.revert();
+    return <Array<Pair<String, Key>>>unreachable();
+  }
+
+  if (totalKeys[0] == 0) {
+    return new Array<Pair<String, Key>>();
+  }
+
+  let mapBytes = readHostBuffer(resultSize[0]);
+  if (mapBytes === null) {
+    Error.fromErrorCode(ErrorCode.HostBufferEmpty).revert();
+    return <Array<Pair<String, Key>>>unreachable();
+  }
+  let maybeMap = fromBytesMap<String, Key>(
+    mapBytes,
+    fromBytesString,
+    Key.fromBytes);
+
+  if (maybeMap === null) {
+    Error.fromErrorCode(ErrorCode.Deserialize).revert();
+    return <Array<Pair<String, Key>>>unreachable();
+  }
+  return <Array<Pair<String, Key>>>maybeMap;
 }

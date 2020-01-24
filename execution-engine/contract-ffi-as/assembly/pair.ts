@@ -9,7 +9,7 @@ export class Pair<T1, T2> {
 
     @operator("==")
     equalsTo(other: Pair<T1, T2>): bool {
-        return this.first === other.first && this.second === other.second;
+        return this.first == other.first && this.second == other.second;
     }
 
     @operator("!=")
