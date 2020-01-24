@@ -56,3 +56,11 @@ export function testPairItemsEqual(): bool {
     ];
     return checkItemsEqual(lhs, rhs);
 }
+
+export function testEmptyItemsEqual(): bool {
+    let lhs: Pair<String, String>[] = [
+    ];
+    let rhs: Pair<String, String>[] = [
+    ];
+    return checkItemsEqual(lhs, rhs);
+}

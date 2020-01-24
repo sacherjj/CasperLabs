@@ -18,7 +18,7 @@ export function arrayToTyped(arr: Array<u8>): Uint8Array {
 
 // Checks if items in two unordered arrays are equal
 export function checkItemsEqual<T>(a: Array<T>, b: Array<T>): bool {
-  for (var i = 0; i < a.length; i++) {
+  for (let i = 0; i < a.length; i++) {
     const idx = b.indexOf(a[i]);
     if (idx == -1) {
       return false;
@@ -39,6 +39,20 @@ export function checkArraysEqual<T>(a: Array<T>, b: Array<T>, len: i32 = 0): boo
     if (isFloat<T>()) {
       if (isNaN(a[i]) && isNaN(b[i])) continue;
     }
+    if (a[i] != b[i]) return false;
+  }
+  return true;
+}
+
+
+// Checks if two ordered arrays are equal
+export function checkTypedArrayEqual(a: Uint8Array, b: Uint8Array, len: i32 = 0): bool {
+  if (!len) {
+    len = a.length;
+    if (len != b.length) return false;
+    if (a === b) return true;
+  }
+  for (let i = 0; i < len; i++) {
     if (a[i] != b[i]) return false;
   }
   return true;
