@@ -53,7 +53,7 @@ class CasperService(object):
         return method
 
     def channel(self):
-        ssl = False
+        ssl = None
         if self.certificate_file:
             ssl = create_default_context(Purpose.SERVER_AUTH)
             # ssl.load_default_certs()
@@ -184,7 +184,7 @@ class CasperLabsClientAIO(object):
                 )
         return result
 
-    async def show_deploy(self, deploy_hash_base16: str, full_view=True):
+    async def show_deploy(self, deploy_hash_base16: str, full_view=False):
         return await self.casper_service.GetDeployInfo(
             casper.GetDeployInfoRequest(
                 deploy_hash_base16=deploy_hash_base16,
