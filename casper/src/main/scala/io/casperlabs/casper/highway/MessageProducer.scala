@@ -209,8 +209,11 @@ object MessageProducer {
                                         MonadThrowable[F].fromTry(Message.fromBlockSummary(s))
                                       }
                                   }
-          // Find the latest justification we picked (it could have changed since then due to concurrency).
-          // in this era.
+          // Find the latest justification we picked. We must make sure they don't change
+          // due to concurrency between the time the justifications are collected and
+          // the sequence number is calculated, otherwise we could be equivocating.
+          // This, currently, is catered for by a Semaphore in the EraRuntime, which
+          // spans the fork choice as well as the block production.
           ownLatests = justificationMessages.filter { j =>
             j.validatorId == validatorId && j.keyBlockHash == keyBlockHash
           }
