@@ -83,6 +83,15 @@ impl ExecutionResult {
         }
     }
 
+    pub fn has_precondition_failure(&self) -> bool {
+        match self {
+            ExecutionResult::Failure { cost, effect, .. } => {
+                cost.value() == 0.into() && *effect == Default::default()
+            }
+            ExecutionResult::Success { .. } => false,
+        }
+    }
+
     pub fn cost(&self) -> Gas {
         match self {
             ExecutionResult::Failure { cost, .. } => *cost,
@@ -116,6 +125,13 @@ impl ExecutionResult {
                 cost,
             },
             ExecutionResult::Success { cost, .. } => ExecutionResult::Success { effect, cost },
+        }
+    }
+
+    pub fn error(&self) -> Option<&error::Error> {
+        match self {
+            ExecutionResult::Failure { error, .. } => Some(error),
+            ExecutionResult::Success { .. } => None,
         }
     }
 

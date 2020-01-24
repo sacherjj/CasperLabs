@@ -55,8 +55,6 @@ fn should_raise_auth_failure_with_invalid_key() {
         .builder()
         .get_exec_response(0)
         .expect("should have exec response")
-        .get_success()
-        .get_deploy_results()
         .get(0)
         .expect("should have at least one deploy result");
 
@@ -65,7 +63,7 @@ fn should_raise_auth_failure_with_invalid_key() {
         "{:?}",
         deploy_result
     );
-    let message = deploy_result.get_precondition_failure().get_message();
+    let message = format!("{}", deploy_result.error().unwrap());
 
     assert_eq!(
         message,
@@ -111,13 +109,11 @@ fn should_raise_auth_failure_with_invalid_keys() {
         .builder()
         .get_exec_response(0)
         .expect("should have exec response")
-        .get_success()
-        .get_deploy_results()
         .get(0)
         .expect("should have at least one deploy result");
 
     assert!(deploy_result.has_precondition_failure());
-    let message = deploy_result.get_precondition_failure().get_message();
+    let message = format!("{}", deploy_result.error().unwrap());
 
     assert_eq!(
         message,
@@ -204,13 +200,11 @@ fn should_raise_deploy_authorization_failure() {
             .builder()
             .get_exec_response(0)
             .expect("should have exec response")
-            .get_success()
-            .get_deploy_results()
             .get(0)
             .expect("should have at least one deploy result");
 
         assert!(deploy_result.has_precondition_failure());
-        let message = deploy_result.get_precondition_failure().get_message();
+        let message = format!("{}", deploy_result.error().unwrap());
         assert!(message.contains(&format!(
             "{}",
             execution::Error::DeploymentAuthorizationFailure
@@ -258,13 +252,11 @@ fn should_raise_deploy_authorization_failure() {
             .builder()
             .get_exec_response(0)
             .expect("should have exec response")
-            .get_success()
-            .get_deploy_results()
             .get(0)
             .expect("should have at least one deploy result");
 
         assert!(deploy_result.has_precondition_failure());
-        let message = deploy_result.get_precondition_failure().get_message();
+        let message = format!("{}", deploy_result.error().unwrap());
         assert!(message.contains(&format!(
             "{}",
             execution::Error::DeploymentAuthorizationFailure
@@ -413,8 +405,6 @@ fn should_not_authorize_deploy_with_duplicated_keys() {
         .builder()
         .get_exec_response(0)
         .expect("should have exec response")
-        .get_success()
-        .get_deploy_results()
         .get(0)
         .expect("should have at least one deploy result");
 
@@ -423,7 +413,7 @@ fn should_not_authorize_deploy_with_duplicated_keys() {
         "{:?}",
         deploy_result
     );
-    let message = deploy_result.get_precondition_failure().get_message();
+    let message = format!("{}", deploy_result.error().unwrap());
     assert!(message.contains(&format!(
         "{}",
         execution::Error::DeploymentAuthorizationFailure

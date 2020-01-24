@@ -1,11 +1,9 @@
-use protobuf::RepeatedField;
+use std::convert::TryInto;
+
 use rand::Rng;
 
 use contract::args_parser::ArgsParser;
-use engine_grpc_server::engine_server::{
-    ipc::{DeployItem, ExecuteRequest},
-    state,
-};
+use engine_core::engine_state::{deploy_item::DeployItem, execute_request::ExecuteRequest};
 use types::{account::PublicKey, ProtocolVersion};
 
 use crate::low_level::{
@@ -13,7 +11,6 @@ use crate::low_level::{
 };
 
 pub struct ExecuteRequestBuilder {
-    deploy_items: Vec<DeployItem>,
     execute_request: ExecuteRequest,
 }
 
@@ -27,36 +24,26 @@ impl ExecuteRequestBuilder {
     }
 
     pub fn push_deploy(mut self, deploy: DeployItem) -> Self {
-        self.deploy_items.push(deploy);
+        self.execute_request.deploys.push(Ok(deploy));
         self
     }
 
     pub fn with_pre_state_hash(mut self, pre_state_hash: &[u8]) -> Self {
-        self.execute_request
-            .set_parent_state_hash(pre_state_hash.to_vec());
+        self.execute_request.parent_state_hash = pre_state_hash.try_into().unwrap();
         self
     }
 
     pub fn with_block_time(mut self, block_time: u64) -> Self {
-        self.execute_request.set_block_time(block_time);
+        self.execute_request.block_time = block_time;
         self
     }
 
     pub fn with_protocol_version(mut self, protocol_version: ProtocolVersion) -> Self {
-        let mut protocol = state::ProtocolVersion::new();
-        protocol.set_major(protocol_version.value().major);
-        protocol.set_minor(protocol_version.value().minor);
-        protocol.set_patch(protocol_version.value().patch);
-        self.execute_request.set_protocol_version(protocol);
+        self.execute_request.protocol_version = protocol_version;
         self
     }
 
-    pub fn build(mut self) -> ExecuteRequest {
-        let mut deploys = RepeatedField::<DeployItem>::new();
-        for deploy in self.deploy_items {
-            deploys.push(deploy);
-        }
-        self.execute_request.set_deploys(deploys);
+    pub fn build(self) -> ExecuteRequest {
         self.execute_request
     }
 
@@ -97,13 +84,9 @@ impl ExecuteRequestBuilder {
 
 impl Default for ExecuteRequestBuilder {
     fn default() -> Self {
-        let deploy_items = vec![];
-        let mut execute_request = ExecuteRequest::new();
-        execute_request.set_block_time(DEFAULT_BLOCK_TIME);
-        execute_request.set_protocol_version(ProtocolVersion::V1_0_0.into());
-        ExecuteRequestBuilder {
-            deploy_items,
-            execute_request,
-        }
+        let mut execute_request: ExecuteRequest = Default::default();
+        execute_request.block_time = DEFAULT_BLOCK_TIME;
+        execute_request.protocol_version = ProtocolVersion::V1_0_0;
+        ExecuteRequestBuilder { execute_request }
     }
 }

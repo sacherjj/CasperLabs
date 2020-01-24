@@ -1,13 +1,9 @@
-use std::{
-    collections::{hash_map::RandomState, BTreeMap},
-    convert::TryInto,
-};
+use std::collections::{hash_map::RandomState, BTreeMap};
 
 use engine_core::engine_state::{upgrade::ActivationPoint, CONV_RATE};
 use engine_grpc_server::engine_server::ipc::DeployCode;
 use engine_shared::{
-    additive_map::AdditiveMap, gas::Gas, motes::Motes, stored_value::StoredValue,
-    transform::Transform,
+    additive_map::AdditiveMap, motes::Motes, stored_value::StoredValue, transform::Transform,
 };
 use engine_test_support::low_level::{
     utils, AdditiveMapDiff, DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder,
@@ -101,12 +97,8 @@ fn should_exec_non_stored_code() {
         .expect("there should be a response")
         .clone();
 
-    let mut success_result = utils::get_success_result(&response);
-    let cost = success_result
-        .take_cost()
-        .try_into()
-        .expect("should map to U512");
-    let gas = Gas::new(cost);
+    let success_result = utils::get_success_result(&response);
+    let gas = success_result.cost();
     let motes = Motes::from_gas(gas, CONV_RATE).expect("should have motes");
     let tally = motes.value() + U512::from(transferred_amount) + modified_balance;
 
@@ -162,8 +154,7 @@ fn should_exec_stored_code_by_hash() {
     );
 
     let mut result = utils::get_success_result(&response);
-    let cost = result.take_cost().try_into().expect("should map to U512");
-    let gas = Gas::new(cost);
+    let gas = result.cost();
     let motes_alpha = Motes::from_gas(gas, CONV_RATE).expect("should have motes");
 
     let default_account = builder
@@ -208,8 +199,7 @@ fn should_exec_stored_code_by_hash() {
         .clone();
 
     result = utils::get_success_result(&response);
-    let cost = result.take_cost().try_into().expect("should map to U512");
-    let gas = Gas::new(cost);
+    let gas = result.cost();
     let motes_bravo = Motes::from_gas(gas, CONV_RATE).expect("should have motes");
 
     let tally = motes_alpha.value()
@@ -258,8 +248,7 @@ fn should_exec_stored_code_by_named_hash() {
         .clone();
 
     let mut result = utils::get_success_result(&response);
-    let cost = result.take_cost().try_into().expect("should map to U512");
-    let gas = Gas::new(cost);
+    let gas = result.cost();
     let motes_alpha = Motes::from_gas(gas, CONV_RATE).expect("should have motes");
 
     let default_account = builder
@@ -305,8 +294,7 @@ fn should_exec_stored_code_by_named_hash() {
         .clone();
 
     result = utils::get_success_result(&response);
-    let cost = result.take_cost().try_into().expect("should map to U512");
-    let gas = Gas::new(cost);
+    let gas = result.cost();
     let motes_bravo = Motes::from_gas(gas, CONV_RATE).expect("should have motes");
 
     let tally = motes_alpha.value()
@@ -366,8 +354,7 @@ fn should_exec_stored_code_by_named_uref() {
         .clone();
 
     let mut result = utils::get_success_result(&response);
-    let cost = result.take_cost().try_into().expect("should map to U512");
-    let gas = Gas::new(cost);
+    let gas = result.cost();
     let motes_alpha = Motes::from_gas(gas, CONV_RATE).expect("should have motes");
 
     let default_account = builder
@@ -410,8 +397,7 @@ fn should_exec_stored_code_by_named_uref() {
         .clone();
 
     result = utils::get_success_result(&response);
-    let cost = result.take_cost().try_into().expect("should map to U512");
-    let gas = Gas::new(cost);
+    let gas = result.cost();
     let motes_bravo = Motes::from_gas(gas, CONV_RATE).expect("should have motes");
 
     let tally = motes_alpha.value()
@@ -460,8 +446,7 @@ fn should_exec_payment_and_session_stored_code() {
         .clone();
 
     let mut result = utils::get_success_result(&response);
-    let cost = result.take_cost().try_into().expect("should map to U512");
-    let gas = Gas::new(cost);
+    let gas = result.cost();
     let motes_alpha = Motes::from_gas(gas, CONV_RATE).expect("should have motes");
 
     // next store transfer contract
@@ -492,8 +477,7 @@ fn should_exec_payment_and_session_stored_code() {
         .clone();
 
     result = utils::get_success_result(&response);
-    let cost = result.take_cost().try_into().expect("should map to U512");
-    let gas = Gas::new(cost);
+    let gas = result.cost();
     let motes_bravo = Motes::from_gas(gas, CONV_RATE).expect("should have motes");
 
     let account_1_public_key = PublicKey::new(ACCOUNT_1_ADDR);
@@ -528,8 +512,7 @@ fn should_exec_payment_and_session_stored_code() {
         .clone();
 
     result = utils::get_success_result(&response);
-    let cost = result.take_cost().try_into().expect("should map to U512");
-    let gas = Gas::new(cost);
+    let gas = result.cost();
     let motes_charlie = Motes::from_gas(gas, CONV_RATE).expect("should have motes");
 
     let default_account = builder
@@ -582,7 +565,7 @@ fn should_produce_same_transforms_by_uref_or_named_uref() {
     let mut builder_by_uref = InMemoryWasmTestBuilder::default();
     builder_by_uref.run_genesis(&*DEFAULT_GENESIS_CONFIG);
 
-    let test_result = builder_by_uref.exec_commit_finish(exec_request_genesis.clone());
+    let test_result = builder_by_uref.exec_commit_finish(exec_request_genesis);
     let transforms: &AdditiveMap<Key, Transform, RandomState> =
         &test_result.builder().get_transforms()[0];
 
@@ -636,6 +619,25 @@ fn should_produce_same_transforms_by_uref_or_named_uref() {
 
     let test_result = builder_by_uref.exec_commit_finish(exec_request_by_uref);
     let direct_uref_transforms = &test_result.builder().get_transforms()[1];
+
+    // requests aren't cloneable, so create another one
+    let exec_request_genesis = {
+        let deploy = DeployItemBuilder::new()
+            .with_address(DEFAULT_ACCOUNT_ADDR)
+            .with_session_code(
+                &format!("{}_stored.wasm", TRANSFER_PURSE_TO_ACCOUNT_CONTRACT_NAME),
+                (),
+            )
+            .with_payment_code(
+                &format!("{}.wasm", STANDARD_PAYMENT_CONTRACT_NAME),
+                (U512::from(payment_purse_amount),),
+            )
+            .with_authorization_keys(&[*DEFAULT_ACCOUNT_KEY])
+            .with_deploy_hash([1u8; 32])
+            .build();
+
+        ExecuteRequestBuilder::new().push_deploy(deploy).build()
+    };
 
     let mut builder_by_named_uref = InMemoryWasmTestBuilder::default();
     builder_by_named_uref.run_genesis(&*DEFAULT_GENESIS_CONFIG);

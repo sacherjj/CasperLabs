@@ -61,6 +61,7 @@ class CasperLabsNetwork:
     """
 
     grpc_encryption = False
+    auto_propose = False
     behind_proxy = False
     initial_motes = INITIAL_MOTES_AMOUNT
 
@@ -183,6 +184,7 @@ class CasperLabsNetwork:
                 node_private_key=account.private_key,
                 node_account=account,
                 grpc_encryption=self.grpc_encryption,
+                auto_propose=self.auto_propose,
                 behind_proxy=self.behind_proxy,
             )
 
@@ -259,6 +261,7 @@ class CasperLabsNetwork:
             wait_for_approved_block_received_handler_state(
                 node, node.config.command_timeout
             )
+            wait_for_genesis_block(self.docker_nodes[node_number])
 
     def wait_for_peers(self) -> None:
         if self.node_count < 2:
@@ -345,6 +348,7 @@ class OneNodeNetwork(CasperLabsNetwork):
             initial_motes=self.initial_motes,
             node_account=account,
             grpc_encryption=self.grpc_encryption,
+            auto_propose=self.auto_propose,
         )
         return config
 
@@ -439,6 +443,12 @@ class PaymentNodeNetworkWithNoMinBalance(OneNodeNetwork):
 
 class OneNodeWithGRPCEncryption(OneNodeNetwork):
     grpc_encryption = True
+
+
+class OneNodeWithAutoPropose(OneNodeNetwork):
+    auto_propose = True
+    # TODO: enable encryption once asyncio client's gRPC encryption fixed
+    # grpc_encryption = True
 
 
 class OneNodeWithClarity(OneNodeNetwork):

@@ -1,6 +1,6 @@
 use lazy_static::lazy_static;
 
-use engine_core::{engine_state::Error, execution};
+use engine_core::execution;
 use engine_shared::transform::TypeMismatch;
 use engine_test_support::low_level::{
     ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG,
@@ -64,7 +64,7 @@ fn overwrite_as_account(builder: &mut InMemoryWasmTestBuilder, uref: URef, addre
         "{}",
         execution::Error::ForgedReference(uref.into_read_add_write())
     );
-    assert_eq!(error_msg, err);
+    assert!(error_msg.contains(&err));
 }
 
 #[ignore]
@@ -136,7 +136,11 @@ fn should_overwrite_system_contract_uref_as_system() {
         .builder()
         .exec_error_message(0)
         .expect("should execute mint overwrite with error");
-    assert_eq!(error_msg, Error::FinalizationError.to_string());
+    assert!(
+        error_msg.contains("FinalizationError"),
+        "Expected FinalizationError, got {}",
+        error_msg
+    );
 
     let result_2 = new_builder.exec(exec_request_3).commit().finish();
 
@@ -147,5 +151,5 @@ fn should_overwrite_system_contract_uref_as_system() {
 
     let type_mismatch = TypeMismatch::new("Contract".to_string(), "String".to_string());
     let expected_error = execution::Error::TypeMismatch(type_mismatch);
-    assert_eq!(error_msg, expected_error.to_string());
+    assert!(error_msg.contains(&expected_error.to_string()));
 }

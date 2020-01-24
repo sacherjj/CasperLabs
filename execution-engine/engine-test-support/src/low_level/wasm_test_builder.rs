@@ -12,21 +12,30 @@ use grpc::RequestOptions;
 use lmdb::DatabaseFlags;
 
 use engine_core::{
-    engine_state::{genesis::GenesisConfig, EngineConfig, EngineState, SYSTEM_ACCOUNT_ADDR},
+    engine_state::{
+        execute_request::ExecuteRequest, execution_result::ExecutionResult, genesis::GenesisConfig,
+        EngineConfig, EngineState, SYSTEM_ACCOUNT_ADDR,
+    },
     execution,
 };
 use engine_grpc_server::engine_server::{
     ipc::{
-        CommitRequest, CommitResponse, ExecuteRequest, ExecuteResponse, GenesisResponse,
-        QueryRequest, UpgradeRequest, UpgradeResponse,
+        CommitRequest, CommitResponse, GenesisResponse, QueryRequest, UpgradeRequest,
+        UpgradeResponse,
     },
     ipc_grpc::ExecutionEngineService,
     mappings::{MappingError, TransformMap},
     transforms::TransformEntry,
 };
 use engine_shared::{
-    account::Account, additive_map::AdditiveMap, contract::Contract, gas::Gas,
-    newtypes::Blake2bHash, os::get_page_size, stored_value::StoredValue, transform::Transform,
+    account::Account,
+    additive_map::AdditiveMap,
+    contract::Contract,
+    gas::Gas,
+    newtypes::{Blake2bHash, CorrelationId},
+    os::get_page_size,
+    stored_value::StoredValue,
+    transform::Transform,
 };
 use engine_storage::{
     global_state::{in_memory::InMemoryGlobalState, lmdb::LmdbGlobalState, StateProvider},
@@ -58,7 +67,8 @@ pub type LmdbWasmTestBuilder = WasmTestBuilder<LmdbGlobalState>;
 pub struct WasmTestBuilder<S> {
     /// [`EngineState`] is wrapped in [`Rc`] to work around a missing [`Clone`] implementation
     engine_state: Rc<EngineState<S>>,
-    exec_responses: Vec<ExecuteResponse>,
+    /// [`ExecutionResult`] is wrapped in [`Rc`] to work around a missing [`Clone`] implementation
+    exec_responses: Vec<Vec<Rc<ExecutionResult>>>,
     upgrade_responses: Vec<UpgradeResponse>,
     genesis_hash: Option<Vec<u8>>,
     post_state_hash: Option<Vec<u8>>,
@@ -355,32 +365,24 @@ where
                 .post_state_hash
                 .clone()
                 .expect("expected post_state_hash");
-            exec_request.set_parent_state_hash(hash.to_vec());
+            exec_request.parent_state_hash =
+                hash.as_slice().try_into().expect("expected a valid hash");
             exec_request
         };
         let exec_response = self
             .engine_state
-            .execute(RequestOptions::new(), exec_request)
-            .wait_drop_metadata()
-            .expect("should exec");
-        self.exec_responses.push(exec_response.clone());
-        assert!(exec_response.has_success());
+            .run_execute(CorrelationId::new(), exec_request);
+        assert!(exec_response.is_ok());
         // Parse deploy results
-        let deploy_result = exec_response
-            .get_success()
-            .get_deploy_results()
-            .get(0) // We only allow for issuing single deploy (one wasm file).
-            .expect("Unable to get first deploy result");
-        let commit_transforms: TransformMap = deploy_result
-            .get_execution_result()
-            .get_effects()
-            .get_transform_map()
-            .to_vec()
-            .try_into()
-            .expect("should convert");
-        let transforms = commit_transforms.into_inner();
+        let execution_results = exec_response.as_ref().unwrap();
         // Cache transformations
-        self.transforms.push(transforms);
+        self.transforms.extend(
+            execution_results
+                .iter()
+                .map(|res| res.effect().transforms.clone()),
+        );
+        self.exec_responses
+            .push(exec_response.unwrap().into_iter().map(Rc::new).collect());
         self
     }
 
@@ -469,18 +471,12 @@ where
         let exec_response = self
             .exec_responses
             .last()
-            .expect("Expected to be called after run()")
-            .clone();
-        let deploy_result = exec_response
-            .get_success()
-            .get_deploy_results()
+            .expect("Expected to be called after run()");
+        let exec_result = exec_response
             .get(0)
             .expect("Unable to get first deploy result");
-        if !deploy_result.has_execution_result() {
-            panic!("Expected ExecutionResult, got {:?} instead", deploy_result);
-        }
 
-        if deploy_result.get_execution_result().has_error() {
+        if exec_result.is_failure() {
             panic!(
                 "Expected successful execution result, but instead got: {:?}",
                 exec_response,
@@ -493,14 +489,11 @@ where
         let exec_response = self
             .exec_responses
             .last()
-            .expect("Expected to be called after run()")
-            .clone();
-        let deploy_result = exec_response
-            .get_success()
-            .get_deploy_results()
+            .expect("Expected to be called after run()");
+        let exec_result = exec_response
             .get(0)
-            .expect("Unable to get first deploy result");
-        deploy_result.get_execution_result().has_error()
+            .expect("Unable to get first execution result");
+        exec_result.is_failure()
     }
 
     /// Gets the transform map that's cached between runs
@@ -552,7 +545,7 @@ where
         &self.engine_state
     }
 
-    pub fn get_exec_response(&self, index: usize) -> Option<&ExecuteResponse> {
+    pub fn get_exec_response(&self, index: usize) -> Option<&Vec<Rc<ExecutionResult>>> {
         self.exec_responses.get(index)
     }
 
@@ -629,8 +622,7 @@ where
 
     pub fn exec_error_message(&self, index: usize) -> Option<String> {
         let response = self.get_exec_response(index)?;
-        let execution_result = utils::get_success_result(&response);
-        Some(utils::get_error_message(execution_result))
+        Some(utils::get_error_message(response))
     }
 
     pub fn exec_commit_finish(&mut self, execute_request: ExecuteRequest) -> WasmTestResult<S> {

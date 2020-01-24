@@ -75,10 +75,7 @@ fn should_run_ee_572_regression() {
         .expect("should have a response")
         .to_owned();
 
-    let error_message = {
-        let execution_result = utils::get_success_result(&response);
-        utils::get_error_message(execution_result)
-    };
+    let error_message = utils::get_error_message(response);
 
     assert!(error_message.contains("ForgedReference"));
 }
