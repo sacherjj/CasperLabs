@@ -82,7 +82,7 @@ object Estimator {
                .bfToposortTraverseF[F](latestMessagesMeta.toList)(
                  _.parents.toList.traverse(dag.lookupUnsafe(_))
                )
-               .takeWhile(_.rank > minRank)
+               .takeWhile(_.rank >= minRank)
                .takeUntil(_.messageHash == stopHash)
                // We start with the tips and remove any message
                // that is reachable through the parent-child link from other tips.

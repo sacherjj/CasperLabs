@@ -409,7 +409,8 @@ class MultiParentCasperImpl[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: 
                          validatorId,
                          privateKey,
                          sigAlgorithm,
-                         lfbHash
+                         lfbHash,
+                         roundId = 0
                        )
                        CreateBlockStatus.created(block)
                      }
@@ -457,7 +458,8 @@ class MultiParentCasperImpl[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: 
         validatorId,
         privateKey,
         sigAlgorithm,
-        keyBlockHash
+        keyBlockHash,
+        roundId = 0
       )
     } yield CreateBlockStatus.created(block)
 

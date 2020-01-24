@@ -100,7 +100,8 @@ object MessageProducer {
             validatorIdentity.publicKey,
             validatorIdentity.privateKey,
             validatorIdentity.signatureAlgorithm,
-            keyBlockHash
+            keyBlockHash,
+            roundId
           )
 
           message <- MonadThrowable[F].fromTry(Message.fromBlock(signed))
@@ -170,7 +171,8 @@ object MessageProducer {
             validatorIdentity.publicKey,
             validatorIdentity.privateKey,
             validatorIdentity.signatureAlgorithm,
-            keyBlockHash
+            keyBlockHash,
+            roundId
           )
 
           message <- MonadThrowable[F].fromTry(Message.fromBlock(signed))
