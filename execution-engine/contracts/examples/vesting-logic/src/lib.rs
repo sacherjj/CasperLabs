@@ -1,9 +1,11 @@
 #![no_std]
 
 extern crate num_traits;
-use num_traits::{Zero, One};
-use core::ops::{Add, Sub, Div, Mul};
-use core::cmp::{self, Ord};
+use core::{
+    cmp::{self, Ord},
+    ops::{Add, Div, Mul, Sub},
+};
+use num_traits::{One, Zero};
 
 #[cfg(test)]
 mod tests;
@@ -32,18 +34,18 @@ pub mod key {
 }
 
 pub trait VestingTrait<
-    Amount: Copy + Zero + One + Add<Output = Amount> + 
-            Sub<Output = Amount> + Mul<Output = Amount> + Ord,
-    Time: Copy + Zero + PartialOrd + Sub<Output = Time> + Div<Output = Amount>
-> {
+    Amount: Copy + Zero + One + Add<Output = Amount> + Sub<Output = Amount> + Mul<Output = Amount> + Ord,
+    Time: Copy + Zero + PartialOrd + Sub<Output = Time> + Div<Output = Amount>,
+>
+{
     fn init(
         &mut self,
-        cliff_time: Time, 
+        cliff_time: Time,
         cliff_amount: Amount,
         drip_period: Time,
         drip_amount: Amount,
         total_amount: Amount,
-        admin_release_period: Time
+        admin_release_period: Time,
     ) {
         self.set_cliff_time(cliff_time);
         self.set_cliff_amount(cliff_amount);
@@ -69,9 +71,9 @@ pub trait VestingTrait<
             let released_amount = self.get_released_amount();
             let mut available = self.get_cliff_amount();
             let time_diff: Time = current_time - cliff_time - self.total_paused_time();
-            let available_drips = if drip_period == Time::zero() { 
-                Amount::zero() 
-            } else { 
+            let available_drips = if drip_period == Time::zero() {
+                Amount::zero()
+            } else {
                 time_diff / drip_period
             };
             available = available + drip_amount * available_drips - released_amount;
@@ -131,18 +133,18 @@ pub trait VestingTrait<
 
     fn admin_release(&mut self) -> Result<Amount, VestingError> {
         if !self.is_paused() {
-            return Err(VestingError::AdminReleaseErrorNotPaused)
+            return Err(VestingError::AdminReleaseErrorNotPaused);
         }
         let last_pause_time = self.get_last_pause_time();
         let since_last_pause = self.current_time() - last_pause_time;
         let required_wait_period = self.get_admin_release_period();
         if since_last_pause < required_wait_period {
-            return Err(VestingError::AdminReleaseErrorNotEnoughTimeElapsed)
+            return Err(VestingError::AdminReleaseErrorNotEnoughTimeElapsed);
         }
         let total_amount = self.get_total_amount();
         let released_amount = self.get_released_amount();
         if total_amount == released_amount {
-            return Err(VestingError::AdminReleaseErrorNothingToWithdraw)
+            return Err(VestingError::AdminReleaseErrorNothingToWithdraw);
         }
         let amount_to_withdraw = total_amount - released_amount;
         self.set_released_amount(total_amount);
@@ -167,12 +169,12 @@ pub trait VestingTrait<
 
     fn set_drip_period(&mut self, drip_period: Time) {
         self.set_time(key::DRIP_PERIOD, drip_period);
-    }    
+    }
 
     fn get_drip_period(&self) -> Time {
         self.get_time(key::DRIP_PERIOD)
-    }    
-    
+    }
+
     fn set_drip_amount(&mut self, drip_amount: Amount) {
         self.set_amount(key::DRIP_AMOUNT, drip_amount);
     }

@@ -1,9 +1,9 @@
 mod vesting_test;
 
 use engine_test_support::low_level::{DEFAULT_ACCOUNT_ADDR, DEFAULT_ACCOUNT_INITIAL_BALANCE};
-use types::{U512};
+use types::U512;
 
-use vesting_test::{VestingTest, VestingConfig};
+use vesting_test::{VestingConfig, VestingTest};
 
 const FAUCET: [u8; 32] = DEFAULT_ACCOUNT_ADDR;
 const RECIPIENT: [u8; 32] = [2u8; 32];
@@ -93,8 +93,10 @@ fn test_withdraw() {
         .assert_success_status_and_commit()
         .assert_released_amount(&withdraw_amount)
         .assert_clx_vesting_balance(&(config.total_amount - withdraw_amount))
-        .assert_clx_account_balance_no_gas(FAUCET, 
-            init_balance + withdraw_amount - config.total_amount);
+        .assert_clx_account_balance_no_gas(
+            FAUCET,
+            init_balance + withdraw_amount - config.total_amount,
+        );
 }
 
 #[ignore]

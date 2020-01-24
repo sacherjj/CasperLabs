@@ -1,8 +1,9 @@
-use crate::{VestingTrait, VestingError};
+use crate::{VestingError, VestingTrait};
 extern crate alloc;
-use alloc::string::String;
-use alloc::string::ToString;
-use alloc::collections::btree_map::BTreeMap;
+use alloc::{
+    collections::btree_map::BTreeMap,
+    string::{String, ToString},
+};
 
 type Amount = u64;
 type Time = u64;
@@ -11,7 +12,7 @@ struct Vault {
     amounts: BTreeMap<String, Amount>,
     times: BTreeMap<String, Time>,
     booleans: BTreeMap<String, bool>,
-    current_time: Time
+    current_time: Time,
 }
 
 impl Vault {
@@ -20,15 +21,15 @@ impl Vault {
             amounts: BTreeMap::new(),
             times: BTreeMap::new(),
             booleans: BTreeMap::new(),
-            current_time: 0
+            current_time: 0,
         };
         vault.init(
-            conf.cliff_time, 
+            conf.cliff_time,
             conf.cliff_amount,
             conf.drip_period,
             conf.drip_amount,
             conf.total_amount,
-            conf.admin_release_period
+            conf.admin_release_period,
         );
         vault
     }
@@ -63,23 +64,23 @@ impl VestingTrait<Amount, Time> for Vault {
 }
 
 struct VestingConfig {
-    cliff_time: Time, 
+    cliff_time: Time,
     cliff_amount: Amount,
     drip_period: Time,
     drip_amount: Amount,
     total_amount: Amount,
-    admin_release_period: Time
+    admin_release_period: Time,
 }
 
 impl Default for VestingConfig {
     fn default() -> VestingConfig {
         VestingConfig {
-            cliff_time: 10, 
+            cliff_time: 10,
             cliff_amount: 2,
             drip_period: 3,
             drip_amount: 5,
             total_amount: 1000,
-            admin_release_period: 123
+            admin_release_period: 123,
         }
     }
 }
@@ -90,14 +91,14 @@ fn test_pausing() {
     assert_eq!(vault.total_paused_time(), 0);
     vault.set_current_time(5);
     assert_eq!(vault.total_paused_time(), 0);
-    vault.pause();
+    let _ = vault.pause();
     vault.set_current_time(8);
-    vault.unpause();
+    let _ = vault.unpause();
     assert_eq!(vault.total_paused_time(), 3);
     vault.set_current_time(10);
-    vault.pause();
+    let _ = vault.pause();
     vault.set_current_time(100);
-    vault.unpause();
+    let _ = vault.unpause();
     assert_eq!(vault.total_paused_time(), 93);
 }
 
@@ -108,7 +109,7 @@ fn test_pausing_already_paused_error() {
     assert!(first.is_ok());
     let second = vault.pause();
     let expected = VestingError::AlreadyPaused;
-    assert_eq!(second.unwrap_err(), expected);    
+    assert_eq!(second.unwrap_err(), expected);
 }
 
 #[test]
@@ -116,9 +117,8 @@ fn test_pausing_already_unpaused_error() {
     let mut vault = Vault::new(Default::default());
     let result = vault.unpause();
     let expected = VestingError::AlreadyUnpaused;
-    assert_eq!(result.unwrap_err(), expected);    
+    assert_eq!(result.unwrap_err(), expected);
 }
-
 
 #[test]
 fn test_availible_no_pause() {
@@ -146,9 +146,9 @@ fn test_availible_no_pause() {
 fn test_availible_with_pause() {
     let mut vault = Vault::new(Default::default());
     vault.set_current_time(5);
-    vault.pause();
+    let _ = vault.pause();
     vault.set_current_time(8);
-    vault.unpause(); // total paused time = 3
+    let _ = vault.unpause(); // total paused time = 3
     assert_eq!(vault.available_amount(), 0);
     vault.set_current_time(11);
     assert_eq!(vault.available_amount(), 0);
@@ -158,10 +158,10 @@ fn test_availible_with_pause() {
     assert_eq!(vault.available_amount(), 2);
     vault.set_current_time(20);
     assert_eq!(vault.available_amount(), 12);
-    vault.pause();
+    let _ = vault.pause();
     vault.set_current_time(37);
     assert_eq!(vault.available_amount(), 12);
-    vault.unpause(); // total paused time = 20 
+    let _ = vault.unpause(); // total paused time = 20
     assert_eq!(vault.available_amount(), 12);
     vault.set_current_time(629);
     assert_eq!(vault.available_amount(), 997);
@@ -185,23 +185,23 @@ fn test_withdraw() {
     let result = vault.withdraw(1);
     assert!(result.is_ok());
     assert_eq!(vault.available_amount(), 1);
-    vault.pause();
+    let _ = vault.pause();
     vault.set_current_time(16);
     let result = vault.withdraw(1);
     assert!(result.is_ok());
     assert_eq!(vault.available_amount(), 0);
-    vault.unpause();
+    let _ = vault.unpause();
     vault.set_current_time(18);
     assert_eq!(vault.available_amount(), 5);
     let result = vault.withdraw(4);
-    assert!(result.is_ok());    
+    assert!(result.is_ok());
     assert_eq!(vault.available_amount(), 1);
 }
 
 #[test]
 fn test_admin_release() {
     let mut vault = Vault::new(Default::default());
-    vault.pause();
+    let _ = vault.pause();
     vault.set_current_time(123);
     let result = vault.admin_release().unwrap();
     assert_eq!(result, 1000);
@@ -222,7 +222,7 @@ fn test_admin_release_not_paused_error() {
 fn test_admin_release_not_enough_time_elapsed_error() {
     let mut vault = Vault::new(Default::default());
     vault.set_current_time(10);
-    vault.pause();
+    let _ = vault.pause();
     vault.set_current_time(50);
     let result = vault.admin_release().unwrap_err();
     assert_eq!(result, VestingError::AdminReleaseErrorNotEnoughTimeElapsed);
@@ -232,7 +232,7 @@ fn test_admin_release_not_enough_time_elapsed_error() {
 fn test_admin_release_nothing_to_withdraw_error() {
     let mut vault = Vault::new(Default::default());
     vault.set_current_time(30000);
-    vault.pause();
+    let _ = vault.pause();
     vault.set_current_time(31000);
     let _ = vault.withdraw(1000);
     let result = vault.admin_release().unwrap_err();

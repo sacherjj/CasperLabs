@@ -1,12 +1,15 @@
-use std::convert::{TryFrom, TryInto};
+use std::{convert::TryFrom, rc::Rc};
 
-use engine_core::engine_state::CONV_RATE;
-use engine_grpc_server::engine_server::ipc::ExecuteResponse;
-use engine_shared::{gas::Gas, motes::Motes};
+use engine_core::engine_state::{execution_result::ExecutionResult, CONV_RATE};
+use engine_shared::motes::Motes;
 use engine_test_support::low_level::{
     utils, ExecuteRequestBuilder, InMemoryWasmTestBuilder as TestBuilder, DEFAULT_GENESIS_CONFIG,
 };
-use types::{account::{PurseId}, bytesrepr::{ToBytes, FromBytes}, CLValue, Key, U512, CLTyped};
+use types::{
+    account::PurseId,
+    bytesrepr::{FromBytes, ToBytes},
+    CLTyped, CLValue, Key, U512,
+};
 
 const TRANFER_TO_ACCOUNT_WASM: &str = "transfer_to_account.wasm";
 const VESTING_CONTRACT_WASM: &str = "vesting_smart_contract.wasm";
@@ -36,23 +39,23 @@ pub mod key {
 }
 
 pub struct VestingConfig {
-    pub cliff_time: U512, 
+    pub cliff_time: U512,
     pub cliff_amount: U512,
     pub drip_period: U512,
     pub drip_amount: U512,
     pub total_amount: U512,
-    pub admin_release_period: U512
+    pub admin_release_period: U512,
 }
 
 impl Default for VestingConfig {
     fn default() -> VestingConfig {
         VestingConfig {
-            cliff_time: 10.into(), 
+            cliff_time: 10.into(),
             cliff_amount: 2.into(),
             drip_period: 3.into(),
             drip_amount: 5.into(),
             total_amount: 1000.into(),
-            admin_release_period: 123.into()
+            admin_release_period: 123.into(),
         }
     }
 }
@@ -61,19 +64,23 @@ pub struct VestingTest {
     pub builder: TestBuilder,
     pub vesting_hash: Option<[u8; 32]>,
     pub proxy_hash: Option<[u8; 32]>,
-    pub current_time: u64
+    pub current_time: u64,
 }
 
 impl VestingTest {
-    pub fn new(sender: [u8; 32], admin: [u8; 32], recipient: [u8; 32],
-        vesting_config: &VestingConfig) -> VestingTest {
+    pub fn new(
+        sender: [u8; 32],
+        admin: [u8; 32],
+        recipient: [u8; 32],
+        vesting_config: &VestingConfig,
+    ) -> VestingTest {
         let mut builder = TestBuilder::default();
         builder.run_genesis(&DEFAULT_GENESIS_CONFIG).commit();
         let test = VestingTest {
             builder,
             vesting_hash: None,
             proxy_hash: None,
-            current_time: 0
+            current_time: 0,
         };
         test.deploy_vesting_contract(sender, admin, recipient, vesting_config)
             .assert_success_status_and_commit()
@@ -91,8 +98,8 @@ impl VestingTest {
             .builder
             .exec_error_message(last_deploy_index - 1)
             .unwrap();
-        let expected_message = format!("Exit code: {:?}", code);
-        assert_eq!(deploy_error, expected_message);
+        let expected_message = format!("Revert({:?})", code);
+        assert!(deploy_error.contains(&expected_message));
         self
     }
 
@@ -105,7 +112,7 @@ impl VestingTest {
     pub fn with_block_time(mut self, time: u64) -> Self {
         self.current_time = time;
         self
-    } 
+    }
 
     pub fn get_vesting_hash(&self) -> [u8; 32] {
         self.vesting_hash
@@ -128,18 +135,27 @@ impl VestingTest {
         key.as_hash().unwrap()
     }
 
-    pub fn deploy_vesting_contract(mut self, sender: [u8; 32], admin: [u8; 32], 
-        recipient: [u8; 32], vesting_config: &VestingConfig) -> Self {
+    pub fn deploy_vesting_contract(
+        mut self,
+        sender: [u8; 32],
+        admin: [u8; 32],
+        recipient: [u8; 32],
+        vesting_config: &VestingConfig,
+    ) -> Self {
         let request = ExecuteRequestBuilder::standard(
             sender,
             VESTING_CONTRACT_WASM,
-            (method::DEPLOY, VESTING_CONTRACT_NAME, admin, recipient,
-                vesting_config.cliff_time, 
-                vesting_config.cliff_amount, 
-                vesting_config.drip_period, 
-                vesting_config.drip_amount, 
-                vesting_config.total_amount, 
-                vesting_config.admin_release_period
+            (
+                method::DEPLOY,
+                VESTING_CONTRACT_NAME,
+                admin,
+                recipient,
+                vesting_config.cliff_time,
+                vesting_config.cliff_amount,
+                vesting_config.drip_period,
+                vesting_config.drip_amount,
+                vesting_config.total_amount,
+                vesting_config.admin_release_period,
             ),
         )
         .with_block_time(self.current_time)
@@ -148,10 +164,7 @@ impl VestingTest {
         self
     }
 
-    pub fn call_vesting_pause(
-        mut self,
-        sender: [u8; 32]
-    ) -> Self {
+    pub fn call_vesting_pause(mut self, sender: [u8; 32]) -> Self {
         let request = ExecuteRequestBuilder::contract_call_by_hash(
             sender,
             self.get_proxy_hash(),
@@ -163,10 +176,7 @@ impl VestingTest {
         self
     }
 
-    pub fn call_vesting_unpause(
-        mut self,
-        sender: [u8; 32]
-    ) -> Self {
+    pub fn call_vesting_unpause(mut self, sender: [u8; 32]) -> Self {
         let request = ExecuteRequestBuilder::contract_call_by_hash(
             sender,
             self.get_proxy_hash(),
@@ -178,11 +188,7 @@ impl VestingTest {
         self
     }
 
-    pub fn call_withdraw(
-        mut self,
-        sender: [u8; 32],
-        amount: U512
-    ) -> Self {
+    pub fn call_withdraw(mut self, sender: [u8; 32], amount: U512) -> Self {
         let request = ExecuteRequestBuilder::contract_call_by_hash(
             sender,
             self.get_proxy_hash(),
@@ -193,11 +199,8 @@ impl VestingTest {
         self.builder.exec(request);
         self
     }
-    
-    pub fn call_admin_release(
-        mut self,
-        sender: [u8; 32]
-    ) -> Self {
+
+    pub fn call_admin_release(mut self, sender: [u8; 32]) -> Self {
         let request = ExecuteRequestBuilder::contract_call_by_hash(
             sender,
             self.get_proxy_hash(),
@@ -264,7 +267,7 @@ impl VestingTest {
             .builder
             .query(None, local_key.clone(), &[])
             .and_then(|v| CLValue::try_from(v).ok())
-            .expect(format!("should have local value for {} key", name).as_str());
+            .unwrap_or_else(|| panic!("should have local value for {} key", name));
         value.into_t().unwrap()
     }
 
@@ -335,13 +338,13 @@ impl VestingTest {
     }
 }
 
-fn get_cost(response: &ExecuteResponse) -> U512 {
-    let mut success_result = utils::get_success_result(response);
-    let cost = success_result
-        .take_cost()
-        .try_into()
-        .expect("should map to U512");
-    let gas = Gas::new(cost);
-    let motes = Motes::from_gas(gas, CONV_RATE).expect("should have motes");
+fn get_cost(response: &[Rc<ExecutionResult>]) -> U512 {
+    let motes = Motes::from_gas(
+        utils::get_exec_costs(response)
+            .into_iter()
+            .fold(Default::default(), |i, acc| i + acc),
+        CONV_RATE,
+    )
+    .expect("should convert");
     motes.value()
 }

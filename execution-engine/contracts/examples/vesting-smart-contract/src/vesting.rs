@@ -1,13 +1,13 @@
-use vesting_logic::{VestingTrait, VestingError};
-use types::{
-    account::{PublicKey, PurseId},
-    U512, U256
-};
+use crate::{api::Api, error::Error};
 use contract::{
     contract_api::{runtime, storage, system},
     unwrap_or_revert::UnwrapOrRevert,
 };
-use crate::{api::Api, error::Error};
+use types::{
+    account::{PublicKey, PurseId},
+    U256, U512,
+};
+use vesting_logic::{VestingError, VestingTrait};
 
 pub const INIT_FLAG_KEY: [u8; 32] = [1u8; 32];
 pub const ADMIN_KEY: &str = "admin_account";
@@ -57,15 +57,15 @@ fn constructor() {
             set_admin_account(admin);
             set_recipient_account(recipient);
             vault.init(
-                vesting_config.cliff_time, 
-                vesting_config.cliff_amount, 
-                vesting_config.drip_period, 
-                vesting_config.drip_amount, 
-                vesting_config.total_amount, 
-                vesting_config.admin_release_period
+                vesting_config.cliff_time,
+                vesting_config.cliff_amount,
+                vesting_config.drip_period,
+                vesting_config.drip_amount,
+                vesting_config.total_amount,
+                vesting_config.admin_release_period,
             );
         }
-        _ => runtime::revert(Error::UnknownConstructorCommand)
+        _ => runtime::revert(Error::UnknownConstructorCommand),
     }
 }
 
@@ -76,46 +76,38 @@ fn entry_point() {
             verify_admin_account();
             match vault.pause() {
                 Ok(()) => {}
-                Err(VestingError::AlreadyPaused) => {
-                    runtime::revert(Error::AlreadyPaused)
-                }
-                _ => runtime::revert(Error::UnexpectedVestingError)
+                Err(VestingError::AlreadyPaused) => runtime::revert(Error::AlreadyPaused),
+                _ => runtime::revert(Error::UnexpectedVestingError),
             }
         }
         Api::Unpause => {
             verify_admin_account();
             match vault.unpause() {
                 Ok(()) => {}
-                Err(VestingError::AlreadyUnpaused) => {
-                    runtime::revert(Error::AlreadyUnpaused)
-                }
-                _ => runtime::revert(Error::UnexpectedVestingError)
+                Err(VestingError::AlreadyUnpaused) => runtime::revert(Error::AlreadyUnpaused),
+                _ => runtime::revert(Error::UnexpectedVestingError),
             }
         }
         Api::Withdraw(purse, amount) => {
             verify_recipient_account();
             match vault.withdraw(amount) {
                 Ok(()) => transfer_out_clx_to_purse(purse, amount),
-                Err(VestingError::NotEnoughBalance) => {
-                    runtime::revert(Error::NotEnoughBalance)
-                }
-                _ => runtime::revert(Error::UnexpectedVestingError)
+                Err(VestingError::NotEnoughBalance) => runtime::revert(Error::NotEnoughBalance),
+                _ => runtime::revert(Error::UnexpectedVestingError),
             }
         }
         Api::AdminRelease(purse) => {
             verify_admin_account();
             match vault.admin_release() {
                 Ok(amount) => transfer_out_clx_to_purse(purse, amount),
-                Err(VestingError::AdminReleaseErrorNotPaused) => {
-                    runtime::revert(Error::NotPaused)
-                }
+                Err(VestingError::AdminReleaseErrorNotPaused) => runtime::revert(Error::NotPaused),
                 Err(VestingError::AdminReleaseErrorNothingToWithdraw) => {
                     runtime::revert(Error::NothingToWithdraw)
                 }
                 Err(VestingError::AdminReleaseErrorNotEnoughTimeElapsed) => {
                     runtime::revert(Error::NotEnoughTimeElapsed)
                 }
-                _ => runtime::revert(Error::UnexpectedVestingError)
+                _ => runtime::revert(Error::UnexpectedVestingError),
             }
         }
         _ => runtime::revert(Error::UnknownVestingCallCommand),
@@ -149,7 +141,7 @@ fn get_recipient_account() -> PublicKey {
 
 fn set_account(key: &str, value: PublicKey) {
     let val: U256 = value.value().into();
-    storage::write_local(key, val);   
+    storage::write_local(key, val);
 }
 
 fn get_account(key: &str) -> PublicKey {
@@ -182,8 +174,7 @@ fn transfer_out_clx_to_purse(purse: PurseId, amount: U512) {
 }
 
 fn local_purse() -> PurseId {
-    let key = runtime::get_key(PURSE_NAME)
-        .unwrap_or_revert_with(Error::LocalPurseKeyMissing);
+    let key = runtime::get_key(PURSE_NAME).unwrap_or_revert_with(Error::LocalPurseKeyMissing);
     let uref = key.as_uref().unwrap_or_revert_with(Error::UnexpectedType);
     PurseId::new(*uref)
 }

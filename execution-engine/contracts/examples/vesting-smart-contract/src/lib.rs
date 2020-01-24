@@ -4,9 +4,9 @@ extern crate alloc;
 
 mod api;
 mod deployer;
-mod vesting;
 mod error;
 mod proxy;
+mod vesting;
 
 #[no_mangle]
 pub extern "C" fn call() {

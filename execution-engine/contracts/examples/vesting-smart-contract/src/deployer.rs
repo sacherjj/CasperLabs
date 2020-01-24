@@ -4,12 +4,11 @@ use crate::{
     api::{self, Api, VestingConfig},
     error::Error,
 };
-use contract::contract_api::{runtime, storage, system, TURef, account};
-use contract::unwrap_or_revert::UnwrapOrRevert;
-use types::{ContractRef, Key};
-use types::{
-    account::{PublicKey}
+use contract::{
+    contract_api::{account, runtime, storage, system, TURef},
+    unwrap_or_revert::UnwrapOrRevert,
 };
+use types::{account::PublicKey, ContractRef, Key};
 
 // Vault smart contract.
 #[allow(unused_imports)]
@@ -33,11 +32,11 @@ pub fn deploy() {
 }
 
 fn deploy_vesting_contract(
-        name: &str,
-        admin: PublicKey,
-        recipient: PublicKey,
-        vesting_config: VestingConfig
-    ) {
+    name: &str,
+    admin: PublicKey,
+    recipient: PublicKey,
+    vesting_config: VestingConfig,
+) {
     // Create a smart contract purse.
     let main_purse = account::get_main_purse();
     let vesting_purse = system::create_purse();
@@ -47,19 +46,24 @@ fn deploy_vesting_contract(
     vesting_urefs.insert(String::from(PURSE_NAME), vesting_purse.value().into());
 
     // Create vesting instance.
-    let vesting_ref: ContractRef = 
+    let vesting_ref: ContractRef =
         storage::store_function_at_hash(VESTING_CONTRACT_NAME, vesting_urefs);
 
     // Initialize vesting contract.
-    runtime::call_contract::<_, ()>(vesting_ref.clone(), (api::INIT, 
-        admin,
-        recipient,
-        vesting_config.cliff_time, 
-        vesting_config.cliff_amount, 
-        vesting_config.drip_period, 
-        vesting_config.drip_amount, 
-        vesting_config.total_amount, 
-        vesting_config.admin_release_period));
+    runtime::call_contract::<_, ()>(
+        vesting_ref.clone(),
+        (
+            api::INIT,
+            admin,
+            recipient,
+            vesting_config.cliff_time,
+            vesting_config.cliff_amount,
+            vesting_config.drip_period,
+            vesting_config.drip_amount,
+            vesting_config.total_amount,
+            vesting_config.admin_release_period,
+        ),
+    );
 
     // Save it under a new TURef.
     let vesting_turef: TURef<Key> = storage::new_turef(vesting_ref.into());

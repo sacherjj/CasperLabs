@@ -17,10 +17,10 @@ pub enum Error {
     PurseBalanceCheckError = 13,       // 65549
     NotPaused = 14,                    // 65550
     NothingToWithdraw = 15,            // 65551
-    NotEnoughTimeElapsed  = 16,        // 65552
-    LocalPurseKeyMissing  = 17,        // 65553
-    UnexpectedType  = 18,              // 65554
-    MissingLocalKey  = 19,             // 65555
+    NotEnoughTimeElapsed = 16,         // 65552
+    LocalPurseKeyMissing = 17,         // 65553
+    UnexpectedType = 18,               // 65554
+    MissingLocalKey = 19,              // 65555
     MissingArgument0 = 20,             // 65556
     MissingArgument1 = 21,             // 65557
     MissingArgument2 = 22,             // 65558
