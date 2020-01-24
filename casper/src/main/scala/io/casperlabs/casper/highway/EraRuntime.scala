@@ -200,7 +200,7 @@ class EraRuntime[F[_]: MonadThrowable: Clock: EraStorage: FinalityStorageReader:
                 // In the voting period the lambda message is a ballot, so can't be a target,
                 // but in any case our own latest message might point at something with more weight already.
                 choice <- ForkChoice[F].fromJustifications(
-                           lambdaMessage.keyBlockHash,
+                           lambdaMessage.eraId,
                            justifications.values.flatten.toSet
                          )
                 message <- messageProducer.ballot(
@@ -449,7 +449,7 @@ class EraRuntime[F[_]: MonadThrowable: Clock: EraStorage: FinalityStorageReader:
 
     for {
       _ <- check(
-            message.keyBlockHash == era.keyBlockHash,
+            message.eraId == era.keyBlockHash,
             "Shouldn't receive messages from other eras!"
           )
       _ <- maybeMessageProducer.fold(noop) { mp =>
@@ -640,7 +640,7 @@ object EraRuntime {
     * can share a round ID, but they are still different rounds.
     */
   def isSameRoundAs(a: Message)(b: Message): Boolean =
-    a.keyBlockHash == b.keyBlockHash && a.roundId == b.roundId
+    a.eraId == b.eraId && a.roundId == b.roundId
 
   /** Check if a message from a validator cites their own message in the same round as the message itself.
     * If it does, that would mean that this message was not the first in that round. In the voting period,

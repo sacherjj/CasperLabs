@@ -831,7 +831,7 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
             assertEvent(events) {
               case HighwayEvent.CreatedLambdaMessage(b: Message.Block) =>
                 b.roundId shouldBe roundId
-                b.keyBlockHash shouldBe runtime.era.keyBlockHash
+                b.eraId shouldBe runtime.era.keyBlockHash
             }
           }
         }

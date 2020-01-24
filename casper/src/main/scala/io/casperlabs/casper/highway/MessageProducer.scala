@@ -215,7 +215,7 @@ object MessageProducer {
           // This, currently, is catered for by a Semaphore in the EraRuntime, which
           // spans the fork choice as well as the block production.
           ownLatests = justificationMessages.filter { j =>
-            j.validatorId == validatorId && j.keyBlockHash == keyBlockHash
+            j.validatorId == validatorId && j.eraId == keyBlockHash
           }
           maybeOwnLatest = Option(ownLatests)
             .filterNot(_.isEmpty)
@@ -282,7 +282,7 @@ object MessageProducer {
                          .bfTraverseF(List(keyBlockHash)) { h =>
                            EraStorage[F].getEraUnsafe(h).map(e => List(e.parentKeyBlockHash))
                          }
-                         .takeUntil(_ == keyBlock.keyBlockHash)
+                         .takeUntil(_ == keyBlock.eraId)
                          .toList
 
       equivocatorsPerEra <- keyBlockHashes.traverse { h =>

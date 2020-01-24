@@ -29,7 +29,7 @@ class MockBlockDagStorage[F[_]: Monad](
     val message = Message.fromBlock(block).get
     messagesRef.update(_.updated(message.messageHash, message)) >>
       latestRef.update { m =>
-        val k = message.keyBlockHash
+        val k = message.eraId
         val v = message.validatorId
         m.updated(k, m(k).updated(v, message))
       } >>
