@@ -436,7 +436,7 @@ steps:
   - "apt-get update && apt-get -y install gcc"
   - "python3 -m pip install pipenv pytest dataclasses typing_extensions dataclasses grpcio grpcio_tools protobuf in-place ed25519 pyblake2 lz4"
   - "cd integration-testing"
-  - "./docker_run_tests.sh --unique_run_num 0 -k R0"
+  - "./docker_run_tests.sh --unique_run_num 0 -k \"R0\""
   environment:
     _JAVA_OPTIONS: "-Xms2G -Xmx2G -XX:MaxMetaspaceSize=1G"
   image: "casperlabs/buildenv:latest"
@@ -458,7 +458,7 @@ steps:
   - "apt-get update && apt-get -y install gcc"
   - "python3 -m pip install pipenv pytest dataclasses typing_extensions dataclasses grpcio grpcio_tools protobuf in-place ed25519 pyblake2 lz4"
   - "cd integration-testing"
-  - "./docker_run_tests.sh --unique_run_num 1 -k \"not R0\""
+  - "./docker_run_tests.sh --unique_run_num 1 -k \"R1\""
   environment:
     _JAVA_OPTIONS: "-Xms2G -Xmx2G -XX:MaxMetaspaceSize=1G"
   image: "casperlabs/buildenv:latest"
@@ -475,20 +475,27 @@ steps:
   - docker-build-ee-int-bors
   - docker-build-explorer-bors
 
-# The below section is for post-bors push webhooks
-- name: rust-compile-for-make
+- name: run-integration-tests-1
   commands:
-  - "cd execution-engine"
-  - "make setup-rs"
-  - "make build"
+    - "apt-get update && apt-get -y install gcc"
+    - "python3 -m pip install pipenv pytest dataclasses typing_extensions dataclasses grpcio grpcio_tools protobuf in-place ed25519 pyblake2 lz4"
+    - "cd integration-testing"
+    - "./docker_run_tests.sh --unique_run_num 1 -k \"not R0 or R1\""
+  environment:
+    _JAVA_OPTIONS: "-Xms2G -Xmx2G -XX:MaxMetaspaceSize=1G"
   image: "casperlabs/buildenv:latest"
+  volumes:
+  - name: docker_sock
+    path: "/var/run/docker.sock"
+  - name: temp
+    path: "/tmp"
   when:
     branch:
-    - dev
-    - release-*
-    - master
-    event:
-    - push
+    - staging
+    - trying
+  depends_on:
+  - docker-build-ee-int-bors
+  - docker-build-explorer-bors
 
 - name: docker-build-ee-merge
   commands:
