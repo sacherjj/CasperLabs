@@ -109,8 +109,14 @@ build-integration-contracts: $(INTEGRATION_CONTRACTS)
 .PHONY: build-example-contracts
 build-example-contracts: $(EXAMPLE_CONTRACTS)
 
+.PHONY: build-tool-contracts
+build-tool-contracts: \
+	build-contract-rs/mint-install \
+	build-contract-rs/pos-install \
+	build-contract-rs/standard-payment
+
 .PHONY: test-rs
-test-rs:
+test-rs: build-tool-contracts
 	$(CARGO) test $(CARGO_FLAGS) --all -- --nocapture
 
 .PHONY: test-as
@@ -141,7 +147,7 @@ format:
 	$(CARGO) fmt --all
 
 .PHONY: lint
-lint:
+lint: build-tool-contracts
 	$(CARGO) clippy --all-targets --all -- -D warnings -A renamed_and_removed_lints
 
 .PHONY: check
