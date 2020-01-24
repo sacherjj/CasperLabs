@@ -5,14 +5,14 @@ import cats.syntax.show._
 import cats.syntax.option._
 import cats.syntax.applicative._
 import cats.effect.{Clock, Sync}
-import cats.effect.concurrent.Ref
+import cats.effect.concurrent.{Ref, Semaphore}
 import com.google.protobuf.ByteString
 import java.util.concurrent.TimeUnit
 import io.casperlabs.casper.consensus.{Block, BlockSummary, Bond, Era}
 import io.casperlabs.casper.consensus.state
 import io.casperlabs.crypto.Keys.{PublicKey, PublicKeyBS}
 import io.casperlabs.models.Message
-import io.casperlabs.catscontrib.MonadThrowable
+import io.casperlabs.catscontrib.{MakeSemaphore, MonadThrowable}
 import io.casperlabs.storage.BlockHash
 import io.casperlabs.storage.block.BlockStorageWriter
 import io.casperlabs.storage.dag.{DagStorage, FinalityStorage}
@@ -172,7 +172,7 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
       roundExponent,
       isSyncedRef.get,
       leaderSequencer
-    )(syncId, C, DS, ES, FS, FC)
+    )(syncId, makeSemaphoreId, C, DS, ES, FS, FC)
 
   /** Fill the DagStorage with blocks at a fixed interval along the era,
     * right up to and including the switch block. */
@@ -1185,4 +1185,25 @@ object EraRuntimeSpec {
 
   def insert[F[_]: Monad, A <: Message](message: A)(implicit ds: MockBlockDagStorage[F]): F[A] =
     ds.insert(message.toBlock).as(message)
+
+  // XXX: This is an unsafe, incorrect implementation of a Semaphore,
+  // but these tests don't do concurrency at the moment.
+  // The other option is to rewrite all of them to use Task.
+  implicit val makeSemaphoreId: MakeSemaphore[Id] =
+    new MakeSemaphore[Id] {
+      override def apply(n: Long): cats.Id[Semaphore[cats.Id]] = new Semaphore[Id] {
+        val s = new java.util.concurrent.Semaphore(n.toInt)
+
+        override def available =
+          s.availablePermits().toLong
+        override def count =
+          // Not exactly, if threads were requiring more than 1 permit.
+          available - s.getQueueLength()
+        override def acquireN(n: Long)    = s.acquire(n.toInt)
+        override def tryAcquireN(n: Long) = s.tryAcquire(n.toInt)
+        override def releaseN(n: Long)    = s.release(n.toInt)
+        // XXX: t is already evaluated when passed to `withPermit` so there's nothing we can do.
+        override def withPermit[A](t: cats.Id[A]) = t
+      }
+    }
 }

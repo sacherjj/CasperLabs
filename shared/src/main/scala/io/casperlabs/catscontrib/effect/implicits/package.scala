@@ -16,6 +16,9 @@ package object implicits {
   implicit def fiberSyntax[A, F[_]: Concurrent: Log: MonadThrowable](fa: F[A]): FiberSyntax[F, A] =
     new FiberSyntax(fa)
 
+  // We should only really use this in tests, if possible, since Sync for Id is not lawful.
+  // For example `MonadThrowable[Id].raiseError(...).whenA(x < 0)` would throw before it got to `whenA`,
+  // and it obviously can't suspend any computation (which we may not mind in tests).
   implicit val syncId: Sync[Id] =
     new Sync[Id] {
       def pure[A](x: A): cats.Id[A] = x

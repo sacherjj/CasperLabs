@@ -66,11 +66,8 @@ object MessageProducer {
       validatorIdentity: ValidatorIdentity,
       chainName: String,
       upgrades: Seq[ipc.ChainSpec.UpgradePoint]
-  ): F[MessageProducer[F]] =
-    for {
-      // Make sure we don't mess up the storages and the sequence numbers.
-      semaphore <- Semaphore[F](1)
-    } yield new MessageProducer[F] {
+  ): MessageProducer[F] =
+    new MessageProducer[F] {
       override val validatorId =
         PublicKey(ByteString.copyFrom(validatorIdentity.publicKey))
 
@@ -79,7 +76,7 @@ object MessageProducer {
           roundId: Ticks,
           target: BlockHash,
           justifications: Map[PublicKeyBS, Set[BlockHash]]
-      ): F[Message.Ballot] = semaphore.withPermit {
+      ): F[Message.Ballot] =
         for {
           parent        <- BlockStorage[F].getBlockSummaryUnsafe(target)
           parentMessage <- MonadThrowable[F].fromTry(Message.fromBlockSummary(parent))
@@ -112,7 +109,6 @@ object MessageProducer {
           _ <- BlockStorage[F].put(record)
 
         } yield message.asInstanceOf[Message.Ballot]
-      }
 
       override def block(
           keyBlockHash: BlockHash,
@@ -120,7 +116,7 @@ object MessageProducer {
           mainParent: BlockHash,
           justifications: Map[PublicKeyBS, Set[BlockHash]],
           isBookingBlock: Boolean
-      ): F[Message.Block] = semaphore.withPermit {
+      ): F[Message.Block] =
         for {
           dag          <- DagStorage[F].getRepresentation
           merged       <- selectParents(dag, keyBlockHash, mainParent, justifications)
@@ -184,7 +180,6 @@ object MessageProducer {
           _ <- BlockStorage[F].put(record)
 
         } yield message.asInstanceOf[Message.Block]
-      }
 
       // NOTE: Currently this will requeue deploys in the background, some will make it, some won't.
       // This made sense with the AutoProposer, since a new block could be proposed any time;
