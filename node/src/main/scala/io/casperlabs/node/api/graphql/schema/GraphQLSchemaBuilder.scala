@@ -49,7 +49,7 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream
   // GraphQL projections don't expose the body.
   val deployView = DeployInfo.View.BASIC
 
-  val blockTypes = new GraphQLBlockTypes
+  val blockTypes = new GraphQLBlockTypes[F]
 
   private def projectionTerms(projections: Vector[ProjectedName]): Set[String] = {
     def flatToSet(ps: Vector[ProjectedName], acc: Set[String]): Set[String] =

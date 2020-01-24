@@ -1,23 +1,45 @@
 package io.casperlabs.node.api.graphql.schema.blocks
 
-import cats.syntax.either._
-import cats.syntax.option._
+import cats._
+import cats.implicits._
+import com.google.protobuf.ByteString
+import io.casperlabs.casper.Estimator.BlockHash
+import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
+import io.casperlabs.casper.api.BlockAPI
 import io.casperlabs.casper.api.BlockAPI.BlockAndMaybeDeploys
 import io.casperlabs.casper.consensus.Block._
 import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.consensus.info.DeployInfo.ProcessingResult
 import io.casperlabs.casper.consensus.info._
+import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.crypto.codec.Base16
+import io.casperlabs.crypto.codec.Base16.ByteArrayOps
+import io.casperlabs.crypto.codec.Base16.StringOps
 import io.casperlabs.node.api.graphql.schema.utils.{DateType, ProtocolVersionType}
 import io.casperlabs.models.BlockImplicits._
+import io.casperlabs.node.api.graphql.RunToFuture
+import io.casperlabs.node.api.graphql.RunToFuture._
+import io.casperlabs.storage.block.BlockStorage
+import io.casperlabs.storage.dag.DagStorage
+import io.casperlabs.storage.deploy.DeployStorage
+import sangria.execution.deferred._
 import sangria.schema._
 import sangria.macros.derive._
+
+import scala.concurrent.Future
 
 case class PageInfo(endCursor: String, hasNextPage: Boolean)
 
 case class DeployInfosWithPageInfo(deployInfos: List[DeployInfo], pageInfo: PageInfo)
 
-class GraphQLBlockTypes {
+// format: off
+class GraphQLBlockTypes[F[_]: MonadThrowable
+                            : MultiParentCasperRef
+                            : BlockStorage
+                            : DeployStorage
+                            : DagStorage
+                            : RunToFuture] {
+// format: on
 
   val SignatureType = ObjectType(
     "Signature",
@@ -128,6 +150,29 @@ class GraphQLBlockTypes {
     )
   )
 
+  val blockFetcher = Fetcher.caching(
+    { (_: Unit, hashes: Seq[BlockHash]) =>
+      // TODO: will be slow due to:
+      // 1) One-by-one reading from database
+      // 2) Reading a full block
+      // 3) Seq->List conversion
+      RunToFuture[F].unsafeToFuture(
+        hashes.toList
+          .traverse { hash =>
+            BlockAPI.getBlockInfoWithDeploys[F](
+              hash,
+              DeployInfo.View.FULL.some,
+              BlockInfo.View.FULL
+            )
+          }
+          .map(list => list: Seq[BlockAndMaybeDeploys])
+      )
+    }
+  )(HasId {
+    case (blockInfo, _) =>
+      blockInfo.getSummary.blockHash
+  })
+
   lazy val BlockInfoInterface = InterfaceType(
     "BlockInfo",
     "Basic block information which doesn't require reading a full block",
@@ -143,19 +188,29 @@ class GraphQLBlockTypes {
           "parents",
           ListType(BlockType),
           "Parent blocks".some,
-          resolve = _ => ??? // TODO
+          resolve = c =>
+            c.value match {
+              case (blockInfo, _) => blockFetcher.deferSeq(blockInfo.getSummary.parents)
+            }
         ),
         Field(
           "justifications",
           ListType(BlockType),
           "Justification blocks".some,
-          resolve = _ => ??? // TODO
+          resolve = c =>
+            c.value match {
+              case (blockInfo, _) =>
+                blockFetcher.deferSeq(blockInfo.getSummary.justifications.map(_.latestBlockHash))
+            }
         ),
         Field(
           "children",
           ListType(BlockType),
           "Child blocks".some,
-          resolve = _ => ??? // TODO
+          resolve = c =>
+            c.value match {
+              case (blockInfo, _) => blockFetcher.deferSeq(blockInfo.getStatus.childHashes)
+            }
         ),
         Field(
           "timestamp",
