@@ -475,7 +475,7 @@ steps:
   - docker-build-ee-int-bors
   - docker-build-explorer-bors
 
-- name: run-integration-tests-1
+- name: run-integration-tests-2
   commands:
     - "apt-get update && apt-get -y install gcc"
     - "python3 -m pip install pipenv pytest dataclasses typing_extensions dataclasses grpcio grpcio_tools protobuf in-place ed25519 pyblake2 lz4"
