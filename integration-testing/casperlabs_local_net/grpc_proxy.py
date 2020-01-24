@@ -7,7 +7,6 @@ import re
 from functools import reduce
 from operator import add
 from casperlabs_client import (
-    hexify,
     casper_pb2_grpc,
     gossiping_pb2_grpc,
     kademlia_pb2_grpc,
@@ -15,6 +14,7 @@ from casperlabs_client import (
     consensus_pb2 as consensus,
     gossiping_pb2 as gossiping,
 )
+from casperlabs_client.utils import hexify
 from casperlabs_client.crypto import blake2b_hash
 import ed25519
 import lz4.block
