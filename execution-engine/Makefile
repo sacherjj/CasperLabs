@@ -191,7 +191,7 @@ publish:
 
 .PHONY: check-publish
 check-publish:
-	cd cargo-casperlabs && $(CARGO) publish --dry-run
+	cd cargo-casperlabs && $(CARGO) publish --dry-run --allow-dirty
 #	cd contract && $(CARGO) publish --dry-run
 #	cd engine-core && $(CARGO) publish --dry-run
 #	cd engine-grpc-server && $(CARGO) publish --dry-run
@@ -215,7 +215,6 @@ setup-rs: rust-toolchain
 	$(RUSTUP) update
 	$(RUSTUP) toolchain install $(RUST_TOOLCHAIN)
 	$(RUSTUP) target add --toolchain $(RUST_TOOLCHAIN) wasm32-unknown-unknown
-	$(RUSTUP) component add --toolchain $(RUST_TOOLCHAIN) rustfmt clippy
 
 .PHONY: setup-as
 setup-as: contract-ffi-as/package.json
