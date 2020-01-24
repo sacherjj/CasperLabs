@@ -1,10 +1,10 @@
 use super::{error, execution_effect::ExecutionEffect, op::Op, CONV_RATE};
-use contract_ffi::{key::Key, value::CLValue};
 use engine_shared::{
     additive_map::AdditiveMap, gas::Gas, motes::Motes, newtypes::CorrelationId,
     stored_value::StoredValue, transform::Transform,
 };
 use engine_storage::global_state::StateReader;
+use types::{CLValue, Key};
 
 fn make_payment_error_effects(
     max_payment_cost: Motes,
@@ -83,6 +83,15 @@ impl ExecutionResult {
         }
     }
 
+    pub fn has_precondition_failure(&self) -> bool {
+        match self {
+            ExecutionResult::Failure { cost, effect, .. } => {
+                cost.value() == 0.into() && *effect == Default::default()
+            }
+            ExecutionResult::Success { .. } => false,
+        }
+    }
+
     pub fn cost(&self) -> Gas {
         match self {
             ExecutionResult::Failure { cost, .. } => *cost,
@@ -116,6 +125,13 @@ impl ExecutionResult {
                 cost,
             },
             ExecutionResult::Success { cost, .. } => ExecutionResult::Success { effect, cost },
+        }
+    }
+
+    pub fn error(&self) -> Option<&error::Error> {
+        match self {
+            ExecutionResult::Failure { error, .. } => Some(error),
+            ExecutionResult::Success { .. } => None,
         }
     }
 
@@ -328,7 +344,7 @@ impl ExecutionResultBuilder {
                 Some(Transform::Write(_)) => reader
                     .read(correlation_id, k)
                     .ok()
-                    .and_then(|maybe_v| maybe_v.map(|v| (*k, v.clone()))),
+                    .and_then(|maybe_v| maybe_v.map(|v| (*k, v))),
                 _ => None,
             })
             .collect();

@@ -2,17 +2,13 @@
 
 extern crate alloc;
 
-// Can be removed once https://github.com/rust-lang/rustfmt/issues/3362 is resolved.
-#[rustfmt::skip]
-use alloc::vec;
-use alloc::{string::String, vec::Vec};
+use alloc::string::String;
 
-use contract_ffi::{
-    contract_api::{runtime, system, ContractRef, Error as ApiError},
-    key::Key,
+use contract::{
+    contract_api::{runtime, system},
     unwrap_or_revert::UnwrapOrRevert,
-    value::{account::PurseId, U512},
 };
+use types::{account::PurseId, ApiError, ContractRef, U512};
 
 const POS_BOND: &str = "bond";
 const POS_UNBOND: &str = "unbond";
@@ -21,11 +17,11 @@ const COMMAND_BOND: &str = "bond";
 const COMMAND_UNBOND: &str = "unbond";
 
 fn bond(pos: &ContractRef, amount: &U512, source: PurseId) {
-    runtime::call_contract::<_, ()>(pos.clone(), (POS_BOND, *amount, source), vec![]);
+    runtime::call_contract::<_, ()>(pos.clone(), (POS_BOND, *amount, source));
 }
 
 fn unbond(pos: &ContractRef, amount: Option<U512>) {
-    runtime::call_contract::<_, ()>(pos.clone(), (POS_UNBOND, amount), Vec::<Key>::new());
+    runtime::call_contract::<_, ()>(pos.clone(), (POS_UNBOND, amount));
 }
 
 #[no_mangle]

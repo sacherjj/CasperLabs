@@ -1,9 +1,8 @@
-use contract_ffi::{key::Key, value::U512};
 use engine_shared::{stored_value::StoredValue, transform::Transform};
-
-use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG};
-
-use crate::support::test_support::{ExecuteRequestBuilder, InMemoryWasmTestBuilder};
+use engine_test_support::low_level::{
+    ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG,
+};
+use types::{Key, U512};
 
 const CONTRACT_NAMED_KEYS: &str = "named_keys.wasm";
 const EXPECTED_UREF_VALUE: u64 = 123_456_789u64;
@@ -40,7 +39,7 @@ fn should_run_named_keys_contract() {
             }
             None
         })
-        .nth(0)
+        .next()
         .expect("Should have write string");
     assert_eq!(string_value, "Hello, world!");
     let u512_value = transform
@@ -58,7 +57,7 @@ fn should_run_named_keys_contract() {
             }
             None
         })
-        .nth(0);
+        .next();
 
     assert!(u512_value.is_some(), "should have write uin512");
 

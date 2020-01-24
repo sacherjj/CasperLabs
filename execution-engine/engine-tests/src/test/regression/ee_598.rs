@@ -1,19 +1,12 @@
 use lazy_static::lazy_static;
 
-use contract_ffi::{
-    contract_api::Error,
-    value::{account::PublicKey, U512},
-};
 use engine_core::engine_state::genesis::GenesisAccount;
 use engine_shared::motes::Motes;
-
-use crate::{
-    support::test_support::{
-        self, DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder,
-        STANDARD_PAYMENT_CONTRACT,
-    },
-    test::{DEFAULT_ACCOUNTS, DEFAULT_ACCOUNT_ADDR, DEFAULT_PAYMENT},
+use engine_test_support::low_level::{
+    utils, DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_ACCOUNTS,
+    DEFAULT_ACCOUNT_ADDR, DEFAULT_PAYMENT, STANDARD_PAYMENT_CONTRACT,
 };
+use types::{account::PublicKey, ApiError, U512};
 
 const CONTRACT_POS_BONDING: &str = "pos_bonding.wasm";
 const ACCOUNT_1_ADDR: [u8; 32] = [7u8; 32];
@@ -39,7 +32,7 @@ fn should_fail_unboding_more_than_it_was_staked_ee_598_regression() {
         tmp
     };
 
-    let genesis_config = test_support::create_genesis_config(accounts);
+    let genesis_config = utils::create_genesis_config(accounts);
 
     let exec_request_1 = ExecuteRequestBuilder::standard(
         DEFAULT_ACCOUNT_ADDR,
@@ -76,13 +69,7 @@ fn should_fail_unboding_more_than_it_was_staked_ee_598_regression() {
         .get_exec_response(1)
         .expect("should have a response")
         .to_owned();
-    let error_message = {
-        let execution_result = test_support::get_success_result(&response);
-        test_support::get_error_message(execution_result)
-    };
+    let error_message = utils::get_error_message(response);
     // Error::UnbondTooLarge => 7,
-    assert_eq!(
-        error_message,
-        format!("Exit code: {}", u32::from(Error::ProofOfStake(7)))
-    );
+    assert!(error_message.contains(&format!("Revert({})", u32::from(ApiError::ProofOfStake(7)))));
 }

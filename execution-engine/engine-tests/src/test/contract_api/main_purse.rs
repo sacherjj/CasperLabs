@@ -1,10 +1,9 @@
-use contract_ffi::key::Key;
 use engine_shared::stored_value::StoredValue;
-
-use crate::{
-    support::test_support::{ExecuteRequestBuilder, InMemoryWasmTestBuilder},
-    test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT},
+use engine_test_support::low_level::{
+    ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG,
+    DEFAULT_PAYMENT,
 };
+use types::Key;
 
 const CONTRACT_MAIN_PURSE: &str = "main_purse.wasm";
 const CONTRACT_TRANSFER_PURSE_TO_ACCOUNT: &str = "transfer_purse_to_account.wasm";

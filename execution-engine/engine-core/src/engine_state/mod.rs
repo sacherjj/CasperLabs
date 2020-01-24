@@ -2,6 +2,7 @@ pub mod deploy_item;
 pub mod engine_config;
 mod error;
 pub mod executable_deploy_item;
+pub mod execute_request;
 pub mod execution_effect;
 pub mod execution_result;
 pub mod genesis;
@@ -20,19 +21,7 @@ use std::{
 use num_traits::Zero;
 use parity_wasm::elements::Module;
 
-use contract_ffi::{
-    args_parser::ArgsParser,
-    block_time::BlockTime,
-    bytesrepr::ToBytes,
-    execution::Phase,
-    key::{Key, KEY_HASH_LENGTH},
-    system_contracts::mint,
-    uref::{AccessRights, URef, UREF_ADDR_LENGTH},
-    value::{
-        account::{PublicKey, PurseId},
-        ProtocolVersion, U512,
-    },
-};
+use contract::args_parser::ArgsParser;
 use engine_shared::{
     account::Account,
     additive_map::AdditiveMap,
@@ -47,6 +36,13 @@ use engine_storage::{
     protocol_data::ProtocolData,
 };
 use engine_wasm_prep::{wasm_costs::WasmCosts, Preprocessor};
+use types::{
+    account::{PublicKey, PurseId},
+    bytesrepr::ToBytes,
+    system_contract_errors::mint,
+    AccessRights, BlockTime, Key, Phase, ProtocolVersion, URef, KEY_HASH_LENGTH, U512,
+    UREF_ADDR_LENGTH,
+};
 
 use self::{
     deploy_item::DeployItem,
@@ -62,6 +58,7 @@ pub use self::{
 use crate::{
     engine_state::{
         error::Error::MissingSystemContractError,
+        execute_request::ExecuteRequest,
         query::{QueryRequest, QueryResult},
         upgrade::{UpgradeConfig, UpgradeResult},
     },
@@ -614,6 +611,46 @@ where
             .into())
     }
 
+    pub fn run_execute(
+        &self,
+        correlation_id: CorrelationId,
+        mut exec_request: ExecuteRequest,
+    ) -> Result<Vec<ExecutionResult>, RootNotFound> {
+        // TODO: do not unwrap
+        let wasm_costs = self
+            .wasm_costs(exec_request.protocol_version)
+            .unwrap()
+            .unwrap();
+        let executor = Executor;
+        let preprocessor = Preprocessor::new(wasm_costs);
+
+        let mut results = Vec::new();
+
+        for deploy_item in exec_request.take_deploys() {
+            let result = match deploy_item {
+                Ok(deploy_item) => self.deploy(
+                    correlation_id,
+                    &executor,
+                    &preprocessor,
+                    exec_request.protocol_version,
+                    exec_request.parent_state_hash,
+                    BlockTime::new(exec_request.block_time),
+                    deploy_item,
+                ),
+                Err(exec_result) => Ok(exec_result), /* this will get pushed into the results vec
+                                                      * below */
+            };
+            match result {
+                Ok(result) => results.push(result),
+                Err(error) => {
+                    return Err(error);
+                }
+            };
+        }
+
+        Ok(results)
+    }
+
     pub fn get_module(
         &self,
         tracking_copy: Rc<RefCell<TrackingCopy<<S as StateProvider>::Reader>>>,
@@ -1123,7 +1160,7 @@ where
                 &mut proof_of_stake_keys,
                 base_key,
                 &system_account,
-                authorization_keys.clone(),
+                authorization_keys,
                 blocktime,
                 deploy_hash,
                 gas_limit,

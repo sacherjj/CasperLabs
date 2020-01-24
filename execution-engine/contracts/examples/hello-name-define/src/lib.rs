@@ -2,13 +2,13 @@
 
 extern crate alloc;
 
-use alloc::{collections::BTreeMap, string::String, vec::Vec};
+use alloc::{collections::BTreeMap, string::String};
 
-use contract_ffi::{
-    contract_api::{runtime, storage, Error},
+use contract::{
+    contract_api::{runtime, storage},
     unwrap_or_revert::UnwrapOrRevert,
-    value::CLValue,
 };
+use types::{ApiError, CLValue};
 
 const HELLO_NAME_EXT: &str = "hello_name_ext";
 const HELLO_NAME_KEY: &str = "hello_name";
@@ -26,10 +26,10 @@ fn hello_name(name: &str) -> String {
 #[no_mangle]
 pub extern "C" fn hello_name_ext() {
     let name: String = runtime::get_arg(Arg::Name as u32)
-        .unwrap_or_revert_with(Error::MissingArgument)
-        .unwrap_or_revert_with(Error::InvalidArgument);
+        .unwrap_or_revert_with(ApiError::MissingArgument)
+        .unwrap_or_revert_with(ApiError::InvalidArgument);
     let return_value = CLValue::from_t(hello_name(&name)).unwrap_or_revert();
-    runtime::ret(return_value, Vec::new());
+    runtime::ret(return_value);
 }
 
 #[no_mangle]

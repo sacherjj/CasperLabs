@@ -1,11 +1,14 @@
 #![no_std]
 
-use contract_ffi::{
-    contract_api::{account, runtime, Error},
+use contract::{
+    contract_api::{account, runtime},
     unwrap_or_revert::UnwrapOrRevert,
-    value::account::{
+};
+use types::{
+    account::{
         ActionType, PublicKey, RemoveKeyFailure, SetThresholdFailure, UpdateKeyFailure, Weight,
     },
+    ApiError,
 };
 
 #[no_mangle]
@@ -26,8 +29,8 @@ pub extern "C" fn call() {
             // Shouldn't be able to remove key because key threshold == 11 and
             // removing would violate the constraint
         }
-        Err(_) => runtime::revert(Error::User(300)),
-        Ok(_) => runtime::revert(Error::User(301)),
+        Err(_) => runtime::revert(ApiError::User(300)),
+        Ok(_) => runtime::revert(ApiError::User(301)),
     }
 
     match account::set_action_threshold(ActionType::KeyManagement, Weight::new(255)) {
@@ -35,8 +38,8 @@ pub extern "C" fn call() {
             // Changing key management threshold to this value would lock down
             // account for future operations
         }
-        Err(_) => runtime::revert(Error::User(400)),
-        Ok(_) => runtime::revert(Error::User(401)),
+        Err(_) => runtime::revert(ApiError::User(400)),
+        Ok(_) => runtime::revert(ApiError::User(401)),
     }
     // Key management threshold is 11, so changing threshold of key from 10 to 11
     // would violate
@@ -45,7 +48,7 @@ pub extern "C" fn call() {
             // Changing it would mean the total weight would be identity(1) +
             // key_1(10) + key_2(1) < key_mgmt(13)
         }
-        Err(_) => runtime::revert(Error::User(500)),
-        Ok(_) => runtime::revert(Error::User(501)),
+        Err(_) => runtime::revert(ApiError::User(500)),
+        Ok(_) => runtime::revert(ApiError::User(501)),
     }
 }

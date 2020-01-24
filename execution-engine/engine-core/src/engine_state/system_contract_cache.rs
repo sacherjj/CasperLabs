@@ -5,7 +5,7 @@ use std::{
 
 use parity_wasm::elements::Module;
 
-use contract_ffi::uref::URef;
+use types::URef;
 
 /// A cache of deserialized contracts.
 #[derive(Clone, Default, Debug)]
@@ -45,7 +45,7 @@ mod tests {
     use lazy_static::lazy_static;
     use parity_wasm::elements::{Module, ModuleNameSection, NameSection, Section};
 
-    use contract_ffi::uref::{AccessRights, URef};
+    use types::{AccessRights, URef};
 
     use crate::{
         engine_state::system_contract_cache::SystemContractCache,
@@ -98,7 +98,7 @@ mod tests {
         };
         let module = Module::default();
 
-        cache.insert(reference, module.clone());
+        cache.insert(reference, module);
 
         assert!(cache.has(&reference))
     }
@@ -113,7 +113,7 @@ mod tests {
         };
         let module = Module::default();
 
-        cache.insert(reference, module.clone());
+        cache.insert(reference, module);
 
         assert!(cache.has(&reference.with_access_rights(AccessRights::ADD_WRITE)))
     }
@@ -130,7 +130,7 @@ mod tests {
 
         cache.insert(
             reference.with_access_rights(AccessRights::ADD_WRITE),
-            module.clone(),
+            module,
         );
 
         assert!(cache.has(&reference))
@@ -185,7 +185,7 @@ mod tests {
 
         let result = cache.get(&reference.with_access_rights(AccessRights::ADD_WRITE));
 
-        assert_eq!(result, Some(module.clone()))
+        assert_eq!(result, Some(module))
     }
 
     #[test]
@@ -209,7 +209,7 @@ mod tests {
 
         let result = cache.get(&reference.remove_access_rights());
 
-        assert_eq!(result, Some(module.clone()))
+        assert_eq!(result, Some(module))
     }
 
     #[test]

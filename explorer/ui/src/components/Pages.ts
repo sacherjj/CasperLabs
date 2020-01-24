@@ -26,4 +26,14 @@ export default class Pages {
     const url = `/accounts/${accountHashBase16}/deploys`;
     return pageToken ? `${url}?pageToken=${pageToken}` : url;
   };
+
+  static readonly explorerWithMaxRankAndDepth = (
+    maxRank: number,
+    depth: number
+  ) => `${Pages.Explorer}?maxRank=${maxRank}&depth=${depth}`;
+
+  static readonly blocksWithMaxRankAndDepth = (
+    maxRank: number,
+    depth: number
+  ) => `${Pages.Blocks}?maxRank=${maxRank}&depth=${depth}`;
 }

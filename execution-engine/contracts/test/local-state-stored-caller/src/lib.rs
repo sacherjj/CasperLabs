@@ -1,14 +1,7 @@
 #![no_std]
 
-extern crate alloc;
-
-use alloc::vec;
-
-use contract_ffi::{
-    contract_api::{runtime, ContractRef, Error},
-    unwrap_or_revert::UnwrapOrRevert,
-    uref::{AccessRights, URef},
-};
+use contract::{contract_api::runtime, unwrap_or_revert::UnwrapOrRevert};
+use types::{AccessRights, ApiError, ContractRef, URef};
 
 #[repr(u32)]
 enum Args {
@@ -23,12 +16,12 @@ enum CustomError {
 #[no_mangle]
 pub extern "C" fn call() {
     let local_state_uref: URef = runtime::get_arg(Args::LocalStateURef as u32)
-        .unwrap_or_revert_with(Error::User(CustomError::MissingLocalStateURefArg as u16))
-        .unwrap_or_revert_with(Error::InvalidArgument);
+        .unwrap_or_revert_with(ApiError::User(CustomError::MissingLocalStateURefArg as u16))
+        .unwrap_or_revert_with(ApiError::InvalidArgument);
 
     let local_state_contract_pointer =
         ContractRef::URef(URef::new(local_state_uref.addr(), AccessRights::READ));
 
     // call do_nothing_stored
-    runtime::call_contract::<_, ()>(local_state_contract_pointer, (), vec![]);
+    runtime::call_contract(local_state_contract_pointer, ())
 }

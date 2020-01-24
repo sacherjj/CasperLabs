@@ -9,6 +9,7 @@ from typing import Callable, Dict, List
 from docker import DockerClient
 from docker.errors import NotFound
 from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
 from selenium.webdriver.remote.webdriver import WebDriver
 
@@ -60,6 +61,7 @@ class CasperLabsNetwork:
     """
 
     grpc_encryption = False
+    auto_propose = False
     behind_proxy = False
     initial_motes = INITIAL_MOTES_AMOUNT
 
@@ -177,6 +179,7 @@ class CasperLabsNetwork:
                 node_private_key=account.private_key,
                 node_account=account,
                 grpc_encryption=self.grpc_encryption,
+                auto_propose=self.auto_propose,
                 behind_proxy=self.behind_proxy,
             )
 
@@ -216,8 +219,11 @@ class CasperLabsNetwork:
                 remote_drive = f"http://{self.selenium_node.name}:4444/wd/hub"
             else:
                 remote_drive = f"http://127.0.0.1:4444/wd/hub"
+            chrome_options = Options()
+            prefs = {"profile.default_content_setting_values.automatic_downloads": 1}
+            chrome_options.add_experimental_option("prefs", prefs)
             self.selenium_driver = webdriver.Remote(
-                remote_drive, DesiredCapabilities.CHROME
+                remote_drive, DesiredCapabilities.CHROME, options=chrome_options
             )
             self.selenium_driver.implicitly_wait(30)
 
@@ -250,6 +256,7 @@ class CasperLabsNetwork:
             wait_for_approved_block_received_handler_state(
                 node, node.config.command_timeout
             )
+            wait_for_genesis_block(self.docker_nodes[node_number])
 
     def wait_for_peers(self) -> None:
         if self.node_count < 2:
@@ -336,6 +343,7 @@ class OneNodeNetwork(CasperLabsNetwork):
             initial_motes=self.initial_motes,
             node_account=account,
             grpc_encryption=self.grpc_encryption,
+            auto_propose=self.auto_propose,
         )
         return config
 
@@ -430,6 +438,12 @@ class PaymentNodeNetworkWithNoMinBalance(OneNodeNetwork):
 
 class OneNodeWithGRPCEncryption(OneNodeNetwork):
     grpc_encryption = True
+
+
+class OneNodeWithAutoPropose(OneNodeNetwork):
+    auto_propose = True
+    # TODO: enable encryption once asyncio client's gRPC encryption fixed
+    # grpc_encryption = True
 
 
 class OneNodeWithClarity(OneNodeNetwork):

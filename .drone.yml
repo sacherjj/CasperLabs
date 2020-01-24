@@ -91,8 +91,6 @@ steps:
 
 #Adding dependency on sbt due to sbt hanging frequently running in parallel with this step
 - name: rust-compile-test-pr
-  environment:
-    CARGO_FLAGS: "--locked"
   commands:
   - "cd execution-engine/"
   - "make setup-rs"
@@ -240,8 +238,6 @@ steps:
 
 #Adding dependency on sbt due to sbt hanging frequently running in parallel with this step
 - name: rust-compile-test-bors
-  environment:
-    CARGO_FLAGS: "--locked"
   commands:
   - "cd execution-engine/"
   - "make setup"
@@ -328,8 +324,9 @@ steps:
 
 - name: run-rust-benchmarks-bors
   commands:
-  - "cd execution-engine/"
-  - "rustup target add --toolchain $(cat rust-toolchain) wasm32-unknown-unknown"
+  - "cd execution-engine"
+  - "~/.cargo/bin/rustup toolchain install $(cat rust-toolchain)"
+  - "~/.cargo/bin/rustup target add --toolchain $(cat rust-toolchain) wasm32-unknown-unknown"
   - "make bench"
   image: "casperlabs/buildenv:latest"
   when:
@@ -458,8 +455,6 @@ steps:
 
 # The below section is for post-bors push webhooks
 - name: rust-compile-for-make
-  environment:
-    CARGO_FLAGS: "--locked"
   commands:
   - "cd execution-engine"
   - "make setup-rs"
@@ -1039,12 +1034,11 @@ steps:
     channel: alerts
     template:
     - |
-      macOS Build Status: {{#success build.status}}✔{{ else }}✘ @sreteam {{/success}}*{{ uppercasefirst build.status }}*
+      macOS Build Status: *{{ uppercasefirst build.status }}*
       Drone Build: <{{ build.link }}|#{{ build.number }}>
   when:
     status:
     - failure
-    - success
 
 trigger:
   cron: [ mac-hourly-cron ]

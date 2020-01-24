@@ -3,7 +3,7 @@ use std::{
     convert::{TryFrom, TryInto},
 };
 
-use contract_ffi::key::Key;
+use types::Key;
 
 use crate::engine_server::{mappings::ParsingError, state::NamedKey};
 
@@ -65,7 +65,7 @@ impl TryFrom<Vec<NamedKey>> for NamedKeyMap {
 mod tests {
     use proptest::proptest;
 
-    use contract_ffi::gens;
+    use types::gens;
 
     use super::*;
     use crate::engine_server::mappings::test_utils;
@@ -78,7 +78,7 @@ mod tests {
 
         #[test]
         fn map_round_trip(named_keys in gens::named_keys_arb(10)) {
-            let named_key_map = NamedKeyMap(named_keys.clone());
+            let named_key_map = NamedKeyMap(named_keys);
             test_utils::protobuf_round_trip::<NamedKeyMap, Vec<NamedKey>>(named_key_map);
         }
     }

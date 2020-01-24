@@ -67,8 +67,9 @@ services:
       - --backend_addr=node-0:40401
       - --backend_tls=false
       - --backend_tls_noverify
-      - --use_websockets
       - --backend_max_call_recv_msg_size=16777216
+      # Timeout for server-side streaming
+      - --server_http_max_write_timeout=1h
       - --allow_all_origins
       - --server_tls_cert_file=/etc/tls/certificate.pem
       - --server_tls_key_file=/etc/tls/key.pem

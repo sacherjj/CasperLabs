@@ -5,28 +5,20 @@ extern crate alloc;
 mod queue;
 mod stakes;
 
-// Can be removed once https://github.com/rust-lang/rustfmt/issues/3362 is resolved.
-#[rustfmt::skip]
-use alloc::vec;
 use alloc::{string::String, vec::Vec};
-
-use contract_ffi::{
-    block_time::BlockTime,
-    contract_api::{runtime, system},
-    execution::Phase,
-    key::Key,
-    system_contracts::pos::{Error, PurseLookupError, Result},
-    unwrap_or_revert::UnwrapOrRevert,
-    uref::{AccessRights, URef},
-    value::{
-        account::{PublicKey, PurseId},
-        CLValue, U512,
-    },
-};
 
 use crate::{
     queue::{QueueEntry, QueueLocal, QueueProvider},
     stakes::{ContractStakes, StakesProvider},
+};
+use contract::{
+    contract_api::{runtime, system},
+    unwrap_or_revert::UnwrapOrRevert,
+};
+use types::{
+    account::{PublicKey, PurseId},
+    system_contract_errors::pos::{Error, PurseLookupError, Result},
+    AccessRights, ApiError, BlockTime, CLValue, Key, Phase, URef, U512,
 };
 
 /// Account used to run system functions (in particular `finalize_payment`).
@@ -241,8 +233,8 @@ fn refund_to_account(payment_purse: PurseId, account: PublicKey, amount: U512) {
 
 pub fn delegate() {
     let method_name: String = runtime::get_arg(0)
-        .unwrap_or_revert_with(Error::MissingArgument)
-        .unwrap_or_revert_with(Error::InvalidArgument);
+        .unwrap_or_revert_with(ApiError::MissingArgument)
+        .unwrap_or_revert_with(ApiError::InvalidArgument);
     let timestamp = runtime::get_blocktime();
     let pos_purse = get_bonding_purse().unwrap_or_revert();
 
@@ -251,14 +243,14 @@ pub fn delegate() {
         "bond" => {
             let validator = runtime::get_caller();
             let amount: U512 = runtime::get_arg(1)
-                .unwrap_or_revert_with(Error::MissingArgument)
-                .unwrap_or_revert_with(Error::InvalidArgument);
+                .unwrap_or_revert_with(ApiError::MissingArgument)
+                .unwrap_or_revert_with(ApiError::InvalidArgument);
             if amount.is_zero() {
                 runtime::revert(Error::BondTooSmall);
             }
             let source_uref: URef = runtime::get_arg(2)
-                .unwrap_or_revert_with(Error::MissingArgument)
-                .unwrap_or_revert_with(Error::InvalidArgument);
+                .unwrap_or_revert_with(ApiError::MissingArgument)
+                .unwrap_or_revert_with(ApiError::InvalidArgument);
             let source = PurseId::new(source_uref);
             // Transfer `amount` from the `source` purse to PoS internal purse.
             // POS_PURSE is a constant, it is the PurseID of the proof-of-stake contract's
@@ -282,8 +274,8 @@ pub fn delegate() {
         "unbond" => {
             let validator = runtime::get_caller();
             let maybe_amount = runtime::get_arg(1)
-                .unwrap_or_revert_with(Error::MissingArgument)
-                .unwrap_or_revert_with(Error::InvalidArgument);
+                .unwrap_or_revert_with(ApiError::MissingArgument)
+                .unwrap_or_revert_with(ApiError::InvalidArgument);
             unbond::<QueueLocal, ContractStakes>(maybe_amount, validator, timestamp)
                 .unwrap_or_revert();
 
@@ -320,34 +312,30 @@ pub fn delegate() {
             let rights_controlled_purse =
                 PurseId::new(URef::new(purse.value().addr(), AccessRights::READ_ADD));
             let return_value = CLValue::from_t(rights_controlled_purse).unwrap_or_revert();
-            runtime::ret(return_value, vec![rights_controlled_purse.value()]);
+            runtime::ret(return_value);
         }
         "set_refund_purse" => {
             let purse_id: PurseId = runtime::get_arg(1)
-                .unwrap_or_revert_with(Error::MissingArgument)
-                .unwrap_or_revert_with(Error::InvalidArgument);
+                .unwrap_or_revert_with(ApiError::MissingArgument)
+                .unwrap_or_revert_with(ApiError::InvalidArgument);
             set_refund(purse_id.value());
         }
         "get_refund_purse" => {
             // We purposely choose to remove the access rights so that we do not
             // accidentally give rights for a purse to some contract that is not
             // supposed to have it.
-            let maybe_purse_uref = get_refund_purse().map(|p| p.value().remove_access_rights());
-            if let Some(uref) = maybe_purse_uref {
-                let return_value = CLValue::from_t(Some(PurseId::new(uref))).unwrap_or_revert();
-                runtime::ret(return_value, vec![uref]);
-            } else {
-                let return_value = CLValue::from_t::<Option<URef>>(None).unwrap_or_revert();
-                runtime::ret(return_value, Vec::new());
-            }
+            let maybe_purse_uref =
+                get_refund_purse().map(|p| PurseId::new(p.value().remove_access_rights()));
+            let return_value = CLValue::from_t(maybe_purse_uref).unwrap_or_revert();
+            runtime::ret(return_value);
         }
         "finalize_payment" => {
             let amount_spent: U512 = runtime::get_arg(1)
-                .unwrap_or_revert_with(Error::MissingArgument)
-                .unwrap_or_revert_with(Error::InvalidArgument);
+                .unwrap_or_revert_with(ApiError::MissingArgument)
+                .unwrap_or_revert_with(ApiError::InvalidArgument);
             let account: PublicKey = runtime::get_arg(2)
-                .unwrap_or_revert_with(Error::MissingArgument)
-                .unwrap_or_revert_with(Error::InvalidArgument);
+                .unwrap_or_revert_with(ApiError::MissingArgument)
+                .unwrap_or_revert_with(ApiError::InvalidArgument);
             finalize_payment(amount_spent, account);
         }
         _ => {}
@@ -364,11 +352,7 @@ pub extern "C" fn call() {
 mod tests {
     use std::{cell::RefCell, iter};
 
-    use contract_ffi::{
-        block_time::BlockTime,
-        system_contracts::pos::Result,
-        value::{account::PublicKey, U512},
-    };
+    use types::{account::PublicKey, system_contract_errors::pos::Result, BlockTime, U512};
 
     use crate::{
         bond,

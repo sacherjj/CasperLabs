@@ -1,4 +1,4 @@
-#![feature(never_type, result_map_or_else)]
+#![feature(never_type)]
 
 // modules
 pub mod error;

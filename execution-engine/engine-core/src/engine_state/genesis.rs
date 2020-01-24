@@ -6,14 +6,10 @@ use rand::{
     Rng,
 };
 
-use contract_ffi::{
-    bytesrepr,
-    key::Key,
-    value::{account::PublicKey, ProtocolVersion, U512},
-};
 use engine_shared::{motes::Motes, newtypes::Blake2bHash, transform::TypeMismatch};
 use engine_storage::global_state::CommitResult;
 use engine_wasm_prep::wasm_costs::WasmCosts;
+use types::{account::PublicKey, bytesrepr, Key, ProtocolVersion, U512};
 
 use crate::engine_state::execution_effect::ExecutionEffect;
 

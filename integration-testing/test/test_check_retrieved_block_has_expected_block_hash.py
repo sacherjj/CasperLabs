@@ -11,7 +11,7 @@ from casperlabs_local_net.grpc_proxy import (
     block_to_chunks,
     update_hashes_and_signature,
 )
-from casperlabs_client import hexify, extract_common_name
+from casperlabs_client.utils import hexify, extract_common_name
 
 
 class RemoveSignatureGossipInterceptor(grpc_proxy.GossipInterceptor):

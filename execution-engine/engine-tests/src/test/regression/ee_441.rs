@@ -1,13 +1,9 @@
-use contract_ffi::{key::Key, uref::URef, value::account::PublicKey};
 use engine_shared::transform::Transform;
-
-use crate::{
-    support::test_support::{
-        DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder,
-        STANDARD_PAYMENT_CONTRACT,
-    },
-    test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT},
+use engine_test_support::low_level::{
+    DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_ACCOUNT_ADDR,
+    DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT, STANDARD_PAYMENT_CONTRACT,
 };
+use types::{account::PublicKey, Key, URef};
 
 fn get_uref(key: Key) -> URef {
     match key {

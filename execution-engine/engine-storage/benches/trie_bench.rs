@@ -5,12 +5,11 @@ extern crate test;
 use test::{black_box, Bencher};
 
 use casperlabs_engine_storage::trie::{Pointer, PointerBlock, Trie};
-use contract_ffi::{
-    bytesrepr::{FromBytes, ToBytes},
-    key::Key,
-    value::CLValue,
-};
 use engine_shared::{newtypes::Blake2bHash, stored_value::StoredValue};
+use types::{
+    bytesrepr::{FromBytes, ToBytes},
+    CLValue, Key,
+};
 
 #[bench]
 fn serialize_trie_leaf(b: &mut Bencher) {

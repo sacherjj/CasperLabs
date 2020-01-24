@@ -2,13 +2,13 @@ use std::{ops::Deref, sync::Arc};
 
 use lmdb;
 
-use contract_ffi::{key::Key, value::ProtocolVersion};
 use engine_shared::{
     additive_map::AdditiveMap,
     newtypes::{Blake2bHash, CorrelationId},
     stored_value::StoredValue,
     transform::Transform,
 };
+use types::{Key, ProtocolVersion};
 
 use crate::{
     error,
@@ -166,7 +166,7 @@ mod tests {
     use lmdb::DatabaseFlags;
     use tempfile::tempdir;
 
-    use contract_ffi::value::CLValue;
+    use types::CLValue;
 
     use crate::{
         trie_store::operations::{write, WriteResult},

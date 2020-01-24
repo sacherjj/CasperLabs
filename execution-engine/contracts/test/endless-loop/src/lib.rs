@@ -1,6 +1,6 @@
 #![no_std]
 
-use contract_ffi::contract_api::account;
+use contract::contract_api::account;
 
 #[no_mangle]
 pub extern "C" fn call() {

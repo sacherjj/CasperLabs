@@ -4,7 +4,7 @@ use failure::Fail;
 use lmdb as lmdb_external;
 use wasmi;
 
-use contract_ffi::bytesrepr;
+use types::bytesrepr;
 
 use super::in_memory;
 

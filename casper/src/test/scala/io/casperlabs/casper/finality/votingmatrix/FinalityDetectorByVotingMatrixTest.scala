@@ -37,6 +37,71 @@ class FinalityDetectorByVotingMatrixTest
   implicit val raiseValidateErr: FunctorRaise[Task, InvalidBlock] =
     validation.raiseValidateErrorThroughApplicativeError[Task]
 
+  it should "detect ballots finalizing a block" in withStorage {
+    implicit blockStore => implicit dagStorage => implicit deployStorage =>
+      _ =>
+        /* The DAG looks like:
+         *
+         *
+         *
+         *
+         *     Ballot
+         *       \
+         *       b1
+         *      /
+         *    a1
+         *      \
+         *      genesis
+         */
+
+        val v1     = generateValidator("V1")
+        val v2     = generateValidator("V2")
+        val v1Bond = Bond(v1, 10)
+        val v2Bond = Bond(v2, 10)
+        val bonds  = Seq(v1Bond, v2Bond)
+
+        for {
+          implicit0(casperState: Cell[Task, CasperState]) <- Cell.mvarCell[Task, CasperState](
+                                                              CasperState()
+                                                            )
+          genesis <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bonds)
+          dag     <- dagStorage.getRepresentation
+          implicit0(detector: FinalityDetectorVotingMatrix[Task]) <- FinalityDetectorVotingMatrix
+                                                                      .of[Task](
+                                                                        dag,
+                                                                        genesis.blockHash,
+                                                                        rFTT = 0.1
+                                                                      )
+          (a1, c1) <- createBlockAndUpdateFinalityDetector[Task](
+                       Seq(genesis.blockHash),
+                       genesis.blockHash,
+                       v1,
+                       bonds,
+                       HashMap(v1 -> genesis.blockHash),
+                       messageType = Block.MessageType.BLOCK
+                     )
+          _ = c1 shouldBe None
+          (b1, c2) <- createBlockAndUpdateFinalityDetector[Task](
+                       Seq(a1.blockHash),
+                       genesis.blockHash,
+                       v2,
+                       bonds,
+                       HashMap(v1 -> a1.blockHash),
+                       messageType = Block.MessageType.BLOCK
+                     )
+          _ = c2 shouldBe None
+          (ballot, c3) <- createBlockAndUpdateFinalityDetector[Task](
+                           Seq(b1.blockHash),
+                           genesis.blockHash,
+                           v1,
+                           bonds,
+                           HashMap(v1 -> b1.blockHash),
+                           messageType = Block.MessageType.BALLOT
+                         )
+          _ = c3 shouldBe Some(CommitteeWithConsensusValue(Set(v1, v2), 20, a1.blockHash))
+        } yield ()
+  }
+
   it should "detect finality as appropriate" in withStorage {
     implicit blockStore => implicit dagStorage => implicit deployStorage =>
       _ =>
@@ -501,22 +566,24 @@ class FinalityDetectorByVotingMatrixTest
     InvalidBlock
   ]](
       parentsHashList: Seq[BlockHash],
-      lastFinalizedBlockHash: BlockHash,
+      keyBlockHash: BlockHash,
       creator: Validator,
       bonds: Seq[Bond] = Seq.empty[Bond],
       justifications: collection.Map[Validator, BlockHash] = HashMap.empty[Validator, BlockHash],
-      postStateHash: ByteString = ByteString.copyFromUtf8(scala.util.Random.nextString(64))
+      postStateHash: ByteString = ByteString.copyFromUtf8(scala.util.Random.nextString(64)),
+      messageType: Block.MessageType = Block.MessageType.BLOCK
   )(
       implicit casperState: Cell[F, CasperState]
   ): F[(Block, Option[CommitteeWithConsensusValue])] =
     for {
       block <- createMessage[F](
                 parentsHashList,
-                lastFinalizedBlockHash,
+                keyBlockHash,
                 creator,
                 bonds,
                 justifications,
-                postStateHash = postStateHash
+                postStateHash = postStateHash,
+                messageType = messageType
               )
       dag     <- IndexedDagStorage[F].getRepresentation
       message <- Sync[F].fromTry(Message.fromBlock(block))
@@ -525,11 +592,12 @@ class FinalityDetectorByVotingMatrixTest
             EquivocationDetector
               .checkEquivocationWithUpdate(dag, message)
           )
-      _ <- BlockStorage[F].put(block.blockHash, block, Seq.empty)
-      finalizedBlockOpt <- FinalityDetectorVotingMatrix[F].onNewBlockAddedToTheBlockDag(
+      _   <- BlockStorage[F].put(block.blockHash, block, Seq.empty)
+      msg <- Sync[F].fromTry(Message.fromBlock(block))
+      finalizedBlockOpt <- FinalityDetectorVotingMatrix[F].onNewMessageAddedToTheBlockDag(
                             dag,
-                            block,
-                            lastFinalizedBlockHash
+                            msg,
+                            keyBlockHash
                           )
     } yield block -> finalizedBlockOpt
 }

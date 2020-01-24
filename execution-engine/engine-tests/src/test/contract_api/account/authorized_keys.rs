@@ -1,12 +1,10 @@
-use crate::{
-    support::test_support::{
-        DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder,
-        STANDARD_PAYMENT_CONTRACT,
-    },
-    test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT},
-};
-use contract_ffi::value::account::{PublicKey, Weight};
 use engine_core::{engine_state, execution};
+use engine_test_support::low_level::{
+    DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_ACCOUNT_ADDR,
+    DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT, STANDARD_PAYMENT_CONTRACT,
+};
+use types::account::{PublicKey, Weight};
+
 const CONTRACT_ADD_UPDATE_ASSOCIATED_KEY: &str = "add_update_associated_key.wasm";
 const CONTRACT_AUTHORIZED_KEYS: &str = "authorized_keys.wasm";
 
@@ -57,8 +55,6 @@ fn should_raise_auth_failure_with_invalid_key() {
         .builder()
         .get_exec_response(0)
         .expect("should have exec response")
-        .get_success()
-        .get_deploy_results()
         .get(0)
         .expect("should have at least one deploy result");
 
@@ -67,7 +63,7 @@ fn should_raise_auth_failure_with_invalid_key() {
         "{:?}",
         deploy_result
     );
-    let message = deploy_result.get_precondition_failure().get_message();
+    let message = format!("{}", deploy_result.error().unwrap());
 
     assert_eq!(
         message,
@@ -113,13 +109,11 @@ fn should_raise_auth_failure_with_invalid_keys() {
         .builder()
         .get_exec_response(0)
         .expect("should have exec response")
-        .get_success()
-        .get_deploy_results()
         .get(0)
         .expect("should have at least one deploy result");
 
     assert!(deploy_result.has_precondition_failure());
-    let message = deploy_result.get_precondition_failure().get_message();
+    let message = format!("{}", deploy_result.error().unwrap());
 
     assert_eq!(
         message,
@@ -206,13 +200,11 @@ fn should_raise_deploy_authorization_failure() {
             .builder()
             .get_exec_response(0)
             .expect("should have exec response")
-            .get_success()
-            .get_deploy_results()
             .get(0)
             .expect("should have at least one deploy result");
 
         assert!(deploy_result.has_precondition_failure());
-        let message = deploy_result.get_precondition_failure().get_message();
+        let message = format!("{}", deploy_result.error().unwrap());
         assert!(message.contains(&format!(
             "{}",
             execution::Error::DeploymentAuthorizationFailure
@@ -260,13 +252,11 @@ fn should_raise_deploy_authorization_failure() {
             .builder()
             .get_exec_response(0)
             .expect("should have exec response")
-            .get_success()
-            .get_deploy_results()
             .get(0)
             .expect("should have at least one deploy result");
 
         assert!(deploy_result.has_precondition_failure());
-        let message = deploy_result.get_precondition_failure().get_message();
+        let message = format!("{}", deploy_result.error().unwrap());
         assert!(message.contains(&format!(
             "{}",
             execution::Error::DeploymentAuthorizationFailure
@@ -415,8 +405,6 @@ fn should_not_authorize_deploy_with_duplicated_keys() {
         .builder()
         .get_exec_response(0)
         .expect("should have exec response")
-        .get_success()
-        .get_deploy_results()
         .get(0)
         .expect("should have at least one deploy result");
 
@@ -425,7 +413,7 @@ fn should_not_authorize_deploy_with_duplicated_keys() {
         "{:?}",
         deploy_result
     );
-    let message = deploy_result.get_precondition_failure().get_message();
+    let message = format!("{}", deploy_result.error().unwrap());
     assert!(message.contains(&format!(
         "{}",
         execution::Error::DeploymentAuthorizationFailure

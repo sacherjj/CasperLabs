@@ -120,8 +120,6 @@ export function callContractExt(key: Key, args: CLValue[], extraUrefs: Key[]): U
       keyBytes.length,
       argBytes.dataStart,
       argBytes.length,
-      extraURefsBytes.dataStart,
-      extraURefsBytes.length,
       resultSize.dataStart,
   );
   if (ret > 0) {

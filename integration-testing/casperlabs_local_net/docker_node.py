@@ -416,7 +416,7 @@ class DockerNode(LoggingDockerBase):
             ]
         )
 
-        response, deploy_hash_bytes = self.p_client.deploy(
+        deploy_hash_hex = self.p_client.deploy(
             from_address=from_account.public_key_hex,
             session_contract=session_contract,
             payment_contract=payment_contract,
@@ -427,7 +427,6 @@ class DockerNode(LoggingDockerBase):
             payment_args=payment_args,
         )
 
-        deploy_hash_hex = deploy_hash_bytes.hex()
         assert len(deploy_hash_hex) == 64
 
         response = self.p_client.propose()
@@ -483,7 +482,7 @@ class DockerNode(LoggingDockerBase):
         gas_price: int = 1,
     ) -> str:
 
-        response, deploy_hash_bytes = self.p_client.deploy(
+        self.p_client.deploy(
             from_address=from_account.public_key_hex,
             session_contract=session_contract,
             gas_price=gas_price,

@@ -1,13 +1,12 @@
 use lazy_static::lazy_static;
 
-use contract_ffi::{uref::URef, value::U512};
-use engine_core::{engine_state::Error, execution};
+use engine_core::execution;
 use engine_shared::transform::TypeMismatch;
-
-use crate::{
-    support::test_support::{ExecuteRequestBuilder, InMemoryWasmTestBuilder},
-    test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT},
+use engine_test_support::low_level::{
+    ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG,
+    DEFAULT_PAYMENT,
 };
+use types::{URef, U512};
 
 const CONTRACT_SYSTEM_CONTRACTS_ACCESS: &str = "system_contracts_access.wasm";
 const CONTRACT_OVERWRITE_UREF_CONTENT: &str = "overwrite_uref_content.wasm";
@@ -65,7 +64,7 @@ fn overwrite_as_account(builder: &mut InMemoryWasmTestBuilder, uref: URef, addre
         "{}",
         execution::Error::ForgedReference(uref.into_read_add_write())
     );
-    assert_eq!(error_msg, err);
+    assert!(error_msg.contains(&err));
 }
 
 #[ignore]
@@ -129,7 +128,7 @@ fn should_overwrite_system_contract_uref_as_system() {
         ExecuteRequestBuilder::standard(SYSTEM_ADDR, CONTRACT_OVERWRITE_UREF_CONTENT, (pos_uref,))
             .build();
 
-    let new_builder = InMemoryWasmTestBuilder::from_result(result);
+    let mut new_builder = InMemoryWasmTestBuilder::from_result(result);
 
     let result_1 = new_builder.clone().exec(exec_request_2).commit().finish();
 
@@ -137,9 +136,13 @@ fn should_overwrite_system_contract_uref_as_system() {
         .builder()
         .exec_error_message(0)
         .expect("should execute mint overwrite with error");
-    assert_eq!(error_msg, Error::FinalizationError.to_string());
+    assert!(
+        error_msg.contains("FinalizationError"),
+        "Expected FinalizationError, got {}",
+        error_msg
+    );
 
-    let result_2 = new_builder.clone().exec(exec_request_3).commit().finish();
+    let result_2 = new_builder.exec(exec_request_3).commit().finish();
 
     let error_msg = result_2
         .builder()
@@ -148,5 +151,5 @@ fn should_overwrite_system_contract_uref_as_system() {
 
     let type_mismatch = TypeMismatch::new("Contract".to_string(), "String".to_string());
     let expected_error = execution::Error::TypeMismatch(type_mismatch);
-    assert_eq!(error_msg, expected_error.to_string());
+    assert!(error_msg.contains(&expected_error.to_string()));
 }

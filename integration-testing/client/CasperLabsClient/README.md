@@ -127,7 +127,7 @@ $ casperlabs_client deploy --help
 ## Python API
 
 To see available API functions, their parameters and documentation,
-see [source](casperlabs_client/casperlabs_client.py).
+see [source](https://github.com/CasperLabs/CasperLabs/blob/dev/integration-testing/client/CasperLabsClient/casperlabs_client/casperlabs_client.py).
 The API functions are marked with `@api` decorator.
 
 After installing `casperlabs-client` you can start interacting with

@@ -6,14 +6,13 @@ extern crate alloc;
 #[rustfmt::skip]
 use alloc::vec;
 use alloc::{collections::BTreeMap, string::String, vec::Vec};
+use core::convert::TryInto;
 
-use contract_ffi::{
-    contract_api::{runtime, storage, Error as ApiError, TURef},
-    key::Key,
+use contract::{
+    contract_api::{runtime, storage, TURef},
     unwrap_or_revert::UnwrapOrRevert,
-    uref::URef,
-    value::CLValue,
 };
+use types::{ApiError, CLValue, Key};
 
 const LIST_KEY: &str = "list";
 const MAILING_KEY: &str = "mailing";
@@ -37,8 +36,7 @@ impl Into<ApiError> for Error {
 
 fn get_list_key(name: &str) -> TURef<Vec<String>> {
     let key = runtime::get_key(name).unwrap_or_revert_with(ApiError::GetKey);
-    key.to_turef()
-        .unwrap_or_revert_with(ApiError::UnexpectedKeyVariant)
+    key.try_into().unwrap_or_revert()
 }
 
 fn update_list(name: String) {
@@ -88,14 +86,12 @@ pub extern "C" fn mailing_list_ext() {
     match method_name.as_str() {
         "sub" => match sub(arg1) {
             Some(turef) => {
-                let extra_uref = URef::new(turef.addr(), turef.access_rights());
-                let extra_urefs = vec![extra_uref];
                 let return_value = CLValue::from_t(Some(Key::from(turef))).unwrap_or_revert();
-                runtime::ret(return_value, extra_urefs);
+                runtime::ret(return_value);
             }
             _ => {
                 let return_value = CLValue::from_t(Option::<Key>::None).unwrap_or_revert();
-                runtime::ret(return_value, Vec::new())
+                runtime::ret(return_value)
             }
         },
         //Note that this is totally insecure. In reality

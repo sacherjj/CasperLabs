@@ -1,9 +1,8 @@
-use contract_ffi::value::{account::PublicKey, U512};
-
-use crate::{
-    support::test_support::{DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder},
-    test::{CONTRACT_STANDARD_PAYMENT, DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG},
+use engine_test_support::low_level::{
+    utils, DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_ACCOUNT_ADDR,
+    DEFAULT_GENESIS_CONFIG, STANDARD_PAYMENT_CONTRACT,
 };
+use types::{account::PublicKey, U512};
 
 const ACCOUNT_1_ADDR: [u8; 32] = [42u8; 32];
 
@@ -39,13 +38,12 @@ fn should_raise_precondition_authorization_failure_invalid_account() {
     let response = transfer_result
         .builder()
         .get_exec_response(0)
-        .expect("there should be a response")
-        .clone();
+        .expect("there should be a response");
 
-    let precondition_failure = crate::support::test_support::get_precondition_failure(&response);
+    let precondition_failure = utils::get_precondition_failure(response);
 
     assert_eq!(
-        precondition_failure.message, "Authorization failure: not authorized.",
+        precondition_failure, "Authorization failure: not authorized.",
         "expected authorization failure"
     );
 }
@@ -57,7 +55,7 @@ fn should_raise_precondition_authorization_failure_empty_authorized_keys() {
         let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_session_code("do_nothing.wasm", ())
-            .with_payment_code(CONTRACT_STANDARD_PAYMENT, ())
+            .with_payment_code(STANDARD_PAYMENT_CONTRACT, ())
             .with_deploy_hash([1; 32])
             // empty authorization keys to force error
             .with_authorization_keys(&[])
@@ -74,13 +72,12 @@ fn should_raise_precondition_authorization_failure_empty_authorized_keys() {
     let response = transfer_result
         .builder()
         .get_exec_response(0)
-        .expect("there should be a response")
-        .clone();
+        .expect("there should be a response");
 
-    let precondition_failure = crate::support::test_support::get_precondition_failure(&response);
+    let precondition_failure = utils::get_precondition_failure(response);
 
     assert_eq!(
-        precondition_failure.message, "Authorization failure: not authorized.",
+        precondition_failure, "Authorization failure: not authorized.",
         "expected authorization failure"
     );
 }
@@ -117,13 +114,12 @@ fn should_raise_precondition_authorization_failure_invalid_authorized_keys() {
     let response = transfer_result
         .builder()
         .get_exec_response(0)
-        .expect("there should be a response")
-        .clone();
+        .expect("there should be a response");
 
-    let precondition_failure = crate::support::test_support::get_precondition_failure(&response);
+    let precondition_failure = utils::get_precondition_failure(response);
 
     assert_eq!(
-        precondition_failure.message, "Authorization failure: not authorized.",
+        precondition_failure, "Authorization failure: not authorized.",
         "expected authorization failure"
     );
 }
