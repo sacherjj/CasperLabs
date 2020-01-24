@@ -17,7 +17,7 @@ case class PageInfo(endCursor: String, hasNextPage: Boolean)
 
 case class DeployInfosWithPageInfo(deployInfos: List[DeployInfo], pageInfo: PageInfo)
 
-package object types {
+object GraphQLBlockTypes {
 
   val SignatureType = ObjectType(
     "Signature",
