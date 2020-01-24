@@ -321,6 +321,7 @@ def test_multiple_deploys_at_once(
             node.client.show_blocks(len(expected_deploy_counts_in_blocks) * 100)
         )
         n_blocks = len(expected_deploy_counts_in_blocks)
-        assert [b.summary.header.deploy_count for b in blocks][
-            :n_blocks
-        ] == expected_deploy_counts_in_blocks, "Unexpected deploy counts in blocks"
+        tmp = [b.summary.header.deploy_count for b in blocks][:n_blocks]
+        assert (
+            tmp.sort() == expected_deploy_counts_in_blocks.sort()
+        ), "Unexpected deploy counts in blocks"
