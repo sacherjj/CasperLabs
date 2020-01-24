@@ -1,6 +1,6 @@
 package io.casperlabs.crypto.codec
 
-import scala.util.Try
+import com.google.protobuf.ByteString
 
 object Base16 {
   def encode(input: Array[Byte]): String = bytes2hex(input, None)
@@ -12,6 +12,16 @@ object Base16 {
       else "0" + input
 
     hex2bytes(paddedInput)
+  }
+
+  implicit class StringOps(s: String) {
+    /* Filters input from invalid characters */
+    def hexDecode: Array[Byte] = Base16.decode(s)
+  }
+
+  implicit class ByteArrayOps(a: Array[Byte]) {
+    def hexEncode: String        = Base16.encode(a)
+    def toByteString: ByteString = ByteString.copyFrom(a)
   }
 
   private def bytes2hex(bytes: Array[Byte], sep: Option[String]): String =
