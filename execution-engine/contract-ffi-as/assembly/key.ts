@@ -4,6 +4,7 @@ import {Error} from "./error";
 import {UREF_SERIALIZED_LENGTH, KEY_ID_SERIALIZED_LENGTH, KEY_UREF_SERIALIZED_LENGTH} from "./constants";
 import * as externals from "./externals";
 import { readHostBuffer } from ".";
+import {checkTypedArrayEqual, typedToArray} from "./utils";
 import {GetDecodedBytesCount, AddDecodedBytesCount, SetDecodedBytesCount} from "./bytesrepr";
 
 export enum KeyVariant {
@@ -17,6 +18,8 @@ export class Key {
     variant: KeyVariant;
     hash: Uint8Array | null;
     uref: URef | null;
+    local: Uint8Array | null;
+    account: Uint8Array | null;
 
     static fromURef(uref: URef): Key {
         let key = new Key();
@@ -25,10 +28,23 @@ export class Key {
         return key;
     }
 
-    static fromHash(hash: Uint8Array): Key{
+    static fromHash(hash: Uint8Array): Key {
         let key = new Key();
         key.variant = KeyVariant.HASH_ID;
         key.hash = hash;
+        return key;
+    }
+
+    static fromLocal(local: Uint8Array): Key {
+        let key = new Key();
+        key.variant = KeyVariant.LOCAL_ID;
+        key.local = local;
+        return key;
+    }
+    static fromAccount(account: Uint8Array): Key {
+        let key = new Key();
+        key.variant = KeyVariant.ACCOUNT_ID;
+        key.account = account;
         return key;
     }
 
@@ -101,8 +117,18 @@ export class Key {
 
             return Key.fromURef(<URef>uref);
         }
+        else if (tag == KeyVariant.LOCAL_ID) {
+            var localBytes = bytes.subarray(1, 32 + 1);
+            AddDecodedBytesCount(32);
+            return Key.fromLocal(localBytes);
+        }
+        else if (tag == KeyVariant.ACCOUNT_ID) {
+            var accountBytes = bytes.subarray(1, 32 + 1);
+            AddDecodedBytesCount(32);
+            return Key.fromAccount(accountBytes);
+        }
         else {
-            throw 123; // unreachable?
+            return null;
         }
     }
 
@@ -122,8 +148,22 @@ export class Key {
             }
             return bytes;
         }
+        else if (this.variant === KeyVariant.LOCAL_ID) {
+            var localBytes = <Uint8Array>this.local;
+            let bytes = new Array<u8>(1);
+            bytes[0] = <u8>this.variant;
+            bytes = bytes.concat(typedToArray(localBytes));
+            return bytes;
+        }
+        else if (this.variant === KeyVariant.ACCOUNT_ID) {
+            var accountBytes = <Uint8Array>this.account;
+            let bytes = new Array<u8>(1);
+            bytes[0] = <u8>this.variant;
+            bytes = bytes.concat(typedToArray(accountBytes));
+            return bytes;
+        }
         else {
-            throw 123;
+            return <Array<u8>>unreachable();
         }
     }
 
@@ -131,7 +171,7 @@ export class Key {
     equalsTo(other: Key): bool {
         if (this.variant === KeyVariant.UREF_ID) {
             if (other.variant == KeyVariant.UREF_ID) {
-                return (<URef>this.uref).equalsTo(<URef>other.uref);
+                return <URef>this.uref == <URef>other.uref;
             }
             else {
                 return false;
@@ -139,14 +179,30 @@ export class Key {
         }
         else if (this.variant == KeyVariant.HASH_ID) {
             if (other.variant == KeyVariant.HASH_ID) {
-                return <Uint8Array>this.hash == <Uint8Array>other.hash;
+                return checkTypedArrayEqual(<Uint8Array>this.hash, <Uint8Array>other.hash);
+
+            }
+            else {
+                return false;
+            }
+        }
+        else if (this.variant == KeyVariant.LOCAL_ID) {
+            if (other.variant == KeyVariant.LOCAL_ID) {
+                return checkTypedArrayEqual(<Uint8Array>this.local, <Uint8Array>other.local);
+            }
+            else {
+                return false;
+            }
+        }
+        else if (this.variant == KeyVariant.ACCOUNT_ID) {
+            if (other.variant == KeyVariant.ACCOUNT_ID) {
+                return checkTypedArrayEqual(<Uint8Array>this.account, <Uint8Array>other.account);
             }
             else {
                 return false;
             }
         }
         else {
-            unreachable();
             return false;
         }
     }
