@@ -30,6 +30,7 @@ import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.block._
 import io.casperlabs.storage.dag.DagStorage
 import io.casperlabs.storage.deploy.DeployStorage
+import sangria.execution.deferred.DeferredResolver
 import sangria.schema._
 
 // format: off
@@ -67,7 +68,7 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream
     blockView(projectionTerms(projections))
 
   private def blockView(terms: Set[String]): BlockInfo.View =
-    if (terms contains "childHashes")
+    if (terms contains "children")
       BlockInfo.View.FULL
     else
       BlockInfo.View.BASIC
@@ -77,6 +78,8 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream
 
   private def deployView(terms: Set[String]): Option[DeployInfo.View] =
     if (terms contains "deploys") Some(deployView) else None
+
+  def createDeferredResolver = DeferredResolver.fetchers(blockTypes.blockFetcher)
 
   def createSchema: Schema[Unit, Unit] =
     Schema(

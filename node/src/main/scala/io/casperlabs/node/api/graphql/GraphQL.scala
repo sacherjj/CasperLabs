@@ -51,7 +51,10 @@ object GraphQL {
     implicit val fs2SubscriptionStream: Fs2SubscriptionStream[F] = new Fs2SubscriptionStream[F]()
     val schemaBuilder                                            = new GraphQLSchemaBuilder[F]
     buildRoute(
-      executor = Executor(schemaBuilder.createSchema),
+      executor = Executor(
+        schemaBuilder.createSchema,
+        deferredResolver = schemaBuilder.createDeferredResolver
+      ),
       keepAlivePeriod = 10.seconds,
       ec
     )
