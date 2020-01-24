@@ -1,5 +1,8 @@
 from casperlabs_local_net.common import Contract
-from casperlabs_local_net.wait import wait_for_block_hash_propagated_to_all_nodes
+from casperlabs_local_net.wait import (
+    wait_for_block_hash_propagated_to_all_nodes,
+    wait_for_node_started,
+)
 import logging
 
 
@@ -50,7 +53,7 @@ def test_standalone_nodes_bootstrap_from_each_other(
     net = three_node_network_with_two_bootstraps
     nodes = net.docker_nodes
 
-    block_hash = deploy_and_propose(nodes[0], Contract.HELLO_NAME_CALL)
+    block_hash = deploy_and_propose(nodes[0], Contract.HELLO_NAME_DEFINE)
     wait_for_block_hash_propagated_to_all_nodes(nodes, block_hash)
 
     logging.info(f"======= Clearing state of {nodes[0].address}")
@@ -62,3 +65,5 @@ def test_standalone_nodes_bootstrap_from_each_other(
 
     logging.info(f"======= Starting {nodes[0].address}")
     net.start_cl_node(0)
+
+    wait_for_node_started(nodes[0], 60, 1)
