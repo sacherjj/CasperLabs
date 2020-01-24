@@ -1,13 +1,13 @@
 use std::{
-    convert::TryInto,
     path::{Path, PathBuf},
+    rc::Rc,
 };
 
 use lazy_static::lazy_static;
 
-use engine_core::engine_state::genesis::{GenesisAccount, GenesisConfig};
-use engine_grpc_server::engine_server::ipc::{
-    DeployResult, DeployResult_ExecutionResult, DeployResult_PreconditionFailure, ExecuteResponse,
+use engine_core::engine_state::{
+    execution_result::ExecutionResult,
+    genesis::{GenesisAccount, GenesisConfig},
 };
 use engine_shared::{
     account::Account, additive_map::AdditiveMap, gas::Gas, stored_value::StoredValue,
@@ -92,53 +92,43 @@ pub fn create_genesis_config(accounts: Vec<GenesisAccount>) -> GenesisConfig {
     )
 }
 
-pub fn get_exec_costs(exec_response: &ExecuteResponse) -> Vec<Gas> {
-    let deploy_results: &[DeployResult] = exec_response.get_success().get_deploy_results();
-
-    deploy_results
-        .iter()
-        .map(|deploy_result| {
-            let execution_result = deploy_result.get_execution_result();
-            let cost = execution_result
-                .get_cost()
-                .clone()
-                .try_into()
-                .expect("cost should map to U512");
-            Gas::new(cost)
-        })
+pub fn get_exec_costs<T: AsRef<ExecutionResult>, I: IntoIterator<Item = T>>(
+    exec_response: I,
+) -> Vec<Gas> {
+    exec_response
+        .into_iter()
+        .map(|res| res.as_ref().cost())
         .collect()
 }
 
-pub fn get_success_result(response: &ExecuteResponse) -> DeployResult_ExecutionResult {
-    let result = response.get_success();
-
-    result
-        .get_deploy_results()
-        .first()
-        .expect("should have a deploy result")
-        .get_execution_result()
-        .to_owned()
+pub fn get_success_result(response: &[Rc<ExecutionResult>]) -> &ExecutionResult {
+    &*response.get(0).expect("should have a result")
 }
 
-pub fn get_precondition_failure(response: &ExecuteResponse) -> DeployResult_PreconditionFailure {
-    let result = response.get_success();
-
-    result
-        .get_deploy_results()
-        .first()
-        .expect("should have a deploy result")
-        .get_precondition_failure()
-        .to_owned()
+pub fn get_precondition_failure(response: &[Rc<ExecutionResult>]) -> String {
+    let result = response.get(0).expect("should have a result");
+    assert!(
+        result.has_precondition_failure(),
+        "should be a precondition failure"
+    );
+    format!("{}", result.error().expect("should have an error"))
 }
 
-pub fn get_error_message(execution_result: DeployResult_ExecutionResult) -> String {
-    let error = execution_result.get_error();
-
-    if error.has_gas_error() {
-        "Gas limit".to_string()
-    } else {
-        error.get_exec_error().get_message().to_string()
-    }
+pub fn get_error_message<T: AsRef<ExecutionResult>, I: IntoIterator<Item = T>>(
+    execution_result: I,
+) -> String {
+    let errors = execution_result
+        .into_iter()
+        .enumerate()
+        .filter_map(|(i, result)| {
+            if let ExecutionResult::Failure { error, .. } = result.as_ref() {
+                Some(format!("{}: {:?}", i, error))
+            } else {
+                None
+            }
+        })
+        .collect::<Vec<_>>();
+    errors.join("\n")
 }
 
 #[allow(clippy::implicit_hasher)]

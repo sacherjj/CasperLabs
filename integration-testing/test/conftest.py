@@ -26,6 +26,7 @@ from casperlabs_local_net.casperlabs_network import (
     NetworkWithTaggedDev,
     OneNodeNetworkWithChainspecUpgrades,
     ThreeNodeNetworkWithTwoBootstraps,
+    OneNodeWithAutoPropose,
 )
 
 
@@ -99,6 +100,13 @@ def encrypted_one_node_network(docker_client_fixture):
 @pytest.fixture(scope="module")
 def one_node_network_with_clarity(docker_client_fixture):
     with OneNodeWithClarity(docker_client_fixture) as net:
+        net.create_cl_network()
+        yield net
+
+
+@pytest.fixture(scope="module")
+def one_node_network_with_auto_propose(docker_client_fixture):
+    with OneNodeWithAutoPropose(docker_client_fixture) as net:
         net.create_cl_network()
         yield net
 

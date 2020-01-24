@@ -181,7 +181,7 @@ package:
 
 .PHONY: publish
 publish:
-	cd contract && $(CARGO) publish
+	./publish.sh
 
 .PHONY: check-publish
 check-publish:

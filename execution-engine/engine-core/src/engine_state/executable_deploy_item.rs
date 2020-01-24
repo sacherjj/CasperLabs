@@ -1,3 +1,4 @@
+#[derive(Clone, PartialEq, Eq)]
 pub enum ExecutableDeployItem {
     ModuleBytes {
         module_bytes: Vec<u8>,

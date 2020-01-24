@@ -106,7 +106,7 @@ def test_error_in_payment_contract(payment_node_network):
     )
     payment_args = ABI.args([ABI.u512("amount", 10 ** 6)])
 
-    response, deploy_hash_bytes = node0.p_client.deploy(
+    node0.p_client.deploy(
         from_address=from_account.public_key_hex,
         session_contract=Contract.TRANSFER_TO_ACCOUNT,
         payment_contract=Contract.DIRECT_REVERT,
@@ -181,7 +181,7 @@ def test_not_enough_to_run_session(trillion_payment_node_network):
     )
     assert account1_starting_balance == 10 ** 8
 
-    _, _ = node0.p_client.deploy(
+    node0.p_client.deploy(
         from_address=account1.public_key_hex,
         payment_contract=Contract.STANDARD_PAYMENT,
         session_contract=Contract.ENDLESS_LOOP,
@@ -220,7 +220,7 @@ def test_refund_after_session_code_error(payment_node_network):
         block_hash=blocks[0].summary.block_hash,
     )
 
-    _, deploy_hash = node0.p_client.deploy(
+    deploy_hash = node0.p_client.deploy(
         from_address=GENESIS_ACCOUNT.public_key_hex,
         session_contract=Contract.ARGS_U512,
         payment_contract=Contract.STANDARD_PAYMENT,
@@ -270,7 +270,7 @@ def test_not_enough_funds_to_run_payment_code(payment_node_network):
             ABI.u64("amount", 10 ** 7),
         ]
     )
-    _, deploy_hash = node0.p_client.deploy(
+    node0.p_client.deploy(
         from_address=GENESIS_ACCOUNT.public_key_hex,
         session_contract=Contract.TRANSFER_TO_ACCOUNT,
         payment_contract=Contract.STANDARD_PAYMENT,
