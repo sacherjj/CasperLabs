@@ -118,7 +118,7 @@ test-rs:
 
 .PHONY: test-as
 test-as: setup-as
-	cd contract-ffi-as && npm run asbuild && npm run test
+	cd contract-as && npm run asbuild && npm run test
 
 .PHONY: test
 test: test-rs test-as
@@ -215,8 +215,8 @@ setup-rs: rust-toolchain
 	$(RUSTUP) component add --toolchain $(RUST_TOOLCHAIN) rustfmt clippy
 
 .PHONY: setup-as
-setup-as: contract-ffi-as/package.json
-	cd contract-ffi-as && $(NPM) install
+setup-as: contract-as/package.json
+	cd contract-as && $(NPM) install
 
 .PHONY: setup
 setup: setup-rs setup-as

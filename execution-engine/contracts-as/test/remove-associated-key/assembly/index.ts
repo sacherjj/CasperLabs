@@ -1,8 +1,8 @@
 // The entry file of your WebAssembly module.
-import * as CL from "../../../../contract-ffi-as/assembly";
-import {Error, ErrorCode} from "../../../../contract-ffi-as/assembly/error";
-import {removeAssociatedKey, RemoveKeyFailure} from "../../../../contract-ffi-as/assembly/account";
-import {typedToArray} from "../../../../contract-ffi-as/assembly/utils";
+import * as CL from "../../../../contract-as/assembly";
+import {Error, ErrorCode} from "../../../../contract-as/assembly/error";
+import {removeAssociatedKey, RemoveKeyFailure} from "../../../../contract-as/assembly/account";
+import {typedToArray} from "../../../../contract-as/assembly/utils";
 
 export function call(): void {
   let accountBytes = CL.getArg(0);

@@ -1,8 +1,8 @@
-import {Error, ErrorCode} from "../../../../contract-ffi-as/assembly/error";
-import {CLValue} from "../../../../contract-ffi-as/assembly/clvalue";
-import {Key} from "../../../../contract-ffi-as/assembly/key";
-import {fromBytesString} from "../../../../contract-ffi-as/assembly/bytesrepr";
-import {callContract, getKey} from "../../../../contract-ffi-as/assembly";
+import {Error, ErrorCode} from "../../../../contract-as/assembly/error";
+import {CLValue} from "../../../../contract-as/assembly/clvalue";
+import {Key} from "../../../../contract-as/assembly/key";
+import {fromBytesString} from "../../../../contract-as/assembly/bytesrepr";
+import {callContract, getKey} from "../../../../contract-as/assembly";
 
 const HELLO_NAME_KEY = "hello_name";
 const HELLOWORLD_KEY = "helloworld";

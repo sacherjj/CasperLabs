@@ -1,8 +1,8 @@
-import * as CL from "../../../../contract-ffi-as/assembly";
-import {Error, ErrorCode} from "../../../../contract-ffi-as/assembly/error";
-import {fromBytesString, fromBytesI32} from "../../../../contract-ffi-as/assembly/bytesrepr";
-import {Key} from "../../../../contract-ffi-as/assembly/key"
-import {addAssociatedKey, AddKeyFailure, ActionType, setActionThreshold, SetThresholdFailure} from "../../../../contract-ffi-as/assembly/account";
+import * as CL from "../../../../contract-as/assembly";
+import {Error, ErrorCode} from "../../../../contract-as/assembly/error";
+import {fromBytesString, fromBytesI32} from "../../../../contract-as/assembly/bytesrepr";
+import {Key} from "../../../../contract-as/assembly/key"
+import {addAssociatedKey, AddKeyFailure, ActionType, setActionThreshold, SetThresholdFailure} from "../../../../contract-as/assembly/account";
 
 export function call(): void {
   // This body intentionally left empty.

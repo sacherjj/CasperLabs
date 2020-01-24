@@ -1,12 +1,12 @@
-import {Error, ErrorCode} from "../../../../contract-ffi-as/assembly/error";
-import {putKey, getKey, hasKey, getArg, storeFunctionAtHash, ret} from "../../../../contract-ffi-as/assembly";
-import {Key} from "../../../../contract-ffi-as/assembly/key";
-import {CLValue, CLTypeTag} from "../../../../contract-ffi-as/assembly/clvalue";
-import {toBytesString, toBytesMap, toBytesPair} from "../../../../contract-ffi-as/assembly/bytesrepr";
-import {fromBytesString, fromBytesI32, fromBytesU32, fromBytesStringList} from "../../../../contract-ffi-as/assembly/bytesrepr";
-import {U512} from "../../../../contract-ffi-as/assembly/bignum";
-import {Option} from "../../../../contract-ffi-as/assembly/option";
-import {arrayToTyped} from "../../../../contract-ffi-as/assembly/utils";
+import {Error, ErrorCode} from "../../../../contract-as/assembly/error";
+import {putKey, getKey, hasKey, getArg, storeFunctionAtHash, ret} from "../../../../contract-as/assembly";
+import {Key} from "../../../../contract-as/assembly/key";
+import {CLValue, CLTypeTag} from "../../../../contract-as/assembly/clvalue";
+import {toBytesString, toBytesMap, toBytesPair} from "../../../../contract-as/assembly/bytesrepr";
+import {fromBytesString, fromBytesI32, fromBytesU32, fromBytesStringList} from "../../../../contract-as/assembly/bytesrepr";
+import {U512} from "../../../../contract-as/assembly/bignum";
+import {Option} from "../../../../contract-as/assembly/option";
+import {arrayToTyped} from "../../../../contract-as/assembly/utils";
 
 const LIST_KEY = "list";
 const MAILING_KEY = "mailing";

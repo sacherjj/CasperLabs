@@ -1,9 +1,9 @@
-import {Error, ErrorCode} from "../../../../contract-ffi-as/assembly/error";
-import {putKey, getKey, getArg, storeFunctionAtHash, ret} from "../../../../contract-ffi-as/assembly";
-import {Key} from "../../../../contract-ffi-as/assembly/key";
-import {CLValue} from "../../../../contract-ffi-as/assembly/clvalue";
-import {toBytesString, toBytesMap, toBytesPair} from "../../../../contract-ffi-as/assembly/bytesrepr";
-import {fromBytesString} from "../../../../contract-ffi-as/assembly/bytesrepr";
+import {Error, ErrorCode} from "../../../../contract-as/assembly/error";
+import {putKey, getKey, getArg, storeFunctionAtHash, ret} from "../../../../contract-as/assembly";
+import {Key} from "../../../../contract-as/assembly/key";
+import {CLValue} from "../../../../contract-as/assembly/clvalue";
+import {toBytesString, toBytesMap, toBytesPair} from "../../../../contract-as/assembly/bytesrepr";
+import {fromBytesString} from "../../../../contract-as/assembly/bytesrepr";
 
 
 const HELLO_NAME_EXT = "hello_name_ext";

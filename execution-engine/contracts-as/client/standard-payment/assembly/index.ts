@@ -1,9 +1,9 @@
-import * as CL from "../../../../contract-ffi-as/assembly";
-import {Error, ErrorCode} from "../../../../contract-ffi-as/assembly/error";
-import {CLValue} from "../../../../contract-ffi-as/assembly/clvalue";
-import {PurseId} from "../../../../contract-ffi-as/assembly/purseid";
-import {U512} from "../../../../contract-ffi-as/assembly/bignum";
-import {Key} from "../../../../contract-ffi-as/assembly/key";
+import * as CL from "../../../../contract-as/assembly";
+import {Error, ErrorCode} from "../../../../contract-as/assembly/error";
+import {CLValue} from "../../../../contract-as/assembly/clvalue";
+import {PurseId} from "../../../../contract-as/assembly/purseid";
+import {U512} from "../../../../contract-as/assembly/bignum";
+import {Key} from "../../../../contract-as/assembly/key";
 
 const POS_ACTION = "get_payment_purse";
 

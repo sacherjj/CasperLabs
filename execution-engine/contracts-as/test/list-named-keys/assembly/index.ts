@@ -1,11 +1,11 @@
-import * as CL from "../../../../contract-ffi-as/assembly";
-import {Error, ErrorCode} from "../../../../contract-ffi-as/assembly/error";
+import * as CL from "../../../../contract-as/assembly";
+import {Error, ErrorCode} from "../../../../contract-as/assembly/error";
 import {fromBytesMap,
         fromBytesString,
-        toBytesString} from "../../../../contract-ffi-as/assembly/bytesrepr";
-import {Key} from "../../../../contract-ffi-as/assembly/key";
-import {Pair} from "../../../../contract-ffi-as/assembly/pair";
-import {checkItemsEqual, checkArraysEqual, checkTypedArrayEqual} from "../../../../contract-ffi-as/assembly/utils";
+        toBytesString} from "../../../../contract-as/assembly/bytesrepr";
+import {Key} from "../../../../contract-as/assembly/key";
+import {Pair} from "../../../../contract-as/assembly/pair";
+import {checkItemsEqual, checkArraysEqual, checkTypedArrayEqual} from "../../../../contract-as/assembly/utils";
 
 export function call(): void {
   let expectedInitialNamedKeysBytes = CL.getArg(0);

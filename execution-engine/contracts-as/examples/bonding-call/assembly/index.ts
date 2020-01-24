@@ -1,9 +1,9 @@
-import * as CL from "../../../../contract-ffi-as/assembly";
-import {Error, ErrorCode, PosErrorCode} from "../../../../contract-ffi-as/assembly/error";
-import {CLValue} from "../../../../contract-ffi-as/assembly/clvalue";
-import {Key} from "../../../../contract-ffi-as/assembly/key";
-import {PurseId} from "../../../../contract-ffi-as/assembly/purseid";
-import {U512} from "../../../../contract-ffi-as/assembly/bignum";
+import * as CL from "../../../../contract-as/assembly";
+import {Error, ErrorCode, PosErrorCode} from "../../../../contract-as/assembly/error";
+import {CLValue} from "../../../../contract-as/assembly/clvalue";
+import {Key} from "../../../../contract-as/assembly/key";
+import {PurseId} from "../../../../contract-as/assembly/purseid";
+import {U512} from "../../../../contract-as/assembly/bignum";
 
 const POS_ACTION = "bond";
 

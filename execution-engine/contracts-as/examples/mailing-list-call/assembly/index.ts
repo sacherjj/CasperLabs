@@ -1,9 +1,9 @@
-import {Error, ErrorCode} from "../../../../contract-ffi-as/assembly/error";
-import {getKey, callContract, putKey} from "../../../../contract-ffi-as/assembly";
-import {CLValue} from "../../../../contract-ffi-as/assembly/clvalue";
-import {Key} from "../../../../contract-ffi-as/assembly/key";
-import {fromBytesStringList} from "../../../../contract-ffi-as/assembly/bytesrepr";
-import {Option} from "../../../../contract-ffi-as/assembly/option";
+import {Error, ErrorCode} from "../../../../contract-as/assembly/error";
+import {getKey, callContract, putKey} from "../../../../contract-as/assembly";
+import {CLValue} from "../../../../contract-as/assembly/clvalue";
+import {Key} from "../../../../contract-as/assembly/key";
+import {fromBytesStringList} from "../../../../contract-as/assembly/bytesrepr";
+import {Option} from "../../../../contract-as/assembly/option";
 
 const MAIL_FEED_KEY = "mail_feed";
 const MAILING_KEY = "mailing";

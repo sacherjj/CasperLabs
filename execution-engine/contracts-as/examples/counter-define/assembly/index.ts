@@ -1,10 +1,10 @@
-import {Error, ErrorCode} from "../../../../contract-ffi-as/assembly/error";
-import {putKey, getKey, getArg, storeFunctionAtHash, ret} from "../../../../contract-ffi-as/assembly";
-import {Key} from "../../../../contract-ffi-as/assembly/key";
-import {CLValue} from "../../../../contract-ffi-as/assembly/clvalue";
-import {toBytesString, toBytesMap, toBytesPair} from "../../../../contract-ffi-as/assembly/bytesrepr";
-import {fromBytesString, fromBytesI32} from "../../../../contract-ffi-as/assembly/bytesrepr";
-import {U512} from "../../../../contract-ffi-as/assembly/bignum";
+import {Error, ErrorCode} from "../../../../contract-as/assembly/error";
+import {putKey, getKey, getArg, storeFunctionAtHash, ret} from "../../../../contract-as/assembly";
+import {Key} from "../../../../contract-as/assembly/key";
+import {CLValue} from "../../../../contract-as/assembly/clvalue";
+import {toBytesString, toBytesMap, toBytesPair} from "../../../../contract-as/assembly/bytesrepr";
+import {fromBytesString, fromBytesI32} from "../../../../contract-as/assembly/bytesrepr";
+import {U512} from "../../../../contract-as/assembly/bignum";
 
 const COUNT_KEY = "count";
 const COUNTER_EXT = "counter_ext";

@@ -1,8 +1,8 @@
-import * as CL from "../../../../contract-ffi-as/assembly";
-import {Error, ErrorCode, PosErrorCode} from "../../../../contract-ffi-as/assembly/error";
-import {U512} from "../../../../contract-ffi-as/assembly/bignum";
-import {CLValue} from "../../../../contract-ffi-as/assembly/clvalue";
-import {Key} from "../../../../contract-ffi-as/assembly/key";
+import * as CL from "../../../../contract-as/assembly";
+import {Error, ErrorCode, PosErrorCode} from "../../../../contract-as/assembly/error";
+import {U512} from "../../../../contract-as/assembly/bignum";
+import {CLValue} from "../../../../contract-as/assembly/clvalue";
+import {Key} from "../../../../contract-as/assembly/key";
 
 const POS_ACTION = "unbond";
 

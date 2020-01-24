@@ -1,8 +1,8 @@
-import * as CL from "../../../../contract-ffi-as/assembly";
-import {Error, ErrorCode} from "../../../../contract-ffi-as/assembly/error";
-import {fromBytesU64, fromBytesArrayU8} from "../../../../contract-ffi-as/assembly/bytesrepr";
-import {transferToAccount} from "../../../../contract-ffi-as/assembly";
-import {U512} from "../../../../contract-ffi-as/assembly/bignum";
+import * as CL from "../../../../contract-as/assembly";
+import {Error, ErrorCode} from "../../../../contract-as/assembly/error";
+import {fromBytesU64, fromBytesArrayU8} from "../../../../contract-as/assembly/bytesrepr";
+import {transferToAccount} from "../../../../contract-as/assembly";
+import {U512} from "../../../../contract-as/assembly/bignum";
 
 export function call(): void {
   let accountBytes = CL.getArg(0);
