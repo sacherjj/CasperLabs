@@ -128,116 +128,115 @@ package object types {
     )
   )
 
-  val BlockInfoInterface = InterfaceType(
+  lazy val BlockInfoInterface = InterfaceType(
     "BlockInfo",
     "Basic block information which doesn't require reading a full block",
-    fields[Unit, BlockAndMaybeDeploys](
-      Field(
-        "blockHash",
-        StringType,
-        "Base-16 encoded BLAKE2b256 hash of the block header".some,
-        resolve = c => Base16.encode(c.value._1.getSummary.blockHash.toByteArray)
-      ),
-      Field(
-        "parentHashes",
-        ListType(StringType),
-        "Hashes of parent blocks".some,
-        resolve = c => c.value._1.getSummary.parents.map(p => Base16.encode(p.toByteArray))
-      ),
-      Field(
-        "justificationHashes",
-        ListType(StringType),
-        "Hashes of justification blocks".some,
-        resolve = c =>
-          c.value._1.getSummary.justifications
-            .map(j => Base16.encode(j.latestBlockHash.toByteArray))
-      ),
-      Field(
-        "childHashes",
-        ListType(StringType),
-        "Hashes of child blocks".some,
-        resolve = c => c.value._1.getStatus.childHashes.map(p => Base16.encode(p.toByteArray))
-      ),
-      Field(
-        "timestamp",
-        DateType,
-        "Timestamp when the block was created".some,
-        resolve = c => c.value._1.getSummary.timestamp
-      ),
-      Field(
-        "protocolVersion",
-        ProtocolVersionType,
-        "Protocol version of CasperLabs blockchain".some,
-        resolve = c => c.value._1.getSummary.getHeader.getProtocolVersion
-      ),
-      Field(
-        "deployCount",
-        IntType,
-        "Amount of deploys in the block".some,
-        resolve = c => c.value._1.getSummary.deployCount
-      ),
-      Field(
-        "rank",
-        LongType,
-        "Amount of hops needed to reach a genesis from the block".some,
-        resolve = c => c.value._1.getSummary.rank
-      ),
-      Field(
-        "validatorPublicKey",
-        StringType,
-        "Base-16 encoded public key of a validator created the block".some,
-        resolve = c => Base16.encode(c.value._1.getSummary.validatorPublicKey.toByteArray)
-      ),
-      Field(
-        "validatorBlockSeqNum",
-        IntType,
-        "The block's number by the validator".some,
-        resolve = c => c.value._1.getSummary.validatorBlockSeqNum
-      ),
-      Field(
-        "chainName",
-        StringType,
-        "Chain name of where the block was created".some,
-        resolve = c => c.value._1.getSummary.chainName
-      ),
-      Field(
-        "signature",
-        SignatureType,
-        "Signature of validator created the block over blockHash".some,
-        resolve = c => c.value._1.getSummary.getSignature
-      ),
-      Field(
-        "deploys",
-        ListType(ProcessedDeployType),
-        "Deploys in the block".some,
-        resolve = c => c.value._2.get.map(_.asLeft[ProcessingResult])
-      ),
-      Field(
-        "faultTolerance",
-        FloatType,
-        resolve = c => c.value._1.getStatus.faultTolerance.toDouble
-      ),
-      Field(
-        "blockSizeBytes",
-        OptionType(IntType),
-        resolve = c => c.value._1.getStatus.stats.map(_.blockSizeBytes)
-      ),
-      Field(
-        "deployErrorCount",
-        OptionType(IntType),
-        resolve = c => c.value._1.getStatus.stats.map(_.deployErrorCount)
-      ),
-      Field(
-        "deployCostTotal",
-        OptionType(LongType),
-        resolve = c => c.value._1.getStatus.stats.map(_.deployCostTotal)
-      ),
-      Field(
-        "deployGasPriceAvg",
-        OptionType(LongType),
-        resolve = c => c.value._1.getStatus.stats.map(_.deployGasPriceAvg)
+    () =>
+      fields[Unit, BlockAndMaybeDeploys](
+        Field(
+          "blockHash",
+          StringType,
+          "Base-16 encoded BLAKE2b256 hash of the block header".some,
+          resolve = c => Base16.encode(c.value._1.getSummary.blockHash.toByteArray)
+        ),
+        Field(
+          "parents",
+          ListType(BlockType),
+          "Parent blocks".some,
+          resolve = _ => ??? // TODO
+        ),
+        Field(
+          "justifications",
+          ListType(BlockType),
+          "Justification blocks".some,
+          resolve = _ => ??? // TODO
+        ),
+        Field(
+          "children",
+          ListType(BlockType),
+          "Child blocks".some,
+          resolve = _ => ??? // TODO
+        ),
+        Field(
+          "timestamp",
+          DateType,
+          "Timestamp when the block was created".some,
+          resolve = c => c.value._1.getSummary.timestamp
+        ),
+        Field(
+          "protocolVersion",
+          ProtocolVersionType,
+          "Protocol version of CasperLabs blockchain".some,
+          resolve = c => c.value._1.getSummary.getHeader.getProtocolVersion
+        ),
+        Field(
+          "deployCount",
+          IntType,
+          "Amount of deploys in the block".some,
+          resolve = c => c.value._1.getSummary.deployCount
+        ),
+        Field(
+          "rank",
+          LongType,
+          "Amount of hops needed to reach a genesis from the block".some,
+          resolve = c => c.value._1.getSummary.rank
+        ),
+        Field(
+          "validatorPublicKey",
+          StringType,
+          "Base-16 encoded public key of a validator created the block".some,
+          resolve = c => Base16.encode(c.value._1.getSummary.validatorPublicKey.toByteArray)
+        ),
+        Field(
+          "validatorBlockSeqNum",
+          IntType,
+          "The block's number by the validator".some,
+          resolve = c => c.value._1.getSummary.validatorBlockSeqNum
+        ),
+        Field(
+          "chainName",
+          StringType,
+          "Chain name of where the block was created".some,
+          resolve = c => c.value._1.getSummary.chainName
+        ),
+        Field(
+          "signature",
+          SignatureType,
+          "Signature of validator created the block over blockHash".some,
+          resolve = c => c.value._1.getSummary.getSignature
+        ),
+        Field(
+          "deploys",
+          ListType(ProcessedDeployType),
+          "Deploys in the block".some,
+          resolve = c => c.value._2.get.map(_.asLeft[ProcessingResult])
+        ),
+        Field(
+          "faultTolerance",
+          FloatType,
+          resolve = c => c.value._1.getStatus.faultTolerance.toDouble
+        ),
+        Field(
+          "blockSizeBytes",
+          OptionType(IntType),
+          resolve = c => c.value._1.getStatus.stats.map(_.blockSizeBytes)
+        ),
+        Field(
+          "deployErrorCount",
+          OptionType(IntType),
+          resolve = c => c.value._1.getStatus.stats.map(_.deployErrorCount)
+        ),
+        Field(
+          "deployCostTotal",
+          OptionType(LongType),
+          resolve = c => c.value._1.getStatus.stats.map(_.deployCostTotal)
+        ),
+        Field(
+          "deployGasPriceAvg",
+          OptionType(LongType),
+          resolve = c => c.value._1.getStatus.stats.map(_.deployGasPriceAvg)
+        )
       )
-    )
   )
 
   val ProcessingResultType = ObjectType(
@@ -273,7 +272,7 @@ package object types {
     )
   )
 
-  val BlockType = ObjectType(
+  lazy val BlockType: ObjectType[Unit, BlockAndMaybeDeploys] = ObjectType(
     "Block",
     interfaces[Unit, BlockAndMaybeDeploys](BlockInfoInterface),
     fields[Unit, BlockAndMaybeDeploys](
