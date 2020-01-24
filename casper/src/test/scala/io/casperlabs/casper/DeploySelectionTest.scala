@@ -135,11 +135,7 @@ class DeploySelectionTest
     val counter                                   = AtomicInt(1)
     implicit val ee: ExecutionEngineService[Task] = eeExecMock(everyOtherCommutesExec(counter) _)
 
-    // Since we generate two streams of `smallBlockSizeBytes` size
-    // A block with thrice as big size limit should fit both streams.
-    val bigBlockSize = smallBlockSizeBytes * 3
-
-    val deploySelection = DeploySelection.create[Task](bigBlockSize)
+    val deploySelection = DeploySelection.create[Task](smallBlockSizeBytes * 4)
 
     // The very first WRITE doesn't conflict
     val expectedCommuting = conflicting.head +: commuting
