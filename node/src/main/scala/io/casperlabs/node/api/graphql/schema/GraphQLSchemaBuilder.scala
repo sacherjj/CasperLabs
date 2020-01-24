@@ -49,6 +49,8 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream
   // GraphQL projections don't expose the body.
   val deployView = DeployInfo.View.BASIC
 
+  val blockTypes = new GraphQLBlockTypes
+
   private def projectionTerms(projections: Vector[ProjectedName]): Set[String] = {
     def flatToSet(ps: Vector[ProjectedName], acc: Set[String]): Set[String] =
       if (ps.isEmpty) {
@@ -83,7 +85,7 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream
         fields[Unit, Unit](
           Field(
             "block",
-            OptionType(GraphQLBlockTypes.BlockType),
+            OptionType(blockTypes.BlockType),
             arguments = blocks.arguments.BlockHashPrefix :: Nil,
             resolve = Projector { (context, projections) =>
               (for {
@@ -102,7 +104,7 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream
           ),
           Field(
             "dagSlice",
-            ListType(GraphQLBlockTypes.BlockType),
+            ListType(blockTypes.BlockType),
             arguments = blocks.arguments.Depth :: blocks.arguments.MaxRank :: Nil,
             resolve = Projector { (context, projections) =>
               BlockAPI
@@ -117,7 +119,7 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream
           ),
           Field(
             "deploy",
-            OptionType(GraphQLBlockTypes.DeployInfoType),
+            OptionType(blockTypes.DeployInfoType),
             arguments = blocks.arguments.DeployHash :: Nil,
             resolve = { c =>
               (validateDeployHash[F](c.arg(blocks.arguments.DeployHash), ByteString.EMPTY) >>= (
@@ -127,7 +129,7 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream
           ),
           Field(
             "deploys",
-            GraphQLBlockTypes.DeployInfosWithPageInfoType,
+            blockTypes.DeployInfosWithPageInfoType,
             arguments = blocks.arguments.AccountPublicKeyBase16 :: blocks.arguments.First :: blocks.arguments.After :: Nil,
             resolve = { c =>
               val program =
@@ -256,7 +258,7 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream
         fields[Unit, Unit](
           Field.subs(
             "finalizedBlocks",
-            GraphQLBlockTypes.BlockType,
+            blockTypes.BlockType,
             "Subscribes to new finalized blocks".some,
             resolve = { c =>
               // Projectors don't work with Subscriptions
