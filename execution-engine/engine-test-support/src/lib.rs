@@ -4,8 +4,10 @@
 //! Consider a contract held in "contract.wasm" which stores an arbitrary `String` under a `Key`
 //! named "special_value":
 //! ```no_run
-//! # use contract::{contract_api::{runtime, storage}, unwrap_or_revert::UnwrapOrRevert};
-//! # use types::{Key, ApiError};
+//! # use contract as casperlabs_contract;
+//! # use types as casperlabs_types;
+//! use casperlabs_contract::{contract_api::{runtime, storage}, unwrap_or_revert::UnwrapOrRevert};
+//! use casperlabs_types::{Key, ApiError};
 //! const KEY: &str = "special_value";
 //!
 //! #[no_mangle]

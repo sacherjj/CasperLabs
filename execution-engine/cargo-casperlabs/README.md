@@ -27,10 +27,10 @@ cargo install cargo-casperlabs --path=.
 
 ## Usage
 
-To create a folder "my_contract" containing an example contract and a separate test crate for the contract:
+To create a folder "my_project" containing an example contract and a separate test crate for the contract:
 
 ```
-cargo casperlabs my_contract
+cargo casperlabs my_project
 ```
 
 This creates the following files:

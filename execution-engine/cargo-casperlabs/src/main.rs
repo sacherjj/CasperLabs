@@ -52,12 +52,15 @@ impl Args {
     fn new() -> Self {
         // If run normally, the args passed are 'cargo-casperlabs', '<target dir>'.  However, if run
         // as a cargo subcommand (i.e. cargo casperlabs <target dir>), then cargo injects a new arg:
-        // 'cargo-casperlabs', 'casperlabs', '<target dir>'.  We need to filter this extra arg out,
-        // but also cater for the case where a user calls the binary directly (not as a cargo
-        // subcommand) and passes 'casperlabs' as the target dir.
-        let unfiltered_args_count = env::args().count();
+        // 'cargo-casperlabs', 'casperlabs', '<target dir>'.  We need to filter this extra arg out.
+        //
+        // This yields the situation where if the binary receives args of
+        // 'cargo-casperlabs', 'casperlabs' then it might be a valid call (not a cargo subcommand -
+        // the user entered 'cargo-casperlabs casperlabs' meaning to create a target dir called
+        // 'casperlabs') or it might be an invalid call (the user entered 'cargo casperlabs' with no
+        // target dir specified).  The latter case is assumed as being more likely.
         let filtered_args_iter = env::args().enumerate().filter_map(|(index, value)| {
-            if index == 1 && unfiltered_args_count != 2 && value.as_str() == "casperlabs" {
+            if index == 1 && value.as_str() == "casperlabs" {
                 None
             } else {
                 Some(value)
