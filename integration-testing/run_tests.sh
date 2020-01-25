@@ -20,4 +20,3 @@ pip install pipenv
 pipenv sync
 pipenv run client/CasperLabsClient/install.sh
 pipenv run pytest ${PYTEST_ARGS} $TEST_RUN_ARGS
-#pipenv run python3 casperlabs_local_net/docker_cleanup_assurance.py

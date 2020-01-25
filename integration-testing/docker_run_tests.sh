@@ -32,14 +32,14 @@ esac
 done
 
 echo "UNIQUE_RUN_NUM  = ${UNIQUE_RUN_NUM}"
-RUN_NAME="${UNIQUE_RUN_NUM}"
+RUN_NAME="RUN${UNIQUE_RUN_NUM}"
 echo "RUN_NAME = ${RUN_NAME}"
-RUN_TAG_NAME="${TAG_NAME}-${RUN_NAME}"
+RUN_TAG_NAME="${TAG_NAME}-${UNIQUE_RUN_NUM}"
 echo "RUN_TAG_NAME = ${RUN_TAG_NAME}"
 # We need networks for the Python Client to talk directly to the DockerNode.
 # We cannot share a network as we might have DockerNodes partitioned.
 # This number of networks is the count of CasperLabNodes we can have active at one time.
-MAX_NODE_COUNT=10
+MAX_NODE_COUNT=5
 
 cleanup() {
     echo "Removing networks for Python Client..."
@@ -67,7 +67,7 @@ done
 
 # Need to make network names in docker-compose.yml match tag based network.
 # Using ||TAG|| as replacable element in docker-compose.yml.template
-mkdir "${RUN_NAME}"
+mkdir "${RUN_NAME}" || true
 cp Dockerfile "${RUN_NAME}/"
 # Replacing tags which need UNIQUE_RUN_NUM
 sed 's/||TAG||/'"${RUN_TAG_NAME}"'/g' docker-compose.yml.template > "${RUN_NAME}/docker-compose.yml"
