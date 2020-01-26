@@ -2,7 +2,7 @@
 
 # Adding display of images to debug issues with CI run
 echo Available Images:
-docker images
+docker network prune -f
 
 set -e
 if [[ -n $DRONE_BUILD_NUMBER ]]; then
@@ -12,16 +12,16 @@ else
 fi
 
 # Passing all arguments to this script into docker startup for run_tests.sh
-export TEST_RUN_ARGS=$@
+export TEST_RUN_ARGS="$@"
 
 # Parse out unique_run_number arg to use number on unique elements needed for running in docker.
 while [[ $# -gt 0 ]]
 do
-key="$1"
+key=$1
 
 case $key in
     --unique_run_num)
-    UNIQUE_RUN_NUM="$2"
+    export UNIQUE_RUN_NUM=$2
     shift # past argument
     shift # past value
     ;;
@@ -74,7 +74,10 @@ sed 's/||TAG||/'"${RUN_TAG_NAME}"'/g' docker-compose.yml.template > "${RUN_NAME}
 # Replacing IMAGE_TAG which should not have UNIQUE_RUN_NUM
 sed -i.bak 's/||IMAGE_TAG||/'"${TAG_NAME}"'/g' "${RUN_NAME}/docker-compose.yml"
 
+pwd
 cd "${RUN_NAME}"
+pwd
+ls
 docker-compose up --exit-code-from test --abort-on-container-exit
 result_code=$?
 exit ${result_code}

@@ -31,4 +31,5 @@ services:
       - cl-||TAG||-5
     environment:
       - TAG_NAME=${TAG_NAME}
-      - TEST_RUN_ARGS=${TEST_RUN_ARGS}
+      - TEST_RUN_ARGS="${TEST_RUN_ARGS}"
+      - UNIQUE_RUN_NUM=${UNIQUE_RUN_NUM}
