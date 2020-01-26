@@ -872,22 +872,6 @@ class ExecEngineUtilTest
       )
     }
   }
-
-  it should "send deploy's effects to commit endpoint" in new SequentialExecFixture {
-    val deploy = deploys.head
-
-    override val eeExec: EEExecFun[Task] =
-      (_, _, _, _) => deployResults(Seq(deployEffects(deploy.deployHash)))
-
-    override val eeCommit: EECommitFun[Task] = (_, effects, _) => {
-      assert(effects == Seq(deployEffects(deploy.deployHash)))
-      commitResult(ByteString.EMPTY, Seq.empty)
-    }
-
-    test { _ =>
-      assert(true)
-    }
-  }
 }
 
 object ExecEngineUtilTest {
