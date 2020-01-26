@@ -717,7 +717,7 @@ class ExecEngineUtilTest
     redundantSecondaryParentResult shouldBe (Map.empty -> Vector(b))
   }
 
-  abstract class Fixture(
+  abstract class SequentialExecFixture(
       initPrestate: ByteString = ByteString.copyFromUtf8("initPrestateHash"),
       blockTime: Long = 1L,
       protocolVersion: state.ProtocolVersion = state.ProtocolVersion(1)
@@ -736,7 +736,7 @@ class ExecEngineUtilTest
 
     def testF[R](f: DeploysCheckpoint => Task[R]): R =
       ExecEngineUtil
-        .commitDeploysSequentially[Task](initPrestate, blockTime, protocolVersion, deploys)(
+        .execCommitSeqDeploys[Task](initPrestate, blockTime, protocolVersion, deploys)(
           eeExec,
           eeCommit
         )
@@ -782,7 +782,7 @@ class ExecEngineUtilTest
     }
   }
 
-  "commitDeploysSequentially" should "start `stage` from 1 and increase monotonically" in new Fixture {
+  "commitDeploysSequentially" should "start `stage` from 1 and increase monotonically" in new SequentialExecFixture {
     override val eeExec: EEExecFun[Task]     = executionEngineService.exec _
     override val eeCommit: EECommitFun[Task] = executionEngineService.commit _
 
@@ -795,7 +795,7 @@ class ExecEngineUtilTest
     }
   }
 
-  it should "send one deploy at a time to the ExecutionEngine" in new Fixture {
+  it should "send one deploy at a time to the ExecutionEngine" in new SequentialExecFixture {
     override val eeExec: EEExecFun[Task] =
       (_, _, deploys, _) => {
         assert(deploys.size == 1)
@@ -812,7 +812,7 @@ class ExecEngineUtilTest
 
   it should "use post-state hash of executing a deploy as a pre-state hash of the next one" in {
     val initPrestate = ByteString.copyFromUtf8("initPrestate")
-    new Fixture(initPrestate) {
+    new SequentialExecFixture(initPrestate) {
       val postStateHashes =
         (initPrestate :: deploys.map(_.deployHash)).zipWithIndex.toList.map(_.swap).toMap
 
@@ -833,7 +833,7 @@ class ExecEngineUtilTest
     }
   }
 
-  it should "mark deploys as invalid if they fail execution with PreconditionFailure" in new Fixture {
+  it should "mark deploys as invalid if they fail execution with PreconditionFailure" in new SequentialExecFixture {
     override val eeExec: EEExecFun[Task] = (_, _, _, _) => preconditionFailure
     override val eeCommit: EECommitFun[Task] =
       (_, _, _) => commitResult(ByteString.EMPTY, Seq.empty)
@@ -847,7 +847,7 @@ class ExecEngineUtilTest
     }
   }
 
-  it should "return post-state hash and bonded validators of the last deploy execution" in new Fixture {
+  it should "return post-state hash and bonded validators of the last deploy execution" in new SequentialExecFixture {
     val lastPostStateHash = ByteString.copyFromUtf8("LastPostStateHash")
     val lastBondedValidators = Seq[consensus.Bond](
       consensus.Bond(ByteString.copyFromUtf8("lastbonded"), Some(BigInt("123456")))
@@ -873,7 +873,7 @@ class ExecEngineUtilTest
     }
   }
 
-  "singleDeploy" should "send deploy's effects to commit endpoint" in new Fixture {
+  it should "send deploy's effects to commit endpoint" in new SequentialExecFixture {
     val deploy = deploys.head
 
     override val eeExec: EEExecFun[Task] =

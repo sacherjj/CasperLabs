@@ -315,21 +315,13 @@ object ProtoUtil {
         }
     }
 
-  def containsDeploy(b: Block, accountPublicKey: ByteString, timestamp: Long): Boolean =
-    deploys(b).values.toStream
-      .map(_.toList)
-      .flatten
-      .flatMap(_.deploy)
-      .exists(
-        d => d.getHeader.accountPublicKey == accountPublicKey && d.getHeader.timestamp == timestamp
-      )
-
   def deploys(b: Block): Map[Int, NonEmptyList[Block.ProcessedDeploy]] =
     b.getBody.deploys
       .groupBy(_.stage)
-      .mapValues(seq => NonEmptyList.fromList(seq.toList))
-      .collect {
-        case (stage, Some(nel)) => stage -> nel
+      .map {
+        case (stage, deploys) =>
+          // It's safe b/c it's preceeded with `groupBy`.
+          stage -> NonEmptyList.fromListUnsafe(deploys.toList)
       }
 
   def postStateHash(b: Block): ByteString =

@@ -104,7 +104,7 @@ object ExecEngineUtil {
       .flatMap { results =>
         val (failures, deployEffects) = ProcessedDeployResult.split(results)
         if (failures.nonEmpty)
-          MonadThrowable[F].pure(failures.asLeft[DeploysCheckpoint])
+          failures.asLeft[DeploysCheckpoint].pure[F]
         else {
           val (deploysForBlock, transforms) = ExecEngineUtil
             .unzipEffectsAndDeploys(deployEffects, stage)
@@ -127,7 +127,7 @@ object ExecEngineUtil {
     *
     * In essence, this simulates sequential execution EE should be providing natively.
     */
-  protected[execengine] def commitDeploysSequentially[F[_]: MonadThrowable: Log: Metrics: DeployStorage: ExecutionEngineService](
+  protected[execengine] def execCommitSeqDeploys[F[_]: MonadThrowable: Log: Metrics: DeployStorage: ExecutionEngineService](
       prestateHash: ByteString,
       blocktime: Long,
       protocolVersion: state.ProtocolVersion,
@@ -225,7 +225,7 @@ object ExecEngineUtil {
                    ).pure[F]
                  )( // Execute conflicting deploys in a sequence.
                    nelDeploys =>
-                     commitDeploysSequentially[F](
+                     execCommitSeqDeploys[F](
                        parResult.postStateHash,
                        blocktime,
                        protocolVersion,
