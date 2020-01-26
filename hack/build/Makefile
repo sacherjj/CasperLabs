@@ -12,9 +12,10 @@ start: .make/run/start
 # source files are changed.
 # Sources files for `bloopInstall` are *.sbt build configuration files and *.scala files under `project/` directory.
 # When SBT runs `bloopInstall` task, it extracts project's build information into the `.bloop` directory.
-# 2. Bloop server checks and uses the `.bloop` directory for compiling the project.
-# 3. Bloop server able to receive requests from Bloop client as `bloop run ...`, `bloop compile`, `bloop test ...`/
-# 4. We use `bloop run ...` in the `make start` task below.
+# 2. `bloop server` runs and keeps a background Scala compiler, so it has benefits by JVM JIT compilation/optimizations and avoiding JVM's 'cold start'.
+# Also, it deduplicates the same requests from multiple clients, saving CPU cycles.
+# 3. Bloop client, when used from a directory which contains a `.bloop` directory, able to send requests `bloop run ...`, `bloop compile ...`, `bloop test ...` to the Bloop server.
+# 4. We use `bloop run ...` in the `make start` task below run the Scala part of CasperLabs Node.
 #
 # To stop background SBT and Bloop server run `make stop-background-scala-compiler`.
 start-background-scala-compiler: .make/run/background-scala-compiler
