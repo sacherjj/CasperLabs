@@ -52,15 +52,20 @@ object ExecEngineUtil {
 
   import io.casperlabs.smartcontracts.GrpcExecutionEngineService.EngineMetricsSource
 
+  // A type signature of the `ExecutionEngineService.exec` endpoint.
+  // Used in places where we only need `exec` method and we want to do "something" with it.
+  // Like counting number of `exec` calls or tracking what effects were sent to EE (in case of `commit`).
   type EEExecFun[F[_]] = (
-      ByteString,
-      Long,
+      ByteString, // Prestate hash
+      Long,       // Block time
       Seq[DeployItem],
       state.ProtocolVersion
   ) => F[Either[Throwable, Seq[DeployResult]]]
+
+  // A type signature of the `ExecutionEngineService.commit` endpoint.
   type EECommitFun[F[_]] = (
-      ByteString,
-      Seq[TransformEntry],
+      ByteString,          // Prestate hash
+      Seq[TransformEntry], // Effects to commit
       ProtocolVersion
   ) => F[Either[Throwable, ExecutionEngineService.CommitResult]]
 

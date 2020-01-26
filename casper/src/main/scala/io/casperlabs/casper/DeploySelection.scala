@@ -62,8 +62,11 @@ object DeploySelection {
 
   private case class IntermediateState(
       // Chosen deploys that commute.
-      accumulated: List[DeployEffects] = List.empty,
-      diff: List[DeployEffects] = List.empty,
+      commuting: List[DeployEffects] = List.empty,
+      // We consume input stream in chunks. We may need to process multiple chunks before filling up the block
+      // and we have to track commuting it across multiple chunks.
+      // These are deploys commuting within a single chunk, they are pushed to the output stream at the end of chunk processing.
+      chunkCommuting: List[DeployEffects] = List.empty,
       // For quicker commutativity test.
       // New deploy has to commute with all the effects accumulated so far.
       accumulatedOps: OpMap[Key] = Map.empty,
@@ -73,12 +76,12 @@ object DeploySelection {
       preconditionFailures: List[PreconditionFailure] = List.empty
   ) {
     def effectsCommutativity: (List[DeployEffects], OpMap[state.Key]) =
-      (accumulated, accumulatedOps)
+      (commuting, accumulatedOps)
 
     // We have to take into account conflicting deploys as well since they will
     // also be included in a block in SEQ sections.
     def size: Int =
-      accumulated.map(_.deploy.serializedSize).sum + conflicting.map(_.serializedSize).sum
+      commuting.map(_.deploy.serializedSize).sum + conflicting.map(_.serializedSize).sum
 
     // Appends new element to the intermediate state if it commutes with it.
     // Otherwise returns initial state.
@@ -87,8 +90,8 @@ object DeploySelection {
       val (accEffects, accOps) = effectsCommutativity
       if (accOps ~ ops) {
         copy(
-          accumulated = deploysEffects :: accEffects,
-          diff = deploysEffects :: diff,
+          commuting = deploysEffects :: accEffects,
+          chunkCommuting = deploysEffects :: chunkCommuting,
           accumulatedOps = accOps + ops
         )
       } else
@@ -167,7 +170,9 @@ object DeploySelection {
                 .flatMap {
                   // Block size limit reached. Output whatever was accumulated in the chunk and stop consuming.
                   case Left(intermediateState) =>
-                    fs2.Pull.output(fs2.Chunk(intermediateState.diff.reverse)).covary[F] >>
+                    fs2.Pull
+                      .output(fs2.Chunk(intermediateState.chunkCommuting.reverse))
+                      .covary[F] >>
                       fs2.Pull.eval(conflictingRef.set(intermediateState.conflicting)).void >>
                       fs2.Pull
                         .eval(preconditionFailuresRef.set(intermediateState.preconditionFailures))
@@ -175,11 +180,11 @@ object DeploySelection {
                       fs2.Pull.done
                   case Right(deploys) =>
                     // Output what was chosen in the chunk and continue consuming the stream.
-                    fs2.Pull.output(fs2.Chunk(deploys.diff.reverse)).covary[F] >> go(
+                    fs2.Pull.output(fs2.Chunk(deploys.chunkCommuting.reverse)).covary[F] >> go(
                       // We're emptying whatever was accumulated in the previous chunk,
                       // but we leave the total accumulated state, so we only pick deploys
                       // that commute with whatever was already chosen.
-                      deploys.copy(diff = List.empty),
+                      deploys.copy(chunkCommuting = List.empty),
                       streamTail,
                       conflictingRef,
                       preconditionFailuresRef

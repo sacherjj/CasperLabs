@@ -311,6 +311,10 @@ class ExecEngineUtilTest
         assert(
           conflictingDeploys
             .forall(_.deployHash == conflictingDeploys.head.deployHash),
+          // "Note: using the deploy hash to signal conflicting deploys is a convenience for this test.
+          // In production identical deploys may or may not conflict (pending future research)
+          // and different deploys also may or may not conflict (depending on what keys they operate on,
+          // and what operations they perform).
           "All conflicting deploys should have the same deploy hash"
         )
 
