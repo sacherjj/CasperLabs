@@ -113,8 +113,6 @@ object DeploySelection {
 
   }
 
-  private final case class ShortcutDeployConsumption(is: IntermediateState) extends Throwable
-
   /** Creates an instance of deploy selection algorithm.
     *
     * @param sizeLimitBytes Maximum block size. An implementation should respect a maximum
@@ -130,53 +128,68 @@ object DeploySelection {
       minChunkSize: Int = 10
   ): DeploySelection[F] =
     new DeploySelection[F] {
+      // If size of accumulated deploys is over 90% of the block limit, stop consuming more deploys.
+      def isOversized(state: IntermediateState) =
+        state.size > 0.9 * sizeLimitBytes
+
       override def select(
           in: (DeployHash, Long, ProtocolVersion, fs2.Stream[F, Deploy])
       ): F[DeploySelectionResult] = {
         val (prestate, blocktime, protocolVersion, deploys) = in
-
-        val selectedDeploys = deploys
-          .chunkMin(minChunkSize)
-          .evalScan(IntermediateState()) {
-            case (state, batch) =>
-              eeExecuteDeploys[F](
+        def go(
+            state: IntermediateState,
+            chunks: fs2.Stream[F, Deploy]
+        ): fs2.Pull[F, IntermediateState, Unit] =
+          chunks.pull.unconsN(minChunkSize, allowFewer = true).flatMap {
+            case None =>
+              fs2.Pull.output1(state)
+            case Some((chunk, deploys)) =>
+              val batch = chunk.toList
+              val newState = eeExecuteDeploys[F](
                 prestate,
                 blocktime,
-                batch.toList,
+                batch,
                 protocolVersion
-              )(ExecutionEngineService[F].exec _) flatMap {
-                _.foldLeftM(state) {
-                  case (accState, element: DeployEffects) =>
-                    // newState is either `accState` if `element` doesn't commute,
-                    // or contains `element` if it does.
-                    val newState = accState.addCommuting(element)
-                    // TODO: Use some base `Block` element to measure the size.
-                    // If size of accumulated deploys is over 90% of the block limit, stop consuming more deploys.
-                    if (newState.size > (0.9 * sizeLimitBytes))
-                      // Raising an error stops stream consumption.
-                      ShortcutDeployConsumption(accState).raiseError[F, IntermediateState]
-                    else newState.pure[F]
-                  case (accState, element: PreconditionFailure) =>
-                    // PreconditionFailure-s should be pushed into the stream
-                    // for later handling (like discarding invalid deploys).
-                    accState.addPreconditionFailure(element).pure[F]
-                }
+              )(ExecutionEngineService[F].exec _) map { results =>
+                // Using `Either` as fold for shortcutting semantics.
+                results
+                  .foldLeftM(state) {
+                    case (accState, element: DeployEffects) =>
+                      // newState is either `accState` if `element` doesn't commute,
+                      // or contains `element` if it does.
+                      val newState = accState.addCommuting(element)
+                      if (isOversized(newState))
+                        accState.asLeft[IntermediateState]
+                      else
+                        newState.asRight[IntermediateState]
+                    case (accState, element: PreconditionFailure) =>
+                      // PreconditionFailure-s should be pushed into the stream
+                      // for later handling (like discarding invalid deploys).
+                      accState.addPreconditionFailure(element).asRight[IntermediateState]
+                  }
+              }
+
+              fs2.Pull.eval(newState).flatMap {
+                case Left(state) =>
+                  fs2.Pull.output1(state)
+                case Right(state) =>
+                  go(state, deploys)
               }
           }
-          .compile
-          .lastOrError
-          .recover {
-            case ShortcutDeployConsumption(is) => is
-          }
 
-        selectedDeploys.map(
-          result =>
+        val selectedDeploys =
+          go(IntermediateState(), deploys).stream.compile.last
+
+        selectedDeploys.map {
+          case None =>
+            DeploySelectionResult(Nil, Nil, Nil)
+          case Some(result) =>
             DeploySelectionResult(
               result.commuting.reverse,
               result.conflicting.reverse,
               result.preconditionFailures.reverse
             )
-        )
+        }
       }
     }
 }
