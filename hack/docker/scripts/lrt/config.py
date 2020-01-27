@@ -51,3 +51,8 @@ class Configuration:
 
 def default_config():
     return Configuration(json.loads(DEFAULT_CONFIG))
+
+
+def read_config(file_name):
+    with open(file_name) as f:
+        return Configuration(json.load(f))

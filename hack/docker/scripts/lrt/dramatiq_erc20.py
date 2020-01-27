@@ -84,9 +84,14 @@ def initialize_erc20_simulation(
 if __name__ == "__main__":
     parser = argparse.ArgumentParser("Simulate ERC20 token sale")
     parser.add_argument("command", choices=("deploy", "run"))
+    parser.add_argument("--configuration", required=False, default=None)
     args = parser.parse_args()
 
-    cfg = config.default_config()
+    if args.configuration:
+        print(f"Reading configuration from {args.configuration}")
+        cfg = config.read_config(args.configuration)
+    else:
+        cfg = config.default_config()
 
     if args.command == "deploy":
         initialize_erc20_simulation(
