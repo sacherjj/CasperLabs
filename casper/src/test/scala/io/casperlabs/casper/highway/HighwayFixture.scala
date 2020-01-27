@@ -97,7 +97,13 @@ trait HighwayFixture extends StorageFixture with TickUtils with ArbitraryConsens
     implicit def `String => PublicKeyBS`(s: String): PublicKeyBS =
       PublicKey(ByteString.copyFromUtf8(s))
 
-    val genesis = Message
+    lazy val bonds = List(
+      Bond("Alice").withStake(state.BigInt("3000")),
+      Bond("Bob").withStake(state.BigInt("4000")),
+      Bond("Charlie").withStake(state.BigInt("5000"))
+    )
+
+    lazy val genesis = Message
       .fromBlockSummary(
         BlockSummary()
           .withBlockHash(ByteString.copyFromUtf8("genesis"))
@@ -107,13 +113,7 @@ trait HighwayFixture extends StorageFixture with TickUtils with ArbitraryConsens
               .withState(
                 Block
                   .GlobalState()
-                  .withBonds(
-                    List(
-                      Bond("Alice").withStake(state.BigInt("3000")),
-                      Bond("Bob").withStake(state.BigInt("4000")),
-                      Bond("Charlie").withStake(state.BigInt("5000"))
-                    )
-                  )
+                  .withBonds(bonds)
               )
           )
       )
@@ -127,8 +127,9 @@ trait HighwayFixture extends StorageFixture with TickUtils with ArbitraryConsens
         printLevel = printLevel
       )
 
-    implicit val forkchoice  = MockForkChoice.unsafe[Task](genesis)
-    val maybeMessageProducer = new MockMessageProducer[Task](validator).some
+    implicit lazy val forkchoice = MockForkChoice.unsafe[Task](genesis)
+
+    lazy val messageProducer = new MockMessageProducer[Task](validator)
 
     implicit val relaying = new Relaying[Task] {
       override def relay(hashes: List[BlockHash]): Task[WaitHandle[Task]] = ().pure[Task].pure[Task]
@@ -140,14 +141,16 @@ trait HighwayFixture extends StorageFixture with TickUtils with ArbitraryConsens
     }
 
     implicit class EraOps(era: Era) {
-      def addChildEra(): Task[Era] = {
+      def addChildEra(keyBlockHash: BlockHash = ByteString.EMPTY): Task[Era] = {
         val nextEndTick = conf.toTicks(conf.eraEnd(conf.toInstant(Ticks(era.endTick))))
-        val child = sample[Era]
+        val randomEra   = sample[Era]
+        val childEra = randomEra
+          .withKeyBlockHash(if (keyBlockHash.isEmpty) randomEra.keyBlockHash else keyBlockHash)
           .withParentKeyBlockHash(era.keyBlockHash)
           .withStartTick(era.endTick)
           .withEndTick(nextEndTick)
           .withBonds(era.bonds)
-        db.addEra(child).as(child)
+        db.addEra(childEra).as(childEra)
       }
     }
 
@@ -155,26 +158,28 @@ trait HighwayFixture extends StorageFixture with TickUtils with ArbitraryConsens
       EraRuntime.fromEra[Task](
         conf,
         era,
-        maybeMessageProducer,
+        messageProducer.some,
         initRoundExponent,
         isSyncedRef.get
       )
 
+    def insertGenesis(): Task[Unit] = {
+      val genesisSummary = genesis.blockSummary
+      val genesisBlock = Block(
+        blockHash = genesisSummary.blockHash,
+        header = genesisSummary.header,
+        signature = genesisSummary.signature
+      )
+      db.put(BlockMsgWithTransform().withBlockMessage(genesisBlock))
+    }
+
     def makeSupervisor(): Resource[Task, EraSupervisor[Task]] =
       for {
-        _ <- Resource.liftF {
-              val genesisSummary = genesis.blockSummary
-              val genesisBlock = Block(
-                blockHash = genesisSummary.blockHash,
-                header = genesisSummary.header,
-                signature = genesisSummary.signature
-              )
-              db.put(BlockMsgWithTransform().withBlockMessage(genesisBlock))
-            }
+        _ <- Resource.liftF(insertGenesis())
         supervisor <- EraSupervisor[Task](
                        conf,
                        genesis.blockSummary,
-                       maybeMessageProducer,
+                       messageProducer.some,
                        initRoundExponent,
                        isSyncedRef.get
                      )

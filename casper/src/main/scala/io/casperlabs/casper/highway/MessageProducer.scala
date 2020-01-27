@@ -257,7 +257,7 @@ object MessageProducer {
     for {
       latestMessages <- NonEmptyList(mainParent, justifications.values.flatten.toList).pure[F]
       tips           <- Estimator.tipsOfLatestMessages[F](dag, latestMessages, stopHash = keyBlockHash)
-      equivocators   <- getEquivocators[F](keyBlockHash)
+      equivocators   <- collectEquivocators[F](keyBlockHash)
       // TODO: There are no scores here for ordering secondary parents.
       secondaries = tips
         .filterNot(m => equivocators(m.validatorId) || m.messageHash == mainParent)
@@ -268,10 +268,10 @@ object MessageProducer {
       merged     <- ExecEngineUtil.merge[F](blocks, dag)
     } yield merged
 
-  /** Gather all the equivocators that are in eras between the era of the key block and the era
+  /** Gather all the unforgiven equivocators that are in eras between the era of the key block and the era
     * defined _by_ the keyblock itself (typically that means grandparent, parent and child era).
     */
-  def getEquivocators[F[_]: MonadThrowable: EraStorage: DagStorage](
+  def collectEquivocators[F[_]: MonadThrowable: EraStorage: DagStorage](
       keyBlockHash: BlockHash
   ): F[Set[ByteString]] =
     for {
@@ -280,7 +280,9 @@ object MessageProducer {
 
       keyBlockHashes <- DagOperations
                          .bfTraverseF(List(keyBlockHash)) { h =>
-                           EraStorage[F].getEraUnsafe(h).map(e => List(e.parentKeyBlockHash))
+                           EraStorage[F].getEraUnsafe(h).map { e =>
+                             List(e.parentKeyBlockHash)
+                           }
                          }
                          .takeUntil(_ == keyBlock.eraId)
                          .toList
