@@ -6,7 +6,7 @@ import logging
 import casperlabs_client
 from casperlabs_client.abi import ABI
 
-BASE_PATH = Path(os.path.dirname(os.path.abspath(__file__))).parent
+BASE_PATH = Path(os.path.dirname(os.path.abspath(__file__))).parent.parent.parent.parent
 ERC20_WASM = f"{BASE_PATH}/execution-engine/target/wasm32-unknown-unknown/release/erc20_smart_contract.wasm"
 
 
