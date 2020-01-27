@@ -31,7 +31,6 @@ export function call(): void {
     return;
   }
 
-  // WTF
   if (!checkItemsEqual(expectedInitialNamedKeys, actualNamedKeys)) {
     Error.fromUserError(<u16>4464 + 41).revert();
   }

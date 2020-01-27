@@ -16,6 +16,7 @@ import { checkArraysEqual, checkTypedArrayEqual, checkItemsEqual } from "../../a
 import { typedToArray, arrayToTyped } from "../../assembly/utils";
 import { Pair } from "../../assembly/pair";
 
+// Unfortunately I can't contain this stuff in a class, due to loader error:
 // ERROR: TypeError: Cannot create property 'shouldSerializeU64' on number '3' in @assemblyscript/loader
 // export class BytesReprTest {
 
@@ -29,8 +30,9 @@ export function testDeSerU8(): bool {
 }
 
 export function xtestDeSerU8_Zero(): bool {
-    // Used for deserializng Weight (for example)
-    // NOTE: Currently probably unable to check if `foo(): U8 | null` result is null
+    // NOTE: Currently probably unable to check if `foo(): U8 | null` result
+    // is null and thats why this test is skipped for now.
+    // Ref: https://github.com/AssemblyScript/assemblyscript/issues/1069
     const truth: u8[] = [0];
     let ser = toBytesU8(0);
     assert(checkArraysEqual(ser, truth));
@@ -52,8 +54,8 @@ export function testDeSerZeroU32(): bool {
     let ser = toBytesU32(0);
     assert(checkArraysEqual(ser, truth));
     let deser = fromBytesU32(arrayToTyped(ser));
-    // WTF: `ser !== null` is false when ser === <U32>0
-    assert(ser != null);
+    // WTF: `ser !== null` is true when ser === <U32>0
+    assert(ser !== null);
     return deser === <U32>0;
 }
 
@@ -82,9 +84,8 @@ export function testDeserializeU64_u32max_plus1(): bool {
     return value == <U64>4294967296;
 }
 
-// xtest marks this test as skipped
-export function xtestDeserializeU64_u64max(): bool {
-    const truth = hex2bin("fffffffffffffffe");
+export function testDeserializeU64_u64max(): bool {
+    const truth = hex2bin("feffffffffffffff");
     const value = fromBytesU64(truth);
     assert(value !== null);
     // NOTE: It seems like U64/u64 is not represented as a real u64 value,

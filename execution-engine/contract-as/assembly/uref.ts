@@ -37,9 +37,7 @@ export class URef {
             urefBytes.dataStart,
             urefBytes.length
         );
-        if (ret == 0)
-            return false;
-        return true;
+        return ret !== 0;
     }
 
     static fromBytes(bytes: Uint8Array): URef | null {

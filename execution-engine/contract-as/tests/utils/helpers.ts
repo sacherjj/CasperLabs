@@ -5,11 +5,11 @@ export function hex2bin(hex: String): Uint8Array {
 
   for (let i = 0; i < hex.length / 2; i++) {
     // NOTE: hex.substr + parseInt gives weird results under AssemblyScript
-    const lo = HEX_TABLE.indexOf(hex[i * 2]);
-    assert(lo > -1);
-    const hi = HEX_TABLE.indexOf(hex[(i * 2) + 1]);
+    const hi = HEX_TABLE.indexOf(hex[i * 2]);
     assert(hi > -1);
-    const number = (lo << 4) | hi;
+    const lo = HEX_TABLE.indexOf(hex[(i * 2) + 1]);
+    assert(lo > -1);
+    const number = (hi << 4) | lo;
     bin[i] = number;
   }
   return bin;

@@ -5,7 +5,6 @@ import {Key} from "../../../../contract-as/assembly/key"
 import {addAssociatedKey, AddKeyFailure, ActionType, setActionThreshold, SetThresholdFailure} from "../../../../contract-as/assembly/account";
 
 export function call(): void {
-  // This body intentionally left empty.
   let publicKey = new Array<u8>(32);
   publicKey.fill(123);
 
