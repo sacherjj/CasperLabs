@@ -159,7 +159,7 @@ class GraphQLBlockTypes[F[_]: MonadThrowable
           .traverse { hash =>
             BlockAPI.getBlockInfoWithDeploys[F](
               hash,
-              DeployInfo.View.FULL.some,
+              DeployInfo.View.BASIC.some,
               BlockInfo.View.FULL
             )
           }
