@@ -152,11 +152,10 @@ object DeploySelection {
                     val newState = accState.addCommuting(element)
                     // TODO: Use some base `Block` element to measure the size.
                     // If size of accumulated deploys is over 90% of the block limit, stop consuming more deploys.
-                    if (newState.size > (0.9 * sizeLimitBytes)) {
-                      // foldM will short-circuit for `Left`
-                      // and continue for `Right`
+                    if (newState.size > (0.9 * sizeLimitBytes))
+                      // Raising an error stops stream consumption.
                       ShortcutDeployConsumption(accState).raiseError[F, IntermediateState]
-                    } else newState.pure[F]
+                    else newState.pure[F]
                   case (accState, element: PreconditionFailure) =>
                     // PreconditionFailure-s should be pushed into the stream
                     // for later handling (like discarding invalid deploys).
