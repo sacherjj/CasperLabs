@@ -36,7 +36,6 @@ export declare function put_key(name_ptr: usize, name_size: usize, key_ptr: usiz
 export declare function remove_key(name_ptr: usize, name_size: u32): void;
 @external("env", "revert")
 export declare function revert(err_code: i32): void;
-// TODO: is_valid_uref
 @external("env", "is_valid_uref")
 export declare function is_valid_uref(target_ptr: usize, target_size: u32): i32;
 @external("env", "add_associated_key")

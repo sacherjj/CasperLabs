@@ -41,6 +41,7 @@ export class Key {
         key.local = local;
         return key;
     }
+
     static fromAccount(account: Uint8Array): Key {
         let key = new Key();
         key.variant = KeyVariant.ACCOUNT_ID;
@@ -48,13 +49,17 @@ export class Key {
         return key;
     }
 
-    static newInitialized(value: CLValue): Key | null {
+    /// attempts to write `value` under a new Key::URef
+    /// this is equivalent to the TURef concept in the rust implementation
+    /// if a key is returned it is always of KeyVariant.UREF_ID
+    static create(value: CLValue): Key | null {
         const valueBytes = value.toBytes();
         let keyBytes = new Uint8Array(KEY_UREF_SERIALIZED_LENGTH);
         externals.new_uref(
             keyBytes.dataStart,
             valueBytes.dataStart,
-            valueBytes.length);
+            valueBytes.length
+        );
         const key = Key.fromBytes(keyBytes);
         if (key === null) {
             return null;
@@ -63,31 +68,6 @@ export class Key {
             return null;
         }
         return <Key>key;
-    }
-
-    add(value: CLValue): void {
-        const keyBytes = this.toBytes();
-        const valueBytes = value.toBytes();
-
-        externals.add(
-            keyBytes.dataStart,
-            keyBytes.length,
-            valueBytes.dataStart,
-            valueBytes.length);
-    }
-
-    read(): Uint8Array | null {
-        const keyBytes = this.toBytes();
-        let valueSize = new Uint8Array(1);
-        const ret = externals.read_value(keyBytes.dataStart, keyBytes.length, valueSize.dataStart);
-        const error = Error.fromResult(ret);
-        if (error != null) {
-            // TODO: How do we differentiate lack of value from other errors?
-            error.revert();
-            return null;
-        }
-        // TODO: How can we have `read<T>` that would deserialize host bytes into T?
-        return readHostBuffer(valueSize[0]);
     }
 
     static fromBytes(bytes: Uint8Array): Key | null {
@@ -167,6 +147,51 @@ export class Key {
         }
     }
 
+    isURef(): bool {
+        return this.variant == KeyVariant.UREF_ID;
+    }
+
+    toURef(): URef {
+        return <URef>this.uref;
+    }
+
+    read(): Uint8Array | null {
+        const keyBytes = this.toBytes();
+        let valueSize = new Uint8Array(1);
+        const ret = externals.read_value(keyBytes.dataStart, keyBytes.length, valueSize.dataStart);
+        const error = Error.fromResult(ret);
+        if (error != null) {
+            // TODO: How do we differentiate lack of value from other errors?
+            error.revert();
+            return null;
+        }
+        // TODO: How can we have `read<T>` that would deserialize host bytes into T?
+        return readHostBuffer(valueSize[0]);
+    }
+
+    write(value: CLValue): void {
+        const keyBytes = this.toBytes();
+        const valueBytes = value.toBytes();
+        externals.write(
+            keyBytes.dataStart,
+            keyBytes.length,
+            valueBytes.dataStart,
+            valueBytes.length
+        );
+    }
+
+    add(value: CLValue): void {
+        const keyBytes = this.toBytes();
+        const valueBytes = value.toBytes();
+
+        externals.add(
+            keyBytes.dataStart,
+            keyBytes.length,
+            valueBytes.dataStart,
+            valueBytes.length
+        );
+    }
+
     @operator("==")
     equalsTo(other: Key): bool {
         if (this.variant === KeyVariant.UREF_ID) {
@@ -210,23 +235,5 @@ export class Key {
     @operator("!=")
     notEqualsTo(other: Key): bool {
         return !this.equalsTo(other);
-    }
-
-    isURef(): bool {
-        return this.variant == KeyVariant.UREF_ID;
-    }
-
-    write(value: CLValue): void {
-        const keyBytes = this.toBytes();
-        const valueBytes = value.toBytes();
-        externals.write(
-            keyBytes.dataStart,
-            keyBytes.length,
-            valueBytes.dataStart,
-            valueBytes.length);
-    }
-
-    toURef(): URef {
-        return <URef>this.uref;
     }
 }

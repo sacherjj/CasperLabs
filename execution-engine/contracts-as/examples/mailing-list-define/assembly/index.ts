@@ -56,11 +56,11 @@ function updateList(name: String): void {
 function sub(name: String): Key | null {
     if (hasKey(name)) {
         const initMessage = CLValue.fromStringList(["Hello again!"]);
-        return Key.newInitialized(initMessage);
+        return Key.create(initMessage);
     }
     else {
         const initMessage = CLValue.fromStringList(["Welcome!"]);
-        let newKey = Key.newInitialized(initMessage);
+        let newKey = Key.create(initMessage);
         if (newKey === null) {
             return null;
         }
@@ -151,7 +151,7 @@ export function mailing_list_ext(): void {
 
 export function call(): void {
     let init = CLValue.fromStringList([]);
-    const maybeListKey = Key.newInitialized(init);
+    const maybeListKey = Key.create(init);
     if (maybeListKey === null) {
         Error.fromUserError(1).revert();
         return;

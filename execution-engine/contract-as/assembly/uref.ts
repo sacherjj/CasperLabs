@@ -1,8 +1,7 @@
-import {Option} from "./option";
-import {CLValue} from "./clvalue";
-import {GetDecodedBytesCount, AddDecodedBytesCount, SetDecodedBytesCount} from "./bytesrepr";
-import {UREF_ADDR_LENGTH, OPTION_TAG_SERIALIZED_LENGTH, ACCESS_RIGHTS_SERIALIZED_LENGTH, UREF_SERIALIZED_LENGTH} from "./constants";
+import {AddDecodedBytesCount, SetDecodedBytesCount} from "./bytesrepr";
+import {UREF_ADDR_LENGTH} from "./constants";
 import {checkTypedArrayEqual} from "./utils";
+import {is_valid_uref} from "./externals";
 
 export enum AccessRights{
     NONE = 0x0,
@@ -30,6 +29,17 @@ export class URef {
 
     public getAccessRights(): AccessRights {
         return this.accessRights;
+    }
+
+    public isValid(): boolean{
+        const urefBytes = this.toBytes();
+        let ret = is_valid_uref(
+            urefBytes.dataStart,
+            urefBytes.length
+        );
+        if (ret == 0)
+            return false;
+        return true;
     }
 
     static fromBytes(bytes: Uint8Array): URef | null {
@@ -79,5 +89,4 @@ export class URef {
     notEqualsTo(other: URef): bool {
         return !this.equalsTo(other);
     }
-    //TODO: read():CLValue{}
 }

@@ -8,7 +8,7 @@ const DESTINATION_HASH = "hash";
 const DESTINATION_UREF = "uref";
 
 export function delegate(): void {
-
+  // no-op
 }
 
 function storeAtHash(): Key {

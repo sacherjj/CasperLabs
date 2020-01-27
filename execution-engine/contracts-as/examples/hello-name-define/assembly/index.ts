@@ -45,7 +45,7 @@ export function hello_name_ext(): void {
 
 export function call(): void {
     let init = CLValue.fromI32(0);
-    const maybeCounterLocalKey = Key.newInitialized(init);
+    const maybeCounterLocalKey = Key.create(init);
     if (maybeCounterLocalKey === null) {
         Error.fromUserError(1).revert();
         return;
