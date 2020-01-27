@@ -150,8 +150,8 @@ class GraphQLBlockTypes[F[_]: MonadThrowable
       // 1) One-by-one reading from database: update underlying API to accept multiple block hashes using 'WHERE block_hash IN ...'
       //
       // 2) Reading a full block: make use of Sangria Projections, although, not clear if it's possible to do without modifying the library's source code
-      // UPDATE: It reads full blocks only if a query contains 'children' anywhere.
-      // On the other hand, it still will read all blocks as FULL otherwise which is non optimal.
+      // UPDATE: It reads full blocks only if a query contains 'children' at any depth.
+      // On the other hand, if 'children' presented, then it will read *all* blocks as FULL, even those for which we didn't ask children.
       //
       // 3) Seq->List conversion: least critical, must be ignored until the above 2 issues are solved
       RunToFuture[F].unsafeToFuture(
