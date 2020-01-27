@@ -60,8 +60,19 @@ object ExecutionEngineServiceStub {
       merged  <- ExecutionEngineServiceStub.merge[F](parents, dag)
       preStateHash <- ExecEngineUtil
                        .computePrestate[F](merged, rank = b.getHeader.rank, upgrades = Nil)
-      effects <- ExecEngineUtil.effectsForBlock[F](b, preStateHash)
-      _       <- Validation[F].transactions(b, preStateHash, effects)
+      effects <- ExecEngineUtil
+                  .effectsForBlock[F](b, preStateHash)
+                  .map(
+                    be =>
+                      // This is a little hack needed for tests.
+                      // Genesis block doesn't have any effects
+                      // but is sent using exec + commit which won't call EE.commit
+                      // if there are no effects.
+                      if (ExecEngineUtil.isGenesisLike(b))
+                        Validation.BlockEffects(Map(0 -> Seq.empty))
+                      else be
+                  )
+      _ <- Validation[F].transactions(b, preStateHash, effects)
     } yield ProtoUtil.postStateHash(b)).attempt
   }
 
