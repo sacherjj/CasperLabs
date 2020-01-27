@@ -16,9 +16,8 @@ import { checkArraysEqual, checkTypedArrayEqual, checkItemsEqual } from "../../a
 import { typedToArray, arrayToTyped } from "../../assembly/utils";
 import { Pair } from "../../assembly/pair";
 
-// Unfortunately I can't contain this stuff in a class, due to loader error:
-// ERROR: TypeError: Cannot create property 'shouldSerializeU64' on number '3' in @assemblyscript/loader
-// export class BytesReprTest {
+// adding the prefix xtest to one of these functions will cause the test to
+// be ignored via the defineTestsFromModule function in spec.tsgit
 
 export function testDeSerU8(): bool {
     const truth: u8[] = [222];
@@ -30,9 +29,8 @@ export function testDeSerU8(): bool {
 }
 
 export function xtestDeSerU8_Zero(): bool {
-    // NOTE: Currently probably unable to check if `foo(): U8 | null` result
-    // is null and thats why this test is skipped for now.
-    // Ref: https://github.com/AssemblyScript/assemblyscript/issues/1069
+    // Used for deserializing Weight (for example)
+    // NOTE: Currently probably unable to check if `foo(): U8 | null` result is null
     const truth: u8[] = [0];
     let ser = toBytesU8(0);
     assert(checkArraysEqual(ser, truth));
@@ -320,8 +318,6 @@ export function testDeserMapOfNamedKeys(): bool {
 
     let keyD = Key.fromLocal(arrayToTyped(localBytes));
     truthObj.push(new Pair<String, Key>("DDDD", keyD));
-
-
 
     assert(truthObj.length === deser.length);
     assert(truthObj[0] == deser[0]);
