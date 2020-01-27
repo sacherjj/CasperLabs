@@ -1,8 +1,6 @@
 package io.casperlabs.node.api.graphql.schema.blocks
 
-import cats._
 import cats.implicits._
-import com.google.protobuf.ByteString
 import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.api.BlockAPI
@@ -13,20 +11,14 @@ import io.casperlabs.casper.consensus.info.DeployInfo.ProcessingResult
 import io.casperlabs.casper.consensus.info._
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.crypto.codec.Base16
-import io.casperlabs.crypto.codec.Base16.ByteArrayOps
-import io.casperlabs.crypto.codec.Base16.StringOps
-import io.casperlabs.node.api.graphql.schema.utils.{DateType, ProtocolVersionType}
 import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.node.api.graphql.RunToFuture
-import io.casperlabs.node.api.graphql.RunToFuture._
+import io.casperlabs.node.api.graphql.schema.utils.{DateType, ProtocolVersionType}
 import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.storage.dag.DagStorage
 import io.casperlabs.storage.deploy.DeployStorage
 import sangria.execution.deferred._
 import sangria.schema._
-import sangria.macros.derive._
-
-import scala.concurrent.Future
 
 case class PageInfo(endCursor: String, hasNextPage: Boolean)
 
