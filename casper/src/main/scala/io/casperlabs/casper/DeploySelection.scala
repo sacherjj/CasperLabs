@@ -63,10 +63,6 @@ object DeploySelection {
   private case class IntermediateState(
       // Chosen deploys that commute.
       commuting: List[DeployEffects] = List.empty,
-      // We consume input stream in chunks. We may need to process multiple chunks before filling up the block
-      // and we have to track commuting it across multiple chunks.
-      // These are deploys commuting within a single chunk, they are pushed to the output stream at the end of chunk processing.
-      chunkCommuting: List[DeployEffects] = List.empty,
       // For quicker commutativity test.
       // New deploy has to commute with all the effects accumulated so far.
       accumulatedOps: OpMap[Key] = Map.empty,
@@ -91,7 +87,6 @@ object DeploySelection {
       if (accOps ~ ops) {
         copy(
           commuting = deploysEffects :: accEffects,
-          chunkCommuting = deploysEffects :: chunkCommuting,
           accumulatedOps = accOps + ops
         )
       } else
@@ -118,8 +113,21 @@ object DeploySelection {
 
   }
 
+  private final case class ShortcutDeployConsumption(is: IntermediateState) extends Throwable
+
+  /** Creates an instance of deploy selection algorithm.
+    *
+    * @param sizeLimitBytes Maximum block size. An implementation should respect a maximum
+    *                       size of a block and never return more deploys that can fit into a block.
+    * @param minChunkSize A minimum size of chunk of the deploy stream. This concrete implementation will
+    *                     try to work with chunks of size `minChunkSize` but will allow for smaller chunks
+    *                     if there's not enough elements in the stream.
+    * @tparam F
+    * @return An instance of `DeploySelection` trait.
+    */
   def create[F[_]: Sync: ExecutionEngineService: Fs2Compiler](
-      sizeLimitBytes: Int
+      sizeLimitBytes: Int,
+      minChunkSize: Int = 10
   ): DeploySelection[F] =
     new DeploySelection[F] {
       override def select(
@@ -127,90 +135,49 @@ object DeploySelection {
       ): F[DeploySelectionResult] = {
         val (prestate, blocktime, protocolVersion, deploys) = in
 
-        def go(
-            state: IntermediateState,
-            stream: fs2.Stream[F, Deploy],
-            conflictingRef: Ref[F, List[Deploy]],
-            preconditionFailuresRef: Ref[F, List[PreconditionFailure]]
-        ): fs2.Pull[F, List[DeployEffects], Unit] =
-          stream.pull.uncons.flatMap {
-            case Some((chunk, streamTail)) =>
-              // Fold over elements of the chunk, picking deploys that commute,
-              // stop as soon as maximum block size limit is reached.
-              val batch = chunk.toList
-              val chunkResults =
-                eeExecuteDeploys[F](
-                  prestate,
-                  blocktime,
-                  batch,
-                  protocolVersion
-                )(ExecutionEngineService[F].exec _) map {
-                  _.foldLeftM(state) {
-                    case (accState, element: DeployEffects) =>
-                      // newState is either `accState` if `element` doesn't commute,
-                      // or contains `element` if it does.
-                      val newState = accState.addCommuting(element)
-                      // TODO: Use some base `Block` element to measure the size.
-                      // If size of accumulated deploys is over 90% of the block limit, stop consuming more deploys.
-                      if (newState.size > (0.9 * sizeLimitBytes)) {
-                        // foldM will short-circuit for `Left`
-                        // and continue for `Right`
-                        accState.asLeft[IntermediateState]
-                      } else
-                        newState.asRight[IntermediateState]
-                    case (accState, element: PreconditionFailure) =>
-                      // PreconditionFailure-s should be pushed into the stream
-                      // for later handling (like discarding invalid deploys).
-                      accState.addPreconditionFailure(element).asRight[IntermediateState]
-                  }
+        val selectedDeploys = deploys
+          .chunkMin(minChunkSize)
+          .evalScan(IntermediateState()) {
+            case (state, batch) =>
+              eeExecuteDeploys[F](
+                prestate,
+                blocktime,
+                batch.toList,
+                protocolVersion
+              )(ExecutionEngineService[F].exec _) flatMap {
+                _.foldLeftM(state) {
+                  case (accState, element: DeployEffects) =>
+                    // newState is either `accState` if `element` doesn't commute,
+                    // or contains `element` if it does.
+                    val newState = accState.addCommuting(element)
+                    // TODO: Use some base `Block` element to measure the size.
+                    // If size of accumulated deploys is over 90% of the block limit, stop consuming more deploys.
+                    if (newState.size > (0.9 * sizeLimitBytes)) {
+                      // foldM will short-circuit for `Left`
+                      // and continue for `Right`
+                      ShortcutDeployConsumption(accState).raiseError[F, IntermediateState]
+                    } else newState.pure[F]
+                  case (accState, element: PreconditionFailure) =>
+                    // PreconditionFailure-s should be pushed into the stream
+                    // for later handling (like discarding invalid deploys).
+                    accState.addPreconditionFailure(element).pure[F]
                 }
-
-              fs2.Pull
-                .eval(chunkResults)
-                .flatMap {
-                  // Block size limit reached. Output whatever was accumulated in the chunk and stop consuming.
-                  case Left(intermediateState) =>
-                    fs2.Pull
-                      .output(fs2.Chunk(intermediateState.chunkCommuting.reverse))
-                      .covary[F] >>
-                      fs2.Pull.eval(conflictingRef.set(intermediateState.conflicting)).void >>
-                      fs2.Pull
-                        .eval(preconditionFailuresRef.set(intermediateState.preconditionFailures))
-                        .void >>
-                      fs2.Pull.done
-                  case Right(deploys) =>
-                    // Output what was chosen in the chunk and continue consuming the stream.
-                    fs2.Pull.output(fs2.Chunk(deploys.chunkCommuting.reverse)).covary[F] >> go(
-                      // We're emptying whatever was accumulated in the previous chunk,
-                      // but we leave the total accumulated state, so we only pick deploys
-                      // that commute with whatever was already chosen.
-                      deploys.copy(chunkCommuting = List.empty),
-                      streamTail,
-                      conflictingRef,
-                      preconditionFailuresRef
-                    )
-                }
-
-            // Reached the end of a stream. Return results.
-            case None =>
-              fs2.Pull.eval(conflictingRef.set(state.conflicting)).void >>
-                fs2.Pull.eval(preconditionFailuresRef.set(state.preconditionFailures)).void >>
-                fs2.Pull.done
+              }
+          }
+          .compile
+          .lastOrError
+          .recover {
+            case ShortcutDeployConsumption(is) => is
           }
 
-        for {
-          conflictingRef          <- Ref[F].of(List.empty[Deploy])
-          preconditionFailuresRef <- Ref[F].of(List.empty[PreconditionFailure])
-          commutingDeploys <- go(
-                               IntermediateState(),
-                               deploys,
-                               conflictingRef,
-                               preconditionFailuresRef
-                             ).stream.compile.toList
-                               .map(_.flatten)
-          conflictingDeploys   <- conflictingRef.get
-          preconditionFailures <- preconditionFailuresRef.get
-        } yield DeploySelectionResult(commutingDeploys, conflictingDeploys, preconditionFailures)
+        selectedDeploys.map(
+          result =>
+            DeploySelectionResult(
+              result.commuting.reverse,
+              result.conflicting.reverse,
+              result.preconditionFailures.reverse
+            )
+        )
       }
     }
 }

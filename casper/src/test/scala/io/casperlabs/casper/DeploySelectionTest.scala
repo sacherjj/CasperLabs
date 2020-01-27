@@ -33,7 +33,7 @@ import monix.eval.Task
 import monix.eval.Task._
 import monix.execution.Scheduler.Implicits.global
 import monix.execution.atomic.AtomicInt
-import org.scalacheck.{Gen, Shrink}
+import org.scalacheck.{Arbitrary, Gen, Shrink}
 import org.scalatest.prop.GeneratorDrivenPropertyChecks
 import org.scalatest.{FlatSpec, Matchers}
 
@@ -68,35 +68,52 @@ class DeploySelectionTest
   // see: https://gist.github.com/davidallsopp/f65d73fea8b5e5165fc3
   implicit def noShrink[T]: Shrink[T] = Shrink.shrinkAny
 
-  it should "stop consuming the stream when block size limit is reached" in {
-    val deploys  = List.fill(deploysInSmallBlock * 2)(sample(arbDeploy.arbitrary))
-    val expected = takeUnlessTooBig(smallBlockSizeBytes)(deploys)
-    assert(expected.size <= deploys.size)
+  it should "stop consuming the stream when block size limit is reached" in forAll(
+    Gen.chooseNum(1, 100),
+    arbDeploy.arbitrary,
+    Gen.chooseNum(5 * 1024, 15 * 1024)
+  ) {
+    case (chunkSize, deploy, blockSizeBytes) =>
+      val deploysInSmallBlock = blockSizeBytes / deploy.serializedSize
+      val deploys             = List.fill(deploysInSmallBlock * 2)(deploy)
+      val expected            = takeUnlessTooBig(blockSizeBytes)(deploys)
+      assert(expected.size <= deploys.size)
 
-    assert(deploysSize(expected) <= (0.9 * smallBlockSizeBytes))
+      // Scale pull counts according to the chunk size.
+      // Returns number of elements in all chunks consumed.
+      def scaleWithChunkSize(pullsCount: Int): Int = {
+        val base      = pullsCount / chunkSize
+        val remainder = pullsCount % chunkSize
+        chunkSize * (base + {
+          if (remainder == 0) 0 else 1
+        })
+      }
 
-    val countedStream = CountedStream(fs2.Stream.fromIterator(deploys.toIterator))
+      val expectedPulls =
+        scaleWithChunkSize {
+          // If we can fit it all we will consume the whole stream.
+          if (expected.size == deploys.size) expected.size
+          // If not then we have to make one additional pull to realize it's too big.
+          else expected.size + 1
+        }
 
-    implicit val ee: ExecutionEngineService[Task] = eeExecMock(everythingCommutesExec _)
+      assert(deploysSize(expected) <= (0.9 * blockSizeBytes))
 
-    val deploySelection: DeploySelection[Task] =
-      DeploySelection.create[Task](smallBlockSizeBytes)
+      val countedStream = CountedStream(fs2.Stream.fromIterator(deploys.toIterator))
 
-    val test = for {
-      selected <- deploySelection
-                   .select((prestate, blocktime, protocolVersion, countedStream.stream))
-                   .map(_.commuting.map(_.deploy))
-      // If we will consume whole stream, before condition is met, that's how many
-      // elements we expect to pull from the stream.
-      // Otherwise we expect one more pull than elements, because we have to pull
-      // from the stream first before we decide we're full.
-      expectedPulls = if (expected.size == deploys.size) {
-        expected.size
-      } else expected.size + 1
-      _ <- Task.delay(assert(countedStream.getCount() == expectedPulls))
-    } yield selected should contain theSameElementsAs expected
+      implicit val ee: ExecutionEngineService[Task] = eeExecMock(everythingCommutesExec _)
 
-    test.unsafeRunSync
+      val deploySelection: DeploySelection[Task] =
+        DeploySelection.create[Task](blockSizeBytes, chunkSize)
+
+      val test = for {
+        selected <- deploySelection
+                     .select((prestate, blocktime, protocolVersion, countedStream.stream))
+                     .map(_.commuting.map(_.deploy))
+        _ <- Task.delay(assert(scaleWithChunkSize(countedStream.getCount()) == expectedPulls))
+      } yield selected should contain theSameElementsAs expected
+
+      test.unsafeRunSync
   }
 
   it should "skip elements that won't be included in a block (precondition failures)" +
