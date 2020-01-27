@@ -3,7 +3,6 @@ from google.protobuf.json_format import MessageToDict
 from dramatiq import actor
 from erc20 import Node
 import base64
-import time
 
 NODE = Node("localhost")
 
@@ -27,20 +26,11 @@ def new_block(block_info: dict):
 
 
 def poll_new_blocks():
-    seen = set()
     while True:
-        # It is not clear how to efficiently check
-        # for new blocks with the current node API.
-        # Ideally, we would say something like:
-        # "Give me blocks newer than <block_hash>"
-        for block_info in NODE.client.showBlocks(100):
-            block_hash = block_info.summary.block_hash.hex()
-            if block_hash not in seen:
-                # Convert protobuf object to dictionary because
-                # parameters passed to actors must be JSON serializable.
+        for event in NODE.client.stream_events():
+            if event.HasField("block_added"):
+                block_info = event.block_added.block
                 new_block(MessageToDict(block_info))
-                seen.add(block_hash)
-        time.sleep(0.1)
 
 
 if __name__ == "__main__":
