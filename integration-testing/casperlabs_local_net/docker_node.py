@@ -542,3 +542,9 @@ class DockerNode(LoggingDockerBase):
             raise CasperLabsNodeAddressNotFoundError()
         address = m.group(1)
         return address
+
+    def clear_state(self):
+        cmd = "rm /root/.casperlabs/sqlite.db"
+        rc, output = self.exec_run(cmd)
+        if rc != 0:
+            raise Exception(f"Error executing '{cmd}: Exit code {rc}: {output}")

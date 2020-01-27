@@ -4,6 +4,8 @@ import docker as docker_py
 import pytest
 import shutil
 
+from docker.client import DockerClient
+
 from casperlabs_local_net.common import make_tempdir, random_string
 from casperlabs_local_net.cli import CLI, DockerCLI
 from casperlabs_local_net.casperlabs_network import (
@@ -23,9 +25,9 @@ from casperlabs_local_net.casperlabs_network import (
     TwoNodeWithDifferentAccountsCSVNetwork,
     NetworkWithTaggedDev,
     OneNodeNetworkWithChainspecUpgrades,
+    ThreeNodeNetworkWithTwoBootstraps,
     OneNodeWithAutoPropose,
 )
-from docker.client import DockerClient
 
 
 @pytest.fixture(scope="function")
@@ -146,6 +148,13 @@ def encrypted_two_node_network(docker_client_fixture):
 @pytest.fixture(scope="module")
 def three_node_network(docker_client_fixture):
     with ThreeNodeNetwork(docker_client_fixture) as tnn:
+        tnn.create_cl_network()
+        yield tnn
+
+
+@pytest.fixture(scope="module")
+def three_node_network_with_two_bootstraps(docker_client_fixture):
+    with ThreeNodeNetworkWithTwoBootstraps(docker_client_fixture) as tnn:
         tnn.create_cl_network()
         yield tnn
 
