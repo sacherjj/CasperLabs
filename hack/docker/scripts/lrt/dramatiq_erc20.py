@@ -3,18 +3,8 @@ import logging
 import random
 import jsonpickle
 from dramatiq import actor
-from erc20 import ERC20, Node, Agent, DeployedERC20
-
-AGENTS = [Agent("account-0"), Agent("account-1"), Agent("account-2")]
-NODES = [Node("localhost")]
-ERC20_DEPLOYER = Agent("faucet-account")
-
-TOKEN_NAME = "ABC"
-TOTAL_TOKEN_SUPPLY = 200000
-TOKENS_PER_AGENT = 10000
-MAX_TRANSFER = 100
-
-INITIAL_AGENT_CLX_FUNDS = 10 ** 8
+from erc20 import ERC20, Node, DeployedERC20
+import config
 
 
 @actor
@@ -96,26 +86,32 @@ if __name__ == "__main__":
     parser.add_argument("command", choices=("deploy", "run"))
     args = parser.parse_args()
 
+    cfg = config.default_config()
+
     if args.command == "deploy":
         initialize_erc20_simulation(
-            NODES[0],
-            ERC20_DEPLOYER,
-            AGENTS,
-            TOKEN_NAME,
-            TOTAL_TOKEN_SUPPLY,
-            INITIAL_AGENT_CLX_FUNDS,
-            TOKENS_PER_AGENT,
+            cfg.nodes[0],
+            cfg.erc20_deployer,
+            cfg.agents,
+            cfg.token_name,
+            cfg.total_token_supply,
+            cfg.initial_agent_clx_funds,
+            cfg.tokens_per_agent,
         )
+
+    erc20_deployer = cfg.erc20_deployer
+    agents = cfg.agents
+    nodes = cfg.nodes
 
     if args.command == "run":
         for _ in range(10):
-            sender, recipient = random.sample(AGENTS, 2)
-            node = random.sample(NODES, 1)[0]
-            amount = random.randint(1, MAX_TRANSFER)
+            sender, recipient = random.sample(agents, 2)
+            node = random.sample(nodes, 1)[0]
+            amount = random.randint(1, cfg.max_transfer)
 
             transfer_tokens(
-                jsonpickle.encode(ERC20_DEPLOYER),
-                TOKEN_NAME,
+                jsonpickle.encode(erc20_deployer),
+                cfg.token_name,
                 node.host,
                 node.port,
                 jsonpickle.encode(sender),
