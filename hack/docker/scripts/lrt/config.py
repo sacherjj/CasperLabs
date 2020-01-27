@@ -1,5 +1,6 @@
 import json
 from erc20 import Agent, Node
+import casperlabs_client
 
 
 DEFAULT_CONFIG = """
@@ -29,9 +30,20 @@ class Configuration:
     def agents(self):
         return [Agent(agent[0]) for agent in self.dictionary["agents"]]
 
+    def _make_node(self, node_config):
+        host = node_config[0]
+        port = casperlabs_client.DEFAULT_PORT
+        try:
+            port = node_config[1]
+        except IndexError:
+            pass
+        return Node(host, port)
+
     @property
     def nodes(self):
-        return [Node(node[0]) for node in self.dictionary["nodes"]]
+        return [
+            self._make_node(node_config) for node_config in self.dictionary["nodes"]
+        ]
 
     def __getattr__(self, name):
         return self.dictionary[name]
