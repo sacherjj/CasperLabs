@@ -113,13 +113,13 @@ export class Key {
     }
 
     toBytes(): Array<u8> {
-        if(this.variant === KeyVariant.UREF_ID){
+        if(this.variant == KeyVariant.UREF_ID){
             let bytes = new Array<u8>();
             bytes.push(<u8>this.variant)
             bytes = bytes.concat((<URef>this.uref).toBytes());
             return bytes;
         }
-        else if (this.variant === KeyVariant.HASH_ID) {
+        else if (this.variant == KeyVariant.HASH_ID) {
             var hashBytes = <Uint8Array>this.hash;
             let bytes = new Array<u8>(1 + hashBytes.length);
             bytes[0] = <u8>this.variant;
@@ -128,14 +128,14 @@ export class Key {
             }
             return bytes;
         }
-        else if (this.variant === KeyVariant.LOCAL_ID) {
+        else if (this.variant == KeyVariant.LOCAL_ID) {
             var localBytes = <Uint8Array>this.local;
             let bytes = new Array<u8>(1);
             bytes[0] = <u8>this.variant;
             bytes = bytes.concat(typedToArray(localBytes));
             return bytes;
         }
-        else if (this.variant === KeyVariant.ACCOUNT_ID) {
+        else if (this.variant == KeyVariant.ACCOUNT_ID) {
             var accountBytes = <Uint8Array>this.account;
             let bytes = new Array<u8>(1);
             bytes[0] = <u8>this.variant;
@@ -194,7 +194,7 @@ export class Key {
 
     @operator("==")
     equalsTo(other: Key): bool {
-        if (this.variant === KeyVariant.UREF_ID) {
+        if (this.variant == KeyVariant.UREF_ID) {
             if (other.variant == KeyVariant.UREF_ID) {
                 return <URef>this.uref == <URef>other.uref;
             }
