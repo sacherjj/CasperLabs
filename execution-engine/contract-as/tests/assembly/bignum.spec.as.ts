@@ -1,5 +1,5 @@
 import { hex2bin } from "../utils/helpers";
-import { U512 } from "../../assembly/bignum";
+import { U512, BigNum } from "../../assembly/bignum";
 import { checkArraysEqual } from "../../assembly/utils";
 import { fromBytesU64 } from "../../assembly/bytesrepr";
 import { typedToArray } from "../../assembly/utils";
@@ -42,4 +42,20 @@ export function testSerialize100mTimes10(): bool {
     assert(bytes !== null)
     assert(checkArraysEqual(bytes, typedToArray(truth)));
     return valU512.getValue() === <U64>(100000000*10);
+}
+
+export function testBigNum512(): bool {
+    let a = new BigNum(16, <u64>18446744073709551614);
+    let b = new BigNum(16, 1);
+
+    assert(a.bytes[0] == 0xfffffffe);
+    assert(a.bytes[1] == 0xffffffff);
+    assert(a.bytes[2] == 0);
+
+    a.add(b);
+    assert(a.bytes[0] == 0xffffffff);
+    assert(a.bytes[1] == 0xffffffff);
+    assert(a.bytes[2] == 0);
+
+    return true;
 }

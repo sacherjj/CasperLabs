@@ -1,5 +1,33 @@
 import {toBytesU64} from "./bytesrepr";
 
+export class BigNum {
+    private bytes: Uint32Array;
+
+    constructor(width: usize, initialValue: u64) {
+        this.bytes = new Uint32Array(width);
+        this.bytes.fill(0);
+
+        if (initialValue > 0) {
+            let value = <u64>initialValue;
+            assert(width >= 2);
+            this.bytes[0] = <u32>(value & <u64>0xffffffff);
+            this.bytes[1] = <u32>(value >>> 32);
+        }
+    }
+
+    @operator("+")
+    add(other: BigNum): BigNum {
+        assert(this.bytes.length == other.bytes.length);
+        let carry = <u64>0;
+        for (let i = 0; i < this.bytes.length; i++) {
+            let n = carry + <u64>this.bytes[i] + <u64>other.bytes[i];
+            this.bytes[i] = <u32>(n & <u64>0xffffffff);
+            carry = <u64>(n >>> 32);
+        }
+        return this;
+    }
+};
+
 export class U512 {
     private value: U64;
 
