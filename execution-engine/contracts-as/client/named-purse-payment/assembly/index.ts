@@ -1,12 +1,12 @@
-import * as CL from "../../../../contract-ffi-as/assembly";
-import {getKey} from "../../../../contract-ffi-as/assembly";
-import {Error, ErrorCode, PosErrorCode} from "../../../../contract-ffi-as/assembly/error";
-import {CLValue} from "../../../../contract-ffi-as/assembly/clvalue";
-import {PurseId} from "../../../../contract-ffi-as/assembly/purseid";
-import {U512} from "../../../../contract-ffi-as/assembly/bignum";
-import {fromBytesString} from "../../../../contract-ffi-as/assembly/bytesrepr";
-import {URef} from "../../../../contract-ffi-as/assembly/uref";
-import {Key, KeyVariant} from "../../../../contract-ffi-as/assembly/key";
+import * as CL from "../../../../contract-as/assembly";
+import {getKey} from "../../../../contract-as/assembly";
+import {Error, ErrorCode, PosErrorCode} from "../../../../contract-as/assembly/error";
+import {CLValue} from "../../../../contract-as/assembly/clvalue";
+import {PurseId} from "../../../../contract-as/assembly/purseid";
+import {U512} from "../../../../contract-as/assembly/bignum";
+import {fromBytesString} from "../../../../contract-as/assembly/bytesrepr";
+import {URef} from "../../../../contract-as/assembly/uref";
+import {Key, KeyVariant} from "../../../../contract-as/assembly/key";
 
 const GET_PAYMENT_PURSE = "get_payment_purse";
 const SET_REFUND_PURSE= "set_refund_purse";
@@ -73,8 +73,7 @@ export function call(): void {
 
   // Set Refund Purse
   let args: CLValue[] = [CLValue.fromString(SET_REFUND_PURSE), CLValue.fromURef(purseId.asURef())];
-  let extraUrefs: Key[] = [purseKey];
-  let refundPurseOutput = CL.callContractExt(proofOfStakeKey, args, extraUrefs);
+  let refundPurseOutput = CL.callContract(proofOfStakeKey, args);
   if (refundPurseOutput === null) {
     Error.fromPosErrorCode(PosErrorCode.RefundPurseKeyUnexpectedType).revert(); // TODO: might not be the correct error code
     return;
