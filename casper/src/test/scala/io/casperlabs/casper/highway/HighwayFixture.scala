@@ -129,7 +129,7 @@ trait HighwayFixture extends StorageFixture with TickUtils with ArbitraryConsens
 
     implicit lazy val forkchoice = MockForkChoice.unsafe[Task](genesis)
 
-    lazy val messageProducer = new MockMessageProducer[Task](validator)
+    lazy val messageProducer: MessageProducer[Task] = new MockMessageProducer[Task](validator)
 
     implicit val relaying = new Relaying[Task] {
       override def relay(hashes: List[BlockHash]): Task[WaitHandle[Task]] = ().pure[Task].pure[Task]

@@ -2,14 +2,24 @@ package io.casperlabs.casper.highway
 
 import cats._
 import cats.implicits._
+import com.google.protobuf.ByteString
 import io.casperlabs.crypto.Keys.PublicKey
+import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
+import io.casperlabs.casper.{DeployFilters, DeploySelection, ValidatorIdentity}
 import io.casperlabs.casper.consensus.{Bond, Era}
 import io.casperlabs.casper.consensus.state
+import io.casperlabs.casper.consensus.state.ProtocolVersion
 import io.casperlabs.casper.highway.mocks.MockMessageProducer
+import io.casperlabs.casper.util.CasperLabsProtocol
 import io.casperlabs.storage.BlockHash
 import io.casperlabs.storage.dag.DagStorage
+import io.casperlabs.storage.block.BlockStorage
+import io.casperlabs.mempool.DeployBuffer
+import io.casperlabs.casper.util.execengine.ExecutionEngineServiceStub
+import io.casperlabs.casper.scalatestcontrib._
 import monix.eval.Task
 import org.scalatest._
+import scala.concurrent.duration._
 
 class MessageProducerSpec extends FlatSpec with Matchers with Inspectors with HighwayFixture {
 
@@ -17,7 +27,7 @@ class MessageProducerSpec extends FlatSpec with Matchers with Inspectors with Hi
 
   it should "gather equivocators from the grandparent, parent and child eras" in testFixture {
     implicit timer => implicit db =>
-      new Fixture(length = 4 * eraDuration) {
+      new Fixture(length = 5 * eraDuration) {
 
         // Create an equivocation in an era by storing two messages that don't quote each other.
         // Return the block hash we can use as key block for the next era.
@@ -92,6 +102,94 @@ class MessageProducerSpec extends FlatSpec with Matchers with Inspectors with Hi
             unforgiven("Eve") shouldBe true
             unforgiven("Fred") shouldBe true
             unforgiven.map(x => new String(x.toByteArray)) should have size 3
+          }
+      }
+  }
+
+  behavior of "makeBallot"
+
+  it should "assign fields correctly and restart the validator seq.no and prev message hash in new eras" in testFixture {
+    implicit timer => implicit db =>
+      new Fixture(length = 3 * eraDuration) { self =>
+        val chainName               = "message-producer-test-chain"
+        val (privateKey, publicKey) = Ed25519.newKeyPair
+        val validatorId             = PublicKey(ByteString.copyFrom(publicKey))
+
+        override lazy val messageProducer: MessageProducer[Task] = {
+          implicit val deployBuffer = DeployBuffer.create[Task](chainName, minTtl = Duration.Zero)
+          implicit val protocol = CasperLabsProtocol.unsafe[Task](
+            (0L, ProtocolVersion(0, 1, 0), none)
+          )
+          implicit val execEngineService = ExecutionEngineServiceStub.noOpApi[Task]()
+          implicit val deploySelection   = DeploySelection.create[Task](sizeLimitBytes = Int.MaxValue)
+
+          MessageProducer[Task](
+            validatorIdentity =
+              ValidatorIdentity(publicKey, privateKey, signatureAlgorithm = Ed25519),
+            chainName = chainName,
+            upgrades = Seq.empty
+          )
+        }
+
+        override def test =
+          for {
+            _  <- insertGenesis()
+            e0 <- addGenesisEra()
+            b1 <- messageProducer.ballot(
+                   e0.keyBlockHash,
+                   roundId = Ticks(e0.startTick),
+                   target = genesis.messageHash,
+                   justifications = Map.empty
+                 )
+            b2 <- messageProducer.ballot(
+                   e0.keyBlockHash,
+                   roundId = Ticks(e0.endTick),
+                   target = genesis.messageHash,
+                   justifications = Map(validatorId -> Set(b1.messageHash))
+                 )
+            e1 <- e0.addChildEra()
+            b3 <- messageProducer.ballot(
+                   e1.keyBlockHash,
+                   roundId = Ticks(e1.startTick),
+                   target = genesis.messageHash,
+                   justifications = Map(validatorId -> Set(b2.messageHash))
+                 )
+            b4 <- messageProducer.ballot(
+                   e1.keyBlockHash,
+                   roundId = Ticks(e1.endTick),
+                   target = genesis.messageHash,
+                   justifications = Map(validatorId -> Set(b2.messageHash, b3.messageHash))
+                 )
+
+            // Check that messages are persisted.
+            ballots = List(b1, b2, b3, b4)
+            dag     <- DagStorage[Task].getRepresentation
+
+            _ <- ballots.traverse { x =>
+                  dag.lookupUnsafe(x.messageHash)
+                } shouldBeF ballots
+
+            _ <- ballots.traverse { x =>
+                  BlockStorage[Task].getBlockSummaryUnsafe(x.messageHash)
+                } shouldBeF ballots.map(_.blockSummary)
+          } yield {
+            b1.validatorId shouldBe validatorId
+            b1.eraId shouldBe e0.keyBlockHash
+            b1.roundId shouldBe e0.startTick
+            b1.blockSummary.getHeader.chainName shouldBe chainName
+
+            b1.rank shouldBe 1
+            b1.validatorMsgSeqNum shouldBe 1
+            b2.rank shouldBe 2
+            b2.validatorMsgSeqNum shouldBe 2
+            b2.validatorPrevMessageHash shouldBe b1.messageHash
+            b3.rank shouldBe 3
+            b3.validatorMsgSeqNum shouldBe 1
+            b3.validatorPrevMessageHash shouldBe ByteString.EMPTY
+            b4.rank shouldBe 4
+            b4.validatorMsgSeqNum shouldBe 2
+            b4.validatorPrevMessageHash shouldBe b3.messageHash
+            b4.justifications should have size 2
           }
       }
   }
