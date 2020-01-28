@@ -38,4 +38,4 @@ echo "Test Filter: ${TEST_FILTER}"
 pip install pipenv
 pipenv sync
 pipenv run client/CasperLabsClient/install.sh
-pipenv run pytest ${PYTEST_ARGS} "${TEST_RUN_ARGS}" "${TEST_FILTER}"
+pipenv run pytest ${PYTEST_ARGS} "${TEST_RUN_ARGS}" ${TEST_FILTER}
