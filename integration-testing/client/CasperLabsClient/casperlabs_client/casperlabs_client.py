@@ -451,6 +451,8 @@ class CasperLabsClient:
     @api
     def propose(self):
         """"
+        THIS METHOD IS DEPRECATED! It will be removed soon.
+
         Propose a block using deploys in the pool.
 
         :return:    response object with block_hash
@@ -604,6 +606,14 @@ class CasperLabsClient:
                     and info.DeployInfo.View.FULL
                     or info.DeployInfo.View.BASIC
                 ),
+            )
+        )
+
+    @api
+    def stream_events(self, block_added: bool = True, block_finalized: bool = True):
+        yield from self.casperService.StreamEvents_stream(
+            casper.StreamEventsRequest(
+                block_added=block_added, block_finalized=block_finalized
             )
         )
 
