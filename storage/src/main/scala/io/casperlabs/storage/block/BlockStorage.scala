@@ -77,11 +77,6 @@ trait BlockStorageReader[F[_]] extends BlockStorageWriter[F] {
   )(implicit applicative: Applicative[F]): F[Option[Block]] =
     get(blockHash).map(_.flatMap(_.blockMessage))
 
-  // def getTransforms(
-  //     blockHash: BlockHash
-  // )(implicit applicative: Applicative[F]): F[Option[Seq[TransformEntry]]] =
-  //   get(blockHash).map(_.map(_.transformEntry))
-
   def getUnsafe(hash: BlockHash)(implicit MT: MonadThrowable[F]): F[BlockMsgWithTransform] =
     unsafe(hash, get)
 
