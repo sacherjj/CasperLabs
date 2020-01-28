@@ -36,6 +36,7 @@ RUN_NAME="RUN${UNIQUE_RUN_NUM}"
 echo "RUN_NAME = ${RUN_NAME}"
 RUN_TAG_NAME="${TAG_NAME}-${UNIQUE_RUN_NUM}"
 echo "RUN_TAG_NAME = ${RUN_TAG_NAME}"
+
 # We need networks for the Python Client to talk directly to the DockerNode.
 # We cannot share a network as we might have DockerNodes partitioned.
 # This number of networks is the count of CasperLabNodes we can have active at one time.
@@ -53,7 +54,7 @@ cleanup() {
 
     docker-compose rm --force || true
 
-    # Eliminate this for next run
+    # Eliminate docker-compose for next run
     cd ..
     rm -r "${RUN_NAME}"
 }
@@ -62,6 +63,7 @@ trap cleanup 0
 echo "Setting up networks for Python Client..."
 for num in $(seq 0 $MAX_NODE_COUNT)
 do
+    echo "Creating docker network 'cl-${RUN_TAG_NAME}-${num}'"
     docker network create "cl-${RUN_TAG_NAME}-${num}"
 done
 
