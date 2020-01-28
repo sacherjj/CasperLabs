@@ -64,7 +64,7 @@ fn overwrite_as_account(builder: &mut InMemoryWasmTestBuilder, uref: URef, addre
         "{}",
         execution::Error::ForgedReference(uref.into_read_add_write())
     );
-    assert!(error_msg.contains(&err));
+    assert!(error_msg.contains(&err), "error_msg: {:?}", error_msg);
 }
 
 #[ignore]
@@ -124,15 +124,11 @@ fn should_overwrite_system_contract_uref_as_system() {
         ExecuteRequestBuilder::standard(SYSTEM_ADDR, CONTRACT_OVERWRITE_UREF_CONTENT, (mint_uref,))
             .build();
 
-    let exec_request_3 =
-        ExecuteRequestBuilder::standard(SYSTEM_ADDR, CONTRACT_OVERWRITE_UREF_CONTENT, (pos_uref,))
-            .build();
-
     let mut new_builder = InMemoryWasmTestBuilder::from_result(result);
 
-    let result_1 = new_builder.clone().exec(exec_request_2).commit().finish();
+    let result_mint = new_builder.clone().exec(exec_request_2).commit().finish();
 
-    let error_msg = result_1
+    let error_msg = result_mint
         .builder()
         .exec_error_message(0)
         .expect("should execute mint overwrite with error");
@@ -142,9 +138,13 @@ fn should_overwrite_system_contract_uref_as_system() {
         error_msg
     );
 
-    let result_2 = new_builder.exec(exec_request_3).commit().finish();
+    let exec_request_3 =
+        ExecuteRequestBuilder::standard(SYSTEM_ADDR, CONTRACT_OVERWRITE_UREF_CONTENT, (pos_uref,))
+            .build();
 
-    let error_msg = result_2
+    let result_pos = new_builder.exec(exec_request_3).commit().finish();
+
+    let error_msg = result_pos
         .builder()
         .exec_error_message(0)
         .expect("should execute pos overwrite with error");

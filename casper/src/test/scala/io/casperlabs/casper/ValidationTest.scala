@@ -493,7 +493,7 @@ class ValidationTest
             justificationBlocks.map(b => Justification(b.getHeader.validatorPublicKey, b.blockHash))
           )
         val block = ProtoUtil.unsignedBlockProto(blockWithNumber.getBody, header)
-        blockStorage.put(block.blockHash, block, Seq.empty) *>
+        blockStorage.put(block.blockHash, block, Map.empty) *>
           block.pure[Task]
       }
       val validator = generateValidator("Validator")
@@ -1155,7 +1155,7 @@ class ValidationTest
       for {
         block <- createMessage[Task](Seq.empty, deploys = Vector(deploy.processed(1)))
                   .map(_.changeTimestamp(blockTimestamp))
-        _      <- blockStorage.put(block.blockHash, block, Seq.empty)
+        _      <- blockStorage.put(block.blockHash, block, Map.empty)
         dag    <- dagStorage.getRepresentation
         result <- Validation.deployHeaders[Task](block, dag, chainName).attempt
       } yield result shouldBe Left(ValidateErrorWrapper(DeployFromFuture))
@@ -1168,7 +1168,7 @@ class ValidationTest
       for {
         block <- createMessage[Task](Seq.empty, deploys = Vector(deploy.processed(1)))
                   .map(_.changeTimestamp(blockTimestamp))
-        _      <- blockStorage.put(block.blockHash, block, Seq.empty)
+        _      <- blockStorage.put(block.blockHash, block, Map.empty)
         dag    <- dagStorage.getRepresentation
         result <- Validation.deployHeaders[Task](block, dag, chainName).attempt
       } yield result shouldBe Left(ValidateErrorWrapper(DeployExpired))
@@ -1182,7 +1182,7 @@ class ValidationTest
       for {
         block <- createMessage[Task](Seq.empty, deploys = Vector(deployB.processed(1)))
                   .map(_.changeTimestamp(blockTimestamp))
-        _      <- blockStorage.put(block.blockHash, block, Seq.empty)
+        _      <- blockStorage.put(block.blockHash, block, Map.empty)
         dag    <- dagStorage.getRepresentation
         result <- Validation.deployHeaders[Task](block, dag, chainName).attempt
       } yield result shouldBe Left(ValidateErrorWrapper(DeployDependencyNotMet))
@@ -1210,17 +1210,17 @@ class ValidationTest
         for {
           blockA <- createMessage[Task](Seq.empty, deploys = Vector(deployA.processed(1)))
                      .map(_.changeTimestamp(timeA))
-          _ <- blockStorage.put(blockA.blockHash, blockA, Seq.empty)
+          _ <- blockStorage.put(blockA.blockHash, blockA, Map.empty)
           blockB <- createMessage[Task](
                      List(blockA.blockHash),
                      deploys = Vector(deployB.processed(1))
                    ).map(_.changeTimestamp(timeB))
-          _ <- blockStorage.put(blockB.blockHash, blockB, Seq.empty)
+          _ <- blockStorage.put(blockB.blockHash, blockB, Map.empty)
           blockC <- createMessage[Task](
                      List(blockB.blockHash),
                      deploys = Vector(deployC.processed(1))
                    ).map(_.changeTimestamp(timeC))
-          _      <- blockStorage.put(blockC.blockHash, blockC, Seq.empty)
+          _      <- blockStorage.put(blockC.blockHash, blockC, Map.empty)
           dag    <- dagStorage.getRepresentation
           result <- Validation.deployHeaders[Task](blockC, dag, chainName).attempt
         } yield result shouldBe Right(())

@@ -1,4 +1,3 @@
-import logging
 import pytest
 from itertools import count
 from casperlabs_local_net.casperlabs_accounts import GENESIS_ACCOUNT
@@ -23,9 +22,7 @@ def test_equivocating_node_shutdown_and_other_nodes_are_working_ok(three_node_ne
 
     # Clear state of node-0 so when we restart it
     # it doesn't remember the block it created before.
-    cmd = "rm /root/.casperlabs/sqlite.db"
-    rc, output = nodes[0].exec_run(cmd)
-    logging.info(f"============================ {cmd} => {rc}")
+    nodes[0].clear_state()
 
     # Stop node-0. Also, stop all other nodes so when node-0 restarts it cannot sync old
     # blocks from them.

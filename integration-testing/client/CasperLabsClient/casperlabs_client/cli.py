@@ -367,7 +367,7 @@ def natural(number):
 
 
 # fmt: off
-def deploy_options(keys_required=False, private_key_accepted=True):
+def deploy_options(private_key_accepted=True):
     return ([
         [('-f', '--from'), dict(required=False, type=str, help="The public key of the account which is the context of this deployment, base16 encoded.")],
         [('--chain-name',), dict(required=False, type=str, help="Name of the chain to optionally restrict the deploy from being accidentally included anywhere else.")],
@@ -385,7 +385,7 @@ def deploy_options(keys_required=False, private_key_accepted=True):
         [('--session-args',), dict(required=False, type=str, help="""JSON encoded list of session args, e.g.: '[{"name": "amount", "value": {"long_value": 123456}}]'""")],
         [('--payment-args',), dict(required=False, type=str, help="""JSON encoded list of payment args, e.g.: '[{"name": "amount", "value": {"big_int": {"value": "123456", "bit_width": 512}}}]'""")],
         [('--ttl-millis',), dict(required=False, type=int, help="""Time to live. Time (in milliseconds) that the deploy will remain valid for.'""")],
-        [('--public-key',), dict(required=keys_required, default=None, type=str, help='Path to the file with account public key (Ed25519)')]]
+        [('--public-key',), dict(required=False, default=None, type=str, help='Path to the file with account public key (Ed25519)')]]
         + (private_key_accepted
            and [[('--private-key',), dict(required=True, default=None, type=str, help='Path to the file with account private key (Ed25519)')]]
            or []))
@@ -479,10 +479,10 @@ def cli(*arguments) -> int:
 
     # fmt: off
     parser.addCommand('deploy', deploy_command, 'Deploy a smart contract source file to Casper on an existing running node. The deploy will be packaged and sent as a block to the network depending on the configuration of the Casper instance',
-                      deploy_options(keys_required=True))
+                      deploy_options())
 
     parser.addCommand('make-deploy', make_deploy_command, "Constructs a deploy that can be signed and sent to a node.",
-                      [[('-o', '--deploy-path'), dict(required=False, help="Path to the file where deploy will be saved. Optional, if not provided the deploy will be printed to STDOUT.")]] + deploy_options(keys_required=False, private_key_accepted=False))
+                      [[('-o', '--deploy-path'), dict(required=False, help="Path to the file where deploy will be saved. Optional, if not provided the deploy will be printed to STDOUT.")]] + deploy_options(private_key_accepted=False))
 
     parser.addCommand('sign-deploy', sign_deploy_command, "Cryptographically signs a deploy. The signature is appended to existing approvals.",
                       [[('-o', '--signed-deploy-path'), dict(required=False, default=None, help="Path to the file where signed deploy will be saved. Optional, if not provided the deploy will be printed to STDOUT.")],
@@ -494,16 +494,16 @@ def cli(*arguments) -> int:
                       [[('-i', '--deploy-path'), dict(required=False, default=None, help="Path to the file with signed deploy.")]])
 
     parser.addCommand('bond', bond_command, 'Issues bonding request',
-                      [[('-a', '--amount'), dict(required=True, type=int, help='amount of motes to bond')]] + deploy_options(keys_required=False))
+                      [[('-a', '--amount'), dict(required=True, type=int, help='amount of motes to bond')]] + deploy_options())
 
     parser.addCommand('unbond', unbond_command, 'Issues unbonding request',
                       [[('-a', '--amount'),
-                       dict(required=False, default=None, type=int, help='Amount of motes to unbond. If not provided then a request to unbond with full staked amount is made.')]] + deploy_options(keys_required=False))
+                       dict(required=False, default=None, type=int, help='Amount of motes to unbond. If not provided then a request to unbond with full staked amount is made.')]] + deploy_options())
 
     parser.addCommand('transfer', transfer_command, 'Transfers funds between accounts',
                       [[('-a', '--amount'), dict(required=False, default=None, type=int, help='Amount of motes to transfer. Note: a mote is the smallest, indivisible unit of a token.')],
                        [('-t', '--target-account'), dict(required=True, type=str, help="base64 or base16 representation of target account's public key")],
-                       ] + deploy_options(keys_required=False, private_key_accepted=True))
+                       ] + deploy_options(private_key_accepted=True))
 
     parser.addCommand('propose', propose_command, 'Force a node to propose a block based on its accumulated deploys.', [])
 

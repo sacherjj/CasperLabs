@@ -65,7 +65,7 @@ class EquivocationDetectorTest
         case Some(_) =>
           blockStatus shouldBe Left(ValidateErrorWrapper(EquivocatedBlock))
       }
-      _ <- blockStorage.put(b.blockHash, b, Seq.empty)
+      _ <- blockStorage.put(b.blockHash, b, Map.empty)
       rankOfLowestBaseBlock <- dag
                                 .latestMessage(creator)
                                 .map(

@@ -166,7 +166,7 @@ package object gossiping {
                                            )
                             genesis    = genesisStore.getBlockMessage
                             prestate   = ProtoUtil.preStateHash(genesis)
-                            transforms = genesisStore.transformEntry
+                            transforms = genesisStore.blockEffects.flatMap(_.effects)
                             casper <- MultiParentCasper.fromGossipServices(
                                        validatorId,
                                        genesis,
