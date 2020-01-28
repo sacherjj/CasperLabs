@@ -16,7 +16,7 @@ import io.casperlabs.catscontrib.effect.implicits.fiberSyntax
 import io.casperlabs.crypto.Keys.{PublicKey, PublicKeyBS}
 import io.casperlabs.models.Message
 import io.casperlabs.metrics.Metrics
-import io.casperlabs.storage.{BlockHash, BlockMsgWithTransform}
+import io.casperlabs.storage.BlockHash
 import io.casperlabs.storage.era.EraStorage
 import io.casperlabs.storage.dag.{DagRepresentation, DagStorage}
 import io.casperlabs.storage.block.BlockStorage
@@ -103,10 +103,7 @@ object MessageProducer {
 
           message <- MonadThrowable[F].fromTry(Message.fromBlock(signed))
 
-          record = BlockMsgWithTransform()
-            .withBlockMessage(signed)
-
-          _ <- BlockStorage[F].put(record)
+          _ <- BlockStorage[F].put(signed, transforms = Map.empty)
 
         } yield message.asInstanceOf[Message.Ballot]
 
@@ -173,11 +170,7 @@ object MessageProducer {
 
           message <- MonadThrowable[F].fromTry(Message.fromBlock(signed))
 
-          record = BlockMsgWithTransform()
-            .withBlockMessage(signed)
-            .withTransformEntry(checkpoint.transformMap)
-
-          _ <- BlockStorage[F].put(record)
+          _ <- BlockStorage[F].put(signed, transforms = checkpoint.stageEffects)
 
         } yield message.asInstanceOf[Message.Block]
 

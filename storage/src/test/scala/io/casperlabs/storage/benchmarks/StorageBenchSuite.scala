@@ -12,6 +12,7 @@ import io.casperlabs.metrics.Metrics
 import io.casperlabs.shared.Log
 import io.casperlabs.storage.BlockMsgWithTransform
 import io.casperlabs.storage.BlockHash
+import io.casperlabs.storage.BlockMsgWithTransform.StageEffects
 import io.casperlabs.storage.dag.{DagStorage, IndexedDagStorage}
 import io.casperlabs.{metrics, shared}
 import monix.eval.Task
@@ -131,7 +132,7 @@ object StorageBenchSuite {
   def randomBlockMsgWithTransform: BlockMsgWithTransform =
     BlockMsgWithTransform(
       Some(randomBlockMessage),
-      (0 to Random.nextInt(25)).map(_ => randomTransformEntry)
+      Seq(StageEffects(0, (0 to Random.nextInt(25)).map(_ => randomTransformEntry)))
     )
 
   //This is needed because the alternative `Iterator.continually(elems).flatten`

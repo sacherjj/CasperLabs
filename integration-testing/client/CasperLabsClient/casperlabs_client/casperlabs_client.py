@@ -14,10 +14,8 @@ import os
 import time
 import grpc
 from grpc._channel import _Rendezvous
-import ssl
 import functools
 import logging
-import pkg_resources
 import tempfile
 
 # Monkey patching of google.protobuf.text_encoding.CEscape
@@ -44,15 +42,19 @@ from . import control_pb2 as control
 from . import casper_pb2 as casper
 from . import casper_pb2_grpc
 
-# ~/CasperLabs/protobuf/io/casperlabs/casper/consensus/consensus.proto
-from . import consensus_pb2 as consensus
-
 # ~/CasperLabs/protobuf/io/casperlabs/casper/consensus/info.proto
 from . import info_pb2 as info
 
 from . import vdag
 from . import abi
-from . import crypto
+from casperlabs_client.utils import (
+    bundled_contract,
+    extract_common_name,
+    key_variant,
+    make_deploy,
+    sign_deploy,
+    get_public_key,
+)
 
 
 DEFAULT_HOST = "localhost"
@@ -99,31 +101,6 @@ def api(function):
             raise InternalError(details=str(e)) from e
 
     return wrapper
-
-
-def _read_binary(file_name: str):
-    with open(file_name, "rb") as f:
-        return f.read()
-
-
-def _encode_contract(contract_options, contract_args):
-    """
-    """
-    file_name, hash, name, uref = contract_options
-    C = consensus.Deploy.Code
-    if file_name:
-        return C(wasm=_read_binary(file_name), args=contract_args)
-    if hash:
-        return C(hash=hash, args=contract_args)
-    if name:
-        return C(name=name, args=contract_args)
-    if uref:
-        return C(uref=uref, args=contract_args)
-    raise Exception("One of wasm, hash, name or uref is required")
-
-
-def _serialize(o) -> bytes:
-    return o.SerializeToString()
 
 
 NUMBER_OF_RETRIES = 5
@@ -194,15 +171,6 @@ class InsecureGRPCService:
         return name.endswith("_stream") and unary_stream or unary_unary
 
 
-def extract_common_name(certificate_file: str) -> str:
-    cert_dict = ssl._ssl._test_decode_cert(certificate_file)
-    return [t[0][1] for t in cert_dict["subject"] if t[0][0] == "commonName"][0]
-
-
-def abi_byte_array(a: bytes) -> bytes:
-    return a
-
-
 class SecureGRPCService:
     def __init__(self, host, port, serviceStub, node_id, certificate_file):
         self.address = f"{host}:{port}"
@@ -244,16 +212,6 @@ class CasperLabsClient:
     """
     gRPC CasperLabs client.
     """
-
-    # Note, there is also casper.StateQuery.KeyVariant.KEY_VARIANT_UNSPECIFIED,
-    # but it doesn't seem to have an official string representation
-    # ("key_variant_unspecified"? "unspecified"?) and is not used by the client.
-    STATE_QUERY_KEY_VARIANT = {
-        "hash": casper.StateQuery.KeyVariant.HASH,
-        "uref": casper.StateQuery.KeyVariant.UREF,
-        "address": casper.StateQuery.KeyVariant.ADDRESS,
-        "local": casper.StateQuery.KeyVariant.LOCAL,
-    }
 
     def __init__(
         self,
@@ -327,83 +285,29 @@ class CasperLabsClient:
         """
         Create a protobuf deploy object. See deploy for description of parameters.
         """
-        # Convert from hex to binary.
-        if from_addr and len(from_addr) == 64:
-            from_addr = bytes.fromhex(from_addr)
-
-        if from_addr and len(from_addr) != 32:
-            raise Exception(f"from_addr must be 32 bytes")
-
-        if payment_amount:
-            payment_args = abi.ABI.args(
-                [abi.ABI.big_int("amount", int(payment_amount))]
-            )
-
-        # Unless one of payment* options supplied use bundled standard-payment
-        if not any((payment, payment_name, payment_hash, payment_uref)):
-            payment = bundled_contract("standard_payment.wasm")
-
-        session_options = (session, session_hash, session_name, session_uref)
-        payment_options = (payment, payment_hash, payment_name, payment_uref)
-
-        # Compatibility mode, should be removed when payment is obligatory
-        if len(list(filter(None, payment_options))) == 0:
-            logging.info("No payment contract provided, using session as payment")
-            payment_options = session_options
-
-        if len(list(filter(None, session_options))) != 1:
-            raise TypeError(
-                "deploy: only one of session, session_hash, session_name, session_uref must be provided"
-            )
-
-        if len(list(filter(None, payment_options))) != 1:
-            raise TypeError(
-                "deploy: only one of payment, payment_hash, payment_name, payment_uref must be provided"
-            )
-
-        # session_args must go to payment as well for now cause otherwise we'll get GASLIMIT error,
-        # if payment is same as session:
-        # https://github.com/CasperLabs/CasperLabs/blob/dev/casper/src/main/scala/io/casperlabs/casper/util/ProtoUtil.scala#L463
-        body = consensus.Deploy.Body(
-            session=_encode_contract(session_options, session_args),
-            payment=_encode_contract(payment_options, payment_args),
-        )
-
-        header = consensus.Deploy.Header(
-            account_public_key=from_addr
-            or (public_key and crypto.read_pem_key(public_key)),
-            timestamp=int(1000 * time.time()),
+        return make_deploy(
+            from_addr=from_addr,
             gas_price=gas_price,
-            body_hash=crypto.blake2b_hash(_serialize(body)),
+            payment=payment,
+            session=session,
+            public_key=public_key,
+            session_args=session_args,
+            payment_args=payment_args,
+            payment_amount=payment_amount,
+            payment_hash=payment_hash,
+            payment_name=payment_name,
+            payment_uref=payment_uref,
+            session_hash=session_hash,
+            session_name=session_name,
+            session_uref=session_uref,
             ttl_millis=ttl_millis,
-            dependencies=dependencies
-            and [bytes.fromhex(d) for d in dependencies]
-            or [],
-            chain_name=chain_name or "",
+            dependencies=dependencies,
+            chain_name=chain_name,
         )
-
-        deploy_hash = crypto.blake2b_hash(_serialize(header))
-
-        return consensus.Deploy(deploy_hash=deploy_hash, header=header, body=body)
 
     @api
     def sign_deploy(self, deploy, public_key, private_key_file):
-        # import pdb; pdb.set_trace()
-        # See if this is hex encoded
-        try:
-            public_key = bytes.fromhex(public_key)
-        except TypeError:
-            pass
-
-        deploy.approvals.extend(
-            [
-                consensus.Approval(
-                    approver_public_key=public_key,
-                    signature=crypto.signature(private_key_file, deploy.deploy_hash),
-                )
-            ]
-        )
-        return deploy
+        return sign_deploy(deploy, public_key, private_key_file)
 
     @api
     def deploy(
@@ -460,7 +364,7 @@ class CasperLabsClient:
         :chain_name:          Name of the chain to optionally restrict the
                               deploy from being accidentally included
                               anywhere else.
-        :return:              Tuple: (deserialized DeployServiceResponse object, deploy_hash)
+        :return:              deploy hash in base16 format
         """
 
         deploy = self.make_deploy(
@@ -483,15 +387,11 @@ class CasperLabsClient:
             chain_name=chain_name,
         )
 
-        pk = (
-            (public_key and crypto.read_pem_key(public_key))
-            or from_addr
-            or crypto.private_to_public_key(private_key)
+        deploy = self.sign_deploy(
+            deploy, get_public_key(public_key, from_addr, private_key), private_key
         )
-        deploy = self.sign_deploy(deploy, pk, private_key)
-
-        # TODO: Return only deploy_hash
-        return self.send_deploy(deploy), deploy.deploy_hash
+        self.send_deploy(deploy)
+        return deploy.deploy_hash.hex()
 
     @api
     def transfer(self, target_account_hex, amount, **deploy_args):
@@ -503,14 +403,11 @@ class CasperLabsClient:
                 abi.ABI.long_value("amount", amount),
             ]
         )
-        _, deploy_hash_bytes = self.deploy(**deploy_args)
-        return deploy_hash_bytes.hex()
+        return self.deploy(**deploy_args)
 
     @api
     def send_deploy(self, deploy):
-        # TODO: Deploy returns Empty, error handling via exceptions, apparently,
-        # so no point in returning it.
-        return self.casperService.Deploy(casper.DeployRequest(deploy=deploy))
+        self.casperService.Deploy(casper.DeployRequest(deploy=deploy))
 
     @api
     def showBlocks(self, depth: int = 1, max_rank=0, full_view=True):
@@ -554,6 +451,8 @@ class CasperLabsClient:
     @api
     def propose(self):
         """"
+        THIS METHOD IS DEPRECATED! It will be removed soon.
+
         Propose a block using deploys in the pool.
 
         :return:    response object with block_hash
@@ -642,25 +541,7 @@ class CasperLabsClient:
                                   where both parts are hex encoded."
         :return:                  QueryStateResponse object
         """
-
-        def key_variant(keyType):
-            variant = self.STATE_QUERY_KEY_VARIANT.get(keyType.lower(), None)
-            if variant is None:
-                raise InternalError(
-                    "query-state", f"{keyType} is not a known query-state key type"
-                )
-            return variant
-
-        def encode_local_key(key: str) -> str:
-            seed, rest = key.split(":")
-            abi_encoded_rest = abi_byte_array(bytes.fromhex(rest)).hex()
-            r = f"{seed}:{abi_encoded_rest}"
-            logging.info(f"encode_local_key => {r}")
-            return r
-
-        key_value = encode_local_key(key) if keyType.lower() == "local" else key
-
-        q = casper.StateQuery(key_variant=key_variant(keyType), key_base16=key_value)
+        q = casper.StateQuery(key_variant=key_variant(keyType), key_base16=key)
         q.path_segments.extend([name for name in path.split("/") if name])
         return self.casperService.GetBlockState(
             casper.GetBlockStateRequest(block_hash_base16=blockHash, query=q)
@@ -728,6 +609,14 @@ class CasperLabsClient:
             )
         )
 
+    @api
+    def stream_events(self, block_added: bool = True, block_finalized: bool = True):
+        yield from self.casperService.StreamEvents_stream(
+            casper.StreamEventsRequest(
+                block_added=block_added, block_finalized=block_finalized
+            )
+        )
+
     def cli(self, *arguments) -> int:
         from . import cli
 
@@ -740,20 +629,3 @@ class CasperLabsClient:
             self.port_internal,
             *arguments,
         )
-
-
-def hexify(o):
-    """
-    Convert protobuf message to text format with cryptographic keys and signatures in base 16.
-    """
-    return google.protobuf.text_format.MessageToString(o)
-
-
-def bundled_contract(file_name):
-    """
-    Return path to contract file bundled with the package.
-    """
-    p = pkg_resources.resource_filename(__name__, file_name)
-    if not os.path.exists(p):
-        raise Exception(f"Missing bundled contract {file_name} ({p})")
-    return p

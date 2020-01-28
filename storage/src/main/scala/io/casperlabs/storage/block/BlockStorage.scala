@@ -10,6 +10,7 @@ import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.ipc.TransformEntry
 import io.casperlabs.metrics.Metered
 import io.casperlabs.storage.{BlockHash, BlockMsgWithTransform, DeployHash}
+import io.casperlabs.storage.BlockMsgWithTransform.StageEffects
 import scala.language.higherKinds
 import simulacrum.typeclass
 
@@ -25,11 +26,20 @@ trait BlockStorageWriter[F[_]] {
     )
 
   def put(
+      blockMessage: Block,
+      transforms: Map[Int, Seq[TransformEntry]]
+  ): F[Unit] =
+    put(blockMessage.blockHash, blockMessage, transforms)
+
+  def put(
       blockHash: BlockHash,
       blockMessage: Block,
-      transforms: Seq[TransformEntry]
+      transforms: Map[Int, Seq[TransformEntry]]
   ): F[Unit] =
-    put(blockHash, BlockMsgWithTransform(Some(blockMessage), transforms))
+    put(
+      blockHash,
+      BlockMsgWithTransform(Some(blockMessage), BlockStorage.blockEffectsMapToProto(transforms))
+    )
 }
 
 @typeclass
@@ -40,7 +50,9 @@ trait BlockStorageReader[F[_]] extends BlockStorageWriter[F] {
 
   def isEmpty: F[Boolean]
 
-  def apply(blockHash: BlockHash)(implicit applicativeF: Applicative[F]): F[BlockMsgWithTransform] =
+  def apply(
+      blockHash: BlockHash
+  )(implicit applicativeF: Applicative[F]): F[BlockMsgWithTransform] =
     get(blockHash).map(_.get)
 
   def contains(blockHash: BlockHash)(implicit applicativeF: Applicative[F]): F[Boolean] =
@@ -65,10 +77,10 @@ trait BlockStorageReader[F[_]] extends BlockStorageWriter[F] {
   )(implicit applicative: Applicative[F]): F[Option[Block]] =
     get(blockHash).map(_.flatMap(_.blockMessage))
 
-  def getTransforms(
-      blockHash: BlockHash
-  )(implicit applicative: Applicative[F]): F[Option[Seq[TransformEntry]]] =
-    get(blockHash).map(_.map(_.transformEntry))
+  // def getTransforms(
+  //     blockHash: BlockHash
+  // )(implicit applicative: Applicative[F]): F[Option[Seq[TransformEntry]]] =
+  //   get(blockHash).map(_.map(_.transformEntry))
 
   def getUnsafe(hash: BlockHash)(implicit MT: MonadThrowable[F]): F[BlockMsgWithTransform] =
     unsafe(hash, get)
@@ -153,4 +165,9 @@ object BlockStorage {
         super.findBlockHashesWithDeployHashes(deployHashes)
       )
   }
+
+  def blockEffectsMapToProto(
+      blockEffects: Map[Int, Seq[TransformEntry]]
+  ): Seq[StageEffects] =
+    blockEffects.toSeq.map((StageEffects.apply _).tupled)
 }

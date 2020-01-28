@@ -69,13 +69,7 @@ fn should_fail_unboding_more_than_it_was_staked_ee_598_regression() {
         .get_exec_response(1)
         .expect("should have a response")
         .to_owned();
-    let error_message = {
-        let execution_result = utils::get_success_result(&response);
-        utils::get_error_message(execution_result)
-    };
+    let error_message = utils::get_error_message(response);
     // Error::UnbondTooLarge => 7,
-    assert_eq!(
-        error_message,
-        format!("Exit code: {}", u32::from(ApiError::ProofOfStake(7)))
-    );
+    assert!(error_message.contains(&format!("Revert({})", u32::from(ApiError::ProofOfStake(7)))));
 }

@@ -55,9 +55,9 @@ class CreateBlockAPITest
   implicit val logEff      = LogStub[Task]()
   implicit val broadcaster = Broadcaster.noop[Task]
 
-  private val (validatorKeys, validators)                      = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
-  private val bonds                                            = createBonds(validators)
-  private val BlockMsgWithTransform(Some(genesis), transforms) = createGenesis(bonds)
+  private val (validatorKeys, validators)             = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
+  private val bonds                                   = createBonds(validators)
+  private val BlockMsgWithTransform(Some(genesis), _) = createGenesis(bonds)
 
   "createBlock" should "not allow simultaneous calls" in {
     implicit val scheduler = Scheduler.fixedPool("three-threads", 3)
@@ -67,7 +67,7 @@ class CreateBlockAPITest
       def nanoTime: Task[Long]                        = timer.clock.monotonic(NANOSECONDS)
       def sleep(duration: FiniteDuration): Task[Unit] = timer.sleep(duration)
     }
-    val node   = standaloneEff(genesis, transforms, validatorKeys.head)
+    val node   = standaloneEff(genesis, validatorKeys.head)
     val casper = new SleepingMultiParentCasperImpl[Task](node.casperEff)
     val deploys = List.fill(2)(
       ProtoUtil.deploy(
@@ -118,7 +118,7 @@ class CreateBlockAPITest
     // taken and put into blocks. The blocks we created should form a simple
     // chain, there shouldn't be any forks in it, which we should see from the
     // fact that each rank is occupied by a single block.
-    val node = standaloneEff(genesis, transforms, validatorKeys.head)
+    val node = standaloneEff(genesis, validatorKeys.head)
 
     implicit val bs = node.blockStorage
     implicit val db = node.deployBuffer
@@ -178,7 +178,7 @@ class CreateBlockAPITest
   "deploy" should "reject replayed deploys" in {
     // Create the node with low fault tolerance threshold so it finalizes the blocks as soon as they are made.
     val node =
-      standaloneEff(genesis, transforms, validatorKeys.head)
+      standaloneEff(genesis, validatorKeys.head)
 
     implicit val logEff       = LogStub[Task]()
     implicit val blockStorage = node.blockStorage
@@ -212,7 +212,7 @@ class CreateBlockAPITest
   "getDeployInfo" should "return DeployInfo for specified deployHash" in {
     // Create the node with low fault tolerance threshold so it finalizes the blocks as soon as they are made.
     val node =
-      standaloneEff(genesis, transforms, validatorKeys.head)
+      standaloneEff(genesis, validatorKeys.head)
 
     implicit val logEff        = LogStub[Task]()
     implicit val blockStorage  = node.blockStorage
@@ -280,7 +280,7 @@ class CreateBlockAPITest
 
   "getBlockDeploys" should "return return all ProcessedDeploys in a block" in {
     val node =
-      standaloneEff(genesis, transforms, validatorKeys.head)
+      standaloneEff(genesis, validatorKeys.head)
 
     implicit val logEff        = LogStub[Task]()
     implicit val blockStorage  = node.blockStorage
@@ -322,7 +322,7 @@ class CreateBlockAPITest
   "getDeployInfos" should "return a list of DeployInfo for the list of deploys" in {
     // Create the node with low fault tolerance threshold so it finalizes the blocks as soon as they are made.
     val node =
-      standaloneEff(genesis, transforms, validatorKeys.head)
+      standaloneEff(genesis, validatorKeys.head)
 
     implicit val logEff        = LogStub[Task]()
     implicit val blockStorage  = node.blockStorage

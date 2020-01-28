@@ -187,6 +187,9 @@ message Block {
         uint64 cost = 2;
         bool is_error = 3;
         string error_message = 4;
+        // A group this deploy will be executed in.
+        // Deploys with the same `stage` value will be executed in parallel.
+        uint32 stage = 5;
     }
 
     message GlobalState {

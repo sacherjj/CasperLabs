@@ -14,7 +14,7 @@ use types::{
 const CONTRACT_EE_599_REGRESSION: &str = "ee_599_regression.wasm";
 const CONTRACT_TRANSFER_TO_ACCOUNT: &str = "transfer_to_account.wasm";
 const DONATION_BOX_COPY_KEY: &str = "donation_box_copy";
-const EXPECTED_ERROR: &str = "Invalid execution context.";
+const EXPECTED_ERROR: &str = "InvalidContext";
 const TRANSFER_FUNDS_KEY: &str = "transfer_funds";
 const VICTIM_ADDR: [u8; 32] = [42; 32];
 
@@ -91,14 +91,18 @@ fn should_not_be_able_to_transfer_funds_with_transfer_purse_to_purse() {
         .builder()
         .get_exec_response(0)
         .expect("should have response");
-    let gas_cost = Motes::from_gas(utils::get_exec_costs(&exec_3_response)[0], CONV_RATE)
+    let gas_cost = Motes::from_gas(utils::get_exec_costs(exec_3_response)[0], CONV_RATE)
         .expect("should convert");
 
     let error_msg = result_2
         .builder()
         .exec_error_message(0)
         .expect("should have error");
-    assert_eq!(error_msg, EXPECTED_ERROR,);
+    assert!(
+        error_msg.contains(EXPECTED_ERROR),
+        "Got error: {}",
+        error_msg
+    );
 
     let victim_balance_after = result_2
         .builder()
@@ -160,14 +164,18 @@ fn should_not_be_able_to_transfer_funds_with_transfer_from_purse_to_account() {
         .get_exec_response(0)
         .expect("should have response");
 
-    let gas_cost = Motes::from_gas(utils::get_exec_costs(&exec_3_response)[0], CONV_RATE)
+    let gas_cost = Motes::from_gas(utils::get_exec_costs(exec_3_response)[0], CONV_RATE)
         .expect("should convert");
 
     let error_msg = result_2
         .builder()
         .exec_error_message(0)
         .expect("should have error");
-    assert_eq!(error_msg, EXPECTED_ERROR,);
+    assert!(
+        error_msg.contains(EXPECTED_ERROR),
+        "Got error: {}",
+        error_msg
+    );
 
     let victim_balance_after = result_2
         .builder()
@@ -235,14 +243,18 @@ fn should_not_be_able_to_transfer_funds_with_transfer_to_account() {
         .get_exec_response(0)
         .expect("should have response");
 
-    let gas_cost = Motes::from_gas(utils::get_exec_costs(&exec_3_response)[0], CONV_RATE)
+    let gas_cost = Motes::from_gas(utils::get_exec_costs(exec_3_response)[0], CONV_RATE)
         .expect("should convert");
 
     let error_msg = result_2
         .builder()
         .exec_error_message(0)
         .expect("should have error");
-    assert_eq!(error_msg, EXPECTED_ERROR,);
+    assert!(
+        error_msg.contains(EXPECTED_ERROR),
+        "Got error: {}",
+        error_msg
+    );
 
     let victim_balance_after = result_2
         .builder()
@@ -303,14 +315,18 @@ fn should_not_be_able_to_get_main_purse_in_invalid_context() {
         .get_exec_response(0)
         .expect("should have response");
 
-    let gas_cost = Motes::from_gas(utils::get_exec_costs(&exec_3_response)[0], CONV_RATE)
+    let gas_cost = Motes::from_gas(utils::get_exec_costs(exec_3_response)[0], CONV_RATE)
         .expect("should convert");
 
     let error_msg = result_2
         .builder()
         .exec_error_message(0)
         .expect("should have error");
-    assert_eq!(error_msg, EXPECTED_ERROR,);
+    assert!(
+        error_msg.contains(EXPECTED_ERROR),
+        "Got error: {}",
+        error_msg
+    );
 
     let victim_balance_after = result_2
         .builder()

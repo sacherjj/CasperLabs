@@ -2,22 +2,73 @@
 
 set -e
 
-USERNAME="casperlabs-node"
-DIRECTORY="/var/lib/${USERNAME}"
-SYSTEMD_SERVICE_FILE="/lib/systemd/system/${USERNAME}.service"
+# Default Variables
+# ---
+DEFAULT_USERNAME="casperlabs"
+DEFAULT_SYSTEMD_SERVICE_FILE="/lib/systemd/system/${DEFAULT_USERNAME}-node.service"
+DEFAULT_CONFIG_DIRECTORY="/etc/${DEFAULT_USERNAME}"
+DEFAULT_TOML="${DEFAULT_CONFIG_DIRECTORY}/example-configuration.toml"
+DEFAULT_DATA_DIRECTORY="/var/lib/${DEFAULT_USERNAME}"
 
-if id -u ${USERNAME} >/dev/null 2>&1; then
-    echo "User ${USERNAME} already exists."
+# User Creation
+# ---
+# Assure DEFAULT_USERNAME user exists
+# NOTE: centos and fedora use the --user-group flag instead of --group
+if id -u ${DEFAULT_USERNAME} >/dev/null 2>&1; then
+    echo "User ${DEFAULT_USERNAME} already exists."
 else
-    adduser --no-create-home --home /nonexistent ${USERNAME}
+    adduser --no-create-home --user-group --system ${DEFAULT_USERNAME}
 fi
 
-if [ -d ${DIRECTORY} ] ; then
-    echo "Directory ${DIRECTORY} already exists."
+# Creation of Files/Directories
+# ---
+# Assure DEFAULT_DATA_DIRECTORY is available for state data
+if [ -d ${DEFAULT_DATA_DIRECTORY} ] ; then
+    echo "Directory ${DEFAULT_DATA_DIRECTORY} already exists."
 else
-    mkdir -p ${DIRECTORY}
-    chown -R ${USERNAME}:${USERNAME} ${DIRECTORY}
-    chmod 0644 ${SYSTEMD_SERVICE_FILE}
+    mkdir -p ${DEFAULT_DATA_DIRECTORY}
 fi
 
-systemctl enable casperlabs-node.service
+# Files/Directories Permissions
+# ---
+# Assure DEFAULT_SYSTEMD_SERVICE_FILE has correct permissions after unpacking
+if [ -f ${DEFAULT_SYSTEMD_SERVICE_FILE} ] ; then
+    chmod 0644 ${DEFAULT_SYSTEMD_SERVICE_FILE}
+fi
+
+# Assure DEFAULT_TOML has correct permissions after unpacking
+if [ -f ${DEFAULT_TOML} ] ; then
+    chmod 0644 ${DEFAULT_TOML}
+fi
+
+# Files/Directories Owner
+# ---
+# Assure DEFAULT_CONFIG_DIRECTORY is owned by DEFAULT_USERNAME; created in preinst
+if [ -d ${DEFAULT_CONFIG_DIRECTORY} ] ; then
+    chown ${DEFAULT_USERNAME}:${DEFAULT_USERNAME} ${DEFAULT_CONFIG_DIRECTORY}
+fi
+
+# Assure DEFAULT_TOML is owned by DEFAULT_USERNAME after unpacking
+if [ -f ${DEFAULT_TOML} ] ; then
+    chown ${DEFAULT_USERNAME}:${DEFAULT_USERNAME} ${DEFAULT_TOML}
+fi
+
+# Assure DEFAULT_DATA_DIRECTORY is owned by DEFAULT_USERNAME
+if [ -d ${DEFAULT_DATA_DIRECTORY} ] ; then
+    chown ${DEFAULT_USERNAME}:${DEFAULT_USERNAME} ${DEFAULT_DATA_DIRECTORY}
+fi
+
+# File Manipulation
+# ---
+# Some sed magic on DEFAULT_TOML
+# Neat trick on SED_CHECK :)
+SED_CHECK=$(command -v sed >/dev/null 2>&1)$?
+if [ "$SED_CHECK" -eq "0"  ] && [ -f ${DEFAULT_TOML} ]; then
+    # comment all lines
+    sed -i 's/^\([^#].*\)/# \1/g' ${DEFAULT_TOML}
+    # change defaults to /var/lib/casperlabs or /etc/casperlabs
+    VAR_ARRAY=(data-dir socket certificate key api-certificate api-key)
+    for i in ${VAR_ARRAY[@]}; do sed -i "/$i/s/\$HOME\/./\/var\/lib\//" ${DEFAULT_TOML}; done
+    ETC_ARRAY=(chain-spec-path)
+    for i in ${ETC_ARRAY[@]}; do sed -i "/$i/s/\$HOME\/./\/etc\//" ${DEFAULT_TOML}; done
+fi

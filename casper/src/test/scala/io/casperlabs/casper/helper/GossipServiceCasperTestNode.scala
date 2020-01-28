@@ -116,7 +116,6 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
 
   override def standaloneF[F[_]](
       genesis: consensus.Block,
-      transforms: Seq[TransformEntry],
       sk: PrivateKey,
       storageSize: Long = 1024L * 1024 * 10,
       faultToleranceThreshold: Double = 0.1
@@ -155,7 +154,7 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
           minTTL       = 1.minute
           deployBuffer = DeployBuffer.create[F](chainName, minTTL)
           dag          <- dagStorage.getRepresentation
-          _            <- blockStorage.put(genesis.blockHash, genesis, Seq.empty)
+          _            <- blockStorage.put(genesis.blockHash, genesis, Map.empty)
           finalityDetector <- FinalityDetectorVotingMatrix
                                .of[F](dag, genesis.blockHash, faultToleranceThreshold)
           multiParentFinalizer <- MultiParentFinalizer.empty(
@@ -194,7 +193,6 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
   override def networkF[F[_]](
       sks: IndexedSeq[PrivateKey],
       genesis: consensus.Block,
-      transforms: Seq[TransformEntry],
       storageSize: Long = 1024L * 1024 * 10,
       faultToleranceThreshold: Double = 0.1,
       maybeMakeEE: Option[HashSetCasperTestNode.MakeExecutionEngineService[F]] = None
@@ -253,7 +251,7 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
                               )
                 semaphoreMap     <- SemaphoreMap[F, ByteString](1)
                 semaphore        <- Semaphore[F](1)
-                _                <- blockStorage.put(genesis.blockHash, genesis, Seq.empty)
+                _                <- blockStorage.put(genesis.blockHash, genesis, Map.empty)
                 dag              <- dagStorage.getRepresentation
                 finalityDetector <- FinalityDetectorVotingMatrix.of[F](dag, genesis.blockHash, 0.1)
                 multiParentFinalizer <- MultiParentFinalizer.empty(

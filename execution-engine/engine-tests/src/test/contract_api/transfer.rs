@@ -120,7 +120,7 @@ fn should_transfer_from_account_to_account() {
 
     let genesis_balance = builder.get_purse_balance(default_account_purse_id);
 
-    let gas_cost = Motes::from_gas(utils::get_exec_costs(&exec_1_response)[0], CONV_RATE)
+    let gas_cost = Motes::from_gas(utils::get_exec_costs(exec_1_response)[0], CONV_RATE)
         .expect("should convert");
 
     assert_eq!(
@@ -162,7 +162,7 @@ fn should_transfer_from_account_to_account() {
 
     let account_1_balance = builder.get_purse_balance(account_1_purse_id);
 
-    let gas_cost = Motes::from_gas(utils::get_exec_costs(&exec_2_response)[0], CONV_RATE)
+    let gas_cost = Motes::from_gas(utils::get_exec_costs(exec_2_response)[0], CONV_RATE)
         .expect("should convert");
 
     assert_eq!(
@@ -311,13 +311,11 @@ fn should_fail_when_insufficient_funds() {
         .commit()
         .finish();
 
-    assert_eq!(
-        "Trap(Trap { kind: Unreachable })",
-        result
-            .builder()
-            .exec_error_message(2)
-            .expect("should have error message"),
-    )
+    assert!(result
+        .builder()
+        .exec_error_message(2)
+        .expect("should have error message")
+        .contains("Trap(Trap { kind: Unreachable })"))
 }
 
 #[ignore]

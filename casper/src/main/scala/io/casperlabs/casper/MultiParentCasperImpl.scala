@@ -25,6 +25,7 @@ import io.casperlabs.casper.util.ProtoUtil._
 import io.casperlabs.casper.util.execengine.ExecEngineUtil
 import io.casperlabs.casper.validation.Errors._
 import io.casperlabs.casper.validation.Validation
+import io.casperlabs.casper.validation.Validation.BlockEffects
 import io.casperlabs.catscontrib._
 import io.casperlabs.catscontrib.effect.implicits.fiberSyntax
 import io.casperlabs.comm.gossiping
@@ -113,7 +114,7 @@ class MultiParentCasperImpl[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: 
     val handleInvalidTimestamp =
       (_: Option[StatelessExecutor.Context], block: Block) =>
         statelessExecutor
-          .addEffects(InvalidUnslashableBlock, block, Seq.empty)
+          .addEffects(InvalidUnslashableBlock, block, BlockEffects.empty)
           .as(InvalidUnslashableBlock: BlockStatus)
 
     // If the block timestamp is in the future, wait some time before adding it,
@@ -357,7 +358,6 @@ class MultiParentCasperImpl[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: 
     }
   }
 
-  //TODO: Need to specify SEQ vs PAR type block?
   /** Execute a set of deploys in the context of chosen parents. Compile them into a block if everything goes fine. */
   private def createProposal(
       dag: DagRepresentation[F],
@@ -539,7 +539,7 @@ object MultiParentCasperImpl {
 
   /** Component purely to validate, execute and store blocks.
     * Even the Genesis, to create it in the first place. */
-  class StatelessExecutor[F[_]: MonadThrowable: Time: Log: BlockStorage: DagStorage: DeployStorage: ExecutionEngineService: Metrics: DeployStorageWriter: Validation: CasperLabsProtocol: Fs2Compiler: EventEmitter](
+  class StatelessExecutor[F[_]: Sync: Time: Log: BlockStorage: DagStorage: DeployStorage: ExecutionEngineService: Metrics: DeployStorageWriter: Validation: CasperLabsProtocol: Fs2Compiler: EventEmitter](
       validatorId: Option[Keys.PublicKey],
       chainName: String,
       upgrades: Seq[ipc.ChainSpec.UpgradePoint],
@@ -632,10 +632,10 @@ object MultiParentCasperImpl {
 
           case Left(ValidateErrorWrapper(EquivocatedBlock))
               if validatorId.map(ByteString.copyFrom).exists(_ == block.validatorPublicKey) =>
-            addEffects(SelfEquivocatedBlock, block, Seq.empty).as(SelfEquivocatedBlock)
+            addEffects(SelfEquivocatedBlock, block, BlockEffects.empty).as(SelfEquivocatedBlock)
 
           case Left(ValidateErrorWrapper(invalid)) =>
-            addEffects(invalid, block, Seq.empty).as(invalid)
+            addEffects(invalid, block, BlockEffects.empty).as(invalid)
 
           case Left(ex) =>
             for {
@@ -655,7 +655,7 @@ object MultiParentCasperImpl {
     def addEffects(
         status: BlockStatus,
         block: Block,
-        transforms: Seq[ipc.TransformEntry]
+        transforms: BlockEffects
     )(implicit state: Cell[F, CasperState]): F[Unit] =
       status match {
         //Add successful! Send block to peers, log success, try to add other blocks
@@ -714,12 +714,12 @@ object MultiParentCasperImpl {
     /** Save the block to the block and DAG storage. */
     private def addToState(
         block: Block,
-        effects: Seq[ipc.TransformEntry]
+        blockEffects: BlockEffects
     ): F[Unit] =
       for {
         _ <- semaphore.withPermit {
               BlockStorage[F]
-                .put(block.blockHash, BlockMsgWithTransform(Some(block), effects))
+                .put(block.blockHash, block, blockEffects.effects)
             }
         blockInfo <- BlockAPI.getBlockInfo[F](
                       Base16.encode(block.blockHash.toByteArray),

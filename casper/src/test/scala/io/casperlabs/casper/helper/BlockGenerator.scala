@@ -32,15 +32,13 @@ object BlockGenerator {
   implicit val timeEff = new LogicalTime[Task]()
 
   def updateChainWithBlockStateUpdate[F[_]: Sync: BlockStorage: IndexedDagStorage: DeployStorage: ExecutionEngineService: Log: Metrics](
-      id: Int,
-      genesis: Block
+      id: Int
   ): F[Block] =
     for {
       b   <- IndexedDagStorage[F].lookupByIdUnsafe(id)
       dag <- IndexedDagStorage[F].getRepresentation
       blockCheckpoint <- computeBlockCheckpointFromDeploys[F](
                           b,
-                          genesis,
                           dag
                         )
       _ <- injectPostStateHash[F](
@@ -64,24 +62,18 @@ object BlockGenerator {
     // NOTE: Storing this under the original block hash.
     val updatedBlock =
       ProtoUtil.unsignedBlockProto(updatedBlockBody, updatedBlockHeader).withBlockHash(b.blockHash)
-    BlockStorage[F].put(b.blockHash, updatedBlock, Seq.empty) *>
+    BlockStorage[F].put(b.blockHash, updatedBlock, Map.empty) *>
       IndexedDagStorage[F].inject(id, updatedBlock)
   }
 
   private[casper] def computeBlockCheckpointFromDeploys[F[_]: Sync: BlockStorage: DeployStorage: Log: ExecutionEngineService: Metrics](
       b: Block,
-      genesis: Block,
       dag: DagRepresentation[F]
   ): F[DeploysCheckpoint] =
     for {
       parents <- ProtoUtil.unsafeGetParents[F](b)
+      deploys = ProtoUtil.deploys(b).values.flatMap(_.toList).flatMap(_.deploy)
 
-      deploys = ProtoUtil.deploys(b).flatMap(_.deploy)
-
-      _ = assert(
-        parents.nonEmpty || (parents.isEmpty && b == genesis),
-        "Received a different genesis block."
-      )
       merged <- ExecutionEngineServiceStub.merge[F](parents, dag)
       implicit0(deploySelection: DeploySelection[F]) = DeploySelection.create[F](
         5 * 1024 * 1024
@@ -279,7 +271,7 @@ trait BlockGenerator {
                 keyBlockHash = keyBlockHash,
                 messageType = messageType
               )
-      _ <- BlockStorage[F].put(block.blockHash, block, Seq.empty)
+      _ <- BlockStorage[F].put(block.blockHash, block, Map.empty)
     } yield block
 
   // Same as createAndStoreBlock but works with full models for building DAGs easier.
