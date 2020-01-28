@@ -2,6 +2,7 @@
 
 # Adding display of images to debug issues with CI run
 echo Available Images:
+docker images
 
 set -e
 if [[ -n $DRONE_BUILD_NUMBER ]]; then
@@ -11,7 +12,7 @@ else
 fi
 
 # Passing all arguments to this script into docker startup for run_tests.sh
-export TEST_RUN_ARGS="$@"
+#export TEST_RUN_ARGS="$@"
 
 # Parse out unique_run_number arg to use number on unique elements needed for running in docker.
 while [[ $# -gt 0 ]]
@@ -42,16 +43,14 @@ echo "RUN_TAG_NAME = ${RUN_TAG_NAME}"
 MAX_NODE_COUNT=5
 
 cleanup() {
+    docker-compose rm --force || true
+
     echo "Removing networks for Python Client..."
     for num in $(seq 0 $MAX_NODE_COUNT)
     do
         # Network might get tore down with docker-compose rm, so "|| true" to ignore failure
         docker network rm "cl-${RUN_TAG_NAME}-${num}" || true
     done
-
-    docker network prune --force || true
-
-    docker-compose rm --force || true
 
     # Eliminate docker-compose for next run
     cd ..
