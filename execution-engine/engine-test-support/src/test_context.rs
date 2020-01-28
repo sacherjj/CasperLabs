@@ -8,7 +8,7 @@ use types::{
 };
 
 use crate::{
-    low_level::{InMemoryWasmTestBuilder, DEFAULT_GENESIS_CONFIG},
+    internal::{InMemoryWasmTestBuilder, DEFAULT_GENESIS_CONFIG},
     Address, Error, Result, Session, URefAddr, Value,
 };
 

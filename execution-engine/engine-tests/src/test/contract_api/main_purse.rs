@@ -1,6 +1,6 @@
 use engine_shared::stored_value::StoredValue;
 use engine_test_support::{
-    low_level::{
+    internal::{
         ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT,
     },
     DEFAULT_ACCOUNT_ADDR,

@@ -2,7 +2,7 @@ use std::{convert::TryFrom, rc::Rc};
 
 use engine_core::engine_state::{execution_result::ExecutionResult, CONV_RATE};
 use engine_shared::motes::Motes;
-use engine_test_support::low_level::{
+use engine_test_support::internal::{
     utils, ExecuteRequestBuilder, InMemoryWasmTestBuilder as TestBuilder, DEFAULT_GENESIS_CONFIG,
 };
 use types::{account::PurseId, bytesrepr::ToBytes, CLValue, Key, U512};

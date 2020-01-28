@@ -8,7 +8,7 @@ use base16;
 use clap::{crate_version, App};
 
 use engine_test_support::{
-    low_level::{
+    internal::{
         DeployItemBuilder, ExecuteRequestBuilder, LmdbWasmTestBuilder, DEFAULT_GENESIS_CONFIG,
         DEFAULT_PAYMENT,
     },

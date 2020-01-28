@@ -6,7 +6,7 @@ use engine_shared::{
     additive_map::AdditiveMap, motes::Motes, stored_value::StoredValue, transform::Transform,
 };
 use engine_test_support::{
-    low_level::{
+    internal::{
         utils, AdditiveMapDiff, DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder,
         UpgradeRequestBuilder, DEFAULT_ACCOUNT_KEY, DEFAULT_GENESIS_CONFIG,
     },

@@ -2,7 +2,7 @@ use num_traits::cast::AsPrimitive;
 
 use engine_core::engine_state::CONV_RATE;
 use engine_test_support::{
-    low_level::{
+    internal::{
         ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT,
     },
     DEFAULT_ACCOUNT_ADDR,

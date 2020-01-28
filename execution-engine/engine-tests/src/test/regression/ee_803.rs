@@ -7,7 +7,7 @@ use engine_core::engine_state::{
 };
 use engine_shared::motes::Motes;
 use engine_test_support::{
-    low_level::{utils, ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_ACCOUNTS},
+    internal::{utils, ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_ACCOUNTS},
     DEFAULT_ACCOUNT_ADDR,
 };
 use types::{

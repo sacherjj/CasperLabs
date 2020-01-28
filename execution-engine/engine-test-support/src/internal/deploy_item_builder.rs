@@ -7,7 +7,7 @@ use engine_core::{
 };
 use types::{account::PublicKey, bytesrepr::ToBytes, URef};
 
-use crate::low_level::utils;
+use crate::internal::utils;
 
 #[derive(Default)]
 struct DeployItemData {

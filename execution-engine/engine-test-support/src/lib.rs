@@ -59,7 +59,7 @@
 mod code;
 mod error;
 #[doc(hidden)]
-pub mod low_level;
+pub mod internal;
 mod session;
 mod test_context;
 mod value;

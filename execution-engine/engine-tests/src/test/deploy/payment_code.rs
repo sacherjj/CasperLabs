@@ -3,7 +3,7 @@ use std::convert::TryFrom;
 use engine_core::engine_state::{genesis::POS_REWARDS_PURSE, CONV_RATE, MAX_PAYMENT};
 use engine_shared::{motes::Motes, stored_value::StoredValue, transform::Transform};
 use engine_test_support::{
-    low_level::{
+    internal::{
         utils, DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder,
         DEFAULT_ACCOUNT_KEY, DEFAULT_GENESIS_CONFIG,
     },

@@ -2,7 +2,7 @@ use lazy_static::lazy_static;
 
 use engine_shared::account::Account;
 use engine_test_support::{
-    low_level::{
+    internal::{
         utils, ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_GENESIS_CONFIG,
         DEFAULT_PAYMENT,
     },

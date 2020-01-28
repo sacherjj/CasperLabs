@@ -1,5 +1,5 @@
 use engine_test_support::{
-    low_level::{
+    internal::{
         ExecuteRequestBuilder, InMemoryWasmTestBuilder as TestBuilder, DEFAULT_GENESIS_CONFIG,
     },
     DEFAULT_ACCOUNT_ADDR,

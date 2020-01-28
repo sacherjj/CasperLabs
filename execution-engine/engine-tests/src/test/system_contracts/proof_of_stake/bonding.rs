@@ -6,7 +6,7 @@ use engine_core::engine_state::{
 };
 use engine_shared::{motes::Motes, stored_value::StoredValue, transform::Transform};
 use engine_test_support::{
-    low_level::{
+    internal::{
         utils, ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_ACCOUNTS, DEFAULT_PAYMENT,
     },
     DEFAULT_ACCOUNT_ADDR, DEFAULT_ACCOUNT_INITIAL_BALANCE,

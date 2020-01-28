@@ -6,7 +6,7 @@ use contract::args_parser::ArgsParser;
 use engine_core::engine_state::{deploy_item::DeployItem, execute_request::ExecuteRequest};
 use types::{account::PublicKey, ProtocolVersion};
 
-use crate::low_level::{
+use crate::internal::{
     DeployItemBuilder, DEFAULT_BLOCK_TIME, DEFAULT_PAYMENT, STANDARD_PAYMENT_CONTRACT,
 };
 

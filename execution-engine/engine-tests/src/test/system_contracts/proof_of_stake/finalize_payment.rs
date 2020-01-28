@@ -6,7 +6,7 @@ use engine_core::engine_state::{
 };
 use engine_shared::{account::Account, motes::Motes};
 use engine_test_support::{
-    low_level::{
+    internal::{
         utils, DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder,
         DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT,
     },

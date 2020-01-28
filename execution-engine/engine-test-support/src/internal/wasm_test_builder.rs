@@ -49,7 +49,7 @@ use types::{
     CLValue, Key, URef, U512,
 };
 
-use crate::low_level::utils;
+use crate::internal::utils;
 
 /// LMDB initial map size is calculated based on DEFAULT_LMDB_PAGES and systems page size.
 ///

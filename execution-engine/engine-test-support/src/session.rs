@@ -5,7 +5,7 @@ use engine_core::engine_state::execute_request::ExecuteRequest;
 use types::ProtocolVersion;
 
 use crate::{
-    low_level::{
+    internal::{
         DeployItemBuilder, ExecuteRequestBuilder, DEFAULT_PAYMENT, STANDARD_PAYMENT_CONTRACT,
     },
     Address, Code,

@@ -16,7 +16,7 @@ use engine_shared::{
 };
 use types::Key;
 
-use crate::low_level::{
+use crate::internal::{
     DEFAULT_CHAIN_NAME, DEFAULT_GENESIS_TIMESTAMP, DEFAULT_PROTOCOL_VERSION, DEFAULT_WASM_COSTS,
     MINT_INSTALL_CONTRACT, POS_INSTALL_CONTRACT,
 };

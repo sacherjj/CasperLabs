@@ -1,5 +1,5 @@
 use engine_test_support::{
-    low_level::{
+    internal::{
         utils, DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder,
         DEFAULT_GENESIS_CONFIG, STANDARD_PAYMENT_CONTRACT,
     },

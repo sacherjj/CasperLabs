@@ -2,7 +2,7 @@ use engine_core::engine_state::{upgrade::ActivationPoint, Error};
 use engine_grpc_server::engine_server::ipc::DeployCode;
 use engine_shared::{stored_value::StoredValue, transform::Transform};
 use engine_test_support::{
-    low_level::{
+    internal::{
         utils, ExecuteRequestBuilder, InMemoryWasmTestBuilder, UpgradeRequestBuilder,
         DEFAULT_GENESIS_CONFIG, DEFAULT_WASM_COSTS,
     },

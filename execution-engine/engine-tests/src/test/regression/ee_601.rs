@@ -1,6 +1,6 @@
 use engine_shared::{stored_value::StoredValue, transform::Transform};
 use engine_test_support::{
-    low_level::{
+    internal::{
         DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_GENESIS_CONFIG,
         DEFAULT_PAYMENT,
     },

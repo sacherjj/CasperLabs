@@ -3,7 +3,7 @@ use lazy_static::lazy_static;
 use engine_core::execution;
 use engine_shared::transform::TypeMismatch;
 use engine_test_support::{
-    low_level::{
+    internal::{
         ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT,
     },
     DEFAULT_ACCOUNT_ADDR,

@@ -1,6 +1,6 @@
 use engine_storage::global_state::in_memory::InMemoryGlobalState;
 use engine_test_support::{
-    low_level::{ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_GENESIS_CONFIG},
+    internal::{ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_GENESIS_CONFIG},
     DEFAULT_ACCOUNT_ADDR,
 };
 
