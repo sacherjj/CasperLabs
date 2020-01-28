@@ -112,8 +112,14 @@ build-integration-contracts: $(INTEGRATION_CONTRACTS)
 .PHONY: build-example-contracts
 build-example-contracts: $(EXAMPLE_CONTRACTS)
 
+.PHONY: build-tool-contracts
+build-tool-contracts: \
+	build-contract-rs/mint-install \
+	build-contract-rs/pos-install \
+	build-contract-rs/standard-payment
+
 .PHONY: test-rs
-test-rs:
+test-rs: build-tool-contracts
 	$(CARGO) test $(CARGO_FLAGS) --all -- --nocapture
 
 .PHONY: test-as
@@ -144,7 +150,7 @@ format:
 	$(CARGO) fmt --all
 
 .PHONY: lint
-lint:
+lint: build-tool-contracts
 	$(CARGO) clippy --all-targets --all -- -D warnings -A renamed_and_removed_lints
 
 .PHONY: check
@@ -188,7 +194,7 @@ publish:
 
 .PHONY: check-publish
 check-publish:
-	cd cargo-casperlabs && $(CARGO) publish --dry-run
+	cd cargo-casperlabs && $(CARGO) publish --dry-run --allow-dirty
 #	cd contract && $(CARGO) publish --dry-run
 #	cd engine-core && $(CARGO) publish --dry-run
 #	cd engine-grpc-server && $(CARGO) publish --dry-run
@@ -212,7 +218,6 @@ setup-rs: rust-toolchain
 	$(RUSTUP) update
 	$(RUSTUP) toolchain install $(RUST_TOOLCHAIN)
 	$(RUSTUP) target add --toolchain $(RUST_TOOLCHAIN) wasm32-unknown-unknown
-	$(RUSTUP) component add --toolchain $(RUST_TOOLCHAIN) rustfmt clippy
 
 .PHONY: setup-as
 setup-as: contract-as/package.json

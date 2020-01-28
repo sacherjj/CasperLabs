@@ -1,5 +1,5 @@
 use engine_core::engine_state::Error;
-use engine_test_support::low_level::{
+use engine_test_support::internal::{
     ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_GENESIS_CONFIG,
 };
 

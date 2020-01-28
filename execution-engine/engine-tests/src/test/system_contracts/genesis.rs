@@ -3,7 +3,7 @@ use engine_core::engine_state::{
     SYSTEM_ACCOUNT_ADDR,
 };
 use engine_shared::{motes::Motes, stored_value::StoredValue};
-use engine_test_support::low_level::{utils, InMemoryWasmTestBuilder, DEFAULT_WASM_COSTS};
+use engine_test_support::internal::{utils, InMemoryWasmTestBuilder, DEFAULT_WASM_COSTS};
 use types::{account::PublicKey, Key, ProtocolVersion, U512};
 
 const MINT_INSTALL: &str = "mint_install.wasm";
@@ -88,14 +88,13 @@ fn should_run_genesis() {
     let mint_contract_uref = builder.get_mint_contract_uref();
     let pos_contract_uref = builder.get_pos_contract_uref();
 
-    if let Some(StoredValue::Contract(_)) = builder.query(None, Key::URef(mint_contract_uref), &[])
-    {
+    if let Ok(StoredValue::Contract(_)) = builder.query(None, Key::URef(mint_contract_uref), &[]) {
         // Contract exists at mint contract URef
     } else {
         panic!("contract not found at mint uref");
     }
 
-    if let Some(StoredValue::Contract(_)) = builder.query(None, Key::URef(pos_contract_uref), &[]) {
+    if let Ok(StoredValue::Contract(_)) = builder.query(None, Key::URef(pos_contract_uref), &[]) {
         // Contract exists at pos contract URef
     } else {
         panic!("contract not found at pos uref");

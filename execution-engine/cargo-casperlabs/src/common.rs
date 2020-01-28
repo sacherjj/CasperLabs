@@ -95,6 +95,17 @@ pub fn remove_file<P: AsRef<Path>>(path: P) {
     }
 }
 
+pub fn copy_file<S: AsRef<Path>, D: AsRef<Path>>(source: S, destination: D) {
+    if let Err(error) = fs::copy(source.as_ref(), destination.as_ref()) {
+        print_error_and_exit(&format!(
+            ": failed to copy '{}' to '{}': {}",
+            source.as_ref().display(),
+            destination.as_ref().display(),
+            error
+        ));
+    }
+}
+
 #[cfg(test)]
 pub mod tests {
     use std::{env, fs};

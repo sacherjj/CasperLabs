@@ -8,6 +8,14 @@ readme = "README.md"
 documentation = "https://docs.rs/cargo-casperlabs"
 homepage = "https://casperlabs.io"
 repository = "https://github.com/CasperLabs/CasperLabs/tree/master/execution-engine/cargo-casperlabs"
+include = [
+    "src/*.rs",
+    "wasm/mint_install.wasm",
+    "wasm/pos_install.wasm",
+    "wasm/standard_payment.wasm",
+    "Cargo.lock",
+    "Cargo.toml",
+]
 
 [dependencies]
 clap = "2"

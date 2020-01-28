@@ -3,9 +3,12 @@ use tempfile::TempDir;
 
 use engine_core::engine_state::EngineConfig;
 use engine_storage::global_state::lmdb::LmdbGlobalState;
-use engine_test_support::low_level::{
-    DeployItemBuilder, ExecuteRequestBuilder, LmdbWasmTestBuilder, WasmTestResult,
-    DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT, STANDARD_PAYMENT_CONTRACT,
+use engine_test_support::{
+    internal::{
+        DeployItemBuilder, ExecuteRequestBuilder, LmdbWasmTestBuilder, WasmTestResult,
+        DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT, STANDARD_PAYMENT_CONTRACT,
+    },
+    DEFAULT_ACCOUNT_ADDR,
 };
 use types::{
     account::{PublicKey, PurseId},

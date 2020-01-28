@@ -7,7 +7,9 @@ GH_URL=https://api.github.com/repos/CasperLabs/CasperLabs
 EE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 # These are the subdirs of CasperLabs/execution-engine which contain packages for publishing.  They
 # should remain ordered from least-dependent to most.
-PACKAGE_DIRS=( types contract engine-wasm-prep engine-shared engine-storage engine-core engine-grpc-server engine-test-support cargo-casperlabs )
+#
+# Note: 'cargo-casperlabs' is treated specially since it needs '--allow-dirty' passed to the publish call
+PACKAGE_DIRS=( types contract engine-wasm-prep engine-shared engine-storage engine-core engine-grpc-server engine-test-support )
 
 run_curl() {
     set +e
@@ -73,9 +75,10 @@ publish() {
     else
         printf "Publishing '%s'\n" $CRATE_NAME
         cd $EE_DIR/$DIR_IN_EE
-        cargo publish
+        cargo publish $2
         printf "Published '%s' at version %s\n" $CRATE_NAME $DEV_VERSION
     fi
+    printf "================================================================================\n\n"
 }
 
 check_local_repo_is_up_to_date
@@ -83,5 +86,6 @@ check_python_has_toml
 
 for PACKAGE_DIR in "${PACKAGE_DIRS[@]}"; do
     publish $PACKAGE_DIR
-    printf "================================================================================\n\n"
 done
+
+publish cargo-casperlabs --allow-dirty
