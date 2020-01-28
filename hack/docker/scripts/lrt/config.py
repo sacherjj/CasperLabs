@@ -2,12 +2,13 @@ import json
 from erc20 import Agent, Node
 import casperlabs_client
 
-
 DEFAULT_CONFIG = """
 {
-    "agents": [["account-0"], ["account-1"], ["account-2"]],
-    "nodes": [["localhost"]],
-    "erc20_deployer": ["faucet-account"],
+    "agents": ["account-0", "account-1", "account-2"],
+    "nodes": [{"host": "localhost", "port": 40401},
+              {"host": "localhost", "port": 40411},
+              {"host": "localhost", "port": 40421}],
+    "erc20_deployer": "faucet-account",
     "token_name": "ABC",
     "total_token_supply": 200000,
     "tokens_per_agent": 10000,
@@ -24,35 +25,36 @@ class Configuration:
     @property
     def erc20_deployer(self):
         deployer = self.dictionary["erc20_deployer"]
-        return Agent(deployer[0])
+        return Agent(deployer)
 
     @property
     def agents(self):
-        return [Agent(agent[0]) for agent in self.dictionary["agents"]]
-
-    def _make_node(self, node_config):
-        host = node_config[0]
-        port = casperlabs_client.DEFAULT_PORT
-        try:
-            port = node_config[1]
-        except IndexError:
-            pass
-        return Node(host, port)
+        return [Agent(d) for d in self.dictionary["agents"]]
 
     @property
     def nodes(self):
-        return [
-            self._make_node(node_config) for node_config in self.dictionary["nodes"]
-        ]
+        def make_node(node_config):
+            host = "localhost"
+            port = casperlabs_client.DEFAULT_PORT
+            if type(node_config) == str:
+                host = node_config
+            else:
+                host = node_config.get("host", host)
+                port = node_config.get("port", port)
+            return Node(host, port)
+
+        return [make_node(cfg) for cfg in self.dictionary["nodes"]]
 
     def __getattr__(self, name):
         return self.dictionary[name]
 
+    @staticmethod
+    def default():
+        return Configuration(json.loads(DEFAULT_CONFIG))
 
-def default_config():
-    return Configuration(json.loads(DEFAULT_CONFIG))
-
-
-def read_config(file_name):
-    with open(file_name) as f:
-        return Configuration(json.load(f))
+    @staticmethod
+    def read(file_name):
+        with open(file_name) as f:
+            d = Configuration.default().dictionary
+            d.update(json.load(f))
+            return Configuration(d)

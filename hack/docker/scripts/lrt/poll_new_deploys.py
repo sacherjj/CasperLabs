@@ -26,11 +26,10 @@ def new_block(block_info: dict):
 
 
 def poll_new_blocks():
-    while True:
-        for event in NODE.client.stream_events():
-            if event.HasField("block_added"):
-                block_info = event.block_added.block
-                new_block(MessageToDict(block_info))
+    for event in NODE.client.stream_events():
+        if event.HasField("block_added"):
+            block_info = event.block_added.block
+            new_block(MessageToDict(block_info))
 
 
 if __name__ == "__main__":

@@ -4,7 +4,7 @@ import random
 import jsonpickle
 from dramatiq import actor
 from erc20 import ERC20, Node, DeployedERC20
-import config
+from config import Configuration
 
 
 @actor
@@ -89,9 +89,9 @@ if __name__ == "__main__":
 
     if args.configuration:
         print(f"Reading configuration from {args.configuration}")
-        cfg = config.read_config(args.configuration)
+        cfg = Configuration.read(args.configuration)
     else:
-        cfg = config.default_config()
+        cfg = Configuration.default()
 
     if args.command == "deploy":
         initialize_erc20_simulation(
