@@ -4,6 +4,7 @@ import io.casperlabs.casper.consensus.Block
 import io.casperlabs.casper.consensus.state.Key
 import io.casperlabs.ipc.{Transform, TransformEntry, TransformIdentity}
 import io.casperlabs.models.ArbitraryConsensus
+import io.casperlabs.storage.BlockMsgWithTransform.StageEffects
 import org.scalacheck._
 
 import scala.collection.JavaConverters._
@@ -58,6 +59,7 @@ trait ArbitraryStorageData extends ArbitraryConsensus {
   private def genBlockMsgWithTransformFromBlock(b: Block): Gen[BlockMsgWithTransform] =
     for {
       n          <- transformsNum
-      transforms <- Gen.listOfN(n, arbitrary[TransformEntry])
-    } yield BlockMsgWithTransform(Option(b), transforms)
+      stage      = 0
+      transforms <- Gen.listOfN(n, arbitrary[TransformEntry]).map(StageEffects(stage, _))
+    } yield BlockMsgWithTransform(Option(b), if (n == 0) Seq.empty else Seq(transforms))
 }

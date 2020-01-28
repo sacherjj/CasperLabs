@@ -27,14 +27,14 @@ def test_deploy_buffer_persistence(trillion_payment_node_network):
                 ABI.u32("amount", 1),
             ]
         )
-        _, deploy_hash_bytes = node.p_client.deploy(
+        deploy_hash_hex = node.p_client.deploy(
             from_address=acct.public_key_hex,
             session_contract=Contract.ADD_ASSOCIATED_KEY,
             public_key=acct.public_key_path,
             private_key=acct.private_key_path,
             session_args=args,
         )
-        return deploy_hash_bytes.hex()
+        return deploy_hash_hex
 
     # Currently hit gRPC limit with greater than around 16.
     acct_count = 2

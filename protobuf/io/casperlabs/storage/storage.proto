@@ -9,8 +9,14 @@ import "scalapb/scalapb.proto";
 // This is the content storing in BlockStorage, the reason why we need it is that,
 // we take protobuf as the way to (de)serializer.
 message BlockMsgWithTransform {
+    reserved 2;
     io.casperlabs.casper.consensus.Block block_message = 1;
-    repeated io.casperlabs.ipc.TransformEntry transform_entry = 2;
+    repeated StageEffects block_effects = 3;
+
+    message StageEffects {
+        uint32 stage = 1;
+        repeated io.casperlabs.ipc.TransformEntry effects = 2;
+    }
 }
 
 // Storage type for the DagStorage
@@ -27,4 +33,3 @@ message BlockMetadataInternal {
     int64 rank                        = 6;
     int32 validator_block_seq_num     = 7;
 }
-
