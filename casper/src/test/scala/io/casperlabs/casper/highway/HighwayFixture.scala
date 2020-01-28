@@ -27,14 +27,15 @@ import org.scalatest.Suite
 
 trait HighwayFixture extends StorageFixture with TickUtils with ArbitraryConsensus { self: Suite =>
 
-  def testFixtures(numStorages: Int)(
-      f: Timer[Task] => List[SQLiteStorage.CombinedStorage[Task]] => FixtureLike
+  /** Create multiple databases, one for each validator. */
+  def testFixtures(validators: List[String])(
+      f: Timer[Task] => List[(String, SQLiteStorage.CombinedStorage[Task])] => FixtureLike
   ): Unit = {
     val ctx   = TestScheduler()
     val timer = SchedulerEffect.timer[Task](ctx)
-    withCombinedStorages(ctx, numStorages = numStorages) { dbs =>
+    withCombinedStorages(ctx, numStorages = validators.size) { dbs =>
       Task.async[Unit] { cb =>
-        val fix = f(timer)(dbs)
+        val fix = f(timer)(validators zip dbs)
         // TestScheduler allows us to manually forward time.
         // To get meaningful round IDs, we must start from the genesis.
         ctx.forwardTo(fix.start)
@@ -48,9 +49,10 @@ trait HighwayFixture extends StorageFixture with TickUtils with ArbitraryConsens
     }
   }
 
+  /** Create one database to test with. */
   def testFixture(f: Timer[Task] => SQLiteStorage.CombinedStorage[Task] => FixtureLike): Unit =
-    testFixtures(numStorages = 1) { timer => dbs =>
-      f(timer)(dbs.head)
+    testFixtures(validators = List("")) { timer => dbs =>
+      f(timer)(dbs.head._2)
     }
 
   // Allow using strings for validator names where a ByteString key is required.

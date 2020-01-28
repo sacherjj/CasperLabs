@@ -74,7 +74,9 @@ class EraSupervisorSpec extends FlatSpec with Matchers with Inspectors with High
       }
   }
 
-  it should "relay created messages to other nodes" in testFixtures(3) { implicit timer => dbs =>
+  it should "relay created messages to other nodes" in testFixtures(
+    validators = List("Alice", "Bob", "Charlie")
+  ) { implicit timer => validatorDatabases =>
     new FixtureLike {
       override val start  = genesisEraStart
       override val length = days(5)
@@ -133,16 +135,17 @@ class EraSupervisorSpec extends FlatSpec with Matchers with Inspectors with High
         }
       }
 
-      def network(validators: List[String]) =
+      val network =
         for {
           // Don't create messages until we add all supervisors to this collection,
           // otherwise they might miss some messages and there's no synchronizer here.
           isSyncedRef    <- Resource.liftF(Ref[Task].of(false))
           supervisorsRef <- Resource.liftF(Ref[Task].of(Map.empty[String, EraSupervisor[Task]]))
-          fixtures = validators.zipWithIndex.map {
-            case (validator, idx) =>
-              new RelayFixture(validator, dbs(idx), supervisorsRef, isSyncedRef)
+          fixtures = validatorDatabases.map {
+            case (validator, db) =>
+              new RelayFixture(validator, db, supervisorsRef, isSyncedRef)
           }
+          validators  = validatorDatabases.unzip._1
           supervisors <- fixtures.traverse(_.makeSupervisor())
           _ <- Resource.liftF {
                 supervisorsRef.set(validators zip supervisors toMap) *> isSyncedRef.set(true)
@@ -150,7 +153,7 @@ class EraSupervisorSpec extends FlatSpec with Matchers with Inspectors with High
         } yield fixtures
 
       override def test: Task[Unit] =
-        network(List("Alice", "Bob", "Charlie")).use(_.traverse(_.test).void)
+        network.use(_.traverse(_.test).void)
     }
   }
 }
