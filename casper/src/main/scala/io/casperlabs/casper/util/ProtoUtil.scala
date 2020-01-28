@@ -145,32 +145,10 @@ object ProtoUtil {
   }
 
   def unsafeGetBlockSummary[F[_]: MonadThrowable: BlockStorage](hash: BlockHash): F[BlockSummary] =
-    for {
-      maybeBlock <- BlockStorage[F].getBlockSummary(hash)
-      block <- maybeBlock match {
-                case Some(b) => b.pure[F]
-                case None =>
-                  MonadThrowable[F].raiseError(
-                    new NoSuchElementException(
-                      s"BlockStorage is missing hash ${PrettyPrinter.buildString(hash)}"
-                    )
-                  )
-              }
-    } yield block
+    BlockStorage[F].getBlockSummaryUnsafe(hash)
 
   def unsafeGetBlock[F[_]: MonadThrowable: BlockStorage](hash: BlockHash): F[Block] =
-    for {
-      maybeBlock <- BlockStorage[F].getBlockMessage(hash)
-      block <- maybeBlock match {
-                case Some(b) => b.pure[F]
-                case None =>
-                  MonadThrowable[F].raiseError(
-                    new NoSuchElementException(
-                      s"BlockStorage is missing hash ${PrettyPrinter.buildString(hash)}"
-                    )
-                  )
-              }
-    } yield block
+    BlockStorage[F].getBlockUnsafe(hash)
 
   def nextRank(justificationMsgs: Seq[Message]): Long =
     if (justificationMsgs.isEmpty) 0 // Genesis has rank=0
@@ -438,7 +416,8 @@ object ProtoUtil {
       publicKey: Keys.PublicKey,
       privateKey: Keys.PrivateKey,
       sigAlgorithm: SignatureAlgorithm,
-      keyBlockHash: ByteString
+      keyBlockHash: ByteString,
+      roundId: Long
   ): Block = {
     val body = Block.Body().withDeploys(deploys)
     val postState = Block
@@ -459,7 +438,8 @@ object ProtoUtil {
       creator = publicKey,
       validatorSeqNum = validatorSeqNum,
       validatorPrevBlockHash = validatorPrevBlockHash,
-      keyBlockHash = keyBlockHash
+      keyBlockHash = keyBlockHash,
+      roundId = roundId
     )
 
     val unsigned = unsignedBlockProto(body, header)
@@ -485,7 +465,8 @@ object ProtoUtil {
       publicKey: Keys.PublicKey,
       privateKey: Keys.PrivateKey,
       sigAlgorithm: SignatureAlgorithm,
-      keyBlockHash: ByteString
+      keyBlockHash: ByteString,
+      roundId: Long
   ): Block = {
     val body = Block.Body()
 
@@ -507,7 +488,8 @@ object ProtoUtil {
       creator = publicKey,
       validatorSeqNum = validatorSeqNum,
       validatorPrevBlockHash = validatorPrevBlockHash,
-      keyBlockHash = keyBlockHash
+      keyBlockHash = keyBlockHash,
+      roundId = roundId
     ).withMessageType(Block.MessageType.BALLOT)
 
     val unsigned = unsignedBlockProto(body, header)
@@ -531,11 +513,13 @@ object ProtoUtil {
       protocolVersion: ProtocolVersion,
       timestamp: Long,
       chainName: String,
-      keyBlockHash: ByteString = ByteString.EMPTY // For Genesis it will be empty.
+      keyBlockHash: ByteString = ByteString.EMPTY, // For Genesis it will be empty.
+      roundId: Long = 0
   ): Block.Header =
     Block
       .Header()
       .withKeyBlockHash(keyBlockHash)
+      .withRoundId(roundId)
       .withParentHashes(parentHashes)
       .withJustifications(justifications)
       .withDeployCount(body.deploys.size)

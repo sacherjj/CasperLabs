@@ -61,7 +61,7 @@ class MockMessageProducer[F[_]: Sync: BlockStorageWriter: DagStorage](
     } yield child
 
   override def ballot(
-      eraId: BlockHash,
+      keyBlockHash: BlockHash,
       roundId: Ticks,
       target: ByteString,
       justifications: Map[PublicKeyBS, Set[BlockHash]]
@@ -80,7 +80,7 @@ class MockMessageProducer[F[_]: Sync: BlockStorageWriter: DagStorage](
             } yield Block.Justification(kv._1, h)
           )
           .withRoundId(roundId)
-          .withKeyBlockHash(eraId)
+          .withKeyBlockHash(keyBlockHash)
           .withState(
             Block.GlobalState().withBonds(parent.blockSummary.getHeader.getState.bonds)
           )
@@ -94,7 +94,7 @@ class MockMessageProducer[F[_]: Sync: BlockStorageWriter: DagStorage](
   }
 
   override def block(
-      eraId: ByteString,
+      keyBlockHash: ByteString,
       roundId: Ticks,
       mainParent: ByteString,
       justifications: Map[PublicKeyBS, Set[BlockHash]],
@@ -114,7 +114,7 @@ class MockMessageProducer[F[_]: Sync: BlockStorageWriter: DagStorage](
               } yield Block.Justification(kv._1, h)
             )
             .withRoundId(roundId)
-            .withKeyBlockHash(eraId)
+            .withKeyBlockHash(keyBlockHash)
             .withState(
               Block.GlobalState().withBonds(parent.blockSummary.getHeader.getState.bonds)
             )

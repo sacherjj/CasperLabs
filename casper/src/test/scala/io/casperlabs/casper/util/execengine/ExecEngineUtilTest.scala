@@ -129,7 +129,7 @@ class ExecEngineUtilTest extends FlatSpec with Matchers with BlockGenerator with
                           rank = 0,
                           upgrades = Nil
                         )
-      DeploysCheckpoint(_, _, _, result, _) = computeResult
+      DeploysCheckpoint(_, _, _, result, _, _) = computeResult
     } yield result
 
   "computeDeploysCheckpoint" should "aggregate the result of deploying multiple programs within the block" in withStorage {

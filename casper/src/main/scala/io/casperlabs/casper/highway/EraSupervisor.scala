@@ -49,9 +49,9 @@ class EraSupervisor[F[_]: Concurrent: Timer: Log: BlockStorageWriter: EraStorage
       _       <- ensureNotShutdown
       message <- Sync[F].fromTry(Message.fromBlock(block))
       _ <- Log[F].debug(
-            s"Handling incoming ${message.messageHash.show -> "message"} from ${message.validatorId.show -> "validator"} in ${message.roundId -> "round"} ${message.keyBlockHash.show -> "era"}"
+            s"Handling incoming ${message.messageHash.show -> "message"} from ${message.validatorId.show -> "validator"} in ${message.roundId -> "round"} ${message.eraId.show -> "era"}"
           )
-      entry <- load(message.keyBlockHash)
+      entry <- load(message.eraId)
       _ <- entry.runtime.validate(message).value.flatMap {
             _.fold(
               error =>
@@ -171,7 +171,7 @@ class EraSupervisor[F[_]: Concurrent: Timer: Log: BlockStorageWriter: EraStorage
     def handleCreatedMessage(message: Message, kind: String) =
       for {
         _ <- Log[F].debug(
-              s"Created $kind ${message.messageHash.show -> "message"} in ${message.roundId -> "round"} ${message.keyBlockHash.show -> "era"} child of ${message.parentBlock.show -> "parent"}"
+              s"Created $kind ${message.messageHash.show -> "message"} in ${message.roundId -> "round"} ${message.eraId.show -> "era"} child of ${message.parentBlock.show -> "parent"}"
             )
         _ <- Relaying[F].relay(List(message.messageHash))
         _ <- propagateLatestMessageToDescendantEras(message)
@@ -206,8 +206,8 @@ class EraSupervisor[F[_]: Concurrent: Timer: Log: BlockStorageWriter: EraStorage
       // keep this updated, when the fork choice is implemented, but for now in
       // tests if produce a block in a leaf era this makes sure that the next round
       // will build on it, and it seems to make sense anyway.
-      _  <- ForkChoiceManager[F].updateLatestMessage(message.keyBlockHash, message)
-      ds <- loadDescendants(message.keyBlockHash)
+      _  <- ForkChoiceManager[F].updateLatestMessage(message.eraId, message)
+      ds <- loadDescendants(message.eraId)
       _  <- ds.traverse(d => ForkChoiceManager[F].updateLatestMessage(d.keyBlockHash, message))
     } yield ()
 

@@ -3,6 +3,7 @@ package io.casperlabs.casper
 import cats._
 import cats.implicits._
 import cats.data.WriterT
+import cats.effect.Clock
 import io.casperlabs.crypto.Keys.PublicKeyBS
 import io.casperlabs.storage.BlockHash
 import java.time.Instant
@@ -52,6 +53,11 @@ package object highway {
 
     def minus(b: FiniteDuration) =
       a.minus(b.length, b.unit.toChronoUnit)
+  }
+
+  implicit class ClockOps[F[_]: Applicative](clock: Clock[F]) {
+    def currentTimeMillis: F[Long] =
+      clock.realTime(TimeUnit.MILLISECONDS)
   }
 
   /** Models a state transition of an era, returning the domain events that

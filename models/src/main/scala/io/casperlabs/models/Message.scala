@@ -28,7 +28,9 @@ sealed trait Message {
   val validatorMsgSeqNum: Int
   val signature: consensus.Signature
   val roundId: Long
-  val keyBlockHash: Id
+
+  // Returns the `keyBlockHash`, but it was considered unintuitive after a while.
+  val eraId: Id
 
   val parents: Seq[Id]
   val blockSummary: BlockSummary
@@ -47,7 +49,7 @@ object Message {
       validatorId: ByteString,
       timestamp: Long,
       roundId: Long,
-      keyBlockHash: Message#Id,
+      eraId: Message#Id,
       parentBlock: Message#Id,
       justifications: Seq[consensus.Block.Justification],
       rank: Long,
@@ -75,7 +77,7 @@ object Message {
       validatorId: ByteString,
       timestamp: Long,
       roundId: Long,
-      keyBlockHash: Message#Id,
+      eraId: Message#Id,
       parentBlock: Message#Id,
       justifications: Seq[consensus.Block.Justification],
       rank: Long,

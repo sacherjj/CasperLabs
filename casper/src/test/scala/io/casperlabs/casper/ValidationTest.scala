@@ -255,7 +255,8 @@ class ValidationTest
       pk,
       sk,
       Ed25519,
-      ByteString.EMPTY
+      ByteString.EMPTY,
+      0
     )
     Validation.blockSignature[Task](block) shouldBeF true
   }
@@ -1305,6 +1306,7 @@ class ValidationTest
           computedPostStateHash,
           bondedValidators,
           processedDeploys,
+          _,
           _
         ) = deploysCheckpoint
         block <- createAndStoreMessage[Task](
