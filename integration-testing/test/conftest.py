@@ -1,6 +1,7 @@
 from typing import Generator
 
 import docker as docker_py
+import os
 import pytest
 import shutil
 
@@ -30,13 +31,13 @@ from casperlabs_local_net.casperlabs_network import (
 )
 
 
-def pytest_addoption(parser):
-    parser.addoption("--unique_run_num", action="store", default="0")
-
-
 @pytest.fixture(scope="session")
 def unique_run_num(pytestconfig):
-    return int(pytestconfig.getoption("unique_run_num"))
+    try:
+        run_num = int(os.environ.get("UNIQUE_RUN_NUM"))
+    except ValueError:
+        run_num = 0
+    return run_num
 
 
 @pytest.fixture(scope="function")
