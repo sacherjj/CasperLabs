@@ -29,12 +29,11 @@ case ${UNIQUE_RUN_NUM} in
   TEST_FILTER="-k \"not R0 or R1\""
   ;;
   *)
-  TEST_FILTER="NOTHING ${UNIQUE_RUN_NUM}"
+  TEST_FILTER=""
   ;;
 esac
 
 echo "Test Filter: ${TEST_FILTER}"
-exit
 
 pip install pipenv
 pipenv sync
