@@ -1,7 +1,7 @@
 {
     "_meta": {
         "hash": {
-            "sha256": "d3cb8fb986e10149311cab48eb2976f4ce24c30b788f79e35e4133cb2ee5ab0d"
+            "sha256": "8470539a3d0a328f1181012f91613e370e38ec261a7ec3edc0483d81e09dbd18"
         },
         "pipfile-spec": 6,
         "requires": {
@@ -25,10 +25,10 @@
         },
         "casperlabs-client": {
             "hashes": [
-                "sha256:04773d526738d55f112c889de9f632d4396533a1c8b8a43a7960b0e584c75d11"
+                "sha256:1a9d621a99236c2503212ef96ff092cf7abd5cd7466359f65d276deb4734e86e"
             ],
             "index": "pypi",
-            "version": "==0.7.6"
+            "version": "==0.7.8"
         },
         "cffi": {
             "hashes": [
@@ -213,6 +213,14 @@
             ],
             "version": "==1.26.0"
         },
+        "jsonpickle": {
+            "hashes": [
+                "sha256:d0c5a4e6cb4e58f6d5406bdded44365c2bcf9c836c4f52910cc9ba7245a59dc2",
+                "sha256:d3e922d781b1d0096df2dad89a2e1f47177d7969b596aea806a9d91b4626b29b"
+            ],
+            "index": "pypi",
+            "version": "==1.2"
+        },
         "pathtools": {
             "hashes": [
                 "sha256:7c35c5421a39bb82e58018febd90e3b6e5db34c5443aaaf742b3f33d4655f1c0"
@@ -328,10 +336,10 @@
         },
         "six": {
             "hashes": [
-                "sha256:1f1b7d42e254082a9db6279deae68afb421ceba6158efa6131de7b3003ee93fd",
-                "sha256:30f610279e8b2578cab6db20741130331735c781b56053c59c4076da27f06b66"
+                "sha256:236bdbdce46e6e6a3d61a337c0f8b763ca1e8717c03b369e87a7ec7ce1319c0a",
+                "sha256:8f3cd2e254d8f793e7f3d6d9df77b92252b52637291d0f0da013c76ea2724b6c"
             ],
-            "version": "==1.13.0"
+            "version": "==1.14.0"
         },
         "watchdog": {
             "hashes": [

@@ -11,7 +11,7 @@ use engine_shared::{
     test_utils,
 };
 use engine_storage::global_state::in_memory::InMemoryGlobalState;
-use engine_test_support::low_level::{InMemoryWasmTestBuilder, MOCKED_ACCOUNT_ADDRESS};
+use engine_test_support::internal::{InMemoryWasmTestBuilder, MOCKED_ACCOUNT_ADDRESS};
 
 const PROC_NAME: &str = "ee-shared-lib-tests";
 

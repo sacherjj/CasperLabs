@@ -13,7 +13,7 @@ use base16;
 use clap::{crate_version, App, Arg};
 
 use engine_core::engine_state::EngineConfig;
-use engine_test_support::low_level::{
+use engine_test_support::internal::{
     DeployItemBuilder, ExecuteRequestBuilder, LmdbWasmTestBuilder, DEFAULT_PAYMENT,
 };
 use types::U512;

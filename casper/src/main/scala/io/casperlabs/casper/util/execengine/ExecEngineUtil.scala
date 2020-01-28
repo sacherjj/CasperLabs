@@ -390,7 +390,7 @@ object ExecEngineUtil {
       for {
         protocolVersion <- CasperLabsProtocol[F].protocolFromBlock(block)
         effectsRef      <- Ref[F].of(Map.empty[Int, Seq[TransformEntry]])
-        _ <- deploysGrouped.toList.foldLeftM(prestate) {
+        _ <- deploysGrouped.toList.sortBy(_._1).foldLeftM(prestate) {
               case (preStateHash, (stage, deploys)) =>
                 val eeCommitCaptureEffects: EECommitFun[F] =
                   (preState, transforms, protocol) =>

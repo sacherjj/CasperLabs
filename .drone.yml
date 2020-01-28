@@ -129,7 +129,6 @@ steps:
   commands:
   - "cd execution-engine"
   - "~/.cargo/bin/rustup toolchain install $(cat rust-toolchain)"
-  - "~/.cargo/bin/rustup component add --toolchain=$(cat rust-toolchain) rustfmt"
   - "make check-format"
   image: "casperlabs/buildenv:latest"
   when:
@@ -150,8 +149,7 @@ steps:
 - name: run-rust-lints-pr
   commands:
   - "cd execution-engine"
-  - "~/.cargo/bin/rustup toolchain install $(cat rust-toolchain)"
-  - "~/.cargo/bin/rustup component add --toolchain=$(cat rust-toolchain) clippy"
+  - "make setup-rs"
   - "make lint"
   image: "casperlabs/buildenv:latest"
   when:
@@ -256,7 +254,6 @@ steps:
   commands:
   - "cd execution-engine"
   - "~/.cargo/bin/rustup toolchain install $(cat rust-toolchain)"
-  - "~/.cargo/bin/rustup component add --toolchain=$(cat rust-toolchain) rustfmt"
   - "make check-format"
   image: "casperlabs/buildenv:latest"
   when:
@@ -279,8 +276,7 @@ steps:
 - name: run-rust-lints-bors
   commands:
   - "cd execution-engine"
-  - "~/.cargo/bin/rustup toolchain install $(cat rust-toolchain)"
-  - "~/.cargo/bin/rustup component add --toolchain=$(cat rust-toolchain) clippy"
+  - "make setup-rs"
   - "make lint"
   image: "casperlabs/buildenv:latest"
   when:
@@ -325,8 +321,7 @@ steps:
 - name: run-rust-benchmarks-bors
   commands:
   - "cd execution-engine"
-  - "~/.cargo/bin/rustup toolchain install $(cat rust-toolchain)"
-  - "~/.cargo/bin/rustup target add --toolchain $(cat rust-toolchain) wasm32-unknown-unknown"
+  - "make setup-rs"
   - "make bench"
   image: "casperlabs/buildenv:latest"
   when:

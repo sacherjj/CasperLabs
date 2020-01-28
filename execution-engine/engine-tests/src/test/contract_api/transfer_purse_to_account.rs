@@ -1,9 +1,11 @@
 use lazy_static::lazy_static;
 
 use engine_shared::{stored_value::StoredValue, transform::Transform};
-use engine_test_support::low_level::{
-    ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_ACCOUNT_ADDR,
-    DEFAULT_ACCOUNT_INITIAL_BALANCE, DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT,
+use engine_test_support::{
+    internal::{
+        ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT,
+    },
+    DEFAULT_ACCOUNT_ADDR, DEFAULT_ACCOUNT_INITIAL_BALANCE,
 };
 use types::{account::PublicKey, ApiError, Key, TransferResult, TransferredTo, U512};
 

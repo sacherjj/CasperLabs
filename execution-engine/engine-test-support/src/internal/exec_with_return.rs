@@ -17,7 +17,7 @@ use types::{
     bytesrepr::FromBytes, BlockTime, CLTyped, CLValue, Key, Phase, ProtocolVersion, URef, U512,
 };
 
-use crate::low_level::{utils, WasmTestBuilder, DEFAULT_WASM_COSTS};
+use crate::internal::{utils, WasmTestBuilder, DEFAULT_WASM_COSTS};
 
 const INIT_FN_STORE_ID: u32 = 0;
 

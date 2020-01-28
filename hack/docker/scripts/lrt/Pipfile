@@ -8,6 +8,7 @@ verify_ssl = true
 [packages]
 dramatiq = {extras = ["rabbitmq", "watch"],version = "*"}
 casperlabs-client = "*"
+jsonpickle = "*"
 
 [requires]
 python_version = "3.6"

@@ -1,7 +1,7 @@
 use engine_shared::{stored_value::StoredValue, transform::Transform};
-use engine_test_support::low_level::{
-    exec_with_return, WasmTestBuilder, DEFAULT_ACCOUNT_ADDR, DEFAULT_BLOCK_TIME,
-    DEFAULT_GENESIS_CONFIG,
+use engine_test_support::{
+    internal::{exec_with_return, WasmTestBuilder, DEFAULT_BLOCK_TIME, DEFAULT_GENESIS_CONFIG},
+    DEFAULT_ACCOUNT_ADDR,
 };
 use types::{Key, URef};
 

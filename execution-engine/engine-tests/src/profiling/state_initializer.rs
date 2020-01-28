@@ -7,9 +7,12 @@ use std::{env, path::PathBuf};
 use base16;
 use clap::{crate_version, App};
 
-use engine_test_support::low_level::{
-    DeployItemBuilder, ExecuteRequestBuilder, LmdbWasmTestBuilder, DEFAULT_ACCOUNT_ADDR,
-    DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT,
+use engine_test_support::{
+    internal::{
+        DeployItemBuilder, ExecuteRequestBuilder, LmdbWasmTestBuilder, DEFAULT_GENESIS_CONFIG,
+        DEFAULT_PAYMENT,
+    },
+    DEFAULT_ACCOUNT_ADDR,
 };
 use types::account::PublicKey;
 
