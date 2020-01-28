@@ -20,13 +20,13 @@ fi
 
 case ${UNIQUE_RUN_NUM} in
   [0])
-  TEST_FILTER="-k \"R0\""
+  TEST_FILTER="--unique_run_num 0 -k \"R0\""
   ;;
   [1])
-  TEST_FILTER="-k \"R1\""
+  TEST_FILTER="--unique_run_num 1 -k \"R1\""
   ;;
   [2])
-  TEST_FILTER="-k \"not R0 or R1\""
+  TEST_FILTER="--unique_run_num 2 -k \"not R0 or R1\""
   ;;
   *)
   TEST_FILTER=""
