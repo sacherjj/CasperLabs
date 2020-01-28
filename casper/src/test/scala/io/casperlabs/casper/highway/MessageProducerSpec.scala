@@ -27,7 +27,17 @@ class MessageProducerSpec extends FlatSpec with Matchers with Inspectors with Hi
 
   it should "gather equivocators from the grandparent, parent and child eras" in testFixture {
     implicit timer => implicit db =>
-      new Fixture(length = 5 * eraDuration) {
+      new Fixture(
+        length = 5 * eraDuration,
+        bonds = List(
+          Bond("Alice").withStake(state.BigInt("1000")),
+          Bond("Bob").withStake(state.BigInt("2000")),
+          Bond("Charlie").withStake(state.BigInt("3000")),
+          Bond("Dave").withStake(state.BigInt("4000")),
+          Bond("Eve").withStake(state.BigInt("5000")),
+          Bond("Fred").withStake(state.BigInt("6000"))
+        )
+      ) {
 
         // Create an equivocation in an era by storing two messages that don't quote each other.
         // Return the block hash we can use as key block for the next era.
@@ -55,15 +65,6 @@ class MessageProducerSpec extends FlatSpec with Matchers with Inspectors with Hi
                 )
           } yield b.messageHash
         }
-
-        override lazy val bonds = List(
-          Bond("Alice").withStake(state.BigInt("1000")),
-          Bond("Bob").withStake(state.BigInt("2000")),
-          Bond("Charlie").withStake(state.BigInt("3000")),
-          Bond("Dave").withStake(state.BigInt("4000")),
-          Bond("Eve").withStake(state.BigInt("5000")),
-          Bond("Fred").withStake(state.BigInt("6000"))
-        )
 
         // Make an era tree where we'll put some equivocations into various ones
         // in the hierarchy and check that the right ones are gathered.
@@ -115,7 +116,7 @@ class MessageProducerSpec extends FlatSpec with Matchers with Inspectors with Hi
         val (privateKey, publicKey) = Ed25519.newKeyPair
         val validatorId             = PublicKey(ByteString.copyFrom(publicKey))
 
-        override lazy val messageProducer: MessageProducer[Task] = {
+        override val messageProducer: MessageProducer[Task] = {
           implicit val deployBuffer = DeployBuffer.create[Task](chainName, minTtl = Duration.Zero)
           implicit val protocol = CasperLabsProtocol.unsafe[Task](
             (0L, ProtocolVersion(0, 1, 0), none)

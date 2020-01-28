@@ -53,6 +53,10 @@ trait HighwayFixture extends StorageFixture with TickUtils with ArbitraryConsens
       f(timer)(dbs.head)
     }
 
+  // Allow using strings for validator names where a ByteString key is required.
+  implicit def `String => PublicKeyBS`(s: String): PublicKeyBS =
+    PublicKey(ByteString.copyFromUtf8(s))
+
   import HighwayConf.{EraDuration, VotingDuration}
 
   val genesisEraStart       = date(2019, 12, 30)
@@ -85,6 +89,12 @@ trait HighwayFixture extends StorageFixture with TickUtils with ArbitraryConsens
       val validator: String = "Alice",
       val initRoundExponent: Int = 0,
       val isSyncedRef: Ref[Task, Boolean] = Ref.unsafe(true),
+      // Genesis validators.
+      val bonds: List[Bond] = List(
+        Bond("Alice").withStake(state.BigInt("3000")),
+        Bond("Bob").withStake(state.BigInt("4000")),
+        Bond("Charlie").withStake(state.BigInt("5000"))
+      ),
       printLevel: Log.Level = Log.Level.Error
   )(
       implicit
@@ -94,16 +104,7 @@ trait HighwayFixture extends StorageFixture with TickUtils with ArbitraryConsens
 
     override val start = conf.genesisEraStart
 
-    implicit def `String => PublicKeyBS`(s: String): PublicKeyBS =
-      PublicKey(ByteString.copyFromUtf8(s))
-
-    lazy val bonds = List(
-      Bond("Alice").withStake(state.BigInt("3000")),
-      Bond("Bob").withStake(state.BigInt("4000")),
-      Bond("Charlie").withStake(state.BigInt("5000"))
-    )
-
-    lazy val genesis = Message
+    val genesis = Message
       .fromBlockSummary(
         BlockSummary()
           .withBlockHash(ByteString.copyFromUtf8("genesis"))
@@ -127,9 +128,9 @@ trait HighwayFixture extends StorageFixture with TickUtils with ArbitraryConsens
         printLevel = printLevel
       )
 
-    implicit lazy val forkchoice = MockForkChoice.unsafe[Task](genesis)
+    implicit val forkchoice = MockForkChoice.unsafe[Task](genesis)
 
-    lazy val messageProducer: MessageProducer[Task] = new MockMessageProducer[Task](validator)
+    val messageProducer: MessageProducer[Task] = new MockMessageProducer[Task](validator)
 
     implicit val relaying = new Relaying[Task] {
       override def relay(hashes: List[BlockHash]): Task[WaitHandle[Task]] = ().pure[Task].pure[Task]
