@@ -10,13 +10,7 @@ use contract::{
 };
 use types::{account::PublicKey, ContractRef, Key};
 
-// Vault smart contract.
-#[allow(unused_imports)]
-use crate::vesting::{vesting, PURSE_NAME};
-
-// Proxy smart contract.
-#[allow(unused_imports)]
-use crate::proxy::vesting_proxy;
+use crate::vesting::PURSE_NAME;
 
 const VESTING_CONTRACT_NAME: &str = "vesting";
 const VESTING_PROXY_CONTRACT_NAME: &str = "vesting_proxy";

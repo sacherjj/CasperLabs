@@ -8,8 +8,9 @@ edition = "2018"
 crate-type = ["cdylib"]
 doctest = false
 test = false
+bench = false
 
 [dependencies]
 contract = { path = "../../../contract", package = "casperlabs-contract" }
 types = { path = "../../../types", package = "casperlabs-types" }
-vesting_logic  = { path = "../vesting-logic", package = "vesting-logic" }
+vesting-logic  = { path = "../vesting-logic" }

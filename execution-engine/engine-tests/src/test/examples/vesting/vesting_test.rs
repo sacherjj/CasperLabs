@@ -25,37 +25,37 @@ mod method {
 }
 
 pub mod key {
-    pub const CLIFF_TIME: &str = "cliff_time";
+    pub const CLIFF_TIMESTAMP: &str = "cliff_timestamp";
     pub const CLIFF_AMOUNT: &str = "cliff_amount";
-    pub const DRIP_PERIOD: &str = "drip_period";
+    pub const DRIP_DURATION: &str = "drip_duration";
     pub const DRIP_AMOUNT: &str = "drip_amount";
     pub const TOTAL_AMOUNT: &str = "total_amount";
     pub const RELEASED_AMOUNT: &str = "released_amount";
-    pub const ADMIN_RELEASE_PERIOD: &str = "admin_release_period";
+    pub const ADMIN_RELEASE_DURATION: &str = "admin_release_duration";
     pub const PAUSE_FLAG: &str = "is_paused";
-    pub const ON_PAUSE_PERIOD: &str = "on_pause_period";
-    pub const LAST_PAUSE_TIME: &str = "last_pause_time";
+    pub const ON_PAUSE_DURATION: &str = "on_pause_duration";
+    pub const LAST_PAUSE_TIMESTAMP: &str = "last_pause_timestamp";
     pub const PURSE_NAME: &str = "vesting_main_purse";
 }
 
 pub struct VestingConfig {
-    pub cliff_time: U512,
+    pub cliff_timestamp: U512,
     pub cliff_amount: U512,
-    pub drip_period: U512,
+    pub drip_duration: U512,
     pub drip_amount: U512,
     pub total_amount: U512,
-    pub admin_release_period: U512,
+    pub admin_release_duration: U512,
 }
 
 impl Default for VestingConfig {
     fn default() -> VestingConfig {
         VestingConfig {
-            cliff_time: 10.into(),
+            cliff_timestamp: 10.into(),
             cliff_amount: 2.into(),
-            drip_period: 3.into(),
+            drip_duration: 3.into(),
             drip_amount: 5.into(),
             total_amount: 1000.into(),
-            admin_release_period: 123.into(),
+            admin_release_duration: 123.into(),
         }
     }
 }
@@ -64,7 +64,7 @@ pub struct VestingTest {
     pub builder: TestBuilder,
     pub vesting_hash: Option<[u8; 32]>,
     pub proxy_hash: Option<[u8; 32]>,
-    pub current_time: u64,
+    pub current_timestamp: u64,
 }
 
 impl VestingTest {
@@ -80,7 +80,7 @@ impl VestingTest {
             builder,
             vesting_hash: None,
             proxy_hash: None,
-            current_time: 0,
+            current_timestamp: 0,
         };
         test.deploy_vesting_contract(sender, admin, recipient, vesting_config)
             .assert_success_status_and_commit()
@@ -109,8 +109,8 @@ impl VestingTest {
         self
     }
 
-    pub fn with_block_time(mut self, time: u64) -> Self {
-        self.current_time = time;
+    pub fn with_block_timestamp(mut self, time: u64) -> Self {
+        self.current_timestamp = time;
         self
     }
 
@@ -150,15 +150,15 @@ impl VestingTest {
                 VESTING_CONTRACT_NAME,
                 admin,
                 recipient,
-                vesting_config.cliff_time,
+                vesting_config.cliff_timestamp,
                 vesting_config.cliff_amount,
-                vesting_config.drip_period,
+                vesting_config.drip_duration,
                 vesting_config.drip_amount,
                 vesting_config.total_amount,
-                vesting_config.admin_release_period,
+                vesting_config.admin_release_duration,
             ),
         )
-        .with_block_time(self.current_time)
+        .with_block_time(self.current_timestamp)
         .build();
         self.builder.exec(request);
         self
@@ -170,7 +170,7 @@ impl VestingTest {
             self.get_proxy_hash(),
             (self.get_vesting_hash(), method::PAUSE),
         )
-        .with_block_time(self.current_time)
+        .with_block_time(self.current_timestamp)
         .build();
         self.builder.exec(request);
         self
@@ -182,7 +182,7 @@ impl VestingTest {
             self.get_proxy_hash(),
             (self.get_vesting_hash(), method::UNPAUSE),
         )
-        .with_block_time(self.current_time)
+        .with_block_time(self.current_timestamp)
         .build();
         self.builder.exec(request);
         self
@@ -194,7 +194,7 @@ impl VestingTest {
             self.get_proxy_hash(),
             (self.get_vesting_hash(), method::WITHDRAW_PROXY, amount),
         )
-        .with_block_time(self.current_time)
+        .with_block_time(self.current_timestamp)
         .build();
         self.builder.exec(request);
         self
@@ -206,7 +206,7 @@ impl VestingTest {
             self.get_proxy_hash(),
             (self.get_vesting_hash(), method::ADMIN_RELEASE_PROXY),
         )
-        .with_block_time(self.current_time)
+        .with_block_time(self.current_timestamp)
         .build();
         self.builder.exec(request);
         self
@@ -223,7 +223,7 @@ impl VestingTest {
             TRANFER_TO_ACCOUNT_WASM,
             (recipient, amount.as_u64()),
         )
-        .with_block_time(self.current_time)
+        .with_block_time(self.current_timestamp)
         .build();
         self.builder.exec(request).expect_success().commit();
         self
@@ -271,9 +271,9 @@ impl VestingTest {
         value.into_t().unwrap()
     }
 
-    pub fn assert_cliff_time(self, expected: &U512) -> Self {
-        let value: U512 = self.get_value(key::CLIFF_TIME);
-        assert_eq!(&value, expected, "cliff_time assertion failure");
+    pub fn assert_cliff_timestamp(self, expected: &U512) -> Self {
+        let value: U512 = self.get_value(key::CLIFF_TIMESTAMP);
+        assert_eq!(&value, expected, "cliff_timestamp assertion failure");
         self
     }
 
@@ -283,9 +283,9 @@ impl VestingTest {
         self
     }
 
-    pub fn assert_drip_period(self, expected: &U512) -> Self {
-        let value: U512 = self.get_value(key::DRIP_PERIOD);
-        assert_eq!(&value, expected, "drip_period assertion failure");
+    pub fn assert_drip_duration(self, expected: &U512) -> Self {
+        let value: U512 = self.get_value(key::DRIP_DURATION);
+        assert_eq!(&value, expected, "drip_duration assertion failure");
         self
     }
 
@@ -307,21 +307,21 @@ impl VestingTest {
         self
     }
 
-    pub fn assert_admin_release_period(self, expected: &U512) -> Self {
-        let value: U512 = self.get_value(key::ADMIN_RELEASE_PERIOD);
-        assert_eq!(&value, expected, "admin_release_period assertion failure");
+    pub fn assert_admin_release_duration(self, expected: &U512) -> Self {
+        let value: U512 = self.get_value(key::ADMIN_RELEASE_DURATION);
+        assert_eq!(&value, expected, "admin_release_duration assertion failure");
         self
     }
 
-    pub fn assert_on_pause_period(self, expected: &U512) -> Self {
-        let value: U512 = self.get_value(key::ON_PAUSE_PERIOD);
-        assert_eq!(&value, expected, "on_pause_period assertion failure");
+    pub fn assert_on_pause_duration(self, expected: &U512) -> Self {
+        let value: U512 = self.get_value(key::ON_PAUSE_DURATION);
+        assert_eq!(&value, expected, "on_pause_duration assertion failure");
         self
     }
 
-    pub fn assert_last_pause_time(self, expected: &U512) -> Self {
-        let value: U512 = self.get_value(key::LAST_PAUSE_TIME);
-        assert_eq!(&value, expected, "last_pause_time assertion failure");
+    pub fn assert_last_pause_timestamp(self, expected: &U512) -> Self {
+        let value: U512 = self.get_value(key::LAST_PAUSE_TIMESTAMP);
+        assert_eq!(&value, expected, "last_pause_timestamp assertion failure");
         self
     }
 

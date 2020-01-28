@@ -17,13 +17,13 @@ pub const PURSE_NAME: &str = "vesting_main_purse";
 type Amount = U512;
 type Time = U512;
 
-struct VestingContrat;
+struct VestingContract;
 
-impl VestingTrait<Amount, Time> for VestingContrat {
+impl VestingTrait<Amount, Time> for VestingContract {
     fn set_amount(&mut self, name: &str, value: Amount) {
         storage::write_local(name, value);
     }
-    fn get_amount(&self, name: &str) -> Amount {
+    fn amount(&self, name: &str) -> Amount {
         storage::read_local(&name)
             .unwrap_or_revert_with(Error::MissingLocalKey)
             .unwrap_or_revert_with(Error::UnexpectedType)
@@ -31,7 +31,7 @@ impl VestingTrait<Amount, Time> for VestingContrat {
     fn set_time(&mut self, name: &str, value: Time) {
         storage::write_local(name, value);
     }
-    fn get_time(&self, name: &str) -> Time {
+    fn time(&self, name: &str) -> Time {
         storage::read_local(&name)
             .unwrap_or_revert_with(Error::MissingLocalKey)
             .unwrap_or_revert_with(Error::UnexpectedType)
@@ -40,18 +40,18 @@ impl VestingTrait<Amount, Time> for VestingContrat {
         let val = if value { Amount::one() } else { Amount::zero() };
         self.set_amount(name, val);
     }
-    fn get_boolean(&self, name: &str) -> bool {
-        let val = self.get_amount(name);
+    fn boolean(&self, name: &str) -> bool {
+        let val = self.amount(name);
         val == Amount::one()
     }
-    fn current_time(&self) -> Time {
+    fn current_timestamp(&self) -> Time {
         let time: u64 = runtime::get_blocktime().into();
         time.into()
     }
 }
 
-fn constructor() {
-    let mut vault = VestingContrat;
+fn construct() {
+    let mut vault = VestingContract;
     match Api::from_args() {
         Api::Init(admin, recipient, vesting_config) => {
             set_admin_account(admin);
@@ -70,7 +70,7 @@ fn constructor() {
 }
 
 fn entry_point() {
-    let mut vault = VestingContrat;
+    let mut vault = VestingContract;
     match Api::from_args() {
         Api::Pause => {
             verify_admin_account();
@@ -127,16 +127,16 @@ fn set_admin_account(admin: PublicKey) {
     set_account(ADMIN_KEY, admin);
 }
 
-fn get_admin_account() -> PublicKey {
-    get_account(ADMIN_KEY)
+fn admin_account() -> PublicKey {
+    account(ADMIN_KEY)
 }
 
 fn set_recipient_account(recipient: PublicKey) {
     set_account(RECIPIENT_KEY, recipient);
 }
 
-fn get_recipient_account() -> PublicKey {
-    get_account(RECIPIENT_KEY)
+fn recipient_account() -> PublicKey {
+    account(RECIPIENT_KEY)
 }
 
 fn set_account(key: &str, value: PublicKey) {
@@ -144,7 +144,7 @@ fn set_account(key: &str, value: PublicKey) {
     storage::write_local(key, val);
 }
 
-fn get_account(key: &str) -> PublicKey {
+fn account(key: &str) -> PublicKey {
     let val: U256 = storage::read_local(&key)
         .unwrap_or_revert_with(Error::MissingLocalKey)
         .unwrap_or_revert_with(Error::UnexpectedType);
@@ -152,7 +152,7 @@ fn get_account(key: &str) -> PublicKey {
 }
 
 fn verify_admin_account() {
-    let admin = get_admin_account();
+    let admin = admin_account();
     let caller = runtime::get_caller();
     if admin != caller {
         runtime::revert(Error::NotTheAdminAccount);
@@ -160,7 +160,7 @@ fn verify_admin_account() {
 }
 
 fn verify_recipient_account() {
-    let recipient = get_recipient_account();
+    let recipient = recipient_account();
     let caller = runtime::get_caller();
     if recipient != caller {
         runtime::revert(Error::NotTheRecipientAccount);
@@ -182,7 +182,7 @@ fn local_purse() -> PurseId {
 #[no_mangle]
 pub extern "C" fn vesting() {
     if is_not_initialized() {
-        constructor();
+        construct();
         mark_as_initialized();
     } else {
         entry_point();
