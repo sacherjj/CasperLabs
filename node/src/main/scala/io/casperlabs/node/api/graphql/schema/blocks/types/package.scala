@@ -152,6 +152,8 @@ class GraphQLBlockTypes[F[_]: MonadThrowable
       // 2) Reading a full block: make use of Sangria Projections, although, not clear if it's possible to do without modifying the library's source code
       // UPDATE: It reads full blocks only if a query contains 'children' at any depth.
       // On the other hand, if 'children' presented, then it will read *all* blocks as FULL, even those for which we didn't ask children.
+      // UPDATE: Make sure to fetch blocks only when it's really needed.
+      // For instance, for 'block { parents { blockHash }' query it shouldn't fetch parent blocks, because all information is already presented in the child itself.
       //
       // 3) Seq->List conversion: least critical, must be ignored until the above 2 issues are solved
       RunToFuture[F].unsafeToFuture(
