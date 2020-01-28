@@ -281,7 +281,7 @@ object MessageProducer {
       keyBlockHashes <- DagOperations
                          .bfTraverseF(List(keyBlockHash)) { h =>
                            EraStorage[F].getEraUnsafe(h).map { e =>
-                             List(e.parentKeyBlockHash)
+                             List(e.parentKeyBlockHash).filterNot(_.isEmpty)
                            }
                          }
                          .takeUntil(_ == keyBlock.eraId)

@@ -41,7 +41,7 @@ class MessageProducerSpec extends FlatSpec with Matchers with Inspectors with Hi
 
         // Create an equivocation in an era by storing two messages that don't quote each other.
         // Return the block hash we can use as key block for the next era.
-        def equivocate(validator: String, era: Era): Task[BlockHash] = {
+        def produce(validator: String, era: Era, withEquivocation: Boolean): Task[BlockHash] = {
           val mp = new MockMessageProducer[Task](validator)
           for {
             dag    <- DagStorage[Task].getRepresentation
@@ -57,14 +57,19 @@ class MessageProducerSpec extends FlatSpec with Matchers with Inspectors with Hi
                   justifications = justifications,
                   isBookingBlock = false
                 )
-            _ <- mp.ballot(
-                  era.keyBlockHash,
-                  roundId = Ticks(era.endTick),
-                  target = genesis.messageHash,
-                  justifications = justifications
-                )
+            _ <- mp
+                  .ballot(
+                    era.keyBlockHash,
+                    roundId = Ticks(era.endTick),
+                    target = genesis.messageHash,
+                    justifications = justifications
+                  )
+                  .whenA(withEquivocation)
           } yield b.messageHash
         }
+
+        def equivocate(validator: String, era: Era) = produce(validator, era, true)
+        def normal(validator: String, era: Era)     = produce(validator, era, false)
 
         // Make an era tree where we'll put some equivocations into various ones
         // in the hierarchy and check that the right ones are gathered.
@@ -72,14 +77,20 @@ class MessageProducerSpec extends FlatSpec with Matchers with Inspectors with Hi
         //    \ eC - eD
         //         \ eE - eF
 
+        def equivocators(era: Era) =
+          MessageProducer.collectEquivocators[Task](era.keyBlockHash).map { vs =>
+            // Make it readable again.
+            vs.map(v => new String(v.toByteArray))
+          }
+
         override def test =
           for {
             _ <- insertGenesis()
 
             eA  <- addGenesisEra()
-            bAB <- equivocate("Alice", eA)
-            bAC <- equivocate("Alice", eA)
-            bAD <- equivocate("Alice", eA)
+            bAB <- normal("Alice", eA)
+            bAC <- normal("Alice", eA)
+            bAD <- normal("Alice", eA)
             bAE <- equivocate("Alice", eA)
 
             eB <- eA.addChildEra(bAB)
@@ -87,6 +98,7 @@ class MessageProducerSpec extends FlatSpec with Matchers with Inspectors with Hi
 
             eC  <- eA.addChildEra(bAC)
             bCF <- equivocate("Charlie", eC)
+            _   <- normal("Alice", eC)
 
             eD <- eC.addChildEra(bAD)
             _  <- equivocate("Dave", eD)
@@ -96,14 +108,12 @@ class MessageProducerSpec extends FlatSpec with Matchers with Inspectors with Hi
 
             eF <- eE.addChildEra(bCF)
             _  <- equivocate("Fred", eF)
+            _  <- normal("Bob", eF)
 
-            unforgiven <- MessageProducer.collectEquivocators[Task](eF.keyBlockHash)
-          } yield {
-            unforgiven("Charlie") shouldBe true
-            unforgiven("Eve") shouldBe true
-            unforgiven("Fred") shouldBe true
-            unforgiven.map(x => new String(x.toByteArray)) should have size 3
-          }
+            _ <- equivocators(eA) shouldBeF Set("Alice")
+            _ <- equivocators(eB) shouldBeF Set("Alice", "Bob")
+            _ <- equivocators(eF) shouldBeF Set("Charlie", "Eve", "Fred")
+          } yield ()
       }
   }
 
