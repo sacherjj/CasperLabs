@@ -1,0 +1,41 @@
+{
+  "name": "casperlabs-contract",
+  "version": "0.0.1",
+  "description": "Library for developing CasperLabs smart contracts.",
+  "main": "index.js",
+  "ascMain": "assembly/index.ts",
+  "dependencies": {},
+  "devDependencies": {
+    "@assemblyscript/loader": "^0.8.1",
+    "assemblyscript": "^0.8.1",
+    "ava": "^2.4.0",
+    "ts-loader": "^6.2.1",
+    "ts-node": "^8.5.4",
+    "typescript": "^3.7.3"
+  },
+  "scripts": {
+    "test": "npm run asbuild:test && ava -v --serial",
+    "asbuild:untouched": "asc assembly/index.ts -b build/untouched.wasm -t build/untouched.wat --sourceMap --validate --debug --use abort=",
+    "asbuild:optimized": "asc assembly/index.ts -b build/optimized.wasm -t build/optimized.wat --sourceMap --validate --optimize --use abort=",
+    "asbuild:test:bytesrepr": "asc tests/assembly/bytesrepr.spec.as.ts -b build/bytesrepr.spec.as.wasm -t build/bytesrepr.spec.as.wat --sourceMap --validate --optimize",
+    "asbuild:test:bignum": "asc tests/assembly/bignum.spec.as.ts -b build/bignum.spec.as.wasm -t build/bignum.spec.as.wat --sourceMap --validate --optimize",
+    "asbuild:test:utils": "asc tests/assembly/utils.spec.as.ts -b build/utils.spec.as.wasm -t build/utils.spec.as.wat --sourceMap --validate --optimize",
+    "asbuild:test": "npm run asbuild:test:bytesrepr && npm run asbuild:test:bignum && npm run asbuild:test:utils",
+    "asbuild": "npm run asbuild:untouched && npm run asbuild:optimized"
+  },
+  "author": "Michał Papierski <michal@papierski.net>",
+  "license": "Apache-2.0",
+  "ava": {
+    "compileEnhancements": true,
+    "extensions": [
+      "ts"
+    ],
+    "require": [
+      "ts-node/register",
+      "ts-node/register/transpile-only"
+    ],
+    "files": [
+      "tests/**/*.spec.ts"
+    ]
+  }
+}

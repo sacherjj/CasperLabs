@@ -101,7 +101,7 @@ abstract class HashSetCasperTestNode[F[_]](
   /** Put the genesis in the store. */
   def initialize(): F[Unit] =
     // pre-population removed from internals of Casper
-    blockStorage.put(genesis.blockHash, genesis, Seq.empty) >>
+    blockStorage.put(genesis.blockHash, genesis, Map.empty) >>
       dagStorage.getRepresentation.flatMap { dag =>
         ExecutionEngineServiceStub
           .validateBlockCheckpoint[F](
@@ -138,7 +138,6 @@ trait HashSetCasperTestNodeFactory {
 
   def standaloneF[F[_]](
       genesis: Block,
-      transforms: Seq[TransformEntry],
       sk: PrivateKey,
       storageSize: Long = 1024L * 1024 * 10,
       faultToleranceThreshold: Double = 0.1
@@ -152,14 +151,13 @@ trait HashSetCasperTestNodeFactory {
 
   def standaloneEff(
       genesis: Block,
-      transforms: Seq[TransformEntry],
       sk: PrivateKey,
       storageSize: Long = 1024L * 1024 * 10,
       faultToleranceThreshold: Double = 0.1
   )(
       implicit scheduler: Scheduler
   ): TestNode[Task] =
-    standaloneF[Task](genesis, transforms, sk, storageSize, faultToleranceThreshold)(
+    standaloneF[Task](genesis, sk, storageSize, faultToleranceThreshold)(
       Concurrent[Task],
       Parallel[Task],
       Timer[Task],
@@ -169,7 +167,6 @@ trait HashSetCasperTestNodeFactory {
   def networkF[F[_]](
       sks: IndexedSeq[PrivateKey],
       genesis: Block,
-      transforms: Seq[TransformEntry],
       storageSize: Long = 1024L * 1024 * 10,
       faultToleranceThreshold: Double = 0.1,
       maybeMakeEE: Option[HashSetCasperTestNode.MakeExecutionEngineService[F]] = None
@@ -184,7 +181,6 @@ trait HashSetCasperTestNodeFactory {
   def networkEff(
       sks: IndexedSeq[PrivateKey],
       genesis: Block,
-      transforms: Seq[TransformEntry],
       storageSize: Long = 1024L * 1024 * 10,
       faultToleranceThreshold: Double = 0.1,
       maybeMakeEE: Option[MakeExecutionEngineService[Task]] = None
@@ -192,7 +188,6 @@ trait HashSetCasperTestNodeFactory {
     networkF[Task](
       sks,
       genesis,
-      transforms,
       storageSize,
       faultToleranceThreshold,
       maybeMakeEE
@@ -231,7 +226,7 @@ object HashSetCasperTestNode {
           .map(p => Bond(ByteString.copyFrom(p._1)).withStake(state.BigInt(p._2.toString, 512)))
           .toSeq
 
-      private def getExecutionEffect(deploy: ipc.DeployItem) = {
+      private def getExecutionEffect(deploy: ipc.DeployItem): ExecutionEffect = {
         // The real execution engine will get the keys from what the code changes, which will include
         // changes to the account nonce for example, but not the deploy timestamp. Make sure the `key`
         // here isn't more specific to a deploy then the real thing would be.
@@ -258,9 +253,9 @@ object HashSetCasperTestNode {
               )
             )
         }
-        val transforEntry = TransformEntry(Some(key), Some(transform))
-        val opEntry       = OpEntry(Some(key), Some(op))
-        ExecutionEffect(Seq(opEntry), Seq(transforEntry))
+        val transformEntry = TransformEntry(Some(key), Some(transform))
+        val opEntry        = OpEntry(Some(key), Some(op))
+        ExecutionEffect(Seq(opEntry), Seq(transformEntry))
       }
 
       override def emptyStateHash: ByteString = ByteString.EMPTY

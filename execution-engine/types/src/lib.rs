@@ -16,7 +16,7 @@ mod cl_value;
 mod contract_ref;
 #[cfg(any(feature = "gens", test))]
 pub mod gens;
-mod key;
+pub mod key;
 mod phase;
 mod protocol_version;
 mod semver;

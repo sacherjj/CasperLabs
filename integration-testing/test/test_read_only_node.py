@@ -13,4 +13,5 @@ def test_read_only_node_does_not_accept_deploy(read_only_node_network):
             public_key=account.public_key_path,
             private_key=account.private_key_path,
         )
-    assert "FAILED_PRECONDITION: Node is in read-only mode" in str(exinfo.value)
+    assert "FAILED_PRECONDITION" in str(exinfo.value)
+    assert "Node is in read-only mode" in str(exinfo.value)

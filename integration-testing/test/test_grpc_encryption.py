@@ -95,6 +95,5 @@ def test_grpc_encryption_python_cli_and_proxy(encrypted_two_node_network):
 
     with raises(CLIErrorExit) as excinfo:
         block_info = cli("show-block", block_infos[0].summary.block_hash)
-    assert "StatusCode.UNAVAILABLE: failed to connect to all addresses" in str(
-        excinfo.value
-    )
+    # Expected grpc error: UNAVAILABLE
+    assert '"grpc_status":14' in str(excinfo.value)
