@@ -2,9 +2,12 @@ use std::convert::TryFrom;
 
 use engine_core::engine_state::{genesis::POS_REWARDS_PURSE, CONV_RATE, MAX_PAYMENT};
 use engine_shared::{motes::Motes, stored_value::StoredValue, transform::Transform};
-use engine_test_support::low_level::{
-    utils, DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_ACCOUNT_ADDR,
-    DEFAULT_ACCOUNT_INITIAL_BALANCE, DEFAULT_ACCOUNT_KEY, DEFAULT_GENESIS_CONFIG,
+use engine_test_support::{
+    internal::{
+        utils, DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder,
+        DEFAULT_ACCOUNT_KEY, DEFAULT_GENESIS_CONFIG,
+    },
+    DEFAULT_ACCOUNT_ADDR, DEFAULT_ACCOUNT_INITIAL_BALANCE,
 };
 use types::{
     account::{PublicKey, PurseId},
@@ -862,14 +865,14 @@ fn should_charge_non_main_purse() {
         let balance_mapping_key = Key::local(mint.addr(), &purse_bytes);
         let balance_uref = builder
             .query(None, balance_mapping_key, &[])
-            .and_then(|v| CLValue::try_from(v).ok())
-            .and_then(|cl_value| cl_value.into_t().ok())
+            .and_then(|v| CLValue::try_from(v).map_err(|error| format!("{:?}", error)))
+            .and_then(|cl_value| cl_value.into_t().map_err(|error| format!("{:?}", error)))
             .expect("should find balance uref");
 
         let balance: U512 = builder
             .query(None, balance_uref, &[])
-            .and_then(|v| CLValue::try_from(v).ok())
-            .and_then(|cl_value| cl_value.into_t().ok())
+            .and_then(|v| CLValue::try_from(v).map_err(|error| format!("{:?}", error)))
+            .and_then(|cl_value| cl_value.into_t().map_err(|error| format!("{:?}", error)))
             .expect("should parse balance into a U512");
 
         balance
@@ -925,14 +928,14 @@ fn should_charge_non_main_purse() {
         let balance_mapping_key = Key::local(mint.addr(), &purse_bytes);
         let balance_uref = builder
             .query(None, balance_mapping_key, &[])
-            .and_then(|v| CLValue::try_from(v).ok())
-            .and_then(|cl_value| cl_value.into_t().ok())
+            .and_then(|v| CLValue::try_from(v).map_err(|error| format!("{:?}", error)))
+            .and_then(|cl_value| cl_value.into_t().map_err(|error| format!("{:?}", error)))
             .expect("should find balance uref");
 
         let balance: U512 = builder
             .query(None, balance_uref, &[])
-            .and_then(|v| CLValue::try_from(v).ok())
-            .and_then(|cl_value| cl_value.into_t().ok())
+            .and_then(|v| CLValue::try_from(v).map_err(|error| format!("{:?}", error)))
+            .and_then(|cl_value| cl_value.into_t().map_err(|error| format!("{:?}", error)))
             .expect("should parse balance into a U512");
 
         balance

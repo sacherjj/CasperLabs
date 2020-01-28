@@ -2,7 +2,7 @@ use std::{convert::TryFrom, rc::Rc};
 
 use engine_core::engine_state::{execution_result::ExecutionResult, CONV_RATE};
 use engine_shared::motes::Motes;
-use engine_test_support::low_level::{
+use engine_test_support::internal::{
     utils, ExecuteRequestBuilder, InMemoryWasmTestBuilder as TestBuilder, DEFAULT_GENESIS_CONFIG,
 };
 use types::{
@@ -129,7 +129,7 @@ impl VestingTest {
         let value: CLValue = self
             .builder
             .query(None, account_key, &[name])
-            .and_then(|v| CLValue::try_from(v).ok())
+            .and_then(|v| CLValue::try_from(v).map_err(|error| format!("{:?}", error)))
             .expect("should have named uref in the account space.");
         let key: Key = value.into_t().unwrap();
         key.as_hash().unwrap()
@@ -266,8 +266,10 @@ impl VestingTest {
         let value: CLValue = self
             .builder
             .query(None, local_key.clone(), &[])
-            .and_then(|v| CLValue::try_from(v).ok())
-            .unwrap_or_else(|| panic!("should have local value for {} key", name));
+            .and_then(|v| CLValue::try_from(v).map_err(|error| format!("{:?}", error)))
+            .unwrap_or_else(|error| {
+                panic!("should have local value for {} key - {:?}", name, error)
+            });
         value.into_t().unwrap()
     }
 

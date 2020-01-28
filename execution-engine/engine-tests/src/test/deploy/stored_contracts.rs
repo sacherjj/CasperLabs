@@ -5,10 +5,12 @@ use engine_grpc_server::engine_server::ipc::DeployCode;
 use engine_shared::{
     additive_map::AdditiveMap, motes::Motes, stored_value::StoredValue, transform::Transform,
 };
-use engine_test_support::low_level::{
-    utils, AdditiveMapDiff, DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder,
-    UpgradeRequestBuilder, DEFAULT_ACCOUNT_ADDR, DEFAULT_ACCOUNT_INITIAL_BALANCE,
-    DEFAULT_ACCOUNT_KEY, DEFAULT_GENESIS_CONFIG,
+use engine_test_support::{
+    internal::{
+        utils, AdditiveMapDiff, DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder,
+        UpgradeRequestBuilder, DEFAULT_ACCOUNT_KEY, DEFAULT_GENESIS_CONFIG,
+    },
+    DEFAULT_ACCOUNT_ADDR, DEFAULT_ACCOUNT_INITIAL_BALANCE,
 };
 use types::{account::PublicKey, Key, ProtocolVersion, U512};
 

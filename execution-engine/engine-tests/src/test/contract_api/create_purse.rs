@@ -2,9 +2,9 @@ use base16;
 use lazy_static::lazy_static;
 
 use engine_shared::transform::Transform;
-use engine_test_support::low_level::{
-    ExecuteRequestBuilder, WasmTestBuilder, DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG,
-    DEFAULT_PAYMENT,
+use engine_test_support::{
+    internal::{ExecuteRequestBuilder, WasmTestBuilder, DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT},
+    DEFAULT_ACCOUNT_ADDR,
 };
 use types::{account::PurseId, Key, U512};
 

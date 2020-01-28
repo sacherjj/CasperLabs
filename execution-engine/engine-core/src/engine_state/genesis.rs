@@ -181,6 +181,10 @@ impl GenesisConfig {
     pub fn accounts(&self) -> &[GenesisAccount] {
         self.accounts.as_slice()
     }
+
+    pub fn push_account(&mut self, account: GenesisAccount) {
+        self.accounts.push(account);
+    }
 }
 
 impl Distribution<GenesisConfig> for Standard {
