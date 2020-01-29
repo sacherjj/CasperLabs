@@ -10,6 +10,7 @@ import io.casperlabs.storage.{BlockHash, SQLiteStorage}
 import io.casperlabs.casper.consensus.{Block, BlockSummary, Bond, Era}
 import io.casperlabs.casper.consensus.state
 import io.casperlabs.casper.highway.mocks.{MockForkChoice, MockMessageProducer}
+import io.casperlabs.casper.helper.NoOpsEventEmitter
 import io.casperlabs.crypto.Keys.{PublicKey, PublicKeyBS}
 import io.casperlabs.comm.gossiping.{Relaying, WaitHandle}
 import io.casperlabs.models.ArbitraryConsensus
@@ -130,9 +131,12 @@ trait HighwayFixture extends StorageFixture with TickUtils with ArbitraryConsens
         printLevel = printLevel
       )
 
+    implicit val eventEmitter = NoOpsEventEmitter.create[Task]
+
     implicit val forkchoice = MockForkChoice.unsafe[Task](genesis)
 
     val messageProducer: MessageProducer[Task] = new MockMessageProducer[Task](validator)
+    val messageExecutor: MessageExecutor[Task] = new MessageExecutor[Task]()
 
     implicit val relaying = new Relaying[Task] {
       override def relay(hashes: List[BlockHash]): Task[WaitHandle[Task]] = ().pure[Task].pure[Task]
@@ -183,6 +187,7 @@ trait HighwayFixture extends StorageFixture with TickUtils with ArbitraryConsens
                        conf,
                        genesis.blockSummary,
                        messageProducer.some,
+                       messageExecutor,
                        initRoundExponent,
                        isSyncedRef.get
                      )

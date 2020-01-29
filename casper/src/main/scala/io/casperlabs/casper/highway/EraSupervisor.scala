@@ -12,7 +12,7 @@ import io.casperlabs.comm.gossiping.Relaying
 import io.casperlabs.models.Message
 import io.casperlabs.shared.Log
 import io.casperlabs.storage.BlockHash
-import io.casperlabs.storage.block.BlockStorageWriter
+import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.storage.dag.{DagRepresentation, DagStorage, FinalityStorageReader}
 import io.casperlabs.storage.era.EraStorage
 import scala.concurrent.duration.FiniteDuration
@@ -23,7 +23,7 @@ import scala.util.control.NonFatal
   * - manages the scheduling of the agendas of the eras by acting as a trampoline for them
   * - propagates messages received or created by parent eras to the descendants to keep the latest messsages up to date.
   */
-class EraSupervisor[F[_]: Concurrent: Timer: Log: BlockStorageWriter: EraStorage: Relaying: ForkChoiceManager](
+class EraSupervisor[F[_]: Concurrent: Timer: Log: EraStorage: Relaying: ForkChoiceManager](
     conf: HighwayConf,
     // Once the supervisor is shut down, reject incoming messages.
     isShutdownRef: Ref[F, Boolean],
@@ -234,10 +234,11 @@ class EraSupervisor[F[_]: Concurrent: Timer: Log: BlockStorageWriter: EraStorage
 
 object EraSupervisor {
 
-  def apply[F[_]: Concurrent: Timer: Log: EraStorage: BlockStorageWriter: DagStorage: FinalityStorageReader: Relaying: ForkChoiceManager](
+  def apply[F[_]: Concurrent: Timer: Log: EraStorage: DagStorage: FinalityStorageReader: Relaying: ForkChoiceManager](
       conf: HighwayConf,
       genesis: BlockSummary,
       maybeMessageProducer: Option[MessageProducer[F]],
+      messageExecutor: MessageExecutor[F],
       initRoundExponent: Int,
       isSynced: F[Boolean]
   ): Resource[F, EraSupervisor[F]] =
@@ -257,8 +258,6 @@ object EraSupervisor {
             isSynced
           )
 
-        executor = new MessageExecutor[F]()
-
         supervisor = new EraSupervisor[F](
           conf,
           isShutdownRef,
@@ -266,7 +265,7 @@ object EraSupervisor {
           erasRef,
           scheduleRef,
           makeRuntime,
-          executor
+          messageExecutor
         )
 
         // Make sure we have the genesis era in storage. We'll resume if it's the first one.

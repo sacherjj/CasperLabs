@@ -554,23 +554,20 @@ class EraRuntime[F[_]: MonadThrowable: Clock: EraStorage: FinalityStorageReader:
     * added concurrently, and that we validate the message according to the
     * rules of this era. */
   def validateAndAddBlock(messageExecutor: MessageExecutor[F], block: Block): F[Message] =
-    validatorSemaphoreMap.withPermit(PublicKey(block.getHeader.validatorPublicKey)) {
-      for {
-        message    <- MonadThrowable[F].fromTry(Message.fromBlock(block))
-        maybeError <- validate(message).value
-        _ <- maybeError.fold(
-              error =>
-                MonadThrowable[F].raiseError[Unit](
-                  new IllegalArgumentException(s"Could not validate block against era: $error")
-                ),
-              _ => ().pure[F]
-            )
-
-        isBookingBlock <- message.isBookingBlock
-        _              <- messageExecutor.validateAndAdd(block, isBookingBlock)
-
-      } yield message
-    }
+    for {
+      message    <- MonadThrowable[F].fromTry(Message.fromBlock(block))
+      maybeError <- validate(message).value
+      _ <- maybeError.fold(
+            error =>
+              MonadThrowable[F].raiseError[Unit](
+                new IllegalArgumentException(s"Could not validate block against era: $error")
+              ),
+            _ => ().pure[F]
+          )
+      semaphore      <- validatorSemaphoreMap.getOrAdd(PublicKey(block.getHeader.validatorPublicKey))
+      isBookingBlock <- message.isBookingBlock
+      _              <- messageExecutor.validateAndAdd(semaphore, block, isBookingBlock)
+    } yield message
 }
 
 object EraRuntime {
