@@ -241,11 +241,7 @@ class EraSupervisor[F[_]: Concurrent: Timer: Log: BlockStorageWriter: EraStorage
   private def addToParent(child: Entry[F]): F[Unit] =
     erasRef.update { eras =>
       val parentKeyBlockHash = child.runtime.era.parentKeyBlockHash
-      val parent             = eras(parentKeyBlockHash)
-      eras.updated(
-        parentKeyBlockHash,
-        parent.copy(children = parent.children + child.runtime.era.keyBlockHash)
-      )
+      eras.updated(parentKeyBlockHash, eras(parentKeyBlockHash).withChild(child))
     }
 }
 
@@ -295,11 +291,17 @@ object EraSupervisor {
       } yield supervisor
     }(_.shutdown())
 
+  /** The supervisor keeps track of the eras it initiated, and maintains the set of
+    * child eras that era originally had, plus what it obtained along the way.
+    */
   case class Entry[F[_]](
       runtime: EraRuntime[F],
       children: Set[BlockHash]
   ) {
-    def keyBlockHash = runtime.era.keyBlockHash
+    def keyBlockHash =
+      runtime.era.keyBlockHash
+    def withChild(child: Entry[F]) =
+      copy(children = children + child.keyBlockHash)
   }
   object Entry {
     implicit def `Key[Entry]`[F[_]]: Key[Entry[F]] =
