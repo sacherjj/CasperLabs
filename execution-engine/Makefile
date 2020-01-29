@@ -60,6 +60,8 @@ INTEGRATION_CONTRACTS := $(patsubst %, build-integration-contract/%, $(INTEGRATI
 CONTRACT_TARGET_DIR       = target/wasm32-unknown-unknown/release
 CONTRACT_TARGET_DIR_AS    = target-as
 PACKAGED_SYSTEM_CONTRACTS = mint_install.wasm pos_install.wasm
+TOOL_TARGET_DIR           = cargo-casperlabs/target
+TOOL_WASM_DIR             = cargo-casperlabs/wasm
 
 .PHONY: all
 all: build build-contracts
@@ -112,14 +114,8 @@ build-integration-contracts: $(INTEGRATION_CONTRACTS)
 .PHONY: build-example-contracts
 build-example-contracts: $(EXAMPLE_CONTRACTS)
 
-.PHONY: build-tool-contracts
-build-tool-contracts: \
-	build-contract-rs/mint-install \
-	build-contract-rs/pos-install \
-	build-contract-rs/standard-payment
-
 .PHONY: test-rs
-test-rs: build-tool-contracts
+test-rs:
 	$(CARGO) test $(CARGO_FLAGS) --all -- --nocapture
 
 .PHONY: test-as
@@ -150,7 +146,7 @@ format:
 	$(CARGO) fmt --all
 
 .PHONY: lint
-lint: build-tool-contracts
+lint:
 	$(CARGO) clippy --all-targets --all -- -D warnings -A renamed_and_removed_lints
 
 .PHONY: check
@@ -165,6 +161,8 @@ check: \
 clean:
 	rm -f comm/.rpm
 	rm -rf $(CONTRACT_TARGET_DIR_AS)
+	rm -rf $(TOOL_TARGET_DIR)
+	rm -rf $(TOOL_WASM_DIR)
 	$(CARGO) clean
 
 .PHONY: deb

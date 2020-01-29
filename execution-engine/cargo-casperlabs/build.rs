@@ -38,7 +38,8 @@ impl Package for StandardPayment {
     const WASM_FILENAME: &'static str = "standard_payment.wasm";
 }
 
-const ORIGINAL_WASM_DIR: &str = "../target/wasm32-unknown-unknown/release";
+const TARGET_DIR_FOR_WASM: &str = "target/built-contracts";
+const ORIGINAL_WASM_DIR: &str = "wasm32-unknown-unknown/release";
 const NEW_WASM_DIR: &str = "wasm";
 
 fn build_package<T: Package>() {
@@ -60,7 +61,7 @@ fn build_package<T: Package>() {
     // '.../cargo-casperlabs/target/built-contracts' and then copy the resulting Wasm file from
     // there to '.../cargo-casperlabs/wasm'.
 
-    let target_dir = root_dir.join("target").join("built-contracts");
+    let target_dir = root_dir.join(TARGET_DIR_FOR_WASM);
     build_args.push(format!(
         "--target-dir={}",
         target_dir.to_str().expect("Expected valid unicode")
@@ -83,7 +84,7 @@ fn build_package<T: Package>() {
     let new_wasm_dir = env::current_dir().unwrap().join(NEW_WASM_DIR);
     let _ = fs::create_dir(&new_wasm_dir);
 
-    let original_wasm_file = PathBuf::from(ORIGINAL_WASM_DIR).join(T::WASM_FILENAME);
+    let original_wasm_file = target_dir.join(ORIGINAL_WASM_DIR).join(T::WASM_FILENAME);
     let copied_wasm_file = new_wasm_dir.join(T::WASM_FILENAME);
     fs::copy(original_wasm_file, copied_wasm_file).unwrap();
 }
