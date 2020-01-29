@@ -12,7 +12,6 @@ import io.casperlabs.comm.gossiping.Relaying
 import io.casperlabs.models.Message
 import io.casperlabs.shared.Log
 import io.casperlabs.storage.BlockHash
-import io.casperlabs.storage.BlockMsgWithTransform
 import io.casperlabs.storage.block.BlockStorageWriter
 import io.casperlabs.storage.dag.{DagRepresentation, DagStorage, FinalityStorageReader}
 import io.casperlabs.storage.era.EraStorage
@@ -46,26 +45,13 @@ class EraSupervisor[F[_]: Concurrent: Timer: Log: BlockStorageWriter: EraStorage
     * it will be gossiped if it's successfully validated. Only need to broadcast responses. */
   def validateAndAddBlock(block: Block): F[Unit] =
     for {
-      _       <- ensureNotShutdown
-      message <- Sync[F].fromTry(Message.fromBlock(block))
+      _      <- ensureNotShutdown
+      header = block.getHeader
       _ <- Log[F].debug(
-            s"Handling incoming ${message.messageHash.show -> "message"} from ${message.validatorId.show -> "validator"} in ${message.roundId -> "round"} ${message.eraId.show -> "era"}"
+            s"Handling incoming ${block.blockHash.show -> "message"} from ${header.validatorPublicKey.show -> "validator"} in ${header.roundId -> "round"} ${header.keyBlockHash.show -> "era"}"
           )
-      entry <- load(message.eraId)
-      _ <- entry.runtime.validate(message).value.flatMap {
-            _.fold(
-              error =>
-                Sync[F].raiseError[Unit](
-                  new IllegalArgumentException(s"Could not validate block against era: $error")
-                ),
-              _ => ().pure[F]
-            )
-          }
-
-      // TODO (NODE-1128): Validate and execute the block, store it in the block store and DAG store.
-      // Pass the `isBookingBlock` flag as well. For now just store the incoming blocks so they
-      // are available in the DAG when we produce messages on top of them.
-      _ <- BlockStorageWriter[F].put(BlockMsgWithTransform().withBlockMessage(block))
+      entry   <- load(header.keyBlockHash)
+      message <- entry.runtime.validateAndAddBlock(block)
 
       // Tell descendant eras for the next time they create a block that this era received a message.
       // NOTE: If the events create an era it will only be loaded later, so the first time
@@ -199,7 +185,7 @@ class EraSupervisor[F[_]: Concurrent: Timer: Log: BlockStorageWriter: EraStorage
     } void
   }
 
-  /** Update descendant eras' latest messages. */
+  /** Update this and descendant eras' latest messages. */
   private def propagateLatestMessageToDescendantEras(message: Message): F[Unit] =
     for {
       // Let this era know as well. You'd expect that the message production will

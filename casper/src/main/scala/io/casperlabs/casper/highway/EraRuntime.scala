@@ -13,6 +13,8 @@ import io.casperlabs.catscontrib.{MakeSemaphore, MonadThrowable}
 import io.casperlabs.crypto.Keys.{PublicKey, PublicKeyBS}
 import io.casperlabs.models.Message
 import io.casperlabs.storage.BlockHash
+import io.casperlabs.storage.BlockMsgWithTransform
+import io.casperlabs.storage.block.BlockStorageWriter
 import io.casperlabs.storage.dag.{DagRepresentation, DagStorage, FinalityStorageReader}
 import io.casperlabs.storage.era.EraStorage
 import io.casperlabs.shared.SemaphoreMap
@@ -444,7 +446,9 @@ class EraRuntime[F[_]: MonadThrowable: Clock: EraStorage: FinalityStorageReader:
       }
     }
 
-  /** Handle a block or ballot coming from another validator. For example:
+  /** Handle a block or ballot coming from another validator.
+    * The block is already validated and stored, here we just want to get the protocol reactions.
+    * For example:
     * - if it's a lambda message, create a lambda response
     * - if it's a switch block, create a new era, unless it exists already.
     * Returns a list of events that happened during the persisting of changes.
@@ -539,6 +543,32 @@ class EraRuntime[F[_]: MonadThrowable: Clock: EraStorage: FinalityStorageReader:
         noop
       case block: Message.Block =>
         HighwayLog.liftF(block.isSwitchBlock).ifM(createEra(block), noop)
+    }
+
+  /** Perform the validation and persistence of an incoming block.
+    * Doesn't include reacting to it. It's here so we can encapsulate
+    * the logic to make sure no two blocks from the same validator are
+    * added concurrently, and that we validate the message according to the
+    * rules of this era. */
+  def validateAndAddBlock(block: Block)(implicit BS: BlockStorageWriter[F]): F[Message] =
+    validatorSemaphoreMap.withPermit(PublicKey(block.getHeader.validatorPublicKey)) {
+      for {
+        message    <- MonadThrowable[F].fromTry(Message.fromBlock(block))
+        maybeError <- validate(message).value
+        _ <- maybeError.fold(
+              error =>
+                MonadThrowable[F].raiseError[Unit](
+                  new IllegalArgumentException(s"Could not validate block against era: $error")
+                ),
+              _ => ().pure[F]
+            )
+
+        // TODO (NODE-1128): Validate and execute the block, store it in the block store and DAG store.
+        // Pass the `isBookingBlock` flag as well. For now just store the incoming blocks so they
+        // are available in the DAG when we produce messages on top of them.
+        _ <- BlockStorageWriter[F].put(BlockMsgWithTransform().withBlockMessage(block))
+
+      } yield message
     }
 }
 
