@@ -8,14 +8,11 @@ import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
 import io.casperlabs.casper.{DeployFilters, DeploySelection, ValidatorIdentity}
 import io.casperlabs.casper.consensus.{Bond, Era}
 import io.casperlabs.casper.consensus.state
-import io.casperlabs.casper.consensus.state.ProtocolVersion
 import io.casperlabs.casper.highway.mocks.MockMessageProducer
-import io.casperlabs.casper.util.CasperLabsProtocol
 import io.casperlabs.storage.BlockHash
 import io.casperlabs.storage.dag.DagStorage
 import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.mempool.DeployBuffer
-import io.casperlabs.casper.util.execengine.ExecutionEngineServiceStub
 import io.casperlabs.casper.scalatestcontrib._
 import monix.eval.Task
 import org.scalatest._
@@ -122,17 +119,12 @@ class MessageProducerSpec extends FlatSpec with Matchers with Inspectors with Hi
   it should "assign fields correctly and restart the validator seq.no and prev message hash in new eras" in testFixture {
     implicit timer => implicit db =>
       new Fixture(length = 3 * eraDuration) { self =>
-        val chainName               = "message-producer-test-chain"
         val (privateKey, publicKey) = Ed25519.newKeyPair
         val validatorId             = PublicKey(ByteString.copyFrom(publicKey))
 
         override val messageProducer: MessageProducer[Task] = {
-          implicit val deployBuffer = DeployBuffer.create[Task](chainName, minTtl = Duration.Zero)
-          implicit val protocol = CasperLabsProtocol.unsafe[Task](
-            (0L, ProtocolVersion(0, 1, 0), none)
-          )
-          implicit val execEngineService = ExecutionEngineServiceStub.noOpApi[Task]()
-          implicit val deploySelection   = DeploySelection.create[Task](sizeLimitBytes = Int.MaxValue)
+          implicit val deployBuffer    = DeployBuffer.create[Task](chainName, minTtl = Duration.Zero)
+          implicit val deploySelection = DeploySelection.create[Task](sizeLimitBytes = Int.MaxValue)
 
           MessageProducer[Task](
             validatorIdentity =

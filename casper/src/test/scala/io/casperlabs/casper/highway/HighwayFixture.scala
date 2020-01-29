@@ -9,8 +9,12 @@ import io.casperlabs.casper.helper.StorageFixture
 import io.casperlabs.storage.{BlockHash, SQLiteStorage}
 import io.casperlabs.casper.consensus.{Block, BlockSummary, Bond, Era}
 import io.casperlabs.casper.consensus.state
+import io.casperlabs.casper.consensus.state.ProtocolVersion
+import io.casperlabs.casper.util.CasperLabsProtocol
 import io.casperlabs.casper.highway.mocks.{MockForkChoice, MockMessageProducer}
+import io.casperlabs.casper.mocks.MockValidation
 import io.casperlabs.casper.helper.NoOpsEventEmitter
+import io.casperlabs.casper.validation.{raiseValidateErrorThroughApplicativeError, ValidationImpl}
 import io.casperlabs.crypto.Keys.{PublicKey, PublicKeyBS}
 import io.casperlabs.comm.gossiping.{Relaying, WaitHandle}
 import io.casperlabs.models.ArbitraryConsensus
@@ -25,6 +29,7 @@ import monix.execution.Scheduler
 import monix.execution.schedulers.TestScheduler
 import scala.concurrent.duration._
 import org.scalatest.Suite
+import io.casperlabs.casper.util.execengine.ExecutionEngineServiceStub
 
 trait HighwayFixture extends StorageFixture with TickUtils with ArbitraryConsensus { self: Suite =>
 
@@ -107,22 +112,23 @@ trait HighwayFixture extends StorageFixture with TickUtils with ArbitraryConsens
 
     override val start = conf.genesisEraStart
 
-    val genesis = Message
-      .fromBlockSummary(
-        BlockSummary()
-          .withBlockHash(ByteString.copyFromUtf8("genesis"))
-          .withHeader(
-            Block
-              .Header()
-              .withState(
-                Block
-                  .GlobalState()
-                  .withBonds(bonds)
-              )
-          )
-      )
-      .get
-      .asInstanceOf[Message.Block]
+    val chainName = "highway-test-chain"
+
+    private val genesisBlock =
+      Block()
+        .withBlockHash(ByteString.copyFromUtf8("genesis"))
+        .withHeader(
+          Block
+            .Header()
+            .withChainName(chainName)
+            .withState(
+              Block
+                .GlobalState()
+                .withBonds(bonds)
+            )
+        )
+
+    val genesis = Message.fromBlock(genesisBlock).get.asInstanceOf[Message.Block]
 
     implicit val log: Log[Task] with LogStub =
       LogStub[Task](
@@ -135,8 +141,20 @@ trait HighwayFixture extends StorageFixture with TickUtils with ArbitraryConsens
 
     implicit val forkchoice = MockForkChoice.unsafe[Task](genesis)
 
+    implicit val execEngineService = ExecutionEngineServiceStub.noOpApi[Task]()
+    implicit val validationRaise   = raiseValidateErrorThroughApplicativeError[Task]
+    implicit val protocol = CasperLabsProtocol.unsafe[Task](
+      (0L, ProtocolVersion(0, 0, 0), none)
+    )
+    // While we're using the MockMessageProducer we can't fully validate blocks.
+    implicit val validation                    = new MockValidation[Task]
     val messageProducer: MessageProducer[Task] = new MockMessageProducer[Task](validator)
-    val messageExecutor: MessageExecutor[Task] = new MessageExecutor[Task]()
+    val messageExecutor: MessageExecutor[Task] = new MessageExecutor[Task](
+      chainName = chainName,
+      genesis = genesisBlock,
+      upgrades = Seq.empty,
+      maybeValidatorId = Some(validator: PublicKeyBS)
+    )
 
     implicit val relaying = new Relaying[Task] {
       override def relay(hashes: List[BlockHash]): Task[WaitHandle[Task]] = ().pure[Task].pure[Task]

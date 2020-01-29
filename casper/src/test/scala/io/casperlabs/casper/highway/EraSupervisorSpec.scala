@@ -90,7 +90,8 @@ class EraSupervisorSpec extends FlatSpec with Matchers with Inspectors with High
             length,
             validator = validator,
             initRoundExponent = 15,
-            isSyncedRef = isSyncedRef
+            isSyncedRef = isSyncedRef,
+            printLevel = Log.Level.Warn
           ) (timer, db) {
 
         val validatorId: PublicKeyBS              = validator

@@ -24,6 +24,8 @@ import Validation._
 import cats.effect.Sync
 import io.casperlabs.casper.consensus.state.ProtocolVersion
 import io.casperlabs.smartcontracts.ExecutionEngineService.CommitResult
+import io.casperlabs.models.Message
+import cats.Monad
 
 object ValidationImpl {
   def apply[F[_]](implicit ev: ValidationImpl[F]): Validation[F] = ev
@@ -75,6 +77,9 @@ object ValidationImpl {
           implicit versions: CasperLabsProtocol[F]
       ): F[Unit] =
         Metrics[F].timer("blockSummary")(underlying.blockSummary(summary, chainName))
+
+      override def checkEquivocation(dag: DagRepresentation[F], message: Message): F[Unit] =
+        Metrics[F].timer("checkEquivocation")(underlying.checkEquivocation(dag, message))
     }
   }
 }
@@ -284,5 +289,8 @@ class ValidationImpl[F[_]: Sync: FunctorRaise[*[_], InvalidBlock]: Log: Time: Me
     FunctorRaise[F, InvalidBlock]
       .raise[Unit](InvalidTargetHash)
       .whenA(b.getHeader.messageType.isBallot && b.getHeader.parentHashes.size != 1)
+
+  override def checkEquivocation(dag: DagRepresentation[F], message: Message): F[Unit] =
+    EquivocationDetector.checkEquivocationWithUpdate[F](dag, message)
 
 }
