@@ -28,7 +28,7 @@ use engine_shared::{
     newtypes::{Blake2bHash, CorrelationId},
 };
 use engine_storage::global_state::{CommitResult, StateProvider};
-use types::ProtocolVersion;
+use types::{bytesrepr::ToBytes, ProtocolVersion};
 
 use self::{
     ipc::{
@@ -94,16 +94,15 @@ where
         let response = match result {
             Ok(QueryResult::Success(value)) => {
                 let mut result = ipc::QueryResponse::new();
-                match value.try_into() {
+                match value.to_bytes() {
                     Ok(pb_value) => {
                         let log_message =
                             format!("query successful; correlation_id: {}", correlation_id);
                         log_info(&log_message);
                         result.set_success(pb_value);
                     }
-                    Err(ParsingError(error_msg)) => {
-                        let log_message =
-                            format!("Failed to convert StoredValue to Value: {}", error_msg);
+                    Err(error_msg) => {
+                        let log_message = format!("Failed to serialize StoredValue: {}", error_msg);
                         logging::log_error(&log_message);
                         result.set_failure(log_message);
                     }

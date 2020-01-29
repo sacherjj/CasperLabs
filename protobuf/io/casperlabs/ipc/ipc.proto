@@ -200,7 +200,8 @@ message QueryRequest {
 
 message QueryResponse {
     oneof result {
-        io.casperlabs.casper.consensus.state.Value success = 1;
+        // serialized `StoredValue`
+        bytes success = 1;
         //TODO: ADT for errors
         string failure = 2;
     }
