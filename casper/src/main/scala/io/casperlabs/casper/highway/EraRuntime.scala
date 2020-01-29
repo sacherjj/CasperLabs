@@ -15,6 +15,7 @@ import io.casperlabs.models.Message
 import io.casperlabs.storage.BlockHash
 import io.casperlabs.storage.dag.{DagRepresentation, DagStorage, FinalityStorageReader}
 import io.casperlabs.storage.era.EraStorage
+import io.casperlabs.shared.SemaphoreMap
 import scala.util.Random
 
 /** Class to encapsulate the message handling logic of messages in an era.
@@ -45,7 +46,9 @@ class EraRuntime[F[_]: MonadThrowable: Clock: EraStorage: FinalityStorageReader:
     // our previous message was X, and make a message X <- Y, we must not at the same time
     // make a message X <- Z. Since we let the fork choice tell us what justifications to use,
     // we must protect the fork choice _and_ the message production with a common semaphore.
-    createMessageSemaphore: Semaphore[F],
+    // Also make sure that we only add one message from another validator at a time, so as
+    // not to miss any equivocations that may happen if they arrive at the same time.
+    validatorSemaphoreMap: SemaphoreMap[F, PublicKeyBS],
     // Indicate whether the initial syncing mechanism that runs when the node is started
     // is still ongoing, or it has concluded and the node is caught up with its peers.
     // Before that, responding to messages risks creating an equivocation, in case some
@@ -122,6 +125,11 @@ class EraRuntime[F[_]: MonadThrowable: Clock: EraStorage: FinalityStorageReader:
       else false.pure[F]
   }
 
+  private implicit class MessageProducerOps(mp: MessageProducer[F]) {
+    def withPermit[T](block: F[T]): F[T] =
+      validatorSemaphoreMap.withPermit(mp.validatorId)(block)
+  }
+
   /** Current tick based on wall clock time. */
   private def currentTick =
     Clock[F].realTime(conf.tickUnit).map(Ticks(_))
@@ -186,7 +194,7 @@ class EraRuntime[F[_]: MonadThrowable: Clock: EraStorage: FinalityStorageReader:
   ): HWL[Unit] = ifSynced {
     for {
       b <- HighwayLog.liftF {
-            createMessageSemaphore.withPermit {
+            messageProducer.withPermit {
               for {
                 // We need to cite the lambda message, and our own latest message.
                 // NOTE: The latter will be empty until the validator produces something in this era.
@@ -222,7 +230,7 @@ class EraRuntime[F[_]: MonadThrowable: Clock: EraStorage: FinalityStorageReader:
       messageProducer: MessageProducer[F],
       roundId: Ticks
   ): HWL[Unit] = ifSynced {
-    val message: F[Message] = createMessageSemaphore.withPermit {
+    val message: F[Message] = messageProducer.withPermit {
       for {
         choice <- ForkChoice[F].fromKeyBlock(era.keyBlockHash)
         // In the active period we create a block, but during voting
@@ -270,7 +278,7 @@ class EraRuntime[F[_]: MonadThrowable: Clock: EraStorage: FinalityStorageReader:
   ): HWL[Unit] = ifSynced {
     for {
       b <- HighwayLog.liftF {
-            createMessageSemaphore.withPermit {
+            messageProducer.withPermit {
               for {
                 choice <- ForkChoice[F].fromKeyBlock(era.keyBlockHash)
                 message <- messageProducer.ballot(
@@ -571,7 +579,7 @@ object EraRuntime {
       leaderFunction   <- leaderSequencer[F](era)
       roundExponentRef <- Ref.of[F, Int](initRoundExponent)
       dag              <- DagStorage[F].getRepresentation
-      semaphore        <- MakeSemaphore[F](1)
+      semaphoreMap     <- SemaphoreMap[F, PublicKeyBS](1)
     } yield {
       new EraRuntime[F](
         conf,
@@ -583,7 +591,7 @@ object EraRuntime {
         maybeMessageProducer.filter { mp =>
           era.bonds.exists(b => b.validatorPublicKey == mp.validatorId)
         },
-        semaphore,
+        semaphoreMap,
         isSynced,
         dag
       )
