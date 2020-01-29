@@ -30,7 +30,8 @@ class EraSupervisor[F[_]: Concurrent: Timer: Log: BlockStorageWriter: EraStorage
     eraStartSemaphore: Semaphore[F],
     erasRef: Ref[F, Map[BlockHash, EraSupervisor.Entry[F]]],
     scheduleRef: Ref[F, Map[(BlockHash, Agenda.DelayedAction), Fiber[F, Unit]]],
-    makeRuntime: Era => F[EraRuntime[F]]
+    makeRuntime: Era => F[EraRuntime[F]],
+    executor: MessageExecutor[F]
 ) {
   import EraSupervisor.Entry
 
@@ -51,7 +52,7 @@ class EraSupervisor[F[_]: Concurrent: Timer: Log: BlockStorageWriter: EraStorage
             s"Handling incoming ${block.blockHash.show -> "message"} from ${header.validatorPublicKey.show -> "validator"} in ${header.roundId -> "round"} ${header.keyBlockHash.show -> "era"}"
           )
       entry   <- load(header.keyBlockHash)
-      message <- entry.runtime.validateAndAddBlock(block)
+      message <- entry.runtime.validateAndAddBlock(executor, block)
 
       // Tell descendant eras for the next time they create a block that this era received a message.
       // NOTE: If the events create an era it will only be loaded later, so the first time
@@ -256,13 +257,16 @@ object EraSupervisor {
             isSynced
           )
 
+        executor = new MessageExecutor[F]()
+
         supervisor = new EraSupervisor[F](
           conf,
           isShutdownRef,
           erasSemaphore,
           erasRef,
           scheduleRef,
-          makeRuntime
+          makeRuntime,
+          executor
         )
 
         // Make sure we have the genesis era in storage. We'll resume if it's the first one.

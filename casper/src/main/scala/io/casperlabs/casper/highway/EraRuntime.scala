@@ -13,8 +13,6 @@ import io.casperlabs.catscontrib.{MakeSemaphore, MonadThrowable}
 import io.casperlabs.crypto.Keys.{PublicKey, PublicKeyBS}
 import io.casperlabs.models.Message
 import io.casperlabs.storage.BlockHash
-import io.casperlabs.storage.BlockMsgWithTransform
-import io.casperlabs.storage.block.BlockStorageWriter
 import io.casperlabs.storage.dag.{DagRepresentation, DagStorage, FinalityStorageReader}
 import io.casperlabs.storage.era.EraStorage
 import io.casperlabs.shared.SemaphoreMap
@@ -108,16 +106,21 @@ class EraRuntime[F[_]: MonadThrowable: Clock: EraStorage: FinalityStorageReader:
       conf.toInstant(Ticks(msg.roundId))
 
     /** Check if this block is the first in its main-chain that crosses the end of the era. */
-    def isSwitchBlock: F[Boolean] =
+    def isSwitchBlock: F[Boolean] = isBoundaryBlock(isSwitchBoundary)
+
+    /** Check if this block is one that crosses an era booking boundary, therefor has to execute the auction. */
+    def isBookingBlock: F[Boolean] = isBoundaryBlock(isBookingBoundary)
+
+    /** Check whether the parent to child transition crosses a boundary. */
+    private def isBoundaryBlock(isBoundary: (Instant, Instant) => Boolean): F[Boolean] =
       if (msg.parentBlock.isEmpty || !msg.isInstanceOf[Message.Block])
         false.pure[F]
       else
         dag
           .lookupUnsafe(msg.parentBlock)
-          .map { parent =>
-            isSwitchBoundary(parent.roundInstant, msg.roundInstant)
-          }
+          .map(parent => isBoundary(parent.roundInstant, msg.roundInstant))
 
+    /** Check whether a block or ballot is a lambda message. */
     def isLambdaMessage: F[Boolean] =
       if (leaderFunction(Ticks(msg.roundId)) == msg.validatorId)
         msg match {
@@ -550,7 +553,7 @@ class EraRuntime[F[_]: MonadThrowable: Clock: EraStorage: FinalityStorageReader:
     * the logic to make sure no two blocks from the same validator are
     * added concurrently, and that we validate the message according to the
     * rules of this era. */
-  def validateAndAddBlock(block: Block)(implicit BS: BlockStorageWriter[F]): F[Message] =
+  def validateAndAddBlock(messageExecutor: MessageExecutor[F], block: Block): F[Message] =
     validatorSemaphoreMap.withPermit(PublicKey(block.getHeader.validatorPublicKey)) {
       for {
         message    <- MonadThrowable[F].fromTry(Message.fromBlock(block))
@@ -563,10 +566,8 @@ class EraRuntime[F[_]: MonadThrowable: Clock: EraStorage: FinalityStorageReader:
               _ => ().pure[F]
             )
 
-        // TODO (NODE-1128): Validate and execute the block, store it in the block store and DAG store.
-        // Pass the `isBookingBlock` flag as well. For now just store the incoming blocks so they
-        // are available in the DAG when we produce messages on top of them.
-        _ <- BlockStorageWriter[F].put(BlockMsgWithTransform().withBlockMessage(block))
+        isBookingBlock <- message.isBookingBlock
+        _              <- messageExecutor.validateAndAdd(block, isBookingBlock)
 
       } yield message
     }
