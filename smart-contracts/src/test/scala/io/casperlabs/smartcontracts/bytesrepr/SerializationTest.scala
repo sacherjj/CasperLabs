@@ -2,8 +2,9 @@ package io.casperlabs.smartcontracts.bytesrepr
 
 import org.scalatest.{FlatSpec, Matchers}
 import org.scalatest.prop.PropertyChecks
+import SerializationTest.roundTrip
 
-class SerializationTest extends FlatSpec with Matchers with PropertyChecks {
+class SerializationTest extends FlatSpec with PropertyChecks {
 
   "Booleans" should "serialize properly" in forAll { (b: Boolean) =>
     roundTrip(b)
@@ -56,7 +57,9 @@ class SerializationTest extends FlatSpec with Matchers with PropertyChecks {
   "Triples of values" should "serialize properly" in forAll { (t: (Int, String, Long)) =>
     roundTrip(t)
   }
+}
 
-  private def roundTrip[T: ToBytes: FromBytes](t: T) =
+object SerializationTest extends Matchers {
+  def roundTrip[T: ToBytes: FromBytes](t: T) =
     FromBytes.deserialize(ToBytes[T].toBytes(t)) shouldBe Right(t)
 }

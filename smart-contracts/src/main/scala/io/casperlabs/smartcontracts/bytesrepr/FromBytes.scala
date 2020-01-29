@@ -15,9 +15,10 @@ import simulacrum.typeclass
 object FromBytes {
   sealed trait Error
   object Error {
-    case object LeftOverBytes                   extends Error
-    case object NotEnoughBytes                  extends Error
-    case class FormatException(message: String) extends Error
+    case object LeftOverBytes                                 extends Error
+    case object NotEnoughBytes                                extends Error
+    case class InvalidVariantTag(tag: Byte, typeName: String) extends Error
+    case class FormatException(message: String)               extends Error
   }
 
   def deserialize[T: FromBytes](bytes: Array[Byte]): Either[Error, T] =
@@ -109,7 +110,7 @@ object FromBytes {
           }
 
         case (other, _) =>
-          Left(Error.FormatException(s"Variant tag $other is not valid for type Option"))
+          Left(Error.InvalidVariantTag(other, "Option"))
       }
   }
 
@@ -148,7 +149,7 @@ object FromBytes {
             }
 
           case (other, _) =>
-            Left(Error.FormatException(s"Variant tag $other is not valid for type Either"))
+            Left(Error.InvalidVariantTag(other, "Either"))
         }
     }
 
@@ -194,7 +195,7 @@ object FromBytes {
   private def attempt[T](block: => T): Either[Error, T] =
     Try(block).toEither.leftMap(err => Error.FormatException(err.getMessage))
 
-  private def safeTake(
+  def safeTake(
       n: Int,
       bytes: BytesView
   ): Either[Error.NotEnoughBytes.type, (BytesView, BytesView)] =
@@ -203,7 +204,7 @@ object FromBytes {
       case Some(result) => Right(result)
     }
 
-  private def safePop(
+  def safePop(
       bytes: BytesView
   ): Either[Error.NotEnoughBytes.type, (Byte, BytesView)] =
     bytes.pop match {
