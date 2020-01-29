@@ -35,7 +35,7 @@ from casperlabs_local_net.casperlabs_network import (
 def unique_run_num(pytestconfig):
     try:
         run_num = int(os.environ.get("UNIQUE_RUN_NUM"))
-    except ValueError:
+    except TypeError:
         run_num = 0
     return run_num
 

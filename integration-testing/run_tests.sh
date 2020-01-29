@@ -1,6 +1,6 @@
 #!/bin/bash -e
 
-PYTEST_ARGS="-vv -ra "
+PYTEST_ARGS=" -vv -ra"
 
 echo "Unique run num in run_tests.sh: ${UNIQUE_RUN_NUM}"
 
@@ -18,24 +18,26 @@ if [[ "${TEST_RUN_ARGS}" == "" ]]; then
 fi
 
 
-case ${UNIQUE_RUN_NUM} in
-  [0])
-  TEST_FILTER=" -k \"R0\""
-  ;;
-  [1])
-  TEST_FILTER=" -k \"R1\""
-  ;;
-  [2])
-  TEST_FILTER=" -k \"not R0 or R1\""
-  ;;
-  *)
-  TEST_FILTER=""
-  ;;
-esac
 
-echo "Test Filter: ${TEST_FILTER}"
+TEST_FILTER=(-k "\"R1\"")
+echo "Test Filter: " "${TEST_FILTER[@]}"
 
 pip install pipenv
 pipenv sync
-pipenv run client/CasperLabsClient/install.sh
-pipenv run pytest ${PYTEST_ARGS} "${TEST_RUN_ARGS}" ${TEST_FILTER}
+pipenv run ./client/CasperLabsClient/install.sh
+
+# Cannot get the quoted -k arguments passed in via variable replacement.
+# I would love to do that if someone can show me where I'm messing up.
+case ${UNIQUE_RUN_NUM} in
+  [0])
+  pipenv run pytest -k "R0" ${PYTEST_ARGS} ${TEST_RUN_ARGS}  ;;
+  [1])
+  pipenv run pytest -k "R1" ${PYTEST_ARGS} ${TEST_RUN_ARGS}
+  ;;
+  [2])
+  pipenv run pytest -k "not R0 or R1" ${PYTEST_ARGS} ${TEST_RUN_ARGS}
+  ;;
+  *)
+  pipenv run pytest ${PYTEST_ARGS} ${TEST_RUN_ARGS}
+  ;;
+esac
