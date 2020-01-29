@@ -90,6 +90,11 @@ class MessageExecutor[F[_]: Sync: Log: Time: Metrics: BlockStorage: DagStorage: 
     */
   def effectsAfterAdded(message: Message): F[Unit] =
     for {
+      info <- BlockAPI.getBlockInfo[F](
+               Base16.encode(message.messageHash.toByteArray),
+               BlockInfo.View.FULL
+             )
+      _ <- EventEmitter[F].blockAdded(info)
       _ <- updateLastFinalizedBlock(message)
       _ <- markDeploysAsProcessed(message)
     } yield ()
@@ -125,11 +130,11 @@ class MessageExecutor[F[_]: Sync: Log: Time: Metrics: BlockStorage: DagStorage: 
   ): F[Unit] =
     status match {
       case Valid =>
-        addToState(block, blockEffects) *>
+        save(block, blockEffects) *>
           Log[F].info(s"Added ${block.blockHash.show -> "block"}")
 
       case EquivocatedBlock | SelfEquivocatedBlock =>
-        addToState(block, blockEffects) *>
+        save(block, blockEffects) *>
           Log[F].info(s"Added equivocated ${block.blockHash.show -> "block"}")
 
       case InvalidUnslashableBlock | InvalidBlockNumber | InvalidParents | InvalidSequenceNumber |
@@ -155,15 +160,8 @@ class MessageExecutor[F[_]: Sync: Log: Time: Metrics: BlockStorage: DagStorage: 
     }
 
   /** Save the block to the block and DAG storage. */
-  private def addToState(block: Block, blockEffects: BlockEffects): F[Unit] =
-    for {
-      _ <- BlockStorage[F].put(block, blockEffects.effects)
-      info <- BlockAPI.getBlockInfo[F](
-               Base16.encode(block.blockHash.toByteArray),
-               BlockInfo.View.FULL
-             )
-      _ <- EventEmitter[F].blockAdded(info)
-    } yield ()
+  private def save(block: Block, blockEffects: BlockEffects): F[Unit] =
+    BlockStorage[F].put(block, blockEffects.effects)
 
   // NOTE: Don't call this on genesis, genesis is presumed to be already computed and saved.
   private def computeEffects(
