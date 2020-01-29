@@ -30,6 +30,7 @@ import monix.execution.schedulers.TestScheduler
 import scala.concurrent.duration._
 import org.scalatest.Suite
 import io.casperlabs.casper.util.execengine.ExecutionEngineServiceStub
+import io.casperlabs.casper.finality.MultiParentFinalizer
 
 trait HighwayFixture extends StorageFixture with TickUtils with ArbitraryConsensus { self: Suite =>
 
@@ -140,6 +141,12 @@ trait HighwayFixture extends StorageFixture with TickUtils with ArbitraryConsens
     implicit val eventEmitter = NoOpsEventEmitter.create[Task]
 
     implicit val forkchoice = MockForkChoice.unsafe[Task](genesis)
+
+    implicit val finalizer = new MultiParentFinalizer[Task] {
+      override def onNewMessageAdded(
+          message: Message
+      ): Task[Option[MultiParentFinalizer.FinalizedBlocks]] = none.pure[Task]
+    }
 
     implicit val execEngineService = ExecutionEngineServiceStub.noOpApi[Task]()
     implicit val validationRaise   = raiseValidateErrorThroughApplicativeError[Task]

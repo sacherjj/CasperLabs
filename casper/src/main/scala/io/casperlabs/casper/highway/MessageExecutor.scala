@@ -9,6 +9,7 @@ import io.casperlabs.casper.api.BlockAPI
 import io.casperlabs.casper.consensus.Block
 import io.casperlabs.casper.consensus.info.BlockInfo
 import io.casperlabs.casper.equivocations.EquivocationDetector
+import io.casperlabs.casper.finality.MultiParentFinalizer
 import io.casperlabs.casper.validation.Validation
 import io.casperlabs.casper.validation.Validation.BlockEffects
 import io.casperlabs.casper.validation.Errors.{DropErrorWrapper, ValidateErrorWrapper}
@@ -25,13 +26,13 @@ import io.casperlabs.metrics.implicits._ // for .timer syntax
 import io.casperlabs.shared.{Log, Time}
 import io.casperlabs.storage.BlockMsgWithTransform
 import io.casperlabs.storage.block.BlockStorage
-import io.casperlabs.storage.deploy.DeployStorage
+import io.casperlabs.storage.deploy.{DeployStorage, DeployStorageWriter}
 import io.casperlabs.storage.dag.DagStorage
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import scala.util.control.NonFatal
 
 /** A stateless class to encapsulate the steps to validate, execute and store a block. */
-class MessageExecutor[F[_]: Sync: Log: Time: Metrics: BlockStorage: DagStorage: DeployStorage: EventEmitter: Validation: CasperLabsProtocol: ExecutionEngineService: Fs2Compiler](
+class MessageExecutor[F[_]: Sync: Log: Time: Metrics: BlockStorage: DagStorage: DeployStorage: EventEmitter: Validation: CasperLabsProtocol: ExecutionEngineService: Fs2Compiler: MultiParentFinalizer](
     chainName: String,
     genesis: Block,
     upgrades: Seq[ipc.ChainSpec.UpgradePoint],
@@ -79,6 +80,42 @@ class MessageExecutor[F[_]: Sync: Log: Time: Metrics: BlockStorage: DagStorage: 
             addEffects(InvalidUnslashableBlock, block, BlockEffects.empty)
         }
     }
+
+  /** Carry out maintenance after a message has been added either by this validator or another one.
+    * This used to happen together with validation, however that meant that messages created by this
+    * validator was also validated, so executed twice. Now messages are created by the `MessageProducer`,
+    * so this method needs to be accessible on its own. However it should not be called by the `MessageProducer`
+    * itself, because that's not supposed to have side effects beyond persistence, and this here can emit events
+    * which end up visible to the outside world.
+    */
+  def effectsAfterAdded(message: Message): F[Unit] =
+    for {
+      _ <- updateLastFinalizedBlock(message)
+      _ <- markDeploysAsProcessed(message)
+    } yield ()
+
+  private def updateLastFinalizedBlock(message: Message): F[Unit] =
+    for {
+      result <- MultiParentFinalizer[F].onNewMessageAdded(message)
+      _ <- result.traverse {
+            case MultiParentFinalizer.FinalizedBlocks(mainParent, _, secondary) => {
+              val mainParentFinalizedStr = mainParent.show
+              val secondaryParentsFinalizedStr =
+                secondary.map(_.show).mkString("{", ", ", "}")
+              Log[F].info(
+                s"New last finalized block hashes are ${mainParentFinalizedStr -> null}, ${secondaryParentsFinalizedStr -> null}."
+              ) >> EventEmitter[F]
+                .newLastFinalizedBlock(mainParent, secondary)
+            }
+          }
+    } yield ()
+
+  private def markDeploysAsProcessed(message: Message): F[Unit] =
+    for {
+      block            <- BlockStorage[F].getBlockUnsafe(message.messageHash)
+      processedDeploys = block.getBody.deploys.map(_.getDeploy).toList
+      _                <- DeployStorageWriter[F].markAsProcessed(processedDeploys)
+    } yield ()
 
   /** Carry out the effects according to the status: store valid blocks, ignore invalid ones. */
   private def addEffects(
@@ -178,10 +215,9 @@ class MessageExecutor[F[_]: Sync: Log: Time: Metrics: BlockStorage: DagStorage: 
         //         block,
         //         invalidBlockTracker = Set.empty
         //       )
-        _       <- Log[F].debug(s"Checking equivocation for ${hashPrefix -> "block"}")
-        message <- MonadThrowable[F].fromTry(Message.fromBlock(block))
-        _       <- Validation[F].checkEquivocation(dag, message).timer("checkEquivocationsWithUpdate")
-        _       <- Log[F].debug(s"Block effects calculated for ${hashPrefix -> "block"}")
+        _ <- Log[F].debug(s"Checking equivocation for ${hashPrefix -> "block"}")
+        _ <- Validation[F].checkEquivocation(dag, block).timer("checkEquivocationsWithUpdate")
+        _ <- Log[F].debug(s"Block effects calculated for ${hashPrefix -> "block"}")
       } yield blockEffects
 
       def validBlock(effects: BlockEffects)  = ((Valid: BlockStatus)  -> effects).pure[F]

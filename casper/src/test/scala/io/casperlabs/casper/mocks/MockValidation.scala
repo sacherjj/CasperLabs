@@ -13,7 +13,6 @@ import io.casperlabs.storage.dag.DagRepresentation
 import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.catscontrib.Fs2Compiler
-import io.casperlabs.models.Message
 
 class MockValidation[F[_]: Applicative] extends Validation[F] {
 
@@ -54,5 +53,5 @@ class MockValidation[F[_]: Applicative] extends Validation[F] {
       chainName: String
   )(implicit versions: CasperLabsProtocol[F]): F[Unit] = ().pure[F]
 
-  override def checkEquivocation(dag: DagRepresentation[F], message: Message): F[Unit] = ().pure[F]
+  override def checkEquivocation(dag: DagRepresentation[F], block: Block): F[Unit] = ().pure[F]
 }

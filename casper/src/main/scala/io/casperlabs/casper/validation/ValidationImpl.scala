@@ -78,8 +78,8 @@ object ValidationImpl {
       ): F[Unit] =
         Metrics[F].timer("blockSummary")(underlying.blockSummary(summary, chainName))
 
-      override def checkEquivocation(dag: DagRepresentation[F], message: Message): F[Unit] =
-        Metrics[F].timer("checkEquivocation")(underlying.checkEquivocation(dag, message))
+      override def checkEquivocation(dag: DagRepresentation[F], block: Block): F[Unit] =
+        Metrics[F].timer("checkEquivocation")(underlying.checkEquivocation(dag, block))
     }
   }
 }
@@ -290,7 +290,10 @@ class ValidationImpl[F[_]: Sync: FunctorRaise[*[_], InvalidBlock]: Log: Time: Me
       .raise[Unit](InvalidTargetHash)
       .whenA(b.getHeader.messageType.isBallot && b.getHeader.parentHashes.size != 1)
 
-  override def checkEquivocation(dag: DagRepresentation[F], message: Message): F[Unit] =
-    EquivocationDetector.checkEquivocationWithUpdate[F](dag, message)
+  override def checkEquivocation(dag: DagRepresentation[F], block: Block): F[Unit] =
+    for {
+      message <- Sync[F].fromTry(Message.fromBlock(block))
+      _       <- EquivocationDetector.checkEquivocationWithUpdate[F](dag, message)
+    } yield ()
 
 }

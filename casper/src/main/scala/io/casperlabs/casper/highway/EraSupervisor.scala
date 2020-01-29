@@ -31,7 +31,7 @@ class EraSupervisor[F[_]: Concurrent: Timer: Log: EraStorage: Relaying: ForkChoi
     erasRef: Ref[F, Map[BlockHash, EraSupervisor.Entry[F]]],
     scheduleRef: Ref[F, Map[(BlockHash, Agenda.DelayedAction), Fiber[F, Unit]]],
     makeRuntime: Era => F[EraRuntime[F]],
-    executor: MessageExecutor[F]
+    messageExecutor: MessageExecutor[F]
 ) {
   import EraSupervisor.Entry
 
@@ -52,7 +52,8 @@ class EraSupervisor[F[_]: Concurrent: Timer: Log: EraStorage: Relaying: ForkChoi
             s"Handling incoming ${block.blockHash.show -> "message"} from ${header.validatorPublicKey.show -> "validator"} in ${header.roundId -> "round"} ${header.keyBlockHash.show -> "era"}"
           )
       entry   <- load(header.keyBlockHash)
-      message <- entry.runtime.validateAndAddBlock(executor, block)
+      message <- entry.runtime.validateAndAddBlock(messageExecutor, block)
+      _       <- messageExecutor.effectsAfterAdded(message)
 
       // Tell descendant eras for the next time they create a block that this era received a message.
       // NOTE: If the events create an era it will only be loaded later, so the first time
@@ -160,6 +161,7 @@ class EraSupervisor[F[_]: Concurrent: Timer: Log: EraStorage: Relaying: ForkChoi
         _ <- Log[F].debug(
               s"Created $kind ${message.messageHash.show -> "message"} in ${message.roundId -> "round"} ${message.eraId.show -> "era"} child of ${message.parentBlock.show -> "parent"}"
             )
+        _ <- messageExecutor.effectsAfterAdded(message)
         _ <- Relaying[F].relay(List(message.messageHash))
         _ <- propagateLatestMessageToDescendantEras(message)
       } yield ()

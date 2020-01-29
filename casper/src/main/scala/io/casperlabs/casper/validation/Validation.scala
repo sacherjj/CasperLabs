@@ -86,7 +86,7 @@ trait Validation[F[_]] {
       chainName: String
   )(implicit versions: CasperLabsProtocol[F]): F[Unit]
 
-  def checkEquivocation(dag: DagRepresentation[F], message: Message): F[Unit]
+  def checkEquivocation(dag: DagRepresentation[F], block: Block): F[Unit]
 }
 
 object Validation {
