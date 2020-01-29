@@ -581,6 +581,8 @@ class InterceptedTwoNodeNetwork(TwoNodeNetwork):
 
 
 class ThreeNodeNetwork(CasperLabsNetwork):
+    auto_propose = True
+
     def create_cl_network(self):
         kp = self.get_key()
         config = DockerConfig(
@@ -589,13 +591,17 @@ class ThreeNodeNetwork(CasperLabsNetwork):
             node_public_key=kp.public_key,
             network=self.create_docker_network(),
             node_account=kp,
+            auto_propose=self.auto_propose,
         )
         self.add_bootstrap(config)
 
         for _ in range(1, 3):
             kp = self.get_key()
             config = DockerConfig(
-                self.docker_client, node_private_key=kp.private_key, node_account=kp
+                self.docker_client,
+                node_private_key=kp.private_key,
+                node_account=kp,
+                auto_propose=self.auto_propose,
             )
             self.add_cl_node(config)
 
@@ -614,6 +620,8 @@ class ThreeNodeNetworkWithTwoBootstraps(CasperLabsNetwork):
     - node-2 is setup to bootstrap from node-0 and node-1.
     """
 
+    auto_propose = True
+
     def get_node_config(self, number, network):
         kp = self.get_key()
         return DockerConfig(
@@ -623,6 +631,7 @@ class ThreeNodeNetworkWithTwoBootstraps(CasperLabsNetwork):
             node_account=kp,
             number=number,
             network=network,
+            auto_propose=self.auto_propose,
         )
 
     def _docker_tag(self, config):

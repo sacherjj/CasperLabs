@@ -213,6 +213,8 @@ class CasperLabsClient:
     gRPC CasperLabs client.
     """
 
+    DEPLOY_STATUS_CHECK_DELAY = 0.5
+
     def __init__(
         self,
         host: str = DEFAULT_HOST,
@@ -616,6 +618,28 @@ class CasperLabsClient:
                 block_added=block_added, block_finalized=block_finalized
             )
         )
+
+    @api
+    def wait_for_deploy_processed(
+        self, deploy_hash, on_error_raise=True, delay=DEPLOY_STATUS_CHECK_DELAY
+    ):
+        result = None
+        while True:
+            result = self.showDeploy(deploy_hash)
+            if result.status.state != 1:  # PENDING
+                break
+            time.sleep(delay)
+
+        if on_error_raise:
+            if len(result.processing_results) == 0:
+                raise Exception(f"Deploy {deploy_hash} status: {result.status}")
+
+            last_processing_result = result.processing_results[0]
+            if last_processing_result.is_error:
+                raise Exception(
+                    f"Deploy {deploy_hash} execution error: {last_processing_result.error_message}"
+                )
+        return result
 
     def cli(self, *arguments) -> int:
         from . import cli

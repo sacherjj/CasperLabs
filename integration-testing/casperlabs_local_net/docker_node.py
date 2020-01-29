@@ -548,3 +548,25 @@ class DockerNode(LoggingDockerBase):
         rc, output = self.exec_run(cmd)
         if rc != 0:
             raise Exception(f"Error executing '{cmd}: Exit code {rc}: {output}")
+
+    def deploy_and_wait_for_processed(self, **kwargs):
+        client = self.p_client.client
+        deploy_hash = client.deploy(**kwargs)
+        result = client.wait_for_deploy_processed(deploy_hash)
+        return result
+
+    def deploy_and_get_block_hash(self, account, contract, raise_on_error=True):
+        result = self.deploy_and_wait_for_processed(
+            session=self.resources_folder / contract,
+            from_addr=account.public_key_hex,
+            public_key=account.public_key_path,
+            private_key=account.private_key_path,
+            payment_amount=10 ** 8,
+        )
+        block_hash = result.processing_results[0].block_info.summary.block_hash.hex()
+
+        if raise_on_error:
+            deploys = self.p_client.show_deploys(block_hash)
+            for deploy in deploys:
+                assert deploy.is_error is False
+        return block_hash
