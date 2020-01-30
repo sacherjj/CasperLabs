@@ -1,16 +1,12 @@
 use alloc::{boxed::Box, vec::Vec};
 use core::result;
 
-use contract::contract_api::storage;
 use types::{
     account::PublicKey,
     bytesrepr::{self, FromBytes, ToBytes},
     system_contract_errors::pos::{Error, Result},
     BlockTime, CLType, CLTyped, U512,
 };
-
-const BONDING_KEY: u8 = 1;
-const UNBONDING_KEY: u8 = 2;
 
 /// A pending entry in the bonding or unbonding queue.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -63,52 +59,7 @@ impl CLTyped for QueueEntry {
     }
 }
 
-pub trait QueueProvider {
-    /// Reads bonding queue.
-    fn read_bonding() -> Queue;
-
-    /// Reads unbonding queue.
-    fn read_unbonding() -> Queue;
-
-    /// Writes bonding queue.
-    fn write_bonding(queue: Queue);
-
-    /// Writes unbonding queue.
-    fn write_unbonding(queue: Queue);
-}
-
-/// A `QueueProvider` that reads and writes the queue to/from the contract's
-/// local state.
-pub struct QueueLocal;
-
-impl QueueProvider for QueueLocal {
-    /// Reads bonding queue from the local state of the contract.
-    fn read_bonding() -> Queue {
-        storage::read_local(&BONDING_KEY)
-            .unwrap_or_default()
-            .unwrap_or_default()
-    }
-
-    /// Reads unbonding queue from the local state of the contract.
-    fn read_unbonding() -> Queue {
-        storage::read_local(&UNBONDING_KEY)
-            .unwrap_or_default()
-            .unwrap_or_default()
-    }
-
-    /// Writes bonding queue to the local state of the contract.
-    fn write_bonding(queue: Queue) {
-        storage::write_local(BONDING_KEY, queue);
-    }
-
-    /// Writes unbonding queue to the local state of the contract.
-    fn write_unbonding(queue: Queue) {
-        storage::write_local(UNBONDING_KEY, queue);
-    }
-}
-
-/// A queue of bonding or unbonding requests, sorted by timestamp in ascending
-/// order.
+/// A queue of bonding or unbonding requests, sorted by timestamp in ascending order.
 #[derive(Clone, Default)]
 pub struct Queue(pub Vec<QueueEntry>);
 
@@ -173,7 +124,7 @@ impl CLTyped for Queue {
 mod tests {
     use types::{account::PublicKey, system_contract_errors::pos::Error, BlockTime, U512};
 
-    use crate::queue::{Queue, QueueEntry};
+    use super::{Queue, QueueEntry};
 
     const KEY1: [u8; 32] = [1; 32];
     const KEY2: [u8; 32] = [2; 32];

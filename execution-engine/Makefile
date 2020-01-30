@@ -149,6 +149,14 @@ format:
 lint:
 	$(CARGO) clippy --all-targets --all -- -D warnings -A renamed_and_removed_lints
 
+.PHONY: check-rs
+check-rs: \
+	build \
+	check-format \
+	lint \
+	test-rs \
+	test-contracts-rs
+
 .PHONY: check
 check: \
 	build \
