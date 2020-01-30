@@ -115,7 +115,7 @@ trait HighwayFixture extends StorageFixture with TickUtils with ArbitraryConsens
 
     val chainName = "highway-test-chain"
 
-    private val genesisBlock =
+    val genesisBlock =
       Block()
         .withBlockHash(ByteString.copyFromUtf8("genesis"))
         .withHeader(
@@ -195,15 +195,8 @@ trait HighwayFixture extends StorageFixture with TickUtils with ArbitraryConsens
         isSyncedRef.get
       )
 
-    def insertGenesis(): Task[Unit] = {
-      val genesisSummary = genesis.blockSummary
-      val genesisBlock = Block(
-        blockHash = genesisSummary.blockHash,
-        header = genesisSummary.header,
-        signature = genesisSummary.signature
-      )
+    def insertGenesis(): Task[Unit] =
       db.put(BlockMsgWithTransform().withBlockMessage(genesisBlock))
-    }
 
     def makeSupervisor(): Resource[Task, EraSupervisor[Task]] =
       for {

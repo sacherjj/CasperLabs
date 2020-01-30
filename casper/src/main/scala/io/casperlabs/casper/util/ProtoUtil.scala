@@ -515,12 +515,14 @@ object ProtoUtil {
       timestamp: Long,
       chainName: String,
       keyBlockHash: ByteString = ByteString.EMPTY, // For Genesis it will be empty.
-      roundId: Long = 0
+      roundId: Long = 0,
+      magicBit: Boolean = false
   ): Block.Header =
     Block
       .Header()
       .withKeyBlockHash(keyBlockHash)
       .withRoundId(roundId)
+      .withMagicBit(magicBit)
       .withParentHashes(parentHashes)
       .withJustifications(justifications)
       .withDeployCount(body.deploys.size)
