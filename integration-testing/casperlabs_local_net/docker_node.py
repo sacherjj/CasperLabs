@@ -416,7 +416,7 @@ class DockerNode(LoggingDockerBase):
             ]
         )
 
-        deploy_hash_hex = self.p_client.deploy(
+        deploy_hash = self.p_client.deploy(
             from_address=from_account.public_key_hex,
             session_contract=session_contract,
             payment_contract=payment_contract,
@@ -427,17 +427,26 @@ class DockerNode(LoggingDockerBase):
             payment_args=payment_args,
         )
 
-        assert len(deploy_hash_hex) == 64
-
-        response = self.p_client.propose()
-
-        block_hash = response.block_hash.hex()
-        assert len(deploy_hash_hex) == 64
-
-        if is_deploy_error_check:
-            for deploy_info in self.p_client.show_deploys(block_hash):
-                if deploy_info.is_error:
-                    raise Exception(f"transfer_to_account: {deploy_info.error_message}")
+        if self.cl_network.auto_propose:
+            client = self.p_client.client
+            result = client.wait_for_deploy_processed(
+                deploy_hash, on_error_raise=is_deploy_error_check
+            )
+            last_processing_result = result.processing_results[0]
+            block_hash = last_processing_result.block_info.summary.block_hash.hex()
+            if is_deploy_error_check and last_processing_result.is_error:
+                raise Exception(
+                    f"transfer_to_account: {last_processing_result.error_message}"
+                )
+        else:
+            response = self.p_client.propose()
+            block_hash = response.block_hash.hex()
+            if is_deploy_error_check:
+                for deploy_info in self.p_client.show_deploys(block_hash):
+                    if deploy_info.is_error:
+                        raise Exception(
+                            f"transfer_to_account: {deploy_info.error_message}"
+                        )
 
         return block_hash
 

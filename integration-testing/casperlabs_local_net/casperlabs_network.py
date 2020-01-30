@@ -364,6 +364,7 @@ class OneNodeNetworkWithChainspecUpgrades(OneNodeNetwork):
         "modified_system_upgrader.wasm",
         "pos_install.wasm",
     )
+    auto_propose = True
 
     def __init__(
         self,
@@ -424,12 +425,13 @@ class ReadOnlyNodeNetwork(OneNodeNetwork):
 class PaymentNodeNetwork(OneNodeNetwork):
     """ A single node network with payment code enabled"""
 
-    pass
+    auto_propose = True
 
 
 class TrillionPaymentNodeNetwork(OneNodeNetwork):
     """ A single node network with payment code enabled"""
 
+    auto_propose = True
     initial_motes = (
         MAX_PAYMENT_COST * 100 * 1000
     )  # 10 millions * 100 * 1000 =  billion motes * 1000 = trillion
@@ -443,6 +445,7 @@ class PaymentNodeNetworkWithNoMinBalance(OneNodeNetwork):
 
 class OneNodeWithGRPCEncryption(OneNodeNetwork):
     grpc_encryption = True
+    auto_propose = True
 
 
 class OneNodeWithAutoPropose(OneNodeNetwork):
@@ -529,6 +532,7 @@ class TwoNodeWithDifferentAccountsCSVNetwork(CasperLabsNetwork):
 
 class EncryptedTwoNodeNetwork(TwoNodeNetwork):
     grpc_encryption = True
+    auto_propose = True
 
 
 class InterceptedOneNodeNetwork(OneNodeNetwork):
@@ -708,6 +712,8 @@ class MultiNodeJoinedNetwork(CasperLabsNetwork):
 
 
 class CustomConnectionNetwork(CasperLabsNetwork):
+    auto_propose = True
+
     def create_cl_network(
         self, node_count: int = 3, network_connections: List[List[int]] = None
     ) -> None:
@@ -733,6 +739,7 @@ class CustomConnectionNetwork(CasperLabsNetwork):
             node_public_key=kp.public_key,
             network=self.create_docker_network(),
             node_account=kp,
+            auto_propose=self.auto_propose,
         )
         self.add_bootstrap(config)
 
@@ -743,6 +750,7 @@ class CustomConnectionNetwork(CasperLabsNetwork):
                 node_private_key=kp.private_key,
                 network=self.create_docker_network(),
                 node_account=kp,
+                auto_propose=self.auto_propose,
             )
             self.add_cl_node(config, network_with_bootstrap=False)
 
