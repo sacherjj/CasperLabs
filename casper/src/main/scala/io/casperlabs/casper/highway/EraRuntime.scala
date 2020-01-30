@@ -559,6 +559,9 @@ class EraRuntime[F[_]: MonadThrowable: Clock: EraStorage: FinalityStorageReader:
       maybeError <- validate(message).value
       _ <- maybeError.fold(
             error =>
+              // TODO (CON-623): Some of these errors can be attributable. Those should be slashed
+              // and not stop processing, so we'll need to return more detailed statuses from
+              // validate to decide what to do, whether to react or not.
               MonadThrowable[F].raiseError[Unit](
                 new IllegalArgumentException(s"Could not validate block against era: $error")
               ),
