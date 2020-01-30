@@ -5,7 +5,7 @@ import cats.data.NonEmptyList
 import cats.{Eq, Eval, Monad}
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.Estimator.BlockHash
-import io.casperlabs.casper.consensus.{Block, BlockSummary}
+import io.casperlabs.casper.consensus.{Block, BlockSummary, Era}
 import io.casperlabs.casper.PrettyPrinter
 import io.casperlabs.casper.util.implicits._
 import io.casperlabs.catscontrib.MonadThrowable
@@ -38,6 +38,7 @@ object DagOperations {
     implicit val blockSummaryKey   = instance[BlockSummary, BlockHash](_.blockHash)
     implicit val messageSummaryKey = instance[Message, BlockHash](_.messageHash)
     implicit val blockHashKey      = identity[BlockHash]
+    implicit val eraKey            = instance[Era, BlockHash](_.keyBlockHash)
   }
 
   /** Starts from the list of messages and follows their justifications,

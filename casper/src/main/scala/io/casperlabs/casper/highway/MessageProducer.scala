@@ -8,10 +8,10 @@ import cats.effect.concurrent.Semaphore
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.{DeployFilters, Estimator, ValidatorIdentity}
 import io.casperlabs.casper.DeploySelection.DeploySelection
-import io.casperlabs.casper.consensus.Block
+import io.casperlabs.casper.consensus.{Block, Era}
 import io.casperlabs.casper.consensus.Block.Justification
 import io.casperlabs.casper.consensus.state.ProtocolVersion
-import io.casperlabs.catscontrib.{MonadThrowable}
+import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.catscontrib.effect.implicits.fiberSyntax
 import io.casperlabs.crypto.Keys.{PublicKey, PublicKeyBS}
 import io.casperlabs.models.Message
@@ -283,21 +283,31 @@ object MessageProducer {
       keyBlockHash: BlockHash
   ): F[Set[ByteString]] =
     for {
-      dag      <- DagStorage[F].getRepresentation
-      keyBlock <- dag.lookupUnsafe(keyBlockHash)
-
-      keyBlockHashes <- DagOperations
-                         .bfTraverseF(List(keyBlockHash)) { h =>
-                           EraStorage[F].getEraUnsafe(h).map { e =>
-                             List(e.parentKeyBlockHash).filterNot(_.isEmpty)
-                           }
-                         }
-                         .takeUntil(_ == keyBlock.eraId)
-                         .toList
-
+      dag            <- DagStorage[F].getRepresentation
+      keyBlockHashes <- collectEras[F](keyBlockHash).map(_.map(_.keyBlockHash))
       equivocatorsPerEra <- keyBlockHashes.traverse { h =>
                              dag.latestInEra(h) >>= (_.getEquivocators)
                            }
       equivocators = equivocatorsPerEra.flatten.toSet
     } yield equivocators
+
+  /** Collects ancestor eras between an era identified by [[keyBlockHash]] (current era)
+    * and an era in which that key block was created (most probably a grandparent era).
+    */
+  def collectEras[F[_]: MonadThrowable: EraStorage: DagStorage](
+      keyBlockHash: BlockHash
+  ): F[List[Era]] =
+    for {
+      dag      <- DagStorage[F].getRepresentation
+      keyBlock <- dag.lookupUnsafe(keyBlockHash)
+      startEra <- EraStorage[F].getEraUnsafe(keyBlockHash)
+      eras <- DagOperations
+               .bfTraverseF(List(startEra)) { era =>
+                 List(era.parentKeyBlockHash)
+                   .filterNot(_.isEmpty) // Don't follow further than Genesis era.
+                   .traverse(EraStorage[F].getEraUnsafe(_))
+               }
+               .takeUntil(_.keyBlockHash == keyBlock.eraId)
+               .toList
+    } yield eras
 }
