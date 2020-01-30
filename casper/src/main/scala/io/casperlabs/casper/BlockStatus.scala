@@ -21,7 +21,10 @@ sealed trait ValidBlock extends BlockStatus {
 sealed trait InvalidBlock extends BlockStatus {
   override val inDag: Boolean = false
 }
-sealed trait Slashable { self: InvalidBlock =>
+sealed trait Slashable
+// TODO(CON-623): Eventually we'll want to store and slash invalid blocks,
+// but we need to be able to distinguish them and not build on them.
+sealed trait StoredInvalid { self: InvalidBlock =>
   override val inDag: Boolean = true
 }
 
@@ -30,8 +33,8 @@ final case object Valid extends ValidBlock
 final case object InvalidUnslashableBlock extends InvalidBlock
 final case object MissingBlocks           extends InvalidBlock
 final case object InvalidBlockHash        extends InvalidBlock
-final case object EquivocatedBlock        extends InvalidBlock with Slashable
-final case object SelfEquivocatedBlock    extends InvalidBlock with Slashable
+final case object EquivocatedBlock        extends InvalidBlock with Slashable with StoredInvalid
+final case object SelfEquivocatedBlock    extends InvalidBlock with Slashable with StoredInvalid
 final case object InvalidBlockNumber      extends InvalidBlock with Slashable
 final case object InvalidRepeatDeploy     extends InvalidBlock with Slashable
 final case object InvalidParents          extends InvalidBlock with Slashable

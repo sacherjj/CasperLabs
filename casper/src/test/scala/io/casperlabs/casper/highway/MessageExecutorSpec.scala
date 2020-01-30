@@ -130,7 +130,9 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
     }
   }
 
-  it should "not raise an error for unattributable errors" in executorFixture { implicit db =>
+  // TODO(CON-623): In the future we want these not to raise, but for that the fork
+  // choice would also have to know not to build on them because they are invalid blocks.
+  it should "raise an error for attributable errors" in executorFixture { implicit db =>
     new ExecutorFixture(printLevel = Log.Level.Crit) with RealValidation {
       override def test =
         for {
@@ -141,10 +143,10 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
                   }
           result <- validateAndAdd(block).attempt
           _ = result match {
-            case Left(ex)  => fail(s"Shouldn't have raised: $ex")
-            case Right(()) =>
+            case Left(ex)  => ex shouldBe a[ValidateErrorWrapper]
+            case Right(()) => fail("Should have raised.")
           }
-          _ <- BlockStorage[Task].contains(block.blockHash) shouldBeF true
+          _ <- BlockStorage[Task].contains(block.blockHash) shouldBeF false
         } yield ()
     }
   }

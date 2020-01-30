@@ -140,7 +140,7 @@ class MessageExecutor[F[_]: Sync: Log: Time: Metrics: BlockStorage: DagStorage: 
           Log[F].info(s"Added equivocated ${block.blockHash.show -> "block"}") *>
           FatalError.selfEquivocationError(block.blockHash).whenA(status == SelfEquivocatedBlock)
 
-      case status: Slashable =>
+      case status: StoredInvalid =>
         save(block, blockEffects) *>
           Log[F].warn(s"Added slashable ${block.blockHash.show -> "block"}: $status")
 
