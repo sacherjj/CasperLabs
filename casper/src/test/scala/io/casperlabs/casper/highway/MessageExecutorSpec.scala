@@ -33,14 +33,15 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
       f(db).test
     }
 
-  /** Fixture that creates a  */
+  /** A fixture based on the Highway one where we won't be using the TestScheduler,
+    * just call methods on the `messageExecutor` and override its dependencies to
+    * turn validation on/off and capture the effects it carries out.
+    */
   abstract class ExecutorFixture(
       printLevel: Log.Level = Log.Level.Error
   )(
       implicit db: SQLiteStorage.CombinedStorage[Task]
   ) extends Fixture(length = Duration.Zero, printLevel = printLevel) {
-    def test: Task[Unit]
-
     // Make a block that works with the MockValidator.
     // Make the body empty, otherwise it will fail because the
     // mock EE returns nothing, instead of the random stuff we have.
