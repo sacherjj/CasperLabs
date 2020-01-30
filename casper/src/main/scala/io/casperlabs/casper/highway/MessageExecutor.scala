@@ -171,7 +171,7 @@ class MessageExecutor[F[_]: Sync: Log: Time: Metrics: BlockStorage: DagStorage: 
   ): F[(BlockStatus, BlockEffects)] = {
     import io.casperlabs.casper.validation.ValidationImpl.metricsSource
     Metrics[F].timer("validateAndAddBlock") {
-      val hashPrefix = block.blockHash
+      val hashPrefix = block.blockHash.show
       val effects: F[BlockEffects] = for {
         _   <- Log[F].info(s"Attempting to add $isBookingBlock ${hashPrefix -> "block"} to the DAG.")
         dag <- DagStorage[F].getRepresentation

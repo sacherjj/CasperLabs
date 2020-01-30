@@ -10,9 +10,11 @@ import io.casperlabs.casper.mocks.MockValidation
 import io.casperlabs.casper.validation.ValidationImpl
 import io.casperlabs.casper.validation.Validation
 import io.casperlabs.casper.validation.Errors.ValidateErrorWrapper
+import io.casperlabs.shared.Log
 import monix.eval.Task
 import org.scalatest._
 import scala.concurrent.duration._
+import io.casperlabs.casper.highway.mocks.MockEventEmitter
 
 class MessageExecutorSpec extends FlatSpec with Matchers with HighwayFixture {
 
@@ -21,13 +23,19 @@ class MessageExecutorSpec extends FlatSpec with Matchers with HighwayFixture {
       f(db).test
     }
 
-  abstract class ExecutorFixture()(implicit db: SQLiteStorage.CombinedStorage[Task])
-      extends Fixture(length = Duration.Zero) {
+  abstract class ExecutorFixture(
+      printLevel: Log.Level = Log.Level.Error
+  )(
+      implicit db: SQLiteStorage.CombinedStorage[Task]
+  ) extends Fixture(length = Duration.Zero, printLevel = printLevel) {
     def test: Task[Unit]
 
     implicit val consensusConfig = ConsensusConfig()
 
-    override def messageExecutor = new MessageExecutor[Task](
+    override implicit val eventEmitter: MockEventEmitter[Task] =
+      MockEventEmitter.unsafe[Task]
+
+    override val messageExecutor = new MessageExecutor[Task](
       chainName = chainName,
       genesis = genesisBlock,
       upgrades = Seq.empty,
@@ -44,7 +52,7 @@ class MessageExecutorSpec extends FlatSpec with Matchers with HighwayFixture {
   behavior of "validateAndAdd"
 
   it should "raise an error if there's a problem with the block" in executorFixture { implicit db =>
-    new ExecutorFixture {
+    new ExecutorFixture(printLevel = Log.Level.Crit) {
       override def validation = new ValidationImpl[Task]()
 
       override def test =
@@ -60,4 +68,22 @@ class MessageExecutorSpec extends FlatSpec with Matchers with HighwayFixture {
         }
     }
   }
+
+  it should "not emit events" in executorFixture { implicit db =>
+    new ExecutorFixture {
+      override def test =
+        for {
+          _ <- insertGenesis()
+          // Make the body empty, otherwise it will fail because the
+          // mock EE returns nothing, instead of the random stuff we have.
+          block  = sample[Block].withBody(Block.Body())
+          _      <- validateAndAdd(block)
+          events <- eventEmitter.events
+        } yield {
+          events shouldBe empty
+        }
+
+    }
+  }
+
 }
