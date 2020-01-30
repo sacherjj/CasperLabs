@@ -556,6 +556,7 @@ class InterceptedOneNodeNetwork(OneNodeNetwork):
 class InterceptedTwoNodeNetwork(TwoNodeNetwork):
     grpc_encryption = True
     behind_proxy = True
+    auto_propose = True
 
     def create_cl_network(self):
         kp = self.get_key()
@@ -567,6 +568,7 @@ class InterceptedTwoNodeNetwork(TwoNodeNetwork):
             node_account=kp,
             grpc_encryption=self.grpc_encryption,
             behind_proxy=True,
+            auto_propose=self.auto_propose,
         )
         self.add_bootstrap(config)
         self.add_new_node_to_network(
@@ -579,6 +581,7 @@ class InterceptedTwoNodeNetwork(TwoNodeNetwork):
                     node_account=kp,
                     grpc_encryption=self.grpc_encryption,
                     behind_proxy=True,
+                    auto_propose=self.auto_propose,
                 )
             )
         )
