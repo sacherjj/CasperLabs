@@ -148,6 +148,8 @@ object MessageProducer {
                            upgrades
                          )
 
+          magicBit = scala.util.Random.nextBoolean()
+
           signed = ProtoUtil.block(
             props.justifications,
             checkpoint.preStateHash,
@@ -165,7 +167,8 @@ object MessageProducer {
             validatorIdentity.privateKey,
             validatorIdentity.signatureAlgorithm,
             keyBlockHash,
-            roundId
+            roundId,
+            magicBit
           )
 
           message <- MonadThrowable[F].fromTry(Message.fromBlock(signed))

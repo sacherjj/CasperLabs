@@ -256,7 +256,8 @@ class ValidationTest
       sk,
       Ed25519,
       ByteString.EMPTY,
-      0
+      0,
+      false
     )
     Validation.blockSignature[Task](block) shouldBeF true
   }
