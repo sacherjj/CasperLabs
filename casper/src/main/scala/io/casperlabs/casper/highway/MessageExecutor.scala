@@ -23,7 +23,7 @@ import io.casperlabs.ipc
 import io.casperlabs.models.Message
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.implicits._ // for .timer syntax
-import io.casperlabs.shared.{Log, Time}
+import io.casperlabs.shared.{FatalError, Log, Time}
 import io.casperlabs.storage.BlockMsgWithTransform
 import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.storage.deploy.{DeployStorage, DeployStorageWriter}
@@ -61,14 +61,6 @@ class MessageExecutor[F[_]: Sync: Log: Time: Metrics: BlockStorage: DagStorage: 
           for {
             (status, effects) <- computeEffects(block, isBookingBlock)
             _                 <- addEffects(status, block, effects)
-            _ <- status match {
-                  case invalid: InvalidBlock =>
-                    Log[F]
-                      .warn(s"Could not validate ${block.blockHash.show -> "block"}: $invalid") *>
-                      functorRaiseInvalidBlock.raise(invalid)
-                  case _ =>
-                    ().pure[F]
-                }
           } yield ()
         }
 
@@ -123,41 +115,47 @@ class MessageExecutor[F[_]: Sync: Log: Time: Metrics: BlockStorage: DagStorage: 
       _                <- DeployStorageWriter[F].markAsProcessed(processedDeploys)
     } yield ()
 
-  /** Carry out the effects according to the status: store valid blocks, ignore invalid ones. */
+  /** Carry out the effects according to the status:
+    * - store valid blocks
+    * - store invalid but attributable blocks
+    * - raise and error for unattributable errors to stop further processing
+    */
   private def addEffects(
       status: BlockStatus,
       block: Block,
       blockEffects: BlockEffects
   ): F[Unit] =
     status match {
+      case MissingBlocks =>
+        throw new RuntimeException(
+          "The DownloadManager should not give us a block with missing dependencies."
+        )
+
       case Valid =>
         save(block, blockEffects) *>
           Log[F].info(s"Added ${block.blockHash.show -> "block"}")
 
       case EquivocatedBlock | SelfEquivocatedBlock =>
         save(block, blockEffects) *>
-          Log[F].info(s"Added equivocated ${block.blockHash.show -> "block"}")
+          Log[F].info(s"Added equivocated ${block.blockHash.show -> "block"}") *>
+          FatalError.selfEquivocationError(block.blockHash).whenA(status == SelfEquivocatedBlock)
 
-      case InvalidUnslashableBlock | InvalidBlockNumber | InvalidParents | InvalidSequenceNumber |
-          InvalidPrevBlockHash | NeglectedInvalidBlock | InvalidTransaction | InvalidBondsCache |
-          InvalidRepeatDeploy | InvalidChainName | InvalidBlockHash | InvalidDeployCount |
-          InvalidDeployHash | InvalidDeploySignature | InvalidPreStateHash | InvalidPostStateHash |
-          InvalidTargetHash | InvalidDeployHeader | InvalidDeployChainName |
-          DeployDependencyNotMet | DeployExpired | DeployFromFuture | SwimlaneMerged =>
-        Log[F].warn(s"Ignoring invalid ${block.blockHash.show -> "block"} with $status")
+      case status: Slashable =>
+        save(block, blockEffects) *>
+          Log[F].warn(s"Added slashable ${block.blockHash.show -> "block"}: $status")
 
-      case MissingBlocks =>
-        throw new RuntimeException(
-          "The DownloadManager should not give us a block with missing dependencies."
-        )
+      case status: InvalidBlock =>
+        Log[F].warn(s"Ignoring unslashable ${block.blockHash.show -> "block"}: $status") *>
+          functorRaiseInvalidBlock.raise(status)
 
       case Processing | Processed =>
-        throw new RuntimeException(s"A block should not be processing at this stage.")
+        throw new RuntimeException("A block should not be processing at this stage.")
 
       case UnexpectedBlockException(ex) =>
         Log[F].error(
           s"Encountered exception in while processing ${block.blockHash.show -> "block"}: $ex"
-        )
+        ) >>
+          ex.raiseError[F, Unit]
     }
 
   /** Save the block to the block and DAG storage. */

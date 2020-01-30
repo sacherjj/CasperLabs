@@ -4,7 +4,9 @@ import cats._
 import cats.implicits._
 import cats.effect.concurrent.{Ref, Semaphore}
 import com.google.protobuf.ByteString
-import io.casperlabs.casper.consensus.Block
+import io.casperlabs.casper.consensus.{Block, Bond}
+import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
+import io.casperlabs.casper.consensus.state
 import io.casperlabs.storage.{BlockHash, SQLiteStorage}
 import io.casperlabs.casper.mocks.MockValidation
 import io.casperlabs.casper.validation.ValidationImpl
@@ -26,12 +28,25 @@ import io.casperlabs.casper.consensus.info.DeployInfo
 
 class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with HighwayFixture {
 
-  implicit val consensusConfig = ConsensusConfig()
-
   def executorFixture(f: SQLiteStorage.CombinedStorage[Task] => ExecutorFixture): Unit =
     withCombinedStorage() { db =>
       f(db).test
     }
+
+  implicit val consensusConfig = ConsensusConfig()
+
+  // Pick a key pair we can sign with.
+  val randomValidator = sample(genAccountKeys)
+
+  def signBlock(block: Block): Block = {
+    val bodyHash  = protoHash(block.getBody)
+    val header    = block.getHeader.withBodyHash(bodyHash)
+    val blockHash = protoHash(header)
+    block
+      .withHeader(header)
+      .withBlockHash(blockHash)
+      .withSignature(randomValidator.sign(blockHash))
+  }
 
   /** A fixture based on the Highway one where we won't be using the TestScheduler,
     * just call methods on the `messageExecutor` and override its dependencies to
@@ -41,11 +56,43 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
       printLevel: Log.Level = Log.Level.Error
   )(
       implicit db: SQLiteStorage.CombinedStorage[Task]
-  ) extends Fixture(length = Duration.Zero, printLevel = printLevel) {
-    // Make a block that works with the MockValidator.
-    // Make the body empty, otherwise it will fail because the
-    // mock EE returns nothing, instead of the random stuff we have.
-    def mockValidBlock = sample[Block].withBody(Block.Body()).pure[Task]
+  ) extends Fixture(
+        length = Duration.Zero,
+        printLevel = printLevel,
+        bonds = List(
+          // Our validator needs to be bonded in Genesis.
+          Bond(randomValidator.publicKey).withStake(state.BigInt("10000"))
+        )
+      ) {
+
+    // Make a block that works with the MockValidator,
+    // i.e. if we don't explicitly validate it it passes.
+    val mockValidBlock = Task.eval {
+      // Use something we can sign with.
+      // Make the body empty, otherwise it will fail because the
+      // mock EE returns nothing, instead of the random stuff we have.
+      signBlock {
+        val block = sample[Block]
+        block
+          .withBody(Block.Body())
+          .withHeader(
+            block.getHeader
+              .withState(
+                block.getHeader.getState.withBonds(genesisBlock.getHeader.getState.bonds)
+              )
+              .withChainName(chainName)
+              .withValidatorPublicKey(randomValidator.publicKey)
+              .withParentHashes(List(genesis.messageHash))
+              .withKeyBlockHash(genesis.messageHash)
+              .withJustifications(Seq.empty)
+              .withRank(1)
+              .withValidatorBlockSeqNum(1)
+              .withValidatorPrevBlockHash(ByteString.EMPTY)
+              .withDeployCount(0)
+              .clearProtocolVersion
+          )
+      }
+    }
 
     // No validation by default.
     override def validation: Validation[Task] = new MockValidation[Task]
@@ -61,24 +108,44 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
       } yield ()
   }
 
+  trait RealValidation { self: ExecutorFixture =>
+    override def validation = new ValidationImpl[Task]()
+  }
+
   behavior of "validateAndAdd"
 
-  it should "raise an error if there's a problem with the block" in executorFixture { implicit db =>
-    new ExecutorFixture(printLevel = Log.Level.Crit) {
-      // Turn on validation.
-      override def validation = new ValidationImpl[Task]()
-
+  it should "raise an error for unattributable errors" in executorFixture { implicit db =>
+    new ExecutorFixture(printLevel = Log.Level.Crit) with RealValidation {
       override def test =
         for {
-          // A random block will not be valid.
-          block  <- sample[Block].pure[Task]
+          // A block without signature cannot be a slashed
+          block  <- mockValidBlock.map(_.clearSignature)
           result <- validateAndAdd(block).attempt
-        } yield {
-          result match {
+          _ = result match {
             case Left(ex)  => ex shouldBe a[ValidateErrorWrapper]
             case Right(()) => fail("Should have raised.")
           }
-        }
+          _ <- BlockStorage[Task].contains(block.blockHash) shouldBeF false
+        } yield ()
+    }
+  }
+
+  it should "not raise an error for unattributable errors" in executorFixture { implicit db =>
+    new ExecutorFixture(printLevel = Log.Level.Crit) with RealValidation {
+      override def test =
+        for {
+          _ <- insertGenesis()
+          // Make a block that signed by the validator that has invalid content.
+          block <- mockValidBlock.map { block =>
+                    signBlock(block.withHeader(block.getHeader.withRank(100)))
+                  }
+          result <- validateAndAdd(block).attempt
+          _ = result match {
+            case Left(ex)  => fail(s"Shouldn't have raised: $ex")
+            case Right(()) =>
+          }
+          _ <- BlockStorage[Task].contains(block.blockHash) shouldBeF true
+        } yield ()
     }
   }
 
