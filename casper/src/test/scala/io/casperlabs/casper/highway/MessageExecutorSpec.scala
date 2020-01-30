@@ -2,7 +2,7 @@ package io.casperlabs.casper.highway
 
 import cats._
 import cats.implicits._
-import cats.effect.concurrent.Semaphore
+import cats.effect.concurrent.{Ref, Semaphore}
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.Block
 import io.casperlabs.storage.{BlockHash, SQLiteStorage}
@@ -10,6 +10,7 @@ import io.casperlabs.casper.mocks.MockValidation
 import io.casperlabs.casper.validation.ValidationImpl
 import io.casperlabs.casper.validation.Validation
 import io.casperlabs.casper.validation.Errors.ValidateErrorWrapper
+import io.casperlabs.casper.finality.MultiParentFinalizer
 import io.casperlabs.casper.highway.mocks.MockEventEmitter
 import io.casperlabs.casper.validation.Validation.BlockEffects
 import io.casperlabs.casper.scalatestcontrib._
@@ -121,6 +122,28 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
             event.value.isBlockAdded shouldBe true
           }
         }
+    }
+  }
+
+  it should "update the last finalized block" in executorFixture { implicit db =>
+    new ExecutorFixture {
+
+      val finalizerUpdatedRef = Ref.unsafe[Task, Boolean](false)
+
+      override val finalizer = new MultiParentFinalizer[Task] {
+        override def onNewMessageAdded(
+            message: Message
+        ) = finalizerUpdatedRef.set(true).as(none)
+      }
+
+      override def test =
+        for {
+          block   <- mockValidBlock
+          message = Message.fromBlock(block).get
+          _       <- BlockStorage[Task].put(block, BlockEffects.empty.effects)
+          _       <- messageExecutor.effectsAfterAdded(message)
+          _       <- finalizerUpdatedRef.get shouldBeF true
+        } yield ()
     }
   }
 
