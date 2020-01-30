@@ -418,7 +418,8 @@ object ProtoUtil {
       privateKey: Keys.PrivateKey,
       sigAlgorithm: SignatureAlgorithm,
       keyBlockHash: ByteString,
-      roundId: Long
+      roundId: Long,
+      magicBit: Boolean
   ): Block = {
     val body = Block.Body().withDeploys(deploys)
     val postState = Block
@@ -440,10 +441,12 @@ object ProtoUtil {
       validatorSeqNum = validatorSeqNum,
       validatorPrevBlockHash = validatorPrevBlockHash,
       keyBlockHash = keyBlockHash,
-      roundId = roundId
+      roundId = roundId,
+      magicBit = magicBit
     )
 
     val unsigned = unsignedBlockProto(body, header)
+
     signBlock(
       unsigned,
       privateKey,
