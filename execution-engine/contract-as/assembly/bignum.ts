@@ -21,22 +21,22 @@ const HEX_DIGITS: i32[] =
   -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1 ];
 
 export class BigNum {
-    private bytes: Uint32Array;
+    private pn: Uint32Array;
 
     constructor(width: usize) {
-        this.bytes = new Uint32Array(width);
-        this.bytes.fill(0);
+        this.pn = new Uint32Array(width);
+        this.pn.fill(0);
     }
 
     setU64(value: u64): void {
-        this.bytes.fill(0);
-        assert(this.bytes.length >= 2);
-        this.bytes[0] = <u32>(value & <u64>0xffffffff);
-        this.bytes[1] = <u32>(value >> 32);
+        this.pn.fill(0);
+        assert(this.pn.length >= 2);
+        this.pn[0] = <u32>(value & <u64>0xffffffff);
+        this.pn[1] = <u32>(value >> 32);
     }
 
     setHex(value: String): void {
-        this.bytes.fill(0);
+        this.pn.fill(0);
 
         if (value.length >= 2 && value[0] == '0' && (value[1] == 'x' || value[1] == 'X'))
             value = value.substr(2);
@@ -48,7 +48,7 @@ export class BigNum {
         }
 
         // Decodes hex string into an array of bytes
-        let bytes = new Uint8Array(this.bytes.length * 4);
+        let bytes = new Uint8Array(this.pn.length * 4);
         bytes.fill(0);
 
         // Convert ascii codes into values
@@ -63,15 +63,15 @@ export class BigNum {
         }
 
         // Reinterpret individual bytes back to u32 array
-        for (let i = 0; i < this.bytes.length; i++) {
+        for (let i = 0; i < this.pn.length; i++) {
             let num = load<u32>(bytes.dataStart + (i * 4));
-            this.bytes[i] = num;
+            this.pn[i] = num;
         }
     }
 
     isZero(): bool {
-        for (let i = 0; i < this.bytes.length; i++) {
-            if (this.bytes[i] != 0) {
+        for (let i = 0; i < this.pn.length; i++) {
+            if (this.pn[i] != 0) {
                 return false;
             }
         }
@@ -80,11 +80,11 @@ export class BigNum {
 
     @operator("+")
     add(other: BigNum): BigNum {
-        assert(this.bytes.length == other.bytes.length);
+        assert(this.pn.length == other.pn.length);
         let carry = <u64>0;
-        for (let i = 0; i < this.bytes.length; i++) {
-            let n = carry + <u64>this.bytes[i] + <u64>other.bytes[i];
-            this.bytes[i] = <u32>(n & <u64>0xffffffff);
+        for (let i = 0; i < this.pn.length; i++) {
+            let n = carry + <u64>this.pn[i] + <u64>other.pn[i];
+            this.pn[i] = <u32>(n & <u64>0xffffffff);
             carry = <u64>(n >> 32);
         }
         return this;
@@ -92,12 +92,12 @@ export class BigNum {
 
     @operator.prefix("-")
     neg(): BigNum {
-        let ret = new BigNum(this.bytes.length);
-        for (let i = 0; i < this.bytes.length; i++) {
-            ret.bytes[i] = ~this.bytes[i];
+        let ret = new BigNum(this.pn.length);
+        for (let i = 0; i < this.pn.length; i++) {
+            ret.pn[i] = ~this.pn[i];
         }
         // todo bin op ++
-        let one = new BigNum(this.bytes.length);
+        let one = new BigNum(this.pn.length);
         one.setU64(1);
         ret += one;
         return ret;
@@ -110,14 +110,14 @@ export class BigNum {
 
     @operator("*")
     mul(other: BigNum): BigNum {
-        assert(this.bytes.length == other.bytes.length);
-        let ret = new BigNum(this.bytes.length);
+        assert(this.pn.length == other.pn.length);
+        let ret = new BigNum(this.pn.length);
 
-        for (let j = 0; j < this.bytes.length; j++) {
+        for (let j = 0; j < this.pn.length; j++) {
             let carry: u64 = <u64>0;
-            for (let i = 0; i + j < this.bytes.length; i++) {
-                let n: u64 = carry + <u64>ret.bytes[i + j] + <u64>this.bytes[j] * <u64>other.bytes[i];
-                ret.bytes[i + j] = <u32>(n & <u64>0xffffffff);
+            for (let i = 0; i + j < this.pn.length; i++) {
+                let n: u64 = carry + <u64>ret.pn[i + j] + <u64>this.pn[j] * <u64>other.pn[i];
+                ret.pn[i + j] = <u32>(n & <u64>0xffffffff);
                 carry = <u64>(n >> 32);
             }
         }
@@ -126,11 +126,11 @@ export class BigNum {
     }
 
     private toHex(): String {
-        let bytes = new Uint8Array(this.bytes.length * 4);
+        let bytes = new Uint8Array(this.pn.length * 4);
         // Copy array of u32 into array of u8
-        for (let i = 0; i < this.bytes.length / 4; i++) {
+        for (let i = 0; i < this.pn.length / 4; i++) {
 
-            store<u32>(bytes.dataStart + (i * 4), this.bytes[i]);
+            store<u32>(bytes.dataStart + (i * 4), this.pn[i]);
         }
         let result = "";
 
