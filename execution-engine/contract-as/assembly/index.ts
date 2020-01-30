@@ -4,16 +4,13 @@ import {Error, ErrorCode} from "./error";
 import {CLValue} from "./clvalue";
 import {Key} from "./key";
 import {toBytesString,
-        toBytesArrayU8,
-        toBytesU32,
         toBytesVecT,
-        fromBytesArrayU8,
         fromBytesMap,
         fromBytesString} from "./bytesrepr";
 import {U512} from "./bignum";
 import {UREF_SERIALIZED_LENGTH, KEY_UREF_SERIALIZED_LENGTH} from "./constants";
-import { typedToArray } from "./utils";
 import {Pair} from "./pair";
+import {revert} from "./externals";
 
 // NOTE: interfaces aren't supported in AS yet: https://github.com/AssemblyScript/assemblyscript/issues/146#issuecomment-399130960
 // interface ToBytes {
@@ -161,7 +158,6 @@ export enum TransferredTo {
 }
 
 export function transferToAccount(target: Uint8Array, amount: U512): U32 | null {
-  // var targetBytes = (target);
   let amountBytes = amount.toBytes();
 
   let ret = externals.transfer_to_account(
@@ -255,4 +251,21 @@ export function listNamedKeys(): Array<Pair<String, Key>> {
     return <Array<Pair<String, Key>>>unreachable();
   }
   return <Array<Pair<String, Key>>>maybeMap;
+}
+
+export function upgradeContractAtURef(name: String, uref: URef): void {
+  const nameBytes = toBytesString(name);
+  const key = Key.fromURef(uref);
+  const keyBytes = key.toBytes();
+  let ret = externals.upgrade_contract_at_uref(
+      nameBytes.dataStart,
+      nameBytes.length,
+      keyBytes.dataStart,
+      keyBytes.length
+  );
+  if (ret < 1)
+    return;
+  const error = Error.fromResult(ret);
+  if(error !== null)
+    error.revert();
 }
