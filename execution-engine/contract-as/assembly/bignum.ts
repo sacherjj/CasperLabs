@@ -125,6 +125,49 @@ export class BigNum {
         return ret;
     }
 
+    cmp(other: BigNum): i32 {
+        assert(this.pn.length == other.pn.length);
+        for (let i = this.pn.length - 1; i >= 0; --i) {
+            if (this.pn[i] < other.pn[i]) {
+                return -1;
+            }
+            if (this.pn[i] > other.pn[i]) {
+                return 1;
+            }
+        }
+        return 0;
+    }
+
+    @operator("==")
+    eq(other: BigNum): bool {
+        return this.cmp(other) == 0;
+    }
+
+    @operator("!=")
+    neq(other: BigNum): bool {
+        return this.cmp(other) != 0;
+    }
+
+    @operator(">")
+    gt(other: BigNum): bool {
+        return this.cmp(other) == 1;
+    }
+
+    @operator("<")
+    lt(other: BigNum): bool {
+        return this.cmp(other) == -1;
+    }
+
+    @operator(">=")
+    gte(other: BigNum): bool {
+        return this.cmp(other) >= 0;
+    }
+
+    @operator("<=")
+    lte(other: BigNum): bool {
+        return this.cmp(other) <= 0;
+    }
+
     private toHex(): String {
         let bytes = new Uint8Array(this.pn.length * 4);
         // Copy array of u32 into array of u8

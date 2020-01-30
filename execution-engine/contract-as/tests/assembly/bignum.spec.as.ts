@@ -121,3 +121,68 @@ export function testBigNumSetHex(): bool {
     assert(large.toString() == "fffffffffffffff8000000000000001bffffffffffffffc80000000000000045ffffffffffffffc8000000000000001bfffffffffffffff80000000000000001");
     return true;
 }
+
+export function testNeg(): bool {
+    // big == -big
+    // in 2s compliment: big == ~(~big+1)+1
+    let big = new BigNum(64);
+    big.setHex("e7ed081ae96850db0c7d5b42094b5e09b0631e6b9f63efe4deb90d7dd677c82f8ce52eccda5b03f5190770a763729ae9ab85c76cd1dc9606ec9dcf2e2528fccb");
+
+    let one = new BigNum(64);
+    one.setU64(1);
+
+    assert(big == -(-big));
+    return true;
+}
+
+export function testComparison(): bool {
+    let zero = new BigNum(64);
+    assert(zero.isZero());
+    let one = new BigNum(64);
+    one.setU64(1);
+
+    let u32Max = new BigNum(64);
+    u32Max.setU64(4294967295);
+
+    assert(zero != one);
+    assert(one == one);
+    assert(zero == zero);
+
+    assert(zero < one);
+    assert(zero <= one);
+    assert(one <= one);
+
+    assert(one > zero);
+    assert(one >= zero);
+    assert(one >= one);
+
+    // python: large = random.randint(0, 2**512-1)
+    let large1 = new BigNum(64);
+    large1.setHex("a25bd58358ae4cd57ba0a4afcde6e9aa55c801d88854541dfc6ea5e3c1fada9ed9cb1e48b0a2d553faa26e5381743415ae1ec593dc67fc525d18e0b6fdf3f7ae");
+
+    let large2 = new BigNum(64);
+    large2.setHex("f254bb1c7f6654f5ad104854709cb5c09009ccd2b78b5364fefd3a5fa99381a173c5498966e77d88d443bd1a650b4bcb8bb8a92013a85a7095330bc79a2e22dc");
+
+    assert(large1.cmp(large2) != 0);
+    assert(large1 != large2);
+    assert(large2 == large2);
+    assert(large1 == large1);
+
+    assert(large1 < large2);
+    assert(large1 <= large2);
+    assert(large2 <= large2);
+
+    assert(large2 > large1);
+    assert(large2 >= large1);
+    assert(large2 >= large2);
+
+    assert(large1 > zero);
+    assert(large1 > one);
+    assert(large1 > u32Max);
+    assert(large2 > u32Max);
+    assert(large1 >= u32Max);
+    assert(u32Max >= one);
+    assert(one <= u32Max);
+    assert(one != u32Max);
+    return true;
+}
