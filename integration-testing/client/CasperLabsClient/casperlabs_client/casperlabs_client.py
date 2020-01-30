@@ -214,6 +214,7 @@ class CasperLabsClient:
     """
 
     DEPLOY_STATUS_CHECK_DELAY = 0.5
+    DEPLOY_STATUS_TIMEOUT = 180  # 3 minutes
 
     def __init__(
         self,
@@ -621,10 +622,20 @@ class CasperLabsClient:
 
     @api
     def wait_for_deploy_processed(
-        self, deploy_hash, on_error_raise=True, delay=DEPLOY_STATUS_CHECK_DELAY
+        self,
+        deploy_hash,
+        on_error_raise=True,
+        delay=DEPLOY_STATUS_CHECK_DELAY,
+        timeout_seconds=DEPLOY_STATUS_TIMEOUT,
     ):
+        start_time = time.time()
         result = None
         while True:
+            if time.time() - start_time > timeout_seconds:
+                raise Exception(
+                    f"Timed oud waiting for deploy {deploy_hash} to be processed"
+                )
+
             result = self.showDeploy(deploy_hash)
             if result.status.state != 1:  # PENDING
                 break
