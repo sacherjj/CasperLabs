@@ -11,7 +11,9 @@ import io.casperlabs.casper.validation.ValidationImpl
 import io.casperlabs.casper.validation.Validation
 import io.casperlabs.casper.validation.Errors.ValidateErrorWrapper
 import io.casperlabs.casper.highway.mocks.MockEventEmitter
+import io.casperlabs.casper.validation.Validation.BlockEffects
 import io.casperlabs.casper.scalatestcontrib._
+import io.casperlabs.models.Message
 import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.storage.dag.DagStorage
 import io.casperlabs.shared.Log
@@ -19,7 +21,7 @@ import monix.eval.Task
 import org.scalatest._
 import scala.concurrent.duration._
 
-class MessageExecutorSpec extends FlatSpec with Matchers with HighwayFixture {
+class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with HighwayFixture {
 
   implicit val consensusConfig = ConsensusConfig()
 
@@ -39,7 +41,7 @@ class MessageExecutorSpec extends FlatSpec with Matchers with HighwayFixture {
     // Make a block that works with the MockValidator.
     // Make the body empty, otherwise it will fail because the
     // mock EE returns nothing, instead of the random stuff we have.
-    def mockValidBlock = sample[Block].withBody(Block.Body())
+    def mockValidBlock = sample[Block].withBody(Block.Body()).pure[Task]
 
     // No validation by default.
     override def validation: Validation[Task] = new MockValidation[Task]
@@ -80,7 +82,8 @@ class MessageExecutorSpec extends FlatSpec with Matchers with HighwayFixture {
     new ExecutorFixture {
       override def test =
         for {
-          _      <- validateAndAdd(mockValidBlock)
+          block  <- mockValidBlock
+          _      <- validateAndAdd(block)
           events <- eventEmitter.events
         } yield {
           events shouldBe empty
@@ -93,12 +96,31 @@ class MessageExecutorSpec extends FlatSpec with Matchers with HighwayFixture {
     new ExecutorFixture {
       override def test =
         for {
-          block <- mockValidBlock.pure[Task]
+          block <- mockValidBlock
           _     <- validateAndAdd(block)
           dag   <- DagStorage[Task].getRepresentation
           _     <- dag.contains(block.blockHash) shouldBeF true
           _     <- BlockStorage[Task].contains(block.blockHash) shouldBeF true
         } yield ()
+    }
+  }
+
+  behavior of "effectsAfterAdded"
+
+  it should "emit events" in executorFixture { implicit db =>
+    new ExecutorFixture {
+      override def test =
+        for {
+          block   <- mockValidBlock
+          message = Message.fromBlock(block).get
+          _       <- BlockStorage[Task].put(block, BlockEffects.empty.effects)
+          _       <- messageExecutor.effectsAfterAdded(message)
+          events  <- eventEmitter.events
+        } yield {
+          forExactly(1, events) { event =>
+            event.value.isBlockAdded shouldBe true
+          }
+        }
     }
   }
 
