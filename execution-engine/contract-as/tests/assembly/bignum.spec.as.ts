@@ -186,3 +186,30 @@ export function testComparison(): bool {
     assert(one != u32Max);
     return true;
 }
+
+export function testBits(): bool {
+    let zero = new BigNum(64);
+    assert(zero.bits() == 0);
+    let one = new BigNum(64);
+    one.setU64(1);
+    assert(one.bits() == 1);
+
+    let value = new BigNum(64);
+    for (let i = 0; i < 63; i++) {
+        value.setU64(1 << i);
+        assert(value.bits() == i + 1);
+    }
+
+    let shl512P1 = new BigNum(64);
+    shl512P1.setHex("10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000");
+    assert(shl512P1.bits() == 509);
+
+    let u512Max = new BigNum(64);
+    u512Max.setHex("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
+    assert(u512Max.bits() == 512);
+
+    let mix = new BigNum(64);
+    mix.setHex("55555555555");
+    assert(mix.bits() == 43);
+    return true;
+}

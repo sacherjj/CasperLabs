@@ -125,6 +125,16 @@ export class BigNum {
         return ret;
     }
 
+    // Returns bits length
+    bits(): u32 {
+        for (let i = this.pn.length - 1; i >= 0; i--) {
+            if (this.pn[i] > 0) {
+                return 32 * i + (32 - clz(this.pn[i]));
+            }
+        }
+        return 0;
+    }
+
     cmp(other: BigNum): i32 {
         assert(this.pn.length == other.pn.length);
         for (let i = this.pn.length - 1; i >= 0; --i) {
