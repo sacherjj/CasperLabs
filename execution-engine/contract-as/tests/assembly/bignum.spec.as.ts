@@ -44,18 +44,80 @@ export function testSerialize100mTimes10(): bool {
     return valU512.getValue() === <U64>(100000000*10);
 }
 
-export function testBigNum512(): bool {
-    let a = new BigNum(16, <u64>18446744073709551614);
-    let b = new BigNum(16, 1);
+export function testBigNum512Arith(): bool {
+    let a = new BigNum(64);
+    a.setU64(<u64>18446744073709551614); // 2^64-2
+    assert(a.toString() == "fffffffffffffffe");
 
-    assert(a.bytes[0] == 0xfffffffe);
-    assert(a.bytes[1] == 0xffffffff);
-    assert(a.bytes[2] == 0);
+    let b = new BigNum(64);
+    b.setU64(1);
 
-    a.add(b);
-    assert(a.bytes[0] == 0xffffffff);
-    assert(a.bytes[1] == 0xffffffff);
-    assert(a.bytes[2] == 0);
+    assert(b.toString() == "1");
 
+    a += b; // a==2^64-1
+    assert(a.toString() == "ffffffffffffffff");
+
+    a += b; // a==2^64
+    assert(a.toString() == "10000000000000000");
+
+    a -= b; // a==2^64-1
+    assert(a.toString() == "ffffffffffffffff");
+
+    a -= b; // a==2^64-2
+    assert(a.toString() == "fffffffffffffffe");
+
+    return true;
+}
+
+export function testBigNum512Mul(): bool {
+    let u64Max = new BigNum(64);
+    u64Max.setU64(<u64>18446744073709551615); // 2^64-1
+    assert(u64Max.toString() == "ffffffffffffffff");
+
+    let a = new BigNum(64);
+    a.setU64(<u64>18446744073709551615);
+
+    assert(a.toString() == "ffffffffffffffff");
+
+    a *= u64Max; // (2^64-1) ^ 2
+    assert(a.toString() == "fffffffffffffffe0000000000000001");
+
+    a *= u64Max; // (2^64-1) ^ 3
+    assert(a.toString(), "fffffffffffffffd0000000000000002ffffffffffffffff");
+
+    a *= u64Max; // (2^64-1) ^ 4
+    assert(a.toString() == "fffffffffffffffc0000000000000005fffffffffffffffc0000000000000001");
+
+    a *= u64Max; // (2^64-1) ^ 5
+    assert(a.toString() == "fffffffffffffffb0000000000000009fffffffffffffff60000000000000004ffffffffffffffff");
+
+    a *= u64Max; // (2^64-1) ^ 6
+    assert(a.toString() == "fffffffffffffffa000000000000000effffffffffffffec000000000000000efffffffffffffffa0000000000000001");
+    a *= u64Max; // (2^64-1) ^ 7
+    assert(a.toString() == "fffffffffffffff90000000000000014ffffffffffffffdd0000000000000022ffffffffffffffeb0000000000000006ffffffffffffffff");
+
+    a *= u64Max; // (2^64-1) ^ 8
+    assert(a.toString() == "fffffffffffffff8000000000000001bffffffffffffffc80000000000000045ffffffffffffffc8000000000000001bfffffffffffffff80000000000000001");
+
+    return true;
+}
+
+export function testBigNumZero(): bool {
+    let zero = new BigNum(64);
+    assert(zero.toString() == "0");
+    return zero.isZero();
+}
+
+export function testBigNonZero(): bool {
+    let nonzero = new BigNum(64);
+    nonzero.setU64(<u64>0xffffffff);
+    assert(nonzero.toString() == "ffffffff");
+    return !nonzero.isZero();
+}
+
+export function testBigNumSetHex(): bool {
+    let large = new BigNum(64);
+    large.setHex("fffffffffffffff8000000000000001bffffffffffffffc80000000000000045ffffffffffffffc8000000000000001bfffffffffffffff80000000000000001");
+    assert(large.toString() == "fffffffffffffff8000000000000001bffffffffffffffc80000000000000045ffffffffffffffc8000000000000001bfffffffffffffff80000000000000001");
     return true;
 }
