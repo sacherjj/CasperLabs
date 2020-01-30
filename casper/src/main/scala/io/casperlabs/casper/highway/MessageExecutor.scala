@@ -39,7 +39,8 @@ class MessageExecutor[F[_]: Sync: Log: Time: Metrics: BlockStorage: DagStorage: 
     maybeValidatorId: Option[PublicKeyBS]
 ) {
 
-  implicit val functorRaiseInvalidBlock = validation.raiseValidateErrorThroughApplicativeError[F]
+  private implicit val functorRaiseInvalidBlock =
+    validation.raiseValidateErrorThroughApplicativeError[F]
 
   /** Validate, execute and persist an incoming block.
     * The blocks made by the MessageProducer don't have to be passed here.
