@@ -10,19 +10,25 @@ import io.casperlabs.casper.mocks.MockValidation
 import io.casperlabs.casper.validation.ValidationImpl
 import io.casperlabs.casper.validation.Validation
 import io.casperlabs.casper.validation.Errors.ValidateErrorWrapper
+import io.casperlabs.casper.highway.mocks.MockEventEmitter
+import io.casperlabs.casper.scalatestcontrib._
+import io.casperlabs.storage.block.BlockStorage
+import io.casperlabs.storage.dag.DagStorage
 import io.casperlabs.shared.Log
 import monix.eval.Task
 import org.scalatest._
 import scala.concurrent.duration._
-import io.casperlabs.casper.highway.mocks.MockEventEmitter
 
 class MessageExecutorSpec extends FlatSpec with Matchers with HighwayFixture {
+
+  implicit val consensusConfig = ConsensusConfig()
 
   def executorFixture(f: SQLiteStorage.CombinedStorage[Task] => ExecutorFixture): Unit =
     withCombinedStorage() { db =>
       f(db).test
     }
 
+  /** Fixture that creates a  */
   abstract class ExecutorFixture(
       printLevel: Log.Level = Log.Level.Error
   )(
@@ -30,17 +36,17 @@ class MessageExecutorSpec extends FlatSpec with Matchers with HighwayFixture {
   ) extends Fixture(length = Duration.Zero, printLevel = printLevel) {
     def test: Task[Unit]
 
-    implicit val consensusConfig = ConsensusConfig()
+    // Make a block that works with the MockValidator.
+    // Make the body empty, otherwise it will fail because the
+    // mock EE returns nothing, instead of the random stuff we have.
+    def mockValidBlock = sample[Block].withBody(Block.Body())
 
+    // No validation by default.
+    override def validation: Validation[Task] = new MockValidation[Task]
+
+    // Collect emitted events.
     override implicit val eventEmitter: MockEventEmitter[Task] =
       MockEventEmitter.unsafe[Task]
-
-    override val messageExecutor = new MessageExecutor[Task](
-      chainName = chainName,
-      genesis = genesisBlock,
-      upgrades = Seq.empty,
-      maybeValidatorId = none
-    )
 
     def validateAndAdd(block: Block): Task[Unit] =
       for {
@@ -53,12 +59,13 @@ class MessageExecutorSpec extends FlatSpec with Matchers with HighwayFixture {
 
   it should "raise an error if there's a problem with the block" in executorFixture { implicit db =>
     new ExecutorFixture(printLevel = Log.Level.Crit) {
+      // Turn on validation.
       override def validation = new ValidationImpl[Task]()
 
       override def test =
         for {
-          _      <- insertGenesis()
-          block  = sample[Block]
+          // A random block will not be valid.
+          block  <- sample[Block].pure[Task]
           result <- validateAndAdd(block).attempt
         } yield {
           result match {
@@ -73,16 +80,25 @@ class MessageExecutorSpec extends FlatSpec with Matchers with HighwayFixture {
     new ExecutorFixture {
       override def test =
         for {
-          _ <- insertGenesis()
-          // Make the body empty, otherwise it will fail because the
-          // mock EE returns nothing, instead of the random stuff we have.
-          block  = sample[Block].withBody(Block.Body())
-          _      <- validateAndAdd(block)
+          _      <- validateAndAdd(mockValidBlock)
           events <- eventEmitter.events
         } yield {
           events shouldBe empty
         }
 
+    }
+  }
+
+  it should "save the block itself" in executorFixture { implicit db =>
+    new ExecutorFixture {
+      override def test =
+        for {
+          block <- mockValidBlock.pure[Task]
+          _     <- validateAndAdd(block)
+          dag   <- DagStorage[Task].getRepresentation
+          _     <- dag.contains(block.blockHash) shouldBeF true
+          _     <- BlockStorage[Task].contains(block.blockHash) shouldBeF true
+        } yield ()
     }
   }
 
