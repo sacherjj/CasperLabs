@@ -21,6 +21,8 @@ import io.casperlabs.shared.Log
 import monix.eval.Task
 import org.scalatest._
 import scala.concurrent.duration._
+import io.casperlabs.storage.deploy.DeployStorage
+import io.casperlabs.casper.consensus.info.DeployInfo
 
 class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with HighwayFixture {
 
@@ -112,7 +114,7 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
     new ExecutorFixture {
       override def test =
         for {
-          block   <- mockValidBlock
+          block   <- sample[Block].pure[Task]
           message = Message.fromBlock(block).get
           _       <- BlockStorage[Task].put(block, BlockEffects.empty.effects)
           _       <- messageExecutor.effectsAfterAdded(message)
@@ -138,12 +140,34 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
 
       override def test =
         for {
-          block   <- mockValidBlock
+          block   <- sample[Block].pure[Task]
           message = Message.fromBlock(block).get
           _       <- BlockStorage[Task].put(block, BlockEffects.empty.effects)
           _       <- messageExecutor.effectsAfterAdded(message)
           _       <- finalizerUpdatedRef.get shouldBeF true
         } yield ()
+    }
+  }
+
+  it should "mark deploys as finalized" in executorFixture { implicit db =>
+    new ExecutorFixture {
+      override def test =
+        for {
+          block   <- sample(arbBlock.arbitrary.filter(_.getBody.deploys.size > 0)).pure[Task]
+          deploys = block.getBody.deploys.map(_.getDeploy).toList
+          _       <- DeployStorage[Task].writer.addAsPending(deploys)
+          _       <- BlockStorage[Task].put(block, BlockEffects.empty.effects)
+          message = Message.fromBlock(block).get
+          _       <- messageExecutor.effectsAfterAdded(message)
+          statuses <- deploys.traverse { d =>
+                       DeployStorage[Task].reader.getBufferedStatus(d.deployHash)
+                     }
+        } yield {
+          forAll(statuses) { maybeStatus =>
+            maybeStatus should not be empty
+            maybeStatus.get.state shouldBe DeployInfo.State.PROCESSED
+          }
+        }
     }
   }
 
