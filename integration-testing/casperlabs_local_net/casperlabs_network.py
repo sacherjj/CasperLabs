@@ -467,6 +467,8 @@ class OneNodeWithClarity(OneNodeNetwork):
 
 
 class TwoNodeNetwork(CasperLabsNetwork):
+    auto_propose = True
+
     def create_cl_network(self):
         kp = self.get_key()
         config = DockerConfig(
@@ -476,6 +478,7 @@ class TwoNodeNetwork(CasperLabsNetwork):
             network=self.create_docker_network(),
             node_account=kp,
             grpc_encryption=self.grpc_encryption,
+            auto_propose=self.auto_propose,
         )
         self.add_bootstrap(config)
         self.add_new_node_to_network()

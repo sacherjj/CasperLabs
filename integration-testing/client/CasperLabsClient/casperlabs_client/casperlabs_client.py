@@ -636,7 +636,7 @@ class CasperLabsClient:
                     f"Timed oud waiting for deploy {deploy_hash} to be processed"
                 )
 
-            result = self.showDeploy(deploy_hash)
+            result = self.showDeploy(deploy_hash, full_view=False)
             if result.status.state != 1:  # PENDING
                 break
             time.sleep(delay)
