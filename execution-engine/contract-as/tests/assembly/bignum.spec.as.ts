@@ -213,3 +213,27 @@ export function testBits(): bool {
     assert(mix.bits() == 43);
     return true;
 }
+
+export function testDivision(): bool {
+    let u512Max = new BigNum(64);
+    u512Max.setHex("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
+
+    let five = new BigNum(64);
+    five.setU64(5);
+
+    let rand = new BigNum(64);
+    rand.setHex("6fdf77a12c44899b8456d394e555ac9b62af0b0e70b79c8f8aa3837116c8c2a5");
+
+    assert(rand.bits() != 0);
+    let res1 = u512Max / rand;
+
+    assert(res1.toString(), "249cebb32c9a2f0d1375ddc28138b727428ed6c66f4ca9f0abeb231cff6df7ec7");
+
+    // u512max is multiply of 5
+
+    let divided = u512Max / five;
+    let multiplied = divided * five;
+
+    assert(multiplied == u512Max);
+    return true;
+}

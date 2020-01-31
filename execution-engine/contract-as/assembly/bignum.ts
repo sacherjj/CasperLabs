@@ -125,6 +125,18 @@ export class BigNum {
         return ret;
     }
 
+    setValues(pn: Uint32Array): void {
+        for (let i = 0; i < this.pn.length; i++) {
+            this.pn[i] = pn[i];
+        }
+    }
+
+    clone(): BigNum {
+        let bigNumber = new BigNum(64);
+        bigNumber.setValues(this.pn);
+        return bigNumber;
+    }
+
     // Returns bits length
     bits(): u32 {
         for (let i = this.pn.length - 1; i >= 0; i--) {
@@ -133,6 +145,76 @@ export class BigNum {
             }
         }
         return 0;
+    }
+
+    @operator("/")
+    div(other: BigNum): BigNum {
+        assert(this.pn.length == other.pn.length);
+
+        let div = other.clone(); // make a copy, so we can shift.
+        assert(div == other);
+
+        let num = this.clone(); // make a copy, so we can subtract the quotient.
+
+        let res = new BigNum(this.pn.length);
+
+        let num_bits = num.bits();
+        let div_bits = div.bits();
+
+        assert(div_bits != 0); // division by zero
+
+        if (div_bits > num_bits) {
+            // the result is certainly 0.
+            return new BigNum(this.pn.length);
+        }
+
+        let shift: i32 = num_bits - div_bits;
+        div <<= shift; // shift so that div and num align.
+
+        while (shift >= 0) {
+            if (num >= div) {
+                num -= div;
+                res.pn[shift / 32] |= (1 << (shift & 31)); // set a bit of the result.
+            }
+            div >>= 1; // shift back.
+            shift--;
+        }
+        // num now contains the remainder of the division.
+        return res;
+    }
+
+    @operator("<<")
+    shl(shift: u32): BigNum {
+        let res = new BigNum(this.pn.length);
+
+        let k: u32 = shift / 32;
+        shift = shift % 32;
+
+        for (let i = 0; i < this.pn.length; i++) {
+            if (i + k + 1 < this.pn.length && shift != 0)
+                res.pn[i + k + 1] |= (this.pn[i] >> (32 - shift));
+            if (i + k < this.pn.length)
+                res.pn[i + k] |= (this.pn[i] << shift);
+        }
+
+        return res;
+    }
+
+    @operator(">>")
+    shr(shift: u32): BigNum {
+        let res = new BigNum(this.pn.length);
+
+        let k = shift / 32;
+        shift = shift % 32;
+
+        for (let i = 0; i < this.pn.length; i++) {
+            if (i - k - 1 >= 0 && shift != 0)
+                res.pn[i - k - 1] |= (this.pn[i] << (32 - shift));
+            if (i - k >= 0)
+                res.pn[i - k] |= (this.pn[i] >> shift);
+        }
+
+        return res;
     }
 
     cmp(other: BigNum): i32 {
