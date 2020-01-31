@@ -2,6 +2,7 @@ package io.casperlabs.casper.highway
 
 import cats._
 import cats.implicits._
+import cats.effect.Clock
 import cats.effect.concurrent.{Ref, Semaphore}
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.{DeploySelection, ValidatorIdentity}
@@ -40,17 +41,20 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
   implicit val consensusConfig = ConsensusConfig()
 
   // Pick a key pair we can sign with.
-  val testValidator = sample(genAccountKeys)
+  val thisValidator  = sample(genAccountKeys)
+  val otherValidator = sample(genAccountKeys)
 
-  // Resign a block with the test validator after we messed with its contents.
-  def signBlock(block: Block): Block = {
-    val bodyHash  = protoHash(block.getBody)
-    val header    = block.getHeader.withBodyHash(bodyHash)
-    val blockHash = protoHash(header)
-    block
-      .withHeader(header)
-      .withBlockHash(blockHash)
-      .withSignature(testValidator.sign(blockHash))
+  implicit class AccountKeyOps(keys: AccountKeys) {
+    // Resign a block after we messed with its contents.
+    def signBlock(block: Block): Block = {
+      val bodyHash  = protoHash(block.getBody)
+      val header    = block.getHeader.withBodyHash(bodyHash)
+      val blockHash = protoHash(header)
+      block
+        .withHeader(header)
+        .withBlockHash(blockHash)
+        .withSignature(keys.sign(blockHash))
+    }
   }
 
   /** A fixture based on the Highway one where we won't be using the TestScheduler,
@@ -66,8 +70,9 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
         length = Duration.Zero,
         printLevel = printLevel,
         bonds = List(
-          // Our validator needs to be bonded in Genesis.
-          Bond(testValidator.publicKey).withStake(state.BigInt("10000"))
+          // Our validators needs to be bonded in Genesis, so the blocks created by them don't get rejected.
+          Bond(thisValidator.publicKey).withStake(state.BigInt("10000")),
+          Bond(otherValidator.publicKey).withStake(state.BigInt("5000"))
         )
       ) {
 
@@ -88,9 +93,9 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
     }
 
     // Make blocks in the test validator's name.
-    override val messageProducer = makeMessageProducer(testValidator)
+    override val messageProducer = makeMessageProducer(thisValidator)
 
-    // Produce the first block for the test validator validator, already inserted.
+    // Produce the first block for the test validator validator, already inserted, with dependencies.
     def insertFirstBlock(): Task[Block] =
       for {
         _ <- insertGenesis()
@@ -105,20 +110,47 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
         block <- BlockStorage[Task].getBlockUnsafe(message.messageHash)
       } yield block
 
-    // Make a second block without inserting it.
-    def prepareSecondBlock(): Task[Block] =
+    // Prepare a second block for the test validator, without inserting.
+    def prepareSecondBlock() =
       for {
         first <- insertFirstBlock()
-        second = signBlock {
-          first.withHeader(
-            first.getHeader
-              .withRank(first.getHeader.rank + 1)
-              .withValidatorBlockSeqNum(first.getHeader.validatorBlockSeqNum + 1)
-              .withValidatorPrevBlockHash(first.blockHash)
-              .withParentHashes(List(first.blockHash))
-              .withJustifications(
-                List(Block.Justification(testValidator.publicKey, first.blockHash))
-              )
+        second <- prepareNextBlock(
+                   thisValidator,
+                   first,
+                   first.getHeader.keyBlockHash,
+                   first.getHeader.roundId
+                 )
+      } yield second
+
+    // Make a new block without inserting it.
+    def prepareNextBlock(
+        keys: AccountKeys,
+        parent: Block,
+        keyBlockHash: BlockHash,
+        roundId: Long
+    ): Task[Block] =
+      for {
+        dag       <- DagStorage[Task].getRepresentation
+        tips      <- dag.latestInEra(parent.getHeader.keyBlockHash)
+        latest    <- tips.latestMessages
+        maybePrev = latest.get(keys.publicKey).map(_.head)
+        nextRank  = if (latest.isEmpty) 1 else latest.values.flatten.map(_.rank).max + 1
+        now       <- Clock[Task].currentTimeMillis
+        second = keys.signBlock {
+          parent.withHeader(
+            parent.getHeader
+              .withTimestamp(now)
+              .withKeyBlockHash(keyBlockHash)
+              .withRoundId(roundId)
+              .withRank(nextRank)
+              .withValidatorPublicKey(keys.publicKey)
+              .withValidatorBlockSeqNum(maybePrev.map(_.validatorMsgSeqNum + 1).getOrElse(1))
+              .withValidatorPrevBlockHash(maybePrev.map(_.messageHash).getOrElse(ByteString.EMPTY))
+              .withParentHashes(List(parent.blockHash))
+              .withJustifications(latest.toSeq.map {
+                case (v, ms) =>
+                  ms.toSeq.map(m => Block.Justification(v, m.messageHash))
+              }.flatten)
           )
         }
       } yield second
@@ -152,6 +184,20 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
     }
   }
 
+  it should "validate and save a ballot" in executorFixture { implicit db =>
+    new ExecutorFixture(validate = true, printLevel = Log.Level.Warn) {
+      override def test =
+        for {
+          ballot <- prepareSecondBlock().map { block =>
+                     thisValidator.signBlock(
+                       block.withHeader(block.getHeader.withMessageType(Block.MessageType.BALLOT))
+                     )
+                   }
+          _ <- validateAndAdd(ballot)
+        } yield ()
+    }
+  }
+
   it should "raise an error for unattributable errors" in executorFixture { implicit db =>
     new ExecutorFixture(validate = true, printLevel = Log.Level.Crit) {
       override def test =
@@ -168,7 +214,7 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
     }
   }
 
-  // TODO(CON-623): In the future we want these not to raise, but for that the fork
+  // TODO (CON-623): In the future we want these not to raise, but for that the fork
   // choice would also have to know not to build on them because they are invalid blocks.
   it should "raise an error for attributable errors" in executorFixture { implicit db =>
     new ExecutorFixture(validate = true, printLevel = Log.Level.Crit) {
@@ -176,7 +222,7 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
         for {
           // Make a block that signed by the validator that has invalid content.
           block <- prepareSecondBlock() map { block =>
-                    signBlock(block.withHeader(block.getHeader.withRank(100)))
+                    thisValidator.signBlock(block.withHeader(block.getHeader.withRank(100)))
                   }
           result <- validateAndAdd(block).attempt
           _ = result match {
@@ -184,6 +230,37 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
             case Right(()) => fail("Should have raised.")
           }
           _ <- BlockStorage[Task].contains(block.blockHash) shouldBeF false
+        } yield ()
+    }
+  }
+
+  it should "save an equivocation" in executorFixture { implicit db =>
+    new ExecutorFixture(validate = true) {
+      override def test =
+        for {
+          // Make two blocks by the other validator that form an equivocation.
+          first <- insertFirstBlock()
+
+          blockA <- prepareNextBlock(
+                     otherValidator,
+                     first,
+                     first.getHeader.keyBlockHash,
+                     first.getHeader.roundId + 1
+                   )
+          blockB <- prepareNextBlock(
+                     otherValidator,
+                     first,
+                     first.getHeader.keyBlockHash,
+                     first.getHeader.roundId + 2
+                   )
+          _ <- List(blockA, blockB).traverse { block =>
+                validateAndAdd(block) *>
+                  BlockStorage[Task].contains(block.blockHash) shouldBeF true
+              }
+
+          dag  <- DagStorage[Task].getRepresentation
+          tips <- dag.latestInEra(first.getHeader.keyBlockHash)
+          _    <- tips.getEquivocators shouldBeF Set(otherValidator.publicKey)
         } yield ()
     }
   }
@@ -198,7 +275,6 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
         } yield {
           events shouldBe empty
         }
-
     }
   }
 

@@ -233,6 +233,9 @@ class MessageExecutor[F[_]: Sync: Log: Time: Metrics: BlockStorage: DagStorage: 
 
         case Left(ValidateErrorWrapper(EquivocatedBlock))
             if maybeValidatorId.contains(block.getHeader.validatorPublicKey) =>
+          // NOTE: This will probably not be detected any more like this,
+          // since the blocks made by the MessageProducer are not normally
+          // validated, to avoid double execution.
           invalidBlock(SelfEquivocatedBlock)
 
         case Left(ValidateErrorWrapper(invalid)) =>

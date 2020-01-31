@@ -132,6 +132,7 @@ trait HighwayFixture extends StorageFixture with TickUtils with ArbitraryConsens
                 .withPostStateHash(emptyStateHash)
             )
         )
+        .withBody(Block.Body())
     }
 
     val genesis = Message.fromBlock(genesisBlock).get.asInstanceOf[Message.Block]
