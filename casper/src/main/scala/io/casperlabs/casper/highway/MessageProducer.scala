@@ -258,8 +258,10 @@ object MessageProducer {
 
     val secondaryCandidates: F[List[BlockHash]] =
       for {
-        latestHashes <- NonEmptyList(mainParent, justifications.values.flatten.toList).pure[F]
-        tips         <- Estimator.tipsOfLatestMessages[F](dag, latestHashes, stopHash = keyBlockHash)
+        latestMessages <- (mainParent +: justifications.values.flatten.toList)
+                           .traverse(dag.lookupUnsafe(_))
+                           .map(NonEmptyList.fromListUnsafe(_))
+        tips         <- Estimator.tipsOfLatestMessages[F](dag, latestMessages, stopHash = keyBlockHash)
         equivocators <- collectEquivocators[F](keyBlockHash)
         // TODO: There are no scores here for ordering secondary parents. Another reason for the fork choice to give these.
         secondaries = tips
