@@ -60,6 +60,8 @@ INTEGRATION_CONTRACTS := $(patsubst %, build-integration-contract/%, $(INTEGRATI
 CONTRACT_TARGET_DIR       = target/wasm32-unknown-unknown/release
 CONTRACT_TARGET_DIR_AS    = target-as
 PACKAGED_SYSTEM_CONTRACTS = mint_install.wasm pos_install.wasm
+TOOL_TARGET_DIR           = cargo-casperlabs/target
+TOOL_WASM_DIR             = cargo-casperlabs/wasm
 
 .PHONY: all
 all: build build-contracts
@@ -159,6 +161,8 @@ check: \
 clean:
 	rm -f comm/.rpm
 	rm -rf $(CONTRACT_TARGET_DIR_AS)
+	rm -rf $(TOOL_TARGET_DIR)
+	rm -rf $(TOOL_WASM_DIR)
 	$(CARGO) clean
 
 .PHONY: deb
@@ -188,7 +192,7 @@ publish:
 
 .PHONY: check-publish
 check-publish:
-	cd cargo-casperlabs && $(CARGO) publish --dry-run
+	cd cargo-casperlabs && $(CARGO) publish --dry-run --allow-dirty
 #	cd contract && $(CARGO) publish --dry-run
 #	cd engine-core && $(CARGO) publish --dry-run
 #	cd engine-grpc-server && $(CARGO) publish --dry-run
@@ -212,7 +216,6 @@ setup-rs: rust-toolchain
 	$(RUSTUP) update
 	$(RUSTUP) toolchain install $(RUST_TOOLCHAIN)
 	$(RUSTUP) target add --toolchain $(RUST_TOOLCHAIN) wasm32-unknown-unknown
-	$(RUSTUP) component add --toolchain $(RUST_TOOLCHAIN) rustfmt clippy
 
 .PHONY: setup-as
 setup-as: contract-as/package.json

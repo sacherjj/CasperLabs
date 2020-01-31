@@ -24,7 +24,7 @@ use engine_grpc_server::engine_server::{
         UpgradeResponse,
     },
     ipc_grpc::ExecutionEngineService,
-    mappings::{MappingError, TransformMap},
+    mappings::{MappingError, ParsingError, TransformMap},
     transforms::TransformEntry,
 };
 use engine_shared::{
@@ -49,7 +49,7 @@ use types::{
     CLValue, Key, URef, U512,
 };
 
-use crate::low_level::utils;
+use crate::internal::utils;
 
 /// LMDB initial map size is calculated based on DEFAULT_LMDB_PAGES and systems page size.
 ///
@@ -337,7 +337,7 @@ where
         maybe_post_state: Option<Vec<u8>>,
         base_key: Key,
         path: &[&str],
-    ) -> Option<StoredValue> {
+    ) -> Result<StoredValue, String> {
         let post_state = maybe_post_state
             .or_else(|| self.post_state_hash.clone())
             .expect("builder must have a post-state hash");
@@ -352,11 +352,14 @@ where
             .wait_drop_metadata()
             .expect("should get query response");
 
-        if query_response.has_success() {
-            query_response.take_success().try_into().ok()
-        } else {
-            None
+        if query_response.has_failure() {
+            return Err(query_response.take_failure());
         }
+
+        query_response
+            .take_success()
+            .try_into()
+            .map_err(|error: ParsingError| error.0)
     }
 
     pub fn exec(&mut self, mut exec_request: ExecuteRequest) -> &mut Self {
@@ -400,7 +403,7 @@ where
 
     /// Sends raw commit request to the current engine response.
     ///
-    /// Can be used where result is not necesary
+    /// Can be used where result is not necessary
     pub fn commit_transforms(
         &self,
         prestate_hash: Vec<u8>,
@@ -567,7 +570,7 @@ where
             .expect("should have pos contract uref")
             .into();
         self.query(None, pos_contract, &[])
-            .and_then(|v| v.try_into().ok())
+            .and_then(|v| v.try_into().map_err(|error| format!("{:?}", error)))
             .expect("should find PoS URef")
     }
 
@@ -579,13 +582,13 @@ where
         let balance_mapping_key = Key::local(mint.addr(), &purse_bytes);
         let balance_uref = self
             .query(None, balance_mapping_key, &[])
-            .and_then(|v| CLValue::try_from(v).ok())
-            .and_then(|cl_value| cl_value.into_t().ok())
+            .and_then(|v| CLValue::try_from(v).map_err(|error| format!("{:?}", error)))
+            .and_then(|cl_value| cl_value.into_t().map_err(|error| format!("{:?}", error)))
             .expect("should find balance uref");
 
         self.query(None, balance_uref, &[])
-            .and_then(|v| CLValue::try_from(v).ok())
-            .and_then(|cl_value| cl_value.into_t().ok())
+            .and_then(|v| CLValue::try_from(v).map_err(|error| format!("{:?}", error)))
+            .and_then(|cl_value| cl_value.into_t().map_err(|error| format!("{:?}", error)))
             .expect("should parse balance into a U512")
     }
 

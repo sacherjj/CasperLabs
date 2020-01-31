@@ -12,13 +12,16 @@ use crate::{
 
 const PACKAGE_NAME: &str = "contract";
 
-const LIB_RS_CONTENTS: &str = r#"#![cfg_attr(not(target_arch = "wasm32"), crate_type = "target arch should be wasm32")]
+const LIB_RS_CONTENTS: &str = r#"#![cfg_attr(
+    not(target_arch = "wasm32"),
+    crate_type = "target arch should be wasm32"
+)]
 
 use casperlabs_contract::{
     contract_api::{runtime, storage},
     unwrap_or_revert::UnwrapOrRevert,
 };
-use casperlabs_types::{Key, ApiError};
+use casperlabs_types::{ApiError, Key};
 
 const KEY: &str = "special_value";
 

@@ -6,8 +6,9 @@ use engine_core::engine_state::{
     CONV_RATE,
 };
 use engine_shared::motes::Motes;
-use engine_test_support::low_level::{
-    utils, ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_ACCOUNTS, DEFAULT_ACCOUNT_ADDR,
+use engine_test_support::{
+    internal::{utils, ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_ACCOUNTS},
+    DEFAULT_ACCOUNT_ADDR,
 };
 use types::{
     account::{PublicKey, PurseId},

@@ -1,7 +1,7 @@
 use contract::args_parser::ArgsParser;
-use engine_test_support::low_level::{
-    utils, ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_ACCOUNT_ADDR,
-    DEFAULT_GENESIS_CONFIG,
+use engine_test_support::{
+    internal::{utils, ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_GENESIS_CONFIG},
+    DEFAULT_ACCOUNT_ADDR,
 };
 use types::{ApiError, U512};
 

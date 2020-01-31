@@ -423,12 +423,11 @@ class ExecEngineUtilTest
       implicit val timeEff: Time[Id] = new LogicalTime[Id]
       implicit val cc                = ConsensusConfig()
 
-      val processedDeploys = (0 to 5).toList.traverse { stage =>
-        val deploysNum = scala.util.Random.nextInt(10)
+      val processedDeploys = scala.util.Random.shuffle((0 to 5).toList.traverse { stage =>
         List
-          .fill(deploysNum)(ProtoUtil.basicProcessedDeploy[Id].map(_.withStage(stage)))
+          .fill(3)(ProtoUtil.basicProcessedDeploy[Id].map(_.withStage(stage)))
           .sequence
-      }.flatten
+      }.flatten)
 
       val deployToEffect: Map[ByteString, (Int, Seq[TransformEntry])] =
         processedDeploys.map { deploy =>
@@ -447,22 +446,32 @@ class ExecEngineUtilTest
 
       implicit val cl = CasperLabsProtocol.unsafe[Task]((0, ProtocolVersion(1), None))
 
+      val stageCounter = AtomicInt(0)
+
       implicit val ee = mock[Task](
         _ => new Throwable("Keep calm.").asLeft.pure[Task],
         (_, _, _) => new Throwable("Keep calm.").asLeft.pure[Task],
         (_, _, deploys, _) =>
-          Task.now(
+          Task {
+            val deployHashes = deploys.map(_.deployHash).toSet
+            val stage        = stageCounter.getAndIncrement()
+            val expectedHashes =
+              processedDeploys.filter(_.stage == stage).map(_.getDeploy.deployHash)
+            assert(
+              expectedHashes.toSet == deployHashes,
+              "Deploys are not being sent to the EE in the correct order."
+            )
+
             deploys
               .map { item =>
-                DeployResult()
-                  .withExecutionResult(
-                    ExecutionResult().withEffects(
-                      ExecutionEffect().withTransformMap(deployToEffect(item.deployHash)._2)
-                    )
+                DeployResult().withExecutionResult(
+                  ExecutionResult().withEffects(
+                    ExecutionEffect().withTransformMap(deployToEffect(item.deployHash)._2)
                   )
+                )
               }
               .asRight[Throwable]
-          ),
+          },
         (_, _) =>
           Task.now(
             ExecutionEngineService

@@ -14,6 +14,7 @@ use engine_shared::{motes::Motes, test_utils};
 use engine_wasm_prep::wasm_costs::WasmCosts;
 use types::{account::PublicKey, ProtocolVersion, U512};
 
+use super::{DEFAULT_ACCOUNT_ADDR, DEFAULT_ACCOUNT_INITIAL_BALANCE};
 pub use additive_map_diff::AdditiveMapDiff;
 pub use deploy_item_builder::DeployItemBuilder;
 pub use execute_request_builder::ExecuteRequestBuilder;
@@ -28,8 +29,6 @@ pub const STANDARD_PAYMENT_CONTRACT: &str = "standard_payment.wasm";
 
 pub const DEFAULT_CHAIN_NAME: &str = "gerald";
 pub const DEFAULT_GENESIS_TIMESTAMP: u64 = 0;
-pub const DEFAULT_ACCOUNT_ADDR: [u8; 32] = [6u8; 32];
-pub const DEFAULT_ACCOUNT_INITIAL_BALANCE: u64 = 100_000_000_000;
 pub const DEFAULT_BLOCK_TIME: u64 = 0;
 pub const MOCKED_ACCOUNT_ADDRESS: [u8; 32] = [48u8; 32];
 

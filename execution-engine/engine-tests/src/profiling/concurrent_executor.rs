@@ -21,7 +21,7 @@ use engine_grpc_server::engine_server::{
     ipc::ExecuteRequest,
     ipc_grpc::{ExecutionEngineService, ExecutionEngineServiceClient},
 };
-use engine_test_support::low_level::ExecuteRequestBuilder;
+use engine_test_support::internal::ExecuteRequestBuilder;
 use types::U512;
 
 use casperlabs_engine_tests::profiling;
