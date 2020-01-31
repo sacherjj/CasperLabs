@@ -225,15 +225,34 @@ export function testDivision(): bool {
     rand.setHex("6fdf77a12c44899b8456d394e555ac9b62af0b0e70b79c8f8aa3837116c8c2a5");
 
     assert(rand.bits() != 0);
-    let res1 = u512Max / rand;
+    let res1 = u512Max.divMod(rand);
+    assert(res1 !== null);
 
-    assert(res1.toString(), "249cebb32c9a2f0d1375ddc28138b727428ed6c66f4ca9f0abeb231cff6df7ec7");
+    // result
+    assert(res1.first.toString(), "249cebb32c9a2f0d1375ddc28138b727428ed6c66f4ca9f0abeb231cff6df7ec7");
+    // remainder
+    assert(res1.second.toString(), "4d4edcc2e5e0a5416119b88b280018b1b79ffbd0891ae622ee7a6d895e687bbc");
+    // recalculate back
+    assert((res1.first * rand) + res1.second == u512Max);
 
     // u512max is multiply of 5
-
     let divided = u512Max / five;
     let multiplied = divided * five;
-
     assert(multiplied == u512Max);
+
+    let base10 = "";
+    let zero = new BigNum(64);
+    let ten = new BigNum(64);
+    ten.setU64(10);
+
+    assert(five % ten == five);
+    assert(ten.divMod(zero) === null);
+
+    while (u512Max > zero) {
+        let res = u512Max.divMod(ten);
+        base10 = res.second.toString() + base10;
+        u512Max = res.first;
+    }
+    assert(base10 == "13407807929942597099574024998205846127479365820592393377723561443721764030073546976801874298166903427690031858186486050853753882811946569946433649006084095");
     return true;
 }

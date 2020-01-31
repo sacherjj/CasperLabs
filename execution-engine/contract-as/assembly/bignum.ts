@@ -1,4 +1,5 @@
 import {toBytesU64} from "./bytesrepr";
+import {Pair} from "./pair";
 
 const HEX_LOWERCASE: string[] = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'];
 // ascii -> number value
@@ -147,13 +148,10 @@ export class BigNum {
         return 0;
     }
 
-    @operator("/")
-    div(other: BigNum): BigNum {
+    divMod(other: BigNum): Pair<BigNum, BigNum> | null {
         assert(this.pn.length == other.pn.length);
 
         let div = other.clone(); // make a copy, so we can shift.
-        assert(div == other);
-
         let num = this.clone(); // make a copy, so we can subtract the quotient.
 
         let res = new BigNum(this.pn.length);
@@ -161,11 +159,15 @@ export class BigNum {
         let num_bits = num.bits();
         let div_bits = div.bits();
 
-        assert(div_bits != 0); // division by zero
+        if (div_bits == 0) {
+            // division by zero
+            return null;
+        }
 
         if (div_bits > num_bits) {
-            // the result is certainly 0.
-            return new BigNum(this.pn.length);
+            // the result is certainly 0 and rem is the lhs of equation.
+            let zero = new BigNum(this.pn.length);
+            return new Pair<BigNum, BigNum>(zero, num);
         }
 
         let shift: i32 = num_bits - div_bits;
@@ -180,7 +182,21 @@ export class BigNum {
             shift--;
         }
         // num now contains the remainder of the division.
-        return res;
+        return new Pair<BigNum, BigNum>(res, num);
+    }
+
+    @operator("/")
+    div(other: BigNum): BigNum {
+        let divModResult = this.divMod(other);
+        assert(divModResult !== null);
+        return divModResult.first;
+    }
+
+    @operator("%")
+    rem(other: BigNum): BigNum {
+        let divModResult = this.divMod(other);
+        assert(divModResult !== null);
+        return divModResult.second;
     }
 
     @operator("<<")
