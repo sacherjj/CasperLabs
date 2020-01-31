@@ -92,7 +92,11 @@ object DeployBuffer {
       .timer("notExpiredFilter")
 
     for {
-      unexpiredList <- unexpired.map(_._1).compile.toList
+      // We compile `earlierPendingDeploys` here to avoid a race condition where
+      // the stream may be updated by receiving a new deploy after `unexpired`
+      // has been compiled, causing some deploys to be erroneously marked as DISCARDED.
+      earlierPendingSet <- earlierPendingDeploys.map(_._1).compile.to[Set]
+      unexpiredList     <- unexpired.map(_._1).compile.toList
       // Make sure pending deploys have never been processed in the past cone of the new parents.
       validDeploys <- DeployFilters
                        .filterDeploysNotInPast(dag, parents, unexpiredList)
@@ -100,11 +104,7 @@ object DeployBuffer {
                        .timer("remainingDeploys_filterDeploysNotInPast")
       // anything with timestamp earlier than now and not included in the valid deploys
       // can be discarded as a duplicate and/or expired deploy
-      deploysToDiscard <- earlierPendingDeploys
-                           .map(_._1)
-                           .compile
-                           .to[Set]
-                           .map(_ diff validDeploys)
+      deploysToDiscard = earlierPendingSet diff validDeploys
       _ <- DeployStorageWriter[F]
             .markAsDiscardedByHashes(deploysToDiscard.toList.map((_, "Duplicate or expired")))
             .whenA(deploysToDiscard.nonEmpty)
