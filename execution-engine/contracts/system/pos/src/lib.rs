@@ -2,25 +2,23 @@
 
 extern crate alloc;
 
-mod mint_provider;
-mod pos;
-mod queue;
-mod queue_provider;
-mod runtime_provider;
-mod stakes;
-mod stakes_provider;
+mod contract_mint;
+mod contract_queue;
+mod contract_runtime;
+mod contract_stakes;
 
 use alloc::string::String;
 
 use contract::{contract_api::runtime, unwrap_or_revert::UnwrapOrRevert};
+use proof_of_stake::ProofOfStake;
 use types::{
     account::{PublicKey, PurseId},
     ApiError, CLValue, URef, U512,
 };
 
 use crate::{
-    mint_provider::ContractMint, pos::ProofOfStake, queue_provider::ContractQueue,
-    runtime_provider::ContractRuntime, stakes_provider::ContractStakes,
+    contract_mint::ContractMint, contract_queue::ContractQueue, contract_runtime::ContractRuntime,
+    contract_stakes::ContractStakes,
 };
 
 const METHOD_BOND: &str = "bond";

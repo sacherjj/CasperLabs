@@ -1,23 +1,8 @@
 use contract::contract_api::storage;
-
-use crate::queue::Queue;
+use proof_of_stake::{Queue, QueueProvider};
 
 const BONDING_KEY: u8 = 1;
 const UNBONDING_KEY: u8 = 2;
-
-pub trait QueueProvider {
-    /// Reads bonding queue.
-    fn read_bonding() -> Queue;
-
-    /// Reads unbonding queue.
-    fn read_unbonding() -> Queue;
-
-    /// Writes bonding queue.
-    fn write_bonding(queue: Queue);
-
-    /// Writes unbonding queue.
-    fn write_unbonding(queue: Queue);
-}
 
 #[allow(dead_code)]
 /// A `QueueProvider` that reads and writes the queue to/from the contract's local state.

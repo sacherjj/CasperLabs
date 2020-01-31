@@ -122,6 +122,8 @@ impl CLTyped for Queue {
 
 #[cfg(test)]
 mod tests {
+    use alloc::vec;
+
     use types::{account::PublicKey, system_contract_errors::pos::Error, BlockTime, U512};
 
     use super::{Queue, QueueEntry};

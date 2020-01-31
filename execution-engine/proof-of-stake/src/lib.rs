@@ -1,12 +1,23 @@
+#![cfg_attr(not(feature = "std"), no_std)]
+
+extern crate alloc;
+
+mod mint_provider;
+mod queue;
+mod queue_provider;
+mod runtime_provider;
+mod stakes;
+mod stakes_provider;
+
 use types::{
     account::{PublicKey, PurseId},
     system_contract_errors::pos::{Error, Result},
     AccessRights, TransferredTo, URef, U512,
 };
 
-use crate::{
-    mint_provider::MintProvider, queue_provider::QueueProvider, runtime_provider::RuntimeProvider,
-    stakes_provider::StakesProvider,
+pub use crate::{
+    mint_provider::MintProvider, queue::Queue, queue_provider::QueueProvider,
+    runtime_provider::RuntimeProvider, stakes::Stakes, stakes_provider::StakesProvider,
 };
 
 pub trait ProofOfStake<M, Q, R, S>
@@ -324,7 +335,9 @@ mod internal {
 
     #[cfg(test)]
     mod tests {
-        use std::{cell::RefCell, iter};
+        extern crate std;
+
+        use std::{cell::RefCell, iter, thread_local};
 
         use types::{account::PublicKey, system_contract_errors::pos::Result, BlockTime, U512};
 

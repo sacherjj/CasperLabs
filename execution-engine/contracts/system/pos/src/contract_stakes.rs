@@ -7,18 +7,12 @@ use core::fmt::Write;
 use base16;
 
 use contract::contract_api::runtime;
+use proof_of_stake::{Stakes, StakesProvider};
 use types::{
     account::PublicKey,
     system_contract_errors::pos::{Error, Result},
     Key, U512,
 };
-
-use crate::stakes::Stakes;
-
-pub trait StakesProvider {
-    fn read() -> Result<Stakes>;
-    fn write(stakes: &Stakes);
-}
 
 #[allow(dead_code)]
 /// A `StakesProvider` that reads and writes the stakes to/from the contract's
