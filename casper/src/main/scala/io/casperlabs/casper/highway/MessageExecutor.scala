@@ -170,7 +170,7 @@ class MessageExecutor[F[_]: Sync: Log: Time: Metrics: BlockStorage: DagStorage: 
     import io.casperlabs.casper.validation.ValidationImpl.metricsSource
     Metrics[F].timer("validateAndAddBlock") {
       val hashPrefix = block.blockHash.show
-      val effects: F[BlockEffects] = for {
+      val effectsF: F[BlockEffects] = for {
         _   <- Log[F].info(s"Attempting to add $isBookingBlock ${hashPrefix -> "block"} to the DAG.")
         dag <- DagStorage[F].getRepresentation
         _   <- Validation[F].blockFull(block, dag, chainName, genesis.some)
@@ -219,32 +219,41 @@ class MessageExecutor[F[_]: Sync: Log: Time: Metrics: BlockStorage: DagStorage: 
         _ <- Log[F].debug(s"Block effects calculated for ${hashPrefix -> "block"}")
       } yield blockEffects
 
-      def validBlock(effects: BlockEffects)  = ((Valid: BlockStatus)  -> effects).pure[F]
-      def invalidBlock(status: InvalidBlock) = ((status: BlockStatus) -> BlockEffects.empty).pure[F]
+      effectsToStatus(block, effectsF)
+    }
+  }
 
-      effects.attempt.flatMap {
-        case Right(effects) =>
-          validBlock(effects)
+  def effectsToStatus(
+      block: Block,
+      effects: F[Validation.BlockEffects]
+  ): F[(BlockStatus, BlockEffects)] = {
+    def validBlock(effects: BlockEffects)  = ((Valid: BlockStatus)  -> effects).pure[F]
+    def invalidBlock(status: InvalidBlock) = ((status: BlockStatus) -> BlockEffects.empty).pure[F]
 
-        case Left(DropErrorWrapper(invalid)) =>
-          // These exceptions are coming from the validation checks that used to happen outside attemptAdd,
-          // the ones that returned boolean values.
-          invalidBlock(invalid)
+    effects.attempt.flatMap {
+      case Right(effects) =>
+        validBlock(effects)
 
-        case Left(ValidateErrorWrapper(EquivocatedBlock))
-            if maybeValidatorId.contains(block.getHeader.validatorPublicKey) =>
-          // NOTE: This will probably not be detected any more like this,
-          // since the blocks made by the MessageProducer are not normally
-          // validated, to avoid double execution.
-          invalidBlock(SelfEquivocatedBlock)
+      case Left(DropErrorWrapper(invalid)) =>
+        // These exceptions are coming from the validation checks that used to happen outside attemptAdd,
+        // the ones that returned boolean values.
+        invalidBlock(invalid)
 
-        case Left(ValidateErrorWrapper(invalid)) =>
-          invalidBlock(invalid)
+      case Left(ValidateErrorWrapper(EquivocatedBlock))
+          if maybeValidatorId.contains(block.getHeader.validatorPublicKey) =>
+        // NOTE: This will probably not be detected any more like this,
+        // since the blocks made by the MessageProducer are not normally
+        // validated, to avoid double execution.
+        invalidBlock(SelfEquivocatedBlock)
 
-        case Left(ex) =>
-          Log[F].error(s"Unexpected exception during validation of ${hashPrefix -> "block"}: $ex") *>
-            ex.raiseError[F, (BlockStatus, BlockEffects)]
-      }
+      case Left(ValidateErrorWrapper(invalid)) =>
+        invalidBlock(invalid)
+
+      case Left(ex) =>
+        Log[F].error(
+          s"Unexpected exception during validation of ${block.blockHash.show -> "block"}: $ex"
+        ) *>
+          ex.raiseError[F, (BlockStatus, BlockEffects)]
     }
   }
 }

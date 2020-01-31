@@ -9,8 +9,8 @@ import io.casperlabs.casper.{DeploySelection, ValidatorIdentity}
 import io.casperlabs.casper.consensus.{Block, Bond}
 import io.casperlabs.casper.consensus.state
 import io.casperlabs.casper.mocks.MockValidation
-import io.casperlabs.casper.validation.ValidationImpl
-import io.casperlabs.casper.validation.Validation
+import io.casperlabs.casper.validation
+import io.casperlabs.casper.validation.{Validation, ValidationImpl}
 import io.casperlabs.casper.validation.Errors.ValidateErrorWrapper
 import io.casperlabs.casper.finality.MultiParentFinalizer
 import io.casperlabs.casper.highway.mocks.MockEventEmitter
@@ -377,6 +377,39 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
             maybeStatus should not be empty
             maybeStatus.get.state shouldBe DeployInfo.State.PROCESSED
           }
+        }
+    }
+  }
+
+  behavior of "effectsToStatus"
+
+  it should "return the effects of a valid block" in executorFixture { implicit db =>
+    new ExecutorFixture {
+      override def test =
+        messageExecutor.effectsToStatus(
+          sample[Block],
+          BlockEffects(Map(0 -> Seq.empty)).pure[Task]
+        ) map {
+          case (status, effects) =>
+            status shouldBe Valid
+            effects.effects should not be (empty)
+        }
+    }
+  }
+
+  it should "not return the effects of an invalid block" in executorFixture { implicit db =>
+    val functorRaiseInvalidBlock =
+      validation.raiseValidateErrorThroughApplicativeError[Task]
+
+    new ExecutorFixture {
+      override def test =
+        messageExecutor.effectsToStatus(
+          sample[Block],
+          functorRaiseInvalidBlock.raise(EquivocatedBlock)
+        ) map {
+          case (status, effects) =>
+            status shouldBe EquivocatedBlock
+            effects.effects shouldBe (empty)
         }
     }
   }
