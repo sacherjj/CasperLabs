@@ -223,7 +223,7 @@ class MessageExecutor[F[_]: Sync: Log: Time: Metrics: BlockStorage: DagStorage: 
     }
   }
 
-  def effectsToStatus(
+  private def effectsToStatus(
       block: Block,
       effects: F[Validation.BlockEffects]
   ): F[(BlockStatus, BlockEffects)] = {

@@ -30,6 +30,8 @@ import io.casperlabs.shared.Log
 import monix.eval.Task
 import org.scalatest._
 import scala.concurrent.duration._
+import io.casperlabs.casper.util.execengine.ExecutionEngineServiceStub
+import io.casperlabs.storage.dag.DagRepresentation
 
 class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with HighwayFixture {
 
@@ -381,15 +383,47 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
     }
   }
 
-  behavior of "effectsToStatus"
+  behavior of "computeEffects"
+
+  trait ExecEngineSerivceWithFakeEffects { self: ExecutorFixture =>
+    import io.casperlabs.ipc._
+    import io.casperlabs.smartcontracts.ExecutionEngineService
+    import state.Key
+
+    def sampleBlockWithDeploys =
+      sample(arbBlock.arbitrary.filter(_.getBody.deploys.nonEmpty))
+
+    override def execEngineService =
+      ExecutionEngineServiceStub.mock[Task](
+        (_) => ???,
+        (_, _, _) => ???,
+        (_, _, deploys, _) => {
+          val key = Key(Key.Value.Hash(Key.Hash(ByteString.copyFromUtf8("some-key"))))
+          val (op, transform) = Op(Op.OpInstance.Read(ReadOp())) ->
+            Transform(Transform.TransformInstance.Identity(TransformIdentity()))
+          val transformEntry = TransformEntry(Some(key), Some(transform))
+          val opEntry        = OpEntry(Some(key), Some(op))
+          val effect         = ExecutionEffect(Seq(opEntry), Seq(transformEntry))
+          val result         = DeployResult.ExecutionResult().withEffects(effect)
+          // Have to return exactly the right number of resports.
+          List
+            .fill(deploys.size)(DeployResult().withExecutionResult(result))
+            .asRight[Throwable]
+            .pure[Task]
+        },
+        (preStateHash, _) =>
+          ExecutionEngineService
+            .CommitResult(preStateHash, bonds)
+            .asRight[Throwable]
+            .pure[Task],
+        (_, _, _) => ???
+      )
+  }
 
   it should "return the effects of a valid block" in executorFixture { implicit db =>
-    new ExecutorFixture {
+    new ExecutorFixture with ExecEngineSerivceWithFakeEffects {
       override def test =
-        messageExecutor.effectsToStatus(
-          sample[Block],
-          BlockEffects(Map(0 -> Seq.empty)).pure[Task]
-        ) map {
+        messageExecutor.computeEffects(sampleBlockWithDeploys, false) map {
           case (status, effects) =>
             status shouldBe Valid
             effects.effects should not be (empty)
@@ -401,12 +435,16 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
     val functorRaiseInvalidBlock =
       validation.raiseValidateErrorThroughApplicativeError[Task]
 
-    new ExecutorFixture {
-      override def test =
-        messageExecutor.effectsToStatus(
-          sample[Block],
+    new ExecutorFixture with ExecEngineSerivceWithFakeEffects {
+      // Fake validation which let's everything through but it raises the one
+      // invalid status which should result in a block being saved.
+      override def validation = new MockValidation[Task] {
+        override def checkEquivocation(dag: DagRepresentation[Task], block: Block): Task[Unit] =
           functorRaiseInvalidBlock.raise(EquivocatedBlock)
-        ) map {
+      }
+
+      override def test =
+        messageExecutor.computeEffects(sample[Block], false) map {
           case (status, effects) =>
             status shouldBe EquivocatedBlock
             effects.effects shouldBe (empty)
