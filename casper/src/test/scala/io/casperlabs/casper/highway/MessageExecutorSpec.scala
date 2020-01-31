@@ -261,7 +261,9 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
           dag  <- DagStorage[Task].getRepresentation
           tips <- dag.latestInEra(first.getHeader.keyBlockHash)
           _    <- tips.getEquivocators shouldBeF Set(otherValidator.publicKey)
-        } yield ()
+        } yield {
+          exactly(1, log.warns) should include("Found equivocation")
+        }
     }
   }
 
