@@ -31,6 +31,7 @@ import scala.collection.immutable
 import scala.concurrent.duration.FiniteDuration
 import scala.concurrent.duration._
 import scala.util.Try
+import io.casperlabs.storage.dag.DagLookup
 
 object ProtoUtil {
   import Weight._
@@ -40,7 +41,7 @@ object ProtoUtil {
    */
   // TODO: Move into DAG and remove corresponding param once that is moved over from simulator
   def isInMainChain[F[_]: Monad](
-      dag: DagRepresentation[F],
+      dag: DagLookup[F],
       candidateBlockSummary: Message.Block,
       targetBlockHash: BlockHash
   ): F[Boolean] =

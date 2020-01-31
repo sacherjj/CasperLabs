@@ -1,9 +1,23 @@
 package io.casperlabs.casper.highway
 
+import cats.data.NonEmptyList
+import cats.effect.Sync
+import cats.implicits._
+import com.github.ghik.silencer.silent
+import com.google.protobuf.ByteString
+import io.casperlabs.casper.{Estimator, PrettyPrinter}
 import io.casperlabs.crypto.Keys.{PublicKey, PublicKeyBS}
-import io.casperlabs.models.Message
+import io.casperlabs.models.{Message, Weight}
 import io.casperlabs.storage.BlockHash
+import io.casperlabs.storage.dag.{DagLookup, DagRepresentation, DagStorage}
+import DagRepresentation._
+import io.casperlabs.casper.util.ProtoUtil
+import io.casperlabs.storage.era.EraStorage
+import io.casperlabs.catscontrib.MonadThrowable
+import io.casperlabs.models.Message.Block
 import simulacrum.typeclass
+
+import scala.util.Try
 
 /** Some sort of stateful, memoizing implementation of a fast fork choice.
   * Should have access to the era tree to check what are the latest messages
@@ -47,6 +61,8 @@ trait ForkChoice[F[_]] {
       justifications: Set[BlockHash]
   ): F[ForkChoice.Result]
 }
+
+@silent("is never used")
 object ForkChoice {
   case class Result(
       block: Message.Block,
@@ -57,11 +73,243 @@ object ForkChoice {
       // on top of the main parent can cite all these justifications.
       justifications: Set[Message]
   ) {
-    def justificationsMap: Map[PublicKeyBS, Set[BlockHash]] =
+    lazy val justificationsMap: Map[PublicKeyBS, Set[BlockHash]] =
       justifications.toSeq
         .map(j => PublicKey(j.validatorId) -> j.messageHash)
         .groupBy(_._1)
         .mapValues(_.map(_._2).toSet)
+  }
+
+  def create[F[_]: Sync: EraStorage: DagStorage](): ForkChoice[F] = new ForkChoice[F] {
+
+    private def eraForkChoice(
+        dag: DagRepresentation[F],
+        keyBlock: Block,
+        latestMessages: Map[DagRepresentation.Validator, Set[Message]],
+        equivocators: Set[ByteString]
+    ): F[Block] = {
+      val weights          = keyBlock.weightMap
+      val honestValidators = weights.keys.toList.filterNot(equivocators(_))
+      val latestHonestMessages = latestMessages.collect {
+        case (v, lms) if lms.size == 1 => v -> lms.head
+      }
+      for {
+        forkChoice <- MonadThrowable[F].tailRecM(keyBlock) { startBlock =>
+                       val noChildren = dag
+                         .children(startBlock.messageHash)
+                         .flatMap(_.toList.traverse(dag.lookupUnsafe(_)))
+                         .map(_.filter(m => m.eraId == keyBlock.messageHash && m.isBlock).isEmpty)
+
+                       noChildren.ifM(
+                         startBlock.asRight[Block].pure[F],
+                         for {
+                           // Collect latest messages from honest validators that vote for the block.
+                           relevantMessages <- honestValidators
+                                                .foldLeftM(Map.empty[ByteString, Message]) {
+                                                  case (acc, v) =>
+                                                    latestHonestMessages.get(v).fold(acc.pure[F]) {
+                                                      latestMessage =>
+                                                        previousVoteForDescendant(
+                                                          dag,
+                                                          latestMessage,
+                                                          startBlock
+                                                        ).map(_.fold(acc) { vote =>
+                                                          acc.updated(v, vote)
+                                                        })
+                                                    }
+                                                }
+                           scores <- relevantMessages.toList
+                                      .foldLeftM(Scores.init(startBlock)) {
+                                        case (scores, (v, msg)) =>
+                                          msg match {
+                                            case block: Message.Block =>
+                                              // A block is a vote for itself.
+                                              scores.update(block, weights(v)).pure[F]
+                                            case ballot: Message.Ballot =>
+                                              // Ballot votes for its parent.
+                                              dag
+                                                .lookupUnsafe(msg.parentBlock)
+                                                .map(_.asInstanceOf[Block])
+                                                .map(block => scores.update(block, weights(v)))
+                                          }
+
+                                      }
+
+                           result <- if (scores.isEmpty)
+                                      // No one voted for anything - there are no descendants of `start`.
+                                      startBlock.asRight[Block].pure[F]
+                                    else
+                                      scores
+                                        .tip[F](Sync[F], dag)
+                                        .map(_.asLeft[Block])
+                         } yield result
+                       )
+                     }
+      } yield forkChoice
+    }
+
+    override def fromKeyBlock(keyBlockHash: BlockHash): F[Result] =
+      for {
+        dag <- DagStorage[F].getRepresentation
+        keyBlock <- dag
+                     .lookupUnsafe(keyBlockHash)
+                     .flatMap(msg => Sync[F].fromTry(Try(msg.asInstanceOf[Block])))
+        equivocators <- MessageProducer.collectEquivocators[F](keyBlockHash)
+        keyBlocks    <- MessageProducer.collectKeyBlocks[F](keyBlockHash)
+        forkChoice <- keyBlocks
+                       .foldM(keyBlock -> Map.empty[DagRepresentation.Validator, Set[Message]]) {
+                         case ((startBlock, accLatestMessages), currKeyBlock) =>
+                           dag
+                             .latestMessagesInEra(currKeyBlock)
+                             .flatMap { latestMessages =>
+                               eraForkChoice(dag, startBlock, latestMessages, equivocators)
+                                 .flatMap { forkChoice =>
+                                   val latestMessagesFlattened = NonEmptyList
+                                     .of[Message](
+                                       forkChoice,
+                                       latestMessages.values.flatten.toSeq: _*
+                                     )
+                                   // Eliminate tips that are ancestors in the main-tree.
+                                   Estimator
+                                     .tipsOfLatestMessages(
+                                       dag,
+                                       latestMessagesFlattened,
+                                       currKeyBlock
+                                     )
+                                     .map(
+                                       _.filterNot(_.messageHash == forkChoice.messageHash)
+                                         .groupBy(_.validatorId)
+                                         .mapValues(_.toSet) |+| accLatestMessages
+                                     )
+                                     .map(forkChoice -> _)
+                                 }
+                             }
+                       }
+      } yield Result(
+        forkChoice._1,
+        forkChoice._2.values.flatten.toList
+          .filterNot(_.messageHash == forkChoice._1.messageHash)
+          .toSet
+      )
+
+    override def fromJustifications(
+        keyBlockHash: BlockHash,
+        justifications: Set[BlockHash]
+    ): F[Result] = ???
+  }
+
+  private def previousVoteForDescendant[F[_]: MonadThrowable](
+      dag: DagLookup[F],
+      latestMessage: Message,
+      target: Block
+  ): F[Option[Message]] =
+    if (latestMessage.rank < target.rank)
+      none[Message].pure[F]
+    else if (latestMessage.isBlock && latestMessage.messageHash == target.messageHash)
+      none[Message].pure[F]
+    else {
+      ProtoUtil
+        .isInMainChain[F](dag, target, latestMessage.messageHash)
+        .flatMap(
+          isActiveVote =>
+            if (isActiveVote)
+              latestMessage.some.pure[F]
+            else
+              Option(latestMessage.validatorPrevMessageHash)
+                .filterNot(_ == ByteString.EMPTY)
+                .fold(none[Message].pure[F]) { prevMsgHash =>
+                  dag
+                    .lookupUnsafe(prevMsgHash)
+                    .flatMap(previousVoteForDescendant(dag, _, target))
+                }
+        )
+    }
+
+  /* The scores map keeps track of the votes for a descendant of `start` by height.
+   * This allows us to skip multiple descendants from `start`
+   * if there are enough votes farther up the main tree.
+   *
+   * This is true because later votes have to be in the same main tree theirs ancestors.
+   * We need to find rank of the highest block that is plurality driven (has most votes).
+   * If we know that block rank=5 has >50% of total votes we don't have to check its ancestors.
+   */
+  private[highway] case class Scores(scores: Map[Scores.Height, Map[BlockHash, Weight]]) {
+    // Update weight of votes at height.
+    def update(height: Scores.Height, hash: BlockHash, weight: Weight): Scores = {
+      val currVotes = scores.getOrElse(height, Map.empty[BlockHash, Weight])
+      val currScore = currVotes.getOrElse(hash, Weight.Zero)
+      val newScore  = currScore + weight
+      val newVotes  = currVotes.updated(hash, newScore)
+      copy(scores.updated(height, newVotes))
+    }
+
+    def votesAtHeight(height: Scores.Height): Map[BlockHash, Weight] =
+      scores.getOrElse(height, Map.empty)
+
+    def totalWeight: Weight      = scores.valuesIterator.flatMap(_.valuesIterator).sum
+    def maxHeight: Scores.Height = scores.keysIterator.max
+    def minHeight: Scores.Height = scores.keysIterator.min
+    def isEmpty: Boolean         = scores.isEmpty
+
+    def tip[F[_]: Sync](implicit dag: DagLookup[F]): F[Block] =
+      Scores
+        .findTip[F](maxHeight, minHeight, totalWeight, this)
+        .flatMap(dag.lookupUnsafe(_))
+        .flatMap(
+          msg => Sync[F].fromTry(Try(msg.asInstanceOf[Block]))
+        )
+  }
+
+  object Scores {
+    type Height = Long
+    val empty: Scores = Scores(Map.empty)
+
+    def findTip[F[_]: DagLookup: Sync](
+        height: Scores.Height,
+        stopHeight: Scores.Height,
+        totalWeight: Weight,
+        scores: Scores
+    ): F[BlockHash] =
+      if (height == stopHeight) {
+        import io.casperlabs.casper.util.DagOperations.bigIntByteStringOrdering
+        scores.votesAtHeight(height).map(_.swap).max(bigIntByteStringOrdering)._2.pure[F]
+      } else {
+        scores.votesAtHeight(height).toList.filter {
+          case (_, weight) => 2 * weight >= totalWeight
+        } match {
+          case Nil =>
+            val dag = DagLookup[F]
+            // Not enough weight at this height. We need to go deeper
+            // Propagate this height weights downward. That's safe b/c
+            // if a validator voted for ancestor of a block it also voted for the block itself.
+            val newScores: F[Scores] = {
+              val currHeightVotes = scores.votesAtHeight(height)
+              currHeightVotes.toList.foldM(scores) {
+                case (acc, (hash, weight)) =>
+                  dag.lookupUnsafe(hash).map { msg =>
+                    val parent = msg.asInstanceOf[Block].parentBlock
+                    acc.update(height - 1, parent, weight)
+                  }
+              }
+            }
+
+            newScores.flatMap(findTip[F](height - 1, stopHeight, totalWeight, _))
+          case List((b1, _), (b2, _)) =>
+            import io.casperlabs.shared.Sorting.byteStringOrdering
+            // Two blocks have weight greater or equal than half ot the total weight.
+            // That's possible iff they both have 50% of totalWeight.
+            // Pick the higher one using ByteString ordering.
+            List(b1, b2).max.pure[F]
+          case (hash, _) :: Nil =>
+            hash.pure[F]
+          case _ =>
+            Sync[F].raiseError(
+              new IllegalStateException(
+                "More than two blocks had at least half of the total scores."
+              )
+            )
+        }
+      }
   }
 }
 
