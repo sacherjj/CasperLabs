@@ -133,16 +133,15 @@ object ExecutionEngineServiceStub {
   }
 
   def noOpApi[F[_]: Applicative](
-      postStateHash: ByteString = ByteString.EMPTY,
       bonds: Seq[Bond] = Seq.empty
   ): ExecutionEngineService[F] =
     mock[F](
       (_) => GenesisResult().asRight[Throwable].pure[F],
       (_, _, _) => UpgradeResult().asRight[Throwable].pure[F],
       (_, _, _, _) => Seq.empty[DeployResult].asRight[Throwable].pure[F],
-      (_, _) =>
+      (preStateHash, _) =>
         ExecutionEngineService
-          .CommitResult(postStateHash, bonds)
+          .CommitResult(preStateHash, bonds)
           .asRight[Throwable]
           .pure[F],
       (_, _, _) =>

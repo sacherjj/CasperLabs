@@ -156,7 +156,6 @@ trait HighwayFixture extends StorageFixture with TickUtils with ArbitraryConsens
 
     implicit def execEngineService =
       ExecutionEngineServiceStub.noOpApi[Task](
-        postStateHash = genesisBlock.getHeader.getState.postStateHash,
         bonds = genesisBlock.getHeader.getState.bonds
       )
     implicit val validationRaise = raiseValidateErrorThroughApplicativeError[Task]
