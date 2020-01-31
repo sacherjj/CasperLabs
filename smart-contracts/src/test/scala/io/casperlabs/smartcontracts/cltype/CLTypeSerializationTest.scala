@@ -1,18 +1,35 @@
 package io.casperlabs.smartcontracts.cltype
 
 import io.casperlabs.smartcontracts.bytesrepr.SerializationTest.roundTrip
+import io.casperlabs.smartcontracts.bytesrepr.{FromBytes, ToBytes}
 import org.scalacheck.{Arbitrary, Gen}
 import org.scalatest.{FlatSpec, Matchers}
 import org.scalatest.prop.PropertyChecks
-import CLTypeSerializationTest.arbCLType
+import CLTypeSerializationTest.{arbCLType, bytesRoundTrip, nested}
 
-class CLTypeSerializationTest extends FlatSpec with Matchers with PropertyChecks {
+class CLTypeSerializationTest extends FlatSpec with PropertyChecks {
   "CLTypes" should "serialize properly" in forAll { (t: CLType) =>
     roundTrip(t)
   }
+
+  it should "serialize in a stack safe way" in {
+    val deepType      = nested(CLType.Unit, 500000)(t => CLType.List(t))
+    val deepFixedList = CLType.FixedList(deepType, 17)
+    val deeperType    = nested(deepFixedList, 500000)(t => CLType.Option(t))
+
+    // We can't compare the actual type because it turns out the
+    // auto-generated equality on case classes is not stack safe.
+    bytesRoundTrip(deeperType)
+
+    val wideType      = nested(CLType.String, 5)(t => CLType.Tuple2(t, t))
+    val wideFixedList = CLType.FixedList(wideType, 31)
+    val widerType     = nested(wideFixedList, 5)(t => CLType.Tuple3(t, t, t))
+
+    bytesRoundTrip(widerType)
+  }
 }
 
-object CLTypeSerializationTest {
+object CLTypeSerializationTest extends Matchers {
 
   def genCLType: Gen[CLType] = Gen.choose(0, 21).flatMap {
     case 0  => Gen.const(CLType.Bool)
@@ -72,4 +89,16 @@ object CLTypeSerializationTest {
   }
 
   implicit val arbCLType: Arbitrary[CLType] = Arbitrary(genCLType)
+
+  def nested(base: CLType, n: Int)(nest: CLType => CLType): CLType = (1 to n).foldLeft(base) {
+    case (acc, _) => nest(acc)
+  }
+
+  def bytesRoundTrip[T: ToBytes: FromBytes](t: T) = {
+    val bytes = ToBytes[T].toBytes(t)
+
+    val bytes2 = FromBytes.deserialize[T](bytes).map(value => ToBytes[T].toBytes(value))
+
+    bytes2.map(_.toSeq) shouldBe Right(bytes.toSeq)
+  }
 }
