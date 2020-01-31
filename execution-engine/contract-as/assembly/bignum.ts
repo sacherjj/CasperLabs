@@ -21,12 +21,28 @@ const HEX_DIGITS: i32[] =
   -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
   -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1 ];
 
-export class BigNum {
+export class U512 {
     private pn: Uint32Array;
 
-    constructor(width: usize) {
-        this.pn = new Uint32Array(width);
-        this.pn.fill(0);
+    constructor() {
+        this.pn = new Uint32Array(64);
+    }
+
+    static fromHex(hex: String): U512 {
+        let res = new U512();
+        res.setHex(hex);
+        return res;
+    }
+
+    static fromU64(value: u64): U512 {
+        let res = new U512();
+        res.setU64(value);
+        return res;
+    }
+
+    // Gets width in bytes
+    get width(): i32 {
+        return this.pn.length * 4;
     }
 
     setU64(value: u64): void {
@@ -37,8 +53,6 @@ export class BigNum {
     }
 
     setHex(value: String): void {
-        this.pn.fill(0);
-
         if (value.length >= 2 && value[0] == '0' && (value[1] == 'x' || value[1] == 'X'))
             value = value.substr(2);
 
@@ -49,7 +63,7 @@ export class BigNum {
         }
 
         // Decodes hex string into an array of bytes
-        let bytes = new Uint8Array(this.pn.length * 4);
+        let bytes = new Uint8Array(this.width);
         bytes.fill(0);
 
         // Convert ascii codes into values
@@ -64,10 +78,7 @@ export class BigNum {
         }
 
         // Reinterpret individual bytes back to u32 array
-        for (let i = 0; i < this.pn.length; i++) {
-            let num = load<u32>(bytes.dataStart + (i * 4));
-            this.pn[i] = num;
-        }
+        this.setBytesLE(bytes);
     }
 
     isZero(): bool {
@@ -80,7 +91,7 @@ export class BigNum {
     }
 
     @operator("+")
-    add(other: BigNum): BigNum {
+    add(other: U512): U512 {
         assert(this.pn.length == other.pn.length);
         let carry = <u64>0;
         for (let i = 0; i < this.pn.length; i++) {
@@ -92,27 +103,27 @@ export class BigNum {
     }
 
     @operator.prefix("-")
-    neg(): BigNum {
-        let ret = new BigNum(this.pn.length);
+    neg(): U512 {
+        let ret = new U512();
         for (let i = 0; i < this.pn.length; i++) {
             ret.pn[i] = ~this.pn[i];
         }
-        // todo bin op ++
-        let one = new BigNum(this.pn.length);
+        // TODO: bin op ++
+        let one = new U512();
         one.setU64(1);
         ret += one;
         return ret;
     }
 
     @operator("-")
-    sub(other: BigNum): BigNum {
+    sub(other: U512): U512 {
         return this.add(-other);
     }
 
     @operator("*")
-    mul(other: BigNum): BigNum {
+    mul(other: U512): U512 {
         assert(this.pn.length == other.pn.length);
-        let ret = new BigNum(this.pn.length);
+        let ret = new U512();
 
         for (let j = 0; j < this.pn.length; j++) {
             let carry: u64 = <u64>0;
@@ -132,10 +143,10 @@ export class BigNum {
         }
     }
 
-    clone(): BigNum {
-        let bigNumber = new BigNum(64);
-        bigNumber.setValues(this.pn);
-        return bigNumber;
+    clone(): U512 {
+        let U512ber = new U512();
+        U512ber.setValues(this.pn);
+        return U512ber;
     }
 
     // Returns bits length
@@ -148,13 +159,13 @@ export class BigNum {
         return 0;
     }
 
-    divMod(other: BigNum): Pair<BigNum, BigNum> | null {
+    divMod(other: U512): Pair<U512, U512> | null {
         assert(this.pn.length == other.pn.length);
 
         let div = other.clone(); // make a copy, so we can shift.
         let num = this.clone(); // make a copy, so we can subtract the quotient.
 
-        let res = new BigNum(this.pn.length);
+        let res = new U512();
 
         let num_bits = num.bits();
         let div_bits = div.bits();
@@ -166,8 +177,8 @@ export class BigNum {
 
         if (div_bits > num_bits) {
             // the result is certainly 0 and rem is the lhs of equation.
-            let zero = new BigNum(this.pn.length);
-            return new Pair<BigNum, BigNum>(zero, num);
+            let zero = new U512();
+            return new Pair<U512, U512>(zero, num);
         }
 
         let shift: i32 = num_bits - div_bits;
@@ -182,26 +193,26 @@ export class BigNum {
             shift--;
         }
         // num now contains the remainder of the division.
-        return new Pair<BigNum, BigNum>(res, num);
+        return new Pair<U512, U512>(res, num);
     }
 
     @operator("/")
-    div(other: BigNum): BigNum {
+    div(other: U512): U512 {
         let divModResult = this.divMod(other);
         assert(divModResult !== null);
         return divModResult.first;
     }
 
     @operator("%")
-    rem(other: BigNum): BigNum {
+    rem(other: U512): U512 {
         let divModResult = this.divMod(other);
         assert(divModResult !== null);
         return divModResult.second;
     }
 
     @operator("<<")
-    shl(shift: u32): BigNum {
-        let res = new BigNum(this.pn.length);
+    shl(shift: u32): U512 {
+        let res = new U512();
 
         let k: u32 = shift / 32;
         shift = shift % 32;
@@ -217,8 +228,8 @@ export class BigNum {
     }
 
     @operator(">>")
-    shr(shift: u32): BigNum {
-        let res = new BigNum(this.pn.length);
+    shr(shift: u32): U512 {
+        let res = new U512();
 
         let k = shift / 32;
         shift = shift % 32;
@@ -233,7 +244,7 @@ export class BigNum {
         return res;
     }
 
-    cmp(other: BigNum): i32 {
+    cmp(other: U512): i32 {
         assert(this.pn.length == other.pn.length);
         for (let i = this.pn.length - 1; i >= 0; --i) {
             if (this.pn[i] < other.pn[i]) {
@@ -247,42 +258,53 @@ export class BigNum {
     }
 
     @operator("==")
-    eq(other: BigNum): bool {
+    eq(other: U512): bool {
         return this.cmp(other) == 0;
     }
 
     @operator("!=")
-    neq(other: BigNum): bool {
+    neq(other: U512): bool {
         return this.cmp(other) != 0;
     }
 
     @operator(">")
-    gt(other: BigNum): bool {
+    gt(other: U512): bool {
         return this.cmp(other) == 1;
     }
 
     @operator("<")
-    lt(other: BigNum): bool {
+    lt(other: U512): bool {
         return this.cmp(other) == -1;
     }
 
     @operator(">=")
-    gte(other: BigNum): bool {
+    gte(other: U512): bool {
         return this.cmp(other) >= 0;
     }
 
     @operator("<=")
-    lte(other: BigNum): bool {
+    lte(other: U512): bool {
         return this.cmp(other) <= 0;
     }
 
-    private toHex(): String {
-        let bytes = new Uint8Array(this.pn.length * 4);
+    toBytesLE(): Uint8Array {
+        let bytes = new Uint8Array(this.width);
         // Copy array of u32 into array of u8
         for (let i = 0; i < this.pn.length / 4; i++) {
-
             store<u32>(bytes.dataStart + (i * 4), this.pn[i]);
         }
+        return bytes;
+    }
+
+    setBytesLE(bytes: Uint8Array): void {
+        for (let i = 0; i < this.pn.length; i++) {
+            let num = load<u32>(bytes.dataStart + (i * 4));
+            this.pn[i] = num;
+        }
+    }
+
+    private toHex(): String {
+        let bytes = this.toBytesLE();
         let result = "";
 
         // Skips zeros in the back to make the numbers readable without tons of zeros in front
@@ -314,18 +336,6 @@ export class BigNum {
     toString(): String {
         return this.toHex();
     }
-};
-
-export class U512 {
-    private value: U64;
-
-    constructor(value: U64) {
-        this.value = value;
-    }
-
-    getValue(): U64 {
-        return this.value;
-    }
 
     static fromBytes(bytes: Uint8Array): U512 | null {
         if (bytes.length < 1) {
@@ -333,32 +343,34 @@ export class U512 {
         }
 
         const lengthPrefix = <i32>bytes[0];
+        let res = new U512();
 
-        let shift = <u32>0;
-        var result = <u64>0;
-        for (var i = <i32>0; i < lengthPrefix; i++) {
-            result += (bytes[i + 1] * (<u32>1 << shift));
-            shift += 8;
+        let buffer = new Uint8Array(res.width); // no super calls?!
+        for (let i = 0; i < lengthPrefix; i++) {
+            buffer[i] = bytes[i + 1];
         }
-        return new U512(<U64>result);
+
+        res.setBytesLE(buffer);
+        return res;
     }
 
     toBytes(): Array<u8> {
-        var bytes = toBytesU64(<u64>this.value);
+        let bytes = this.toBytesLE();
+        let skipZeros = bytes.length - 1;
 
-        var zerosAtBack = bytes.length - 1;
-        while (bytes[zerosAtBack] == 0) {
-            zerosAtBack--;
+        // Skip zeros at the end
+        while (skipZeros >= 0 && bytes[skipZeros] == 0) {
+            skipZeros--;
         }
 
-        var nonZeroBytes = zerosAtBack + 1;
-        var result = new Array<u8>(nonZeroBytes + 1);
+        // Continue
+        let lengthPrefix = skipZeros + 1;
 
-        result[0] = <u8>nonZeroBytes;
-
-        for (var i = 0; i < nonZeroBytes; i++) {
-            result[i + 1] = bytes[i];
+        let result = new Array<u8>(1 + lengthPrefix);
+        result[0] = <u8>lengthPrefix;
+        for (let i = 0; i < lengthPrefix; i++) {
+            result[1 + i] = bytes[i];
         }
         return result;
     }
-}
+};
