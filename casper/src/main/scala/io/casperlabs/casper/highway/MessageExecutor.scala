@@ -163,7 +163,7 @@ class MessageExecutor[F[_]: Sync: Log: Time: Metrics: BlockStorage: DagStorage: 
     BlockStorage[F].put(block, blockEffects.effects)
 
   // NOTE: Don't call this on genesis, genesis is presumed to be already computed and saved.
-  private def computeEffects(
+  def computeEffects(
       block: Block,
       isBookingBlock: Boolean
   ): F[(BlockStatus, BlockEffects)] = {

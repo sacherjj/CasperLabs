@@ -7,10 +7,7 @@ import cats.effect.concurrent.{Ref, Semaphore}
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.{DeploySelection, ValidatorIdentity}
 import io.casperlabs.casper.consensus.{Block, Bond}
-import io.casperlabs.crypto.Keys.{PrivateKey, PublicKey}
-import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
 import io.casperlabs.casper.consensus.state
-import io.casperlabs.storage.{BlockHash, SQLiteStorage}
 import io.casperlabs.casper.mocks.MockValidation
 import io.casperlabs.casper.validation.ValidationImpl
 import io.casperlabs.casper.validation.Validation
@@ -19,17 +16,20 @@ import io.casperlabs.casper.finality.MultiParentFinalizer
 import io.casperlabs.casper.highway.mocks.MockEventEmitter
 import io.casperlabs.casper.validation.Validation.BlockEffects
 import io.casperlabs.casper.scalatestcontrib._
+import io.casperlabs.casper.consensus.info.DeployInfo
+import io.casperlabs.casper.{EquivocatedBlock, Valid, ValidatorIdentity}
+import io.casperlabs.crypto.Keys.{PrivateKey, PublicKey}
+import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
 import io.casperlabs.models.Message
 import io.casperlabs.mempool.DeployBuffer
+import io.casperlabs.storage.{BlockHash, SQLiteStorage}
 import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.storage.dag.DagStorage
+import io.casperlabs.storage.deploy.DeployStorage
 import io.casperlabs.shared.Log
 import monix.eval.Task
 import org.scalatest._
 import scala.concurrent.duration._
-import io.casperlabs.storage.deploy.DeployStorage
-import io.casperlabs.casper.consensus.info.DeployInfo
-import io.casperlabs.casper.ValidatorIdentity
 
 class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with HighwayFixture {
 
@@ -238,9 +238,9 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
     new ExecutorFixture(validate = true) {
       override def test =
         for {
-          // Make two blocks by the other validator that form an equivocation.
           first <- insertFirstBlock()
 
+          // Make two blocks by the other validator that form an equivocation.
           blockA <- prepareNextBlock(
                      otherValidator,
                      first,
@@ -253,17 +253,18 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
                      first.getHeader.keyBlockHash,
                      first.getHeader.roundId + 2
                    )
-          _ <- List(blockA, blockB).traverse { block =>
-                validateAndAdd(block) *>
-                  BlockStorage[Task].contains(block.blockHash) shouldBeF true
-              }
+
+          _   <- validateAndAdd(blockA)
+          eff <- messageExecutor.computeEffects(blockB, false)
+          _   = eff._1 shouldBe EquivocatedBlock
+          _   = eff._2.effects shouldBe empty
+          _   <- validateAndAdd(blockB)
+          _   <- BlockStorage[Task].contains(blockB.blockHash) shouldBeF true
 
           dag  <- DagStorage[Task].getRepresentation
           tips <- dag.latestInEra(first.getHeader.keyBlockHash)
           _    <- tips.getEquivocators shouldBeF Set(otherValidator.publicKey)
-        } yield {
-          exactly(1, log.warns) should include("Found equivocation")
-        }
+        } yield ()
     }
   }
 
@@ -272,11 +273,12 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
       new ExecutorFixture(validate = true) {
         override def test =
           for {
-            // Make two blocks by the other validator that form an equivocation.
             era0  <- addGenesisEra()
             first <- insertFirstBlock()
             era1  <- era0.addChildEra(keyBlockHash = first.blockHash)
 
+            // Make one block in the genesis era and one in the child era;
+            // they don't cite each other.
             block0 <- prepareNextBlock(
                        thisValidator,
                        first,
@@ -291,23 +293,16 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
                        era1.startTick
                      )
 
-            _ <- List(block0, block1).traverse { block =>
-                  validateAndAdd(block) *>
-                    BlockStorage[Task].contains(block.blockHash) shouldBeF true
-                }
-
-            dag          <- DagStorage[Task].getRepresentation
-            tips         <- dag.latestInEra(era1.keyBlockHash)
-            equivocators <- tips.getEquivocators
+            _      <- validateAndAdd(block0)
+            status <- messageExecutor.computeEffects(block1, false).map(_._1)
+            _      <- validateAndAdd(block1)
+            _      <- BlockStorage[Task].contains(block1.blockHash) shouldBeF true
           } yield {
-            equivocators shouldBe empty
             // TODO (CON-624): Update the EquivocationDetector to only detect in a given era,
             // or only detect in up to the keyblock, but not globally. For now it will detect
             // them and therefore not save the effects they have.
-            forAll(log.warns) { warning =>
-              if (warning.contains("Found equivocation")) cancel("CON-624")
-              warning should not include ("Found equivocation")
-            }
+            if (status != Valid) cancel("CON-624")
+            status shouldBe Valid
           }
       }
   }
