@@ -23,7 +23,7 @@ export function call(): void {
     return;
   }
 
-  let amount512 = new U512(<U64>amount);
+  let amount512 = U512.fromU64(<u64>amount);
 
   let transferRet = transferToAccount(accountBytes, amount512);
   if (transferRet === null) {
