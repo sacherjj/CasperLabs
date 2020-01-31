@@ -10,7 +10,7 @@ import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.implicits._
 import io.casperlabs.models.{Message, Weight}
-import io.casperlabs.storage.dag.DagRepresentation
+import io.casperlabs.storage.dag.{DagLookup, DagRepresentation}
 import io.casperlabs.shared.{Log, Sorting}
 import Sorting.byteStringOrdering
 
@@ -69,7 +69,7 @@ object Estimator {
   /** Eliminate any latest message which has a descendant which is a latest message
     * of another validator, because in that case those descendants should be the tips. */
   def tipsOfLatestMessages[F[_]: MonadThrowable](
-      dag: DagRepresentation[F],
+      dag: DagLookup[F],
       latestMessages: NonEmptyList[BlockHash],
       stopHash: BlockHash
   ): F[List[Message]] = {

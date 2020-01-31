@@ -11,6 +11,7 @@ import io.casperlabs.storage.BlockHash
 import io.casperlabs.storage.dag.DagRepresentation.Validator
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.crypto.codec.Base16
+import simulacrum.typeclass
 
 trait DagStorage[F[_]] {
 
@@ -124,11 +125,7 @@ trait EraTipRepresentation[F[_]] extends TipRepresentation[F] {
     getEquivocations.map(_.keySet)
 }
 
-trait DagRepresentation[F[_]] {
-  def children(blockHash: BlockHash): F[Set[BlockHash]]
-
-  /** Return blocks that having a specify justification */
-  def justificationToBlocks(blockHash: BlockHash): F[Set[BlockHash]]
+@typeclass trait DagLookup[F[_]] {
   def lookup(blockHash: BlockHash): F[Option[Message]]
   def contains(blockHash: BlockHash): F[Boolean]
 
@@ -141,6 +138,13 @@ trait DagRepresentation[F[_]] {
         )
       )
     }
+}
+
+trait DagRepresentation[F[_]] extends DagLookup[F] {
+  def children(blockHash: BlockHash): F[Set[BlockHash]]
+
+  /** Return blocks that having a specify justification */
+  def justificationToBlocks(blockHash: BlockHash): F[Set[BlockHash]]
 
   /** Return block summaries with ranks in the DAG between start and end, inclusive. */
   def topoSort(
