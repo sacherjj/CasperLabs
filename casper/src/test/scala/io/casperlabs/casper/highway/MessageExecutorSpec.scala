@@ -265,6 +265,51 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
     }
   }
 
+  it should "not consider blocks that don't cite each other across eras as equivocations" in executorFixture {
+    implicit db =>
+      new ExecutorFixture(validate = true) {
+        override def test =
+          for {
+            // Make two blocks by the other validator that form an equivocation.
+            era0  <- addGenesisEra()
+            first <- insertFirstBlock()
+            era1  <- era0.addChildEra(keyBlockHash = first.blockHash)
+
+            block0 <- prepareNextBlock(
+                       thisValidator,
+                       first,
+                       era0.keyBlockHash,
+                       era0.endTick
+                     )
+
+            block1 <- prepareNextBlock(
+                       thisValidator,
+                       first,
+                       era1.keyBlockHash,
+                       era1.startTick
+                     )
+
+            _ <- List(block0, block1).traverse { block =>
+                  validateAndAdd(block) *>
+                    BlockStorage[Task].contains(block.blockHash) shouldBeF true
+                }
+
+            dag          <- DagStorage[Task].getRepresentation
+            tips         <- dag.latestInEra(era1.keyBlockHash)
+            equivocators <- tips.getEquivocators
+          } yield {
+            equivocators shouldBe empty
+            // TODO (CON-624): Update the EquivocationDetector to only detect in a given era,
+            // or only detect in up to the keyblock, but not globally. For now it will detect
+            // them and therefore not save the effects they have.
+            forAll(log.warns) { warning =>
+              if (warning.contains("Found equivocation")) cancel("CON-624")
+              warning should not include ("Found equivocation")
+            }
+          }
+      }
+  }
+
   it should "not emit events" in executorFixture { implicit db =>
     new ExecutorFixture {
       override def test =
