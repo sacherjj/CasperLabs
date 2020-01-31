@@ -1,6 +1,8 @@
 package io.casperlabs.smartcontracts.cltype
 
 import io.casperlabs.smartcontracts.bytesrepr.{BytesView, FromBytes, ToBytes}
+import scala.annotation.tailrec
+import scala.collection.immutable
 
 sealed trait CLType
 
@@ -28,46 +30,57 @@ object CLType {
   case class Tuple3(t1: CLType, t2: CLType, t3: CLType) extends CLType
   case object Any                                       extends CLType
 
+  private type LoopState = immutable.List[Either[Int, CLType]]
+
+  @tailrec
+  private def toBytesTailRec(state: LoopState, acc: IndexedSeq[Byte]): Array[Byte] = state match {
+    case Nil => acc.toArray
+
+    case Left(n) :: tail => toBytesTailRec(tail, acc ++ ToBytes[Int].toBytes(n))
+
+    case Right(t) :: tail =>
+      t match {
+        case Bool   => toBytesTailRec(tail, acc :+ CL_TYPE_TAG_BOOL)
+        case I32    => toBytesTailRec(tail, acc :+ CL_TYPE_TAG_I32)
+        case I64    => toBytesTailRec(tail, acc :+ CL_TYPE_TAG_I64)
+        case U8     => toBytesTailRec(tail, acc :+ CL_TYPE_TAG_U8)
+        case U32    => toBytesTailRec(tail, acc :+ CL_TYPE_TAG_U32)
+        case U64    => toBytesTailRec(tail, acc :+ CL_TYPE_TAG_U64)
+        case U128   => toBytesTailRec(tail, acc :+ CL_TYPE_TAG_U128)
+        case U256   => toBytesTailRec(tail, acc :+ CL_TYPE_TAG_U256)
+        case U512   => toBytesTailRec(tail, acc :+ CL_TYPE_TAG_U512)
+        case Unit   => toBytesTailRec(tail, acc :+ CL_TYPE_TAG_UNIT)
+        case String => toBytesTailRec(tail, acc :+ CL_TYPE_TAG_STRING)
+        case Key    => toBytesTailRec(tail, acc :+ CL_TYPE_TAG_KEY)
+        case URef   => toBytesTailRec(tail, acc :+ CL_TYPE_TAG_UREF)
+
+        case Option(inner) => toBytesTailRec(Right(inner) :: tail, acc :+ CL_TYPE_TAG_OPTION)
+
+        case List(inner) => toBytesTailRec(Right(inner) :: tail, acc :+ CL_TYPE_TAG_LIST)
+
+        case FixedList(inner, n) =>
+          toBytesTailRec(Right(inner) :: Left(n) :: tail, acc :+ CL_TYPE_TAG_FIXED_LIST)
+
+        case Result(ok, err) =>
+          toBytesTailRec(Right(ok) :: Right(err) :: tail, acc :+ CL_TYPE_TAG_RESULT)
+
+        case Map(key, value) =>
+          toBytesTailRec(Right(key) :: Right(value) :: tail, acc :+ CL_TYPE_TAG_MAP)
+
+        case Tuple1(inner) => toBytesTailRec(Right(inner) :: tail, acc :+ CL_TYPE_TAG_TUPLE1)
+
+        case Tuple2(t1, t2) =>
+          toBytesTailRec(Right(t1) :: Right(t2) :: tail, acc :+ CL_TYPE_TAG_TUPLE2)
+
+        case Tuple3(t1, t2, t3) =>
+          toBytesTailRec(Right(t1) :: Right(t2) :: Right(t3) :: tail, acc :+ CL_TYPE_TAG_TUPLE3)
+
+        case Any => toBytesTailRec(tail, acc :+ CL_TYPE_TAG_ANY)
+      }
+  }
+
   implicit val toBytesCLType: ToBytes[CLType] = new ToBytes[CLType] {
-    override def toBytes(t: CLType): Array[Byte] = t match {
-      case Bool   => Array(CL_TYPE_TAG_BOOL)
-      case I32    => Array(CL_TYPE_TAG_I32)
-      case I64    => Array(CL_TYPE_TAG_I64)
-      case U8     => Array(CL_TYPE_TAG_U8)
-      case U32    => Array(CL_TYPE_TAG_U32)
-      case U64    => Array(CL_TYPE_TAG_U64)
-      case U128   => Array(CL_TYPE_TAG_U128)
-      case U256   => Array(CL_TYPE_TAG_U256)
-      case U512   => Array(CL_TYPE_TAG_U512)
-      case Unit   => Array(CL_TYPE_TAG_UNIT)
-      case String => Array(CL_TYPE_TAG_STRING)
-      case Key    => Array(CL_TYPE_TAG_KEY)
-      case URef   => Array(CL_TYPE_TAG_UREF)
-
-      case Option(inner) => CL_TYPE_TAG_OPTION +: ToBytes[CLType].toBytes(inner)
-
-      case List(inner) => CL_TYPE_TAG_LIST +: ToBytes[CLType].toBytes(inner)
-
-      case FixedList(inner, n) =>
-        CL_TYPE_TAG_FIXED_LIST +: (ToBytes[CLType].toBytes(inner) ++ ToBytes[Int].toBytes(n))
-
-      case Result(ok, err) =>
-        CL_TYPE_TAG_RESULT +: (ToBytes[CLType].toBytes(ok) ++ ToBytes[CLType].toBytes(err))
-
-      case Map(key, value) =>
-        CL_TYPE_TAG_MAP +: (ToBytes[CLType].toBytes(key) ++ ToBytes[CLType].toBytes(value))
-
-      case Tuple1(inner) => CL_TYPE_TAG_TUPLE1 +: ToBytes[CLType].toBytes(inner)
-
-      case Tuple2(t1, t2) =>
-        CL_TYPE_TAG_TUPLE2 +: (ToBytes[CLType].toBytes(t1) ++ ToBytes[CLType].toBytes(t2))
-
-      case Tuple3(t1, t2, t3) =>
-        CL_TYPE_TAG_TUPLE3 +: (ToBytes[CLType].toBytes(t1) ++ ToBytes[CLType]
-          .toBytes(t2) ++ ToBytes[CLType].toBytes(t3))
-
-      case Any => Array(CL_TYPE_TAG_ANY)
-    }
+    override def toBytes(t: CLType): Array[Byte] = toBytesTailRec(Right(t) :: Nil, IndexedSeq.empty)
   }
 
   implicit val fromBytesCLType: FromBytes[CLType] = new FromBytes[CLType] {
