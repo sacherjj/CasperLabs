@@ -216,6 +216,7 @@ class GrpcExecutionEngineService[F[_]: Defer: Concurrent: Log: TaskLift: Metrics
             case Left(err) => Left(SmartContractEngineError(s"Error in parsing EE response: $err"))
 
             // TODO: We should map to state.StoredValue instead of state.Value
+            // After that we can remove state.Value (and its variants; state.StringList, state.IntList, etc.).
             case Right(v) =>
               cltype.ProtoMappings.toProto(v) match {
                 case None             => Left(SmartContractEngineError(s"Unsupported EE response: $v"))

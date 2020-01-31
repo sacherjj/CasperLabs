@@ -95,11 +95,11 @@ where
             Ok(QueryResult::Success(value)) => {
                 let mut result = ipc::QueryResponse::new();
                 match value.to_bytes() {
-                    Ok(pb_value) => {
+                    Ok(serialized_value) => {
                         let log_message =
                             format!("query successful; correlation_id: {}", correlation_id);
                         log_info(&log_message);
-                        result.set_success(pb_value);
+                        result.set_success(serialized_value);
                     }
                     Err(error_msg) => {
                         let log_message = format!("Failed to serialize StoredValue: {}", error_msg);
