@@ -7,7 +7,7 @@ import cats.data.NonEmptyList
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper._
-import io.casperlabs.casper.consensus.{Block, BlockSummary}
+import io.casperlabs.casper.consensus.{Block, BlockSummary, Bond}
 import io.casperlabs.casper.equivocations.EquivocationDetector
 import io.casperlabs.casper.util.ProtoUtil.bonds
 import io.casperlabs.casper.util.execengine.ExecEngineUtil
@@ -53,13 +53,16 @@ object ValidationImpl {
       override def transactions(
           block: Block,
           preStateHash: StateHash,
+          preStateBonds: Seq[Bond],
           effects: BlockEffects
       )(
           implicit ee: ExecutionEngineService[F],
           bs: BlockStorage[F],
           clp: CasperLabsProtocol[F]
       ): F[Unit] =
-        Metrics[F].timer("transactions")(underlying.transactions(block, preStateHash, effects))
+        Metrics[F].timer("transactions")(
+          underlying.transactions(block, preStateHash, preStateBonds, effects)
+        )
 
       override def blockFull(
           block: Block,
@@ -195,6 +198,7 @@ class ValidationImpl[F[_]: Sync: FunctorRaise[*[_], InvalidBlock]: Log: Time: Me
   override def transactions(
       block: Block,
       preStateHash: StateHash,
+      preStateBonds: Seq[Bond],
       blockEffects: BlockEffects
   )(
       implicit ee: ExecutionEngineService[F],
@@ -208,6 +212,7 @@ class ValidationImpl[F[_]: Sync: FunctorRaise[*[_], InvalidBlock]: Log: Time: Me
         possibleCommitResult <- ExecEngineUtil
                                  .commitEffects[F](
                                    preStateHash,
+                                   preStateBonds,
                                    block.getHeader.getProtocolVersion,
                                    blockEffects
                                  )

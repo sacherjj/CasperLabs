@@ -15,7 +15,7 @@ import io.casperlabs.casper.DeploySelection.{
 import CommutingDeploys._
 import io.casperlabs.casper._
 import io.casperlabs.casper.consensus.state.{CLType, CLValue, Key, ProtocolVersion, StoredValue}
-import io.casperlabs.casper.consensus.{state, Block, Deploy}
+import io.casperlabs.casper.consensus.{state, Block, Bond, Deploy}
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
 import io.casperlabs.casper.util.execengine.Op.{OpMap, OpMapAddComm}
 import io.casperlabs.casper.util.{CasperLabsProtocol, DagOperations, ProtoUtil}
@@ -81,10 +81,11 @@ object ExecEngineUtil {
     */
   def commitEffects[F[_]: MonadThrowable](
       initPreStateHash: ByteString,
+      initBonds: Seq[Bond],
       protocolVersion: ProtocolVersion,
       blockEffects: BlockEffects
   )(implicit E: ExecutionEngineService[F]): F[ExecutionEngineService.CommitResult] =
-    blockEffects.effects.toList.sortBy(_._1).foldM(CommitResult(initPreStateHash, Seq.empty)) {
+    blockEffects.effects.toList.sortBy(_._1).foldM(CommitResult(initPreStateHash, initBonds)) {
       case (state, (_, transforms)) =>
         E.commit(state.postStateHash, transforms.toList, protocolVersion).rethrow
     }

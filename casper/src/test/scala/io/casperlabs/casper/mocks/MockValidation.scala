@@ -4,7 +4,7 @@ import cats._
 import cats.implicits._
 import cats.mtl.FunctorRaise
 import io.casperlabs.casper.validation.Validation, Validation.BlockEffects
-import io.casperlabs.casper.consensus.{Block, BlockSummary}
+import io.casperlabs.casper.consensus.{Block, BlockSummary, Bond}
 import io.casperlabs.casper.util.execengine.ExecEngineUtil, ExecEngineUtil.StateHash
 import io.casperlabs.casper.util.CasperLabsProtocol
 import io.casperlabs.casper.InvalidBlock
@@ -30,6 +30,7 @@ class MockValidation[F[_]: Applicative] extends Validation[F] {
   override def transactions(
       block: Block,
       preStateHash: StateHash,
+      preStateBonds: Seq[Bond],
       effects: BlockEffects
   )(
       implicit ee: ExecutionEngineService[F],

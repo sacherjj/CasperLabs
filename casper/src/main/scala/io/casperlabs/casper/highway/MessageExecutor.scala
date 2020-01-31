@@ -182,7 +182,8 @@ class MessageExecutor[F[_]: Sync: Log: Time: Metrics: BlockStorage: DagStorage: 
         preStateHash <- ExecEngineUtil
                          .computePrestate[F](merged, block.getHeader.rank, upgrades)
                          .timer("computePrestate")
-        _ <- Log[F].debug(s"Computing the effects for ${hashPrefix -> "block"}")
+        preStateBonds = merged.parents.headOption.getOrElse(block).getHeader.getState.bonds
+        _             <- Log[F].debug(s"Computing the effects for ${hashPrefix -> "block"}")
         blockEffects <- ExecEngineUtil
                          .effectsForBlock[F](block, preStateHash)
                          .recoverWith {
@@ -200,6 +201,7 @@ class MessageExecutor[F[_]: Sync: Log: Time: Metrics: BlockStorage: DagStorage: 
         _ <- Validation[F].transactions(
               block,
               preStateHash,
+              preStateBonds,
               blockEffects
             )
         // TODO: The invalid block tracker used to be a transient thing, it didn't survive a restart.

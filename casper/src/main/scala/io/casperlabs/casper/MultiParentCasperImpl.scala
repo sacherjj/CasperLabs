@@ -603,9 +603,12 @@ object MultiParentCasperImpl {
           _ <- Metrics[F]
                 .incrementCounter("gas_spent", gasSpent)
           _ <- Log[F].debug(s"Validating the transactions in ${hashPrefix -> "block"}")
+          // Genesis won't have parents.
+          preStateBonds = merged.parents.headOption.getOrElse(block).getHeader.getState.bonds
           _ <- Validation[F].transactions(
                 block,
                 preStateHash,
+                preStateBonds,
                 blockEffects
               )
           _ <- Log[F].debug(s"Validating neglection for ${hashPrefix -> "block"}")

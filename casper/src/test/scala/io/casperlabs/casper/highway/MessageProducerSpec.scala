@@ -5,7 +5,7 @@ import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.crypto.Keys.PublicKey
 import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
-import io.casperlabs.casper.{DeployFilters, DeploySelection, ValidatorIdentity}
+import io.casperlabs.casper.{DeploySelection, ValidatorIdentity}
 import io.casperlabs.casper.consensus.{Bond, Era}
 import io.casperlabs.casper.consensus.state
 import io.casperlabs.casper.highway.mocks.MockMessageProducer

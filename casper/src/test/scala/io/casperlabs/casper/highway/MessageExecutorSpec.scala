@@ -4,7 +4,9 @@ import cats._
 import cats.implicits._
 import cats.effect.concurrent.{Ref, Semaphore}
 import com.google.protobuf.ByteString
+import io.casperlabs.casper.{DeploySelection, ValidatorIdentity}
 import io.casperlabs.casper.consensus.{Block, Bond}
+import io.casperlabs.crypto.Keys.{PrivateKey, PublicKey}
 import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
 import io.casperlabs.casper.consensus.state
 import io.casperlabs.storage.{BlockHash, SQLiteStorage}
@@ -17,6 +19,7 @@ import io.casperlabs.casper.highway.mocks.MockEventEmitter
 import io.casperlabs.casper.validation.Validation.BlockEffects
 import io.casperlabs.casper.scalatestcontrib._
 import io.casperlabs.models.Message
+import io.casperlabs.mempool.DeployBuffer
 import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.storage.dag.DagStorage
 import io.casperlabs.shared.Log
@@ -25,6 +28,7 @@ import org.scalatest._
 import scala.concurrent.duration._
 import io.casperlabs.storage.deploy.DeployStorage
 import io.casperlabs.casper.consensus.info.DeployInfo
+import io.casperlabs.casper.ValidatorIdentity
 
 class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with HighwayFixture {
 
@@ -36,8 +40,9 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
   implicit val consensusConfig = ConsensusConfig()
 
   // Pick a key pair we can sign with.
-  val randomValidator = sample(genAccountKeys)
+  val testValidator = sample(genAccountKeys)
 
+  // Resign a block with the test validator after we messed with its contents.
   def signBlock(block: Block): Block = {
     val bodyHash  = protoHash(block.getBody)
     val header    = block.getHeader.withBodyHash(bodyHash)
@@ -45,7 +50,7 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
     block
       .withHeader(header)
       .withBlockHash(blockHash)
-      .withSignature(randomValidator.sign(blockHash))
+      .withSignature(testValidator.sign(blockHash))
   }
 
   /** A fixture based on the Highway one where we won't be using the TestScheduler,
@@ -53,7 +58,8 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
     * turn validation on/off and capture the effects it carries out.
     */
   abstract class ExecutorFixture(
-      printLevel: Log.Level = Log.Level.Error
+      printLevel: Log.Level = Log.Level.Error,
+      validate: Boolean = false
   )(
       implicit db: SQLiteStorage.CombinedStorage[Task]
   ) extends Fixture(
@@ -61,41 +67,64 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
         printLevel = printLevel,
         bonds = List(
           // Our validator needs to be bonded in Genesis.
-          Bond(randomValidator.publicKey).withStake(state.BigInt("10000"))
+          Bond(testValidator.publicKey).withStake(state.BigInt("10000"))
         )
       ) {
 
-    // Make a block that works with the MockValidator,
-    // i.e. if we don't explicitly validate it it passes.
-    val mockValidBlock = Task.eval {
-      // Use something we can sign with.
-      // Make the body empty, otherwise it will fail because the
-      // mock EE returns nothing, instead of the random stuff we have.
-      signBlock {
-        val block = sample[Block]
-        block
-          .withBody(Block.Body())
-          .withHeader(
-            block.getHeader
-              .withState(
-                block.getHeader.getState.withBonds(genesisBlock.getHeader.getState.bonds)
-              )
-              .withChainName(chainName)
-              .withValidatorPublicKey(randomValidator.publicKey)
-              .withParentHashes(List(genesis.messageHash))
-              .withKeyBlockHash(genesis.messageHash)
-              .withJustifications(Seq.empty)
-              .withRank(1)
-              .withValidatorBlockSeqNum(1)
-              .withValidatorPrevBlockHash(ByteString.EMPTY)
-              .withDeployCount(0)
-              .clearProtocolVersion
-          )
-      }
+    // Make a message producer that's supposed to make valid blocks.
+    def makeMessageProducer(keys: AccountKeys): MessageProducer[Task] = {
+      implicit val deployBuffer    = DeployBuffer.create[Task](chainName, minTtl = Duration.Zero)
+      implicit val deploySelection = DeploySelection.create[Task](sizeLimitBytes = Int.MaxValue)
+
+      MessageProducer[Task](
+        validatorIdentity = ValidatorIdentity(
+          PublicKey(keys.publicKey.toByteArray),
+          PrivateKey(keys.privateKey.toByteArray),
+          signatureAlgorithm = Ed25519
+        ),
+        chainName = chainName,
+        upgrades = Seq.empty
+      )
     }
 
-    // No validation by default.
-    override def validation: Validation[Task] = new MockValidation[Task]
+    // Make blocks in the test validator's name.
+    override val messageProducer = makeMessageProducer(testValidator)
+
+    // Produce the first block for the test validator validator, already inserted.
+    def insertFirstBlock(): Task[Block] =
+      for {
+        _ <- insertGenesis()
+        _ <- addGenesisEra()
+        message <- messageProducer.block(
+                    keyBlockHash = genesis.messageHash,
+                    roundId = conf.toTicks(conf.genesisEraStart),
+                    mainParent = genesis.messageHash,
+                    justifications = Map.empty,
+                    isBookingBlock = false
+                  )
+        block <- BlockStorage[Task].getBlockUnsafe(message.messageHash)
+      } yield block
+
+    // Make a second block without inserting it.
+    def prepareSecondBlock(): Task[Block] =
+      for {
+        first <- insertFirstBlock()
+        second = signBlock {
+          first.withHeader(
+            first.getHeader
+              .withRank(first.getHeader.rank + 1)
+              .withValidatorBlockSeqNum(first.getHeader.validatorBlockSeqNum + 1)
+              .withValidatorPrevBlockHash(first.blockHash)
+              .withParentHashes(List(first.blockHash))
+              .withJustifications(
+                List(Block.Justification(testValidator.publicKey, first.blockHash))
+              )
+          )
+        }
+      } yield second
+
+    override def validation: Validation[Task] =
+      if (validate) new ValidationImpl[Task]() else new MockValidation[Task]
 
     // Collect emitted events.
     override implicit val eventEmitter: MockEventEmitter[Task] =
@@ -108,18 +137,27 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
       } yield ()
   }
 
-  trait RealValidation { self: ExecutorFixture =>
-    override def validation = new ValidationImpl[Task]()
-  }
-
   behavior of "validateAndAdd"
 
+  it should "validate and save a valid block" in executorFixture { implicit db =>
+    new ExecutorFixture(validate = true, printLevel = Log.Level.Warn) {
+      override def test =
+        for {
+          block <- prepareSecondBlock()
+          _     <- validateAndAdd(block)
+          dag   <- DagStorage[Task].getRepresentation
+          _     <- dag.contains(block.blockHash) shouldBeF true
+          _     <- BlockStorage[Task].contains(block.blockHash) shouldBeF true
+        } yield ()
+    }
+  }
+
   it should "raise an error for unattributable errors" in executorFixture { implicit db =>
-    new ExecutorFixture(printLevel = Log.Level.Crit) with RealValidation {
+    new ExecutorFixture(validate = true, printLevel = Log.Level.Crit) {
       override def test =
         for {
           // A block without signature cannot be a slashed
-          block  <- mockValidBlock.map(_.clearSignature)
+          block  <- prepareSecondBlock().map(_.clearSignature)
           result <- validateAndAdd(block).attempt
           _ = result match {
             case Left(ex)  => ex shouldBe a[ValidateErrorWrapper]
@@ -133,12 +171,11 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
   // TODO(CON-623): In the future we want these not to raise, but for that the fork
   // choice would also have to know not to build on them because they are invalid blocks.
   it should "raise an error for attributable errors" in executorFixture { implicit db =>
-    new ExecutorFixture(printLevel = Log.Level.Crit) with RealValidation {
+    new ExecutorFixture(validate = true, printLevel = Log.Level.Crit) {
       override def test =
         for {
-          _ <- insertGenesis()
           // Make a block that signed by the validator that has invalid content.
-          block <- mockValidBlock.map { block =>
+          block <- prepareSecondBlock() map { block =>
                     signBlock(block.withHeader(block.getHeader.withRank(100)))
                   }
           result <- validateAndAdd(block).attempt
@@ -155,7 +192,7 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
     new ExecutorFixture {
       override def test =
         for {
-          block  <- mockValidBlock
+          block  <- prepareSecondBlock()
           _      <- validateAndAdd(block)
           events <- eventEmitter.events
         } yield {
@@ -165,28 +202,14 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
     }
   }
 
-  it should "save the block itself" in executorFixture { implicit db =>
-    new ExecutorFixture {
-      override def test =
-        for {
-          block <- mockValidBlock
-          _     <- validateAndAdd(block)
-          dag   <- DagStorage[Task].getRepresentation
-          _     <- dag.contains(block.blockHash) shouldBeF true
-          _     <- BlockStorage[Task].contains(block.blockHash) shouldBeF true
-        } yield ()
-    }
-  }
-
   behavior of "effectsAfterAdded"
 
   it should "emit events" in executorFixture { implicit db =>
     new ExecutorFixture {
       override def test =
         for {
-          block   <- sample[Block].pure[Task]
+          block   <- insertFirstBlock()
           message = Message.fromBlock(block).get
-          _       <- BlockStorage[Task].put(block, BlockEffects.empty.effects)
           _       <- messageExecutor.effectsAfterAdded(message)
           events  <- eventEmitter.events
         } yield {
@@ -210,9 +233,8 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
 
       override def test =
         for {
-          block   <- sample[Block].pure[Task]
+          block   <- insertFirstBlock()
           message = Message.fromBlock(block).get
-          _       <- BlockStorage[Task].put(block, BlockEffects.empty.effects)
           _       <- messageExecutor.effectsAfterAdded(message)
           _       <- finalizerUpdatedRef.get shouldBeF true
         } yield ()

@@ -116,7 +116,8 @@ trait HighwayFixture extends StorageFixture with TickUtils with ArbitraryConsens
 
     val chainName = "highway-test-chain"
 
-    val genesisBlock =
+    val genesisBlock = {
+      val emptyStateHash = ByteString.copyFromUtf8("empty-state")
       Block()
         .withBlockHash(ByteString.copyFromUtf8("genesis"))
         .withHeader(
@@ -127,8 +128,11 @@ trait HighwayFixture extends StorageFixture with TickUtils with ArbitraryConsens
               Block
                 .GlobalState()
                 .withBonds(bonds)
+                .withPreStateHash(emptyStateHash)
+                .withPostStateHash(emptyStateHash)
             )
         )
+    }
 
     val genesis = Message.fromBlock(genesisBlock).get.asInstanceOf[Message.Block]
 
@@ -149,8 +153,12 @@ trait HighwayFixture extends StorageFixture with TickUtils with ArbitraryConsens
       ): Task[Option[MultiParentFinalizer.FinalizedBlocks]] = none.pure[Task]
     }
 
-    implicit def execEngineService = ExecutionEngineServiceStub.noOpApi[Task]()
-    implicit val validationRaise   = raiseValidateErrorThroughApplicativeError[Task]
+    implicit def execEngineService =
+      ExecutionEngineServiceStub.noOpApi[Task](
+        postStateHash = genesisBlock.getHeader.getState.postStateHash,
+        bonds = genesisBlock.getHeader.getState.bonds
+      )
+    implicit val validationRaise = raiseValidateErrorThroughApplicativeError[Task]
     implicit val protocol = CasperLabsProtocol.unsafe[Task](
       (0L, ProtocolVersion(0, 0, 0), none)
     )

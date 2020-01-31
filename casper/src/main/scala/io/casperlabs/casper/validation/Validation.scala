@@ -62,6 +62,7 @@ trait Validation[F[_]] {
   def transactions(
       block: Block,
       preStateHash: StateHash,
+      preStateBonds: Seq[Bond],
       effects: BlockEffects
   )(
       implicit ee: ExecutionEngineService[F],

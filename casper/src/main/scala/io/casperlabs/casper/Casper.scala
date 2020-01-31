@@ -52,7 +52,12 @@ sealed abstract class MultiParentCasperInstances {
       genesisEffects: ExecEngineUtil.TransformMap
   ) =
     for {
-      _ <- Validation[F].transactions(genesis, genesisPreState, BlockEffects(genesisEffects))
+      _ <- Validation[F].transactions(
+            genesis,
+            genesisPreState,
+            genesis.getHeader.getState.bonds,
+            BlockEffects(genesisEffects)
+          )
       casperState <- Cell.mvarCell[F, CasperState](
                       CasperState()
                     )
