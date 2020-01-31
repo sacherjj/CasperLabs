@@ -74,7 +74,7 @@ object DeployBuffer {
     }
 
   /** Returns deploys that are not present in the p-past-cone of chosen parents. */
-  def remainingDeploys[F[_]: MonadThrowable: BlockStorage: DeployStorage: Metrics: Fs2Compiler: Log](
+  def remainingDeploys[F[_]: MonadThrowable: BlockStorage: DeployStorage: Metrics: Fs2Compiler](
       dag: DagRepresentation[F],
       parents: Set[BlockHash],
       timestamp: Long,
@@ -105,8 +105,6 @@ object DeployBuffer {
       // anything with timestamp earlier than now and not included in the valid deploys
       // can be discarded as a duplicate and/or expired deploy
       deploysToDiscard = earlierPendingSet diff validDeploys
-      discardStr       = deploysToDiscard.toVector.map(PrettyPrinter.buildString).sorted.mkString(",")
-      _                <- Log[F].info(s"Discarded deploys: $discardStr").whenA(deploysToDiscard.nonEmpty)
       _ <- DeployStorageWriter[F]
             .markAsDiscardedByHashes(deploysToDiscard.toList.map((_, "Duplicate or expired")))
             .whenA(deploysToDiscard.nonEmpty)
