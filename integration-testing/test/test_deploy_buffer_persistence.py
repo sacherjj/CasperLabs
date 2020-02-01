@@ -4,7 +4,10 @@ from casperlabs_local_net.common import Contract
 from casperlabs_local_net.wait import wait_for_good_bye, wait_for_node_started
 
 
-def test_deploy_buffer_persistence(trillion_payment_node_network):
+# In the auto-propose mode we cannot guarantee that deploys
+# will not be processed before we stop the node.
+# Therefore this test is disabled now.
+def disabled_test_deploy_buffer_persistence(trillion_payment_node_network):
     """
     Creates accounts, then creates deploys for these accounts while storing deploy_hashes.
     Shuts down the node.  Starts back up the node.

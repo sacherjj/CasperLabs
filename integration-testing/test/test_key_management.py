@@ -1,5 +1,4 @@
 import pytest
-import json
 import time
 
 from casperlabs_client.abi import ABI
@@ -33,9 +32,11 @@ def _add_update_associate_key(
     session_args = ABI.args(
         [ABI.account("account", key.public_key_hex), ABI.u32("amount", weight)]
     )
-    return node.p_client.deploy_and_propose(
-        from_address=IDENTITY_KEY.public_key_hex,
-        session_contract=contract,
+    return node.deploy_and_get_block_hash(
+        weight_key,
+        contract,
+        on_error_raise=False,
+        from_addr=IDENTITY_KEY.public_key_hex,
         public_key=weight_key.public_key_path,
         private_key=weight_key.private_key_path,
         session_args=session_args,
@@ -59,9 +60,11 @@ def update_associated_key(node, weight_key: Account, key: Account, weight: int):
 def remove_associated_key(node, weight_key: Account, key: Account):
     """ Removes a key from the IDENTITY_KEY account """
     args = ABI.args([ABI.account("account", key.public_key_hex)])
-    return node.p_client.deploy_and_propose(
-        from_address=IDENTITY_KEY.public_key_hex,
-        session_contract=Contract.REMOVE_ASSOCIATED_KEY,
+    return node.deploy_and_get_block_hash(
+        weight_key,
+        Contract.REMOVE_ASSOCIATED_KEY,
+        on_error_raise=False,
+        from_addr=IDENTITY_KEY.public_key_hex,
         public_key=weight_key.public_key_path,
         private_key=weight_key.private_key_path,
         session_args=args,
@@ -76,38 +79,24 @@ def set_key_thresholds(node, weight_key, key_mgmt_weight: int, deploy_weight: in
             ABI.u32("deploy_weight", deploy_weight),
         ]
     )
-    return node.p_client.deploy_and_propose(
-        from_address=IDENTITY_KEY.public_key_hex,
-        session_contract=Contract.SET_KEY_THRESHOLDS,
+    return node.deploy_and_get_block_hash(
+        weight_key,
+        Contract.SET_KEY_THRESHOLDS,
+        on_error_raise=False,
+        from_addr=IDENTITY_KEY.public_key_hex,
         public_key=weight_key.public_key_path,
         private_key=weight_key.private_key_path,
         session_args=args,
     )
 
 
-def set_key_thresholds_scala(
-    node, weight_key, key_mgmt_weight: int, deploy_weight: int
-):
-    """ Sets key management and deploy thresholds for IDENTITY_KEY account """
-    args = [
-        {"value": {"long_value": key_mgmt_weight}},
-        {"value": {"long_value": deploy_weight}},
-    ]
-    json_args = json.dumps(args)
-    return node.d_client.deploy_and_propose(
-        from_address=IDENTITY_KEY.public_key_hex,
-        session_contract=Contract.SET_KEY_THRESHOLDS,
-        public_key=weight_key.public_key_path,
-        private_key=weight_key.private_key_path,
-        session_args=json_args,
-    )
-
-
 def hello_name_deploy(node, weight_key: Account) -> str:
     """ Simple deploy to test deploy permissions """
-    return node.p_client.deploy_and_propose(
-        from_address=IDENTITY_KEY.public_key_hex,
-        session_contract=Contract.HELLO_NAME_DEFINE,
+    return node.deploy_and_get_block_hash(
+        weight_key,
+        Contract.HELLO_NAME_DEFINE,
+        on_error_raise=False,
+        from_addr=IDENTITY_KEY.public_key_hex,
         public_key=weight_key.public_key_path,
         private_key=weight_key.private_key_path,
         session_args=None,

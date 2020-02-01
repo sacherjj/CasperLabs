@@ -82,7 +82,8 @@ def test_two_network_repeated_deploy(two_node_network):
     with signed_deploy_file_path(clis[0], accounts[0]) as signed_deploy_path:
         # First deployment of signed_deploy from node-0 should succeed
         deploy_hash = clis[0]("send-deploy", "-i", signed_deploy_path)
-        block_hash = clis[0]("propose")
+        block_hash = nodes[0].wait_for_deploy_processed_and_get_block_hash(deploy_hash)
+
         deploy_info = clis[0]("show-deploy", deploy_hash)
         assert not deploy_info.processing_results[0].is_error
 
@@ -92,6 +93,7 @@ def test_two_network_repeated_deploy(two_node_network):
         deploy_hash = clis[1]("send-deploy", "-i", signed_deploy_path)
         deploy_info = clis[1]("show-deploy", deploy_hash)
         assert not deploy_info.processing_results[0].is_error
-        with pytest.raises(Exception) as excinfo:
-            clis[1]("propose")
-        assert "No new deploys" in str(excinfo.value)
+
+        result = nodes[1].p_client.client.wait_for_deploy_processed(deploy_hash)
+        assert "DISCARDED" in str(result)
+        assert "Duplicate or expired" in str(result)

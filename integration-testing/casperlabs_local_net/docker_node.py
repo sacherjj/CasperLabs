@@ -416,7 +416,7 @@ class DockerNode(LoggingDockerBase):
             ]
         )
 
-        deploy_hash_hex = self.p_client.deploy(
+        deploy_hash = self.p_client.deploy(
             from_address=from_account.public_key_hex,
             session_contract=session_contract,
             payment_contract=payment_contract,
@@ -427,17 +427,26 @@ class DockerNode(LoggingDockerBase):
             payment_args=payment_args,
         )
 
-        assert len(deploy_hash_hex) == 64
-
-        response = self.p_client.propose()
-
-        block_hash = response.block_hash.hex()
-        assert len(deploy_hash_hex) == 64
-
-        if is_deploy_error_check:
-            for deploy_info in self.p_client.show_deploys(block_hash):
-                if deploy_info.is_error:
-                    raise Exception(f"transfer_to_account: {deploy_info.error_message}")
+        if self.cl_network.auto_propose:
+            client = self.p_client.client
+            result = client.wait_for_deploy_processed(
+                deploy_hash, on_error_raise=is_deploy_error_check
+            )
+            last_processing_result = result.processing_results[0]
+            block_hash = last_processing_result.block_info.summary.block_hash.hex()
+            if is_deploy_error_check and last_processing_result.is_error:
+                raise Exception(
+                    f"transfer_to_account: {last_processing_result.error_message}"
+                )
+        else:
+            response = self.p_client.propose()
+            block_hash = response.block_hash.hex()
+            if is_deploy_error_check:
+                for deploy_info in self.p_client.show_deploys(block_hash):
+                    if deploy_info.is_error:
+                        raise Exception(
+                            f"transfer_to_account: {deploy_info.error_message}"
+                        )
 
         return block_hash
 
@@ -548,3 +557,39 @@ class DockerNode(LoggingDockerBase):
         rc, output = self.exec_run(cmd)
         if rc != 0:
             raise Exception(f"Error executing '{cmd}: Exit code {rc}: {output}")
+
+    def deploy_and_wait_for_processed(self, on_error_raise=True, **deploy_kwargs):
+        client = self.p_client.client
+        deploy_hash = client.deploy(**deploy_kwargs)
+        result = client.wait_for_deploy_processed(
+            deploy_hash, on_error_raise=on_error_raise
+        )
+        return result
+
+    def deploy_and_get_block_hash(
+        self, account, contract, on_error_raise=True, **deploy_kwargs
+    ):
+        deploy_args = dict(
+            session=self.resources_folder / contract,
+            from_addr=account.public_key_hex,
+            public_key=account.public_key_path,
+            private_key=account.private_key_path,
+            payment_amount=10 ** 8,
+        )
+        deploy_args.update(deploy_kwargs)
+        result = self.deploy_and_wait_for_processed(
+            on_error_raise=on_error_raise, **deploy_args
+        )
+        block_hash = result.processing_results[0].block_info.summary.block_hash.hex()
+
+        if on_error_raise:
+            deploys = self.p_client.show_deploys(block_hash)
+            for deploy in deploys:
+                assert deploy.is_error is False
+        return block_hash
+
+    def wait_for_deploy_processed_and_get_block_hash(self, deploy_hash):
+        result = self.p_client.client.wait_for_deploy_processed(deploy_hash)
+        last_processing_result = result.processing_results[0]
+        block_hash = last_processing_result.block_info.summary.block_hash.hex()
+        return block_hash
