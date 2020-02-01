@@ -21,7 +21,7 @@ impl Socket {
 
     /// Safely removes file pointed out by a path.
     ///
-    /// In practice this file tries to remove file, and if
+    /// In practice this tries to remove the file, and if
     /// the file does not exist, it ignores it, and propagates
     /// any other error.
     pub fn remove_file(&self) -> io::Result<()> {

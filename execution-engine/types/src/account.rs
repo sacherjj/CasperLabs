@@ -66,7 +66,7 @@ pub enum ActionType {
     KeyManagement = 1,
 }
 
-/// convert from u32 representation of `[ActionType]`
+/// convert from u32 representation of [`ActionType`]
 impl TryFrom<u32> for ActionType {
     type Error = TryFromIntError;
 
@@ -110,7 +110,7 @@ pub enum SetThresholdFailure {
     InsufficientTotalWeight = 4,
 }
 
-/// convert from i32 representation of `[SetThresholdFailure]`
+/// convert from i32 representation of [`SetThresholdFailure`]
 impl TryFrom<i32> for SetThresholdFailure {
     type Error = TryFromIntError;
 
@@ -272,7 +272,7 @@ pub enum AddKeyFailure {
     PermissionDenied = 3,
 }
 
-/// convert from i32 representation of `[AddKeyFailure]`
+/// convert from i32 representation of [`AddKeyFailure`]
 impl TryFrom<i32> for AddKeyFailure {
     type Error = TryFromIntError;
 
@@ -311,7 +311,7 @@ pub enum RemoveKeyFailure {
     ThresholdViolation = 3,
 }
 
-/// convert from i32 representation of `[RemoveKeyFailure]`
+/// convert from i32 representation of [`RemoveKeyFailure`]
 impl TryFrom<i32> for RemoveKeyFailure {
     type Error = TryFromIntError;
 
@@ -351,7 +351,7 @@ pub enum UpdateKeyFailure {
     ThresholdViolation = 3,
 }
 
-/// convert from i32 representation of `[UpdateKeyFailure]`
+/// convert from i32 representation of [`UpdateKeyFailure`]
 impl TryFrom<i32> for UpdateKeyFailure {
     type Error = TryFromIntError;
 
