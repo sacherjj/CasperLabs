@@ -16,29 +16,29 @@ object ProtoMappings {
   }
 
   def toProto(c: Contract): state.Contract = state.Contract(
-    ByteString.copyFrom(c.bytes.toArray),
-    toProto(c.namedKeys),
-    Some(toProto(c.protocolVersion))
+    body = ByteString.copyFrom(c.bytes.toArray),
+    namedKeys = toProto(c.namedKeys),
+    protocolVersion = Some(toProto(c.protocolVersion))
   )
 
   def toProto(a: Account): state.Account = state.Account(
-    ByteString.copyFrom(a.publicKey.bytes.toArray),
-    toProto(Key.URef(a.purseId)).value.uref,
-    toProto(a.namedKeys),
-    a.associatedKeys.toSeq.map {
+    publicKey = ByteString.copyFrom(a.publicKey.bytes.toArray),
+    purseId = toProto(Key.URef(a.purseId)).value.uref,
+    namedKeys = toProto(a.namedKeys),
+    associatedKeys = a.associatedKeys.toSeq.map {
       case (k, w) => state.Account.AssociatedKey(ByteString.copyFrom(k.bytes.toArray), w.toInt)
     },
-    Some(
+    actionThresholds = Some(
       state.Account
         .ActionThresholds(
-          a.actionThresholds.deployment.toInt,
-          a.actionThresholds.keyManagement.toInt
+          deploymentThreshold = a.actionThresholds.deployment.toInt,
+          keyManagementThreshold = a.actionThresholds.keyManagement.toInt
         )
     )
   )
 
   def toProto(namedKeys: Map[String, Key]): Seq[state.NamedKey] = namedKeys.toSeq.map {
-    case (n, k) => state.NamedKey(n, Some(toProto(k)))
+    case (n, k) => state.NamedKey(name = n, key = Some(toProto(k)))
   }
 
   def toProto(k: Key): state.Key = k match {
@@ -64,9 +64,9 @@ object ProtoMappings {
   }
 
   def toProto(version: SemVer): state.ProtocolVersion = state.ProtocolVersion(
-    version.major,
-    version.minor,
-    version.patch
+    major = version.major,
+    minor = version.minor,
+    patch = version.patch
   )
 
   def toProto(v: CLValue): Option[state.Value] = v.clType match {
@@ -97,22 +97,23 @@ object ProtoMappings {
 
     case CLType.Tuple2(CLType.String, CLType.Key) =>
       v.to[(String, Key)].toOption.map {
-        case (n, k) => state.Value(state.Value.Value.NamedKey(state.NamedKey(n, Some(toProto(k)))))
+        case (n, k) =>
+          state.Value(state.Value.Value.NamedKey(state.NamedKey(name = n, key = Some(toProto(k)))))
       }
 
     case CLType.U128 =>
       FromBytes.deserialize[BigInt](v.value.toArray).toOption.map { i =>
-        state.Value(state.Value.Value.BigInt(state.BigInt(i.toString, 128)))
+        state.Value(state.Value.Value.BigInt(state.BigInt(value = i.toString, bitWidth = 128)))
       }
 
     case CLType.U256 =>
       FromBytes.deserialize[BigInt](v.value.toArray).toOption.map { i =>
-        state.Value(state.Value.Value.BigInt(state.BigInt(i.toString, 256)))
+        state.Value(state.Value.Value.BigInt(state.BigInt(value = i.toString, bitWidth = 256)))
       }
 
     case CLType.U512 =>
       FromBytes.deserialize[BigInt](v.value.toArray).toOption.map { i =>
-        state.Value(state.Value.Value.BigInt(state.BigInt(i.toString, 512)))
+        state.Value(state.Value.Value.BigInt(state.BigInt(value = i.toString, bitWidth = 512)))
       }
 
     case CLType.Key =>
