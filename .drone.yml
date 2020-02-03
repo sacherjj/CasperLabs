@@ -817,6 +817,8 @@ steps:
   when:
     ref:
     - refs/tags/v*
+  depends_on:
+  - package-sbt-artifacts-tag
 
 - name: mac-ee-tarball-tag
   image: appleboy/drone-ssh:latest
