@@ -15,6 +15,7 @@ import io.casperlabs.models.Message
 import io.casperlabs.storage.BlockHash
 import io.casperlabs.storage.dag.{DagRepresentation, DagStorage, FinalityStorageReader}
 import io.casperlabs.storage.era.EraStorage
+import io.casperlabs.shared.SemaphoreMap
 import scala.util.Random
 
 /** Class to encapsulate the message handling logic of messages in an era.
@@ -45,7 +46,9 @@ class EraRuntime[F[_]: MonadThrowable: Clock: EraStorage: FinalityStorageReader:
     // our previous message was X, and make a message X <- Y, we must not at the same time
     // make a message X <- Z. Since we let the fork choice tell us what justifications to use,
     // we must protect the fork choice _and_ the message production with a common semaphore.
-    createMessageSemaphore: Semaphore[F],
+    // Also make sure that we only add one message from another validator at a time, so as
+    // not to miss any equivocations that may happen if they arrive at the same time.
+    validatorSemaphoreMap: SemaphoreMap[F, PublicKeyBS],
     // Indicate whether the initial syncing mechanism that runs when the node is started
     // is still ongoing, or it has concluded and the node is caught up with its peers.
     // Before that, responding to messages risks creating an equivocation, in case some
@@ -103,16 +106,21 @@ class EraRuntime[F[_]: MonadThrowable: Clock: EraStorage: FinalityStorageReader:
       conf.toInstant(Ticks(msg.roundId))
 
     /** Check if this block is the first in its main-chain that crosses the end of the era. */
-    def isSwitchBlock: F[Boolean] =
+    def isSwitchBlock: F[Boolean] = isBoundaryBlock(isSwitchBoundary)
+
+    /** Check if this block is one that crosses an era booking boundary, therefor has to execute the auction. */
+    def isBookingBlock: F[Boolean] = isBoundaryBlock(isBookingBoundary)
+
+    /** Check whether the parent to child transition crosses a boundary. */
+    private def isBoundaryBlock(isBoundary: (Instant, Instant) => Boolean): F[Boolean] =
       if (msg.parentBlock.isEmpty || !msg.isInstanceOf[Message.Block])
         false.pure[F]
       else
         dag
           .lookupUnsafe(msg.parentBlock)
-          .map { parent =>
-            isSwitchBoundary(parent.roundInstant, msg.roundInstant)
-          }
+          .map(parent => isBoundary(parent.roundInstant, msg.roundInstant))
 
+    /** Check whether a block or ballot is a lambda message. */
     def isLambdaMessage: F[Boolean] =
       if (leaderFunction(Ticks(msg.roundId)) == msg.validatorId)
         msg match {
@@ -120,6 +128,11 @@ class EraRuntime[F[_]: MonadThrowable: Clock: EraStorage: FinalityStorageReader:
           case b: Message.Ballot => isLambdaLikeBallot(dag, b, endTick)
         }
       else false.pure[F]
+  }
+
+  private implicit class MessageProducerOps(mp: MessageProducer[F]) {
+    def withPermit[T](block: F[T]): F[T] =
+      validatorSemaphoreMap.withPermit(mp.validatorId)(block)
   }
 
   /** Current tick based on wall clock time. */
@@ -186,7 +199,7 @@ class EraRuntime[F[_]: MonadThrowable: Clock: EraStorage: FinalityStorageReader:
   ): HWL[Unit] = ifSynced {
     for {
       b <- HighwayLog.liftF {
-            createMessageSemaphore.withPermit {
+            messageProducer.withPermit {
               for {
                 // We need to cite the lambda message, and our own latest message.
                 // NOTE: The latter will be empty until the validator produces something in this era.
@@ -222,7 +235,7 @@ class EraRuntime[F[_]: MonadThrowable: Clock: EraStorage: FinalityStorageReader:
       messageProducer: MessageProducer[F],
       roundId: Ticks
   ): HWL[Unit] = ifSynced {
-    val message: F[Message] = createMessageSemaphore.withPermit {
+    val message: F[Message] = messageProducer.withPermit {
       for {
         choice <- ForkChoice[F].fromKeyBlock(era.keyBlockHash)
         // In the active period we create a block, but during voting
@@ -270,7 +283,7 @@ class EraRuntime[F[_]: MonadThrowable: Clock: EraStorage: FinalityStorageReader:
   ): HWL[Unit] = ifSynced {
     for {
       b <- HighwayLog.liftF {
-            createMessageSemaphore.withPermit {
+            messageProducer.withPermit {
               for {
                 choice <- ForkChoice[F].fromKeyBlock(era.keyBlockHash)
                 message <- messageProducer.ballot(
@@ -436,14 +449,16 @@ class EraRuntime[F[_]: MonadThrowable: Clock: EraStorage: FinalityStorageReader:
       }
     }
 
-  /** Handle a block or ballot coming from another validator. For example:
+  /** Handle a block or ballot coming from another validator.
+    * The block is already validated and stored, here we just want to get the protocol reactions.
+    * For example:
     * - if it's a lambda message, create a lambda response
     * - if it's a switch block, create a new era, unless it exists already.
     * Returns a list of events that happened during the persisting of changes.
     * This method is always called as a reaction to an incoming message,
     * so it doesn't return a future agenda of its own.
     */
-  def handleMessage(message: Message): HWL[Unit] = {
+  def handleMessage(message: ValidatedMessage): HWL[Unit] = {
     def check(ok: Boolean, error: String) =
       if (ok) noop else MonadThrowable[HWL].raiseError[Unit](new IllegalStateException(error))
 
@@ -532,6 +547,30 @@ class EraRuntime[F[_]: MonadThrowable: Clock: EraStorage: FinalityStorageReader:
       case block: Message.Block =>
         HighwayLog.liftF(block.isSwitchBlock).ifM(createEra(block), noop)
     }
+
+  /** Perform the validation and persistence of an incoming block.
+    * Doesn't include reacting to it. It's here so we can encapsulate
+    * the logic to make sure no two blocks from the same validator are
+    * added concurrently, and that we validate the message according to the
+    * rules of this era. */
+  def validateAndAddBlock(messageExecutor: MessageExecutor[F], block: Block): F[ValidatedMessage] =
+    for {
+      message    <- MonadThrowable[F].fromTry(Message.fromBlock(block))
+      maybeError <- validate(message).value
+      _ <- maybeError.fold(
+            error =>
+              // TODO (CON-623): Some of these errors can be attributable. Those should be slashed
+              // and not stop processing, so we'll need to return more detailed statuses from
+              // validate to decide what to do, whether to react or not.
+              MonadThrowable[F].raiseError[Unit](
+                new IllegalArgumentException(s"Could not validate block against era: $error")
+              ),
+            _ => ().pure[F]
+          )
+      semaphore      <- validatorSemaphoreMap.getOrAdd(PublicKey(block.getHeader.validatorPublicKey))
+      isBookingBlock <- message.isBookingBlock
+      _              <- messageExecutor.validateAndAdd(semaphore, block, isBookingBlock)
+    } yield Validated(message)
 }
 
 object EraRuntime {
@@ -571,7 +610,7 @@ object EraRuntime {
       leaderFunction   <- leaderSequencer[F](era)
       roundExponentRef <- Ref.of[F, Int](initRoundExponent)
       dag              <- DagStorage[F].getRepresentation
-      semaphore        <- MakeSemaphore[F](1)
+      semaphoreMap     <- SemaphoreMap[F, PublicKeyBS](1)
     } yield {
       new EraRuntime[F](
         conf,
@@ -583,7 +622,7 @@ object EraRuntime {
         maybeMessageProducer.filter { mp =>
           era.bonds.exists(b => b.validatorPublicKey == mp.validatorId)
         },
-        semaphore,
+        semaphoreMap,
         isSynced,
         dag
       )

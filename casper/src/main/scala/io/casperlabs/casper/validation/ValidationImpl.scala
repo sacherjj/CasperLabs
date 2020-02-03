@@ -7,7 +7,7 @@ import cats.data.NonEmptyList
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper._
-import io.casperlabs.casper.consensus.{Block, BlockSummary}
+import io.casperlabs.casper.consensus.{Block, BlockSummary, Bond}
 import io.casperlabs.casper.equivocations.EquivocationDetector
 import io.casperlabs.casper.util.ProtoUtil.bonds
 import io.casperlabs.casper.util.execengine.ExecEngineUtil
@@ -24,6 +24,8 @@ import Validation._
 import cats.effect.Sync
 import io.casperlabs.casper.consensus.state.ProtocolVersion
 import io.casperlabs.smartcontracts.ExecutionEngineService.CommitResult
+import io.casperlabs.models.Message
+import cats.Monad
 
 object ValidationImpl {
   def apply[F[_]](implicit ev: ValidationImpl[F]): Validation[F] = ev
@@ -51,13 +53,16 @@ object ValidationImpl {
       override def transactions(
           block: Block,
           preStateHash: StateHash,
+          preStateBonds: Seq[Bond],
           effects: BlockEffects
       )(
           implicit ee: ExecutionEngineService[F],
           bs: BlockStorage[F],
           clp: CasperLabsProtocol[F]
       ): F[Unit] =
-        Metrics[F].timer("transactions")(underlying.transactions(block, preStateHash, effects))
+        Metrics[F].timer("transactions")(
+          underlying.transactions(block, preStateHash, preStateBonds, effects)
+        )
 
       override def blockFull(
           block: Block,
@@ -75,6 +80,9 @@ object ValidationImpl {
           implicit versions: CasperLabsProtocol[F]
       ): F[Unit] =
         Metrics[F].timer("blockSummary")(underlying.blockSummary(summary, chainName))
+
+      override def checkEquivocation(dag: DagRepresentation[F], block: Block): F[Unit] =
+        Metrics[F].timer("checkEquivocation")(underlying.checkEquivocation(dag, block))
     }
   }
 }
@@ -190,6 +198,7 @@ class ValidationImpl[F[_]: Sync: FunctorRaise[*[_], InvalidBlock]: Log: Time: Me
   override def transactions(
       block: Block,
       preStateHash: StateHash,
+      preStateBonds: Seq[Bond],
       blockEffects: BlockEffects
   )(
       implicit ee: ExecutionEngineService[F],
@@ -203,6 +212,7 @@ class ValidationImpl[F[_]: Sync: FunctorRaise[*[_], InvalidBlock]: Log: Time: Me
         possibleCommitResult <- ExecEngineUtil
                                  .commitEffects[F](
                                    preStateHash,
+                                   preStateBonds,
                                    block.getHeader.getProtocolVersion,
                                    blockEffects
                                  )
@@ -284,5 +294,11 @@ class ValidationImpl[F[_]: Sync: FunctorRaise[*[_], InvalidBlock]: Log: Time: Me
     FunctorRaise[F, InvalidBlock]
       .raise[Unit](InvalidTargetHash)
       .whenA(b.getHeader.messageType.isBallot && b.getHeader.parentHashes.size != 1)
+
+  override def checkEquivocation(dag: DagRepresentation[F], block: Block): F[Unit] =
+    for {
+      message <- Sync[F].fromTry(Message.fromBlock(block))
+      _       <- EquivocationDetector.checkEquivocationWithUpdate[F](dag, message)
+    } yield ()
 
 }

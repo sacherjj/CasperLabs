@@ -60,6 +60,7 @@ object ExecutionEngineServiceStub {
       merged  <- ExecutionEngineServiceStub.merge[F](parents, dag)
       preStateHash <- ExecEngineUtil
                        .computePrestate[F](merged, rank = b.getHeader.rank, upgrades = Nil)
+      preStateBonds = merged.parents.headOption.getOrElse(b).getHeader.getState.bonds
       effects <- ExecEngineUtil
                   .effectsForBlock[F](b, preStateHash)
                   .map(
@@ -72,7 +73,7 @@ object ExecutionEngineServiceStub {
                         Validation.BlockEffects(Map(0 -> Seq.empty))
                       else be
                   )
-      _ <- Validation[F].transactions(b, preStateHash, effects)
+      _ <- Validation[F].transactions(b, preStateHash, preStateBonds, effects)
     } yield ProtoUtil.postStateHash(b)).attempt
   }
 
@@ -131,14 +132,16 @@ object ExecutionEngineServiceStub {
     ): F[Either[Throwable, Value]] = queryFunc(state, baseKey, path)
   }
 
-  def noOpApi[F[_]: Applicative](): ExecutionEngineService[F] =
+  def noOpApi[F[_]: Applicative](
+      bonds: Seq[Bond] = Seq.empty
+  ): ExecutionEngineService[F] =
     mock[F](
       (_) => GenesisResult().asRight[Throwable].pure[F],
       (_, _, _) => UpgradeResult().asRight[Throwable].pure[F],
       (_, _, _, _) => Seq.empty[DeployResult].asRight[Throwable].pure[F],
-      (_, _) =>
+      (preStateHash, _) =>
         ExecutionEngineService
-          .CommitResult(ByteString.EMPTY, Seq.empty[Bond])
+          .CommitResult(preStateHash, bonds)
           .asRight[Throwable]
           .pure[F],
       (_, _, _) =>

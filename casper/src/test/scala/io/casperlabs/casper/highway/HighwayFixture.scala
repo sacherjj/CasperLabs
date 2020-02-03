@@ -9,7 +9,13 @@ import io.casperlabs.casper.helper.StorageFixture
 import io.casperlabs.storage.{BlockHash, SQLiteStorage}
 import io.casperlabs.casper.consensus.{Block, BlockSummary, Bond, Era}
 import io.casperlabs.casper.consensus.state
+import io.casperlabs.casper.consensus.state.ProtocolVersion
+import io.casperlabs.casper.util.CasperLabsProtocol
 import io.casperlabs.casper.highway.mocks.{MockForkChoice, MockMessageProducer}
+import io.casperlabs.casper.mocks.NoOpValidation
+import io.casperlabs.casper.helper.NoOpsEventEmitter
+import io.casperlabs.casper.validation.raiseValidateErrorThroughApplicativeError
+import io.casperlabs.casper.validation.{Validation, ValidationImpl}
 import io.casperlabs.crypto.Keys.{PublicKey, PublicKeyBS}
 import io.casperlabs.comm.gossiping.{Relaying, WaitHandle}
 import io.casperlabs.models.ArbitraryConsensus
@@ -24,6 +30,8 @@ import monix.execution.Scheduler
 import monix.execution.schedulers.TestScheduler
 import scala.concurrent.duration._
 import org.scalatest.Suite
+import io.casperlabs.casper.util.execengine.ExecutionEngineServiceStub
+import io.casperlabs.casper.finality.MultiParentFinalizer
 
 trait HighwayFixture extends StorageFixture with TickUtils with ArbitraryConsensus { self: Suite =>
 
@@ -106,22 +114,28 @@ trait HighwayFixture extends StorageFixture with TickUtils with ArbitraryConsens
 
     override val start = conf.genesisEraStart
 
-    val genesis = Message
-      .fromBlockSummary(
-        BlockSummary()
-          .withBlockHash(ByteString.copyFromUtf8("genesis"))
-          .withHeader(
-            Block
-              .Header()
-              .withState(
-                Block
-                  .GlobalState()
-                  .withBonds(bonds)
-              )
-          )
-      )
-      .get
-      .asInstanceOf[Message.Block]
+    val chainName = "highway-test-chain"
+
+    val genesisBlock = {
+      val emptyStateHash = ByteString.copyFromUtf8("empty-state")
+      Block()
+        .withBlockHash(ByteString.copyFromUtf8("genesis"))
+        .withHeader(
+          Block
+            .Header()
+            .withChainName(chainName)
+            .withState(
+              Block
+                .GlobalState()
+                .withBonds(bonds)
+                .withPreStateHash(emptyStateHash)
+                .withPostStateHash(emptyStateHash)
+            )
+        )
+        .withBody(Block.Body())
+    }
+
+    val genesis = Message.fromBlock(genesisBlock).get.asInstanceOf[Message.Block]
 
     implicit val log: Log[Task] with LogStub =
       LogStub[Task](
@@ -130,11 +144,35 @@ trait HighwayFixture extends StorageFixture with TickUtils with ArbitraryConsens
         printLevel = printLevel
       )
 
-    implicit val forkchoice = MockForkChoice.unsafe[Task](genesis)
+    implicit def eventEmitter = NoOpsEventEmitter.create[Task]
 
-    val messageProducer: MessageProducer[Task] = new MockMessageProducer[Task](validator)
+    implicit def forkchoice = MockForkChoice.unsafe[Task](genesis)
 
-    implicit val relaying = new Relaying[Task] {
+    implicit def finalizer = new MultiParentFinalizer[Task] {
+      override def onNewMessageAdded(
+          message: Message
+      ): Task[Option[MultiParentFinalizer.FinalizedBlocks]] = none.pure[Task]
+    }
+
+    implicit def execEngineService =
+      ExecutionEngineServiceStub.noOpApi[Task](
+        bonds = genesisBlock.getHeader.getState.bonds
+      )
+    implicit val validationRaise = raiseValidateErrorThroughApplicativeError[Task]
+    implicit val protocol = CasperLabsProtocol.unsafe[Task](
+      (0L, ProtocolVersion(0, 0, 0), none)
+    )
+    // While we're using the MockMessageProducer we can't fully validate blocks.
+    implicit def validation: Validation[Task]  = new NoOpValidation[Task]
+    def messageProducer: MessageProducer[Task] = new MockMessageProducer[Task](validator)
+    def messageExecutor: MessageExecutor[Task] = new MessageExecutor[Task](
+      chainName = chainName,
+      genesis = genesisBlock,
+      upgrades = Seq.empty,
+      maybeValidatorId = Some(validator: PublicKeyBS)
+    )
+
+    implicit def relaying = new Relaying[Task] {
       override def relay(hashes: List[BlockHash]): Task[WaitHandle[Task]] = ().pure[Task].pure[Task]
     }
 
@@ -166,15 +204,8 @@ trait HighwayFixture extends StorageFixture with TickUtils with ArbitraryConsens
         isSyncedRef.get
       )
 
-    def insertGenesis(): Task[Unit] = {
-      val genesisSummary = genesis.blockSummary
-      val genesisBlock = Block(
-        blockHash = genesisSummary.blockHash,
-        header = genesisSummary.header,
-        signature = genesisSummary.signature
-      )
+    def insertGenesis(): Task[Unit] =
       db.put(BlockMsgWithTransform().withBlockMessage(genesisBlock))
-    }
 
     def makeSupervisor(): Resource[Task, EraSupervisor[Task]] =
       for {
@@ -183,6 +214,7 @@ trait HighwayFixture extends StorageFixture with TickUtils with ArbitraryConsens
                        conf,
                        genesis.blockSummary,
                        messageProducer.some,
+                       messageExecutor,
                        initRoundExponent,
                        isSyncedRef.get
                      )

@@ -12,8 +12,7 @@ import io.casperlabs.comm.gossiping.Relaying
 import io.casperlabs.models.Message
 import io.casperlabs.shared.Log
 import io.casperlabs.storage.BlockHash
-import io.casperlabs.storage.BlockMsgWithTransform
-import io.casperlabs.storage.block.BlockStorageWriter
+import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.storage.dag.{DagRepresentation, DagStorage, FinalityStorageReader}
 import io.casperlabs.storage.era.EraStorage
 import scala.concurrent.duration.FiniteDuration
@@ -24,14 +23,15 @@ import scala.util.control.NonFatal
   * - manages the scheduling of the agendas of the eras by acting as a trampoline for them
   * - propagates messages received or created by parent eras to the descendants to keep the latest messsages up to date.
   */
-class EraSupervisor[F[_]: Concurrent: Timer: Log: BlockStorageWriter: EraStorage: Relaying: ForkChoiceManager](
+class EraSupervisor[F[_]: Concurrent: Timer: Log: EraStorage: Relaying: ForkChoiceManager](
     conf: HighwayConf,
     // Once the supervisor is shut down, reject incoming messages.
     isShutdownRef: Ref[F, Boolean],
     eraStartSemaphore: Semaphore[F],
     erasRef: Ref[F, Map[BlockHash, EraSupervisor.Entry[F]]],
     scheduleRef: Ref[F, Map[(BlockHash, Agenda.DelayedAction), Fiber[F, Unit]]],
-    makeRuntime: Era => F[EraRuntime[F]]
+    makeRuntime: Era => F[EraRuntime[F]],
+    messageExecutor: MessageExecutor[F]
 ) {
   import EraSupervisor.Entry
 
@@ -46,26 +46,14 @@ class EraSupervisor[F[_]: Concurrent: Timer: Log: BlockStorageWriter: EraStorage
     * it will be gossiped if it's successfully validated. Only need to broadcast responses. */
   def validateAndAddBlock(block: Block): F[Unit] =
     for {
-      _       <- ensureNotShutdown
-      message <- Sync[F].fromTry(Message.fromBlock(block))
+      _      <- ensureNotShutdown
+      header = block.getHeader
       _ <- Log[F].debug(
-            s"Handling incoming ${message.messageHash.show -> "message"} from ${message.validatorId.show -> "validator"} in ${message.roundId -> "round"} ${message.eraId.show -> "era"}"
+            s"Handling incoming ${block.blockHash.show -> "message"} from ${header.validatorPublicKey.show -> "validator"} in ${header.roundId -> "round"} ${header.keyBlockHash.show -> "era"}"
           )
-      entry <- load(message.eraId)
-      _ <- entry.runtime.validate(message).value.flatMap {
-            _.fold(
-              error =>
-                Sync[F].raiseError[Unit](
-                  new IllegalArgumentException(s"Could not validate block against era: $error")
-                ),
-              _ => ().pure[F]
-            )
-          }
-
-      // TODO (NODE-1128): Validate and execute the block, store it in the block store and DAG store.
-      // Pass the `isBookingBlock` flag as well. For now just store the incoming blocks so they
-      // are available in the DAG when we produce messages on top of them.
-      _ <- BlockStorageWriter[F].put(BlockMsgWithTransform().withBlockMessage(block))
+      entry   <- load(header.keyBlockHash)
+      message <- entry.runtime.validateAndAddBlock(messageExecutor, block)
+      _       <- messageExecutor.effectsAfterAdded(message)
 
       // Tell descendant eras for the next time they create a block that this era received a message.
       // NOTE: If the events create an era it will only be loaded later, so the first time
@@ -173,6 +161,7 @@ class EraSupervisor[F[_]: Concurrent: Timer: Log: BlockStorageWriter: EraStorage
         _ <- Log[F].debug(
               s"Created $kind ${message.messageHash.show -> "message"} in ${message.roundId -> "round"} ${message.eraId.show -> "era"} child of ${message.parentBlock.show -> "parent"}"
             )
+        _ <- messageExecutor.effectsAfterAdded(Validated(message))
         _ <- Relaying[F].relay(List(message.messageHash))
         _ <- propagateLatestMessageToDescendantEras(message)
       } yield ()
@@ -199,7 +188,7 @@ class EraSupervisor[F[_]: Concurrent: Timer: Log: BlockStorageWriter: EraStorage
     } void
   }
 
-  /** Update descendant eras' latest messages. */
+  /** Update this and descendant eras' latest messages. */
   private def propagateLatestMessageToDescendantEras(message: Message): F[Unit] =
     for {
       // Let this era know as well. You'd expect that the message production will
@@ -241,20 +230,17 @@ class EraSupervisor[F[_]: Concurrent: Timer: Log: BlockStorageWriter: EraStorage
   private def addToParent(child: Entry[F]): F[Unit] =
     erasRef.update { eras =>
       val parentKeyBlockHash = child.runtime.era.parentKeyBlockHash
-      val parent             = eras(parentKeyBlockHash)
-      eras.updated(
-        parentKeyBlockHash,
-        parent.copy(children = parent.children + child.runtime.era.keyBlockHash)
-      )
+      eras.updated(parentKeyBlockHash, eras(parentKeyBlockHash).withChild(child))
     }
 }
 
 object EraSupervisor {
 
-  def apply[F[_]: Concurrent: Timer: Log: EraStorage: BlockStorageWriter: DagStorage: FinalityStorageReader: Relaying: ForkChoiceManager](
+  def apply[F[_]: Concurrent: Timer: Log: EraStorage: DagStorage: FinalityStorageReader: Relaying: ForkChoiceManager](
       conf: HighwayConf,
       genesis: BlockSummary,
       maybeMessageProducer: Option[MessageProducer[F]],
+      messageExecutor: MessageExecutor[F],
       initRoundExponent: Int,
       isSynced: F[Boolean]
   ): Resource[F, EraSupervisor[F]] =
@@ -280,7 +266,8 @@ object EraSupervisor {
           erasSemaphore,
           erasRef,
           scheduleRef,
-          makeRuntime
+          makeRuntime,
+          messageExecutor
         )
 
         // Make sure we have the genesis era in storage. We'll resume if it's the first one.
@@ -295,11 +282,17 @@ object EraSupervisor {
       } yield supervisor
     }(_.shutdown())
 
+  /** The supervisor keeps track of the eras it initiated, and maintains the set of
+    * child eras that era originally had, plus what it obtained along the way.
+    */
   case class Entry[F[_]](
       runtime: EraRuntime[F],
       children: Set[BlockHash]
   ) {
-    def keyBlockHash = runtime.era.keyBlockHash
+    def keyBlockHash =
+      runtime.era.keyBlockHash
+    def withChild(child: Entry[F]) =
+      copy(children = children + child.keyBlockHash)
   }
   object Entry {
     implicit def `Key[Entry]`[F[_]]: Key[Entry[F]] =

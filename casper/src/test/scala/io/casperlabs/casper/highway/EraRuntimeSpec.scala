@@ -44,6 +44,8 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
 
   implicit def defaultClock: Clock[Id] = TestClock.frozen[Id](date(2019, 12, 9))
 
+  implicit def `Message => ValidatedMessage`(m: Message): ValidatedMessage = Validated(m)
+
   val postEraVotingDuration = days(2)
 
   val conf = HighwayConf(

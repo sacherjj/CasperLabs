@@ -59,7 +59,7 @@ trait ArbitraryConsensus {
 
   def sample[T](implicit a: Arbitrary[T]): T = sample(arbitrary[T])
 
-  private def protoHash[T <: scalapb.GeneratedMessage](proto: T): ByteString =
+  protected def protoHash[T <: scalapb.GeneratedMessage](proto: T): ByteString =
     ByteString.copyFrom(Blake2b256.hash(proto.toByteArray))
 
   val genHash = genBytes(32)
