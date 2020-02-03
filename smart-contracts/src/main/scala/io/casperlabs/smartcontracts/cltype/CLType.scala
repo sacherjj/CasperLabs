@@ -31,6 +31,10 @@ object CLType {
   case class Tuple3(t1: CLType, t2: CLType, t3: CLType) extends CLType
   case object Any                                       extends CLType
 
+  // Type representing the list of things that need to be appended to the
+  // serialized CLType (see `toBytesTailRec` below). The `Left` case represents the
+  // length of a `FixedList`, while the `Right` case represents the inner type of
+  // something like `List`, `Tuple2`, etc.
   private type LoopState = immutable.List[Either[Int, CLType]]
 
   @tailrec
@@ -92,127 +96,15 @@ object CLType {
     FromBytes.safePop(bytes) match {
       case Left(err) => Left(err)
 
-      case Right((tag, tail)) if tag == CL_TYPE_TAG_BOOL =>
-        CLTypeBuilder.buildFrom(Bool, builders, tail) match {
+      case Right((tag, tail)) if primitiveTags.contains(tag) =>
+        CLTypeBuilder.buildFrom(primitiveTags(tag), builders, tail) match {
           case Right((Right(clType), remBytes))     => Right(clType -> remBytes)
           case Right((Left(remBuilders), remBytes)) => fromBytesTailRec(remBytes, remBuilders)
           case Left(err)                            => Left(err)
         }
 
-      case Right((tag, tail)) if tag == CL_TYPE_TAG_I32 =>
-        CLTypeBuilder.buildFrom(I32, builders, tail) match {
-          case Right((Right(clType), remBytes))     => Right(clType -> remBytes)
-          case Right((Left(remBuilders), remBytes)) => fromBytesTailRec(remBytes, remBuilders)
-          case Left(err)                            => Left(err)
-        }
-
-      case Right((tag, tail)) if tag == CL_TYPE_TAG_I64 =>
-        CLTypeBuilder.buildFrom(I64, builders, tail) match {
-          case Right((Right(clType), remBytes))     => Right(clType -> remBytes)
-          case Right((Left(remBuilders), remBytes)) => fromBytesTailRec(remBytes, remBuilders)
-          case Left(err)                            => Left(err)
-        }
-
-      case Right((tag, tail)) if tag == CL_TYPE_TAG_U8 =>
-        CLTypeBuilder.buildFrom(U8, builders, tail) match {
-          case Right((Right(clType), remBytes))     => Right(clType -> remBytes)
-          case Right((Left(remBuilders), remBytes)) => fromBytesTailRec(remBytes, remBuilders)
-          case Left(err)                            => Left(err)
-        }
-
-      case Right((tag, tail)) if tag == CL_TYPE_TAG_U32 =>
-        CLTypeBuilder.buildFrom(U32, builders, tail) match {
-          case Right((Right(clType), remBytes))     => Right(clType -> remBytes)
-          case Right((Left(remBuilders), remBytes)) => fromBytesTailRec(remBytes, remBuilders)
-          case Left(err)                            => Left(err)
-        }
-
-      case Right((tag, tail)) if tag == CL_TYPE_TAG_U64 =>
-        CLTypeBuilder.buildFrom(U64, builders, tail) match {
-          case Right((Right(clType), remBytes))     => Right(clType -> remBytes)
-          case Right((Left(remBuilders), remBytes)) => fromBytesTailRec(remBytes, remBuilders)
-          case Left(err)                            => Left(err)
-        }
-
-      case Right((tag, tail)) if tag == CL_TYPE_TAG_U128 =>
-        CLTypeBuilder.buildFrom(U128, builders, tail) match {
-          case Right((Right(clType), remBytes))     => Right(clType -> remBytes)
-          case Right((Left(remBuilders), remBytes)) => fromBytesTailRec(remBytes, remBuilders)
-          case Left(err)                            => Left(err)
-        }
-
-      case Right((tag, tail)) if tag == CL_TYPE_TAG_U256 =>
-        CLTypeBuilder.buildFrom(U256, builders, tail) match {
-          case Right((Right(clType), remBytes))     => Right(clType -> remBytes)
-          case Right((Left(remBuilders), remBytes)) => fromBytesTailRec(remBytes, remBuilders)
-          case Left(err)                            => Left(err)
-        }
-
-      case Right((tag, tail)) if tag == CL_TYPE_TAG_U512 =>
-        CLTypeBuilder.buildFrom(U512, builders, tail) match {
-          case Right((Right(clType), remBytes))     => Right(clType -> remBytes)
-          case Right((Left(remBuilders), remBytes)) => fromBytesTailRec(remBytes, remBuilders)
-          case Left(err)                            => Left(err)
-        }
-
-      case Right((tag, tail)) if tag == CL_TYPE_TAG_UNIT =>
-        CLTypeBuilder.buildFrom(Unit, builders, tail) match {
-          case Right((Right(clType), remBytes))     => Right(clType -> remBytes)
-          case Right((Left(remBuilders), remBytes)) => fromBytesTailRec(remBytes, remBuilders)
-          case Left(err)                            => Left(err)
-        }
-
-      case Right((tag, tail)) if tag == CL_TYPE_TAG_STRING =>
-        CLTypeBuilder.buildFrom(String, builders, tail) match {
-          case Right((Right(clType), remBytes))     => Right(clType -> remBytes)
-          case Right((Left(remBuilders), remBytes)) => fromBytesTailRec(remBytes, remBuilders)
-          case Left(err)                            => Left(err)
-        }
-
-      case Right((tag, tail)) if tag == CL_TYPE_TAG_KEY =>
-        CLTypeBuilder.buildFrom(Key, builders, tail) match {
-          case Right((Right(clType), remBytes))     => Right(clType -> remBytes)
-          case Right((Left(remBuilders), remBytes)) => fromBytesTailRec(remBytes, remBuilders)
-          case Left(err)                            => Left(err)
-        }
-
-      case Right((tag, tail)) if tag == CL_TYPE_TAG_UREF =>
-        CLTypeBuilder.buildFrom(URef, builders, tail) match {
-          case Right((Right(clType), remBytes))     => Right(clType -> remBytes)
-          case Right((Left(remBuilders), remBytes)) => fromBytesTailRec(remBytes, remBuilders)
-          case Left(err)                            => Left(err)
-        }
-
-      case Right((tag, tail)) if tag == CL_TYPE_TAG_OPTION =>
-        fromBytesTailRec(tail, CLTypeBuilder.OptionHole :: builders)
-
-      case Right((tag, tail)) if tag == CL_TYPE_TAG_LIST =>
-        fromBytesTailRec(tail, CLTypeBuilder.ListHole :: builders)
-
-      case Right((tag, tail)) if tag == CL_TYPE_TAG_FIXED_LIST =>
-        fromBytesTailRec(tail, CLTypeBuilder.FixedListHole :: builders)
-
-      case Right((tag, tail)) if tag == CL_TYPE_TAG_RESULT =>
-        fromBytesTailRec(tail, CLTypeBuilder.ResultHole :: builders)
-
-      case Right((tag, tail)) if tag == CL_TYPE_TAG_MAP =>
-        fromBytesTailRec(tail, CLTypeBuilder.MapHole :: builders)
-
-      case Right((tag, tail)) if tag == CL_TYPE_TAG_TUPLE1 =>
-        fromBytesTailRec(tail, CLTypeBuilder.Tuple1Hole :: builders)
-
-      case Right((tag, tail)) if tag == CL_TYPE_TAG_TUPLE2 =>
-        fromBytesTailRec(tail, CLTypeBuilder.Tuple2Hole :: builders)
-
-      case Right((tag, tail)) if tag == CL_TYPE_TAG_TUPLE3 =>
-        fromBytesTailRec(tail, CLTypeBuilder.Tuple3Hole :: builders)
-
-      case Right((tag, tail)) if tag == CL_TYPE_TAG_ANY =>
-        CLTypeBuilder.buildFrom(Any, builders, tail) match {
-          case Right((Right(clType), remBytes))     => Right(clType -> remBytes)
-          case Right((Left(remBuilders), remBytes)) => fromBytesTailRec(remBytes, remBuilders)
-          case Left(err)                            => Left(err)
-        }
+      case Right((tag, tail)) if compositeTags.contains(tag) =>
+        fromBytesTailRec(tail, compositeTags(tag) :: builders)
 
       case Right((other, _)) => Left(FromBytes.Error.InvalidVariantTag(other, "CLType"))
     }
@@ -244,4 +136,32 @@ object CLType {
   val CL_TYPE_TAG_TUPLE2: Byte     = 19
   val CL_TYPE_TAG_TUPLE3: Byte     = 20
   val CL_TYPE_TAG_ANY: Byte        = 21
+
+  val primitiveTags: immutable.Map[Byte, CLType] = immutable.Map(
+    CL_TYPE_TAG_BOOL   -> Bool,
+    CL_TYPE_TAG_I32    -> I32,
+    CL_TYPE_TAG_I64    -> I64,
+    CL_TYPE_TAG_U8     -> U8,
+    CL_TYPE_TAG_U32    -> U32,
+    CL_TYPE_TAG_U64    -> U64,
+    CL_TYPE_TAG_U128   -> U128,
+    CL_TYPE_TAG_U256   -> U256,
+    CL_TYPE_TAG_U512   -> U512,
+    CL_TYPE_TAG_UNIT   -> Unit,
+    CL_TYPE_TAG_STRING -> String,
+    CL_TYPE_TAG_KEY    -> Key,
+    CL_TYPE_TAG_UREF   -> URef,
+    CL_TYPE_TAG_ANY    -> Any
+  )
+
+  val compositeTags: immutable.Map[Byte, CLTypeBuilder] = immutable.Map(
+    CL_TYPE_TAG_OPTION     -> CLTypeBuilder.OptionHole,
+    CL_TYPE_TAG_LIST       -> CLTypeBuilder.ListHole,
+    CL_TYPE_TAG_FIXED_LIST -> CLTypeBuilder.FixedListHole,
+    CL_TYPE_TAG_RESULT     -> CLTypeBuilder.ResultHole,
+    CL_TYPE_TAG_MAP        -> CLTypeBuilder.MapHole,
+    CL_TYPE_TAG_TUPLE1     -> CLTypeBuilder.Tuple1Hole,
+    CL_TYPE_TAG_TUPLE2     -> CLTypeBuilder.Tuple2Hole,
+    CL_TYPE_TAG_TUPLE3     -> CLTypeBuilder.Tuple3Hole
+  )
 }
