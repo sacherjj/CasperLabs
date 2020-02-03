@@ -54,7 +54,6 @@ object Account {
         ToBytes[ActionThresholds].toBytes(a.actionThresholds)
   }
 
-  // TODO: Validate public keys are 32 bytes
   implicit val fromBytesAccount: FromBytes[Account] = new FromBytes[Account] {
     override def fromBytes(bytes: BytesView): Either[FromBytes.Error, (Account, BytesView)] =
       for {
