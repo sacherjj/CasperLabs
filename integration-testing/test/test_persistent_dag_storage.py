@@ -15,7 +15,7 @@ def test_persistent_dag_storage(two_node_network):
     """
     node0, node1 = two_node_network.docker_nodes
     for node in two_node_network.docker_nodes:
-        node.d_client.deploy_and_propose(session_contract=Contract.HELLO_NAME_DEFINE)
+        node.deploy_and_get_block_hash(GENESIS_ACCOUNT, Contract.HELLO_NAME_DEFINE)
 
     two_node_network.stop_cl_node(1)
     two_node_network.start_cl_node(1)
@@ -24,8 +24,8 @@ def test_persistent_dag_storage(two_node_network):
 
     wait_for_connected_to_node(node0, node1.name, timeout, 2)
 
-    hash_string = node0.d_client.deploy_and_propose(
-        session_contract=Contract.HELLO_NAME_DEFINE
+    hash_string = node0.deploy_and_get_block_hash(
+        GENESIS_ACCOUNT, Contract.HELLO_NAME_DEFINE
     )
 
     wait_for_finalised_hash(node0, hash_string, timeout * 2)
@@ -43,12 +43,7 @@ def test_storage_after_multiple_node_deploy_propose_and_shutdown(two_node_networ
     tnn = two_node_network
     node0, node1 = tnn.docker_nodes
     block_hashes = [
-        node.d_client.deploy_and_propose(
-            from_address=GENESIS_ACCOUNT.public_key_hex,
-            public_key=GENESIS_ACCOUNT.public_key_path,
-            private_key=GENESIS_ACCOUNT.private_key_path,
-            session_contract=Contract.HELLO_NAME_DEFINE,
-        )
+        node.deploy_and_get_block_hash(GENESIS_ACCOUNT, Contract.HELLO_NAME_DEFINE)
         for node in (node0, node1)
     ]
 

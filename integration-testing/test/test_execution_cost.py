@@ -181,7 +181,7 @@ def test_not_enough_to_run_session(trillion_payment_node_network):
     )
     assert account1_starting_balance == 10 ** 8
 
-    node0.p_client.deploy(
+    deploy_hash = node0.p_client.deploy(
         from_address=account1.public_key_hex,
         payment_contract=Contract.STANDARD_PAYMENT,
         session_contract=Contract.ENDLESS_LOOP,
@@ -191,16 +191,16 @@ def test_not_enough_to_run_session(trillion_payment_node_network):
         session_args=None,
         payment_args=MAX_PAYMENT_ABI,
     )
-    try:
-        node0.p_client.propose()
-    except Exception as ex:
-        print(ex)
+    result = node0.p_client.client.wait_for_deploy_processed(
+        deploy_hash, on_error_raise=False
+    )
+    last_processing_result = result.processing_results[0]
 
-    latest_blocks = parse_show_blocks(node0.d_client.show_blocks(100))
-    block_hash = latest_blocks[0].summary.block_hash
-    deploy = node0.d_client.show_deploys(block_hash)[0]
-    assert deploy.cost > 0
-    motes = deploy.cost * CONV_RATE
+    cost = last_processing_result.cost
+    assert cost > 0
+
+    motes = cost * CONV_RATE
+    block_hash = last_processing_result.block_info.summary.block_hash.hex()
     account1_balance_after_computation = node0.d_client.get_balance(
         account_address=account1.public_key_hex, block_hash=block_hash
     )
@@ -231,19 +231,18 @@ def test_refund_after_session_code_error(payment_node_network):
         payment_args=ABI.args([ABI.u32("amount", 10 ** 6)])
         # 100 is a revert code.
     )
-    try:
-        node0.p_client.propose()
-    except Exception as ex:
-        print(ex)
+    result = node0.p_client.client.wait_for_deploy_processed(
+        deploy_hash, on_error_raise=False
+    )
+    last_processing_result = result.processing_results[0]
+    block_hash = last_processing_result.block_info.summary.block_hash.hex()
+    cost = last_processing_result.cost
 
-    latest_blocks = parse_show_blocks(node0.d_client.show_blocks(1000))
-    deploy_hash = latest_blocks[0].summary.block_hash
-    deploy = node0.client.show_deploys(deploy_hash)[0]
-    assert deploy.cost == MAX_PAYMENT_COST / CONV_RATE
-    motes = deploy.cost * CONV_RATE
+    assert cost == MAX_PAYMENT_COST / CONV_RATE
+    motes = cost * CONV_RATE
 
     later_balance = node0.client.get_balance(
-        account_address=GENESIS_ACCOUNT.public_key_hex, block_hash=deploy_hash
+        account_address=GENESIS_ACCOUNT.public_key_hex, block_hash=block_hash
     )
 
     expected_sum = later_balance + motes

@@ -23,7 +23,7 @@ impl<K: Eq + Hash, V: AddAssign + Default, S: BuildHasher> AdditiveMap<K, V, S> 
     /// Modifies the existing value stored under `key`, or the default value for `V` if none, by
     /// adding `value_to_add`.
     pub fn insert_add(&mut self, key: K, value_to_add: V) {
-        let current_value = self.0.entry(key).or_insert_with(Default::default);
+        let current_value = self.0.entry(key).or_default();
         *current_value += value_to_add;
     }
 }

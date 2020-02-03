@@ -29,15 +29,11 @@ def mk_expected_string(node, random_token):
 
 
 def test_star_network(star_network):
-    # deploy and propose from one of the star edge nodes.
+    # Deploy on one of the star edge nodes.
     node1 = star_network.docker_nodes[1]
-    block = node1.d_client.deploy_and_propose(
-        from_address=GENESIS_ACCOUNT.public_key_hex,
-        public_key=GENESIS_ACCOUNT.public_key_path,
-        private_key=GENESIS_ACCOUNT.private_key_path,
-        session_contract=Contract.HELLO_NAME_DEFINE,
+    block_hash = node1.deploy_and_get_block_hash(
+        GENESIS_ACCOUNT, Contract.HELLO_NAME_DEFINE
     )
-
-    # validate all nodes get block
+    # Validate all nodes get block.
     for node in star_network.docker_nodes:
-        wait_for_added_block(node, block, node.timeout)
+        wait_for_added_block(node, block_hash, node.timeout)
