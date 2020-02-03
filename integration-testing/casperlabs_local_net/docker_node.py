@@ -218,7 +218,7 @@ class DockerNode(LoggingDockerBase):
         This renders the network name that the docker client should have opened for Python Client connection
         """
         # Networks are created in docker_run_tests.sh.  Must stay in sync.
-        return f"cl-{self.docker_tag}-{self.config.number}"
+        return f"cl-{self.docker_tag}-{self.unique_run_num}-{self.config.number}"
 
     def join_client_network(self) -> None:
         """
