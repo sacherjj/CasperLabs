@@ -58,6 +58,8 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
     }
   }
 
+  implicit def `Message => ValidatedMessage`(m: Message): ValidatedMessage = Validated(m)
+
   /** A fixture based on the Highway one where we won't be using the TestScheduler,
     * just call methods on the `messageExecutor` and override its dependencies to
     * turn validation on/off and capture the effects it carries out.

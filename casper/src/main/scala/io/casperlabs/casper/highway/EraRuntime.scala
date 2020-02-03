@@ -458,7 +458,7 @@ class EraRuntime[F[_]: MonadThrowable: Clock: EraStorage: FinalityStorageReader:
     * This method is always called as a reaction to an incoming message,
     * so it doesn't return a future agenda of its own.
     */
-  def handleMessage(message: Message): HWL[Unit] = {
+  def handleMessage(message: ValidatedMessage): HWL[Unit] = {
     def check(ok: Boolean, error: String) =
       if (ok) noop else MonadThrowable[HWL].raiseError[Unit](new IllegalStateException(error))
 
@@ -553,7 +553,7 @@ class EraRuntime[F[_]: MonadThrowable: Clock: EraStorage: FinalityStorageReader:
     * the logic to make sure no two blocks from the same validator are
     * added concurrently, and that we validate the message according to the
     * rules of this era. */
-  def validateAndAddBlock(messageExecutor: MessageExecutor[F], block: Block): F[Message] =
+  def validateAndAddBlock(messageExecutor: MessageExecutor[F], block: Block): F[ValidatedMessage] =
     for {
       message    <- MonadThrowable[F].fromTry(Message.fromBlock(block))
       maybeError <- validate(message).value
@@ -570,7 +570,7 @@ class EraRuntime[F[_]: MonadThrowable: Clock: EraStorage: FinalityStorageReader:
       semaphore      <- validatorSemaphoreMap.getOrAdd(PublicKey(block.getHeader.validatorPublicKey))
       isBookingBlock <- message.isBookingBlock
       _              <- messageExecutor.validateAndAdd(semaphore, block, isBookingBlock)
-    } yield message
+    } yield Validated(message)
 }
 
 object EraRuntime {

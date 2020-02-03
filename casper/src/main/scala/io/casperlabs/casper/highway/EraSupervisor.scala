@@ -161,7 +161,7 @@ class EraSupervisor[F[_]: Concurrent: Timer: Log: EraStorage: Relaying: ForkChoi
         _ <- Log[F].debug(
               s"Created $kind ${message.messageHash.show -> "message"} in ${message.roundId -> "round"} ${message.eraId.show -> "era"} child of ${message.parentBlock.show -> "parent"}"
             )
-        _ <- messageExecutor.effectsAfterAdded(message)
+        _ <- messageExecutor.effectsAfterAdded(Validated(message))
         _ <- Relaying[F].relay(List(message.messageHash))
         _ <- propagateLatestMessageToDescendantEras(message)
       } yield ()

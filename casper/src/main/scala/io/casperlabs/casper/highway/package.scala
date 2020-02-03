@@ -6,6 +6,7 @@ import cats.data.WriterT
 import cats.effect.Clock
 import io.casperlabs.crypto.Keys.PublicKeyBS
 import io.casperlabs.storage.BlockHash
+import io.casperlabs.models.Message
 import java.time.Instant
 import java.util.concurrent.TimeUnit
 import org.apache.commons.math3.util.ArithmeticUtils
@@ -16,6 +17,7 @@ import shapeless.tag.@@
 package highway {
   sealed trait TimestampTag
   sealed trait TicksTag
+  sealed trait ValidatedTag
 }
 
 package object highway {
@@ -83,4 +85,7 @@ package object highway {
 
   implicit val `Show[BlockHash]` =
     Show.show[BlockHash](PrettyPrinter.buildString(_))
+
+  type ValidatedMessage = Message @@ ValidatedTag
+  def Validated(m: Message) = m.asInstanceOf[ValidatedMessage]
 }

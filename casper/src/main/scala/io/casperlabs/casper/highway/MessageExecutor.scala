@@ -81,7 +81,7 @@ class MessageExecutor[F[_]: Sync: Log: Time: Metrics: BlockStorage: DagStorage: 
     * itself, because that's not supposed to have side effects beyond persistence, and this here can emit events
     * which end up visible to the outside world.
     */
-  def effectsAfterAdded(message: Message): F[Unit] =
+  def effectsAfterAdded(message: ValidatedMessage): F[Unit] =
     for {
       info <- BlockAPI.getBlockInfo[F](
                Base16.encode(message.messageHash.toByteArray),
