@@ -22,7 +22,8 @@ use types::{
         UpdateKeyFailure, Weight,
     },
     bytesrepr::{self, ToBytes},
-    AccessRights, BlockTime, CLType, CLValue, Key, Phase, ProtocolVersion, URef, LOCAL_SEED_LENGTH,
+    AccessRights, BlockTime, CLType, CLValue, Key, Phase, ProtocolVersion, URef,
+    KEY_LOCAL_SEED_LENGTH,
 };
 
 use crate::{
@@ -254,7 +255,7 @@ where
         self.base_key
     }
 
-    pub fn seed(&self) -> [u8; LOCAL_SEED_LENGTH] {
+    pub fn seed(&self) -> [u8; KEY_LOCAL_SEED_LENGTH] {
         match self.base_key {
             Key::Account(bytes) => bytes,
             Key::Hash(bytes) => bytes,
@@ -326,7 +327,7 @@ where
     /// DO NOT EXPOSE THIS VIA THE FFI
     pub fn read_ls_with_seed(
         &mut self,
-        seed: [u8; LOCAL_SEED_LENGTH],
+        seed: [u8; KEY_LOCAL_SEED_LENGTH],
         key_bytes: &[u8],
     ) -> Result<Option<CLValue>, Error> {
         let key = Key::local(seed, key_bytes);

@@ -1,6 +1,5 @@
-//! Home of [`URef`](crate::uref::URef), which represents an unforgeable reference.
-
 use alloc::{format, string::String, vec::Vec};
+use core::fmt::{self, Debug, Display, Formatter};
 
 use base16;
 use hex_fmt::HexFmt;
@@ -10,40 +9,28 @@ use crate::{
     AccessRights, ACCESS_RIGHTS_SERIALIZED_LENGTH,
 };
 
+/// The number of bytes in a [`URef`] address.
 pub const UREF_ADDR_LENGTH: usize = 32;
+
+/// The number of bytes in a serialized [`URef`] where the [`AccessRights`] are not `None`.
 pub const UREF_SERIALIZED_LENGTH: usize =
     UREF_ADDR_LENGTH + OPTION_TAG_SERIALIZED_LENGTH + ACCESS_RIGHTS_SERIALIZED_LENGTH;
 
-/// Represents an unforgeable reference
+/// Represents an unforgeable reference, containing an address in the network's global storage and
+/// the [`AccessRights`] of the reference.
+///
+/// A `URef` can be used to index entities such as [`CLValue`](crate::CLValue)s, or smart contracts.
 #[derive(Copy, Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct URef([u8; UREF_ADDR_LENGTH], Option<AccessRights>);
 
-impl core::fmt::Display for URef {
-    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
-        let addr = self.addr();
-        let access_rights_o = self.access_rights();
-        if let Some(access_rights) = access_rights_o {
-            write!(f, "URef({}, {})", HexFmt(&addr), access_rights)
-        } else {
-            write!(f, "URef({}, None)", HexFmt(&addr))
-        }
-    }
-}
-
-impl core::fmt::Debug for URef {
-    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
-        write!(f, "{}", self)
-    }
-}
-
 impl URef {
-    /// Creates a [`URef`] from an id and access rights.
-    pub fn new(id: [u8; UREF_ADDR_LENGTH], access_rights: AccessRights) -> Self {
-        URef(id, Some(access_rights))
+    /// Constructs a [`URef`] from an address and access rights.
+    pub fn new(address: [u8; UREF_ADDR_LENGTH], access_rights: AccessRights) -> Self {
+        URef(address, Some(access_rights))
     }
 
-    /// Creates a [`URef`] from an id and optional access rights.  [`URef::new`]
-    /// is the preferred constructor for most common use-cases.
+    /// Constructs a [`URef`] from an address and optional access rights.  [`URef::new`] is the
+    /// preferred constructor for most common use-cases.
     #[cfg(any(test, feature = "gens"))]
     pub(crate) fn unsafe_new(
         id: [u8; UREF_ADDR_LENGTH],
@@ -52,26 +39,28 @@ impl URef {
         URef(id, maybe_access_rights)
     }
 
-    /// Returns the address of this URef.
+    /// Returns the address of this [`URef`].
     pub fn addr(&self) -> [u8; UREF_ADDR_LENGTH] {
         self.0
     }
 
-    /// Returns the access rights of this URef.
+    /// Returns the access rights of this [`URef`].
     pub fn access_rights(&self) -> Option<AccessRights> {
         self.1
     }
 
-    /// Returns a new URef with updated access rights.
+    /// Returns a new [`URef`] with the same address and updated access rights.
     pub fn with_access_rights(self, access_rights: AccessRights) -> Self {
         URef(self.0, Some(access_rights))
     }
 
-    /// Removes the access rights from this URef.
+    /// Removes the access rights from this [`URef`].
     pub fn remove_access_rights(self) -> Self {
         URef(self.0, None)
     }
 
+    /// Returns `true` if the access rights are `Some` and
+    /// [`is_readable`](AccessRights::is_readable) is `true` for them.
     pub fn is_readable(self) -> bool {
         if let Some(access_rights) = self.1 {
             access_rights.is_readable()
@@ -80,14 +69,19 @@ impl URef {
         }
     }
 
+    /// Returns a new [`URef`] with the same address and [`AccessRights::READ`] permission.
     pub fn into_read(self) -> URef {
         URef(self.0, Some(AccessRights::READ))
     }
 
+    /// Returns a new [`URef`] with the same address and [`AccessRights::READ_ADD_WRITE`]
+    /// permission.
     pub fn into_read_add_write(self) -> URef {
         URef(self.0, Some(AccessRights::READ_ADD_WRITE))
     }
 
+    /// Returns `true` if the access rights are `Some` and
+    /// [`is_writeable`](AccessRights::is_writeable) is `true` for them.
     pub fn is_writeable(self) -> bool {
         if let Some(access_rights) = self.1 {
             access_rights.is_writeable()
@@ -96,6 +90,8 @@ impl URef {
         }
     }
 
+    /// Returns `true` if the access rights are `Some` and [`is_addable`](AccessRights::is_addable)
+    /// is `true` for them.
     pub fn is_addable(self) -> bool {
         if let Some(access_rights) = self.1 {
             access_rights.is_addable()
@@ -104,8 +100,8 @@ impl URef {
         }
     }
 
-    /// Formats address and its access rights in an unique way that could be
-    /// used as a name when storing given uref in a global state.
+    /// Formats the address and access rights of the [`URef`] in an unique way that could be used as
+    /// a name when storing the given `URef` in a global state.
     pub fn as_string(&self) -> String {
         // Extract bits as numerical value, with no flags marked as 0.
         let access_rights_bits = self
@@ -119,6 +115,24 @@ impl URef {
             base16::encode_lower(&self.addr()),
             access_rights_bits
         )
+    }
+}
+
+impl Display for URef {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        let addr = self.addr();
+        let access_rights_o = self.access_rights();
+        if let Some(access_rights) = access_rights_o {
+            write!(f, "URef({}, {})", HexFmt(&addr), access_rights)
+        } else {
+            write!(f, "URef({}, None)", HexFmt(&addr))
+        }
+    }
+}
+
+impl Debug for URef {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(f, "{}", self)
     }
 }
 

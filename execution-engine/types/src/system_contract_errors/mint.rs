@@ -1,4 +1,5 @@
-/// Implementation of error codes that are shared between contract implementation and FFI.
+//! Home of the Mint contract's [`Error`] type.
+
 use alloc::{fmt, vec::Vec};
 use core::convert::{TryFrom, TryInto};
 
@@ -9,26 +10,32 @@ use crate::{
     AccessRights, CLType, CLTyped,
 };
 
-/// An enum error that is capable of carrying a value across FFI-Host boundary.
+/// Errors which can occur while executing the Mint contract.
 #[derive(Fail, Debug, Copy, Clone, PartialEq, Eq)]
 #[repr(u8)]
 pub enum Error {
+    /// Insufficient funds to complete the transfer.
     #[fail(display = "Insufficient funds")]
     InsufficientFunds = 0,
+    /// Source purse not found.
     #[fail(display = "Source not found")]
     SourceNotFound = 1,
+    /// Destination purse not found.
     #[fail(display = "Destination not found")]
     DestNotFound = 2,
-    /// See [`PurseIdError::InvalidURef`]
+    /// See [`PurseIdError::InvalidURef`].
     #[fail(display = "Invalid URef")]
     InvalidURef = 3,
-    /// See [`PurseIdError::InvalidAccessRights`]
+    /// See [`PurseIdError::InvalidAccessRights`].
     #[fail(display = "Invalid AccessRights")]
     InvalidAccessRights = 4,
+    /// Tried to create a new purse with a non-zero initial balance.
     #[fail(display = "Invalid non-empty purse creation")]
     InvalidNonEmptyPurseCreation = 5,
+    /// A required argument wasn't passed to the Mint contract.
     #[fail(display = "Missing argument")]
     MissingArgument = 102,
+    /// An argument passed to the Mint contract didn't parse correctly.
     #[fail(display = "Passed argument is invalid")]
     InvalidArgument = 103,
 }
@@ -53,9 +60,12 @@ impl CLTyped for Error {
     }
 }
 
-/// The error type returned when construction from `u8` fails
+// This error type is not intended to be used by third party crates.
+#[doc(hidden)]
 pub struct TryFromU8ForError(());
 
+// This conversion is not intended to be used by third party crates.
+#[doc(hidden)]
 impl TryFrom<u8> for Error {
     type Error = TryFromU8ForError;
 
@@ -95,9 +105,15 @@ impl FromBytes for Error {
     }
 }
 
+/// Errors relating to validity of source or destination purses.
 #[derive(Debug, Copy, Clone)]
 pub enum PurseIdError {
+    /// The given [`URef`](crate::URef) does not reference the account holder's purse, or such a
+    /// [`URef`](crate::URef) does not have the required [`AccessRights`].
     InvalidURef,
+    /// The source purse is not writeable (see [`URef::is_writeable`](crate::URef::is_writeable)),
+    /// or the destination purse is not addable (see
+    /// [`URef::is_addable`](crate::URef::is_addable)).
     InvalidAccessRights(Option<AccessRights>),
 }
 

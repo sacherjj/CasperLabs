@@ -1,36 +1,46 @@
-//! Home of [`AccessRights`](crate::access_rights::AccessRights), which represents the access rights
-//! of a [`URef`](crate::uref::URef).
-
 use alloc::vec::Vec;
 
 use bitflags::bitflags;
 
 use crate::bytesrepr;
 
+/// The number of bytes in a serialized [`AccessRights`].
 pub const ACCESS_RIGHTS_SERIALIZED_LENGTH: usize = 1;
 
 bitflags! {
+    /// A struct which behaves like a set of bitflags to define access rights associated with a
+    /// [`URef`](crate::URef).
     #[allow(clippy::derive_hash_xor_eq)]
     pub struct AccessRights: u8 {
+        /// Permission to read the value under the associated `URef`.
         const READ  = 0b001;
+        /// Permission to write a value under the associated `URef`.
         const WRITE = 0b010;
+        /// Permission to add to the value under the associated `URef`.
         const ADD   = 0b100;
+        /// Permission to read or add to the value under the associated `URef`.
         const READ_ADD       = Self::READ.bits | Self::ADD.bits;
+        /// Permission to read or write the value under the associated `URef`.
         const READ_WRITE     = Self::READ.bits | Self::WRITE.bits;
+        /// Permission to add to, or write the value under the associated `URef`.
         const ADD_WRITE      = Self::ADD.bits  | Self::WRITE.bits;
+        /// Permission to read, add to, or write the value under the associated `URef`.
         const READ_ADD_WRITE = Self::READ.bits | Self::ADD.bits | Self::WRITE.bits;
     }
 }
 
 impl AccessRights {
+    /// Returns `true` if the `READ` flag is set.
     pub fn is_readable(self) -> bool {
         self & AccessRights::READ == AccessRights::READ
     }
 
+    /// Returns `true` if the `WRITE` flag is set.
     pub fn is_writeable(self) -> bool {
         self & AccessRights::WRITE == AccessRights::WRITE
     }
 
+    /// Returns `true` if the `ADD` flag is set.
     pub fn is_addable(self) -> bool {
         self & AccessRights::ADD == AccessRights::ADD
     }

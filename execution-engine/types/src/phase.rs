@@ -1,6 +1,3 @@
-//! Home of [`Phase`](crate::Phase), which represents the phase in which a given contract
-//! is executing.
-
 // Can be removed once https://github.com/rust-lang/rustfmt/issues/3362 is resolved.
 #[rustfmt::skip]
 use alloc::vec;
@@ -14,14 +11,20 @@ use crate::{
     CLType, CLTyped,
 };
 
+/// The number of bytes in a serialized [`Phase`].
 pub const PHASE_SERIALIZED_LENGTH: usize = 1;
 
+/// The phase in which a given contract is executing.
 #[derive(Debug, PartialEq, Eq, Clone, Copy, FromPrimitive, ToPrimitive)]
 #[repr(u8)]
 pub enum Phase {
+    /// Set while committing the genesis or upgrade configurations.
     System = 0,
+    /// Set while executing the payment code of a deploy.
     Payment = 1,
+    /// Set while executing the session code of a deploy.
     Session = 2,
+    /// Set while finalizing payment at the end of a deploy.
     FinalizePayment = 3,
 }
 

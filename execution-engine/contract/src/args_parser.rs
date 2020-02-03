@@ -1,5 +1,4 @@
-//! Home of [`ArgsParser`](crate::args_parser::ArgsParser), a trait used for parsing contract
-//! arguments from n-ary tuples.
+//! Home of [`ArgsParser`], a trait used for parsing contract arguments from n-ary tuples.
 
 // Can be removed once https://github.com/rust-lang/rustfmt/issues/3362 is resolved.
 #[rustfmt::skip]
@@ -17,6 +16,7 @@ use casperlabs_types::{
 /// It is primarily implemented for n-ary tuples of values which themselves implement [`ToBytes`]
 /// and [`CLTyped`].
 pub trait ArgsParser {
+    /// Parses the arguments to a `Vec` of [`CLValue`]s.
     fn parse(self) -> Result<Vec<CLValue>, CLValueError>;
 
     #[doc(hidden)]

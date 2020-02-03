@@ -1,3 +1,5 @@
+//! Contains [`ApiError`] and associated helper functions.
+
 use core::{
     fmt::{self, Debug, Formatter},
     u16, u8,
@@ -25,13 +27,277 @@ const POS_ERROR_OFFSET: u32 = RESERVED_ERROR_MAX - u8::MAX as u32; // 65280..=65
 /// added to them when being converted to a `u32`.
 const MINT_ERROR_OFFSET: u32 = (POS_ERROR_OFFSET - 1) - u8::MAX as u32; // 65024..=65279
 
-/// Variants to be passed to `runtime::revert()`.
+/// Errors which can be encountered while running a smart contract.
 ///
-/// Variants other than `Error::User` will represent a `u32` in the range `(0, u16::MAX]`, while
-/// `Error::User` will represent a `u32` in the range `(u16::MAX, 2 * u16::MAX + 1]`.
+/// An `ApiError` can be converted to a `u32` in order to be passed via the execution engine's
+/// `ext_ffi::revert()` function.  This means the information each variant can convey is limited.
+///
+/// The variants are split into numeric ranges as follows:
+///
+/// | Inclusive range | Variant(s)                                   |
+/// | ----------------| ---------------------------------------------|
+/// | [1, 65023]      | all except `Mint`, `ProofOfStake` and `User` |
+/// | [65024, 65279]  | `Mint`                                       |
+/// | [65280, 65535]  | `ProofOfStake`                               |
+/// | [65536, 131071] | `User`                                       |
+///
+/// ## Mappings
+///
+/// The expanded mapping of all variants to their numerical equivalents is as follows:
+/// ```
+/// # use casperlabs_types::ApiError::{self, *};
+/// # macro_rules! show_and_check {
+/// #     ($lhs:literal => $rhs:expr) => {
+/// #         assert_eq!($lhs as u32, ApiError::from($rhs).into());
+/// #     };
+/// # }
+/// // General system errors:
+/// # show_and_check!(
+/// 1 => None
+/// # );
+/// # show_and_check!(
+/// 2 => MissingArgument
+/// # );
+/// # show_and_check!(
+/// 3 => InvalidArgument
+/// # );
+/// # show_and_check!(
+/// 4 => Deserialize
+/// # );
+/// # show_and_check!(
+/// 5 => Read
+/// # );
+/// # show_and_check!(
+/// 6 => ValueNotFound
+/// # );
+/// # show_and_check!(
+/// 7 => ContractNotFound
+/// # );
+/// # show_and_check!(
+/// 8 => GetKey
+/// # );
+/// # show_and_check!(
+/// 9 => UnexpectedKeyVariant
+/// # );
+/// # show_and_check!(
+/// 10 => UnexpectedValueVariant
+/// # );
+/// # show_and_check!(
+/// 11 => UnexpectedContractRefVariant
+/// # );
+/// # show_and_check!(
+/// 12 => InvalidPurseName
+/// # );
+/// # show_and_check!(
+/// 13 => InvalidPurse
+/// # );
+/// # show_and_check!(
+/// 14 => UpgradeContractAtURef
+/// # );
+/// # show_and_check!(
+/// 15 => Transfer
+/// # );
+/// # show_and_check!(
+/// 16 => NoAccessRights
+/// # );
+/// # show_and_check!(
+/// 17 => ValueConversion
+/// # );
+/// # show_and_check!(
+/// 18 => CLTypeMismatch
+/// # );
+/// # show_and_check!(
+/// 19 => EarlyEndOfStream
+/// # );
+/// # show_and_check!(
+/// 20 => FormattingError
+/// # );
+/// # show_and_check!(
+/// 21 => LeftOverBytes
+/// # );
+/// # show_and_check!(
+/// 22 => OutOfMemoryError
+/// # );
+/// # show_and_check!(
+/// 23 => MaxKeysLimit
+/// # );
+/// # show_and_check!(
+/// 24 => DuplicateKey
+/// # );
+/// # show_and_check!(
+/// 25 => PermissionDenied
+/// # );
+/// # show_and_check!(
+/// 26 => MissingKey
+/// # );
+/// # show_and_check!(
+/// 27 => ThresholdViolation
+/// # );
+/// # show_and_check!(
+/// 28 => KeyManagementThresholdError
+/// # );
+/// # show_and_check!(
+/// 29 => DeploymentThresholdError
+/// # );
+/// # show_and_check!(
+/// 30 => PermissionDeniedError
+/// # );
+/// # show_and_check!(
+/// 31 => InsufficientTotalWeight
+/// # );
+/// # show_and_check!(
+/// 32 => InvalidSystemContract
+/// # );
+/// # show_and_check!(
+/// 33 => PurseNotCreated
+/// # );
+/// # show_and_check!(
+/// 34 => Unhandled
+/// # );
+/// # show_and_check!(
+/// 35 => BufferTooSmall
+/// # );
+/// # show_and_check!(
+/// 36 => HostBufferEmpty
+/// # );
+/// # show_and_check!(
+/// 37 => HostBufferFull
+/// # );
+///
+/// // Mint errors:
+/// use casperlabs_types::system_contract_errors::mint::Error as MintError;
+/// # show_and_check!(
+/// 65_024 => MintError::InsufficientFunds
+/// # );
+/// # show_and_check!(
+/// 65_025 => MintError::SourceNotFound
+/// # );
+/// # show_and_check!(
+/// 65_026 => MintError::DestNotFound
+/// # );
+/// # show_and_check!(
+/// 65_027 => MintError::InvalidURef
+/// # );
+/// # show_and_check!(
+/// 65_028 => MintError::InvalidAccessRights
+/// # );
+/// # show_and_check!(
+/// 65_029 => MintError::InvalidNonEmptyPurseCreation
+/// # );
+/// # show_and_check!(
+/// 65_126 => MintError::MissingArgument
+/// # );
+/// # show_and_check!(
+/// 65_127 => MintError::InvalidArgument
+/// # );
+///
+/// // Proof of stake errors:
+/// use casperlabs_types::system_contract_errors::pos::Error as PosError;
+/// # show_and_check!(
+/// 65_280 => PosError::NotBonded
+/// # );
+/// # show_and_check!(
+/// 65_281 => PosError::TooManyEventsInQueue
+/// # );
+/// # show_and_check!(
+/// 65_282 => PosError::CannotUnbondLastValidator
+/// # );
+/// # show_and_check!(
+/// 65_283 => PosError::SpreadTooHigh
+/// # );
+/// # show_and_check!(
+/// 65_284 => PosError::MultipleRequests
+/// # );
+/// # show_and_check!(
+/// 65_285 => PosError::BondTooSmall
+/// # );
+/// # show_and_check!(
+/// 65_286 => PosError::BondTooLarge
+/// # );
+/// # show_and_check!(
+/// 65_287 => PosError::UnbondTooLarge
+/// # );
+/// # show_and_check!(
+/// 65_288 => PosError::BondTransferFailed
+/// # );
+/// # show_and_check!(
+/// 65_289 => PosError::UnbondTransferFailed
+/// # );
+/// # show_and_check!(
+/// 65_290 => PosError::MissingArgument
+/// # );
+/// # show_and_check!(
+/// 65_291 => PosError::InvalidArgument
+/// # );
+/// # show_and_check!(
+/// 65_292 => PosError::TimeWentBackwards
+/// # );
+/// # show_and_check!(
+/// 65_293 => PosError::StakesNotFound
+/// # );
+/// # show_and_check!(
+/// 65_294 => PosError::PaymentPurseNotFound
+/// # );
+/// # show_and_check!(
+/// 65_295 => PosError::PaymentPurseKeyUnexpectedType
+/// # );
+/// # show_and_check!(
+/// 65_296 => PosError::PaymentPurseBalanceNotFound
+/// # );
+/// # show_and_check!(
+/// 65_297 => PosError::BondingPurseNotFound
+/// # );
+/// # show_and_check!(
+/// 65_298 => PosError::BondingPurseKeyUnexpectedType
+/// # );
+/// # show_and_check!(
+/// 65_299 => PosError::RefundPurseKeyUnexpectedType
+/// # );
+/// # show_and_check!(
+/// 65_300 => PosError::RewardsPurseNotFound
+/// # );
+/// # show_and_check!(
+/// 65_301 => PosError::RewardsPurseKeyUnexpectedType
+/// # );
+/// # show_and_check!(
+/// 65_302 => PosError::StakesKeyDeserializationFailed
+/// # );
+/// # show_and_check!(
+/// 65_303 => PosError::StakesDeserializationFailed
+/// # );
+/// # show_and_check!(
+/// 65_304 => PosError::SystemFunctionCalledByUserAccount
+/// # );
+/// # show_and_check!(
+/// 65_305 => PosError::InsufficientPaymentForAmountSpent
+/// # );
+/// # show_and_check!(
+/// 65_306 => PosError::FailedTransferToRewardsPurse
+/// # );
+/// # show_and_check!(
+/// 65_307 => PosError::FailedTransferToAccountPurse
+/// # );
+/// # show_and_check!(
+/// 65_308 => PosError::SetRefundPurseCalledOutsidePayment
+/// # );
+///
+/// // User-defined errors:
+/// # show_and_check!(
+/// 65_536 => User(0)
+/// # );
+/// # show_and_check!(
+/// 65_537 => User(1)
+/// # );
+/// # show_and_check!(
+/// 65_538 => User(2)
+/// # );
+/// # show_and_check!(
+/// 131_071 => User(u16::max_value())
+/// # );
+/// ```
 ///
 /// Users can specify a C-style enum and implement `From` to ease usage of
-/// `runtime::revert()`, e.g.
+/// `casperlabs_contract::runtime::revert()`, e.g.
 /// ```
 /// use casperlabs_types::ApiError;
 ///
@@ -62,78 +328,86 @@ pub enum ApiError {
     InvalidArgument,
     /// Failed to deserialize a value.
     Deserialize,
-    /// `read` returned an error.
+    /// `casperlabs_contract::storage::read()` returned an error.
     Read,
     /// The given key returned a `None` value.
     ValueNotFound,
     /// Failed to find a specified contract.
     ContractNotFound,
-    /// A call to `get_key()` returned a failure.
+    /// A call to `casperlabs_contract::runtime::get_key()` returned a failure.
     GetKey,
-    /// The `Key` variant was not as expected.
+    /// The [`Key`](crate::Key) variant was not as expected.
     UnexpectedKeyVariant,
     /// The `Value` variant was not as expected.
     UnexpectedValueVariant,
-    /// The `ContractRef` variant was not as expected.
+    /// The [`ContractRef`](crate::ContractRef) variant was not as expected.
     UnexpectedContractRefVariant,
     /// Invalid purse name given.
     InvalidPurseName,
     /// Invalid purse retrieved.
     InvalidPurse,
-    /// Failed to upgrade contract at URef.
+    /// Failed to upgrade contract at [`URef`](crate::URef).
     UpgradeContractAtURef,
     /// Failed to transfer motes.
     Transfer,
-    /// No access rights.
+    /// The given [`URef`](crate::URef) has no access rights.
     NoAccessRights,
-    /// A given type could be derived from a `Value`.
+    /// A given type could not be constructed from a `Value`.
     ValueConversion,
-    /// A given type could be derived from a `CLValue`.
+    /// A given type could not be constructed from a [`CLValue`](crate::CLValue).
     CLTypeMismatch,
-    /// Early end of stream when deserializing.
+    /// Early end of stream while deserializing.
     EarlyEndOfStream,
-    /// Formatting error.
+    /// Formatting error while deserializing.
     FormattingError,
-    /// Leftover bytes.
+    /// Not all input bytes were consumed in [`deserialize`](crate::bytesrepr::deserialize).
     LeftOverBytes,
     /// Out of memory error.
     OutOfMemoryError,
-    /// Unable to add new associated key because maximum amount of keys is reached.
+    /// There are already [`MAX_ASSOCIATED_KEYS`](crate::account::MAX_ASSOCIATED_KEYS)
+    /// [`PublicKey`](crate::account::PublicKey)s associated with the given account.
     MaxKeysLimit,
-    /// Unable to add new associated key because given key already exists.
+    /// The given [`PublicKey`](crate::account::PublicKey) is already associated with the given
+    /// account.
     DuplicateKey,
-    /// Unable to add/update/remove new associated key due to insufficient permissions.
+    /// Unable to add/update/remove new associated [`PublicKey`](crate::account::PublicKey) due to
+    /// insufficient permissions.
     PermissionDenied,
-    /// Unable to update/remove a key that does exist.
+    /// The given [`PublicKey`](crate::account::PublicKey) is not associated with the given
+    /// account.
     MissingKey,
-    /// Unable to update/remove a key which would violate action threshold constraints.
+    /// Removing/updating the given associated [`PublicKey`](crate::account::PublicKey) would cause
+    /// the total [`Weight`](crate::account::Weight) of all remaining `PublicKey`s to fall below
+    /// one of the action thresholds for the given account.
     ThresholdViolation,
-    /// New threshold should be lower or equal than deployment threshold.
+    /// Setting the key-management threshold to a value lower than the deployment threshold is
+    /// disallowed.
     KeyManagementThresholdError,
-    /// New threshold should be lower or equal than key management threshold.
+    /// Setting the deployment threshold to a value greater than any other threshold is disallowed.
     DeploymentThresholdError,
-    /// Unable to set action threshold due to insufficient permissions.
+    /// Caller doesn't have sufficient permissions to perform the given action.
     PermissionDeniedError,
-    /// New threshold should be lower or equal than total weight of associated keys.
+    /// Setting a threshold to a value greater than the total weight of associated keys is
+    /// disallowed.
     InsufficientTotalWeight,
-    /// Returns when contract tries to obtain URef to a system contract that does not exist.
+    /// The given `u32` doesn't map to a [`SystemContractType`](crate::SystemContractType).
     InvalidSystemContract,
     /// Failed to create a new purse.
     PurseNotCreated,
     /// An unhandled value, likely representing a bug in the code.
     Unhandled,
-    /// Passing a buffer of a size that is too small to complete an operation
+    /// The provided buffer is too small to complete an operation.
     BufferTooSmall,
     /// No data available in the host buffer.
     HostBufferEmpty,
-    /// Data in the host buffer is full and should be consumed first by read operation
+    /// The host buffer has been set to a value and should be consumed first by a read operation.
     HostBufferFull,
     /// Error specific to Mint contract.
     Mint(u8),
     /// Error specific to Proof of Stake contract.
     ProofOfStake(u8),
-    /// User-specified value.  The internal `u16` value is added to `u16::MAX as u32 + 1` when an
-    /// `Error::User` is converted to a `u32`.
+    /// User-specified error code.  The internal `u16` value is added to `u16::MAX as u32 + 1` when
+    /// an `Error::User` is converted to a `u32`.
     User(u16),
 }
 
@@ -200,6 +474,8 @@ impl From<CLValueError> for ApiError {
     }
 }
 
+// This conversion is not intended to be used by third party crates.
+#[doc(hidden)]
 impl From<TryFromIntError> for ApiError {
     fn from(_error: TryFromIntError) -> Self {
         ApiError::Unhandled
@@ -323,6 +599,8 @@ impl Debug for ApiError {
     }
 }
 
+// This function is not intended to be used by third party crates.
+#[doc(hidden)]
 pub fn i32_from(result: Result<(), ApiError>) -> i32 {
     match result {
         Ok(()) => 0,
@@ -330,6 +608,9 @@ pub fn i32_from(result: Result<(), ApiError>) -> i32 {
     }
 }
 
+/// Converts an `i32` to a `Result<(), ApiError>`, where `0` represents `Ok(())`, and all other
+/// inputs are mapped to `Err(ApiError::<variant>)`.  The full list of mappings can be found in the
+/// [docs for `ApiError`](ApiError#mappings).
 pub fn result_from(value: i32) -> Result<(), ApiError> {
     match value {
         0 => Ok(()),

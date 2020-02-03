@@ -1,4 +1,4 @@
-//! Command line tool for creating a Wasm contract and tests for use on the CasperLabs network.
+//! Command line tool for creating a Wasm contract and tests for use on the CasperLabs Platform.
 
 #![deny(warnings)]
 
@@ -18,7 +18,7 @@ mod tests_package;
 const APP_NAME: &str = "cargo-casperlabs";
 const ABOUT: &str =
     "A command line tool for creating a Wasm contract and tests at <path> for use on the \
-     CasperLabs network.";
+     CasperLabs Platform.";
 const TOOLCHAIN: &str = "nightly-2020-01-08";
 
 const ROOT_PATH_ARG_NAME: &str = "path";

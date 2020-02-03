@@ -1,20 +1,22 @@
-//! Home of [`BlockTime`](crate::block_time::BlockTime), an internal type used in the execution of
-//! contracts.
-
 use alloc::vec::Vec;
 
 use crate::bytesrepr::{Error, FromBytes, ToBytes, U64_SERIALIZED_LENGTH};
 
+/// The number of bytes in a serialized [`BlockTime`].
 pub const BLOCKTIME_SERIALIZED_LENGTH: usize = U64_SERIALIZED_LENGTH;
 
+/// A newtype wrapping a [`u64`] which represents the block time.
 #[derive(Clone, Copy, Default, Debug, PartialEq, Eq, PartialOrd)]
 pub struct BlockTime(u64);
 
 impl BlockTime {
+    /// Constructs a `BlockTime`.
     pub fn new(value: u64) -> Self {
         BlockTime(value)
     }
 
+    /// Saturating integer subtraction. Computes `self - other`, saturating at `0` instead of
+    /// overflowing.
     pub fn saturating_sub(self, other: BlockTime) -> Self {
         BlockTime(self.0.saturating_sub(other.0))
     }
