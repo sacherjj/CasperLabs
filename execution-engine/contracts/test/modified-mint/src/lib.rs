@@ -4,11 +4,8 @@ extern crate alloc;
 
 use alloc::string::String;
 
-use contract::{
-    contract_api::{runtime, storage, TURef},
-    unwrap_or_revert::UnwrapOrRevert,
-};
-use mint_token::{mint::Mint, CLMint};
+use contract::{contract_api::runtime, unwrap_or_revert::UnwrapOrRevert};
+use mint_token::{CLMint, Mint};
 use types::{system_contract_errors::mint::Error, ApiError, CLValue, URef, U512};
 
 const VERSION: &str = "1.1.0";
@@ -32,7 +29,9 @@ pub fn delegate() {
         }
 
         "create" => {
-            let uref = mint.create();
+            let uref = mint
+                .mint(U512::zero())
+                .expect("Creating a zero balance purse should always be allowed.");
             let ret = CLValue::from_t(uref).unwrap_or_revert();
             runtime::ret(ret)
         }
@@ -41,12 +40,7 @@ pub fn delegate() {
             let uref: URef = runtime::get_arg(1)
                 .unwrap_or_revert_with(ApiError::MissingArgument)
                 .unwrap_or_revert_with(ApiError::InvalidArgument);
-            let balance_uref: TURef<U512> = match mint.lookup(uref) {
-                Some(uref) if uref.access_rights().is_some() => TURef::from_uref(uref).unwrap(),
-                Some(_) => runtime::revert(ApiError::NoAccessRights),
-                None => runtime::revert(ApiError::ValueNotFound),
-            };
-            let balance: Option<U512> = storage::read(balance_uref).unwrap_or_default();
+            let balance: Option<U512> = mint.balance(uref).unwrap_or_revert();
             let ret = CLValue::from_t(balance).unwrap_or_revert();
             runtime::ret(ret)
         }
