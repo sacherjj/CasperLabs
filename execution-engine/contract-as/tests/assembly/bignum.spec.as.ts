@@ -1,7 +1,7 @@
 import { hex2bin } from "../utils/helpers";
 import { U512 } from "../../assembly/bignum";
+import { Pair } from "../../assembly/pair";
 import { checkArraysEqual } from "../../assembly/utils";
-import { fromBytesU64 } from "../../assembly/bytesrepr";
 import { arrayToTyped, typedToArray } from "../../assembly/utils";
 
 export function testBigNum512Arith(): bool {
@@ -161,10 +161,12 @@ export function testDivision(): bool {
     let rand = U512.fromHex("6fdf77a12c44899b8456d394e555ac9b62af0b0e70b79c8f8aa3837116c8c2a5");
 
     assert(rand.bits() != 0);
-    let res1 = u512Max.divMod(rand);
-    assert(res1 !== null);
+    let maybeRes1 = u512Max.divMod(rand);
+    assert(maybeRes1 !== null);
+    let res1 = <Pair<U512, U512>>(maybeRes1);
 
     // result
+    
     assert(res1.first.toString(), "249cebb32c9a2f0d1375ddc28138b727428ed6c66f4ca9f0abeb231cff6df7ec7");
     // remainder
     assert(res1.second.toString(), "4d4edcc2e5e0a5416119b88b280018b1b79ffbd0891ae622ee7a6d895e687bbc");
@@ -184,7 +186,9 @@ export function testDivision(): bool {
     assert(ten.divMod(zero) === null);
 
     while (u512Max > zero) {
-        let res = u512Max.divMod(ten);
+        let maybeRes = u512Max.divMod(ten);
+        assert(maybeRes !== null);
+        let res = <Pair<U512, U512>>(maybeRes);
         base10 = res.second.toString() + base10;
         u512Max = res.first;
     }

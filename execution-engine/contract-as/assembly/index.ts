@@ -36,7 +36,7 @@ export function getArgSize(i: u32): U32 | null {
   if (ret > 0) {
     return null;
   }
-  return <U32>size[0];
+  return changetype<U32>(size[0]);
 }
 
 export function getArg(i: u32): Uint8Array | null {
@@ -44,7 +44,7 @@ export function getArg(i: u32): Uint8Array | null {
   if (arg_size === null) {
     return null;
   }
-  let arg_size_u32 = <u32>(arg_size);
+  let arg_size_u32 = changetype<u32>(arg_size);
   let data = new Uint8Array(arg_size_u32);
   let ret = externals.get_arg(i, data.dataStart, arg_size_u32);
   if (ret > 0) {
@@ -172,7 +172,7 @@ export function transferToAccount(target: Uint8Array, amount: U512): U32 | null 
   );
 
   if (ret <= 1) {
-    return <U32>ret;
+    return changetype<U32>(ret);
   }
   else {
     return null;

@@ -241,14 +241,14 @@ export class U512 {
     div(other: U512): U512 {
         let divModResult = this.divMod(other);
         assert(divModResult !== null);
-        return divModResult.first;
+        return (<Pair<U512, U512>>divModResult).first;
     }
 
     @operator("%")
     rem(other: U512): U512 {
         let divModResult = this.divMod(other);
         assert(divModResult !== null);
-        return divModResult.second;
+        return (<Pair<U512, U512>>divModResult).second;
     }
 
     @operator("<<")

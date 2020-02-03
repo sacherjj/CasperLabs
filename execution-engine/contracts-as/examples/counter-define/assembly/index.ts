@@ -53,7 +53,7 @@ export function counter_ext(): void {
             return;
         }
         
-        let returnValue = CLValue.fromI32(<i32>valueI32);
+        let returnValue = CLValue.fromI32(changetype<i32>(valueI32));
         ret(returnValue);
     }
     else {
