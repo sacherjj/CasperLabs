@@ -965,7 +965,7 @@ where
             Default::default(),
         );
 
-        // `[ExecutionResultBuilder]` handles merging of multiple execution results
+        // [`ExecutionResultBuilder`] handles merging of multiple execution results
         let mut execution_result_builder = execution_result::ExecutionResultBuilder::new();
 
         // Execute provided payment code

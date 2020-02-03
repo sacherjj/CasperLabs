@@ -76,8 +76,8 @@ impl AssociatedKeys {
     ///
     /// This method is not concerned about uniqueness of the passed iterable.
     /// Uniqueness is determined based on the input collection properties,
-    /// which is either BTreeSet (in `[AssociatedKeys::calculate_keys_weight]`)
-    /// or BTreeMap (in `[AssociatedKeys::total_keys_weight]`).
+    /// which is either BTreeSet (in [`AssociatedKeys::calculate_keys_weight`])
+    /// or BTreeMap (in [`AssociatedKeys::total_keys_weight`]).
     fn calculate_any_keys_weight<'a>(&self, keys: impl Iterator<Item = &'a PublicKey>) -> Weight {
         let total = keys
             .filter_map(|key| self.0.get(key))

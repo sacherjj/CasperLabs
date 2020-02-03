@@ -364,6 +364,7 @@ class OneNodeNetworkWithChainspecUpgrades(OneNodeNetwork):
         "modified_system_upgrader.wasm",
         "pos_install.wasm",
     )
+    auto_propose = True
 
     def __init__(
         self,
@@ -424,12 +425,13 @@ class ReadOnlyNodeNetwork(OneNodeNetwork):
 class PaymentNodeNetwork(OneNodeNetwork):
     """ A single node network with payment code enabled"""
 
-    pass
+    auto_propose = True
 
 
 class TrillionPaymentNodeNetwork(OneNodeNetwork):
     """ A single node network with payment code enabled"""
 
+    auto_propose = True
     initial_motes = (
         MAX_PAYMENT_COST * 100 * 1000
     )  # 10 millions * 100 * 1000 =  billion motes * 1000 = trillion
@@ -443,6 +445,7 @@ class PaymentNodeNetworkWithNoMinBalance(OneNodeNetwork):
 
 class OneNodeWithGRPCEncryption(OneNodeNetwork):
     grpc_encryption = True
+    auto_propose = True
 
 
 class OneNodeWithAutoPropose(OneNodeNetwork):
@@ -464,6 +467,8 @@ class OneNodeWithClarity(OneNodeNetwork):
 
 
 class TwoNodeNetwork(CasperLabsNetwork):
+    auto_propose = True
+
     def create_cl_network(self):
         kp = self.get_key()
         config = DockerConfig(
@@ -473,6 +478,7 @@ class TwoNodeNetwork(CasperLabsNetwork):
             network=self.create_docker_network(),
             node_account=kp,
             grpc_encryption=self.grpc_encryption,
+            auto_propose=self.auto_propose,
         )
         self.add_bootstrap(config)
         self.add_new_node_to_network()
@@ -529,6 +535,7 @@ class TwoNodeWithDifferentAccountsCSVNetwork(CasperLabsNetwork):
 
 class EncryptedTwoNodeNetwork(TwoNodeNetwork):
     grpc_encryption = True
+    auto_propose = True
 
 
 class InterceptedOneNodeNetwork(OneNodeNetwork):
@@ -552,6 +559,7 @@ class InterceptedOneNodeNetwork(OneNodeNetwork):
 class InterceptedTwoNodeNetwork(TwoNodeNetwork):
     grpc_encryption = True
     behind_proxy = True
+    auto_propose = True
 
     def create_cl_network(self):
         kp = self.get_key()
@@ -563,6 +571,7 @@ class InterceptedTwoNodeNetwork(TwoNodeNetwork):
             node_account=kp,
             grpc_encryption=self.grpc_encryption,
             behind_proxy=True,
+            auto_propose=self.auto_propose,
         )
         self.add_bootstrap(config)
         self.add_new_node_to_network(
@@ -575,12 +584,15 @@ class InterceptedTwoNodeNetwork(TwoNodeNetwork):
                     node_account=kp,
                     grpc_encryption=self.grpc_encryption,
                     behind_proxy=True,
+                    auto_propose=self.auto_propose,
                 )
             )
         )
 
 
 class ThreeNodeNetwork(CasperLabsNetwork):
+    auto_propose = True
+
     def create_cl_network(self):
         kp = self.get_key()
         config = DockerConfig(
@@ -589,13 +601,17 @@ class ThreeNodeNetwork(CasperLabsNetwork):
             node_public_key=kp.public_key,
             network=self.create_docker_network(),
             node_account=kp,
+            auto_propose=self.auto_propose,
         )
         self.add_bootstrap(config)
 
         for _ in range(1, 3):
             kp = self.get_key()
             config = DockerConfig(
-                self.docker_client, node_private_key=kp.private_key, node_account=kp
+                self.docker_client,
+                node_private_key=kp.private_key,
+                node_account=kp,
+                auto_propose=self.auto_propose,
             )
             self.add_cl_node(config)
 
@@ -614,6 +630,8 @@ class ThreeNodeNetworkWithTwoBootstraps(CasperLabsNetwork):
     - node-2 is setup to bootstrap from node-0 and node-1.
     """
 
+    auto_propose = True
+
     def get_node_config(self, number, network):
         kp = self.get_key()
         return DockerConfig(
@@ -623,6 +641,7 @@ class ThreeNodeNetworkWithTwoBootstraps(CasperLabsNetwork):
             node_account=kp,
             number=number,
             network=network,
+            auto_propose=self.auto_propose,
         )
 
     def _docker_tag(self, config):
@@ -699,6 +718,8 @@ class MultiNodeJoinedNetwork(CasperLabsNetwork):
 
 
 class CustomConnectionNetwork(CasperLabsNetwork):
+    auto_propose = True
+
     def create_cl_network(
         self, node_count: int = 3, network_connections: List[List[int]] = None
     ) -> None:
@@ -724,6 +745,7 @@ class CustomConnectionNetwork(CasperLabsNetwork):
             node_public_key=kp.public_key,
             network=self.create_docker_network(),
             node_account=kp,
+            auto_propose=self.auto_propose,
         )
         self.add_bootstrap(config)
 
@@ -734,6 +756,7 @@ class CustomConnectionNetwork(CasperLabsNetwork):
                 node_private_key=kp.private_key,
                 network=self.create_docker_network(),
                 node_account=kp,
+                auto_propose=self.auto_propose,
             )
             self.add_cl_node(config, network_with_bootstrap=False)
 
