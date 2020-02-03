@@ -80,9 +80,6 @@ export function testNeg(): bool {
     // big == -big
     // in 2s compliment: big == ~(~big+1)+1
     let big = U512.fromHex("e7ed081ae96850db0c7d5b42094b5e09b0631e6b9f63efe4deb90d7dd677c82f8ce52eccda5b03f5190770a763729ae9ab85c76cd1dc9606ec9dcf2e2528fccb");
-
-    let one = U512.fromU64(1);
-
     assert(big == -(-big));
     return true;
 }
@@ -106,9 +103,7 @@ export function testComparison(): bool {
     assert(one >= zero);
     assert(one >= one);
 
-    // python: large = random.randint(0, 2**512-1)
     let large1 = U512.fromHex("a25bd58358ae4cd57ba0a4afcde6e9aa55c801d88854541dfc6ea5e3c1fada9ed9cb1e48b0a2d553faa26e5381743415ae1ec593dc67fc525d18e0b6fdf3f7ae");
-
     let large2 = U512.fromHex("f254bb1c7f6654f5ad104854709cb5c09009ccd2b78b5364fefd3a5fa99381a173c5498966e77d88d443bd1a650b4bcb8bb8a92013a85a7095330bc79a2e22dc");
 
     assert(large1.cmp(large2) != 0);
@@ -252,7 +247,6 @@ export function testSerialize100mTimes10(): bool {
 }
 
 export function testDeserLargeRandomU512(): bool {
-    // dec:
     // U512::from_dec_str("11047322357349959198658049652287831689404979606512518998046171549088754115972343255984024380249291159341787585633940860990180834807840096331186000119802997").expect("should create");
     let hex = "d2ee2fd630b02f2ffec88918ba0adaba87e76a294af2e5cc9a4710a23da14a6dde1c73780be2815e979547a949e085aa9279db4c3d1d0fde2361cd2e2d392c75";
 

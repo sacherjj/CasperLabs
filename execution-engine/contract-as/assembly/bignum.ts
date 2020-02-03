@@ -2,7 +2,8 @@ import {toBytesU64} from "./bytesrepr";
 import {Pair} from "./pair";
 
 const HEX_LOWERCASE: string[] = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'];
-// ascii -> number value
+
+// Fast lookup of ascii character into it's numerical value in base16
 const HEX_DIGITS: i32[] =
 [ -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
   -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
@@ -25,7 +26,7 @@ export class U512 {
     private pn: Uint32Array;
 
     constructor() {
-        this.pn = new Uint32Array(16);
+        this.pn = new Uint32Array(16); // 512 bits total
     }
 
     static fromHex(hex: String): U512 {
@@ -64,7 +65,6 @@ export class U512 {
 
         // Decodes hex string into an array of bytes
         let bytes = new Uint8Array(this.width);
-        bytes.fill(0);
 
         // Convert ascii codes into values
         let i = 0;
@@ -93,10 +93,13 @@ export class U512 {
     @operator("+")
     add(other: U512): U512 {
         assert(this.pn.length == other.pn.length);
+        // We do store carry as u64, to easily detect the overflow.
         let carry = <u64>0;
         for (let i = 0; i < this.pn.length; i++) {
             let n = carry + <u64>this.pn[i] + <u64>other.pn[i];
+            // The actual value after (possibly) overflowing addition
             this.pn[i] = <u32>(n & <u64>0xffffffff);
+            // Anything above 2^32-1 is the overflow and its what we carry over
             carry = <u64>(n >> 32);
         }
         return this;
@@ -121,16 +124,16 @@ export class U512 {
     mul(other: U512): U512 {
         assert(this.pn.length == other.pn.length);
         let ret = new U512();
-
+        // A naive implementation of multiplication
         for (let j = 0; j < this.pn.length; j++) {
             let carry: u64 = <u64>0;
             for (let i = 0; i + j < this.pn.length; i++) {
+                // In a similar fashion to addition, we do arithmetic on 64 bit integers to detect overflow
                 let n: u64 = carry + <u64>ret.pn[i + j] + <u64>this.pn[j] * <u64>other.pn[i];
                 ret.pn[i + j] = <u32>(n & <u64>0xffffffff);
                 carry = <u64>(n >> 32);
             }
         }
-
         return ret;
     }
 
@@ -186,10 +189,11 @@ export class U512 {
         return U512ber;
     }
 
-    // Returns bits length
+    // Returns length of the integer in bits
     bits(): u32 {
         for (let i = this.pn.length - 1; i >= 0; i--) {
             if (this.pn[i] > 0) {
+                // Counts leading zeros
                 return 32 * i + (32 - clz(this.pn[i]));
             }
         }
@@ -204,21 +208,21 @@ export class U512 {
 
         let res = new U512();
 
-        let num_bits = num.bits();
-        let div_bits = div.bits();
+        let numBits = num.bits();
+        let divBits = div.bits();
 
-        if (div_bits == 0) {
+        if (divBits == 0) {
             // division by zero
             return null;
         }
 
-        if (div_bits > num_bits) {
+        if (divBits > numBits) {
             // the result is certainly 0 and rem is the lhs of equation.
             let zero = new U512();
             return new Pair<U512, U512>(zero, num);
         }
 
-        let shift: i32 = num_bits - div_bits;
+        let shift: i32 = numBits - divBits;
         div <<= shift; // shift so that div and num align.
 
         while (shift >= 0) {
@@ -255,10 +259,12 @@ export class U512 {
         shift = shift % 32;
 
         for (let i = 0; i < this.pn.length; i++) {
-            if (i + k + 1 < this.pn.length && shift != 0)
+            if (i + k + 1 < this.pn.length && shift != 0) {
                 res.pn[i + k + 1] |= (this.pn[i] >> (32 - shift));
-            if (i + k < this.pn.length)
+            }
+            if (i + k < this.pn.length) {
                 res.pn[i + k] |= (this.pn[i] << shift);
+            }
         }
 
         return res;
@@ -272,10 +278,12 @@ export class U512 {
         shift = shift % 32;
 
         for (let i = 0; i < this.pn.length; i++) {
-            if (i - k - 1 >= 0 && shift != 0)
+            if (i - k - 1 >= 0 && shift != 0) {
                 res.pn[i - k - 1] |= (this.pn[i] << (32 - shift));
-            if (i - k >= 0)
+            }
+            if (i - k >= 0) {
                 res.pn[i - k] |= (this.pn[i] >> shift);
+            }
         }
 
         return res;
@@ -382,7 +390,8 @@ export class U512 {
         const lengthPrefix = <i32>bytes[0];
         let res = new U512();
 
-        let buffer = new Uint8Array(res.width); // no super calls?!
+        // Creates a buffer so individual bytes can be placed there
+        let buffer = new Uint8Array(res.width);
         for (let i = 0; i < lengthPrefix; i++) {
             buffer[i] = bytes[i + 1];
         }
