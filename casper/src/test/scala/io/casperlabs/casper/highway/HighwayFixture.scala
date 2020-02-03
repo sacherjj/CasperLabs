@@ -12,7 +12,7 @@ import io.casperlabs.casper.consensus.state
 import io.casperlabs.casper.consensus.state.ProtocolVersion
 import io.casperlabs.casper.util.CasperLabsProtocol
 import io.casperlabs.casper.highway.mocks.{MockForkChoice, MockMessageProducer}
-import io.casperlabs.casper.mocks.MockValidation
+import io.casperlabs.casper.mocks.NoOpValidation
 import io.casperlabs.casper.helper.NoOpsEventEmitter
 import io.casperlabs.casper.validation.raiseValidateErrorThroughApplicativeError
 import io.casperlabs.casper.validation.{Validation, ValidationImpl}
@@ -163,7 +163,7 @@ trait HighwayFixture extends StorageFixture with TickUtils with ArbitraryConsens
       (0L, ProtocolVersion(0, 0, 0), none)
     )
     // While we're using the MockMessageProducer we can't fully validate blocks.
-    implicit def validation: Validation[Task]  = new MockValidation[Task]
+    implicit def validation: Validation[Task]  = new NoOpValidation[Task]
     def messageProducer: MessageProducer[Task] = new MockMessageProducer[Task](validator)
     def messageExecutor: MessageExecutor[Task] = new MessageExecutor[Task](
       chainName = chainName,

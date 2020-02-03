@@ -8,7 +8,7 @@ import com.google.protobuf.ByteString
 import io.casperlabs.casper.{DeploySelection, ValidatorIdentity}
 import io.casperlabs.casper.consensus.{Block, Bond}
 import io.casperlabs.casper.consensus.state
-import io.casperlabs.casper.mocks.{MockEventEmitter, MockValidation}
+import io.casperlabs.casper.mocks.{MockEventEmitter, NoOpValidation}
 import io.casperlabs.casper.validation
 import io.casperlabs.casper.validation.{Validation, ValidationImpl}
 import io.casperlabs.casper.validation.Errors.ValidateErrorWrapper
@@ -157,7 +157,7 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
       } yield second
 
     override def validation: Validation[Task] =
-      if (validate) new ValidationImpl[Task]() else new MockValidation[Task]
+      if (validate) new ValidationImpl[Task]() else new NoOpValidation[Task]
 
     // Collect emitted events.
     override implicit val eventEmitter: MockEventEmitter[Task] =
@@ -437,7 +437,7 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
     new ExecutorFixture with ExecEngineSerivceWithFakeEffects {
       // Fake validation which let's everything through but it raises the one
       // invalid status which should result in a block being saved.
-      override def validation = new MockValidation[Task] {
+      override def validation = new NoOpValidation[Task] {
         override def checkEquivocation(dag: DagRepresentation[Task], block: Block): Task[Unit] =
           functorRaiseInvalidBlock.raise(EquivocatedBlock)
       }

@@ -14,7 +14,7 @@ import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.catscontrib.Fs2Compiler
 
-class MockValidation[F[_]: Applicative] extends Validation[F] {
+class NoOpValidation[F[_]: Applicative] extends Validation[F] {
 
   override def neglectedInvalidBlock(block: Block, invalidBlockTracker: Set[BlockHash]): F[Unit] =
     ().pure[F]
