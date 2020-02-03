@@ -12,9 +12,9 @@ object StoredValue {
 
   implicit val toBytesStoredValue: ToBytes[StoredValue] = new ToBytes[StoredValue] {
     override def toBytes(v: StoredValue): Array[Byte] = v match {
-      case CLValue(value)     => CLVALUE_TAG +: ToBytes[cltype.CLValue].toBytes(value)
-      case Account(account)   => ACCOUNT_TAG +: ToBytes[cltype.Account].toBytes(account)
-      case Contract(contract) => CONTRACT_TAG +: ToBytes[cltype.Contract].toBytes(contract)
+      case CLValue(value)     => CLVALUE_TAG +: ToBytes.toBytes(value)
+      case Account(account)   => ACCOUNT_TAG +: ToBytes.toBytes(account)
+      case Contract(contract) => CONTRACT_TAG +: ToBytes.toBytes(contract)
     }
   }
 

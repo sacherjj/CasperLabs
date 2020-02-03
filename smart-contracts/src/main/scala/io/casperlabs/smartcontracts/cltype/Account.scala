@@ -18,7 +18,7 @@ object Account {
 
   implicit val toBytesActionThresholds: ToBytes[ActionThresholds] = new ToBytes[ActionThresholds] {
     override def toBytes(a: ActionThresholds): Array[Byte] =
-      ToBytes[(Weight, Weight)].toBytes(a.deployment -> a.keyManagement)
+      ToBytes.toBytes(a.deployment -> a.keyManagement)
   }
 
   implicit val fromBytesActionThresholds: FromBytes[ActionThresholds] =
@@ -42,16 +42,13 @@ object Account {
           .exists { case (b1, b2) => b1 < b2 })
   }
 
-  implicit val toBytesAssociatedKeys: ToBytes[Map[PublicKey, Weight]] =
-    ToBytes.toBytesMap[PublicKey, Weight]
-
   implicit val toBytesAccount: ToBytes[Account] = new ToBytes[Account] {
     override def toBytes(a: Account): Array[Byte] =
-      ToBytes[PublicKey].toBytes(a.publicKey) ++
-        ToBytes[Map[String, Key]].toBytes(a.namedKeys) ++
-        ToBytes[URef].toBytes(a.purseId) ++
-        toBytesAssociatedKeys.toBytes(a.associatedKeys) ++
-        ToBytes[ActionThresholds].toBytes(a.actionThresholds)
+      ToBytes.toBytes(a.publicKey) ++
+        ToBytes.toBytes(a.namedKeys) ++
+        ToBytes.toBytes(a.purseId) ++
+        ToBytes.toBytes(a.associatedKeys) ++
+        ToBytes.toBytes(a.actionThresholds)
   }
 
   implicit val fromBytesAccount: FromBytes[Account] = new FromBytes[Account] {

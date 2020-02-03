@@ -14,12 +14,12 @@ case class CLValue(clType: CLType, value: IndexedSeq[Byte]) {
 object CLValue {
   def from[T: CLTyped: ToBytes](t: T): CLValue = CLValue(
     CLTyped[T].clType,
-    ToBytes[T].toBytes(t)
+    ToBytes.toBytes(t)
   )
 
   implicit val toBytesCLValue: ToBytes[CLValue] = new ToBytes[CLValue] {
     override def toBytes(v: CLValue): Array[Byte] =
-      ToBytes[Seq[Byte]].toBytes(v.value) ++ ToBytes[CLType].toBytes(v.clType)
+      ToBytes.toBytes(v.value) ++ ToBytes.toBytes(v.clType)
   }
 
   implicit val fromBytesCLValue: FromBytes[CLValue] = new FromBytes[CLValue] {

@@ -9,6 +9,8 @@ import simulacrum.typeclass
 }
 
 object ToBytes {
+  def toBytes[T: ToBytes](t: T): Array[Byte] = ToBytes[T].toBytes(t)
+
   implicit val toBytesBool: ToBytes[Boolean] = new ToBytes[Boolean] {
     override def toBytes(b: Boolean): Array[Byte] =
       if (b) Array(Constants.Boolean.TRUE_TAG)
@@ -65,12 +67,18 @@ object ToBytes {
     }
   }
 
+  private def _toBytesSeq[T: ToBytes](list: Seq[T]): Array[Byte] = {
+    val n     = list.size
+    val bytes = list.flatMap(t => ToBytes[T].toBytes(t)).toArray
+    ToBytes[Int].toBytes(n) ++ bytes
+  }
+
   implicit def toBytesSeq[T: ToBytes]: ToBytes[Seq[T]] = new ToBytes[Seq[T]] {
-    override def toBytes(list: Seq[T]): Array[Byte] = {
-      val n     = list.size
-      val bytes = list.flatMap(t => ToBytes[T].toBytes(t)).toArray
-      ToBytes[Int].toBytes(n) ++ bytes
-    }
+    override def toBytes(list: Seq[T]): Array[Byte] = _toBytesSeq(list)
+  }
+
+  implicit def toBytesIndexedSeq[T: ToBytes]: ToBytes[IndexedSeq[T]] = new ToBytes[IndexedSeq[T]] {
+    override def toBytes(list: IndexedSeq[T]): Array[Byte] = _toBytesSeq(list)
   }
 
   implicit def toBytesEither[A: ToBytes, B: ToBytes]: ToBytes[Either[A, B]] =

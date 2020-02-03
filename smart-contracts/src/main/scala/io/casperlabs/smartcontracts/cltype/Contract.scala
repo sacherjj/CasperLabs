@@ -7,10 +7,7 @@ case class Contract(bytes: IndexedSeq[Byte], namedKeys: Map[String, Key], protoc
 object Contract {
   implicit val toBytesContract: ToBytes[Contract] = new ToBytes[Contract] {
     override def toBytes(c: Contract): Array[Byte] =
-      ToBytes[Seq[Byte]].toBytes(c.bytes) ++ ToBytes[Map[String, Key]]
-        .toBytes(c.namedKeys) ++ ToBytes[SemVer].toBytes(
-        c.protocolVersion
-      )
+      ToBytes.toBytes(c.bytes) ++ ToBytes.toBytes(c.namedKeys) ++ ToBytes.toBytes(c.protocolVersion)
   }
 
   implicit val fromBytesContract: FromBytes[Contract] = new FromBytes[Contract] {

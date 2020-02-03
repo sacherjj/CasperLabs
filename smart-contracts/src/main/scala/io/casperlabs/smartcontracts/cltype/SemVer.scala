@@ -7,9 +7,7 @@ case class SemVer(major: Int, minor: Int, patch: Int)
 object SemVer {
   implicit val toBytesSemVer: ToBytes[SemVer] = new ToBytes[SemVer] {
     override def toBytes(v: SemVer): Array[Byte] =
-      ToBytes[Int].toBytes(v.major) ++ ToBytes[Int].toBytes(v.minor) ++ ToBytes[Int].toBytes(
-        v.patch
-      )
+      ToBytes.toBytes(v.major) ++ ToBytes.toBytes(v.minor) ++ ToBytes.toBytes(v.patch)
   }
 
   implicit val fromBytesSemVer: FromBytes[SemVer] = new FromBytes[SemVer] {

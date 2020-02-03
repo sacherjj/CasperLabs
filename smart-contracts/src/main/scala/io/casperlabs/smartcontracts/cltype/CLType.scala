@@ -41,7 +41,7 @@ object CLType {
   private def toBytesTailRec(state: LoopState, acc: IndexedSeq[Byte]): Array[Byte] = state match {
     case Nil => acc.toArray
 
-    case Left(n) :: tail => toBytesTailRec(tail, acc ++ ToBytes[Int].toBytes(n))
+    case Left(n) :: tail => toBytesTailRec(tail, acc ++ ToBytes.toBytes(n))
 
     case Right(t) :: tail =>
       t match {

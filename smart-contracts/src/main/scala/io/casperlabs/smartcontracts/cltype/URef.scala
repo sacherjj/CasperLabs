@@ -7,8 +7,7 @@ case class URef(address: ByteArray32, accessRights: Option[AccessRights])
 object URef {
   implicit val toBytesURef: ToBytes[URef] = new ToBytes[URef] {
     override def toBytes(u: URef): Array[Byte] =
-      ToBytes[ByteArray32].toBytes(u.address) ++ ToBytes[Option[AccessRights]]
-        .toBytes(u.accessRights)
+      ToBytes.toBytes(u.address) ++ ToBytes.toBytes(u.accessRights)
   }
 
   implicit val fromBytesURef: FromBytes[URef] = new FromBytes[URef] {
