@@ -367,7 +367,7 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
     }
   }
 
-  it should "mark deploys as finalized" in executorFixture { implicit db =>
+  it should "mark deploys as processed" in executorFixture { implicit db =>
     new ExecutorFixture {
       override def test =
         for {
