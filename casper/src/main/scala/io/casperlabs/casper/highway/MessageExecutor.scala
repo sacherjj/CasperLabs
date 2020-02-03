@@ -127,8 +127,10 @@ class MessageExecutor[F[_]: Sync: Log: Time: Metrics: BlockStorage: DagStorage: 
   ): F[Unit] =
     status match {
       case MissingBlocks =>
-        throw new RuntimeException(
-          "The DownloadManager should not give us a block with missing dependencies."
+        Sync[F].raiseError(
+          new RuntimeException(
+            "The DownloadManager should not give us a block with missing dependencies."
+          )
         )
 
       case Valid =>
@@ -149,7 +151,7 @@ class MessageExecutor[F[_]: Sync: Log: Time: Metrics: BlockStorage: DagStorage: 
           functorRaiseInvalidBlock.raise(status)
 
       case Processing | Processed =>
-        throw new RuntimeException("A block should not be processing at this stage.")
+        Sync[F].raiseError(new RuntimeException("A block should not be processing at this stage."))
 
       case UnexpectedBlockException(ex) =>
         Log[F].error(
