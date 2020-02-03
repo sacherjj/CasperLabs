@@ -191,12 +191,17 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
     new ExecutorFixture(validate = true, printLevel = Log.Level.Warn) {
       override def test =
         for {
-          ballot <- prepareSecondBlock().map { block =>
-                     thisValidator.signBlock(
-                       block.withHeader(block.getHeader.withMessageType(Block.MessageType.BALLOT))
-                     )
-                   }
-          _ <- validateAndAdd(ballot)
+          (ballot: Block) <- prepareSecondBlock().map { block =>
+                              thisValidator.signBlock(
+                                block.withHeader(
+                                  block.getHeader.withMessageType(Block.MessageType.BALLOT)
+                                )
+                              )
+                            }
+          _       <- validateAndAdd(ballot)
+          dag     <- DagStorage[Task].getRepresentation
+          message <- dag.lookupUnsafe(ballot.blockHash)
+          _       = message shouldBe a[Message.Ballot]
         } yield ()
     }
   }
