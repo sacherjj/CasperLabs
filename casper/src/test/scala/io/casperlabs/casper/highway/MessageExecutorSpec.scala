@@ -346,15 +346,15 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
     }
   }
 
-  it should "update the last finalized block" in executorFixture { implicit db =>
+  it should "tell the finalizer about the new blocks" in executorFixture { implicit db =>
     new ExecutorFixture {
 
-      val finalizerUpdatedRef = Ref.unsafe[Task, Boolean](false)
+      val messageAddedRef = Ref.unsafe[Task, Option[Message]](none)
 
       override val finalizer = new MultiParentFinalizer[Task] {
         override def onNewMessageAdded(
             message: Message
-        ) = finalizerUpdatedRef.set(true).as(none)
+        ) = messageAddedRef.set(Some(message)).as(none)
       }
 
       override def test =
@@ -362,7 +362,7 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
           block   <- insertFirstBlock()
           message = Message.fromBlock(block).get
           _       <- messageExecutor.effectsAfterAdded(message)
-          _       <- finalizerUpdatedRef.get shouldBeF true
+          _       <- messageAddedRef.get shouldBeF Some(message)
         } yield ()
     }
   }
