@@ -394,36 +394,14 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
   trait ExecEngineSerivceWithFakeEffects { self: ExecutorFixture =>
     import io.casperlabs.ipc._
     import io.casperlabs.smartcontracts.ExecutionEngineService
+    import io.casperlabs.casper.helper.HashSetCasperTestNode.simpleEEApi
     import state.Key
 
     def sampleBlockWithDeploys =
       sample(arbBlock.arbitrary.filter(_.getBody.deploys.nonEmpty))
 
     override def execEngineService =
-      ExecutionEngineServiceStub.mock[Task](
-        (_) => ???,
-        (_, _, _) => ???,
-        (_, _, deploys, _) => {
-          val key = Key(Key.Value.Hash(Key.Hash(ByteString.copyFromUtf8("some-key"))))
-          val (op, transform) = Op(Op.OpInstance.Read(ReadOp())) ->
-            Transform(Transform.TransformInstance.Identity(TransformIdentity()))
-          val transformEntry = TransformEntry(Some(key), Some(transform))
-          val opEntry        = OpEntry(Some(key), Some(op))
-          val effect         = ExecutionEffect(Seq(opEntry), Seq(transformEntry))
-          val result         = DeployResult.ExecutionResult().withEffects(effect)
-          // Have to return exactly the right number of resports.
-          List
-            .fill(deploys.size)(DeployResult().withExecutionResult(result))
-            .asRight[Throwable]
-            .pure[Task]
-        },
-        (preStateHash, _) =>
-          ExecutionEngineService
-            .CommitResult(preStateHash, bonds)
-            .asRight[Throwable]
-            .pure[Task],
-        (_, _, _) => ???
-      )
+      simpleEEApi[Task](initialBonds = Map.empty, generateConflict = false)
   }
 
   it should "return the effects of a valid block" in executorFixture { implicit db =>
