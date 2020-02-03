@@ -108,10 +108,7 @@ export class U512 {
         for (let i = 0; i < this.pn.length; i++) {
             ret.pn[i] = ~this.pn[i];
         }
-        // TODO: bin op ++
-        let one = new U512();
-        one.setU64(1);
-        ret += one;
+        ++ret;
         return ret;
     }
 
@@ -135,6 +132,46 @@ export class U512 {
         }
 
         return ret;
+    }
+
+    private increment(): void {
+        let i = 0;
+        while (i < this.pn.length && ++this.pn[i] == 0) {
+            i++;
+        }
+    }
+
+    private decrement(): void {
+        let i = 0;
+        while (i < this.pn.length && --this.pn[i] == u32.MAX_VALUE) {
+            i++;
+        }
+    }
+
+    @operator.prefix("++")
+    prefixInc(): U512 {
+        this.increment();
+        return this;
+    }
+
+    @operator.prefix("--")
+    prefixDec(): U512 {
+        this.decrement();
+        return this;
+    }
+
+    @operator.postfix("++")
+    postfixInc(): U512 {
+        let cloned = this.clone();
+        cloned.increment();
+        return cloned;
+    }
+
+    @operator.postfix("--")
+    postfixDec(): U512 {
+        let cloned = this.clone();
+        cloned.decrement();
+        return cloned;
     }
 
     setValues(pn: Uint32Array): void {

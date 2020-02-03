@@ -268,3 +268,33 @@ export function testDeserLargeRandomU512(): bool {
 
     return true;
 }
+export function testPrefixOps(): bool {
+    let a = U512.fromU64(<u64>18446744073709551615); // 2^64-2
+    assert(a.toString() == "ffffffffffffffff");
+
+    let one = U512.fromU64(1);
+    assert(one.toString() == "1");
+
+    ++a;
+    assert(a.toString() == "10000000000000000");
+
+    ++a;
+    assert(a.toString() == "10000000000000001");
+
+    --a;
+    assert(a.toString() == "10000000000000000");
+
+    --a;
+    assert(a.toString() == "ffffffffffffffff");
+
+    let aCloned = a.clone();
+
+    let aPostInc = a++;
+    assert(aPostInc == aCloned);
+    assert(a == aCloned + one);
+
+    let aPostDec = a--;
+    assert(aPostDec == aCloned);
+    assert(a == aCloned - one);
+    return true;
+}
