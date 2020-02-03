@@ -180,7 +180,10 @@ class MessageExecutor[F[_]: Sync: Log: Time: Metrics: BlockStorage: DagStorage: 
         // the effect needed to compute the correct pre-state as well.
         _      <- Log[F].debug(s"Validating the parents of ${hashPrefix -> "block"}")
         merged <- Validation[F].parents(block, dag)
-        _      <- Log[F].debug(s"Computing the pre-state hash of ${hashPrefix -> "block"}")
+        // TODO (CON-626): Pass the isBookingBlock information to the effects calculation. Or should it be computePrestate?
+        _ <- Log[F].debug(
+              s"Computing the pre-state hash of $isBookingBlock ${hashPrefix -> "block"}"
+            )
         preStateHash <- ExecEngineUtil
                          .computePrestate[F](merged, block.getHeader.rank, upgrades)
                          .timer("computePrestate")
