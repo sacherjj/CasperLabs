@@ -25,7 +25,7 @@ export class U512 {
     private pn: Uint32Array;
 
     constructor() {
-        this.pn = new Uint32Array(64);
+        this.pn = new Uint32Array(16);
     }
 
     static fromHex(hex: String): U512 {
@@ -290,7 +290,7 @@ export class U512 {
     toBytesLE(): Uint8Array {
         let bytes = new Uint8Array(this.width);
         // Copy array of u32 into array of u8
-        for (let i = 0; i < this.pn.length / 4; i++) {
+        for (let i = 0; i < this.pn.length; i++) {
             store<u32>(bytes.dataStart + (i * 4), this.pn[i]);
         }
         return bytes;
