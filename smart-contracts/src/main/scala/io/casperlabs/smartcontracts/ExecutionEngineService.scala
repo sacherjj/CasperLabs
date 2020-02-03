@@ -218,10 +218,11 @@ class GrpcExecutionEngineService[F[_]: Defer: Concurrent: Log: TaskLift: Metrics
             // TODO: We should map to state.StoredValue instead of state.Value
             // After that we can remove state.Value (and its variants; state.StringList, state.IntList, etc.).
             case Right(v) =>
-              cltype.ProtoMappings.toProto(v) match {
-                case None             => Left(SmartContractEngineError(s"Unsupported EE response: $v"))
-                case Some(protoValue) => Right(protoValue)
-              }
+              cltype.ProtoMappings
+                .toProto(v)
+                .leftMap(
+                  err => SmartContractEngineError(s"Error with EE response $v:\n$err")
+                )
           }
 
         case QueryResponse.Result.Empty        => Left(SmartContractEngineError("empty response"))

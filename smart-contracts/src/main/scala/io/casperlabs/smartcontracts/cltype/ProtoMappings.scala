@@ -1,18 +1,19 @@
 package io.casperlabs.smartcontracts.cltype
 
+import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.state
 import io.casperlabs.smartcontracts.bytesrepr.FromBytes
 
 object ProtoMappings {
-  def toProto(v: StoredValue): Option[state.Value] = v match {
+  def toProto(v: StoredValue): Either[Error, state.Value] = v match {
     case StoredValue.CLValue(clValue) => toProto(clValue)
 
     case StoredValue.Account(account) =>
-      Some(state.Value(state.Value.Value.Account(toProto(account))))
+      Right(state.Value(state.Value.Value.Account(toProto(account))))
 
     case StoredValue.Contract(contract) =>
-      Some(state.Value(state.Value.Value.Contract(toProto(contract))))
+      Right(state.Value(state.Value.Value.Contract(toProto(contract))))
   }
 
   def toProto(c: Contract): state.Contract = state.Contract(
@@ -69,82 +70,125 @@ object ProtoMappings {
     patch = version.patch
   )
 
-  def toProto(v: CLValue): Option[state.Value] = v.clType match {
+  def toProto(v: CLValue): Either[Error, state.Value] = v.clType match {
     case CLType.I32 | CLType.U32 =>
-      FromBytes.deserialize[Int](v.value.toArray).toOption.map { i =>
-        state.Value(state.Value.Value.IntValue(i))
-      }
+      FromBytes
+        .deserialize[Int](v.value.toArray)
+        .map { i =>
+          state.Value(state.Value.Value.IntValue(i))
+        }
+        .leftMap(err => Error.FromBytesError(err))
 
     case CLType.List(CLType.U8) =>
-      v.to[Seq[Byte]].toOption.map { bytes =>
-        state.Value(state.Value.Value.BytesValue(ByteString.copyFrom(bytes.toArray)))
-      }
+      v.to[Seq[Byte]]
+        .map { bytes =>
+          state.Value(state.Value.Value.BytesValue(ByteString.copyFrom(bytes.toArray)))
+        }
+        .leftMap(err => Error.CLValueError(err))
 
     case CLType.List(CLType.I32) | CLType.List(CLType.U32) =>
-      FromBytes.deserialize[Seq[Int]](v.value.toArray).toOption.map { list =>
-        state.Value(state.Value.Value.IntList(state.IntList(list)))
-      }
+      FromBytes
+        .deserialize[Seq[Int]](v.value.toArray)
+        .map { list =>
+          state.Value(state.Value.Value.IntList(state.IntList(list)))
+        }
+        .leftMap(err => Error.FromBytesError(err))
 
     case CLType.String =>
-      v.to[String].toOption.map { s =>
-        state.Value(state.Value.Value.StringValue(s))
-      }
+      v.to[String]
+        .map { s =>
+          state.Value(state.Value.Value.StringValue(s))
+        }
+        .leftMap(err => Error.CLValueError(err))
 
     case CLType.List(CLType.String) =>
-      v.to[Seq[String]].toOption.map { list =>
-        state.Value(state.Value.Value.StringList(state.StringList(list)))
-      }
+      v.to[Seq[String]]
+        .map { list =>
+          state.Value(state.Value.Value.StringList(state.StringList(list)))
+        }
+        .leftMap(err => Error.CLValueError(err))
 
     case CLType.Tuple2(CLType.String, CLType.Key) =>
-      v.to[(String, Key)].toOption.map {
-        case (n, k) =>
-          state.Value(state.Value.Value.NamedKey(state.NamedKey(name = n, key = Some(toProto(k)))))
-      }
+      v.to[(String, Key)]
+        .map {
+          case (n, k) =>
+            state
+              .Value(state.Value.Value.NamedKey(state.NamedKey(name = n, key = Some(toProto(k)))))
+        }
+        .leftMap(err => Error.CLValueError(err))
 
     case CLType.U128 =>
-      FromBytes.deserialize[BigInt](v.value.toArray).toOption.map { i =>
-        state.Value(state.Value.Value.BigInt(state.BigInt(value = i.toString, bitWidth = 128)))
-      }
+      FromBytes
+        .deserialize[BigInt](v.value.toArray)
+        .map { i =>
+          state.Value(state.Value.Value.BigInt(state.BigInt(value = i.toString, bitWidth = 128)))
+        }
+        .leftMap(err => Error.FromBytesError(err))
 
     case CLType.U256 =>
-      FromBytes.deserialize[BigInt](v.value.toArray).toOption.map { i =>
-        state.Value(state.Value.Value.BigInt(state.BigInt(value = i.toString, bitWidth = 256)))
-      }
+      FromBytes
+        .deserialize[BigInt](v.value.toArray)
+        .map { i =>
+          state.Value(state.Value.Value.BigInt(state.BigInt(value = i.toString, bitWidth = 256)))
+        }
+        .leftMap(err => Error.FromBytesError(err))
 
     case CLType.U512 =>
-      FromBytes.deserialize[BigInt](v.value.toArray).toOption.map { i =>
-        state.Value(state.Value.Value.BigInt(state.BigInt(value = i.toString, bitWidth = 512)))
-      }
+      FromBytes
+        .deserialize[BigInt](v.value.toArray)
+        .map { i =>
+          state.Value(state.Value.Value.BigInt(state.BigInt(value = i.toString, bitWidth = 512)))
+        }
+        .leftMap(err => Error.FromBytesError(err))
 
     case CLType.Key =>
-      v.to[Key].toOption.map { k =>
-        state.Value(state.Value.Value.Key(toProto(k)))
-      }
+      v.to[Key]
+        .map { k =>
+          state.Value(state.Value.Value.Key(toProto(k)))
+        }
+        .leftMap(err => Error.CLValueError(err))
 
     case CLType.URef =>
-      v.to[URef].toOption.map { u =>
-        val key = Key.URef(u)
-        state.Value(state.Value.Value.Key(toProto(key)))
-      }
+      v.to[URef]
+        .map { u =>
+          val key = Key.URef(u)
+          state.Value(state.Value.Value.Key(toProto(key)))
+        }
+        .leftMap(err => Error.CLValueError(err))
 
     case CLType.Unit =>
-      Some(state.Value(state.Value.Value.Unit(state.Unit())))
+      Right(state.Value(state.Value.Value.Unit(state.Unit())))
 
     case CLType.I64 | CLType.U64 =>
-      FromBytes.deserialize[Long](v.value.toArray).toOption.map { i =>
-        state.Value(state.Value.Value.LongValue(i))
-      }
+      FromBytes
+        .deserialize[Long](v.value.toArray)
+        .map { i =>
+          state.Value(state.Value.Value.LongValue(i))
+        }
+        .leftMap(err => Error.FromBytesError(err))
 
-    case CLType.Bool            => None
-    case CLType.U8              => None
-    case CLType.Option(_)       => None
-    case CLType.List(_)         => None
-    case CLType.FixedList(_, _) => None
-    case CLType.Result(_, _)    => None
-    case CLType.Map(_, _)       => None
-    case CLType.Tuple1(_)       => None
-    case CLType.Tuple2(_, _)    => None
-    case CLType.Tuple3(_, _, _) => None
-    case CLType.Any             => None
+    case CLType.Bool            => Left(Error.NoRepresentation("CLType.Bool", "state.Value"))
+    case CLType.U8              => Left(Error.NoRepresentation("CLType.U8", "state.Value"))
+    case CLType.Option(_)       => Left(Error.NoRepresentation("CLType.Option", "state.Value"))
+    case CLType.List(t)         => Left(Error.NoRepresentation(s"CLType.List($t)", "state.Value"))
+    case CLType.FixedList(_, _) => Left(Error.NoRepresentation("CLType.FixedList", "state.Value"))
+    case CLType.Result(_, _)    => Left(Error.NoRepresentation("CLType.Result", "state.Value"))
+    case CLType.Map(_, _)       => Left(Error.NoRepresentation("CLType.Map", "state.Value"))
+    case CLType.Tuple1(_)       => Left(Error.NoRepresentation("CLType.Tuple1", "state.Value"))
+    case CLType.Tuple2(t1, t2) =>
+      Left(Error.NoRepresentation(s"CLType.Tuple2($t1, $t2)", "state.Value"))
+    case CLType.Tuple3(_, _, _) => Left(Error.NoRepresentation("CLType.Tuple3", "state.Value"))
+    case CLType.Any             => Left(Error.NoRepresentation("CLType.Any", "state.Value"))
+  }
+
+  sealed trait Error
+  object Error {
+    case class NoRepresentation(source: String, target: String) extends Error {
+      override def toString: String = s"No representation for $source as $target"
+    }
+
+    case class FromBytesError(err: FromBytes.Error) extends Error
+
+    case class CLValueError(err: CLValue.Error) extends Error
   }
 }
