@@ -8,12 +8,11 @@ import com.google.protobuf.ByteString
 import io.casperlabs.casper.{DeploySelection, ValidatorIdentity}
 import io.casperlabs.casper.consensus.{Block, Bond}
 import io.casperlabs.casper.consensus.state
-import io.casperlabs.casper.mocks.MockValidation
+import io.casperlabs.casper.mocks.{MockEventEmitter, MockValidation}
 import io.casperlabs.casper.validation
 import io.casperlabs.casper.validation.{Validation, ValidationImpl}
 import io.casperlabs.casper.validation.Errors.ValidateErrorWrapper
 import io.casperlabs.casper.finality.MultiParentFinalizer
-import io.casperlabs.casper.highway.mocks.MockEventEmitter
 import io.casperlabs.casper.validation.Validation.BlockEffects
 import io.casperlabs.casper.scalatestcontrib._
 import io.casperlabs.casper.consensus.info.DeployInfo

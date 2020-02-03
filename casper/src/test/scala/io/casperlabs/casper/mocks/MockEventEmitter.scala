@@ -1,4 +1,4 @@
-package io.casperlabs.casper.highway.mocks
+package io.casperlabs.casper.mocks
 
 import cats._
 import cats.implicits._
