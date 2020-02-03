@@ -15,4 +15,5 @@ lib = []
 
 [dependencies]
 contract = { path = "../../../contract", package = "casperlabs-contract" }
+mint = { path = "../../../mint", package = "casperlabs-mint" }
 types = { path = "../../../types", package = "casperlabs-types" }

@@ -13,6 +13,7 @@ members = [
     "engine-storage",
     "engine-tests",
     "engine-wasm-prep",
+    "mint",
     "proof-of-stake",
     "types"
 ]
@@ -30,6 +31,7 @@ default-members = [
     "engine-storage",
     "engine-tests",
     "engine-wasm-prep",
+    "mint",
     "proof-of-stake",
     "types"
 ]

@@ -5,7 +5,8 @@ extern crate alloc;
 use alloc::string::String;
 
 use contract::{contract_api::runtime, unwrap_or_revert::UnwrapOrRevert};
-use mint_token::{CLMint, Mint};
+use mint::Mint;
+use mint_token::CLMint;
 use types::{system_contract_errors::mint::Error, ApiError, CLValue, URef, U512};
 
 const VERSION: &str = "1.1.0";
