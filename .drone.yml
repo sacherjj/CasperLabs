@@ -113,6 +113,7 @@ steps:
   commands:
   - "cd execution-engine"
   - "make setup"
+  - "make build-contracts-rs"
   - "make test-as test-contracts-as"
   image: "casperlabs/buildenv:latest"
   when:
@@ -120,10 +121,8 @@ steps:
     - pull_request
     changeset:
       includes:
-      - "**/contract-ffi-as/**"
+      - "**/contract-as/**"
       - "**/contracts-as/**"
-  depends_on:
-  - rust-compile-test-pr
 
 - name: run-cargo-fmt-pr
   commands:
