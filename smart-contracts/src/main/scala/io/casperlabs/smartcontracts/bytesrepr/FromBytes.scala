@@ -47,7 +47,7 @@ object FromBytes {
     override def fromBytes(bytes: BytesView): Either[FromBytes.Error, (Int, BytesView)] =
       for {
         (head, tail) <- safeTake(4, bytes)
-        i            <- attempt(head.buffer.getInt)
+        i            <- attempt(head.toByteBuffer.getInt)
       } yield i -> tail
   }
 
@@ -55,7 +55,7 @@ object FromBytes {
     override def fromBytes(bytes: BytesView): Either[FromBytes.Error, (Long, BytesView)] =
       for {
         (head, tail) <- safeTake(8, bytes)
-        i            <- attempt(head.buffer.getLong)
+        i            <- attempt(head.toByteBuffer.getLong)
       } yield i -> tail
   }
 
