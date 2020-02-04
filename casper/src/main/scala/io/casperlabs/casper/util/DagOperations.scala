@@ -118,13 +118,8 @@ object DagOperations {
       case (a, b) =>
         if (a._1 < b._1) true
         else if (b._1 < a._1) false
-        else {
-          val aStr = a._2.toStringUtf8
-          val bStr = b._2.toStringUtf8
-          if (aStr < bStr) true
-          else if (bStr < aStr) false
-          else true
-        }
+        else
+          io.casperlabs.shared.Sorting.byteStringOrdering.lt(a._2, b._2)
     }
 
   val blockTopoOrderingAsc: Ordering[Message] =

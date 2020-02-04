@@ -233,7 +233,10 @@ object ForkChoice {
    * We need to find rank of the highest block that is plurality driven (has most votes).
    * If we know that block rank=5 has >50% of total votes we don't have to check its ancestors.
    */
-  private[highway] case class Scores(scores: Map[Scores.Height, Map[BlockHash, Weight]]) {
+  private[highway] case class Scores(
+      scores: Map[Scores.Height, Map[BlockHash, Weight]],
+      stopHeight: Scores.Height
+  ) {
     // Update weight of votes at height.
     def update(vote: Block, weight: Weight): Scores = {
       val currVotes = scores.getOrElse(vote.rank, Map.empty[BlockHash, Weight])
@@ -251,7 +254,6 @@ object ForkChoice {
 
     def totalWeight: Weight      = scores.valuesIterator.flatMap(_.valuesIterator).sum
     def maxHeight: Scores.Height = scores.keysIterator.max
-    def minHeight: Scores.Height = scores.keysIterator.min
     def isEmpty: Boolean         = scores.isEmpty
 
     def tip[F[_]: Sync](implicit dag: DagLookup[F]): F[Block] =
@@ -265,21 +267,23 @@ object ForkChoice {
 
   object Scores {
     type Height = Long
-    val empty: Scores = Scores(Map.empty)
+    def init(startBlock: Message.Block): Scores = Scores(Map.empty, startBlock.rank + 1)
 
     def findTip[F[_]: DagLookup: Sync](
         currHeight: Scores.Height,
         scores: Scores
     ): F[BlockHash] =
-      if (currHeight == scores.minHeight) {
+      if (currHeight == scores.stopHeight) {
+        // We reached the starting block. This means there is no block that has majority of votes.
+        // Return a child of starting block that has the highest score.
         import io.casperlabs.casper.util.DagOperations.bigIntByteStringOrdering
-        scores.votesAtHeight(currHeight).map(_.swap).max(bigIntByteStringOrdering)._2.pure[F]
+        scores.votesAtHeight(currHeight).toList.map(_.swap).max(bigIntByteStringOrdering)._2.pure[F]
       } else {
         scores.votesAtHeight(currHeight).toList.filter {
-          case (_, weight) => 2 * weight >= scores.totalWeight
+          case (_, weight) =>
+            2 * weight >= scores.totalWeight
         } match {
           case Nil =>
-            val dag = DagLookup[F]
             // Not enough weight at this height. We need to go deeper
             // Propagate this height weights downward. That's safe b/c
             // if a validator voted for ancestor of a block it also voted for the block itself.
@@ -288,8 +292,8 @@ object ForkChoice {
               currHeightVotes.toList.foldM(scores.removeHeight(currHeight)) {
                 case (acc, (hash, weight)) =>
                   for {
-                    msg    <- dag.lookupUnsafe(hash)
-                    parent <- dag.lookupUnsafe(msg.parentBlock).map(_.asInstanceOf[Block])
+                    msg    <- DagLookup[F].lookupUnsafe(hash)
+                    parent <- DagLookup[F].lookupUnsafe(msg.parentBlock).map(_.asInstanceOf[Block])
                   } yield acc.update(parent, weight)
               }
             }
@@ -300,7 +304,7 @@ object ForkChoice {
             // Two blocks have weight greater or equal than half ot the total weight.
             // That's possible iff they both have 50% of totalWeight.
             // Pick the higher one using ByteString ordering.
-            List(b1, b2).max.pure[F]
+            List(b1, b2).max(byteStringOrdering).pure[F]
           case (hash, _) :: Nil =>
             hash.pure[F]
           case _ =>
