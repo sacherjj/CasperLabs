@@ -17,6 +17,17 @@ object CLValue {
     ToBytes.toBytes(t)
   )
 
+  def option(inner: Option[CLValue]): CLValue = inner match {
+    // TODO: the type here could be a problem; if we get a `None` we know
+    // that we should return a `CLType.Option`, but we do not know what
+    // the inner type should be. I am choosing `Any` for now, but
+    // maybe we will need to revisit this decision in the future.
+    case None => CLValue(CLType.Option(CLType.Any), Vector(bytesrepr.Constants.Option.NONE_TAG))
+
+    case Some(value) =>
+      CLValue(CLType.Option(value.clType), bytesrepr.Constants.Option.SOME_TAG +: value.value)
+  }
+
   implicit val toBytesCLValue: ToBytes[CLValue] = new ToBytes[CLValue] {
     override def toBytes(v: CLValue): Array[Byte] =
       ToBytes.toBytes(v.value) ++ ToBytes.toBytes(v.clType)

@@ -3,7 +3,9 @@ package io.casperlabs.smartcontracts.cltype
 import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.state
-import io.casperlabs.smartcontracts.bytesrepr.FromBytes
+import io.casperlabs.casper.consensus.Deploy
+import io.casperlabs.smartcontracts.bytesrepr.{FromBytes, ToBytes}
+import scala.util.{Failure, Success, Try}
 
 object ProtoMappings {
   def toProto(v: StoredValue): Either[Error, state.Value] = v match {
@@ -42,6 +44,22 @@ object ProtoMappings {
     case (n, k) => state.NamedKey(name = n, key = Some(toProto(k)))
   }
 
+  def toProto(rights: Option[AccessRights]): state.Key.URef.AccessRights = rights match {
+    case None                            => state.Key.URef.AccessRights.UNKNOWN
+    case Some(AccessRights.Read)         => state.Key.URef.AccessRights.READ
+    case Some(AccessRights.Write)        => state.Key.URef.AccessRights.WRITE
+    case Some(AccessRights.ReadWrite)    => state.Key.URef.AccessRights.READ_WRITE
+    case Some(AccessRights.Add)          => state.Key.URef.AccessRights.ADD
+    case Some(AccessRights.ReadAdd)      => state.Key.URef.AccessRights.READ_ADD
+    case Some(AccessRights.AddWrite)     => state.Key.URef.AccessRights.ADD_WRITE
+    case Some(AccessRights.ReadAddWrite) => state.Key.URef.AccessRights.READ_ADD_WRITE
+  }
+
+  def toProto(uref: URef): state.Key.URef = state.Key.URef(
+    uref = ByteString.copyFrom(uref.address.bytes.toArray),
+    accessRights = toProto(uref.accessRights)
+  )
+
   def toProto(k: Key): state.Key = k match {
     case Key.Account(address) =>
       state.Key(
@@ -55,7 +73,7 @@ object ProtoMappings {
 
     case Key.URef(uref) =>
       state.Key(
-        state.Key.Value.Uref(state.Key.URef(ByteString.copyFrom(uref.address.bytes.toArray)))
+        state.Key.Value.Uref(toProto(uref))
       )
 
     case Key.Local(address) =>
@@ -181,6 +199,90 @@ object ProtoMappings {
     case CLType.Any             => Left(Error.NoRepresentation("CLType.Any", "state.Value"))
   }
 
+  def fromProto(rights: state.Key.URef.AccessRights): Either[Error, Option[AccessRights]] =
+    rights match {
+      case state.Key.URef.AccessRights.UNKNOWN         => Right(None)
+      case state.Key.URef.AccessRights.READ            => Right(Some(AccessRights.Read))
+      case state.Key.URef.AccessRights.WRITE           => Right(Some(AccessRights.Write))
+      case state.Key.URef.AccessRights.READ_WRITE      => Right(Some(AccessRights.ReadWrite))
+      case state.Key.URef.AccessRights.ADD             => Right(Some(AccessRights.Add))
+      case state.Key.URef.AccessRights.READ_ADD        => Right(Some(AccessRights.ReadAdd))
+      case state.Key.URef.AccessRights.ADD_WRITE       => Right(Some(AccessRights.AddWrite))
+      case state.Key.URef.AccessRights.READ_ADD_WRITE  => Right(Some(AccessRights.ReadAddWrite))
+      case state.Key.URef.AccessRights.Unrecognized(i) => Left(Error.UnrecognizedAccessRights(i))
+    }
+
+  def fromProto(uref: state.Key.URef): Either[Error, URef] =
+    for {
+      address <- toByteArray32(uref.uref)
+      rights  <- fromProto(uref.accessRights)
+    } yield URef(address, rights)
+
+  def fromProto(k: state.Key): Either[Error, Key] = k.value match {
+    case state.Key.Value.Empty => Left(Error.EmptyKeyVariant)
+
+    case state.Key.Value.Address(state.Key.Address(address)) =>
+      toByteArray32(address).map(Key.Account.apply)
+
+    case state.Key.Value.Hash(state.Key.Hash(address)) =>
+      toByteArray32(address).map(Key.Hash.apply)
+
+    case state.Key.Value.Uref(uref) => fromProto(uref).map(Key.URef.apply)
+
+    case state.Key.Value.Local(state.Key.Local(address)) =>
+      toByteArray32(address).map(Key.Local.apply)
+  }
+
+  private def fromArg(arg: Deploy.Arg.Value): Either[Error, CLValue] = arg.value match {
+    case Deploy.Arg.Value.Value.Empty          => Left(Error.EmptyArgValueVariant)
+    case Deploy.Arg.Value.Value.IntValue(x)    => Right(CLValue.from(x))
+    case Deploy.Arg.Value.Value.IntList(x)     => Right(CLValue.from(x.values))
+    case Deploy.Arg.Value.Value.StringValue(x) => Right(CLValue.from(x))
+    case Deploy.Arg.Value.Value.StringList(x)  => Right(CLValue.from(x.values))
+    case Deploy.Arg.Value.Value.LongValue(x)   => Right(CLValue.from(x))
+    case Deploy.Arg.Value.Value.Key(x)         => fromProto(x).map(CLValue.from[Key])
+
+    // TODO: It is a problem with the clients that they send public keys
+    // as byte arrays, but do not say they are supposed to be fixed length.
+    // For now we will assume all byte arrays are fixed length and fix this when
+    // we expand the `Arg` value model.
+    case Deploy.Arg.Value.Value.BytesValue(x) =>
+      val bytes  = x.toByteArray
+      val clType = CLType.FixedList(CLType.U8, bytes.length)
+      val value  = CLValue(clType, bytes)
+      Right(value)
+
+    case Deploy.Arg.Value.Value.BigInt(x) =>
+      Try(BigInt(x.value)) match {
+        case Failure(_) => Left(Error.InvalidBigIntValue(x.value))
+        case Success(value) =>
+          x.bitWidth match {
+            case 128   => Right(CLValue(CLType.U128, ToBytes[BigInt].toBytes(value)))
+            case 256   => Right(CLValue(CLType.U256, ToBytes[BigInt].toBytes(value)))
+            case 512   => Right(CLValue(CLType.U512, ToBytes[BigInt].toBytes(value)))
+            case other => Left(Error.InvalidBitWidth(other))
+          }
+      }
+
+    case Deploy.Arg.Value.Value.OptionalValue(x) =>
+      fromArg(x) match {
+        case Left(Error.EmptyArgValueVariant) => Right(CLValue.option(None))
+        case Right(value)                     => Right(CLValue.option(value.some))
+        case otherError                       => otherError
+      }
+  }
+
+  def fromArg(arg: Deploy.Arg): Either[Error, CLValue] = arg.value match {
+    case None        => Left(Error.MissingArg)
+    case Some(value) => fromArg(value)
+  }
+
+  private def toByteArray32(bytes: ByteString): Either[Error, ByteArray32] =
+    ByteArray32(bytes.toByteArray) match {
+      case None          => Left(Error.Expected32Bytes(found = bytes.toByteArray.toIndexedSeq))
+      case Some(bytes32) => Right(bytes32)
+    }
+
   sealed trait Error
   object Error {
     case class NoRepresentation(source: String, target: String) extends Error {
@@ -190,5 +292,16 @@ object ProtoMappings {
     case class FromBytesError(err: FromBytes.Error) extends Error
 
     case class CLValueError(err: CLValue.Error) extends Error
+
+    case class Expected32Bytes(found: IndexedSeq[Byte]) extends Error
+
+    case object MissingArg           extends Error
+    case object EmptyKeyVariant      extends Error
+    case object EmptyArgValueVariant extends Error
+
+    case class InvalidBigIntValue(value: String) extends Error
+    case class InvalidBitWidth(bitWidth: Int)    extends Error
+
+    case class UnrecognizedAccessRights(enumValue: Int) extends Error
   }
 }
