@@ -61,11 +61,7 @@ pub fn delegate() {
             let amount: U512 = runtime::get_arg(3)
                 .unwrap_or_revert_with(ApiError::MissingArgument)
                 .unwrap_or_revert_with(ApiError::InvalidArgument);
-            let result: Result<(), Error> = if !source.is_writeable() || !target.is_addable() {
-                Err(Error::InvalidAccessRights)
-            } else {
-                mint.transfer(source, target, amount)
-            };
+            let result: Result<(), Error> = mint.transfer(source, target, amount);
             let ret = CLValue::from_t(result).unwrap_or_revert();
             runtime::ret(ret);
         }

@@ -47,6 +47,9 @@ where
     }
 
     fn transfer(&self, source: URef, dest: URef, amount: U512) -> Result<(), Error> {
+        if !source.is_writeable() || !dest.is_addable() {
+            return Err(Error::InvalidAccessRights);
+        }
         let source_bal: URef = match S::read_local(&source.addr())? {
             Some(key) => TryFrom::<Key>::try_from(key).map_err(|_| Error::InvalidAccessRights)?,
             None => return Err(Error::SourceNotFound),
