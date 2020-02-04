@@ -101,14 +101,14 @@ export function toBytesU64(num: u64): u8[] {
 
 export function fromBytesU64(bytes: Uint8Array): u64 {
     if (bytes.length < 8) {
-        // SetLastError(Error.EarlyEndOfStream);
+        SetLastError(Error.EarlyEndOfStream);
         return u64.MAX_VALUE;
     }
 
     // NOTE: Overflows on unit tests for ranges >= 2**32
-    // SetDecodedBytesCount(8);
+    SetDecodedBytesCount(8);
 
-    // SetLastError(Error.Ok);
+    SetLastError(Error.Ok);
     return load<u64>(bytes.dataStart);
 }
 
