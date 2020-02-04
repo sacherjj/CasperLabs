@@ -43,7 +43,7 @@ booking-duration = "10days"
 entropy-duration = "3hours"
 
 # Keep voting on the switch block for a fixed amount of time; effective if the summit level is zero.
-voting-period-duration = "0days"
+voting-period-duration = "2days"
 
 # Alternative voting duration based on the finality level of the switch block; effective if it's non-zero.
 voting-period-summit-level = 1
