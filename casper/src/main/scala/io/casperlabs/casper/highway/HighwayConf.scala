@@ -56,13 +56,10 @@ final case class HighwayConf(
       case EraDuration.Calendar(length, unit) =>
         val s = LocalDateTime.ofInstant(start, UTC)
         val e = unit match {
-          case SECONDS => s.plusSeconds(length)
-          case MINUTES => s.plusMinutes(length)
-          case HOURS   => s.plusHours(length)
-          case DAYS    => s.plusDays(length)
-          case WEEKS   => s.plusWeeks(length)
-          case MONTHS  => s.plusMonths(length)
-          case YEARS   => s.plusYears(length)
+          case DAYS   => s.plusDays(length)
+          case WEEKS  => s.plusWeeks(length)
+          case MONTHS => s.plusMonths(length)
+          case YEARS  => s.plusYears(length)
         }
         e.atZone(UTC).toInstant
     }
@@ -143,18 +140,17 @@ object HighwayConf {
     /** Fixed endings can be calculated with the calendar, to make eras take exactly one week (or a month),
       * but it means eras might have different lengths. Using this might mean that a different platform
       * which handles leap seconds differently could assign different tick IDs.
+      *
+      * In practice at least the JVM doesn't make leap seconds visible, they get distributed over the last day of the year.
       */
     case class Calendar(length: Long, unit: CalendarUnit) extends EraDuration
 
     sealed trait CalendarUnit
     object CalendarUnit {
-      case object SECONDS extends CalendarUnit
-      case object MINUTES extends CalendarUnit
-      case object HOURS   extends CalendarUnit
-      case object DAYS    extends CalendarUnit
-      case object WEEKS   extends CalendarUnit
-      case object MONTHS  extends CalendarUnit
-      case object YEARS   extends CalendarUnit
+      case object DAYS   extends CalendarUnit
+      case object WEEKS  extends CalendarUnit
+      case object MONTHS extends CalendarUnit
+      case object YEARS  extends CalendarUnit
     }
   }
 
