@@ -6,9 +6,10 @@ from casperlabs_local_net.client_parser import parse_show_block
 from casperlabs_local_net.client_parser import parse_show_blocks
 from casperlabs_local_net.casperlabs_network import OneNodeNetwork
 from casperlabs_local_net.casperlabs_accounts import Account
-from casperlabs_local_net.wait import wait_for_block_hash_propagated_to_all_nodes
-from casperlabs_client import InternalError
-from casperlabs_local_net.common import extract_block_hash_from_propose_output
+from casperlabs_local_net.wait import (
+    wait_for_block_hash_propagated_to_all_nodes,
+    wait_for_invalid_unslashable_block,
+)
 from casperlabs_local_net.casperlabs_accounts import GENESIS_ACCOUNT
 from casperlabs_local_net.cli import CLI, DockerCLI
 
@@ -31,12 +32,8 @@ def add_funded_account_to_network(network: OneNodeNetwork, account_number: int):
         target_account=account.public_key,
     )
     assert "Success!" in response
-    response = node0.d_client.propose()
-    block_hash = extract_block_hash_from_propose_output(response)
-    assert block_hash is not None
-    r = node0.client.show_deploys(block_hash)[0]
-    assert r.is_error is False, f"Transfer Failed: {r.error_message}"
-    assert r.error_message == ""
+    deploy_hash = response.split()[2]
+    node0.wait_for_deploy_processed_and_get_block_hash(deploy_hash)
 
 
 def bond_to_the_network(
@@ -46,12 +43,14 @@ def bond_to_the_network(
     node0, node1 = network.docker_nodes
     cli = cli_method(node0)
     # fmt: off
-    cli("bond",
-        "--amount", bond_amount,
-        '--private-key', cli.private_key_path(account),
-        '--payment-amount', EXECUTION_PAYMENT_AMOUNT)
+    deploy_hash = cli("bond",
+                      "--amount", bond_amount,
+                      '--private-key', cli.private_key_path(account),
+                      '--payment-amount', EXECUTION_PAYMENT_AMOUNT)
     # fmt: on
-    block_hash = cli("propose")
+    block_hash = cli.node.wait_for_deploy_processed_and_get_block_hash(
+        deploy_hash, on_error_raise=False
+    )
     return block_hash, account
 
 
@@ -138,12 +137,7 @@ def test_bonding_and_unbonding_with_deploys(one_node_network_fn, acct_num, cli_m
 
     # Test deploy/propose bonded
     logging.info(f"Deploy and propose on bonded node.")
-    block_hash = node1.d_client.deploy_and_propose(
-        from_address=account.public_key_hex,
-        session_contract=Contract.HELLO_NAME_DEFINE,
-        private_key=account.private_key_docker_path,
-        public_key=account.public_key_docker_path,
-    )
+    block_hash = node1.deploy_and_get_block_hash(account, Contract.HELLO_NAME_DEFINE)
     wait_for_block_hash_propagated_to_all_nodes(
         one_node_network_fn.docker_nodes, block_hash
     )
@@ -176,9 +170,7 @@ def test_bonding_and_unbonding_with_deploys(one_node_network_fn, acct_num, cli_m
         private_key=account.private_key_docker_path,
         public_key=account.public_key_docker_path,
     )
-    with pytest.raises(InternalError) as excinfo:
-        node1.p_client.propose().block_hash.hex()
-    assert "InvalidUnslashableBlock" in str(excinfo.value)
+    wait_for_invalid_unslashable_block(node1)
 
 
 @pytest.mark.parametrize(
