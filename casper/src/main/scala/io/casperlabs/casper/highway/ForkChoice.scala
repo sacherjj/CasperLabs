@@ -243,6 +243,9 @@ object ForkChoice {
       copy(scores.updated(height, newVotes))
     }
 
+    def removeHeight(height: Scores.Height): Scores =
+      copy(scores - height)
+
     def votesAtHeight(height: Scores.Height): Map[BlockHash, Weight] =
       scores.getOrElse(height, Map.empty)
 
@@ -253,7 +256,7 @@ object ForkChoice {
 
     def tip[F[_]: Sync](implicit dag: DagLookup[F]): F[Block] =
       Scores
-        .findTip[F](maxHeight, minHeight, totalWeight, this)
+        .findTip[F](maxHeight, this)
         .flatMap(dag.lookupUnsafe(_))
         .flatMap(
           msg => Sync[F].fromTry(Try(msg.asInstanceOf[Block]))
@@ -265,17 +268,15 @@ object ForkChoice {
     val empty: Scores = Scores(Map.empty)
 
     def findTip[F[_]: DagLookup: Sync](
-        height: Scores.Height,
-        stopHeight: Scores.Height,
-        totalWeight: Weight,
+        currHeight: Scores.Height,
         scores: Scores
     ): F[BlockHash] =
-      if (height == stopHeight) {
+      if (currHeight == scores.minHeight) {
         import io.casperlabs.casper.util.DagOperations.bigIntByteStringOrdering
-        scores.votesAtHeight(height).map(_.swap).max(bigIntByteStringOrdering)._2.pure[F]
+        scores.votesAtHeight(currHeight).map(_.swap).max(bigIntByteStringOrdering)._2.pure[F]
       } else {
-        scores.votesAtHeight(height).toList.filter {
-          case (_, weight) => 2 * weight >= totalWeight
+        scores.votesAtHeight(currHeight).toList.filter {
+          case (_, weight) => 2 * weight >= scores.totalWeight
         } match {
           case Nil =>
             val dag = DagLookup[F]
@@ -283,17 +284,17 @@ object ForkChoice {
             // Propagate this height weights downward. That's safe b/c
             // if a validator voted for ancestor of a block it also voted for the block itself.
             val newScores: F[Scores] = {
-              val currHeightVotes = scores.votesAtHeight(height)
-              currHeightVotes.toList.foldM(scores) {
+              val currHeightVotes = scores.votesAtHeight(currHeight)
+              currHeightVotes.toList.foldM(scores.removeHeight(currHeight)) {
                 case (acc, (hash, weight)) =>
                   dag.lookupUnsafe(hash).map { msg =>
                     val parent = msg.asInstanceOf[Block].parentBlock
-                    acc.update(height - 1, parent, weight)
+                    acc.update(currHeight - 1, parent, weight)
                   }
               }
             }
 
-            newScores.flatMap(findTip[F](height - 1, stopHeight, totalWeight, _))
+            newScores.flatMap(findTip[F](currHeight - 1, _))
           case List((b1, _), (b2, _)) =>
             import io.casperlabs.shared.Sorting.byteStringOrdering
             // Two blocks have weight greater or equal than half ot the total weight.
