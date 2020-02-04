@@ -2,7 +2,6 @@ use contract::contract_api::runtime;
 use proof_of_stake::RuntimeProvider;
 use types::{account::PublicKey, key::Key, BlockTime, Phase};
 
-#[allow(dead_code)]
 pub struct ContractRuntime;
 
 impl RuntimeProvider for ContractRuntime {

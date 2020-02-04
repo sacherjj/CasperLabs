@@ -4,7 +4,6 @@ use proof_of_stake::{Queue, QueueProvider};
 const BONDING_KEY: u8 = 1;
 const UNBONDING_KEY: u8 = 2;
 
-#[allow(dead_code)]
 /// A `QueueProvider` that reads and writes the queue to/from the contract's local state.
 pub struct ContractQueue;
 

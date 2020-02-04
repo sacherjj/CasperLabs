@@ -5,7 +5,6 @@ use types::{
     TransferResult, U512,
 };
 
-#[allow(dead_code)]
 pub struct ContractMint;
 
 impl MintProvider for ContractMint {

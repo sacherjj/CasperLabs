@@ -14,7 +14,6 @@ use types::{
     Key, U512,
 };
 
-#[allow(dead_code)]
 /// A `StakesProvider` that reads and writes the stakes to/from the contract's
 /// known urefs.
 pub struct ContractStakes;
