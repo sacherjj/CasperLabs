@@ -2,7 +2,7 @@ use contract::contract_api::system;
 use proof_of_stake::MintProvider;
 use types::{
     account::{PublicKey, PurseId},
-    ApiError, TransferResult, U512,
+    TransferResult, U512,
 };
 
 #[allow(dead_code)]
@@ -21,8 +21,8 @@ impl MintProvider for ContractMint {
         source: PurseId,
         target: PurseId,
         amount: U512,
-    ) -> Result<(), ApiError> {
-        system::transfer_from_purse_to_purse(source, target, amount)
+    ) -> Result<(), ()> {
+        system::transfer_from_purse_to_purse(source, target, amount).map_err(|_| ())
     }
 
     fn get_balance(purse: PurseId) -> Option<U512> {

@@ -1,6 +1,6 @@
 use types::{
     account::{PublicKey, PurseId},
-    ApiError, TransferResult, U512,
+    TransferResult, U512,
 };
 
 pub trait MintProvider {
@@ -14,7 +14,7 @@ pub trait MintProvider {
         source: PurseId,
         target: PurseId,
         amount: U512,
-    ) -> Result<(), ApiError>;
+    ) -> Result<(), ()>;
 
     fn get_balance(purse: PurseId) -> Option<U512>;
 }
