@@ -42,7 +42,7 @@ where
         };
         match S::read(balance_uref)? {
             some @ Some(_) => Ok(some),
-            None => Err(Error::DestNotFound), // TODO
+            None => Err(Error::PurseNotFound),
         }
     }
 

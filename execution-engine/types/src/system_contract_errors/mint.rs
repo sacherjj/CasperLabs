@@ -29,6 +29,8 @@ pub enum Error {
     InvalidNonEmptyPurseCreation = 5,
     #[fail(display = "Storage error")]
     StorageError = 6,
+    #[fail(display = "Purse not found")]
+    PurseNotFound = 7,
     #[fail(display = "Missing argument")]
     MissingArgument = 102,
     #[fail(display = "Passed argument is invalid")]
