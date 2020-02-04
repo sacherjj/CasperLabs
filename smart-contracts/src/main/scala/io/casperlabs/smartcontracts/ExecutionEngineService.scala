@@ -14,6 +14,8 @@ import io.casperlabs.ipc._
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.models.SmartContractEngineError
 import io.casperlabs.shared.Log
+import io.casperlabs.smartcontracts.bytesrepr.FromBytes
+import io.casperlabs.smartcontracts.cltype.StoredValue
 import io.casperlabs.smartcontracts.ExecutionEngineService.Stub
 import monix.eval.{Task, TaskLift}
 import simulacrum.typeclass
@@ -209,9 +211,22 @@ class GrpcExecutionEngineService[F[_]: Defer: Concurrent: Log: TaskLift: Metrics
   ): F[Either[Throwable, Value]] =
     sendMessage(QueryRequest(state, Some(baseKey), path, Some(protocolVersion)), _.query) {
       _.result match {
-        case QueryResponse.Result.Success(value) => Right(value)
-        case QueryResponse.Result.Empty          => Left(SmartContractEngineError("empty response"))
-        case QueryResponse.Result.Failure(err)   => Left(SmartContractEngineError(err))
+        case QueryResponse.Result.Success(bytes) =>
+          FromBytes.deserialize[StoredValue](bytes.toByteArray) match {
+            case Left(err) => Left(SmartContractEngineError(s"Error in parsing EE response: $err"))
+
+            // TODO: We should map to state.StoredValue instead of state.Value
+            // After that we can remove state.Value (and its variants; state.StringList, state.IntList, etc.).
+            case Right(v) =>
+              cltype.ProtoMappings
+                .toProto(v)
+                .leftMap(
+                  err => SmartContractEngineError(s"Error with EE response $v:\n$err")
+                )
+          }
+
+        case QueryResponse.Result.Empty        => Left(SmartContractEngineError("empty response"))
+        case QueryResponse.Result.Failure(err) => Left(SmartContractEngineError(err))
       }
     }
 }
