@@ -235,15 +235,15 @@ object ForkChoice {
    */
   private[highway] case class Scores(scores: Map[Scores.Height, Map[BlockHash, Weight]]) {
     // Update weight of votes at height.
-    def update(height: Scores.Height, hash: BlockHash, weight: Weight): Scores = {
-      val currVotes = scores.getOrElse(height, Map.empty[BlockHash, Weight])
-      val currScore = currVotes.getOrElse(hash, Weight.Zero)
+    def update(vote: Block, weight: Weight): Scores = {
+      val currVotes = scores.getOrElse(vote.rank, Map.empty[BlockHash, Weight])
+      val currScore = currVotes.getOrElse(vote.messageHash, Weight.Zero)
       val newScore  = currScore + weight
-      val newVotes  = currVotes.updated(hash, newScore)
-      copy(scores.updated(height, newVotes))
+      val newVotes  = currVotes.updated(vote.messageHash, newScore)
+      copy(scores.updated(vote.rank, newVotes))
     }
 
-    def removeHeight(height: Scores.Height): Scores =
+    private def removeHeight(height: Scores.Height): Scores =
       copy(scores - height)
 
     def votesAtHeight(height: Scores.Height): Map[BlockHash, Weight] =
@@ -287,10 +287,10 @@ object ForkChoice {
               val currHeightVotes = scores.votesAtHeight(currHeight)
               currHeightVotes.toList.foldM(scores.removeHeight(currHeight)) {
                 case (acc, (hash, weight)) =>
-                  dag.lookupUnsafe(hash).map { msg =>
-                    val parent = msg.asInstanceOf[Block].parentBlock
-                    acc.update(currHeight - 1, parent, weight)
-                  }
+                  for {
+                    msg    <- dag.lookupUnsafe(hash)
+                    parent <- dag.lookupUnsafe(msg.parentBlock).map(_.asInstanceOf[Block])
+                  } yield acc.update(parent, weight)
               }
             }
 
