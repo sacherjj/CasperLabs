@@ -6,8 +6,8 @@
   "ascMain": "assembly/index.ts",
   "dependencies": {},
   "devDependencies": {
-    "@assemblyscript/loader": "^0.8.1",
-    "assemblyscript": "^0.8.1",
+    "@assemblyscript/loader": "^0.9.1",
+    "assemblyscript": "^0.9.1",
     "ava": "^2.4.0",
     "ts-loader": "^6.2.1",
     "ts-node": "^8.5.4",

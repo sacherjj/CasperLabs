@@ -1,8 +1,29 @@
 import {Pair} from "./pair";
 
+export enum Error {
+    // Last operation was a success
+    Ok = 0,
+    // Early end of stream
+    EarlyEndOfStream = 1,
+}
+
+// NOTE: Using Error.Ok generates additional "start" node with initializing code which we want to avoid
+// Ref: https://github.com/AssemblyScript/assemblyscript/issues/566#issuecomment-581835994
+@lazy
+let lastError: i32 = <Error>0;
+
+export function GetLastError(): i32 {
+    return lastError;
+}
+
+export function SetLastError(error: i32): void {
+    lastError = error;
+}
+
 // Any fromBytes operation sets this, so caller can know how much bytes to
 // skip in the input stream for complex types
-var LastDecodedBytesCount: u32 = 0;
+@lazy
+let LastDecodedBytesCount: u32 = 0;
 
 export function SetDecodedBytesCount(value: u32): void {
     LastDecodedBytesCount = value;
@@ -44,9 +65,9 @@ export function fromBytesU32(bytes: Uint8Array): U32 | null {
     }
     const number = <u32>load<u32>(bytes.dataStart);
     
-    LastDecodedBytesCount = 4;
+    SetDecodedBytesCount(4);
 
-    return <U32>number;
+    return changetype<U32>(number);
 }
 
 export function toBytesI32(num: i32): u8[] {
@@ -63,12 +84,11 @@ export function fromBytesI32(bytes: Uint8Array): I32 | null {
     if (bytes.length < 4) {
         return null;
     }
-    LastDecodedBytesCount = 4;
-    return <I32>(<i32>load<i32>(bytes.dataStart));
+    SetDecodedBytesCount(4);
+    return load<I32>(bytes.dataStart);
 }
 
 export function toBytesU64(num: u64): u8[] {
-    // NOTE: Overflows on unit tests for ranges >= 2**32
     let bytes = new Uint8Array(8);
     store<u64>(bytes.dataStart, num);
     let result = new Array<u8>(8);
@@ -78,14 +98,16 @@ export function toBytesU64(num: u64): u8[] {
     return result;
 }
 
-export function fromBytesU64(bytes: Uint8Array): U64 | null {
+export function fromBytesU64(bytes: Uint8Array): u64 {
     if (bytes.length < 8) {
-        return null;
+        SetLastError(Error.EarlyEndOfStream);
+        return u64.MAX_VALUE;
     }
 
-    // NOTE: Overflows on unit tests for ranges >= 2**32
-    LastDecodedBytesCount = 8;
-    return <U64><i64>load<i64>(bytes.dataStart);
+    SetDecodedBytesCount(8);
+
+    SetLastError(Error.Ok);
+    return load<u64>(bytes.dataStart);
 }
 
 export function toBytesPair(key: u8[], value: u8[]): u8[] {
@@ -113,38 +135,43 @@ export function fromBytesMap<K, V>(
 
     let result = new Array<Pair<K, V>>();
 
-    if (length === <U32>0) {
+    if (length === changetype<U32>(0)) {
         return result;
     }
     if (length === null) {
         return null;
     }
 
-    let currentOffset = LastDecodedBytesCount;
+    let currentDecodedBytes = GetDecodedBytesCount();
+    let currentOffset = currentDecodedBytes;
 
-    let bytes = bytes.subarray(LastDecodedBytesCount);
+    let bytes = bytes.subarray(currentDecodedBytes);
 
-    for (let i = 0; i < <i32>length; i++) {
+    for (let i = 0; i < changetype<i32>(length); i++) {
         let key = decodeKey(bytes);
         if (key === null) {
             return null;
         }
-        currentOffset += LastDecodedBytesCount;
-        bytes = bytes.subarray(LastDecodedBytesCount);
+
+        let keyDecodedBytes = GetDecodedBytesCount();
+        currentOffset += keyDecodedBytes;
+        bytes = bytes.subarray(keyDecodedBytes);
 
         let value = decodeValue(bytes);
         if (value === null) {
             return null;
         }
-        currentOffset += LastDecodedBytesCount;
+
+        let valueDecodedBytes = GetDecodedBytesCount()
+        currentOffset += valueDecodedBytes;
         
-        bytes = bytes.subarray(LastDecodedBytesCount);
+        bytes = bytes.subarray(valueDecodedBytes);
 
         let pair = new Pair<K, V>(key, value);
         result.push(pair);
     }
 
-    LastDecodedBytesCount = currentOffset;
+    SetDecodedBytesCount(currentOffset);
     return result;
 }
 
@@ -163,13 +190,14 @@ export function fromBytesString(s: Uint8Array): String | null {
     if (len === null) {
         return null;
     }
-    let currentOffset = LastDecodedBytesCount;
+    let leni32 = changetype<i32>(len);
+    let currentOffset = GetDecodedBytesCount();
     var result = "";
-    for (var i = 0; i < <i32>len; i++) {
+    for (var i = 0; i < leni32; i++) {
         result += String.fromCharCode(s[4 + i]);
     }
 
-    LastDecodedBytesCount = currentOffset + <u32>len;
+    SetDecodedBytesCount(currentOffset + leni32);
     return result;
 }
 
@@ -184,7 +212,7 @@ export function fromBytesArrayU8(arr: Uint8Array): Uint8Array | null {
         return null;
     }
 
-    let offset = LastDecodedBytesCount;
+    let offset = GetDecodedBytesCount();
 
     if (<u32>len < <u32>arr.length - 4) {
         return null;
@@ -205,7 +233,7 @@ export function toBytesVecT<T>(ts: T[]): Array<u8> {
 export function fromBytesStringList(arr: Uint8Array): String[] | null {
     var len = fromBytesU32(arr);
     
-    if (len === <U32>0) {
+    if (len === changetype<U32>(0)) {
         // NOTE: There's something wrong about how === operator works (compared to JS/TS).
         // NOTE: If len is null then `len === null` is true for both null and 0.
         return [];
@@ -215,23 +243,23 @@ export function fromBytesStringList(arr: Uint8Array): String[] | null {
         return null;
     }
 
-    let offset = LastDecodedBytesCount;
+    let offset = GetDecodedBytesCount();
     let head = arr.subarray(offset);
 
     let result: String[] = [];
 
-    for (let i = 0; i < <i32>len; ++i) {
+    for (let i = 0; i < changetype<i32>(len); ++i) {
         let str = fromBytesString(head);
         if (str === null) {
             return null;
         }
-        offset += LastDecodedBytesCount;
+        offset += GetDecodedBytesCount();
         
         result.push(str);
         head = head.subarray(4 + str.length);
     }
 
-    LastDecodedBytesCount = offset;
+    SetDecodedBytesCount(offset);
     return result;
 }
 
