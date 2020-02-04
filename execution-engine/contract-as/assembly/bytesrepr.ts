@@ -89,7 +89,6 @@ export function fromBytesI32(bytes: Uint8Array): I32 | null {
 }
 
 export function toBytesU64(num: u64): u8[] {
-    // NOTE: Overflows on unit tests for ranges >= 2**32
     let bytes = new Uint8Array(8);
     store<u64>(bytes.dataStart, num);
     let result = new Array<u8>(8);
@@ -105,7 +104,6 @@ export function fromBytesU64(bytes: Uint8Array): u64 {
         return u64.MAX_VALUE;
     }
 
-    // NOTE: Overflows on unit tests for ranges >= 2**32
     SetDecodedBytesCount(8);
 
     SetLastError(Error.Ok);

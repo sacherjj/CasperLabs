@@ -184,9 +184,9 @@ export class U512 {
     }
 
     clone(): U512 {
-        let U512ber = new U512();
-        U512ber.setValues(this.pn);
-        return U512ber;
+        let U512val = new U512();
+        U512val.setValues(this.pn);
+        return U512val;
     }
 
     // Returns length of the integer in bits
