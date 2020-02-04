@@ -81,6 +81,13 @@ trait ArbitraryImplicits {
     } yield refineV[GreaterEqual[W.`0.0`.T]](d).right.get
   }
 
+  implicit val gt0lte1DoubleGen
+      : Arbitrary[Refined[Double, Interval.OpenClosed[W.`0.0`.T, W.`1.0`.T]]] = Arbitrary {
+    for {
+      d <- Gen.choose(0.0, 1.0).filter(_ > 0)
+    } yield refineV[Interval.OpenClosed[W.`0.0`.T, W.`1.0`.T]](d).right.get
+  }
+
   implicit val levelGen: Arbitrary[IzLog.Level] = Arbitrary {
     Gen.oneOf(List(IzLog.Level.Debug, IzLog.Level.Info, IzLog.Level.Error, IzLog.Level.Warn))
   }

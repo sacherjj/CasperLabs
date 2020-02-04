@@ -28,6 +28,7 @@ final case class Configuration(
     grpc: Configuration.Grpc,
     tls: Tls,
     casper: CasperConf,
+    highway: Configuration.Highway,
     blockstorage: Configuration.BlockStorage,
     metrics: Configuration.Kamon,
     influx: Option[Configuration.Influx]
@@ -111,6 +112,12 @@ object Configuration extends ParserImplicits {
       portExternal: Int,
       portInternal: Int,
       useTls: Boolean
+  ) extends SubConfig
+
+  case class Highway(
+      omegaMessageTimeStart: Double Refined Interval.OpenClosed[W.`0.0`.T, W.`1.0`.T],
+      omegaMessageTimeEnd: Double Refined Interval.OpenClosed[W.`0.0`.T, W.`1.0`.T],
+      initRoundExponent: Int Refined NonNegative
   ) extends SubConfig
 
   sealed trait Command extends Product with Serializable
