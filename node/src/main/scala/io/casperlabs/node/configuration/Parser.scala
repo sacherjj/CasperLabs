@@ -97,6 +97,13 @@ private[configuration] trait ParserImplicits {
         w <- refineV[Interval.OpenClosed[W.`0.0`.T, W.`1.0`.T]](d)
       } yield w
 
+  implicit val gte0lte1IntParser: Parser[Refined[Int, Interval.Closed[W.`0`.T, W.`1`.T]]] =
+    s =>
+      for {
+        d <- Try(s.toInt).toEither.leftMap(_.getMessage)
+        w <- refineV[Interval.Closed[W.`0`.T, W.`1`.T]](d)
+      } yield w
+
   implicit def listParser[T: Parser] = new Parser[List[T]] {
     override def parse(s: String) =
       s.split(' ').filterNot(_.isEmpty).map(Parser[T].parse).toList.sequence
