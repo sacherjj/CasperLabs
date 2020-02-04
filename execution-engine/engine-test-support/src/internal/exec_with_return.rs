@@ -7,6 +7,7 @@ use engine_core::{
         EngineState,
     },
     execution::{self, AddressGenerator},
+    runtime::{self, Runtime},
     runtime_context::RuntimeContext,
 };
 use engine_grpc_server::engine_server::ipc_grpc::ExecutionEngineService;
@@ -71,8 +72,8 @@ where
     let mut named_keys = account.named_keys().clone();
 
     let access_rights = {
-        let mut ret = execution::extract_access_rights_from_keys(named_keys.values().cloned());
-        let extras = execution::extract_access_rights_from_urefs(extra_urefs.into_iter());
+        let mut ret = runtime::extract_access_rights_from_keys(named_keys.values().cloned());
+        let extras = runtime::extract_access_rights_from_urefs(extra_urefs.into_iter());
         ret.extend(extras.into_iter());
         ret
     };
@@ -118,11 +119,10 @@ where
         )
         .expect("should get wasm module");
 
-    let (instance, memory) =
-        execution::instance_and_memory(parity_module.clone(), protocol_version)
-            .expect("should be able to make wasm instance from module");
+    let (instance, memory) = runtime::instance_and_memory(parity_module.clone(), protocol_version)
+        .expect("should be able to make wasm instance from module");
 
-    let mut runtime = execution::Runtime::new(Default::default(), memory, parity_module, context);
+    let mut runtime = Runtime::new(Default::default(), memory, parity_module, context);
 
     match instance.invoke_export("call", &[], &mut runtime) {
         Ok(_) => None,
