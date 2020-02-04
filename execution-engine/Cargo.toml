@@ -13,6 +13,7 @@ members = [
     "engine-storage",
     "engine-tests",
     "engine-wasm-prep",
+    "proof-of-stake",
     "types"
 ]
 exclude = [
@@ -29,6 +30,7 @@ default-members = [
     "engine-storage",
     "engine-tests",
     "engine-wasm-prep",
+    "proof-of-stake",
     "types"
 ]
 

@@ -16,4 +16,5 @@ lib = []
 [dependencies]
 base16 = { version = "0.2.1", default-features = false }
 contract = { path = "../../../contract", package = "casperlabs-contract" }
+proof-of-stake = { path = "../../../proof-of-stake", package = "casperlabs-proof-of-stake" }
 types = { path = "../../../types", package = "casperlabs-types" }
