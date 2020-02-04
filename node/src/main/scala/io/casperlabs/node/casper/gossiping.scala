@@ -802,12 +802,27 @@ package object gossiping {
   private def show(hash: ByteString) =
     PrettyPrinter.buildString(hash)
 
+  /** Find the rank we should be synchronizing from, i.e. the maximum rank we can consider
+    * complete in our DAG. At some point this should be coming from the base block, which
+    * is moved in accordance to social consensus.
+    */
   private def latestMessagesMinRank[F[_]: Monad: DagStorage]: F[Long] =
     for {
       dag            <- DagStorage[F].getRepresentation
       latestMessages <- dag.latestMessages
+      // Take the maximum per validator (which gives us the last era they are part of)
+      // and then the minimum across the validators themselves. This can get stuck
+      // if some validator never bonds again. That will be solved by the base block.
+      // If the parent era was still voting, we might have new blocks in the past that
+      // the next blocks in the child era will depend on, when we resume, we we can't
+      // safely take the last message of each validator. If the node is stopped for a long
+      // time we may come back and see that all of the eras are inactive; we could gather
+      // messages which aren't in the last eras.
       minRank = latestMessages.values
-        .flatMap(_.map(_.rank))
+        .flatMap { messages =>
+          // TODO: The fact that the last 3 eras are active should come from config.
+          messages.map(_.rank).toSeq.sorted.takeRight(3)
+        }
         .toList
         .minimumOption
         .getOrElse(0L)
