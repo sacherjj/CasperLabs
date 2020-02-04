@@ -1,8 +1,7 @@
 package io.casperlabs.casper.highway
 
-import cats._
 import cats.implicits._
-import cats.effect.{ContextShift, Resource, Sync, Timer}
+import cats.effect.{Resource, Timer}
 import cats.effect.concurrent.Ref
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.helper.StorageFixture
@@ -26,7 +25,6 @@ import java.time.Instant
 import java.util.concurrent.TimeUnit
 import monix.catnap.SchedulerEffect
 import monix.eval.Task
-import monix.execution.Scheduler
 import monix.execution.schedulers.TestScheduler
 import scala.concurrent.duration._
 import org.scalatest.Suite
