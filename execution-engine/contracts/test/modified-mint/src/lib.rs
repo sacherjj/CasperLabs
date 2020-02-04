@@ -6,13 +6,13 @@ use alloc::string::String;
 
 use contract::{contract_api::runtime, unwrap_or_revert::UnwrapOrRevert};
 use mint::Mint;
-use mint_token::CLMint;
+use mint_token::MintContract;
 use types::{system_contract_errors::mint::Error, ApiError, CLValue, URef, U512};
 
 const VERSION: &str = "1.1.0";
 
 pub fn delegate() {
-    let mint = CLMint;
+    let mint = MintContract;
     let method_name: String = runtime::get_arg(0)
         .unwrap_or_revert_with(ApiError::MissingArgument)
         .unwrap_or_revert_with(ApiError::InvalidArgument);

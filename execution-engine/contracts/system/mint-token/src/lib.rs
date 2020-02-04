@@ -14,44 +14,49 @@ use types::{system_contract_errors::mint::Error, ApiError, CLValue, URef, U512};
 
 use crate::{contract_runtime::ContractRuntime, contract_storage::ContractStorage};
 
-pub struct CLMint;
+const METHOD_MINT: &str = "mint";
+const METHOD_CREATE: &str = "create";
+const METHOD_BALANCE: &str = "balance";
+const METHOD_TRANSFER: &str = "transfer";
 
-impl Mint<ContractRuntime, ContractStorage> for CLMint {}
+pub struct MintContract;
+
+impl Mint<ContractRuntime, ContractStorage> for MintContract {}
 
 pub fn delegate() {
-    let mint = CLMint;
+    let mint_contract = MintContract;
+
     let method_name: String = runtime::get_arg(0)
         .unwrap_or_revert_with(ApiError::MissingArgument)
         .unwrap_or_revert_with(ApiError::InvalidArgument);
 
     match method_name.as_str() {
-        // argument: U512
-        // return: Result<URef, mint::error::Error>
-        "mint" => {
+        // Type: `fn mint(amount: U512) -> Result<URef, Error>`
+        METHOD_MINT => {
             let amount: U512 = runtime::get_arg(1)
                 .unwrap_or_revert_with(ApiError::MissingArgument)
                 .unwrap_or_revert_with(ApiError::InvalidArgument);
-            let result: Result<URef, Error> = mint.mint(amount);
+            let result: Result<URef, Error> = mint_contract.mint(amount);
             let ret = CLValue::from_t(result).unwrap_or_revert();
             runtime::ret(ret)
         }
-
-        "create" => {
-            let uref = mint.mint(U512::zero()).unwrap_or_revert();
+        // Type: `fn create() -> URef`
+        METHOD_CREATE => {
+            let uref = mint_contract.mint(U512::zero()).unwrap_or_revert();
             let ret = CLValue::from_t(uref).unwrap_or_revert();
             runtime::ret(ret)
         }
-
-        "balance" => {
+        // Type: `fn balance(purse: URef) -> Option<U512>`
+        METHOD_BALANCE => {
             let uref: URef = runtime::get_arg(1)
                 .unwrap_or_revert_with(ApiError::MissingArgument)
                 .unwrap_or_revert_with(ApiError::InvalidArgument);
-            let balance: Option<U512> = mint.balance(uref).unwrap_or_revert();
+            let balance: Option<U512> = mint_contract.balance(uref).unwrap_or_revert();
             let ret = CLValue::from_t(balance).unwrap_or_revert();
             runtime::ret(ret)
         }
-
-        "transfer" => {
+        // Type: `fn transfer(source: URef, target: URef, amount: U512) -> Result<(), Error>`
+        METHOD_TRANSFER => {
             let source: URef = runtime::get_arg(1)
                 .unwrap_or_revert_with(ApiError::MissingArgument)
                 .unwrap_or_revert_with(ApiError::InvalidArgument);
@@ -61,10 +66,11 @@ pub fn delegate() {
             let amount: U512 = runtime::get_arg(3)
                 .unwrap_or_revert_with(ApiError::MissingArgument)
                 .unwrap_or_revert_with(ApiError::InvalidArgument);
-            let result: Result<(), Error> = mint.transfer(source, target, amount);
+            let result: Result<(), Error> = mint_contract.transfer(source, target, amount);
             let ret = CLValue::from_t(result).unwrap_or_revert();
             runtime::ret(ret);
         }
+
         _ => panic!("Unknown method name!"),
     }
 }
