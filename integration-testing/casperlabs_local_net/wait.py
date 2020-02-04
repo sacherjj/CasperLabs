@@ -292,6 +292,11 @@ class LastFinalisedHash(LogsContainMessage):
         super().__init__(node, f"Added block={hash_string[:10]}...")
 
 
+class NoNewDeploys(LogsContainMessage):
+    def __init__(self, node: DockerNode) -> None:
+        super().__init__(node, f"OUT_OF_RANGE: No new deploys.")
+
+
 class BlocksCountAtLeast:
     def __init__(self, node: DockerNode, blocks_count: int, depth: int) -> None:
         self.node = node
@@ -382,6 +387,10 @@ def wait_for_block_contains(
 def wait_for_finalised_hash(node: DockerNode, hash_string: str, timeout_seconds: int):
     predicate = LastFinalisedHash(node, hash_string)
     wait_on_using_wall_clock_time(predicate, timeout_seconds)
+
+
+def wait_for_no_new_deploys(node: DockerNode, timeout_seconds: int = 60):
+    wait_on_using_wall_clock_time(NoNewDeploys(node), timeout_seconds)
 
 
 def wait_for_new_fork_choice_tip_block(

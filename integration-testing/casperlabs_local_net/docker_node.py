@@ -588,8 +588,12 @@ class DockerNode(LoggingDockerBase):
                 assert deploy.is_error is False
         return block_hash
 
-    def wait_for_deploy_processed_and_get_block_hash(self, deploy_hash):
-        result = self.p_client.client.wait_for_deploy_processed(deploy_hash)
+    def wait_for_deploy_processed_and_get_block_hash(
+        self, deploy_hash, on_error_raise=True
+    ):
+        result = self.p_client.client.wait_for_deploy_processed(
+            deploy_hash, on_error_raise=on_error_raise
+        )
         last_processing_result = result.processing_results[0]
         block_hash = last_processing_result.block_info.summary.block_hash.hex()
         return block_hash

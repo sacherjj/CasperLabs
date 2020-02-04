@@ -139,7 +139,7 @@ failed propose.
 """
 
 
-def disable_test_neglected_invalid_block(three_node_network):
+def test_neglected_invalid_block(three_node_network):
     """
     Feature file: neglected_invalid_justification.feature
     Scenario: 3 Nodes doing simultaneous deploys and proposes do not have neglected invalid blocks
@@ -217,11 +217,7 @@ class DeployThread(threading.Thread):
     def run(self) -> None:
         for batch in self.batches_of_contracts:
             for contract in batch:
-                # TODO: The test was supposed to deploy few deploys and propose them all at once.
-                # After refactoring it is deploying one contract and waiting for the deploy
-                # to be processed and included in a block, before proceeding with a next deploy.
-                # With auto-propose this seems to be tricky to do without a race condition.
-                # We may need to rework the test or disable it. Discussion needed!
+                # TODO: deploy, remember deploy hashes and and wait for processed later.
                 block_hash = self.node.deploy_and_get_block_hash(
                     self.node.genesis_account, contract
                 )
@@ -232,7 +228,6 @@ class DeployThread(threading.Thread):
     "contract_paths,expected_deploy_counts_in_blocks",
     [([[Contract.HELLO_NAME_DEFINE]], [1, 5, 1, 1])],
 )
-# Nodes deploy one or more contracts followed by propose.
 def test_multiple_deploys_at_once(
     three_node_network,
     contract_paths: List[List[str]],
@@ -243,7 +238,6 @@ def test_multiple_deploys_at_once(
     Scenario: Multiple simultaneous deploy after single deploy
     """
     nodes = three_node_network.docker_nodes
-    # Wait for the genesis block reacing each node.
 
     deploy_threads = [
         DeployThread(

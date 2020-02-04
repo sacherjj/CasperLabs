@@ -333,6 +333,7 @@ class OneNodeNetwork(CasperLabsNetwork):
     """ A single node network with just a bootstrap """
 
     grpc_encryption = False
+    auto_propose = True
 
     def create_cl_network(self):
         account = self.get_key()
