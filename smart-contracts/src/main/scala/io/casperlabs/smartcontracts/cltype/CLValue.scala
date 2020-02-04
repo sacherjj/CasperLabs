@@ -7,7 +7,7 @@ import io.casperlabs.smartcontracts.bytesrepr.{BytesView, FromBytes, ToBytes}
 case class CLValue(clType: CLType, value: IndexedSeq[Byte]) {
   def to[T: CLTyped: FromBytes]: Either[CLValue.Error, T] =
     if (clType != CLTyped[T].clType)
-      Left(CLValue.Error.TypeMisMatch(expected = clType, found = CLTyped[T].clType))
+      Left(CLValue.Error.TypeMisMatch(valueType = clType, tType = CLTyped[T].clType))
     else FromBytes.deserialize[T](value.toArray).leftMap(err => CLValue.Error.FromBytes(err))
 }
 
@@ -32,7 +32,7 @@ object CLValue {
 
   sealed trait Error
   object Error {
-    case class TypeMisMatch(expected: CLType, found: CLType) extends Error
-    case class FromBytes(error: bytesrepr.FromBytes.Error)   extends Error
+    case class TypeMisMatch(valueType: CLType, tType: CLType) extends Error
+    case class FromBytes(error: bytesrepr.FromBytes.Error)    extends Error
   }
 }
