@@ -14,17 +14,6 @@ export class PurseId {
         this.uref = uref;
     }
 
-    static getMainPurse(): PurseId | null {
-        let data = new Uint8Array(PURSE_ID_SERIALIZED_LENGTH);
-        data.fill(0);
-        externals.get_main_purse(data.dataStart);
-        let uref = URef.fromBytes(data);
-        if (uref === null)
-            return null;
-        let purseId = new PurseId(uref);
-        return purseId;
-    }
-
     toBytes(): Array<u8>{
         return this.uref.toBytes();
     }
