@@ -1,90 +1,27 @@
-use alloc::{
-    collections::{BTreeMap, BTreeSet},
-    string::String,
-};
-use core::fmt::Write;
+use alloc::collections::BTreeMap;
 
-use base16;
-
-use contract::contract_api::runtime;
 use types::{
     account::PublicKey,
     system_contract_errors::pos::{Error, Result},
-    Key, U512,
+    U512,
 };
 
-use super::{MAX_DECREASE, MAX_INCREASE, MAX_REL_DECREASE, MAX_REL_INCREASE, MAX_SPREAD};
+/// The maximum difference between the largest and the smallest stakes.
+// TODO: Should this be a percentage instead?
+// TODO: Pick a reasonable value.
+const MAX_SPREAD: U512 = U512::MAX;
 
-pub trait StakesProvider {
-    fn read() -> Result<Stakes>;
-    fn write(stakes: &Stakes);
-}
+/// The maximum increase of stakes in a single bonding request.
+const MAX_INCREASE: U512 = U512::MAX;
 
-/// A `StakesProvider` that reads and writes the stakes to/from the contract's
-/// known urefs.
-pub struct ContractStakes;
+/// The maximum decrease of stakes in a single unbonding request.
+const MAX_DECREASE: U512 = U512::MAX;
 
-impl StakesProvider for ContractStakes {
-    /// Reads the current stakes from the contract's known urefs.
-    fn read() -> Result<Stakes> {
-        let mut stakes = BTreeMap::new();
-        for (name, _) in runtime::list_named_keys() {
-            let mut split_name = name.split('_');
-            if Some("v") != split_name.next() {
-                continue;
-            }
-            let hex_key = split_name
-                .next()
-                .ok_or(Error::StakesKeyDeserializationFailed)?;
-            if hex_key.len() != 64 {
-                return Err(Error::StakesKeyDeserializationFailed);
-            }
-            let mut key_bytes = [0u8; 32];
-            let _bytes_written = base16::decode_slice(hex_key, &mut key_bytes)
-                .map_err(|_| Error::StakesKeyDeserializationFailed)?;
-            debug_assert!(_bytes_written == key_bytes.len());
-            let pub_key = PublicKey::new(key_bytes);
-            let balance = split_name
-                .next()
-                .and_then(|b| U512::from_dec_str(b).ok())
-                .ok_or(Error::StakesDeserializationFailed)?;
-            stakes.insert(pub_key, balance);
-        }
-        if stakes.is_empty() {
-            return Err(Error::StakesNotFound);
-        }
-        Ok(Stakes(stakes))
-    }
+/// The maximum increase of stakes in millionths of the total stakes in a single bonding request.
+const MAX_REL_INCREASE: u64 = 1_000_000_000;
 
-    /// Writes the current stakes to the contract's known urefs.
-    fn write(stakes: &Stakes) {
-        // Encode the stakes as a set of uref names.
-        let mut new_urefs: BTreeSet<String> = stakes
-            .0
-            .iter()
-            .map(|(pub_key, balance)| {
-                let key_bytes = pub_key.value();
-                let mut hex_key = String::with_capacity(64);
-                for byte in &key_bytes[..32] {
-                    write!(hex_key, "{:02x}", byte).expect("Writing to a string cannot fail");
-                }
-                let mut uref = String::new();
-                uref.write_fmt(format_args!("v_{}_{}", hex_key, balance))
-                    .expect("Writing to a string cannot fail");
-                uref
-            })
-            .collect();
-        // Remove and add urefs to update the contract's known urefs accordingly.
-        for (name, _) in runtime::list_named_keys() {
-            if name.starts_with("v_") && !new_urefs.remove(&name) {
-                runtime::remove_key(&name);
-            }
-        }
-        for name in new_urefs {
-            runtime::put_key(&name, Key::Hash([0; 32]));
-        }
-    }
-}
+/// The maximum decrease of stakes in millionths of the total stakes in a single unbonding request.
+const MAX_REL_DECREASE: u64 = 900_000;
 
 /// The stakes map, assigning the staked amount of motes to each bonded
 /// validator.
@@ -204,7 +141,7 @@ impl Stakes {
 mod tests {
     use types::{account::PublicKey, system_contract_errors::pos::Error, U512};
 
-    use crate::stakes::Stakes;
+    use super::Stakes;
 
     const KEY1: [u8; 32] = [1; 32];
     const KEY2: [u8; 32] = [2; 32];
@@ -248,7 +185,7 @@ mod tests {
             Err(Error::BondTooLarge),
             stakes.validate_bonding(
                 &PublicKey::new(KEY1),
-                U512::from(crate::MAX_REL_INCREASE * total / 1_000_000 + 1)
+                U512::from(super::MAX_REL_INCREASE * total / 1_000_000 + 1)
             ),
             "Successfully bonded more than the maximum amount."
         );
@@ -256,7 +193,7 @@ mod tests {
             Ok(()),
             stakes.validate_bonding(
                 &PublicKey::new(KEY1),
-                U512::from(crate::MAX_REL_INCREASE * total / 1_000_000)
+                U512::from(super::MAX_REL_INCREASE * total / 1_000_000)
             ),
             "Failed to bond the maximum amount."
         );
@@ -299,15 +236,15 @@ mod tests {
             Err(Error::UnbondTooLarge),
             stakes.unbond(
                 &PublicKey::new(KEY1),
-                Some(U512::from(crate::MAX_REL_DECREASE * total / 1_000_000 + 1))
+                Some(U512::from(super::MAX_REL_DECREASE * total / 1_000_000 + 1))
             ),
             "Successfully unbonded more than the maximum amount."
         );
         assert_eq!(
-            Ok(U512::from(crate::MAX_REL_DECREASE * total / 1_000_000)),
+            Ok(U512::from(super::MAX_REL_DECREASE * total / 1_000_000)),
             stakes.unbond(
                 &PublicKey::new(KEY1),
-                Some(U512::from(crate::MAX_REL_DECREASE * total / 1_000_000))
+                Some(U512::from(super::MAX_REL_DECREASE * total / 1_000_000))
             ),
             "Failed to unbond the maximum amount."
         );

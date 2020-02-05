@@ -32,6 +32,12 @@ pub enum Error {
     /// Tried to create a new purse with a non-zero initial balance.
     #[fail(display = "Invalid non-empty purse creation")]
     InvalidNonEmptyPurseCreation = 5,
+    /// Failed to read from local or global storage.
+    #[fail(display = "Storage error")]
+    StorageError = 6,
+    /// Purse not found while trying to get balance.
+    #[fail(display = "Purse not found")]
+    PurseNotFound = 7,
     /// A required argument wasn't passed to the Mint contract.
     #[fail(display = "Missing argument")]
     MissingArgument = 102,

@@ -185,6 +185,12 @@ const MINT_ERROR_OFFSET: u32 = (POS_ERROR_OFFSET - 1) - u8::MAX as u32; // 65024
 /// 65_029 => MintError::InvalidNonEmptyPurseCreation
 /// # );
 /// # show_and_check!(
+/// 65_030 => MintError::StorageError
+/// # );
+/// # show_and_check!(
+/// 65_031 => MintError::PurseNotFound
+/// # );
+/// # show_and_check!(
 /// 65_126 => MintError::MissingArgument
 /// # );
 /// # show_and_check!(

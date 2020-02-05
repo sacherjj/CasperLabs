@@ -1,12 +1,15 @@
 use alloc::{format, string::String, vec::Vec};
-use core::fmt::{self, Debug, Display, Formatter};
+use core::{
+    convert::TryFrom,
+    fmt::{self, Debug, Display, Formatter},
+};
 
 use base16;
 use hex_fmt::HexFmt;
 
 use crate::{
     bytesrepr::{self, OPTION_TAG_SERIALIZED_LENGTH, U32_SERIALIZED_LENGTH},
-    AccessRights, ACCESS_RIGHTS_SERIALIZED_LENGTH,
+    AccessRights, ApiError, Key, ACCESS_RIGHTS_SERIALIZED_LENGTH,
 };
 
 /// The number of bytes in a [`URef`] address.
@@ -181,6 +184,18 @@ impl bytesrepr::ToBytes for Vec<URef> {
                 .flatten(),
         );
         Ok(result)
+    }
+}
+
+impl TryFrom<Key> for URef {
+    type Error = ApiError;
+
+    fn try_from(key: Key) -> Result<Self, Self::Error> {
+        if let Key::URef(uref) = key {
+            Ok(uref)
+        } else {
+            Err(ApiError::UnexpectedKeyVariant)
+        }
     }
 }
 
