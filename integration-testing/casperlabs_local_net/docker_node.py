@@ -427,26 +427,16 @@ class DockerNode(LoggingDockerBase):
             payment_args=payment_args,
         )
 
-        if self.cl_network.auto_propose:
-            client = self.p_client.client
-            result = client.wait_for_deploy_processed(
-                deploy_hash, on_error_raise=is_deploy_error_check
+        client = self.p_client.client
+        result = client.wait_for_deploy_processed(
+            deploy_hash, on_error_raise=is_deploy_error_check
+        )
+        last_processing_result = result.processing_results[0]
+        block_hash = last_processing_result.block_info.summary.block_hash.hex()
+        if is_deploy_error_check and last_processing_result.is_error:
+            raise Exception(
+                f"transfer_to_account: {last_processing_result.error_message}"
             )
-            last_processing_result = result.processing_results[0]
-            block_hash = last_processing_result.block_info.summary.block_hash.hex()
-            if is_deploy_error_check and last_processing_result.is_error:
-                raise Exception(
-                    f"transfer_to_account: {last_processing_result.error_message}"
-                )
-        else:
-            response = self.p_client.propose()
-            block_hash = response.block_hash.hex()
-            if is_deploy_error_check:
-                for deploy_info in self.p_client.show_deploys(block_hash):
-                    if deploy_info.is_error:
-                        raise Exception(
-                            f"transfer_to_account: {deploy_info.error_message}"
-                        )
 
         return block_hash
 
@@ -469,13 +459,6 @@ class DockerNode(LoggingDockerBase):
         maybe_amount: Optional[int] = None,
         from_account_id: Union[str, int] = "genesis",
     ) -> str:
-        # NOTE: The Scala client is bundled with an unbond contract that expects an optional
-        #       value, but the integration tests have their own version which expects an int
-        #       and turns 0 into None inside the contract itself
-        # amount = {} if maybe_amount is None else {"int_value": maybe_amount}
-        # json_args = json.dumps(
-        #     [{"name": "amount", "value": {"optional_value": amount}}]
-        # )
         json_args = json.dumps(
             [{"name": "amount", "value": {"int_value": maybe_amount or 0}}]
         )
@@ -491,7 +474,7 @@ class DockerNode(LoggingDockerBase):
         gas_price: int = 1,
     ) -> str:
 
-        self.p_client.deploy(
+        deploy_hash = self.p_client.deploy(
             from_address=from_account.public_key_hex,
             session_contract=session_contract,
             gas_price=gas_price,
@@ -499,11 +482,9 @@ class DockerNode(LoggingDockerBase):
             private_key=from_account.private_key_path,
             session_args=self.p_client.abi.args_from_json(json_args),
         )
-
-        response = self.p_client.propose()
-
-        block_hash = response.block_hash.hex()
-        return block_hash
+        return self.wait_for_deploy_processed_and_get_block_hash(
+            deploy_hash, on_error_raise=False
+        )
 
     def transfer_to_accounts(self, account_value_list) -> List[str]:
         """

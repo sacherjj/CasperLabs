@@ -61,13 +61,14 @@ def unbond_from_network(
     account = Account(account_number)
     cli = cli_method(node)
     # fmt: off
-    cli("unbond",
-        "--amount", bonding_amount,
-        "--private-key", cli.private_key_path(account),
-        "--payment-amount", EXECUTION_PAYMENT_AMOUNT)
+    deploy_hash = cli("unbond",
+                      "--amount", bonding_amount,
+                      "--private-key", cli.private_key_path(account),
+                      "--payment-amount", EXECUTION_PAYMENT_AMOUNT)
     # fmt: on
-    block_hash = cli("propose")
-    assert block_hash is not None
+    block_hash = cli.node.wait_for_deploy_processed_and_get_block_hash(
+        deploy_hash, on_error_raise=False
+    )
     return block_hash, account
 
 
@@ -135,8 +136,8 @@ def test_bonding_and_unbonding_with_deploys(one_node_network_fn, acct_num, cli_m
         one_node_network_fn.docker_nodes, block_hash
     )
 
-    # Test deploy/propose bonded
-    logging.info(f"Deploy and propose on bonded node.")
+    # Test deploy on bonded node
+    logging.info(f"Deploy on bonded node.")
     block_hash = node1.deploy_and_get_block_hash(account, Contract.HELLO_NAME_DEFINE)
     wait_for_block_hash_propagated_to_all_nodes(
         one_node_network_fn.docker_nodes, block_hash
@@ -162,8 +163,8 @@ def test_bonding_and_unbonding_with_deploys(one_node_network_fn, acct_num, cli_m
         one_node_network_fn.docker_nodes, block_hash
     )
 
-    # Test deploy/propose unbonded
-    logging.info(f"Testing unbonded deploy and propose.")
+    # Test deploy on unbonded node
+    logging.info(f"Testing unbonded deploy.")
     node1.d_client.deploy(
         from_address=account.public_key_hex,
         session_contract=Contract.HELLO_NAME_DEFINE,
@@ -279,7 +280,7 @@ def test_unbonding_without_bonding(one_node_network_fn, acct_num, cli_method):
 
     node0, node1 = onn.docker_nodes
     cli = cli_method(node0)
-    cli(
+    deploy_hash = cli(
         "unbond",
         "--amount",
         bonding_amount,
@@ -288,7 +289,11 @@ def test_unbonding_without_bonding(one_node_network_fn, acct_num, cli_method):
         "--payment-amount",
         EXECUTION_PAYMENT_AMOUNT,
     )
-    block_hash = cli("propose")
+
+    block_hash = cli.node.wait_for_deploy_processed_and_get_block_hash(
+        deploy_hash, on_error_raise=False
+    )
+
     r = node0.client.show_deploys(block_hash)[0]
     assert r.is_error is True
     assert r.error_message == "Exit code: 65280"

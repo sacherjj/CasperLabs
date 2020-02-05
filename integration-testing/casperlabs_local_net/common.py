@@ -118,17 +118,3 @@ def extract_deploy_hash_from_deploy_output(deploy_output: str) -> str:
     if match is None:
         raise UnexpectedProposeOutputFormatError(deploy_output)
     return match.group(1)
-
-
-def extract_block_hash_from_propose_output(propose_output: str):
-    """We're getting back something along the lines of:
-
-    Response: Success! Block a91208047c... created and added.\n
-    """
-    match = re.match(
-        r"Response: Success! Block ([0-9a-f]+) created and added.",
-        propose_output.strip(),
-    )
-    if match is None:
-        raise UnexpectedProposeOutputFormatError(propose_output)
-    return match.group(1)
