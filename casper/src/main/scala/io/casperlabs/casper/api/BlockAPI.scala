@@ -54,7 +54,7 @@ object BlockAPI {
       _ <- Metrics[F].incrementCounter("create-blocks-success", 0)
     } yield ()
 
-  def deploy[F[_]: MonadThrowable: DeployBuffer: MultiParentCasperRef: BlockStorage: Validation: Log: Metrics](
+  def deploy[F[_]: MonadThrowable: DeployBuffer: BlockStorage: Validation: Log: Metrics](
       d: Deploy
   ): F[Unit] =
     for {
@@ -135,7 +135,7 @@ object BlockAPI {
     }
   }
 
-  def getDeployInfoOpt[F[_]: MonadThrowable: Log: MultiParentCasperRef: BlockStorage: DeployStorage](
+  def getDeployInfoOpt[F[_]: MonadThrowable: Log: BlockStorage: DeployStorage](
       deployHashBase16: String,
       deployView: DeployInfo.View
   ): F[Option[DeployInfo]] =
@@ -146,7 +146,7 @@ object BlockAPI {
       DeployStorage[F].reader(deployView).getDeployInfo(deployHash)
     }
 
-  def getDeployInfo[F[_]: MonadThrowable: Log: MultiParentCasperRef: BlockStorage: DeployStorage](
+  def getDeployInfo[F[_]: MonadThrowable: Log: BlockStorage: DeployStorage](
       deployHashBase16: String,
       deployView: DeployInfo.View
   ): F[DeployInfo] =
@@ -169,7 +169,7 @@ object BlockAPI {
         }
       }
 
-  def getBlockInfoWithDeploys[F[_]: MonadThrowable: MultiParentCasperRef: BlockStorage: DeployStorage: DagStorage](
+  def getBlockInfoWithDeploys[F[_]: MonadThrowable: BlockStorage: DeployStorage: DagStorage](
       blockHash: BlockHash,
       maybeDeployView: Option[DeployInfo.View],
       blockView: BlockInfo.View
@@ -245,41 +245,39 @@ object BlockAPI {
   /** Return block infos and maybe the corresponding deploy summaries in the a slice of the DAG.
     * Use `maxRank` 0 to get the top slice,
     * then we pass previous ranks to paginate backwards. */
-  def getBlockInfosWithDeploys[F[_]: MonadThrowable: Log: MultiParentCasperRef: DeployStorage: DagStorage: Fs2Compiler](
+  def getBlockInfosWithDeploys[F[_]: MonadThrowable: Log: DeployStorage: DagStorage: Fs2Compiler](
       depth: Int,
       maxRank: Long,
       maybeDeployView: Option[DeployInfo.View],
       blockView: BlockInfo.View
   ): F[List[BlockAndMaybeDeploys]] =
-    unsafeWithCasper[F, List[BlockAndMaybeDeploys]]("Could not show blocks.") { implicit casper =>
-      casper.dag flatMap { dag =>
-        maxRank match {
-          case 0 =>
-            dag.topoSortTail(depth).compile.toVector
-          case r =>
-            dag
-              .topoSort(
-                endBlockNumber = r,
-                startBlockNumber = math.max(r - depth + 1, 0)
-              )
-              .compile
-              .toVector
-        }
-      } handleErrorWith {
-        case ex: StorageError =>
-          MonadThrowable[F].raiseError(InvalidArgument(StorageError.errorMessage(ex)))
-        case ex: IllegalArgumentException =>
-          MonadThrowable[F].raiseError(InvalidArgument(ex.getMessage))
-      } flatMap { infosByRank =>
-        infosByRank.flatten.reverse.toList.traverse { info =>
-          withViews[F](info, maybeDeployView, blockView)
-        }
+    DagStorage[F].getRepresentation flatMap { dag =>
+      maxRank match {
+        case 0 =>
+          dag.topoSortTail(depth).compile.toVector
+        case r =>
+          dag
+            .topoSort(
+              endBlockNumber = r,
+              startBlockNumber = math.max(r - depth + 1, 0)
+            )
+            .compile
+            .toVector
+      }
+    } handleErrorWith {
+      case ex: StorageError =>
+        MonadThrowable[F].raiseError(InvalidArgument(StorageError.errorMessage(ex)))
+      case ex: IllegalArgumentException =>
+        MonadThrowable[F].raiseError(InvalidArgument(ex.getMessage))
+    } flatMap { infosByRank =>
+      infosByRank.flatten.reverse.toList.traverse { info =>
+        withViews[F](info, maybeDeployView, blockView)
       }
     }
 
   /** Return block infos in the a slice of the DAG. Use `maxRank` 0 to get the top slice,
     * then we pass previous ranks to paginate backwards. */
-  def getBlockInfos[F[_]: MonadThrowable: Log: MultiParentCasperRef: DeployStorage: DagStorage: Fs2Compiler](
+  def getBlockInfos[F[_]: MonadThrowable: Log: DeployStorage: DagStorage: Fs2Compiler](
       depth: Int,
       maxRank: Long = 0,
       blockView: BlockInfo.View = BlockInfo.View.BASIC

@@ -16,9 +16,11 @@ import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper._
 import io.casperlabs.casper.MultiParentCasperImpl.Broadcaster
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
+import io.casperlabs.casper.DeploySelection.DeploySelection
 import io.casperlabs.casper.consensus.Block
 import io.casperlabs.casper.genesis.Genesis
 import io.casperlabs.casper.validation.{Validation, ValidationImpl}
+import io.casperlabs.casper.util.CasperLabsProtocol
 import io.casperlabs.catscontrib._
 import io.casperlabs.catscontrib.Catscontrib._
 import io.casperlabs.catscontrib.TaskContrib._
@@ -99,7 +101,6 @@ class NodeRuntime private[node] (
 
   val main: Task[Unit] = {
     implicit val metricsId: Metrics[Id] = diagnostics.effects.metrics[Id](syncId)
-    implicit val filesApiEff            = FilesAPI.create[Task](Sync[Task], log)
 
     // SSL context to use for the public facing API.
     val maybeApiSslContext = if (conf.grpc.useTls) {
@@ -167,7 +168,7 @@ class NodeRuntime private[node] (
 
       genesis <- makeGenesis[Task](chainSpec)
 
-      validatorId <- Resource.liftF(ValidatorIdentity.fromConfig[Task](conf.casper))
+      maybeValidatorId <- Resource.liftF(ValidatorIdentity.fromConfig[Task](conf.casper))
 
       implicit0(deployBuffer: DeployBuffer[Task]) <- Resource.pure[Task, DeployBuffer[Task]](
                                                       DeployBuffer.create[Task](
@@ -235,27 +236,54 @@ class NodeRuntime private[node] (
                                                                         .of[Task]
                                                                     )
 
+      implicit0(protocolVersions: CasperLabsProtocol[Task]) <- Resource.liftF(
+                                                                CasperLabsProtocol
+                                                                  .fromChainSpec[Task](chainSpec)
+                                                              )
+
+      implicit0(deploySelection: DeploySelection[Task]) <- Resource.liftF(
+                                                            DeploySelection
+                                                              .createMetered[Task](
+                                                                conf.casper.maxBlockSizeBytes
+                                                              )
+                                                              .pure[Task]
+                                                          )
+
+      implicit0(consensus: casper.Consensus[Task]) <- Resource.liftF(
+                                                       new casper.NCB[Task](
+                                                         conf,
+                                                         chainSpec,
+                                                         maybeValidatorId
+                                                       ).pure[Task]
+                                                     )
+
       // Creating with 0 permits initially, enabled after the initial synchronization.
       blockApiLock <- Resource.liftF(Semaphore[Task](0))
 
       // Set up gossiping machinery and start synchronizing with the network.
-      broadcastAndSync <- casper.gossiping
-                           .apply[
-                             Task
-                           ](
-                             port,
-                             conf,
-                             chainSpec,
-                             genesis,
-                             ingressScheduler,
-                             egressScheduler
-                           )
+      relaying <- casper.gossiping
+                   .apply[
+                     Task
+                   ](
+                     port,
+                     conf,
+                     maybeValidatorId,
+                     genesis,
+                     ingressScheduler,
+                     egressScheduler,
+                     // Enable block production after sync.
+                     onInitialSyncCompleted = blockApiLock.releaseN(1)
+                   )
 
-      implicit0(broadcaster: Broadcaster[Task]) = broadcastAndSync._1
-      awaitSynchronization                      = broadcastAndSync._2
-
-      // Enable block production after sync.
-      _ <- Resource.liftF((awaitSynchronization >> blockApiLock.releaseN(1)).start)
+      // The BlockAPI does relaying of blocks its creating on its own and wants to have a broadcaster.
+      implicit0(broadcaster: Broadcaster[Task]) <- Resource.liftF(
+                                                    MultiParentCasperImpl.Broadcaster
+                                                      .fromGossipServices(
+                                                        maybeValidatorId,
+                                                        relaying
+                                                      )
+                                                      .pure[Task]
+                                                  )
 
       // For now just either starting the auto-proposer or not, but ostensibly we
       // could pass it the flag to run or not and also wire it into the ControlService
@@ -282,7 +310,7 @@ class NodeRuntime private[node] (
             conf.server.maxMessageSize,
             ingressScheduler,
             maybeApiSslContext,
-            validatorId.isEmpty
+            maybeValidatorId.isEmpty
           )
 
       _ <- api.Servers.httpServerR[Task](
