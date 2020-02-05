@@ -527,6 +527,24 @@ private[configuration] final case class Options private (
       )
 
     @scallop
+    val highwayOmegaMessageTimeStart =
+      gen[Double](
+        "Fraction of time through the round after which we can create an omega message."
+      )
+
+    @scallop
+    val highwayOmegaMessageTimeEnd =
+      gen[Double](
+        "Fraction of time through the round before which we must have created the omega message."
+      )
+
+    @scallop
+    val highwayInitRoundExponent =
+      gen[Int](
+        "Initial round exponent to start the node with, before auto-adjustment takes over; corresponds to the tick unit of the chain."
+      )
+
+    @scallop
     val metricsPrometheus =
       gen[Flag]("Enable the Prometheus metrics reporter.")
 
