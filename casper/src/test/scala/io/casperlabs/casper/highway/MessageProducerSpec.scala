@@ -25,8 +25,10 @@ class MessageProducerSpec extends FlatSpec with Matchers with Inspectors with Hi
   it should "gather equivocators from the grandparent, parent and child eras" in testFixture {
     implicit timer => implicit db =>
       new Fixture(
-        length = 5 * eraDuration,
-        bonds = List(
+        length = 5 * eraDuration
+      ) {
+
+        override lazy val bonds = List(
           Bond("Alice").withStake(state.BigInt("1000")),
           Bond("Bob").withStake(state.BigInt("2000")),
           Bond("Charlie").withStake(state.BigInt("3000")),
@@ -34,7 +36,6 @@ class MessageProducerSpec extends FlatSpec with Matchers with Inspectors with Hi
           Bond("Eve").withStake(state.BigInt("5000")),
           Bond("Fred").withStake(state.BigInt("6000"))
         )
-      ) {
 
         // Create an equivocation in an era by storing two messages that don't quote each other.
         // Return the block hash we can use as key block for the next era.

@@ -102,18 +102,19 @@ trait HighwayFixture
       val validator: String = "Alice",
       val initRoundExponent: Int = 0,
       val isSyncedRef: Ref[Task, Boolean] = Ref.unsafe(true),
-      // Genesis validators.
-      val bonds: List[Bond] = List(
-        Bond("Alice").withStake(state.BigInt("3000")),
-        Bond("Bob").withStake(state.BigInt("4000")),
-        Bond("Charlie").withStake(state.BigInt("5000"))
-      ),
       printLevel: Log.Level = Log.Level.Error
   )(
       implicit
       timer: Timer[Task],
       db: SQLiteStorage.CombinedStorage[Task]
   ) extends FixtureLike {
+
+    // Genesis validators.
+    lazy val bonds: List[Bond] = List(
+      Bond("Alice").withStake(state.BigInt("3000")),
+      Bond("Bob").withStake(state.BigInt("4000")),
+      Bond("Charlie").withStake(state.BigInt("5000"))
+    )
 
     override val start = conf.genesisEraStart
 
