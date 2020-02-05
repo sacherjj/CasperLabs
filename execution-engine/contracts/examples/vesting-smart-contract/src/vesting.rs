@@ -1,15 +1,19 @@
-use crate::{api::Api, error::Error};
+use core::convert::TryInto;
+
 use contract::{
     contract_api::{runtime, storage, system},
     unwrap_or_revert::UnwrapOrRevert,
 };
 use types::{
     account::{PublicKey, PurseId},
-    U256, U512,
+    bytesrepr::{FromBytes, ToBytes},
+    CLTyped, U512,
 };
+
+use crate::{api::Api, error::Error};
 use vesting_logic::{VestingError, VestingTrait};
 
-pub const INIT_FLAG_KEY: [u8; 32] = [1u8; 32];
+pub const INIT_FLAG_KEY: &str = "is_initialized";
 pub const ADMIN_KEY: &str = "admin_account";
 pub const RECIPIENT_KEY: &str = "recipient_account";
 pub const PURSE_NAME: &str = "vesting_main_purse";
@@ -21,28 +25,22 @@ struct VestingContract;
 
 impl VestingTrait<Amount, Time> for VestingContract {
     fn set_amount(&mut self, name: &str, value: Amount) {
-        storage::write_local(name, value);
+        set_key(name, value)
     }
     fn amount(&self, name: &str) -> Amount {
-        storage::read_local(&name)
-            .unwrap_or_revert_with(Error::MissingLocalKey)
-            .unwrap_or_revert_with(Error::UnexpectedType)
+        key(name)
     }
     fn set_time(&mut self, name: &str, value: Time) {
-        storage::write_local(name, value);
+        set_key(name, value);
     }
     fn time(&self, name: &str) -> Time {
-        storage::read_local(&name)
-            .unwrap_or_revert_with(Error::MissingLocalKey)
-            .unwrap_or_revert_with(Error::UnexpectedType)
+        key(name)
     }
     fn set_boolean(&mut self, name: &str, value: bool) {
-        let val = if value { Amount::one() } else { Amount::zero() };
-        self.set_amount(name, val);
+        set_key(name, value)
     }
     fn boolean(&self, name: &str) -> bool {
-        let val = self.amount(name);
-        val == Amount::one()
+        key(name)
     }
     fn current_timestamp(&self) -> Time {
         let time: u64 = runtime::get_blocktime().into();
@@ -114,41 +112,28 @@ fn entry_point() {
     }
 }
 
-fn is_not_initialized() -> bool {
-    let flag: Option<i32> = storage::read_local(&INIT_FLAG_KEY).unwrap_or_revert();
-    flag.is_none()
+fn is_initialized() -> bool {
+    runtime::has_key(INIT_FLAG_KEY)
 }
 
 fn mark_as_initialized() {
-    storage::write_local(INIT_FLAG_KEY, 1);
+    set_key(INIT_FLAG_KEY, 1);
 }
 
 fn set_admin_account(admin: PublicKey) {
-    set_account(ADMIN_KEY, admin);
+    set_key(ADMIN_KEY, admin);
 }
 
 fn admin_account() -> PublicKey {
-    account(ADMIN_KEY)
+    key(ADMIN_KEY)
 }
 
 fn set_recipient_account(recipient: PublicKey) {
-    set_account(RECIPIENT_KEY, recipient);
+    set_key(RECIPIENT_KEY, recipient);
 }
 
 fn recipient_account() -> PublicKey {
-    account(RECIPIENT_KEY)
-}
-
-fn set_account(key: &str, value: PublicKey) {
-    let val: U256 = value.value().into();
-    storage::write_local(key, val);
-}
-
-fn account(key: &str) -> PublicKey {
-    let val: U256 = storage::read_local(&key)
-        .unwrap_or_revert_with(Error::MissingLocalKey)
-        .unwrap_or_revert_with(Error::UnexpectedType);
-    PublicKey::new(val.into())
+    key(RECIPIENT_KEY)
 }
 
 fn verify_admin_account() {
@@ -179,9 +164,32 @@ fn local_purse() -> PurseId {
     PurseId::new(*uref)
 }
 
+fn key<T: FromBytes + CLTyped>(name: &str) -> T {
+    let key = runtime::get_key(name)
+        .unwrap_or_revert_with(Error::MissingKey)
+        .try_into()
+        .unwrap_or_revert_with(Error::UnexpectedType);
+    storage::read(key)
+        .unwrap_or_revert_with(Error::MissingKey)
+        .unwrap_or_revert_with(Error::UnexpectedType)
+}
+
+fn set_key<T: ToBytes + CLTyped>(name: &str, value: T) {
+    match runtime::get_key(name) {
+        Some(key) => {
+            let key_ref = key.try_into().unwrap_or_revert();
+            storage::write(key_ref, value);
+        }
+        None => {
+            let key = storage::new_turef(value).into();
+            runtime::put_key(name, key);
+        }
+    }
+}
+
 #[no_mangle]
 pub extern "C" fn vesting() {
-    if is_not_initialized() {
+    if !is_initialized() {
         construct();
         mark_as_initialized();
     } else {

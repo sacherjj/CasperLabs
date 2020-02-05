@@ -77,7 +77,7 @@ pub trait VestingTrait<
             let drip_amount = self.drip_amount();
             let released_amount = self.released_amount();
             let mut counter = self.cliff_amount();
-            counter = counter + drip_amount * available_drips ;
+            counter = counter + drip_amount * available_drips;
             counter = cmp::min(counter, total_amount);
             counter - released_amount
         }
