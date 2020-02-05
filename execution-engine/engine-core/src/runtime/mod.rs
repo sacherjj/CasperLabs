@@ -24,9 +24,9 @@ use types::{
     TransferResult, TransferredTo, URef, U128, U256, U512,
 };
 
-use super::{Error, MINT_NAME, POS_NAME};
 use crate::{
     engine_state::system_contract_cache::SystemContractCache,
+    execution::{Error, MINT_NAME, POS_NAME},
     resolvers::{create_module_resolver, memory_resolver::MemoryResolver},
     runtime_context::RuntimeContext,
     Address,
