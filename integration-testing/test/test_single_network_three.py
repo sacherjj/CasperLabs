@@ -125,18 +125,9 @@ class TimedThread(Thread):
 
 class DeployTimedTread(TimedThread):
     def my_call(self, contract):
-        return self.node.deploy_and_get_block_hash(self.node.test_account, contract)
-
-
-"""
-After refactoring this is failing. I suspect this is because before refacctoring the test was ignoring
-failed propose.
-
-08:16:21   node-1-sxmwi-latest: W 2020-01-29T07:16:21.167            (Validation.scala:112)  …alidation.Validation.ignore [37:node-runner-37] Ignoring block=d0a891a3c6... because invalid post state hash
-08:16:21   node-1-sxmwi-latest: W 2020-01-29T07:16:21.168 (MultiParentCasperImpl.scala:702)  …or.handleInvalidBlockEffect [37:node-runner-37] Recording invalid block=d0a891a3c6... for status=InvalidPostStateHash.
-08:16:21   node-1-sxmwi-latest: E 2020-01-29T07:16:21.179           (AutoProposer.scala:86)  ….AutoProposer.tryPropose.84 [37:node-runner-37] Could not propose block: ex=io.casperlabs.comm.ServiceError$Exception: INVALID_ARGUMENT: Invalid block: InvalidPostStateHash
-08:16:21   node-0-pwkyi-latest: I 2020-01-29T07:16:21.316           (AutoProposer.scala:53)  i.c.c.A.run.loop.44 [25:node-runner-25] Proposing a block after start_millis=5012 ms with size=3 pending deploys.
-"""
+        return self.node.deploy_and_get_block_hash(
+            self.node.test_account, contract, on_error_raise=False
+        )
 
 
 def test_neglected_invalid_block(three_node_network):
