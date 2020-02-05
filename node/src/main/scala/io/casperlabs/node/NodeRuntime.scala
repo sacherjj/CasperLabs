@@ -12,6 +12,7 @@ import cats.syntax.flatMap._
 import cats.syntax.functor._
 import cats.syntax.show._
 import com.olegpy.meow.effects._
+import com.google.protobuf.ByteString
 import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper._
 import io.casperlabs.casper.MultiParentCasperImpl.Broadcaster
@@ -30,6 +31,7 @@ import io.casperlabs.comm.discovery._
 import io.casperlabs.comm.discovery.NodeUtils._
 import io.casperlabs.comm.grpc.SslContexts
 import io.casperlabs.comm.rp._
+import io.casperlabs.comm.gossiping.{Relaying, WaitHandle}
 import io.casperlabs.ipc.ChainSpec
 import io.casperlabs.mempool.DeployBuffer
 import io.casperlabs.metrics.Metrics
@@ -52,7 +54,6 @@ import monix.execution.Scheduler
 import monix.execution.atomic.AtomicLong
 import org.flywaydb.core.Flyway
 import org.flywaydb.core.api.Location
-
 import scala.concurrent.duration._
 
 class NodeRuntime private[node] (
@@ -65,6 +66,7 @@ class NodeRuntime private[node] (
     logId: Log[Id],
     uncaughtExceptionHandler: UncaughtExceptionHandler
 ) {
+  import NodeRuntime.RelayingProxy
 
   private[this] val loopScheduler =
     Scheduler.fixedPool("loop", 2, reporter = uncaughtExceptionHandler)
@@ -128,9 +130,7 @@ class NodeRuntime private[node] (
       _ <- Resource.liftF(runRdmbsMigrations(conf.server.dataDir))
 
       implicit0(
-        storage: BlockStorage[Task] with DagStorage[Task] with DeployStorage[Task] with FinalityStorage[
-          Task
-        ]
+        storage: SQLiteStorage.CombinedStorage[Task]
       ) <- Resource.liftF(
             SQLiteStorage.create[Task](
               deployStorageChunkSize = conf.blockstorage.deployStreamChunkSize,
@@ -250,13 +250,24 @@ class NodeRuntime private[node] (
                                                               .pure[Task]
                                                           )
 
-      implicit0(consensus: Consensus[Task]) <- Resource.liftF(
-                                                new casper.consensus.NCB[Task](
-                                                  conf,
-                                                  chainSpec,
-                                                  maybeValidatorId
-                                                ).pure[Task]
-                                              )
+      implicit0(relayingProxy: RelayingProxy[Task]) <- Resource.liftF[Task, RelayingProxy[Task]](
+                                                        RelayingProxy[Task]
+                                                      )
+
+      isSyncedRef <- Resource.liftF(Ref.of[Task, Boolean](false))
+
+      implicit0(consensus: Consensus[Task]) <- {
+        if (conf.highway.enabled)
+          casper.consensus.Highway(conf, chainSpec, maybeValidatorId, genesis, isSyncedRef)
+        else
+          Resource.liftF {
+            new casper.consensus.NCB[Task](
+              conf,
+              chainSpec,
+              maybeValidatorId
+            ).pure[Task]
+          }
+      }
 
       // Creating with 0 permits initially, enabled after the initial synchronization.
       blockApiLock <- Resource.liftF(Semaphore[Task](0))
@@ -273,8 +284,11 @@ class NodeRuntime private[node] (
                      ingressScheduler,
                      egressScheduler,
                      // Enable block production after sync.
-                     onInitialSyncCompleted = blockApiLock.releaseN(1)
+                     onInitialSyncCompleted = blockApiLock.releaseN(1) *> isSyncedRef.set(true)
                    )
+
+      // Update the relaying we passed to consensus to use the real one.
+      _ <- Resource.liftF(relayingProxy.set(relaying))
 
       // The BlockAPI does relaying of blocks its creating on its own and wants to have a broadcaster.
       implicit0(broadcaster: Broadcaster[Task]) <- Resource.liftF(
@@ -295,7 +309,7 @@ class NodeRuntime private[node] (
             accInterval = conf.casper.autoProposeAccInterval,
             accCount = conf.casper.autoProposeAccCount,
             blockApiLock = blockApiLock
-          ).whenA(conf.casper.autoProposeEnabled)
+          ).whenA(conf.casper.autoProposeEnabled && !conf.highway.enabled)
 
       _ <- api.Servers
             .internalServersR(
@@ -490,4 +504,25 @@ object NodeRuntime {
       id      <- NodeEnvironment.create(conf)
       runtime <- Task.delay(new NodeRuntime(conf, chainSpec, id, scheduler))
     } yield runtime
+
+  /** There's a forward dependency between Highway consensus and the gossiping. */
+  class RelayingProxy[F[_]: Monad](
+      underlyingRef: Ref[F, Option[Relaying[F]]]
+  ) extends Relaying[F] {
+    override def relay(hashes: List[ByteString]): F[WaitHandle[F]] =
+      underlyingRef.get.flatMap {
+        case None =>
+          ().pure[F].pure[F]
+        case Some(underlying) =>
+          underlying.relay(hashes)
+      }
+
+    def set(underlying: Relaying[F]) =
+      underlyingRef.set(Some(underlying))
+  }
+  object RelayingProxy {
+    def apply[F[_]: Sync]: F[RelayingProxy[F]] =
+      Ref.of[F, Option[Relaying[F]]](None) map (new RelayingProxy(_))
+  }
+
 }
