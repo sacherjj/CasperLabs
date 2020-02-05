@@ -670,20 +670,16 @@ def check_extended_deploy(cli, temp_dir, account, public_key, private_key):
     deploy_info = cli("show-deploy", deploy_hash)
     assert not deploy_info.processing_results[0].is_error
 
+    blocks_with_deploy = [bi.block_info.summary.block_hash for bi in deploy_info.processing_results]
+    assert len(blocks_with_deploy) == 1
+
     # Test that replay attacks have no effect.
     cli('send-deploy', '-i', signed_deploy_path)
 
-    # wait_for_deploy_processed_and_get_block_hash will say PROCESSED,
-    # as previously.
-
-    cli.node.wait_for_deploy_processed_and_get_block_hash(deploy_hash)
-    # TODO: with auto-propose we cannot observe propose failing with "No new deploys",
-    # the replayed deploy is discarded quietly, there is nothing in the logs indicating
-    # that a replayed deploy was discarded.
-    # We could count the blocks, but we don't want to do that because it will be problematic
-    # when we parallelize the tests and run them against the same test node.
-    # Perhaps adding a log statement saying that a replayed deploy
-    # was discarded would be useful not only for testing.
+    # After replay there should be no new blocks with the deploy
+    deploy_info = cli.node.p_client.client.wait_for_deploy_processed(deploy_hash)
+    blocks_with_deploy_after_replay = [bi.block_info.summary.block_hash.hex() for bi in deploy_info.processing_results]
+    assert blocks_with_deploy_after_replay == blocks_with_deploy
 
 
 def test_cli_scala_direct_call_by_hash_and_name(scala_cli):
