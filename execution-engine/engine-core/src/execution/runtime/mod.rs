@@ -1794,8 +1794,11 @@ where
         let result = self.call_contract(key, args_bytes)?;
         let result_size = result.inner_bytes().len() as u32; // considered to be safe
 
-        if let Err(error) = self.write_host_buf(result) {
-            return Ok(Err(error));
+        // leave the host buffer set to `None` since there's nothing to write there
+        if result_size != 0 {
+            if let Err(error) = self.write_host_buf(result) {
+                return Ok(Err(error));
+            }
         }
 
         let result_size_bytes = result_size.to_le_bytes(); // Wasm is little-endian
