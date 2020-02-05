@@ -1,7 +1,7 @@
 import {AddDecodedBytesCount, SetDecodedBytesCount} from "./bytesrepr";
 import {UREF_ADDR_LENGTH} from "./constants";
 import {checkTypedArrayEqual} from "./utils";
-import {is_valid_uref} from "./externals";
+import {is_valid_uref, revert} from "./externals";
 
 export enum AccessRights{
     NONE = 0x0,
