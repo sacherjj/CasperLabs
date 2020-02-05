@@ -50,8 +50,13 @@ trait Consensus[F[_]] {
       block: Block
   ): F[Unit]
 
+  /** Let consensus know that the Genesis block has been approved and stored,
+    * so it can transition to block processing now.
+    */
   def onGenesisApproved(genesisBlockHash: ByteString): F[Unit]
 
+  /** Let consensus know that a new block has been scheduled for downloading.
+    */
   def onScheduled(summary: BlockSummary): F[Unit]
 }
 
