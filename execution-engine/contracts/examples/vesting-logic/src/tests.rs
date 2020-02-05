@@ -239,3 +239,19 @@ fn test_admin_release_nothing_to_withdraw_error() {
     let result = vault.admin_release().unwrap_err();
     assert_eq!(result, VestingError::AdminReleaseErrorNothingToWithdraw);
 }
+
+#[test]
+fn test_long_wait_attact_handled() {
+    let cfg = VestingConfig::default();
+    let mut vault = Vault::new(cfg.clone());
+    // Wait until it's possible to withdraw all + one more drip_duration.
+    let last_drip_period = (cfg.total_amount - cfg.cliff_amount) / cfg.drip_amount + 1;
+    let time = cfg.cliff_timestamp + (last_drip_period + 1) * cfg.drip_duration;
+    vault.set_current_timestamp(time);
+    // Withdraw drip_amount.
+    let result = vault.withdraw(cfg.drip_amount);
+    assert!(result.is_ok());
+    // Available amount should be correct.
+    let expected = cfg.total_amount - cfg.drip_amount;
+    assert_eq!(expected, vault.available_amount());
+}

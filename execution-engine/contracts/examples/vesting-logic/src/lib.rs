@@ -62,23 +62,24 @@ pub trait VestingTrait<
         let current_timestamp = self.current_timestamp();
         let cliff_timestamp = self.cliff_timestamp();
         let total_paused_duration = self.total_paused_duration();
-        if current_timestamp < cliff_timestamp + total_paused_duration {
+        let cliff_timestamp_adjusted = cliff_timestamp + total_paused_duration;
+        if current_timestamp < cliff_timestamp_adjusted {
             Amount::zero()
         } else {
-            let total_amount = self.total_amount();
             let drip_duration = self.drip_duration();
-            let drip_amount = self.drip_amount();
-            let released_amount = self.released_amount();
-            let mut available = self.cliff_amount();
-            let time_diff: Time = current_timestamp - cliff_timestamp - total_paused_duration;
+            let time_diff: Time = current_timestamp - cliff_timestamp_adjusted;
             let available_drips = if drip_duration == Time::zero() {
                 Amount::zero()
             } else {
                 time_diff / drip_duration
             };
-            available = available + drip_amount * available_drips - released_amount;
-            available = cmp::min(available, total_amount);
-            available
+            let total_amount = self.total_amount();
+            let drip_amount = self.drip_amount();
+            let released_amount = self.released_amount();
+            let mut counter = self.cliff_amount();
+            counter = counter + drip_amount * available_drips ;
+            counter = cmp::min(counter, total_amount);
+            counter - released_amount
         }
     }
 
