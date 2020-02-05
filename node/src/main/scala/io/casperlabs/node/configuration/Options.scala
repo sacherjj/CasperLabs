@@ -551,6 +551,12 @@ private[configuration] final case class Options private (
       )
 
     @scallop
+    val highwayGenesisEraStartOverride =
+      gen[Long](
+        "For testing purposes allow overriding the start of the genesis era, to avoid having to edit the chainspec."
+      )
+
+    @scallop
     val metricsPrometheus =
       gen[Flag]("Enable the Prometheus metrics reporter.")
 

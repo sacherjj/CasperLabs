@@ -132,7 +132,8 @@ class ConfigurationSpec
       enabled = false,
       omegaMessageTimeStart = 1.0,
       omegaMessageTimeEnd = 1.0,
-      initRoundExponent = 0
+      initRoundExponent = 0,
+      genesisEraStartOverride = 0
     )
     val tls = Tls(
       certificate = Paths.get("/tmp/test.crt"),

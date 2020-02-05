@@ -87,6 +87,7 @@ enabled = false
 omega-message-time-start = 1.0
 omega-message-time-end = 1.0
 init-round-exponent = 0
+genesis-era-start-override = 0
 
 [blockstorage]
 cache-max-size-bytes = 1

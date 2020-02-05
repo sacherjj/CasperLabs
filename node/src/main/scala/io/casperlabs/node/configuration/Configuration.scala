@@ -118,7 +118,8 @@ object Configuration extends ParserImplicits {
       enabled: Boolean,
       omegaMessageTimeStart: Double Refined Interval.OpenClosed[W.`0.0`.T, W.`1.0`.T],
       omegaMessageTimeEnd: Double Refined Interval.OpenClosed[W.`0.0`.T, W.`1.0`.T],
-      initRoundExponent: Int Refined NonNegative
+      initRoundExponent: Int Refined NonNegative,
+      genesisEraStartOverride: Long
   ) extends SubConfig
 
   sealed trait Command extends Product with Serializable
