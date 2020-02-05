@@ -11,6 +11,5 @@ mod named_key;
 mod protocol_version;
 mod stored_value;
 mod uref;
-mod value;
 
 pub(crate) use named_key::NamedKeyMap;

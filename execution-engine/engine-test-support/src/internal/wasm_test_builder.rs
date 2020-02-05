@@ -24,7 +24,7 @@ use engine_grpc_server::engine_server::{
         UpgradeResponse,
     },
     ipc_grpc::ExecutionEngineService,
-    mappings::{MappingError, ParsingError, TransformMap},
+    mappings::{MappingError, TransformMap},
     transforms::TransformEntry,
 };
 use engine_shared::{
@@ -45,7 +45,7 @@ use engine_storage::{
 };
 use types::{
     account::{PublicKey, PurseId},
-    bytesrepr::ToBytes,
+    bytesrepr::{self, ToBytes},
     CLValue, Key, URef, U512,
 };
 
@@ -356,10 +356,7 @@ where
             return Err(query_response.take_failure());
         }
 
-        query_response
-            .take_success()
-            .try_into()
-            .map_err(|error: ParsingError| error.0)
+        bytesrepr::deserialize(query_response.take_success()).map_err(|err| format!("{}", err))
     }
 
     pub fn exec(&mut self, mut exec_request: ExecuteRequest) -> &mut Self {

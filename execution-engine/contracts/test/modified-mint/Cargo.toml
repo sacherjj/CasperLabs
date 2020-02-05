@@ -16,5 +16,6 @@ lib = []
 
 [dependencies]
 contract = { path = "../../../contract", package = "casperlabs-contract" }
-types = { path = "../../../types", package = "casperlabs-types" }
+mint = { path = "../../../mint", package = "casperlabs-mint" }
 mint-token = { path = "../../system/mint-token", default-features = false, features = ["lib"] }
+types = { path = "../../../types", package = "casperlabs-types" }

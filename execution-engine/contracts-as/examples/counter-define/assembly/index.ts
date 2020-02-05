@@ -36,7 +36,7 @@ export function counter_ext(): void {
     }
 
     if (methodName == INC_METHOD) {
-        const oneValue = new U512(<U64>1);
+        const oneValue = U512.fromU64(1);
         const one = CLValue.fromU512(oneValue);
         countKey.add(one);
     }
@@ -53,7 +53,7 @@ export function counter_ext(): void {
             return;
         }
         
-        let returnValue = CLValue.fromI32(<i32>valueI32);
+        let returnValue = CLValue.fromI32(changetype<i32>(valueI32));
         ret(returnValue);
     }
     else {

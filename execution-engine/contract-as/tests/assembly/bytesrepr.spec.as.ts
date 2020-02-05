@@ -6,7 +6,8 @@ import { fromBytesU64, toBytesU64,
          toBytesPair,
          toBytesString, fromBytesString,
          toBytesVecT,
-         GetDecodedBytesCount } from "../../assembly/bytesrepr";
+         GetDecodedBytesCount,
+         GetLastError, Error } from "../../assembly/bytesrepr";
 import { CLValue } from "../../assembly/clvalue";
 import { Key, KeyVariant } from "../../assembly/key";
 import { URef, AccessRights } from "../../assembly/uref";
@@ -24,8 +25,8 @@ export function testDeSerU8(): bool {
     let ser = toBytesU8(222);
     assert(checkArraysEqual(ser, truth));
     let deser = fromBytesU8(arrayToTyped(ser));
-    assert(ser !== null);
-    return <u8>deser == <u8>222;
+    assert(deser !== null);
+    return deser == changetype<U8>(222);
 }
 
 export function xtestDeSerU8_Zero(): bool {
@@ -35,7 +36,7 @@ export function xtestDeSerU8_Zero(): bool {
     let ser = toBytesU8(0);
     assert(checkArraysEqual(ser, truth));
     let deser = fromBytesU8(arrayToTyped(ser));
-    return deser == <U8>0;
+    return deser == changetype<U8>(0);
 }
 
 export function testDeSerU32(): bool {
@@ -44,7 +45,7 @@ export function testDeSerU32(): bool {
     assert(checkArraysEqual(deser, truth));
     let ser = fromBytesU32(arrayToTyped(deser));
     assert(ser !== null);
-    return <u32>ser == <u32>0xdeadbeef;
+    return ser == changetype<U32>(0xdeadbeef);
 }
   
 export function testDeSerZeroU32(): bool {
@@ -54,42 +55,50 @@ export function testDeSerZeroU32(): bool {
     let deser = fromBytesU32(arrayToTyped(ser));
     // WTF: `ser !== null` is true when ser === <U32>0
     assert(ser !== null);
-    return deser === <U32>0;
+    return deser === changetype<U32>(0);
 }
 
 export function testDeserializeU64_1024(): bool {
     const truth = hex2bin("0004000000000000");
     var value = fromBytesU64(truth);
-    return value == <U64>1024;
+    assert(GetLastError() == Error.Ok);
+    return value == <u64>1024;
 }
 
 export function testDeserializeU64_zero(): bool {
     const truth = hex2bin("0000000000000000");
     var value = fromBytesU64(truth);
-    return value == <U64>0;
+    assert(GetLastError() == Error.Ok);
+    return value == <u64>0;
 }
 
 export function testDeserializeU64_u32max(): bool {
     const truth = hex2bin("ffffffff00000000");
     const value = fromBytesU64(truth);
-    return value == <U64>0xffffffff;
+    return value == u64(0xffffffff);
 }
 
 export function testDeserializeU64_u32max_plus1(): bool {
-    
     const truth = hex2bin("0000000001000000");
     const value = fromBytesU64(truth);
-    return value == <U64>4294967296;
+    assert(GetLastError() == Error.Ok);
+    return value == changetype<u64>(4294967296);
+}
+
+export function testDeserializeU64_EOF(): bool {
+    const truth = hex2bin("0000");
+    const value = fromBytesU64(truth);
+    assert(GetLastError() == Error.EarlyEndOfStream);
+    return true;
 }
 
 export function testDeserializeU64_u64max(): bool {
     const truth = hex2bin("feffffffffffffff");
     const value = fromBytesU64(truth);
     assert(value !== null);
-    // NOTE: It seems like U64/u64 is not represented as a real u64 value,
-    // so I suspect this actually overflows and compares X == u32max.
-    let u64_max = <u64>18446744073709551614;
-    return value == <U64>u64_max;
+    assert(GetLastError() == Error.Ok);
+    let u64Val = <u64>18446744073709551614;
+    return value == u64Val;
 }
 
 export function testDeSerListOfStrings(): bool {
@@ -280,8 +289,10 @@ export function testDeserMapOfNamedKeys(): bool {
     let urefBytes = new Array<u8>(32);
     urefBytes.fill(2);
 
-    assert(checkTypedArrayEqual(<Uint8Array>deser[1].second.uref.bytes, arrayToTyped(urefBytes)));
-    assert(deser[1].second.uref.accessRights == AccessRights.READ_ADD_WRITE);
+    assert(deser[1].second.uref !== null);
+    let deser1Uref = <URef>deser[1].second.uref;
+    assert(checkTypedArrayEqual(<Uint8Array>deser1Uref.bytes, arrayToTyped(urefBytes)));
+    assert(deser1Uref.accessRights == AccessRights.READ_ADD_WRITE);
 
     //
 
