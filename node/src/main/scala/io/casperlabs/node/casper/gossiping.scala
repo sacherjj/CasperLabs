@@ -38,6 +38,7 @@ import io.casperlabs.ipc.ChainSpec
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.node.configuration.Configuration
+import io.casperlabs.node.casper.consensus.Consensus
 import io.casperlabs.shared.{Cell, FatalError, Log, Time}
 import io.casperlabs.storage.block._
 import io.casperlabs.storage.dag._

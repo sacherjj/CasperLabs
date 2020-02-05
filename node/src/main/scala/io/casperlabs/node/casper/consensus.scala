@@ -1,4 +1,4 @@
-package io.casperlabs.node.casper
+package io.casperlabs.node.casper.consensus
 
 import com.google.protobuf.ByteString
 import cats._

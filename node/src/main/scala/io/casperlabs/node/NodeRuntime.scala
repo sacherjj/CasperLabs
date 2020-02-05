@@ -36,6 +36,7 @@ import io.casperlabs.metrics.Metrics
 import io.casperlabs.node.api.graphql.FinalizedBlocksStream
 import io.casperlabs.node.api.EventStream
 import io.casperlabs.node.configuration.Configuration
+import io.casperlabs.node.casper.consensus.Consensus
 import io.casperlabs.shared._
 import io.casperlabs.smartcontracts.{ExecutionEngineService, GrpcExecutionEngineService}
 import io.casperlabs.storage.SQLiteStorage
@@ -249,13 +250,13 @@ class NodeRuntime private[node] (
                                                               .pure[Task]
                                                           )
 
-      implicit0(consensus: casper.Consensus[Task]) <- Resource.liftF(
-                                                       new casper.NCB[Task](
-                                                         conf,
-                                                         chainSpec,
-                                                         maybeValidatorId
-                                                       ).pure[Task]
-                                                     )
+      implicit0(consensus: Consensus[Task]) <- Resource.liftF(
+                                                new casper.consensus.NCB[Task](
+                                                  conf,
+                                                  chainSpec,
+                                                  maybeValidatorId
+                                                ).pure[Task]
+                                              )
 
       // Creating with 0 permits initially, enabled after the initial synchronization.
       blockApiLock <- Resource.liftF(Semaphore[Task](0))
