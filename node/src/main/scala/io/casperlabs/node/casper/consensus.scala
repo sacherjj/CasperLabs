@@ -1,4 +1,4 @@
-package io.casperlabs.node.casper
+package io.casperlabs.node.casper.consensus
 
 import com.google.protobuf.ByteString
 import cats._
@@ -10,6 +10,7 @@ import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.{
   BlockStatus,
   CasperState,
+  EventEmitter,
   MultiParentCasper,
   MultiParentCasperImpl,
   MultiParentCasperRef,
@@ -19,27 +20,43 @@ import io.casperlabs.casper.{
 import io.casperlabs.casper.{EquivocatedBlock, Processed, SelfEquivocatedBlock, Valid}
 import io.casperlabs.casper.DeploySelection.DeploySelection
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
+import io.casperlabs.casper.finality.MultiParentFinalizer
+import io.casperlabs.casper.finality.votingmatrix.FinalityDetectorVotingMatrix
 import io.casperlabs.casper.validation.Validation
 import io.casperlabs.casper.util.{CasperLabsProtocol, ProtoUtil}
+import io.casperlabs.casper.DeploySelection
+import io.casperlabs.casper.highway.{
+  EraSupervisor,
+  ForkChoiceManager,
+  HighwayConf,
+  MessageExecutor,
+  MessageProducer
+}
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.comm.ServiceError.{NotFound, Unavailable}
+import io.casperlabs.comm.gossiping.Relaying
 import io.casperlabs.crypto.Keys
 import io.casperlabs.crypto.Keys.PublicKey
 import io.casperlabs.ipc
 import io.casperlabs.ipc.ChainSpec
+import io.casperlabs.models.Message
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.mempool.DeployBuffer
 import io.casperlabs.node.api.EventStream
 import io.casperlabs.node.configuration.Configuration
 import io.casperlabs.shared.{Cell, FatalError, Log, Time}
+import io.casperlabs.storage.BlockHash
 import io.casperlabs.storage.deploy.DeployStorage
 import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.storage.dag.DagStorage
 import io.casperlabs.storage.dag.FinalityStorage
+import io.casperlabs.storage.era.EraStorage
 import io.casperlabs.smartcontracts.ExecutionEngineService
+import java.util.concurrent.TimeUnit
+import java.time.Instant
 import scala.util.control.NoStackTrace
+import scala.concurrent.duration._
 import simulacrum.typeclass
-import io.casperlabs.casper.DeploySelection
 
 // Stuff we need to pass to gossiping.
 @typeclass
@@ -159,4 +176,109 @@ class NCB[F[_]: Concurrent: Time: Log: BlockStorage: DagStorage: ExecutionEngine
 
   private def show(hash: ByteString) =
     PrettyPrinter.buildString(hash)
+}
+
+object Highway {
+  def apply[F[_]: Concurrent: Time: Timer: Clock: Log: Metrics: DagStorage: BlockStorage: DeployBuffer: DeployStorage: EraStorage: FinalityStorage: CasperLabsProtocol: ExecutionEngineService: DeploySelection: EventEmitter: Validation: Relaying](
+      conf: Configuration,
+      chainSpec: ChainSpec,
+      maybeValidatorId: Option[ValidatorIdentity],
+      genesis: Block,
+      isSyncedRef: Ref[F, Boolean]
+  ): Resource[F, Consensus[F]] = {
+    val hc                      = chainSpec.getGenesis.getHighwayConfig
+    val faultToleranceThreshold = 0.1
+
+    for {
+      implicit0(finalizer: MultiParentFinalizer[F]) <- {
+        Resource.liftF[F, MultiParentFinalizer[F]] {
+          for {
+            lfb <- FinalityStorage[F].getLastFinalizedBlock
+            dag <- DagStorage[F].getRepresentation
+            finalityDetector <- FinalityDetectorVotingMatrix
+                                 .of[F](
+                                   dag,
+                                   lfb,
+                                   faultToleranceThreshold
+                                 )
+            finalizer <- MultiParentFinalizer.empty[F](
+                          dag,
+                          lfb,
+                          finalityDetector
+                        )
+          } yield finalizer
+        }
+      }
+
+      // TODO (CON-622): Implement the ForkChoiceManager.
+      implicit0(forkchoice: ForkChoiceManager[F]) <- Resource.pure[F, ForkChoiceManager[F]] {
+                                                      new ForkChoiceManager[F] {
+                                                        override def fromKeyBlock(
+                                                            keyBlockHash: BlockHash
+                                                        ) = ???
+                                                        override def fromJustifications(
+                                                            keyBlockHash: BlockHash,
+                                                            justifications: Set[BlockHash]
+                                                        ) = ???
+                                                        override def updateLatestMessage(
+                                                            keyBlockHash: BlockHash,
+                                                            message: Message
+                                                        ) = ???
+                                                      }
+                                                    }
+
+      // Allow specifying the start outside the chain spec, for convenience.
+      genesisEraStart = Option(conf.highway.genesisEraStartOverride)
+        .filter(_ > 0)
+        .getOrElse(hc.genesisEraStartTimestamp)
+
+      supervisor <- EraSupervisor(
+                     conf = HighwayConf(
+                       tickUnit = TimeUnit.MILLISECONDS,
+                       genesisEraStart = Instant.ofEpochMilli(genesisEraStart),
+                       eraDuration =
+                         HighwayConf.EraDuration.FixedLength(hc.eraDurationMillis.millis),
+                       bookingDuration = hc.bookingDurationMillis.millis,
+                       entropyDuration = hc.entropyDurationMillis.millis,
+                       postEraVotingDuration = if (hc.votingPeriodSummitLevel > 0) {
+                         HighwayConf.VotingDuration.SummitLevel(hc.votingPeriodSummitLevel)
+                       } else {
+                         HighwayConf.VotingDuration
+                           .FixedLength(hc.votingPeriodDurationMillis.millis)
+                       },
+                       omegaMessageTimeStart = conf.highway.omegaMessageTimeStart.value,
+                       omegaMessageTimeEnd = conf.highway.omegaMessageTimeEnd.value
+                     ),
+                     genesis = BlockSummary(genesis.blockHash, genesis.header, genesis.signature),
+                     maybeMessageProducer = maybeValidatorId.map { validatorId =>
+                       MessageProducer[F](
+                         validatorId,
+                         chainName = chainSpec.getGenesis.name,
+                         upgrades = chainSpec.upgrades
+                       )
+                     },
+                     messageExecutor = new MessageExecutor(
+                       chainName = chainSpec.getGenesis.name,
+                       genesis = genesis,
+                       upgrades = chainSpec.upgrades,
+                       maybeValidatorId =
+                         maybeValidatorId.map(v => PublicKey(ByteString.copyFrom(v.publicKey)))
+                     ),
+                     initRoundExponent = conf.highway.initRoundExponent.value,
+                     isSynced = isSyncedRef.get
+                   )
+
+      cons = new Consensus[F] {
+        override def validateAndAddBlock(block: Block): F[Unit] =
+          supervisor.validateAndAddBlock(block)
+
+        override def onGenesisApproved(genesisBlockHash: ByteString): F[Unit] =
+          // This is for the integration tests, they are looking for this.
+          Log[F].info(s"Making the transition to block processing.")
+
+        override def onScheduled(summary: BlockSummary): F[Unit] =
+          ().pure[F]
+      }
+    } yield cons
+  }
 }

@@ -527,6 +527,12 @@ private[configuration] final case class Options private (
       )
 
     @scallop
+    val highwayEnabled =
+      gen[Boolean](
+        "Use highway, or stick to NCB."
+      )
+
+    @scallop
     val highwayOmegaMessageTimeStart =
       gen[Double](
         "Fraction of time through the round after which we can create an omega message."
@@ -542,6 +548,12 @@ private[configuration] final case class Options private (
     val highwayInitRoundExponent =
       gen[Int](
         "Initial round exponent to start the node with, before auto-adjustment takes over; corresponds to the tick unit of the chain."
+      )
+
+    @scallop
+    val highwayGenesisEraStartOverride =
+      gen[Long](
+        "For testing purposes allow overriding the start of the genesis era, to avoid having to edit the chainspec."
       )
 
     @scallop
