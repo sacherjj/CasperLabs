@@ -542,10 +542,10 @@ class DockerNode(LoggingDockerBase):
     def deploy_and_wait_for_processed(self, on_error_raise=True, **deploy_kwargs):
         client = self.p_client.client
         deploy_hash = client.deploy(**deploy_kwargs)
-        result = client.wait_for_deploy_processed(
+        deploy_info = client.wait_for_deploy_processed(
             deploy_hash, on_error_raise=on_error_raise
         )
-        return result
+        return deploy_info
 
     def deploy_and_get_block_hash(
         self, account, contract, on_error_raise=True, **deploy_kwargs
@@ -558,15 +558,12 @@ class DockerNode(LoggingDockerBase):
             payment_amount=10 ** 8,
         )
         deploy_args.update(deploy_kwargs)
-        result = self.deploy_and_wait_for_processed(
+        deploy_info = self.deploy_and_wait_for_processed(
             on_error_raise=on_error_raise, **deploy_args
         )
-        block_hash = result.processing_results[0].block_info.summary.block_hash.hex()
-
-        if on_error_raise:
-            deploys = self.p_client.show_deploys(block_hash)
-            for deploy in deploys:
-                assert deploy.is_error is False
+        block_hash = deploy_info.processing_results[
+            0
+        ].block_info.summary.block_hash.hex()
         return block_hash
 
     def wait_for_deploy_processed_and_get_block_hash(

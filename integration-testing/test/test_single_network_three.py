@@ -190,27 +190,19 @@ branch out and be only 4 levels deep
 
 class DeployThread(threading.Thread):
     def __init__(
-        self,
-        name: str,
-        node: DockerNode,
-        batches_of_contracts: List[List[str]],
-        max_attempts: int,
-        retry_seconds: int,
+        self, name: str, node: DockerNode, batches_of_contracts: List[List[str]]
     ) -> None:
         threading.Thread.__init__(self)
         self.name = name
         self.node = node
         self.batches_of_contracts = batches_of_contracts
-        self.max_attempts = max_attempts
-        self.retry_seconds = retry_seconds
         self.block_hashes = []
 
     def run(self) -> None:
         for batch in self.batches_of_contracts:
             for contract in batch:
-                # TODO: deploy, remember deploy hashes and and wait for processed later.
                 block_hash = self.node.deploy_and_get_block_hash(
-                    self.node.genesis_account, contract
+                    self.node.genesis_account, contract, on_error_raise=False
                 )
                 self.block_hashes.append(block_hash)
 
@@ -231,9 +223,7 @@ def test_multiple_deploys_at_once(
     nodes = three_node_network.docker_nodes
 
     deploy_threads = [
-        DeployThread(
-            "node" + str(i + 1), node, contract_paths, max_attempts=5, retry_seconds=3
-        )
+        DeployThread("node" + str(i + 1), node, contract_paths)
         for i, node in enumerate(nodes)
     ]
 
