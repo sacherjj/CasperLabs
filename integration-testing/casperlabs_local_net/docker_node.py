@@ -449,7 +449,7 @@ class DockerNode(LoggingDockerBase):
         # NOTE: The Scala client is bundled with a bond contract that expects long_value,
         #       but the integration test version expects int.
         json_args = json.dumps([{"name": "amount", "value": {"int_value": amount}}])
-        return self._deploy_and_propose_with_abi_args(
+        return self._deploy_with_abi_args_and_get_block_hash(
             session_contract, Account(from_account_id), json_args
         )
 
@@ -462,11 +462,11 @@ class DockerNode(LoggingDockerBase):
         json_args = json.dumps(
             [{"name": "amount", "value": {"int_value": maybe_amount or 0}}]
         )
-        return self._deploy_and_propose_with_abi_args(
+        return self._deploy_with_abi_args_and_get_block_hash(
             session_contract, Account(from_account_id), json_args
         )
 
-    def _deploy_and_propose_with_abi_args(
+    def _deploy_with_abi_args_and_get_block_hash(
         self,
         session_contract: str,
         from_account: Account,
