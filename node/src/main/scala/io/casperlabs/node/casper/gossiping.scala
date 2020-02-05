@@ -73,11 +73,12 @@ package object gossiping {
       chainSpec: ChainSpec,
       genesis: Block,
       ingressScheduler: Scheduler,
-      egressScheduler: Scheduler
+      egressScheduler: Scheduler,
+      onInitialSyncCompleted: F[Unit]
   )(
       implicit logId: Log[Id],
       metricsId: Metrics[Id]
-  ): Resource[F, (Broadcaster[F], WaitHandle[F])] = {
+  ): Resource[F, Broadcaster[F]] = {
 
     val (cert, key) = conf.tls.readIntraNodeCertAndKey
 
@@ -197,6 +198,11 @@ package object gossiping {
                                  Resource.liftF(().pure[F].start)
                                )
 
+      // Let the outside world know when we're done.
+      _ <- makeFiberResource {
+            awaitSynchronization.join >> onInitialSyncCompleted
+          }
+
       // The stashing synchronizer waits for Genesis approval and the initial synchronization
       // to complete before actually syncing anything. We had to create the underlying
       // synchronizer earlier because the Download Manager needs a reference to it,
@@ -242,7 +248,7 @@ package object gossiping {
                       MultiParentCasperImpl.Broadcaster
                         .fromGossipServices(validatorId, relaying)
                     )
-    } yield (broadcaster, awaitSynchronization.join)
+    } yield broadcaster
   }
 
   /** Check if we have a block yet. */
@@ -564,7 +570,7 @@ package object gossiping {
                  )
     } yield approver
 
-  def makeSynchronizer[F[_]: Concurrent: Parallel: Log: Metrics: MultiParentCasperRef: DagStorage: Validation: CasperLabsProtocol](
+  def makeSynchronizer[F[_]: Concurrent: Parallel: Log: Metrics: DagStorage: Validation: CasperLabsProtocol](
       conf: Configuration,
       connectToGossip: GossipService.Connector[F],
       chainName: String
@@ -596,7 +602,7 @@ package object gossiping {
   }
 
   /** Create gossip service. */
-  def makeGossipServiceServer[F[_]: ConcurrentEffect: Parallel: Log: Metrics: BlockStorage: DagStorage: MultiParentCasperRef](
+  def makeGossipServiceServer[F[_]: ConcurrentEffect: Parallel: Log: Metrics: BlockStorage: DagStorage](
       conf: Configuration,
       synchronizer: Synchronizer[F],
       downloadManager: DownloadManager[F],
