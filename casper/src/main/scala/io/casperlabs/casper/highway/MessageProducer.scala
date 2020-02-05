@@ -286,12 +286,20 @@ object MessageProducer {
   ): F[Set[ByteString]] =
     for {
       dag            <- DagStorage[F].getRepresentation
-      keyBlockHashes <- collectEras[F](keyBlockHash).map(_.map(_.keyBlockHash))
+      keyBlockHashes <- collectKeyBlocks[F](keyBlockHash)
       equivocatorsPerEra <- keyBlockHashes.traverse { h =>
                              dag.latestInEra(h) >>= (_.getEquivocators)
                            }
       equivocators = equivocatorsPerEra.flatten.toSet
     } yield equivocators
+
+  /** Collects key blocks between an era identified by [[keyBlockHash]] (current era)
+    * and an era in which that key block was created (most probably a grandparent era).
+    */
+  def collectKeyBlocks[F[_]: MonadThrowable: DagStorage: EraStorage](
+      keyBlockHash: BlockHash
+  ): F[List[BlockHash]] =
+    collectEras[F](keyBlockHash).map(_.map(_.keyBlockHash))
 
   /** Collects ancestor eras between an era identified by [[keyBlockHash]] (current era)
     * and an era in which that key block was created (most probably a grandparent era).
