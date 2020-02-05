@@ -527,6 +527,12 @@ private[configuration] final case class Options private (
       )
 
     @scallop
+    val highwayEnabled =
+      gen[Boolean](
+        "Use highway, or stick to NCB."
+      )
+
+    @scallop
     val highwayOmegaMessageTimeStart =
       gen[Double](
         "Fraction of time through the round after which we can create an omega message."

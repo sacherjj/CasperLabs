@@ -252,6 +252,9 @@ min-ttl = "1hour"
 # Highway parameters that we can freely choose or tweak; the rest is in the Genesis chain spec.
 [highway]
 
+# Use highway, or stick to NCB.
+enabled = false
+
 # Fraction of time through the round after which we can create an omega message.
 omega-message-time-start = 0.5
 
