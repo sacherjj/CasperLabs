@@ -57,7 +57,6 @@ export function addAssociatedKey(publicKey: Array<u8>, weight: i32): AddKeyFailu
     return <AddKeyFailure>ret;
 }
 
-
 export function setActionThreshold(actionType: ActionType, thresholdValue: u8): SetThresholdFailure {
     const ret = externals.set_action_threshold(<i32>actionType, thresholdValue);
     return <SetThresholdFailure>ret;

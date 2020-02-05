@@ -1,3 +1,4 @@
+//@ts-nocheck
 import {Error, ErrorCode} from "../../../../contract-as/assembly/error";
 import {putKey, getKey, hasKey, getArg, storeFunctionAtHash, ret} from "../../../../contract-as/assembly";
 import {Key} from "../../../../contract-as/assembly/key";

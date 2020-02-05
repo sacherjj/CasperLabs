@@ -6,7 +6,7 @@ import {Key} from "../../../../contract-as/assembly/key";
 import {putKey} from "../../../../contract-as/assembly";
 import {PurseId} from "../../../../contract-as/assembly/purseid";
 
-enum DelegatedArgs {
+enum Args {
   PurseName = 0,
 }
 
@@ -18,7 +18,7 @@ enum CustomError {
 
 export function call(): void {
   // purse name arg
-  const purseNameArg = CL.getArg(DelegatedArgs.PurseName);
+  const purseNameArg = CL.getArg(Args.PurseName);
   if (purseNameArg === null) {
     Error.fromUserError(<u16>CustomError.MissingPurseNameArg).revert();
     return;

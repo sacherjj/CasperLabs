@@ -1,4 +1,4 @@
-import {toBytesArrayU8, toBytesString, toBytesI32, toBytesStringList} from "./bytesrepr";
+import {toBytesArrayU8, toBytesString, toBytesI32, toBytesStringList, toBytesU64} from "./bytesrepr";
 import {U512} from "./bignum";
 import {URef} from "./uref";
 import {Key} from "./key";
@@ -50,6 +50,10 @@ export class CLValue {
         return new CLValue(toBytesI32(value), [<u8>CLTypeTag.I32]);
     }
 
+    static fromU64(value: u64): CLValue {
+        return new CLValue(toBytesU64(value), [<u8>CLTypeTag.U64]);
+    }
+
     static fromKey(key: Key): CLValue{
         return new CLValue(key.toBytes(), [<u8>CLTypeTag.Key]);
     }
@@ -79,9 +83,4 @@ export class CLValue {
         }
         return data;
     }
-
-    // new_turef equivalent
-    // write(): URef{
-    //   // make call to write passing this CLValue and the provided URef
-    // }
 }

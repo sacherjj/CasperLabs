@@ -13,8 +13,8 @@ pub const SNIPPET: &str = " I've been upgraded!";
 
 #[repr(u16)]
 enum CustomError {
-    UnableToReadMutatedLocalKey = 0,
     LocalKeyReadMutatedBytesRepr = 1,
+    UnableToReadMutatedLocalKey = 2,
 }
 
 #[no_mangle]

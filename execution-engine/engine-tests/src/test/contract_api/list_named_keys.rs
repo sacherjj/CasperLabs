@@ -10,7 +10,6 @@ use types::Key;
 const CONTRACT_LIST_NAMED_KEYS: &str = "list_named_keys.wasm";
 const NEW_NAME_ACCOUNT: &str = "Account";
 const NEW_NAME_HASH: &str = "Hash";
-const NEW_NAME_LOCAL: &str = "Local";
 
 #[ignore]
 #[test]
@@ -40,9 +39,10 @@ fn should_list_named_keys() {
         assert!(named_keys
             .insert(NEW_NAME_HASH.to_string(), Key::Hash([2; 32]))
             .is_none());
-        assert!(named_keys
-            .insert(NEW_NAME_LOCAL.to_string(), Key::Local([3; 32]))
-            .is_none());
+        // Key::Local([3; 32])) is not a valid Key::Local
+        //        assert!(named_keys
+        //            .insert(NEW_NAME_LOCAL.to_string(), Key::Local([3; 32]))
+        //            .is_none());
         named_keys
     };
 
