@@ -213,6 +213,12 @@ object DagRepresentation {
     def getEquivocators: F[Set[Validator]] =
       getEquivocations.map(_.keySet)
 
+    def latestMessagesInEra(keyBlockHash: ByteString): F[Map[Validator, Set[Message]]] =
+      dagRepresentation.latestInEra(keyBlockHash).flatMap(_.latestMessages)
+
+    def getEquivocatorsInEra(keyBlockHash: ByteString): F[Set[Validator]] =
+      dagRepresentation.latestInEra(keyBlockHash).flatMap(_.getEquivocators)
+
     // NOTE: These extension methods are here so the Naive-Casper codebase doesn't have to do another
     // step (i.e. `.latestGlobal.flatMap { tip => ... }`)  but in Highway we should first specify the era.
 
