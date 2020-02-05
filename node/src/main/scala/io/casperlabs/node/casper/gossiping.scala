@@ -10,18 +10,13 @@ import cats.effect.concurrent._
 import cats.implicits._
 import com.google.protobuf.ByteString
 import eu.timepit.refined.auto._
-import io.casperlabs.casper.DeploySelection.DeploySelection
 import io.casperlabs.casper.Estimator.BlockHash
-import io.casperlabs.casper.MultiParentCasperImpl.Broadcaster
-import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper._
 import io.casperlabs.casper.consensus._
-import io.casperlabs.casper.consensus.info.Event
-import io.casperlabs.casper.consensus.info.Event.BlockAdded
 import io.casperlabs.casper.util.{CasperLabsProtocol, ProtoUtil}
 import io.casperlabs.casper.validation.Validation
 import io.casperlabs.catscontrib.MonadThrowable
-import io.casperlabs.comm.ServiceError.{InvalidArgument, NotFound, Unavailable}
+import io.casperlabs.comm.ServiceError.{InvalidArgument, Unavailable}
 import io.casperlabs.comm.discovery.NodeUtils._
 import io.casperlabs.comm.discovery.{Node, NodeDiscovery}
 import io.casperlabs.comm.gossiping._
@@ -40,16 +35,12 @@ import io.casperlabs.crypto.Keys.PublicKey
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.ipc
 import io.casperlabs.ipc.ChainSpec
-import io.casperlabs.mempool.DeployBuffer
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.models.BlockImplicits._
-import io.casperlabs.node.api.EventStream
 import io.casperlabs.node.configuration.Configuration
-import io.casperlabs.shared.{Cell, FatalError, FilesAPI, Log, Time}
-import io.casperlabs.smartcontracts.ExecutionEngineService
+import io.casperlabs.shared.{Cell, FatalError, Log, Time}
 import io.casperlabs.storage.block._
 import io.casperlabs.storage.dag._
-import io.casperlabs.storage.deploy.DeployStorage
 import io.grpc.{ManagedChannel, Server}
 import io.grpc.netty.{NegotiationType, NettyChannelBuilder}
 import io.netty.handler.ssl.{ClientAuth, SslContext}
@@ -67,7 +58,7 @@ package object gossiping {
   private implicit val metricsSource: Metrics.Source =
     Metrics.Source(Metrics.Source(Metrics.BaseSource, "node"), "gossiping")
 
-  def apply[F[_]: Parallel: ConcurrentEffect: Log: Metrics: Time: Timer: BlockStorage: DagStorage: FinalityStorage: NodeDiscovery: NodeAsk: ExecutionEngineService: FilesAPI: DeployStorage: Validation: DeployBuffer: EventStream: CasperLabsProtocol: Consensus](
+  def apply[F[_]: Parallel: ConcurrentEffect: Log: Metrics: Time: Timer: BlockStorage: DagStorage: NodeDiscovery: NodeAsk: Validation: CasperLabsProtocol: Consensus](
       port: Int,
       conf: Configuration,
       maybeValidatorId: Option[ValidatorIdentity],
@@ -287,7 +278,7 @@ package object gossiping {
         )
       }
 
-  private def makeDownloadManager[F[_]: Concurrent: Log: Time: Timer: Metrics: BlockStorage: DagStorage: ExecutionEngineService: DeployStorage: Validation: CasperLabsProtocol: EventStream: Consensus](
+  private def makeDownloadManager[F[_]: Concurrent: Log: Time: Timer: Metrics: DagStorage: Consensus](
       conf: Configuration,
       connectToGossip: GossipService.Connector[F],
       relaying: Relaying[F],
@@ -347,7 +338,7 @@ package object gossiping {
   // Even though we create the Genesis from the chainspec, the approver gives the green light to use it,
   // which could be based on the presence of other known validators, signaled by their approvals.
   // That just gives us the assurance that we are using the right chain spec because other are as well.
-  private def makeGenesisApprover[F[_]: Concurrent: Log: Time: Timer: NodeDiscovery: BlockStorage: DagStorage: ExecutionEngineService: FilesAPI: Metrics: DeployStorage: Validation: CasperLabsProtocol: EventStream: Consensus](
+  private def makeGenesisApprover[F[_]: Concurrent: Log: Time: Timer: NodeDiscovery: BlockStorage: Consensus](
       conf: Configuration,
       maybeValidatorId: Option[ValidatorIdentity],
       connectToGossip: GossipService.Connector[F],

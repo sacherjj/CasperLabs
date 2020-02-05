@@ -101,7 +101,6 @@ class NodeRuntime private[node] (
 
   val main: Task[Unit] = {
     implicit val metricsId: Metrics[Id] = diagnostics.effects.metrics[Id](syncId)
-    implicit val filesApiEff            = FilesAPI.create[Task](Sync[Task], log)
 
     // SSL context to use for the public facing API.
     val maybeApiSslContext = if (conf.grpc.useTls) {
