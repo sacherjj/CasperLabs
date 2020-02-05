@@ -1,3 +1,4 @@
+//@ts-nocheck
 import * as externals from "./externals";
 import {Error, ErrorCode} from "./error";
 import {CLValue} from "./clvalue";
@@ -29,7 +30,6 @@ export function writeLocal(local: Uint8Array, value: CLValue): void {
 
 export function addLocal(local: Uint8Array, value: CLValue): void {
     const valueBytes = value.toBytes();
-
     externals.add_local(
         local.dataStart,
         local.length,
