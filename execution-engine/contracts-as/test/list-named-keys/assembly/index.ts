@@ -14,7 +14,7 @@ enum CustomError {
   MissingInitialNamedKeys = 0,
   InvalidInitialNamedKeys = 1,
   MissingNewNamedKeys = 2,
-  InvalidNewNamedKeys = 300,
+  InvalidNewNamedKeys = 3,
   MissingActualNamedKeys = 4464,
   MismatchedKeys = 4505,
 }

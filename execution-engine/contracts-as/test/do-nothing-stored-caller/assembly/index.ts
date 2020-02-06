@@ -19,7 +19,6 @@ enum CustomError {
 }
 
 export function call(): void {
-  // uref arg
   let urefBytes = CL.getArg(Args.DoNothingURef);
   if (urefBytes === null) {
     Error.fromUserError(<u16>CustomError.MissingDoNothingURefArg).revert();
@@ -35,7 +34,6 @@ export function call(): void {
     return;
   }
 
-  // purse name arg
   const purseNameArg = CL.getArg(Args.PurseName);
   if (purseNameArg === null) {
     Error.fromUserError(<u16>CustomError.MissingPurseNameArg).revert();

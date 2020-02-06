@@ -1,10 +1,15 @@
 import {URef} from "./uref";
 import * as externals from "./externals";
-import {fromBytesU32} from "./bytesrepr";
 import {readHostBuffer} from "./index";
 import {U512} from "./bignum";
 import {Error, ErrorCode} from "./error";
 import {PURSE_ID_SERIALIZED_LENGTH} from "./constants";
+
+export enum TransferredTo {
+    TransferError = -1,
+    ExistingAccount = 0,
+    NewAccount = 1,
+}
 
 export class PurseId {
     private uref: URef;
@@ -49,7 +54,7 @@ export class PurseId {
         return this.uref;
     }
 
-    getBalance(): u32 | null {
+    getBalance(): U512 | null {
         let sourceBytes = this.toBytes();
         let balanceSize = new Array<u32>(1);
         balanceSize[0] = 0;
@@ -68,15 +73,15 @@ export class PurseId {
             return null;
         }
 
-        let balance = fromBytesU32(bytes);
+        let balance = U512.fromBytes(bytes);
         if (balance === null) {
             return null;
         }
 
-        return <u32>balance;
+        return balance;
     }
 
-    transferToAccount(target: Uint8Array, amount: U512): i32 {
+    transferToAccount(target: Uint8Array, amount: U512): TransferredTo {
         let sourceBytes = this.toBytes();
         let targetBytes = new Array<u8>(target.length);
         for (let i = 0; i < target.length; i++) {
@@ -94,7 +99,12 @@ export class PurseId {
             amountBytes.dataStart,
             amountBytes.length,
         );
-        return ret;
+
+        if (ret == TransferredTo.ExistingAccount)
+            return TransferredTo.ExistingAccount;
+        if (ret == TransferredTo.NewAccount)
+            return TransferredTo.NewAccount;
+        return TransferredTo.TransferError;
     }
 
     transferToPurse(target: PurseId, amount: U512): i32 {

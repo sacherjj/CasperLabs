@@ -804,7 +804,6 @@ fn should_charge_non_main_purse() {
 
     let mut builder = InMemoryWasmTestBuilder::default();
 
-    // arrange
     let setup_exec_request = {
         let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)

@@ -151,11 +151,6 @@ export function getKey(name: String): Key | null {
   return key;
 }
 
-export enum TransferredTo {
-  ExistingAccount = 0,
-  NewAccount = 1,
-}
-
 export function transferToAccount(target: Uint8Array, amount: U512): U32 | null {
   let amountBytes = amount.toBytes();
 
