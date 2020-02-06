@@ -24,10 +24,6 @@ class CasperLabsClientBase(ABC):
         pass
 
     @abstractmethod
-    def propose(self) -> str:
-        pass
-
-    @abstractmethod
     def show_block(self, block_hash: str) -> str:
         pass
 

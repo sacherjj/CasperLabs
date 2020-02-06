@@ -1,4 +1,3 @@
-import time
 from typing import Optional, Union, Any, Iterable
 from dataclasses import dataclass
 import docker.errors
@@ -8,7 +7,6 @@ from pathlib import Path
 from casperlabs_local_net import LoggingMixin
 from casperlabs_local_net.common import (
     extract_block_count_from_show_blocks,
-    extract_block_hash_from_propose_output,
     random_string,
     Contract,
     DEFAULT_PAYMENT_COST,
@@ -106,27 +104,6 @@ class DockerClient(CasperLabsClientBase, LoggingMixin):
             )
 
         return stdout
-
-    def propose(self) -> str:
-        return self.invoke_client("propose")
-
-    def propose_with_retry(self, max_attempts: int, retry_seconds: int) -> str:
-        # TODO: Is this still true with Nonces gone.
-        # With many threads using the same account the nonces will be interleaved.
-        # Only one node can propose at a time, the others have to wait until they
-        # receive the block and then try proposing again.
-        attempt = 0
-        while True:
-            try:
-                return extract_block_hash_from_propose_output(self.propose())
-            except NonZeroExitCodeError as ex:
-                if attempt < max_attempts:
-                    self.logger.debug("Could not propose; retrying later.")
-                    attempt += 1
-                    time.sleep(retry_seconds)
-                else:
-                    self.logger.debug("Could not propose; no more retries!")
-                    raise ex
 
     def get_balance(self, account_address: str, block_hash: str) -> int:
         """
@@ -469,44 +446,3 @@ class DockerClient(CasperLabsClientBase, LoggingMixin):
 
     def query_purse_balance(self, block_hash: str, purse_id: str) -> Optional[float]:
         raise NotImplementedError()
-
-    def deploy_and_propose(self, **deploy_kwargs) -> str:
-        if "from_address" not in deploy_kwargs:
-            deploy_kwargs["from_address"] = self.node.from_address
-
-        deploy_output = self.deploy(**deploy_kwargs)
-
-        if "Success!" not in deploy_output:
-            raise Exception(f"Deploy failed: {deploy_output}")
-
-        propose_output = self.propose()
-
-        block_hash = extract_block_hash_from_propose_output(propose_output)
-
-        if block_hash is None:
-            raise Exception(
-                f"Block Hash not extracted from propose output: {propose_output}"
-            )
-
-        self.logger.info(
-            f"The block hash: {block_hash} generated for {self.node.container_name}"
-        )
-
-        return block_hash
-
-    def deploy_and_propose_with_retry(
-        self, max_attempts: int, retry_seconds: int, **deploy_kwargs
-    ) -> str:
-        deploy_output = self.deploy(**deploy_kwargs)
-        if "Success!" not in deploy_output:
-            raise Exception(f"Deploy failed: {deploy_output}")
-
-        block_hash = self.propose_with_retry(max_attempts, retry_seconds)
-        if block_hash is None:
-            raise Exception(f"Block Hash not received from propose_with_retry.")
-
-        self.logger.info(
-            f"The block hash: {block_hash} generated for {self.node.container.name}"
-        )
-
-        return block_hash

@@ -1,9 +1,6 @@
 """Tests for the testing code itself."""
 
-from casperlabs_local_net.common import (
-    extract_block_hash_from_propose_output,
-    extract_block_count_from_show_blocks,
-)
+from casperlabs_local_net.common import extract_block_count_from_show_blocks
 
 
 def test_blocks_count_from_show_blocks() -> None:
@@ -28,8 +25,3 @@ count: 123
 """
 
     assert extract_block_count_from_show_blocks(show_blocks_output) == 123
-
-
-def test_extract_block_hash_from_propose_output() -> None:
-    response = "Response: Success! Block a91208047c created and added.\n"
-    assert extract_block_hash_from_propose_output(response) == "a91208047c"

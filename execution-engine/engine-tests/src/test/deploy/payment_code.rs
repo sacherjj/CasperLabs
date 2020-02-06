@@ -1,7 +1,7 @@
 use std::convert::TryFrom;
 
 use engine_core::engine_state::{genesis::POS_REWARDS_PURSE, CONV_RATE, MAX_PAYMENT};
-use engine_shared::{motes::Motes, stored_value::StoredValue, transform::Transform};
+use engine_shared::{motes::Motes, transform::Transform};
 use engine_test_support::{
     internal::{
         utils, DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder,
@@ -94,32 +94,19 @@ fn should_raise_insufficient_payment_when_payment_code_does_not_pay_enough() {
 
     let mut builder = InMemoryWasmTestBuilder::default();
 
-    let _response = builder
+    builder
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
         .exec(exec_request)
-        .commit()
-        .get_exec_response(0)
-        .expect("there should be a response")
-        .to_owned();
+        .commit();
 
-    let mut modified_balance: Option<U512> = None;
-    let mut reward_balance: Option<U512> = None;
+    let modified_balance = builder.get_purse_balance(
+        builder
+            .get_account(DEFAULT_ACCOUNT_ADDR)
+            .expect("should have account")
+            .purse_id(),
+    );
+    let reward_balance = get_pos_rewards_purse_balance(&builder);
 
-    let transforms = builder.get_transforms();
-    let transform = &transforms[0];
-
-    for t in transform.values() {
-        if let Transform::Write(StoredValue::CLValue(cl_value)) = t {
-            if let Ok(v) = cl_value.to_owned().into_t() {
-                modified_balance = Some(v);
-            }
-        }
-        if let Transform::AddUInt512(v) = t {
-            reward_balance = Some(*v);
-        }
-    }
-
-    let modified_balance = modified_balance.expect("modified balance should be present");
     let initial_balance: U512 = U512::from(DEFAULT_ACCOUNT_INITIAL_BALANCE);
     let expected_reward_balance: U512 = U512::from(MAX_PAYMENT);
 
@@ -128,8 +115,6 @@ fn should_raise_insufficient_payment_when_payment_code_does_not_pay_enough() {
         initial_balance - expected_reward_balance,
         "modified balance is incorrect"
     );
-
-    let reward_balance = reward_balance.expect("reward balance should be present");
 
     assert_eq!(
         reward_balance, expected_reward_balance,
@@ -161,7 +146,6 @@ fn should_raise_insufficient_payment_error_when_out_of_gas() {
     let account_1_public_key = PublicKey::new(ACCOUNT_1_ADDR);
     let payment_purse_amount: U512 = U512::from(1);
     let transferred_amount = U512::from(1);
-    let expected_transfers_count = 2;
 
     let exec_request = {
         let deploy = DeployItemBuilder::new()
@@ -178,46 +162,30 @@ fn should_raise_insufficient_payment_error_when_out_of_gas() {
         ExecuteRequestBuilder::new().push_deploy(deploy).build()
     };
 
-    let transfer_result = InMemoryWasmTestBuilder::default()
+    let mut builder = InMemoryWasmTestBuilder::default();
+
+    builder
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
         .exec(exec_request)
         .commit()
         .finish();
 
-    let transforms = transfer_result.builder().get_transforms();
-    let transform = &transforms[0];
-
-    assert_eq!(
-        transform.len(),
-        expected_transfers_count,
-        "unexpected forced transfer transforms count"
-    );
-
     let initial_balance: U512 = U512::from(DEFAULT_ACCOUNT_INITIAL_BALANCE);
     let expected_reward_balance: U512 = U512::from(MAX_PAYMENT);
-    let mut modified_balance: Option<U512> = None;
-    let mut reward_balance: Option<U512> = None;
 
-    for t in transform.values() {
-        if let Transform::Write(StoredValue::CLValue(cl_value)) = t {
-            if let Ok(v) = cl_value.to_owned().into_t() {
-                modified_balance = Some(v);
-            }
-        }
-        if let Transform::AddUInt512(v) = t {
-            reward_balance = Some(*v);
-        }
-    }
-
-    let modified_balance = modified_balance.expect("modified balance should be present");
+    let modified_balance = builder.get_purse_balance(
+        builder
+            .get_account(DEFAULT_ACCOUNT_ADDR)
+            .expect("should have account")
+            .purse_id(),
+    );
+    let reward_balance = get_pos_rewards_purse_balance(&builder);
 
     assert_eq!(
         modified_balance,
         initial_balance - expected_reward_balance,
         "modified balance is incorrect"
     );
-
-    let reward_balance = reward_balance.expect("reward balance should be present");
 
     assert_eq!(
         reward_balance, expected_reward_balance,
@@ -230,8 +198,7 @@ fn should_raise_insufficient_payment_error_when_out_of_gas() {
         "no net resources should be gained or lost post-distribution"
     );
 
-    let response = transfer_result
-        .builder()
+    let response = builder
         .get_exec_response(0)
         .expect("there should be a response");
 
@@ -249,7 +216,6 @@ fn should_raise_insufficient_payment_error_when_out_of_gas() {
 fn should_forward_payment_execution_runtime_error() {
     let account_1_public_key = PublicKey::new(ACCOUNT_1_ADDR);
     let transferred_amount = U512::from(1);
-    let expected_transfers_count = 2;
 
     let exec_request = {
         let deploy = DeployItemBuilder::new()
@@ -266,46 +232,30 @@ fn should_forward_payment_execution_runtime_error() {
         ExecuteRequestBuilder::new().push_deploy(deploy).build()
     };
 
-    let transfer_result = InMemoryWasmTestBuilder::default()
+    let mut builder = InMemoryWasmTestBuilder::default();
+
+    builder
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
         .exec(exec_request)
         .commit()
         .finish();
 
-    let transforms = transfer_result.builder().get_transforms();
-    let transform = &transforms[0];
-
-    assert_eq!(
-        transform.len(),
-        expected_transfers_count,
-        "unexpected forced transfer transforms count"
-    );
-
     let initial_balance: U512 = U512::from(DEFAULT_ACCOUNT_INITIAL_BALANCE);
     let expected_reward_balance: U512 = U512::from(MAX_PAYMENT);
-    let mut modified_balance: Option<U512> = None;
-    let mut reward_balance: Option<U512> = None;
 
-    for t in transform.values() {
-        if let Transform::Write(StoredValue::CLValue(cl_value)) = t {
-            if let Ok(v) = cl_value.to_owned().into_t() {
-                modified_balance = Some(v);
-            }
-        }
-        if let Transform::AddUInt512(v) = t {
-            reward_balance = Some(*v);
-        }
-    }
-
-    let modified_balance = modified_balance.expect("modified balance should be present");
+    let modified_balance = builder.get_purse_balance(
+        builder
+            .get_account(DEFAULT_ACCOUNT_ADDR)
+            .expect("should have account")
+            .purse_id(),
+    );
+    let reward_balance = get_pos_rewards_purse_balance(&builder);
 
     assert_eq!(
         modified_balance,
         initial_balance - expected_reward_balance,
         "modified balance is incorrect"
     );
-
-    let reward_balance = reward_balance.expect("reward balance should be present");
 
     assert_eq!(
         reward_balance, expected_reward_balance,
@@ -318,8 +268,7 @@ fn should_forward_payment_execution_runtime_error() {
         "no net resources should be gained or lost post-distribution"
     );
 
-    let response = transfer_result
-        .builder()
+    let response = builder
         .get_exec_response(0)
         .expect("there should be a response");
 
@@ -337,7 +286,6 @@ fn should_forward_payment_execution_runtime_error() {
 fn should_forward_payment_execution_gas_limit_error() {
     let account_1_public_key = PublicKey::new(ACCOUNT_1_ADDR);
     let transferred_amount = U512::from(1);
-    let expected_transfers_count = 2;
 
     let exec_request = {
         let deploy = DeployItemBuilder::new()
@@ -354,46 +302,30 @@ fn should_forward_payment_execution_gas_limit_error() {
         ExecuteRequestBuilder::new().push_deploy(deploy).build()
     };
 
-    let transfer_result = InMemoryWasmTestBuilder::default()
+    let mut builder = InMemoryWasmTestBuilder::default();
+
+    builder
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
         .exec(exec_request)
         .commit()
         .finish();
 
-    let transforms = transfer_result.builder().get_transforms();
-    let transform = &transforms[0];
-
-    assert_eq!(
-        transform.len(),
-        expected_transfers_count,
-        "unexpected forced transfer transforms count"
-    );
-
     let initial_balance: U512 = U512::from(DEFAULT_ACCOUNT_INITIAL_BALANCE);
     let expected_reward_balance: U512 = U512::from(MAX_PAYMENT);
-    let mut modified_balance: Option<U512> = None;
-    let mut reward_balance: Option<U512> = None;
 
-    for t in transform.values() {
-        if let Transform::Write(StoredValue::CLValue(cl_value)) = t {
-            if let Ok(v) = cl_value.to_owned().into_t() {
-                modified_balance = Some(v);
-            }
-        }
-        if let Transform::AddUInt512(v) = t {
-            reward_balance = Some(*v);
-        }
-    }
-
-    let modified_balance = modified_balance.expect("modified balance should be present");
+    let modified_balance = builder.get_purse_balance(
+        builder
+            .get_account(DEFAULT_ACCOUNT_ADDR)
+            .expect("should have account")
+            .purse_id(),
+    );
+    let reward_balance = get_pos_rewards_purse_balance(&builder);
 
     assert_eq!(
         modified_balance,
         initial_balance - expected_reward_balance,
         "modified balance is incorrect"
     );
-
-    let reward_balance = reward_balance.expect("reward balance should be present");
 
     assert_eq!(
         reward_balance, expected_reward_balance,
@@ -406,8 +338,7 @@ fn should_forward_payment_execution_gas_limit_error() {
         "no net resources should be gained or lost post-distribution"
     );
 
-    let response = transfer_result
-        .builder()
+    let response = builder
         .get_exec_response(0)
         .expect("there should be a response");
 
@@ -484,19 +415,16 @@ fn should_correctly_charge_when_session_code_runs_out_of_gas() {
 
     let mut builder = InMemoryWasmTestBuilder::default();
 
-    let transfer_result = builder
+    builder
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
         .exec(exec_request)
         .commit()
         .finish();
 
-    let default_account = transfer_result
-        .builder()
+    let default_account = builder
         .get_account(DEFAULT_ACCOUNT_ADDR)
         .expect("should get genesis account");
-    let modified_balance: U512 = transfer_result
-        .builder()
-        .get_purse_balance(default_account.purse_id());
+    let modified_balance: U512 = builder.get_purse_balance(default_account.purse_id());
     let initial_balance: U512 = U512::from(DEFAULT_ACCOUNT_INITIAL_BALANCE);
 
     assert_ne!(
@@ -504,8 +432,7 @@ fn should_correctly_charge_when_session_code_runs_out_of_gas() {
         "balance should be less than initial balance"
     );
 
-    let response = transfer_result
-        .builder()
+    let response = builder
         .get_exec_response(0)
         .expect("there should be a response");
 
@@ -550,19 +477,16 @@ fn should_correctly_charge_when_session_code_fails() {
 
     let mut builder = InMemoryWasmTestBuilder::default();
 
-    let transfer_result = builder
+    builder
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
         .exec(exec_request)
         .commit()
         .finish();
 
-    let default_account = transfer_result
-        .builder()
+    let default_account = builder
         .get_account(DEFAULT_ACCOUNT_ADDR)
         .expect("should get genesis account");
-    let modified_balance: U512 = transfer_result
-        .builder()
-        .get_purse_balance(default_account.purse_id());
+    let modified_balance: U512 = builder.get_purse_balance(default_account.purse_id());
     let initial_balance: U512 = U512::from(DEFAULT_ACCOUNT_INITIAL_BALANCE);
 
     assert_ne!(
@@ -570,8 +494,7 @@ fn should_correctly_charge_when_session_code_fails() {
         "balance should be less than initial balance"
     );
 
-    let response = transfer_result
-        .builder()
+    let response = builder
         .get_exec_response(0)
         .expect("there should be a response")
         .clone();
@@ -611,20 +534,17 @@ fn should_correctly_charge_when_session_code_succeeds() {
 
     let mut builder = InMemoryWasmTestBuilder::default();
 
-    let transfer_result = builder
+    builder
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
         .exec(exec_request)
         .expect_success()
         .commit()
         .finish();
 
-    let default_account = transfer_result
-        .builder()
+    let default_account = builder
         .get_account(DEFAULT_ACCOUNT_ADDR)
         .expect("should get genesis account");
-    let modified_balance: U512 = transfer_result
-        .builder()
-        .get_purse_balance(default_account.purse_id());
+    let modified_balance: U512 = builder.get_purse_balance(default_account.purse_id());
     let initial_balance: U512 = U512::from(DEFAULT_ACCOUNT_INITIAL_BALANCE);
 
     assert_ne!(
@@ -632,8 +552,7 @@ fn should_correctly_charge_when_session_code_succeeds() {
         "balance should be less than initial balance"
     );
 
-    let response = transfer_result
-        .builder()
+    let response = builder
         .get_exec_response(0)
         .expect("there should be a response")
         .clone();

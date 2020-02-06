@@ -8,7 +8,7 @@ ERC20_WASM=${ERC20_WASM:-"../../../execution-engine/target/wasm32-unknown-unknow
 TOKEN_NAME=${TOKEN_NAME:-"test-token"}
 AUTO_PROPOSE=${AUTO_PROPOSE:-false}
 QUERY_DEPLOY_STATUS=${QUERY_DEPLOY_STATUS:-false}
-PROXY_NAME="erc20-proxy"
+PROXY_NAME="erc20_proxy"
 
 # At the beginning of a serialized version of Rust's Vec<u8>, first 4 bytes represent the size of the vector.
 #

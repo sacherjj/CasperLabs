@@ -29,6 +29,16 @@ export class U512 {
         this.pn = new Uint32Array(16); // 512 bits total
     }
 
+    static get MAX_VALUE(): U512 {
+        let value = new U512();
+        value.pn.fill(0xffffffff);
+        return value;
+    }
+
+    static get MIN_VALUE(): U512 {
+        return new U512();
+    }
+
     static fromHex(hex: String): U512 {
         let res = new U512();
         res.setHex(hex);

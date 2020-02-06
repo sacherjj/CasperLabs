@@ -1,6 +1,5 @@
 use std::collections::BTreeMap;
 
-use engine_shared::{stored_value::StoredValue, transform::Transform};
 use engine_test_support::{
     internal::{
         exec_with_return, ExecuteRequestBuilder, WasmTestBuilder, DEFAULT_BLOCK_TIME,
@@ -62,20 +61,16 @@ fn should_run_pos_install_contract() {
     .expect("should run successfully");
 
     let prestate = builder.get_post_state_hash();
-    builder.commit_effects(prestate, effect.transforms.clone());
+    builder.commit_effects(prestate, effect.transforms);
 
     // should return a uref
     assert_eq!(ret_value, ret_urefs[0]);
 
     // should have written a contract under that uref
-    let named_keys = match effect
-        .transforms
-        .get(&Key::URef(ret_value.remove_access_rights()))
-    {
-        Some(Transform::Write(StoredValue::Contract(contract))) => contract.named_keys(),
-
-        _ => panic!("Expected contract to be written under the key"),
-    };
+    let contract = builder
+        .get_contract(ret_value.remove_access_rights())
+        .expect("should have a contract");
+    let named_keys = contract.named_keys();
 
     assert_eq!(named_keys.len(), EXPECTED_KNOWN_KEYS_LEN);
 

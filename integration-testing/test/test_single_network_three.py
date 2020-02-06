@@ -125,21 +125,12 @@ class TimedThread(Thread):
 
 class DeployTimedTread(TimedThread):
     def my_call(self, contract):
-        return self.node.deploy_and_get_block_hash(self.node.test_account, contract)
+        return self.node.deploy_and_get_block_hash(
+            self.node.test_account, contract, on_error_raise=False
+        )
 
 
-"""
-After refactoring this is failing. I suspect this is because before refacctoring the test was ignoring
-failed propose.
-
-08:16:21   node-1-sxmwi-latest: W 2020-01-29T07:16:21.167            (Validation.scala:112)  …alidation.Validation.ignore [37:node-runner-37] Ignoring block=d0a891a3c6... because invalid post state hash
-08:16:21   node-1-sxmwi-latest: W 2020-01-29T07:16:21.168 (MultiParentCasperImpl.scala:702)  …or.handleInvalidBlockEffect [37:node-runner-37] Recording invalid block=d0a891a3c6... for status=InvalidPostStateHash.
-08:16:21   node-1-sxmwi-latest: E 2020-01-29T07:16:21.179           (AutoProposer.scala:86)  ….AutoProposer.tryPropose.84 [37:node-runner-37] Could not propose block: ex=io.casperlabs.comm.ServiceError$Exception: INVALID_ARGUMENT: Invalid block: InvalidPostStateHash
-08:16:21   node-0-pwkyi-latest: I 2020-01-29T07:16:21.316           (AutoProposer.scala:53)  i.c.c.A.run.loop.44 [25:node-runner-25] Proposing a block after start_millis=5012 ms with size=3 pending deploys.
-"""
-
-
-def disable_test_neglected_invalid_block(three_node_network):
+def test_neglected_invalid_block(three_node_network):
     """
     Feature file: neglected_invalid_justification.feature
     Scenario: 3 Nodes doing simultaneous deploys and proposes do not have neglected invalid blocks
@@ -199,31 +190,19 @@ branch out and be only 4 levels deep
 
 class DeployThread(threading.Thread):
     def __init__(
-        self,
-        name: str,
-        node: DockerNode,
-        batches_of_contracts: List[List[str]],
-        max_attempts: int,
-        retry_seconds: int,
+        self, name: str, node: DockerNode, batches_of_contracts: List[List[str]]
     ) -> None:
         threading.Thread.__init__(self)
         self.name = name
         self.node = node
         self.batches_of_contracts = batches_of_contracts
-        self.max_attempts = max_attempts
-        self.retry_seconds = retry_seconds
         self.block_hashes = []
 
     def run(self) -> None:
         for batch in self.batches_of_contracts:
             for contract in batch:
-                # TODO: The test was supposed to deploy few deploys and propose them all at once.
-                # After refactoring it is deploying one contract and waiting for the deploy
-                # to be processed and included in a block, before proceeding with a next deploy.
-                # With auto-propose this seems to be tricky to do without a race condition.
-                # We may need to rework the test or disable it. Discussion needed!
                 block_hash = self.node.deploy_and_get_block_hash(
-                    self.node.genesis_account, contract
+                    self.node.genesis_account, contract, on_error_raise=False
                 )
                 self.block_hashes.append(block_hash)
 
@@ -232,7 +211,6 @@ class DeployThread(threading.Thread):
     "contract_paths,expected_deploy_counts_in_blocks",
     [([[Contract.HELLO_NAME_DEFINE]], [1, 5, 1, 1])],
 )
-# Nodes deploy one or more contracts followed by propose.
 def test_multiple_deploys_at_once(
     three_node_network,
     contract_paths: List[List[str]],
@@ -243,12 +221,9 @@ def test_multiple_deploys_at_once(
     Scenario: Multiple simultaneous deploy after single deploy
     """
     nodes = three_node_network.docker_nodes
-    # Wait for the genesis block reacing each node.
 
     deploy_threads = [
-        DeployThread(
-            "node" + str(i + 1), node, contract_paths, max_attempts=5, retry_seconds=3
-        )
+        DeployThread("node" + str(i + 1), node, contract_paths)
         for i, node in enumerate(nodes)
     ]
 
