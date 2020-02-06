@@ -319,5 +319,5 @@ object MessageProducer {
                }
                .takeUntil(_.keyBlockHash == keyBlock.eraId)
                .toList
-    } yield eras
+    } yield eras.reverse
 }
