@@ -291,7 +291,7 @@ object ProtoMappings {
 
   private def toByteArray32(bytes: ByteString): Either[Error, ByteArray32] =
     ByteArray32(bytes.toByteArray) match {
-      case None          => Left(Error.Expected32Bytes(found = bytes.toByteArray.toIndexedSeq))
+      case None          => Left(Error.Expected32Bytes(foundLength = bytes.size))
       case Some(bytes32) => Right(bytes32)
     }
 
@@ -305,7 +305,7 @@ object ProtoMappings {
 
     case class CLValueError(err: CLValue.Error) extends Error
 
-    case class Expected32Bytes(found: IndexedSeq[Byte]) extends Error
+    case class Expected32Bytes(foundLength: Int) extends Error
 
     case object MissingArg           extends Error
     case object EmptyKeyVariant      extends Error
