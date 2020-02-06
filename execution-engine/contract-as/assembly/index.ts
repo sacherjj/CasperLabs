@@ -117,7 +117,11 @@ export function callContract(key: Key, args: CLValue[]): Uint8Array | null {
   }
 
   let hostBufSize = resultSize[0];
-  return readHostBuffer(hostBufSize);
+  if (hostBufSize > 0) {
+    return readHostBuffer(hostBufSize);
+  } else {
+    return new Uint8Array(0);
+  }
 }
 
 export function putKey(name: String, key: Key): void {

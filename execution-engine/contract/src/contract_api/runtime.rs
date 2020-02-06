@@ -66,12 +66,20 @@ pub fn call_contract<A: ArgsParser, T: CLTyped + FromBytes>(c_ptr: ContractRef, 
         unsafe { bytes_written.assume_init() }
     };
 
-    // NOTE: this is a copy of the contents of `read_host_buffer()`.  Calling that directly from
-    // here causes several contracts to fail with a Wasmi `Unreachable` error.
-    let bytes_ptr = contract_api::alloc_bytes(bytes_written);
-    let mut dest: Vec<u8> = unsafe { Vec::from_raw_parts(bytes_ptr, bytes_written, bytes_written) };
-    read_host_buffer_into(&mut dest).unwrap_or_revert();
-    bytesrepr::deserialize(dest).unwrap_or_revert()
+    let serialized_result = if bytes_written == 0 {
+        // If no bytes were written, the host buffer hasn't been set and hence shouldn't be read.
+        vec![]
+    } else {
+        // NOTE: this is a copy of the contents of `read_host_buffer()`.  Calling that directly from
+        // here causes several contracts to fail with a Wasmi `Unreachable` error.
+        let bytes_ptr = contract_api::alloc_bytes(bytes_written);
+        let mut dest: Vec<u8> =
+            unsafe { Vec::from_raw_parts(bytes_ptr, bytes_written, bytes_written) };
+        read_host_buffer_into(&mut dest).unwrap_or_revert();
+        dest
+    };
+
+    bytesrepr::deserialize(serialized_result).unwrap_or_revert()
 }
 
 /// Takes the name of a (non-mangled) `extern "C"` function to store as a contract under the given

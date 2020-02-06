@@ -5,10 +5,7 @@
 use alloc::vec;
 use alloc::vec::Vec;
 
-use casperlabs_types::{
-    bytesrepr::{Error, ToBytes},
-    CLTyped, CLValue, CLValueError,
-};
+use casperlabs_types::{bytesrepr::ToBytes, CLTyped, CLValue, CLValueError};
 
 /// Types which implement [`ArgsParser`] can be parsed into an ABI-compliant byte representation
 /// suitable for passing as arguments to a contract.
@@ -18,20 +15,10 @@ use casperlabs_types::{
 pub trait ArgsParser {
     /// Parses the arguments to a `Vec` of [`CLValue`]s.
     fn parse(self) -> Result<Vec<CLValue>, CLValueError>;
-
-    #[doc(hidden)]
-    /// This parses the args to a `Vec<Vec<u8>` so that we can continue to support this form being
-    /// received from Node in Deploy requests.  Once Node has been altered to support `CLValue`
-    /// fully, we can remove this method and receive args as serialized `Vec<CLValue>`.
-    fn parse_to_vec_u8(self) -> Result<Vec<Vec<u8>>, Error>;
 }
 
 impl ArgsParser for () {
     fn parse(self) -> Result<Vec<CLValue>, CLValueError> {
-        Ok(Vec::new())
-    }
-
-    fn parse_to_vec_u8(self) -> Result<Vec<Vec<u8>>, Error> {
         Ok(Vec::new())
     }
 }
@@ -43,12 +30,6 @@ macro_rules! impl_argsparser_tuple {
             fn parse(self) -> Result<Vec<CLValue>, CLValueError> {
                 let ($($name,)+) = self;
                 Ok(vec![$(CLValue::from_t($name)?,)+])
-            }
-
-            #[allow(non_snake_case)]
-            fn parse_to_vec_u8(self) -> Result<Vec<Vec<u8>>, Error> {
-                let ($($name,)+) = self;
-                Ok(vec![$(ToBytes::into_bytes($name)?,)+])
             }
         }
     );

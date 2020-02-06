@@ -26,7 +26,8 @@ import io.casperlabs.metrics.Metrics
 import io.casperlabs.models.Weight
 import io.casperlabs.p2p.EffectsTestInstances._
 import io.casperlabs.shared.{Cell, Log, Time}
-import io.casperlabs.smartcontracts.{Abi, ExecutionEngineService}
+import io.casperlabs.smartcontracts.bytesrepr._
+import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.block._
 import io.casperlabs.storage.dag._
 import io.casperlabs.storage.deploy.DeployStorage
@@ -236,7 +237,7 @@ object HashSetCasperTestNode {
           case _ => sys.error("Expected DeployPayload.Code")
         }
         val tyI32: CLType = CLType(CLType.Variants.SimpleType(CLType.Simple.I32))
-        val zero_bytes    = Abi.toBytes[Int](0).get
+        val zero_bytes    = ToBytes.toBytes(0)
         val zero: CLValue = CLValue(Some(tyI32), ByteString.copyFrom(zero_bytes))
         val value         = StoredValue().withClValue(zero)
         val key = Key(

@@ -13,7 +13,7 @@ use engine_storage::{global_state::StateReader, protocol_data::ProtocolData};
 use types::{
     account::PublicKey,
     bytesrepr::{self, FromBytes},
-    BlockTime, CLType, CLTyped, CLValue, Key, Phase, ProtocolVersion,
+    BlockTime, CLTyped, CLValue, Key, Phase, ProtocolVersion,
 };
 
 use crate::{
@@ -108,7 +108,7 @@ impl Executor {
         // only nonce update can be returned.
         let effects_snapshot = tc.borrow().effect();
 
-        let arguments: Vec<Vec<u8>> = if args.is_empty() {
+        let arguments: Vec<CLValue> = if args.is_empty() {
             Vec::new()
         } else {
             // TODO: figure out how this works with the cost model
@@ -116,11 +116,6 @@ impl Executor {
             let gas = Gas::new(args.len().into());
             on_fail_charge!(bytesrepr::deserialize(args), gas, effects_snapshot)
         };
-
-        let arguments = arguments
-            .into_iter()
-            .map(|bytes: Vec<u8>| CLValue::from_components(CLType::Any, bytes))
-            .collect();
 
         let context = RuntimeContext::new(
             tc,
