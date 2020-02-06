@@ -53,6 +53,25 @@ class DockerNode(LoggingDockerBase):
     GRPC_INTERNAL_PORT = 40402
     HTTP_PORT = 40403
     KADEMLIA_PORT = 40404
+    PROXY_OFFSET = 5  # Proxy port offset added to normal port numbers
+    DOCKER_PORT_MULTIPLIER = 10
+    UNIQUE_RUN_MULTIPLIER = 100
+    BEHIND_PROXY_OFFSET = 10000
+
+    # Ports:
+    # CasperLabs Docker Node requires 40400-40404.
+    #
+    # We started allocating ports based on digits.  However, we have run out of ports for the number of possible
+    # nodes running at a given time.
+    #
+    # Ports use 0-4 in ones digit.  Proxy will add 5 to use 5-9.
+    # Note: if we add more ports, we may have to manually specify the proxy ports needed, rather than a simple +5.
+    #
+    # Docker mapping to local adds 10 * node_number (self.config.number).  To allow for up to 10 nodes running.
+    #
+    #
+    #
+    #
 
     DOCKER_CLIENT = "d"
     PYTHON_CLIENT = "p"
@@ -107,6 +126,10 @@ class DockerNode(LoggingDockerBase):
         )
 
     @property
+    def unique_run_offset(self) -> int:
+        return self.config.unique_run_num * self.UNIQUE_RUN_MULTIPLIER
+
+    @property
     def node_host(self):
         return os.environ.get("TAG_NAME") and self.container_name or "172.17.0.1"
 
@@ -120,33 +143,34 @@ class DockerNode(LoggingDockerBase):
 
     @property
     def server_proxy_port(self) -> int:
-        return (
-            self.GRPC_SERVER_PORT + self.config.number * 100 + self.docker_port_offset
-        )
+        return self.GRPC_SERVER_PORT + self.PROXY_OFFSET + self.docker_port_offset
 
     @property
     def kademlia_proxy_port(self) -> int:
-        return self.KADEMLIA_PORT + self.config.number * 100 + self.docker_port_offset
+        return self.KADEMLIA_PORT + self.PROXY_OFFSET + self.docker_port_offset
 
     @property
     def docker_port_offset(self) -> int:
         if self.is_in_docker:
             return 0
         else:
-            return self.config.number * 10
+            return (
+                self.config.number * self.DOCKER_PORT_MULTIPLIER
+                + self.unique_run_offset
+            )
 
     @property
     def grpc_server_docker_port(self) -> int:
         n = self.GRPC_SERVER_PORT + self.docker_port_offset
         if self.config.behind_proxy:
-            return n + 10000  # 50400 + self.docker_port_offset
+            return n + self.BEHIND_PROXY_OFFSET  # 50400 + self.docker_port_offset
         return n
 
     @property
     def kademlia_docker_port(self) -> int:
         n = self.KADEMLIA_PORT + self.docker_port_offset
         if self.config.behind_proxy:
-            return n + 10000  # 50404 + self.docker_port_offset
+            return n + self.BEHIND_PROXY_OFFSET  # 50404 + self.docker_port_offset
         return n
 
     @property
@@ -197,7 +221,7 @@ class DockerNode(LoggingDockerBase):
         This renders the network name that the docker client should have opened for Python Client connection
         """
         # Networks are created in docker_run_tests.sh.  Must stay in sync.
-        return f"cl-{self.docker_tag}-{self.config.number}"
+        return f"cl-{self.docker_tag}-{self.config.unique_run_num}-{self.config.number}"
 
     def join_client_network(self) -> None:
         """
