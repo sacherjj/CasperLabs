@@ -75,6 +75,9 @@ trait Consensus[F[_]] {
   /** Let consensus know that a new block has been scheduled for downloading.
     */
   def onScheduled(summary: BlockSummary): F[Unit]
+
+  /** Provide a rank to start the initial synchronization from. */
+  def lastSynchronizedRank: F[Long]
 }
 
 class NCB[F[_]: Concurrent: Time: Log: BlockStorage: DagStorage: ExecutionEngineService: MultiParentCasperRef: Metrics: DeployStorage: DeployBuffer: DeploySelection: FinalityStorage: Validation: CasperLabsProtocol: EventStream](
@@ -173,6 +176,26 @@ class NCB[F[_]: Concurrent: Time: Log: BlockStorage: DagStorage: ExecutionEngine
 
       case _ => ().pure[F]
     }
+
+  /** Start from the rank of the oldest message of validators bonded at the latest finalized block. */
+  override def lastSynchronizedRank: F[Long] =
+    for {
+      dag            <- DagStorage[F].getRepresentation
+      latestMessages <- dag.latestMessages
+      lfb            <- FinalityStorage[F].getLastFinalizedBlock
+      lfbMessage     <- dag.lookupUnsafe(lfb)
+      // Take only validators who were bonded in the LFB to make sure unbonded
+      // validators don't cause syncing to always start from the rank they left at.
+      bonded = lfbMessage.blockSummary.getHeader.getState.bonds.map(_.validatorPublicKey).toSet
+      // The minimum rank of all latest messages is not exactly
+      minRank = latestMessages
+        .filterKeys(bonded)
+        .values
+        .flatMap(_.map(_.rank))
+        .toList
+        .minimumOption
+        .getOrElse(0L)
+    } yield minRank
 
   private def show(hash: ByteString) =
     PrettyPrinter.buildString(hash)
@@ -278,6 +301,19 @@ object Highway {
 
         override def onScheduled(summary: BlockSummary): F[Unit] =
           ().pure[F]
+
+        /** Start from the key block of the latest era. Eventually we should use the base block. */
+        override def lastSynchronizedRank: F[Long] =
+          for {
+            dag  <- DagStorage[F].getRepresentation
+            eras <- EraStorage[F].getChildlessEras
+            // Key block hashes are going to be in the grandparent era.
+            keyBlocksHashes = eras.map(_.keyBlockHash).toList
+            keyBlocks       <- keyBlocksHashes.traverse(dag.lookupUnsafe)
+            // Take the latest, to allow eras to be killed without causing
+            // initial sync to start from their keyblock forever.
+            maxRank = keyBlocks.map(_.rank).max
+          } yield maxRank
       }
     } yield cons
   }
