@@ -47,7 +47,6 @@ class DockerConfig:
     socket_volume: Optional[str] = None
     node_account: Account = None
     grpc_encryption: bool = False
-    auto_propose: bool = False
     is_read_only: bool = False
     behind_proxy: bool = False
     # Function that returns bonds amount for each account to be placed in accounts.csv.
@@ -103,6 +102,7 @@ class DockerConfig:
             "--tls-key": self.tls_key_path(),
             "--tls-api-certificate": self.tls_certificate_path(),
             "--tls-api-key": self.tls_key_path(),
+            "--casper-auto-propose-enabled": "",
         }
         if self.behind_proxy:
             options["--server-port"] = "50400"
@@ -122,8 +122,6 @@ class DockerConfig:
             # In this case we have to provide full chainspec,
             # including manifest.toml and the system contracts.
             options["--casper-chain-spec-path"] = node.CL_CHAINSPEC_DIR
-        if self.auto_propose:
-            options["--casper-auto-propose-enabled"] = ""
         return options
 
 

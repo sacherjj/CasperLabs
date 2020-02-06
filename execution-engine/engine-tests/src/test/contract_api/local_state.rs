@@ -40,7 +40,7 @@ fn should_run_local_state_contract() {
     assert_eq!(
         transforms[0]
             .get(&expected_local_key)
-            .expect("Should have expected local key"),
+            .expect("Should have expected local key transforms[0]"),
         &Transform::Write(StoredValue::CLValue(
             CLValue::from_t(String::from("Hello, world!")).unwrap()
         ))
@@ -49,7 +49,7 @@ fn should_run_local_state_contract() {
     assert_eq!(
         transforms[1]
             .get(&expected_local_key)
-            .expect("Should have expected local key"),
+            .expect("Should have expected local key transforms[1]"),
         &Transform::Write(StoredValue::CLValue(
             CLValue::from_t(String::from("Hello, world! Hello, world!")).unwrap()
         ))
@@ -89,13 +89,15 @@ fn should_add_to_local_state() {
         transforms[0]
             .get(&expected_local_key)
             .expect("Should have expected local key"),
-        &Transform::Write(StoredValue::CLValue(CLValue::from_t(10u64).unwrap()))
+        &Transform::Write(StoredValue::CLValue(CLValue::from_t(10u64).unwrap())),
+        "local key should have u64 10"
     );
 
     assert_eq!(
         transforms[1]
             .get(&expected_local_key)
             .expect("Should have expected local key"),
-        &Transform::AddUInt64(5)
+        &Transform::AddUInt64(5),
+        "local key should have u64 5"
     );
 }

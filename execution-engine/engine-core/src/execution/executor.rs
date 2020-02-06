@@ -16,10 +16,10 @@ use types::{
     BlockTime, CLType, CLTyped, CLValue, Key, Phase, ProtocolVersion,
 };
 
-use super::{extract_access_rights_from_keys, instance_and_memory, Error, Runtime};
 use crate::{
     engine_state::{execution_result::ExecutionResult, system_contract_cache::SystemContractCache},
-    execution::{address_generator::AddressGenerator, FN_STORE_ID_INITIAL},
+    execution::{address_generator::AddressGenerator, Error, FN_STORE_ID_INITIAL},
+    runtime::{extract_access_rights_from_keys, instance_and_memory, Runtime},
     runtime_context::{self, RuntimeContext},
     tracking_copy::TrackingCopy,
 };

@@ -633,11 +633,11 @@ class CasperLabsClient:
         while True:
             if time.time() - start_time > timeout_seconds:
                 raise Exception(
-                    f"Timed oud waiting for deploy {deploy_hash} to be processed"
+                    f"Timed out waiting for deploy {deploy_hash} to be processed"
                 )
 
             result = self.showDeploy(deploy_hash, full_view=False)
-            if result.status.state != 1:  # PENDING
+            if result.status.state != info.DeployInfo.State.PENDING:
                 break
             time.sleep(delay)
 

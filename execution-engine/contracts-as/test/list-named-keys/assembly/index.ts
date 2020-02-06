@@ -1,53 +1,66 @@
+//@ts-nocheck
 import * as CL from "../../../../contract-as/assembly";
 import {Error, ErrorCode} from "../../../../contract-as/assembly/error";
-import {fromBytesMap,
-        fromBytesString,
-        toBytesString} from "../../../../contract-as/assembly/bytesrepr";
+import {fromBytesMap, fromBytesString} from "../../../../contract-as/assembly/bytesrepr";
 import {Key} from "../../../../contract-as/assembly/key";
-import {Pair} from "../../../../contract-as/assembly/pair";
-import {checkItemsEqual, checkArraysEqual, checkTypedArrayEqual} from "../../../../contract-as/assembly/utils";
+import {checkItemsEqual} from "../../../../contract-as/assembly/utils";
+
+enum Args {
+  InitialNamedKeys = 0,
+  NewNamedKeys = 1,
+}
+
+enum CustomError {
+  MissingInitialNamedKeys = 0,
+  InvalidInitialNamedKeys = 1,
+  MissingNewNamedKeys = 2,
+  InvalidNewNamedKeys = 300,
+  MissingActualNamedKeys = 4464,
+  MismatchedKeys = 4505,
+}
 
 export function call(): void {
-  let expectedInitialNamedKeysBytes = CL.getArg(0);
+  let expectedInitialNamedKeysBytes = CL.getArg(Args.InitialNamedKeys);
   if (expectedInitialNamedKeysBytes === null) {
-    Error.fromErrorCode(ErrorCode.MissingArgument).revert();
+    Error.fromUserError(<u16>CustomError.MissingInitialNamedKeys).revert();
     return;
   }
 
   const expectedInitialNamedKeys = fromBytesMap<String, Key>(
     expectedInitialNamedKeysBytes,
     fromBytesString,
-    Key.fromBytes);
+    Key.fromBytes
+  );
   if (expectedInitialNamedKeys === null) {
-    Error.fromErrorCode(ErrorCode.InvalidArgument).revert();
+    Error.fromUserError(<u16>CustomError.InvalidInitialNamedKeys).revert();
     return;
   }
 
-  // ===
-
   let actualNamedKeys = CL.listNamedKeys();
   if (actualNamedKeys === null) {
-    Error.fromUserError(<u16>4464).revert();
+    Error.fromUserError(<u16>CustomError.MissingActualNamedKeys).revert();
     return;
   }
 
   if (!checkItemsEqual(expectedInitialNamedKeys, actualNamedKeys)) {
-    Error.fromUserError(<u16>4464 + 41).revert();
+    Error.fromUserError(<u16>CustomError.MismatchedKeys).revert();
+    return;
   }
 
-  let newNamedKeysBytes = CL.getArg(1);
+  let newNamedKeysBytes = CL.getArg(Args.NewNamedKeys);
   if (newNamedKeysBytes === null) {
-    Error.fromErrorCode(ErrorCode.MissingArgument).revert();
+    Error.fromUserError(<u16>CustomError.MissingNewNamedKeys).revert();
     return;
   }
 
   const newNamedKeys = fromBytesMap<String, Key>(
     newNamedKeysBytes,
     fromBytesString,
-    Key.fromBytes);
+    Key.fromBytes
+  );
 
   if (newNamedKeys === null) {
-    Error.fromErrorCode(ErrorCode.InvalidArgument).revert();
+    Error.fromUserError(<u16>CustomError.InvalidNewNamedKeys).revert();
     return;
   }
 

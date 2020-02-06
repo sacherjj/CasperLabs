@@ -36,14 +36,15 @@ export class PurseId {
         return new PurseId(uref);
     }
 
-    static createPurse(): PurseId | null {
+    static create(): PurseId | null {
         let bytes = new Uint8Array(PURSE_ID_SERIALIZED_LENGTH);
         let ret = externals.create_purse(
             bytes.dataStart,
             bytes.length
             );
-        if (ret == 0){
-            Error.fromErrorCode(ErrorCode.PurseNotCreated).revert();
+        let error = Error.fromResult(<u32>ret);
+        if (error !== null){
+            error.revert();
             return null;
         }
 

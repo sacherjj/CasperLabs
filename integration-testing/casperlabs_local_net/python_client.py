@@ -1,12 +1,11 @@
 from typing import Optional, Union
 import logging
-import time
 from pathlib import Path  # noqa: F401
 
 from casperlabs_local_net import LoggingMixin
 from casperlabs_local_net.common import Contract, DEFAULT_PAYMENT_ABI
 from casperlabs_local_net.client_base import CasperLabsClientBase
-from casperlabs_client import CasperLabsClient, InternalError, extract_common_name
+from casperlabs_client import CasperLabsClient, extract_common_name
 from casperlabs_client.abi import ABI
 
 
@@ -98,10 +97,6 @@ class PythonClient(CasperLabsClientBase, LoggingMixin):
             payment_args,
         )
 
-    def propose(self):
-        logging.info(f"PY_CLIENT.propose() for {self.client.host}")
-        return self.client.propose()
-
     def query_state(self, block_hash: str, key: str, path: str, key_type: str):
         return self.client.queryState(block_hash, key, path, key_type)
 
@@ -119,45 +114,3 @@ class PythonClient(CasperLabsClientBase, LoggingMixin):
 
     def show_deploy(self, deploy_hash: str):
         return self.client.showDeploy(deploy_hash)
-
-    def propose_with_retry(self, max_attempts: int, retry_seconds: int) -> str:
-        attempt = 0
-        while True:
-            try:
-                return self.propose()
-            except InternalError as ex:
-                if attempt < max_attempts:
-                    self.logger.debug("Could not propose; retrying later.")
-                    attempt += 1
-                    time.sleep(retry_seconds)
-                else:
-                    self.logger.debug("Could not propose; no more retries!")
-                    raise ex
-
-    def deploy_and_propose(self, **deploy_kwargs) -> str:
-        if "from_address" not in deploy_kwargs:
-            deploy_kwargs["from_address"] = self.node.from_address
-        self.deploy(**deploy_kwargs)
-
-        propose_output = self.propose()
-        block_hash = propose_output.block_hash.hex()
-
-        logging.info(
-            f"The block hash: {block_hash} generated for {self.node.container_name}"
-        )
-        return block_hash
-
-    def deploy_and_propose_with_retry(
-        self, max_attempts: int, retry_seconds: int, **deploy_kwargs
-    ) -> str:
-        self.deploy(**deploy_kwargs)
-
-        block_hash = self.propose_with_retry(max_attempts, retry_seconds)
-
-        logging.info(
-            f"The block hash: {block_hash} generated for {self.node.container_name}"
-        )
-        if block_hash is None:
-            raise Exception("No block_hash received from propose_with_retry")
-
-        return block_hash
