@@ -1794,7 +1794,7 @@ where
         let result = self.call_contract(key, args_bytes)?;
         let result_size = result.inner_bytes().len() as u32; // considered to be safe
 
-        // leave the host buffer set to `None` since there's nothing to write there
+        // leave the host buffer set to `None` if there's nothing to write there
         if result_size != 0 {
             if let Err(error) = self.write_host_buf(result) {
                 return Ok(Err(error));
