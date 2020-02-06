@@ -34,14 +34,13 @@ export const enum ErrorCode {
     ThresholdViolation = 27,
     KeyManagementThresholdError = 28,
     DeploymentThresholdError = 29,
-    PermissionDeniedError = 30,
-    InsufficientTotalWeight = 31,
-    InvalidSystemContract = 32,
-    PurseNotCreated = 33,
-    Unhandled = 34,
-    BufferTooSmall = 35,
-    HostBufferEmpty = 36,
-    HostBufferFull = 37,
+    InsufficientTotalWeight = 30,
+    InvalidSystemContract = 31,
+    PurseNotCreated = 32,
+    Unhandled = 33,
+    BufferTooSmall = 34,
+    HostBufferEmpty = 35,
+    HostBufferFull = 36,
 }
 
 export const enum PosErrorCode {

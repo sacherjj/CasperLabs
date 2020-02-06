@@ -140,28 +140,25 @@ const MINT_ERROR_OFFSET: u32 = (POS_ERROR_OFFSET - 1) - u8::MAX as u32; // 65024
 /// 29 => DeploymentThresholdError
 /// # );
 /// # show_and_check!(
-/// 30 => PermissionDeniedError
+/// 30 => InsufficientTotalWeight
 /// # );
 /// # show_and_check!(
-/// 31 => InsufficientTotalWeight
+/// 31 => InvalidSystemContract
 /// # );
 /// # show_and_check!(
-/// 32 => InvalidSystemContract
+/// 32 => PurseNotCreated
 /// # );
 /// # show_and_check!(
-/// 33 => PurseNotCreated
+/// 33 => Unhandled
 /// # );
 /// # show_and_check!(
-/// 34 => Unhandled
+/// 34 => BufferTooSmall
 /// # );
 /// # show_and_check!(
-/// 35 => BufferTooSmall
+/// 35 => HostBufferEmpty
 /// # );
 /// # show_and_check!(
-/// 36 => HostBufferEmpty
-/// # );
-/// # show_and_check!(
-/// 37 => HostBufferFull
+/// 36 => HostBufferFull
 /// # );
 ///
 /// // Mint errors:
@@ -376,8 +373,7 @@ pub enum ApiError {
     /// The given [`PublicKey`](crate::account::PublicKey) is already associated with the given
     /// account.
     DuplicateKey,
-    /// Unable to add/update/remove new associated [`PublicKey`](crate::account::PublicKey) due to
-    /// insufficient permissions.
+    /// Caller doesn't have sufficient permissions to perform the given action.
     PermissionDenied,
     /// The given [`PublicKey`](crate::account::PublicKey) is not associated with the given
     /// account.
@@ -391,8 +387,6 @@ pub enum ApiError {
     KeyManagementThresholdError,
     /// Setting the deployment threshold to a value greater than any other threshold is disallowed.
     DeploymentThresholdError,
-    /// Caller doesn't have sufficient permissions to perform the given action.
-    PermissionDeniedError,
     /// Setting a threshold to a value greater than the total weight of associated keys is
     /// disallowed.
     InsufficientTotalWeight,
@@ -465,7 +459,7 @@ impl From<SetThresholdFailure> for ApiError {
                 ApiError::KeyManagementThresholdError
             }
             SetThresholdFailure::DeploymentThresholdError => ApiError::DeploymentThresholdError,
-            SetThresholdFailure::PermissionDeniedError => ApiError::PermissionDeniedError,
+            SetThresholdFailure::PermissionDeniedError => ApiError::PermissionDenied,
             SetThresholdFailure::InsufficientTotalWeight => ApiError::InsufficientTotalWeight,
         }
     }
@@ -538,14 +532,13 @@ impl From<ApiError> for u32 {
             ApiError::ThresholdViolation => 27,
             ApiError::KeyManagementThresholdError => 28,
             ApiError::DeploymentThresholdError => 29,
-            ApiError::PermissionDeniedError => 30,
-            ApiError::InsufficientTotalWeight => 31,
-            ApiError::InvalidSystemContract => 32,
-            ApiError::PurseNotCreated => 33,
-            ApiError::Unhandled => 34,
-            ApiError::BufferTooSmall => 35,
-            ApiError::HostBufferEmpty => 36,
-            ApiError::HostBufferFull => 37,
+            ApiError::InsufficientTotalWeight => 30,
+            ApiError::InvalidSystemContract => 31,
+            ApiError::PurseNotCreated => 32,
+            ApiError::Unhandled => 33,
+            ApiError::BufferTooSmall => 34,
+            ApiError::HostBufferEmpty => 35,
+            ApiError::HostBufferFull => 36,
             ApiError::Mint(value) => MINT_ERROR_OFFSET + u32::from(value),
             ApiError::ProofOfStake(value) => POS_ERROR_OFFSET + u32::from(value),
             ApiError::User(value) => RESERVED_ERROR_MAX + 1 + u32::from(value),
@@ -589,7 +582,6 @@ impl Debug for ApiError {
                 write!(f, "ApiError::KeyManagementThresholdError")?
             }
             ApiError::DeploymentThresholdError => write!(f, "ApiError::DeploymentThresholdError")?,
-            ApiError::PermissionDeniedError => write!(f, "ApiError::PermissionDeniedError")?,
             ApiError::InsufficientTotalWeight => write!(f, "ApiError::InsufficientTotalWeight")?,
             ApiError::InvalidSystemContract => write!(f, "ApiError::InvalidSystemContract")?,
             ApiError::PurseNotCreated => write!(f, "ApiError::PurseNotCreated")?,
@@ -649,14 +641,13 @@ pub fn result_from(value: i32) -> Result<(), ApiError> {
         27 => Err(ApiError::ThresholdViolation),
         28 => Err(ApiError::KeyManagementThresholdError),
         29 => Err(ApiError::DeploymentThresholdError),
-        30 => Err(ApiError::PermissionDeniedError),
-        31 => Err(ApiError::InsufficientTotalWeight),
-        32 => Err(ApiError::InvalidSystemContract),
-        33 => Err(ApiError::PurseNotCreated),
-        34 => Err(ApiError::Unhandled),
-        35 => Err(ApiError::BufferTooSmall),
-        36 => Err(ApiError::HostBufferEmpty),
-        37 => Err(ApiError::HostBufferFull),
+        30 => Err(ApiError::InsufficientTotalWeight),
+        31 => Err(ApiError::InvalidSystemContract),
+        32 => Err(ApiError::PurseNotCreated),
+        33 => Err(ApiError::Unhandled),
+        34 => Err(ApiError::BufferTooSmall),
+        35 => Err(ApiError::HostBufferEmpty),
+        36 => Err(ApiError::HostBufferFull),
         _ => {
             if value > RESERVED_ERROR_MAX as i32 && value <= (2 * RESERVED_ERROR_MAX + 1) as i32 {
                 Err(ApiError::User(value as u16))
@@ -755,7 +746,6 @@ mod tests {
         round_trip(Err(ApiError::ThresholdViolation));
         round_trip(Err(ApiError::KeyManagementThresholdError));
         round_trip(Err(ApiError::DeploymentThresholdError));
-        round_trip(Err(ApiError::PermissionDeniedError));
         round_trip(Err(ApiError::InsufficientTotalWeight));
         round_trip(Err(ApiError::InvalidSystemContract));
         round_trip(Err(ApiError::PurseNotCreated));
