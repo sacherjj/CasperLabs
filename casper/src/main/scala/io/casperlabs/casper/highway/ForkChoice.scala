@@ -5,16 +5,16 @@ import cats.effect.Sync
 import cats.implicits._
 import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
-import io.casperlabs.casper.{Estimator, PrettyPrinter}
+import io.casperlabs.casper.Estimator
+import io.casperlabs.casper.util.ProtoUtil
+import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.crypto.Keys.{PublicKey, PublicKeyBS}
+import io.casperlabs.models.Message.Block
 import io.casperlabs.models.{Message, Weight}
 import io.casperlabs.storage.BlockHash
+import io.casperlabs.storage.dag.DagRepresentation._
 import io.casperlabs.storage.dag.{DagLookup, DagRepresentation, DagStorage}
-import DagRepresentation._
-import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.storage.era.EraStorage
-import io.casperlabs.catscontrib.MonadThrowable
-import io.casperlabs.models.Message.Block
 import simulacrum.typeclass
 
 import scala.util.Try
@@ -84,17 +84,19 @@ object ForkChoice {
 
     private def eraForkChoice(
         dag: DagRepresentation[F],
-        keyBlock: Block,
+        keyBlockHash: BlockHash,
+        eraStartBlock: Block,
         latestMessages: Map[DagRepresentation.Validator, Set[Message]],
         equivocators: Set[ByteString]
-    ): F[Block] = {
-      val weights          = keyBlock.weightMap
-      val honestValidators = weights.keys.toList.filterNot(equivocators(_))
-      val latestHonestMessages = latestMessages.collect {
-        case (v, lms) if lms.size == 1 => v -> lms.head
-      }
+    ): F[(Block, Map[DagRepresentation.Validator, Set[Message]])] =
       for {
-        forkChoice <- MonadThrowable[F].tailRecM(keyBlock) { startBlock =>
+        keyBlock         <- dag.lookupUnsafe(keyBlockHash).map(_.asInstanceOf[Block])
+        weights          = keyBlock.weightMap
+        honestValidators = weights.keys.toList.filterNot(equivocators(_))
+        latestHonestMessages = latestMessages.collect {
+          case (v, lms) if lms.size == 1 => v -> lms.head
+        }
+        forkChoice <- MonadThrowable[F].tailRecM(eraStartBlock) { startBlock =>
                        val noChildren = dag
                          .children(startBlock.messageHash)
                          .flatMap(_.toList.traverse(dag.lookupUnsafe(_)))
@@ -128,8 +130,11 @@ object ForkChoice {
                                             case ballot: Message.Ballot =>
                                               // Ballot votes for its parent.
                                               dag
-                                                .lookupUnsafe(msg.parentBlock)
-                                                .map(_.asInstanceOf[Block])
+                                                .lookupUnsafe(ballot.parentBlock)
+                                                .flatMap(
+                                                  msg =>
+                                                    Sync[F].fromTry(Try(msg.asInstanceOf[Block]))
+                                                )
                                                 .map(block => scores.update(block, weights(v)))
                                           }
 
@@ -145,8 +150,24 @@ object ForkChoice {
                          } yield result
                        )
                      }
-      } yield forkChoice
-    }
+        latestMessagesFlattened = NonEmptyList
+          .of[Message](
+            forkChoice,
+            latestMessages.values.flatten.toSeq: _*
+          )
+        // Eliminate tips that are ancestors in the main-tree.
+        reducedJustifications <- Estimator
+                                  .tipsOfLatestMessages[F](
+                                    dag,
+                                    latestMessagesFlattened,
+                                    eraStartBlock.messageHash
+                                  )
+                                  .map(
+                                    _.filterNot(_.messageHash == forkChoice.messageHash)
+                                      .groupBy(_.validatorId)
+                                      .mapValues(_.toSet)
+                                  )
+      } yield (forkChoice, reducedJustifications)
 
     override def fromKeyBlock(keyBlockHash: BlockHash): F[Result] =
       for {
@@ -156,41 +177,31 @@ object ForkChoice {
                      .flatMap(msg => Sync[F].fromTry(Try(msg.asInstanceOf[Block])))
         equivocators <- MessageProducer.collectEquivocators[F](keyBlockHash)
         keyBlocks    <- MessageProducer.collectKeyBlocks[F](keyBlockHash)
-        forkChoice <- keyBlocks
-                       .foldM(keyBlock -> Map.empty[DagRepresentation.Validator, Set[Message]]) {
-                         case ((startBlock, accLatestMessages), currKeyBlock) =>
-                           dag
-                             .latestMessagesInEra(currKeyBlock)
-                             .flatMap { latestMessages =>
-                               eraForkChoice(dag, startBlock, latestMessages, equivocators)
-                                 .flatMap { forkChoice =>
-                                   val latestMessagesFlattened = NonEmptyList
-                                     .of[Message](
-                                       forkChoice,
-                                       latestMessages.values.flatten.toSeq: _*
-                                     )
-                                   // Eliminate tips that are ancestors in the main-tree.
-                                   Estimator
-                                     .tipsOfLatestMessages(
-                                       dag,
-                                       latestMessagesFlattened,
-                                       currKeyBlock
-                                     )
-                                     .map(
-                                       _.filterNot(_.messageHash == forkChoice.messageHash)
-                                         .groupBy(_.validatorId)
-                                         .mapValues(_.toSet) |+| accLatestMessages
-                                     )
-                                     .map(forkChoice -> _)
-                                 }
-                             }
-                       }
-      } yield Result(
-        forkChoice._1,
-        forkChoice._2.values.flatten.toList
-          .filterNot(_.messageHash == forkChoice._1.messageHash)
-          .toSet
-      )
+        (forkChoice, justifications) <- keyBlocks
+                                         .foldM(
+                                           keyBlock -> Map
+                                             .empty[DagRepresentation.Validator, Set[Message]]
+                                         ) {
+                                           case ((startBlock, accLatestMessages), currKeyBlock) =>
+                                             dag
+                                               .latestMessagesInEra(currKeyBlock)
+                                               .flatMap { latestMessages =>
+                                                 eraForkChoice(
+                                                   dag,
+                                                   currKeyBlock,
+                                                   startBlock,
+                                                   latestMessages,
+                                                   equivocators
+                                                 ).map {
+                                                   case (forkChoice, eraLatestMessages) =>
+                                                     (
+                                                       forkChoice,
+                                                       accLatestMessages |+| eraLatestMessages
+                                                     )
+                                                 }
+                                               }
+                                         }
+      } yield Result(forkChoice, justifications.values.flatten.toSet)
 
     override def fromJustifications(
         keyBlockHash: BlockHash,
