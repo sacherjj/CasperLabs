@@ -166,7 +166,7 @@ export function testDivision(): bool {
     let res1 = <Pair<U512, U512>>(maybeRes1);
 
     // result
-    
+
     assert(res1.first.toString(), "249cebb32c9a2f0d1375ddc28138b727428ed6c66f4ca9f0abeb231cff6df7ec7");
     // remainder
     assert(res1.second.toString(), "4d4edcc2e5e0a5416119b88b280018b1b79ffbd0891ae622ee7a6d895e687bbc");
@@ -294,5 +294,11 @@ export function testPrefixOps(): bool {
     let aPostDec = a--;
     assert(aPostDec == aCloned);
     assert(a == aCloned - one);
+    return true;
+}
+
+export function testMinMaxValue(): bool {
+    assert(U512.MAX_VALUE.toString() == "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
+    assert(U512.MIN_VALUE.toString() == "0");
     return true;
 }
