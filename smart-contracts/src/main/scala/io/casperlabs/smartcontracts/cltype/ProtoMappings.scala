@@ -4,6 +4,7 @@ import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.state
 import io.casperlabs.casper.consensus.Deploy
+import io.casperlabs.smartcontracts.bytesrepr
 import io.casperlabs.smartcontracts.bytesrepr.{FromBytes, ToBytes}
 import scala.util.{Failure, Success, Try}
 
@@ -266,8 +267,8 @@ object ProtoMappings {
 
     case Deploy.Arg.Value.Value.OptionalValue(x) =>
       fromArg(x) match {
-        case Left(Error.EmptyArgValueVariant) => Right(CLValue.option(None))
-        case Right(value)                     => Right(CLValue.option(value.some))
+        case Left(Error.EmptyArgValueVariant) => Right(option(None))
+        case Right(value)                     => Right(option(value.some))
         case otherError                       => otherError
       }
   }
@@ -275,6 +276,17 @@ object ProtoMappings {
   def fromArg(arg: Deploy.Arg): Either[Error, CLValue] = arg.value match {
     case None        => Left(Error.MissingArg)
     case Some(value) => fromArg(value)
+  }
+
+  private def option(inner: Option[CLValue]): CLValue = inner match {
+    // TODO: the type here could be a problem; if we get a `None` we know
+    // that we should return a `CLType.Option`, but we do not know what
+    // the inner type should be. I am choosing `Any` for now, but
+    // maybe we will need to revisit this decision in the future.
+    case None => CLValue(CLType.Option(CLType.Any), Vector(bytesrepr.Constants.Option.NONE_TAG))
+
+    case Some(value) =>
+      CLValue(CLType.Option(value.clType), bytesrepr.Constants.Option.SOME_TAG +: value.value)
   }
 
   private def toByteArray32(bytes: ByteString): Either[Error, ByteArray32] =
