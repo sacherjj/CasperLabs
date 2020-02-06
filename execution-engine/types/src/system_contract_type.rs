@@ -3,10 +3,15 @@ use core::convert::TryFrom;
 
 use crate::ApiError;
 
-/// System contracts used to query host for system contract ref
+/// System contract types.
+///
+/// Used by converting to a `u32` and passing as the `system_contract_index` argument of
+/// `ext_ffi::get_system_contract()`.
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum SystemContractType {
+    /// Mint contract.
     Mint,
+    /// Proof of Stake contract.
     ProofOfStake,
 }
 
@@ -19,6 +24,8 @@ impl Into<u32> for SystemContractType {
     }
 }
 
+// This conversion is not intended to be used by third party crates.
+#[doc(hidden)]
 impl TryFrom<u32> for SystemContractType {
     type Error = ApiError;
     fn try_from(value: u32) -> Result<SystemContractType, Self::Error> {

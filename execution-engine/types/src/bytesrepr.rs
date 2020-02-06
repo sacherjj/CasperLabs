@@ -12,18 +12,29 @@ use core::mem::{size_of, MaybeUninit};
 
 use failure::Fail;
 
+/// The number of bytes in a serialized [`i32`].
 pub const I32_SERIALIZED_LENGTH: usize = size_of::<i32>();
+/// The number of bytes in a serialized [`u8`].
 pub const U8_SERIALIZED_LENGTH: usize = size_of::<u8>();
+/// The number of bytes in a serialized [`u16`].
 pub const U16_SERIALIZED_LENGTH: usize = size_of::<u16>();
+/// The number of bytes in a serialized [`u32`].
 pub const U32_SERIALIZED_LENGTH: usize = size_of::<u32>();
+/// The number of bytes in a serialized [`u64`].
 pub const U64_SERIALIZED_LENGTH: usize = size_of::<u64>();
+/// The number of bytes in a serialized [`U128`](crate::U128).
 pub const U128_SERIALIZED_LENGTH: usize = size_of::<u128>();
+/// The number of bytes in a serialized [`U256`](crate::U256).
 pub const U256_SERIALIZED_LENGTH: usize = U128_SERIALIZED_LENGTH * 2;
+/// The number of bytes in a serialized [`U512`](crate::U512).
 pub const U512_SERIALIZED_LENGTH: usize = U256_SERIALIZED_LENGTH * 2;
-pub const OPTION_TAG_SERIALIZED_LENGTH: usize = 1;
+pub(crate) const OPTION_TAG_SERIALIZED_LENGTH: usize = 1;
 
+/// A type which can be serialized to a `Vec<u8>`.
 pub trait ToBytes {
+    /// Serializes `&self` to a `Vec<u8>`.
     fn to_bytes(&self) -> Result<Vec<u8>, Error>;
+    /// Consumes `self` and serializes to a `Vec<u8>`.
     fn into_bytes(self) -> Result<Vec<u8>, Error>
     where
         Self: Sized,
@@ -32,25 +43,30 @@ pub trait ToBytes {
     }
 }
 
+/// A type which can be deserialized from a `Vec<u8>`.
 pub trait FromBytes: Sized {
+    /// Deserializes the slice into `Self`.
     fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error>;
+    /// Deserializes the `Vec<u8>` into `Self`.
     fn from_vec(bytes: Vec<u8>) -> Result<(Self, Vec<u8>), Error> {
         Self::from_bytes(bytes.as_slice()).map(|(x, remainder)| (x, Vec::from(remainder)))
     }
 }
 
+/// Serialization and deserialization errors.
 #[derive(Debug, Fail, PartialEq, Eq, Clone)]
 #[repr(u8)]
 pub enum Error {
+    /// Early end of stream while deserializing.
     #[fail(display = "Deserialization error: early end of stream")]
     EarlyEndOfStream = 0,
-
+    /// Formatting error while deserializing.
     #[fail(display = "Deserialization error: formatting error")]
     FormattingError,
-
+    /// Not all input bytes were consumed in [`deserialize`].
     #[fail(display = "Deserialization error: left-over bytes")]
     LeftOverBytes,
-
+    /// Out of memory error.
     #[fail(display = "Serialization error: out of memory")]
     OutOfMemoryError,
 }
@@ -61,6 +77,10 @@ impl From<TryReserveError> for Error {
     }
 }
 
+/// Deserializes `bytes` into an instance of `T`.
+///
+/// Returns an error if the bytes cannot be deserialized into `T` or if not all of the input bytes
+/// are consumed in the operation.
 pub fn deserialize<T: FromBytes>(bytes: Vec<u8>) -> Result<T, Error> {
     let (t, remainder) = T::from_vec(bytes)?;
     if remainder.is_empty() {
@@ -70,11 +90,12 @@ pub fn deserialize<T: FromBytes>(bytes: Vec<u8>) -> Result<T, Error> {
     }
 }
 
+/// Serializes `t` into a `Vec<u8>`.
 pub fn serialize(t: impl ToBytes) -> Result<Vec<u8>, Error> {
     t.into_bytes()
 }
 
-pub fn safe_split_at(bytes: &[u8], n: usize) -> Result<(&[u8], &[u8]), Error> {
+pub(crate) fn safe_split_at(bytes: &[u8], n: usize) -> Result<(&[u8], &[u8]), Error> {
     if n > bytes.len() {
         Err(Error::EarlyEndOfStream)
     } else {
@@ -622,6 +643,7 @@ impl<T1: FromBytes, T2: FromBytes, T3: FromBytes> FromBytes for (T1, T2, T3) {
     }
 }
 
+// This test helper is not intended to be used by third party crates.
 #[doc(hidden)]
 /// Returns `true` if a we can serialize and then deserialize a value
 pub fn test_serialization_roundtrip<T>(t: &T)

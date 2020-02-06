@@ -132,7 +132,7 @@ impl VestingTest {
             .and_then(|v| CLValue::try_from(v).map_err(|error| format!("{:?}", error)))
             .expect("should have named uref in the account space.");
         let key: Key = value.into_t().unwrap();
-        key.as_hash().unwrap()
+        key.into_hash().unwrap()
     }
 
     pub fn deploy_vesting_contract(

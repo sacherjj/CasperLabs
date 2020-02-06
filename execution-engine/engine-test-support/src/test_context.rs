@@ -18,8 +18,8 @@ pub struct TestContext {
 }
 
 impl TestContext {
-    /// Runs the supplied [`Session`](struct.Session.html), asserting successful execution of the
-    /// contained deploy and subsequent commit of the resulting transforms.
+    /// Runs the supplied [`Session`], asserting successful execution of the contained deploy and
+    /// subsequent commit of the resulting transforms.
     pub fn run(&mut self, session: Session) -> &mut Self {
         self.inner
             .exec(session.inner)
@@ -29,9 +29,9 @@ impl TestContext {
         self
     }
 
-    /// Queries for a [`Value`](struct.Value.html) stored under the given `key` and `path`.
+    /// Queries for a [`Value`] stored under the given `key` and `path`.
     ///
-    /// Returns an [`Error`](struct.Error.html) if not found.
+    /// Returns an [`Error`] if not found.
     pub fn query<T: AsRef<str>>(&self, key: Address, path: &[T]) -> Result<Value> {
         let path = path.iter().map(AsRef::as_ref).collect::<Vec<_>>();
         self.inner
@@ -40,7 +40,7 @@ impl TestContext {
             .map_err(Error::from)
     }
 
-    /// Gets the balance of the purse under the given [`URefAddr`](type.URefAddr.html).
+    /// Gets the balance of the purse under the given [`URefAddr`].
     ///
     /// Note that this requires performing an earlier query to retrieve `purse_id_addr`.
     pub fn get_balance(&self, purse_id_addr: URefAddr) -> U512 {
@@ -56,10 +56,9 @@ pub struct TestContextBuilder {
 
 impl TestContextBuilder {
     /// Constructs a new `TestContextBuilder` initialised with default values for an account, i.e.
-    /// an account at [`DEFAULT_ACCOUNT_ADDR`](constant.DEFAULT_ACCOUNT_ADDR.html) with an initial
-    /// balance of
-    /// [`DEFAULT_ACCOUNT_INITIAL_BALANCE`](constant.DEFAULT_ACCOUNT_INITIAL_BALANCE.html) which
-    /// will be added to the Genesis block.
+    /// an account at [`DEFAULT_ACCOUNT_ADDR`](crate::DEFAULT_ACCOUNT_ADDR) with an initial balance
+    /// of [`DEFAULT_ACCOUNT_INITIAL_BALANCE`](crate::DEFAULT_ACCOUNT_INITIAL_BALANCE) which will be
+    /// added to the Genesis block.
     pub fn new() -> Self {
         TestContextBuilder {
             genesis_config: DEFAULT_GENESIS_CONFIG.clone(),
@@ -69,8 +68,7 @@ impl TestContextBuilder {
     /// Returns `self` with the provided account's details added to existing ones, for inclusion in
     /// the Genesis block.
     ///
-    /// Note: `initial_balance` is in
-    /// [`Motes`](https://docs.rs/casperlabs-engine-shared/latest/casperlabs_engine_shared/motes/struct.Motes.html)
+    /// Note: `initial_balance` represents the number of motes.
     pub fn with_account(mut self, address: Address, initial_balance: U512) -> Self {
         let new_account = GenesisAccount::new(
             PublicKey::new(address),

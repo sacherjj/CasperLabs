@@ -480,6 +480,8 @@ steps:
     - master
     event:
     - push
+  depends_on:
+  - rust-compile-for-make
 
 - name: docker-key-gen-merge
   commands:

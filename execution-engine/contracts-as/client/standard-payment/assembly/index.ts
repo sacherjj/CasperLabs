@@ -8,22 +8,10 @@ import {getMainPurse} from "../../../../contract-as/assembly/account";
 
 const POS_ACTION = "get_payment_purse";
 
-export function call(): void {
+export function entryPoint(amount: U512): void {
   let proofOfStake = CL.getSystemContract(CL.SystemContract.ProofOfStake);
   if (proofOfStake === null) {
     Error.fromErrorCode(ErrorCode.InvalidSystemContract).revert();
-    return;
-  }
-
-  let amountBytes = CL.getArg(0);
-  if (amountBytes === null) {
-    Error.fromErrorCode(ErrorCode.MissingArgument).revert();
-    return;
-  }
-
-  let amount = U512.fromBytes(amountBytes);
-  if (amount === null) {
-    Error.fromErrorCode(ErrorCode.InvalidArgument).revert();
     return;
   }
 
@@ -56,4 +44,20 @@ export function call(): void {
     Error.fromErrorCode(ErrorCode.Transfer).revert();
     return;
   }
+}
+
+export function call(): void {
+  let amountBytes = CL.getArg(0);
+  if (amountBytes === null) {
+    Error.fromErrorCode(ErrorCode.MissingArgument).revert();
+    return;
+  }
+
+  let amount = U512.fromBytes(amountBytes);
+  if (amount === null) {
+    Error.fromErrorCode(ErrorCode.InvalidArgument).revert();
+    return;
+  }
+
+  entryPoint(amount);
 }

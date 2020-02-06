@@ -1,4 +1,4 @@
-use types::{account::PublicKey, key::Key, BlockTime, Phase};
+use types::{account::PublicKey, BlockTime, Key, Phase};
 
 pub trait RuntimeProvider {
     fn get_key(name: &str) -> Option<Key>;

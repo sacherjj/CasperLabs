@@ -2,7 +2,7 @@ use engine_test_support::{
     internal::{ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_GENESIS_CONFIG},
     DEFAULT_ACCOUNT_ADDR,
 };
-use types::key::Key;
+use types::Key;
 
 const CONTRACT_COUNTER_CALL: &str = "counter_call.wasm";
 const CONTRACT_COUNTER_DEFINE: &str = "counter_define.wasm";

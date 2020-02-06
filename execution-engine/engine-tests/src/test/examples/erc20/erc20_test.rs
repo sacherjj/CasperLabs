@@ -50,7 +50,7 @@ impl ERC20Test {
             .and_then(|v| CLValue::try_from(v).map_err(|error| format!("{:?}", error)))
             .expect("should have named uref.");
         let key: Key = value.into_t().unwrap();
-        key.as_hash().unwrap()
+        key.into_hash().unwrap()
     }
 
     pub fn deploy_erc20_contract(mut self, sender: [u8; 32], init_balance: U512) -> Self {

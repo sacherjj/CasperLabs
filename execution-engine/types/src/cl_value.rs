@@ -6,18 +6,29 @@ use crate::{
     CLType, CLTyped,
 };
 
+/// Error while converting a [`CLValue`] into a given type.
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub struct CLTypeMismatch {
+    /// The [`CLType`] into which the `CLValue` was being converted.
     pub expected: CLType,
+    /// The actual underlying [`CLType`] of this `CLValue`, i.e. the type from which it was
+    /// constructed.
     pub found: CLType,
 }
 
+/// Error relating to [`CLValue`] operations.
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub enum CLValueError {
+    /// An error while serializing or deserializing the underlying data.
     Serialization(bytesrepr::Error),
+    /// A type mismatch while trying to convert a [`CLValue`] into a given type.
     Type(CLTypeMismatch),
 }
 
+/// A CasperLabs value, i.e. a value which can be stored and manipulated by smart contracts.
+///
+/// It holds the underlying data as a type-erased, serialized `Vec<u8>` and also holds the
+/// [`CLType`] of the underlying data as a separate member.
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub struct CLValue {
     cl_type: CLType,
@@ -63,6 +74,7 @@ impl CLValue {
         (self.cl_type, self.bytes)
     }
 
+    /// The [`CLType`] of the underlying data.
     pub fn cl_type(&self) -> &CLType {
         &self.cl_type
     }
@@ -72,7 +84,7 @@ impl CLValue {
         &self.bytes
     }
 
-    /// Returns the length of the `Vec<u8>` yielded after calling `self.to_bytes().unwrap()`.
+    /// Returns the length of the `Vec<u8>` yielded after calling `self.to_bytes()`.
     ///
     /// Note, this method doesn't actually serialize `self`, and hence is relatively cheap.
     pub fn serialized_len(&self) -> usize {

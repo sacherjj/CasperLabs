@@ -2,7 +2,7 @@ use engine_test_support::{
     internal::{ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_GENESIS_CONFIG},
     DEFAULT_ACCOUNT_ADDR,
 };
-use types::key::Key;
+use types::Key;
 
 const MAILING_CALL: &str = "mailing_list_call.wasm";
 const MAILING_DEFINE: &str = "mailing_list_define.wasm";

@@ -1,3 +1,5 @@
+//! Functions for interacting with the current runtime.
+
 // Can be removed once https://github.com/rust-lang/rustfmt/issues/3362 is resolved.
 #[rustfmt::skip]
 use alloc::vec;
@@ -14,10 +16,11 @@ use casperlabs_types::{
 
 use crate::{args_parser::ArgsParser, contract_api, ext_ffi, unwrap_or_revert::UnwrapOrRevert};
 
-/// Returns `value` to the host, terminating the currently running module.
+/// Returns the given [`CLValue`] to the host, terminating the currently running module.
 ///
-/// Note this function is only relevant to contracts stored on chain which return a value to their
-/// caller. The return value of a directly deployed contract is never looked at.
+/// Note this function is only relevant to contracts stored on chain which are invoked via
+/// [`call_contract`] and can thus return a value to their caller.  The return value of a directly
+/// deployed contract is never used.
 pub fn ret(value: CLValue) -> ! {
     let (ptr, size, _bytes) = contract_api::to_ptr(value);
     unsafe {
@@ -25,17 +28,21 @@ pub fn ret(value: CLValue) -> ! {
     }
 }
 
-/// Stops execution of a contract and reverts execution effects with a given reason.
+/// Stops execution of a contract and reverts execution effects with a given [`ApiError`].
+///
+/// The provided `ApiError` is returned in the form of a numeric exit code to the caller via the
+/// deploy response.
 pub fn revert<T: Into<ApiError>>(error: T) -> ! {
     unsafe {
         ext_ffi::revert(error.into().into());
     }
 }
 
-/// Call the given contract, passing the given (serialized) arguments to
-/// the host in order to have them available to the called contract during its
-/// execution. The value returned from the contract call (see `ret` above) is
-/// returned from this function.
+/// Calls the given stored contract, passing the given arguments to it.
+///
+/// If the stored contract calls [`ret`], then that value is returned from `call_contract`.  If the
+/// stored contract calls [`revert`], then execution stops and `call_contract` doesn't return.
+/// Otherwise `call_contract` returns `()`.
 #[allow(clippy::ptr_arg)]
 pub fn call_contract<A: ArgsParser, T: CLTyped + FromBytes>(c_ptr: ContractRef, args: A) -> T {
     let contract_key: Key = c_ptr.into();
@@ -67,9 +74,12 @@ pub fn call_contract<A: ArgsParser, T: CLTyped + FromBytes>(c_ptr: ContractRef, 
     bytesrepr::deserialize(dest).unwrap_or_revert()
 }
 
-/// Takes the name of a function to store and a contract URef, and overwrites the value under
-/// that URef with a new Contract instance containing the original contract's named_keys, the
-/// current protocol version, and the newly created bytes of the stored function.
+/// Takes the name of a (non-mangled) `extern "C"` function to store as a contract under the given
+/// [`URef`] which should already reference a stored contract.
+///
+/// If successful, this overwrites the value under `uref` with a new contract instance containing
+/// the original contract's named_keys, the current protocol version, and the newly created bytes of
+/// the stored function.
 pub fn upgrade_contract_at_uref(name: &str, uref: URef) {
     let (name_ptr, name_size, _bytes) = contract_api::to_ptr(name);
     let key: Key = uref.into();
@@ -92,9 +102,10 @@ fn get_arg_size(i: u32) -> Option<usize> {
     }
 }
 
-/// Return the i-th argument passed to the host for the current module
-/// invocation. Note that this is only relevant to contracts stored on-chain
-/// since a contract deployed directly is not invoked with any arguments.
+/// Returns the i-th argument passed to the host for the current module invocation.
+///
+/// Note that this is only relevant to contracts stored on-chain since a contract deployed directly
+/// is not invoked with any arguments.
 pub fn get_arg<T: FromBytes>(i: u32) -> Option<Result<T, bytesrepr::Error>> {
     let arg_size = get_arg_size(i)?;
 
@@ -111,10 +122,8 @@ pub fn get_arg<T: FromBytes>(i: u32) -> Option<Result<T, bytesrepr::Error>> {
     Some(bytesrepr::deserialize(arg_bytes))
 }
 
-/// Returns caller of current context.
-/// When in root context (not in the sub call) - returns None.
-/// When in the sub call - returns public key of the account that made the
-/// deploy.
+/// Returns the caller of the current context, i.e. the [`PublicKey`] of the account which made the
+/// deploy request.
 pub fn get_caller() -> PublicKey {
     let dest_ptr = contract_api::alloc_bytes(PUBLIC_KEY_SERIALIZED_LENGTH);
     unsafe { ext_ffi::get_caller(dest_ptr) };
@@ -128,6 +137,7 @@ pub fn get_caller() -> PublicKey {
     bytesrepr::deserialize(bytes).unwrap_or_revert()
 }
 
+/// Returns the current [`BlockTime`].
 pub fn get_blocktime() -> BlockTime {
     let dest_ptr = contract_api::alloc_bytes(BLOCKTIME_SERIALIZED_LENGTH);
     let bytes = unsafe {
@@ -141,6 +151,7 @@ pub fn get_blocktime() -> BlockTime {
     bytesrepr::deserialize(bytes).unwrap_or_revert()
 }
 
+/// Returns the current [`Phase`].
 pub fn get_phase() -> Phase {
     let dest_ptr = contract_api::alloc_bytes(PHASE_SERIALIZED_LENGTH);
     unsafe { ext_ffi::get_phase(dest_ptr) };
@@ -149,9 +160,10 @@ pub fn get_phase() -> Phase {
     bytesrepr::deserialize(bytes).unwrap_or_revert()
 }
 
-/// Return the unforgable reference known by the current module under the given
-/// name. This either comes from the named_keys of the account or contract,
-/// depending on whether the current module is a sub-call or not.
+/// Returns the requested named [`Key`] from the current context.
+///
+/// The current context is either the caller's account or a stored contract depending on whether the
+/// currently-executing module is a direct call or a sub-call respectively.
 pub fn get_key(name: &str) -> Option<Key> {
     let (name_ptr, name_size, _bytes) = contract_api::to_ptr(name);
     let mut key_bytes = vec![0u8; Key::serialized_size_hint()];
@@ -175,26 +187,39 @@ pub fn get_key(name: &str) -> Option<Key> {
     Some(key)
 }
 
-/// Check if the given name corresponds to a known unforgable reference
+/// Returns `true` if `name` exists in the current context's named keys.
+///
+/// The current context is either the caller's account or a stored contract depending on whether the
+/// currently-executing module is a direct call or a sub-call respectively.
 pub fn has_key(name: &str) -> bool {
     let (name_ptr, name_size, _bytes) = contract_api::to_ptr(name);
     let result = unsafe { ext_ffi::has_key(name_ptr, name_size) };
     result == 0
 }
 
-/// Put the given key to the named_keys map under the given name
+/// Stores the given [`Key`] under `name` in the current context's named keys.
+///
+/// The current context is either the caller's account or a stored contract depending on whether the
+/// currently-executing module is a direct call or a sub-call respectively.
 pub fn put_key(name: &str, key: Key) {
     let (name_ptr, name_size, _bytes) = contract_api::to_ptr(name);
     let (key_ptr, key_size, _bytes2) = contract_api::to_ptr(key);
     unsafe { ext_ffi::put_key(name_ptr, name_size, key_ptr, key_size) };
 }
 
-/// Removes key persisted under `name` in the current context's map.
+/// Removes the [`Key`] stored under `name` in the current context's named keys.
+///
+/// The current context is either the caller's account or a stored contract depending on whether the
+/// currently-executing module is a direct call or a sub-call respectively.
 pub fn remove_key(name: &str) {
     let (name_ptr, name_size, _bytes) = contract_api::to_ptr(name);
     unsafe { ext_ffi::remove_key(name_ptr, name_size) }
 }
 
+/// Returns the named keys of the current context.
+///
+/// The current context is either the caller's account or a stored contract depending on whether the
+/// currently-executing module is a direct call or a sub-call respectively.
 pub fn list_named_keys() -> BTreeMap<String, Key> {
     let (total_keys, result_size) = {
         let mut total_keys = MaybeUninit::uninit();
@@ -213,7 +238,11 @@ pub fn list_named_keys() -> BTreeMap<String, Key> {
     bytesrepr::deserialize(bytes).unwrap_or_revert()
 }
 
-/// checks if a uref is valid
+/// Returns `true` if the given [`URef`] is the account's
+/// [`PurseId`](casperlabs_types::account::PurseId) with identical
+/// [`AccessRights`](casperlabs_types::AccessRights), or if it's a member of the named keys with
+/// [`AccessRights`](casperlabs_types::AccessRights) no more permissive than those of the one in
+/// named keys.
 pub fn is_valid_uref(uref: URef) -> bool {
     let (uref_ptr, uref_size, _bytes) = contract_api::to_ptr(uref);
     let result = unsafe { ext_ffi::is_valid_uref(uref_ptr, uref_size) };
