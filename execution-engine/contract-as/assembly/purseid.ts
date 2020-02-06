@@ -4,8 +4,7 @@ import {fromBytesU32} from "./bytesrepr";
 import {readHostBuffer} from "./index";
 import {U512} from "./bignum";
 import {Error, ErrorCode} from "./error";
-import {UREF_SERIALIZED_LENGTH, PURSE_ID_SERIALIZED_LENGTH} from "./constants";
-
+import {PURSE_ID_SERIALIZED_LENGTH} from "./constants";
 
 export class PurseId {
     private uref: URef;
@@ -112,5 +111,15 @@ export class PurseId {
             amountBytes.length,
         );
         return ret;
+    }
+
+    @operator("==")
+    equalsTo(other: PurseId): bool {
+        return this.uref == other.uref;
+    }
+
+    @operator("!=")
+    notEqualsTo(other: PurseId): bool {
+        return !this.uref.equalsTo(other.uref);
     }
 }
