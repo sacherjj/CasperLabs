@@ -48,9 +48,8 @@ object DeployBuffer {
 
         for {
           _ <- (deploy.getBody.session, deploy.getBody.payment) match {
-                case (None, _) | (_, None) |
-                    (Some(Deploy.Code(_, _, Deploy.Code.Contract.Empty)), _) |
-                    (_, Some(Deploy.Code(_, _, Deploy.Code.Contract.Empty))) =>
+                case (None, _) | (_, None) | (Some(Deploy.Code(_, Deploy.Code.Contract.Empty)), _) |
+                    (_, Some(Deploy.Code(_, Deploy.Code.Contract.Empty))) =>
                   illegal(s"Deploy was missing session and/or payment code.")
                 case _ => ().pure[F]
               }

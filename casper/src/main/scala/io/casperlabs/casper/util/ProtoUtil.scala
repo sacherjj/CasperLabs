@@ -657,18 +657,16 @@ object ProtoUtil {
   }
 
   def deployCodeToDeployPayload[F[_]: MonadThrowable](code: Deploy.Code): Try[ipc.DeployPayload] = {
-    val argsF: Try[ByteString] = if (code.args.nonEmpty) {
-      code.args.toList.traverse(cltype.ProtoMappings.fromArg) match {
-        case Left(err) =>
-          Try(throw new SmartContractEngineError(s"Error parsing deploy arguments: $err"))
-        case Right(args) =>
-          Try(
-            ByteString.copyFrom(
-              ToBytes[Seq[cltype.CLValue]].toBytes(args)
-            )
+    val argsF: Try[ByteString] = code.args.toList.traverse(cltype.ProtoMappings.fromArg) match {
+      case Left(err) =>
+        Try(throw new SmartContractEngineError(s"Error parsing deploy arguments: $err"))
+      case Right(args) =>
+        Try(
+          ByteString.copyFrom(
+            ToBytes[Seq[cltype.CLValue]].toBytes(args)
           )
-      }
-    } else Try(code.abiArgs)
+        )
+    }
 
     argsF.map { args =>
       val payload = code.contract match {
