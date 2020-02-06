@@ -23,6 +23,7 @@ import io.casperlabs.shared.{Log, LogStub}
 import io.casperlabs.storage.BlockMsgWithTransform
 import java.time.Instant
 import java.util.concurrent.TimeUnit
+
 import monix.catnap.SchedulerEffect
 import monix.eval.Task
 import monix.execution.schedulers.TestScheduler
@@ -31,6 +32,7 @@ import org.scalatest.Suite
 import io.casperlabs.casper.util.execengine.ExecutionEngineServiceStub
 import io.casperlabs.casper.finality.MultiParentFinalizer
 import io.casperlabs.casper.util.ByteStringPrettifier
+import io.casperlabs.storage.dag.DagStorage
 
 trait HighwayFixture
     extends StorageFixture
@@ -197,6 +199,43 @@ trait HighwayFixture
           .withBonds(era.bonds)
         db.addEra(childEra).as(childEra)
       }
+
+      def ballot(mp: MessageProducer[Task], parent: BlockHash)(
+          implicit dagStorage: DagStorage[Task]
+      ): Task[BlockHash] =
+        for {
+          dag    <- dagStorage.getRepresentation
+          tips   <- dag.latestInEra(era.keyBlockHash)
+          latest <- tips.latestMessages
+          justifications = latest.map {
+            case (v, ms) => PublicKey(v) -> ms.map(_.messageHash)
+          }
+          b <- mp.ballot(
+                era.keyBlockHash,
+                roundId = Ticks(era.startTick),
+                target = parent,
+                justifications = justifications
+              )
+        } yield b.messageHash
+
+      def block(mp: MessageProducer[Task], parent: BlockHash)(
+          implicit dagStorage: DagStorage[Task]
+      ): Task[BlockHash] =
+        for {
+          dag    <- dagStorage.getRepresentation
+          tips   <- dag.latestInEra(era.keyBlockHash)
+          latest <- tips.latestMessages
+          justifications = latest.map {
+            case (v, ms) => PublicKey(v) -> ms.map(_.messageHash)
+          }
+          b <- mp.block(
+                era.keyBlockHash,
+                roundId = Ticks(era.startTick),
+                mainParent = parent,
+                justifications = justifications,
+                isBookingBlock = false
+              )
+        } yield b.messageHash
     }
 
     def makeRuntime(era: Era): Task[EraRuntime[Task]] =
