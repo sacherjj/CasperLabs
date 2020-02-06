@@ -204,12 +204,9 @@ impl ERC20Test {
         recipient: [u8; 32],
         amount: U512,
     ) -> Self {
-        let request = ExecuteRequestBuilder::standard(
-            sender,
-            TRANFER_TO_ACCOUNT_WASM,
-            (recipient, amount.as_u64()),
-        )
-        .build();
+        let request =
+            ExecuteRequestBuilder::standard(sender, TRANFER_TO_ACCOUNT_WASM, (recipient, amount))
+                .build();
         self.builder.exec(request).expect_success().commit();
         self
     }

@@ -218,13 +218,10 @@ impl VestingTest {
         recipient: [u8; 32],
         amount: U512,
     ) -> Self {
-        let request = ExecuteRequestBuilder::standard(
-            sender,
-            TRANFER_TO_ACCOUNT_WASM,
-            (recipient, amount.as_u64()),
-        )
-        .with_block_time(self.current_timestamp)
-        .build();
+        let request =
+            ExecuteRequestBuilder::standard(sender, TRANFER_TO_ACCOUNT_WASM, (recipient, amount))
+                .with_block_time(self.current_timestamp)
+                .build();
         self.builder.exec(request).expect_success().commit();
         self
     }

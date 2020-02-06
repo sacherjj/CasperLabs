@@ -28,7 +28,7 @@ lazy_static! {
 fn setup() -> InMemoryWasmTestBuilder {
     // Creates victim account
     let exec_request_1 = {
-        let args = (PublicKey::new(VICTIM_ADDR), VICTIM_INITIAL_FUNDS.as_u64());
+        let args = (PublicKey::new(VICTIM_ADDR), *VICTIM_INITIAL_FUNDS);
         ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, CONTRACT_TRANSFER_TO_ACCOUNT, args)
             .build()
     };
