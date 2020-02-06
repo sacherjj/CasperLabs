@@ -1,16 +1,14 @@
 use lazy_static::lazy_static;
 
-use engine_shared::account::Account;
 use engine_test_support::{
     internal::{
-        utils, ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_GENESIS_CONFIG,
-        DEFAULT_PAYMENT,
+        ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT,
     },
     DEFAULT_ACCOUNT_ADDR,
 };
 use types::{
     account::{PublicKey, Weight},
-    Key, U512,
+    U512,
 };
 
 const CONTRACT_ADD_UPDATE_ASSOCIATED_KEY: &str = "add_update_associated_key.wasm";
@@ -49,14 +47,11 @@ fn should_manage_associated_key() {
         .expect_success()
         .commit();
 
-    let account_key = Key::Account(ACCOUNT_1_ADDR);
     let genesis_key = PublicKey::new(DEFAULT_ACCOUNT_ADDR);
 
-    let account_1: Account = {
-        let tmp = builder.clone();
-        let transforms = tmp.get_transforms();
-        utils::get_account(&transforms[1], &account_key).expect("should get account")
-    };
+    let account_1 = builder
+        .get_account(ACCOUNT_1_ADDR)
+        .expect("should have account");
 
     let gen_weight = account_1
         .get_associated_key_weight(genesis_key)
@@ -74,17 +69,13 @@ fn should_manage_associated_key() {
 
     builder.exec(exec_request_3).expect_success().commit();
 
-    let account_1: Account = {
-        let tmp = builder.clone();
-        let transforms = tmp.get_transforms();
-        utils::get_account(&transforms[2], &account_key).expect("should get account")
-    };
+    let account_1 = builder
+        .get_account(ACCOUNT_1_ADDR)
+        .expect("should have account");
 
-    assert_eq!(
-        account_1.get_associated_key_weight(genesis_key),
-        None,
-        "key should be removed"
-    );
+    let new_weight = account_1.get_associated_key_weight(genesis_key);
+
+    assert_eq!(new_weight, None, "key should be removed");
 
     let is_error = builder.is_error();
     assert!(!is_error);

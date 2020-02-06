@@ -1,9 +1,15 @@
 @external("env", "read_value")
 export declare function read_value(key_ptr: usize, key_size: usize, value_size: usize): i32;
+@external("env", "read_value_local")
+export declare function read_value_local(key_ptr: usize, key_size: usize, output_size: usize): i32;
 @external("env", "write")
 export declare function write(key_ptr: usize, key_size: usize, value_ptr: usize, value_size: usize): void;
+@external("env", "write_local")
+export declare function write_local(key_ptr: usize, key_size: usize, value_ptr: usize, value_size: usize): void;
 @external("env", "add")
 export declare function add(key_ptr: usize, key_size: usize, value_ptr: usize, value_size: usize): void;
+@external("env", "add_local")
+export declare function add_local(key_ptr: usize, key_size: usize, value_ptr: usize, value_size: usize): void;
 @external("env", "new_uref")
 export declare function new_uref(key_ptr: usize, value_ptr: usize, value_size: usize): void;
 @external("env", "store_function")

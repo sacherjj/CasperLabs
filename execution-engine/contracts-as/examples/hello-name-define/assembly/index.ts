@@ -44,16 +44,16 @@ export function hello_name_ext(): void {
 }
 
 export function call(): void {
-    let init = CLValue.fromI32(0);
-    const maybeCounterLocalKey = Key.create(init);
-    if (maybeCounterLocalKey === null) {
+    let arg = CLValue.fromI32(0);
+    const maybeKey = Key.create(arg);
+    if (maybeKey === null) {
         Error.fromUserError(1).revert();
         return;
     }
-    const counterLocalKey = <Key>maybeCounterLocalKey;
+    const key = <Key>maybeKey;
 
     let namedKeys = toBytesMap([
-        toBytesPair(toBytesString(HELLO_NAME_KEY), counterLocalKey.toBytes()),
+        toBytesPair(toBytesString(HELLO_NAME_KEY), key.toBytes()),
     ]);
     var pointer = storeFunctionAtHash(HELLO_NAME_EXT, namedKeys);
     if (pointer === null) {

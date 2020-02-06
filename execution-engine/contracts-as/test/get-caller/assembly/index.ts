@@ -1,6 +1,5 @@
 import * as CL from "../../../../contract-as/assembly";
 import {Error, ErrorCode} from "../../../../contract-as/assembly/error";
-import {fromBytesU64} from "../../../../contract-as/assembly/bytesrepr";
 import {typedToArray, checkArraysEqual} from "../../../../contract-as/assembly/utils";
 
 export function call(): void {

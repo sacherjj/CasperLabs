@@ -20,7 +20,7 @@ export function call(): void {
         return;
     }
 
-    let bondingPurse = PurseId.createPurse();
+    let bondingPurse = PurseId.create();
     if (bondingPurse === null) {
         Error.fromErrorCode(ErrorCode.PurseNotCreated).revert();
         return;
