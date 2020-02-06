@@ -249,20 +249,32 @@ object MessageProducer {
       keyBlockHash: BlockHash,
       mainParent: BlockHash,
       justifications: Map[PublicKeyBS, Set[BlockHash]]
-  ): F[MergeResult[TransformMap, Block]] =
+  ): F[MergeResult[TransformMap, Block]] = {
+    // TODO (CON-627): The merge doesn't deal with ballots that are cast in response to protocol
+    // messages such as the switch block or lambda message. It wouldn't properly return all possible
+    // secondary parents. Better would be if the fork choice result already contained them.
+    // Until that's fixed, and other stuff noted in CON-628, don't use secondary parents at all.
+    val secondaryParentsEnabled = false
+
+    val secondaryCandidates: F[List[BlockHash]] =
+      for {
+        latestHashes <- NonEmptyList(mainParent, justifications.values.flatten.toList).pure[F]
+        tips         <- Estimator.tipsOfLatestMessages[F](dag, latestHashes, stopHash = keyBlockHash)
+        equivocators <- collectEquivocators[F](keyBlockHash)
+        // TODO: There are no scores here for ordering secondary parents. Another reason for the fork choice to give these.
+        secondaries = tips
+          .filterNot(m => equivocators(m.validatorId) || m.messageHash == mainParent)
+          .map(_.messageHash)
+          .sorted
+      } yield secondaries
+
     for {
-      latestMessages <- NonEmptyList(mainParent, justifications.values.flatten.toList).pure[F]
-      tips           <- Estimator.tipsOfLatestMessages[F](dag, latestMessages, stopHash = keyBlockHash)
-      equivocators   <- collectEquivocators[F](keyBlockHash)
-      // TODO: There are no scores here for ordering secondary parents.
-      secondaries = tips
-        .filterNot(m => equivocators(m.validatorId) || m.messageHash == mainParent)
-        .map(_.messageHash)
-        .sorted
-      candidates = NonEmptyList(mainParent, secondaries)
-      blocks     <- candidates.traverse(BlockStorage[F].getBlockUnsafe)
-      merged     <- ExecEngineUtil.merge[F](blocks, dag)
+      secondaries <- if (secondaryParentsEnabled) secondaryCandidates else Nil.pure[F]
+      candidates  = NonEmptyList(mainParent, secondaries)
+      blocks      <- candidates.traverse(BlockStorage[F].getBlockUnsafe)
+      merged      <- ExecEngineUtil.merge[F](blocks, dag)
     } yield merged
+  }
 
   /** Gather all the unforgiven equivocators that are in eras between the era of the key block and the era
     * defined _by_ the keyblock itself (typically that means grandparent, parent and child era).
