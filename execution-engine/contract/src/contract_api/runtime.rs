@@ -74,8 +74,8 @@ pub fn call_contract<A: ArgsParser, T: CLTyped + FromBytes>(c_ptr: ContractRef, 
     bytesrepr::deserialize(dest).unwrap_or_revert()
 }
 
-/// Takes the name of an `extern "C"` function to store as a contract under the given [`URef`] which
-/// should already reference a stored contract.
+/// Takes the name of a (non-mangled) `extern "C"` function to store as a contract under the given
+/// [`URef`] which should already reference a stored contract.
 ///
 /// If successful, this overwrites the value under `uref` with a new contract instance containing
 /// the original contract's named_keys, the current protocol version, and the newly created bytes of

@@ -71,9 +71,9 @@ impl CLTyped for PurseId {
 pub enum ActionType {
     /// Represents performing a deploy.
     Deployment = 0,
-    /// Represents changing
-    /// [`AssociatedKeys`](https://docs.rs/casperlabs-engine-shared/latest/casperlabs_engine_shared/account/struct.AssociatedKeys.html)
-    /// or [`ActionThresholds`](https://docs.rs/casperlabs-engine-shared/latest/casperlabs_engine_shared/account/struct.ActionThresholds.html).
+    /// Represents changing the associated keys (i.e. map of [`PublicKey`]s to [`Weight`]s) or
+    /// action thresholds (i.e. the total [`Weight`]s of signing [`PublicKey`]s required to perform
+    /// various actions).
     KeyManagement = 1,
 }
 
@@ -94,9 +94,8 @@ impl TryFrom<u32> for ActionType {
     }
 }
 
-/// Errors that can occur while changing
-/// [`ActionThresholds`](https://docs.rs/casperlabs-engine-shared/latest/casperlabs_engine_shared/account/struct.ActionThresholds.html)
-/// on an account.
+/// Errors that can occur while changing action thresholds (i.e. the total [`Weight`]s of signing
+/// [`PublicKey`]s required to perform various actions) on an account.
 #[repr(i32)]
 #[derive(Debug, Fail, PartialEq, Eq)]
 pub enum SetThresholdFailure {
@@ -142,16 +141,14 @@ impl TryFrom<i32> for SetThresholdFailure {
     }
 }
 
-/// Maximum number of
-/// [`AssociatedKeys`](https://docs.rs/casperlabs-engine-shared/latest/casperlabs_engine_shared/account/struct.AssociatedKeys.html)
-/// for a single account.
+/// Maximum number of associated keys (i.e. map of [`PublicKey`]s to [`Weight`]s) for a single
+/// account.
 pub const MAX_ASSOCIATED_KEYS: usize = 10;
 
 /// The number of bytes in a serialized [`Weight`].
 pub const WEIGHT_SERIALIZED_LENGTH: usize = U8_SERIALIZED_LENGTH;
 
-/// The weight attributed to a given [`PublicKey`] in an account's
-/// [`AssociatedKeys`](https://docs.rs/casperlabs-engine-shared/latest/casperlabs_engine_shared/account/struct.AssociatedKeys.html)
+/// The weight attributed to a given [`PublicKey`] in an account's associated keys.
 #[derive(PartialOrd, Ord, PartialEq, Eq, Clone, Copy, Debug)]
 pub struct Weight(u8);
 
@@ -263,8 +260,7 @@ impl FromBytes for PublicKey {
     }
 }
 
-/// Errors that can occur while adding a new [`PublicKey`] to an account's
-/// [`AssociatedKeys`](https://docs.rs/casperlabs-engine-shared/latest/casperlabs_engine_shared/account/struct.AssociatedKeys.html).
+/// Errors that can occur while adding a new [`PublicKey`] to an account's associated keys map.
 #[derive(PartialEq, Eq, Fail, Debug)]
 #[repr(i32)]
 pub enum AddKeyFailure {
@@ -295,8 +291,7 @@ impl TryFrom<i32> for AddKeyFailure {
     }
 }
 
-/// Errors that can occur while removing a [`PublicKey`] from an account's
-/// [`AssociatedKeys`](https://docs.rs/casperlabs-engine-shared/latest/casperlabs_engine_shared/account/struct.AssociatedKeys.html).
+/// Errors that can occur while removing a [`PublicKey`] from an account's associated keys map.
 #[derive(Fail, Debug, Eq, PartialEq)]
 #[repr(i32)]
 pub enum RemoveKeyFailure {
@@ -333,7 +328,7 @@ impl TryFrom<i32> for RemoveKeyFailure {
 }
 
 /// Errors that can occur while updating the [`Weight`] of a [`PublicKey`] in an account's
-/// [`AssociatedKeys`](https://docs.rs/casperlabs-engine-shared/latest/casperlabs_engine_shared/account/struct.AssociatedKeys.html).
+/// associated keys map.
 #[derive(PartialEq, Eq, Fail, Debug)]
 #[repr(i32)]
 pub enum UpdateKeyFailure {
