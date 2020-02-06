@@ -49,8 +49,8 @@ class GraphQL:
 
             deploys
             blockHash
-            parentHashes
-            justificationHashes
+            parents
+            justifications
             timestamp
             protocolVersion
             deployCount
