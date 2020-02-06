@@ -169,7 +169,7 @@ class CasperLabsClientAIO(object):
         result = None
         while True:
             result = await self.show_deploy(deploy_hash)
-            if result.status.state != 1:  # PENDING
+            if result.status.state != info.DeployInfo.State.PENDING:
                 break
             await asyncio.sleep(delay)
 

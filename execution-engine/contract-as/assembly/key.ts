@@ -1,9 +1,9 @@
+import * as externals from "./externals";
+import {readHostBuffer} from ".";
+import {KEY_UREF_SERIALIZED_LENGTH} from "./constants";
 import {URef} from "./uref";
 import {CLValue} from "./clvalue";
 import {Error} from "./error";
-import {UREF_SERIALIZED_LENGTH, KEY_ID_SERIALIZED_LENGTH, KEY_UREF_SERIALIZED_LENGTH} from "./constants";
-import * as externals from "./externals";
-import { readHostBuffer } from ".";
 import {checkTypedArrayEqual, typedToArray} from "./utils";
 import {GetDecodedBytesCount, AddDecodedBytesCount, SetDecodedBytesCount} from "./bytesrepr";
 
@@ -11,14 +11,12 @@ export enum KeyVariant {
     ACCOUNT_ID = 0,
     HASH_ID = 1,
     UREF_ID = 2,
-    LOCAL_ID = 3,
 }
 
 export class Key {
     variant: KeyVariant;
     hash: Uint8Array | null;
     uref: URef | null;
-    local: Uint8Array | null;
     account: Uint8Array | null;
 
     static fromURef(uref: URef): Key {
@@ -32,13 +30,6 @@ export class Key {
         let key = new Key();
         key.variant = KeyVariant.HASH_ID;
         key.hash = hash;
-        return key;
-    }
-
-    static fromLocal(local: Uint8Array): Key {
-        let key = new Key();
-        key.variant = KeyVariant.LOCAL_ID;
-        key.local = local;
         return key;
     }
 
@@ -97,11 +88,6 @@ export class Key {
 
             return Key.fromURef(<URef>uref);
         }
-        else if (tag == KeyVariant.LOCAL_ID) {
-            var localBytes = bytes.subarray(1, 32 + 1);
-            AddDecodedBytesCount(32);
-            return Key.fromLocal(localBytes);
-        }
         else if (tag == KeyVariant.ACCOUNT_ID) {
             var accountBytes = bytes.subarray(1, 32 + 1);
             AddDecodedBytesCount(32);
@@ -126,13 +112,6 @@ export class Key {
             for (let i = 0; i < hashBytes.length; i++) {
                 bytes[i + 1] = hashBytes[i];
             }
-            return bytes;
-        }
-        else if (this.variant == KeyVariant.LOCAL_ID) {
-            var localBytes = <Uint8Array>this.local;
-            let bytes = new Array<u8>(1);
-            bytes[0] = <u8>this.variant;
-            bytes = bytes.concat(typedToArray(localBytes));
             return bytes;
         }
         else if (this.variant == KeyVariant.ACCOUNT_ID) {
@@ -206,14 +185,6 @@ export class Key {
             if (other.variant == KeyVariant.HASH_ID) {
                 return checkTypedArrayEqual(<Uint8Array>this.hash, <Uint8Array>other.hash);
 
-            }
-            else {
-                return false;
-            }
-        }
-        else if (this.variant == KeyVariant.LOCAL_ID) {
-            if (other.variant == KeyVariant.LOCAL_ID) {
-                return checkTypedArrayEqual(<Uint8Array>this.local, <Uint8Array>other.local);
             }
             else {
                 return false;

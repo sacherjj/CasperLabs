@@ -30,9 +30,8 @@ use types::{
 
 use super::{attenuate_uref_for_account, Address, Error, RuntimeContext};
 use crate::{
-    engine_state::SYSTEM_ACCOUNT_ADDR,
-    execution::{extract_access_rights_from_keys, AddressGenerator},
-    tracking_copy::TrackingCopy,
+    engine_state::SYSTEM_ACCOUNT_ADDR, execution::AddressGenerator,
+    runtime::extract_access_rights_from_keys, tracking_copy::TrackingCopy,
 };
 
 const DEPLOY_HASH: [u8; 32] = [1u8; 32];
