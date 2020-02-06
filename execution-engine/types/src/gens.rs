@@ -1,4 +1,6 @@
-//! Contains functions for generating arbitrary values for use by [`Proptest`](https://crates.io/crates/proptest).
+//! Contains functions for generating arbitrary values for use by
+//! [`Proptest`](https://crates.io/crates/proptest).
+#![allow(missing_docs)]
 
 use alloc::{collections::BTreeMap, string::String, vec};
 

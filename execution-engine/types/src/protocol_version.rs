@@ -6,16 +6,18 @@ use crate::{
     SemVer,
 };
 
+/// A newtype wrapping a [`SemVer`] which represents a CasperLabs Platform protocol version.
 #[derive(Copy, Clone, Debug, Default, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(SemVer);
 
+/// The result of [`ProtocolVersion::check_next_version`].
 #[derive(Debug, PartialEq, Eq)]
 pub enum VersionCheckResult {
-    /// Upgrade possible, installer code is required
+    /// Upgrade possible, installer code is required.
     CodeIsRequired,
-    /// Upgrade possible, installer code is optional
+    /// Upgrade possible, installer code is optional.
     CodeIsOptional,
-    /// Upgrade is invalid
+    /// Upgrade is invalid.
     Invalid,
 }
 
@@ -42,22 +44,25 @@ impl VersionCheckResult {
 }
 
 impl ProtocolVersion {
+    /// Version 1.0.0.
     pub const V1_0_0: ProtocolVersion = ProtocolVersion(SemVer {
         major: 1,
         minor: 0,
         patch: 0,
     });
 
+    /// Constructs a new `ProtocolVersion` from `version`.
     pub fn new(version: SemVer) -> ProtocolVersion {
         ProtocolVersion(version)
     }
 
+    /// Constructs a new `ProtocolVersion` from the given semver parts.
     pub fn from_parts(major: u32, minor: u32, patch: u32) -> ProtocolVersion {
         let sem_ver = SemVer::new(major, minor, patch);
         Self::new(sem_ver)
     }
 
-    #[allow(clippy::trivially_copy_pass_by_ref)] //TODO: remove attr after switch to SemVer
+    /// Returns the inner [`SemVer`].
     pub fn value(&self) -> SemVer {
         self.0
     }
@@ -108,7 +113,7 @@ impl ProtocolVersion {
 
     /// Checks if given protocol version is compatible with current one.
     ///
-    /// Two protocol versions with different major version are considered to be invalid.
+    /// Two protocol versions with different major version are considered to be incompatible.
     pub fn is_compatible_with(&self, version: &ProtocolVersion) -> bool {
         self.0.major == version.0.major
     }

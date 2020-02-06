@@ -1,3 +1,5 @@
+SHELL := bash
+
 # Easier to use and less error-prone in some places where we need to 'cd'
 $(eval PROJECT = $(shell echo $$(pwd)/../..))
 $(eval MAKE_DIR = $(shell echo $$(pwd)/.make/run))

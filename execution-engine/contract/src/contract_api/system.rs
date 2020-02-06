@@ -1,3 +1,5 @@
+//! Functions for interacting with the system contracts.
+
 use alloc::vec::Vec;
 use core::mem::MaybeUninit;
 
@@ -13,7 +15,9 @@ use crate::{
     unwrap_or_revert::UnwrapOrRevert,
 };
 
+/// Name of the reference to the Mint contract in the named keys.
 pub const MINT_NAME: &str = "mint";
+/// Name of the reference to the Proof of Stake contract in the named keys.
 pub const POS_NAME: &str = "pos";
 
 fn get_system_contract(system_contract: SystemContractType) -> ContractRef {
@@ -41,18 +45,21 @@ fn get_system_contract(system_contract: SystemContractType) -> ContractRef {
     ContractRef::URef(uref)
 }
 
-/// Returns a read-only pointer to the Mint Contract.  Any failure will trigger `revert()` with a
-/// `contract_api::Error`.
+/// Returns a read-only pointer to the Mint contract.
+///
+/// Any failure will trigger [`revert`](runtime::revert) with an appropriate [`ApiError`].
 pub fn get_mint() -> ContractRef {
     get_system_contract(SystemContractType::Mint)
 }
 
-/// Returns a read-only pointer to the Proof of Stake Contract.  Any failure will trigger `revert()`
-/// with a `contract_api::Error`.
+/// Returns a read-only pointer to the Proof of Stake contract.
+///
+/// Any failure will trigger [`revert`](runtime::revert) with an appropriate [`ApiError`].
 pub fn get_proof_of_stake() -> ContractRef {
     get_system_contract(SystemContractType::ProofOfStake)
 }
 
+/// Creates a new empty purse and returns its [`PurseId`].
 pub fn create_purse() -> PurseId {
     let purse_id_ptr = contract_api::alloc_bytes(PURSE_ID_SERIALIZED_LENGTH);
     unsafe {
@@ -70,7 +77,7 @@ pub fn create_purse() -> PurseId {
     }
 }
 
-/// Gets the balance of a given purse
+/// Returns the balance in motes of the given purse.
 pub fn get_balance(purse_id: PurseId) -> Option<U512> {
     let (purse_id_ptr, purse_id_size, _bytes) = contract_api::to_ptr(purse_id);
 
@@ -89,8 +96,8 @@ pub fn get_balance(purse_id: PurseId) -> Option<U512> {
     Some(value)
 }
 
-/// Transfers `amount` of motes from default purse of the account to `target`
-/// account. If `target` does not exist it will create it.
+/// Transfers `amount` of motes from the default purse of the account to `target`
+/// account.  If `target` does not exist it will be created.
 pub fn transfer_to_account(target: PublicKey, amount: U512) -> TransferResult {
     let (target_ptr, target_size, _bytes1) = contract_api::to_ptr(target);
     let (amount_ptr, amount_size, _bytes2) = contract_api::to_ptr(amount);
@@ -99,8 +106,8 @@ pub fn transfer_to_account(target: PublicKey, amount: U512) -> TransferResult {
     TransferredTo::result_from(return_code)
 }
 
-/// Transfers `amount` of motes from `source` purse to `target` account.
-/// If `target` does not exist it will create it.
+/// Transfers `amount` of motes from `source` purse to `target` account.  If `target` does not exist
+/// it will be created.
 pub fn transfer_from_purse_to_account(
     source: PurseId,
     target: PublicKey,
@@ -122,7 +129,8 @@ pub fn transfer_from_purse_to_account(
     TransferredTo::result_from(return_code)
 }
 
-/// Transfers `amount` of motes from `source` purse to `target` purse.
+/// Transfers `amount` of motes from `source` purse to `target` purse.  If `target` does not exist
+/// the transfer fails.
 pub fn transfer_from_purse_to_purse(
     source: PurseId,
     target: PurseId,

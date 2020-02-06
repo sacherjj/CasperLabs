@@ -1,6 +1,6 @@
 [package]
 name = "casperlabs-contract"
-version = "0.22.0"
+version = "0.22.0" # when updating, also update 'html_root_url' in lib.rs
 authors = ["Michael Birch <birchmd@casperlabs.io>", "Mateusz Górski <gorski.mateusz@protonmail.ch>"]
 edition = "2018"
 description = "Library for developing CasperLabs smart contracts."
@@ -18,3 +18,6 @@ casperlabs-types = { version = "0.1.0", path = "../types" }
 failure = { version = "0.1.6", default-features = false, features = ["failure_derive"] }
 hex_fmt = "0.3.0"
 wee_alloc = "0.4.5"
+
+[dev-dependencies]
+version-sync = "0.8"

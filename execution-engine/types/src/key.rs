@@ -1,7 +1,5 @@
-//! Home of [`Key`](crate::Key), the type for indexing all data stored on the CasperLabs
-//! Platform.
-
-use alloc::{format, vec::Vec};
+use alloc::{format, string::String, vec::Vec};
+use core::fmt::{self, Debug, Display, Formatter};
 
 use base16;
 use blake2::{
@@ -20,15 +18,19 @@ const HASH_ID: u8 = 1;
 const UREF_ID: u8 = 2;
 const LOCAL_ID: u8 = 3;
 
+/// The number of bytes in a [`Key::Account`].
 pub const KEY_ACCOUNT_LENGTH: usize = 32;
+/// The number of bytes in a [`Key::Hash`].
 pub const KEY_HASH_LENGTH: usize = 32;
+/// The number of bytes in a [`Key::Local`].
 pub const KEY_LOCAL_LENGTH: usize = 32;
-pub const LOCAL_SEED_LENGTH: usize = 32;
+/// The number of bytes in the seed for a new [`Key::Local`].
+pub const KEY_LOCAL_SEED_LENGTH: usize = 32;
 
 const KEY_ID_SERIALIZED_LENGTH: usize = 1; // u8 used to determine the ID
 const KEY_ACCOUNT_SERIALIZED_LENGTH: usize = KEY_ID_SERIALIZED_LENGTH + KEY_ACCOUNT_LENGTH;
 const KEY_HASH_SERIALIZED_LENGTH: usize = KEY_ID_SERIALIZED_LENGTH + KEY_HASH_LENGTH;
-pub const KEY_UREF_SERIALIZED_LENGTH: usize = KEY_ID_SERIALIZED_LENGTH + UREF_SERIALIZED_LENGTH;
+const KEY_UREF_SERIALIZED_LENGTH: usize = KEY_ID_SERIALIZED_LENGTH + UREF_SERIALIZED_LENGTH;
 const KEY_LOCAL_SERIALIZED_LENGTH: usize = KEY_ID_SERIALIZED_LENGTH + KEY_LOCAL_LENGTH;
 
 /// Creates a 32-byte BLAKE2b hash digest from a given a piece of data
@@ -41,22 +43,33 @@ fn hash(bytes: &[u8]) -> [u8; KEY_LOCAL_LENGTH] {
     ret
 }
 
+/// The type under which data (e.g. [`CLValue`](crate::CLValue)s, smart contracts, user accounts)
+/// are indexed on the network.
 #[repr(C)]
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Hash)]
 pub enum Key {
+    /// A `Key` under which a user account is stored.
     Account([u8; KEY_ACCOUNT_LENGTH]),
+    /// A `Key` under which a smart contract is stored and which is the pseudo-hash of the
+    /// contract.
     Hash([u8; KEY_HASH_LENGTH]),
+    /// A `Key` which is a [`URef`], under which most types of data can be stored.
     URef(URef),
+    /// A `Key` to data (normally a [`CLValue`](crate::CLValue)) which is held in local-storage
+    /// rather than global-storage.
     Local([u8; KEY_LOCAL_LENGTH]),
 }
 
 impl Key {
-    pub fn local(seed: [u8; LOCAL_SEED_LENGTH], key_bytes: &[u8]) -> Self {
+    /// Constructs a new [`Key::Local`] by hashing `seed` concatenated with `key_bytes`.
+    pub fn local(seed: [u8; KEY_LOCAL_SEED_LENGTH], key_bytes: &[u8]) -> Self {
         let bytes_to_hash: Vec<u8> = seed.iter().chain(key_bytes.iter()).copied().collect();
         let hash: [u8; KEY_LOCAL_LENGTH] = hash(&bytes_to_hash);
         Key::Local(hash)
     }
 
+    // This method is not intended to be used by third party crates.
+    #[doc(hidden)]
     pub fn type_string(&self) -> String {
         match self {
             Key::Account(_) => String::from("Key::Account"),
@@ -66,7 +79,8 @@ impl Key {
         }
     }
 
-    /// Calculates serialized size without actually serializing data.
+    // TODO - remove this method as it's unused
+    #[doc(hidden)]
     pub fn serialized_size(&self) -> usize {
         match self {
             Key::Account(_) => KEY_ACCOUNT_SERIALIZED_LENGTH,
@@ -76,14 +90,114 @@ impl Key {
         }
     }
 
-    /// Returns max size a [`Key`] can be serialized into.
+    /// Returns the maximum size a [`Key`] can be serialized into.
     pub const fn serialized_size_hint() -> usize {
         KEY_UREF_SERIALIZED_LENGTH
     }
+
+    /// If `self` is of type [`Key::URef`], returns `self` with the [`AccessRights`] stripped from
+    /// the wrapped [`URef`], otherwise returns `self` unmodified.
+    pub fn normalize(self) -> Key {
+        match self {
+            Key::URef(uref) => Key::URef(uref.remove_access_rights()),
+            other => other,
+        }
+    }
+
+    // TODO - remove this method as it's unused
+    #[doc(hidden)]
+    /// Creates an instance of `Key::Hash` from the hex-encoded string.  Returns `None` if
+    /// `hex_encodede_hash` does not decode to a 32-byte array.
+    pub fn parse_hash(hex_encodede_hash: &str) -> Option<Key> {
+        decode_from_hex(hex_encodede_hash).map(Key::Hash)
+    }
+
+    // TODO - remove this method as it's unused
+    #[doc(hidden)]
+    /// Creates an instance of `Key::URef` from the hex-encoded string.  Returns `None` if
+    /// `hex_encoded_uref` does not decode to a 32-byte array.
+    pub fn parse_uref(hex_encoded_uref: &str, access_rights: AccessRights) -> Option<Key> {
+        decode_from_hex(hex_encoded_uref).map(|uref| Key::URef(URef::new(uref, access_rights)))
+    }
+
+    // TODO - remove this method as it's unused
+    #[doc(hidden)]
+    /// Creates an instance of `Key::Local` from the hex-encoded strings.  Returns `None` if
+    /// `hex_encoded_seed` does not decode to a 32-byte array, or if `hex_encoded_key_bytes` does
+    /// does not decode from hex.
+    pub fn parse_local(hex_encoded_seed: &str, hex_encoded_key_bytes: &str) -> Option<Key> {
+        let decoded_seed = decode_from_hex(hex_encoded_seed)?;
+        let decoded_key_bytes = base16::decode(drop_hex_prefix(hex_encoded_key_bytes)).ok()?;
+        Some(Key::local(decoded_seed, &decoded_key_bytes))
+    }
+
+    /// Returns a human-readable version of `self`, with the inner bytes encoded to Base16.
+    pub fn as_string(&self) -> String {
+        match self {
+            Key::Account(addr) => format!("account-{}", base16::encode_lower(addr)),
+            Key::Hash(addr) => format!("hash-{}", base16::encode_lower(addr)),
+            Key::URef(uref) => uref.as_string(),
+            Key::Local(hash) => format!("local-{}", base16::encode_lower(hash)),
+        }
+    }
+
+    /// Consumes and converts `self` to a [`ContractRef`] if `self` is of type [`Key::Hash`] or
+    /// [`Key::URef`], otherwise returns `None`.
+    pub fn to_contract_ref(self) -> Option<ContractRef> {
+        match self {
+            Key::URef(uref) => Some(ContractRef::URef(uref)),
+            Key::Hash(id) => Some(ContractRef::Hash(id)),
+            _ => None,
+        }
+    }
+
+    /// Returns the inner bytes of `self` if `self` is of type [`Key::Account`], otherwise returns
+    /// `None`.
+    pub fn into_account(self) -> Option<[u8; KEY_ACCOUNT_LENGTH]> {
+        match self {
+            Key::Account(bytes) => Some(bytes),
+            _ => None,
+        }
+    }
+
+    /// Returns the inner bytes of `self` if `self` is of type [`Key::Hash`], otherwise returns
+    /// `None`.
+    pub fn into_hash(self) -> Option<[u8; KEY_HASH_LENGTH]> {
+        match self {
+            Key::Hash(hash) => Some(hash),
+            _ => None,
+        }
+    }
+
+    /// Returns a reference to the inner [`URef`] if `self` is of type [`Key::URef`], otherwise
+    /// returns `None`.
+    pub fn as_uref(&self) -> Option<&URef> {
+        match self {
+            Key::URef(uref) => Some(uref),
+            _ => None,
+        }
+    }
+
+    /// Returns the inner [`URef`] if `self` is of type [`Key::URef`], otherwise returns `None`.
+    pub fn into_uref(self) -> Option<URef> {
+        match self {
+            Key::URef(uref) => Some(uref),
+            _ => None,
+        }
+    }
+
+    /// Returns the inner bytes of `self` if `self` is of type [`Key::Local`], otherwise returns
+    /// `None`.
+    pub fn into_local(self) -> Option<[u8; KEY_LOCAL_LENGTH]> {
+        match self {
+            Key::Local(local) => Some(local),
+            _ => None,
+        }
+    }
 }
 
-impl core::fmt::Display for Key {
-    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+impl Display for Key {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match self {
             Key::Account(addr) => write!(f, "Key::Account({})", HexFmt(addr)),
             Key::Hash(addr) => write!(f, "Key::Hash({})", HexFmt(addr)),
@@ -94,15 +208,13 @@ impl core::fmt::Display for Key {
     }
 }
 
-impl core::fmt::Debug for Key {
-    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+impl Debug for Key {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(f, "{}", self)
     }
 }
 
-use alloc::string::String;
-
-/// Drops "0x" prefix from the input string and turns rest of it into slice.
+/// Drops "0x" prefix from the input string and turns rest of it into a slice.
 fn drop_hex_prefix(s: &str) -> &str {
     if s.starts_with("0x") {
         &s[2..]
@@ -126,89 +238,6 @@ fn decode_from_hex(input: &str) -> Option<[u8; KEY_HASH_LENGTH]> {
     let _bytes_written = base16::decode_slice(undecorated_input, &mut output).ok()?;
     debug_assert!(_bytes_written == KEY_HASH_LENGTH);
     Some(output)
-}
-
-impl Key {
-    pub fn to_contract_ref(self) -> Option<ContractRef> {
-        match self {
-            Key::URef(uref) => Some(ContractRef::URef(uref)),
-            Key::Hash(id) => Some(ContractRef::Hash(id)),
-            _ => None,
-        }
-    }
-
-    /// Returns bytes of an account
-    pub fn as_account(&self) -> Option<[u8; 32]> {
-        match self {
-            Key::Account(bytes) => Some(*bytes),
-            _ => None,
-        }
-    }
-
-    pub fn normalize(self) -> Key {
-        match self {
-            Key::URef(uref) => Key::URef(uref.remove_access_rights()),
-            other => other,
-        }
-    }
-
-    /// Creates an instance of `Key::Hash` from the hex-encoded string.  Returns `None` if
-    /// `hex_encodede_hash` does not decode to a 32-byte array.
-    pub fn parse_hash(hex_encodede_hash: &str) -> Option<Key> {
-        decode_from_hex(hex_encodede_hash).map(Key::Hash)
-    }
-
-    /// Creates an instance of `Key::URef` from the hex-encoded string.  Returns `None` if
-    /// `hex_encoded_uref` does not decode to a 32-byte array.
-    pub fn parse_uref(hex_encoded_uref: &str, access_rights: AccessRights) -> Option<Key> {
-        decode_from_hex(hex_encoded_uref).map(|uref| Key::URef(URef::new(uref, access_rights)))
-    }
-
-    /// Creates an instance of `Key::Local` from the hex-encoded strings.  Returns `None` if
-    /// `hex_encoded_seed` does not decode to a 32-byte array, or if `hex_encoded_key_bytes` does
-    /// does not decode from hex.
-    pub fn parse_local(hex_encoded_seed: &str, hex_encoded_key_bytes: &str) -> Option<Key> {
-        let decoded_seed = decode_from_hex(hex_encoded_seed)?;
-        let decoded_key_bytes = base16::decode(drop_hex_prefix(hex_encoded_key_bytes)).ok()?;
-        Some(Key::local(decoded_seed, &decoded_key_bytes))
-    }
-
-    pub fn as_string(&self) -> String {
-        match self {
-            Key::Account(addr) => format!("account-{}", base16::encode_lower(addr)),
-            Key::Hash(addr) => format!("hash-{}", base16::encode_lower(addr)),
-            Key::URef(uref) => uref.as_string(),
-            Key::Local(hash) => format!("local-{}", base16::encode_lower(hash)),
-        }
-    }
-
-    pub fn as_uref(&self) -> Option<&URef> {
-        match self {
-            Key::URef(uref) => Some(uref),
-            _ => None,
-        }
-    }
-
-    pub fn into_uref(self) -> Option<URef> {
-        match self {
-            Key::URef(uref) => Some(uref),
-            _ => None,
-        }
-    }
-
-    pub fn as_hash(&self) -> Option<[u8; KEY_HASH_LENGTH]> {
-        match self {
-            Key::Hash(hash) => Some(*hash),
-            _ => None,
-        }
-    }
-
-    pub fn as_local(&self) -> Option<[u8; KEY_LOCAL_LENGTH]> {
-        match self {
-            Key::Local(local) => Some(*local),
-            _ => None,
-        }
-    }
 }
 
 impl From<URef> for Key {
@@ -314,7 +343,7 @@ mod tests {
 
     use super::*;
     use crate::{
-        bytesrepr::{Error, FromBytes, ToBytes},
+        bytesrepr::{Error, FromBytes},
         AccessRights, URef,
     };
 
@@ -483,62 +512,40 @@ mod tests {
     fn check_key_account_getters() {
         let account = [42; 32];
         let key1 = Key::Account(account);
-        assert_eq!(key1.as_account(), Some(account));
-        assert!(key1.as_hash().is_none());
+        assert_eq!(key1.into_account(), Some(account));
+        assert!(key1.into_hash().is_none());
         assert!(key1.as_uref().is_none());
-        assert!(key1.as_local().is_none());
+        assert!(key1.into_local().is_none());
     }
 
     #[test]
     fn check_key_hash_getters() {
         let hash = [42; KEY_HASH_LENGTH];
         let key1 = Key::Hash(hash);
-        assert!(key1.as_account().is_none());
-        assert_eq!(key1.as_hash(), Some(hash));
+        assert!(key1.into_account().is_none());
+        assert_eq!(key1.into_hash(), Some(hash));
         assert!(key1.as_uref().is_none());
-        assert!(key1.as_local().is_none());
+        assert!(key1.into_local().is_none());
     }
 
     #[test]
     fn check_key_uref_getters() {
         let uref = URef::new([42; 32], AccessRights::READ_ADD_WRITE);
         let key1 = Key::URef(uref);
-        assert!(key1.as_account().is_none());
-        assert!(key1.as_hash().is_none());
+        assert!(key1.into_account().is_none());
+        assert!(key1.into_hash().is_none());
         assert_eq!(key1.as_uref(), Some(&uref));
-        assert!(key1.as_local().is_none());
+        assert!(key1.into_local().is_none());
     }
 
     #[test]
     fn check_key_local_getters() {
         let local = [42; KEY_LOCAL_LENGTH];
         let key1 = Key::Local(local);
-        assert!(key1.as_account().is_none());
-        assert!(key1.as_hash().is_none());
+        assert!(key1.into_account().is_none());
+        assert!(key1.into_hash().is_none());
         assert!(key1.as_uref().is_none());
-        assert_eq!(key1.as_local(), Some(local));
-    }
-
-    #[test]
-    fn serialized_size() {
-        let account = [42; 32];
-        let hash = [42; KEY_HASH_LENGTH];
-        let uref = URef::new([42; 32], AccessRights::READ_ADD_WRITE);
-        let local = [42; KEY_LOCAL_LENGTH];
-
-        let keys = [
-            (Key::Account(account), KEY_ACCOUNT_SERIALIZED_LENGTH),
-            (Key::Hash(hash), KEY_HASH_SERIALIZED_LENGTH),
-            (Key::URef(uref), KEY_UREF_SERIALIZED_LENGTH),
-            (Key::Local(local), KEY_LOCAL_SERIALIZED_LENGTH),
-        ];
-
-        for &(key, const_size) in keys.iter() {
-            // println!("{:?}={}", key, const_size);
-            let bytes = key.to_bytes().expect("should serialize");
-            assert_eq!(key.serialized_size(), const_size);
-            assert_eq!(bytes.len(), key.serialized_size());
-        }
+        assert_eq!(key1.into_local(), Some(local));
     }
 
     #[test]

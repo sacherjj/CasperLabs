@@ -3,22 +3,28 @@ use core::fmt;
 
 use crate::bytesrepr::{Error, FromBytes, ToBytes};
 
-pub const SEM_VER_SERIALIZED_LENGTH: usize = 12;
+const SEM_VER_SERIALIZED_LENGTH: usize = 12;
 
+/// A struct for semantic versioning.
 #[derive(Copy, Clone, Debug, Default, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct SemVer {
+    /// Major version.
     pub major: u32,
+    /// Minor version.
     pub minor: u32,
+    /// Patch version.
     pub patch: u32,
 }
 
 impl SemVer {
+    /// Version 1.0.0.
     pub const V1_0_0: SemVer = SemVer {
         major: 1,
         minor: 0,
         patch: 0,
     };
 
+    /// Constructs a new `SemVer` from the given semver parts.
     pub fn new(major: u32, minor: u32, patch: u32) -> SemVer {
         SemVer {
             major,

@@ -1,3 +1,5 @@
+SHELL := bash
+
 # This supports environments where $HOME/.cargo/env has not been sourced (CI, CLion Makefile runner)
 CARGO  = $(or $(shell which cargo),  $(HOME)/.cargo/bin/cargo)
 RUSTUP = $(or $(shell which rustup), $(HOME)/.cargo/bin/rustup)

@@ -133,7 +133,7 @@ fn should_exec_stored_code_by_hash() {
         .named_keys()
         .get(STANDARD_PAYMENT_CONTRACT_NAME)
         .expect("stored_payment_contract_hash should exist")
-        .as_hash()
+        .into_hash()
         .expect("should be a hash");
 
     let response = builder
@@ -699,7 +699,7 @@ fn should_have_equivalent_transforms_with_stored_contract_pointers() {
             .named_keys()
             .get(STANDARD_PAYMENT_CONTRACT_NAME)
             .expect("should have named key")
-            .as_hash()
+            .into_hash()
             .expect("should be a hash");
 
         let call_stored_request = {
@@ -931,7 +931,7 @@ fn should_fail_payment_stored_at_hash_with_incompatible_major_version() {
         .named_keys()
         .get(STANDARD_PAYMENT_CONTRACT_NAME)
         .expect("should have standard_payment named key")
-        .as_hash()
+        .into_hash()
         .expect("standard_payment should be an uref");
 
     //
@@ -1175,7 +1175,7 @@ fn should_fail_session_stored_at_hash_with_incompatible_major_version() {
         .named_keys()
         .get(DO_NOTHING_STORED_CONTRACT_NAME)
         .expect("do_nothing should be present in named keys")
-        .as_hash()
+        .into_hash()
         .expect("do_nothing named key should be hash");
 
     //
@@ -1376,7 +1376,7 @@ fn should_execute_stored_payment_and_session_code_with_new_major_version() {
         .named_keys()
         .get(STANDARD_PAYMENT_CONTRACT_NAME)
         .expect("standard_payment should be present in named keys")
-        .as_hash()
+        .into_hash()
         .expect("standard_payment named key should be hash");
     let do_nothing_stored_uref = default_account
         .named_keys()

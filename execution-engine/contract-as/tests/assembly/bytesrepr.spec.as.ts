@@ -47,7 +47,7 @@ export function testDeSerU32(): bool {
     assert(ser !== null);
     return ser == changetype<U32>(0xdeadbeef);
 }
-  
+
 export function testDeSerZeroU32(): bool {
     const truth: u8[] = [0, 0, 0, 0];
     let ser = toBytesU32(0);
@@ -112,7 +112,7 @@ export function testDeSerListOfStrings(): bool {
         "1234567890",
         "qwerty",
     ]));
-    
+
     let lhs = toBytesStringList(result);
     let rhs = typedToArray(truth);
     return checkArraysEqual(lhs, rhs);
@@ -134,7 +134,6 @@ export function testDeSerEmptyMap(): bool {
     return checkArraysEqual(<Array<Pair<String, Key>>>maybeResult, <Array<Pair<String, Key>>>[]);
 };
 
-
 export function testSerializeMap(): bool {
     // let mut m = BTreeMap::new();
     // m.insert("Key1".to_string(), "Value1".to_string());
@@ -155,10 +154,10 @@ export function testSerializeMap(): bool {
         arrayToTyped(serialized),
         fromBytesString,
         fromBytesString);
-    
+
     assert(maybeDeser !== null);
     let deser = <Array<Pair<String, String>>>maybeDeser;
-    
+
     let res1 = false;
     let res2 = false;
     for (let i = 0; i < deser.length; i++) {
@@ -255,88 +254,75 @@ export function testDecodedOptionalIsSome(): bool {
     return checkArraysEqual(typedToArray(values), [2, 3, 4, 5, 6, 7, 8, 9, 10]);
 };
 
-// export function xtestDeserMapOfNamedKeys(): bool {
-//
-//     let extraBytes = "fffefd";
-//     let truthBytes = "0400000001000000410001010101010101010101010101010101010101010101010101010101010101010200000042420202020202020202020202020202020202020202020202020202020202020202020107030000004343430103030303030303030303030303030303030303030303030303030303030303030400000044444444030404040404040404040404040404040404040404040404040404040404040404";
-//
-//     let truth = hex2bin(truthBytes + extraBytes);
-//
-//     const maybeDeser = fromBytesMap<String, Key>(
-//         truth,
-//         fromBytesString,
-//         Key.fromBytes);
-//     let deserializedBytes = GetDecodedBytesCount();
-//     assert(<u32>deserializedBytes == <i32>truth.length - hex2bin(extraBytes).length);
-//
-//     assert(maybeDeser !== null);
-//     let deser = <Array<Pair<String, Key>>>maybeDeser;
-//     assert(deser.length === 4);
-//
-//     assert(deser[0].first == "A");
-//     assert(deser[0].second.variant == KeyVariant.ACCOUNT_ID);
-//
-//     let accountBytes = new Array<u8>(32);
-//     accountBytes.fill(1);
-//
-//     assert(checkTypedArrayEqual(<Uint8Array>deser[0].second.account, arrayToTyped(accountBytes)));
-//
-//     //
-//
-//     assert(deser[1].first == "BB");
-//     assert(deser[1].second.variant == KeyVariant.UREF_ID);
-//
-//     let urefBytes = new Array<u8>(32);
-//     urefBytes.fill(2);
-//
-//     assert(deser[1].second.uref !== null);
-//     let deser1Uref = <URef>deser[1].second.uref;
-//     assert(checkTypedArrayEqual(<Uint8Array>deser1Uref.bytes, arrayToTyped(urefBytes)));
-//     assert(deser1Uref.accessRights == AccessRights.READ_ADD_WRITE);
-//
-//     //
-//
-//     assert(deser[2].first == "CCC");
-//     assert(deser[2].second.variant == KeyVariant.HASH_ID);
-//
-//     let hashBytes = new Array<u8>(32);
-//     hashBytes.fill(3);
-//
-//     assert(checkTypedArrayEqual(<Uint8Array>deser[2].second.hash, arrayToTyped(hashBytes)));
-//
-//     //
-//
-//     assert(deser[3].first == "DDDD");
-//     assert(deser[3].second.variant == KeyVariant.LOCAL_ID);
-//
-//     let localBytes = new Array<u8>(32);
-//     localBytes.fill(4);
-//
-//     assert(checkTypedArrayEqual(<Uint8Array>deser[3].second.local, arrayToTyped(localBytes)));
-//
-//     // Compares to truth
-//
-//     let truthObj = new Array<Pair<String, Key>>();
-//     let keyA = Key.fromAccount(arrayToTyped(accountBytes));
-//     truthObj.push(new Pair<String, Key>("A", keyA));
-//
-//     let urefB = new URef(arrayToTyped(urefBytes), AccessRights.READ_ADD_WRITE);
-//     let keyB = Key.fromURef(urefB);
-//     truthObj.push(new Pair<String, Key>("BB", keyB));
-//
-//     let keyC = Key.fromHash(arrayToTyped(hashBytes));
-//     truthObj.push(new Pair<String, Key>("CCC", keyC));
-//
-//     let keyD = Key.fromLocal(arrayToTyped(localBytes));
-//     truthObj.push(new Pair<String, Key>("DDDD", keyD));
-//
-//     assert(truthObj.length === deser.length);
-//     assert(truthObj[0] == deser[0]);
-//     assert(truthObj[1] == deser[1]);
-//     assert(truthObj[2] == deser[2]);
-//     assert(truthObj[3] == deser[3]);
-//     assert(checkArraysEqual(truthObj, deser));
-//     assert(checkItemsEqual(truthObj, deser));
-//
-//     return true;
-// }
+export function testDeserMapOfNamedKeys(): bool {
+
+    let extraBytes = "fffefd";
+    let truthBytes = "030000000100000041000101010101010101010101010101010101010101010101010101010101010101020000004242020202020202020202020202020202020202020202020202020202020202020202010703000000434343010303030303030303030303030303030303030303030303030303030303030303";
+
+    let truth = hex2bin(truthBytes + extraBytes);
+
+    const maybeDeser = fromBytesMap<String, Key>(
+        truth,
+        fromBytesString,
+        Key.fromBytes);
+    let deserializedBytes = GetDecodedBytesCount();
+    assert(<u32>deserializedBytes == <i32>truth.length - hex2bin(extraBytes).length);
+
+    assert(maybeDeser !== null);
+    let deser = <Array<Pair<String, Key>>>maybeDeser;
+    assert(deser.length === 3);
+
+    assert(deser[0].first == "A");
+    assert(deser[0].second.variant == KeyVariant.ACCOUNT_ID);
+
+    let accountBytes = new Array<u8>(32);
+    accountBytes.fill(1);
+
+    assert(checkTypedArrayEqual(<Uint8Array>deser[0].second.account, arrayToTyped(accountBytes)));
+
+    //
+
+    assert(deser[1].first == "BB");
+    assert(deser[1].second.variant == KeyVariant.UREF_ID);
+
+    let urefBytes = new Array<u8>(32);
+    urefBytes.fill(2);
+
+    assert(deser[1].second.uref !== null);
+    let deser1Uref = <URef>deser[1].second.uref;
+    assert(checkTypedArrayEqual(<Uint8Array>deser1Uref.bytes, arrayToTyped(urefBytes)));
+    assert(deser1Uref.accessRights == AccessRights.READ_ADD_WRITE);
+
+    //
+
+    assert(deser[2].first == "CCC");
+    assert(deser[2].second.variant == KeyVariant.HASH_ID);
+
+    let hashBytes = new Array<u8>(32);
+    hashBytes.fill(3);
+
+    assert(checkTypedArrayEqual(<Uint8Array>deser[2].second.hash, arrayToTyped(hashBytes)));
+
+    // Compares to truth
+
+    let truthObj = new Array<Pair<String, Key>>();
+    let keyA = Key.fromAccount(arrayToTyped(accountBytes));
+    truthObj.push(new Pair<String, Key>("A", keyA));
+
+    let urefB = new URef(arrayToTyped(urefBytes), AccessRights.READ_ADD_WRITE);
+    let keyB = Key.fromURef(urefB);
+    truthObj.push(new Pair<String, Key>("BB", keyB));
+
+    let keyC = Key.fromHash(arrayToTyped(hashBytes));
+    truthObj.push(new Pair<String, Key>("CCC", keyC));
+
+    assert(truthObj.length === deser.length);
+    assert(truthObj[0] == deser[0]);
+    assert(truthObj[1] == deser[1]);
+    assert(truthObj[2] == deser[2]);
+
+    assert(checkArraysEqual(truthObj, deser));
+    assert(checkItemsEqual(truthObj, deser));
+
+    return true;
+}

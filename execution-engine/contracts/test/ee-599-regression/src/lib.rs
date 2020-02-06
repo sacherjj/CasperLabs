@@ -54,7 +54,7 @@ fn get_maintainer_public_key() -> Result<PublicKey, ApiError> {
     // Obtain maintainer address from the contract's named keys
     let maintainer_key = runtime::get_key(MAINTAINER).ok_or(ApiError::GetKey)?;
     maintainer_key
-        .as_account()
+        .into_account()
         .ok_or(ApiError::UnexpectedKeyVariant)
         .map(PublicKey::new)
 }

@@ -780,7 +780,7 @@ where
 
         // Get addr bytes from `address` (which is actually a Key)
         // validation_spec_3: account validity
-        let account_addr = match address.as_account() {
+        let account_addr = match address.into_account() {
             Some(account_addr) => account_addr,
             None => {
                 return Ok(ExecutionResult::precondition_failure(
