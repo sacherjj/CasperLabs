@@ -136,8 +136,8 @@ where
                         let urefs = ret_urefs.clone();
 
                         let value: T = runtime
-                            .take_host_buf()
-                            .expect("should have return value in the host_buf")
+                            .take_host_buffer()
+                            .expect("should have return value in the host_buffer")
                             .into_t()
                             .expect("should deserialize return value");
 

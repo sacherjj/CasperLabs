@@ -36,7 +36,7 @@ pub struct Runtime<'a, R> {
     system_contract_cache: SystemContractCache,
     memory: MemoryRef,
     module: Module,
-    host_buf: Option<CLValue>,
+    host_buffer: Option<CLValue>,
     context: RuntimeContext<'a, R>,
 }
 
@@ -1364,7 +1364,7 @@ where
         system_contract_cache,
         memory,
         module: parity_module,
-        host_buf: None,
+        host_buffer: None,
         context: RuntimeContext::new(
             current_runtime.context.state(),
             named_keys,
@@ -1394,10 +1394,10 @@ where
     // }
 
     match result {
-        // If `Ok` and the `host_buf` is `None`, the contract's execution succeeded but did not
+        // If `Ok` and the `host_buffer` is `None`, the contract's execution succeeded but did not
         // explicitly call `runtime::ret()`.  Treat as though the execution returned the unit type
         // `()` as per Rust functions which don't specify a return value.
-        Ok(_) => Ok(runtime.take_host_buf().unwrap_or(CLValue::from_t(())?)),
+        Ok(_) => Ok(runtime.take_host_buffer().unwrap_or(CLValue::from_t(())?)),
         Err(e) => {
             if let Some(host_error) = e.as_host_error() {
                 // If the "error" was in fact a trap caused by calling `ret` then
@@ -1410,8 +1410,8 @@ where
                         let ret_urefs_map: HashMap<Address, HashSet<AccessRights>> =
                             extract_access_rights_from_urefs(ret_urefs.clone());
                         current_runtime.context.access_rights_extend(ret_urefs_map);
-                        // if ret has not set host_buf consider it programmer error
-                        return runtime.take_host_buf().ok_or(Error::ExpectedReturnValue);
+                        // if ret has not set host_buffer consider it programmer error
+                        return runtime.take_host_buffer().ok_or(Error::ExpectedReturnValue);
                     }
                     Error::Revert(status) => {
                         // Propagate revert as revert, instead of passing it as
@@ -1445,7 +1445,7 @@ where
             system_contract_cache,
             memory,
             module,
-            host_buf: None,
+            host_buffer: None,
             context,
         }
     }
@@ -1693,7 +1693,7 @@ where
     /// Return some bytes from the memory and terminate the current `sub_call`. Note that the return
     /// type is `Trap`, indicating that this function will always kill the current Wasm instance.
     fn ret(&mut self, value_ptr: u32, value_size: usize) -> Trap {
-        self.host_buf = None;
+        self.host_buffer = None;
         let mem_get = self
             .memory
             .get(value_ptr, value_size)
@@ -1702,9 +1702,9 @@ where
             Ok(buf) => {
                 // Set the result field in the runtime and return the proper element of the `Error`
                 // enum indicating that the reason for exiting the module was a call to ret.
-                self.host_buf = bytesrepr::deserialize(buf).ok();
+                self.host_buffer = bytesrepr::deserialize(buf).ok();
 
-                let urefs = match &self.host_buf {
+                let urefs = match &self.host_buffer {
                     Some(buf) => extract_urefs(buf),
                     None => Ok(vec![]),
                 };
@@ -1779,13 +1779,13 @@ where
         Ok(result)
     }
 
-    fn call_contract_host_buf(
+    fn call_contract_host_buffer(
         &mut self,
         key: Key,
         args_bytes: Vec<u8>,
         result_size_ptr: u32,
     ) -> Result<Result<(), ApiError>, Error> {
-        if !self.can_write_to_host_buf() {
+        if !self.can_write_to_host_buffer() {
             // Exit early if the host buffer is already occupied
             return Ok(Err(ApiError::HostBufferFull));
         }
@@ -1795,7 +1795,7 @@ where
 
         // leave the host buffer set to `None` if there's nothing to write there
         if result_size != 0 {
-            if let Err(error) = self.write_host_buf(result) {
+            if let Err(error) = self.write_host_buffer(result) {
                 return Ok(Err(error));
             }
         }
@@ -1813,7 +1813,7 @@ where
         total_keys_ptr: u32,
         result_size_ptr: u32,
     ) -> Result<Result<(), ApiError>, Trap> {
-        if !self.can_write_to_host_buf() {
+        if !self.can_write_to_host_buffer() {
             // Exit early if the host buffer is already occupied
             return Ok(Err(ApiError::HostBufferFull));
         }
@@ -1833,7 +1833,7 @@ where
             CLValue::from_t(self.context.named_keys().clone()).map_err(Error::CLValue)?;
 
         let length = named_keys.inner_bytes().len() as u32;
-        if let Err(error) = self.write_host_buf(named_keys) {
+        if let Err(error) = self.write_host_buffer(named_keys) {
             return Ok(Err(error));
         }
 
@@ -1963,7 +1963,7 @@ where
         key_size: u32,
         output_size_ptr: u32,
     ) -> Result<Result<(), ApiError>, Trap> {
-        if !self.can_write_to_host_buf() {
+        if !self.can_write_to_host_buffer() {
             // Exit early if the host buffer is already occupied
             return Ok(Err(ApiError::HostBufferFull));
         }
@@ -1975,7 +1975,7 @@ where
         };
 
         let value_size = cl_value.inner_bytes().len() as u32;
-        if let Err(error) = self.write_host_buf(cl_value) {
+        if let Err(error) = self.write_host_buffer(cl_value) {
             return Ok(Err(error));
         }
 
@@ -1995,7 +1995,7 @@ where
         key_size: u32,
         output_size_ptr: u32,
     ) -> Result<Result<(), ApiError>, Trap> {
-        if !self.can_write_to_host_buf() {
+        if !self.can_write_to_host_buffer() {
             // Exit early if the host buffer is already occupied
             return Ok(Err(ApiError::HostBufferFull));
         }
@@ -2008,7 +2008,7 @@ where
         };
 
         let value_size = cl_value.inner_bytes().len() as u32;
-        if let Err(error) = self.write_host_buf(cl_value) {
+        if let Err(error) = self.write_host_buffer(cl_value) {
             return Ok(Err(error));
         }
 
@@ -2357,13 +2357,13 @@ where
         Ok(ret)
     }
 
-    fn get_balance_host_buf(
+    fn get_balance_host_buffer(
         &mut self,
         purse_id_ptr: u32,
         purse_id_size: usize,
         output_size_ptr: u32,
     ) -> Result<Result<(), ApiError>, Error> {
-        if !self.can_write_to_host_buf() {
+        if !self.can_write_to_host_buffer() {
             // Exit early if the host buffer is already occupied
             return Ok(Err(ApiError::HostBufferFull));
         }
@@ -2387,7 +2387,7 @@ where
         };
 
         let balance_size = balance_cl_value.inner_bytes().len() as i32;
-        if let Err(error) = self.write_host_buf(balance_cl_value) {
+        if let Err(error) = self.write_host_buffer(balance_cl_value) {
             return Ok(Err(error));
         }
 
@@ -2447,23 +2447,23 @@ where
         }
     }
 
-    /// If host_buf set, clears the host_buf and returns value, else None
-    pub fn take_host_buf(&mut self) -> Option<CLValue> {
-        self.host_buf.take()
+    /// If host_buffer set, clears the host_buffer and returns value, else None
+    pub fn take_host_buffer(&mut self) -> Option<CLValue> {
+        self.host_buffer.take()
     }
 
     /// Checks if a write to host buffer can happen.
     ///
     /// This will check if the host buffer is empty.
-    fn can_write_to_host_buf(&self) -> bool {
-        self.host_buf.is_none()
+    fn can_write_to_host_buffer(&self) -> bool {
+        self.host_buffer.is_none()
     }
 
     /// Overwrites data in host buffer only if it's in empty state
-    fn write_host_buf(&mut self, data: CLValue) -> Result<(), ApiError> {
-        match self.host_buf {
+    fn write_host_buffer(&mut self, data: CLValue) -> Result<(), ApiError> {
+        match self.host_buffer {
             Some(_) => return Err(ApiError::HostBufferFull),
-            None => self.host_buf = Some(data),
+            None => self.host_buffer = Some(data),
         }
         Ok(())
     }
@@ -2474,7 +2474,7 @@ where
         dest_size: usize,
         bytes_written_ptr: u32,
     ) -> Result<Result<(), ApiError>, Error> {
-        let (_cl_type, serialized_value) = match self.take_host_buf() {
+        let (_cl_type, serialized_value) = match self.take_host_buffer() {
             None => return Ok(Err(ApiError::HostBufferEmpty)),
             Some(cl_value) => cl_value.destructure(),
         };
@@ -2486,8 +2486,8 @@ where
             return Ok(Err(ApiError::BufferTooSmall));
         }
 
-        // Slice data, so if `dest_size` is larger than hostbuf size, it will take host_buf as
-        // whole.
+        // Slice data, so if `dest_size` is larger than host_buffer size, it will take host_buffer
+        // as whole.
         let sliced_buf = &serialized_value[..cmp::min(dest_size, serialized_value.len())];
         if let Err(error) = self.memory.set(dest_ptr, sliced_buf) {
             return Err(Error::Interpreter(error));

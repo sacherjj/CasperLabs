@@ -338,11 +338,11 @@ impl Executor {
             Ok(_) => {
                 // This duplicates the behavior of sub_call, but is admittedly rather questionable.
                 //
-                // If `instance.invoke_export` returns `Ok` and the `host_buf` is `None`, the
+                // If `instance.invoke_export` returns `Ok` and the `host_buffer` is `None`, the
                 // contract's execution succeeded but did not explicitly call `runtime::ret()`.
                 // Treat as though the execution returned the unit type `()` as per Rust functions
                 // which don't specify a return value.
-                let result = runtime.take_host_buf().unwrap_or(CLValue::from_t(())?);
+                let result = runtime.take_host_buffer().unwrap_or(CLValue::from_t(())?);
                 let ret = result.into_t()?;
                 return Ok(ret);
             }
@@ -352,7 +352,9 @@ impl Executor {
             .as_host_error()
             .and_then(|host_error| host_error.downcast_ref::<Error>())
         {
-            Some(Error::Ret(_)) => runtime.take_host_buf().ok_or(Error::ExpectedReturnValue)?,
+            Some(Error::Ret(_)) => runtime
+                .take_host_buffer()
+                .ok_or(Error::ExpectedReturnValue)?,
             Some(Error::Revert(code)) => return Err(Error::Revert(*code)),
             _ => return Err(Error::Interpreter(return_error)),
         };
