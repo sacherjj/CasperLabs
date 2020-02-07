@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use criterion::{criterion_group, criterion_main, Criterion, Throughput};
 use tempfile::TempDir;
 
@@ -175,6 +177,7 @@ pub fn transfer_bench(c: &mut Criterion) {
     // Minimize no of samples and measurement times to decrease the total time of this benchmark
     // possibly not decreasing quality of the numbers that much.
     group.sample_size(10);
+    group.measurement_time(Duration::from_secs(10));
 
     // Measure by elements where one element/s is one transaction per second
     group.throughput(Throughput::Elements(TRANSFER_BATCH_SIZE));
