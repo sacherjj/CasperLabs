@@ -163,24 +163,3 @@ impl FromBytes for Vec<CLValue> {
         Ok((result, bytes))
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use std::{collections::BTreeMap, string::String};
-
-    use super::*;
-    use crate::bytesrepr::deserialize;
-
-    #[test]
-    fn ser_cl_value() {
-        let mut map: BTreeMap<String, u64> = BTreeMap::new();
-        map.insert(String::from("abc"), 1);
-        map.insert(String::from("xyz"), 2);
-        let v = CLValue::from_t(map.clone()).unwrap();
-        let ser_v = v.clone().into_bytes().unwrap();
-        let w = deserialize::<CLValue>(ser_v).unwrap();
-        assert_eq!(v, w);
-        let x = w.into_t().unwrap();
-        assert_eq!(map, x);
-    }
-}
