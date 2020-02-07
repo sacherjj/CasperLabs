@@ -542,7 +542,7 @@ package object gossiping {
 
   /** Initially sync with the bootstrap node and/or some others.
     * Returns handle which will be resolved when initial synchronization is finished. */
-  private def makeInitialSynchronizer[F[_]: Concurrent: Parallel: Log: Timer: NodeDiscovery: DagStorage](
+  private def makeInitialSynchronizer[F[_]: Concurrent: Parallel: Log: Timer: NodeDiscovery: DagStorage: Consensus](
       conf: Configuration,
       downloadManager: DownloadManager[F],
       connectToGossip: GossipService.Connector[F],
@@ -550,7 +550,7 @@ package object gossiping {
   ): Resource[F, Fiber[F, Unit]] =
     for {
       initialSync <- Resource.liftF {
-                      latestMessagesMinRank[F] >>= { minRank =>
+                      Consensus[F].lastSynchronizedRank >>= { startRank =>
                         Sync[F].delay(
                           new InitialSynchronizationForwardImpl[F](
                             NodeDiscovery[F],
@@ -562,7 +562,7 @@ package object gossiping {
                             connector = connectToGossip,
                             downloadManager = downloadManager,
                             step = conf.server.initSyncStep,
-                            rankStartFrom = minRank,
+                            rankStartFrom = startRank,
                             roundPeriod = conf.server.initSyncRoundPeriod
                           )
                         )
@@ -682,32 +682,6 @@ package object gossiping {
 
   private def show(hash: ByteString) =
     PrettyPrinter.buildString(hash)
-
-  /** Find the rank we should be synchronizing from, i.e. the maximum rank we can consider
-    * complete in our DAG. At some point this should be coming from the base block, which
-    * is moved in accordance to social consensus.
-    */
-  private def latestMessagesMinRank[F[_]: Monad: DagStorage]: F[Long] =
-    for {
-      dag            <- DagStorage[F].getRepresentation
-      latestMessages <- dag.latestMessages
-      // Take the maximum per validator (which gives us the last era they are part of)
-      // and then the minimum across the validators themselves. This can get stuck
-      // if some validator never bonds again. That will be solved by the base block.
-      // If the parent era was still voting, we might have new blocks in the past that
-      // the next blocks in the child era will depend on, when we resume, we we can't
-      // safely take the last message of each validator. If the node is stopped for a long
-      // time we may come back and see that all of the eras are inactive; we could gather
-      // messages which aren't in the last eras.
-      minRank = latestMessages.values
-        .flatMap { messages =>
-          // TODO: The fact that the last 3 eras are active should come from config.
-          messages.map(_.rank).toSeq.sorted.takeRight(3)
-        }
-        .toList
-        .minimumOption
-        .getOrElse(0L)
-    } yield minRank
 
   def startGrpcServer[F[_]: Sync: TaskLike: ObservableIterant](
       server: GossipServiceServer[F],
