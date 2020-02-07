@@ -62,7 +62,6 @@ trait ForkChoice[F[_]] {
   ): F[ForkChoice.Result]
 }
 
-@silent("is never used")
 object ForkChoice {
   case class Result(
       block: Message.Block,
