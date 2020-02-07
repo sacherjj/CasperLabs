@@ -57,7 +57,7 @@ macro_rules! ser_and_num_impls {
                 let (num_bytes, rem): (u8, &[u8]) = FromBytes::from_bytes(bytes)?;
 
                 if num_bytes > $total_bytes {
-                    Err(Error::FormattingError)
+                    Err(Error::Formatting)
                 } else {
                     let (value, rem) = bytesrepr::safe_split_at(rem, num_bytes as usize)?;
                     let result = $type::from_little_endian(value);

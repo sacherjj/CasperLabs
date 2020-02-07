@@ -1,6 +1,6 @@
 use std::result;
 
-use engine_shared::transform::TypeMismatch;
+use engine_shared::TypeMismatch;
 use types::CLValueError;
 
 /// The error type returned by any casperlabs-engine-test-support operation.

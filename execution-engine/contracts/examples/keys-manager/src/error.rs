@@ -7,8 +7,8 @@ pub enum Error {
     ThresholdViolation = 3,            // 65539
     MaxKeysLimit = 4,                  // 65540
     DuplicateKey = 5,                  // 65541
-    KeyManagementThresholdError = 6,   // 65542
-    DeploymentThresholdError = 7,      // 65543
+    KeyManagementThreshold = 6,        // 65542
+    DeploymentThreshold = 7,           // 65543
     InsufficientTotalWeight = 8,       // 65544
     MissingArgument0 = 20,             // 65556
     MissingArgument1 = 21,             // 65557

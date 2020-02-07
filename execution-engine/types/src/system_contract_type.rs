@@ -1,5 +1,7 @@
-use alloc::string::{String, ToString};
-use core::convert::TryFrom;
+use core::{
+    convert::TryFrom,
+    fmt::{self, Display, Formatter},
+};
 
 use crate::ApiError;
 
@@ -15,9 +17,9 @@ pub enum SystemContractType {
     ProofOfStake,
 }
 
-impl Into<u32> for SystemContractType {
-    fn into(self) -> u32 {
-        match self {
+impl From<SystemContractType> for u32 {
+    fn from(system_contract_type: SystemContractType) -> u32 {
+        match system_contract_type {
             SystemContractType::Mint => 0,
             SystemContractType::ProofOfStake => 1,
         }
@@ -37,11 +39,11 @@ impl TryFrom<u32> for SystemContractType {
     }
 }
 
-impl ToString for SystemContractType {
-    fn to_string(&self) -> String {
+impl Display for SystemContractType {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match *self {
-            SystemContractType::Mint => "mint".to_string(),
-            SystemContractType::ProofOfStake => "pos".to_string(),
+            SystemContractType::Mint => write!(f, "mint"),
+            SystemContractType::ProofOfStake => write!(f, "pos"),
         }
     }
 }

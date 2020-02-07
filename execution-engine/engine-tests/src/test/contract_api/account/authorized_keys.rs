@@ -32,7 +32,7 @@ fn should_deploy_with_authorized_identity_key() {
 #[test]
 fn should_raise_auth_failure_with_invalid_key() {
     // tests that authorized keys that does not belong to account raises
-    // AuthorizationError
+    // Error::Authorization
     let key_1 = [254; 32];
     assert_ne!(DEFAULT_ACCOUNT_ADDR, key_1);
 
@@ -68,17 +68,14 @@ fn should_raise_auth_failure_with_invalid_key() {
     );
     let message = format!("{}", deploy_result.error().unwrap());
 
-    assert_eq!(
-        message,
-        format!("{}", engine_state::Error::AuthorizationError)
-    )
+    assert_eq!(message, format!("{}", engine_state::Error::Authorization))
 }
 
 #[ignore]
 #[test]
 fn should_raise_auth_failure_with_invalid_keys() {
     // tests that authorized keys that does not belong to account raises
-    // AuthorizationError
+    // Error::Authorization
     let key_1 = [254; 32];
     let key_2 = [253; 32];
     let key_3 = [252; 32];
@@ -118,10 +115,7 @@ fn should_raise_auth_failure_with_invalid_keys() {
     assert!(deploy_result.has_precondition_failure());
     let message = format!("{}", deploy_result.error().unwrap());
 
-    assert_eq!(
-        message,
-        format!("{}", engine_state::Error::AuthorizationError)
-    )
+    assert_eq!(message, format!("{}", engine_state::Error::Authorization))
 }
 
 #[ignore]

@@ -117,7 +117,7 @@ impl ToBytes for Vec<CLValue> {
     fn to_bytes(&self) -> Result<Vec<u8>, bytesrepr::Error> {
         let serialized_len = self.iter().map(CLValue::serialized_len).sum();
         if serialized_len > u32::max_value() as usize - U32_SERIALIZED_LENGTH {
-            return Err(bytesrepr::Error::OutOfMemoryError);
+            return Err(bytesrepr::Error::OutOfMemory);
         }
 
         let mut result = Vec::with_capacity(serialized_len);
@@ -134,7 +134,7 @@ impl ToBytes for Vec<CLValue> {
     fn into_bytes(self) -> Result<Vec<u8>, bytesrepr::Error> {
         let serialized_len = self.iter().map(CLValue::serialized_len).sum();
         if serialized_len > u32::max_value() as usize - U32_SERIALIZED_LENGTH {
-            return Err(bytesrepr::Error::OutOfMemoryError);
+            return Err(bytesrepr::Error::OutOfMemory);
         }
 
         let mut result = Vec::with_capacity(serialized_len);
@@ -161,26 +161,5 @@ impl FromBytes for Vec<CLValue> {
             bytes = remainder;
         }
         Ok((result, bytes))
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use std::{collections::BTreeMap, string::String};
-
-    use super::*;
-    use crate::bytesrepr::deserialize;
-
-    #[test]
-    fn ser_cl_value() {
-        let mut map: BTreeMap<String, u64> = BTreeMap::new();
-        map.insert(String::from("abc"), 1);
-        map.insert(String::from("xyz"), 2);
-        let v = CLValue::from_t(map.clone()).unwrap();
-        let ser_v = v.clone().into_bytes().unwrap();
-        let w = deserialize::<CLValue>(ser_v).unwrap();
-        assert_eq!(v, w);
-        let x = w.into_t().unwrap();
-        assert_eq!(map, x);
     }
 }

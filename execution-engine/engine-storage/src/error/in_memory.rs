@@ -10,7 +10,7 @@ pub enum Error {
     BytesRepr(#[fail(cause)] bytesrepr::Error),
 
     #[fail(display = "Another thread panicked while holding a lock")]
-    PoisonError,
+    Poison,
 }
 
 impl From<bytesrepr::Error> for Error {
@@ -21,6 +21,6 @@ impl From<bytesrepr::Error> for Error {
 
 impl<T> From<sync::PoisonError<T>> for Error {
     fn from(_error: sync::PoisonError<T>) -> Self {
-        Error::PoisonError
+        Error::Poison
     }
 }

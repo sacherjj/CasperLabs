@@ -316,7 +316,7 @@ fn should_fail_when_insufficient_funds() {
         .builder()
         .exec_error_message(2)
         .expect("should have error message")
-        .contains("Trap(Trap { kind: Host(Revert(15)) })"))
+        .contains("Trap(Trap { kind: Host(Revert(14)) })"))
 }
 
 #[ignore]

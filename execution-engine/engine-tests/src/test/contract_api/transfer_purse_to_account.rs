@@ -248,6 +248,6 @@ fn should_fail_when_sending_too_much_from_purse_to_account() {
     assert_eq!(
         transfer_result,
         format!("{:?}", Result::<(), _>::Err(ApiError::Transfer)),
-        "TransferError incorrect"
+        "Transfer Error incorrect"
     );
 }

@@ -102,10 +102,10 @@ pub enum SetThresholdFailure {
     /// Setting the key-management threshold to a value lower than the deployment threshold is
     /// disallowed.
     #[fail(display = "New threshold should be greater than or equal to deployment threshold")]
-    KeyManagementThresholdError = 1,
+    KeyManagementThreshold = 1,
     /// Setting the deployment threshold to a value greater than any other threshold is disallowed.
     #[fail(display = "New threshold should be lower than or equal to key management threshold")]
-    DeploymentThresholdError = 2,
+    DeploymentThreshold = 2,
     /// Caller doesn't have sufficient permissions to set new thresholds.
     #[fail(display = "Unable to set action threshold due to insufficient permissions")]
     PermissionDeniedError = 3,
@@ -124,11 +124,11 @@ impl TryFrom<i32> for SetThresholdFailure {
 
     fn try_from(value: i32) -> Result<Self, Self::Error> {
         match value {
-            d if d == SetThresholdFailure::KeyManagementThresholdError as i32 => {
-                Ok(SetThresholdFailure::KeyManagementThresholdError)
+            d if d == SetThresholdFailure::KeyManagementThreshold as i32 => {
+                Ok(SetThresholdFailure::KeyManagementThreshold)
             }
-            d if d == SetThresholdFailure::DeploymentThresholdError as i32 => {
-                Ok(SetThresholdFailure::DeploymentThresholdError)
+            d if d == SetThresholdFailure::DeploymentThreshold as i32 => {
+                Ok(SetThresholdFailure::DeploymentThreshold)
             }
             d if d == SetThresholdFailure::PermissionDeniedError as i32 => {
                 Ok(SetThresholdFailure::PermissionDeniedError)

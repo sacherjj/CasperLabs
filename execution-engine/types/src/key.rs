@@ -297,7 +297,7 @@ impl FromBytes for Key {
                 let (hash, rest): ([u8; 32], &[u8]) = FromBytes::from_bytes(rest)?;
                 Ok((Key::Local(hash), rest))
             }
-            _ => Err(Error::FormattingError),
+            _ => Err(Error::Formatting),
         }
     }
 }
@@ -481,7 +481,7 @@ mod tests {
         let bytes: Vec<u8> = vec![255, 255, 255, 255, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
         let res: Result<(Vec<Key>, &[u8]), _> = FromBytes::from_bytes(&bytes);
         #[cfg(target_os = "linux")]
-        assert_eq!(res.expect_err("should fail"), Error::OutOfMemoryError);
+        assert_eq!(res.expect_err("should fail"), Error::OutOfMemory);
         #[cfg(target_os = "macos")]
         assert_eq!(res.expect_err("should fail"), Error::EarlyEndOfStream);
     }

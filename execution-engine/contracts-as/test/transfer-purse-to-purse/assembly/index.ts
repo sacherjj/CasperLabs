@@ -13,7 +13,7 @@ const PURSE_MAIN = "purse:main";
 const PURSE_TRANSFER_RESULT = "purse_transfer_result";
 const MAIN_PURSE_BALANCE = "main_purse_balance";
 const SUCCESS_MESSAGE = "Ok(())";
-const TRANSFER_ERROR_MESSAGE = "Err(ApiError::Transfer [15])";
+const TRANSFER_ERROR_MESSAGE = "Err(ApiError::Transfer [14])";
 
 enum Args {
     SourcePurse = 0,

@@ -19,12 +19,12 @@ pub trait Drainer<T>: Clone + Send + Sync {
 
 #[derive(Debug, Copy, Clone)]
 pub enum AccumulationError {
-    PoisonError,
+    Poison,
 }
 
 impl<T> From<PoisonError<T>> for AccumulationError {
     fn from(_error: PoisonError<T>) -> Self {
-        AccumulationError::PoisonError
+        AccumulationError::Poison
     }
 }
 

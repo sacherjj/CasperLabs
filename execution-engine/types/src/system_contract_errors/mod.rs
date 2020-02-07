@@ -7,19 +7,19 @@ pub mod pos;
 #[derive(Debug)]
 pub enum Error {
     /// Contains a [`mint::Error`].
-    MintError(mint::Error),
+    Mint(mint::Error),
     /// Contains a [`pos::Error`].
-    PosError(pos::Error),
+    Pos(pos::Error),
 }
 
 impl From<mint::Error> for Error {
     fn from(error: mint::Error) -> Error {
-        Error::MintError(error)
+        Error::Mint(error)
     }
 }
 
 impl From<pos::Error> for Error {
     fn from(error: pos::Error) -> Error {
-        Error::PosError(error)
+        Error::Pos(error)
     }
 }

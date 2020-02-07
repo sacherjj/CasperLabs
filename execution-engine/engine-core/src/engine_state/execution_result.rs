@@ -299,9 +299,9 @@ impl ExecutionResultBuilder {
         match self.finalize_execution_result {
             Some(result) => {
                 if result.is_failure() {
-                    // payment_code_spec_5_a: FinalizationError should only ever be raised here
+                    // payment_code_spec_5_a: Finalization Error should only ever be raised here
                     return Ok(ExecutionResult::precondition_failure(
-                        error::Error::FinalizationError,
+                        error::Error::Finalization,
                     ));
                 } else {
                     Self::add_effects(&mut ops, &mut transforms, result.effect());

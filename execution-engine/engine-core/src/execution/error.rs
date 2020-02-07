@@ -3,7 +3,7 @@ use core::fmt;
 use parity_wasm::elements;
 use wasmi;
 
-use engine_shared::transform::TypeMismatch;
+use engine_shared::TypeMismatch;
 use types::{
     account::{AddKeyFailure, RemoveKeyFailure, SetThresholdFailure, UpdateKeyFailure},
     bytesrepr, system_contract_errors, AccessRights, CLValueError, Key, URef,
@@ -29,14 +29,14 @@ pub enum Error {
     GasLimit,
     Ret(Vec<URef>),
     Rng(rand::Error),
-    ResolverError(ResolverError),
+    Resolver(ResolverError),
     /// Reverts execution with a provided status
     Revert(u32),
     AddKeyFailure(AddKeyFailure),
     RemoveKeyFailure(RemoveKeyFailure),
     UpdateKeyFailure(UpdateKeyFailure),
     SetThresholdFailure(SetThresholdFailure),
-    SystemContractError(system_contract_errors::Error),
+    SystemContract(system_contract_errors::Error),
     DeploymentAuthorizationFailure,
     ExpectedReturnValue,
     UnexpectedReturnValue,
@@ -89,7 +89,7 @@ impl From<elements::Error> for Error {
 
 impl From<ResolverError> for Error {
     fn from(err: ResolverError) -> Self {
-        Error::ResolverError(err)
+        Error::Resolver(err)
     }
 }
 
@@ -119,7 +119,7 @@ impl From<SetThresholdFailure> for Error {
 
 impl From<system_contract_errors::Error> for Error {
     fn from(error: system_contract_errors::Error) -> Self {
-        Error::SystemContractError(error)
+        Error::SystemContract(error)
     }
 }
 

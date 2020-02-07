@@ -70,7 +70,7 @@ impl FromBytes for Pointer {
                 let (hash, rem): (Blake2bHash, &[u8]) = FromBytes::from_bytes(rem)?;
                 Ok((Pointer::NodePointer(hash), rem))
             }
-            _ => Err(bytesrepr::Error::FormattingError),
+            _ => Err(bytesrepr::Error::Formatting),
         }
     }
 }
@@ -252,7 +252,7 @@ where
                 if key_bytes.len() + value_bytes.len()
                     > u32::max_value() as usize - U32_SERIALIZED_LENGTH
                 {
-                    return Err(bytesrepr::Error::OutOfMemoryError);
+                    return Err(bytesrepr::Error::OutOfMemory);
                 }
                 let mut ret: Vec<u8> =
                     Vec::with_capacity(U32_SERIALIZED_LENGTH + key_bytes.len() + value_bytes.len());
@@ -275,7 +275,7 @@ where
                 if affix_bytes.len() + pointer_bytes.len()
                     > u32::max_value() as usize - U32_SERIALIZED_LENGTH
                 {
-                    return Err(bytesrepr::Error::OutOfMemoryError);
+                    return Err(bytesrepr::Error::OutOfMemory);
                 }
                 let mut ret: Vec<u8> = Vec::with_capacity(
                     U32_SERIALIZED_LENGTH + affix_bytes.len() + pointer_bytes.len(),
@@ -312,7 +312,7 @@ impl<K: FromBytes, V: FromBytes> FromBytes for Trie<K, V> {
                 let (pointer, rem): (Pointer, &[u8]) = FromBytes::from_bytes(rem)?;
                 Ok((Trie::Extension { affix, pointer }, rem))
             }
-            _ => Err(bytesrepr::Error::FormattingError),
+            _ => Err(bytesrepr::Error::Formatting),
         }
     }
 }

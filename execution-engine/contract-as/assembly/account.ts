@@ -38,9 +38,9 @@ export enum RemoveKeyFailure {
 export enum SetThresholdFailure {
     Ok = 0,
     // New threshold should be lower or equal than deployment threshold
-    KeyManagementThresholdError = 1,
+    KeyManagementThreshold = 1,
     // New threshold should be lower or equal than key management threshold
-    DeploymentThresholdError = 2,
+    DeploymentThreshold = 2,
     // Unable to set action threshold due to insufficient permissions
     PermissionDeniedError = 3,
     // New threshold should be lower or equal than total weight of associated keys

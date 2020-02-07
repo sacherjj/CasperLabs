@@ -120,7 +120,7 @@ impl FromBytes for PublicKey {
                 let (key, rem): (Long, &[u8]) = FromBytes::from_bytes(rem)?;
                 Ok((PublicKey::Long(key), rem))
             }
-            _ => Err(bytesrepr::Error::FormattingError),
+            _ => Err(bytesrepr::Error::Formatting),
         }
     }
 }
@@ -196,7 +196,7 @@ impl FromBytes for TestKey {
                 let (local, rem): ([u8; KEY_LOCAL_LENGTH], &[u8]) = FromBytes::from_bytes(rem)?;
                 Ok((TestKey::Local(local), rem))
             }
-            _ => Err(bytesrepr::Error::FormattingError),
+            _ => Err(bytesrepr::Error::Formatting),
         }
     }
 }

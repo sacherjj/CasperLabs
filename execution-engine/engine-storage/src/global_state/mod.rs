@@ -8,7 +8,8 @@ use engine_shared::{
     logging::{log_duration, log_metric, GAUGE},
     newtypes::{Blake2bHash, CorrelationId},
     stored_value::StoredValue,
-    transform::{self, Transform, TypeMismatch},
+    transform::{self, Transform},
+    TypeMismatch,
 };
 use types::{account::PublicKey, bytesrepr, Key, ProtocolVersion, U512};
 
