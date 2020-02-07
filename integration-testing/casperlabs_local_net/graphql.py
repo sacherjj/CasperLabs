@@ -9,8 +9,8 @@ class GraphQL:
     """
 
     DEFAULT_BLOCK_SUB_SELECT = """blockHash
-                            parents { 
-                                blockHash 
+                            parents {
+                                blockHash
                             }
                             deployCount
                             deployErrorCount
