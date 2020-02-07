@@ -206,7 +206,45 @@ object ForkChoice {
     override def fromJustifications(
         keyBlockHash: BlockHash,
         justifications: Set[BlockHash]
-    ): F[Result] = ???
+    ): F[Result] =
+      for {
+        dag <- DagStorage[F].getRepresentation
+        latestMessages <- justifications.toList
+                           .traverse(dag.lookupUnsafe)
+                           .map(_.groupBy(_.validatorId).mapValues(_.toSet))
+        keyBlock <- dag
+                     .lookupUnsafe(keyBlockHash)
+                     .flatMap(msg => Sync[F].fromTry(Try(msg.asInstanceOf[Block])))
+        // TODO: Impl correct equivocation detector for Highway
+        //equivocators <- EquivocationDetector.detectVisibleFromJustifications[F](dag, latestMessages)
+        equivocators = Set.empty[Validator]
+        keyBlocks    <- MessageProducer.collectKeyBlocks[F](keyBlockHash)
+        (forkChoice, justifications) <- keyBlocks
+                                         .foldM(
+                                           keyBlock -> Map
+                                             .empty[DagRepresentation.Validator, Set[Message]]
+                                         ) {
+                                           case ((startBlock, accLatestMessages), currKeyBlock) =>
+                                             val eraLatestMessages: Map[Validator, Set[Message]] =
+                                               latestMessages.mapValues(
+                                                 _.filter(_.eraId == currKeyBlock)
+                                               )
+
+                                             eraForkChoice(
+                                               dag,
+                                               currKeyBlock,
+                                               startBlock,
+                                               eraLatestMessages,
+                                               equivocators
+                                             ).map {
+                                               case (forkChoice, eraLatestMessages) =>
+                                                 (
+                                                   forkChoice,
+                                                   accLatestMessages |+| eraLatestMessages
+                                                 )
+                                             }
+                                         }
+      } yield Result(forkChoice, justifications.values.flatten.toSet)
   }
 
   private def previousVoteForDescendant[F[_]: MonadThrowable](
