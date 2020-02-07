@@ -80,85 +80,79 @@ const MINT_ERROR_OFFSET: u32 = (POS_ERROR_OFFSET - 1) - u8::MAX as u32; // 65024
 /// 9 => UnexpectedKeyVariant
 /// # );
 /// # show_and_check!(
-/// 10 => UnexpectedValueVariant
+/// 10 => UnexpectedContractRefVariant
 /// # );
 /// # show_and_check!(
-/// 11 => UnexpectedContractRefVariant
+/// 11 => InvalidPurseName
 /// # );
 /// # show_and_check!(
-/// 12 => InvalidPurseName
+/// 12 => InvalidPurse
 /// # );
 /// # show_and_check!(
-/// 13 => InvalidPurse
+/// 13 => UpgradeContractAtURef
 /// # );
 /// # show_and_check!(
-/// 14 => UpgradeContractAtURef
+/// 14 => Transfer
 /// # );
 /// # show_and_check!(
-/// 15 => Transfer
+/// 15 => NoAccessRights
 /// # );
 /// # show_and_check!(
-/// 16 => NoAccessRights
+/// 16 => CLTypeMismatch
 /// # );
 /// # show_and_check!(
-/// 17 => ValueConversion
+/// 17 => EarlyEndOfStream
 /// # );
 /// # show_and_check!(
-/// 18 => CLTypeMismatch
+/// 18 => Formatting
 /// # );
 /// # show_and_check!(
-/// 19 => EarlyEndOfStream
+/// 19 => LeftOverBytes
 /// # );
 /// # show_and_check!(
-/// 20 => Formatting
+/// 20 => OutOfMemory
 /// # );
 /// # show_and_check!(
-/// 21 => LeftOverBytes
+/// 21 => MaxKeysLimit
 /// # );
 /// # show_and_check!(
-/// 22 => OutOfMemory
+/// 22 => DuplicateKey
 /// # );
 /// # show_and_check!(
-/// 23 => MaxKeysLimit
+/// 23 => PermissionDenied
 /// # );
 /// # show_and_check!(
-/// 24 => DuplicateKey
+/// 24 => MissingKey
 /// # );
 /// # show_and_check!(
-/// 25 => PermissionDenied
+/// 25 => ThresholdViolation
 /// # );
 /// # show_and_check!(
-/// 26 => MissingKey
+/// 26 => KeyManagementThreshold
 /// # );
 /// # show_and_check!(
-/// 27 => ThresholdViolation
+/// 27 => DeploymentThreshold
 /// # );
 /// # show_and_check!(
-/// 28 => KeyManagementThreshold
+/// 28 => InsufficientTotalWeight
 /// # );
 /// # show_and_check!(
-/// 29 => DeploymentThreshold
+/// 29 => InvalidSystemContract
 /// # );
 /// # show_and_check!(
-/// 30 => InsufficientTotalWeight
+/// 30 => PurseNotCreated
 /// # );
 /// # show_and_check!(
-/// 31 => InvalidSystemContract
+/// 31 => Unhandled
 /// # );
 /// # show_and_check!(
-/// 32 => PurseNotCreated
+/// 32 => BufferTooSmall
 /// # );
 /// # show_and_check!(
-/// 33 => Unhandled
+/// 33 => HostBufferEmpty
 /// # );
 /// # show_and_check!(
-/// 34 => BufferTooSmall
-/// # );
-/// # show_and_check!(
-/// 35 => HostBufferEmpty
-/// # );
-/// # show_and_check!(
-/// 36 => HostBufferFull
+/// 34 => HostBufferFull
 /// # );
 ///
 /// // Mint errors:
@@ -341,8 +335,6 @@ pub enum ApiError {
     GetKey,
     /// The [`Key`](crate::Key) variant was not as expected.
     UnexpectedKeyVariant,
-    /// The `Value` variant was not as expected.
-    UnexpectedValueVariant,
     /// The [`ContractRef`](crate::ContractRef) variant was not as expected.
     UnexpectedContractRefVariant,
     /// Invalid purse name given.
@@ -355,8 +347,6 @@ pub enum ApiError {
     Transfer,
     /// The given [`URef`](crate::URef) has no access rights.
     NoAccessRights,
-    /// A given type could not be constructed from a `Value`.
-    ValueConversion,
     /// A given type could not be constructed from a [`CLValue`](crate::CLValue).
     CLTypeMismatch,
     /// Early end of stream while deserializing.
@@ -510,33 +500,31 @@ impl From<ApiError> for u32 {
             ApiError::ContractNotFound => 7,
             ApiError::GetKey => 8,
             ApiError::UnexpectedKeyVariant => 9,
-            ApiError::UnexpectedValueVariant => 10,
-            ApiError::UnexpectedContractRefVariant => 11,
-            ApiError::InvalidPurseName => 12,
-            ApiError::InvalidPurse => 13,
-            ApiError::UpgradeContractAtURef => 14,
-            ApiError::Transfer => 15,
-            ApiError::NoAccessRights => 16,
-            ApiError::ValueConversion => 17,
-            ApiError::CLTypeMismatch => 18,
-            ApiError::EarlyEndOfStream => 19,
-            ApiError::Formatting => 20,
-            ApiError::LeftOverBytes => 21,
-            ApiError::OutOfMemory => 22,
-            ApiError::MaxKeysLimit => 23,
-            ApiError::DuplicateKey => 24,
-            ApiError::PermissionDenied => 25,
-            ApiError::MissingKey => 26,
-            ApiError::ThresholdViolation => 27,
-            ApiError::KeyManagementThreshold => 28,
-            ApiError::DeploymentThreshold => 29,
-            ApiError::InsufficientTotalWeight => 30,
-            ApiError::InvalidSystemContract => 31,
-            ApiError::PurseNotCreated => 32,
-            ApiError::Unhandled => 33,
-            ApiError::BufferTooSmall => 34,
-            ApiError::HostBufferEmpty => 35,
-            ApiError::HostBufferFull => 36,
+            ApiError::UnexpectedContractRefVariant => 10,
+            ApiError::InvalidPurseName => 11,
+            ApiError::InvalidPurse => 12,
+            ApiError::UpgradeContractAtURef => 13,
+            ApiError::Transfer => 14,
+            ApiError::NoAccessRights => 15,
+            ApiError::CLTypeMismatch => 16,
+            ApiError::EarlyEndOfStream => 17,
+            ApiError::Formatting => 18,
+            ApiError::LeftOverBytes => 19,
+            ApiError::OutOfMemory => 20,
+            ApiError::MaxKeysLimit => 21,
+            ApiError::DuplicateKey => 22,
+            ApiError::PermissionDenied => 23,
+            ApiError::MissingKey => 24,
+            ApiError::ThresholdViolation => 25,
+            ApiError::KeyManagementThreshold => 26,
+            ApiError::DeploymentThreshold => 27,
+            ApiError::InsufficientTotalWeight => 28,
+            ApiError::InvalidSystemContract => 29,
+            ApiError::PurseNotCreated => 30,
+            ApiError::Unhandled => 31,
+            ApiError::BufferTooSmall => 32,
+            ApiError::HostBufferEmpty => 33,
+            ApiError::HostBufferFull => 34,
             ApiError::Mint(value) => MINT_ERROR_OFFSET + u32::from(value),
             ApiError::ProofOfStake(value) => POS_ERROR_OFFSET + u32::from(value),
             ApiError::User(value) => RESERVED_ERROR_MAX + 1 + u32::from(value),
@@ -556,7 +544,6 @@ impl Debug for ApiError {
             ApiError::ContractNotFound => write!(f, "ApiError::ContractNotFound")?,
             ApiError::GetKey => write!(f, "ApiError::GetKey")?,
             ApiError::UnexpectedKeyVariant => write!(f, "ApiError::UnexpectedKeyVariant")?,
-            ApiError::UnexpectedValueVariant => write!(f, "ApiError::UnexpectedValueVariant")?,
             ApiError::UnexpectedContractRefVariant => {
                 write!(f, "ApiError::UnexpectedContractRefVariant")?
             }
@@ -565,7 +552,6 @@ impl Debug for ApiError {
             ApiError::UpgradeContractAtURef => write!(f, "ApiError::UpgradeContractAtURef")?,
             ApiError::Transfer => write!(f, "ApiError::Transfer")?,
             ApiError::NoAccessRights => write!(f, "ApiError::NoAccessRights")?,
-            ApiError::ValueConversion => write!(f, "ApiError::ValueConversion")?,
             ApiError::CLTypeMismatch => write!(f, "ApiError::CLTypeMismatch")?,
             ApiError::EarlyEndOfStream => write!(f, "ApiError::EarlyEndOfStream")?,
             ApiError::Formatting => write!(f, "ApiError::Formatting")?,
@@ -617,33 +603,31 @@ pub fn result_from(value: i32) -> Result<(), ApiError> {
         7 => Err(ApiError::ContractNotFound),
         8 => Err(ApiError::GetKey),
         9 => Err(ApiError::UnexpectedKeyVariant),
-        10 => Err(ApiError::UnexpectedValueVariant),
-        11 => Err(ApiError::UnexpectedContractRefVariant),
-        12 => Err(ApiError::InvalidPurseName),
-        13 => Err(ApiError::InvalidPurse),
-        14 => Err(ApiError::UpgradeContractAtURef),
-        15 => Err(ApiError::Transfer),
-        16 => Err(ApiError::NoAccessRights),
-        17 => Err(ApiError::ValueConversion),
-        18 => Err(ApiError::CLTypeMismatch),
-        19 => Err(ApiError::EarlyEndOfStream),
-        20 => Err(ApiError::Formatting),
-        21 => Err(ApiError::LeftOverBytes),
-        22 => Err(ApiError::OutOfMemory),
-        23 => Err(ApiError::MaxKeysLimit),
-        24 => Err(ApiError::DuplicateKey),
-        25 => Err(ApiError::PermissionDenied),
-        26 => Err(ApiError::MissingKey),
-        27 => Err(ApiError::ThresholdViolation),
-        28 => Err(ApiError::KeyManagementThreshold),
-        29 => Err(ApiError::DeploymentThreshold),
-        30 => Err(ApiError::InsufficientTotalWeight),
-        31 => Err(ApiError::InvalidSystemContract),
-        32 => Err(ApiError::PurseNotCreated),
-        33 => Err(ApiError::Unhandled),
-        34 => Err(ApiError::BufferTooSmall),
-        35 => Err(ApiError::HostBufferEmpty),
-        36 => Err(ApiError::HostBufferFull),
+        10 => Err(ApiError::UnexpectedContractRefVariant),
+        11 => Err(ApiError::InvalidPurseName),
+        12 => Err(ApiError::InvalidPurse),
+        13 => Err(ApiError::UpgradeContractAtURef),
+        14 => Err(ApiError::Transfer),
+        15 => Err(ApiError::NoAccessRights),
+        16 => Err(ApiError::CLTypeMismatch),
+        17 => Err(ApiError::EarlyEndOfStream),
+        18 => Err(ApiError::Formatting),
+        19 => Err(ApiError::LeftOverBytes),
+        20 => Err(ApiError::OutOfMemory),
+        21 => Err(ApiError::MaxKeysLimit),
+        22 => Err(ApiError::DuplicateKey),
+        23 => Err(ApiError::PermissionDenied),
+        24 => Err(ApiError::MissingKey),
+        25 => Err(ApiError::ThresholdViolation),
+        26 => Err(ApiError::KeyManagementThreshold),
+        27 => Err(ApiError::DeploymentThreshold),
+        28 => Err(ApiError::InsufficientTotalWeight),
+        29 => Err(ApiError::InvalidSystemContract),
+        30 => Err(ApiError::PurseNotCreated),
+        31 => Err(ApiError::Unhandled),
+        32 => Err(ApiError::BufferTooSmall),
+        33 => Err(ApiError::HostBufferEmpty),
+        34 => Err(ApiError::HostBufferFull),
         _ => {
             if value > RESERVED_ERROR_MAX as i32 && value <= (2 * RESERVED_ERROR_MAX + 1) as i32 {
                 Err(ApiError::User(value as u16))
@@ -722,14 +706,12 @@ mod tests {
         round_trip(Err(ApiError::ContractNotFound));
         round_trip(Err(ApiError::GetKey));
         round_trip(Err(ApiError::UnexpectedKeyVariant));
-        round_trip(Err(ApiError::UnexpectedValueVariant));
         round_trip(Err(ApiError::UnexpectedContractRefVariant));
         round_trip(Err(ApiError::InvalidPurseName));
         round_trip(Err(ApiError::InvalidPurse));
         round_trip(Err(ApiError::UpgradeContractAtURef));
         round_trip(Err(ApiError::Transfer));
         round_trip(Err(ApiError::NoAccessRights));
-        round_trip(Err(ApiError::ValueConversion));
         round_trip(Err(ApiError::CLTypeMismatch));
         round_trip(Err(ApiError::EarlyEndOfStream));
         round_trip(Err(ApiError::Formatting));
