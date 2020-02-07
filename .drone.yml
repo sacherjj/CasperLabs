@@ -822,7 +822,7 @@ steps:
   - package-sbt-artifacts-tag
 
 - name: mac-ee-tarball-tag
-  image: appleboy/drone-ssh:latest
+  image: appleboy/drone-ssh:1.5.5
   environment:
     SSH_HOST:
       from_secret: mac-host
@@ -893,7 +893,7 @@ steps:
   - rsync-mac-tarball-tag
 
 - name: cleanup-mac-tag
-  image: appleboy/drone-ssh:latest
+  image: appleboy/drone-ssh:1.5.5
   environment:
     SSH_HOST:
       from_secret: mac-host
@@ -934,7 +934,7 @@ clone:
 
 steps:
 - name: mac-clone
-  image: appleboy/drone-ssh:latest
+  image: appleboy/drone-ssh:1.5.5
   environment:
     SSH_HOST:
       from_secret: mac-host
@@ -952,7 +952,7 @@ steps:
     - git clone -b dev https://github.com/CasperLabs/CasperLabs.git
 
 - name: build-node
-  image: appleboy/drone-ssh:latest
+  image: appleboy/drone-ssh:1.5.5
   environment:
     SSH_HOST:
       from_secret: mac-host
@@ -969,7 +969,7 @@ steps:
     - /usr/local/bin/sbt node/universal:stage
 
 - name: build-client
-  image: appleboy/drone-ssh:latest
+  image: appleboy/drone-ssh:1.5.5
   environment:
     SSH_HOST:
       from_secret: mac-host
@@ -986,7 +986,7 @@ steps:
     - /usr/local/bin/sbt client/universal:stage
 
 - name: build-ee
-  image: appleboy/drone-ssh:latest
+  image: appleboy/drone-ssh:1.5.5
   environment:
     SSH_HOST:
       from_secret: mac-host
@@ -1006,7 +1006,7 @@ steps:
     - make build
 
 - name: cleanup-mac
-  image: appleboy/drone-ssh:latest
+  image: appleboy/drone-ssh:1.5.5
   environment:
     SSH_HOST:
       from_secret: mac-host
