@@ -1535,8 +1535,7 @@ where
     fn is_valid_uref(&mut self, uref_ptr: u32, uref_size: u32) -> Result<bool, Trap> {
         let bytes = self.bytes_from_mem(uref_ptr, uref_size as usize)?;
         let uref: URef = bytesrepr::deserialize(bytes).map_err(Error::BytesRepr)?;
-        let key = Key::URef(uref);
-        Ok(self.context.validate_key(&key).is_ok())
+        Ok(self.context.validate_uref(&uref).is_ok())
     }
 
     fn get_arg_size(&mut self, index: usize, size_ptr: u32) -> Result<Result<(), ApiError>, Trap> {
