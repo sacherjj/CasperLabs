@@ -1,4 +1,4 @@
-package io.casperlabs.node.api.graphql.schema.blocks
+package io.casperlabs.node.api.graphql.schema.blocks.types
 
 import cats.implicits._
 import io.casperlabs.casper.Estimator.BlockHash

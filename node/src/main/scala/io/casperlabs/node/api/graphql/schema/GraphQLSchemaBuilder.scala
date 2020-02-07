@@ -19,7 +19,7 @@ import io.casperlabs.node.api.Utils.{
 import io.casperlabs.node.api.casper.ListDeployInfosRequest
 import io.casperlabs.node.api.graphql.RunToFuture.ops._
 import io.casperlabs.node.api.graphql._
-import io.casperlabs.node.api.graphql.schema.blocks.{
+import io.casperlabs.node.api.graphql.schema.blocks.types.{
   DeployInfosWithPageInfo,
   GraphQLBlockTypes,
   PageInfo
