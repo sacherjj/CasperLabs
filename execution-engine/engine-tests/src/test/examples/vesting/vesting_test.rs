@@ -11,7 +11,7 @@ use types::{
     CLTyped, CLValue, Key, U512,
 };
 
-const TRANFER_TO_ACCOUNT_WASM: &str = "transfer_to_account.wasm";
+const TRANFER_TO_ACCOUNT_WASM: &str = "transfer_to_account_u512.wasm";
 const VESTING_CONTRACT_WASM: &str = "vesting_smart_contract.wasm";
 const VESTING_PROXY_CONTRACT_NAME: &str = "vesting_proxy";
 const VESTING_CONTRACT_NAME: &str = "vesting_01";
@@ -218,13 +218,10 @@ impl VestingTest {
         recipient: [u8; 32],
         amount: U512,
     ) -> Self {
-        let request = ExecuteRequestBuilder::standard(
-            sender,
-            TRANFER_TO_ACCOUNT_WASM,
-            (recipient, amount.as_u64()),
-        )
-        .with_block_time(self.current_timestamp)
-        .build();
+        let request =
+            ExecuteRequestBuilder::standard(sender, TRANFER_TO_ACCOUNT_WASM, (recipient, amount))
+                .with_block_time(self.current_timestamp)
+                .build();
         self.builder.exec(request).expect_success().commit();
         self
     }

@@ -15,7 +15,6 @@ enum CustomError {
 }
 
 export function call(): void {
-  // uref arg
   let urefBytes = CL.getArg(Args.LocalStateURef);
   if (urefBytes === null) {
     Error.fromUserError(<u16>CustomError.MissingURefArg).revert();

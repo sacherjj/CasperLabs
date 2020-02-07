@@ -4,6 +4,7 @@ import {CLValue} from "../../../../contract-as/assembly/clvalue";
 import {Key} from "../../../../contract-as/assembly/key";
 import {PurseId} from "../../../../contract-as/assembly/purseid";
 import {U512} from "../../../../contract-as/assembly/bignum";
+import {getMainPurse} from "../../../../contract-as/assembly/account";
 
 const POS_ACTION = "bond";
 
@@ -14,7 +15,7 @@ export function call(): void {
         return;
     }
 
-    let mainPurse = PurseId.getMainPurse();
+    let mainPurse = getMainPurse();
     if (mainPurse === null) {
         Error.fromErrorCode(ErrorCode.MissingArgument).revert();
         return;

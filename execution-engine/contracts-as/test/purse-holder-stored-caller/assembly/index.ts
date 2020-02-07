@@ -28,7 +28,6 @@ enum CustomError {
 }
 
 export function call(): void {
-  // uref arg
   let urefBytes = CL.getArg(Args.PurseHolderURef);
   if (urefBytes === null) {
     Error.fromUserError(<u16>CustomError.MissingPurseHolderURefArg).revert();
@@ -43,8 +42,6 @@ export function call(): void {
     Error.fromUserError(<u16>CustomError.InvalidPurseHolderURefArg).revert();
     return;
   }
-
-  // method name arg
   const methodNameArg = CL.getArg(Args.MethodName);
   if (methodNameArg === null) {
     Error.fromUserError(<u16>CustomError.MissingMethodNameArg).revert();
@@ -83,7 +80,6 @@ export function call(): void {
     return;
   }
 
-  // purse name arg
   const purseNameArg = CL.getArg(Args.PurseName);
   if (purseNameArg === null) {
     Error.fromUserError(<u16>CustomError.MissingPurseNameArg).revert();

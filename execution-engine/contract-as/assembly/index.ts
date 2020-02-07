@@ -155,29 +155,6 @@ export function getKey(name: String): Key | null {
   return key;
 }
 
-export enum TransferredTo {
-  ExistingAccount = 0,
-  NewAccount = 1,
-}
-
-export function transferToAccount(target: Uint8Array, amount: U512): U32 | null {
-  let amountBytes = amount.toBytes();
-
-  let ret = externals.transfer_to_account(
-      target.dataStart,
-      target.length,
-      amountBytes.dataStart,
-      amountBytes.length,
-  );
-
-  if (ret <= 1) {
-    return changetype<U32>(ret);
-  }
-  else {
-    return null;
-  }
-}
-
 export function ret(value: CLValue): void {
   const valueBytes = value.toBytes();
   externals.ret(

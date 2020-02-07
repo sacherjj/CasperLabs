@@ -93,7 +93,6 @@ export function delegate(): void {
 }
 
 export function call(): void {
-  // uref arg
   let urefBytes = CL.getArg(CallArgs.PurseHolderURef);
   if (urefBytes === null) {
     Error.fromUserError(<u16>CustomError.MissingPurseHolderURefArg).revert();

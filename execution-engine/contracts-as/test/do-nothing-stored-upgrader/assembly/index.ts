@@ -50,7 +50,6 @@ export function delegate(): void {
 }
 
 export function call(): void {
-  // uref arg
   let urefBytes = CL.getArg(CallArgs.DoNothingURef);
   if (urefBytes === null) {
     Error.fromUserError(<u16>CustomError.MissingDoNothingURefArg).revert();

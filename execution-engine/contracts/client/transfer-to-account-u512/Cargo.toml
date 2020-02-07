@@ -1,7 +1,7 @@
 [package]
-name = "transfer-to-account-02"
+name = "transfer-to-account-u512"
 version = "0.1.0"
-authors = ["Henry Till <henrytill@gmail.com>"]
+authors = ["Michael Birch <birchmd@casperlabs.io>"]
 edition = "2018"
 
 [lib]

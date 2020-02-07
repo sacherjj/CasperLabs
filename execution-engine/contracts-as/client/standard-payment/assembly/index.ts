@@ -4,6 +4,7 @@ import {CLValue} from "../../../../contract-as/assembly/clvalue";
 import {PurseId} from "../../../../contract-as/assembly/purseid";
 import {U512} from "../../../../contract-as/assembly/bignum";
 import {Key} from "../../../../contract-as/assembly/key";
+import {getMainPurse} from "../../../../contract-as/assembly/account";
 
 const POS_ACTION = "get_payment_purse";
 
@@ -14,7 +15,7 @@ export function entryPoint(amount: U512): void {
     return;
   }
 
-  let mainPurse = PurseId.getMainPurse();
+  let mainPurse = getMainPurse();
   if (mainPurse === null) {
     Error.fromErrorCode(ErrorCode.MissingArgument).revert();
     return;
