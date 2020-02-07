@@ -4,6 +4,7 @@ import {readHostBuffer} from "./index";
 import {U512} from "./bignum";
 import {Error, ErrorCode} from "./error";
 import {PURSE_ID_SERIALIZED_LENGTH} from "./constants";
+import { SetLastError, Error as BytesreprError} from "./bytesrepr";
 
 export enum TransferredTo {
     TransferError = -1,
@@ -24,8 +25,11 @@ export class PurseId {
 
     static fromBytes(bytes: Uint8Array): PurseId | null {
         let uref = URef.fromBytes(bytes);
-        if(uref === null)
+        if(uref === null) {
+            SetLastError(BytesreprError.FormattingError);
             return null;
+        }
+        SetLastError(BytesreprError.Ok);
         return new PurseId(uref);
     }
 

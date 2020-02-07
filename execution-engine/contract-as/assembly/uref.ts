@@ -1,4 +1,5 @@
-import {AddDecodedBytesCount, SetDecodedBytesCount} from "./bytesrepr";
+import {AddDecodedBytesCount, SetDecodedBytesCount,
+        GetLastError, SetLastError, Error} from "./bytesrepr";
 import {UREF_ADDR_LENGTH} from "./constants";
 import {checkTypedArrayEqual} from "./utils";
 import {is_valid_uref, revert} from "./externals";
@@ -42,21 +43,25 @@ export class URef {
 
     static fromBytes(bytes: Uint8Array): URef | null {
         if (bytes.length < 33) {
+            SetLastError(Error.EarlyEndOfStream);
             return null;
         }
-        
+
         let urefBytes = bytes.subarray(0, UREF_ADDR_LENGTH);
         SetDecodedBytesCount(33);
         if (bytes[UREF_ADDR_LENGTH] == 1) {
             if (bytes.length < 34) {
+                SetLastError(Error.EarlyEndOfStream);
                 return null;
             }
             let accessRights = bytes[UREF_ADDR_LENGTH + 1];
             AddDecodedBytesCount(1);
+            SetLastError(Error.Ok);
             return new URef(urefBytes, accessRights);
         }
         else {
             let urefBytes = bytes.subarray(0, UREF_ADDR_LENGTH);
+            SetLastError(Error.Ok);
             return new URef(urefBytes, AccessRights.NONE);
         }
     }

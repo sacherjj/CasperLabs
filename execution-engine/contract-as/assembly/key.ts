@@ -5,7 +5,8 @@ import {URef} from "./uref";
 import {CLValue} from "./clvalue";
 import {Error} from "./error";
 import {checkTypedArrayEqual, typedToArray} from "./utils";
-import {GetDecodedBytesCount, AddDecodedBytesCount, SetDecodedBytesCount} from "./bytesrepr";
+import {GetDecodedBytesCount, AddDecodedBytesCount, SetDecodedBytesCount,
+        SetLastError, GetLastError, Error as BytesreprError} from "./bytesrepr";
 
 export enum KeyVariant {
     ACCOUNT_ID = 0,
@@ -63,6 +64,7 @@ export class Key {
 
     static fromBytes(bytes: Uint8Array): Key | null {
         if (bytes.length < 1) {
+            SetLastError(BytesreprError.EarlyEndOfStream);
             return null;
         }
         const tag = bytes[0];
@@ -70,6 +72,7 @@ export class Key {
         if (tag == KeyVariant.HASH_ID) {
             var hashBytes = bytes.subarray(1, 32 + 1);
             AddDecodedBytesCount(32);
+            SetLastError(BytesreprError.Ok);
             return Key.fromHash(hashBytes);
         }
         else if (tag == KeyVariant.UREF_ID) {
@@ -79,21 +82,24 @@ export class Key {
 
             var uref = URef.fromBytes(urefBytes);
             if (uref === null) {
+                SetLastError(BytesreprError.FormattingError);
                 return null;
             }
 
             let decodedBytes = GetDecodedBytesCount();
             SetDecodedBytesCount(savedOffset);
             AddDecodedBytesCount(decodedBytes);
-
+            SetLastError(BytesreprError.Ok);
             return Key.fromURef(<URef>uref);
         }
         else if (tag == KeyVariant.ACCOUNT_ID) {
             var accountBytes = bytes.subarray(1, 32 + 1);
             AddDecodedBytesCount(32);
+            SetLastError(BytesreprError.Ok);
             return Key.fromAccount(accountBytes);
         }
         else {
+            SetLastError(BytesreprError.FormattingError);
             return null;
         }
     }

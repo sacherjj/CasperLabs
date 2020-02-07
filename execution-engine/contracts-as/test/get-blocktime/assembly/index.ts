@@ -1,6 +1,6 @@
 import * as CL from "../../../../contract-as/assembly";
 import {Error, ErrorCode} from "../../../../contract-as/assembly/error";
-import {fromBytesU64} from "../../../../contract-as/assembly/bytesrepr";
+import {fromBytesU64, GetLastError, Error as BytesreprError} from "../../../../contract-as/assembly/bytesrepr";
 
 export function call(): void {
   const knownBlockTimeBytes = CL.getArg(0);
@@ -9,7 +9,7 @@ export function call(): void {
     return;
   }
   const knownBlockTime = fromBytesU64(knownBlockTimeBytes);
-  if (knownBlockTime === null) {
+  if (GetLastError() != BytesreprError.Ok) {
     Error.fromErrorCode(ErrorCode.InvalidArgument).revert();
     return;
   }

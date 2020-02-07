@@ -20,13 +20,22 @@ import { Pair } from "../../assembly/pair";
 // adding the prefix xtest to one of these functions will cause the test to
 // be ignored via the defineTestsFromModule function in spec.tsgit
 
+export function testDeserializeInvalidU8(): bool {
+    const bytes: u8[] = [];
+    let deser = fromBytesU8(arrayToTyped(bytes));
+    assert(GetLastError() == Error.EarlyEndOfStream);
+    assert(deser == 0);
+    return !deser;
+}
+
 export function testDeSerU8(): bool {
     const truth: u8[] = [222];
     let ser = toBytesU8(222);
     assert(checkArraysEqual(ser, truth));
     let deser = fromBytesU8(arrayToTyped(ser));
+    assert(GetLastError() == Error.Ok);
     assert(deser !== null);
-    return deser == changetype<U8>(222);
+    return deser == 222;
 }
 
 export function xtestDeSerU8_Zero(): bool {
@@ -36,7 +45,8 @@ export function xtestDeSerU8_Zero(): bool {
     let ser = toBytesU8(0);
     assert(checkArraysEqual(ser, truth));
     let deser = fromBytesU8(arrayToTyped(ser));
-    return deser == changetype<U8>(0);
+    assert(GetLastError() == Error.Ok);
+    return deser == 0;
 }
 
 export function testDeSerU32(): bool {
@@ -44,8 +54,8 @@ export function testDeSerU32(): bool {
     let deser = toBytesU32(3735928559);
     assert(checkArraysEqual(deser, truth));
     let ser = fromBytesU32(arrayToTyped(deser));
-    assert(ser !== null);
-    return ser == changetype<U32>(0xdeadbeef);
+    assert(GetLastError() == Error.Ok);
+    return ser == 0xdeadbeef;
 }
 
 export function testDeSerZeroU32(): bool {
@@ -53,9 +63,8 @@ export function testDeSerZeroU32(): bool {
     let ser = toBytesU32(0);
     assert(checkArraysEqual(ser, truth));
     let deser = fromBytesU32(arrayToTyped(ser));
-    // WTF: `ser !== null` is true when ser === <U32>0
-    assert(ser !== null);
-    return deser === changetype<U32>(0);
+    assert(GetLastError() == Error.Ok);
+    return deser === 0;
 }
 
 export function testDeserializeU64_1024(): bool {
@@ -75,35 +84,35 @@ export function testDeserializeU64_zero(): bool {
 export function testDeserializeU64_u32max(): bool {
     const truth = hex2bin("ffffffff00000000");
     const value = fromBytesU64(truth);
-    return value == u64(0xffffffff);
+    assert(GetLastError() == Error.Ok);
+    return value == 0xffffffff;
 }
 
 export function testDeserializeU64_u32max_plus1(): bool {
     const truth = hex2bin("0000000001000000");
     const value = fromBytesU64(truth);
     assert(GetLastError() == Error.Ok);
-    return value == changetype<u64>(4294967296);
+    return value == 4294967296;
 }
 
 export function testDeserializeU64_EOF(): bool {
     const truth = hex2bin("0000");
     const value = fromBytesU64(truth);
     assert(GetLastError() == Error.EarlyEndOfStream);
-    return true;
+    return !value;
 }
 
 export function testDeserializeU64_u64max(): bool {
     const truth = hex2bin("feffffffffffffff");
     const value = fromBytesU64(truth);
-    assert(value !== null);
     assert(GetLastError() == Error.Ok);
-    let u64Val = <u64>18446744073709551614;
-    return value == u64Val;
+    return value == <u64>18446744073709551614;
 }
 
 export function testDeSerListOfStrings(): bool {
     const truth = hex2bin("03000000030000006162630a0000003132333435363738393006000000717765727479");
     const maybeResult = fromBytesStringList(truth);
+    assert(GetLastError() == Error.Ok);
     assert(maybeResult != null);
     const result = <String[]>maybeResult;
 
@@ -121,6 +130,7 @@ export function testDeSerListOfStrings(): bool {
 export function testDeSerEmptyListOfStrings(): bool {
     const truth = hex2bin("00000000");
     const maybeResult = fromBytesStringList(truth);
+    assert(GetLastError() == Error.Ok);
     return checkArraysEqual(<String[]>maybeResult, <String[]>[]);
 };
 
@@ -130,6 +140,7 @@ export function testDeSerEmptyMap(): bool {
         truth,
         fromBytesString,
         Key.fromBytes);
+    assert(GetLastError() == Error.Ok);
     assert(maybeResult !== null);
     return checkArraysEqual(<Array<Pair<String, Key>>>maybeResult, <Array<Pair<String, Key>>>[]);
 };
@@ -155,6 +166,7 @@ export function testSerializeMap(): bool {
         fromBytesString,
         fromBytesString);
 
+    assert(GetLastError() == Error.Ok);
     assert(maybeDeser !== null);
     let deser = <Array<Pair<String, String>>>maybeDeser;
 
@@ -201,13 +213,23 @@ export function testDeSerString(): bool {
     assert(checkArraysEqual(ser, typedToArray(truth)));
 
     const deser = fromBytesString(arrayToTyped(ser));
-    assert(deser !== null);
+    assert(GetLastError() == Error.Ok);
     return deser == "hello_world";
+}
+
+export function testDeSerIncompleteString(): bool {
+    // Rust: let bytes = "hello_world".to_bytes().unwrap();
+    const truth = hex2bin("0b00000068656c6c6f5f776f726c");
+    // last byte removed from the truth to signalize incomplete data
+    const deser = fromBytesString(truth);
+    assert(GetLastError() == Error.EarlyEndOfStream);
+    return deser === null;
 }
 
 export function testDecodeURefFromBytesWithoutAccessRights(): bool {
     const truth = hex2bin("2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a00");
     let uref = URef.fromBytes(truth);
+    assert(GetLastError() == Error.Ok);
     assert(uref !== null);
 
     let urefBytes = new Array<u8>(32);
@@ -265,6 +287,7 @@ export function testDeserMapOfNamedKeys(): bool {
         truth,
         fromBytesString,
         Key.fromBytes);
+    assert(GetLastError() == Error.Ok);
     let deserializedBytes = GetDecodedBytesCount();
     assert(<u32>deserializedBytes == <i32>truth.length - hex2bin(extraBytes).length);
 

@@ -1,4 +1,5 @@
-import {toBytesU64} from "./bytesrepr";
+import {SetLastError, GetLastError, Error,
+        toBytesU64} from "./bytesrepr";
 import {Pair} from "./pair";
 
 const HEX_LOWERCASE: string[] = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'];
@@ -394,6 +395,7 @@ export class U512 {
 
     static fromBytes(bytes: Uint8Array): U512 | null {
         if (bytes.length < 1) {
+            SetLastError(Error.EarlyEndOfStream);
             return null;
         }
 
@@ -407,6 +409,7 @@ export class U512 {
         }
 
         res.setBytesLE(buffer);
+        SetLastError(Error.Ok);
         return res;
     }
 

@@ -1,5 +1,6 @@
 import { hex2bin } from "../utils/helpers";
 import { U512 } from "../../assembly/bignum";
+import { GetLastError, Error } from "../../assembly/bytesrepr";
 import { Pair } from "../../assembly/pair";
 import { checkArraysEqual } from "../../assembly/utils";
 import { arrayToTyped, typedToArray } from "../../assembly/utils";
@@ -199,6 +200,7 @@ export function testDivision(): bool {
 export function testSerializeU512Zero(): bool {
     let truth = hex2bin("00");
     let zero = U512.fromBytes(truth);
+    assert(GetLastError() == Error.Ok);
     assert(zero !== null);
     assert(zero.isZero());
     const bytes = zero.toBytes();
@@ -208,6 +210,7 @@ export function testSerializeU512Zero(): bool {
 export function testSerializeU512_3BytesWide(): bool {
     let truth = hex2bin("03807801");
     let num = U512.fromBytes(truth);
+    assert(GetLastError() == Error.Ok);
     assert(num !== null);
     assert(num.toString() == "17880"); // dec: 96384
     const bytes = num.toBytes();
@@ -217,6 +220,7 @@ export function testSerializeU512_3BytesWide(): bool {
 export function testSerializeU512_2BytesWide(): bool {
     let truth = hex2bin("020004");
     let num = U512.fromBytes(truth);
+    assert(GetLastError() == Error.Ok);
     assert(num !== null);
     assert(num.toString() == "400"); // dec: 1024
     const bytes = num.toBytes();
@@ -226,6 +230,8 @@ export function testSerializeU512_2BytesWide(): bool {
 export function testSerializeU512_1BytesWide(): bool {
     let truth = hex2bin("0101");
     let num = U512.fromBytes(truth);
+    assert(GetLastError() == Error.Ok);
+    assert(num !== null);
     assert(num.toString() == "1");
     const bytes = num.toBytes();
     return checkArraysEqual(bytes, typedToArray(truth));
@@ -244,7 +250,7 @@ export function testSerialize100mTimes10(): bool {
     assert(checkArraysEqual(bytes, typedToArray(truth)));
 
     let roundTrip = U512.fromBytes(arrayToTyped(bytes));
-    assert(roundTrip !== null);
+    assert(GetLastError() == Error.Ok);
     assert(roundTrip.toString() == hex);
 
     return true;
@@ -258,6 +264,7 @@ export function testDeserLargeRandomU512(): bool {
     let truth = hex2bin("40752c392d2ecd6123de0f1d3d4cdb7992aa85e049a94795975e81e20b78731cde6d4aa13da210479acce5f24a296ae787bada0aba1889c8fe2f2fb030d62feed2");
 
     let deser = U512.fromBytes(truth);
+    assert(GetLastError() == Error.Ok);
     assert(deser !== null);
     assert(deser.toString() == hex);
 
