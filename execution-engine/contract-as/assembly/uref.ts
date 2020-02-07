@@ -1,4 +1,4 @@
-import {AddDecodedBytesCount, SetDecodedBytesCount,
+import {SetDecodedBytesCount,
         GetLastError, SetLastError, Error} from "./bytesrepr";
 import {UREF_ADDR_LENGTH} from "./constants";
 import {checkTypedArrayEqual} from "./utils";
@@ -55,7 +55,7 @@ export class URef {
                 return null;
             }
             let accessRights = bytes[UREF_ADDR_LENGTH + 1];
-            AddDecodedBytesCount(1);
+            SetDecodedBytesCount(33 + 1);
             SetLastError(Error.Ok);
             return new URef(urefBytes, accessRights);
         }

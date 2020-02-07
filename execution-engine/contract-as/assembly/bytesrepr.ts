@@ -25,18 +25,14 @@ export function SetLastError(error: i32): void {
 // Any fromBytes operation sets this, so caller can know how much bytes to
 // skip in the input stream for complex types
 @lazy
-let LastDecodedBytesCount: u32 = 0;
+let lastDecodedBytesCount: u32 = 0;
 
 export function SetDecodedBytesCount(value: u32): void {
-    LastDecodedBytesCount = value;
-}
-
-export function AddDecodedBytesCount(value: u32): void {
-    LastDecodedBytesCount += value;
+    lastDecodedBytesCount = value;
 }
 
 export function GetDecodedBytesCount(): u32 {
-    return LastDecodedBytesCount;
+    return lastDecodedBytesCount;
 }
 
 export function toBytesU8(num: u8): u8[] {
@@ -49,6 +45,7 @@ export function fromBytesU8(bytes: Uint8Array): u8 {
         return 0;
     }
     SetLastError(Error.Ok);
+    SetDecodedBytesCount(1);
     return load<u8>(bytes.dataStart);
 }
 
@@ -70,9 +67,8 @@ export function fromBytesU32(bytes: Uint8Array): u32 {
     }
     const number = <u32>load<u32>(bytes.dataStart);
 
-    SetDecodedBytesCount(4);
-
     SetLastError(Error.Ok);
+    SetDecodedBytesCount(4);
     return number;
 }
 
@@ -112,9 +108,8 @@ export function fromBytesU64(bytes: Uint8Array): u64 {
         return 0;
     }
 
-    SetDecodedBytesCount(8);
-
     SetLastError(Error.Ok);
+    SetDecodedBytesCount(8);
     return load<u64>(bytes.dataStart);
 }
 

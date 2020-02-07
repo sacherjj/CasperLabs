@@ -5,7 +5,7 @@ import {URef} from "./uref";
 import {CLValue} from "./clvalue";
 import {Error} from "./error";
 import {checkTypedArrayEqual, typedToArray} from "./utils";
-import {GetDecodedBytesCount, AddDecodedBytesCount, SetDecodedBytesCount,
+import {GetDecodedBytesCount, SetDecodedBytesCount,
         SetLastError, GetLastError, Error as BytesreprError} from "./bytesrepr";
 
 export enum KeyVariant {
@@ -71,7 +71,7 @@ export class Key {
         SetDecodedBytesCount(1);
         if (tag == KeyVariant.HASH_ID) {
             var hashBytes = bytes.subarray(1, 32 + 1);
-            AddDecodedBytesCount(32);
+            SetDecodedBytesCount(1 + 32);
             SetLastError(BytesreprError.Ok);
             return Key.fromHash(hashBytes);
         }
@@ -87,14 +87,13 @@ export class Key {
             }
 
             let decodedBytes = GetDecodedBytesCount();
-            SetDecodedBytesCount(savedOffset);
-            AddDecodedBytesCount(decodedBytes);
+            SetDecodedBytesCount(savedOffset + decodedBytes);
             SetLastError(BytesreprError.Ok);
             return Key.fromURef(<URef>uref);
         }
         else if (tag == KeyVariant.ACCOUNT_ID) {
             var accountBytes = bytes.subarray(1, 32 + 1);
-            AddDecodedBytesCount(32);
+            SetDecodedBytesCount(1 + 32);
             SetLastError(BytesreprError.Ok);
             return Key.fromAccount(accountBytes);
         }
