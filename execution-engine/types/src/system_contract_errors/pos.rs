@@ -30,10 +30,6 @@ pub enum Error {
     /// While unbonding, the transfer from the Proof of Stake internal purse to the destination
     /// purse failed.
     UnbondTransferFailed,
-    /// A required argument wasn't passed to the Proof of Stake contract.
-    MissingArgument,
-    /// An argument passed to the Proof of Stake contract didn't parse correctly.
-    InvalidArgument,
     // ===== System errors =====
     /// Internal error: a [`BlockTime`](crate::BlockTime) was unexpectedly out of sequence.
     TimeWentBackwards,

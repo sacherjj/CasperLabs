@@ -181,12 +181,6 @@ const MINT_ERROR_OFFSET: u32 = (POS_ERROR_OFFSET - 1) - u8::MAX as u32; // 65024
 /// # show_and_check!(
 /// 65_031 => MintError::PurseNotFound
 /// # );
-/// # show_and_check!(
-/// 65_126 => MintError::MissingArgument
-/// # );
-/// # show_and_check!(
-/// 65_127 => MintError::InvalidArgument
-/// # );
 ///
 /// // Proof of stake errors:
 /// use casperlabs_types::system_contract_errors::pos::Error as PosError;
@@ -221,61 +215,55 @@ const MINT_ERROR_OFFSET: u32 = (POS_ERROR_OFFSET - 1) - u8::MAX as u32; // 65024
 /// 65_289 => PosError::UnbondTransferFailed
 /// # );
 /// # show_and_check!(
-/// 65_290 => PosError::MissingArgument
+/// 65_290 => PosError::TimeWentBackwards
 /// # );
 /// # show_and_check!(
-/// 65_291 => PosError::InvalidArgument
+/// 65_291 => PosError::StakesNotFound
 /// # );
 /// # show_and_check!(
-/// 65_292 => PosError::TimeWentBackwards
+/// 65_292 => PosError::PaymentPurseNotFound
 /// # );
 /// # show_and_check!(
-/// 65_293 => PosError::StakesNotFound
+/// 65_293 => PosError::PaymentPurseKeyUnexpectedType
 /// # );
 /// # show_and_check!(
-/// 65_294 => PosError::PaymentPurseNotFound
+/// 65_294 => PosError::PaymentPurseBalanceNotFound
 /// # );
 /// # show_and_check!(
-/// 65_295 => PosError::PaymentPurseKeyUnexpectedType
+/// 65_295 => PosError::BondingPurseNotFound
 /// # );
 /// # show_and_check!(
-/// 65_296 => PosError::PaymentPurseBalanceNotFound
+/// 65_296 => PosError::BondingPurseKeyUnexpectedType
 /// # );
 /// # show_and_check!(
-/// 65_297 => PosError::BondingPurseNotFound
+/// 65_297 => PosError::RefundPurseKeyUnexpectedType
 /// # );
 /// # show_and_check!(
-/// 65_298 => PosError::BondingPurseKeyUnexpectedType
+/// 65_298 => PosError::RewardsPurseNotFound
 /// # );
 /// # show_and_check!(
-/// 65_299 => PosError::RefundPurseKeyUnexpectedType
+/// 65_299 => PosError::RewardsPurseKeyUnexpectedType
 /// # );
 /// # show_and_check!(
-/// 65_300 => PosError::RewardsPurseNotFound
+/// 65_300 => PosError::StakesKeyDeserializationFailed
 /// # );
 /// # show_and_check!(
-/// 65_301 => PosError::RewardsPurseKeyUnexpectedType
+/// 65_301 => PosError::StakesDeserializationFailed
 /// # );
 /// # show_and_check!(
-/// 65_302 => PosError::StakesKeyDeserializationFailed
+/// 65_302 => PosError::SystemFunctionCalledByUserAccount
 /// # );
 /// # show_and_check!(
-/// 65_303 => PosError::StakesDeserializationFailed
+/// 65_303 => PosError::InsufficientPaymentForAmountSpent
 /// # );
 /// # show_and_check!(
-/// 65_304 => PosError::SystemFunctionCalledByUserAccount
+/// 65_304 => PosError::FailedTransferToRewardsPurse
 /// # );
 /// # show_and_check!(
-/// 65_305 => PosError::InsufficientPaymentForAmountSpent
+/// 65_305 => PosError::FailedTransferToAccountPurse
 /// # );
 /// # show_and_check!(
-/// 65_306 => PosError::FailedTransferToRewardsPurse
-/// # );
-/// # show_and_check!(
-/// 65_307 => PosError::FailedTransferToAccountPurse
-/// # );
-/// # show_and_check!(
-/// 65_308 => PosError::SetRefundPurseCalledOutsidePayment
+/// 65_306 => PosError::SetRefundPurseCalledOutsidePayment
 /// # );
 ///
 /// // User-defined errors:

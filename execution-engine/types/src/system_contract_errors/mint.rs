@@ -38,12 +38,6 @@ pub enum Error {
     /// Purse not found while trying to get balance.
     #[fail(display = "Purse not found")]
     PurseNotFound = 7,
-    /// A required argument wasn't passed to the Mint contract.
-    #[fail(display = "Missing argument")]
-    MissingArgument = 102,
-    /// An argument passed to the Mint contract didn't parse correctly.
-    #[fail(display = "Passed argument is invalid")]
-    InvalidArgument = 103,
 }
 
 impl From<PurseIdError> for Error {
@@ -82,8 +76,6 @@ impl TryFrom<u8> for Error {
             d if d == Error::DestNotFound as u8 => Ok(Error::DestNotFound),
             d if d == Error::InvalidURef as u8 => Ok(Error::InvalidURef),
             d if d == Error::InvalidAccessRights as u8 => Ok(Error::InvalidAccessRights),
-            d if d == Error::MissingArgument as u8 => Ok(Error::MissingArgument),
-            d if d == Error::InvalidArgument as u8 => Ok(Error::InvalidArgument),
             d if d == Error::InvalidNonEmptyPurseCreation as u8 => {
                 Ok(Error::InvalidNonEmptyPurseCreation)
             }
