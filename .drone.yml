@@ -198,6 +198,21 @@ steps:
       - "**/.drone.yml"
       - "**/**.md"
 
+- name: black-and-flake8-bors
+  commands:
+  - "python3 -m pip install pipenv"
+  - "cd integration-testing"
+  - "./run_flake8_black.sh"
+  image: "casperlabs/buildenv:latest"
+  when:
+    branch:
+    - staging
+    - trying
+    changeset:
+      includes:
+      - "**/.drone.yml"
+      - "integration-testing/**"
+
 - name: sbt-test-docker-bors
   commands:
   - "sbt test"
