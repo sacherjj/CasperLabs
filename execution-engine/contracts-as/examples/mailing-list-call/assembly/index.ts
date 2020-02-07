@@ -25,7 +25,7 @@ export function call(): void {
         Error.fromErrorCode(ErrorCode.GetKey).revert();
         return;
     }
-    
+
     let name = "CasperLabs";
     let maybeSubKeyBytes = callContract(<Key>contractKey, [
         CLValue.fromString(SUB_METHOD),
@@ -75,8 +75,6 @@ export function call(): void {
         Error.fromUserError(<u16>UserError.GetMessagesURef)
         return;
     }
-
-    // TODO: Decode list of strings and do the check (currently fails)
 
     const messageBytes = <Uint8Array>maybeMessagesBytes;
     const messages = fromBytesStringList(messageBytes);

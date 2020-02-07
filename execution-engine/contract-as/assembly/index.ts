@@ -137,7 +137,7 @@ export function putKey(name: String, key: Key): void {
 
 export function getKey(name: String): Key | null {
   var nameBytes = toBytesString(name);
-  let keyBytes = new Uint8Array(KEY_UREF_SERIALIZED_LENGTH); // TODO: some equivalent of Key::serialized_size_hint() ?
+  let keyBytes = new Uint8Array(KEY_UREF_SERIALIZED_LENGTH);
   let resultSize = new Uint32Array(1);
   let ret =  externals.get_key(
       nameBytes.dataStart,
