@@ -255,7 +255,7 @@ impl FromBytes for CLType {
                 Ok((cl_type, remainder))
             }
             CL_TYPE_TAG_ANY => Ok((CLType::Any, remainder)),
-            _ => Err(bytesrepr::Error::FormattingError),
+            _ => Err(bytesrepr::Error::Formatting),
         }
     }
 }

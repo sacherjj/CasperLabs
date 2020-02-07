@@ -61,7 +61,7 @@ impl ToBytes for Contract {
             + U64_SERIALIZED_LENGTH
             >= u32::max_value() as usize - U32_SERIALIZED_LENGTH * 2
         {
-            return Err(Error::OutOfMemoryError);
+            return Err(Error::OutOfMemory);
         }
         let size: usize = U32_SERIALIZED_LENGTH +                         //size for length of bytes
                     self.bytes.len() +                                    //size for elements of bytes

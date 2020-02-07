@@ -135,8 +135,8 @@ fn should_overwrite_system_contract_uref_as_system() {
         .exec_error_message(0)
         .expect("should execute mint overwrite with error");
     assert!(
-        error_msg.contains("FinalizationError"),
-        "Expected FinalizationError, got {}",
+        error_msg.contains("Finalization"),
+        "Expected Error::Finalization, got {}",
         error_msg
     );
 

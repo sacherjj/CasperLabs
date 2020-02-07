@@ -56,7 +56,7 @@ fn should_raise_insufficient_payment_when_caller_lacks_minimum_balance() {
     let error_message = utils::get_error_message(account_1_response);
 
     assert!(
-        error_message.contains("InsufficientPaymentError"),
+        error_message.contains("InsufficientPayment"),
         "expected insufficient payment, got: {}",
         error_message
     );

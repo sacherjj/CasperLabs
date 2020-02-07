@@ -117,7 +117,7 @@ impl ToBytes for Vec<CLValue> {
     fn to_bytes(&self) -> Result<Vec<u8>, bytesrepr::Error> {
         let serialized_len = self.iter().map(CLValue::serialized_len).sum();
         if serialized_len > u32::max_value() as usize - U32_SERIALIZED_LENGTH {
-            return Err(bytesrepr::Error::OutOfMemoryError);
+            return Err(bytesrepr::Error::OutOfMemory);
         }
 
         let mut result = Vec::with_capacity(serialized_len);
@@ -134,7 +134,7 @@ impl ToBytes for Vec<CLValue> {
     fn into_bytes(self) -> Result<Vec<u8>, bytesrepr::Error> {
         let serialized_len = self.iter().map(CLValue::serialized_len).sum();
         if serialized_len > u32::max_value() as usize - U32_SERIALIZED_LENGTH {
-            return Err(bytesrepr::Error::OutOfMemoryError);
+            return Err(bytesrepr::Error::OutOfMemory);
         }
 
         let mut result = Vec::with_capacity(serialized_len);

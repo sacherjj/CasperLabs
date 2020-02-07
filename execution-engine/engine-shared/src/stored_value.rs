@@ -97,7 +97,7 @@ impl TryFrom<StoredValue> for Contract {
 fn to_bytes<T: ToBytes>(value: &T, tag: Tag) -> Result<Vec<u8>, bytesrepr::Error> {
     let mut bytes = value.to_bytes()?;
     if bytes.len() >= u32::max_value() as usize - mem::size_of::<Tag>() {
-        return Err(bytesrepr::Error::OutOfMemoryError);
+        return Err(bytesrepr::Error::OutOfMemory);
     }
 
     let mut result = Vec::with_capacity(bytes.len() + mem::size_of::<Tag>());
@@ -126,7 +126,7 @@ impl FromBytes for StoredValue {
                 .map(|(account, remainder)| (StoredValue::Account(account), remainder)),
             tag if tag == Tag::Contract as u8 => Contract::from_bytes(remainder)
                 .map(|(contract, remainder)| (StoredValue::Contract(contract), remainder)),
-            _ => Err(bytesrepr::Error::FormattingError),
+            _ => Err(bytesrepr::Error::Formatting),
         }
     }
 }

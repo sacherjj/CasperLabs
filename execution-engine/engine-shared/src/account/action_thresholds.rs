@@ -20,7 +20,7 @@ impl ActionThresholds {
         key_management: Weight,
     ) -> Result<ActionThresholds, SetThresholdFailure> {
         if deployment > key_management {
-            return Err(SetThresholdFailure::DeploymentThresholdError);
+            return Err(SetThresholdFailure::DeploymentThreshold);
         }
         Ok(ActionThresholds {
             deployment,
@@ -38,7 +38,7 @@ impl ActionThresholds {
         new_threshold: Weight,
     ) -> Result<(), SetThresholdFailure> {
         if new_threshold > self.key_management {
-            Err(SetThresholdFailure::DeploymentThresholdError)
+            Err(SetThresholdFailure::DeploymentThreshold)
         } else {
             self.deployment = new_threshold;
             Ok(())
@@ -51,7 +51,7 @@ impl ActionThresholds {
         new_threshold: Weight,
     ) -> Result<(), SetThresholdFailure> {
         if self.deployment > new_threshold {
-            Err(SetThresholdFailure::KeyManagementThresholdError)
+            Err(SetThresholdFailure::KeyManagementThreshold)
         } else {
             self.key_management = new_threshold;
             Ok(())

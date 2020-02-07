@@ -1542,7 +1542,7 @@ where
     fn get_arg_size(&mut self, index: usize, size_ptr: u32) -> Result<Result<(), ApiError>, Trap> {
         let arg_size = match self.context.args().get(index) {
             Some(arg) if arg.inner_bytes().len() > u32::max_value() as usize => {
-                return Ok(Err(ApiError::OutOfMemoryError))
+                return Ok(Err(ApiError::OutOfMemory))
             }
             None => return Ok(Err(ApiError::MissingArgument)),
             Some(arg) => arg.inner_bytes().len() as u32,
@@ -1569,7 +1569,7 @@ where
         };
 
         if arg.inner_bytes().len() > output_size {
-            return Ok(Err(ApiError::OutOfMemoryError));
+            return Ok(Err(ApiError::OutOfMemory));
         }
 
         if let Err(e) = self
@@ -2481,7 +2481,7 @@ where
         };
 
         if serialized_value.len() > u32::max_value() as usize {
-            return Ok(Err(ApiError::OutOfMemoryError));
+            return Ok(Err(ApiError::OutOfMemory));
         }
         if serialized_value.len() > dest_size {
             return Ok(Err(ApiError::BufferTooSmall));

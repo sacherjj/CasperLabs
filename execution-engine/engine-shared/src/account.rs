@@ -220,7 +220,7 @@ impl ToBytes for Account {
             + associated_keys_size
             + action_thresholds_size;
         if serialized_account_size >= u32::max_value() as usize {
-            return Err(Error::OutOfMemoryError);
+            return Err(Error::OutOfMemory);
         }
         let mut result: Vec<u8> = Vec::with_capacity(serialized_account_size);
         result.extend(&self.public_key.to_bytes()?);

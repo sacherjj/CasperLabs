@@ -57,7 +57,7 @@ pub use self::{
 };
 use crate::{
     engine_state::{
-        error::Error::MissingSystemContractError,
+        error::Error::MissingSystemContract,
         execute_request::ExecuteRequest,
         query::{QueryRequest, QueryResult},
         upgrade::{UpgradeConfig, UpgradeResult},
@@ -118,7 +118,7 @@ where
     ) -> Result<Option<ProtocolData>, Error> {
         match self.state.get_protocol_data(protocol_version) {
             Ok(Some(protocol_data)) => Ok(Some(protocol_data)),
-            Err(error) => Err(Error::ExecError(error.into())),
+            Err(error) => Err(Error::Exec(error.into())),
             _ => Ok(None),
         }
     }
@@ -448,7 +448,7 @@ where
                 return Err(Error::InvalidProtocolVersion(current_protocol_version));
             }
             Err(error) => {
-                return Err(Error::ExecError(error.into()));
+                return Err(Error::Exec(error.into()));
             }
         };
 
@@ -511,7 +511,7 @@ where
                     match tracking_copy.borrow_mut().read(correlation_id, &key) {
                         Ok(Some(StoredValue::Account(account))) => account,
                         Ok(_) => panic!("system account must exist"),
-                        Err(error) => return Err(Error::ExecError(error.into())),
+                        Err(error) => return Err(Error::Exec(error.into())),
                     }
                 };
 
@@ -607,7 +607,7 @@ where
 
         Ok(mut_tracking_copy
             .query(correlation_id, query_request.key(), query_request.path())
-            .map_err(|err| Error::ExecError(err.into()))?
+            .map_err(|err| Error::Exec(err.into()))?
             .into())
     }
 
@@ -679,13 +679,11 @@ where
             }
             ExecutableDeployItem::StoredContractByName { name, .. } => {
                 let stored_contract_key = account.named_keys().get(name).ok_or_else(|| {
-                    error::Error::ExecError(execution::Error::URefNotFound(name.to_string()))
+                    error::Error::Exec(execution::Error::URefNotFound(name.to_string()))
                 })?;
                 if let Key::URef(uref) = stored_contract_key {
                     if !uref.is_readable() {
-                        return Err(error::Error::ExecError(execution::Error::ForgedReference(
-                            *uref,
-                        )));
+                        return Err(error::Error::Exec(execution::Error::ForgedReference(*uref)));
                     }
                 }
                 *stored_contract_key
@@ -711,12 +709,12 @@ where
                 match maybe_named_key {
                     Some(Key::URef(uref)) if uref.is_readable() => normalized_uref,
                     Some(Key::URef(_)) => {
-                        return Err(error::Error::ExecError(execution::Error::ForgedReference(
+                        return Err(error::Error::Exec(execution::Error::ForgedReference(
                             read_only_uref,
                         )));
                     }
                     Some(key) => {
-                        return Err(error::Error::ExecError(execution::Error::TypeMismatch(
+                        return Err(error::Error::Exec(execution::Error::TypeMismatch(
                             engine_shared::transform::TypeMismatch::new(
                                 "Key::URef".to_string(),
                                 key.type_string(),
@@ -724,7 +722,7 @@ where
                         )));
                     }
                     None => {
-                        return Err(error::Error::ExecError(execution::Error::KeyNotFound(
+                        return Err(error::Error::Exec(execution::Error::KeyNotFound(
                             Key::URef(read_only_uref),
                         )));
                     }
@@ -743,7 +741,7 @@ where
                 expected: protocol_version.value().major,
                 actual: contract_version.value().major,
             };
-            return Err(error::Error::ExecError(exec_error));
+            return Err(error::Error::Exec(exec_error));
         }
 
         let (ret, _, _) = contract.destructure();
@@ -784,7 +782,7 @@ where
             Some(account_addr) => account_addr,
             None => {
                 return Ok(ExecutionResult::precondition_failure(
-                    error::Error::AuthorizationError,
+                    error::Error::Authorization,
                 ))
             }
         };
@@ -798,7 +796,7 @@ where
             Ok(account) => account,
             Err(_) => {
                 return Ok(ExecutionResult::precondition_failure(
-                    error::Error::AuthorizationError,
+                    error::Error::Authorization,
                 ));
             }
         };
@@ -807,7 +805,7 @@ where
         // validation_spec_3: account validity
         if !account.can_authorize(&authorization_keys) {
             return Ok(ExecutionResult::precondition_failure(
-                crate::engine_state::error::Error::AuthorizationError,
+                crate::engine_state::error::Error::Authorization,
             ));
         }
 
@@ -844,7 +842,7 @@ where
                 return Ok(ExecutionResult::precondition_failure(error));
             }
             Err(error) => {
-                return Ok(ExecutionResult::precondition_failure(Error::ExecError(
+                return Ok(ExecutionResult::precondition_failure(Error::Exec(
                     error.into(),
                 )));
             }
@@ -905,7 +903,7 @@ where
                 match proof_of_stake_contract.named_keys().get(POS_REWARDS_PURSE) {
                     Some(key) => *key,
                     None => {
-                        return Ok(ExecutionResult::precondition_failure(Error::DeployError));
+                        return Ok(ExecutionResult::precondition_failure(Error::Deploy));
                     }
                 };
 
@@ -951,7 +949,7 @@ where
         // validation_spec_5: account main purse minimum balance
         if account_main_purse_balance < max_payment_cost {
             return Ok(ExecutionResult::precondition_failure(
-                Error::InsufficientPaymentError,
+                Error::InsufficientPayment,
             ));
         }
 
@@ -1020,7 +1018,7 @@ where
             let payment_purse: Key =
                 match proof_of_stake_contract.named_keys().get(POS_PAYMENT_PURSE) {
                     Some(key) => *key,
-                    None => return Ok(ExecutionResult::precondition_failure(Error::DeployError)),
+                    None => return Ok(ExecutionResult::precondition_failure(Error::Deploy)),
                 };
 
             let purse_balance_key = match tracking_copy.borrow_mut().get_purse_balance_key(
@@ -1047,7 +1045,7 @@ where
 
         if let Some(forced_transfer) = payment_result.check_forced_transfer(payment_purse_balance) {
             let error = match forced_transfer {
-                ForcedTransferResult::InsufficientPayment => Error::InsufficientPaymentError,
+                ForcedTransferResult::InsufficientPayment => Error::InsufficientPayment,
                 ForcedTransferResult::PaymentFailure => payment_result.take_error().unwrap(),
             };
             return Ok(ExecutionResult::new_payment_code_error(
@@ -1239,7 +1237,7 @@ where
 
         let contract = match reader.read(correlation_id, &proof_of_stake)? {
             Some(StoredValue::Contract(contract)) => contract,
-            _ => return Err(MissingSystemContractError("proof of stake".to_string())),
+            _ => return Err(MissingSystemContract("proof of stake".to_string())),
         };
 
         let bonded_validators = contract

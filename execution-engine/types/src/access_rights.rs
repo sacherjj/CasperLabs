@@ -72,7 +72,7 @@ impl bytesrepr::FromBytes for AccessRights {
         let (id, rem): (u8, &[u8]) = bytesrepr::FromBytes::from_bytes(bytes)?;
         match AccessRights::from_bits(id) {
             Some(rights) => Ok((rights, rem)),
-            None => Err(bytesrepr::Error::FormattingError),
+            None => Err(bytesrepr::Error::Formatting),
         }
     }
 }

@@ -34,7 +34,7 @@ pub enum Error {
     InvalidNonEmptyPurseCreation = 5,
     /// Failed to read from local or global storage.
     #[fail(display = "Storage error")]
-    StorageError = 6,
+    Storage = 6,
     /// Purse not found while trying to get balance.
     #[fail(display = "Purse not found")]
     PurseNotFound = 7,
@@ -104,9 +104,9 @@ impl FromBytes for Error {
         let (value, rem): (u8, _) = FromBytes::from_bytes(bytes)?;
         let error: Error = value
             .try_into()
-            // In case an Error variant is unable to be determined it would return a FormattingError
-            // as if its unable to be correctly deserialized.
-            .map_err(|_| bytesrepr::Error::FormattingError)?;
+            // In case an Error variant is unable to be determined it would return an
+            // Error::Formatting as if its unable to be correctly deserialized.
+            .map_err(|_| bytesrepr::Error::Formatting)?;
         Ok((error, rem))
     }
 }

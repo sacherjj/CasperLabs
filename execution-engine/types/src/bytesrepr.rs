@@ -61,19 +61,19 @@ pub enum Error {
     #[fail(display = "Deserialization error: early end of stream")]
     EarlyEndOfStream = 0,
     /// Formatting error while deserializing.
-    #[fail(display = "Deserialization error: formatting error")]
-    FormattingError,
+    #[fail(display = "Deserialization error: formatting")]
+    Formatting,
     /// Not all input bytes were consumed in [`deserialize`].
     #[fail(display = "Deserialization error: left-over bytes")]
     LeftOverBytes,
     /// Out of memory error.
     #[fail(display = "Serialization error: out of memory")]
-    OutOfMemoryError,
+    OutOfMemory,
 }
 
 impl From<TryReserveError> for Error {
     fn from(_: TryReserveError) -> Error {
-        Error::OutOfMemoryError
+        Error::OutOfMemory
     }
 }
 
@@ -116,7 +116,7 @@ impl FromBytes for bool {
             Some((byte, rem)) => match byte {
                 1 => Ok((true, rem)),
                 0 => Ok((false, rem)),
-                _ => Err(Error::FormattingError),
+                _ => Err(Error::Formatting),
             },
         }
     }
@@ -210,7 +210,7 @@ impl ToBytes for Vec<u8> {
         // Return error if size of serialized vector would exceed limit for
         // 32-bit architecture.
         if self.len() >= u32::max_value() as usize - U32_SERIALIZED_LENGTH {
-            return Err(Error::OutOfMemoryError);
+            return Err(Error::OutOfMemory);
         }
         let size = self.len() as u32;
         let mut result: Vec<u8> = Vec::with_capacity(U32_SERIALIZED_LENGTH + size as usize);
@@ -240,7 +240,7 @@ impl<T: ToBytes> ToBytes for Option<T> {
             Some(v) => {
                 let mut value = v.to_bytes()?;
                 if value.len() >= u32::max_value() as usize - U8_SERIALIZED_LENGTH {
-                    return Err(Error::OutOfMemoryError);
+                    return Err(Error::OutOfMemory);
                 }
                 let mut result: Vec<u8> = Vec::with_capacity(U8_SERIALIZED_LENGTH + value.len());
                 result.append(&mut 1u8.to_bytes()?);
@@ -263,7 +263,7 @@ impl<T: FromBytes> FromBytes for Option<T> {
                 let (t, rem): (T, &[u8]) = FromBytes::from_bytes(rem)?;
                 Ok((Some(t), rem))
             }
-            _ => Err(Error::FormattingError),
+            _ => Err(Error::Formatting),
         }
     }
 }
@@ -272,7 +272,7 @@ impl ToBytes for Vec<i32> {
     fn to_bytes(&self) -> Result<Vec<u8>, Error> {
         // Return error if size of vector would exceed length of serialized data
         if self.len() * I32_SERIALIZED_LENGTH >= u32::max_value() as usize - U32_SERIALIZED_LENGTH {
-            return Err(Error::OutOfMemoryError);
+            return Err(Error::OutOfMemory);
         }
         let size = self.len() as u32;
         let mut result: Vec<u8> =
@@ -322,7 +322,7 @@ impl ToBytes for Vec<Vec<u8>> {
         let serialized_len = self.iter().map(Vec::len).sum::<usize>()
             + (U32_SERIALIZED_LENGTH as usize * (self_len + 1));
         if serialized_len > u32::max_value() as usize {
-            return Err(Error::OutOfMemoryError);
+            return Err(Error::OutOfMemory);
         }
 
         let mut result: Vec<u8> = Vec::with_capacity(serialized_len);
@@ -338,7 +338,7 @@ impl ToBytes for Vec<Vec<u8>> {
         let serialized_len = self.iter().map(Vec::len).sum::<usize>()
             + (U32_SERIALIZED_LENGTH as usize * (self_len + 1));
         if serialized_len > u32::max_value() as usize {
-            return Err(Error::OutOfMemoryError);
+            return Err(Error::OutOfMemory);
         }
 
         let mut result: Vec<u8> = Vec::with_capacity(serialized_len);
@@ -389,7 +389,7 @@ macro_rules! impl_to_from_bytes_for_array {
                     // size of `T`.
                     let approx_size = self.len() * size_of::<T>();
                     if approx_size >= u32::max_value() as usize {
-                        return Err(Error::OutOfMemoryError);
+                        return Err(Error::OutOfMemory);
                     }
 
                     let mut result = Vec::with_capacity(approx_size);
@@ -408,7 +408,7 @@ macro_rules! impl_to_from_bytes_for_array {
                     let (size, remainder) = u32::from_bytes(bytes)?;
                     bytes = remainder;
                     if size != $N as u32 {
-                        return Err(Error::FormattingError);
+                        return Err(Error::Formatting);
                     }
 
                     let mut result: MaybeUninit<[T; $N]> = MaybeUninit::uninit();
@@ -475,7 +475,7 @@ impl ToBytes for String {
 impl FromBytes for String {
     fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
         let (str_bytes, rem): (Vec<u8>, &[u8]) = FromBytes::from_bytes(bytes)?;
-        let result = String::from_utf8(str_bytes).map_err(|_| Error::FormattingError)?;
+        let result = String::from_utf8(str_bytes).map_err(|_| Error::Formatting)?;
         Ok((result, rem))
     }
 }
@@ -520,7 +520,7 @@ where
 
         let (lower_bound, _upper_bound) = bytes.size_hint();
         if lower_bound >= u32::max_value() as usize - U32_SERIALIZED_LENGTH {
-            return Err(Error::OutOfMemoryError);
+            return Err(Error::OutOfMemory);
         }
         let mut result: Vec<u8> = Vec::with_capacity(U32_SERIALIZED_LENGTH + lower_bound);
         result.append(&mut num_keys.to_bytes()?);
@@ -550,7 +550,7 @@ where
 impl ToBytes for str {
     fn to_bytes(&self) -> Result<Vec<u8>, Error> {
         if self.len() >= u32::max_value() as usize - U32_SERIALIZED_LENGTH {
-            return Err(Error::OutOfMemoryError);
+            return Err(Error::OutOfMemory);
         }
         self.as_bytes().to_vec().into_bytes()
     }
@@ -587,7 +587,7 @@ impl<T: FromBytes, E: FromBytes> FromBytes for Result<T, E> {
                 let (value, rem): (T, &[u8]) = FromBytes::from_bytes(rem)?;
                 Ok((Ok(value), rem))
             }
-            _ => Err(Error::FormattingError),
+            _ => Err(Error::Formatting),
         }
     }
 }
@@ -672,7 +672,7 @@ mod tests {
             fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
                 let instance_num = INSTANCE_COUNT.with(|count| *count.borrow());
                 if instance_num >= MAX_INSTANCES {
-                    Err(Error::FormattingError)
+                    Err(Error::Formatting)
                 } else {
                     INSTANCE_COUNT.with(|count| *count.borrow_mut() += 1);
                     Ok((LeakChecker, bytes))

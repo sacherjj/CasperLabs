@@ -110,13 +110,13 @@ const MINT_ERROR_OFFSET: u32 = (POS_ERROR_OFFSET - 1) - u8::MAX as u32; // 65024
 /// 19 => EarlyEndOfStream
 /// # );
 /// # show_and_check!(
-/// 20 => FormattingError
+/// 20 => Formatting
 /// # );
 /// # show_and_check!(
 /// 21 => LeftOverBytes
 /// # );
 /// # show_and_check!(
-/// 22 => OutOfMemoryError
+/// 22 => OutOfMemory
 /// # );
 /// # show_and_check!(
 /// 23 => MaxKeysLimit
@@ -134,10 +134,10 @@ const MINT_ERROR_OFFSET: u32 = (POS_ERROR_OFFSET - 1) - u8::MAX as u32; // 65024
 /// 27 => ThresholdViolation
 /// # );
 /// # show_and_check!(
-/// 28 => KeyManagementThresholdError
+/// 28 => KeyManagementThreshold
 /// # );
 /// # show_and_check!(
-/// 29 => DeploymentThresholdError
+/// 29 => DeploymentThreshold
 /// # );
 /// # show_and_check!(
 /// 30 => InsufficientTotalWeight
@@ -182,7 +182,7 @@ const MINT_ERROR_OFFSET: u32 = (POS_ERROR_OFFSET - 1) - u8::MAX as u32; // 65024
 /// 65_029 => MintError::InvalidNonEmptyPurseCreation
 /// # );
 /// # show_and_check!(
-/// 65_030 => MintError::StorageError
+/// 65_030 => MintError::Storage
 /// # );
 /// # show_and_check!(
 /// 65_031 => MintError::PurseNotFound
@@ -362,11 +362,11 @@ pub enum ApiError {
     /// Early end of stream while deserializing.
     EarlyEndOfStream,
     /// Formatting error while deserializing.
-    FormattingError,
+    Formatting,
     /// Not all input bytes were consumed in [`deserialize`](crate::bytesrepr::deserialize).
     LeftOverBytes,
     /// Out of memory error.
-    OutOfMemoryError,
+    OutOfMemory,
     /// There are already [`MAX_ASSOCIATED_KEYS`](crate::account::MAX_ASSOCIATED_KEYS)
     /// [`PublicKey`](crate::account::PublicKey)s associated with the given account.
     MaxKeysLimit,
@@ -384,9 +384,9 @@ pub enum ApiError {
     ThresholdViolation,
     /// Setting the key-management threshold to a value lower than the deployment threshold is
     /// disallowed.
-    KeyManagementThresholdError,
+    KeyManagementThreshold,
     /// Setting the deployment threshold to a value greater than any other threshold is disallowed.
-    DeploymentThresholdError,
+    DeploymentThreshold,
     /// Setting a threshold to a value greater than the total weight of associated keys is
     /// disallowed.
     InsufficientTotalWeight,
@@ -415,9 +415,9 @@ impl From<bytesrepr::Error> for ApiError {
     fn from(error: bytesrepr::Error) -> Self {
         match error {
             bytesrepr::Error::EarlyEndOfStream => ApiError::EarlyEndOfStream,
-            bytesrepr::Error::FormattingError => ApiError::FormattingError,
+            bytesrepr::Error::Formatting => ApiError::Formatting,
             bytesrepr::Error::LeftOverBytes => ApiError::LeftOverBytes,
-            bytesrepr::Error::OutOfMemoryError => ApiError::OutOfMemoryError,
+            bytesrepr::Error::OutOfMemory => ApiError::OutOfMemory,
         }
     }
 }
@@ -455,10 +455,8 @@ impl From<RemoveKeyFailure> for ApiError {
 impl From<SetThresholdFailure> for ApiError {
     fn from(error: SetThresholdFailure) -> Self {
         match error {
-            SetThresholdFailure::KeyManagementThresholdError => {
-                ApiError::KeyManagementThresholdError
-            }
-            SetThresholdFailure::DeploymentThresholdError => ApiError::DeploymentThresholdError,
+            SetThresholdFailure::KeyManagementThreshold => ApiError::KeyManagementThreshold,
+            SetThresholdFailure::DeploymentThreshold => ApiError::DeploymentThreshold,
             SetThresholdFailure::PermissionDeniedError => ApiError::PermissionDenied,
             SetThresholdFailure::InsufficientTotalWeight => ApiError::InsufficientTotalWeight,
         }
@@ -522,16 +520,16 @@ impl From<ApiError> for u32 {
             ApiError::ValueConversion => 17,
             ApiError::CLTypeMismatch => 18,
             ApiError::EarlyEndOfStream => 19,
-            ApiError::FormattingError => 20,
+            ApiError::Formatting => 20,
             ApiError::LeftOverBytes => 21,
-            ApiError::OutOfMemoryError => 22,
+            ApiError::OutOfMemory => 22,
             ApiError::MaxKeysLimit => 23,
             ApiError::DuplicateKey => 24,
             ApiError::PermissionDenied => 25,
             ApiError::MissingKey => 26,
             ApiError::ThresholdViolation => 27,
-            ApiError::KeyManagementThresholdError => 28,
-            ApiError::DeploymentThresholdError => 29,
+            ApiError::KeyManagementThreshold => 28,
+            ApiError::DeploymentThreshold => 29,
             ApiError::InsufficientTotalWeight => 30,
             ApiError::InvalidSystemContract => 31,
             ApiError::PurseNotCreated => 32,
@@ -570,18 +568,16 @@ impl Debug for ApiError {
             ApiError::ValueConversion => write!(f, "ApiError::ValueConversion")?,
             ApiError::CLTypeMismatch => write!(f, "ApiError::CLTypeMismatch")?,
             ApiError::EarlyEndOfStream => write!(f, "ApiError::EarlyEndOfStream")?,
-            ApiError::FormattingError => write!(f, "ApiError::FormattingError")?,
+            ApiError::Formatting => write!(f, "ApiError::Formatting")?,
             ApiError::LeftOverBytes => write!(f, "ApiError::LeftOverBytes")?,
-            ApiError::OutOfMemoryError => write!(f, "ApiError::OutOfMemoryError")?,
+            ApiError::OutOfMemory => write!(f, "ApiError::OutOfMemory")?,
             ApiError::MaxKeysLimit => write!(f, "ApiError::MaxKeysLimit")?,
             ApiError::DuplicateKey => write!(f, "ApiError::DuplicateKey")?,
             ApiError::PermissionDenied => write!(f, "ApiError::PermissionDenied")?,
             ApiError::MissingKey => write!(f, "ApiError::MissingKey")?,
             ApiError::ThresholdViolation => write!(f, "ApiError::ThresholdViolation")?,
-            ApiError::KeyManagementThresholdError => {
-                write!(f, "ApiError::KeyManagementThresholdError")?
-            }
-            ApiError::DeploymentThresholdError => write!(f, "ApiError::DeploymentThresholdError")?,
+            ApiError::KeyManagementThreshold => write!(f, "ApiError::KeyManagementThreshold")?,
+            ApiError::DeploymentThreshold => write!(f, "ApiError::DeploymentThreshold")?,
             ApiError::InsufficientTotalWeight => write!(f, "ApiError::InsufficientTotalWeight")?,
             ApiError::InvalidSystemContract => write!(f, "ApiError::InvalidSystemContract")?,
             ApiError::PurseNotCreated => write!(f, "ApiError::PurseNotCreated")?,
@@ -631,16 +627,16 @@ pub fn result_from(value: i32) -> Result<(), ApiError> {
         17 => Err(ApiError::ValueConversion),
         18 => Err(ApiError::CLTypeMismatch),
         19 => Err(ApiError::EarlyEndOfStream),
-        20 => Err(ApiError::FormattingError),
+        20 => Err(ApiError::Formatting),
         21 => Err(ApiError::LeftOverBytes),
-        22 => Err(ApiError::OutOfMemoryError),
+        22 => Err(ApiError::OutOfMemory),
         23 => Err(ApiError::MaxKeysLimit),
         24 => Err(ApiError::DuplicateKey),
         25 => Err(ApiError::PermissionDenied),
         26 => Err(ApiError::MissingKey),
         27 => Err(ApiError::ThresholdViolation),
-        28 => Err(ApiError::KeyManagementThresholdError),
-        29 => Err(ApiError::DeploymentThresholdError),
+        28 => Err(ApiError::KeyManagementThreshold),
+        29 => Err(ApiError::DeploymentThreshold),
         30 => Err(ApiError::InsufficientTotalWeight),
         31 => Err(ApiError::InvalidSystemContract),
         32 => Err(ApiError::PurseNotCreated),
@@ -736,16 +732,16 @@ mod tests {
         round_trip(Err(ApiError::ValueConversion));
         round_trip(Err(ApiError::CLTypeMismatch));
         round_trip(Err(ApiError::EarlyEndOfStream));
-        round_trip(Err(ApiError::FormattingError));
+        round_trip(Err(ApiError::Formatting));
         round_trip(Err(ApiError::LeftOverBytes));
-        round_trip(Err(ApiError::OutOfMemoryError));
+        round_trip(Err(ApiError::OutOfMemory));
         round_trip(Err(ApiError::MaxKeysLimit));
         round_trip(Err(ApiError::DuplicateKey));
         round_trip(Err(ApiError::PermissionDenied));
         round_trip(Err(ApiError::MissingKey));
         round_trip(Err(ApiError::ThresholdViolation));
-        round_trip(Err(ApiError::KeyManagementThresholdError));
-        round_trip(Err(ApiError::DeploymentThresholdError));
+        round_trip(Err(ApiError::KeyManagementThreshold));
+        round_trip(Err(ApiError::DeploymentThreshold));
         round_trip(Err(ApiError::InsufficientTotalWeight));
         round_trip(Err(ApiError::InvalidSystemContract));
         round_trip(Err(ApiError::PurseNotCreated));

@@ -12,23 +12,23 @@ pub const MEM_PAGES: u32 = 64;
 
 #[derive(Debug)]
 pub enum PreprocessingError {
-    DeserializeError(String),
+    Deserialize(String),
     OperationForbiddenByGasRules,
-    StackLimiterError,
+    StackLimiter,
 }
 
 impl From<elements::Error> for PreprocessingError {
     fn from(error: elements::Error) -> Self {
-        PreprocessingError::DeserializeError(error.to_string())
+        PreprocessingError::Deserialize(error.to_string())
     }
 }
 
 impl Display for PreprocessingError {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match self {
-            PreprocessingError::DeserializeError(error) => write!(f, "Deserialization error: {}", error),
+            PreprocessingError::Deserialize(error) => write!(f, "Deserialization error: {}", error),
             PreprocessingError::OperationForbiddenByGasRules => write!(f, "Encountered operation forbidden by gas rules. Consult instruction -> metering config map"),
-            PreprocessingError::StackLimiterError => write!(f, "Stack limiter error"),
+            PreprocessingError::StackLimiter => write!(f, "Stack limiter error"),
         }
     }
 }
@@ -53,7 +53,7 @@ impl Preprocessor {
         let module = pwasm_utils::inject_gas_counter(module, &self.wasm_costs.to_set())
             .map_err(|_| PreprocessingError::OperationForbiddenByGasRules)?;
         let module = stack_height::inject_limiter(module, self.wasm_costs.max_stack_height)
-            .map_err(|_| PreprocessingError::StackLimiterError)?;
+            .map_err(|_| PreprocessingError::StackLimiter)?;
         Ok(module)
     }
 }
