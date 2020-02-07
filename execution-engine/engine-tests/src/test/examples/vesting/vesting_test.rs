@@ -11,7 +11,7 @@ use types::{
     CLTyped, CLValue, Key, U512,
 };
 
-const TRANFER_TO_ACCOUNT_WASM: &str = "transfer_to_account.wasm";
+const TRANFER_TO_ACCOUNT_WASM: &str = "transfer_to_account_u512.wasm";
 const VESTING_CONTRACT_WASM: &str = "vesting_smart_contract.wasm";
 const VESTING_PROXY_CONTRACT_NAME: &str = "vesting_proxy";
 const VESTING_CONTRACT_NAME: &str = "vesting_01";

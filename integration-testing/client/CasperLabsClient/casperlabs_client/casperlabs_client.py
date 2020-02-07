@@ -403,7 +403,7 @@ class CasperLabsClient:
         deploy_args["session_args"] = abi.ABI.args(
             [
                 abi.ABI.account("account", target_account_bytes),
-                abi.ABI.u512("amount", amount),
+                abi.ABI.long_value("amount", amount),
             ]
         )
         return self.deploy(**deploy_args)

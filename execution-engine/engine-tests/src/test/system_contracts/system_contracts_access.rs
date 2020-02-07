@@ -12,7 +12,7 @@ use types::{URef, U512};
 
 const CONTRACT_SYSTEM_CONTRACTS_ACCESS: &str = "system_contracts_access.wasm";
 const CONTRACT_OVERWRITE_UREF_CONTENT: &str = "overwrite_uref_content.wasm";
-const CONTRACT_TRANSFER_TO_ACCOUNT: &str = "transfer_to_account.wasm";
+const CONTRACT_TRANSFER_TO_ACCOUNT: &str = "transfer_to_account_u512.wasm";
 
 const SYSTEM_ADDR: [u8; 32] = [0u8; 32];
 const ACCOUNT_1_ADDR: [u8; 32] = [1u8; 32];

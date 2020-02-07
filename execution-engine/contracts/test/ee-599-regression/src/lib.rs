@@ -26,7 +26,7 @@ const TRANSFER_FROM_PURSE_TO_ACCOUNT: &str = "transfer_from_purse_to_account";
 const TRANSFER_FROM_PURSE_TO_PURSE: &str = "transfer_from_purse_to_purse";
 const TRANSFER_FUNDS_EXT: &str = "transfer_funds_ext";
 const TRANSFER_FUNDS_KEY: &str = "transfer_funds";
-const TRANSFER_TO_ACCOUNT: &str = "transfer_to_account";
+const TRANSFER_TO_ACCOUNT: &str = "transfer_to_account_u512";
 
 enum DelegateArg {
     Method = 0,

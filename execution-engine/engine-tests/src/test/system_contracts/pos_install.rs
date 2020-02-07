@@ -12,7 +12,7 @@ use types::{
     AccessRights, Key, URef, U512,
 };
 
-const CONTRACT_TRANSFER_TO_ACCOUNT: &str = "transfer_to_account.wasm";
+const CONTRACT_TRANSFER_TO_ACCOUNT: &str = "transfer_to_account_u512.wasm";
 const TRANSFER_AMOUNT: u64 = 250_000_000 + 1000;
 const SYSTEM_ADDR: [u8; 32] = [0u8; 32];
 const DEPLOY_HASH_2: [u8; 32] = [2u8; 32];

@@ -12,7 +12,7 @@ use engine_test_support::{
 use types::U512;
 
 const CONTRACT_TRANSFER_PURSE_TO_ACCOUNT: &str = "transfer_purse_to_account.wasm";
-const CONTRACT_TRANSFER_TO_ACCOUNT: &str = "transfer_to_account.wasm";
+const CONTRACT_TRANSFER_TO_ACCOUNT: &str = "transfer_to_account_u512.wasm";
 
 lazy_static! {
     static ref TRANSFER_1_AMOUNT: U512 = U512::from(250_000_000) + 1000;

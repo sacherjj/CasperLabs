@@ -8,7 +8,7 @@ use engine_test_support::internal::{
 use types::{account::PurseId, bytesrepr::ToBytes, CLValue, Key, U512};
 
 const ERC_20_CONTRACT_WASM: &str = "erc20_smart_contract.wasm";
-const TRANFER_TO_ACCOUNT_WASM: &str = "transfer_to_account.wasm";
+const TRANFER_TO_ACCOUNT_WASM: &str = "transfer_to_account_u512.wasm";
 const METHOD_DEPLOY: &str = "deploy";
 const METHOD_ASSERT_BALANCE: &str = "assert_balance";
 const METHOD_ASSERT_TOTAL_SUPPLY: &str = "assert_total_supply";

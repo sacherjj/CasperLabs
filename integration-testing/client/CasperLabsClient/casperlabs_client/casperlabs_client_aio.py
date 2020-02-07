@@ -204,7 +204,7 @@ class CasperLabsClientAIO(object):
         deploy_args["session_args"] = abi.ABI.args(
             [
                 abi.ABI.account("account", bytes.fromhex(target_account_hex)),
-                abi.ABI.u512("amount", amount),
+                abi.ABI.long_value("amount", amount),
             ]
         )
         return await self.deploy(**deploy_args)
