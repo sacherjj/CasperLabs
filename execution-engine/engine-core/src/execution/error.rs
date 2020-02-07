@@ -3,7 +3,7 @@ use core::fmt;
 use parity_wasm::elements;
 use wasmi;
 
-use engine_shared::transform::TypeMismatch;
+use engine_shared::TypeMismatch;
 use types::{
     account::{AddKeyFailure, RemoveKeyFailure, SetThresholdFailure, UpdateKeyFailure},
     bytesrepr, system_contract_errors, AccessRights, CLValueError, Key, URef,

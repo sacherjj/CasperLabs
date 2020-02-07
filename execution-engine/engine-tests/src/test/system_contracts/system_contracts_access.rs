@@ -1,7 +1,7 @@
 use lazy_static::lazy_static;
 
 use engine_core::execution;
-use engine_shared::transform::TypeMismatch;
+use engine_shared::TypeMismatch;
 use engine_test_support::{
     internal::{
         ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT,
