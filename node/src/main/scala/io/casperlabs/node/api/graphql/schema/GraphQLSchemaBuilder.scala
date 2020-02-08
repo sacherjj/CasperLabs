@@ -2,8 +2,10 @@ package io.casperlabs.node.api.graphql.schema
 
 import cats.implicits._
 import com.google.protobuf.ByteString
+import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.api.BlockAPI
+import io.casperlabs.casper.api.BlockAPI.BlockAndMaybeDeploys
 import io.casperlabs.casper.consensus.info.{BlockInfo, DeployInfo}
 import io.casperlabs.casper.consensus.state
 import io.casperlabs.catscontrib.{Fs2Compiler, MonadThrowable}
@@ -30,7 +32,7 @@ import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.block._
 import io.casperlabs.storage.dag.DagStorage
 import io.casperlabs.storage.deploy.DeployStorage
-import sangria.execution.deferred.DeferredResolver
+import sangria.execution.deferred.{DeferredResolver, Fetcher, HasId}
 import sangria.schema._
 
 // format: off
@@ -50,7 +52,38 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream
   // GraphQL projections don't expose the body.
   val deployView = DeployInfo.View.BASIC
 
-  val blockTypes = new GraphQLBlockTypes[F]
+  val blockFetcher = Fetcher.caching(
+    { (_: Unit, hashes: Seq[BlockHash]) =>
+      // Fetches only unique blocks without repetitive reading of the same block many times.
+      //
+      // TODO: However, it still will be slow due to (in decreasing priority):
+      // 1) One-by-one reading from the database: update underlying API to accept multiple block hashes using 'WHERE block_hash IN ...'
+      //
+      // 2) Reading a full block: make use of Sangria Projections, although, not clear if it's possible to do without modifying the library's source code
+      // UPDATE: It reads full blocks only if a query contains 'children' at any depth.
+      // On the other hand, if 'children' presented, then it will read *all* blocks as FULL, even those for which we didn't ask children.
+      // UPDATE: Make sure to fetch blocks only when it's really needed.
+      // For instance, for 'block { parents { blockHash }' it shouldn't fetch parent blocks, because we have all the required information in the child block itself.
+      //
+      // 3) Seq->List conversion: least critical, must be ignored until we solve the above 2 issues
+      RunToFuture[F].unsafeToFuture(
+        hashes.toList
+          .traverse { hash =>
+            BlockAPI.getBlockInfoWithDeploys[F](
+              hash,
+              DeployInfo.View.BASIC.some,
+              BlockInfo.View.FULL
+            )
+          }
+          .map(list => list: Seq[BlockAndMaybeDeploys])
+      )
+    }
+  )(HasId {
+    case (blockInfo, _) =>
+      blockInfo.getSummary.blockHash
+  })
+
+  val blockTypes = new GraphQLBlockTypes(blockFetcher)
 
   private def projectionTerms(projections: Vector[ProjectedName]): Set[String] = {
     def flatToSet(ps: Vector[ProjectedName], acc: Set[String]): Set[String] =
@@ -171,7 +204,7 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream
                                                pageSize + 1,
                                                pageTokenParams.lastTimeStamp,
                                                pageTokenParams.lastDeployHash,
-                                               true
+                                               isNext = true
                                              )
                   (deploys, hasNextPage) = if (deploysWithOneMoreElem.length == pageSize + 1) {
                     (deploysWithOneMoreElem.take(pageSize), true)

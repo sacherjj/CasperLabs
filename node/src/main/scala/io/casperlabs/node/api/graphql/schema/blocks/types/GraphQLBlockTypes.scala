@@ -2,21 +2,14 @@ package io.casperlabs.node.api.graphql.schema.blocks.types
 
 import cats.implicits._
 import io.casperlabs.casper.Estimator.BlockHash
-import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
-import io.casperlabs.casper.api.BlockAPI
 import io.casperlabs.casper.api.BlockAPI.BlockAndMaybeDeploys
 import io.casperlabs.casper.consensus.Block._
 import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.consensus.info.DeployInfo.ProcessingResult
 import io.casperlabs.casper.consensus.info._
-import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.models.BlockImplicits._
-import io.casperlabs.node.api.graphql.RunToFuture
 import io.casperlabs.node.api.graphql.schema.utils.{DateType, ProtocolVersionType}
-import io.casperlabs.storage.block.BlockStorage
-import io.casperlabs.storage.dag.DagStorage
-import io.casperlabs.storage.deploy.DeployStorage
 import sangria.execution.deferred._
 import sangria.schema._
 
@@ -25,12 +18,10 @@ case class PageInfo(endCursor: String, hasNextPage: Boolean)
 case class DeployInfosWithPageInfo(deployInfos: List[DeployInfo], pageInfo: PageInfo)
 
 // format: off
-class GraphQLBlockTypes[F[_]: MonadThrowable
-                            : MultiParentCasperRef
-                            : BlockStorage
-                            : DeployStorage
-                            : DagStorage
-                            : RunToFuture] {
+/**
+  * Contains only GraphQL types without declaring actual ways of retrieving the information
+  */
+class GraphQLBlockTypes(val blockFetcher: Fetcher[Unit, BlockAndMaybeDeploys, BlockAndMaybeDeploys, BlockHash]) {
 // format: on
 
   val SignatureType = ObjectType(
@@ -141,37 +132,6 @@ class GraphQLBlockTypes[F[_]: MonadThrowable
       Field("deploy", DeployType, resolve = c => c.value.left.get.getDeploy)
     )
   )
-
-  val blockFetcher = Fetcher.caching(
-    { (_: Unit, hashes: Seq[BlockHash]) =>
-      // Fetches only unique blocks without repetitive reading of the same block many times.
-      //
-      // TODO: However, it still will be slow due to (in decreasing priority):
-      // 1) One-by-one reading from database: update underlying API to accept multiple block hashes using 'WHERE block_hash IN ...'
-      //
-      // 2) Reading a full block: make use of Sangria Projections, although, not clear if it's possible to do without modifying the library's source code
-      // UPDATE: It reads full blocks only if a query contains 'children' at any depth.
-      // On the other hand, if 'children' presented, then it will read *all* blocks as FULL, even those for which we didn't ask children.
-      // UPDATE: Make sure to fetch blocks only when it's really needed.
-      // For instance, for 'block { parents { blockHash }' query it shouldn't fetch parent blocks, because all information is already presented in the child itself.
-      //
-      // 3) Seq->List conversion: least critical, must be ignored until the above 2 issues are solved
-      RunToFuture[F].unsafeToFuture(
-        hashes.toList
-          .traverse { hash =>
-            BlockAPI.getBlockInfoWithDeploys[F](
-              hash,
-              DeployInfo.View.BASIC.some,
-              BlockInfo.View.FULL
-            )
-          }
-          .map(list => list: Seq[BlockAndMaybeDeploys])
-      )
-    }
-  )(HasId {
-    case (blockInfo, _) =>
-      blockInfo.getSummary.blockHash
-  })
 
   lazy val BlockInfoInterface = InterfaceType(
     "BlockInfo",
