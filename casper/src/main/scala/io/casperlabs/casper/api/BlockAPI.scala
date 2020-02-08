@@ -5,7 +5,7 @@ import cats.effect.{Concurrent, Resource, Sync}
 import cats.implicits._
 import cats.Monad
 import com.google.protobuf.ByteString
-import io.casperlabs.casper.Estimator.BlockHash
+import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper._
 import io.casperlabs.casper.consensus._
@@ -241,6 +241,16 @@ object BlockAPI {
           )
       )(_._1.pure[F])
     )
+
+  // TODO: Implement
+  /* Similar to [[getBlockInfosWithDeploys]] but in addition filters blocks by a validator. */
+  def getBlockInfosWithDeploysByValidator[F[_]: MonadThrowable: Log: MultiParentCasperRef: DeployStorage: DagStorage: Fs2Compiler](
+      validator: Validator,
+      depth: Int,
+      maxRank: Long,
+      maybeDeployView: Option[DeployInfo.View],
+      blockView: BlockInfo.View
+  ): F[List[BlockAndMaybeDeploys]] = ???
 
   /** Return block infos and maybe the corresponding deploy summaries in the a slice of the DAG.
     * Use `maxRank` 0 to get the top slice,

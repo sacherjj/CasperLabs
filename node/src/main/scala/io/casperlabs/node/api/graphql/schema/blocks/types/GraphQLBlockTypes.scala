@@ -1,17 +1,21 @@
 package io.casperlabs.node.api.graphql.schema.blocks.types
 
 import cats.implicits._
-import io.casperlabs.casper.Estimator.BlockHash
+import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.api.BlockAPI.BlockAndMaybeDeploys
 import io.casperlabs.casper.consensus.Block._
 import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.consensus.info.DeployInfo.ProcessingResult
 import io.casperlabs.casper.consensus.info._
 import io.casperlabs.crypto.codec.Base16
+import io.casperlabs.crypto.codec.ByteArraySyntax
 import io.casperlabs.models.BlockImplicits._
+import io.casperlabs.node.api.graphql.schema.blocks
 import io.casperlabs.node.api.graphql.schema.utils.{DateType, ProtocolVersionType}
 import sangria.execution.deferred._
 import sangria.schema._
+
+import scala.concurrent.Future
 
 case class PageInfo(endCursor: String, hasNextPage: Boolean)
 
@@ -21,7 +25,7 @@ case class DeployInfosWithPageInfo(deployInfos: List[DeployInfo], pageInfo: Page
 /**
   * Contains only GraphQL types without declaring actual ways of retrieving the information
   */
-class GraphQLBlockTypes(val blockFetcher: Fetcher[Unit, BlockAndMaybeDeploys, BlockAndMaybeDeploys, BlockHash]) {
+class GraphQLBlockTypes(val blockFetcher: Fetcher[Unit, BlockAndMaybeDeploys, BlockAndMaybeDeploys, BlockHash], val blocksByValidator: Context[Unit, Validator] => Action[Unit, List[BlockAndMaybeDeploys]]) {
 // format: on
 
   val SignatureType = ObjectType(
@@ -131,6 +135,33 @@ class GraphQLBlockTypes(val blockFetcher: Fetcher[Unit, BlockAndMaybeDeploys, Bl
     fields[Unit, Either[ProcessedDeploy, ProcessingResult]](
       Field("deploy", DeployType, resolve = c => c.value.left.get.getDeploy)
     )
+  )
+
+  lazy val ValidatorType = ObjectType(
+    "Validator",
+    "Validator information",
+    () =>
+      fields[Unit, Validator](
+        Field(
+          "publicKeyBase16",
+          StringType,
+          "Validator's public key in Base16 encoding".some,
+          resolve = c => c.value.toByteArray.base16Encode
+        ),
+        Field(
+          "publicKeyBase64",
+          StringType,
+          "Validator's public key in Base64 encoding".some,
+          resolve = c => c.value.toByteArray.base64Encode
+        ),
+        Field(
+          "blocks",
+          ListType(BlockType),
+          "Blocks produced by the validator".some,
+          arguments = blocks.arguments.Depth :: blocks.arguments.MaxRank :: Nil,
+          resolve = c => blocksByValidator(c)
+        )
+      )
   )
 
   lazy val BlockInfoInterface = InterfaceType(
@@ -290,14 +321,15 @@ class GraphQLBlockTypes(val blockFetcher: Fetcher[Unit, BlockAndMaybeDeploys, Bl
   lazy val BlockType: ObjectType[Unit, BlockAndMaybeDeploys] = ObjectType(
     "Block",
     interfaces[Unit, BlockAndMaybeDeploys](BlockInfoInterface),
-    fields[Unit, BlockAndMaybeDeploys](
-      Field(
-        "deploys",
-        ListType(ProcessedDeployType),
-        "Deploys in the block".some,
-        resolve = c => c.value._2.get.map(_.asLeft[ProcessingResult])
+    () =>
+      fields[Unit, BlockAndMaybeDeploys](
+        Field(
+          "deploys",
+          ListType(ProcessedDeployType),
+          "Deploys in the block".some,
+          resolve = c => c.value._2.get.map(_.asLeft[ProcessingResult])
+        )
       )
-    )
   )
 
   val PageInfoType = ObjectType(

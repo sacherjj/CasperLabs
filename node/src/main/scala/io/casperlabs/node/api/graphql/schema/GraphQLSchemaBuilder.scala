@@ -2,7 +2,7 @@ package io.casperlabs.node.api.graphql.schema
 
 import cats.implicits._
 import com.google.protobuf.ByteString
-import io.casperlabs.casper.Estimator.BlockHash
+import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.api.BlockAPI
 import io.casperlabs.casper.api.BlockAPI.BlockAndMaybeDeploys
@@ -83,7 +83,20 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream
       blockInfo.getSummary.blockHash
   })
 
-  val blockTypes = new GraphQLBlockTypes(blockFetcher)
+  val blocksByValidator: Projector[Unit, Validator, List[BlockAndMaybeDeploys]] =
+    Projector { (context, projections) =>
+      BlockAPI
+        .getBlockInfosWithDeploysByValidator[F](
+          context.value,
+          depth = context.arg(blocks.arguments.Depth),
+          maxRank = context.arg(blocks.arguments.MaxRank),
+          maybeDeployView = deployView(projections),
+          blockView = blockView(projections)
+        )
+        .unsafeToFuture
+    }
+
+  val blockTypes = new GraphQLBlockTypes(blockFetcher, blocksByValidator)
 
   private def projectionTerms(projections: Vector[ProjectedName]): Set[String] = {
     def flatToSet(ps: Vector[ProjectedName], acc: Set[String]): Set[String] =
