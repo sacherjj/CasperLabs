@@ -58,6 +58,9 @@ stop-background-scala-compiler:
 	@echo "Data directory is .make/run/data-dir"
 	@echo "Generating keys..."
 	@$(PROJECT)/hack/key-management/docker-gen-keys.sh .make/run/data-dir
+	@echo "Generating accounts.csv..."
+	@mkdir -p .make/run/data-dir/chainspec/genesis/
+	@echo $$(cat .make/run/data-dir/validator-id)",100000000000000000,100000000000000000" > .make/run/data-dir/chainspec/genesis/accounts.csv
 	@mkdir -p $(dir $@) && touch $@
 
 
