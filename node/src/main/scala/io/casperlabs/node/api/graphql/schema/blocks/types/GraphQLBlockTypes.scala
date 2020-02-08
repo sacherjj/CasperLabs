@@ -228,10 +228,10 @@ class GraphQLBlockTypes(val blockFetcher: Fetcher[Unit, BlockAndMaybeDeploys, Bl
           resolve = c => c.value._1.getSummary.rank
         ),
         Field(
-          "validatorPublicKey",
-          StringType,
-          "Base-16 encoded public key of a validator created the block".some,
-          resolve = c => Base16.encode(c.value._1.getSummary.validatorPublicKey.toByteArray)
+          "validator",
+          ValidatorType,
+          "Validator related information".some,
+          resolve = c => c.value._1.getSummary.validatorPublicKey
         ),
         Field(
           "validatorBlockSeqNum",
