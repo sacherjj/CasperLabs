@@ -203,6 +203,16 @@ class SQLiteDagStorage[F[_]: Bracket[*[_], Throwable]](
       .transact(readXa)
       .groupByRank
 
+  // TODO: Implement
+  override def topoSortValidator(
+      validator: Validator,
+      startBlockNumber: Long,
+      endBlockNumber: Long
+  ) = ???
+
+  // TODO: Implement
+  override def topoSortTailValidator(validator: Validator, tailLength: Int) = ???
+
   override def latestMessageHash(validator: Validator): F[Set[BlockHash]] =
     sql"""|SELECT block_hash
           |FROM validator_latest_messages

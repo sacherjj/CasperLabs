@@ -242,15 +242,40 @@ object BlockAPI {
       )(_._1.pure[F])
     )
 
-  // TODO: Implement
   /* Similar to [[getBlockInfosWithDeploys]] but in addition filters blocks by a validator. */
-  def getBlockInfosWithDeploysByValidator[F[_]: MonadThrowable: Log: MultiParentCasperRef: DeployStorage: DagStorage: Fs2Compiler](
+  def getBlockInfosWithDeploysByValidator[F[_]: MonadThrowable: Log: MultiParentCasperRef: DeployStorage: DagStorage: Fs2Compiler: BlockStorage](
       validator: Validator,
       depth: Int,
       maxRank: Long,
       maybeDeployView: Option[DeployInfo.View],
       blockView: BlockInfo.View
-  ): F[List[BlockAndMaybeDeploys]] = ???
+  ): F[List[BlockAndMaybeDeploys]] =
+    unsafeWithCasper[F, List[BlockAndMaybeDeploys]]("Could not show blocks.") { implicit casper =>
+      casper.dag flatMap { dag =>
+        maxRank match {
+          case 0 =>
+            dag.topoSortTailValidator(validator, depth).compile.toVector
+          case r =>
+            dag
+              .topoSortValidator(
+                validator = validator,
+                endBlockNumber = r,
+                startBlockNumber = math.max(r - depth + 1, 0)
+              )
+              .compile
+              .toVector
+        }
+      } handleErrorWith {
+        case ex: StorageError =>
+          MonadThrowable[F].raiseError(InvalidArgument(StorageError.errorMessage(ex)))
+        case ex: IllegalArgumentException =>
+          MonadThrowable[F].raiseError(InvalidArgument(ex.getMessage))
+      } flatMap { infosByRank =>
+        infosByRank.flatten.reverse.toList.traverse { info =>
+          withViews[F](info, maybeDeployView, blockView)
+        }
+      }
+    }
 
   /** Return block infos and maybe the corresponding deploy summaries in the a slice of the DAG.
     * Use `maxRank` 0 to get the top slice,
