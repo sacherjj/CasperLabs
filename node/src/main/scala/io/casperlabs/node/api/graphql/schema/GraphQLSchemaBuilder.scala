@@ -83,18 +83,18 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream
       blockInfo.getSummary.blockHash
   })
 
-  val blocksByValidator: Projector[Unit, Validator, List[BlockAndMaybeDeploys]] =
-    Projector { (context, projections) =>
-      BlockAPI
-        .getBlockInfosWithDeploysByValidator[F](
-          context.value,
-          depth = context.arg(blocks.arguments.Depth),
-          maxRank = context.arg(blocks.arguments.MaxRank),
-          maybeDeployView = deployView(projections),
-          blockView = blockView(projections)
-        )
-        .unsafeToFuture
-    }
+  // TODO: Performance issue - make use of Sangria Projections.
+  // The same as the TODO #2 of the 'blockFetcher'
+  val blocksByValidator: Context[Unit, Validator] => Action[Unit, List[BlockAndMaybeDeploys]] = c =>
+    BlockAPI
+      .getBlockInfosWithDeploysByValidator[F](
+        c.value,
+        depth = c.arg(blocks.arguments.Depth),
+        maxRank = c.arg(blocks.arguments.MaxRank),
+        maybeDeployView = DeployInfo.View.BASIC.some,
+        blockView = BlockInfo.View.FULL
+      )
+      .unsafeToFuture
 
   val blockTypes = new GraphQLBlockTypes(blockFetcher, blocksByValidator)
 
