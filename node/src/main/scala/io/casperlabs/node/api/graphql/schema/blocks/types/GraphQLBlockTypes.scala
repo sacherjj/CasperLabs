@@ -1,21 +1,19 @@
 package io.casperlabs.node.api.graphql.schema.blocks.types
 
 import cats.implicits._
+import com.google.protobuf.ByteString
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.api.BlockAPI.BlockAndMaybeDeploys
 import io.casperlabs.casper.consensus.Block._
 import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.consensus.info.DeployInfo.ProcessingResult
 import io.casperlabs.casper.consensus.info._
-import io.casperlabs.crypto.codec.Base16
-import io.casperlabs.crypto.codec.ByteArraySyntax
+import io.casperlabs.crypto.codec.{Base16, ByteArraySyntax}
 import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.node.api.graphql.schema.blocks
 import io.casperlabs.node.api.graphql.schema.utils.{DateType, ProtocolVersionType}
 import sangria.execution.deferred._
 import sangria.schema._
-
-import scala.concurrent.Future
 
 case class PageInfo(endCursor: String, hasNextPage: Boolean)
 
@@ -27,6 +25,8 @@ case class DeployInfosWithPageInfo(deployInfos: List[DeployInfo], pageInfo: Page
   */
 class GraphQLBlockTypes(val blockFetcher: Fetcher[Unit, BlockAndMaybeDeploys, BlockAndMaybeDeploys, BlockHash], val blocksByValidator: Context[Unit, Validator] => Action[Unit, List[BlockAndMaybeDeploys]]) {
 // format: on
+
+  type AccountKey = ByteString
 
   val SignatureType = ObjectType(
     "Signature",
@@ -77,10 +77,10 @@ class GraphQLBlockTypes(val blockFetcher: Fetcher[Unit, BlockAndMaybeDeploys, Bl
         resolve = c => Base16.encode(c.value.deployHash.toByteArray)
       ),
       Field(
-        "accountId",
-        StringType,
-        "Base-16 encoded account public key".some,
-        resolve = c => Base16.encode(c.value.getHeader.accountPublicKey.toByteArray)
+        "account",
+        AccountType,
+        "Account related information".some,
+        resolve = c => c.value.getHeader.accountPublicKey
       ),
       Field(
         "timestamp",
@@ -139,7 +139,7 @@ class GraphQLBlockTypes(val blockFetcher: Fetcher[Unit, BlockAndMaybeDeploys, Bl
 
   lazy val ValidatorType = ObjectType(
     "Validator",
-    "Validator information",
+    "Validator related information",
     () =>
       fields[Unit, Validator](
         Field(
@@ -160,6 +160,26 @@ class GraphQLBlockTypes(val blockFetcher: Fetcher[Unit, BlockAndMaybeDeploys, Bl
           "Blocks produced by the validator".some,
           arguments = blocks.arguments.Depth :: blocks.arguments.MaxRank :: Nil,
           resolve = c => blocksByValidator(c)
+        )
+      )
+  )
+
+  lazy val AccountType = ObjectType(
+    "AccountInfo",
+    "Account related information",
+    () =>
+      fields[Unit, AccountKey](
+        Field(
+          "publicKeyBase16",
+          StringType,
+          "Account's public key in Base16 encoding".some,
+          resolve = c => c.value.toByteArray.base16Encode
+        ),
+        Field(
+          "publicKeyBase64",
+          StringType,
+          "Account's public key in Base64 encoding".some,
+          resolve = c => c.value.toByteArray.base64Encode
         )
       )
   )
