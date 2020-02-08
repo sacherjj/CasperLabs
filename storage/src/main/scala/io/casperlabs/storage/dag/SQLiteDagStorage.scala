@@ -203,15 +203,35 @@ class SQLiteDagStorage[F[_]: Bracket[*[_], Throwable]](
       .transact(readXa)
       .groupByRank
 
-  // TODO: Implement
   override def topoSortValidator(
       validator: Validator,
       startBlockNumber: Long,
       endBlockNumber: Long
-  ) = ???
+  ) =
+    (fr"""SELECT rank, """ ++ blockInfoCols() ++ fr"""
+          FROM block_metadata
+          WHERE rank>=$startBlockNumber AND rank<=$endBlockNumber AND validator=$validator
+          ORDER BY rank
+          """)
+      .query[(Long, BlockInfo)]
+      .stream
+      .transact(readXa)
+      .groupByRank
 
-  // TODO: Implement
-  override def topoSortTailValidator(validator: Validator, tailLength: Int) = ???
+  override def topoSortTailValidator(validator: Validator, tailLength: Int) =
+    (fr"""SELECT a.rank, """ ++ blockInfoCols("a") ++ fr"""
+          FROM block_metadata a
+          INNER JOIN (
+           SELECT max(rank) max_rank FROM block_metadata
+          ) b
+          ON a.rank>b.max_rank-$tailLength
+          WHERE a.validator=$validator
+          ORDER BY a.rank
+          """)
+      .query[(Long, BlockInfo)]
+      .stream
+      .transact(readXa)
+      .groupByRank
 
   override def latestMessageHash(validator: Validator): F[Set[BlockHash]] =
     sql"""|SELECT block_hash
