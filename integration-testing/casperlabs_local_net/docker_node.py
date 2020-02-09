@@ -48,30 +48,12 @@ class DockerNode(LoggingDockerBase):
 
     NUMBER_OF_BONDS = 10
 
+    # Standard Ports of a Node
     GRPC_SERVER_PORT = 40400
     GRPC_EXTERNAL_PORT = 40401
     GRPC_INTERNAL_PORT = 40402
     HTTP_PORT = 40403
     KADEMLIA_PORT = 40404
-    PROXY_OFFSET = 5  # Proxy port offset added to normal port numbers
-    DOCKER_PORT_MULTIPLIER = 10
-    UNIQUE_RUN_MULTIPLIER = 100
-    BEHIND_PROXY_OFFSET = 10000
-
-    # Ports:
-    # CasperLabs Docker Node requires 40400-40404.
-    #
-    # We started allocating ports based on digits.  However, we have run out of ports for the number of possible
-    # nodes running at a given time.
-    #
-    # Ports use 0-4 in ones digit.  Proxy will add 5 to use 5-9.
-    # Note: if we add more ports, we may have to manually specify the proxy ports needed, rather than a simple +5.
-    #
-    # Docker mapping to local adds 10 * node_number (self.config.number).  To allow for up to 10 nodes running.
-    #
-    #
-    #
-    #
 
     DOCKER_CLIENT = "d"
     PYTHON_CLIENT = "p"
@@ -127,51 +109,59 @@ class DockerNode(LoggingDockerBase):
 
     @property
     def unique_run_offset(self) -> int:
-        return self.config.unique_run_num * self.UNIQUE_RUN_MULTIPLIER
+        """ Added to port numbers to make external ports unique with parallel runs """
+        return self.config.unique_run_num * 1000
 
     @property
-    def node_host(self):
-        return os.environ.get("TAG_NAME") and self.container_name or "172.17.0.1"
-
-    @property
-    def proxy_host(self):
-        return (
-            os.environ.get("TAG_NAME")
-            and f"test-{os.environ.get('TAG_NAME')}"
-            or "172.17.0.1"
-        )
-
-    @property
-    def server_proxy_port(self) -> int:
-        return self.GRPC_SERVER_PORT + self.PROXY_OFFSET + self.docker_port_offset
-
-    @property
-    def kademlia_proxy_port(self) -> int:
-        return self.KADEMLIA_PORT + self.PROXY_OFFSET + self.docker_port_offset
+    def proxy_offset(self) -> int:
+        return self.config.number * 100
 
     @property
     def docker_port_offset(self) -> int:
         if self.is_in_docker:
             return 0
         else:
-            return (
-                self.config.number * self.DOCKER_PORT_MULTIPLIER
-                + self.unique_run_offset
-            )
+            return self.config.number * 10 + self.unique_run_offset
+
+    @property
+    def behind_proxy_offset(self) -> int:
+        if self.config.behind_proxy:
+            return 10000
+        else:
+            return 0
+
+    @property
+    def docker_test_host_name(self) -> str:
+        return f"test-{os.environ.get('TAG_NAME')}-{self.config.unique_run_num}"
+
+    @property
+    def node_host(self):
+        return self.is_in_docker and self.container_name or "172.17.0.1"
+
+    @property
+    def proxy_host(self):
+        if self.is_in_docker:
+            return self.docker_test_host_name
+        else:
+            return "172.17.0.1"
+
+    @property
+    def server_proxy_port(self) -> int:
+        return self.GRPC_SERVER_PORT + self.docker_port_offset + self.proxy_offset
+
+    @property
+    def kademlia_proxy_port(self) -> int:
+        return self.KADEMLIA_PORT + self.docker_port_offset + self.proxy_offset
 
     @property
     def grpc_server_docker_port(self) -> int:
-        n = self.GRPC_SERVER_PORT + self.docker_port_offset
-        if self.config.behind_proxy:
-            return n + self.BEHIND_PROXY_OFFSET  # 50400 + self.docker_port_offset
-        return n
+        return (
+            self.GRPC_SERVER_PORT + self.docker_port_offset + self.behind_proxy_offset
+        )
 
     @property
     def kademlia_docker_port(self) -> int:
-        n = self.KADEMLIA_PORT + self.docker_port_offset
-        if self.config.behind_proxy:
-            return n + self.BEHIND_PROXY_OFFSET  # 50404 + self.docker_port_offset
-        return n
+        return self.KADEMLIA_PORT + self.docker_port_offset + self.behind_proxy_offset
 
     @property
     def grpc_external_docker_port(self) -> int:
@@ -227,7 +217,7 @@ class DockerNode(LoggingDockerBase):
         """
         Joins DockerNode to client network to enable Python Client communication
         """
-        if os.environ.get("TAG_NAME"):
+        if self.is_in_docker:
             # We are running in docker, because we have this environment variable
             self.connect_to_network(self.client_network_name)
             logging.info(
@@ -243,13 +233,10 @@ class DockerNode(LoggingDockerBase):
         """
         ports = (
             (
-                self.GRPC_SERVER_PORT + (self.config.behind_proxy and 10000 or 0),
+                self.GRPC_SERVER_PORT + self.behind_proxy_offset,
                 self.grpc_server_docker_port,
             ),
-            (
-                self.KADEMLIA_PORT + (self.config.behind_proxy and 10000 or 0),
-                self.kademlia_docker_port,
-            ),
+            (self.KADEMLIA_PORT + self.behind_proxy_offset, self.kademlia_docker_port),
             (self.GRPC_INTERNAL_PORT, self.grpc_internal_docker_port),
             (self.GRPC_EXTERNAL_PORT, self.grpc_external_docker_port),
             (self.HTTP_PORT, self.http_port),

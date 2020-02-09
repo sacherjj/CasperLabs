@@ -155,7 +155,7 @@ class CasperLabsNetwork:
                 tag_name += f"-{self.docker_client.cl_unique_run_num}"
             except KeyError:
                 # if not an attribute, running single and don't need appended number
-                pass
+                tag_name += "-0"
             network_name = f"casperlabs_{random_string(5)}_{tag_name}"
             self._created_networks.append(network_name)
             self.docker_client.networks.create(network_name, driver="bridge")
@@ -632,7 +632,7 @@ class ThreeNodeNetworkWithTwoBootstraps(CasperLabsNetwork):
 
     def _node_address(self, config):
         node_id = extract_common_name(config.tls_certificate_local_path())
-        return f"casperlabs://{node_id}@node-{config.number}-{config.rand_str}-{self._docker_tag(config)}?protocol=40400&discovery=40404"
+        return f"casperlabs://{node_id}@node-{config.number}-{config.rand_str}-{self._docker_tag(config)}-{config.unique_run_num}?protocol=40400&discovery=40404"
 
     def create_cl_network(self):
 
@@ -653,6 +653,9 @@ class ThreeNodeNetworkWithTwoBootstraps(CasperLabsNetwork):
         for node in self.docker_nodes:
             wait_for_node_started(node, 30, 1)
 
+        logging.info(
+            f"{self.docker_nodes[1].config.bootstrap_address} == {self.docker_nodes[0].address}"
+        )
         assert (
             self.docker_nodes[1].config.bootstrap_address
             == self.docker_nodes[0].address

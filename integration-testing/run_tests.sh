@@ -32,7 +32,7 @@ case ${UNIQUE_RUN_NUM} in
   pipenv run pytest -k "R1" ${PYTEST_ARGS} ${TEST_RUN_ARGS}
   ;;
   [2])
-  pipenv run pytest -k "not R0 or R1" ${PYTEST_ARGS} ${TEST_RUN_ARGS}
+  pipenv run pytest -k "not R0 and not R1" ${PYTEST_ARGS} ${TEST_RUN_ARGS}
   ;;
   *)
   pipenv run pytest ${PYTEST_ARGS} ${TEST_RUN_ARGS}
