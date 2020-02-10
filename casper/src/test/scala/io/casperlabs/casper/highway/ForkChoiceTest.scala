@@ -250,7 +250,7 @@ class ForkChoiceTest extends FlatSpec with HighwayFixture {
     implicit timer =>
       implicit db =>
         // Using the same DAG as in the previous test, but this time
-        // we will make C equivocated in Genesis era. This means its
+        // we will make C equivocate in the Genesis era. This means its
         // blocks get 0 score - the fork choice should pick A4
         //
         // Weights: A -> 3, B -> 4, C -> 5
