@@ -18,9 +18,9 @@ import scala.concurrent.duration._
 
 class ForkChoiceTest extends FlatSpec with HighwayFixture {
 
-  behavior of "ForkChoiceTest"
+  behavior of "fromKeyBlock"
 
-  "fromKeyBlock" should "return fork choice in the simplest case" in testFixture {
+  it should "return fork choice in the simplest case" in testFixture {
     implicit timer => implicit db =>
       new ForkChoiceTestFixture(eraDuration) {
 
