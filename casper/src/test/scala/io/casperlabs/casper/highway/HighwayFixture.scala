@@ -200,11 +200,9 @@ trait HighwayFixture
         db.addEra(childEra).as(childEra)
       }
 
-      def ballot(mp: MessageProducer[Task], parent: BlockHash)(
-          implicit dagStorage: DagStorage[Task]
-      ): Task[BlockHash] =
+      def ballot(mp: MessageProducer[Task], parent: BlockHash): Task[BlockHash] =
         for {
-          dag    <- dagStorage.getRepresentation
+          dag    <- db.getRepresentation
           tips   <- dag.latestInEra(era.keyBlockHash)
           latest <- tips.latestMessages
           justifications = latest.map {
@@ -218,11 +216,9 @@ trait HighwayFixture
               )
         } yield b.messageHash
 
-      def block(mp: MessageProducer[Task], parent: BlockHash)(
-          implicit dagStorage: DagStorage[Task]
-      ): Task[BlockHash] =
+      def block(mp: MessageProducer[Task], parent: BlockHash): Task[BlockHash] =
         for {
-          dag    <- dagStorage.getRepresentation
+          dag    <- db.getRepresentation
           tips   <- dag.latestInEra(era.keyBlockHash)
           latest <- tips.latestMessages
           justifications = latest.map {
