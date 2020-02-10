@@ -1,5 +1,4 @@
-import {SetDecodedBytesCount,
-        GetLastError, SetLastError, Error} from "./bytesrepr";
+import {Error, Result, Ref} from "./bytesrepr";
 import {UREF_ADDR_LENGTH} from "./constants";
 import {checkTypedArrayEqual} from "./utils";
 import {is_valid_uref, revert} from "./externals";
@@ -41,28 +40,29 @@ export class URef {
         return ret !== 0;
     }
 
-    static fromBytes(bytes: Uint8Array): URef | null {
+    static fromBytes(bytes: Uint8Array): Result<URef> {
         if (bytes.length < 33) {
-            SetLastError(Error.EarlyEndOfStream);
-            return null;
+            return new Result<URef>(null, Error.EarlyEndOfStream, 0);
         }
 
         let urefBytes = bytes.subarray(0, UREF_ADDR_LENGTH);
-        SetDecodedBytesCount(33);
+        let currentPos = 33;
+
         if (bytes[UREF_ADDR_LENGTH] == 1) {
             if (bytes.length < 34) {
-                SetLastError(Error.EarlyEndOfStream);
-                return null;
+                return new Result<URef>(null, Error.EarlyEndOfStream, 0);
             }
             let accessRights = bytes[UREF_ADDR_LENGTH + 1];
-            SetDecodedBytesCount(33 + 1);
-            SetLastError(Error.Ok);
-            return new URef(urefBytes, accessRights);
+            currentPos += 1;
+            let uref = new URef(urefBytes, accessRights);
+            let ref = new Ref<URef>(uref);
+            return new Result<URef>(ref, Error.Ok, currentPos);
         }
         else {
             let urefBytes = bytes.subarray(0, UREF_ADDR_LENGTH);
-            SetLastError(Error.Ok);
-            return new URef(urefBytes, AccessRights.NONE);
+            let uref = new URef(urefBytes, AccessRights.NONE);
+            let ref = new Ref<URef>(uref);
+            return new Result<URef>(ref, Error.Ok, currentPos);
         }
     }
 

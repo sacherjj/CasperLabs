@@ -1,4 +1,5 @@
 import { Pair } from "./pair";
+import { typedToArray } from "./utils";
 
 export enum Error {
     // Last operation was a success
@@ -9,44 +10,70 @@ export enum Error {
     FormattingError = 2,
 }
 
-// NOTE: Using Error.Ok generates additional "start" node with initializing code which we want to avoid
-// Ref: https://github.com/AssemblyScript/assemblyscript/issues/566#issuecomment-581835994
-@lazy
-let lastError: i32 = <Error>0;
-
-export function GetLastError(): i32 {
-    return lastError;
+/**
+ * Boxes a value which could then be nullable in any context.
+ */
+export class Ref<T> {
+    constructor(public value: T) {}
 }
 
-export function SetLastError(error: i32): void {
-    lastError = error;
-}
+export class Result<T> {
+    /**
+     * Creates new Result with wrapped value
+     * @param value Ref-wrapped value (success) or null (error)
+     * @param error Error value
+     * @param position Position of input stream 
+     */
+    constructor(public ref: Ref<T> | null, public error: Error, public position: usize) {}
 
-// Any fromBytes operation sets this, so caller can know how much bytes to
-// skip in the input stream for complex types
-@lazy
-let lastDecodedBytesCount: u32 = 0;
+    /**
+     * Assumes that reference wrapper contains a value and then returns it
+     */
+    get value(): T {
+        assert(this.hasValue());
+        let ref = <Ref<T>>this.ref;
+        return ref.value;
+    }
 
-export function SetDecodedBytesCount(value: u32): void {
-    lastDecodedBytesCount = value;
-}
+    /**
+     * Checks if given Result contains a value 
+     */
+    hasValue(): bool {
+        return this.ref !== null;
+    }
+    /**
+     * Checks if error value is set.
+     * 
+     * Truth also implies !hasValue(), false value implies hasValue()
+     */
 
-export function GetDecodedBytesCount(): u32 {
-    return lastDecodedBytesCount;
+    hasError(): bool {
+        return this.error != Error.Ok;
+    }
+
+    /**
+     * For nullable types, this returns the value itself, or a null.
+     */
+    ok(): T | null {
+        return this.hasValue() ? this.value : null;
+    }
 }
 
 export function toBytesU8(num: u8): u8[] {
     return [num];
 }
 
-export function fromBytesU8(bytes: Uint8Array): u8 {
-    if (bytes.length < 1) {
-        SetLastError(Error.EarlyEndOfStream);
-        return 0;
+export function fromBytesLoad<T>(bytes: Uint8Array): Result<T> {
+    let expectedSize = changetype<i32>(sizeof<T>())
+    if (bytes.length < expectedSize) {
+        return new Result<T>(null, Error.EarlyEndOfStream, 0);
     }
-    SetLastError(Error.Ok);
-    SetDecodedBytesCount(1);
-    return load<u8>(bytes.dataStart);
+    const value = load<T>(bytes.dataStart);
+    return new Result<T>(new Ref<T>(value), Error.Ok, expectedSize);
+}
+
+export function fromBytesU8(bytes: Uint8Array): Result<u8> {
+    return fromBytesLoad<u8>(bytes);
 }
 
 // Converts u32 to little endian
@@ -60,16 +87,8 @@ export function toBytesU32(num: u32): u8[] {
     return result;
 }
 
-export function fromBytesU32(bytes: Uint8Array): u32 {
-    if (bytes.length < 4) {
-        SetLastError(Error.EarlyEndOfStream);
-        return 0;
-    }
-    const number = <u32>load<u32>(bytes.dataStart);
-
-    SetLastError(Error.Ok);
-    SetDecodedBytesCount(4);
-    return number;
+export function fromBytesU32(bytes: Uint8Array): Result<u32> {
+    return fromBytesLoad<u32>(bytes);
 }
 
 export function toBytesI32(num: i32): u8[] {
@@ -82,14 +101,8 @@ export function toBytesI32(num: i32): u8[] {
     return result;
 }
 
-export function fromBytesI32(bytes: Uint8Array): i32 {
-    if (bytes.length < 4) {
-        SetLastError(Error.EarlyEndOfStream);
-        return 0;
-    }
-    SetDecodedBytesCount(4);
-    SetLastError(Error.Ok);
-    return load<i32>(bytes.dataStart);
+export function fromBytesI32(bytes: Uint8Array): Result<i32> {
+    return fromBytesLoad<i32>(bytes);
 }
 
 export function toBytesU64(num: u64): u8[] {
@@ -102,15 +115,8 @@ export function toBytesU64(num: u64): u8[] {
     return result;
 }
 
-export function fromBytesU64(bytes: Uint8Array): u64 {
-    if (bytes.length < 8) {
-        SetLastError(Error.EarlyEndOfStream);
-        return 0;
-    }
-
-    SetLastError(Error.Ok);
-    SetDecodedBytesCount(8);
-    return load<u64>(bytes.dataStart);
+export function fromBytesU64(bytes: Uint8Array): Result<u64> {
+    return fromBytesLoad<u64>(bytes);
 }
 
 export function toBytesPair(key: u8[], value: u8[]): u8[] {
@@ -131,55 +137,50 @@ export function toBytesMap(pairs: u8[][]): u8[] {
 
 export function fromBytesMap<K, V>(
     bytes: Uint8Array,
-    decodeKey: (bytes1: Uint8Array) => K | null,
-    decodeValue: (bytes2: Uint8Array) => V | null
-): Array<Pair<K, V>> | null {
-    const length = fromBytesU32(bytes);
-    if (GetLastError() != Error.Ok) {
-        SetLastError(Error.EarlyEndOfStream);
-        return null;
+    decodeKey: (bytes1: Uint8Array) => Result<K>,
+    decodeValue: (bytes2: Uint8Array) => Result<V>,
+): Result<Array<Pair<K, V>>> {
+    const lengthResult = fromBytesU32(bytes);
+    if (lengthResult.error != Error.Ok) {
+        return new Result<Array<Pair<K, V>>>(null, Error.EarlyEndOfStream, 0);
     }
+    const length = lengthResult.value;
+
+    // Tracks how many bytes are parsed
+    let currentPos = lengthResult.position;
 
     let result = new Array<Pair<K, V>>();
 
     if (length == 0) {
-        return result;
+        let ref = new Ref<Array<Pair<K, V>>>(result);
+        return new Result<Array<Pair<K, V>>>(ref, Error.Ok, lengthResult.position);
     }
 
-    let currentDecodedBytes = GetDecodedBytesCount();
-    let currentOffset = currentDecodedBytes;
-
-    let bytes = bytes.subarray(currentDecodedBytes);
+    let bytes = bytes.subarray(currentPos);
 
     for (let i = 0; i < changetype<i32>(length); i++) {
-        let key = decodeKey(bytes);
-        if (key === null) {
-            SetLastError(Error.FormattingError);
-            return null;
+        const keyResult = decodeKey(bytes);
+        if (keyResult.error != Error.Ok) {
+            return new Result<Array<Pair<K, V>>>(null, keyResult.error, keyResult.position);
         }
 
-        let keyDecodedBytes = GetDecodedBytesCount();
-        currentOffset += keyDecodedBytes;
-        bytes = bytes.subarray(keyDecodedBytes);
+        currentPos += keyResult.position;
+        bytes = bytes.subarray(keyResult.position);
 
-        let value = decodeValue(bytes);
-        if (value === null) {
-            SetLastError(Error.FormattingError);
-            return null;
+        let valueResult = decodeValue(bytes);
+        if (valueResult.error != Error.Ok) {
+            return new Result<Array<Pair<K, V>>>(null, valueResult.error, valueResult.position);
         }
 
-        let valueDecodedBytes = GetDecodedBytesCount()
-        currentOffset += valueDecodedBytes;
+        currentPos += valueResult.position;
+        bytes = bytes.subarray(valueResult.position);
 
-        bytes = bytes.subarray(valueDecodedBytes);
-
-        let pair = new Pair<K, V>(key, value);
+        let pair = new Pair<K, V>(keyResult.value, valueResult.value);
         result.push(pair);
     }
 
-    SetDecodedBytesCount(currentOffset);
-    SetLastError(Error.Ok);
-    return result;
+    let ref = new Ref<Array<Pair<K, V>>>(result);
+    return new Result<Array<Pair<K, V>>>(ref, Error.Ok, currentPos);
 }
 
 export function toBytesString(s: String): u8[] {
@@ -192,26 +193,24 @@ export function toBytesString(s: String): u8[] {
     return bytes;
 }
 
-export function fromBytesString(s: Uint8Array): String | null {
-    var len = fromBytesU32(s);
-    if (GetLastError() != Error.Ok) {
-        SetLastError(Error.EarlyEndOfStream);
-        return null;
-    }
-    let leni32 = changetype<i32>(len);
-    if (s.length < leni32 + 4) {
-        SetLastError(Error.EarlyEndOfStream);
-        return null;
-    }
-    let currentOffset = GetDecodedBytesCount();
-    var result = "";
-    for (var i = 0; i < 0 + leni32; i++) {
-        result += String.fromCharCode(s[4 + i]);
+export function fromBytesString(s: Uint8Array): Result<String> {
+    var lenResult = fromBytesI32(s);
+    if (lenResult.error != Error.Ok) {
+        return new Result<String>(null, Error.EarlyEndOfStream, 0);
     }
 
-    SetDecodedBytesCount(currentOffset + leni32);
-    SetLastError(Error.Ok);
-    return result;
+    let currentPos = lenResult.position;
+
+    const leni32 = lenResult.value;
+    if (s.length < leni32 + 4) {
+        return new Result<String>(null, Error.EarlyEndOfStream, 0);
+    }
+    var result = "";
+    for (var i = 0; i < leni32; i++) {
+        result += String.fromCharCode(s[4 + i]);
+    }
+    let ref = new Ref<String>(result);
+    return new Result<String>(ref, Error.Ok, currentPos + leni32);
 }
 
 export function toBytesArrayU8(arr: Array<u8>): u8[] {
@@ -219,23 +218,22 @@ export function toBytesArrayU8(arr: Array<u8>): u8[] {
     return bytes.concat(arr);
 }
 
-export function fromBytesArrayU8(arr: Uint8Array): Uint8Array | null {
-    var len = fromBytesU32(arr);
-    if (GetLastError() != Error.Ok) {
-        SetLastError(Error.EarlyEndOfStream);
-        return null;
+export function fromBytesArrayU8(bytes: Uint8Array): Result<Array<u8>> {
+    var lenResult = fromBytesI32(bytes);
+    if (lenResult.error != Error.Ok) {
+        return new Result<String>(null, Error.EarlyEndOfStream, 0);
     }
 
-    let offset = GetDecodedBytesCount();
+    let currentPos = lenResult.position;
 
-    if (<u32>len < <u32>arr.length - 4) {
-        SetLastError(Error.EarlyEndOfStream);
-        return null;
+    const leni32 = lenResult.value;
+    if (s.length < leni32 + 4) {
+        return new Result<String>(null, Error.EarlyEndOfStream, 0);
     }
-    let currentOffset = offset + len;
-    SetDecodedBytesCount(currentOffset);
-    SetLastError(Error.Ok);
-    return arr.subarray(4, 4 + len);
+
+    let result = typedToArray(bytes.subarray(currentPos));
+    let ref = new Ref<String>(result);
+    return new Result<String>(ref, Error.Ok, currentPos + leni32, currentPos + leni32);
 }
 
 export function toBytesVecT<T>(ts: T[]): Array<u8> {
@@ -246,37 +244,34 @@ export function toBytesVecT<T>(ts: T[]): Array<u8> {
     return bytes;
 }
 
-export function fromBytesStringList(arr: Uint8Array): String[] | null {
-    var len = fromBytesU32(arr);
-    if (GetLastError() != Error.Ok) {
-        SetLastError(Error.EarlyEndOfStream);
-        return null;
+export function fromBytesArray<T>(bytes: Uint8Array, decodeItem: (bytes: Uint8Array) => Result<T>): Result<Array<T>> {
+    var lenResult = fromBytesI32(bytes);
+    if (lenResult.error != Error.Ok) {
+        return new Result<Array<T>>(null, Error.EarlyEndOfStream, 0);
     }
 
-    if (len == 0) {
-        return [];
-    }
+    let len = lenResult.value;
+    let currentPos = lenResult.position;
+    let head = bytes.subarray(currentPos);
 
-    let offset = GetDecodedBytesCount();
-    let head = arr.subarray(offset);
+    let result: Array<T> = new Array<T>();
 
-    let result: String[] = [];
-
-    for (let i = 0; i < changetype<i32>(len); ++i) {
-        let str = fromBytesString(head);
-        if (str === null) {
-            SetLastError(Error.FormattingError);
-            return null;
+    for (let i = 0; i < len; ++i) {
+        let decodeResult = decodeItem(head);
+        if (decodeResult.error != Error.Ok) {
+            return new Result<Array<T>>(null, decodeResult.error, 0);
         }
-        offset += GetDecodedBytesCount();
-
-        result.push(str);
-        head = head.subarray(4 + str.length);
+        currentPos += decodeResult.position;
+        result.push(decodeResult.value);
+        head = head.subarray(decodeResult.position);
     }
 
-    SetDecodedBytesCount(offset);
-    SetLastError(Error.Ok);
-    return result;
+    let ref = new Ref<Array<T>>(result);
+    return new Result<Array<T>>(ref, Error.Ok, currentPos);
+}
+
+export function fromBytesStringList(bytes: Uint8Array): Result<Array<String>> {
+    return fromBytesArray(bytes, fromBytesString);
 }
 
 export function toBytesStringList(arr: String[]): u8[] {

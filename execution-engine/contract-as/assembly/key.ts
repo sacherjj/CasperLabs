@@ -5,8 +5,7 @@ import {URef} from "./uref";
 import {CLValue} from "./clvalue";
 import {Error} from "./error";
 import {checkTypedArrayEqual, typedToArray} from "./utils";
-import {GetDecodedBytesCount, SetDecodedBytesCount,
-        SetLastError, GetLastError, Error as BytesreprError} from "./bytesrepr";
+import {Result, Ref, Error as BytesreprError} from "./bytesrepr";
 
 export enum KeyVariant {
     ACCOUNT_ID = 0,
@@ -52,54 +51,51 @@ export class Key {
             valueBytes.dataStart,
             valueBytes.length
         );
-        const key = Key.fromBytes(keyBytes);
-        if (key === null) {
+        const keyResult = Key.fromBytes(keyBytes);
+        if (keyResult.hasError()) {
             return null;
         }
+        let key = keyResult.value;
         if (key.variant != KeyVariant.UREF_ID) {
             return null;
         }
-        return <Key>key;
+        return key;
     }
 
-    static fromBytes(bytes: Uint8Array): Key | null {
+    static fromBytes(bytes: Uint8Array): Result<Key> {
         if (bytes.length < 1) {
-            SetLastError(BytesreprError.EarlyEndOfStream);
-            return null;
+            return new Result<Key>(null, BytesreprError.EarlyEndOfStream, 0);
         }
         const tag = bytes[0];
-        SetDecodedBytesCount(1);
+        let currentPos = 1;
+
         if (tag == KeyVariant.HASH_ID) {
             var hashBytes = bytes.subarray(1, 32 + 1);
-            SetDecodedBytesCount(1 + 32);
-            SetLastError(BytesreprError.Ok);
-            return Key.fromHash(hashBytes);
+            currentPos += 32;
+            
+            let key = Key.fromHash(hashBytes);
+            let ref = new Ref<Key>(key);
+            return new Result<Key>(ref, BytesreprError.Ok, currentPos);
         }
         else if (tag == KeyVariant.UREF_ID) {
             var urefBytes = bytes.subarray(1);
-
-            let savedOffset = GetDecodedBytesCount();
-
-            var uref = URef.fromBytes(urefBytes);
-            if (uref === null) {
-                SetLastError(BytesreprError.FormattingError);
-                return null;
+            var urefResult = URef.fromBytes(urefBytes);
+            if (urefResult.error != BytesreprError.Ok) {
+                return new Result<Key>(null, urefResult.error, 0);
             }
-
-            let decodedBytes = GetDecodedBytesCount();
-            SetDecodedBytesCount(savedOffset + decodedBytes);
-            SetLastError(BytesreprError.Ok);
-            return Key.fromURef(<URef>uref);
+            let key = Key.fromURef(urefResult.value);
+            let ref = new Ref<Key>(key);
+            return new Result<Key>(ref, BytesreprError.Ok, currentPos + urefResult.position);
         }
         else if (tag == KeyVariant.ACCOUNT_ID) {
             var accountBytes = bytes.subarray(1, 32 + 1);
-            SetDecodedBytesCount(1 + 32);
-            SetLastError(BytesreprError.Ok);
-            return Key.fromAccount(accountBytes);
+            currentPos += 32;
+            let key = Key.fromAccount(accountBytes);
+            let ref = new Ref<Key>(key);
+            return new Result<Key>(ref, BytesreprError.Ok, currentPos);
         }
         else {
-            SetLastError(BytesreprError.FormattingError);
-            return null;
+            return new Result<Key>(null, BytesreprError.FormattingError, currentPos);
         }
     }
 
