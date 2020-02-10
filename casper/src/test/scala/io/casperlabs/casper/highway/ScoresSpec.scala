@@ -150,7 +150,7 @@ class ScoresSpec extends FlatSpec with Matchers {
     // a1 <- a2 <- b1 <- c1
     val a1     = createBlock(validatorA, randomBlockHash, 1)
     val a2     = createBlock(validatorA, a1.blockHash, 2)
-    val b1     = createBlock(validatorB, a1.blockHash, 3)
+    val b1     = createBlock(validatorB, a2.blockHash, 3)
     val c1     = createBlock(validatorC, b1.blockHash, 4)
     val blocks = List(a2, b1, c1)
 
