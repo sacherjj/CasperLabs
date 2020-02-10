@@ -43,11 +43,12 @@ export const Button = (props: {
   onClick: () => void;
   title: string;
   disabled?: boolean;
+  style?: "primary" | "danger"
 }) => (
   <button
     type="button"
     onClick={_ => props.onClick()}
-    className="btn btn-primary"
+    className={`btn btn-${props.style || "primary"}`}
     disabled={props.disabled || false}
   >
     {props.title}
