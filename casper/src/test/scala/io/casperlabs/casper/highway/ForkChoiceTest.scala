@@ -116,12 +116,9 @@ class ForkChoiceTest extends FlatSpec with HighwayFixture {
               b1         <- genesisEra.block(bob, a2)
               b2         <- genesisEra.block(bob, b1)
               // Voting period ballots
-              (ba1, bb1, bc1) <- Task.parZip3(
-                                  genesisEra.ballot(alice, b2),
-                                  genesisEra.ballot(bob, b2),
-                                  genesisEra.ballot(charlie, b2)
-                                )
-              //
+              ba1        <- genesisEra.ballot(alice, b2)
+              bb1        <- genesisEra.ballot(bob, b2)
+              bc1        <- genesisEra.ballot(charlie, b2)
               childEra   <- genesisEra.addChildEra(a2)
               b3         <- childEra.block(bob, b2)
               forkChoice <- ForkChoice.create[Task].fromKeyBlock(childEra.keyBlockHash)
@@ -216,28 +213,22 @@ class ForkChoiceTest extends FlatSpec with HighwayFixture {
             for {
               _          <- insertGenesis()
               genesisEra <- addGenesisEra()
-              (a1, c1) <- Task.parZip2(
-                           genesisEra.block(alice, genesis.messageHash),
-                           genesisEra.block(charlie, genesis.messageHash)
-                         )
-              a2 <- genesisEra.block(alice, a1)
-              b1 <- genesisEra.block(bob, a2)
-              b2 <- genesisEra.block(bob, b1)
+              a1         <- genesisEra.block(alice, genesis.messageHash)
+              _          <- genesisEra.block(charlie, genesis.messageHash)
+              a2         <- genesisEra.block(alice, a1)
+              b1         <- genesisEra.block(bob, a2)
+              b2         <- genesisEra.block(bob, b1)
               // Voting period ballots
-              (ba1, bb1, bc1) <- Task.parZip3(
-                                  genesisEra.ballot(alice, b2),
-                                  genesisEra.ballot(bob, b2),
-                                  genesisEra.ballot(charlie, b2)
-                                )
-              //
-              childEra <- genesisEra.addChildEra(a2)
-              (a3, c2, b3) <- Task.parZip3(
-                               childEra.block(alice, b2),
-                               childEra.block(charlie, b2),
-                               childEra.block(bob, b2)
-                             )
+              ba1        <- genesisEra.ballot(alice, b2)
+              bb1        <- genesisEra.ballot(bob, b2)
+              bc1        <- genesisEra.ballot(charlie, b2)
+              childEra   <- genesisEra.addChildEra(a2)
+              a3         <- childEra.block(alice, b2)
+              _          <- childEra.block(charlie, b2)
+              b3         <- childEra.block(bob, b2)
               _          <- childEra.block(charlie, a3)
-              (a4, c4)   <- Task.parZip2(childEra.block(alice, b3), childEra.block(charlie, b3))
+              a4         <- childEra.block(alice, b3)
+              c4         <- childEra.block(charlie, b3)
               forkChoice <- ForkChoice.create[Task].fromKeyBlock(childEra.keyBlockHash)
             } yield {
               assert(forkChoice.block.messageHash == c4)
@@ -280,20 +271,16 @@ class ForkChoiceTest extends FlatSpec with HighwayFixture {
               b1 <- genesisEra.block(bob, a2)
               b2 <- genesisEra.block(bob, b1)
               // Voting period ballots
-              (ba1, bb1, bc1) <- Task.parZip3(
-                                  genesisEra.ballot(alice, b2),
-                                  genesisEra.ballot(bob, b2),
-                                  genesisEra.ballot(charlie, b2)
-                                )
-              //
-              childEra <- genesisEra.addChildEra(a2)
-              (a3, c2, b3) <- Task.parZip3(
-                               childEra.block(alice, b2),
-                               childEra.block(charlie, b2),
-                               childEra.block(bob, b2)
-                             )
+              ba1          <- genesisEra.ballot(alice, b2)
+              bb1          <- genesisEra.ballot(bob, b2)
+              bc1          <- genesisEra.ballot(charlie, b2)
+              childEra     <- genesisEra.addChildEra(a2)
+              a3           <- childEra.block(alice, b2)
+              _            <- childEra.block(charlie, b2)
+              b3           <- childEra.block(bob, b2)
               _            <- childEra.block(charlie, a3)
-              (a4, c4)     <- Task.parZip2(childEra.block(alice, b3), childEra.block(charlie, b3))
+              a4           <- childEra.block(alice, b3)
+              c4           <- childEra.block(charlie, b3)
               forkChoice   <- ForkChoice.create[Task].fromKeyBlock(childEra.keyBlockHash)
               equivocators <- MessageProducer.collectEquivocators[Task](childEra.keyBlockHash)
             } yield {
