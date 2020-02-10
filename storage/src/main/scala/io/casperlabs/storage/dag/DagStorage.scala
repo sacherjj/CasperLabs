@@ -12,6 +12,7 @@ import io.casperlabs.storage.dag.DagRepresentation.Validator
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.crypto.codec.Base16
 import simulacrum.typeclass
+import scala.util.Try
 
 trait DagStorage[F[_]] {
 
@@ -138,6 +139,9 @@ trait EraTipRepresentation[F[_]] extends TipRepresentation[F] {
         )
       )
     }
+
+  def lookupBlockUnsafe(blockHash: BlockHash)(implicit MT: MonadThrowable[F]): F[Message.Block] =
+    lookupUnsafe(blockHash).flatMap(msg => MT.fromTry(Try(msg.asInstanceOf[Message.Block])))
 }
 
 trait DagRepresentation[F[_]] extends DagLookup[F] {

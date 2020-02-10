@@ -89,7 +89,7 @@ object ForkChoice {
         equivocators: Set[ByteString]
     ): F[(Block, Map[DagRepresentation.Validator, Set[Message]])] =
       for {
-        keyBlock         <- dag.lookupUnsafe(keyBlockHash).map(_.asInstanceOf[Message.Block])
+        keyBlock         <- dag.lookupBlockUnsafe(keyBlockHash)
         weights          = keyBlock.weightMap
         honestValidators = weights.keys.toList.filterNot(equivocators(_))
         latestHonestMessages = latestMessages.collect {
@@ -129,11 +129,7 @@ object ForkChoice {
                                             case ballot: Message.Ballot =>
                                               // Ballot votes for its parent.
                                               dag
-                                                .lookupUnsafe(ballot.parentBlock)
-                                                .flatMap(
-                                                  msg =>
-                                                    Sync[F].fromTry(Try(msg.asInstanceOf[Block]))
-                                                )
+                                                .lookupBlockUnsafe(ballot.parentBlock)
                                                 .map(block => scores.update(block, weights(v)))
                                           }
 
@@ -170,10 +166,8 @@ object ForkChoice {
 
     override def fromKeyBlock(keyBlockHash: BlockHash): F[Result] =
       for {
-        dag <- DagStorage[F].getRepresentation
-        keyBlock <- dag
-                     .lookupUnsafe(keyBlockHash)
-                     .flatMap(msg => Sync[F].fromTry(Try(msg.asInstanceOf[Block])))
+        dag          <- DagStorage[F].getRepresentation
+        keyBlock     <- dag.lookupBlockUnsafe(keyBlockHash)
         equivocators <- MessageProducer.collectEquivocators[F](keyBlockHash)
         keyBlocks    <- MessageProducer.collectKeyBlocks[F](keyBlockHash)
         (forkChoice, justifications) <- keyBlocks
@@ -212,8 +206,7 @@ object ForkChoice {
                            .traverse(dag.lookupUnsafe)
                            .map(_.groupBy(_.validatorId).mapValues(_.toSet))
         keyBlock <- dag
-                     .lookupUnsafe(keyBlockHash)
-                     .flatMap(msg => Sync[F].fromTry(Try(msg.asInstanceOf[Block])))
+                     .lookupBlockUnsafe(keyBlockHash)
         // TODO: Impl correct equivocation detector for Highway
         //equivocators <- EquivocationDetector.detectVisibleFromJustifications[F](dag, latestMessages)
         equivocators = Set.empty[Validator]
@@ -311,10 +304,7 @@ object ForkChoice {
     def tip[F[_]: Sync](implicit dag: DagLookup[F]): F[Block] =
       Scores
         .findTip[F](maxHeight, this)
-        .flatMap(dag.lookupUnsafe(_))
-        .flatMap(
-          msg => Sync[F].fromTry(Try(msg.asInstanceOf[Block]))
-        )
+        .flatMap(dag.lookupBlockUnsafe(_))
   }
 
   object Scores {
@@ -345,7 +335,7 @@ object ForkChoice {
                 case (acc, (hash, weight)) =>
                   for {
                     msg    <- DagLookup[F].lookupUnsafe(hash)
-                    parent <- DagLookup[F].lookupUnsafe(msg.parentBlock).map(_.asInstanceOf[Block])
+                    parent <- DagLookup[F].lookupBlockUnsafe(msg.parentBlock)
                   } yield acc.update(parent, weight)
               }
             }
