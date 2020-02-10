@@ -246,6 +246,12 @@ object ForkChoice {
       } yield Result(forkChoice, justifications.values.flatten.toSet)
   }
 
+  /** Returns previous message by the creator of `latestMessage` that is a descendant
+    * (in the main tree) of the target block. If such message doesn't exists - returns `None`.
+    *
+    * Validator can "change his mind". His latest message may be a descendant of different
+    * block than his second to last message.
+    */
   private def previousVoteForDescendant[F[_]: MonadThrowable](
       dag: DagLookup[F],
       latestMessage: Message,
