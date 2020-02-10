@@ -63,7 +63,7 @@ class ForkChoiceTest extends FlatSpec with HighwayFixture {
       }
   }
 
-  it should "return a key block when there's no correct descendants" in testFixture {
+  it should "return a key block when there's no descendants" in testFixture {
     implicit timer => implicit db =>
       new ForkChoiceTestFixture(eraDuration) {
 
