@@ -89,7 +89,7 @@ object ForkChoice {
         equivocators: Set[ByteString]
     ): F[(Block, Map[DagRepresentation.Validator, Set[Message]])] =
       for {
-        keyBlock         <- dag.lookupUnsafe(keyBlockHash).map(_.asInstanceOf[Block])
+        keyBlock         <- dag.lookupUnsafe(keyBlockHash).map(_.asInstanceOf[Message.Block])
         weights          = keyBlock.weightMap
         honestValidators = weights.keys.toList.filterNot(equivocators(_))
         latestHonestMessages = latestMessages.collect {
