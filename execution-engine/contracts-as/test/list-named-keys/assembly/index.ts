@@ -26,15 +26,16 @@ export function call(): void {
     return;
   }
 
-  const expectedInitialNamedKeys = fromBytesMap<String, Key>(
+  const mapResult = fromBytesMap<String, Key>(
     expectedInitialNamedKeysBytes,
     fromBytesString,
     Key.fromBytes
   );
-  if (expectedInitialNamedKeys === null) {
+  if (mapResult.hasError()) {
     Error.fromUserError(<u16>CustomError.InvalidInitialNamedKeys).revert();
     return;
   }
+  let expectedInitialNamedKeys = mapResult.value;
 
   let actualNamedKeys = CL.listNamedKeys();
   if (actualNamedKeys === null) {
@@ -53,16 +54,16 @@ export function call(): void {
     return;
   }
 
-  const newNamedKeys = fromBytesMap<String, Key>(
+  const mapResult2 = fromBytesMap<String, Key>(
     newNamedKeysBytes,
     fromBytesString,
     Key.fromBytes
   );
-
-  if (newNamedKeys === null) {
+  if (mapResult2.hasError()) {
     Error.fromUserError(<u16>CustomError.InvalidNewNamedKeys).revert();
     return;
   }
+  let newNamedKeys = mapResult2.value;
 
   let expectedNamedKeys = expectedInitialNamedKeys;
 

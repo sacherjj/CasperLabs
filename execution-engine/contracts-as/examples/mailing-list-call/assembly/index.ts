@@ -43,11 +43,12 @@ export function call(): void {
     }
 
     let subKeyBytes = <Uint8Array>maybeSubKey.unwrap();
-    let subKey = Key.fromBytes(subKeyBytes);
-    if (subKey === null) {
+    let subKeyResult = Key.fromBytes(subKeyBytes);
+    if (subKeyResult === null) {
         Error.fromUserError(<u16>UserError.NoSubKey).revert();
         return;
     }
+    let subKey = subKeyResult.value;
 
     putKey(MAIL_FEED_KEY, subKey);
 
@@ -77,12 +78,14 @@ export function call(): void {
     }
 
     const messageBytes = <Uint8Array>maybeMessagesBytes;
-    const messages = fromBytesStringList(messageBytes);
-    if (messages === null) {
+    const messagesResult = fromBytesStringList(messageBytes);
+    if (messagesResult.hasError()) {
         Error.fromUserError(<u16>UserError.FindMessagesURef).revert();
+        return;
     }
+    let messages = messagesResult.value;
 
-    if ((<String[]>messages).length == 0) {
+    if (messages.length == 0) {
         Error.fromUserError(<u16>UserError.NoMessages).revert();
     }
 }

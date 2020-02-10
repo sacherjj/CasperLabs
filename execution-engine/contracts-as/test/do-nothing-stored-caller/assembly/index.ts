@@ -24,11 +24,12 @@ export function call(): void {
     Error.fromUserError(<u16>CustomError.MissingDoNothingURefArg).revert();
     return;
   }
-  let uref = URef.fromBytes(urefBytes);
-  if (uref === null) {
+  let urefResult = URef.fromBytes(urefBytes);
+  if (urefResult.hasError()) {
     Error.fromErrorCode(ErrorCode.InvalidArgument).revert();
     return;
   }
+  let uref = urefResult.value;
   if (uref.isValid() == false){
     Error.fromUserError(<u16>CustomError.InvalidDoNothingURefArg).revert();
     return;
@@ -39,16 +40,17 @@ export function call(): void {
     Error.fromUserError(<u16>CustomError.MissingPurseNameArg).revert();
     return;
   }
-  const purseName = fromBytesString(purseNameArg);
-  if (purseName === null){
+  const purseNameResult = fromBytesString(purseNameArg);
+  if (purseNameResult.hasError()) {
     Error.fromUserError(<u16>CustomError.InvalidPurseNameArg).revert();
     return;
   }
+  const purseName = purseNameResult.value;
 
   let key = Key.fromURef(uref);
 
   const args: CLValue[] = [
-    CLValue.fromString(purseName)
+    CLValue.fromString(purseName),
   ];
 
   CL.callContract(key, args);

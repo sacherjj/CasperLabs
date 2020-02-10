@@ -5,34 +5,35 @@ import {getMainPurse} from "../../../../contract-as/assembly/account";
 import {TransferredTo} from "../../../../contract-as/assembly/purseid";
 
 enum Args{
-  Account = 0,
-  Amount = 1
+    Account = 0,
+    Amount = 1
 }
 
 export function call(): void {
-  const accountBytes = CL.getArg(Args.Account);
-  if (accountBytes === null) {
-    Error.fromErrorCode(ErrorCode.MissingArgument).revert();
-    return;
-  }
-  const amountBytes = CL.getArg(Args.Amount);
-  if (amountBytes === null) {
-    Error.fromErrorCode(ErrorCode.MissingArgument).revert();
-    return;
-  }
-  const amount = U512.fromBytes(amountBytes);
-  if(amount === null){
-      Error.fromErrorCode(ErrorCode.InvalidArgument).revert();
-      return;
+    const accountBytes = CL.getArg(Args.Account);
+    if (accountBytes === null) {
+        Error.fromErrorCode(ErrorCode.MissingArgument).revert();
+        return;
     }
-  const mainPurse = getMainPurse();
-  if (mainPurse === null){
-      Error.fromErrorCode(ErrorCode.InvalidPurse).revert();
-      return;
-  }
-    const result = mainPurse.transferToAccount(accountBytes, <U512>amount);
-  if (result == TransferredTo.TransferError){
-      Error.fromErrorCode(ErrorCode.Transfer).revert();
-      return;
-  }
+    const amountBytes = CL.getArg(Args.Amount);
+    if (amountBytes === null) {
+        Error.fromErrorCode(ErrorCode.MissingArgument).revert();
+        return;
+    }
+    const amountResult = U512.fromBytes(amountBytes);
+    if (amountResult.hasError()){
+        Error.fromErrorCode(ErrorCode.InvalidArgument).revert();
+        return;
+    }
+    let amount = amountResult.value;
+    const mainPurse = getMainPurse();
+    if (mainPurse === null){
+        Error.fromErrorCode(ErrorCode.InvalidPurse).revert();
+        return;
+    }
+    const result = mainPurse.transferToAccount(accountBytes, amount);
+    if (result == TransferredTo.TransferError){
+        Error.fromErrorCode(ErrorCode.Transfer).revert();
+        return;
+    }
 }

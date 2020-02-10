@@ -33,11 +33,13 @@ export function delegate(): void {
     Error.fromUserError(<u16>CustomError.MissingMethodNameArg).revert();
     return;
   }
-  const methodName = fromBytesString(methodNameArg);
-  if (methodName === null){
+  const methodNameResult = fromBytesString(methodNameArg);
+  if (methodNameResult === null){
     Error.fromUserError(<u16>CustomError.InvalidMethodNameArg).revert();
     return;
   }
+  let methodName = methodNameResult.value;
+
   if (methodName == METHOD_ADD){
     const purseNameArg = CL.getArg(Args.PurseName);
     if (purseNameArg === null){
@@ -51,11 +53,12 @@ export function delegate(): void {
     }
     const uref = (<PurseId>purseId).asURef();
     const key = Key.fromURef(uref);
-    const purseName = fromBytesString(purseNameArg);
-    if (purseName === null){
+    const purseNameResult = fromBytesString(purseNameArg);
+    if (purseNameResult.hasError()) {
       Error.fromUserError(<u16>CustomError.InvalidPurseNameArg).revert();
       return;
     }
+    let purseName = purseNameResult.value;
     putKey(purseName, <Key>key);
     return;
   }
