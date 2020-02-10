@@ -155,10 +155,16 @@ export const Card = (props: {
   title: string;
   children: any;
   footerMessage?: any;
+  refresh?: () => void;
 }) => (
   <div className="card mb-3">
     <div className="card-header">
       <span>{props.title}</span>
+      {props.refresh && (
+        <div className="float-right">
+          <RefreshButton refresh={() => props.refresh!()} />
+        </div>
+      )}
     </div>
     <div className="card-body">{props.children}</div>
     {props.footerMessage && (
