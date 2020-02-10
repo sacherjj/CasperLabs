@@ -212,7 +212,7 @@ class GrpcExecutionEngineService[F[_]: Defer: Concurrent: Log: TaskLift: Metrics
     sendMessage(QueryRequest(state, Some(baseKey), path, Some(protocolVersion)), _.query) {
       _.result match {
         case QueryResponse.Result.Success(bytes) =>
-          FromBytes.deserialize[StoredValue](bytes.toByteArray) match {
+          FromBytes.deserialize(StoredValue.deserializer, bytes.toByteArray) match {
             case Left(err) => Left(SmartContractEngineError(s"Error in parsing EE response: $err"))
 
             // TODO: We should map to state.StoredValue instead of state.Value

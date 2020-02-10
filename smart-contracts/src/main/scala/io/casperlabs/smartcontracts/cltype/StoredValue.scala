@@ -18,27 +18,13 @@ object StoredValue {
     }
   }
 
-  implicit val fromBytesStoredValue: FromBytes[StoredValue] = new FromBytes[StoredValue] {
-    override def fromBytes(bytes: BytesView): Either[FromBytes.Error, (StoredValue, BytesView)] =
-      FromBytes.safePop(bytes).flatMap {
-        case (tag, tail) if tag == CLVALUE_TAG =>
-          FromBytes[cltype.CLValue].fromBytes(tail).map {
-            case (value, rem) => CLValue(value) -> rem
-          }
-
-        case (tag, tail) if tag == ACCOUNT_TAG =>
-          FromBytes[cltype.Account].fromBytes(tail).map {
-            case (account, rem) => Account(account) -> rem
-          }
-
-        case (tag, tail) if tag == CONTRACT_TAG =>
-          FromBytes[cltype.Contract]
-            .fromBytes(tail)
-            .map { case (contract, rem) => Contract(contract) -> rem }
-
-        case (other, _) => Left(FromBytes.Error.InvalidVariantTag(other, "StoredValue"))
-      }
-  }
+  val deserializer: FromBytes.Deserializer[StoredValue] =
+    FromBytes.byte.flatMap {
+      case tag if tag == CLVALUE_TAG  => cltype.CLValue.deserializer.map(v => CLValue(v))
+      case tag if tag == ACCOUNT_TAG  => cltype.Account.deserializer.map(v => Account(v))
+      case tag if tag == CONTRACT_TAG => cltype.Contract.deserializer.map(v => Contract(v))
+      case other                      => FromBytes.raise(FromBytes.Error.InvalidVariantTag(other, "StoredValue"))
+    }
 
   val CLVALUE_TAG: Byte  = 0
   val ACCOUNT_TAG: Byte  = 1

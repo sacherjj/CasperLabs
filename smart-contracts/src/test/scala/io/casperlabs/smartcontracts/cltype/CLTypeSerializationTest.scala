@@ -9,7 +9,7 @@ import CLTypeSerializationTest.{arbCLType, bytesRoundTrip, nested}
 
 class CLTypeSerializationTest extends FlatSpec with PropertyChecks {
   "CLTypes" should "serialize properly" in forAll { (t: CLType) =>
-    roundTrip(t)
+    roundTrip(t, CLType.deserializer)
   }
 
   it should "serialize in a stack safe way" in {
@@ -19,13 +19,13 @@ class CLTypeSerializationTest extends FlatSpec with PropertyChecks {
 
     // We can't compare the actual type because it turns out the
     // auto-generated equality on case classes is not stack safe.
-    bytesRoundTrip(deeperType)
+    bytesRoundTrip(deeperType, CLType.deserializer)
 
     val wideType      = nested(CLType.String, 5)(t => CLType.Tuple2(t, t))
     val wideFixedList = CLType.FixedList(wideType, 31)
     val widerType     = nested(wideFixedList, 5)(t => CLType.Tuple3(t, t, t))
 
-    bytesRoundTrip(widerType)
+    bytesRoundTrip(widerType, CLType.deserializer)
   }
 }
 
@@ -94,10 +94,10 @@ object CLTypeSerializationTest extends Matchers {
     case (acc, _) => nest(acc)
   }
 
-  def bytesRoundTrip[T: ToBytes: FromBytes](t: T) = {
+  def bytesRoundTrip[T: ToBytes](t: T, des: FromBytes.Deserializer[T]) = {
     val bytes = ToBytes[T].toBytes(t)
 
-    val bytes2 = FromBytes.deserialize[T](bytes).map(value => ToBytes[T].toBytes(value))
+    val bytes2 = FromBytes.deserialize(des, bytes).map(value => ToBytes[T].toBytes(value))
 
     bytes2.map(_.toSeq) shouldBe Right(bytes.toSeq)
   }
