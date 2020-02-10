@@ -33,7 +33,7 @@ class ForkChoiceTest extends FlatSpec with HighwayFixture {
             _          <- insertGenesis()
             genesisEra <- addGenesisEra()
             a          <- genesisEra.block(alice, genesisEra.keyBlockHash)
-            forkChoice <- ForkChoice.create[Task]().fromKeyBlock(genesisEra.keyBlockHash)
+            forkChoice <- ForkChoice.create[Task].fromKeyBlock(genesisEra.keyBlockHash)
           } yield {
             assert(forkChoice.block.messageHash == a)
             assert(forkChoice.justifications == Set.empty)
@@ -55,7 +55,7 @@ class ForkChoiceTest extends FlatSpec with HighwayFixture {
             genesisEra <- addGenesisEra()
             a          <- genesisEra.block(alice, genesisEra.keyBlockHash)
             b          <- genesisEra.block(bob, a)
-            forkChoice <- ForkChoice.create[Task]().fromKeyBlock(genesisEra.keyBlockHash)
+            forkChoice <- ForkChoice.create[Task].fromKeyBlock(genesisEra.keyBlockHash)
           } yield {
             assert(forkChoice.block.messageHash == b)
             assert(forkChoice.justifications.isEmpty, "returned justifications were not reduced")
@@ -77,7 +77,7 @@ class ForkChoiceTest extends FlatSpec with HighwayFixture {
           for {
             _          <- insertGenesis()
             genesisEra <- addGenesisEra()
-            forkChoice <- ForkChoice.create[Task]().fromKeyBlock(genesisEra.keyBlockHash)
+            forkChoice <- ForkChoice.create[Task].fromKeyBlock(genesisEra.keyBlockHash)
           } yield {
             assert(forkChoice.block.messageHash == genesisEra.keyBlockHash)
             assert(forkChoice.justifications.isEmpty)
@@ -124,7 +124,7 @@ class ForkChoiceTest extends FlatSpec with HighwayFixture {
               //
               childEra   <- genesisEra.addChildEra(a2)
               b3         <- childEra.block(bob, b2)
-              forkChoice <- ForkChoice.create[Task]().fromKeyBlock(childEra.keyBlockHash)
+              forkChoice <- ForkChoice.create[Task].fromKeyBlock(childEra.keyBlockHash)
             } yield {
               assert(forkChoice.block.messageHash == b3)
               assert(forkChoice.justifications.map(_.messageHash) == Set(ba1, bb1, bc1))
@@ -148,7 +148,7 @@ class ForkChoiceTest extends FlatSpec with HighwayFixture {
             _           <- insertGenesis()
             genesisEra  <- addGenesisEra()
             (a, aPrime) <- equivocate(alice, genesisEra, genesisEra.keyBlockHash)
-            forkChoice  <- ForkChoice.create[Task]().fromKeyBlock(genesisEra.keyBlockHash)
+            forkChoice  <- ForkChoice.create[Task].fromKeyBlock(genesisEra.keyBlockHash)
           } yield {
             assert(forkChoice.block.messageHash == genesisEra.keyBlockHash)
             assert(forkChoice.justifications.map(_.messageHash) == Set(a, aPrime))
@@ -182,7 +182,7 @@ class ForkChoiceTest extends FlatSpec with HighwayFixture {
           a2         <- genesisEra.block(alice, a1)
           b1         <- genesisEra.block(bob, a2)
           c2         <- genesisEra.block(charlie, c1)
-          forkChoice <- ForkChoice.create[Task]().fromKeyBlock(genesisEra.keyBlockHash)
+          forkChoice <- ForkChoice.create[Task].fromKeyBlock(genesisEra.keyBlockHash)
         } yield {
           assert(forkChoice.block.messageHash == b1)
           assert(forkChoice.justifications.map(_.messageHash) == Set(c2))
@@ -238,7 +238,7 @@ class ForkChoiceTest extends FlatSpec with HighwayFixture {
                              )
               _          <- childEra.block(charlie, a3)
               (a4, c4)   <- Task.parZip2(childEra.block(alice, b3), childEra.block(charlie, b3))
-              forkChoice <- ForkChoice.create[Task]().fromKeyBlock(childEra.keyBlockHash)
+              forkChoice <- ForkChoice.create[Task].fromKeyBlock(childEra.keyBlockHash)
             } yield {
               assert(forkChoice.block.messageHash == c4)
               assert(forkChoice.justifications.map(_.messageHash) == Set(ba1, bb1, bc1, a4))
@@ -294,7 +294,7 @@ class ForkChoiceTest extends FlatSpec with HighwayFixture {
                              )
               _            <- childEra.block(charlie, a3)
               (a4, c4)     <- Task.parZip2(childEra.block(alice, b3), childEra.block(charlie, b3))
-              forkChoice   <- ForkChoice.create[Task]().fromKeyBlock(childEra.keyBlockHash)
+              forkChoice   <- ForkChoice.create[Task].fromKeyBlock(childEra.keyBlockHash)
               equivocators <- MessageProducer.collectEquivocators[Task](childEra.keyBlockHash)
             } yield {
               assert(equivocators == Set(ByteString.copyFrom(Charlie._2)))

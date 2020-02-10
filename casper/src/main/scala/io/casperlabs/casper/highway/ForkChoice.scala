@@ -79,7 +79,7 @@ object ForkChoice {
         .mapValues(_.map(_._2).toSet)
   }
 
-  def create[F[_]: Sync: EraStorage: DagStorage](): ForkChoice[F] = new ForkChoice[F] {
+  def create[F[_]: Sync: EraStorage: DagStorage]: ForkChoice[F] = new ForkChoice[F] {
 
     private def eraForkChoice(
         dag: DagRepresentation[F],
