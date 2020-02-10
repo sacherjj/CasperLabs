@@ -94,8 +94,12 @@ class ScoresSpec extends FlatSpec with Matchers {
     case other          => Prettifier.default(other)
   }
 
-  class TipFixture(startBlock: Block, blocks: List[Block]) {
-    def assertTip(weights: Map[ByteString, Int], expectedTip: Message.Block): Assertion = {
+  class TipFixture(blocks: List[Block]) {
+    def assertTip(
+        weights: Map[ByteString, Int],
+        startBlock: Block,
+        expectedTip: Message.Block
+    ): Assertion = {
       val test = for {
         blockStore                      <- MockBlockDagStorage[Task](startBlock +: blocks: _*)
         implicit0(dag: DagLookup[Task]) <- blockStore.getRepresentation
@@ -142,8 +146,8 @@ class ScoresSpec extends FlatSpec with Matchers {
       validatorC -> 3
     )
 
-    val fixture = new TipFixture(a1, blocks)
-    fixture.assertTip(weights, a2)
+    val fixture = new TipFixture(blocks)
+    fixture.assertTip(weights, a1, a2)
   }
 
   it should "return tip for the blockchain" in {
@@ -160,8 +164,8 @@ class ScoresSpec extends FlatSpec with Matchers {
       validatorC -> 3
     )
 
-    val fixtureA = new TipFixture(a1, blocks)
-    fixtureA.assertTip(weightsA, a2)
+    val fixtureA = new TipFixture(blocks)
+    fixtureA.assertTip(weightsA, a1, a2)
 
     // This weight map will have majority of votes at block b1
     val weightsB = Map(
@@ -170,8 +174,8 @@ class ScoresSpec extends FlatSpec with Matchers {
       validatorC -> 10
     )
 
-    val fixtureB = new TipFixture(a1, blocks)
-    fixtureB.assertTip(weightsB, b1)
+    val fixtureB = new TipFixture(blocks)
+    fixtureB.assertTip(weightsB, a1, b1)
 
     // This weight map will have majority of votes at block c1
     val weightsC = Map(
@@ -180,8 +184,8 @@ class ScoresSpec extends FlatSpec with Matchers {
       validatorC -> 21
     )
 
-    val fixtureC = new TipFixture(a1, blocks)
-    fixtureC.assertTip(weightsC, c1)
+    val fixtureC = new TipFixture(blocks)
+    fixtureC.assertTip(weightsC, a1, c1)
   }
 
   it should "return tip when a tie between uneven branches of the tree" in {
@@ -200,7 +204,7 @@ class ScoresSpec extends FlatSpec with Matchers {
     val c2 = createBlock(validatorC, c1.blockHash, 3)
     val c3 = createBlock(validatorC, c2.blockHash, 4)
 
-    val blocks = List(a2, b1, c1, c2, c3)
+    val blocks = List(a1, a2, b1, c1, c2, c3)
 
     // No validator on its own has majority of votes.
     val weights: Map[ByteString, Int] = Map(
@@ -209,10 +213,10 @@ class ScoresSpec extends FlatSpec with Matchers {
       validatorC -> 10
     )
 
-    val expectedTip = tieBreaker(List(b1, a2, c1), weights)
+    // val expectedTip = tieBreaker(List(b1, a2, c1), weights)
 
-    val fixture = new TipFixture(a1, blocks)
-    fixture.assertTip(weights, expectedTip)
+    val fixture = new TipFixture(blocks)
+    fixture.assertTip(weights, a1, c1)
   }
 
   it should "return correct tip as soon as it has majority of the votes" in {
@@ -238,8 +242,8 @@ class ScoresSpec extends FlatSpec with Matchers {
 
     val blocks = List(a2, b1, c1, c2, c3, a3)
 
-    val fixture = new TipFixture(a1, blocks)
-    fixture.assertTip(weights, c3)
+    val fixture = new TipFixture(blocks)
+    fixture.assertTip(weights, a1, c3)
   }
 
   it should "return correct tip when there's a tie" in {
@@ -255,6 +259,8 @@ class ScoresSpec extends FlatSpec with Matchers {
     val b1 = createBlock(validatorB, a1.blockHash, 2)
     val b2 = createBlock(validatorB, b1.blockHash, 3)
 
+    val blocks = List(a1, a2, a3, b1, b2)
+
     // No validator on its own has majority of votes.
     val weights: Map[ByteString, Int] = Map(
       validatorA -> 10,
@@ -263,7 +269,7 @@ class ScoresSpec extends FlatSpec with Matchers {
 
     val expectedTip = tieBreaker(List(a3, b2), weights)
 
-    val fixture = new TipFixture(a1, List(a3, b2))
-    fixture.assertTip(weights, expectedTip)
+    val fixture = new TipFixture(blocks)
+    fixture.assertTip(weights, a1, expectedTip)
   }
 }
