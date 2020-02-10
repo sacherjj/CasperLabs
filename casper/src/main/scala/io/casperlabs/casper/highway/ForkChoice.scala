@@ -275,7 +275,7 @@ object ForkChoice {
    * This allows us to skip multiple descendants from `start`
    * if there are enough votes farther up the main tree.
    *
-   * This is true because later votes have to be in the same main tree theirs ancestors.
+   * This is true because later votes have to be in the same main tree as theirs ancestors.
    * We need to find rank of the highest block that is plurality driven (has most votes).
    * If we know that block rank=5 has >50% of total votes we don't have to check its ancestors.
    */
