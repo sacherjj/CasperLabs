@@ -184,7 +184,7 @@ class ScoresSpec extends FlatSpec with Matchers {
     fixtureC.assertTip(weightsC, c1)
   }
 
-  it should "return tip in more complex DAG" in {
+  it should "return tip when a tie between uneven branches of the tree" in {
     //    b1
     //   /
     // a1-a2
