@@ -32,8 +32,13 @@ import scala.concurrent.duration._
 import org.scalatest.Suite
 import io.casperlabs.casper.util.execengine.ExecutionEngineServiceStub
 import io.casperlabs.casper.finality.MultiParentFinalizer
+import io.casperlabs.casper.util.ByteStringPrettifier
 
-trait HighwayFixture extends StorageFixture with TickUtils with ArbitraryConsensus { self: Suite =>
+trait HighwayFixture
+    extends StorageFixture
+    with TickUtils
+    with ByteStringPrettifier
+    with ArbitraryConsensus { self: Suite =>
 
   /** Create multiple databases, one for each validator. */
   def testFixtures(validators: List[String])(
