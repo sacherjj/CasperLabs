@@ -143,7 +143,7 @@ trait EraTipRepresentation[F[_]] extends TipRepresentation[F] {
 trait DagRepresentation[F[_]] extends DagLookup[F] {
   def children(blockHash: BlockHash): F[Set[BlockHash]]
 
-  /** Return blocks that having a specify justification */
+  /** Return blocks which have a specific block in their justifications. */
   def justificationToBlocks(blockHash: BlockHash): F[Set[BlockHash]]
 
   /** Return block summaries with ranks in the DAG between start and end, inclusive. */
