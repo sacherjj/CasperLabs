@@ -112,7 +112,7 @@ trait HighwayFixture
   ) extends FixtureLike {
 
     // Genesis validators.
-    lazy val bonds: List[Bond] = List(
+    def bonds: List[Bond] = List(
       Bond("Alice").withStake(state.BigInt("3000")),
       Bond("Bob").withStake(state.BigInt("4000")),
       Bond("Charlie").withStake(state.BigInt("5000"))
