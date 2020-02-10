@@ -304,7 +304,7 @@ object ForkChoice {
     def votesAtHeight(height: Scores.Height): Map[BlockHash, Weight] =
       scores.getOrElse(height, Map.empty)
 
-    def totalWeight: Weight      = scores.valuesIterator.flatMap(_.valuesIterator).sum
+    lazy val totalWeight: Weight = scores.valuesIterator.flatMap(_.valuesIterator).sum
     def maxHeight: Scores.Height = scores.keysIterator.max
     def isEmpty: Boolean         = scores.isEmpty
 
