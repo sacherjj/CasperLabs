@@ -251,9 +251,7 @@ object ForkChoice {
       latestMessage: Message,
       target: Block
   ): F[Option[Message]] =
-    if (latestMessage.rank < target.rank)
-      none[Message].pure[F]
-    else if (latestMessage.isBlock && latestMessage.messageHash == target.messageHash)
+    if (latestMessage.rank <= target.rank)
       none[Message].pure[F]
     else {
       ProtoUtil
