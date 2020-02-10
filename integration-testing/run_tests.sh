@@ -27,7 +27,8 @@ pipenv run client/CasperLabsClient/install.sh
 # I would love to do that if someone can show me where I'm messing up.
 case ${UNIQUE_RUN_NUM} in
   [0])
-  pipenv run pytest -k "R0" ${PYTEST_ARGS} ${TEST_RUN_ARGS}  ;;
+  pipenv run pytest -k "R0" ${PYTEST_ARGS} ${TEST_RUN_ARGS}
+  ;;
   [1])
   pipenv run pytest -k "R1" ${PYTEST_ARGS} ${TEST_RUN_ARGS}
   ;;

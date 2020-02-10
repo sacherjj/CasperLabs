@@ -1,9 +1,5 @@
 #!/usr/bin/env bash
 
-# Adding display of images to debug issues with CI run
-echo Available Images:
-docker images
-
 set -e
 
 if [[ -n $DRONE_BUILD_NUMBER ]]; then
