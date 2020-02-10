@@ -50,6 +50,8 @@ impl Display for SystemContractType {
 
 #[cfg(test)]
 mod tests {
+    use std::string::ToString;
+
     use super::*;
 
     #[test]
