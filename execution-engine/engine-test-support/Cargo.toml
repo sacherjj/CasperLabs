@@ -10,7 +10,7 @@ homepage = "https://casperlabs.io"
 repository = "https://github.com/CasperLabs/CasperLabs/tree/master/execution-engine/engine-test-support"
 
 [dependencies]
-contract = { version = "0.22.0", path = "../contract", package = "casperlabs-contract" }
+contract = { version = "0.1.0", path = "../contract", package = "casperlabs-contract" }
 engine-core = { version = "0.1.0", path = "../engine-core", package = "casperlabs-engine-core" }
 engine-grpc-server = { version = "0.11.0", path = "../engine-grpc-server", package = "casperlabs-engine-grpc-server" }
 engine-shared = { version = "0.2.0", path = "../engine-shared", package = "casperlabs-engine-shared" }

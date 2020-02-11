@@ -12,7 +12,7 @@ repository = "https://github.com/CasperLabs/CasperLabs/tree/master/execution-eng
 [dependencies]
 base16 = "0.2.1"
 blake2 = "0.8.1"
-contract = { version = "0.22.0", path = "../contract",  package = "casperlabs-contract", features = ["std"] }
+contract = { version = "0.1.0", path = "../contract",  package = "casperlabs-contract", features = ["std"] }
 engine-shared = { version = "0.2.0", path = "../engine-shared", package = "casperlabs-engine-shared" }
 engine-storage = { version = "0.1.0", path = "../engine-storage", package = "casperlabs-engine-storage" }
 engine-wasm-prep = { version = "0.1.0", path = "../engine-wasm-prep", package = "casperlabs-engine-wasm-prep" }
