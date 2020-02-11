@@ -3,7 +3,7 @@ import { observer } from 'mobx-react';
 import { Form, SelectField, TextField } from './Forms';
 import AuthContainer from '../containers/AuthContainer';
 import { FaucetRequest } from '../containers/FaucetContainer';
-import { Button, Card, Icon, ListInline, Loading, RefreshableComponent, shortHash } from './Utils';
+import { Button, Card, Icon, ListInline, Loading, RefreshableComponent, shortHash, ShortHashSpan } from './Utils';
 import { DeployInfo } from 'casperlabs-grpc/io/casperlabs/casper/consensus/info_pb';
 import { decodeBase64, encodeBase16 } from 'casperlabs-sdk';
 import VestingChart from './VestringChart';
@@ -150,7 +150,7 @@ const VestingHashesManageForm = observer(
   }
 );
 
-const TableRow = (props: { title: string; children: ReactNode}) => {
+const TableRow = (props: { title: string; children: ReactNode }) => {
   return (
     <tr>
       <th role="row">{props.title}</th>
@@ -192,7 +192,7 @@ const VestingDetails = observer(
       <table className="table table-bordered">
         <tbody>
         <TableRow title="Hash of the Vesting Contract">
-          {shortHash(props.hash)}
+          <ShortHashSpan hash={props.hash}/>
         </TableRow>
         <TableRow title="Current Time">
           {moment().format()}
@@ -224,13 +224,20 @@ const VestingDetails = observer(
           )}
         </TableRow>
         <TableRow title="Paused State">
-          {props.vestingDetail.is_paused? 'Paused': 'Not Paused'}
+          {props.vestingDetail.is_paused ? 'Paused' : 'Not Paused'}
         </TableRow>
+        {
+          props.vestingDetail.is_paused && (
+            <TableRow title="Last Time Paused">
+              {moment(props.vestingDetail.last_pause_timestamp * 1000).fromNow()}
+            </TableRow>
+          )
+        }
         <TableRow title="Admin Account">
-          xxx
+          <ShortHashSpan hash={props.vestingDetail.admin_account}/>
         </TableRow>
-        <TableRow title="Recipient account">
-          aaa
+        <TableRow title="Recipient Account">
+          <ShortHashSpan hash={props.vestingDetail.recipient_account}/>
         </TableRow>
         <TableRow title="Available Amount">
           {props.vestingDetail.available_amount.toLocaleString() + ' CLX'}

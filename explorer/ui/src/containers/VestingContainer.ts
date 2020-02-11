@@ -53,15 +53,19 @@ export class VestingDetail {
   drip_amount: number;
   admin_release_duration: number;
 
-  get total_paused_duration(): number {
-    let duration = this.on_pause_duration;
-    let current_timestamp = Date.now();
+  // Todo fetch from global state storage once the parsing bug is fixed.
+  get admin_account(): string {
+    return "ad1ce8c63f6439c12a6c57f8d797e2a1ea7af76ccdcc08b83baa5f84ffc180f1";
+  }
 
-    if (this.is_paused) {
-      duration += current_timestamp - this.last_pause_timestamp;
-    }
+  // Todo fetch from global state storage once the parsing bug is fixed.
+  get recipient_account(): string {
+    return "400ceb75b8ad14a395edd03a285cc2de745cc61bef22e5a8e214a9783505409c";
+  }
 
-    return duration;
+  // Todo fetch from global state storage once the parsing bug is fixed.
+  get is_paused(): boolean{
+    return true;
   }
 
   // check whether the contract is releasable by admin account
@@ -79,9 +83,15 @@ export class VestingDetail {
     return true;
   }
 
-  // Todo fetch from global state storage once the parsing bug is fixed.
-  get is_paused(): boolean{
-    return true;
+  get total_paused_duration(): number {
+    let duration = this.on_pause_duration;
+    let current_timestamp = Date.now();
+
+    if (this.is_paused) {
+      duration += current_timestamp - this.last_pause_timestamp;
+    }
+
+    return duration;
   }
 
   get available_amount() {

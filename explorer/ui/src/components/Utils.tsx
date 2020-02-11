@@ -31,7 +31,7 @@ export const IconButton = (props: {
     title={props.title}
     className="link icon-button"
   >
-    <Icon name={props.icon} />
+    <Icon name={props.icon}/>
   </button>
 );
 
@@ -43,12 +43,12 @@ export const Button = (props: {
   onClick: () => void;
   title: string;
   disabled?: boolean;
-  style?: "primary" | "danger"
+  style?: 'primary' | 'danger'
 }) => (
   <button
     type="button"
     onClick={_ => props.onClick()}
-    className={`btn btn-${props.style || "primary"}`}
+    className={`btn btn-${props.style || 'primary'}`}
     disabled={props.disabled || false}
   >
     {props.title}
@@ -149,6 +149,15 @@ export class PrivateRoute extends React.Component<PrivateRouteProps, {}> {
 export const shortHash = (hash: string | ByteArray) => {
   const h = typeof hash === 'string' ? hash : encodeBase16(hash);
   return h.length > 10 ? h.substr(0, 10) + '...' : h;
+};
+
+export const ShortHashSpan = (props: { hash: string | ByteArray }) => {
+  const h = typeof props.hash === 'string' ? props.hash : encodeBase16(props.hash);
+  return (
+    <span title={h}>
+      {shortHash(h)}
+    </span>
+  );
 };
 
 export const Card = (props: {
