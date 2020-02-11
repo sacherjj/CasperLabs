@@ -50,8 +50,8 @@ object DagOperations {
     *
     * Returns a stream.
     */
-  def toposortJDagDesc[F[_]: Monad](
-      dag: DagRepresentation[F],
+  def toposortJDagDesc[F[_]: MonadThrowable](
+      dag: DagLookup[F],
       msgs: List[Message]
   ): StreamT[F, Message] = {
     implicit val blockTopoOrdering: Ordering[Message] = DagOperations.blockTopoOrderingDesc
@@ -59,8 +59,7 @@ object DagOperations {
       msgs
     )(
       _.justifications.toList
-        .traverse(j => dag.lookup(j.latestBlockHash))
-        .map(_.flatten)
+        .traverse(j => dag.lookupUnsafe(j.latestBlockHash))
     )
   }
 
@@ -547,14 +546,7 @@ object DagOperations {
     implicit val blockTopoOrdering: Ordering[Message] =
       DagOperations.blockTopoOrderingDesc
 
-    val stream = DagOperations
-      .bfToposortTraverseF(justifications) { b =>
-        b.justifications.toList
-          .traverse(justification => {
-            dag.lookup(justification.latestBlockHash)
-          })
-          .map(_.flatten)
-      }
+    val stream = toposortJDagDesc(dag, justifications)
       .takeUntil(_ == stop)
 
     val initStates =
