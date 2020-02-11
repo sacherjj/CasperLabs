@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { ReactNode } from 'react';
 import { observer } from 'mobx-react';
 import { Form, SelectField, TextField } from './Forms';
 import AuthContainer from '../containers/AuthContainer';
@@ -150,7 +150,7 @@ const VestingHashesManageForm = observer(
   }
 );
 
-const TableRow = (props: { title: string; children: string }) => {
+const TableRow = (props: { title: string; children: ReactNode}) => {
   return (
     <tr>
       <th role="row">{props.title}</th>
@@ -216,10 +216,15 @@ const VestingDetails = observer(
           {props.vestingDetail.released_amount.toLocaleString() + ' CLX'}
         </TableRow>
         <TableRow title="Admin Release Duration">
+         <span className="mr-3">
           {duration(props.vestingDetail.admin_release_duration * 1000)}
+         </span>
+          {props.vestingDetail.is_releasable && (
+            <Icon name="check-circle" color="green" title="Available to release"/>
+          )}
         </TableRow>
         <TableRow title="Paused State">
-          Paused
+          {props.vestingDetail.is_paused? 'Paused': 'Not Paused'}
         </TableRow>
         <TableRow title="Admin Account">
           xxx

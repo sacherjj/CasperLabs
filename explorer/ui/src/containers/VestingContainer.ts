@@ -64,9 +64,24 @@ export class VestingDetail {
     return duration;
   }
 
+  // check whether the contract is releasable by admin account
+  get is_releasable(): boolean{
+    if (!this.is_paused) {
+      return false;
+    }
+    let since_last_pause = Date.now() - this.last_pause_timestamp;
+    if( since_last_pause < this.admin_release_duration ){
+      return false;
+    }
+    if (this.total_amount == this.released_amount) {
+      return false;
+    }
+    return true;
+  }
+
   // Todo fetch from global state storage once the parsing bug is fixed.
   get is_paused(): boolean{
-    return false;
+    return true;
   }
 
   get available_amount() {

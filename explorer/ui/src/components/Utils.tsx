@@ -14,11 +14,11 @@ export const Spinner = (msg: String) => (
 export const Loading = () => Spinner('Loading');
 
 // https://fontawesome.com/icons?d=gallery&q=ground&m=free
-export const Icon = (props: { name: string; color?: string }) => {
+export const Icon = (props: { name: string; color?: string; title?: string }) => {
   const styles = {
     color: props.color
   };
-  return <i className={'fa fa-fw fa-' + props.name} style={styles} />;
+  return <i className={'fa fa-fw fa-' + props.name} style={styles} title={props.title}/>;
 };
 
 export const IconButton = (props: {
