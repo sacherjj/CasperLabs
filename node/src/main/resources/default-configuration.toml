@@ -264,9 +264,6 @@ omega-message-time-end = 0.75
 # Initial round exponent to start the node with, before auto-adjustment takes over; corresponds to the tick unit of the chain.
 init-round-exponent = 14
 
-# For testing purposes allow overriding the start of the genesis era, to avoid having to edit the chainspec.
-genesis-era-start-override = 0
-
 # io.casperlabs.node.configuration.Configuration.Kamon
 [metrics]
 

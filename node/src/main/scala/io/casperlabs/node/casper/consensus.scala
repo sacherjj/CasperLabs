@@ -250,15 +250,10 @@ object Highway {
                                                       }
                                                     }
 
-      // Allow specifying the start outside the chain spec, for convenience.
-      genesisEraStart = Option(conf.highway.genesisEraStartOverride)
-        .filter(_ > 0)
-        .getOrElse(hc.genesisEraStartTimestamp)
-
       supervisor <- EraSupervisor(
                      conf = HighwayConf(
                        tickUnit = TimeUnit.MILLISECONDS,
-                       genesisEraStart = Instant.ofEpochMilli(genesisEraStart),
+                       genesisEraStart = Instant.ofEpochMilli(hc.genesisEraStartTimestamp),
                        eraDuration =
                          HighwayConf.EraDuration.FixedLength(hc.eraDurationMillis.millis),
                        bookingDuration = hc.bookingDurationMillis.millis,
