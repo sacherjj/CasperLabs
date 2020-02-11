@@ -18,6 +18,8 @@ import io.casperlabs.storage.era.EraStorage
 import simulacrum.typeclass
 
 import scala.util.Try
+import io.casperlabs.casper.util.DagOperations
+import DagOperations.ObservedValidatorBehavior
 
 /** Some sort of stateful, memoizing implementation of a fast fork choice.
   * Should have access to the era tree to check what are the latest messages
@@ -201,42 +203,47 @@ object ForkChoice {
         justifications: Set[BlockHash]
     ): F[Result] =
       for {
-        dag <- DagStorage[F].getRepresentation
-        latestMessages <- justifications.toList
-                           .traverse(dag.lookupUnsafe)
-                           .map(_.groupBy(_.validatorId).mapValues(_.toSet))
-        keyBlock <- dag
-                     .lookupBlockUnsafe(keyBlockHash)
-        // TODO: Impl correct equivocation detector for Highway
-        //equivocators <- EquivocationDetector.detectVisibleFromJustifications[F](dag, latestMessages)
-        equivocators = Set.empty[Validator]
-        keyBlocks    <- MessageProducer.collectKeyBlocks[F](keyBlockHash)
-        (forkChoice, justifications) <- keyBlocks
-                                         .foldM(
-                                           keyBlock -> Map
-                                             .empty[DagRepresentation.Validator, Set[Message]]
-                                         ) {
-                                           case ((startBlock, accLatestMessages), currKeyBlock) =>
-                                             val eraLatestMessages: Map[Validator, Set[Message]] =
-                                               latestMessages.mapValues(
-                                                 _.filter(_.eraId == currKeyBlock)
-                                               )
-
-                                             eraForkChoice(
-                                               dag,
-                                               currKeyBlock,
-                                               startBlock,
-                                               eraLatestMessages,
-                                               equivocators
-                                             ).map {
-                                               case (forkChoice, eraLatestMessages) =>
-                                                 (
-                                                   forkChoice,
-                                                   accLatestMessages |+| eraLatestMessages
-                                                 )
-                                             }
-                                         }
-      } yield Result(forkChoice, justifications.values.flatten.toSet)
+        dag                    <- DagStorage[F].getRepresentation
+        keyBlock               <- dag.lookupBlockUnsafe(keyBlockHash)
+        validators             = keyBlock.weightMap.keySet
+        justificationsMessages <- justifications.toList.traverse(dag.lookupUnsafe)
+        latestMessages <- DagOperations.panoramaOfMessageFromJustifications[F](
+                           dag,
+                           justificationsMessages,
+                           validators,
+                           keyBlock
+                         )
+        equivocators = latestMessages.filter(_._2.isEquivocated).keySet
+        latestHonestMessages = latestMessages.collect {
+          case (v, ObservedValidatorBehavior.Honest(msg)) => v -> Set(msg)
+        }
+        keyBlocks <- MessageProducer.collectKeyBlocks[F](keyBlockHash)
+        (forkChoice, forkChoiceJustifications) <- keyBlocks
+                                                   .foldM(
+                                                     keyBlock -> Map
+                                                       .empty[DagRepresentation.Validator, Set[
+                                                         Message
+                                                       ]]
+                                                   ) {
+                                                     case (
+                                                         (startBlock, accLatestMessages),
+                                                         currKeyBlock
+                                                         ) =>
+                                                       eraForkChoice(
+                                                         dag,
+                                                         currKeyBlock,
+                                                         startBlock,
+                                                         latestHonestMessages,
+                                                         equivocators
+                                                       ).map {
+                                                         case (forkChoice, eraLatestMessages) =>
+                                                           (
+                                                             forkChoice,
+                                                             accLatestMessages |+| eraLatestMessages
+                                                           )
+                                                       }
+                                                   }
+      } yield Result(forkChoice, forkChoiceJustifications.values.flatten.toSet)
   }
 
   /** Returns previous message by the creator of `latestMessage` that is a descendant
