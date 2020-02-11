@@ -1,6 +1,5 @@
 import React, { Component } from 'react';
 import { Line } from 'react-chartjs-2';
-import moment from 'moment';
 import { VestingDetail } from '../containers/VestingContainer';
 
 interface Props {
@@ -9,7 +8,6 @@ interface Props {
 
 class VestingChart extends Component<Props, {}> {
   render() {
-    console.log(this.props.vestingDetail);
     return <Line data={this.chartData()} options={this.chartOptions()}/>;
   }
 
@@ -17,68 +15,13 @@ class VestingChart extends Component<Props, {}> {
     return {
       datasets: [
         this.fromBaseDataset({
-          data: this.getPoints()
+          data: this.props.vestingDetail.getSchedulePoints()
         })
       ]
     };
   }
 
-  getPoints() {
-    const {
-      total_amount,
-      on_pause_duration,
-      cliff_timestamp,
-      drip_duration
-    } = this.props.vestingDetail;
-    const points = [];
-    let time = cliff_timestamp + on_pause_duration;
-    let p;
-    do {
-      p = this.getDataPointAt(time);
-      points.push(p);
-      time += drip_duration;
-    } while (p.y < total_amount);
-    points.push(this.getDataPointAt(Date.now()/ 1000));
-    let ret = points
-      .sort((a, b) => a.x - b.x)
-      .map(x => {
-        return {
-          x: this.formatDate(x.x * 1000),
-          y: x.y
-        };
-      });
 
-    return ret;
-  }
-
-  getDataPointAt(date: number) {
-    return {
-      x: date,
-      y: this.getAmountAt(date)
-    };
-  }
-
-  formatDate(date: number) {
-    return moment(date).format('MM/DD/YYYY HH:mm');
-  }
-
-  getAmountAt(date: number) {
-    const {
-      total_amount,
-      on_pause_duration,
-      cliff_amount,
-      cliff_timestamp,
-      drip_amount,
-      drip_duration
-    } = this.props.vestingDetail;
-    if (date < cliff_timestamp + on_pause_duration) {
-      return 0;
-    }
-    const computed =
-      cliff_amount + ((date - cliff_timestamp) / drip_duration) * drip_amount;
-
-    return Math.min(total_amount, computed);
-  }
 
   chartOptions() {
     return {

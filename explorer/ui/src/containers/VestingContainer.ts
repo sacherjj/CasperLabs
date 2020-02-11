@@ -2,6 +2,7 @@ import ErrorContainer from './ErrorContainer';
 import { CasperService } from 'casperlabs-sdk';
 import { StateQuery } from 'casperlabs-grpc/io/casperlabs/node/api/casper_pb';
 import { observable } from 'mobx';
+import moment from 'moment';
 
 
 export class VestingContainer {
@@ -55,12 +56,12 @@ export class VestingDetail {
 
   // Todo fetch from global state storage once the parsing bug is fixed.
   get admin_account(): string {
-    return "ad1ce8c63f6439c12a6c57f8d797e2a1ea7af76ccdcc08b83baa5f84ffc180f1";
+    return 'ad1ce8c63f6439c12a6c57f8d797e2a1ea7af76ccdcc08b83baa5f84ffc180f1';
   }
 
   // Todo fetch from global state storage once the parsing bug is fixed.
   get recipient_account(): string {
-    return "400ceb75b8ad14a395edd03a285cc2de745cc61bef22e5a8e214a9783505409c";
+    return '400ceb75b8ad14a395edd03a285cc2de745cc61bef22e5a8e214a9783505409c';
   }
 
   // Todo fetch from global state storage once the parsing bug is fixed.
@@ -69,12 +70,12 @@ export class VestingDetail {
   }
 
   // check whether the contract is releasable by admin account
-  get is_releasable(): boolean{
+  get is_releasable(): boolean {
     if (!this.is_paused) {
       return false;
     }
     let since_last_pause = Date.now() - this.last_pause_timestamp;
-    if( since_last_pause < this.admin_release_duration ){
+    if (since_last_pause < this.admin_release_duration) {
       return false;
     }
     if (this.total_amount === this.released_amount) {
@@ -94,14 +95,46 @@ export class VestingDetail {
     return duration;
   }
 
-  get available_amount() {
-    let current_timestamp = Date.now();
+  getSchedulePoints(): { x: string; y: number }[] {
+    let formatDate = (date: number) => {
+      return moment(date).format('MM/DD/YYYY HH:mm');
+    };
+
+    const points = [];
+    let time = this.cliff_timestamp + this.on_pause_duration;
+    let p;
+    do {
+      p = this.getDataPointAt(time);
+      points.push(p);
+      time += this.drip_duration;
+    } while (p.y < this.total_amount);
+    points.push(this.getDataPointAt(Date.now() / 1000));
+    let ret = points
+      .sort((a, b) => a.x - b.x)
+      .map(x => {
+        return {
+          x: formatDate(x.x * 1000),
+          y: x.y
+        };
+      });
+
+    return ret;
+  }
+
+  private getDataPointAt(date: number) {
+    return {
+      x: date,
+      y: this.getAmountAt(date)
+    };
+  }
+
+  private getAmountAt(date: number): number {
     let total_paused_duration = this.total_paused_duration;
     let cliff_timestamp_adjusted = this.cliff_timestamp + total_paused_duration;
-    if (current_timestamp < cliff_timestamp_adjusted) {
+    if (date < cliff_timestamp_adjusted) {
       return 0;
     } else {
-      let time_diff = current_timestamp - cliff_timestamp_adjusted;
+      let time_diff = date - cliff_timestamp_adjusted;
       let available_drips = 0;
       if (this.drip_duration !== 0) {
         available_drips = time_diff / this.drip_duration;
@@ -109,7 +142,11 @@ export class VestingDetail {
       let counter = this.cliff_amount;
       counter += this.drip_amount * available_drips;
       counter = Math.min(counter, this.total_amount);
-      return counter - this.released_amount;
+      return counter;
     }
+  }
+
+  get available_amount() {
+    return this.getAmountAt(Date.now()) - this.released_amount;
   }
 }
