@@ -20,6 +20,7 @@ import simulacrum.typeclass
 import scala.util.Try
 import io.casperlabs.casper.util.DagOperations
 import DagOperations.ObservedValidatorBehavior
+import io.casperlabs.casper.consensus.Bond
 
 /** Some sort of stateful, memoizing implementation of a fast fork choice.
   * Should have access to the era tree to check what are the latest messages
@@ -91,8 +92,12 @@ object ForkChoice {
         equivocators: Set[ByteString]
     ): F[(Block, Map[DagRepresentation.Validator, Set[Message]])] =
       for {
-        keyBlock         <- dag.lookupBlockUnsafe(keyBlockHash)
-        weights          = keyBlock.weightMap
+        keyBlock <- dag.lookupBlockUnsafe(keyBlockHash)
+        weights <- EraStorage[F]
+                    .getEraUnsafe(keyBlockHash)
+                    .map(_.bonds.map {
+                      case Bond(validator, stake) => validator -> Weight(stake)
+                    }.toMap)
         honestValidators = weights.keys.toList.filterNot(equivocators(_))
         latestHonestMessages = latestMessages.collect {
           case (v, lms) if lms.size == 1 => v -> lms.head
@@ -202,9 +207,11 @@ object ForkChoice {
         justifications: Set[BlockHash]
     ): F[Result] =
       for {
-        dag                    <- DagStorage[F].getRepresentation
-        keyBlock               <- dag.lookupBlockUnsafe(keyBlockHash)
-        validators             = keyBlock.weightMap.keySet
+        dag      <- DagStorage[F].getRepresentation
+        keyBlock <- dag.lookupBlockUnsafe(keyBlockHash)
+        validators <- EraStorage[F]
+                       .getEraUnsafe(keyBlockHash)
+                       .map(_.bonds.map(_.validatorPublicKey).toSet)
         justificationsMessages <- justifications.toList.traverse(dag.lookupUnsafe)
         latestMessages <- DagOperations.panoramaOfMessageFromJustifications[F](
                            dag,
