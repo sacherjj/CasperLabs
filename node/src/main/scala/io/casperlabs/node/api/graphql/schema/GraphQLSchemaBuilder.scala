@@ -1,5 +1,6 @@
 package io.casperlabs.node.api.graphql.schema
 
+import cats.effect.Sync
 import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
@@ -8,12 +9,16 @@ import io.casperlabs.casper.api.BlockAPI
 import io.casperlabs.casper.api.BlockAPI.BlockAndMaybeDeploys
 import io.casperlabs.casper.consensus.info.{BlockInfo, DeployInfo}
 import io.casperlabs.casper.consensus.state
+import io.casperlabs.casper.util.Blake2b256Hash
 import io.casperlabs.catscontrib.{Fs2Compiler, MonadThrowable}
 import io.casperlabs.crypto.Keys.PublicKey
 import io.casperlabs.crypto.codec.Base16
+import io.casperlabs.crypto.codec.ByteArraySyntax
+import io.casperlabs.crypto.hash.Blake2b256
 import io.casperlabs.models.SmartContractEngineError
 import io.casperlabs.node.api.DeployInfoPagination.DeployInfoPageTokenParams
 import io.casperlabs.node.api.Utils.{
+  toKey,
   validateAccountPublicKey,
   validateBlockHashPrefix,
   validateDeployHash
@@ -21,6 +26,10 @@ import io.casperlabs.node.api.Utils.{
 import io.casperlabs.node.api.casper.ListDeployInfosRequest
 import io.casperlabs.node.api.graphql.RunToFuture.ops._
 import io.casperlabs.node.api.graphql._
+import io.casperlabs.node.api.graphql.schema.blocks.types.GraphQLBlockTypes.{
+  AccountKey,
+  BlockHashPrefix
+}
 import io.casperlabs.node.api.graphql.schema.blocks.types.{
   DeployInfosWithPageInfo,
   GraphQLBlockTypes,
@@ -85,18 +94,22 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream
 
   // TODO: Performance issue - make use of Sangria Projections.
   // The same as the TODO #2 of the 'blockFetcher'
-  val blocksByValidator: Context[Unit, Validator] => Action[Unit, List[BlockAndMaybeDeploys]] = c =>
-    BlockAPI
-      .getBlockInfosWithDeploysByValidator[F](
-        c.value,
-        depth = c.arg(blocks.arguments.Depth),
-        maxRank = c.arg(blocks.arguments.MaxRank),
-        maybeDeployView = DeployInfo.View.BASIC.some,
-        blockView = BlockInfo.View.FULL
-      )
-      .unsafeToFuture
+  val blocksByValidator: (Validator, Int, Long) => Action[Unit, List[BlockAndMaybeDeploys]] =
+    (validator, depth, maxRank) =>
+      BlockAPI
+        .getBlockInfosWithDeploysByValidator[F](
+          validator,
+          depth = depth,
+          maxRank = maxRank,
+          maybeDeployView = DeployInfo.View.BASIC.some,
+          blockView = BlockInfo.View.FULL
+        )
+        .unsafeToFuture
 
-  val blockTypes = new GraphQLBlockTypes(blockFetcher, blocksByValidator)
+  // TODO: Implement
+  val accountBalance: (BlockHashPrefix, AccountKey) => Action[Unit, String] = (_, _) => ???
+
+  val blockTypes = new GraphQLBlockTypes(blockFetcher, blocksByValidator, accountBalance)
 
   private def projectionTerms(projections: Vector[ProjectedName]): Set[String] = {
     def flatToSet(ps: Vector[ProjectedName], acc: Set[String]): Set[String] =

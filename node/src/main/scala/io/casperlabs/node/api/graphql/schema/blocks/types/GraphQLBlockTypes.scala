@@ -11,6 +11,10 @@ import io.casperlabs.casper.consensus.info._
 import io.casperlabs.crypto.codec.{Base16, ByteArraySyntax}
 import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.node.api.graphql.schema.blocks
+import io.casperlabs.node.api.graphql.schema.blocks.types.GraphQLBlockTypes.{
+  AccountKey,
+  BlockHashPrefix
+}
 import io.casperlabs.node.api.graphql.schema.utils.{DateType, ProtocolVersionType}
 import sangria.execution.deferred._
 import sangria.schema._
@@ -19,14 +23,14 @@ case class PageInfo(endCursor: String, hasNextPage: Boolean)
 
 case class DeployInfosWithPageInfo(deployInfos: List[DeployInfo], pageInfo: PageInfo)
 
-// format: off
 /**
   * Contains only GraphQL types without declaring actual ways of retrieving the information
   */
-class GraphQLBlockTypes(val blockFetcher: Fetcher[Unit, BlockAndMaybeDeploys, BlockAndMaybeDeploys, BlockHash], val blocksByValidator: Context[Unit, Validator] => Action[Unit, List[BlockAndMaybeDeploys]]) {
-// format: on
-
-  type AccountKey = ByteString
+class GraphQLBlockTypes(
+    val blockFetcher: Fetcher[Unit, BlockAndMaybeDeploys, BlockAndMaybeDeploys, BlockHash],
+    val blocksByValidator: (Validator, Int, Long) => Action[Unit, List[BlockAndMaybeDeploys]],
+    val accountBalance: (BlockHashPrefix, AccountKey) => Action[Unit, String]
+) {
 
   val SignatureType = ObjectType(
     "Signature",
@@ -159,7 +163,12 @@ class GraphQLBlockTypes(val blockFetcher: Fetcher[Unit, BlockAndMaybeDeploys, Bl
           ListType(BlockType),
           "Blocks produced by the validator".some,
           arguments = blocks.arguments.Depth :: blocks.arguments.MaxRank :: Nil,
-          resolve = c => blocksByValidator(c)
+          resolve = c =>
+            blocksByValidator(
+              c.value,
+              c.arg(blocks.arguments.Depth),
+              c.arg(blocks.arguments.MaxRank)
+            )
         )
       )
   )
@@ -180,6 +189,14 @@ class GraphQLBlockTypes(val blockFetcher: Fetcher[Unit, BlockAndMaybeDeploys, Bl
           StringType,
           "Account's public key in Base64 encoding".some,
           resolve = c => c.value.toByteArray.base64Encode
+        ),
+        // TODO: Add description
+        Field(
+          "balance",
+          StringType,
+          None,
+          arguments = blocks.arguments.BlockHashPrefix :: Nil,
+          resolve = c => accountBalance(c.arg(blocks.arguments.BlockHashPrefix), c.value)
         )
       )
   )
@@ -379,4 +396,9 @@ class GraphQLBlockTypes(val blockFetcher: Fetcher[Unit, BlockAndMaybeDeploys, Bl
       Field("pageInfo", PageInfoType, resolve = _.value.pageInfo)
     )
   )
+}
+
+object GraphQLBlockTypes {
+  type AccountKey      = ByteString
+  type BlockHashPrefix = String
 }
