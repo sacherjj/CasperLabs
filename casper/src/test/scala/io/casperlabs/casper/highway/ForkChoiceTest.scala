@@ -15,6 +15,7 @@ import monix.eval.Task
 import org.scalatest.FlatSpec
 
 import scala.concurrent.duration._
+import io.casperlabs.models.Message
 
 class ForkChoiceTest extends FlatSpec with HighwayFixture {
 
@@ -36,7 +37,7 @@ class ForkChoiceTest extends FlatSpec with HighwayFixture {
             forkChoice <- ForkChoice.create[Task].fromKeyBlock(genesisEra.keyBlockHash)
           } yield {
             assert(forkChoice.block.messageHash == a)
-            assert(forkChoice.justifications == Set.empty)
+            assert(forkChoice.justifications.map(_.messageHash) == Set(a))
           }
       }
   }
@@ -58,7 +59,7 @@ class ForkChoiceTest extends FlatSpec with HighwayFixture {
             forkChoice <- ForkChoice.create[Task].fromKeyBlock(genesisEra.keyBlockHash)
           } yield {
             assert(forkChoice.block.messageHash == b)
-            assert(forkChoice.justifications.isEmpty, "returned justifications were not reduced")
+            assert(forkChoice.justifications.map(_.messageHash) == Set(b))
           }
       }
   }
@@ -80,7 +81,7 @@ class ForkChoiceTest extends FlatSpec with HighwayFixture {
             forkChoice <- ForkChoice.create[Task].fromKeyBlock(genesisEra.keyBlockHash)
           } yield {
             assert(forkChoice.block.messageHash == genesisEra.keyBlockHash)
-            assert(forkChoice.justifications.isEmpty)
+            assert(forkChoice.justifications == Set(genesis))
           }
       }
   }
@@ -122,7 +123,7 @@ class ForkChoiceTest extends FlatSpec with HighwayFixture {
               forkChoice <- ForkChoice.create[Task].fromKeyBlock(childEra.keyBlockHash)
             } yield {
               assert(forkChoice.block.messageHash == b3)
-              assert(forkChoice.justifications.map(_.messageHash) == Set(ba1, bb1, bc1))
+              assert(forkChoice.justifications.map(_.messageHash) == Set(b3, ba1, bb1, bc1))
             }
       }
   }
@@ -178,7 +179,7 @@ class ForkChoiceTest extends FlatSpec with HighwayFixture {
           forkChoice <- ForkChoice.create[Task].fromKeyBlock(genesisEra.keyBlockHash)
         } yield {
           assert(forkChoice.block.messageHash == b1)
-          assert(forkChoice.justifications.map(_.messageHash) == Set(c2))
+          assert(forkChoice.justifications.map(_.messageHash) == Set(b1, c2))
         }
   }
   }
@@ -226,7 +227,7 @@ class ForkChoiceTest extends FlatSpec with HighwayFixture {
               forkChoice <- ForkChoice.create[Task].fromKeyBlock(childEra.keyBlockHash)
             } yield {
               assert(forkChoice.block.messageHash == c4)
-              assert(forkChoice.justifications.map(_.messageHash) == Set(ba1, bb1, bc1, a4))
+              assert(forkChoice.justifications.map(_.messageHash) == Set(ba1, bb1, bc1, a4, c4))
             }
       }
   }

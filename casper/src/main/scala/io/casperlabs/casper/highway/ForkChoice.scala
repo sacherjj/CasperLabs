@@ -160,8 +160,7 @@ object ForkChoice {
                                     eraStartBlock.messageHash
                                   )
                                   .map(
-                                    _.filterNot(_.messageHash == forkChoice.messageHash)
-                                      .groupBy(_.validatorId)
+                                    _.groupBy(_.validatorId)
                                       .mapValues(_.toSet)
                                   )
       } yield (forkChoice, reducedJustifications)
