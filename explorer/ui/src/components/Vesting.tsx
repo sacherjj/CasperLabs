@@ -2,10 +2,7 @@ import React, { ReactNode } from 'react';
 import { observer } from 'mobx-react';
 import { Form, SelectField, TextField } from './Forms';
 import AuthContainer from '../containers/AuthContainer';
-import { FaucetRequest } from '../containers/FaucetContainer';
-import { Button, Card, Icon, ListInline, Loading, RefreshableComponent, shortHash, ShortHashSpan } from './Utils';
-import { DeployInfo } from 'casperlabs-grpc/io/casperlabs/casper/consensus/info_pb';
-import { decodeBase64, encodeBase16 } from 'casperlabs-sdk';
+import { Button, Card, Icon, ListInline, Loading, RefreshableComponent, ShortHashSpan } from './Utils';
 import VestingChart from './VestringChart';
 import moment from 'moment';
 import { VestingContainer, VestingDetail } from '../containers/VestingContainer';
@@ -111,7 +108,7 @@ const VestingHashesManageForm = observer(
             id="id-vesting-name"
             label="Name"
             placeholder="Select hash of the vesting contract"
-            value={auth.selectedVestingHash && auth.selectedVestingHash.name || null}
+            value={(auth.selectedVestingHash && auth.selectedVestingHash.name) || null}
             options={(auth.vestingHashes || []).map(x => ({
               label: x.name,
               value: x.name
@@ -139,7 +136,7 @@ const VestingHashesManageForm = observer(
             title="Add New"
             onClick={() => auth.configureImportVestingHash()}
           />
-          <Button title="Remove" style="danger" onClick={() => {
+          <Button title="Remove" type="danger" onClick={() => {
             auth.deleteVestingHash(auth.selectedVestingHash!.hashBase16).then(() => {
               auth.selectedVestingHash = null;
             });
@@ -247,45 +244,5 @@ const VestingDetails = observer(
     </Card>
   )
 );
-
-const StatusCell = observer((props: { request: FaucetRequest }) => {
-  const info = props.request.deployInfo;
-  const iconAndMessage: () => [any, string | undefined] = () => {
-    if (info) {
-      const attempts = info.processingResultsList;
-      const success = attempts.find(x => !x.isError);
-      const failure = attempts.find(x => x.isError);
-      const blockHash = (result: DeployInfo.ProcessingResult.AsObject) => {
-        const h = result.blockInfo!.summary!.blockHash;
-        return encodeBase16(typeof h === 'string' ? decodeBase64(h) : h);
-      };
-      if (success)
-        return [
-          <Icon name="check-circle" color="green"/>,
-          `Successfully included in block ${blockHash(success)}`
-        ];
-      if (failure) {
-        const errm = failure.errorMessage;
-        const hint =
-          errm === 'Exit code: 1'
-            ? '. It looks like you already funded this account!'
-            : errm === 'Exit code: 2'
-            ? '. It looks like the faucet ran out of funds!'
-            : '';
-        return [
-          <Icon name="times-circle" color="red"/>,
-          `Failed in block ${blockHash(failure)}: ${errm + hint}`
-        ];
-      }
-    }
-    return [<Icon name="clock"/>, 'Pending...'];
-  };
-  const [icon, message] = iconAndMessage();
-  return (
-    <td className="text-center" title={message}>
-      {icon}
-    </td>
-  );
-});
 
 export default Vesting;

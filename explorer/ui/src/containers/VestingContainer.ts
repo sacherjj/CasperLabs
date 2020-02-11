@@ -77,7 +77,7 @@ export class VestingDetail {
     if( since_last_pause < this.admin_release_duration ){
       return false;
     }
-    if (this.total_amount == this.released_amount) {
+    if (this.total_amount === this.released_amount) {
       return false;
     }
     return true;
@@ -103,7 +103,7 @@ export class VestingDetail {
     } else {
       let time_diff = current_timestamp - cliff_timestamp_adjusted;
       let available_drips = 0;
-      if (this.drip_duration != 0) {
+      if (this.drip_duration !== 0) {
         available_drips = time_diff / this.drip_duration;
       }
       let counter = this.cliff_amount;

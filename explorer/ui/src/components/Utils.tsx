@@ -43,12 +43,12 @@ export const Button = (props: {
   onClick: () => void;
   title: string;
   disabled?: boolean;
-  style?: 'primary' | 'danger'
+  type?: 'primary' | 'danger'
 }) => (
   <button
     type="button"
     onClick={_ => props.onClick()}
-    className={`btn btn-${props.style || 'primary'}`}
+    className={`btn btn-${props.type || 'primary'}`}
     disabled={props.disabled || false}
   >
     {props.title}
@@ -123,7 +123,7 @@ export const CommandLineHint = (props: { children: any }) => {
     <div className="card shadow mb-3">
       <div className="card-header bg-info">
         <h5 className="card-title font-weight-bold text-white">
-          <Icon name="terminal" />
+          <Icon name="terminal"/>
         </h5>
       </div>
       <div className="card-body">{props.children}</div>
