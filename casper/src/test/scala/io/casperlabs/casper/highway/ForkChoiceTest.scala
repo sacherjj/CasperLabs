@@ -22,7 +22,7 @@ class ForkChoiceTest extends FlatSpec with HighwayFixture {
 
   it should "return fork choice in the simplest case" in testFixture {
     implicit timer => implicit db =>
-      new ForkChoiceTestFixture(eraDuration) {
+      new ForkChoiceTestFixture {
 
         // key_block - A
 
@@ -43,7 +43,7 @@ class ForkChoiceTest extends FlatSpec with HighwayFixture {
 
   it should "return fork choice for a blockchain and reduce justifications" in testFixture {
     implicit timer => implicit db =>
-      new ForkChoiceTestFixture(eraDuration) {
+      new ForkChoiceTestFixture {
 
         // key_block - A - B
 
@@ -65,7 +65,7 @@ class ForkChoiceTest extends FlatSpec with HighwayFixture {
 
   it should "return a key block when there's no descendants" in testFixture {
     implicit timer => implicit db =>
-      new ForkChoiceTestFixture(eraDuration) {
+      new ForkChoiceTestFixture {
 
         // key_block
         //
@@ -103,9 +103,7 @@ class ForkChoiceTest extends FlatSpec with HighwayFixture {
         //
         // small letters are ballots
 
-        new ForkChoiceTestFixture(
-          length = eraDuration
-        ) {
+        new ForkChoiceTestFixture {
 
           override def test: Task[Unit] =
             for {
@@ -131,7 +129,7 @@ class ForkChoiceTest extends FlatSpec with HighwayFixture {
 
   it should "not choose an equivocator as the fork choice" in testFixture {
     implicit timer => implicit db =>
-      new ForkChoiceTestFixture(eraDuration) {
+      new ForkChoiceTestFixture {
 
         // key_block - A
         //           \ A'
@@ -166,9 +164,7 @@ class ForkChoiceTest extends FlatSpec with HighwayFixture {
     // fork choice - B1
     // latest messages - {C2}, B1 is the fork choice and A2 is its p-dag ancestor
 
-    new ForkChoiceTestFixture(
-      length = eraDuration
-    ) {
+    new ForkChoiceTestFixture {
 
       override def test: Task[Unit] =
         for {
@@ -205,9 +201,7 @@ class ForkChoiceTest extends FlatSpec with HighwayFixture {
         //
         // small letters are ballots
 
-        new ForkChoiceTestFixture(
-          length = eraDuration
-        ) {
+        new ForkChoiceTestFixture {
 
           override def test: Task[Unit] =
             for {
@@ -255,9 +249,7 @@ class ForkChoiceTest extends FlatSpec with HighwayFixture {
         //
         // small letters are ballots
 
-        new ForkChoiceTestFixture(
-          length = eraDuration
-        ) {
+        new ForkChoiceTestFixture {
 
           override def test: Task[Unit] =
             for {
@@ -295,11 +287,11 @@ class ForkChoiceTest extends FlatSpec with HighwayFixture {
 
   it should "not return parent-era voting-only ballots as justifications once they are included in the child-era blocks" in (pending)
 
-  abstract class ForkChoiceTestFixture(length: FiniteDuration)(
+  abstract class ForkChoiceTestFixture(
       implicit
       timer: Timer[Task],
       db: SQLiteStorage.CombinedStorage[Task]
-  ) extends Fixture(length) {
+  ) extends Fixture(eraDuration) {
 
     implicit val deployBuffer    = DeployBuffer.create[Task](chainName, minTtl = Duration.Zero)
     implicit val deploySelection = DeploySelection.create[Task](sizeLimitBytes = Int.MaxValue)
