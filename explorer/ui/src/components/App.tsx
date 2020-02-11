@@ -29,6 +29,8 @@ import AccountSelector from './AccountSelector';
 import AccountSelectorContainer from '../containers/AccountSelectorContainer';
 import ConnectedPeersContainer from '../containers/ConnectedPeersContainer';
 import ConnectedPeers from './ConnectedPeers';
+import Vesting from './Vesting';
+import { VestingContainer } from '../containers/VestingContainer';
 
 // https://medium.com/@pshrmn/a-simple-react-router-v4-tutorial-7f23ff27adf
 
@@ -46,6 +48,7 @@ const SideMenuItems: MenuItem[] = [
   new MenuItem(Pages.Home, 'Home', 'home', true),
   new MenuItem(Pages.Accounts, 'Account Keys', 'address-book'),
   new MenuItem(Pages.Faucet, 'Faucet', 'coins'),
+  new MenuItem(Pages.Vesting, 'Vesting', 'stamp'),
   new MenuItem(Pages.Explorer, 'Explorer', 'project-diagram'),
   new MenuItem(Pages.Blocks, 'Blocks', 'th-large'),
   new MenuItem(Pages.Deploys, 'Deploys', 'tasks'),
@@ -57,6 +60,7 @@ export interface AppProps {
   errors: ErrorContainer;
   auth: AuthContainer;
   faucet: FaucetContainer;
+  vesting: VestingContainer;
   dag: DagContainer;
   block: BlockContainer;
   deploy: DeployContainer;
@@ -310,13 +314,17 @@ const Content = (props: AppProps) => {
               path={Pages.Deploy}
               render={_ => <DeployDetails {...props} />}
             />
+            <Route path={Pages.Vesting} render={_ => <Vesting {...props} />} />
 
             <Route
               path={Pages.Deploys}
               render={_ => <AccountSelector {...props} />}
             />
             <Route path={Pages.Search} render={_ => <Search {...props} />} />
-            <Route path={Pages.ConnectedPeers} render={_ => <ConnectedPeers {...props}/>} />
+            <Route
+              path={Pages.ConnectedPeers}
+              render={_ => <ConnectedPeers {...props} />}
+            />
           </Switch>
         </div>
       </div>
