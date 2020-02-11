@@ -1,19 +1,19 @@
 [package]
-name = "transfer-to-account"
+name = "transfer-to-account-stored"
 version = "0.1.0"
 authors = ["Michael Birch <birchmd@casperlabs.io>"]
 edition = "2018"
 
 [lib]
-crate-type = ["lib", "cdylib"]
+crate-type = ["cdylib"]
 bench = false
 doctest = false
 test = false
 
 [features]
 std = ["contract/std", "types/std"]
-lib = []
 
 [dependencies]
 contract = { path = "../../../contract", package = "casperlabs-contract" }
+transfer-to-account = { path = "../transfer-to-account", default-features = false, features = ["lib"] }
 types = { path = "../../../types", package = "casperlabs-types" }
