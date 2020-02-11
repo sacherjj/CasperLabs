@@ -27,6 +27,7 @@ import io.casperlabs.node.api.Utils.{
 import io.casperlabs.node.api.casper._
 import io.casperlabs.shared.Log
 import io.casperlabs.smartcontracts.ExecutionEngineService
+import io.casperlabs.smartcontracts.cltype.ProtoMappings
 import io.casperlabs.storage.block._
 import io.casperlabs.storage.deploy.DeployStorage
 import io.casperlabs.storage.dag.DagStorage
@@ -146,7 +147,14 @@ object GrpcCasperService {
                                  query.pathSegments,
                                  protocolVersion
                                )
-            value <- Concurrent[F].fromEither(possibleResponse).handleErrorWith {
+            protoValue = possibleResponse.flatMap { storedValue =>
+              ProtoMappings
+                .toProto(storedValue)
+                .leftMap(
+                  err => SmartContractEngineError(s"Error with EE response $storedValue:\n$err")
+                )
+            }
+            value <- Concurrent[F].fromEither(protoValue).handleErrorWith {
                       case SmartContractEngineError(msg) =>
                         MonadThrowable[F].raiseError(InvalidArgument(msg))
                     }

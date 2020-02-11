@@ -27,6 +27,7 @@ import io.casperlabs.models.Weight
 import io.casperlabs.p2p.EffectsTestInstances._
 import io.casperlabs.shared.{Cell, Log, Time}
 import io.casperlabs.smartcontracts.bytesrepr._
+import io.casperlabs.smartcontracts.cltype
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.block._
 import io.casperlabs.storage.dag._
@@ -320,8 +321,8 @@ object HashSetCasperTestNode {
           baseKey: Key,
           path: Seq[String],
           protocolVersion: ProtocolVersion
-      ): F[Either[Throwable, Value]] =
-        Applicative[F].pure[Either[Throwable, Value]](
+      ): F[Either[Throwable, cltype.StoredValue]] =
+        Applicative[F].pure[Either[Throwable, cltype.StoredValue]](
           Left(new Exception("Method `query` not implemented on this instance!"))
         )
     }
