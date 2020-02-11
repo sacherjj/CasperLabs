@@ -22,6 +22,7 @@ export class AuthContainer {
   @observable accountForm: NewAccountFormData | ImportAccountFormData | null = null;
 
   @observable selectedAccount: UserAccount | null = null;
+  @observable selectedVestingHash: VestingHash | null = null;
 
   // Balance for each public key.
   @observable balances = new ObservableValueMap<AccountB64, AccountBalance>();
@@ -126,6 +127,11 @@ export class AuthContainer {
     this.accountForm = new ImportAccountFormData(this.accounts!);
   }
 
+  // Open a form for importing information of vesting contract
+  configureImportVestingHash() {
+    this.importVestingForm = new ImportVestingFormData(this.vestingHashes!, this.casperService);
+  }
+
   async createAccount(): Promise<boolean> {
     let form = this.accountForm!;
     if (form instanceof NewAccountFormData && form.clean()) {
@@ -156,7 +162,22 @@ export class AuthContainer {
     }
   }
 
-  deleteAccount(name: String) {
+  async addVestingItem(): Promise<boolean> {
+    let form = this.importVestingForm!;
+    let clean = await form.clean();
+    if (clean) {
+      // Save it to Auth0.
+      await this.addVestingHash({
+        name: form.name,
+        hashBase16: form.hashBase16
+      });
+      return true;
+    } else {
+      return false;
+    }
+  }
+
+  async deleteAccount(name: String) {
     if (window.confirm(`Are you sure you want to delete account '${name}'?`)) {
       this.accounts = this.accounts!.filter(x => x.name !== name);
       await this.errors.capture(this.saveMetaData());
@@ -191,11 +212,50 @@ export class AuthContainer {
   selectAccountByName(name: string) {
     this.selectedAccount = this.accounts!.find(x => x.name === name) || null;
   }
+
+  selectVestingHashByName(name: string) {
+    this.selectedVestingHash = this.vestingHashes!.find(x => x.name === name) || null;
+  }
 }
 
 function saveToFile(content: string, filename: string) {
   let blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
   saveAs(blob, filename);
+}
+
+class ImportVestingFormData extends AsyncCleanableFormData {
+  @observable name: string = '';
+  @observable hashBase16: string = '';
+
+  constructor(private vestingHashes: VestingHash[], private casperService: CasperService) {
+    super();
+  }
+
+  protected async check() {
+    if (this.name === '') return 'Name cannot be empty!';
+
+    if (this.name.indexOf(' ') > -1)
+      return 'The account name should not include spaces.';
+
+    if (this.vestingHashes.some(x => x.name === this.name))
+      return `An item with name '${this.name}' already exists.`;
+
+    if (this.vestingHashes.some(x => x.hashBase16 === this.hashBase16))
+      return 'An item with this contract hash already exists.';
+
+
+    let stateQuery = new StateQuery();
+    stateQuery.setKeyBase16(this.hashBase16);
+    stateQuery.setKeyVariant(StateQuery.KeyVariant.HASH);
+    stateQuery.setPathSegmentsList(['cliff_timestamp']);
+    let lastFinalizedBlockInfo = await this.casperService.getLastFinalizedBlockInfo();
+    try {
+      await this.casperService.getBlockState(lastFinalizedBlockInfo.getSummary()!.getBlockHash_asU8(), stateQuery);
+    } catch (error) {
+      return 'Could not find the vesting contract with the hash';
+    }
+    return null;
+  }
 }
 
 class AccountFormData extends CleanableFormData {
@@ -268,7 +328,9 @@ export class ImportAccountFormData extends AccountFormData {
       return 'The content of imported file cannot be empty!';
     }
     try {
-      this.key = Keys.Ed25519.parsePublicKey(Keys.Ed25519.readBase64WithPEM(this.fileContent));
+      this.key = Keys.Ed25519.parsePublicKey(
+        Keys.Ed25519.readBase64WithPEM(this.fileContent)
+      );
     } catch (e) {
       return e.message;
     }
