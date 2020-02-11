@@ -85,18 +85,16 @@ impl DeployItemBuilder {
         self
     }
 
-    pub fn with_session_code<T: AsRef<Path>>(
-        mut self,
-        file_name: T,
-        args: impl ArgsParser,
-    ) -> Self {
-        let wasm_bytes = utils::read_wasm_file_bytes(file_name);
+    pub fn with_session_bytes(mut self, module_bytes: Vec<u8>, args: impl ArgsParser) -> Self {
         let args = Self::serialize_args(args);
-        self.deploy_item.session_code = Some(ExecutableDeployItem::ModuleBytes {
-            module_bytes: wasm_bytes,
-            args,
-        });
+        self.deploy_item.session_code =
+            Some(ExecutableDeployItem::ModuleBytes { module_bytes, args });
         self
+    }
+
+    pub fn with_session_code<T: AsRef<Path>>(self, file_name: T, args: impl ArgsParser) -> Self {
+        let module_bytes = utils::read_wasm_file_bytes(file_name);
+        self.with_session_bytes(module_bytes, args)
     }
 
     pub fn with_stored_session_hash(mut self, hash: Vec<u8>, args: impl ArgsParser) -> Self {
