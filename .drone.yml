@@ -610,7 +610,7 @@ steps:
     event:
     - push
   depends_on:
-  - make-clean-before-package
+  - package-sbt-artifacts-merge
 
 - name: rsync-artifacts
   image: drillster/drone-rsync
