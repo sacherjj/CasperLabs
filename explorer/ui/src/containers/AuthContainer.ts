@@ -21,6 +21,8 @@ export class AuthContainer {
   // An account we are creating or importing, while we're configuring it.
   @observable accountForm: NewAccountFormData | ImportAccountFormData | null = null;
 
+  @observable importVestingForm: ImportVestingFormData | null = null;
+
   @observable selectedAccount: UserAccount | null = null;
   @observable selectedVestingHash: VestingHash | null = null;
 

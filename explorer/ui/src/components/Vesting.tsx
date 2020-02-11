@@ -26,7 +26,7 @@ class Vesting extends RefreshableComponent<Props, {}> {
     const { auth, vesting } = this.props;
     return (
       <div className="container">
-        <VestingHashForm auth={auth} requestVestingDetails={x =>
+        <VestingHashesManageForm auth={auth} requestVestingDetails={x =>
           this.props.vesting.init(x, true).catch(() => {
             let msg = `The hash is not valid anymore, do you want to remove it?`;
             auth.deleteVestingHash(x, msg).then(auth.selectedVestingHash = null);
@@ -57,14 +57,19 @@ class Vesting extends RefreshableComponent<Props, {}> {
   }
 }
 
-const VestingHashForm = observer(
+/**
+ * The ui component to manage hashes of Vesting Contract,
+ * including selecting, adding and removing hashes.
+ */
+const VestingHashesManageForm = observer(
   (props: {
     auth: AuthContainer;
     requestVestingDetails: (hashBase16: string) => void;
   }) => {
     const { auth, requestVestingDetails } = props;
 
-    const modelImporting = (auth.importVestingForm !== null &&
+    // The modal for importing new hash, showed once users click the `Add New` button.
+    const modalImporting = (auth.importVestingForm !== null &&
       <Modal
         id="addNewVestingHash"
         title="Add new hash of vesting contract"
@@ -115,7 +120,7 @@ const VestingHashForm = observer(
               let oldSelected = auth.selectedVestingHash;
               auth.selectVestingHashByName(x);
 
-              // if user select another vesting contract
+              // Check whether user select another vesting contract
               if (oldSelected !== auth.selectedVestingHash && auth.selectedVestingHash) {
                 requestVestingDetails(auth.selectedVestingHash.hashBase16);
               }
@@ -128,7 +133,7 @@ const VestingHashForm = observer(
             readonly={true}
           />
         </Form>
-        {modelImporting}
+        {modalImporting}
         <ListInline>
           <Button
             title="Add New"
@@ -156,6 +161,10 @@ const TableRow = (props: { title: string; children: string }) => {
   );
 };
 
+/**
+ * Get a string represent how long the duration is.
+ * @param duration : milliseconds
+ */
 function duration(duration: number) {
   const d = moment.duration(duration);
   if (d.days() > 1) {
@@ -167,6 +176,9 @@ function duration(duration: number) {
   }
 }
 
+/**
+ * The table to show the information of the selected vesting contract.
+ */
 const VestingDetails = observer(
   (props: {
     vestingDetail: VestingDetail,
@@ -179,7 +191,7 @@ const VestingDetails = observer(
     >
       <table className="table table-bordered">
         <tbody>
-        <TableRow title="Hash of the Smart Contract">
+        <TableRow title="Hash of the Vesting Contract">
           {shortHash(props.hash)}
         </TableRow>
         <TableRow title="Current Time">
@@ -200,10 +212,10 @@ const VestingDetails = observer(
         <TableRow title="Total Amount">
           {props.vestingDetail.total_amount.toLocaleString() + ' CLX'}
         </TableRow>
-        <TableRow title="Release Amount">
+        <TableRow title="Released Amount">
           {props.vestingDetail.released_amount.toLocaleString() + ' CLX'}
         </TableRow>
-        <TableRow title="Admin release duration">
+        <TableRow title="Admin Release Duration">
           {duration(props.vestingDetail.admin_release_duration * 1000)}
         </TableRow>
         <TableRow title="Paused State">
@@ -214,6 +226,9 @@ const VestingDetails = observer(
         </TableRow>
         <TableRow title="Recipient account">
           aaa
+        </TableRow>
+        <TableRow title="Available Amount">
+          {props.vestingDetail.available_amount.toLocaleString() + ' CLX'}
         </TableRow>
         </tbody>
       </table>
