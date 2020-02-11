@@ -138,10 +138,7 @@ object Configuration extends ParserImplicits {
       command         <- options.parseCommand
       defaultDataDir  <- readDefaultDataDir
       maybeConfigFile <- options.readConfigFile.map(_.map(parseToml))
-      envSnakeCase = envVars.flatMap {
-        case (k, v) if k.startsWith("CL_") && isSnakeCase(k) => List(SnakeCase(k) -> v)
-        case _                                               => Nil
-      }
+      envSnakeCase    = Utils.collectEnvVars(envVars)
     } yield parse(options.fieldByName, envSnakeCase, maybeConfigFile, defaultDataDir, defaults)
       .map(conf => (command, conf))
     res.fold(_.invalidNel[(Command, Configuration)], identity)

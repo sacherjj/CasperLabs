@@ -30,14 +30,19 @@ import simulacrum.typeclass
   * https://casperlabs.atlassian.net/wiki/spaces/EN/pages/133529693/Genesis+process+design+doc
   */
 object ChainSpec extends ParserImplicits {
+  import Utils.SnakeCase
 
   class ConfCompanion[T](confParser: ConfParser[T]) {
+    // For convenience, allow overriding the settings in the genesis manifest,
+    // but not the upgrades because they won't be unique.
+    protected def parseEnvVars: Map[SnakeCase, String] = Map.empty
+
     def parseManifest(manifest: => Source): ValidatedNel[String, T] =
       Utils.readFile(manifest).toValidatedNel[String].andThen { raw =>
         confParser
           .parse(
             cliByName = _ => None,
-            envVars = Map.empty,
+            envVars = parseEnvVars,
             // NOTE: If we passed a config file and maybe took the default values from the resources
             // we could allow partial overrides, and later add new fields to the spec; without it
             // a new field would just cause a parsing error. On the other hand a new non-optional field
@@ -69,7 +74,23 @@ object ChainSpec extends ParserImplicits {
       deploys: Deploy,
       highway: Highway
   )
-  object GenesisConf extends ConfCompanion[GenesisConf](ConfParser.gen[GenesisConf])
+  object GenesisConf extends ConfCompanion[GenesisConf](ConfParser.gen[GenesisConf]) {
+    // Allow overriding genesis configuration so we can do things like bounce the network
+    // and restart with a new chain name or an updated era start time.
+    override def parseEnvVars: Map[SnakeCase, String] = {
+      // Use some extra prefixing to disambiguate from normal Highway config.
+      val chainSpecPrefix = "CL_CHAINSPEC_"
+      Utils.collectEnvVars(prefix = chainSpecPrefix).collect {
+        case (k, v) =>
+          // Get rid of the extra to make it just what the parser expects,
+          // e.g. `export CL_CHAINSPEC_HIGHWAY_GENESIS_ERA_START=...`
+          // and  `export CL_CHAINSPEC_GENESIS_NAME=...` would be the ones to set,
+          // and they would internally be mapped to the structure of `GenesisConf`,
+          // e.g. `CL_GENESIS_NAME`.
+          SnakeCase("CL_" + k.stripPrefix(chainSpecPrefix)) -> v
+      }
+    }
+  }
 
   /** Subsequent changes describe upgrades. */
   final case class UpgradeConf(
