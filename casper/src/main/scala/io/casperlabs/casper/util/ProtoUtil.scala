@@ -634,11 +634,11 @@ object ProtoUtil {
   // Later, post DEV NET, conversion rate will be part of a deploy.
   val GAS_PRICE = 10L
 
-  def deployDataToEEDeploy[F[_]: MonadThrowable](d: Deploy): Try[ipc.DeployItem] = {
+  def deployDataToEEDeploy(d: Deploy): Try[ipc.DeployItem] = {
     def toPayload(maybeCode: Option[Deploy.Code]): Try[Option[ipc.DeployPayload]] =
       maybeCode match {
         case None       => Try(none[ipc.DeployPayload])
-        case Some(code) => (deployCodeToDeployPayload[F](code).map(Some(_)))
+        case Some(code) => (deployCodeToDeployPayload(code).map(Some(_)))
       }
 
     for {
@@ -656,7 +656,7 @@ object ProtoUtil {
     }
   }
 
-  def deployCodeToDeployPayload[F[_]: MonadThrowable](code: Deploy.Code): Try[ipc.DeployPayload] = {
+  def deployCodeToDeployPayload(code: Deploy.Code): Try[ipc.DeployPayload] = {
     val argsF: Try[ByteString] = code.args.toList.traverse(cltype.ProtoMappings.fromArg) match {
       case Left(err) =>
         Try(throw new SmartContractEngineError(s"Error parsing deploy arguments: $err"))
