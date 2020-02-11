@@ -12,7 +12,7 @@ big_int_value = 123456789012345678901234567890
 ARGS = [
     {"name": "amount", "value": {"long_value": str(long_value)}},
     {"name": "account", "value": {"bytes_value": account.hex()}},
-    {"name": "purse_id", "value": {"optional_value": {}}},
+    {"name": "main_purse", "value": {"optional_value": {}}},
     {
         "name": "number",
         "value": {"big_int": {"value": f"{big_int_value}", "bit_width": 512}},
@@ -35,7 +35,7 @@ def test_args_from_json():
     args = ABI.args_from_json(json_str)
     assert args[0] == ABI.long_value("amount", long_value)
     assert args[1] == ABI.account("account", account)
-    assert args[2] == ABI.optional_value("purse_id", None)
+    assert args[2] == ABI.optional_value("main_purse", None)
     assert args[3] == ABI.big_int("number", big_int_value)
     assert args[4] == ABI.bytes_value("my_bytes", account)
 
@@ -49,7 +49,7 @@ def test_args_to_json():
     args = [
         ABI.long_value("amount", long_value),
         ABI.account("account", account),
-        ABI.optional_value("purse_id", None),
+        ABI.optional_value("main_purse", None),
         ABI.big_int("number", big_int_value),
         ABI.bytes_value("my_bytes", account),
         ABI.key_hash("my_hash", account),

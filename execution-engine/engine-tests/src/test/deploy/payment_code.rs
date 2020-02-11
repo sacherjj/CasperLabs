@@ -9,11 +9,7 @@ use engine_test_support::{
     },
     DEFAULT_ACCOUNT_ADDR, DEFAULT_ACCOUNT_INITIAL_BALANCE,
 };
-use types::{
-    account::{PublicKey, PurseId},
-    bytesrepr::ToBytes,
-    CLValue, Key, U512,
-};
+use types::{account::PublicKey, bytesrepr::ToBytes, CLValue, Key, URef, U512};
 
 const ACCOUNT_1_ADDR: [u8; 32] = [42u8; 32];
 const STANDARD_PAYMENT_WASM: &str = "standard_payment.wasm";
@@ -103,7 +99,7 @@ fn should_raise_insufficient_payment_when_payment_code_does_not_pay_enough() {
         builder
             .get_account(DEFAULT_ACCOUNT_ADDR)
             .expect("should have account")
-            .purse_id(),
+            .main_purse(),
     );
     let reward_balance = get_pos_rewards_purse_balance(&builder);
 
@@ -177,7 +173,7 @@ fn should_raise_insufficient_payment_error_when_out_of_gas() {
         builder
             .get_account(DEFAULT_ACCOUNT_ADDR)
             .expect("should have account")
-            .purse_id(),
+            .main_purse(),
     );
     let reward_balance = get_pos_rewards_purse_balance(&builder);
 
@@ -247,7 +243,7 @@ fn should_forward_payment_execution_runtime_error() {
         builder
             .get_account(DEFAULT_ACCOUNT_ADDR)
             .expect("should have account")
-            .purse_id(),
+            .main_purse(),
     );
     let reward_balance = get_pos_rewards_purse_balance(&builder);
 
@@ -317,7 +313,7 @@ fn should_forward_payment_execution_gas_limit_error() {
         builder
             .get_account(DEFAULT_ACCOUNT_ADDR)
             .expect("should have account")
-            .purse_id(),
+            .main_purse(),
     );
     let reward_balance = get_pos_rewards_purse_balance(&builder);
 
@@ -424,7 +420,7 @@ fn should_correctly_charge_when_session_code_runs_out_of_gas() {
     let default_account = builder
         .get_account(DEFAULT_ACCOUNT_ADDR)
         .expect("should get genesis account");
-    let modified_balance: U512 = builder.get_purse_balance(default_account.purse_id());
+    let modified_balance: U512 = builder.get_purse_balance(default_account.main_purse());
     let initial_balance: U512 = U512::from(DEFAULT_ACCOUNT_INITIAL_BALANCE);
 
     assert_ne!(
@@ -486,7 +482,7 @@ fn should_correctly_charge_when_session_code_fails() {
     let default_account = builder
         .get_account(DEFAULT_ACCOUNT_ADDR)
         .expect("should get genesis account");
-    let modified_balance: U512 = builder.get_purse_balance(default_account.purse_id());
+    let modified_balance: U512 = builder.get_purse_balance(default_account.main_purse());
     let initial_balance: U512 = U512::from(DEFAULT_ACCOUNT_INITIAL_BALANCE);
 
     assert_ne!(
@@ -544,7 +540,7 @@ fn should_correctly_charge_when_session_code_succeeds() {
     let default_account = builder
         .get_account(DEFAULT_ACCOUNT_ADDR)
         .expect("should get genesis account");
-    let modified_balance: U512 = builder.get_purse_balance(default_account.purse_id());
+    let modified_balance: U512 = builder.get_purse_balance(default_account.main_purse());
     let initial_balance: U512 = U512::from(DEFAULT_ACCOUNT_INITIAL_BALANCE);
 
     assert_ne!(
@@ -573,23 +569,20 @@ fn should_correctly_charge_when_session_code_succeeds() {
     )
 }
 
-fn get_pos_purse_id_by_name(
-    builder: &InMemoryWasmTestBuilder,
-    purse_name: &str,
-) -> Option<PurseId> {
+fn get_pos_purse_by_name(builder: &InMemoryWasmTestBuilder, purse_name: &str) -> Option<URef> {
     let pos_contract = builder.get_pos_contract();
 
     pos_contract
         .named_keys()
         .get(purse_name)
         .and_then(Key::as_uref)
-        .map(|u| PurseId::new(*u))
+        .cloned()
 }
 
 fn get_pos_rewards_purse_balance(builder: &InMemoryWasmTestBuilder) -> U512 {
-    let purse_id = get_pos_purse_id_by_name(builder, POS_REWARDS_PURSE)
-        .expect("should find PoS payment purse");
-    builder.get_purse_balance(purse_id)
+    let purse =
+        get_pos_purse_by_name(builder, POS_REWARDS_PURSE).expect("should find PoS payment purse");
+    builder.get_purse_balance(purse)
 }
 
 #[ignore]
@@ -769,12 +762,11 @@ fn should_charge_non_main_purse() {
         .get_account(ACCOUNT_1_ADDR)
         .expect("should have account");
     // get purse
-    let purse_id_key = account_1.named_keys()[TEST_PURSE_NAME];
-    let purse_id = PurseId::new(*purse_id_key.as_uref().expect("should have uref"));
+    let purse_key = account_1.named_keys()[TEST_PURSE_NAME];
+    let purse = purse_key.into_uref().expect("should have uref");
 
     let purse_starting_balance = {
-        let purse_bytes = purse_id
-            .value()
+        let purse_bytes = purse
             .addr()
             .to_bytes()
             .expect("should be able to serialize purse bytes");
@@ -836,8 +828,7 @@ fn should_charge_non_main_purse() {
     let expected_resting_balance = account_1_purse_funding_amount - motes.value();
 
     let purse_final_balance = {
-        let purse_bytes = purse_id
-            .value()
+        let purse_bytes = purse
             .addr()
             .to_bytes()
             .expect("should be able to serialize purse bytes");

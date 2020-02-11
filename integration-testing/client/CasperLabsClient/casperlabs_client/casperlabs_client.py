@@ -571,7 +571,7 @@ class CasperLabsClient:
         mintPublic = urefs[0]
 
         mintPublicHex = mintPublic.key.uref.uref.hex()
-        purseAddrHex = account.purse_id.uref.hex()
+        purseAddrHex = account.main_purse.uref.hex()
         localKeyValue = f"{mintPublicHex}:{purseAddrHex}"
 
         balanceURef = self.queryState(block_hash, localKeyValue, "", "local")

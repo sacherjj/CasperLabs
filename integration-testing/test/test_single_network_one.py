@@ -26,7 +26,7 @@ Example output of the Scala client:
 
 account {
   public_key: "3030303030303030303030303030303030303030303030303030303030303030"
-  purse_id {
+  main_purse {
     uref: "0000000000000000000000000000000000000000000000000000000000000000"
     access_rights: READ_ADD_WRITE
   }

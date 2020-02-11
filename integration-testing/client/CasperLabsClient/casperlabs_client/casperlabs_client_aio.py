@@ -226,7 +226,7 @@ class CasperLabsClientAIO(object):
         mint_public = urefs[0]
 
         mint_public_hex = mint_public.key.uref.uref.hex()
-        purse_addr_hex = account.purse_id.uref.hex()
+        purse_addr_hex = account.main_purse.uref.hex()
         local_key_value = f"{mint_public_hex}:{purse_addr_hex}"
 
         balance_uref = await self.query_state(block_hash, local_key_value, "", "local")

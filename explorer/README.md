@@ -138,7 +138,7 @@ $ ./client.sh node-0 query-state \
 
 account {
   public_key: "045499d51a013e06c6cbb5734843cf3c7f08d66af312d81238ffeb54244f1800"
-  purse_id {
+  main_purse {
     uref: "e698d314cd8004ca6cdfc5b5ea94b8c930aa3cd108bb32d6a5e9f53bcc201f75"
     access_rights: READ_ADD_WRITE
   }
@@ -189,7 +189,7 @@ account {
 }
 ```
 
-Based on the `purse_id` we can issue a followup request to check the balance:
+Based on the `main_purse` we can issue a followup request to check the balance:
 
 ```console
 $ ./client.sh node-0 query-state \
