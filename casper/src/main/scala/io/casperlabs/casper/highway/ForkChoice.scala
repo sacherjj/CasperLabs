@@ -172,10 +172,12 @@ object ForkChoice {
 
     override def fromKeyBlock(keyBlockHash: BlockHash): F[Result] =
       for {
-        dag          <- DagStorage[F].getRepresentation
-        keyBlock     <- dag.lookupBlockUnsafe(keyBlockHash)
-        equivocators <- MessageProducer.collectEquivocators[F](keyBlockHash)
-        keyBlocks    <- MessageProducer.collectKeyBlocks[F](keyBlockHash)
+        dag       <- DagStorage[F].getRepresentation
+        keyBlock  <- dag.lookupBlockUnsafe(keyBlockHash)
+        keyBlocks <- MessageProducer.collectKeyBlocks[F](keyBlockHash)
+        equivocators <- keyBlocks
+                         .traverse(dag.latestMessagesInEra(_).map(_.filter(_._2.size > 1).keySet))
+                         .map(_.flatten.toSet)
         (forkChoice, justifications) <- keyBlocks
                                          .foldM(
                                            keyBlock -> Map
