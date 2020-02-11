@@ -526,7 +526,6 @@ class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator with 
     implicit blockStorage => implicit dagStorage => _ =>
       _ =>
         // Validators A, B and C
-        // All messages within single era.
         //                      |
         //    a1                |      a2
         //   / \(justification) |     / \
@@ -535,8 +534,7 @@ class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator with 
         //        c1 (sees a1)  |      c2-c3
         //
         // Starting point: c3
-        // Expected result: Map(A -> a2, C -> c3)
-        // Notice that there's no entry for B.
+        // Expected result: Map(A -> a2, B -> S_b, C -> c2)
 
         for {
           genesis <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bondsThree)
@@ -674,8 +672,8 @@ class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator with 
   it should "detect equivocators only after the stop block" in withStorage {
     implicit blockStorage => implicit dagStorage => _ =>
       _ =>
-        //    a1     a2
-        //   /   \  /
+        //    a1     a2-----------
+        //   /   \  /              \
         // G -a1'-b2 (stop block) - b3
         //   \   /
         //    b1
