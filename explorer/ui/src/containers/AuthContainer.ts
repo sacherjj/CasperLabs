@@ -2,16 +2,11 @@ import { computed, observable } from 'mobx';
 import * as nacl from 'tweetnacl-ts';
 import { saveAs } from 'file-saver';
 import ErrorContainer from './ErrorContainer';
-import { CleanableFormData } from './FormData';
+import { AsyncCleanableFormData, CleanableFormData } from './FormData';
 import AuthService from '../services/AuthService';
-import {
-  BalanceService,
-  CasperService,
-  decodeBase64,
-  encodeBase64,
-  Keys
-} from 'casperlabs-sdk';
+import { BalanceService, CasperService, decodeBase64, encodeBase64, Keys } from 'casperlabs-sdk';
 import ObservableValueMap from '../lib/ObservableValueMap';
+import { StateQuery } from 'casperlabs-grpc/io/casperlabs/node/api/casper_pb';
 
 // https://www.npmjs.com/package/tweetnacl-ts#signatures
 // https://tweetnacl.js.org/#/sign
@@ -21,6 +16,7 @@ type AccountB64 = string;
 export class AuthContainer {
   @observable user: User | null = null;
   @observable accounts: UserAccount[] | null = null;
+  @observable vestingHashes: VestingHash[] | null = null;
 
   // An account we are creating or importing, while we're configuring it.
   @observable accountForm: NewAccountFormData | ImportAccountFormData | null = null;
@@ -66,6 +62,7 @@ export class AuthContainer {
   async logout() {
     this.user = null;
     this.accounts = null;
+    this.vestingHashes = null;
     this.balances.clear();
     sessionStorage.clear();
     this.authService.logout();
@@ -83,6 +80,7 @@ export class AuthContainer {
         this.user.sub
       );
       this.accounts = meta.accounts || [];
+      this.vestingHashes = meta.vestingHashes || [];
     }
   }
 
@@ -161,18 +159,32 @@ export class AuthContainer {
   deleteAccount(name: String) {
     if (window.confirm(`Are you sure you want to delete account '${name}'?`)) {
       this.accounts = this.accounts!.filter(x => x.name !== name);
-      this.errors.capture(this.saveAccounts());
+      await this.errors.capture(this.saveMetaData());
     }
   }
 
   private async addAccount(account: UserAccount) {
     this.accounts!.push(account);
-    await this.errors.capture(this.saveAccounts());
+    await this.errors.capture(this.saveMetaData());
   }
 
-  private async saveAccounts() {
+  private async addVestingHash(vestingHash: VestingHash) {
+    this.vestingHashes!.push(vestingHash);
+    await this.errors.capture(this.saveMetaData());
+  }
+
+  async deleteVestingHash(vestingHash: string, msg?: string) {
+    msg = msg || `Are you sure you want to delete the stored vesting contract hash '${vestingHash}'?`;
+    if (window.confirm(msg)) {
+      this.vestingHashes = this.vestingHashes!.filter(x => x.hashBase16 !== vestingHash);
+      await this.errors.capture(this.saveMetaData());
+    }
+  }
+
+  private async saveMetaData() {
     await this.authService.updateUserMetadata(this.user!.sub, {
-      accounts: this.accounts || undefined
+      accounts: this.accounts || undefined,
+      vestingHashes: this.vestingHashes || undefined
     });
   }
 
