@@ -18,6 +18,8 @@ import monix.eval.Task
 import org.scalatest.{FlatSpec, Matchers}
 
 import scala.collection.immutable.BitSet
+import io.casperlabs.casper.PrettyPrinter
+import io.casperlabs.casper.util.DagOperations.ObservedValidatorBehavior
 
 @silent("deprecated")
 @silent("is never used")
@@ -469,6 +471,275 @@ class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator with 
               .map(_.messageHash)
               .toList shouldBeF List(b3.blockHash, b1.blockHash)
       } yield ()
+  }
+
+  import ByteStringPrettifier._
+  import ObservedValidatorBehavior._
+  val v1         = generateValidator("V1")
+  val v2         = generateValidator("V2")
+  val v3         = generateValidator("V3")
+  val v1Bond     = Bond(v1, 2)
+  val v2Bond     = Bond(v2, 3)
+  val v3Bond     = Bond(v2, 3)
+  val bondsThree = List(v1Bond, v2Bond, v3Bond)
+
+  "panoramaOfBlockByValidators" should "return latest message per validator within single era" in withStorage {
+    implicit blockStorage => implicit dagStorage => _ =>
+      _ =>
+        // Validators A, B and C
+        // All messages within single era.
+        //
+        //    a1
+        //   / \(justification)
+        // G - b1   b2
+        //        \/
+        //        c1 (sees a1)
+        //
+        // Starting point: b2
+        // Expected result: Map(A -> a1, B -> b2, C -> c1)
+
+        for {
+          genesis        <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bondsThree)
+          a1             <- createAndStoreBlockFull[Task](v1, Seq(genesis), Seq.empty, bondsThree)
+          b1             <- createAndStoreBlockFull[Task](v2, Seq(genesis), Seq(a1), bondsThree)
+          c1             <- createAndStoreBlockFull[Task](v3, Seq(b1), Seq.empty, bondsThree)
+          b2             <- createAndStoreBlockFull[Task](v2, Seq(c1), Seq.empty, bondsThree)
+          dag            <- dagStorage.getRepresentation
+          b2Message      = Message.fromBlock(b2).get
+          genesisMessage = Message.fromBlock(genesis).get
+          latestMessages <- DagOperations.panoramaOfMessage[Task](
+                             dag,
+                             b2Message,
+                             Set(v1, v2, v3),
+                             genesisMessage
+                           )
+          latestMessageHashes = latestMessages.mapValues(_.map(_.messageHash))
+          expected = Map(
+            v1 -> Honest(a1.blockHash),
+            v2 -> Honest(b1.blockHash),
+            v3 -> Honest(c1.blockHash)
+          )
+        } yield assert(latestMessageHashes == expected)
+  }
+
+  it should "return latest message per validator across multiple eras" in withStorage {
+    implicit blockStorage => implicit dagStorage => _ =>
+      _ =>
+        // Validators A, B and C
+        // All messages within single era.
+        //                      |
+        //    a1                |      a2
+        //   / \(justification) |     / \
+        // G - b1   b2 -------- |--S_b   \
+        //        \/            |     \   \
+        //        c1 (sees a1)  |      c2-c3
+        //
+        // Starting point: c3
+        // Expected result: Map(A -> a2, C -> c3)
+        // Notice that there's no entry for B.
+
+        for {
+          genesis <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bondsThree)
+          a1 <- createAndStoreBlockFull[Task](
+                 v1,
+                 Seq(genesis),
+                 Seq.empty,
+                 bondsThree,
+                 keyBlockHash = genesis.blockHash
+               )
+          b1 <- createAndStoreBlockFull[Task](
+                 v2,
+                 Seq(genesis),
+                 Seq(a1),
+                 bondsThree,
+                 keyBlockHash = genesis.blockHash
+               )
+          c1 <- createAndStoreBlockFull[Task](
+                 v3,
+                 Seq(b1),
+                 Seq.empty,
+                 bondsThree,
+                 keyBlockHash = genesis.blockHash
+               )
+          b2 <- createAndStoreBlockFull[Task](
+                 v2,
+                 Seq(c1),
+                 Seq.empty,
+                 bondsThree,
+                 keyBlockHash = genesis.blockHash
+               )
+          sb <- createAndStoreBlockFull[Task](
+                 v2,
+                 Seq(b2),
+                 Seq.empty,
+                 bondsThree,
+                 keyBlockHash = genesis.blockHash
+               )
+          a2 <- createAndStoreBlockFull[Task](
+                 v1,
+                 Seq(sb),
+                 Seq.empty,
+                 bondsThree,
+                 keyBlockHash = c1.blockHash
+               )
+          c2 <- createAndStoreBlockFull[Task](
+                 v3,
+                 Seq(sb),
+                 Seq.empty,
+                 bondsThree,
+                 keyBlockHash = c1.blockHash
+               )
+          c3 <- createAndStoreBlockFull[Task](
+                 v3,
+                 Seq(c2),
+                 Seq(a2),
+                 bondsThree,
+                 keyBlockHash = c1.blockHash
+               )
+          dag            <- dagStorage.getRepresentation
+          c3Message      = Message.fromBlock(c3).get
+          genesisMessage = Message.fromBlock(genesis).get
+          latestMessages <- DagOperations.panoramaOfMessage[Task](
+                             dag,
+                             c3Message,
+                             Set(v1, v2, v3),
+                             genesisMessage
+                           )
+          latestMessageHashes = latestMessages.mapValues(_.map(_.messageHash))
+          expected = Map(
+            v1 -> Honest(a2.blockHash),
+            v2 -> Honest(sb.blockHash),
+            v3 -> Honest(c2.blockHash)
+          )
+        } yield assert(latestMessageHashes == expected)
+  }
+
+  it should "detect equivocators" in withStorage {
+    implicit blockStorage => implicit dagStorage => _ =>
+      _ =>
+        //    a1
+        //   /   \
+        // G -a1'-b2
+        //   \   /
+        //    b1
+        //
+        // Note there's no message for C validator
+        for {
+          genesis <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bondsThree)
+          a1 <- createAndStoreBlockFull[Task](
+                 v1,
+                 Seq(genesis),
+                 Seq.empty,
+                 bondsThree,
+                 keyBlockHash = genesis.blockHash
+               )
+          a1Prime <- createAndStoreBlockFull[Task](
+                      v1,
+                      Seq(genesis),
+                      Seq.empty,
+                      bondsThree,
+                      keyBlockHash = genesis.blockHash
+                    )
+          b1 <- createAndStoreBlockFull[Task](
+                 v2,
+                 Seq(genesis),
+                 Seq(a1),
+                 bondsThree,
+                 keyBlockHash = genesis.blockHash
+               )
+          b2 <- createAndStoreBlockFull[Task](
+                 v2,
+                 Seq(b1),
+                 Seq(a1, a1Prime),
+                 bondsThree,
+                 keyBlockHash = genesis.blockHash
+               )
+          dag            <- dagStorage.getRepresentation
+          genesisMessage = Message.fromBlock(genesis).get
+          latestMessages <- DagOperations.panoramaOfMessage[Task](
+                             dag,
+                             Message.fromBlock(b2).get,
+                             Set(v1, v2, v3),
+                             genesisMessage
+                           )
+          latestMessageHashes = latestMessages.mapValues(_.map(_.messageHash))
+          expected = Map(
+            v1 -> Equivocated,
+            v2 -> Honest(b1.blockHash),
+            v3 -> Empty
+          )
+        } yield assert(latestMessageHashes == expected)
+  }
+
+  it should "detect equivocators only after the stop block" in withStorage {
+    implicit blockStorage => implicit dagStorage => _ =>
+      _ =>
+        //    a1     a2
+        //   /   \  /
+        // G -a1'-b2 (stop block) - b3
+        //   \   /
+        //    b1
+        //
+        // Note there's no message for C validator and A equivocated before stop block.
+        for {
+          genesis <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bondsThree)
+          a1 <- createAndStoreBlockFull[Task](
+                 v1,
+                 Seq(genesis),
+                 Seq.empty,
+                 bondsThree,
+                 keyBlockHash = genesis.blockHash
+               )
+          a1Prime <- createAndStoreBlockFull[Task](
+                      v1,
+                      Seq(genesis),
+                      Seq.empty,
+                      bondsThree,
+                      keyBlockHash = genesis.blockHash
+                    )
+          b1 <- createAndStoreBlockFull[Task](
+                 v2,
+                 Seq(genesis),
+                 Seq(a1),
+                 bondsThree,
+                 keyBlockHash = genesis.blockHash
+               )
+          b2 <- createAndStoreBlockFull[Task](
+                 v2,
+                 Seq(b1),
+                 Seq(a1, a1Prime),
+                 bondsThree,
+                 keyBlockHash = genesis.blockHash
+               )
+          a2 <- createAndStoreBlockFull[Task](
+                 v1,
+                 Seq(b2),
+                 Seq.empty,
+                 bondsThree,
+                 keyBlockHash = genesis.blockHash
+               )
+          b3 <- createAndStoreBlockFull[Task](
+                 v2,
+                 Seq(b2),
+                 Seq(a2),
+                 bondsThree,
+                 keyBlockHash = genesis.blockHash
+               )
+          dag       <- dagStorage.getRepresentation
+          b2Message = Message.fromBlock(b2).get
+          latestMessages <- DagOperations.panoramaOfMessage[Task](
+                             dag,
+                             Message.fromBlock(b3).get,
+                             Set(v1, v2, v3),
+                             b2Message
+                           )
+          latestMessageHashes = latestMessages.mapValues(_.map(_.messageHash))
+          expected = Map(
+            v1 -> Honest(a2.blockHash),
+            v2 -> Honest(b2.blockHash),
+            v3 -> Empty
+          )
+        } yield assert(latestMessageHashes == expected)
   }
 
 }

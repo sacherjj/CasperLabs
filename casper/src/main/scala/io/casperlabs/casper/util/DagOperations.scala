@@ -17,7 +17,11 @@ import simulacrum.typeclass
 
 import scala.collection.immutable.{BitSet, HashSet, Queue}
 import scala.collection.mutable
+import io.casperlabs.storage.dag.DagLookup
+import com.github.ghik.silencer.silent
+import cats.Functor
 
+@silent("is never used")
 object DagOperations {
 
   /** Some traversals take so long that tracking the visited nodes can fill the memory.
@@ -476,4 +480,127 @@ object DagOperations {
                     }
       } yield reachable
     }
+
+  sealed trait ObservedValidatorBehavior[+A] {
+    def isEquivocated: Boolean
+  }
+
+  object ObservedValidatorBehavior {
+
+    case class Honest[A](msg: A) extends ObservedValidatorBehavior[A] {
+      def isEquivocated: Boolean = false
+    }
+
+    case object Empty extends ObservedValidatorBehavior[Nothing] {
+      def isEquivocated: Boolean = false
+    }
+
+    case object Equivocated extends ObservedValidatorBehavior[Nothing] {
+      def isEquivocated: Boolean = true
+    }
+
+    implicit val functor: Functor[ObservedValidatorBehavior] =
+      new Functor[ObservedValidatorBehavior] {
+        def map[A, B](fa: ObservedValidatorBehavior[A])(f: A => B): ObservedValidatorBehavior[B] =
+          fa match {
+            case Honest(msg) => Honest(f(msg))
+            case Equivocated => Equivocated
+            case Empty       => Empty
+          }
+      }
+  }
+
+  /**
+    * Calculates panorama of a message.
+    *
+    * Panorama is a "view" into the past of the message (j-past-cone).
+    * It is the latest message (or multiple messages) per validator seen
+    * in the j-past-cone of the message.
+    *
+    * This particular method is capped by a "stop block". It won't consider
+    * blocks created before that stop block.
+    *
+    * @param dag
+    * @param message
+    * @param validators
+    * @param stop
+    * @return
+    */
+  def panoramaOfMessage[F[_]: MonadThrowable](
+      dag: DagLookup[F],
+      message: Message,
+      validators: Set[ByteString],
+      stop: Message
+  ): F[Map[ByteString, ObservedValidatorBehavior[Message]]] =
+    message.justifications.toList
+      .map(_.latestBlockHash)
+      .traverse(dag.lookupUnsafe(_))
+      .flatMap(panoramaOfMessageFromJustifications[F](dag, _, validators, stop))
+
+  def panoramaOfMessageFromJustifications[F[_]: MonadThrowable](
+      dag: DagLookup[F],
+      justifications: List[Message],
+      validators: Set[ByteString],
+      stop: Message
+  ): F[Map[ByteString, ObservedValidatorBehavior[Message]]] = {
+    import ObservedValidatorBehavior._
+    implicit val blockTopoOrdering: Ordering[Message] =
+      DagOperations.blockTopoOrderingDesc
+
+    val stream = DagOperations
+      .bfToposortTraverseF(justifications) { b =>
+        b.justifications.toList
+          .traverse(justification => {
+            dag.lookup(justification.latestBlockHash)
+          })
+          .map(_.flatten)
+      }
+      .takeUntil(_ == stop)
+
+    val initStates =
+      validators
+        .map(_ -> ObservedValidatorBehavior.Empty)
+        .toMap[ByteString, ObservedValidatorBehavior[Message]]
+    // Previously seen message from the validator.
+    val prevMessageSeen: Map[ByteString, Message] = Map.empty
+    // We can only say we're done if we've seen all validators equivocated OR
+    // we have consumed whole stream. Having latest message doesn't mean that validator
+    // hasn't equivocated.
+    val isDone: Map[ByteString, ObservedValidatorBehavior[Message]] => Boolean = state =>
+      state.values.forall(_.isEquivocated)
+
+    stream
+      .foldWhileLeft((initStates, prevMessageSeen)) {
+        case ((latestMessages, prevMessages), message) =>
+          if (isDone(latestMessages)) {
+            Right((latestMessages, prevMessages))
+          } else {
+            val msgCreator = message.validatorId
+            if (validators.contains(msgCreator)) {
+              Left(
+                latestMessages
+                  .get(msgCreator)
+                  .fold(
+                    (
+                      latestMessages + (msgCreator -> Honest(message)),
+                      prevMessages + (msgCreator   -> message)
+                    )
+                  ) {
+                    case Honest(prevMsg) =>
+                      if (prevMessages(msgCreator).validatorPrevMessageHash == message.messageHash)
+                        (latestMessages, prevMessages.updated(msgCreator, message))
+                      else (latestMessages.updated(msgCreator, Equivocated), prevMessages)
+                    case Empty =>
+                      (
+                        latestMessages.updated(msgCreator, Honest(message)),
+                        prevMessages.updated(msgCreator, message)
+                      )
+                    case Equivocated => (latestMessages, prevMessages)
+                  }
+              )
+            } else Left((latestMessages, prevMessages))
+          }
+      }
+      .map(_._1)
+  }
 }
