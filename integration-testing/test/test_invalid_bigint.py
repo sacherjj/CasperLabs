@@ -24,9 +24,9 @@ def test_invalid_bigint(one_node_network_fn):
     wait_for_no_new_deploys(node)
 
     status = node.d_client.show_deploy(deploy_hash).status
-    assert "state: DISCARDED" in str(status)
+    assert "'state': 'DISCARDED'" in str(status)
     assert (
-        'message: "Error parsing deploy arguments: InvalidBigIntValue([1000])"'
+        "'message': 'Error parsing deploy arguments: InvalidBigIntValue([1000])'"
         in str(status)
     )
 
