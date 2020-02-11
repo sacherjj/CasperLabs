@@ -1,6 +1,5 @@
 package io.casperlabs.node.api.graphql.schema
 
-import cats.effect.Sync
 import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
@@ -9,16 +8,14 @@ import io.casperlabs.casper.api.BlockAPI
 import io.casperlabs.casper.api.BlockAPI.BlockAndMaybeDeploys
 import io.casperlabs.casper.consensus.info.{BlockInfo, DeployInfo}
 import io.casperlabs.casper.consensus.state
-import io.casperlabs.casper.util.Blake2b256Hash
+import io.casperlabs.casper.consensus.state.Key
 import io.casperlabs.catscontrib.{Fs2Compiler, MonadThrowable}
 import io.casperlabs.crypto.Keys.PublicKey
 import io.casperlabs.crypto.codec.Base16
-import io.casperlabs.crypto.codec.ByteArraySyntax
 import io.casperlabs.crypto.hash.Blake2b256
 import io.casperlabs.models.SmartContractEngineError
 import io.casperlabs.node.api.DeployInfoPagination.DeployInfoPageTokenParams
 import io.casperlabs.node.api.Utils.{
-  toKey,
   validateAccountPublicKey,
   validateBlockHashPrefix,
   validateDeployHash
@@ -106,8 +103,31 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream
         )
         .unsafeToFuture
 
-  // TODO: Implement
-  val accountBalance: (BlockHashPrefix, AccountKey) => Action[Unit, String] = (_, _) => ???
+  val accountBalance: (BlockHashPrefix, AccountKey) => Action[Unit, String] =
+    (blockHashPrefix, accountKey) =>
+      (for {
+        prefix          <- validateBlockHashPrefix[F](blockHashPrefix, ByteString.EMPTY)
+        info            <- BlockAPI.getBlockInfo[F](prefix, BlockInfo.View.BASIC)
+        stateHash       = info.getSummary.getHeader.getState.postStateHash
+        protocolVersion = info.getSummary.getHeader.getProtocolVersion
+        getState = (keyValue: Key.Value) =>
+          ExecutionEngineService[F].query(stateHash, Key(keyValue), Nil, protocolVersion).rethrow
+        // Starting from here all normally dangerous unwrap operations are safe to do
+        // because otherwise a deploy couldn't be created due to validations in Node and EE
+        account <- getState(Key.Value.Address(Key.Address(accountKey))).map(_.getAccount)
+        mintPublic = account.namedKeys
+          .find(_.name == "mint")
+          .flatMap(_.key)
+          .get
+          .getUref
+          .uref
+          .toByteArray
+        purse = account.getPurseId.uref.toByteArray
+        // This is what EE does when creating local key address.
+        hash        = ByteString.copyFrom(Blake2b256.hash(mintPublic ++ purse))
+        balanceUref <- getState(Key.Value.Local(Key.Local(hash))).map(_.getKey.getUref.uref)
+        balance     <- getState(Key.Value.Uref(Key.URef(balanceUref))).map(_.getBigInt.value)
+      } yield balance).unsafeToFuture
 
   val blockTypes = new GraphQLBlockTypes(blockFetcher, blocksByValidator, accountBalance)
 
