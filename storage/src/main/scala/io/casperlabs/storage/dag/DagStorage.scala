@@ -13,6 +13,9 @@ import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.crypto.codec.Base16
 import simulacrum.typeclass
 import scala.util.Try
+import scala.util.Success
+import scala.util.Failure
+import scala.util.control.NoStackTrace
 
 trait DagStorage[F[_]] {
 
@@ -141,7 +144,20 @@ trait EraTipRepresentation[F[_]] extends TipRepresentation[F] {
     }
 
   def lookupBlockUnsafe(blockHash: BlockHash)(implicit MT: MonadThrowable[F]): F[Message.Block] =
-    lookupUnsafe(blockHash).flatMap(msg => MT.fromTry(Try(msg.asInstanceOf[Message.Block])))
+    lookupUnsafe(blockHash).flatMap(
+      msg =>
+        Try(msg.asInstanceOf[Message.Block]) match {
+          case Success(value) => MT.pure(value)
+          case Failure(_)     =>
+            // PrettyPrinter is not visible here.
+            val hashEncoded = Base16.encode(blockHash.toByteArray).take(10)
+            MT.raiseError(
+              new Exception(
+                s"$hashEncoded was expected to be a Block but was a Ballot."
+              ) with NoStackTrace
+            )
+        }
+    )
 }
 
 trait DagRepresentation[F[_]] extends DagLookup[F] {
