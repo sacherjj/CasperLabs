@@ -218,7 +218,6 @@ export default class CasperService {
         request,
         onEnd: res => {
           if (res.status === grpc.Code.OK) {
-            console.log((res.message as BatchGetBlockStateResponse).toObject());
             resolve((res.message as BatchGetBlockStateResponse).getValuesList());
           } else {
             reject(new GrpcError(res.status, res.statusMessage));

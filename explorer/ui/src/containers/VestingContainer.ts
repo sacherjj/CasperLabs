@@ -64,8 +64,8 @@ export class VestingDetail {
   }
 
   // Todo fetch from global state storage once the parsing bug is fixed.
-  get is_paused(): boolean{
-    return true;
+  get is_paused(): boolean {
+    return false;
   }
 
   // check whether the contract is releasable by admin account

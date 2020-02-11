@@ -22,7 +22,7 @@ class Vesting extends RefreshableComponent<Props, {}> {
   render() {
     const { auth, vesting } = this.props;
     return (
-      <div className="container">
+      <div>
         <VestingHashesManageForm auth={auth} requestVestingDetails={x =>
           this.props.vesting.init(x, true).catch(() => {
             let msg = `The hash is not valid anymore, do you want to remove it?`;
@@ -35,18 +35,17 @@ class Vesting extends RefreshableComponent<Props, {}> {
           </div>
         )}
         {auth.selectedVestingHash && vesting.vestingDetails && (
-          <div className="row">
-            <div className="col-6">
-              <VestingDetails hash={auth.selectedVestingHash!.hashBase16}
-                              vestingDetail={vesting.vestingDetails}
-                              refresh={
-                                () => vesting.init(auth.selectedVestingHash!.hashBase16)
-                              }
-              />
-            </div>
-            <div className="col-6">
-              <VestingChart vestingDetail={vesting.vestingDetails}/>
-            </div>
+          <div>
+            <Card title="Vesting Schedule">
+              <div className="col-8 container">
+                <VestingChart vestingDetail={vesting.vestingDetails}/>
+              </div>
+            </Card>
+            <VestingDetails hash={auth.selectedVestingHash!.hashBase16}
+                            vestingDetail={vesting.vestingDetails}
+                            refresh={
+                              () => vesting.init(auth.selectedVestingHash!.hashBase16)
+                            }/>
           </div>
         )}
       </div>
@@ -189,7 +188,7 @@ const VestingDetails = observer(
       <table className="table table-bordered">
         <tbody>
         <TableRow title="Hash of the Vesting Contract">
-          <ShortHashSpan hash={props.hash}/>
+          {props.hash}
         </TableRow>
         <TableRow title="Current Time">
           {moment().format()}
@@ -230,11 +229,14 @@ const VestingDetails = observer(
             </TableRow>
           )
         }
+        <TableRow title="On Pause Duration">
+          {duration(props.vestingDetail.on_pause_duration)}
+        </TableRow>
         <TableRow title="Admin Account">
-          <ShortHashSpan hash={props.vestingDetail.admin_account}/>
+          {props.vestingDetail.admin_account}
         </TableRow>
         <TableRow title="Recipient Account">
-          <ShortHashSpan hash={props.vestingDetail.recipient_account}/>
+          {props.vestingDetail.recipient_account}
         </TableRow>
         <TableRow title="Available Amount">
           {props.vestingDetail.available_amount.toLocaleString() + ' CLX'}
