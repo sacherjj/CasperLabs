@@ -81,9 +81,10 @@ export function getMainPurse(): PurseId | null {
     let data = new Uint8Array(PURSE_ID_SERIALIZED_LENGTH);
     data.fill(0);
     externals.get_main_purse(data.dataStart);
-    let uref = URef.fromBytes(data);
-    if (uref === null)
+    let urefResult = URef.fromBytes(data);
+    if (urefResult.hasError()) {
         return null;
-    let purseId = new PurseId(uref);
+    }
+    let purseId = new PurseId(urefResult.value);
     return purseId;
 }

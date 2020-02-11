@@ -30,14 +30,15 @@ export function entryPoint(amount: U512): void {
     return;
   }
 
-  let paymentPurse = PurseId.fromBytes(output);
-  if (paymentPurse === null) {
+  let paymentPurseResult = PurseId.fromBytes(output);
+  if (paymentPurseResult.hasError()) {
     Error.fromErrorCode(ErrorCode.InvalidPurse).revert();
     return;
   }
+  let paymentPurse = paymentPurseResult.value;
 
   let ret = mainPurse.transferToPurse(
-    <PurseId>(paymentPurse),
+    paymentPurse,
     amount,
   );
   if (ret > 0) {
@@ -53,11 +54,11 @@ export function call(): void {
     return;
   }
 
-  let amount = U512.fromBytes(amountBytes);
-  if (amount === null) {
+  let amountResult = U512.fromBytes(amountBytes);
+  if (amountResult.hasError()) {
     Error.fromErrorCode(ErrorCode.InvalidArgument).revert();
     return;
   }
 
-  entryPoint(amount);
+  entryPoint(amountResult.value);
 }

@@ -4,6 +4,7 @@ import {readHostBuffer} from "./index";
 import {U512} from "./bignum";
 import {Error, ErrorCode} from "./error";
 import {PURSE_ID_SERIALIZED_LENGTH} from "./constants";
+import {Result, Ref} from "./bytesrepr";
 
 export enum TransferredTo {
     TransferError = -1,
@@ -22,11 +23,14 @@ export class PurseId {
         return this.uref.toBytes();
     }
 
-    static fromBytes(bytes: Uint8Array): PurseId | null {
-        let uref = URef.fromBytes(bytes);
-        if(uref === null)
-            return null;
-        return new PurseId(uref);
+    static fromBytes(bytes: Uint8Array): Result<PurseId> {
+        let result = URef.fromBytes(bytes);
+        if (result.hasError()) {
+            return new Result<PurseId>(null, result.error, result.position);
+        }
+        let purseId = new PurseId(result.value);
+        let ref = new Ref<PurseId>(purseId);
+        return new Result<PurseId>(ref, result.error, result.position);
     }
 
     static create(): PurseId | null {
@@ -41,13 +45,13 @@ export class PurseId {
             return null;
         }
 
-        let uref = URef.fromBytes(bytes);
-        if(uref === null){
+        let urefResult = URef.fromBytes(bytes);
+        if (urefResult.hasError()) {
             Error.fromErrorCode(ErrorCode.PurseNotCreated).revert();
             return null;
         }
 
-        return new PurseId(uref);
+        return new PurseId(urefResult.value);
     }
 
     asURef(): URef{
@@ -73,12 +77,8 @@ export class PurseId {
             return null;
         }
 
-        let balance = U512.fromBytes(bytes);
-        if (balance === null) {
-            return null;
-        }
-
-        return balance;
+        let balanceResult = U512.fromBytes(bytes);
+        return balanceResult.ok();
     }
 
     transferToAccount(target: Uint8Array, amount: U512): TransferredTo {
@@ -95,7 +95,6 @@ export class PurseId {
             sourceBytes.length,
             targetBytes.dataStart,
             targetBytes.length,
-            // NOTE: amount has U512 type but is not deserialized throughout the execution, as there's no direct replacement for big ints
             amountBytes.dataStart,
             amountBytes.length,
         );

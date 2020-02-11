@@ -68,7 +68,11 @@ export function getSystemContract(system_contract: SystemContract): URef | null 
     // TODO: revert
     return null;
   }
-  return URef.fromBytes(data);
+  let decodeResult = URef.fromBytes(data);
+  if (decodeResult.hasError()) {
+    return null;
+  }
+  return decodeResult.value;
 }
 
 export function storeFunction(name: String, namedKeysBytes: u8[]): Key {
@@ -137,7 +141,7 @@ export function putKey(name: String, key: Key): void {
 
 export function getKey(name: String): Key | null {
   var nameBytes = toBytesString(name);
-  let keyBytes = new Uint8Array(KEY_UREF_SERIALIZED_LENGTH); // TODO: some equivalent of Key::serialized_size_hint() ?
+  let keyBytes = new Uint8Array(KEY_UREF_SERIALIZED_LENGTH);
   let resultSize = new Uint32Array(1);
   let ret =  externals.get_key(
       nameBytes.dataStart,
@@ -152,7 +156,7 @@ export function getKey(name: String): Key | null {
     return null;
   }
   let key = Key.fromBytes(keyBytes.slice(0, <i32>resultSize[0])); // total guess
-  return key;
+  return key.ok();
 }
 
 export function ret(value: CLValue): void {
@@ -226,11 +230,11 @@ export function listNamedKeys(): Array<Pair<String, Key>> {
     fromBytesString,
     Key.fromBytes);
 
-  if (maybeMap === null) {
+  if (maybeMap.hasError()) {
     Error.fromErrorCode(ErrorCode.Deserialize).revert();
     return <Array<Pair<String, Key>>>unreachable();
   }
-  return <Array<Pair<String, Key>>>maybeMap;
+  return maybeMap.value;
 }
 
 export function upgradeContractAtURef(name: String, uref: URef): void {

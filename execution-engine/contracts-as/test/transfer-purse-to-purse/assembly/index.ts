@@ -60,13 +60,14 @@ export function call(): void {
         Error.fromUserError(<u16>CustomError.MissingSourcePurseArg).revert();
         return;
     }
-    const sourcePurse = fromBytesString(sourcePurseArg);
-    if(sourcePurse === null){
+    const sourcePurseResult = fromBytesString(sourcePurseArg);
+    if(sourcePurseResult.hasError()) {
         Error.fromUserError(<u16>CustomError.InvalidSourcePurseArg).revert();
         return;
     }
+    const sourcePurse = sourcePurseResult.value;
     const sourcePurseKey = getKey(sourcePurse);
-    if(sourcePurseKey === null){
+    if (sourcePurseKey === null){
         Error.fromUserError(<u16>CustomError.InvalidSourcePurseKey).revert();
         return;
     }
@@ -81,11 +82,12 @@ export function call(): void {
         Error.fromUserError(<u16>CustomError.MissingDestinationPurseArg).revert();
         return;
     }
-    const destinationPurse = fromBytesString(destinationPurseArg);
-    if(destinationPurse === null){
+    const destinationPurseResult = fromBytesString(destinationPurseArg);
+    if(destinationPurseResult.hasError()){
         Error.fromUserError(<u16>CustomError.InvalidDestinationPurseArg).revert();
         return;
     }
+    let destinationPurse = destinationPurseResult.value;
     let destinationPurseId: PurseId | null;
     let destinationKey: Key | null;
     if(!hasKey(destinationPurse)){
@@ -122,13 +124,14 @@ export function call(): void {
         Error.fromUserError(<u16>CustomError.MissingAmountArg).revert();
         return;
     }
-    const amount = U512.fromBytes(amountArg);
-    if (amount === null) {
+    const amountResult = U512.fromBytes(amountArg);
+    if (amountResult.hasError()) {
         Error.fromUserError(<u16>CustomError.InvalidAmountArg).revert();
         return;
     }
+    const amount = amountResult.value;
 
-    const result = sourcePurseId.transferToPurse(<PurseId>destinationPurseId, <U512>amount);
+    const result = sourcePurseId.transferToPurse(<PurseId>destinationPurseId, amount);
     let message = SUCCESS_MESSAGE;
     if (result !== null && result > 0){
         message = TRANSFER_ERROR_MESSAGE;

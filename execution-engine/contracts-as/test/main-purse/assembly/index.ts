@@ -21,11 +21,12 @@ export function call(): void {
     Error.fromUserError(<u16>CustomError.MissingExpectedMainPurseArg).revert();
     return;
   }
-  let expectedMainPurse = PurseId.fromBytes(expectedMainPurseArg);
-  if (expectedMainPurse === null){
+  let purseResult = PurseId.fromBytes(expectedMainPurseArg);
+  if (purseResult === null){
     Error.fromUserError(<u16>CustomError.InvalidExpectedMainPurseArg).revert();
     return;
   }
+  const expectedMainPurse = purseResult.value;
   const actualMainPurse = getMainPurse();
   if (actualMainPurse === null){
     Error.fromUserError(<u16>CustomError.UnableToGetMainPurse).revert();

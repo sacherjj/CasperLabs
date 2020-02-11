@@ -28,21 +28,23 @@ export function call(): void {
         Error.fromUserError(<u16>CustomError.MissingAmountArg).revert();
         return;
     }
-    const amount = U512.fromBytes(amountArg);
-    if (amount === null) {
+    const amountResult = U512.fromBytes(amountArg);
+    if (amountResult.hasError()) {
         Error.fromUserError(<u16>CustomError.InvalidAmountArg).revert();
         return;
     }
+    let amount = amountResult.value;
     const destinationPurseNameArg = CL.getArg(Args.DestinationPurseName);
     if (destinationPurseNameArg === null) {
         Error.fromUserError(<u16>CustomError.MissingDestinationArg).revert();
         return;
     }
-    const destinationPurseName = fromBytesString(destinationPurseNameArg);
-    if (destinationPurseName === null){
+    const destinationPurseNameResult = fromBytesString(destinationPurseNameArg);
+    if (destinationPurseNameResult.hasError()) {
         Error.fromUserError(<u16>CustomError.InvalidDestinationArg).revert();
         return;
     }
+    let destinationPurseName = destinationPurseNameResult.value;
     const maybeMainPurse = getMainPurse();
     if (maybeMainPurse === null) {
         Error.fromUserError(<u16>CustomError.UnableToGetMainPurse).revert();

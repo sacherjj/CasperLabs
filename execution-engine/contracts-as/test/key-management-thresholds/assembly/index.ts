@@ -13,11 +13,13 @@ export function call(): void {
     return;
   }
 
-  let stage = fromBytesString(stageBytes);
-  if (stage === null) {
+  let stageResult = fromBytesString(stageBytes);
+  if (stageResult.hasError()) {
     Error.fromErrorCode(ErrorCode.InvalidArgument).revert();
     return;
   }
+  let stage = stageResult.value;
+
   let key42s = new Array<u8>(32);
   key42s.fill(42);
 

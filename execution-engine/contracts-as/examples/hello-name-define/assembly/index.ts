@@ -26,11 +26,12 @@ export function hello_name_ext(): void {
         return;
     }
 
-    const name = fromBytesString(nameBytes);
-    if (name === null) {
+    const nameResult = fromBytesString(nameBytes);
+    if (nameResult.hasError()) {
         Error.fromErrorCode(ErrorCode.InvalidArgument).revert();
         return;
     }
+    const name = nameResult.value;
 
     let hello = "Hello, " + name;
 

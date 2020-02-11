@@ -44,13 +44,14 @@ export function delegate(): void {
         Error.fromUserError(<u16>CustomError.MissingAmountArg).revert();
         return;
     }
-    const amount = U512.fromBytes(amountArg);
-    if (amount === null) {
+    const amountResult = U512.fromBytes(amountArg);
+    if (amountResult.hasError()) {
         Error.fromUserError(<u16>CustomError.InvalidAmountArg).revert();
         return;
     }
+    let amount = amountResult.value;
     let message = "";
-    const result = mainPurse.transferToAccount(<Uint8Array>destinationAccountAddrArg, <U512>amount);
+    const result = mainPurse.transferToAccount(<Uint8Array>destinationAccountAddrArg, amount);
     switch (result) {
         case TransferredTo.NewAccount:
             message = "Ok(NewAccount)";

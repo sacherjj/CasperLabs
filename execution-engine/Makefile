@@ -32,6 +32,20 @@ SYSTEM_CONTRACTS    := $(patsubst %, build-contract-rs/%, $(SYSTEM_CONTRACTS))
 TEST_CONTRACTS      := $(patsubst %, build-contract-rs/%, $(TEST_CONTRACTS))
 
 # AssemblyScript Contracts
+ASC_VERSION := 0.9.1
+
+# Checks if AssemblyScript compiler is found in $PATH
+ifeq (, $(shell which asc))
+	$(error "No asc in $(PATH). Please run npm install -g assemblyscript@$(ASC_VERSION) first")
+endif
+
+# Checks if AssemblyScript compiler is at correct version
+ASC_VERSION_OUTPUT:=$(shell asc --version | cut -d' ' -f2)
+ifeq (,$(findstring $(ASC_VERSION),$(ASC_VERSION_OUTPUT)))
+    $(error "Found asc version $(ASC_VERSION_OUTPUT) but version $(ASC_VERSION) is required.\
+	  Please run npm install -g assemblyscript@$(ASC_VERSION) first")
+endif
+
 CLIENT_CONTRACTS_AS  = $(shell find ./contracts-as/client   -mindepth 1 -maxdepth 1 -type d)
 TEST_CONTRACTS_AS    = $(shell find ./contracts-as/test     -mindepth 1 -maxdepth 1 -type d)
 EXAMPLE_CONTRACTS_AS = $(shell find ./contracts-as/examples -mindepth 1 -maxdepth 1 -type d)

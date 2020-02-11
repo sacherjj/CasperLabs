@@ -25,7 +25,12 @@ export function call(): void {
     Error.fromUserError(<u16>CustomError.MissingArgument0).revert();
     return;
   }
-  const stringVal = fromBytesString(stringArg)
+  const stringValResult = fromBytesString(stringArg)
+  if (stringValResult.hasError()) {
+    Error.fromUserError(<u16>CustomError.InvalidArgument0).revert();
+    return;
+  }
+  let stringVal = stringValResult.value;
   if (stringVal != EXPECTED_STRING){
     Error.fromUserError(<u16>CustomError.InvalidArgument0).revert();
     return;
@@ -35,7 +40,12 @@ export function call(): void {
     Error.fromUserError(<u16>CustomError.MissingArgument1).revert();
     return;
   }
-  const u512Val = U512.fromBytes(u512Arg);
+  const u512ValResult = U512.fromBytes(u512Arg);
+  if (u512ValResult.hasError()) {
+    Error.fromUserError(<u16>CustomError.InvalidArgument1).revert();
+    return;    
+  }
+  let u512Val = u512ValResult.value;
   if (u512Val != U512.fromU64(EXPECTED_NUM)){
     Error.fromUserError(<u16>CustomError.InvalidArgument1).revert();
     return;

@@ -19,16 +19,17 @@ export function call(): void {
         return;
     }
 
-    let amount = U512.fromBytes(amountBytes);
-    if (amount === null) {
+    let amountResult = U512.fromBytes(amountBytes);
+    if (amountResult.hasError()) {
         Error.fromErrorCode(ErrorCode.InvalidArgument).revert();
         return;
     }
+    let amount = amountResult.value;
 
     let key = Key.fromURef(proofOfStake);
     let args: CLValue[] = [
         CLValue.fromString(POS_ACTION),
-        CLValue.fromU512(<U512>amount)
+        CLValue.fromU512(amount)
     ];
     let output = CL.callContract(key, args);
     if (output === null) {

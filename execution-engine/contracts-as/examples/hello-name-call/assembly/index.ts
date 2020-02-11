@@ -24,11 +24,12 @@ export function call(): void {
         Error.fromUserError(1).revert();
         return;
     }
-    let outputMessage = fromBytesString(output);
-    if (outputMessage === null) {
+    let outputMessageResult = fromBytesString(output);
+    if (outputMessageResult.hasError()) {
         Error.fromUserError(2).revert();
         return;
     }
+    let outputMessage = outputMessageResult.value;
 
     if (outputMessage != EXPECTED){
         Error.fromUserError(3).revert();
