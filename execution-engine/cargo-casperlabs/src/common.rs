@@ -13,7 +13,7 @@ use crate::{dependency::Dependency, ARGS, FAILURE_EXIT_CODE};
 
 lazy_static! {
     pub static ref CL_CONTRACT: Dependency =
-        Dependency::new("casperlabs-contract", "0.22.0", "contract");
+        Dependency::new("casperlabs-contract", "0.1.0", "contract");
     pub static ref CL_TYPES: Dependency = Dependency::new("casperlabs-types", "0.1.0", "types");
 }
 
