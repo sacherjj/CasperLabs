@@ -30,6 +30,7 @@ import io.casperlabs.shared.Sorting.byteStringOrdering
 import io.casperlabs.mempool.DeployBuffer
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.ipc
+import io.casperlabs.casper.PrettyPrinter
 
 /** Produce a signed message, persisted message.
   * The producer should the thread safe, so that when it's
@@ -285,12 +286,10 @@ object MessageProducer {
       keyBlockHash: BlockHash
   ): F[Set[ByteString]] =
     for {
-      dag            <- DagStorage[F].getRepresentation
-      keyBlockHashes <- collectKeyBlocks[F](keyBlockHash)
-      equivocatorsPerEra <- keyBlockHashes.traverse { h =>
-                             dag.latestInEra(h) >>= (_.getEquivocators)
-                           }
-      equivocators = equivocatorsPerEra.flatten.toSet
+      dag               <- DagStorage[F].getRepresentation
+      keyBlocks         <- collectKeyBlocks[F](keyBlockHash)
+      eraLatestMessages <- DagOperations.latestMessagesInEras[F](dag, keyBlocks)
+      equivocators      = eraLatestMessages.map(_._2.filter(_._2.size > 1)).map(_.keySet).flatten.toSet
     } yield equivocators
 
   /** Collects key blocks between an era identified by [[keyBlockHash]] (current era)
@@ -298,8 +297,13 @@ object MessageProducer {
     */
   def collectKeyBlocks[F[_]: MonadThrowable: DagStorage: EraStorage](
       keyBlockHash: BlockHash
-  ): F[List[BlockHash]] =
-    collectEras[F](keyBlockHash).map(_.map(_.keyBlockHash))
+  ): F[List[Message.Block]] =
+    for {
+      eras           <- collectEras[F](keyBlockHash)
+      keyBlockHashes = eras.map(_.keyBlockHash)
+      dag            <- DagStorage[F].getRepresentation
+      keyBlocks      <- keyBlockHashes.traverse(dag.lookupBlockUnsafe(_))
+    } yield keyBlocks
 
   /** Collects ancestor eras between an era identified by [[keyBlockHash]] (current era)
     * and an era in which that key block was created (most probably a grandparent era).

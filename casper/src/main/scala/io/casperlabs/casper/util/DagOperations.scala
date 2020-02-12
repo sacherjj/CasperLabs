@@ -20,6 +20,8 @@ import scala.collection.mutable
 import io.casperlabs.storage.dag.DagLookup
 import com.github.ghik.silencer.silent
 import cats.Functor
+import io.casperlabs.storage.dag.DagStorage
+import io.casperlabs.storage.dag.DagRepresentation._
 
 @silent("is never used")
 object DagOperations {
@@ -588,4 +590,22 @@ object DagOperations {
       }
       .map(_._1)
   }
+
+  /**
+    * Returns latest messages per era.
+    *
+    * We start collecting from the youngest era to avoid situation
+    * where concurrent addition of a message in the parent era causes
+    * j-past-cone of the child era to contain this message transitively
+    * when latestMessage(parentEra) doesn't.
+    */
+  def latestMessagesInEras[F[_]: Monad](
+      dag: DagRepresentation[F],
+      keyBlocks: List[Message]
+  ): F[Map[ByteString, Map[DagRepresentation.Validator, Set[Message]]]] =
+    keyBlocks
+      .sortBy(_.rank)
+      .reverse
+      .traverse(kb => dag.latestMessagesInEra(kb.messageHash).map(kb.messageHash -> _))
+      .map(_.toMap)
 }

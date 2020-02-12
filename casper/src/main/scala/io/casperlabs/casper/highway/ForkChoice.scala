@@ -86,15 +86,14 @@ object ForkChoice {
 
     private def eraForkChoice(
         dag: DagRepresentation[F],
-        keyBlockHash: BlockHash,
+        keyBlock: Message.Block,
         eraStartBlock: Block,
         latestMessages: Map[DagRepresentation.Validator, Set[Message]],
         equivocators: Set[ByteString]
     ): F[(Block, Map[DagRepresentation.Validator, Set[Message]])] =
       for {
-        keyBlock <- dag.lookupBlockUnsafe(keyBlockHash)
         weights <- EraStorage[F]
-                    .getEraUnsafe(keyBlockHash)
+                    .getEraUnsafe(keyBlock.messageHash)
                     .map(_.bonds.map {
                       case Bond(validator, stake) => validator -> Weight(stake)
                     }.toMap)
@@ -172,13 +171,11 @@ object ForkChoice {
 
     override def fromKeyBlock(keyBlockHash: BlockHash): F[Result] =
       for {
-        dag       <- DagStorage[F].getRepresentation
-        keyBlock  <- dag.lookupBlockUnsafe(keyBlockHash)
-        keyBlocks <- MessageProducer.collectKeyBlocks[F](keyBlockHash)
-        eraLatestMessages <- keyBlocks
-                              .traverse(kb => dag.latestMessagesInEra(kb).map(kb -> _))
-                              .map(_.toMap)
-        equivocators = eraLatestMessages.filter(_._2.size > 1).keySet
+        dag               <- DagStorage[F].getRepresentation
+        keyBlock          <- dag.lookupBlockUnsafe(keyBlockHash)
+        keyBlocks         <- MessageProducer.collectKeyBlocks[F](keyBlockHash)
+        eraLatestMessages <- DagOperations.latestMessagesInEras[F](dag, keyBlocks)
+        equivocators      = eraLatestMessages.map(_._2.filter(_._2.size > 1)).map(_.keySet).flatten.toSet
         (forkChoice, justifications) <- keyBlocks
                                          .foldM(
                                            keyBlock -> Map
@@ -189,7 +186,7 @@ object ForkChoice {
                                                dag,
                                                currKeyBlock,
                                                startBlock,
-                                               eraLatestMessages(currKeyBlock),
+                                               eraLatestMessages(currKeyBlock.messageHash),
                                                equivocators
                                              ).map {
                                                case (forkChoice, eraLatestMessages) =>
