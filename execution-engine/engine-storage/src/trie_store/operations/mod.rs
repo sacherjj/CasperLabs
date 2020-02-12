@@ -768,12 +768,7 @@ where
                     let mut index: usize = maybe_index.unwrap_or_default();
                     while index < RADIX {
                         if let Some(ref pointer) = pointer_block[index] {
-                            maybe_next_trie = match self.store.get(self.txn, pointer.hash()) {
-                                Ok(next_trie) => next_trie,
-                                Err(_) => {
-                                    return None;
-                                }
-                            };
+                            maybe_next_trie = self.store.get(self.txn, pointer.hash()).ok()?;
                             debug_assert!(maybe_next_trie.is_some());
                             self.visited.push((trie, Some(index + 1), path.clone()));
                             path.push(index as u8);
@@ -783,12 +778,7 @@ where
                     }
                 }
                 Trie::Extension { affix, pointer } => {
-                    maybe_next_trie = match self.store.get(self.txn, pointer.hash()) {
-                        Ok(next_trie) => next_trie,
-                        Err(_) => {
-                            return None;
-                        }
-                    };
+                    maybe_next_trie = self.store.get(self.txn, pointer.hash()).ok()?;
                     debug_assert!({
                         match &maybe_next_trie {
                             Some(Trie::Node { .. }) => true,
