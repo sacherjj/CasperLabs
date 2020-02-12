@@ -19,7 +19,6 @@ import simulacrum.typeclass
 
 import scala.util.Try
 import io.casperlabs.casper.util.DagOperations
-import DagOperations.ObservedValidatorBehavior
 import io.casperlabs.casper.consensus.Bond
 
 /** Some sort of stateful, memoizing implementation of a fast fork choice.
@@ -171,30 +170,43 @@ object ForkChoice {
 
     override def fromKeyBlock(keyBlockHash: BlockHash): F[Result] =
       for {
-        dag               <- DagStorage[F].getRepresentation
-        keyBlock          <- dag.lookupBlockUnsafe(keyBlockHash)
-        keyBlocks         <- MessageProducer.collectKeyBlocks[F](keyBlockHash)
-        eraLatestMessages <- DagOperations.latestMessagesInEras[F](dag, keyBlocks)
-        equivocators      = eraLatestMessages.map(_._2.filter(_._2.size > 1)).map(_.keySet).flatten.toSet
+        implicit0(dag: DagRepresentation[F]) <- DagStorage[F].getRepresentation
+        keyBlock                             <- dag.lookupBlockUnsafe(keyBlockHash)
+        keyBlocks                            <- MessageProducer.collectKeyBlocks[F](keyBlockHash)
+        erasLatestMessages <- DagOperations
+                               .latestMessagesInEras[F](dag, keyBlocks)
+                               .map(EraObservedBehavior.local(_))
         (forkChoice, justifications) <- keyBlocks
                                          .foldM(
                                            keyBlock -> Map
                                              .empty[DagRepresentation.Validator, Set[Message]]
                                          ) {
                                            case ((startBlock, accLatestMessages), currKeyBlock) =>
-                                             eraForkChoice(
-                                               dag,
-                                               currKeyBlock,
-                                               startBlock,
-                                               eraLatestMessages(currKeyBlock.messageHash),
-                                               equivocators
-                                             ).map {
-                                               case (forkChoice, eraLatestMessages) =>
-                                                 (
-                                                   forkChoice,
-                                                   accLatestMessages |+| eraLatestMessages
+                                             for {
+                                               eraLatestMessages <- erasLatestMessages
+                                                                     .latestMessagesInEra[F](
+                                                                       currKeyBlock.messageHash
+                                                                     )
+                                               pastEras = currKeyBlock.messageHash :: keyBlocks
+                                                 .takeWhile(
+                                                   _.messageHash != currKeyBlock.messageHash
                                                  )
-                                             }
+                                                 .map(_.messageHash)
+                                               visibleEquivocators = erasLatestMessages
+                                                 .equivocatorsVisibleInEras(
+                                                   pastEras.toSet
+                                                 )
+                                               (forkChoice, eraLatestMessagesReduced) <- eraForkChoice(
+                                                                                          dag,
+                                                                                          currKeyBlock,
+                                                                                          startBlock,
+                                                                                          eraLatestMessages,
+                                                                                          visibleEquivocators
+                                                                                        )
+                                             } yield (
+                                               forkChoice,
+                                               accLatestMessages |+| eraLatestMessagesReduced
+                                             )
                                          }
       } yield Result(forkChoice, justifications.values.flatten.toSet)
 
@@ -203,22 +215,18 @@ object ForkChoice {
         justifications: Set[BlockHash]
     ): F[Result] =
       for {
-        dag      <- DagStorage[F].getRepresentation
-        keyBlock <- dag.lookupBlockUnsafe(keyBlockHash)
-        validators <- EraStorage[F]
-                       .getEraUnsafe(keyBlockHash)
-                       .map(_.bonds.map(_.validatorPublicKey).toSet)
+        implicit0(dag: DagRepresentation[F]) <- DagStorage[F].getRepresentation
+        keyBlock                             <- dag.lookupBlockUnsafe(keyBlockHash)
+        erasObservedBehaviors <- DagOperations
+                                  .latestMessagesInErasUntil[F](keyBlock.messageHash)
+                                  .map(EraObservedBehavior.local(_))
         justificationsMessages <- justifications.toList.traverse(dag.lookupUnsafe)
         latestMessages <- DagOperations.panoramaOfMessageFromJustifications[F](
                            dag,
                            justificationsMessages,
-                           validators,
+                           erasObservedBehaviors,
                            keyBlock
                          )
-        equivocators = latestMessages.filter(_._2.isEquivocated).keySet
-        latestHonestMessages = latestMessages.collect {
-          case (v, ObservedValidatorBehavior.Honest(msg)) => v -> Set(msg)
-        }
         keyBlocks <- MessageProducer.collectKeyBlocks[F](keyBlockHash)
         (forkChoice, forkChoiceJustifications) <- keyBlocks
                                                    .foldM(
@@ -231,19 +239,33 @@ object ForkChoice {
                                                          (startBlock, accLatestMessages),
                                                          currKeyBlock
                                                          ) =>
-                                                       eraForkChoice(
-                                                         dag,
-                                                         currKeyBlock,
-                                                         startBlock,
-                                                         latestHonestMessages,
-                                                         equivocators
-                                                       ).map {
-                                                         case (forkChoice, eraLatestMessages) =>
-                                                           (
-                                                             forkChoice,
-                                                             accLatestMessages |+| eraLatestMessages
+                                                       for {
+                                                         eraLatestMessages <- latestMessages
+                                                                               .latestMessagesInEra[
+                                                                                 F
+                                                                               ](
+                                                                                 currKeyBlock.messageHash
+                                                                               )
+                                                         pastEras = currKeyBlock.messageHash :: keyBlocks
+                                                           .takeWhile(
+                                                             _.messageHash != currKeyBlock.messageHash
                                                            )
-                                                       }
+                                                           .map(_.messageHash)
+                                                         visibleEquivocators = latestMessages
+                                                           .equivocatorsVisibleInEras(
+                                                             pastEras.toSet
+                                                           )
+                                                         (forkChoice, eraLatestMessagesReduced) <- eraForkChoice(
+                                                                                                    dag,
+                                                                                                    currKeyBlock,
+                                                                                                    startBlock,
+                                                                                                    eraLatestMessages,
+                                                                                                    visibleEquivocators
+                                                                                                  )
+                                                       } yield (
+                                                         forkChoice,
+                                                         accLatestMessages |+| eraLatestMessagesReduced
+                                                       )
                                                    }
       } yield Result(forkChoice, forkChoiceJustifications.values.flatten.toSet)
   }

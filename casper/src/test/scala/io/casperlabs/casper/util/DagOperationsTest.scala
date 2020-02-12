@@ -14,12 +14,12 @@ import io.casperlabs.casper.util.BondingUtil.Bond
 import io.casperlabs.models.Message
 import io.casperlabs.shared.Sorting.messageSummaryOrdering
 import io.casperlabs.storage.dag.DagRepresentation
+import DagRepresentation.EraObservedBehavior
 import monix.eval.Task
 import org.scalatest.{FlatSpec, Matchers}
 
 import scala.collection.immutable.BitSet
 import io.casperlabs.casper.PrettyPrinter
-import io.casperlabs.casper.util.DagOperations.ObservedValidatorBehavior
 
 @silent("deprecated")
 @silent("is never used")
@@ -474,7 +474,7 @@ class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator with 
   }
 
   import ByteStringPrettifier._
-  import ObservedValidatorBehavior._
+  import DagRepresentation.ObservedValidatorBehavior._
   val v1         = generateValidator("V1")
   val v2         = generateValidator("V2")
   val v3         = generateValidator("V3")
@@ -499,27 +499,62 @@ class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator with 
         // Expected result: Map(A -> a1, B -> b2, C -> c1)
 
         for {
-          genesis        <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bondsThree)
-          a1             <- createAndStoreBlockFull[Task](v1, Seq(genesis), Seq.empty, bondsThree)
-          b1             <- createAndStoreBlockFull[Task](v2, Seq(genesis), Seq(a1), bondsThree)
-          c1             <- createAndStoreBlockFull[Task](v3, Seq(b1), Seq.empty, bondsThree)
-          b2             <- createAndStoreBlockFull[Task](v2, Seq(c1), Seq.empty, bondsThree)
-          dag            <- dagStorage.getRepresentation
-          b2Message      = Message.fromBlock(b2).get
-          genesisMessage = Message.fromBlock(genesis).get
+          genesis <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bondsThree)
+          a1 <- createAndStoreBlockFull[Task](
+                 v1,
+                 Seq(genesis),
+                 Seq.empty,
+                 bondsThree,
+                 keyBlockHash = genesis.blockHash
+               )
+          b1 <- createAndStoreBlockFull[Task](
+                 v2,
+                 Seq(genesis),
+                 Seq(a1),
+                 bondsThree,
+                 keyBlockHash = genesis.blockHash
+               )
+          c1 <- createAndStoreBlockFull[Task](
+                 v3,
+                 Seq(b1),
+                 Seq.empty,
+                 bondsThree,
+                 keyBlockHash = genesis.blockHash
+               )
+          b2 <- createAndStoreBlockFull[Task](
+                 v2,
+                 Seq(c1),
+                 Seq.empty,
+                 bondsThree,
+                 keyBlockHash = genesis.blockHash
+               )
+          implicit0(dag: DagRepresentation[Task]) <- dagStorage.getRepresentation
+          b2Message                               = Message.fromBlock(b2).get
+          genesisMessage                          = Message.fromBlock(genesis).get
+          localDagView = EraObservedBehavior.local(
+            Map(
+              genesis.blockHash -> Map(
+                v1 -> Set(Message.fromBlock(a1).get),
+                v2 -> Set(Message.fromBlock(b1).get),
+                v3 -> Set(Message.fromBlock(c1).get)
+              )
+            )
+          )
           latestMessages <- DagOperations.panoramaOfMessage[Task](
                              dag,
                              b2Message,
-                             Set(v1, v2, v3),
+                             localDagView,
                              genesisMessage
                            )
-          latestMessageHashes = latestMessages.mapValues(_.map(_.messageHash))
+          latestGenesisMessageHashes <- latestMessages
+                                         .latestMessagesInEra[Task](genesis.blockHash)
+                                         .map(_.mapValues(_.map(_.messageHash)))
           expected = Map(
-            v1 -> Honest(a1.blockHash),
-            v2 -> Honest(b1.blockHash),
-            v3 -> Honest(c1.blockHash)
+            v1 -> Set(a1.blockHash),
+            v2 -> Set(b1.blockHash),
+            v3 -> Set(c1.blockHash)
           )
-        } yield assert(latestMessageHashes == expected)
+        } yield assert(latestGenesisMessageHashes == expected)
   }
 
   it should "return latest message per validator across multiple eras" in withStorage {
@@ -594,22 +629,47 @@ class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator with 
                  bondsThree,
                  keyBlockHash = c1.blockHash
                )
-          dag            <- dagStorage.getRepresentation
-          c3Message      = Message.fromBlock(c3).get
-          genesisMessage = Message.fromBlock(genesis).get
+          implicit0(dag: DagRepresentation[Task]) <- dagStorage.getRepresentation
+          c3Message                               = Message.fromBlock(c3).get
+          genesisMessage                          = Message.fromBlock(genesis).get
+          localDagView = EraObservedBehavior.local(
+            Map(
+              genesis.blockHash -> Map(
+                v1 -> Set(Message.fromBlock(a1).get),
+                v2 -> Set(Message.fromBlock(sb).get),
+                v3 -> Set(Message.fromBlock(c1).get)
+              ),
+              c1.blockHash -> Map(
+                v1 -> Set(Message.fromBlock(a2).get),
+                v3 -> Set(Message.fromBlock(c2).get)
+              )
+            )
+          )
           latestMessages <- DagOperations.panoramaOfMessage[Task](
                              dag,
                              c3Message,
-                             Set(v1, v2, v3),
+                             localDagView,
                              genesisMessage
                            )
-          latestMessageHashes = latestMessages.mapValues(_.map(_.messageHash))
-          expected = Map(
-            v1 -> Honest(a2.blockHash),
-            v2 -> Honest(sb.blockHash),
-            v3 -> Honest(c2.blockHash)
+          latestGenesisMessageHashes <- latestMessages
+                                         .latestMessagesInEra[Task](genesis.blockHash)
+                                         .map(_.mapValues(_.map(_.messageHash)))
+          expectedGenesis = Map(
+            v1 -> Set(a1.blockHash),
+            v2 -> Set(sb.blockHash),
+            v3 -> Set(c1.blockHash)
           )
-        } yield assert(latestMessageHashes == expected)
+          latestChildMessageHashes <- latestMessages
+                                       .latestMessagesInEra[Task](c1.blockHash)
+                                       .map(_.mapValues(_.map(_.messageHash)))
+          expectedChild = Map(
+            v1 -> Set(a2.blockHash),
+            v3 -> Set(c2.blockHash)
+          )
+        } yield {
+          assert(latestGenesisMessageHashes == expectedGenesis)
+          assert(latestChildMessageHashes == expectedChild)
+        }
   }
 
   it should "detect equivocators" in withStorage {
@@ -652,21 +712,36 @@ class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator with 
                  bondsThree,
                  keyBlockHash = genesis.blockHash
                )
-          dag            <- dagStorage.getRepresentation
-          genesisMessage = Message.fromBlock(genesis).get
+          localDagView = EraObservedBehavior.local(
+            Map(
+              genesis.blockHash -> Map(
+                v1 -> Set(Message.fromBlock(a1).get, Message.fromBlock(a1Prime).get),
+                v2 -> Set(Message.fromBlock(b1).get)
+              )
+            )
+          )
+          implicit0(dag: DagRepresentation[Task]) <- dagStorage.getRepresentation
           latestMessages <- DagOperations.panoramaOfMessage[Task](
                              dag,
                              Message.fromBlock(b2).get,
-                             Set(v1, v2, v3),
-                             genesisMessage
+                             localDagView,
+                             Message.fromBlock(genesis).get
                            )
-          latestMessageHashes = latestMessages.mapValues(_.map(_.messageHash))
-          expected = Map(
-            v1 -> Equivocated,
-            v2 -> Honest(b1.blockHash),
-            v3 -> Empty
+
+          latestGenesisMessageHashes <- latestMessages
+                                         .latestMessagesInEra[Task](genesis.blockHash)
+                                         .map(_.mapValues(_.map(_.messageHash)))
+
+          expectedGenesis = Map(
+            v1 -> Set(a1.blockHash, a1Prime.blockHash),
+            v2 -> Set(b1.blockHash)
           )
-        } yield assert(latestMessageHashes == expected)
+
+          detectedEquivocators = latestMessages.equivocatorsVisibleInEras(Set(genesis.blockHash))
+        } yield {
+          assert(latestGenesisMessageHashes == expectedGenesis)
+          assert(detectedEquivocators == Set(v1))
+        }
   }
 
   it should "detect equivocators only after the stop block" in withStorage {
@@ -723,21 +798,36 @@ class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator with 
                  bondsThree,
                  keyBlockHash = genesis.blockHash
                )
-          dag       <- dagStorage.getRepresentation
-          b2Message = Message.fromBlock(b2).get
+          localDagView = EraObservedBehavior.local(
+            Map(
+              genesis.blockHash -> Map(
+                v1 -> Set(Message.fromBlock(a1).get, Message.fromBlock(a1Prime).get),
+                v2 -> Set(Message.fromBlock(b2).get)
+              )
+            )
+          )
+          implicit0(dag: DagRepresentation[Task]) <- dagStorage.getRepresentation
           latestMessages <- DagOperations.panoramaOfMessage[Task](
                              dag,
                              Message.fromBlock(b3).get,
-                             Set(v1, v2, v3),
-                             b2Message
+                             localDagView,
+                             Message.fromBlock(b2).get
                            )
-          latestMessageHashes = latestMessages.mapValues(_.map(_.messageHash))
-          expected = Map(
-            v1 -> Honest(a2.blockHash),
-            v2 -> Honest(b2.blockHash),
-            v3 -> Empty
+
+          latestGenesisMessageHashes <- latestMessages
+                                         .latestMessagesInEra[Task](genesis.blockHash)
+                                         .map(_.mapValues(_.map(_.messageHash)))
+
+          expectedGenesis = Map(
+            v1 -> Set(a2.blockHash),
+            v2 -> Set(b2.blockHash)
           )
-        } yield assert(latestMessageHashes == expected)
+
+          detectedEquivocators = latestMessages.equivocatorsVisibleInEras(Set(genesis.blockHash))
+        } yield {
+          assert(latestGenesisMessageHashes == expectedGenesis)
+          assert(detectedEquivocators.isEmpty)
+        }
   }
 
 }

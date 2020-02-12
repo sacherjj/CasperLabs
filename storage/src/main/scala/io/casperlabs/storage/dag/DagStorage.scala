@@ -1,9 +1,11 @@
 package io.casperlabs.storage.dag
 
+import java.io.Serializable
+
 import cats.{Applicative, Monad}
 import cats.implicits._
 import com.google.protobuf.ByteString
-import io.casperlabs.casper.consensus.{Block, BlockSummary}
+import io.casperlabs.casper.consensus.Block
 import io.casperlabs.casper.consensus.info.BlockInfo
 import io.casperlabs.metrics.Metered
 import io.casperlabs.models.Message
@@ -12,15 +14,30 @@ import io.casperlabs.storage.dag.DagRepresentation.Validator
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.crypto.codec.Base16
 import simulacrum.typeclass
+
 import scala.util.Try
 import scala.util.Success
 import scala.util.Failure
 import scala.util.control.NoStackTrace
+import cats.Functor
+import com.github.ghik.silencer.silent
+import io.casperlabs.storage.dag.DagRepresentation.ObservedValidatorBehavior.{
+  Empty,
+  Equivocated,
+  Honest
+}
+import shapeless.tag.@@
 
 trait DagStorage[F[_]] {
 
   /** Doesn't guarantee to return immutable representation. */
   def getRepresentation: F[DagRepresentation[F]]
+
+  def checkpoint(): F[Unit]
+
+  def clear(): F[Unit]
+
+  def close(): F[Unit]
 
   /** Insert a block into the DAG and update the latest messages.
     * In the presence of eras, the block only affects the latest messages
@@ -28,13 +45,11 @@ trait DagStorage[F[_]] {
     * or the tips, the caller needs to look at multiple eras along the tree.
     */
   private[storage] def insert(block: Block): F[DagRepresentation[F]]
-
-  def checkpoint(): F[Unit]
-  def clear(): F[Unit]
-  def close(): F[Unit]
 }
 
 object DagStorage {
+  def apply[F[_]](implicit B: DagStorage[F]): DagStorage[F] = B
+
   trait MeteredDagStorage[F[_]] extends DagStorage[F] with Metered[F] {
 
     abstract override def getRepresentation: F[DagRepresentation[F]] =
@@ -91,8 +106,6 @@ object DagStorage {
     abstract override def latestMessages: F[Map[Validator, Set[Message]]] =
       incAndMeasure("latestMessages", super.latestMessages)
   }
-
-  def apply[F[_]](implicit B: DagStorage[F]): DagStorage[F] = B
 }
 
 trait TipRepresentation[F[_]] {
@@ -122,26 +135,16 @@ trait EraTipRepresentation[F[_]] extends TipRepresentation[F] {
   // * the parent block candidate hashes, and
   // * the justifications of the parent block candidates.
 
-  def getEquivocations(implicit A: Applicative[F]): F[Map[Validator, Set[Message]]] =
-    latestMessages.map(_.filter(_._2.size > 1))
-
   def getEquivocators(implicit A: Applicative[F]): F[Set[Validator]] =
     getEquivocations.map(_.keySet)
+
+  def getEquivocations(implicit A: Applicative[F]): F[Map[Validator, Set[Message]]] =
+    latestMessages.map(_.filter(_._2.size > 1))
 }
 
 @typeclass trait DagLookup[F[_]] {
   def lookup(blockHash: BlockHash): F[Option[Message]]
   def contains(blockHash: BlockHash): F[Boolean]
-
-  def lookupUnsafe(blockHash: BlockHash)(implicit MT: MonadThrowable[F]): F[Message] =
-    lookup(blockHash) flatMap {
-      MonadThrowable[F].fromOption(
-        _,
-        new NoSuchElementException(
-          s"DAG store was missing ${Base16.encode(blockHash.toByteArray)}."
-        )
-      )
-    }
 
   def lookupBlockUnsafe(blockHash: BlockHash)(implicit MT: MonadThrowable[F]): F[Message.Block] =
     lookupUnsafe(blockHash).flatMap(
@@ -158,6 +161,16 @@ trait EraTipRepresentation[F[_]] extends TipRepresentation[F] {
             )
         }
     )
+
+  def lookupUnsafe(blockHash: BlockHash)(implicit MT: MonadThrowable[F]): F[Message] =
+    lookup(blockHash) flatMap {
+      MonadThrowable[F].fromOption(
+        _,
+        new NoSuchElementException(
+          s"DAG store was missing ${Base16.encode(blockHash.toByteArray)}."
+        )
+      )
+    }
 }
 
 trait DagRepresentation[F[_]] extends DagLookup[F] {
@@ -206,6 +219,7 @@ trait DagRepresentation[F[_]] extends DagLookup[F] {
   def latestInEra(keyBlockHash: BlockHash): F[EraTipRepresentation[F]]
 }
 
+@silent("is never used")
 object DagRepresentation {
   type Validator = ByteString
 
@@ -233,14 +247,21 @@ object DagRepresentation {
     def getEquivocators: F[Set[Validator]] =
       getEquivocations.map(_.keySet)
 
+    // Returns a mapping between equivocators and their messages.
+    def getEquivocations: F[Map[Validator, Set[Message]]] =
+      latestMessages.map(_.filter(_._2.size > 1))
+
+    def latestMessages: F[Map[Validator, Set[Message]]] =
+      dagRepresentation.latestGlobal.flatMap(_.latestMessages)
+
+    // NOTE: These extension methods are here so the Naive-Casper codebase doesn't have to do another
+    // step (i.e. `.latestGlobal.flatMap { tip => ... }`)  but in Highway we should first specify the era.
+
     def latestMessagesInEra(keyBlockHash: ByteString): F[Map[Validator, Set[Message]]] =
       dagRepresentation.latestInEra(keyBlockHash).flatMap(_.latestMessages)
 
     def getEquivocatorsInEra(keyBlockHash: ByteString): F[Set[Validator]] =
       dagRepresentation.latestInEra(keyBlockHash).flatMap(_.getEquivocators)
-
-    // NOTE: These extension methods are here so the Naive-Casper codebase doesn't have to do another
-    // step (i.e. `.latestGlobal.flatMap { tip => ... }`)  but in Highway we should first specify the era.
 
     def latestMessageHash(validator: Validator): F[Set[BlockHash]] =
       dagRepresentation.latestGlobal.flatMap(_.latestMessageHash(validator))
@@ -250,13 +271,6 @@ object DagRepresentation {
 
     def latestMessageHashes: F[Map[Validator, Set[BlockHash]]] =
       dagRepresentation.latestGlobal.flatMap(_.latestMessageHashes)
-
-    def latestMessages: F[Map[Validator, Set[Message]]] =
-      dagRepresentation.latestGlobal.flatMap(_.latestMessages)
-
-    // Returns a mapping between equivocators and their messages.
-    def getEquivocations: F[Map[Validator, Set[Message]]] =
-      latestMessages.map(_.filter(_._2.size > 1))
 
     // Returns latest messages from honest validators
     def latestMessagesHonestValidators: F[Map[Validator, Message]] =
@@ -269,4 +283,125 @@ object DagRepresentation {
   }
 
   def apply[F[_]](implicit ev: DagRepresentation[F]): DagRepresentation[F] = ev
+
+  final class EraObservedBehavior[A] private (
+      val data: Map[ByteString, Map[Validator, ObservedValidatorBehavior[A]]]
+  ) {
+    // Returns set of equivocating validators that are visible in the j-past-cone
+    // of the era.
+    def equivocatorsVisibleInEras(
+        keyBlockHashes: Set[ByteString]
+    ): Set[Validator] =
+      data
+        .collect {
+          case (keyBlockHash, lms) if keyBlockHashes(keyBlockHash) =>
+            lms.filter(_._2.isEquivocated).keySet
+        }
+        .flatten
+        .toSet
+
+    def keyBlockHashes: Set[ByteString] = data.keySet
+
+    def validatorsInEra(keyBlockHash: ByteString): Set[Validator] =
+      data.get(keyBlockHash).fold(Set.empty[Validator])(_.keySet)
+
+//    def latestMessagesInEra[F[_]: MonadThrowable: DagLookup](
+//        keyBlockHash: ByteString
+//    )(implicit ev: A =:= ByteString): F[Map[Validator, Set[Message]]] =
+//      data.get(keyBlockHash) match {
+//        case None => Map.empty[Validator, Set[Message]].pure[F]
+//        case Some(lms) =>
+//          lms.toList
+//            .traverse {
+//              case (v, observedBehavior) =>
+//                val lm: F[Set[Message]] = observedBehavior match {
+//                  case Empty => Set.empty[Message].pure[F]
+//                  case Honest(hash) =>
+//                    DagLookup[F].lookupUnsafe(hash.asInstanceOf[ByteString]).map(Set(_))
+//                  case Equivocated(m1, m2) =>
+//                    MonadThrowable[F].map2(
+//                      DagLookup[F].lookupUnsafe(m1.asInstanceOf[ByteString]),
+//                      DagLookup[F].lookupUnsafe(m2.asInstanceOf[ByteString])
+//                    ) { case (a, b) => Set(a, b) }
+//
+//                }
+//                lm.map(v -> _)
+//            }
+//            .map(_.toMap)
+//      }
+
+    def latestMessagesInEra[F[_]: MonadThrowable: DagLookup](
+        keyBlockHash: ByteString
+    )(implicit ev: A =:= Message): F[Map[Validator, Set[Message]]] =
+      data.get(keyBlockHash) match {
+        case None => Map.empty[Validator, Set[Message]].pure[F]
+        case Some(lms) =>
+          lms.toList
+            .traverse {
+              case (v, observedBehavior) =>
+                val lm: F[Set[Message]] = observedBehavior match {
+                  case Empty       => Set.empty[Message].pure[F]
+                  case Honest(msg) => Set(msg.asInstanceOf[Message]).pure[F]
+                  case Equivocated(m1, m2) =>
+                    Set(m1.asInstanceOf[Message], m2.asInstanceOf[Message]).pure[F]
+                }
+                lm.map(v -> _)
+            }
+            .map(_.toMap)
+      }
+  }
+
+  sealed trait ObservedValidatorBehavior[+A] extends Product with Serializable {
+    def isEquivocated: Boolean
+  }
+
+  object ObservedValidatorBehavior {
+
+    case class Honest[A](msg: A) extends ObservedValidatorBehavior[A] {
+      override def isEquivocated: Boolean = false
+    }
+
+    case class Equivocated[A](m1: A, m2: A) extends ObservedValidatorBehavior[A] {
+      override def isEquivocated: Boolean = true
+    }
+
+    case object Empty extends ObservedValidatorBehavior[Nothing] {
+      override def isEquivocated: Boolean = false
+    }
+
+    implicit val functor: Functor[ObservedValidatorBehavior] =
+      new Functor[ObservedValidatorBehavior] {
+        def map[A, B](fa: ObservedValidatorBehavior[A])(f: A => B): ObservedValidatorBehavior[B] =
+          fa match {
+            case Honest(msg)         => Honest(f(msg))
+            case Equivocated(m1, m2) => Equivocated(f(m1), f(m2))
+            case Empty               => Empty
+          }
+      }
+  }
+
+  object EraObservedBehavior {
+    type LocalDagView[A] = EraObservedBehavior[A] @@ LocalView
+    type MessageJPast[A] = EraObservedBehavior[A] @@ MessageView
+
+    def local(data: Map[ByteString, Map[Validator, Set[Message]]]): LocalDagView[Message] =
+      apply(data).asInstanceOf[LocalDagView[Message]]
+
+    def messageJPast(data: Map[ByteString, Map[Validator, Set[Message]]]): MessageJPast[Message] =
+      apply(data).asInstanceOf[MessageJPast[Message]]
+
+    private def apply(
+        data: Map[ByteString, Map[Validator, Set[Message]]]
+    ): EraObservedBehavior[Message] =
+      new EraObservedBehavior(data.mapValues(_.map {
+        case (v, lms) =>
+          if (lms.isEmpty) v -> ObservedValidatorBehavior.Empty
+          else if (lms.size == 1) v -> ObservedValidatorBehavior.Honest(lms.head)
+          else v                    -> ObservedValidatorBehavior.Equivocated(lms.head, lms.drop(1).head)
+      }))
+
+    sealed trait LocalView
+
+    sealed trait MessageView
+  }
 }

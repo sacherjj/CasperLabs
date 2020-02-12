@@ -19,9 +19,11 @@ import scala.collection.immutable.{BitSet, HashSet, Queue}
 import scala.collection.mutable
 import io.casperlabs.storage.dag.DagLookup
 import com.github.ghik.silencer.silent
-import cats.Functor
 import io.casperlabs.storage.dag.DagStorage
 import io.casperlabs.storage.dag.DagRepresentation._
+import EraObservedBehavior._
+import io.casperlabs.casper.highway.MessageProducer
+import io.casperlabs.storage.era.EraStorage
 
 @silent("is never used")
 object DagOperations {
@@ -482,34 +484,7 @@ object DagOperations {
       } yield reachable
     }
 
-  sealed trait ObservedValidatorBehavior[+A] {
-    def isEquivocated: Boolean
-  }
-
-  object ObservedValidatorBehavior {
-
-    case class Honest[A](msg: A) extends ObservedValidatorBehavior[A] {
-      def isEquivocated: Boolean = false
-    }
-
-    case object Empty extends ObservedValidatorBehavior[Nothing] {
-      def isEquivocated: Boolean = false
-    }
-
-    case object Equivocated extends ObservedValidatorBehavior[Nothing] {
-      def isEquivocated: Boolean = true
-    }
-
-    implicit val functor: Functor[ObservedValidatorBehavior] =
-      new Functor[ObservedValidatorBehavior] {
-        def map[A, B](fa: ObservedValidatorBehavior[A])(f: A => B): ObservedValidatorBehavior[B] =
-          fa match {
-            case Honest(msg) => Honest(f(msg))
-            case Equivocated => Equivocated
-            case Empty       => Empty
-          }
-      }
-  }
+  import DagRepresentation.Validator
 
   /**
     * Calculates panorama of a message.
@@ -523,27 +498,28 @@ object DagOperations {
     *
     * @param dag
     * @param message
-    * @param validators
     * @param stop
     * @return
     */
   def panoramaOfMessage[F[_]: MonadThrowable](
       dag: DagLookup[F],
       message: Message,
-      validators: Set[ByteString],
+      erasObservedBehavior: LocalDagView[Message],
       stop: Message
-  ): F[Map[ByteString, ObservedValidatorBehavior[Message]]] =
+  ): F[MessageJPast[Message]] =
     message.justifications.toList
       .map(_.latestBlockHash)
       .traverse(dag.lookupUnsafe(_))
-      .flatMap(panoramaOfMessageFromJustifications[F](dag, _, validators, stop))
+      .flatMap(panoramaOfMessageFromJustifications[F](dag, _, erasObservedBehavior, stop))
 
   def panoramaOfMessageFromJustifications[F[_]: MonadThrowable](
       dag: DagLookup[F],
       justifications: List[Message],
-      validators: Set[ByteString],
+      erasObservedBehavior: LocalDagView[Message],
       stop: Message
-  ): F[Map[ByteString, ObservedValidatorBehavior[Message]]] = {
+  ): F[MessageJPast[Message]] = {
+    type PerEraValidatorMessages =
+      Map[ByteString, Map[Validator, ObservedValidatorBehavior[Message]]]
     import ObservedValidatorBehavior._
     implicit val blockTopoOrdering: Ordering[Message] =
       DagOperations.blockTopoOrderingDesc
@@ -551,17 +527,37 @@ object DagOperations {
     val stream = toposortJDagDesc(dag, justifications)
       .takeUntil(_ == stop)
 
-    val initStates =
-      validators
-        .map(_ -> ObservedValidatorBehavior.Empty)
-        .toMap[ByteString, ObservedValidatorBehavior[Message]]
+    val keyBlockHashes = erasObservedBehavior.keyBlockHashes
+
+    val initStates: PerEraValidatorMessages =
+      keyBlockHashes.toList
+        .map(
+          kbh =>
+            kbh -> erasObservedBehavior
+              .validatorsInEra(kbh)
+              .map(_ -> ObservedValidatorBehavior.Empty)
+              .toMap
+        )
+        .toMap
+
     // Previously seen message from the validator.
-    val prevMessageSeen: Map[ByteString, Message] = Map.empty
-    // We can only say we're done if we've seen all validators equivocated OR
-    // we have consumed whole stream. Having latest message doesn't mean that validator
-    // hasn't equivocated.
-    val isDone: Map[ByteString, ObservedValidatorBehavior[Message]] => Boolean = state =>
-      state.values.forall(_.isEquivocated)
+    val prevMessageSeen: Map[ByteString, Map[Validator, Message]] = Map.empty
+    val validatorStatusMatches
+        : ByteString => Validator => ObservedValidatorBehavior[Message] => Boolean =
+      era => validator => seenBehavior => erasObservedBehavior.data(era)(validator) == seenBehavior
+
+    // If we've seen, in the j-past-cone of the message, the same statuses
+    // as ones we have collected locally then we're done.
+    // This is correct b/c a node has to download all dependencies first,
+    // before validating the block.
+    val isDone: PerEraValidatorMessages => Boolean = state =>
+      state.forall {
+        case (era, eraLMS) =>
+          eraLMS.forall {
+            case (validator, seenStatus) =>
+              validatorStatusMatches(era)(validator)(seenStatus)
+          }
+      }
 
     stream
       .foldWhileLeft((initStates, prevMessageSeen)) {
@@ -570,25 +566,50 @@ object DagOperations {
             Right((latestMessages, prevMessages))
           } else {
             val msgCreator = message.validatorId
-            if (validators.contains(msgCreator)) {
-              Left(
-                latestMessages(msgCreator) match {
-                  case Honest(prevMsg) =>
-                    if (prevMessages(msgCreator).validatorPrevMessageHash == message.messageHash)
-                      (latestMessages, prevMessages.updated(msgCreator, message))
-                    else (latestMessages.updated(msgCreator, Equivocated), prevMessages)
-                  case Empty =>
-                    (
-                      latestMessages.updated(msgCreator, Honest(message)),
-                      prevMessages.updated(msgCreator, message)
-                    )
-                  case Equivocated => (latestMessages, prevMessages)
+            val msgEra     = message.eraId
+            val eraMsgs    = latestMessages(msgEra)
+            Left(eraMsgs(msgCreator) match {
+              case Honest(prevMsg) =>
+                if (prevMessages(msgEra)(msgCreator).validatorPrevMessageHash == message.messageHash)
+                  (
+                    latestMessages,
+                    prevMessages
+                      .updated(msgEra, prevMessages(msgEra).updated(msgCreator, message))
+                  )
+                else {
+                  // Validator equivocated in this era
+                  (
+                    latestMessages.updated(
+                      msgEra,
+                      latestMessages(msgEra).updated(msgCreator, Equivocated(prevMsg, message))
+                    ),
+                    prevMessages
+                  )
                 }
-              )
-            } else Left((latestMessages, prevMessages))
+              case Empty =>
+                (
+                  latestMessages
+                    .updated(msgEra, latestMessages(msgEra).updated(msgCreator, Honest(message))),
+                  prevMessages
+                    .updated(
+                      msgEra,
+                      prevMessages.getOrElse(msgEra, Map.empty).updated(msgCreator, message)
+                    )
+                )
+              case Equivocated(_, _) => (latestMessages, prevMessages)
+            })
           }
       }
-      .map(_._1)
+      .map {
+        case (a, _) =>
+          EraObservedBehavior.messageJPast(
+            a.mapValues(_.mapValues {
+              case Empty               => Set.empty
+              case Honest(m)           => Set(m)
+              case Equivocated(m1, m2) => Set(m1, m2)
+            })
+          )
+      }
   }
 
   /**
@@ -608,4 +629,20 @@ object DagOperations {
       .reverse
       .traverse(kb => dag.latestMessagesInEra(kb.messageHash).map(kb.messageHash -> _))
       .map(_.toMap)
+
+  /**
+    * Returns per-era latest messages from validators.
+    *
+    * @param keyBlock
+    * @return
+    */
+  def latestMessagesInErasUntil[F[_]: MonadThrowable: EraStorage: DagStorage](
+      keyBlock: ByteString
+  ): F[Map[ByteString, Map[DagRepresentation.Validator, Set[Message]]]] =
+    for {
+      keyBlocks            <- MessageProducer.collectKeyBlocks[F](keyBlock)
+      dag                  <- DagStorage[F].getRepresentation
+      perEraLatestMessages <- latestMessagesInEras(dag, keyBlocks)
+    } yield perEraLatestMessages
+
 }
