@@ -45,6 +45,10 @@ from . import casper_pb2_grpc
 # ~/CasperLabs/protobuf/io/casperlabs/casper/consensus/info.proto
 from . import info_pb2 as info
 
+# ~/CasperLabs/protobuf/io/casperlabs/node/api/diagnostics.proto
+from . import diagnostics_pb2_grpc
+from . import empty_pb2
+
 from . import vdag
 from . import abi
 from casperlabs_client.utils import (
@@ -256,12 +260,23 @@ class CasperLabsClient:
                 node_id,
                 certificate_file,
             )
+            self.diagnosticsService = SecureGRPCService(
+                host,
+                port,
+                diagnostics_pb2_grpc.DiagnosticsStub,
+                node_id,
+                certificate_file,
+            )
+
         else:
             self.casperService = InsecureGRPCService(
                 host, port, casper_pb2_grpc.CasperServiceStub
             )
             self.controlService = InsecureGRPCService(
                 host, port_internal, control_pb2_grpc.ControlServiceStub
+            )
+            self.diagnosticsService = InsecureGRPCService(
+                host, port, diagnostics_pb2_grpc.DiagnosticsStub
             )
 
     @api
@@ -651,6 +666,9 @@ class CasperLabsClient:
                     f"Deploy {deploy_hash} execution error: {last_processing_result.error_message}"
                 )
         return result
+
+    def list_peers(self):
+        return list(self.diagnosticsService.ListPeers(empty_pb2.Empty()).peers)
 
     def cli(self, *arguments) -> int:
         from . import cli

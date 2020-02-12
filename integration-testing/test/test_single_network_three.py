@@ -246,3 +246,11 @@ def test_multiple_deploys_at_once(
         assert (
             tmp.sort() == expected_deploy_counts_in_blocks.sort()
         ), "Unexpected deploy counts in blocks"
+
+
+def test_list_peers(three_node_network):
+    node = three_node_network.docker_nodes[0]
+    client = node.p_client.client
+    peers = client.list_peers()
+    logging.info(f"PEERS: {peers}")
+    assert len(list(peers)) == 2
