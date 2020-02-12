@@ -105,6 +105,7 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
                   case (v, b) => Block.Justification(v, b)
                 }
               )
+              .withState(Block.GlobalState().withBonds(era.bonds))
           )
           .withBlockHash(blockHashes.next())
       }
@@ -175,6 +176,40 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
       isSyncedRef.get,
       leaderSequencer
     )(syncId, makeSemaphoreId, C, DS, ES, FS, FC)
+
+  def childEraRuntime(
+      era: Era,
+      validator: Option[String] = none,
+      roundExponent: Int = 0,
+      leaderSequencer: LeaderSequencer = LeaderSequencer,
+      isSyncedRef: Ref[Id, Boolean] = Ref.of[Id, Boolean](true),
+      messageProducer: String => BlockDagStorage[Id] => MessageProducer[Id] = defaultMessageProducer,
+      config: HighwayConf = conf
+  )(
+      implicit
+      C: Clock[Id],
+      DS: BlockDagStorage[Id],
+      ES: EraStorage[Id],
+      FS: FinalityStorage[Id],
+      FC: ForkChoice[Id]
+  ) =
+    EraRuntime.fromEra[Id](
+      config,
+      era,
+      validator.map(v => messageProducer(v)(DS)),
+      roundExponent,
+      isSyncedRef.get,
+      leaderSequencer
+    )(syncId, makeSemaphoreId, C, DS, ES, FS, FC)
+
+  // Make it easier to share common dependencies.
+  trait Fixture {
+    implicit val C  = TestClock.adjustable[Id](date(2019, 12, 9))
+    implicit val DS = defaultBlockDagStorage
+    implicit val ES = MockEraStorage[Id]
+    implicit val FS = defaultFinalityStorage
+    implicit val FC = defaultForkChoice
+  }
 
   /** Fill the DagStorage with blocks at a fixed interval along the era,
     * right up to and including the switch block. */
@@ -573,10 +608,37 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
           }
         }
 
+        "the fork choice is in a previous era" should {
+          "not respond" in {
+            new Fixture {
+              val runtime = genesisEraRuntime("Alice".some, leaderSequencer = mockSequencer(leader))
+              val switch  = insert(makeBlock(leader, runtime.era, runtime.endTick))
+              val childEra = runtime
+                .handleMessage(switch)
+                .written
+                .collect {
+                  case HighwayEvent.CreatedEra(era) => era
+                }
+                .head
+              val childRuntime =
+                childEraRuntime(childEra, "Alice".some, leaderSequencer = mockSequencer(leader))
+
+              // Now set to fork choice to something that's not the switch block yet.
+              FC.set(insert(makeBlock("Bob", runtime.era, runtime.startTick)))
+              // Set the clock forward so the block is accepted.
+              C.set(childRuntime.start)
+
+              val msg    = insert(makeBlock(leader, childRuntime.era, childRuntime.startTick))
+              val events = childRuntime.handleMessage(msg).written
+              events shouldBe empty
+            }
+          }
+        }
+
         "it is not from the leader" should {
           "ignore the block" in {
             val msg = makeBlock("Bob", runtime.era, runtime.startTick)
-            // These will fail validation but in case they didn't, don't repond.
+            // These will fail validation but in case they didn't, don't respond.
             runtime.handleMessage(msg).written shouldBe empty
           }
         }
@@ -818,6 +880,10 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
               a.action shouldBe an[Agenda.CreateOmegaMessage]
             }
           }
+        }
+
+        "the fork choice points at a previous era" should {
+          "skip the round" in (pending)
         }
       }
 
@@ -1103,6 +1169,9 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
             case HighwayEvent.CreatedOmegaMessage(_) =>
           }
         }
+      }
+      "the fork choice points at a previous era" should {
+        "skip the round" in (pending)
       }
     }
   }

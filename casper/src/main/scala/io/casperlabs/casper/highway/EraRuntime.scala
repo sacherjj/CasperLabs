@@ -193,6 +193,18 @@ class EraRuntime[F[_]: MonadThrowable: Clock: EraStorage: FinalityStorageReader:
       case _                            => noop
     }
 
+  /** Build a block or ballot unless the fork choice is at the moment not something
+    * that we can legally use, for example because it was reverted to some pre-midnight
+    * block in the parent era. The fork choice will not pick something in a sibling era,
+    * because it always starts from the key block of *this* era, and the sibling eras
+    * have different key blocks, so it should be enough to check that the round ID of
+    * the fork choice is earlier than the start of this era.
+    */
+  private def ifCanBuildOn[T](choice: ForkChoice.Result)(build: => F[T]): F[Option[T]] =
+    // Doesn't apply on Genesis.
+    if (!choice.block.parentBlock.isEmpty && choice.block.roundId < startTick) none.pure[F]
+    else build.map(_.some)
+
   private def createLambdaResponse(
       messageProducer: MessageProducer[F],
       lambdaMessage: Message
@@ -216,18 +228,19 @@ class EraRuntime[F[_]: MonadThrowable: Clock: EraStorage: FinalityStorageReader:
                            lambdaMessage.eraId,
                            justifications.values.flatten.toSet
                          )
-                message <- messageProducer.ballot(
-                            keyBlockHash = era.keyBlockHash,
-                            roundId = Ticks(lambdaMessage.roundId),
-                            target = choice.block.messageHash,
-                            justifications = justifications
-                          )
-              } yield message
+                maybeMessage <- ifCanBuildOn(choice) {
+                                 messageProducer
+                                   .ballot(
+                                     keyBlockHash = era.keyBlockHash,
+                                     roundId = Ticks(lambdaMessage.roundId),
+                                     target = choice.block.messageHash,
+                                     justifications = justifications
+                                   )
+                               }
+              } yield maybeMessage
             }
           }
-      _ <- HighwayLog.tell[F] {
-            HighwayEvent.CreatedLambdaResponse(b)
-          }
+      _ <- b.fold(noop)(ballot => HighwayLog.tell[F](HighwayEvent.CreatedLambdaResponse(ballot)))
     } yield ()
   }
 
