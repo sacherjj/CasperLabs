@@ -213,10 +213,10 @@ class ScoresSpec extends FlatSpec with Matchers {
       validatorC -> 10
     )
 
-    // val expectedTip = tieBreaker(List(b1, a2, c1), weights)
+    val expectedTip = tieBreaker(List(b1, a2, c1), weights)
 
     val fixture = new TipFixture(blocks)
-    fixture.assertTip(weights, a1, c1)
+    fixture.assertTip(weights, a1, expectedTip)
   }
 
   it should "return correct tip as soon as it has majority of the votes" in {
@@ -271,5 +271,33 @@ class ScoresSpec extends FlatSpec with Matchers {
 
     val fixture = new TipFixture(blocks)
     fixture.assertTip(weights, a1, expectedTip)
+  }
+
+  it should "return correct tip when there's a score tie between uneven branches of the tree" in {
+    //   a1
+    //  /
+    // g
+    //  \
+    //   b1 - b2
+    //
+    // Even though there's a tie between a1 and b1
+    // it doesn't matter since we start assigning weights "from the top"
+    // where b2 gets 50% of all weights and is "alone" at that level.
+
+    val g  = createBlock(validatorA, randomBlockHash, 0)
+    val a1 = createBlock(validatorA, g.blockHash, 1)
+    val b1 = createBlock(validatorB, g.blockHash, 1)
+    val b2 = createBlock(validatorB, b1.blockHash, 2)
+
+    val blocks = List(g, a1, b1, b2)
+
+    // No validator on its own has majority of votes.
+    val weights: Map[ByteString, Int] = Map(
+      validatorA -> 10,
+      validatorB -> 10
+    )
+
+    val fixture = new TipFixture(blocks)
+    fixture.assertTip(weights, g, b2)
   }
 }
