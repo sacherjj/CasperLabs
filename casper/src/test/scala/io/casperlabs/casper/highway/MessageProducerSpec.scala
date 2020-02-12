@@ -17,7 +17,9 @@ import io.casperlabs.casper.scalatestcontrib._
 import monix.eval.Task
 import org.scalatest._
 import scala.concurrent.duration._
+import com.github.ghik.silencer.silent
 
+@silent("is never used")
 class MessageProducerSpec extends FlatSpec with Matchers with Inspectors with HighwayFixture {
 
   behavior of "collectEquivocators"
@@ -201,5 +203,61 @@ class MessageProducerSpec extends FlatSpec with Matchers with Inspectors with Hi
                 } shouldBeF ballots.map(_.blockSummary)
           } yield ()
       }
+  }
+
+  behavior of "collectEras"
+
+  it should "return eras up until the one the key block was built in" in testFixture {
+    implicit timer => implicit db =>
+      new Fixture(eraDuration) {
+        // Make an era tree where we'll put some equivocations into various ones
+        // in the hierarchy and check that the right ones are gathered.
+        // eA - eB
+        //    \ eC - eD
+        //         \ eE - eF
+
+        val alice = new MockMessageProducer[Task]("Alice")
+        val bob   = new MockMessageProducer[Task]("Bob")
+
+        def erasUntil(era: Era): Task[List[ByteString]] =
+          MessageProducer.collectEras[Task](era.keyBlockHash).map(_.map(_.keyBlockHash))
+
+        override def test =
+          for {
+            _ <- insertGenesis()
+
+            eA   <- addGenesisEra()
+            eAa1 <- eA.block(alice, genesis.messageHash)
+            eAb1 <- eA.block(bob, eAa1)
+
+            eB   <- eA.addChildEra(eAb1)
+            eBa1 <- eB.block(alice, eAb1)
+            eBb1 <- eB.block(bob, eBa1)
+
+            eC   <- eA.addChildEra(eAb1)
+            eCa1 <- eC.block(alice, eAb1)
+            eCb1 <- eC.block(bob, eCa1)
+
+            eD   <- eC.addChildEra(eAa1)
+            eDa1 <- eD.block(alice, eCb1)
+            eDb1 <- eD.block(bob, eDa1)
+
+            eE   <- eC.addChildEra(eAa1)
+            eEa1 <- eE.block(alice, eCb1)
+            eEb1 <- eE.block(bob, eEa1)
+
+            eF   <- eE.addChildEra(eCb1)
+            eFa1 <- eF.block(alice, eEb1)
+            eFb1 <- eF.block(bob, eFa1)
+
+            _ <- erasUntil(eA) shouldBeF List(eA.keyBlockHash)
+            _ <- erasUntil(eB) shouldBeF List(eA.keyBlockHash, eB.keyBlockHash)
+            _ <- erasUntil(eC) shouldBeF List(eA.keyBlockHash, eC.keyBlockHash)
+            _ <- erasUntil(eD) shouldBeF List(eA.keyBlockHash, eC.keyBlockHash, eD.keyBlockHash)
+            _ <- erasUntil(eE) shouldBeF List(eA.keyBlockHash, eC.keyBlockHash, eE.keyBlockHash)
+            _ <- erasUntil(eF) shouldBeF List(eC.keyBlockHash, eE.keyBlockHash, eF.keyBlockHash)
+          } yield ()
+      }
+
   }
 }
