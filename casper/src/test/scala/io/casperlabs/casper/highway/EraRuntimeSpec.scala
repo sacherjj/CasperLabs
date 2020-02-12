@@ -105,6 +105,7 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
                   case (v, b) => Block.Justification(v, b)
                 }
               )
+              .withState(Block.GlobalState().withBonds(era.bonds))
           )
           .withBlockHash(blockHashes.next())
       }
@@ -175,6 +176,77 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
       isSyncedRef.get,
       leaderSequencer
     )(syncId, makeSemaphoreId, C, DS, ES, FS, FC)
+
+  /** Create a runtime given an era that's supposedly the child era of another one;
+    * otherwise we should be using `genesisEraRuntime` instead. For the same reason
+    * this one's not using any default values for the implicits: they should be
+    * shared with the parent. Only practical to be used inside `Fixture`.
+    */
+  def childEraRuntime(
+      era: Era,
+      validator: Option[String] = none,
+      roundExponent: Int = 0,
+      leaderSequencer: LeaderSequencer = LeaderSequencer,
+      isSyncedRef: Ref[Id, Boolean] = Ref.of[Id, Boolean](true),
+      messageProducer: String => BlockDagStorage[Id] => MessageProducer[Id] = defaultMessageProducer,
+      config: HighwayConf = conf
+  )(
+      implicit
+      C: Clock[Id],
+      DS: BlockDagStorage[Id],
+      ES: EraStorage[Id],
+      FS: FinalityStorage[Id],
+      FC: ForkChoice[Id]
+  ) =
+    EraRuntime.fromEra[Id](
+      config,
+      era,
+      validator.map(v => messageProducer(v)(DS)),
+      roundExponent,
+      isSyncedRef.get,
+      leaderSequencer
+    )(syncId, makeSemaphoreId, C, DS, ES, FS, FC)
+
+  // Make it easier to share common dependencies.
+  // TODO (NODE-1199): Use HighwayFixture instead for all tests.
+  trait Fixture {
+    implicit val C  = TestClock.adjustable[Id](date(2019, 12, 9))
+    implicit val DS = defaultBlockDagStorage
+    implicit val ES = MockEraStorage[Id]
+    implicit val FS = defaultFinalityStorage
+    implicit val FC = defaultForkChoice
+  }
+
+  // Prepare a child era.
+  abstract class ParentChildFixture(isLeaderInChild: Boolean) extends Fixture {
+    val validator = "Alice"
+    val leader    = if (isLeaderInChild) validator else "Charlie"
+
+    // Using the validator to lead the parent so it can create its own switch block.
+    val parentRuntime =
+      genesisEraRuntime(validator.some, leaderSequencer = mockSequencer(validator))
+
+    // Make a switch block.
+    private val switchEvents = parentRuntime
+      .handleAgenda(Agenda.StartRound(parentRuntime.endTick))
+      .written
+
+    private val childEra = switchEvents.collectFirst {
+      case HighwayEvent.CreatedEra(era) => era
+    }.get
+
+    private val switchBlock = switchEvents.collectFirst {
+      case HighwayEvent.CreatedLambdaMessage(msg: Message.Block) => msg
+    }.get
+
+    val childRuntime =
+      childEraRuntime(childEra, validator.some, leaderSequencer = mockSequencer(leader))
+
+    // Set the fork choice to the switch so we can build on it.
+    FC.set(switchBlock)
+    // Set the clock forward so the next message is accepted.
+    C.set(childRuntime.start)
+  }
 
   /** Fill the DagStorage with blocks at a fixed interval along the era,
     * right up to and including the switch block. */
@@ -573,10 +645,25 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
           }
         }
 
+        "the fork choice points to a previous era" should {
+          "not respond" in {
+            new ParentChildFixture(isLeaderInChild = false) {
+              val msg = insert(makeBlock(leader, childRuntime.era, childRuntime.startTick))
+
+              // By default it should respond.
+              childRuntime.handleMessage(msg).written should not be empty
+
+              FC.set(insert(makeBlock(leader, parentRuntime.era, parentRuntime.startTick)))
+
+              childRuntime.handleMessage(msg).written shouldBe empty
+            }
+          }
+        }
+
         "it is not from the leader" should {
           "ignore the block" in {
             val msg = makeBlock("Bob", runtime.era, runtime.startTick)
-            // These will fail validation but in case they didn't, don't repond.
+            // These will fail validation but in case they didn't, don't respond.
             runtime.handleMessage(msg).written shouldBe empty
           }
         }
@@ -816,6 +903,25 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
           "schedule an omega message" in {
             forExactly(1, agenda) { a =>
               a.action shouldBe an[Agenda.CreateOmegaMessage]
+            }
+          }
+        }
+
+        "the fork choice points at a previous era" should {
+          "skip the round" in {
+            new ParentChildFixture(isLeaderInChild = true) {
+              // By default we should be able to create a lambda.
+              childRuntime
+                .handleAgenda(Agenda.StartRound(childRuntime.startTick))
+                .written should not be empty
+
+              FC.set(insert(makeBlock(leader, parentRuntime.era, parentRuntime.startTick)))
+
+              val (events, agenda) =
+                childRuntime.handleAgenda(Agenda.StartRound(Ticks(childRuntime.startTick + 1))).run
+
+              events shouldBe empty
+              agenda should not be empty
             }
           }
         }
@@ -1101,6 +1207,22 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
             runtime.handleAgenda(Agenda.CreateOmegaMessage(runtime.endTick)).written
           assertEvent(events) {
             case HighwayEvent.CreatedOmegaMessage(_) =>
+          }
+        }
+      }
+      "the fork choice points at a previous era" should {
+        "skip the round" in {
+          new ParentChildFixture(isLeaderInChild = false) {
+            // By default it should create an omega.
+            childRuntime
+              .handleAgenda(Agenda.CreateOmegaMessage(childRuntime.startTick))
+              .written should not be empty
+
+            FC.set(insert(makeBlock(leader, parentRuntime.era, parentRuntime.startTick)))
+
+            childRuntime
+              .handleAgenda(Agenda.CreateOmegaMessage(Ticks(childRuntime.startTick + 1)))
+              .written shouldBe empty
           }
         }
       }
