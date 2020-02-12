@@ -310,28 +310,6 @@ steps:
   - rust-compile-test-bors
   - sbt-test-docker-bors
 
-- name: try-cargo-publish-bors
-  commands:
-  - "cd execution-engine"
-  - "make check-publish"
-  image: "casperlabs/buildenv:latest"
-  when:
-    branch:
-    - staging
-    - trying
-    changeset:
-      includes:
-      - "**/.drone.yml"
-      - "**/**.rs"
-      - "**/**.proto"
-      - "**/Cargo.lock"
-      - "**/Cargo.toml"
-      - "**/casperlabs-engine-grpc-server.spec"
-      - "**/rustfmt.toml"
-  depends_on:
-  - rust-compile-test-bors
-  - sbt-test-docker-bors
-
 - name: run-rust-benchmarks-bors
   commands:
   - "cd execution-engine"
