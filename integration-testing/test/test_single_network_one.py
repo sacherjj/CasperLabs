@@ -12,7 +12,6 @@ from casperlabs_local_net.errors import NonZeroExitCodeError
 from casperlabs_local_net.wait import (
     wait_for_block_hash_propagated_to_all_nodes,
     wait_for_no_new_deploys,
-    wait_for_deploy_status_state_not_pending,
 )
 from casperlabs_client.crypto import blake2b_hash
 from casperlabs_client.abi import ABI
@@ -1028,7 +1027,7 @@ def test_invalid_bigint(one_node_network):
                       "--session-args", cli.format_json_str(args))
     # fmt: on
 
-    wait_for_deploy_status_state_not_pending(node, deploy_hash, 30)
+    node.p_client.wait_for_deploy_processed(deploy_hash, on_error_raise=False, delay=1, timeout_seconds=30)
 
     status = node.d_client.show_deploy(deploy_hash).status
     assert status.state == "DISCARDED"
