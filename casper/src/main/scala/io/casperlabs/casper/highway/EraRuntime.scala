@@ -302,18 +302,21 @@ class EraRuntime[F[_]: MonadThrowable: Clock: EraStorage: FinalityStorageReader:
     for {
       m <- HighwayLog.liftF {
             messageProducer.withPermit {
-              for {
-                choice <- ForkChoice[F].fromKeyBlock(era.keyBlockHash)
-                message <- messageProducer.ballot(
-                            keyBlockHash = era.keyBlockHash,
-                            roundId = roundId,
-                            target = choice.block.messageHash,
-                            justifications = choice.justificationsMap
-                          )
-              } yield message
+              ForkChoice[F].fromKeyBlock(era.keyBlockHash) flatMap { choice =>
+                ifCanBuildOn(choice) {
+                  messageProducer.ballot(
+                    keyBlockHash = era.keyBlockHash,
+                    roundId = roundId,
+                    target = choice.block.messageHash,
+                    justifications = choice.justificationsMap
+                  )
+                }
+              }
             }
           }
-      _ <- HighwayLog.tell[F](HighwayEvent.CreatedOmegaMessage(m))
+      _ <- m.fold(noop) { msg =>
+            HighwayLog.tell[F](HighwayEvent.CreatedOmegaMessage(msg))
+          }
     } yield ()
   }
 

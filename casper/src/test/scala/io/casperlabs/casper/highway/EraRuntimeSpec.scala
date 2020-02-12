@@ -642,20 +642,14 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
         "the fork choice points to a previous era" should {
           "not respond" in {
             new ParentChildFixture(isLeaderInChild = false) {
-              FC.set(insert(makeBlock(leader, parentRuntime.era, parentRuntime.startTick)))
-              val msg    = insert(makeBlock(leader, childRuntime.era, childRuntime.startTick))
-              val events = childRuntime.handleMessage(msg).written
-              events shouldBe empty
-            }
-          }
-        }
+              val msg = insert(makeBlock(leader, childRuntime.era, childRuntime.startTick))
 
-        "the fork choice points at the switch block" should {
-          "create a lambda message" in {
-            new ParentChildFixture(isLeaderInChild = false) {
-              val msg    = insert(makeBlock(leader, childRuntime.era, childRuntime.startTick))
-              val events = childRuntime.handleMessage(msg).written
-              events should not be empty
+              // By default it should respond.
+              childRuntime.handleMessage(msg).written should not be empty
+
+              FC.set(insert(makeBlock(leader, parentRuntime.era, parentRuntime.startTick)))
+
+              childRuntime.handleMessage(msg).written shouldBe empty
             }
           }
         }
@@ -907,22 +901,19 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
           }
         }
 
-        "the fork choice points at the switch block" should {
-          "create a lambda message" in {
-            new ParentChildFixture(isLeaderInChild = true) {
-              val events =
-                childRuntime.handleAgenda(Agenda.StartRound(childRuntime.startTick)).written
-              events should not be empty
-            }
-          }
-        }
-
         "the fork choice points at a previous era" should {
           "skip the round" in {
             new ParentChildFixture(isLeaderInChild = true) {
+              // By default we should be able to create a lambda.
+              childRuntime
+                .handleAgenda(Agenda.StartRound(childRuntime.startTick))
+                .written should not be empty
+
               FC.set(insert(makeBlock(leader, parentRuntime.era, parentRuntime.startTick)))
+
               val (events, agenda) =
-                childRuntime.handleAgenda(Agenda.StartRound(childRuntime.startTick)).run
+                childRuntime.handleAgenda(Agenda.StartRound(Ticks(childRuntime.startTick + 1))).run
+
               events shouldBe empty
               agenda should not be empty
             }
@@ -1214,7 +1205,20 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
         }
       }
       "the fork choice points at a previous era" should {
-        "skip the round" in (pending)
+        "skip the round" in {
+          new ParentChildFixture(isLeaderInChild = false) {
+            // By default it should create an omega.
+            childRuntime
+              .handleAgenda(Agenda.CreateOmegaMessage(childRuntime.startTick))
+              .written should not be empty
+
+            FC.set(insert(makeBlock(leader, parentRuntime.era, parentRuntime.startTick)))
+
+            childRuntime
+              .handleAgenda(Agenda.CreateOmegaMessage(Ticks(childRuntime.startTick + 1)))
+              .written shouldBe empty
+          }
+        }
       }
     }
   }
