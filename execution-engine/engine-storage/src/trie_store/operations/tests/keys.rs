@@ -2,7 +2,6 @@ mod partial_tries {
     use engine_shared::newtypes::CorrelationId;
 
     use crate::{
-        error::{self, in_memory},
         transaction_source::{Transaction, TransactionSource},
         trie::Trie,
         trie_store::operations::{
@@ -34,13 +33,13 @@ mod partial_tries {
             };
             let actual = {
                 let txn = context.environment.create_read_txn().unwrap();
-                let mut tmp = operations::keys::<TestKey, TestValue, _, _, error::Error>(
+                let mut tmp = operations::keys::<TestKey, TestValue, _, _>(
                     correlation_id,
                     &txn,
                     &context.store,
                     &root_hash,
                 )
-                .unwrap();
+                .collect::<Vec<TestKey>>();
                 txn.commit().unwrap();
                 tmp.sort();
                 tmp
@@ -69,13 +68,13 @@ mod partial_tries {
             };
             let actual = {
                 let txn = context.environment.create_read_txn().unwrap();
-                let mut tmp = operations::keys::<TestKey, TestValue, _, _, in_memory::Error>(
+                let mut tmp = operations::keys::<TestKey, TestValue, _, _>(
                     correlation_id,
                     &txn,
                     &context.store,
                     &root_hash,
                 )
-                .unwrap();
+                .collect::<Vec<TestKey>>();
                 txn.commit().unwrap();
                 tmp.sort();
                 tmp
@@ -89,7 +88,6 @@ mod full_tries {
     use engine_shared::newtypes::{Blake2bHash, CorrelationId};
 
     use crate::{
-        error::in_memory,
         transaction_source::{Transaction, TransactionSource},
         trie::Trie,
         trie_store::operations::{
@@ -127,13 +125,13 @@ mod full_tries {
                 };
                 let actual = {
                     let txn = context.environment.create_read_txn().unwrap();
-                    let mut tmp = operations::keys::<TestKey, TestValue, _, _, in_memory::Error>(
+                    let mut tmp = operations::keys::<TestKey, TestValue, _, _>(
                         correlation_id,
                         &txn,
                         &context.store,
                         &state,
                     )
-                    .unwrap();
+                    .collect::<Vec<TestKey>>();
                     txn.commit().unwrap();
                     tmp.sort();
                     tmp
