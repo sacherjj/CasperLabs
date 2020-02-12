@@ -358,6 +358,19 @@ class AllNodesHaveBlockHashes:
         )
 
 
+class DeployStateStatusNotPending:
+
+    PENDING = 1
+
+    def __init__(self, node: DockerNode, deploy_hash: str):
+        self.node = node
+        self.deploy_hash = deploy_hash
+
+    def is_satisfied(self) -> bool:
+        state = self.node.p_client.show_deploy(self.deploy_hash).status.state
+        return state != self.PENDING
+
+
 def wait_on_using_wall_clock_time(
     predicate: PredicateProtocol, timeout_seconds: int
 ) -> None:
@@ -548,3 +561,10 @@ def wait_for_clarity_started(node: DockerNode, startup_timeout: int, times: int 
 def wait_for_selenium_started(node: DockerNode, startup_timeout: int, times: int = 1):
     predicate = SeleniumServerStarted(node, times)
     wait_on_using_wall_clock_time(predicate, startup_timeout)
+
+
+def wait_for_deploy_status_state_not_pending(
+    node: DockerNode, deploy_hash: str, timeout: int
+):
+    predicate = DeployStateStatusNotPending(node, deploy_hash)
+    wait_on_using_wall_clock_time(predicate, timeout)
