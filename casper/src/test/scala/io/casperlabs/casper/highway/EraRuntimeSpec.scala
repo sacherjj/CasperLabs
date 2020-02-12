@@ -177,6 +177,11 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
       leaderSequencer
     )(syncId, makeSemaphoreId, C, DS, ES, FS, FC)
 
+  /** Create a runtime given an era that's supposedly the child era of another one;
+    * otherwise we should be using `genesisEraRuntime` instead. For the same reason
+    * this one's not using any default values for the implicits: they should be
+    * shared with the parent. Only practical to be used inside `Fixture`.
+    */
   def childEraRuntime(
       era: Era,
       validator: Option[String] = none,
@@ -203,6 +208,7 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
     )(syncId, makeSemaphoreId, C, DS, ES, FS, FC)
 
   // Make it easier to share common dependencies.
+  // TODO (NODE-1199): Use HighwayFixture instead for all tests.
   trait Fixture {
     implicit val C  = TestClock.adjustable[Id](date(2019, 12, 9))
     implicit val DS = defaultBlockDagStorage
