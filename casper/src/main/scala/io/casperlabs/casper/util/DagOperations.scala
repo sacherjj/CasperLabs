@@ -570,25 +570,18 @@ object DagOperations {
             val msgCreator = message.validatorId
             if (validators.contains(msgCreator)) {
               Left(
-                latestMessages
-                  .get(msgCreator)
-                  .fold(
+                latestMessages(msgCreator) match {
+                  case Honest(prevMsg) =>
+                    if (prevMessages(msgCreator).validatorPrevMessageHash == message.messageHash)
+                      (latestMessages, prevMessages.updated(msgCreator, message))
+                    else (latestMessages.updated(msgCreator, Equivocated), prevMessages)
+                  case Empty =>
                     (
-                      latestMessages + (msgCreator -> Honest(message)),
-                      prevMessages + (msgCreator   -> message)
+                      latestMessages.updated(msgCreator, Honest(message)),
+                      prevMessages.updated(msgCreator, message)
                     )
-                  ) {
-                    case Honest(prevMsg) =>
-                      if (prevMessages(msgCreator).validatorPrevMessageHash == message.messageHash)
-                        (latestMessages, prevMessages.updated(msgCreator, message))
-                      else (latestMessages.updated(msgCreator, Equivocated), prevMessages)
-                    case Empty =>
-                      (
-                        latestMessages.updated(msgCreator, Honest(message)),
-                        prevMessages.updated(msgCreator, message)
-                      )
-                    case Equivocated => (latestMessages, prevMessages)
-                  }
+                  case Equivocated => (latestMessages, prevMessages)
+                }
               )
             } else Left((latestMessages, prevMessages))
           }
