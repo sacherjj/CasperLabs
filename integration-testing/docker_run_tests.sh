@@ -4,14 +4,18 @@ set -e
 
 if [[ -n $DRONE_BUILD_NUMBER ]]; then
     export TAG_NAME=DRONE-${DRONE_BUILD_NUMBER}
+    # Using last 2 digits of build number for 2nd octet of subnet
+    # This will be unique across runs close in time.  We should
+    # never have a run within 100 of the next one.
+    padded_drone="0${DRONE_BUILD_NUMBER}"
+    # If I don't pad, I'm getting nothing off the -2 as it is outside of string len
+    subnet_second_octet=${padded_drone: -2}
 else
     export TAG_NAME="latest"
+    subnet_second_octet=0
 fi
 
-# Passing all arguments to this script into docker startup for run_tests.sh
-#export TEST_RUN_ARGS="$@"
-
-# Parse out unique_run_number arg to use number on unique elements needed for running in docker.
+# Parse out unique_run_number arg.
 while [[ $# -gt 0 ]]
 do
 key=$1
@@ -23,17 +27,18 @@ case $key in
     shift # past value
     ;;
     *)    # unknown option
+    echo "Unknown argument: ${key}"
+    exit 1
     shift # past argument
     ;;
 esac
 done
 
-if [ -z ${UNIQUE_RUN_NUM} ]; then
-    export UNIQUE_RUN_NUM=0
-fi
+# Make 0 if not set
+export UNIQUE_RUN_NUM="${UNIQUE_RUN_NUM:-0}"
 
 echo "UNIQUE_RUN_NUM  = ${UNIQUE_RUN_NUM}"
-RUN_NAME="RUN${UNIQUE_RUN_NUM}"
+RUN_NAME="RUN${UNIQUE_RUN_NUM}-${TAG_NAME}"
 echo "RUN_NAME = ${RUN_NAME}"
 RUN_TAG_NAME="${TAG_NAME}-${UNIQUE_RUN_NUM}"
 echo "RUN_TAG_NAME = ${RUN_TAG_NAME}"
@@ -59,11 +64,19 @@ cleanup() {
 }
 trap cleanup 0
 
+# Generate second octet for subnet
+
+
 echo "Setting up networks for Python Client..."
 for num in $(seq 0 $MAX_NODE_COUNT)
 do
-    echo "Creating docker network 'cl-${RUN_TAG_NAME}-${num}'"
-    docker network create "cl-${RUN_TAG_NAME}-${num}"
+    # Both UNIQUE_RUN_NUM and num will be single digit.
+    third_octet="${UNIQUE_RUN_NUM}${num}"
+    subnet="192.${subnet_second_octet}.${third_octet}.0/24"
+    net_name="cl-${RUN_TAG_NAME}-${num}"
+    echo "Creating docker network '${net_name}' using subnet: ${subnet}..."
+    docker network create --subnet "${subnet}" "${net_name}"
+    docker network inspect "${net_name}" | grep Subnet
 done
 
 # Need to make network names in docker-compose.yml match tag based network.
@@ -75,10 +88,7 @@ sed 's/||TAG||/'"${RUN_TAG_NAME}"'/g' docker-compose.yml.template > "${RUN_NAME}
 # Replacing IMAGE_TAG which should not have UNIQUE_RUN_NUM
 sed -i.bak 's/||IMAGE_TAG||/'"${TAG_NAME}"'/g' "${RUN_NAME}/docker-compose.yml"
 
-pwd
 cd "${RUN_NAME}"
-pwd
-ls
 docker-compose up --exit-code-from test --abort-on-container-exit
 result_code=$?
 exit ${result_code}

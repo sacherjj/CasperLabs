@@ -425,7 +425,7 @@ steps:
   depends_on:
   - docker-build-key-bors
 
-- name: run-integration-tests-serial-0
+- name: run-integration-tests-parallel-0
   commands:
   - "apt-get update && apt-get -y install gcc"
   - "python3 -m pip install pipenv pytest dataclasses typing_extensions dataclasses grpcio grpcio_tools protobuf in-place ed25519 pyblake2 lz4"
@@ -466,7 +466,8 @@ steps:
     - staging
     - trying
   depends_on:
-  - run-integration-tests-serial-0
+  - docker-build-ee-int-bors
+  - docker-build-explorer-bors
 
 - name: run-integration-tests-parallel-2
   commands:
@@ -487,28 +488,8 @@ steps:
     - staging
     - trying
   depends_on:
-  - run-integration-tests-serial-0
-
-- name: run-integration-tests-parallel-3
-  commands:
-  - "apt-get update && apt-get -y install gcc"
-  - "python3 -m pip install pipenv pytest dataclasses typing_extensions dataclasses grpcio grpcio_tools protobuf in-place ed25519 pyblake2 lz4"
-  - "cd integration-testing"
-  - "./docker_run_tests.sh --unique_run_num 3"
-  environment:
-    _JAVA_OPTIONS: "-Xms2G -Xmx2G -XX:MaxMetaspaceSize=1G"
-  image: "casperlabs/buildenv:latest"
-  volumes:
-  - name: docker_sock
-    path: "/var/run/docker.sock"
-  - name: temp
-    path: "/tmp"
-  when:
-    branch:
-    - staging
-    - trying
-  depends_on:
-  - run-integration-tests-serial-0
+  - docker-build-ee-int-bors
+  - docker-build-explorer-bors
 
 # The below section is for post-bors push webhooks
 - name: rust-compile-for-make

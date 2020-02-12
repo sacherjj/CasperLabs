@@ -10,7 +10,7 @@ if [[ -n $TAG_NAME ]] && [[ "$TAG_NAME" != "latest" ]]; then
     PYTEST_ARGS="${PYTEST_ARGS} --maxfail=3 --tb=short"
 else
     # We want to compile contracts if run locally
-    ./build_contracts.sh
+    ./build_contracts.sh || echo "build_contracts.sh Failed. Only OK if running locally."
 fi
 
 if [[ "$TEST_RUN_ARGS" == "" ]]; then
@@ -24,7 +24,7 @@ pipenv sync
 pipenv run client/CasperLabsClient/install.sh
 
 # Cannot get the quoted -k arguments passed in via variable replacement.
-# I would love to do that if someone can show me where I'm messing up.
+# So I'm doing the full line via case.
 case ${UNIQUE_RUN_NUM} in
   [0])
   pipenv run pytest -k "R0" ${PYTEST_ARGS} ${TEST_RUN_ARGS}

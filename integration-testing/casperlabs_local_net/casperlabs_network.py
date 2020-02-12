@@ -653,9 +653,6 @@ class ThreeNodeNetworkWithTwoBootstraps(CasperLabsNetwork):
         for node in self.docker_nodes:
             wait_for_node_started(node, 30, 1)
 
-        logging.info(
-            f"{self.docker_nodes[1].config.bootstrap_address} == {self.docker_nodes[0].address}"
-        )
         assert (
             self.docker_nodes[1].config.bootstrap_address
             == self.docker_nodes[0].address
