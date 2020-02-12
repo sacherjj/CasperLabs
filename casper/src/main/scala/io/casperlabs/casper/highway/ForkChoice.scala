@@ -175,32 +175,29 @@ object ForkChoice {
         dag       <- DagStorage[F].getRepresentation
         keyBlock  <- dag.lookupBlockUnsafe(keyBlockHash)
         keyBlocks <- MessageProducer.collectKeyBlocks[F](keyBlockHash)
-        equivocators <- keyBlocks
-                         .traverse(dag.latestMessagesInEra(_).map(_.filter(_._2.size > 1).keySet))
-                         .map(_.flatten.toSet)
+        eraLatestMessages <- keyBlocks
+                              .traverse(kb => dag.latestMessagesInEra(kb).map(kb -> _))
+                              .map(_.toMap)
+        equivocators = eraLatestMessages.filter(_._2.size > 1).keySet
         (forkChoice, justifications) <- keyBlocks
                                          .foldM(
                                            keyBlock -> Map
                                              .empty[DagRepresentation.Validator, Set[Message]]
                                          ) {
                                            case ((startBlock, accLatestMessages), currKeyBlock) =>
-                                             dag
-                                               .latestMessagesInEra(currKeyBlock)
-                                               .flatMap { latestMessages =>
-                                                 eraForkChoice(
-                                                   dag,
-                                                   currKeyBlock,
-                                                   startBlock,
-                                                   latestMessages,
-                                                   equivocators
-                                                 ).map {
-                                                   case (forkChoice, eraLatestMessages) =>
-                                                     (
-                                                       forkChoice,
-                                                       accLatestMessages |+| eraLatestMessages
-                                                     )
-                                                 }
-                                               }
+                                             eraForkChoice(
+                                               dag,
+                                               currKeyBlock,
+                                               startBlock,
+                                               eraLatestMessages(currKeyBlock),
+                                               equivocators
+                                             ).map {
+                                               case (forkChoice, eraLatestMessages) =>
+                                                 (
+                                                   forkChoice,
+                                                   accLatestMessages |+| eraLatestMessages
+                                                 )
+                                             }
                                          }
       } yield Result(forkChoice, justifications.values.flatten.toSet)
 
