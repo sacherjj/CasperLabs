@@ -1,7 +1,5 @@
 package io.casperlabs.crypto.codec
 
-import scala.util.Try
-
 object Base16 {
   def encode(input: Array[Byte]): String = bytes2hex(input, None)
 

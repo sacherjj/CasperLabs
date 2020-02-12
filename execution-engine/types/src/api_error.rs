@@ -1,3 +1,5 @@
+//! Contains [`ApiError`] and associated helper functions.
+
 use core::{
     fmt::{self, Debug, Formatter},
     u16, u8,
@@ -25,13 +27,262 @@ const POS_ERROR_OFFSET: u32 = RESERVED_ERROR_MAX - u8::MAX as u32; // 65280..=65
 /// added to them when being converted to a `u32`.
 const MINT_ERROR_OFFSET: u32 = (POS_ERROR_OFFSET - 1) - u8::MAX as u32; // 65024..=65279
 
-/// Variants to be passed to `runtime::revert()`.
+/// Errors which can be encountered while running a smart contract.
 ///
-/// Variants other than `Error::User` will represent a `u32` in the range `(0, u16::MAX]`, while
-/// `Error::User` will represent a `u32` in the range `(u16::MAX, 2 * u16::MAX + 1]`.
+/// An `ApiError` can be converted to a `u32` in order to be passed via the execution engine's
+/// `ext_ffi::revert()` function.  This means the information each variant can convey is limited.
+///
+/// The variants are split into numeric ranges as follows:
+///
+/// | Inclusive range | Variant(s)                                   |
+/// | ----------------| ---------------------------------------------|
+/// | [1, 65023]      | all except `Mint`, `ProofOfStake` and `User` |
+/// | [65024, 65279]  | `Mint`                                       |
+/// | [65280, 65535]  | `ProofOfStake`                               |
+/// | [65536, 131071] | `User`                                       |
+///
+/// ## Mappings
+///
+/// The expanded mapping of all variants to their numerical equivalents is as follows:
+/// ```
+/// # use casperlabs_types::ApiError::{self, *};
+/// # macro_rules! show_and_check {
+/// #     ($lhs:literal => $rhs:expr) => {
+/// #         assert_eq!($lhs as u32, ApiError::from($rhs).into());
+/// #     };
+/// # }
+/// // General system errors:
+/// # show_and_check!(
+/// 1 => None
+/// # );
+/// # show_and_check!(
+/// 2 => MissingArgument
+/// # );
+/// # show_and_check!(
+/// 3 => InvalidArgument
+/// # );
+/// # show_and_check!(
+/// 4 => Deserialize
+/// # );
+/// # show_and_check!(
+/// 5 => Read
+/// # );
+/// # show_and_check!(
+/// 6 => ValueNotFound
+/// # );
+/// # show_and_check!(
+/// 7 => ContractNotFound
+/// # );
+/// # show_and_check!(
+/// 8 => GetKey
+/// # );
+/// # show_and_check!(
+/// 9 => UnexpectedKeyVariant
+/// # );
+/// # show_and_check!(
+/// 10 => UnexpectedContractRefVariant
+/// # );
+/// # show_and_check!(
+/// 11 => InvalidPurseName
+/// # );
+/// # show_and_check!(
+/// 12 => InvalidPurse
+/// # );
+/// # show_and_check!(
+/// 13 => UpgradeContractAtURef
+/// # );
+/// # show_and_check!(
+/// 14 => Transfer
+/// # );
+/// # show_and_check!(
+/// 15 => NoAccessRights
+/// # );
+/// # show_and_check!(
+/// 16 => CLTypeMismatch
+/// # );
+/// # show_and_check!(
+/// 17 => EarlyEndOfStream
+/// # );
+/// # show_and_check!(
+/// 18 => Formatting
+/// # );
+/// # show_and_check!(
+/// 19 => LeftOverBytes
+/// # );
+/// # show_and_check!(
+/// 20 => OutOfMemory
+/// # );
+/// # show_and_check!(
+/// 21 => MaxKeysLimit
+/// # );
+/// # show_and_check!(
+/// 22 => DuplicateKey
+/// # );
+/// # show_and_check!(
+/// 23 => PermissionDenied
+/// # );
+/// # show_and_check!(
+/// 24 => MissingKey
+/// # );
+/// # show_and_check!(
+/// 25 => ThresholdViolation
+/// # );
+/// # show_and_check!(
+/// 26 => KeyManagementThreshold
+/// # );
+/// # show_and_check!(
+/// 27 => DeploymentThreshold
+/// # );
+/// # show_and_check!(
+/// 28 => InsufficientTotalWeight
+/// # );
+/// # show_and_check!(
+/// 29 => InvalidSystemContract
+/// # );
+/// # show_and_check!(
+/// 30 => PurseNotCreated
+/// # );
+/// # show_and_check!(
+/// 31 => Unhandled
+/// # );
+/// # show_and_check!(
+/// 32 => BufferTooSmall
+/// # );
+/// # show_and_check!(
+/// 33 => HostBufferEmpty
+/// # );
+/// # show_and_check!(
+/// 34 => HostBufferFull
+/// # );
+///
+/// // Mint errors:
+/// use casperlabs_types::system_contract_errors::mint::Error as MintError;
+/// # show_and_check!(
+/// 65_024 => MintError::InsufficientFunds
+/// # );
+/// # show_and_check!(
+/// 65_025 => MintError::SourceNotFound
+/// # );
+/// # show_and_check!(
+/// 65_026 => MintError::DestNotFound
+/// # );
+/// # show_and_check!(
+/// 65_027 => MintError::InvalidURef
+/// # );
+/// # show_and_check!(
+/// 65_028 => MintError::InvalidAccessRights
+/// # );
+/// # show_and_check!(
+/// 65_029 => MintError::InvalidNonEmptyPurseCreation
+/// # );
+/// # show_and_check!(
+/// 65_030 => MintError::Storage
+/// # );
+/// # show_and_check!(
+/// 65_031 => MintError::PurseNotFound
+/// # );
+///
+/// // Proof of stake errors:
+/// use casperlabs_types::system_contract_errors::pos::Error as PosError;
+/// # show_and_check!(
+/// 65_280 => PosError::NotBonded
+/// # );
+/// # show_and_check!(
+/// 65_281 => PosError::TooManyEventsInQueue
+/// # );
+/// # show_and_check!(
+/// 65_282 => PosError::CannotUnbondLastValidator
+/// # );
+/// # show_and_check!(
+/// 65_283 => PosError::SpreadTooHigh
+/// # );
+/// # show_and_check!(
+/// 65_284 => PosError::MultipleRequests
+/// # );
+/// # show_and_check!(
+/// 65_285 => PosError::BondTooSmall
+/// # );
+/// # show_and_check!(
+/// 65_286 => PosError::BondTooLarge
+/// # );
+/// # show_and_check!(
+/// 65_287 => PosError::UnbondTooLarge
+/// # );
+/// # show_and_check!(
+/// 65_288 => PosError::BondTransferFailed
+/// # );
+/// # show_and_check!(
+/// 65_289 => PosError::UnbondTransferFailed
+/// # );
+/// # show_and_check!(
+/// 65_290 => PosError::TimeWentBackwards
+/// # );
+/// # show_and_check!(
+/// 65_291 => PosError::StakesNotFound
+/// # );
+/// # show_and_check!(
+/// 65_292 => PosError::PaymentPurseNotFound
+/// # );
+/// # show_and_check!(
+/// 65_293 => PosError::PaymentPurseKeyUnexpectedType
+/// # );
+/// # show_and_check!(
+/// 65_294 => PosError::PaymentPurseBalanceNotFound
+/// # );
+/// # show_and_check!(
+/// 65_295 => PosError::BondingPurseNotFound
+/// # );
+/// # show_and_check!(
+/// 65_296 => PosError::BondingPurseKeyUnexpectedType
+/// # );
+/// # show_and_check!(
+/// 65_297 => PosError::RefundPurseKeyUnexpectedType
+/// # );
+/// # show_and_check!(
+/// 65_298 => PosError::RewardsPurseNotFound
+/// # );
+/// # show_and_check!(
+/// 65_299 => PosError::RewardsPurseKeyUnexpectedType
+/// # );
+/// # show_and_check!(
+/// 65_300 => PosError::StakesKeyDeserializationFailed
+/// # );
+/// # show_and_check!(
+/// 65_301 => PosError::StakesDeserializationFailed
+/// # );
+/// # show_and_check!(
+/// 65_302 => PosError::SystemFunctionCalledByUserAccount
+/// # );
+/// # show_and_check!(
+/// 65_303 => PosError::InsufficientPaymentForAmountSpent
+/// # );
+/// # show_and_check!(
+/// 65_304 => PosError::FailedTransferToRewardsPurse
+/// # );
+/// # show_and_check!(
+/// 65_305 => PosError::FailedTransferToAccountPurse
+/// # );
+/// # show_and_check!(
+/// 65_306 => PosError::SetRefundPurseCalledOutsidePayment
+/// # );
+///
+/// // User-defined errors:
+/// # show_and_check!(
+/// 65_536 => User(0)
+/// # );
+/// # show_and_check!(
+/// 65_537 => User(1)
+/// # );
+/// # show_and_check!(
+/// 65_538 => User(2)
+/// # );
+/// # show_and_check!(
+/// 131_071 => User(u16::max_value())
+/// # );
+/// ```
 ///
 /// Users can specify a C-style enum and implement `From` to ease usage of
-/// `runtime::revert()`, e.g.
+/// `casperlabs_contract::runtime::revert()`, e.g.
 /// ```
 /// use casperlabs_types::ApiError;
 ///
@@ -62,78 +313,79 @@ pub enum ApiError {
     InvalidArgument,
     /// Failed to deserialize a value.
     Deserialize,
-    /// `read` returned an error.
+    /// `casperlabs_contract::storage::read()` returned an error.
     Read,
     /// The given key returned a `None` value.
     ValueNotFound,
     /// Failed to find a specified contract.
     ContractNotFound,
-    /// A call to `get_key()` returned a failure.
+    /// A call to `casperlabs_contract::runtime::get_key()` returned a failure.
     GetKey,
-    /// The `Key` variant was not as expected.
+    /// The [`Key`](crate::Key) variant was not as expected.
     UnexpectedKeyVariant,
-    /// The `Value` variant was not as expected.
-    UnexpectedValueVariant,
-    /// The `ContractRef` variant was not as expected.
+    /// The [`ContractRef`](crate::ContractRef) variant was not as expected.
     UnexpectedContractRefVariant,
     /// Invalid purse name given.
     InvalidPurseName,
     /// Invalid purse retrieved.
     InvalidPurse,
-    /// Failed to upgrade contract at URef.
+    /// Failed to upgrade contract at [`URef`](crate::URef).
     UpgradeContractAtURef,
     /// Failed to transfer motes.
     Transfer,
-    /// No access rights.
+    /// The given [`URef`](crate::URef) has no access rights.
     NoAccessRights,
-    /// A given type could be derived from a `Value`.
-    ValueConversion,
-    /// A given type could be derived from a `CLValue`.
+    /// A given type could not be constructed from a [`CLValue`](crate::CLValue).
     CLTypeMismatch,
-    /// Early end of stream when deserializing.
+    /// Early end of stream while deserializing.
     EarlyEndOfStream,
-    /// Formatting error.
-    FormattingError,
-    /// Leftover bytes.
+    /// Formatting error while deserializing.
+    Formatting,
+    /// Not all input bytes were consumed in [`deserialize`](crate::bytesrepr::deserialize).
     LeftOverBytes,
     /// Out of memory error.
-    OutOfMemoryError,
-    /// Unable to add new associated key because maximum amount of keys is reached.
+    OutOfMemory,
+    /// There are already [`MAX_ASSOCIATED_KEYS`](crate::account::MAX_ASSOCIATED_KEYS)
+    /// [`PublicKey`](crate::account::PublicKey)s associated with the given account.
     MaxKeysLimit,
-    /// Unable to add new associated key because given key already exists.
+    /// The given [`PublicKey`](crate::account::PublicKey) is already associated with the given
+    /// account.
     DuplicateKey,
-    /// Unable to add/update/remove new associated key due to insufficient permissions.
+    /// Caller doesn't have sufficient permissions to perform the given action.
     PermissionDenied,
-    /// Unable to update/remove a key that does exist.
+    /// The given [`PublicKey`](crate::account::PublicKey) is not associated with the given
+    /// account.
     MissingKey,
-    /// Unable to update/remove a key which would violate action threshold constraints.
+    /// Removing/updating the given associated [`PublicKey`](crate::account::PublicKey) would cause
+    /// the total [`Weight`](crate::account::Weight) of all remaining `PublicKey`s to fall below
+    /// one of the action thresholds for the given account.
     ThresholdViolation,
-    /// New threshold should be lower or equal than deployment threshold.
-    KeyManagementThresholdError,
-    /// New threshold should be lower or equal than key management threshold.
-    DeploymentThresholdError,
-    /// Unable to set action threshold due to insufficient permissions.
-    PermissionDeniedError,
-    /// New threshold should be lower or equal than total weight of associated keys.
+    /// Setting the key-management threshold to a value lower than the deployment threshold is
+    /// disallowed.
+    KeyManagementThreshold,
+    /// Setting the deployment threshold to a value greater than any other threshold is disallowed.
+    DeploymentThreshold,
+    /// Setting a threshold to a value greater than the total weight of associated keys is
+    /// disallowed.
     InsufficientTotalWeight,
-    /// Returns when contract tries to obtain URef to a system contract that does not exist.
+    /// The given `u32` doesn't map to a [`SystemContractType`](crate::SystemContractType).
     InvalidSystemContract,
     /// Failed to create a new purse.
     PurseNotCreated,
     /// An unhandled value, likely representing a bug in the code.
     Unhandled,
-    /// Passing a buffer of a size that is too small to complete an operation
+    /// The provided buffer is too small to complete an operation.
     BufferTooSmall,
     /// No data available in the host buffer.
     HostBufferEmpty,
-    /// Data in the host buffer is full and should be consumed first by read operation
+    /// The host buffer has been set to a value and should be consumed first by a read operation.
     HostBufferFull,
     /// Error specific to Mint contract.
     Mint(u8),
     /// Error specific to Proof of Stake contract.
     ProofOfStake(u8),
-    /// User-specified value.  The internal `u16` value is added to `u16::MAX as u32 + 1` when an
-    /// `Error::User` is converted to a `u32`.
+    /// User-specified error code.  The internal `u16` value is added to `u16::MAX as u32 + 1` when
+    /// an `Error::User` is converted to a `u32`.
     User(u16),
 }
 
@@ -141,9 +393,9 @@ impl From<bytesrepr::Error> for ApiError {
     fn from(error: bytesrepr::Error) -> Self {
         match error {
             bytesrepr::Error::EarlyEndOfStream => ApiError::EarlyEndOfStream,
-            bytesrepr::Error::FormattingError => ApiError::FormattingError,
+            bytesrepr::Error::Formatting => ApiError::Formatting,
             bytesrepr::Error::LeftOverBytes => ApiError::LeftOverBytes,
-            bytesrepr::Error::OutOfMemoryError => ApiError::OutOfMemoryError,
+            bytesrepr::Error::OutOfMemory => ApiError::OutOfMemory,
         }
     }
 }
@@ -181,11 +433,9 @@ impl From<RemoveKeyFailure> for ApiError {
 impl From<SetThresholdFailure> for ApiError {
     fn from(error: SetThresholdFailure) -> Self {
         match error {
-            SetThresholdFailure::KeyManagementThresholdError => {
-                ApiError::KeyManagementThresholdError
-            }
-            SetThresholdFailure::DeploymentThresholdError => ApiError::DeploymentThresholdError,
-            SetThresholdFailure::PermissionDeniedError => ApiError::PermissionDeniedError,
+            SetThresholdFailure::KeyManagementThreshold => ApiError::KeyManagementThreshold,
+            SetThresholdFailure::DeploymentThreshold => ApiError::DeploymentThreshold,
+            SetThresholdFailure::PermissionDeniedError => ApiError::PermissionDenied,
             SetThresholdFailure::InsufficientTotalWeight => ApiError::InsufficientTotalWeight,
         }
     }
@@ -200,6 +450,8 @@ impl From<CLValueError> for ApiError {
     }
 }
 
+// This conversion is not intended to be used by third party crates.
+#[doc(hidden)]
 impl From<TryFromIntError> for ApiError {
     fn from(_error: TryFromIntError) -> Self {
         ApiError::Unhandled
@@ -236,34 +488,31 @@ impl From<ApiError> for u32 {
             ApiError::ContractNotFound => 7,
             ApiError::GetKey => 8,
             ApiError::UnexpectedKeyVariant => 9,
-            ApiError::UnexpectedValueVariant => 10,
-            ApiError::UnexpectedContractRefVariant => 11,
-            ApiError::InvalidPurseName => 12,
-            ApiError::InvalidPurse => 13,
-            ApiError::UpgradeContractAtURef => 14,
-            ApiError::Transfer => 15,
-            ApiError::NoAccessRights => 16,
-            ApiError::ValueConversion => 17,
-            ApiError::CLTypeMismatch => 18,
-            ApiError::EarlyEndOfStream => 19,
-            ApiError::FormattingError => 20,
-            ApiError::LeftOverBytes => 21,
-            ApiError::OutOfMemoryError => 22,
-            ApiError::MaxKeysLimit => 23,
-            ApiError::DuplicateKey => 24,
-            ApiError::PermissionDenied => 25,
-            ApiError::MissingKey => 26,
-            ApiError::ThresholdViolation => 27,
-            ApiError::KeyManagementThresholdError => 28,
-            ApiError::DeploymentThresholdError => 29,
-            ApiError::PermissionDeniedError => 30,
-            ApiError::InsufficientTotalWeight => 31,
-            ApiError::InvalidSystemContract => 32,
-            ApiError::PurseNotCreated => 33,
-            ApiError::Unhandled => 34,
-            ApiError::BufferTooSmall => 35,
-            ApiError::HostBufferEmpty => 36,
-            ApiError::HostBufferFull => 37,
+            ApiError::UnexpectedContractRefVariant => 10,
+            ApiError::InvalidPurseName => 11,
+            ApiError::InvalidPurse => 12,
+            ApiError::UpgradeContractAtURef => 13,
+            ApiError::Transfer => 14,
+            ApiError::NoAccessRights => 15,
+            ApiError::CLTypeMismatch => 16,
+            ApiError::EarlyEndOfStream => 17,
+            ApiError::Formatting => 18,
+            ApiError::LeftOverBytes => 19,
+            ApiError::OutOfMemory => 20,
+            ApiError::MaxKeysLimit => 21,
+            ApiError::DuplicateKey => 22,
+            ApiError::PermissionDenied => 23,
+            ApiError::MissingKey => 24,
+            ApiError::ThresholdViolation => 25,
+            ApiError::KeyManagementThreshold => 26,
+            ApiError::DeploymentThreshold => 27,
+            ApiError::InsufficientTotalWeight => 28,
+            ApiError::InvalidSystemContract => 29,
+            ApiError::PurseNotCreated => 30,
+            ApiError::Unhandled => 31,
+            ApiError::BufferTooSmall => 32,
+            ApiError::HostBufferEmpty => 33,
+            ApiError::HostBufferFull => 34,
             ApiError::Mint(value) => MINT_ERROR_OFFSET + u32::from(value),
             ApiError::ProofOfStake(value) => POS_ERROR_OFFSET + u32::from(value),
             ApiError::User(value) => RESERVED_ERROR_MAX + 1 + u32::from(value),
@@ -283,7 +532,6 @@ impl Debug for ApiError {
             ApiError::ContractNotFound => write!(f, "ApiError::ContractNotFound")?,
             ApiError::GetKey => write!(f, "ApiError::GetKey")?,
             ApiError::UnexpectedKeyVariant => write!(f, "ApiError::UnexpectedKeyVariant")?,
-            ApiError::UnexpectedValueVariant => write!(f, "ApiError::UnexpectedValueVariant")?,
             ApiError::UnexpectedContractRefVariant => {
                 write!(f, "ApiError::UnexpectedContractRefVariant")?
             }
@@ -292,22 +540,18 @@ impl Debug for ApiError {
             ApiError::UpgradeContractAtURef => write!(f, "ApiError::UpgradeContractAtURef")?,
             ApiError::Transfer => write!(f, "ApiError::Transfer")?,
             ApiError::NoAccessRights => write!(f, "ApiError::NoAccessRights")?,
-            ApiError::ValueConversion => write!(f, "ApiError::ValueConversion")?,
             ApiError::CLTypeMismatch => write!(f, "ApiError::CLTypeMismatch")?,
             ApiError::EarlyEndOfStream => write!(f, "ApiError::EarlyEndOfStream")?,
-            ApiError::FormattingError => write!(f, "ApiError::FormattingError")?,
+            ApiError::Formatting => write!(f, "ApiError::Formatting")?,
             ApiError::LeftOverBytes => write!(f, "ApiError::LeftOverBytes")?,
-            ApiError::OutOfMemoryError => write!(f, "ApiError::OutOfMemoryError")?,
+            ApiError::OutOfMemory => write!(f, "ApiError::OutOfMemory")?,
             ApiError::MaxKeysLimit => write!(f, "ApiError::MaxKeysLimit")?,
             ApiError::DuplicateKey => write!(f, "ApiError::DuplicateKey")?,
             ApiError::PermissionDenied => write!(f, "ApiError::PermissionDenied")?,
             ApiError::MissingKey => write!(f, "ApiError::MissingKey")?,
             ApiError::ThresholdViolation => write!(f, "ApiError::ThresholdViolation")?,
-            ApiError::KeyManagementThresholdError => {
-                write!(f, "ApiError::KeyManagementThresholdError")?
-            }
-            ApiError::DeploymentThresholdError => write!(f, "ApiError::DeploymentThresholdError")?,
-            ApiError::PermissionDeniedError => write!(f, "ApiError::PermissionDeniedError")?,
+            ApiError::KeyManagementThreshold => write!(f, "ApiError::KeyManagementThreshold")?,
+            ApiError::DeploymentThreshold => write!(f, "ApiError::DeploymentThreshold")?,
             ApiError::InsufficientTotalWeight => write!(f, "ApiError::InsufficientTotalWeight")?,
             ApiError::InvalidSystemContract => write!(f, "ApiError::InvalidSystemContract")?,
             ApiError::PurseNotCreated => write!(f, "ApiError::PurseNotCreated")?,
@@ -323,6 +567,8 @@ impl Debug for ApiError {
     }
 }
 
+// This function is not intended to be used by third party crates.
+#[doc(hidden)]
 pub fn i32_from(result: Result<(), ApiError>) -> i32 {
     match result {
         Ok(()) => 0,
@@ -330,6 +576,9 @@ pub fn i32_from(result: Result<(), ApiError>) -> i32 {
     }
 }
 
+/// Converts an `i32` to a `Result<(), ApiError>`, where `0` represents `Ok(())`, and all other
+/// inputs are mapped to `Err(ApiError::<variant>)`.  The full list of mappings can be found in the
+/// [docs for `ApiError`](ApiError#mappings).
 pub fn result_from(value: i32) -> Result<(), ApiError> {
     match value {
         0 => Ok(()),
@@ -342,34 +591,31 @@ pub fn result_from(value: i32) -> Result<(), ApiError> {
         7 => Err(ApiError::ContractNotFound),
         8 => Err(ApiError::GetKey),
         9 => Err(ApiError::UnexpectedKeyVariant),
-        10 => Err(ApiError::UnexpectedValueVariant),
-        11 => Err(ApiError::UnexpectedContractRefVariant),
-        12 => Err(ApiError::InvalidPurseName),
-        13 => Err(ApiError::InvalidPurse),
-        14 => Err(ApiError::UpgradeContractAtURef),
-        15 => Err(ApiError::Transfer),
-        16 => Err(ApiError::NoAccessRights),
-        17 => Err(ApiError::ValueConversion),
-        18 => Err(ApiError::CLTypeMismatch),
-        19 => Err(ApiError::EarlyEndOfStream),
-        20 => Err(ApiError::FormattingError),
-        21 => Err(ApiError::LeftOverBytes),
-        22 => Err(ApiError::OutOfMemoryError),
-        23 => Err(ApiError::MaxKeysLimit),
-        24 => Err(ApiError::DuplicateKey),
-        25 => Err(ApiError::PermissionDenied),
-        26 => Err(ApiError::MissingKey),
-        27 => Err(ApiError::ThresholdViolation),
-        28 => Err(ApiError::KeyManagementThresholdError),
-        29 => Err(ApiError::DeploymentThresholdError),
-        30 => Err(ApiError::PermissionDeniedError),
-        31 => Err(ApiError::InsufficientTotalWeight),
-        32 => Err(ApiError::InvalidSystemContract),
-        33 => Err(ApiError::PurseNotCreated),
-        34 => Err(ApiError::Unhandled),
-        35 => Err(ApiError::BufferTooSmall),
-        36 => Err(ApiError::HostBufferEmpty),
-        37 => Err(ApiError::HostBufferFull),
+        10 => Err(ApiError::UnexpectedContractRefVariant),
+        11 => Err(ApiError::InvalidPurseName),
+        12 => Err(ApiError::InvalidPurse),
+        13 => Err(ApiError::UpgradeContractAtURef),
+        14 => Err(ApiError::Transfer),
+        15 => Err(ApiError::NoAccessRights),
+        16 => Err(ApiError::CLTypeMismatch),
+        17 => Err(ApiError::EarlyEndOfStream),
+        18 => Err(ApiError::Formatting),
+        19 => Err(ApiError::LeftOverBytes),
+        20 => Err(ApiError::OutOfMemory),
+        21 => Err(ApiError::MaxKeysLimit),
+        22 => Err(ApiError::DuplicateKey),
+        23 => Err(ApiError::PermissionDenied),
+        24 => Err(ApiError::MissingKey),
+        25 => Err(ApiError::ThresholdViolation),
+        26 => Err(ApiError::KeyManagementThreshold),
+        27 => Err(ApiError::DeploymentThreshold),
+        28 => Err(ApiError::InsufficientTotalWeight),
+        29 => Err(ApiError::InvalidSystemContract),
+        30 => Err(ApiError::PurseNotCreated),
+        31 => Err(ApiError::Unhandled),
+        32 => Err(ApiError::BufferTooSmall),
+        33 => Err(ApiError::HostBufferEmpty),
+        34 => Err(ApiError::HostBufferFull),
         _ => {
             if value > RESERVED_ERROR_MAX as i32 && value <= (2 * RESERVED_ERROR_MAX + 1) as i32 {
                 Err(ApiError::User(value as u16))
@@ -448,27 +694,24 @@ mod tests {
         round_trip(Err(ApiError::ContractNotFound));
         round_trip(Err(ApiError::GetKey));
         round_trip(Err(ApiError::UnexpectedKeyVariant));
-        round_trip(Err(ApiError::UnexpectedValueVariant));
         round_trip(Err(ApiError::UnexpectedContractRefVariant));
         round_trip(Err(ApiError::InvalidPurseName));
         round_trip(Err(ApiError::InvalidPurse));
         round_trip(Err(ApiError::UpgradeContractAtURef));
         round_trip(Err(ApiError::Transfer));
         round_trip(Err(ApiError::NoAccessRights));
-        round_trip(Err(ApiError::ValueConversion));
         round_trip(Err(ApiError::CLTypeMismatch));
         round_trip(Err(ApiError::EarlyEndOfStream));
-        round_trip(Err(ApiError::FormattingError));
+        round_trip(Err(ApiError::Formatting));
         round_trip(Err(ApiError::LeftOverBytes));
-        round_trip(Err(ApiError::OutOfMemoryError));
+        round_trip(Err(ApiError::OutOfMemory));
         round_trip(Err(ApiError::MaxKeysLimit));
         round_trip(Err(ApiError::DuplicateKey));
         round_trip(Err(ApiError::PermissionDenied));
         round_trip(Err(ApiError::MissingKey));
         round_trip(Err(ApiError::ThresholdViolation));
-        round_trip(Err(ApiError::KeyManagementThresholdError));
-        round_trip(Err(ApiError::DeploymentThresholdError));
-        round_trip(Err(ApiError::PermissionDeniedError));
+        round_trip(Err(ApiError::KeyManagementThreshold));
+        round_trip(Err(ApiError::DeploymentThreshold));
         round_trip(Err(ApiError::InsufficientTotalWeight));
         round_trip(Err(ApiError::InvalidSystemContract));
         round_trip(Err(ApiError::PurseNotCreated));

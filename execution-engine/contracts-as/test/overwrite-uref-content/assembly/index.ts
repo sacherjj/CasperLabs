@@ -13,11 +13,12 @@ export function call(): void {
     return;
   }
 
-  let uref = URef.fromBytes(urefBytes);
-  if (uref === null) {
+  let urefResult = URef.fromBytes(urefBytes);
+  if (urefResult.hasError()) {
     Error.fromErrorCode(ErrorCode.InvalidArgument).revert();
     return;
   }
+  let uref = urefResult.value;
 
   if (uref.isValid() == false){
     Error.fromUserError(1).revert();

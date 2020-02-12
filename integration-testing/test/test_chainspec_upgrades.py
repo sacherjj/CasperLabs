@@ -3,15 +3,14 @@ from casperlabs_local_net.cli import CLI
 from casperlabs_local_net.common import Contract
 
 
-def propose_and_get_cost(cli):
-    block_hash = cli("propose")
-    deployInfos = list(cli("show-deploys", block_hash))
-    if len(deployInfos) != 1:
-        raise Exception(f"Unexpected number of deploys: {len(deployInfos)}")
-    deployInfo = deployInfos[0]
-    if deployInfo.is_error:
-        raise Exception(f"error_message: {deployInfo.error_message}")
-    return deployInfo.cost, block_hash
+def get_cost_and_block_hash(node, deploy_hash):
+    client = node.p_client.client
+    result = client.wait_for_deploy_processed(deploy_hash)
+    last_processing_result = result.processing_results[0]
+    return (
+        last_processing_result.cost,
+        last_processing_result.block_info.summary.block_hash.hex(),
+    )
 
 
 # fmt: off
@@ -52,8 +51,8 @@ def check_upgrades_applied(network):
     )
 
     # First deploy
-    cli("deploy", "--payment-amount", 10000000, "--session", cli.resource(Contract.COUNTER_DEFINE))
-    propose_and_get_cost(cli)
+    deploy_hash = cli("deploy", "--payment-amount", 10000000, "--session", cli.resource(Contract.COUNTER_DEFINE))
+    get_cost_and_block_hash(node, deploy_hash)
 
     # When activation-point-rank of an upgrade is reached, and upgrade is executed,
     # the cost of execution should change.
@@ -79,13 +78,13 @@ def check_upgrades_applied(network):
         position = i + offset
         if position == upgrade_1 or position == upgrade_2:
             logging.info(f'Redeploying contract at position {position}')
-            cli("deploy", "--payment-amount", 10000000, "--session", cli.resource(Contract.COUNTER_DEFINE))
-            propose_and_get_cost(cli)
+            deploy_hash = cli("deploy", "--payment-amount", 10000000, "--session", cli.resource(Contract.COUNTER_DEFINE))
+            get_cost_and_block_hash(node, deploy_hash)
             # Add up, as another deploy shifts the block position
             offset += 1
 
-        cli("deploy", "--payment-amount", 10000000, "--session", cli.resource(Contract.COUNTER_CALL))
-        cost, block_hash = propose_and_get_cost(cli)
+        deploy_hash = cli("deploy", "--payment-amount", 10000000, "--session", cli.resource(Contract.COUNTER_CALL))
+        cost, block_hash = get_cost_and_block_hash(node, deploy_hash)
         if cost not in costs:
             logging.info(f"Execution cost at iteration {i}, is {cost}. ")
             costs.append(cost)

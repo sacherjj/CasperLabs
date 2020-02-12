@@ -6,18 +6,29 @@ use crate::{
     CLType, CLTyped,
 };
 
+/// Error while converting a [`CLValue`] into a given type.
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub struct CLTypeMismatch {
+    /// The [`CLType`] into which the `CLValue` was being converted.
     pub expected: CLType,
+    /// The actual underlying [`CLType`] of this `CLValue`, i.e. the type from which it was
+    /// constructed.
     pub found: CLType,
 }
 
+/// Error relating to [`CLValue`] operations.
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub enum CLValueError {
+    /// An error while serializing or deserializing the underlying data.
     Serialization(bytesrepr::Error),
+    /// A type mismatch while trying to convert a [`CLValue`] into a given type.
     Type(CLTypeMismatch),
 }
 
+/// A CasperLabs value, i.e. a value which can be stored and manipulated by smart contracts.
+///
+/// It holds the underlying data as a type-erased, serialized `Vec<u8>` and also holds the
+/// [`CLType`] of the underlying data as a separate member.
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub struct CLValue {
     cl_type: CLType,
@@ -63,6 +74,7 @@ impl CLValue {
         (self.cl_type, self.bytes)
     }
 
+    /// The [`CLType`] of the underlying data.
     pub fn cl_type(&self) -> &CLType {
         &self.cl_type
     }
@@ -72,7 +84,7 @@ impl CLValue {
         &self.bytes
     }
 
-    /// Returns the length of the `Vec<u8>` yielded after calling `self.to_bytes().unwrap()`.
+    /// Returns the length of the `Vec<u8>` yielded after calling `self.to_bytes()`.
     ///
     /// Note, this method doesn't actually serialize `self`, and hence is relatively cheap.
     pub fn serialized_len(&self) -> usize {
@@ -105,7 +117,7 @@ impl ToBytes for Vec<CLValue> {
     fn to_bytes(&self) -> Result<Vec<u8>, bytesrepr::Error> {
         let serialized_len = self.iter().map(CLValue::serialized_len).sum();
         if serialized_len > u32::max_value() as usize - U32_SERIALIZED_LENGTH {
-            return Err(bytesrepr::Error::OutOfMemoryError);
+            return Err(bytesrepr::Error::OutOfMemory);
         }
 
         let mut result = Vec::with_capacity(serialized_len);
@@ -122,7 +134,7 @@ impl ToBytes for Vec<CLValue> {
     fn into_bytes(self) -> Result<Vec<u8>, bytesrepr::Error> {
         let serialized_len = self.iter().map(CLValue::serialized_len).sum();
         if serialized_len > u32::max_value() as usize - U32_SERIALIZED_LENGTH {
-            return Err(bytesrepr::Error::OutOfMemoryError);
+            return Err(bytesrepr::Error::OutOfMemory);
         }
 
         let mut result = Vec::with_capacity(serialized_len);
@@ -149,26 +161,5 @@ impl FromBytes for Vec<CLValue> {
             bytes = remainder;
         }
         Ok((result, bytes))
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use std::{collections::BTreeMap, string::String};
-
-    use super::*;
-    use crate::bytesrepr::deserialize;
-
-    #[test]
-    fn ser_cl_value() {
-        let mut map: BTreeMap<String, u64> = BTreeMap::new();
-        map.insert(String::from("abc"), 1);
-        map.insert(String::from("xyz"), 2);
-        let v = CLValue::from_t(map.clone()).unwrap();
-        let ser_v = v.clone().into_bytes().unwrap();
-        let w = deserialize::<CLValue>(ser_v).unwrap();
-        assert_eq!(v, w);
-        let x = w.into_t().unwrap();
-        assert_eq!(map, x);
     }
 }

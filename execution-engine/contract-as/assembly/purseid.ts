@@ -1,11 +1,16 @@
 import {URef} from "./uref";
 import * as externals from "./externals";
-import {fromBytesU32} from "./bytesrepr";
 import {readHostBuffer} from "./index";
 import {U512} from "./bignum";
 import {Error, ErrorCode} from "./error";
-import {UREF_SERIALIZED_LENGTH, PURSE_ID_SERIALIZED_LENGTH} from "./constants";
+import {PURSE_ID_SERIALIZED_LENGTH} from "./constants";
+import {Result, Ref} from "./bytesrepr";
 
+export enum TransferredTo {
+    TransferError = -1,
+    ExistingAccount = 0,
+    NewAccount = 1,
+}
 
 export class PurseId {
     private uref: URef;
@@ -14,53 +19,46 @@ export class PurseId {
         this.uref = uref;
     }
 
-    static getMainPurse(): PurseId | null {
-        let data = new Uint8Array(PURSE_ID_SERIALIZED_LENGTH);
-        data.fill(0);
-        externals.get_main_purse(data.dataStart);
-        let uref = URef.fromBytes(data);
-        if (uref === null)
-            return null;
-        let purseId = new PurseId(uref);
-        return purseId;
-    }
-
     toBytes(): Array<u8>{
         return this.uref.toBytes();
     }
 
-    static fromBytes(bytes: Uint8Array): PurseId | null {
-        let uref = URef.fromBytes(bytes);
-        if(uref === null)
-            return null;
-        return new PurseId(uref);
+    static fromBytes(bytes: Uint8Array): Result<PurseId> {
+        let result = URef.fromBytes(bytes);
+        if (result.hasError()) {
+            return new Result<PurseId>(null, result.error, result.position);
+        }
+        let purseId = new PurseId(result.value);
+        let ref = new Ref<PurseId>(purseId);
+        return new Result<PurseId>(ref, result.error, result.position);
     }
 
-    static createPurse(): PurseId | null {
+    static create(): PurseId | null {
         let bytes = new Uint8Array(PURSE_ID_SERIALIZED_LENGTH);
         let ret = externals.create_purse(
             bytes.dataStart,
             bytes.length
             );
-        if (ret == 0){
+        let error = Error.fromResult(<u32>ret);
+        if (error !== null){
+            error.revert();
+            return null;
+        }
+
+        let urefResult = URef.fromBytes(bytes);
+        if (urefResult.hasError()) {
             Error.fromErrorCode(ErrorCode.PurseNotCreated).revert();
             return null;
         }
 
-        let uref = URef.fromBytes(bytes);
-        if(uref === null){
-            Error.fromErrorCode(ErrorCode.PurseNotCreated).revert();
-            return null;
-        }
-
-        return new PurseId(uref);
+        return new PurseId(urefResult.value);
     }
 
     asURef(): URef{
         return this.uref;
     }
 
-    getBalance(): u32 | null {
+    getBalance(): U512 | null {
         let sourceBytes = this.toBytes();
         let balanceSize = new Array<u32>(1);
         balanceSize[0] = 0;
@@ -79,15 +77,11 @@ export class PurseId {
             return null;
         }
 
-        let balance = fromBytesU32(bytes);
-        if (balance === null) {
-            return null;
-        }
-
-        return <u32>balance;
+        let balanceResult = U512.fromBytes(bytes);
+        return balanceResult.ok();
     }
 
-    transferToAccount(target: Uint8Array, amount: U512): i32 {
+    transferToAccount(target: Uint8Array, amount: U512): TransferredTo {
         let sourceBytes = this.toBytes();
         let targetBytes = new Array<u8>(target.length);
         for (let i = 0; i < target.length; i++) {
@@ -101,11 +95,15 @@ export class PurseId {
             sourceBytes.length,
             targetBytes.dataStart,
             targetBytes.length,
-            // NOTE: amount has U512 type but is not deserialized throughout the execution, as there's no direct replacement for big ints
             amountBytes.dataStart,
             amountBytes.length,
         );
-        return ret;
+
+        if (ret == TransferredTo.ExistingAccount)
+            return TransferredTo.ExistingAccount;
+        if (ret == TransferredTo.NewAccount)
+            return TransferredTo.NewAccount;
+        return TransferredTo.TransferError;
     }
 
     transferToPurse(target: PurseId, amount: U512): i32 {
@@ -122,5 +120,15 @@ export class PurseId {
             amountBytes.length,
         );
         return ret;
+    }
+
+    @operator("==")
+    equalsTo(other: PurseId): bool {
+        return this.uref == other.uref;
+    }
+
+    @operator("!=")
+    notEqualsTo(other: PurseId): bool {
+        return !this.uref.equalsTo(other.uref);
     }
 }

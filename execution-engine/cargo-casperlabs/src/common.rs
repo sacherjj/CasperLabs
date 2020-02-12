@@ -13,7 +13,7 @@ use crate::{dependency::Dependency, ARGS, FAILURE_EXIT_CODE};
 
 lazy_static! {
     pub static ref CL_CONTRACT: Dependency =
-        Dependency::new("casperlabs-contract", "0.22.0", "contract");
+        Dependency::new("casperlabs-contract", "0.1.0", "contract");
     pub static ref CL_TYPES: Dependency = Dependency::new("casperlabs-types", "0.1.0", "types");
 }
 
@@ -90,6 +90,17 @@ pub fn remove_file<P: AsRef<Path>>(path: P) {
         print_error_and_exit(&format!(
             ": failed to remove '{}': {}",
             path.as_ref().display(),
+            error
+        ));
+    }
+}
+
+pub fn copy_file<S: AsRef<Path>, D: AsRef<Path>>(source: S, destination: D) {
+    if let Err(error) = fs::copy(source.as_ref(), destination.as_ref()) {
+        print_error_and_exit(&format!(
+            ": failed to copy '{}' to '{}': {}",
+            source.as_ref().display(),
+            destination.as_ref().display(),
             error
         ));
     }

@@ -113,6 +113,7 @@ steps:
   commands:
   - "cd execution-engine"
   - "make setup"
+  - "make build-contracts-rs"
   - "make test-as test-contracts-as"
   image: "casperlabs/buildenv:latest"
   when:
@@ -120,16 +121,13 @@ steps:
     - pull_request
     changeset:
       includes:
-      - "**/contract-ffi-as/**"
+      - "**/contract-as/**"
       - "**/contracts-as/**"
-  depends_on:
-  - rust-compile-test-pr
 
 - name: run-cargo-fmt-pr
   commands:
   - "cd execution-engine"
   - "~/.cargo/bin/rustup toolchain install $(cat rust-toolchain)"
-  - "~/.cargo/bin/rustup component add --toolchain=$(cat rust-toolchain) rustfmt"
   - "make check-format"
   image: "casperlabs/buildenv:latest"
   when:
@@ -150,8 +148,7 @@ steps:
 - name: run-rust-lints-pr
   commands:
   - "cd execution-engine"
-  - "~/.cargo/bin/rustup toolchain install $(cat rust-toolchain)"
-  - "~/.cargo/bin/rustup component add --toolchain=$(cat rust-toolchain) clippy"
+  - "make setup-rs"
   - "make lint"
   image: "casperlabs/buildenv:latest"
   when:
@@ -200,6 +197,21 @@ steps:
       includes:
       - "**/.drone.yml"
       - "**/**.md"
+
+- name: black-and-flake8-bors
+  commands:
+  - "python3 -m pip install pipenv"
+  - "cd integration-testing"
+  - "./run_flake8_black.sh"
+  image: "casperlabs/buildenv:latest"
+  when:
+    branch:
+    - staging
+    - trying
+    changeset:
+      includes:
+      - "**/.drone.yml"
+      - "integration-testing/**"
 
 - name: sbt-test-docker-bors
   commands:
@@ -256,7 +268,6 @@ steps:
   commands:
   - "cd execution-engine"
   - "~/.cargo/bin/rustup toolchain install $(cat rust-toolchain)"
-  - "~/.cargo/bin/rustup component add --toolchain=$(cat rust-toolchain) rustfmt"
   - "make check-format"
   image: "casperlabs/buildenv:latest"
   when:
@@ -279,8 +290,7 @@ steps:
 - name: run-rust-lints-bors
   commands:
   - "cd execution-engine"
-  - "~/.cargo/bin/rustup toolchain install $(cat rust-toolchain)"
-  - "~/.cargo/bin/rustup component add --toolchain=$(cat rust-toolchain) clippy"
+  - "make setup-rs"
   - "make lint"
   image: "casperlabs/buildenv:latest"
   when:
@@ -325,8 +335,7 @@ steps:
 - name: run-rust-benchmarks-bors
   commands:
   - "cd execution-engine"
-  - "~/.cargo/bin/rustup toolchain install $(cat rust-toolchain)"
-  - "~/.cargo/bin/rustup target add --toolchain $(cat rust-toolchain) wasm32-unknown-unknown"
+  - "make setup-rs"
   - "make bench"
   image: "casperlabs/buildenv:latest"
   when:
@@ -486,6 +495,8 @@ steps:
     - master
     event:
     - push
+  depends_on:
+  - rust-compile-for-make
 
 - name: docker-key-gen-merge
   commands:
@@ -599,7 +610,7 @@ steps:
     event:
     - push
   depends_on:
-  - make-clean-before-package
+  - package-sbt-artifacts-merge
 
 - name: rsync-artifacts
   image: drillster/drone-rsync
@@ -822,9 +833,11 @@ steps:
   when:
     ref:
     - refs/tags/v*
+  depends_on:
+  - package-sbt-artifacts-tag
 
 - name: mac-ee-tarball-tag
-  image: appleboy/drone-ssh:latest
+  image: appleboy/drone-ssh:1.5.5
   environment:
     SSH_HOST:
       from_secret: mac-host
@@ -895,7 +908,7 @@ steps:
   - rsync-mac-tarball-tag
 
 - name: cleanup-mac-tag
-  image: appleboy/drone-ssh:latest
+  image: appleboy/drone-ssh:1.5.5
   environment:
     SSH_HOST:
       from_secret: mac-host
@@ -936,7 +949,7 @@ clone:
 
 steps:
 - name: mac-clone
-  image: appleboy/drone-ssh:latest
+  image: appleboy/drone-ssh:1.5.5
   environment:
     SSH_HOST:
       from_secret: mac-host
@@ -954,7 +967,7 @@ steps:
     - git clone -b dev https://github.com/CasperLabs/CasperLabs.git
 
 - name: build-node
-  image: appleboy/drone-ssh:latest
+  image: appleboy/drone-ssh:1.5.5
   environment:
     SSH_HOST:
       from_secret: mac-host
@@ -971,7 +984,7 @@ steps:
     - /usr/local/bin/sbt node/universal:stage
 
 - name: build-client
-  image: appleboy/drone-ssh:latest
+  image: appleboy/drone-ssh:1.5.5
   environment:
     SSH_HOST:
       from_secret: mac-host
@@ -988,7 +1001,7 @@ steps:
     - /usr/local/bin/sbt client/universal:stage
 
 - name: build-ee
-  image: appleboy/drone-ssh:latest
+  image: appleboy/drone-ssh:1.5.5
   environment:
     SSH_HOST:
       from_secret: mac-host
@@ -1008,7 +1021,7 @@ steps:
     - make build
 
 - name: cleanup-mac
-  image: appleboy/drone-ssh:latest
+  image: appleboy/drone-ssh:1.5.5
   environment:
     SSH_HOST:
       from_secret: mac-host

@@ -60,7 +60,6 @@ class CasperLabsNetwork:
     """
 
     grpc_encryption = False
-    auto_propose = False
     behind_proxy = False
     initial_motes = INITIAL_MOTES_AMOUNT
 
@@ -178,7 +177,6 @@ class CasperLabsNetwork:
                 node_private_key=account.private_key,
                 node_account=account,
                 grpc_encryption=self.grpc_encryption,
-                auto_propose=self.auto_propose,
                 behind_proxy=self.behind_proxy,
             )
 
@@ -348,7 +346,6 @@ class OneNodeNetwork(CasperLabsNetwork):
             initial_motes=self.initial_motes,
             node_account=account,
             grpc_encryption=self.grpc_encryption,
-            auto_propose=self.auto_propose,
         )
         return config
 
@@ -446,9 +443,9 @@ class OneNodeWithGRPCEncryption(OneNodeNetwork):
 
 
 class OneNodeWithAutoPropose(OneNodeNetwork):
-    auto_propose = True
     # TODO: enable encryption once asyncio client's gRPC encryption fixed
     # grpc_encryption = True
+    pass
 
 
 class OneNodeWithClarity(OneNodeNetwork):

@@ -1,4 +1,9 @@
-use core::{any::type_name, convert::TryFrom, fmt, marker::PhantomData};
+use core::{
+    any::type_name,
+    convert::TryFrom,
+    fmt::{self, Display, Formatter},
+    marker::PhantomData,
+};
 
 use hex_fmt::HexFmt;
 
@@ -23,7 +28,8 @@ impl fmt::Display for Error {
 // as one of the fields in order to be able to statically provide guarantees about how it can
 // operate on the keys.
 
-// URef with type information about what value is in the global state
+/// A typed [`URef`], i.e. one containing type information about the corresponding value referenced
+/// in global state.
 #[derive(Debug, Clone, PartialEq, Eq, Copy, Hash)]
 pub struct TURef<T> {
     addr: [u8; 32],
@@ -32,6 +38,7 @@ pub struct TURef<T> {
 }
 
 impl<T: CLTyped> TURef<T> {
+    /// Constructs a [`TURef`] from an address and access rights.
     pub fn new(addr: [u8; 32], access_rights: AccessRights) -> Self {
         TURef {
             addr,
@@ -40,6 +47,7 @@ impl<T: CLTyped> TURef<T> {
         }
     }
 
+    /// Constructs a [`TURef`] from a [`URef`].
     pub fn from_uref(uref: URef) -> Result<Self, Error> {
         if let Some(access_rights) = uref.access_rights() {
             let addr = uref.addr();
@@ -53,21 +61,24 @@ impl<T: CLTyped> TURef<T> {
         }
     }
 
+    /// Returns the address of this [`TURef`].
     pub fn addr(&self) -> [u8; 32] {
         self.addr
     }
 
+    /// Returns the access rights of this [`TURef`].
     pub fn access_rights(&self) -> AccessRights {
         self.access_rights
     }
 
+    /// Sets the access rights of this [`TURef`].
     pub fn set_access_rights(&mut self, access_rights: AccessRights) {
         self.access_rights = access_rights;
     }
 }
 
-impl<T> core::fmt::Display for TURef<T> {
-    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+impl<T> Display for TURef<T> {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(
             f,
             "TURef({}, {}; {})",

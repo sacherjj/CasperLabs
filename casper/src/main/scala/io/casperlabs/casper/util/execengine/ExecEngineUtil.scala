@@ -32,6 +32,7 @@ import io.casperlabs.storage.deploy.{DeployStorage, DeployStorageWriter}
 import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.metrics.implicits._
 import io.casperlabs.smartcontracts.ExecutionEngineService.CommitResult
+import scala.util.{Failure, Success}
 
 import scala.util.Either
 
@@ -294,20 +295,33 @@ object ExecEngineUtil {
       blocktime: Long,
       deploys: Seq[Deploy],
       protocolVersion: state.ProtocolVersion
-  )(eeExec: EEExecFun[F]): F[List[ProcessedDeployResult]] =
+  )(eeExec: EEExecFun[F]): F[List[ProcessedDeployResult]] = {
+    val (eeDeploys, goodDeploys, badArgs) =
+      deploys.foldLeft(
+        (Vector.empty[DeployItem], Vector.empty[Deploy], Vector.empty[PreconditionFailure])
+      ) {
+        case ((eeAcc, goodAcc, failAcc), deploy) =>
+          ProtoUtil.deployDataToEEDeploy(deploy) match {
+            case Failure(err) =>
+              val updated = failAcc :+ PreconditionFailure(deploy, err.getMessage)
+              (eeAcc, goodAcc, updated)
+
+            case Success(ipcDeploy) =>
+              (eeAcc :+ ipcDeploy, goodAcc :+ deploy, failAcc)
+          }
+      }
+
     for {
-      eeDeploys <- MonadThrowable[F].fromTry(
-                    deploys.toList.traverse(ProtoUtil.deployDataToEEDeploy[F](_))
-                  )
       results <- eeExec(prestate, blocktime, eeDeploys, protocolVersion).rethrow
       _ <- MonadThrowable[F]
             .raiseError[List[ProcessedDeployResult]](
               SmartContractEngineError(
-                s"Unexpected number of results (${results.size} vs ${deploys.size} expected."
+                s"Unexpected number of results (${results.size} vs ${goodDeploys.size} expected."
               )
             )
-            .whenA(results.size != deploys.size)
-    } yield zipDeploysResults(deploys, results)
+            .whenA(results.size != goodDeploys.size)
+    } yield zipDeploysResults(goodDeploys, results) ++ badArgs
+  }
 
   /** Chooses a set of commuting effects.
     *
@@ -400,7 +414,7 @@ object ExecEngineUtil {
       for {
         protocolVersion <- CasperLabsProtocol[F].protocolFromBlock(block)
         effectsRef      <- Ref[F].of(Map.empty[Int, Seq[TransformEntry]])
-        _ <- deploysGrouped.toList.foldLeftM(prestate) {
+        _ <- deploysGrouped.toList.sortBy(_._1).foldLeftM(prestate) {
               case (preStateHash, (stage, deploys)) =>
                 val eeCommitCaptureEffects: EECommitFun[F] =
                   (preState, transforms, protocol) =>

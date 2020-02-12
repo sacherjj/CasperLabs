@@ -20,13 +20,13 @@ impl TryFrom<ipc::QueryRequest> for QueryRequest {
             }
             state_hash
                 .try_into()
-                .map_err(|_| MappingError::TryFromSliceError)?
+                .map_err(|_| MappingError::TryFromSlice)?
         };
 
         let key = query_request
             .take_base_key()
             .try_into()
-            .map_err(MappingError::ParsingError)?;
+            .map_err(MappingError::Parsing)?;
 
         let path = query_request.take_path().into_vec();
 

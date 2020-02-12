@@ -1,71 +1,106 @@
-use engine_shared::{stored_value::StoredValue, transform::Transform};
-use engine_test_support::low_level::{
-    ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG,
+use std::convert::TryFrom;
+
+use engine_test_support::{
+    internal::{ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_GENESIS_CONFIG},
+    DEFAULT_ACCOUNT_ADDR,
 };
-use types::{Key, U512};
+use types::{bytesrepr::FromBytes, CLTyped, CLValue, Key, U512};
 
 const CONTRACT_NAMED_KEYS: &str = "named_keys.wasm";
 const EXPECTED_UREF_VALUE: u64 = 123_456_789u64;
 
-#[ignore]
-#[test]
-fn should_run_named_keys_contract() {
-    let exec_request =
-        ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, CONTRACT_NAMED_KEYS, ()).build();
+const KEY1: &str = "hello-world";
+const KEY2: &str = "big-value";
 
-    let result = InMemoryWasmTestBuilder::default()
-        .run_genesis(&DEFAULT_GENESIS_CONFIG)
+const COMMAND_CREATE_UREF1: &str = "create-uref1";
+const COMMAND_CREATE_UREF2: &str = "create-uref2";
+const COMMAND_REMOVE_UREF1: &str = "remove-uref1";
+const COMMAND_REMOVE_UREF2: &str = "remove-uref2";
+const COMMAND_TEST_READ_UREF1: &str = "test-read-uref1";
+const COMMAND_TEST_READ_UREF2: &str = "test-read-uref2";
+const COMMAND_INCREASE_UREF2: &str = "increase-uref2";
+const COMMAND_OVERWRITE_UREF2: &str = "overwrite-uref2";
+
+fn run_command(builder: &mut InMemoryWasmTestBuilder, command: &str) {
+    let exec_request =
+        ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, CONTRACT_NAMED_KEYS, (command,))
+            .build();
+    builder
         .exec(exec_request)
         .commit()
         .expect_success()
         .finish();
+}
 
-    let transforms = result.builder().get_transforms();
+fn read_value<T: CLTyped + FromBytes>(builder: &mut InMemoryWasmTestBuilder, key: Key) -> T {
+    CLValue::try_from(builder.query(None, key, &[]).expect("should have value"))
+        .expect("should have CLValue")
+        .into_t()
+        .expect("should convert successfully")
+}
 
-    assert_eq!(transforms.len(), 1);
+#[ignore]
+#[test]
+fn should_run_named_keys_contract() {
+    let mut builder = InMemoryWasmTestBuilder::default();
 
-    let transform = transforms
-        .get(0)
-        .expect("Should have at least one transform");
+    builder.run_genesis(&DEFAULT_GENESIS_CONFIG);
 
-    let string_value = transform
-        .iter()
-        .filter_map(|(k, v)| {
-            if let Transform::Write(StoredValue::CLValue(cl_value)) = v {
-                let s = cl_value.to_owned().into_t::<String>().ok()?;
-                if let Key::URef(_) = k {
-                    return Some(s);
-                }
-            }
-            None
-        })
-        .next()
-        .expect("Should have write string");
-    assert_eq!(string_value, "Hello, world!");
-    let u512_value = transform
-        .iter()
-        .filter_map(|(k, v)| {
-            if let Transform::Write(StoredValue::CLValue(cl_value)) = v {
-                let value = cl_value.to_owned().into_t::<U512>().ok()?;
-                if let Key::URef(_) = k {
-                    // Since payment code is enabled by default there are multiple writes of Uint512
-                    // type, so we narrow it down to the expected value.
-                    if value == U512::from(EXPECTED_UREF_VALUE) {
-                        return Some(());
-                    }
-                }
-            }
-            None
-        })
-        .next();
+    run_command(&mut builder, COMMAND_CREATE_UREF1);
 
-    assert!(u512_value.is_some(), "should have write uin512");
-
-    let account = result
-        .builder()
+    let account = builder
         .get_account(DEFAULT_ACCOUNT_ADDR)
-        .expect("Unable to get account transformation");
-    // Those named URefs are created, although removed at the end of the test
-    assert!(account.named_keys().get("URef1").is_none());
-    assert!(account.named_keys().get("URef2").is_none());
+        .expect("should have account");
+    assert!(account.named_keys().contains_key(KEY1));
+    assert!(!account.named_keys().contains_key(KEY2));
+
+    run_command(&mut builder, COMMAND_CREATE_UREF2);
+
+    let account = builder
+        .get_account(DEFAULT_ACCOUNT_ADDR)
+        .expect("should have account");
+    let uref1 = *account.named_keys().get(KEY1).expect("should have key");
+    let uref2 = *account.named_keys().get(KEY2).expect("should have key");
+    let value1: String = read_value(&mut builder, uref1);
+    let value2: U512 = read_value(&mut builder, uref2);
+    assert_eq!(value1, "Hello, world!");
+    assert_eq!(value2, U512::max_value());
+
+    run_command(&mut builder, COMMAND_TEST_READ_UREF1);
+
+    run_command(&mut builder, COMMAND_REMOVE_UREF1);
+
+    let account = builder
+        .get_account(DEFAULT_ACCOUNT_ADDR)
+        .expect("should have account");
+    assert!(!account.named_keys().contains_key(KEY1));
+    assert!(account.named_keys().contains_key(KEY2));
+
+    run_command(&mut builder, COMMAND_TEST_READ_UREF2);
+
+    run_command(&mut builder, COMMAND_INCREASE_UREF2);
+
+    let account = builder
+        .get_account(DEFAULT_ACCOUNT_ADDR)
+        .expect("should have account");
+    let uref2 = *account.named_keys().get(KEY2).expect("should have key");
+    let value2: U512 = read_value(&mut builder, uref2);
+    assert_eq!(value2, U512::zero());
+
+    run_command(&mut builder, COMMAND_OVERWRITE_UREF2);
+
+    let account = builder
+        .get_account(DEFAULT_ACCOUNT_ADDR)
+        .expect("should have account");
+    let uref2 = *account.named_keys().get(KEY2).expect("should have key");
+    let value2: U512 = read_value(&mut builder, uref2);
+    assert_eq!(value2, U512::from(EXPECTED_UREF_VALUE));
+
+    run_command(&mut builder, COMMAND_REMOVE_UREF2);
+
+    let account = builder
+        .get_account(DEFAULT_ACCOUNT_ADDR)
+        .expect("should have account");
+    assert!(!account.named_keys().contains_key(KEY1));
+    assert!(!account.named_keys().contains_key(KEY2));
 }

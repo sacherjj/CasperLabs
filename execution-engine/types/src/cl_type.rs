@@ -34,52 +34,64 @@ const CL_TYPE_TAG_TUPLE2: u8 = 19;
 const CL_TYPE_TAG_TUPLE3: u8 = 20;
 const CL_TYPE_TAG_ANY: u8 = 21;
 
+/// CasperLabs types, i.e. types which can be stored and manipulated by smart contracts.
+///
+/// Provides a description of the underlying data type of a [`CLValue`](crate::CLValue).
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub enum CLType {
-    // boolean primitive
+    /// `bool` primitive.
     Bool,
-    // signed numeric primitives
+    /// `i32` primitive.
     I32,
+    /// `i64` primitive.
     I64,
-    // unsigned numeric primitives
+    /// `u8` primitive.
     U8,
+    /// `u32` primitive.
     U32,
+    /// `u64` primitive.
     U64,
+    /// [`U128`] large unsigned integer type.
     U128,
+    /// [`U256`] large unsigned integer type.
     U256,
+    /// [`U512`] large unsigned integer type.
     U512,
-    // unit primitive
+    /// `()` primitive.
     Unit,
-    // string primitive
+    /// `String` primitive.
     String,
-    // system primitives
+    /// [`Key`] system type.
     Key,
+    /// [`URef`] system type.
     URef,
-    // optional type
+    /// `Option` of a `CLType`.
     Option(Box<CLType>),
-    // list type
+    /// Variable-length list of a single `CLType` (comparable to a `Vec`).
     List(Box<CLType>),
-    // fixed-length list type (equivalent to rust's array type)
+    /// Fixed-length list of a single `CLType` (comparable to a Rust array).
     FixedList(Box<CLType>, u32),
-    // result type
-    Result {
-        ok: Box<CLType>,
-        err: Box<CLType>,
-    },
-    // map type
+    /// `Result` with `Ok` and `Err` variants of `CLType`s.
+    #[allow(missing_docs)] // generated docs are explicit enough.
+    Result { ok: Box<CLType>, err: Box<CLType> },
+    /// Map with keys of a single `CLType` and values of a single `CLType`.
+    #[allow(missing_docs)] // generated docs are explicit enough.
     Map {
         key: Box<CLType>,
         value: Box<CLType>,
     },
-    // tuple types
+    /// 1-ary tuple of a `CLType`.
     Tuple1([Box<CLType>; 1]),
+    /// 2-ary tuple of `CLType`s.
     Tuple2([Box<CLType>; 2]),
+    /// 3-ary tuple of `CLType`s.
     Tuple3([Box<CLType>; 3]),
+    /// Unspecified type.
     Any,
 }
 
 impl CLType {
-    /// The `len()` of the `Vec<u8>` resulting from `self.to_bytes()?`.
+    /// The `len()` of the `Vec<u8>` resulting from `self.to_bytes()`.
     pub fn serialized_len(&self) -> usize {
         mem::size_of::<u8>()
             + match self {
@@ -110,12 +122,13 @@ impl CLType {
     }
 }
 
+/// Returns the `CLType` describing a "named key" on the system, i.e. a `(String, Key)`.
 pub fn named_key_type() -> CLType {
     CLType::Tuple2([Box::new(CLType::String), Box::new(CLType::Key)])
 }
 
 impl CLType {
-    pub fn append_bytes(&self, stream: &mut Vec<u8>) {
+    pub(crate) fn append_bytes(&self, stream: &mut Vec<u8>) {
         match self {
             CLType::Bool => stream.push(CL_TYPE_TAG_BOOL),
             CLType::I32 => stream.push(CL_TYPE_TAG_I32),
@@ -242,7 +255,7 @@ impl FromBytes for CLType {
                 Ok((cl_type, remainder))
             }
             CL_TYPE_TAG_ANY => Ok((CLType::Any, remainder)),
-            _ => Err(bytesrepr::Error::FormattingError),
+            _ => Err(bytesrepr::Error::Formatting),
         }
     }
 }
@@ -281,7 +294,9 @@ fn serialized_len_of_cl_tuple_type<'a, T: IntoIterator<Item = &'a Box<CLType>>>(
         .sum()
 }
 
+/// A type which can be described as a [`CLType`].
 pub trait CLTyped {
+    /// The `CLType` of `Self`.
     fn cl_type() -> CLType;
 }
 

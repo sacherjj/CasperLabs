@@ -1,3 +1,4 @@
+//@ts-nocheck
 import * as CL from "../../../../contract-as/assembly";
 import {Error, ErrorCode} from "../../../../contract-as/assembly/error";
 import {fromBytesString, toBytesMap} from "../../../../contract-as/assembly/bytesrepr";
@@ -6,6 +7,16 @@ import {Key} from "../../../../contract-as/assembly/key";
 const CONTRACT_NAME = "do_nothing_stored";
 const DESTINATION_HASH = "hash";
 const DESTINATION_UREF = "uref";
+
+enum Args {
+  Destination = 0,
+  PurseName = 1,
+}
+
+enum CustomError {
+  MissingDestinationArg = 0,
+  InvalidDestination = 1,
+}
 
 export function delegate(): void {
   // no-op
@@ -26,18 +37,18 @@ function storeAtURef(): Key {
 }
 
 export function call(): void {
-  let destinationBytes = CL.getArg(0);
+  let destinationBytes = CL.getArg(Args.Destination);
   if (destinationBytes === null) {
-    Error.fromErrorCode(ErrorCode.MissingArgument).revert();
+    Error.fromUserError(<u16>CustomError.MissingDestinationArg).revert();
     return;
   }
 
-  let destination = fromBytesString(destinationBytes);
-  if (destination === null) {
+  let destinationResult = fromBytesString(destinationBytes);
+  if (destinationResult.hasError()) {
     Error.fromErrorCode(ErrorCode.InvalidArgument);
     return;
   }
-
+  let destination = destinationResult.value;
   if (destination == DESTINATION_HASH) {
     const key = storeAtHash();
     CL.putKey(CONTRACT_NAME, key);
@@ -47,6 +58,6 @@ export function call(): void {
     CL.putKey(CONTRACT_NAME, key);
   }
   else {
-    Error.fromUserError(1).revert();
+    Error.fromUserError(<u16>CustomError.InvalidDestination).revert();
   }
 }

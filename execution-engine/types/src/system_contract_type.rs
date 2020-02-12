@@ -1,24 +1,33 @@
-use alloc::string::{String, ToString};
-use core::convert::TryFrom;
+use core::{
+    convert::TryFrom,
+    fmt::{self, Display, Formatter},
+};
 
 use crate::ApiError;
 
-/// System contracts used to query host for system contract ref
+/// System contract types.
+///
+/// Used by converting to a `u32` and passing as the `system_contract_index` argument of
+/// `ext_ffi::get_system_contract()`.
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum SystemContractType {
+    /// Mint contract.
     Mint,
+    /// Proof of Stake contract.
     ProofOfStake,
 }
 
-impl Into<u32> for SystemContractType {
-    fn into(self) -> u32 {
-        match self {
+impl From<SystemContractType> for u32 {
+    fn from(system_contract_type: SystemContractType) -> u32 {
+        match system_contract_type {
             SystemContractType::Mint => 0,
             SystemContractType::ProofOfStake => 1,
         }
     }
 }
 
+// This conversion is not intended to be used by third party crates.
+#[doc(hidden)]
 impl TryFrom<u32> for SystemContractType {
     type Error = ApiError;
     fn try_from(value: u32) -> Result<SystemContractType, Self::Error> {
@@ -30,17 +39,19 @@ impl TryFrom<u32> for SystemContractType {
     }
 }
 
-impl ToString for SystemContractType {
-    fn to_string(&self) -> String {
+impl Display for SystemContractType {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match *self {
-            SystemContractType::Mint => "mint".to_string(),
-            SystemContractType::ProofOfStake => "pos".to_string(),
+            SystemContractType::Mint => write!(f, "mint"),
+            SystemContractType::ProofOfStake => write!(f, "pos"),
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::string::ToString;
+
     use super::*;
 
     #[test]

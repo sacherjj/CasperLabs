@@ -5,10 +5,8 @@ from functools import reduce
 from itertools import count
 from operator import add
 
-from casperlabs_local_net.common import extract_block_hash_from_propose_output
 from casperlabs_local_net.client_parser import parse_show_blocks
 from casperlabs_local_net.docker_node import DockerNode
-from casperlabs_local_net.errors import NonZeroExitCodeError
 from casperlabs_local_net.common import Contract
 from casperlabs_local_net.wait import (
     wait_for_block_hash_propagated_to_all_nodes,
@@ -26,34 +24,15 @@ def three_node_network_with_combined_contract(three_node_network):
     use later by tests in this module.
     """
     tnn = three_node_network
-    bootstrap, node1, node2 = tnn.docker_nodes
-    node = bootstrap
+    node = tnn.docker_nodes[0]
     for contract in [
         Contract.HELLO_NAME_DEFINE,
         Contract.COUNTER_DEFINE,
         Contract.MAILING_LIST_DEFINE,
     ]:
-        block_hash = bootstrap.p_client.deploy_and_propose(
-            session_contract=contract,
-            from_address=node.genesis_account.public_key_hex,
-            public_key=node.genesis_account.public_key_path,
-            private_key=node.genesis_account.private_key_path,
-        )
+        block_hash = node.deploy_and_get_block_hash(node.genesis_account, contract)
         wait_for_block_hash_propagated_to_all_nodes(tnn.docker_nodes, block_hash)
     return tnn
-
-
-def deploy_and_propose(node, contract):
-    block_hash = node.p_client.deploy_and_propose(
-        session_contract=contract,
-        from_address=node.genesis_account.public_key_hex,
-        public_key=node.genesis_account.public_key_path,
-        private_key=node.genesis_account.private_key_path,
-    )
-    deploys = node.p_client.show_deploys(block_hash)
-    for deploy in deploys:
-        assert deploy.is_error is False
-    return block_hash
 
 
 @pytest.fixture(scope="module")
@@ -109,7 +88,7 @@ def test_call_stored_contract(
         )
 
     for node in nodes:
-        block_hash = deploy_and_propose(node, contract)
+        block_hash = node.deploy_and_get_block_hash(node.genesis_account, contract)
         wait_for_block_hash_propagated_to_all_nodes(nodes, block_hash)
         cur_state = state(node, path, block_hash)
         assert expected(cur_state), f"{cur_state!r}"
@@ -121,14 +100,14 @@ CONTRACT_2 = "old_wasm/helloname_invalid_just_2.wasm"
 
 class TimedThread(Thread):
     def __init__(
-        self, docker_node: "DockerNode", command_kwargs: dict, start_time: float
+        self, docker_node: "DockerNode", contract: str, start_time: float
     ) -> None:
         Thread.__init__(self)
         self.name = docker_node.name
         self.node = docker_node
-        self.kwargs = command_kwargs
-
+        self.contract = contract
         self.start_time = start_time
+        self.result = None
 
     def run(self) -> None:
         if self.start_time <= time():
@@ -138,30 +117,17 @@ class TimedThread(Thread):
 
         while self.start_time > time():
             sleep(0.001)
-        self.my_call(self.kwargs)
+        self.result = self.my_call(self.contract)
 
-    def my_call(self, kwargs):
+    def my_call(self, contract):
         raise NotImplementedError()
 
 
 class DeployTimedTread(TimedThread):
-    def my_call(self, kwargs):
-        kwargs["from_address"] = self.node.test_account.public_key_hex
-        kwargs["public_key"] = self.node.test_account.public_key_path
-        kwargs["private_key"] = self.node.test_account.private_key_path
-        self.node.client.deploy(**kwargs)
-
-
-class ProposeTimedThread(TimedThread):
-    def my_call(self, kwargs):
-        self.block_hash = None
-        try:
-            self.block_hash = extract_block_hash_from_propose_output(
-                self.node.client.propose()
-            )
-        except NonZeroExitCodeError:
-            # Ignore error for no new deploys
-            pass
+    def my_call(self, contract):
+        return self.node.deploy_and_get_block_hash(
+            self.node.test_account, contract, on_error_raise=False
+        )
 
 
 def test_neglected_invalid_block(three_node_network):
@@ -175,15 +141,9 @@ def test_neglected_invalid_block(three_node_network):
         logging.info(f"DEPLOY_PROPOSE CYCLE COUNT: {cycle_count + 1}")
         start_time = time() + 1
 
-        boot_deploy = DeployTimedTread(
-            bootstrap, {"session_contract": CONTRACT_1}, start_time
-        )
-        node1_deploy = DeployTimedTread(
-            node1, {"session_contract": CONTRACT_2}, start_time
-        )
-        node2_deploy = DeployTimedTread(
-            node2, {"session_contract": CONTRACT_2}, start_time
-        )
+        boot_deploy = DeployTimedTread(bootstrap, CONTRACT_1, start_time)
+        node1_deploy = DeployTimedTread(node1, CONTRACT_2, start_time)
+        node2_deploy = DeployTimedTread(node2, CONTRACT_2, start_time)
 
         # Simultaneous Deploy
         node1_deploy.start()
@@ -196,29 +156,8 @@ def test_neglected_invalid_block(three_node_network):
 
         start_time = time() + 1
 
-        boot_deploy = ProposeTimedThread(bootstrap, {}, start_time)
-        node1_deploy = ProposeTimedThread(node1, {}, start_time)
-        node2_deploy = ProposeTimedThread(node2, {}, start_time)
-
-        # Simultaneous Propose
-        node1_deploy.start()
-        boot_deploy.start()
-        node2_deploy.start()
-
-        boot_deploy.join()
-        node1_deploy.join()
-        node2_deploy.join()
-
     # Assure deploy and proposes occurred
-    block_hashes = [
-        h
-        for h in [
-            boot_deploy.block_hash,
-            node1_deploy.block_hash,
-            node2_deploy.block_hash,
-        ]
-        if h
-    ]
+    block_hashes = [node1_deploy.result, boot_deploy.result, node2_deploy.result]
     wait_for_block_hashes_propagated_to_all_nodes(
         three_node_network.docker_nodes, block_hashes
     )
@@ -251,42 +190,27 @@ branch out and be only 4 levels deep
 
 class DeployThread(threading.Thread):
     def __init__(
-        self,
-        name: str,
-        node: DockerNode,
-        batches_of_contracts: List[List[str]],
-        max_attempts: int,
-        retry_seconds: int,
+        self, name: str, node: DockerNode, batches_of_contracts: List[List[str]]
     ) -> None:
         threading.Thread.__init__(self)
         self.name = name
         self.node = node
         self.batches_of_contracts = batches_of_contracts
-        self.max_attempts = max_attempts
-        self.retry_seconds = retry_seconds
         self.block_hashes = []
 
     def run(self) -> None:
         for batch in self.batches_of_contracts:
             for contract in batch:
-                assert "Success" in self.node.client.deploy(
-                    session_contract=contract,
-                    from_address=self.node.genesis_account.public_key_hex,
-                    public_key=self.node.genesis_account.public_key_path,
-                    private_key=self.node.genesis_account.private_key_path,
+                block_hash = self.node.deploy_and_get_block_hash(
+                    self.node.genesis_account, contract, on_error_raise=False
                 )
-
-            block_hash = self.node.client.propose_with_retry(
-                self.max_attempts, self.retry_seconds
-            )
-            self.block_hashes.append(block_hash)
+                self.block_hashes.append(block_hash)
 
 
 @pytest.mark.parametrize(
     "contract_paths,expected_deploy_counts_in_blocks",
     [([[Contract.HELLO_NAME_DEFINE]], [1, 5, 1, 1])],
 )
-# Nodes deploy one or more contracts followed by propose.
 def test_multiple_deploys_at_once(
     three_node_network,
     contract_paths: List[List[str]],
@@ -297,12 +221,9 @@ def test_multiple_deploys_at_once(
     Scenario: Multiple simultaneous deploy after single deploy
     """
     nodes = three_node_network.docker_nodes
-    # Wait for the genesis block reacing each node.
 
     deploy_threads = [
-        DeployThread(
-            "node" + str(i + 1), node, contract_paths, max_attempts=5, retry_seconds=3
-        )
+        DeployThread("node" + str(i + 1), node, contract_paths)
         for i, node in enumerate(nodes)
     ]
 

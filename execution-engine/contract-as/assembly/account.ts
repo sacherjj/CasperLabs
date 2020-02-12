@@ -1,5 +1,8 @@
 import * as externals from "./externals";
 import {arrayToTyped} from "./utils";
+import {PURSE_ID_SERIALIZED_LENGTH} from "./constants";
+import {URef} from "./uref";
+import {PurseId} from "./purseid";
 
 export enum AddKeyFailure {
     // Success
@@ -35,9 +38,9 @@ export enum RemoveKeyFailure {
 export enum SetThresholdFailure {
     Ok = 0,
     // New threshold should be lower or equal than deployment threshold
-    KeyManagementThresholdError = 1,
+    KeyManagementThreshold = 1,
     // New threshold should be lower or equal than key management threshold
-    DeploymentThresholdError = 2,
+    DeploymentThreshold = 2,
     // Unable to set action threshold due to insufficient permissions
     PermissionDeniedError = 3,
     // New threshold should be lower or equal than total weight of associated keys
@@ -57,7 +60,6 @@ export function addAssociatedKey(publicKey: Array<u8>, weight: i32): AddKeyFailu
     return <AddKeyFailure>ret;
 }
 
-
 export function setActionThreshold(actionType: ActionType, thresholdValue: u8): SetThresholdFailure {
     const ret = externals.set_action_threshold(<i32>actionType, thresholdValue);
     return <SetThresholdFailure>ret;
@@ -73,4 +75,16 @@ export function removeAssociatedKey(publicKey: Array<u8>): RemoveKeyFailure {
     const publicKeyBytes = arrayToTyped(publicKey);
     const ret = externals.remove_associated_key(publicKeyBytes.dataStart);
     return <RemoveKeyFailure>ret;
+}
+
+export function getMainPurse(): PurseId | null {
+    let data = new Uint8Array(PURSE_ID_SERIALIZED_LENGTH);
+    data.fill(0);
+    externals.get_main_purse(data.dataStart);
+    let urefResult = URef.fromBytes(data);
+    if (urefResult.hasError()) {
+        return null;
+    }
+    let purseId = new PurseId(urefResult.value);
+    return purseId;
 }

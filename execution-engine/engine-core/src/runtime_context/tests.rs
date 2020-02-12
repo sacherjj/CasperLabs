@@ -25,14 +25,13 @@ use types::{
         ActionType, AddKeyFailure, PublicKey, PurseId, RemoveKeyFailure, SetThresholdFailure,
         Weight,
     },
-    AccessRights, BlockTime, CLValue, Key, Phase, ProtocolVersion, URef, LOCAL_SEED_LENGTH,
+    AccessRights, BlockTime, CLValue, Key, Phase, ProtocolVersion, URef, KEY_LOCAL_SEED_LENGTH,
 };
 
 use super::{attenuate_uref_for_account, Address, Error, RuntimeContext};
 use crate::{
-    engine_state::SYSTEM_ACCOUNT_ADDR,
-    execution::{extract_access_rights_from_keys, AddressGenerator},
-    tracking_copy::TrackingCopy,
+    engine_state::SYSTEM_ACCOUNT_ADDR, execution::AddressGenerator,
+    runtime::extract_access_rights_from_keys, tracking_copy::TrackingCopy,
 };
 
 const DEPLOY_HASH: [u8; 32] = [1u8; 32];
@@ -101,7 +100,7 @@ fn create_uref(address_generator: &mut AddressGenerator, rights: AccessRights) -
     Key::URef(URef::new(address, rights))
 }
 
-fn random_local_key<G: RngCore>(entropy_source: &mut G, seed: [u8; LOCAL_SEED_LENGTH]) -> Key {
+fn random_local_key<G: RngCore>(entropy_source: &mut G, seed: [u8; KEY_LOCAL_SEED_LENGTH]) -> Key {
     let mut key = [0u8; 64];
     entropy_source.fill_bytes(&mut key);
     Key::local(seed, &key)
@@ -630,7 +629,7 @@ fn local_key_writeable_invalid() {
     let access_rights = HashMap::new();
     let query = |runtime_context: RuntimeContext<InMemoryGlobalStateView>| {
         let mut rng = rand::thread_rng();
-        let seed = [1u8; LOCAL_SEED_LENGTH];
+        let seed = [1u8; KEY_LOCAL_SEED_LENGTH];
         let key = random_local_key(&mut rng, seed);
         runtime_context.validate_writeable(&key)
     };
@@ -656,7 +655,7 @@ fn local_key_readable_invalid() {
     let access_rights = HashMap::new();
     let query = |runtime_context: RuntimeContext<InMemoryGlobalStateView>| {
         let mut rng = rand::thread_rng();
-        let seed = [1u8; LOCAL_SEED_LENGTH];
+        let seed = [1u8; KEY_LOCAL_SEED_LENGTH];
         let key = random_local_key(&mut rng, seed);
         runtime_context.validate_readable(&key)
     };
@@ -682,7 +681,7 @@ fn local_key_addable_invalid() {
     let access_rights = HashMap::new();
     let query = |runtime_context: RuntimeContext<InMemoryGlobalStateView>| {
         let mut rng = rand::thread_rng();
-        let seed = [1u8; LOCAL_SEED_LENGTH];
+        let seed = [1u8; KEY_LOCAL_SEED_LENGTH];
         let key = random_local_key(&mut rng, seed);
         runtime_context.validate_addable(&key)
     };

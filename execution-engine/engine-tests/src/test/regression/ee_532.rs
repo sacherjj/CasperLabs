@@ -1,5 +1,5 @@
 use engine_core::engine_state::Error;
-use engine_test_support::low_level::{
+use engine_test_support::internal::{
     ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_GENESIS_CONFIG,
 };
 
@@ -36,7 +36,7 @@ fn should_run_ee_532_get_uref_regression_test() {
     let message = deploy_result.error().map(|err| format!("{}", err));
     assert_eq!(
         message,
-        Some(format!("{}", Error::AuthorizationError)),
-        "expected AuthorizationError"
+        Some(format!("{}", Error::Authorization)),
+        "expected Error::Authorization"
     )
 }

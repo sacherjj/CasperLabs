@@ -1,7 +1,9 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use types::{
-    account::{AddKeyFailure, PublicKey, RemoveKeyFailure, UpdateKeyFailure, Weight, MAX_KEYS},
+    account::{
+        AddKeyFailure, PublicKey, RemoveKeyFailure, UpdateKeyFailure, Weight, MAX_ASSOCIATED_KEYS,
+    },
     bytesrepr::{Error, FromBytes, ToBytes},
 };
 
@@ -19,7 +21,7 @@ impl AssociatedKeys {
     /// Returns true if added successfully, false otherwise.
     #[allow(clippy::map_entry)]
     pub fn add_key(&mut self, key: PublicKey, weight: Weight) -> Result<(), AddKeyFailure> {
-        if self.0.len() == MAX_KEYS {
+        if self.0.len() == MAX_ASSOCIATED_KEYS {
             Err(AddKeyFailure::MaxKeysLimit)
         } else if self.0.contains_key(&key) {
             Err(AddKeyFailure::DuplicateKey)
@@ -76,8 +78,8 @@ impl AssociatedKeys {
     ///
     /// This method is not concerned about uniqueness of the passed iterable.
     /// Uniqueness is determined based on the input collection properties,
-    /// which is either BTreeSet (in `[AssociatedKeys::calculate_keys_weight]`)
-    /// or BTreeMap (in `[AssociatedKeys::total_keys_weight]`).
+    /// which is either BTreeSet (in [`AssociatedKeys::calculate_keys_weight`])
+    /// or BTreeMap (in [`AssociatedKeys::total_keys_weight`]).
     fn calculate_any_keys_weight<'a>(&self, keys: impl Iterator<Item = &'a PublicKey>) -> Weight {
         let total = keys
             .filter_map(|key| self.0.get(key))
@@ -144,7 +146,9 @@ pub mod gens {
 mod tests {
     use std::{collections::BTreeSet, iter::FromIterator};
 
-    use types::account::{AddKeyFailure, PublicKey, Weight, MAX_KEYS, PUBLIC_KEY_LENGTH};
+    use types::account::{
+        AddKeyFailure, PublicKey, Weight, MAX_ASSOCIATED_KEYS, PUBLIC_KEY_LENGTH,
+    };
 
     use super::AssociatedKeys;
 
@@ -159,7 +163,7 @@ mod tests {
 
     #[test]
     fn associated_keys_add_full() {
-        let map = (0..MAX_KEYS).map(|k| {
+        let map = (0..MAX_ASSOCIATED_KEYS).map(|k| {
             (
                 PublicKey::new([k as u8; PUBLIC_KEY_LENGTH]),
                 Weight::new(k as u8),

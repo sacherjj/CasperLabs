@@ -1,15 +1,15 @@
 use std::collections::BTreeMap;
 
 use contract::contract_api::system::{MINT_NAME, POS_NAME};
-use engine_test_support::low_level::{
-    ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG,
+use engine_test_support::{
+    internal::{ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_GENESIS_CONFIG},
+    DEFAULT_ACCOUNT_ADDR,
 };
 use types::Key;
 
 const CONTRACT_LIST_NAMED_KEYS: &str = "list_named_keys.wasm";
 const NEW_NAME_ACCOUNT: &str = "Account";
 const NEW_NAME_HASH: &str = "Hash";
-const NEW_NAME_LOCAL: &str = "Local";
 
 #[ignore]
 #[test]
@@ -38,9 +38,6 @@ fn should_list_named_keys() {
             .is_none());
         assert!(named_keys
             .insert(NEW_NAME_HASH.to_string(), Key::Hash([2; 32]))
-            .is_none());
-        assert!(named_keys
-            .insert(NEW_NAME_LOCAL.to_string(), Key::Local([3; 32]))
             .is_none());
         named_keys
     };

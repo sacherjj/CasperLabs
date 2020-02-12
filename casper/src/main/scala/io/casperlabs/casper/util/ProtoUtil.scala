@@ -21,9 +21,10 @@ import io.casperlabs.crypto.signatures.SignatureAlgorithm
 import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
 import io.casperlabs.ipc
 import io.casperlabs.models.BlockImplicits._
-import io.casperlabs.models.{Message, Weight}
+import io.casperlabs.models.{Message, SmartContractEngineError, Weight}
 import io.casperlabs.shared.Time
-import io.casperlabs.smartcontracts.Abi
+import io.casperlabs.smartcontracts.cltype
+import io.casperlabs.smartcontracts.bytesrepr._
 import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.storage.dag.DagRepresentation
 
@@ -622,11 +623,11 @@ object ProtoUtil {
   // Later, post DEV NET, conversion rate will be part of a deploy.
   val GAS_PRICE = 10L
 
-  def deployDataToEEDeploy[F[_]: MonadThrowable](d: Deploy): Try[ipc.DeployItem] = {
+  def deployDataToEEDeploy(d: Deploy): Try[ipc.DeployItem] = {
     def toPayload(maybeCode: Option[Deploy.Code]): Try[Option[ipc.DeployPayload]] =
       maybeCode match {
         case None       => Try(none[ipc.DeployPayload])
-        case Some(code) => (deployCodeToDeployPayload[F](code).map(Some(_)))
+        case Some(code) => (deployCodeToDeployPayload(code).map(Some(_)))
       }
 
     for {
@@ -644,12 +645,17 @@ object ProtoUtil {
     }
   }
 
-  def deployCodeToDeployPayload[F[_]: MonadThrowable](code: Deploy.Code): Try[ipc.DeployPayload] = {
-    val argsF: Try[ByteString] = if (code.args.nonEmpty) {
-      Abi
-        .args(code.args.map(_.getValue: Abi.Serializable[_]): _*)
-        .map(ByteString.copyFrom(_))
-    } else Try(code.abiArgs)
+  def deployCodeToDeployPayload(code: Deploy.Code): Try[ipc.DeployPayload] = {
+    val argsF: Try[ByteString] = code.args.toList.traverse(cltype.ProtoMappings.fromArg) match {
+      case Left(err) =>
+        Try(throw new SmartContractEngineError(s"Error parsing deploy arguments: $err"))
+      case Right(args) =>
+        Try(
+          ByteString.copyFrom(
+            ToBytes[Seq[cltype.CLValue]].toBytes(args)
+          )
+        )
+    }
 
     argsF.map { args =>
       val payload = code.contract match {

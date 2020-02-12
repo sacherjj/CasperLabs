@@ -27,7 +27,8 @@ import io.casperlabs.ipc
 import io.casperlabs.ipc.DeployResult.Value.{ExecutionResult, PreconditionFailure}
 import io.casperlabs.ipc._
 import io.casperlabs.models.ArbitraryConsensus
-import io.casperlabs.smartcontracts.{Abi, ExecutionEngineService}
+import io.casperlabs.smartcontracts.bytesrepr._
+import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.smartcontracts.ExecutionEngineService.CommitResult
 import monix.eval.Task
 import monix.eval.Task._
@@ -280,7 +281,7 @@ object DeploySelectionTest {
 
   private val writeTransform: (OpEntry, TransformEntry) = {
     val tyI32: CLType = CLType(CLType.Variants.SimpleType(CLType.Simple.I32))
-    val ten_bytes     = Abi.toBytes[Int](10).get
+    val ten_bytes     = ToBytes.toBytes(10)
     val ten: CLValue  = CLValue(Some(tyI32), ByteString.copyFrom(ten_bytes))
     val value         = StoredValue().withClValue(ten)
 

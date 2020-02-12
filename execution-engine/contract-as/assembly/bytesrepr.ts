@@ -1,30 +1,79 @@
-import {Pair} from "./pair";
+import { Pair } from "./pair";
+import { typedToArray } from "./utils";
 
-// Any fromBytes operation sets this, so caller can know how much bytes to
-// skip in the input stream for complex types
-var LastDecodedBytesCount: u32 = 0;
-
-export function SetDecodedBytesCount(value: u32): void {
-    LastDecodedBytesCount = value;
+export enum Error {
+    // Last operation was a success
+    Ok = 0,
+    // Early end of stream
+    EarlyEndOfStream = 1,
+    // Unexpected data encountered while decoding byte stream
+    FormattingError = 2,
 }
 
-export function AddDecodedBytesCount(value: u32): void {
-    LastDecodedBytesCount += value;
+/**
+ * Boxes a value which could then be nullable in any context.
+ */
+export class Ref<T> {
+    constructor(public value: T) {}
 }
 
-export function GetDecodedBytesCount(): u32 {
-    return LastDecodedBytesCount;
+export class Result<T> {
+    /**
+     * Creates new Result with wrapped value
+     * @param value Ref-wrapped value (success) or null (error)
+     * @param error Error value
+     * @param position Position of input stream 
+     */
+    constructor(public ref: Ref<T> | null, public error: Error, public position: usize) {}
+
+    /**
+     * Assumes that reference wrapper contains a value and then returns it
+     */
+    get value(): T {
+        assert(this.hasValue());
+        let ref = <Ref<T>>this.ref;
+        return ref.value;
+    }
+
+    /**
+     * Checks if given Result contains a value 
+     */
+    hasValue(): bool {
+        return this.ref !== null;
+    }
+    /**
+     * Checks if error value is set.
+     * 
+     * Truth also implies !hasValue(), false value implies hasValue()
+     */
+
+    hasError(): bool {
+        return this.error != Error.Ok;
+    }
+
+    /**
+     * For nullable types, this returns the value itself, or a null.
+     */
+    ok(): T | null {
+        return this.hasValue() ? this.value : null;
+    }
 }
 
 export function toBytesU8(num: u8): u8[] {
     return [num];
 }
 
-export function fromBytesU8(bytes: Uint8Array): U8 | null {
-    if (bytes.length < 1) {
-        return null;
+export function fromBytesLoad<T>(bytes: Uint8Array): Result<T> {
+    let expectedSize = changetype<i32>(sizeof<T>())
+    if (bytes.length < expectedSize) {
+        return new Result<T>(null, Error.EarlyEndOfStream, 0);
     }
-    return <U8>load<u8>(bytes.dataStart);
+    const value = load<T>(bytes.dataStart);
+    return new Result<T>(new Ref<T>(value), Error.Ok, expectedSize);
+}
+
+export function fromBytesU8(bytes: Uint8Array): Result<u8> {
+    return fromBytesLoad<u8>(bytes);
 }
 
 // Converts u32 to little endian
@@ -38,15 +87,8 @@ export function toBytesU32(num: u32): u8[] {
     return result;
 }
 
-export function fromBytesU32(bytes: Uint8Array): U32 | null {
-    if (bytes.length < 4) {
-        return null;
-    }
-    const number = <u32>load<u32>(bytes.dataStart);
-    
-    LastDecodedBytesCount = 4;
-
-    return <U32>number;
+export function fromBytesU32(bytes: Uint8Array): Result<u32> {
+    return fromBytesLoad<u32>(bytes);
 }
 
 export function toBytesI32(num: i32): u8[] {
@@ -59,16 +101,11 @@ export function toBytesI32(num: i32): u8[] {
     return result;
 }
 
-export function fromBytesI32(bytes: Uint8Array): I32 | null {
-    if (bytes.length < 4) {
-        return null;
-    }
-    LastDecodedBytesCount = 4;
-    return <I32>(<i32>load<i32>(bytes.dataStart));
+export function fromBytesI32(bytes: Uint8Array): Result<i32> {
+    return fromBytesLoad<i32>(bytes);
 }
 
 export function toBytesU64(num: u64): u8[] {
-    // NOTE: Overflows on unit tests for ranges >= 2**32
     let bytes = new Uint8Array(8);
     store<u64>(bytes.dataStart, num);
     let result = new Array<u8>(8);
@@ -78,14 +115,8 @@ export function toBytesU64(num: u64): u8[] {
     return result;
 }
 
-export function fromBytesU64(bytes: Uint8Array): U64 | null {
-    if (bytes.length < 8) {
-        return null;
-    }
-
-    // NOTE: Overflows on unit tests for ranges >= 2**32
-    LastDecodedBytesCount = 8;
-    return <U64><i64>load<i64>(bytes.dataStart);
+export function fromBytesU64(bytes: Uint8Array): Result<u64> {
+    return fromBytesLoad<u64>(bytes);
 }
 
 export function toBytesPair(key: u8[], value: u8[]): u8[] {
@@ -105,47 +136,51 @@ export function toBytesMap(pairs: u8[][]): u8[] {
 }
 
 export function fromBytesMap<K, V>(
-        bytes: Uint8Array,
-        decodeKey: (bytes1: Uint8Array) => K | null,
-        decodeValue: (bytes2: Uint8Array) => V | null
-): Array<Pair<K, V>> | null {
-    const length = fromBytesU32(bytes);
+    bytes: Uint8Array,
+    decodeKey: (bytes1: Uint8Array) => Result<K>,
+    decodeValue: (bytes2: Uint8Array) => Result<V>,
+): Result<Array<Pair<K, V>>> {
+    const lengthResult = fromBytesU32(bytes);
+    if (lengthResult.error != Error.Ok) {
+        return new Result<Array<Pair<K, V>>>(null, Error.EarlyEndOfStream, 0);
+    }
+    const length = lengthResult.value;
+
+    // Tracks how many bytes are parsed
+    let currentPos = lengthResult.position;
 
     let result = new Array<Pair<K, V>>();
 
-    if (length === <U32>0) {
-        return result;
-    }
-    if (length === null) {
-        return null;
+    if (length == 0) {
+        let ref = new Ref<Array<Pair<K, V>>>(result);
+        return new Result<Array<Pair<K, V>>>(ref, Error.Ok, lengthResult.position);
     }
 
-    let currentOffset = LastDecodedBytesCount;
+    let bytes = bytes.subarray(currentPos);
 
-    let bytes = bytes.subarray(LastDecodedBytesCount);
-
-    for (let i = 0; i < <i32>length; i++) {
-        let key = decodeKey(bytes);
-        if (key === null) {
-            return null;
+    for (let i = 0; i < changetype<i32>(length); i++) {
+        const keyResult = decodeKey(bytes);
+        if (keyResult.error != Error.Ok) {
+            return new Result<Array<Pair<K, V>>>(null, keyResult.error, keyResult.position);
         }
-        currentOffset += LastDecodedBytesCount;
-        bytes = bytes.subarray(LastDecodedBytesCount);
 
-        let value = decodeValue(bytes);
-        if (value === null) {
-            return null;
+        currentPos += keyResult.position;
+        bytes = bytes.subarray(keyResult.position);
+
+        let valueResult = decodeValue(bytes);
+        if (valueResult.error != Error.Ok) {
+            return new Result<Array<Pair<K, V>>>(null, valueResult.error, valueResult.position);
         }
-        currentOffset += LastDecodedBytesCount;
-        
-        bytes = bytes.subarray(LastDecodedBytesCount);
 
-        let pair = new Pair<K, V>(key, value);
+        currentPos += valueResult.position;
+        bytes = bytes.subarray(valueResult.position);
+
+        let pair = new Pair<K, V>(keyResult.value, valueResult.value);
         result.push(pair);
     }
 
-    LastDecodedBytesCount = currentOffset;
-    return result;
+    let ref = new Ref<Array<Pair<K, V>>>(result);
+    return new Result<Array<Pair<K, V>>>(ref, Error.Ok, currentPos);
 }
 
 export function toBytesString(s: String): u8[] {
@@ -158,19 +193,24 @@ export function toBytesString(s: String): u8[] {
     return bytes;
 }
 
-export function fromBytesString(s: Uint8Array): String | null {
-    var len = fromBytesU32(s);
-    if (len === null) {
-        return null;
-    }
-    let currentOffset = LastDecodedBytesCount;
-    var result = "";
-    for (var i = 0; i < <i32>len; i++) {
-        result += String.fromCharCode(s[4 + i]);
+export function fromBytesString(s: Uint8Array): Result<String> {
+    var lenResult = fromBytesI32(s);
+    if (lenResult.error != Error.Ok) {
+        return new Result<String>(null, Error.EarlyEndOfStream, 0);
     }
 
-    LastDecodedBytesCount = currentOffset + <u32>len;
-    return result;
+    let currentPos = lenResult.position;
+
+    const leni32 = lenResult.value;
+    if (s.length < leni32 + 4) {
+        return new Result<String>(null, Error.EarlyEndOfStream, 0);
+    }
+    var result = "";
+    for (var i = 0; i < leni32; i++) {
+        result += String.fromCharCode(s[4 + i]);
+    }
+    let ref = new Ref<String>(result);
+    return new Result<String>(ref, Error.Ok, currentPos + leni32);
 }
 
 export function toBytesArrayU8(arr: Array<u8>): u8[] {
@@ -178,20 +218,22 @@ export function toBytesArrayU8(arr: Array<u8>): u8[] {
     return bytes.concat(arr);
 }
 
-export function fromBytesArrayU8(arr: Uint8Array): Uint8Array | null {
-    var len = fromBytesU32(arr);
-    if (len === null) {
-        return null;
+export function fromBytesArrayU8(bytes: Uint8Array): Result<Array<u8>> {
+    var lenResult = fromBytesI32(bytes);
+    if (lenResult.error != Error.Ok) {
+        return new Result<String>(null, Error.EarlyEndOfStream, 0);
     }
 
-    let offset = LastDecodedBytesCount;
+    let currentPos = lenResult.position;
 
-    if (<u32>len < <u32>arr.length - 4) {
-        return null;
+    const leni32 = lenResult.value;
+    if (s.length < leni32 + 4) {
+        return new Result<String>(null, Error.EarlyEndOfStream, 0);
     }
-    let currentOffset = offset + len;
 
-    return arr.subarray(4);
+    let result = typedToArray(bytes.subarray(currentPos));
+    let ref = new Ref<String>(result);
+    return new Result<String>(ref, Error.Ok, currentPos + leni32, currentPos + leni32);
 }
 
 export function toBytesVecT<T>(ts: T[]): Array<u8> {
@@ -202,37 +244,34 @@ export function toBytesVecT<T>(ts: T[]): Array<u8> {
     return bytes;
 }
 
-export function fromBytesStringList(arr: Uint8Array): String[] | null {
-    var len = fromBytesU32(arr);
-    
-    if (len === <U32>0) {
-        // NOTE: There's something wrong about how === operator works (compared to JS/TS).
-        // NOTE: If len is null then `len === null` is true for both null and 0.
-        return [];
+export function fromBytesArray<T>(bytes: Uint8Array, decodeItem: (bytes: Uint8Array) => Result<T>): Result<Array<T>> {
+    var lenResult = fromBytesI32(bytes);
+    if (lenResult.error != Error.Ok) {
+        return new Result<Array<T>>(null, Error.EarlyEndOfStream, 0);
     }
 
-    if (len === null) {
-        return null;
-    }
+    let len = lenResult.value;
+    let currentPos = lenResult.position;
+    let head = bytes.subarray(currentPos);
 
-    let offset = LastDecodedBytesCount;
-    let head = arr.subarray(offset);
+    let result: Array<T> = new Array<T>();
 
-    let result: String[] = [];
-
-    for (let i = 0; i < <i32>len; ++i) {
-        let str = fromBytesString(head);
-        if (str === null) {
-            return null;
+    for (let i = 0; i < len; ++i) {
+        let decodeResult = decodeItem(head);
+        if (decodeResult.error != Error.Ok) {
+            return new Result<Array<T>>(null, decodeResult.error, 0);
         }
-        offset += LastDecodedBytesCount;
-        
-        result.push(str);
-        head = head.subarray(4 + str.length);
+        currentPos += decodeResult.position;
+        result.push(decodeResult.value);
+        head = head.subarray(decodeResult.position);
     }
 
-    LastDecodedBytesCount = offset;
-    return result;
+    let ref = new Ref<Array<T>>(result);
+    return new Result<Array<T>>(ref, Error.Ok, currentPos);
+}
+
+export function fromBytesStringList(bytes: Uint8Array): Result<Array<String>> {
+    return fromBytesArray(bytes, fromBytesString);
 }
 
 export function toBytesStringList(arr: String[]): u8[] {

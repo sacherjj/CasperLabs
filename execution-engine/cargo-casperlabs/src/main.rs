@@ -1,8 +1,11 @@
-//! Command line tool for creating a Wasm contract and tests for use on the CasperLabs network.
+//! Command line tool for creating a Wasm contract and tests for use on the CasperLabs Platform.
 
 #![deny(warnings)]
 
-use std::path::{Path, PathBuf};
+use std::{
+    env,
+    path::{Path, PathBuf},
+};
 
 use clap::{crate_version, App, Arg};
 use lazy_static::lazy_static;
@@ -15,7 +18,7 @@ mod tests_package;
 const APP_NAME: &str = "cargo-casperlabs";
 const ABOUT: &str =
     "A command line tool for creating a Wasm contract and tests at <path> for use on the \
-     CasperLabs network.";
+     CasperLabs Platform.";
 const TOOLCHAIN: &str = "nightly-2020-01-08";
 
 const ROOT_PATH_ARG_NAME: &str = "path";
@@ -33,7 +36,7 @@ lazy_static! {
     rustup install {0}
     rustup target add --toolchain {0} wasm32-unknown-unknown
     cd <path>/tests
-    cargo run"#,
+    cargo test"#,
         TOOLCHAIN
     );
     static ref ARGS: Args = Args::new();
@@ -47,6 +50,23 @@ struct Args {
 
 impl Args {
     fn new() -> Self {
+        // If run normally, the args passed are 'cargo-casperlabs', '<target dir>'.  However, if run
+        // as a cargo subcommand (i.e. cargo casperlabs <target dir>), then cargo injects a new arg:
+        // 'cargo-casperlabs', 'casperlabs', '<target dir>'.  We need to filter this extra arg out.
+        //
+        // This yields the situation where if the binary receives args of
+        // 'cargo-casperlabs', 'casperlabs' then it might be a valid call (not a cargo subcommand -
+        // the user entered 'cargo-casperlabs casperlabs' meaning to create a target dir called
+        // 'casperlabs') or it might be an invalid call (the user entered 'cargo casperlabs' with no
+        // target dir specified).  The latter case is assumed as being more likely.
+        let filtered_args_iter = env::args().enumerate().filter_map(|(index, value)| {
+            if index == 1 && value.as_str() == "casperlabs" {
+                None
+            } else {
+                Some(value)
+            }
+        });
+
         let root_path_arg = Arg::with_name(ROOT_PATH_ARG_NAME)
             .required(true)
             .value_name(ROOT_PATH_ARG_VALUE_NAME)
@@ -63,7 +83,7 @@ impl Args {
             .usage(USAGE.as_str())
             .arg(root_path_arg)
             .arg(workspace_path_arg)
-            .get_matches();
+            .get_matches_from(filtered_args_iter);
 
         let root_path = arg_matches
             .value_of(ROOT_PATH_ARG_NAME)
@@ -110,6 +130,7 @@ fn main() {
     tests_package::add_rust_toolchain();
     tests_package::add_build_rs();
     tests_package::replace_main_rs();
+    tests_package::copy_wasm_files();
 }
 
 #[cfg(test)]

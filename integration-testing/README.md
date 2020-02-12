@@ -33,7 +33,7 @@ Python 3.7.0
 
 Pip comes bundled with latest python.
 ```bash
-pip install pipenv
+pip3 install pipenv
 ```
 ## Step 4: Dependencies
 

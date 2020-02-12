@@ -32,26 +32,24 @@ impl From<(EngineStateError, ExecutionEffect, Gas)> for DeployResult {
             | error @ EngineStateError::InvalidPublicKeyLength { .. }
             | error @ EngineStateError::InvalidProtocolVersion { .. }
             | error @ EngineStateError::InvalidUpgradeConfig
-            | error @ EngineStateError::WasmPreprocessingError(_)
-            | error @ EngineStateError::WasmSerializationError(_)
-            | error @ EngineStateError::ExecError(ExecutionError::DeploymentAuthorizationFailure)
-            | error @ EngineStateError::AuthorizationError => {
+            | error @ EngineStateError::WasmPreprocessing(_)
+            | error @ EngineStateError::WasmSerialization(_)
+            | error @ EngineStateError::Exec(ExecutionError::DeploymentAuthorizationFailure)
+            | error @ EngineStateError::Authorization => {
                 detail::precondition_error(error.to_string())
             }
-            EngineStateError::StorageError(storage_error) => {
+            EngineStateError::Storage(storage_error) => {
                 detail::execution_error(storage_error, effect, cost)
             }
-            EngineStateError::MissingSystemContractError(msg) => {
+            EngineStateError::MissingSystemContract(msg) => {
                 detail::execution_error(msg, effect, cost)
             }
-            error @ EngineStateError::InsufficientPaymentError
-            | error @ EngineStateError::DeployError
-            | error @ EngineStateError::FinalizationError
-            | error @ EngineStateError::SerializationError(_)
-            | error @ EngineStateError::MintError(_) => {
-                detail::execution_error(error, effect, cost)
-            }
-            EngineStateError::ExecError(exec_error) => (exec_error, effect, cost).into(),
+            error @ EngineStateError::InsufficientPayment
+            | error @ EngineStateError::Deploy
+            | error @ EngineStateError::Finalization
+            | error @ EngineStateError::Serialization(_)
+            | error @ EngineStateError::Mint(_) => detail::execution_error(error, effect, cost),
+            EngineStateError::Exec(exec_error) => (exec_error, effect, cost).into(),
         }
     }
 }
@@ -250,7 +248,7 @@ mod tests {
         let revert_error = ExecutionError::Revert(REVERT);
         let amount = U512::from(15);
         let exec_result = ExecutionResult::Failure {
-            error: EngineStateError::ExecError(revert_error),
+            error: EngineStateError::Exec(revert_error),
             effect: Default::default(),
             cost: Gas::new(amount),
         };
