@@ -210,7 +210,7 @@ class EraRuntime[F[_]: MonadThrowable: Clock: EraStorage: FinalityStorageReader:
       lambdaMessage: Message
   ): HWL[Unit] = ifSynced {
     for {
-      b <- HighwayLog.liftF {
+      m <- HighwayLog.liftF {
             messageProducer.withPermit {
               for {
                 // We need to cite the lambda message, and our own latest message.
@@ -240,7 +240,9 @@ class EraRuntime[F[_]: MonadThrowable: Clock: EraStorage: FinalityStorageReader:
               } yield maybeMessage
             }
           }
-      _ <- b.fold(noop)(ballot => HighwayLog.tell[F](HighwayEvent.CreatedLambdaResponse(ballot)))
+      _ <- m.fold(noop) { msg =>
+            HighwayLog.tell[F](HighwayEvent.CreatedLambdaResponse(msg))
+          }
     } yield ()
   }
 
@@ -248,45 +250,48 @@ class EraRuntime[F[_]: MonadThrowable: Clock: EraStorage: FinalityStorageReader:
       messageProducer: MessageProducer[F],
       roundId: Ticks
   ): HWL[Unit] = ifSynced {
-    val message: F[Message] = messageProducer.withPermit {
-      for {
-        choice <- ForkChoice[F].fromKeyBlock(era.keyBlockHash)
-        // In the active period we create a block, but during voting
-        // it can only be a ballot, after the switch block has been created.
-        block = messageProducer
-          .block(
-            keyBlockHash = era.keyBlockHash,
-            roundId = roundId,
-            mainParent = choice.block.messageHash,
-            justifications = choice.justificationsMap,
-            isBookingBlock = isBookingBoundary(
-              choice.block.roundInstant,
-              conf.toInstant(roundId)
-            )
-          )
-          .widen[Message]
+    for {
+      m <- HighwayLog.liftF {
+            messageProducer.withPermit {
+              ForkChoice[F].fromKeyBlock(era.keyBlockHash) flatMap { choice =>
+                ifCanBuildOn(choice) {
+                  // In the active period we create a block, but during voting
+                  // it can only be a ballot, after the switch block has been created.
+                  val block = messageProducer
+                    .block(
+                      keyBlockHash = era.keyBlockHash,
+                      roundId = roundId,
+                      mainParent = choice.block.messageHash,
+                      justifications = choice.justificationsMap,
+                      isBookingBlock = isBookingBoundary(
+                        choice.block.roundInstant,
+                        conf.toInstant(roundId)
+                      )
+                    )
+                    .widen[Message]
 
-        ballot = messageProducer
-          .ballot(
-            keyBlockHash = era.keyBlockHash,
-            roundId = roundId,
-            target = choice.block.messageHash,
-            justifications = choice.justificationsMap
-          )
-          .widen[Message]
+                  val ballot = messageProducer
+                    .ballot(
+                      keyBlockHash = era.keyBlockHash,
+                      roundId = roundId,
+                      target = choice.block.messageHash,
+                      justifications = choice.justificationsMap
+                    )
+                    .widen[Message]
 
-        message <- if (roundId < endTick) {
+                  if (roundId < endTick) {
                     block
                   } else {
                     choice.block.isSwitchBlock.ifM(ballot, block)
                   }
-      } yield message
-    }
-
-    for {
-      m <- HighwayLog.liftF(message)
-      _ <- HighwayLog.tell[F](HighwayEvent.CreatedLambdaMessage(m))
-      _ <- handleCriticalMessages(m)
+                }
+              }
+            }
+          }
+      _ <- m.fold(noop) { msg =>
+            HighwayLog.tell[F](HighwayEvent.CreatedLambdaMessage(msg)) >>
+              handleCriticalMessages(msg)
+          }
     } yield ()
   }
 
@@ -295,7 +300,7 @@ class EraRuntime[F[_]: MonadThrowable: Clock: EraStorage: FinalityStorageReader:
       roundId: Ticks
   ): HWL[Unit] = ifSynced {
     for {
-      b <- HighwayLog.liftF {
+      m <- HighwayLog.liftF {
             messageProducer.withPermit {
               for {
                 choice <- ForkChoice[F].fromKeyBlock(era.keyBlockHash)
@@ -308,9 +313,7 @@ class EraRuntime[F[_]: MonadThrowable: Clock: EraStorage: FinalityStorageReader:
               } yield message
             }
           }
-      _ <- HighwayLog.tell[F](
-            HighwayEvent.CreatedOmegaMessage(b)
-          )
+      _ <- HighwayLog.tell[F](HighwayEvent.CreatedOmegaMessage(m))
     } yield ()
   }
 

@@ -211,6 +211,37 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
     implicit val FC = defaultForkChoice
   }
 
+  // Prepare a child era.
+  abstract class ParentChildFixture(isLeaderInChild: Boolean) extends Fixture {
+    val validator = "Alice"
+    val leader    = if (isLeaderInChild) validator else "Charlie"
+
+    // Using the validator to lead the parent so it can create its own switch block.
+    val parentRuntime =
+      genesisEraRuntime(validator.some, leaderSequencer = mockSequencer(validator))
+
+    // Make a switch block.
+    private val switchEvents = parentRuntime
+      .handleAgenda(Agenda.StartRound(parentRuntime.endTick))
+      .written
+
+    private val childEra = switchEvents.collectFirst {
+      case HighwayEvent.CreatedEra(era) => era
+    }.get
+
+    private val switchBlock = switchEvents.collectFirst {
+      case HighwayEvent.CreatedLambdaMessage(msg: Message.Block) => msg
+    }.get
+
+    val childRuntime =
+      childEraRuntime(childEra, validator.some, leaderSequencer = mockSequencer(leader))
+
+    // Set the fork choice to the switch so we can build on it.
+    FC.set(switchBlock)
+    // Set the clock forward so the next message is accepted.
+    C.set(childRuntime.start)
+  }
+
   /** Fill the DagStorage with blocks at a fixed interval along the era,
     * right up to and including the switch block. */
   def makeFullChain(validator: String, runtime: EraRuntime[Id], interval: FiniteDuration) =
@@ -608,29 +639,23 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
           }
         }
 
-        "the fork choice is in a previous era" should {
+        "the fork choice points to a previous era" should {
           "not respond" in {
-            new Fixture {
-              val runtime = genesisEraRuntime("Alice".some, leaderSequencer = mockSequencer(leader))
-              val switch  = insert(makeBlock(leader, runtime.era, runtime.endTick))
-              val childEra = runtime
-                .handleMessage(switch)
-                .written
-                .collect {
-                  case HighwayEvent.CreatedEra(era) => era
-                }
-                .head
-              val childRuntime =
-                childEraRuntime(childEra, "Alice".some, leaderSequencer = mockSequencer(leader))
-
-              // Now set to fork choice to something that's not the switch block yet.
-              FC.set(insert(makeBlock("Bob", runtime.era, runtime.startTick)))
-              // Set the clock forward so the block is accepted.
-              C.set(childRuntime.start)
-
+            new ParentChildFixture(isLeaderInChild = false) {
+              FC.set(insert(makeBlock(leader, parentRuntime.era, parentRuntime.startTick)))
               val msg    = insert(makeBlock(leader, childRuntime.era, childRuntime.startTick))
               val events = childRuntime.handleMessage(msg).written
               events shouldBe empty
+            }
+          }
+        }
+
+        "the fork choice points at the switch block" should {
+          "create a lambda message" in {
+            new ParentChildFixture(isLeaderInChild = false) {
+              val msg    = insert(makeBlock(leader, childRuntime.era, childRuntime.startTick))
+              val events = childRuntime.handleMessage(msg).written
+              events should not be empty
             }
           }
         }
@@ -882,8 +907,26 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
           }
         }
 
+        "the fork choice points at the switch block" should {
+          "create a lambda message" in {
+            new ParentChildFixture(isLeaderInChild = true) {
+              val events =
+                childRuntime.handleAgenda(Agenda.StartRound(childRuntime.startTick)).written
+              events should not be empty
+            }
+          }
+        }
+
         "the fork choice points at a previous era" should {
-          "skip the round" in (pending)
+          "skip the round" in {
+            new ParentChildFixture(isLeaderInChild = true) {
+              FC.set(insert(makeBlock(leader, parentRuntime.era, parentRuntime.startTick)))
+              val (events, agenda) =
+                childRuntime.handleAgenda(Agenda.StartRound(childRuntime.startTick)).run
+              events shouldBe empty
+              agenda should not be empty
+            }
+          }
         }
       }
 
