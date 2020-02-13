@@ -26,15 +26,14 @@ mod macro_code {
 
 pub use self::macro_code::{U128, U256, U512};
 
-/// Error type for parsing U128, U256, U512 from a string.
-/// `FromDecStr` is the parsing error from the `uint` crate, which
-/// only supports base-10 parsing. `InvalidRadix` is raised when
-/// parsing is attempted on any string representing the number in some
-/// base other than 10 presently, however a general radix may be
-/// supported in the future.
+/// Error type for parsing [`U128`], [`U256`], [`U512`] from a string.
 #[derive(Debug)]
 pub enum UIntParseError {
+    /// Contains the parsing error from the `uint` crate, which only supports base-10 parsing.
     FromDecStr(uint::FromDecStrErr),
+    /// Parsing was attempted on a string representing the number in some base other than 10.
+    ///
+    /// Note: a general radix may be supported in the future.
     InvalidRadix,
 }
 
@@ -58,7 +57,7 @@ macro_rules! ser_and_num_impls {
                 let (num_bytes, rem): (u8, &[u8]) = FromBytes::from_bytes(bytes)?;
 
                 if num_bytes > $total_bytes {
-                    Err(Error::FormattingError)
+                    Err(Error::Formatting)
                 } else {
                     let (value, rem) = bytesrepr::safe_split_at(rem, num_bytes as usize)?;
                     let result = $type::from_little_endian(value);

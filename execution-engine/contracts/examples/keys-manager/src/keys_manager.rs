@@ -36,10 +36,8 @@ fn remove_key_if_exists(key: PublicKey) -> Result<(), Error> {
 fn set_threshold(permission_level: ActionType, threshold: Weight) -> Result<(), Error> {
     match account::set_action_threshold(permission_level, threshold) {
         Ok(()) => Ok(()),
-        Err(SetThresholdFailure::KeyManagementThresholdError) => {
-            Err(Error::KeyManagementThresholdError)
-        }
-        Err(SetThresholdFailure::DeploymentThresholdError) => Err(Error::DeploymentThresholdError),
+        Err(SetThresholdFailure::KeyManagementThreshold) => Err(Error::KeyManagementThreshold),
+        Err(SetThresholdFailure::DeploymentThreshold) => Err(Error::DeploymentThreshold),
         Err(SetThresholdFailure::PermissionDeniedError) => Err(Error::PermissionDenied),
         Err(SetThresholdFailure::InsufficientTotalWeight) => Err(Error::InsufficientTotalWeight),
     }

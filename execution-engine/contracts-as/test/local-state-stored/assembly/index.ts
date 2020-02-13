@@ -28,10 +28,8 @@ export function delegate(): void {
     maybeValue = new Uint8Array(0);
   }
 
-  let storedValue = fromBytesString(maybeValue);
-  if (storedValue === null){
-    storedValue = "";
-  }
+  let storedValueResult = fromBytesString(maybeValue);
+  let storedValue = storedValueResult.hasError() ? "" : storedValueResult.value;
 
   writeLocal(local, CLValue.fromString(storedValue + HELLO_PREFIX));
 
@@ -41,10 +39,8 @@ export function delegate(): void {
     return;
   }
 
-  let newValue = fromBytesString(maybeReadBack);
-  if (newValue === null){
-    newValue = "";
-  }
+  let newValueResult = fromBytesString(maybeReadBack);
+  let newValue = newValueResult.hasError() ? "" : newValueResult.value;
 
   newValue = newValue + WORLD_SUFFIX;
 

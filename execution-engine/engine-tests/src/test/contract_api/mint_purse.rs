@@ -2,17 +2,20 @@ use engine_test_support::{
     internal::{ExecuteRequestBuilder, WasmTestBuilder, DEFAULT_GENESIS_CONFIG},
     DEFAULT_ACCOUNT_ADDR,
 };
+use types::U512;
+
 const CONTRACT_MINT_PURSE: &str = "mint_purse.wasm";
-const CONTRACT_TRANSFER_TO_ACCOUNT_01: &str = "transfer_to_account_01.wasm";
+const CONTRACT_TRANSFER_TO_ACCOUNT: &str = "transfer_to_account_u512.wasm";
 const SYSTEM_ADDR: [u8; 32] = [0u8; 32];
+const TRANSFER_AMOUNT: u64 = 250_000_000 + 1000;
 
 #[ignore]
 #[test]
 fn should_run_mint_purse_contract() {
     let exec_request_1 = ExecuteRequestBuilder::standard(
         DEFAULT_ACCOUNT_ADDR,
-        CONTRACT_TRANSFER_TO_ACCOUNT_01,
-        (SYSTEM_ADDR,),
+        CONTRACT_TRANSFER_TO_ACCOUNT,
+        (SYSTEM_ADDR, U512::from(TRANSFER_AMOUNT)),
     )
     .build();
     let exec_request_2 =

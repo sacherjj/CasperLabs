@@ -28,33 +28,32 @@ enum CustomError {
 }
 
 export function call(): void {
-  // uref arg
   let urefBytes = CL.getArg(Args.PurseHolderURef);
   if (urefBytes === null) {
     Error.fromUserError(<u16>CustomError.MissingPurseHolderURefArg).revert();
     return;
   }
-  let uref = URef.fromBytes(urefBytes);
-  if (uref === null) {
+  let urefResult = URef.fromBytes(urefBytes);
+  if (urefResult.hasError()) {
     Error.fromErrorCode(ErrorCode.InvalidArgument).revert();
     return;
   }
+  let uref = urefResult.value;
   if (uref.isValid() == false){
     Error.fromUserError(<u16>CustomError.InvalidPurseHolderURefArg).revert();
     return;
   }
-
-  // method name arg
   const methodNameArg = CL.getArg(Args.MethodName);
   if (methodNameArg === null) {
     Error.fromUserError(<u16>CustomError.MissingMethodNameArg).revert();
     return;
   }
-  const methodName = fromBytesString(methodNameArg);
-  if (methodName === null){
+  const methodNameResult = fromBytesString(methodNameArg);
+  if (methodNameResult.hasError()) {
     Error.fromUserError(<u16>CustomError.InvalidMethodNameArg).revert();
     return;
   }
+  let methodName = methodNameResult.value;
 
   let key = Key.fromURef(uref);
 
@@ -68,11 +67,12 @@ export function call(): void {
       Error.fromUserError(<u16>CustomError.UnableToGetVersion).revert();
       return;
     }
-    const version = fromBytesString(versionBytes);
-    if (version === null) {
+    const versionResult = fromBytesString(versionBytes);
+    if (versionResult.hasError()) {
       Error.fromUserError(<u16>CustomError.InvalidVersion).revert();
       return;
     }
+    let version = versionResult.value;
     const maybeVersionKey = Key.create(CLValue.fromString(version));
     if (maybeVersionKey === null) {
       Error.fromUserError(<u16>CustomError.UnableToStoreVersion).revert();
@@ -83,17 +83,18 @@ export function call(): void {
     return;
   }
 
-  // purse name arg
   const purseNameArg = CL.getArg(Args.PurseName);
   if (purseNameArg === null) {
     Error.fromUserError(<u16>CustomError.MissingPurseNameArg).revert();
     return;
   }
-  const purseName = fromBytesString(purseNameArg);
-  if (purseName === null){
+  const purseNameResult = fromBytesString(purseNameArg);
+  if (purseNameResult.hasError()){
     Error.fromUserError(<u16>CustomError.InvalidPurseNameArg).revert();
     return;
   }
+  const purseName = purseNameResult.value;
+
   const args: CLValue[] = [
     CLValue.fromString(methodName),
     CLValue.fromString(purseName)

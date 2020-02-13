@@ -93,11 +93,17 @@ class SQLiteDagStorage[F[_]: Bracket[*[_], Throwable]](
       if (block.isGenesisLike) {
         ().pure[ConnectionIO]
       } else {
-        Update[(BlockHash, BlockHash)](
-          """|INSERT OR IGNORE INTO block_parents
-             |(parent_block_hash, child_block_hash)
-             |VALUES (?, ?)""".stripMargin
-        ).updateMany(blockSummary.parentHashes.map((_, blockSummary.blockHash)).toList).void
+        Update[(BlockHash, BlockHash, Boolean)](
+          """INSERT OR IGNORE INTO block_parents
+             (parent_block_hash, child_block_hash, is_main)
+             VALUES (?, ?, ?)"""
+        ).updateMany(
+            blockSummary.parentHashes.zipWithIndex.map {
+              case (parentBlockHash, idx) =>
+                (parentBlockHash, blockSummary.blockHash, idx == 0)
+            }.toList
+          )
+          .void
       }
 
     val transaction = for {

@@ -9,7 +9,7 @@ use types::{
         UpdateKeyFailure, Weight, PUBLIC_KEY_SERIALIZED_LENGTH, WEIGHT_SERIALIZED_LENGTH,
     },
     bytesrepr::{Error, FromBytes, ToBytes, U32_SERIALIZED_LENGTH, U8_SERIALIZED_LENGTH},
-    AccessRights, Key, URef, KEY_UREF_SERIALIZED_LENGTH,
+    AccessRights, Key, URef,
 };
 
 pub use action_thresholds::ActionThresholds;
@@ -212,15 +212,15 @@ impl ToBytes for Account {
             * (PUBLIC_KEY_SERIALIZED_LENGTH + WEIGHT_SERIALIZED_LENGTH)
             + U32_SERIALIZED_LENGTH;
         let named_keys_size =
-            KEY_UREF_SERIALIZED_LENGTH * self.named_keys.len() + U32_SERIALIZED_LENGTH;
-        let purse_id_size = KEY_UREF_SERIALIZED_LENGTH;
+            Key::serialized_size_hint() * self.named_keys.len() + U32_SERIALIZED_LENGTH;
+        let purse_id_size = Key::serialized_size_hint();
         let serialized_account_size = PUBLIC_KEY_SERIALIZED_LENGTH // pub key
             + named_keys_size
             + purse_id_size
             + associated_keys_size
             + action_thresholds_size;
         if serialized_account_size >= u32::max_value() as usize {
-            return Err(Error::OutOfMemoryError);
+            return Err(Error::OutOfMemory);
         }
         let mut result: Vec<u8> = Vec::with_capacity(serialized_account_size);
         result.extend(&self.public_key.to_bytes()?);
@@ -257,7 +257,7 @@ pub mod gens {
     use proptest::prelude::*;
 
     use types::{
-        account::MAX_KEYS,
+        account::MAX_ASSOCIATED_KEYS,
         gens::{named_keys_arb, u8_slice_32, uref_arb},
     };
 
@@ -272,7 +272,7 @@ pub mod gens {
             urefs in named_keys_arb(3),
             purse_id in uref_arb(),
             thresholds in action_thresholds_arb(),
-            mut associated_keys in associated_keys_arb(MAX_KEYS - 1),
+            mut associated_keys in associated_keys_arb(MAX_ASSOCIATED_KEYS - 1),
         ) -> Account {
                 let purse_id = PurseId::new(purse_id);
                 associated_keys.add_key(pub_key.into(), Weight::new(1)).unwrap();

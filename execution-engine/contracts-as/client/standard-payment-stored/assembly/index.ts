@@ -34,11 +34,12 @@ export function call(): void {
     return;
   }
 
-  let destination = fromBytesString(destinationBytes);
-  if (destination === null) {
+  let destinationResult = fromBytesString(destinationBytes);
+  if (destinationResult.hasError()) {
     Error.fromErrorCode(ErrorCode.InvalidArgument);
     return;
   }
+  let destination = destinationResult.value;
 
   if (destination == DESTINATION_HASH) {
     const key = storeAtHash();

@@ -112,9 +112,8 @@ mod internal {
 
     use types::{
         account::{PublicKey, PurseId},
-        key::Key,
         system_contract_errors::pos::{Error, PurseLookupError, Result},
-        BlockTime, Phase, URef, U512,
+        BlockTime, Key, Phase, URef, U512,
     };
 
     use crate::{

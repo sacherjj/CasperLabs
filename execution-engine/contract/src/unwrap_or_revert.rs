@@ -1,18 +1,17 @@
-//! Home of [`UnwrapOrRevert`](crate::unwrap_or_revert::UnwrapOrRevert), a convenience trait for
-//! unwrapping values.
+//! Home of [`UnwrapOrRevert`], a convenience trait for unwrapping values.
 
 use casperlabs_types::ApiError;
 
 use crate::contract_api::runtime;
 
 /// A trait which provides syntactic sugar for unwrapping a type or calling
-/// `runtime::revert()` if this fails.  It is implemented for `Result` and `Option`.
+/// [`runtime::revert`] if this fails.  It is implemented for `Result` and `Option`.
 pub trait UnwrapOrRevert<T> {
-    /// Unwraps the value into its inner type or calls `runtime::revert()` with a
+    /// Unwraps the value into its inner type or calls [`runtime::revert`] with a
     /// predetermined error code on failure.
     fn unwrap_or_revert(self) -> T;
 
-    /// Unwraps the value into its inner type or calls `runtime::revert()` with the
+    /// Unwraps the value into its inner type or calls [`runtime::revert`] with the
     /// provided `error` on failure.
     fn unwrap_or_revert_with<E: Into<ApiError>>(self, error: E) -> T;
 }

@@ -1,3 +1,5 @@
+//! Contains types and constants associated with user accounts.
+
 use alloc::{boxed::Box, vec::Vec};
 use core::{
     convert::TryFrom,
@@ -12,22 +14,29 @@ use crate::{
     CLType, CLTyped, URef, UREF_SERIALIZED_LENGTH,
 };
 
+/// The number of bytes in a serialized [`PurseId`].
 pub const PURSE_ID_SERIALIZED_LENGTH: usize = UREF_SERIALIZED_LENGTH;
 
-#[derive(Debug)]
+// This error type is not intended to be used by third party crates.
+#[doc(hidden)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct TryFromIntError(());
 
+/// Associated error type of `TryFrom<&[u8]>` for [`PublicKey`].
 #[derive(Debug)]
 pub struct TryFromSliceForPublicKeyError(());
 
+/// A newtype wrapping a [`URef`](crate::URef) which represents the ID of a purse.
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct PurseId(URef);
 
 impl PurseId {
+    /// Constructs a `PurseId` from a `URef`.
     pub fn new(uref: URef) -> Self {
         PurseId(uref)
     }
 
+    /// Returns the wrapped `URef`.
     pub fn value(&self) -> URef {
         self.0
     }
@@ -57,16 +66,19 @@ impl CLTyped for PurseId {
     }
 }
 
+/// The various types of action which can be performed in the context of a given account.
 #[repr(u32)]
 pub enum ActionType {
-    /// Required by deploy execution.
+    /// Represents performing a deploy.
     Deployment = 0,
-    /// Required when adding/removing associated keys, changing threshold
-    /// levels.
+    /// Represents changing the associated keys (i.e. map of [`PublicKey`]s to [`Weight`]s) or
+    /// action thresholds (i.e. the total [`Weight`]s of signing [`PublicKey`]s required to perform
+    /// various actions).
     KeyManagement = 1,
 }
 
-/// convert from u32 representation of [`ActionType`]
+// This conversion is not intended to be used by third party crates.
+#[doc(hidden)]
 impl TryFrom<u32> for ActionType {
     type Error = TryFromIntError;
 
@@ -82,45 +94,41 @@ impl TryFrom<u32> for ActionType {
     }
 }
 
-/// Represents an error that occurs during the change of a thresholds on an
-/// account.
-///
-/// It is represented by `i32` to be easily able to transform this value in an
-/// out through FFI boundaries as a number.
-///
-/// The explicit numbering of the variants is done on purpose and whenever you
-/// plan to add new variant, you should always extend it, and add a variant that
-/// does not exist already. When adding new variants you should also remember to
-/// change `From<i32> for SetThresholdFailure`.
-///
-/// This way we can ensure safety and backwards compatibility. Any changes
-/// should be carefully reviewed and tested.
+/// Errors that can occur while changing action thresholds (i.e. the total [`Weight`]s of signing
+/// [`PublicKey`]s required to perform various actions) on an account.
 #[repr(i32)]
 #[derive(Debug, Fail, PartialEq, Eq)]
 pub enum SetThresholdFailure {
-    #[fail(display = "New threshold should be lower or equal than deployment threshold")]
-    KeyManagementThresholdError = 1,
-    #[fail(display = "New threshold should be lower or equal than key management threshold")]
-    DeploymentThresholdError = 2,
+    /// Setting the key-management threshold to a value lower than the deployment threshold is
+    /// disallowed.
+    #[fail(display = "New threshold should be greater than or equal to deployment threshold")]
+    KeyManagementThreshold = 1,
+    /// Setting the deployment threshold to a value greater than any other threshold is disallowed.
+    #[fail(display = "New threshold should be lower than or equal to key management threshold")]
+    DeploymentThreshold = 2,
+    /// Caller doesn't have sufficient permissions to set new thresholds.
     #[fail(display = "Unable to set action threshold due to insufficient permissions")]
     PermissionDeniedError = 3,
+    /// Setting a threshold to a value greater than the total weight of associated keys is
+    /// disallowed.
     #[fail(
         display = "New threshold should be lower or equal than total weight of associated keys"
     )]
     InsufficientTotalWeight = 4,
 }
 
-/// convert from i32 representation of [`SetThresholdFailure`]
+// This conversion is not intended to be used by third party crates.
+#[doc(hidden)]
 impl TryFrom<i32> for SetThresholdFailure {
     type Error = TryFromIntError;
 
     fn try_from(value: i32) -> Result<Self, Self::Error> {
         match value {
-            d if d == SetThresholdFailure::KeyManagementThresholdError as i32 => {
-                Ok(SetThresholdFailure::KeyManagementThresholdError)
+            d if d == SetThresholdFailure::KeyManagementThreshold as i32 => {
+                Ok(SetThresholdFailure::KeyManagementThreshold)
             }
-            d if d == SetThresholdFailure::DeploymentThresholdError as i32 => {
-                Ok(SetThresholdFailure::DeploymentThresholdError)
+            d if d == SetThresholdFailure::DeploymentThreshold as i32 => {
+                Ok(SetThresholdFailure::DeploymentThreshold)
             }
             d if d == SetThresholdFailure::PermissionDeniedError as i32 => {
                 Ok(SetThresholdFailure::PermissionDeniedError)
@@ -133,22 +141,24 @@ impl TryFrom<i32> for SetThresholdFailure {
     }
 }
 
-pub const PUBLIC_KEY_LENGTH: usize = 32;
+/// Maximum number of associated keys (i.e. map of [`PublicKey`]s to [`Weight`]s) for a single
+/// account.
+pub const MAX_ASSOCIATED_KEYS: usize = 10;
 
-/// Maximum number of associated keys.
-/// Value chosen arbitrary, shouldn't be too large to prevent bloating `associated_keys` table.
-pub const MAX_KEYS: usize = 10;
-
+/// The number of bytes in a serialized [`Weight`].
 pub const WEIGHT_SERIALIZED_LENGTH: usize = U8_SERIALIZED_LENGTH;
 
+/// The weight attributed to a given [`PublicKey`] in an account's associated keys.
 #[derive(PartialOrd, Ord, PartialEq, Eq, Clone, Copy, Debug)]
 pub struct Weight(u8);
 
 impl Weight {
+    /// Constructs a new `Weight`.
     pub fn new(weight: u8) -> Weight {
         Weight(weight)
     }
 
+    /// Returns the value of `self` as a `u8`.
     pub fn value(self) -> u8 {
         self.0
     }
@@ -173,12 +183,37 @@ impl CLTyped for Weight {
     }
 }
 
+/// The length in bytes of a [`PublicKey`].
+pub const PUBLIC_KEY_LENGTH: usize = 32;
+
+/// The number of bytes in a serialized [`PublicKey`].
+pub const PUBLIC_KEY_SERIALIZED_LENGTH: usize = PUBLIC_KEY_LENGTH;
+
+/// A newtype wrapping a [`[u8; PUBLIC_KEY_LENGTH]`](PUBLIC_KEY_LENGTH) which is the raw bytes of
+/// the public key of a cryptographic asymmetric key pair.
 #[derive(PartialOrd, Ord, PartialEq, Eq, Hash, Clone, Copy)]
 pub struct PublicKey([u8; PUBLIC_KEY_LENGTH]);
 
 impl Display for PublicKey {
     fn fmt(&self, f: &mut Formatter) -> core::fmt::Result {
         write!(f, "PublicKey({})", HexFmt(&self.0))
+    }
+}
+
+impl PublicKey {
+    /// Constructs a new `PublicKey`.
+    pub fn new(key: [u8; PUBLIC_KEY_LENGTH]) -> PublicKey {
+        PublicKey(key)
+    }
+
+    /// Returns the raw bytes of the public key as an array.
+    pub fn value(self) -> [u8; PUBLIC_KEY_LENGTH] {
+        self.0
+    }
+
+    /// Returns the raw bytes of the public key as a `Vec`.
+    pub fn to_vec(&self) -> Vec<u8> {
+        self.0.to_vec()
     }
 }
 
@@ -191,29 +226,6 @@ impl Debug for PublicKey {
 impl CLTyped for PublicKey {
     fn cl_type() -> CLType {
         CLType::FixedList(Box::new(CLType::U8), PUBLIC_KEY_LENGTH as u32)
-    }
-}
-
-// TODO: This needs to be updated, `PUBLIC_KEY_SERIALIZED_LENGTH` is not 32 bytes as KEY_SIZE
-// * U8_SIZE. I am not changing that as I don't want to deal with ripple effect.
-
-// Public key is encoded as its underlying [u8; 32] array, which in turn
-// is serialized as u8 + [u8; 32], u8 represents the length and then 32 element
-// array.
-pub const PUBLIC_KEY_SERIALIZED_LENGTH: usize = PUBLIC_KEY_LENGTH;
-
-impl PublicKey {
-    pub fn new(key: [u8; PUBLIC_KEY_LENGTH]) -> PublicKey {
-        PublicKey(key)
-    }
-
-    pub fn value(self) -> [u8; PUBLIC_KEY_LENGTH] {
-        self.0
-    }
-
-    /// Converts the underlying public key to a `Vec`
-    pub fn to_vec(&self) -> Vec<u8> {
-        self.0.to_vec()
     }
 }
 
@@ -248,31 +260,24 @@ impl FromBytes for PublicKey {
     }
 }
 
-/// Represents an error that happens when trying to add a new associated key
-/// on an account.
-///
-/// It is represented by `i32` to be easily able to transform this value in an
-/// out through FFI boundaries as a number.
-///
-/// The explicit numbering of the variants is done on purpose and whenever you
-/// plan to add new variant, you should always extend it, and add a variant that
-/// does not exist already. When adding new variants you should also remember to
-/// change `From<i32> for AddKeyFailure`.
-///
-/// This way we can ensure safety and backwards compatibility. Any changes
-/// should be carefully reviewed and tested.
+/// Errors that can occur while adding a new [`PublicKey`] to an account's associated keys map.
 #[derive(PartialEq, Eq, Fail, Debug)]
 #[repr(i32)]
 pub enum AddKeyFailure {
+    /// There are already [`MAX_ASSOCIATED_KEYS`] [`PublicKey`]s associated with the given account.
     #[fail(display = "Unable to add new associated key because maximum amount of keys is reached")]
     MaxKeysLimit = 1,
+    /// The given [`PublicKey`] is already associated with the given account.
     #[fail(display = "Unable to add new associated key because given key already exists")]
     DuplicateKey = 2,
+    /// Caller doesn't have sufficient permissions to associate a new [`PublicKey`] with the given
+    /// account.
     #[fail(display = "Unable to add new associated key due to insufficient permissions")]
     PermissionDenied = 3,
 }
 
-/// convert from i32 representation of [`AddKeyFailure`]
+// This conversion is not intended to be used by third party crates.
+#[doc(hidden)]
 impl TryFrom<i32> for AddKeyFailure {
     type Error = TryFromIntError;
 
@@ -286,32 +291,25 @@ impl TryFrom<i32> for AddKeyFailure {
     }
 }
 
-/// Represents an error that happens when trying to remove an associated key
-/// from an account.
-///
-/// It is represented by `i32` to be easily able to transform this value in an
-/// out through FFI boundaries as a number.
-///
-/// The explicit numbering of the variants is done on purpose and whenever you
-/// plan to add new variant, you should always extend it, and add a variant that
-/// does not exist already. When adding new variants you should also remember to
-/// change `From<i32> for RemoveKeyFailure`.
-///
-/// This way we can ensure safety and backwards compatibility. Any changes
-/// should be carefully reviewed and tested.
+/// Errors that can occur while removing a [`PublicKey`] from an account's associated keys map.
 #[derive(Fail, Debug, Eq, PartialEq)]
 #[repr(i32)]
 pub enum RemoveKeyFailure {
-    /// Key does not exist in the list of associated keys.
+    /// The given [`PublicKey`] is not associated with the given account.
     #[fail(display = "Unable to remove a key that does not exist")]
     MissingKey = 1,
+    /// Caller doesn't have sufficient permissions to remove an associated [`PublicKey`] from the
+    /// given account.
     #[fail(display = "Unable to remove associated key due to insufficient permissions")]
     PermissionDenied = 2,
+    /// Removing the given associated [`PublicKey`] would cause the total weight of all remaining
+    /// `PublicKey`s to fall below one of the action thresholds for the given account.
     #[fail(display = "Unable to remove a key which would violate action threshold constraints")]
     ThresholdViolation = 3,
 }
 
-/// convert from i32 representation of [`RemoveKeyFailure`]
+// This conversion is not intended to be used by third party crates.
+#[doc(hidden)]
 impl TryFrom<i32> for RemoveKeyFailure {
     type Error = TryFromIntError;
 
@@ -329,29 +327,26 @@ impl TryFrom<i32> for RemoveKeyFailure {
     }
 }
 
-/// Represents an error that happens when trying to update the value under a
-/// public key associated with an account.
-///
-/// It is represented by `i32` to be easily able to transform this value in and
-/// out through FFI boundaries as a number.
-///
-/// For backwards compatibility, the variants are explicitly ordered and will
-/// not be reordered; variants added in future versions will be appended to
-/// extend the enum and in the event that a variant is removed its ordinal will
-/// not be reused.
+/// Errors that can occur while updating the [`Weight`] of a [`PublicKey`] in an account's
+/// associated keys map.
 #[derive(PartialEq, Eq, Fail, Debug)]
 #[repr(i32)]
 pub enum UpdateKeyFailure {
-    /// Key does not exist in the list of associated keys.
+    /// The given [`PublicKey`] is not associated with the given account.
     #[fail(display = "Unable to update the value under an associated key that does not exist")]
     MissingKey = 1,
-    #[fail(display = "Unable to add new associated key due to insufficient permissions")]
+    /// Caller doesn't have sufficient permissions to update an associated [`PublicKey`] from the
+    /// given account.
+    #[fail(display = "Unable to update associated key due to insufficient permissions")]
     PermissionDenied = 2,
+    /// Updating the [`Weight`] of the given associated [`PublicKey`] would cause the total weight
+    /// of all `PublicKey`s to fall below one of the action thresholds for the given account.
     #[fail(display = "Unable to update weight that would fall below any of action thresholds")]
     ThresholdViolation = 3,
 }
 
-/// convert from i32 representation of [`UpdateKeyFailure`]
+// This conversion is not intended to be used by third party crates.
+#[doc(hidden)]
 impl TryFrom<i32> for UpdateKeyFailure {
     type Error = TryFromIntError;
 
@@ -373,7 +368,7 @@ impl TryFrom<i32> for UpdateKeyFailure {
 mod tests {
     use std::{convert::TryFrom, vec::Vec};
 
-    use super::PublicKey;
+    use super::*;
 
     #[test]
     fn public_key_from_slice() {
@@ -391,5 +386,49 @@ mod tests {
     fn public_key_from_slice_too_big() {
         let _public_key =
             PublicKey::try_from(&[0u8; 33][..]).expect_err("should not create public key");
+    }
+
+    #[test]
+    fn try_from_i32_for_set_threshold_failure() {
+        let max_valid_value_for_variant = SetThresholdFailure::InsufficientTotalWeight as i32;
+        assert_eq!(
+            Err(TryFromIntError(())),
+            SetThresholdFailure::try_from(max_valid_value_for_variant + 1),
+            "Did you forget to update `SetThresholdFailure::try_from` for a new variant of \
+                   `SetThresholdFailure`, or `max_valid_value_for_variant` in this test?"
+        );
+    }
+
+    #[test]
+    fn try_from_i32_for_add_key_failure() {
+        let max_valid_value_for_variant = AddKeyFailure::PermissionDenied as i32;
+        assert_eq!(
+            Err(TryFromIntError(())),
+            AddKeyFailure::try_from(max_valid_value_for_variant + 1),
+            "Did you forget to update `AddKeyFailure::try_from` for a new variant of \
+                   `AddKeyFailure`, or `max_valid_value_for_variant` in this test?"
+        );
+    }
+
+    #[test]
+    fn try_from_i32_for_remove_key_failure() {
+        let max_valid_value_for_variant = RemoveKeyFailure::ThresholdViolation as i32;
+        assert_eq!(
+            Err(TryFromIntError(())),
+            RemoveKeyFailure::try_from(max_valid_value_for_variant + 1),
+            "Did you forget to update `RemoveKeyFailure::try_from` for a new variant of \
+                   `RemoveKeyFailure`, or `max_valid_value_for_variant` in this test?"
+        );
+    }
+
+    #[test]
+    fn try_from_i32_for_update_key_failure() {
+        let max_valid_value_for_variant = UpdateKeyFailure::ThresholdViolation as i32;
+        assert_eq!(
+            Err(TryFromIntError(())),
+            UpdateKeyFailure::try_from(max_valid_value_for_variant + 1),
+            "Did you forget to update `UpdateKeyFailure::try_from` for a new variant of \
+                   `UpdateKeyFailure`, or `max_valid_value_for_variant` in this test?"
+        );
     }
 }

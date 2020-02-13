@@ -5,13 +5,9 @@ use engine_shared::motes::Motes;
 use engine_test_support::internal::{
     utils, ExecuteRequestBuilder, InMemoryWasmTestBuilder as TestBuilder, DEFAULT_GENESIS_CONFIG,
 };
-use types::{
-    account::PurseId,
-    bytesrepr::{FromBytes, ToBytes},
-    CLTyped, CLValue, Key, U512,
-};
+use types::{account::PurseId, bytesrepr::FromBytes, CLTyped, CLValue, Key, U512};
 
-const TRANFER_TO_ACCOUNT_WASM: &str = "transfer_to_account.wasm";
+const TRANFER_TO_ACCOUNT_WASM: &str = "transfer_to_account_u512.wasm";
 const VESTING_CONTRACT_WASM: &str = "vesting_smart_contract.wasm";
 const VESTING_PROXY_CONTRACT_NAME: &str = "vesting_proxy";
 const VESTING_CONTRACT_NAME: &str = "vesting_01";
@@ -132,7 +128,7 @@ impl VestingTest {
             .and_then(|v| CLValue::try_from(v).map_err(|error| format!("{:?}", error)))
             .expect("should have named uref in the account space.");
         let key: Key = value.into_t().unwrap();
-        key.as_hash().unwrap()
+        key.into_hash().unwrap()
     }
 
     pub fn deploy_vesting_contract(
@@ -218,13 +214,10 @@ impl VestingTest {
         recipient: [u8; 32],
         amount: U512,
     ) -> Self {
-        let request = ExecuteRequestBuilder::standard(
-            sender,
-            TRANFER_TO_ACCOUNT_WASM,
-            (recipient, amount.as_u64()),
-        )
-        .with_block_time(self.current_timestamp)
-        .build();
+        let request =
+            ExecuteRequestBuilder::standard(sender, TRANFER_TO_ACCOUNT_WASM, (recipient, amount))
+                .with_block_time(self.current_timestamp)
+                .build();
         self.builder.exec(request).expect_success().commit();
         self
     }
@@ -262,14 +255,26 @@ impl VestingTest {
     }
 
     fn get_value<T: FromBytes + CLTyped>(&self, name: &str) -> T {
-        let local_key = Key::local(self.get_vesting_hash(), &name.to_bytes().unwrap());
-        let value: CLValue = self
+        let contract = self
             .builder
-            .query(None, local_key.clone(), &[])
+            .query(None, Key::Hash(self.get_vesting_hash()), &[])
+            .expect("should have token contract.");
+
+        let key_uref: &Key = contract
+            .as_contract()
+            .unwrap()
+            .named_keys()
+            .get(name)
+            .unwrap();
+
+        let value = self
+            .builder
+            .query(None, *key_uref, &[])
             .and_then(|v| CLValue::try_from(v).map_err(|error| format!("{:?}", error)))
             .unwrap_or_else(|error| {
                 panic!("should have local value for {} key - {:?}", name, error)
             });
+
         value.into_t().unwrap()
     }
 
@@ -328,14 +333,14 @@ impl VestingTest {
     }
 
     pub fn assert_paused(self) -> Self {
-        let value: U512 = self.get_value(key::PAUSE_FLAG);
-        assert_eq!(value, 1.into(), "contract is not paused");
+        let value: bool = self.get_value(key::PAUSE_FLAG);
+        assert!(value, "contract is not paused");
         self
     }
 
     pub fn assert_unpaused(self) -> Self {
-        let value: U512 = self.get_value(key::PAUSE_FLAG);
-        assert_eq!(value, 0.into(), "contract is not paused");
+        let value: bool = self.get_value(key::PAUSE_FLAG);
+        assert!(!value, "contract is not paused");
         self
     }
 }

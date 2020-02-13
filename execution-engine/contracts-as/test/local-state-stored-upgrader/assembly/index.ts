@@ -41,10 +41,8 @@ export function delegate(): void {
     maybeValue = new Uint8Array(0);
   }
 
-  let storedValue = fromBytesString(maybeValue);
-  if (storedValue === null){
-    storedValue = "";
-  }
+  let storedValueResult = fromBytesString(maybeValue);
+  let storedValue = storedValueResult.hasError() ? "" : storedValueResult.value;
 
   writeLocal(local, CLValue.fromString(storedValue + HELLO_PREFIX));
 
@@ -54,10 +52,8 @@ export function delegate(): void {
     return;
   }
 
-  let newValue = fromBytesString(readback);
-  if (newValue === null){
-    newValue = "";
-  }
+  let newValueResult = fromBytesString(readback);
+  let newValue = newValueResult.hasError() ? "" : newValueResult.value;
 
   newValue = newValue + WORLD_SUFFIX;
   writeLocal(local, CLValue.fromString(newValue.trim()));
@@ -68,8 +64,8 @@ export function delegate(): void {
     return;
   }
 
-  newValue = fromBytesString(readback);
-  if (newValue === null){
+  newValueResult = fromBytesString(readback);
+  if (newValueResult.hasError()) {
     newValue = "";
   }
 
@@ -84,24 +80,24 @@ export function delegate(): void {
 
   let finalValue = fromBytesString(readback);
 
-  if (finalValue === null){
+  if (finalValue.hasError()){
     Error.fromUserError(<u16>DelegatedError.FailedFinalReadback).revert()
     return;
   }
 }
 
 export function call(): void{
-  // uref arg
   let urefBytes = CL.getArg(Args.LocalStateURef);
   if (urefBytes === null) {
     Error.fromUserError(<u16>CustomError.MissingURefArg).revert();
     return;
   }
-  let uref = URef.fromBytes(urefBytes);
-  if (uref === null) {
+  let urefResult = URef.fromBytes(urefBytes);
+  if (urefResult.hasError()) {
     Error.fromErrorCode(ErrorCode.InvalidArgument).revert();
     return;
   }
+  let uref = urefResult.value;
   if (uref.isValid() == false){
     Error.fromUserError(<u16>CustomError.InvalidURefArg).revert();
     return;

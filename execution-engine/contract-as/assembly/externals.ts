@@ -87,7 +87,6 @@ export declare function transfer_from_purse_to_purse(
 export declare function get_balance(purse_id_ptr: usize, purse_id_size: usize, result_size: u32): i32;
 @external("env", "get_phase")
 export declare function get_phase(dest_ptr: usize): void;
-// TODO: upgrade_contract_at_uref
 @external("env", "upgrade_contract_at_uref")
 export declare function upgrade_contract_at_uref(
     name_ptr: usize,

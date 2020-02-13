@@ -12,7 +12,8 @@ use types::{
     AccessRights, Key, URef, U512,
 };
 
-const CONTRACT_TRANSFER_TO_ACCOUNT_01: &str = "transfer_to_account_01.wasm";
+const CONTRACT_TRANSFER_TO_ACCOUNT: &str = "transfer_to_account_u512.wasm";
+const TRANSFER_AMOUNT: u64 = 250_000_000 + 1000;
 const SYSTEM_ADDR: [u8; 32] = [0u8; 32];
 const DEPLOY_HASH_2: [u8; 32] = [2u8; 32];
 const N_VALIDATORS: u8 = 5;
@@ -31,8 +32,8 @@ fn should_run_pos_install_contract() {
 
     let exec_request = ExecuteRequestBuilder::standard(
         DEFAULT_ACCOUNT_ADDR,
-        CONTRACT_TRANSFER_TO_ACCOUNT_01,
-        (SYSTEM_ADDR,),
+        CONTRACT_TRANSFER_TO_ACCOUNT,
+        (SYSTEM_ADDR, U512::from(TRANSFER_AMOUNT)),
     )
     .build();
     builder

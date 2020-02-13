@@ -1,6 +1,6 @@
 use contract::contract_api::runtime;
 use proof_of_stake::RuntimeProvider;
-use types::{account::PublicKey, key::Key, BlockTime, Phase};
+use types::{account::PublicKey, BlockTime, Key, Phase};
 
 pub struct ContractRuntime;
 

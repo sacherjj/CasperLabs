@@ -1,4 +1,4 @@
-//! A library to support testing of Wasm smart contracts for use on the CasperLabs network.
+//! A library to support testing of Wasm smart contracts for use on the CasperLabs Platform.
 //!
 //! # Example
 //! Consider a contract held in "contract.wasm" which stores an arbitrary `String` under a `Key`
@@ -54,10 +54,17 @@
 //! assert_eq!(expected_value, returned_value);
 //! ```
 
+#![doc(html_root_url = "https://docs.rs/casperlabs-engine-test-support/0.1.0")]
+#![doc(
+    html_favicon_url = "https://raw.githubusercontent.com/CasperLabs/CasperLabs/dev/images/CasperLabs_Logo_Favicon_RGB_50px.png",
+    html_logo_url = "https://raw.githubusercontent.com/CasperLabs/CasperLabs/dev/images/CasperLabs_Logo_Symbol_RGB.png",
+    test(attr(forbid(warnings)))
+)]
 #![warn(missing_docs)]
 
 mod code;
 mod error;
+// This module is not intended to be used by third party crates.
 #[doc(hidden)]
 pub mod internal;
 mod session;
@@ -73,9 +80,7 @@ pub use value::Value;
 /// An address of an entity (e.g. an account or key) on the network.
 pub type Address = [u8; 32];
 
-/// The address of a
-/// [`URef`](https://docs.rs/casperlabs-types/latest/casperlabs_types/struct.URef.html) (unforgeable
-/// reference) on the network.
+/// The address of a [`URef`](types::URef) (unforgeable reference) on the network.
 pub type URefAddr = [u8; 32];
 
 /// The hash of a smart contract stored on the network, which can be used to reference the contract.
@@ -84,6 +89,5 @@ pub type Hash = [u8; 32];
 /// Default test account address.
 pub const DEFAULT_ACCOUNT_ADDR: [u8; 32] = [6u8; 32];
 
-/// Default initial balance of a test account in
-/// [`Motes`](https://docs.rs/casperlabs-engine-shared/latest/casperlabs_engine_shared/motes/struct.Motes.html).
+/// Default initial balance of a test account in motes.
 pub const DEFAULT_ACCOUNT_INITIAL_BALANCE: u64 = 100_000_000_000;

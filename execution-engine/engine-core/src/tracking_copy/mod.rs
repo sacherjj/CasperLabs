@@ -12,7 +12,8 @@ use engine_shared::{
     additive_map::AdditiveMap,
     newtypes::CorrelationId,
     stored_value::StoredValue,
-    transform::{self, Transform, TypeMismatch},
+    transform::{self, Transform},
+    TypeMismatch,
 };
 use engine_storage::global_state::StateReader;
 use types::{bytesrepr, CLType, CLValueError, Key};

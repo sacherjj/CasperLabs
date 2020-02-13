@@ -18,12 +18,12 @@ impl StorageProvider for ContractStorage {
     }
 
     fn read_local<K: ToBytes, V: CLTyped + FromBytes>(key: &K) -> Result<Option<V>, Error> {
-        storage::read_local(key).map_err(|_| Error::StorageError)
+        storage::read_local(key).map_err(|_| Error::Storage)
     }
 
     fn read<T: CLTyped + FromBytes>(uref: URef) -> Result<Option<T>, Error> {
         let turef: TURef<T> = TURef::from_uref(uref).map_err(|_| Error::InvalidAccessRights)?;
-        storage::read(turef).map_err(|_| Error::StorageError)
+        storage::read(turef).map_err(|_| Error::Storage)
     }
 
     fn write<T: CLTyped + ToBytes>(uref: URef, value: T) -> Result<(), Error> {

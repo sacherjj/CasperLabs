@@ -139,7 +139,8 @@ where
                 let key_contract: Key = self.key_from_mem(key_ptr, key_size)?;
                 let args_bytes: Vec<u8> = self.bytes_from_mem(args_ptr, args_size as usize)?;
 
-                let ret = self.call_contract_host_buf(key_contract, args_bytes, result_size_ptr)?;
+                let ret =
+                    self.call_contract_host_buffer(key_contract, args_bytes, result_size_ptr)?;
                 Ok(Some(RuntimeValue::I32(api_error::i32_from(ret))))
             }
 
@@ -391,7 +392,7 @@ where
                 // args(1) = length of purse_id
                 // args(2) = pointer to output size (output)
                 let (ptr, ptr_size, output_size_ptr): (_, u32, _) = Args::parse(args)?;
-                let ret = self.get_balance_host_buf(ptr, ptr_size as usize, output_size_ptr)?;
+                let ret = self.get_balance_host_buffer(ptr, ptr_size as usize, output_size_ptr)?;
                 Ok(Some(RuntimeValue::I32(api_error::i32_from(ret))))
             }
 

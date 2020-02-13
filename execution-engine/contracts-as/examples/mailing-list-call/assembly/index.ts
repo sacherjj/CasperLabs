@@ -25,7 +25,7 @@ export function call(): void {
         Error.fromErrorCode(ErrorCode.GetKey).revert();
         return;
     }
-    
+
     let name = "CasperLabs";
     let maybeSubKeyBytes = callContract(<Key>contractKey, [
         CLValue.fromString(SUB_METHOD),
@@ -43,11 +43,12 @@ export function call(): void {
     }
 
     let subKeyBytes = <Uint8Array>maybeSubKey.unwrap();
-    let subKey = Key.fromBytes(subKeyBytes);
-    if (subKey === null) {
+    let subKeyResult = Key.fromBytes(subKeyBytes);
+    if (subKeyResult === null) {
         Error.fromUserError(<u16>UserError.NoSubKey).revert();
         return;
     }
+    let subKey = subKeyResult.value;
 
     putKey(MAIL_FEED_KEY, subKey);
 
@@ -76,15 +77,15 @@ export function call(): void {
         return;
     }
 
-    // TODO: Decode list of strings and do the check (currently fails)
-
     const messageBytes = <Uint8Array>maybeMessagesBytes;
-    const messages = fromBytesStringList(messageBytes);
-    if (messages === null) {
+    const messagesResult = fromBytesStringList(messageBytes);
+    if (messagesResult.hasError()) {
         Error.fromUserError(<u16>UserError.FindMessagesURef).revert();
+        return;
     }
+    let messages = messagesResult.value;
 
-    if ((<String[]>messages).length == 0) {
+    if (messages.length == 0) {
         Error.fromUserError(<u16>UserError.NoMessages).revert();
     }
 }

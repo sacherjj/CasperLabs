@@ -25,12 +25,12 @@ export function call(): void {
   }
 
   let purseName = fromBytesString(purseNameBytes);
-  if (purseName === null) {
+  if (purseName.hasError()) {
     Error.fromErrorCode(ErrorCode.InvalidArgument);
     return;
   }
 
-  let purseKey = getKey(<String>purseName);
+  let purseKey = getKey(purseName.value);
   if (purseKey === null) {
     Error.fromErrorCode(ErrorCode.InvalidArgument);
     return;
@@ -49,11 +49,12 @@ export function call(): void {
     return;
   }
 
-  let amount = U512.fromBytes(amountBytes);
-  if (amount === null) {
+  let amountResult = U512.fromBytes(amountBytes);
+  if (amountResult.hasError()) {
     Error.fromErrorCode(ErrorCode.InvalidArgument).revert();
     return;
   }
+  let amount = amountResult.value;
 
   let proofOfStakeKey = Key.fromURef(proofOfStake);
 
@@ -65,11 +66,12 @@ export function call(): void {
     Error.fromErrorCode(ErrorCode.PurseNotCreated).revert();
     return;
   }
-  let paymentPurse = PurseId.fromBytes(paymentPurseOutput);
-  if (paymentPurse === null) {
+  let paymentPurseResult = PurseId.fromBytes(paymentPurseOutput);
+  if (paymentPurseResult.hasError()) {
     Error.fromErrorCode(ErrorCode.InvalidPurse).revert();
     return;
   }
+  let paymentPurse = paymentPurseResult.value;
 
   // Set Refund Purse
   let args: CLValue[] = [CLValue.fromString(SET_REFUND_PURSE), CLValue.fromURef(purseId.asURef())];
@@ -80,8 +82,8 @@ export function call(): void {
   }
 
   let ret = purseId.transferToPurse(
-    <PurseId>(paymentPurse),
-    <U512>amount,
+    paymentPurse,
+    amount,
   );
   if (ret > 0) {
     Error.fromErrorCode(ErrorCode.Transfer).revert();

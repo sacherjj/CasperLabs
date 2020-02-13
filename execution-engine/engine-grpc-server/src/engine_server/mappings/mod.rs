@@ -28,10 +28,10 @@ pub enum MappingError {
     InvalidStateHashLength { expected: usize, actual: usize },
     InvalidPublicKeyLength { expected: usize, actual: usize },
     InvalidDeployHashLength { expected: usize, actual: usize },
-    ParsingError(ParsingError),
+    Parsing(ParsingError),
     InvalidStateHash(String),
     MissingPayload,
-    TryFromSliceError,
+    TryFromSlice,
 }
 
 impl MappingError {
@@ -48,7 +48,7 @@ impl MappingError {
 
 impl From<ParsingError> for MappingError {
     fn from(error: ParsingError) -> Self {
-        MappingError::ParsingError(error)
+        MappingError::Parsing(error)
     }
 }
 
@@ -59,7 +59,7 @@ impl From<MappingError> for engine_state::Error {
             MappingError::InvalidStateHashLength { expected, actual } => {
                 engine_state::Error::InvalidHashLength { expected, actual }
             }
-            _ => engine_state::Error::DeployError,
+            _ => engine_state::Error::Deploy,
         }
     }
 }
@@ -82,12 +82,10 @@ impl Display for MappingError {
                 "Invalid deploy hash length: expected {}, actual {}",
                 expected, actual
             ),
-            MappingError::ParsingError(ParsingError(message)) => {
-                write!(f, "Parsing error: {}", message)
-            }
+            MappingError::Parsing(ParsingError(message)) => write!(f, "Parsing error: {}", message),
             MappingError::InvalidStateHash(message) => write!(f, "Invalid hash: {}", message),
             MappingError::MissingPayload => write!(f, "Missing payload"),
-            MappingError::TryFromSliceError => write!(f, "Unable to convert from slice"),
+            MappingError::TryFromSlice => write!(f, "Unable to convert from slice"),
         }
     }
 }

@@ -25,7 +25,7 @@ fn alloc_bytes(n: usize) -> *mut u8 {
     } else {
         Global
             .alloc_array(n)
-            .map_err(|_| ApiError::OutOfMemoryError)
+            .map_err(|_| ApiError::OutOfMemory)
             .unwrap_or_revert()
             .as_ptr()
     }

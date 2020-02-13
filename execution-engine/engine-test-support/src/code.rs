@@ -10,7 +10,7 @@ pub enum Code {
     Path(PathBuf),
     /// A named key providing the location of a stored contract.
     NamedKey(String),
-    /// A [`URef`](https://docs.rs/casperlabs-types/latest/casperlabs_types/struct.URef.html) to a stored contract.
+    /// A [`URef`] to a stored contract.
     URef(URefAddr),
     /// A hash providing the location of a stored contract.
     Hash(Hash),

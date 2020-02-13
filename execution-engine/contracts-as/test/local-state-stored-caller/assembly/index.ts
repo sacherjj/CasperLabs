@@ -15,17 +15,17 @@ enum CustomError {
 }
 
 export function call(): void {
-  // uref arg
   let urefBytes = CL.getArg(Args.LocalStateURef);
   if (urefBytes === null) {
     Error.fromUserError(<u16>CustomError.MissingURefArg).revert();
     return;
   }
-  let uref = URef.fromBytes(urefBytes);
-  if (uref === null) {
+  let urefResult = URef.fromBytes(urefBytes);
+  if (urefResult.hasError()) {
     Error.fromErrorCode(ErrorCode.InvalidArgument).revert();
     return;
   }
+  let uref = urefResult.value;
   if (uref.isValid() == false){
     Error.fromUserError(<u16>CustomError.InvalidURefArg).revert();
     return;

@@ -1,4 +1,10 @@
-//! A Rust library for writing smart contracts on the [CasperLabs Platform](https://techspec.casperlabs.io).
+//! A Rust library for writing smart contracts on the
+//! [CasperLabs Platform](https://techspec.casperlabs.io).
+//!
+//! # `no_std`
+//!
+//! By default, the library is `no_std`, however you can enable full `std` functionality by enabling
+//! the crate's `std` feature.
 //!
 //! # Example
 //!
@@ -12,7 +18,7 @@
 //!     contract_api::{runtime, storage, TURef},
 //!     unwrap_or_revert::UnwrapOrRevert,
 //! };
-//! use casperlabs_types::{ApiError, Key, URef};
+//! use casperlabs_types::{ApiError, Key};
 //!
 //! const KEY: &str = "special_value";
 //!
@@ -44,17 +50,27 @@
 //! ```
 //!
 //! # Writing Smart Contracts
-//! Support for writing smart contracts are contained in the [`contract_api`](crate::contract_api)
-//! module and its submodules.
+//!
+//! Support for writing smart contracts are contained in the [`contract_api`] module and its
+//! submodules.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #![feature(alloc_error_handler, allocator_api, core_intrinsics, lang_items)]
+#![doc(html_root_url = "https://docs.rs/casperlabs-contract/0.1.0")]
+#![doc(
+    html_favicon_url = "https://raw.githubusercontent.com/CasperLabs/CasperLabs/dev/images/CasperLabs_Logo_Favicon_RGB_50px.png",
+    html_logo_url = "https://raw.githubusercontent.com/CasperLabs/CasperLabs/dev/images/CasperLabs_Logo_Symbol_RGB.png",
+    test(attr(forbid(warnings)))
+)]
+#![warn(missing_docs)]
 
 extern crate alloc;
 #[cfg(any(feature = "std", test))]
 #[macro_use]
 extern crate std;
 
+/// An instance of [`WeeAlloc`](https://docs.rs/wee_alloc) which allows contracts built as `no_std`
+/// to avoid having to provide a global allocator themselves.
 #[cfg(not(any(feature = "std", test)))]
 #[global_allocator]
 pub static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;

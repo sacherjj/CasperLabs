@@ -56,7 +56,7 @@ fn should_raise_insufficient_payment_when_caller_lacks_minimum_balance() {
     let error_message = utils::get_error_message(account_1_response);
 
     assert!(
-        error_message.contains("InsufficientPaymentError"),
+        error_message.contains("InsufficientPayment"),
         "expected insufficient payment, got: {}",
         error_message
     );
@@ -723,7 +723,6 @@ fn should_charge_non_main_purse() {
 
     let mut builder = InMemoryWasmTestBuilder::default();
 
-    // arrange
     let setup_exec_request = {
         let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)

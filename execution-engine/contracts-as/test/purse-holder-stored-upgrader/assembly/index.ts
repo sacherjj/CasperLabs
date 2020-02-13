@@ -43,11 +43,12 @@ export function delegate(): void {
     Error.fromUserError(<u16>CustomError.MissingMethodNameArg).revert();
     return;
   }
-  const methodName = fromBytesString(methodNameArg);
-  if (methodName === null){
+  const methodNameResult = fromBytesString(methodNameArg);
+  if (methodNameResult === null){
     Error.fromUserError(<u16>CustomError.InvalidMethodNameArg).revert();
     return;
   }
+  let methodName = methodNameResult.value;
   if (methodName == METHOD_ADD){
     // purseName
     const purseNameArg = CL.getArg(ApplyArgs.PurseName);
@@ -55,11 +56,13 @@ export function delegate(): void {
       Error.fromUserError(<u16>CustomError.MissingPurseNameArg).revert();
       return;
     }
-    const purseName = fromBytesString(purseNameArg);
-    if (purseName === null){
+    const purseNameResult = fromBytesString(purseNameArg);
+    if (purseNameResult === null){
       Error.fromUserError(<u16>CustomError.InvalidPurseNameArg).revert();
       return;
     }
+    let purseName = purseNameResult.value;
+
     let purseId = PurseId.create();
     if (purseId === null) {
       Error.fromUserError(<u16>CustomError.NamedPurseNotCreated).revert();
@@ -77,11 +80,12 @@ export function delegate(): void {
       Error.fromUserError(<u16>CustomError.MissingPurseNameArg).revert();
       return;
     }
-    const purseName = fromBytesString(purseNameArg);
-    if (purseName === null){
+    const purseNameResult = fromBytesString(purseNameArg);
+    if (purseNameResult === null){
       Error.fromUserError(<u16>CustomError.InvalidPurseNameArg).revert();
       return;
     }
+    let purseName = purseNameResult.value;
     removeKey(purseName);
     return;
   }
@@ -93,17 +97,17 @@ export function delegate(): void {
 }
 
 export function call(): void {
-  // uref arg
   let urefBytes = CL.getArg(CallArgs.PurseHolderURef);
   if (urefBytes === null) {
     Error.fromUserError(<u16>CustomError.MissingPurseHolderURefArg).revert();
     return;
   }
-  let uref = URef.fromBytes(urefBytes);
-  if (uref === null) {
+  let urefResult = URef.fromBytes(urefBytes);
+  if (urefResult.hasError()) {
     Error.fromErrorCode(ErrorCode.InvalidArgument).revert();
     return;
   }
+  let uref = urefResult.value;
   if (uref.isValid() == false){
     Error.fromUserError(<u16>CustomError.InvalidPurseHolderURefArg).revert();
     return;
