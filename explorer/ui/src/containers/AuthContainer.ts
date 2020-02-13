@@ -179,8 +179,15 @@ export class AuthContainer {
     return this.contracts;
   }
 
-  public async updateContracts(f: (contract: Contracts) => Contracts) {
-    this.contracts = f(this.contracts || {vestingContracts: []});
+  public async updateContracts<K extends keyof Contracts>(
+    id: K,
+    f: (oldState: Contracts[K]) => Contracts[K]
+  ) {
+    if (!this.contracts) {
+      this.contracts = {};
+    }
+    let oldState = this.contracts[id];
+    this.contracts[id] = f(oldState);
     await this.errors.capture(this.saveMetaData());
   }
 

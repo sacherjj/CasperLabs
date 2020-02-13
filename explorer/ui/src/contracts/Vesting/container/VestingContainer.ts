@@ -67,20 +67,18 @@ export class VestingContainer {
   }
 
   public async addVestingHash(vestingHash: NamedHash) {
-    await this.auth.updateContracts(contracts => {
-      let vestingHashes = contracts.vestingContracts || [];
-      vestingHashes.push(vestingHash);
-      contracts.vestingContracts = vestingHashes;
-      return contracts;
+    await this.auth.updateContracts("vestingContracts", vestingHashes=> {
+      let d = vestingHashes || [];
+      d.push(vestingHash);
+      return d;
     });
   }
 
   public async removeVestingHash(hash: string) {
-    await this.auth.updateContracts(contracts => {
-      contracts.vestingContracts = (contracts.vestingContracts || []).filter(
+    await this.auth.updateContracts("vestingContracts", vestingHashes => {
+      return (vestingHashes || []).filter(
         x => x.hashBase16 !== hash
       );
-      return contracts;
     });
   }
 
