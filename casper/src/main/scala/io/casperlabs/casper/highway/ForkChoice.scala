@@ -110,7 +110,9 @@ object ForkChoice {
                     }.toMap)
         honestValidators = weights.keys.toList.filterNot(equivocators(_))
         latestHonestMessages = latestMessages.collect {
-          case (v, lms) if lms.size == 1 => v -> lms.head
+          // It may be the case that validator is honest in current era,
+          // but equivocated in the past and we haven't yet forgiven him.
+          case (v, lms) if lms.size == 1 && honestValidators.contains(v) => v -> lms.head
         }
         forkChoice <- MonadThrowable[F].tailRecM(eraStartBlock) { startBlock =>
                        val noChildren = dag
@@ -245,11 +247,11 @@ object ForkChoice {
                                   .map(EraObservedBehavior.local(_))
         justificationsMessages <- justifications.toList.traverse(dag.lookupUnsafe)
         panoramaOfTheBlock <- DagOperations.panoramaOfMessageFromJustifications[F](
-                           dag,
-                           justificationsMessages,
-                           erasObservedBehaviors,
-                           keyBlock
-                         )
+                               dag,
+                               justificationsMessages,
+                               erasObservedBehaviors,
+                               keyBlock
+                             )
         keyBlocks <- MessageProducer.collectKeyBlocks[F](keyBlockHash)
         (forkChoice, forkChoiceJustifications) <- erasForkChoice(
                                                    keyBlock,
