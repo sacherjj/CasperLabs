@@ -7,6 +7,7 @@ import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.Estimator
 import io.casperlabs.casper.util.ProtoUtil
+import io.casperlabs.casper.util.EraObservedBehavior
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.crypto.Keys.{PublicKey, PublicKeyBS}
 import io.casperlabs.models.Message.Block

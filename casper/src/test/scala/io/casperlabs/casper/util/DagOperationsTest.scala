@@ -14,7 +14,6 @@ import io.casperlabs.casper.util.BondingUtil.Bond
 import io.casperlabs.models.Message
 import io.casperlabs.shared.Sorting.messageSummaryOrdering
 import io.casperlabs.storage.dag.DagRepresentation
-import DagRepresentation.EraObservedBehavior
 import monix.eval.Task
 import org.scalatest.{FlatSpec, Matchers}
 
@@ -474,7 +473,6 @@ class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator with 
   }
 
   import ByteStringPrettifier._
-  import DagRepresentation.ObservedValidatorBehavior._
   val v1         = generateValidator("V1")
   val v2         = generateValidator("V2")
   val v3         = generateValidator("V3")
