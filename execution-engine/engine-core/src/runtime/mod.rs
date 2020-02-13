@@ -64,8 +64,11 @@ pub fn instance_and_memory(
     let resolver = create_module_resolver(protocol_version)?;
     let mut imports = ImportsBuilder::new();
     imports.push_resolver("env", &resolver);
-    let instance = ModuleInstance::new(&module, &imports)?.assert_no_start();
-
+    let not_started_module = ModuleInstance::new(&module, &imports)?;
+    if not_started_module.has_start() {
+        return Err(Error::UnsupportedWasmStart);
+    }
+    let instance = not_started_module.not_started_instance().clone();
     let memory = resolver.memory_ref()?;
     Ok((instance, memory))
 }
