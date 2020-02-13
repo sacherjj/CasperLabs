@@ -179,19 +179,8 @@ export class AuthContainer {
     return this.contracts;
   }
 
-  public async addVestingHash(vestingHash: NamedHash) {
-    this.contracts?.vestingContracts?.push(vestingHash);
-    await this.errors.capture(this.saveMetaData());
-  }
-
-  public async removeVestingHash(hash: string) {
-    if (!this.contracts) {
-      await this.errors.capture(Promise.reject('Please Login'));
-      return;
-    }
-    this.contracts.vestingContracts = (this.contracts.vestingContracts || []).filter(
-      x => x.hashBase16 !== hash
-    );
+  public async updateContracts(f: (contract: Contracts) => Contracts) {
+    this.contracts = f(this.contracts || {vestingContracts: []});
     await this.errors.capture(this.saveMetaData());
   }
 

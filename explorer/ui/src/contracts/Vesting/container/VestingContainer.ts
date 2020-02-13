@@ -66,12 +66,30 @@ export class VestingContainer {
     });
   }
 
+  public async addVestingHash(vestingHash: NamedHash) {
+    await this.auth.updateContracts(contracts => {
+      let vestingHashes = contracts.vestingContracts || [];
+      vestingHashes.push(vestingHash);
+      contracts.vestingContracts = vestingHashes;
+      return contracts;
+    });
+  }
+
+  public async removeVestingHash(hash: string) {
+    await this.auth.updateContracts(contracts => {
+      contracts.vestingContracts = (contracts.vestingContracts || []).filter(
+        x => x.hashBase16 !== hash
+      );
+      return contracts;
+    });
+  }
+
   async save(): Promise<boolean> {
     let form = this.importVestingForm!;
     let clean = await form.clean();
     if (clean) {
       // Save it to Auth0.
-      await this.auth.addVestingHash({
+      await this.addVestingHash({
         name: form.name,
         hashBase16: form.hashBase16
       });
@@ -88,7 +106,7 @@ export class VestingContainer {
   async deleteVestingHash(vestingHash: string, msg?: string) {
     msg = msg || `Are you sure you want to delete the stored vesting contract hash '${vestingHash}'?`;
     if (window.confirm(msg)) {
-      await this.auth.removeVestingHash(vestingHash);
+      await this.removeVestingHash(vestingHash);
       this.selectedVestingHash = null;
     }
   }
