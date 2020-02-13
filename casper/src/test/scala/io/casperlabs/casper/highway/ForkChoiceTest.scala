@@ -254,15 +254,13 @@ class ForkChoiceTest extends FlatSpec with HighwayFixture {
 
           override def test: Task[Unit] =
             for {
-              _          <- insertGenesis()
-              genesisEra <- addGenesisEra()
-              (a1, (c1, c1Prime)) <- Task.parZip2(
-                                      genesisEra.block(alice, genesis.messageHash),
-                                      equivocate(charlie, genesisEra, genesis.messageHash)
-                                    )
-              a2 <- genesisEra.block(alice, a1)
-              b1 <- genesisEra.block(bob, a2)
-              b2 <- genesisEra.block(bob, b1)
+              _             <- insertGenesis()
+              genesisEra    <- addGenesisEra()
+              a1            <- genesisEra.block(alice, genesis.messageHash)
+              (c1, c1Prime) <- equivocate(charlie, genesisEra, genesis.messageHash)
+              a2            <- genesisEra.block(alice, a1)
+              b1            <- genesisEra.block(bob, a2)
+              b2            <- genesisEra.block(bob, b1)
               // Voting period ballots
               ba1          <- genesisEra.ballot(alice, b2)
               bb1          <- genesisEra.ballot(bob, b2)
