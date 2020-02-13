@@ -165,10 +165,10 @@ function duration(duration: number) {
   const d = moment.duration(duration);
   if (d.days() > 1) {
     let days = d.asDays();
-    return `${days.toLocaleString()} Day${days > 1 ? 's' : ''}`;
+    return `${days.toLocaleString()} day${days > 1 ? 's' : ''}`;
   } else {
     let hours = d.asHours();
-    return `${hours.toLocaleString()} Hour${hours > 1 ? 's' : ''}`;
+    return `${hours.toLocaleString()} hour${hours > 1 ? 's' : ''}`;
   }
 }
 

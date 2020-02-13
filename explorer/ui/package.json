@@ -25,7 +25,6 @@
     "downshift": "^3.4.1",
     "file-saver": "^2.0.2",
     "google-protobuf": "^3.9.0",
-    "javascript-time-ago": "^2.0.1",
     "jquery": "^3.4.1",
     "lint-staged": "^8.2.1",
     "lodash": "^4.17.14",
