@@ -28,7 +28,7 @@ export class VestingContainer {
     }
     try {
       this.vestingDetails = await this.getVestingDetails(hash);
-    }catch (e) {
+    } catch (e) {
       let msg = `The hash is not valid anymore, do you want to remove it?`;
       this.deleteVestingHash(hash, msg);
     }
@@ -36,9 +36,9 @@ export class VestingContainer {
 
   // Open a form for importing information of vesting contract
   configureImportVestingHash() {
-    let contracts = this.auth.getContracts();
-    if (contracts !== null) {
-      this.importVestingForm = new ImportVestingFormData(contracts.vestingContracts || [], this.casperService);
+    let vestingHashes = this.auth.getContracts('vestingContracts');
+    if (vestingHashes !== undefined) {
+      this.importVestingForm = new ImportVestingFormData(vestingHashes, this.casperService);
     }
   }
 
@@ -58,7 +58,7 @@ export class VestingContainer {
 
   @computed
   get options() {
-    return (this.auth.getContracts()?.vestingContracts || []).map(x => {
+    return (this.auth.getContracts('vestingContracts') || []).map(x => {
       return {
         label: x.name,
         value: x.name
@@ -98,7 +98,7 @@ export class VestingContainer {
   }
 
   selectVestingHashByName(name: string) {
-    this.selectedVestingHash = (this.auth.getContracts()?.vestingContracts || [])!.find(x => x.name === name) || null;
+    this.selectedVestingHash = (this.auth.getContracts('vestingContracts') || []).find(x => x.name === name) || null;
   }
 
   async deleteVestingHash(vestingHash: string, msg?: string) {

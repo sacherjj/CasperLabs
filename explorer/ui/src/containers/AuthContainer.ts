@@ -172,22 +172,22 @@ export class AuthContainer {
     await this.errors.capture(this.saveMetaData());
   }
 
-  public getContracts(): Contracts | null {
+  public getContracts<K extends keyof Contracts>(key:K): Contracts[K] {
     if(!this.contracts){
-      this.errors.capture(Promise.reject("Please Login"));
+      this.contracts = {};
     }
-    return this.contracts;
+    return this.contracts[key];
   }
 
   public async updateContracts<K extends keyof Contracts>(
-    id: K,
+    key: K,
     f: (oldState: Contracts[K]) => Contracts[K]
   ) {
     if (!this.contracts) {
       this.contracts = {};
     }
-    let oldState = this.contracts[id];
-    this.contracts[id] = f(oldState);
+    let oldState = this.contracts[key];
+    this.contracts[key] = f(oldState);
     await this.errors.capture(this.saveMetaData());
   }
 
