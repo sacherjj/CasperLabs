@@ -200,14 +200,9 @@ object ForkChoice {
               .latestMessagesInEra(
                 currKeyBlock.messageHash
               )
-            val pastEras = currKeyBlock.messageHash :: keyBlocks
-              .takeWhile(
-                _.messageHash != currKeyBlock.messageHash
-              )
-              .map(_.messageHash)
             val visibleEquivocators = dagView
               .equivocatorsVisibleInEras(
-                pastEras.toSet
+                Set(currKeyBlock.messageHash) // Equivocator count only in era he equivocated
               )
             for {
               (forkChoice, eraLatestMessagesReduced) <- eraForkChoice(
