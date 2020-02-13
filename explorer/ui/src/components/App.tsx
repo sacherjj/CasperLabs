@@ -97,7 +97,7 @@ const SideMenuItems: (MenuItem | GroupedMenuItem)[] = [
   new MenuItem(Pages.Deploys, 'Deploys', 'tasks'),
   new MenuItem(Pages.Search, 'Search', 'search'),
   new MenuItem(Pages.ConnectedPeers, 'Connected Peers', 'network-wired'),
-  new GroupedMenuItem('clarityContracts', 'Contracts', 'stamp', [
+  new GroupedMenuItem('clarityContracts', 'Contracts', 'file-contract', [
     new MenuItem(Pages.Vesting, 'Vesting')
   ])
 ];

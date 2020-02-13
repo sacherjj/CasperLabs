@@ -21,8 +21,6 @@ class VestingChart extends Component<Props, {}> {
     };
   }
 
-
-
   chartOptions() {
     return {
       legend: { display: false },

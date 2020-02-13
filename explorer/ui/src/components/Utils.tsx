@@ -14,11 +14,21 @@ export const Spinner = (msg: String) => (
 export const Loading = () => Spinner('Loading');
 
 // https://fontawesome.com/icons?d=gallery&q=ground&m=free
-export const Icon = (props: { name: string; color?: string; title?: string }) => {
+export const Icon = (props: {
+  name: string;
+  color?: string;
+  title?: string;
+}) => {
   const styles = {
     color: props.color
   };
-  return <i className={'fa fa-fw fa-' + props.name} style={styles} title={props.title}/>;
+  return (
+    <i
+      className={'fa fa-fw fa-' + props.name}
+      style={styles}
+      title={props.title}
+    />
+  );
 };
 
 export const IconButton = (props: {
@@ -43,7 +53,7 @@ export const Button = (props: {
   onClick: () => void;
   title: string;
   disabled?: boolean;
-  type?: 'primary' | 'danger'
+  type?: 'primary' | 'danger';
 }) => (
   <button
     type="button"
@@ -153,15 +163,6 @@ export class PrivateRoute extends React.Component<PrivateRouteProps, {}> {
 export const shortHash = (hash: string | ByteArray) => {
   const h = typeof hash === 'string' ? hash : encodeBase16(hash);
   return h.length > 10 ? h.substr(0, 10) + '...' : h;
-};
-
-export const ShortHashSpan = (props: { hash: string | ByteArray }) => {
-  const h = typeof props.hash === 'string' ? props.hash : encodeBase16(props.hash);
-  return (
-    <span title={h}>
-      {shortHash(h)}
-    </span>
-  );
 };
 
 export const Card = (props: {

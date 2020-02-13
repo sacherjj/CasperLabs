@@ -244,7 +244,6 @@ class ImportVestingFormData extends AsyncCleanableFormData {
     if (this.vestingHashes.some(x => x.hashBase16 === this.hashBase16))
       return 'An item with this contract hash already exists.';
 
-
     let stateQuery = new StateQuery();
     stateQuery.setKeyBase16(this.hashBase16);
     stateQuery.setKeyVariant(StateQuery.KeyVariant.HASH);

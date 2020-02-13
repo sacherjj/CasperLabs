@@ -4,7 +4,13 @@ import { saveAs } from 'file-saver';
 import ErrorContainer from './ErrorContainer';
 import { CleanableFormData } from './FormData';
 import AuthService from '../services/AuthService';
-import { BalanceService, CasperService, decodeBase64, encodeBase64, Keys } from 'casperlabs-sdk';
+import {
+  BalanceService,
+  CasperService,
+  decodeBase64,
+  encodeBase64,
+  Keys
+} from 'casperlabs-sdk';
 import ObservableValueMap from '../lib/ObservableValueMap';
 
 // https://www.npmjs.com/package/tweetnacl-ts#signatures
@@ -123,7 +129,6 @@ export class AuthContainer {
   configureImportAccount() {
     this.accountForm = new ImportAccountFormData(this.accounts!);
   }
-
 
   async createAccount(): Promise<boolean> {
     let form = this.accountForm!;
