@@ -1044,7 +1044,7 @@ clone:
 steps:
 - name: drone-docker-image-cleanup
   image: casperlabs/buildenv:latest
-  command:
+  commands:
   - "docker images --filter \"dangling=true\" -q --no-trunc | xargs --no-run-if-empty docker rmi -f || true"
   - "docker images | grep DRONE | grep -E '([1-9][0-9]|[4-9]).hours' | awk '{print $3}' | xargs --no-run-if-empty docker rmi -f || true"
   volumes:
