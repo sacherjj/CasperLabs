@@ -14,6 +14,8 @@ import io.casperlabs.ipc._
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.models.SmartContractEngineError
 import io.casperlabs.shared.Log
+import io.casperlabs.smartcontracts.bytesrepr.FromBytes
+import io.casperlabs.smartcontracts.cltype.StoredValue
 import io.casperlabs.smartcontracts.ExecutionEngineService.Stub
 import monix.eval.{Task, TaskLift}
 import simulacrum.typeclass
@@ -91,6 +93,39 @@ class GrpcExecutionEngineService[F[_]: Defer: Concurrent: Log: TaskLift: Metrics
         )
     }
 
+  private def sendExecute(
+      request: ExecuteRequest
+  ): F[Either[SmartContractEngineError, Seq[DeployResult]]] =
+    sendMessage(request, _.execute) {
+      _.result match {
+        case ExecuteResponse.Result.Success(ExecResult(deployResults)) =>
+          Right(deployResults) //TODO: Capture errors better than just as a string
+        case ExecuteResponse.Result.Empty =>
+          Left(new SmartContractEngineError("empty response"))
+        case ExecuteResponse.Result.MissingParent(RootNotFound(missing)) =>
+          Left(
+            new SmartContractEngineError(
+              s"Missing states: ${Base16.encode(missing.toByteArray)}"
+            )
+          )
+      }
+    }
+
+  private def updateGasMetrics(
+      deployResults: Either[SmartContractEngineError, Seq[DeployResult]]
+  ): F[Unit] =
+    deployResults.fold(
+      _ => ().pure[F],
+      deployResults => {
+        // XXX: EE returns cost as BigInt but metrics are in Long. In practice it will be unlikely exhaust the limits of Long.
+        val gasSpent =
+          deployResults.foldLeft(0L)(
+            (a, d) => a + d.value.executionResult.fold(0L)(_.cost.fold(0L)(_.value.toLong))
+          )
+        Metrics[F].incrementCounter("gas_spent", gasSpent)
+      }
+    )
+
   override def exec(
       prestate: ByteString,
       blocktime: Long,
@@ -104,36 +139,11 @@ class GrpcExecutionEngineService[F[_]: Defer: Concurrent: Log: TaskLift: Metrics
     val batches =
       ExecutionEngineService.batchDeploys(baseExecRequest, messageSizeLimit, parallelism)(deploys)
 
-    val stream = fs2.Stream.evalSeq(batches.pure[F]).mapAsync(parallelism) { request =>
-      sendMessage(request, _.execute) {
-        _.result match {
-          case ExecuteResponse.Result.Success(ExecResult(deployResults)) =>
-            Right(deployResults) //TODO: Capture errors better than just as a string
-          case ExecuteResponse.Result.Empty =>
-            Left(new SmartContractEngineError("empty response"))
-          case ExecuteResponse.Result.MissingParent(RootNotFound(missing)) =>
-            Left(
-              new SmartContractEngineError(
-                s"Missing states: ${Base16.encode(missing.toByteArray)}"
-              )
-            )
-        }
-      }
-    }
+    val stream = fs2.Stream.evalSeq(batches.pure[F]).mapAsync(parallelism)(sendExecute)
 
     for {
       result <- stream.compile.toList.map(_.sequence.map(_.flatten))
-      _ <- result.fold(
-            _ => ().pure[F],
-            deployResults => {
-              // XXX: EE returns cost as BigInt but metrics are in Long. In practice it will be unlikely exhaust the limits of Long.
-              val gasSpent =
-                deployResults.foldLeft(0L)(
-                  (a, d) => a + d.value.executionResult.fold(0L)(_.cost.fold(0L)(_.value.toLong))
-                )
-              Metrics[F].incrementCounter("gas_spent", gasSpent)
-            }
-          )
+      _      <- updateGasMetrics(result)
     } yield result
   }
 
@@ -201,9 +211,22 @@ class GrpcExecutionEngineService[F[_]: Defer: Concurrent: Log: TaskLift: Metrics
   ): F[Either[Throwable, Value]] =
     sendMessage(QueryRequest(state, Some(baseKey), path, Some(protocolVersion)), _.query) {
       _.result match {
-        case QueryResponse.Result.Success(value) => Right(value)
-        case QueryResponse.Result.Empty          => Left(SmartContractEngineError("empty response"))
-        case QueryResponse.Result.Failure(err)   => Left(SmartContractEngineError(err))
+        case QueryResponse.Result.Success(bytes) =>
+          FromBytes.deserialize[StoredValue](bytes.toByteArray) match {
+            case Left(err) => Left(SmartContractEngineError(s"Error in parsing EE response: $err"))
+
+            // TODO: We should map to state.StoredValue instead of state.Value
+            // After that we can remove state.Value (and its variants; state.StringList, state.IntList, etc.).
+            case Right(v) =>
+              cltype.ProtoMappings
+                .toProto(v)
+                .leftMap(
+                  err => SmartContractEngineError(s"Error with EE response $v:\n$err")
+                )
+          }
+
+        case QueryResponse.Result.Empty        => Left(SmartContractEngineError("empty response"))
+        case QueryResponse.Result.Failure(err) => Left(SmartContractEngineError(err))
       }
     }
 }
@@ -284,7 +307,6 @@ object ExecutionEngineService {
 
     groupElements(deploys, sizes)
       .flatMap(batchElements(_, canAdd).map(base.withDeploys(_)))
-      .toList
   }
 
 }

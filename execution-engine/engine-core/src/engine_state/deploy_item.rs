@@ -1,12 +1,13 @@
 use std::collections::BTreeSet;
 
-use contract_ffi::value::account::PublicKey;
+use types::account::PublicKey;
 
 use crate::{engine_state::executable_deploy_item::ExecutableDeployItem, DeployHash};
 
 type GasPrice = u64;
 
 /// Represents a deploy to be executed.  Corresponds to the similarly-named ipc protobuf message.
+#[derive(Clone, PartialEq, Eq)]
 pub struct DeployItem {
     pub address: PublicKey,
     pub session: ExecutableDeployItem,

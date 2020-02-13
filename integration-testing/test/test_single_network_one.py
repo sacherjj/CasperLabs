@@ -6,19 +6,12 @@ from pytest import fixture, raises
 
 from casperlabs_local_net.contract_address import contract_address
 from casperlabs_local_net.casperlabs_accounts import Account, GENESIS_ACCOUNT
-from casperlabs_local_net.common import (
-    resources_path,
-    extract_deploy_hash_from_deploy_output,
-    extract_block_hash_from_propose_output,
-    Contract,
-    MAX_PAYMENT_ABI,
-    USER_ERROR_MIN,
-)
+from casperlabs_local_net.common import resources_path, Contract, USER_ERROR_MIN
 from casperlabs_local_net.docker_node import DockerNode
 from casperlabs_local_net.errors import NonZeroExitCodeError
 from casperlabs_local_net.wait import (
-    wait_for_genesis_block,
     wait_for_block_hash_propagated_to_all_nodes,
+    wait_for_no_new_deploys,
 )
 from casperlabs_client.crypto import blake2b_hash
 from casperlabs_client.abi import ABI
@@ -50,12 +43,9 @@ account {
 """
 
 
-def deploy_and_propose_from_genesis(node, contract):
-    return node.p_client.deploy_and_propose(
-        session_contract=contract,
-        from_address=GENESIS_ACCOUNT.public_key_hex,
-        public_key=GENESIS_ACCOUNT.public_key_path,
-        private_key=GENESIS_ACCOUNT.private_key_path,
+def deploy_from_genesis(node, contract):
+    return node.deploy_and_get_block_hash(
+        GENESIS_ACCOUNT, contract, on_error_raise=False
     )
 
 
@@ -66,7 +56,7 @@ def account_state(node, block_hash, account=GENESIS_ACCOUNT):
 
 
 def test_account_state(node):
-    block_hash = deploy_and_propose_from_genesis(node, Contract.COUNTER_DEFINE)
+    block_hash = deploy_from_genesis(node, Contract.COUNTER_DEFINE)
     deploys = node.d_client.show_deploys(block_hash)
     assert not deploys[0].is_error
 
@@ -75,7 +65,7 @@ def test_account_state(node):
     names = [uref.name for uref in named_keys]
     assert "counter" in names
 
-    block_hash = deploy_and_propose_from_genesis(node, Contract.COUNTER_CALL)
+    block_hash = deploy_from_genesis(node, Contract.COUNTER_CALL)
     acct_state = account_state(node, block_hash)
     named_keys = acct_state.account[0].named_keys
     names = [uref.name for uref in named_keys]
@@ -84,15 +74,17 @@ def test_account_state(node):
 
 def test_graph_ql(one_node_network):
     node = one_node_network.docker_nodes[0]
-    deploy_output = node.d_client.deploy(
-        session_contract=Contract.HELLO_NAME_DEFINE,
-        from_address=GENESIS_ACCOUNT.public_key_hex,
+    client = node.p_client.client
+
+    deploy_hash = client.deploy(
+        session=node.resources_folder / Contract.HELLO_NAME_DEFINE,
+        from_addr=GENESIS_ACCOUNT.public_key_hex,
         public_key=GENESIS_ACCOUNT.public_key_path,
         private_key=GENESIS_ACCOUNT.private_key_path,
+        payment_amount=10 ** 8,
     )
-    deploy_hash = extract_deploy_hash_from_deploy_output(deploy_output)
-    propose_output = node.client.propose()
-    block_hash = extract_block_hash_from_propose_output(propose_output)
+
+    block_hash = node.wait_for_deploy_processed_and_get_block_hash(deploy_hash)
 
     wait_for_block_hash_propagated_to_all_nodes(
         one_node_network.docker_nodes, block_hash
@@ -240,51 +232,15 @@ ffi_test_contracts = [
 ]
 
 
-def deploy_and_propose_expect_no_errors(node, contract):
-    block_hash = node.p_client.deploy_and_propose(
-        session_contract=contract,
-        from_address=node.genesis_account.public_key_hex,
-        public_key=node.genesis_account.public_key_path,
-        private_key=node.genesis_account.private_key_path,
-    )
-    r = node.p_client.show_deploys(block_hash).__next__()
-    assert r.is_error is False, f"error_message: {r.error_message}"
-
-
 @pytest.mark.parametrize("define_contract, call_contract", ffi_test_contracts)
 def test_get_caller(one_node_network, define_contract, call_contract):
     node = one_node_network.docker_nodes[0]
-    deploy_and_propose_expect_no_errors(node, define_contract)
-    deploy_and_propose_expect_no_errors(node, call_contract)
-
-
-@pytest.mark.parametrize(
-    "wasm", [Contract.HELLO_NAME_DEFINE, "old_wasm/test_helloname.wasm"]
-)
-def test_multiple_propose(one_node_network, wasm):
-    """
-    Feature file: propose.feature
-    Scenario: Single node deploy and multiple propose generates an Exception.
-    OP-182: First propose should be success, and subsequent propose calls should throw an error/exception.
-    """
-    node = one_node_network.docker_nodes[0]
-    deploy_and_propose_from_genesis(node, wasm)
-    number_of_blocks = node.client.get_blocks_count(100)
-
-    try:
-        _ = node.client.propose()
-        assert False, "Second propose must not succeed, should throw"
-    except NonZeroExitCodeError as e:
-        assert e.exit_code == 1, "Second propose should fail"
-    wait_for_genesis_block(node)
-
-    # Number of blocks after second propose should not change
-    assert node.client.get_blocks_count(100) == number_of_blocks
+    node.deploy_and_get_block_hash(node.genesis_account, define_contract)
+    node.deploy_and_get_block_hash(node.genesis_account, call_contract)
 
 
 # Examples of query-state executed with the Scala client that result in errors:
 
-# CasperLabs/docker $ ./client.sh node-0 propose
 # Response: Success! Block 9d38836598... created and added.
 
 # CasperLabs/docker $ ./client.sh node-0 query-state --block-hash '"9d"' --key '"a91208047c"' --path file.xxx --type hash
@@ -309,7 +265,9 @@ def client(node):
 
 @pytest.fixture()  # (scope="module")
 def block_hash(node):
-    return node.d_client.deploy_and_propose(session_contract=Contract.HELLO_NAME_DEFINE)
+    return node.deploy_and_get_block_hash(
+        node.genesis_account, Contract.HELLO_NAME_DEFINE
+    )
 
 
 block_hash_queries = [
@@ -345,7 +303,7 @@ def test_query_state_error(node, client, block_hash, query, expected):
 
 def test_revert_subcall(client, node):
     # This contract calls another contract that calls revert(2)
-    block_hash = deploy_and_propose_from_genesis(node, Contract.SUBCALL_REVERT_DEFINE)
+    block_hash = deploy_from_genesis(node, Contract.SUBCALL_REVERT_DEFINE)
 
     r = client.show_deploys(block_hash)[0]
     assert not r.is_error
@@ -356,7 +314,7 @@ def test_revert_subcall(client, node):
     r = client.show_deploy(deploy_hash)
     assert r.deploy.deploy_hash == deploy_hash
 
-    block_hash = deploy_and_propose_from_genesis(node, Contract.SUBCALL_REVERT_CALL)
+    block_hash = deploy_from_genesis(node, Contract.SUBCALL_REVERT_CALL)
     r = client.show_deploys(block_hash)[0]
     assert r.is_error
     assert r.error_message == "Exit code: 65538"
@@ -364,7 +322,7 @@ def test_revert_subcall(client, node):
 
 def test_revert_direct(client, node):
     # This contract calls revert(1) directly
-    block_hash = deploy_and_propose_from_genesis(node, Contract.DIRECT_REVERT)
+    block_hash = deploy_from_genesis(node, Contract.DIRECT_REVERT)
 
     r = client.show_deploys(block_hash)[0]
     assert r.is_error
@@ -377,7 +335,7 @@ def test_deploy_with_valid_signature(one_node_network):
     Scenario: Deploy with valid signature
     """
     node0 = one_node_network.docker_nodes[0]
-    block_hash = deploy_and_propose_from_genesis(node0, Contract.HELLO_NAME_DEFINE)
+    block_hash = deploy_from_genesis(node0, Contract.HELLO_NAME_DEFINE)
     deploys = node0.client.show_deploys(block_hash)
     assert deploys[0].is_error is False
 
@@ -404,16 +362,6 @@ Feature file: ~/CasperLabs/integration-testing/features/deploy.feature
 """
 
 
-def deploy_and_propose(node, contract):
-    node.p_client.deploy(
-        session_contract=contract,
-        from_address=GENESIS_ACCOUNT.public_key_hex,
-        public_key=GENESIS_ACCOUNT.public_key_path,
-        private_key=GENESIS_ACCOUNT.private_key_path,
-    )
-    return extract_block_hash_from_propose_output(node.client.propose())
-
-
 def deploy(node, contract):
     message = node.p_client.deploy(
         from_address=GENESIS_ACCOUNT.public_key_hex,
@@ -423,10 +371,6 @@ def deploy(node, contract):
     )
     assert "Success!" in message
     return message.split()[2]
-
-
-def propose(node):
-    return extract_block_hash_from_propose_output(node.d_client.propose())
 
 
 def deploy_hashes(node, block_hash):
@@ -470,21 +414,12 @@ def test_deploy_with_args(one_node_network, genesis_public_signing_key):
         (resources_path() / Contract.ARGS_U512, ABI.big_int),
     ]:
         for number in [1, 12, 256, 1024]:
-            response, deploy_hash = client.deploy(
-                session=wasm,
+            block_hash = node.deploy_and_get_block_hash(
+                GENESIS_ACCOUNT,
+                wasm,
+                on_error_raise=False,
                 session_args=ABI.args([encode("number", number)]),
-                payment=resources_path() / Contract.STANDARD_PAYMENT,
-                payment_args=MAX_PAYMENT_ABI,
-                public_key=GENESIS_ACCOUNT.public_key_path,
-                private_key=GENESIS_ACCOUNT.private_key_path,
             )
-            logging.info(
-                f"DEPLOY RESPONSE: {response} deploy_hash: {deploy_hash.hex()}"
-            )
-
-            response = client.propose()
-            # Need to convert to hex string from bytes
-            block_hash = response.block_hash.hex()
 
             for deploy_info in client.showDeploys(block_hash):
                 exit_code = number + USER_ERROR_MIN
@@ -496,20 +431,14 @@ def test_deploy_with_args(one_node_network, genesis_public_signing_key):
     number = 1000
     total_sum = sum([1, 2, 3, 4, 5, 6, 7, 8]) * 4 + number
 
-    response, deploy_hash = client.deploy(
-        session=wasm,
+    block_hash = node.deploy_and_get_block_hash(
+        GENESIS_ACCOUNT,
+        wasm,
+        on_error_raise=False,
         session_args=ABI.args(
             [ABI.account("account", account_hex), ABI.u32("number", number)]
         ),
-        payment=resources_path() / Contract.STANDARD_PAYMENT,
-        payment_args=MAX_PAYMENT_ABI,
-        public_key=GENESIS_ACCOUNT.public_key_path,
-        private_key=GENESIS_ACCOUNT.private_key_path,
     )
-    logging.info(f"DEPLOY RESPONSE: {response} deploy_hash: {deploy_hash.hex()}")
-    response = client.propose()
-
-    block_hash = response.block_hash.hex()
 
     for deploy_info in client.showDeploys(block_hash):
         exit_code = total_sum + USER_ERROR_MIN
@@ -527,17 +456,14 @@ def test_python_api_payment_amount(one_node_network):
     node = one_node_network.docker_nodes[0]
     client = node.p_client.client
     account = node.test_account
-    client.deploy(
+    deploy_hash = client.deploy(
         from_addr=account.public_key_hex,
         public_key=account.public_key_path,
         private_key=account.private_key_path,
         session=os.path.join("resources", Contract.HELLO_NAME_DEFINE),
         payment_amount=10000000,
     )
-    block_hash = client.propose().block_hash.hex()
-    for deployInfo in client.showDeploys(block_hash):
-        if deployInfo.is_error:
-            raise Exception(f"Deploy failed: {deployInfo.error_message}")
+    node.wait_for_deploy_processed_and_get_block_hash(deploy_hash)
 
 
 # Python CLI #
@@ -598,7 +524,7 @@ def test_cli_deploy_propose_show_deploys_show_deploy_query_state_and_balance(cli
         "--public-key", cli.public_key_path(account),
         "--payment-args", cli.payment_json
     )
-    block_hash = cli("propose")
+    block_hash = cli.node.wait_for_deploy_processed_and_get_block_hash(deploy_hash)
     deploys = cli("show-deploys", block_hash)
     deploy_hashes = [d.deploy.deploy_hash for d in deploys]
     assert deploy_hash in deploy_hashes
@@ -669,7 +595,7 @@ def check_cli_abi_unsigned(cli, unsigned_type, value, test_contract):
         logging.info(f"EXECUTING {' '.join(cli.expand_args(args))}")
         deploy_hash = cli(*args)
 
-        cli('propose')
+        cli.node.wait_for_deploy_processed_and_get_block_hash(deploy_hash, on_error_raise=False)
         deploy_info = cli("show-deploy", deploy_hash)
         exit_code = number + USER_ERROR_MIN
         assert deploy_info.processing_results[0].is_error is True
@@ -692,7 +618,7 @@ def test_cli_abi_multiple(cli):
                       '--public-key', cli.public_key_path(account),
                       '--payment', cli.resource(Contract.STANDARD_PAYMENT),
                       '--payment-args', cli.payment_json)
-    cli('propose')
+    cli.node.wait_for_deploy_processed_and_get_block_hash(deploy_hash, on_error_raise=False)
     deploy_info = cli("show-deploy", deploy_hash)
     exit_code = total_sum + USER_ERROR_MIN
     assert deploy_info.processing_results[0].is_error is True
@@ -740,29 +666,31 @@ def check_extended_deploy(cli, temp_dir, account, public_key, private_key):
         '--public-key', public_key)
 
     deploy_hash = cli('send-deploy', '-i', signed_deploy_path)
-    cli('propose')
+    cli.node.wait_for_deploy_processed_and_get_block_hash(deploy_hash)
     deploy_info = cli("show-deploy", deploy_hash)
     assert not deploy_info.processing_results[0].is_error
 
+    blocks_with_deploy = [bi.block_info.summary.block_hash for bi in deploy_info.processing_results]
+    assert len(blocks_with_deploy) == 1
+
     # Test that replay attacks have no effect.
     cli('send-deploy', '-i', signed_deploy_path)
-    with pytest.raises(Exception) as excinfo:
-        cli('propose')
-    assert "No new deploys" in str(excinfo.value) or "No new deploys" in excinfo.value.output
+
+    # After replay there should be no new blocks with the deploy
+    deploy_info = cli.node.p_client.client.wait_for_deploy_processed(deploy_hash)
+    blocks_with_deploy_after_replay = [bi.block_info.summary.block_hash.hex() for bi in deploy_info.processing_results]
+    assert blocks_with_deploy_after_replay == blocks_with_deploy
 
 
 def test_cli_scala_direct_call_by_hash_and_name(scala_cli):
-    check_cli_direct_call_by_hash_and_name(scala_cli, scala_cli)
+    check_cli_direct_call_by_hash_and_name(scala_cli)
 
 
 def test_cli_python_direct_call_by_hash_and_name(cli, scala_cli):
-    check_cli_direct_call_by_hash_and_name(cli, scala_cli)
+    check_cli_direct_call_by_hash_and_name(cli)
 
 
-def check_cli_direct_call_by_hash_and_name(cli, scala_cli):
-    # TODO: For now using scala_cli for assertions because for some
-    # strange reason Python CLI doesn't show is_error and error_message
-    # in the output of show-deploys. This has to be fixed asap.
+def check_cli_direct_call_by_hash_and_name(cli):
     account = cli.node.test_account
     cli.set_default_deploy_args('--from', account.public_key_hex,
                                 '--private-key', cli.private_key_path(account),
@@ -777,10 +705,10 @@ def check_cli_direct_call_by_hash_and_name(cli, scala_cli):
 
     first_deploy_hash = cli('deploy',
                             '--session', cli.resource(test_contract))
-    block_hash = cli("propose")
+    block_hash = cli.node.wait_for_deploy_processed_and_get_block_hash(first_deploy_hash)
 
-    logging.info(f"""EXECUTING {' '.join(scala_cli.expand_args(["show-deploys", block_hash]))}""")
-    deploys = scala_cli("show-deploys", block_hash)
+    logging.info(f"""EXECUTING {' '.join(cli.expand_args(["show-deploys", block_hash]))}""")
+    deploys = cli("show-deploys", block_hash)
     assert len(list(deploys)) == 1
     for deploy_info in deploys:
         assert deploy_info.deploy.deploy_hash == first_deploy_hash
@@ -789,9 +717,9 @@ def check_cli_direct_call_by_hash_and_name(cli, scala_cli):
     # Call by name
     deploy_hash = cli("deploy",
                       '--session-name', "revert_test")
-    block_hash = cli("propose")
+    block_hash = cli.node.wait_for_deploy_processed_and_get_block_hash(deploy_hash, on_error_raise=False)
 
-    deploys = scala_cli("show-deploys", block_hash)
+    deploys = cli("show-deploys", block_hash)
     for deploy_info in deploys:
         assert deploy_info.deploy.deploy_hash == deploy_hash
         assert deploy_info.error_message == 'Exit code: 65538'  # Expected: contract called revert(2)
@@ -800,23 +728,19 @@ def check_cli_direct_call_by_hash_and_name(cli, scala_cli):
     revert_test_addr = contract_address(first_deploy_hash, 0).hex()  # assume fn_store_id starts from 0
     deploy_hash = cli("deploy",
                       '--session-hash', revert_test_addr)
-    block_hash = cli("propose")
+    block_hash = cli.node.wait_for_deploy_processed_and_get_block_hash(deploy_hash, on_error_raise=False)
 
-    deploys = scala_cli("show-deploys", block_hash)
+    deploys = cli("show-deploys", block_hash)
     for deploy_info in deploys:
         assert deploy_info.deploy.deploy_hash == deploy_hash
         assert deploy_info.error_message == 'Exit code: 65538'
 
 
-def propose_check_no_errors(cli):
-    block_hash = cli("propose")
-    for deployInfo in cli.node.d_client.show_deploys(block_hash):
-        if deployInfo.is_error:
-            raise Exception(f"error_message: {deployInfo.error_message}")
-    return block_hash
+def check_no_errors(cli, deploy_hash):
+    return cli.node.wait_for_deploy_processed_and_get_block_hash(deploy_hash)
 
 
-def test_multiple_deploys_per_block(cli):
+def disable_test_multiple_deploys_per_block(cli):
     """
     Two deploys from the same account then propose.
     Both deploys should be be included in the new block.
@@ -834,20 +758,20 @@ def test_multiple_deploys_per_block(cli):
                                 '--public-key', cli.public_key_path(account))
 
     # Create purse_1
-    cli('deploy',
-        '--session', cli.resource(Contract.CREATE_NAMED_PURSE),
-        '--session-args', ABI.args_to_json(ABI.args([ABI.big_int("amount", 100000000), ABI.string_value("purse-name", "purse_1")])),
-        '--payment', cli.resource(Contract.STANDARD_PAYMENT),
-        '--payment-args', ABI.args_to_json(ABI.args([ABI.big_int("amount", 100000000)])))
-    propose_check_no_errors(cli)
+    deploy_hash = cli('deploy',
+                      '--session', cli.resource(Contract.CREATE_NAMED_PURSE),
+                      '--session-args', ABI.args_to_json(ABI.args([ABI.big_int("amount", 100000000), ABI.string_value("purse-name", "purse_1")])),
+                      '--payment', cli.resource(Contract.STANDARD_PAYMENT),
+                      '--payment-args', ABI.args_to_json(ABI.args([ABI.big_int("amount", 100000000)])))
+    check_no_errors(cli, deploy_hash)
 
     # Create purse_2
-    cli('deploy',
-        '--session', cli.resource(Contract.CREATE_NAMED_PURSE),
-        '--session-args', ABI.args_to_json(ABI.args([ABI.big_int("amount", 100000000), ABI.string_value("purse-name", "purse_2")])),
-        '--payment', cli.resource(Contract.STANDARD_PAYMENT),
-        '--payment-args', ABI.args_to_json(ABI.args([ABI.big_int("amount", 100000000)])))
-    propose_check_no_errors(cli)
+    deploy_hash = cli('deploy',
+                      '--session', cli.resource(Contract.CREATE_NAMED_PURSE),
+                      '--session-args', ABI.args_to_json(ABI.args([ABI.big_int("amount", 100000000), ABI.string_value("purse-name", "purse_2")])),
+                      '--payment', cli.resource(Contract.STANDARD_PAYMENT),
+                      '--payment-args', ABI.args_to_json(ABI.args([ABI.big_int("amount", 100000000)])))
+    check_no_errors(cli, deploy_hash)
 
     # First deploy uses first purse for payment
     deploy_hash1 = cli('deploy',
@@ -862,10 +786,11 @@ def test_multiple_deploys_per_block(cli):
                        '--session', cli.resource(Contract.MAILING_LIST_DEFINE),
                        '--payment', cli.resource(Contract.PAYMENT_FROM_NAMED_PURSE),
                        '--payment-args', ABI.args_to_json(ABI.args([ABI.big_int("amount", 100000000), ABI.string_value("purse-name", "purse_2")])))
-    block_hash = propose_check_no_errors(cli)
+    block_hash = check_no_errors(cli, deploy_hash2)
 
     # Propose should include both deploys.
     deploys = list(cli("show-deploys", block_hash))
+    # TODO: with auto-propose this may fail:
     assert len(deploys) == 2
     assert set(d.deploy.deploy_hash for d in deploys) == set((deploy_hash1, deploy_hash2))
 
@@ -885,11 +810,11 @@ def check_dependencies_ok(cli):
                                 '--public-key', cli.public_key_path(account),
                                 "--payment-amount", 10000000)
     deploy_hash1 = cli("deploy", "--session", cli.resource(Contract.COUNTER_DEFINE))
-    propose_check_no_errors(cli)
-    cli("deploy",
-        "--session", cli.resource(Contract.MAILING_LIST_DEFINE),
-        "--dependencies", deploy_hash1)
-    propose_check_no_errors(cli)
+    check_no_errors(cli, deploy_hash1)
+    deploy_hash2 = cli("deploy",
+                       "--session", cli.resource(Contract.MAILING_LIST_DEFINE),
+                       "--dependencies", deploy_hash1)
+    check_no_errors(cli, deploy_hash2)
 
 
 def test_dependencies_multiple_ok_scala(scala_cli):
@@ -907,15 +832,15 @@ def check_dependencies_multiple_ok(cli):
                                 '--public-key', cli.public_key_path(account),
                                 "--payment-amount", 10000000)
     deploy_hash1 = cli("deploy", "--session", cli.resource(Contract.COUNTER_DEFINE))
-    propose_check_no_errors(cli)
+    check_no_errors(cli, deploy_hash1)
 
     deploy_hash2 = cli("deploy", "--session", cli.resource(Contract.COUNTER_CALL))
-    propose_check_no_errors(cli)
+    check_no_errors(cli, deploy_hash2)
 
-    cli("deploy",
-        "--session", cli.resource(Contract.MAILING_LIST_DEFINE),
-        "--dependencies", deploy_hash1, deploy_hash2)
-    propose_check_no_errors(cli)
+    deploy_hash3 = cli("deploy",
+                       "--session", cli.resource(Contract.MAILING_LIST_DEFINE),
+                       "--dependencies", deploy_hash1, deploy_hash2)
+    check_no_errors(cli, deploy_hash3)
 
 
 def test_dependencies_not_met_scala(scala_cli):
@@ -939,11 +864,11 @@ def check_dependencies_not_met(cli):
         "--session", cli.resource(Contract.MAILING_LIST_DEFINE),
         "--dependencies", deploy_hash1)
 
-    with raises(Exception) as excinfo:
-        propose_check_no_errors(cli)
+    # This will not work when tests run in parallel, unless this is the only test
+    # that causes "OUT_OF_RANGE: No new deploy"
 
-    expected = "OUT_OF_RANGE: No new deploys"
-    assert expected in str(excinfo.value) or expected in excinfo.value.output
+    # 05:51:33   node-0-udcpq-latest: E 2020-02-04T04:51:33.059           (AutoProposer.scala:86)  ….AutoProposer.tryPropose.84 [72:node-runner-72] Could not propose block: ex=io.casperlabs.comm.ServiceError$Exception: OUT_OF_RANGE: No new deploys.
+    wait_for_no_new_deploys(cli.node)
 
 
 def test_ttl_ok_scala(scala_cli):
@@ -956,15 +881,15 @@ def test_ttl_ok_python(cli):
 
 def check_ttl_ok(cli):
     account = cli.node.test_account
-    cli("deploy",
-        "--from", account.public_key_hex,
-        "--private-key", cli.private_key_path(account),
-        "--public-key", cli.public_key_path(account),
-        "--payment-amount", 10000000,
-        "--session", cli.resource(Contract.COUNTER_DEFINE),
-        "--ttl-millis", 3600000)  # 1 hour, this is a minimum ttl you can set currently.
+    deploy_hash = cli("deploy",
+                      "--from", account.public_key_hex,
+                      "--private-key", cli.private_key_path(account),
+                      "--public-key", cli.public_key_path(account),
+                      "--payment-amount", 10000000,
+                      "--session", cli.resource(Contract.COUNTER_DEFINE),
+                      "--ttl-millis", 3600000)  # 1 hour, this is a minimum ttl you can set currently.
     time.sleep(0.5)
-    propose_check_no_errors(cli)
+    check_no_errors(cli, deploy_hash)
 
 
 def test_ttl_late_scala(scala_cli, temp_dir):
@@ -1007,13 +932,13 @@ def check_ttl_late(cli, temp_dir):
         "--private-key", cli.private_key_path(account),
         "--public-key", cli.public_key_path(account))
 
-    cli('send-deploy', '-i', signed_deploy_path)
+    deploy_hash = cli('send-deploy', '-i', signed_deploy_path)
 
     with raises(Exception) as excinfo:
-        propose_check_no_errors(cli)
+        check_no_errors(cli, deploy_hash)
 
-    expected = "OUT_OF_RANGE: No new deploys"
-    assert expected in str(excinfo.value) or expected in excinfo.value.output
+    assert "DISCARDED" in str(excinfo.value)
+    assert "Duplicate or expired" in str(excinfo.value)
 
 
 def test_cli_local_key_scala(scala_cli):
@@ -1026,13 +951,14 @@ def test_cli_local_key_python(cli):
 
 def check_cli_local_key(cli):
     account = cli.node.test_account
-    cli("deploy",
+    deploy_hash = cli(
+        "deploy",
         "--from", account.public_key_hex,
         "--private-key", cli.private_key_path(account),
         "--public-key", cli.public_key_path(account),
         "--payment-amount", 10000000,
         "--session", cli.resource("local_state.wasm"))
-    block_hash = propose_check_no_errors(cli)
+    block_hash = check_no_errors(cli, deploy_hash)
 
     local_key = account.public_key_hex + ":" + bytes([66] * 32).hex()
     result = cli("query-state",
@@ -1041,13 +967,13 @@ def check_cli_local_key(cli):
                  "--type", "local")
     assert result.string_value == 'Hello, world!'
 
-    cli("deploy",
-        "--from", account.public_key_hex,
-        "--private-key", cli.private_key_path(account),
-        "--public-key", cli.public_key_path(account),
-        "--payment-amount", 10000000,
-        "--session", cli.resource("local_state.wasm"))
-    block_hash = propose_check_no_errors(cli)
+    deploy_hash = cli("deploy",
+                      "--from", account.public_key_hex,
+                      "--private-key", cli.private_key_path(account),
+                      "--public-key", cli.public_key_path(account),
+                      "--payment-amount", 10000000,
+                      "--session", cli.resource("local_state.wasm"))
+    block_hash = check_no_errors(cli, deploy_hash)
 
     result = cli("query-state",
                  "--block-hash", block_hash,
@@ -1073,12 +999,54 @@ def check_transfer_cli(cli):
     balance = cli("balance", "--block-hash", block_hash, "--address", account.public_key_hex)
 
     for i in range(2):
-        cli("transfer",
-            "--private-key", cli.private_key_path(genesis_account),
-            "--payment-amount", 10000000,
-            "--target-account", account.public_key,
-            "--amount", amount)
-        block_hash = propose_check_no_errors(cli)
+        deploy_hash = cli("transfer",
+                          "--private-key", cli.private_key_path(genesis_account),
+                          "--payment-amount", 10000000,
+                          "--target-account", account.public_key,
+                          "--amount", amount)
+        block_hash = check_no_errors(cli, deploy_hash)
         new_balance = cli("balance", "--block-hash", block_hash, "--address", account.public_key_hex)
         assert new_balance == balance + amount
         balance = new_balance
+
+
+def test_invalid_bigint(one_node_network):
+    # Test covering fix for NODE-1182
+    # Use a malformed BigInt contract argument
+    node = one_node_network.docker_nodes[0]
+    cli = DockerCLI(node)
+    session_wasm = cli.resource(Contract.ARGS_U512)
+
+    # Send in u512 with invalid string format, surrounded []
+    args = '[{"name": "arg_u512", "value": {"big_int": {"value": "[1000]", "bit_width": 512}}}]'
+    # fmt: off
+    deploy_hash = cli("deploy",
+                      "--private-key", cli.private_key_path(GENESIS_ACCOUNT),
+                      "--payment-amount", 10000000,
+                      "--session", session_wasm,
+                      "--session-args", cli.format_json_str(args))
+    # fmt: on
+
+    node.p_client.wait_for_deploy_processed(deploy_hash, on_error_raise=False, delay=1, timeout_seconds=30)
+
+    status = node.d_client.show_deploy(deploy_hash).status
+    assert status.state == "DISCARDED"
+    assert status.message == "Error parsing deploy arguments: InvalidBigIntValue([1000])"
+
+    # Send in u512 valid as 1000.
+    args = '[{"name": "arg_u512", "value": {"big_int": {"value": "1000", "bit_width": 512}}}]'
+    # fmt: off
+    deploy_hash = cli("deploy",
+                      "--private-key", cli.private_key_path(GENESIS_ACCOUNT),
+                      "--payment-amount", 10000000,
+                      "--session", session_wasm,
+                      "--session-args", cli.format_json_str(args))
+    # fmt: on
+
+    node.wait_for_deploy_processed_and_get_block_hash(deploy_hash, on_error_raise=False)
+
+    result = node.d_client.show_deploy(deploy_hash)
+
+    # User(code) in revert adds 65536 to the 1000
+    assert result.status.state == "PROCESSED"
+    assert result.processing_results.error_message == f"Exit code: {1000 + 65536}"

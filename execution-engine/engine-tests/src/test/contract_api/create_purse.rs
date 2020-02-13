@@ -1,16 +1,12 @@
 use base16;
 use lazy_static::lazy_static;
 
-use contract_ffi::{
-    key::Key,
-    value::{account::PurseId, U512},
-};
 use engine_shared::transform::Transform;
-
-use crate::{
-    support::test_support::{ExecuteRequestBuilder, WasmTestBuilder},
-    test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT},
+use engine_test_support::{
+    internal::{ExecuteRequestBuilder, WasmTestBuilder, DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT},
+    DEFAULT_ACCOUNT_ADDR,
 };
+use types::{account::PurseId, Key, U512};
 
 const CONTRACT_CREATE_PURSE_01: &str = "create_purse_01.wasm";
 const CONTRACT_TRANSFER_PURSE_TO_ACCOUNT: &str = "transfer_purse_to_account.wasm";
@@ -33,7 +29,7 @@ fn get_purse_key_from_mint_transform(mint_transform: &Transform) -> Key {
 
     // Exactly one new key which is the new purse created
     assert_eq!(keys.len(), 1);
-    let (map_key, map_value) = keys.iter().nth(0).unwrap();
+    let (map_key, map_value) = keys.iter().next().unwrap();
 
     // Decode uref name
     assert!(

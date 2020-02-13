@@ -1,6 +1,5 @@
 import React from 'react';
 import { observer } from 'mobx-react';
-import DagContainer from '../containers/DagContainer';
 import {
   LinkButton,
   ListInline,
@@ -11,20 +10,24 @@ import { BlockDAG } from './BlockDAG';
 import DataTable from './DataTable';
 import { BlockInfo } from 'casperlabs-grpc/io/casperlabs/casper/consensus/info_pb';
 import $ from 'jquery';
-import { DagStepButtons } from './BlockList';
-import { Link } from 'react-router-dom';
+import { DagStepButtons, Props } from './BlockList';
+import { Link, withRouter } from 'react-router-dom';
 import Pages from './Pages';
 import { encodeBase16 } from 'casperlabs-sdk';
 import { BondedValidatorsTable } from './BondedValidatorsTable';
 import { ToggleButton } from './ToggleButton';
 
-interface Props {
-  dag: DagContainer;
-}
-
 /** Show the tips of the DAG. */
 @observer
-export default class Explorer extends RefreshableComponent<Props, {}> {
+class _Explorer extends RefreshableComponent<Props, {}> {
+  constructor(props:Props) {
+    super(props);
+    let maxRank = parseInt(props.maxRank || '') || 0;
+    let depth = parseInt(props.depth || '') || 10;
+    this.props.dag.updateMaxRankAndDepth(maxRank, depth);
+    this.props.dag.refreshBlockDagAndSetupSubscriber();
+  }
+
   async refresh() {
     await this.props.dag.refreshBlockDagAndSetupSubscriber();
   }
@@ -52,7 +55,11 @@ export default class Explorer extends RefreshableComponent<Props, {}> {
               subscribeToggleStore={dag.subscribeToggleStore}
               footerMessage={
                 <ListInline>
-                  <DagStepButtons step={dag.step} />
+                  <DagStepButtons
+                    step={dag.step}
+                    history={this.props.history}
+                    urlWithRankAndDepth={Pages.explorerWithMaxRankAndDepth}
+                  />
                   {dag.hasBlocks && (
                     <span>Select a block to see its details.</span>
                   )}
@@ -112,11 +119,17 @@ export default class Explorer extends RefreshableComponent<Props, {}> {
   }
 }
 
-class BlockDetails extends React.Component<{
-  block: BlockInfo;
-  blocks: BlockInfo[];
-  onSelect: (blockHash: string) => void;
-}, {}> {
+const Explorer = withRouter(_Explorer);
+export default Explorer;
+
+class BlockDetails extends React.Component<
+  {
+    block: BlockInfo;
+    blocks: BlockInfo[];
+    onSelect: (blockHash: string) => void;
+  },
+  {}
+> {
   ref: HTMLElement | null = null;
 
   render() {

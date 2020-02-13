@@ -1,3 +1,5 @@
+SHELL := bash
+
 DOCKER_USERNAME ?= casperlabs
 DOCKER_PUSH_LATEST ?= false
 DOCKER_LATEST_TAG ?= latest

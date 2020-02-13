@@ -1,9 +1,10 @@
 use std::{collections::BTreeMap, ops::RangeInclusive};
 
-use contract_ffi::{gens as gens_ext, value::ProtocolVersion};
 use lmdb::DatabaseFlags;
 use proptest::{collection, prelude::proptest};
 use tempfile;
+
+use types::{gens as gens_ext, ProtocolVersion};
 
 use crate::{
     protocol_data::{gens, ProtocolData},

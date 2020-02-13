@@ -1,7 +1,8 @@
-use crate::support::test_support::{ExecuteRequestBuilder, InMemoryWasmTestBuilder};
-use contract_ffi::value::account::PublicKey;
-
-use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG};
+use engine_test_support::{
+    internal::{ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_GENESIS_CONFIG},
+    DEFAULT_ACCOUNT_ADDR,
+};
+use types::account::PublicKey;
 
 const CONTRACT_EE_401_REGRESSION: &str = "ee_401_regression.wasm";
 const CONTRACT_EE_401_REGRESSION_CALL: &str = "ee_401_regression_call.wasm";

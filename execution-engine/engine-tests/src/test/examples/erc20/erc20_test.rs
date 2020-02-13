@@ -1,25 +1,14 @@
-use std::convert::{TryFrom, TryInto};
+use std::{convert::TryFrom, rc::Rc};
 
-use engine_shared::{gas::Gas, motes::Motes};
-
-use engine_grpc_server::engine_server::ipc::ExecuteResponse;
-
-use engine_core::engine_state::CONV_RATE;
-
-use crate::support::test_support;
-
-use contract_ffi::{
-    bytesrepr::ToBytes,
-    key::Key,
-    value::{account::PurseId, CLValue, U512},
+use engine_core::engine_state::{execution_result::ExecutionResult, CONV_RATE};
+use engine_shared::motes::Motes;
+use engine_test_support::internal::{
+    utils, ExecuteRequestBuilder, InMemoryWasmTestBuilder as TestBuilder, DEFAULT_GENESIS_CONFIG,
 };
-
-use crate::support::test_support::{ExecuteRequestBuilder, InMemoryWasmTestBuilder as TestBuilder};
-
-use crate::test::DEFAULT_GENESIS_CONFIG;
+use types::{account::PurseId, bytesrepr::ToBytes, CLValue, Key, U512};
 
 const ERC_20_CONTRACT_WASM: &str = "erc20_smart_contract.wasm";
-const TRANFER_TO_ACCOUNT_WASM: &str = "transfer_to_account.wasm";
+const TRANFER_TO_ACCOUNT_WASM: &str = "transfer_to_account_u512.wasm";
 const METHOD_DEPLOY: &str = "deploy";
 const METHOD_ASSERT_BALANCE: &str = "assert_balance";
 const METHOD_ASSERT_TOTAL_SUPPLY: &str = "assert_total_supply";
@@ -58,10 +47,10 @@ impl ERC20Test {
         let value: CLValue = self
             .builder
             .query(None, account_key, &[name])
-            .and_then(|v| CLValue::try_from(v).ok())
+            .and_then(|v| CLValue::try_from(v).map_err(|error| format!("{:?}", error)))
             .expect("should have named uref.");
         let key: Key = value.into_t().unwrap();
-        key.as_hash().unwrap()
+        key.into_hash().unwrap()
     }
 
     pub fn deploy_erc20_contract(mut self, sender: [u8; 32], init_balance: U512) -> Self {
@@ -215,12 +204,9 @@ impl ERC20Test {
         recipient: [u8; 32],
         amount: U512,
     ) -> Self {
-        let request = ExecuteRequestBuilder::standard(
-            sender,
-            TRANFER_TO_ACCOUNT_WASM,
-            (recipient, amount.as_u64()),
-        )
-        .build();
+        let request =
+            ExecuteRequestBuilder::standard(sender, TRANFER_TO_ACCOUNT_WASM, (recipient, amount))
+                .build();
         self.builder.exec(request).expect_success().commit();
         self
     }
@@ -236,8 +222,8 @@ impl ERC20Test {
             .builder
             .exec_error_message(last_deploy_index - 1)
             .unwrap();
-        let expected_message = format!("Exit code: {:?}", code);
-        assert_eq!(deploy_error, expected_message);
+        let expected_message = format!("Revert({:?})", code);
+        assert!(deploy_error.contains(&expected_message));
         self
     }
 
@@ -284,7 +270,7 @@ impl ERC20Test {
         let value: CLValue = self
             .builder
             .query(None, balance_key.clone(), &[])
-            .and_then(|v| CLValue::try_from(v).ok())
+            .and_then(|v| CLValue::try_from(v).map_err(|error| format!("{:?}", error)))
             .expect("should have local value.");
         let balance: U512 = value.into_t().unwrap();
         assert_eq!(
@@ -301,7 +287,7 @@ impl ERC20Test {
         let value: CLValue = self
             .builder
             .query(None, total_supply_key.clone(), &[])
-            .and_then(|v| CLValue::try_from(v).ok())
+            .and_then(|v| CLValue::try_from(v).map_err(|error| format!("{:?}", error)))
             .expect("should have total supply key.");
         let total_supply: U512 = value.into_t().unwrap();
         assert_eq!(total_supply, expected, "Total supply assertion failure.");
@@ -322,7 +308,7 @@ impl ERC20Test {
         let value: CLValue = self
             .builder
             .query(None, allowance_key.clone(), &[])
-            .and_then(|v| CLValue::try_from(v).ok())
+            .and_then(|v| CLValue::try_from(v).map_err(|error| format!("{:?}", error)))
             .expect("should have allowance key.");
         let allowance: U512 = value.into_t().unwrap();
         assert_eq!(
@@ -350,13 +336,13 @@ impl ERC20Test {
     }
 }
 
-fn get_cost(response: &ExecuteResponse) -> U512 {
-    let mut success_result = test_support::get_success_result(response);
-    let cost = success_result
-        .take_cost()
-        .try_into()
-        .expect("should map to U512");
-    let gas = Gas::new(cost);
-    let motes = Motes::from_gas(gas, CONV_RATE).expect("should have motes");
+fn get_cost(response: &[Rc<ExecutionResult>]) -> U512 {
+    let motes = Motes::from_gas(
+        utils::get_exec_costs(response)
+            .into_iter()
+            .fold(Default::default(), |i, acc| i + acc),
+        CONV_RATE,
+    )
+    .expect("should convert");
     motes.value()
 }

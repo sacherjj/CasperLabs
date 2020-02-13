@@ -15,7 +15,7 @@ import io.casperlabs.ipc
 import io.casperlabs.models.Weight
 import io.casperlabs.shared.LogStub
 import io.casperlabs.shared.PathOps.RichPath
-import io.casperlabs.shared.{Log}
+import io.casperlabs.shared.Log
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.BlockMsgWithTransform
 import io.casperlabs.storage.block.BlockStorage
@@ -63,7 +63,7 @@ class GenesisTest extends FlatSpec with Matchers with StorageFixture {
                                                               .ChainSpec()
                                                               .withGenesis(spec)
                                                           )
-        BlockMsgWithTransform(Some(genesis), transforms) = genesisWithTransform
+        BlockMsgWithTransform(Some(genesis), _) = genesisWithTransform
 
         _ = genesis.getHeader.chainName shouldBe "casperlabs"
         _ = genesis.getHeader.timestamp shouldBe 1234567890L

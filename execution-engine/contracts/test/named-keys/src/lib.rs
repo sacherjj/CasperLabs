@@ -3,88 +3,88 @@
 extern crate alloc;
 
 use alloc::string::{String, ToString};
+use core::convert::TryInto;
 
-use contract_ffi::{
-    contract_api::{runtime, storage, Error},
-    key::Key,
+use contract::{
+    contract_api::{runtime, storage},
     unwrap_or_revert::UnwrapOrRevert,
-    value::U512,
 };
+use types::{bytesrepr::ToBytes, ApiError, CLTyped, Key, U512};
+
+fn create_uref<T: CLTyped + ToBytes>(key_name: &str, value: T) {
+    let key: Key = storage::new_turef(value).into();
+    runtime::put_key(key_name, key);
+}
+
+const COMMAND_CREATE_UREF1: &str = "create-uref1";
+const COMMAND_CREATE_UREF2: &str = "create-uref2";
+const COMMAND_REMOVE_UREF1: &str = "remove-uref1";
+const COMMAND_REMOVE_UREF2: &str = "remove-uref2";
+const COMMAND_TEST_READ_UREF1: &str = "test-read-uref1";
+const COMMAND_TEST_READ_UREF2: &str = "test-read-uref2";
+const COMMAND_INCREASE_UREF2: &str = "increase-uref2";
+const COMMAND_OVERWRITE_UREF2: &str = "overwrite-uref2";
 
 #[no_mangle]
 pub extern "C" fn call() {
-    let initi_uref_num = 2; // TODO: this is very brittle as it breaks whenever we add another default uref
+    let command: String = runtime::get_arg(0)
+        .unwrap_or_revert_with(ApiError::MissingArgument)
+        .unwrap_or_revert_with(ApiError::InvalidArgument);
 
-    // Account starts with two known urefs: mint uref & pos uref
-    if runtime::list_named_keys().len() != initi_uref_num {
-        runtime::revert(Error::User(201));
+    match command.as_str() {
+        COMMAND_CREATE_UREF1 => create_uref("hello-world", String::from("Hello, world!")),
+        COMMAND_CREATE_UREF2 => create_uref("big-value", U512::max_value()),
+        COMMAND_REMOVE_UREF1 => runtime::remove_key("hello-world"),
+        COMMAND_REMOVE_UREF2 => runtime::remove_key("big-value"),
+        COMMAND_TEST_READ_UREF1 => {
+            // Read data hidden behind `URef1` uref
+            let hello_world: String = storage::read(
+                runtime::list_named_keys()
+                    .get("hello-world")
+                    .expect("Unable to get hello-world")
+                    .clone()
+                    .try_into()
+                    .expect("Unable to convert to turef"),
+            )
+            .expect("Unable to deserialize TURef")
+            .expect("Unable to find value");
+            assert_eq!(hello_world, "Hello, world!");
+
+            // Read data through dedicated FFI function
+            let uref1 = runtime::get_key("hello-world").unwrap_or_revert();
+
+            let turef = uref1.try_into().unwrap_or_revert_with(ApiError::User(101));
+            let hello_world = storage::read(turef);
+            assert_eq!(hello_world, Ok(Some("Hello, world!".to_string())));
+        }
+        COMMAND_TEST_READ_UREF2 => {
+            // Get the big value back
+            let big_value_key =
+                runtime::get_key("big-value").unwrap_or_revert_with(ApiError::User(102));
+            let big_value_ref = big_value_key.try_into().unwrap_or_revert();
+            let big_value = storage::read(big_value_ref);
+            assert_eq!(big_value, Ok(Some(U512::max_value())));
+        }
+        COMMAND_INCREASE_UREF2 => {
+            // Get the big value back
+            let big_value_key =
+                runtime::get_key("big-value").unwrap_or_revert_with(ApiError::User(102));
+            let big_value_ref = big_value_key.try_into().unwrap_or_revert();
+            // Increase by 1
+            storage::add(big_value_ref, U512::one());
+            let new_big_value = storage::read(big_value_ref);
+            assert_eq!(new_big_value, Ok(Some(U512::zero())));
+        }
+        COMMAND_OVERWRITE_UREF2 => {
+            // Get the big value back
+            let big_value_key =
+                runtime::get_key("big-value").unwrap_or_revert_with(ApiError::User(102));
+            let big_value_ref = big_value_key.try_into().unwrap_or_revert();
+            // I can overwrite some data under the pointer
+            storage::write(big_value_ref, U512::from(123_456_789u64));
+            let new_value = storage::read(big_value_ref);
+            assert_eq!(new_value, Ok(Some(U512::from(123_456_789u64))));
+        }
+        _ => runtime::revert(ApiError::InvalidArgument),
     }
-
-    // Add new urefs
-    let hello_world_key: Key = storage::new_turef(String::from("Hello, world!")).into();
-    runtime::put_key("hello-world", hello_world_key);
-    assert_eq!(runtime::list_named_keys().len(), initi_uref_num + 1);
-
-    // Verify if the uref is present
-    assert!(runtime::has_key("hello-world"));
-
-    let big_value_key: Key = storage::new_turef(U512::max_value()).into();
-    runtime::put_key("big-value", big_value_key);
-
-    assert_eq!(runtime::list_named_keys().len(), initi_uref_num + 2);
-
-    // Read data hidden behind `URef1` uref
-    let hello_world: String = storage::read(
-        runtime::list_named_keys()
-            .get("hello-world")
-            .expect("Unable to get hello-world")
-            .to_turef()
-            .expect("Unable to convert to turef"),
-    )
-    .expect("Unable to deserialize TURef")
-    .expect("Unable to find value");
-    assert_eq!(hello_world, "Hello, world!");
-
-    // Read data through dedicated FFI function
-    let uref1 = runtime::get_key("hello-world").unwrap_or_revert();
-
-    let turef = uref1.to_turef().unwrap_or_revert_with(Error::User(101));
-    let hello_world = storage::read(turef);
-    assert_eq!(hello_world, Ok(Some("Hello, world!".to_string())));
-
-    // Remove uref
-    runtime::remove_key("hello-world");
-    assert!(!runtime::has_key("hello-world"));
-
-    // Confirm URef2 is still there
-    assert!(runtime::has_key("big-value"));
-
-    // Get the big value back
-    let big_value_key = runtime::get_key("big-value").unwrap_or_revert_with(Error::User(102));
-    let big_value_ref = big_value_key
-        .to_turef()
-        .expect("Unable to get turef for big-value");
-    let big_value = storage::read(big_value_ref);
-    assert_eq!(big_value, Ok(Some(U512::max_value())));
-
-    // Increase by 1
-    storage::add(big_value_ref, U512::one());
-    let new_big_value = storage::read(big_value_ref);
-    assert_eq!(new_big_value, Ok(Some(U512::zero())));
-
-    // I can overwrite some data under the pointer
-    storage::write(big_value_ref, U512::from(123_456_789u64));
-    let new_value = storage::read(big_value_ref);
-    assert_eq!(new_value, Ok(Some(U512::from(123_456_789u64))));
-
-    // Try to remove non existing uref which shouldn't fail
-    runtime::remove_key("hello-world");
-    // Remove a valid uref
-    runtime::remove_key("big-value");
-
-    // Cleaned up state
-    assert!(!runtime::has_key("hello-world"));
-    assert!(!runtime::has_key("big-value"));
-
-    assert_eq!(runtime::list_named_keys().len(), initi_uref_num);
 }

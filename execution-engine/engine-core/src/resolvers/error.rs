@@ -1,4 +1,4 @@
-use contract_ffi::value::ProtocolVersion;
+use types::ProtocolVersion;
 
 #[derive(Debug)]
 pub enum ResolverError {

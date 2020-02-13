@@ -8,6 +8,7 @@ import io.casperlabs.casper.consensus.info.BlockInfo
 import io.casperlabs.ipc.TransformEntry
 import io.casperlabs.metrics.Metered
 import io.casperlabs.storage.BlockMsgWithTransform
+import io.casperlabs.storage.BlockMsgWithTransform.StageEffects
 import io.casperlabs.storage.block.BlockStorage.DeployHash
 
 import scala.language.higherKinds
@@ -25,9 +26,12 @@ trait BlockStorage[F[_]] {
   def put(
       blockHash: BlockHash,
       blockMessage: BlockMessage,
-      transforms: Seq[TransformEntry]
+      transforms: Map[Int, Seq[TransformEntry]]
   ): F[Unit] =
-    put(blockHash, BlockMsgWithTransform(Some(blockMessage), transforms))
+    put(
+      blockHash,
+      BlockMsgWithTransform(Some(blockMessage), BlockStorage.blockEffectsMapToProto(transforms))
+    )
 
   def get(blockHash: BlockHash): F[Option[BlockMsgWithTransform]]
 
@@ -124,11 +128,16 @@ object BlockStorage {
 
     def getTransforms(
         blockHash: BlockHash
-    )(implicit applicative: Applicative[F]): F[Option[Seq[TransformEntry]]] =
-      blockStorage.get(blockHash).map(_.map(_.transformEntry))
+    )(implicit applicative: Applicative[F]): F[Option[Map[Int, Seq[TransformEntry]]]] =
+      blockStorage.get(blockHash).map(_.map(_.blockEffects.map(se => (se.stage, se.effects)).toMap))
   }
   def apply[F[_]](implicit ev: BlockStorage[F]): BlockStorage[F] = ev
 
   type BlockHash  = ByteString
   type DeployHash = ByteString
+
+  def blockEffectsMapToProto(
+      blockEffects: Map[Int, Seq[TransformEntry]]
+  ): Seq[StageEffects] =
+    blockEffects.toSeq.map((StageEffects.apply _).tupled)
 }

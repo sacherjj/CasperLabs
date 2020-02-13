@@ -3,14 +3,14 @@
 extern crate alloc;
 
 use alloc::{collections::BTreeMap, string::String};
-use contract_ffi::{
-    contract_api::{account, runtime, storage, system, Error},
-    key::Key,
+
+use contract::{
+    contract_api::{account, runtime, storage, system},
     unwrap_or_revert::UnwrapOrRevert,
-    value::{
-        account::{PublicKey, PurseId},
-        U512,
-    },
+};
+use types::{
+    account::{PublicKey, PurseId},
+    ApiError, Key, U512,
 };
 
 const DONATION_AMOUNT: u64 = 1;
@@ -26,7 +26,7 @@ const TRANSFER_FROM_PURSE_TO_ACCOUNT: &str = "transfer_from_purse_to_account";
 const TRANSFER_FROM_PURSE_TO_PURSE: &str = "transfer_from_purse_to_purse";
 const TRANSFER_FUNDS_EXT: &str = "transfer_funds_ext";
 const TRANSFER_FUNDS_KEY: &str = "transfer_funds";
-const TRANSFER_TO_ACCOUNT: &str = "transfer_to_account";
+const TRANSFER_TO_ACCOUNT: &str = "transfer_to_account_u512";
 
 enum DelegateArg {
     Method = 0,
@@ -44,35 +44,35 @@ enum ContractError {
     InvalidDelegateMethod = 1,
 }
 
-impl Into<Error> for ContractError {
-    fn into(self) -> Error {
-        Error::User(self as u16)
+impl Into<ApiError> for ContractError {
+    fn into(self) -> ApiError {
+        ApiError::User(self as u16)
     }
 }
 
-fn get_maintainer_public_key() -> Result<PublicKey, Error> {
+fn get_maintainer_public_key() -> Result<PublicKey, ApiError> {
     // Obtain maintainer address from the contract's named keys
-    let maintainer_key = runtime::get_key(MAINTAINER).ok_or(Error::GetKey)?;
+    let maintainer_key = runtime::get_key(MAINTAINER).ok_or(ApiError::GetKey)?;
     maintainer_key
-        .as_account()
-        .ok_or(Error::UnexpectedKeyVariant)
+        .into_account()
+        .ok_or(ApiError::UnexpectedKeyVariant)
         .map(PublicKey::new)
 }
 
-fn get_donation_box_purse() -> Result<PurseId, Error> {
-    let donation_box_key = runtime::get_key(DONATION_BOX).ok_or(Error::GetKey)?;
+fn get_donation_box_purse() -> Result<PurseId, ApiError> {
+    let donation_box_key = runtime::get_key(DONATION_BOX).ok_or(ApiError::GetKey)?;
     donation_box_key
         .as_uref()
         .cloned()
-        .ok_or(Error::UnexpectedKeyVariant)
+        .ok_or(ApiError::UnexpectedKeyVariant)
         .map(PurseId::new)
 }
 
 /// This method is possibly ran from a context of a different user than the initial deployer
-fn transfer_funds() -> Result<(), Error> {
+fn transfer_funds() -> Result<(), ApiError> {
     let method: String = runtime::get_arg(TransferFunds::Method as u32)
-        .ok_or(Error::MissingArgument)?
-        .map_err(|_| Error::InvalidArgument)?;
+        .ok_or(ApiError::MissingArgument)?
+        .map_err(|_| ApiError::InvalidArgument)?;
 
     // Donation box is the purse funds will be transferred into
     let donation_box_purse = get_donation_box_purse()?;
@@ -116,10 +116,10 @@ fn transfer_funds_ext() {
 }
 
 /// Registers a function and saves it in callers named keys
-fn delegate() -> Result<(), Error> {
+fn delegate() -> Result<(), ApiError> {
     let method: String = runtime::get_arg(DelegateArg::Method as u32)
-        .ok_or(Error::MissingArgument)?
-        .map_err(|_| Error::InvalidArgument)?;
+        .ok_or(ApiError::MissingArgument)?
+        .map_err(|_| ApiError::InvalidArgument)?;
     match method.as_str() {
         METHOD_INSTALL => {
             // Create a purse that should be known to the contract regardless of the
@@ -146,16 +146,16 @@ fn delegate() -> Result<(), Error> {
             // This comes from outside i.e. after deploying the contract, this key is queried, and
             // then passed into the call
             let contract_key: Key = runtime::get_arg(DelegateArg::ContractKey as u32)
-                .ok_or(Error::MissingArgument)?
-                .map_err(|_| Error::InvalidArgument)?;
+                .ok_or(ApiError::MissingArgument)?
+                .map_err(|_| ApiError::InvalidArgument)?;
             let contract_ref = contract_key
                 .to_contract_ref()
-                .ok_or(Error::UnexpectedKeyVariant)?;
+                .ok_or(ApiError::UnexpectedKeyVariant)?;
             // This is a method that's gets forwarded into the sub contract
             let subcontract_method: String =
                 runtime::get_arg(DelegateArg::SubContractMethodFwd as u32)
-                    .ok_or(Error::MissingArgument)?
-                    .map_err(|_| Error::InvalidArgument)?;
+                    .ok_or(ApiError::MissingArgument)?
+                    .map_err(|_| ApiError::InvalidArgument)?;
 
             let subcontract_args = (subcontract_method,);
             runtime::call_contract::<_, ()>(contract_ref, subcontract_args);

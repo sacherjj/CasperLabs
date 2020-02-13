@@ -1,8 +1,6 @@
 use engine_core::engine_state::Error;
-
-use crate::{
-    support::test_support::{ExecuteRequestBuilder, InMemoryWasmTestBuilder},
-    test::DEFAULT_GENESIS_CONFIG,
+use engine_test_support::internal::{
+    ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_GENESIS_CONFIG,
 };
 
 const CONTRACT_EE_532_REGRESSION: &str = "ee_532_regression.wasm";
@@ -27,8 +25,6 @@ fn should_run_ee_532_get_uref_regression_test() {
         .builder()
         .get_exec_response(0)
         .expect("should have exec response")
-        .get_success()
-        .get_deploy_results()
         .get(0)
         .expect("should have at least one deploy result");
 
@@ -37,10 +33,10 @@ fn should_run_ee_532_get_uref_regression_test() {
         "expected precondition failure"
     );
 
-    let message = deploy_result.get_precondition_failure().get_message();
+    let message = deploy_result.error().map(|err| format!("{}", err));
     assert_eq!(
         message,
-        format!("{}", Error::AuthorizationError),
-        "expected AuthorizationError"
+        Some(format!("{}", Error::Authorization)),
+        "expected Error::Authorization"
     )
 }

@@ -1,21 +1,23 @@
 use lazy_static::lazy_static;
 
-use contract_ffi::value::{
+use engine_core::engine_state::CONV_RATE;
+use engine_shared::motes::Motes;
+use engine_test_support::{
+    internal::{
+        utils, ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_GENESIS_CONFIG,
+        DEFAULT_PAYMENT,
+    },
+    DEFAULT_ACCOUNT_ADDR,
+};
+use types::{
     account::{PublicKey, PurseId},
     U512,
 };
-use engine_core::engine_state::CONV_RATE;
-use engine_shared::motes::Motes;
-
-use crate::{
-    support::test_support::{self, ExecuteRequestBuilder, InMemoryWasmTestBuilder},
-    test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT},
-};
 
 const CONTRACT_EE_599_REGRESSION: &str = "ee_599_regression.wasm";
-const CONTRACT_TRANSFER_TO_ACCOUNT: &str = "transfer_to_account.wasm";
+const CONTRACT_TRANSFER_TO_ACCOUNT: &str = "transfer_to_account_u512.wasm";
 const DONATION_BOX_COPY_KEY: &str = "donation_box_copy";
-const EXPECTED_ERROR: &str = "Invalid execution context.";
+const EXPECTED_ERROR: &str = "InvalidContext";
 const TRANSFER_FUNDS_KEY: &str = "transfer_funds";
 const VICTIM_ADDR: [u8; 32] = [42; 32];
 
@@ -26,7 +28,7 @@ lazy_static! {
 fn setup() -> InMemoryWasmTestBuilder {
     // Creates victim account
     let exec_request_1 = {
-        let args = (PublicKey::new(VICTIM_ADDR), VICTIM_INITIAL_FUNDS.as_u64());
+        let args = (PublicKey::new(VICTIM_ADDR), *VICTIM_INITIAL_FUNDS);
         ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, CONTRACT_TRANSFER_TO_ACCOUNT, args)
             .build()
     };
@@ -92,14 +94,18 @@ fn should_not_be_able_to_transfer_funds_with_transfer_purse_to_purse() {
         .builder()
         .get_exec_response(0)
         .expect("should have response");
-    let gas_cost = Motes::from_gas(test_support::get_exec_costs(&exec_3_response)[0], CONV_RATE)
+    let gas_cost = Motes::from_gas(utils::get_exec_costs(exec_3_response)[0], CONV_RATE)
         .expect("should convert");
 
     let error_msg = result_2
         .builder()
         .exec_error_message(0)
         .expect("should have error");
-    assert_eq!(error_msg, EXPECTED_ERROR,);
+    assert!(
+        error_msg.contains(EXPECTED_ERROR),
+        "Got error: {}",
+        error_msg
+    );
 
     let victim_balance_after = result_2
         .builder()
@@ -161,14 +167,18 @@ fn should_not_be_able_to_transfer_funds_with_transfer_from_purse_to_account() {
         .get_exec_response(0)
         .expect("should have response");
 
-    let gas_cost = Motes::from_gas(test_support::get_exec_costs(&exec_3_response)[0], CONV_RATE)
+    let gas_cost = Motes::from_gas(utils::get_exec_costs(exec_3_response)[0], CONV_RATE)
         .expect("should convert");
 
     let error_msg = result_2
         .builder()
         .exec_error_message(0)
         .expect("should have error");
-    assert_eq!(error_msg, EXPECTED_ERROR,);
+    assert!(
+        error_msg.contains(EXPECTED_ERROR),
+        "Got error: {}",
+        error_msg
+    );
 
     let victim_balance_after = result_2
         .builder()
@@ -225,7 +235,11 @@ fn should_not_be_able_to_transfer_funds_with_transfer_to_account() {
     let donation_box_copy = PurseId::new(*donation_box_copy_uref);
 
     let exec_request_3 = {
-        let args = ("call".to_string(), transfer_funds, "transfer_to_account");
+        let args = (
+            "call".to_string(),
+            transfer_funds,
+            "transfer_to_account_u512",
+        );
         ExecuteRequestBuilder::standard(VICTIM_ADDR, CONTRACT_EE_599_REGRESSION, args).build()
     };
 
@@ -236,14 +250,18 @@ fn should_not_be_able_to_transfer_funds_with_transfer_to_account() {
         .get_exec_response(0)
         .expect("should have response");
 
-    let gas_cost = Motes::from_gas(test_support::get_exec_costs(&exec_3_response)[0], CONV_RATE)
+    let gas_cost = Motes::from_gas(utils::get_exec_costs(exec_3_response)[0], CONV_RATE)
         .expect("should convert");
 
     let error_msg = result_2
         .builder()
         .exec_error_message(0)
         .expect("should have error");
-    assert_eq!(error_msg, EXPECTED_ERROR,);
+    assert!(
+        error_msg.contains(EXPECTED_ERROR),
+        "Got error: {}",
+        error_msg
+    );
 
     let victim_balance_after = result_2
         .builder()
@@ -291,7 +309,11 @@ fn should_not_be_able_to_get_main_purse_in_invalid_context() {
         .unwrap_or_else(|| panic!("should have {}", TRANSFER_FUNDS_KEY));
 
     let exec_request_3 = {
-        let args = ("call".to_string(), transfer_funds, "transfer_to_account");
+        let args = (
+            "call".to_string(),
+            transfer_funds,
+            "transfer_to_account_u512",
+        );
         ExecuteRequestBuilder::standard(VICTIM_ADDR, CONTRACT_EE_599_REGRESSION, args).build()
     };
 
@@ -304,14 +326,18 @@ fn should_not_be_able_to_get_main_purse_in_invalid_context() {
         .get_exec_response(0)
         .expect("should have response");
 
-    let gas_cost = Motes::from_gas(test_support::get_exec_costs(&exec_3_response)[0], CONV_RATE)
+    let gas_cost = Motes::from_gas(utils::get_exec_costs(exec_3_response)[0], CONV_RATE)
         .expect("should convert");
 
     let error_msg = result_2
         .builder()
         .exec_error_message(0)
         .expect("should have error");
-    assert_eq!(error_msg, EXPECTED_ERROR,);
+    assert!(
+        error_msg.contains(EXPECTED_ERROR),
+        "Got error: {}",
+        error_msg
+    );
 
     let victim_balance_after = result_2
         .builder()

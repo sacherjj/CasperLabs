@@ -1,3 +1,4 @@
+import logging
 from casperlabs_client.abi import ABI
 from casperlabs_local_net.casperlabs_accounts import Account
 from casperlabs_local_net.common import Contract
@@ -14,9 +15,6 @@ def test_deploy_buffer_persistence(trillion_payment_node_network):
 
     node = trillion_payment_node_network.docker_nodes[0]
 
-    # Storing deploys to verify they are processed
-    deploy_hashes = []
-
     def create_associate_deploy(acct_num: int):
         """ Add associated key of acct_num + 1 to acct_num account """
         acct = Account(acct_num)
@@ -27,17 +25,16 @@ def test_deploy_buffer_persistence(trillion_payment_node_network):
                 ABI.u32("amount", 1),
             ]
         )
-        _, deploy_hash_bytes = node.p_client.deploy(
+        return node.p_client.deploy(
             from_address=acct.public_key_hex,
             session_contract=Contract.ADD_ASSOCIATED_KEY,
             public_key=acct.public_key_path,
             private_key=acct.private_key_path,
             session_args=args,
         )
-        return deploy_hash_bytes.hex()
 
     # Currently hit gRPC limit with greater than around 16.
-    acct_count = 2
+    acct_count = 8
 
     # We will add associated key for acct_num + 1, so skipping by 2.
     odd_acct_numbers = list(range(1, acct_count * 2 + 1, 2))
@@ -47,8 +44,8 @@ def test_deploy_buffer_persistence(trillion_payment_node_network):
         node.transfer_to_account(acct_num, 10 ** 8)
 
     # Adding associated key for even account numbers one greater than acct_num
-    for acct_num in odd_acct_numbers:
-        deploy_hashes.append(create_associate_deploy(acct_num))
+    # Storing deploys to verify they are processed
+    deploy_hashes = [create_associate_deploy(acct_num) for acct_num in odd_acct_numbers]
 
     block_count_prior = len(list(node.p_client.show_blocks(1000)))
 
@@ -58,19 +55,17 @@ def test_deploy_buffer_persistence(trillion_payment_node_network):
     node.start()
     wait_for_node_started(node, 60, 2)
 
-    # Process through the deploy buffer
-    # Currently requires two proposes, but might be optimized to one in future.
-    while len(deploy_hashes) > 0:
-        response = node.p_client.propose()
-        block_hash = response.block_hash.hex()
-        for deploy in node.p_client.show_deploys(block_hash):
-            deploy_hash = deploy.deploy.deploy_hash.hex()
-            assert (
-                deploy_hash in deploy_hashes
-            ), f"Expected deploy hash: {deploy_hash} in previous hashes: {deploy_hashes}."
-            deploy_hashes.remove(deploy_hash)
+    block_hashes = set(
+        node.wait_for_deploy_processed_and_get_block_hash(deploy_hash)
+        for deploy_hash in deploy_hashes
+    )
+    logging.info(
+        f"=== Deploy hashes {deploy_hashes} processed and included in {len(block_hashes)} blocks: {block_hashes}"
+    )
 
-    # Validate all deploy hashes were used and new blocks were proposes.
-    assert len(deploy_hashes) == 0, "We did not propose all stored deploy_hashes."
     block_count_post = len(list(node.p_client.show_blocks(1000)))
+    logging.info(f"Blocks before restarting: {block_count_prior}")
+    logging.info(f"Blocks after restarting: {block_count_post}")
+
+    # Check there were some new blocks created after restart.
     assert block_count_post > block_count_prior

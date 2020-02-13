@@ -11,10 +11,11 @@ doctest = false
 test = false
 
 [features]
-default = []
-std = ["contract-ffi/std"]
+std = ["contract/std", "types/std"]
 lib = []
 
 [dependencies]
-contract-ffi = { path = "../../../contract-ffi", package = "casperlabs-contract-ffi" }
+contract = { path = "../../../contract", package = "casperlabs-contract" }
+mint = { path = "../../../mint", package = "casperlabs-mint" }
 mint-token = { path = "../../system/mint-token", default-features = false, features = ["lib"] }
+types = { path = "../../../types", package = "casperlabs-types" }

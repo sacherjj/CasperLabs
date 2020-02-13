@@ -2,6 +2,7 @@ pub mod deploy_item;
 pub mod engine_config;
 mod error;
 pub mod executable_deploy_item;
+pub mod execute_request;
 pub mod execution_effect;
 pub mod execution_result;
 pub mod genesis;
@@ -20,19 +21,7 @@ use std::{
 use num_traits::Zero;
 use parity_wasm::elements::Module;
 
-use contract_ffi::{
-    args_parser::ArgsParser,
-    block_time::BlockTime,
-    bytesrepr::ToBytes,
-    execution::Phase,
-    key::{Key, KEY_HASH_LENGTH},
-    system_contracts::mint,
-    uref::{AccessRights, URef, UREF_ADDR_LENGTH},
-    value::{
-        account::{PublicKey, PurseId},
-        ProtocolVersion, U512,
-    },
-};
+use contract::args_parser::ArgsParser;
 use engine_shared::{
     account::Account,
     additive_map::AdditiveMap,
@@ -47,6 +36,13 @@ use engine_storage::{
     protocol_data::ProtocolData,
 };
 use engine_wasm_prep::{wasm_costs::WasmCosts, Preprocessor};
+use types::{
+    account::{PublicKey, PurseId},
+    bytesrepr::ToBytes,
+    system_contract_errors::mint,
+    AccessRights, BlockTime, Key, Phase, ProtocolVersion, URef, KEY_HASH_LENGTH, U512,
+    UREF_ADDR_LENGTH,
+};
 
 use self::{
     deploy_item::DeployItem,
@@ -61,7 +57,8 @@ pub use self::{
 };
 use crate::{
     engine_state::{
-        error::Error::MissingSystemContractError,
+        error::Error::MissingSystemContract,
+        execute_request::ExecuteRequest,
         query::{QueryRequest, QueryResult},
         upgrade::{UpgradeConfig, UpgradeResult},
     },
@@ -121,7 +118,7 @@ where
     ) -> Result<Option<ProtocolData>, Error> {
         match self.state.get_protocol_data(protocol_version) {
             Ok(Some(protocol_data)) => Ok(Some(protocol_data)),
-            Err(error) => Err(Error::ExecError(error.into())),
+            Err(error) => Err(Error::Exec(error.into())),
             _ => Ok(None),
         }
     }
@@ -451,7 +448,7 @@ where
                 return Err(Error::InvalidProtocolVersion(current_protocol_version));
             }
             Err(error) => {
-                return Err(Error::ExecError(error.into()));
+                return Err(Error::Exec(error.into()));
             }
         };
 
@@ -514,7 +511,7 @@ where
                     match tracking_copy.borrow_mut().read(correlation_id, &key) {
                         Ok(Some(StoredValue::Account(account))) => account,
                         Ok(_) => panic!("system account must exist"),
-                        Err(error) => return Err(Error::ExecError(error.into())),
+                        Err(error) => return Err(Error::Exec(error.into())),
                     }
                 };
 
@@ -610,8 +607,48 @@ where
 
         Ok(mut_tracking_copy
             .query(correlation_id, query_request.key(), query_request.path())
-            .map_err(|err| Error::ExecError(err.into()))?
+            .map_err(|err| Error::Exec(err.into()))?
             .into())
+    }
+
+    pub fn run_execute(
+        &self,
+        correlation_id: CorrelationId,
+        mut exec_request: ExecuteRequest,
+    ) -> Result<Vec<ExecutionResult>, RootNotFound> {
+        // TODO: do not unwrap
+        let wasm_costs = self
+            .wasm_costs(exec_request.protocol_version)
+            .unwrap()
+            .unwrap();
+        let executor = Executor;
+        let preprocessor = Preprocessor::new(wasm_costs);
+
+        let mut results = Vec::new();
+
+        for deploy_item in exec_request.take_deploys() {
+            let result = match deploy_item {
+                Ok(deploy_item) => self.deploy(
+                    correlation_id,
+                    &executor,
+                    &preprocessor,
+                    exec_request.protocol_version,
+                    exec_request.parent_state_hash,
+                    BlockTime::new(exec_request.block_time),
+                    deploy_item,
+                ),
+                Err(exec_result) => Ok(exec_result), /* this will get pushed into the results vec
+                                                      * below */
+            };
+            match result {
+                Ok(result) => results.push(result),
+                Err(error) => {
+                    return Err(error);
+                }
+            };
+        }
+
+        Ok(results)
     }
 
     pub fn get_module(
@@ -642,13 +679,11 @@ where
             }
             ExecutableDeployItem::StoredContractByName { name, .. } => {
                 let stored_contract_key = account.named_keys().get(name).ok_or_else(|| {
-                    error::Error::ExecError(execution::Error::URefNotFound(name.to_string()))
+                    error::Error::Exec(execution::Error::URefNotFound(name.to_string()))
                 })?;
                 if let Key::URef(uref) = stored_contract_key {
                     if !uref.is_readable() {
-                        return Err(error::Error::ExecError(execution::Error::ForgedReference(
-                            *uref,
-                        )));
+                        return Err(error::Error::Exec(execution::Error::ForgedReference(*uref)));
                     }
                 }
                 *stored_contract_key
@@ -674,20 +709,20 @@ where
                 match maybe_named_key {
                     Some(Key::URef(uref)) if uref.is_readable() => normalized_uref,
                     Some(Key::URef(_)) => {
-                        return Err(error::Error::ExecError(execution::Error::ForgedReference(
+                        return Err(error::Error::Exec(execution::Error::ForgedReference(
                             read_only_uref,
                         )));
                     }
                     Some(key) => {
-                        return Err(error::Error::ExecError(execution::Error::TypeMismatch(
-                            engine_shared::transform::TypeMismatch::new(
+                        return Err(error::Error::Exec(execution::Error::TypeMismatch(
+                            engine_shared::TypeMismatch::new(
                                 "Key::URef".to_string(),
                                 key.type_string(),
                             ),
                         )));
                     }
                     None => {
-                        return Err(error::Error::ExecError(execution::Error::KeyNotFound(
+                        return Err(error::Error::Exec(execution::Error::KeyNotFound(
                             Key::URef(read_only_uref),
                         )));
                     }
@@ -706,7 +741,7 @@ where
                 expected: protocol_version.value().major,
                 actual: contract_version.value().major,
             };
-            return Err(error::Error::ExecError(exec_error));
+            return Err(error::Error::Exec(exec_error));
         }
 
         let (ret, _, _) = contract.destructure();
@@ -743,11 +778,11 @@ where
 
         // Get addr bytes from `address` (which is actually a Key)
         // validation_spec_3: account validity
-        let account_addr = match address.as_account() {
+        let account_addr = match address.into_account() {
             Some(account_addr) => account_addr,
             None => {
                 return Ok(ExecutionResult::precondition_failure(
-                    error::Error::AuthorizationError,
+                    error::Error::Authorization,
                 ))
             }
         };
@@ -761,7 +796,7 @@ where
             Ok(account) => account,
             Err(_) => {
                 return Ok(ExecutionResult::precondition_failure(
-                    error::Error::AuthorizationError,
+                    error::Error::Authorization,
                 ));
             }
         };
@@ -770,7 +805,7 @@ where
         // validation_spec_3: account validity
         if !account.can_authorize(&authorization_keys) {
             return Ok(ExecutionResult::precondition_failure(
-                crate::engine_state::error::Error::AuthorizationError,
+                crate::engine_state::error::Error::Authorization,
             ));
         }
 
@@ -807,7 +842,7 @@ where
                 return Ok(ExecutionResult::precondition_failure(error));
             }
             Err(error) => {
-                return Ok(ExecutionResult::precondition_failure(Error::ExecError(
+                return Ok(ExecutionResult::precondition_failure(Error::Exec(
                     error.into(),
                 )));
             }
@@ -868,7 +903,7 @@ where
                 match proof_of_stake_contract.named_keys().get(POS_REWARDS_PURSE) {
                     Some(key) => *key,
                     None => {
-                        return Ok(ExecutionResult::precondition_failure(Error::DeployError));
+                        return Ok(ExecutionResult::precondition_failure(Error::Deploy));
                     }
                 };
 
@@ -914,7 +949,7 @@ where
         // validation_spec_5: account main purse minimum balance
         if account_main_purse_balance < max_payment_cost {
             return Ok(ExecutionResult::precondition_failure(
-                Error::InsufficientPaymentError,
+                Error::InsufficientPayment,
             ));
         }
 
@@ -928,7 +963,7 @@ where
             Default::default(),
         );
 
-        // `[ExecutionResultBuilder]` handles merging of multiple execution results
+        // [`ExecutionResultBuilder`] handles merging of multiple execution results
         let mut execution_result_builder = execution_result::ExecutionResultBuilder::new();
 
         // Execute provided payment code
@@ -983,7 +1018,7 @@ where
             let payment_purse: Key =
                 match proof_of_stake_contract.named_keys().get(POS_PAYMENT_PURSE) {
                     Some(key) => *key,
-                    None => return Ok(ExecutionResult::precondition_failure(Error::DeployError)),
+                    None => return Ok(ExecutionResult::precondition_failure(Error::Deploy)),
                 };
 
             let purse_balance_key = match tracking_copy.borrow_mut().get_purse_balance_key(
@@ -1010,7 +1045,7 @@ where
 
         if let Some(forced_transfer) = payment_result.check_forced_transfer(payment_purse_balance) {
             let error = match forced_transfer {
-                ForcedTransferResult::InsufficientPayment => Error::InsufficientPaymentError,
+                ForcedTransferResult::InsufficientPayment => Error::InsufficientPayment,
                 ForcedTransferResult::PaymentFailure => payment_result.take_error().unwrap(),
             };
             return Ok(ExecutionResult::new_payment_code_error(
@@ -1123,7 +1158,7 @@ where
                 &mut proof_of_stake_keys,
                 base_key,
                 &system_account,
-                authorization_keys.clone(),
+                authorization_keys,
                 blocktime,
                 deploy_hash,
                 gas_limit,
@@ -1202,7 +1237,7 @@ where
 
         let contract = match reader.read(correlation_id, &proof_of_stake)? {
             Some(StoredValue::Contract(contract)) => contract,
-            _ => return Err(MissingSystemContractError("proof of stake".to_string())),
+            _ => return Err(MissingSystemContract("proof of stake".to_string())),
         };
 
         let bonded_validators = contract

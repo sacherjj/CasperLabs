@@ -92,6 +92,7 @@ class DockerConfig:
             "--tls-key": self.tls_key_path(),
             "--tls-api-certificate": self.tls_certificate_path(),
             "--tls-api-key": self.tls_key_path(),
+            "--casper-auto-propose-enabled": "",
         }
         if self.behind_proxy:
             options["--server-port"] = "50400"

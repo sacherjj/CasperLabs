@@ -16,32 +16,27 @@ use std::{
 
 use grpc::{RequestOptions, ServerBuilder, SingleResponse};
 
-use contract_ffi::{block_time::BlockTime, value::ProtocolVersion};
-use engine_core::{
-    engine_state::{
-        deploy_item::DeployItem,
-        execution_result::ExecutionResult,
-        genesis::{GenesisConfig, GenesisResult},
-        query::{QueryRequest, QueryResult},
-        upgrade::{UpgradeConfig, UpgradeResult},
-        EngineState, Error as EngineError,
-    },
-    execution::Executor,
+use engine_core::engine_state::{
+    execute_request::ExecuteRequest,
+    genesis::{GenesisConfig, GenesisResult},
+    query::{QueryRequest, QueryResult},
+    upgrade::{UpgradeConfig, UpgradeResult},
+    EngineState, Error as EngineError,
 };
 use engine_shared::{
     logging::{self, log_duration, log_info, log_level::LogLevel},
-    newtypes::{Blake2bHash, CorrelationId, BLAKE2B_DIGEST_LENGTH},
+    newtypes::{Blake2bHash, CorrelationId},
 };
 use engine_storage::global_state::{CommitResult, StateProvider};
-use engine_wasm_prep::Preprocessor;
+use types::{bytesrepr::ToBytes, ProtocolVersion};
 
 use self::{
     ipc::{
-        ChainSpec_GenesisConfig, CommitRequest, CommitResponse, ExecuteRequest, ExecuteResponse,
-        GenesisResponse, QueryResponse, UpgradeRequest, UpgradeResponse,
+        ChainSpec_GenesisConfig, CommitRequest, CommitResponse, ExecuteResponse, GenesisResponse,
+        QueryResponse, UpgradeRequest, UpgradeResponse,
     },
     ipc_grpc::{ExecutionEngineService, ExecutionEngineServiceServer},
-    mappings::{MappingError, ParsingError, TransformMap},
+    mappings::{ParsingError, TransformMap},
 };
 
 const METRIC_DURATION_COMMIT: &str = "commit_duration";
@@ -99,16 +94,15 @@ where
         let response = match result {
             Ok(QueryResult::Success(value)) => {
                 let mut result = ipc::QueryResponse::new();
-                match value.try_into() {
-                    Ok(pb_value) => {
+                match value.to_bytes() {
+                    Ok(serialized_value) => {
                         let log_message =
                             format!("query successful; correlation_id: {}", correlation_id);
                         log_info(&log_message);
-                        result.set_success(pb_value);
+                        result.set_success(serialized_value);
                     }
-                    Err(ParsingError(error_msg)) => {
-                        let log_message =
-                            format!("Failed to convert StoredValue to Value: {}", error_msg);
+                    Err(error_msg) => {
+                        let log_message = format!("Failed to serialize StoredValue: {}", error_msg);
                         logging::log_error(&log_message);
                         result.set_failure(log_message);
                     }
@@ -151,73 +145,36 @@ where
     fn execute(
         &self,
         _request_options: RequestOptions,
-        mut exec_request: ExecuteRequest,
+        exec_request: ipc::ExecuteRequest,
     ) -> SingleResponse<ExecuteResponse> {
         let start = Instant::now();
         let correlation_id = CorrelationId::new();
 
-        let parent_state_hash = {
-            let parent_state_hash = exec_request.get_parent_state_hash();
-            match Blake2bHash::try_from(parent_state_hash) {
-                Ok(hash) => hash,
-                Err(_) => {
-                    // TODO: do not panic
-                    let length = parent_state_hash.len();
-                    panic!(
-                        "Invalid hash. Expected length: {:?}, actual length: {:?}",
-                        BLAKE2B_DIGEST_LENGTH, length
-                    )
-                }
+        let exec_request: ExecuteRequest = match exec_request.try_into() {
+            Ok(ret) => ret,
+            Err(err) => {
+                return SingleResponse::completed(err);
             }
         };
-        let block_time = BlockTime::new(exec_request.get_block_time());
-        let protocol_version = exec_request.take_protocol_version().into();
-        // TODO: do not unwrap
-        let wasm_costs = self.wasm_costs(protocol_version).unwrap().unwrap();
-        let executor = Executor;
-        let preprocessor = Preprocessor::new(wasm_costs);
 
         let mut exec_response = ExecuteResponse::new();
-        let mut results: Vec<ExecutionResult> = Vec::new();
 
-        for result in exec_request
-            .take_deploys()
-            .into_iter()
-            .map::<Result<DeployItem, MappingError>, _>(TryInto::try_into)
-        {
-            match result {
-                Ok(deploy_item) => {
-                    let result = self.deploy(
-                        correlation_id,
-                        &executor,
-                        &preprocessor,
-                        protocol_version,
-                        parent_state_hash,
-                        block_time,
-                        deploy_item,
-                    );
-                    match result {
-                        Ok(result) => results.push(result),
-                        Err(error) => {
-                            logging::log_error("deploy results error: RootNotFound");
-                            exec_response
-                                .mut_missing_parent()
-                                .set_hash(error.0.to_vec());
-                            log_duration(
-                                correlation_id,
-                                METRIC_DURATION_EXEC,
-                                TAG_RESPONSE_EXEC,
-                                start.elapsed(),
-                            );
-                            return SingleResponse::completed(exec_response);
-                        }
-                    };
-                }
-                Err(mapping_error) => {
-                    results.push(ExecutionResult::precondition_failure(mapping_error.into()))
-                }
+        let results = match self.run_execute(correlation_id, exec_request) {
+            Ok(results) => results,
+            Err(error) => {
+                logging::log_error("deploy results error: RootNotFound");
+                exec_response
+                    .mut_missing_parent()
+                    .set_hash(error.0.to_vec());
+                log_duration(
+                    correlation_id,
+                    METRIC_DURATION_EXEC,
+                    TAG_RESPONSE_EXEC,
+                    start.elapsed(),
+                );
+                return SingleResponse::completed(exec_response);
             }
-        }
+        };
 
         let protobuf_results_iter = results.into_iter().map(Into::into);
         exec_response

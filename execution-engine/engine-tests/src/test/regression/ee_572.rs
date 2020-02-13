@@ -1,10 +1,12 @@
-use contract_ffi::{key::Key, value::U512};
 use engine_shared::stored_value::StoredValue;
-
-use crate::{
-    support::test_support::{ExecuteRequestBuilder, InMemoryWasmTestBuilder},
-    test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT},
+use engine_test_support::{
+    internal::{
+        utils, ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_GENESIS_CONFIG,
+        DEFAULT_PAYMENT,
+    },
+    DEFAULT_ACCOUNT_ADDR,
 };
+use types::{Key, U512};
 
 const CONTRACT_CREATE: &str = "ee_572_regression_create.wasm";
 const CONTRACT_ESCALATE: &str = "ee_572_regression_escalate.wasm";
@@ -57,7 +59,7 @@ fn should_run_ee_572_regression() {
 
     let contract: Key = {
         let account = match builder.query(None, Key::Account(ACCOUNT_1_ADDR), &[]) {
-            Some(StoredValue::Account(account)) => account,
+            Ok(StoredValue::Account(account)) => account,
             _ => panic!("Could not find account at: {:?}", ACCOUNT_1_ADDR),
         };
         *account
@@ -76,10 +78,7 @@ fn should_run_ee_572_regression() {
         .expect("should have a response")
         .to_owned();
 
-    let error_message = {
-        let execution_result = crate::support::test_support::get_success_result(&response);
-        crate::support::test_support::get_error_message(execution_result)
-    };
+    let error_message = utils::get_error_message(response);
 
     assert!(error_message.contains("ForgedReference"));
 }

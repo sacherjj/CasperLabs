@@ -1,11 +1,10 @@
 use failure::Fail;
 
 use engine_shared::newtypes::Blake2bHash;
-
-use contract_ffi::{bytesrepr, system_contracts::mint};
+use types::{bytesrepr, system_contract_errors::mint};
 
 use crate::execution;
-use contract_ffi::value::ProtocolVersion;
+use types::ProtocolVersion;
 
 #[derive(Fail, Debug)]
 pub enum Error {
@@ -18,62 +17,62 @@ pub enum Error {
     #[fail(display = "Invalid upgrade config")]
     InvalidUpgradeConfig,
     #[fail(display = "Wasm preprocessing error: {}", _0)]
-    WasmPreprocessingError(engine_wasm_prep::PreprocessingError),
+    WasmPreprocessing(engine_wasm_prep::PreprocessingError),
     #[fail(display = "Wasm serialization error: {:?}", _0)]
-    WasmSerializationError(parity_wasm::SerializationError),
+    WasmSerialization(parity_wasm::SerializationError),
     #[fail(display = "Execution error: {}", _0)]
-    ExecError(execution::Error),
+    Exec(execution::Error),
     #[fail(display = "Storage error: {}", _0)]
-    StorageError(engine_storage::error::Error),
+    Storage(engine_storage::error::Error),
     #[fail(display = "Authorization failure: not authorized.")]
-    AuthorizationError,
+    Authorization,
     #[fail(display = "Insufficient payment")]
-    InsufficientPaymentError,
+    InsufficientPayment,
     #[fail(display = "Deploy error")]
-    DeployError,
+    Deploy,
     #[fail(display = "Payment finalization error")]
-    FinalizationError,
+    Finalization,
     #[fail(display = "Missing system contract association: {}", _0)]
-    MissingSystemContractError(String),
+    MissingSystemContract(String),
     #[fail(display = "Serialization error: {}", _0)]
-    SerializationError(bytesrepr::Error),
+    Serialization(bytesrepr::Error),
     #[fail(display = "Mint error: {}", _0)]
-    MintError(mint::Error),
+    Mint(mint::Error),
 }
 
 impl From<engine_wasm_prep::PreprocessingError> for Error {
     fn from(error: engine_wasm_prep::PreprocessingError) -> Self {
-        Error::WasmPreprocessingError(error)
+        Error::WasmPreprocessing(error)
     }
 }
 
 impl From<parity_wasm::SerializationError> for Error {
     fn from(error: parity_wasm::SerializationError) -> Self {
-        Error::WasmSerializationError(error)
+        Error::WasmSerialization(error)
     }
 }
 
 impl From<execution::Error> for Error {
     fn from(error: execution::Error) -> Self {
-        Error::ExecError(error)
+        Error::Exec(error)
     }
 }
 
 impl From<engine_storage::error::Error> for Error {
     fn from(error: engine_storage::error::Error) -> Self {
-        Error::StorageError(error)
+        Error::Storage(error)
     }
 }
 
 impl From<bytesrepr::Error> for Error {
     fn from(error: bytesrepr::Error) -> Self {
-        Error::SerializationError(error)
+        Error::Serialization(error)
     }
 }
 
 impl From<mint::Error> for Error {
     fn from(error: mint::Error) -> Self {
-        Error::MintError(error)
+        Error::Mint(error)
     }
 }
 

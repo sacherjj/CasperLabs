@@ -1,13 +1,11 @@
-use contract_ffi::{key::Key, uref::URef, value::account::PublicKey};
-use engine_shared::transform::Transform;
-
-use crate::{
-    support::test_support::{
-        DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder,
-        STANDARD_PAYMENT_CONTRACT,
+use engine_test_support::{
+    internal::{
+        DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_GENESIS_CONFIG,
+        DEFAULT_PAYMENT, STANDARD_PAYMENT_CONTRACT,
     },
-    test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT},
+    DEFAULT_ACCOUNT_ADDR,
 };
+use types::{account::PublicKey, Key, URef};
 
 fn get_uref(key: Key) -> URef {
     match key {
@@ -30,25 +28,21 @@ fn do_pass(pass: &str) -> (URef, URef) {
         ExecuteRequestBuilder::from_deploy_item(deploy).build()
     };
 
-    let transforms = InMemoryWasmTestBuilder::default()
+    let mut builder = InMemoryWasmTestBuilder::default();
+    builder
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
         .exec(exec_request)
         .expect_success()
-        .commit()
-        .get_transforms();
+        .commit();
 
-    let transform = &transforms[0];
-    let account_transform = &transform[&Key::Account(DEFAULT_ACCOUNT_ADDR)];
-    let keys = if let Transform::AddKeys(keys) = account_transform {
-        keys
-    } else {
-        panic!(
-            "Transform for account is expected to be of type AddKeys(keys) but got {:?}",
-            account_transform
-        );
-    };
+    let account = builder
+        .get_account(DEFAULT_ACCOUNT_ADDR)
+        .expect("should have account");
 
-    (get_uref(keys["uref1"]), get_uref(keys["uref2"]))
+    (
+        get_uref(account.named_keys()["uref1"]),
+        get_uref(account.named_keys()["uref2"]),
+    )
 }
 
 #[ignore]

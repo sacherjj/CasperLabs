@@ -1,12 +1,10 @@
 use proptest::{arbitrary, array, collection, prop_oneof, strategy::Strategy};
 
-use contract_ffi::{
-    bytesrepr::{self, FromBytes, ToBytes},
-    gens,
-    key::LOCAL_SEED_LENGTH,
-    uref::URef,
-};
 use engine_shared::{make_array_newtype, newtypes::Blake2bHash};
+use types::{
+    bytesrepr::{self, FromBytes, ToBytes},
+    gens, URef, KEY_LOCAL_SEED_LENGTH,
+};
 
 use super::{HashedTrie, TestValue};
 use crate::trie::Trie;
@@ -122,7 +120,7 @@ impl FromBytes for PublicKey {
                 let (key, rem): (Long, &[u8]) = FromBytes::from_bytes(rem)?;
                 Ok((PublicKey::Long(key), rem))
             }
-            _ => Err(bytesrepr::Error::FormattingError),
+            _ => Err(bytesrepr::Error::Formatting),
         }
     }
 }
@@ -145,7 +143,7 @@ pub enum TestKey {
 }
 
 impl TestKey {
-    pub fn local(seed: [u8; LOCAL_SEED_LENGTH], key_bytes: &[u8]) -> Self {
+    pub fn local(seed: [u8; KEY_LOCAL_SEED_LENGTH], key_bytes: &[u8]) -> Self {
         let bytes_to_hash: Vec<u8> = seed.iter().chain(key_bytes.iter()).copied().collect();
         let hash: [u8; KEY_LOCAL_LENGTH] = Blake2bHash::new(&bytes_to_hash).into();
         TestKey::Local(hash)
@@ -198,7 +196,7 @@ impl FromBytes for TestKey {
                 let (local, rem): ([u8; KEY_LOCAL_LENGTH], &[u8]) = FromBytes::from_bytes(rem)?;
                 Ok((TestKey::Local(local), rem))
             }
-            _ => Err(bytesrepr::Error::FormattingError),
+            _ => Err(bytesrepr::Error::Formatting),
         }
     }
 }

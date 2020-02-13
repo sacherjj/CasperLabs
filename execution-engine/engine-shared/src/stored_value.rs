@@ -1,11 +1,11 @@
 use std::{convert::TryFrom, mem, u32};
 
-use contract_ffi::{
+use types::{
     bytesrepr::{self, FromBytes, ToBytes},
-    value::CLValue,
+    CLValue,
 };
 
-use crate::{account::Account, contract::Contract, transform::TypeMismatch};
+use crate::{account::Account, contract::Contract, TypeMismatch};
 
 #[repr(u8)]
 enum Tag {
@@ -97,7 +97,7 @@ impl TryFrom<StoredValue> for Contract {
 fn to_bytes<T: ToBytes>(value: &T, tag: Tag) -> Result<Vec<u8>, bytesrepr::Error> {
     let mut bytes = value.to_bytes()?;
     if bytes.len() >= u32::max_value() as usize - mem::size_of::<Tag>() {
-        return Err(bytesrepr::Error::OutOfMemoryError);
+        return Err(bytesrepr::Error::OutOfMemory);
     }
 
     let mut result = Vec::with_capacity(bytes.len() + mem::size_of::<Tag>());
@@ -126,7 +126,7 @@ impl FromBytes for StoredValue {
                 .map(|(account, remainder)| (StoredValue::Account(account), remainder)),
             tag if tag == Tag::Contract as u8 => Contract::from_bytes(remainder)
                 .map(|(contract, remainder)| (StoredValue::Contract(contract), remainder)),
-            _ => Err(bytesrepr::Error::FormattingError),
+            _ => Err(bytesrepr::Error::Formatting),
         }
     }
 }
@@ -134,7 +134,7 @@ impl FromBytes for StoredValue {
 pub mod gens {
     use proptest::prelude::*;
 
-    use contract_ffi::gens::cl_value_arb;
+    use types::gens::cl_value_arb;
 
     use super::StoredValue;
     use crate::{account::gens::account_arb, contract::gens::contract_arb};

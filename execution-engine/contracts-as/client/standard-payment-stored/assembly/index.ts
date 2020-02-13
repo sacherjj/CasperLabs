@@ -1,7 +1,7 @@
-import * as CL from "../../../../contract-ffi-as/assembly";
-import {Error, ErrorCode} from "../../../../contract-ffi-as/assembly/error";
-import {fromBytesString, toBytesMap} from "../../../../contract-ffi-as/assembly/bytesrepr";
-import {Key} from "../../../../contract-ffi-as/assembly/key";
+import * as CL from "../../../../contract-as/assembly";
+import {Error, ErrorCode} from "../../../../contract-as/assembly/error";
+import {fromBytesString, toBytesMap} from "../../../../contract-as/assembly/bytesrepr";
+import {Key} from "../../../../contract-as/assembly/key";
 import * as StandardPayment from "../../standard-payment/assembly/index"
 
 
@@ -34,11 +34,12 @@ export function call(): void {
     return;
   }
 
-  let destination = fromBytesString(destinationBytes);
-  if (destination === null) {
+  let destinationResult = fromBytesString(destinationBytes);
+  if (destinationResult.hasError()) {
     Error.fromErrorCode(ErrorCode.InvalidArgument);
     return;
   }
+  let destination = destinationResult.value;
 
   if (destination == DESTINATION_HASH) {
     const key = storeAtHash();

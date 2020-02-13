@@ -1,6 +1,6 @@
 use engine_core::engine_state::executable_deploy_item::ExecutableDeployItem;
 
-use crate::engine_server::ipc::DeployPayload_oneof_payload;
+use crate::engine_server::ipc::{DeployPayload, DeployPayload_oneof_payload};
 
 impl From<DeployPayload_oneof_payload> for ExecutableDeployItem {
     fn from(pb_deploy_payload: DeployPayload_oneof_payload) -> Self {
@@ -30,5 +30,34 @@ impl From<DeployPayload_oneof_payload> for ExecutableDeployItem {
                 }
             }
         }
+    }
+}
+
+impl From<ExecutableDeployItem> for DeployPayload {
+    fn from(edi: ExecutableDeployItem) -> Self {
+        let mut result = DeployPayload::new();
+        match edi {
+            ExecutableDeployItem::ModuleBytes { module_bytes, args } => {
+                let code = result.mut_deploy_code();
+                code.set_code(module_bytes);
+                code.set_args(args);
+            }
+            ExecutableDeployItem::StoredContractByHash { hash, args } => {
+                let inner = result.mut_stored_contract_hash();
+                inner.set_hash(hash);
+                inner.set_args(args);
+            }
+            ExecutableDeployItem::StoredContractByName { name, args } => {
+                let inner = result.mut_stored_contract_name();
+                inner.set_stored_contract_name(name);
+                inner.set_args(args);
+            }
+            ExecutableDeployItem::StoredContractByURef { uref, args } => {
+                let inner = result.mut_stored_contract_uref();
+                inner.set_uref(uref);
+                inner.set_args(args);
+            }
+        }
+        result
     }
 }

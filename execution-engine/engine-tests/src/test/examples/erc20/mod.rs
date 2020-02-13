@@ -1,10 +1,7 @@
 mod erc20_test;
 
-extern crate alloc;
-
-use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_ACCOUNT_INITIAL_BALANCE};
-
-use contract_ffi::value::U512;
+use engine_test_support::{DEFAULT_ACCOUNT_ADDR, DEFAULT_ACCOUNT_INITIAL_BALANCE};
+use types::U512;
 
 use erc20_test::ERC20Test;
 

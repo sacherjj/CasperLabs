@@ -2,8 +2,8 @@
 
 use std::{mem::size_of, ops::Deref};
 
-use contract_ffi::bytesrepr::{self, FromBytes, ToBytes};
 use engine_shared::newtypes::Blake2bHash;
+use types::bytesrepr::{self, FromBytes, ToBytes};
 
 #[cfg(test)]
 pub mod gens;
@@ -70,7 +70,7 @@ impl FromBytes for Pointer {
                 let (hash, rem): (Blake2bHash, &[u8]) = FromBytes::from_bytes(rem)?;
                 Ok((Pointer::NodePointer(hash), rem))
             }
-            _ => Err(bytesrepr::Error::FormattingError),
+            _ => Err(bytesrepr::Error::Formatting),
         }
     }
 }
@@ -252,7 +252,7 @@ where
                 if key_bytes.len() + value_bytes.len()
                     > u32::max_value() as usize - U32_SERIALIZED_LENGTH
                 {
-                    return Err(bytesrepr::Error::OutOfMemoryError);
+                    return Err(bytesrepr::Error::OutOfMemory);
                 }
                 let mut ret: Vec<u8> =
                     Vec::with_capacity(U32_SERIALIZED_LENGTH + key_bytes.len() + value_bytes.len());
@@ -275,7 +275,7 @@ where
                 if affix_bytes.len() + pointer_bytes.len()
                     > u32::max_value() as usize - U32_SERIALIZED_LENGTH
                 {
-                    return Err(bytesrepr::Error::OutOfMemoryError);
+                    return Err(bytesrepr::Error::OutOfMemory);
                 }
                 let mut ret: Vec<u8> = Vec::with_capacity(
                     U32_SERIALIZED_LENGTH + affix_bytes.len() + pointer_bytes.len(),
@@ -312,15 +312,15 @@ impl<K: FromBytes, V: FromBytes> FromBytes for Trie<K, V> {
                 let (pointer, rem): (Pointer, &[u8]) = FromBytes::from_bytes(rem)?;
                 Ok((Trie::Extension { affix, pointer }, rem))
             }
-            _ => Err(bytesrepr::Error::FormattingError),
+            _ => Err(bytesrepr::Error::Formatting),
         }
     }
 }
 
 pub(crate) mod operations {
     use crate::trie::Trie;
-    use contract_ffi::bytesrepr::{self, ToBytes};
     use engine_shared::newtypes::Blake2bHash;
+    use types::bytesrepr::{self, ToBytes};
 
     /// Creates a tuple containing an empty root hash and an empty root (a node
     /// with an empty pointer block)

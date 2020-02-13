@@ -1,9 +1,11 @@
-use contract_ffi::value::{account::PublicKey, U512};
-
-use crate::{
-    support::test_support::{DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder},
-    test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT},
+use engine_test_support::{
+    internal::{
+        DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_GENESIS_CONFIG,
+        DEFAULT_PAYMENT,
+    },
+    DEFAULT_ACCOUNT_ADDR,
 };
+use types::{account::PublicKey, U512};
 
 const CONTRACT_TRANSFER_PURSE_TO_ACCOUNT: &str = "transfer_purse_to_account.wasm";
 const ACCOUNT_1_ADDR: [u8; 32] = [1u8; 32];

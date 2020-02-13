@@ -3,7 +3,8 @@ cargo-features = ["profile-overrides"]
 [workspace]
 
 members = [
-    "contract-ffi",
+    "cargo-casperlabs",
+    "contract",
     "contracts/[!.]*/*",
     "engine-core",
     "engine-grpc-server",
@@ -12,13 +13,17 @@ members = [
     "engine-storage",
     "engine-tests",
     "engine-wasm-prep",
+    "mint",
+    "proof-of-stake",
+    "types"
 ]
 exclude = [
     "contracts/examples/README.md",
 ]
 
 default-members = [
-    "contract-ffi",
+    "cargo-casperlabs",
+    "contract",
     "engine-core",
     "engine-grpc-server",
     "engine-metrics-scraper",
@@ -26,6 +31,9 @@ default-members = [
     "engine-storage",
     "engine-tests",
     "engine-wasm-prep",
+    "mint",
+    "proof-of-stake",
+    "types"
 ]
 
 # Include debug symbols in the release build of `casperlabs-engine-tests` so that `simple-transfer` will yield useful

@@ -9,7 +9,9 @@ class GraphQL:
     """
 
     DEFAULT_BLOCK_SUB_SELECT = """blockHash
-                            parentHashes
+                            parents {
+                                blockHash
+                            }
                             deployCount
                             deployErrorCount
                             blockSizeBytes"""
@@ -49,8 +51,8 @@ class GraphQL:
 
             deploys
             blockHash
-            parentHashes
-            justificationHashes
+            parents
+            justifications
             timestamp
             protocolVersion
             deployCount

@@ -1,8 +1,9 @@
 #![no_std]
 
-use contract_ffi::contract_api::{runtime, Error};
+use contract::contract_api::runtime;
+use types::ApiError;
 
 #[no_mangle]
 pub extern "C" fn call() {
-    runtime::revert(Error::User(100))
+    runtime::revert(ApiError::User(100))
 }

@@ -1,125 +1,61 @@
 #![no_std]
-#![feature(cell_update)]
 
 extern crate alloc;
 
-mod capabilities;
-
-// These types are purposely defined in a separate module
-// so that their constructors are hidden and therefore
-// we must use the conversion methods from Key elsewhere
-// in the code.
-pub mod internal_purse_id;
-pub mod mint;
+mod contract_runtime;
+mod contract_storage;
 
 use alloc::string::String;
-use core::convert::TryInto;
 
-use contract_ffi::{
-    contract_api::{runtime, storage, Error as ApiError},
-    key::Key,
-    system_contracts::mint::{Error, PurseIdError},
-    unwrap_or_revert::UnwrapOrRevert,
-    uref::{AccessRights, URef},
-    value::{account::PUBLIC_KEY_LENGTH, CLValue, U512},
-};
-
-use capabilities::{RefWithAddRights, RefWithReadAddWriteRights};
-use internal_purse_id::{DepositId, WithdrawId};
+use contract::{contract_api::runtime, unwrap_or_revert::UnwrapOrRevert};
 use mint::Mint;
+use types::{system_contract_errors::mint::Error, ApiError, CLValue, URef, U512};
 
-const SYSTEM_ACCOUNT: [u8; PUBLIC_KEY_LENGTH] = [0u8; PUBLIC_KEY_LENGTH];
+use crate::{contract_runtime::ContractRuntime, contract_storage::ContractStorage};
 
-pub struct CLMint;
+const METHOD_MINT: &str = "mint";
+const METHOD_CREATE: &str = "create";
+const METHOD_BALANCE: &str = "balance";
+const METHOD_TRANSFER: &str = "transfer";
 
-impl Mint<RefWithAddRights<U512>, RefWithReadAddWriteRights<U512>> for CLMint {
-    type PurseId = WithdrawId;
-    type DepOnlyId = DepositId;
+pub struct MintContract;
 
-    fn mint(&self, initial_balance: U512) -> Result<Self::PurseId, Error> {
-        let caller = runtime::get_caller();
-        if !initial_balance.is_zero() && caller.value() != SYSTEM_ACCOUNT {
-            return Err(Error::InvalidNonEmptyPurseCreation);
-        }
-
-        let balance_uref: Key = storage::new_turef(initial_balance).into();
-
-        let purse_key: URef = storage::new_turef(()).into();
-        let purse_uref_name = purse_key.remove_access_rights().as_string();
-
-        let purse_id: WithdrawId = WithdrawId::from_uref(purse_key).unwrap();
-
-        // store balance uref so that the runtime knows the mint has full access
-        runtime::put_key(&purse_uref_name, balance_uref);
-
-        // store association between purse id and balance uref
-        //
-        // Gorski writes:
-        //   I'm worried that this can lead to overwriting of values in the local state.
-        //   Since it accepts a raw byte array it's possible to construct one by hand.
-        // Of course,   a key can be overwritten only when that write is
-        // performed in the "owner" context   so it aligns with other semantics
-        // of write but I would prefer if were able to enforce   uniqueness
-        // somehow.
-        storage::write_local(purse_id.raw_id(), balance_uref);
-
-        Ok(purse_id)
-    }
-
-    fn lookup(&self, p: Self::PurseId) -> Option<RefWithReadAddWriteRights<U512>> {
-        storage::read_local(&p.raw_id())
-            .ok()?
-            .and_then(|key: Key| key.try_into().ok())
-    }
-
-    fn dep_lookup(&self, p: Self::DepOnlyId) -> Option<RefWithAddRights<U512>> {
-        storage::read_local(&p.raw_id())
-            .ok()?
-            .and_then(|key: Key| key.try_into().ok())
-    }
-}
+impl Mint<ContractRuntime, ContractStorage> for MintContract {}
 
 pub fn delegate() {
-    let mint = CLMint;
+    let mint_contract = MintContract;
+
     let method_name: String = runtime::get_arg(0)
         .unwrap_or_revert_with(ApiError::MissingArgument)
         .unwrap_or_revert_with(ApiError::InvalidArgument);
 
     match method_name.as_str() {
-        // argument: U512
-        // return: Result<URef, mint::error::Error>
-        "mint" => {
+        // Type: `fn mint(amount: U512) -> Result<URef, Error>`
+        METHOD_MINT => {
             let amount: U512 = runtime::get_arg(1)
                 .unwrap_or_revert_with(ApiError::MissingArgument)
                 .unwrap_or_revert_with(ApiError::InvalidArgument);
-
-            let maybe_purse_key = mint
-                .mint(amount)
-                .map(|purse_id| URef::new(purse_id.raw_id(), AccessRights::READ_ADD_WRITE));
-            let return_value = CLValue::from_t(maybe_purse_key).unwrap_or_revert();
-            runtime::ret(return_value)
+            let result: Result<URef, Error> = mint_contract.mint(amount);
+            let ret = CLValue::from_t(result).unwrap_or_revert();
+            runtime::ret(ret)
         }
-
-        "create" => {
-            let purse_id = mint.create();
-            let purse_key = URef::new(purse_id.raw_id(), AccessRights::READ_ADD_WRITE);
-            let return_value = CLValue::from_t(purse_key).unwrap_or_revert();
-            runtime::ret(return_value)
+        // Type: `fn create() -> URef`
+        METHOD_CREATE => {
+            let uref = mint_contract.mint(U512::zero()).unwrap_or_revert();
+            let ret = CLValue::from_t(uref).unwrap_or_revert();
+            runtime::ret(ret)
         }
-
-        "balance" => {
-            let key: URef = runtime::get_arg(1)
+        // Type: `fn balance(purse: URef) -> Option<U512>`
+        METHOD_BALANCE => {
+            let uref: URef = runtime::get_arg(1)
                 .unwrap_or_revert_with(ApiError::MissingArgument)
                 .unwrap_or_revert_with(ApiError::InvalidArgument);
-            let purse_id: WithdrawId = WithdrawId::from_uref(key).unwrap();
-            let balance_uref = mint.lookup(purse_id);
-            let balance: Option<U512> =
-                balance_uref.and_then(|uref| storage::read(uref.into()).unwrap_or_default());
-            let return_value = CLValue::from_t(balance).unwrap_or_revert();
-            runtime::ret(return_value)
+            let balance: Option<U512> = mint_contract.balance(uref).unwrap_or_revert();
+            let ret = CLValue::from_t(balance).unwrap_or_revert();
+            runtime::ret(ret)
         }
-
-        "transfer" => {
+        // Type: `fn transfer(source: URef, target: URef, amount: U512) -> Result<(), Error>`
+        METHOD_TRANSFER => {
             let source: URef = runtime::get_arg(1)
                 .unwrap_or_revert_with(ApiError::MissingArgument)
                 .unwrap_or_revert_with(ApiError::InvalidArgument);
@@ -129,27 +65,11 @@ pub fn delegate() {
             let amount: U512 = runtime::get_arg(3)
                 .unwrap_or_revert_with(ApiError::MissingArgument)
                 .unwrap_or_revert_with(ApiError::InvalidArgument);
-
-            let return_error = |error: PurseIdError| -> ! {
-                let transfer_result: Result<(), Error> = Err(error.into());
-                let return_value = CLValue::from_t(transfer_result).unwrap_or_revert();
-                runtime::ret(return_value)
-            };
-
-            let source: WithdrawId = match WithdrawId::from_uref(source) {
-                Ok(withdraw_id) => withdraw_id,
-                Err(error) => return_error(error),
-            };
-
-            let target: DepositId = match DepositId::from_uref(target) {
-                Ok(deposit_id) => deposit_id,
-                Err(error) => return_error(error),
-            };
-
-            let transfer_result = mint.transfer(source, target, amount);
-            let return_value = CLValue::from_t(transfer_result).unwrap_or_revert();
-            runtime::ret(return_value);
+            let result: Result<(), Error> = mint_contract.transfer(source, target, amount);
+            let ret = CLValue::from_t(result).unwrap_or_revert();
+            runtime::ret(ret);
         }
+
         _ => panic!("Unknown method name!"),
     }
 }

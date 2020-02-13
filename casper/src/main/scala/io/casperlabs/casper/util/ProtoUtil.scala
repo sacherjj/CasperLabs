@@ -3,6 +3,7 @@ package io.casperlabs.casper.util
 import java.util.NoSuchElementException
 
 import cats.Monad
+import cats.data.NonEmptyList
 import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
@@ -20,15 +21,17 @@ import io.casperlabs.crypto.signatures.SignatureAlgorithm
 import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
 import io.casperlabs.ipc
 import io.casperlabs.models.BlockImplicits._
-import io.casperlabs.models.{Message, Weight}
+import io.casperlabs.models.{Message, SmartContractEngineError, Weight}
 import io.casperlabs.shared.Time
-import io.casperlabs.smartcontracts.Abi
+import io.casperlabs.smartcontracts.cltype
+import io.casperlabs.smartcontracts.bytesrepr._
 import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.storage.dag.DagRepresentation
 
 import scala.collection.immutable
 import scala.concurrent.duration.FiniteDuration
 import scala.concurrent.duration._
+import scala.util.Try
 
 object ProtoUtil {
   import Weight._
@@ -313,15 +316,14 @@ object ProtoUtil {
         }
     }
 
-  def containsDeploy(b: Block, accountPublicKey: ByteString, timestamp: Long): Boolean =
-    deploys(b).toStream
-      .flatMap(_.deploy)
-      .exists(
-        d => d.getHeader.accountPublicKey == accountPublicKey && d.getHeader.timestamp == timestamp
-      )
-
-  def deploys(b: Block): Seq[Block.ProcessedDeploy] =
+  def deploys(b: Block): Map[Int, NonEmptyList[Block.ProcessedDeploy]] =
     b.getBody.deploys
+      .groupBy(_.stage)
+      .map {
+        case (stage, deploys) =>
+          // It's safe b/c it's preceeded with `groupBy`.
+          stage -> NonEmptyList.fromListUnsafe(deploys.toList)
+      }
 
   def postStateHash(b: Block): ByteString =
     b.getHeader.getState.postStateHash
@@ -632,11 +634,11 @@ object ProtoUtil {
   // Later, post DEV NET, conversion rate will be part of a deploy.
   val GAS_PRICE = 10L
 
-  def deployDataToEEDeploy[F[_]: MonadThrowable](d: Deploy): F[ipc.DeployItem] = {
-    def toPayload(maybeCode: Option[Deploy.Code]): F[Option[ipc.DeployPayload]] =
+  def deployDataToEEDeploy(d: Deploy): Try[ipc.DeployItem] = {
+    def toPayload(maybeCode: Option[Deploy.Code]): Try[Option[ipc.DeployPayload]] =
       maybeCode match {
-        case None       => none[ipc.DeployPayload].pure[F]
-        case Some(code) => (deployCodeToDeployPayload[F](code).map(Some(_)))
+        case None       => Try(none[ipc.DeployPayload])
+        case Some(code) => (deployCodeToDeployPayload(code).map(Some(_)))
       }
 
     for {
@@ -654,12 +656,17 @@ object ProtoUtil {
     }
   }
 
-  def deployCodeToDeployPayload[F[_]: MonadThrowable](code: Deploy.Code): F[ipc.DeployPayload] = {
-    val argsF: F[ByteString] = if (code.args.nonEmpty) {
-      MonadThrowable[F]
-        .fromTry(Abi.args(code.args.map(_.getValue: Abi.Serializable[_]): _*))
-        .map(ByteString.copyFrom(_))
-    } else code.abiArgs.pure[F]
+  def deployCodeToDeployPayload(code: Deploy.Code): Try[ipc.DeployPayload] = {
+    val argsF: Try[ByteString] = code.args.toList.traverse(cltype.ProtoMappings.fromArg) match {
+      case Left(err) =>
+        Try(throw new SmartContractEngineError(s"Error parsing deploy arguments: $err"))
+      case Right(args) =>
+        Try(
+          ByteString.copyFrom(
+            ToBytes[Seq[cltype.CLValue]].toBytes(args)
+          )
+        )
+    }
 
     argsF.map { args =>
       val payload = code.contract match {

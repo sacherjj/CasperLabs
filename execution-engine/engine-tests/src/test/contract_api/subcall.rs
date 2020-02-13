@@ -1,12 +1,13 @@
 use num_traits::cast::AsPrimitive;
 
-use contract_ffi::value::U512;
 use engine_core::engine_state::CONV_RATE;
-
-use crate::{
-    support::test_support::{ExecuteRequestBuilder, InMemoryWasmTestBuilder},
-    test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT},
+use engine_test_support::{
+    internal::{
+        ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT,
+    },
+    DEFAULT_ACCOUNT_ADDR,
 };
+use types::U512;
 
 #[ignore]
 #[test]

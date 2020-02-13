@@ -1,20 +1,18 @@
 use lazy_static::lazy_static;
 
-use contract_ffi::value::U512;
 use engine_core::engine_state::CONV_RATE;
 use engine_shared::motes::Motes;
-
-use crate::{
-    support::test_support::{self, ExecuteRequestBuilder, InMemoryWasmTestBuilder},
-    test::{
-        DEFAULT_ACCOUNT_ADDR, DEFAULT_ACCOUNT_INITIAL_BALANCE, DEFAULT_GENESIS_CONFIG,
+use engine_test_support::{
+    internal::{
+        utils, ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_GENESIS_CONFIG,
         DEFAULT_PAYMENT,
     },
+    DEFAULT_ACCOUNT_ADDR, DEFAULT_ACCOUNT_INITIAL_BALANCE,
 };
+use types::U512;
 
 const CONTRACT_TRANSFER_PURSE_TO_ACCOUNT: &str = "transfer_purse_to_account.wasm";
-const CONTRACT_TRANSFER_TO_ACCOUNT_01: &str = "transfer_to_account_01.wasm";
-const CONTRACT_TRANSFER_TO_ACCOUNT_02: &str = "transfer_to_account_02.wasm";
+const CONTRACT_TRANSFER_TO_ACCOUNT: &str = "transfer_to_account_u512.wasm";
 
 lazy_static! {
     static ref TRANSFER_1_AMOUNT: U512 = U512::from(250_000_000) + 1000;
@@ -53,8 +51,8 @@ fn should_transfer_to_account() {
 
     let exec_request_1 = ExecuteRequestBuilder::standard(
         DEFAULT_ACCOUNT_ADDR,
-        CONTRACT_TRANSFER_TO_ACCOUNT_01,
-        (ACCOUNT_1_ADDR,),
+        CONTRACT_TRANSFER_TO_ACCOUNT,
+        (ACCOUNT_1_ADDR, *TRANSFER_1_AMOUNT),
     )
     .build();
 
@@ -111,8 +109,8 @@ fn should_transfer_from_account_to_account() {
 
     let exec_request_1 = ExecuteRequestBuilder::standard(
         DEFAULT_ACCOUNT_ADDR,
-        CONTRACT_TRANSFER_TO_ACCOUNT_01,
-        (ACCOUNT_1_ADDR,),
+        CONTRACT_TRANSFER_TO_ACCOUNT,
+        (ACCOUNT_1_ADDR, *TRANSFER_1_AMOUNT),
     )
     .build();
 
@@ -124,7 +122,7 @@ fn should_transfer_from_account_to_account() {
 
     let genesis_balance = builder.get_purse_balance(default_account_purse_id);
 
-    let gas_cost = Motes::from_gas(test_support::get_exec_costs(&exec_1_response)[0], CONV_RATE)
+    let gas_cost = Motes::from_gas(utils::get_exec_costs(exec_1_response)[0], CONV_RATE)
         .expect("should convert");
 
     assert_eq!(
@@ -145,8 +143,8 @@ fn should_transfer_from_account_to_account() {
 
     let exec_request_2 = ExecuteRequestBuilder::standard(
         ACCOUNT_1_ADDR,
-        CONTRACT_TRANSFER_TO_ACCOUNT_02,
-        (*TRANSFER_2_AMOUNT,),
+        CONTRACT_TRANSFER_TO_ACCOUNT,
+        (ACCOUNT_2_ADDR, *TRANSFER_2_AMOUNT),
     )
     .build();
 
@@ -166,7 +164,7 @@ fn should_transfer_from_account_to_account() {
 
     let account_1_balance = builder.get_purse_balance(account_1_purse_id);
 
-    let gas_cost = Motes::from_gas(test_support::get_exec_costs(&exec_2_response)[0], CONV_RATE)
+    let gas_cost = Motes::from_gas(utils::get_exec_costs(exec_2_response)[0], CONV_RATE)
         .expect("should convert");
 
     assert_eq!(
@@ -206,8 +204,8 @@ fn should_transfer_to_existing_account() {
 
     let exec_request_1 = ExecuteRequestBuilder::standard(
         DEFAULT_ACCOUNT_ADDR,
-        CONTRACT_TRANSFER_TO_ACCOUNT_01,
-        (ACCOUNT_1_ADDR,),
+        CONTRACT_TRANSFER_TO_ACCOUNT,
+        (ACCOUNT_1_ADDR, *TRANSFER_1_AMOUNT),
     )
     .build();
 
@@ -243,8 +241,8 @@ fn should_transfer_to_existing_account() {
 
     let exec_request_2 = ExecuteRequestBuilder::standard(
         ACCOUNT_1_ADDR,
-        CONTRACT_TRANSFER_TO_ACCOUNT_02,
-        (*TRANSFER_2_AMOUNT,),
+        CONTRACT_TRANSFER_TO_ACCOUNT,
+        (ACCOUNT_2_ADDR, *TRANSFER_2_AMOUNT),
     )
     .build();
     builder.exec(exec_request_2).expect_success().commit();
@@ -281,21 +279,21 @@ fn should_fail_when_insufficient_funds() {
 
     let exec_request_1 = ExecuteRequestBuilder::standard(
         DEFAULT_ACCOUNT_ADDR,
-        CONTRACT_TRANSFER_TO_ACCOUNT_01,
-        (ACCOUNT_1_ADDR,),
+        CONTRACT_TRANSFER_TO_ACCOUNT,
+        (ACCOUNT_1_ADDR, *TRANSFER_1_AMOUNT),
     )
     .build();
     let exec_request_2 = ExecuteRequestBuilder::standard(
         ACCOUNT_1_ADDR,
-        CONTRACT_TRANSFER_TO_ACCOUNT_02,
-        (*TRANSFER_2_AMOUNT_WITH_ADV,),
+        CONTRACT_TRANSFER_TO_ACCOUNT,
+        (ACCOUNT_2_ADDR, *TRANSFER_2_AMOUNT_WITH_ADV),
     )
     .build();
 
     let exec_request_3 = ExecuteRequestBuilder::standard(
         ACCOUNT_1_ADDR,
-        CONTRACT_TRANSFER_TO_ACCOUNT_02,
-        (*TRANSFER_TOO_MUCH,),
+        CONTRACT_TRANSFER_TO_ACCOUNT,
+        (ACCOUNT_2_ADDR, *TRANSFER_TOO_MUCH),
     )
     .build();
 
@@ -311,23 +309,20 @@ fn should_fail_when_insufficient_funds() {
         .commit()
         // // Exec transfer contract
         .exec(exec_request_3)
-        // .expect_success()
         .commit()
         .finish();
 
-    assert_eq!(
-        "Trap(Trap { kind: Unreachable })",
-        result
-            .builder()
-            .exec_error_message(2)
-            .expect("should have error message"),
-    )
+    assert!(result
+        .builder()
+        .exec_error_message(2)
+        .expect("should have error message")
+        .contains("Trap(Trap { kind: Host(Revert(14)) })"))
 }
 
 #[ignore]
 #[test]
 fn should_transfer_total_amount() {
-    let mut builder = test_support::InMemoryWasmTestBuilder::default();
+    let mut builder = InMemoryWasmTestBuilder::default();
 
     let exec_request_1 = ExecuteRequestBuilder::standard(
         DEFAULT_ACCOUNT_ADDR,

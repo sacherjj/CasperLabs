@@ -1,10 +1,9 @@
-use contract_ffi::value::CLValue;
 use engine_shared::{stored_value::StoredValue, transform::Transform};
-
-use crate::{
-    support::test_support::{ExecuteRequestBuilder, InMemoryWasmTestBuilder},
-    test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG},
+use engine_test_support::{
+    internal::{ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_GENESIS_CONFIG},
+    DEFAULT_ACCOUNT_ADDR,
 };
+use types::CLValue;
 
 const DO_NOTHING_STORED_CALLER_CONTRACT_NAME: &str = "do_nothing_stored_caller";
 const DO_NOTHING_STORED_CONTRACT_NAME: &str = "do_nothing_stored";
@@ -419,7 +418,7 @@ fn should_maintain_local_state_across_upgrade() {
             Transform::Write(StoredValue::CLValue(cl_value)) => {
                 let s = cl_value.to_owned().into_t::<String>().unwrap_or_default();
                 if s.contains(HELLO) {
-                    Some((*key, s.clone()))
+                    Some((*key, s))
                 } else {
                     None
                 }

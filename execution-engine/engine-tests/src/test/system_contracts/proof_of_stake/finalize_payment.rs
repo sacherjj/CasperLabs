@@ -1,23 +1,20 @@
 use std::convert::TryInto;
 
-use contract_ffi::{
-    key::Key,
-    value::{
-        account::{PublicKey, PurseId},
-        U512,
-    },
-};
 use engine_core::engine_state::{
     genesis::{POS_PAYMENT_PURSE, POS_REWARDS_PURSE},
     CONV_RATE,
 };
-use engine_shared::{account::Account, gas::Gas, motes::Motes};
-
-use crate::{
-    support::test_support::{
-        self, DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder,
+use engine_shared::{account::Account, motes::Motes};
+use engine_test_support::{
+    internal::{
+        utils, DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder,
+        DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT,
     },
-    test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT},
+    DEFAULT_ACCOUNT_ADDR,
+};
+use types::{
+    account::{PublicKey, PurseId},
+    Key, U512,
 };
 
 const CONTRACT_FINALIZE_PAYMENT: &str = "pos_finalize_payment.wasm";
@@ -131,12 +128,8 @@ fn finalize_payment_should_refund_to_specified_purse() {
             .get_exec_response(0)
             .expect("there should be a response");
 
-        let mut success_result = test_support::get_success_result(response);
-        let cost = success_result
-            .take_cost()
-            .try_into()
-            .expect("should map to U512");
-        Motes::from_gas(Gas::new(cost), CONV_RATE)
+        let success_result = utils::get_success_result(response);
+        Motes::from_gas(success_result.cost(), CONV_RATE)
             .expect("should have motes")
             .value()
     };
@@ -215,7 +208,7 @@ fn get_named_account_balance(
 
     let account: Account = builder
         .query(None, account_key, &[])
-        .and_then(|v| v.try_into().ok())
+        .and_then(|v| v.try_into().map_err(|error| format!("{:?}", error)))
         .expect("should find balance uref");
 
     let purse_id = account

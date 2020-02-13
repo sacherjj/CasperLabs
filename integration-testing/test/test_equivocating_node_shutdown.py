@@ -1,4 +1,3 @@
-import logging
 import pytest
 from itertools import count
 from casperlabs_local_net.casperlabs_accounts import GENESIS_ACCOUNT
@@ -11,21 +10,12 @@ def test_equivocating_node_shutdown_and_other_nodes_are_working_ok(three_node_ne
     nodes = network.docker_nodes
     account = GENESIS_ACCOUNT
 
-    deploy_options = dict(
-        from_address=account.public_key_hex,
-        public_key=account.public_key_path,
-        private_key=account.private_key_path,
-        session_contract=Contract.HELLO_NAME_DEFINE,
-    )
-
-    block_hash = nodes[0].p_client.deploy_and_propose(**deploy_options)
+    block_hash = nodes[0].deploy_and_get_block_hash(account, Contract.HELLO_NAME_DEFINE)
     wait_for_block_hash_propagated_to_all_nodes(nodes, block_hash)
 
     # Clear state of node-0 so when we restart it
     # it doesn't remember the block it created before.
-    cmd = "rm /root/.casperlabs/sqlite.db"
-    rc, output = nodes[0].exec_run(cmd)
-    logging.info(f"============================ {cmd} => {rc}")
+    nodes[0].clear_state()
 
     # Stop node-0. Also, stop all other nodes so when node-0 restarts it cannot sync old
     # blocks from them.
@@ -37,14 +27,14 @@ def test_equivocating_node_shutdown_and_other_nodes_are_working_ok(three_node_ne
     assert len(list(nodes[0].p_client.show_blocks(1000))) == 1
 
     # Create the equivocating block.
-    block_hash = nodes[0].p_client.deploy_and_propose(**deploy_options)
+    block_hash = nodes[0].deploy_and_get_block_hash(account, Contract.HELLO_NAME_DEFINE)
     for i in range(1, len(nodes)):
         network.start_cl_node(i)
     wait_for_block_hash_propagated_to_all_nodes(nodes, block_hash)
 
     assert len(list(nodes[1].p_client.show_blocks(1000))) == 3
 
-    block_hash = nodes[1].p_client.deploy_and_propose(**deploy_options)
+    block_hash = nodes[1].deploy_and_get_block_hash(account, Contract.HELLO_NAME_DEFINE)
     with pytest.raises(Exception):
         wait_for_block_hash_propagated_to_all_nodes(nodes, block_hash)
 
@@ -61,11 +51,8 @@ def test_equivocating_node_shutdown_and_other_nodes_are_working_ok(three_node_ne
 
     working_nodes = nodes[1:]
 
-    block_hash = working_nodes[0].p_client.deploy_and_propose(
-        from_address=account.public_key_hex,
-        public_key=account.public_key_path,
-        private_key=account.private_key_path,
-        session_contract=Contract.COUNTER_DEFINE,
+    block_hash = working_nodes[0].deploy_and_get_block_hash(
+        account, Contract.COUNTER_DEFINE
     )
     wait_for_block_hash_propagated_to_all_nodes(working_nodes, block_hash)
 
@@ -74,12 +61,7 @@ def test_equivocating_node_shutdown_and_other_nodes_are_working_ok(three_node_ne
     expected_counter_result = count(1)
     for i in range(2):
         for node in working_nodes:
-            block_hash = node.p_client.deploy_and_propose(
-                from_address=account.public_key_hex,
-                public_key=account.public_key_path,
-                private_key=account.private_key_path,
-                session_contract=Contract.COUNTER_CALL,
-            )
+            block_hash = node.deploy_and_get_block_hash(account, Contract.COUNTER_CALL)
             wait_for_block_hash_propagated_to_all_nodes(working_nodes, block_hash)
 
             state = node.p_client.query_state(

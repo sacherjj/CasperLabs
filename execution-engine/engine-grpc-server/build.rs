@@ -15,7 +15,6 @@ fn main() {
             "../../protobuf/io/casperlabs/ipc",
         ],
         rust_protobuf: true,
-        ..Default::default()
     })
     .expect("protoc-rust-grpc");
 }

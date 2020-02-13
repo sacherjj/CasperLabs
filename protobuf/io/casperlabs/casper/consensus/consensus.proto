@@ -70,6 +70,9 @@ message Deploy {
     // Includes both binary instructions (wasm) and optionally, arguments
     // to those instructions encoded via our ABI
     message Code {
+        // Previously was ABI encoded args (directly as bytes); no longer
+        // supported, use `args` instead.
+        reserved 2;
         oneof contract {
             // Wasm byte code.
             bytes wasm = 1;
@@ -80,8 +83,6 @@ message Deploy {
             // URef of a stored contract.
             bytes uref = 5;
         }
-        // Deprecated, use `args` instead.
-        bytes abi_args = 2; // ABI-encoded arguments
         // Keyword arguments. Note that while the execution engine works with the original
         // positional argument passing style, the order of the arguments matters.
         repeated Arg args = 6;
@@ -177,6 +178,9 @@ message Block {
         uint64 cost = 2;
         bool is_error = 3;
         string error_message = 4;
+        // A group this deploy will be executed in.
+        // Deploys with the same `stage` value will be executed in parallel.
+        uint32 stage = 5;
     }
 
     message GlobalState {

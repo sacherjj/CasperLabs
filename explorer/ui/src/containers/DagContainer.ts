@@ -16,15 +16,15 @@ export class DagStep {
     this.container.selectedBlock = undefined;
   };
 
-  private get maxRank() {
+  get maxRank() {
     return this.container.maxRank;
   }
 
-  private get depth() {
+  get depth() {
     return this.container.depth;
   }
 
-  private set maxRank(rank: number) {
+  set maxRank(rank: number) {
     this.container.maxRank = rank;
   }
 
@@ -82,6 +82,12 @@ export class DagContainer {
     });
   }
 
+  @action
+  updateMaxRankAndDepth(rank: number, depth: number){
+    this.maxRank = rank;
+    this.depth = depth;
+  }
+
   get minRank() {
     return Math.max(0, this.maxRank - this.depth + 1);
   }
@@ -125,7 +131,7 @@ export class DagContainer {
   step = new DagStep(this);
 
   unsubscribe() {
-    if (this.subscriberState == SubscribeState.ON) {
+    if (this.subscriberState === SubscribeState.ON) {
       this.eventsSubscriber!.unsubscribe();
     }
   }
@@ -145,41 +151,50 @@ export class DagContainer {
 
         let subscribeTopics = {
           blockAdded: true,
-          blockFinalized: false
+          blockFinalized: true
         };
         let obs = this.casperService.subscribeEvents(subscribeTopics);
 
         this.eventsSubscriber = obs.subscribe({
           next: (event: Event) => {
-            let block = event.getBlockAdded()?.getBlock();
-            if (block) {
-              let index: number | undefined = this.blocks?.findIndex(
-                b =>
-                  b.getSummary()?.getBlockHash_asB64() ===
-                  block!.getSummary()?.getBlockHash_asB64()
-              );
+            if (event.hasBlockAdded()) {
+              let block = event.getBlockAdded()?.getBlock();
+              if (block) {
+                let index: number | undefined = this.blocks?.findIndex(
+                  b =>
+                    b.getSummary()?.getBlockHash_asB64() ===
+                    block!.getSummary()?.getBlockHash_asB64()
+                );
 
-              if (index === -1) {
-                // blocks with rank < N+1-depth will be culled
-                let culledThreshold = block!.getSummary()!.getHeader()!.getRank() + 1 - this.depth;
-                let remainingBlocks: BlockInfo[] = [];
-                if (this.blocks !== null) {
-                  remainingBlocks = this.blocks.filter(b => {
-                    let rank = b.getSummary()?.getHeader()?.getRank();
-                    if (rank !== undefined) {
-                      return rank >= culledThreshold;
-                    }
-                    return false;
+                if (index === -1) {
+                  // blocks with rank < N+1-depth will be culled
+                  let culledThreshold = block!.getSummary()!.getHeader()!.getRank() + 1 - this.depth;
+                  let remainingBlocks: BlockInfo[] = [];
+                  if (this.blocks !== null) {
+                    remainingBlocks = this.blocks.filter(b => {
+                      let rank = b.getSummary()?.getHeader()?.getRank();
+                      if (rank !== undefined) {
+                        return rank >= culledThreshold;
+                      }
+                      return false;
+                    });
+                  }
+                  remainingBlocks.splice(0, 0, block!);
+                  runInAction(() => {
+                    this.blocks = remainingBlocks;
                   });
                 }
-                remainingBlocks.splice(0, 0, block!);
-                runInAction(() => {
-                  this.blocks = remainingBlocks;
-                });
               }
+            } else if (event.hasNewFinalizedBlock()) {
+              this.errors.capture(
+                this.casperService.getLastFinalizedBlockInfo().then(block => {
+                  this.lastFinalizedBlock = block;
+                })
+              );
             }
           }
         });
+
       }
     } else {
       // disable subscriber
@@ -202,7 +217,7 @@ export class DagContainer {
     );
 
     await this.errors.capture(
-      this.casperService.getLatestBlockInfo().then(block => {
+      this.casperService.getLastFinalizedBlockInfo().then(block => {
         this.lastFinalizedBlock = block;
       })
     );

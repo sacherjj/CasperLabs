@@ -108,7 +108,6 @@ fn in_memory_writer_mutex_does_not_collide_with_readers() {
         }));
     }
 
-    let store = store.clone();
     let mut txn = env.create_read_write_txn().unwrap();
     // wait for reader threads to read
     barrier.wait();

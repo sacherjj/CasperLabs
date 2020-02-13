@@ -10,28 +10,47 @@ import io.casperlabs.catscontrib.{Fs2Compiler, MonadThrowable}
 import io.casperlabs.crypto.Keys.PublicKey
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.models.SmartContractEngineError
-import io.casperlabs.node.api.{DeployInfoPagination, Utils}
+import io.casperlabs.node.api.DeployInfoPagination.DeployInfoPageTokenParams
 import io.casperlabs.node.api.Utils.{
   validateAccountPublicKey,
   validateBlockHashPrefix,
   validateDeployHash
 }
 import io.casperlabs.node.api.casper.ListDeployInfosRequest
-import io.casperlabs.node.api.graphql._
 import io.casperlabs.node.api.graphql.RunToFuture.ops._
-import io.casperlabs.node.api.graphql.schema.blocks.{DeployInfosWithPageInfo, PageInfo}
-import io.casperlabs.node.api.DeployInfoPagination.DeployInfoPageTokenParams
+import io.casperlabs.node.api.graphql._
+import io.casperlabs.node.api.graphql.schema.blocks.{
+  DeployInfosWithPageInfo,
+  GraphQLBlockTypes,
+  PageInfo
+}
+import io.casperlabs.node.api.{DeployInfoPagination, Utils}
 import io.casperlabs.shared.Log
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.block._
-import io.casperlabs.storage.deploy.DeployStorage
 import io.casperlabs.storage.dag.DagStorage
+import io.casperlabs.storage.deploy.DeployStorage
+import sangria.execution.deferred.DeferredResolver
 import sangria.schema._
 
-private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream: Log: RunToFuture: MultiParentCasperRef: BlockStorage: FinalizedBlocksStream: MonadThrowable: ExecutionEngineService: DeployStorage: DagStorage: Fs2Compiler] {
+// format: off
+private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream
+                                                : Log
+                                                : RunToFuture
+                                                : MultiParentCasperRef
+                                                : BlockStorage
+                                                : FinalizedBlocksStream
+                                                : MonadThrowable
+                                                : ExecutionEngineService
+                                                : DeployStorage
+                                                : DagStorage
+                                                : Fs2Compiler] {
+// format: on
 
   // GraphQL projections don't expose the body.
   val deployView = DeployInfo.View.BASIC
+
+  val blockTypes = new GraphQLBlockTypes[F]
 
   private def projectionTerms(projections: Vector[ProjectedName]): Set[String] = {
     def flatToSet(ps: Vector[ProjectedName], acc: Set[String]): Set[String] =
@@ -49,7 +68,7 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream: Log: Ru
     blockView(projectionTerms(projections))
 
   private def blockView(terms: Set[String]): BlockInfo.View =
-    if (terms contains "childHashes")
+    if (terms contains "children")
       BlockInfo.View.FULL
     else
       BlockInfo.View.BASIC
@@ -60,6 +79,8 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream: Log: Ru
   private def deployView(terms: Set[String]): Option[DeployInfo.View] =
     if (terms contains "deploys") Some(deployView) else None
 
+  def createDeferredResolver = DeferredResolver.fetchers(blockTypes.blockFetcher)
+
   def createSchema: Schema[Unit, Unit] =
     Schema(
       query = ObjectType(
@@ -67,7 +88,7 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream: Log: Ru
         fields[Unit, Unit](
           Field(
             "block",
-            OptionType(blocks.types.BlockType),
+            OptionType(blockTypes.BlockType),
             arguments = blocks.arguments.BlockHashPrefix :: Nil,
             resolve = Projector { (context, projections) =>
               (for {
@@ -86,7 +107,7 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream: Log: Ru
           ),
           Field(
             "dagSlice",
-            ListType(blocks.types.BlockType),
+            ListType(blockTypes.BlockType),
             arguments = blocks.arguments.Depth :: blocks.arguments.MaxRank :: Nil,
             resolve = Projector { (context, projections) =>
               BlockAPI
@@ -101,7 +122,7 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream: Log: Ru
           ),
           Field(
             "deploy",
-            OptionType(blocks.types.DeployInfoType),
+            OptionType(blockTypes.DeployInfoType),
             arguments = blocks.arguments.DeployHash :: Nil,
             resolve = { c =>
               (validateDeployHash[F](c.arg(blocks.arguments.DeployHash), ByteString.EMPTY) >>= (
@@ -111,7 +132,7 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream: Log: Ru
           ),
           Field(
             "deploys",
-            blocks.types.DeployInfosWithPageInfoType,
+            blockTypes.DeployInfosWithPageInfoType,
             arguments = blocks.arguments.AccountPublicKeyBase16 :: blocks.arguments.First :: blocks.arguments.After :: Nil,
             resolve = { c =>
               val program =
@@ -240,7 +261,7 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream: Log: Ru
         fields[Unit, Unit](
           Field.subs(
             "finalizedBlocks",
-            blocks.types.BlockType,
+            blockTypes.BlockType,
             "Subscribes to new finalized blocks".some,
             resolve = { c =>
               // Projectors don't work with Subscriptions

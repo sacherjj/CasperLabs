@@ -1,22 +1,19 @@
 use std::collections::BTreeMap;
 
-use crate::support::{
-    exec_with_return,
-    test_support::{ExecuteRequestBuilder, WasmTestBuilder, DEFAULT_BLOCK_TIME},
-};
-use contract_ffi::{
-    key::Key,
-    uref::{AccessRights, URef},
-    value::{
-        account::{PublicKey, PurseId},
-        U512,
+use engine_test_support::{
+    internal::{
+        exec_with_return, ExecuteRequestBuilder, WasmTestBuilder, DEFAULT_BLOCK_TIME,
+        DEFAULT_GENESIS_CONFIG,
     },
+    DEFAULT_ACCOUNT_ADDR,
 };
-use engine_shared::{stored_value::StoredValue, transform::Transform};
+use types::{
+    account::{PublicKey, PurseId},
+    AccessRights, Key, URef, U512,
+};
 
-use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG};
-
-const CONTRACT_TRANSFER_TO_ACCOUNT_01: &str = "transfer_to_account_01.wasm";
+const CONTRACT_TRANSFER_TO_ACCOUNT: &str = "transfer_to_account_u512.wasm";
+const TRANSFER_AMOUNT: u64 = 250_000_000 + 1000;
 const SYSTEM_ADDR: [u8; 32] = [0u8; 32];
 const DEPLOY_HASH_2: [u8; 32] = [2u8; 32];
 const N_VALIDATORS: u8 = 5;
@@ -35,8 +32,8 @@ fn should_run_pos_install_contract() {
 
     let exec_request = ExecuteRequestBuilder::standard(
         DEFAULT_ACCOUNT_ADDR,
-        CONTRACT_TRANSFER_TO_ACCOUNT_01,
-        (SYSTEM_ADDR,),
+        CONTRACT_TRANSFER_TO_ACCOUNT,
+        (SYSTEM_ADDR, U512::from(TRANSFER_AMOUNT)),
     )
     .build();
     builder
@@ -64,20 +61,16 @@ fn should_run_pos_install_contract() {
     .expect("should run successfully");
 
     let prestate = builder.get_post_state_hash();
-    builder.commit_effects(prestate, effect.transforms.clone());
+    builder.commit_effects(prestate, effect.transforms);
 
     // should return a uref
     assert_eq!(ret_value, ret_urefs[0]);
 
     // should have written a contract under that uref
-    let named_keys = match effect
-        .transforms
-        .get(&Key::URef(ret_value.remove_access_rights()))
-    {
-        Some(Transform::Write(StoredValue::Contract(contract))) => contract.named_keys(),
-
-        _ => panic!("Expected contract to be written under the key"),
-    };
+    let contract = builder
+        .get_contract(ret_value.remove_access_rights())
+        .expect("should have a contract");
+    let named_keys = contract.named_keys();
 
     assert_eq!(named_keys.len(), EXPECTED_KNOWN_KEYS_LEN);
 

@@ -7,37 +7,39 @@ use std::{env, path::PathBuf};
 use base16;
 use clap::{crate_version, App};
 
-use casperlabs_engine_tests::{
-    support::{
-        profiling_common,
-        test_support::{DeployItemBuilder, ExecuteRequestBuilder, LmdbWasmTestBuilder},
+use engine_test_support::{
+    internal::{
+        DeployItemBuilder, ExecuteRequestBuilder, LmdbWasmTestBuilder, DEFAULT_GENESIS_CONFIG,
+        DEFAULT_PAYMENT,
     },
-    test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT},
+    DEFAULT_ACCOUNT_ADDR,
 };
-use contract_ffi::value::account::PublicKey;
+use types::account::PublicKey;
+
+use casperlabs_engine_tests::profiling;
 
 const ABOUT: &str = "Initializes global state in preparation for profiling runs. Outputs the root \
                      hash from the commit response.";
 const STANDARD_PAYMENT_WASM: &str = "standard_payment.wasm";
 
 fn data_dir() -> PathBuf {
-    let exe_name = profiling_common::exe_name();
-    let data_dir_arg = profiling_common::data_dir_arg();
+    let exe_name = profiling::exe_name();
+    let data_dir_arg = profiling::data_dir_arg();
     let arg_matches = App::new(&exe_name)
         .version(crate_version!())
         .about(ABOUT)
         .arg(data_dir_arg)
         .get_matches();
-    profiling_common::data_dir(&arg_matches)
+    profiling::data_dir(&arg_matches)
 }
 
 fn main() {
     let data_dir = data_dir();
 
     let genesis_public_key = PublicKey::new(DEFAULT_ACCOUNT_ADDR);
-    let account_1_public_key = profiling_common::account_1_public_key();
-    let account_1_initial_amount = profiling_common::account_1_initial_amount();
-    let account_2_public_key = profiling_common::account_2_public_key();
+    let account_1_public_key = profiling::account_1_public_key();
+    let account_1_initial_amount = profiling::account_1_initial_amount();
+    let account_2_public_key = profiling::account_2_public_key();
 
     let exec_request = {
         let deploy = DeployItemBuilder::new()

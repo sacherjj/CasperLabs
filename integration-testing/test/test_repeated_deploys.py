@@ -1,4 +1,3 @@
-import pytest
 from contextlib import contextmanager
 import tempfile
 
@@ -57,17 +56,28 @@ def test_one_network_repeated_deploy(one_node_network_fn):
     with signed_deploy_file_path(cli, account) as signed_deploy_path:
         # First deployment of signed_deploy, should succeed
         deploy_hash = cli("send-deploy", "-i", signed_deploy_path)
-        cli("propose")
-        deploy_info = cli("show-deploy", deploy_hash)
+        deploy_info = cli.node.p_client.client.wait_for_deploy_processed(deploy_hash)
+        blocks_with_deploy = [
+            bi.block_info.summary.block_hash.hex()
+            for bi in deploy_info.processing_results
+        ]
+
+        blocks_with_deploy_after_replay = [
+            bi.block_info.summary.block_hash.hex()
+            for bi in deploy_info.processing_results
+        ]
         assert not deploy_info.processing_results[0].is_error
 
         # Second deployment of signed_deploy should fail
         deploy_hash = cli("send-deploy", "-i", signed_deploy_path)
-        deploy_info = cli("show-deploy", deploy_hash)
+
+        deploy_info = cli.node.p_client.client.wait_for_deploy_processed(deploy_hash)
         assert not deploy_info.processing_results[0].is_error
-        with pytest.raises(Exception) as excinfo:
-            cli("propose")
-        assert "No new deploys" in str(excinfo.value)
+        blocks_with_deploy_after_replay = [
+            bi.block_info.summary.block_hash.hex()
+            for bi in deploy_info.processing_results
+        ]
+        assert blocks_with_deploy_after_replay == blocks_with_deploy
 
 
 def test_two_network_repeated_deploy(two_node_network):
@@ -82,7 +92,8 @@ def test_two_network_repeated_deploy(two_node_network):
     with signed_deploy_file_path(clis[0], accounts[0]) as signed_deploy_path:
         # First deployment of signed_deploy from node-0 should succeed
         deploy_hash = clis[0]("send-deploy", "-i", signed_deploy_path)
-        block_hash = clis[0]("propose")
+        block_hash = nodes[0].wait_for_deploy_processed_and_get_block_hash(deploy_hash)
+
         deploy_info = clis[0]("show-deploy", deploy_hash)
         assert not deploy_info.processing_results[0].is_error
 
@@ -92,6 +103,7 @@ def test_two_network_repeated_deploy(two_node_network):
         deploy_hash = clis[1]("send-deploy", "-i", signed_deploy_path)
         deploy_info = clis[1]("show-deploy", deploy_hash)
         assert not deploy_info.processing_results[0].is_error
-        with pytest.raises(Exception) as excinfo:
-            clis[1]("propose")
-        assert "No new deploys" in str(excinfo.value)
+
+        result = nodes[1].p_client.client.wait_for_deploy_processed(deploy_hash)
+        assert "DISCARDED" in str(result)
+        assert "Duplicate or expired" in str(result)

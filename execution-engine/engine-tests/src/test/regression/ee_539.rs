@@ -1,7 +1,8 @@
-use crate::support::test_support::{ExecuteRequestBuilder, InMemoryWasmTestBuilder};
-use contract_ffi::value::account::Weight;
-
-use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG};
+use engine_test_support::{
+    internal::{ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_GENESIS_CONFIG},
+    DEFAULT_ACCOUNT_ADDR,
+};
+use types::account::Weight;
 
 const CONTRACT_EE_539_REGRESSION: &str = "ee_539_regression.wasm";
 

@@ -6,22 +6,20 @@ use std::{
 
 use parity_wasm::elements::Module;
 
-use contract_ffi::{
-    block_time::BlockTime,
-    bytesrepr::{self, FromBytes},
-    execution::Phase,
-    key::Key,
-    value::{account::PublicKey, CLType, CLTyped, CLValue, ProtocolVersion},
-};
 use engine_shared::{
     account::Account, gas::Gas, newtypes::CorrelationId, stored_value::StoredValue,
 };
 use engine_storage::{global_state::StateReader, protocol_data::ProtocolData};
+use types::{
+    account::PublicKey,
+    bytesrepr::{self, FromBytes},
+    BlockTime, CLTyped, CLValue, Key, Phase, ProtocolVersion,
+};
 
-use super::{extract_access_rights_from_keys, instance_and_memory, Error, Runtime};
 use crate::{
     engine_state::{execution_result::ExecutionResult, system_contract_cache::SystemContractCache},
-    execution::{address_generator::AddressGenerator, FN_STORE_ID_INITIAL},
+    execution::{address_generator::AddressGenerator, Error, FN_STORE_ID_INITIAL},
+    runtime::{extract_access_rights_from_keys, instance_and_memory, Runtime},
     runtime_context::{self, RuntimeContext},
     tracking_copy::TrackingCopy,
 };
@@ -110,7 +108,7 @@ impl Executor {
         // only nonce update can be returned.
         let effects_snapshot = tc.borrow().effect();
 
-        let arguments: Vec<Vec<u8>> = if args.is_empty() {
+        let arguments: Vec<CLValue> = if args.is_empty() {
             Vec::new()
         } else {
             // TODO: figure out how this works with the cost model
@@ -118,11 +116,6 @@ impl Executor {
             let gas = Gas::new(args.len().into());
             on_fail_charge!(bytesrepr::deserialize(args), gas, effects_snapshot)
         };
-
-        let arguments = arguments
-            .into_iter()
-            .map(|bytes: Vec<u8>| CLValue::from_components(CLType::Any, bytes))
-            .collect();
 
         let context = RuntimeContext::new(
             tc,
@@ -319,9 +312,9 @@ impl Executor {
         let runtime_context = RuntimeContext::new(
             state,
             keys,
-            access_rights.clone(),
+            access_rights,
             args,
-            authorization_keys.clone(),
+            authorization_keys,
             account,
             base_key,
             blocktime,
@@ -345,11 +338,11 @@ impl Executor {
             Ok(_) => {
                 // This duplicates the behavior of sub_call, but is admittedly rather questionable.
                 //
-                // If `instance.invoke_export` returns `Ok` and the `host_buf` is `None`, the
+                // If `instance.invoke_export` returns `Ok` and the `host_buffer` is `None`, the
                 // contract's execution succeeded but did not explicitly call `runtime::ret()`.
                 // Treat as though the execution returned the unit type `()` as per Rust functions
                 // which don't specify a return value.
-                let result = runtime.take_host_buf().unwrap_or(CLValue::from_t(())?);
+                let result = runtime.take_host_buffer().unwrap_or(CLValue::from_t(())?);
                 let ret = result.into_t()?;
                 return Ok(ret);
             }
@@ -359,7 +352,9 @@ impl Executor {
             .as_host_error()
             .and_then(|host_error| host_error.downcast_ref::<Error>())
         {
-            Some(Error::Ret(_)) => runtime.take_host_buf().ok_or(Error::ExpectedReturnValue)?,
+            Some(Error::Ret(_)) => runtime
+                .take_host_buffer()
+                .ok_or(Error::ExpectedReturnValue)?,
             Some(Error::Revert(code)) => return Err(Error::Revert(*code)),
             _ => return Err(Error::Interpreter(return_error)),
         };

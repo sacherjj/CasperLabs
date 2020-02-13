@@ -1,26 +1,16 @@
-use std::{
-    collections::{hash_map::RandomState, BTreeMap},
-    convert::TryInto,
-};
+use std::collections::BTreeMap;
 
-use contract_ffi::{
-    key::Key,
-    value::{account::PublicKey, ProtocolVersion, U512},
-};
 use engine_core::engine_state::{upgrade::ActivationPoint, CONV_RATE};
 use engine_grpc_server::engine_server::ipc::DeployCode;
-use engine_shared::{
-    additive_map::AdditiveMap, gas::Gas, motes::Motes, stored_value::StoredValue,
-    transform::Transform,
-};
-
-use crate::{
-    support::test_support::{
-        self, DeployItemBuilder, Diff, ExecuteRequestBuilder, InMemoryWasmTestBuilder,
-        UpgradeRequestBuilder, GENESIS_INITIAL_BALANCE,
+use engine_shared::{motes::Motes, stored_value::StoredValue, transform::Transform};
+use engine_test_support::{
+    internal::{
+        utils, AdditiveMapDiff, DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder,
+        UpgradeRequestBuilder, DEFAULT_ACCOUNT_KEY, DEFAULT_GENESIS_CONFIG,
     },
-    test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_ACCOUNT_KEY, DEFAULT_GENESIS_CONFIG},
+    DEFAULT_ACCOUNT_ADDR, DEFAULT_ACCOUNT_INITIAL_BALANCE,
 };
+use types::{account::PublicKey, Key, ProtocolVersion, U512};
 
 const ACCOUNT_1_ADDR: [u8; 32] = [42u8; 32];
 const DEFAULT_ACTIVATION_POINT: ActivationPoint = 1;
@@ -43,7 +33,7 @@ fn make_upgrade_request(
     code: &str,
 ) -> UpgradeRequestBuilder {
     let installer_code = {
-        let bytes = test_support::read_wasm_file_bytes(code);
+        let bytes = utils::read_wasm_file_bytes(code);
         let mut deploy_code = DeployCode::new();
         deploy_code.set_code(bytes);
         deploy_code
@@ -94,7 +84,7 @@ fn should_exec_non_stored_code() {
         .expect("should get genesis account");
     let modified_balance: U512 = builder.get_purse_balance(default_account.purse_id());
 
-    let initial_balance: U512 = U512::from(GENESIS_INITIAL_BALANCE);
+    let initial_balance: U512 = U512::from(DEFAULT_ACCOUNT_INITIAL_BALANCE);
 
     assert_ne!(
         modified_balance, initial_balance,
@@ -107,12 +97,8 @@ fn should_exec_non_stored_code() {
         .expect("there should be a response")
         .clone();
 
-    let mut success_result = test_support::get_success_result(&response);
-    let cost = success_result
-        .take_cost()
-        .try_into()
-        .expect("should map to U512");
-    let gas = Gas::new(cost);
+    let success_result = utils::get_success_result(&response);
+    let gas = success_result.cost();
     let motes = Motes::from_gas(gas, CONV_RATE).expect("should have motes");
     let tally = motes.value() + U512::from(transferred_amount) + modified_balance;
 
@@ -138,43 +124,26 @@ fn should_exec_stored_code_by_hash() {
     let mut builder = InMemoryWasmTestBuilder::default();
     builder.run_genesis(&*DEFAULT_GENESIS_CONFIG);
 
-    let test_result = builder.exec_commit_finish(exec_request);
-
-    let response = test_result
-        .builder()
-        .get_exec_response(0)
-        .expect("there should be a response")
-        .clone();
-
-    let transforms = &test_result.builder().get_transforms()[0];
-
-    // find the contract write transform, then get the hash from its key
-    let stored_payment_contract_hash = {
-        let mut ret = None;
-        for (k, t) in transforms {
-            if let Transform::Write(StoredValue::Contract(_)) = t {
-                if let Key::Hash(hash) = k {
-                    ret = Some(hash);
-                    break;
-                }
-            }
-        }
-        ret
-    };
-
-    assert_ne!(
-        stored_payment_contract_hash, None,
-        "stored_payment_contract_hash should exist"
-    );
-
-    let mut result = test_support::get_success_result(&response);
-    let cost = result.take_cost().try_into().expect("should map to U512");
-    let gas = Gas::new(cost);
-    let motes_alpha = Motes::from_gas(gas, CONV_RATE).expect("should have motes");
+    builder.exec_commit_finish(exec_request);
 
     let default_account = builder
         .get_account(DEFAULT_ACCOUNT_ADDR)
-        .expect("should get genesis account");
+        .expect("should have account");
+    let stored_payment_contract_hash = default_account
+        .named_keys()
+        .get(STANDARD_PAYMENT_CONTRACT_NAME)
+        .expect("stored_payment_contract_hash should exist")
+        .into_hash()
+        .expect("should be a hash");
+
+    let response = builder
+        .get_exec_response(0)
+        .expect("there should be a response")
+        .clone();
+    let mut result = utils::get_success_result(&response);
+    let gas = result.cost();
+    let motes_alpha = Motes::from_gas(gas, CONV_RATE).expect("should have motes");
+
     let modified_balance_alpha: U512 = builder.get_purse_balance(default_account.purse_id());
 
     let account_1_public_key = PublicKey::new(ACCOUNT_1_ADDR);
@@ -189,9 +158,7 @@ fn should_exec_stored_code_by_hash() {
                 (account_1_public_key, U512::from(transferred_amount)),
             )
             .with_stored_payment_hash(
-                stored_payment_contract_hash
-                    .expect("hash should exist")
-                    .to_vec(),
+                stored_payment_contract_hash.to_vec(),
                 (U512::from(payment_purse_amount),),
             )
             .with_authorization_keys(&[*DEFAULT_ACCOUNT_KEY])
@@ -201,21 +168,19 @@ fn should_exec_stored_code_by_hash() {
         ExecuteRequestBuilder::new().push_deploy(deploy).build()
     };
 
-    let test_result = builder.exec_commit_finish(exec_request_stored_payment);
+    builder.exec_commit_finish(exec_request_stored_payment);
 
     let modified_balance_bravo: U512 = builder.get_purse_balance(default_account.purse_id());
 
-    let initial_balance: U512 = U512::from(GENESIS_INITIAL_BALANCE);
+    let initial_balance: U512 = U512::from(DEFAULT_ACCOUNT_INITIAL_BALANCE);
 
-    let response = test_result
-        .builder()
+    let response = builder
         .get_exec_response(1)
         .expect("there should be a response")
         .clone();
 
-    result = test_support::get_success_result(&response);
-    let cost = result.take_cost().try_into().expect("should map to U512");
-    let gas = Gas::new(cost);
+    result = utils::get_success_result(&response);
+    let gas = result.cost();
     let motes_bravo = Motes::from_gas(gas, CONV_RATE).expect("should have motes");
 
     let tally = motes_alpha.value()
@@ -263,9 +228,8 @@ fn should_exec_stored_code_by_named_hash() {
         .expect("there should be a response")
         .clone();
 
-    let mut result = test_support::get_success_result(&response);
-    let cost = result.take_cost().try_into().expect("should map to U512");
-    let gas = Gas::new(cost);
+    let mut result = utils::get_success_result(&response);
+    let gas = result.cost();
     let motes_alpha = Motes::from_gas(gas, CONV_RATE).expect("should have motes");
 
     let default_account = builder
@@ -302,7 +266,7 @@ fn should_exec_stored_code_by_named_hash() {
         .expect("should get genesis account");
     let modified_balance_bravo: U512 = builder.get_purse_balance(default_account.purse_id());
 
-    let initial_balance: U512 = U512::from(GENESIS_INITIAL_BALANCE);
+    let initial_balance: U512 = U512::from(DEFAULT_ACCOUNT_INITIAL_BALANCE);
 
     let response = test_result
         .builder()
@@ -310,9 +274,8 @@ fn should_exec_stored_code_by_named_hash() {
         .expect("there should be a response")
         .clone();
 
-    result = test_support::get_success_result(&response);
-    let cost = result.take_cost().try_into().expect("should map to U512");
-    let gas = Gas::new(cost);
+    result = utils::get_success_result(&response);
+    let gas = result.cost();
     let motes_bravo = Motes::from_gas(gas, CONV_RATE).expect("should have motes");
 
     let tally = motes_alpha.value()
@@ -371,9 +334,8 @@ fn should_exec_stored_code_by_named_uref() {
         .expect("there should be a response")
         .clone();
 
-    let mut result = test_support::get_success_result(&response);
-    let cost = result.take_cost().try_into().expect("should map to U512");
-    let gas = Gas::new(cost);
+    let mut result = utils::get_success_result(&response);
+    let gas = result.cost();
     let motes_alpha = Motes::from_gas(gas, CONV_RATE).expect("should have motes");
 
     let default_account = builder
@@ -407,7 +369,7 @@ fn should_exec_stored_code_by_named_uref() {
 
     let modified_balance_bravo: U512 = builder.get_purse_balance(default_account.purse_id());
 
-    let initial_balance: U512 = U512::from(GENESIS_INITIAL_BALANCE);
+    let initial_balance: U512 = U512::from(DEFAULT_ACCOUNT_INITIAL_BALANCE);
 
     let response = test_result
         .builder()
@@ -415,9 +377,8 @@ fn should_exec_stored_code_by_named_uref() {
         .expect("there should be a response")
         .clone();
 
-    result = test_support::get_success_result(&response);
-    let cost = result.take_cost().try_into().expect("should map to U512");
-    let gas = Gas::new(cost);
+    result = utils::get_success_result(&response);
+    let gas = result.cost();
     let motes_bravo = Motes::from_gas(gas, CONV_RATE).expect("should have motes");
 
     let tally = motes_alpha.value()
@@ -465,9 +426,8 @@ fn should_exec_payment_and_session_stored_code() {
         .expect("there should be a response")
         .clone();
 
-    let mut result = test_support::get_success_result(&response);
-    let cost = result.take_cost().try_into().expect("should map to U512");
-    let gas = Gas::new(cost);
+    let mut result = utils::get_success_result(&response);
+    let gas = result.cost();
     let motes_alpha = Motes::from_gas(gas, CONV_RATE).expect("should have motes");
 
     // next store transfer contract
@@ -497,9 +457,8 @@ fn should_exec_payment_and_session_stored_code() {
         .expect("there should be a response")
         .clone();
 
-    result = test_support::get_success_result(&response);
-    let cost = result.take_cost().try_into().expect("should map to U512");
-    let gas = Gas::new(cost);
+    result = utils::get_success_result(&response);
+    let gas = result.cost();
     let motes_bravo = Motes::from_gas(gas, CONV_RATE).expect("should have motes");
 
     let account_1_public_key = PublicKey::new(ACCOUNT_1_ADDR);
@@ -533,9 +492,8 @@ fn should_exec_payment_and_session_stored_code() {
         .expect("there should be a response")
         .clone();
 
-    result = test_support::get_success_result(&response);
-    let cost = result.take_cost().try_into().expect("should map to U512");
-    let gas = Gas::new(cost);
+    result = utils::get_success_result(&response);
+    let gas = result.cost();
     let motes_charlie = Motes::from_gas(gas, CONV_RATE).expect("should have motes");
 
     let default_account = builder
@@ -543,7 +501,7 @@ fn should_exec_payment_and_session_stored_code() {
         .expect("should get genesis account");
     let modified_balance: U512 = builder.get_purse_balance(default_account.purse_id());
 
-    let initial_balance: U512 = U512::from(GENESIS_INITIAL_BALANCE);
+    let initial_balance: U512 = U512::from(DEFAULT_ACCOUNT_INITIAL_BALANCE);
 
     let tally = motes_alpha.value()
         + motes_bravo.value()
@@ -588,45 +546,25 @@ fn should_produce_same_transforms_by_uref_or_named_uref() {
     let mut builder_by_uref = InMemoryWasmTestBuilder::default();
     builder_by_uref.run_genesis(&*DEFAULT_GENESIS_CONFIG);
 
-    let test_result = builder_by_uref.exec_commit_finish(exec_request_genesis.clone());
-    let transforms: &AdditiveMap<Key, Transform, RandomState> =
-        &test_result.builder().get_transforms()[0];
+    builder_by_uref.exec_commit_finish(exec_request_genesis);
 
-    let stored_payment_contract_uref = {
-        // get pos contract public key
-        let pos_uref = builder_by_uref.get_pos_contract_uref();
+    let default_account = builder_by_uref
+        .get_account(DEFAULT_ACCOUNT_ADDR)
+        .expect("should have account");
 
-        // find the contract write transform, then get the uref from its key
-        // the pos contract gets re-written when the refund purse uref is removed from
-        // it and therefore there are two URef->Contract Writes present in
-        // transforms... we want to ignore the proof of stake URef as it is not
-        // the one we are interested in
-        let stored_payment_contract_uref = transforms
-            .iter()
-            .find_map(|key_transform| match key_transform {
-                (Key::URef(uref), Transform::Write(StoredValue::Contract(_)))
-                    if uref != &pos_uref =>
-                {
-                    Some(uref)
-                }
-                _ => None,
-            })
-            .expect("should have stored_payment_contract_uref");
-
-        assert_ne!(
-            &pos_uref, stored_payment_contract_uref,
-            "should ignore the pos_uref"
-        );
-
-        stored_payment_contract_uref
-    };
+    let stored_payment_contract_uref = default_account
+        .named_keys()
+        .get(TRANSFER_PURSE_TO_ACCOUNT_CONTRACT_NAME)
+        .expect("should have named key")
+        .into_uref()
+        .expect("should be an URef");
 
     // direct uref exec
     let exec_request_by_uref = {
         let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_stored_session_uref(
-                *stored_payment_contract_uref,
+                stored_payment_contract_uref,
                 (account_1_public_key, U512::from(transferred_amount)),
             )
             .with_payment_code(
@@ -642,6 +580,25 @@ fn should_produce_same_transforms_by_uref_or_named_uref() {
 
     let test_result = builder_by_uref.exec_commit_finish(exec_request_by_uref);
     let direct_uref_transforms = &test_result.builder().get_transforms()[1];
+
+    // requests aren't cloneable, so create another one
+    let exec_request_genesis = {
+        let deploy = DeployItemBuilder::new()
+            .with_address(DEFAULT_ACCOUNT_ADDR)
+            .with_session_code(
+                &format!("{}_stored.wasm", TRANSFER_PURSE_TO_ACCOUNT_CONTRACT_NAME),
+                (),
+            )
+            .with_payment_code(
+                &format!("{}.wasm", STANDARD_PAYMENT_CONTRACT_NAME),
+                (U512::from(payment_purse_amount),),
+            )
+            .with_authorization_keys(&[*DEFAULT_ACCOUNT_KEY])
+            .with_deploy_hash([1u8; 32])
+            .build();
+
+        ExecuteRequestBuilder::new().push_deploy(deploy).build()
+    };
 
     let mut builder_by_named_uref = InMemoryWasmTestBuilder::default();
     builder_by_named_uref.run_genesis(&*DEFAULT_GENESIS_CONFIG);
@@ -725,26 +682,25 @@ fn should_have_equivalent_transforms_with_stored_contract_pointers() {
                 .build()
         };
 
-        let store_transforms = builder
+        builder
             .run_genesis(&*DEFAULT_GENESIS_CONFIG)
             .exec(exec_request_1)
             .expect_success()
             .commit()
             .exec(exec_request_2)
             .expect_success()
-            .commit()
-            .get_transforms()[1]
-            .to_owned();
+            .commit();
 
-        let stored_payment_contract_hash =
-            store_transforms
-                .iter()
-                .find_map(|key_transform| match key_transform {
-                    (Key::Hash(hash), Transform::Write(StoredValue::Contract(_))) => Some(hash),
-                    _ => None,
-                });
+        let default_account = builder
+            .get_account(DEFAULT_ACCOUNT_ADDR)
+            .expect("should have account");
 
-        assert!(stored_payment_contract_hash.is_some());
+        let stored_payment_contract_hash = default_account
+            .named_keys()
+            .get(STANDARD_PAYMENT_CONTRACT_NAME)
+            .expect("should have named key")
+            .into_hash()
+            .expect("should be a hash");
 
         let call_stored_request = {
             let deploy = DeployItemBuilder::new()
@@ -754,9 +710,7 @@ fn should_have_equivalent_transforms_with_stored_contract_pointers() {
                     (account_1_public_key, U512::from(transferred_amount)),
                 )
                 .with_stored_payment_hash(
-                    stored_payment_contract_hash
-                        .expect("hash should exist")
-                        .to_vec(),
+                    stored_payment_contract_hash.to_vec(),
                     (U512::from(payment_purse_amount),),
                 )
                 .with_authorization_keys(&[*DEFAULT_ACCOUNT_KEY])
@@ -822,7 +776,7 @@ fn should_have_equivalent_transforms_with_stored_contract_pointers() {
             .to_owned()
     };
 
-    let diff = Diff::new(provided_transforms, stored_transforms);
+    let diff = AdditiveMapDiff::new(provided_transforms, stored_transforms);
 
     let left: BTreeMap<&Key, &Transform> = diff.left().iter().collect();
     let right: BTreeMap<&Key, &Transform> = diff.right().iter().collect();
@@ -977,7 +931,7 @@ fn should_fail_payment_stored_at_hash_with_incompatible_major_version() {
         .named_keys()
         .get(STANDARD_PAYMENT_CONTRACT_NAME)
         .expect("should have standard_payment named key")
-        .as_hash()
+        .into_hash()
         .expect("standard_payment should be an uref");
 
     //
@@ -1221,7 +1175,7 @@ fn should_fail_session_stored_at_hash_with_incompatible_major_version() {
         .named_keys()
         .get(DO_NOTHING_STORED_CONTRACT_NAME)
         .expect("do_nothing should be present in named keys")
-        .as_hash()
+        .into_hash()
         .expect("do_nothing named key should be hash");
 
     //
@@ -1422,7 +1376,7 @@ fn should_execute_stored_payment_and_session_code_with_new_major_version() {
         .named_keys()
         .get(STANDARD_PAYMENT_CONTRACT_NAME)
         .expect("standard_payment should be present in named keys")
-        .as_hash()
+        .into_hash()
         .expect("standard_payment named key should be hash");
     let do_nothing_stored_uref = default_account
         .named_keys()

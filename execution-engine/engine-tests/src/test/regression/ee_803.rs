@@ -1,22 +1,18 @@
-use std::convert::TryInto;
+use std::rc::Rc;
 
-use contract_ffi::{
-    key::Key,
-    value::{
-        account::{PublicKey, PurseId},
-        U512,
-    },
-};
 use engine_core::engine_state::{
+    execution_result::ExecutionResult,
     genesis::{GenesisAccount, POS_REWARDS_PURSE},
     CONV_RATE,
 };
-use engine_grpc_server::engine_server::ipc::ExecuteResponse;
-use engine_shared::{gas::Gas, motes::Motes};
-
-use crate::{
-    support::test_support::{self, ExecuteRequestBuilder, InMemoryWasmTestBuilder},
-    test::{DEFAULT_ACCOUNTS, DEFAULT_ACCOUNT_ADDR},
+use engine_shared::motes::Motes;
+use engine_test_support::{
+    internal::{utils, ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_ACCOUNTS},
+    DEFAULT_ACCOUNT_ADDR,
+};
+use types::{
+    account::{PublicKey, PurseId},
+    Key, U512,
 };
 
 const CONTRACT_DO_NOTHING: &str = "do_nothing.wasm";
@@ -40,14 +36,14 @@ fn get_pos_purse_id_by_name(
         .map(|u| PurseId::new(*u))
 }
 
-fn get_cost(response: &ExecuteResponse) -> U512 {
-    let mut success_result = test_support::get_success_result(response);
-    let cost = success_result
-        .take_cost()
-        .try_into()
-        .expect("should map to U512");
-    let gas = Gas::new(cost);
-    let motes = Motes::from_gas(gas, CONV_RATE).expect("should have motes");
+fn get_cost(response: &[Rc<ExecutionResult>]) -> U512 {
+    let motes = Motes::from_gas(
+        utils::get_exec_costs(response)
+            .into_iter()
+            .fold(Default::default(), |i, acc| i + acc),
+        CONV_RATE,
+    )
+    .expect("should convert");
     motes.value()
 }
 
@@ -71,7 +67,7 @@ fn should_not_be_able_to_unbond_reward() {
         tmp
     };
 
-    let genesis_config = test_support::create_genesis_config(accounts);
+    let genesis_config = utils::create_genesis_config(accounts);
     builder.run_genesis(&genesis_config);
 
     // First request to put some funds in the reward purse

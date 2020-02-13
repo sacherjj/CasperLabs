@@ -89,7 +89,10 @@ object Genesis {
 
       unsignedBlock = unsignedBlockProto(body, header)
 
-      genesis = BlockMsgWithTransform(Some(unsignedBlock), transforms)
+      genesis = BlockMsgWithTransform(
+        Some(unsignedBlock),
+        BlockStorage.blockEffectsMapToProto(Map(0 -> transforms))
+      )
 
       // And store the block as well since we won't have any other means of retrieving its effects.
       _ <- BlockStorage[F].put(genesis)

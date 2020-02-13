@@ -27,10 +27,10 @@ class NoOpsCasperEffect[F[_]: Sync: BlockStorage: DagStorage] private (
     for {
       _ <- Sync[F].delay(
             blockStorage
-              .update(b.blockHash, BlockMsgWithTransform(Some(b), Seq.empty[TransformEntry]))
+              .update(b.blockHash, BlockMsgWithTransform(Some(b), Seq.empty))
           )
       _ <- BlockStorage[F]
-            .put(b.blockHash, BlockMsgWithTransform(Some(b), Seq.empty[TransformEntry]))
+            .put(b.blockHash, BlockMsgWithTransform(Some(b), Seq.empty))
     } yield BlockStatus.valid
   def contains(b: Block): F[Boolean] = false.pure[F]
   def estimator(

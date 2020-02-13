@@ -3,17 +3,11 @@ use core::fmt;
 use parity_wasm::elements;
 use wasmi;
 
-use contract_ffi::{
-    bytesrepr,
-    key::Key,
-    system_contracts,
-    uref::{AccessRights, URef},
-    value::{
-        account::{AddKeyFailure, RemoveKeyFailure, SetThresholdFailure, UpdateKeyFailure},
-        CLValueError,
-    },
+use engine_shared::TypeMismatch;
+use types::{
+    account::{AddKeyFailure, RemoveKeyFailure, SetThresholdFailure, UpdateKeyFailure},
+    bytesrepr, system_contract_errors, AccessRights, CLValueError, Key, URef,
 };
-use engine_shared::transform::TypeMismatch;
 
 use crate::resolvers::error::ResolverError;
 
@@ -35,14 +29,14 @@ pub enum Error {
     GasLimit,
     Ret(Vec<URef>),
     Rng(rand::Error),
-    ResolverError(ResolverError),
+    Resolver(ResolverError),
     /// Reverts execution with a provided status
     Revert(u32),
     AddKeyFailure(AddKeyFailure),
     RemoveKeyFailure(RemoveKeyFailure),
     UpdateKeyFailure(UpdateKeyFailure),
     SetThresholdFailure(SetThresholdFailure),
-    SystemContractError(system_contracts::Error),
+    SystemContract(system_contract_errors::Error),
     DeploymentAuthorizationFailure,
     ExpectedReturnValue,
     UnexpectedReturnValue,
@@ -95,7 +89,7 @@ impl From<elements::Error> for Error {
 
 impl From<ResolverError> for Error {
     fn from(err: ResolverError) -> Self {
-        Error::ResolverError(err)
+        Error::Resolver(err)
     }
 }
 
@@ -123,9 +117,9 @@ impl From<SetThresholdFailure> for Error {
     }
 }
 
-impl From<system_contracts::Error> for Error {
-    fn from(error: system_contracts::Error) -> Self {
-        Error::SystemContractError(error)
+impl From<system_contract_errors::Error> for Error {
+    fn from(error: system_contract_errors::Error) -> Self {
+        Error::SystemContract(error)
     }
 }
 

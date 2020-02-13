@@ -516,6 +516,9 @@ class NodeDiscoverySpec extends WordSpecLike with GeneratorDrivenPropertyChecks 
     }
     "discover" should {
       "instruct KademliaService to ignore peers with wrong chainId" in {
+        if (sys.env.contains("DRONE_BRANCH")) {
+          cancel("NODE-1153")
+        }
         val peers: Map[Node, List[Node]] = sample(genFullyConnectedPeers)
         val wrongChainIdPeer             = sample(genPeerNode).withChainId(sample(genHash))
         TestFixture.prefilledTable(

@@ -1,9 +1,8 @@
-use contract_ffi::contract_api::Error;
-
-use crate::{
-    support::test_support::{self, ExecuteRequestBuilder, InMemoryWasmTestBuilder},
-    test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG},
+use engine_test_support::{
+    internal::{utils, ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_GENESIS_CONFIG},
+    DEFAULT_ACCOUNT_ADDR,
 };
+use types::ApiError;
 
 const CONTRACT_EE_597_REGRESSION: &str = "ee_597_regression.wasm";
 
@@ -26,13 +25,7 @@ fn should_fail_when_bonding_amount_is_zero_ee_597_regression() {
         .expect("should have a response")
         .to_owned();
 
-    let error_message = {
-        let execution_result = test_support::get_success_result(&response);
-        test_support::get_error_message(execution_result)
-    };
+    let error_message = utils::get_error_message(response);
     // Error::BondTooSmall => 5,
-    assert_eq!(
-        error_message,
-        format!("Exit code: {}", u32::from(Error::ProofOfStake(5)))
-    );
+    assert!(error_message.contains(&format!("Revert({})", u32::from(ApiError::ProofOfStake(5)))));
 }

@@ -1,11 +1,11 @@
-use contract_ffi::value::account::PublicKey;
-
-use crate::{
-    support::test_support::{DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder},
-    test::{
-        CONTRACT_STANDARD_PAYMENT, DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT,
+use engine_test_support::{
+    internal::{
+        DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_GENESIS_CONFIG,
+        DEFAULT_PAYMENT, STANDARD_PAYMENT_CONTRACT,
     },
+    DEFAULT_ACCOUNT_ADDR,
 };
+use types::account::PublicKey;
 
 const PASS_INIT_REMOVE: &str = "init_remove";
 const PASS_TEST_REMOVE: &str = "test_remove";
@@ -33,7 +33,7 @@ fn should_run_ee_550_remove_with_saturated_threshold_regression() {
                 CONTRACT_EE_550_REGRESSION,
                 (String::from(PASS_TEST_REMOVE),),
             )
-            .with_payment_code(CONTRACT_STANDARD_PAYMENT, (*DEFAULT_PAYMENT,))
+            .with_payment_code(STANDARD_PAYMENT_CONTRACT, (*DEFAULT_PAYMENT,))
             .with_authorization_keys(&[
                 PublicKey::new(DEFAULT_ACCOUNT_ADDR),
                 PublicKey::new(KEY_2_ADDR),
@@ -73,7 +73,7 @@ fn should_run_ee_550_update_with_saturated_threshold_regression() {
                 CONTRACT_EE_550_REGRESSION,
                 (String::from(PASS_TEST_UPDATE),),
             )
-            .with_payment_code(CONTRACT_STANDARD_PAYMENT, (*DEFAULT_PAYMENT,))
+            .with_payment_code(STANDARD_PAYMENT_CONTRACT, (*DEFAULT_PAYMENT,))
             .with_authorization_keys(&[
                 PublicKey::new(DEFAULT_ACCOUNT_ADDR),
                 PublicKey::new(KEY_2_ADDR),

@@ -1,23 +1,13 @@
 use alloc::{collections::BTreeMap, string::String};
 
-use contract_ffi::{
-    contract_api::{runtime, storage, system, ContractRef, TURef},
-    key::Key,
-    value::U512,
-};
-
 use crate::{
     api::{self, Api},
     error::Error,
 };
+use contract::contract_api::{runtime, storage, system, TURef};
+use types::{ContractRef, Key, U512};
 
-// ERC20 smart contract.
-#[allow(unused_imports)]
-use crate::erc20::{erc20, PURSE_NAME};
-
-// Proxy smart contract.
-#[allow(unused_imports)]
-use crate::proxy::erc20_proxy;
+use crate::erc20::PURSE_NAME;
 
 const ERC20_CONTRACT_NAME: &str = "erc20";
 const ERC20_PROXY_CONTRACT_NAME: &str = "erc20_proxy";

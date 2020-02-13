@@ -1,8 +1,7 @@
 use engine_shared::{stored_value::StoredValue, transform::Transform};
-
-use crate::{
-    support::test_support::{ExecuteRequestBuilder, InMemoryWasmTestBuilder},
-    test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG},
+use engine_test_support::{
+    internal::{ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_GENESIS_CONFIG},
+    DEFAULT_ACCOUNT_ADDR,
 };
 
 const CONTRACT_EE_584_REGRESSION: &str = "ee_584_regression.wasm";

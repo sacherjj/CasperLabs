@@ -1,31 +1,44 @@
 package io.casperlabs.casper.util.execengine
 
-import cats.Id
+import cats.{Id, MonadError}
 import cats.data.NonEmptyList
+import cats.effect.Sync
 import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.DeploySelection.DeploySelection
 import io.casperlabs.casper.consensus.Block.ProcessedDeploy
+import io.casperlabs.casper.consensus.state.Key.Hash
 import io.casperlabs.casper.consensus.state._
-import io.casperlabs.casper.consensus.{state, Block}
+import io.casperlabs.casper.consensus.{state, Block, Deploy}
 import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.helper._
-import io.casperlabs.casper.util.ProtoUtil
+import io.casperlabs.casper.util.{CasperLabsProtocol, ProtoUtil}
+import io.casperlabs.casper.util.execengine.ExecEngineUtil.{EECommitFun, EEExecFun}
 import io.casperlabs.casper.util.execengine.ExecEngineUtilTest._
 import io.casperlabs.casper.util.execengine.ExecutionEngineServiceStub.mock
 import io.casperlabs.casper.util.execengine.Op.OpMap
 import io.casperlabs.casper.{consensus, DeploySelection}
 import io.casperlabs.ipc
+import io.casperlabs.ipc.DeployResult.ExecutionResult
+import io.casperlabs.ipc.Op.OpInstance
 import io.casperlabs.ipc._
-import io.casperlabs.models.SmartContractEngineError
-import io.casperlabs.shared.LogStub
+import io.casperlabs.metrics.Metrics
+import io.casperlabs.models.{ArbitraryConsensus, SmartContractEngineError}
+import io.casperlabs.p2p.EffectsTestInstances.LogicalTime
+import io.casperlabs.shared.{LogStub, Time}
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.deploy._
 import monix.eval.Task
-import scala.concurrent.duration._
-import org.scalatest.{FlatSpec, Matchers}
+import monix.execution.Scheduler
+import monix.execution.atomic.{AtomicInt, AtomicLong}
+import org.scalatest.{Assertion, FlatSpec, Matchers}
 
-class ExecEngineUtilTest extends FlatSpec with Matchers with BlockGenerator with StorageFixture {
+class ExecEngineUtilTest
+    extends FlatSpec
+    with Matchers
+    with BlockGenerator
+    with ArbitraryConsensus
+    with StorageFixture {
 
   implicit val logEff = LogStub[Task]()
 
@@ -65,7 +78,7 @@ class ExecEngineUtilTest extends FlatSpec with Matchers with BlockGenerator with
         b2              <- createAndStoreMessage[Task](Seq(b1.blockHash), deploys = b2DeploysCost)
         b3              <- createAndStoreMessage[Task](Seq(b2.blockHash), deploys = b3DeploysCost)
         dag1            <- dagStorage.getRepresentation
-        blockCheckpoint <- computeBlockCheckpointFromDeploys(genesis, genesis, dag1)
+        blockCheckpoint <- computeBlockCheckpointFromDeploys(genesis, dag1)
         _ <- injectPostStateHash[Task](
               0,
               genesis,
@@ -73,7 +86,7 @@ class ExecEngineUtilTest extends FlatSpec with Matchers with BlockGenerator with
               blockCheckpoint.deploysForBlock
             )
         dag2         <- dagStorage.getRepresentation
-        b1Checkpoint <- computeBlockCheckpointFromDeploys(b1, genesis, dag2)
+        b1Checkpoint <- computeBlockCheckpointFromDeploys(b1, dag2)
         _ <- injectPostStateHash[Task](
               1,
               b1,
@@ -83,7 +96,6 @@ class ExecEngineUtilTest extends FlatSpec with Matchers with BlockGenerator with
         dag3 <- dagStorage.getRepresentation
         b2Checkpoint <- computeBlockCheckpointFromDeploys(
                          b2,
-                         genesis,
                          dag3
                        )
         _ <- injectPostStateHash[Task](
@@ -96,7 +108,6 @@ class ExecEngineUtilTest extends FlatSpec with Matchers with BlockGenerator with
         dag4 <- dagStorage.getRepresentation
         _ <- computeBlockCheckpointFromDeploys(
               b3,
-              genesis,
               dag4
             )
 //          b3PostState          = runtimeManager.storageRepr(postb3StateHash).get
@@ -108,7 +119,7 @@ class ExecEngineUtilTest extends FlatSpec with Matchers with BlockGenerator with
   }
 
   def computeSingleProcessedDeploy(
-      deploy: Seq[consensus.Deploy],
+      deploys: Seq[consensus.Deploy],
       protocolVersion: state.ProtocolVersion = state.ProtocolVersion(1)
   )(
       implicit executionEngineService: ExecutionEngineService[Task],
@@ -119,11 +130,11 @@ class ExecEngineUtilTest extends FlatSpec with Matchers with BlockGenerator with
       implicit0(deploySelection: DeploySelection[Task]) = DeploySelection.create[Task](
         5 * 1024 * 1024
       )
-      _ <- deployStorage.writer.addAsPending(deploy.toList)
+      _ <- deployStorage.writer.addAsPending(deploys.toList)
       computeResult <- ExecEngineUtil
                         .computeDeploysCheckpoint[Task](
                           ExecEngineUtil.MergeResult.empty,
-                          fs2.Stream.fromIterator[Task](deploy.toIterator),
+                          fs2.Stream.fromIterator[Task](deploys.toIterator),
                           blocktime,
                           protocolVersion,
                           rank = 0,
@@ -161,7 +172,7 @@ class ExecEngineUtilTest extends FlatSpec with Matchers with BlockGenerator with
         } yield batchResult should contain theSameElementsAs singleResults
   }
 
-  "computeDeploysCheckpoint" should "throw exception when EE Service Failed" in withStorage {
+  it should "throw exception when EE Service Failed" in withStorage {
     implicit blockStorage => implicit dagStorage => implicit deployStorage => _ =>
       val failedExecEEService: ExecutionEngineService[Task] =
         mock[Task](
@@ -221,7 +232,7 @@ class ExecEngineUtilTest extends FlatSpec with Matchers with BlockGenerator with
        *         genesis
        */
 
-      def step(index: Int, genesis: Block)(
+      def step(index: Int)(
           implicit executionEngineService: ExecutionEngineService[Task]
       ) =
         for {
@@ -229,7 +240,6 @@ class ExecEngineUtilTest extends FlatSpec with Matchers with BlockGenerator with
           dag <- dagStorage.getRepresentation
           computeBlockCheckpointResult <- computeBlockCheckpointFromDeploys(
                                            b1,
-                                           genesis,
                                            dag
                                          )
           postB1StateHash        = computeBlockCheckpointResult.postStateHash
@@ -250,22 +260,242 @@ class ExecEngineUtilTest extends FlatSpec with Matchers with BlockGenerator with
               Seq(b1.blockHash, b2.blockHash),
               deploys = b3DeploysWithCost
             )
-        _ <- step(1, genesis)
-        _ <- step(2, genesis)
-        r1 <- step(2, genesis)(failedExecEEService).onErrorHandleWith { ex =>
+        _ <- step(1)
+        _ <- step(2)
+        r1 <- step(2)(failedExecEEService).onErrorHandleWith { ex =>
                Task.now {
                  ex.getMessage should startWith("failed when exec")
                  ByteString.copyFromUtf8("succeed")
                }
              }
         _ = r1 should be(ByteString.copyFromUtf8("succeed"))
-        _ <- step(2, genesis)(failedCommitEEService).onErrorHandleWith { ex =>
+        _ <- step(2)(failedCommitEEService).onErrorHandleWith { ex =>
               Task.now {
                 ex.getMessage should startWith("failed when commit")
                 ByteString.copyFromUtf8("succeed")
               }
             }
         _ = r1 should be(ByteString.copyFromUtf8("succeed"))
+      } yield ()
+  }
+
+  it should "include conflicting deploys in the result" in withStorage {
+    _ => _ => implicit deployStorage => _ =>
+      val nonConflictingDeploys = List.fill(5)(ProtoUtil.basicDeploy[Task]()).sequence
+      // Deploys' transforms depend on their code and `basicDeploy` parses timestamp
+      // as session code. By replicating the same deploy we get multiple deploys with the same effects.
+      val conflictingDeploys =
+        ProtoUtil.basicDeploy[Task]().map(List.fill(3)(_))
+
+      for {
+        deploys      <- Task.parMap2(nonConflictingDeploys, conflictingDeploys)(_ ++ _)
+        blockDeploys <- computeSingleProcessedDeploy(deploys)
+      } yield {
+        blockDeploys.map(_.getDeploy) should contain theSameElementsAs (deploys)
+      }
+  }
+
+  it should "use post-state hash and bonded validators values of the last deploy execution" in withStorage {
+    _ => _ => implicit deployStorage => _ =>
+      import cats.implicits._
+
+      import monix.execution.Scheduler.Implicits.global
+
+      val processedDeploys = {
+        val nonConflictingDeploys = ProtoUtil.basicDeploy[Task]().runSyncUnsafe()
+        val conflictingDeploys = {
+          val deploy = ProtoUtil.basicDeploy[Task]().runSyncUnsafe()
+          List.fill(3)(deploy)
+        }
+
+        assert(
+          conflictingDeploys
+            .forall(_.deployHash == conflictingDeploys.head.deployHash),
+          // "Note: using the deploy hash to signal conflicting deploys is a convenience for this test.
+          // In production identical deploys may or may not conflict (pending future research)
+          // and different deploys also may or may not conflict (depending on what keys they operate on,
+          // and what operations they perform).
+          "All conflicting deploys should have the same deploy hash"
+        )
+
+        (nonConflictingDeploys +: conflictingDeploys).zipWithIndex.map {
+          case (deploy, stage) => ProcessedDeploy(Some(deploy), stage = stage)
+        }
+      }
+
+      // Prepare deploys' effects so that we know what EE stub will return.
+      // Since effects are the thing that gets sent to EE.commit we can make an association
+      // between deploy and CommitResult.
+      val deployToEffect: Map[ByteString, (Int, Seq[TransformEntry])] =
+        processedDeploys.map { deploy =>
+          val deployHash = deploy.getDeploy.deployHash
+          deployHash -> (deploy.stage -> Seq(
+            TransformEntry()
+              .withKey(Key().withHash(Hash(deployHash)))
+              .withTransform(
+                Transform()
+                  .withWrite(TransformWrite().withValue(StoredValue().withAccount(Account())))
+              )
+          ))
+        }.toMap
+
+      // Mapping between deploy stage and its effects.
+      val stageEffects = deployToEffect.values
+        .map(Map(_))
+        .map(_.mapValues(_.toSet))
+        .foldLeft(Map.empty[Int, Set[TransformEntry]])(_ |+| _)
+
+      def isLastCommit(transforms: Seq[TransformEntry]): Boolean =
+        stageEffects.toList.sortBy(_._1).last._2 == transforms.toSet
+      def isLastButOne(transforms: Seq[TransformEntry]): Boolean =
+        stageEffects.toList.sortBy(_._1).dropRight(1).last._2 == transforms.toSet
+      val lastPreStateHash  = ByteString.copyFromUtf8("TheLastPreState")
+      val lastPostStateHash = ByteString.copyFromUtf8("TheLastPostState")
+      val lastBondedValidators = Seq(
+        io.casperlabs.casper.consensus
+          .Bond(ByteString.copyFromUtf8("LastBondedValidator"), Some(BigInt("1000")))
+      )
+
+      def deployHashToKey(deployHash: ByteString) =
+        Key().withHash(Hash(deployHash))
+      val writeOp = io.casperlabs.ipc.Op(OpInstance.Write(WriteOp()))
+      def writeOpEntry(deployHash: ByteString) =
+        OpEntry().withKey(deployHashToKey(deployHash)).withOperation(writeOp)
+
+      def deployToDeployResult(deployItem: DeployItem): DeployResult =
+        DeployResult()
+          .withExecutionResult(
+            ExecutionResult().withEffects(
+              ExecutionEffect()
+                .withOpMap(Seq(writeOpEntry(deployItem.deployHash)))
+                .withTransformMap(deployToEffect(deployItem.deployHash)._2)
+            )
+          )
+
+      implicit val ee = mock[Task](
+        _ => new Throwable("Keep calm.").asLeft.pure[Task],
+        (_, _, _) => new Throwable("Keep calm.").asLeft.pure[Task],
+        (_, _, deploys, _) =>
+          Task.now(
+            deploys.map(deployToDeployResult).asRight[Throwable]
+          ),
+        (_, transforms) =>
+          Task {
+            if (isLastButOne(transforms)) {
+              ExecutionEngineService.CommitResult(lastPreStateHash, Seq.empty).asRight[Throwable]
+            } else if (isLastCommit(transforms)) {
+              ExecutionEngineService
+                .CommitResult(lastPostStateHash, lastBondedValidators)
+                .asRight[Throwable]
+            } else {
+              ExecutionEngineService
+                .CommitResult(ByteString.copyFromUtf8("testPostState"), Seq.empty)
+                .asRight[Throwable]
+            }
+          },
+        (_, _, _) => new Throwable("Keep calm.").asLeft.pure[Task]
+      )
+
+      implicit val deploySelection = DeploySelection.create[Task](
+        5 * 1024 * 1024
+      )(Sync[Task], ee, fs2.Stream.Compiler.syncInstance[Task])
+
+      ExecEngineUtil
+        .computeDeploysCheckpoint[Task](
+          ExecEngineUtil.MergeResult.empty,
+          fs2.Stream.fromIterator[Task](processedDeploys.map(_.getDeploy).toIterator),
+          0L,
+          ProtocolVersion(1),
+          rank = 0,
+          upgrades = Nil
+        )(Sync[Task], deployStorage, logEff, ee, deploySelection, Metrics[Task])
+        .map { result =>
+          assert(result.postStateHash == lastPostStateHash)
+          assert(result.bondedValidators == lastBondedValidators)
+        }
+  }
+
+  "effectsForBlock" should "extract block's effects properly" in withStorage {
+    implicit bs => _ => _ => _ =>
+      import io.casperlabs.catscontrib.effect.implicits._
+      import cats.implicits._
+
+      implicit val timeEff: Time[Id] = new LogicalTime[Id]
+      implicit val cc                = ConsensusConfig()
+
+      val processedDeploys = scala.util.Random.shuffle((0 to 5).toList.traverse { stage =>
+        List
+          .fill(3)(ProtoUtil.basicProcessedDeploy[Id].map(_.withStage(stage)))
+          .sequence
+      }.flatten)
+
+      val deployToEffect: Map[ByteString, (Int, Seq[TransformEntry])] =
+        processedDeploys.map { deploy =>
+          val deployHash = deploy.getDeploy.deployHash
+          deployHash -> (deploy.stage -> Seq(
+            TransformEntry()
+              .withKey(Key().withHash(Hash(deployHash)))
+              .withTransform(Transform().withAddI32(TransformAddInt32(deploy.stage)))
+          ))
+        }.toMap
+
+      val stageEffects = deployToEffect.values
+        .map(Map(_))
+        .map(_.mapValues(_.toSet))
+        .foldLeft(Map.empty[Int, Set[TransformEntry]])(_ |+| _)
+
+      implicit val cl = CasperLabsProtocol.unsafe[Task]((0, ProtocolVersion(1), None))
+
+      val stageCounter = AtomicInt(0)
+
+      implicit val ee = mock[Task](
+        _ => new Throwable("Keep calm.").asLeft.pure[Task],
+        (_, _, _) => new Throwable("Keep calm.").asLeft.pure[Task],
+        (_, _, deploys, _) =>
+          Task {
+            val deployHashes = deploys.map(_.deployHash).toSet
+            val stage        = stageCounter.getAndIncrement()
+            val expectedHashes =
+              processedDeploys.filter(_.stage == stage).map(_.getDeploy.deployHash)
+            assert(
+              expectedHashes.toSet == deployHashes,
+              "Deploys are not being sent to the EE in the correct order."
+            )
+
+            deploys
+              .map { item =>
+                DeployResult().withExecutionResult(
+                  ExecutionResult().withEffects(
+                    ExecutionEffect().withTransformMap(deployToEffect(item.deployHash)._2)
+                  )
+                )
+              }
+              .asRight[Throwable]
+          },
+        (_, _) =>
+          Task.now(
+            ExecutionEngineService
+              .CommitResult(ByteString.copyFromUtf8("testPostState"), Seq.empty)
+              .asRight[Throwable]
+          ),
+        (_, _, _) => new Throwable("Keep calm.").asLeft.pure[Task]
+      )
+
+      val block = sample(arbBlock.arbitrary).update(_.body.update(_.deploys := processedDeploys))
+      for {
+        blockEffects <- ExecEngineUtil
+                         .effectsForBlock[Task](block, ByteString.EMPTY)(
+                           Sync[Task],
+                           ee,
+                           bs,
+                           cl
+                         )
+        _ <- Task {
+              assert(
+                stageEffects == blockEffects.effects.mapValues(_.toSet),
+                "Expected the same per-stage effects."
+              )
+            }
       } yield ()
   }
 
@@ -498,6 +728,162 @@ class ExecEngineUtilTest extends FlatSpec with Matchers with BlockGenerator with
     redundantMainParentResult shouldBe (ops -> Vector(a, b))
     // secondary parent is filtered out because it is redundant with the main
     redundantSecondaryParentResult shouldBe (Map.empty -> Vector(b))
+  }
+
+  abstract class SequentialExecFixture(
+      initPrestate: ByteString = ByteString.copyFromUtf8("initPrestateHash"),
+      blockTime: Long = 1L,
+      protocolVersion: state.ProtocolVersion = state.ProtocolVersion(1)
+  ) {
+    implicit val mockDS: DeployStorage[Task] = MockDeployStorage.unsafeCreate[Task]()
+    implicit val scheduler: Scheduler        = monix.execution.Scheduler.Implicits.global
+
+    val deploys: NonEmptyList[Deploy] =
+      NonEmptyList.fromListUnsafe(List.fill(10)(ProtoUtil.deploy(System.currentTimeMillis)))
+
+    val eeExec: EEExecFun[Task]
+    val eeCommit: EECommitFun[Task]
+
+    def test[R](f: DeploysCheckpoint => R): R =
+      testF[R](d => Task(f(d)))
+
+    def testF[R](f: DeploysCheckpoint => Task[R]): R =
+      ExecEngineUtil
+        .execCommitSeqDeploys[Task](initPrestate, blockTime, protocolVersion, deploys)(
+          eeExec,
+          eeCommit
+        )
+        .flatMap(f)
+        .runSyncUnsafe()
+
+    def deployResults(transforms: Seq[TransformEntry]): Task[Either[Throwable, Seq[DeployResult]]] =
+      Task(
+        Either.right[Throwable, Seq[DeployResult]](
+          Seq(
+            DeployResult().withExecutionResult(
+              ExecutionResult().withEffects(
+                ExecutionEffect().withTransformMap(transforms)
+              )
+            )
+          )
+        )
+      )
+
+    val preconditionFailure: Task[Either[Throwable, Seq[DeployResult]]] =
+      Task(
+        Either.right[Throwable, Seq[DeployResult]](
+          Seq(DeployResult().withPreconditionFailure(DeployResult.PreconditionFailure("")))
+        )
+      )
+
+    def commitResult(
+        postStateHash: ByteString,
+        bondedValidators: Seq[consensus.Bond] = Seq.empty
+    ): Task[Either[Throwable, ExecutionEngineService.CommitResult]] =
+      Task(
+        Either.right[Throwable, ExecutionEngineService.CommitResult](
+          ExecutionEngineService.CommitResult(postStateHash, bondedValidators)
+        )
+      )
+
+    def deployEffects = (deployHash: ByteString) => {
+      val key =
+        Key(Key.Value.Hash(Key.Hash(deployHash)))
+      val transform      = Transform(Transform.TransformInstance.Identity(TransformIdentity()))
+      val transformEntry = TransformEntry(Some(key), Some(transform))
+      transformEntry
+    }
+  }
+
+  "commitDeploysSequentially" should "start `stage` from 1 and increase monotonically" in new SequentialExecFixture {
+    override val eeExec: EEExecFun[Task]     = executionEngineService.exec _
+    override val eeCommit: EECommitFun[Task] = executionEngineService.commit _
+
+    test { result =>
+      result.deploysForBlock.map(_.stage).toList.foldLeft(0) {
+        case (prevStage, stage) =>
+          assert(stage == prevStage + 1)
+          stage
+      }
+    }
+  }
+
+  it should "send one deploy at a time to the ExecutionEngine" in new SequentialExecFixture {
+    override val eeExec: EEExecFun[Task] =
+      (_, _, deploys, _) => {
+        assert(deploys.size == 1)
+        preconditionFailure
+      }
+
+    override val eeCommit: EECommitFun[Task] =
+      (_, _, _) => commitResult(ByteString.EMPTY, Seq.empty)
+
+    test { _ =>
+      assert(true)
+    }
+  }
+
+  it should "use post-state hash of executing a deploy as a pre-state hash of the next one" in {
+    val initPrestate = ByteString.copyFromUtf8("initPrestate")
+    new SequentialExecFixture(initPrestate) {
+      val postStateHashes =
+        (initPrestate :: deploys.map(_.deployHash)).zipWithIndex.toList.map(_.swap).toMap
+
+      override val eeExec: EEExecFun[Task] =
+        (_, _, deploys, _) => deployResults(Seq(deployEffects(deploys.head.deployHash)))
+
+      val commitCounter = AtomicInt(0)
+      override val eeCommit: EECommitFun[Task] =
+        (prestate, _, _) => {
+          val commitCount = commitCounter.getAndIncrement()
+          assert(prestate == postStateHashes(commitCount))
+          commitResult(postStateHashes(commitCount + 1))
+        }
+
+      test { _ =>
+        assert(true)
+      }
+    }
+  }
+
+  it should "mark deploys as invalid if they fail execution with PreconditionFailure" in new SequentialExecFixture {
+    override val eeExec: EEExecFun[Task] = (_, _, _, _) => preconditionFailure
+    override val eeCommit: EECommitFun[Task] =
+      (_, _, _) => commitResult(ByteString.EMPTY, Seq.empty)
+
+    mockDS.writer.addAsPending(deploys.toList).runSyncUnsafe()
+    assert(mockDS.reader.readPending.runSyncUnsafe().toSet == deploys.toList.toSet)
+
+    testF { _ =>
+      // All deploys should result in `PreconditionFailure` and be marked as discarded.
+      mockDS.reader.readPending.map(l => assert(l.isEmpty))
+    }
+  }
+
+  it should "return post-state hash and bonded validators of the last deploy execution" in new SequentialExecFixture {
+    val lastPostStateHash = ByteString.copyFromUtf8("LastPostStateHash")
+    val lastBondedValidators = Seq[consensus.Bond](
+      consensus.Bond(ByteString.copyFromUtf8("lastbonded"), Some(BigInt("123456")))
+    )
+
+    override val eeExec: EEExecFun[Task] =
+      (_, _, deploys, _) => deployResults(Seq(deployEffects(deploys.head.deployHash)))
+
+    val commitCounter = AtomicLong(0)
+    override val eeCommit: EECommitFun[Task] = (_, _, _) => {
+      val commitCount = commitCounter.incrementAndGet()
+      if (commitCount == deploys.size) {
+        commitResult(lastPostStateHash, lastBondedValidators)
+      } else {
+        commitResult(ByteString.copyFromUtf8("different"), Seq.empty)
+      }
+    }
+
+    test { result =>
+      assert(
+        result.postStateHash == lastPostStateHash && result.bondedValidators == lastBondedValidators
+      )
+    }
   }
 }
 

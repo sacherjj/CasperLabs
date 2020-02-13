@@ -3,8 +3,8 @@ use std::{
     convert::{TryFrom, TryInto},
 };
 
-use contract_ffi::value::account::PublicKey;
 use engine_core::engine_state::deploy_item::DeployItem;
+use types::account::PublicKey;
 
 use crate::engine_server::{ipc, mappings::MappingError};
 
@@ -53,5 +53,24 @@ impl TryFrom<ipc::DeployItem> for DeployItem {
             authorization_keys,
             deploy_hash,
         ))
+    }
+}
+
+impl From<DeployItem> for ipc::DeployItem {
+    fn from(deploy_item: DeployItem) -> Self {
+        let mut result = ipc::DeployItem::new();
+        result.set_address(deploy_item.address.value().to_vec());
+        result.set_session(deploy_item.session.into());
+        result.set_payment(deploy_item.payment.into());
+        result.set_gas_price(deploy_item.gas_price);
+        result.set_authorization_keys(
+            deploy_item
+                .authorization_keys
+                .into_iter()
+                .map(|key| key.value().to_vec())
+                .collect(),
+        );
+        result.set_deploy_hash(deploy_item.deploy_hash.to_vec());
+        result
     }
 }

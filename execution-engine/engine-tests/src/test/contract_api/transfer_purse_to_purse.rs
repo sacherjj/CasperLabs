@@ -1,12 +1,12 @@
-use contract_ffi::{contract_api::Error, key::Key, value::U512};
-use engine_shared::{stored_value::StoredValue, transform::Transform};
+use std::convert::TryFrom;
 
-use crate::{
-    support::test_support::{ExecuteRequestBuilder, InMemoryWasmTestBuilder},
-    test::{
-        DEFAULT_ACCOUNT_ADDR, DEFAULT_ACCOUNT_INITIAL_BALANCE, DEFAULT_GENESIS_CONFIG,
-        DEFAULT_PAYMENT,
+use types::{ApiError, CLValue, Key, U512};
+
+use engine_test_support::{
+    internal::{
+        ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT,
     },
+    DEFAULT_ACCOUNT_ADDR, DEFAULT_ACCOUNT_INITIAL_BALANCE,
 };
 
 const CONTRACT_TRANSFER_PURSE_TO_PURSE: &str = "transfer_purse_to_purse.wasm";
@@ -25,53 +25,44 @@ fn should_run_purse_to_purse_transfer() {
     )
     .build();
 
-    let transfer_result = InMemoryWasmTestBuilder::default()
+    let mut builder = InMemoryWasmTestBuilder::default();
+    builder
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
         .exec(exec_request_1)
         .expect_success()
         .commit()
         .finish();
 
-    let transforms = transfer_result.builder().get_transforms();
-    let transform = &transforms[0];
-
-    let default_account = transfer_result
-        .builder()
+    let default_account = builder
         .get_account(DEFAULT_ACCOUNT_ADDR)
         .expect("should get genesis account");
 
     // Get the `purse_transfer_result` for a given
-    let purse_transfer_result =
-        &transform[&default_account.named_keys()["purse_transfer_result"].normalize()];
-    let purse_transfer_result =
-        if let Transform::Write(StoredValue::CLValue(cl_value)) = purse_transfer_result {
-            cl_value
-                .to_owned()
-                .into_t::<String>()
-                .expect("should be String")
-        } else {
-            panic!("Purse transfer result is expected to contain Write with String value");
-        };
+    let purse_transfer_result_key =
+        default_account.named_keys()["purse_transfer_result"].normalize();
+    let purse_transfer_result = CLValue::try_from(
+        builder
+            .query(None, purse_transfer_result_key, &[])
+            .expect("should have purse transfer result"),
+    )
+    .expect("should be a CLValue")
+    .into_t::<String>()
+    .expect("should be String");
     // Main assertion for the result of `transfer_from_purse_to_purse`
     assert_eq!(
         purse_transfer_result,
-        format!("{:?}", Result::<(), Error>::Ok(()),)
+        format!("{:?}", Result::<_, ApiError>::Ok(()),)
     );
 
-    let main_purse_balance =
-        &transform[&default_account.named_keys()["main_purse_balance"].normalize()];
-    let main_purse_balance =
-        if let Transform::Write(StoredValue::CLValue(cl_value)) = main_purse_balance {
-            cl_value
-                .to_owned()
-                .into_t::<U512>()
-                .expect("should be U512")
-        } else {
-            panic!(
-                "Purse transfer result is expected to contain Write with Uint512 value, got {:?}",
-                main_purse_balance
-            );
-        };
+    let main_purse_balance_key = default_account.named_keys()["main_purse_balance"].normalize();
+    let main_purse_balance = CLValue::try_from(
+        builder
+            .query(None, main_purse_balance_key, &[])
+            .expect("should have main purse balance"),
+    )
+    .expect("should be a CLValue")
+    .into_t::<U512>()
+    .expect("should be U512");
 
     // Assert secondary purse value after successful transfer
     let purse_secondary_key = default_account.named_keys()["purse:secondary"];
@@ -85,32 +76,22 @@ fn should_run_purse_to_purse_transfer() {
         .remove_access_rights()
         .as_string();
 
-    let mint_contract_uref = transfer_result.builder().get_mint_contract_uref();
-    // Obtain transforms for a mint account
-    let mint_transforms = transform
-        .get(&Key::from(mint_contract_uref).normalize())
-        .expect("Unable to find transforms for a mint");
-
-    // Inspect AddKeys for that account
-    let mint_addkeys = if let Transform::AddKeys(value) = mint_transforms {
-        value
-    } else {
-        panic!("Transform {:?} is not AddKeys", mint_transforms);
-    };
+    let mint_contract_uref = builder.get_mint_contract_uref().remove_access_rights();
+    let mint_contract = builder
+        .get_contract(mint_contract_uref)
+        .expect("should have mint contract");
 
     // Find `purse:secondary`.
-    let purse_secondary_uref = &mint_addkeys[&purse_secondary_lookup_key];
+    let purse_secondary_uref = mint_contract.named_keys()[&purse_secondary_lookup_key];
     let purse_secondary_key: Key = purse_secondary_uref.normalize();
-    let purse_secondary = &transform[&purse_secondary_key];
-    let purse_secondary_balance =
-        if let Transform::Write(StoredValue::CLValue(cl_value)) = purse_secondary {
-            cl_value
-                .to_owned()
-                .into_t::<U512>()
-                .expect("should be U512")
-        } else {
-            panic!("actual purse uref should be a Write of UInt512 type");
-        };
+    let purse_secondary_balance = CLValue::try_from(
+        builder
+            .query(None, purse_secondary_key, &[])
+            .expect("should have main purse balance"),
+    )
+    .expect("should be a CLValue")
+    .into_t::<U512>()
+    .expect("should be U512");
 
     // Final balance of the destination purse
     assert_eq!(purse_secondary_balance, U512::from(PURSE_TO_PURSE_AMOUNT));
@@ -133,68 +114,45 @@ fn should_run_purse_to_purse_transfer_with_error() {
         (source, target, U512::from(999_999_999_999i64)),
     )
     .build();
-    let transfer_result = InMemoryWasmTestBuilder::default()
+    let mut builder = InMemoryWasmTestBuilder::default();
+    builder
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
         .exec(exec_request_1)
         .expect_success()
         .commit()
         .finish();
 
-    let transforms = transfer_result.builder().get_transforms();
-    let transform = &transforms[0];
-
-    let default_account = transfer_result
-        .builder()
+    let default_account = builder
         .get_account(DEFAULT_ACCOUNT_ADDR)
         .expect("should get genesis account");
 
     // Get the `purse_transfer_result` for a given
-    let purse_transfer_result =
-        &transform[&default_account.named_keys()["purse_transfer_result"].normalize()]; //addkeys["purse_transfer_result"].as_uref().unwrap();
-    let purse_transfer_result =
-        if let Transform::Write(StoredValue::CLValue(cl_value)) = purse_transfer_result {
-            cl_value
-                .to_owned()
-                .into_t::<String>()
-                .expect("should be String")
-        } else {
-            panic!("Purse transfer result is expected to contain Write with String value");
-        };
+    let purse_transfer_result_key =
+        default_account.named_keys()["purse_transfer_result"].normalize();
+    let purse_transfer_result = CLValue::try_from(
+        builder
+            .query(None, purse_transfer_result_key, &[])
+            .expect("should have purse transfer result"),
+    )
+    .expect("should be a CLValue")
+    .into_t::<String>()
+    .expect("should be String");
     // Main assertion for the result of `transfer_from_purse_to_purse`
     assert_eq!(
         purse_transfer_result,
-        format!("{:?}", Result::<(), Error>::Err(Error::Transfer)),
+        format!("{:?}", Result::<(), _>::Err(ApiError::Transfer)),
     );
 
     // Obtain main purse's balance
-    let main_purse_balance =
-        &transform[&default_account.named_keys()["main_purse_balance"].normalize()];
-    let main_purse_balance =
-        if let Transform::Write(StoredValue::CLValue(cl_value)) = main_purse_balance {
-            cl_value
-                .to_owned()
-                .into_t::<U512>()
-                .expect("should be U512")
-        } else {
-            panic!(
-                "Purse transfer result is expected to contain Write with Uint512 value, got {:?}",
-                main_purse_balance
-            );
-        };
-
-    let mint_contract_uref = transfer_result.builder().get_mint_contract_uref();
-
-    // Obtain transforms for a mint account
-    let mint_transforms = transform
-        .get(&Key::from(mint_contract_uref).normalize())
-        .expect("Unable to find transforms for a mint");
-
-    // Inspect AddKeys for that account
-    let mint_addkeys = if let Transform::AddKeys(value) = mint_transforms {
-        value
-    } else {
-        panic!("Transform {:?} is not AddKeys", mint_transforms);
-    };
+    let main_purse_balance_key = default_account.named_keys()["main_purse_balance"].normalize();
+    let main_purse_balance = CLValue::try_from(
+        builder
+            .query(None, main_purse_balance_key, &[])
+            .expect("should have main purse balance"),
+    )
+    .expect("should be a CLValue")
+    .into_t::<U512>()
+    .expect("should be U512");
 
     // Assert secondary purse value after successful transfer
     let purse_secondary_key = default_account.named_keys()["purse:secondary"];
@@ -208,19 +166,22 @@ fn should_run_purse_to_purse_transfer_with_error() {
         .remove_access_rights()
         .as_string();
 
+    let mint_contract_uref = builder.get_mint_contract_uref();
+    let mint_contract = builder
+        .get_contract(mint_contract_uref)
+        .expect("should have mint contract");
+
     // Find `purse:secondary` for a balance
-    let purse_secondary_uref = &mint_addkeys[&purse_secondary_lookup_key];
+    let purse_secondary_uref = mint_contract.named_keys()[&purse_secondary_lookup_key];
     let purse_secondary_key: Key = purse_secondary_uref.normalize();
-    let purse_secondary = &transform[&purse_secondary_key];
-    let purse_secondary_balance =
-        if let Transform::Write(StoredValue::CLValue(cl_value)) = purse_secondary {
-            cl_value
-                .to_owned()
-                .into_t::<U512>()
-                .expect("should be U512")
-        } else {
-            panic!("actual purse uref should be a Write of UInt512 type");
-        };
+    let purse_secondary_balance = CLValue::try_from(
+        builder
+            .query(None, purse_secondary_key, &[])
+            .expect("should have main purse balance"),
+    )
+    .expect("should be a CLValue")
+    .into_t::<U512>()
+    .expect("should be U512");
 
     // Final balance of the destination purse equals to 0 as this purse is created
     // as new.

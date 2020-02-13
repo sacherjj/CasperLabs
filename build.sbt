@@ -210,7 +210,7 @@ lazy val models = (project in file("models"))
   )
   .dependsOn(crypto % "compile->compile;test->test")
 
-val nodeAndClientVersion = "0.11.0"
+val nodeAndClientVersion = "0.12.0"
 
 lazy val node = (project in file("node"))
   .settings(commonSettings: _*)
@@ -310,9 +310,11 @@ lazy val node = (project in file("node"))
     },
     /* Packaging */
     linuxPackageMappings ++= {
-      val file = baseDirectory.value / "casperlabs-node.service"
+      val service_file = baseDirectory.value / "casperlabs-node.service"
+      val example_toml = baseDirectory.value / "src/main/resources/default-configuration.toml"
       Seq(
-        packageMapping(file -> "/lib/systemd/system/casperlabs-node.service")
+        packageMapping(service_file -> "/lib/systemd/system/casperlabs-node.service"),
+        packageMapping(example_toml -> "/etc/casperlabs/example-configuration.toml")
       )
     },
     /* Debian */

@@ -13,17 +13,10 @@ def test_newly_joined_node_should_not_gossip_blocks(two_node_network):
     """
     network = two_node_network
 
-    def propose(node):
-        block_hash = node.d_client.deploy_and_propose(
-            session_contract=Contract.HELLO_NAME_DEFINE,
-            from_address=node.genesis_account.public_key_hex,
-            public_key=node.genesis_account.public_key_path,
-            private_key=node.genesis_account.private_key_path,
-        )
-
-        return block_hash
-
-    block_hashes = [propose(node) for node in network.docker_nodes]
+    block_hashes = [
+        node.deploy_and_get_block_hash(node.genesis_account, Contract.HELLO_NAME_DEFINE)
+        for node in network.docker_nodes
+    ]
     wait_for_block_hashes_propagated_to_all_nodes(network.docker_nodes, block_hashes)
 
     # Add a new node, it should sync with the old ones.

@@ -1,22 +1,22 @@
-use criterion::{criterion_group, criterion_main, Criterion, Throughput};
+use std::{path::Path, time::Duration};
+
+use criterion::{
+    criterion_group, criterion_main, measurement::WallTime, BenchmarkGroup, Criterion, Throughput,
+};
 use tempfile::TempDir;
 
-use casperlabs_engine_tests::{
-    support::test_support::{
-        DeployItemBuilder, ExecuteRequestBuilder, LmdbWasmTestBuilder, WasmTestResult,
-        STANDARD_PAYMENT_CONTRACT,
-    },
-    test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT},
-};
-use contract_ffi::{
-    key::Key,
-    value::{
-        account::{PublicKey, PurseId},
-        U512,
-    },
-};
 use engine_core::engine_state::EngineConfig;
-use engine_storage::global_state::lmdb::LmdbGlobalState;
+use engine_test_support::{
+    internal::{
+        DeployItemBuilder, ExecuteRequestBuilder, LmdbWasmTestBuilder, DEFAULT_GENESIS_CONFIG,
+        DEFAULT_PAYMENT, STANDARD_PAYMENT_CONTRACT,
+    },
+    DEFAULT_ACCOUNT_ADDR,
+};
+use types::{
+    account::{PublicKey, PurseId},
+    Key, U512,
+};
 
 const CONTRACT_CREATE_ACCOUNTS: &str = "create_accounts.wasm";
 const CONTRACT_CREATE_PURSES: &str = "create_purses.wasm";
@@ -37,13 +37,11 @@ fn make_deploy_hash(i: u64) -> [u8; 32] {
     result
 }
 
-fn bootstrap(accounts: &[PublicKey], amount: U512) -> (WasmTestResult<LmdbGlobalState>, TempDir) {
+fn bootstrap(data_dir: &Path, accounts: &[PublicKey], amount: U512) -> LmdbWasmTestBuilder {
     let accounts_bytes: Vec<Vec<u8>> = accounts
         .iter()
         .map(|public_key| public_key.value().to_vec())
         .collect();
-
-    let data_dir = TempDir::new().expect("should create temp dir");
 
     let exec_request = ExecuteRequestBuilder::standard(
         DEFAULT_ACCOUNT_ADDR,
@@ -52,14 +50,15 @@ fn bootstrap(accounts: &[PublicKey], amount: U512) -> (WasmTestResult<LmdbGlobal
     )
     .build();
 
-    let result = LmdbWasmTestBuilder::new_with_config(&data_dir.path(), EngineConfig::new())
+    let mut builder = LmdbWasmTestBuilder::new_with_config(data_dir, EngineConfig::new());
+
+    builder
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
         .exec(exec_request)
         .expect_success()
-        .commit()
-        .finish();
+        .commit();
 
-    (result, data_dir)
+    builder
 }
 
 fn create_purses(
@@ -100,7 +99,11 @@ fn create_purses(
 
 /// Uses multiple exec requests with a single deploy to transfer tokens. Executes all transfers in
 /// batch determined by value of TRANSFER_BATCH_SIZE.
-fn transfer_to_account_multiple_execs(builder: &mut LmdbWasmTestBuilder, account: PublicKey) {
+fn transfer_to_account_multiple_execs(
+    builder: &mut LmdbWasmTestBuilder,
+    account: PublicKey,
+    should_commit: bool,
+) {
     let amount = U512::one();
 
     for _ in 0..TRANSFER_BATCH_SIZE {
@@ -110,12 +113,20 @@ fn transfer_to_account_multiple_execs(builder: &mut LmdbWasmTestBuilder, account
             (account, amount),
         )
         .build();
-        builder.exec(exec_request).expect_success().commit();
+
+        let builder = builder.exec(exec_request).expect_success();
+        if should_commit {
+            builder.commit();
+        }
     }
 }
 
 /// Executes multiple deploys per single exec with based on TRANSFER_BATCH_SIZE.
-fn transfer_to_account_multiple_deploys(builder: &mut LmdbWasmTestBuilder, account: PublicKey) {
+fn transfer_to_account_multiple_deploys(
+    builder: &mut LmdbWasmTestBuilder,
+    account: PublicKey,
+    should_commit: bool,
+) {
     let mut exec_builder = ExecuteRequestBuilder::new();
 
     for i in 0..TRANSFER_BATCH_SIZE {
@@ -132,12 +143,21 @@ fn transfer_to_account_multiple_deploys(builder: &mut LmdbWasmTestBuilder, accou
         exec_builder = exec_builder.push_deploy(deploy);
     }
 
-    builder.exec(exec_builder.build()).expect_success().commit();
+    let exec_request = exec_builder.build();
+
+    let builder = builder.exec(exec_request).expect_success();
+    if should_commit {
+        builder.commit();
+    }
 }
 
 /// Uses multiple exec requests with a single deploy to transfer tokens from purse to purse.
 /// Executes all transfers in batch determined by value of TRANSFER_BATCH_SIZE.
-fn transfer_to_purse_multiple_execs(builder: &mut LmdbWasmTestBuilder, purse_id: PurseId) {
+fn transfer_to_purse_multiple_execs(
+    builder: &mut LmdbWasmTestBuilder,
+    purse_id: PurseId,
+    should_commit: bool,
+) {
     let amount = U512::one();
 
     for _ in 0..TRANSFER_BATCH_SIZE {
@@ -147,12 +167,20 @@ fn transfer_to_purse_multiple_execs(builder: &mut LmdbWasmTestBuilder, purse_id:
             (purse_id, amount),
         )
         .build();
-        builder.exec(exec_request).expect_success().commit();
+
+        let builder = builder.exec(exec_request).expect_success();
+        if should_commit {
+            builder.commit();
+        }
     }
 }
 
 /// Executes multiple deploys per single exec with based on TRANSFER_BATCH_SIZE.
-fn transfer_to_purse_multiple_deploys(builder: &mut LmdbWasmTestBuilder, purse_id: PurseId) {
+fn transfer_to_purse_multiple_deploys(
+    builder: &mut LmdbWasmTestBuilder,
+    purse_id: PurseId,
+    should_commit: bool,
+) {
     let mut exec_builder = ExecuteRequestBuilder::new();
 
     for i in 0..TRANSFER_BATCH_SIZE {
@@ -166,97 +194,114 @@ fn transfer_to_purse_multiple_deploys(builder: &mut LmdbWasmTestBuilder, purse_i
         exec_builder = exec_builder.push_deploy(deploy);
     }
 
-    builder.exec(exec_builder.build()).expect_success().commit();
+    let exec_request = exec_builder.build();
+
+    let builder = builder.exec(exec_request).expect_success();
+    if should_commit {
+        builder.commit();
+    }
 }
 
-pub fn transfer_bench(c: &mut Criterion) {
+pub fn transfer_to_existing_accounts(group: &mut BenchmarkGroup<WallTime>, should_commit: bool) {
     let target_account = PublicKey::new(TARGET_ADDR);
     let bootstrap_accounts = vec![target_account];
 
-    let mut group = c.benchmark_group("tps");
-
-    // Minimize no of samples and measurement times to decrease the total time of this benchmark
-    // possibly not decreasing quality of the numbers that much.
-    group.sample_size(10);
-
-    // Measure by elements where one element/s is one transaction per second
-    group.throughput(Throughput::Elements(TRANSFER_BATCH_SIZE));
-
-    // Bootstrap database once
-    let (result_1, _source_dir_1) = bootstrap(&bootstrap_accounts, U512::one());
-    let mut builder_1 = LmdbWasmTestBuilder::from_result(result_1);
-
-    //
-    // Transfers to existing account
-    //
+    let data_dir = TempDir::new().expect("should create temp dir");
+    let mut builder = bootstrap(data_dir.path(), &bootstrap_accounts, U512::one());
 
     group.bench_function(
         format!(
-            "transfer_to_existing_account_multiple_execs/{}",
-            TRANSFER_BATCH_SIZE
+            "transfer_to_existing_account_multiple_execs/{}/{}",
+            TRANSFER_BATCH_SIZE, should_commit
         ),
         |b| {
             b.iter(|| {
                 // Execute multiple deploys with multiple exec requests
-                transfer_to_account_multiple_execs(&mut builder_1, target_account)
+                transfer_to_account_multiple_execs(&mut builder, target_account, should_commit)
             })
         },
     );
 
-    let (result_2, _source_dir_2) = bootstrap(&bootstrap_accounts, U512::one());
-    let mut builder_2 = LmdbWasmTestBuilder::from_result(result_2);
+    let data_dir = TempDir::new().expect("should create temp dir");
+    let mut builder = bootstrap(data_dir.path(), &bootstrap_accounts, U512::one());
 
     group.bench_function(
         format!(
-            "transfer_to_existing_account_multiple_deploys_per_exec/{}",
-            TRANSFER_BATCH_SIZE
+            "transfer_to_existing_account_multiple_deploys_per_exec/{}/{}",
+            TRANSFER_BATCH_SIZE, should_commit
         ),
         |b| {
             b.iter(|| {
                 // Execute multiple deploys with a single exec request
-                transfer_to_account_multiple_deploys(&mut builder_2, target_account)
+                transfer_to_account_multiple_deploys(&mut builder, target_account, should_commit)
             })
         },
     );
+}
 
-    //
-    // Transfers to purse
-    //
+pub fn transfer_to_existing_purses(group: &mut BenchmarkGroup<WallTime>, should_commit: bool) {
+    let target_account = PublicKey::new(TARGET_ADDR);
+    let bootstrap_accounts = vec![target_account];
 
-    let (result_3, _source_dir_3) = bootstrap(&bootstrap_accounts, *DEFAULT_PAYMENT * 10);
-    let mut builder_3 = LmdbWasmTestBuilder::from_result(result_3);
-
-    let purses_1 = create_purses(&mut builder_3, TARGET_ADDR, 1, U512::one());
+    let data_dir = TempDir::new().expect("should create temp dir");
+    let mut builder = bootstrap(data_dir.path(), &bootstrap_accounts, *DEFAULT_PAYMENT * 10);
+    let purses = create_purses(&mut builder, TARGET_ADDR, 1, U512::one());
 
     group.bench_function(
-        format!("transfer_to_purse_multiple_execs/{}", TRANSFER_BATCH_SIZE),
+        format!(
+            "transfer_to_purse_multiple_execs/{}/{}",
+            TRANSFER_BATCH_SIZE, should_commit
+        ),
         |b| {
-            let target_purse = purses_1[0];
+            let target_purse = purses[0];
             b.iter(|| {
                 // Execute multiple deploys with mutliple exec request
-                transfer_to_purse_multiple_execs(&mut builder_3, target_purse)
+                transfer_to_purse_multiple_execs(&mut builder, target_purse, should_commit)
             })
         },
     );
 
-    let (result_4, _source_dir_4) = bootstrap(&bootstrap_accounts, *DEFAULT_PAYMENT * 10);
-    let mut builder_4 = LmdbWasmTestBuilder::from_result(result_4);
-
-    let purses_2 = create_purses(&mut builder_4, TARGET_ADDR, 1, U512::one());
+    let data_dir = TempDir::new().expect("should create temp dir");
+    let mut builder = bootstrap(data_dir.path(), &bootstrap_accounts, *DEFAULT_PAYMENT * 10);
+    let purses = create_purses(&mut builder, TARGET_ADDR, 1, U512::one());
 
     group.bench_function(
         format!(
-            "transfer_to_purse_multiple_deploys_per_exec/{}",
-            TRANSFER_BATCH_SIZE
+            "transfer_to_purse_multiple_deploys_per_exec/{}/{}",
+            TRANSFER_BATCH_SIZE, should_commit
         ),
         |b| {
-            let target_purse = purses_2[0];
+            let target_purse = purses[0];
             b.iter(|| {
                 // Execute multiple deploys with a single exec request
-                transfer_to_purse_multiple_deploys(&mut builder_4, target_purse)
+                transfer_to_purse_multiple_deploys(&mut builder, target_purse, should_commit)
             })
         },
     );
+}
+
+pub fn transfer_bench(c: &mut Criterion) {
+    let mut group = c.benchmark_group("tps");
+
+    // Minimum number of samples and measurement times to decrease the total time of this benchmark.
+    // This may or may not decrease the quality of the numbers.
+    group.sample_size(10);
+    group.measurement_time(Duration::from_secs(10));
+
+    // Measure by elements where one element per second is one transaction per second
+    group.throughput(Throughput::Elements(TRANSFER_BATCH_SIZE));
+
+    // Transfers to existing accounts, no commits
+    transfer_to_existing_accounts(&mut group, false);
+
+    // Transfers to existing purses, no commits
+    transfer_to_existing_purses(&mut group, false);
+
+    // Transfers to existing accounts, with commits
+    transfer_to_existing_accounts(&mut group, true);
+
+    // Transfers to existing purses, with commits
+    transfer_to_existing_purses(&mut group, true);
 
     group.finish();
 }

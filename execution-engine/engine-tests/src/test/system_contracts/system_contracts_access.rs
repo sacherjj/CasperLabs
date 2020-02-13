@@ -1,17 +1,18 @@
 use lazy_static::lazy_static;
 
-use contract_ffi::{uref::URef, value::U512};
-use engine_core::{engine_state::Error, execution};
-use engine_shared::transform::TypeMismatch;
-
-use crate::{
-    support::test_support::{ExecuteRequestBuilder, InMemoryWasmTestBuilder},
-    test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT},
+use engine_core::execution;
+use engine_shared::TypeMismatch;
+use engine_test_support::{
+    internal::{
+        ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT,
+    },
+    DEFAULT_ACCOUNT_ADDR,
 };
+use types::{URef, U512};
 
 const CONTRACT_SYSTEM_CONTRACTS_ACCESS: &str = "system_contracts_access.wasm";
 const CONTRACT_OVERWRITE_UREF_CONTENT: &str = "overwrite_uref_content.wasm";
-const CONTRACT_TRANSFER_TO_ACCOUNT_01: &str = "transfer_to_account_01.wasm";
+const CONTRACT_TRANSFER_TO_ACCOUNT: &str = "transfer_to_account_u512.wasm";
 
 const SYSTEM_ADDR: [u8; 32] = [0u8; 32];
 const ACCOUNT_1_ADDR: [u8; 32] = [1u8; 32];
@@ -35,7 +36,7 @@ fn should_verify_system_contracts_access_rights_default() {
 
     let exec_request_1 = ExecuteRequestBuilder::standard(
         DEFAULT_ACCOUNT_ADDR,
-        CONTRACT_TRANSFER_TO_ACCOUNT_01,
+        CONTRACT_TRANSFER_TO_ACCOUNT,
         (ACCOUNT_1_ADDR, *ACCOUNT_1_INITIAL_BALANCE),
     )
     .build();
@@ -65,7 +66,7 @@ fn overwrite_as_account(builder: &mut InMemoryWasmTestBuilder, uref: URef, addre
         "{}",
         execution::Error::ForgedReference(uref.into_read_add_write())
     );
-    assert_eq!(error_msg, err);
+    assert!(error_msg.contains(&err), "error_msg: {:?}", error_msg);
 }
 
 #[ignore]
@@ -75,7 +76,7 @@ fn should_not_overwrite_system_contract_uref_as_user() {
 
     let exec_request_1 = ExecuteRequestBuilder::standard(
         DEFAULT_ACCOUNT_ADDR,
-        CONTRACT_TRANSFER_TO_ACCOUNT_01,
+        CONTRACT_TRANSFER_TO_ACCOUNT,
         (ACCOUNT_1_ADDR, *ACCOUNT_1_INITIAL_BALANCE),
     )
     .build();
@@ -106,7 +107,7 @@ fn should_not_overwrite_system_contract_uref_as_user() {
 fn should_overwrite_system_contract_uref_as_system() {
     let exec_request_1 = ExecuteRequestBuilder::standard(
         DEFAULT_ACCOUNT_ADDR,
-        CONTRACT_TRANSFER_TO_ACCOUNT_01,
+        CONTRACT_TRANSFER_TO_ACCOUNT,
         (SYSTEM_ADDR, *SYSTEM_INITIAL_BALANCE),
     )
     .build();
@@ -125,28 +126,32 @@ fn should_overwrite_system_contract_uref_as_system() {
         ExecuteRequestBuilder::standard(SYSTEM_ADDR, CONTRACT_OVERWRITE_UREF_CONTENT, (mint_uref,))
             .build();
 
+    let mut new_builder = InMemoryWasmTestBuilder::from_result(result);
+
+    let result_mint = new_builder.clone().exec(exec_request_2).commit().finish();
+
+    let error_msg = result_mint
+        .builder()
+        .exec_error_message(0)
+        .expect("should execute mint overwrite with error");
+    assert!(
+        error_msg.contains("Finalization"),
+        "Expected Error::Finalization, got {}",
+        error_msg
+    );
+
     let exec_request_3 =
         ExecuteRequestBuilder::standard(SYSTEM_ADDR, CONTRACT_OVERWRITE_UREF_CONTENT, (pos_uref,))
             .build();
 
-    let new_builder = InMemoryWasmTestBuilder::from_result(result);
+    let result_pos = new_builder.exec(exec_request_3).commit().finish();
 
-    let result_1 = new_builder.clone().exec(exec_request_2).commit().finish();
-
-    let error_msg = result_1
-        .builder()
-        .exec_error_message(0)
-        .expect("should execute mint overwrite with error");
-    assert_eq!(error_msg, Error::FinalizationError.to_string());
-
-    let result_2 = new_builder.clone().exec(exec_request_3).commit().finish();
-
-    let error_msg = result_2
+    let error_msg = result_pos
         .builder()
         .exec_error_message(0)
         .expect("should execute pos overwrite with error");
 
     let type_mismatch = TypeMismatch::new("Contract".to_string(), "String".to_string());
     let expected_error = execution::Error::TypeMismatch(type_mismatch);
-    assert_eq!(error_msg, expected_error.to_string());
+    assert!(error_msg.contains(&expected_error.to_string()));
 }

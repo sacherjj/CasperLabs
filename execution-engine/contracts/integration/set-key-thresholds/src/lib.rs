@@ -1,9 +1,12 @@
 #![no_std]
 
-use contract_ffi::{
-    contract_api::{account, runtime, Error as ApiError},
+use contract::{
+    contract_api::{account, runtime},
     unwrap_or_revert::UnwrapOrRevert,
-    value::account::{ActionType, Weight},
+};
+use types::{
+    account::{ActionType, Weight},
+    ApiError,
 };
 
 enum Arg {
