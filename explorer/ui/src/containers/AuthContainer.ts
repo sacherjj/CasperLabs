@@ -16,7 +16,7 @@ type AccountB64 = string;
 export class AuthContainer {
   @observable user: User | null = null;
   @observable accounts: UserAccount[] | null = null;
-  @observable vestingHashes: VestingHash[] | null = null;
+  @observable vestingHashes: NamedHash[] | null = null;
 
   // An account we are creating or importing, while we're configuring it.
   @observable accountForm: NewAccountFormData | ImportAccountFormData | null = null;
@@ -24,7 +24,7 @@ export class AuthContainer {
   @observable importVestingForm: ImportVestingFormData | null = null;
 
   @observable selectedAccount: UserAccount | null = null;
-  @observable selectedVestingHash: VestingHash | null = null;
+  @observable selectedVestingHash: NamedHash | null = null;
 
   // Balance for each public key.
   @observable balances = new ObservableValueMap<AccountB64, AccountBalance>();
@@ -191,7 +191,7 @@ export class AuthContainer {
     await this.errors.capture(this.saveMetaData());
   }
 
-  private async addVestingHash(vestingHash: VestingHash) {
+  private async addVestingHash(vestingHash: NamedHash) {
     this.vestingHashes!.push(vestingHash);
     await this.errors.capture(this.saveMetaData());
   }
@@ -229,7 +229,7 @@ class ImportVestingFormData extends AsyncCleanableFormData {
   @observable name: string = '';
   @observable hashBase16: string = '';
 
-  constructor(private vestingHashes: VestingHash[], private casperService: CasperService) {
+  constructor(private vestingHashes: NamedHash[], private casperService: CasperService) {
     super();
   }
 

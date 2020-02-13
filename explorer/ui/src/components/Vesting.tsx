@@ -3,7 +3,7 @@ import { observer } from 'mobx-react';
 import { Form, SelectField, TextField } from './Forms';
 import AuthContainer from '../containers/AuthContainer';
 import { Button, Card, Icon, ListInline, Loading, RefreshableComponent, ShortHashSpan } from './Utils';
-import VestingChart from './VestringChart';
+import VestingChart from './VestingChart';
 import moment from 'moment';
 import { VestingContainer, VestingDetail } from '../containers/VestingContainer';
 import Modal from './Modal';
