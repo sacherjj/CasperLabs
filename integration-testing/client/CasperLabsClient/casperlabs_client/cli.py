@@ -333,10 +333,12 @@ def keygen_command(casperlabs_client, args):
 @guarded_command
 def list_peers_command(casperlabs_client, args):
     peers = casperlabs_client.list_peers()
-    for p in peers:
-        print(
-            f"{p.id.hex()}\t{p.host}\t{p.protocol_port}\t{p.discovery_port}\t{p.chain_id.hex()}"
-        )
+    i = 0
+    for i, node in enumerate(peers):
+        print(f"------------- node {i} ---------------")
+        print(hexify(node))
+    print("-----------------------------------------------------")
+    print(f"count: {i}")
 
 
 def check_directory(path):

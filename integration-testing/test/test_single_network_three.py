@@ -253,4 +253,6 @@ def test_list_peers(three_node_network):
     client = node.p_client.client
     peers = client.list_peers()
     logging.info(f"PEERS: {peers}")
-    assert len(list(peers)) == 2
+    assert set(node.host[: len("node-N")] for node in peers) == set(
+        ["node-1", "node-2"]
+    )

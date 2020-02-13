@@ -667,6 +667,7 @@ class CasperLabsClient:
                 )
         return result
 
+    @api
     def list_peers(self):
         return list(self.diagnosticsService.ListPeers(empty_pb2.Empty()).peers)
 
