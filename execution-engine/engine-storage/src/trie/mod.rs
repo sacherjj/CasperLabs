@@ -1,9 +1,7 @@
 //! Core types for a Merkle Trie
 
-use std::{mem::size_of, ops::Deref};
-
-use engine_shared::newtypes::Blake2bHash;
-use types::bytesrepr::{self, FromBytes, ToBytes};
+use engine_shared::newtypes::{Blake2bHash, BLAKE2B_DIGEST_LENGTH};
+use types::bytesrepr::{self, FromBytes, ToBytes, U8_SERIALIZED_LENGTH};
 
 #[cfg(test)]
 pub mod gens;
@@ -12,8 +10,6 @@ pub mod gens;
 mod tests;
 
 pub const RADIX: usize = 256;
-
-const U32_SERIALIZED_LENGTH: usize = size_of::<u32>();
 
 /// A parent is represented as a pair of a child index and a node or extension.
 pub type Parents<K, V> = Vec<(u8, Trie<K, V>)>;
@@ -40,7 +36,7 @@ impl Pointer {
         }
     }
 
-    fn tag(&self) -> u32 {
+    fn tag(&self) -> u8 {
         match self {
             Pointer::LeafPointer(_) => 0,
             Pointer::NodePointer(_) => 1,
@@ -50,24 +46,30 @@ impl Pointer {
 
 impl ToBytes for Pointer {
     fn to_bytes(&self) -> Result<Vec<u8>, bytesrepr::Error> {
+        let mut ret = bytesrepr::unchecked_allocate_buffer(self);
+        ret.push(self.tag());
+
         let mut hash_bytes = self.hash().to_bytes()?;
-        let mut ret = Vec::with_capacity(U32_SERIALIZED_LENGTH + hash_bytes.len());
-        ret.append(&mut self.tag().to_bytes()?);
         ret.append(&mut hash_bytes);
+
         Ok(ret)
+    }
+
+    fn serialized_length(&self) -> usize {
+        U8_SERIALIZED_LENGTH + BLAKE2B_DIGEST_LENGTH
     }
 }
 
 impl FromBytes for Pointer {
     fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), bytesrepr::Error> {
-        let (tag, rem): (u32, &[u8]) = FromBytes::from_bytes(bytes)?;
+        let (tag, rem) = u8::from_bytes(bytes)?;
         match tag {
             0 => {
-                let (hash, rem): (Blake2bHash, &[u8]) = FromBytes::from_bytes(rem)?;
+                let (hash, rem) = Blake2bHash::from_bytes(rem)?;
                 Ok((Pointer::LeafPointer(hash), rem))
             }
             1 => {
-                let (hash, rem): (Blake2bHash, &[u8]) = FromBytes::from_bytes(rem)?;
+                let (hash, rem) = Blake2bHash::from_bytes(rem)?;
                 Ok((Pointer::NodePointer(hash), rem))
             }
             _ => Err(bytesrepr::Error::Formatting),
@@ -116,7 +118,11 @@ impl Default for PointerBlock {
 
 impl ToBytes for PointerBlock {
     fn to_bytes(&self) -> Result<Vec<u8>, bytesrepr::Error> {
-        ToBytes::to_bytes(&self.0)
+        self.0.to_bytes()
+    }
+
+    fn serialized_length(&self) -> usize {
+        self.0.serialized_length()
     }
 }
 
@@ -206,7 +212,7 @@ pub enum Trie<K, V> {
 }
 
 impl<K, V> Trie<K, V> {
-    fn tag(&self) -> u32 {
+    fn tag(&self) -> u8 {
         match self {
             Trie::Leaf { .. } => 0,
             Trie::Node { .. } => 1,
@@ -245,61 +251,48 @@ where
     V: ToBytes,
 {
     fn to_bytes(&self) -> Result<Vec<u8>, bytesrepr::Error> {
+        let mut ret = bytesrepr::allocate_buffer(self)?;
+        ret.push(self.tag());
+
         match self {
             Trie::Leaf { key, value } => {
-                let mut key_bytes = ToBytes::to_bytes(key)?;
-                let mut value_bytes = ToBytes::to_bytes(value)?;
-                if key_bytes.len() + value_bytes.len()
-                    > u32::max_value() as usize - U32_SERIALIZED_LENGTH
-                {
-                    return Err(bytesrepr::Error::OutOfMemory);
-                }
-                let mut ret: Vec<u8> =
-                    Vec::with_capacity(U32_SERIALIZED_LENGTH + key_bytes.len() + value_bytes.len());
-                ret.append(&mut self.tag().to_bytes()?);
-                ret.append(&mut key_bytes);
-                ret.append(&mut value_bytes);
-                Ok(ret)
+                ret.append(&mut key.to_bytes()?);
+                ret.append(&mut value.to_bytes()?);
             }
             Trie::Node { pointer_block } => {
-                let mut pointer_block_bytes = ToBytes::to_bytes(pointer_block.deref())?;
-                let mut ret: Vec<u8> =
-                    Vec::with_capacity(U32_SERIALIZED_LENGTH + pointer_block_bytes.len());
-                ret.append(&mut self.tag().to_bytes()?);
-                ret.append(&mut pointer_block_bytes);
-                Ok(ret)
+                ret.append(&mut pointer_block.to_bytes()?);
             }
             Trie::Extension { affix, pointer } => {
-                let mut affix_bytes = ToBytes::to_bytes(affix)?;
-                let mut pointer_bytes = ToBytes::to_bytes(pointer)?;
-                if affix_bytes.len() + pointer_bytes.len()
-                    > u32::max_value() as usize - U32_SERIALIZED_LENGTH
-                {
-                    return Err(bytesrepr::Error::OutOfMemory);
-                }
-                let mut ret: Vec<u8> = Vec::with_capacity(
-                    U32_SERIALIZED_LENGTH + affix_bytes.len() + pointer_bytes.len(),
-                );
-                ret.append(&mut self.tag().to_bytes()?);
-                ret.append(&mut affix_bytes);
-                ret.append(&mut pointer_bytes);
-                Ok(ret)
+                ret.append(&mut affix.to_bytes()?);
+                ret.append(&mut pointer.to_bytes()?);
             }
         }
+        Ok(ret)
+    }
+
+    fn serialized_length(&self) -> usize {
+        U8_SERIALIZED_LENGTH
+            + match self {
+                Trie::Leaf { key, value } => key.serialized_length() + value.serialized_length(),
+                Trie::Node { pointer_block } => pointer_block.serialized_length(),
+                Trie::Extension { affix, pointer } => {
+                    affix.serialized_length() + pointer.serialized_length()
+                }
+            }
     }
 }
 
 impl<K: FromBytes, V: FromBytes> FromBytes for Trie<K, V> {
     fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), bytesrepr::Error> {
-        let (tag, rem): (u32, &[u8]) = FromBytes::from_bytes(bytes)?;
+        let (tag, rem) = u8::from_bytes(bytes)?;
         match tag {
             0 => {
-                let (key, rem): (K, &[u8]) = FromBytes::from_bytes(rem)?;
-                let (value, rem): (V, &[u8]) = FromBytes::from_bytes(rem)?;
+                let (key, rem) = K::from_bytes(rem)?;
+                let (value, rem) = V::from_bytes(rem)?;
                 Ok((Trie::Leaf { key, value }, rem))
             }
             1 => {
-                let (pointer_block, rem): (PointerBlock, &[u8]) = FromBytes::from_bytes(rem)?;
+                let (pointer_block, rem) = PointerBlock::from_bytes(rem)?;
                 Ok((
                     Trie::Node {
                         pointer_block: Box::new(pointer_block),
@@ -308,8 +301,8 @@ impl<K: FromBytes, V: FromBytes> FromBytes for Trie<K, V> {
                 ))
             }
             2 => {
-                let (affix, rem): (Vec<u8>, &[u8]) = FromBytes::from_bytes(rem)?;
-                let (pointer, rem): (Pointer, &[u8]) = FromBytes::from_bytes(rem)?;
+                let (affix, rem) = Vec::<u8>::from_bytes(rem)?;
+                let (pointer, rem) = Pointer::from_bytes(rem)?;
                 Ok((Trie::Extension { affix, pointer }, rem))
             }
             _ => Err(bytesrepr::Error::Formatting),

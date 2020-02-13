@@ -347,8 +347,8 @@ mod tests {
     fn initial_state_has_the_expected_hash() {
         let correlation_id = CorrelationId::new();
         let expected_bytes = vec![
-            243, 47, 248, 24, 18, 220, 95, 83, 103, 81, 100, 141, 145, 156, 26, 225, 23, 211, 126,
-            219, 65, 215, 200, 175, 255, 183, 116, 198, 144, 222, 99, 246,
+            197, 117, 38, 12, 241, 62, 54, 241, 121, 165, 11, 8, 130, 189, 100, 252, 4, 102, 236,
+            210, 91, 221, 123, 200, 135, 102, 194, 204, 46, 76, 13, 254,
         ];
         let (_, root_hash) = InMemoryGlobalState::from_pairs(correlation_id, &[]).unwrap();
         assert_eq!(expected_bytes, root_hash.to_vec())
