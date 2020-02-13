@@ -82,6 +82,19 @@ object ForkChoice {
 
   def create[F[_]: Sync: EraStorage: DagStorage]: ForkChoice[F] = new ForkChoice[F] {
 
+    /**
+      * Computes fork choice within single era.
+      *
+      * @param dag
+      * @param keyBlock key block of the era.
+      * @param eraStartBlock block where fork choice starts from. Note that it may not
+      *                      necessarily belong to the same era as key block (see switch blocks).
+      * @param latestMessages validators' latest messages in that era.
+      * @param equivocators known equivocators. Using latest messages is not enough since
+      *                     we have a "forgiveness period" which states that a validator
+      *                     is an equivocator in the era he equivocated and `n` descendant eras.
+      * @return fork choice and a set of reduced justifications.
+      */
     private def eraForkChoice(
         dag: DagRepresentation[F],
         keyBlock: Message.Block,
