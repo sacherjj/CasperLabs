@@ -337,7 +337,7 @@ class GrpcGossipServiceSpec
         "compression is supported" should {
           "return a stream of compressed chunks" in {
             forAll { block: Block =>
-              runTestUnsafe(TestData.fromBlock(block)) {
+              runTestUnsafe(TestData.fromBlock(block), timeout = 15.seconds) {
                 val req = GetBlockChunkedRequest(
                   blockHash = block.blockHash,
                   acceptedCompressionAlgorithms = Seq("lz4")
