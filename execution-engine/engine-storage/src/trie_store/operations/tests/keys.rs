@@ -39,6 +39,7 @@ mod partial_tries {
                     &context.store,
                     &root_hash,
                 )
+                .filter_map(Result::ok)
                 .collect::<Vec<TestKey>>();
                 txn.commit().unwrap();
                 tmp.sort();
@@ -74,6 +75,7 @@ mod partial_tries {
                     &context.store,
                     &root_hash,
                 )
+                .filter_map(Result::ok)
                 .collect::<Vec<TestKey>>();
                 txn.commit().unwrap();
                 tmp.sort();
@@ -131,6 +133,7 @@ mod full_tries {
                         &context.store,
                         &state,
                     )
+                    .filter_map(Result::ok)
                     .collect::<Vec<TestKey>>();
                     txn.commit().unwrap();
                     tmp.sort();

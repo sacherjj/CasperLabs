@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests;
 
-use std::time::Instant;
+use std::{mem, time::Instant};
 
 use engine_shared::{
     logging::{log_duration, log_metric, GAUGE},
@@ -730,11 +730,21 @@ where
     }
 }
 
-pub struct KeysIterator<'a, 'b, K, V, T, S> {
+enum KeysIteratorState<K, V, S: TrieStore<K, V>> {
+    /// Iterate normally
+    Ok,
+    /// Return the error and stop iterating
+    ReturnError(S::Error),
+    /// Already failed, only return None
+    Failed,
+}
+
+pub struct KeysIterator<'a, 'b, K, V, T, S: TrieStore<K, V>> {
     #[allow(clippy::type_complexity)]
     visited: Vec<(Trie<K, V>, Option<usize>, Vec<u8>)>,
     store: &'a S,
     txn: &'b T,
+    state: KeysIteratorState<K, V, S>,
 }
 
 impl<'a, 'b, K, V, T, S> Iterator for KeysIterator<'a, 'b, K, V, T, S>
@@ -743,11 +753,21 @@ where
     V: ToBytes + FromBytes + Clone + Eq + std::fmt::Debug,
     T: Readable<Handle = S::Handle>,
     S: TrieStore<K, V>,
-    S::Error: From<T::Error>,
+    S::Error: From<T::Error> + From<types::bytesrepr::Error>,
 {
-    type Item = K;
+    type Item = Result<K, S::Error>;
 
     fn next(&mut self) -> Option<Self::Item> {
+        match mem::replace(&mut self.state, KeysIteratorState::Ok) {
+            KeysIteratorState::Ok => (),
+            KeysIteratorState::ReturnError(e) => {
+                self.state = KeysIteratorState::Failed;
+                return Some(Err(e));
+            }
+            KeysIteratorState::Failed => {
+                return None;
+            }
+        }
         while let Some((trie, maybe_index, mut path)) = self.visited.pop() {
             let mut maybe_next_trie: Option<Trie<K, V>> = None;
 
@@ -756,19 +776,26 @@ where
                     debug_assert!({
                         let key_bytes = match key.to_bytes() {
                             Ok(bytes) => bytes,
-                            Err(_) => {
-                                return None;
+                            Err(e) => {
+                                self.state = KeysIteratorState::Failed;
+                                return Some(Err(e.into()));
                             }
                         };
                         key_bytes.starts_with(&path)
                     });
-                    return Some(key);
+                    return Some(Ok(key));
                 }
                 Trie::Node { ref pointer_block } => {
                     let mut index: usize = maybe_index.unwrap_or_default();
                     while index < RADIX {
                         if let Some(ref pointer) = pointer_block[index] {
-                            maybe_next_trie = self.store.get(self.txn, pointer.hash()).ok()?;
+                            maybe_next_trie = match self.store.get(self.txn, pointer.hash()) {
+                                Ok(trie) => trie,
+                                Err(e) => {
+                                    self.state = KeysIteratorState::Failed;
+                                    return Some(Err(e));
+                                }
+                            };
                             debug_assert!(maybe_next_trie.is_some());
                             self.visited.push((trie, Some(index + 1), path.clone()));
                             path.push(index as u8);
@@ -778,7 +805,13 @@ where
                     }
                 }
                 Trie::Extension { affix, pointer } => {
-                    maybe_next_trie = self.store.get(self.txn, pointer.hash()).ok()?;
+                    maybe_next_trie = match self.store.get(self.txn, pointer.hash()) {
+                        Ok(trie) => trie,
+                        Err(e) => {
+                            self.state = KeysIteratorState::Failed;
+                            return Some(Err(e));
+                        }
+                    };
                     debug_assert!({
                         match &maybe_next_trie {
                             Some(Trie::Node { .. }) => true,
@@ -817,14 +850,17 @@ where
     S::Error: From<T::Error>,
 {
     #[allow(clippy::type_complexity)]
-    let visited: Vec<(Trie<K, V>, Option<usize>, Vec<u8>)> = match store.get(txn, root) {
-        Ok(None) | Err(_) => vec![],
-        Ok(Some(current_root)) => vec![(current_root, None, vec![])],
-    };
+    let (visited, init_state): (Vec<(Trie<K, V>, Option<usize>, Vec<u8>)>, _) =
+        match store.get(txn, root) {
+            Ok(None) => (vec![], KeysIteratorState::Ok),
+            Err(e) => (vec![], KeysIteratorState::ReturnError(e)),
+            Ok(Some(current_root)) => (vec![(current_root, None, vec![])], KeysIteratorState::Ok),
+        };
 
     KeysIterator {
         visited,
         store,
         txn,
+        state: init_state,
     }
 }
