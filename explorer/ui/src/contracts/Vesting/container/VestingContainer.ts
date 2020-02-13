@@ -1,16 +1,21 @@
-import ErrorContainer from './ErrorContainer';
+import ErrorContainer from '../../../containers/ErrorContainer';
 import { CasperService } from 'casperlabs-sdk';
 import { StateQuery } from 'casperlabs-grpc/io/casperlabs/node/api/casper_pb';
-import { observable } from 'mobx';
+import { computed, observable } from 'mobx';
 import moment from 'moment';
-import { snakeCase } from "change-case";
+import { snakeCase } from 'change-case';
+import { AsyncCleanableFormData } from '../../../containers/FormData';
+import AuthContainer from '../../../containers/AuthContainer';
 
 
 export class VestingContainer {
   @observable vestingDetails: VestingDetail | null = null;
+  @observable importVestingForm: ImportVestingFormData | null = null;
+  @observable selectedVestingHash: NamedHash | null = null;
 
   constructor(
     private errors: ErrorContainer,
+    private auth: AuthContainer,
     private casperService: CasperService
   ) {
   }
@@ -21,9 +26,72 @@ export class VestingContainer {
     if (showLoading) {
       this.vestingDetails = null;
     }
-    this.vestingDetails = await this.getVestingDetails(hash);
+    try {
+      this.vestingDetails = await this.getVestingDetails(hash);
+    }catch (e) {
+      let msg = `The hash is not valid anymore, do you want to remove it?`;
+      this.deleteVestingHash(hash, msg);
+    }
   }
 
+  // Open a form for importing information of vesting contract
+  configureImportVestingHash() {
+    let contracts = this.auth.getContracts();
+    if (contracts !== null) {
+      this.importVestingForm = new ImportVestingFormData(contracts.vestingContracts || [], this.casperService);
+    }
+  }
+
+  closeImportVestingHashForm() {
+    this.importVestingForm = null;
+  }
+
+  @computed
+  get isFormOpen() {
+    return this.importVestingForm !== null;
+  }
+
+  @computed
+  get error(): string | null | undefined {
+    return this.importVestingForm?.error;
+  }
+
+  @computed
+  get options() {
+    return (this.auth.getContracts()?.vestingContracts || []).map(x => {
+      return {
+        label: x.name,
+        value: x.name
+      };
+    });
+  }
+
+  async save(): Promise<boolean> {
+    let form = this.importVestingForm!;
+    let clean = await form.clean();
+    if (clean) {
+      // Save it to Auth0.
+      await this.auth.addVestingHash({
+        name: form.name,
+        hashBase16: form.hashBase16
+      });
+      return true;
+    } else {
+      return false;
+    }
+  }
+
+  selectVestingHashByName(name: string) {
+    this.selectedVestingHash = (this.auth.getContracts()?.vestingContracts || [])!.find(x => x.name === name) || null;
+  }
+
+  async deleteVestingHash(vestingHash: string, msg?: string) {
+    msg = msg || `Are you sure you want to delete the stored vesting contract hash '${vestingHash}'?`;
+    if (window.confirm(msg)) {
+      await this.auth.removeVestingHash(vestingHash);
+      this.selectedVestingHash = null;
+    }
+  }
 
   private async getVestingDetails(keyBase16: string) {
     let res = new VestingDetail();
@@ -41,7 +109,7 @@ export class VestingContainer {
       let value = Number(values[i].getBigInt()!.getValue());
       // The vesting contract use seconds based timestamp/duration
       // multiple 1000 to be milliseconds based timestamp/duration
-      if(paths[i].endsWith("Timestamp") || paths[i].endsWith("Duration")){
+      if (paths[i].endsWith('Timestamp') || paths[i].endsWith('Duration')) {
         value = value * 1000;
       }
       (res as any)[paths[i]] = value;
@@ -156,5 +224,37 @@ export class VestingDetail {
 
   get available_amount() {
     return this.getAmountAt(Date.now()) - this.releasedAmount;
+  }
+}
+
+class ImportVestingFormData extends AsyncCleanableFormData {
+  @observable name: string = '';
+  @observable hashBase16: string = '';
+
+  constructor(private vestingHashes: NamedHash[], private casperService: CasperService) {
+    super();
+  }
+
+  protected async check() {
+    if (this.name === '') return 'Name cannot be empty!';
+
+    if (this.vestingHashes.some(x => x.name === this.name))
+      return `An item with name '${this.name}' already exists.`;
+
+    if (this.vestingHashes.some(x => x.hashBase16 === this.hashBase16))
+      return 'An item with this contract hash already exists.';
+
+
+    let stateQuery = new StateQuery();
+    stateQuery.setKeyBase16(this.hashBase16);
+    stateQuery.setKeyVariant(StateQuery.KeyVariant.HASH);
+    stateQuery.setPathSegmentsList(['cliff_timestamp']);
+    let lastFinalizedBlockInfo = await this.casperService.getLastFinalizedBlockInfo();
+    try {
+      await this.casperService.getBlockState(lastFinalizedBlockInfo.getSummary()!.getBlockHash_asU8(), stateQuery);
+    } catch (error) {
+      return 'Could not find the vesting contract with the hash';
+    }
+    return null;
   }
 }

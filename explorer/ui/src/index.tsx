@@ -31,7 +31,7 @@ import SearchContainer from './containers/SearchContainer';
 import { DeployInfoListContainer } from './containers/DeployInfoListContainer';
 import AccountSelectorContainer from './containers/AccountSelectorContainer';
 import ConnectedPeersContainer from './containers/ConnectedPeersContainer';
-import { VestingContainer } from './containers/VestingContainer';
+import { VestingContainer } from './contracts/Vesting/container/VestingContainer';
 
 let w = window as any;
 w.$ = w.jQuery = jQuery;
@@ -64,7 +64,7 @@ const faucet = new FaucetContainer(
   // Update the balances when a new faucet request went through.
   () => auth.refreshBalances(true)
 );
-const vesting = new VestingContainer(errors, casperService);
+const vesting = new VestingContainer(errors, auth, casperService);
 const dag = new DagContainer(errors, casperService);
 const block = new BlockContainer(errors, casperService, balanceService);
 const deploy = new DeployContainer(errors, casperService, balanceService);

@@ -1,6 +1,6 @@
 import React, { Component } from 'react';
 import { Line } from 'react-chartjs-2';
-import { VestingDetail } from '../containers/VestingContainer';
+import { VestingDetail } from '../container/VestingContainer';
 
 interface Props {
   vestingDetail: VestingDetail;

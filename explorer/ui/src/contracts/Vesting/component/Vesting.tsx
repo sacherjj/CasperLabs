@@ -1,12 +1,12 @@
 import React, { ReactNode } from 'react';
 import { observer } from 'mobx-react';
-import { Form, SelectField, TextField } from './Forms';
-import AuthContainer from '../containers/AuthContainer';
-import { Button, Card, CLX, Icon, ListInline, Loading, RefreshableComponent } from './Utils';
+import { Form, SelectField, TextField } from '../../../components/Forms';
+import AuthContainer from '../../../containers/AuthContainer';
+import { Button, Card, CLX, Icon, ListInline, Loading, RefreshableComponent } from '../../../components/Utils';
 import VestingChart from './VestingChart';
 import moment from 'moment';
-import { VestingContainer, VestingDetail } from '../containers/VestingContainer';
-import Modal from './Modal';
+import { VestingContainer, VestingDetail } from '../container/VestingContainer';
+import Modal from '../../../components/Modal';
 
 interface Props {
   auth: AuthContainer;
@@ -15,36 +15,35 @@ interface Props {
 
 @observer
 class Vesting extends RefreshableComponent<Props, {}> {
+  constructor(props: Props) {
+    super(props);
+  }
+
   refresh() {
     this.props.auth.refreshAccounts();
   }
 
   render() {
-    const { auth, vesting } = this.props;
+    const { vesting } = this.props;
     return (
       <div>
-        <VestingHashesManageForm auth={auth} requestVestingDetails={x =>
-          this.props.vesting.init(x, true).catch(() => {
-            let msg = `The hash is not valid anymore, do you want to remove it?`;
-            auth.deleteVestingHash(x, msg).then(auth.selectedVestingHash = null);
-          })
-        }/>
-        {auth.selectedVestingHash && !vesting.vestingDetails && (
+        <VestingHashesManageForm vestingContainer={this.props.vesting}/>
+        {vesting.selectedVestingHash && !vesting.vestingDetails && (
           <div className="col-12">
             <Loading/>
           </div>
         )}
-        {auth.selectedVestingHash && vesting.vestingDetails && (
+        {vesting.selectedVestingHash && vesting.vestingDetails && (
           <div>
             <Card title="Vesting Schedule">
               <div className="col-8 container">
                 <VestingChart vestingDetail={vesting.vestingDetails}/>
               </div>
             </Card>
-            <VestingDetails hash={auth.selectedVestingHash!.hashBase16}
+            <VestingDetails hash={vesting.selectedVestingHash!.hashBase16}
                             vestingDetail={vesting.vestingDetails}
                             refresh={
-                              () => vesting.init(auth.selectedVestingHash!.hashBase16)
+                              () => vesting.init(vesting.selectedVestingHash!.hashBase16)
                             }/>
           </div>
         )}
@@ -59,39 +58,38 @@ class Vesting extends RefreshableComponent<Props, {}> {
  */
 const VestingHashesManageForm = observer(
   (props: {
-    auth: AuthContainer;
-    requestVestingDetails: (hashBase16: string) => void;
+    vestingContainer: VestingContainer;
   }) => {
-    const { auth, requestVestingDetails } = props;
+    const { vestingContainer } = props;
 
     // The modal for importing new hash, showed once users click the `Add New` button.
-    const modalImporting = (auth.importVestingForm !== null &&
+    const modalImporting = (vestingContainer.isFormOpen &&
       <Modal
         id="addNewVestingHash"
         title="Add new hash of vesting contract"
         submitLabel="Save"
-        onSubmit={() => auth.addVestingItem()}
+        onSubmit={() => vestingContainer.save()}
         onClose={() => {
-          auth.importVestingForm = null;
+          vestingContainer.closeImportVestingHashForm();
         }}
-        error={auth.importVestingForm!.error}
+        error={vestingContainer.error}
       >
         <Form>
           <TextField
             id="id-import-vesting-hash-base64"
             label="Hash of vesting contract (Base16)"
-            value={auth.importVestingForm!.hashBase16 || ''}
+            value={vestingContainer.importVestingForm!.hashBase16 || ''}
             onChange={x => {
-              auth.importVestingForm!.hashBase16 = x;
+              vestingContainer.importVestingForm!.hashBase16 = x;
             }}
           />
           <TextField
             id="id-import-vesting-hash-name"
             label="Name"
-            value={auth.importVestingForm!.name || ''}
+            value={vestingContainer.importVestingForm!.name || ''}
             placeholder="Human readable alias"
             onChange={x => {
-              auth.importVestingForm!.name = x;
+              vestingContainer.importVestingForm!.name = x;
             }}
           />
         </Form>
@@ -107,25 +105,22 @@ const VestingHashesManageForm = observer(
             id="id-vesting-name"
             label="Name"
             placeholder="Select hash of the vesting contract"
-            value={(auth.selectedVestingHash && auth.selectedVestingHash.name) || null}
-            options={(auth.vestingHashes || []).map(x => ({
-              label: x.name,
-              value: x.name
-            }))}
+            value={(vestingContainer.selectedVestingHash && vestingContainer.selectedVestingHash.name) || null}
+            options={vestingContainer.options}
             onChange={x => {
-              let oldSelected = auth.selectedVestingHash;
-              auth.selectVestingHashByName(x);
+              let oldSelected = vestingContainer.selectedVestingHash;
+              vestingContainer.selectVestingHashByName(x);
 
               // Check whether user select another vesting contract
-              if (oldSelected !== auth.selectedVestingHash && auth.selectedVestingHash) {
-                requestVestingDetails(auth.selectedVestingHash.hashBase16);
+              if (oldSelected !== vestingContainer.selectedVestingHash && vestingContainer.selectedVestingHash) {
+                vestingContainer.init(vestingContainer.selectedVestingHash.hashBase16);
               }
             }}
           />
           <TextField
             id="id-vesting-hash-base16"
             label="Hash of vesting contract (Base16)"
-            value={auth.selectedVestingHash?.hashBase16 || null}
+            value={vestingContainer.selectedVestingHash?.hashBase16 || null}
             readonly={true}
           />
         </Form>
@@ -133,13 +128,13 @@ const VestingHashesManageForm = observer(
         <ListInline>
           <Button
             title="Add New"
-            onClick={() => auth.configureImportVestingHash()}
+            onClick={() => vestingContainer.configureImportVestingHash()}
           />
           <Button title="Remove" type="danger" onClick={() => {
-            auth.deleteVestingHash(auth.selectedVestingHash!.hashBase16).then(() => {
-              auth.selectedVestingHash = null;
-            });
-          }} disabled={auth.selectedVestingHash === null}/>
+            if(vestingContainer.selectedVestingHash?.hashBase16){
+              vestingContainer.deleteVestingHash(vestingContainer.selectedVestingHash!.hashBase16);
+            }
+          }} disabled={vestingContainer.selectedVestingHash === null}/>
         </ListInline>
       </Card>
     );

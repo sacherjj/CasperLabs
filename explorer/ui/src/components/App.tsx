@@ -29,8 +29,8 @@ import AccountSelector from './AccountSelector';
 import AccountSelectorContainer from '../containers/AccountSelectorContainer';
 import ConnectedPeersContainer from '../containers/ConnectedPeersContainer';
 import ConnectedPeers from './ConnectedPeers';
-import Vesting from './Vesting';
-import { VestingContainer } from '../containers/VestingContainer';
+import Vesting from '../contracts/Vesting/component/Vesting';
+import { VestingContainer } from '../contracts/Vesting/container/VestingContainer';
 
 // https://medium.com/@pshrmn/a-simple-react-router-v4-tutorial-7f23ff27adf
 

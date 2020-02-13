@@ -14,7 +14,11 @@ interface NamedHash{
 
 interface UserMetadata {
   accounts?: UserAccount[];
-  vestingHashes?: NamedHash[];
+  contracts?: Contracts;
+}
+
+interface Contracts{
+  vestingContracts?: NamedHash[]
 }
 
 interface User {
