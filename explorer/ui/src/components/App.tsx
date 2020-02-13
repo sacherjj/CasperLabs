@@ -39,21 +39,67 @@ class MenuItem {
   constructor(
     public path: string,
     public label: string,
-    public icon: string,
+    public icon?: string,
     public exact: boolean = false
   ) {}
+
+  toRoute() {
+    return <NavLink item={this} key={this.path} />;
+  }
 }
 
-const SideMenuItems: MenuItem[] = [
+class GroupedMenuItem {
+  constructor(
+    public id: string,
+    public label: string,
+    public icon: string,
+    public secondLevelChildren: MenuItem[]
+  ) {}
+
+  toRoute() {
+    return (
+      <li className="nav-item">
+        <a
+          className="nav-link collapsed"
+          href="#"
+          data-toggle="collapse"
+          aria-expanded="false"
+          data-target={`#${this.id}`}
+          aria-controls={this.id}
+        >
+          <i className={`nav-link-icon fas fa-${this.icon}`} />
+          {this.label}
+          <div className="sidenav-collapse-arrow">
+            <i className="fas fa-angle-down" />
+          </div>
+        </a>
+        <div
+          className="collapse"
+          id={`${this.id}`}
+          aria-labelledby="headingOne"
+          data-parent="#mainNav"
+        >
+          <nav className="sidenav-menu-nested nav">
+            {this.secondLevelChildren.map(menuItem => menuItem.toRoute())}
+          </nav>
+        </div>
+      </li>
+    );
+  }
+}
+
+const SideMenuItems: (MenuItem | GroupedMenuItem)[] = [
   new MenuItem(Pages.Home, 'Home', 'home', true),
   new MenuItem(Pages.Accounts, 'Account Keys', 'address-book'),
   new MenuItem(Pages.Faucet, 'Faucet', 'coins'),
-  new MenuItem(Pages.Vesting, 'Vesting', 'stamp'),
   new MenuItem(Pages.Explorer, 'Explorer', 'project-diagram'),
   new MenuItem(Pages.Blocks, 'Blocks', 'th-large'),
   new MenuItem(Pages.Deploys, 'Deploys', 'tasks'),
   new MenuItem(Pages.Search, 'Search', 'search'),
-  new MenuItem(Pages.ConnectedPeers, 'Connected Peers', 'network-wired')
+  new MenuItem(Pages.ConnectedPeers, 'Connected Peers', 'network-wired'),
+  new GroupedMenuItem('clarityContracts', 'Contracts', 'stamp', [
+    new MenuItem(Pages.Vesting, 'Vesting')
+  ])
 ];
 
 export interface AppProps {
@@ -163,7 +209,9 @@ const NavLink = (props: { item: MenuItem }) => {
             data-placement="right"
           >
             <Link to={item.path} className="nav-link">
-              <i className={'fa fa-fw fa-' + item.icon}></i>
+              {item.icon && (
+                <i className={'nav-link-icon fa fa-fw fa-' + item.icon} />
+              )}
               <span className="nav-link-text">{item.label}</span>
             </Link>
           </li>
@@ -191,7 +239,7 @@ class _Navigation extends React.Component<
         id="mainNav"
       >
         <a className="navbar-brand" href="https://casperlabs.io/">
-          <img src={logo} alt="logo" />
+          <img src={logo} alt="logo"/>
         </a>
         <button
           className="navbar-toggler navbar-toggler-right"
@@ -208,9 +256,7 @@ class _Navigation extends React.Component<
         <div className="collapse navbar-collapse" id="navbarResponsive">
           {/* Side Bar */}
           <ul className="navbar-nav navbar-sidenav" id="exampleAccordion">
-            {SideMenuItems.map(x => (
-              <NavLink item={x} key={x.path}></NavLink>
-            ))}
+            {SideMenuItems.map(x => x.toRoute())}
           </ul>
 
           {/* Side Bar Toggle */}
