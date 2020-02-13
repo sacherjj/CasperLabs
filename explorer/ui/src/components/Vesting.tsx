@@ -2,7 +2,7 @@ import React, { ReactNode } from 'react';
 import { observer } from 'mobx-react';
 import { Form, SelectField, TextField } from './Forms';
 import AuthContainer from '../containers/AuthContainer';
-import { Button, Card, Icon, ListInline, Loading, RefreshableComponent, ShortHashSpan } from './Utils';
+import { Button, Card, CLX, Icon, ListInline, Loading, RefreshableComponent } from './Utils';
 import VestingChart from './VestingChart';
 import moment from 'moment';
 import { VestingContainer, VestingDetail } from '../containers/VestingContainer';
@@ -180,71 +180,74 @@ const VestingDetails = observer(
     vestingDetail: VestingDetail,
     hash: string
     refresh: () => void
-  }) => (
-    <Card
-      title="Vesting Details"
-      refresh={() => props.refresh()}
-    >
-      <table className="table table-bordered">
-        <tbody>
-        <TableRow title="Hash of the Vesting Contract">
-          {props.hash}
-        </TableRow>
-        <TableRow title="Current Time">
-          {moment().format()}
-        </TableRow>
-        <TableRow title="Cliff Timestamp">
-          {moment(props.vestingDetail.cliff_timestamp * 1000).fromNow()}
-        </TableRow>
-        <TableRow title="Cliff Amount">
-          {props.vestingDetail.cliff_amount.toLocaleString() + ' CLX'}
-        </TableRow>
-        <TableRow title="Drip Duration">
-          {duration(props.vestingDetail.drip_duration * 1000)}
-        </TableRow>
-        <TableRow title="Drip Amount">
-          {props.vestingDetail.drip_amount.toLocaleString() + ' CLX'}
-        </TableRow>
-        <TableRow title="Total Amount">
-          {props.vestingDetail.total_amount.toLocaleString() + ' CLX'}
-        </TableRow>
-        <TableRow title="Released Amount">
-          {props.vestingDetail.released_amount.toLocaleString() + ' CLX'}
-        </TableRow>
-        <TableRow title="Admin Release Duration">
+  }) => {
+    const vestingDetail = props.vestingDetail;
+    return (
+      <Card
+        title="Vesting Details"
+        refresh={() => props.refresh()}
+      >
+        <table className="table table-bordered">
+          <tbody>
+          <TableRow title="Hash of the Vesting Contract">
+            {props.hash}
+          </TableRow>
+          <TableRow title="Current Time">
+            {moment().format()}
+          </TableRow>
+          <TableRow title="Cliff Timestamp">
+            {moment(vestingDetail.cliff_timestamp * 1000).fromNow()}
+          </TableRow>
+          <TableRow title="Cliff Amount">
+            <CLX amount={vestingDetail.cliff_amount}/>
+          </TableRow>
+          <TableRow title="Drip Duration">
+            {duration(vestingDetail.drip_duration * 1000)}
+          </TableRow>
+          <TableRow title="Drip Amount">
+            <CLX amount={vestingDetail.drip_amount}/>
+          </TableRow>
+          <TableRow title="Total Amount">
+            <CLX amount={vestingDetail.total_amount}/>
+          </TableRow>
+          <TableRow title="Released Amount">
+            <CLX amount={vestingDetail.released_amount}/>
+          </TableRow>
+          <TableRow title="Admin Release Duration">
          <span className="mr-3">
-          {duration(props.vestingDetail.admin_release_duration * 1000)}
+          {duration(vestingDetail.admin_release_duration * 1000)}
          </span>
-          {props.vestingDetail.is_releasable && (
-            <Icon name="check-circle" color="green" title="Available to release"/>
-          )}
-        </TableRow>
-        <TableRow title="Paused State">
-          {props.vestingDetail.is_paused ? 'Paused' : 'Not Paused'}
-        </TableRow>
-        {
-          props.vestingDetail.is_paused && (
-            <TableRow title="Last Time Paused">
-              {moment(props.vestingDetail.last_pause_timestamp * 1000).fromNow()}
-            </TableRow>
-          )
-        }
-        <TableRow title="On Pause Duration">
-          {duration(props.vestingDetail.on_pause_duration)}
-        </TableRow>
-        <TableRow title="Admin Account">
-          {props.vestingDetail.admin_account}
-        </TableRow>
-        <TableRow title="Recipient Account">
-          {props.vestingDetail.recipient_account}
-        </TableRow>
-        <TableRow title="Available Amount">
-          {props.vestingDetail.available_amount.toLocaleString() + ' CLX'}
-        </TableRow>
-        </tbody>
-      </table>
-    </Card>
-  )
+            {vestingDetail.is_releasable && (
+              <Icon name="check-circle" color="green" title="Available to release"/>
+            )}
+          </TableRow>
+          <TableRow title="Paused State">
+            {vestingDetail.is_paused ? 'Paused' : 'Not Paused'}
+          </TableRow>
+          {
+            vestingDetail.is_paused && (
+              <TableRow title="Last Time Paused">
+                {moment(vestingDetail.last_pause_timestamp * 1000).fromNow()}
+              </TableRow>
+            )
+          }
+          <TableRow title="On Pause Duration">
+            {duration(vestingDetail.on_pause_duration)}
+          </TableRow>
+          <TableRow title="Admin Account">
+            {vestingDetail.admin_account}
+          </TableRow>
+          <TableRow title="Recipient Account">
+            {vestingDetail.recipient_account}
+          </TableRow>
+          <TableRow title="Available Amount">
+            <CLX amount={vestingDetail.available_amount}/>
+          </TableRow>
+          </tbody>
+        </table>
+      </Card>
+    );
+  }
 );
 
 export default Vesting;

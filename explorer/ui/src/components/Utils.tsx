@@ -131,6 +131,10 @@ export const CommandLineHint = (props: { children: any }) => {
   );
 };
 
+export const CLX = (props: {amount: number}) => {
+  return <span>{props.amount.toLocaleString()} CLX</span>
+};
+
 interface PrivateRouteProps extends RouteProps {
   auth: AuthContainer;
 }
