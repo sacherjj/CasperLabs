@@ -200,11 +200,11 @@ class CasperLabsClientAIO(object):
         )
 
     async def transfer(self, target_account_hex, amount, **deploy_args):
-        deploy_args["session"] = bundled_contract("transfer_to_account.wasm")
+        deploy_args["session"] = bundled_contract("transfer_to_account_u512.wasm")
         deploy_args["session_args"] = abi.ABI.args(
             [
                 abi.ABI.account("account", bytes.fromhex(target_account_hex)),
-                abi.ABI.long_value("amount", amount),
+                abi.ABI.u512("amount", amount),
             ]
         )
         return await self.deploy(**deploy_args)
