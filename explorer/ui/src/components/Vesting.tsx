@@ -196,49 +196,49 @@ const VestingDetails = observer(
             {moment().format()}
           </TableRow>
           <TableRow title="Cliff Timestamp">
-            {moment(vestingDetail.cliff_timestamp * 1000).fromNow()}
+            {moment(vestingDetail.cliffTimestamp).fromNow()}
           </TableRow>
           <TableRow title="Cliff Amount">
-            <CLX amount={vestingDetail.cliff_amount}/>
+            <CLX amount={vestingDetail.cliffAmount}/>
           </TableRow>
           <TableRow title="Drip Duration">
-            {duration(vestingDetail.drip_duration * 1000)}
+            {duration(vestingDetail.dripDuration)}
           </TableRow>
           <TableRow title="Drip Amount">
-            <CLX amount={vestingDetail.drip_amount}/>
+            <CLX amount={vestingDetail.dripAmount}/>
           </TableRow>
           <TableRow title="Total Amount">
-            <CLX amount={vestingDetail.total_amount}/>
+            <CLX amount={vestingDetail.totalAmount}/>
           </TableRow>
           <TableRow title="Released Amount">
-            <CLX amount={vestingDetail.released_amount}/>
+            <CLX amount={vestingDetail.releasedAmount}/>
           </TableRow>
           <TableRow title="Admin Release Duration">
          <span className="mr-3">
-          {duration(vestingDetail.admin_release_duration * 1000)}
+          {duration(vestingDetail.adminReleaseDuration)}
          </span>
-            {vestingDetail.is_releasable && (
+            {vestingDetail.isReleasable && (
               <Icon name="check-circle" color="green" title="Available to release"/>
             )}
           </TableRow>
           <TableRow title="Paused State">
-            {vestingDetail.is_paused ? 'Paused' : 'Not Paused'}
+            {vestingDetail.isPaused ? 'Paused' : 'Not Paused'}
           </TableRow>
           {
-            vestingDetail.is_paused && (
+            vestingDetail.isPaused && (
               <TableRow title="Last Time Paused">
-                {moment(vestingDetail.last_pause_timestamp * 1000).fromNow()}
+                {moment(vestingDetail.lastPauseTimestamp).fromNow()}
               </TableRow>
             )
           }
           <TableRow title="On Pause Duration">
-            {duration(vestingDetail.on_pause_duration)}
+            {duration(vestingDetail.onPauseDuration)}
           </TableRow>
           <TableRow title="Admin Account">
-            {vestingDetail.admin_account}
+            {vestingDetail.adminAccount}
           </TableRow>
           <TableRow title="Recipient Account">
-            {vestingDetail.recipient_account}
+            {vestingDetail.recipientAccount}
           </TableRow>
           <TableRow title="Available Amount">
             <CLX amount={vestingDetail.available_amount}/>

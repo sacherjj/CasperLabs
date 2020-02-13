@@ -20,6 +20,7 @@
     "bootstrap-components": "^1.1.287",
     "casperlabs-grpc": "file:../grpc",
     "casperlabs-sdk": "file:../sdk",
+    "change-case": "^4.1.1",
     "chart.js": "^2.9.3",
     "d3": "^5.9.7",
     "downshift": "^3.4.1",
