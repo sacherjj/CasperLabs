@@ -29,7 +29,8 @@ case class DeployInfosWithPageInfo(deployInfos: List[DeployInfo], pageInfo: Page
 class GraphQLBlockTypes(
     val blockFetcher: Fetcher[Unit, BlockAndMaybeDeploys, BlockAndMaybeDeploys, BlockHash],
     val blocksByValidator: (Validator, Int, Long) => Action[Unit, List[BlockAndMaybeDeploys]],
-    val accountBalance: (BlockHashPrefix, AccountKey) => Action[Unit, String]
+    val accountBalance: (BlockHashPrefix, AccountKey) => Action[Unit, String],
+    val accountDeploys: (AccountKey, Int, String) => Action[Unit, DeployInfosWithPageInfo]
 ) {
 
   val SignatureType = ObjectType(
@@ -197,6 +198,13 @@ class GraphQLBlockTypes(
           None,
           arguments = blocks.arguments.BlockHashPrefix :: Nil,
           resolve = c => accountBalance(c.arg(blocks.arguments.BlockHashPrefix), c.value)
+        ),
+        Field(
+          "deploys",
+          DeployInfosWithPageInfoType,
+          arguments = blocks.arguments.First :: blocks.arguments.After :: Nil,
+          resolve = c =>
+            accountDeploys(c.value, c.arg(blocks.arguments.First), c.arg(blocks.arguments.After))
         )
       )
   )
@@ -388,7 +396,7 @@ class GraphQLBlockTypes(
     )
   )
 
-  val DeployInfosWithPageInfoType = ObjectType(
+  val DeployInfosWithPageInfoType: ObjectType[Unit, DeployInfosWithPageInfo] = ObjectType(
     "deploys",
     "A list of deploys for the specified account",
     fields[Unit, DeployInfosWithPageInfo](

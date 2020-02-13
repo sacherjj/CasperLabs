@@ -41,6 +41,8 @@ import io.casperlabs.storage.deploy.DeployStorage
 import sangria.execution.deferred.{DeferredResolver, Fetcher, HasId}
 import sangria.schema._
 
+import scala.concurrent.Future
+
 // format: off
 private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream
                                                 : Log
@@ -129,7 +131,61 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream
         balance     <- getState(Key.Value.Uref(Key.URef(balanceUref))).map(_.getBigInt.value)
       } yield balance).unsafeToFuture
 
-  val blockTypes = new GraphQLBlockTypes(blockFetcher, blocksByValidator, accountBalance)
+  val accountDeploys: (AccountKey, Int, String) => Action[Unit, DeployInfosWithPageInfo] = {
+    (accountKey, first, after) =>
+      val program =
+        for {
+          first <- Utils
+                    .check[F, Int](
+                      first,
+                      "First must be greater than 0",
+                      _ > 0
+                    )
+          (pageSize, pageTokenParams) <- MonadThrowable[F].fromTry(
+                                          DeployInfoPagination
+                                            .parsePageToken(
+                                              ListDeployInfosRequest(
+                                                pageSize = first,
+                                                pageToken = after
+                                              )
+                                            )
+                                        )
+          accountPublicKeyBs = PublicKey(accountKey)
+          deploysWithOneMoreElem <- DeployStorage[F]
+                                     .reader(deployView)
+                                     .getDeploysByAccount(
+                                       accountPublicKeyBs,
+                                       pageSize + 1,
+                                       pageTokenParams.lastTimeStamp,
+                                       pageTokenParams.lastDeployHash,
+                                       isNext = true
+                                     )
+          (deploys, hasNextPage) = if (deploysWithOneMoreElem.length == pageSize + 1) {
+            (deploysWithOneMoreElem.take(pageSize), true)
+          } else {
+            (deploysWithOneMoreElem, false)
+          }
+          deployInfos <- DeployStorage[F]
+                          .reader(deployView)
+                          .getDeployInfos(deploys)
+          endCursor = DeployInfoPagination.createPageToken(
+            deploys.lastOption.map(
+              d =>
+                DeployInfoPageTokenParams(
+                  d.getHeader.timestamp,
+                  d.deployHash,
+                  isNext = true
+                )
+            )
+          )
+          pageInfo = PageInfo(endCursor, hasNextPage)
+          result   = DeployInfosWithPageInfo(deployInfos, pageInfo)
+        } yield result
+      program.unsafeToFuture
+  }
+
+  val blockTypes =
+    new GraphQLBlockTypes(blockFetcher, blocksByValidator, accountBalance, accountDeploys)
 
   private def projectionTerms(projections: Vector[ProjectedName]): Set[String] = {
     def flatToSet(ps: Vector[ProjectedName], acc: Set[String]): Set[String] =
@@ -214,66 +270,18 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream
             blockTypes.DeployInfosWithPageInfoType,
             arguments = blocks.arguments.AccountPublicKeyBase16 :: blocks.arguments.First :: blocks.arguments.After :: Nil,
             resolve = { c =>
-              val program =
-                for {
-                  first <- Utils
-                            .check[F, Int](
-                              c.arg(blocks.arguments.First),
-                              "First must be greater than 0",
-                              _ > 0
-                            )
-                  accountPublicKeyBase16 = c.arg(blocks.arguments.AccountPublicKeyBase16)
-                  after                  = c.arg(blocks.arguments.After)
-                  accountPublicKeyBase16 <- validateAccountPublicKey[F](
-                                             accountPublicKeyBase16,
-                                             ByteString.EMPTY
-                                           )
-                  (pageSize, pageTokenParams) <- MonadThrowable[F]
-                                                  .fromTry(
-                                                    DeployInfoPagination
-                                                      .parsePageToken(
-                                                        ListDeployInfosRequest(
-                                                          pageSize = first,
-                                                          pageToken = after
-                                                        )
-                                                      )
-                                                  )
-                  accountPublicKeyBs = PublicKey(
-                    ByteString.copyFrom(
-                      Base16.decode(accountPublicKeyBase16)
-                    )
-                  )
-                  deploysWithOneMoreElem <- DeployStorage[F]
-                                             .reader(deployView)
-                                             .getDeploysByAccount(
-                                               accountPublicKeyBs,
-                                               pageSize + 1,
-                                               pageTokenParams.lastTimeStamp,
-                                               pageTokenParams.lastDeployHash,
-                                               isNext = true
-                                             )
-                  (deploys, hasNextPage) = if (deploysWithOneMoreElem.length == pageSize + 1) {
-                    (deploysWithOneMoreElem.take(pageSize), true)
-                  } else {
-                    (deploysWithOneMoreElem, false)
-                  }
-                  deployInfos <- DeployStorage[F]
-                                  .reader(deployView)
-                                  .getDeployInfos(deploys)
-                  endCursor = DeployInfoPagination.createPageToken(
-                    deploys.lastOption.map(
-                      d =>
-                        DeployInfoPageTokenParams(
-                          d.getHeader.timestamp,
-                          d.deployHash,
-                          isNext = true
-                        )
-                    )
-                  )
-                  pageInfo = PageInfo(endCursor, hasNextPage)
-                  result   = DeployInfosWithPageInfo(deployInfos, pageInfo)
-                } yield result
-              program.unsafeToFuture
+              val accountPublicKeyBase16 = c.arg(blocks.arguments.AccountPublicKeyBase16)
+              val after                  = c.arg(blocks.arguments.After)
+              val first                  = c.arg(blocks.arguments.First)
+              val accountKeyEither = validateAccountPublicKey[Either[Throwable, *]](
+                accountPublicKeyBase16,
+                ByteString.EMPTY
+              ).map(s => ByteString.copyFrom(Base16.decode(s)))
+              accountKeyEither
+                .fold(
+                  e => Action.futureAction(Future.failed[DeployInfosWithPageInfo](e)),
+                  accountKey => accountDeploys(accountKey, first, after)
+                )
             }
           ),
           Field(
