@@ -564,7 +564,7 @@ def cli(*arguments) -> int:
            validator-public.pem  # ed25519 public key"""),
                       [[('directory',), dict(type=check_directory, help="Output directory for keys. Should already exists.")]])
 
-    parser.addCommand('list-peers', list_peers_command, "List peers connected to the node. Each line contains node's id, protocol_port, discovery_port, chain_id", [])
+    parser.addCommand('list-peers', list_peers_command, "List peers connected to the node.", [])
     # fmt:on
     return parser.run([str(a) for a in arguments])
 
