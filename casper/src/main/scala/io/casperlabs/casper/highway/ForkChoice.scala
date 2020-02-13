@@ -195,20 +195,20 @@ object ForkChoice {
             .empty[DagRepresentation.Validator, Set[Message]]
         ) {
           case ((startBlock, accLatestMessages), currKeyBlock) =>
+            val eraLatestMessages = dagView
+              .latestMessagesInEra(
+                currKeyBlock.messageHash
+              )
+            val pastEras = currKeyBlock.messageHash :: keyBlocks
+              .takeWhile(
+                _.messageHash != currKeyBlock.messageHash
+              )
+              .map(_.messageHash)
+            val visibleEquivocators = dagView
+              .equivocatorsVisibleInEras(
+                pastEras.toSet
+              )
             for {
-              eraLatestMessages <- dagView
-                                    .latestMessagesInEra[F](
-                                      currKeyBlock.messageHash
-                                    )
-              pastEras = currKeyBlock.messageHash :: keyBlocks
-                .takeWhile(
-                  _.messageHash != currKeyBlock.messageHash
-                )
-                .map(_.messageHash)
-              visibleEquivocators = dagView
-                .equivocatorsVisibleInEras(
-                  pastEras.toSet
-                )
               (forkChoice, eraLatestMessagesReduced) <- eraForkChoice(
                                                          dag,
                                                          currKeyBlock,

@@ -330,24 +330,18 @@ object DagRepresentation {
 //            .map(_.toMap)
 //      }
 
-    def latestMessagesInEra[F[_]: MonadThrowable: DagLookup](
+    def latestMessagesInEra(
         keyBlockHash: ByteString
-    )(implicit ev: A =:= Message): F[Map[Validator, Set[Message]]] =
+    )(implicit ev: A =:= Message): Map[Validator, Set[Message]] =
       data.get(keyBlockHash) match {
-        case None => Map.empty[Validator, Set[Message]].pure[F]
+        case None => Map.empty[Validator, Set[Message]]
         case Some(lms) =>
-          lms.toList
-            .traverse {
-              case (v, observedBehavior) =>
-                val lm: F[Set[Message]] = observedBehavior match {
-                  case Empty       => Set.empty[Message].pure[F]
-                  case Honest(msg) => Set(msg.asInstanceOf[Message]).pure[F]
-                  case Equivocated(m1, m2) =>
-                    Set(m1.asInstanceOf[Message], m2.asInstanceOf[Message]).pure[F]
-                }
-                lm.map(v -> _)
-            }
-            .map(_.toMap)
+          lms.mapValues {
+            case Empty       => Set.empty[Message]
+            case Honest(msg) => Set(msg.asInstanceOf[Message])
+            case Equivocated(m1, m2) =>
+              Set(m1.asInstanceOf[Message], m2.asInstanceOf[Message])
+          }
       }
   }
 

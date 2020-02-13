@@ -546,9 +546,9 @@ class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator with 
                              localDagView,
                              genesisMessage
                            )
-          latestGenesisMessageHashes <- latestMessages
-                                         .latestMessagesInEra[Task](genesis.blockHash)
-                                         .map(_.mapValues(_.map(_.messageHash)))
+          latestGenesisMessageHashes = latestMessages
+            .latestMessagesInEra(genesis.blockHash)
+            .mapValues(_.map(_.messageHash))
           expected = Map(
             v1 -> Set(a1.blockHash),
             v2 -> Set(b1.blockHash),
@@ -651,17 +651,17 @@ class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator with 
                              localDagView,
                              genesisMessage
                            )
-          latestGenesisMessageHashes <- latestMessages
-                                         .latestMessagesInEra[Task](genesis.blockHash)
-                                         .map(_.mapValues(_.map(_.messageHash)))
+          latestGenesisMessageHashes = latestMessages
+            .latestMessagesInEra(genesis.blockHash)
+            .mapValues(_.map(_.messageHash))
           expectedGenesis = Map(
             v1 -> Set(a1.blockHash),
             v2 -> Set(sb.blockHash),
             v3 -> Set(c1.blockHash)
           )
-          latestChildMessageHashes <- latestMessages
-                                       .latestMessagesInEra[Task](c1.blockHash)
-                                       .map(_.mapValues(_.map(_.messageHash)))
+          latestChildMessageHashes = latestMessages
+            .latestMessagesInEra(c1.blockHash)
+            .mapValues(_.map(_.messageHash))
           expectedChild = Map(
             v1 -> Set(a2.blockHash),
             v3 -> Set(c2.blockHash)
@@ -728,9 +728,9 @@ class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator with 
                              Message.fromBlock(genesis).get
                            )
 
-          latestGenesisMessageHashes <- latestMessages
-                                         .latestMessagesInEra[Task](genesis.blockHash)
-                                         .map(_.mapValues(_.map(_.messageHash)))
+          latestGenesisMessageHashes = latestMessages
+            .latestMessagesInEra(genesis.blockHash)
+            .mapValues(_.map(_.messageHash))
 
           expectedGenesis = Map(
             v1 -> Set(a1.blockHash, a1Prime.blockHash),
@@ -814,9 +814,9 @@ class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator with 
                              Message.fromBlock(b2).get
                            )
 
-          latestGenesisMessageHashes <- latestMessages
-                                         .latestMessagesInEra[Task](genesis.blockHash)
-                                         .map(_.mapValues(_.map(_.messageHash)))
+          latestGenesisMessageHashes = latestMessages
+            .latestMessagesInEra(genesis.blockHash)
+            .mapValues(_.map(_.messageHash))
 
           expectedGenesis = Map(
             v1 -> Set(a2.blockHash),
