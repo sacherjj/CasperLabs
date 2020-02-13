@@ -109,11 +109,10 @@ where
                 }
                 result
             }
-            Ok(QueryResult::ValueNotFound(full_path)) => {
-                let log_message = format!("Value not found: {:?}", full_path);
-                logging::log_warning(&log_message);
+            Ok(QueryResult::ValueNotFound(msg)) => {
+                logging::log_warning(&msg);
                 let mut result = ipc::QueryResponse::new();
-                result.set_failure(log_message);
+                result.set_failure(msg);
                 result
             }
             Ok(QueryResult::RootNotFound) => {
@@ -121,6 +120,12 @@ where
                 logging::log_error(log_message);
                 let mut result = ipc::QueryResponse::new();
                 result.set_failure(log_message.to_string());
+                result
+            }
+            Ok(QueryResult::CircularReference(msg)) => {
+                logging::log_warning(&msg);
+                let mut result = ipc::QueryResponse::new();
+                result.set_failure(msg);
                 result
             }
             Err(err) => {

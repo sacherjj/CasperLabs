@@ -55,7 +55,7 @@ pub fn add_associated_key(public_key: PublicKey, weight: Weight) -> Result<(), A
     }
 }
 
-/// Removes the given [`PublicKey'] from the account's associated keys.
+/// Removes the given [`PublicKey`] from the account's associated keys.
 pub fn remove_associated_key(public_key: PublicKey) -> Result<(), RemoveKeyFailure> {
     let (public_key_ptr, _public_key_size, _bytes) = to_ptr(public_key);
     let result = unsafe { ext_ffi::remove_associated_key(public_key_ptr) };

@@ -25,6 +25,7 @@ pub enum Error {
     ForgedReference(URef),
     URefNotFound(String),
     FunctionNotFound(String),
+    CircularReferenceInQuery(String),
     ParityWasm(elements::Error),
     GasLimit,
     Ret(Vec<URef>),
