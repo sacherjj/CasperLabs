@@ -210,8 +210,7 @@ class MessageProducerSpec extends FlatSpec with Matchers with Inspectors with Hi
   it should "return eras up until the one the key block was built in" in testFixture {
     implicit timer => implicit db =>
       new Fixture(eraDuration) {
-        // Make an era tree where we'll put some equivocations into various ones
-        // in the hierarchy and check that the right ones are gathered.
+        // An era tree:
         // eA - eB
         //    \ eC - eD
         //         \ eE - eF
