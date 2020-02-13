@@ -1,9 +1,10 @@
 package io.casperlabs.comm.gossiping.synchronization
 
 import java.util.concurrent.TimeoutException
-
+import cats.effect.concurrent.Ref
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.{Block, BlockSummary}
+import io.casperlabs.comm.GossipError
 import io.casperlabs.comm.discovery.{Node, NodeDiscovery, NodeIdentifier}
 import io.casperlabs.comm.gossiping._
 import io.casperlabs.comm.gossiping.synchronization.InitialSynchronization.SynchronizationError
@@ -105,7 +106,8 @@ class InitialSynchronizationForwardImplSpec
           successfulNodes ++ failingNodes,
           Task(dag),
           memoizeNodes = memoize,
-          failing = failingNodes,
+          maybeFail =
+            (node, _) => if (failingNodes(node)) Some(new RuntimeException("Boom!")) else None,
           skipFailedNodesInNextRounds = true
         ) { (initialSynchronizer, mockDownloadManager) =>
           for {
@@ -125,16 +127,10 @@ class InitialSynchronizationForwardImplSpec
         }
       }
 
-      """|invoke successful nodes multiple times and
-         |not include failed nodes in next rounds
-         |if memoization is true
-      """.stripMargin in {
+      "invoke successful nodes multiple times and not include failed nodes in next rounds if memoization is true" in {
         test(memoize = true)
       }
-      """|invoke successful nodes multiple times and
-         |not include failed nodes in next rounds
-         |if memoization is false
-      """.stripMargin in {
+      "invoke successful nodes multiple times and not include failed nodes in next rounds if memoization is false" in {
         test(memoize = false)
       }
 
@@ -230,6 +226,41 @@ class InitialSynchronizationForwardImplSpec
         }
       }
     }
+    "returned dag slice contains summaries with missing dependencies" should {
+      "use the regular synchronizer to get the dependencies" in {
+        val nodes = sample(genNodes(max = 1))
+        val (genesis, rest) = {
+          val dag = sample(genDag())
+          (dag.head, dag.tail.take(1))
+        }
+        val syncedRef = Ref.unsafe[Task, Set[ByteString]](Set.empty)
+
+        TestFixture(
+          nodes,
+          Task(rest),
+          skipFailedNodesInNextRounds = true,
+          minSuccessful = 1,
+          maybeFail = (_, summary) =>
+            if (summary == rest.head) {
+              Some(GossipError.MissingDependencies(summary.blockHash, List(genesis.blockHash)))
+            } else None,
+          sync = targets =>
+            syncedRef.update(_ ++ targets).map { _ =>
+              Vector(genesis).filter(x => targets(x.blockHash))
+            }
+        ) { (initialSynchronizer, downloadManager) =>
+          for {
+            w <- initialSynchronizer.sync()
+            _ <- w.attempt
+            s <- syncedRef.get
+          } yield {
+            s shouldBe Set(genesis.blockHash)
+            // It should try download once, then sync and download genesis, then the original again.
+            downloadManager.requestsCounter.get()(nodes.head) shouldBe 3
+          }
+        }
+      }
+    }
   }
 }
 
@@ -244,17 +275,14 @@ object InitialSynchronizationForwardImplSpec extends ArbitraryConsensus {
     def banTemp(node: Node): Task[Unit]     = ???
   }
 
-  class MockDownloadManager(failing: Set[Node]) extends DownloadManager[Task] {
+  class MockDownloadManager(maybeFail: (Node, BlockSummary) => Option[Throwable])
+      extends DownloadManager[Task] {
     val requestsCounter = Atomic(Map.empty[Node, Int].withDefaultValue(0))
 
     def scheduleDownload(summary: BlockSummary, source: Node, relay: Boolean) =
       Task.delay {
         requestsCounter.transform(m => m + (source -> (m(source) + 1)))
-        if (failing(source)) {
-          Task.raiseError(new RuntimeException("Boom!"))
-        } else {
-          Task.unit
-        }
+        maybeFail(source, summary).fold(Task.unit)(Task.raiseError(_))
       }
 
   }
@@ -285,12 +313,26 @@ object InitialSynchronizationForwardImplSpec extends ArbitraryConsensus {
         .flatMap(summaries => Iterant.fromSeq[Task, BlockSummary](summaries))
   }
 
+  class MockSynchronizer(f: Set[ByteString] => Task[Vector[BlockSummary]])
+      extends Synchronizer[Task] {
+    def syncDag(
+        source: Node,
+        targetBlockHashes: Set[ByteString]
+    ): Task[Either[Synchronizer.SyncError, Vector[BlockSummary]]] =
+      f(targetBlockHashes).map(Right(_))
+
+    def downloaded(
+        blockHash: ByteString
+    ): Task[Unit] = Task.unit
+  }
+
   object TestFixture {
     def apply(
         nodes: List[Node],
         produceDag: Task[Vector[BlockSummary]],
         correctRanges: Boolean = true,
-        failing: Set[Node] = Set.empty,
+        maybeFail: (Node, BlockSummary) => Option[Throwable] = (_, _) => None,
+        sync: Set[ByteString] => Task[Vector[BlockSummary]] = _ => Task.now(Vector.empty),
         selectNodes: List[Node] => List[Node] = _.distinct,
         memoizeNodes: Boolean = false,
         minSuccessful: Int = Int.MaxValue,
@@ -302,7 +344,8 @@ object InitialSynchronizationForwardImplSpec extends ArbitraryConsensus {
         test: (InitialSynchronization[Task], MockDownloadManager) => Task[Unit]
     ): Unit = {
       val mockGossipService   = new MockGossipService(produceDag, correctRanges)
-      val mockDownloadManager = new MockDownloadManager(failing)
+      val mockDownloadManager = new MockDownloadManager(maybeFail)
+      val mockSynchronizer    = new MockSynchronizer(sync)
       val effect = new InitialSynchronizationForwardImpl[Task](
         nodeDiscovery = new MockNodeDiscovery(nodes),
         selectNodes,
@@ -311,6 +354,7 @@ object InitialSynchronizationForwardImplSpec extends ArbitraryConsensus {
         minSuccessful,
         skipFailedNodesInNextRounds,
         mockDownloadManager,
+        mockSynchronizer,
         step,
         rankStartFrom,
         roundPeriod
