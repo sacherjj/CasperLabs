@@ -62,22 +62,22 @@ export class VestingDetail {
   dripAmount: number;
   adminReleaseDuration: number;
 
-  // Todo fetch from global state storage once the parsing bug is fixed.
+  // Todo(ECO-321): fetching from global state storage once the parsing bug is fixed.
   get adminAccount(): string {
     return 'ad1ce8c63f6439c12a6c57f8d797e2a1ea7af76ccdcc08b83baa5f84ffc180f1';
   }
 
-  // Todo fetch from global state storage once the parsing bug is fixed.
+  // Todo(ECO-321): fetching from global state storage once the parsing bug is fixed.
   get recipientAccount(): string {
     return '400ceb75b8ad14a395edd03a285cc2de745cc61bef22e5a8e214a9783505409c';
   }
 
-  // Todo fetch from global state storage once the parsing bug is fixed.
+  // Todo(ECO-321): fetching from global state storage once the parsing bug is fixed.
   get isPaused(): boolean {
     return false;
   }
 
-  // check whether the contract is releasable by admin account
+  // Check whether the contract is releasable by admin account
   get isReleasable(): boolean {
     if (!this.isPaused) {
       return false;
