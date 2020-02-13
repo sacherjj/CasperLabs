@@ -20,7 +20,7 @@ import { ToggleButton } from './ToggleButton';
 /** Show the tips of the DAG. */
 @observer
 class _Explorer extends RefreshableComponent<Props, {}> {
-  constructor(props:Props) {
+  constructor(props: Props) {
     super(props);
     let maxRank = parseInt(props.maxRank || '') || 0;
     let depth = parseInt(props.depth || '') || 10;
@@ -77,7 +77,7 @@ class _Explorer extends RefreshableComponent<Props, {}> {
                 if (
                   current &&
                   current.getSummary()!.getBlockHash_asB64() ===
-                    block.getSummary()!.getBlockHash_asB64()
+                  block.getSummary()!.getBlockHash_asB64()
                 ) {
                   dag.selectedBlock = undefined;
                 } else {
@@ -129,7 +129,7 @@ class BlockDetails extends React.Component<
     onSelect: (blockHash: string) => void;
   },
   {}
-> {
+  > {
   ref: HTMLElement | null = null;
 
   render() {
@@ -210,11 +210,10 @@ class BlockDetails extends React.Component<
           })()
         ],
         [
-          'Fault Tolerance',
+          'Is Finalized',
           block
             .getStatus()!
-            .getFaultTolerance()
-            .toFixed(3)
+            .getIsFinalized()
         ]
       ]
     ];
