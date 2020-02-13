@@ -1034,6 +1034,26 @@ steps:
 trigger:
   cron: [ mac-hourly-cron ]
 
+---
+kind: pipeline
+name: drone-docker-image-cleanup-cron
+
+clone:
+  disable: true
+
+steps:
+- name: drone-docker-image-cleanup
+  image: casperlabs/buildenv:latest
+  command:
+  - "docker images --filter \"dangling=true\" -q --no-trunc | xargs --no-run-if-empty docker rmi -f || true"
+  - "docker images | grep DRONE | grep -E '([1-9][0-9]|[3-9]).hours' | awk '{print $3}' | xargs --no-run-if-empty docker rmi -f || true"
+  volumes:
+  - name: docker_sock
+    path: "/var/run/docker.sock"
+
+trigger:
+  cron: [ drone-docker-image-cleanup-cron ]
+
 # Signature for Drone
 ---
 kind: signature
