@@ -311,7 +311,7 @@ build-client: \
 build-client-contracts: \
 	client/src/main/resources/bonding.wasm \
 	client/src/main/resources/unbonding.wasm \
-	client/src/main/resources/transfer_to_account.wasm \
+	client/src/main/resources/transfer_to_account_u512.wasm \
 	client/src/main/resources/standard_payment.wasm
 
 build-node: \
@@ -325,7 +325,7 @@ build-explorer: \
 	.make/npm/explorer
 
 build-explorer-contracts: \
-	explorer/contracts/transfer_to_account.wasm \
+	explorer/contracts/transfer_to_account_u512.wasm \
 	explorer/contracts/standard_payment.wasm \
 	explorer/contracts/faucet.wasm
 

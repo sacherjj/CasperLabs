@@ -112,7 +112,7 @@ def unbond_command(casperlabs_client, args):
 
 @guarded_command
 def transfer_command(casperlabs_client, args):
-    _set_session(args, "transfer_to_account.wasm")
+    _set_session(args, "transfer_to_account_u512.wasm")
 
     if not args.session_args:
         target_account_bytes = base64.b64decode(args.target_account)
@@ -127,7 +127,7 @@ def transfer_command(casperlabs_client, args):
             ABI.args(
                 [
                     ABI.account("account", target_account_bytes),
-                    ABI.long_value("amount", args.amount),
+                    ABI.u512("amount", args.amount),
                 ]
             )
         )

@@ -50,7 +50,7 @@ Run the transfer from the genesis account to our test faucet account.
 ```sh
 node ./server/dist/transfer.js \
   --host-url http://localhost:8401 \
-  --transfer-contract-path contracts/transfer_to_account.wasm \
+  --transfer-contract-path contracts/transfer_to_account_u512.wasm \
   --payment-contract-path contracts/standard_payment.wasm \
   --payment-amount 100000 \
   --gas-price 10 \
