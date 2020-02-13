@@ -139,6 +139,8 @@ def _deploy_kwargs(args, private_key_accepted=True):
     from_addr = (
         getattr(args, "from")
         and bytes.fromhex(getattr(args, "from"))
+        or getattr(args, "public_key")
+        and read_pem_key(args.public_key)
         or private_to_public_key(args.private_key)
     )
     if from_addr and len(from_addr) != 32:
@@ -189,7 +191,7 @@ def make_deploy_command(casperlabs_client, args):
     deploy = casperlabs_client.make_deploy(**kwargs)
     data = deploy.SerializeToString()
     if not args.deploy_path:
-        sys.stdout.write(data)
+        sys.stdout.buffer.write(data)
     else:
         with open(args.deploy_path, "wb") as f:
             f.write(data)
@@ -229,6 +231,14 @@ def deploy_command(casperlabs_client, args):
     kwargs = _deploy_kwargs(args)
     deploy_hash = casperlabs_client.deploy(**kwargs)
     print(f"Success! Deploy {deploy_hash} deployed")
+    if args.wait_for_processed:
+        deploy_info = casperlabs_client.showDeploy(
+            deploy_hash,
+            full_view=False,
+            wait_for_processed=args.wait_for_processed,
+            timeout_seconds=args.timeout_seconds,
+        )
+        print(hexify(deploy_info))
 
 
 @guarded_command
@@ -276,7 +286,12 @@ def balance_command(casperlabs_client, args):
 
 @guarded_command
 def show_deploy_command(casperlabs_client, args):
-    response = casperlabs_client.showDeploy(args.hash, full_view=False)
+    response = casperlabs_client.showDeploy(
+        args.hash,
+        full_view=False,
+        wait_for_processed=args.wait_for_processed,
+        timeout_seconds=args.timeout_seconds,
+    )
     print(hexify(response))
 
 
@@ -385,6 +400,8 @@ def deploy_options(private_key_accepted=True):
         [('--session-args',), dict(required=False, type=str, help="""JSON encoded list of session args, e.g.: '[{"name": "amount", "value": {"long_value": 123456}}]'""")],
         [('--payment-args',), dict(required=False, type=str, help="""JSON encoded list of payment args, e.g.: '[{"name": "amount", "value": {"big_int": {"value": "123456", "bit_width": 512}}}]'""")],
         [('--ttl-millis',), dict(required=False, type=int, help="""Time to live. Time (in milliseconds) that the deploy will remain valid for.'""")],
+        [('-w', '--wait-for-processed'), dict(action='store_true', help='Wait for deploy status PROCESSED or DISCARDED')],
+        [('--timeout-seconds',), dict(type=int, default=CasperLabsClient.DEPLOY_STATUS_TIMEOUT, help='Timeout in seconds')],
         [('--public-key',), dict(required=False, default=None, type=str, help='Path to the file with account public key (Ed25519)')]]
         + (private_key_accepted
            and [[('--private-key',), dict(required=True, default=None, type=str, help='Path to the file with account private key (Ed25519)')]]
@@ -514,7 +531,9 @@ def cli(*arguments) -> int:
                       [[('-d', '--depth'), dict(required=True, type=int, help='depth in terms of block height')]])
 
     parser.addCommand('show-deploy', show_deploy_command, 'View properties of a deploy known by Casper on an existing running node.',
-                      [[('hash',), dict(type=str, help='Value of the deploy hash, base16 encoded.')]])
+                      [[('hash',), dict(type=str, help='Value of the deploy hash, base16 encoded.')],
+                       [('-w', '--wait-for-processed'), dict(action='store_true', help='Wait for deploy status PROCESSED or DISCARDED')],
+                       [('--timeout-seconds',), dict(type=int, default=CasperLabsClient.DEPLOY_STATUS_TIMEOUT, help='Timeout in seconds')]])
 
     parser.addCommand('show-deploys', show_deploys_command, 'View deploys included in a block.',
                       [[('hash',), dict(type=str, help='Value of the block hash, base16 encoded.')]])

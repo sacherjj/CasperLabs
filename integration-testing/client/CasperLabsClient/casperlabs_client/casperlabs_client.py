@@ -581,20 +581,40 @@ class CasperLabsClient:
         return int(balance.big_int.value)
 
     @api
-    def showDeploy(self, deploy_hash_base16: str, full_view=True):
+    def showDeploy(
+        self,
+        deploy_hash_base16: str,
+        full_view: bool = False,
+        wait_for_processed: bool = False,
+        delay: int = DEPLOY_STATUS_CHECK_DELAY,
+        timeout_seconds: int = DEPLOY_STATUS_TIMEOUT,
+    ):
         """
         Retrieve information about a single deploy by hash.
         """
-        return self.casperService.GetDeployInfo(
-            casper.GetDeployInfoRequest(
-                deploy_hash_base16=deploy_hash_base16,
-                view=(
-                    full_view
-                    and info.DeployInfo.View.FULL
-                    or info.DeployInfo.View.BASIC
-                ),
+        start_time = time.time()
+        while True:
+            deploy_info = self.casperService.GetDeployInfo(
+                casper.GetDeployInfoRequest(
+                    deploy_hash_base16=deploy_hash_base16,
+                    view=(
+                        full_view
+                        and info.DeployInfo.View.FULL
+                        or info.DeployInfo.View.BASIC
+                    ),
+                )
             )
-        )
+            if (
+                wait_for_processed
+                and deploy_info.status.state == info.DeployInfo.State.PENDING
+            ):
+                if time.time() - start_time > timeout_seconds:
+                    raise Exception(
+                        f"Timed out waiting for deploy {deploy_hash_base16} to be processed"
+                    )
+                time.sleep(delay)
+                continue
+            return deploy_info
 
     @api
     def showDeploys(self, block_hash_base16: str, full_view=True):
