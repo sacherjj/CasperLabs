@@ -526,6 +526,7 @@ object DagOperations {
 
     val stream = toposortJDagDesc(dag, justifications)
       .takeUntil(_ == stop)
+      .filter(!_.isGenesisLike) // Not interested in Genesis block
 
     val keyBlockHashes = erasObservedBehavior.keyBlockHashes
 
@@ -535,6 +536,7 @@ object DagOperations {
           kbh =>
             kbh -> erasObservedBehavior
               .validatorsInEra(kbh)
+              .filterNot(_.isEmpty()) // Not interested in Genesis validator.
               .map(_ -> ObservedValidatorBehavior.Empty)
               .toMap
         )

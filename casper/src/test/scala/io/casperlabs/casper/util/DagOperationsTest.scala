@@ -481,6 +481,9 @@ class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator with 
   val v3Bond     = Bond(v2, 3)
   val bondsThree = List(v1Bond, v2Bond, v3Bond)
 
+  val genesisValidator = ByteString.EMPTY
+  val genesisEra       = ByteString.EMPTY
+
   "panoramaOfBlockByValidators" should "return latest message per validator within single era" in withStorage {
     implicit blockStorage => implicit dagStorage => _ =>
       _ =>
@@ -531,6 +534,9 @@ class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator with 
           genesisMessage                          = Message.fromBlock(genesis).get
           localDagView = EraObservedBehavior.local(
             Map(
+              genesisEra -> Map(
+                genesisValidator -> Set(genesisMessage)
+              ),
               genesis.blockHash -> Map(
                 v1 -> Set(Message.fromBlock(a1).get),
                 v2 -> Set(Message.fromBlock(b1).get),
@@ -632,6 +638,9 @@ class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator with 
           genesisMessage                          = Message.fromBlock(genesis).get
           localDagView = EraObservedBehavior.local(
             Map(
+              genesisEra -> Map(
+                genesisValidator -> Set(genesisMessage)
+              ),
               genesis.blockHash -> Map(
                 v1 -> Set(Message.fromBlock(a1).get),
                 v2 -> Set(Message.fromBlock(sb).get),
@@ -710,8 +719,12 @@ class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator with 
                  bondsThree,
                  keyBlockHash = genesis.blockHash
                )
+          genesisMessage = Message.fromBlock(genesis).get
           localDagView = EraObservedBehavior.local(
             Map(
+              genesisEra -> Map(
+                genesisValidator -> Set(genesisMessage)
+              ),
               genesis.blockHash -> Map(
                 v1 -> Set(Message.fromBlock(a1).get, Message.fromBlock(a1Prime).get),
                 v2 -> Set(Message.fromBlock(b1).get)
@@ -723,7 +736,7 @@ class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator with 
                              dag,
                              Message.fromBlock(b2).get,
                              localDagView,
-                             Message.fromBlock(genesis).get
+                             genesisMessage
                            )
 
           latestGenesisMessageHashes = latestMessages
@@ -796,8 +809,12 @@ class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator with 
                  bondsThree,
                  keyBlockHash = genesis.blockHash
                )
+          genesisMessage = Message.fromBlock(genesis).get
           localDagView = EraObservedBehavior.local(
             Map(
+              genesisEra -> Map(
+                genesisValidator -> Set(genesisMessage)
+              ),
               genesis.blockHash -> Map(
                 v1 -> Set(Message.fromBlock(a1).get, Message.fromBlock(a1Prime).get),
                 v2 -> Set(Message.fromBlock(b2).get)
