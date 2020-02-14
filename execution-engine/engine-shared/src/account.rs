@@ -17,7 +17,7 @@ pub use associated_keys::AssociatedKeys;
 
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub struct Account {
-    public_key: [u8; 32],
+    public_key: PublicKey,
     named_keys: BTreeMap<String, Key>,
     purse_id: PurseId,
     associated_keys: AssociatedKeys,
@@ -26,7 +26,7 @@ pub struct Account {
 
 impl Account {
     pub fn new(
-        public_key: [u8; 32],
+        public_key: PublicKey,
         named_keys: BTreeMap<String, Key>,
         purse_id: PurseId,
         associated_keys: AssociatedKeys,
@@ -42,14 +42,14 @@ impl Account {
     }
 
     pub fn create(
-        account_addr: [u8; 32],
+        account: PublicKey,
         named_keys: BTreeMap<String, Key>,
         purse_id: PurseId,
     ) -> Self {
-        let associated_keys = AssociatedKeys::new(PublicKey::new(account_addr), Weight::new(1));
+        let associated_keys = AssociatedKeys::new(account, Weight::new(1));
         let action_thresholds: ActionThresholds = Default::default();
         Account::new(
-            account_addr,
+            account,
             named_keys,
             purse_id,
             associated_keys,
@@ -69,7 +69,7 @@ impl Account {
         &mut self.named_keys
     }
 
-    pub fn pub_key(&self) -> [u8; 32] {
+    pub fn pub_key(&self) -> PublicKey {
         self.public_key
     }
 
@@ -234,7 +234,7 @@ impl ToBytes for Account {
 
 impl FromBytes for Account {
     fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
-        let (public_key, rem): ([u8; 32], &[u8]) = FromBytes::from_bytes(bytes)?;
+        let (public_key, rem): (PublicKey, &[u8]) = FromBytes::from_bytes(bytes)?;
         let (named_keys, rem): (BTreeMap<String, Key>, &[u8]) = FromBytes::from_bytes(rem)?;
         let (purse_id, rem): (URef, &[u8]) = FromBytes::from_bytes(rem)?;
         let (associated_keys, rem): (AssociatedKeys, &[u8]) = FromBytes::from_bytes(rem)?;
@@ -258,7 +258,7 @@ pub mod gens {
 
     use types::{
         account::MAX_ASSOCIATED_KEYS,
-        gens::{named_keys_arb, u8_slice_32, uref_arb},
+        gens::{named_keys_arb, public_key_arb, uref_arb},
     };
 
     use super::*;
@@ -268,14 +268,14 @@ pub mod gens {
 
     prop_compose! {
         pub fn account_arb()(
-            pub_key in u8_slice_32(),
+            pub_key in public_key_arb(),
             urefs in named_keys_arb(3),
             purse_id in uref_arb(),
             thresholds in action_thresholds_arb(),
             mut associated_keys in associated_keys_arb(MAX_ASSOCIATED_KEYS - 1),
         ) -> Account {
                 let purse_id = PurseId::new(purse_id);
-                associated_keys.add_key(pub_key.into(), Weight::new(1)).unwrap();
+                associated_keys.add_key(pub_key, Weight::new(1)).unwrap();
                 Account::new(
                     pub_key,
                     urefs,
@@ -335,7 +335,7 @@ mod tests {
             .expect("should add key_1");
 
         let account = Account::new(
-            [0u8; 32],
+            PublicKey::new([0u8; 32]),
             BTreeMap::new(),
             PurseId::new(URef::new([0u8; 32], AccessRights::READ_ADD_WRITE)),
             keys,
@@ -381,7 +381,7 @@ mod tests {
             res
         };
         let account = Account::new(
-            [0u8; 32],
+            PublicKey::new([0u8; 32]),
             BTreeMap::new(),
             PurseId::new(URef::new([0u8; 32], AccessRights::READ_ADD_WRITE)),
             associated_keys,
@@ -425,7 +425,7 @@ mod tests {
             res
         };
         let account = Account::new(
-            [0u8; 32],
+            PublicKey::new([0u8; 32]),
             BTreeMap::new(),
             PurseId::new(URef::new([0u8; 32], AccessRights::READ_ADD_WRITE)),
             associated_keys,
@@ -473,7 +473,7 @@ mod tests {
             res
         };
         let mut account = Account::new(
-            [0u8; 32],
+            PublicKey::new([0u8; 32]),
             BTreeMap::new(),
             PurseId::new(URef::new([0u8; 32], AccessRights::READ_ADD_WRITE)),
             associated_keys,
@@ -513,7 +513,7 @@ mod tests {
             res
         };
         let mut account = Account::new(
-            [0u8; 32],
+            PublicKey::new([0u8; 32]),
             BTreeMap::new(),
             PurseId::new(URef::new([0u8; 32], AccessRights::READ_ADD_WRITE)),
             associated_keys,
@@ -555,7 +555,7 @@ mod tests {
         );
         let key_management_threshold = Weight::new(deployment_threshold.value() + 1);
         let mut account = Account::new(
-            identity_key.value(),
+            identity_key,
             BTreeMap::new(),
             PurseId::new(URef::new([0u8; 32], AccessRights::READ_ADD_WRITE)),
             associated_keys,
@@ -613,7 +613,7 @@ mod tests {
         };
 
         let mut account = Account::new(
-            identity_key.value(),
+            identity_key,
             BTreeMap::new(),
             PurseId::new(URef::new([0u8; 32], AccessRights::READ_ADD_WRITE)),
             associated_keys,
@@ -648,7 +648,7 @@ mod tests {
         };
 
         let mut account = Account::new(
-            identity_key.value(),
+            identity_key,
             BTreeMap::new(),
             PurseId::new(URef::new([0u8; 32], AccessRights::READ_ADD_WRITE)),
             associated_keys,

@@ -204,7 +204,7 @@ where
     }
 
     pub fn get_caller(&self) -> PublicKey {
-        self.account.pub_key().into()
+        self.account.pub_key()
     }
 
     pub fn get_blocktime(&self) -> BlockTime {
@@ -257,7 +257,7 @@ where
 
     pub fn seed(&self) -> [u8; KEY_LOCAL_SEED_LENGTH] {
         match self.base_key {
-            Key::Account(bytes) => bytes,
+            Key::Account(bytes) => bytes.value(),
             Key::Hash(bytes) => bytes,
             Key::URef(uref) => uref.addr(),
             Key::Local(hash) => hash,

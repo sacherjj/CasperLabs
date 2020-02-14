@@ -92,7 +92,7 @@ impl TryFrom<state::Account> for Account {
         };
 
         let account = Account::new(
-            public_key,
+            PublicKey::new(public_key),
             named_keys.into_inner(),
             purse_id,
             associated_keys,

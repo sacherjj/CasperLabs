@@ -72,7 +72,7 @@ use crate::{
 pub const MAX_PAYMENT: u64 = 10_000_000;
 pub const CONV_RATE: u64 = 10;
 
-pub const SYSTEM_ACCOUNT_ADDR: [u8; 32] = [0u8; 32];
+pub const SYSTEM_ACCOUNT_ADDR: PublicKey = PublicKey::new([0u8; 32]);
 
 const GENESIS_INITIAL_BLOCKTIME: u64 = 0;
 const MINT_METHOD_NAME: &str = "mint";
@@ -328,11 +328,8 @@ where
                     .into_iter()
                     .map(|account| (account, account_named_keys.clone()))
                     .collect();
-                let system_account = GenesisAccount::new(
-                    PublicKey::new(SYSTEM_ACCOUNT_ADDR),
-                    Motes::zero(),
-                    Motes::zero(),
-                );
+                let system_account =
+                    GenesisAccount::new(SYSTEM_ACCOUNT_ADDR, Motes::zero(), Motes::zero());
                 ret.push((system_account, system_account_named_keys));
                 ret
             };
@@ -391,15 +388,11 @@ where
                 )?;
 
                 // ...and write that account to global state...
-                let key = Key::Account(account_public_key.value());
+                let key = Key::Account(account_public_key);
                 let value = {
                     let account_main_purse = mint_result?;
                     let purse_id = PurseId::new(account_main_purse);
-                    StoredValue::Account(Account::create(
-                        account_public_key.value(),
-                        named_keys,
-                        purse_id,
-                    ))
+                    StoredValue::Account(Account::create(account_public_key, named_keys, purse_id))
                 };
 
                 tracking_copy_write.borrow_mut().write(key, value);
@@ -520,7 +513,7 @@ where
                 let initial_base_key = Key::Account(SYSTEM_ACCOUNT_ADDR);
                 let authorization_keys = {
                     let mut ret = BTreeSet::new();
-                    ret.insert(PublicKey::new(SYSTEM_ACCOUNT_ADDR));
+                    ret.insert(SYSTEM_ACCOUNT_ADDR);
                     ret
                 };
 
@@ -764,7 +757,7 @@ where
 
         let session = deploy_item.session;
         let payment = deploy_item.payment;
-        let address = Key::Account(deploy_item.address.value());
+        let address = Key::Account(deploy_item.address);
         let authorization_keys = deploy_item.authorization_keys;
         let deploy_hash = deploy_item.deploy_hash;
 

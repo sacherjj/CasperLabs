@@ -12,7 +12,7 @@ use engine_test_support::{
 use types::{account::PublicKey, ApiError, CLValue, Key, TransferResult, TransferredTo, U512};
 
 const CONTRACT_TRANSFER_PURSE_TO_ACCOUNT: &str = "transfer_purse_to_account.wasm";
-const ACCOUNT_1_ADDR: [u8; 32] = [42u8; 32];
+const ACCOUNT_1_ADDR: PublicKey = PublicKey::new([42u8; 32]);
 lazy_static! {
     static ref ACCOUNT_1_INITIAL_FUND: U512 = *DEFAULT_PAYMENT + 42;
 }
@@ -20,8 +20,8 @@ lazy_static! {
 #[ignore]
 #[test]
 fn should_run_purse_to_account_transfer() {
-    let account_1_public_key = PublicKey::new(ACCOUNT_1_ADDR);
-    let genesis_public_key = PublicKey::new(DEFAULT_ACCOUNT_ADDR);
+    let account_1_public_key = ACCOUNT_1_ADDR;
+    let genesis_public_key = DEFAULT_ACCOUNT_ADDR;
     let exec_request_1 = ExecuteRequestBuilder::standard(
         DEFAULT_ACCOUNT_ADDR,
         CONTRACT_TRANSFER_PURSE_TO_ACCOUNT,
@@ -29,7 +29,7 @@ fn should_run_purse_to_account_transfer() {
     )
     .build();
     let exec_request_2 = ExecuteRequestBuilder::standard(
-        account_1_public_key.value(),
+        account_1_public_key,
         CONTRACT_TRANSFER_PURSE_TO_ACCOUNT,
         (genesis_public_key, U512::from(1)),
     )
@@ -193,7 +193,7 @@ fn should_run_purse_to_account_transfer() {
 #[ignore]
 #[test]
 fn should_fail_when_sending_too_much_from_purse_to_account() {
-    let account_1_key = PublicKey::new(ACCOUNT_1_ADDR);
+    let account_1_key = ACCOUNT_1_ADDR;
 
     let exec_request_1 = ExecuteRequestBuilder::standard(
         DEFAULT_ACCOUNT_ADDR,

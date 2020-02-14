@@ -6,11 +6,14 @@ use engine_test_support::{
     internal::{ExecuteRequestBuilder, WasmTestBuilder, DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT},
     DEFAULT_ACCOUNT_ADDR,
 };
-use types::{account::PurseId, Key, U512};
+use types::{
+    account::{PublicKey, PurseId},
+    Key, U512,
+};
 
 const CONTRACT_CREATE_PURSE_01: &str = "create_purse_01.wasm";
 const CONTRACT_TRANSFER_PURSE_TO_ACCOUNT: &str = "transfer_purse_to_account.wasm";
-const ACCOUNT_1_ADDR: [u8; 32] = [1u8; 32];
+const ACCOUNT_1_ADDR: PublicKey = PublicKey::new([1u8; 32]);
 const TEST_PURSE_NAME: &str = "test_purse";
 
 lazy_static! {

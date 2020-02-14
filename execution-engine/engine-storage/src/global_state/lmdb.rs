@@ -166,7 +166,7 @@ mod tests {
     use lmdb::DatabaseFlags;
     use tempfile::tempdir;
 
-    use types::CLValue;
+    use types::{account::PublicKey, CLValue};
 
     use crate::{
         trie_store::operations::{write, WriteResult},
@@ -184,11 +184,11 @@ mod tests {
     fn create_test_pairs() -> [TestPair; 2] {
         [
             TestPair {
-                key: Key::Account([1_u8; 32]),
+                key: Key::Account(PublicKey::new([1_u8; 32])),
                 value: StoredValue::CLValue(CLValue::from_t(1_i32).unwrap()),
             },
             TestPair {
-                key: Key::Account([2_u8; 32]),
+                key: Key::Account(PublicKey::new([2_u8; 32])),
                 value: StoredValue::CLValue(CLValue::from_t(2_i32).unwrap()),
             },
         ]
@@ -197,15 +197,15 @@ mod tests {
     fn create_test_pairs_updated() -> [TestPair; 3] {
         [
             TestPair {
-                key: Key::Account([1u8; 32]),
+                key: Key::Account(PublicKey::new([1u8; 32])),
                 value: StoredValue::CLValue(CLValue::from_t("one".to_string()).unwrap()),
             },
             TestPair {
-                key: Key::Account([2u8; 32]),
+                key: Key::Account(PublicKey::new([2u8; 32])),
                 value: StoredValue::CLValue(CLValue::from_t("two".to_string()).unwrap()),
             },
             TestPair {
-                key: Key::Account([3u8; 32]),
+                key: Key::Account(PublicKey::new([3u8; 32])),
                 value: StoredValue::CLValue(CLValue::from_t(3_i32).unwrap()),
             },
         ]

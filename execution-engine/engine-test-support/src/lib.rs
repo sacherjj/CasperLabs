@@ -75,10 +75,11 @@ pub use code::Code;
 pub use error::{Error, Result};
 pub use session::{Session, SessionBuilder};
 pub use test_context::{TestContext, TestContextBuilder};
+use types::account::PublicKey;
 pub use value::Value;
 
 /// An address of an entity (e.g. an account or key) on the network.
-pub type Address = [u8; 32];
+pub type Address = PublicKey;
 
 /// The address of a [`URef`](types::URef) (unforgeable reference) on the network.
 pub type URefAddr = [u8; 32];
@@ -87,7 +88,7 @@ pub type URefAddr = [u8; 32];
 pub type Hash = [u8; 32];
 
 /// Default test account address.
-pub const DEFAULT_ACCOUNT_ADDR: [u8; 32] = [6u8; 32];
+pub const DEFAULT_ACCOUNT_ADDR: PublicKey = PublicKey::new([6u8; 32]);
 
 /// Default initial balance of a test account in motes.
 pub const DEFAULT_ACCOUNT_INITIAL_BALANCE: u64 = 100_000_000_000;

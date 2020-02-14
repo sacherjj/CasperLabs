@@ -9,6 +9,7 @@ use blake2::{
 use hex_fmt::HexFmt;
 
 use crate::{
+    account::PublicKey,
     bytesrepr::{Error, FromBytes, ToBytes},
     AccessRights, ContractRef, URef, UREF_SERIALIZED_LENGTH,
 };
@@ -49,7 +50,7 @@ fn hash(bytes: &[u8]) -> [u8; KEY_LOCAL_LENGTH] {
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Hash)]
 pub enum Key {
     /// A `Key` under which a user account is stored.
-    Account([u8; KEY_ACCOUNT_LENGTH]),
+    Account(PublicKey),
     /// A `Key` under which a smart contract is stored and which is the pseudo-hash of the
     /// contract.
     Hash([u8; KEY_HASH_LENGTH]),
@@ -134,7 +135,7 @@ impl Key {
     /// Returns a human-readable version of `self`, with the inner bytes encoded to Base16.
     pub fn as_string(&self) -> String {
         match self {
-            Key::Account(addr) => format!("account-{}", base16::encode_lower(addr)),
+            Key::Account(addr) => format!("account-{}", base16::encode_lower(&addr.value())),
             Key::Hash(addr) => format!("hash-{}", base16::encode_lower(addr)),
             Key::URef(uref) => uref.as_string(),
             Key::Local(hash) => format!("local-{}", base16::encode_lower(hash)),
@@ -153,7 +154,7 @@ impl Key {
 
     /// Returns the inner bytes of `self` if `self` is of type [`Key::Account`], otherwise returns
     /// `None`.
-    pub fn into_account(self) -> Option<[u8; KEY_ACCOUNT_LENGTH]> {
+    pub fn into_account(self) -> Option<PublicKey> {
         match self {
             Key::Account(bytes) => Some(bytes),
             _ => None,
@@ -199,7 +200,7 @@ impl Key {
 impl Display for Key {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match self {
-            Key::Account(addr) => write!(f, "Key::Account({})", HexFmt(addr)),
+            Key::Account(public_key) => write!(f, "Key::Account({})", HexFmt(&public_key.value())),
             Key::Hash(addr) => write!(f, "Key::Hash({})", HexFmt(addr)),
             Key::URef(uref) => write!(f, "Key::{}", uref), /* Display impl for URef will append */
             // URef(…).
@@ -249,10 +250,10 @@ impl From<URef> for Key {
 impl ToBytes for Key {
     fn to_bytes(&self) -> Result<Vec<u8>, Error> {
         match self {
-            Key::Account(addr) => {
+            Key::Account(public_key) => {
                 let mut result = Vec::with_capacity(KEY_ACCOUNT_SERIALIZED_LENGTH);
                 result.push(ACCOUNT_ID);
-                result.append(&mut addr.to_bytes()?);
+                result.append(&mut public_key.to_bytes()?);
                 Ok(result)
             }
             Key::Hash(hash) => {
@@ -282,8 +283,8 @@ impl FromBytes for Key {
         let (id, rest): (u8, &[u8]) = FromBytes::from_bytes(bytes)?;
         match id {
             ACCOUNT_ID => {
-                let (addr, rem): ([u8; 32], &[u8]) = FromBytes::from_bytes(rest)?;
-                Ok((Key::Account(addr), rem))
+                let (public_key, rem): (PublicKey, &[u8]) = FromBytes::from_bytes(rest)?;
+                Ok((Key::Account(public_key), rem))
             }
             HASH_ID => {
                 let (hash, rem): ([u8; 32], &[u8]) = FromBytes::from_bytes(rest)?;
@@ -396,7 +397,8 @@ mod tests {
     fn should_display_key() {
         let expected_hash = core::iter::repeat("0").take(64).collect::<String>();
         let addr_array = [0u8; 32];
-        let account_key = Key::Account(addr_array);
+        let public_key = PublicKey::new(addr_array);
+        let account_key = Key::Account(public_key);
         assert_eq!(
             format!("{}", account_key),
             format!("Key::Account({})", expected_hash)
@@ -511,8 +513,9 @@ mod tests {
     #[test]
     fn check_key_account_getters() {
         let account = [42; 32];
-        let key1 = Key::Account(account);
-        assert_eq!(key1.into_account(), Some(account));
+        let public_key = PublicKey::new(account);
+        let key1 = Key::Account(public_key);
+        assert_eq!(key1.into_account(), Some(public_key));
         assert!(key1.into_hash().is_none());
         assert!(key1.as_uref().is_none());
         assert!(key1.into_local().is_none());

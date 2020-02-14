@@ -62,29 +62,29 @@ fn mock_tc(init_key: Key, init_account: Account) -> TrackingCopy<InMemoryGlobalS
     TrackingCopy::new(reader)
 }
 
-fn mock_account_with_purse_id(addr: [u8; 32], purse_id: [u8; 32]) -> (Key, Account) {
-    let associated_keys = AssociatedKeys::new(PublicKey::new(addr), Weight::new(1));
+fn mock_account_with_purse_id(public_key: PublicKey, purse_id: [u8; 32]) -> (Key, Account) {
+    let associated_keys = AssociatedKeys::new(public_key, Weight::new(1));
     let account = Account::new(
-        addr,
+        public_key,
         BTreeMap::new(),
         PurseId::new(URef::new(purse_id, AccessRights::READ_ADD_WRITE)),
         associated_keys,
         Default::default(),
     );
-    let key = Key::Account(addr);
+    let key = Key::Account(public_key);
 
     (key, account)
 }
 
-fn mock_account(addr: [u8; 32]) -> (Key, Account) {
-    mock_account_with_purse_id(addr, [0; 32])
+fn mock_account(public_key: PublicKey) -> (Key, Account) {
+    mock_account_with_purse_id(public_key, [0; 32])
 }
 
 // create random account key.
 fn random_account_key<G: RngCore>(entropy_source: &mut G) -> Key {
     let mut key = [0u8; 32];
     entropy_source.fill_bytes(&mut key);
-    Key::Account(key)
+    Key::Account(PublicKey::new(key))
 }
 
 // create random contract key.
@@ -159,8 +159,9 @@ where
     F: FnOnce(RuntimeContext<InMemoryGlobalStateView>) -> Result<T, Error>,
 {
     let base_acc_addr = [0u8; 32];
+    let base_acc = PublicKey::new(base_acc_addr);
     let deploy_hash = [1u8; 32];
-    let (key, account) = mock_account(base_acc_addr);
+    let (key, account) = mock_account(base_acc);
     let mut uref_map = BTreeMap::new();
     let address_generator = AddressGenerator::new(deploy_hash, Phase::Session);
     let runtime_context = mock_runtime_context(
@@ -426,7 +427,8 @@ fn contract_key_addable_valid() {
     // Contract key is addable if it is a "base" key - current context of the
     // execution.
     let base_acc_addr = [0u8; 32];
-    let (account_key, account) = mock_account(base_acc_addr);
+    let base_acc = PublicKey::new(base_acc_addr);
+    let (account_key, account) = mock_account(base_acc);
     let mut address_generator = AddressGenerator::new(DEPLOY_HASH, PHASE);
     let mut rng = rand::thread_rng();
     let contract_key = random_contract_key(&mut rng);
@@ -487,7 +489,8 @@ fn contract_key_addable_invalid() {
     // Contract key is addable if it is a "base" key - current context of the
     // execution.
     let base_acc_addr = [0u8; 32];
-    let (account_key, account) = mock_account(base_acc_addr);
+    let base_acc = PublicKey::new(base_acc_addr);
+    let (account_key, account) = mock_account(base_acc);
     let mut address_generator = AddressGenerator::new(DEPLOY_HASH, PHASE);
     let mut rng = rand::thread_rng();
     let contract_key = random_contract_key(&mut rng);
@@ -896,8 +899,9 @@ fn remove_uref_works() {
 
     let named_keys = HashMap::new();
     let base_acc_addr = [0u8; 32];
+    let base_acc = PublicKey::new(base_acc_addr);
     let deploy_hash = [1u8; 32];
-    let (key, account) = mock_account(base_acc_addr);
+    let (key, account) = mock_account(base_acc);
     let mut address_generator = AddressGenerator::new(deploy_hash, Phase::Session);
     let uref_name = "Foo".to_owned();
     let uref_key = create_uref(&mut address_generator, AccessRights::READ);
@@ -924,8 +928,9 @@ fn validate_valid_purse_id_of_an_account() {
     let mock_purse_id = [42u8; 32];
     let named_keys = HashMap::new();
     let base_acc_addr = [0u8; 32];
+    let base_acc = PublicKey::new(base_acc_addr);
     let deploy_hash = [1u8; 32];
-    let (key, account) = mock_account_with_purse_id(base_acc_addr, mock_purse_id);
+    let (key, account) = mock_account_with_purse_id(base_acc, mock_purse_id);
     let address_generator = AddressGenerator::new(deploy_hash, Phase::Session);
     let mut uref_map = BTreeMap::new();
     let runtime_context =
@@ -965,7 +970,7 @@ fn attenuate_uref_for_system_account() {
 
 #[test]
 fn attenuate_uref_for_user_account() {
-    let (_key, account) = mock_account([42; 32]);
+    let (_key, account) = mock_account(PublicKey::new([42; 32]));
     let system_contract_uref = URef::new([42; 32], AccessRights::READ_ADD_WRITE);
     let attenuated_uref = attenuate_uref_for_account(&account, system_contract_uref);
 

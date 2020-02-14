@@ -202,7 +202,7 @@ impl Display for PublicKey {
 
 impl PublicKey {
     /// Constructs a new `PublicKey`.
-    pub fn new(key: [u8; PUBLIC_KEY_LENGTH]) -> PublicKey {
+    pub const fn new(key: [u8; PUBLIC_KEY_LENGTH]) -> PublicKey {
         PublicKey(key)
     }
 

@@ -175,12 +175,12 @@ fn tracking_copy_add_i32() {
 
 #[test]
 fn tracking_copy_add_named_key() {
+    let zero_public_key = PublicKey::new([0u8; PUBLIC_KEY_LENGTH]);
     let correlation_id = CorrelationId::new();
     // DB now holds an `Account` so that we can test adding a `NamedKey`
-    let associated_keys =
-        AssociatedKeys::new(PublicKey::new([0u8; PUBLIC_KEY_LENGTH]), Weight::new(1));
+    let associated_keys = AssociatedKeys::new(zero_public_key, Weight::new(1));
     let account = Account::new(
-        [0u8; PUBLIC_KEY_LENGTH],
+        zero_public_key,
         BTreeMap::new(),
         PurseId::new(URef::new([0u8; 32], AccessRights::READ_ADD_WRITE)),
         associated_keys,
@@ -347,13 +347,13 @@ proptest! {
         v in stored_value_arb(), // value in account state
         name in "\\PC*", // human-readable name for state
         missing_name in "\\PC*",
-        pk in u8_slice_32(), // account public key
-        address in u8_slice_32(), // address for account key
+        pk in public_key_arb(), // account public key
+        address in public_key_arb(), // address for account key
     ) {
         let correlation_id = CorrelationId::new();
         let named_keys = iter::once((name.clone(), k)).collect();
         let purse_id = PurseId::new(URef::new([0u8; 32], AccessRights::READ_ADD_WRITE));
-        let associated_keys = AssociatedKeys::new(PublicKey::new(pk), Weight::new(1));
+        let associated_keys = AssociatedKeys::new(pk, Weight::new(1));
         let account = Account::new(
             pk,
             named_keys,
@@ -388,8 +388,8 @@ proptest! {
         v in stored_value_arb(), // value in contract state
         state_name in "\\PC*", // human-readable name for state
         contract_name in "\\PC*", // human-readable name for contract
-        pk in u8_slice_32(), // account public key
-        address in u8_slice_32(), // address for account key
+        pk in public_key_arb(), // account public key
+        address in public_key_arb(), // address for account key
         body in vec(any::<u8>(), 1..1000), //contract body
         hash in u8_slice_32(), // hash for contract key
     ) {
@@ -406,7 +406,7 @@ proptest! {
         let mut account_named_keys = BTreeMap::new();
         account_named_keys.insert(contract_name.clone(), contract_key);
         let purse_id = PurseId::new(URef::new([0u8; 32], AccessRights::READ_ADD_WRITE));
-        let associated_keys = AssociatedKeys::new(PublicKey::new(pk), Weight::new(1));
+        let associated_keys = AssociatedKeys::new(pk, Weight::new(1));
         let account = Account::new(
             pk,
             account_named_keys,

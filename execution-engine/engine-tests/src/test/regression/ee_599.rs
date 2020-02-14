@@ -19,7 +19,7 @@ const CONTRACT_TRANSFER_TO_ACCOUNT: &str = "transfer_to_account_u512.wasm";
 const DONATION_BOX_COPY_KEY: &str = "donation_box_copy";
 const EXPECTED_ERROR: &str = "InvalidContext";
 const TRANSFER_FUNDS_KEY: &str = "transfer_funds";
-const VICTIM_ADDR: [u8; 32] = [42; 32];
+const VICTIM_ADDR: PublicKey = PublicKey::new([42; 32]);
 
 lazy_static! {
     static ref VICTIM_INITIAL_FUNDS: U512 = *DEFAULT_PAYMENT * 10;
@@ -28,7 +28,7 @@ lazy_static! {
 fn setup() -> InMemoryWasmTestBuilder {
     // Creates victim account
     let exec_request_1 = {
-        let args = (PublicKey::new(VICTIM_ADDR), *VICTIM_INITIAL_FUNDS);
+        let args = (VICTIM_ADDR, *VICTIM_INITIAL_FUNDS);
         ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, CONTRACT_TRANSFER_TO_ACCOUNT, args)
             .build()
     };

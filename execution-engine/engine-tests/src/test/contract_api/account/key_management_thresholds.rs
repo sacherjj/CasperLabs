@@ -54,7 +54,7 @@ fn should_verify_key_management_permission_with_sufficient_weight() {
             )
             .with_deploy_hash([2u8; 32])
             .with_authorization_keys(&[
-                PublicKey::new(DEFAULT_ACCOUNT_ADDR),
+                DEFAULT_ACCOUNT_ADDR,
                 // Key [42; 32] is created in init stage
                 PublicKey::new([42; 32]),
             ])

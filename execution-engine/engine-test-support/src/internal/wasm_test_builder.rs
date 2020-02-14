@@ -589,9 +589,9 @@ where
             .expect("should parse balance into a U512")
     }
 
-    pub fn get_account(&self, addr: [u8; 32]) -> Option<Account> {
+    pub fn get_account(&self, public_key: PublicKey) -> Option<Account> {
         let account_value = self
-            .query(None, Key::Account(addr), &[])
+            .query(None, Key::Account(public_key), &[])
             .expect("should query account");
 
         if let StoredValue::Account(account) = account_value {

@@ -5,7 +5,11 @@ use engine_shared::motes::Motes;
 use engine_test_support::internal::{
     utils, ExecuteRequestBuilder, InMemoryWasmTestBuilder as TestBuilder, DEFAULT_GENESIS_CONFIG,
 };
-use types::{account::PurseId, bytesrepr::FromBytes, CLTyped, CLValue, Key, U512};
+use types::{
+    account::{PublicKey, PurseId},
+    bytesrepr::FromBytes,
+    CLTyped, CLValue, Key, U512,
+};
 
 const TRANFER_TO_ACCOUNT_WASM: &str = "transfer_to_account_u512.wasm";
 const VESTING_CONTRACT_WASM: &str = "vesting_smart_contract.wasm";
@@ -65,9 +69,9 @@ pub struct VestingTest {
 
 impl VestingTest {
     pub fn new(
-        sender: [u8; 32],
-        admin: [u8; 32],
-        recipient: [u8; 32],
+        sender: PublicKey,
+        admin: PublicKey,
+        recipient: PublicKey,
         vesting_config: &VestingConfig,
     ) -> VestingTest {
         let mut builder = TestBuilder::default();
@@ -99,7 +103,7 @@ impl VestingTest {
         self
     }
 
-    pub fn with_contract(mut self, sender: [u8; 32], vesting_contract_name: &str) -> Self {
+    pub fn with_contract(mut self, sender: PublicKey, vesting_contract_name: &str) -> Self {
         self.vesting_hash = Some(self.query_contract_hash(sender, vesting_contract_name));
         self.proxy_hash = Some(self.query_contract_hash(sender, VESTING_PROXY_CONTRACT_NAME));
         self
@@ -120,7 +124,7 @@ impl VestingTest {
             .unwrap_or_else(|| panic!("Field proxy_hash not set."))
     }
 
-    pub fn query_contract_hash(&self, account: [u8; 32], name: &str) -> [u8; 32] {
+    pub fn query_contract_hash(&self, account: PublicKey, name: &str) -> [u8; 32] {
         let account_key = Key::Account(account);
         let value: CLValue = self
             .builder
@@ -133,9 +137,9 @@ impl VestingTest {
 
     pub fn deploy_vesting_contract(
         mut self,
-        sender: [u8; 32],
-        admin: [u8; 32],
-        recipient: [u8; 32],
+        sender: PublicKey,
+        admin: PublicKey,
+        recipient: PublicKey,
         vesting_config: &VestingConfig,
     ) -> Self {
         let request = ExecuteRequestBuilder::standard(
@@ -160,7 +164,7 @@ impl VestingTest {
         self
     }
 
-    pub fn call_vesting_pause(mut self, sender: [u8; 32]) -> Self {
+    pub fn call_vesting_pause(mut self, sender: PublicKey) -> Self {
         let request = ExecuteRequestBuilder::contract_call_by_hash(
             sender,
             self.get_proxy_hash(),
@@ -172,7 +176,7 @@ impl VestingTest {
         self
     }
 
-    pub fn call_vesting_unpause(mut self, sender: [u8; 32]) -> Self {
+    pub fn call_vesting_unpause(mut self, sender: PublicKey) -> Self {
         let request = ExecuteRequestBuilder::contract_call_by_hash(
             sender,
             self.get_proxy_hash(),
@@ -184,7 +188,7 @@ impl VestingTest {
         self
     }
 
-    pub fn call_withdraw(mut self, sender: [u8; 32], amount: U512) -> Self {
+    pub fn call_withdraw(mut self, sender: PublicKey, amount: U512) -> Self {
         let request = ExecuteRequestBuilder::contract_call_by_hash(
             sender,
             self.get_proxy_hash(),
@@ -196,7 +200,7 @@ impl VestingTest {
         self
     }
 
-    pub fn call_admin_release(mut self, sender: [u8; 32]) -> Self {
+    pub fn call_admin_release(mut self, sender: PublicKey) -> Self {
         let request = ExecuteRequestBuilder::contract_call_by_hash(
             sender,
             self.get_proxy_hash(),
@@ -210,8 +214,8 @@ impl VestingTest {
 
     pub fn call_clx_transfer_with_success(
         mut self,
-        sender: [u8; 32],
-        recipient: [u8; 32],
+        sender: PublicKey,
+        recipient: PublicKey,
         amount: U512,
     ) -> Self {
         let request =
@@ -241,7 +245,7 @@ impl VestingTest {
         self
     }
 
-    pub fn assert_clx_account_balance_no_gas(self, account: [u8; 32], expected: U512) -> Self {
+    pub fn assert_clx_account_balance_no_gas(self, account: PublicKey, expected: U512) -> Self {
         let account_purse = self.builder.get_account(account).unwrap().purse_id();
         let mut account_balance = self.builder.get_purse_balance(account_purse);
         let last_deploy_index = self.builder.get_exec_responses_count();

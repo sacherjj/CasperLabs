@@ -2179,8 +2179,7 @@ where
     ) -> Result<TransferResult, Error> {
         let mint_contract_key = self.get_mint_contract_uref().into();
 
-        let target_addr = target.value();
-        let target_key = Key::Account(target_addr);
+        let target_key = Key::Account(target);
 
         // A precondition check that verifies that the transfer can be done
         // as the source purse has enough funds to cover the transfer.
@@ -2217,7 +2216,7 @@ where
                     }
                 })
                 .collect();
-                let account = Account::create(target_addr, named_keys, target_purse_id);
+                let account = Account::create(target, named_keys, target_purse_id);
                 self.context.write_account(target_key, account)?;
                 Ok(Ok(TransferredTo::NewAccount))
             }
@@ -2264,7 +2263,7 @@ where
         target: PublicKey,
         amount: U512,
     ) -> Result<TransferResult, Error> {
-        let target_key = Key::Account(target.value());
+        let target_key = Key::Account(target);
         // Look up the account at the given public key's address
         match self.context.read_account(&target_key)? {
             None => {

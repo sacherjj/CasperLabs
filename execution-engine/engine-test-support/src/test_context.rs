@@ -32,7 +32,7 @@ impl TestContext {
     /// Queries for a [`Value`] stored under the given `key` and `path`.
     ///
     /// Returns an [`Error`] if not found.
-    pub fn query<T: AsRef<str>>(&self, key: Address, path: &[T]) -> Result<Value> {
+    pub fn query<T: AsRef<str>>(&self, key: PublicKey, path: &[T]) -> Result<Value> {
         let path = path.iter().map(AsRef::as_ref).collect::<Vec<_>>();
         self.inner
             .query(None, Key::Account(key), &path)
@@ -70,11 +70,7 @@ impl TestContextBuilder {
     ///
     /// Note: `initial_balance` represents the number of motes.
     pub fn with_account(mut self, address: Address, initial_balance: U512) -> Self {
-        let new_account = GenesisAccount::new(
-            PublicKey::new(address),
-            Motes::new(initial_balance),
-            Motes::zero(),
-        );
+        let new_account = GenesisAccount::new(address, Motes::new(initial_balance), Motes::zero());
         self.genesis_config.push_account(new_account);
         self
     }

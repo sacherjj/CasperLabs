@@ -5,7 +5,7 @@ use engine_shared::{
     stored_value::StoredValue, TypeMismatch,
 };
 use engine_storage::global_state::StateReader;
-use types::{bytesrepr::ToBytes, CLValue, Key, URef, U512};
+use types::{account::PublicKey, bytesrepr::ToBytes, CLValue, Key, URef, U512};
 
 use crate::{
     execution,
@@ -19,7 +19,7 @@ pub trait TrackingCopyExt<R> {
     fn get_account(
         &mut self,
         correlation_id: CorrelationId,
-        account_address: [u8; 32],
+        public_key: PublicKey,
     ) -> Result<Account, Self::Error>;
 
     /// Gets the purse balance key for a given purse id
@@ -55,9 +55,9 @@ where
     fn get_account(
         &mut self,
         correlation_id: CorrelationId,
-        account_address: [u8; 32],
+        public_key: PublicKey,
     ) -> Result<Account, Self::Error> {
-        let account_key = Key::Account(account_address);
+        let account_key = Key::Account(public_key);
         match self.get(correlation_id, &account_key).map_err(Into::into)? {
             Some(StoredValue::Account(account)) => Ok(account),
             Some(other) => Err(execution::Error::TypeMismatch(TypeMismatch::new(

@@ -4,12 +4,12 @@ use engine_test_support::{
     },
     DEFAULT_ACCOUNT_ADDR,
 };
-use types::{account::PublicKey, Phase};
+use types::Phase;
 
 #[ignore]
 #[test]
 fn should_run_get_phase_contract() {
-    let default_account = PublicKey::new(DEFAULT_ACCOUNT_ADDR);
+    let default_account = DEFAULT_ACCOUNT_ADDR;
 
     let exec_request = {
         let deploy = DeployItemBuilder::new()

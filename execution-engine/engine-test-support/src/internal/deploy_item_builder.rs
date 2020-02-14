@@ -28,8 +28,8 @@ impl DeployItemBuilder {
         Default::default()
     }
 
-    pub fn with_address(mut self, address: [u8; 32]) -> Self {
-        self.deploy_item.address = Some(address.into());
+    pub fn with_address(mut self, address: PublicKey) -> Self {
+        self.deploy_item.address = Some(address);
         self
     }
 

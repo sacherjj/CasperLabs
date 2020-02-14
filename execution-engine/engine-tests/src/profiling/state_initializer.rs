@@ -14,7 +14,6 @@ use engine_test_support::{
     },
     DEFAULT_ACCOUNT_ADDR,
 };
-use types::account::PublicKey;
 
 use casperlabs_engine_tests::profiling;
 
@@ -36,7 +35,7 @@ fn data_dir() -> PathBuf {
 fn main() {
     let data_dir = data_dir();
 
-    let genesis_public_key = PublicKey::new(DEFAULT_ACCOUNT_ADDR);
+    let genesis_public_key = DEFAULT_ACCOUNT_ADDR;
     let account_1_public_key = profiling::account_1_public_key();
     let account_1_initial_amount = profiling::account_1_initial_amount();
     let account_2_public_key = profiling::account_2_public_key();

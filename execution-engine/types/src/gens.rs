@@ -59,7 +59,7 @@ pub fn uref_arb() -> impl Strategy<Value = URef> {
 
 pub fn key_arb() -> impl Strategy<Value = Key> {
     prop_oneof![
-        u8_slice_32().prop_map(Key::Account),
+        public_key_arb().prop_map(Key::Account),
         u8_slice_32().prop_map(Key::Hash),
         uref_arb().prop_map(Key::URef),
         (u8_slice_32(), u8_slice_32()).prop_map(|(seed, key)| Key::local(seed, &key))

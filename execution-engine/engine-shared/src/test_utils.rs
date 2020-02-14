@@ -7,7 +7,10 @@ use parity_wasm::{
 };
 
 use engine_wasm_prep::wasm_costs::WasmCosts;
-use types::{account::PurseId, AccessRights, Key, URef};
+use types::{
+    account::{PublicKey, PurseId},
+    AccessRights, Key, URef,
+};
 
 use crate::{account::Account, stored_value::StoredValue};
 
@@ -22,10 +25,10 @@ pub fn create_empty_wasm_module_bytes() -> Vec<u8> {
 }
 
 /// Returns an account value paired with its key
-pub fn mocked_account(account_addr: [u8; 32]) -> Vec<(Key, StoredValue)> {
+pub fn mocked_account(public_key: PublicKey) -> Vec<(Key, StoredValue)> {
     let purse_id = PurseId::new(URef::new([0u8; 32], AccessRights::READ_ADD_WRITE));
-    let account = Account::create(account_addr, BTreeMap::new(), purse_id);
-    vec![(Key::Account(account_addr), StoredValue::Account(account))]
+    let account = Account::create(public_key, BTreeMap::new(), purse_id);
+    vec![(Key::Account(public_key), StoredValue::Account(account))]
 }
 
 pub fn wasm_costs_mock() -> WasmCosts {
