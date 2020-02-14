@@ -251,12 +251,15 @@ class InitialSynchronizationForwardImplSpec
         ) { (initialSynchronizer, downloadManager) =>
           for {
             w <- initialSynchronizer.sync()
-            _ <- w.attempt
+            r <- w.attempt
             s <- syncedRef.get
           } yield {
             s shouldBe Set(genesis.blockHash)
             // It should try download once, then sync and download genesis, then the original again.
             downloadManager.requestsCounter.get()(nodes.head) shouldBe 3
+            // For the record: because we aren't distinguishing in `maybeFail` based on which attempt
+            // it it is, the overall download will still fail in this test.
+            r.isLeft shouldBe true
           }
         }
       }
