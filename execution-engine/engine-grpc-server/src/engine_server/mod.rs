@@ -1,8 +1,20 @@
-pub mod ipc;
-pub mod ipc_grpc;
+include!(concat!(
+    env!("OUT_DIR"),
+    "/../../../../generated_protobuf/ipc.rs"
+));
+include!(concat!(
+    env!("OUT_DIR"),
+    "/../../../../generated_protobuf/ipc_grpc.rs"
+));
+include!(concat!(
+    env!("OUT_DIR"),
+    "/../../../../generated_protobuf/state.rs"
+));
+include!(concat!(
+    env!("OUT_DIR"),
+    "/../../../../generated_protobuf/transforms.rs"
+));
 pub mod mappings;
-pub mod state;
-pub mod transforms;
 
 use std::{
     collections::BTreeMap,

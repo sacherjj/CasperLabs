@@ -36,6 +36,12 @@ lazy_static! {
         .expect("should get current working dir")
         .join("wasm");
     // The location of compiled Wasm files if compiled from the Rust sources within the CasperLabs
+    // repo where `CARGO_TARGET_DIR` is set, i.e.
+    // '<CARGO_TARGET_DIR>/wasm32-unknown-unknown/release/'.
+    static ref CARGO_TARGET_DIR_WASM_PATH: PathBuf = Path::new(env!("CARGO_TARGET_DIR"))
+        .join("wasm32-unknown-unknown")
+        .join("release");
+    // The location of compiled Wasm files if compiled from the Rust sources within the CasperLabs
     // repo, i.e. 'CasperLabs/execution-engine/target/wasm32-unknown-unknown/release/'.
     static ref ASSEMBLY_SCRIPT_WORKSPACE_WASM_PATH: PathBuf = Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
@@ -51,6 +57,7 @@ fn get_compiled_wasm_paths() -> Vec<PathBuf> {
         #[cfg(feature = "use-as-wasm")]
         ASSEMBLY_SCRIPT_WORKSPACE_WASM_PATH.clone(),
         RUST_WORKSPACE_WASM_PATH.clone(),
+        CARGO_TARGET_DIR_WASM_PATH.clone(),
         RUST_TOOL_WASM_PATH.clone(),
     ]
 }
