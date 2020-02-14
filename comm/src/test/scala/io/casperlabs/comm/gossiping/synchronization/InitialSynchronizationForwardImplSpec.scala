@@ -245,8 +245,9 @@ class InitialSynchronizationForwardImplSpec
               Some(GossipError.MissingDependencies(summary.blockHash, List(genesis.blockHash)))
             } else None,
           sync = targets =>
+            // Remember what we synced, then return what they asked for.
             syncedRef.update(_ ++ targets).map { _ =>
-              Vector(genesis).filter(x => targets(x.blockHash))
+              (genesis +: rest).filter(x => targets(x.blockHash))
             }
         ) { (initialSynchronizer, downloadManager) =>
           for {
