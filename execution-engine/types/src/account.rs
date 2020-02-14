@@ -192,28 +192,34 @@ pub const PUBLIC_KEY_SERIALIZED_LENGTH: usize = PUBLIC_KEY_LENGTH;
 /// A newtype wrapping a [`[u8; PUBLIC_KEY_LENGTH]`](PUBLIC_KEY_LENGTH) which is the raw bytes of
 /// the public key of a cryptographic asymmetric key pair.
 #[derive(PartialOrd, Ord, PartialEq, Eq, Hash, Clone, Copy)]
-pub struct PublicKey([u8; PUBLIC_KEY_LENGTH]);
+pub enum PublicKey {
+    /// Represents an Ed25519 public key bytes
+    Ed25519([u8; 32]),
+}
 
 impl Display for PublicKey {
     fn fmt(&self, f: &mut Formatter) -> core::fmt::Result {
-        write!(f, "PublicKey({})", HexFmt(&self.0))
+        let PublicKey::Ed25519(bytes) = self;
+        write!(f, "PublicKey({})", HexFmt(&bytes))
     }
 }
 
 impl PublicKey {
     /// Constructs a new `PublicKey`.
     pub const fn new(key: [u8; PUBLIC_KEY_LENGTH]) -> PublicKey {
-        PublicKey(key)
+        PublicKey::Ed25519(key)
     }
 
     /// Returns the raw bytes of the public key as an array.
     pub fn value(self) -> [u8; PUBLIC_KEY_LENGTH] {
-        self.0
+        let PublicKey::Ed25519(bytes) = self;
+        bytes
     }
 
     /// Returns the raw bytes of the public key as a `Vec`.
     pub fn to_vec(&self) -> Vec<u8> {
-        self.0.to_vec()
+        let PublicKey::Ed25519(bytes) = self;
+        bytes.to_vec()
     }
 }
 
@@ -231,7 +237,7 @@ impl CLTyped for PublicKey {
 
 impl From<[u8; PUBLIC_KEY_LENGTH]> for PublicKey {
     fn from(key: [u8; PUBLIC_KEY_LENGTH]) -> Self {
-        PublicKey(key)
+        PublicKey::Ed25519(key)
     }
 }
 
@@ -249,7 +255,8 @@ impl TryFrom<&[u8]> for PublicKey {
 
 impl ToBytes for PublicKey {
     fn to_bytes(&self) -> Result<Vec<u8>, Error> {
-        ToBytes::to_bytes(&self.0)
+        let PublicKey::Ed25519(bytes) = self;
+        ToBytes::to_bytes(bytes)
     }
 }
 
