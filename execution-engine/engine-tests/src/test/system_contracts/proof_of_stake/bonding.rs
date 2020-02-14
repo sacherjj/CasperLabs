@@ -11,10 +11,7 @@ use engine_test_support::{
     },
     DEFAULT_ACCOUNT_ADDR, DEFAULT_ACCOUNT_INITIAL_BALANCE,
 };
-use types::{
-    account::{PublicKey, PurseId},
-    ApiError, Key, U512,
-};
+use types::{account::PublicKey, ApiError, Key, URef, U512};
 
 const CONTRACT_POS_BONDING: &str = "pos_bonding.wasm";
 const ACCOUNT_1_ADDR: [u8; 32] = [1u8; 32];
@@ -33,23 +30,20 @@ const TEST_BOND_FROM_MAIN_PURSE: &str = "bond-from-main-purse";
 const TEST_SEED_NEW_ACCOUNT: &str = "seed_new_account";
 const TEST_UNBOND: &str = "unbond";
 
-fn get_pos_purse_id_by_name(
-    builder: &InMemoryWasmTestBuilder,
-    purse_name: &str,
-) -> Option<PurseId> {
+fn get_pos_purse_by_name(builder: &InMemoryWasmTestBuilder, purse_name: &str) -> Option<URef> {
     let pos_contract = builder.get_pos_contract();
 
     pos_contract
         .named_keys()
         .get(purse_name)
         .and_then(Key::as_uref)
-        .map(|u| PurseId::new(*u))
+        .cloned()
 }
 
 fn get_pos_bonding_purse_balance(builder: &InMemoryWasmTestBuilder) -> U512 {
-    let purse_id = get_pos_purse_id_by_name(builder, POS_BONDING_PURSE)
-        .expect("should find PoS payment purse");
-    builder.get_purse_balance(purse_id)
+    let purse =
+        get_pos_purse_by_name(builder, POS_BONDING_PURSE).expect("should find PoS payment purse");
+    builder.get_purse_balance(purse)
 }
 
 #[ignore]
@@ -190,7 +184,7 @@ fn should_run_successful_bond_and_unbond() {
         ),
     )
     .build();
-    let account_1_bal_before = builder.get_purse_balance(account_1.purse_id());
+    let account_1_bal_before = builder.get_purse_balance(account_1.main_purse());
     let mut builder = InMemoryWasmTestBuilder::from_result(result);
     let result = builder
         .exec(exec_request_4)
@@ -198,7 +192,7 @@ fn should_run_successful_bond_and_unbond() {
         .commit()
         .finish();
 
-    let account_1_bal_after = builder.get_purse_balance(account_1.purse_id());
+    let account_1_bal_after = builder.get_purse_balance(account_1.main_purse());
     let exec_response = builder
         .get_exec_response(0)
         .expect("should have exec response");
@@ -261,7 +255,7 @@ fn should_run_successful_bond_and_unbond() {
     genesis_gas_cost = genesis_gas_cost + utils::get_exec_costs(exec_response)[0];
 
     assert_eq!(
-        builder.get_purse_balance(default_account.purse_id()),
+        builder.get_purse_balance(default_account.main_purse()),
         U512::from(
             DEFAULT_ACCOUNT_INITIAL_BALANCE
                 - Motes::from_gas(genesis_gas_cost, CONV_RATE)
@@ -282,7 +276,7 @@ fn should_run_successful_bond_and_unbond() {
     //
     // Stage 3a - Fully unbond account1 with Some(TOTAL_AMOUNT)
     //
-    let account_1_bal_before = builder.get_purse_balance(account_1.purse_id());
+    let account_1_bal_before = builder.get_purse_balance(account_1.main_purse());
 
     let exec_request_6 = ExecuteRequestBuilder::standard(
         ACCOUNT_1_ADDR,
@@ -301,7 +295,7 @@ fn should_run_successful_bond_and_unbond() {
         .commit()
         .finish();
 
-    let account_1_bal_after = builder.get_purse_balance(account_1.purse_id());
+    let account_1_bal_after = builder.get_purse_balance(account_1.main_purse());
     let exec_response = builder
         .get_exec_response(0)
         .expect("should have exec response");
@@ -358,7 +352,7 @@ fn should_run_successful_bond_and_unbond() {
     assert_eq!(
         result
             .builder()
-            .get_purse_balance(default_account.purse_id()),
+            .get_purse_balance(default_account.main_purse()),
         U512::from(
             DEFAULT_ACCOUNT_INITIAL_BALANCE
                 - Motes::from_gas(genesis_gas_cost, CONV_RATE)

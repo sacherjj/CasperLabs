@@ -5,7 +5,7 @@ use std::{
 };
 
 use engine_shared::account::{Account, ActionThresholds, AssociatedKeys};
-use types::account::{PublicKey, PurseId, Weight};
+use types::account::{PublicKey, Weight};
 
 use super::NamedKeyMap;
 use crate::engine_server::{
@@ -23,7 +23,7 @@ impl From<Account> for state::Account {
         let pb_named_keys: Vec<NamedKey> = NamedKeyMap::new(named_keys).into();
         pb_account.set_named_keys(pb_named_keys.into());
 
-        pb_account.set_purse_id(account.purse_id().value().into());
+        pb_account.set_main_purse(account.main_purse().into());
 
         let associated_keys: Vec<Account_AssociatedKey> =
             account.get_associated_keys().map(Into::into).collect();
@@ -50,12 +50,12 @@ impl TryFrom<state::Account> for Account {
 
         let named_keys: NamedKeyMap = pb_account.named_keys.into_vec().try_into()?;
 
-        let purse_id = {
+        let main_purse = {
             let pb_uref = pb_account
-                .purse_id
+                .main_purse
                 .into_option()
-                .ok_or_else(|| ParsingError::from("Protobuf Account missing PurseId field"))?;
-            PurseId::new(pb_uref.try_into()?)
+                .ok_or_else(|| ParsingError::from("Protobuf Account missing MainPurse field"))?;
+            pb_uref.try_into()?
         };
 
         let associated_keys = {
@@ -94,7 +94,7 @@ impl TryFrom<state::Account> for Account {
         let account = Account::new(
             public_key,
             named_keys.into_inner(),
-            purse_id,
+            main_purse,
             associated_keys,
             action_thresholds,
         );

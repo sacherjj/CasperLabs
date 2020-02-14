@@ -8,7 +8,7 @@ use contract::{
     contract_api::{runtime, system},
     unwrap_or_revert::UnwrapOrRevert,
 };
-use types::{account::PurseId, ApiError, ContractRef, U512};
+use types::{ApiError, ContractRef, URef, U512};
 
 const POS_BOND: &str = "bond";
 const POS_UNBOND: &str = "unbond";
@@ -16,7 +16,7 @@ const POS_UNBOND: &str = "unbond";
 const COMMAND_BOND: &str = "bond";
 const COMMAND_UNBOND: &str = "unbond";
 
-fn bond(pos: &ContractRef, amount: &U512, source: PurseId) {
+fn bond(pos: &ContractRef, amount: &U512, source: URef) {
     runtime::call_contract::<_, ()>(pos.clone(), (POS_BOND, *amount, source));
 }
 
@@ -31,7 +31,7 @@ pub extern "C" fn call() {
         .unwrap_or_revert_with(ApiError::InvalidArgument);
     let pos_pointer = system::get_proof_of_stake();
     if command == COMMAND_BOND {
-        let rewards_purse = runtime::get_arg(1)
+        let rewards_purse: URef = runtime::get_arg(1)
             .unwrap_or_revert_with(ApiError::MissingArgument)
             .unwrap_or_revert_with(ApiError::InvalidArgument);
         let available_reward = runtime::get_arg(2)

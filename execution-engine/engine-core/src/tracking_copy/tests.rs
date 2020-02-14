@@ -12,7 +12,7 @@ use engine_shared::{
 };
 use engine_storage::global_state::{in_memory::InMemoryGlobalState, StateProvider, StateReader};
 use types::{
-    account::{PublicKey, PurseId, Weight, PUBLIC_KEY_LENGTH},
+    account::{PublicKey, Weight, PUBLIC_KEY_LENGTH},
     gens::*,
     AccessRights, CLValue, Key, ProtocolVersion, URef,
 };
@@ -182,7 +182,7 @@ fn tracking_copy_add_named_key() {
     let account = Account::new(
         [0u8; PUBLIC_KEY_LENGTH],
         BTreeMap::new(),
-        PurseId::new(URef::new([0u8; 32], AccessRights::READ_ADD_WRITE)),
+        URef::new([0u8; 32], AccessRights::READ_ADD_WRITE),
         associated_keys,
         Default::default(),
     );
@@ -352,12 +352,12 @@ proptest! {
     ) {
         let correlation_id = CorrelationId::new();
         let named_keys = iter::once((name.clone(), k)).collect();
-        let purse_id = PurseId::new(URef::new([0u8; 32], AccessRights::READ_ADD_WRITE));
+        let purse = URef::new([0u8; 32], AccessRights::READ_ADD_WRITE);
         let associated_keys = AssociatedKeys::new(PublicKey::new(pk), Weight::new(1));
         let account = Account::new(
             pk,
             named_keys,
-            purse_id,
+            purse,
             associated_keys,
             Default::default(),
         );
@@ -405,12 +405,12 @@ proptest! {
         // create account which knows about contract
         let mut account_named_keys = BTreeMap::new();
         account_named_keys.insert(contract_name.clone(), contract_key);
-        let purse_id = PurseId::new(URef::new([0u8; 32], AccessRights::READ_ADD_WRITE));
+        let purse = URef::new([0u8; 32], AccessRights::READ_ADD_WRITE);
         let associated_keys = AssociatedKeys::new(PublicKey::new(pk), Weight::new(1));
         let account = Account::new(
             pk,
             account_named_keys,
-            purse_id,
+            purse,
             associated_keys,
             Default::default(),
         );

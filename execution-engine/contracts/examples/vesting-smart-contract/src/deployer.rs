@@ -36,12 +36,12 @@ fn deploy_vesting_contract(
     let vesting_purse = system::create_purse();
     system::transfer_from_purse_to_purse(main_purse, vesting_purse, vesting_config.total_amount)
         .unwrap_or_revert_with(Error::PurseTransferError);
-    let mut vesting_urefs: BTreeMap<String, Key> = BTreeMap::new();
-    vesting_urefs.insert(String::from(PURSE_NAME), vesting_purse.value().into());
+    let mut vesting_keys: BTreeMap<String, Key> = BTreeMap::new();
+    vesting_keys.insert(String::from(PURSE_NAME), vesting_purse.into());
 
     // Create vesting instance.
     let vesting_ref: ContractRef =
-        storage::store_function_at_hash(VESTING_CONTRACT_NAME, vesting_urefs);
+        storage::store_function_at_hash(VESTING_CONTRACT_NAME, vesting_keys);
 
     // Initialize vesting contract.
     runtime::call_contract::<_, ()>(

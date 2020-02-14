@@ -27,7 +27,7 @@ object ProtoMappings {
 
   def toProto(a: Account): state.Account = state.Account(
     publicKey = ByteString.copyFrom(a.publicKey.bytes.toArray),
-    purseId = toProto(Key.URef(a.purseId)).value.uref,
+    mainPurse = toProto(Key.URef(a.mainPurse)).value.uref,
     namedKeys = toProto(a.namedKeys),
     associatedKeys = a.associatedKeys.toSeq.map {
       case (k, w) => state.Account.AssociatedKey(ByteString.copyFrom(k.bytes.toArray), w.toInt)

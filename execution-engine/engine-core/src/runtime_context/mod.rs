@@ -18,7 +18,7 @@ use engine_shared::{
 use engine_storage::{global_state::StateReader, protocol_data::ProtocolData};
 use types::{
     account::{
-        ActionType, AddKeyFailure, PublicKey, PurseId, RemoveKeyFailure, SetThresholdFailure,
+        ActionType, AddKeyFailure, PublicKey, RemoveKeyFailure, SetThresholdFailure,
         UpdateKeyFailure, Weight,
     },
     bytesrepr::{self, ToBytes},
@@ -528,12 +528,12 @@ where
     }
 
     pub fn validate_uref(&self, uref: &URef) -> Result<(), Error> {
-        if self.account.purse_id().value().addr() == uref.addr() {
+        if self.account.main_purse().addr() == uref.addr() {
             // If passed uref matches account's purse then we have to also validate their
             // access rights.
-            if let Some(rights) = self.account.purse_id().value().access_rights() {
+            if let Some(rights) = self.account.main_purse().access_rights() {
                 if let Some(uref_rights) = uref.access_rights() {
-                    // Access rights of the passed uref, and the account's purse_id should match
+                    // Access rights of the passed uref, and the account's purse should match
                     if rights & uref_rights == uref_rights {
                         return Ok(());
                     }
@@ -852,10 +852,10 @@ where
     }
 
     /// Gets main purse id
-    pub fn get_main_purse(&self) -> Result<PurseId, Error> {
+    pub fn get_main_purse(&self) -> Result<URef, Error> {
         if !self.is_valid_context() {
             return Err(Error::InvalidContext);
         }
-        Ok(self.account().purse_id())
+        Ok(self.account().main_purse())
     }
 }

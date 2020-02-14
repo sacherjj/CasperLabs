@@ -307,11 +307,11 @@ where
                 // args(0) = pointer to array for return value
                 // args(1) = length of array for return value
                 let (dest_ptr, dest_size): (u32, u32) = Args::parse(args)?;
-                let purse_id = self.create_purse()?;
-                let purse_id_bytes = purse_id.into_bytes().map_err(Error::BytesRepr)?;
-                assert_eq!(dest_size, purse_id_bytes.len() as u32);
+                let purse = self.create_purse()?;
+                let purse_bytes = purse.into_bytes().map_err(Error::BytesRepr)?;
+                assert_eq!(dest_size, purse_bytes.len() as u32);
                 self.memory
-                    .set(dest_ptr, &purse_id_bytes)
+                    .set(dest_ptr, &purse_bytes)
                     .map_err(Error::Interpreter)?;
                 Ok(Some(RuntimeValue::I32(0)))
             }
@@ -388,8 +388,8 @@ where
             }
 
             FunctionIndex::GetBalanceIndex => {
-                // args(0) = pointer to purse_id input
-                // args(1) = length of purse_id
+                // args(0) = pointer to purse input
+                // args(1) = length of purse
                 // args(2) = pointer to output size (output)
                 let (ptr, ptr_size, output_size_ptr): (_, u32, _) = Args::parse(args)?;
                 let ret = self.get_balance_host_buffer(ptr, ptr_size as usize, output_size_ptr)?;
