@@ -1,5 +1,3 @@
-use base16;
-
 use engine_core::engine_state::{
     genesis::{GenesisAccount, POS_BONDING_PURSE},
     CONV_RATE,

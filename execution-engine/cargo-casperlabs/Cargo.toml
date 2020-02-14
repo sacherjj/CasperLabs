@@ -1,6 +1,6 @@
 [package]
 name = "cargo-casperlabs"
-version = "0.1.0"
+version = "0.3.0"
 authors = ["Fraser Hutchison <fraser@casperlabs.io>"]
 edition = "2018"
 description = "Command line tool for creating a Wasm smart contract and tests for use on the CasperLabs network."
@@ -8,6 +8,7 @@ readme = "README.md"
 documentation = "https://docs.rs/cargo-casperlabs"
 homepage = "https://casperlabs.io"
 repository = "https://github.com/CasperLabs/CasperLabs/tree/master/execution-engine/cargo-casperlabs"
+license-file = "../../LICENSE"
 include = [
     "src/*.rs",
     "wasm/mint_install.wasm",

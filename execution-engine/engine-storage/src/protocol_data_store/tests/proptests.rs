@@ -2,7 +2,6 @@ use std::{collections::BTreeMap, ops::RangeInclusive};
 
 use lmdb::DatabaseFlags;
 use proptest::{collection, prelude::proptest};
-use tempfile;
 
 use types::{gens as gens_ext, ProtocolVersion};
 

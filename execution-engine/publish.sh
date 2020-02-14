@@ -74,14 +74,15 @@ publish() {
         printf "Skipping '%s'\n" $CRATE_NAME
     else
         printf "Publishing '%s'\n" $CRATE_NAME
-        cd $EE_DIR/$DIR_IN_EE
-        cargo publish $2
+        pushd $EE_DIR/$DIR_IN_EE
+        cargo publish
+        popd
         printf "Published '%s' at version %s\n" $CRATE_NAME $DEV_VERSION
     fi
     printf "================================================================================\n\n"
 }
 
-check_local_repo_is_up_to_date
+# check_local_repo_is_up_to_date
 check_python_has_toml
 
 for PACKAGE_DIR in "${PACKAGE_DIRS[@]}"; do

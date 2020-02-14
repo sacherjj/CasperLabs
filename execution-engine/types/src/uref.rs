@@ -4,7 +4,6 @@ use core::{
     fmt::{self, Debug, Display, Formatter},
 };
 
-use base16;
 use hex_fmt::HexFmt;
 
 use crate::{
