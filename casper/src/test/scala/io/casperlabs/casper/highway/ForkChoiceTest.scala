@@ -281,8 +281,8 @@ class ForkChoiceTest extends FlatSpec with HighwayFixture {
               // This is non-det b/c, when creating a new message in MessageProducer,
               // we will pick non-det validator previous message to put in `message.validatorPrevMsg`
               // field. The new message will override previous equivocation as "latest message" in the DAG.
-              val verC1          = Set(a4, c1, ba1, bb1, bc1, c4)
-              val verC1Prime     = Set(a4, c1Prime, ba1, bb1, bc1, c4)
+              val verC1      = Set(a4, c1, ba1, bb1, bc1, c4)
+              val verC1Prime = Set(a4, c1Prime, ba1, bb1, bc1, c4)
               assert(justifications == verC1 || justifications == verC1Prime)
             }
       }
