@@ -256,8 +256,8 @@ class ForkChoiceTest extends FlatSpec with HighwayFixture {
             for {
               _             <- insertGenesis()
               genesisEra    <- addGenesisEra()
-              a1            <- genesisEra.block(alice, genesis.messageHash)
               (c1, c1Prime) <- equivocate(charlie, genesisEra, genesis.messageHash)
+              a1            <- genesisEra.block(alice, genesis.messageHash)
               a2            <- genesisEra.block(alice, a1)
               b1            <- genesisEra.block(bob, a2)
               b2            <- genesisEra.block(bob, b1)
@@ -276,10 +276,14 @@ class ForkChoiceTest extends FlatSpec with HighwayFixture {
               equivocators <- MessageProducer.collectEquivocators[Task](childEra.keyBlockHash)
             } yield {
               assert(equivocators == Set(ByteString.copyFrom(Charlie._2)))
-              assert(forkChoice.block.messageHash == a4)
-              assert(
-                forkChoice.justifications.map(_.messageHash) == Set(c1, c1Prime, ba1, bb1, bc1, c4)
-              )
+              assert(forkChoice.block.messageHash == c4)
+              val justifications = forkChoice.justifications.map(_.messageHash)
+              // This is non-det b/c, when creating a new message in MessageProducer,
+              // we will pick non-det validator previous message to put in `message.validatorPrevMsg`
+              // field. The new message will override previous equivocation as "latest message" in the DAG.
+              val verC1          = Set(a4, c1, ba1, bb1, bc1, c4)
+              val verC1Prime     = Set(a4, c1Prime, ba1, bb1, bc1, c4)
+              assert(justifications == verC1 || justifications == verC1Prime)
             }
       }
   }
