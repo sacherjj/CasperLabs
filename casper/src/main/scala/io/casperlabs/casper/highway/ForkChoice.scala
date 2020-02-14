@@ -202,7 +202,9 @@ object ForkChoice {
               )
             val visibleEquivocators = dagView
               .equivocatorsVisibleInEras(
-                Set(currKeyBlock.messageHash) // Equivocator count only in era he equivocated
+                // TODO: CON-633
+                // Equivocator count only in era he equivocated
+                Set(currKeyBlock.messageHash)
               )
             for {
               (forkChoice, eraLatestMessagesReduced) <- eraForkChoice(
