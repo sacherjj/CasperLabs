@@ -99,7 +99,7 @@ const ResultsTable = observer(
         title={`Results for deploy ${props.deployHashBase16}`}
         headers={[
           'Block Hash',
-          'Fault Tolerance',
+          'Is Finalized',
           'Cost',
           'Remaining Balance',
           'Result',
@@ -122,8 +122,7 @@ const ResultsTable = observer(
                 {proc
                   .getBlockInfo()!
                   .getStatus()!
-                  .getFaultTolerance()
-                  .toFixed(3)}
+                  .getIsFinalized()}
               </td>
               <td className="text-right">{proc.getCost().toLocaleString()}</td>
               <td className="text-right">
@@ -133,8 +132,8 @@ const ResultsTable = observer(
                 {proc.getIsError() ? (
                   <Icon name="times-circle" color="red" />
                 ) : (
-                  <Icon name="check-circle" color="green" />
-                )}
+                    <Icon name="check-circle" color="green" />
+                  )}
               </td>
               <td>{proc.getErrorMessage()}</td>
             </tr>

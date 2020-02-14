@@ -15,9 +15,12 @@ message BlockInfo {
     }
 
     message Status {
-        float fault_tolerance = 1;
+        reserved 1; // fault_tolerance;
         Stats stats = 2;
         repeated bytes child_hashes = 3;
+
+        // Indicate that this block has reached k=1 summit level and has appeared in the finalized block stream.
+        bool is_finalized = 4;
 
         // Statistics derived from the full block.
         message Stats {

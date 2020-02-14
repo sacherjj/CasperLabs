@@ -6,7 +6,7 @@ import Account.{ActionThresholds, PublicKey, Weight}
 case class Account(
     publicKey: PublicKey,
     namedKeys: Map[String, Key],
-    purseId: URef,
+    mainPurse: URef,
     associatedKeys: Map[PublicKey, Weight],
     actionThresholds: ActionThresholds
 )
@@ -40,7 +40,7 @@ object Account {
     override def toBytes(a: Account): Array[Byte] =
       ToBytes.toBytes(a.publicKey) ++
         ToBytes.toBytes(a.namedKeys) ++
-        ToBytes.toBytes(a.purseId) ++
+        ToBytes.toBytes(a.mainPurse) ++
         ToBytes.toBytes(a.associatedKeys) ++
         ToBytes.toBytes(a.actionThresholds)
   }
@@ -49,8 +49,8 @@ object Account {
     for {
       publicKey        <- ByteArray32.deserializer
       namedKeys        <- FromBytes.map(FromBytes.string, Key.deserializer)
-      purseId          <- URef.deserializer
+      mainPurse        <- URef.deserializer
       associatedKeys   <- FromBytes.map(ByteArray32.deserializer, FromBytes.byte)
       actionThresholds <- desActionThresholds
-    } yield Account(publicKey, namedKeys, purseId, associatedKeys, actionThresholds)
+    } yield Account(publicKey, namedKeys, mainPurse, associatedKeys, actionThresholds)
 }

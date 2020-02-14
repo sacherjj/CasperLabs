@@ -20,7 +20,7 @@ object AccountSerializationTest {
     namedKeys <- Gen.mapOf(
                   Gen.alphaStr.flatMap(s => KeySerializationTest.genKey.map(k => s -> k))
                 )
-    purseId <- URefSerializationTest.genURef
+    mainPurse <- URefSerializationTest.genURef
     associatedKeys <- Gen.mapOf(
                        ByteArray32SerializationTest.genByteArray32.flatMap(
                          k => genWeight.map(w => k -> w)
@@ -29,7 +29,7 @@ object AccountSerializationTest {
     actionThresholds <- genWeight.flatMap { d =>
                          genWeight.map(k => Account.ActionThresholds(d, k))
                        }
-  } yield Account(publicKey, namedKeys, purseId, associatedKeys, actionThresholds)
+  } yield Account(publicKey, namedKeys, mainPurse, associatedKeys, actionThresholds)
 
   implicit val arbAccount: Arbitrary[Account] = Arbitrary(genAccount)
 }

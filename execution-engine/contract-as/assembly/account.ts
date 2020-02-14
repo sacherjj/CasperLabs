@@ -1,8 +1,7 @@
 import * as externals from "./externals";
 import {arrayToTyped} from "./utils";
-import {PURSE_ID_SERIALIZED_LENGTH} from "./constants";
+import {UREF_SERIALIZED_LENGTH} from "./constants";
 import {URef} from "./uref";
-import {PurseId} from "./purseid";
 
 export enum AddKeyFailure {
     // Success
@@ -77,13 +76,13 @@ export function removeAssociatedKey(publicKey: Array<u8>): RemoveKeyFailure {
     return <RemoveKeyFailure>ret;
 }
 
-export function getMainPurse(): PurseId | null {
-    let data = new Uint8Array(PURSE_ID_SERIALIZED_LENGTH);
+export function getMainPurse(): URef | null {
+    let data = new Uint8Array(UREF_SERIALIZED_LENGTH);
     data.fill(0);
     externals.get_main_purse(data.dataStart);
-    let uref = URef.fromBytes(data);
-    if (uref === null)
+    let urefResult = URef.fromBytes(data);
+    if (urefResult.hasError()) {
         return null;
-    let purseId = new PurseId(uref);
-    return purseId;
+    }
+    return urefResult.value;
 }

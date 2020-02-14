@@ -57,7 +57,7 @@ export declare function get_blocktime(dest_ptr: usize): void;
 @external("env", "get_caller")
 export declare function get_caller(dest_ptr: usize): void;
 @external("env", "create_purse")
-export declare function create_purse(purse_id_ptr: usize, purse_id_size: u32): i32;
+export declare function create_purse(purse_ptr: usize, purse_size: u32): i32;
 @external("env", "transfer_to_account")
 export declare function transfer_to_account(
     target_ptr: usize,
@@ -84,10 +84,9 @@ export declare function transfer_from_purse_to_purse(
     amount_size: u32,
 ): i32;
 @external("env", "get_balance")
-export declare function get_balance(purse_id_ptr: usize, purse_id_size: usize, result_size: u32): i32;
+export declare function get_balance(purse_ptr: usize, purse_size: usize, result_size: u32): i32;
 @external("env", "get_phase")
 export declare function get_phase(dest_ptr: usize): void;
-// TODO: upgrade_contract_at_uref
 @external("env", "upgrade_contract_at_uref")
 export declare function upgrade_contract_at_uref(
     name_ptr: usize,

@@ -4,8 +4,8 @@ import {Error, ErrorCode} from "../../../../contract-as/assembly/error";
 import {fromBytesString} from "../../../../contract-as/assembly/bytesrepr";
 import {Key} from "../../../../contract-as/assembly/key";
 import {putKey, upgradeContractAtURef} from "../../../../contract-as/assembly";
-import {PurseId} from "../../../../contract-as/assembly/purseid";
 import {URef} from "../../../../contract-as/assembly/uref";
+import {createPurse} from "../../../../contract-as/assembly/purse";
 
 const ENTRY_FUNCTION_NAME = "delegate";
 
@@ -32,19 +32,20 @@ export function delegate(): void {
     Error.fromUserError(<u16>CustomError.MissingPurseNameArg).revert();
     return;
   }
-  const purseName = fromBytesString(purseNameArg);
-  if (purseName === null){
+  const purseNameResult = fromBytesString(purseNameArg);
+  if (purseNameResult.hasError()) {
     Error.fromUserError(<u16>CustomError.InvalidPurseNameArg).revert();
     return;
   }
+  let purseName = purseNameResult.value;
 
-  const maybePurse = PurseId.create();
+  const maybePurse = createPurse();
   if (maybePurse === null){
     Error.fromUserError(<u16>CustomError.UnableToCreatePurse).revert();
     return;
   }
 
-  const key = Key.fromURef(maybePurse.asURef());
+  const key = Key.fromURef(maybePurse);
 
   putKey(purseName, <Key>key);
 }
@@ -55,11 +56,12 @@ export function call(): void {
     Error.fromUserError(<u16>CustomError.MissingDoNothingURefArg).revert();
     return;
   }
-  let uref = URef.fromBytes(urefBytes);
-  if (uref === null) {
+  let urefResult = URef.fromBytes(urefBytes);
+  if (urefResult.hasError()) {
     Error.fromErrorCode(ErrorCode.InvalidArgument).revert();
     return;
   }
+  let uref = urefResult.value;
   if (uref.isValid() == false){
     Error.fromUserError(<u16>CustomError.InvalidDoNothingURefArg).revert();
     return;

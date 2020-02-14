@@ -58,8 +58,8 @@ pub extern "C" fn apply_method() {
     match method_name.as_str() {
         METHOD_ADD => {
             let purse_name = purse_name();
-            let purse_id = system::create_purse();
-            runtime::put_key(&purse_name, purse_id.value().into());
+            let purse = system::create_purse();
+            runtime::put_key(&purse_name, purse.into());
         }
         METHOD_REMOVE => {
             let purse_name = purse_name();

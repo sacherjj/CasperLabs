@@ -176,7 +176,7 @@ message Account {
 	reserved 7;
 
 	bytes public_key = 1;
-	Key.URef purse_id = 3;
+	Key.URef main_purse = 3;
 	repeated NamedKey named_keys = 4;
 	repeated AssociatedKey associated_keys = 5;
 	ActionThresholds action_thresholds = 6;

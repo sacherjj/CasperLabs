@@ -1,11 +1,7 @@
 use alloc::string::String;
 
 use contract::{contract_api::runtime, unwrap_or_revert::UnwrapOrRevert};
-use types::{
-    account::{PublicKey, PurseId},
-    bytesrepr::FromBytes,
-    CLTyped, ContractRef, U512,
-};
+use types::{account::PublicKey, bytesrepr::FromBytes, CLTyped, ContractRef, URef, U512};
 
 use crate::error::Error;
 
@@ -34,9 +30,9 @@ pub enum Api {
     Pause,
     Unpause,
     WithdrawProxy(U512),
-    Withdraw(PurseId, U512),
+    Withdraw(URef, U512),
     AdminReleaseProxy,
-    AdminRelease(PurseId),
+    AdminRelease(URef),
 }
 
 fn get_arg<T: CLTyped + FromBytes>(i: u32) -> T {
@@ -82,7 +78,7 @@ impl Api {
                 Api::Withdraw(purse, amount)
             }
             ADMIN_RELEASE => {
-                let purse = get_arg(arg_shift + 1);
+                let purse: URef = get_arg(arg_shift + 1);
                 Api::AdminRelease(purse)
             }
             ADMIN_RELEASE_PROXY => Api::AdminReleaseProxy,

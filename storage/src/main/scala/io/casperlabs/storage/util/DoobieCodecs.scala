@@ -57,8 +57,15 @@ trait DoobieCodecs {
   }
 
   protected implicit val readBlockInfo: Read[BlockInfo] = {
-    Read[(Array[Byte], Int, Int, Long, Long)].map {
-      case (blockSummaryData, blockSize, deployErrorCount, deployCostTotal, deployGasPriceAvg) =>
+    Read[(Array[Byte], Int, Int, Long, Long, Boolean)].map {
+      case (
+          blockSummaryData,
+          blockSize,
+          deployErrorCount,
+          deployCostTotal,
+          deployGasPriceAvg,
+          isFinalized
+          ) =>
         val blockSummary = BlockSummary.parseFrom(blockSummaryData)
         val blockStatus = BlockInfo
           .Status()
@@ -70,6 +77,7 @@ trait DoobieCodecs {
               .withDeployCostTotal(deployCostTotal)
               .withDeployGasPriceAvg(deployGasPriceAvg)
           )
+          .withIsFinalized(isFinalized)
         BlockInfo()
           .withSummary(blockSummary)
           .withStatus(blockStatus)

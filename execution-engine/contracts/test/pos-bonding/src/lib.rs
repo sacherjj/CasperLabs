@@ -8,10 +8,7 @@ use contract::{
     contract_api::{account, runtime, system},
     unwrap_or_revert::UnwrapOrRevert,
 };
-use types::{
-    account::{PublicKey, PurseId},
-    ApiError, ContractRef, U512,
-};
+use types::{account::PublicKey, ApiError, ContractRef, URef, U512};
 
 #[repr(u16)]
 enum Error {
@@ -19,7 +16,7 @@ enum Error {
     UnknownCommand,
 }
 
-fn bond(pos: &ContractRef, amount: &U512, source: PurseId) {
+fn bond(pos: &ContractRef, amount: &U512, source: URef) {
     runtime::call_contract::<_, ()>(pos.clone(), (POS_BOND, *amount, source));
 }
 

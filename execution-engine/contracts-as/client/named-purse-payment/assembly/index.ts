@@ -2,11 +2,11 @@ import * as CL from "../../../../contract-as/assembly";
 import {getKey} from "../../../../contract-as/assembly";
 import {Error, ErrorCode, PosErrorCode} from "../../../../contract-as/assembly/error";
 import {CLValue} from "../../../../contract-as/assembly/clvalue";
-import {PurseId} from "../../../../contract-as/assembly/purseid";
 import {U512} from "../../../../contract-as/assembly/bignum";
 import {fromBytesString} from "../../../../contract-as/assembly/bytesrepr";
 import {URef} from "../../../../contract-as/assembly/uref";
 import {Key, KeyVariant} from "../../../../contract-as/assembly/key";
+import {transferFromPurseToPurse} from "../../../../contract-as/assembly/purse";
 
 const GET_PAYMENT_PURSE = "get_payment_purse";
 const SET_REFUND_PURSE= "set_refund_purse";
@@ -25,12 +25,12 @@ export function call(): void {
   }
 
   let purseName = fromBytesString(purseNameBytes);
-  if (purseName === null) {
+  if (purseName.hasError()) {
     Error.fromErrorCode(ErrorCode.InvalidArgument);
     return;
   }
 
-  let purseKey = getKey(<String>purseName);
+  let purseKey = getKey(purseName.value);
   if (purseKey === null) {
     Error.fromErrorCode(ErrorCode.InvalidArgument);
     return;
@@ -41,7 +41,7 @@ export function call(): void {
     return;
   }
 
-  let purseId = new PurseId(<URef>purseKey.uref);
+  let purse = <URef>purseKey.uref;
 
   let amountBytes = CL.getArg(1);
   if (amountBytes === null) {
@@ -49,11 +49,12 @@ export function call(): void {
     return;
   }
 
-  let amount = U512.fromBytes(amountBytes);
-  if (amount === null) {
+  let amountResult = U512.fromBytes(amountBytes);
+  if (amountResult.hasError()) {
     Error.fromErrorCode(ErrorCode.InvalidArgument).revert();
     return;
   }
+  let amount = amountResult.value;
 
   let proofOfStakeKey = Key.fromURef(proofOfStake);
 
@@ -65,23 +66,25 @@ export function call(): void {
     Error.fromErrorCode(ErrorCode.PurseNotCreated).revert();
     return;
   }
-  let paymentPurse = PurseId.fromBytes(paymentPurseOutput);
-  if (paymentPurse === null) {
+  let paymentPurseResult = URef.fromBytes(paymentPurseOutput);
+  if (paymentPurseResult.hasError()) {
     Error.fromErrorCode(ErrorCode.InvalidPurse).revert();
     return;
   }
+  let paymentPurse = paymentPurseResult.value;
 
   // Set Refund Purse
-  let args: CLValue[] = [CLValue.fromString(SET_REFUND_PURSE), CLValue.fromURef(purseId.asURef())];
+  let args: CLValue[] = [CLValue.fromString(SET_REFUND_PURSE), CLValue.fromURef(purse)];
   let refundPurseOutput = CL.callContract(proofOfStakeKey, args);
   if (refundPurseOutput === null) {
     Error.fromPosErrorCode(PosErrorCode.RefundPurseKeyUnexpectedType).revert(); // TODO: might not be the correct error code
     return;
   }
 
-  let ret = purseId.transferToPurse(
-    <PurseId>(paymentPurse),
-    <U512>amount,
+  let ret = transferFromPurseToPurse(
+    purse,
+    paymentPurse,
+    amount,
   );
   if (ret > 0) {
     Error.fromErrorCode(ErrorCode.Transfer).revert();

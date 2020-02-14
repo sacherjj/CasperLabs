@@ -5,8 +5,8 @@ import {fromBytesString} from "../../../../contract-as/assembly/bytesrepr";
 import {Key} from "../../../../contract-as/assembly/key";
 import {putKey, removeKey, ret, upgradeContractAtURef} from "../../../../contract-as/assembly";
 import {CLValue} from "../../../../contract-as/assembly/clvalue";
-import {PurseId} from "../../../../contract-as/assembly/purseid";
 import {URef} from "../../../../contract-as/assembly/uref";
+import {createPurse} from "../../../../contract-as/assembly/purse";
 
 const ENTRY_FUNCTION_NAME = "delegate";
 const METHOD_ADD = "add";
@@ -35,7 +35,6 @@ enum CustomError {
   NamedPurseNotCreated = 8
 }
 
-
 export function delegate(): void {
   // methodName
   const methodNameArg = CL.getArg(ApplyArgs.MethodName);
@@ -43,11 +42,12 @@ export function delegate(): void {
     Error.fromUserError(<u16>CustomError.MissingMethodNameArg).revert();
     return;
   }
-  const methodName = fromBytesString(methodNameArg);
-  if (methodName === null){
+  const methodNameResult = fromBytesString(methodNameArg);
+  if (methodNameResult === null){
     Error.fromUserError(<u16>CustomError.InvalidMethodNameArg).revert();
     return;
   }
+  let methodName = methodNameResult.value;
   if (methodName == METHOD_ADD){
     // purseName
     const purseNameArg = CL.getArg(ApplyArgs.PurseName);
@@ -55,17 +55,19 @@ export function delegate(): void {
       Error.fromUserError(<u16>CustomError.MissingPurseNameArg).revert();
       return;
     }
-    const purseName = fromBytesString(purseNameArg);
-    if (purseName === null){
+    const purseNameResult = fromBytesString(purseNameArg);
+    if (purseNameResult === null){
       Error.fromUserError(<u16>CustomError.InvalidPurseNameArg).revert();
       return;
     }
-    let purseId = PurseId.create();
-    if (purseId === null) {
+    let purseName = purseNameResult.value;
+
+    let purse = createPurse();
+    if (purse === null) {
       Error.fromUserError(<u16>CustomError.NamedPurseNotCreated).revert();
       return;
     }
-    const uref = (<PurseId>purseId).asURef();
+    const uref = <URef>purse;
     const key = Key.fromURef(uref);
     putKey(purseName, <Key>key);
     return;
@@ -77,11 +79,12 @@ export function delegate(): void {
       Error.fromUserError(<u16>CustomError.MissingPurseNameArg).revert();
       return;
     }
-    const purseName = fromBytesString(purseNameArg);
-    if (purseName === null){
+    const purseNameResult = fromBytesString(purseNameArg);
+    if (purseNameResult === null){
       Error.fromUserError(<u16>CustomError.InvalidPurseNameArg).revert();
       return;
     }
+    let purseName = purseNameResult.value;
     removeKey(purseName);
     return;
   }
@@ -98,11 +101,12 @@ export function call(): void {
     Error.fromUserError(<u16>CustomError.MissingPurseHolderURefArg).revert();
     return;
   }
-  let uref = URef.fromBytes(urefBytes);
-  if (uref === null) {
+  let urefResult = URef.fromBytes(urefBytes);
+  if (urefResult.hasError()) {
     Error.fromErrorCode(ErrorCode.InvalidArgument).revert();
     return;
   }
+  let uref = urefResult.value;
   if (uref.isValid() == false){
     Error.fromUserError(<u16>CustomError.InvalidPurseHolderURefArg).revert();
     return;

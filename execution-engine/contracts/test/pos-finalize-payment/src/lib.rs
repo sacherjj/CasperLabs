@@ -4,16 +4,13 @@ use contract::{
     contract_api::{account, runtime, system},
     unwrap_or_revert::UnwrapOrRevert,
 };
-use types::{
-    account::{PublicKey, PurseId},
-    ApiError, ContractRef, Key, U512,
-};
+use types::{account::PublicKey, ApiError, ContractRef, Key, URef, U512};
 
-fn set_refund_purse(pos: &ContractRef, p: &PurseId) {
+fn set_refund_purse(pos: &ContractRef, p: &URef) {
     runtime::call_contract(pos.clone(), ("set_refund_purse", *p))
 }
 
-fn get_payment_purse(pos: &ContractRef) -> PurseId {
+fn get_payment_purse(pos: &ContractRef) -> URef {
     runtime::call_contract(pos.clone(), ("get_payment_purse",))
 }
 
@@ -47,7 +44,7 @@ pub extern "C" fn call() {
     submit_payment(&pos_pointer, payment_amount);
     if refund_purse_flag != 0 {
         let refund_purse = system::create_purse();
-        runtime::put_key("local_refund_purse", Key::URef(refund_purse.value()));
+        runtime::put_key("local_refund_purse", Key::URef(refund_purse));
         set_refund_purse(&pos_pointer, &refund_purse);
     }
 

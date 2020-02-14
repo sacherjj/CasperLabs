@@ -2,11 +2,12 @@
 import * as CL from "../../../../contract-as/assembly";
 import {Error} from "../../../../contract-as/assembly/error";
 import {U512} from "../../../../contract-as/assembly/bignum";
-import {getMainPurse} from "../../../../contract-as/assembly/account";
 import {Key} from "../../../../contract-as/assembly/key";
-import {PurseId} from "../../../../contract-as/assembly/purseid";
-import {fromBytesString} from "../../../../contract-as/assembly/bytesrepr";
+import {URef} from "../../../../contract-as/assembly/uref";
 import {putKey} from "../../../../contract-as/assembly";
+import {getMainPurse} from "../../../../contract-as/assembly/account";
+import {fromBytesString} from "../../../../contract-as/assembly/bytesrepr";
+import {createPurse, transferFromPurseToPurse} from "../../../../contract-as/assembly/purse";
 
 enum Args{
     DestinationPurseName = 0,
@@ -28,38 +29,40 @@ export function call(): void {
         Error.fromUserError(<u16>CustomError.MissingAmountArg).revert();
         return;
     }
-    const amount = U512.fromBytes(amountArg);
-    if (amount === null) {
+    const amountResult = U512.fromBytes(amountArg);
+    if (amountResult.hasError()) {
         Error.fromUserError(<u16>CustomError.InvalidAmountArg).revert();
         return;
     }
+    let amount = amountResult.value;
     const destinationPurseNameArg = CL.getArg(Args.DestinationPurseName);
     if (destinationPurseNameArg === null) {
         Error.fromUserError(<u16>CustomError.MissingDestinationArg).revert();
         return;
     }
-    const destinationPurseName = fromBytesString(destinationPurseNameArg);
-    if (destinationPurseName === null){
+    const destinationPurseNameResult = fromBytesString(destinationPurseNameArg);
+    if (destinationPurseNameResult.hasError()) {
         Error.fromUserError(<u16>CustomError.InvalidDestinationArg).revert();
         return;
     }
+    let destinationPurseName = destinationPurseNameResult.value;
     const maybeMainPurse = getMainPurse();
     if (maybeMainPurse === null) {
         Error.fromUserError(<u16>CustomError.UnableToGetMainPurse).revert();
         return;
     }
-    const mainPurse = <PurseId>maybeMainPurse;
-    const maybeDestinationPurse = PurseId.create();
+    const mainPurse = <URef>maybeMainPurse;
+    const maybeDestinationPurse = createPurse();
     if (maybeDestinationPurse === null){
         Error.fromUserError(<u16>CustomError.FailedToCreateDestinationPurse).revert();
         return;
     }
-    const destinationPurse = <PurseId>maybeDestinationPurse;
-    const result = mainPurse.transferToPurse(destinationPurse, <U512>amount);
+    const destinationPurse = <URef>maybeDestinationPurse;
+    const result = transferFromPurseToPurse(mainPurse,destinationPurse, <U512>amount);
     const error = Error.fromResult(result);
     if (error !== null) {
         error.revert();
         return;
     }
-    putKey(destinationPurseName, <Key>Key.fromURef(destinationPurse.asURef()));
+    putKey(destinationPurseName, <Key>Key.fromURef(destinationPurse));
 }

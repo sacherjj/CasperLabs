@@ -9,11 +9,11 @@ export function call(): void {
     return;
   }
   const knownBlockTime = fromBytesU64(knownBlockTimeBytes);
-  if (knownBlockTime === null) {
+  if (knownBlockTime.hasError()) {
     Error.fromErrorCode(ErrorCode.InvalidArgument).revert();
     return;
   }
 
   const blockTime = CL.getBlockTime();
-  assert(blockTime == <u64>knownBlockTime);
+  assert(blockTime == knownBlockTime.value);
 }

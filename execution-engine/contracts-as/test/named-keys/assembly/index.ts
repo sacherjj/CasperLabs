@@ -21,13 +21,14 @@ export function call(): void {
     return;
   }
 
-  let command = fromBytesString(commandBytes);
-  if (command === null) {
+  let commandResult = fromBytesString(commandBytes);
+  if (commandResult.hasError()) {
     Error.fromErrorCode(ErrorCode.InvalidArgument);
     return;
   }
+  let command = commandResult.value;
 
-  else if (command == COMMAND_CREATE_UREF1) {
+  if (command == COMMAND_CREATE_UREF1) {
     let helloWorldKey = Key.create(CLValue.fromString("Hello, world!"));
     if (helloWorldKey === null) {
       Error.fromUserError(4464 + 1).revert();
@@ -68,11 +69,11 @@ export function call(): void {
         }
 
         let bytesString = fromBytesString(bytes);
-        if (bytesString === null) {
+        if (bytesString.hasError()) {
           Error.fromUserError(4464 + 2000 + <u16>i).revert();
           return;
         }
-        helloWorld = bytesString;
+        helloWorld = bytesString.value;
       }
     }
 
@@ -89,11 +90,11 @@ export function call(): void {
       return;
     }
     let uref1Str = fromBytesString(uref1Bytes);
-    if (uref1Str === null) {
+    if (uref1Str.hasError()) {
       Error.fromUserError(4464 + 8).revert();
       return;
     }
-    if (uref1Str != "Hello, world!") {
+    if (uref1Str.value != "Hello, world!") {
       Error.fromUserError(4464 + 9).revert();
       return;
     }
@@ -108,12 +109,12 @@ export function call(): void {
       return;
     }
     let bigValue = U512.fromBytes(bigValueBytes);
-    if (bigValue === null) {
+    if (bigValue.hasError()) {
       Error.fromUserError(4464 + 13).revert();
       return;
     }
 
-    if (bigValue != U512.MAX_VALUE) {
+    if (bigValue.value != U512.MAX_VALUE) {
       Error.fromUserError(4464 + 14).revert();
       return;
     }
@@ -130,11 +131,11 @@ export function call(): void {
       return;
     }
     let newBigValue = U512.fromBytes(newBigValueBytes);
-    if (newBigValue === null) {
+    if (newBigValue.hasError()) {
       Error.fromUserError(4464 + 16).revert();
       return;
     }
-    if (newBigValue != U512.MIN_VALUE) {
+    if (newBigValue.value != U512.MIN_VALUE) {
       Error.fromUserError(4464 + 17).revert();
       return;
     }
@@ -152,11 +153,11 @@ export function call(): void {
       return;
     }
     let newBigValue = U512.fromBytes(newBigValueBytes);
-    if (newBigValue === null) {
+    if (newBigValue.hasError()) {
       Error.fromUserError(4464 + 19).revert();
       return;
     }
-    if (newBigValue != U512.fromU64(123456789)) {
+    if (newBigValue.value != U512.fromU64(123456789)) {
       Error.fromUserError(4464 + 20).revert();
       return;
     }

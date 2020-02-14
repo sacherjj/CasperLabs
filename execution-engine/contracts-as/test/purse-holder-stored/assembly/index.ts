@@ -5,7 +5,8 @@ import {fromBytesString, toBytesMap} from "../../../../contract-as/assembly/byte
 import {Key} from "../../../../contract-as/assembly/key";
 import {putKey, ret} from "../../../../contract-as/assembly";
 import {CLValue} from "../../../../contract-as/assembly/clvalue";
-import {PurseId} from "../../../../contract-as/assembly/purseid";
+import {createPurse} from "../../../../contract-as/assembly/purse";
+import {URef} from "../../../../contract-as/assembly/uref";
 
 const ENTRY_FUNCTION_NAME = "delegate";
 const CONTRACT_NAME = "purse_holder_stored";
@@ -33,29 +34,32 @@ export function delegate(): void {
     Error.fromUserError(<u16>CustomError.MissingMethodNameArg).revert();
     return;
   }
-  const methodName = fromBytesString(methodNameArg);
-  if (methodName === null){
+  const methodNameResult = fromBytesString(methodNameArg);
+  if (methodNameResult === null){
     Error.fromUserError(<u16>CustomError.InvalidMethodNameArg).revert();
     return;
   }
+  let methodName = methodNameResult.value;
+
   if (methodName == METHOD_ADD){
     const purseNameArg = CL.getArg(Args.PurseName);
     if (purseNameArg === null){
       Error.fromUserError(<u16>CustomError.MissingPurseNameArg).revert();
       return;
     }
-    let purseId = PurseId.create();
-    if (purseId === null) {
+    let purse = createPurse();
+    if (purse === null) {
       Error.fromUserError(<u16>CustomError.NamedPurseNotCreated).revert();
       return;
     }
-    const uref = (<PurseId>purseId).asURef();
+    const uref = <URef>purse;
     const key = Key.fromURef(uref);
-    const purseName = fromBytesString(purseNameArg);
-    if (purseName === null){
+    const purseNameResult = fromBytesString(purseNameArg);
+    if (purseNameResult.hasError()) {
       Error.fromUserError(<u16>CustomError.InvalidPurseNameArg).revert();
       return;
     }
+    let purseName = purseNameResult.value;
     putKey(purseName, <Key>key);
     return;
   }

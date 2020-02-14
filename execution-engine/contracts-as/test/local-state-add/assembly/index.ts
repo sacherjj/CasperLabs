@@ -31,11 +31,12 @@ export function call(): void {
     Error.fromUserError(<u16>CustomError.MissingCommandArg).revert();
     return;
   }
-  const command = fromBytesString(commandArg);
-  if (command === null){
+  const commandResult = fromBytesString(commandArg);
+  if (commandResult.hasError()) {
     Error.fromUserError(<u16>CustomError.InvalidCommandArg).revert();
     return;
   }
+  const command = commandResult.value;
   if (command == CMD_WRITE){
     writeLocal(local, CLValue.fromU64(INITIAL_VALUE));
   } else if (command == CMD_ADD){

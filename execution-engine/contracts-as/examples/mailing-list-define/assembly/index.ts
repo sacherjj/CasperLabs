@@ -43,12 +43,13 @@ function updateList(name: String): void {
         return;
     }
 
-    let lst = fromBytesStringList(<Uint8Array>listBytes);
-    if (lst === null) {
+    let lstResult = fromBytesStringList(<Uint8Array>listBytes);
+    if (lstResult.hasError()) {
         Error.fromErrorCode(ErrorCode.ValueNotFound).revert();
         return;
     }
 
+    let lst = lstResult.value;
     lst.push(name);
 
     listKey.write(CLValue.fromStringList(lst));
@@ -80,11 +81,12 @@ function publish(msg: String): void {
         return;
     }
 
-    let lst = fromBytesStringList(<Uint8Array>listBytes);
-    if (lst === null) {
+    let lstResult = fromBytesStringList(<Uint8Array>listBytes);
+    if (lstResult.hasError()) {
         Error.fromErrorCode(ErrorCode.ValueNotFound).revert();
         return;
     }
+    let lst = lstResult.value;
 
     for (let i = 0; i < lst.length; i++) {
         const name = lst[i];
@@ -94,11 +96,12 @@ function publish(msg: String): void {
             Error.fromErrorCode(ErrorCode.Read).revert();
             return;
         }
-        let messages = fromBytesStringList(messagesBytes);
-        if (messages === null) {
+        let messagesResult = fromBytesStringList(messagesBytes);
+        if (messagesResult.hasError()) {
             Error.fromErrorCode(ErrorCode.ValueNotFound).revert();
             return;
         }
+        let messages = messagesResult.value;
         messages.push(msg);
         key.write(CLValue.fromStringList(messages));
     }
@@ -111,11 +114,12 @@ export function mailing_list_ext(): void {
         return;
     }
 
-    let methodName = fromBytesString(methodNameBytes);
-    if (methodName === null) {
+    let methodNameResult = fromBytesString(methodNameBytes);
+    if (methodNameResult === null) {
         Error.fromErrorCode(ErrorCode.InvalidArgument).revert();
         return;
     }
+    let methodName = methodNameResult.value;
 
     let arg1Bytes = getArg(Arg.Arg1);
     if (arg1Bytes === null) {
@@ -123,11 +127,12 @@ export function mailing_list_ext(): void {
         return;
     }
 
-    let arg1 = fromBytesString(arg1Bytes);
-    if (arg1 === null) {
+    let arg1Result = fromBytesString(arg1Bytes);
+    if (arg1Result.hasError()) {
         Error.fromErrorCode(ErrorCode.InvalidArgument).revert();
         return;
     }
+    let arg1 = arg1Result.value;
 
     if (methodName == "sub") {
         let maybeKey = sub(arg1);

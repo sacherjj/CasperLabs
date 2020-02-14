@@ -191,6 +191,7 @@ package object gossiping {
                                  makeInitialSynchronizer(
                                    conf,
                                    downloadManager,
+                                   synchronizer,
                                    connectToGossip,
                                    awaitApproval.join
                                  ),
@@ -664,6 +665,7 @@ package object gossiping {
   private def makeInitialSynchronizer[F[_]: Concurrent: Parallel: Log: Timer: NodeDiscovery: DagStorage](
       conf: Configuration,
       downloadManager: DownloadManager[F],
+      synchronizer: Synchronizer[F],
       connectToGossip: GossipService.Connector[F],
       awaitApproved: F[Unit]
   ): Resource[F, Fiber[F, Unit]] =
@@ -680,6 +682,7 @@ package object gossiping {
                             skipFailedNodesInNextRounds = conf.server.initSyncSkipFailedNodes,
                             connector = connectToGossip,
                             downloadManager = downloadManager,
+                            synchronizer = synchronizer,
                             step = conf.server.initSyncStep,
                             rankStartFrom = minRank,
                             roundPeriod = conf.server.initSyncRoundPeriod
