@@ -26,7 +26,7 @@ import io.casperlabs.node.api.graphql.schema.blocks.{
 import io.casperlabs.node.api.{DeployInfoPagination, Utils}
 import io.casperlabs.shared.Log
 import io.casperlabs.smartcontracts.ExecutionEngineService
-import io.casperlabs.smartcontracts.cltype.StoredValue
+import io.casperlabs.smartcontracts.cltype.StoredValueInstance
 import io.casperlabs.storage.block._
 import io.casperlabs.storage.dag.DagStorage
 import io.casperlabs.storage.deploy.DeployStorage
@@ -220,7 +220,7 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream
                                         info.getSummary.getHeader.getState.postStateHash ->
                                           info.getSummary.getHeader.getProtocolVersion
                                     })
-                values <- maybeBlockProps.fold(List.empty[Option[StoredValue]].pure[F]) {
+                values <- maybeBlockProps.fold(List.empty[Option[StoredValueInstance]].pure[F]) {
                            case (stateHash, protocolVersion) =>
                              for {
 
@@ -238,13 +238,23 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream
                                                                      query.pathSegments,
                                                                      protocolVersion
                                                                    )
+                                              possibleInstance = possibleResponse.flatMap { sv =>
+                                                StoredValueInstance
+                                                  .from(sv)
+                                                  .leftMap(
+                                                    err =>
+                                                      SmartContractEngineError(
+                                                        s"Error during instantiation of $sv: $err"
+                                                      )
+                                                  )
+                                              }
                                               value <- MonadThrowable[F]
-                                                        .fromEither(possibleResponse)
+                                                        .fromEither(possibleInstance)
                                                         .map(_.some)
                                                         .handleError {
                                                           case SmartContractEngineError(message)
                                                               if message contains "Value not found" =>
-                                                            none[StoredValue]
+                                                            none[StoredValueInstance]
                                                         }
                                             } yield value
                                         }

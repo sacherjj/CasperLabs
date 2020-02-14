@@ -417,15 +417,15 @@ package object types {
 
   lazy val StoredValue = ObjectType(
     "StoredValue",
-    fields[Unit, cltype.StoredValue](
+    fields[Unit, cltype.StoredValueInstance](
       Field(
         "value",
         StoredValueUnion,
         resolve = _.value match {
-          case cltype.StoredValue.Contract(value) => value
-          case cltype.StoredValue.Account(value)  => value
-          case cltype.StoredValue.CLValue(value) =>
-            cltype.CLValue.instantiate(value).right.get match {
+          case cltype.StoredValueInstance.Contract(value) => value
+          case cltype.StoredValueInstance.Account(value)  => value
+          case cltype.StoredValueInstance.CLValue(value) =>
+            value match {
               case v: CLValueInstance.Bool      => v
               case v: CLValueInstance.I32       => v
               case v: CLValueInstance.I64       => v
