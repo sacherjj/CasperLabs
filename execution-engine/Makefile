@@ -169,12 +169,16 @@ lint:
 .PHONY: check-rs
 check-rs: \
 	build \
+	check-format \
+	lint \
 	test-rs \
 	test-contracts-rs
 
 .PHONY: check
 check: \
 	build \
+	check-format \
+	lint \
 	test \
 	test-contracts
 

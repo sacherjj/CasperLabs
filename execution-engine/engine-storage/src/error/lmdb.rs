@@ -2,7 +2,6 @@ use std::sync;
 
 use failure::Fail;
 use lmdb as lmdb_external;
-use wasmi;
 
 use types::bytesrepr;
 

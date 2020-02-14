@@ -1,7 +1,5 @@
 use std::{ops::Deref, sync::Arc};
 
-use lmdb;
-
 use engine_shared::{
     additive_map::AdditiveMap,
     newtypes::{Blake2bHash, CorrelationId},

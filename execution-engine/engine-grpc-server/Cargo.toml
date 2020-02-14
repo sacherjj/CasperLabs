@@ -32,7 +32,6 @@ lmdb = "0.8"
 proptest = "0.9.4"
 protobuf = "=2.8"
 types = { version = "0.2.0", path = "../types", package = "casperlabs-types", features = ["std", "gens"] }
-wabt = "0.9"
 
 [build-dependencies]
 protoc-rust-grpc = "0.6.1"

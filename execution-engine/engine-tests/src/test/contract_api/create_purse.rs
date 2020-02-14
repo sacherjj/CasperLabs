@@ -1,4 +1,3 @@
-use base16;
 use lazy_static::lazy_static;
 
 use engine_shared::transform::Transform;

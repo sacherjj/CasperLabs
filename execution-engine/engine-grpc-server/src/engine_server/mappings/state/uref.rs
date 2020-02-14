@@ -61,8 +61,6 @@ impl TryFrom<Key_URef> for URef {
 
 #[cfg(test)]
 mod tests {
-    use rand;
-
     use types::UREF_ADDR_LENGTH;
 
     use super::*;
