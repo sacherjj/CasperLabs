@@ -53,22 +53,35 @@ class InitialSynchronizationForwardImpl[F[_]: Parallel: Log: Timer](
     /* The DownloadManager validates the dependencies on scheduling, so no need to check them here,
      * but it's possible that the node might have received a message in range [N, N+100] that depends
      * on a message that wasn't there previously in the [N-100, N] range.
-     * We can try to sync such messages using the regular synchronizer. */
+     * We can try to sync such messages using the regular synchronizer.
+     *
+     * For example say we go in rank ranges [0-4],[5-9] and in our first round we get blocks [G,A,B,C,D],
+     * but by the time we finish downloading them and move on to [5-9] there are some new block in the [0-4]
+     * range. We get [F,L,G,H,I] in the slice, but L is rejected because K is missing. We use the Synchronizer
+     * to get the missing DAG part [J,K], download them, then try L again.
+     * G - A - B - C - D -|- F - G - H - I
+     *           \ J - K -|- L
+     * */
     def schedule(peer: Node, summary: BlockSummary): F[WaitHandle[F]] = {
       val download = downloadManager.scheduleDownload(summary, peer, relay = false)
 
+      // Map over the wait handle returned by the schedule without waiting on it,
+      // so that we can schedule the rest of them (some of it can be downloaddd in parallel).
       download.map { handle =>
         // Attach an error handler to the handle.
         handle.recoverWith {
           case GossipError.MissingDependencies(_, missing) =>
             for {
-              dag <- synchronizer.syncDag(peer, missing.toSet).rethrow
-              handles <- dag.traverse { dep =>
-                          downloadManager.scheduleDownload(dep, peer, relay = false)
-                        }
-              _           <- handles.sequence
+              missingDag <- synchronizer.syncDag(peer, missing.toSet).rethrow
+              missingHandles <- missingDag.traverse { dep =>
+                                 downloadManager.scheduleDownload(dep, peer, relay = false)
+                               }
+              // Wait for all these extra backfilling downloads to finish.
+              _ <- missingHandles.sequence
+              // Now try the original download again.
               retryHandle <- download
-              _           <- retryHandle
+              // Whoever is waiting on `handle` now has to wait on the `retryHandle` instead.
+              _ <- retryHandle
             } yield ()
         }
       }
