@@ -3,9 +3,9 @@ use types::{account::PublicKey, BlockTime, Key, Phase};
 pub trait RuntimeProvider {
     fn get_key(name: &str) -> Option<Key>;
 
-    fn put_key(name: &str, key: Key) -> ();
+    fn put_key(name: &str, key: Key);
 
-    fn remove_key(name: &str) -> ();
+    fn remove_key(name: &str);
 
     fn get_phase() -> Phase;
 

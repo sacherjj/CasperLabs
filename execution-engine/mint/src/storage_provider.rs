@@ -7,7 +7,7 @@ use types::{
 pub trait StorageProvider {
     fn new_uref<T: CLTyped + ToBytes>(init: T) -> URef;
 
-    fn write_local<K: ToBytes, V: CLTyped + ToBytes>(key: K, value: V) -> ();
+    fn write_local<K: ToBytes, V: CLTyped + ToBytes>(key: K, value: V);
 
     fn read_local<K: ToBytes, V: CLTyped + FromBytes>(key: &K) -> Result<Option<V>, Error>;
 

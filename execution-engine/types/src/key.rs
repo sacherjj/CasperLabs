@@ -1,7 +1,6 @@
 use alloc::{format, string::String, vec::Vec};
 use core::fmt::{self, Debug, Display, Formatter};
 
-use base16;
 use blake2::{
     digest::{Input, VariableOutput},
     VarBlake2b,
