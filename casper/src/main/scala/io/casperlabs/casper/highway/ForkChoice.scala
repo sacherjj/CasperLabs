@@ -183,6 +183,15 @@ object ForkChoice {
                                   )
       } yield (forkChoice, reducedJustifications)
 
+    /**
+      * Computes the fork choice across multiple eras (as defined by `keyBlock`).
+      *
+      * @param startBlock Starting block for the fork choice (already known DAG tip).
+      * @param keyBlocks List of eras over which we will calculate the fork choice.
+      * @param dagView
+      * @param dag
+      * @return Main parent and set of justifications.
+      */
     private def erasForkChoice(
         startBlock: Message.Block,
         keyBlocks: List[Message.Block],
@@ -321,6 +330,9 @@ object ForkChoice {
     def maxHeight: Scores.Height = scores.keysIterator.max
     def isEmpty: Boolean         = scores.isEmpty
 
+    /**
+      * Finds the tip of the accumulated scores map.
+      */
     def tip[F[_]: Sync](implicit dag: DagLookup[F]): F[Block] =
       Scores
         .findTip[F](maxHeight, this)
