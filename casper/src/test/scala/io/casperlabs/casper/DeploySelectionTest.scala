@@ -144,9 +144,6 @@ class DeploySelectionTest
   }
 
   it should "return conflicting deploys along the commuting ones if they fit the block size limit" in {
-    if (sys.env.contains("DRONE_BRANCH")) {
-      cancel("NODE-1202")
-    }
     val conflicting = List.fill(deploysInSmallBlock)(sample(arbDeploy.arbitrary))
     val commuting   = List.fill(deploysInSmallBlock)(sample(arbDeploy.arbitrary))
     val stream = fs2.Stream
@@ -156,7 +153,7 @@ class DeploySelectionTest
     val counter                                   = AtomicInt(1)
     implicit val ee: ExecutionEngineService[Task] = eeExecMock(everyOtherCommutesExec(counter) _)
 
-    val deploySelection = DeploySelection.create[Task](smallBlockSizeBytes * 4)
+    val deploySelection = DeploySelection.create[Task](sizeLimitBytes = Int.MaxValue)
 
     // The very first WRITE doesn't conflict
     val expectedCommuting = conflicting.head +: commuting
