@@ -8,7 +8,7 @@ import AccountSerializationTest.arbAccount
 
 class AccountSerializationTest extends FlatSpec with Matchers with PropertyChecks {
   "Accounts" should "serialize properly" in forAll { (a: Account) =>
-    roundTrip(a)
+    roundTrip(a, Account.deserializer)
   }
 }
 

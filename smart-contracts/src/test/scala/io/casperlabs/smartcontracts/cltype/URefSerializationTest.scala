@@ -8,7 +8,7 @@ import URefSerializationTest.arbURef
 
 class URefSerializationTest extends FlatSpec with Matchers with PropertyChecks {
   "URef" should "serialize properly" in forAll { (u: URef) =>
-    roundTrip(u)
+    roundTrip(u, URef.deserializer)
   }
 }
 

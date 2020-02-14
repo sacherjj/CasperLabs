@@ -88,31 +88,61 @@ object CLType {
     override def toBytes(t: CLType): Array[Byte] = toBytesTailRec(Right(t) :: Nil, IndexedSeq.empty)
   }
 
-  @tailrec
-  def fromBytesTailRec(
-      bytes: BytesView,
-      builders: NonEmptyList[CLTypeBuilder]
-  ): Either[FromBytes.Error, (CLType, BytesView)] =
-    FromBytes.safePop(bytes) match {
-      case Left(err) => Left(err)
+  val deserializer: FromBytes.Deserializer[CLType] =
+    FromBytes.byte.flatMap {
+      case tag if tag == CL_TYPE_TAG_BOOL   => FromBytes.pure(Bool)
+      case tag if tag == CL_TYPE_TAG_I32    => FromBytes.pure(I32)
+      case tag if tag == CL_TYPE_TAG_I64    => FromBytes.pure(I64)
+      case tag if tag == CL_TYPE_TAG_U8     => FromBytes.pure(U8)
+      case tag if tag == CL_TYPE_TAG_U32    => FromBytes.pure(U32)
+      case tag if tag == CL_TYPE_TAG_U64    => FromBytes.pure(U64)
+      case tag if tag == CL_TYPE_TAG_U128   => FromBytes.pure(U128)
+      case tag if tag == CL_TYPE_TAG_U256   => FromBytes.pure(U256)
+      case tag if tag == CL_TYPE_TAG_U512   => FromBytes.pure(U512)
+      case tag if tag == CL_TYPE_TAG_UNIT   => FromBytes.pure(Unit)
+      case tag if tag == CL_TYPE_TAG_STRING => FromBytes.pure(String)
+      case tag if tag == CL_TYPE_TAG_KEY    => FromBytes.pure(Key)
+      case tag if tag == CL_TYPE_TAG_UREF   => FromBytes.pure(URef)
+      case tag if tag == CL_TYPE_TAG_OPTION => deserializer.map(inner => Option(inner))
+      case tag if tag == CL_TYPE_TAG_LIST   => deserializer.map(inner => List(inner))
 
-      case Right((tag, tail)) if primitiveTags.contains(tag) =>
-        CLTypeBuilder.buildFrom(primitiveTags(tag), builders, tail) match {
-          case Right((Right(clType), remBytes))     => Right(clType -> remBytes)
-          case Right((Left(remBuilders), remBytes)) => fromBytesTailRec(remBytes, remBuilders)
-          case Left(err)                            => Left(err)
-        }
+      case tag if tag == CL_TYPE_TAG_FIXED_LIST =>
+        for {
+          inner  <- deserializer
+          length <- FromBytes.int
+        } yield FixedList(inner, length)
 
-      case Right((tag, tail)) if compositeTags.contains(tag) =>
-        fromBytesTailRec(tail, compositeTags(tag) :: builders)
+      case tag if tag == CL_TYPE_TAG_RESULT =>
+        for {
+          ok  <- deserializer
+          err <- deserializer
+        } yield Result(ok, err)
 
-      case Right((other, _)) => Left(FromBytes.Error.InvalidVariantTag(other, "CLType"))
+      case tag if tag == CL_TYPE_TAG_MAP =>
+        for {
+          key   <- deserializer
+          value <- deserializer
+        } yield Map(key, value)
+
+      case tag if tag == CL_TYPE_TAG_TUPLE1 => deserializer.map(inner => Tuple1(inner))
+
+      case tag if tag == CL_TYPE_TAG_TUPLE2 =>
+        for {
+          t1 <- deserializer
+          t2 <- deserializer
+        } yield Tuple2(t1, t2)
+
+      case tag if tag == CL_TYPE_TAG_TUPLE3 =>
+        for {
+          t1 <- deserializer
+          t2 <- deserializer
+          t3 <- deserializer
+        } yield Tuple3(t1, t2, t3)
+
+      case tag if tag == CL_TYPE_TAG_ANY => FromBytes.pure(Any)
+
+      case other => FromBytes.raise(FromBytes.Error.InvalidVariantTag(other, "CLType"))
     }
-
-  implicit val fromBytesCLType: FromBytes[CLType] = new FromBytes[CLType] {
-    override def fromBytes(bytes: BytesView): Either[FromBytes.Error, (CLType, BytesView)] =
-      fromBytesTailRec(bytes, NonEmptyList.one(CLTypeBuilder.Hole))
-  }
 
   val CL_TYPE_TAG_BOOL: Byte       = 0
   val CL_TYPE_TAG_I32: Byte        = 1
@@ -136,32 +166,4 @@ object CLType {
   val CL_TYPE_TAG_TUPLE2: Byte     = 19
   val CL_TYPE_TAG_TUPLE3: Byte     = 20
   val CL_TYPE_TAG_ANY: Byte        = 21
-
-  val primitiveTags: immutable.Map[Byte, CLType] = immutable.Map(
-    CL_TYPE_TAG_BOOL   -> Bool,
-    CL_TYPE_TAG_I32    -> I32,
-    CL_TYPE_TAG_I64    -> I64,
-    CL_TYPE_TAG_U8     -> U8,
-    CL_TYPE_TAG_U32    -> U32,
-    CL_TYPE_TAG_U64    -> U64,
-    CL_TYPE_TAG_U128   -> U128,
-    CL_TYPE_TAG_U256   -> U256,
-    CL_TYPE_TAG_U512   -> U512,
-    CL_TYPE_TAG_UNIT   -> Unit,
-    CL_TYPE_TAG_STRING -> String,
-    CL_TYPE_TAG_KEY    -> Key,
-    CL_TYPE_TAG_UREF   -> URef,
-    CL_TYPE_TAG_ANY    -> Any
-  )
-
-  val compositeTags: immutable.Map[Byte, CLTypeBuilder] = immutable.Map(
-    CL_TYPE_TAG_OPTION     -> CLTypeBuilder.OptionHole,
-    CL_TYPE_TAG_LIST       -> CLTypeBuilder.ListHole,
-    CL_TYPE_TAG_FIXED_LIST -> CLTypeBuilder.FixedListHole,
-    CL_TYPE_TAG_RESULT     -> CLTypeBuilder.ResultHole,
-    CL_TYPE_TAG_MAP        -> CLTypeBuilder.MapHole,
-    CL_TYPE_TAG_TUPLE1     -> CLTypeBuilder.Tuple1Hole,
-    CL_TYPE_TAG_TUPLE2     -> CLTypeBuilder.Tuple2Hole,
-    CL_TYPE_TAG_TUPLE3     -> CLTypeBuilder.Tuple3Hole
-  )
 }

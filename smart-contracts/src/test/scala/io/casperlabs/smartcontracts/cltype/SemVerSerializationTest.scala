@@ -8,7 +8,7 @@ import SemVerSerializationTest.arbSemVer
 
 class SemVerSerializationTest extends FlatSpec with Matchers with PropertyChecks {
   "SemVers" should "serialize properly" in forAll { (v: SemVer) =>
-    roundTrip(v)
+    roundTrip(v, SemVer.deserializer)
   }
 }
 
