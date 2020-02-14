@@ -56,7 +56,7 @@ object Account {
       for {
         (publicKey, rem1)        <- FromBytes[PublicKey].fromBytes(bytes)
         (namedKeys, rem2)        <- FromBytes[Map[String, Key]].fromBytes(rem1)
-        (mainPurse, rem3)         <- FromBytes[URef].fromBytes(rem2)
+        (mainPurse, rem3)        <- FromBytes[URef].fromBytes(rem2)
         (associatedKeys, rem4)   <- FromBytes[Map[PublicKey, Weight]].fromBytes(rem3)
         (actionThresholds, rem5) <- FromBytes[ActionThresholds].fromBytes(rem4)
       } yield Account(publicKey, namedKeys, mainPurse, associatedKeys, actionThresholds) -> rem5
