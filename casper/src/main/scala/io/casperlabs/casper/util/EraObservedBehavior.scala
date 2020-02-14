@@ -1,5 +1,6 @@
 package io.casperlabs.casper.util
 
+import cats.implicits._
 import shapeless.tag.@@
 import io.casperlabs.storage.dag.DagRepresentation.Validator
 import io.casperlabs.storage.BlockHash
@@ -7,6 +8,8 @@ import com.google.protobuf.ByteString
 import io.casperlabs.models.Message
 import io.casperlabs.casper.util.ObservedValidatorBehavior._
 import com.github.ghik.silencer.silent
+import io.casperlabs.catscontrib.MonadThrowable
+import io.casperlabs.storage.dag.DagLookup
 
 @silent("is never used")
 final class EraObservedBehavior[A] private (
@@ -81,8 +84,100 @@ object EraObservedBehavior {
   def local(data: Map[ByteString, Map[Validator, Set[Message]]]): LocalDagView[Message] =
     apply(data).asInstanceOf[LocalDagView[Message]]
 
-  def messageJPast(data: Map[ByteString, Map[Validator, Set[Message]]]): MessageJPast[Message] =
-    apply(data).asInstanceOf[MessageJPast[Message]]
+  def messageJPast[F[_]: MonadThrowable](
+      dag: DagLookup[F],
+      justifications: List[Message],
+      erasObservedBehavior: LocalDagView[Message],
+      stop: Message
+  ): F[MessageJPast[Message]] = {
+    type PerEraValidatorMessages =
+      Map[ByteString, Map[Validator, ObservedValidatorBehavior[Message]]]
+    import ObservedValidatorBehavior._
+
+    val stream = DagOperations
+      .toposortJDagDesc(dag, justifications)
+      .takeUntil(_ == stop)
+      .filter(!_.isGenesisLike) // Not interested in Genesis block
+
+    val keyBlockHashes = erasObservedBehavior.keyBlockHashes
+
+    val initStates: PerEraValidatorMessages =
+      keyBlockHashes.toList
+        .map(
+          kbh =>
+            kbh -> erasObservedBehavior
+              .validatorsInEra(kbh)
+              .filterNot(_.isEmpty()) // Not interested in Genesis validator.
+              .map(_ -> ObservedValidatorBehavior.Empty)
+              .toMap
+        )
+        .toMap
+
+    // Previously seen message from the validator.
+    val prevMessageSeen: Map[ByteString, Map[Validator, Message]] = Map.empty
+    val validatorStatusMatches
+        : ByteString => Validator => ObservedValidatorBehavior[Message] => Boolean =
+      era => validator => seenBehavior => erasObservedBehavior.data(era)(validator) == seenBehavior
+
+    // If we've seen, in the j-past-cone of the message, the same statuses
+    // as ones we have collected locally then we're done.
+    // This is correct b/c a node has to download all dependencies first,
+    // before validating the block.
+    val isDone: PerEraValidatorMessages => Boolean = state =>
+      state.forall {
+        case (era, eraLMS) =>
+          eraLMS.forall {
+            case (validator, seenStatus) =>
+              validatorStatusMatches(era)(validator)(seenStatus)
+          }
+      }
+
+    stream
+      .foldWhileLeft((initStates, prevMessageSeen)) {
+        case ((latestMessages, prevMessages), message) =>
+          if (isDone(latestMessages)) {
+            Right((latestMessages, prevMessages))
+          } else {
+            val msgCreator = message.validatorId
+            val msgEra     = message.eraId
+            val eraMsgs    = latestMessages(msgEra)
+            Left(eraMsgs(msgCreator) match {
+              case Honest(prevMsg) =>
+                if (prevMessages(msgEra)(msgCreator).validatorPrevMessageHash == message.messageHash)
+                  (
+                    latestMessages,
+                    prevMessages
+                      .updated(msgEra, prevMessages(msgEra).updated(msgCreator, message))
+                  )
+                else {
+                  // Validator equivocated in this era
+                  (
+                    latestMessages.updated(
+                      msgEra,
+                      latestMessages(msgEra).updated(msgCreator, Equivocated(prevMsg, message))
+                    ),
+                    prevMessages
+                  )
+                }
+              case Empty =>
+                (
+                  latestMessages
+                    .updated(msgEra, latestMessages(msgEra).updated(msgCreator, Honest(message))),
+                  prevMessages
+                    .updated(
+                      msgEra,
+                      prevMessages.getOrElse(msgEra, Map.empty).updated(msgCreator, message)
+                    )
+                )
+              case Equivocated(_, _) => (latestMessages, prevMessages)
+            })
+          }
+      }
+      .map {
+        case (observedBehaviors, _) =>
+          new EraObservedBehavior[Message](observedBehaviors).asInstanceOf[MessageJPast[Message]]
+      }
+  }
 
   private def apply(
       data: Map[ByteString, Map[Validator, Set[Message]]]
