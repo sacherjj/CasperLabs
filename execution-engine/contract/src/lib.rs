@@ -55,8 +55,8 @@
 //! submodules.
 
 #![cfg_attr(not(feature = "std"), no_std)]
-#![feature(alloc_error_handler, allocator_api, core_intrinsics, lang_items)]
-#![doc(html_root_url = "https://docs.rs/casperlabs-contract/0.1.0")]
+#![feature(alloc_error_handler, alloc_layout_extra, allocator_api, core_intrinsics, lang_items)]
+#![doc(html_root_url = "https://docs.rs/casperlabs-contract/0.2.0")]
 #![doc(
     html_favicon_url = "https://raw.githubusercontent.com/CasperLabs/CasperLabs/dev/images/CasperLabs_Logo_Favicon_RGB_50px.png",
     html_logo_url = "https://raw.githubusercontent.com/CasperLabs/CasperLabs/dev/images/CasperLabs_Logo_Symbol_RGB.png",
