@@ -33,31 +33,6 @@ final class EraObservedBehavior[A] private (
   def validatorsInEra(keyBlockHash: BlockHash): Set[Validator] =
     data.get(keyBlockHash).fold(Set.empty[Validator])(_.keySet)
 
-//    def latestMessagesInEra[F[_]: MonadThrowable: DagLookup](
-//        keyBlockHash: ByteString
-//    )(implicit ev: A =:= ByteString): F[Map[Validator, Set[Message]]] =
-//      data.get(keyBlockHash) match {
-//        case None => Map.empty[Validator, Set[Message]].pure[F]
-//        case Some(lms) =>
-//          lms.toList
-//            .traverse {
-//              case (v, observedBehavior) =>
-//                val lm: F[Set[Message]] = observedBehavior match {
-//                  case Empty => Set.empty[Message].pure[F]
-//                  case Honest(hash) =>
-//                    DagLookup[F].lookupUnsafe(hash.asInstanceOf[ByteString]).map(Set(_))
-//                  case Equivocated(m1, m2) =>
-//                    MonadThrowable[F].map2(
-//                      DagLookup[F].lookupUnsafe(m1.asInstanceOf[ByteString]),
-//                      DagLookup[F].lookupUnsafe(m2.asInstanceOf[ByteString])
-//                    ) { case (a, b) => Set(a, b) }
-//
-//                }
-//                lm.map(v -> _)
-//            }
-//            .map(_.toMap)
-//      }
-
   def latestMessagesInEra(
       keyBlockHash: BlockHash
   )(implicit ev: A =:= Message): Map[Validator, Set[Message]] =
@@ -65,10 +40,9 @@ final class EraObservedBehavior[A] private (
       case None => Map.empty[Validator, Set[Message]]
       case Some(lms) =>
         lms.mapValues {
-          case Empty       => Set.empty[Message]
-          case Honest(msg) => Set(msg.asInstanceOf[Message])
-          case Equivocated(m1, m2) =>
-            Set(m1.asInstanceOf[Message], m2.asInstanceOf[Message])
+          case Empty               => Set.empty[Message]
+          case Honest(msg)         => Set(msg)
+          case Equivocated(m1, m2) => Set(m1, m2)
         }
     }
 }
