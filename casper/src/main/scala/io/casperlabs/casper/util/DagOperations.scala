@@ -525,8 +525,7 @@ object DagOperations {
       keyBlocks: List[Message]
   ): F[Map[ByteString, Map[DagRepresentation.Validator, Set[Message]]]] =
     keyBlocks
-      .sortBy(_.rank)
-      .reverse
+      .sortBy(_.rank)(Ordering[Long].reverse)
       .traverse(kb => dag.latestMessagesInEra(kb.messageHash).map(kb.messageHash -> _))
       .map(_.toMap)
 
