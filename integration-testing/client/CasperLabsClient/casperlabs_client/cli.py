@@ -334,7 +334,7 @@ def keygen_command(casperlabs_client, args):
 def show_peers_command(casperlabs_client, args):
     peers = casperlabs_client.show_peers()
     i = 0
-    for i, node in enumerate(peers):
+    for i, node in enumerate(peers, 1):
         print(f"------------- node {i} ---------------")
         print(hexify(node))
     print("-----------------------------------------------------")
