@@ -25,7 +25,6 @@ import EraObservedBehavior._
 import io.casperlabs.casper.highway.MessageProducer
 import io.casperlabs.storage.era.EraStorage
 
-@silent("is never used")
 object DagOperations {
 
   /** Some traversals take so long that tracking the visited nodes can fill the memory.

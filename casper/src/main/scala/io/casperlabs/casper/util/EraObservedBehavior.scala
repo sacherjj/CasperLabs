@@ -11,7 +11,6 @@ import com.github.ghik.silencer.silent
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.storage.dag.DagLookup
 
-@silent("is never used")
 final class EraObservedBehavior[A] private (
     val data: Map[BlockHash, Map[Validator, ObservedValidatorBehavior[A]]]
 ) {

@@ -213,7 +213,6 @@ trait DagRepresentation[F[_]] extends DagLookup[F] {
   def latestInEra(keyBlockHash: BlockHash): F[EraTipRepresentation[F]]
 }
 
-@silent("is never used")
 object DagRepresentation {
   type Validator = ByteString
 
