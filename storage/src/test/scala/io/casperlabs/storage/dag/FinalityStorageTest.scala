@@ -74,7 +74,7 @@ class FinalityStorageTest
     storage =>
       val blocks = List.fill(10)(sample(arbBlock.arbitrary)).zipWithIndex.map {
         case (block, idx) =>
-          block.update(_.header.rank := idx.toLong)
+          block.update(_.header.jRank := idx.toLong)
       }
 
       for {

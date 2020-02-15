@@ -30,6 +30,7 @@ class ScoresSpec extends FlatSpec with Matchers {
       parent,
       Seq.empty,
       rank.toLong,
+      rank.toLong,
       1,
       Signature(),
       BlockSummary(),
@@ -44,7 +45,7 @@ class ScoresSpec extends FlatSpec with Matchers {
     val vote    = newVote(1, randomBlockHash)
     val weight  = 10
     val updated = Scores.init(vote).update(vote, weight)
-    assert(updated.votesAtHeight(vote.rank) == Map(vote.messageHash -> BigInt(weight)))
+    assert(updated.votesAtHeight(vote.jRank) == Map(vote.messageHash -> BigInt(weight)))
   }
 
   it should "update a vote" in {
@@ -52,7 +53,7 @@ class ScoresSpec extends FlatSpec with Matchers {
     val weightA = 10
     val weightB = 20
     val updated = Scores.init(vote).update(vote, weightA).update(vote, weightB)
-    assert(updated.votesAtHeight(vote.rank) == Map(vote.messageHash -> BigInt(weightA + weightB)))
+    assert(updated.votesAtHeight(vote.jRank) == Map(vote.messageHash -> BigInt(weightA + weightB)))
   }
 
   it should "return weight of all votes" in {
@@ -82,7 +83,7 @@ class ScoresSpec extends FlatSpec with Matchers {
           .Header()
           .withValidatorPublicKey(validator)
           .withParentHashes(Seq(parentHash))
-          .withRank(rank.toLong)
+          .withPRank(rank.toLong)
       )
 
   val validatorA = randomBlockHash
@@ -104,7 +105,7 @@ class ScoresSpec extends FlatSpec with Matchers {
         blockStore                      <- MockBlockDagStorage[Task](startBlock +: blocks: _*)
         implicit0(dag: DagLookup[Task]) <- blockStore.getRepresentation
         messageBlocks                   = blocks.map(Message.fromBlock(_).get.asInstanceOf[Message.Block])
-        latestVotes                     = messageBlocks.groupBy(_.validatorId).mapValues(_.maxBy(_.rank)).values
+        latestVotes                     = messageBlocks.groupBy(_.validatorId).mapValues(_.maxBy(_.pRank)).values
         scoresMap = latestVotes.foldLeft(Scores.init(startBlock)) {
           case (scores, block) => scores.update(block, weights(block.validatorId))
         }

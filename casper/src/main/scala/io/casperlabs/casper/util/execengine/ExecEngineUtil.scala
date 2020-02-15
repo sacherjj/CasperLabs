@@ -482,7 +482,7 @@ object ExecEngineUtil {
     mergedStateHash.flatMap { postStateHash =>
       if (merged.parents.nonEmpty) {
         val protocolVersion = merged.parents.head.getHeader.getProtocolVersion
-        val maxRank         = merged.parents.map(_.getHeader.rank).max
+        val maxRank         = merged.parents.map(_.getHeader.jRank).max
 
         val activatedUpgrades = upgrades.filter { u =>
           maxRank < u.getActivationPoint.rank && u.getActivationPoint.rank <= rank

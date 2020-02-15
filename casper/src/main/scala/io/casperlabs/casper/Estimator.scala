@@ -35,10 +35,10 @@ object Estimator {
       lfb <- dag.lookupUnsafe(lfbHash)
       latestMessages <- latestMessageHashes.values.flatten.toList
                          .traverse(dag.lookupUnsafe(_))
-                         .map(_.filterNot(_.rank < lfb.rank)) // Filter out messages that are older than LFB.
+                         .map(_.filterNot(_.jRank < lfb.jRank)) // Filter out messages that are older than LFB.
                          .map(NonEmptyList.fromList(_).getOrElse(NonEmptyList.one(lfb)))
       latestMessagesByV = latestMessages.groupBy(_.validatorId)(cats.Order.fromOrdering[ByteString])
-      lfbDistance       = latestMessages.toList.maxBy(_.rank)(increasingOrder).rank - lfb.rank
+      lfbDistance       = latestMessages.toList.maxBy(_.jRank)(increasingOrder).jRank - lfb.jRank
       _                 <- Metrics[F].record("lfbDistance", lfbDistance)
       scores <- lmdScoring(
                  dag,
@@ -75,13 +75,13 @@ object Estimator {
   ): F[List[Message]] = {
     // Start from the highest latest messages and traverse backwards
     implicit val ord = DagOperations.blockTopoOrderingDesc
-    val minRank      = latestMessages.map(_.rank).toList.min
+    val minRank      = latestMessages.map(_.jRank).toList.min
     for {
       tips <- DagOperations
                .bfToposortTraverseF[F](latestMessages.toList)(
                  _.parents.toList.traverse(dag.lookupUnsafe(_))
                )
-               .takeWhile(_.rank >= minRank)
+               .takeWhile(_.jRank >= minRank)
                .takeUntil(_.messageHash == stopHash)
                // We start with the tips and remove any message
                // that is reachable through the parent-child link from other tips.
@@ -114,7 +114,7 @@ object Estimator {
         for {
           sortedMessages <- latestMessageHashes.toList
                              .traverse(dag.lookup(_))
-                             .map(_.flatten.sortBy(_.rank))
+                             .map(_.flatten.sortBy(_.jRank))
           lmdScore <- DagOperations
                        .bfToposortTraverseF[F](sortedMessages)(
                          _.parents.take(1).toList.traverse(dag.lookupUnsafe(_))

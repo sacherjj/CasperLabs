@@ -86,7 +86,7 @@ object VotingMatrix {
                                     .levelZeroMsgsOfValidator(dag, v, voteValue)
                                     .map(
                                       _.lastOption
-                                        .map(b => (v, (voteValue, b.rank)))
+                                        .map(b => (v, (voteValue, b.jRank)))
                                     )
                               }
                               .map(_.flatten.toMap)

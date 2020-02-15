@@ -152,7 +152,7 @@ class MessageProducerSpec extends FlatSpec with Matchers with Inspectors with Hi
             _ = b1.eraId shouldBe e0.keyBlockHash
             _ = b1.roundId shouldBe e0.startTick
             _ = b1.blockSummary.getHeader.chainName shouldBe chainName
-            _ = b1.rank shouldBe 1
+            _ = b1.jRank shouldBe 1
             _ = b1.validatorMsgSeqNum shouldBe 1
 
             b2 <- messageProducer.ballot(
@@ -162,7 +162,7 @@ class MessageProducerSpec extends FlatSpec with Matchers with Inspectors with Hi
                    justifications = Map(validatorId -> Set(b1.messageHash))
                  )
 
-            _ = b2.rank shouldBe 2
+            _ = b2.jRank shouldBe 2
             _ = b2.validatorMsgSeqNum shouldBe 2
             _ = b2.validatorPrevMessageHash shouldBe b1.messageHash
 
@@ -174,7 +174,7 @@ class MessageProducerSpec extends FlatSpec with Matchers with Inspectors with Hi
                    justifications = Map(validatorId -> Set(b2.messageHash))
                  )
 
-            _ = b3.rank shouldBe 3
+            _ = b3.jRank shouldBe 3
             _ = b3.validatorMsgSeqNum shouldBe 1
             _ = b3.validatorPrevMessageHash shouldBe ByteString.EMPTY
 
@@ -185,7 +185,7 @@ class MessageProducerSpec extends FlatSpec with Matchers with Inspectors with Hi
                    justifications = Map(validatorId -> Set(b2.messageHash, b3.messageHash))
                  )
 
-            _ = b4.rank shouldBe 4
+            _ = b4.jRank shouldBe 4
             _ = b4.validatorMsgSeqNum shouldBe 2
             _ = b4.validatorPrevMessageHash shouldBe b3.messageHash
             _ = b4.justifications should have size 2

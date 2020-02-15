@@ -158,7 +158,7 @@ class SynchronizerImpl[F[_]: Concurrent: Log: Metrics](
   }
 
   private def topologicalSort(syncState: SyncState): Vector[BlockSummary] =
-    syncState.summaries.values.toVector.sortBy(_.rank)
+    syncState.summaries.values.toVector.sortBy(_.jRank)
 
   /** Remember that we got these summaries from this source,
     * so next time we don't have to travel that far back in their DAG. */
@@ -409,7 +409,7 @@ object SynchronizerImpl {
     def append(summary: BlockSummary, iterationDistance: Int, originalDistance: Int): SyncState =
       copy(
         summaries = summaries + (summary.blockHash -> summary),
-        ranks = ranks + summary.rank,
+        ranks = ranks + summary.jRank,
         iterationState = iterationState.append(summary, iterationDistance),
         distanceFromOriginalTargets =
           distanceFromOriginalTargets.updated(summary.blockHash, originalDistance)

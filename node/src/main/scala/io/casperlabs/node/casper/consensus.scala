@@ -191,7 +191,7 @@ class NCB[F[_]: Concurrent: Time: Log: BlockStorage: DagStorage: ExecutionEngine
       minRank = latestMessages
         .filterKeys(bonded)
         .values
-        .flatMap(_.map(_.rank))
+        .flatMap(_.map(_.jRank))
         .toList
         .minimumOption
         .getOrElse(0L)
@@ -307,7 +307,7 @@ object Highway {
             keyBlocks       <- keyBlocksHashes.traverse(dag.lookupUnsafe)
             // Take the latest, to allow eras to be killed without causing
             // initial sync to start from their keyblock forever.
-            maxRank = keyBlocks.map(_.rank).max
+            maxRank = keyBlocks.map(_.jRank).max
           } yield maxRank
       }
     } yield cons

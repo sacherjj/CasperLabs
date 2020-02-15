@@ -159,7 +159,7 @@ class ValidationTest
   implicit class ChangeBlockOps(b: Block) {
     def changeBlockNumber(n: Long): Block = {
       val header    = b.getHeader
-      val newHeader = header.withRank(n)
+      val newHeader = header.withJRank(n)
       // NOTE: blockHash should be recalculated.
       b.withHeader(newHeader)
     }
@@ -251,7 +251,8 @@ class ValidationTest
       ByteString.EMPTY,
       "casperlabs",
       1,
-      0,
+      1,
+      1,
       pk,
       sk,
       Ed25519,

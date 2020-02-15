@@ -26,7 +26,7 @@ class ProtocolVersions private (l: List[Config]) {
   def fromBlock(
       b: Block
   ): state.ProtocolVersion =
-    versionAt(b.getHeader.rank)
+    versionAt(b.getHeader.jRank)
 }
 
 object ProtocolVersions {

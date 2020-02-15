@@ -13,14 +13,14 @@ object Sorting {
   implicit val byteStringOrdering: Ordering[ByteString] = Ordering.by(_.toByteArray)
 
   implicit val blockSummaryOrdering: Ordering[BlockSummary] = (x: BlockSummary, y: BlockSummary) =>
-    x.rank.compare(y.rank) match {
+    x.jRank.compare(y.jRank) match {
       case 0 => Ordering[ByteString].compare(x.blockHash, y.blockHash)
       case n => n
     }
 
   implicit def messageSummaryOrdering[A <: Message]: Ordering[A] =
     (x: A, y: A) =>
-      x.rank.compare(y.rank) match {
+      x.jRank.compare(y.jRank) match {
         case 0 => Ordering[ByteString].compare(x.messageHash, y.messageHash)
         case n => n
       }

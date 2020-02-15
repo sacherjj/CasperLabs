@@ -279,7 +279,7 @@ object ForkChoice {
       latestMessage: Message,
       target: Block
   ): F[Option[Message]] =
-    if (latestMessage.rank <= target.rank)
+    if (latestMessage.pRank <= target.pRank)
       none[Message].pure[F]
     else {
       ProtoUtil
@@ -313,11 +313,11 @@ object ForkChoice {
   ) {
     // Update weight of votes at height.
     def update(vote: Block, weight: Weight): Scores = {
-      val currVotes = scores.getOrElse(vote.rank, Map.empty[BlockHash, Weight])
+      val currVotes = scores.getOrElse(vote.pRank, Map.empty[BlockHash, Weight])
       val currScore = currVotes.getOrElse(vote.messageHash, Weight.Zero)
       val newScore  = currScore + weight
       val newVotes  = currVotes.updated(vote.messageHash, newScore)
-      copy(scores.updated(vote.rank, newVotes))
+      copy(scores.updated(vote.pRank, newVotes))
     }
 
     private def removeHeight(height: Scores.Height): Scores =
@@ -341,7 +341,7 @@ object ForkChoice {
 
   object Scores {
     type Height = Long
-    def init(startBlock: Message.Block): Scores = Scores(Map.empty, startBlock.rank + 1)
+    def init(startBlock: Message.Block): Scores = Scores(Map.empty, startBlock.pRank + 1)
 
     def findTip[F[_]: DagLookup: Sync](
         currHeight: Scores.Height,

@@ -234,7 +234,7 @@ class GraphQLBlockTypes[F[_]: MonadThrowable
           "rank",
           LongType,
           "Amount of hops needed to reach a genesis from the block".some,
-          resolve = c => c.value._1.getSummary.rank
+          resolve = c => c.value._1.getSummary.jRank
         ),
         Field(
           "validatorPublicKey",

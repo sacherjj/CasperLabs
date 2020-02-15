@@ -308,7 +308,8 @@ class MultiParentCasperImpl[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: 
   private case class CreateMessageProps(
       justifications: Seq[Justification],
       parents: Seq[BlockHash],
-      rank: Long,
+      jRank: Long,
+      pRank: Long,
       protocolVersion: ProtocolVersion,
       configuration: Config,
       validatorSeqNum: Int,
@@ -338,18 +339,20 @@ class MultiParentCasperImpl[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: 
         // `bondedLatestMsgs` won't include Genesis block
         // and in the case when it becomes the main parent we want to include its rank
         // when calculating it for the current block.
-        rank <- MonadThrowable[F].fromTry(
-                 merged.parents.toList
-                   .traverse(Message.fromBlock(_))
-                   .map(_.toSet | bondedLatestMsgs.values.flatten.toSet)
-                   .map(set => ProtoUtil.nextRank(set.toList))
-               )
-        config          <- CasperLabsProtocol[F].configAt(rank)
-        protocolVersion <- CasperLabsProtocol[F].versionAt(rank)
+        jRank <- MonadThrowable[F].fromTry(
+                  merged.parents.toList
+                    .traverse(Message.fromBlock(_))
+                    .map(_.toSet | bondedLatestMsgs.values.flatten.toSet)
+                    .map(set => ProtoUtil.nextJRank(set.toList))
+                )
+        pRank           = merged.parents.head.getHeader.pRank + 1
+        config          <- CasperLabsProtocol[F].configAt(jRank)
+        protocolVersion <- CasperLabsProtocol[F].versionAt(jRank)
       } yield CreateMessageProps(
         justifications,
         merged.parents.map(_.blockHash).toSeq,
-        rank,
+        jRank,
+        pRank,
         protocolVersion,
         config,
         validatorSeqNum,
@@ -385,7 +388,7 @@ class MultiParentCasperImpl[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: 
                          deployStream,
                          timestamp,
                          props.protocolVersion,
-                         props.rank,
+                         props.jRank,
                          upgrades
                        )
         result <- Sync[F]
@@ -405,7 +408,8 @@ class MultiParentCasperImpl[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: 
                          props.validatorPrevBlockHash,
                          chainName,
                          timestamp,
-                         props.rank,
+                         props.jRank,
+                         props.pRank,
                          validatorId,
                          privateKey,
                          sigAlgorithm,
@@ -455,7 +459,8 @@ class MultiParentCasperImpl[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: 
         props.validatorPrevBlockHash,
         chainName,
         now,
-        props.rank,
+        props.jRank,
+        props.pRank,
         validatorId,
         privateKey,
         sigAlgorithm,
@@ -586,7 +591,7 @@ object MultiParentCasperImpl {
                    }
           _ <- Log[F].debug(s"Computing the pre-state hash of ${hashPrefix -> "block"}")
           preStateHash <- ExecEngineUtil
-                           .computePrestate[F](merged, block.getHeader.rank, upgrades)
+                           .computePrestate[F](merged, block.getHeader.jRank, upgrades) // TOOD: This should probably be using p-rank
                            .timer("computePrestate")
           _ <- Log[F].debug(s"Computing the effects for ${hashPrefix -> "block"}")
           blockEffects <- ExecEngineUtil

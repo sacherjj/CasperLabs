@@ -127,7 +127,7 @@ object GraphzGenerator {
   private def toDagInfo[G[_]](
       blockInfos: List[BlockInfo]
   ): DagInfo[G] = {
-    val ranks = blockInfos.map(_.getSummary.rank).distinct
+    val ranks = blockInfos.map(_.getSummary.jRank).distinct
 
     val validators = blockInfos
       .map(_.getSummary)
@@ -143,7 +143,7 @@ object GraphzGenerator {
           .toList
 
         val validatorBlocks =
-          Map(b.rank -> List(ValidatorBlock(blockHash, parents, justifications)))
+          Map(b.jRank -> List(ValidatorBlock(blockHash, parents, justifications)))
 
         Map(blockSenderHash -> validatorBlocks)
       }

@@ -185,7 +185,7 @@ class MessageExecutor[F[_]: Sync: Log: Time: Metrics: BlockStorage: DagStorage: 
               s"Computing the pre-state hash of $isBookingBlock ${hashPrefix -> "block"}"
             )
         preStateHash <- ExecEngineUtil
-                         .computePrestate[F](merged, block.getHeader.rank, upgrades)
+                         .computePrestate[F](merged, block.getHeader.jRank, upgrades) //TODO: This should probably use p-rank
                          .timer("computePrestate")
         preStateBonds = merged.parents.headOption.getOrElse(block).getHeader.getState.bonds
         _             <- Log[F].debug(s"Computing the effects for ${hashPrefix -> "block"}")

@@ -94,7 +94,8 @@ object MessageProducer {
             props.validatorPrevBlockHash,
             chainName,
             timestamp,
-            props.rank,
+            props.jRank,
+            props.pRank,
             validatorIdentity.publicKey,
             validatorIdentity.privateKey,
             validatorIdentity.signatureAlgorithm,
@@ -145,7 +146,7 @@ object MessageProducer {
                            deployStream,
                            timestamp,
                            props.protocolVersion,
-                           props.rank,
+                           props.jRank,
                            upgrades
                          )
 
@@ -163,7 +164,8 @@ object MessageProducer {
             props.validatorPrevBlockHash,
             chainName,
             timestamp,
-            props.rank,
+            props.jRank,
+            props.pRank,
             validatorIdentity.publicKey,
             validatorIdentity.privateKey,
             validatorIdentity.signatureAlgorithm,
@@ -222,13 +224,15 @@ object MessageProducer {
           validatorPrevBlockHash = maybeOwnLatest.fold(ByteString.EMPTY)(_.messageHash)
 
           // Genesis is for example not part of the justifications, so to be safe include parents too.
-          rank            = ProtoUtil.nextRank(parents ++ justificationMessages)
-          config          <- CasperLabsProtocol[F].configAt(rank)
-          protocolVersion <- CasperLabsProtocol[F].versionAt(rank)
+          jRank           = ProtoUtil.nextJRank(parents ++ justificationMessages)
+          pRank           = parents.head.pRank + 1
+          config          <- CasperLabsProtocol[F].configAt(jRank)
+          protocolVersion <- CasperLabsProtocol[F].versionAt(jRank)
         } yield MessageProps(
           validatorSeqNum,
           validatorPrevBlockHash,
-          rank,
+          jRank,
+          pRank,
           config,
           protocolVersion,
           ProtoUtil.toJustification(justificationMessages)
@@ -238,7 +242,8 @@ object MessageProducer {
   case class MessageProps(
       validatorSeqNum: Int,
       validatorPrevBlockHash: BlockHash,
-      rank: Long,
+      jRank: Long,
+      pRank: Long,
       configuration: Config,
       protocolVersion: ProtocolVersion,
       justifications: Seq[Justification]

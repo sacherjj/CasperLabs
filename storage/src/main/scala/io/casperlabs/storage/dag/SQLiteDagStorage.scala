@@ -53,14 +53,15 @@ class SQLiteDagStorage[F[_]: Sync](
           .map(d => d.cost * d.getDeploy.getHeader.gasPrice)
           .sum / deployCostTotal
 
-val isFinalized = false
+    val isFinalized = false
     val insertBlockMetadata =
       (fr"""INSERT OR IGNORE INTO block_metadata
-            (block_hash, validator, rank, """ ++ blockInfoCols() ++ fr""")
+            (block_hash, validator, j_rank, p_rank, """ ++ blockInfoCols() ++ fr""")
             VALUES (
               ${block.blockHash},
               ${block.validatorPublicKey},
-              ${block.rank},
+              ${block.jRank},
+              ${block.pRank},
               ${blockSummary.toByteString},
               ${block.serializedSize},
               $deployErrorCount,
@@ -212,10 +213,10 @@ val isFinalized = false
       startBlockNumber: Long,
       endBlockNumber: Long
   ): fs2.Stream[F, Vector[BlockInfo]] =
-    (fr"""SELECT rank, """ ++ blockInfoCols() ++ fr"""
+    (fr"""SELECT j_rank, """ ++ blockInfoCols() ++ fr"""
           FROM block_metadata
-          WHERE rank>=$startBlockNumber AND rank<=$endBlockNumber
-          ORDER BY rank
+          WHERE j_rank>=$startBlockNumber AND j_rank<=$endBlockNumber
+          ORDER BY j_rank
           """)
       .query[(Long, BlockInfo)]
       .stream
@@ -223,23 +224,23 @@ val isFinalized = false
       .groupByRank
 
   override def topoSort(startBlockNumber: Long): fs2.Stream[F, Vector[BlockInfo]] =
-    (fr"""SELECT rank, """ ++ blockInfoCols() ++ fr"""
+    (fr"""SELECT j_rank, """ ++ blockInfoCols() ++ fr"""
           FROM block_metadata
-          WHERE rank>=$startBlockNumber
-          ORDER BY rank""")
+          WHERE j_rank>=$startBlockNumber
+          ORDER BY j_rank""")
       .query[(Long, BlockInfo)]
       .stream
       .transact(readXa)
       .groupByRank
 
   override def topoSortTail(tailLength: Int): fs2.Stream[F, Vector[BlockInfo]] =
-    (fr"""SELECT a.rank, """ ++ blockInfoCols("a") ++ fr"""
+    (fr"""SELECT a.j_rank, """ ++ blockInfoCols("a") ++ fr"""
           FROM block_metadata a
           INNER JOIN (
-           SELECT max(rank) max_rank FROM block_metadata
+           SELECT max(j_rank) max_rank FROM block_metadata
           ) b
-          ON a.rank>b.max_rank-$tailLength
-          ORDER BY a.rank
+          ON a.j_rank>b.max_rank-$tailLength
+          ORDER BY a.j_rank
           """)
       .query[(Long, BlockInfo)]
       .stream
@@ -359,7 +360,7 @@ object SQLiteDagStorage {
 
   private case class Fs2State(
       buffer: Vector[BlockInfo] = Vector.empty,
-      rank: Long = -1
+      jRank: Long = -1
   )
 
   private implicit class StreamOps[F[_]: Bracket[*[_], Throwable]](
@@ -383,18 +384,18 @@ object SQLiteDagStorage {
         case Some((chunk, streamTail)) =>
           chunk
             .foldLeftM[G, Fs2State](state) {
-              case (Fs2State(_, currentRank), (rank, info)) if currentRank == -1 =>
-                Fs2State(Vector(info), rank).pure[G]
-              case (Fs2State(acc, currentRank), (rank, info)) if rank == currentRank =>
+              case (Fs2State(_, currentRank), (jRank, info)) if currentRank == -1 =>
+                Fs2State(Vector(info), jRank).pure[G]
+              case (Fs2State(acc, currentRank), (jRank, info)) if jRank == currentRank =>
                 Fs2State(acc :+ info, currentRank).pure[G]
-              case (Fs2State(acc, currentRank), (rank, info)) if rank > currentRank =>
-                put(acc) >> Fs2State(Vector(info), rank).pure[G]
-              case (Fs2State(acc, currentRank), (rank, info)) =>
+              case (Fs2State(acc, currentRank), (jRank, info)) if jRank > currentRank =>
+                put(acc) >> Fs2State(Vector(info), jRank).pure[G]
+              case (Fs2State(acc, currentRank), (jRank, info)) =>
                 error(
                   new IllegalArgumentException(
                     s"Ranks must increase monotonically, got prev rank: $currentRank, prev block: ${msg(
                       acc.last
-                    )}, next rank: ${rank}, next block: ${msg(info)}"
+                    )}, next rank: ${jRank}, next block: ${msg(info)}"
                   )
                 )
             }

@@ -218,7 +218,7 @@ class CachingDagStorageTest
         case CachingDagStorageTestData(underlying, cache, mockMetrics) =>
           def genChild(parent: Block) =
             parent
-              .update(_.header.rank := parent.rank + 1)
+              .update(_.header.jRank := parent.jRank + 1)
               .update(_.header.parentHashes := List(parent.blockHash))
               .update(_.blockHash := sample(genHash))
 

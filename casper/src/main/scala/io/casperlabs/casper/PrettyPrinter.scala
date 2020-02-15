@@ -101,7 +101,7 @@ object PrettyPrinter {
       header     <- b.header
       mainParent <- header.parentHashes.headOption
       postState  <- header.state
-    } yield s"Block #${header.rank} (${buildString(b.blockHash)}) " +
+    } yield s"Block #${header.jRank} (${buildString(b.blockHash)}) " +
       s"-- Sender ID ${buildString(header.validatorPublicKey)} " +
       s"-- M Parent Hash ${buildString(mainParent)} " +
       s"-- Contents ${buildString(postState.postStateHash)}" +

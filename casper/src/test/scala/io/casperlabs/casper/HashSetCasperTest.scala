@@ -1409,7 +1409,7 @@ abstract class HashSetCasperTest
       .withJustifications(serializedJustifications)
       .withBodyHash(ProtoUtil.protoHash(body))
       .withState(postState)
-      .withRank(1)
+      .withJRank(1)
     val blockHash = ProtoUtil.protoHash(header)
     val blockThatPointsToInvalidBlock =
       Block()

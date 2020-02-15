@@ -72,7 +72,7 @@ object FinalityDetectorUtil {
       validators: Set[Validator]
   ): F[Map[Validator, Level]] =
     panoramaOfBlockByValidators(blockDag, block, validators)
-      .map(_.mapValues(_.rank))
+      .map(_.mapValues(_.jRank))
 
   /**
     * Get level zero messages of the specified validator and specified candidateBlock

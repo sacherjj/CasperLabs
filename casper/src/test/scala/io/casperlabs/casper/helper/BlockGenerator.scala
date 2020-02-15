@@ -27,6 +27,7 @@ import monix.eval.Task
 
 import scala.collection.immutable.HashMap
 import scala.language.higherKinds
+import _root_.io.casperlabs.storage.dag.DagStorage
 
 object BlockGenerator {
   implicit val timeEff = new LogicalTime[Task]()
@@ -183,12 +184,14 @@ trait BlockGenerator {
                           else
                             ProtoUtil.nextValidatorBlockSeqNum(dag, validatorPrevBlockHash)
                         }
-      rank <- if (parentsHashList.isEmpty) 0L.pure[F]
-             else
-               updatedJustifications.values.toList
-                 .flatTraverse(_.toList.traverse(dag.lookup(_)))
-                 .map(_.flatten)
-                 .map(ProtoUtil.nextRank(_))
+      jRank <- if (parentsHashList.isEmpty) 0L.pure[F]
+              else
+                updatedJustifications.values.toList
+                  .flatTraverse(_.toList.traverse(dag.lookup(_)))
+                  .map(_.flatten)
+                  .map(ProtoUtil.nextJRank(_))
+      pRank <- if (parentsHashList.isEmpty) 0L.pure[F] // Genesis
+              else dag.lookupBlockUnsafe(parentsHashList.head).map(_.pRank + 1)
       header = ProtoUtil
         .blockHeader(
           body,
@@ -196,7 +199,8 @@ trait BlockGenerator {
           parentsHashList,
           serializedJustifications,
           postState,
-          rank,
+          jRank,
+          pRank,
           validatorSeqNum,
           validatorPrevBlockHash,
           protocolVersion = ProtocolVersion(1),

@@ -59,7 +59,7 @@ object ExecutionEngineServiceStub {
       parents <- ProtoUtil.unsafeGetParents[F](b)
       merged  <- ExecutionEngineServiceStub.merge[F](parents, dag)
       preStateHash <- ExecEngineUtil
-                       .computePrestate[F](merged, rank = b.getHeader.rank, upgrades = Nil)
+                       .computePrestate[F](merged, rank = b.getHeader.jRank, upgrades = Nil)
       preStateBonds = merged.parents.headOption.getOrElse(b).getHeader.getState.bonds
       effects <- ExecEngineUtil
                   .effectsForBlock[F](b, preStateHash)

@@ -150,7 +150,8 @@ message Block {
         // validator_block_seq_num - 1.
         bytes validator_prev_block_hash = 14;
         // Distance from Genesis.
-        uint64 rank = 11;
+        // This is a rank based on justifications of a message.
+        uint64 j_rank = 11;
         MessageType message_type = 12;
         // A block from where the fork choice is calculated.
         // Corresponds to the era the block belongs to.
@@ -163,6 +164,9 @@ message Block {
         // of the era. Only leader blocks (i.e. lambda messages) have to set it; should be
         // empty for ballots.
         bool magic_bit = 17;
+        // Block height.
+        // Different from j_rank because it's incremented along main tree in the DAG.
+        uint64 p_rank = 18;
     }
 
     enum MessageType {

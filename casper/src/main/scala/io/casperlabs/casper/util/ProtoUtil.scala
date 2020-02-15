@@ -53,7 +53,7 @@ object ProtoUtil {
         targetBlockOpt <- dag.lookup(targetBlockHash)
         result <- targetBlockOpt match {
                    case Some(targetBlockMeta) =>
-                     if (targetBlockMeta.rank <= candidateBlockSummary.rank)
+                     if (targetBlockMeta.jRank <= candidateBlockSummary.jRank)
                        false.pure[F]
                      else {
                        targetBlockMeta.parents.headOption match {
@@ -101,7 +101,7 @@ object ProtoUtil {
       latestFinalizedBlock: Message,
       newBlock: Message
   ): F[Option[BlockHash]] =
-    if (newBlock.rank <= latestFinalizedBlock.rank) {
+    if (newBlock.jRank <= latestFinalizedBlock.jRank) {
       none[BlockHash].pure[F]
     } else {
       for {
@@ -154,11 +154,11 @@ object ProtoUtil {
   def unsafeGetBlock[F[_]: MonadThrowable: BlockStorage](hash: BlockHash): F[Block] =
     BlockStorage[F].getBlockUnsafe(hash)
 
-  def nextRank(justificationMsgs: Seq[Message]): Long =
+  def nextJRank(justificationMsgs: Seq[Message]): Long =
     if (justificationMsgs.isEmpty) 0 // Genesis has rank=0
     else
       // For any other block `rank` should be 1 higher than the highest rank in its justifications.
-      justificationMsgs.map(_.rank).max + 1
+      justificationMsgs.map(_.jRank).max + 1
 
   def nextValidatorBlockSeqNum[F[_]: MonadThrowable](
       dag: DagRepresentation[F],
@@ -317,7 +317,7 @@ object ProtoUtil {
     b.getHeader.getState.bonds
 
   def blockNumber(b: Block): Long =
-    b.getHeader.rank
+    b.getHeader.jRank
 
   /** Removes redundant messages that are available in the immediate justifications of another message in the set */
   def removeRedundantMessages(
@@ -415,7 +415,8 @@ object ProtoUtil {
       validatorPrevBlockHash: ByteString,
       chainName: String,
       now: Long,
-      rank: Long,
+      jRank: Long,
+      pRank: Long,
       publicKey: Keys.PublicKey,
       privateKey: Keys.PrivateKey,
       sigAlgorithm: SignatureAlgorithm,
@@ -435,7 +436,8 @@ object ProtoUtil {
       parentHashes = parents,
       justifications = justifications,
       state = postState,
-      rank = rank,
+      jRank = jRank,
+      pRank = pRank,
       protocolVersion = protocolVersion,
       timestamp = now,
       chainName = chainName,
@@ -467,7 +469,8 @@ object ProtoUtil {
       validatorPrevBlockHash: ByteString,
       chainName: String,
       now: Long,
-      rank: Long,
+      jRank: Long,
+      pRank: Long,
       publicKey: Keys.PublicKey,
       privateKey: Keys.PrivateKey,
       sigAlgorithm: SignatureAlgorithm,
@@ -487,7 +490,8 @@ object ProtoUtil {
       parentHashes = List(parent),
       justifications = justifications,
       state = postState,
-      rank = rank,
+      jRank = jRank,
+      pRank = pRank,
       protocolVersion = protocolVersion,
       timestamp = now,
       chainName = chainName,
@@ -513,7 +517,8 @@ object ProtoUtil {
       parentHashes: Seq[ByteString],
       justifications: Seq[Justification],
       state: Block.GlobalState,
-      rank: Long,
+      jRank: Long,
+      pRank: Long,
       validatorSeqNum: Int,
       validatorPrevBlockHash: ByteString,
       protocolVersion: ProtocolVersion,
@@ -532,7 +537,8 @@ object ProtoUtil {
       .withJustifications(justifications)
       .withDeployCount(body.deploys.size)
       .withState(state)
-      .withRank(rank)
+      .withJRank(jRank)
+      .withPRank(pRank)
       .withValidatorPublicKey(ByteString.copyFrom(creator))
       .withValidatorBlockSeqNum(validatorSeqNum)
       .withValidatorPrevBlockHash(validatorPrevBlockHash)

@@ -137,7 +137,7 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
         tips      <- dag.latestInEra(parent.getHeader.keyBlockHash)
         latest    <- tips.latestMessages
         maybePrev = latest.get(keys.publicKey).map(_.head)
-        nextRank  = if (latest.isEmpty) 1 else latest.values.flatten.map(_.rank).max + 1
+        nextRank  = if (latest.isEmpty) 1 else latest.values.flatten.map(_.jRank).max + 1
         now       <- Clock[Task].currentTimeMillis
         second = keys.signBlock {
           parent.withHeader(
@@ -145,7 +145,7 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
               .withTimestamp(now)
               .withKeyBlockHash(keyBlockHash)
               .withRoundId(roundId)
-              .withRank(nextRank)
+              .withJRank(nextRank)
               .withValidatorPublicKey(keys.publicKey)
               .withValidatorBlockSeqNum(maybePrev.map(_.validatorMsgSeqNum + 1).getOrElse(1))
               .withValidatorPrevBlockHash(maybePrev.map(_.messageHash).getOrElse(ByteString.EMPTY))
@@ -230,7 +230,7 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
         for {
           // Make a block that signed by the validator that has invalid content.
           block <- prepareSecondBlock() map { block =>
-                    thisValidator.signBlock(block.withHeader(block.getHeader.withRank(100)))
+                    thisValidator.signBlock(block.withHeader(block.getHeader.withJRank(100)))
                   }
           result <- validateAndAdd(block).attempt
           _ = result match {

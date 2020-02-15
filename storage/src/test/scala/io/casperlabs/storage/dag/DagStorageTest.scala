@@ -44,7 +44,7 @@ trait DagStorageTest
     * [[FileDagStorageTest]] fails if use plain generators
     * */
   def zeroedRank(b: BlockMsgWithTransform): BlockMsgWithTransform =
-    b.withBlockMessage(b.getBlockMessage.withHeader(b.getBlockMessage.getHeader.copy(rank = 0)))
+    b.withBlockMessage(b.getBlockMessage.withHeader(b.getBlockMessage.getHeader.copy(jRank = 0)))
 
   def zeroedRanks(bs: List[BlockMsgWithTransform]): List[BlockMsgWithTransform] = bs.map(zeroedRank)
 

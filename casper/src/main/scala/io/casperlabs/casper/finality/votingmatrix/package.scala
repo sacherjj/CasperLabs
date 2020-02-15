@@ -38,7 +38,7 @@ package object votingmatrix {
           } else {
             for {
               _ <- updateVotingMatrixOnNewBlock[F](dag, msg)
-              _ <- updateFirstZeroLevelVote[F](voter, currentVoteValue, msg.rank)
+              _ <- updateFirstZeroLevelVote[F](voter, currentVoteValue, msg.jRank)
             } yield ()
           }
     } yield ()

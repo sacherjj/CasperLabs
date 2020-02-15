@@ -155,7 +155,7 @@ class CreateBlockAPITest
       blocks should have size (1L + successCount.toLong)
 
       // Check that we have no forks.
-      val blocksPerRank = blocks.groupBy(_.getSummary.getHeader.rank)
+      val blocksPerRank = blocks.groupBy(_.getSummary.getHeader.jRank)
       blocksPerRank should have size (blocks.size.toLong)
       forAll(blocksPerRank.values)(_ should have size 1)
 

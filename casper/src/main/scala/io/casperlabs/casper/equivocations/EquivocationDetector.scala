@@ -148,7 +148,8 @@ object EquivocationDetector {
                                    case (state, b) =>
                                      val creator            = b.validatorId
                                      val creatorBlockSeqNum = b.validatorMsgSeqNum
-                                     if (state.allDetected(equivocators) || b.rank <= minBaseRank) {
+                                     if (state
+                                           .allDetected(equivocators) || b.jRank <= minBaseRank) {
                                        // Stop traversal if all known equivocations has been found in j-past-cone
                                        // of `b` or we traversed beyond the minimum rank of all equivocations.
                                        Right(state)
@@ -182,7 +183,7 @@ object EquivocationDetector {
   def findMinBaseRank(latestMessages: Map[Validator, Set[Message]]): Option[Long] = {
     val equivocators = latestMessages.filter(_._2.size > 1)
     if (equivocators.isEmpty) None
-    else Some(equivocators.values.flatten.minBy(_.rank).rank - 1)
+    else Some(equivocators.values.flatten.minBy(_.jRank).jRank - 1)
   }
 
 }

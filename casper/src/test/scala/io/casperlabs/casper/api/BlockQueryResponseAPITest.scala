@@ -44,7 +44,8 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with StorageFixtu
       parentHashes = Nil,
       justifications = Nil,
       state = ps,
-      rank = 0,
+      jRank = 0,
+      pRank = 0,
       protocolVersion = version,
       timestamp = 1527191663,
       chainName = "casperlabs",
@@ -96,6 +97,7 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with StorageFixtu
     chainName,
     timestamp,
     1,
+    1,
     Keys.PublicKey(secondBlockSender.toByteArray),
     Keys.PrivateKey(secondBlockSender.toByteArray),
     Ed25519,
@@ -130,7 +132,7 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with StorageFixtu
         _ = blockInfo.getStatus.getStats.deployGasPriceAvg should be(
           deployCostAndPrice.map(x => x._1 * x._2).sum / deployCostAndPrice.map(_._1).sum
         )
-        _ = blockInfo.getSummary.getHeader.rank should be(blockNumber)
+        _ = blockInfo.getSummary.getHeader.jRank should be(blockNumber)
         _ = blockInfo.getSummary.getHeader.getProtocolVersion should be(version)
         _ = blockInfo.getSummary.getHeader.deployCount should be(deployCount)
         _ = blockInfo.getSummary.getHeader.parentHashes.head should be(genesisHash)

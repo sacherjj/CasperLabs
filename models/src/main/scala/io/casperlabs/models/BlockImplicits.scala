@@ -26,7 +26,8 @@ object BlockImplicits {
     def chainName: String                    = block.getHeader.chainName
     def validatorBlockSeqNum: Int            = block.getHeader.validatorBlockSeqNum
     def validatorPublicKey: ByteString       = block.getHeader.validatorPublicKey
-    def rank: Long                           = block.getHeader.rank
+    def jRank: Long                          = block.getHeader.jRank
+    def pRank: Long                          = block.getHeader.pRank
     def weightMap: Map[ByteString, Weight] =
       block.getHeader.getState.bonds
         .map(b => (b.validatorPublicKey, Weight(b.stake)))
@@ -52,7 +53,7 @@ object BlockImplicits {
     def chainName: String                  = summary.getHeader.chainName
     def validatorBlockSeqNum: Int          = summary.getHeader.validatorBlockSeqNum
     def validatorPublicKey: ByteString     = summary.getHeader.validatorPublicKey
-    def rank: Long                         = summary.getHeader.rank
+    def jRank: Long                        = summary.getHeader.jRank
     def weightMap: Map[ByteString, Weight] =
       summary.getHeader.getState.bonds
         .map(b => (b.validatorPublicKey, Weight(b.stake)))
