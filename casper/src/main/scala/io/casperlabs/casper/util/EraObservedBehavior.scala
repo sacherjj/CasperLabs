@@ -89,8 +89,8 @@ object EraObservedBehavior {
     // Previously seen message from the validator.
     val prevMessageSeen: Map[ByteString, Map[Validator, Message]] = Map.empty
     val validatorStatusMatches
-        : ByteString => Validator => ObservedValidatorBehavior[Message] => Boolean =
-      era => validator => seenBehavior => erasObservedBehavior.data(era)(validator) == seenBehavior
+        : (ByteString, Validator, ObservedValidatorBehavior[Message]) => Boolean =
+      (era, validator, seenBehavior) => erasObservedBehavior.data(era)(validator) == seenBehavior
 
     // If we've seen, in the j-past-cone of the message, the same statuses
     // as ones we have collected locally then we're done.
@@ -101,7 +101,7 @@ object EraObservedBehavior {
         case (era, eraLMS) =>
           eraLMS.forall {
             case (validator, seenStatus) =>
-              validatorStatusMatches(era)(validator)(seenStatus)
+              validatorStatusMatches(era, validator, seenStatus)
           }
       }
 
