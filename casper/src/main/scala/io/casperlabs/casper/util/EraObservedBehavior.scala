@@ -57,6 +57,23 @@ object EraObservedBehavior {
   def local(data: Map[ByteString, Map[Validator, Set[Message]]]): LocalDagView[Message] =
     apply(data).asInstanceOf[LocalDagView[Message]]
 
+  /**
+    * Calculates panorama of a set of justifications.
+    *
+    * Panorama is a "view" into the past of the message (j-past-cone).
+    * It is the latest message (or multiple messages) per validator seen
+    * in the j-past-cone of the message.
+    *
+    * This particular method is capped by a "stop block". It won't consider
+    * blocks created before that stop block.
+    *
+    * NOTE: In the future, this will be using Andreas' Merkle trie optimization.
+    * @param dag
+    * @param justifications
+    * @param erasObservedBehavior
+    * @param stop
+    * @return
+    */
   def messageJPast[F[_]: MonadThrowable](
       dag: DagLookup[F],
       justifications: List[Message],
