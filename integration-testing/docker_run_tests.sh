@@ -64,9 +64,6 @@ cleanup() {
 }
 trap cleanup 0
 
-# Generate second octet for subnet
-
-
 echo "Setting up networks for Python Client..."
 for num in $(seq 0 $MAX_NODE_COUNT)
 do
@@ -75,7 +72,8 @@ do
     subnet="192.${subnet_second_octet}.${third_octet}.0/24"
     net_name="cl-${RUN_TAG_NAME}-${num}"
     echo "Creating docker network '${net_name}' using subnet: ${subnet}..."
-    docker network create --subnet "${subnet}" "${net_name}"
+    #docker network create --subnet "${subnet}" "${net_name}"
+    docker network create "${net_name}"
     docker network inspect "${net_name}" | grep Subnet
 done
 
