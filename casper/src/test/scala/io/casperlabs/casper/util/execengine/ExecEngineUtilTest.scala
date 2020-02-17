@@ -45,6 +45,8 @@ class ExecEngineUtilTest
   implicit val executionEngineService: ExecutionEngineService[Task] =
     HashSetCasperTestNode.simpleEEApi[Task](Map.empty)
 
+  implicit val emitter = NoOpsEventEmitter.create[Task]()
+
   "computeBlockCheckpoint" should "compute the final post-state of a chain properly" in withStorage {
     implicit blockStorage => implicit dagStorage => implicit deployStorage => _ =>
       val genesisDeploys = Vector(ProtoUtil.deploy(System.currentTimeMillis))
@@ -408,7 +410,7 @@ class ExecEngineUtilTest
           ProtocolVersion(1),
           rank = 0,
           upgrades = Nil
-        )(Sync[Task], deployStorage, logEff, ee, deploySelection, Metrics[Task])
+        )(Sync[Task], deployStorage, emitter, logEff, ee, deploySelection, Metrics[Task])
         .map { result =>
           assert(result.postStateHash == lastPostStateHash)
           assert(result.bondedValidators == lastBondedValidators)

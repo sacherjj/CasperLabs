@@ -1,5 +1,6 @@
 package io.casperlabs.mempool
 
+import cats._
 import cats.implicits._
 import io.casperlabs.casper.DeployFilters.filterDeploysNotInPast
 import io.casperlabs.casper.Estimator.BlockHash
@@ -178,4 +179,16 @@ object DeployBuffer {
                          .map(after => initialHistorySize - after)
     } yield deploysRemoved
 
+  /** Discard deploys and emit the necessary events. */
+  def discardDeploys[F[_]: Monad: DeployStorage: DeployEventEmitter](
+      deploysWithReasons: List[(DeployHash, String)]
+  ): F[Unit] =
+    for {
+      _ <- DeployStorageWriter[F]
+            .markAsDiscardedByHashes(deploysWithReasons)
+            .whenA(deploysWithReasons.nonEmpty)
+      _ <- deploysWithReasons.traverse {
+            case (d, r) => DeployEventEmitter[F].deployDiscarded(d, r)
+          }
+    } yield ()
 }
