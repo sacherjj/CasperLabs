@@ -284,7 +284,10 @@ block_hash_queries = [
         {"key": "a91208047c", "path": "file.xxx", "key_type": "hash"},
         "INVALID_ARGUMENT: Key of type hash must have exactly 32 bytes",
     ),
-    ({"path": "file.xxx", "key_type": "hash"}, "INVALID_ARGUMENT: Value not found"),
+    (
+        {"path": "file.xxx", "key_type": "hash"},
+        "INVALID_ARGUMENT: Failed to find base key",
+    ),
 ]
 
 
