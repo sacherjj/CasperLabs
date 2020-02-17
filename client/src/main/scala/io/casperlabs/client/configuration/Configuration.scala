@@ -181,7 +181,8 @@ final case class ShowDeploy(
     deployHash: String,
     bytesStandard: Boolean,
     json: Boolean,
-    waitForProcessed: Boolean
+    waitForProcessed: Boolean,
+    timeoutSeconds: Long
 ) extends Configuration
     with Formatting
 final case class ShowBlocks(depth: Int, bytesStandard: Boolean, json: Boolean)
@@ -292,7 +293,8 @@ object Configuration {
           options.showDeploy.hash(),
           options.showDeploy.bytesStandard(),
           options.showDeploy.json(),
-          options.showDeploy.waitForProcessed()
+          options.showDeploy.waitForProcessed(),
+          options.showDeploy.timeoutSeconds()
         )
       case options.showBlocks =>
         ShowBlocks(

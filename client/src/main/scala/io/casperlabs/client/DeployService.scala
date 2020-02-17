@@ -21,7 +21,8 @@ import scala.util.Either
       blockHash: String,
       bytesStandard: Boolean,
       json: Boolean,
-      waitForProcessed: Boolean
+      waitForProcessed: Boolean,
+      timeoutSeconds: Long
   ): F[Either[Throwable, String]]
   def showBlocks(depth: Int, bytesStandard: Boolean, json: Boolean): F[Either[Throwable, String]]
   def visualizeDag(depth: Int, showJustificationLines: Boolean): F[Either[Throwable, String]]

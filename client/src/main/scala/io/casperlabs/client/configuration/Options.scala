@@ -422,9 +422,12 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
 
     val waitForProcessed =
       opt[Boolean](
-        descr = "",
+        descr = "Wait for deploy status PROCESSED or DISCARDED",
         default = false.some
       )
+
+    val timeoutSeconds =
+      opt[Long](descr = "Timeout in seconds.", default = Option(3 * 60))
   }
   addSubcommand(showDeploy)
 

@@ -142,44 +142,54 @@ class GrpcDeployService(conn: ConnectOptions, scheduler: Scheduler)
       hash: String,
       bytesStandard: Boolean,
       json: Boolean,
-      waitForProcessed: Boolean
+      waitForProcessed: Boolean,
+      timeoutSeconds: Long
   ): Task[Either[Throwable, String]] =
     if (waitForProcessed) {
+      val startTime   = System.currentTimeMillis()
+      val timeoutTime = startTime + timeoutSeconds * 1000
 
-      def deployInfo: DeployInfo = {
+      def deployInfo(sleep: java.lang.Long): DeployInfo = {
         val future: CancelableFuture[DeployInfo] =
           casperServiceStub
             .getDeployInfo(GetDeployInfoRequest(hash, view = DeployInfo.View.BASIC))
             .runToFuture
 
-        Await.result(future, 5.seconds)
+        val result = Await.result(future, 5.seconds)
+        Thread.sleep(sleep)
+        result
       }
 
-      def deployInfos: Stream[DeployInfo] = deployInfo #:: deployInfos
+      def deployInfos: Stream[DeployInfo] = deployInfo(0) #:: {
+        if (System.currentTimeMillis() > timeoutTime)
+          Stream.empty
+        else
+          List(deployInfo(1000)).toStream #::: deployInfos
+      }
 
-      val loop = Task.eval({
-        deployInfos
-          .find(
-            di =>
-              di.status match {
-                case Some(state) =>
-                  state match {
-                    case DeployInfo.Status(DeployInfo.State.PENDING, _)         => false
-                    case DeployInfo.Status(DeployInfo.State.DISCARDED, _)       => true
-                    case DeployInfo.Status(DeployInfo.State.FINALIZED, _)       => true
-                    case DeployInfo.Status(DeployInfo.State.PROCESSED, _)       => true
-                    case DeployInfo.Status(DeployInfo.State.UNDEFINED, _)       => true
-                    case DeployInfo.Status(DeployInfo.State.Unrecognized(_), _) => true
-                  }
-                case None => true
-              }
-          ) match {
-          case Some(di) => Printer.print(di, bytesStandard, json)
-          case None     => throw new RuntimeException("Should not happen.")
-        }
-      })
-
-      loop.attempt
+      Task
+        .eval({
+          deployInfos
+            .find(
+              di =>
+                di.status match {
+                  case Some(state) =>
+                    state match {
+                      case DeployInfo.Status(DeployInfo.State.PENDING, _)         => false
+                      case DeployInfo.Status(DeployInfo.State.DISCARDED, _)       => true
+                      case DeployInfo.Status(DeployInfo.State.FINALIZED, _)       => true
+                      case DeployInfo.Status(DeployInfo.State.PROCESSED, _)       => true
+                      case DeployInfo.Status(DeployInfo.State.UNDEFINED, _)       => true
+                      case DeployInfo.Status(DeployInfo.State.Unrecognized(_), _) => true
+                    }
+                  case None => true
+                }
+            ) match {
+            case Some(di) => Printer.print(di, bytesStandard, json)
+            case None     => throw new RuntimeException(s"Timeout.")
+          }
+        })
+        .attempt
 
     } else {
       casperServiceStub
