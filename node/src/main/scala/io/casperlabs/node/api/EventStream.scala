@@ -3,6 +3,7 @@ package io.casperlabs.node.api
 import cats._
 import cats.implicits._
 import cats.effect._
+import com.google.protobuf.ByteString
 import io.casperlabs.casper.DeployHash
 import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.consensus.info.{BlockInfo, DeployInfo, Event}
@@ -43,16 +44,48 @@ object EventStream {
 
       override def subscribe(request: StreamEventsRequest): Observable[Event] = {
         import Event.Value._
+
+        val accountFilter: ByteString => Boolean =
+          request.getDeployFilter.accountPublicKeys.toSet match {
+            case keys if keys.nonEmpty => keys.contains
+            case _                     => _ => true
+          }
+
+        val deployHashFilter: DeployHash => Boolean =
+          request.getDeployFilter.deployHashes.toSet match {
+            case hashes if hashes.nonEmpty => hashes.contains
+            case _                         => _ => true
+          }
+
+        def deployFilter(d: Deploy) =
+          accountFilter(d.getHeader.accountPublicKey) && deployHashFilter(d.deployHash)
+
         source.filter {
           _.value match {
-            case Empty                      => false
-            case Value.BlockAdded(_)        => request.blockAdded
-            case Value.NewFinalizedBlock(_) => request.blockFinalized
-            case Value.DeployAdded(_)       => request.deployAdded
-            case Value.DeployDiscarded(_)   => request.deployDiscarded
-            case Value.DeployRequeued(_)    => request.deployRequeued
-            case Value.DeployProcessed(_)   => request.deployProcessed
-            case Value.DeployFinalized(_)   => request.deployFinalized
+            case Empty => false
+            case Value.BlockAdded(_) =>
+              request.blockAdded
+
+            case Value.NewFinalizedBlock(_) =>
+              request.blockFinalized
+
+            case Value.DeployAdded(e) =>
+              request.deployAdded && deployFilter(e.getDeploy)
+
+            case Value.DeployDiscarded(e) =>
+              request.deployDiscarded && deployFilter(e.getDeploy)
+
+            case Value.DeployRequeued(e) =>
+              request.deployRequeued && deployFilter(e.getDeploy)
+
+            case Value.DeployProcessed(e) =>
+              request.deployProcessed && deployFilter(e.getProcessedDeploy.getDeploy)
+
+            case Value.DeployFinalized(e) =>
+              request.deployFinalized && deployFilter(e.getProcessedDeploy.getDeploy)
+
+            case Value.DeployOrphaned(e) =>
+              request.deployOrphaned && deployFilter(e.getDeployInfo.getDeploy)
           }
         }
       }
@@ -68,7 +101,7 @@ object EventStream {
               deploys.traverse { d =>
                 emit {
                   Event().withDeployProcessed(
-                    DeployProcessed().withBlockHash(blockHash).withDeploy(d)
+                    DeployProcessed().withBlockHash(blockHash).withProcessedDeploy(d)
                   )
                 }
               }
@@ -92,7 +125,7 @@ object EventStream {
                 deploys.traverse { d =>
                   emit {
                     Event().withDeployFinalized(
-                      DeployFinalized().withBlockHash(blockHash).withDeploy(d)
+                      DeployFinalized().withBlockHash(blockHash).withProcessedDeploy(d)
                     )
                   }
                 }

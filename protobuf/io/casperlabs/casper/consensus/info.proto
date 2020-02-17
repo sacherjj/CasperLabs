@@ -85,6 +85,7 @@ message Event {
         DeployDiscarded deploy_discarded = 5;
         DeployProcessed deploy_processed = 6;
         DeployFinalized deploy_finalized = 7;
+        DeployOrphaned deploy_orphaned = 8;
     }
 
     message BlockAdded {
@@ -96,6 +97,7 @@ message Event {
         bytes block_hash = 1;
         // Set of blocks that were finalized indirectly (secondary parents of the new main-chain LFB).
         repeated bytes indirectly_finalized_block_hashes = 2;
+        // TODO (CON-631): Add `orphaned_block_hashes`.
     }
 
     // A deploy was added to the to the local buffer.
@@ -118,7 +120,7 @@ message Event {
     // A deploy was included in a block.
     message DeployProcessed {
         bytes block_hash = 1;
-        io.casperlabs.casper.consensus.Block.ProcessedDeploy deploy = 2;
+        io.casperlabs.casper.consensus.Block.ProcessedDeploy processed_deploy = 2;
     }
 
     // A block the deploy was included in has been finalized. Every DeployProcessed event should eventually end up being
@@ -128,10 +130,10 @@ message Event {
         bytes block_hash = 1;
         // This deploy cannot appear in the descendants of the finalized block as that would be a duplicate,
         // so these results are considered final.
-        io.casperlabs.casper.consensus.Block.ProcessedDeploy deploy = 2;
+        io.casperlabs.casper.consensus.Block.ProcessedDeploy processed_deploy = 2;
     }
 
-    // TODO (CON-631): Emit the anti-finalization event.
+    // TODO (CON-631): Emit the anti-finalization event (currently just a placeholder).
     // A block the deploy was included in has been anti-finalized, i.e. orphaned by the LFB.
     // The deploy can still be finalized in a different block, if it was requeued or re-sent.
     message DeployOrphaned {
@@ -140,6 +142,6 @@ message Event {
        // Including the full DeployInfo with all the alternative processing results so we can see if there's another,
        // finalized block, or something else to wait for. Otherwise the client could pair up Processed and
        // Finalized/Anti-finalized events but if they miss something they'd most likely query the status of the deploy anyway.
-       DeployInfo deploy = 2;
+       DeployInfo deploy_info = 2;
     }
 }
