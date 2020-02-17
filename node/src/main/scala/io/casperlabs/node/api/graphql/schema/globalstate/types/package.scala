@@ -166,7 +166,7 @@ package object types {
     "Account",
     fields[Unit, state.Account](
       Field("pubKey", StringType, resolve = c => Base16.encode(c.value.publicKey.toByteArray)),
-      Field("purseId", KeyURef, resolve = _.value.purseId.get),
+      Field("mainPurse", KeyURef, resolve = _.value.mainPurse.get),
       Field("namedKeys", ListType(NamedKey), resolve = _.value.namedKeys),
       Field("associatedKeys", ListType(AccountAssociatedKey), resolve = _.value.associatedKeys),
       Field("actionThreshold", AccountActionThresholds, resolve = _.value.actionThresholds.get)

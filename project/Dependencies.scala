@@ -19,6 +19,7 @@ object Dependencies {
   val bouncyProvCastle    = "org.bouncycastle"    % "bcprov-jdk15on"        % "1.61"
   val bouncyPkixCastle    = "org.bouncycastle"    % "bcpkix-jdk15on"        % "1.61"
   val catsCore            = "org.typelevel"       %% "cats-core"            % catsVersion
+  val catsFree            = "org.typelevel"       %% "cats-free"            % catsVersion
   val catsLawsTest        = "org.typelevel"       %% "cats-laws"            % catsVersion % "test"
   val catsLawsTestkitTest = "org.typelevel"       %% "cats-testkit"         % catsVersion % "test"
   val catsEffect          = "org.typelevel"       %% "cats-effect"          % catsVersion

@@ -16,7 +16,7 @@ use contract::args_parser::ArgsParser;
 use engine_shared::{account::Account, contract::Contract, gas::Gas, stored_value::StoredValue};
 use engine_storage::global_state::StateReader;
 use types::{
-    account::{ActionType, PublicKey, PurseId, Weight, PUBLIC_KEY_SERIALIZED_LENGTH},
+    account::{ActionType, PublicKey, Weight, PUBLIC_KEY_SERIALIZED_LENGTH},
     bytesrepr::{self, ToBytes},
     system_contract_errors,
     system_contract_errors::mint,
@@ -64,8 +64,11 @@ pub fn instance_and_memory(
     let resolver = create_module_resolver(protocol_version)?;
     let mut imports = ImportsBuilder::new();
     imports.push_resolver("env", &resolver);
-    let instance = ModuleInstance::new(&module, &imports)?.assert_no_start();
-
+    let not_started_module = ModuleInstance::new(&module, &imports)?;
+    if not_started_module.has_start() {
+        return Err(Error::UnsupportedWasmStart);
+    }
+    let instance = not_started_module.not_started_instance().clone();
     let memory = resolver.memory_ref()?;
     Ok((instance, memory))
 }
@@ -1652,10 +1655,10 @@ where
 
     /// Writes runtime context's account main purse to [dest_ptr] in the Wasm memory.
     fn get_main_purse(&mut self, dest_ptr: u32) -> Result<(), Trap> {
-        let purse_id = self.context.get_main_purse()?;
-        let purse_id_bytes = purse_id.into_bytes().map_err(Error::BytesRepr)?;
+        let purse = self.context.get_main_purse()?;
+        let purse_bytes = purse.into_bytes().map_err(Error::BytesRepr)?;
         self.memory
-            .set(dest_ptr, &purse_id_bytes)
+            .set(dest_ptr, &purse_bytes)
             .map_err(|e| Error::Interpreter(e).into())
     }
 
@@ -2130,19 +2133,19 @@ where
 
     /// Calls the "create" method on the mint contract at the given mint
     /// contract key
-    fn mint_create(&mut self, mint_contract_key: Key) -> Result<PurseId, Error> {
+    fn mint_create(&mut self, mint_contract_key: Key) -> Result<URef, Error> {
         let args_bytes = {
             let args = ("create",);
             ArgsParser::parse(args)?.into_bytes()?
         };
 
         let result = self.call_contract(mint_contract_key, args_bytes)?;
-        let purse_uref = result.into_t()?;
+        let purse = result.into_t()?;
 
-        Ok(PurseId::new(purse_uref))
+        Ok(purse)
     }
 
-    fn create_purse(&mut self) -> Result<PurseId, Error> {
+    fn create_purse(&mut self) -> Result<URef, Error> {
         let mint_contract_key = self.get_mint_contract_uref().into();
         self.mint_create(mint_contract_key)
     }
@@ -2152,15 +2155,12 @@ where
     fn mint_transfer(
         &mut self,
         mint_contract_key: Key,
-        source: PurseId,
-        target: PurseId,
+        source: URef,
+        target: URef,
         amount: U512,
     ) -> Result<(), Error> {
-        let source_value: URef = source.value();
-        let target_value: URef = target.value();
-
         let args_bytes = {
-            let args = ("transfer", source_value, target_value, amount);
+            let args = ("transfer", source, target, amount);
             ArgsParser::parse(args)?.into_bytes()?
         };
 
@@ -2173,7 +2173,7 @@ where
     /// of motes from the given source purse to the new account's purse.
     fn transfer_to_new_account(
         &mut self,
-        source: PurseId,
+        source: URef,
         target: PublicKey,
         amount: U512,
     ) -> Result<TransferResult, Error> {
@@ -2188,13 +2188,13 @@ where
             return Ok(Err(ApiError::Transfer));
         }
 
-        let target_purse_id = self.mint_create(mint_contract_key)?;
+        let target_purse = self.mint_create(mint_contract_key)?;
 
-        if source == target_purse_id {
+        if source == target_purse {
             return Ok(Err(ApiError::Transfer));
         }
 
-        match self.mint_transfer(mint_contract_key, source, target_purse_id, amount) {
+        match self.mint_transfer(mint_contract_key, source, target_purse, amount) {
             Ok(_) => {
                 // After merging in EE-704 system contracts lookup internally uses protocol data and
                 // this is used for backwards compatibility with explorer to query mint/pos urefs.
@@ -2217,7 +2217,7 @@ where
                     }
                 })
                 .collect();
-                let account = Account::create(target_addr, named_keys, target_purse_id);
+                let account = Account::create(target_addr, named_keys, target_purse);
                 self.context.write_account(target_key, account)?;
                 Ok(Ok(TransferredTo::NewAccount))
             }
@@ -2226,18 +2226,18 @@ where
     }
 
     /// Transferring a given amount of motes from the given source purse to the
-    /// new account's purse. Requires that the [`PurseId`]s have already
+    /// new account's purse. Requires that the [`URef`]s have already
     /// been created by the mint contract (or are the genesis account's).
     fn transfer_to_existing_account(
         &mut self,
-        source: PurseId,
-        target: PurseId,
+        source: URef,
+        target: URef,
         amount: U512,
     ) -> Result<TransferResult, Error> {
         let mint_contract_key = self.get_mint_contract_uref().into();
 
         // This appears to be a load-bearing use of `RuntimeContext::insert_uref`.
-        self.context.insert_uref(target.value());
+        self.context.insert_uref(target);
 
         match self.mint_transfer(mint_contract_key, source, target, amount) {
             Ok(_) => Ok(Ok(TransferredTo::ExistingAccount)),
@@ -2260,7 +2260,7 @@ where
     /// If that account does not exist, creates one.
     fn transfer_from_purse_to_account(
         &mut self,
-        source: PurseId,
+        source: URef,
         target: PublicKey,
         amount: U512,
     ) -> Result<TransferResult, Error> {
@@ -2273,7 +2273,7 @@ where
                 self.transfer_to_new_account(source, target, amount)
             }
             Some(StoredValue::Account(account)) => {
-                let target = account.purse_id_add_only();
+                let target = account.main_purse_add_only();
                 if source == target {
                     return Ok(Ok(TransferredTo::ExistingAccount));
                 }
@@ -2297,12 +2297,12 @@ where
         amount_ptr: u32,
         amount_size: u32,
     ) -> Result<Result<(), ApiError>, Error> {
-        let source: PurseId = {
+        let source: URef = {
             let bytes = self.bytes_from_mem(source_ptr, source_size as usize)?;
             bytesrepr::deserialize(bytes).map_err(Error::BytesRepr)?
         };
 
-        let target: PurseId = {
+        let target: URef = {
             let bytes = self.bytes_from_mem(target_ptr, target_size as usize)?;
             bytesrepr::deserialize(bytes).map_err(Error::BytesRepr)?
         };
@@ -2324,10 +2324,10 @@ where
         }
     }
 
-    fn get_balance(&mut self, purse_id: PurseId) -> Result<Option<U512>, Error> {
+    fn get_balance(&mut self, purse: URef) -> Result<Option<U512>, Error> {
         let seed = self.get_mint_contract_uref().addr();
 
-        let key = purse_id.value().addr().into_bytes()?;
+        let key = purse.addr().into_bytes()?;
 
         let uref_key = match self.context.read_ls_with_seed(seed, &key)? {
             Some(cl_value) => {
@@ -2359,8 +2359,8 @@ where
 
     fn get_balance_host_buffer(
         &mut self,
-        purse_id_ptr: u32,
-        purse_id_size: usize,
+        purse_ptr: u32,
+        purse_size: usize,
         output_size_ptr: u32,
     ) -> Result<Result<(), ApiError>, Error> {
         if !self.can_write_to_host_buffer() {
@@ -2368,15 +2368,15 @@ where
             return Ok(Err(ApiError::HostBufferFull));
         }
 
-        let purse_id: PurseId = {
-            let bytes = self.bytes_from_mem(purse_id_ptr, purse_id_size)?;
+        let purse: URef = {
+            let bytes = self.bytes_from_mem(purse_ptr, purse_size)?;
             match bytesrepr::deserialize(bytes) {
-                Ok(purse_id) => purse_id,
+                Ok(purse) => purse,
                 Err(error) => return Ok(Err(error.into())),
             }
         };
 
-        let balance = match self.get_balance(purse_id)? {
+        let balance = match self.get_balance(purse)? {
             Some(balance) => balance,
             None => return Ok(Err(ApiError::InvalidPurse)),
         };

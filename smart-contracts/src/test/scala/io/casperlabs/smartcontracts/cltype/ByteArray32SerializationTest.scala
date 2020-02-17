@@ -8,7 +8,7 @@ import ByteArray32SerializationTest.arbByteArray32
 
 class ByteArray32SerializationTest extends FlatSpec with Matchers with PropertyChecks {
   "ByteArray32" should "serialize properly" in forAll { (b: ByteArray32) =>
-    roundTrip(b)
+    roundTrip(b, ByteArray32.deserializer)
   }
 }
 

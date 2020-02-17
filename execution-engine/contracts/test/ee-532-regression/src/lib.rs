@@ -1,7 +1,7 @@
 #![no_std]
 
 // Required to bring `#[panic_handler]` from `contract::handlers` into scope.
-#[allow(unused_imports)]
+#[allow(unused_imports, clippy::single_component_path_imports)]
 use contract;
 
 #[no_mangle]

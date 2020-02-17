@@ -1,6 +1,6 @@
 FROM node:12.5.0-stretch-slim
 
-COPY contracts/transfer_to_account.wasm /app/contracts/transfer.wasm
+COPY contracts/transfer_to_account_u512.wasm /app/contracts/transfer.wasm
 COPY contracts/standard_payment.wasm /app/contracts/payment.wasm
 COPY contracts/faucet.wasm /app/contracts/faucet.wasm
 

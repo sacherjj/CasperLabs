@@ -210,7 +210,7 @@ lazy val models = (project in file("models"))
   )
   .dependsOn(crypto % "compile->compile;test->test")
 
-val nodeAndClientVersion = "0.11.0"
+val nodeAndClientVersion = "0.14.0"
 
 lazy val node = (project in file("node"))
   .settings(commonSettings: _*)
@@ -383,8 +383,10 @@ lazy val smartContracts = (project in file("smart-contracts"))
     name := "smart-contracts",
     version := "0.0.1-SNAPSHOT",
     libraryDependencies ++= commonDependencies ++ protobufLibDependencies ++ Seq(
+      catsFree,
       nettyAll,
       grpcNetty,
+      refinement,
       nettyTransNativeEpoll,
       nettyTransNativeKqueue
     ),

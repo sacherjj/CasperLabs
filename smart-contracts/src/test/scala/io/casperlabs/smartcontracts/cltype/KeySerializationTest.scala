@@ -8,7 +8,7 @@ import KeySerializationTest.arbKey
 
 class KeySerializationTest extends FlatSpec with Matchers with PropertyChecks {
   "Keys" should "serialize properly" in forAll { (k: Key) =>
-    roundTrip(k)
+    roundTrip(k, Key.deserializer)
   }
 }
 

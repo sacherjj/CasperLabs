@@ -5,7 +5,7 @@ use engine_shared::motes::Motes;
 use engine_test_support::internal::{
     utils, ExecuteRequestBuilder, InMemoryWasmTestBuilder as TestBuilder, DEFAULT_GENESIS_CONFIG,
 };
-use types::{account::PurseId, bytesrepr::ToBytes, CLValue, Key, U512};
+use types::{bytesrepr::ToBytes, CLValue, Key, U512};
 
 const ERC_20_CONTRACT_WASM: &str = "erc20_smart_contract.wasm";
 const TRANFER_TO_ACCOUNT_WASM: &str = "transfer_to_account_u512.wasm";
@@ -228,7 +228,7 @@ impl ERC20Test {
     }
 
     pub fn assert_clx_account_balance_no_gas(self, account: [u8; 32], expected: U512) -> Self {
-        let account_purse = self.builder.get_account(account).unwrap().purse_id();
+        let account_purse = self.builder.get_account(account).unwrap().main_purse();
         let mut account_balance = self.builder.get_purse_balance(account_purse);
         let last_deploy_index = self.builder.get_exec_responses_count();
         let execution_costs = (0..last_deploy_index)
@@ -246,15 +246,15 @@ impl ERC20Test {
             .query(None, Key::Hash(self.get_token_hash()), &[])
             .expect("should have token contract.");
 
-        let purse_uref = token_contract_value
+        let purse = token_contract_value
             .as_contract()
             .unwrap()
             .named_keys()
             .get(TOKEN_PURSE_NAME)
             .unwrap()
-            .as_uref()
+            .into_uref()
             .unwrap();
-        let contract_balance = self.builder.get_purse_balance(PurseId::new(*purse_uref));
+        let contract_balance = self.builder.get_purse_balance(purse);
         assert_eq!(contract_balance, expected);
         self
     }

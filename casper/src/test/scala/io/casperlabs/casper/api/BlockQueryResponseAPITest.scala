@@ -107,8 +107,6 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with StorageFixtu
   val blockHash: BlockHash = secondBlock.blockHash
   val secondBlockQuery     = secondHashString.take(5)
 
-  val faultTolerance = 0
-
   // TODO: Test tsCheckpoint:
   // we should be able to stub in a tuplespace dump but there is currently no way to do that.
   "showBlock" should "return successful block info response" in withStorage {
@@ -135,7 +133,6 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with StorageFixtu
         _ = blockInfo.getSummary.getHeader.rank should be(blockNumber)
         _ = blockInfo.getSummary.getHeader.getProtocolVersion should be(version)
         _ = blockInfo.getSummary.getHeader.deployCount should be(deployCount)
-        _ = blockInfo.getStatus.faultTolerance should be(faultTolerance)
         _ = blockInfo.getSummary.getHeader.parentHashes.head should be(genesisHash)
         _ = blockInfo.getSummary.getHeader.parentHashes should be(parentsHashList)
         _ = blockInfo.getSummary.getHeader.validatorPublicKey should be(secondBlockSender)

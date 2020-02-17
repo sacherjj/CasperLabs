@@ -39,17 +39,16 @@ object AccessRights {
     override def toBytes(a: AccessRights): Array[Byte] = Array(a.tag)
   }
 
-  implicit val fromBytesAccessRights: FromBytes[AccessRights] = new FromBytes[AccessRights] {
-    override def fromBytes(bytes: BytesView): Either[FromBytes.Error, (AccessRights, BytesView)] =
-      FromBytes.safePop(bytes).flatMap {
-        case (tag, tail) if tag == Read.tag         => Right(Read -> tail)
-        case (tag, tail) if tag == Write.tag        => Right(Write -> tail)
-        case (tag, tail) if tag == ReadWrite.tag    => Right(ReadWrite -> tail)
-        case (tag, tail) if tag == Add.tag          => Right(Add -> tail)
-        case (tag, tail) if tag == ReadAdd.tag      => Right(ReadAdd -> tail)
-        case (tag, tail) if tag == AddWrite.tag     => Right(AddWrite -> tail)
-        case (tag, tail) if tag == ReadAddWrite.tag => Right(ReadAddWrite -> tail)
-        case (other, _)                             => Left(FromBytes.Error.InvalidVariantTag(other, "AccessRights"))
-      }
-  }
+  val deserializer: FromBytes.Deserializer[AccessRights] =
+    FromBytes.byte.flatMap {
+      case tag if tag == Read.tag         => FromBytes.pure(Read)
+      case tag if tag == Write.tag        => FromBytes.pure(Write)
+      case tag if tag == ReadWrite.tag    => FromBytes.pure(ReadWrite)
+      case tag if tag == Add.tag          => FromBytes.pure(Add)
+      case tag if tag == ReadAdd.tag      => FromBytes.pure(ReadAdd)
+      case tag if tag == ReadAdd.tag      => FromBytes.pure(ReadAdd)
+      case tag if tag == AddWrite.tag     => FromBytes.pure(AddWrite)
+      case tag if tag == ReadAddWrite.tag => FromBytes.pure(ReadAddWrite)
+      case other                          => FromBytes.raise(FromBytes.Error.InvalidVariantTag(other, "AccessRights"))
+    }
 }

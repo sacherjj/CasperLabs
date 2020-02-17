@@ -53,10 +53,21 @@ class SQLiteDagStorage[F[_]: Sync](
           .map(d => d.cost * d.getDeploy.getHeader.gasPrice)
           .sum / deployCostTotal
 
+val isFinalized = false
     val insertBlockMetadata =
       (fr"""INSERT OR IGNORE INTO block_metadata
             (block_hash, validator, rank, """ ++ blockInfoCols() ++ fr""")
-            VALUES (${block.blockHash}, ${block.validatorPublicKey}, ${block.rank}, ${blockSummary.toByteString}, ${block.serializedSize}, $deployErrorCount, $deployCostTotal, $deployGasPriceAvg)
+            VALUES (
+              ${block.blockHash},
+              ${block.validatorPublicKey},
+              ${block.rank},
+              ${blockSummary.toByteString},
+              ${block.serializedSize},
+              $deployErrorCount,
+              $deployCostTotal,
+              $deployGasPriceAvg,
+              $isFinalized
+            )
             """).update.run
 
     val insertJustifications =

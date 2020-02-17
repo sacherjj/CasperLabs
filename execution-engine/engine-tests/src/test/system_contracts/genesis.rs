@@ -77,9 +77,9 @@ fn should_run_genesis() {
         .get_account(ACCOUNT_2_ADDR)
         .expect("account 2 should exist");
 
-    let system_account_balance_actual = builder.get_purse_balance(system_account.purse_id());
-    let account_1_balance_actual = builder.get_purse_balance(account_1.purse_id());
-    let account_2_balance_actual = builder.get_purse_balance(account_2.purse_id());
+    let system_account_balance_actual = builder.get_purse_balance(system_account.main_purse());
+    let account_1_balance_actual = builder.get_purse_balance(account_1.main_purse());
+    let account_2_balance_actual = builder.get_purse_balance(account_2.main_purse());
 
     assert_eq!(system_account_balance_actual, U512::zero());
     assert_eq!(account_1_balance_actual, account_1_balance.value());

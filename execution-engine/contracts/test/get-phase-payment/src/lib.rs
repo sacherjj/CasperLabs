@@ -4,7 +4,7 @@ use contract::{
     contract_api::{account, runtime, system},
     unwrap_or_revert::UnwrapOrRevert,
 };
-use types::{account::PurseId, ApiError, Phase, U512};
+use types::{ApiError, Phase, URef, U512};
 
 const GET_PAYMENT_PURSE: &str = "get_payment_purse";
 
@@ -13,7 +13,7 @@ fn standard_payment(amount: U512) {
 
     let pos_pointer = system::get_proof_of_stake();
 
-    let payment_purse: PurseId = runtime::call_contract(pos_pointer, (GET_PAYMENT_PURSE,));
+    let payment_purse: URef = runtime::call_contract(pos_pointer, (GET_PAYMENT_PURSE,));
 
     system::transfer_from_purse_to_purse(main_purse, payment_purse, amount).unwrap_or_revert()
 }

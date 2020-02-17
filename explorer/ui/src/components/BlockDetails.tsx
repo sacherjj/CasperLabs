@@ -228,11 +228,10 @@ const blockAttrs: (block: BlockInfo) => Array<[string, any]> = (
     ['Deploy Gas Price Average', stats.getDeployGasPriceAvg().toLocaleString()],
     ['Block Size (bytes)', stats.getBlockSizeBytes().toLocaleString()],
     [
-      'Fault Tolerance',
+      'Is Finalized',
       block
         .getStatus()!
-        .getFaultTolerance()
-        .toFixed(3)
+        .getIsFinalized()
     ]
   ];
 };

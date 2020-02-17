@@ -1,12 +1,12 @@
 #![no_std]
 
 use contract::contract_api::{account, runtime, system};
-use types::{account::PurseId, ContractRef, U512};
+use types::{ContractRef, URef, U512};
 
 const POS_BOND: &str = "bond";
 
-fn bond(pos: ContractRef, amount: &U512, source: PurseId) {
-    runtime::call_contract::<_, ()>(pos, (POS_BOND, *amount, source));
+fn bond(pos: ContractRef, amount: &U512, source_purse: URef) {
+    runtime::call_contract::<_, ()>(pos, (POS_BOND, *amount, source_purse));
 }
 
 #[no_mangle]
