@@ -2,7 +2,7 @@ import * as CL from "../../../../contract-as/assembly";
 import {Error, ErrorCode} from "../../../../contract-as/assembly/error";
 import {U512} from "../../../../contract-as/assembly/bignum";
 import {getMainPurse} from "../../../../contract-as/assembly/account";
-import {TransferredTo} from "../../../../contract-as/assembly/purseid";
+import {transferFromPurseToAccount, TransferredTo} from "../../../../contract-as/assembly/purse";
 
 enum Args{
     Account = 0,
@@ -31,7 +31,7 @@ export function call(): void {
         Error.fromErrorCode(ErrorCode.InvalidPurse).revert();
         return;
     }
-    const result = mainPurse.transferToAccount(accountBytes, amount);
+    const result = transferFromPurseToAccount(mainPurse, accountBytes, amount);
     if (result == TransferredTo.TransferError){
         Error.fromErrorCode(ErrorCode.Transfer).revert();
         return;

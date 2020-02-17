@@ -5,8 +5,8 @@ import {fromBytesString} from "../../../../contract-as/assembly/bytesrepr";
 import {Key} from "../../../../contract-as/assembly/key";
 import {putKey, removeKey, ret, upgradeContractAtURef} from "../../../../contract-as/assembly";
 import {CLValue} from "../../../../contract-as/assembly/clvalue";
-import {PurseId} from "../../../../contract-as/assembly/purseid";
 import {URef} from "../../../../contract-as/assembly/uref";
+import {createPurse} from "../../../../contract-as/assembly/purse";
 
 const ENTRY_FUNCTION_NAME = "delegate";
 const METHOD_ADD = "add";
@@ -35,7 +35,6 @@ enum CustomError {
   NamedPurseNotCreated = 8
 }
 
-
 export function delegate(): void {
   // methodName
   const methodNameArg = CL.getArg(ApplyArgs.MethodName);
@@ -63,12 +62,12 @@ export function delegate(): void {
     }
     let purseName = purseNameResult.value;
 
-    let purseId = PurseId.create();
-    if (purseId === null) {
+    let purse = createPurse();
+    if (purse === null) {
       Error.fromUserError(<u16>CustomError.NamedPurseNotCreated).revert();
       return;
     }
-    const uref = (<PurseId>purseId).asURef();
+    const uref = <URef>purse;
     const key = Key.fromURef(uref);
     putKey(purseName, <Key>key);
     return;

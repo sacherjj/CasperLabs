@@ -26,7 +26,7 @@ Example output of the Scala client:
 
 account {
   public_key: "3030303030303030303030303030303030303030303030303030303030303030"
-  purse_id {
+  main_purse {
     uref: "0000000000000000000000000000000000000000000000000000000000000000"
     access_rights: READ_ADD_WRITE
   }
@@ -284,7 +284,10 @@ block_hash_queries = [
         {"key": "a91208047c", "path": "file.xxx", "key_type": "hash"},
         "INVALID_ARGUMENT: Key of type hash must have exactly 32 bytes",
     ),
-    ({"path": "file.xxx", "key_type": "hash"}, "INVALID_ARGUMENT: Value not found"),
+    (
+        {"path": "file.xxx", "key_type": "hash"},
+        "INVALID_ARGUMENT: Failed to find base key",
+    ),
 ]
 
 

@@ -303,9 +303,9 @@ class GraphQLBlockTypes(
           resolve = c => c.value._2.get.map(_.asLeft[ProcessingResult])
         ),
         Field(
-          "faultTolerance",
-          FloatType,
-          resolve = c => c.value._1.getStatus.faultTolerance.toDouble
+          "isFinalized",
+          BooleanType,
+          resolve = c => c.value._1.getStatus.isFinalized
         ),
         Field(
           "blockSizeBytes",

@@ -131,7 +131,7 @@ pub fn store_function_at_hash(name: &str, named_keys: BTreeMap<String, Key>) -> 
     ContractRef::Hash(addr)
 }
 
-/// Returns a new unforgeable pointer, where the value is initialized to `init`
+/// Returns a new unforgeable pointer, where the value is initialized to `init`.
 pub fn new_turef<T: CLTyped + ToBytes>(init: T) -> TURef<T> {
     let key_ptr = contract_api::alloc_bytes(Key::serialized_size_hint());
     let cl_value = CLValue::from_t(init).unwrap_or_revert();

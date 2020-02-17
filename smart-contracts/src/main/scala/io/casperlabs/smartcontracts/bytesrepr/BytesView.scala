@@ -19,18 +19,18 @@ class BytesView private (
     if (n <= length)
       Some(
         (
-          new BytesView(underlying, start, n),
-          new BytesView(underlying, start + n, length - n)
+          new BytesView(underlying, start + n, length - n),
+          new BytesView(underlying, start, n)
         )
       )
     else None
 
-  def pop: Option[(Byte, BytesView)] =
+  def pop: Option[(BytesView, Byte)] =
     if (length >= 1)
       Some(
         (
-          underlying(start),
-          new BytesView(underlying, start + 1, length - 1)
+          new BytesView(underlying, start + 1, length - 1),
+          underlying(start)
         )
       )
     else None

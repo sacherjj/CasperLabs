@@ -87,10 +87,10 @@ fn should_run_purse_to_account_transfer() {
         .get_account(ACCOUNT_1_ADDR)
         .expect("should have new account");
 
-    let new_purse_id = new_account.purse_id();
-    // This is the new PurseId lookup key that will be present in AddKeys for a mint
+    let new_purse = new_account.main_purse();
+    // This is the new lookup key that will be present in AddKeys for a mint
     // contract uref
-    let new_purse_id_lookup_key = new_purse_id.value().remove_access_rights().as_string();
+    let new_purse_key = new_purse.remove_access_rights().as_string();
 
     // Obtain transforms for a mint account
     let mint_contract_uref = builder.get_mint_contract_uref().remove_access_rights();
@@ -99,12 +99,10 @@ fn should_run_purse_to_account_transfer() {
         .get_contract(mint_contract_uref)
         .expect("should have mint contract");
 
-    assert!(mint_contract
-        .named_keys()
-        .contains_key(&new_purse_id_lookup_key));
+    assert!(mint_contract.named_keys().contains_key(&new_purse_key));
 
     // Find new account's purse uref
-    let new_account_purse_uref = &mint_contract.named_keys()[&new_purse_id_lookup_key];
+    let new_account_purse_uref = &mint_contract.named_keys()[&new_purse_key];
     let purse_secondary_balance = CLValue::try_from(
         builder
             .query(None, new_account_purse_uref.normalize(), &[])

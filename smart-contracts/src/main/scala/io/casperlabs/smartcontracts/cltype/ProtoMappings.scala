@@ -27,7 +27,7 @@ object ProtoMappings {
 
   def toProto(a: Account): state.Account = state.Account(
     publicKey = ByteString.copyFrom(a.publicKey.bytes.toArray),
-    purseId = toProto(Key.URef(a.purseId)).value.uref,
+    mainPurse = toProto(Key.URef(a.mainPurse)).value.uref,
     namedKeys = toProto(a.namedKeys),
     associatedKeys = a.associatedKeys.toSeq.map {
       case (k, w) => state.Account.AssociatedKey(ByteString.copyFrom(k.bytes.toArray), w.toInt)
@@ -92,53 +92,57 @@ object ProtoMappings {
   def toProto(v: CLValue): Either[Error, state.Value] = v.clType match {
     case CLType.I32 | CLType.U32 =>
       FromBytes
-        .deserialize[Int](v.value.toArray)
+        .deserialize(FromBytes.int, v.value.toArray)
         .map { i =>
           state.Value(state.Value.Value.IntValue(i))
         }
         .leftMap(err => Error.FromBytesError(err))
 
     case CLType.List(CLType.U8) =>
-      v.to[Seq[Byte]]
+      FromBytes
+        .deserialize(FromBytes.seq(FromBytes.byte), v.value.toArray)
         .map { bytes =>
           state.Value(state.Value.Value.BytesValue(ByteString.copyFrom(bytes.toArray)))
         }
-        .leftMap(err => Error.CLValueError(err))
+        .leftMap(err => Error.FromBytesError(err))
 
     case CLType.List(CLType.I32) | CLType.List(CLType.U32) =>
       FromBytes
-        .deserialize[Seq[Int]](v.value.toArray)
+        .deserialize(FromBytes.seq(FromBytes.int), v.value.toArray)
         .map { list =>
           state.Value(state.Value.Value.IntList(state.IntList(list)))
         }
         .leftMap(err => Error.FromBytesError(err))
 
     case CLType.String =>
-      v.to[String]
+      FromBytes
+        .deserialize(FromBytes.string, v.value.toArray)
         .map { s =>
           state.Value(state.Value.Value.StringValue(s))
         }
-        .leftMap(err => Error.CLValueError(err))
+        .leftMap(err => Error.FromBytesError(err))
 
     case CLType.List(CLType.String) =>
-      v.to[Seq[String]]
+      FromBytes
+        .deserialize(FromBytes.seq(FromBytes.string), v.value.toArray)
         .map { list =>
           state.Value(state.Value.Value.StringList(state.StringList(list)))
         }
-        .leftMap(err => Error.CLValueError(err))
+        .leftMap(err => Error.FromBytesError(err))
 
     case CLType.Tuple2(CLType.String, CLType.Key) =>
-      v.to[(String, Key)]
+      FromBytes
+        .deserialize(FromBytes.tuple2(FromBytes.string, Key.deserializer), v.value.toArray)
         .map {
           case (n, k) =>
             state
               .Value(state.Value.Value.NamedKey(state.NamedKey(name = n, key = Some(toProto(k)))))
         }
-        .leftMap(err => Error.CLValueError(err))
+        .leftMap(err => Error.FromBytesError(err))
 
     case CLType.U128 =>
       FromBytes
-        .deserialize[BigInt](v.value.toArray)
+        .deserialize(FromBytes.bigInt, v.value.toArray)
         .map { i =>
           state.Value(state.Value.Value.BigInt(state.BigInt(value = i.toString, bitWidth = 128)))
         }
@@ -146,7 +150,7 @@ object ProtoMappings {
 
     case CLType.U256 =>
       FromBytes
-        .deserialize[BigInt](v.value.toArray)
+        .deserialize(FromBytes.bigInt, v.value.toArray)
         .map { i =>
           state.Value(state.Value.Value.BigInt(state.BigInt(value = i.toString, bitWidth = 256)))
         }
@@ -154,33 +158,35 @@ object ProtoMappings {
 
     case CLType.U512 =>
       FromBytes
-        .deserialize[BigInt](v.value.toArray)
+        .deserialize(FromBytes.bigInt, v.value.toArray)
         .map { i =>
           state.Value(state.Value.Value.BigInt(state.BigInt(value = i.toString, bitWidth = 512)))
         }
         .leftMap(err => Error.FromBytesError(err))
 
     case CLType.Key =>
-      v.to[Key]
+      FromBytes
+        .deserialize(Key.deserializer, v.value.toArray)
         .map { k =>
           state.Value(state.Value.Value.Key(toProto(k)))
         }
-        .leftMap(err => Error.CLValueError(err))
+        .leftMap(err => Error.FromBytesError(err))
 
     case CLType.URef =>
-      v.to[URef]
+      FromBytes
+        .deserialize(URef.deserializer, v.value.toArray)
         .map { u =>
           val key = Key.URef(u)
           state.Value(state.Value.Value.Key(toProto(key)))
         }
-        .leftMap(err => Error.CLValueError(err))
+        .leftMap(err => Error.FromBytesError(err))
 
     case CLType.Unit =>
       Right(state.Value(state.Value.Value.Unit(state.Unit())))
 
     case CLType.I64 | CLType.U64 =>
       FromBytes
-        .deserialize[Long](v.value.toArray)
+        .deserialize(FromBytes.long, v.value.toArray)
         .map { i =>
           state.Value(state.Value.Value.LongValue(i))
         }
@@ -236,12 +242,13 @@ object ProtoMappings {
 
   private def fromArg(arg: Deploy.Arg.Value): Either[Error, CLValue] = arg.value match {
     case Deploy.Arg.Value.Value.Empty          => Left(Error.EmptyArgValueVariant)
-    case Deploy.Arg.Value.Value.IntValue(x)    => Right(CLValue.from(x))
-    case Deploy.Arg.Value.Value.IntList(x)     => Right(CLValue.from(x.values))
-    case Deploy.Arg.Value.Value.StringValue(x) => Right(CLValue.from(x))
-    case Deploy.Arg.Value.Value.StringList(x)  => Right(CLValue.from(x.values))
-    case Deploy.Arg.Value.Value.LongValue(x)   => Right(CLValue.from(x))
-    case Deploy.Arg.Value.Value.Key(x)         => fromProto(x).map(CLValue.from[Key])
+    case Deploy.Arg.Value.Value.IntValue(x)    => Right(CLValue.from(x, CLType.I32))
+    case Deploy.Arg.Value.Value.IntList(x)     => Right(CLValue.from(x.values, CLType.List(CLType.I32)))
+    case Deploy.Arg.Value.Value.StringValue(x) => Right(CLValue.from(x, CLType.String))
+    case Deploy.Arg.Value.Value.StringList(x) =>
+      Right(CLValue.from(x.values, CLType.List(CLType.String)))
+    case Deploy.Arg.Value.Value.LongValue(x) => Right(CLValue.from(x, CLType.I64))
+    case Deploy.Arg.Value.Value.Key(x)       => fromProto(x).map(k => CLValue.from(k, CLType.Key))
 
     // TODO: It is a problem with the clients that they send public keys
     // as byte arrays, but do not say they are supposed to be fixed length.
@@ -302,8 +309,6 @@ object ProtoMappings {
     }
 
     case class FromBytesError(err: FromBytes.Error) extends Error
-
-    case class CLValueError(err: CLValue.Error) extends Error
 
     case class Expected32Bytes(foundLength: Int) extends Error
 

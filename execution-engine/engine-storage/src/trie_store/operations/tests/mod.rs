@@ -7,7 +7,6 @@ mod write;
 
 use std::{collections::HashMap, convert};
 
-use failure;
 use lmdb::DatabaseFlags;
 use tempfile::{tempdir, TempDir};
 

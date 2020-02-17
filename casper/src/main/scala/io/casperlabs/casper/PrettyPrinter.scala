@@ -52,12 +52,12 @@ object PrettyPrinter {
         Account(
           pk,
           urefs,
-          purseId,
+          mainPurse,
           associatedKeys,
           actionThresholds
         )
         ) =>
-      s"Account(${buildString(pk)}, {${urefs.map(buildString).mkString(",")}}, ${purseId
+      s"Account(${buildString(pk)}, {${urefs.map(buildString).mkString(",")}}, ${mainPurse
         .map(buildString)}, {${associatedKeys
         .map(buildString)
         .mkString(",")}, {${actionThresholds.map(buildString)}})"
@@ -73,12 +73,12 @@ object PrettyPrinter {
         Account(
           pk,
           urefs,
-          purseId,
+          mainPurse,
           associatedKeys,
           actionThresholds
         )
         ) =>
-      s"Account(${buildString(pk)}, {${urefs.map(buildString).mkString(",")}}, ${purseId
+      s"Account(${buildString(pk)}, {${urefs.map(buildString).mkString(",")}}, ${mainPurse
         .map(buildString)}, {${associatedKeys
         .map(buildString)
         .mkString(",")}, {${actionThresholds.map(buildString)}})"

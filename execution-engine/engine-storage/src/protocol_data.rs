@@ -119,21 +119,51 @@ pub(crate) mod gens {
 mod tests {
     use proptest::proptest;
 
-    use engine_shared::test_utils;
+    use engine_wasm_prep::wasm_costs::WasmCosts;
     use types::{bytesrepr, AccessRights, URef};
 
     use super::{gens, ProtocolData};
 
+    fn wasm_costs_mock() -> WasmCosts {
+        WasmCosts {
+            regular: 1,
+            div: 16,
+            mul: 4,
+            mem: 2,
+            initial_mem: 4096,
+            grow_mem: 8192,
+            memcpy: 1,
+            max_stack_height: 64 * 1024,
+            opcodes_mul: 3,
+            opcodes_div: 8,
+        }
+    }
+
+    fn wasm_costs_free() -> WasmCosts {
+        WasmCosts {
+            regular: 0,
+            div: 0,
+            mul: 0,
+            mem: 0,
+            initial_mem: 4096,
+            grow_mem: 8192,
+            memcpy: 0,
+            max_stack_height: 64 * 1024,
+            opcodes_mul: 1,
+            opcodes_div: 1,
+        }
+    }
+
     #[test]
     fn should_serialize_and_deserialize() {
         let mock = {
-            let costs = test_utils::wasm_costs_mock();
+            let costs = wasm_costs_mock();
             let mint_reference = URef::new([0u8; 32], AccessRights::READ_ADD_WRITE);
             let proof_of_stake_reference = URef::new([1u8; 32], AccessRights::READ_ADD_WRITE);
             ProtocolData::new(costs, mint_reference, proof_of_stake_reference)
         };
         let free = {
-            let costs = test_utils::wasm_costs_free();
+            let costs = wasm_costs_free();
             let mint_reference = URef::new([0u8; 32], AccessRights::READ_ADD_WRITE);
             let proof_of_stake_reference = URef::new([1u8; 32], AccessRights::READ_ADD_WRITE);
             ProtocolData::new(costs, mint_reference, proof_of_stake_reference)
@@ -147,7 +177,7 @@ mod tests {
         let mint_reference = URef::new([197u8; 32], AccessRights::READ_ADD_WRITE);
         let proof_of_stake_reference = URef::new([198u8; 32], AccessRights::READ_ADD_WRITE);
         let protocol_data = {
-            let costs = test_utils::wasm_costs_mock();
+            let costs = wasm_costs_mock();
             ProtocolData::new(costs, mint_reference, proof_of_stake_reference)
         };
 
@@ -169,7 +199,7 @@ mod tests {
         let mint_reference = URef::new([199u8; 32], AccessRights::READ_ADD_WRITE);
         let proof_of_stake_reference = URef::new([0u8; 32], AccessRights::READ);
         let protocol_data = {
-            let costs = test_utils::wasm_costs_mock();
+            let costs = wasm_costs_mock();
             ProtocolData::new(costs, mint_reference, proof_of_stake_reference)
         };
 

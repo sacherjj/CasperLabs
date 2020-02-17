@@ -5,25 +5,21 @@ use core::convert::TryFrom;
 
 use casperlabs_types::{
     account::{
-        ActionType, AddKeyFailure, PublicKey, PurseId, RemoveKeyFailure, SetThresholdFailure,
-        UpdateKeyFailure, Weight, PURSE_ID_SERIALIZED_LENGTH,
+        ActionType, AddKeyFailure, PublicKey, RemoveKeyFailure, SetThresholdFailure,
+        UpdateKeyFailure, Weight,
     },
-    bytesrepr,
+    bytesrepr, URef, UREF_SERIALIZED_LENGTH,
 };
 
 use super::to_ptr;
 use crate::{contract_api, ext_ffi, unwrap_or_revert::UnwrapOrRevert};
 
 /// Retrieves the ID of the account's main purse.
-pub fn get_main_purse() -> PurseId {
-    let dest_ptr = contract_api::alloc_bytes(PURSE_ID_SERIALIZED_LENGTH);
+pub fn get_main_purse() -> URef {
+    let dest_ptr = contract_api::alloc_bytes(UREF_SERIALIZED_LENGTH);
     let bytes = unsafe {
         ext_ffi::get_main_purse(dest_ptr);
-        Vec::from_raw_parts(
-            dest_ptr,
-            PURSE_ID_SERIALIZED_LENGTH,
-            PURSE_ID_SERIALIZED_LENGTH,
-        )
+        Vec::from_raw_parts(dest_ptr, UREF_SERIALIZED_LENGTH, UREF_SERIALIZED_LENGTH)
     };
     bytesrepr::deserialize(bytes).unwrap_or_revert()
 }
@@ -55,7 +51,7 @@ pub fn add_associated_key(public_key: PublicKey, weight: Weight) -> Result<(), A
     }
 }
 
-/// Removes the given [`PublicKey'] from the account's associated keys.
+/// Removes the given [`PublicKey`] from the account's associated keys.
 pub fn remove_associated_key(public_key: PublicKey) -> Result<(), RemoveKeyFailure> {
     let (public_key_ptr, _public_key_size, _bytes) = to_ptr(public_key);
     let result = unsafe { ext_ffi::remove_associated_key(public_key_ptr) };

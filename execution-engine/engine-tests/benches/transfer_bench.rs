@@ -13,10 +13,7 @@ use engine_test_support::{
     },
     DEFAULT_ACCOUNT_ADDR,
 };
-use types::{
-    account::{PublicKey, PurseId},
-    Key, U512,
-};
+use types::{account::PublicKey, Key, URef, U512};
 
 const CONTRACT_CREATE_ACCOUNTS: &str = "create_accounts.wasm";
 const CONTRACT_CREATE_PURSES: &str = "create_purses.wasm";
@@ -66,7 +63,7 @@ fn create_purses(
     source: [u8; 32],
     total_purses: u64,
     purse_amount: U512,
-) -> Vec<PurseId> {
+) -> Vec<URef> {
     let exec_request = ExecuteRequestBuilder::standard(
         source,
         CONTRACT_CREATE_PURSES,
@@ -92,7 +89,7 @@ fn create_purses(
                 .get(&purse_lookup_key)
                 .and_then(Key::as_uref)
                 .unwrap_or_else(|| panic!("should get named key {} as uref", purse_lookup_key));
-            PurseId::new(*purse_uref)
+            *purse_uref
         })
         .collect()
 }
@@ -155,7 +152,7 @@ fn transfer_to_account_multiple_deploys(
 /// Executes all transfers in batch determined by value of TRANSFER_BATCH_SIZE.
 fn transfer_to_purse_multiple_execs(
     builder: &mut LmdbWasmTestBuilder,
-    purse_id: PurseId,
+    purse: URef,
     should_commit: bool,
 ) {
     let amount = U512::one();
@@ -164,7 +161,7 @@ fn transfer_to_purse_multiple_execs(
         let exec_request = ExecuteRequestBuilder::standard(
             TARGET_ADDR,
             CONTRACT_TRANSFER_TO_PURSE,
-            (purse_id, amount),
+            (purse, amount),
         )
         .build();
 
@@ -178,7 +175,7 @@ fn transfer_to_purse_multiple_execs(
 /// Executes multiple deploys per single exec with based on TRANSFER_BATCH_SIZE.
 fn transfer_to_purse_multiple_deploys(
     builder: &mut LmdbWasmTestBuilder,
-    purse_id: PurseId,
+    purse: URef,
     should_commit: bool,
 ) {
     let mut exec_builder = ExecuteRequestBuilder::new();
@@ -187,7 +184,7 @@ fn transfer_to_purse_multiple_deploys(
         let deploy = DeployItemBuilder::default()
             .with_address(TARGET_ADDR)
             .with_payment_code(STANDARD_PAYMENT_CONTRACT, (U512::from(PER_RUN_FUNDING),))
-            .with_session_code(CONTRACT_TRANSFER_TO_PURSE, (purse_id, U512::one()))
+            .with_session_code(CONTRACT_TRANSFER_TO_PURSE, (purse, U512::one()))
             .with_authorization_keys(&[PublicKey::new(TARGET_ADDR)])
             .with_deploy_hash(make_deploy_hash(i)) // deploy_hash
             .build();

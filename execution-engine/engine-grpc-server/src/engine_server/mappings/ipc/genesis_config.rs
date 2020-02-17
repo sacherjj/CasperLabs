@@ -62,8 +62,6 @@ impl TryFrom<ChainSpec_GenesisConfig> for GenesisConfig {
 
 #[cfg(test)]
 mod tests {
-    use rand;
-
     use super::*;
     use crate::engine_server::mappings::test_utils;
 
