@@ -1,31 +1,28 @@
 package io.casperlabs.casper.api
 
-import cats.effect.concurrent.Semaphore
-import cats.effect.{Concurrent, Resource, Sync}
-import cats.implicits._
 import cats.Monad
+import cats.effect.concurrent.Semaphore
+import cats.effect.{Concurrent, Resource}
+import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
+import io.casperlabs.casper.MultiParentCasperImpl.Broadcaster
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper._
 import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.consensus.info._
-import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.casper.validation.Validation
-import io.casperlabs.catscontrib.Fs2Compiler
-import io.casperlabs.catscontrib.MonadThrowable
+import io.casperlabs.catscontrib.{Fs2Compiler, MonadThrowable}
 import io.casperlabs.comm.ServiceError
 import io.casperlabs.comm.ServiceError._
 import io.casperlabs.crypto.codec.Base16
+import io.casperlabs.mempool.DeployBuffer
 import io.casperlabs.metrics.Metrics
-import io.casperlabs.shared.{FatalError, FatalErrorShutdown, Log}
+import io.casperlabs.shared.{FatalError, Log}
 import io.casperlabs.storage.StorageError
 import io.casperlabs.storage.block.BlockStorage
-import io.casperlabs.storage.deploy.{DeployStorage, DeployStorageReader}
-import cats.Applicative
-import io.casperlabs.casper.MultiParentCasperImpl.Broadcaster
-import io.casperlabs.mempool.DeployBuffer
 import io.casperlabs.storage.dag.DagStorage
+import io.casperlabs.storage.deploy.{DeployStorage, DeployStorageReader}
 
 object BlockAPI {
 
@@ -206,11 +203,10 @@ object BlockAPI {
       maybeDeployView: Option[DeployInfo.View],
       blockView: BlockInfo.View
   ): F[BlockAndMaybeDeploys] = {
-    val deploysF = maybeDeployView.fold((none[List[Block.ProcessedDeploy]]).pure[F]) {
-      implicit dv =>
-        DeployStorageReader[F]
-          .getProcessedDeploys(blockInfo.getSummary.blockHash)
-          .map(_.some)
+    val deploysF = maybeDeployView.fold(none[List[Block.ProcessedDeploy]].pure[F]) { implicit dv =>
+      DeployStorageReader[F]
+        .getProcessedDeploys(blockInfo.getSummary.blockHash)
+        .map(_.some)
     }
 
     val childrenF = blockView match {
@@ -243,37 +239,35 @@ object BlockAPI {
     )
 
   /* Similar to [[getBlockInfosWithDeploys]] but in addition filters blocks by a validator. */
-  def getBlockInfosWithDeploysByValidator[F[_]: MonadThrowable: Log: MultiParentCasperRef: DeployStorage: DagStorage: Fs2Compiler: BlockStorage](
+  def getBlockInfosWithDeploysByValidator[F[_]: MonadThrowable: Log: DeployStorage: DagStorage: Fs2Compiler: BlockStorage](
       validator: Validator,
       depth: Int,
       maxRank: Long,
       maybeDeployView: Option[DeployInfo.View],
       blockView: BlockInfo.View
   ): F[List[BlockAndMaybeDeploys]] =
-    unsafeWithCasper[F, List[BlockAndMaybeDeploys]]("Could not show blocks.") { implicit casper =>
-      casper.dag flatMap { dag =>
-        maxRank match {
-          case 0 =>
-            dag.topoSortTailValidator(validator, depth).compile.toVector
-          case r =>
-            dag
-              .topoSortValidator(
-                validator = validator,
-                endBlockNumber = r,
-                startBlockNumber = math.max(r - depth + 1, 0)
-              )
-              .compile
-              .toVector
-        }
-      } handleErrorWith {
-        case ex: StorageError =>
-          MonadThrowable[F].raiseError(InvalidArgument(StorageError.errorMessage(ex)))
-        case ex: IllegalArgumentException =>
-          MonadThrowable[F].raiseError(InvalidArgument(ex.getMessage))
-      } flatMap { infosByRank =>
-        infosByRank.flatten.reverse.toList.traverse { info =>
-          withViews[F](info, maybeDeployView, blockView)
-        }
+    DagStorage[F].getRepresentation flatMap { dag =>
+      maxRank match {
+        case 0 =>
+          dag.topoSortTailValidator(validator, depth).compile.toVector
+        case r =>
+          dag
+            .topoSortValidator(
+              validator = validator,
+              endBlockNumber = r,
+              startBlockNumber = math.max(r - depth + 1, 0)
+            )
+            .compile
+            .toVector
+      }
+    } handleErrorWith {
+      case ex: StorageError =>
+        MonadThrowable[F].raiseError(InvalidArgument(StorageError.errorMessage(ex)))
+      case ex: IllegalArgumentException =>
+        MonadThrowable[F].raiseError(InvalidArgument(ex.getMessage))
+    } flatMap { infosByRank =>
+      infosByRank.flatten.reverse.toList.traverse { info =>
+        withViews[F](info, maybeDeployView, blockView)
       }
     }
 
