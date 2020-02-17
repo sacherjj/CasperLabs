@@ -178,7 +178,7 @@ object DeployBuffer {
     } yield deploysRemoved
 
   /** Discard deploys and emit the necessary events. */
-  def discardDeploys[F[_]: Monad: DeployStorage: DeployEventEmitter](
+  def discardDeploys[F[_]: Monad: DeployStorageWriter: DeployEventEmitter](
       deploysWithReasons: List[(DeployHash, String)]
   ): F[Unit] =
     for {
@@ -187,4 +187,16 @@ object DeployBuffer {
             .whenA(deploysWithReasons.nonEmpty)
       _ <- DeployEventEmitter[F].deploysDiscarded(deploysWithReasons)
     } yield ()
+
+  /** Discard deploys that sat in the buffer for too long. */
+  def discardExpiredDeploys[F[_]: Monad: DeployStorageWriter: DeployEventEmitter](
+      expirationPeriod: FiniteDuration
+  ): F[Unit] = {
+    val msg = "TTL Expired"
+    for {
+      discarded <- DeployStorageWriter[F]
+                    .markAsDiscarded(expirationPeriod, msg)
+      _ <- DeployEventEmitter[F].deploysDiscarded(discarded.toList.map(_ -> msg))
+    } yield ()
+  }
 }
