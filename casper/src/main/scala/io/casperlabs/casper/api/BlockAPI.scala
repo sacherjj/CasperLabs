@@ -11,14 +11,17 @@ import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper._
 import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.consensus.info._
+import io.casperlabs.casper.consensus.state.Key
 import io.casperlabs.casper.validation.Validation
 import io.casperlabs.catscontrib.{Fs2Compiler, MonadThrowable}
 import io.casperlabs.comm.ServiceError
 import io.casperlabs.comm.ServiceError._
 import io.casperlabs.crypto.codec.Base16
+import io.casperlabs.crypto.hash.Blake2b256
 import io.casperlabs.mempool.DeployBuffer
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.shared.{FatalError, Log}
+import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.StorageError
 import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.storage.dag.DagStorage
@@ -225,7 +228,7 @@ object BlockAPI {
     }
   }
 
-  def getBlockInfo[F[_]: MonadThrowable: Log: BlockStorage: DeployStorage: DagStorage](
+  def getBlockInfo[F[_]: MonadThrowable: BlockStorage: DeployStorage: DagStorage](
       blockHashBase16: String,
       blockView: BlockInfo.View
   ): F[BlockInfo] =
@@ -314,4 +317,31 @@ object BlockAPI {
       blockView: BlockInfo.View = BlockInfo.View.BASIC
   ): F[List[BlockInfo]] =
     getBlockInfosWithDeploys[F](depth, maxRank, None, blockView).map(_.map(_._1))
+
+  def accountBalance[F[_]: MonadThrowable: BlockStorage: DeployStorage: DagStorage: ExecutionEngineService](
+      blockHashBase16: String,
+      accountKey: ByteString
+  ): F[String] =
+    for {
+      info            <- BlockAPI.getBlockInfo[F](blockHashBase16, BlockInfo.View.BASIC)
+      stateHash       = info.getSummary.getHeader.getState.postStateHash
+      protocolVersion = info.getSummary.getHeader.getProtocolVersion
+      getState = (keyValue: Key.Value) =>
+        ExecutionEngineService[F].query(stateHash, Key(keyValue), Nil, protocolVersion).rethrow
+      // Starting from here all normally dangerous unwrap operations are safe to do
+      // because otherwise a deploy couldn't be created due to validations in Node and EE
+      account <- getState(Key.Value.Address(Key.Address(accountKey))).map(_.getAccount)
+      mintPublic = account.namedKeys
+        .find(_.name == "mint")
+        .flatMap(_.key)
+        .get
+        .getUref
+        .uref
+        .toByteArray
+      purse = account.getMainPurse.uref.toByteArray
+      // This is what EE does when creating local key address.
+      hash        = ByteString.copyFrom(Blake2b256.hash(mintPublic ++ purse))
+      balanceUref <- getState(Key.Value.Local(Key.Local(hash))).map(_.getKey.getUref.uref)
+      balance     <- getState(Key.Value.Uref(Key.URef(balanceUref))).map(_.getBigInt.value)
+    } yield balance
 }
