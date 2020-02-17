@@ -54,7 +54,7 @@ object BlockAPI {
       _ <- Metrics[F].incrementCounter("create-blocks-success", 0)
     } yield ()
 
-  def deploy[F[_]: MonadThrowable: DeployBuffer: MultiParentCasperRef: BlockStorage: Validation: Log: Metrics: EventEmitter](
+  def deploy[F[_]: MonadThrowable: DeployBuffer: MultiParentCasperRef: BlockStorage: Validation: Log: Metrics: DeployEventEmitter](
       d: Deploy
   ): F[Unit] =
     for {
@@ -62,7 +62,7 @@ object BlockAPI {
       r <- DeployBuffer[F].addDeploy(d)
       _ <- r match {
             case Right(_) =>
-              Metrics[F].incrementCounter("deploys-success") *> EventEmitter[F].deployAdded(d)
+              Metrics[F].incrementCounter("deploys-success")
             case Left(ex: IllegalArgumentException) =>
               MonadThrowable[F].raiseError[Unit](InvalidArgument(ex.getMessage))
             case Left(ex: IllegalStateException) =>

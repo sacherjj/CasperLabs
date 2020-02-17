@@ -265,7 +265,6 @@ class MultiParentCasperImpl[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: 
               _ <- Log[F]
                     .info(s"Re-queued ${requeued.size} orphaned deploys.")
                     .whenA(requeued.nonEmpty)
-              _ <- requeued.toList.traverse(EventEmitter[F].deployRequeued(_))
             } yield ()
           }.forkAndLog
 

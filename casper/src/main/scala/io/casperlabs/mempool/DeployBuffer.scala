@@ -3,7 +3,7 @@ package io.casperlabs.mempool
 import cats.implicits._
 import io.casperlabs.casper.DeployFilters.filterDeploysNotInPast
 import io.casperlabs.casper.Estimator.BlockHash
-import io.casperlabs.casper.{DeployFilters, DeployHash, PrettyPrinter}
+import io.casperlabs.casper.{DeployEventEmitter, DeployFilters, DeployHash, PrettyPrinter}
 import io.casperlabs.casper.consensus.Deploy
 import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.casper.validation.Validation
@@ -24,7 +24,7 @@ import simulacrum.typeclass
   /** If a deploy is valid (according to node rules), adds is the deploy buffer.
     * Otherwise returns an error.
     */
-  def addDeploy(d: Deploy): F[Either[Throwable, Unit]]
+  def addDeploy(d: Deploy)(implicit e: DeployEventEmitter[F]): F[Either[Throwable, Unit]]
 }
 
 object DeployBuffer {
@@ -64,11 +64,14 @@ object DeployBuffer {
         } yield ()
       }
 
-      override def addDeploy(d: Deploy): F[Either[Throwable, Unit]] =
+      override def addDeploy(
+          d: Deploy
+      )(implicit e: DeployEventEmitter[F]): F[Either[Throwable, Unit]] =
         (for {
           _ <- validateDeploy(d)
           _ <- Log[F].info(s"Received ${PrettyPrinter.buildString(d) -> "deploy" -> null}")
           _ <- DeployStorageWriter[F].addAsPending(List(d))
+          _ <- DeployEventEmitter[F].deployAdded(d)
         } yield ()).attempt
     }
 
@@ -113,7 +116,7 @@ object DeployBuffer {
   /** If another node proposed a block which orphaned something proposed by this node,
     * and we still have these deploys in the `processedDeploys` buffer then put them
     * back into the `pendingDeploys` so that the `AutoProposer` can pick them up again. */
-  def requeueOrphanedDeploys[F[_]: MonadThrowable: DagStorage: BlockStorage: DeployStorage: Metrics](
+  def requeueOrphanedDeploys[F[_]: MonadThrowable: DagStorage: BlockStorage: DeployStorage: Metrics: DeployEventEmitter](
       tips: Set[BlockHash]
   ): F[Set[DeployHash]] =
     Metrics[F].timer("requeueOrphanedDeploys") {
@@ -128,6 +131,7 @@ object DeployBuffer {
                           ).timer("requeueOrphanedDeploys_filterDeploysNotInPast")
         _ <- DeployStorageWriter[F]
               .markAsPendingByHashes(orphanedDeploys) whenA orphanedDeploys.nonEmpty
+        _ <- orphanedDeploys.toList.traverse(DeployEventEmitter[F].deployRequeued(_))
       } yield orphanedDeploys.toSet
     }
 

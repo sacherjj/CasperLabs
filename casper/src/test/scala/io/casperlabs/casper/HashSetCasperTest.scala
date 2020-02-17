@@ -46,6 +46,8 @@ abstract class HashSetCasperTest
 
   import HashSetCasperTest._
 
+  implicit val emitter = NoOpsEventEmitter.create[Task]()
+
   implicit class TestNodeOps(node: TestNode[Task]) {
     def addAndBroadcast(b: Block): Task[BlockStatus] =
       node.casperEff.addBlock(b).flatTap(node.broadcaster.networkEffects(b, _))

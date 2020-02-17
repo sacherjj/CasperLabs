@@ -9,6 +9,7 @@ import io.casperlabs.casper.Estimator.Validator
 import io.casperlabs.casper.MultiParentCasperImpl.Broadcaster
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.consensus._
+import io.casperlabs.casper.helper.NoOpsEventEmitter
 import io.casperlabs.mempool.DeployBuffer
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.models.{ArbitraryConsensus, Weight}
@@ -30,7 +31,8 @@ class AutoProposerTest extends FlatSpec with Matchers with ArbitraryConsensus {
 
   import AutoProposerTest._
 
-  implicit val cc = ConsensusConfig()
+  implicit val cc      = ConsensusConfig()
+  implicit val emitter = NoOpsEventEmitter.create[Task]()
 
   def sampleDeployData = sample(arbitrary[consensus.Deploy])
 
