@@ -147,15 +147,15 @@ mod tests {
     use std::{collections::BTreeSet, iter::FromIterator};
 
     use types::account::{
-        AddKeyFailure, PublicKey, Weight, MAX_ASSOCIATED_KEYS, PUBLIC_KEY_LENGTH,
+        AddKeyFailure, PublicKey, Weight, MAX_ASSOCIATED_KEYS, ED25519_LENGTH,
     };
 
     use super::AssociatedKeys;
 
     #[test]
     fn associated_keys_add() {
-        let mut keys = AssociatedKeys::new([0u8; PUBLIC_KEY_LENGTH].into(), Weight::new(1));
-        let new_pk = PublicKey::new([1u8; PUBLIC_KEY_LENGTH]);
+        let mut keys = AssociatedKeys::new([0u8; ED25519_LENGTH].into(), Weight::new(1));
+        let new_pk = PublicKey::new([1u8; ED25519_LENGTH]);
         let new_pk_weight = Weight::new(2);
         assert!(keys.add_key(new_pk, new_pk_weight).is_ok());
         assert_eq!(keys.get(&new_pk), Some(&new_pk_weight))
@@ -165,7 +165,7 @@ mod tests {
     fn associated_keys_add_full() {
         let map = (0..MAX_ASSOCIATED_KEYS).map(|k| {
             (
-                PublicKey::new([k as u8; PUBLIC_KEY_LENGTH]),
+                PublicKey::new([k as u8; ED25519_LENGTH]),
                 Weight::new(k as u8),
             )
         });
@@ -176,14 +176,14 @@ mod tests {
             tmp
         };
         assert_eq!(
-            keys.add_key(PublicKey::new([100u8; PUBLIC_KEY_LENGTH]), Weight::new(100)),
+            keys.add_key(PublicKey::new([100u8; ED25519_LENGTH]), Weight::new(100)),
             Err(AddKeyFailure::MaxKeysLimit)
         )
     }
 
     #[test]
     fn associated_keys_add_duplicate() {
-        let pk = PublicKey::new([0u8; PUBLIC_KEY_LENGTH]);
+        let pk = PublicKey::new([0u8; ED25519_LENGTH]);
         let weight = Weight::new(1);
         let mut keys = AssociatedKeys::new(pk, weight);
         assert_eq!(
@@ -195,12 +195,12 @@ mod tests {
 
     #[test]
     fn associated_keys_remove() {
-        let pk = PublicKey::new([0u8; PUBLIC_KEY_LENGTH]);
+        let pk = PublicKey::new([0u8; ED25519_LENGTH]);
         let weight = Weight::new(1);
         let mut keys = AssociatedKeys::new(pk, weight);
         assert!(keys.remove_key(&pk).is_ok());
         assert!(keys
-            .remove_key(&PublicKey::new([1u8; PUBLIC_KEY_LENGTH]))
+            .remove_key(&PublicKey::new([1u8; ED25519_LENGTH]))
             .is_err());
     }
 

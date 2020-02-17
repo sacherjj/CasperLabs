@@ -12,7 +12,7 @@ use engine_shared::{
 };
 use engine_storage::global_state::{in_memory::InMemoryGlobalState, StateProvider, StateReader};
 use types::{
-    account::{PublicKey, PurseId, Weight, PUBLIC_KEY_LENGTH},
+    account::{PublicKey, PurseId, Weight, ED25519_LENGTH},
     gens::*,
     AccessRights, CLValue, Key, ProtocolVersion, URef,
 };
@@ -175,7 +175,7 @@ fn tracking_copy_add_i32() {
 
 #[test]
 fn tracking_copy_add_named_key() {
-    let zero_public_key = PublicKey::new([0u8; PUBLIC_KEY_LENGTH]);
+    let zero_public_key = PublicKey::new([0u8; ED25519_LENGTH]);
     let correlation_id = CorrelationId::new();
     // DB now holds an `Account` so that we can test adding a `NamedKey`
     let associated_keys = AssociatedKeys::new(zero_public_key, Weight::new(1));

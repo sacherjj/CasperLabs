@@ -182,43 +182,86 @@ impl CLTyped for Weight {
         CLType::U8
     }
 }
-
 /// The length in bytes of a [`PublicKey`].
-pub const PUBLIC_KEY_LENGTH: usize = 32;
+pub const ED25519_LENGTH: usize = 32;
 
 /// The number of bytes in a serialized [`PublicKey`].
-pub const PUBLIC_KEY_SERIALIZED_LENGTH: usize = PUBLIC_KEY_LENGTH;
+pub const PUBLIC_KEY_SERIALIZED_LENGTH: usize = ED25519_LENGTH;
 
-/// A newtype wrapping a [`[u8; PUBLIC_KEY_LENGTH]`](PUBLIC_KEY_LENGTH) which is the raw bytes of
+/// A newtype wrapping a [`[u8; ED25519_LENGTH]`](ED25519_LENGTH) which is the raw bytes of
 /// the public key of a cryptographic asymmetric key pair.
 #[derive(PartialOrd, Ord, PartialEq, Eq, Hash, Clone, Copy)]
+pub struct Ed25519([u8; ED25519_LENGTH]);
+
+impl Ed25519 {
+    /// Constructs new [`Ed25519`] instance from raw bytes representing a Ed25519 public key
+    pub const fn new(value: [u8; ED25519_LENGTH]) -> Ed25519 {
+        Ed25519(value)
+    }
+
+    /// Returns the raw bytes of the public key as an array.
+    pub fn value(&self) -> [u8; ED25519_LENGTH] {
+        self.0
+    }
+}
+
+
+impl Display for Ed25519 {
+    fn fmt(&self, f: &mut Formatter) -> core::fmt::Result {
+        write!(f, "Ed25519({})", HexFmt(&self.0))
+    }
+}
+
+impl ToBytes for Ed25519 {
+    fn to_bytes(&self) -> Result<Vec<u8>, Error> {
+        ToBytes::to_bytes(&self.0)
+    }
+}
+
+impl FromBytes for Ed25519 {
+    fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
+        let (bytes, rem): ([u8; 32], &[u8]) = FromBytes::from_bytes(bytes)?;
+        Ok((Ed25519::new(bytes), rem))
+    }
+}
+
+/// An enum wrapping various variants of supported public key types.
+#[derive(PartialOrd, Ord, PartialEq, Eq, Hash, Clone, Copy)]
 pub enum PublicKey {
-    /// Represents an Ed25519 public key bytes
-    Ed25519([u8; 32]),
+    /// Represents an Ed25519 public key type
+    Ed25519(Ed25519),
 }
 
 impl Display for PublicKey {
     fn fmt(&self, f: &mut Formatter) -> core::fmt::Result {
-        let PublicKey::Ed25519(bytes) = self;
-        write!(f, "PublicKey({})", HexFmt(&bytes))
+        let PublicKey::Ed25519(ed25519) = self;
+        write!(f, "PublicKey({})", ed25519)
     }
 }
 
 impl PublicKey {
     /// Constructs a new `PublicKey`.
-    pub const fn new(key: [u8; PUBLIC_KEY_LENGTH]) -> PublicKey {
-        PublicKey::Ed25519(key)
+    pub const fn new(key: [u8; ED25519_LENGTH]) -> PublicKey {
+        let ed25519 = Ed25519::new(key);
+        PublicKey::from_ed25519(ed25519)
+    }
+
+    /// Constructs a new [`PublicKey`] from an existing instance of
+    /// [`Ed25519`] public key
+    pub const fn from_ed25519(ed25519: Ed25519) -> PublicKey {
+        PublicKey::Ed25519(ed25519)
     }
 
     /// Returns the raw bytes of the public key as an array.
-    pub fn value(self) -> [u8; PUBLIC_KEY_LENGTH] {
-        let PublicKey::Ed25519(bytes) = self;
-        bytes
+    pub fn value(self) -> [u8; ED25519_LENGTH] {
+        let PublicKey::Ed25519(ed25519) = self;
+        ed25519.value()
     }
 
     /// Returns the raw bytes of the public key as a `Vec`.
     pub fn to_vec(&self) -> Vec<u8> {
-        let PublicKey::Ed25519(bytes) = self;
+        let PublicKey::Ed25519(ed25519) = self;
+        let bytes = ed25519.value();
         bytes.to_vec()
     }
 }
@@ -231,20 +274,20 @@ impl Debug for PublicKey {
 
 impl CLTyped for PublicKey {
     fn cl_type() -> CLType {
-        CLType::FixedList(Box::new(CLType::U8), PUBLIC_KEY_LENGTH as u32)
+        CLType::FixedList(Box::new(CLType::U8), ED25519_LENGTH as u32)
     }
 }
 
-impl From<[u8; PUBLIC_KEY_LENGTH]> for PublicKey {
-    fn from(key: [u8; PUBLIC_KEY_LENGTH]) -> Self {
-        PublicKey::Ed25519(key)
+impl From<[u8; ED25519_LENGTH]> for PublicKey {
+    fn from(key: [u8; ED25519_LENGTH]) -> Self {
+        PublicKey::Ed25519(Ed25519::new(key))
     }
 }
 
 impl TryFrom<&[u8]> for PublicKey {
     type Error = TryFromSliceForPublicKeyError;
     fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
-        if bytes.len() != PUBLIC_KEY_LENGTH {
+        if bytes.len() != ED25519_LENGTH {
             return Err(TryFromSliceForPublicKeyError(()));
         }
         let mut public_key = [0u8; 32];
@@ -255,15 +298,15 @@ impl TryFrom<&[u8]> for PublicKey {
 
 impl ToBytes for PublicKey {
     fn to_bytes(&self) -> Result<Vec<u8>, Error> {
-        let PublicKey::Ed25519(bytes) = self;
-        ToBytes::to_bytes(bytes)
+        let PublicKey::Ed25519(ed25519) = self;
+        ToBytes::to_bytes(ed25519)
     }
 }
 
 impl FromBytes for PublicKey {
     fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
-        let (key_bytes, rem): ([u8; PUBLIC_KEY_LENGTH], &[u8]) = FromBytes::from_bytes(bytes)?;
-        Ok((PublicKey::new(key_bytes), rem))
+        let (ed25519, rem): (Ed25519, &[u8]) = FromBytes::from_bytes(bytes)?;
+        Ok((PublicKey::from_ed25519(ed25519), rem))
     }
 }
 
