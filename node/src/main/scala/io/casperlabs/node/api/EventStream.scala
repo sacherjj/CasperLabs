@@ -1,15 +1,13 @@
 package io.casperlabs.node.api
 
+import cats._
+import cats.implicits._
 import cats.effect._
-import cats.syntax.flatMap._
-import cats.syntax.functor._
-import cats.syntax.apply._
 import io.casperlabs.casper.DeployHash
 import io.casperlabs.casper.Estimator.BlockHash
-import io.casperlabs.casper.consensus.info.{BlockInfo, Event}
+import io.casperlabs.casper.consensus.info.{BlockInfo, DeployInfo, Event}
 import io.casperlabs.casper.consensus.Deploy
 import io.casperlabs.casper.EventEmitter
-import io.casperlabs.casper.consensus.info.Event.{BlockAdded, NewFinalizedBlock, Value}
 import io.casperlabs.mempool.DeployBuffer
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.node.api.casper.StreamEventsRequest
@@ -31,9 +29,18 @@ object EventStream {
       scheduler: Scheduler,
       eventStreamBufferSize: Int
   ): EventStream[F] = {
+    // Don't send code in the deploy bodies.
+    implicit val deployView = DeployInfo.View.BASIC
+
     val source =
       ConcurrentSubject.publish[Event](OverflowStrategy.DropOld(eventStreamBufferSize))(scheduler)
+
+    def emit(event: Event) =
+      Sync[F].delay(source.onNext(event)).void
+
     new EventStream[F] {
+      import Event._
+
       override def subscribe(request: StreamEventsRequest): Observable[Event] = {
         import Event.Value._
         source.filter {
@@ -51,25 +58,78 @@ object EventStream {
       }
 
       override def blockAdded(blockInfo: BlockInfo): F[Unit] =
-        Sync[F].delay {
-          val event = Event().withBlockAdded(BlockAdded().withBlock(blockInfo))
-          source.onNext(event)
+        emit {
+          Event().withBlockAdded(BlockAdded().withBlock(blockInfo))
+        } >> {
+          val blockHash = blockInfo.getSummary.blockHash
+          DeployStorage[F].reader
+            .getProcessedDeploys(blockHash)
+            .flatMap { deploys =>
+              deploys.traverse { d =>
+                emit {
+                  Event().withDeployProcessed(
+                    DeployProcessed().withBlockHash(blockHash).withDeploy(d)
+                  )
+                }
+              }
+            }
+            .void
         }
 
       override def newLastFinalizedBlock(
           lfb: BlockHash,
           indirectlyFinalized: Set[BlockHash]
       ): F[Unit] =
-        Sync[F].delay {
-          val event = Event().withNewFinalizedBlock(
+        emit {
+          Event().withNewFinalizedBlock(
             NewFinalizedBlock(lfb, indirectlyFinalized.toSeq)
           )
-          source.onNext(event)
+        } >> {
+          (lfb +: indirectlyFinalized.toList).traverse { blockHash =>
+            DeployStorage[F].reader
+              .getProcessedDeploys(blockHash)
+              .flatMap { deploys =>
+                deploys.traverse { d =>
+                  emit {
+                    Event().withDeployFinalized(
+                      DeployFinalized().withBlockHash(blockHash).withDeploy(d)
+                    )
+                  }
+                }
+              }
+          }.void
         }
 
-      override def deployAdded(deploy: Deploy): F[Unit]                              = ???
-      override def deployDiscarded(deployHash: DeployHash, message: String): F[Unit] = ???
-      override def deployRequeued(deployHash: DeployHash): F[Unit]                   = ???
+      override def deployAdded(deploy: Deploy): F[Unit] =
+        emit {
+          Event().withDeployAdded(DeployAdded().withDeploy(deploy))
+        }
+
+      override def deploysDiscarded(deployHashesWithReasons: Seq[(DeployHash, String)]): F[Unit] = {
+        val reasons = deployHashesWithReasons.toMap
+        DeployStorage[F].reader
+          .getByHashes(reasons.keySet)
+          .evalMap { deploy =>
+            emit {
+              Event().withDeployDiscarded(
+                DeployDiscarded().withDeploy(deploy).withMessage(reasons(deploy.deployHash))
+              )
+            }
+          }
+          .compile
+          .drain
+      }
+
+      override def deploysRequeued(deployHashes: Seq[DeployHash]): F[Unit] =
+        DeployStorage[F].reader
+          .getByHashes(deployHashes.toSet)
+          .evalMap { deploy =>
+            emit {
+              Event().withDeployRequeued(DeployRequeued().withDeploy(deploy))
+            }
+          }
+          .compile
+          .drain
     }
   }
 }

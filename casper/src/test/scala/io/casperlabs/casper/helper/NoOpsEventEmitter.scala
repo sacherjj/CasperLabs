@@ -25,9 +25,12 @@ object NoOpsEventEmitter {
           indirectlyFinalized: Set[BlockHash]
       ): F[Unit] = ().pure[F]
 
-      override def deployAdded(deploy: Deploy): F[Unit]                              = ().pure[F]
-      override def deployDiscarded(deployHash: DeployHash, message: String): F[Unit] = ().pure[F]
-      override def deployRequeued(deployHash: DeployHash): F[Unit]                   = ().pure[F]
+      override def deployAdded(deploy: Deploy): F[Unit] =
+        ().pure[F]
+      override def deploysDiscarded(deployHashesWithReasons: Seq[(DeployHash, String)]): F[Unit] =
+        ().pure[F]
+      override def deploysRequeued(deployHashes: Seq[DeployHash]): F[Unit] =
+        ().pure[F]
     }
 }
 
@@ -49,8 +52,11 @@ object TestEventEmitter {
         FinalityStorage[F].markAsFinalized(lfb, indirectlyFinalized) >>
           DeployBuffer.removeFinalizedDeploys[F](indirectlyFinalized + lfb)
 
-      override def deployAdded(deploy: Deploy): F[Unit]                              = ().pure[F]
-      override def deployDiscarded(deployHash: DeployHash, message: String): F[Unit] = ().pure[F]
-      override def deployRequeued(deployHash: DeployHash): F[Unit]                   = ().pure[F]
+      override def deployAdded(deploy: Deploy): F[Unit] =
+        ().pure[F]
+      override def deploysDiscarded(deployHashesWithReasons: Seq[(DeployHash, String)]): F[Unit] =
+        ().pure[F]
+      override def deploysRequeued(deployHashes: Seq[DeployHash]): F[Unit] =
+        ().pure[F]
     }
 }

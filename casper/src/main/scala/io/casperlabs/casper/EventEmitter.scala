@@ -11,8 +11,8 @@ import simulacrum.typeclass
   */
 @typeclass trait DeployEventEmitter[F[_]] {
   def deployAdded(deploy: Deploy): F[Unit]
-  def deployDiscarded(deployHash: DeployHash, message: String): F[Unit]
-  def deployRequeued(deployHash: DeployHash): F[Unit]
+  def deploysDiscarded(deployHashesWithReasons: Seq[(DeployHash, String)]): F[Unit]
+  def deploysRequeued(deployHashes: Seq[DeployHash]): F[Unit]
 }
 
 /** Emit events based on whole blocks. Includes raising events for the deploys embedded in the blocks. */

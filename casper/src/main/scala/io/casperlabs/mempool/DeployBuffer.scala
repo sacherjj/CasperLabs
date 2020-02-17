@@ -130,7 +130,7 @@ object DeployBuffer {
                           ).timer("requeueOrphanedDeploys_filterDeploysNotInPast")
         _ <- DeployStorageWriter[F]
               .markAsPendingByHashes(orphanedDeploys) whenA orphanedDeploys.nonEmpty
-        _ <- orphanedDeploys.toList.traverse(DeployEventEmitter[F].deployRequeued(_))
+        _ <- DeployEventEmitter[F].deploysRequeued(orphanedDeploys)
       } yield orphanedDeploys.toSet
     }
 
@@ -185,8 +185,6 @@ object DeployBuffer {
       _ <- DeployStorageWriter[F]
             .markAsDiscardedByHashes(deploysWithReasons)
             .whenA(deploysWithReasons.nonEmpty)
-      _ <- deploysWithReasons.traverse {
-            case (d, r) => DeployEventEmitter[F].deployDiscarded(d, r)
-          }
+      _ <- DeployEventEmitter[F].deploysDiscarded(deploysWithReasons)
     } yield ()
 }
