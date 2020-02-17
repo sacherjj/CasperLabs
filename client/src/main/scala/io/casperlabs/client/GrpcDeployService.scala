@@ -136,12 +136,41 @@ class GrpcDeployService(conn: ConnectOptions, scheduler: Scheduler)
   def showDeploy(
       hash: String,
       bytesStandard: Boolean,
-      json: Boolean
+      json: Boolean,
+      waitForProcessed: Boolean
   ): Task[Either[Throwable, String]] =
-    casperServiceStub
-      .getDeployInfo(GetDeployInfoRequest(hash, view = DeployInfo.View.BASIC))
-      .map(Printer.print(_, bytesStandard, json))
-      .attempt
+    if (waitForProcessed) {
+
+      def deployInfo: Task[DeployInfo] = {
+        println("deployInfo")
+        casperServiceStub.getDeployInfo(GetDeployInfoRequest(hash, view = DeployInfo.View.BASIC))
+      }
+
+      deployInfo
+        .restartUntil(di => {
+          println(s".restartUntil: $di")
+          println(s"---------------------")
+          di.status match {
+            case Some(state) =>
+              state match {
+                case DeployInfo.Status(DeployInfo.State.PENDING, _)         => false
+                case DeployInfo.Status(DeployInfo.State.DISCARDED, _)       => true
+                case DeployInfo.Status(DeployInfo.State.FINALIZED, _)       => true
+                case DeployInfo.Status(DeployInfo.State.PROCESSED, _)       => true
+                case DeployInfo.Status(DeployInfo.State.UNDEFINED, _)       => true
+                case DeployInfo.Status(DeployInfo.State.Unrecognized(_), _) => true
+              }
+            case None => true
+          }
+        })
+        .map(Printer.print(_, bytesStandard, json))
+        .attempt
+    } else {
+      casperServiceStub
+        .getDeployInfo(GetDeployInfoRequest(hash, view = DeployInfo.View.BASIC))
+        .map(Printer.print(_, bytesStandard, json))
+        .attempt
+    }
 
   def showDeploys(
       hash: String,

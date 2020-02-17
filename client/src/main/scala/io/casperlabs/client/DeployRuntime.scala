@@ -68,9 +68,10 @@ object DeployRuntime {
   def showDeploy[F[_]: Sync: DeployService](
       hash: String,
       bytesStandard: Boolean,
-      json: Boolean
+      json: Boolean,
+      waitForProcessed: Boolean
   ): F[Unit] =
-    gracefulExit(DeployService[F].showDeploy(hash, bytesStandard, json))
+    gracefulExit(DeployService[F].showDeploy(hash, bytesStandard, json, waitForProcessed))
 
   def showBlocks[F[_]: Sync: DeployService](
       depth: Int,

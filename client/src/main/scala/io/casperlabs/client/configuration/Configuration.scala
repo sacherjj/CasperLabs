@@ -177,8 +177,12 @@ final case class ShowBlock(blockHash: String, bytesStandard: Boolean, json: Bool
 final case class ShowDeploys(blockHash: String, bytesStandard: Boolean, json: Boolean)
     extends Configuration
     with Formatting
-final case class ShowDeploy(deployHash: String, bytesStandard: Boolean, json: Boolean)
-    extends Configuration
+final case class ShowDeploy(
+    deployHash: String,
+    bytesStandard: Boolean,
+    json: Boolean,
+    waitForProcessed: Boolean
+) extends Configuration
     with Formatting
 final case class ShowBlocks(depth: Int, bytesStandard: Boolean, json: Boolean)
     extends Configuration
@@ -287,7 +291,8 @@ object Configuration {
         ShowDeploy(
           options.showDeploy.hash(),
           options.showDeploy.bytesStandard(),
-          options.showDeploy.json()
+          options.showDeploy.json(),
+          options.showDeploy.waitForProcessed()
         )
       case options.showBlocks =>
         ShowBlocks(

@@ -52,8 +52,8 @@ object Main {
     configuration match {
       case ShowBlock(hash, bytesStandard, json) =>
         DeployRuntime.showBlock[F](hash, bytesStandard, json)
-      case ShowDeploy(hash, bytesStandard, json) =>
-        DeployRuntime.showDeploy[F](hash, bytesStandard, json)
+      case ShowDeploy(hash, bytesStandard, json, waitForProcessed) =>
+        DeployRuntime.showDeploy[F](hash, bytesStandard, json, waitForProcessed)
       case ShowDeploys(hash, bytesStandard, json) =>
         DeployRuntime.showDeploys[F](hash, bytesStandard, json)
       case ShowBlocks(depth, bytesStandard, json) =>

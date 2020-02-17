@@ -20,7 +20,8 @@ import scala.util.Either
   def showDeploy(
       blockHash: String,
       bytesStandard: Boolean,
-      json: Boolean
+      json: Boolean,
+      waitForProcessed: Boolean
   ): F[Either[Throwable, String]]
   def showBlocks(depth: Int, bytesStandard: Boolean, json: Boolean): F[Either[Throwable, String]]
   def visualizeDag(depth: Int, showJustificationLines: Boolean): F[Either[Throwable, String]]

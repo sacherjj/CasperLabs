@@ -419,6 +419,12 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
         descr = "Value of the deploy hash, base16 encoded.",
         validate = hashCheck
       )
+
+    val waitForProcessed =
+      opt[Boolean](
+        descr = "",
+        default = false.some
+      )
   }
   addSubcommand(showDeploy)
 
