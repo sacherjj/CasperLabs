@@ -52,7 +52,7 @@
     "@improbable-eng/grpc-web": "^0.9.6",
     "@types/google-protobuf": "^3.7.1",
     "blakejs": "^1.1.0",
-    "casperlabs-grpc": "file:../grpc",
+    "casperlabs-grpc": "latest",
     "google-protobuf": "^3.8.0-rc.1",
     "rxjs": "^6.5.3",
     "tweetnacl-ts": "^1.0.3",
