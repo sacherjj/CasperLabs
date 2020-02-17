@@ -21,10 +21,10 @@ type AccountB64 = string;
 export class AuthContainer {
   @observable user: User | null = null;
   @observable accounts: UserAccount[] | null = null;
+  @observable private contracts: Contracts | null = null;
 
   // An account we are creating or importing, while we're configuring it.
   @observable accountForm: NewAccountFormData | ImportAccountFormData | null = null;
-
   @observable selectedAccount: UserAccount | null = null;
 
   // Balance for each public key.
@@ -66,6 +66,7 @@ export class AuthContainer {
   async logout() {
     this.user = null;
     this.accounts = null;
+    this.contracts = null;
     this.balances.clear();
     sessionStorage.clear();
     this.authService.logout();
@@ -83,6 +84,7 @@ export class AuthContainer {
         this.user.sub
       );
       this.accounts = meta.accounts || [];
+      this.contracts = meta.contracts || { vestingContracts: [] };
     }
   }
 
@@ -158,21 +160,41 @@ export class AuthContainer {
     }
   }
 
-  deleteAccount(name: String) {
+  async deleteAccount(name: String) {
     if (window.confirm(`Are you sure you want to delete account '${name}'?`)) {
       this.accounts = this.accounts!.filter(x => x.name !== name);
-      this.errors.capture(this.saveAccounts());
+      await this.errors.capture(this.saveMetaData());
     }
   }
 
   private async addAccount(account: UserAccount) {
     this.accounts!.push(account);
-    await this.errors.capture(this.saveAccounts());
+    await this.errors.capture(this.saveMetaData());
   }
 
-  private async saveAccounts() {
+  public getContracts<K extends keyof Contracts>(key:K): Contracts[K] {
+    if(!this.contracts){
+      this.contracts = {};
+    }
+    return this.contracts[key];
+  }
+
+  public async updateContracts<K extends keyof Contracts>(
+    key: K,
+    f: (oldState: Contracts[K]) => Contracts[K]
+  ) {
+    if (!this.contracts) {
+      this.contracts = {};
+    }
+    let oldState = this.contracts[key];
+    this.contracts[key] = f(oldState);
+    await this.errors.capture(this.saveMetaData());
+  }
+
+  private async saveMetaData() {
     await this.authService.updateUserMetadata(this.user!.sub, {
-      accounts: this.accounts || undefined
+      accounts: this.accounts || undefined,
+      contracts: this.contracts || undefined
     });
   }
 
@@ -256,7 +278,9 @@ export class ImportAccountFormData extends AccountFormData {
       return 'The content of imported file cannot be empty!';
     }
     try {
-      this.key = Keys.Ed25519.parsePublicKey(Keys.Ed25519.readBase64WithPEM(this.fileContent));
+      this.key = Keys.Ed25519.parsePublicKey(
+        Keys.Ed25519.readBase64WithPEM(this.fileContent)
+      );
     } catch (e) {
       return e.message;
     }

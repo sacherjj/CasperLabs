@@ -14,11 +14,21 @@ export const Spinner = (msg: String) => (
 export const Loading = () => Spinner('Loading');
 
 // https://fontawesome.com/icons?d=gallery&q=ground&m=free
-export const Icon = (props: { name: string; color?: string }) => {
+export const Icon = (props: {
+  name: string;
+  color?: string;
+  title?: string;
+}) => {
   const styles = {
     color: props.color
   };
-  return <i className={'fa fa-fw fa-' + props.name} style={styles} />;
+  return (
+    <i
+      className={'fa fa-fw fa-' + props.name}
+      style={styles}
+      title={props.title}
+    />
+  );
 };
 
 export const IconButton = (props: {
@@ -31,7 +41,7 @@ export const IconButton = (props: {
     title={props.title}
     className="link icon-button"
   >
-    <Icon name={props.icon} />
+    <Icon name={props.icon}/>
   </button>
 );
 
@@ -43,11 +53,12 @@ export const Button = (props: {
   onClick: () => void;
   title: string;
   disabled?: boolean;
+  type?: 'primary' | 'danger';
 }) => (
   <button
     type="button"
     onClick={_ => props.onClick()}
-    className="btn btn-primary"
+    className={`btn btn-${props.type || 'primary'}`}
     disabled={props.disabled || false}
   >
     {props.title}
@@ -122,12 +133,16 @@ export const CommandLineHint = (props: { children: any }) => {
     <div className="card shadow mb-3">
       <div className="card-header bg-info">
         <h5 className="card-title font-weight-bold text-white">
-          <Icon name="terminal" />
+          <Icon name="terminal"/>
         </h5>
       </div>
       <div className="card-body">{props.children}</div>
     </div>
   );
+};
+
+export const CLX = (props: {amount: number}) => {
+  return <span>{props.amount.toLocaleString()} CLX</span>
 };
 
 interface PrivateRouteProps extends RouteProps {
@@ -154,10 +169,16 @@ export const Card = (props: {
   title: string;
   children: any;
   footerMessage?: any;
+  refresh?: () => void;
 }) => (
   <div className="card mb-3">
     <div className="card-header">
       <span>{props.title}</span>
+      {props.refresh && (
+        <div className="float-right">
+          <RefreshButton refresh={() => props.refresh!()} />
+        </div>
+      )}
     </div>
     <div className="card-body">{props.children}</div>
     {props.footerMessage && (
