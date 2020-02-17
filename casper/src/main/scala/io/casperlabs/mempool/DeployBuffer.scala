@@ -114,7 +114,7 @@ object DeployBuffer {
   /** If another node proposed a block which orphaned something proposed by this node,
     * and we still have these deploys in the `processedDeploys` buffer then put them
     * back into the `pendingDeploys` so that the `AutoProposer` can pick them up again. */
-  def requeueOrphanedDeploys[F[_]: MonadThrowable: DagStorage: BlockStorage: DeployStorage: Metrics](
+  def requeueOrphanedDeploys[F[_]: MonadThrowable: DagStorage: BlockStorage: DeployStorage: Metrics: EventEmitter](
       tips: Set[BlockHash]
   ): F[Int] =
     Metrics[F].timer("requeueOrphanedDeploys") {
@@ -129,6 +129,7 @@ object DeployBuffer {
                           ).timer("requeueOrphanedDeploys_filterDeploysNotInPast")
         _ <- DeployStorageWriter[F]
               .markAsPendingByHashes(orphanedDeploys) whenA orphanedDeploys.nonEmpty
+        _ <- orphanedDeploys.traverse(EventEmitter[F].deployRequeued(_))
       } yield orphanedDeploys.size
     }
 
