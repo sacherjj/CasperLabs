@@ -124,7 +124,7 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream
           .getUref
           .uref
           .toByteArray
-        purse = account.getPurseId.uref.toByteArray
+        purse = account.getMainPurse.uref.toByteArray
         // This is what EE does when creating local key address.
         hash        = ByteString.copyFrom(Blake2b256.hash(mintPublic ++ purse))
         balanceUref <- getState(Key.Value.Local(Key.Local(hash))).map(_.getKey.getUref.uref)
