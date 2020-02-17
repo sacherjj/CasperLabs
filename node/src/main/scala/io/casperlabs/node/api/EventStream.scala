@@ -48,11 +48,11 @@ object EventStream {
             case Empty                      => false
             case Value.BlockAdded(_)        => request.blockAdded
             case Value.NewFinalizedBlock(_) => request.blockFinalized
-            case Value.DeployAdded(_)       => false
-            case Value.DeployDiscarded(_)   => false
-            case Value.DeployFinalized(_)   => false
-            case Value.DeployProcessed(_)   => false
-            case Value.DeployRequeued(_)    => false
+            case Value.DeployAdded(_)       => request.deployAdded
+            case Value.DeployDiscarded(_)   => request.deployDiscarded
+            case Value.DeployRequeued(_)    => request.deployRequeued
+            case Value.DeployProcessed(_)   => request.deployProcessed
+            case Value.DeployFinalized(_)   => request.deployFinalized
           }
         }
       }

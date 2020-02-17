@@ -181,4 +181,9 @@ message GetLastFinalizedBlockInfoRequest {
 message StreamEventsRequest {
   bool block_added = 1;
   bool block_finalized = 2;
+  bool deploy_added = 3;
+  bool deploy_discarded = 4;
+  bool deploy_requeued = 5;
+  bool deploy_processed = 6;
+  bool deploy_finalized = 7;
 }
