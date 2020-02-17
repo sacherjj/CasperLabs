@@ -1,9 +1,11 @@
 package io.casperlabs.storage.dag
 
+import java.io.Serializable
+
 import cats.{Applicative, Monad}
 import cats.implicits._
 import com.google.protobuf.ByteString
-import io.casperlabs.casper.consensus.{Block, BlockSummary}
+import io.casperlabs.casper.consensus.Block
 import io.casperlabs.casper.consensus.info.BlockInfo
 import io.casperlabs.metrics.Metered
 import io.casperlabs.models.Message
@@ -11,11 +13,25 @@ import io.casperlabs.storage.BlockHash
 import io.casperlabs.storage.dag.DagRepresentation.Validator
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.crypto.codec.Base16
+import simulacrum.typeclass
+
+import scala.util.Try
+import scala.util.Success
+import scala.util.Failure
+import scala.util.control.NoStackTrace
+import cats.Functor
+import com.github.ghik.silencer.silent
 
 trait DagStorage[F[_]] {
 
   /** Doesn't guarantee to return immutable representation. */
   def getRepresentation: F[DagRepresentation[F]]
+
+  def checkpoint(): F[Unit]
+
+  def clear(): F[Unit]
+
+  def close(): F[Unit]
 
   /** Insert a block into the DAG and update the latest messages.
     * In the presence of eras, the block only affects the latest messages
@@ -23,13 +39,11 @@ trait DagStorage[F[_]] {
     * or the tips, the caller needs to look at multiple eras along the tree.
     */
   private[storage] def insert(block: Block): F[DagRepresentation[F]]
-
-  def checkpoint(): F[Unit]
-  def clear(): F[Unit]
-  def close(): F[Unit]
 }
 
 object DagStorage {
+  def apply[F[_]](implicit B: DagStorage[F]): DagStorage[F] = B
+
   trait MeteredDagStorage[F[_]] extends DagStorage[F] with Metered[F] {
 
     abstract override def getRepresentation: F[DagRepresentation[F]] =
@@ -86,8 +100,6 @@ object DagStorage {
     abstract override def latestMessages: F[Map[Validator, Set[Message]]] =
       incAndMeasure("latestMessages", super.latestMessages)
   }
-
-  def apply[F[_]](implicit B: DagStorage[F]): DagStorage[F] = B
 }
 
 trait TipRepresentation[F[_]] {
@@ -117,20 +129,32 @@ trait EraTipRepresentation[F[_]] extends TipRepresentation[F] {
   // * the parent block candidate hashes, and
   // * the justifications of the parent block candidates.
 
-  def getEquivocations(implicit A: Applicative[F]): F[Map[Validator, Set[Message]]] =
-    latestMessages.map(_.filter(_._2.size > 1))
-
   def getEquivocators(implicit A: Applicative[F]): F[Set[Validator]] =
     getEquivocations.map(_.keySet)
+
+  def getEquivocations(implicit A: Applicative[F]): F[Map[Validator, Set[Message]]] =
+    latestMessages.map(_.filter(_._2.size > 1))
 }
 
-trait DagRepresentation[F[_]] {
-  def children(blockHash: BlockHash): F[Set[BlockHash]]
-
-  /** Return blocks that having a specify justification */
-  def justificationToBlocks(blockHash: BlockHash): F[Set[BlockHash]]
+@typeclass trait DagLookup[F[_]] {
   def lookup(blockHash: BlockHash): F[Option[Message]]
   def contains(blockHash: BlockHash): F[Boolean]
+
+  def lookupBlockUnsafe(blockHash: BlockHash)(implicit MT: MonadThrowable[F]): F[Message.Block] =
+    lookupUnsafe(blockHash).flatMap(
+      msg =>
+        Try(msg.asInstanceOf[Message.Block]) match {
+          case Success(value) => MT.pure(value)
+          case Failure(_)     =>
+            // PrettyPrinter is not visible here.
+            val hashEncoded = Base16.encode(blockHash.toByteArray).take(10)
+            MT.raiseError(
+              new Exception(
+                s"$hashEncoded was expected to be a Block but was a Ballot."
+              ) with NoStackTrace
+            )
+        }
+    )
 
   def lookupUnsafe(blockHash: BlockHash)(implicit MT: MonadThrowable[F]): F[Message] =
     lookup(blockHash) flatMap {
@@ -141,6 +165,13 @@ trait DagRepresentation[F[_]] {
         )
       )
     }
+}
+
+trait DagRepresentation[F[_]] extends DagLookup[F] {
+  def children(blockHash: BlockHash): F[Set[BlockHash]]
+
+  /** Return blocks which have a specific block in their justifications. */
+  def justificationToBlocks(blockHash: BlockHash): F[Set[BlockHash]]
 
   /** Return block summaries with ranks in the DAG between start and end, inclusive. */
   def topoSort(
@@ -209,8 +240,21 @@ object DagRepresentation {
     def getEquivocators: F[Set[Validator]] =
       getEquivocations.map(_.keySet)
 
+    // Returns a mapping between equivocators and their messages.
+    def getEquivocations: F[Map[Validator, Set[Message]]] =
+      latestMessages.map(_.filter(_._2.size > 1))
+
+    def latestMessages: F[Map[Validator, Set[Message]]] =
+      dagRepresentation.latestGlobal.flatMap(_.latestMessages)
+
     // NOTE: These extension methods are here so the Naive-Casper codebase doesn't have to do another
     // step (i.e. `.latestGlobal.flatMap { tip => ... }`)  but in Highway we should first specify the era.
+
+    def latestMessagesInEra(keyBlockHash: ByteString): F[Map[Validator, Set[Message]]] =
+      dagRepresentation.latestInEra(keyBlockHash).flatMap(_.latestMessages)
+
+    def getEquivocatorsInEra(keyBlockHash: ByteString): F[Set[Validator]] =
+      dagRepresentation.latestInEra(keyBlockHash).flatMap(_.getEquivocators)
 
     def latestMessageHash(validator: Validator): F[Set[BlockHash]] =
       dagRepresentation.latestGlobal.flatMap(_.latestMessageHash(validator))
@@ -220,13 +264,6 @@ object DagRepresentation {
 
     def latestMessageHashes: F[Map[Validator, Set[BlockHash]]] =
       dagRepresentation.latestGlobal.flatMap(_.latestMessageHashes)
-
-    def latestMessages: F[Map[Validator, Set[Message]]] =
-      dagRepresentation.latestGlobal.flatMap(_.latestMessages)
-
-    // Returns a mapping between equivocators and their messages.
-    def getEquivocations: F[Map[Validator, Set[Message]]] =
-      latestMessages.map(_.filter(_._2.size > 1))
 
     // Returns latest messages from honest validators
     def latestMessagesHonestValidators: F[Map[Validator, Message]] =

@@ -285,7 +285,8 @@ trait BlockGenerator {
       preStateHash: ByteString = ByteString.EMPTY,
       postStateHash: ByteString = ByteString.EMPTY,
       maybeValidatorPrevBlockHash: Option[BlockHash] = None,
-      maybeValidatorBlockSeqNum: Option[Int] = None
+      maybeValidatorBlockSeqNum: Option[Int] = None,
+      keyBlockHash: ByteString = ByteString.EMPTY
   ): F[Block] =
     createAndStoreMessage[F](
       parentsHashList = parents.map(_.blockHash),
@@ -297,6 +298,7 @@ trait BlockGenerator {
       chainName = chainName,
       preStateHash = preStateHash,
       maybeValidatorPrevBlockHash = maybeValidatorPrevBlockHash,
-      maybeValidatorBlockSeqNum = maybeValidatorBlockSeqNum
+      maybeValidatorBlockSeqNum = maybeValidatorBlockSeqNum,
+      keyBlockHash = keyBlockHash
     )
 }

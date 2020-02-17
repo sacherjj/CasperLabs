@@ -29,7 +29,6 @@ import io.casperlabs.shared.Log
 import monix.eval.Task
 import org.scalatest._
 import scala.concurrent.duration._
-import io.casperlabs.casper.util.execengine.ExecutionEngineServiceStub
 import io.casperlabs.storage.dag.DagRepresentation
 
 class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with HighwayFixture {
@@ -71,13 +70,14 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
       implicit db: SQLiteStorage.CombinedStorage[Task]
   ) extends Fixture(
         length = Duration.Zero,
-        printLevel = printLevel,
-        bonds = List(
-          // Our validators needs to be bonded in Genesis, so the blocks created by them don't get rejected.
-          Bond(thisValidator.publicKey).withStake(state.BigInt("10000")),
-          Bond(otherValidator.publicKey).withStake(state.BigInt("5000"))
-        )
+        printLevel = printLevel
       ) {
+
+    override lazy val bonds = List(
+      // Our validators needs to be bonded in Genesis, so the blocks created by them don't get rejected.
+      Bond(thisValidator.publicKey).withStake(state.BigInt("10000")),
+      Bond(otherValidator.publicKey).withStake(state.BigInt("5000"))
+    )
 
     // Make a message producer that's supposed to make valid blocks.
     def makeMessageProducer(keys: AccountKeys): MessageProducer[Task] = {

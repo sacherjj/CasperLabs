@@ -8,10 +8,10 @@ import cats.effect.concurrent.Semaphore
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.{DeployFilters, Estimator, ValidatorIdentity}
 import io.casperlabs.casper.DeploySelection.DeploySelection
-import io.casperlabs.casper.consensus.Block
+import io.casperlabs.casper.consensus.{Block, Era}
 import io.casperlabs.casper.consensus.Block.Justification
 import io.casperlabs.casper.consensus.state.ProtocolVersion
-import io.casperlabs.catscontrib.{MonadThrowable}
+import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.catscontrib.effect.implicits.fiberSyntax
 import io.casperlabs.crypto.Keys.{PublicKey, PublicKeyBS}
 import io.casperlabs.models.Message
@@ -30,6 +30,7 @@ import io.casperlabs.shared.Sorting.byteStringOrdering
 import io.casperlabs.mempool.DeployBuffer
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.ipc
+import io.casperlabs.casper.PrettyPrinter
 
 /** Produce a signed message, persisted message.
   * The producer should the thread safe, so that when it's
@@ -258,8 +259,10 @@ object MessageProducer {
 
     val secondaryCandidates: F[List[BlockHash]] =
       for {
-        latestHashes <- NonEmptyList(mainParent, justifications.values.flatten.toList).pure[F]
-        tips         <- Estimator.tipsOfLatestMessages[F](dag, latestHashes, stopHash = keyBlockHash)
+        latestMessages <- (mainParent +: justifications.values.flatten.toList)
+                           .traverse(dag.lookupUnsafe(_))
+                           .map(NonEmptyList.fromListUnsafe(_))
+        tips         <- Estimator.tipsOfLatestMessages[F](dag, latestMessages, stopHash = keyBlockHash)
         equivocators <- collectEquivocators[F](keyBlockHash)
         // TODO: There are no scores here for ordering secondary parents. Another reason for the fork choice to give these.
         secondaries = tips
@@ -283,21 +286,42 @@ object MessageProducer {
       keyBlockHash: BlockHash
   ): F[Set[ByteString]] =
     for {
+      dag               <- DagStorage[F].getRepresentation
+      keyBlocks         <- collectKeyBlocks[F](keyBlockHash)
+      eraLatestMessages <- DagOperations.latestMessagesInEras[F](dag, keyBlocks)
+      equivocators      = eraLatestMessages.map(_._2.filter(_._2.size > 1)).map(_.keySet).flatten.toSet
+    } yield equivocators
+
+  /** Collects key blocks between an era identified by [[keyBlockHash]] (current era)
+    * and an era in which that key block was created (most probably a grandparent era).
+    */
+  def collectKeyBlocks[F[_]: MonadThrowable: DagStorage: EraStorage](
+      keyBlockHash: BlockHash
+  ): F[List[Message.Block]] =
+    for {
+      eras           <- collectEras[F](keyBlockHash)
+      keyBlockHashes = eras.map(_.keyBlockHash)
+      dag            <- DagStorage[F].getRepresentation
+      keyBlocks      <- keyBlockHashes.traverse(dag.lookupBlockUnsafe(_))
+    } yield keyBlocks
+
+  /** Collects ancestor eras between an era identified by [[keyBlockHash]] (current era)
+    * and an era in which that key block was created (most probably a grandparent era).
+    */
+  def collectEras[F[_]: MonadThrowable: EraStorage: DagStorage](
+      keyBlockHash: BlockHash
+  ): F[List[Era]] =
+    for {
       dag      <- DagStorage[F].getRepresentation
       keyBlock <- dag.lookupUnsafe(keyBlockHash)
-
-      keyBlockHashes <- DagOperations
-                         .bfTraverseF(List(keyBlockHash)) { h =>
-                           EraStorage[F].getEraUnsafe(h).map { e =>
-                             List(e.parentKeyBlockHash).filterNot(_.isEmpty)
-                           }
-                         }
-                         .takeUntil(_ == keyBlock.eraId)
-                         .toList
-
-      equivocatorsPerEra <- keyBlockHashes.traverse { h =>
-                             dag.latestInEra(h) >>= (_.getEquivocators)
-                           }
-      equivocators = equivocatorsPerEra.flatten.toSet
-    } yield equivocators
+      startEra <- EraStorage[F].getEraUnsafe(keyBlockHash)
+      eras <- DagOperations
+               .bfTraverseF(List(startEra)) { era =>
+                 List(era.parentKeyBlockHash)
+                   .filterNot(_.isEmpty) // Don't follow further than Genesis era.
+                   .traverse(EraStorage[F].getEraUnsafe(_))
+               }
+               .takeUntil(_.keyBlockHash == keyBlock.eraId)
+               .toList
+    } yield eras.reverse
 }

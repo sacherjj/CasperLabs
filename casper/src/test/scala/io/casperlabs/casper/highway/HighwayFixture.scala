@@ -1,8 +1,7 @@
 package io.casperlabs.casper.highway
 
-import cats._
 import cats.implicits._
-import cats.effect.{ContextShift, Resource, Sync, Timer}
+import cats.effect.{Resource, Timer}
 import cats.effect.concurrent.Ref
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.helper.StorageFixture
@@ -24,15 +23,16 @@ import io.casperlabs.shared.{Log, LogStub}
 import io.casperlabs.storage.BlockMsgWithTransform
 import java.time.Instant
 import java.util.concurrent.TimeUnit
+
 import monix.catnap.SchedulerEffect
 import monix.eval.Task
-import monix.execution.Scheduler
 import monix.execution.schedulers.TestScheduler
 import scala.concurrent.duration._
 import org.scalatest.Suite
 import io.casperlabs.casper.util.execengine.ExecutionEngineServiceStub
 import io.casperlabs.casper.finality.MultiParentFinalizer
 import io.casperlabs.casper.util.ByteStringPrettifier
+import io.casperlabs.storage.dag.DagStorage
 
 trait HighwayFixture
     extends StorageFixture
@@ -104,18 +104,19 @@ trait HighwayFixture
       val validator: String = "Alice",
       val initRoundExponent: Int = 0,
       val isSyncedRef: Ref[Task, Boolean] = Ref.unsafe(true),
-      // Genesis validators.
-      val bonds: List[Bond] = List(
-        Bond("Alice").withStake(state.BigInt("3000")),
-        Bond("Bob").withStake(state.BigInt("4000")),
-        Bond("Charlie").withStake(state.BigInt("5000"))
-      ),
       printLevel: Log.Level = Log.Level.Error
   )(
       implicit
       timer: Timer[Task],
       db: SQLiteStorage.CombinedStorage[Task]
   ) extends FixtureLike {
+
+    // Genesis validators.
+    def bonds: List[Bond] = List(
+      Bond("Alice").withStake(state.BigInt("3000")),
+      Bond("Bob").withStake(state.BigInt("4000")),
+      Bond("Charlie").withStake(state.BigInt("5000"))
+    )
 
     override val start = conf.genesisEraStart
 
@@ -198,6 +199,39 @@ trait HighwayFixture
           .withBonds(era.bonds)
         db.addEra(childEra).as(childEra)
       }
+
+      def ballot(mp: MessageProducer[Task], parent: BlockHash): Task[BlockHash] =
+        for {
+          dag    <- db.getRepresentation
+          tips   <- dag.latestInEra(era.keyBlockHash)
+          latest <- tips.latestMessages
+          justifications = latest.map {
+            case (v, ms) => PublicKey(v) -> ms.map(_.messageHash)
+          }
+          b <- mp.ballot(
+                era.keyBlockHash,
+                roundId = Ticks(era.startTick),
+                target = parent,
+                justifications = justifications
+              )
+        } yield b.messageHash
+
+      def block(mp: MessageProducer[Task], parent: BlockHash): Task[BlockHash] =
+        for {
+          dag    <- db.getRepresentation
+          tips   <- dag.latestInEra(era.keyBlockHash)
+          latest <- tips.latestMessages
+          justifications = latest.map {
+            case (v, ms) => PublicKey(v) -> ms.map(_.messageHash)
+          }
+          b <- mp.block(
+                era.keyBlockHash,
+                roundId = Ticks(era.startTick),
+                mainParent = parent,
+                justifications = justifications,
+                isBookingBlock = false
+              )
+        } yield b.messageHash
     }
 
     def makeRuntime(era: Era): Task[EraRuntime[Task]] =

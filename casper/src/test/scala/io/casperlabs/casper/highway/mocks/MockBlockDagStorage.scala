@@ -71,7 +71,7 @@ class MockBlockDagStorage[F[_]: Monad](
 }
 
 object MockBlockDagStorage {
-  def apply[F[_]: Sync](blocks: Block*) =
+  def apply[F[_]: Sync](blocks: Block*): F[MockBlockDagStorage[F]] =
     for {
       messagesRef <- Ref.of[F, Map[BlockHash, Message]](Map.empty)
       latestRef <- Ref.of[F, Map[BlockHash, Map[Validator, Message]]](

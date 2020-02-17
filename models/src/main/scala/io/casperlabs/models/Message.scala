@@ -37,6 +37,9 @@ sealed trait Message {
 
   val validatorPrevMessageHash: Id
 
+  def isBlock: Boolean
+  def isBallot: Boolean = !isBlock
+
   def isGenesisLike: Boolean =
     this.parents.isEmpty &&
       this.validatorId.isEmpty &&
@@ -70,6 +73,8 @@ object Message {
     lazy val weightMap: Map[ByteString, Weight] = blockSummary.getHeader.getState.bonds.map {
       case Bond(validatorPk, stake) => validatorPk -> Weight(stake)
     }.toMap
+
+    def isBlock: Boolean = true
   }
 
   case class Ballot private (
@@ -87,6 +92,7 @@ object Message {
       validatorPrevMessageHash: Message#Id
   ) extends Message {
     override val parents: Seq[Id] = Seq(parentBlock)
+    def isBlock: Boolean          = false
   }
 
   def fromBlockSummary(b: consensus.BlockSummary): Try[Message] =

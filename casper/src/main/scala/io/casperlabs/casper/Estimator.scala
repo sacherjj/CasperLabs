@@ -10,7 +10,7 @@ import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.implicits._
 import io.casperlabs.models.{Message, Weight}
-import io.casperlabs.storage.dag.DagRepresentation
+import io.casperlabs.storage.dag.{DagLookup, DagRepresentation}
 import io.casperlabs.shared.{Log, Sorting}
 import Sorting.byteStringOrdering
 
@@ -49,7 +49,7 @@ object Estimator {
       newMainParent <- forkChoiceTip(dag, lfb.messageHash, scores).timer("forkChoiceTip")
       parents <- tipsOfLatestMessages[F](
                   dag,
-                  latestMessages.map(_.messageHash),
+                  latestMessages,
                   lfb.messageHash
                 ).timer("tipsOfLatestMessages")
       secondaryParents = parents.filter(_.messageHash != newMainParent).filterNot { message =>
@@ -69,17 +69,16 @@ object Estimator {
   /** Eliminate any latest message which has a descendant which is a latest message
     * of another validator, because in that case those descendants should be the tips. */
   def tipsOfLatestMessages[F[_]: MonadThrowable](
-      dag: DagRepresentation[F],
-      latestMessages: NonEmptyList[BlockHash],
+      dag: DagLookup[F],
+      latestMessages: NonEmptyList[Message],
       stopHash: BlockHash
   ): F[List[Message]] = {
     // Start from the highest latest messages and traverse backwards
     implicit val ord = DagOperations.blockTopoOrderingDesc
+    val minRank      = latestMessages.map(_.rank).toList.min
     for {
-      latestMessagesMeta <- latestMessages.traverse(dag.lookupUnsafe(_))
-      minRank            = latestMessagesMeta.map(_.rank).toList.min
       tips <- DagOperations
-               .bfToposortTraverseF[F](latestMessagesMeta.toList)(
+               .bfToposortTraverseF[F](latestMessages.toList)(
                  _.parents.toList.traverse(dag.lookupUnsafe(_))
                )
                .takeWhile(_.rank >= minRank)
@@ -87,7 +86,7 @@ object Estimator {
                // We start with the tips and remove any message
                // that is reachable through the parent-child link from other tips.
                // This should leave us only with the tips that cannot be reached from others.
-               .foldLeft(latestMessagesMeta.toList.toSet) {
+               .foldLeft(latestMessages.toList.toSet) {
                  case (tips, message) =>
                    tips.filterNot(msg => message.parents.toSet.contains(msg.messageHash))
                }
