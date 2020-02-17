@@ -3,7 +3,7 @@ package io.casperlabs.mempool
 import cats.implicits._
 import io.casperlabs.casper.DeployFilters.filterDeploysNotInPast
 import io.casperlabs.casper.Estimator.BlockHash
-import io.casperlabs.casper.{DeployFilters, DeployHash, EventEmitter, PrettyPrinter}
+import io.casperlabs.casper.{DeployFilters, DeployHash, PrettyPrinter}
 import io.casperlabs.casper.consensus.Deploy
 import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.casper.validation.Validation
@@ -31,7 +31,7 @@ object DeployBuffer {
   implicit val DeployBufferMetricsSource: Metrics.Source =
     Metrics.Source(Metrics.BaseSource, "deploy_buffer")
 
-  def create[F[_]: MonadThrowable: Log: DeployStorage: EventEmitter](
+  def create[F[_]: MonadThrowable: Log: DeployStorage](
       chainName: String,
       minTtl: FiniteDuration
   ): DeployBuffer[F] =
@@ -69,7 +69,6 @@ object DeployBuffer {
           _ <- validateDeploy(d)
           _ <- Log[F].info(s"Received ${PrettyPrinter.buildString(d) -> "deploy" -> null}")
           _ <- DeployStorageWriter[F].addAsPending(List(d))
-          _ <- EventEmitter[F].deployAdded(d)
         } yield ()).attempt
     }
 
@@ -114,9 +113,9 @@ object DeployBuffer {
   /** If another node proposed a block which orphaned something proposed by this node,
     * and we still have these deploys in the `processedDeploys` buffer then put them
     * back into the `pendingDeploys` so that the `AutoProposer` can pick them up again. */
-  def requeueOrphanedDeploys[F[_]: MonadThrowable: DagStorage: BlockStorage: DeployStorage: Metrics: EventEmitter](
+  def requeueOrphanedDeploys[F[_]: MonadThrowable: DagStorage: BlockStorage: DeployStorage: Metrics](
       tips: Set[BlockHash]
-  ): F[Int] =
+  ): F[Set[DeployHash]] =
     Metrics[F].timer("requeueOrphanedDeploys") {
       for {
         dag <- DagStorage[F].getRepresentation
@@ -129,8 +128,7 @@ object DeployBuffer {
                           ).timer("requeueOrphanedDeploys_filterDeploysNotInPast")
         _ <- DeployStorageWriter[F]
               .markAsPendingByHashes(orphanedDeploys) whenA orphanedDeploys.nonEmpty
-        _ <- orphanedDeploys.traverse(EventEmitter[F].deployRequeued(_))
-      } yield orphanedDeploys.size
+      } yield orphanedDeploys.toSet
     }
 
   /** Remove deploys from the buffer which are included in blocks that are finalized.

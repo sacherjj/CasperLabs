@@ -9,7 +9,6 @@ import io.casperlabs.casper.Estimator.Validator
 import io.casperlabs.casper.MultiParentCasperImpl.Broadcaster
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.consensus._
-import io.casperlabs.casper.helper.NoOpsEventEmitter
 import io.casperlabs.mempool.DeployBuffer
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.models.{ArbitraryConsensus, Weight}
@@ -179,7 +178,6 @@ object AutoProposerTest {
                                                           MockDeployStorage.create[Task]()
                                                         )
         implicit0(emptyRef: MultiParentCasperRef[Task]) = MultiParentCasperRef.unsafe[Task]()
-        implicit0(eventEmitter: EventEmitter[Task])     = NoOpsEventEmitter.create[Task]()
         blockApiLock                                    <- Resource.liftF(Semaphore[Task](1))
         deployBuffer                                    = DeployBuffer.create[Task]("casperlabs", 1.minute)
         proposer <- AutoProposer[Task](

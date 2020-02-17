@@ -60,7 +60,7 @@ final case class CasperState(
 )
 
 @silent("is never used")
-class MultiParentCasperImpl[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: DagStorage: DeployBuffer: ExecutionEngineService: MultiParentFinalizer: DeployStorage: Validation: Fs2Compiler: DeploySelection: CasperLabsProtocol: EventEmitter](
+class MultiParentCasperImpl[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: DagStorage: DeployBuffer: ExecutionEngineService: MultiParentFinalizer: DeployStorage: Validation: Fs2Compiler: DeploySelection: CasperLabsProtocol: EventEmitter: FinalityStorage](
     validatorSemaphoreMap: SemaphoreMap[F, ByteString],
     statelessExecutor: MultiParentCasperImpl.StatelessExecutor[F],
     validatorId: Option[ValidatorIdentity],
@@ -176,10 +176,15 @@ class MultiParentCasperImpl[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: 
                 )
                 val secondaryParentsFinalizedStr =
                   secondary.map(PrettyPrinter.buildString).mkString("{", ", ", "}")
-                Log[F].info(
-                  s"New last finalized block hashes are ${mainParentFinalizedStr -> null}, ${secondaryParentsFinalizedStr -> null}."
-                ) >> lfbRef.set(mainParent) >> EventEmitter[F]
-                  .newLastFinalizedBlock(mainParent, secondary)
+                for {
+                  _ <- Log[F].info(
+                        s"New last finalized block hashes are ${mainParentFinalizedStr -> null}, ${secondaryParentsFinalizedStr -> null}."
+                      )
+                  _ <- lfbRef.set(mainParent)
+                  _ <- FinalityStorage[F].markAsFinalized(mainParent, secondary)
+                  _ <- DeployBuffer.removeFinalizedDeploys[F](secondary + mainParent).forkAndLog
+                  _ <- EventEmitter[F].newLastFinalizedBlock(mainParent, secondary)
+                } yield ()
               }
             }
       } yield ()
@@ -244,6 +249,7 @@ class MultiParentCasperImpl[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: 
           _ <- Log[F].info(
                 s"${parents.size} parents out of ${tipHashes.size} latest blocks will be used."
               )
+
           // Push any unfinalized deploys which are still in the buffer back to pending state if the
           // blocks they were contained have become orphans since we last tried to propose a block.
           // Doing this here rather than after adding blocks because it's quite costly; the downside
@@ -251,10 +257,18 @@ class MultiParentCasperImpl[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: 
           // Requeueing operation is changing status of orphaned deploys in the DB.
           // It's done as a transaction. If operation won't make it in time before
           // immediate `createProposal`, those deploys will be considered for the next block.
-          _ <- (DeployBuffer.requeueOrphanedDeploys[F](merged.parents.map(_.blockHash).toSet) >>= {
-                requeued =>
-                  Log[F].info(s"Re-queued $requeued orphaned deploys.").whenA(requeued > 0)
-              }).forkAndLog
+          _ <- {
+            for {
+              requeued <- DeployBuffer.requeueOrphanedDeploys[F](
+                           merged.parents.map(_.blockHash).toSet
+                         )
+              _ <- Log[F]
+                    .info(s"Re-queued ${requeued.size} orphaned deploys.")
+                    .whenA(requeued.nonEmpty)
+              _ <- requeued.toList.traverse(EventEmitter[F].deployRequeued(_))
+            } yield ()
+          }.forkAndLog
+
           timestamp <- Time[F].currentMillis
           props     <- CreateMessageProps(publicKey, latestMessages, merged)
           remainingHashes <- DeployBuffer.remainingDeploys[F](

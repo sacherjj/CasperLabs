@@ -15,7 +15,11 @@ import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.consensus.info.{BlockInfo, DeployInfo}
 import io.casperlabs.casper.consensus.info.BlockInfo.Status.Stats
 import io.casperlabs.casper.consensus.info.DeployInfo.ProcessingResult
-import io.casperlabs.casper.helper.{GossipServiceCasperTestNodeFactory, HashSetCasperTestNode}
+import io.casperlabs.casper.helper.{
+  GossipServiceCasperTestNodeFactory,
+  HashSetCasperTestNode,
+  NoOpsEventEmitter
+}
 import io.casperlabs.casper.helper.BlockUtil.generateValidator
 import io.casperlabs.casper.util._
 import io.casperlabs.casper.validation.Validation
@@ -52,8 +56,9 @@ class CreateBlockAPITest
   implicit val metrics              = new Metrics.MetricsNOP[Task]
   implicit val raiseValidateErr =
     casper.validation.raiseValidateErrorThroughApplicativeError[Task]
-  implicit val logEff      = LogStub[Task]()
-  implicit val broadcaster = Broadcaster.noop[Task]
+  implicit val logEff       = LogStub[Task]()
+  implicit val broadcaster  = Broadcaster.noop[Task]
+  implicit val eventEmitter = NoOpsEventEmitter.create[Task]()
 
   private val (validatorKeys, validators)             = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
   private val bonds                                   = createBonds(validators)

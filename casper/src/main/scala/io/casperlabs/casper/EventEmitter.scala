@@ -6,6 +6,7 @@ import io.casperlabs.casper.consensus.Deploy
 import io.casperlabs.casper.consensus.Block.ProcessedDeploy
 import simulacrum.typeclass
 
+/** Emit events to be observed by the outside world. */
 @typeclass trait EventEmitter[F[_]] {
   def blockAdded(blockInfo: BlockInfo): F[Unit]
   def newLastFinalizedBlock(

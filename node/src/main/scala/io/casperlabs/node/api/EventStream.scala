@@ -21,15 +21,13 @@ import monix.reactive.{Observable, OverflowStrategy}
 import monix.reactive.subjects.ConcurrentSubject
 import simulacrum.typeclass
 import io.casperlabs.shared.Log
-import io.casperlabs.catscontrib.effect.implicits.fiberSyntax
-import io.casperlabs.storage.dag.FinalityStorage
 
 @typeclass trait EventStream[F[_]] extends EventEmitter[F] {
   def subscribe(request: StreamEventsRequest): Observable[Event]
 }
 
 object EventStream {
-  def create[F[_]: Concurrent: DeployStorage: BlockStorage: FinalityStorage: Log: Metrics](
+  def create[F[_]: Concurrent: DeployStorage: BlockStorage: Log: Metrics](
       scheduler: Scheduler,
       eventStreamBufferSize: Int
   ): EventStream[F] = {
@@ -62,14 +60,12 @@ object EventStream {
           lfb: BlockHash,
           indirectlyFinalized: Set[BlockHash]
       ): F[Unit] =
-        FinalityStorage[F].markAsFinalized(lfb, indirectlyFinalized) >>
-          DeployBuffer.removeFinalizedDeploys(indirectlyFinalized + lfb).forkAndLog >>
-          Sync[F].delay {
-            val event = Event().withNewFinalizedBlock(
-              NewFinalizedBlock(lfb, indirectlyFinalized.toSeq)
-            )
-            source.onNext(event)
-          }
+        Sync[F].delay {
+          val event = Event().withNewFinalizedBlock(
+            NewFinalizedBlock(lfb, indirectlyFinalized.toSeq)
+          )
+          source.onNext(event)
+        }
 
       override def deployAdded(deploy: Deploy): F[Unit]                              = ???
       override def deployDiscarded(deployHash: DeployHash, message: String): F[Unit] = ???

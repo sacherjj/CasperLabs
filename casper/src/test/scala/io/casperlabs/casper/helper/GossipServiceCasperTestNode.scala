@@ -145,8 +145,7 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
 
     initStorage() flatMap {
       case (blockStorage, dagStorage, deployStorage, finalityStorage) =>
-        implicit val ds           = deployStorage
-        implicit val eventEmitter = NoOpsEventEmitter.create[F]()
+        implicit val ds = deployStorage
         for {
           casperState  <- Cell.mvarCell[F, CasperState](CasperState())
           semaphoreMap <- SemaphoreMap[F, ByteString](1)
@@ -245,8 +244,7 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
 
           initStorage() flatMap {
             case (blockStorage, dagStorage, deployStorage, finalityStorage) =>
-              implicit val ds           = deployStorage
-              implicit val eventEmitter = NoOpsEventEmitter.create[F]()
+              implicit val ds = deployStorage
               for {
                 casperState <- Cell.mvarCell[F, CasperState](
                                 CasperState()
