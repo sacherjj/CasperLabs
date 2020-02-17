@@ -3,7 +3,7 @@ package io.casperlabs.mempool
 import cats.implicits._
 import io.casperlabs.casper.DeployFilters.filterDeploysNotInPast
 import io.casperlabs.casper.Estimator.BlockHash
-import io.casperlabs.casper.{DeployFilters, DeployHash, PrettyPrinter}
+import io.casperlabs.casper.{DeployFilters, DeployHash, EventEmitter, PrettyPrinter}
 import io.casperlabs.casper.consensus.Deploy
 import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.casper.validation.Validation
@@ -31,7 +31,7 @@ object DeployBuffer {
   implicit val DeployBufferMetricsSource: Metrics.Source =
     Metrics.Source(Metrics.BaseSource, "deploy_buffer")
 
-  def create[F[_]: MonadThrowable: DeployStorage: Log](
+  def create[F[_]: MonadThrowable: Log: DeployStorage: EventEmitter](
       chainName: String,
       minTtl: FiniteDuration
   ): DeployBuffer[F] =
@@ -67,8 +67,9 @@ object DeployBuffer {
       override def addDeploy(d: Deploy): F[Either[Throwable, Unit]] =
         (for {
           _ <- validateDeploy(d)
-          _ <- DeployStorageWriter[F].addAsPending(List(d))
           _ <- Log[F].info(s"Received ${PrettyPrinter.buildString(d) -> "deploy" -> null}")
+          _ <- DeployStorageWriter[F].addAsPending(List(d))
+          _ <- EventEmitter[F].deployAdded(d)
         } yield ()).attempt
     }
 

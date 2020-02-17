@@ -167,6 +167,14 @@ class NodeRuntime private[node] (
 
       validatorId <- Resource.liftF(ValidatorIdentity.fromConfig[Task](conf.casper))
 
+      implicit0(eventsStream: EventStream[Task]) <- Resource.pure[Task, EventStream[Task]](
+                                                     EventStream
+                                                       .create[Task](
+                                                         ingressScheduler,
+                                                         conf.server.eventStreamBufferSize.value
+                                                       )
+                                                   )
+
       implicit0(deployBuffer: DeployBuffer[Task]) <- Resource.pure[Task, DeployBuffer[Task]](
                                                       DeployBuffer.create[Task](
                                                         chainSpec.getGenesis.name,
@@ -192,14 +200,6 @@ class NodeRuntime private[node] (
       lfb <- Resource.liftF[Task, BlockHash](
               storage.getLastFinalizedBlock
             )
-
-      implicit0(eventsStream: EventStream[Task]) <- Resource.pure[Task, EventStream[Task]](
-                                                     EventStream
-                                                       .create[Task](
-                                                         ingressScheduler,
-                                                         conf.server.eventStreamBufferSize.value
-                                                       )
-                                                   )
 
       implicit0(finalizedBlocksStream: FinalizedBlocksStream[Task]) <- Resource.suspend(
                                                                         FinalizedBlocksStream
