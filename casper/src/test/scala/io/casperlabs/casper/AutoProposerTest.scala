@@ -32,7 +32,7 @@ class AutoProposerTest extends FlatSpec with Matchers with ArbitraryConsensus {
   import AutoProposerTest._
 
   implicit val cc      = ConsensusConfig()
-  implicit val emitter = NoOpsEventEmitter.create[Task]()
+  implicit val emitter = NoOpsEventEmitter.create[Task]
 
   def sampleDeployData = sample(arbitrary[consensus.Deploy])
 

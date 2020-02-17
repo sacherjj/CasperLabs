@@ -65,7 +65,7 @@ class ValidationTest
     with BlockGenerator
     with StorageFixture
     with ArbitraryConsensus {
-  implicit val emitter                                = NoOpsEventEmitter.create[Task]()
+  implicit val emitter                                = NoOpsEventEmitter.create[Task]
   implicit val timeEff                                = new LogicalTime[Task](System.currentTimeMillis)
   override implicit val log: LogIO[Task] with LogStub = LogStub[Task]()
   implicit val raiseValidateErr                       = validation.raiseValidateErrorThroughApplicativeError[Task]

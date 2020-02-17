@@ -58,7 +58,7 @@ class CreateBlockAPITest
     casper.validation.raiseValidateErrorThroughApplicativeError[Task]
   implicit val logEff       = LogStub[Task]()
   implicit val broadcaster  = Broadcaster.noop[Task]
-  implicit val eventEmitter = NoOpsEventEmitter.create[Task]()
+  implicit val eventEmitter = NoOpsEventEmitter.create[Task]
 
   private val (validatorKeys, validators)             = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
   private val bonds                                   = createBonds(validators)

@@ -45,7 +45,7 @@ class ExecEngineUtilTest
   implicit val executionEngineService: ExecutionEngineService[Task] =
     HashSetCasperTestNode.simpleEEApi[Task](Map.empty)
 
-  implicit val emitter = NoOpsEventEmitter.create[Task]()
+  implicit val emitter = NoOpsEventEmitter.create[Task]
 
   "computeBlockCheckpoint" should "compute the final post-state of a chain properly" in withStorage {
     implicit blockStorage => implicit dagStorage => implicit deployStorage => _ =>

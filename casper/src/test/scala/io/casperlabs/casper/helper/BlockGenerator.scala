@@ -30,7 +30,7 @@ import scala.language.higherKinds
 
 object BlockGenerator {
   implicit val timeEff = new LogicalTime[Task]()
-  implicit val emitter = NoOpsEventEmitter.create[Task]()
+  implicit val emitter = NoOpsEventEmitter.create[Task]
 
   def updateChainWithBlockStateUpdate[F[_]: Sync: BlockStorage: IndexedDagStorage: DeployStorage: DeployEventEmitter: ExecutionEngineService: Log: Metrics](
       id: Int

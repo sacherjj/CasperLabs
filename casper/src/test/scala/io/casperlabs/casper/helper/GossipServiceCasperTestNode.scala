@@ -73,7 +73,7 @@ class GossipServiceCasperTestNode[F[_]](
     Broadcaster.fromGossipServices(Some(validatorId), relaying)
   implicit val deploySelection   = DeploySelection.create[F](5 * 1024 * 1024)
   implicit val derivedValidation = DeriveValidation.deriveValidationImpl[F]
-  implicit val eventEmitter      = TestEventEmitter.create[F]
+  implicit val eventEmitter      = NoOpsEventEmitter.create[F]
 
   // `addBlock` called in many ways:
   // - test proposes a block on the node that created it
