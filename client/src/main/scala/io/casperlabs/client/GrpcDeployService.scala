@@ -25,8 +25,13 @@ import io.netty.handler.ssl.util.SimpleTrustManagerFactory
 import javax.net.ssl._
 import monix.eval.Task
 import monix.execution.Scheduler
+import monix.execution.CancelableFuture
+import monix.execution.Scheduler.Implicits.global
 
 import scala.util.Either
+import monix.execution.Cancelable
+import scala.concurrent.duration._
+import scala.concurrent.Await
 
 class GrpcDeployService(conn: ConnectOptions, scheduler: Scheduler)
     extends DeployService[Task]
@@ -141,30 +146,41 @@ class GrpcDeployService(conn: ConnectOptions, scheduler: Scheduler)
   ): Task[Either[Throwable, String]] =
     if (waitForProcessed) {
 
-      def deployInfo: Task[DeployInfo] = {
-        println("deployInfo")
-        casperServiceStub.getDeployInfo(GetDeployInfoRequest(hash, view = DeployInfo.View.BASIC))
+      def deployInfo: DeployInfo = {
+        val future: CancelableFuture[DeployInfo] =
+          casperServiceStub
+            .getDeployInfo(GetDeployInfoRequest(hash, view = DeployInfo.View.BASIC))
+            .runToFuture
+
+        Await.result(future, 5.seconds)
       }
 
-      deployInfo
-        .restartUntil(di => {
-          println(s".restartUntil: $di")
-          println(s"---------------------")
-          di.status match {
-            case Some(state) =>
-              state match {
-                case DeployInfo.Status(DeployInfo.State.PENDING, _)         => false
-                case DeployInfo.Status(DeployInfo.State.DISCARDED, _)       => true
-                case DeployInfo.Status(DeployInfo.State.FINALIZED, _)       => true
-                case DeployInfo.Status(DeployInfo.State.PROCESSED, _)       => true
-                case DeployInfo.Status(DeployInfo.State.UNDEFINED, _)       => true
-                case DeployInfo.Status(DeployInfo.State.Unrecognized(_), _) => true
+      def deployInfos: Stream[DeployInfo] = deployInfo #:: deployInfos
+
+      val loop = Task.eval({
+        deployInfos
+          .find(
+            di =>
+              di.status match {
+                case Some(state) =>
+                  state match {
+                    case DeployInfo.Status(DeployInfo.State.PENDING, _)         => false
+                    case DeployInfo.Status(DeployInfo.State.DISCARDED, _)       => true
+                    case DeployInfo.Status(DeployInfo.State.FINALIZED, _)       => true
+                    case DeployInfo.Status(DeployInfo.State.PROCESSED, _)       => true
+                    case DeployInfo.Status(DeployInfo.State.UNDEFINED, _)       => true
+                    case DeployInfo.Status(DeployInfo.State.Unrecognized(_), _) => true
+                  }
+                case None => true
               }
-            case None => true
-          }
-        })
-        .map(Printer.print(_, bytesStandard, json))
-        .attempt
+          ) match {
+          case Some(di) => Printer.print(di, bytesStandard, json)
+          case None     => throw new RuntimeException("Should not happen.")
+        }
+      })
+
+      loop.attempt
+
     } else {
       casperServiceStub
         .getDeployInfo(GetDeployInfoRequest(hash, view = DeployInfo.View.BASIC))
