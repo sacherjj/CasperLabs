@@ -1,9 +1,10 @@
 package io.casperlabs.mempool
 
+import cats._
 import cats.implicits._
 import io.casperlabs.casper.DeployFilters.filterDeploysNotInPast
 import io.casperlabs.casper.Estimator.BlockHash
-import io.casperlabs.casper.{DeployFilters, DeployHash, PrettyPrinter}
+import io.casperlabs.casper.{DeployEventEmitter, DeployFilters, DeployHash, PrettyPrinter}
 import io.casperlabs.casper.consensus.Deploy
 import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.casper.validation.Validation
@@ -25,13 +26,44 @@ import simulacrum.typeclass
     * Otherwise returns an error.
     */
   def addDeploy(d: Deploy): F[Either[Throwable, Unit]]
+
+  /** Returns deploys that are not present in the p-past-cone of chosen parents. */
+  def remainingDeploys(
+      dag: DagRepresentation[F],
+      parents: Set[BlockHash],
+      timestamp: Long,
+      deployConfig: DeployConfig
+  ): F[Set[DeployHash]]
+
+  /** If another node proposed a block which orphaned something proposed by this node,
+    * and we still have these deploys in the `processedDeploys` buffer then put them
+    * back into the `pendingDeploys` so that the `AutoProposer` can pick them up again. */
+  def requeueOrphanedDeploys(
+      tips: Set[BlockHash]
+  ): F[Set[DeployHash]]
+
+  /** Remove deploys from the buffer which are included in blocks that are finalized.
+    * Those deploys won't be requeued anymore. */
+  def removeFinalizedDeploys(
+      lfbs: Set[BlockHash]
+  ): F[Unit]
+
+  /** Discard deploys and emit the necessary events. */
+  def discardDeploys(
+      deploysWithReasons: List[(DeployHash, String)]
+  ): F[Unit]
+
+  /** Discard deploys that sat in the buffer for too long. */
+  def discardExpiredDeploys(
+      expirationPeriod: FiniteDuration
+  ): F[Unit]
 }
 
 object DeployBuffer {
   implicit val DeployBufferMetricsSource: Metrics.Source =
     Metrics.Source(Metrics.BaseSource, "deploy_buffer")
 
-  def create[F[_]: MonadThrowable: DeployStorage: Log](
+  def create[F[_]: MonadThrowable: Fs2Compiler: Log: Metrics: DeployStorage: BlockStorage: DagStorage: DeployEventEmitter](
       chainName: String,
       minTtl: FiniteDuration
   ): DeployBuffer[F] =
@@ -64,114 +96,128 @@ object DeployBuffer {
         } yield ()
       }
 
-      override def addDeploy(d: Deploy): F[Either[Throwable, Unit]] =
+      override def addDeploy(
+          d: Deploy
+      ): F[Either[Throwable, Unit]] =
         (for {
           _ <- validateDeploy(d)
-          _ <- DeployStorageWriter[F].addAsPending(List(d))
           _ <- Log[F].info(s"Received ${PrettyPrinter.buildString(d) -> "deploy" -> null}")
+          _ <- DeployStorageWriter[F].addAsPending(List(d))
+          _ <- DeployEventEmitter[F].deployAdded(d)
         } yield ()).attempt
+
+      override def remainingDeploys(
+          dag: DagRepresentation[F],
+          parents: Set[BlockHash],
+          timestamp: Long,
+          deployConfig: DeployConfig
+      ): F[Set[DeployHash]] = Metrics[F].timer("remainingDeploys") {
+        // We have re-queued orphan deploys already, so we can just look at pending ones.
+        val earlierPendingDeploys = DeployStorageReader[F].readPendingHashesAndHeaders
+          .through(DeployFilters.Pipes.timestampBefore[F](timestamp))
+          .timer("timestampBeforeFilter")
+        val unexpired = earlierPendingDeploys
+          .through(
+            DeployFilters.Pipes.notExpired[F](timestamp, deployConfig.maxTtlMillis)
+          )
+          .through(DeployFilters.Pipes.validMaxTtl[F](deployConfig.maxTtlMillis))
+          .timer("notExpiredFilter")
+
+        for {
+          // We compile `earlierPendingDeploys` here to avoid a race condition where
+          // the stream may be updated by receiving a new deploy after `unexpired`
+          // has been compiled, causing some deploys to be erroneously marked as DISCARDED.
+          earlierPendingSet <- earlierPendingDeploys.map(_._1).compile.to[Set]
+          unexpiredList     <- unexpired.map(_._1).compile.toList
+          // Make sure pending deploys have never been processed in the past cone of the new parents.
+          validDeploys <- DeployFilters
+                           .filterDeploysNotInPast(dag, parents, unexpiredList)
+                           .map(_.toSet)
+                           .timer("remainingDeploys_filterDeploysNotInPast")
+          // anything with timestamp earlier than now and not included in the valid deploys
+          // can be discarded as a duplicate and/or expired deploy
+          deploysToDiscard = earlierPendingSet diff validDeploys
+          _                <- discardDeploys(deploysToDiscard.toList.map(_ -> "Duplicate or expired"))
+        } yield validDeploys
+      }
+
+      override def requeueOrphanedDeploys(
+          tips: Set[BlockHash]
+      ): F[Set[DeployHash]] =
+        Metrics[F].timer("requeueOrphanedDeploys") {
+          for {
+            dag <- DagStorage[F].getRepresentation
+            // Consider deploys which this node has processed but hasn't finalized yet.
+            processedDeploys <- DeployStorageReader[F].readProcessedHashes
+            orphanedDeploys <- filterDeploysNotInPast[F](
+                                dag,
+                                tips,
+                                processedDeploys
+                              ).timer("requeueOrphanedDeploys_filterDeploysNotInPast")
+            _ <- DeployStorageWriter[F]
+                  .markAsPendingByHashes(orphanedDeploys) whenA orphanedDeploys.nonEmpty
+            _ <- DeployEventEmitter[F].deploysRequeued(orphanedDeploys)
+          } yield orphanedDeploys.toSet
+        }
+
+      override def removeFinalizedDeploys(
+          lfbs: Set[BlockHash]
+      ): F[Unit] = Metrics[F].timer("removeFinalizedDeploys") {
+        for {
+          deployHashes <- DeployStorageReader[F].readProcessedHashes
+
+          blockHashes <- BlockStorage[F]
+                          .findBlockHashesWithDeployHashes(deployHashes)
+                          .map(_.values.flatten.toList.distinct)
+
+          finalizedBlockHashes = blockHashes.filter(lfbs.contains(_))
+          _ <- finalizedBlockHashes.traverse { blockHash =>
+                removeDeploysInBlock(blockHash) flatMap { removed =>
+                  Log[F]
+                    .info(
+                      s"Removed $removed deploys from deploy history as we finalized block ${PrettyPrinter
+                        .buildString(blockHash)}"
+                    )
+                    .whenA(removed > 0L)
+                }
+              }
+        } yield ()
+      }
+
+      /** Remove deploys from the history which are included in a just finalised block. */
+      private def removeDeploysInBlock(
+          blockHash: BlockHash
+      ): F[Long] =
+        for {
+          block           <- ProtoUtil.unsafeGetBlock[F](blockHash)
+          deploysToRemove = block.body.get.deploys.map(_.deploy.get).toList
+          // NOTE: Do we really need this metric? It will make unncessary calls to the DB.
+          initialHistorySize <- DeployStorageReader[F].sizePendingOrProcessed()
+          _                  <- DeployStorageWriter[F].markAsFinalized(deploysToRemove)
+          deploysRemoved <- DeployStorageReader[F]
+                             .sizePendingOrProcessed()
+                             .map(after => initialHistorySize - after)
+        } yield deploysRemoved
+
+      override def discardDeploys(
+          deploysWithReasons: List[(DeployHash, String)]
+      ): F[Unit] =
+        for {
+          _ <- DeployStorageWriter[F]
+                .markAsDiscardedByHashes(deploysWithReasons)
+                .whenA(deploysWithReasons.nonEmpty)
+          _ <- DeployEventEmitter[F].deploysDiscarded(deploysWithReasons)
+        } yield ()
+
+      override def discardExpiredDeploys(
+          expirationPeriod: FiniteDuration
+      ): F[Unit] = {
+        val msg = "TTL Expired"
+        for {
+          discarded <- DeployStorageWriter[F]
+                        .markAsDiscarded(expirationPeriod, msg)
+          _ <- DeployEventEmitter[F].deploysDiscarded(discarded.toList.map(_ -> msg))
+        } yield ()
+      }
     }
-
-  /** Returns deploys that are not present in the p-past-cone of chosen parents. */
-  def remainingDeploys[F[_]: MonadThrowable: BlockStorage: DeployStorage: Metrics: Fs2Compiler](
-      dag: DagRepresentation[F],
-      parents: Set[BlockHash],
-      timestamp: Long,
-      deployConfig: DeployConfig
-  ): F[Set[DeployHash]] = Metrics[F].timer("remainingDeploys") {
-    // We have re-queued orphan deploys already, so we can just look at pending ones.
-    val earlierPendingDeploys = DeployStorageReader[F].readPendingHashesAndHeaders
-      .through(DeployFilters.Pipes.timestampBefore[F](timestamp))
-      .timer("timestampBeforeFilter")
-    val unexpired = earlierPendingDeploys
-      .through(
-        DeployFilters.Pipes.notExpired[F](timestamp, deployConfig.maxTtlMillis)
-      )
-      .through(DeployFilters.Pipes.validMaxTtl[F](deployConfig.maxTtlMillis))
-      .timer("notExpiredFilter")
-
-    for {
-      // We compile `earlierPendingDeploys` here to avoid a race condition where
-      // the stream may be updated by receiving a new deploy after `unexpired`
-      // has been compiled, causing some deploys to be erroneously marked as DISCARDED.
-      earlierPendingSet <- earlierPendingDeploys.map(_._1).compile.to[Set]
-      unexpiredList     <- unexpired.map(_._1).compile.toList
-      // Make sure pending deploys have never been processed in the past cone of the new parents.
-      validDeploys <- DeployFilters
-                       .filterDeploysNotInPast(dag, parents, unexpiredList)
-                       .map(_.toSet)
-                       .timer("remainingDeploys_filterDeploysNotInPast")
-      // anything with timestamp earlier than now and not included in the valid deploys
-      // can be discarded as a duplicate and/or expired deploy
-      deploysToDiscard = earlierPendingSet diff validDeploys
-      _ <- DeployStorageWriter[F]
-            .markAsDiscardedByHashes(deploysToDiscard.toList.map((_, "Duplicate or expired")))
-            .whenA(deploysToDiscard.nonEmpty)
-    } yield validDeploys
-  }
-
-  /** If another node proposed a block which orphaned something proposed by this node,
-    * and we still have these deploys in the `processedDeploys` buffer then put them
-    * back into the `pendingDeploys` so that the `AutoProposer` can pick them up again. */
-  def requeueOrphanedDeploys[F[_]: MonadThrowable: DagStorage: BlockStorage: DeployStorage: Metrics](
-      tips: Set[BlockHash]
-  ): F[Int] =
-    Metrics[F].timer("requeueOrphanedDeploys") {
-      for {
-        dag <- DagStorage[F].getRepresentation
-        // Consider deploys which this node has processed but hasn't finalized yet.
-        processedDeploys <- DeployStorageReader[F].readProcessedHashes
-        orphanedDeploys <- filterDeploysNotInPast[F](
-                            dag,
-                            tips,
-                            processedDeploys
-                          ).timer("requeueOrphanedDeploys_filterDeploysNotInPast")
-        _ <- DeployStorageWriter[F]
-              .markAsPendingByHashes(orphanedDeploys) whenA orphanedDeploys.nonEmpty
-      } yield orphanedDeploys.size
-    }
-
-  /** Remove deploys from the buffer which are included in blocks that are finalized.
-    *
-    * Those deploys won't be requeued anymore.
-    */
-  def removeFinalizedDeploys[F[_]: MonadThrowable: DeployStorage: BlockStorage: Log: Metrics](
-      lfbs: Set[BlockHash]
-  ): F[Unit] = Metrics[F].timer("removeFinalizedDeploys") {
-    for {
-      deployHashes <- DeployStorageReader[F].readProcessedHashes
-
-      blockHashes <- BlockStorage[F]
-                      .findBlockHashesWithDeployHashes(deployHashes)
-                      .map(_.values.flatten.toList.distinct)
-
-      finalizedBlockHashes = blockHashes.filter(lfbs.contains(_))
-      _ <- finalizedBlockHashes.traverse { blockHash =>
-            removeDeploysInBlock[F](blockHash) flatMap { removed =>
-              Log[F]
-                .info(
-                  s"Removed $removed deploys from deploy history as we finalized block ${PrettyPrinter
-                    .buildString(blockHash)}"
-                )
-                .whenA(removed > 0L)
-            }
-          }
-    } yield ()
-  }
-
-  /** Remove deploys from the history which are included in a just finalised block. */
-  private def removeDeploysInBlock[F[_]: MonadThrowable: DeployStorage: BlockStorage](
-      blockHash: BlockHash
-  ): F[Long] =
-    for {
-      block           <- ProtoUtil.unsafeGetBlock[F](blockHash)
-      deploysToRemove = block.body.get.deploys.map(_.deploy.get).toList
-      // NOTE: Do we really need this metric? It will make unncessary calls to the DB.
-      initialHistorySize <- DeployStorageReader[F].sizePendingOrProcessed()
-      _                  <- DeployStorageWriter[F].markAsFinalized(deploysToRemove)
-      deploysRemoved <- DeployStorageReader[F]
-                         .sizePendingOrProcessed()
-                         .map(after => initialHistorySize - after)
-    } yield deploysRemoved
-
 }
