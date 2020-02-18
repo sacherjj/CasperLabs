@@ -10,9 +10,8 @@ use contract::{
     unwrap_or_revert::UnwrapOrRevert,
 };
 use types::{
-    account::{PublicKey, PurseId},
-    system_contract_errors::mint,
-    AccessRights, ApiError, CLValue, ContractRef, Key, URef, U512,
+    account::PublicKey, system_contract_errors::mint, AccessRights, ApiError, CLValue, ContractRef,
+    Key, URef, U512,
 };
 
 const PLACEHOLDER_KEY: Key = Key::Hash([0u8; 32]);
@@ -71,9 +70,9 @@ pub extern "C" fn call() {
 
     // Include PoS purses in its named_keys
     [
-        (POS_BONDING_PURSE, bonding_purse.value()),
-        (POS_PAYMENT_PURSE, payment_purse.value()),
-        (POS_REWARDS_PURSE, rewards_purse.value()),
+        (POS_BONDING_PURSE, bonding_purse),
+        (POS_PAYMENT_PURSE, payment_purse),
+        (POS_REWARDS_PURSE, rewards_purse),
     ]
     .iter()
     .for_each(|(name, uref)| {
@@ -88,8 +87,8 @@ pub extern "C" fn call() {
     runtime::ret(return_value);
 }
 
-fn mint_purse(mint: &ContractRef, amount: U512) -> PurseId {
+fn mint_purse(mint: &ContractRef, amount: U512) -> URef {
     let result: Result<URef, mint::Error> = runtime::call_contract(mint.clone(), ("mint", amount));
 
-    result.map(PurseId::new).unwrap_or_revert()
+    result.unwrap_or_revert()
 }

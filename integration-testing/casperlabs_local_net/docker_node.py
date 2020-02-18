@@ -412,7 +412,7 @@ class DockerNode(LoggingDockerBase):
         session_args = ABI.args(
             [
                 ABI.account("account", to_account.public_key_binary),
-                ABI.u64("amount", amount),
+                ABI.u512("amount", amount),
             ]
         )
 

@@ -82,7 +82,7 @@ fn should_exec_non_stored_code() {
     let default_account = builder
         .get_account(DEFAULT_ACCOUNT_ADDR)
         .expect("should get genesis account");
-    let modified_balance: U512 = builder.get_purse_balance(default_account.purse_id());
+    let modified_balance: U512 = builder.get_purse_balance(default_account.main_purse());
 
     let initial_balance: U512 = U512::from(DEFAULT_ACCOUNT_INITIAL_BALANCE);
 
@@ -144,7 +144,7 @@ fn should_exec_stored_code_by_hash() {
     let gas = result.cost();
     let motes_alpha = Motes::from_gas(gas, CONV_RATE).expect("should have motes");
 
-    let modified_balance_alpha: U512 = builder.get_purse_balance(default_account.purse_id());
+    let modified_balance_alpha: U512 = builder.get_purse_balance(default_account.main_purse());
 
     let account_1_public_key = ACCOUNT_1_ADDR;
     let transferred_amount = 1;
@@ -170,7 +170,7 @@ fn should_exec_stored_code_by_hash() {
 
     builder.exec_commit_finish(exec_request_stored_payment);
 
-    let modified_balance_bravo: U512 = builder.get_purse_balance(default_account.purse_id());
+    let modified_balance_bravo: U512 = builder.get_purse_balance(default_account.main_purse());
 
     let initial_balance: U512 = U512::from(DEFAULT_ACCOUNT_INITIAL_BALANCE);
 
@@ -235,7 +235,7 @@ fn should_exec_stored_code_by_named_hash() {
     let default_account = builder
         .get_account(DEFAULT_ACCOUNT_ADDR)
         .expect("should get genesis account");
-    let modified_balance_alpha: U512 = builder.get_purse_balance(default_account.purse_id());
+    let modified_balance_alpha: U512 = builder.get_purse_balance(default_account.main_purse());
 
     let account_1_public_key = ACCOUNT_1_ADDR;
     let transferred_amount = 1;
@@ -264,7 +264,7 @@ fn should_exec_stored_code_by_named_hash() {
     let default_account = builder
         .get_account(DEFAULT_ACCOUNT_ADDR)
         .expect("should get genesis account");
-    let modified_balance_bravo: U512 = builder.get_purse_balance(default_account.purse_id());
+    let modified_balance_bravo: U512 = builder.get_purse_balance(default_account.main_purse());
 
     let initial_balance: U512 = U512::from(DEFAULT_ACCOUNT_INITIAL_BALANCE);
 
@@ -341,7 +341,7 @@ fn should_exec_stored_code_by_named_uref() {
     let default_account = builder
         .get_account(DEFAULT_ACCOUNT_ADDR)
         .expect("should get genesis account");
-    let modified_balance_alpha: U512 = builder.get_purse_balance(default_account.purse_id());
+    let modified_balance_alpha: U512 = builder.get_purse_balance(default_account.main_purse());
 
     let account_1_public_key = ACCOUNT_1_ADDR;
     let transferred_amount = 1;
@@ -367,7 +367,7 @@ fn should_exec_stored_code_by_named_uref() {
 
     let test_result = builder.exec_commit_finish(exec_request_stored_session);
 
-    let modified_balance_bravo: U512 = builder.get_purse_balance(default_account.purse_id());
+    let modified_balance_bravo: U512 = builder.get_purse_balance(default_account.main_purse());
 
     let initial_balance: U512 = U512::from(DEFAULT_ACCOUNT_INITIAL_BALANCE);
 
@@ -499,7 +499,7 @@ fn should_exec_payment_and_session_stored_code() {
     let default_account = builder
         .get_account(DEFAULT_ACCOUNT_ADDR)
         .expect("should get genesis account");
-    let modified_balance: U512 = builder.get_purse_balance(default_account.purse_id());
+    let modified_balance: U512 = builder.get_purse_balance(default_account.main_purse());
 
     let initial_balance: U512 = U512::from(DEFAULT_ACCOUNT_INITIAL_BALANCE);
 
@@ -800,7 +800,7 @@ fn should_have_equivalent_transforms_with_stored_contract_pointers() {
                 Transform::Write(StoredValue::Account(ra)),
             ) => {
                 assert_eq!(la.pub_key(), ra.pub_key());
-                assert_eq!(la.purse_id(), ra.purse_id());
+                assert_eq!(la.main_purse(), ra.main_purse());
                 assert_eq!(la.action_thresholds(), ra.action_thresholds());
 
                 assert!(Iterator::eq(

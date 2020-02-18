@@ -29,7 +29,7 @@ fn should_run_main_purse_contract_default_account() {
     let exec_request = ExecuteRequestBuilder::standard(
         DEFAULT_ACCOUNT_ADDR,
         CONTRACT_MAIN_PURSE,
-        (default_account.purse_id(),),
+        (default_account.main_purse(),),
     )
     .build();
 
@@ -61,7 +61,7 @@ fn should_run_main_purse_contract_account_1() {
     let exec_request_2 = ExecuteRequestBuilder::standard(
         ACCOUNT_1_ADDR,
         CONTRACT_MAIN_PURSE,
-        (account_1.purse_id(),),
+        (account_1.main_purse(),),
     )
     .build();
 

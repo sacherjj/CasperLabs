@@ -8,7 +8,7 @@ import CLValueSerializationTest.arbCLValue
 
 class CLValueSerializationTest extends FlatSpec with Matchers with PropertyChecks {
   "CLValues" should "serialize properly" in forAll { (v: CLValue) =>
-    roundTrip(v)
+    roundTrip(v, CLValue.deserializer)
   }
 }
 

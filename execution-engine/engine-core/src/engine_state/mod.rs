@@ -37,11 +37,8 @@ use engine_storage::{
 };
 use engine_wasm_prep::{wasm_costs::WasmCosts, Preprocessor};
 use types::{
-    account::{PublicKey, PurseId},
-    bytesrepr::ToBytes,
-    system_contract_errors::mint,
-    AccessRights, BlockTime, Key, Phase, ProtocolVersion, URef, KEY_HASH_LENGTH, U512,
-    UREF_ADDR_LENGTH,
+    account::PublicKey, bytesrepr::ToBytes, system_contract_errors::mint, AccessRights, BlockTime,
+    Key, Phase, ProtocolVersion, URef, KEY_HASH_LENGTH, U512, UREF_ADDR_LENGTH,
 };
 
 use self::{
@@ -143,7 +140,7 @@ where
         // Spec #3: Create "virtual system account" object.
         let virtual_system_account = {
             let named_keys = BTreeMap::new();
-            let purse = PurseId::new(URef::new(Default::default(), AccessRights::READ_ADD_WRITE));
+            let purse = URef::new(Default::default(), AccessRights::READ_ADD_WRITE);
             Account::create(SYSTEM_ACCOUNT_ADDR, named_keys, purse)
         };
 
@@ -390,9 +387,12 @@ where
                 // ...and write that account to global state...
                 let key = Key::Account(account_public_key);
                 let value = {
-                    let account_main_purse = mint_result?;
-                    let purse_id = PurseId::new(account_main_purse);
-                    StoredValue::Account(Account::create(account_public_key, named_keys, purse_id))
+                    let main_purse = mint_result?;
+                    StoredValue::Account(Account::create(
+                        account_public_key,
+                        named_keys,
+                        main_purse,
+                    ))
                 };
 
                 tracking_copy_write.borrow_mut().write(key, value);
@@ -596,9 +596,9 @@ where
             None => return Ok(QueryResult::RootNotFound),
         };
 
-        let mut mut_tracking_copy = tracking_copy.borrow_mut();
+        let tracking_copy = tracking_copy.borrow();
 
-        Ok(mut_tracking_copy
+        Ok(tracking_copy
             .query(correlation_id, query_request.key(), query_request.path())
             .map_err(|err| Error::Exec(err.into()))?
             .into())
@@ -915,7 +915,7 @@ where
         // Get account main purse balance key
         // validation_spec_5: account main purse minimum balance
         let account_main_purse_balance_key: Key = {
-            let account_key = Key::URef(account.purse_id().value());
+            let account_key = Key::URef(account.main_purse());
             match tracking_copy.borrow_mut().get_purse_balance_key(
                 correlation_id,
                 mint_reference,
@@ -951,7 +951,7 @@ where
         let system_account = Account::new(
             SYSTEM_ACCOUNT_ADDR,
             Default::default(),
-            PurseId::new(URef::new(Default::default(), AccessRights::READ_ADD_WRITE)),
+            URef::new(Default::default(), AccessRights::READ_ADD_WRITE),
             Default::default(),
             Default::default(),
         );

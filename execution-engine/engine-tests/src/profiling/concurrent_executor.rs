@@ -11,7 +11,6 @@ use std::{
     time::{Duration, Instant},
 };
 
-use base16;
 use clap::{crate_version, App, Arg};
 use crossbeam_channel::{Iter, Receiver, Sender};
 use grpc::{ClientStubExt, RequestOptions};

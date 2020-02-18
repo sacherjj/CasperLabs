@@ -15,10 +15,6 @@ object ByteArray32 {
       b.bytes.toArray
   }
 
-  implicit val fromBytes: FromBytes[ByteArray32] = new FromBytes[ByteArray32] {
-    override def fromBytes(bytes: BytesView): Either[FromBytes.Error, (ByteArray32, BytesView)] =
-      FromBytes.safeTake(32, bytes).map {
-        case (array, tail) => (new ByteArray32(array.toArray), tail)
-      }
-  }
+  val deserializer: FromBytes.Deserializer[ByteArray32] =
+    FromBytes.take(32).map(view => new ByteArray32(view.toArray))
 }

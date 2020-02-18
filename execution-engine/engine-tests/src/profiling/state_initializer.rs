@@ -4,7 +4,6 @@
 
 use std::{env, path::PathBuf};
 
-use base16;
 use clap::{crate_version, App};
 
 use engine_test_support::{

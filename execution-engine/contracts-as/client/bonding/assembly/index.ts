@@ -1,10 +1,10 @@
 import * as CL from "../../../../contract-as/assembly";
 import {Error, ErrorCode, PosErrorCode} from "../../../../contract-as/assembly/error";
-import {PurseId} from "../../../../contract-as/assembly/purseid";
 import {U512} from "../../../../contract-as/assembly/bignum";
 import {CLValue} from "../../../../contract-as/assembly/clvalue";
 import {Key} from "../../../../contract-as/assembly/key";
 import {getMainPurse} from "../../../../contract-as/assembly/account";
+import {createPurse, transferFromPurseToPurse} from "../../../../contract-as/assembly/purse";
 
 const POS_ACTION = "bond";
 
@@ -21,7 +21,7 @@ export function call(): void {
         return;
     }
 
-    let bondingPurse = PurseId.create();
+    let bondingPurse = createPurse();
     if (bondingPurse === null) {
         Error.fromErrorCode(ErrorCode.PurseNotCreated).revert();
         return;
@@ -41,8 +41,9 @@ export function call(): void {
 
     let amount = amountResult.value;
 
-    let ret = mainPurse.transferToPurse(
-        <PurseId>(bondingPurse),
+    let ret = transferFromPurseToPurse(
+        mainPurse,
+        bondingPurse,
         amount,
     );
     if (ret > 0) {
@@ -50,7 +51,7 @@ export function call(): void {
         return;
     }
 
-    let bondingPurseValue = CLValue.fromURef(bondingPurse.asURef());
+    let bondingPurseValue = CLValue.fromURef(bondingPurse);
     let key = Key.fromURef(proofOfStake);
     let args: CLValue[] = [
         CLValue.fromString(POS_ACTION),

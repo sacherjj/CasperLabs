@@ -10,15 +10,9 @@ object URef {
       ToBytes.toBytes(u.address) ++ ToBytes.toBytes(u.accessRights)
   }
 
-  implicit val fromBytesURef: FromBytes[URef] = new FromBytes[URef] {
-    override def fromBytes(bytes: BytesView): Either[FromBytes.Error, (URef, BytesView)] =
-      for {
-        (address, tail)     <- FromBytes[ByteArray32].fromBytes(bytes)
-        (accessRights, rem) <- FromBytes[Option[AccessRights]].fromBytes(tail)
-      } yield URef(address, accessRights) -> rem
-  }
-
-  implicit val clTypedURef: CLTyped[URef] = new CLTyped[URef] {
-    override def clType: CLType = CLType.URef
-  }
+  val deserializer: FromBytes.Deserializer[URef] =
+    for {
+      address      <- ByteArray32.deserializer
+      accessRights <- FromBytes.option(AccessRights.deserializer)
+    } yield URef(address, accessRights)
 }

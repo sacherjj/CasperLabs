@@ -4,7 +4,7 @@ use contract::{
     contract_api::{runtime, system},
     unwrap_or_revert::UnwrapOrRevert,
 };
-use types::{account::PurseId, system_contract_errors::mint, ApiError, URef, U512};
+use types::{system_contract_errors::mint, ApiError, URef, U512};
 
 #[repr(u16)]
 enum Error {
@@ -12,12 +12,8 @@ enum Error {
     BalanceMismatch,
 }
 
-fn mint_purse(amount: U512) -> Result<PurseId, mint::Error> {
-    let mint = system::get_mint();
-
-    let result: Result<URef, mint::Error> = runtime::call_contract(mint, ("mint", amount));
-
-    result.map(PurseId::new)
+fn mint_purse(amount: U512) -> Result<URef, mint::Error> {
+    runtime::call_contract(system::get_mint(), ("mint", amount))
 }
 
 #[no_mangle]

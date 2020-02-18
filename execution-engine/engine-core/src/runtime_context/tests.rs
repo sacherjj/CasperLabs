@@ -22,8 +22,7 @@ use engine_storage::global_state::{
 };
 use types::{
     account::{
-        ActionType, AddKeyFailure, PublicKey, PurseId, RemoveKeyFailure, SetThresholdFailure,
-        Weight,
+        ActionType, AddKeyFailure, PublicKey, RemoveKeyFailure, SetThresholdFailure, Weight,
     },
     AccessRights, BlockTime, CLValue, Key, Phase, ProtocolVersion, URef, KEY_LOCAL_SEED_LENGTH,
 };
@@ -62,12 +61,12 @@ fn mock_tc(init_key: Key, init_account: Account) -> TrackingCopy<InMemoryGlobalS
     TrackingCopy::new(reader)
 }
 
-fn mock_account_with_purse_id(public_key: PublicKey, purse_id: [u8; 32]) -> (Key, Account) {
+fn mock_account_with_purse(public_key: PublicKey, purse: [u8; 32]) -> (Key, Account) {
     let associated_keys = AssociatedKeys::new(public_key, Weight::new(1));
     let account = Account::new(
         public_key,
         BTreeMap::new(),
-        PurseId::new(URef::new(purse_id, AccessRights::READ_ADD_WRITE)),
+        URef::new(purse, AccessRights::READ_ADD_WRITE),
         associated_keys,
         Default::default(),
     );
@@ -77,7 +76,7 @@ fn mock_account_with_purse_id(public_key: PublicKey, purse_id: [u8; 32]) -> (Key
 }
 
 fn mock_account(public_key: PublicKey) -> (Key, Account) {
-    mock_account_with_purse_id(public_key, [0; 32])
+    mock_account_with_purse(public_key, [0; 32])
 }
 
 // create random account key.
@@ -923,37 +922,37 @@ fn remove_uref_works() {
 }
 
 #[test]
-fn validate_valid_purse_id_of_an_account() {
-    // Tests that URef which matches a purse_id of a given context gets validated
-    let mock_purse_id = [42u8; 32];
+fn validate_valid_purse_of_an_account() {
+    // Tests that URef which matches a purse of a given context gets validated
+    let mock_purse = [42u8; 32];
     let named_keys = HashMap::new();
     let base_acc_addr = [0u8; 32];
     let base_acc = PublicKey::new(base_acc_addr);
     let deploy_hash = [1u8; 32];
-    let (key, account) = mock_account_with_purse_id(base_acc, mock_purse_id);
+    let (key, account) = mock_account_with_purse(base_acc, mock_purse);
     let address_generator = AddressGenerator::new(deploy_hash, Phase::Session);
     let mut uref_map = BTreeMap::new();
     let runtime_context =
         mock_runtime_context(&account, key, &mut uref_map, named_keys, address_generator);
 
-    // URef that has the same id as purse_id of an account gets validated
+    // URef that has the same id as purse of an account gets validated
     // successfully.
-    let purse_id = URef::new(mock_purse_id, AccessRights::READ_ADD_WRITE);
-    assert!(runtime_context.validate_uref(&purse_id).is_ok());
+    let purse = URef::new(mock_purse, AccessRights::READ_ADD_WRITE);
+    assert!(runtime_context.validate_uref(&purse).is_ok());
 
-    // URef that has the same id as purse_id of an account gets validated
+    // URef that has the same id as purse of an account gets validated
     // successfully as the passed purse has only subset of the privileges
-    let purse_id = URef::new(mock_purse_id, AccessRights::READ);
-    assert!(runtime_context.validate_uref(&purse_id).is_ok());
-    let purse_id = URef::new(mock_purse_id, AccessRights::ADD);
-    assert!(runtime_context.validate_uref(&purse_id).is_ok());
-    let purse_id = URef::new(mock_purse_id, AccessRights::WRITE);
-    assert!(runtime_context.validate_uref(&purse_id).is_ok());
+    let purse = URef::new(mock_purse, AccessRights::READ);
+    assert!(runtime_context.validate_uref(&purse).is_ok());
+    let purse = URef::new(mock_purse, AccessRights::ADD);
+    assert!(runtime_context.validate_uref(&purse).is_ok());
+    let purse = URef::new(mock_purse, AccessRights::WRITE);
+    assert!(runtime_context.validate_uref(&purse).is_ok());
 
-    // Purse ID that doesn't match account's purse_id should fail as it's also not
+    // Purse ID that doesn't match account's purse should fail as it's also not
     // in known urefs.
-    let purse_id = URef::new([53; 32], AccessRights::READ_ADD_WRITE);
-    assert!(runtime_context.validate_uref(&purse_id).is_err());
+    let purse = URef::new([53; 32], AccessRights::READ_ADD_WRITE);
+    assert!(runtime_context.validate_uref(&purse).is_err());
 }
 
 #[test]

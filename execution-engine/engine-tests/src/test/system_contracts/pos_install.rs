@@ -7,10 +7,7 @@ use engine_test_support::{
     },
     DEFAULT_ACCOUNT_ADDR,
 };
-use types::{
-    account::{PublicKey, PurseId},
-    AccessRights, Key, URef, U512,
-};
+use types::{account::PublicKey, AccessRights, Key, URef, U512};
 
 const CONTRACT_TRANSFER_TO_ACCOUNT: &str = "transfer_to_account_u512.wasm";
 const TRANSFER_AMOUNT: u64 = 250_000_000 + 1000;
@@ -96,10 +93,9 @@ fn should_run_pos_install_contract() {
     assert_eq!(rewards_purse_balance, U512::zero());
 }
 
-fn get_purse(named_keys: &BTreeMap<String, Key>, name: &str) -> Option<PurseId> {
+fn get_purse(named_keys: &BTreeMap<String, Key>, name: &str) -> Option<URef> {
     named_keys
         .get(name)
-        .and_then(Key::as_uref)
-        .cloned()
-        .map(PurseId::new)
+        .expect("should have named key")
+        .into_uref()
 }

@@ -2,10 +2,7 @@ use num_traits::identities::Zero;
 
 use engine_core::engine_state::genesis::{GenesisAccount, GenesisConfig};
 use engine_shared::motes::Motes;
-use types::{
-    account::{PublicKey, PurseId},
-    AccessRights, Key, URef, U512,
-};
+use types::{account::PublicKey, AccessRights, Key, URef, U512};
 
 use crate::{
     internal::{InMemoryWasmTestBuilder, DEFAULT_GENESIS_CONFIG},
@@ -42,10 +39,10 @@ impl TestContext {
 
     /// Gets the balance of the purse under the given [`URefAddr`].
     ///
-    /// Note that this requires performing an earlier query to retrieve `purse_id_addr`.
-    pub fn get_balance(&self, purse_id_addr: URefAddr) -> U512 {
-        let purse_id = PurseId::new(URef::new(purse_id_addr, AccessRights::READ));
-        self.inner.get_purse_balance(purse_id)
+    /// Note that this requires performing an earlier query to retrieve `purse_addr`.
+    pub fn get_balance(&self, purse_addr: URefAddr) -> U512 {
+        let purse = URef::new(purse_addr, AccessRights::READ);
+        self.inner.get_purse_balance(purse)
     }
 }
 

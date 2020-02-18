@@ -1,8 +1,20 @@
-pub mod ipc;
-pub mod ipc_grpc;
+include!(concat!(
+    env!("OUT_DIR"),
+    "/../../../../generated_protobuf/ipc.rs"
+));
+include!(concat!(
+    env!("OUT_DIR"),
+    "/../../../../generated_protobuf/ipc_grpc.rs"
+));
+include!(concat!(
+    env!("OUT_DIR"),
+    "/../../../../generated_protobuf/state.rs"
+));
+include!(concat!(
+    env!("OUT_DIR"),
+    "/../../../../generated_protobuf/transforms.rs"
+));
 pub mod mappings;
-pub mod state;
-pub mod transforms;
 
 use std::{
     collections::BTreeMap,
@@ -109,11 +121,10 @@ where
                 }
                 result
             }
-            Ok(QueryResult::ValueNotFound(full_path)) => {
-                let log_message = format!("Value not found: {:?}", full_path);
-                logging::log_warning(&log_message);
+            Ok(QueryResult::ValueNotFound(msg)) => {
+                logging::log_warning(&msg);
                 let mut result = ipc::QueryResponse::new();
-                result.set_failure(log_message);
+                result.set_failure(msg);
                 result
             }
             Ok(QueryResult::RootNotFound) => {
@@ -121,6 +132,12 @@ where
                 logging::log_error(log_message);
                 let mut result = ipc::QueryResponse::new();
                 result.set_failure(log_message.to_string());
+                result
+            }
+            Ok(QueryResult::CircularReference(msg)) => {
+                logging::log_warning(&msg);
+                let mut result = ipc::QueryResponse::new();
+                result.set_failure(msg);
                 result
             }
             Err(err) => {

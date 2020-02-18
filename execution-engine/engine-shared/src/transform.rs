@@ -299,10 +299,7 @@ pub mod gens {
 mod tests {
     use num::{Bounded, Num};
 
-    use types::{
-        account::{PublicKey, PurseId},
-        AccessRights, ProtocolVersion, URef, U128, U256, U512,
-    };
+    use types::{account::PublicKey, AccessRights, ProtocolVersion, URef, U128, U256, U512};
 
     use super::*;
     use crate::{
@@ -445,7 +442,7 @@ mod tests {
         let account = StoredValue::Account(Account::new(
             ZERO_PUBLIC_KEY,
             BTreeMap::new(),
-            PurseId::new(uref),
+            uref,
             AssociatedKeys::default(),
             ActionThresholds::default(),
         ));

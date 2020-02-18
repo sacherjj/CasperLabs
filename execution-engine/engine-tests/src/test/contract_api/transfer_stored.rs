@@ -49,7 +49,7 @@ fn should_transfer_to_account_stored() {
     let gas = result.cost();
     let motes_alpha = Motes::from_gas(gas, CONV_RATE).expect("should have motes");
 
-    let modified_balance_alpha: U512 = builder.get_purse_balance(default_account.purse_id());
+    let modified_balance_alpha: U512 = builder.get_purse_balance(default_account.main_purse());
 
     let transferred_amount: u64 = 1;
     let payment_purse_amount = 10_000_000;
@@ -72,7 +72,7 @@ fn should_transfer_to_account_stored() {
 
     builder.exec_commit_finish(exec_request);
 
-    let modified_balance_bravo: U512 = builder.get_purse_balance(default_account.purse_id());
+    let modified_balance_bravo: U512 = builder.get_purse_balance(default_account.main_purse());
 
     let initial_balance: U512 = U512::from(DEFAULT_ACCOUNT_INITIAL_BALANCE);
 

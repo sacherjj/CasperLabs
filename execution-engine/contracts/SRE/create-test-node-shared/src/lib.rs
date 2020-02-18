@@ -1,7 +1,5 @@
 #![no_std]
 
-use base16;
-
 use contract::{
     contract_api::{runtime, system},
     unwrap_or_revert::UnwrapOrRevert,

@@ -9,7 +9,6 @@
 
 use std::{env, io, path::PathBuf};
 
-use base16;
 use clap::{crate_version, App, Arg};
 
 use engine_core::engine_state::EngineConfig;

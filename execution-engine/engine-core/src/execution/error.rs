@@ -1,7 +1,6 @@
 use core::fmt;
 
 use parity_wasm::elements;
-use wasmi;
 
 use engine_shared::TypeMismatch;
 use types::{
@@ -47,6 +46,7 @@ pub enum Error {
     },
     CLValue(CLValueError),
     HostBufferEmpty,
+    UnsupportedWasmStart,
 }
 
 impl fmt::Display for Error {

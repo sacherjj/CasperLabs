@@ -5,7 +5,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use types::{
     account::{
-        ActionType, AddKeyFailure, PublicKey, PurseId, RemoveKeyFailure, SetThresholdFailure,
+        ActionType, AddKeyFailure, PublicKey, RemoveKeyFailure, SetThresholdFailure,
         UpdateKeyFailure, Weight, PUBLIC_KEY_SERIALIZED_LENGTH, WEIGHT_SERIALIZED_LENGTH,
     },
     bytesrepr::{Error, FromBytes, ToBytes, U32_SERIALIZED_LENGTH, U8_SERIALIZED_LENGTH},
@@ -19,7 +19,7 @@ pub use associated_keys::AssociatedKeys;
 pub struct Account {
     public_key: PublicKey,
     named_keys: BTreeMap<String, Key>,
-    purse_id: PurseId,
+    main_purse: URef,
     associated_keys: AssociatedKeys,
     action_thresholds: ActionThresholds,
 }
@@ -28,30 +28,26 @@ impl Account {
     pub fn new(
         public_key: PublicKey,
         named_keys: BTreeMap<String, Key>,
-        purse_id: PurseId,
+        main_purse: URef,
         associated_keys: AssociatedKeys,
         action_thresholds: ActionThresholds,
     ) -> Self {
         Account {
             public_key,
             named_keys,
-            purse_id,
+            main_purse,
             associated_keys,
             action_thresholds,
         }
     }
 
-    pub fn create(
-        account: PublicKey,
-        named_keys: BTreeMap<String, Key>,
-        purse_id: PurseId,
-    ) -> Self {
+    pub fn create(account: PublicKey, named_keys: BTreeMap<String, Key>, main_purse: URef) -> Self {
         let associated_keys = AssociatedKeys::new(account, Weight::new(1));
         let action_thresholds: ActionThresholds = Default::default();
         Account::new(
             account,
             named_keys,
-            purse_id,
+            main_purse,
             associated_keys,
             action_thresholds,
         )
@@ -73,15 +69,13 @@ impl Account {
         self.public_key
     }
 
-    pub fn purse_id(&self) -> PurseId {
-        self.purse_id
+    pub fn main_purse(&self) -> URef {
+        self.main_purse
     }
 
-    /// Returns an [`AccessRights::ADD`]-only version of the [`PurseId`].
-    pub fn purse_id_add_only(&self) -> PurseId {
-        let purse_id_uref = self.purse_id.value();
-        let add_only_uref = URef::new(purse_id_uref.addr(), AccessRights::ADD);
-        PurseId::new(add_only_uref)
+    /// Returns an [`AccessRights::ADD`]-only version of the [`URef`].
+    pub fn main_purse_add_only(&self) -> URef {
+        URef::new(self.main_purse.addr(), AccessRights::ADD)
     }
 
     pub fn get_associated_keys(&self) -> impl Iterator<Item = (&PublicKey, &Weight)> {
@@ -213,10 +207,10 @@ impl ToBytes for Account {
             + U32_SERIALIZED_LENGTH;
         let named_keys_size =
             Key::serialized_size_hint() * self.named_keys.len() + U32_SERIALIZED_LENGTH;
-        let purse_id_size = Key::serialized_size_hint();
+        let purse_size = Key::serialized_size_hint();
         let serialized_account_size = PUBLIC_KEY_SERIALIZED_LENGTH // pub key
             + named_keys_size
-            + purse_id_size
+            + purse_size
             + associated_keys_size
             + action_thresholds_size;
         if serialized_account_size >= u32::max_value() as usize {
@@ -225,7 +219,7 @@ impl ToBytes for Account {
         let mut result: Vec<u8> = Vec::with_capacity(serialized_account_size);
         result.extend(&self.public_key.to_bytes()?);
         result.append(&mut self.named_keys.to_bytes()?);
-        result.append(&mut self.purse_id.value().to_bytes()?);
+        result.append(&mut self.main_purse.to_bytes()?);
         result.append(&mut self.associated_keys.to_bytes()?);
         result.append(&mut self.action_thresholds.to_bytes()?);
         Ok(result)
@@ -236,15 +230,14 @@ impl FromBytes for Account {
     fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
         let (public_key, rem): (PublicKey, &[u8]) = FromBytes::from_bytes(bytes)?;
         let (named_keys, rem): (BTreeMap<String, Key>, &[u8]) = FromBytes::from_bytes(rem)?;
-        let (purse_id, rem): (URef, &[u8]) = FromBytes::from_bytes(rem)?;
+        let (main_purse, rem): (URef, &[u8]) = FromBytes::from_bytes(rem)?;
         let (associated_keys, rem): (AssociatedKeys, &[u8]) = FromBytes::from_bytes(rem)?;
         let (action_thresholds, rem): (ActionThresholds, &[u8]) = FromBytes::from_bytes(rem)?;
-        let purse_id = PurseId::new(purse_id);
         Ok((
             Account {
                 public_key,
                 named_keys,
-                purse_id,
+                main_purse,
                 associated_keys,
                 action_thresholds,
             },
@@ -270,16 +263,15 @@ pub mod gens {
         pub fn account_arb()(
             pub_key in public_key_arb(),
             urefs in named_keys_arb(3),
-            purse_id in uref_arb(),
+            purse in uref_arb(),
             thresholds in action_thresholds_arb(),
             mut associated_keys in associated_keys_arb(MAX_ASSOCIATED_KEYS - 1),
         ) -> Account {
-                let purse_id = PurseId::new(purse_id);
                 associated_keys.add_key(pub_key, Weight::new(1)).unwrap();
                 Account::new(
                     pub_key,
                     urefs,
-                    purse_id,
+                    purse,
                     associated_keys,
                     thresholds,
                 )
@@ -312,8 +304,7 @@ mod tests {
 
     use types::{
         account::{
-            ActionType, PublicKey, PurseId, RemoveKeyFailure, SetThresholdFailure,
-            UpdateKeyFailure, Weight,
+            ActionType, PublicKey, RemoveKeyFailure, SetThresholdFailure, UpdateKeyFailure, Weight,
         },
         AccessRights, URef,
     };
@@ -337,7 +328,7 @@ mod tests {
         let account = Account::new(
             PublicKey::new([0u8; 32]),
             BTreeMap::new(),
-            PurseId::new(URef::new([0u8; 32], AccessRights::READ_ADD_WRITE)),
+            URef::new([0u8; 32], AccessRights::READ_ADD_WRITE),
             keys,
             // deploy: 33 (3*11)
             ActionThresholds::new(Weight::new(33), Weight::new(48))
@@ -383,7 +374,7 @@ mod tests {
         let account = Account::new(
             PublicKey::new([0u8; 32]),
             BTreeMap::new(),
-            PurseId::new(URef::new([0u8; 32], AccessRights::READ_ADD_WRITE)),
+            URef::new([0u8; 32], AccessRights::READ_ADD_WRITE),
             associated_keys,
             // deploy: 33 (3*11)
             ActionThresholds::new(Weight::new(33), Weight::new(48))
@@ -427,7 +418,7 @@ mod tests {
         let account = Account::new(
             PublicKey::new([0u8; 32]),
             BTreeMap::new(),
-            PurseId::new(URef::new([0u8; 32], AccessRights::READ_ADD_WRITE)),
+            URef::new([0u8; 32], AccessRights::READ_ADD_WRITE),
             associated_keys,
             // deploy: 33 (3*11)
             ActionThresholds::new(Weight::new(11), Weight::new(33))
@@ -475,7 +466,7 @@ mod tests {
         let mut account = Account::new(
             PublicKey::new([0u8; 32]),
             BTreeMap::new(),
-            PurseId::new(URef::new([0u8; 32], AccessRights::READ_ADD_WRITE)),
+            URef::new([0u8; 32], AccessRights::READ_ADD_WRITE),
             associated_keys,
             // deploy: 33 (3*11)
             ActionThresholds::new(Weight::new(33), Weight::new(48))
@@ -515,7 +506,7 @@ mod tests {
         let mut account = Account::new(
             PublicKey::new([0u8; 32]),
             BTreeMap::new(),
-            PurseId::new(URef::new([0u8; 32], AccessRights::READ_ADD_WRITE)),
+            URef::new([0u8; 32], AccessRights::READ_ADD_WRITE),
             associated_keys,
             // deploy: 33 (3*11)
             ActionThresholds::new(Weight::new(1 + 2 + 3 + 4), Weight::new(1 + 2 + 3 + 4 + 5))
@@ -557,7 +548,7 @@ mod tests {
         let mut account = Account::new(
             identity_key,
             BTreeMap::new(),
-            PurseId::new(URef::new([0u8; 32], AccessRights::READ_ADD_WRITE)),
+            URef::new([0u8; 32], AccessRights::READ_ADD_WRITE),
             associated_keys,
             // deploy: 33 (3*11)
             ActionThresholds::new(deployment_threshold, key_management_threshold)
@@ -615,7 +606,7 @@ mod tests {
         let mut account = Account::new(
             identity_key,
             BTreeMap::new(),
-            PurseId::new(URef::new([0u8; 32], AccessRights::READ_ADD_WRITE)),
+            URef::new([0u8; 32], AccessRights::READ_ADD_WRITE),
             associated_keys,
             ActionThresholds::new(Weight::new(1), Weight::new(254))
                 .expect("should create thresholds"),
@@ -650,7 +641,7 @@ mod tests {
         let mut account = Account::new(
             identity_key,
             BTreeMap::new(),
-            PurseId::new(URef::new([0u8; 32], AccessRights::READ_ADD_WRITE)),
+            URef::new([0u8; 32], AccessRights::READ_ADD_WRITE),
             associated_keys,
             ActionThresholds::new(deployment_threshold, key_management_threshold)
                 .expect("should create thresholds"),

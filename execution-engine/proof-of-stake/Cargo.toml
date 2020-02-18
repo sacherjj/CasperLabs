@@ -8,4 +8,4 @@ edition = "2018"
 std = []
 
 [dependencies]
-types = { version = "0.1.0", path = "../types", package = "casperlabs-types" }
+types = { path = "../types", package = "casperlabs-types" }

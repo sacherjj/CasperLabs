@@ -7,7 +7,7 @@ import SerializationTest.roundTrip
 class SerializationTest extends FlatSpec with Matchers with PropertyChecks {
 
   "Booleans" should "serialize properly" in forAll { (b: Boolean) =>
-    roundTrip(b)
+    roundTrip(b, FromBytes.bool)
   }
 
   it should "follow the ABI spec" in {
@@ -19,7 +19,7 @@ class SerializationTest extends FlatSpec with Matchers with PropertyChecks {
   }
 
   "Bytes" should "serialize properly" in forAll { (b: Byte) =>
-    roundTrip(b)
+    roundTrip(b, FromBytes.byte)
   }
 
   it should "follow the ABI spec" in {
@@ -30,7 +30,7 @@ class SerializationTest extends FlatSpec with Matchers with PropertyChecks {
   }
 
   "Integers" should "serialize properly" in forAll { (i: Int) =>
-    roundTrip(i)
+    roundTrip(i, FromBytes.int)
   }
 
   it should "follow the ABI spec" in {
@@ -45,7 +45,7 @@ class SerializationTest extends FlatSpec with Matchers with PropertyChecks {
   }
 
   "Long integers" should "serialize properly" in forAll { (i: Long) =>
-    roundTrip(i)
+    roundTrip(i, FromBytes.long)
   }
 
   it should "follow the ABI spec" in {
@@ -63,7 +63,7 @@ class SerializationTest extends FlatSpec with Matchers with PropertyChecks {
   }
 
   "BigInt" should "serialize properly" in forAll { (i: BigInt) =>
-    whenever(i > 0) { roundTrip(i) }
+    whenever(i > 0) { roundTrip(i, FromBytes.bigInt) }
   }
 
   it should "follow the ABI spec" in {
@@ -81,7 +81,7 @@ class SerializationTest extends FlatSpec with Matchers with PropertyChecks {
   }
 
   "Unit" should "serialize properly" in {
-    roundTrip(())
+    roundTrip((), FromBytes.unit)
   }
 
   it should "follow the ABI spec" in {
@@ -91,7 +91,7 @@ class SerializationTest extends FlatSpec with Matchers with PropertyChecks {
   }
 
   "Strings" should "serialize properly" in forAll { (s: String) =>
-    roundTrip(s)
+    roundTrip(s, FromBytes.string)
   }
 
   it should "follow the ABI spec" in {
@@ -105,7 +105,7 @@ class SerializationTest extends FlatSpec with Matchers with PropertyChecks {
   }
 
   "Optional values" should "serialize properly" in forAll { (o: Option[Int]) =>
-    roundTrip(o)
+    roundTrip(o, FromBytes.option(FromBytes.int))
   }
 
   it should "follow the ABI spec" in {
@@ -120,7 +120,7 @@ class SerializationTest extends FlatSpec with Matchers with PropertyChecks {
   }
 
   "Lists of values" should "serialize properly" in forAll { (s: Seq[Option[Long]]) =>
-    roundTrip(s)
+    roundTrip(s, FromBytes.seq(FromBytes.option(FromBytes.long)))
   }
 
   it should "follow the ABI spec" in {
@@ -150,7 +150,7 @@ class SerializationTest extends FlatSpec with Matchers with PropertyChecks {
   }
 
   "Either values" should "serialize properly" in forAll { (e: Either[Byte, Option[String]]) =>
-    roundTrip(e)
+    roundTrip(e, FromBytes.either(FromBytes.byte, FromBytes.option(FromBytes.string)))
   }
 
   it should "follow the ABI spec" in {
@@ -172,7 +172,7 @@ class SerializationTest extends FlatSpec with Matchers with PropertyChecks {
   }
 
   "Maps of values" should "serialize properly" in forAll { (m: Map[String, Int]) =>
-    roundTrip(m)
+    roundTrip(m, FromBytes.map(FromBytes.string, FromBytes.int))
   }
 
   it should "follow the ABI spec" in {
@@ -211,7 +211,7 @@ class SerializationTest extends FlatSpec with Matchers with PropertyChecks {
   }
 
   "Single element tuples" should "serialize properly" in forAll { t: Tuple1[Int] =>
-    roundTrip(t)
+    roundTrip(t, FromBytes.tuple1(FromBytes.int))
   }
 
   it should "follow the ABI spec" in {
@@ -224,7 +224,7 @@ class SerializationTest extends FlatSpec with Matchers with PropertyChecks {
   }
 
   "Pairs of values" should "serialize properly" in forAll { (p: (Long, List[Byte])) =>
-    roundTrip[(Long, Seq[Byte])](p)
+    roundTrip[(Long, Seq[Byte])](p, FromBytes.tuple2(FromBytes.long, FromBytes.seq(FromBytes.byte)))
   }
 
   it should "follow the ABI spec" in {
@@ -242,7 +242,7 @@ class SerializationTest extends FlatSpec with Matchers with PropertyChecks {
   }
 
   "Triples of values" should "serialize properly" in forAll { (t: (Int, String, Long)) =>
-    roundTrip(t)
+    roundTrip(t, FromBytes.tuple3(FromBytes.int, FromBytes.string, FromBytes.long))
   }
 
   it should "follow the ABI spec" in {
@@ -263,6 +263,6 @@ class SerializationTest extends FlatSpec with Matchers with PropertyChecks {
 }
 
 object SerializationTest extends Matchers {
-  def roundTrip[T: ToBytes: FromBytes](t: T) =
-    FromBytes.deserialize(ToBytes[T].toBytes(t)) shouldBe Right(t)
+  def roundTrip[T: ToBytes](t: T, des: FromBytes.Deserializer[T]) =
+    FromBytes.deserialize(des, ToBytes[T].toBytes(t)) shouldBe Right(t)
 }

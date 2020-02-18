@@ -8,7 +8,7 @@ import ContractSerializationTest.arbContract
 
 class ContractSerializationTest extends FlatSpec with Matchers with PropertyChecks {
   "Contracts" should "serialize properly" in forAll { (c: Contract) =>
-    roundTrip(c)
+    roundTrip(c, Contract.deserializer)
   }
 }
 

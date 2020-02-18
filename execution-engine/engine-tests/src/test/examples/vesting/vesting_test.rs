@@ -5,11 +5,7 @@ use engine_shared::motes::Motes;
 use engine_test_support::internal::{
     utils, ExecuteRequestBuilder, InMemoryWasmTestBuilder as TestBuilder, DEFAULT_GENESIS_CONFIG,
 };
-use types::{
-    account::{PublicKey, PurseId},
-    bytesrepr::FromBytes,
-    CLTyped, CLValue, Key, U512,
-};
+use types::{account::PublicKey, bytesrepr::FromBytes, CLTyped, CLValue, Key, U512};
 
 const TRANFER_TO_ACCOUNT_WASM: &str = "transfer_to_account_u512.wasm";
 const VESTING_CONTRACT_WASM: &str = "vesting_smart_contract.wasm";
@@ -232,21 +228,21 @@ impl VestingTest {
             .query(None, Key::Hash(self.get_vesting_hash()), &[])
             .expect("should have token contract.");
 
-        let purse_uref = token_contract_value
+        let purse = token_contract_value
             .as_contract()
             .unwrap()
             .named_keys()
             .get(key::PURSE_NAME)
             .unwrap()
-            .as_uref()
+            .into_uref()
             .unwrap();
-        let contract_balance = self.builder.get_purse_balance(PurseId::new(*purse_uref));
+        let contract_balance = self.builder.get_purse_balance(purse);
         assert_eq!(&contract_balance, expected);
         self
     }
 
     pub fn assert_clx_account_balance_no_gas(self, account: PublicKey, expected: U512) -> Self {
-        let account_purse = self.builder.get_account(account).unwrap().purse_id();
+        let account_purse = self.builder.get_account(account).unwrap().main_purse();
         let mut account_balance = self.builder.get_purse_balance(account_purse);
         let last_deploy_index = self.builder.get_exec_responses_count();
         let execution_costs = (0..last_deploy_index)

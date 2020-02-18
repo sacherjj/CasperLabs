@@ -8,7 +8,7 @@ import * as fs from 'fs';
 import { Message } from 'google-protobuf';
 import * as nacl from 'tweetnacl-ts';
 import { ByteArray } from '../index';
-import { Args, BigIntValue, BytesValue, LongValue } from './Args';
+import { Args, BigIntValue, BytesValue } from './Args';
 
 // https://www.npmjs.com/package/tweetnacl-ts
 // https://github.com/dcposch/blakejs
@@ -107,7 +107,7 @@ export class Transfer {
   ): Deploy.Arg[] {
     return Args(
       ['account', BytesValue(accountPublicKey)],
-      ['amount', LongValue(amount)]
+      ['amount', BigIntValue(amount)]
     );
   }
 }
