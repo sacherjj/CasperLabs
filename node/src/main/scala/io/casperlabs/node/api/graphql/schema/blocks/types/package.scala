@@ -233,8 +233,14 @@ class GraphQLBlockTypes[F[_]: MonadThrowable
         Field(
           "rank",
           LongType,
-          "Amount of hops needed to reach a genesis from the block".some,
+          "Amount of hops needed to reach a genesis from the block. Based on block's justifications".some,
           resolve = c => c.value._1.getSummary.jRank
+        ),
+        Field(
+          "pRank",
+          LongType,
+          "Block height along the main-tree in the DAGA. Based on the block's main parent.".some,
+          resolve = c => c.value._1.getSummary.pRank
         ),
         Field(
           "validatorPublicKey",
