@@ -13,6 +13,7 @@ import io.casperlabs.casper.helper.{
   BlockGenerator,
   DeployOps,
   HashSetCasperTestNode,
+  NoOpsEventEmitter,
   StorageFixture
 }
 import io.casperlabs.casper.helper.DeployOps.ChangeDeployOps
@@ -36,6 +37,7 @@ import io.casperlabs.crypto.Keys.PrivateKey
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
 import io.casperlabs.ipc.ChainSpec.DeployConfig
+import io.casperlabs.mempool.DeployBuffer
 import io.casperlabs.models.ArbitraryConsensus
 import io.casperlabs.models.BlockImplicits.BlockOps
 import io.casperlabs.p2p.EffectsTestInstances.LogicalTime
@@ -64,6 +66,7 @@ class ValidationTest
     with BlockGenerator
     with StorageFixture
     with ArbitraryConsensus {
+  implicit val emitter                                = NoOpsEventEmitter.create[Task]
   implicit val timeEff                                = new LogicalTime[Task](System.currentTimeMillis)
   override implicit val log: LogIO[Task] with LogStub = LogStub[Task]()
   implicit val raiseValidateErr                       = validation.raiseValidateErrorThroughApplicativeError[Task]
@@ -1290,6 +1293,9 @@ class ValidationTest
       implicit val deploySelection: DeploySelection[Task] = DeploySelection.create[Task](
         5 * 1024 * 1024
       )
+
+      implicit val deployBuffer = DeployBuffer.create[Task]("casperlabs", Duration.Zero)
+
       for {
         _ <- deployStorage.writer.addAsPending(deploys.toList)
         deploysCheckpoint <- ExecEngineUtil.computeDeploysCheckpoint[Task](
