@@ -7,7 +7,6 @@ import io.casperlabs.casper.consensus.Deploy
 import io.casperlabs.comm.ServiceError.InvalidArgument
 import pbdirect._
 import io.casperlabs.node.{ByteStringReader, ByteStringWriter}
-
 import scala.util.{Failure, Success, Try}
 
 trait Pagination {
@@ -77,12 +76,16 @@ object DeployInfoPagination extends Pagination {
   /**
     * Compute the nextPageToken and prevPageToken.
     *
-    * If `deploys` is not empty, then the `nextPageToken` can be generated from the last element of `deploys`,
-    * and the `prevPageToken` can generate from the first element of `deploys`.
+    * If `deploys` is not empty,
+    *   then the `nextPageToken` can be generated from the last element of `deploys`,
+    *     and the `prevPageToken` can generate from the first element of `deploys`.
     *
-    * If `deploys` is empty and we are fetching the next page, then the `prevPageToken` should be the MAX_CURSOR,
-    * and nextPageToken is "", to indicate there is no more elements, else if we are fetching the previous page,
-    * then the prevPageToken should be "", and nextPageToken should be the MIN_CURSOR.
+    * If `deploys` is empty and we are fetching the next page,
+    *   then the `prevPageToken` should be the MAX_CURSOR, and nextPageToken is "",
+    *     to indicate there is no more elements.
+    * Else if we are fetching the previous page,
+    *   then the prevPageToken should be "",
+    *     and nextPageToken should be the MIN_CURSOR.
     */
   def createNextAndPrePageToken(
       deploys: List[Deploy],
