@@ -95,7 +95,7 @@ object MessageProducer {
             chainName,
             timestamp,
             props.jRank,
-            props.pRank,
+            props.mainRank,
             validatorIdentity.publicKey,
             validatorIdentity.privateKey,
             validatorIdentity.signatureAlgorithm,
@@ -165,7 +165,7 @@ object MessageProducer {
             chainName,
             timestamp,
             props.jRank,
-            props.pRank,
+            props.mainRank,
             validatorIdentity.publicKey,
             validatorIdentity.privateKey,
             validatorIdentity.signatureAlgorithm,
@@ -225,14 +225,14 @@ object MessageProducer {
 
           // Genesis is for example not part of the justifications, so to be safe include parents too.
           jRank           = ProtoUtil.nextJRank(parents ++ justificationMessages)
-          pRank           = parents.head.pRank + 1
+          mainRank        = parents.head.mainRank + 1
           config          <- CasperLabsProtocol[F].configAt(jRank)
           protocolVersion <- CasperLabsProtocol[F].versionAt(jRank)
         } yield MessageProps(
           validatorSeqNum,
           validatorPrevBlockHash,
           jRank,
-          pRank,
+          mainRank,
           config,
           protocolVersion,
           ProtoUtil.toJustification(justificationMessages)
@@ -243,7 +243,7 @@ object MessageProducer {
       validatorSeqNum: Int,
       validatorPrevBlockHash: BlockHash,
       jRank: Long,
-      pRank: Long,
+      mainRank: Long,
       configuration: Config,
       protocolVersion: ProtocolVersion,
       justifications: Seq[Justification]

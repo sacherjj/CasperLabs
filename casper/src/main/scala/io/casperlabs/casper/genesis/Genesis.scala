@@ -80,7 +80,7 @@ object Genesis {
         justifications = Nil,
         state = state,
         jRank = 0,
-        pRank = 0,
+        mainRank = 0,
         validatorSeqNum = 0,
         validatorPrevBlockHash = ByteString.EMPTY,
         protocolVersion = genesisConfig.getProtocolVersion,

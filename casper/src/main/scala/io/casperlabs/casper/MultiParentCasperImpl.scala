@@ -309,7 +309,7 @@ class MultiParentCasperImpl[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: 
       justifications: Seq[Justification],
       parents: Seq[BlockHash],
       jRank: Long,
-      pRank: Long,
+      mainRank: Long,
       protocolVersion: ProtocolVersion,
       configuration: Config,
       validatorSeqNum: Int,
@@ -345,14 +345,14 @@ class MultiParentCasperImpl[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: 
                     .map(_.toSet | bondedLatestMsgs.values.flatten.toSet)
                     .map(set => ProtoUtil.nextJRank(set.toList))
                 )
-        pRank           = merged.parents.head.getHeader.pRank + 1
+        mainRank        = merged.parents.head.getHeader.mainRank + 1
         config          <- CasperLabsProtocol[F].configAt(jRank)
         protocolVersion <- CasperLabsProtocol[F].versionAt(jRank)
       } yield CreateMessageProps(
         justifications,
         merged.parents.map(_.blockHash).toSeq,
         jRank,
-        pRank,
+        mainRank,
         protocolVersion,
         config,
         validatorSeqNum,
@@ -409,7 +409,7 @@ class MultiParentCasperImpl[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: 
                          chainName,
                          timestamp,
                          props.jRank,
-                         props.pRank,
+                         props.mainRank,
                          validatorId,
                          privateKey,
                          sigAlgorithm,
@@ -460,7 +460,7 @@ class MultiParentCasperImpl[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: 
         chainName,
         now,
         props.jRank,
-        props.pRank,
+        props.mainRank,
         validatorId,
         privateKey,
         sigAlgorithm,

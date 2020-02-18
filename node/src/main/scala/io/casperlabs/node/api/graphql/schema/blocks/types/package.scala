@@ -237,10 +237,10 @@ class GraphQLBlockTypes[F[_]: MonadThrowable
           resolve = c => c.value._1.getSummary.jRank
         ),
         Field(
-          "pRank",
+          "mainRank",
           LongType,
           "Block height along the main-tree in the DAGA. Based on the block's main parent.".some,
-          resolve = c => c.value._1.getSummary.pRank
+          resolve = c => c.value._1.getSummary.mainRank
         ),
         Field(
           "validatorPublicKey",

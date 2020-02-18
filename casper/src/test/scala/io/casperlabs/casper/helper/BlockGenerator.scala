@@ -190,8 +190,8 @@ trait BlockGenerator {
                   .flatTraverse(_.toList.traverse(dag.lookup(_)))
                   .map(_.flatten)
                   .map(ProtoUtil.nextJRank(_))
-      pRank <- if (parentsHashList.isEmpty) 0L.pure[F] // Genesis
-              else dag.lookupBlockUnsafe(parentsHashList.head).map(_.pRank + 1)
+      mainRank <- if (parentsHashList.isEmpty) 0L.pure[F] // Genesis
+                 else dag.lookupBlockUnsafe(parentsHashList.head).map(_.mainRank + 1)
       header = ProtoUtil
         .blockHeader(
           body,
@@ -200,7 +200,7 @@ trait BlockGenerator {
           serializedJustifications,
           postState,
           jRank,
-          pRank,
+          mainRank,
           validatorSeqNum,
           validatorPrevBlockHash,
           protocolVersion = ProtocolVersion(1),

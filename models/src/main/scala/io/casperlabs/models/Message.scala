@@ -23,7 +23,7 @@ sealed trait Message {
   val validatorId: ByteString
   val timestamp: Long
   val jRank: Long
-  val pRank: Long
+  val mainRank: Long
   val parentBlock: Id
   val justifications: Seq[consensus.Block.Justification]
   val validatorMsgSeqNum: Int
@@ -57,7 +57,7 @@ object Message {
       parentBlock: Message#Id,
       justifications: Seq[consensus.Block.Justification],
       jRank: Long,
-      pRank: Long,
+      mainRank: Long,
       validatorMsgSeqNum: Int,
       signature: consensus.Signature,
       blockSummary: BlockSummary,
@@ -88,7 +88,7 @@ object Message {
       parentBlock: Message#Id,
       justifications: Seq[consensus.Block.Justification],
       jRank: Long,
-      pRank: Long,
+      mainRank: Long,
       validatorMsgSeqNum: Int,
       signature: consensus.Signature,
       blockSummary: BlockSummary,
@@ -109,7 +109,7 @@ object Message {
       val validatorId        = header.validatorPublicKey
       val justifications     = header.justifications
       val jRank              = header.jRank
-      val pRank              = header.pRank
+      val mainRank           = header.mainRank
       val validatorMsgSeqNum = header.validatorBlockSeqNum
       val role               = header.messageType
       val signature          = b.getSignature
@@ -127,7 +127,7 @@ object Message {
               parentBlock,
               justifications,
               jRank,
-              pRank,
+              mainRank,
               validatorMsgSeqNum,
               signature,
               b,
@@ -145,7 +145,7 @@ object Message {
               parentBlock,
               justifications,
               jRank,
-              pRank,
+              mainRank,
               validatorMsgSeqNum,
               signature,
               b,

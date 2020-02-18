@@ -75,7 +75,7 @@ class ScoresSpec extends FlatSpec with Matchers {
     assert(nestedScoresMap.totalWeight == scores.sum)
   }
 
-  def createBlock(validator: ByteString, parentHash: ByteString, rank: Int): Block =
+  def createBlock(validator: ByteString, parentHash: ByteString, mainRank: Int): Block =
     Block()
       .withBlockHash(randomBlockHash)
       .update(
@@ -83,7 +83,7 @@ class ScoresSpec extends FlatSpec with Matchers {
           .Header()
           .withValidatorPublicKey(validator)
           .withParentHashes(Seq(parentHash))
-          .withPRank(rank.toLong)
+          .withMainRank(mainRank.toLong)
       )
 
   val validatorA = randomBlockHash
@@ -105,7 +105,7 @@ class ScoresSpec extends FlatSpec with Matchers {
         blockStore                      <- MockBlockDagStorage[Task](startBlock +: blocks: _*)
         implicit0(dag: DagLookup[Task]) <- blockStore.getRepresentation
         messageBlocks                   = blocks.map(Message.fromBlock(_).get.asInstanceOf[Message.Block])
-        latestVotes                     = messageBlocks.groupBy(_.validatorId).mapValues(_.maxBy(_.pRank)).values
+        latestVotes                     = messageBlocks.groupBy(_.validatorId).mapValues(_.maxBy(_.mainRank)).values
         scoresMap = latestVotes.foldLeft(Scores.init(startBlock)) {
           case (scores, block) => scores.update(block, weights(block.validatorId))
         }

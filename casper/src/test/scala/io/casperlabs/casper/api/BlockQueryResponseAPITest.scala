@@ -45,7 +45,7 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with StorageFixtu
       justifications = Nil,
       state = ps,
       jRank = 0,
-      pRank = 0,
+      mainRank = 0,
       protocolVersion = version,
       timestamp = 1527191663,
       chainName = "casperlabs",

@@ -416,7 +416,7 @@ object ProtoUtil {
       chainName: String,
       now: Long,
       jRank: Long,
-      pRank: Long,
+      mainRank: Long,
       publicKey: Keys.PublicKey,
       privateKey: Keys.PrivateKey,
       sigAlgorithm: SignatureAlgorithm,
@@ -437,7 +437,7 @@ object ProtoUtil {
       justifications = justifications,
       state = postState,
       jRank = jRank,
-      pRank = pRank,
+      mainRank = mainRank,
       protocolVersion = protocolVersion,
       timestamp = now,
       chainName = chainName,
@@ -470,7 +470,7 @@ object ProtoUtil {
       chainName: String,
       now: Long,
       jRank: Long,
-      pRank: Long,
+      mainRank: Long,
       publicKey: Keys.PublicKey,
       privateKey: Keys.PrivateKey,
       sigAlgorithm: SignatureAlgorithm,
@@ -491,7 +491,7 @@ object ProtoUtil {
       justifications = justifications,
       state = postState,
       jRank = jRank,
-      pRank = pRank,
+      mainRank = mainRank,
       protocolVersion = protocolVersion,
       timestamp = now,
       chainName = chainName,
@@ -518,7 +518,7 @@ object ProtoUtil {
       justifications: Seq[Justification],
       state: Block.GlobalState,
       jRank: Long,
-      pRank: Long,
+      mainRank: Long,
       validatorSeqNum: Int,
       validatorPrevBlockHash: ByteString,
       protocolVersion: ProtocolVersion,
@@ -538,7 +538,7 @@ object ProtoUtil {
       .withDeployCount(body.deploys.size)
       .withState(state)
       .withJRank(jRank)
-      .withPRank(pRank)
+      .withMainRank(mainRank)
       .withValidatorPublicKey(ByteString.copyFrom(creator))
       .withValidatorBlockSeqNum(validatorSeqNum)
       .withValidatorPrevBlockHash(validatorPrevBlockHash)
