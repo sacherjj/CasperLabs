@@ -158,13 +158,13 @@ class CachingDagStorage[F[_]: Concurrent](
   /** Similar to [[topoSort]] but in addition filters blocks by a validator */
   override def topoSortValidator(
       validator: Validator,
-      startBlockNumber: Rank,
+      blocksNum: Int,
       endBlockNumber: Rank
-  ) = underlying.topoSortValidator(validator, startBlockNumber, endBlockNumber)
+  ) = underlying.topoSortValidator(validator, blocksNum, endBlockNumber)
 
   /** Similar to [[topoSortTail]] but in addition filters blocks by a validator */
-  override def topoSortTailValidator(validator: Validator, tailLength: Int) =
-    underlying.topoSortTailValidator(validator, tailLength)
+  override def topoSortTailValidator(validator: Validator, blocksNum: Int) =
+    underlying.topoSortTailValidator(validator, blocksNum)
 
   override def latestMessageHash(validator: Validator): F[Set[BlockHash]] =
     underlying.latestMessageHash(validator)

@@ -142,12 +142,12 @@ object SQLiteStorage {
 
       override def topoSortValidator(
           validator: Validator,
-          startBlockNumber: Long,
+          blocksNum: Int,
           endBlockNumber: Long
-      ) = dagStorage.topoSortValidator(validator, startBlockNumber, endBlockNumber)
+      ) = dagStorage.topoSortValidator(validator, blocksNum, endBlockNumber)
 
-      override def topoSortTailValidator(validator: Validator, tailLength: Int) =
-        dagStorage.topoSortTailValidator(validator, tailLength)
+      override def topoSortTailValidator(validator: Validator, blocksNum: Int) =
+        dagStorage.topoSortTailValidator(validator, blocksNum)
 
       override def latestMessageHash(validator: Validator): F[Set[BlockHash]] =
         dagStorage.latestMessageHash(validator)

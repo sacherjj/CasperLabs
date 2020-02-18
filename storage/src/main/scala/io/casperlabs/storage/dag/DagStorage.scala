@@ -114,12 +114,12 @@ trait DagRepresentation[F[_]] {
   /** Similar to [[topoSort]] but in addition filters blocks by a validator*/
   def topoSortValidator(
       validator: Validator,
-      startBlockNumber: Long,
+      blocksNum: Int,
       endBlockNumber: Long
   ): fs2.Stream[F, Vector[BlockInfo]]
 
   /** Similar to [[topoSortTail]] but in addition filters blocks by a validator*/
-  def topoSortTailValidator(validator: Validator, tailLength: Int): fs2.Stream[F, Vector[BlockInfo]]
+  def topoSortTailValidator(validator: Validator, blocksNum: Int): fs2.Stream[F, Vector[BlockInfo]]
 
   def latestMessageHash(validator: Validator): F[Set[BlockHash]]
   def latestMessage(validator: Validator): F[Set[Message]]

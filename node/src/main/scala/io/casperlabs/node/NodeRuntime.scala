@@ -307,7 +307,7 @@ class NodeRuntime private[node] (
         Flyway
           .configure()
           .dataSource(s"jdbc:sqlite:$db", "", "")
-          .locations(new Location("classpath:/db/migration"))
+          .locations(new Location("classpath:db/migration"))
       val flyway = conf.load()
       flyway.migrate()
       ()

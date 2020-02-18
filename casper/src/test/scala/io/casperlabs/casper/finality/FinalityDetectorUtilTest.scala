@@ -158,12 +158,12 @@ object FinalityDetectorUtilTest {
       /** Similar to [[topoSort]] but in addition filters blocks by a validator */
       override def topoSortValidator(
           validator: Validator,
-          startBlockNumber: Level,
+          blocksNum: Int,
           endBlockNumber: Level
       ) = ???
 
       /** Similar to [[topoSortTail]] but in addition filters blocks by a validator */
-      override def topoSortTailValidator(validator: Validator, tailLength: Int) = ???
+      override def topoSortTailValidator(validator: Validator, blocksNum: Int) = ???
 
       override def latestMessageHash(
           validator: Validator

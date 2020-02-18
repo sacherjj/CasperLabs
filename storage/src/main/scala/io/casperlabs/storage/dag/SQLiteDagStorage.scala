@@ -49,7 +49,7 @@ class SQLiteDagStorage[F[_]: Bracket[*[_], Throwable]](
     val isFinalized = false
     val blockMetadataQuery =
       (fr"""INSERT OR IGNORE INTO block_metadata
-            (block_hash, validator, rank, """ ++ blockInfoCols() ++ fr""")
+            (block_hash, validator, rank, """ ++ blockInfoCols() ++ fr", validator_block_seq_num" ++ fr""")
             VALUES (
               ${block.blockHash},
               ${block.validatorPublicKey},
@@ -59,7 +59,8 @@ class SQLiteDagStorage[F[_]: Bracket[*[_], Throwable]](
               $deployErrorCount,
               $deployCostTotal,
               $deployGasPriceAvg,
-              $isFinalized
+              $isFinalized, 
+              ${block.validatorBlockSeqNum}
             )
             """).update.run
 
@@ -216,33 +217,33 @@ class SQLiteDagStorage[F[_]: Bracket[*[_], Throwable]](
 
   override def topoSortValidator(
       validator: Validator,
-      startBlockNumber: Long,
+      blocksNum: Int,
       endBlockNumber: Long
-  ) =
-    (fr"""SELECT rank, """ ++ blockInfoCols() ++ fr"""
+  ) = {
+    val subQuery = fr"""SELECT validator_block_seq_num, """ ++ blockInfoCols() ++ fr"""
           FROM block_metadata
-          WHERE rank>=$startBlockNumber AND rank<=$endBlockNumber AND validator=$validator
-          ORDER BY rank
-          """)
+          WHERE validator_block_seq_num<=$endBlockNumber AND validator=$validator
+          ORDER BY validator_block_seq_num DESC
+          LIMIT $blocksNum"""
+    (fr"SELECT * FROM (" ++ subQuery ++ fr") ORDER BY validator_block_seq_num ASC")
       .query[(Long, BlockInfo)]
       .stream
       .transact(readXa)
       .groupByRank
+  }
 
-  override def topoSortTailValidator(validator: Validator, tailLength: Int) =
-    (fr"""SELECT a.rank, """ ++ blockInfoCols("a") ++ fr"""
-          FROM block_metadata a
-          INNER JOIN (
-           SELECT max(rank) max_rank FROM block_metadata
-          ) b
-          ON a.rank>b.max_rank-$tailLength
-          WHERE a.validator=$validator
-          ORDER BY a.rank
-          """)
+  override def topoSortTailValidator(validator: Validator, blocksNum: Int) = {
+    val subQuery = fr"""SELECT validator_block_seq_num, """ ++ blockInfoCols() ++ fr"""
+          FROM block_metadata
+          WHERE validator=$validator
+          ORDER BY validator_block_seq_num DESC
+          LIMIT $blocksNum"""
+    (fr"SELECT * FROM (" ++ subQuery ++ fr") ORDER BY validator_block_seq_num ASC")
       .query[(Long, BlockInfo)]
       .stream
       .transact(readXa)
       .groupByRank
+  }
 
   override def latestMessageHash(validator: Validator): F[Set[BlockHash]] =
     sql"""|SELECT block_hash
