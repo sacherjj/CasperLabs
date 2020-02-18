@@ -27,7 +27,7 @@ import monix.eval.Task
 
 import scala.collection.immutable.HashMap
 import scala.language.higherKinds
-import _root_.io.casperlabs.storage.dag.DagStorage
+import io.casperlabs.storage.dag.DagStorage
 
 object BlockGenerator {
   implicit val timeEff = new LogicalTime[Task]()
