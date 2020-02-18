@@ -6,7 +6,7 @@ use core::{convert::From, mem::MaybeUninit};
 use casperlabs_types::{
     api_error,
     bytesrepr::{self, FromBytes, ToBytes},
-    AccessRights, ApiError, CLTyped, CLValue, ContractRef, Key, URef,
+    AccessRights, ApiError, CLTyped, CLValue, ContractRef, Key, URef, KEY_UREF_SERIALIZED_LENGTH,
 };
 
 use crate::{
@@ -133,15 +133,15 @@ pub fn store_function_at_hash(name: &str, named_keys: BTreeMap<String, Key>) -> 
 
 /// Returns a new unforgeable pointer, where the value is initialized to `init`
 pub fn new_turef<T: CLTyped + ToBytes>(init: T) -> TURef<T> {
-    let key_ptr = contract_api::alloc_bytes(Key::serialized_size_hint());
+    let key_ptr = contract_api::alloc_bytes(KEY_UREF_SERIALIZED_LENGTH);
     let cl_value = CLValue::from_t(init).unwrap_or_revert();
     let (cl_value_ptr, cl_value_size, _cl_value_bytes) = contract_api::to_ptr(cl_value);
     let bytes = unsafe {
         ext_ffi::new_uref(key_ptr, cl_value_ptr, cl_value_size); // URef has `READ_ADD_WRITE` access
         Vec::from_raw_parts(
             key_ptr,
-            Key::serialized_size_hint(),
-            Key::serialized_size_hint(),
+            KEY_UREF_SERIALIZED_LENGTH,
+            KEY_UREF_SERIALIZED_LENGTH,
         )
     };
     let key: Key = bytesrepr::deserialize(bytes).unwrap_or_revert();
