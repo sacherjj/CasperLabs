@@ -26,7 +26,8 @@
 //! ```no_run
 //! use casperlabs_engine_test_support::{TestContextBuilder, SessionBuilder, Value, Error, Code};
 //!
-//! const MY_ACCOUNT: [u8; 32] = [7u8; 32];
+//! # use types::account::PublicKey;
+//! const MY_ACCOUNT: PublicKey = PublicKey::new([7u8; 32]);
 //! const KEY: &str = "special_value";
 //! const VALUE: &str = "hello world";
 //!
