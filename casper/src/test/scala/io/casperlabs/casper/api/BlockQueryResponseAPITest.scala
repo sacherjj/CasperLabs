@@ -15,6 +15,7 @@ import io.casperlabs.crypto.Keys
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
 import io.casperlabs.p2p.EffectsTestInstances.LogicalTime
+import io.casperlabs.storage.block.BlockStorage
 import monix.eval.Task
 import org.scalatest.{FlatSpec, Matchers}
 
@@ -100,10 +101,13 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with StorageFixtu
   "showBlock" should "return successful block info response" in withStorage {
     implicit blockStorage => implicit dagStorage => implicit deployStorage => _ =>
       for {
+        _         <- initData(blockStorage)
         blockInfo <- BlockAPI.getBlockInfo[Task](secondBlockQuery, BlockInfo.View.BASIC)
         _         = blockInfo.getSummary.blockHash should be(blockHash)
         _         = blockInfo.getStatus.getStats.blockSizeBytes should be(secondBlock.serializedSize)
-        _         = blockInfo.getStatus.getStats.deployCostTotal should be(deployCostAndPrice.map(_._1).sum)
+        _ = blockInfo.getStatus.getStats.deployCostTotal should be(
+          deployCostAndPrice.map(_._1).sum
+        )
         _ = blockInfo.getStatus.getStats.deployGasPriceAvg should be(
           deployCostAndPrice.map(x => x._1 * x._2).sum / deployCostAndPrice.map(_._1).sum
         )
@@ -120,6 +124,7 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with StorageFixtu
   it should "return children in FULL view" in withStorage {
     implicit blockStorage => implicit dagStorage => implicit deployStorage => _ =>
       for {
+        _         <- initData(blockStorage)
         basicInfo <- BlockAPI.getBlockInfo[Task](genesisHashString, BlockInfo.View.BASIC)
         fullInfo  <- BlockAPI.getBlockInfo[Task](genesisHashString, BlockInfo.View.FULL)
         _         = basicInfo.getStatus.childHashes shouldBe empty
@@ -138,4 +143,10 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with StorageFixtu
         blockQueryResponse.left.get.getMessage should include("NOT_FOUND")
       }
   }
+
+  private def initData(blockStorage: BlockStorage[Task]): Task[Unit] =
+    for {
+      _ <- blockStorage.put(genesisBlock.blockHash, genesisBlock, Map.empty)
+      _ <- blockStorage.put(secondBlock.blockHash, secondBlock, Map.empty)
+    } yield ()
 }
