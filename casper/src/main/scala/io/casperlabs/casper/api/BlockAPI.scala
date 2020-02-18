@@ -54,7 +54,7 @@ object BlockAPI {
       _ <- Metrics[F].incrementCounter("create-blocks-success", 0)
     } yield ()
 
-  def deploy[F[_]: MonadThrowable: DeployBuffer: MultiParentCasperRef: BlockStorage: Validation: Log: Metrics: DeployEventEmitter](
+  def deploy[F[_]: MonadThrowable: DeployBuffer: Metrics](
       d: Deploy
   ): F[Unit] =
     for {

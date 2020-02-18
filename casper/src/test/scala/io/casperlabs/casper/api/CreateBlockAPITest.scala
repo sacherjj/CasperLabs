@@ -81,9 +81,8 @@ class CreateBlockAPITest
       )
     )
 
-    implicit val logEff       = LogStub[Task]()
-    implicit val blockStorage = node.blockStorage
-    implicit val db           = node.deployBuffer
+    implicit val logEff = LogStub[Task]()
+    implicit val db     = node.deployBuffer
 
     def testProgram(blockApiLock: Semaphore[Task])(
         implicit casperRef: MultiParentCasperRef[Task]
@@ -125,7 +124,6 @@ class CreateBlockAPITest
     // fact that each rank is occupied by a single block.
     val node = standaloneEff(genesis, validatorKeys.head)
 
-    implicit val bs = node.blockStorage
     implicit val db = node.deployBuffer
 
     def deployAndPropose(
@@ -185,9 +183,8 @@ class CreateBlockAPITest
     val node =
       standaloneEff(genesis, validatorKeys.head)
 
-    implicit val logEff       = LogStub[Task]()
-    implicit val blockStorage = node.blockStorage
-    implicit val db           = node.deployBuffer
+    implicit val logEff = LogStub[Task]()
+    implicit val db     = node.deployBuffer
 
     def testProgram(blockApiLock: Semaphore[Task])(
         implicit casperRef: MultiParentCasperRef[Task]
@@ -330,7 +327,6 @@ class CreateBlockAPITest
       standaloneEff(genesis, validatorKeys.head)
 
     implicit val logEff        = LogStub[Task]()
-    implicit val blockStorage  = node.blockStorage
     implicit val deployStorage = node.deployStorage
     implicit val db            = node.deployBuffer
 

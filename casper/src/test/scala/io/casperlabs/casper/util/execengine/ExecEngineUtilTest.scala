@@ -1,14 +1,15 @@
 package io.casperlabs.casper.util.execengine
 
-import cats.{Id, MonadError}
+import cats.{Applicative, Id, MonadError}
 import cats.data.NonEmptyList
 import cats.effect.Sync
 import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.DeploySelection.DeploySelection
+import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.consensus.Block.ProcessedDeploy
 import io.casperlabs.casper.consensus.state.Key.Hash
-import io.casperlabs.casper.consensus.state._
+import io.casperlabs.casper.consensus.state.{Unit => _, _}
 import io.casperlabs.casper.consensus.{state, Block, Deploy}
 import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.helper._
@@ -17,21 +18,26 @@ import io.casperlabs.casper.util.execengine.ExecEngineUtil.{EECommitFun, EEExecF
 import io.casperlabs.casper.util.execengine.ExecEngineUtilTest._
 import io.casperlabs.casper.util.execengine.ExecutionEngineServiceStub.mock
 import io.casperlabs.casper.util.execengine.Op.OpMap
-import io.casperlabs.casper.{consensus, DeploySelection}
+import io.casperlabs.casper.{consensus, DeployHash, DeploySelection}
 import io.casperlabs.ipc
+import io.casperlabs.ipc.ChainSpec.DeployConfig
 import io.casperlabs.ipc.DeployResult.ExecutionResult
 import io.casperlabs.ipc.Op.OpInstance
 import io.casperlabs.ipc._
+import io.casperlabs.mempool.DeployBuffer
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.models.{ArbitraryConsensus, SmartContractEngineError}
 import io.casperlabs.p2p.EffectsTestInstances.LogicalTime
 import io.casperlabs.shared.{LogStub, Time}
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.deploy._
+import io.casperlabs.storage.dag.{DagRepresentation, DagStorage}
+import io.casperlabs.storage.block.BlockStorage
 import monix.eval.Task
 import monix.execution.Scheduler
 import monix.execution.atomic.{AtomicInt, AtomicLong}
 import org.scalatest.{Assertion, FlatSpec, Matchers}
+import scala.concurrent.duration._
 
 class ExecEngineUtilTest
     extends FlatSpec
@@ -46,6 +52,14 @@ class ExecEngineUtilTest
     HashSetCasperTestNode.simpleEEApi[Task](Map.empty)
 
   implicit val emitter = NoOpsEventEmitter.create[Task]
+
+  implicit def deployBuffer(
+      implicit
+      blockStorage: BlockStorage[Task],
+      dagStorage: DagStorage[Task],
+      deployStorage: DeployStorage[Task]
+  ): DeployBuffer[Task] =
+    DeployBuffer.create[Task]("casperlabs", Duration.Zero)
 
   "computeBlockCheckpoint" should "compute the final post-state of a chain properly" in withStorage {
     implicit blockStorage => implicit dagStorage => implicit deployStorage => _ =>
@@ -125,7 +139,8 @@ class ExecEngineUtilTest
       protocolVersion: state.ProtocolVersion = state.ProtocolVersion(1)
   )(
       implicit executionEngineService: ExecutionEngineService[Task],
-      deployStorage: DeployStorage[Task]
+      deployStorage: DeployStorage[Task],
+      deployBuffer: DeployBuffer[Task]
   ): Task[Seq[ProcessedDeploy]] =
     for {
       blocktime <- Task.delay(System.currentTimeMillis)
@@ -146,7 +161,7 @@ class ExecEngineUtilTest
     } yield result
 
   "computeDeploysCheckpoint" should "aggregate the result of deploying multiple programs within the block" in withStorage {
-    _ => _ => implicit deployStorage =>
+    implicit blockStorage => implicit dagStorage => implicit deployStorage =>
       _ =>
         // reference costs
         // deploy each Rholang program separately and record its cost
@@ -282,7 +297,7 @@ class ExecEngineUtilTest
   }
 
   it should "include conflicting deploys in the result" in withStorage {
-    _ => _ => implicit deployStorage => _ =>
+    implicit blockStorage => implicit dagStorage => implicit deployStorage => _ =>
       val nonConflictingDeploys = List.fill(5)(ProtoUtil.basicDeploy[Task]()).sequence
       // Deploys' transforms depend on their code and `basicDeploy` parses timestamp
       // as session code. By replicating the same deploy we get multiple deploys with the same effects.
@@ -298,7 +313,7 @@ class ExecEngineUtilTest
   }
 
   it should "use post-state hash and bonded validators values of the last deploy execution" in withStorage {
-    _ => _ => implicit deployStorage => _ =>
+    implicit blockStorage => implicit dagStorage => implicit deployStorage => _ =>
       import cats.implicits._
 
       import monix.execution.Scheduler.Implicits.global
@@ -410,7 +425,7 @@ class ExecEngineUtilTest
           ProtocolVersion(1),
           rank = 0,
           upgrades = Nil
-        )(Sync[Task], deployStorage, emitter, logEff, ee, deploySelection, Metrics[Task])
+        )(Sync[Task], deployStorage, deployBuffer, logEff, ee, deploySelection, Metrics[Task])
         .map { result =>
           assert(result.postStateHash == lastPostStateHash)
           assert(result.bondedValidators == lastBondedValidators)
@@ -738,6 +753,7 @@ class ExecEngineUtilTest
       protocolVersion: state.ProtocolVersion = state.ProtocolVersion(1)
   ) {
     implicit val mockDS: DeployStorage[Task] = MockDeployStorage.unsafeCreate[Task]()
+    implicit val mockDB: DeployBuffer[Task]  = MockDeployBuffer[Task](mockDS)
     implicit val scheduler: Scheduler        = monix.execution.Scheduler.Implicits.global
 
     val deploys: NonEmptyList[Deploy] =
@@ -926,4 +942,37 @@ object ExecEngineUtilTest {
       contracts.map(ProtoUtil.deploy(System.currentTimeMillis, _))
     deploys.map(d => ProcessedDeploy().withDeploy(d).withCost(cost))
   }
+
+  object MockDeployBuffer {
+    def apply[F[_]: Sync](deployStorage: DeployStorage[F]): DeployBuffer[F] =
+      new DeployBuffer[F] {
+        def addDeploy(d: Deploy): F[Either[Throwable, Unit]] =
+          deployStorage.writer.addAsPending(List(d)).attempt
+
+        def remainingDeploys(
+            dag: DagRepresentation[F],
+            parents: Set[BlockHash],
+            timestamp: Long,
+            deployConfig: DeployConfig
+        ): F[Set[DeployHash]] = ???
+
+        def requeueOrphanedDeploys(
+            tips: Set[BlockHash]
+        ): F[Set[DeployHash]] = ???
+
+        def removeFinalizedDeploys(
+            lfbs: Set[BlockHash]
+        ): F[Unit] = ???
+
+        def discardDeploys(
+            deploysWithReasons: List[(DeployHash, String)]
+        ): F[Unit] =
+          deployStorage.writer.markAsDiscardedByHashes(deploysWithReasons)
+
+        def discardExpiredDeploys(
+            expirationPeriod: FiniteDuration
+        ): F[Unit] = ???
+      }
+  }
+
 }

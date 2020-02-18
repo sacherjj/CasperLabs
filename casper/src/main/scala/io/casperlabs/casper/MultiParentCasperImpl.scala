@@ -60,7 +60,7 @@ final case class CasperState(
 )
 
 @silent("is never used")
-class MultiParentCasperImpl[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: DagStorage: DeployBuffer: ExecutionEngineService: MultiParentFinalizer: DeployStorage: Validation: Fs2Compiler: DeploySelection: CasperLabsProtocol: EventEmitter: FinalityStorage](
+class MultiParentCasperImpl[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: DagStorage: DeployBuffer: ExecutionEngineService: MultiParentFinalizer: DeployStorage: Validation: Fs2Compiler: DeploySelection: CasperLabsProtocol: BlockEventEmitter: FinalityStorage](
     validatorSemaphoreMap: SemaphoreMap[F, ByteString],
     statelessExecutor: MultiParentCasperImpl.StatelessExecutor[F],
     validatorId: Option[ValidatorIdentity],
@@ -182,8 +182,8 @@ class MultiParentCasperImpl[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: 
                       )
                   _ <- lfbRef.set(mainParent)
                   _ <- FinalityStorage[F].markAsFinalized(mainParent, secondary)
-                  _ <- DeployBuffer.removeFinalizedDeploys[F](secondary + mainParent).forkAndLog
-                  _ <- EventEmitter[F].newLastFinalizedBlock(mainParent, secondary)
+                  _ <- DeployBuffer[F].removeFinalizedDeploys(secondary + mainParent).forkAndLog
+                  _ <- BlockEventEmitter[F].newLastFinalizedBlock(mainParent, secondary)
                 } yield ()
               }
             }
@@ -259,7 +259,7 @@ class MultiParentCasperImpl[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: 
           // immediate `createProposal`, those deploys will be considered for the next block.
           _ <- {
             for {
-              requeued <- DeployBuffer.requeueOrphanedDeploys[F](
+              requeued <- DeployBuffer[F].requeueOrphanedDeploys(
                            merged.parents.map(_.blockHash).toSet
                          )
               _ <- Log[F]
@@ -270,7 +270,7 @@ class MultiParentCasperImpl[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: 
 
           timestamp <- Time[F].currentMillis
           props     <- CreateMessageProps(publicKey, latestMessages, merged)
-          remainingHashes <- DeployBuffer.remainingDeploys[F](
+          remainingHashes <- DeployBuffer[F].remainingDeploys(
                               dag,
                               parents.map(_.blockHash).toSet,
                               timestamp,
@@ -512,7 +512,7 @@ object MultiParentCasperImpl {
   def create[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: DagStorage: DeployBuffer: FinalityStorage: ExecutionEngineService: DeployStorage: Validation: CasperLabsProtocol: Cell[
     *[_],
     CasperState
-  ]: DeploySelection: EventEmitter](
+  ]: DeploySelection: BlockEventEmitter](
       semaphoreMap: SemaphoreMap[F, ByteString],
       statelessExecutor: StatelessExecutor[F],
       validatorId: Option[ValidatorIdentity],
@@ -550,7 +550,7 @@ object MultiParentCasperImpl {
 
   /** Component purely to validate, execute and store blocks.
     * Even the Genesis, to create it in the first place. */
-  class StatelessExecutor[F[_]: Sync: Time: Log: BlockStorage: DagStorage: DeployStorage: ExecutionEngineService: Metrics: DeployStorageWriter: Validation: CasperLabsProtocol: Fs2Compiler: EventEmitter](
+  class StatelessExecutor[F[_]: Sync: Time: Log: BlockStorage: DagStorage: DeployStorage: ExecutionEngineService: Metrics: DeployStorageWriter: Validation: CasperLabsProtocol: Fs2Compiler: BlockEventEmitter](
       validatorId: Option[Keys.PublicKey],
       chainName: String,
       upgrades: Seq[ipc.ChainSpec.UpgradePoint],
@@ -732,7 +732,7 @@ object MultiParentCasperImpl {
               BlockStorage[F]
                 .put(block.blockHash, block, blockEffects.effects)
             }
-        _ <- EventEmitter[F].blockAdded(block.blockHash)
+        _ <- BlockEventEmitter[F].blockAdded(block.blockHash)
       } yield ()
 
     /** Check if the block has dependencies that we don't have in store.
@@ -778,7 +778,7 @@ object MultiParentCasperImpl {
       Metrics[F].incrementCounter("gas_spent", 0L)
     }
 
-    def create[F[_]: Concurrent: Time: Log: BlockStorage: DagStorage: ExecutionEngineService: Metrics: DeployStorage: Validation: CasperLabsProtocol: Fs2Compiler: EventEmitter](
+    def create[F[_]: Concurrent: Time: Log: BlockStorage: DagStorage: ExecutionEngineService: Metrics: DeployStorage: Validation: CasperLabsProtocol: Fs2Compiler: BlockEventEmitter](
         validatorId: Option[Keys.PublicKey],
         chainName: String,
         upgrades: Seq[ipc.ChainSpec.UpgradePoint]

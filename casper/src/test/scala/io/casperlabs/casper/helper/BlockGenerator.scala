@@ -17,6 +17,7 @@ import io.casperlabs.casper.util.execengine.{DeploysCheckpoint, ExecEngineUtil}
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.crypto.Keys
 import io.casperlabs.metrics.Metrics
+import io.casperlabs.mempool.DeployBuffer
 import io.casperlabs.p2p.EffectsTestInstances.LogicalTime
 import io.casperlabs.shared.{Log, Time}
 import io.casperlabs.smartcontracts.ExecutionEngineService
@@ -32,7 +33,7 @@ object BlockGenerator {
   implicit val timeEff = new LogicalTime[Task]()
   implicit val emitter = NoOpsEventEmitter.create[Task]
 
-  def updateChainWithBlockStateUpdate[F[_]: Sync: BlockStorage: IndexedDagStorage: DeployStorage: DeployEventEmitter: ExecutionEngineService: Log: Metrics](
+  def updateChainWithBlockStateUpdate[F[_]: Sync: BlockStorage: IndexedDagStorage: DeployStorage: DeployBuffer: ExecutionEngineService: Log: Metrics](
       id: Int
   ): F[Block] =
     for {
@@ -67,7 +68,7 @@ object BlockGenerator {
       IndexedDagStorage[F].inject(id, updatedBlock)
   }
 
-  private[casper] def computeBlockCheckpointFromDeploys[F[_]: Sync: BlockStorage: DeployStorage: DeployEventEmitter: Log: ExecutionEngineService: Metrics](
+  private[casper] def computeBlockCheckpointFromDeploys[F[_]: Sync: BlockStorage: DeployStorage: DeployBuffer: Log: ExecutionEngineService: Metrics](
       b: Block,
       dag: DagRepresentation[F]
   ): F[DeploysCheckpoint] =

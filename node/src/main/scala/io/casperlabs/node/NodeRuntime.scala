@@ -289,12 +289,12 @@ class NodeRuntime private[node] (
             id,
             ingressScheduler
           )
-    } yield (nodeAsk, nodeDiscovery, storage.writer, eventStream)
+    } yield (nodeAsk, nodeDiscovery, storage.writer, deployBuffer)
 
     resources.allocated flatMap {
-      case ((nodeAsk, nodeDiscovery, deployStorage, eventStream), release) =>
+      case ((nodeAsk, nodeDiscovery, deployStorage, deployBuffer), release) =>
         handleUnrecoverableErrors {
-          nodeProgram(nodeAsk, nodeDiscovery, deployStorage, eventStream, release)
+          nodeProgram(nodeAsk, nodeDiscovery, deployStorage, deployBuffer, release)
         }
     }
 
@@ -319,7 +319,7 @@ class NodeRuntime private[node] (
       localAsk: NodeAsk[Task],
       nodeDiscovery: NodeDiscovery[Task],
       deployStorageWriter: DeployStorageWriter[Task],
-      deployEventEmitter: DeployEventEmitter[Task],
+      deployBuffer: DeployBuffer[Task],
       release: Task[Unit]
   ): Task[Unit] = {
 
@@ -339,7 +339,7 @@ class NodeRuntime private[node] (
     } yield ()
 
     val checkPendingDeploysExpirationLoop: Task[Unit] = for {
-      _ <- DeployBuffer.discardExpiredDeploys[Task](24.hours)
+      _ <- DeployBuffer[Task].discardExpiredDeploys(24.hours)
       _ <- time.sleep(1.minute)
     } yield ()
 
