@@ -261,18 +261,19 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream
           Field(
             "account",
             OptionType(blockTypes.AccountType),
-            arguments = blocks.arguments.AccountPublicKey :: Nil,
+            arguments = blocks.arguments.PublicKey :: Nil,
             resolve = { c =>
-              val key = c.arg(blocks.arguments.AccountPublicKey)
+              val key = c.arg(blocks.arguments.PublicKey)
               key.tryBase64AndBase16Decode.map(ByteString.copyFrom)
             }
           ),
           Field(
             "validator",
-            blockTypes.ValidatorType,
-            arguments = Nil,
-            resolve = { _ =>
-              ???
+            OptionType(blockTypes.ValidatorType),
+            arguments = blocks.arguments.PublicKey :: Nil,
+            resolve = { c =>
+              val key = c.arg(blocks.arguments.PublicKey)
+              key.tryBase64AndBase16Decode.map(ByteString.copyFrom)
             }
           ),
           Field(
