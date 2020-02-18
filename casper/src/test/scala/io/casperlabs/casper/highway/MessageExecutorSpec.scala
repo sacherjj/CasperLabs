@@ -30,6 +30,7 @@ import monix.eval.Task
 import org.scalatest._
 import scala.concurrent.duration._
 import io.casperlabs.storage.dag.DagRepresentation
+import io.casperlabs.storage.dag.FinalityStorage
 
 class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with HighwayFixture {
 
@@ -349,7 +350,7 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
     }
   }
 
-  it should "tell the finalizer about the new blocks" in executorFixture { implicit db =>
+  it should "update the last finalized block" in executorFixture { implicit db =>
     new ExecutorFixture(db) {
 
       val messageAddedRef = Ref.unsafe[Task, Option[Message]](none)
@@ -357,7 +358,14 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
       override lazy val finalizer = new MultiParentFinalizer[Task] {
         override def onNewMessageAdded(
             message: Message
-        ) = messageAddedRef.set(Some(message)).as(none)
+        ) =
+          messageAddedRef
+            .set(Some(message))
+            .as(
+              Some(
+                MultiParentFinalizer.FinalizedBlocks(message.messageHash, BigInt(0), Set.empty)
+              )
+            )
       }
 
       override def test =
@@ -366,7 +374,13 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
           message = Message.fromBlock(block).get
           _       <- messageExecutor.effectsAfterAdded(message)
           _       <- messageAddedRef.get shouldBeF Some(message)
-        } yield ()
+          _       <- FinalityStorage[Task].isFinalized(block.blockHash) shouldBeF true
+          events  <- eventEmitter.events
+        } yield {
+          forExactly(1, events) { event =>
+            event.value.isNewFinalizedBlock shouldBe true
+          }
+        }
     }
   }
 
