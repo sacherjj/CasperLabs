@@ -404,3 +404,24 @@ trait ForkChoiceManager[F[_]] extends ForkChoice[F] {
       message: Message
   ): F[Unit]
 }
+
+object ForkChoiceManager {
+  def create[F[_]: Sync: EraStorage: DagStorage]: ForkChoiceManager[F] = {
+    val fc = ForkChoice.create[F]
+    new ForkChoiceManager[F] {
+      // TODO (CON-636): Implement the ForkChoiceManager.
+      override def updateLatestMessage(keyBlockHash: BlockHash, message: Message): F[Unit] =
+        Sync[F].unit
+
+      override def fromJustifications(
+          keyBlockHash: BlockHash,
+          justifications: Set[BlockHash]
+      ): F[ForkChoice.Result] =
+        fc.fromJustifications(keyBlockHash, justifications)
+
+      override def fromKeyBlock(keyBlockHash: BlockHash): F[ForkChoice.Result] =
+        fc.fromKeyBlock(keyBlockHash)
+    }
+  }
+
+}
