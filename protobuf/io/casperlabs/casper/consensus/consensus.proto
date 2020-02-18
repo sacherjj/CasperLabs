@@ -150,7 +150,7 @@ message Block {
         // validator_block_seq_num - 1.
         bytes validator_prev_block_hash = 14;
         // Distance from Genesis.
-        // This is a rank based on justifications of a message.
+        // This is a rank based on the justifications of the message.
         uint64 j_rank = 11;
         MessageType message_type = 12;
         // A block from where the fork choice is calculated.
