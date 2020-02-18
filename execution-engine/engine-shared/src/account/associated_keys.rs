@@ -146,9 +146,7 @@ pub mod gens {
 mod tests {
     use std::{collections::BTreeSet, iter::FromIterator};
 
-    use types::account::{
-        AddKeyFailure, PublicKey, Weight, MAX_ASSOCIATED_KEYS, ED25519_LENGTH,
-    };
+    use types::account::{AddKeyFailure, PublicKey, Weight, ED25519_LENGTH, MAX_ASSOCIATED_KEYS};
 
     use super::AssociatedKeys;
 

@@ -185,6 +185,9 @@ impl CLTyped for Weight {
 /// The length in bytes of a [`PublicKey`].
 pub const ED25519_LENGTH: usize = 32;
 
+/// The number of bytes in a serialized [`Ed25519`]
+pub const ED25519_SERIALIZED_LENGTH: usize = ED25519_LENGTH;
+
 /// Identifies a serialized public key of Ed25519 variant.
 const PUBLIC_KEY_ED25519_ID: u8 = 0;
 
@@ -192,7 +195,8 @@ const PUBLIC_KEY_ED25519_ID: u8 = 0;
 const PUBLIC_KEY_ID_SERIALIZED_LENGTH: usize = 1;
 
 /// The number of bytes in a serialized [`PublicKey`].
-pub const PUBLIC_KEY_SERIALIZED_LENGTH: usize = PUBLIC_KEY_ID_SERIALIZED_LENGTH + ED25519_LENGTH;
+pub const PUBLIC_KEY_SERIALIZED_LENGTH: usize =
+    PUBLIC_KEY_ID_SERIALIZED_LENGTH + ED25519_SERIALIZED_LENGTH;
 
 /// A newtype wrapping a [`[u8; ED25519_LENGTH]`](ED25519_LENGTH) which is the raw bytes of
 /// the public key of a cryptographic asymmetric key pair.
@@ -210,7 +214,6 @@ impl Ed25519 {
         self.0
     }
 }
-
 
 impl Display for Ed25519 {
     fn fmt(&self, f: &mut Formatter) -> core::fmt::Result {
@@ -311,8 +314,9 @@ impl TryFrom<&[u8]> for PublicKey {
 impl ToBytes for PublicKey {
     fn to_bytes(&self) -> Result<Vec<u8>, Error> {
         let PublicKey::Ed25519(ed25519) = self;
-        let mut bytes = ed25519.to_bytes()?;
-        bytes.insert(0, PUBLIC_KEY_ED25519_ID);
+        let mut bytes = Vec::with_capacity(PUBLIC_KEY_SERIALIZED_LENGTH);
+        bytes.push(PUBLIC_KEY_ED25519_ID);
+        bytes.extend(&ed25519.to_bytes()?);
         Ok(bytes)
     }
 }
@@ -324,7 +328,7 @@ impl FromBytes for PublicKey {
             PUBLIC_KEY_ED25519_ID => {
                 let (ed25519, rem2) = Ed25519::from_bytes(rem1)?;
                 Ok((PublicKey::from(ed25519), rem2))
-            },
+            }
             _ => Err(Error::Formatting),
         }
     }
