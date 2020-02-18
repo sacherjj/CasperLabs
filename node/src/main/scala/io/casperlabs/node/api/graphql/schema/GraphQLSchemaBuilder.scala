@@ -11,6 +11,7 @@ import io.casperlabs.casper.consensus.state
 import io.casperlabs.catscontrib.{Fs2Compiler, MonadThrowable}
 import io.casperlabs.crypto.Keys.PublicKey
 import io.casperlabs.crypto.codec.Base16
+import io.casperlabs.crypto.codec.StringSyntax
 import io.casperlabs.models.SmartContractEngineError
 import io.casperlabs.node.api.DeployInfoPagination.DeployInfoPageTokenParams
 import io.casperlabs.node.api.Utils.{
@@ -21,10 +22,7 @@ import io.casperlabs.node.api.Utils.{
 import io.casperlabs.node.api.casper.ListDeployInfosRequest
 import io.casperlabs.node.api.graphql.RunToFuture.ops._
 import io.casperlabs.node.api.graphql._
-import io.casperlabs.node.api.graphql.schema.blocks.types.GraphQLBlockTypes.{
-  AccountKey,
-  BlockHashPrefix
-}
+import io.casperlabs.node.api.graphql.schema.blocks.types.GraphQLBlockTypes.AccountKey
 import io.casperlabs.node.api.graphql.schema.blocks.types.{
   DeployInfosWithPageInfo,
   GraphQLBlockTypes,
@@ -103,7 +101,7 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream
         )
         .unsafeToFuture
 
-  val accountBalance: AccountKey => Action[Unit, String] = { accountKey =>
+  val accountBalance: AccountKey => Action[Unit, Option[String]] = { accountKey =>
     BlockAPI.accountBalance[F](accountKey).unsafeToFuture
   }
 
@@ -258,6 +256,23 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream
                   e => Action.futureAction(Future.failed[DeployInfosWithPageInfo](e)),
                   accountKey => accountDeploys(accountKey, first, after)
                 )
+            }
+          ),
+          Field(
+            "account",
+            OptionType(blockTypes.AccountType),
+            arguments = blocks.arguments.AccountPublicKey :: Nil,
+            resolve = { c =>
+              val key = c.arg(blocks.arguments.AccountPublicKey)
+              key.tryBase64AndBase16Decode.map(ByteString.copyFrom)
+            }
+          ),
+          Field(
+            "validator",
+            blockTypes.ValidatorType,
+            arguments = Nil,
+            resolve = { _ =>
+              ???
             }
           ),
           Field(

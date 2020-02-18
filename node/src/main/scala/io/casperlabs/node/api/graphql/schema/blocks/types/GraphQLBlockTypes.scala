@@ -26,7 +26,7 @@ case class DeployInfosWithPageInfo(deployInfos: List[DeployInfo], pageInfo: Page
 class GraphQLBlockTypes(
     val blockFetcher: Fetcher[Unit, BlockAndMaybeDeploys, BlockAndMaybeDeploys, BlockHash],
     val blocksByValidator: (Validator, Int, Long) => Action[Unit, List[BlockAndMaybeDeploys]],
-    val accountBalance: AccountKey => Action[Unit, String],
+    val accountBalance: AccountKey => Action[Unit, Option[String]],
     val accountDeploys: (AccountKey, Int, String) => Action[Unit, DeployInfosWithPageInfo]
 ) {
 
@@ -190,7 +190,7 @@ class GraphQLBlockTypes(
         ),
         Field(
           "balance",
-          StringType,
+          OptionType(StringType),
           "Account's balance at the latest block in motes".some,
           resolve = c => accountBalance(c.value)
         ),

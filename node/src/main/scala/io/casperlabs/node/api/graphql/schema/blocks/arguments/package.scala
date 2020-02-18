@@ -47,6 +47,12 @@ package object arguments {
       description = "Base-16 hash of a deploy, must be 64 characters long"
     )
 
+  val AccountPublicKey = Argument(
+    "accountPublicKey",
+    StringType,
+    description = "Base-16 or Base-64 public key of a account"
+  )
+
   val AccountPublicKeyBase16 =
     Argument(
       "accountPublicKeyBase16",

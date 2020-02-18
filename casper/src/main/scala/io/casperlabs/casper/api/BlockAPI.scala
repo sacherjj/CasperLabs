@@ -320,8 +320,8 @@ object BlockAPI {
 
   def accountBalance[F[_]: MonadThrowable: Log: MultiParentCasperRef: DeployStorage: DagStorage: Fs2Compiler: ExecutionEngineService](
       accountKey: ByteString
-  ): F[String] =
-    for {
+  ): F[Option[String]] = {
+    val program = for {
       info <- BlockAPI
                .getBlockInfos[F](1)
                .map(_.head) // Safe to unwrap because there is at least a genesis block
@@ -329,8 +329,6 @@ object BlockAPI {
       protocolVersion = info.getSummary.getHeader.getProtocolVersion
       getState = (keyValue: Key.Value) =>
         ExecutionEngineService[F].query(stateHash, Key(keyValue), Nil, protocolVersion).rethrow
-      // Starting from here all normally dangerous unwrap operations are safe to do
-      // because otherwise a deploy couldn't be created due to validations in Node and EE
       account <- getState(Key.Value.Address(Key.Address(accountKey))).map(_.getAccount)
       mintPublic = account.namedKeys
         .find(_.name == "mint")
@@ -345,4 +343,6 @@ object BlockAPI {
       balanceUref <- getState(Key.Value.Local(Key.Local(hash))).map(_.getKey.getUref.uref)
       balance     <- getState(Key.Value.Uref(Key.URef(balanceUref))).map(_.getBigInt.value)
     } yield balance
+    program.attempt.map(_.toOption)
+  }
 }
