@@ -100,7 +100,7 @@ message Event {
         // TODO (CON-631): Add `orphaned_block_hashes`.
     }
 
-    // A deploy was added to the to the local buffer.
+    // A deploy was added to the local buffer.
     message DeployAdded {
         io.casperlabs.casper.consensus.Deploy deploy = 1;
     }
@@ -111,20 +111,21 @@ message Event {
         string message = 2;
     }
 
-    // A deploy has been requeued in the local buffer because the blocks it was included in no longer lead to the fork choice.
-    // Some of the old blocks may become un-orphaned again if the fork choice switches back to their branch.
+    // A deploy has been requeued in the local buffer because none of the blocks it was included in are
+    // in the p-past cone of the fork choice. Some of the existing blocks may become un-orphaned again if
+    // the fork choice switches back to their branch.
     message DeployRequeued {
         io.casperlabs.casper.consensus.Deploy deploy = 1;
     }
 
-    // A deploy was included in a block.
+    // A deploy was executed and included in a block.
     message DeployProcessed {
         bytes block_hash = 1;
         io.casperlabs.casper.consensus.Block.ProcessedDeploy processed_deploy = 2;
     }
 
-    // A block the deploy was included in has been finalized. Every DeployProcessed event should eventually end up being
-    // finalized or orphaned (anti-finalized).
+    // A block the deploy was included in has been finalized. Every `DeployProcessed` event should
+    // eventually end up being finalized or orphaned (anti-finalized).
     message DeployFinalized {
         // This block has been finalized directly or indirectly.
         bytes block_hash = 1;
@@ -139,7 +140,7 @@ message Event {
     message DeployOrphaned {
        // This block has been passed by the Last Finalized Block and will never be included in the main chain.
        bytes block_hash = 1;
-       // Including the full DeployInfo with all the alternative processing results so we can see if there's another,
+       // Including the full `DeployInfo `with all the alternative processing results so we can see if there's another,
        // finalized block, or something else to wait for. Otherwise the client could pair up Processed and
        // Finalized/Anti-finalized events but if they miss something they'd most likely query the status of the deploy anyway.
        DeployInfo deploy_info = 2;
