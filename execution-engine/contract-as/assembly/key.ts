@@ -13,11 +13,52 @@ export enum KeyVariant {
     UREF_ID = 2,
 }
 
+export const PUBLIC_KEY_ED25519_ID: u8 = 0;
+
+export class PublicKey {
+    constructor(public variant: u8, public bytes: Uint8Array) {}
+
+    @operator("==")
+    equalsTo(other: PublicKey): bool {
+        return this.variant == other.variant && checkTypedArrayEqual(this.bytes, other.bytes);
+    }
+
+    @operator("!=")
+    notEqualsTo(other: PublicKey): bool {
+        return !this.equalsTo(other);
+    }
+
+    static fromBytes(bytes: Uint8Array): Result<PublicKey> {
+        if (bytes.length < 33) {
+            return new Result<PublicKey>(null, BytesreprError.EarlyEndOfStream, 0);
+        }
+
+        let currentPos = 1;
+        const variant = bytes[0];
+        if (variant == PUBLIC_KEY_ED25519_ID) {
+            let publicKeyBytes = bytes.subarray(currentPos, currentPos + 32);
+            currentPos += 32;
+            let publicKey = new PublicKey(variant, publicKeyBytes);
+            let ref = new Ref<PublicKey>(publicKey);
+            return new Result<PublicKey>(ref, BytesreprError.Ok, currentPos);
+        }
+        else {
+            return new Result<PublicKey>(null, BytesreprError.FormattingError, currentPos);
+        }
+    }
+
+    toBytes(): Array<u8> {
+        let bytes = new Array<u8>(1);
+        bytes[0] = <u8>this.variant;
+        return bytes.concat(typedToArray(this.bytes));
+    }
+}
+
 export class Key {
     variant: KeyVariant;
     hash: Uint8Array | null;
     uref: URef | null;
-    account: Uint8Array | null;
+    account: PublicKey | null;
 
     static fromURef(uref: URef): Key {
         let key = new Key();
@@ -33,7 +74,7 @@ export class Key {
         return key;
     }
 
-    static fromAccount(account: Uint8Array): Key {
+    static fromAccount(account: PublicKey): Key {
         let key = new Key();
         key.variant = KeyVariant.ACCOUNT_ID;
         key.account = account;
@@ -88,9 +129,13 @@ export class Key {
             return new Result<Key>(ref, BytesreprError.Ok, currentPos + urefResult.position);
         }
         else if (tag == KeyVariant.ACCOUNT_ID) {
-            var accountBytes = bytes.subarray(1, 32 + 1);
-            currentPos += 32;
-            let key = Key.fromAccount(accountBytes);
+            let publicKeyBytes = bytes.subarray(1);
+            let publicKeyResult = PublicKey.fromBytes(publicKeyBytes);
+            if (publicKeyResult.hasError()) {
+                return new Result<Key>(null, publicKeyResult.error, currentPos);
+            }
+            currentPos += publicKeyResult.position;
+            let key = Key.fromAccount(publicKeyResult.value);
             let ref = new Ref<Key>(key);
             return new Result<Key>(ref, BytesreprError.Ok, currentPos);
         }
@@ -116,11 +161,7 @@ export class Key {
             return bytes;
         }
         else if (this.variant == KeyVariant.ACCOUNT_ID) {
-            var accountBytes = <Uint8Array>this.account;
-            let bytes = new Array<u8>(1);
-            bytes[0] = <u8>this.variant;
-            bytes = bytes.concat(typedToArray(accountBytes));
-            return bytes;
+            return this.account.toBytes();
         }
         else {
             return <Array<u8>>unreachable();
@@ -193,7 +234,7 @@ export class Key {
         }
         else if (this.variant == KeyVariant.ACCOUNT_ID) {
             if (other.variant == KeyVariant.ACCOUNT_ID) {
-                return checkTypedArrayEqual(<Uint8Array>this.account, <Uint8Array>other.account);
+                return <PublicKey>this.account == <PublicKey>other.account;
             }
             else {
                 return false;

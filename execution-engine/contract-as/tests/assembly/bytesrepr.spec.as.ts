@@ -8,7 +8,7 @@ import { fromBytesU64, toBytesU64,
          toBytesVecT,
          Error } from "../../assembly/bytesrepr";
 import { CLValue } from "../../assembly/clvalue";
-import { Key, KeyVariant } from "../../assembly/key";
+import { Key, KeyVariant, PublicKey, PUBLIC_KEY_ED25519_ID } from "../../assembly/key";
 import { URef, AccessRights } from "../../assembly/uref";
 import { Option } from "../../assembly/option";
 import { hex2bin } from "../utils/helpers";
@@ -293,7 +293,7 @@ export function testDecodedOptionalIsSome(): bool {
 export function testDeserMapOfNamedKeys(): bool {
 
     let extraBytes = "fffefd";
-    let truthBytes = "030000000100000041000101010101010101010101010101010101010101010101010101010101010101020000004242020202020202020202020202020202020202020202020202020202020202020202010703000000434343010303030303030303030303030303030303030303030303030303030303030303";
+    let truthBytes = "03000000010000004100000101010101010101010101010101010101010101010101010101010101010101020000004242020202020202020202020202020202020202020202020202020202020202020202010703000000434343010303030303030303030303030303030303030303030303030303030303030303";
 
     let truth = hex2bin(truthBytes + extraBytes);
 
@@ -314,7 +314,8 @@ export function testDeserMapOfNamedKeys(): bool {
     let accountBytes = new Array<u8>(32);
     accountBytes.fill(1);
 
-    assert(checkTypedArrayEqual(<Uint8Array>deser[0].second.account, arrayToTyped(accountBytes)));
+    assert(checkTypedArrayEqual((<PublicKey>deser[0].second.account).bytes, arrayToTyped(accountBytes)));
+    assert(checkTypedArrayEqual((<PublicKey>deser[0].second.account).bytes, arrayToTyped(accountBytes)));
 
     //
 
@@ -342,7 +343,7 @@ export function testDeserMapOfNamedKeys(): bool {
     // Compares to truth
 
     let truthObj = new Array<Pair<String, Key>>();
-    let keyA = Key.fromAccount(arrayToTyped(accountBytes));
+    let keyA = Key.fromAccount(new PublicKey(PUBLIC_KEY_ED25519_ID, arrayToTyped(accountBytes)));
     truthObj.push(new Pair<String, Key>("A", keyA));
 
     let urefB = new URef(arrayToTyped(urefBytes), AccessRights.READ_ADD_WRITE);
