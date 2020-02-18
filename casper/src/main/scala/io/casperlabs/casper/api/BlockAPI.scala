@@ -318,12 +318,13 @@ object BlockAPI {
   ): F[List[BlockInfo]] =
     getBlockInfosWithDeploys[F](depth, maxRank, None, blockView).map(_.map(_._1))
 
-  def accountBalance[F[_]: MonadThrowable: BlockStorage: DeployStorage: DagStorage: ExecutionEngineService](
-      blockHashBase16: String,
+  def accountBalance[F[_]: MonadThrowable: Log: MultiParentCasperRef: DeployStorage: DagStorage: Fs2Compiler: ExecutionEngineService](
       accountKey: ByteString
   ): F[String] =
     for {
-      info            <- BlockAPI.getBlockInfo[F](blockHashBase16, BlockInfo.View.BASIC)
+      info <- BlockAPI
+               .getBlockInfos[F](1)
+               .map(_.head) // Safe to unwrap because there is at least a genesis block
       stateHash       = info.getSummary.getHeader.getState.postStateHash
       protocolVersion = info.getSummary.getHeader.getProtocolVersion
       getState = (keyValue: Key.Value) =>

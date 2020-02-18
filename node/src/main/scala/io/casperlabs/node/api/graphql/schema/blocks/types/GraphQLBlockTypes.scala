@@ -11,10 +11,7 @@ import io.casperlabs.casper.consensus.info._
 import io.casperlabs.crypto.codec.{Base16, ByteArraySyntax}
 import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.node.api.graphql.schema.blocks
-import io.casperlabs.node.api.graphql.schema.blocks.types.GraphQLBlockTypes.{
-  AccountKey,
-  BlockHashPrefix
-}
+import io.casperlabs.node.api.graphql.schema.blocks.types.GraphQLBlockTypes.AccountKey
 import io.casperlabs.node.api.graphql.schema.utils.{DateType, ProtocolVersionType}
 import sangria.execution.deferred._
 import sangria.schema._
@@ -29,7 +26,7 @@ case class DeployInfosWithPageInfo(deployInfos: List[DeployInfo], pageInfo: Page
 class GraphQLBlockTypes(
     val blockFetcher: Fetcher[Unit, BlockAndMaybeDeploys, BlockAndMaybeDeploys, BlockHash],
     val blocksByValidator: (Validator, Int, Long) => Action[Unit, List[BlockAndMaybeDeploys]],
-    val accountBalance: (BlockHashPrefix, AccountKey) => Action[Unit, String],
+    val accountBalance: AccountKey => Action[Unit, String],
     val accountDeploys: (AccountKey, Int, String) => Action[Unit, DeployInfosWithPageInfo]
 ) {
 
@@ -191,13 +188,11 @@ class GraphQLBlockTypes(
           "Account's public key in Base64 encoding".some,
           resolve = c => c.value.toByteArray.base64Encode
         ),
-        // TODO: Add description
         Field(
           "balance",
           StringType,
-          None,
-          arguments = blocks.arguments.BlockHashPrefix :: Nil,
-          resolve = c => accountBalance(c.arg(blocks.arguments.BlockHashPrefix), c.value)
+          "Account's balance at the latest block in motes".some,
+          resolve = c => accountBalance(c.value)
         ),
         Field(
           "deploys",

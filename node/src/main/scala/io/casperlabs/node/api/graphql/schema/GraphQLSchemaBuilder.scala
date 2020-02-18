@@ -103,12 +103,8 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream
         )
         .unsafeToFuture
 
-  val accountBalance = { (blockHashPrefixBase16: BlockHashPrefix, accountKey: AccountKey) =>
-    val program = for {
-      prefix  <- validateBlockHashPrefix[F](blockHashPrefixBase16, ByteString.EMPTY)
-      balance <- BlockAPI.accountBalance[F](prefix, accountKey)
-    } yield balance
-    program.unsafeToFuture: Action[Unit, String]
+  val accountBalance: AccountKey => Action[Unit, String] = { accountKey =>
+    BlockAPI.accountBalance[F](accountKey).unsafeToFuture
   }
 
   val accountDeploys: (AccountKey, Int, String) => Action[Unit, DeployInfosWithPageInfo] = {
