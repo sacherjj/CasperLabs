@@ -2,7 +2,7 @@ package io.casperlabs.casper.highway
 
 import cats._
 import cats.implicits._
-import cats.effect.Clock
+import cats.effect.{Clock, Timer}
 import cats.effect.concurrent.{Ref, Semaphore}
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.{DeploySelection, ValidatorIdentity}
@@ -64,14 +64,17 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
     * turn validation on/off and capture the effects it carries out.
     */
   abstract class ExecutorFixture(
+      store: SQLiteStorage.CombinedStorage[Task],
       printLevel: Log.Level = Log.Level.Error,
       validate: Boolean = false
-  )(
-      implicit db: SQLiteStorage.CombinedStorage[Task]
   ) extends Fixture(
         length = Duration.Zero,
         printLevel = printLevel
-      ) {
+      ) (implicitly[Timer[Task]], store) {
+
+    // Passed `store` to the base class explicitly to avoid a compiler bug,
+    // the NullPointerException of the type checker that can happen.
+    implicit val db = store
 
     override lazy val bonds = List(
       // Our validators needs to be bonded in Genesis, so the blocks created by them don't get rejected.
@@ -175,7 +178,7 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
   behavior of "validateAndAdd"
 
   it should "validate and save a valid block" in executorFixture { implicit db =>
-    new ExecutorFixture(validate = true, printLevel = Log.Level.Warn) {
+    new ExecutorFixture(db, validate = true, printLevel = Log.Level.Warn) {
       override def test =
         for {
           block <- prepareSecondBlock()
@@ -188,7 +191,7 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
   }
 
   it should "validate and save a ballot" in executorFixture { implicit db =>
-    new ExecutorFixture(validate = true, printLevel = Log.Level.Warn) {
+    new ExecutorFixture(db, validate = true, printLevel = Log.Level.Warn) {
       override def test =
         for {
           (ballot: Block) <- prepareSecondBlock().map { block =>
@@ -207,7 +210,7 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
   }
 
   it should "raise an error for unattributable errors" in executorFixture { implicit db =>
-    new ExecutorFixture(validate = true, printLevel = Log.Level.Crit) {
+    new ExecutorFixture(db, validate = true, printLevel = Log.Level.Crit) {
       override def test =
         for {
           // A block without signature cannot be a slashed
@@ -225,7 +228,7 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
   // TODO (CON-623): In the future we want these not to raise, but for that the fork
   // choice would also have to know not to build on them because they are invalid blocks.
   it should "raise an error for attributable errors" in executorFixture { implicit db =>
-    new ExecutorFixture(validate = true, printLevel = Log.Level.Crit) {
+    new ExecutorFixture(db, validate = true, printLevel = Log.Level.Crit) {
       override def test =
         for {
           // Make a block that signed by the validator that has invalid content.
@@ -243,7 +246,7 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
   }
 
   it should "save an equivocation" in executorFixture { implicit db =>
-    new ExecutorFixture(validate = true) {
+    new ExecutorFixture(db, validate = true) {
       override def test =
         for {
           first <- insertFirstBlock()
@@ -278,7 +281,7 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
 
   it should "not consider blocks that don't cite each other across eras as equivocations" in executorFixture {
     implicit db =>
-      new ExecutorFixture(validate = true) {
+      new ExecutorFixture(db, validate = true) {
         override def test =
           for {
             era0  <- addGenesisEra()
@@ -316,7 +319,7 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
   }
 
   it should "not emit events" in executorFixture { implicit db =>
-    new ExecutorFixture {
+    new ExecutorFixture(db) {
       override def test =
         for {
           block  <- prepareSecondBlock()
@@ -331,7 +334,7 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
   behavior of "effectsAfterAdded"
 
   it should "emit events" in executorFixture { implicit db =>
-    new ExecutorFixture {
+    new ExecutorFixture(db) {
       override def test =
         for {
           block   <- insertFirstBlock()
@@ -347,7 +350,7 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
   }
 
   it should "tell the finalizer about the new blocks" in executorFixture { implicit db =>
-    new ExecutorFixture {
+    new ExecutorFixture(db) {
 
       val messageAddedRef = Ref.unsafe[Task, Option[Message]](none)
 
@@ -368,7 +371,7 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
   }
 
   it should "mark deploys as processed" in executorFixture { implicit db =>
-    new ExecutorFixture {
+    new ExecutorFixture(db) {
       override def test =
         for {
           block   <- sample(arbBlock.arbitrary.filter(_.getBody.deploys.size > 0)).pure[Task]
@@ -405,7 +408,7 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
   }
 
   it should "return the effects of a valid block" in executorFixture { implicit db =>
-    new ExecutorFixture with ExecEngineSerivceWithFakeEffects {
+    new ExecutorFixture(db) with ExecEngineSerivceWithFakeEffects {
       override def test =
         messageExecutor.computeEffects(sampleBlockWithDeploys, false) map {
           case (status, effects) =>
@@ -419,7 +422,7 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
     val functorRaiseInvalidBlock =
       validation.raiseValidateErrorThroughApplicativeError[Task]
 
-    new ExecutorFixture with ExecEngineSerivceWithFakeEffects {
+    new ExecutorFixture(db) with ExecEngineSerivceWithFakeEffects {
       // Fake validation which let's everything through but it raises the one
       // invalid status which should result in a block being saved.
       override lazy val validation = new NoOpValidation[Task] {
