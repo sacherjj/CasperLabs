@@ -6,6 +6,7 @@ use crate::tracking_copy::TrackingCopyQueryResult;
 pub enum QueryResult {
     RootNotFound,
     ValueNotFound(String),
+    CircularReference(String),
     Success(StoredValue),
 }
 
@@ -41,8 +42,9 @@ impl QueryRequest {
 impl From<TrackingCopyQueryResult> for QueryResult {
     fn from(tracking_copy_query_result: TrackingCopyQueryResult) -> Self {
         match tracking_copy_query_result {
-            TrackingCopyQueryResult::ValueNotFound(full_path) => {
-                QueryResult::ValueNotFound(full_path)
+            TrackingCopyQueryResult::ValueNotFound(message) => QueryResult::ValueNotFound(message),
+            TrackingCopyQueryResult::CircularReference(message) => {
+                QueryResult::CircularReference(message)
             }
             TrackingCopyQueryResult::Success(value) => QueryResult::Success(value),
         }

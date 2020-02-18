@@ -60,7 +60,7 @@ final case class CasperState(
 )
 
 @silent("is never used")
-class MultiParentCasperImpl[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: DagStorage: DeployBuffer: ExecutionEngineService: MultiParentFinalizer: DeployStorage: Validation: Fs2Compiler: DeploySelection: CasperLabsProtocol: EventEmitter](
+class MultiParentCasperImpl[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: DagStorage: DeployBuffer: ExecutionEngineService: MultiParentFinalizer: DeployStorage: Validation: Fs2Compiler: DeploySelection: CasperLabsProtocol: BlockEventEmitter: FinalityStorage](
     validatorSemaphoreMap: SemaphoreMap[F, ByteString],
     statelessExecutor: MultiParentCasperImpl.StatelessExecutor[F],
     validatorId: Option[ValidatorIdentity],
@@ -176,10 +176,15 @@ class MultiParentCasperImpl[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: 
                 )
                 val secondaryParentsFinalizedStr =
                   secondary.map(PrettyPrinter.buildString).mkString("{", ", ", "}")
-                Log[F].info(
-                  s"New last finalized block hashes are ${mainParentFinalizedStr -> null}, ${secondaryParentsFinalizedStr -> null}."
-                ) >> lfbRef.set(mainParent) >> EventEmitter[F]
-                  .newLastFinalizedBlock(mainParent, secondary)
+                for {
+                  _ <- Log[F].info(
+                        s"New last finalized block hashes are ${mainParentFinalizedStr -> null}, ${secondaryParentsFinalizedStr -> null}."
+                      )
+                  _ <- lfbRef.set(mainParent)
+                  _ <- FinalityStorage[F].markAsFinalized(mainParent, secondary)
+                  _ <- DeployBuffer[F].removeFinalizedDeploys(secondary + mainParent).forkAndLog
+                  _ <- BlockEventEmitter[F].newLastFinalizedBlock(mainParent, secondary)
+                } yield ()
               }
             }
       } yield ()
@@ -244,6 +249,7 @@ class MultiParentCasperImpl[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: 
           _ <- Log[F].info(
                 s"${parents.size} parents out of ${tipHashes.size} latest blocks will be used."
               )
+
           // Push any unfinalized deploys which are still in the buffer back to pending state if the
           // blocks they were contained have become orphans since we last tried to propose a block.
           // Doing this here rather than after adding blocks because it's quite costly; the downside
@@ -251,13 +257,20 @@ class MultiParentCasperImpl[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: 
           // Requeueing operation is changing status of orphaned deploys in the DB.
           // It's done as a transaction. If operation won't make it in time before
           // immediate `createProposal`, those deploys will be considered for the next block.
-          _ <- (DeployBuffer.requeueOrphanedDeploys[F](merged.parents.map(_.blockHash).toSet) >>= {
-                requeued =>
-                  Log[F].info(s"Re-queued $requeued orphaned deploys.").whenA(requeued > 0)
-              }).forkAndLog
+          _ <- {
+            for {
+              requeued <- DeployBuffer[F].requeueOrphanedDeploys(
+                           merged.parents.map(_.blockHash).toSet
+                         )
+              _ <- Log[F]
+                    .info(s"Re-queued ${requeued.size} orphaned deploys.")
+                    .whenA(requeued.nonEmpty)
+            } yield ()
+          }.forkAndLog
+
           timestamp <- Time[F].currentMillis
           props     <- CreateMessageProps(publicKey, latestMessages, merged)
-          remainingHashes <- DeployBuffer.remainingDeploys[F](
+          remainingHashes <- DeployBuffer[F].remainingDeploys(
                               dag,
                               parents.map(_.blockHash).toSet,
                               timestamp,
@@ -502,7 +515,7 @@ object MultiParentCasperImpl {
   def create[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: DagStorage: DeployBuffer: FinalityStorage: ExecutionEngineService: DeployStorage: Validation: CasperLabsProtocol: Cell[
     *[_],
     CasperState
-  ]: DeploySelection: EventEmitter](
+  ]: DeploySelection: BlockEventEmitter](
       semaphoreMap: SemaphoreMap[F, ByteString],
       statelessExecutor: StatelessExecutor[F],
       validatorId: Option[ValidatorIdentity],
@@ -540,7 +553,7 @@ object MultiParentCasperImpl {
 
   /** Component purely to validate, execute and store blocks.
     * Even the Genesis, to create it in the first place. */
-  class StatelessExecutor[F[_]: Sync: Time: Log: BlockStorage: DagStorage: DeployStorage: ExecutionEngineService: Metrics: DeployStorageWriter: Validation: CasperLabsProtocol: Fs2Compiler: EventEmitter](
+  class StatelessExecutor[F[_]: Sync: Time: Log: BlockStorage: DagStorage: DeployStorage: ExecutionEngineService: Metrics: DeployStorageWriter: Validation: CasperLabsProtocol: Fs2Compiler: BlockEventEmitter](
       validatorId: Option[Keys.PublicKey],
       chainName: String,
       upgrades: Seq[ipc.ChainSpec.UpgradePoint],
@@ -725,11 +738,7 @@ object MultiParentCasperImpl {
               BlockStorage[F]
                 .put(block.blockHash, block, blockEffects.effects)
             }
-        blockInfo <- BlockAPI.getBlockInfo[F](
-                      Base16.encode(block.blockHash.toByteArray),
-                      BlockInfo.View.FULL
-                    )
-        _ <- EventEmitter[F].blockAdded(blockInfo)
+        _ <- BlockEventEmitter[F].blockAdded(block.blockHash)
       } yield ()
 
     /** Check if the block has dependencies that we don't have in store.
@@ -775,7 +784,7 @@ object MultiParentCasperImpl {
       Metrics[F].incrementCounter("gas_spent", 0L)
     }
 
-    def create[F[_]: Concurrent: Time: Log: BlockStorage: DagStorage: ExecutionEngineService: Metrics: DeployStorage: Validation: CasperLabsProtocol: Fs2Compiler: EventEmitter](
+    def create[F[_]: Concurrent: Time: Log: BlockStorage: DagStorage: ExecutionEngineService: Metrics: DeployStorage: Validation: CasperLabsProtocol: Fs2Compiler: BlockEventEmitter](
         validatorId: Option[Keys.PublicKey],
         chainName: String,
         upgrades: Seq[ipc.ChainSpec.UpgradePoint]

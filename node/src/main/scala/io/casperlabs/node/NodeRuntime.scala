@@ -171,6 +171,14 @@ class NodeRuntime private[node] (
 
       maybeValidatorId <- Resource.liftF(ValidatorIdentity.fromConfig[Task](conf.casper))
 
+      implicit0(eventStream: EventStream[Task]) <- Resource.pure[Task, EventStream[Task]](
+                                                    EventStream
+                                                      .create[Task](
+                                                        ingressScheduler,
+                                                        conf.server.eventStreamBufferSize.value
+                                                      )
+                                                  )
+
       implicit0(deployBuffer: DeployBuffer[Task]) <- Resource.pure[Task, DeployBuffer[Task]](
                                                       DeployBuffer.create[Task](
                                                         chainSpec.getGenesis.name,
@@ -196,14 +204,6 @@ class NodeRuntime private[node] (
       lfb <- Resource.liftF[Task, BlockHash](
               storage.getLastFinalizedBlock
             )
-
-      implicit0(eventsStream: EventStream[Task]) <- Resource.pure[Task, EventStream[Task]](
-                                                     EventStream
-                                                       .create[Task](
-                                                         ingressScheduler,
-                                                         conf.server.eventStreamBufferSize.value
-                                                       )
-                                                   )
 
       implicit0(finalizedBlocksStream: FinalizedBlocksStream[Task]) <- Resource.suspend(
                                                                         FinalizedBlocksStream
@@ -334,12 +334,12 @@ class NodeRuntime private[node] (
             id,
             ingressScheduler
           )
-    } yield (nodeAsk, nodeDiscovery, storage.writer)
+    } yield (nodeAsk, nodeDiscovery, storage.writer, deployBuffer)
 
     resources.allocated flatMap {
-      case ((nodeAsk, nodeDiscovery, deployStorage), release) =>
+      case ((nodeAsk, nodeDiscovery, deployStorage, deployBuffer), release) =>
         handleUnrecoverableErrors {
-          nodeProgram(nodeAsk, nodeDiscovery, deployStorage, release)
+          nodeProgram(nodeAsk, nodeDiscovery, deployStorage, deployBuffer, release)
         }
     }
 
@@ -364,6 +364,7 @@ class NodeRuntime private[node] (
       localAsk: NodeAsk[Task],
       nodeDiscovery: NodeDiscovery[Task],
       deployStorageWriter: DeployStorageWriter[Task],
+      deployBuffer: DeployBuffer[Task],
       release: Task[Unit]
   ): Task[Unit] = {
 
@@ -383,7 +384,7 @@ class NodeRuntime private[node] (
     } yield ()
 
     val checkPendingDeploysExpirationLoop: Task[Unit] = for {
-      _ <- deployStorageWriter.markAsDiscarded(24.hours)
+      _ <- DeployBuffer[Task].discardExpiredDeploys(24.hours)
       _ <- time.sleep(1.minute)
     } yield ()
 

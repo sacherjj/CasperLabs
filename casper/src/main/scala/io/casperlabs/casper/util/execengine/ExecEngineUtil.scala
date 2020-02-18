@@ -23,6 +23,7 @@ import io.casperlabs.casper.validation.Validation.BlockEffects
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.ipc._
 import io.casperlabs.metrics.Metrics
+import io.casperlabs.mempool.DeployBuffer
 import io.casperlabs.models.{Message, SmartContractEngineError, DeployResult => _}
 import io.casperlabs.shared.Log
 import io.casperlabs.smartcontracts.ExecutionEngineService
@@ -137,7 +138,7 @@ object ExecEngineUtil {
     *
     * In essence, this simulates sequential execution EE should be providing natively.
     */
-  protected[execengine] def execCommitSeqDeploys[F[_]: MonadThrowable: Log: Metrics: DeployStorage: ExecutionEngineService](
+  protected[execengine] def execCommitSeqDeploys[F[_]: MonadThrowable: Log: Metrics: DeployStorage: DeployBuffer: ExecutionEngineService](
       prestateHash: ByteString,
       blocktime: Long,
       protocolVersion: state.ProtocolVersion,
@@ -201,7 +202,7 @@ object ExecEngineUtil {
 
   /** Given a set of chosen parents create a "deploy checkpoint".
     */
-  def computeDeploysCheckpoint[F[_]: MonadThrowable: DeployStorage: Log: ExecutionEngineService: DeploySelection: Metrics](
+  def computeDeploysCheckpoint[F[_]: MonadThrowable: DeployStorage: DeployBuffer: Log: ExecutionEngineService: DeploySelection: Metrics](
       merged: MergeResult[TransformMap, Block],
       deployStream: fs2.Stream[F, Deploy],
       blocktime: Long,
@@ -269,7 +270,7 @@ object ExecEngineUtil {
   // Then if a block gets finalized and we remove the deploys it contains, and _then_ one of them
   // turns up again for some reason, we'll treat it again as a pending deploy and try to include it.
   // At that point the EE will discard it as the nonce is in the past and we'll drop it here.
-  def handleInvalidDeploys[F[_]: MonadThrowable: DeployStorage: Log: Metrics](
+  def handleInvalidDeploys[F[_]: MonadThrowable: DeployStorage: DeployBuffer: Log: Metrics](
       invalidDeploys: List[PreconditionFailure]
   ): F[Unit] = Metrics[F].timer("handleInvalidDeploys") {
     for {
@@ -279,10 +280,9 @@ object ExecEngineUtil {
               s"${PrettyPrinter.buildString(d.deploy.deployHash) -> "deploy"} failed precondition error: ${d.errorMessage}"
             )
           }
-      _ <- DeployStorageWriter[F]
-            .markAsDiscarded(
-              invalidDeploys.map(pf => (pf.deploy, pf.errorMessage))
-            ) whenA invalidDeploys.nonEmpty
+      _ <- DeployBuffer[F].discardDeploys(
+            invalidDeploys.map(d => (d.deploy.deployHash, d.errorMessage))
+          )
     } yield ()
   }
 

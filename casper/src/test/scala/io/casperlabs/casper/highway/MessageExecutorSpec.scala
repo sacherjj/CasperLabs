@@ -96,7 +96,7 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
     }
 
     // Make blocks in the test validator's name.
-    override val messageProducer = makeMessageProducer(thisValidator)
+    override lazy val messageProducer = makeMessageProducer(thisValidator)
 
     // Produce the first block for the test validator validator, already inserted, with dependencies.
     def insertFirstBlock(): Task[Block] =
@@ -158,11 +158,11 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
         }
       } yield second
 
-    override def validation: Validation[Task] =
+    override lazy val validation: Validation[Task] =
       if (validate) new ValidationImpl[Task]() else new NoOpValidation[Task]
 
     // Collect emitted events.
-    override implicit val eventEmitter: MockEventEmitter[Task] =
+    override implicit lazy val eventEmitter: MockEventEmitter[Task] =
       MockEventEmitter.unsafe[Task]
 
     def validateAndAdd(block: Block): Task[Unit] =
@@ -351,7 +351,7 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
 
       val messageAddedRef = Ref.unsafe[Task, Option[Message]](none)
 
-      override val finalizer = new MultiParentFinalizer[Task] {
+      override lazy val finalizer = new MultiParentFinalizer[Task] {
         override def onNewMessageAdded(
             message: Message
         ) = messageAddedRef.set(Some(message)).as(none)
@@ -400,7 +400,7 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
     def sampleBlockWithDeploys =
       sample(arbBlock.arbitrary.filter(_.getBody.deploys.nonEmpty))
 
-    override def execEngineService =
+    override lazy val execEngineService =
       simpleEEApi[Task](initialBonds = Map.empty, generateConflict = false)
   }
 
@@ -422,7 +422,7 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
     new ExecutorFixture with ExecEngineSerivceWithFakeEffects {
       // Fake validation which let's everything through but it raises the one
       // invalid status which should result in a block being saved.
-      override def validation = new NoOpValidation[Task] {
+      override lazy val validation = new NoOpValidation[Task] {
         override def checkEquivocation(dag: DagRepresentation[Task], block: Block): Task[Unit] =
           functorRaiseInvalidBlock.raise(EquivocatedBlock)
       }

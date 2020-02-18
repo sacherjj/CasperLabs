@@ -15,8 +15,10 @@ import io.casperlabs.casper.mocks.NoOpValidation
 import io.casperlabs.casper.helper.NoOpsEventEmitter
 import io.casperlabs.casper.validation.raiseValidateErrorThroughApplicativeError
 import io.casperlabs.casper.validation.{Validation, ValidationImpl}
+import io.casperlabs.casper.DeploySelection
 import io.casperlabs.crypto.Keys.{PublicKey, PublicKeyBS}
 import io.casperlabs.comm.gossiping.{Relaying, WaitHandle}
+import io.casperlabs.mempool.DeployBuffer
 import io.casperlabs.models.ArbitraryConsensus
 import io.casperlabs.models.Message
 import io.casperlabs.shared.{Log, LogStub}
@@ -150,35 +152,42 @@ trait HighwayFixture
         printLevel = printLevel
       )
 
-    implicit def eventEmitter = NoOpsEventEmitter.create[Task]
+    implicit lazy val eventEmitter = NoOpsEventEmitter.create[Task]
 
-    implicit def forkchoice = MockForkChoice.unsafe[Task](genesis)
+    implicit lazy val forkchoice = MockForkChoice.unsafe[Task](genesis)
 
-    implicit def finalizer = new MultiParentFinalizer[Task] {
+    implicit lazy val finalizer = new MultiParentFinalizer[Task] {
       override def onNewMessageAdded(
           message: Message
       ): Task[Option[MultiParentFinalizer.FinalizedBlocks]] = none.pure[Task]
     }
 
-    implicit def execEngineService =
+    implicit lazy val deployBuffer = DeployBuffer.create[Task](chainName, minTtl = Duration.Zero)
+
+    implicit lazy val execEngineService =
       ExecutionEngineServiceStub.noOpApi[Task](
         bonds = genesisBlock.getHeader.getState.bonds
       )
+
+    implicit lazy val deploySelection = DeploySelection.create[Task](sizeLimitBytes = Int.MaxValue)
+
     implicit val validationRaise = raiseValidateErrorThroughApplicativeError[Task]
     implicit val protocol = CasperLabsProtocol.unsafe[Task](
       (0L, ProtocolVersion(0, 0, 0), none)
     )
     // While we're using the MockMessageProducer we can't fully validate blocks.
-    implicit def validation: Validation[Task]  = new NoOpValidation[Task]
-    def messageProducer: MessageProducer[Task] = new MockMessageProducer[Task](validator)
-    def messageExecutor: MessageExecutor[Task] = new MessageExecutor[Task](
+    implicit lazy val validation: Validation[Task] = new NoOpValidation[Task]
+
+    lazy val messageProducer: MessageProducer[Task] = new MockMessageProducer[Task](validator)
+
+    lazy val messageExecutor: MessageExecutor[Task] = new MessageExecutor[Task](
       chainName = chainName,
       genesis = genesisBlock,
       upgrades = Seq.empty,
       maybeValidatorId = Some(validator: PublicKeyBS)
     )
 
-    implicit def relaying = new Relaying[Task] {
+    implicit lazy val relaying = new Relaying[Task] {
       override def relay(hashes: List[BlockHash]): Task[WaitHandle[Task]] = ().pure[Task].pure[Task]
     }
 

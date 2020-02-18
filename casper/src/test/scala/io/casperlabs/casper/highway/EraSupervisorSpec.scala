@@ -96,7 +96,7 @@ class EraSupervisorSpec extends FlatSpec with Matchers with Inspectors with High
         val validatorId: PublicKeyBS              = validator
         val relayedRef: Ref[Task, Set[BlockHash]] = Ref.unsafe(Set.empty)
 
-        override val relaying = new Relaying[Task] {
+        override lazy val relaying = new Relaying[Task] {
           override def relay(hashes: List[BlockHash]): Task[WaitHandle[Task]] =
             for {
               _           <- relayedRef.update(_ ++ hashes)

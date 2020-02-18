@@ -125,7 +125,7 @@ class MessageProducerSpec extends FlatSpec with Matchers with Inspectors with Hi
         val (privateKey, publicKey) = Ed25519.newKeyPair
         val validatorId             = PublicKey(ByteString.copyFrom(publicKey))
 
-        override val messageProducer: MessageProducer[Task] = {
+        override lazy val messageProducer: MessageProducer[Task] = {
           implicit val deployBuffer    = DeployBuffer.create[Task](chainName, minTtl = Duration.Zero)
           implicit val deploySelection = DeploySelection.create[Task](sizeLimitBytes = Int.MaxValue)
 

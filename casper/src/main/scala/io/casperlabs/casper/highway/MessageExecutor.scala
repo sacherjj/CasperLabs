@@ -2,7 +2,7 @@ package io.casperlabs.casper.highway
 
 import cats._
 import cats.implicits._
-import cats.effect.Sync
+import cats.effect.{Concurrent, Sync}
 import cats.mtl.FunctorRaise
 import cats.effect.concurrent.Semaphore
 import io.casperlabs.casper.api.BlockAPI
@@ -17,9 +17,11 @@ import io.casperlabs.casper.util.CasperLabsProtocol
 import io.casperlabs.casper._
 import io.casperlabs.casper.util.execengine.ExecEngineUtil
 import io.casperlabs.catscontrib.{Fs2Compiler, MonadThrowable}
+import io.casperlabs.catscontrib.effect.implicits.fiberSyntax
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.Keys.PublicKeyBS
 import io.casperlabs.ipc
+import io.casperlabs.mempool.DeployBuffer
 import io.casperlabs.models.Message
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.implicits._ // for .timer syntax
@@ -27,12 +29,12 @@ import io.casperlabs.shared.{FatalError, Log, Time}
 import io.casperlabs.storage.BlockMsgWithTransform
 import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.storage.deploy.{DeployStorage, DeployStorageWriter}
-import io.casperlabs.storage.dag.DagStorage
+import io.casperlabs.storage.dag.{DagStorage, FinalityStorage}
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import scala.util.control.NonFatal
 
 /** A stateless class to encapsulate the steps to validate, execute and store a block. */
-class MessageExecutor[F[_]: Sync: Log: Time: Metrics: BlockStorage: DagStorage: DeployStorage: EventEmitter: Validation: CasperLabsProtocol: ExecutionEngineService: Fs2Compiler: MultiParentFinalizer](
+class MessageExecutor[F[_]: Concurrent: Log: Time: Metrics: BlockStorage: DagStorage: DeployStorage: BlockEventEmitter: Validation: CasperLabsProtocol: ExecutionEngineService: Fs2Compiler: MultiParentFinalizer: FinalityStorage: DeployBuffer](
     chainName: String,
     genesis: Block,
     upgrades: Seq[ipc.ChainSpec.UpgradePoint],
@@ -83,13 +85,10 @@ class MessageExecutor[F[_]: Sync: Log: Time: Metrics: BlockStorage: DagStorage: 
     */
   def effectsAfterAdded(message: ValidatedMessage): F[Unit] =
     for {
-      info <- BlockAPI.getBlockInfo[F](
-               Base16.encode(message.messageHash.toByteArray),
-               BlockInfo.View.FULL
-             )
-      _ <- EventEmitter[F].blockAdded(info)
-      _ <- updateLastFinalizedBlock(message)
       _ <- markDeploysAsProcessed(message)
+      // Forking event emissions so as not to hold up block processing.
+      _ <- BlockEventEmitter[F].blockAdded(message.messageHash).forkAndLog
+      _ <- updateLastFinalizedBlock(message)
     } yield ()
 
   private def updateLastFinalizedBlock(message: Message): F[Unit] =
@@ -100,10 +99,14 @@ class MessageExecutor[F[_]: Sync: Log: Time: Metrics: BlockStorage: DagStorage: 
               val mainParentFinalizedStr = mainParent.show
               val secondaryParentsFinalizedStr =
                 secondary.map(_.show).mkString("{", ", ", "}")
-              Log[F].info(
-                s"New last finalized block hashes are ${mainParentFinalizedStr -> null}, ${secondaryParentsFinalizedStr -> null}."
-              ) >> EventEmitter[F]
-                .newLastFinalizedBlock(mainParent, secondary)
+              for {
+                _ <- Log[F].info(
+                      s"New last finalized block hashes are ${mainParentFinalizedStr -> null}, ${secondaryParentsFinalizedStr -> null}."
+                    )
+                _ <- FinalityStorage[F].markAsFinalized(mainParent, secondary)
+                _ <- DeployBuffer[F].removeFinalizedDeploys(secondary + mainParent).forkAndLog
+                _ <- BlockEventEmitter[F].newLastFinalizedBlock(mainParent, secondary).forkAndLog
+              } yield ()
             }
           }
     } yield ()
