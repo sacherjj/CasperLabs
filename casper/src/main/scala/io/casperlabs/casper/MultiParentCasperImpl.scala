@@ -732,11 +732,7 @@ object MultiParentCasperImpl {
               BlockStorage[F]
                 .put(block.blockHash, block, blockEffects.effects)
             }
-        blockInfo <- BlockAPI.getBlockInfo[F](
-                      Base16.encode(block.blockHash.toByteArray),
-                      BlockInfo.View.FULL
-                    )
-        _ <- EventEmitter[F].blockAdded(blockInfo)
+        _ <- EventEmitter[F].blockAdded(block.blockHash)
       } yield ()
 
     /** Check if the block has dependencies that we don't have in store.

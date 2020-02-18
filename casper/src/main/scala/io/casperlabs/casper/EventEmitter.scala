@@ -1,7 +1,6 @@
 package io.casperlabs.casper
 
 import io.casperlabs.casper.Estimator.BlockHash
-import io.casperlabs.casper.consensus.info.BlockInfo
 import io.casperlabs.casper.consensus.Deploy
 import io.casperlabs.casper.consensus.Block.ProcessedDeploy
 import simulacrum.typeclass
@@ -17,7 +16,7 @@ import simulacrum.typeclass
 
 /** Emit events based on whole blocks. Includes raising events for the deploys embedded in the blocks. */
 @typeclass trait BlockEventEmitter[F[_]] {
-  def blockAdded(blockInfo: BlockInfo): F[Unit]
+  def blockAdded(blockHash: BlockHash): F[Unit]
   def newLastFinalizedBlock(
       lfb: BlockHash,
       indirectlyFinalized: Set[BlockHash]

@@ -4,8 +4,10 @@ import cats._
 import cats.implicits._
 import cats.effect._
 import com.google.protobuf.ByteString
+import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.casper.DeployHash
 import io.casperlabs.casper.Estimator.BlockHash
+import io.casperlabs.casper.api.BlockAPI
 import io.casperlabs.casper.consensus.info.{BlockInfo, DeployInfo, Event}
 import io.casperlabs.casper.consensus.Deploy
 import io.casperlabs.casper.EventEmitter
@@ -14,6 +16,7 @@ import io.casperlabs.metrics.Metrics
 import io.casperlabs.node.api.casper.StreamEventsRequest
 import io.casperlabs.node.api.graphql.FinalizedBlocksStream
 import io.casperlabs.storage.block.BlockStorage
+import io.casperlabs.storage.dag.DagStorage
 import io.casperlabs.storage.deploy.DeployStorage
 import monix.execution.{Ack, Scheduler}
 import monix.reactive.{Observable, OverflowStrategy}
@@ -26,7 +29,7 @@ import io.casperlabs.shared.Log
 }
 
 object EventStream {
-  def create[F[_]: Concurrent: DeployStorage: BlockStorage: Log: Metrics](
+  def create[F[_]: Concurrent: DeployStorage: BlockStorage: DagStorage: Log: Metrics](
       scheduler: Scheduler,
       eventStreamBufferSize: Int
   ): EventStream[F] = {
@@ -90,24 +93,29 @@ object EventStream {
         }
       }
 
-      override def blockAdded(blockInfo: BlockInfo): F[Unit] =
-        emit {
-          Event().withBlockAdded(BlockAdded().withBlock(blockInfo))
-        } >> {
-          val blockHash = blockInfo.getSummary.blockHash
-          DeployStorage[F].reader
-            .getProcessedDeploys(blockHash)
-            .flatMap { deploys =>
-              deploys.traverse { d =>
-                emit {
-                  Event().withDeployProcessed(
-                    DeployProcessed().withBlockHash(blockHash).withProcessedDeploy(d)
-                  )
-                }
+      override def blockAdded(blockHash: BlockHash): F[Unit] = {
+        BlockAPI.getBlockInfo[F](
+          Base16.encode(blockHash.toByteArray),
+          BlockInfo.View.FULL
+        ) flatMap { blockInfo =>
+          emit {
+            Event().withBlockAdded(BlockAdded().withBlock(blockInfo))
+          }
+        }
+      } >> {
+        DeployStorage[F].reader
+          .getProcessedDeploys(blockHash)
+          .flatMap { deploys =>
+            deploys.traverse { d =>
+              emit {
+                Event().withDeployProcessed(
+                  DeployProcessed().withBlockHash(blockHash).withProcessedDeploy(d)
+                )
               }
             }
-            .void
-        }
+          }
+          .void
+      }
 
       override def newLastFinalizedBlock(
           lfb: BlockHash,

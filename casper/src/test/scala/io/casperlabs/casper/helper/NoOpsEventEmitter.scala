@@ -7,7 +7,6 @@ import io.casperlabs.casper.DeployHash
 import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.EventEmitter
 import io.casperlabs.casper.consensus.Deploy
-import io.casperlabs.casper.consensus.info.BlockInfo
 import io.casperlabs.mempool.DeployBuffer
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.storage.block.BlockStorage
@@ -18,7 +17,7 @@ import io.casperlabs.storage.dag.FinalityStorage
 object NoOpsEventEmitter {
   def create[F[_]: Applicative]: EventEmitter[F] =
     new EventEmitter[F] {
-      override def blockAdded(block: BlockInfo): F[Unit] = ().pure[F]
+      override def blockAdded(blockHash: BlockHash): F[Unit] = ().pure[F]
 
       override def newLastFinalizedBlock(
           lfb: BlockHash,
