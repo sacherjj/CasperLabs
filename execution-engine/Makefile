@@ -69,7 +69,7 @@ INTEGRATION_CONTRACTS += \
 	pos-bonding \
 	remove-associated-key \
 	standard-payment \
-	transfer-to-account \
+	transfer-to-account-u512 \
 	unbonding-call
 
 INTEGRATION_CONTRACTS := $(patsubst %, build-integration-contract-rs/%, $(INTEGRATION_CONTRACTS))

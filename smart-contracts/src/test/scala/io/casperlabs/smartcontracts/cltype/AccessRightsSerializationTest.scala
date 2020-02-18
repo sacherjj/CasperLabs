@@ -8,7 +8,7 @@ import AccessRightsSerializationTest.arbAccessRights
 
 class AccessRightsSerializationTest extends FlatSpec with Matchers with PropertyChecks {
   "AccessRights" should "serialize properly" in forAll { (a: AccessRights) =>
-    roundTrip(a)
+    roundTrip(a, AccessRights.deserializer)
   }
 }
 

@@ -1,10 +1,11 @@
 import * as CL from "../../../../contract-as/assembly";
 import {Error, ErrorCode} from "../../../../contract-as/assembly/error";
 import {CLValue} from "../../../../contract-as/assembly/clvalue";
-import {PurseId} from "../../../../contract-as/assembly/purseid";
+import {URef} from "../../../../contract-as/assembly/uref";
 import {U512} from "../../../../contract-as/assembly/bignum";
 import {Key} from "../../../../contract-as/assembly/key";
 import {getMainPurse} from "../../../../contract-as/assembly/account";
+import {transferFromPurseToPurse} from "../../../../contract-as/assembly/purse";
 
 const POS_ACTION = "get_payment_purse";
 
@@ -30,14 +31,15 @@ export function entryPoint(amount: U512): void {
     return;
   }
 
-  let paymentPurseResult = PurseId.fromBytes(output);
+  let paymentPurseResult = URef.fromBytes(output);
   if (paymentPurseResult.hasError()) {
     Error.fromErrorCode(ErrorCode.InvalidPurse).revert();
     return;
   }
   let paymentPurse = paymentPurseResult.value;
 
-  let ret = mainPurse.transferToPurse(
+  let ret = transferFromPurseToPurse(
+    mainPurse,
     paymentPurse,
     amount,
   );

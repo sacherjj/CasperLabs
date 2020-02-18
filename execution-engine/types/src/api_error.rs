@@ -380,6 +380,8 @@ pub enum ApiError {
     HostBufferEmpty,
     /// The host buffer has been set to a value and should be consumed first by a read operation.
     HostBufferFull,
+    /// Could not lay out an array in memory
+    AllocLayout,
     /// Error specific to Mint contract.
     Mint(u8),
     /// Error specific to Proof of Stake contract.
@@ -513,6 +515,7 @@ impl From<ApiError> for u32 {
             ApiError::BufferTooSmall => 32,
             ApiError::HostBufferEmpty => 33,
             ApiError::HostBufferFull => 34,
+            ApiError::AllocLayout => 35,
             ApiError::Mint(value) => MINT_ERROR_OFFSET + u32::from(value),
             ApiError::ProofOfStake(value) => POS_ERROR_OFFSET + u32::from(value),
             ApiError::User(value) => RESERVED_ERROR_MAX + 1 + u32::from(value),
@@ -559,6 +562,7 @@ impl Debug for ApiError {
             ApiError::BufferTooSmall => write!(f, "ApiError::BufferTooSmall")?,
             ApiError::HostBufferEmpty => write!(f, "ApiError::HostBufferEmpty")?,
             ApiError::HostBufferFull => write!(f, "ApiError::HostBufferFull")?,
+            ApiError::AllocLayout => write!(f, "ApiError::AllocLayout")?,
             ApiError::Mint(value) => write!(f, "ApiError::Mint({})", value)?,
             ApiError::ProofOfStake(value) => write!(f, "ApiError::ProofOfStake({})", value)?,
             ApiError::User(value) => write!(f, "ApiError::User({})", value)?,
@@ -616,6 +620,7 @@ pub fn result_from(value: i32) -> Result<(), ApiError> {
         32 => Err(ApiError::BufferTooSmall),
         33 => Err(ApiError::HostBufferEmpty),
         34 => Err(ApiError::HostBufferFull),
+        35 => Err(ApiError::AllocLayout),
         _ => {
             if value > RESERVED_ERROR_MAX as i32 && value <= (2 * RESERVED_ERROR_MAX + 1) as i32 {
                 Err(ApiError::User(value as u16))
@@ -719,6 +724,7 @@ mod tests {
         round_trip(Err(ApiError::BufferTooSmall));
         round_trip(Err(ApiError::HostBufferEmpty));
         round_trip(Err(ApiError::HostBufferFull));
+        round_trip(Err(ApiError::AllocLayout));
         round_trip(Err(ApiError::Mint(0)));
         round_trip(Err(ApiError::Mint(u8::MAX)));
         round_trip(Err(ApiError::ProofOfStake(0)));

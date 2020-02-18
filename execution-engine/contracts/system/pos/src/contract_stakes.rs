@@ -4,8 +4,6 @@ use alloc::{
 };
 use core::fmt::Write;
 
-use base16;
-
 use contract::contract_api::runtime;
 use proof_of_stake::{Stakes, StakesProvider};
 use types::{

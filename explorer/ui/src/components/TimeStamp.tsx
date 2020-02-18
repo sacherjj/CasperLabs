@@ -1,15 +1,12 @@
-import TimeAgo from 'javascript-time-ago';
-import en from 'javascript-time-ago/locale/en';
 import React from 'react';
-
-TimeAgo.addLocale(en);
-const timeAgo = new TimeAgo();
+import moment from 'moment';
 
 const Timestamp = (props: { timestamp: number }) => {
   // Genesis has 0 timestamp which would print 50 years ago.
-  const d = new Date(props.timestamp);
+  const d = moment(props.timestamp);
+
   return props.timestamp ? (
-    <span title={d.toISOString()}>{timeAgo.format(d)}</span>
+    <span title={d.toISOString()}>{d.fromNow()}</span>
   ) : null;
 };
 export default Timestamp;

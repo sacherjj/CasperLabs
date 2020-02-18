@@ -26,7 +26,7 @@ Example output of the Scala client:
 
 account {
   public_key: "3030303030303030303030303030303030303030303030303030303030303030"
-  purse_id {
+  main_purse {
     uref: "0000000000000000000000000000000000000000000000000000000000000000"
     access_rights: READ_ADD_WRITE
   }
@@ -284,7 +284,10 @@ block_hash_queries = [
         {"key": "a91208047c", "path": "file.xxx", "key_type": "hash"},
         "INVALID_ARGUMENT: Key of type hash must have exactly 32 bytes",
     ),
-    ({"path": "file.xxx", "key_type": "hash"}, "INVALID_ARGUMENT: Value not found"),
+    (
+        {"path": "file.xxx", "key_type": "hash"},
+        "INVALID_ARGUMENT: Failed to find base key",
+    ),
 ]
 
 
@@ -1008,3 +1011,45 @@ def check_transfer_cli(cli):
         new_balance = cli("balance", "--block-hash", block_hash, "--address", account.public_key_hex)
         assert new_balance == balance + amount
         balance = new_balance
+
+
+def test_invalid_bigint(one_node_network):
+    # Test covering fix for NODE-1182
+    # Use a malformed BigInt contract argument
+    node = one_node_network.docker_nodes[0]
+    cli = DockerCLI(node)
+    session_wasm = cli.resource(Contract.ARGS_U512)
+
+    # Send in u512 with invalid string format, surrounded []
+    args = '[{"name": "arg_u512", "value": {"big_int": {"value": "[1000]", "bit_width": 512}}}]'
+    # fmt: off
+    deploy_hash = cli("deploy",
+                      "--private-key", cli.private_key_path(GENESIS_ACCOUNT),
+                      "--payment-amount", 10000000,
+                      "--session", session_wasm,
+                      "--session-args", cli.format_json_str(args))
+    # fmt: on
+
+    node.p_client.wait_for_deploy_processed(deploy_hash, on_error_raise=False, delay=1, timeout_seconds=30)
+
+    status = node.d_client.show_deploy(deploy_hash).status
+    assert status.state == "DISCARDED"
+    assert status.message == "Error parsing deploy arguments: InvalidBigIntValue([1000])"
+
+    # Send in u512 valid as 1000.
+    args = '[{"name": "arg_u512", "value": {"big_int": {"value": "1000", "bit_width": 512}}}]'
+    # fmt: off
+    deploy_hash = cli("deploy",
+                      "--private-key", cli.private_key_path(GENESIS_ACCOUNT),
+                      "--payment-amount", 10000000,
+                      "--session", session_wasm,
+                      "--session-args", cli.format_json_str(args))
+    # fmt: on
+
+    node.wait_for_deploy_processed_and_get_block_hash(deploy_hash, on_error_raise=False)
+
+    result = node.d_client.show_deploy(deploy_hash)
+
+    # User(code) in revert adds 65536 to the 1000
+    assert result.status.state == "PROCESSED"
+    assert result.processing_results.error_message == f"Exit code: {1000 + 65536}"

@@ -1,11 +1,7 @@
 use alloc::string::String;
 
 use contract::{contract_api::runtime, unwrap_or_revert::UnwrapOrRevert};
-use types::{
-    account::{PublicKey, PurseId},
-    bytesrepr::FromBytes,
-    CLTyped, ContractRef, U512,
-};
+use types::{account::PublicKey, bytesrepr::FromBytes, CLTyped, ContractRef, URef, U512};
 
 use crate::error::Error;
 
@@ -38,9 +34,9 @@ pub enum Api {
     AssertTotalSupply(U512),
     AssertAllowance(PublicKey, PublicKey, U512),
     BuyProxy(U512),
-    Buy(PurseId),
+    Buy(URef),
     SellProxy(U512),
-    Sell(PurseId, U512),
+    Sell(URef, U512),
 }
 
 fn get_arg<T: CLTyped + FromBytes>(i: u32) -> T {

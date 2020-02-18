@@ -19,8 +19,8 @@ pub fn delegate() {
     let purse_name: String = runtime::get_arg(Args::PurseName as u32)
         .unwrap_or_revert_with(ApiError::MissingArgument)
         .unwrap_or_revert_with(ApiError::InvalidArgument);
-    let purse_id = system::create_purse();
-    runtime::put_key(&purse_name, purse_id.value().into());
+    let purse = system::create_purse();
+    runtime::put_key(&purse_name, purse.into());
 }
 
 #[cfg(not(feature = "lib"))]

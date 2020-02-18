@@ -8,7 +8,7 @@ import StoredValueSerializationTest.arbStoredValue
 
 class StoredValueSerializationTest extends FlatSpec with Matchers with PropertyChecks {
   "StoredValues" should "serialize properly" in forAll { (v: StoredValue) =>
-    roundTrip(v)
+    roundTrip(v, StoredValue.deserializer)
   }
 }
 

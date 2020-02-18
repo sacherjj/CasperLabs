@@ -42,8 +42,6 @@ impl TryFrom<ChainSpec_GenesisAccount> for GenesisAccount {
 
 #[cfg(test)]
 mod tests {
-    use rand;
-
     use super::*;
     use crate::engine_server::mappings::test_utils;
 

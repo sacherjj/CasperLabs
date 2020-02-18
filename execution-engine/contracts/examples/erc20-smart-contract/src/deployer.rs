@@ -26,7 +26,7 @@ fn deploy_token(name: &str, initial_balance: U512) {
     // Create a smart contract purse.
     let token_purse = system::create_purse();
     let mut token_urefs: BTreeMap<String, Key> = BTreeMap::new();
-    token_urefs.insert(String::from(PURSE_NAME), token_purse.value().into());
+    token_urefs.insert(String::from(PURSE_NAME), token_purse.into());
 
     // Create erc20 token instance.
     let token_ref: ContractRef = storage::store_function_at_hash(ERC20_CONTRACT_NAME, token_urefs);

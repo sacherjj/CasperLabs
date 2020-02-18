@@ -246,11 +246,7 @@ pub fn list_named_keys() -> BTreeMap<String, Key> {
     bytesrepr::deserialize(bytes).unwrap_or_revert()
 }
 
-/// Returns `true` if the given [`URef`] is the account's
-/// [`PurseId`](casperlabs_types::account::PurseId) with identical
-/// [`AccessRights`](casperlabs_types::AccessRights), or if it's a member of the named keys with
-/// [`AccessRights`](casperlabs_types::AccessRights) no more permissive than those of the one in
-/// named keys.
+/// Validates uref against named keys.
 pub fn is_valid_uref(uref: URef) -> bool {
     let (uref_ptr, uref_size, _bytes) = contract_api::to_ptr(uref);
     let result = unsafe { ext_ffi::is_valid_uref(uref_ptr, uref_size) };

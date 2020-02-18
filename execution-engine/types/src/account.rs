@@ -11,11 +11,8 @@ use hex_fmt::HexFmt;
 
 use crate::{
     bytesrepr::{Error, FromBytes, ToBytes, U8_SERIALIZED_LENGTH},
-    CLType, CLTyped, URef, UREF_SERIALIZED_LENGTH,
+    CLType, CLTyped,
 };
-
-/// The number of bytes in a serialized [`PurseId`].
-pub const PURSE_ID_SERIALIZED_LENGTH: usize = UREF_SERIALIZED_LENGTH;
 
 // This error type is not intended to be used by third party crates.
 #[doc(hidden)]
@@ -25,46 +22,6 @@ pub struct TryFromIntError(());
 /// Associated error type of `TryFrom<&[u8]>` for [`PublicKey`].
 #[derive(Debug)]
 pub struct TryFromSliceForPublicKeyError(());
-
-/// A newtype wrapping a [`URef`](crate::URef) which represents the ID of a purse.
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
-pub struct PurseId(URef);
-
-impl PurseId {
-    /// Constructs a `PurseId` from a `URef`.
-    pub fn new(uref: URef) -> Self {
-        PurseId(uref)
-    }
-
-    /// Returns the wrapped `URef`.
-    pub fn value(&self) -> URef {
-        self.0
-    }
-}
-
-impl From<PurseId> for URef {
-    fn from(purse_id: PurseId) -> URef {
-        purse_id.value()
-    }
-}
-
-impl ToBytes for PurseId {
-    fn to_bytes(&self) -> Result<Vec<u8>, Error> {
-        ToBytes::to_bytes(&self.0)
-    }
-}
-
-impl FromBytes for PurseId {
-    fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
-        <URef>::from_bytes(bytes).map(|(uref, rem)| (PurseId::new(uref), rem))
-    }
-}
-
-impl CLTyped for PurseId {
-    fn cl_type() -> CLType {
-        CLType::URef
-    }
-}
 
 /// The various types of action which can be performed in the context of a given account.
 #[repr(u32)]
