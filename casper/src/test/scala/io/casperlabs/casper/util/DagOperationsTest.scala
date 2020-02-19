@@ -67,7 +67,7 @@ class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator with 
               .children(b.messageHash)
               .flatMap(_.toList.traverse(l => dag.lookup(l).map(_.get)))
           }(Monad[Task], dagTopoOrderingAsc)
-          _                   <- stream.toList.map(_.map(_.rank) shouldBe List(0, 1, 2, 2, 3, 3, 4, 4))
+          _                   <- stream.toList.map(_.map(_.jRank) shouldBe List(0, 1, 2, 2, 3, 3, 4, 4))
           dagTopoOrderingDesc = DagOperations.blockTopoOrderingDesc
           stream2 = DagOperations
             .bfToposortTraverseF[Task](
@@ -75,7 +75,7 @@ class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator with 
             ) { b =>
               b.parents.toList.traverse(l => dag.lookup(l).map(_.get))
             }(Monad[Task], dagTopoOrderingDesc)
-          _ <- stream2.toList.map(_.map(_.rank) shouldBe List(4, 4, 3, 3, 2, 2, 1, 0))
+          _ <- stream2.toList.map(_.map(_.jRank) shouldBe List(4, 4, 3, 3, 2, 2, 1, 0))
         } yield ()
   }
 

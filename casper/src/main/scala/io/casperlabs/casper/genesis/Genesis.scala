@@ -28,6 +28,7 @@ import io.casperlabs.storage.dag.FinalityStorage
 
 import scala.util._
 import scala.util.control.NoStackTrace
+import io.casperlabs.models.Message
 
 object Genesis {
   import Sorting.byteArrayOrdering
@@ -79,7 +80,8 @@ object Genesis {
         parentHashes = Nil,
         justifications = Nil,
         state = state,
-        rank = 0,
+        jRank = Message.asJRank(0),
+        mainRank = Message.asMainRank(0),
         validatorSeqNum = 0,
         validatorPrevBlockHash = ByteString.EMPTY,
         protocolVersion = genesisConfig.getProtocolVersion,

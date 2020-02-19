@@ -121,7 +121,7 @@ object MultiParentFinalizerTest extends BlockGenerator {
       .map(
         _.map(
           blockInfo =>
-            s"${blockInfo.getSummary.getHeader.rank}:\t${PrettyPrinter.buildString(
+            s"${blockInfo.getSummary.getHeader.jRank}:\t${PrettyPrinter.buildString(
               blockInfo.getSummary.getHeader.parentHashes.headOption.getOrElse(ByteString.EMPTY)
             )} <- ${PrettyPrinter
               .buildString(blockInfo.getSummary.blockHash)} : ${PrettyPrinter

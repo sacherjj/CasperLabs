@@ -152,7 +152,7 @@ class MessageProducerSpec extends FlatSpec with Matchers with Inspectors with Hi
             _ = b1.eraId shouldBe e0.keyBlockHash
             _ = b1.roundId shouldBe e0.startTick
             _ = b1.blockSummary.getHeader.chainName shouldBe chainName
-            _ = b1.rank shouldBe 1
+            _ = b1.jRank shouldBe 1
             _ = b1.validatorMsgSeqNum shouldBe 1
 
             b2 <- messageProducer.ballot(
@@ -162,7 +162,8 @@ class MessageProducerSpec extends FlatSpec with Matchers with Inspectors with Hi
                    justifications = Map(validatorId -> Set(b1.messageHash))
                  )
 
-            _ = b2.rank shouldBe 2
+            _ = b2.jRank shouldBe 2
+            _ = b2.mainRank shouldBe 1
             _ = b2.validatorMsgSeqNum shouldBe 2
             _ = b2.validatorPrevMessageHash shouldBe b1.messageHash
 
@@ -174,7 +175,8 @@ class MessageProducerSpec extends FlatSpec with Matchers with Inspectors with Hi
                    justifications = Map(validatorId -> Set(b2.messageHash))
                  )
 
-            _ = b3.rank shouldBe 3
+            _ = b3.jRank shouldBe 3
+            _ = b3.mainRank shouldBe 1
             _ = b3.validatorMsgSeqNum shouldBe 1
             _ = b3.validatorPrevMessageHash shouldBe ByteString.EMPTY
 
@@ -185,7 +187,8 @@ class MessageProducerSpec extends FlatSpec with Matchers with Inspectors with Hi
                    justifications = Map(validatorId -> Set(b2.messageHash, b3.messageHash))
                  )
 
-            _ = b4.rank shouldBe 4
+            _ = b4.jRank shouldBe 4
+            _ = b4.mainRank shouldBe 1
             _ = b4.validatorMsgSeqNum shouldBe 2
             _ = b4.validatorPrevMessageHash shouldBe b3.messageHash
             _ = b4.justifications should have size 2
@@ -201,6 +204,102 @@ class MessageProducerSpec extends FlatSpec with Matchers with Inspectors with Hi
             _ <- ballots.traverse { x =>
                   BlockStorage[Task].getBlockSummaryUnsafe(x.messageHash)
                 } shouldBeF ballots.map(_.blockSummary)
+          } yield ()
+      }
+  }
+
+  behavior of "makeBlock"
+
+  it should "assign fields correctly and restart the validator seq.no and prev message hash in new eras" in testFixture {
+    implicit timer => implicit db =>
+      new Fixture(length = 3 * eraDuration) { self =>
+        val (privateKey, publicKey) = Ed25519.newKeyPair
+        val validatorId             = PublicKey(ByteString.copyFrom(publicKey))
+
+        override lazy val messageProducer: MessageProducer[Task] = {
+          implicit val deployBuffer    = DeployBuffer.create[Task](chainName, minTtl = Duration.Zero)
+          implicit val deploySelection = DeploySelection.create[Task](sizeLimitBytes = Int.MaxValue)
+
+          MessageProducer[Task](
+            validatorIdentity =
+              ValidatorIdentity(publicKey, privateKey, signatureAlgorithm = Ed25519),
+            chainName = chainName,
+            upgrades = Seq.empty
+          )
+        }
+
+        override def test =
+          for {
+            _  <- insertGenesis()
+            e0 <- addGenesisEra()
+            b1 <- messageProducer.block(
+                   e0.keyBlockHash,
+                   roundId = Ticks(e0.startTick),
+                   mainParent = genesis.messageHash,
+                   justifications = Map.empty,
+                   isBookingBlock = false
+                 )
+
+            _ = b1.validatorId shouldBe validatorId
+            _ = b1.eraId shouldBe e0.keyBlockHash
+            _ = b1.roundId shouldBe e0.startTick
+            _ = b1.blockSummary.getHeader.chainName shouldBe chainName
+            _ = b1.jRank shouldBe 1
+            _ = b1.mainRank shouldBe 1
+            _ = b1.validatorMsgSeqNum shouldBe 1
+
+            b2 <- messageProducer.block(
+                   e0.keyBlockHash,
+                   roundId = Ticks(e0.endTick),
+                   mainParent = b1.messageHash,
+                   justifications = Map(validatorId -> Set(b1.messageHash)),
+                   isBookingBlock = false
+                 )
+
+            _ = b2.jRank shouldBe 2
+            _ = b2.mainRank shouldBe 2
+            _ = b2.validatorMsgSeqNum shouldBe 2
+            _ = b2.validatorPrevMessageHash shouldBe b1.messageHash
+
+            e1 <- e0.addChildEra()
+            b3 <- messageProducer.block(
+                   e1.keyBlockHash,
+                   roundId = Ticks(e1.startTick),
+                   mainParent = b2.messageHash,
+                   justifications = Map(validatorId -> Set(b2.messageHash)),
+                   isBookingBlock = false
+                 )
+
+            _ = b3.jRank shouldBe 3
+            _ = b3.mainRank shouldBe 3
+            _ = b3.validatorMsgSeqNum shouldBe 1
+            _ = b3.validatorPrevMessageHash shouldBe ByteString.EMPTY
+
+            b4 <- messageProducer.block(
+                   e1.keyBlockHash,
+                   roundId = Ticks(e1.endTick),
+                   mainParent = b3.messageHash,
+                   justifications = Map(validatorId -> Set(b2.messageHash, b3.messageHash)),
+                   isBookingBlock = false
+                 )
+
+            _ = b4.jRank shouldBe 4
+            _ = b4.mainRank shouldBe 4
+            _ = b4.validatorMsgSeqNum shouldBe 2
+            _ = b4.validatorPrevMessageHash shouldBe b3.messageHash
+            _ = b4.justifications should have size 2
+
+            // Check that messages are persisted.
+            block = List(b1, b2, b3, b4)
+            dag   <- DagStorage[Task].getRepresentation
+
+            _ <- block.traverse { x =>
+                  dag.lookupUnsafe(x.messageHash)
+                } shouldBeF block
+
+            _ <- block.traverse { x =>
+                  BlockStorage[Task].getBlockSummaryUnsafe(x.messageHash)
+                } shouldBeF block.map(_.blockSummary)
           } yield ()
       }
   }

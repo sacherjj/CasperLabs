@@ -1,11 +1,16 @@
 package io.casperlabs.casper.util
 
+package io.casperlabs.casper.util
+
 import io.casperlabs.casper.consensus.state.ProtocolVersion
-import io.casperlabs.casper.util.ProtocolVersions.{Config}
+import io.casperlabs.casper.util.ProtocolVersions.Config
 import io.casperlabs.ipc.ChainSpec.DeployConfig
+import io.casperlabs.models.Message
 import org.scalatest.{Assertion, Inspectors, Matchers, WordSpec}
 
 class ProtocolVersionsTest extends WordSpec with Matchers with Inspectors {
+
+  implicit def `Long => MainRank`(in: Long): Message.MainRank = Message.asMainRank(in)
 
   val deployConfig = DeployConfig(
     maxTtlMillis = 24 * 60 * 60 * 1000, // 1 day

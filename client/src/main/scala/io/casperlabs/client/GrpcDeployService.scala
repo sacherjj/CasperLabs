@@ -224,7 +224,7 @@ class GrpcDeployService(conn: ConnectOptions, scheduler: Scheduler)
           Printer.print(bi, bytesStandard, json = true)
         } else {
           s"""
-           |------------- block @ ${bi.getSummary.rank} ---------------
+           |------------- block @ ${bi.getSummary.jRank} ---------------
            |${Printer.print(bi, bytesStandard, json = false)}
            |-----------------------------------------------------
            |""".stripMargin

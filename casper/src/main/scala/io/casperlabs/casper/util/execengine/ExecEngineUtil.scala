@@ -32,9 +32,10 @@ import io.casperlabs.storage.dag.DagRepresentation
 import io.casperlabs.storage.deploy.{DeployStorage, DeployStorageWriter}
 import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.metrics.implicits._
+import io.casperlabs.models.Message.{JRank, MainRank}
 import io.casperlabs.smartcontracts.ExecutionEngineService.CommitResult
-import scala.util.{Failure, Success}
 
+import scala.util.{Failure, Success}
 import scala.util.Either
 
 case class DeploysCheckpoint(
@@ -207,11 +208,11 @@ object ExecEngineUtil {
       deployStream: fs2.Stream[F, Deploy],
       blocktime: Long,
       protocolVersion: state.ProtocolVersion,
-      rank: Long,
+      mainRank: MainRank,
       upgrades: Seq[ChainSpec.UpgradePoint]
   ): F[DeploysCheckpoint] = Metrics[F].timer("computeDeploysCheckpoint") {
     for {
-      preStateHash <- computePrestate[F](merged, rank, upgrades).timer("computePrestate")
+      preStateHash <- computePrestate[F](merged, mainRank, upgrades).timer("computePrestate")
       DeploySelectionResult(commuting, conflicting, preconditionFailures) <- DeploySelection[F]
                                                                               .select(
                                                                                 (
@@ -460,7 +461,7 @@ object ExecEngineUtil {
     */
   def computePrestate[F[_]: MonadThrowable: ExecutionEngineService: Log](
       merged: MergeResult[TransformMap, Block],
-      rank: Long, // Rank of the block we are creating on top of the parents; can be way ahead because of justifications.
+      rank: MainRank, // Rank of the block we are creating on top of the parents; can be way ahead because of justifications.
       upgrades: Seq[ChainSpec.UpgradePoint]
   ): F[StateHash] = {
     val mergedStateHash: F[StateHash] = merged match {
@@ -482,7 +483,7 @@ object ExecEngineUtil {
     mergedStateHash.flatMap { postStateHash =>
       if (merged.parents.nonEmpty) {
         val protocolVersion = merged.parents.head.getHeader.getProtocolVersion
-        val maxRank         = merged.parents.map(_.getHeader.rank).max
+        val maxRank         = merged.parents.map(_.getHeader.mainRank).max
 
         val activatedUpgrades = upgrades.filter { u =>
           maxRank < u.getActivationPoint.rank && u.getActivationPoint.rank <= rank

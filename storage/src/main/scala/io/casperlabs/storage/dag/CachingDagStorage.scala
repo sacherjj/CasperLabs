@@ -76,8 +76,8 @@ class CachingDagStorage[F[_]: Concurrent](
     * */
   private def unsafeCacheNeighborhood(m: Message): F[Unit] = {
     val missingRanks =
-      (m.rank - neighborhoodBefore)
-        .to(m.rank + neighborhoodAfter)
+      (m.jRank - neighborhoodBefore)
+        .to(m.jRank + neighborhoodAfter)
         .toSet
         .diff(ranksRanges.keySet)
         .toList
@@ -199,7 +199,7 @@ object CachingDagStorage {
     ): RemovalListener[BlockHash, Message] = { n: RemovalNotification[BlockHash, Message] =>
       Option(n.getValue)
         .foreach { m =>
-          ranksRanges -= m.rank
+          ranksRanges -= m.jRank
         }
     }
 

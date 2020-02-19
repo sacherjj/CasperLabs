@@ -1,6 +1,5 @@
 package io.casperlabs.casper.highway
 
-import cats._
 import cats.implicits._
 import cats.effect.{Concurrent, Sync}
 import cats.mtl.FunctorRaise
@@ -8,7 +7,6 @@ import cats.effect.concurrent.Semaphore
 import io.casperlabs.casper.api.BlockAPI
 import io.casperlabs.casper.consensus.Block
 import io.casperlabs.casper.consensus.info.BlockInfo
-import io.casperlabs.casper.equivocations.EquivocationDetector
 import io.casperlabs.casper.finality.MultiParentFinalizer
 import io.casperlabs.casper.validation.Validation
 import io.casperlabs.casper.validation.Validation.BlockEffects
@@ -16,6 +14,7 @@ import io.casperlabs.casper.validation.Errors.{DropErrorWrapper, ValidateErrorWr
 import io.casperlabs.casper.util.CasperLabsProtocol
 import io.casperlabs.casper._
 import io.casperlabs.casper.util.execengine.ExecEngineUtil
+import io.casperlabs.catscontrib.Fs2Compiler
 import io.casperlabs.catscontrib.{Fs2Compiler, MonadThrowable}
 import io.casperlabs.catscontrib.effect.implicits.fiberSyntax
 import io.casperlabs.crypto.codec.Base16
@@ -26,12 +25,12 @@ import io.casperlabs.models.Message
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.implicits._ // for .timer syntax
 import io.casperlabs.shared.{FatalError, Log, Time}
-import io.casperlabs.storage.BlockMsgWithTransform
 import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.storage.deploy.{DeployStorage, DeployStorageWriter}
 import io.casperlabs.storage.dag.{DagStorage, FinalityStorage}
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import scala.util.control.NonFatal
+import io.casperlabs.models.BlockImplicits._
 
 /** A stateless class to encapsulate the steps to validate, execute and store a block. */
 class MessageExecutor[F[_]: Concurrent: Log: Time: Metrics: BlockStorage: DagStorage: DeployStorage: BlockEventEmitter: Validation: CasperLabsProtocol: ExecutionEngineService: Fs2Compiler: MultiParentFinalizer: FinalityStorage: DeployBuffer](
@@ -188,7 +187,7 @@ class MessageExecutor[F[_]: Concurrent: Log: Time: Metrics: BlockStorage: DagSto
               s"Computing the pre-state hash of $isBookingBlock ${hashPrefix -> "block"}"
             )
         preStateHash <- ExecEngineUtil
-                         .computePrestate[F](merged, block.getHeader.rank, upgrades)
+                         .computePrestate[F](merged, block.mainRank, upgrades) //TODO: This should probably use p-rank
                          .timer("computePrestate")
         preStateBonds = merged.parents.headOption.getOrElse(block).getHeader.getState.bonds
         _             <- Log[F].debug(s"Computing the effects for ${hashPrefix -> "block"}")

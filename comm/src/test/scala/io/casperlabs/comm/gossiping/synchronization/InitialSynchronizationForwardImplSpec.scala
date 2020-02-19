@@ -188,7 +188,7 @@ class InitialSynchronizationForwardImplSpec
         val nodes = sample(genNodes(max = 1))
         val dag = {
           val d = sample(genDag())
-          d.head.update(_.header.rank := 100) +: d.tail
+          d.head.update(_.header.jRank := 100) +: d.tail
         }
         TestFixture(
           nodes,
@@ -307,7 +307,7 @@ object InitialSynchronizationForwardImplSpec extends ArbitraryConsensus {
             Task {
               val range = request.startRank.to(request.endRank)
               if (correct) {
-                dag.filter(s => range.contains(s.rank))
+                dag.filter(s => range.contains(s.jRank))
               } else {
                 dag
               }
