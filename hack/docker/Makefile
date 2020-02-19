@@ -57,10 +57,14 @@ node-%/up: node-% .make/docker/network $(HIGHWAY_ENV)
 	cd node-$* && docker-compose up -d
 	$(REFRESH_TARGETS)
 
-# Tear down node.
+# Tear down node. Using docker to delete logs owned by root for now.
 node-%/down:
 	if [ -d node-$* ]; then \
 		cd node-$* && docker-compose down && cd - && \
+		docker run -it --rm \
+			-v $(PWD)/node-$*/logs:/var/logs/casperlabs \
+			--entrypoint sh casperlabs/node:$(CL_VERSION) \
+			-c 'rm -rf /var/logs/casperlabs/*' && \
 		rm -rf node-$* ; \
 	fi
 	$(REFRESH_TARGETS)

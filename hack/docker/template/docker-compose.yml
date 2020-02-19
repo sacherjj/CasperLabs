@@ -60,7 +60,7 @@ services:
       CL_GRPC_USE_TLS: "false"
       CL_METRICS_PROMETHEUS: "true"
       # TODO: The log written is owned by root, can't remove.
-      #CL_LOG_JSON_PATH: /var/logs/casperlabs
+      CL_LOG_JSON_PATH: /var/logs/casperlabs
     env_file:
       - .env
       - $PWD/../.casperlabs/chainspec/genesis/highway.env
