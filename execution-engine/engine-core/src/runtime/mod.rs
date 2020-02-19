@@ -1738,7 +1738,7 @@ where
             let downcasted_error = host_error.downcast_ref::<Error>().unwrap();
             match downcasted_error {
                 Error::Ret(ref ret_urefs) => {
-                    //insert extra urefs returned from call
+                    // insert extra urefs returned from call
                     let ret_urefs_map: HashMap<Address, HashSet<AccessRights>> =
                         extract_access_rights_from_urefs(ret_urefs.clone());
                     self.context.access_rights_extend(ret_urefs_map);
