@@ -144,7 +144,7 @@ class EquivocationDetectorTest
               genesis,
               v0,
               justifications = HashMap(v0 -> b1.blockHash),
-              rankOfLowestBaseBlockExpect = b1.getHeader.rank.some,
+              rankOfLowestBaseBlockExpect = b1.getHeader.jRank.some,
               messageType = rightMessageType
             )
       } yield ()
@@ -325,14 +325,14 @@ class EquivocationDetectorTest
                  genesis,
                  v0,
                  justifications = HashMap(v0 -> b1.blockHash),
-                 rankOfLowestBaseBlockExpect = b1.getHeader.rank.some
+                 rankOfLowestBaseBlockExpect = b1.getHeader.jRank.some
                )
           _ <- createMessageAndTestEquivocateDetector(
                 Seq(b3.blockHash),
                 genesis,
                 v0,
                 justifications = HashMap(v0 -> b3.blockHash),
-                rankOfLowestBaseBlockExpect = b1.getHeader.rank.some
+                rankOfLowestBaseBlockExpect = b1.getHeader.jRank.some
               )
         } yield ()
   }
@@ -393,7 +393,7 @@ class EquivocationDetectorTest
                 genesis,
                 v0,
                 justifications = HashMap(v0 -> b2.blockHash),
-                rankOfLowestBaseBlockExpect = b2.getHeader.rank.some
+                rankOfLowestBaseBlockExpect = b2.getHeader.jRank.some
               )
           // When v0 creates another equivocation, and the base block(i.e. block b1) of the
           // equivocation is smaller, then update the rank of lowest base block to be the rank of b1
@@ -402,7 +402,7 @@ class EquivocationDetectorTest
                 genesis,
                 v0,
                 justifications = HashMap(v0 -> b1.blockHash),
-                rankOfLowestBaseBlockExpect = b1.getHeader.rank.some
+                rankOfLowestBaseBlockExpect = b1.getHeader.jRank.some
               )
         } yield ()
   }

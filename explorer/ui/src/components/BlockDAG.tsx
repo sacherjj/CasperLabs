@@ -75,18 +75,18 @@ export class BlockDAG extends React.Component<Props, {}> {
               {this.props.emptyMessage || 'No blocks to show.'}
             </div>
           ) : (
-            <div className="svg-container">
-              <svg
-                width={this.props.width}
-                height={this.props.height}
-                ref={(ref: SVGSVGElement) => (this.svg = ref)}
-              ></svg>
-              <div
-                className="svg-hint"
-                ref={(ref: HTMLDivElement) => (this.hint = ref)}
-              ></div>
-            </div>
-          )}
+                <div className="svg-container">
+                  <svg
+                    width={this.props.width}
+                    height={this.props.height}
+                    ref={(ref: SVGSVGElement) => (this.svg = ref)}
+                  ></svg>
+                  <div
+                    className="svg-hint"
+                    ref={(ref: HTMLDivElement) => (this.hint = ref)}
+                  ></div>
+                </div>
+              )}
         </div>
         {this.props.footerMessage && (
           <div className="card-footer small text-muted">
@@ -234,8 +234,8 @@ export class BlockDAG extends React.Component<Props, {}> {
         x.source.id === datum.id || x.target.id === datum.id
           ? 1
           : x.isJustification
-          ? 0
-          : 0.1
+            ? 0
+            : 0.1
       );
       hint.html(
         `Block: ${datum.id} @ ${datum.rank} <br /> Validator: ${datum.validator}`
@@ -345,7 +345,7 @@ const toGraph = (blocks: BlockInfo[]) => {
       rank: block
         .getSummary()!
         .getHeader()!
-        .getRank(),
+        .getJRank(),
       block: block
     };
   });

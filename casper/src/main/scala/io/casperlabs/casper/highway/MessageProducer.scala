@@ -31,6 +31,8 @@ import io.casperlabs.mempool.DeployBuffer
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.ipc
 import io.casperlabs.casper.PrettyPrinter
+import io.casperlabs.models.Message.{asMainRank, JRank, MainRank}
+import io.casperlabs.shared.Sorting._
 
 /** Produce a signed message, persisted message.
   * The producer should the thread safe, so that when it's
@@ -94,7 +96,8 @@ object MessageProducer {
             props.validatorPrevBlockHash,
             chainName,
             timestamp,
-            props.rank,
+            props.jRank,
+            props.mainRank,
             validatorIdentity.publicKey,
             validatorIdentity.privateKey,
             validatorIdentity.signatureAlgorithm,
@@ -145,7 +148,7 @@ object MessageProducer {
                            deployStream,
                            timestamp,
                            props.protocolVersion,
-                           props.rank,
+                           props.mainRank,
                            upgrades
                          )
 
@@ -163,7 +166,8 @@ object MessageProducer {
             props.validatorPrevBlockHash,
             chainName,
             timestamp,
-            props.rank,
+            props.jRank,
+            props.mainRank,
             validatorIdentity.publicKey,
             validatorIdentity.privateKey,
             validatorIdentity.signatureAlgorithm,
@@ -222,13 +226,15 @@ object MessageProducer {
           validatorPrevBlockHash = maybeOwnLatest.fold(ByteString.EMPTY)(_.messageHash)
 
           // Genesis is for example not part of the justifications, so to be safe include parents too.
-          rank            = ProtoUtil.nextRank(parents ++ justificationMessages)
-          config          <- CasperLabsProtocol[F].configAt(rank)
-          protocolVersion <- CasperLabsProtocol[F].versionAt(rank)
+          jRank           = ProtoUtil.nextJRank(parents ++ justificationMessages)
+          mainRank        = ProtoUtil.nextMainRank(parents.toList)
+          config          <- CasperLabsProtocol[F].configAt(mainRank)
+          protocolVersion <- CasperLabsProtocol[F].versionAt(mainRank)
         } yield MessageProps(
           validatorSeqNum,
           validatorPrevBlockHash,
-          rank,
+          jRank,
+          mainRank,
           config,
           protocolVersion,
           ProtoUtil.toJustification(justificationMessages)
@@ -238,7 +244,8 @@ object MessageProducer {
   case class MessageProps(
       validatorSeqNum: Int,
       validatorPrevBlockHash: BlockHash,
-      rank: Long,
+      jRank: JRank,
+      mainRank: MainRank,
       configuration: Config,
       protocolVersion: ProtocolVersion,
       justifications: Seq[Justification]

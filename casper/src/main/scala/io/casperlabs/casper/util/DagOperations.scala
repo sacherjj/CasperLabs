@@ -18,12 +18,13 @@ import simulacrum.typeclass
 import scala.collection.immutable.{BitSet, HashSet, Queue}
 import scala.collection.mutable
 import io.casperlabs.storage.dag.DagLookup
-import com.github.ghik.silencer.silent
 import io.casperlabs.storage.dag.DagStorage
 import io.casperlabs.storage.dag.DagRepresentation._
 import EraObservedBehavior._
 import io.casperlabs.casper.highway.MessageProducer
 import io.casperlabs.storage.era.EraStorage
+import io.casperlabs.shared.Sorting.jRankOrdering
+import io.casperlabs.models.Message.asJRank
 
 object DagOperations {
 
@@ -130,11 +131,11 @@ object DagOperations {
 
   val blockTopoOrderingAsc: Ordering[Message] =
     Ordering
-      .by[Message, (Long, ByteString)](m => (m.rank, m.messageHash))(longByteStringOrdering)
+      .by[Message, (Long, ByteString)](m => (m.jRank, m.messageHash))(longByteStringOrdering)
       .reverse
 
   val blockTopoOrderingDesc: Ordering[Message] =
-    Ordering.by[Message, (Long, ByteString)](m => (m.rank, m.messageHash))(longByteStringOrdering)
+    Ordering.by[Message, (Long, ByteString)](m => (m.jRank, m.messageHash))(longByteStringOrdering)
 
   def bfToposortTraverseF[F[_]: Monad](
       start: List[Message]
@@ -469,13 +470,13 @@ object DagOperations {
       for {
         ancestorMeta   <- ancestors.toList.traverse(dag.lookup).map(_.flatten)
         descendantMeta <- descendants.toList.traverse(dag.lookup).map(_.flatten)
-        minRank        = if (ancestorMeta.isEmpty) 0 else ancestorMeta.map(_.rank).min
+        minRank        = if (ancestorMeta.isEmpty) asJRank(0) else ancestorMeta.map(_.jRank).min
         reachable <- bfToposortTraverseF[F](descendantMeta) { blockMeta =>
                       blockMeta.parents.toList.traverse(dag.lookup).map(_.flatten)
                     }.foldWhileLeft(Set.empty[BlockHash]) {
                       case (reachable, msgSummary) if ancestors(msgSummary.messageHash) =>
                         Left(reachable + msgSummary.messageHash)
-                      case (reachable, blockMeta) if blockMeta.rank >= minRank =>
+                      case (reachable, blockMeta) if blockMeta.jRank >= minRank =>
                         Left(reachable)
                       case (reachable, _) =>
                         Right(reachable)
@@ -524,7 +525,7 @@ object DagOperations {
       keyBlocks: List[Message]
   ): F[Map[ByteString, Map[DagRepresentation.Validator, Set[Message]]]] =
     keyBlocks
-      .sortBy(_.rank)(Ordering[Long].reverse)
+      .sortBy(_.jRank)(jRankOrdering.reverse)
       .traverse(kb => dag.latestMessagesInEra(kb.messageHash).map(kb.messageHash -> _))
       .map(_.toMap)
 

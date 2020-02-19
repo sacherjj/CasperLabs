@@ -37,6 +37,7 @@ import io.casperlabs.crypto.Keys.PrivateKey
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
 import io.casperlabs.ipc.ChainSpec.DeployConfig
+import io.casperlabs.models.{ArbitraryConsensus, Message}
 import io.casperlabs.mempool.DeployBuffer
 import io.casperlabs.models.ArbitraryConsensus
 import io.casperlabs.models.BlockImplicits.BlockOps
@@ -80,6 +81,8 @@ class ValidationTest
   // When raise errors we wrap them with Throwable so we need to do the same here.
   implicit def wrapWithThrowable[A <: InvalidBlock](err: A): Throwable =
     ValidateErrorWrapper(err)
+
+  implicit def `Long => MainRank`(in: Long): Message.MainRank = Message.asMainRank(in)
 
   implicit val consensusConfig = ConsensusConfig()
 
@@ -162,7 +165,7 @@ class ValidationTest
   implicit class ChangeBlockOps(b: Block) {
     def changeBlockNumber(n: Long): Block = {
       val header    = b.getHeader
-      val newHeader = header.withRank(n)
+      val newHeader = header.withJRank(n)
       // NOTE: blockHash should be recalculated.
       b.withHeader(newHeader)
     }
@@ -254,7 +257,8 @@ class ValidationTest
       ByteString.EMPTY,
       "casperlabs",
       1,
-      0,
+      Message.asJRank(1),
+      Message.asMainRank(1),
       pk,
       sk,
       Ed25519,
@@ -1305,7 +1309,7 @@ class ValidationTest
                               fs2.Stream.fromIterator[Task](deploys.toIterator),
                               System.currentTimeMillis,
                               ProtocolVersion(1),
-                              rank = 0,
+                              mainRank = 0,
                               upgrades = Nil
                             )
         DeploysCheckpoint(

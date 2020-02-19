@@ -27,6 +27,7 @@ import io.casperlabs.ipc.TransformEntry
 import io.casperlabs.models.Message
 import io.casperlabs.shared._
 import io.casperlabs.models.BlockImplicits._
+import io.casperlabs.models.Message.MainRank
 
 import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
 import scala.util.{Success, Try}
@@ -93,7 +94,7 @@ trait Validation[F[_]] {
 object Validation {
   def apply[F[_]](implicit ev: Validation[F]) = ev
 
-  type BlockHeight = Long
+  type BlockHeight = MainRank
   type Data        = Array[Byte]
 
   // TODO (CON-639): Remove this; but for now NCB validation doesn't work with Highway in some cases.
@@ -166,7 +167,7 @@ object Validation {
                                     .swimlaneV[F](message.validatorId, message, dag)
                                     .foldWhileLeft(Set.empty[BlockHash]) {
                                       case (seenEquivocations, message) =>
-                                        if (message.rank <= minRank) {
+                                        if (message.jRank <= minRank) {
                                           Right(seenEquivocations)
                                         } else {
                                           if (equivocationsHashes.contains(message.messageHash)) {
@@ -260,8 +261,8 @@ object Validation {
     for {
       justificationMsgs <- (b.parents ++ b.justifications.map(_.latestBlockHash)).toSet.toList
                             .traverse(dag.lookupUnsafe(_))
-      calculatedRank = ProtoUtil.nextRank(justificationMsgs)
-      actuallyRank   = b.rank
+      calculatedRank = ProtoUtil.nextJRank(justificationMsgs)
+      actuallyRank   = b.jRank
       result         = calculatedRank == actuallyRank
       _ <- if (result) {
             Applicative[F].unit
@@ -573,11 +574,11 @@ object Validation {
   // Validates whether block was built using correct protocol version.
   def version[F[_]: Monad: Log](
       b: BlockSummary,
-      m: BlockHeight => F[state.ProtocolVersion]
+      m: MainRank => F[state.ProtocolVersion]
   ): F[Boolean] = {
 
     val blockVersion = b.getHeader.getProtocolVersion
-    val blockHeight  = b.getHeader.rank
+    val blockHeight  = b.mainRank
     m(blockHeight).flatMap { version =>
       if (blockVersion == version) {
         true.pure[F]
@@ -668,7 +669,7 @@ object Validation {
             DagOperations
               .toposortJDagDesc(dag, List(blockMsg))
               .find { j =>
-                j.validatorId == validatorId && j.messageHash != b.blockHash || j.rank < meta.rank
+                j.validatorId == validatorId && j.messageHash != b.blockHash || j.jRank < meta.jRank
               }
               .flatMap {
                 case Some(msg) if msg.messageHash == prevBlockHash =>
@@ -772,7 +773,7 @@ object Validation {
 
     def singleDeployValidation(d: consensus.Deploy): F[Unit] =
       for {
-        config <- CasperLabsProtocol[F].configAt(b.getHeader.rank).map(_.deployConfig)
+        config <- CasperLabsProtocol[F].configAt(b.mainRank).map(_.deployConfig)
         staticErrors <- deployHeader[F](
                          d,
                          chainName,

@@ -34,7 +34,7 @@ export class DagStep {
       this.container
         .blocks![0].getSummary()!
         .getHeader()!
-        .getRank();
+        .getJRank();
     return this.maxRank === 0 && blockRank ? blockRank : this.maxRank;
   }
 
@@ -44,8 +44,8 @@ export class DagStep {
     this.maxRank === 0 && this.currentMaxRank <= this.depth
       ? 0
       : this.currentMaxRank > this.depth
-      ? this.currentMaxRank - this.depth
-      : this.currentMaxRank
+        ? this.currentMaxRank - this.depth
+        : this.currentMaxRank
   );
 
   next = this.step(() => this.currentMaxRank + this.depth);
@@ -83,7 +83,7 @@ export class DagContainer {
   }
 
   @action
-  updateMaxRankAndDepth(rank: number, depth: number){
+  updateMaxRankAndDepth(rank: number, depth: number) {
     this.maxRank = rank;
     this.depth = depth;
   }
@@ -168,11 +168,11 @@ export class DagContainer {
 
                 if (index === -1) {
                   // blocks with rank < N+1-depth will be culled
-                  let culledThreshold = block!.getSummary()!.getHeader()!.getRank() + 1 - this.depth;
+                  let culledThreshold = block!.getSummary()!.getHeader()!.getJRank() + 1 - this.depth;
                   let remainingBlocks: BlockInfo[] = [];
                   if (this.blocks !== null) {
                     remainingBlocks = this.blocks.filter(b => {
-                      let rank = b.getSummary()?.getHeader()?.getRank();
+                      let rank = b.getSummary()?.getHeader()?.getJRank();
                       if (rank !== undefined) {
                         return rank >= culledThreshold;
                       }

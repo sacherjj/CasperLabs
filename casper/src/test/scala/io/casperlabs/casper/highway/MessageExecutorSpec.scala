@@ -16,6 +16,7 @@ import io.casperlabs.casper.finality.MultiParentFinalizer
 import io.casperlabs.casper.validation.Validation.BlockEffects
 import io.casperlabs.casper.scalatestcontrib._
 import io.casperlabs.casper.consensus.info.DeployInfo
+import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.casper.{EquivocatedBlock, Valid, ValidatorIdentity}
 import io.casperlabs.crypto.Keys.{PrivateKey, PublicKey}
 import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
@@ -141,7 +142,7 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
         tips      <- dag.latestInEra(parent.getHeader.keyBlockHash)
         latest    <- tips.latestMessages
         maybePrev = latest.get(keys.publicKey).map(_.head)
-        nextRank  = if (latest.isEmpty) 1 else latest.values.flatten.map(_.rank).max + 1
+        nextJRank = ProtoUtil.nextJRank(latest.values.flatten.toSeq)
         now       <- Clock[Task].currentTimeMillis
         second = keys.signBlock {
           parent.withHeader(
@@ -149,7 +150,7 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
               .withTimestamp(now)
               .withKeyBlockHash(keyBlockHash)
               .withRoundId(roundId)
-              .withRank(nextRank)
+              .withJRank(nextJRank)
               .withValidatorPublicKey(keys.publicKey)
               .withValidatorBlockSeqNum(maybePrev.map(_.validatorMsgSeqNum + 1).getOrElse(1))
               .withValidatorPrevBlockHash(maybePrev.map(_.messageHash).getOrElse(ByteString.EMPTY))
@@ -234,7 +235,7 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
         for {
           // Make a block that signed by the validator that has invalid content.
           block <- prepareSecondBlock() map { block =>
-                    thisValidator.signBlock(block.withHeader(block.getHeader.withRank(100)))
+                    thisValidator.signBlock(block.withHeader(block.getHeader.withJRank(100)))
                   }
           result <- validateAndAdd(block).attempt
           _ = result match {

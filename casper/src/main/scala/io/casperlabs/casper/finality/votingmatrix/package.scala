@@ -5,6 +5,7 @@ import cats.implicits._
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.finality.votingmatrix.VotingMatrix.{Vote, VotingMatrix}
 import io.casperlabs.catscontrib.MonadStateOps._
+import io.casperlabs.models.Message.MainRank
 import io.casperlabs.models.{Message, Weight}
 import io.casperlabs.storage.dag.DagRepresentation
 
@@ -38,7 +39,7 @@ package object votingmatrix {
           } else {
             for {
               _ <- updateVotingMatrixOnNewBlock[F](dag, msg)
-              _ <- updateFirstZeroLevelVote[F](voter, currentVoteValue, msg.rank)
+              _ <- updateFirstZeroLevelVote[F](voter, currentVoteValue, msg.mainRank)
             } yield ()
           }
     } yield ()
@@ -107,7 +108,7 @@ package object votingmatrix {
   private[votingmatrix] def updateFirstZeroLevelVote[F[_]: Monad](
       validator: Validator,
       newVote: BlockHash,
-      dagLevel: Long
+      dagLevel: MainRank
   )(implicit matrix: VotingMatrix[F]): F[Unit] =
     for {
       firstLevelZeroMsgs <- (matrix >> 'firstLevelZeroVotes).get

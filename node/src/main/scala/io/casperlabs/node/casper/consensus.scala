@@ -1,10 +1,8 @@
 package io.casperlabs.node.casper.consensus
 
 import com.google.protobuf.ByteString
-import cats._
 import cats.implicits._
 import cats.effect._
-import cats.effect.implicits._
 import cats.effect.concurrent._
 import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.{
@@ -24,7 +22,6 @@ import io.casperlabs.casper.finality.MultiParentFinalizer
 import io.casperlabs.casper.finality.votingmatrix.FinalityDetectorVotingMatrix
 import io.casperlabs.casper.validation.Validation
 import io.casperlabs.casper.util.{CasperLabsProtocol, ProtoUtil}
-import io.casperlabs.casper.DeploySelection
 import io.casperlabs.casper.highway.{
   EraSupervisor,
   ForkChoiceManager,
@@ -35,9 +32,7 @@ import io.casperlabs.casper.highway.{
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.comm.ServiceError.{NotFound, Unavailable}
 import io.casperlabs.comm.gossiping.Relaying
-import io.casperlabs.crypto.Keys
 import io.casperlabs.crypto.Keys.PublicKey
-import io.casperlabs.ipc
 import io.casperlabs.ipc.ChainSpec
 import io.casperlabs.models.Message
 import io.casperlabs.metrics.Metrics
@@ -54,6 +49,8 @@ import io.casperlabs.storage.era.EraStorage
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import java.util.concurrent.TimeUnit
 import java.time.Instant
+import io.casperlabs.shared.Sorting.jRankOrder
+
 import scala.util.control.NoStackTrace
 import scala.concurrent.duration._
 import simulacrum.typeclass
@@ -191,7 +188,7 @@ class NCB[F[_]: Concurrent: Time: Log: BlockStorage: DagStorage: ExecutionEngine
       minRank = latestMessages
         .filterKeys(bonded)
         .values
-        .flatMap(_.map(_.rank))
+        .flatMap(_.map(_.jRank))
         .toList
         .minimumOption
         .getOrElse(0L)
@@ -294,7 +291,7 @@ object Highway {
             keyBlocks       <- keyBlocksHashes.traverse(dag.lookupUnsafe)
             // Take the latest, to allow eras to be killed without causing
             // initial sync to start from their keyblock forever.
-            maxRank = keyBlocks.map(_.rank).max
+            maxRank = keyBlocks.map(_.jRank).max
           } yield maxRank
       }
     } yield cons

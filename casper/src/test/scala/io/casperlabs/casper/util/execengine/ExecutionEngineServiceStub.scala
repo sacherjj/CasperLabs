@@ -7,7 +7,6 @@ import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.casper
-import io.casperlabs.casper.CasperMetricsSource
 import io.casperlabs.casper.consensus.state.{Unit => _, _}
 import io.casperlabs.casper.consensus.{Block, Bond}
 import io.casperlabs.casper.util.{CasperLabsProtocol, ProtoUtil}
@@ -22,6 +21,7 @@ import io.casperlabs.shared.{Log, Time}
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.block._
 import io.casperlabs.storage.dag._
+import io.casperlabs.models.BlockImplicits._
 
 import scala.concurrent.duration.FiniteDuration
 import scala.util.Either
@@ -59,7 +59,7 @@ object ExecutionEngineServiceStub {
       parents <- ProtoUtil.unsafeGetParents[F](b)
       merged  <- ExecutionEngineServiceStub.merge[F](parents, dag)
       preStateHash <- ExecEngineUtil
-                       .computePrestate[F](merged, rank = b.getHeader.rank, upgrades = Nil)
+                       .computePrestate[F](merged, rank = b.mainRank, upgrades = Nil)
       preStateBonds = merged.parents.headOption.getOrElse(b).getHeader.getState.bonds
       effects <- ExecEngineUtil
                   .effectsForBlock[F](b, preStateHash)
