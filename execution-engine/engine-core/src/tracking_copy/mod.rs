@@ -4,7 +4,11 @@ pub(self) mod meter;
 #[cfg(test)]
 mod tests;
 
-use std::{collections::HashMap, convert::From, iter};
+use std::{
+    collections::{HashMap, HashSet, VecDeque},
+    convert::From,
+    iter,
+};
 
 use linked_hash_map::LinkedHashMap;
 
@@ -27,6 +31,65 @@ use self::meter::{heap_meter::HeapSize, Meter};
 pub enum TrackingCopyQueryResult {
     Success(StoredValue),
     ValueNotFound(String),
+    CircularReference(String),
+}
+
+/// Struct containing state relating to a given query.
+struct Query {
+    /// The key from where the search starts.
+    base_key: Key,
+    /// A collection of normalized keys which have been visited during the search.
+    visited_keys: HashSet<Key>,
+    /// The key currently being processed.
+    current_key: Key,
+    /// Path components which have not yet been followed, held in the same order in which they were
+    /// provided to the `query()` call.
+    unvisited_names: VecDeque<String>,
+    /// Path components which have been followed, held in the same order in which they were
+    /// provided to the `query()` call.
+    visited_names: Vec<String>,
+}
+
+impl Query {
+    fn new(base_key: Key, path: &[String]) -> Self {
+        Query {
+            base_key,
+            current_key: base_key.normalize(),
+            unvisited_names: path.iter().cloned().collect(),
+            visited_names: Vec::new(),
+            visited_keys: HashSet::new(),
+        }
+    }
+
+    /// Panics if `unvisited_names` is empty.
+    fn next_name(&mut self) -> &String {
+        let next_name = self.unvisited_names.pop_front().unwrap();
+        self.visited_names.push(next_name);
+        self.visited_names.last().unwrap()
+    }
+
+    fn into_not_found_result(self, msg_prefix: &str) -> TrackingCopyQueryResult {
+        let msg = format!("{} at path: {}", msg_prefix, self.current_path());
+        TrackingCopyQueryResult::ValueNotFound(msg)
+    }
+
+    fn into_circular_ref_result(self) -> TrackingCopyQueryResult {
+        let msg = format!(
+            "{:?} has formed a circular reference at path: {}",
+            self.current_key,
+            self.current_path()
+        );
+        TrackingCopyQueryResult::CircularReference(msg)
+    }
+
+    fn current_path(&self) -> String {
+        let mut path = format!("{:?}", self.base_key);
+        for name in &self.visited_names {
+            path.push_str("/");
+            path.push_str(name);
+        }
+        path
+    }
 }
 
 /// Keeps track of already accessed keys.
@@ -265,93 +328,74 @@ impl<R: StateReader<Key, StoredValue>> TrackingCopy<R> {
         ExecutionEffect::new(self.ops.clone(), self.fns.clone())
     }
 
+    /// Calling `query()` avoids calling into `self.cache`, so this will not return any values
+    /// written or mutated in this `TrackingCopy` via previous calls to `write()` or `add()`, since
+    /// these updates are only held in `self.cache`.
+    ///
+    /// The intent is that `query()` is only used to satisfy `QueryRequest`s made to the server.
+    /// Other EE internal use cases should call `read()` or `get()` in order to retrieve cached
+    /// values.
     pub fn query(
-        &mut self,
+        &self,
         correlation_id: CorrelationId,
         base_key: Key,
         path: &[String],
     ) -> Result<TrackingCopyQueryResult, R::Error> {
-        match self.read(correlation_id, &base_key)? {
-            None => Ok(TrackingCopyQueryResult::ValueNotFound(self.error_path_msg(
-                base_key,
-                path,
-                "".to_owned(),
-                0 as usize,
-            ))),
-            Some(base_value) => {
-                let result = path.iter().enumerate().try_fold(
-                    base_value,
-                    // We encode the two possible short-circuit conditions with
-                    // Result<(usize, String), Error>, where the Ok(_) case corresponds to
-                    // QueryResult::ValueNotFound and Err(_) corresponds to
-                    // a storage-related error. The information in the Ok(_) case is used
-                    // to build an informative error message about why the query was not successful.
-                    |current_value, (i, name)| -> Result<StoredValue, Result<(usize, String), R::Error>> {
-                        match current_value {
-                            StoredValue::Account(account) => {
-                                if let Some(key) = account.named_keys().get(name) {
-                                    self.read_key_or_stop(correlation_id, *key, i)
-                                } else {
-                                    Err(Ok((i, format!("Name {} not found in Account at path:", name))))
-                                }
-                            }
+        let mut query = Query::new(base_key, path);
+        loop {
+            if !query.visited_keys.insert(query.current_key) {
+                return Ok(query.into_circular_ref_result());
+            }
+            let stored_value = match self.reader.read(correlation_id, &query.current_key)? {
+                None => {
+                    return Ok(query.into_not_found_result("Failed to find base key"));
+                }
+                Some(stored_value) => stored_value,
+            };
 
-                            StoredValue::Contract(contract) => {
-                                if let Some(key) = contract.named_keys().get(name) {
-                                    self.read_key_or_stop(correlation_id, *key, i)
-                                } else {
-                                    Err(Ok((i, format!("Name {} not found in Contract at path:", name))))
-                                }
-                            }
+            if query.unvisited_names.is_empty() {
+                return Ok(TrackingCopyQueryResult::Success(stored_value));
+            }
 
-                            other => Err(
-                                Ok((i, format!("Name {} cannot be followed from value {:?} because it is neither an account nor contract. Value found at path:", name, other)))
-                                ),
-                        }
-                    },
-                );
+            match stored_value {
+                StoredValue::Account(account) => {
+                    let name = query.next_name();
+                    if let Some(key) = account.named_keys().get(name) {
+                        query.current_key = key.normalize();
+                    } else {
+                        let msg_prefix = format!("Name {} not found in Account", name);
+                        return Ok(query.into_not_found_result(&msg_prefix));
+                    }
+                }
 
-                match result {
-                    Ok(value) => Ok(TrackingCopyQueryResult::Success(value)),
-                    Err(Ok((i, s))) => Ok(TrackingCopyQueryResult::ValueNotFound(
-                        self.error_path_msg(base_key, path, s, i),
-                    )),
-                    Err(Err(err)) => Err(err),
+                StoredValue::Contract(contract) => {
+                    let name = query.next_name();
+                    if let Some(key) = contract.named_keys().get(name) {
+                        query.current_key = key.normalize();
+                    } else {
+                        let msg_prefix = format!("Name {} not found in Contract", name);
+                        return Ok(query.into_not_found_result(&msg_prefix));
+                    }
+                }
+
+                StoredValue::CLValue(cl_value) if cl_value.cl_type() == &CLType::Key => {
+                    if let Ok(key) = cl_value.into_t::<Key>() {
+                        query.current_key = key.normalize();
+                    } else {
+                        return Ok(query.into_not_found_result("Failed to parse CLValue as Key"));
+                    }
+                }
+
+                StoredValue::CLValue(cl_value) => {
+                    let msg_prefix = format!(
+                        "Query cannot continue as {:?} is not an account, contract nor key to \
+                        such.  Value found",
+                        cl_value
+                    );
+                    return Ok(query.into_not_found_result(&msg_prefix));
                 }
             }
         }
-    }
-
-    fn read_key_or_stop(
-        &mut self,
-        correlation_id: CorrelationId,
-        key: Key,
-        i: usize,
-    ) -> Result<StoredValue, Result<(usize, String), R::Error>> {
-        match self.read(correlation_id, &key) {
-            // continue recursion
-            Ok(Some(value)) => Ok(value),
-            // key not found in the global state; stop recursion
-            Ok(None) => Err(Ok((i, format!("Name {:?} not found: ", key)))),
-            // global state access error; stop recursion
-            Err(error) => Err(Err(error)),
-        }
-    }
-
-    fn error_path_msg(
-        &self,
-        key: Key,
-        path: &[String],
-        missing_key: String,
-        missing_at_index: usize,
-    ) -> String {
-        let mut error_msg = format!("{} {:?}", missing_key, key);
-        //include the partial path to the account/contract/value which failed
-        for p in path.iter().take(missing_at_index) {
-            error_msg.push_str("/");
-            error_msg.push_str(p);
-        }
-        error_msg
     }
 }
 

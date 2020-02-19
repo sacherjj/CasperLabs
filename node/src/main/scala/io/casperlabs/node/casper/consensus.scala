@@ -230,21 +230,8 @@ object Highway {
         }
       }
 
-      // TODO (CON-622): Implement the ForkChoiceManager.
       implicit0(forkchoice: ForkChoiceManager[F]) <- Resource.pure[F, ForkChoiceManager[F]] {
-                                                      new ForkChoiceManager[F] {
-                                                        override def fromKeyBlock(
-                                                            keyBlockHash: BlockHash
-                                                        ) = ???
-                                                        override def fromJustifications(
-                                                            keyBlockHash: BlockHash,
-                                                            justifications: Set[BlockHash]
-                                                        ) = ???
-                                                        override def updateLatestMessage(
-                                                            keyBlockHash: BlockHash,
-                                                            message: Message
-                                                        ) = ???
-                                                      }
+                                                      ForkChoiceManager.create[F]
                                                     }
 
       supervisor <- EraSupervisor(

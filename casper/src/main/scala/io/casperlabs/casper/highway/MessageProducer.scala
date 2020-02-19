@@ -130,7 +130,7 @@ object MessageProducer {
           props     <- messageProps(keyBlockHash, parentMessages, justifications)
           timestamp <- Clock[F].currentTimeMillis
 
-          remainingHashes <- DeployBuffer.remainingDeploys[F](
+          remainingHashes <- DeployBuffer[F].remainingDeploys(
                               dag,
                               parentHashes,
                               timestamp,
@@ -188,8 +188,8 @@ object MessageProducer {
       // This made sense with the AutoProposer, since a new block could be proposed any time;
       // in Highway that's going to the next round, whenever that is.
       private def startRequeueingOrphanedDeploys(parentHashes: Set[BlockHash]): F[Unit] = {
-        DeployBuffer.requeueOrphanedDeploys[F](parentHashes) >>= { requeued =>
-          Log[F].info(s"Re-queued $requeued orphaned deploys.").whenA(requeued > 0)
+        DeployBuffer[F].requeueOrphanedDeploys(parentHashes) >>= { requeued =>
+          Log[F].info(s"Re-queued ${requeued.size} orphaned deploys.").whenA(requeued.nonEmpty)
         }
       }.forkAndLog
 

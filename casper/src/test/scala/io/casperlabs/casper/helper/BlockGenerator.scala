@@ -4,7 +4,7 @@ import cats._
 import cats.effect.Sync
 import cats.implicits._
 import com.google.protobuf.ByteString
-import io.casperlabs.casper.DeploySelection
+import io.casperlabs.casper.{DeployEventEmitter, DeploySelection}
 import io.casperlabs.casper.DeploySelection.DeploySelection
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.consensus.Block.ProcessedDeploy
@@ -18,6 +18,7 @@ import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.crypto.Keys
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.models.Message
+import io.casperlabs.mempool.DeployBuffer
 import io.casperlabs.p2p.EffectsTestInstances.LogicalTime
 import io.casperlabs.shared.{Log, Time}
 import io.casperlabs.smartcontracts.ExecutionEngineService
@@ -33,8 +34,9 @@ import io.casperlabs.storage.dag.DagStorage
 
 object BlockGenerator {
   implicit val timeEff = new LogicalTime[Task]()
+  implicit val emitter = NoOpsEventEmitter.create[Task]
 
-  def updateChainWithBlockStateUpdate[F[_]: Sync: BlockStorage: IndexedDagStorage: DeployStorage: ExecutionEngineService: Log: Metrics](
+  def updateChainWithBlockStateUpdate[F[_]: Sync: BlockStorage: IndexedDagStorage: DeployStorage: DeployBuffer: ExecutionEngineService: Log: Metrics](
       id: Int
   ): F[Block] =
     for {
@@ -69,7 +71,7 @@ object BlockGenerator {
       IndexedDagStorage[F].inject(id, updatedBlock)
   }
 
-  private[casper] def computeBlockCheckpointFromDeploys[F[_]: Sync: BlockStorage: DeployStorage: Log: ExecutionEngineService: Metrics](
+  private[casper] def computeBlockCheckpointFromDeploys[F[_]: Sync: BlockStorage: DeployStorage: DeployBuffer: Log: ExecutionEngineService: Metrics](
       b: Block,
       dag: DagRepresentation[F]
   ): F[DeploysCheckpoint] =

@@ -181,4 +181,21 @@ message GetLastFinalizedBlockInfoRequest {
 message StreamEventsRequest {
   bool block_added = 1;
   bool block_finalized = 2;
+  bool deploy_added = 3;
+  bool deploy_discarded = 4;
+  bool deploy_requeued = 5;
+  bool deploy_processed = 6;
+  bool deploy_finalized = 7;
+  bool deploy_orphaned = 8;
+
+  // Optional filters for deploy events; applies to anything opted into via the flags.
+  DeployFilter deploy_filter = 9;
+
+  // Filters to apply on deploy events; different fields combined with AND operator.
+  message DeployFilter {
+      // Filter to any of the accounts on the list.
+      repeated bytes account_public_keys = 1;
+      // Filter for specific deploy hashes.
+      repeated bytes deploy_hashes = 2;
+  }
 }

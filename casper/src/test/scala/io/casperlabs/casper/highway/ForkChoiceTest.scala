@@ -296,9 +296,6 @@ class ForkChoiceTest extends FlatSpec with HighwayFixture {
       db: SQLiteStorage.CombinedStorage[Task]
   ) extends Fixture(eraDuration) {
 
-    implicit val deployBuffer    = DeployBuffer.create[Task](chainName, minTtl = Duration.Zero)
-    implicit val deploySelection = DeploySelection.create[Task](sizeLimitBytes = Int.MaxValue)
-
     lazy val Alice   = Ed25519.newKeyPair
     lazy val Bob     = Ed25519.newKeyPair
     lazy val Charlie = Ed25519.newKeyPair
