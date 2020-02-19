@@ -3,6 +3,7 @@ CL_SERVER_HTTP_PORT ?= 40403
 CL_VERSION ?= latest
 
 REFRESH_TARGETS := ./monitoring/prometheus/refresh-targets.sh
+HIGHWAY_ENV := .casperlabs/chainspec/genesis/highway.env
 
 # Don't remove directories created as dependencies.
 .SECONDARY:
@@ -48,7 +49,7 @@ node-%: .casperlabs
 
 # Start node.
 # Only make `highway.env` when the first node is started, so the era epoch doesn't become stale.
-node-%/up: node-% .make/docker/network .casperlabs/chainspec/genesis/highway.env
+node-%/up: node-% .make/docker/network $(HIGHWAY_ENV)
 	@# Go into the directory to pick up values from .env
 	if [ "$(CL_VERSION)" != "latest" ]; then \
 		cd node-$* && docker-compose pull; \
@@ -142,5 +143,9 @@ slow:
 
 # Create common Highway environment overrides for the chainspec defaults,
 # common to all, so a node started later won't choose a different era epoch.
-.casperlabs/chainspec/genesis/highway.env: .casperlabs
-	./scripts/highway-env.sh > .casperlabs/chainspec/genesis/highway.env
+$(HIGHWAY_ENV): .casperlabs reset-highway-env
+
+# If we need to re-start the nodes after a long time, we might have to recreate the era epoch, if it's short, like 5 minutes.
+reset-highway-env:
+	rm -f $(HIGHWAY_ENV)
+	./scripts/highway-env.sh > $(HIGHWAY_ENV)
