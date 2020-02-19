@@ -510,7 +510,9 @@ object GenesisApproverSpec extends ArbitraryConsensusAndComm {
   }
 
   // Default test environment which accepts anything and pretends to download a block.
-  class MockEnvironment() extends GenesisApproverImpl.Backend[Task] with DownloadManager[Task] {
+  class MockEnvironment()
+      extends GenesisApproverImpl.Backend[Task]
+      with BlocksDownloadManager[Task] {
 
     @volatile var downloaded = false
 

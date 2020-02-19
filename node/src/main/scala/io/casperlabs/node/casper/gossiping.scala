@@ -281,16 +281,16 @@ package object gossiping {
       relaying: Relaying[F],
       synchronizer: Synchronizer[F],
       maybeValidatorId: Option[ValidatorIdentity]
-  ): Resource[F, DownloadManager[F]] =
+  ): Resource[F, BlocksDownloadManager[F]] =
     for {
-      _ <- Resource.liftF(DownloadManagerImpl.establishMetrics[F])
+      _ <- Resource.liftF(BlocksDownloadManagerImpl.establishMetrics[F])
       maybeValidatorPublicKey = maybeValidatorId
         .map(x => ByteString.copyFrom(x.publicKey))
         .filterNot(_.isEmpty)
-      downloadManager <- DownloadManagerImpl[F](
+      downloadManager <- BlocksDownloadManagerImpl[F](
                           maxParallelDownloads = conf.server.downloadMaxParallelBlocks,
                           connectToGossip = connectToGossip,
-                          backend = new DownloadManagerImpl.Backend[F] {
+                          backend = new BlocksDownloadManagerImpl.Backend[F] {
                             override def hasBlock(blockHash: ByteString): F[Boolean] =
                               isInDag(blockHash)
 
@@ -324,7 +324,7 @@ package object gossiping {
                               synchronizer.downloaded(blockHash)
                           },
                           relaying = relaying,
-                          retriesConf = DownloadManagerImpl.RetriesConf(
+                          retriesConf = BlocksDownloadManagerImpl.RetriesConf(
                             maxRetries = conf.server.downloadMaxRetries,
                             initialBackoffPeriod = conf.server.downloadRetryInitialBackoffPeriod,
                             backoffFactor = conf.server.downloadRetryBackoffFactor
@@ -339,7 +339,7 @@ package object gossiping {
       conf: Configuration,
       maybeValidatorId: Option[ValidatorIdentity],
       connectToGossip: GossipService.Connector[F],
-      downloadManager: DownloadManager[F],
+      downloadManager: BlocksDownloadManager[F],
       genesis: Block
   ): Resource[F, GenesisApprover[F]] =
     for {
@@ -485,7 +485,7 @@ package object gossiping {
   def makeGossipServiceServer[F[_]: ConcurrentEffect: Parallel: Log: Metrics: BlockStorage: DagStorage: DeployStorage: Consensus](
       conf: Configuration,
       synchronizer: Synchronizer[F],
-      downloadManager: DownloadManager[F],
+      downloadManager: BlocksDownloadManager[F],
       genesisApprover: GenesisApprover[F]
   ): Resource[F, GossipServiceServer[F]] =
     for {
@@ -552,7 +552,7 @@ package object gossiping {
     * Returns handle which will be resolved when initial synchronization is finished. */
   private def makeInitialSynchronizer[F[_]: Concurrent: Parallel: Log: Timer: NodeDiscovery: DagStorage: Consensus](
       conf: Configuration,
-      downloadManager: DownloadManager[F],
+      downloadManager: BlocksDownloadManager[F],
       synchronizer: Synchronizer[F],
       connectToGossip: GossipService.Connector[F],
       awaitApproved: F[Unit]

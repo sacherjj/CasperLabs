@@ -1172,7 +1172,7 @@ class GrpcGossipServiceSpec
                     def downloaded(blockHash: ByteString) = Task.unit
                   }
 
-                  val downloadManager = new DownloadManager[Task] {
+                  val downloadManager = new BlocksDownloadManager[Task] {
                     @volatile var scheduled = Vector.empty[ByteString]
                     def scheduleDownload(summary: BlockSummary, source: Node, relay: Boolean) = {
                       source shouldBe node
@@ -1411,7 +1411,7 @@ object GrpcGossipServiceSpec extends TestRuntime with ArbitraryConsensusAndComm 
       def syncDag(source: Node, targetBlockHashes: Set[ByteString]) = ???
       def downloaded(blockHash: ByteString): Task[Unit]             = ???
     }
-    private val emptyDownloadManager = new DownloadManager[Task] {
+    private val emptyDownloadManager = new BlocksDownloadManager[Task] {
       def scheduleDownload(summary: BlockSummary, source: Node, relay: Boolean) = ???
     }
     private val emptyGenesisApprover = new GenesisApprover[Task] {
@@ -1468,7 +1468,7 @@ object GrpcGossipServiceSpec extends TestRuntime with ArbitraryConsensusAndComm 
         maxParallelBlockDownloads: Int = 100,
         blockChunkConsumerTimeout: FiniteDuration = 10.seconds,
         synchronizer: Synchronizer[Task] = emptySynchronizer,
-        downloadManager: DownloadManager[Task] = emptyDownloadManager,
+        downloadManager: BlocksDownloadManager[Task] = emptyDownloadManager,
         genesisApprover: GenesisApprover[Task] = emptyGenesisApprover,
         rateLimiter: RateLimiter[Task, ByteString] = RateLimiter.noOp,
         mkBackend: AtomicReference[TestData] => GossipServiceServer.Backend[Task] = defaultBackend

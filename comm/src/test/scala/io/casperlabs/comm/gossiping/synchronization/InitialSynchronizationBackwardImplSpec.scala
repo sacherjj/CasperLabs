@@ -223,7 +223,7 @@ object InitialSynchronizationBackwardImplSpec extends ArbitraryConsensus {
     def downloaded(blockHash: ByteString): Task[Unit]             = ???
   }
 
-  object MockDownloadManager extends DownloadManager[Task] {
+  object MockBlocksDownloadManager$ extends BlocksDownloadManager[Task] {
     def scheduleDownload(summary: BlockSummary, source: Node, relay: Boolean) = ???
   }
 
@@ -239,7 +239,7 @@ object InitialSynchronizationBackwardImplSpec extends ArbitraryConsensus {
       extends GossipServiceServer[Task](
         MockBackend,
         MockSynchronizer,
-        MockDownloadManager,
+        MockBlocksDownloadManager$,
         MockGenesisApprover,
         0,
         MockSemaphore

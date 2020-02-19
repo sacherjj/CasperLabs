@@ -370,10 +370,10 @@ object GossipServiceCasperTestNodeFactory {
         } yield cont
 
       for {
-        downloadManagerR <- DownloadManagerImpl[F](
+        downloadManagerR <- BlocksDownloadManagerImpl[F](
                              maxParallelDownloads = 10,
                              connectToGossip = connectToGossip,
-                             backend = new DownloadManagerImpl.Backend[F] {
+                             backend = new BlocksDownloadManagerImpl.Backend[F] {
                                override def hasBlock(blockHash: ByteString): F[Boolean] =
                                  isInDag(blockHash)
 
@@ -439,7 +439,7 @@ object GossipServiceCasperTestNodeFactory {
 
                              },
                              relaying = relaying,
-                             retriesConf = DownloadManagerImpl.RetriesConf.noRetries
+                             retriesConf = BlocksDownloadManagerImpl.RetriesConf.noRetries
                            ).allocated
 
         (downloadManager, downloadManagerShutdown) = downloadManagerR

@@ -11,7 +11,7 @@ import io.casperlabs.casper.consensus.{Approval, Block, BlockSummary}
 import io.casperlabs.comm.GossipError
 import io.casperlabs.comm.discovery.Node
 import io.casperlabs.comm.discovery.NodeUtils.showNode
-import io.casperlabs.comm.gossiping.DownloadManagerImpl.RetriesConf
+import io.casperlabs.comm.gossiping.BlocksDownloadManagerImpl.RetriesConf
 import io.casperlabs.comm.gossiping.synchronization.Synchronizer
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.shared.{Log, LogStub}
@@ -25,13 +25,13 @@ import org.scalatest._
 import scala.concurrent.TimeoutException
 import scala.concurrent.duration._
 
-class DownloadManagerSpec
+class BlocksDownloadManagerSpec
     extends WordSpecLike
     with Matchers
     with BeforeAndAfterEach
     with ArbitraryConsensusAndComm {
 
-  import DownloadManagerSpec._
+  import BlocksDownloadManagerSpec._
   import Scheduler.Implicits.global
 
   // Collect log messages. Reset before each test.
@@ -66,7 +66,7 @@ class DownloadManagerSpec
       val remote   = MockGossipService(dag)
       val relaying = MockRelaying.default
 
-      def scheduleAll(manager: DownloadManager[Task]): Task[List[Task[Unit]]] =
+      def scheduleAll(manager: BlocksDownloadManager[Task]): Task[List[Task[Unit]]] =
         // Add them in the natural topological order they were generated with.
         dag.toList.traverse { block =>
           manager.scheduleDownload(summaryOf(block), source, relay = relayed(block))
@@ -244,7 +244,7 @@ class DownloadManagerSpec
         val backend = MockBackend()
 
         val test = for {
-          alloc <- DownloadManagerImpl[Task](
+          alloc <- BlocksDownloadManagerImpl[Task](
                     maxParallelDownloads = 1,
                     connectToGossip = _ => remote,
                     backend = backend,
@@ -272,7 +272,7 @@ class DownloadManagerSpec
 
       "reject further schedules" in {
         val test = for {
-          alloc <- DownloadManagerImpl[Task](
+          alloc <- BlocksDownloadManagerImpl[Task](
                     maxParallelDownloads = 1,
                     connectToGossip = _ => MockGossipService(),
                     backend = MockBackend(),
@@ -612,7 +612,7 @@ class DownloadManagerSpec
   }
 }
 
-object DownloadManagerSpec {
+object BlocksDownloadManagerSpec {
   implicit val metrics = new Metrics.MetricsNOP[Task]
 
   def summaryOf(block: Block): BlockSummary =
@@ -630,7 +630,7 @@ object DownloadManagerSpec {
   def toBlockMap(blocks: Seq[Block]) =
     blocks.groupBy(_.blockHash).mapValues(_.head)
 
-  type TestArgs = (DownloadManager[Task], MockBackend)
+  type TestArgs = (BlocksDownloadManager[Task], MockBackend)
 
   object TestFixture {
     def apply(
@@ -644,7 +644,7 @@ object DownloadManagerSpec {
         test: TestArgs => Task[Unit]
     )(implicit scheduler: Scheduler, log: Log[Task]): Unit = {
 
-      val managerR = DownloadManagerImpl[Task](
+      val managerR = BlocksDownloadManagerImpl[Task](
         maxParallelDownloads = maxParallelDownloads,
         connectToGossip = remote(_),
         backend = backend,
@@ -661,7 +661,7 @@ object DownloadManagerSpec {
   }
 
   class MockBackend(validate: Block => Task[Unit] = _ => Task.unit)
-      extends DownloadManagerImpl.Backend[Task] {
+      extends BlocksDownloadManagerImpl.Backend[Task] {
     // Record what we have been called with.
     @volatile var validations = Vector.empty[ByteString]
     @volatile var blocks      = Vector.empty[ByteString]
@@ -716,7 +716,7 @@ object DownloadManagerSpec {
       def syncDag(source: Node, targetBlockHashes: Set[ByteString]) = ???
       def downloaded(blockHash: ByteString): Task[Unit]             = ???
     }
-    private val emptyDownloadManager = new DownloadManager[Task] {
+    private val emptyDownloadManager = new BlocksDownloadManager[Task] {
       def scheduleDownload(summary: BlockSummary, source: Node, relay: Boolean) = ???
     }
     private val emptyGenesisApprover = new GenesisApprover[Task] {

@@ -17,7 +17,7 @@ import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.comm.GossipError
 import io.casperlabs.comm.discovery.Node
 import io.casperlabs.comm.discovery.NodeUtils.showNode
-import io.casperlabs.comm.gossiping.DownloadManagerImpl.RetriesConf
+import io.casperlabs.comm.gossiping.BlocksDownloadManagerImpl.RetriesConf
 import io.casperlabs.comm.gossiping.Utils._
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.shared.{Compression, FatalErrorShutdown, Log}
@@ -27,7 +27,7 @@ import scala.concurrent.duration.{Duration, FiniteDuration}
 import scala.util.control.NonFatal
 
 /** Manage the download, validation, storing and gossiping of blocks. */
-trait DownloadManager[F[_]] {
+trait BlocksDownloadManager[F[_]] {
 
   /** Schedule the download of a full block from the `source` node.
     * If `relay` is `true` then gossip it afterwards, if it's valid.
@@ -42,9 +42,9 @@ trait DownloadManager[F[_]] {
   def scheduleDownload(summary: BlockSummary, source: Node, relay: Boolean): F[WaitHandle[F]]
 }
 
-object DownloadManagerImpl {
+object BlocksDownloadManagerImpl {
   implicit val metricsSource: Metrics.Source =
-    Metrics.Source(GossipingMetricsSource, "DownloadManager")
+    Metrics.Source(BlocksGossipingMetricsSource, "DownloadManager")
 
   // to use .minimumOption on collections of (Node, Int)
   implicit val sourcesAndCountersOrder: Order[(Node, Int)] = Order[Int].contramap[(Node, Int)](_._2)
@@ -126,7 +126,7 @@ object DownloadManagerImpl {
       backend: Backend[F],
       relaying: Relaying[F],
       retriesConf: RetriesConf
-  ): Resource[F, DownloadManager[F]] =
+  ): Resource[F, BlocksDownloadManager[F]] =
     Resource.make {
       for {
         isShutdown <- Ref.of(false)
@@ -134,7 +134,7 @@ object DownloadManagerImpl {
         workersRef <- Ref.of(Map.empty[ByteString, Fiber[F, Unit]])
         semaphore  <- Semaphore[F](maxParallelDownloads.toLong)
         signal     <- MVar[F].empty[Signal[F]]
-        manager = new DownloadManagerImpl[F](
+        manager = new BlocksDownloadManagerImpl[F](
           isShutdown,
           itemsRef,
           workersRef,
@@ -165,24 +165,24 @@ object DownloadManagerImpl {
     summary.parentHashes ++ summary.justifications.map(_.latestBlockHash)
 }
 
-class DownloadManagerImpl[F[_]: Concurrent: Log: Timer: Metrics](
+class BlocksDownloadManagerImpl[F[_]: Concurrent: Log: Timer: Metrics](
     isShutdown: Ref[F, Boolean],
     // Keep track of active downloads and dependencies.
-    itemsRef: Ref[F, Map[ByteString, DownloadManagerImpl.Item[F]]],
+    itemsRef: Ref[F, Map[ByteString, BlocksDownloadManagerImpl.Item[F]]],
     // Keep track of ongoing downloads so we can cancel them.
     workersRef: Ref[F, Map[ByteString, Fiber[F, Unit]]],
     // Limit parallel downloads.
     semaphore: Semaphore[F],
     // Single item control signals for the manager loop.
-    signal: MVar[F, DownloadManagerImpl.Signal[F]],
+    signal: MVar[F, BlocksDownloadManagerImpl.Signal[F]],
     // Establish gRPC connection to another node.
     connectToGossip: GossipService.Connector[F],
-    backend: DownloadManagerImpl.Backend[F],
+    backend: BlocksDownloadManagerImpl.Backend[F],
     relaying: Relaying[F],
     retriesConf: RetriesConf
-) extends DownloadManager[F] {
+) extends BlocksDownloadManager[F] {
 
-  import DownloadManagerImpl._
+  import BlocksDownloadManagerImpl._
 
   private def ensureNotShutdown: F[Unit] =
     isShutdown.get.ifM(
