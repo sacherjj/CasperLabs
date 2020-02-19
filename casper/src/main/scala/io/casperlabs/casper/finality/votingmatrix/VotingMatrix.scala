@@ -11,14 +11,14 @@ import io.casperlabs.casper.finality.FinalityDetectorUtil
 import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.models.Message
-import io.casperlabs.models.Message.JRank
+import io.casperlabs.models.Message.MainRank
 import io.casperlabs.storage.dag.DagRepresentation
 
 import scala.collection.mutable.{IndexedSeq => MutableSeq}
 
 object VotingMatrix {
   // (Consensus value, DagLevel of the block)
-  type Vote               = (BlockHash, JRank)
+  type Vote               = (BlockHash, MainRank)
   type VotingMatrix[F[_]] = MonadState[F, VotingMatrixState]
 
   private[votingmatrix] def of[F[_]: Sync](
@@ -87,7 +87,7 @@ object VotingMatrix {
                                     .levelZeroMsgsOfValidator(dag, v, voteValue)
                                     .map(
                                       _.lastOption
-                                        .map(b => (v, (voteValue, b.jRank)))
+                                        .map(b => (v, (voteValue, b.mainRank)))
                                     )
                               }
                               .map(_.flatten.toMap)
