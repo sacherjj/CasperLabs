@@ -14,8 +14,8 @@ mod method {
     pub const CONCEDE: &str = "concede";
 }
 
-const PLAYER_X: Address = [1u8; 32];
-const PLAYER_O: Address = [2u8; 32];
+const PLAYER_X: PublicKey = PublicKey::new([1u8; 32]);
+const PLAYER_O: PublicKey = PublicKey::new([2u8; 32]);
 
 pub struct GameTest {
     pub context: TestContext,
@@ -52,7 +52,7 @@ impl GameTest {
         self
     }
 
-    pub fn concede(mut self, player: Address) -> Self {
+    pub fn concede(mut self, player: PublicKey) -> Self {
         let proxy = Code::Hash(self.proxy_contract_hash());
         let args = (self.game_contract_hash(), method::CONCEDE);
         let session = SessionBuilder::new(proxy, args)
@@ -93,8 +93,8 @@ impl GameTest {
         self.contract_hash(GAME_PROXY_CONTRACT_NAME)
     }
 
-    pub fn player_status(&self, player: Address) -> String {
-        let key: String = format!("{}", PublicKey::new(player));
+    pub fn player_status(&self, player: PublicKey) -> String {
+        let key: String = format!("{}", player);
         self.context
             .query(PLAYER_X, &[GAME_CONTRACT_NAME, key.as_str()])
             .expect("Player status not found")
@@ -105,43 +105,37 @@ impl GameTest {
     pub fn assert_player_in_game(
         self,
         playing_as: &str,
-        player: Address,
-        opponent: Address,
+        player: PublicKey,
+        opponent: PublicKey,
     ) -> Self {
         let val = self.player_status(player);
-        let expected = format!(
-            "playing as {} against {}",
-            playing_as,
-            PublicKey::new(opponent)
-        );
+        let expected = format!("playing as {} against {}", playing_as, opponent);
         assert_eq!(val, expected);
         self
     }
 
-    pub fn assert_player_won(self, player: Address, opponent: Address) -> Self {
+    pub fn assert_player_won(self, player: PublicKey, opponent: PublicKey) -> Self {
         let val = self.player_status(player);
-        let expected = format!("victorious against {}", PublicKey::new(opponent));
+        let expected = format!("victorious against {}", opponent);
         assert_eq!(val, expected);
         self
     }
 
-    pub fn assert_player_lost(self, player: Address, opponent: Address) -> Self {
+    pub fn assert_player_lost(self, player: PublicKey, opponent: PublicKey) -> Self {
         let val = self.player_status(player);
-        let expected = format!("defeated by {}", PublicKey::new(opponent));
+        let expected = format!("defeated by {}", opponent);
         assert_eq!(val, expected);
         self
     }
 
-    pub fn assert_player_draw(self, player: Address, opponent: Address) -> Self {
+    pub fn assert_player_draw(self, player: PublicKey, opponent: PublicKey) -> Self {
         let val = self.player_status(player);
-        let expected = format!("draw against {}", PublicKey::new(opponent));
+        let expected = format!("draw against {}", opponent);
         assert_eq!(val, expected);
         self
     }
 
-    pub fn assert_board_status(self, p1: Address, p2: Address, expected: &str) -> Self {
-        let pk1 = PublicKey::new(p1);
-        let pk2 = PublicKey::new(p2);
+    pub fn assert_board_status(self, pk1: PublicKey, pk2: PublicKey, expected: &str) -> Self {
         let key: String = if pk1 > pk2 {
             format!("Game {} vs {}", pk1, pk2)
         } else {
