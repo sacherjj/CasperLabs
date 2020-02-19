@@ -362,8 +362,8 @@ class MultiParentCasperImpl[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: 
                     .map(_.toSet | bondedLatestMsgs.values.flatten.toSet)
                     .map(set => ProtoUtil.nextJRank(set.toList))
                 )
-        mainRank        = asMainRank(merged.parents.head.mainRank + 1)
-        pRank           = asPRank(merged.parents.map(_.pRank).max + 1)
+        mainRank        = ProtoUtil.nextMainRank(merged.parents.traverse(Message.fromBlock(_)).get)
+        pRank           = ProtoUtil.nextPRank(merged.parents.traverse(Message.fromBlock(_)).get)
         config          <- CasperLabsProtocol[F].configAt(pRank)
         protocolVersion <- CasperLabsProtocol[F].versionAt(pRank)
       } yield CreateMessageProps(

@@ -161,11 +161,11 @@ object ProtoUtil {
       // For any other block `rank` should be 1 higher than the highest rank in its justifications.
       asJRank(justificationMsgs.map(_.jRank).max + 1)
 
-  def nextMainRank(parents: List[Message]): MainRank =
+  def nextMainRank(parents: Seq[Message]): MainRank =
     if (parents.isEmpty) asMainRank(0)
     else asMainRank(parents.head.mainRank + 1)
 
-  def nextPRank(parents: List[Message]): PRank =
+  def nextPRank(parents: Seq[Message]): PRank =
     if (parents.isEmpty) asPRank(0)
     else asPRank(parents.map(_.pRank).max + 1)
 
