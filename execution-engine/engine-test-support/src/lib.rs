@@ -16,7 +16,7 @@
 //!         .unwrap_or_revert_with(ApiError::MissingArgument)
 //!         .unwrap_or_revert_with(ApiError::InvalidArgument);
 //!
-//!     let value_ref = storage::new_turef(value);
+//!     let value_ref = storage::new_uref(value);
 //!     let value_key: Key = value_ref.into();
 //!     runtime::put_key(KEY, value_key);
 //! }
