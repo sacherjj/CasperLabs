@@ -9,7 +9,7 @@ import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.catscontrib.MonadThrowable
 import cats.implicits._
 import shapeless.tag.@@
-import Message.{JRank, MainRank}
+import Message.{JRank, MainRank, PRank}
 
 import scala.util.{Failure, Success, Try}
 import scala.reflect.quasiquotes.Rank
@@ -28,6 +28,7 @@ sealed trait Message {
   val timestamp: Long
   val jRank: JRank
   val mainRank: MainRank
+  val pRank: PRank
   val parentBlock: Id
   val justifications: Seq[consensus.Block.Justification]
   val validatorMsgSeqNum: Int
@@ -54,12 +55,16 @@ sealed trait Message {
 object Message {
   sealed trait JRankTag
   sealed trait MainRankTag
+  sealed trait PRankTag
 
   type JRank = Long @@ JRankTag
   def asJRank(l: Long): JRank = l.asInstanceOf[JRank]
 
   type MainRank = Long @@ MainRankTag
   def asMainRank(l: Long): MainRank = l.asInstanceOf[MainRank]
+
+  type PRank = Long @@ PRankTag
+  def asPRank(l: Long): PRank = l.asInstanceOf[PRank]
 
   case class Block private (
       messageHash: Message#Id,
@@ -71,6 +76,7 @@ object Message {
       justifications: Seq[consensus.Block.Justification],
       jRank: JRank,
       mainRank: MainRank,
+      pRank: PRank,
       validatorMsgSeqNum: Int,
       signature: consensus.Signature,
       blockSummary: BlockSummary,
@@ -102,6 +108,7 @@ object Message {
       justifications: Seq[consensus.Block.Justification],
       jRank: JRank,
       mainRank: MainRank,
+      pRank: PRank,
       validatorMsgSeqNum: Int,
       signature: consensus.Signature,
       blockSummary: BlockSummary,
@@ -123,6 +130,7 @@ object Message {
       val justifications     = header.justifications
       val jRank              = asJRank(header.jRank)
       val mainRank           = asMainRank(header.mainRank)
+      val pRank              = asPRank(header.pRank)
       val validatorMsgSeqNum = header.validatorBlockSeqNum
       val role               = header.messageType
       val signature          = b.getSignature
@@ -141,6 +149,7 @@ object Message {
               justifications,
               jRank,
               mainRank,
+              pRank,
               validatorMsgSeqNum,
               signature,
               b,
@@ -159,6 +168,7 @@ object Message {
               justifications,
               jRank,
               mainRank,
+              pRank,
               validatorMsgSeqNum,
               signature,
               b,

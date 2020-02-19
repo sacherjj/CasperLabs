@@ -55,16 +55,18 @@ class SQLiteDagStorage[F[_]: Sync](
 
     val jRank    = block.getHeader.jRank
     val mainRank = block.getHeader.mainRank
+    val pRank    = block.getHeader.pRank
 
     val isFinalized = false
     val insertBlockMetadata =
       (fr"""INSERT OR IGNORE INTO block_metadata
-            (block_hash, validator, j_rank, main_rank, """ ++ blockInfoCols() ++ fr""")
+            (block_hash, validator, j_rank, main_rank, p_rank, """ ++ blockInfoCols() ++ fr""")
             VALUES (
               ${block.blockHash},
               ${block.validatorPublicKey},
               $jRank,
               $mainRank,
+              $pRank,
               ${blockSummary.toByteString},
               ${block.serializedSize},
               $deployErrorCount,

@@ -167,6 +167,9 @@ message Block {
         // Block height.
         // Different from `j_rank` because it's incremented along main tree in the DAG, based on the parents.
         uint64 main_rank = 18;
+        // Incremented along the parent tree (NOT main parent.)
+        // Calculated as follows `max(parents.map(_.p_rank)) + 1`
+        uint64 p_rank = 19;
     }
 
     enum MessageType {
