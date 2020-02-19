@@ -53,6 +53,9 @@ class SQLiteDagStorage[F[_]: Sync](
           .map(d => d.cost * d.getDeploy.getHeader.gasPrice)
           .sum / deployCostTotal
 
+    val jRank    = block.getHeader.jRank
+    val mainRank = block.getHeader.mainRank
+
     val isFinalized = false
     val insertBlockMetadata =
       (fr"""INSERT OR IGNORE INTO block_metadata
@@ -60,8 +63,8 @@ class SQLiteDagStorage[F[_]: Sync](
             VALUES (
               ${block.blockHash},
               ${block.validatorPublicKey},
-              ${block.jRank},
-              ${block.mainRank},
+              $jRank,
+              $mainRank,
               ${blockSummary.toByteString},
               ${block.serializedSize},
               $deployErrorCount,

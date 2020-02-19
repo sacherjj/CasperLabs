@@ -8,6 +8,7 @@ import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.crypto.Keys.PrivateKey
 import io.casperlabs.crypto.hash.Blake2b256
 import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
+import io.casperlabs.shared.Sorting.jRankOrdering
 import org.scalacheck.{Arbitrary, Gen, Shrink}
 
 import scala.collection.JavaConverters._

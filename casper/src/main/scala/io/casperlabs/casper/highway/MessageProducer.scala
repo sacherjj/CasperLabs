@@ -31,6 +31,7 @@ import io.casperlabs.mempool.DeployBuffer
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.ipc
 import io.casperlabs.casper.PrettyPrinter
+import io.casperlabs.models.Message.{asMainRank, JRank, MainRank}
 
 /** Produce a signed message, persisted message.
   * The producer should the thread safe, so that when it's
@@ -146,7 +147,7 @@ object MessageProducer {
                            deployStream,
                            timestamp,
                            props.protocolVersion,
-                           props.jRank,
+                           props.mainRank,
                            upgrades
                          )
 
@@ -225,9 +226,9 @@ object MessageProducer {
 
           // Genesis is for example not part of the justifications, so to be safe include parents too.
           jRank           = ProtoUtil.nextJRank(parents ++ justificationMessages)
-          mainRank        = parents.head.mainRank + 1
-          config          <- CasperLabsProtocol[F].configAt(jRank)
-          protocolVersion <- CasperLabsProtocol[F].versionAt(jRank)
+          mainRank        = asMainRank(parents.head.mainRank + 1)
+          config          <- CasperLabsProtocol[F].configAt(mainRank)
+          protocolVersion <- CasperLabsProtocol[F].versionAt(mainRank)
         } yield MessageProps(
           validatorSeqNum,
           validatorPrevBlockHash,
@@ -242,8 +243,8 @@ object MessageProducer {
   case class MessageProps(
       validatorSeqNum: Int,
       validatorPrevBlockHash: BlockHash,
-      jRank: Long,
-      mainRank: Long,
+      jRank: JRank,
+      mainRank: MainRank,
       configuration: Config,
       protocolVersion: ProtocolVersion,
       justifications: Seq[Justification]

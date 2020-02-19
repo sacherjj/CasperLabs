@@ -11,6 +11,7 @@ import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.models.Message
 import io.casperlabs.shared.{Cell, Log, LogSource, StreamT}
 import io.casperlabs.storage.dag.DagRepresentation
+import io.casperlabs.shared.Sorting.jRankOrdering
 
 import scala.collection.immutable.{Map, Set}
 

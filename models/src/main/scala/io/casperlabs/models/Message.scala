@@ -8,8 +8,12 @@ import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.catscontrib.MonadThrowable
 import cats.implicits._
+import shapeless.tag.@@
+import Message.{JRank, MainRank}
 
 import scala.util.{Failure, Success, Try}
+import scala.reflect.quasiquotes.Rank
+import shapeless.tag
 
 /** A sum type representing message types that can be exchanged between validators.
   *
@@ -22,8 +26,8 @@ sealed trait Message {
   val messageHash: Id
   val validatorId: ByteString
   val timestamp: Long
-  val jRank: Long
-  val mainRank: Long
+  val jRank: JRank
+  val mainRank: MainRank
   val parentBlock: Id
   val justifications: Seq[consensus.Block.Justification]
   val validatorMsgSeqNum: Int
@@ -48,6 +52,15 @@ sealed trait Message {
 }
 
 object Message {
+  sealed trait JRankTag
+  sealed trait MainRankTag
+
+  type JRank = Long @@ JRankTag
+  def asJRank(l: Long): JRank = l.asInstanceOf[JRank]
+
+  type MainRank = Long @@ MainRankTag
+  def asMainRank(l: Long): MainRank = l.asInstanceOf[MainRank]
+
   case class Block private (
       messageHash: Message#Id,
       validatorId: ByteString,
@@ -56,8 +69,8 @@ object Message {
       eraId: Message#Id,
       parentBlock: Message#Id,
       justifications: Seq[consensus.Block.Justification],
-      jRank: Long,
-      mainRank: Long,
+      jRank: JRank,
+      mainRank: MainRank,
       validatorMsgSeqNum: Int,
       signature: consensus.Signature,
       blockSummary: BlockSummary,
@@ -87,8 +100,8 @@ object Message {
       eraId: Message#Id,
       parentBlock: Message#Id,
       justifications: Seq[consensus.Block.Justification],
-      jRank: Long,
-      mainRank: Long,
+      jRank: JRank,
+      mainRank: MainRank,
       validatorMsgSeqNum: Int,
       signature: consensus.Signature,
       blockSummary: BlockSummary,
@@ -108,8 +121,8 @@ object Message {
       val parentBlock        = header.parentHashes.headOption.getOrElse(ByteString.EMPTY)
       val validatorId        = header.validatorPublicKey
       val justifications     = header.justifications
-      val jRank              = header.jRank
-      val mainRank           = header.mainRank
+      val jRank              = asJRank(header.jRank)
+      val mainRank           = asMainRank(header.mainRank)
       val validatorMsgSeqNum = header.validatorBlockSeqNum
       val role               = header.messageType
       val signature          = b.getSignature

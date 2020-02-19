@@ -37,6 +37,7 @@ import io.casperlabs.mempool.DeployBuffer
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.implicits._
 import io.casperlabs.models.{Message, SmartContractEngineError}
+import Message.{asJRank, asMainRank, JRank, MainRank}
 import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.shared._
 import io.casperlabs.smartcontracts.ExecutionEngineService
@@ -45,6 +46,7 @@ import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.storage.dag.{DagRepresentation, DagStorage, FinalityStorage}
 import io.casperlabs.storage.deploy.{DeployStorage, DeployStorageReader, DeployStorageWriter}
 import simulacrum.typeclass
+import io.casperlabs.models.BlockImplicits._
 
 import scala.concurrent.duration.FiniteDuration
 import scala.util.control.NonFatal
@@ -308,8 +310,8 @@ class MultiParentCasperImpl[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: 
   private case class CreateMessageProps(
       justifications: Seq[Justification],
       parents: Seq[BlockHash],
-      jRank: Long,
-      mainRank: Long,
+      jRank: JRank,
+      mainRank: MainRank,
       protocolVersion: ProtocolVersion,
       configuration: Config,
       validatorSeqNum: Int,
@@ -345,12 +347,12 @@ class MultiParentCasperImpl[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: 
                     .map(_.toSet | bondedLatestMsgs.values.flatten.toSet)
                     .map(set => ProtoUtil.nextJRank(set.toList))
                 )
-        mainRank        = merged.parents.head.getHeader.mainRank + 1
-        config          <- CasperLabsProtocol[F].configAt(jRank)
-        protocolVersion <- CasperLabsProtocol[F].versionAt(jRank)
+        mainRank        = asMainRank(merged.parents.head.mainRank + 1)
+        config          <- CasperLabsProtocol[F].configAt(mainRank)
+        protocolVersion <- CasperLabsProtocol[F].versionAt(mainRank)
       } yield CreateMessageProps(
         justifications,
-        merged.parents.map(_.blockHash).toSeq,
+        merged.parents.map(_.blockHash),
         jRank,
         mainRank,
         protocolVersion,
@@ -388,7 +390,7 @@ class MultiParentCasperImpl[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: 
                          deployStream,
                          timestamp,
                          props.protocolVersion,
-                         props.jRank,
+                         props.mainRank,
                          upgrades
                        )
         result <- Sync[F]
@@ -591,7 +593,7 @@ object MultiParentCasperImpl {
                    }
           _ <- Log[F].debug(s"Computing the pre-state hash of ${hashPrefix -> "block"}")
           preStateHash <- ExecEngineUtil
-                           .computePrestate[F](merged, block.getHeader.jRank, upgrades) // TOOD: This should probably be using p-rank
+                           .computePrestate[F](merged, block.mainRank, upgrades) // TOOD: This should probably be using p-rank
                            .timer("computePrestate")
           _ <- Log[F].debug(s"Computing the effects for ${hashPrefix -> "block"}")
           blockEffects <- ExecEngineUtil

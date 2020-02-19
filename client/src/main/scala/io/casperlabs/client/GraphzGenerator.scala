@@ -142,7 +142,7 @@ object GraphzGenerator {
           .toSet
           .toList
 
-        val validatorBlocks =
+        val validatorBlocks: Map[Long, List[io.casperlabs.client.ValidatorBlock]] =
           Map(b.jRank -> List(ValidatorBlock(blockHash, parents, justifications)))
 
         Map(blockSenderHash -> validatorBlocks)

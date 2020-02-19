@@ -15,6 +15,7 @@ import io.casperlabs.catscontrib.TaskContrib._
 import monix.execution.Scheduler.Implicits.global
 import io.casperlabs.casper.PrettyPrinter
 import org.scalactic.Prettifier
+import io.casperlabs.shared.Sorting._
 
 class ScoresSpec extends FlatSpec with Matchers {
 
@@ -29,8 +30,8 @@ class ScoresSpec extends FlatSpec with Matchers {
       randomBlockHash,
       parent,
       Seq.empty,
-      rank.toLong,
-      rank.toLong,
+      Message.asJRank(rank.toLong),
+      Message.asMainRank(rank.toLong),
       1,
       Signature(),
       BlockSummary(),

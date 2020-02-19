@@ -27,6 +27,7 @@ import io.casperlabs.ipc.TransformEntry
 import io.casperlabs.models.Message
 import io.casperlabs.shared._
 import io.casperlabs.models.BlockImplicits._
+import io.casperlabs.models.Message.MainRank
 
 import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
 import scala.util.{Success, Try}
@@ -93,7 +94,7 @@ trait Validation[F[_]] {
 object Validation {
   def apply[F[_]](implicit ev: Validation[F]) = ev
 
-  type BlockHeight = Long
+  type BlockHeight = MainRank
   type Data        = Array[Byte]
 
   /** Represents block's effects indexed by deploy's `stage` value.
@@ -572,7 +573,7 @@ object Validation {
   ): F[Boolean] = {
 
     val blockVersion = b.getHeader.getProtocolVersion
-    val blockHeight  = b.getHeader.jRank
+    val blockHeight  = b.mainRank
     m(blockHeight).flatMap { version =>
       if (blockVersion == version) {
         true.pure[F]
@@ -767,7 +768,7 @@ object Validation {
 
     def singleDeployValidation(d: consensus.Deploy): F[Unit] =
       for {
-        config <- CasperLabsProtocol[F].configAt(b.getHeader.jRank).map(_.deployConfig)
+        config <- CasperLabsProtocol[F].configAt(b.mainRank).map(_.deployConfig)
         staticErrors <- deployHeader[F](
                          d,
                          chainName,

@@ -18,12 +18,13 @@ import simulacrum.typeclass
 import scala.collection.immutable.{BitSet, HashSet, Queue}
 import scala.collection.mutable
 import io.casperlabs.storage.dag.DagLookup
-import com.github.ghik.silencer.silent
 import io.casperlabs.storage.dag.DagStorage
 import io.casperlabs.storage.dag.DagRepresentation._
 import EraObservedBehavior._
 import io.casperlabs.casper.highway.MessageProducer
 import io.casperlabs.storage.era.EraStorage
+import io.casperlabs.shared.Sorting.jRankOrdering
+import io.casperlabs.models.Message.asJRank
 
 object DagOperations {
 
@@ -469,7 +470,7 @@ object DagOperations {
       for {
         ancestorMeta   <- ancestors.toList.traverse(dag.lookup).map(_.flatten)
         descendantMeta <- descendants.toList.traverse(dag.lookup).map(_.flatten)
-        minRank        = if (ancestorMeta.isEmpty) 0 else ancestorMeta.map(_.jRank).min
+        minRank        = if (ancestorMeta.isEmpty) asJRank(0) else ancestorMeta.map(_.jRank).min
         reachable <- bfToposortTraverseF[F](descendantMeta) { blockMeta =>
                       blockMeta.parents.toList.traverse(dag.lookup).map(_.flatten)
                     }.foldWhileLeft(Set.empty[BlockHash]) {
@@ -524,7 +525,7 @@ object DagOperations {
       keyBlocks: List[Message]
   ): F[Map[ByteString, Map[DagRepresentation.Validator, Set[Message]]]] =
     keyBlocks
-      .sortBy(_.jRank)(Ordering[Long].reverse)
+      .sortBy(_.jRank)(jRankOrdering.reverse)
       .traverse(kb => dag.latestMessagesInEra(kb.messageHash).map(kb.messageHash -> _))
       .map(_.toMap)
 

@@ -27,12 +27,13 @@ import io.casperlabs.smartcontracts.cltype
 import io.casperlabs.smartcontracts.bytesrepr._
 import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.storage.dag.DagRepresentation
-
+import io.casperlabs.models.Message.{asJRank, asMainRank, JRank, MainRank}
 import scala.collection.immutable
 import scala.concurrent.duration.FiniteDuration
 import scala.concurrent.duration._
 import scala.util.Try
 import io.casperlabs.storage.dag.DagLookup
+import io.casperlabs.shared.Sorting._
 
 object ProtoUtil {
   import Weight._
@@ -154,11 +155,11 @@ object ProtoUtil {
   def unsafeGetBlock[F[_]: MonadThrowable: BlockStorage](hash: BlockHash): F[Block] =
     BlockStorage[F].getBlockUnsafe(hash)
 
-  def nextJRank(justificationMsgs: Seq[Message]): Long =
-    if (justificationMsgs.isEmpty) 0 // Genesis has rank=0
+  def nextJRank(justificationMsgs: Seq[Message]): JRank =
+    if (justificationMsgs.isEmpty) asJRank(0) // Genesis has rank=0
     else
       // For any other block `rank` should be 1 higher than the highest rank in its justifications.
-      justificationMsgs.map(_.jRank).max + 1
+      asJRank(justificationMsgs.map(_.jRank).max + 1)
 
   def nextValidatorBlockSeqNum[F[_]: MonadThrowable](
       dag: DagRepresentation[F],

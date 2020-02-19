@@ -17,6 +17,7 @@ import io.casperlabs.casper.util.execengine.{DeploysCheckpoint, ExecEngineUtil}
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.crypto.Keys
 import io.casperlabs.metrics.Metrics
+import io.casperlabs.models.Message
 import io.casperlabs.p2p.EffectsTestInstances.LogicalTime
 import io.casperlabs.shared.{Log, Time}
 import io.casperlabs.smartcontracts.ExecutionEngineService
@@ -85,7 +86,7 @@ object BlockGenerator {
                  fs2.Stream.fromIterator(deploys.toIterator),
                  b.getHeader.timestamp,
                  ProtocolVersion(1),
-                 rank = 0,
+                 mainRank = Message.asMainRank(0),
                  upgrades = Nil
                )
     } yield result

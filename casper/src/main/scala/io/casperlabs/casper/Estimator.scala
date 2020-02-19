@@ -12,7 +12,7 @@ import io.casperlabs.metrics.implicits._
 import io.casperlabs.models.{Message, Weight}
 import io.casperlabs.storage.dag.{DagLookup, DagRepresentation}
 import io.casperlabs.shared.{Log, Sorting}
-import Sorting.byteStringOrdering
+import Sorting.{byteStringOrdering, jRankOrdering}
 
 import scala.collection.immutable.Map
 
@@ -23,7 +23,7 @@ object Estimator {
   import Weight._
 
   implicit val metricsSource = CasperMetricsSource
-  val increasingOrder        = Ordering[Long]
+  val increasingOrder        = jRankOrdering
 
   def tips[F[_]: MonadThrowable: Metrics: Log](
       dag: DagRepresentation[F],
