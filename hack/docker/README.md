@@ -76,8 +76,8 @@ To start the nextwork in Highway mode, first export an environment variable to e
 
 ```console
 export CL_HIGHWAY_ENABLED=true
-CL_HIGHWAY_ROUND_EXPONENT=14 make node-0/up
-CL_HIGHWAY_ROUND_EXPONENT=15 make node-1/up
+CL_HIGHWAY_INIT_ROUND_EXPONENT=14 make node-0/up
+CL_HIGHWAY_INIT_ROUND_EXPONENT=15 make node-1/up
 ```
 
 The default values for era length can be found in [highway-env.sh](./scripts/highway-env.sh)
