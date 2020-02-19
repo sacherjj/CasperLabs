@@ -272,7 +272,7 @@ object Highway {
 
       cons = new Consensus[F] {
         override def validateAndAddBlock(block: Block): F[Unit] =
-          supervisor.validateAndAddBlock(block)
+          supervisor.validateAndAddBlock(block).whenA(block != genesis)
 
         override def onGenesisApproved(genesisBlockHash: ByteString): F[Unit] =
           // This is for the integration tests, they are looking for this.

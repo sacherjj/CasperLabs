@@ -528,7 +528,7 @@ private[configuration] final case class Options private (
 
     @scallop
     val highwayEnabled =
-      gen[Boolean](
+      gen[Flag](
         "Use highway, or stick to NCB."
       )
 

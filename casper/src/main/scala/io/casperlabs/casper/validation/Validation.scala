@@ -97,6 +97,10 @@ object Validation {
   type BlockHeight = MainRank
   type Data        = Array[Byte]
 
+  // TODO (CON-639): Remove this; but for now NCB validation doesn't work with Highway in some cases.
+  // This only works with env vars, not the CLI or the config file, but I just want to get it going.
+  def isHighway = sys.env.get("CL_HIGHWAY_ENABLED") == Some("true")
+
   /** Represents block's effects indexed by deploy's `stage` value.
     * Deploys with the same `stage` value can be run in parallel.
     * Execution must be ordered from lowest stage to the highest.
@@ -148,7 +152,8 @@ object Validation {
       b: BlockSummary,
       dag: DagRepresentation[F]
   ): F[Unit] =
-    for {
+    // TODO (CON-639): A voting ballot appears to be merging swimlanes in the child era.
+    (for {
       equivocators <- dag.getEquivocators
       message      <- MonadThrowable[F].fromTry(Message.fromBlockSummary(b))
       _ <- Monad[F].whenA(equivocators.contains(message.validatorId)) {
@@ -182,7 +187,7 @@ object Validation {
                   }
             } yield ()
           }
-    } yield ()
+    } yield ()).whenA(!isHighway)
 
   /* If we receive block from future then we may fail to propose new block on top of it because of Validation.timestamp */
   def preTimestamp[F[_]: Monad: RaiseValidationError: Time](
@@ -643,7 +648,8 @@ object Validation {
   ): F[Unit] = {
     val prevBlockHash = b.getHeader.validatorPrevBlockHash
     val validatorId   = b.getHeader.validatorPublicKey
-    if (prevBlockHash.isEmpty) {
+    // TODO (CON-639): Going on the j-DAG is not enough, it may lead to a ballot in the parent era.
+    if (prevBlockHash.isEmpty || isHighway) {
       ().pure[F]
     } else {
       def rejectWith(msg: String) =
@@ -654,17 +660,18 @@ object Validation {
           rejectWith(
             s"DagStorage is missing previous block hash ${PrettyPrinter.buildString(prevBlockHash)}"
           )
-        case Some(meta) if meta.validatorId != validatorId =>
+        case Some(prev) if prev.validatorId != validatorId =>
           rejectWith(
             s"Previous block hash ${PrettyPrinter.buildString(prevBlockHash)} was not created by validator ${PrettyPrinter
               .buildString(validatorId)}"
           )
-        case Some(meta) =>
+        case Some(prev) =>
           MonadThrowable[F].fromTry(Message.fromBlockSummary(b)) flatMap { blockMsg =>
             DagOperations
               .toposortJDagDesc(dag, List(blockMsg))
               .find { j =>
-                j.validatorId == validatorId && j.messageHash != b.blockHash || j.jRank < meta.jRank
+                // Go until we're passed the previous message they point at. It should be the first form this validator.
+                j.validatorId == validatorId && j.messageHash != b.blockHash || j.jRank < prev.jRank
               }
               .flatMap {
                 case Some(msg) if msg.messageHash == prevBlockHash =>

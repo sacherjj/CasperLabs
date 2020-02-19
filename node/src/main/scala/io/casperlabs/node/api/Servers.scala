@@ -23,7 +23,7 @@ import io.casperlabs.node.diagnostics.{GrpcDiagnosticsService, NewPrometheusRepo
 import io.casperlabs.shared._
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.block._
-import io.casperlabs.storage.dag.DagStorage
+import io.casperlabs.storage.dag.{DagStorage, FinalityStorage}
 import io.casperlabs.storage.deploy.DeployStorage
 import io.netty.handler.ssl.SslContext
 import kamon.Kamon
@@ -80,7 +80,7 @@ object Servers {
   }
 
   /** Start a gRPC server with services meant for users and dApp developers. */
-  def externalServersR[F[_]: Concurrent: TaskLike: Log: MultiParentCasperRef: Metrics: BlockStorage: ExecutionEngineService: DeployStorage: Validation: Fs2Compiler: DeployBuffer: DagStorage: EventStream: NodeDiscovery](
+  def externalServersR[F[_]: Concurrent: TaskLike: Log: FinalityStorage: Metrics: BlockStorage: ExecutionEngineService: DeployStorage: Validation: Fs2Compiler: DeployBuffer: DagStorage: EventStream: NodeDiscovery](
       port: Int,
       maxMessageSize: Int,
       ingressScheduler: Scheduler,

@@ -404,9 +404,9 @@ class EraRuntime[F[_]: MonadThrowable: Clock: EraStorage: FinalityStorageReader:
     def check(errorMessage: String, errorCondition: Boolean) =
       checkF(errorMessage, errorCondition.pure[F])
 
-    check(
+    checkF(
       "The block is coming from a doppelganger.",
-      maybeMessageProducer.map(_.validatorId).contains(message.validatorId)
+      isSynced.map(_ && maybeMessageProducer.map(_.validatorId).contains(message.validatorId))
     ) >>
       check(
         "The round ID is before the start of the era.",
@@ -487,12 +487,18 @@ class EraRuntime[F[_]: MonadThrowable: Clock: EraStorage: FinalityStorageReader:
             "Shouldn't receive messages from other eras!"
           )
       _ <- maybeMessageProducer.fold(noop) { mp =>
-            check(message.validatorId != mp.validatorId, "Shouldn't receive our own messages!") >>
-              ifCurrentRound(Ticks(message.roundId)) {
-                HighwayLog
-                  .liftF(message.isLambdaMessage)
-                  .ifM(createLambdaResponse(mp, message), noop)
-              }
+            for {
+              synced <- HighwayLog.liftF(isSynced)
+              _ <- check(
+                    !synced || message.validatorId != mp.validatorId,
+                    "Shouldn't receive our own messages!"
+                  )
+              _ <- ifCurrentRound(Ticks(message.roundId)) {
+                    HighwayLog
+                      .liftF(message.isLambdaMessage)
+                      .ifM(createLambdaResponse(mp, message), noop)
+                  }
+            } yield ()
           }
       _ <- handleCriticalMessages(message)
     } yield ()

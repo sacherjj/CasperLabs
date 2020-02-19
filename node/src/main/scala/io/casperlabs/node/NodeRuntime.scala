@@ -258,15 +258,17 @@ class NodeRuntime private[node] (
 
       implicit0(consensus: Consensus[Task]) <- {
         if (conf.highway.enabled)
-          casper.consensus.Highway(conf, chainSpec, maybeValidatorId, genesis, isSyncedRef)
+          Resource.liftF(Log[Task].info(s"Starting in Highway mode.")) *>
+            casper.consensus.Highway(conf, chainSpec, maybeValidatorId, genesis, isSyncedRef)
         else
-          Resource.liftF {
-            new casper.consensus.NCB[Task](
-              conf,
-              chainSpec,
-              maybeValidatorId
-            ).pure[Task]
-          }
+          Resource.liftF(Log[Task].info(s"Starting in NCB mode.")) *>
+            Resource.liftF {
+              new casper.consensus.NCB[Task](
+                conf,
+                chainSpec,
+                maybeValidatorId
+              ).pure[Task]
+            }
       }
 
       // Creating with 0 permits initially, enabled after the initial synchronization.

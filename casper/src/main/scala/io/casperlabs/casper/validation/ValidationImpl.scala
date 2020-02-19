@@ -158,12 +158,18 @@ class ValidationImpl[F[_]: Sync: FunctorRaise[*[_], InvalidBlock]: Log: Time: Me
       .getJustificationMsgHashes(b.getHeader.justifications)
 
     for {
-      equivocators <- EquivocationDetector.detectVisibleFromJustifications(
-                       dag,
-                       latestMessagesHashes
-                     )
-      tipHashes <- Estimator
-                    .tips[F](dag, b.getHeader.keyBlockHash, latestMessagesHashes, equivocators)
+      // TODO (CON-639): Need to use the Highway ForkChoice here. For now not validating it at all.
+      tipHashes <- if (isHighway)
+                    NonEmptyList.fromListUnsafe(b.getHeader.parentHashes.toList).pure[F]
+                  else {
+                    EquivocationDetector.detectVisibleFromJustifications(
+                      dag,
+                      latestMessagesHashes
+                    ) flatMap { equivocators =>
+                      Estimator
+                        .tips[F](dag, b.getHeader.keyBlockHash, latestMessagesHashes, equivocators)
+                    }
+                  }
       _                    <- Log[F].debug(s"Estimated tips are ${printHashes(tipHashes) -> "tips"}")
       tips                 <- tipHashes.traverse(ProtoUtil.unsafeGetBlock[F])
       merged               <- ExecEngineUtil.merge[F](tips, dag)
@@ -296,9 +302,10 @@ class ValidationImpl[F[_]: Sync: FunctorRaise[*[_], InvalidBlock]: Log: Time: Me
       .whenA(b.getHeader.messageType.isBallot && b.getHeader.parentHashes.size != 1)
 
   override def checkEquivocation(dag: DagRepresentation[F], block: Block): F[Unit] =
-    for {
+    // TODO (CON-639): The equivocation detector doesn't know about eras, so voting ballots are treated incorrectly as equivocations.
+    (for {
       message <- Sync[F].fromTry(Message.fromBlock(block))
       _       <- EquivocationDetector.checkEquivocationWithUpdate[F](dag, message)
-    } yield ()
+    } yield ()).whenA(!isHighway)
 
 }
