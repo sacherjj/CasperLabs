@@ -243,12 +243,6 @@ class GraphQLBlockTypes[F[_]: MonadThrowable
           resolve = c => c.value._1.getSummary.mainRank
         ),
         Field(
-          "pRank",
-          LongType,
-          "Block height along the parent-tree in the DAGA. Based on the block's parents.".some,
-          resolve = c => c.value._1.getSummary.pRank
-        ),
-        Field(
           "validatorPublicKey",
           StringType,
           "Base-16 encoded public key of a validator created the block".some,

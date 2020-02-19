@@ -82,7 +82,6 @@ object Genesis {
         state = state,
         jRank = Message.asJRank(0),
         mainRank = Message.asMainRank(0),
-        pRank = Message.asPRank(0),
         validatorSeqNum = 0,
         validatorPrevBlockHash = ByteString.EMPTY,
         protocolVersion = genesisConfig.getProtocolVersion,

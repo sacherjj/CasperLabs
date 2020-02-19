@@ -32,7 +32,6 @@ class ScoresSpec extends FlatSpec with Matchers {
       Seq.empty,
       Message.asJRank(rank.toLong),
       Message.asMainRank(rank.toLong),
-      Message.asPRank(rank.toLong),
       1,
       Signature(),
       BlockSummary(),

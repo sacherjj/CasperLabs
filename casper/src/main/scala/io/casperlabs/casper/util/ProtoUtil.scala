@@ -27,7 +27,7 @@ import io.casperlabs.smartcontracts.cltype
 import io.casperlabs.smartcontracts.bytesrepr._
 import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.storage.dag.DagRepresentation
-import io.casperlabs.models.Message.{asJRank, asMainRank, asPRank, JRank, MainRank, PRank}
+import io.casperlabs.models.Message.{asJRank, asMainRank, JRank, MainRank}
 import scala.collection.immutable
 import scala.concurrent.duration.FiniteDuration
 import scala.concurrent.duration._
@@ -164,10 +164,6 @@ object ProtoUtil {
   def nextMainRank(parents: Seq[Message]): MainRank =
     if (parents.isEmpty) asMainRank(0)
     else asMainRank(parents.head.mainRank + 1)
-
-  def nextPRank(parents: Seq[Message]): PRank =
-    if (parents.isEmpty) asPRank(0)
-    else asPRank(parents.map(_.pRank).max + 1)
 
   def nextValidatorBlockSeqNum[F[_]: MonadThrowable](
       dag: DagRepresentation[F],
@@ -426,7 +422,6 @@ object ProtoUtil {
       now: Long,
       jRank: JRank,
       mainRank: MainRank,
-      pRank: PRank,
       publicKey: Keys.PublicKey,
       privateKey: Keys.PrivateKey,
       sigAlgorithm: SignatureAlgorithm,
@@ -448,7 +443,6 @@ object ProtoUtil {
       state = postState,
       jRank = jRank,
       mainRank = mainRank,
-      pRank = pRank,
       protocolVersion = protocolVersion,
       timestamp = now,
       chainName = chainName,
@@ -482,7 +476,6 @@ object ProtoUtil {
       now: Long,
       jRank: JRank,
       mainRank: MainRank,
-      pRank: PRank,
       publicKey: Keys.PublicKey,
       privateKey: Keys.PrivateKey,
       sigAlgorithm: SignatureAlgorithm,
@@ -504,7 +497,6 @@ object ProtoUtil {
       state = postState,
       jRank = jRank,
       mainRank = mainRank,
-      pRank = pRank,
       protocolVersion = protocolVersion,
       timestamp = now,
       chainName = chainName,
@@ -532,7 +524,6 @@ object ProtoUtil {
       state: Block.GlobalState,
       jRank: JRank,
       mainRank: MainRank,
-      pRank: PRank,
       validatorSeqNum: Int,
       validatorPrevBlockHash: ByteString,
       protocolVersion: ProtocolVersion,
@@ -553,7 +544,6 @@ object ProtoUtil {
       .withState(state)
       .withJRank(jRank)
       .withMainRank(mainRank)
-      .withPRank(pRank)
       .withValidatorPublicKey(ByteString.copyFrom(creator))
       .withValidatorBlockSeqNum(validatorSeqNum)
       .withValidatorPrevBlockHash(validatorPrevBlockHash)

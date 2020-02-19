@@ -7,7 +7,7 @@ import org.scalatest.{Matchers, WordSpec}
 
 class CasperLabsProtocolSpec extends WordSpec with Matchers {
 
-  implicit def `Long => PRank`(in: Long): Message.PRank = Message.asPRank(in)
+  implicit def `Long => MainRank`(in: Long): Message.MainRank = Message.asMainRank(in)
 
   "CasperLabsProtocol" when {
     val genesisDeployConfig = ChainSpec.DeployConfig(1, 1)

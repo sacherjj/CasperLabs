@@ -27,7 +27,7 @@ import io.casperlabs.ipc.TransformEntry
 import io.casperlabs.models.Message
 import io.casperlabs.shared._
 import io.casperlabs.models.BlockImplicits._
-import io.casperlabs.models.Message.{MainRank, PRank}
+import io.casperlabs.models.Message.MainRank
 
 import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
 import scala.util.{Success, Try}
@@ -569,11 +569,11 @@ object Validation {
   // Validates whether block was built using correct protocol version.
   def version[F[_]: Monad: Log](
       b: BlockSummary,
-      m: PRank => F[state.ProtocolVersion]
+      m: MainRank => F[state.ProtocolVersion]
   ): F[Boolean] = {
 
     val blockVersion = b.getHeader.getProtocolVersion
-    val blockHeight  = b.pRank
+    val blockHeight  = b.mainRank
     m(blockHeight).flatMap { version =>
       if (blockVersion == version) {
         true.pure[F]
@@ -768,7 +768,7 @@ object Validation {
 
     def singleDeployValidation(d: consensus.Deploy): F[Unit] =
       for {
-        config <- CasperLabsProtocol[F].configAt(b.pRank).map(_.deployConfig)
+        config <- CasperLabsProtocol[F].configAt(b.mainRank).map(_.deployConfig)
         staticErrors <- deployHeader[F](
                          d,
                          chainName,

@@ -8,13 +8,13 @@ import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.ipc
 import io.casperlabs.ipc.ChainSpec.DeployConfig
 import simulacrum.typeclass
-import io.casperlabs.models.Message.PRank
+import io.casperlabs.models.Message.MainRank
 
 @typeclass
 trait CasperLabsProtocol[F[_]] {
 
   /** Returns a [[state.ProtocolVersion]] at block height. */
-  def versionAt(blockHeight: PRank): F[state.ProtocolVersion]
+  def versionAt(blockHeight: MainRank): F[state.ProtocolVersion]
 
   /** Returns a [[state.ProtocolVersion]] at specific block. */
   def protocolFromBlock(b: Block): F[state.ProtocolVersion]
@@ -25,7 +25,7 @@ trait CasperLabsProtocol[F[_]] {
     * Specifically if certain configuration parameter isn't defined at latest
     * upgrade point, latest one will be used.
     */
-  def configAt(blockHeight: PRank): F[Config]
+  def configAt(blockHeight: MainRank): F[Config]
 }
 
 object CasperLabsProtocol {
@@ -64,10 +64,10 @@ object CasperLabsProtocol {
       )
 
     new CasperLabsProtocol[F] {
-      def versionAt(blockHeight: PRank): F[state.ProtocolVersion] =
+      def versionAt(blockHeight: MainRank): F[state.ProtocolVersion] =
         underlying.versionAt(blockHeight).pure[F]
       def protocolFromBlock(b: Block): F[state.ProtocolVersion] = underlying.fromBlock(b).pure[F]
-      def configAt(blockHeight: PRank): F[Config]               = merged.configAt(blockHeight).pure[F]
+      def configAt(blockHeight: MainRank): F[Config]            = merged.configAt(blockHeight).pure[F]
     }
   }
 

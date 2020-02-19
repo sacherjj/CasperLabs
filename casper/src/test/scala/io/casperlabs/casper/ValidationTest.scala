@@ -259,7 +259,6 @@ class ValidationTest
       1,
       Message.asJRank(1),
       Message.asMainRank(1),
-      Message.asPRank(1),
       pk,
       sk,
       Ed25519,

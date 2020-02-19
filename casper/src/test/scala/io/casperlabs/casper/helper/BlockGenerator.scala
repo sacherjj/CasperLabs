@@ -196,7 +196,6 @@ trait BlockGenerator {
                   .map(ProtoUtil.nextJRank(_))
       parentMessages <- parentsHashList.toList.traverse(dag.lookupBlockUnsafe(_))
       mainRank       = ProtoUtil.nextMainRank(parentMessages)
-      pRank          = ProtoUtil.nextPRank(parentMessages)
       header = ProtoUtil
         .blockHeader(
           body,
@@ -206,7 +205,6 @@ trait BlockGenerator {
           postState,
           jRank,
           mainRank,
-          pRank,
           validatorSeqNum,
           validatorPrevBlockHash,
           protocolVersion = ProtocolVersion(1),
