@@ -149,15 +149,13 @@ class GrpcDeployService(conn: ConnectOptions, scheduler: Scheduler)
       val startTime   = System.currentTimeMillis()
       val timeoutTime = startTime + timeoutSeconds * 1000
 
-      def deployInfo(sleep: java.lang.Long): DeployInfo = {
+      def deployInfo(delayMillis: java.lang.Long): DeployInfo = {
+        Thread.sleep(delayMillis)
         val future: CancelableFuture[DeployInfo] =
           casperServiceStub
             .getDeployInfo(GetDeployInfoRequest(hash, view = DeployInfo.View.BASIC))
             .runToFuture
-
-        val result = Await.result(future, 5.seconds)
-        Thread.sleep(sleep)
-        result
+        Await.result(future, 5.seconds)
       }
 
       def deployInfos: Stream[DeployInfo] = deployInfo(0) #:: {

@@ -61,40 +61,54 @@ object Main {
       case Unbond(
           amount,
           contracts,
-          privateKey
+          privateKey,
+          waitForProcessed,
+          timeoutSeconds
           ) =>
         DeployRuntime.unbond[F](
           amount,
           contracts,
-          privateKey
+          privateKey,
+          waitForProcessed,
+          timeoutSeconds
         )
       case Bond(
           amount,
           contracts,
-          privateKey
+          privateKey,
+          waitForProcessed,
+          timeoutSeconds
           ) =>
         DeployRuntime.bond[F](
           amount,
           contracts,
-          privateKey
+          privateKey,
+          waitForProcessed,
+          timeoutSeconds
         )
       case Transfer(
           amount,
           recipientPublicKey,
           contracts,
-          privateKey
+          privateKey,
+          waitForProcessed,
+          timeoutSeconds
           ) =>
         DeployRuntime.transferCLI[F](
           contracts,
           privateKey,
           recipientPublicKey,
-          amount
+          amount,
+          waitForProcessed,
+          timeoutSeconds
         )
       case Deploy(
           from,
           contracts,
           maybePublicKey,
-          maybePrivateKey
+          maybePrivateKey,
+          waitForProcessed,
+          timeoutSeconds
           ) =>
         DeployRuntime.deployFileProgram[F](
           from,
@@ -106,7 +120,9 @@ object Main {
           maybePrivateKey.map(
             file =>
               new String(Files.readAllBytes(file.toPath), StandardCharsets.UTF_8).asLeft[PrivateKey]
-          )
+          ),
+          waitForProcessed = waitForProcessed,
+          timeoutSeconds = timeoutSeconds
         )
       case MakeDeploy(
           from,
@@ -138,8 +154,8 @@ object Main {
           _ <- DeployRuntime.writeDeploy[F](deploy, deployPath)
         } yield ()
 
-      case SendDeploy(deploy) =>
-        DeployRuntime.sendDeploy[F](deploy)
+      case SendDeploy(deploy, waitForProcessed, timeoutSeconds) =>
+        DeployRuntime.sendDeploy[F](deploy, waitForProcessed, timeoutSeconds)
 
       case PrintDeploy(deploy, bytesStandard, json) =>
         DeployRuntime.printDeploy[F](deploy, bytesStandard, json)

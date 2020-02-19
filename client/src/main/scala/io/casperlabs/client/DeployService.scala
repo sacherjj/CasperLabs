@@ -7,7 +7,9 @@ import simulacrum.typeclass
 import scala.util.Either
 
 @typeclass trait DeployService[F[_]] {
-  def deploy(d: consensus.Deploy): F[Either[Throwable, String]]
+  def deploy(
+      d: consensus.Deploy
+  ): F[Either[Throwable, String]]
   def propose(): F[Either[Throwable, String]]
   def showBlock(
       blockHash: String
