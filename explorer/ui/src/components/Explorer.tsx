@@ -143,7 +143,7 @@ class BlockDetails extends React.Component<
     let attrs: Array<Array<[string, any]>> = [
       [
         ['Block Hash', <Link to={Pages.block(id)}>{shortHash(id)}</Link>],
-        ['Rank', header.getRank()]
+        ['j-Rank', header.getJRank()]
       ],
       [
         [

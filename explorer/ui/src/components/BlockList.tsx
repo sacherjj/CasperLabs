@@ -23,7 +23,7 @@ export interface Props extends RouteComponentProps<{}> {
 
 @observer
 class _BlockList extends RefreshableComponent<Props, {}> {
-  constructor(props:Props) {
+  constructor(props: Props) {
     super(props);
     let maxRank = parseInt(props.maxRank || '') || 0;
     let depth = parseInt(props.depth || '') || 10;
@@ -52,7 +52,7 @@ class _BlockList extends RefreshableComponent<Props, {}> {
         }
         refresh={() => this.refresh()}
         subscribeToggleStore={dag.subscribeToggleStore}
-        headers={['Block hash', 'Rank', 'Timestamp', 'Validator']}
+        headers={['Block hash', 'j-Rank', 'Timestamp', 'Validator']}
         rows={dag.blocks}
         renderRow={(block: BlockInfo) => {
           const header = block.getSummary()!.getHeader()!;
@@ -62,7 +62,7 @@ class _BlockList extends RefreshableComponent<Props, {}> {
               <td>
                 <Link to={Pages.block(id)}>{id}</Link>
               </td>
-              <td>{header.getRank()}</td>
+              <td>{header.getJRank()}</td>
               <td>
                 <Timestamp timestamp={header.getTimestamp()} />
               </td>

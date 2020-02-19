@@ -180,7 +180,7 @@ const blockAttrs: (block: BlockInfo) => Array<[string, any]> = (
   const stats = block.getStatus()!.getStats()!;
   return [
     ['Block Hash', id],
-    ['Rank', header.getRank()],
+    ['j-Rank', header.getJRank()],
     ['Timestamp', new Date(header.getTimestamp()).toISOString()],
     [
       'Parents',
