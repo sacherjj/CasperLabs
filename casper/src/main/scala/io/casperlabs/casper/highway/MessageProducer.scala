@@ -31,7 +31,8 @@ import io.casperlabs.mempool.DeployBuffer
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.ipc
 import io.casperlabs.casper.PrettyPrinter
-import io.casperlabs.models.Message.{asMainRank, JRank, MainRank}
+import io.casperlabs.models.Message.{asMainRank, asPRank, JRank, MainRank, PRank}
+import io.casperlabs.shared.Sorting._
 
 /** Produce a signed message, persisted message.
   * The producer should the thread safe, so that when it's
@@ -97,6 +98,7 @@ object MessageProducer {
             timestamp,
             props.jRank,
             props.mainRank,
+            props.pRank,
             validatorIdentity.publicKey,
             validatorIdentity.privateKey,
             validatorIdentity.signatureAlgorithm,
@@ -167,6 +169,7 @@ object MessageProducer {
             timestamp,
             props.jRank,
             props.mainRank,
+            props.pRank,
             validatorIdentity.publicKey,
             validatorIdentity.privateKey,
             validatorIdentity.signatureAlgorithm,
@@ -226,14 +229,16 @@ object MessageProducer {
 
           // Genesis is for example not part of the justifications, so to be safe include parents too.
           jRank           = ProtoUtil.nextJRank(parents ++ justificationMessages)
-          mainRank        = asMainRank(parents.head.mainRank + 1)
-          config          <- CasperLabsProtocol[F].configAt(mainRank)
-          protocolVersion <- CasperLabsProtocol[F].versionAt(mainRank)
+          mainRank        = ProtoUtil.nextMainRank(parents.toList)
+          pRank           = ProtoUtil.nextPRank(parents.toList)
+          config          <- CasperLabsProtocol[F].configAt(pRank)
+          protocolVersion <- CasperLabsProtocol[F].versionAt(pRank)
         } yield MessageProps(
           validatorSeqNum,
           validatorPrevBlockHash,
           jRank,
           mainRank,
+          pRank,
           config,
           protocolVersion,
           ProtoUtil.toJustification(justificationMessages)
@@ -245,6 +250,7 @@ object MessageProducer {
       validatorPrevBlockHash: BlockHash,
       jRank: JRank,
       mainRank: MainRank,
+      pRank: PRank,
       configuration: Config,
       protocolVersion: ProtocolVersion,
       justifications: Seq[Justification]

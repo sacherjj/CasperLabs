@@ -27,6 +27,7 @@ import monix.eval.Task
 import org.scalatest.{FlatSpec, Matchers}
 
 import scala.collection.immutable.HashMap
+import io.casperlabs.models.Message
 
 class BlockQueryResponseAPITest extends FlatSpec with Matchers with StorageFixture {
   implicit val timeEff = new LogicalTime[Task]
@@ -44,8 +45,9 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with StorageFixtu
       parentHashes = Nil,
       justifications = Nil,
       state = ps,
-      jRank = 0,
-      mainRank = 0,
+      jRank = Message.asJRank(1),
+      mainRank = Message.asMainRank(1),
+      pRank = Message.asPRank(1),
       protocolVersion = version,
       timestamp = 1527191663,
       chainName = "casperlabs",
@@ -96,8 +98,9 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with StorageFixtu
     ByteString.EMPTY,
     chainName,
     timestamp,
-    1,
-    1,
+    Message.asJRank(1),
+    Message.asMainRank(1),
+    Message.asPRank(1),
     Keys.PublicKey(secondBlockSender.toByteArray),
     Keys.PrivateKey(secondBlockSender.toByteArray),
     Ed25519,

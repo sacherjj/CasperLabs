@@ -6,7 +6,7 @@ import io.casperlabs.casper.consensus.{Block, BlockSummary}
 import io.casperlabs.casper.consensus.info.BlockInfo
 import io.casperlabs.casper.consensus.info.BlockInfo.Status.Stats
 import io.casperlabs.casper.consensus.state.ProtocolVersion
-import io.casperlabs.models.Message.{asJRank, asMainRank, JRank, MainRank}
+import io.casperlabs.models.Message._
 
 object BlockImplicits {
   implicit class BlockOps(val block: Block) extends AnyVal {
@@ -29,6 +29,7 @@ object BlockImplicits {
     def validatorPublicKey: ByteString       = block.getHeader.validatorPublicKey
     def jRank: JRank                         = asJRank(block.getHeader.jRank)
     def mainRank: MainRank                   = asMainRank(block.getHeader.mainRank)
+    def pRank: PRank                         = asPRank(block.getHeader.pRank)
     def weightMap: Map[ByteString, Weight] =
       block.getHeader.getState.bonds
         .map(b => (b.validatorPublicKey, Weight(b.stake)))
@@ -56,6 +57,7 @@ object BlockImplicits {
     def validatorPublicKey: ByteString     = summary.getHeader.validatorPublicKey
     def jRank: JRank                       = asJRank(summary.getHeader.jRank)
     def mainRank: MainRank                 = asMainRank(summary.getHeader.mainRank)
+    def pRank: PRank                       = asPRank(summary.getHeader.pRank)
     def weightMap: Map[ByteString, Weight] =
       summary.getHeader.getState.bonds
         .map(b => (b.validatorPublicKey, Weight(b.stake)))

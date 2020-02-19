@@ -37,7 +37,7 @@ import io.casperlabs.mempool.DeployBuffer
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.implicits._
 import io.casperlabs.models.{Message, SmartContractEngineError}
-import Message.{asJRank, asMainRank, JRank, MainRank}
+import Message.{asJRank, asMainRank, asPRank, JRank, MainRank, PRank}
 import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.shared._
 import io.casperlabs.smartcontracts.ExecutionEngineService
@@ -47,6 +47,7 @@ import io.casperlabs.storage.dag.{DagRepresentation, DagStorage, FinalityStorage
 import io.casperlabs.storage.deploy.{DeployStorage, DeployStorageReader, DeployStorageWriter}
 import simulacrum.typeclass
 import io.casperlabs.models.BlockImplicits._
+import Sorting._
 
 import scala.concurrent.duration.FiniteDuration
 import scala.util.control.NonFatal
@@ -312,6 +313,7 @@ class MultiParentCasperImpl[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: 
       parents: Seq[BlockHash],
       jRank: JRank,
       mainRank: MainRank,
+      pRank: PRank,
       protocolVersion: ProtocolVersion,
       configuration: Config,
       validatorSeqNum: Int,
@@ -348,13 +350,15 @@ class MultiParentCasperImpl[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: 
                     .map(set => ProtoUtil.nextJRank(set.toList))
                 )
         mainRank        = asMainRank(merged.parents.head.mainRank + 1)
-        config          <- CasperLabsProtocol[F].configAt(mainRank)
-        protocolVersion <- CasperLabsProtocol[F].versionAt(mainRank)
+        pRank           = asPRank(merged.parents.map(_.pRank).max + 1)
+        config          <- CasperLabsProtocol[F].configAt(pRank)
+        protocolVersion <- CasperLabsProtocol[F].versionAt(pRank)
       } yield CreateMessageProps(
         justifications,
         merged.parents.map(_.blockHash),
         jRank,
         mainRank,
+        pRank,
         protocolVersion,
         config,
         validatorSeqNum,
@@ -412,6 +416,7 @@ class MultiParentCasperImpl[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: 
                          timestamp,
                          props.jRank,
                          props.mainRank,
+                         props.pRank,
                          validatorId,
                          privateKey,
                          sigAlgorithm,
@@ -463,6 +468,7 @@ class MultiParentCasperImpl[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: 
         now,
         props.jRank,
         props.mainRank,
+        props.pRank,
         validatorId,
         privateKey,
         sigAlgorithm,

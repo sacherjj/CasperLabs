@@ -8,22 +8,22 @@ import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.models.Message._
 
 class ProtocolVersions private (l: List[Config]) {
-  private def configAtHeight(blockHeight: MainRank): Config =
+  private def configAtHeight(blockHeight: PRank): Config =
     l.collectFirst {
       case c @ Config(blockHeightMin, _, _) if blockHeightMin <= blockHeight =>
         c
     }.get // This cannot throw because we validate in `apply` that list is never empty.
 
-  def versionAt(blockHeight: MainRank): state.ProtocolVersion =
+  def versionAt(blockHeight: PRank): state.ProtocolVersion =
     configAtHeight(blockHeight).version
 
-  def configAt(blockHeight: MainRank): Config =
+  def configAt(blockHeight: PRank): Config =
     configAtHeight(blockHeight)
 
   def fromBlock(
       b: Block
   ): state.ProtocolVersion =
-    versionAt(b.mainRank)
+    versionAt(b.pRank)
 }
 
 object ProtocolVersions {

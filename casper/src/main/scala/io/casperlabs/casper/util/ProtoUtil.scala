@@ -27,7 +27,7 @@ import io.casperlabs.smartcontracts.cltype
 import io.casperlabs.smartcontracts.bytesrepr._
 import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.storage.dag.DagRepresentation
-import io.casperlabs.models.Message.{asJRank, asMainRank, JRank, MainRank}
+import io.casperlabs.models.Message.{asJRank, asMainRank, asPRank, JRank, MainRank, PRank}
 import scala.collection.immutable
 import scala.concurrent.duration.FiniteDuration
 import scala.concurrent.duration._
@@ -160,6 +160,14 @@ object ProtoUtil {
     else
       // For any other block `rank` should be 1 higher than the highest rank in its justifications.
       asJRank(justificationMsgs.map(_.jRank).max + 1)
+
+  def nextMainRank(parents: List[Message]): MainRank =
+    if (parents.isEmpty) asMainRank(0)
+    else asMainRank(parents.head.mainRank + 1)
+
+  def nextPRank(parents: List[Message]): PRank =
+    if (parents.isEmpty) asPRank(0)
+    else asPRank(parents.map(_.pRank).max + 1)
 
   def nextValidatorBlockSeqNum[F[_]: MonadThrowable](
       dag: DagRepresentation[F],
@@ -416,8 +424,9 @@ object ProtoUtil {
       validatorPrevBlockHash: ByteString,
       chainName: String,
       now: Long,
-      jRank: Long,
-      mainRank: Long,
+      jRank: JRank,
+      mainRank: MainRank,
+      pRank: PRank,
       publicKey: Keys.PublicKey,
       privateKey: Keys.PrivateKey,
       sigAlgorithm: SignatureAlgorithm,
@@ -439,6 +448,7 @@ object ProtoUtil {
       state = postState,
       jRank = jRank,
       mainRank = mainRank,
+      pRank = pRank,
       protocolVersion = protocolVersion,
       timestamp = now,
       chainName = chainName,
@@ -470,8 +480,9 @@ object ProtoUtil {
       validatorPrevBlockHash: ByteString,
       chainName: String,
       now: Long,
-      jRank: Long,
-      mainRank: Long,
+      jRank: JRank,
+      mainRank: MainRank,
+      pRank: PRank,
       publicKey: Keys.PublicKey,
       privateKey: Keys.PrivateKey,
       sigAlgorithm: SignatureAlgorithm,
@@ -493,6 +504,7 @@ object ProtoUtil {
       state = postState,
       jRank = jRank,
       mainRank = mainRank,
+      pRank = pRank,
       protocolVersion = protocolVersion,
       timestamp = now,
       chainName = chainName,
@@ -518,8 +530,9 @@ object ProtoUtil {
       parentHashes: Seq[ByteString],
       justifications: Seq[Justification],
       state: Block.GlobalState,
-      jRank: Long,
-      mainRank: Long,
+      jRank: JRank,
+      mainRank: MainRank,
+      pRank: PRank,
       validatorSeqNum: Int,
       validatorPrevBlockHash: ByteString,
       protocolVersion: ProtocolVersion,
@@ -540,6 +553,7 @@ object ProtoUtil {
       .withState(state)
       .withJRank(jRank)
       .withMainRank(mainRank)
+      .withPRank(pRank)
       .withValidatorPublicKey(ByteString.copyFrom(creator))
       .withValidatorBlockSeqNum(validatorSeqNum)
       .withValidatorPrevBlockHash(validatorPrevBlockHash)

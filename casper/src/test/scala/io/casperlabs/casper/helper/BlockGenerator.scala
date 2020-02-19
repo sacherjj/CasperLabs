@@ -25,6 +25,7 @@ import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.storage.dag.{DagRepresentation, IndexedDagStorage}
 import io.casperlabs.storage.deploy.{DeployStorage, DeployStorageWriter}
 import monix.eval.Task
+import io.casperlabs.shared.Sorting._
 
 import scala.collection.immutable.HashMap
 import scala.language.higherKinds
@@ -185,14 +186,15 @@ trait BlockGenerator {
                           else
                             ProtoUtil.nextValidatorBlockSeqNum(dag, validatorPrevBlockHash)
                         }
-      jRank <- if (parentsHashList.isEmpty) 0L.pure[F]
+      jRank <- if (parentsHashList.isEmpty) Message.asJRank(0L).pure[F]
               else
                 updatedJustifications.values.toList
                   .flatTraverse(_.toList.traverse(dag.lookup(_)))
                   .map(_.flatten)
                   .map(ProtoUtil.nextJRank(_))
-      mainRank <- if (parentsHashList.isEmpty) 0L.pure[F] // Genesis
-                 else dag.lookupBlockUnsafe(parentsHashList.head).map(_.mainRank + 1)
+      parentMessages <- parentsHashList.toList.traverse(dag.lookupBlockUnsafe(_))
+      mainRank       = ProtoUtil.nextMainRank(parentMessages)
+      pRank          = ProtoUtil.nextPRank(parentMessages)
       header = ProtoUtil
         .blockHeader(
           body,
@@ -202,6 +204,7 @@ trait BlockGenerator {
           postState,
           jRank,
           mainRank,
+          pRank,
           validatorSeqNum,
           validatorPrevBlockHash,
           protocolVersion = ProtocolVersion(1),

@@ -5,7 +5,7 @@ import io.casperlabs.casper.consensus.BlockSummary
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.models.Message
-import io.casperlabs.models.Message.{JRank, MainRank}
+import io.casperlabs.models.Message.{JRank, MainRank, PRank}
 
 object Sorting {
 
@@ -28,11 +28,12 @@ object Sorting {
 
   implicit val jRankOrdering: Ordering[JRank]       = Ordering.by[JRank, Long](identity)
   implicit val mainRankOrdering: Ordering[MainRank] = Ordering.by[MainRank, Long](identity)
+  implicit val pRankOrdering: Ordering[PRank]       = Ordering.by[PRank, Long](identity)
 
   implicit def catsOrder[T: Ordering]: cats.Order[T] = cats.Order.fromOrdering[T]
 
   // For some reason, these are not derived automatically :/
-  // For some reason, these are not derived automatically :/
   implicit val jRankOrder    = catsOrder[JRank]
   implicit val mainRankOrder = catsOrder[MainRank]
+  implicit val pRankOrder    = catsOrder[PRank]
 }

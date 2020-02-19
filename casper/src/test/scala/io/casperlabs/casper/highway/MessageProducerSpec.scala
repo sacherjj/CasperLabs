@@ -163,6 +163,8 @@ class MessageProducerSpec extends FlatSpec with Matchers with Inspectors with Hi
                  )
 
             _ = b2.jRank shouldBe 2
+            _ = b2.mainRank shouldBe 1
+            _ = b2.pRank shouldBe 1
             _ = b2.validatorMsgSeqNum shouldBe 2
             _ = b2.validatorPrevMessageHash shouldBe b1.messageHash
 
@@ -175,6 +177,8 @@ class MessageProducerSpec extends FlatSpec with Matchers with Inspectors with Hi
                  )
 
             _ = b3.jRank shouldBe 3
+            _ = b3.pRank shouldBe 1
+            _ = b3.mainRank shouldBe 1
             _ = b3.validatorMsgSeqNum shouldBe 1
             _ = b3.validatorPrevMessageHash shouldBe ByteString.EMPTY
 
@@ -186,6 +190,8 @@ class MessageProducerSpec extends FlatSpec with Matchers with Inspectors with Hi
                  )
 
             _ = b4.jRank shouldBe 4
+            _ = b4.pRank shouldBe 1
+            _ = b4.mainRank shouldBe 1
             _ = b4.validatorMsgSeqNum shouldBe 2
             _ = b4.validatorPrevMessageHash shouldBe b3.messageHash
             _ = b4.justifications should have size 2

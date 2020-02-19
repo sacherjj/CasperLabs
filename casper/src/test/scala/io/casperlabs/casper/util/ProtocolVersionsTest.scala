@@ -8,7 +8,7 @@ import org.scalatest.{Assertion, Inspectors, Matchers, WordSpec}
 
 class ProtocolVersionsTest extends WordSpec with Matchers with Inspectors {
 
-  implicit def `Long => MainRank`(in: Long): Message.MainRank = Message.asMainRank(in)
+  implicit def `Long => PRank`(in: Long): Message.PRank = Message.asPRank(in)
 
   val deployConfig = DeployConfig(
     maxTtlMillis = 24 * 60 * 60 * 1000, // 1 day
