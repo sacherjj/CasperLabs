@@ -59,7 +59,8 @@ services:
       CL_TLS_API_KEY: /root/.casperlabs/node/node.key.pem
       CL_GRPC_USE_TLS: "false"
       CL_METRICS_PROMETHEUS: "true"
-      CL_LOG_JSON_PATH: /var/logs/casperlabs
+      # TODO: The log written is owned by root, can't remove.
+      #CL_LOG_JSON_PATH: /var/logs/casperlabs
     env_file:
       - .env
       - $PWD/../.casperlabs/chainspec/genesis/highway.env
