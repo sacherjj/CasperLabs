@@ -19,12 +19,26 @@ node-%: .casperlabs
 	$(eval N = $*)
 	$(eval ENV = node-$(N)/.env)
 	mkdir node-$(N)
-	# Copy default env values. Create overrides with `export CL_<name>=<value>` before running `make node-X/up` commands.
-	cp ${PWD}/template/.env $(ENV)
 
 	@# Create an .env file to hold template variables for docker-compose.
-	echo CL_VERSION=$(CL_VERSION) >> $(ENV)
 	echo NODE_NUMBER=$(N) >> $(ENV)
+
+	# Set default env values. Create overrides with `export CL_<name>=<value>` before running `make node-X/up` commands,
+	# or override them for individual nodes e.g. `CL_VERSION=0.1.2 make node-0/up`
+	# Capture all CL_ env vars into the .env file so later they don't revert if we run things in another console.
+	# Take overrides from template/.env file.
+	bash -c '\
+	export CL_VERSION=$(CL_VERSION) ; \
+	while read kv; do \
+		k=$$(echo $${kv} | cut -d'=' -f1) ; \
+		v=$$(echo $${kv} | cut -d'=' -f2) ; \
+		if [ -z "$${!k}" ]; then \
+			export $${k}=$${v} ; \
+		fi ; \
+	done < ${PWD}/template/.env ; \
+	for var in $$(compgen -v CL_); do \
+		echo $${var}=$${!var} >> $(ENV) ; \
+	done'
 
 	@# Link Dockerfile so we can change it and reapply.
 	@#ln -s ${PWD}/template/docker-compose.yml node-$(N)/docker-compose.yml
@@ -33,7 +47,8 @@ node-%: .casperlabs
 
 
 # Start node.
-node-%/up: node-% .make/docker/network
+# Only make `highway.env` when the first node is started, so the era epoch doesn't become stale.
+node-%/up: node-% .make/docker/network .casperlabs/chainspec/genesis/highway.env
 	@# Go into the directory to pick up values from .env
 	if [ "$(CL_VERSION)" != "latest" ]; then \
 		cd node-$* && docker-compose pull; \
@@ -123,3 +138,9 @@ slow:
 	@# Check that the files we wanted exist and aren't empty.
 	[ -s .casperlabs/chainspec/genesis/accounts.csv ]
 	[ -s .casperlabs/bootstrap/node-id ]
+
+
+# Create common Highway environment overrides for the chainspec defaults,
+# common to all, so a node started later won't choose a different era epoch.
+.casperlabs/chainspec/genesis/highway.env: .casperlabs
+	./scripts/highway-env.sh > .casperlabs/chainspec/genesis/highway.env
