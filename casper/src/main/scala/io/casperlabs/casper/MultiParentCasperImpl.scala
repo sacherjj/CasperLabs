@@ -612,7 +612,7 @@ object MultiParentCasperImpl {
                    }
           _ <- Log[F].debug(s"Computing the pre-state hash of ${hashPrefix -> "block"}")
           preStateHash <- ExecEngineUtil
-                           .computePrestate[F](merged, block.mainRank, upgrades) // TOOD: This should probably be using p-rank
+                           .computePrestate[F](merged, block.mainRank, upgrades)
                            .timer("computePrestate")
           _ <- Log[F].debug(s"Computing the effects for ${hashPrefix -> "block"}")
           blockEffects <- ExecEngineUtil
