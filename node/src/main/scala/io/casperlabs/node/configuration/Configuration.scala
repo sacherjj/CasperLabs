@@ -37,6 +37,7 @@ final case class Configuration(
 object Configuration extends ParserImplicits {
   case class Log(
       level: IzLog.Level,
+      // Directory path where the logs will be sent.
       jsonPath: Option[Path]
   ) extends SubConfig
 

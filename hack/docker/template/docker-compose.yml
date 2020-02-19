@@ -41,6 +41,8 @@ services:
       # Node keys
       - $PWD/../.casperlabs/node-${NODE_NUMBER}:/root/.casperlabs/node
       - $PWD/../template/start-node.sh:/opt/docker/start-node.sh
+      # Make logs available in JSON, stack traces are only available there.
+      - $PWD/logs:/var/logs/casperlabs
     networks:
       - casperlabs
     environment:
@@ -57,6 +59,7 @@ services:
       CL_TLS_API_KEY: /root/.casperlabs/node/node.key.pem
       CL_GRPC_USE_TLS: "false"
       CL_METRICS_PROMETHEUS: "true"
+      CL_LOG_JSON_PATH: /var/logs/casperlabs
     env_file:
       - .env
       - $PWD/../.casperlabs/chainspec/genesis/highway.env
