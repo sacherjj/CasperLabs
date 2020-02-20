@@ -141,16 +141,23 @@ package object votingmatrix {
       quorum: Weight
   )(implicit matrix: VotingMatrix[F]): F[Option[CommitteeWithConsensusValue]] =
     for {
-      equivocators        <- dag.getEquivocators
       weightMap           <- (matrix >> 'weightMap).get
       validators          <- (matrix >> 'validators).get
       firstLevelZeroVotes <- (matrix >> 'firstLevelZeroVotes).get
       // Get Map[VoteBranch, List[Validator]] directly from firstLevelZeroVotes
-      consensusValueToHonestValidators = firstLevelZeroVotes.zipWithIndex
-        .collect { case (Some((blockHash, _)), idx) => (blockHash, validators(idx)) }
-        .filterNot { case (_, validator) => equivocators.contains(validator) }
-        .groupBy(_._1)
-        .mapValues(_.map(_._2))
+      consensusValueToHonestValidators <- firstLevelZeroVotes.zipWithIndex
+                                           .collect {
+                                             case (Some((blockHash, _)), idx) =>
+                                               (blockHash, validators(idx))
+                                           }
+                                           .toList
+                                           .filterA {
+                                             case (vote, validator) =>
+                                               dag
+                                                 .getEquivocatorsInEra(vote)
+                                                 .map(!_.contains(validator))
+                                           }
+                                           .map(_.groupBy(_._1).mapValues(_.map(_._2)))
       // Get most support voteBranch and its support weight
       mostSupport = consensusValueToHonestValidators
         .mapValues(_.map(weightMap.getOrElse(_, Zero)).sum)

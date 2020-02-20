@@ -32,7 +32,8 @@ class FinalityDetectorVotingMatrix[F[_]: Concurrent: Log] private (rFTT: Double)
       message: Message,
       latestFinalizedBlock: BlockHash
   ): F[Option[CommitteeWithConsensusValue]] =
-    dag.getEquivocators
+    dag
+      .getEquivocatorsInEra(message.eraId)
       .map(_.contains(message.validatorId))
       .ifM(
         Log[F].info(
