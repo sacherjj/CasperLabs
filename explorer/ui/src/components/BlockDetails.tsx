@@ -180,8 +180,14 @@ const blockAttrs: (block: BlockInfo) => Array<[string, any]> = (
   const stats = block.getStatus()!.getStats()!;
   return [
     ['Block Hash', id],
+    ['Key Block Hash',
+      <Link to={Pages.block(encodeBase16(header.getKeyBlockHash_asU8()))}>
+        {shortHash(header.getKeyBlockHash_asU8())}
+      </Link>],
     ['j-Rank', header.getJRank()],
+    ['m-Rank', header.getMainRank()],
     ['Timestamp', new Date(header.getTimestamp()).toISOString()],
+    ['Type', <BlockType header={header} />],
     [
       'Parents',
       <ul>
@@ -231,7 +237,7 @@ const blockAttrs: (block: BlockInfo) => Array<[string, any]> = (
       'Is Finalized',
       block
         .getStatus()!
-        .getIsFinalized()
+        .getIsFinalized().toString()
     ]
   ];
 };
@@ -249,5 +255,11 @@ export const Balance = observer(
     return <span>{value.toLocaleString()}</span>;
   }
 );
+
+export const BlockType = (props: { header: Block.Header }) => {
+  let typ = props.header.getMessageType();
+  let lbl = typ === Block.MessageType.BLOCK ? "Block" : typ === Block.MessageType.BALLOT ? "Ballot" : "n/a"
+  return <span>{lbl}</span>;
+}
 
 export default BlockDetails;

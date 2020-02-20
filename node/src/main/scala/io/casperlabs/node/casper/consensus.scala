@@ -234,23 +234,37 @@ object Highway {
                                                       ForkChoiceManager.create[F]
                                                     }
 
+      hwConf = HighwayConf(
+        tickUnit = TimeUnit.MILLISECONDS,
+        genesisEraStart = Instant.ofEpochMilli(hc.genesisEraStartTimestamp),
+        eraDuration = HighwayConf.EraDuration.FixedLength(hc.eraDurationMillis.millis),
+        bookingDuration = hc.bookingDurationMillis.millis,
+        entropyDuration = hc.entropyDurationMillis.millis,
+        postEraVotingDuration = if (hc.votingPeriodSummitLevel > 0) {
+          HighwayConf.VotingDuration.SummitLevel(hc.votingPeriodSummitLevel)
+        } else {
+          HighwayConf.VotingDuration
+            .FixedLength(hc.votingPeriodDurationMillis.millis)
+        },
+        omegaMessageTimeStart = conf.highway.omegaMessageTimeStart.value,
+        omegaMessageTimeEnd = conf.highway.omegaMessageTimeEnd.value
+      )
+
+      _ <- Resource.liftF {
+            Log[F].info(
+              s"Genesis era lasts from ${hwConf.genesisEraStart} to ${hwConf.genesisEraEnd}"
+            ) >>
+              Log[F].info(s"Era duration is ${hwConf.eraDuration}") >>
+              Log[F].info(s"Booking duration is ${hwConf.bookingDuration}") >>
+              Log[F].info(s"Entropy duration is ${hwConf.entropyDuration}") >>
+              Log[F].info(s"Voting duration is ${hwConf.postEraVotingDuration}") >>
+              Log[F].info(
+                s"Initial round exponent is ${conf.highway.initRoundExponent.value -> "exponent"}"
+              )
+          }
+
       supervisor <- EraSupervisor(
-                     conf = HighwayConf(
-                       tickUnit = TimeUnit.MILLISECONDS,
-                       genesisEraStart = Instant.ofEpochMilli(hc.genesisEraStartTimestamp),
-                       eraDuration =
-                         HighwayConf.EraDuration.FixedLength(hc.eraDurationMillis.millis),
-                       bookingDuration = hc.bookingDurationMillis.millis,
-                       entropyDuration = hc.entropyDurationMillis.millis,
-                       postEraVotingDuration = if (hc.votingPeriodSummitLevel > 0) {
-                         HighwayConf.VotingDuration.SummitLevel(hc.votingPeriodSummitLevel)
-                       } else {
-                         HighwayConf.VotingDuration
-                           .FixedLength(hc.votingPeriodDurationMillis.millis)
-                       },
-                       omegaMessageTimeStart = conf.highway.omegaMessageTimeStart.value,
-                       omegaMessageTimeEnd = conf.highway.omegaMessageTimeEnd.value
-                     ),
+                     conf = hwConf,
                      genesis = BlockSummary(genesis.blockHash, genesis.header, genesis.signature),
                      maybeMessageProducer = maybeValidatorId.map { validatorId =>
                        MessageProducer[F](

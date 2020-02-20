@@ -25,7 +25,7 @@ entropy-duration = "3hours"
 
 voting-period-duration = "2days"
 
-voting-period-summit-level = 1
+voting-period-summit-level = 0
 
 [deploys]
 max-ttl-millis = 86400000

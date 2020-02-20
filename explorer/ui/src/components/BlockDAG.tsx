@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { Block } from 'casperlabs-grpc/io/casperlabs/casper/consensus/consensus_pb';
 import { BlockInfo } from 'casperlabs-grpc/io/casperlabs/casper/consensus/info_pb';
 import { ListInline, Loading, RefreshButton, shortHash } from './Utils';
 import * as d3 from 'd3';
@@ -9,6 +10,7 @@ import { ToggleButton, ToggleStore } from './ToggleButton';
 
 const CircleRadius = 8;
 const LineColor = '#AAA';
+const FinalizedLineColor = '#83f2a1';
 
 export interface Props {
   title: string;
@@ -183,7 +185,7 @@ export class BlockDAG extends React.Component<Props, {}> {
       .data(graph.links)
       .enter()
       .append('line')
-      .attr('stroke', LineColor)
+      .attr('stroke', (d: d3Link) => d.isFinalized ? FinalizedLineColor : LineColor)
       .attr('stroke-width', (d: d3Link) => (d.isMainParent ? 3 : 1))
       .attr('marker-end', 'url(#arrow)') // use the Arrow created above
       .attr('stroke-dasharray', (d: d3Link) =>
@@ -202,12 +204,16 @@ export class BlockDAG extends React.Component<Props, {}> {
     node
       .append('circle')
       .attr('class', 'node')
-      .attr('r', CircleRadius)
+      .attr('r', (d: d3Node) =>
+        CircleRadius * (isBallot(d.block) ? 0.7 : 1.0))
       .attr('stroke', (d: d3Node) =>
-        selectedId && d.id === selectedId ? '#E00' : '#fff'
+        selectedId && d.id === selectedId ? '#E00' : color(d.eraId)
       )
       .attr('stroke-width', (d: d3Node) =>
-        selectedId && d.id === selectedId ? '3px' : '1.5px'
+        selectedId && d.id === selectedId ? '4px' : '3px'
+      )
+      .attr('stroke-opacity', (d: d3Node) =>
+        selectedId && d.id === selectedId ? 1 : 0.75
       )
       .attr('fill', (d: d3Node) => color(d.validator));
 
@@ -303,6 +309,7 @@ interface d3Node {
   id: string;
   title: string;
   validator: string;
+  eraId: string;
   rank: number;
   x?: number;
   y?: number;
@@ -314,6 +321,7 @@ interface d3Link {
   target: d3Node;
   isMainParent: boolean;
   isJustification: boolean;
+  isFinalized: boolean;
 }
 
 class Graph {
@@ -342,6 +350,7 @@ const toGraph = (blocks: BlockInfo[]) => {
       id: id,
       title: shortHash(id),
       validator: validatorHash(block),
+      eraId: keyBlockHash(block),
       rank: block
         .getSummary()!
         .getHeader()!
@@ -354,6 +363,8 @@ const toGraph = (blocks: BlockInfo[]) => {
 
   let links = blocks.flatMap(block => {
     let child = blockHash(block);
+
+    let isChildFinalized = isFinalized(block);
 
     let parents = block
       .getSummary()!
@@ -369,14 +380,18 @@ const toGraph = (blocks: BlockInfo[]) => {
       .getJustificationsList()
       .map(x => encodeBase16(x.getLatestBlockHash_asU8()));
 
+    let source = nodeMap.get(child)!
+
     let parentLinks = parents
       .filter(p => nodeMap.has(p))
       .map(p => {
+        let target = nodeMap.get(p)!
         return {
-          source: nodeMap.get(child)!,
-          target: nodeMap.get(p)!,
+          source: source,
+          target: target,
           isMainParent: p === parents[0],
-          isJustification: false
+          isJustification: false,
+          isFinalized: isChildFinalized && isFinalized(target.block)
         };
       });
 
@@ -384,11 +399,13 @@ const toGraph = (blocks: BlockInfo[]) => {
       .filter(x => !parentSet.has(x))
       .filter(j => nodeMap.has(j))
       .map(j => {
+        let target = nodeMap.get(j)!
         return {
-          source: nodeMap.get(child)!,
-          target: nodeMap.get(j)!,
+          source: source,
+          target: target,
           isMainParent: false,
-          isJustification: true
+          isJustification: true,
+          isFinalized: isChildFinalized && isFinalized(target.block)
         };
       });
 
@@ -448,6 +465,18 @@ const calculateCoordinates = (graph: Graph, width: number, height: number) => {
 
 const blockHash = (block: BlockInfo) =>
   encodeBase16(block.getSummary()!.getBlockHash_asU8());
+
+const keyBlockHash = (block: BlockInfo) =>
+  encodeBase16(block.getSummary()!.getHeader()!.getKeyBlockHash_asU8());
+
+const isBlock = (block: BlockInfo) =>
+  block.getSummary()!.getHeader()!.getMessageType() === Block.MessageType.BLOCK
+
+const isBallot = (block: BlockInfo) =>
+  !isBlock(block)
+
+const isFinalized = (block: BlockInfo) =>
+  block.getStatus()!.getIsFinalized()
 
 const validatorHash = (block: BlockInfo) =>
   encodeBase16(
