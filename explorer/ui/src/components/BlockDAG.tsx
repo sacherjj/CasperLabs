@@ -211,10 +211,7 @@ export class BlockDAG extends React.Component<Props, {}> {
         selectedId && d.id === selectedId ? '#E00' : eraColor(d.eraId)
       )
       .attr('stroke-width', (d: d3Node) =>
-        selectedId && d.id === selectedId ? '4px' : '3px'
-      )
-      .attr('stroke-opacity', (d: d3Node) =>
-        selectedId && d.id === selectedId ? 1 : 0.75
+        selectedId && d.id === selectedId ? '7px' : '4px'
       )
       .attr('fill', (d: d3Node) => validatorColor(d.validator));
 
