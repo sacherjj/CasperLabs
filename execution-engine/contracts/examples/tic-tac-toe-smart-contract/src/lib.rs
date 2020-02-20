@@ -5,7 +5,7 @@ extern crate alloc;
 use alloc::{format, string::ToString};
 
 use contract::{
-    contract_api::{runtime, storage, TURef},
+    contract_api::{runtime, storage},
     unwrap_or_revert::UnwrapOrRevert,
 };
 use types::{account::PublicKey, Key};
@@ -39,14 +39,14 @@ fn start_game(x_player: PublicKey, o_player: PublicKey) -> Result<(), Error> {
     }
 
     let state = GameState::new();
-    let x_status = storage::new_turef(format!("playing as X against {}", o_player));
-    let o_status = storage::new_turef(format!("playing as O against {}", x_player));
-    let game_status = storage::new_turef(state.to_string());
+    let x_status = storage::new_uref(format!("playing as X against {}", o_player));
+    let o_status = storage::new_uref(format!("playing as O against {}", x_player));
+    let game_status = storage::new_uref(state.to_string());
     let game_status_key = game_state::game_status_key(&x_player, &o_player);
 
     game_state::write_local(x_player, o_player, &state);
-    PlayerData::write_local(x_player, Player::X, o_player, x_status.clone());
-    PlayerData::write_local(o_player, Player::O, x_player, o_status.clone());
+    PlayerData::write_local(x_player, Player::X, o_player, x_status);
+    PlayerData::write_local(o_player, Player::O, x_player, o_status);
 
     runtime::put_key(x_player.to_string().as_str(), x_status.into());
     runtime::put_key(o_player.to_string().as_str(), o_status.into());
@@ -128,14 +128,19 @@ fn concede(player: PublicKey) -> Result<(), Error> {
 }
 
 fn deploy() {
-    let game_hash = storage::store_function_at_hash(GAME_CONTRACT_NAME, Default::default());
-    let proxy_hash = storage::store_function_at_hash(GAME_PROXY_CONTRACT_NAME, Default::default());
+    let game_key: Key = {
+        let key: Key =
+            storage::store_function_at_hash(GAME_CONTRACT_NAME, Default::default()).into();
+        storage::new_uref(key).into()
+    };
+    let proxy_key: Key = {
+        let key: Key =
+            storage::store_function_at_hash(GAME_PROXY_CONTRACT_NAME, Default::default()).into();
+        storage::new_uref(key).into()
+    };
 
-    let game_turef: TURef<Key> = storage::new_turef(game_hash.into());
-    let proxy_turef: TURef<Key> = storage::new_turef(proxy_hash.into());
-
-    runtime::put_key(GAME_CONTRACT_NAME, game_turef.into());
-    runtime::put_key(GAME_PROXY_CONTRACT_NAME, proxy_turef.into());
+    runtime::put_key(GAME_CONTRACT_NAME, game_key);
+    runtime::put_key(GAME_PROXY_CONTRACT_NAME, proxy_key);
 }
 
 #[no_mangle]

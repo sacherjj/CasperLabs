@@ -180,7 +180,7 @@ fn set_key<T: ToBytes + CLTyped>(name: &str, value: T) {
             storage::write(key_ref, value);
         }
         None => {
-            let key = storage::new_turef(value).into();
+            let key = storage::new_uref(value).into();
             runtime::put_key(name, key);
         }
     }

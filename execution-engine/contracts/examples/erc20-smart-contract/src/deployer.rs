@@ -4,7 +4,7 @@ use crate::{
     api::{self, Api},
     error::Error,
 };
-use contract::contract_api::{runtime, storage, system, TURef};
+use contract::contract_api::{runtime, storage, system};
 use types::{ContractRef, Key, U512};
 
 use crate::erc20::PURSE_NAME;
@@ -34,11 +34,13 @@ fn deploy_token(name: &str, initial_balance: U512) {
     // Initialize erc20 contract.
     runtime::call_contract::<_, ()>(token_ref.clone(), (api::INIT_ERC20, initial_balance));
 
-    // Save it under a new TURef.
-    let token_turef: TURef<Key> = storage::new_turef(token_ref.into());
+    let contract_key: Key = token_ref.into();
 
-    // Save TURef under readable name.
-    runtime::put_key(&name, token_turef.into());
+    // Save it under a new URef.
+    let token: Key = storage::new_uref(contract_key).into();
+
+    // Save URef under readable name.
+    runtime::put_key(&name, token);
 }
 
 fn deploy_proxy() {
@@ -46,9 +48,11 @@ fn deploy_proxy() {
     let proxy_ref: ContractRef =
         storage::store_function_at_hash(ERC20_PROXY_CONTRACT_NAME, Default::default());
 
-    // Save it under a new TURef.
-    let proxy_turef: TURef<Key> = storage::new_turef(proxy_ref.into());
+    let contract_key: Key = proxy_ref.into();
 
-    // Save TURef under readable name.
-    runtime::put_key(ERC20_PROXY_CONTRACT_NAME, proxy_turef.into());
+    // Save it under a new URef.
+    let proxy: Key = storage::new_uref(contract_key).into();
+
+    // Save URef under readable name.
+    runtime::put_key(ERC20_PROXY_CONTRACT_NAME, proxy);
 }

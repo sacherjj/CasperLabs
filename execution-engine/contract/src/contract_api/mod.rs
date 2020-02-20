@@ -4,9 +4,6 @@ pub mod account;
 pub mod runtime;
 pub mod storage;
 pub mod system;
-mod turef;
-
-pub use turef::TURef;
 
 use alloc::{
     alloc::{AllocRef, Global, Layout},
