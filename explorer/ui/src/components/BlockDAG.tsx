@@ -205,7 +205,7 @@ export class BlockDAG extends React.Component<Props, {}> {
       .append('circle')
       .attr('class', 'node')
       .attr('r', (d: d3Node) =>
-        CircleRadius * (isBallot(d.block) ? 0.7 : 1.0))
+        CircleRadius * (isBallot(d.block) ? 0.6 : 1.0))
       .attr('stroke', (d: d3Node) =>
         selectedId && d.id === selectedId ? '#E00' : color(d.eraId)
       )
