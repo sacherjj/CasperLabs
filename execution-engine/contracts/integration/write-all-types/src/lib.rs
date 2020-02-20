@@ -25,7 +25,7 @@ pub extern "C" fn call() {
     let v10: () = ();
     let v11: String = String::from("Hello, World");
     let v12: Key = Key::Hash([12u8; 32]);
-    let v13: URef = storage::new_uref(()).into();
+    let v13: URef = storage::new_uref(());
     let v14: Option<u32> = Some(14);
     let v15: Vec<String> = vec![String::from("ABCD"), String::from("EFG")];
     let v16: [Option<u8>; 4] = [None, Some(0), Some(1), None];
