@@ -799,7 +799,7 @@ fn should_have_equivalent_transforms_with_stored_contract_pointers() {
                 Transform::Write(StoredValue::Account(la)),
                 Transform::Write(StoredValue::Account(ra)),
             ) => {
-                assert_eq!(la.pub_key(), ra.pub_key());
+                assert_eq!(la.public_key(), ra.public_key());
                 assert_eq!(la.main_purse(), ra.main_purse());
                 assert_eq!(la.action_thresholds(), ra.action_thresholds());
 

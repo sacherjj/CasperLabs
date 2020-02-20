@@ -65,7 +65,7 @@ impl Account {
         &mut self.named_keys
     }
 
-    pub fn pub_key(&self) -> PublicKey {
+    pub fn public_key(&self) -> PublicKey {
         self.public_key
     }
 

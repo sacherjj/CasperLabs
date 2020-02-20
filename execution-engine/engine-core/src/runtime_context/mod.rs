@@ -41,7 +41,7 @@ mod tests;
 /// System account transfers given URefs into READ_ADD_WRITE access rights,
 /// and any other URef is transformed into READ only URef.
 pub(crate) fn attenuate_uref_for_account(account: &Account, uref: URef) -> URef {
-    if account.pub_key() == SYSTEM_ACCOUNT_ADDR {
+    if account.public_key() == SYSTEM_ACCOUNT_ADDR {
         // If the system account calls this function, it is given READ_ADD_WRITE access.
         uref.into_read_add_write()
     } else {
@@ -204,7 +204,7 @@ where
     }
 
     pub fn get_caller(&self) -> PublicKey {
-        self.account.pub_key()
+        self.account.public_key()
     }
 
     pub fn get_blocktime(&self) -> BlockTime {
@@ -681,7 +681,7 @@ where
         }
 
         // Converts an account's public key into a URef
-        let key = Key::Account(self.account().pub_key());
+        let key = Key::Account(self.account().public_key());
 
         // Take an account out of the global state
         let account = {
@@ -717,7 +717,7 @@ where
         }
 
         // Converts an account's public key into a URef
-        let key = Key::Account(self.account().pub_key());
+        let key = Key::Account(self.account().public_key());
 
         // Take an account out of the global state
         let mut account: Account = self.read_gs_typed(&key)?;
@@ -755,7 +755,7 @@ where
         }
 
         // Converts an account's public key into a URef
-        let key = Key::Account(self.account().pub_key());
+        let key = Key::Account(self.account().public_key());
 
         // Take an account out of the global state
         let mut account: Account = self.read_gs_typed(&key)?;
@@ -793,7 +793,7 @@ where
         }
 
         // Converts an account's public key into a URef
-        let key = Key::Account(self.account().pub_key());
+        let key = Key::Account(self.account().public_key());
 
         // Take an account out of the global state
         let mut account: Account = self.read_gs_typed(&key)?;
@@ -848,7 +848,7 @@ where
 
     /// Checks if the account context is valid.
     fn is_valid_context(&self) -> bool {
-        self.base_key() == Key::Account(self.account().pub_key())
+        self.base_key() == Key::Account(self.account().public_key())
     }
 
     /// Gets main purse id

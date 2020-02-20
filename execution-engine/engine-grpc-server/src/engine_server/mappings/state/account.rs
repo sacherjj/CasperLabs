@@ -17,7 +17,7 @@ impl From<Account> for state::Account {
     fn from(mut account: Account) -> Self {
         let mut pb_account = state::Account::new();
 
-        pb_account.set_public_key(account.pub_key().to_vec());
+        pb_account.set_public_key(account.public_key().to_vec());
 
         let named_keys = mem::replace(account.named_keys_mut(), BTreeMap::new());
         let pb_named_keys: Vec<NamedKey> = NamedKeyMap::new(named_keys).into();
