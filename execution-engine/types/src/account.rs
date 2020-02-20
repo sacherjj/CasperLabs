@@ -142,7 +142,7 @@ impl CLTyped for Weight {
 /// The length in bytes of a [`PublicKey`].
 pub const ED25519_LENGTH: usize = 32;
 
-/// The number of bytes in a serialized [`Ed25519`]
+/// The number of bytes in a serialized [`Ed25519`].
 pub const ED25519_SERIALIZED_LENGTH: usize = ED25519_LENGTH;
 
 /// Identifies a serialized public key of Ed25519 variant.
@@ -155,19 +155,22 @@ const PUBLIC_KEY_ID_SERIALIZED_LENGTH: usize = 1;
 pub const PUBLIC_KEY_SERIALIZED_LENGTH: usize =
     PUBLIC_KEY_ID_SERIALIZED_LENGTH + ED25519_SERIALIZED_LENGTH;
 
-/// A newtype wrapping a [`[u8; ED25519_LENGTH]`](ED25519_LENGTH) which is the raw bytes of
-/// the public key of a cryptographic asymmetric key pair.
+/// A type alias for raw bytes of Ed25519 public key
+pub type Ed25519Bytes = [u8; ED25519_LENGTH];
+
+/// A newtype wrapping a [`Ed25519Bytes`] which is the raw bytes of
+/// the public key of an Ed25519 key pair.
 #[derive(PartialOrd, Ord, PartialEq, Eq, Hash, Clone, Copy)]
-pub struct Ed25519([u8; ED25519_LENGTH]);
+pub struct Ed25519(Ed25519Bytes);
 
 impl Ed25519 {
-    /// Constructs new [`Ed25519`] instance from raw bytes representing a Ed25519 public key
-    pub const fn new(value: [u8; ED25519_LENGTH]) -> Ed25519 {
+    /// Constructs a new `Ed25519` instance from the raw bytes of an Ed25519 public key.
+    pub const fn new(value: Ed25519Bytes) -> Ed25519 {
         Ed25519(value)
     }
 
     /// Returns the raw bytes of the public key as an array.
-    pub fn value(&self) -> [u8; ED25519_LENGTH] {
+    pub fn value(&self) -> Ed25519Bytes {
         self.0
     }
 }
@@ -191,10 +194,10 @@ impl FromBytes for Ed25519 {
     }
 }
 
-/// An enum wrapping various variants of supported public key types.
+/// An enum of supported public key types.
 #[derive(PartialOrd, Ord, PartialEq, Eq, Hash, Clone, Copy)]
 pub enum PublicKey {
-    /// Represents an Ed25519 public key type
+    /// An Ed25519 public key type.
     Ed25519(Ed25519),
 }
 
@@ -206,20 +209,14 @@ impl Display for PublicKey {
 }
 
 impl PublicKey {
-    /// Constructs a new `PublicKey`.
-    pub const fn new(key: [u8; ED25519_LENGTH]) -> PublicKey {
+    /// Constructs a new `PublicKey` using Ed25519 bytes.
+    pub const fn from_ed25519_bytes(key: Ed25519Bytes) -> PublicKey {
         let ed25519 = Ed25519::new(key);
-        PublicKey::from_ed25519(ed25519)
-    }
-
-    /// Constructs a new [`PublicKey`] from an existing instance of
-    /// [`Ed25519`] public key
-    pub const fn from_ed25519(ed25519: Ed25519) -> PublicKey {
         PublicKey::Ed25519(ed25519)
     }
 
     /// Returns the raw bytes of the public key as an array.
-    pub fn value(self) -> [u8; ED25519_LENGTH] {
+    pub fn value(self) -> Ed25519Bytes {
         let PublicKey::Ed25519(ed25519) = self;
         ed25519.value()
     }
@@ -244,15 +241,15 @@ impl CLTyped for PublicKey {
     }
 }
 
-impl From<[u8; ED25519_LENGTH]> for PublicKey {
-    fn from(key: [u8; ED25519_LENGTH]) -> Self {
+impl From<Ed25519Bytes> for PublicKey {
+    fn from(key: Ed25519Bytes) -> Self {
         PublicKey::Ed25519(Ed25519::new(key))
     }
 }
 
 impl From<Ed25519> for PublicKey {
     fn from(ed25519: Ed25519) -> PublicKey {
-        PublicKey::from_ed25519(ed25519)
+        PublicKey::Ed25519(ed25519)
     }
 }
 
@@ -264,7 +261,7 @@ impl TryFrom<&[u8]> for PublicKey {
         }
         let mut public_key = [0u8; 32];
         public_key.copy_from_slice(bytes);
-        Ok(PublicKey::new(public_key))
+        Ok(PublicKey::from_ed25519_bytes(public_key))
     }
 }
 

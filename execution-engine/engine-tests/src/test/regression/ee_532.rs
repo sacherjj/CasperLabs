@@ -5,7 +5,7 @@ use engine_test_support::internal::{
 use types::account::PublicKey;
 
 const CONTRACT_EE_532_REGRESSION: &str = "ee_532_regression.wasm";
-const UNKNOWN_ADDR: PublicKey = PublicKey::new([42u8; 32]);
+const UNKNOWN_ADDR: PublicKey = PublicKey::from_ed25519_bytes([42u8; 32]);
 
 #[ignore]
 #[test]

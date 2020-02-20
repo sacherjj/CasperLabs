@@ -92,7 +92,7 @@ impl TryFrom<state::Account> for Account {
         };
 
         let account = Account::new(
-            PublicKey::new(public_key),
+            PublicKey::from_ed25519_bytes(public_key),
             named_keys.into_inner(),
             main_purse,
             associated_keys,
@@ -115,7 +115,7 @@ impl TryFrom<Account_AssociatedKey> for (PublicKey, Weight) {
     type Error = ParsingError;
 
     fn try_from(pb_associated_key: Account_AssociatedKey) -> Result<Self, Self::Error> {
-        let public_key = PublicKey::new(mappings::vec_to_array(
+        let public_key = PublicKey::from_ed25519_bytes(mappings::vec_to_array(
             pb_associated_key.public_key,
             "Protobuf Account::AssociatedKey",
         )?);

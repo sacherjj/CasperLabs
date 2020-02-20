@@ -12,8 +12,8 @@ const BAD_INSTALL: &str = "standard_payment.wasm";
 
 const CHAIN_NAME: &str = "Jeremiah";
 const TIMESTAMP: u64 = 0;
-const ACCOUNT_1_ADDR: PublicKey = PublicKey::new([1u8; 32]);
-const ACCOUNT_2_ADDR: PublicKey = PublicKey::new([2u8; 32]);
+const ACCOUNT_1_ADDR: PublicKey = PublicKey::from_ed25519_bytes([1u8; 32]);
+const ACCOUNT_2_ADDR: PublicKey = PublicKey::from_ed25519_bytes([2u8; 32]);
 const ACCOUNT_1_BONDED_AMOUNT: u64 = 1_000_000;
 const ACCOUNT_2_BONDED_AMOUNT: u64 = 2_000_000;
 const ACCOUNT_1_BALANCE: u64 = 1_000_000_000;

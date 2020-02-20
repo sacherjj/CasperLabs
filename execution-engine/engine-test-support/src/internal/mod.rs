@@ -30,7 +30,7 @@ pub const STANDARD_PAYMENT_CONTRACT: &str = "standard_payment.wasm";
 pub const DEFAULT_CHAIN_NAME: &str = "gerald";
 pub const DEFAULT_GENESIS_TIMESTAMP: u64 = 0;
 pub const DEFAULT_BLOCK_TIME: u64 = 0;
-pub const MOCKED_ACCOUNT_ADDRESS: PublicKey = PublicKey::new([48u8; 32]);
+pub const MOCKED_ACCOUNT_ADDRESS: PublicKey = PublicKey::from_ed25519_bytes([48u8; 32]);
 
 pub const DEFAULT_ACCOUNT_KEY: PublicKey = DEFAULT_ACCOUNT_ADDR;
 

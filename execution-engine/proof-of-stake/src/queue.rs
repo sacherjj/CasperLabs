@@ -134,9 +134,9 @@ mod tests {
 
     #[test]
     fn test_push() {
-        let val1 = PublicKey::new(KEY1);
-        let val2 = PublicKey::new(KEY2);
-        let val3 = PublicKey::new(KEY3);
+        let val1 = PublicKey::from_ed25519_bytes(KEY1);
+        let val2 = PublicKey::from_ed25519_bytes(KEY2);
+        let val3 = PublicKey::from_ed25519_bytes(KEY3);
         let mut queue: Queue = Default::default();
         assert_eq!(Ok(()), queue.push(val1, U512::from(5), BlockTime::new(100)));
         assert_eq!(Ok(()), queue.push(val2, U512::from(5), BlockTime::new(101)));
@@ -152,9 +152,9 @@ mod tests {
 
     #[test]
     fn test_pop_due() {
-        let val1 = PublicKey::new(KEY1);
-        let val2 = PublicKey::new(KEY2);
-        let val3 = PublicKey::new(KEY3);
+        let val1 = PublicKey::from_ed25519_bytes(KEY1);
+        let val2 = PublicKey::from_ed25519_bytes(KEY2);
+        let val3 = PublicKey::from_ed25519_bytes(KEY3);
         let mut queue: Queue = Default::default();
         assert_eq!(Ok(()), queue.push(val1, U512::from(5), BlockTime::new(100)));
         assert_eq!(Ok(()), queue.push(val2, U512::from(6), BlockTime::new(101)));

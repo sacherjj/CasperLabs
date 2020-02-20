@@ -150,7 +150,7 @@ mod tests {
         Stakes(
             stakes
                 .iter()
-                .map(|&(key, amount)| (PublicKey::new(key), U512::from(amount)))
+                .map(|&(key, amount)| (PublicKey::from_ed25519_bytes(key), U512::from(amount)))
                 .collect(),
         )
     }
@@ -160,9 +160,9 @@ mod tests {
         let mut stakes = new_stakes(&[(KEY2, 100)]);
         assert_eq!(
             Ok(()),
-            stakes.validate_bonding(&PublicKey::new(KEY1), U512::from(5))
+            stakes.validate_bonding(&PublicKey::from_ed25519_bytes(KEY1), U512::from(5))
         );
-        stakes.bond(&PublicKey::new(KEY1), U512::from(5));
+        stakes.bond(&PublicKey::from_ed25519_bytes(KEY1), U512::from(5));
         assert_eq!(new_stakes(&[(KEY1, 5), (KEY2, 100)]), stakes);
     }
 
@@ -171,9 +171,9 @@ mod tests {
         let mut stakes = new_stakes(&[(KEY1, 50), (KEY2, 100)]);
         assert_eq!(
             Ok(()),
-            stakes.validate_bonding(&PublicKey::new(KEY1), U512::from(4))
+            stakes.validate_bonding(&PublicKey::from_ed25519_bytes(KEY1), U512::from(4))
         );
-        stakes.bond(&PublicKey::new(KEY1), U512::from(4));
+        stakes.bond(&PublicKey::from_ed25519_bytes(KEY1), U512::from(4));
         assert_eq!(new_stakes(&[(KEY1, 54), (KEY2, 100)]), stakes);
     }
 
@@ -184,7 +184,7 @@ mod tests {
         assert_eq!(
             Err(Error::BondTooLarge),
             stakes.validate_bonding(
-                &PublicKey::new(KEY1),
+                &PublicKey::from_ed25519_bytes(KEY1),
                 U512::from(super::MAX_REL_INCREASE * total / 1_000_000 + 1)
             ),
             "Successfully bonded more than the maximum amount."
@@ -192,7 +192,7 @@ mod tests {
         assert_eq!(
             Ok(()),
             stakes.validate_bonding(
-                &PublicKey::new(KEY1),
+                &PublicKey::from_ed25519_bytes(KEY1),
                 U512::from(super::MAX_REL_INCREASE * total / 1_000_000)
             ),
             "Failed to bond the maximum amount."
@@ -204,7 +204,7 @@ mod tests {
         let mut stakes = new_stakes(&[(KEY1, 5), (KEY2, 100)]);
         assert_eq!(
             Ok(U512::from(5)),
-            stakes.unbond(&PublicKey::new(KEY1), None)
+            stakes.unbond(&PublicKey::from_ed25519_bytes(KEY1), None)
         );
         assert_eq!(new_stakes(&[(KEY2, 100)]), stakes);
     }
@@ -214,7 +214,7 @@ mod tests {
         let mut stakes = new_stakes(&[(KEY1, 5)]);
         assert_eq!(
             Err(Error::CannotUnbondLastValidator),
-            stakes.unbond(&PublicKey::new(KEY1), None)
+            stakes.unbond(&PublicKey::from_ed25519_bytes(KEY1), None)
         );
     }
 
@@ -223,7 +223,7 @@ mod tests {
         let mut stakes = new_stakes(&[(KEY1, 50)]);
         assert_eq!(
             Ok(U512::from(4)),
-            stakes.unbond(&PublicKey::new(KEY1), Some(U512::from(4)))
+            stakes.unbond(&PublicKey::from_ed25519_bytes(KEY1), Some(U512::from(4)))
         );
         assert_eq!(new_stakes(&[(KEY1, 46)]), stakes);
     }
@@ -235,7 +235,7 @@ mod tests {
         assert_eq!(
             Err(Error::UnbondTooLarge),
             stakes.unbond(
-                &PublicKey::new(KEY1),
+                &PublicKey::from_ed25519_bytes(KEY1),
                 Some(U512::from(super::MAX_REL_DECREASE * total / 1_000_000 + 1))
             ),
             "Successfully unbonded more than the maximum amount."
@@ -243,7 +243,7 @@ mod tests {
         assert_eq!(
             Ok(U512::from(super::MAX_REL_DECREASE * total / 1_000_000)),
             stakes.unbond(
-                &PublicKey::new(KEY1),
+                &PublicKey::from_ed25519_bytes(KEY1),
                 Some(U512::from(super::MAX_REL_DECREASE * total / 1_000_000))
             ),
             "Failed to unbond the maximum amount."

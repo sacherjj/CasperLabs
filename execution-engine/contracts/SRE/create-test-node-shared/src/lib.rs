@@ -27,7 +27,7 @@ fn parse_public_key(hex: &[u8]) -> PublicKey {
     if bytes_written != buffer.len() {
         runtime::revert(Error::FailedToParsePublicKey)
     }
-    PublicKey::new(buffer)
+    PublicKey::from_ed25519_bytes(buffer)
 }
 
 pub fn create_account(account_addr: &[u8; 64], initial_amount: u64) {

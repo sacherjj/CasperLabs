@@ -26,8 +26,8 @@
 //! ```no_run
 //! use casperlabs_engine_test_support::{TestContextBuilder, SessionBuilder, Value, Error, Code};
 //!
-//! # use types::account::PublicKey;
-//! const MY_ACCOUNT: PublicKey = PublicKey::new([7u8; 32]);
+//! use types::account::PublicKey;
+//! const MY_ACCOUNT: PublicKey = PublicKey::from_ed25519_bytes([7u8; 32]);
 //! const KEY: &str = "special_value";
 //! const VALUE: &str = "hello world";
 //!
@@ -86,7 +86,7 @@ pub type URefAddr = [u8; 32];
 pub type Hash = [u8; 32];
 
 /// Default test account address.
-pub const DEFAULT_ACCOUNT_ADDR: PublicKey = PublicKey::new([6u8; 32]);
+pub const DEFAULT_ACCOUNT_ADDR: PublicKey = PublicKey::from_ed25519_bytes([6u8; 32]);
 
 /// Default initial balance of a test account in motes.
 pub const DEFAULT_ACCOUNT_INITIAL_BALANCE: u64 = 100_000_000_000;

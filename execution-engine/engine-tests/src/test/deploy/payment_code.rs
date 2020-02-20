@@ -11,7 +11,7 @@ use engine_test_support::{
 };
 use types::{account::PublicKey, bytesrepr::ToBytes, CLValue, Key, URef, U512};
 
-const ACCOUNT_1_ADDR: PublicKey = PublicKey::new([42u8; 32]);
+const ACCOUNT_1_ADDR: PublicKey = PublicKey::from_ed25519_bytes([42u8; 32]);
 const STANDARD_PAYMENT_WASM: &str = "standard_payment.wasm";
 const DO_NOTHING_WASM: &str = "do_nothing.wasm";
 const CONTRACT_TRANSFER_PURSE_TO_ACCOUNT: &str = "transfer_purse_to_account.wasm";

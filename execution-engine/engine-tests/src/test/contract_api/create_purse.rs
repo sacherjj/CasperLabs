@@ -8,7 +8,7 @@ use engine_test_support::{
 use types::{account::PublicKey, Key, U512};
 const CONTRACT_CREATE_PURSE_01: &str = "create_purse_01.wasm";
 const CONTRACT_TRANSFER_PURSE_TO_ACCOUNT: &str = "transfer_purse_to_account.wasm";
-const ACCOUNT_1_ADDR: PublicKey = PublicKey::new([1u8; 32]);
+const ACCOUNT_1_ADDR: PublicKey = PublicKey::from_ed25519_bytes([1u8; 32]);
 const TEST_PURSE_NAME: &str = "test_purse";
 
 lazy_static! {

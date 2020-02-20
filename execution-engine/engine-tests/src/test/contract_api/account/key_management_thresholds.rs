@@ -56,7 +56,7 @@ fn should_verify_key_management_permission_with_sufficient_weight() {
             .with_authorization_keys(&[
                 DEFAULT_ACCOUNT_ADDR,
                 // Key [42; 32] is created in init stage
-                PublicKey::new([42; 32]),
+                PublicKey::from_ed25519_bytes([42; 32]),
             ])
             .build();
         ExecuteRequestBuilder::from_deploy_item(deploy).build()

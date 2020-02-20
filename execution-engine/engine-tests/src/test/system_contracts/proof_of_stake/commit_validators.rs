@@ -10,11 +10,11 @@ use engine_test_support::{
 use types::{account::PublicKey, U512};
 
 const CONTRACT_LOCAL_STATE: &str = "local_state.wasm";
-const ACCOUNT_1_ADDR: PublicKey = PublicKey::new([1u8; 32]);
+const ACCOUNT_1_ADDR: PublicKey = PublicKey::from_ed25519_bytes([1u8; 32]);
 const ACCOUNT_1_BALANCE: u64 = 2000;
 const ACCOUNT_1_BOND: u64 = 1000;
 
-const ACCOUNT_2_ADDR: PublicKey = PublicKey::new([2u8; 32]);
+const ACCOUNT_2_ADDR: PublicKey = PublicKey::from_ed25519_bytes([2u8; 32]);
 const ACCOUNT_2_BALANCE: u64 = 2000;
 const ACCOUNT_2_BOND: u64 = 200;
 

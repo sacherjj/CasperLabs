@@ -7,13 +7,13 @@ use engine_test_support::{
 };
 use types::{account::PublicKey, U512};
 
-const ACCOUNT_1_ADDR: PublicKey = PublicKey::new([42u8; 32]);
+const ACCOUNT_1_ADDR: PublicKey = PublicKey::from_ed25519_bytes([42u8; 32]);
 
 #[ignore]
 #[test]
 fn should_raise_precondition_authorization_failure_invalid_account() {
     let account_1_public_key = ACCOUNT_1_ADDR;
-    let nonexistent_account_addr = PublicKey::new([99u8; 32]);
+    let nonexistent_account_addr = PublicKey::from_ed25519_bytes([99u8; 32]);
     let payment_purse_amount = 10_000_000;
     let transferred_amount = 1;
 

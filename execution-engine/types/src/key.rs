@@ -396,7 +396,7 @@ mod tests {
     fn should_display_key() {
         let expected_hash = core::iter::repeat("0").take(64).collect::<String>();
         let addr_array = [0u8; 32];
-        let public_key = PublicKey::new(addr_array);
+        let public_key = PublicKey::from_ed25519_bytes(addr_array);
         let account_key = Key::Account(public_key);
         assert_eq!(
             format!("{}", account_key),
@@ -512,7 +512,7 @@ mod tests {
     #[test]
     fn check_key_account_getters() {
         let account = [42; 32];
-        let public_key = PublicKey::new(account);
+        let public_key = PublicKey::from_ed25519_bytes(account);
         let key1 = Key::Account(public_key);
         assert_eq!(key1.into_account(), Some(public_key));
         assert!(key1.into_hash().is_none());

@@ -6,8 +6,8 @@ use types::{account::PublicKey, U512};
 use vesting_test::{VestingConfig, VestingTest};
 
 const FAUCET: PublicKey = DEFAULT_ACCOUNT_ADDR;
-const RECIPIENT: PublicKey = PublicKey::new([2u8; 32]);
-const ADMIN: PublicKey = PublicKey::new([3u8; 32]);
+const RECIPIENT: PublicKey = PublicKey::from_ed25519_bytes([2u8; 32]);
+const ADMIN: PublicKey = PublicKey::from_ed25519_bytes([3u8; 32]);
 
 const NOT_ADMIN_ERROR_CODE: u32 = 65544;
 const NOT_RECIPIENT_ERROR_CODE: u32 = 65545;

@@ -69,7 +69,7 @@ use crate::{
 pub const MAX_PAYMENT: u64 = 10_000_000;
 pub const CONV_RATE: u64 = 10;
 
-pub const SYSTEM_ACCOUNT_ADDR: PublicKey = PublicKey::new([0u8; 32]);
+pub const SYSTEM_ACCOUNT_ADDR: PublicKey = PublicKey::from_ed25519_bytes([0u8; 32]);
 
 const GENESIS_INITIAL_BLOCKTIME: u64 = 0;
 const MINT_METHOD_NAME: &str = "mint";
@@ -182,7 +182,7 @@ where
         };
 
         let address_generator = {
-            let generator = AddressGenerator::new(install_deploy_hash.into(), phase);
+            let generator = AddressGenerator::new(&install_deploy_hash.value(), phase);
             Rc::new(RefCell::new(generator))
         };
 
@@ -359,7 +359,7 @@ where
                 let account_public_key = account.public_key();
                 let purse_creation_deploy_hash = account_public_key.value();
                 let address_generator = {
-                    let generator = AddressGenerator::new(purse_creation_deploy_hash, phase);
+                    let generator = AddressGenerator::new(&account_public_key.to_bytes()?, phase);
                     Rc::new(RefCell::new(generator))
                 };
                 let system_contract_cache = SystemContractCache::clone(&self.system_contract_cache);
@@ -533,7 +533,7 @@ where
                 let gas_limit = Gas::new(std::u64::MAX.into());
                 let phase = Phase::System;
                 let address_generator = {
-                    let generator = AddressGenerator::new(pre_state_hash.into(), phase);
+                    let generator = AddressGenerator::new(&pre_state_hash.value(), phase);
                     Rc::new(RefCell::new(generator))
                 };
                 let state = Rc::clone(&tracking_copy);

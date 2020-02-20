@@ -32,7 +32,7 @@ fn should_list_named_keys() {
     };
 
     let new_named_keys = {
-        let public_key = PublicKey::new([1; 32]);
+        let public_key = PublicKey::from_ed25519_bytes([1; 32]);
         let mut named_keys = BTreeMap::new();
         assert!(named_keys
             .insert(NEW_NAME_ACCOUNT.to_string(), Key::Account(public_key))

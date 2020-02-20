@@ -12,7 +12,7 @@ use engine_test_support::{
 use types::{account::PublicKey, ApiError, U512};
 
 const CONTRACT_POS_BONDING: &str = "pos_bonding.wasm";
-const ACCOUNT_1_ADDR: PublicKey = PublicKey::new([7u8; 32]);
+const ACCOUNT_1_ADDR: PublicKey = PublicKey::from_ed25519_bytes([7u8; 32]);
 
 const GENESIS_VALIDATOR_STAKE: u64 = 50_000;
 lazy_static! {
@@ -27,7 +27,7 @@ fn should_fail_unboding_more_than_it_was_staked_ee_598_regression() {
     let accounts = {
         let mut tmp: Vec<GenesisAccount> = DEFAULT_ACCOUNTS.clone();
         let account = GenesisAccount::new(
-            PublicKey::new([42; 32]),
+            PublicKey::from_ed25519_bytes([42; 32]),
             Motes::new(GENESIS_VALIDATOR_STAKE.into()) * Motes::new(2.into()),
             Motes::new(GENESIS_VALIDATOR_STAKE.into()),
         );

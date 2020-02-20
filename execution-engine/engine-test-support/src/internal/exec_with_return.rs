@@ -57,7 +57,7 @@ where
 
     let phase = Phase::Session;
     let address_generator = {
-        let address_generator = AddressGenerator::new(deploy_hash, phase);
+        let address_generator = AddressGenerator::new(&deploy_hash, phase);
         Rc::new(RefCell::new(address_generator))
     };
     let gas_counter = Gas::default();

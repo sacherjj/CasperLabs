@@ -90,7 +90,7 @@ impl FromBytes for PlayerData {
         let status_key: [u8; 32] = bytes[33..]
             .try_into()
             .map_err(|_| bytesrepr::Error::Formatting)?;
-        let opponent = PublicKey::new(opponent_key);
+        let opponent = PublicKey::from_ed25519_bytes(opponent_key);
         let status_key = TURef::new(status_key, AccessRights::READ_ADD_WRITE);
         Ok((
             PlayerData {
@@ -119,7 +119,7 @@ mod tests {
     fn player_data_round_trip() {
         let player_data = PlayerData {
             piece: Player::X,
-            opponent: PublicKey::new([3u8; 32]),
+            opponent: PublicKey::from_ed25519_bytes([3u8; 32]),
             status_key: TURef::new([5u8; 32], AccessRights::READ_ADD_WRITE),
         };
         let value = player_data.to_bytes().expect("Should serialize");
