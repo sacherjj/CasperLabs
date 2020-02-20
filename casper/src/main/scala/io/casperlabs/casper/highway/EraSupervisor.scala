@@ -48,7 +48,7 @@ class EraSupervisor[F[_]: Concurrent: Timer: Log: EraStorage: Relaying: ForkChoi
     for {
       _      <- ensureNotShutdown
       header = block.getHeader
-      _ <- Log[F].debug(
+      _ <- Log[F].info(
             s"Handling incoming ${block.blockHash.show -> "message"} from ${header.validatorPublicKey.show -> "validator"} in ${header.roundId -> "round"} ${header.keyBlockHash.show -> "era"}"
           )
       entry   <- load(header.keyBlockHash)
@@ -158,7 +158,7 @@ class EraSupervisor[F[_]: Concurrent: Timer: Log: EraStorage: Relaying: ForkChoi
   private def handleEvents(events: Vector[HighwayEvent]): F[Unit] = {
     def handleCreatedMessage(message: Message, kind: String) =
       for {
-        _ <- Log[F].debug(
+        _ <- Log[F].info(
               s"Created $kind ${message.messageHash.show -> "message"} in ${message.roundId -> "round"} ${message.eraId.show -> "era"} child of ${message.parentBlock.show -> "parent"}"
             )
         _ <- messageExecutor.effectsAfterAdded(Validated(message))
