@@ -233,18 +233,14 @@ class HasAtLeastPeers:
         return "<{}({})>".format(self.__class__.__name__, args)
 
     def is_satisfied(self) -> bool:
-        try:
-            output = self.node.get_metrics_strict()
-            match = self.metric_regex.search(output)
+        output = self.node.get_metrics_strict()
+        match = self.metric_regex.search(output)
+        if match is None:
+            match = self.new_metric_regex.search(output)
             if match is None:
-                match = self.new_metric_regex.search(output)
-                if match is None:
-                    return False
-            peers = int(match[1])
-            return peers >= self.minimum_peers_number
-        except Exception as e:
-            logging.error(f"Exception in HasAtLeastPeers: {e}")
-            return False
+                return False
+        peers = int(match[1])
+        return peers >= self.minimum_peers_number
 
 
 class HasPeersExactly:

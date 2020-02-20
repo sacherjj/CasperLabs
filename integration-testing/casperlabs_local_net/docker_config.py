@@ -72,10 +72,7 @@ class DockerConfig:
         """
         Created to give unique flag for docker object creation and cleanup for test runs.
         """
-        try:
-            return self.docker_client.cl_unique_run_num
-        except AttributeError:
-            return 0
+        return self.docker_client.cl_unique_run_num
 
     def tls_certificate_path(self):
         return f"{BOOTSTRAP_PATH}/node-{self.number}.certificate.pem"
