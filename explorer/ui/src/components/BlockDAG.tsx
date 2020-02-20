@@ -206,7 +206,7 @@ export class BlockDAG extends React.Component<Props, {}> {
       .append('circle')
       .attr('class', 'node')
       .attr('r', (d: d3Node) =>
-        CircleRadius * (isBallot(d.block) ? 0.6 : 1.0))
+        CircleRadius * (isBallot(d.block) ? 0.5 : 1.0))
       .attr('stroke', (d: d3Node) =>
         selectedId && d.id === selectedId ? '#E00' : eraColor(d.eraId)
       )
@@ -227,7 +227,7 @@ export class BlockDAG extends React.Component<Props, {}> {
       .style('font-size', 12)
       .style('pointer-events', 'none') // to prevent mouseover/drag capture
       .style('text-anchor', 'start')
-      .attr('transform', 'rotate(15)'); // rotate so a chain doesn't overlap on a small screen.
+      .attr('transform', 'rotate(25)'); // rotate so a chain doesn't overlap on a small screen.
 
     const focus = (d: any) => {
       let datum = d3.select(d3.event.target).datum() as d3Node;
@@ -277,8 +277,8 @@ export class BlockDAG extends React.Component<Props, {}> {
       // update position of label
       container
         .selectAll('text.node-label')
-        .attr('x', (d: any) => x(d.x) + 9)
-        .attr('y', (d: any) => y(d.y) + 12)
+        .attr('x', (d: any) => x(d.x) + 5)
+        .attr('y', (d: any) => y(d.y) + 25)
         .style('transform-origin', (d: any) => `${x(d.x)}px ${y(d.y)}px`);
 
       // update positions of line
