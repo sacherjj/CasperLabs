@@ -13,6 +13,7 @@ import { Link, RouteComponentProps, withRouter } from 'react-router-dom';
 import Pages from './Pages';
 import { encodeBase16 } from 'casperlabs-sdk';
 import Timestamp from './TimeStamp';
+import { BlockType } from './BlockDetails';
 import * as H from 'history';
 
 export interface Props extends RouteComponentProps<{}> {
@@ -52,7 +53,7 @@ class _BlockList extends RefreshableComponent<Props, {}> {
         }
         refresh={() => this.refresh()}
         subscribeToggleStore={dag.subscribeToggleStore}
-        headers={['Block Hash', 'j-Rank', 'm-Rank', 'Timestamp', 'Validator', 'Key Block Hash']}
+        headers={['Block Hash', 'j-Rank', 'm-Rank', 'Timestamp', 'Validator', 'Type', 'Key Block Hash']}
         rows={dag.blocks}
         renderRow={(block: BlockInfo) => {
           const header = block.getSummary()!.getHeader()!;
@@ -68,6 +69,7 @@ class _BlockList extends RefreshableComponent<Props, {}> {
                 <Timestamp timestamp={header.getTimestamp()} />
               </td>
               <td>{shortHash(header.getValidatorPublicKey_asU8())}</td>
+              <td><BlockType header={header} /></td>
               <td>
                 <Link to={Pages.block(encodeBase16(header.getKeyBlockHash_asU8()))}>
                   {shortHash(header.getKeyBlockHash_asU8())}
