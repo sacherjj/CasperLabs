@@ -28,6 +28,7 @@ import io.casperlabs.ipc.DeployResult.Value.{ExecutionResult, PreconditionFailur
 import io.casperlabs.ipc._
 import io.casperlabs.models.ArbitraryConsensus
 import io.casperlabs.smartcontracts.bytesrepr._
+import io.casperlabs.smartcontracts.cltype
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.smartcontracts.ExecutionEngineService.CommitResult
 import monix.eval.Task
@@ -394,6 +395,6 @@ object DeploySelectionTest {
     (_, _, _) => raiseNotImplemented[F, Either[Throwable, UpgradeResult]],
     execFunc,
     (_, _) => raiseNotImplemented[F, Either[Throwable, CommitResult]],
-    (_, _, _) => raiseNotImplemented[F, Either[Throwable, Value]]
+    (_, _, _) => raiseNotImplemented[F, Either[Throwable, cltype.StoredValue]]
   )
 }
