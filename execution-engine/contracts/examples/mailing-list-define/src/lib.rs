@@ -9,10 +9,10 @@ use alloc::{collections::BTreeMap, string::String, vec::Vec};
 use core::convert::TryInto;
 
 use contract::{
-    contract_api::{runtime, storage, TURef},
+    contract_api::{runtime, storage},
     unwrap_or_revert::UnwrapOrRevert,
 };
-use types::{ApiError, CLValue, Key};
+use types::{ApiError, CLValue, Key, URef};
 
 const LIST_KEY: &str = "list";
 const MAILING_KEY: &str = "mailing";
@@ -34,27 +34,25 @@ impl Into<ApiError> for Error {
     }
 }
 
-fn get_list_key(name: &str) -> TURef<Vec<String>> {
+fn get_list_key(name: &str) -> URef {
     let key = runtime::get_key(name).unwrap_or_revert_with(ApiError::GetKey);
     key.try_into().unwrap_or_revert()
 }
 
 fn update_list(name: String) {
     let list_key = get_list_key(LIST_KEY);
-    let mut list = storage::read(list_key.clone())
-        .unwrap_or_revert_with(ApiError::Read)
-        .unwrap_or_revert_with(ApiError::ValueNotFound);
+    let mut list: Vec<String> = storage::read_or_revert(list_key);
     list.push(name);
     storage::write(list_key, list);
 }
 
-fn sub(name: String) -> Option<TURef<Vec<String>>> {
+fn sub(name: String) -> Option<URef> {
     if runtime::has_key(&name) {
         let init_message = vec![String::from("Hello again!")];
-        Some(storage::new_turef(init_message))
+        Some(storage::new_uref(init_message))
     } else {
         let init_message = vec![String::from("Welcome!")];
-        let new_key = storage::new_turef(init_message);
+        let new_key = storage::new_uref(init_message);
         runtime::put_key(&name, new_key.clone().into());
         update_list(name);
         Some(new_key)
@@ -62,14 +60,10 @@ fn sub(name: String) -> Option<TURef<Vec<String>>> {
 }
 
 fn publish(msg: String) {
-    let curr_list = storage::read(get_list_key(LIST_KEY))
-        .unwrap_or_revert_with(ApiError::Read)
-        .unwrap_or_revert_with(ApiError::ValueNotFound);
+    let curr_list: Vec<String> = storage::read_or_revert(get_list_key(LIST_KEY));
     for name in curr_list.iter() {
-        let uref = get_list_key(name);
-        let mut messages = storage::read(uref.clone())
-            .unwrap_or_revert_with(ApiError::Read)
-            .unwrap_or_revert_with(ApiError::ValueNotFound);
+        let uref: URef = get_list_key(name);
+        let mut messages: Vec<String> = storage::read_or_revert(uref);
         messages.push(msg.clone());
         storage::write(uref, messages);
     }
@@ -85,8 +79,8 @@ pub extern "C" fn mailing_list_ext() {
         .unwrap_or_revert_with(ApiError::InvalidArgument);
     match method_name.as_str() {
         "sub" => match sub(arg1) {
-            Some(turef) => {
-                let return_value = CLValue::from_t(Some(Key::from(turef))).unwrap_or_revert();
+            Some(uref) => {
+                let return_value = CLValue::from_t(Some(Key::from(uref))).unwrap_or_revert();
                 runtime::ret(return_value);
             }
             _ => {
@@ -108,7 +102,7 @@ pub extern "C" fn mailing_list_ext() {
 #[no_mangle]
 pub extern "C" fn call() {
     let init_list: Vec<String> = Vec::new();
-    let list_key = storage::new_turef(init_list);
+    let list_key = storage::new_uref(init_list);
 
     //create map of references for stored contract
     let mut mailing_list_urefs: BTreeMap<String, Key> = BTreeMap::new();

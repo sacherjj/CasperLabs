@@ -1,17 +1,14 @@
-use alloc::{string::String, vec::Vec};
+use alloc::vec::Vec;
 use core::convert::TryInto;
 
-use contract::{
-    contract_api::{storage, TURef},
-    unwrap_or_revert::UnwrapOrRevert,
-};
+use contract::{contract_api::storage, unwrap_or_revert::UnwrapOrRevert};
 use num_traits::{FromPrimitive, ToPrimitive};
 
 use tic_tac_toe_logic::player::Player;
 use types::{
     account::PublicKey,
     bytesrepr::{self, FromBytes, ToBytes},
-    AccessRights, CLType, CLTyped,
+    AccessRights, CLType, CLTyped, URef,
 };
 
 use crate::error::Error;
@@ -22,7 +19,7 @@ const PLAYER_DATA_BYTES_SIZE: usize = 1 + 32 + 32;
 pub struct PlayerData {
     piece: Player,
     opponent: PublicKey,
-    status_key: TURef<String>,
+    status_key: URef,
 }
 
 impl PlayerData {
@@ -30,12 +27,7 @@ impl PlayerData {
         storage::read_local(&key).unwrap_or_revert_with(Error::PlayerDataDeserialization)
     }
 
-    pub fn write_local(
-        key: PublicKey,
-        piece: Player,
-        opponent: PublicKey,
-        status_key: TURef<String>,
-    ) {
+    pub fn write_local(key: PublicKey, piece: Player, opponent: PublicKey, status_key: URef) {
         let data = PlayerData {
             piece,
             opponent,
@@ -53,8 +45,8 @@ impl PlayerData {
         self.opponent
     }
 
-    pub fn status_key(&self) -> TURef<String> {
-        self.status_key.clone()
+    pub fn status_key(&self) -> URef {
+        self.status_key
     }
 }
 
@@ -91,7 +83,7 @@ impl FromBytes for PlayerData {
             .try_into()
             .map_err(|_| bytesrepr::Error::Formatting)?;
         let opponent = PublicKey::from_ed25519_bytes(opponent_key);
-        let status_key = TURef::new(status_key, AccessRights::READ_ADD_WRITE);
+        let status_key = URef::new(status_key, AccessRights::READ_ADD_WRITE);
         Ok((
             PlayerData {
                 piece,
@@ -106,11 +98,10 @@ impl FromBytes for PlayerData {
 #[cfg(test)]
 mod tests {
     use super::PlayerData;
-    use contract::contract_api::TURef;
     use types::{
         account::PublicKey,
         bytesrepr::{FromBytes, ToBytes},
-        AccessRights,
+        AccessRights, URef,
     };
 
     use tic_tac_toe_logic::player::Player;
@@ -120,7 +111,7 @@ mod tests {
         let player_data = PlayerData {
             piece: Player::X,
             opponent: PublicKey::from_ed25519_bytes([3u8; 32]),
-            status_key: TURef::new([5u8; 32], AccessRights::READ_ADD_WRITE),
+            status_key: URef::new([5u8; 32], AccessRights::READ_ADD_WRITE),
         };
         let value = player_data.to_bytes().expect("Should serialize");
         let player_data_2: (PlayerData, &[u8]) =

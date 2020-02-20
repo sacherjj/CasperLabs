@@ -82,7 +82,6 @@ export class Key {
     }
 
     /// attempts to write `value` under a new Key::URef
-    /// this is equivalent to the TURef concept in the rust implementation
     /// if a key is returned it is always of KeyVariant.UREF_ID
     static create(value: CLValue): Key | null {
         const valueBytes = value.toBytes();
