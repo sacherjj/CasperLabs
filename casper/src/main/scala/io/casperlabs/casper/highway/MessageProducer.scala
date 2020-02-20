@@ -203,13 +203,14 @@ object MessageProducer {
         for {
           // NOTE: The validator sequence number restarts in each era, and `justifications`
           // can contain entries for the parent era as well as the child.
-          justificationMessages <- justifications.values.flatten.toList.traverse { h =>
-                                    BlockStorage[F]
-                                      .getBlockSummaryUnsafe(h)
-                                      .flatMap { s =>
-                                        MonadThrowable[F].fromTry(Message.fromBlockSummary(s))
-                                      }
-                                  }
+          justificationMessages <- (parents.map(_.messageHash) ++ justifications.values.flatten).toSet.toList
+                                    .traverse { h =>
+                                      BlockStorage[F]
+                                        .getBlockSummaryUnsafe(h)
+                                        .flatMap { s =>
+                                          MonadThrowable[F].fromTry(Message.fromBlockSummary(s))
+                                        }
+                                    }
           // Find the latest justification we picked. We must make sure they don't change
           // due to concurrency between the time the justifications are collected and
           // the sequence number is calculated, otherwise we could be equivocating.
