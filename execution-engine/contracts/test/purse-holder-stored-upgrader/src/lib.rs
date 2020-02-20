@@ -80,6 +80,6 @@ pub extern "C" fn call() {
     runtime::upgrade_contract_at_uref(ENTRY_FUNCTION_NAME, uref);
 
     // set new version
-    let version_key = storage::new_turef(VERSION).into();
+    let version_key = storage::new_uref(VERSION).into();
     runtime::put_key(METHOD_VERSION, version_key);
 }

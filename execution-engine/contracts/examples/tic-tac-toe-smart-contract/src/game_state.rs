@@ -41,9 +41,9 @@ pub fn game_status_key(a: &PublicKey, b: &PublicKey) -> String {
 
 pub fn update_game_status(state: &GameState, x_player: PublicKey, o_player: PublicKey) {
     let name = game_status_key(&x_player, &o_player);
-    let uref = runtime::get_key(&name).unwrap_or_revert();
-    let turef = uref.try_into().unwrap_or_revert();
-    storage::write(turef, (*state).to_string());
+    let key = runtime::get_key(&name).unwrap_or_revert();
+    let uref = key.try_into().unwrap_or_revert();
+    storage::write(uref, (*state).to_string());
 }
 
 fn to_value(state: &GameState) -> Option<Vec<u8>> {

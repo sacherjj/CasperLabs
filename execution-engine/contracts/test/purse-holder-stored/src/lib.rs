@@ -66,6 +66,6 @@ pub extern "C" fn call() {
     runtime::put_key(CONTRACT_NAME, key);
 
     // set version
-    let version_key = storage::new_turef(VERSION).into();
+    let version_key = storage::new_uref(VERSION).into();
     runtime::put_key(METHOD_VERSION, version_key);
 }
