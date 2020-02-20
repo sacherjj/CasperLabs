@@ -12,9 +12,7 @@ impl TryFrom<ipc::DeployItem> for DeployItem {
     type Error = MappingError;
 
     fn try_from(mut pb_deploy_item: ipc::DeployItem) -> Result<Self, Self::Error> {
-        let address = pb_deploy_item
-            .get_address()
-            .try_into()
+        let address = PublicKey::try_ed25519_from(pb_deploy_item.get_address())
             .map_err(|_| MappingError::invalid_public_key_length(pb_deploy_item.address.len()))?;
 
         let session = pb_deploy_item
@@ -35,8 +33,7 @@ impl TryFrom<ipc::DeployItem> for DeployItem {
             .get_authorization_keys()
             .iter()
             .map(|raw: &Vec<u8>| {
-                raw.as_slice()
-                    .try_into()
+                PublicKey::try_ed25519_from(raw.as_slice())
                     .map_err(|_| MappingError::invalid_public_key_length(raw.len()))
             })
             .collect::<Result<BTreeSet<PublicKey>, Self::Error>>()?;
