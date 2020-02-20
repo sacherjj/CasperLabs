@@ -28,6 +28,27 @@ make up node-0/up
 cd -
 ```
 
+Start the `server` in one console:
+
+```sh
+cd server
+npm run dev
+```
+
+and the `ui` in another one:
+
+```sh
+cd ui
+npm start
+```
+
+A new browser window will automatically open pointing at the app running at http://localhost:8000
+
+The server should serve the config that will route traffic to the `grpcwebproxy` container running in Docker,
+while we can work on the UI and see it reload after each change. Check out the `server` README for details
+about how it can be configured to tell the UI to connect to a remote server like devnet.
+
+
 ### Fund the Faucet
 
 If we were not using the `faucet-account` that's created in the `hack/docker` setup as the Faucet account,
