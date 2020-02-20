@@ -15,6 +15,8 @@ import org.rogach.scallop._
 import scala.concurrent.duration.FiniteDuration
 
 object Options {
+  val TIMEOUT_SECONDS_DEFAULT: Long = 3 * 60
+
   val hexCheck: String => Boolean  = _.matches("[0-9a-fA-F]+")
   val hashCheck: String => Boolean = x => hexCheck(x) && x.length == 64
 
@@ -142,7 +144,7 @@ object Options {
       )
 
     val timeoutSeconds =
-      opt[Long](descr = "Timeout in seconds.", default = Option(3 * 60))
+      opt[Long](descr = "Timeout in seconds.", default = Option(TIMEOUT_SECONDS_DEFAULT))
 
     addValidation {
       val sessionsProvided =
@@ -293,7 +295,7 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
   }
   addSubcommand(makeDeploy)
 
-  val sendDeploy = new Subcommand("send-deploy") {
+  val sendDeploy = new Subcommand("send-deploy") with FormattingOptions {
     descr(
       "Deploy a smart contract source file to Casper on an existing running node. " +
         "The deploy will be packaged and sent as a block to the network depending " +
@@ -311,7 +313,7 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
   }
   addSubcommand(sendDeploy)
 
-  val deploy = new Subcommand("deploy") with DeployOptions {
+  val deploy = new Subcommand("deploy") with DeployOptions with FormattingOptions {
     descr(
       "Constructs a Deploy and sends it to Casper on an existing running node. " +
         "The deploy will be packaged and sent as a block to the network depending " +
@@ -437,7 +439,7 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
       )
 
     val timeoutSeconds =
-      opt[Long](descr = "Timeout in seconds.", default = Option(3 * 60))
+      opt[Long](descr = "Timeout in seconds.", default = Option(TIMEOUT_SECONDS_DEFAULT))
   }
   addSubcommand(showDeploy)
 
@@ -470,7 +472,7 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
   }
   addSubcommand(showBlocks)
 
-  val unbond = new Subcommand("unbond") with DeployOptions {
+  val unbond = new Subcommand("unbond") with DeployOptions with FormattingOptions {
     descr("Issues unbonding request")
 
     override def sessionRequired = false
@@ -492,7 +494,7 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
   }
   addSubcommand(unbond)
 
-  val bond = new Subcommand("bond") with DeployOptions {
+  val bond = new Subcommand("bond") with DeployOptions with FormattingOptions {
     descr("Issues bonding request")
 
     override def sessionRequired = false
@@ -514,7 +516,7 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
   }
   addSubcommand(bond)
 
-  val transfer = new Subcommand("transfer") with DeployOptions {
+  val transfer = new Subcommand("transfer") with DeployOptions with FormattingOptions {
     descr("Transfers funds between accounts")
 
     override def sessionRequired = false

@@ -145,8 +145,11 @@ final case class MakeDeploy(
 final case class SendDeploy(
     deploy: Array[Byte],
     waitForProcessed: Boolean,
-    timeoutSeconds: Long
+    timeoutSeconds: Long,
+    bytesStandard: Boolean,
+    json: Boolean
 ) extends Configuration
+    with Formatting
 
 final case class PrintDeploy(
     deploy: Array[Byte],
@@ -161,8 +164,11 @@ final case class Deploy(
     publicKey: Option[File],
     privateKey: Option[File],
     waitForProcessed: Boolean,
-    timeoutSeconds: Long
+    timeoutSeconds: Long,
+    bytesStandard: Boolean,
+    json: Boolean
 ) extends Configuration
+    with Formatting
 
 /** Client command to sign a deploy.
   */
@@ -197,23 +203,32 @@ final case class Bond(
     deployConfig: DeployConfig,
     privateKey: File,
     waitForProcessed: Boolean,
-    timeoutSeconds: Long
+    timeoutSeconds: Long,
+    bytesStandard: Boolean,
+    json: Boolean
 ) extends Configuration
+    with Formatting
 final case class Transfer(
     amount: Long,
     recipientPublicKey: PublicKey,
     deployConfig: DeployConfig,
     privateKey: File,
     waitForProcessed: Boolean,
-    timeoutSeconds: Long
+    timeoutSeconds: Long,
+    bytesStandard: Boolean,
+    json: Boolean
 ) extends Configuration
+    with Formatting
 final case class Unbond(
     amount: Option[Long],
     deployConfig: DeployConfig,
     privateKey: File,
     waitForProcessed: Boolean,
-    timeoutSeconds: Long
+    timeoutSeconds: Long,
+    bytesStandard: Boolean,
+    json: Boolean
 ) extends Configuration
+    with Formatting
 final case class VisualizeDag(
     depth: Int,
     showJustificationLines: Boolean,
@@ -262,7 +277,9 @@ object Configuration {
           options.deploy.publicKey.toOption,
           options.deploy.privateKey.toOption,
           options.deploy.waitForProcessed.getOrElse(false),
-          options.deploy.timeoutSeconds.getOrElse(3 * 60)
+          options.deploy.timeoutSeconds.getOrElse(Options.TIMEOUT_SECONDS_DEFAULT),
+          options.deploy.bytesStandard(),
+          options.deploy.json()
         )
       case options.makeDeploy =>
         MakeDeploy(
@@ -275,7 +292,9 @@ object Configuration {
         SendDeploy(
           options.sendDeploy.deployPath(),
           options.deploy.waitForProcessed.getOrElse(false),
-          options.deploy.timeoutSeconds.getOrElse(3 * 60)
+          options.deploy.timeoutSeconds.getOrElse(Options.TIMEOUT_SECONDS_DEFAULT),
+          options.deploy.bytesStandard(),
+          options.deploy.json()
         )
       case options.printDeploy =>
         PrintDeploy(
@@ -324,7 +343,9 @@ object Configuration {
           DeployConfig(options.unbond),
           options.unbond.privateKey(),
           options.unbond.waitForProcessed(),
-          options.unbond.timeoutSeconds()
+          options.unbond.timeoutSeconds(),
+          options.unbond.bytesStandard(),
+          options.unbond.json()
         )
       case options.bond =>
         Bond(
@@ -332,7 +353,9 @@ object Configuration {
           DeployConfig(options.bond),
           options.bond.privateKey(),
           options.bond.waitForProcessed(),
-          options.bond.timeoutSeconds()
+          options.bond.timeoutSeconds(),
+          options.bond.bytesStandard(),
+          options.bond.json()
         )
       case options.transfer =>
         Transfer(
@@ -341,7 +364,9 @@ object Configuration {
           DeployConfig(options.transfer),
           options.transfer.privateKey(),
           options.transfer.waitForProcessed(),
-          options.transfer.timeoutSeconds()
+          options.transfer.timeoutSeconds(),
+          options.transfer.bytesStandard(),
+          options.transfer.json()
         )
       case options.visualizeBlocks =>
         VisualizeDag(

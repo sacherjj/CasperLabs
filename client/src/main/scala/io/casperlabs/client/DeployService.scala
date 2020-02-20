@@ -20,7 +20,7 @@ import scala.util.Either
       json: Boolean
   ): F[Either[Throwable, String]]
   def showDeploy(
-      blockHash: String,
+      deployHash: String,
       bytesStandard: Boolean,
       json: Boolean,
       waitForProcessed: Boolean,
