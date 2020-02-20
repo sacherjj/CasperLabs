@@ -258,7 +258,7 @@ export const Balance = observer(
 
 export const BlockType = (props: { header: Block.Header }) => {
   let typ = props.header.getMessageType();
-  let lbl = typ == Block.MessageType.BLOCK ? "Block" : typ == Block.MessageType.BALLOT ? "Ballot" : "n/a"
+  let lbl = typ === Block.MessageType.BLOCK ? "Block" : typ === Block.MessageType.BALLOT ? "Ballot" : "n/a"
   return <span>{lbl}</span>;
 }
 

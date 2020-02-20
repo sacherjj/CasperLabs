@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { Block } from 'casperlabs-grpc/io/casperlabs/casper/consensus/consensus_pb';
 import { BlockInfo } from 'casperlabs-grpc/io/casperlabs/casper/consensus/info_pb';
 import { ListInline, Loading, RefreshButton, shortHash } from './Utils';
 import * as d3 from 'd3';
@@ -202,12 +203,16 @@ export class BlockDAG extends React.Component<Props, {}> {
     node
       .append('circle')
       .attr('class', 'node')
-      .attr('r', CircleRadius)
+      .attr('r', (d: d3Node) =>
+        CircleRadius * (isBallot(d.block) ? 0.7 : 1.0))
       .attr('stroke', (d: d3Node) =>
-        selectedId && d.id === selectedId ? '#E00' : '#fff'
+        selectedId && d.id === selectedId ? '#E00' : color(d.eraId)
       )
       .attr('stroke-width', (d: d3Node) =>
-        selectedId && d.id === selectedId ? '3px' : '1.5px'
+        selectedId && d.id === selectedId ? '4px' : '3px'
+      )
+      .attr('stroke-opacity', (d: d3Node) =>
+        selectedId && d.id === selectedId ? 1 : 0.75
       )
       .attr('fill', (d: d3Node) => color(d.validator));
 
@@ -303,6 +308,7 @@ interface d3Node {
   id: string;
   title: string;
   validator: string;
+  eraId: string;
   rank: number;
   x?: number;
   y?: number;
@@ -342,6 +348,7 @@ const toGraph = (blocks: BlockInfo[]) => {
       id: id,
       title: shortHash(id),
       validator: validatorHash(block),
+      eraId: keyBlockHash(block),
       rank: block
         .getSummary()!
         .getHeader()!
@@ -448,6 +455,15 @@ const calculateCoordinates = (graph: Graph, width: number, height: number) => {
 
 const blockHash = (block: BlockInfo) =>
   encodeBase16(block.getSummary()!.getBlockHash_asU8());
+
+const keyBlockHash = (block: BlockInfo) =>
+  encodeBase16(block.getSummary()!.getHeader()!.getKeyBlockHash_asU8());
+
+const isBlock = (block: BlockInfo) =>
+  block.getSummary()!.getHeader()!.getMessageType() === Block.MessageType.BLOCK
+
+const isBallot = (block: BlockInfo) =>
+  !isBlock(block)
 
 const validatorHash = (block: BlockInfo) =>
   encodeBase16(
