@@ -291,10 +291,10 @@ object Configuration {
       case options.sendDeploy =>
         SendDeploy(
           options.sendDeploy.deployPath(),
-          options.deploy.waitForProcessed.getOrElse(false),
-          options.deploy.timeoutSeconds.getOrElse(Options.TIMEOUT_SECONDS_DEFAULT),
-          options.deploy.bytesStandard(),
-          options.deploy.json()
+          options.sendDeploy.waitForProcessed.getOrElse(false),
+          options.sendDeploy.timeoutSeconds.getOrElse(Options.TIMEOUT_SECONDS_DEFAULT),
+          options.sendDeploy.bytesStandard(),
+          options.sendDeploy.json()
         )
       case options.printDeploy =>
         PrintDeploy(

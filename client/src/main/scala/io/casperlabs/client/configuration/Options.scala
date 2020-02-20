@@ -310,6 +310,16 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
     ).map(file => Files.readAllBytes(file.toPath))
       .orElse(Some(IOUtils.toByteArray(System.in)))
 
+    val waitForProcessed =
+      opt[Boolean](
+        descr = "Wait for deploy status PROCESSED or DISCARDED",
+        default = false.some,
+        short = 'w'
+      )
+
+    val timeoutSeconds =
+      opt[Long](descr = "Timeout in seconds.", default = Option(TIMEOUT_SECONDS_DEFAULT))
+
   }
   addSubcommand(sendDeploy)
 
