@@ -357,6 +357,8 @@ where
                 let base_key = Key::URef(mint_reference);
                 let authorization_keys: BTreeSet<PublicKey> = BTreeSet::new();
                 let account_public_key = account.public_key();
+                // NOTE: As Ed25519 keys are currently supported by chainspec, PublicKey::value
+                // returns raw bytes of it
                 let purse_creation_deploy_hash = account_public_key.value();
                 let address_generator = {
                     let generator = AddressGenerator::new(&account_public_key.to_bytes()?, phase);

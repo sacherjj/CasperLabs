@@ -10,7 +10,7 @@ impl From<GenesisAccount> for ChainSpec_GenesisAccount {
     fn from(genesis_account: GenesisAccount) -> Self {
         let mut pb_genesis_account = ChainSpec_GenesisAccount::new();
 
-        pb_genesis_account.set_public_key(genesis_account.public_key().to_vec());
+        pb_genesis_account.set_public_key(genesis_account.public_key().as_bytes().to_vec());
         pb_genesis_account.set_balance(genesis_account.balance().value().into());
         pb_genesis_account.set_bonded_amount(genesis_account.bonded_amount().value().into());
 

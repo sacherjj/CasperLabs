@@ -173,6 +173,11 @@ impl Ed25519 {
     pub fn value(&self) -> Ed25519Bytes {
         self.0
     }
+
+    /// Returns the raw bytes of the public key as a `slice`.
+    pub fn as_bytes(&self) -> &[u8] {
+        &self.0
+    }
 }
 
 impl Display for Ed25519 {
@@ -228,11 +233,10 @@ impl PublicKey {
         ed25519.value()
     }
 
-    /// Returns the raw bytes of the public key as a `Vec`.
-    pub fn to_vec(&self) -> Vec<u8> {
+    /// Returns the raw bytes of the public key as a `slice`.
+    pub fn as_bytes(&self) -> &[u8] {
         let PublicKey::Ed25519(ed25519) = self;
-        let bytes = ed25519.value();
-        bytes.to_vec()
+        ed25519.as_bytes()
     }
 }
 
@@ -398,7 +402,7 @@ mod tests {
     fn ed25519_public_key_from_slice() {
         let bytes: Vec<u8> = (0..32).collect();
         let public_key = PublicKey::try_ed25519_from(&bytes[..]).expect("should create public key");
-        assert_eq!(&bytes, &public_key.value());
+        assert_eq!(&bytes, &public_key.as_bytes());
     }
     #[test]
     fn ed25519_public_key_from_slice_too_small() {

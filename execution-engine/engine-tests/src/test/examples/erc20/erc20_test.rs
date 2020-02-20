@@ -269,7 +269,7 @@ impl ERC20Test {
     pub fn assert_erc20_balance(self, address: PublicKey, expected: U512) -> Self {
         let mut balance_bytes: Vec<u8> = Vec::with_capacity(33);
         balance_bytes.extend(&[1]);
-        balance_bytes.extend(&address.value());
+        balance_bytes.extend(address.as_bytes());
         let balance_key = Key::local(self.get_token_hash(), &balance_bytes.to_bytes().unwrap());
         let value: CLValue = self
             .builder
@@ -308,9 +308,9 @@ impl ERC20Test {
         expected: U512,
     ) -> Self {
         let allowance_bytes: Vec<u8> = owner
-            .value()
+            .as_bytes()
             .iter()
-            .chain(spender.value().iter())
+            .chain(spender.as_bytes().iter())
             .copied()
             .collect();
         let allowance_key = Key::local(self.get_token_hash(), &allowance_bytes.to_bytes().unwrap());

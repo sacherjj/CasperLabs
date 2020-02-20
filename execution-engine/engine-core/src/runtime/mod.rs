@@ -1676,7 +1676,7 @@ where
         if let Err(error) = self.write_host_buffer(value) {
             return Ok(Err(error));
         }
-        
+
         // Write output
         let output_size_bytes = value_size.to_le_bytes(); // Wasm is little-endian
         if let Err(error) = self.memory.set(output_size, &output_size_bytes) {

@@ -70,7 +70,7 @@ impl ToBytes for PlayerData {
         result.push(self.piece.to_u8().unwrap());
         for byte in self
             .opponent
-            .value()
+            .as_bytes()
             .iter()
             .chain(self.status_key.addr().iter())
         {

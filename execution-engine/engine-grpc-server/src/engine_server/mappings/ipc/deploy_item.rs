@@ -56,7 +56,7 @@ impl TryFrom<ipc::DeployItem> for DeployItem {
 impl From<DeployItem> for ipc::DeployItem {
     fn from(deploy_item: DeployItem) -> Self {
         let mut result = ipc::DeployItem::new();
-        result.set_address(deploy_item.address.value().to_vec());
+        result.set_address(deploy_item.address.as_bytes().to_vec());
         result.set_session(deploy_item.session.into());
         result.set_payment(deploy_item.payment.into());
         result.set_gas_price(deploy_item.gas_price);
@@ -64,7 +64,7 @@ impl From<DeployItem> for ipc::DeployItem {
             deploy_item
                 .authorization_keys
                 .into_iter()
-                .map(|key| key.value().to_vec())
+                .map(|key| key.as_bytes().to_vec())
                 .collect(),
         );
         result.set_deploy_hash(deploy_item.deploy_hash.to_vec());

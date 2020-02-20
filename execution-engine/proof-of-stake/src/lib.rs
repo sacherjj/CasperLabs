@@ -118,7 +118,7 @@ mod internal {
     };
 
     /// Account used to run system functions (in particular `finalize_payment`).
-    const SYSTEM_ACCOUNT: [u8; 32] = [0u8; 32];
+    const SYSTEM_ACCOUNT: PublicKey = PublicKey::from_ed25519_bytes([0u8; 32]);
 
     /// The uref name where the PoS purse is stored. It contains all staked motes, and all unbonded
     /// motes that are yet to be paid out.
@@ -275,7 +275,7 @@ mod internal {
         account: PublicKey,
     ) -> Result<()> {
         let caller = R::get_caller();
-        if caller.value() != SYSTEM_ACCOUNT {
+        if caller != SYSTEM_ACCOUNT {
             return Err(Error::SystemFunctionCalledByUserAccount);
         }
 

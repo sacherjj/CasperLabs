@@ -7,7 +7,7 @@ use crate::engine_server::{ipc::Bond, mappings::MappingError};
 impl From<(PublicKey, U512)> for Bond {
     fn from((key, amount): (PublicKey, U512)) -> Self {
         let mut pb_bond = Bond::new();
-        pb_bond.set_validator_public_key(key.to_vec());
+        pb_bond.set_validator_public_key(key.as_bytes().to_vec());
         pb_bond.set_stake(amount.into());
         pb_bond
     }

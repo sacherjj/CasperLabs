@@ -13,7 +13,7 @@ impl From<Key> for state::Key {
         match key {
             Key::Account(account) => {
                 let mut pb_account = Key_Address::new();
-                pb_account.set_account(account.to_vec());
+                pb_account.set_account(account.as_bytes().to_vec());
                 pb_key.set_address(pb_account);
             }
             Key::Hash(hash) => {

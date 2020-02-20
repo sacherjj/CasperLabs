@@ -121,7 +121,9 @@ impl Key {
     /// Returns a human-readable version of `self`, with the inner bytes encoded to Base16.
     pub fn as_string(&self) -> String {
         match self {
-            Key::Account(addr) => format!("account-{}", base16::encode_lower(&addr.value())),
+            Key::Account(PublicKey::Ed25519(addr)) => {
+                format!("account-ed25519-{}", base16::encode_lower(&addr.value()))
+            }
             Key::Hash(addr) => format!("hash-{}", base16::encode_lower(addr)),
             Key::URef(uref) => uref.as_string(),
             Key::Local(hash) => format!("local-{}", base16::encode_lower(hash)),
@@ -186,7 +188,7 @@ impl Key {
 impl Display for Key {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match self {
-            Key::Account(public_key) => write!(f, "Key::Account({})", HexFmt(&public_key.value())),
+            Key::Account(PublicKey::Ed25519(ed25519)) => write!(f, "Key::Account({})", ed25519),
             Key::Hash(addr) => write!(f, "Key::Hash({})", HexFmt(addr)),
             Key::URef(uref) => write!(f, "Key::{}", uref), /* Display impl for URef will append */
             // URef(…).

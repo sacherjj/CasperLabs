@@ -55,11 +55,8 @@ impl StakesProvider for ContractStakes {
             .0
             .iter()
             .map(|(pub_key, balance)| {
-                let key_bytes = pub_key.value();
-                let mut hex_key = String::with_capacity(64);
-                for byte in &key_bytes[..32] {
-                    write!(hex_key, "{:02x}", byte).expect("Writing to a string cannot fail");
-                }
+                let key_bytes = pub_key.as_bytes();
+                let hex_key = base16::encode_lower(&key_bytes);
                 let mut uref = String::new();
                 uref.write_fmt(format_args!("v_{}_{}", hex_key, balance))
                     .expect("Writing to a string cannot fail");

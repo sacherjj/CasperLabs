@@ -112,18 +112,18 @@ fn mark_as_initialized() {
 }
 
 fn balance_key(public_key: &PublicKey) -> Vec<u8> {
-    let len = public_key.value().len() + 1;
+    let len = public_key.as_bytes().len() + 1;
     let mut result: Vec<u8> = Vec::with_capacity(len);
     result.extend(&[BALANCE_BYTE]);
-    result.extend(&public_key.value());
+    result.extend(public_key.as_bytes());
     result
 }
 
 fn allowance_key(owner: &PublicKey, spender: &PublicKey) -> Vec<u8> {
-    let len = owner.value().len() + spender.value().len();
+    let len = owner.as_bytes().len() + spender.as_bytes().len();
     let mut result: Vec<u8> = Vec::with_capacity(len);
-    result.extend(&owner.value());
-    result.extend(&spender.value());
+    result.extend(owner.as_bytes());
+    result.extend(spender.as_bytes());
     result
 }
 

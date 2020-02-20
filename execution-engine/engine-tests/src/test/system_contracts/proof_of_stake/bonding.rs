@@ -94,7 +94,7 @@ fn should_run_successful_bond_and_unbond() {
 
     let lookup_key = format!(
         "v_{}_{}",
-        base16::encode_lower(&DEFAULT_ACCOUNT_ADDR.value()),
+        base16::encode_lower(&DEFAULT_ACCOUNT_ADDR.as_bytes()),
         GENESIS_ACCOUNT_STAKE
     );
     assert!(contract.named_keys().contains_key(&lookup_key));
@@ -156,7 +156,7 @@ fn should_run_successful_bond_and_unbond() {
 
     let lookup_key = format!(
         "v_{}_{}",
-        base16::encode_lower(&ACCOUNT_1_ADDR.value()),
+        base16::encode_lower(ACCOUNT_1_ADDR.as_bytes()),
         ACCOUNT_1_STAKE
     );
     assert!(contract.named_keys().contains_key(&lookup_key));
@@ -212,14 +212,14 @@ fn should_run_successful_bond_and_unbond() {
 
     let lookup_key = format!(
         "v_{}_{}",
-        base16::encode_lower(&ACCOUNT_1_ADDR.value()),
+        base16::encode_lower(ACCOUNT_1_ADDR.as_bytes()),
         ACCOUNT_1_STAKE
     );
     assert!(!pos_contract.named_keys().contains_key(&lookup_key));
 
     let lookup_key = format!(
         "v_{}_{}",
-        base16::encode_lower(&ACCOUNT_1_ADDR.value()),
+        base16::encode_lower(ACCOUNT_1_ADDR.as_bytes()),
         ACCOUNT_1_UNBOND_2
     );
     // Account 1 is still tracked anymore in the bonding queue with different uref
@@ -316,7 +316,7 @@ fn should_run_successful_bond_and_unbond() {
 
     let lookup_key = format!(
         "v_{}_{}",
-        base16::encode_lower(&ACCOUNT_1_ADDR.value()),
+        base16::encode_lower(ACCOUNT_1_ADDR.as_bytes()),
         ACCOUNT_1_UNBOND_2
     );
     // Account 1 isn't tracked anymore in the bonding queue
@@ -370,7 +370,7 @@ fn should_run_successful_bond_and_unbond() {
     let pos_contract = builder.get_pos_contract();
     let lookup_key = format!(
         "v_{}_{}",
-        base16::encode_lower(&DEFAULT_ACCOUNT_ADDR.value()),
+        base16::encode_lower(&DEFAULT_ACCOUNT_ADDR.as_bytes()),
         GENESIS_ACCOUNT_UNBOND_2
     );
     // Genesis is still tracked anymore in the bonding queue with different uref
@@ -389,7 +389,7 @@ fn should_run_successful_bond_and_unbond() {
             .iter()
             .filter(|(key, _)| key.starts_with(&format!(
                 "v_{}",
-                base16::encode_lower(&DEFAULT_ACCOUNT_ADDR.value())
+                base16::encode_lower(&DEFAULT_ACCOUNT_ADDR.as_bytes())
             )))
             .count(),
         0
@@ -400,7 +400,7 @@ fn should_run_successful_bond_and_unbond() {
             .iter()
             .filter(|(key, _)| key.starts_with(&format!(
                 "v_{}",
-                base16::encode_lower(&ACCOUNT_1_ADDR.value())
+                base16::encode_lower(ACCOUNT_1_ADDR.as_bytes())
             )))
             .count(),
         0
