@@ -478,7 +478,10 @@ object DeployRuntime {
   ): F[Either[Throwable, String]] =
     for {
       a <- DeployService[F].deploy(deploy)
-      _ = println(a)
+      _ = print(a match {
+        case Right(message) => message + "\n"
+        case Left(_)        => ""
+      })
       b <- DeployService[F].showDeploy(
             Base16.encode(deploy.deployHash.toByteArray),
             bytesStandard,
