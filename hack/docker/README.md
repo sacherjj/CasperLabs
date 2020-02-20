@@ -85,6 +85,16 @@ which is used to generate common overrides for the defaults in the chainspec jus
 before the first node is started, and calculate a genesis era epoch so that it
 will be currently active (otherwise the nodes couldn't start their schedule).
 
+If for any reason you need to recreate _all_ nodes, with none of them left to restore the state of the others,
+then the original era will likely have gone out of scope and the nodes will not produce blocks.
+Start them like so, to recreate the necessary genesis era epoch:
+
+```console
+make reset-highway-env node-0/up node-1/up node-2/up
+```
+
+Alternatively you can run `make clean` before bringing back the nodes.
+
 ## Cleanup
 To cleanup the network stopping and removing all containers run the command `make clean`.
 
