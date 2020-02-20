@@ -34,7 +34,7 @@ pub fn read<T: CLTyped + FromBytes>(uref: URef) -> Result<Option<T>, bytesrepr::
     Ok(Some(bytesrepr::deserialize(value_bytes)?))
 }
 
-/// Reads value under `uref` in the global state, reverts if value not found or is not T
+/// Reads value under `uref` in the global state, reverts if value not found or is not `T`.
 pub fn read_or_revert<T: CLTyped + FromBytes>(uref: URef) -> T {
     read(uref)
         .unwrap_or_revert_with(ApiError::Read)
