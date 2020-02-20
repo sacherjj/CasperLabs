@@ -72,8 +72,7 @@ do
     subnet="192.${subnet_second_octet}.${third_octet}.0/24"
     net_name="cl-${RUN_TAG_NAME}-${num}"
     echo "Creating docker network '${net_name}' using subnet: ${subnet}..."
-    #docker network create --subnet "${subnet}" "${net_name}"
-    docker network create "${net_name}"
+    docker network create --subnet "${subnet}" "${net_name}"
     docker network inspect "${net_name}" | grep Subnet
 done
 
@@ -81,10 +80,8 @@ done
 # Using ||TAG|| as replacable element in docker-compose.yml.template
 mkdir "${RUN_NAME}" || true
 cp Dockerfile "${RUN_NAME}/"
-# Replacing tags which need UNIQUE_RUN_NUM
-sed 's/||TAG||/'"${RUN_TAG_NAME}"'/g' docker-compose.yml.template > "${RUN_NAME}/docker-compose.yml"
-# Replacing IMAGE_TAG which should not have UNIQUE_RUN_NUM
-sed -i.bak 's/||IMAGE_TAG||/'"${TAG_NAME}"'/g' "${RUN_NAME}/docker-compose.yml"
+# Replacing tags in docker-compose
+sed -e 's/||TAG||/'"${RUN_TAG_NAME}"'/g' -e 's/||IMAGE_TAG||/'"${TAG_NAME}"'/g' docker-compose.yml.template > "${RUN_NAME}/docker-compose.yml"
 
 cd "${RUN_NAME}"
 docker-compose up --exit-code-from test --abort-on-container-exit
