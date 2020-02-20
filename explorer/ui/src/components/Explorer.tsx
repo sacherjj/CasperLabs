@@ -213,7 +213,7 @@ class BlockDetails extends React.Component<
           'Is Finalized',
           block
             .getStatus()!
-            .getIsFinalized()
+            .getIsFinalized().toString()
         ]
       ]
     ];

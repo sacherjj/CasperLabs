@@ -231,7 +231,7 @@ const blockAttrs: (block: BlockInfo) => Array<[string, any]> = (
       'Is Finalized',
       block
         .getStatus()!
-        .getIsFinalized()
+        .getIsFinalized().toString()
     ]
   ];
 };
