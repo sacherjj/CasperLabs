@@ -9,6 +9,8 @@ import {
   Value as StateValue
 } from 'casperlabs-grpc/io/casperlabs/casper/consensus/state_pb';
 import {
+  BatchGetBlockStateRequest,
+  BatchGetBlockStateResponse,
   GetBlockInfoRequest,
   GetBlockStateRequest,
   GetDeployInfoRequest,
@@ -201,6 +203,26 @@ export default class CasperService {
         onEnd: res => {
           if (res.status === grpc.Code.OK) {
             resolve(res.message as StateValue);
+          } else {
+            reject(new GrpcError(res.status, res.statusMessage));
+          }
+        }
+      });
+    });
+  }
+
+  batchGetBlockState(blockHash: BlockHash, querys: StateQuery[]): Promise<StateValue[]> {
+    return new Promise<StateValue[]>((resolve, reject) => {
+      const request = new BatchGetBlockStateRequest();
+      request.setBlockHashBase16(encodeBase16(blockHash));
+      request.setQueriesList(querys);
+
+      grpc.unary(GrpcCasperService.BatchGetBlockState, {
+        host: this.url,
+        request,
+        onEnd: res => {
+          if (res.status === grpc.Code.OK) {
+            resolve((res.message as BatchGetBlockStateResponse).getValuesList());
           } else {
             reject(new GrpcError(res.status, res.statusMessage));
           }

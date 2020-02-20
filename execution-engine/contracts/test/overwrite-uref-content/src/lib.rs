@@ -1,7 +1,7 @@
 #![no_std]
 
 use contract::{
-    contract_api::{runtime, storage, TURef},
+    contract_api::{runtime, storage},
     unwrap_or_revert::UnwrapOrRevert,
 };
 use types::{AccessRights, ApiError, URef};
@@ -10,7 +10,6 @@ const CONTRACT_UREF: u32 = 0;
 
 #[repr(u16)]
 enum Error {
-    CreateTURef,
     InvalidURefArg,
 }
 
@@ -27,11 +26,7 @@ pub extern "C" fn call() {
         runtime::revert(ApiError::User(Error::InvalidURefArg as u16))
     }
 
-    let forged_reference: TURef<&str> = {
-        let ret = URef::new(uref.addr(), AccessRights::READ_ADD_WRITE);
-        TURef::from_uref(ret)
-            .unwrap_or_else(|_| runtime::revert(ApiError::User(Error::CreateTURef as u16)))
-    };
+    let forged_reference: URef = URef::new(uref.addr(), AccessRights::READ_ADD_WRITE);
 
-    storage::write(forged_reference, &REPLACEMENT_DATA)
+    storage::write(forged_reference, REPLACEMENT_DATA)
 }

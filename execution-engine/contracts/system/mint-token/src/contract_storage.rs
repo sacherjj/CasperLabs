@@ -1,4 +1,4 @@
-use contract::contract_api::{storage, TURef};
+use contract::contract_api::storage;
 use mint::StorageProvider;
 use types::{
     bytesrepr::{FromBytes, ToBytes},
@@ -10,7 +10,7 @@ pub struct ContractStorage;
 
 impl StorageProvider for ContractStorage {
     fn new_uref<T: CLTyped + ToBytes>(init: T) -> URef {
-        storage::new_turef(init).into()
+        storage::new_uref(init)
     }
 
     fn write_local<K: ToBytes, V: CLTyped + ToBytes>(key: K, value: V) {
@@ -22,19 +22,16 @@ impl StorageProvider for ContractStorage {
     }
 
     fn read<T: CLTyped + FromBytes>(uref: URef) -> Result<Option<T>, Error> {
-        let turef: TURef<T> = TURef::from_uref(uref).map_err(|_| Error::InvalidAccessRights)?;
-        storage::read(turef).map_err(|_| Error::Storage)
+        storage::read(uref).map_err(|_| Error::Storage)
     }
 
     fn write<T: CLTyped + ToBytes>(uref: URef, value: T) -> Result<(), Error> {
-        let turef: TURef<T> = TURef::from_uref(uref).map_err(|_| Error::InvalidAccessRights)?;
-        storage::write(turef, value);
+        storage::write(uref, value);
         Ok(())
     }
 
     fn add<T: CLTyped + ToBytes>(uref: URef, value: T) -> Result<(), Error> {
-        let turef: TURef<T> = TURef::from_uref(uref).map_err(|_| Error::InvalidAccessRights)?;
-        storage::add(turef, value);
+        storage::add(uref, value);
         Ok(())
     }
 }

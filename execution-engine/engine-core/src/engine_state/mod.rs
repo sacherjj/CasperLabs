@@ -599,9 +599,9 @@ where
             None => return Ok(QueryResult::RootNotFound),
         };
 
-        let mut mut_tracking_copy = tracking_copy.borrow_mut();
+        let tracking_copy = tracking_copy.borrow();
 
-        Ok(mut_tracking_copy
+        Ok(tracking_copy
             .query(correlation_id, query_request.key(), query_request.path())
             .map_err(|err| Error::Exec(err.into()))?
             .into())

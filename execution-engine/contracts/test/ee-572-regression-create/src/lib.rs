@@ -3,7 +3,7 @@
 use core::convert::Into;
 
 use contract::{
-    contract_api::{runtime, storage, TURef},
+    contract_api::{runtime, storage},
     unwrap_or_revert::UnwrapOrRevert,
 };
 use types::{AccessRights, CLValue, Key, URef};
@@ -13,13 +13,8 @@ const CONTRACT_NAME: &str = "create";
 
 #[no_mangle]
 pub extern "C" fn create() {
-    let reference: TURef<&str> = storage::new_turef(&DATA);
-
-    let read_only_reference: URef = {
-        let mut ret: TURef<&str> = reference;
-        ret.set_access_rights(AccessRights::READ);
-        ret.into()
-    };
+    let reference: URef = storage::new_uref(DATA);
+    let read_only_reference: URef = URef::new(reference.addr(), AccessRights::READ);
     let return_value = CLValue::from_t(read_only_reference).unwrap_or_revert();
     runtime::ret(return_value)
 }

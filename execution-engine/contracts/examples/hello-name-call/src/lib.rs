@@ -25,5 +25,5 @@ pub extern "C" fn call() {
     assert_eq!("Hello, World", result);
 
     // Store the result at a uref so it can be seen as an effect on the global state
-    runtime::put_key(HELLOWORLD_KEY, storage::new_turef(result).into());
+    runtime::put_key(HELLOWORLD_KEY, storage::new_uref(result).into());
 }
