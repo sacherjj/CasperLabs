@@ -147,9 +147,9 @@ slow:
 
 # Create common Highway environment overrides for the chainspec defaults,
 # common to all, so a node started later won't choose a different era epoch.
-$(HIGHWAY_ENV): .casperlabs reset-highway-env
+$(HIGHWAY_ENV): reset-highway-env
 
 # If we need to re-start the nodes after a long time, we might have to recreate the era epoch, if it's short, like 5 minutes.
-reset-highway-env:
+reset-highway-env: .casperlabs
 	rm -f $(HIGHWAY_ENV)
 	./scripts/highway-env.sh > $(HIGHWAY_ENV)
