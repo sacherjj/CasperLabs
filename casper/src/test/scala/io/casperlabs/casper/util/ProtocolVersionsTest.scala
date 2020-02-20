@@ -1,7 +1,5 @@
 package io.casperlabs.casper.util
 
-package io.casperlabs.casper.util
-
 import io.casperlabs.casper.consensus.state.ProtocolVersion
 import io.casperlabs.casper.util.ProtocolVersions.Config
 import io.casperlabs.ipc.ChainSpec.DeployConfig
