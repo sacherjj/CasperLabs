@@ -8,7 +8,7 @@ import { ToggleButton, ToggleStore } from './ToggleButton';
 
 // https://bl.ocks.org/mapio/53fed7d84cd1812d6a6639ed7aa83868
 
-const CircleRadius = 8;
+const CircleRadius = 12;
 const LineColor = '#AAA';
 const FinalizedLineColor = '#83f2a1';
 
@@ -116,7 +116,8 @@ export class BlockDAG extends React.Component<Props, {}> {
     }
     const svg = d3.select(this.svg);
     const hint = d3.select(this.hint);
-    const color = consistentColor();
+    const validatorColor = consistentColor(d3.schemePaired);
+    const eraColor = consistentColor(d3.schemeCategory10);
     // See what the actual width and height is.
     const width = $(this.svg!).width()!;
     const height = $(this.svg!).height()!;
@@ -207,7 +208,7 @@ export class BlockDAG extends React.Component<Props, {}> {
       .attr('r', (d: d3Node) =>
         CircleRadius * (isBallot(d.block) ? 0.6 : 1.0))
       .attr('stroke', (d: d3Node) =>
-        selectedId && d.id === selectedId ? '#E00' : color(d.eraId)
+        selectedId && d.id === selectedId ? '#E00' : eraColor(d.eraId)
       )
       .attr('stroke-width', (d: d3Node) =>
         selectedId && d.id === selectedId ? '4px' : '3px'
@@ -215,7 +216,7 @@ export class BlockDAG extends React.Component<Props, {}> {
       .attr('stroke-opacity', (d: d3Node) =>
         selectedId && d.id === selectedId ? 1 : 0.75
       )
-      .attr('fill', (d: d3Node) => color(d.validator));
+      .attr('fill', (d: d3Node) => validatorColor(d.validator));
 
     // Append a node-label to each node
     const label = node
@@ -506,7 +507,7 @@ const hashCode = (s: string) => {
   return hash;
 };
 
-const consistentColor = () => {
+const consistentColor = (colors: readonly string[]) => {
   // Display each validator with its own color.
   // https://www.d3-graph-gallery.com/graph/custom_color.html
   // http://bl.ocks.org/curran/3094b37e63b918bab0a06787e161607b
@@ -514,20 +515,11 @@ const consistentColor = () => {
   // const color = d3.scaleOrdinal(d3.schemeCategory10);
   // This can be used with a numeric value:
   // const hashRange: [number, number] = [-2147483648, 2147483647];
-  const steps = 20;
-  const domain: [number, number] = [0, steps - 1];
-  const colors = [
-    d3.scaleSequential(d3.interpolateSpectral).domain(domain),
-    d3.scaleSequential(d3.interpolateSinebow).domain(domain),
-    d3.scaleSequential(d3.interpolateRainbow).domain(domain),
-    d3.scaleSequential(d3.interpolateGreys).domain(domain)
-  ];
+  //   d3.scaleSequential(d3.interpolateSpectral).domain(hashRange),
   const cl = colors.length;
-
   return (s: string) => {
     const h = hashCode(s);
-    const c = Math.abs(h % steps);
-    const i = Math.abs(h % cl);
-    return colors[i](c);
+    const c = Math.abs(h % cl);
+    return colors[c];
   };
 };
