@@ -18,7 +18,7 @@ class CLValueInstanceTest extends FlatSpec with Matchers with PropertyChecks {
     val n        = 1000000
     val deepType = nested(CLType.Bool, n)(t => CLType.Option(t))
     val bytes    = Array.fill[Byte](n + 1)(1)
-    val instance = CLValue.instantiate(CLValue(deepType, bytes))
+    val instance = CLValueInstance.from(CLValue(deepType, bytes))
 
     @tailrec
     def checkInstance(i: CLValueInstance, count: Int = 0): Unit =
@@ -36,7 +36,7 @@ class CLValueInstanceTest extends FlatSpec with Matchers with PropertyChecks {
     val k        = math.pow(2, n.toDouble).toInt
     val wideType = nested(CLType.Bool, n)(t => CLType.Tuple2(t, t))
     val bytes    = Array.fill[Byte](k)(1)
-    val instance = CLValue.instantiate(CLValue(wideType, bytes))
+    val instance = CLValueInstance.from(CLValue(wideType, bytes))
 
     @tailrec
     def checkInstance(nodes: Vector[CLValueInstance], depth: Int = 0): Unit =
@@ -220,7 +220,7 @@ class CLValueInstanceTest extends FlatSpec with Matchers with PropertyChecks {
 
   private def instantiateTest[T: ToBytes](t: T, clType: CLType, instance: T => CLValueInstance) = {
     val clValue    = CLValue.from(t, clType)
-    val clInstance = CLValue.instantiate(clValue)
+    val clInstance = CLValueInstance.from(clValue)
 
     clInstance shouldBe Right(instance(t))
   }

@@ -8,7 +8,7 @@ sealed trait StoredValueInstance
 object StoredValueInstance {
   def from(sv: StoredValue): Either[FromBytes.Error, StoredValueInstance] = sv match {
     case StoredValue.CLValue(v) =>
-      cltype.CLValue.instantiate(v).map(instance => CLValue(instance))
+      cltype.CLValueInstance.from(v).map(instance => CLValue(instance))
     case StoredValue.Account(a)  => Right(Account(a))
     case StoredValue.Contract(c) => Right(Contract(c))
   }

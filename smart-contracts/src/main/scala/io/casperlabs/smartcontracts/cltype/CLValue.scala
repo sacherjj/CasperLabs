@@ -7,12 +7,6 @@ import io.casperlabs.smartcontracts.bytesrepr.{BytesView, FromBytes, ToBytes}
 case class CLValue(clType: CLType, value: IndexedSeq[Byte])
 
 object CLValue {
-
-  def instantiate(v: CLValue): Either[FromBytes.Error, CLValueInstance] = {
-    val des = CLValueInstance.deserializer(v.clType)
-    FromBytes.deserialize(des, v.value.toArray)
-  }
-
   def from[T: ToBytes](t: T, clType: CLType): CLValue = CLValue(clType, ToBytes.toBytes(t))
 
   implicit val toBytesCLValue: ToBytes[CLValue] = new ToBytes[CLValue] {

@@ -14,6 +14,9 @@ sealed trait CLValueInstance {
 }
 
 object CLValueInstance {
+  def from(v: CLValue): Either[FromBytes.Error, CLValueInstance] =
+    FromBytes.deserialize(deserializer(v.clType), v.value.toArray)
+
   def deserializer(t: CLType): FromBytes.Deserializer[CLValueInstance] = t match {
     case CLType.Bool => FromBytes.bool.map(b => Bool(b))
 
