@@ -19,7 +19,7 @@ CL_CHAINSPEC_HIGHWAY_VOTING_PERIOD_DURATION=${CL_CHAINSPEC_HIGHWAY_VOTING_PERIOD
 
 if [ "${TRUNCATE}" == "true" ]; then
   # Extraction duration like 10minutes, 1hour, 7days into 10m, 1h, 7d (doesn't handle milliseconds).
-  DURATION=$(echo $CL_CHAINSPEC_HIGHWAY_ERA_DURATION | sed -r 's/([0123456789]+)([smdh]).*|.*/\1 \2/')
+  DURATION=$(echo $CL_CHAINSPEC_HIGHWAY_ERA_DURATION | sed -r 's/([0-9]+)([smdh]).*|.*/\1 \2/')
   if [ -z "$DURATION" ]; then
     echo "Invalid duration: ${CL_CHAINSPEC_HIGHWAY_ERA_DURATION}; should be a numeric length and a unit of [seconds | minutes | hours | days]"
   fi

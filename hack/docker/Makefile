@@ -2,8 +2,9 @@ CL_CASPER_NUM_VALIDATORS ?= 3
 CL_SERVER_HTTP_PORT ?= 40403
 CL_VERSION ?= latest
 
-REFRESH_TARGETS := ./monitoring/prometheus/refresh-targets.sh
-HIGHWAY_ENV := .casperlabs/chainspec/genesis/highway.env
+REFRESH_TARGETS   := ./monitoring/prometheus/refresh-targets.sh
+HIGHWAY_ENV       := .casperlabs/chainspec/genesis/highway.env
+RESET_HIGHWAY_ENV := rm -f $(HIGHWAY_ENV); ./scripts/highway-env.sh > $(HIGHWAY_ENV)
 
 # Don't remove directories created as dependencies.
 .SECONDARY:
@@ -49,7 +50,7 @@ node-%: .casperlabs
 
 # Start node.
 # Only make `highway.env` when the first node is started, so the era epoch doesn't become stale.
-node-%/up: node-% .make/docker/network $(HIGHWAY_ENV)
+node-%/up: node-% .make/docker/network maybe-reset-highway-env
 	@# Go into the directory to pick up values from .env
 	if [ "$(CL_VERSION)" != "latest" ]; then \
 		cd node-$* && docker-compose pull; \
@@ -151,5 +152,12 @@ $(HIGHWAY_ENV): reset-highway-env
 
 # If we need to re-start the nodes after a long time, we might have to recreate the era epoch, if it's short, like 5 minutes.
 reset-highway-env: .casperlabs
-	rm -f $(HIGHWAY_ENV)
-	./scripts/highway-env.sh > $(HIGHWAY_ENV)
+	$(RESET_HIGHWAY_ENV)
+
+# Reset highway env if there are no nodes running at the moment or there's only one node directory created (we are restarting the 1 node we have)
+maybe-reset-highway-env:
+	DEFINED=$$(find . -maxdepth 1 -type d | grep -e node-[0-9] | wc -l); \
+	RUNNING=$$(docker ps --format '{{.Names}}' | grep -e node-[0-9] | wc -l); \
+	if [ "$${RUNNING}" = "0" ] || [ "$${DEFINED}" = "1" ]; then \
+		$(RESET_HIGHWAY_ENV); \
+	fi
