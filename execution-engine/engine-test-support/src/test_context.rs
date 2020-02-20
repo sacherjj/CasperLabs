@@ -2,11 +2,11 @@ use num_traits::identities::Zero;
 
 use engine_core::engine_state::genesis::{GenesisAccount, GenesisConfig};
 use engine_shared::motes::Motes;
-use types::{account::PublicKey, AccessRights, Key, URef, U512};
+use types::{AccessRights, Key, URef, U512};
 
 use crate::{
     internal::{InMemoryWasmTestBuilder, DEFAULT_GENESIS_CONFIG},
-    Address, Error, Result, Session, URefAddr, Value,
+    Error, PublicKey, Result, Session, URefAddr, Value,
 };
 
 /// Context in which to run a test of a Wasm smart contract.
@@ -66,7 +66,7 @@ impl TestContextBuilder {
     /// the Genesis block.
     ///
     /// Note: `initial_balance` represents the number of motes.
-    pub fn with_account(mut self, address: Address, initial_balance: U512) -> Self {
+    pub fn with_account(mut self, address: PublicKey, initial_balance: U512) -> Self {
         let new_account = GenesisAccount::new(address, Motes::new(initial_balance), Motes::zero());
         self.genesis_config.push_account(new_account);
         self

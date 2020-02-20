@@ -1,8 +1,8 @@
 extern crate alloc;
 
-use engine_test_support::{Address, Code, Hash, SessionBuilder, TestContext, TestContextBuilder};
+use engine_test_support::{Code, Hash, PublicKey, SessionBuilder, TestContext, TestContextBuilder};
 
-use types::{account::PublicKey, Key, U512};
+use types::{Key, U512};
 
 const GAME_WASM: &str = "tic_tac_toe_smart_contract.wasm";
 const GAME_CONTRACT_NAME: &str = "tic_tac_toe";
@@ -63,7 +63,7 @@ impl GameTest {
         self
     }
 
-    pub fn make_move(mut self, player: Address, move_x: u32, move_y: u32) -> Self {
+    pub fn make_move(mut self, player: PublicKey, move_x: u32, move_y: u32) -> Self {
         let proxy = Code::Hash(self.proxy_contract_hash());
         let args = (self.game_contract_hash(), method::MOVE, move_x, move_y);
         let session = SessionBuilder::new(proxy, args)

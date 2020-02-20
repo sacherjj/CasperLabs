@@ -39,14 +39,14 @@ fn should_manage_associated_key() {
         (DEFAULT_ACCOUNT_ADDR,),
     )
     .build();
-    let builder = builder
+
+    builder
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
         .exec(exec_request_1)
         .expect_success()
-        .commit()
-        .exec(exec_request_2)
-        .expect_success()
         .commit();
+
+    builder.exec(exec_request_2).expect_success().commit();
 
     let genesis_key = DEFAULT_ACCOUNT_ADDR;
 

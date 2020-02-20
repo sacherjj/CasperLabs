@@ -161,7 +161,10 @@ export class Key {
             return bytes;
         }
         else if (this.variant == KeyVariant.ACCOUNT_ID) {
-            return this.account.toBytes();
+            let bytes = new Array<u8>();
+            bytes.push(<u8>this.variant);
+            bytes = bytes.concat((<PublicKey>this.account).toBytes());
+            return bytes;
         }
         else {
             return <Array<u8>>unreachable();

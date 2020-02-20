@@ -76,11 +76,8 @@ pub use code::Code;
 pub use error::{Error, Result};
 pub use session::{Session, SessionBuilder};
 pub use test_context::{TestContext, TestContextBuilder};
-use types::account::PublicKey;
+pub use types::account::PublicKey;
 pub use value::Value;
-
-/// An address of an entity (e.g. an account or key) on the network.
-pub type Address = PublicKey;
 
 /// The address of a [`URef`](types::URef) (unforgeable reference) on the network.
 pub type URefAddr = [u8; 32];

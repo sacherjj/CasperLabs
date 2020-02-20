@@ -2,7 +2,7 @@ import * as externals from "./externals";
 import {URef, AccessRights} from "./uref";
 import {Error, ErrorCode} from "./error";
 import {CLValue} from "./clvalue";
-import {Key} from "./key";
+import {Key, PublicKey} from "./key";
 import {toBytesString,
         toBytesVecT,
         fromBytesMap,
@@ -180,10 +180,15 @@ export function getBlockTime(): u64 {
   return <u64>bytes[0];
 }
 
-export function getCaller(): Uint8Array {
-  let bytes = new Uint8Array(32);
+export function getCaller(): PublicKey {
+  let bytes = new Uint8Array(33);
   externals.get_caller(bytes.dataStart);
-  return bytes;
+  const publicKeyResult = PublicKey.fromBytes(bytes);
+  if (publicKeyResult.hasError()) {
+    Error.fromErrorCode(ErrorCode.Deserialize).revert();
+    return <PublicKey>unreachable();
+  }
+  return publicKeyResult.value;
 }
 
 export enum Phase {

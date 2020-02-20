@@ -2,6 +2,7 @@ import * as externals from "./externals";
 import {arrayToTyped} from "./utils";
 import {UREF_SERIALIZED_LENGTH} from "./constants";
 import {URef} from "./uref";
+import {PublicKey, PUBLIC_KEY_ED25519_ID} from "./key";
 
 export enum AddKeyFailure {
     // Success
@@ -53,8 +54,8 @@ export enum ActionType {
     KeyManagement = 1,
 }
 
-export function addAssociatedKey(publicKey: Array<u8>, weight: i32): AddKeyFailure {
-    const publicKeyBytes = arrayToTyped(publicKey);
+export function addAssociatedKey(publicKey: PublicKey, weight: i32): AddKeyFailure {
+    const publicKeyBytes = publicKey.toBytes();
     const ret = externals.add_associated_key(publicKeyBytes.dataStart, weight);
     return <AddKeyFailure>ret;
 }
@@ -64,14 +65,14 @@ export function setActionThreshold(actionType: ActionType, thresholdValue: u8): 
     return <SetThresholdFailure>ret;
 }
 
-export function updateAssociatedKey(publicKey: Array<u8>, weight: i32): UpdateKeyFailure {
-    const publicKeyBytes = arrayToTyped(publicKey);
+export function updateAssociatedKey(publicKey: PublicKey, weight: i32): UpdateKeyFailure {
+    const publicKeyBytes = publicKey.toBytes();
     const ret = externals.update_associated_key(publicKeyBytes.dataStart, weight);
     return <UpdateKeyFailure>ret;
 }
 
-export function removeAssociatedKey(publicKey: Array<u8>): RemoveKeyFailure {
-    const publicKeyBytes = arrayToTyped(publicKey);
+export function removeAssociatedKey(publicKey: PublicKey): RemoveKeyFailure {
+    const publicKeyBytes = publicKey.toBytes();
     const ret = externals.remove_associated_key(publicKeyBytes.dataStart);
     return <RemoveKeyFailure>ret;
 }
