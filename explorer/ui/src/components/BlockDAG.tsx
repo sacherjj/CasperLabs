@@ -10,6 +10,7 @@ import { ToggleButton, ToggleStore } from './ToggleButton';
 
 const CircleRadius = 8;
 const LineColor = '#AAA';
+const FinalizedLineColor = '#83f2a1';
 
 export interface Props {
   title: string;
@@ -184,7 +185,7 @@ export class BlockDAG extends React.Component<Props, {}> {
       .data(graph.links)
       .enter()
       .append('line')
-      .attr('stroke', LineColor)
+      .attr('stroke', (d: d3Link) => d.isFinalized ? FinalizedLineColor : LineColor)
       .attr('stroke-width', (d: d3Link) => (d.isMainParent ? 3 : 1))
       .attr('marker-end', 'url(#arrow)') // use the Arrow created above
       .attr('stroke-dasharray', (d: d3Link) =>
@@ -320,6 +321,7 @@ interface d3Link {
   target: d3Node;
   isMainParent: boolean;
   isJustification: boolean;
+  isFinalized: boolean;
 }
 
 class Graph {
@@ -362,6 +364,8 @@ const toGraph = (blocks: BlockInfo[]) => {
   let links = blocks.flatMap(block => {
     let child = blockHash(block);
 
+    let isChildFinalized = isFinalized(block);
+
     let parents = block
       .getSummary()!
       .getHeader()!
@@ -376,14 +380,18 @@ const toGraph = (blocks: BlockInfo[]) => {
       .getJustificationsList()
       .map(x => encodeBase16(x.getLatestBlockHash_asU8()));
 
+    let source = nodeMap.get(child)!
+
     let parentLinks = parents
       .filter(p => nodeMap.has(p))
       .map(p => {
+        let target = nodeMap.get(p)!
         return {
-          source: nodeMap.get(child)!,
-          target: nodeMap.get(p)!,
+          source: source,
+          target: target,
           isMainParent: p === parents[0],
-          isJustification: false
+          isJustification: false,
+          isFinalized: isChildFinalized && isFinalized(target.block)
         };
       });
 
@@ -391,11 +399,13 @@ const toGraph = (blocks: BlockInfo[]) => {
       .filter(x => !parentSet.has(x))
       .filter(j => nodeMap.has(j))
       .map(j => {
+        let target = nodeMap.get(j)!
         return {
-          source: nodeMap.get(child)!,
-          target: nodeMap.get(j)!,
+          source: source,
+          target: target,
           isMainParent: false,
-          isJustification: true
+          isJustification: true,
+          isFinalized: isChildFinalized && isFinalized(target.block)
         };
       });
 
@@ -464,6 +474,9 @@ const isBlock = (block: BlockInfo) =>
 
 const isBallot = (block: BlockInfo) =>
   !isBlock(block)
+
+const isFinalized = (block: BlockInfo) =>
+  block.getStatus()!.getIsFinalized()
 
 const validatorHash = (block: BlockInfo) =>
   encodeBase16(
