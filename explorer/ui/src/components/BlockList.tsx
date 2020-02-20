@@ -52,7 +52,7 @@ class _BlockList extends RefreshableComponent<Props, {}> {
         }
         refresh={() => this.refresh()}
         subscribeToggleStore={dag.subscribeToggleStore}
-        headers={['Block hash', 'j-Rank', 'Timestamp', 'Validator']}
+        headers={['Block Hash', 'j-Rank', 'm-Rank', 'Timestamp', 'Validator', 'Key Block Hash']}
         rows={dag.blocks}
         renderRow={(block: BlockInfo) => {
           const header = block.getSummary()!.getHeader()!;
@@ -63,10 +63,16 @@ class _BlockList extends RefreshableComponent<Props, {}> {
                 <Link to={Pages.block(id)}>{id}</Link>
               </td>
               <td>{header.getJRank()}</td>
+              <td>{header.getMainRank()}</td>
               <td>
                 <Timestamp timestamp={header.getTimestamp()} />
               </td>
               <td>{shortHash(header.getValidatorPublicKey_asU8())}</td>
+              <td>
+                <Link to={Pages.block(encodeBase16(header.getKeyBlockHash_asU8()))}>
+                  {shortHash(header.getKeyBlockHash_asU8())}
+                </Link>
+              </td>
             </tr>
           );
         }}

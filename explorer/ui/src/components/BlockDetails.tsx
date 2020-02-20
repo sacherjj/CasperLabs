@@ -180,7 +180,12 @@ const blockAttrs: (block: BlockInfo) => Array<[string, any]> = (
   const stats = block.getStatus()!.getStats()!;
   return [
     ['Block Hash', id],
+    ['Key Block Hash',
+      <Link to={Pages.block(encodeBase16(header.getKeyBlockHash_asU8()))}>
+        {shortHash(header.getKeyBlockHash_asU8())}
+      </Link>],
     ['j-Rank', header.getJRank()],
+    ['m-Rank', header.getMainRank()],
     ['Timestamp', new Date(header.getTimestamp()).toISOString()],
     [
       'Parents',
