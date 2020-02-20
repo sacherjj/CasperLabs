@@ -27,7 +27,7 @@ const KEY: &str = "special_value";
 
 fn store(value: String) {
     // Store `value` under a new unforgeable reference.
-    let value_ref = storage::new_turef(value);
+    let value_ref = storage::new_uref(value);
 
     // Wrap the unforgeable reference in a value of type `Key`.
     let value_key: Key = value_ref.into();

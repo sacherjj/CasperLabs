@@ -57,7 +57,7 @@ import cats.mtl.ApplicativeAsk
 
   /** Will have an effect only on pending deploys.
     * Marks deploys as discarded that were added as pending more than 'now - expirationPeriod' time ago. */
-  def markAsDiscarded(expirationPeriod: FiniteDuration): F[Unit]
+  def markAsDiscarded(expirationPeriod: FiniteDuration, message: String): F[Set[ByteString]]
 
   /** Deletes discarded deploys from buffer that are older than 'now - expirationPeriod'.
     * Won't delete bodies of deploys which were [[addAsExecuted]] before.
@@ -153,8 +153,8 @@ object DeployStorageWriter {
     abstract override def markAsDiscardedByHashes(hashesAndReasons: List[(ByteString, String)]) =
       incAndMeasure("markAsDiscardedByHashes", super.markAsDiscardedByHashes(hashesAndReasons))
 
-    abstract override def markAsDiscarded(expirationPeriod: FiniteDuration) =
-      incAndMeasure("markAsDiscarded", super.markAsDiscarded(expirationPeriod))
+    abstract override def markAsDiscarded(expirationPeriod: FiniteDuration, message: String) =
+      incAndMeasure("markAsDiscarded", super.markAsDiscarded(expirationPeriod, message))
 
     abstract override def cleanupDiscarded(expirationPeriod: FiniteDuration) =
       incAndMeasure("cleanupDiscarded", super.cleanupDiscarded(expirationPeriod))
