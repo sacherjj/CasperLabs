@@ -46,7 +46,7 @@ entropy-duration = "3hours"
 voting-period-duration = "2days"
 
 # Alternative voting duration based on the finality level of the switch block; effective if it's non-zero.
-voting-period-summit-level = 1
+voting-period-summit-level = 0
 
 [deploys]
 # 1 day
