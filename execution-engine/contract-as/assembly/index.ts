@@ -181,9 +181,19 @@ export function getBlockTime(): u64 {
 }
 
 export function getCaller(): PublicKey {
-  let bytes = new Uint8Array(33);
-  externals.get_caller(bytes.dataStart);
-  const publicKeyResult = PublicKey.fromBytes(bytes);
+  let outputSize = new Uint32Array(1);
+  let ret = externals.get_caller(outputSize.dataStart);
+  const error = Error.fromResult(ret);
+  if (error != null) {
+    error.revert();
+    return <PublicKey>unreachable();
+  }
+  const publicKeyBytes = readHostBuffer(outputSize[0]);
+  if (publicKeyBytes === null) {
+    Error.fromErrorCode(ErrorCode.Deserialize).revert();
+    return <PublicKey>unreachable();
+  }
+  const publicKeyResult = PublicKey.fromBytes(publicKeyBytes);
   if (publicKeyResult.hasError()) {
     Error.fromErrorCode(ErrorCode.Deserialize).revert();
     return <PublicKey>unreachable();

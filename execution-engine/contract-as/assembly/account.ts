@@ -56,7 +56,7 @@ export enum ActionType {
 
 export function addAssociatedKey(publicKey: PublicKey, weight: i32): AddKeyFailure {
     const publicKeyBytes = publicKey.toBytes();
-    const ret = externals.add_associated_key(publicKeyBytes.dataStart, weight);
+    const ret = externals.add_associated_key(publicKeyBytes.dataStart, publicKeyBytes.length, weight);
     return <AddKeyFailure>ret;
 }
 
@@ -67,13 +67,13 @@ export function setActionThreshold(actionType: ActionType, thresholdValue: u8): 
 
 export function updateAssociatedKey(publicKey: PublicKey, weight: i32): UpdateKeyFailure {
     const publicKeyBytes = publicKey.toBytes();
-    const ret = externals.update_associated_key(publicKeyBytes.dataStart, weight);
+    const ret = externals.update_associated_key(publicKeyBytes.dataStart, publicKeyBytes.length, weight);
     return <UpdateKeyFailure>ret;
 }
 
 export function removeAssociatedKey(publicKey: PublicKey): RemoveKeyFailure {
     const publicKeyBytes = publicKey.toBytes();
-    const ret = externals.remove_associated_key(publicKeyBytes.dataStart);
+    const ret = externals.remove_associated_key(publicKeyBytes.dataStart, publicKeyBytes.length);
     return <RemoveKeyFailure>ret;
 }
 

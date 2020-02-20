@@ -6,7 +6,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use types::{
     account::{
         ActionType, AddKeyFailure, PublicKey, RemoveKeyFailure, SetThresholdFailure,
-        UpdateKeyFailure, Weight, PUBLIC_KEY_SERIALIZED_LENGTH, WEIGHT_SERIALIZED_LENGTH,
+        UpdateKeyFailure, Weight, PUBLIC_KEY_SERIALIZED_MAX_LENGTH, WEIGHT_SERIALIZED_LENGTH,
     },
     bytesrepr::{Error, FromBytes, ToBytes, U32_SERIALIZED_LENGTH, U8_SERIALIZED_LENGTH},
     AccessRights, Key, URef,
@@ -203,12 +203,12 @@ impl ToBytes for Account {
     fn to_bytes(&self) -> Result<Vec<u8>, Error> {
         let action_thresholds_size = 2 * (WEIGHT_SERIALIZED_LENGTH + U8_SERIALIZED_LENGTH);
         let associated_keys_size = self.associated_keys.len()
-            * (PUBLIC_KEY_SERIALIZED_LENGTH + WEIGHT_SERIALIZED_LENGTH)
+            * (PUBLIC_KEY_SERIALIZED_MAX_LENGTH + WEIGHT_SERIALIZED_LENGTH)
             + U32_SERIALIZED_LENGTH;
         let named_keys_size =
             Key::serialized_size_hint() * self.named_keys.len() + U32_SERIALIZED_LENGTH;
         let purse_size = Key::serialized_size_hint();
-        let serialized_account_size = PUBLIC_KEY_SERIALIZED_LENGTH // pub key
+        let serialized_account_size = PUBLIC_KEY_SERIALIZED_MAX_LENGTH // pub key
             + named_keys_size
             + purse_size
             + associated_keys_size

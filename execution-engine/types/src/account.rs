@@ -151,8 +151,8 @@ const PUBLIC_KEY_ED25519_ID: u8 = 0;
 /// The number of bytes that a variant tag occupies in serialized [`PublicKey`].
 const PUBLIC_KEY_ID_SERIALIZED_LENGTH: usize = 1;
 
-/// The number of bytes in a serialized [`PublicKey`].
-pub const PUBLIC_KEY_SERIALIZED_LENGTH: usize =
+/// The upper bound of bytes in a serialized [`PublicKey`].
+pub const PUBLIC_KEY_SERIALIZED_MAX_LENGTH: usize =
     PUBLIC_KEY_ID_SERIALIZED_LENGTH + ED25519_SERIALIZED_LENGTH;
 
 /// A type alias for raw bytes of Ed25519 public key
@@ -244,7 +244,7 @@ impl Debug for PublicKey {
 
 impl CLTyped for PublicKey {
     fn cl_type() -> CLType {
-        CLType::FixedList(Box::new(CLType::U8), ED25519_LENGTH as u32)
+        CLType::List(Box::new(CLType::U8))
     }
 }
 
@@ -263,7 +263,8 @@ impl From<Ed25519> for PublicKey {
 impl ToBytes for PublicKey {
     fn to_bytes(&self) -> Result<Vec<u8>, Error> {
         let PublicKey::Ed25519(ed25519) = self;
-        let mut bytes = Vec::with_capacity(PUBLIC_KEY_SERIALIZED_LENGTH);
+        let mut bytes =
+            Vec::with_capacity(PUBLIC_KEY_ID_SERIALIZED_LENGTH + ED25519_SERIALIZED_LENGTH);
         bytes.push(PUBLIC_KEY_ED25519_ID);
         bytes.extend(&ed25519.to_bytes()?);
         Ok(bytes)

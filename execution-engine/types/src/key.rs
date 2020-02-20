@@ -8,7 +8,7 @@ use blake2::{
 use hex_fmt::HexFmt;
 
 use crate::{
-    account::{PublicKey, PUBLIC_KEY_SERIALIZED_LENGTH},
+    account::PublicKey,
     bytesrepr::{Error, FromBytes, ToBytes},
     AccessRights, ContractRef, URef, UREF_SERIALIZED_LENGTH,
 };
@@ -18,6 +18,7 @@ const HASH_ID: u8 = 1;
 const UREF_ID: u8 = 2;
 const LOCAL_ID: u8 = 3;
 
+const KEY_ACCOUNT_SERIALIZED_LENGTH: usize = KEY_ID_SERIALIZED_LENGTH + 33;
 /// The number of bytes in a [`Key::Hash`].
 pub const KEY_HASH_LENGTH: usize = 32;
 /// The number of bytes in a [`Key::Local`].
@@ -26,8 +27,6 @@ pub const KEY_LOCAL_LENGTH: usize = 32;
 pub const KEY_LOCAL_SEED_LENGTH: usize = 32;
 
 const KEY_ID_SERIALIZED_LENGTH: usize = 1; // u8 used to determine the ID
-const KEY_ACCOUNT_SERIALIZED_LENGTH: usize =
-    KEY_ID_SERIALIZED_LENGTH + PUBLIC_KEY_SERIALIZED_LENGTH;
 const KEY_HASH_SERIALIZED_LENGTH: usize = KEY_ID_SERIALIZED_LENGTH + KEY_HASH_LENGTH;
 const KEY_UREF_SERIALIZED_LENGTH: usize = KEY_ID_SERIALIZED_LENGTH + UREF_SERIALIZED_LENGTH;
 const KEY_LOCAL_SERIALIZED_LENGTH: usize = KEY_ID_SERIALIZED_LENGTH + KEY_LOCAL_LENGTH;
@@ -75,17 +74,6 @@ impl Key {
             Key::Hash(_) => String::from("Key::Hash"),
             Key::URef(_) => String::from("Key::URef"),
             Key::Local(_) => String::from("Key::Local"),
-        }
-    }
-
-    // TODO - remove this method as it's unused
-    #[doc(hidden)]
-    pub fn serialized_size(&self) -> usize {
-        match self {
-            Key::Account(_) => KEY_ACCOUNT_SERIALIZED_LENGTH,
-            Key::Hash(_) => KEY_HASH_SERIALIZED_LENGTH,
-            Key::URef(_) => KEY_UREF_SERIALIZED_LENGTH,
-            Key::Local(_) => KEY_LOCAL_SERIALIZED_LENGTH,
         }
     }
 
