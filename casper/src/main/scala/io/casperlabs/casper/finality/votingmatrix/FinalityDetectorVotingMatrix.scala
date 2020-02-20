@@ -35,7 +35,11 @@ class FinalityDetectorVotingMatrix[F[_]: Concurrent: Log] private (rFTT: Double)
     dag.getEquivocators
       .map(_.contains(message.validatorId))
       .ifM(
-        none[CommitteeWithConsensusValue].pure[F], {
+        Log[F].info(
+          s"Message ${PrettyPrinter.buildString(message.messageHash) -> "message"} is from an equivocator ${PrettyPrinter
+            .buildString(message.validatorId)                        -> "validator"}"
+        ) *>
+          none[CommitteeWithConsensusValue].pure[F], {
           matrix
             .withPermit(
               for {
@@ -48,16 +52,27 @@ class FinalityDetectorVotingMatrix[F[_]: Concurrent: Log] private (rFTT: Double)
                                      message,
                                      branch
                                    )
-                               result <- checkForCommittee[F](dag, rFTT)
-                               _ <- result match {
-                                     case Some(newLFB) =>
-                                       // On new LFB we rebuild VotingMatrix and start the new game.
-                                       VotingMatrix
-                                         .create[F](dag, newLFB.consensusValue)
-                                         .flatMap(_.get.flatMap(matrix.set))
-                                     case None =>
-                                       Applicative[F].unit
-                                   }
+                               result <- checkForCommittee[F](dag, rFTT).flatMap {
+                                          case Some(newLFB) =>
+                                            val isBlock: F[Boolean] =
+                                              dag.lookupUnsafe(newLFB.consensusValue).map(_.isBlock)
+
+                                            // On new LFB (but only if it's a block) we rebuild VotingMatrix and start the new game.
+                                            Monad[F].ifM(isBlock)(
+                                              VotingMatrix
+                                                .create[F](dag, newLFB.consensusValue)
+                                                .flatMap(_.get.flatMap(matrix.set))
+                                                .as(Option(newLFB)),
+                                              Log[F].info(
+                                                s"New LFB is a ballot: ${PrettyPrinter
+                                                  .buildString(newLFB.consensusValue) -> "message"}"
+                                              ) *> Applicative[F]
+                                                .pure(none[CommitteeWithConsensusValue])
+                                            )
+
+                                          case None =>
+                                            Applicative[F].pure(none[CommitteeWithConsensusValue])
+                                        }
                              } yield result
 
                            // If block doesn't vote on any of main children of latestFinalizedBlock,
