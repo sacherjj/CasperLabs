@@ -37,9 +37,9 @@ class FinalityDetectorVotingMatrix[F[_]: Concurrent: Log] private (rFTT: Double)
       .getEquivocatorsInEra(
         message.eraId
       )
-      .map(!_.contains(message.validatorId))
+      .map(_.contains(message.validatorId))
 
-    val ncbCheck = dag.getEquivocators.map(!_.contains(message.validatorId))
+    val ncbCheck = dag.getEquivocators.map(_.contains(message.validatorId))
 
     val isEquivocator = if (Validation.isHighway) highwayCheck else ncbCheck
 
