@@ -155,7 +155,7 @@ const PUBLIC_KEY_ID_SERIALIZED_LENGTH: usize = 1;
 pub const PUBLIC_KEY_SERIALIZED_MAX_LENGTH: usize =
     PUBLIC_KEY_ID_SERIALIZED_LENGTH + ED25519_SERIALIZED_LENGTH;
 
-/// A type alias for raw bytes of Ed25519 public key
+/// A type alias for the raw bytes of an Ed25519 public key.
 pub type Ed25519Bytes = [u8; ED25519_LENGTH];
 
 /// A newtype wrapping a [`Ed25519Bytes`] which is the raw bytes of
@@ -220,7 +220,7 @@ impl PublicKey {
         PublicKey::Ed25519(ed25519)
     }
 
-    /// Attemps a new `PublicKey` creation using a slice of bytes
+    /// Attemps a new `PublicKey` creation using a slice of bytes.
     pub fn try_ed25519_from(bytes: &[u8]) -> Result<PublicKey, TryFromSliceForPublicKeyError> {
         Ed25519Bytes::try_from(bytes)
             .map(PublicKey::from_ed25519_bytes)
