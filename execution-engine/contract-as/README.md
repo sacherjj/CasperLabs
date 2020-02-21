@@ -1,9 +1,10 @@
 # @casperlabs/contract
 
-## Installation
 This package allows a distributed app developer to create smart contracts
 for the open source [CasperLabs](https://github.com/CasperLabs/CasperLabs) project using [AssemblyScript](https://www.npmjs.com/package/assemblyscript).
 
+## Installation
+For each smart contract you create, make a project directory and initialize it.
 ``` 
 mkdir project
 cd project
@@ -13,6 +14,8 @@ npm init
 npm init will prompt you for various details about your project; 
 answer as you see fit but you may safely default everything except `name` which should follow the convention of
 `your-contract-name`.
+
+Then install assembly script and this package in the project directory.
 
 ```
 npm install --save-dev assemblyscript@0.9.1
