@@ -8,11 +8,14 @@ import io.casperlabs.catscontrib.MonadStateOps._
 import io.casperlabs.models.Message.MainRank
 import io.casperlabs.models.{Message, Weight}
 import io.casperlabs.storage.dag.DagRepresentation
+import io.casperlabs.casper.validation.Validation
 
 import scala.annotation.tailrec
 import scala.collection.mutable.{IndexedSeq => MutableSeq}
 
 package object votingmatrix {
+
+  import io.casperlabs.catscontrib.MonadThrowable
 
   import Weight.Implicits._
   import Weight.Zero
@@ -49,7 +52,7 @@ package object votingmatrix {
     * @param rFTT the relative fault tolerance threshold
     * @return
     */
-  def checkForCommittee[F[_]: Monad](
+  def checkForCommittee[F[_]: MonadThrowable](
       dag: DagRepresentation[F],
       rFTT: Double
   )(
@@ -136,7 +139,7 @@ package object votingmatrix {
     * @param quorum
     * @return
     */
-  private[votingmatrix] def findCommitteeApproximation[F[_]: Monad](
+  private[votingmatrix] def findCommitteeApproximation[F[_]: MonadThrowable](
       dag: DagRepresentation[F],
       quorum: Weight
   )(implicit matrix: VotingMatrix[F]): F[Option[CommitteeWithConsensusValue]] =
@@ -152,10 +155,17 @@ package object votingmatrix {
                                            }
                                            .toList
                                            .filterA {
-                                             case (vote, validator) =>
-                                               dag
-                                                 .getEquivocatorsInEra(vote)
-                                                 .map(!_.contains(validator))
+                                             case (voteHash, validator) =>
+                                               val highwayCheck = for {
+                                                 voteMsg <- dag.lookupUnsafe(voteHash)
+                                                 eraEquivocators <- dag.getEquivocatorsInEra(
+                                                                     voteMsg.eraId
+                                                                   )
+                                               } yield !eraEquivocators.contains(validator)
+                                               val ncbCheck =
+                                                 dag.getEquivocators.map(!_.contains(validator))
+
+                                               if (Validation.isHighway) highwayCheck else ncbCheck
                                            }
                                            .map(_.groupBy(_._1).mapValues(_.map(_._2)))
       // Get most support voteBranch and its support weight

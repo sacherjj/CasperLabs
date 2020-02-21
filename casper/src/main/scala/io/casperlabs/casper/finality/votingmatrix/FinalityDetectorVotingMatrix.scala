@@ -15,6 +15,7 @@ import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.models.Message
 import io.casperlabs.shared.Log
 import io.casperlabs.storage.dag.DagRepresentation
+import io.casperlabs.casper.validation.Validation
 
 class FinalityDetectorVotingMatrix[F[_]: Concurrent: Log] private (rFTT: Double)(
     implicit private val matrix: _votingMatrixS[F]
@@ -31,12 +32,20 @@ class FinalityDetectorVotingMatrix[F[_]: Concurrent: Log] private (rFTT: Double)
       dag: DagRepresentation[F],
       message: Message,
       latestFinalizedBlock: BlockHash
-  ): F[Option[CommitteeWithConsensusValue]] =
-    dag
-      .getEquivocatorsInEra(message.eraId)
-      .map(_.contains(message.validatorId))
+  ): F[Option[CommitteeWithConsensusValue]] = {
+    val highwayCheck = dag
+      .getEquivocatorsInEra(
+        message.eraId
+      )
+      .map(!_.contains(message.validatorId))
+
+    val ncbCheck = dag.getEquivocators.map(!_.contains(message.validatorId))
+
+    val isEquivocator = if (Validation.isHighway) highwayCheck else ncbCheck
+
+    isEquivocator
       .ifM(
-        Log[F].info(
+        Log[F].debug(
           s"Message ${PrettyPrinter.buildString(message.messageHash) -> "message"} is from an equivocator ${PrettyPrinter
             .buildString(message.validatorId)                        -> "validator"}"
         ) *>
@@ -90,6 +99,7 @@ class FinalityDetectorVotingMatrix[F[_]: Concurrent: Log] private (rFTT: Double)
             )
         }
       )
+  }
 }
 
 object FinalityDetectorVotingMatrix {
