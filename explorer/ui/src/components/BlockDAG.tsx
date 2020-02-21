@@ -363,6 +363,7 @@ const toGraph = (blocks: BlockInfo[]) => {
     let child = blockHash(block);
 
     let isChildFinalized = isFinalized(block);
+    let isChildBallot = isBallot(block);
 
     let parents = block
       .getSummary()!
@@ -389,7 +390,7 @@ const toGraph = (blocks: BlockInfo[]) => {
           target: target,
           isMainParent: p === parents[0],
           isJustification: false,
-          isFinalized: isChildFinalized && isFinalized(target.block)
+          isFinalized: (isChildFinalized || isChildBallot) && isFinalized(target.block)
         };
       });
 
@@ -403,7 +404,7 @@ const toGraph = (blocks: BlockInfo[]) => {
           target: target,
           isMainParent: false,
           isJustification: true,
-          isFinalized: isChildFinalized && isFinalized(target.block)
+          isFinalized: (isChildFinalized || isChildBallot) && isFinalized(target.block)
         };
       });
 
