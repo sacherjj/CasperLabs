@@ -191,7 +191,7 @@ class MessageProducerSpec extends FlatSpec with Matchers with Inspectors with Hi
             _ = b4.mainRank shouldBe 1
             _ = b4.validatorMsgSeqNum shouldBe 2
             _ = b4.validatorPrevMessageHash shouldBe b3.messageHash
-            _ = b4.justifications should have size 3
+            _ = b4.justifications should have size 2
 
             // Check that messages are persisted.
             ballots = List(b1, b2, b3, b4)
