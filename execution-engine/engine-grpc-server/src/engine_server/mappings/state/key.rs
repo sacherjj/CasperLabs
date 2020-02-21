@@ -1,6 +1,8 @@
 use std::convert::{TryFrom, TryInto};
 
-use types::{account::PublicKey, Key};
+use types::{
+    account::PublicKey, Key, BLAKE2B_DIGEST_LENGTH, KEY_LOCAL_LENGTH, KEY_LOCAL_SEED_LENGTH,
+};
 
 use crate::engine_server::{
     mappings::{self, ParsingError},
@@ -24,9 +26,12 @@ impl From<Key> for state::Key {
             Key::URef(uref) => {
                 pb_key.set_uref(uref.into());
             }
-            Key::Local(hash) => {
+            Key::Local { seed, hash } => {
                 let mut pb_local = Key_Local::new();
-                pb_local.set_hash(hash.to_vec());
+                let mut local = [0; KEY_LOCAL_LENGTH];
+                local[..KEY_LOCAL_SEED_LENGTH].copy_from_slice(&seed);
+                local[KEY_LOCAL_SEED_LENGTH..].copy_from_slice(&hash);
+                pb_local.set_hash(local.to_vec());
                 pb_key.set_local(pb_local);
             }
         }
@@ -56,8 +61,12 @@ impl TryFrom<state::Key> for Key {
                 Key::URef(uref)
             }
             Key_oneof_value::local(pb_local) => {
-                let local = mappings::vec_to_array(pb_local.hash, "Protobuf Key::Local")?;
-                Key::Local(local)
+                let local = mappings::vec_to_array64(pb_local.hash, "Protobuf Key::Local")?;
+                let mut seed = [0; KEY_LOCAL_SEED_LENGTH];
+                let mut hash = [0; BLAKE2B_DIGEST_LENGTH];
+                seed.copy_from_slice(&local[..KEY_LOCAL_SEED_LENGTH]);
+                hash.copy_from_slice(&local[KEY_LOCAL_SEED_LENGTH..]);
+                Key::Local { seed, hash }
             }
         };
         Ok(key)

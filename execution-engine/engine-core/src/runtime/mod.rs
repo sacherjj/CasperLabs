@@ -1336,103 +1336,6 @@ fn extract_urefs(cl_value: &CLValue) -> Result<Vec<URef>, Error> {
     }
 }
 
-fn sub_call<R>(
-    parity_module: Module,
-    args: Vec<CLValue>,
-    named_keys: &mut BTreeMap<String, Key>,
-    key: Key,
-    current_runtime: &mut Runtime<R>,
-    // Unforgable references passed across the call boundary from caller to callee (necessary if
-    // the contract takes a uref argument).
-    extra_urefs: Vec<Key>,
-    protocol_version: ProtocolVersion,
-) -> Result<CLValue, Error>
-where
-    R: StateReader<Key, StoredValue>,
-    R::Error: Into<Error>,
-{
-    let (instance, memory) = instance_and_memory(parity_module.clone(), protocol_version)?;
-
-    let access_rights = {
-        let mut keys: Vec<Key> = named_keys.values().cloned().collect();
-        keys.extend(extra_urefs);
-        keys.push(current_runtime.get_mint_contract_uref().into());
-        keys.push(current_runtime.get_pos_contract_uref().into());
-        extract_access_rights_from_keys(keys)
-    };
-
-    let system_contract_cache = SystemContractCache::clone(&current_runtime.system_contract_cache);
-
-    let mut runtime = Runtime {
-        system_contract_cache,
-        memory,
-        module: parity_module,
-        host_buffer: None,
-        context: RuntimeContext::new(
-            current_runtime.context.state(),
-            named_keys,
-            access_rights,
-            args,
-            current_runtime.context.authorization_keys().clone(),
-            &current_runtime.context.account(),
-            key,
-            current_runtime.context.get_blocktime(),
-            current_runtime.context.get_deployhash(),
-            current_runtime.context.gas_limit(),
-            current_runtime.context.gas_counter(),
-            current_runtime.context.fn_store_id(),
-            current_runtime.context.address_generator(),
-            protocol_version,
-            current_runtime.context.correlation_id(),
-            current_runtime.context.phase(),
-            current_runtime.context.protocol_data(),
-        ),
-    };
-
-    let result = instance.invoke_export("call", &[], &mut runtime);
-
-    // TODO: To account for the gas used in a subcall, we should uncomment the following lines
-    // if !current_runtime.charge_gas(runtime.context.gas_counter()) {
-    //     return Err(Error::GasLimit);
-    // }
-
-    match result {
-        // If `Ok` and the `host_buffer` is `None`, the contract's execution succeeded but did not
-        // explicitly call `runtime::ret()`.  Treat as though the execution returned the unit type
-        // `()` as per Rust functions which don't specify a return value.
-        Ok(_) => Ok(runtime.take_host_buffer().unwrap_or(CLValue::from_t(())?)),
-        Err(e) => {
-            if let Some(host_error) = e.as_host_error() {
-                // If the "error" was in fact a trap caused by calling `ret` then
-                // this is normal operation and we should return the value captured
-                // in the Runtime result field.
-                let downcasted_error = host_error.downcast_ref::<Error>().unwrap();
-                match downcasted_error {
-                    Error::Ret(ref ret_urefs) => {
-                        //insert extra urefs returned from call
-                        let ret_urefs_map: HashMap<Address, HashSet<AccessRights>> =
-                            extract_access_rights_from_urefs(ret_urefs.clone());
-                        current_runtime.context.access_rights_extend(ret_urefs_map);
-                        // if ret has not set host_buffer consider it programmer error
-                        return runtime.take_host_buffer().ok_or(Error::ExpectedReturnValue);
-                    }
-                    Error::Revert(status) => {
-                        // Propagate revert as revert, instead of passing it as
-                        // InterpreterError.
-                        return Err(Error::Revert(*status));
-                    }
-                    Error::InvalidContext => {
-                        // TODO: https://casperlabs.atlassian.net/browse/EE-771
-                        return Err(Error::InvalidContext);
-                    }
-                    _ => {}
-                }
-            }
-            Err(Error::Interpreter(e))
-        }
-    }
-}
-
 impl<'a, R> Runtime<'a, R>
 where
     R: StateReader<Key, StoredValue>,
@@ -1781,18 +1684,94 @@ where
             self.context.validate_key(key)?;
         }
 
-        let mut refs = contract.take_named_keys();
+        let mut named_keys = contract.take_named_keys();
 
-        let result = sub_call(
-            module,
+        let (instance, memory) = instance_and_memory(module.clone(), contract_version)?;
+
+        let access_rights = {
+            let mut keys: Vec<Key> = named_keys.values().cloned().collect();
+            keys.extend(extra_urefs);
+            keys.push(self.get_mint_contract_uref().into());
+            keys.push(self.get_pos_contract_uref().into());
+            extract_access_rights_from_keys(keys)
+        };
+
+        let system_contract_cache = SystemContractCache::clone(&self.system_contract_cache);
+
+        let host_buffer = None;
+
+        let context = RuntimeContext::new(
+            self.context.state(),
+            &mut named_keys,
+            access_rights,
             args,
-            &mut refs,
+            self.context.authorization_keys().clone(),
+            &self.context.account(),
             key,
-            self,
-            extra_urefs,
+            self.context.get_blocktime(),
+            self.context.get_deployhash(),
+            self.context.gas_limit(),
+            self.context.gas_counter(),
+            self.context.fn_store_id(),
+            self.context.address_generator(),
             contract_version,
-        )?;
-        Ok(result)
+            self.context.correlation_id(),
+            self.context.phase(),
+            self.context.protocol_data(),
+        );
+
+        let mut runtime = Runtime {
+            system_contract_cache,
+            memory,
+            module,
+            host_buffer,
+            context,
+        };
+
+        let result = instance.invoke_export("call", &[], &mut runtime);
+
+        // TODO: To account for the gas used in a subcall, we should uncomment the following lines
+        // if !current_runtime.charge_gas(runtime.context.gas_counter()) {
+        //     return Err(Error::GasLimit);
+        // }
+
+        let error = match result {
+            Err(error) => error,
+            // If `Ok` and the `host_buffer` is `None`, the contract's execution succeeded but did
+            // not explicitly call `runtime::ret()`.  Treat as though the execution
+            // returned the unit type `()` as per Rust functions which don't specify a
+            // return value.
+            Ok(_) => return Ok(runtime.take_host_buffer().unwrap_or(CLValue::from_t(())?)),
+        };
+
+        if let Some(host_error) = error.as_host_error() {
+            // If the "error" was in fact a trap caused by calling `ret` then
+            // this is normal operation and we should return the value captured
+            // in the Runtime result field.
+            let downcasted_error = host_error.downcast_ref::<Error>().unwrap();
+            match downcasted_error {
+                Error::Ret(ref ret_urefs) => {
+                    // insert extra urefs returned from call
+                    let ret_urefs_map: HashMap<Address, HashSet<AccessRights>> =
+                        extract_access_rights_from_urefs(ret_urefs.clone());
+                    self.context.access_rights_extend(ret_urefs_map);
+                    // if ret has not set host_buffer consider it programmer error
+                    return runtime.take_host_buffer().ok_or(Error::ExpectedReturnValue);
+                }
+                Error::Revert(status) => {
+                    // Propagate revert as revert, instead of passing it as
+                    // InterpreterError.
+                    return Err(Error::Revert(*status));
+                }
+                Error::InvalidContext => {
+                    // TODO: https://casperlabs.atlassian.net/browse/EE-771
+                    return Err(Error::InvalidContext);
+                }
+                _ => {}
+            }
+        }
+
+        Err(Error::Interpreter(error))
     }
 
     fn call_contract_host_buffer(
