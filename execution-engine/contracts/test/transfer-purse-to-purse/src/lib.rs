@@ -82,7 +82,7 @@ pub extern "C" fn call() {
 
     let result = format!("{:?}", transfer_result);
     // Add new urefs
-    let result_key: Key = storage::new_turef(result).into();
+    let result_key: Key = storage::new_uref(result).into();
     runtime::put_key(PURSE_TRANSFER_RESULT, result_key);
-    runtime::put_key(MAIN_PURSE_BALANCE, storage::new_turef(final_balance).into());
+    runtime::put_key(MAIN_PURSE_BALANCE, storage::new_uref(final_balance).into());
 }

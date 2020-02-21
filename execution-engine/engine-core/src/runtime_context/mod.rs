@@ -195,7 +195,7 @@ where
                 self.named_keys.remove(name);
                 self.remove_key_from_contract(contract_hash, contract, name)
             }
-            contract_local @ Key::Local(_) => {
+            contract_local @ Key::Local { .. } => {
                 let contract: Contract = self.read_gs_typed(&contract_local)?;
                 self.named_keys.remove(name);
                 self.remove_key_from_contract(contract_local, contract, name)
@@ -260,7 +260,7 @@ where
             Key::Account(bytes) => bytes,
             Key::Hash(bytes) => bytes,
             Key::URef(uref) => uref.addr(),
-            Key::Local(hash) => hash,
+            Key::Local { seed, .. } => seed,
         }
     }
 
@@ -610,7 +610,7 @@ where
             Key::Account(_) => &self.base_key() == key,
             Key::Hash(_) => true,
             Key::URef(uref) => uref.is_readable(),
-            Key::Local(_) => false,
+            Key::Local { .. } => false,
         }
     }
 
@@ -619,7 +619,7 @@ where
         match key {
             Key::Account(_) | Key::Hash(_) => &self.base_key() == key,
             Key::URef(uref) => uref.is_addable(),
-            Key::Local(_) => false,
+            Key::Local { .. } => false,
         }
     }
 
@@ -628,7 +628,7 @@ where
         match key {
             Key::Account(_) | Key::Hash(_) => false,
             Key::URef(uref) => uref.is_writeable(),
-            Key::Local(_) => false,
+            Key::Local { .. } => false,
         }
     }
 
