@@ -157,9 +157,11 @@ class DeploySelectionTest
     val deploySelection = DeploySelection.create[Task](sizeLimitBytes)
 
     // The very first WRITE doesn't conflict
-    val expectedCommuting = mixed.head +: mixed.zipWithIndex.filter(_._2 % 2 == 1).map(_._1)
+    val expectedCommuting = cappedEffects.head +: cappedEffects.zipWithIndex
+      .filter(_._2 % 2 == 1)
+      .map(_._1)
     // Because first WRITE doesn't conflict we will get 1 less of them in conflicting section
-    val expectedConflicting = mixed.zipWithIndex.filter(_._2 % 2 == 0).map(_._1).tail
+    val expectedConflicting = cappedEffects.zipWithIndex.filter(_._2 % 2 == 0).map(_._1).tail
 
     val test = deploySelection
       .select((prestate, blocktime, protocolVersion, stream))
