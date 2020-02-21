@@ -145,15 +145,8 @@ pub const ED25519_LENGTH: usize = 32;
 /// The number of bytes in a serialized [`Ed25519`].
 pub const ED25519_SERIALIZED_LENGTH: usize = ED25519_LENGTH;
 
-/// Identifies a serialized public key of Ed25519 variant.
-const PUBLIC_KEY_ED25519_ID: u8 = 0;
-
-/// The number of bytes that a variant tag occupies in serialized [`PublicKey`].
-const PUBLIC_KEY_ID_SERIALIZED_LENGTH: usize = 1;
-
 /// The upper bound of bytes in a serialized [`PublicKey`].
-pub const PUBLIC_KEY_SERIALIZED_MAX_LENGTH: usize =
-    PUBLIC_KEY_ID_SERIALIZED_LENGTH + ED25519_SERIALIZED_LENGTH;
+pub const PUBLIC_KEY_SERIALIZED_MAX_LENGTH: usize = ED25519_SERIALIZED_LENGTH;
 
 /// A type alias for the raw bytes of an Ed25519 public key.
 pub type Ed25519Bytes = [u8; ED25519_LENGTH];
@@ -263,7 +256,6 @@ impl ToBytes for PublicKey {
     fn to_bytes(&self) -> Result<Vec<u8>, Error> {
         let PublicKey::Ed25519(ed25519) = self;
         let mut bytes = Vec::with_capacity(PUBLIC_KEY_SERIALIZED_MAX_LENGTH);
-        bytes.push(PUBLIC_KEY_ED25519_ID);
         bytes.extend(&ed25519.to_bytes()?);
         Ok(bytes)
     }
@@ -271,14 +263,8 @@ impl ToBytes for PublicKey {
 
 impl FromBytes for PublicKey {
     fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
-        let (variant_tag, rem1) = u8::from_bytes(bytes)?;
-        match variant_tag {
-            PUBLIC_KEY_ED25519_ID => {
-                let (ed25519, rem2) = Ed25519::from_bytes(rem1)?;
-                Ok((PublicKey::from(ed25519), rem2))
-            }
-            _ => Err(Error::Formatting),
-        }
+        let (ed25519, rem) = Ed25519::from_bytes(bytes)?;
+        Ok((PublicKey::from(ed25519), rem))
     }
 }
 
