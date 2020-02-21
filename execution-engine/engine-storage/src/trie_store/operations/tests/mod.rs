@@ -611,7 +611,9 @@ where
         tmp
     };
     let actual = {
-        let mut tmp = operations::keys::<_, _, _, _, E>(correlation_id, txn, store, root)?;
+        let mut tmp = operations::keys::<_, _, _, _>(correlation_id, txn, store, root)
+            .filter_map(Result::ok)
+            .collect::<Vec<K>>();
         tmp.sort();
         tmp
     };
@@ -735,8 +737,9 @@ where
             tmp
         };
         let actual = {
-            let mut tmp =
-                operations::keys::<_, _, _, _, E>(correlation_id, &txn, store, root_hash)?;
+            let mut tmp = operations::keys::<_, _, _, _>(correlation_id, &txn, store, root_hash)
+                .filter_map(Result::ok)
+                .collect::<Vec<K>>();
             tmp.sort();
             tmp
         };
