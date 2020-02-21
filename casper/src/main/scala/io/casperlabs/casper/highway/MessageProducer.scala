@@ -203,7 +203,7 @@ object MessageProducer {
         for {
           // NOTE: The validator sequence number restarts in each era, and `justifications`
           // can contain entries for the parent era as well as the child.
-          justificationMessages <- (parents.map(_.messageHash) ++ justifications.values.flatten).toSet.toList
+          justificationMessages <- justifications.values.flatten.toSet.toList
                                     .traverse { h =>
                                       BlockStorage[F]
                                         .getBlockSummaryUnsafe(h)

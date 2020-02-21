@@ -9,16 +9,17 @@ import io.casperlabs.storage.BlockHash
 import io.casperlabs.casper.highway.{ForkChoice, ForkChoiceManager}
 
 class MockForkChoice[F[_]: Applicative](
-    resultRef: Ref[F, ForkChoice.Result]
+    resultRef: Ref[F, ForkChoice.Result],
+    maybeFun: Option[MockForkChoice.ForkChoiceFun]
 ) extends ForkChoiceManager[F] {
   override def fromKeyBlock(keyBlockHash: BlockHash): F[ForkChoice.Result] =
-    resultRef.get
+    maybeFun.fold(resultRef.get)(_(keyBlockHash, Set.empty).pure[F])
 
   override def fromJustifications(
       keyBlockHash: BlockHash,
       justifications: Set[BlockHash]
   ): F[ForkChoice.Result] =
-    resultRef.get
+    maybeFun.fold(resultRef.get)(_(keyBlockHash, justifications).pure[F])
 
   def updateLatestMessage(
       keyBlockHash: BlockHash,
@@ -36,9 +37,13 @@ class MockForkChoice[F[_]: Applicative](
 }
 
 object MockForkChoice {
-  def apply[F[_]: Sync](init: Message.Block) = Sync[F].delay(unsafe(init))
-  def unsafe[F[_]: Sync](init: Message.Block) = {
+  type ForkChoiceFun = (BlockHash, Set[BlockHash]) => ForkChoice.Result
+
+  def apply[F[_]: Sync](init: Message.Block, f: Option[ForkChoiceFun] = None) =
+    Sync[F].delay(unsafe(init, f))
+
+  def unsafe[F[_]: Sync](init: Message.Block, f: Option[ForkChoiceFun] = None) = {
     val ref = Ref.unsafe[F, ForkChoice.Result](ForkChoice.Result(init, Set.empty))
-    new MockForkChoice[F](ref)
+    new MockForkChoice[F](ref, f)
   }
 }
