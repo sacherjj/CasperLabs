@@ -102,7 +102,7 @@ package object types {
       Field(
         "hash",
         StringType,
-        resolve = c => Base16.encode(c.value.address.bytes.toArray)
+        resolve = c => Base16.encode((c.value.seed.bytes ++ c.value.hash.bytes).toArray)
       )
     )
   )

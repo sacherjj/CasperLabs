@@ -13,7 +13,7 @@ use uuid::Uuid;
 
 use types::bytesrepr::{self, FromBytes, ToBytes};
 
-pub const BLAKE2B_DIGEST_LENGTH: usize = 32;
+pub use types::BLAKE2B_DIGEST_LENGTH;
 
 /// Represents a 32-byte BLAKE2b hash digest
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
