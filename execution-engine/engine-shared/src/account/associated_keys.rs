@@ -152,8 +152,11 @@ mod tests {
 
     #[test]
     fn associated_keys_add() {
-        let mut keys = AssociatedKeys::new([0u8; ED25519_LENGTH].into(), Weight::new(1));
-        let new_pk = PublicKey::from_ed25519_bytes([1u8; ED25519_LENGTH]);
+        let mut keys = AssociatedKeys::new(
+            PublicKey::ed25519_from([0u8; ED25519_LENGTH]),
+            Weight::new(1),
+        );
+        let new_pk = PublicKey::ed25519_from([1u8; ED25519_LENGTH]);
         let new_pk_weight = Weight::new(2);
         assert!(keys.add_key(new_pk, new_pk_weight).is_ok());
         assert_eq!(keys.get(&new_pk), Some(&new_pk_weight))
@@ -163,7 +166,7 @@ mod tests {
     fn associated_keys_add_full() {
         let map = (0..MAX_ASSOCIATED_KEYS).map(|k| {
             (
-                PublicKey::from_ed25519_bytes([k as u8; ED25519_LENGTH]),
+                PublicKey::ed25519_from([k as u8; ED25519_LENGTH]),
                 Weight::new(k as u8),
             )
         });
@@ -175,7 +178,7 @@ mod tests {
         };
         assert_eq!(
             keys.add_key(
-                PublicKey::from_ed25519_bytes([100u8; ED25519_LENGTH]),
+                PublicKey::ed25519_from([100u8; ED25519_LENGTH]),
                 Weight::new(100)
             ),
             Err(AddKeyFailure::MaxKeysLimit)
@@ -184,7 +187,7 @@ mod tests {
 
     #[test]
     fn associated_keys_add_duplicate() {
-        let pk = PublicKey::from_ed25519_bytes([0u8; ED25519_LENGTH]);
+        let pk = PublicKey::ed25519_from([0u8; ED25519_LENGTH]);
         let weight = Weight::new(1);
         let mut keys = AssociatedKeys::new(pk, weight);
         assert_eq!(
@@ -196,20 +199,20 @@ mod tests {
 
     #[test]
     fn associated_keys_remove() {
-        let pk = PublicKey::from_ed25519_bytes([0u8; ED25519_LENGTH]);
+        let pk = PublicKey::ed25519_from([0u8; ED25519_LENGTH]);
         let weight = Weight::new(1);
         let mut keys = AssociatedKeys::new(pk, weight);
         assert!(keys.remove_key(&pk).is_ok());
         assert!(keys
-            .remove_key(&PublicKey::from_ed25519_bytes([1u8; ED25519_LENGTH]))
+            .remove_key(&PublicKey::ed25519_from([1u8; ED25519_LENGTH]))
             .is_err());
     }
 
     #[test]
     fn associated_keys_calculate_keys_once() {
-        let key_1 = PublicKey::from_ed25519_bytes([0; 32]);
-        let key_2 = PublicKey::from_ed25519_bytes([1; 32]);
-        let key_3 = PublicKey::from_ed25519_bytes([2; 32]);
+        let key_1 = PublicKey::ed25519_from([0; 32]);
+        let key_2 = PublicKey::ed25519_from([1; 32]);
+        let key_3 = PublicKey::ed25519_from([2; 32]);
         let mut keys = AssociatedKeys::default();
 
         keys.add_key(key_2, Weight::new(2))
@@ -230,13 +233,12 @@ mod tests {
     #[test]
     fn associated_keys_total_weight() {
         let associated_keys = {
-            let mut res =
-                AssociatedKeys::new(PublicKey::from_ed25519_bytes([1u8; 32]), Weight::new(1));
-            res.add_key(PublicKey::from_ed25519_bytes([2u8; 32]), Weight::new(11))
+            let mut res = AssociatedKeys::new(PublicKey::ed25519_from([1u8; 32]), Weight::new(1));
+            res.add_key(PublicKey::ed25519_from([2u8; 32]), Weight::new(11))
                 .expect("should add key 1");
-            res.add_key(PublicKey::from_ed25519_bytes([3u8; 32]), Weight::new(12))
+            res.add_key(PublicKey::ed25519_from([3u8; 32]), Weight::new(12))
                 .expect("should add key 2");
-            res.add_key(PublicKey::from_ed25519_bytes([4u8; 32]), Weight::new(13))
+            res.add_key(PublicKey::ed25519_from([4u8; 32]), Weight::new(13))
                 .expect("should add key 3");
             res
         };
@@ -248,16 +250,16 @@ mod tests {
 
     #[test]
     fn associated_keys_total_weight_excluding() {
-        let identity_key = PublicKey::from_ed25519_bytes([1u8; 32]);
+        let identity_key = PublicKey::ed25519_from([1u8; 32]);
         let identity_key_weight = Weight::new(1);
 
-        let key_1 = PublicKey::from_ed25519_bytes([2u8; 32]);
+        let key_1 = PublicKey::ed25519_from([2u8; 32]);
         let key_1_weight = Weight::new(11);
 
-        let key_2 = PublicKey::from_ed25519_bytes([3u8; 32]);
+        let key_2 = PublicKey::ed25519_from([3u8; 32]);
         let key_2_weight = Weight::new(12);
 
-        let key_3 = PublicKey::from_ed25519_bytes([4u8; 32]);
+        let key_3 = PublicKey::ed25519_from([4u8; 32]);
         let key_3_weight = Weight::new(13);
 
         let associated_keys = {
@@ -275,10 +277,10 @@ mod tests {
 
     #[test]
     fn overflowing_keys_weight() {
-        let identity_key = PublicKey::from_ed25519_bytes([1u8; 32]);
-        let key_1 = PublicKey::from_ed25519_bytes([2u8; 32]);
-        let key_2 = PublicKey::from_ed25519_bytes([3u8; 32]);
-        let key_3 = PublicKey::from_ed25519_bytes([4u8; 32]);
+        let identity_key = PublicKey::ed25519_from([1u8; 32]);
+        let key_1 = PublicKey::ed25519_from([2u8; 32]);
+        let key_2 = PublicKey::ed25519_from([3u8; 32]);
+        let key_3 = PublicKey::ed25519_from([4u8; 32]);
 
         let identity_key_weight = Weight::new(250);
         let weight_1 = Weight::new(1);

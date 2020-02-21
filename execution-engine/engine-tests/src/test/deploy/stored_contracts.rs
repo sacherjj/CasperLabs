@@ -12,7 +12,7 @@ use engine_test_support::{
 };
 use types::{account::PublicKey, Key, ProtocolVersion, U512};
 
-const ACCOUNT_1_ADDR: PublicKey = PublicKey::from_ed25519_bytes([42u8; 32]);
+const ACCOUNT_1_ADDR: PublicKey = PublicKey::ed25519_from([42u8; 32]);
 const DEFAULT_ACTIVATION_POINT: ActivationPoint = 1;
 const DO_NOTHING_NAME: &str = "do_nothing";
 const DO_NOTHING_STORED_CONTRACT_NAME: &str = "do_nothing_stored";

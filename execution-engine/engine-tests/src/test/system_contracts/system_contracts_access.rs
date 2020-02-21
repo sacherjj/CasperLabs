@@ -14,8 +14,8 @@ const CONTRACT_SYSTEM_CONTRACTS_ACCESS: &str = "system_contracts_access.wasm";
 const CONTRACT_OVERWRITE_UREF_CONTENT: &str = "overwrite_uref_content.wasm";
 const CONTRACT_TRANSFER_TO_ACCOUNT: &str = "transfer_to_account_u512.wasm";
 
-const SYSTEM_ADDR: PublicKey = PublicKey::from_ed25519_bytes([0u8; 32]);
-const ACCOUNT_1_ADDR: PublicKey = PublicKey::from_ed25519_bytes([1u8; 32]);
+const SYSTEM_ADDR: PublicKey = PublicKey::ed25519_from([0u8; 32]);
+const ACCOUNT_1_ADDR: PublicKey = PublicKey::ed25519_from([1u8; 32]);
 
 lazy_static! {
     static ref ACCOUNT_1_INITIAL_BALANCE: U512 = *DEFAULT_PAYMENT * 10;

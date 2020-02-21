@@ -15,7 +15,7 @@ use types::{
 #[bench]
 fn serialize_trie_leaf(b: &mut Bencher) {
     let leaf = Trie::Leaf {
-        key: Key::Account(PublicKey::from_ed25519_bytes([0; 32])),
+        key: Key::Account(PublicKey::ed25519_from([0; 32])),
         value: StoredValue::CLValue(CLValue::from_t(42_i32).unwrap()),
     };
     b.iter(|| ToBytes::to_bytes(black_box(&leaf)));
@@ -24,7 +24,7 @@ fn serialize_trie_leaf(b: &mut Bencher) {
 #[bench]
 fn deserialize_trie_leaf(b: &mut Bencher) {
     let leaf = Trie::Leaf {
-        key: Key::Account(PublicKey::from_ed25519_bytes([0; 32])),
+        key: Key::Account(PublicKey::ed25519_from([0; 32])),
         value: StoredValue::CLValue(CLValue::from_t(42_i32).unwrap()),
     };
     let leaf_bytes = leaf.to_bytes().unwrap();

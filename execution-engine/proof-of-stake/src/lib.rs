@@ -118,7 +118,7 @@ mod internal {
     };
 
     /// Account used to run system functions (in particular `finalize_payment`).
-    const SYSTEM_ACCOUNT: PublicKey = PublicKey::from_ed25519_bytes([0u8; 32]);
+    const SYSTEM_ACCOUNT: PublicKey = PublicKey::ed25519_from([0u8; 32]);
 
     /// The uref name where the PoS purse is stored. It contains all staked motes, and all unbonded
     /// motes that are yet to be paid out.
@@ -347,7 +347,7 @@ mod internal {
             static BONDING: RefCell<Queue> = RefCell::new(Queue(Default::default()));
             static UNBONDING: RefCell<Queue> = RefCell::new(Queue(Default::default()));
             static STAKES: RefCell<Stakes> = RefCell::new(
-                Stakes(iter::once((PublicKey::from_ed25519_bytes(KEY1), U512::from(1_000))).collect())
+                Stakes(iter::once((PublicKey::ed25519_from(KEY1), U512::from(1_000))).collect())
             );
         }
 
@@ -387,7 +387,7 @@ mod internal {
             let expected = Stakes(
                 stakes
                     .iter()
-                    .map(|(key, amount)| (PublicKey::from_ed25519_bytes(*key), U512::from(*amount)))
+                    .map(|(key, amount)| (PublicKey::ed25519_from(*key), U512::from(*amount)))
                     .collect(),
             );
             assert_eq!(Ok(expected), TestStakes::read());
@@ -397,7 +397,7 @@ mod internal {
         fn test_bond_step_unbond() {
             bond::<TestQueues, TestStakes>(
                 U512::from(500),
-                PublicKey::from_ed25519_bytes(KEY2),
+                PublicKey::ed25519_from(KEY2),
                 BlockTime::new(1),
             )
             .expect("bond validator 2");
@@ -411,7 +411,7 @@ mod internal {
 
             unbond::<TestQueues, TestStakes>(
                 Some(U512::from(500)),
-                PublicKey::from_ed25519_bytes(KEY1),
+                PublicKey::ed25519_from(KEY1),
                 BlockTime::new(2),
             )
             .expect("partly unbond validator 1");

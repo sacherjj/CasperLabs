@@ -24,7 +24,7 @@ impl TryFrom<ChainSpec_GenesisAccount> for GenesisAccount {
     fn try_from(mut pb_genesis_account: ChainSpec_GenesisAccount) -> Result<Self, Self::Error> {
         // TODO: our TryFromSliceForPublicKeyError should convey length info
         let public_key =
-            PublicKey::try_ed25519_from(pb_genesis_account.get_public_key()).map_err(|_| {
+            PublicKey::ed25519_try_from(pb_genesis_account.get_public_key()).map_err(|_| {
                 MappingError::invalid_public_key_length(pb_genesis_account.public_key.len())
             })?;
         let balance = pb_genesis_account

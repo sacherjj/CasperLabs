@@ -157,7 +157,10 @@ impl DeployItemBuilder {
 
     pub fn build(self) -> DeployItem {
         DeployItem {
-            address: self.deploy_item.address.unwrap_or_else(|| [0u8; 32].into()),
+            address: self
+                .deploy_item
+                .address
+                .unwrap_or_else(|| PublicKey::ed25519_from([0u8; 32])),
             session: self.deploy_item.session_code.unwrap(),
             payment: self.deploy_item.payment_code.unwrap(),
             gas_price: self.deploy_item.gas_price,

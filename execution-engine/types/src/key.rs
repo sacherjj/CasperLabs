@@ -8,7 +8,7 @@ use blake2::{
 use hex_fmt::HexFmt;
 
 use crate::{
-    account::PublicKey,
+    account::{PublicKey, PUBLIC_KEY_SERIALIZED_MAX_LENGTH},
     bytesrepr::{Error, FromBytes, ToBytes},
     AccessRights, ContractRef, URef, UREF_SERIALIZED_LENGTH,
 };
@@ -18,7 +18,8 @@ const HASH_ID: u8 = 1;
 const UREF_ID: u8 = 2;
 const LOCAL_ID: u8 = 3;
 
-const KEY_ACCOUNT_SERIALIZED_LENGTH: usize = KEY_ID_SERIALIZED_LENGTH + 33;
+const KEY_ACCOUNT_SERIALIZED_MAX_LENGTH: usize =
+    KEY_ID_SERIALIZED_LENGTH + PUBLIC_KEY_SERIALIZED_MAX_LENGTH;
 /// The number of bytes in a [`Key::Hash`].
 pub const KEY_HASH_LENGTH: usize = 32;
 /// The number of bytes in a [`Key::Local`].
@@ -239,7 +240,7 @@ impl ToBytes for Key {
     fn to_bytes(&self) -> Result<Vec<u8>, Error> {
         match self {
             Key::Account(public_key) => {
-                let mut result = Vec::with_capacity(KEY_ACCOUNT_SERIALIZED_LENGTH);
+                let mut result = Vec::with_capacity(KEY_ACCOUNT_SERIALIZED_MAX_LENGTH);
                 result.push(ACCOUNT_ID);
                 result.append(&mut public_key.to_bytes()?);
                 Ok(result)
@@ -385,7 +386,7 @@ mod tests {
     fn should_display_key() {
         let expected_hash = core::iter::repeat("0").take(64).collect::<String>();
         let addr_array = [0u8; 32];
-        let public_key = PublicKey::from_ed25519_bytes(addr_array);
+        let public_key = PublicKey::ed25519_from(addr_array);
         let account_key = Key::Account(public_key);
         assert_eq!(
             format!("{}", account_key),
@@ -501,7 +502,7 @@ mod tests {
     #[test]
     fn check_key_account_getters() {
         let account = [42; 32];
-        let public_key = PublicKey::from_ed25519_bytes(account);
+        let public_key = PublicKey::ed25519_from(account);
         let key1 = Key::Account(public_key);
         assert_eq!(key1.into_account(), Some(public_key));
         assert!(key1.into_hash().is_none());
@@ -542,7 +543,7 @@ mod tests {
     #[test]
     fn key_size_hint() {
         let mut sizes = vec![
-            KEY_ACCOUNT_SERIALIZED_LENGTH,
+            KEY_ACCOUNT_SERIALIZED_MAX_LENGTH,
             KEY_HASH_SERIALIZED_LENGTH,
             KEY_UREF_SERIALIZED_LENGTH,
             KEY_LOCAL_SERIALIZED_LENGTH,

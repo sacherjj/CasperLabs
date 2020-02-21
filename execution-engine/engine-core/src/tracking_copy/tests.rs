@@ -175,7 +175,7 @@ fn tracking_copy_add_i32() {
 
 #[test]
 fn tracking_copy_add_named_key() {
-    let zero_public_key = PublicKey::from_ed25519_bytes([0u8; ED25519_LENGTH]);
+    let zero_public_key = PublicKey::ed25519_from([0u8; ED25519_LENGTH]);
     let correlation_id = CorrelationId::new();
     // DB now holds an `Account` so that we can test adding a `NamedKey`
     let associated_keys = AssociatedKeys::new(zero_public_key, Weight::new(1));

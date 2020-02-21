@@ -69,7 +69,7 @@ use crate::{
 pub const MAX_PAYMENT: u64 = 10_000_000;
 pub const CONV_RATE: u64 = 10;
 
-pub const SYSTEM_ACCOUNT_ADDR: PublicKey = PublicKey::from_ed25519_bytes([0u8; 32]);
+pub const SYSTEM_ACCOUNT_ADDR: PublicKey = PublicKey::ed25519_from([0u8; 32]);
 
 const GENESIS_INITIAL_BLOCKTIME: u64 = 0;
 const MINT_METHOD_NAME: &str = "mint";

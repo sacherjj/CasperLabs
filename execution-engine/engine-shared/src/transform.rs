@@ -308,7 +308,7 @@ mod tests {
     };
 
     const ZERO_ARRAY: [u8; 32] = [0; 32];
-    const ZERO_PUBLIC_KEY: PublicKey = PublicKey::from_ed25519_bytes(ZERO_ARRAY);
+    const ZERO_PUBLIC_KEY: PublicKey = PublicKey::ed25519_from(ZERO_ARRAY);
     const TEST_STR: &str = "a";
     const TEST_BOOL: bool = true;
 

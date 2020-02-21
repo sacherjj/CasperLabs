@@ -215,19 +215,20 @@ impl Display for PublicKey {
 
 impl PublicKey {
     /// Constructs a new `PublicKey` using Ed25519 bytes.
-    pub const fn from_ed25519_bytes(key: Ed25519Bytes) -> PublicKey {
+    pub const fn ed25519_from(key: Ed25519Bytes) -> PublicKey {
         let ed25519 = Ed25519::new(key);
         PublicKey::Ed25519(ed25519)
     }
 
     /// Attemps a new `PublicKey` creation using a slice of bytes.
-    pub fn try_ed25519_from(bytes: &[u8]) -> Result<PublicKey, TryFromSliceForPublicKeyError> {
+    pub fn ed25519_try_from(bytes: &[u8]) -> Result<PublicKey, TryFromSliceForPublicKeyError> {
         Ed25519Bytes::try_from(bytes)
-            .map(PublicKey::from_ed25519_bytes)
+            .map(PublicKey::ed25519_from)
             .map_err(|_| TryFromSliceForPublicKeyError(()))
     }
 
     /// Returns the raw bytes of the public key as an array.
+    #[doc(hidden)]
     pub fn value(self) -> Ed25519Bytes {
         let PublicKey::Ed25519(ed25519) = self;
         ed25519.value()
@@ -252,12 +253,6 @@ impl CLTyped for PublicKey {
     }
 }
 
-impl From<Ed25519Bytes> for PublicKey {
-    fn from(key: Ed25519Bytes) -> Self {
-        PublicKey::Ed25519(Ed25519::new(key))
-    }
-}
-
 impl From<Ed25519> for PublicKey {
     fn from(ed25519: Ed25519) -> PublicKey {
         PublicKey::Ed25519(ed25519)
@@ -267,8 +262,7 @@ impl From<Ed25519> for PublicKey {
 impl ToBytes for PublicKey {
     fn to_bytes(&self) -> Result<Vec<u8>, Error> {
         let PublicKey::Ed25519(ed25519) = self;
-        let mut bytes =
-            Vec::with_capacity(PUBLIC_KEY_ID_SERIALIZED_LENGTH + ED25519_SERIALIZED_LENGTH);
+        let mut bytes = Vec::with_capacity(PUBLIC_KEY_SERIALIZED_MAX_LENGTH);
         bytes.push(PUBLIC_KEY_ED25519_ID);
         bytes.extend(&ed25519.to_bytes()?);
         Ok(bytes)
@@ -401,19 +395,19 @@ mod tests {
     #[test]
     fn ed25519_public_key_from_slice() {
         let bytes: Vec<u8> = (0..32).collect();
-        let public_key = PublicKey::try_ed25519_from(&bytes[..]).expect("should create public key");
+        let public_key = PublicKey::ed25519_try_from(&bytes[..]).expect("should create public key");
         assert_eq!(&bytes, &public_key.as_bytes());
     }
     #[test]
     fn ed25519_public_key_from_slice_too_small() {
         let _public_key =
-            PublicKey::try_ed25519_from(&[0u8; 31][..]).expect_err("should not create public key");
+            PublicKey::ed25519_try_from(&[0u8; 31][..]).expect_err("should not create public key");
     }
 
     #[test]
     fn ed25519_public_key_from_slice_too_big() {
         let _public_key =
-            PublicKey::try_ed25519_from(&[0u8; 33][..]).expect_err("should not create public key");
+            PublicKey::ed25519_try_from(&[0u8; 33][..]).expect_err("should not create public key");
     }
 
     #[test]

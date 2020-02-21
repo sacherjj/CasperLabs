@@ -23,7 +23,7 @@ const CONTRACT_TRANSFER_TO_PURSE: &str = "transfer_to_purse.wasm";
 /// Size of batch used in multiple execs benchmark, and multiple deploys per exec cases.
 const TRANSFER_BATCH_SIZE: u64 = 3;
 const PER_RUN_FUNDING: u64 = 10_000_000;
-const TARGET_ADDR: PublicKey = PublicKey::from_ed25519_bytes([127; 32]);
+const TARGET_ADDR: PublicKey = PublicKey::ed25519_from([127; 32]);
 
 /// Converts an integer into an array of type [u8; 32] by converting integer
 /// into its big endian representation and embedding it at the end of the

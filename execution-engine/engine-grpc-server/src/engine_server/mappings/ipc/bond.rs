@@ -19,7 +19,7 @@ impl TryFrom<Bond> for (PublicKey, U512) {
     fn try_from(mut pb_bond: Bond) -> Result<Self, Self::Error> {
         // TODO: our TryFromSliceForPublicKeyError should convey length info
         let public_key =
-            PublicKey::try_ed25519_from(pb_bond.get_validator_public_key()).map_err(|_| {
+            PublicKey::ed25519_try_from(pb_bond.get_validator_public_key()).map_err(|_| {
                 MappingError::invalid_public_key_length(pb_bond.validator_public_key.len())
             })?;
 

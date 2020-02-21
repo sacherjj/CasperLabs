@@ -22,8 +22,8 @@ lazy_static! {
     static ref ACCOUNT_1_INITIAL_BALANCE: U512 = *DEFAULT_PAYMENT;
 }
 
-const ACCOUNT_1_ADDR: PublicKey = PublicKey::from_ed25519_bytes([1u8; 32]);
-const ACCOUNT_2_ADDR: PublicKey = PublicKey::from_ed25519_bytes([2u8; 32]);
+const ACCOUNT_1_ADDR: PublicKey = PublicKey::ed25519_from([1u8; 32]);
+const ACCOUNT_2_ADDR: PublicKey = PublicKey::ed25519_from([2u8; 32]);
 
 #[ignore]
 #[test]

@@ -17,7 +17,7 @@ const CONTRACT_TRANSFER: &str = "transfer_purse_to_account.wasm";
 const CONTRACT_EE_803_REGRESSION: &str = "ee_803_regression.wasm";
 const COMMAND_BOND: &str = "bond";
 const COMMAND_UNBOND: &str = "unbond";
-const ACCOUNT_ADDR_1: PublicKey = PublicKey::from_ed25519_bytes([1u8; 32]);
+const ACCOUNT_ADDR_1: PublicKey = PublicKey::ed25519_from([1u8; 32]);
 const GENESIS_VALIDATOR_STAKE: u64 = 50_000;
 
 fn get_pos_purse_by_name(builder: &InMemoryWasmTestBuilder, purse_name: &str) -> Option<URef> {
@@ -53,7 +53,7 @@ fn should_not_be_able_to_unbond_reward() {
     let accounts = {
         let mut tmp: Vec<GenesisAccount> = DEFAULT_ACCOUNTS.clone();
         let account = GenesisAccount::new(
-            PublicKey::from_ed25519_bytes([42; 32]),
+            PublicKey::ed25519_from([42; 32]),
             Motes::new(GENESIS_VALIDATOR_STAKE.into()) * Motes::new(2.into()),
             Motes::new(GENESIS_VALIDATOR_STAKE.into()),
         );

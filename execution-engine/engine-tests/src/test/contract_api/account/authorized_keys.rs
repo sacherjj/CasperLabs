@@ -33,7 +33,7 @@ fn should_deploy_with_authorized_identity_key() {
 fn should_raise_auth_failure_with_invalid_key() {
     // tests that authorized keys that does not belong to account raises
     // Error::Authorization
-    let key_1 = PublicKey::from_ed25519_bytes([254; 32]);
+    let key_1 = PublicKey::ed25519_from([254; 32]);
     assert_ne!(DEFAULT_ACCOUNT_ADDR, key_1);
 
     let exec_request = {
@@ -76,9 +76,9 @@ fn should_raise_auth_failure_with_invalid_key() {
 fn should_raise_auth_failure_with_invalid_keys() {
     // tests that authorized keys that does not belong to account raises
     // Error::Authorization
-    let key_1 = PublicKey::from_ed25519_bytes([254; 32]);
-    let key_2 = PublicKey::from_ed25519_bytes([253; 32]);
-    let key_3 = PublicKey::from_ed25519_bytes([252; 32]);
+    let key_1 = PublicKey::ed25519_from([254; 32]);
+    let key_2 = PublicKey::ed25519_from([253; 32]);
+    let key_3 = PublicKey::ed25519_from([252; 32]);
     assert_ne!(DEFAULT_ACCOUNT_ADDR, key_1);
     assert_ne!(DEFAULT_ACCOUNT_ADDR, key_2);
     assert_ne!(DEFAULT_ACCOUNT_ADDR, key_3);
@@ -118,9 +118,9 @@ fn should_raise_auth_failure_with_invalid_keys() {
 #[test]
 fn should_raise_deploy_authorization_failure() {
     // tests that authorized keys needs sufficient cumulative weight
-    let key_1 = PublicKey::from_ed25519_bytes([254; 32]);
-    let key_2 = PublicKey::from_ed25519_bytes([253; 32]);
-    let key_3 = PublicKey::from_ed25519_bytes([252; 32]);
+    let key_1 = PublicKey::ed25519_from([254; 32]);
+    let key_2 = PublicKey::ed25519_from([253; 32]);
+    let key_3 = PublicKey::ed25519_from([252; 32]);
     assert_ne!(DEFAULT_ACCOUNT_ADDR, key_1);
     assert_ne!(DEFAULT_ACCOUNT_ADDR, key_2);
     assert_ne!(DEFAULT_ACCOUNT_ADDR, key_3);
@@ -281,8 +281,8 @@ fn should_authorize_deploy_with_multiple_keys() {
     // tests that authorized keys needs sufficient cumulative weight
     // and each of the associated keys is greater than threshold
 
-    let key_1 = PublicKey::from_ed25519_bytes([254; 32]);
-    let key_2 = PublicKey::from_ed25519_bytes([253; 32]);
+    let key_1 = PublicKey::ed25519_from([254; 32]);
+    let key_2 = PublicKey::ed25519_from([253; 32]);
     assert_ne!(DEFAULT_ACCOUNT_ADDR, key_1);
     assert_ne!(DEFAULT_ACCOUNT_ADDR, key_2);
 
@@ -329,7 +329,7 @@ fn should_authorize_deploy_with_multiple_keys() {
 fn should_not_authorize_deploy_with_duplicated_keys() {
     // tests that authorized keys needs sufficient cumulative weight
     // and each of the associated keys is greater than threshold
-    let key_1 = PublicKey::from_ed25519_bytes([254; 32]);
+    let key_1 = PublicKey::ed25519_from([254; 32]);
     assert_ne!(DEFAULT_ACCOUNT_ADDR, key_1);
 
     let exec_request_1 = ExecuteRequestBuilder::standard(

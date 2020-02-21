@@ -12,7 +12,7 @@ const METHOD_SET_DEPLOYMENT_THRESHOLD: &str = "set_deployment_threshold";
 const METHOD_SET_KEY_MANAGEMENT_THRESHOLD: &str = "set_key_management_threshold";
 
 const ALICE: PublicKey = DEFAULT_ACCOUNT_ADDR;
-const BOB: PublicKey = PublicKey::from_ed25519_bytes([2u8; 32]);
+const BOB: PublicKey = PublicKey::ed25519_from([2u8; 32]);
 
 struct KeysManagerTest {
     pub builder: TestBuilder,

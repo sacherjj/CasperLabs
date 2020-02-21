@@ -45,7 +45,7 @@ impl TryFrom<state::Key> for Key {
         let key = match pb_key {
             Key_oneof_value::address(pb_account) => {
                 let account = mappings::vec_to_array(pb_account.account, "Protobuf Key::Account")?;
-                Key::Account(PublicKey::from_ed25519_bytes(account))
+                Key::Account(PublicKey::ed25519_from(account))
             }
             Key_oneof_value::hash(pb_hash) => {
                 let hash = mappings::vec_to_array(pb_hash.hash, "Protobuf Key::Hash")?;

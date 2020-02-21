@@ -67,7 +67,7 @@ pub fn key_arb() -> impl Strategy<Value = Key> {
 }
 
 pub fn public_key_arb() -> impl Strategy<Value = PublicKey> {
-    u8_slice_32().prop_map(Into::into)
+    u8_slice_32().prop_map(PublicKey::ed25519_from)
 }
 
 pub fn weight_arb() -> impl Strategy<Value = Weight> {

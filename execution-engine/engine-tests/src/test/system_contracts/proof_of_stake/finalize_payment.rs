@@ -20,8 +20,8 @@ const FINALIZE_PAYMENT: &str = "pos_finalize_payment.wasm";
 const LOCAL_REFUND_PURSE: &str = "local_refund_purse";
 const POS_REFUND_PURSE_NAME: &str = "pos_refund_purse";
 
-const SYSTEM_ADDR: PublicKey = PublicKey::from_ed25519_bytes([0u8; 32]);
-const ACCOUNT_ADDR: PublicKey = PublicKey::from_ed25519_bytes([1u8; 32]);
+const SYSTEM_ADDR: PublicKey = PublicKey::ed25519_from([0u8; 32]);
+const ACCOUNT_ADDR: PublicKey = PublicKey::ed25519_from([1u8; 32]);
 
 fn initialize() -> InMemoryWasmTestBuilder {
     let mut builder = InMemoryWasmTestBuilder::default();

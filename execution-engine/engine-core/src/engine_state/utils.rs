@@ -15,7 +15,7 @@ pub fn pos_validator_key_name_to_tuple(pos_key_name: &str) -> Option<(PublicKey,
         let mut key_bytes = [0u8; 32];
         let _bytes_written = base16::decode_slice(hex_key, &mut key_bytes).ok()?;
         debug_assert!(_bytes_written == key_bytes.len());
-        let pub_key = PublicKey::from_ed25519_bytes(key_bytes);
+        let pub_key = PublicKey::ed25519_from(key_bytes);
         let balance = split_bond.next().and_then(|b| {
             if b.is_empty() {
                 None
@@ -37,7 +37,7 @@ mod tests {
 
     #[test]
     fn should_parse_string_to_validator_tuple() {
-        let public_key = PublicKey::from_ed25519_bytes([1u8; 32]);
+        let public_key = PublicKey::ed25519_from([1u8; 32]);
         let stake = U512::from(100);
         let named_key_name = format!("v_{}_{}", HexFmt(&public_key.as_bytes()), stake);
 
@@ -50,7 +50,7 @@ mod tests {
 
     #[test]
     fn should_not_parse_string_to_validator_tuple() {
-        let public_key = PublicKey::from_ed25519_bytes([1u8; 32]);
+        let public_key = PublicKey::ed25519_from([1u8; 32]);
         let stake = U512::from(100);
 
         let bad_prefix = format!("a_{}_{}", HexFmt(&public_key.as_bytes()), stake);

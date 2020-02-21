@@ -9,7 +9,7 @@ use types::{account::PublicKey, system_contract_errors::mint::Error, Key, URef, 
 
 pub use crate::{runtime_provider::RuntimeProvider, storage_provider::StorageProvider};
 
-const SYSTEM_ACCOUNT: PublicKey = PublicKey::from_ed25519_bytes([0; 32]);
+const SYSTEM_ACCOUNT: PublicKey = PublicKey::ed25519_from([0; 32]);
 
 pub trait Mint<R, S>
 where

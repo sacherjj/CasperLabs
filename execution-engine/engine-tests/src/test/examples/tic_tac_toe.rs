@@ -14,8 +14,8 @@ mod method {
     pub const CONCEDE: &str = "concede";
 }
 
-const PLAYER_X: PublicKey = PublicKey::from_ed25519_bytes([1u8; 32]);
-const PLAYER_O: PublicKey = PublicKey::from_ed25519_bytes([2u8; 32]);
+const PLAYER_X: PublicKey = PublicKey::ed25519_from([1u8; 32]);
+const PLAYER_O: PublicKey = PublicKey::ed25519_from([2u8; 32]);
 
 pub struct GameTest {
     pub context: TestContext,

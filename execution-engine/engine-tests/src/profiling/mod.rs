@@ -11,9 +11,9 @@ const DATA_DIR_ARG_VALUE_NAME: &str = "PATH";
 const DATA_DIR_ARG_HELP: &str = "Directory in which persistent data is stored [default: current \
                                  working directory]";
 
-const ACCOUNT_1_ADDR: PublicKey = PublicKey::from_ed25519_bytes([1u8; 32]);
+const ACCOUNT_1_ADDR: PublicKey = PublicKey::ed25519_from([1u8; 32]);
 const ACCOUNT_1_INITIAL_AMOUNT: u64 = 1_000_000_000;
-const ACCOUNT_2_ADDR: PublicKey = PublicKey::from_ed25519_bytes([2u8; 32]);
+const ACCOUNT_2_ADDR: PublicKey = PublicKey::ed25519_from([2u8; 32]);
 
 pub fn exe_name() -> String {
     env::current_exe()

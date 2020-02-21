@@ -35,7 +35,7 @@ impl StakesProvider for ContractStakes {
             let _bytes_written = base16::decode_slice(hex_key, &mut key_bytes)
                 .map_err(|_| Error::StakesKeyDeserializationFailed)?;
             debug_assert!(_bytes_written == key_bytes.len());
-            let pub_key = PublicKey::from_ed25519_bytes(key_bytes);
+            let pub_key = PublicKey::ed25519_from(key_bytes);
             let balance = split_name
                 .next()
                 .and_then(|b| U512::from_dec_str(b).ok())
