@@ -234,7 +234,7 @@ class EraRuntime[F[_]: MonadThrowable: Clock: EraStorage: FinalityStorageReader:
                                      keyBlockHash = era.keyBlockHash,
                                      roundId = Ticks(lambdaMessage.roundId),
                                      target = choice.block.messageHash,
-                                     justifications = justifications
+                                     justifications = choice.justificationsMap
                                    )
                                }
               } yield maybeMessage

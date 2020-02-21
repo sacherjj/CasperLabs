@@ -68,7 +68,8 @@ object MessageProducer {
   def apply[F[_]: Concurrent: Clock: Log: Metrics: DagStorage: BlockStorage: DeployBuffer: DeployStorage: EraStorage: CasperLabsProtocol: ExecutionEngineService: DeploySelection](
       validatorIdentity: ValidatorIdentity,
       chainName: String,
-      upgrades: Seq[ipc.ChainSpec.UpgradePoint]
+      upgrades: Seq[ipc.ChainSpec.UpgradePoint],
+      onlyTakeOwnLatestFromJustifications: Boolean = false
   ): MessageProducer[F] =
     new MessageProducer[F] {
       override val validatorId =
@@ -203,7 +204,7 @@ object MessageProducer {
         for {
           // NOTE: The validator sequence number restarts in each era, and `justifications`
           // can contain entries for the parent era as well as the child.
-          justificationMessages <- (parents.map(_.messageHash) ++ justifications.values.flatten).toSet.toList
+          justificationMessages <- justifications.values.flatten.toSet.toList
                                     .traverse { h =>
                                       BlockStorage[F]
                                         .getBlockSummaryUnsafe(h)
@@ -211,14 +212,29 @@ object MessageProducer {
                                           MonadThrowable[F].fromTry(Message.fromBlockSummary(s))
                                         }
                                     }
-          // Find the latest justification we picked. We must make sure they don't change
-          // due to concurrency between the time the justifications are collected and
-          // the sequence number is calculated, otherwise we could be equivocating.
-          // This, currently, is catered for by a Semaphore in the EraRuntime, which
-          // spans the fork choice as well as the block production.
-          ownLatests = justificationMessages.filter { j =>
+
+          // Find the latest justification of the validator. They might be eliminated with transitives.
+          validatorLatests = justificationMessages.filter { j =>
             j.validatorId == validatorId && j.eraId == keyBlockHash
           }
+
+          // If they were eliminated we can look them up, as long as we make sure they don't change
+          // due to concurrency since the time the justifications were collected, otherwise we could
+          // be equivocating. This, currently, is catered for by a Semaphore in the EraRuntime around
+          // the use of MessageProducer, which spans the fork choice as well as the block production.
+          ownLatests <- if (validatorLatests.nonEmpty || onlyTakeOwnLatestFromJustifications)
+                         validatorLatests.pure[F]
+                       else {
+                         for {
+                           dag  <- DagStorage[F].getRepresentation
+                           tips <- dag.latestInEra(keyBlockHash)
+                           // Looking up hashes should be faster than full messages, and the following lookup is cached.
+                           // Alternatively we could traverse the DAG from the justifications (currently transitions are eliminated).
+                           ownLatestsHashes <- tips.latestMessageHash(validatorId)
+                           ownLatests       <- ownLatestsHashes.toList.traverse(dag.lookupUnsafe)
+                         } yield ownLatests
+                       }
+
           maybeOwnLatest = Option(ownLatests)
             .filterNot(_.isEmpty)
             .map(_.maxBy(_.validatorMsgSeqNum))

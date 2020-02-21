@@ -588,7 +588,12 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
           }
 
           "only cite the lambda message and validators own latest message" in {
+            var forkChoiceFun: MockForkChoice.ForkChoiceFun =
+              (_, _) => sys.error("Fork choice unassigned.")
+
             implicit val ds = defaultBlockDagStorage
+            implicit val fc = MockForkChoice[Id](genesis, Some(forkChoiceFun(_, _)))
+
             val runtime =
               genesisEraRuntime("Alice".some, leaderSequencer = mockSequencer("Charlie"))
 
@@ -597,23 +602,24 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
             insert(makeBallot("Bob", runtime.era, runtime.startTick))
             insert(makeBallot("Charlie", runtime.era, runtime.startTick))
 
+            forkChoiceFun = (_, js) => {
+              js shouldBe Set(msgA.messageHash, msgC.messageHash)
+              ForkChoice.Result(msgC, Set(msgC))
+            }
+
             val events = runtime.handleMessage(msgC).written
 
             assertEvent(events) {
               case HighwayEvent.CreatedLambdaResponse(response) =>
-                response.justifications should have size 2
-                val jmap = response.justifications.map { j =>
-                  j.validatorPublicKey -> j.latestBlockHash
-                }.toMap
-                jmap("Alice") shouldBe msgA.messageHash
-                jmap("Charlie") shouldBe msgC.messageHash
-                jmap.get("Bob") shouldBe empty
+                // It should return what the `forkChoiceFun` gave as result.
+                response.justifications.map(_.latestBlockHash) shouldBe Seq(msgC.messageHash)
             }
           }
 
           "target the fork choice, not necessarily the lambda message" in {
             implicit val ds = defaultBlockDagStorage
             implicit val fc = defaultForkChoice
+
             val runtime =
               genesisEraRuntime("Alice".some, leaderSequencer = mockSequencer("Charlie"))
 
@@ -631,10 +637,6 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
 
             assertEvent(events) {
               case HighwayEvent.CreatedLambdaResponse(response) =>
-                response.justifications.map(_.validatorPublicKey) should contain theSameElementsAs List(
-                  validatorKey("Alice"),
-                  validatorKey("Charlie")
-                )
                 response.parentBlock shouldBe msgB.messageHash
             }
           }
@@ -1138,7 +1140,7 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
       "crossing the booking block boundary" should {
         "pass the flag to the message producer" in {
           implicit val ds = defaultBlockDagStorage
-          implicit val fc = MockForkChoice[Id](genesis)
+          implicit val fc = defaultForkChoice
 
           val messageProducer = new MockMessageProducer[Id]("Alice") {
             override def block(

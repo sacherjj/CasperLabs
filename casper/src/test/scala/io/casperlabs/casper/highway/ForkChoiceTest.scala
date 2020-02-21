@@ -144,7 +144,8 @@ class ForkChoiceTest extends FlatSpec with HighwayFixture {
             _           <- insertGenesis()
             genesisEra  <- addGenesisEra()
             (a, aPrime) <- equivocate(alice, genesisEra, genesisEra.keyBlockHash)
-            forkChoice  <- ForkChoice.create[Task].fromKeyBlock(genesisEra.keyBlockHash)
+            // NOTE: Without the `onlyTakeOwnLatestFromJustifications` flag this test somehow got hung.
+            forkChoice <- ForkChoice.create[Task].fromKeyBlock(genesisEra.keyBlockHash)
           } yield {
             assert(forkChoice.block.messageHash == genesisEra.keyBlockHash)
             assert(forkChoice.justifications.map(_.messageHash) == Set(a, aPrime))
@@ -319,7 +320,10 @@ class ForkChoiceTest extends FlatSpec with HighwayFixture {
       MessageProducer[Task](
         validatorIdentity = ValidatorIdentity(keys._2, keys._1, signatureAlgorithm = Ed25519),
         chainName = chainName,
-        upgrades = Seq.empty
+        upgrades = Seq.empty,
+        // Without this, tests that want to trigger equivocations without creating another
+        // message first will not work as the code will look up the latest from the DB.
+        onlyTakeOwnLatestFromJustifications = true
       )
 
     private def produceG(
