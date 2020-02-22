@@ -77,9 +77,11 @@ object ProtoMappings {
         state.Key.Value.Uref(toProto(uref))
       )
 
-    case Key.Local(address) =>
+    case Key.Local(seed, hash) =>
+      val address: Array[Byte] = (seed.bytes ++ hash.bytes).toArray
       state.Key(
-        state.Key.Value.Local(state.Key.Local(ByteString.copyFrom(address.bytes.toArray)))
+        state.Key.Value
+          .Local(state.Key.Local(ByteString.copyFrom(address)))
       )
   }
 
@@ -237,7 +239,15 @@ object ProtoMappings {
     case state.Key.Value.Uref(uref) => fromProto(uref).map(Key.URef.apply)
 
     case state.Key.Value.Local(state.Key.Local(address)) =>
-      toByteArray32(address).map(Key.Local.apply)
+      if (address.size != 64) Left(Error.Expected64Bytes(address.size))
+      else {
+        val seedBytes = address.substring(0, 32)
+        val hashBytes = address.substring(32, 64)
+        for {
+          seed <- toByteArray32(seedBytes)
+          hash <- toByteArray32(hashBytes)
+        } yield Key.Local(seed, hash)
+      }
   }
 
   private def fromArg(arg: Deploy.Arg.Value): Either[Error, CLValue] = arg.value match {
@@ -311,6 +321,7 @@ object ProtoMappings {
     case class FromBytesError(err: FromBytes.Error) extends Error
 
     case class Expected32Bytes(foundLength: Int) extends Error
+    case class Expected64Bytes(foundLength: Int) extends Error
 
     case object MissingArg           extends Error
     case object EmptyKeyVariant      extends Error

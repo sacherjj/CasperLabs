@@ -19,6 +19,7 @@ import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.Metrics.MetricsNOP
 import io.casperlabs.models.SmartContractEngineError
 import io.casperlabs.shared.{Log, Time}
+import io.casperlabs.smartcontracts.cltype
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.block._
 import io.casperlabs.storage.dag._
@@ -95,7 +96,7 @@ object ExecutionEngineServiceStub {
           ByteString,
           Seq[TransformEntry]
       ) => F[Either[Throwable, ExecutionEngineService.CommitResult]],
-      queryFunc: (ByteString, Key, Seq[String]) => F[Either[Throwable, Value]]
+      queryFunc: (ByteString, Key, Seq[String]) => F[Either[Throwable, cltype.StoredValue]]
   ): ExecutionEngineService[F] = new ExecutionEngineService[F] {
     override def emptyStateHash: ByteString = ByteString.EMPTY
     override def runGenesis(
@@ -128,7 +129,7 @@ object ExecutionEngineServiceStub {
         baseKey: Key,
         path: Seq[String],
         protocolVersion: ProtocolVersion
-    ): F[Either[Throwable, Value]] = queryFunc(state, baseKey, path)
+    ): F[Either[Throwable, cltype.StoredValue]] = queryFunc(state, baseKey, path)
   }
 
   def noOpApi[F[_]: Applicative](): ExecutionEngineService[F] =
@@ -143,7 +144,9 @@ object ExecutionEngineServiceStub {
           .pure[F],
       (_, _, _) =>
         Applicative[F]
-          .pure[Either[Throwable, Value]](Left(new SmartContractEngineError("unimplemented")))
+          .pure[Either[Throwable, cltype.StoredValue]](
+            Left(new SmartContractEngineError("unimplemented"))
+          )
     )
 
 }

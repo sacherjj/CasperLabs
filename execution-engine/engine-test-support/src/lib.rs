@@ -16,7 +16,7 @@
 //!         .unwrap_or_revert_with(ApiError::MissingArgument)
 //!         .unwrap_or_revert_with(ApiError::InvalidArgument);
 //!
-//!     let value_ref = storage::new_turef(value);
+//!     let value_ref = storage::new_uref(value);
 //!     let value_key: Key = value_ref.into();
 //!     runtime::put_key(KEY, value_key);
 //! }
@@ -24,9 +24,11 @@
 //!
 //! The test could be written as follows:
 //! ```no_run
+//! # use types as casperlabs_types;
 //! use casperlabs_engine_test_support::{TestContextBuilder, SessionBuilder, Value, Error, Code};
+//! use casperlabs_types::account::PublicKey;
 //!
-//! const MY_ACCOUNT: [u8; 32] = [7u8; 32];
+//! const MY_ACCOUNT: PublicKey = PublicKey::ed25519_from([7u8; 32]);
 //! const KEY: &str = "special_value";
 //! const VALUE: &str = "hello world";
 //!
@@ -75,10 +77,8 @@ pub use code::Code;
 pub use error::{Error, Result};
 pub use session::{Session, SessionBuilder};
 pub use test_context::{TestContext, TestContextBuilder};
+pub use types::account::PublicKey;
 pub use value::Value;
-
-/// An address of an entity (e.g. an account or key) on the network.
-pub type Address = [u8; 32];
 
 /// The address of a [`URef`](types::URef) (unforgeable reference) on the network.
 pub type URefAddr = [u8; 32];
@@ -87,7 +87,7 @@ pub type URefAddr = [u8; 32];
 pub type Hash = [u8; 32];
 
 /// Default test account address.
-pub const DEFAULT_ACCOUNT_ADDR: [u8; 32] = [6u8; 32];
+pub const DEFAULT_ACCOUNT_ADDR: PublicKey = PublicKey::ed25519_from([6u8; 32]);
 
 /// Default initial balance of a test account in motes.
 pub const DEFAULT_ACCOUNT_INITIAL_BALANCE: u64 = 100_000_000_000;

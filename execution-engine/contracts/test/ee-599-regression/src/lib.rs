@@ -53,7 +53,6 @@ fn get_maintainer_public_key() -> Result<PublicKey, ApiError> {
     maintainer_key
         .into_account()
         .ok_or(ApiError::UnexpectedKeyVariant)
-        .map(PublicKey::new)
 }
 
 fn get_donation_purse() -> Result<URef, ApiError> {
@@ -128,7 +127,7 @@ fn delegate() -> Result<(), ApiError> {
                 // callers
                 keys.insert(DONATION_PURSE.into(), purse.into());
                 // "maintainer" is the person who installed this contract
-                keys.insert(MAINTAINER.into(), Key::Account(maintainer.value()));
+                keys.insert(MAINTAINER.into(), Key::Account(maintainer));
                 keys
             };
             // Install the contract with associated owner-related keys

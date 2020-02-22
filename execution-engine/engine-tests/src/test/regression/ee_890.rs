@@ -5,7 +5,6 @@ use engine_test_support::{
     },
     DEFAULT_ACCOUNT_ADDR,
 };
-use types::account::PublicKey;
 
 const DO_NOTHING_WASM: &str = "do_nothing.wasm";
 
@@ -30,7 +29,7 @@ fn should_run_ee_890_gracefully_reject_start_node_in_session() {
         .with_address(DEFAULT_ACCOUNT_ADDR)
         .with_session_bytes(wasm_binary, ())
         .with_payment_code(STANDARD_PAYMENT_CONTRACT, (*DEFAULT_PAYMENT,))
-        .with_authorization_keys(&[PublicKey::new(DEFAULT_ACCOUNT_ADDR)])
+        .with_authorization_keys(&[DEFAULT_ACCOUNT_ADDR])
         .with_deploy_hash([123; 32])
         .build();
 
@@ -58,7 +57,7 @@ fn should_run_ee_890_gracefully_reject_start_node_in_payment() {
         .with_address(DEFAULT_ACCOUNT_ADDR)
         .with_session_code(DO_NOTHING_WASM, ())
         .with_payment_bytes(wasm_binary, ())
-        .with_authorization_keys(&[PublicKey::new(DEFAULT_ACCOUNT_ADDR)])
+        .with_authorization_keys(&[DEFAULT_ACCOUNT_ADDR])
         .with_deploy_hash([123; 32])
         .build();
 
