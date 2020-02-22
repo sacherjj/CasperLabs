@@ -738,6 +738,36 @@ depends_on:
 
 ---
 kind: pipeline
+name: rebuild-buildenv
+
+clone:
+  disable: true
+
+steps:
+- name: update-buildenv
+  image: plugins/downstream
+  settings:
+    repositories:
+    - "CasperLabs/buildenv@master"
+  environment:
+    DOWNSTREAM_SERVER:
+      from_secret: downstream_server
+    DOWNSTREAM_TOKEN:
+      from_secret: downstream_token
+
+trigger:
+  status:
+  - success
+  branch:
+  - dev
+  event:
+  - push
+
+depends_on:
+- build-bors-merge
+
+---
+kind: pipeline
 name: failed-build-alert
 
 clone:
