@@ -11,7 +11,8 @@ use types::{
 
 #[no_mangle]
 pub extern "C" fn call() {
-    account::add_associated_key(PublicKey::new([123; 32]), Weight::new(254)).unwrap_or_revert();
+    account::add_associated_key(PublicKey::ed25519_from([123; 32]), Weight::new(254))
+        .unwrap_or_revert();
     let key_management_threshold: Weight = runtime::get_arg(0)
         .unwrap_or_revert_with(ApiError::MissingArgument)
         .unwrap_or_revert_with(ApiError::InvalidArgument);

@@ -5,11 +5,11 @@ mod storage_provider;
 
 use core::convert::TryFrom;
 
-use types::{system_contract_errors::mint::Error, Key, URef, U512};
+use types::{account::PublicKey, system_contract_errors::mint::Error, Key, URef, U512};
 
 pub use crate::{runtime_provider::RuntimeProvider, storage_provider::StorageProvider};
 
-const SYSTEM_ACCOUNT: [u8; 32] = [0; 32];
+const SYSTEM_ACCOUNT: PublicKey = PublicKey::ed25519_from([0; 32]);
 
 pub trait Mint<R, S>
 where
@@ -18,7 +18,7 @@ where
 {
     fn mint(&self, initial_balance: U512) -> Result<URef, Error> {
         let caller = R::get_caller();
-        if !initial_balance.is_zero() && caller.value() != SYSTEM_ACCOUNT {
+        if !initial_balance.is_zero() && caller != SYSTEM_ACCOUNT {
             return Err(Error::InvalidNonEmptyPurseCreation);
         }
 

@@ -12,7 +12,7 @@ pub extern "C" fn call() {
         .unwrap_or_revert_with(ApiError::MissingArgument)
         .unwrap_or_revert_with(ApiError::InvalidArgument);
 
-    let public_key = PublicKey::new([42; 32]);
+    let public_key = PublicKey::ed25519_from([42; 32]);
     let result = system::transfer_to_account(public_key, amount);
     assert_eq!(result, Err(ApiError::Transfer))
 }

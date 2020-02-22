@@ -101,7 +101,7 @@ impl Executor {
                 extract_access_rights_from_keys(keys)
             };
 
-        let address_generator = AddressGenerator::new(deploy_hash, phase);
+        let address_generator = AddressGenerator::new(&deploy_hash, phase);
         let gas_counter: Gas = Gas::default();
 
         // Snapshot of effects before execution, so in case of error
@@ -183,7 +183,7 @@ impl Executor {
             };
 
         let address_generator = {
-            let address_generator = AddressGenerator::new(deploy_hash, phase);
+            let address_generator = AddressGenerator::new(&deploy_hash, phase);
             Rc::new(RefCell::new(address_generator))
         };
         let gas_counter = Gas::default(); // maybe const?

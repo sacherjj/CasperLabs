@@ -14,6 +14,7 @@ test = false
 std = ["contract/std", "types/std"]
 
 [dependencies]
+base16 = { version = "0.2.1", default-features = false }
 contract = { path = "../../../contract", package = "casperlabs-contract" }
 types = { path = "../../../types", package = "casperlabs-types" }
 pos = { path = "../pos", default-features = false, features = ["lib"] }

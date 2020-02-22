@@ -23,7 +23,7 @@ const CONTRACT_TRANSFER_TO_PURSE: &str = "transfer_to_purse.wasm";
 /// Size of batch used in multiple execs benchmark, and multiple deploys per exec cases.
 const TRANSFER_BATCH_SIZE: u64 = 3;
 const PER_RUN_FUNDING: u64 = 10_000_000;
-const TARGET_ADDR: [u8; 32] = [127; 32];
+const TARGET_ADDR: PublicKey = PublicKey::ed25519_from([127; 32]);
 
 /// Converts an integer into an array of type [u8; 32] by converting integer
 /// into its big endian representation and embedding it at the end of the
@@ -37,7 +37,7 @@ fn make_deploy_hash(i: u64) -> [u8; 32] {
 fn bootstrap(data_dir: &Path, accounts: &[PublicKey], amount: U512) -> LmdbWasmTestBuilder {
     let accounts_bytes: Vec<Vec<u8>> = accounts
         .iter()
-        .map(|public_key| public_key.value().to_vec())
+        .map(|public_key| public_key.as_bytes().to_vec())
         .collect();
 
     let exec_request = ExecuteRequestBuilder::standard(
@@ -60,7 +60,7 @@ fn bootstrap(data_dir: &Path, accounts: &[PublicKey], amount: U512) -> LmdbWasmT
 
 fn create_purses(
     builder: &mut LmdbWasmTestBuilder,
-    source: [u8; 32],
+    source: PublicKey,
     total_purses: u64,
     purse_amount: U512,
 ) -> Vec<URef> {
@@ -134,7 +134,7 @@ fn transfer_to_account_multiple_deploys(
                 CONTRACT_TRANSFER_TO_EXISTING_ACCOUNT,
                 (account, U512::one()),
             )
-            .with_authorization_keys(&[PublicKey::new(DEFAULT_ACCOUNT_ADDR)])
+            .with_authorization_keys(&[DEFAULT_ACCOUNT_ADDR])
             .with_deploy_hash(make_deploy_hash(i)) // deploy_hash
             .build();
         exec_builder = exec_builder.push_deploy(deploy);
@@ -185,7 +185,7 @@ fn transfer_to_purse_multiple_deploys(
             .with_address(TARGET_ADDR)
             .with_payment_code(STANDARD_PAYMENT_CONTRACT, (U512::from(PER_RUN_FUNDING),))
             .with_session_code(CONTRACT_TRANSFER_TO_PURSE, (purse, U512::one()))
-            .with_authorization_keys(&[PublicKey::new(TARGET_ADDR)])
+            .with_authorization_keys(&[TARGET_ADDR])
             .with_deploy_hash(make_deploy_hash(i)) // deploy_hash
             .build();
         exec_builder = exec_builder.push_deploy(deploy);
@@ -200,7 +200,7 @@ fn transfer_to_purse_multiple_deploys(
 }
 
 pub fn transfer_to_existing_accounts(group: &mut BenchmarkGroup<WallTime>, should_commit: bool) {
-    let target_account = PublicKey::new(TARGET_ADDR);
+    let target_account = TARGET_ADDR;
     let bootstrap_accounts = vec![target_account];
 
     let data_dir = TempDir::new().expect("should create temp dir");
@@ -237,12 +237,12 @@ pub fn transfer_to_existing_accounts(group: &mut BenchmarkGroup<WallTime>, shoul
 }
 
 pub fn transfer_to_existing_purses(group: &mut BenchmarkGroup<WallTime>, should_commit: bool) {
-    let target_account = PublicKey::new(TARGET_ADDR);
+    let target_account = TARGET_ADDR;
     let bootstrap_accounts = vec![target_account];
 
     let data_dir = TempDir::new().expect("should create temp dir");
     let mut builder = bootstrap(data_dir.path(), &bootstrap_accounts, *DEFAULT_PAYMENT * 10);
-    let purses = create_purses(&mut builder, TARGET_ADDR, 1, U512::one());
+    let purses = create_purses(&mut builder, target_account, 1, U512::one());
 
     group.bench_function(
         format!(

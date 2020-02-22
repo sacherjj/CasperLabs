@@ -5,7 +5,7 @@ use engine_test_support::{
     },
     DEFAULT_ACCOUNT_ADDR,
 };
-use types::{account::PublicKey, Key, URef};
+use types::{Key, URef};
 
 fn get_uref(key: Key) -> URef {
     match key {
@@ -23,7 +23,7 @@ fn do_pass(pass: &str) -> (URef, URef) {
             .with_payment_code(STANDARD_PAYMENT_CONTRACT, (*DEFAULT_PAYMENT,))
             .with_session_code("ee_441_rng_state.wasm", (pass.to_string(),))
             .with_deploy_hash([1u8; 32])
-            .with_authorization_keys(&[PublicKey::new(DEFAULT_ACCOUNT_ADDR)])
+            .with_authorization_keys(&[DEFAULT_ACCOUNT_ADDR])
             .build();
         ExecuteRequestBuilder::from_deploy_item(deploy).build()
     };

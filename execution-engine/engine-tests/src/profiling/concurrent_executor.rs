@@ -334,7 +334,7 @@ fn new_execute_request(args: &Args) -> ExecuteRequest {
     let account_1_public_key = profiling::account_1_public_key();
     let account_2_public_key = profiling::account_2_public_key();
     ExecuteRequestBuilder::standard(
-        account_1_public_key.value(),
+        account_1_public_key,
         CONTRACT_NAME,
         (account_2_public_key, amount),
     )
