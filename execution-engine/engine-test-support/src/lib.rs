@@ -24,9 +24,10 @@
 //!
 //! The test could be written as follows:
 //! ```no_run
+//! # use types as casperlabs_types;
 //! use casperlabs_engine_test_support::{TestContextBuilder, SessionBuilder, Value, Error, Code};
+//! use casperlabs_types::account::PublicKey;
 //!
-//! use types::account::PublicKey;
 //! const MY_ACCOUNT: PublicKey = PublicKey::ed25519_from([7u8; 32]);
 //! const KEY: &str = "special_value";
 //! const VALUE: &str = "hello world";
