@@ -11,7 +11,7 @@ use std::{
 };
 
 use engine_core::{engine_state, DEPLOY_HASH_LENGTH};
-use types::account::PUBLIC_KEY_LENGTH;
+use types::account::ED25519_LENGTH;
 
 pub use transforms::TransformMap;
 
@@ -21,6 +21,16 @@ pub(crate) fn vec_to_array(input: Vec<u8>, input_name: &str) -> Result<[u8; 32],
         .as_slice()
         .try_into()
         .map_err(|_| format!("{} must be 32 bytes.", input_name).into())
+}
+
+/// Try to convert a `Vec<u8>` to a 64-byte array.
+pub(crate) fn vec_to_array64(input: Vec<u8>, input_name: &str) -> Result<[u8; 64], ParsingError> {
+    if input.len() != 64 {
+        return Err(format!("{} must be 64 bytes.", input_name).into());
+    }
+    let mut result = [0; 64];
+    result.copy_from_slice(&input);
+    Ok(result)
 }
 
 #[derive(Debug)]
@@ -36,7 +46,7 @@ pub enum MappingError {
 
 impl MappingError {
     pub fn invalid_public_key_length(actual: usize) -> Self {
-        let expected = PUBLIC_KEY_LENGTH;
+        let expected = ED25519_LENGTH;
         MappingError::InvalidPublicKeyLength { expected, actual }
     }
 

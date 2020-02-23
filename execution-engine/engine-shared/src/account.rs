@@ -6,7 +6,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use types::{
     account::{
         ActionType, AddKeyFailure, PublicKey, RemoveKeyFailure, SetThresholdFailure,
-        UpdateKeyFailure, Weight, PUBLIC_KEY_SERIALIZED_LENGTH, WEIGHT_SERIALIZED_LENGTH,
+        UpdateKeyFailure, Weight, PUBLIC_KEY_SERIALIZED_MAX_LENGTH, WEIGHT_SERIALIZED_LENGTH,
     },
     bytesrepr::{Error, FromBytes, ToBytes, U32_SERIALIZED_LENGTH, U8_SERIALIZED_LENGTH},
     AccessRights, Key, URef,
@@ -17,7 +17,7 @@ pub use associated_keys::AssociatedKeys;
 
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub struct Account {
-    public_key: [u8; 32],
+    public_key: PublicKey,
     named_keys: BTreeMap<String, Key>,
     main_purse: URef,
     associated_keys: AssociatedKeys,
@@ -26,7 +26,7 @@ pub struct Account {
 
 impl Account {
     pub fn new(
-        public_key: [u8; 32],
+        public_key: PublicKey,
         named_keys: BTreeMap<String, Key>,
         main_purse: URef,
         associated_keys: AssociatedKeys,
@@ -41,15 +41,11 @@ impl Account {
         }
     }
 
-    pub fn create(
-        account_addr: [u8; 32],
-        named_keys: BTreeMap<String, Key>,
-        main_purse: URef,
-    ) -> Self {
-        let associated_keys = AssociatedKeys::new(PublicKey::new(account_addr), Weight::new(1));
+    pub fn create(account: PublicKey, named_keys: BTreeMap<String, Key>, main_purse: URef) -> Self {
+        let associated_keys = AssociatedKeys::new(account, Weight::new(1));
         let action_thresholds: ActionThresholds = Default::default();
         Account::new(
-            account_addr,
+            account,
             named_keys,
             main_purse,
             associated_keys,
@@ -69,7 +65,7 @@ impl Account {
         &mut self.named_keys
     }
 
-    pub fn pub_key(&self) -> [u8; 32] {
+    pub fn public_key(&self) -> PublicKey {
         self.public_key
     }
 
@@ -207,12 +203,12 @@ impl ToBytes for Account {
     fn to_bytes(&self) -> Result<Vec<u8>, Error> {
         let action_thresholds_size = 2 * (WEIGHT_SERIALIZED_LENGTH + U8_SERIALIZED_LENGTH);
         let associated_keys_size = self.associated_keys.len()
-            * (PUBLIC_KEY_SERIALIZED_LENGTH + WEIGHT_SERIALIZED_LENGTH)
+            * (PUBLIC_KEY_SERIALIZED_MAX_LENGTH + WEIGHT_SERIALIZED_LENGTH)
             + U32_SERIALIZED_LENGTH;
         let named_keys_size =
             Key::serialized_size_hint() * self.named_keys.len() + U32_SERIALIZED_LENGTH;
         let purse_size = Key::serialized_size_hint();
-        let serialized_account_size = PUBLIC_KEY_SERIALIZED_LENGTH // pub key
+        let serialized_account_size = PUBLIC_KEY_SERIALIZED_MAX_LENGTH // pub key
             + named_keys_size
             + purse_size
             + associated_keys_size
@@ -232,7 +228,7 @@ impl ToBytes for Account {
 
 impl FromBytes for Account {
     fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
-        let (public_key, rem): ([u8; 32], &[u8]) = FromBytes::from_bytes(bytes)?;
+        let (public_key, rem): (PublicKey, &[u8]) = FromBytes::from_bytes(bytes)?;
         let (named_keys, rem): (BTreeMap<String, Key>, &[u8]) = FromBytes::from_bytes(rem)?;
         let (main_purse, rem): (URef, &[u8]) = FromBytes::from_bytes(rem)?;
         let (associated_keys, rem): (AssociatedKeys, &[u8]) = FromBytes::from_bytes(rem)?;
@@ -255,7 +251,7 @@ pub mod gens {
 
     use types::{
         account::MAX_ASSOCIATED_KEYS,
-        gens::{named_keys_arb, u8_slice_32, uref_arb},
+        gens::{named_keys_arb, public_key_arb, uref_arb},
     };
 
     use super::*;
@@ -265,13 +261,13 @@ pub mod gens {
 
     prop_compose! {
         pub fn account_arb()(
-            pub_key in u8_slice_32(),
+            pub_key in public_key_arb(),
             urefs in named_keys_arb(3),
             purse in uref_arb(),
             thresholds in action_thresholds_arb(),
             mut associated_keys in associated_keys_arb(MAX_ASSOCIATED_KEYS - 1),
         ) -> Account {
-                associated_keys.add_key(pub_key.into(), Weight::new(1)).unwrap();
+                associated_keys.add_key(pub_key, Weight::new(1)).unwrap();
                 Account::new(
                     pub_key,
                     urefs,
@@ -317,9 +313,9 @@ mod tests {
 
     #[test]
     fn associated_keys_can_authorize_keys() {
-        let key_1 = PublicKey::new([0; 32]);
-        let key_2 = PublicKey::new([1; 32]);
-        let key_3 = PublicKey::new([2; 32]);
+        let key_1 = PublicKey::ed25519_from([0; 32]);
+        let key_2 = PublicKey::ed25519_from([1; 32]);
+        let key_3 = PublicKey::ed25519_from([2; 32]);
         let mut keys = AssociatedKeys::default();
 
         keys.add_key(key_2, Weight::new(2))
@@ -330,7 +326,7 @@ mod tests {
             .expect("should add key_1");
 
         let account = Account::new(
-            [0u8; 32],
+            PublicKey::ed25519_from([0u8; 32]),
             BTreeMap::new(),
             URef::new([0u8; 32], AccessRights::READ_ADD_WRITE),
             keys,
@@ -348,17 +344,17 @@ mod tests {
         assert!(!account.can_authorize(&BTreeSet::from_iter(vec![
             key_1,
             key_2,
-            PublicKey::new([42; 32])
+            PublicKey::ed25519_from([42; 32])
         ])));
         assert!(!account.can_authorize(&BTreeSet::from_iter(vec![
-            PublicKey::new([42; 32]),
+            PublicKey::ed25519_from([42; 32]),
             key_1,
             key_2
         ])));
         assert!(!account.can_authorize(&BTreeSet::from_iter(vec![
-            PublicKey::new([43; 32]),
-            PublicKey::new([44; 32]),
-            PublicKey::new([42; 32])
+            PublicKey::ed25519_from([43; 32]),
+            PublicKey::ed25519_from([44; 32]),
+            PublicKey::ed25519_from([42; 32])
         ])));
         assert!(!account.can_authorize(&BTreeSet::new()));
     }
@@ -366,17 +362,17 @@ mod tests {
     #[test]
     fn account_can_deploy_with() {
         let associated_keys = {
-            let mut res = AssociatedKeys::new(PublicKey::new([1u8; 32]), Weight::new(1));
-            res.add_key(PublicKey::new([2u8; 32]), Weight::new(11))
+            let mut res = AssociatedKeys::new(PublicKey::ed25519_from([1u8; 32]), Weight::new(1));
+            res.add_key(PublicKey::ed25519_from([2u8; 32]), Weight::new(11))
                 .expect("should add key 1");
-            res.add_key(PublicKey::new([3u8; 32]), Weight::new(11))
+            res.add_key(PublicKey::ed25519_from([3u8; 32]), Weight::new(11))
                 .expect("should add key 2");
-            res.add_key(PublicKey::new([4u8; 32]), Weight::new(11))
+            res.add_key(PublicKey::ed25519_from([4u8; 32]), Weight::new(11))
                 .expect("should add key 3");
             res
         };
         let account = Account::new(
-            [0u8; 32],
+            PublicKey::ed25519_from([0u8; 32]),
             BTreeMap::new(),
             URef::new([0u8; 32], AccessRights::READ_ADD_WRITE),
             associated_keys,
@@ -387,40 +383,40 @@ mod tests {
 
         // sum: 22, required 33 - can't deploy
         assert!(!account.can_deploy_with(&BTreeSet::from_iter(vec![
-            PublicKey::new([3u8; 32]),
-            PublicKey::new([2u8; 32]),
+            PublicKey::ed25519_from([3u8; 32]),
+            PublicKey::ed25519_from([2u8; 32]),
         ])));
 
         // sum: 33, required 33 - can deploy
         assert!(account.can_deploy_with(&BTreeSet::from_iter(vec![
-            PublicKey::new([4u8; 32]),
-            PublicKey::new([3u8; 32]),
-            PublicKey::new([2u8; 32]),
+            PublicKey::ed25519_from([4u8; 32]),
+            PublicKey::ed25519_from([3u8; 32]),
+            PublicKey::ed25519_from([2u8; 32]),
         ])));
 
         // sum: 34, required 33 - can deploy
         assert!(account.can_deploy_with(&BTreeSet::from_iter(vec![
-            PublicKey::new([2u8; 32]),
-            PublicKey::new([1u8; 32]),
-            PublicKey::new([4u8; 32]),
-            PublicKey::new([3u8; 32]),
+            PublicKey::ed25519_from([2u8; 32]),
+            PublicKey::ed25519_from([1u8; 32]),
+            PublicKey::ed25519_from([4u8; 32]),
+            PublicKey::ed25519_from([3u8; 32]),
         ])));
     }
 
     #[test]
     fn account_can_manage_keys_with() {
         let associated_keys = {
-            let mut res = AssociatedKeys::new(PublicKey::new([1u8; 32]), Weight::new(1));
-            res.add_key(PublicKey::new([2u8; 32]), Weight::new(11))
+            let mut res = AssociatedKeys::new(PublicKey::ed25519_from([1u8; 32]), Weight::new(1));
+            res.add_key(PublicKey::ed25519_from([2u8; 32]), Weight::new(11))
                 .expect("should add key 1");
-            res.add_key(PublicKey::new([3u8; 32]), Weight::new(11))
+            res.add_key(PublicKey::ed25519_from([3u8; 32]), Weight::new(11))
                 .expect("should add key 2");
-            res.add_key(PublicKey::new([4u8; 32]), Weight::new(11))
+            res.add_key(PublicKey::ed25519_from([4u8; 32]), Weight::new(11))
                 .expect("should add key 3");
             res
         };
         let account = Account::new(
-            [0u8; 32],
+            PublicKey::ed25519_from([0u8; 32]),
             BTreeMap::new(),
             URef::new([0u8; 32], AccessRights::READ_ADD_WRITE),
             associated_keys,
@@ -431,32 +427,32 @@ mod tests {
 
         // sum: 22, required 33 - can't manage
         assert!(!account.can_manage_keys_with(&BTreeSet::from_iter(vec![
-            PublicKey::new([3u8; 32]),
-            PublicKey::new([2u8; 32]),
+            PublicKey::ed25519_from([3u8; 32]),
+            PublicKey::ed25519_from([2u8; 32]),
         ])));
 
         // sum: 33, required 33 - can manage
         assert!(account.can_manage_keys_with(&BTreeSet::from_iter(vec![
-            PublicKey::new([4u8; 32]),
-            PublicKey::new([3u8; 32]),
-            PublicKey::new([2u8; 32]),
+            PublicKey::ed25519_from([4u8; 32]),
+            PublicKey::ed25519_from([3u8; 32]),
+            PublicKey::ed25519_from([2u8; 32]),
         ])));
 
         // sum: 34, required 33 - can manage
         assert!(account.can_manage_keys_with(&BTreeSet::from_iter(vec![
-            PublicKey::new([2u8; 32]),
-            PublicKey::new([1u8; 32]),
-            PublicKey::new([4u8; 32]),
-            PublicKey::new([3u8; 32]),
+            PublicKey::ed25519_from([2u8; 32]),
+            PublicKey::ed25519_from([1u8; 32]),
+            PublicKey::ed25519_from([4u8; 32]),
+            PublicKey::ed25519_from([3u8; 32]),
         ])));
     }
 
     #[test]
     fn set_action_threshold_higher_than_total_weight() {
-        let identity_key = PublicKey::new([1u8; 32]);
-        let key_1 = PublicKey::new([2u8; 32]);
-        let key_2 = PublicKey::new([3u8; 32]);
-        let key_3 = PublicKey::new([4u8; 32]);
+        let identity_key = PublicKey::ed25519_from([1u8; 32]);
+        let key_1 = PublicKey::ed25519_from([2u8; 32]);
+        let key_2 = PublicKey::ed25519_from([3u8; 32]);
+        let key_3 = PublicKey::ed25519_from([4u8; 32]);
         let associated_keys = {
             let mut res = AssociatedKeys::new(identity_key, Weight::new(1));
             res.add_key(key_1, Weight::new(2))
@@ -468,7 +464,7 @@ mod tests {
             res
         };
         let mut account = Account::new(
-            [0u8; 32],
+            PublicKey::ed25519_from([0u8; 32]),
             BTreeMap::new(),
             URef::new([0u8; 32], AccessRights::READ_ADD_WRITE),
             associated_keys,
@@ -493,10 +489,10 @@ mod tests {
 
     #[test]
     fn remove_key_would_violate_action_thresholds() {
-        let identity_key = PublicKey::new([1u8; 32]);
-        let key_1 = PublicKey::new([2u8; 32]);
-        let key_2 = PublicKey::new([3u8; 32]);
-        let key_3 = PublicKey::new([4u8; 32]);
+        let identity_key = PublicKey::ed25519_from([1u8; 32]);
+        let key_1 = PublicKey::ed25519_from([2u8; 32]);
+        let key_2 = PublicKey::ed25519_from([3u8; 32]);
+        let key_3 = PublicKey::ed25519_from([4u8; 32]);
         let associated_keys = {
             let mut res = AssociatedKeys::new(identity_key, Weight::new(1));
             res.add_key(key_1, Weight::new(2))
@@ -508,7 +504,7 @@ mod tests {
             res
         };
         let mut account = Account::new(
-            [0u8; 32],
+            PublicKey::ed25519_from([0u8; 32]),
             BTreeMap::new(),
             URef::new([0u8; 32], AccessRights::READ_ADD_WRITE),
             associated_keys,
@@ -525,13 +521,13 @@ mod tests {
 
     #[test]
     fn updating_key_would_violate_action_thresholds() {
-        let identity_key = PublicKey::new([1u8; 32]);
+        let identity_key = PublicKey::ed25519_from([1u8; 32]);
         let identity_key_weight = Weight::new(1);
-        let key_1 = PublicKey::new([2u8; 32]);
+        let key_1 = PublicKey::ed25519_from([2u8; 32]);
         let key_1_weight = Weight::new(2);
-        let key_2 = PublicKey::new([3u8; 32]);
+        let key_2 = PublicKey::ed25519_from([3u8; 32]);
         let key_2_weight = Weight::new(3);
-        let key_3 = PublicKey::new([4u8; 32]);
+        let key_3 = PublicKey::ed25519_from([4u8; 32]);
         let key_3_weight = Weight::new(4);
         let associated_keys = {
             let mut res = AssociatedKeys::new(identity_key, identity_key_weight);
@@ -550,7 +546,7 @@ mod tests {
         );
         let key_management_threshold = Weight::new(deployment_threshold.value() + 1);
         let mut account = Account::new(
-            identity_key.value(),
+            identity_key,
             BTreeMap::new(),
             URef::new([0u8; 32], AccessRights::READ_ADD_WRITE),
             associated_keys,
@@ -589,9 +585,9 @@ mod tests {
 
     #[test]
     fn overflowing_should_allow_removal() {
-        let identity_key = PublicKey::new([42; 32]);
-        let key_1 = PublicKey::new([2u8; 32]);
-        let key_2 = PublicKey::new([3u8; 32]);
+        let identity_key = PublicKey::ed25519_from([42; 32]);
+        let key_1 = PublicKey::ed25519_from([2u8; 32]);
+        let key_2 = PublicKey::ed25519_from([3u8; 32]);
 
         let associated_keys = {
             // Identity
@@ -608,7 +604,7 @@ mod tests {
         };
 
         let mut account = Account::new(
-            identity_key.value(),
+            identity_key,
             BTreeMap::new(),
             URef::new([0u8; 32], AccessRights::READ_ADD_WRITE),
             associated_keys,
@@ -621,11 +617,11 @@ mod tests {
 
     #[test]
     fn overflowing_should_allow_updating() {
-        let identity_key = PublicKey::new([1; 32]);
+        let identity_key = PublicKey::ed25519_from([1; 32]);
         let identity_key_weight = Weight::new(1);
-        let key_1 = PublicKey::new([2u8; 32]);
+        let key_1 = PublicKey::ed25519_from([2u8; 32]);
         let key_1_weight = Weight::new(3);
-        let key_2 = PublicKey::new([3u8; 32]);
+        let key_2 = PublicKey::ed25519_from([3u8; 32]);
         let key_2_weight = Weight::new(255);
         let deployment_threshold = Weight::new(1);
         let key_management_threshold = Weight::new(254);
@@ -643,7 +639,7 @@ mod tests {
         };
 
         let mut account = Account::new(
-            identity_key.value(),
+            identity_key,
             BTreeMap::new(),
             URef::new([0u8; 32], AccessRights::READ_ADD_WRITE),
             associated_keys,

@@ -56,7 +56,7 @@ import io.netty.handler.ssl.ApplicationProtocolConfig.Protocol
       baseKey: Key,
       path: Seq[String],
       protocolVersion: ProtocolVersion
-  ): F[Either[Throwable, Value]]
+  ): F[Either[Throwable, StoredValue]]
 }
 
 class GrpcExecutionEngineService[F[_]: Defer: Concurrent: Log: TaskLift: Metrics] private[smartcontracts] (
@@ -208,22 +208,13 @@ class GrpcExecutionEngineService[F[_]: Defer: Concurrent: Log: TaskLift: Metrics
       baseKey: Key,
       path: Seq[String],
       protocolVersion: ProtocolVersion
-  ): F[Either[Throwable, Value]] =
+  ): F[Either[Throwable, StoredValue]] =
     sendMessage(QueryRequest(state, Some(baseKey), path, Some(protocolVersion)), _.query) {
       _.result match {
         case QueryResponse.Result.Success(bytes) =>
-          FromBytes.deserialize(StoredValue.deserializer, bytes.toByteArray) match {
-            case Left(err) => Left(SmartContractEngineError(s"Error in parsing EE response: $err"))
-
-            // TODO: We should map to state.StoredValue instead of state.Value
-            // After that we can remove state.Value (and its variants; state.StringList, state.IntList, etc.).
-            case Right(v) =>
-              cltype.ProtoMappings
-                .toProto(v)
-                .leftMap(
-                  err => SmartContractEngineError(s"Error with EE response $v:\n$err")
-                )
-          }
+          FromBytes
+            .deserialize(StoredValue.deserializer, bytes.toByteArray)
+            .leftMap(err => SmartContractEngineError(s"Error in parsing EE response: $err"))
 
         case QueryResponse.Result.Empty        => Left(SmartContractEngineError("empty response"))
         case QueryResponse.Result.Failure(err) => Left(SmartContractEngineError(err))

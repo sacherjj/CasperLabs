@@ -91,7 +91,7 @@ impl GenesisAccount {
 
 impl Distribution<GenesisAccount> for Standard {
     fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> GenesisAccount {
-        let public_key = PublicKey::new(rng.gen());
+        let public_key = PublicKey::ed25519_from(rng.gen());
 
         let mut u512_array = [0u8; 64];
         rng.fill_bytes(u512_array.as_mut());

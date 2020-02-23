@@ -41,7 +41,7 @@ mod tests;
 /// System account transfers given URefs into READ_ADD_WRITE access rights,
 /// and any other URef is transformed into READ only URef.
 pub(crate) fn attenuate_uref_for_account(account: &Account, uref: URef) -> URef {
-    if account.pub_key() == SYSTEM_ACCOUNT_ADDR {
+    if account.public_key() == SYSTEM_ACCOUNT_ADDR {
         // If the system account calls this function, it is given READ_ADD_WRITE access.
         uref.into_read_add_write()
     } else {
@@ -195,7 +195,7 @@ where
                 self.named_keys.remove(name);
                 self.remove_key_from_contract(contract_hash, contract, name)
             }
-            contract_local @ Key::Local(_) => {
+            contract_local @ Key::Local { .. } => {
                 let contract: Contract = self.read_gs_typed(&contract_local)?;
                 self.named_keys.remove(name);
                 self.remove_key_from_contract(contract_local, contract, name)
@@ -204,7 +204,7 @@ where
     }
 
     pub fn get_caller(&self) -> PublicKey {
-        self.account.pub_key().into()
+        self.account.public_key()
     }
 
     pub fn get_blocktime(&self) -> BlockTime {
@@ -257,10 +257,10 @@ where
 
     pub fn seed(&self) -> [u8; KEY_LOCAL_SEED_LENGTH] {
         match self.base_key {
-            Key::Account(bytes) => bytes,
+            Key::Account(PublicKey::Ed25519(bytes)) => bytes.value(),
             Key::Hash(bytes) => bytes,
             Key::URef(uref) => uref.addr(),
-            Key::Local(hash) => hash,
+            Key::Local { seed, .. } => seed,
         }
     }
 
@@ -610,7 +610,7 @@ where
             Key::Account(_) => &self.base_key() == key,
             Key::Hash(_) => true,
             Key::URef(uref) => uref.is_readable(),
-            Key::Local(_) => false,
+            Key::Local { .. } => false,
         }
     }
 
@@ -619,7 +619,7 @@ where
         match key {
             Key::Account(_) | Key::Hash(_) => &self.base_key() == key,
             Key::URef(uref) => uref.is_addable(),
-            Key::Local(_) => false,
+            Key::Local { .. } => false,
         }
     }
 
@@ -628,7 +628,7 @@ where
         match key {
             Key::Account(_) | Key::Hash(_) => false,
             Key::URef(uref) => uref.is_writeable(),
-            Key::Local(_) => false,
+            Key::Local { .. } => false,
         }
     }
 
@@ -681,7 +681,7 @@ where
         }
 
         // Converts an account's public key into a URef
-        let key = Key::Account(self.account().pub_key());
+        let key = Key::Account(self.account().public_key());
 
         // Take an account out of the global state
         let account = {
@@ -717,7 +717,7 @@ where
         }
 
         // Converts an account's public key into a URef
-        let key = Key::Account(self.account().pub_key());
+        let key = Key::Account(self.account().public_key());
 
         // Take an account out of the global state
         let mut account: Account = self.read_gs_typed(&key)?;
@@ -755,7 +755,7 @@ where
         }
 
         // Converts an account's public key into a URef
-        let key = Key::Account(self.account().pub_key());
+        let key = Key::Account(self.account().public_key());
 
         // Take an account out of the global state
         let mut account: Account = self.read_gs_typed(&key)?;
@@ -793,7 +793,7 @@ where
         }
 
         // Converts an account's public key into a URef
-        let key = Key::Account(self.account().pub_key());
+        let key = Key::Account(self.account().public_key());
 
         // Take an account out of the global state
         let mut account: Account = self.read_gs_typed(&key)?;
@@ -848,7 +848,7 @@ where
 
     /// Checks if the account context is valid.
     fn is_valid_context(&self) -> bool {
-        self.base_key() == Key::Account(self.account().pub_key())
+        self.base_key() == Key::Account(self.account().public_key())
     }
 
     /// Gets main purse id

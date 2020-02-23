@@ -55,7 +55,7 @@ def nodes(docker_client_fixture):
     "contract_paths, expected_number_of_blocks",
     [([[Contract.HELLO_NAME_DEFINE], [Contract.HELLO_NAME_CALL]], 7)],
 )
-def test_block_propagation(
+def test_block_propagation_R0(
     nodes, contract_paths: List[List[str]], expected_number_of_blocks
 ):
     """
@@ -96,7 +96,7 @@ def not_all_connected_directly_nodes(docker_client_fixture):
         yield network.docker_nodes
 
 
-def test_blocks_infect_network(not_all_connected_directly_nodes):
+def test_blocks_infect_network_R0(not_all_connected_directly_nodes):
     """
     Feature file: block_gossiping.feature
     Scenario: Blocks 'infect' the network and nodes 'closest' to the propose see the blocks first.
@@ -130,7 +130,7 @@ def four_nodes_network(docker_client_fixture):
 C = [Contract.HELLO_NAME_DEFINE, Contract.MAILING_LIST_DEFINE, Contract.HELLO_NAME_CALL]
 
 
-def test_network_partition_and_rejoin(four_nodes_network):
+def test_network_partition_and_rejoin_RS(four_nodes_network):
     """
     Feature file: block_gossiping.feature
     Scenario: Network partition occurs and rejoin occurs

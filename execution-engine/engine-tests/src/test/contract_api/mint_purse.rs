@@ -2,11 +2,11 @@ use engine_test_support::{
     internal::{ExecuteRequestBuilder, WasmTestBuilder, DEFAULT_GENESIS_CONFIG},
     DEFAULT_ACCOUNT_ADDR,
 };
-use types::U512;
+use types::{account::PublicKey, U512};
 
 const CONTRACT_MINT_PURSE: &str = "mint_purse.wasm";
 const CONTRACT_TRANSFER_TO_ACCOUNT: &str = "transfer_to_account_u512.wasm";
-const SYSTEM_ADDR: [u8; 32] = [0u8; 32];
+const SYSTEM_ADDR: PublicKey = PublicKey::ed25519_from([0u8; 32]);
 const TRANSFER_AMOUNT: u64 = 250_000_000 + 1000;
 
 #[ignore]

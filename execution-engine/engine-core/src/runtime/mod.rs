@@ -16,7 +16,7 @@ use contract::args_parser::ArgsParser;
 use engine_shared::{account::Account, contract::Contract, gas::Gas, stored_value::StoredValue};
 use engine_storage::global_state::StateReader;
 use types::{
-    account::{ActionType, PublicKey, Weight, PUBLIC_KEY_SERIALIZED_LENGTH},
+    account::{ActionType, PublicKey, Weight},
     bytesrepr::{self, ToBytes},
     system_contract_errors,
     system_contract_errors::mint,
@@ -1567,12 +1567,25 @@ where
 
     /// Writes caller (deploy) account public key to [dest_ptr] in the Wasm
     /// memory.
-    fn get_caller(&mut self, dest_ptr: u32) -> Result<(), Trap> {
-        let key = self.context.get_caller();
-        let bytes = key.into_bytes().map_err(Error::BytesRepr)?;
-        self.memory
-            .set(dest_ptr, &bytes)
-            .map_err(|e| Error::Interpreter(e).into())
+    fn get_caller(&mut self, output_size: u32) -> Result<Result<(), ApiError>, Trap> {
+        if !self.can_write_to_host_buffer() {
+            // Exit early if the host buffer is already occupied
+            return Ok(Err(ApiError::HostBufferFull));
+        }
+        let value = CLValue::from_t(self.context.get_caller()).map_err(Error::CLValue)?;
+        let value_size = value.inner_bytes().len();
+
+        // Save serialized public key into host buffer
+        if let Err(error) = self.write_host_buffer(value) {
+            return Ok(Err(error));
+        }
+
+        // Write output
+        let output_size_bytes = value_size.to_le_bytes(); // Wasm is little-endian
+        if let Err(error) = self.memory.set(output_size, &output_size_bytes) {
+            return Err(Error::Interpreter(error).into());
+        }
+        Ok(Ok(()))
     }
 
     /// Writes runtime context's phase to [dest_ptr] in the Wasm memory.
@@ -2007,11 +2020,15 @@ where
         Error::Revert(status).into()
     }
 
-    fn add_associated_key(&mut self, public_key_ptr: u32, weight_value: u8) -> Result<i32, Trap> {
+    fn add_associated_key(
+        &mut self,
+        public_key_ptr: u32,
+        public_key_size: usize,
+        weight_value: u8,
+    ) -> Result<i32, Trap> {
         let public_key = {
             // Public key as serialized bytes
-            let source_serialized =
-                self.bytes_from_mem(public_key_ptr, PUBLIC_KEY_SERIALIZED_LENGTH)?;
+            let source_serialized = self.bytes_from_mem(public_key_ptr, public_key_size)?;
             // Public key deserialized
             let source: PublicKey =
                 bytesrepr::deserialize(source_serialized).map_err(Error::BytesRepr)?;
@@ -2031,11 +2048,14 @@ where
         }
     }
 
-    fn remove_associated_key(&mut self, public_key_ptr: u32) -> Result<i32, Trap> {
+    fn remove_associated_key(
+        &mut self,
+        public_key_ptr: u32,
+        public_key_size: usize,
+    ) -> Result<i32, Trap> {
         let public_key = {
             // Public key as serialized bytes
-            let source_serialized =
-                self.bytes_from_mem(public_key_ptr, PUBLIC_KEY_SERIALIZED_LENGTH)?;
+            let source_serialized = self.bytes_from_mem(public_key_ptr, public_key_size)?;
             // Public key deserialized
             let source: PublicKey =
                 bytesrepr::deserialize(source_serialized).map_err(Error::BytesRepr)?;
@@ -2051,12 +2071,12 @@ where
     fn update_associated_key(
         &mut self,
         public_key_ptr: u32,
+        public_key_size: usize,
         weight_value: u8,
     ) -> Result<i32, Trap> {
         let public_key = {
             // Public key as serialized bytes
-            let source_serialized =
-                self.bytes_from_mem(public_key_ptr, PUBLIC_KEY_SERIALIZED_LENGTH)?;
+            let source_serialized = self.bytes_from_mem(public_key_ptr, public_key_size)?;
             // Public key deserialized
             let source: PublicKey =
                 bytesrepr::deserialize(source_serialized).map_err(Error::BytesRepr)?;
@@ -2158,8 +2178,7 @@ where
     ) -> Result<TransferResult, Error> {
         let mint_contract_key = self.get_mint_contract_uref().into();
 
-        let target_addr = target.value();
-        let target_key = Key::Account(target_addr);
+        let target_key = Key::Account(target);
 
         // A precondition check that verifies that the transfer can be done
         // as the source purse has enough funds to cover the transfer.
@@ -2196,7 +2215,7 @@ where
                     }
                 })
                 .collect();
-                let account = Account::create(target_addr, named_keys, target_purse);
+                let account = Account::create(target, named_keys, target_purse);
                 self.context.write_account(target_key, account)?;
                 Ok(Ok(TransferredTo::NewAccount))
             }
@@ -2243,7 +2262,7 @@ where
         target: PublicKey,
         amount: U512,
     ) -> Result<TransferResult, Error> {
-        let target_key = Key::Account(target.value());
+        let target_key = Key::Account(target);
         // Look up the account at the given public key's address
         match self.context.read_account(&target_key)? {
             None => {

@@ -7,7 +7,6 @@ import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.api.BlockAPI
 import io.casperlabs.casper.api.BlockAPI.BlockAndMaybeDeploys
 import io.casperlabs.casper.consensus.info.{BlockInfo, DeployInfo}
-import io.casperlabs.casper.consensus.state
 import io.casperlabs.catscontrib.{Fs2Compiler, MonadThrowable}
 import io.casperlabs.crypto.Keys.PublicKey
 import io.casperlabs.crypto.codec.Base16
@@ -31,6 +30,7 @@ import io.casperlabs.node.api.graphql.schema.blocks.types.{
 import io.casperlabs.node.api.{DeployInfoPagination, Utils}
 import io.casperlabs.shared.Log
 import io.casperlabs.smartcontracts.ExecutionEngineService
+import io.casperlabs.smartcontracts.cltype.StoredValueInstance
 import io.casperlabs.storage.block._
 import io.casperlabs.storage.dag.DagStorage
 import io.casperlabs.storage.deploy.DeployStorage
@@ -278,7 +278,7 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream
           ),
           Field(
             "globalState",
-            ListType(OptionType(globalstate.types.Value)),
+            ListType(OptionType(globalstate.types.StoredValue)),
             arguments = globalstate.arguments.StateQueryArgument :: blocks.arguments.BlockHashPrefix :: Nil,
             resolve = { c =>
               val queries = c.arg(globalstate.arguments.StateQueryArgument).toList
@@ -299,7 +299,7 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream
                                         info.getSummary.getHeader.getState.postStateHash ->
                                           info.getSummary.getHeader.getProtocolVersion
                                     })
-                values <- maybeBlockProps.fold(List.empty[Option[state.Value]].pure[F]) {
+                values <- maybeBlockProps.fold(List.empty[Option[StoredValueInstance]].pure[F]) {
                            case (stateHash, protocolVersion) =>
                              for {
 
@@ -317,13 +317,23 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream
                                                                      query.pathSegments,
                                                                      protocolVersion
                                                                    )
+                                              possibleInstance = possibleResponse.flatMap { sv =>
+                                                StoredValueInstance
+                                                  .from(sv)
+                                                  .leftMap(
+                                                    err =>
+                                                      SmartContractEngineError(
+                                                        s"Error during instantiation of $sv: $err"
+                                                      )
+                                                  )
+                                              }
                                               value <- MonadThrowable[F]
-                                                        .fromEither(possibleResponse)
+                                                        .fromEither(possibleInstance)
                                                         .map(_.some)
                                                         .handleError {
                                                           case SmartContractEngineError(message)
                                                               if message contains "Value not found" =>
-                                                            none[state.Value]
+                                                            none[StoredValueInstance]
                                                         }
                                             } yield value
                                         }

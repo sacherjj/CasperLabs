@@ -6,7 +6,7 @@ use core::{convert::From, mem::MaybeUninit};
 use casperlabs_types::{
     api_error,
     bytesrepr::{self, FromBytes, ToBytes},
-    AccessRights, ApiError, CLTyped, CLValue, ContractRef, Key, URef,
+    AccessRights, ApiError, CLTyped, CLValue, ContractRef, Key, URef, KEY_UREF_SERIALIZED_LENGTH,
 };
 
 use crate::{
@@ -147,8 +147,8 @@ pub fn new_uref<T: CLTyped + ToBytes>(init: T) -> URef {
         ext_ffi::new_uref(key_ptr, cl_value_ptr, cl_value_size); // URef has `READ_ADD_WRITE`
         Vec::from_raw_parts(
             key_ptr,
-            Key::serialized_size_hint(),
-            Key::serialized_size_hint(),
+            KEY_UREF_SERIALIZED_LENGTH,
+            KEY_UREF_SERIALIZED_LENGTH,
         )
     };
     let key: Key = bytesrepr::deserialize(bytes).unwrap_or_revert();
