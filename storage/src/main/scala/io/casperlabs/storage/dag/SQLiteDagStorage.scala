@@ -49,7 +49,7 @@ class SQLiteDagStorage[F[_]: Bracket[*[_], Throwable]](
     val isFinalized = false
     val blockMetadataQuery =
       (fr"""INSERT OR IGNORE INTO block_metadata
-            (block_hash, validator, rank, """ ++ blockInfoCols() ++ fr""")
+            (block_hash, validator, rank, """ ++ blockInfoCols() ++ fr", validator_block_seq_num" ++ fr""")
             VALUES (
               ${block.blockHash},
               ${block.validatorPublicKey},
@@ -59,7 +59,8 @@ class SQLiteDagStorage[F[_]: Bracket[*[_], Throwable]](
               $deployErrorCount,
               $deployCostTotal,
               $deployGasPriceAvg,
-              $isFinalized
+              $isFinalized, 
+              ${block.validatorBlockSeqNum}
             )
             """).update.run
 
@@ -213,6 +214,36 @@ class SQLiteDagStorage[F[_]: Bracket[*[_], Throwable]](
       .stream
       .transact(readXa)
       .groupByRank
+
+  override def topoSortValidator(
+      validator: Validator,
+      blocksNum: Int,
+      endBlockNumber: Long
+  ) = {
+    val subQuery = fr"""SELECT validator_block_seq_num, """ ++ blockInfoCols() ++ fr"""
+          FROM block_metadata
+          WHERE validator_block_seq_num<=$endBlockNumber AND validator=$validator
+          ORDER BY validator_block_seq_num DESC
+          LIMIT $blocksNum"""
+    (fr"SELECT * FROM (" ++ subQuery ++ fr") ORDER BY validator_block_seq_num ASC")
+      .query[(Long, BlockInfo)]
+      .stream
+      .transact(readXa)
+      .groupByRank
+  }
+
+  override def topoSortTailValidator(validator: Validator, blocksNum: Int) = {
+    val subQuery = fr"""SELECT validator_block_seq_num, """ ++ blockInfoCols() ++ fr"""
+          FROM block_metadata
+          WHERE validator=$validator
+          ORDER BY validator_block_seq_num DESC
+          LIMIT $blocksNum"""
+    (fr"SELECT * FROM (" ++ subQuery ++ fr") ORDER BY validator_block_seq_num ASC")
+      .query[(Long, BlockInfo)]
+      .stream
+      .transact(readXa)
+      .groupByRank
+  }
 
   override def latestMessageHash(validator: Validator): F[Set[BlockHash]] =
     sql"""|SELECT block_hash

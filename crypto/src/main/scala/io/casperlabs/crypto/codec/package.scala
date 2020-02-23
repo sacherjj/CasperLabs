@@ -7,6 +7,8 @@ package object codec {
     /* Filters input from invalid characters */
     def base16Decode: Array[Byte]            = Base16.decode(s)
     def base64TryDecode: Option[Array[Byte]] = Base64.tryDecode(s)
+    def tryBase64AndBase16Decode: Option[Array[Byte]] =
+      Base16.tryDecode(s).orElse(Base64.tryDecode(s))
   }
 
   implicit class ByteArraySyntax(a: Array[Byte]) {

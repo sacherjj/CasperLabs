@@ -1,22 +1,18 @@
-package io.casperlabs.node.api.graphql.schema.blocks
+package io.casperlabs.node.api.graphql.schema.blocks.types
 
 import cats.implicits._
-import io.casperlabs.casper.Estimator.BlockHash
-import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
-import io.casperlabs.casper.api.BlockAPI
+import com.google.protobuf.ByteString
+import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.api.BlockAPI.BlockAndMaybeDeploys
 import io.casperlabs.casper.consensus.Block._
 import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.consensus.info.DeployInfo.ProcessingResult
 import io.casperlabs.casper.consensus.info._
-import io.casperlabs.catscontrib.MonadThrowable
-import io.casperlabs.crypto.codec.Base16
+import io.casperlabs.crypto.codec.{Base16, ByteArraySyntax}
 import io.casperlabs.models.BlockImplicits._
-import io.casperlabs.node.api.graphql.RunToFuture
+import io.casperlabs.node.api.graphql.schema.blocks
+import io.casperlabs.node.api.graphql.schema.blocks.types.GraphQLBlockTypes.AccountKey
 import io.casperlabs.node.api.graphql.schema.utils.{DateType, ProtocolVersionType}
-import io.casperlabs.storage.block.BlockStorage
-import io.casperlabs.storage.dag.DagStorage
-import io.casperlabs.storage.deploy.DeployStorage
 import sangria.execution.deferred._
 import sangria.schema._
 
@@ -24,14 +20,15 @@ case class PageInfo(endCursor: String, hasNextPage: Boolean)
 
 case class DeployInfosWithPageInfo(deployInfos: List[DeployInfo], pageInfo: PageInfo)
 
-// format: off
-class GraphQLBlockTypes[F[_]: MonadThrowable
-                            : MultiParentCasperRef
-                            : BlockStorage
-                            : DeployStorage
-                            : DagStorage
-                            : RunToFuture] {
-// format: on
+/**
+  * Contains only GraphQL types without declaring actual ways of retrieving the information
+  */
+class GraphQLBlockTypes(
+    val blockFetcher: Fetcher[Unit, BlockAndMaybeDeploys, BlockAndMaybeDeploys, BlockHash],
+    val blocksByValidator: (Validator, Int, Long) => Action[Unit, List[BlockAndMaybeDeploys]],
+    val accountBalance: AccountKey => Action[Unit, Option[String]],
+    val accountDeploys: (AccountKey, Int, String) => Action[Unit, DeployInfosWithPageInfo]
+) {
 
   val SignatureType = ObjectType(
     "Signature",
@@ -82,10 +79,10 @@ class GraphQLBlockTypes[F[_]: MonadThrowable
         resolve = c => Base16.encode(c.value.deployHash.toByteArray)
       ),
       Field(
-        "accountId",
-        StringType,
-        "Base-16 encoded account public key".some,
-        resolve = c => Base16.encode(c.value.getHeader.accountPublicKey.toByteArray)
+        "account",
+        AccountType,
+        "Account related information".some,
+        resolve = c => c.value.getHeader.accountPublicKey
       ),
       Field(
         "timestamp",
@@ -142,36 +139,70 @@ class GraphQLBlockTypes[F[_]: MonadThrowable
     )
   )
 
-  val blockFetcher = Fetcher.caching(
-    { (_: Unit, hashes: Seq[BlockHash]) =>
-      // Fetches only unique blocks without repetitive reading of the same block many times.
-      //
-      // TODO: However, it still will be slow due to (in decreasing priority):
-      // 1) One-by-one reading from database: update underlying API to accept multiple block hashes using 'WHERE block_hash IN ...'
-      //
-      // 2) Reading a full block: make use of Sangria Projections, although, not clear if it's possible to do without modifying the library's source code
-      // UPDATE: It reads full blocks only if a query contains 'children' at any depth.
-      // On the other hand, if 'children' presented, then it will read *all* blocks as FULL, even those for which we didn't ask children.
-      // UPDATE: Make sure to fetch blocks only when it's really needed.
-      // For instance, for 'block { parents { blockHash }' query it shouldn't fetch parent blocks, because all information is already presented in the child itself.
-      //
-      // 3) Seq->List conversion: least critical, must be ignored until the above 2 issues are solved
-      RunToFuture[F].unsafeToFuture(
-        hashes.toList
-          .traverse { hash =>
-            BlockAPI.getBlockInfoWithDeploys[F](
-              hash,
-              DeployInfo.View.BASIC.some,
-              BlockInfo.View.FULL
+  lazy val ValidatorType = ObjectType(
+    "Validator",
+    "Validator related information",
+    () =>
+      fields[Unit, Validator](
+        Field(
+          "publicKeyBase16",
+          StringType,
+          "Validator's public key in Base16 encoding".some,
+          resolve = c => c.value.toByteArray.base16Encode
+        ),
+        Field(
+          "publicKeyBase64",
+          StringType,
+          "Validator's public key in Base64 encoding".some,
+          resolve = c => c.value.toByteArray.base64Encode
+        ),
+        Field(
+          "blocks",
+          ListType(BlockType),
+          "Blocks produced by the validator".some,
+          arguments = blocks.arguments.BlocksNum :: blocks.arguments.MaxBlockSeqNum :: Nil,
+          resolve = c =>
+            blocksByValidator(
+              c.value,
+              c.arg(blocks.arguments.BlocksNum),
+              c.arg(blocks.arguments.MaxBlockSeqNum)
             )
-          }
-          .map(list => list: Seq[BlockAndMaybeDeploys])
+        )
       )
-    }
-  )(HasId {
-    case (blockInfo, _) =>
-      blockInfo.getSummary.blockHash
-  })
+  )
+
+  lazy val AccountType = ObjectType(
+    "AccountInfo",
+    "Account related information",
+    () =>
+      fields[Unit, AccountKey](
+        Field(
+          "publicKeyBase16",
+          StringType,
+          "Account's public key in Base16 encoding".some,
+          resolve = c => c.value.toByteArray.base16Encode
+        ),
+        Field(
+          "publicKeyBase64",
+          StringType,
+          "Account's public key in Base64 encoding".some,
+          resolve = c => c.value.toByteArray.base64Encode
+        ),
+        Field(
+          "balance",
+          OptionType(StringType),
+          "Account's balance at the latest block in motes".some,
+          resolve = c => accountBalance(c.value)
+        ),
+        Field(
+          "deploys",
+          DeployInfosWithPageInfoType,
+          arguments = blocks.arguments.First :: blocks.arguments.After :: Nil,
+          resolve = c =>
+            accountDeploys(c.value, c.arg(blocks.arguments.First), c.arg(blocks.arguments.After))
+        )
+      )
+  )
 
   lazy val BlockInfoInterface = InterfaceType(
     "BlockInfo",
@@ -237,10 +268,10 @@ class GraphQLBlockTypes[F[_]: MonadThrowable
           resolve = c => c.value._1.getSummary.rank
         ),
         Field(
-          "validatorPublicKey",
-          StringType,
-          "Base-16 encoded public key of a validator created the block".some,
-          resolve = c => Base16.encode(c.value._1.getSummary.validatorPublicKey.toByteArray)
+          "validator",
+          ValidatorType,
+          "Validator related information".some,
+          resolve = c => c.value._1.getSummary.validatorPublicKey
         ),
         Field(
           "validatorBlockSeqNum",
@@ -330,14 +361,15 @@ class GraphQLBlockTypes[F[_]: MonadThrowable
   lazy val BlockType: ObjectType[Unit, BlockAndMaybeDeploys] = ObjectType(
     "Block",
     interfaces[Unit, BlockAndMaybeDeploys](BlockInfoInterface),
-    fields[Unit, BlockAndMaybeDeploys](
-      Field(
-        "deploys",
-        ListType(ProcessedDeployType),
-        "Deploys in the block".some,
-        resolve = c => c.value._2.get.map(_.asLeft[ProcessingResult])
+    () =>
+      fields[Unit, BlockAndMaybeDeploys](
+        Field(
+          "deploys",
+          ListType(ProcessedDeployType),
+          "Deploys in the block".some,
+          resolve = c => c.value._2.get.map(_.asLeft[ProcessingResult])
+        )
       )
-    )
   )
 
   val PageInfoType = ObjectType(
@@ -359,7 +391,7 @@ class GraphQLBlockTypes[F[_]: MonadThrowable
     )
   )
 
-  val DeployInfosWithPageInfoType = ObjectType(
+  val DeployInfosWithPageInfoType: ObjectType[Unit, DeployInfosWithPageInfo] = ObjectType(
     "deploys",
     "A list of deploys for the specified account",
     fields[Unit, DeployInfosWithPageInfo](
@@ -367,4 +399,9 @@ class GraphQLBlockTypes[F[_]: MonadThrowable
       Field("pageInfo", PageInfoType, resolve = _.value.pageInfo)
     )
   )
+}
+
+object GraphQLBlockTypes {
+  type AccountKey      = ByteString
+  type BlockHashPrefix = String
 }

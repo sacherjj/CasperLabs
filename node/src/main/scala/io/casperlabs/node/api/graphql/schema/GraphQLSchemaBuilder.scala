@@ -2,12 +2,15 @@ package io.casperlabs.node.api.graphql.schema
 
 import cats.implicits._
 import com.google.protobuf.ByteString
+import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.api.BlockAPI
+import io.casperlabs.casper.api.BlockAPI.BlockAndMaybeDeploys
 import io.casperlabs.casper.consensus.info.{BlockInfo, DeployInfo}
 import io.casperlabs.catscontrib.{Fs2Compiler, MonadThrowable}
 import io.casperlabs.crypto.Keys.PublicKey
 import io.casperlabs.crypto.codec.Base16
+import io.casperlabs.crypto.codec.StringSyntax
 import io.casperlabs.models.SmartContractEngineError
 import io.casperlabs.node.api.DeployInfoPagination.DeployInfoPageTokenParams
 import io.casperlabs.node.api.Utils.{
@@ -18,7 +21,8 @@ import io.casperlabs.node.api.Utils.{
 import io.casperlabs.node.api.casper.ListDeployInfosRequest
 import io.casperlabs.node.api.graphql.RunToFuture.ops._
 import io.casperlabs.node.api.graphql._
-import io.casperlabs.node.api.graphql.schema.blocks.{
+import io.casperlabs.node.api.graphql.schema.blocks.types.GraphQLBlockTypes.AccountKey
+import io.casperlabs.node.api.graphql.schema.blocks.types.{
   DeployInfosWithPageInfo,
   GraphQLBlockTypes,
   PageInfo
@@ -30,8 +34,10 @@ import io.casperlabs.smartcontracts.cltype.StoredValueInstance
 import io.casperlabs.storage.block._
 import io.casperlabs.storage.dag.DagStorage
 import io.casperlabs.storage.deploy.DeployStorage
-import sangria.execution.deferred.DeferredResolver
+import sangria.execution.deferred.{DeferredResolver, Fetcher, HasId}
 import sangria.schema._
+
+import scala.concurrent.Future
 
 // format: off
 private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream
@@ -50,7 +56,110 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream
   // GraphQL projections don't expose the body.
   val deployView = DeployInfo.View.BASIC
 
-  val blockTypes = new GraphQLBlockTypes[F]
+  val blockFetcher = Fetcher.caching(
+    { (_: Unit, hashes: Seq[BlockHash]) =>
+      // Fetches only unique blocks without repetitive reading of the same block many times.
+      //
+      // TODO: However, it still will be slow due to (in decreasing priority):
+      // 1) One-by-one reading from the database: update underlying API to accept multiple block hashes using 'WHERE block_hash IN ...'
+      //
+      // 2) Reading a full block: make use of Sangria Projections, although, not clear if it's possible to do without modifying the library's source code
+      // UPDATE: It reads full blocks only if a query contains 'children' at any depth.
+      // On the other hand, if 'children' presented, then it will read *all* blocks as FULL, even those for which we didn't ask children.
+      // UPDATE: Make sure to fetch blocks only when it's really needed.
+      // For instance, for 'block { parents { blockHash }' it shouldn't fetch parent blocks, because we have all the required information in the child block itself.
+      //
+      // 3) Seq->List conversion: least critical, must be ignored until we solve the above 2 issues
+      RunToFuture[F].unsafeToFuture(
+        hashes.toList
+          .traverse { hash =>
+            BlockAPI.getBlockInfoWithDeploys[F](
+              hash,
+              DeployInfo.View.BASIC.some,
+              BlockInfo.View.FULL
+            )
+          }
+          .map(list => list: Seq[BlockAndMaybeDeploys])
+      )
+    }
+  )(HasId {
+    case (blockInfo, _) =>
+      blockInfo.getSummary.blockHash
+  })
+
+  // TODO: Performance issue - make use of Sangria Projections.
+  // The same as the TODO #2 of the 'blockFetcher'
+  val blocksByValidator: (Validator, Int, Long) => Action[Unit, List[BlockAndMaybeDeploys]] =
+    (validator, blocksNum, maxBlockSeqNum) =>
+      BlockAPI
+        .getBlockInfosWithDeploysByValidator[F](
+          validator,
+          blocksNum = blocksNum,
+          maxBlockSeqNum = maxBlockSeqNum,
+          maybeDeployView = DeployInfo.View.BASIC.some,
+          blockView = BlockInfo.View.FULL
+        )
+        .unsafeToFuture
+
+  val accountBalance: AccountKey => Action[Unit, Option[String]] = { accountKey =>
+    BlockAPI.accountBalance[F](accountKey).unsafeToFuture
+  }
+
+  val accountDeploys: (AccountKey, Int, String) => Action[Unit, DeployInfosWithPageInfo] = {
+    (accountKey, first, after) =>
+      val program =
+        for {
+          first <- Utils
+                    .check[F, Int](
+                      first,
+                      "First must be greater than 0",
+                      _ > 0
+                    )
+          (pageSize, pageTokenParams) <- MonadThrowable[F].fromTry(
+                                          DeployInfoPagination
+                                            .parsePageToken(
+                                              ListDeployInfosRequest(
+                                                pageSize = first,
+                                                pageToken = after
+                                              )
+                                            )
+                                        )
+          accountPublicKeyBs = PublicKey(accountKey)
+          deploysWithOneMoreElem <- DeployStorage[F]
+                                     .reader(deployView)
+                                     .getDeploysByAccount(
+                                       accountPublicKeyBs,
+                                       pageSize + 1,
+                                       pageTokenParams.lastTimeStamp,
+                                       pageTokenParams.lastDeployHash,
+                                       isNext = true
+                                     )
+          (deploys, hasNextPage) = if (deploysWithOneMoreElem.length == pageSize + 1) {
+            (deploysWithOneMoreElem.take(pageSize), true)
+          } else {
+            (deploysWithOneMoreElem, false)
+          }
+          deployInfos <- DeployStorage[F]
+                          .reader(deployView)
+                          .getDeployInfos(deploys)
+          endCursor = DeployInfoPagination.createPageToken(
+            deploys.lastOption.map(
+              d =>
+                DeployInfoPageTokenParams(
+                  d.getHeader.timestamp,
+                  d.deployHash,
+                  isNext = true
+                )
+            )
+          )
+          pageInfo = PageInfo(endCursor, hasNextPage)
+          result   = DeployInfosWithPageInfo(deployInfos, pageInfo)
+        } yield result
+      program.unsafeToFuture
+  }
+
+  val blockTypes =
+    new GraphQLBlockTypes(blockFetcher, blocksByValidator, accountBalance, accountDeploys)
 
   private def projectionTerms(projections: Vector[ProjectedName]): Set[String] = {
     def flatToSet(ps: Vector[ProjectedName], acc: Set[String]): Set[String] =
@@ -135,66 +244,36 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream
             blockTypes.DeployInfosWithPageInfoType,
             arguments = blocks.arguments.AccountPublicKeyBase16 :: blocks.arguments.First :: blocks.arguments.After :: Nil,
             resolve = { c =>
-              val program =
-                for {
-                  first <- Utils
-                            .check[F, Int](
-                              c.arg(blocks.arguments.First),
-                              "First must be greater than 0",
-                              _ > 0
-                            )
-                  accountPublicKeyBase16 = c.arg(blocks.arguments.AccountPublicKeyBase16)
-                  after                  = c.arg(blocks.arguments.After)
-                  accountPublicKeyBase16 <- validateAccountPublicKey[F](
-                                             accountPublicKeyBase16,
-                                             ByteString.EMPTY
-                                           )
-                  (pageSize, pageTokenParams) <- MonadThrowable[F]
-                                                  .fromTry(
-                                                    DeployInfoPagination
-                                                      .parsePageToken(
-                                                        ListDeployInfosRequest(
-                                                          pageSize = first,
-                                                          pageToken = after
-                                                        )
-                                                      )
-                                                  )
-                  accountPublicKeyBs = PublicKey(
-                    ByteString.copyFrom(
-                      Base16.decode(accountPublicKeyBase16)
-                    )
-                  )
-                  deploysWithOneMoreElem <- DeployStorage[F]
-                                             .reader(deployView)
-                                             .getDeploysByAccount(
-                                               accountPublicKeyBs,
-                                               pageSize + 1,
-                                               pageTokenParams.lastTimeStamp,
-                                               pageTokenParams.lastDeployHash,
-                                               true
-                                             )
-                  (deploys, hasNextPage) = if (deploysWithOneMoreElem.length == pageSize + 1) {
-                    (deploysWithOneMoreElem.take(pageSize), true)
-                  } else {
-                    (deploysWithOneMoreElem, false)
-                  }
-                  deployInfos <- DeployStorage[F]
-                                  .reader(deployView)
-                                  .getDeployInfos(deploys)
-                  endCursor = DeployInfoPagination.createPageToken(
-                    deploys.lastOption.map(
-                      d =>
-                        DeployInfoPageTokenParams(
-                          d.getHeader.timestamp,
-                          d.deployHash,
-                          isNext = true
-                        )
-                    )
-                  )
-                  pageInfo = PageInfo(endCursor, hasNextPage)
-                  result   = DeployInfosWithPageInfo(deployInfos, pageInfo)
-                } yield result
-              program.unsafeToFuture
+              val accountPublicKeyBase16 = c.arg(blocks.arguments.AccountPublicKeyBase16)
+              val after                  = c.arg(blocks.arguments.After)
+              val first                  = c.arg(blocks.arguments.First)
+              val accountKeyEither = validateAccountPublicKey[Either[Throwable, *]](
+                accountPublicKeyBase16,
+                ByteString.EMPTY
+              ).map(s => ByteString.copyFrom(Base16.decode(s)))
+              accountKeyEither
+                .fold(
+                  e => Action.futureAction(Future.failed[DeployInfosWithPageInfo](e)),
+                  accountKey => accountDeploys(accountKey, first, after)
+                )
+            }
+          ),
+          Field(
+            "account",
+            OptionType(blockTypes.AccountType),
+            arguments = blocks.arguments.PublicKey :: Nil,
+            resolve = { c =>
+              val key = c.arg(blocks.arguments.PublicKey)
+              key.tryBase64AndBase16Decode.map(ByteString.copyFrom)
+            }
+          ),
+          Field(
+            "validator",
+            OptionType(blockTypes.ValidatorType),
+            arguments = blocks.arguments.PublicKey :: Nil,
+            resolve = { c =>
+              val key = c.arg(blocks.arguments.PublicKey)
+              key.tryBase64AndBase16Decode.map(ByteString.copyFrom)
             }
           ),
           Field(
