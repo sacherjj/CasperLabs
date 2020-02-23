@@ -29,9 +29,9 @@ const Home = observer((props: Props) => {
             <AccountsCard accounts={props.auth.accounts} />
             {props.auth.accounts &&
               props.auth.accounts.length > 0 && [
-                <FaucetCard />,
-                <ExploreCard />,
-                <GraphQLCard />
+                <FaucetCard key="faucet" />,
+                <ExploreCard key="explore" />,
+                <GraphQLCard key="graphql" />
               ]}
           </div>
         </div>
@@ -84,8 +84,10 @@ interface CardProps {
 const Card = (props: CardProps) => {
   const linkClass = 'card-footer text-white clearfix small z-1';
   const view = [
-    <span className="float-left">View Details</span>,
-    <span className="float-right">
+    <span key="left" className="float-left">
+      View Details
+    </span>,
+    <span key="right" className="float-right">
       <i className="fa fa-angle-right"></i>
     </span>
   ];

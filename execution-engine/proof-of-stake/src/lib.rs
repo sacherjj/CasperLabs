@@ -10,7 +10,7 @@ mod stakes;
 mod stakes_provider;
 
 use types::{
-    account::{PublicKey, PurseId},
+    account::PublicKey,
     system_contract_errors::pos::{Error, Result},
     AccessRights, TransferredTo, URef, U512,
 };
@@ -27,16 +27,15 @@ where
     R: RuntimeProvider,
     S: StakesProvider,
 {
-    fn bond(&self, validator: PublicKey, amount: U512, source_uref: URef) -> Result<()> {
+    fn bond(&self, validator: PublicKey, amount: U512, source: URef) -> Result<()> {
         if amount.is_zero() {
             return Err(Error::BondTooSmall);
         }
-        let source = PurseId::new(source_uref);
-        let pos_purse = internal::get_bonding_purse::<R>()?;
+        let target = internal::get_bonding_purse::<R>()?;
         let timestamp = R::get_block_time();
         // Transfer `amount` from the `source` purse to PoS internal purse. POS_PURSE is a constant,
-        // it is the PurseID of the proof-of-stake contract's own purse.
-        M::transfer_from_purse_to_purse(source, pos_purse, amount)
+        // it is the URef of the proof-of-stake contract's own purse.
+        M::transfer_from_purse_to_purse(source, target, amount)
             .map_err(|_| Error::BondTransferFailed)?;
         internal::bond::<Q, S>(amount, validator, timestamp)?;
 
@@ -44,7 +43,7 @@ where
         let unbonds = internal::step::<Q, S>(timestamp)?;
         for entry in unbonds {
             let _: TransferredTo =
-                M::transfer_from_purse_to_account(pos_purse, entry.validator, entry.amount)
+                M::transfer_from_purse_to_account(source, entry.validator, entry.amount)
                     .map_err(|_| Error::BondTransferFailed)?;
         }
         Ok(())
@@ -81,25 +80,22 @@ where
         Ok(())
     }
 
-    fn get_payment_purse(&self) -> Result<PurseId> {
+    fn get_payment_purse(&self) -> Result<URef> {
         let purse = internal::get_payment_purse::<R>()?;
         // Limit the access rights so only balance query and deposit are allowed.
-        Ok(PurseId::new(URef::new(
-            purse.value().addr(),
-            AccessRights::READ_ADD,
-        )))
+        Ok(URef::new(purse.addr(), AccessRights::READ_ADD))
     }
 
-    fn set_refund_purse(&self, purse_id: PurseId) -> Result<()> {
-        internal::set_refund::<R>(purse_id.value())
+    fn set_refund_purse(&self, purse: URef) -> Result<()> {
+        internal::set_refund::<R>(purse)
     }
 
-    fn get_refund_purse(&self) -> Result<Option<PurseId>> {
+    fn get_refund_purse(&self) -> Result<Option<URef>> {
         // We purposely choose to remove the access rights so that we do not
         // accidentally give rights for a purse to some contract that is not
         // supposed to have it.
         let maybe_purse = internal::get_refund_purse::<R>()?;
-        Ok(maybe_purse.map(|p| PurseId::new(p.value().remove_access_rights())))
+        Ok(maybe_purse.map(|p| p.remove_access_rights()))
     }
 
     fn finalize_payment(&self, amount_spent: U512, account: PublicKey) -> Result<()> {
@@ -111,7 +107,7 @@ mod internal {
     use alloc::vec::Vec;
 
     use types::{
-        account::{PublicKey, PurseId},
+        account::PublicKey,
         system_contract_errors::pos::{Error, PurseLookupError, Result},
         BlockTime, Key, Phase, URef, U512,
     };
@@ -122,7 +118,7 @@ mod internal {
     };
 
     /// Account used to run system functions (in particular `finalize_payment`).
-    const SYSTEM_ACCOUNT: [u8; 32] = [0u8; 32];
+    const SYSTEM_ACCOUNT: PublicKey = PublicKey::ed25519_from([0u8; 32]);
 
     /// The uref name where the PoS purse is stored. It contains all staked motes, and all unbonded
     /// motes that are yet to be paid out.
@@ -226,47 +222,45 @@ mod internal {
     }
 
     /// Attempts to look up a purse from the named_keys
-    fn get_purse_id<R: RuntimeProvider>(
-        name: &str,
-    ) -> core::result::Result<PurseId, PurseLookupError> {
+    fn get_purse<R: RuntimeProvider>(name: &str) -> core::result::Result<URef, PurseLookupError> {
         R::get_key(name)
             .ok_or(PurseLookupError::KeyNotFound)
             .and_then(|key| match key {
-                Key::URef(uref) => Ok(PurseId::new(uref)),
+                Key::URef(uref) => Ok(uref),
                 _ => Err(PurseLookupError::KeyUnexpectedType),
             })
     }
 
     /// Returns the purse for accepting payment for tranasactions.
-    pub fn get_payment_purse<R: RuntimeProvider>() -> Result<PurseId> {
-        get_purse_id::<R>(PAYMENT_PURSE_KEY).map_err(PurseLookupError::payment)
+    pub fn get_payment_purse<R: RuntimeProvider>() -> Result<URef> {
+        get_purse::<R>(PAYMENT_PURSE_KEY).map_err(PurseLookupError::payment)
     }
 
     /// Returns the purse for holding bonds
-    pub fn get_bonding_purse<R: RuntimeProvider>() -> Result<PurseId> {
-        get_purse_id::<R>(BONDING_PURSE_KEY).map_err(PurseLookupError::bonding)
+    pub fn get_bonding_purse<R: RuntimeProvider>() -> Result<URef> {
+        get_purse::<R>(BONDING_PURSE_KEY).map_err(PurseLookupError::bonding)
     }
 
     /// Returns the purse for holding validator earnings
-    pub fn get_rewards_purse<R: RuntimeProvider>() -> Result<PurseId> {
-        get_purse_id::<R>(REWARDS_PURSE_KEY).map_err(PurseLookupError::rewards)
+    pub fn get_rewards_purse<R: RuntimeProvider>() -> Result<URef> {
+        get_purse::<R>(REWARDS_PURSE_KEY).map_err(PurseLookupError::rewards)
     }
 
     /// Sets the purse where refunds (excess funds not spent to pay for computation) will be sent.
     /// Note that if this function is never called, the default location is the main purse of the
     /// deployer's account.
-    pub fn set_refund<R: RuntimeProvider>(purse_id: URef) -> Result<()> {
+    pub fn set_refund<R: RuntimeProvider>(purse: URef) -> Result<()> {
         if let Phase::Payment = R::get_phase() {
-            R::put_key(REFUND_PURSE_KEY, Key::URef(purse_id));
+            R::put_key(REFUND_PURSE_KEY, Key::URef(purse));
             return Ok(());
         }
         Err(Error::SetRefundPurseCalledOutsidePayment)
     }
 
     /// Returns the currently set refund purse.
-    pub fn get_refund_purse<R: RuntimeProvider>() -> Result<Option<PurseId>> {
-        match get_purse_id::<R>(REFUND_PURSE_KEY) {
-            Ok(purse_id) => Ok(Some(purse_id)),
+    pub fn get_refund_purse<R: RuntimeProvider>() -> Result<Option<URef>> {
+        match get_purse::<R>(REFUND_PURSE_KEY) {
+            Ok(uref) => Ok(Some(uref)),
             Err(PurseLookupError::KeyNotFound) => Ok(None),
             Err(PurseLookupError::KeyUnexpectedType) => Err(Error::RefundPurseKeyUnexpectedType),
         }
@@ -281,7 +275,7 @@ mod internal {
         account: PublicKey,
     ) -> Result<()> {
         let caller = R::get_caller();
-        if caller.value() != SYSTEM_ACCOUNT {
+        if caller != SYSTEM_ACCOUNT {
             return Err(Error::SystemFunctionCalledByUserAccount);
         }
 
@@ -309,7 +303,7 @@ mod internal {
 
         // give refund
         let refund_purse = match refund_purse {
-            Some(purse_id) => purse_id,
+            Some(uref) => uref,
             None => return refund_to_account::<M>(payment_purse, account, refund_amount),
         };
 
@@ -322,7 +316,7 @@ mod internal {
     }
 
     pub fn refund_to_account<M: MintProvider>(
-        payment_purse: PurseId,
+        payment_purse: URef,
         account: PublicKey,
         amount: U512,
     ) -> Result<()> {
@@ -353,7 +347,7 @@ mod internal {
             static BONDING: RefCell<Queue> = RefCell::new(Queue(Default::default()));
             static UNBONDING: RefCell<Queue> = RefCell::new(Queue(Default::default()));
             static STAKES: RefCell<Stakes> = RefCell::new(
-                Stakes(iter::once((PublicKey::new(KEY1), U512::from(1_000))).collect())
+                Stakes(iter::once((PublicKey::ed25519_from(KEY1), U512::from(1_000))).collect())
             );
         }
 
@@ -393,7 +387,7 @@ mod internal {
             let expected = Stakes(
                 stakes
                     .iter()
-                    .map(|(key, amount)| (PublicKey::new(*key), U512::from(*amount)))
+                    .map(|(key, amount)| (PublicKey::ed25519_from(*key), U512::from(*amount)))
                     .collect(),
             );
             assert_eq!(Ok(expected), TestStakes::read());
@@ -403,7 +397,7 @@ mod internal {
         fn test_bond_step_unbond() {
             bond::<TestQueues, TestStakes>(
                 U512::from(500),
-                PublicKey::new(KEY2),
+                PublicKey::ed25519_from(KEY2),
                 BlockTime::new(1),
             )
             .expect("bond validator 2");
@@ -417,7 +411,7 @@ mod internal {
 
             unbond::<TestQueues, TestStakes>(
                 Some(U512::from(500)),
-                PublicKey::new(KEY1),
+                PublicKey::ed25519_from(KEY1),
                 BlockTime::new(2),
             )
             .expect("partly unbond validator 1");

@@ -24,7 +24,7 @@ pub extern "C" fn pos_ext() {
     pos::delegate();
 }
 
-fn upgrade_turef(name: &str, contract_ref: ContractRef) {
+fn upgrade_uref(name: &str, contract_ref: ContractRef) {
     let uref = contract_ref
         .into_uref()
         .ok_or(ApiError::User(CustomError::ContractPointerHash as u16))
@@ -34,12 +34,12 @@ fn upgrade_turef(name: &str, contract_ref: ContractRef) {
 
 fn upgrade_mint() {
     let mint_ref = system::get_mint();
-    upgrade_turef(MODIFIED_MINT_EXT_FUNCTION_NAME, mint_ref);
+    upgrade_uref(MODIFIED_MINT_EXT_FUNCTION_NAME, mint_ref);
 }
 
 fn upgrade_proof_of_stake() {
     let pos_ref = system::get_proof_of_stake();
-    upgrade_turef(POS_EXT_FUNCTION_NAME, pos_ref);
+    upgrade_uref(POS_EXT_FUNCTION_NAME, pos_ref);
 }
 
 #[no_mangle]

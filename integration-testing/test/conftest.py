@@ -1,6 +1,7 @@
 from typing import Generator
 
 import docker as docker_py
+import os
 import pytest
 import shutil
 
@@ -30,6 +31,15 @@ from casperlabs_local_net.casperlabs_network import (
 )
 
 
+@pytest.fixture(scope="session")
+def unique_run_num(pytestconfig):
+    try:
+        run_num = int(os.environ.get("UNIQUE_RUN_NUM"))
+    except TypeError:
+        run_num = 0
+    return run_num
+
+
 @pytest.fixture(scope="function")
 def temp_dir():
     directory = make_tempdir(random_string(6))
@@ -38,8 +48,9 @@ def temp_dir():
 
 
 @pytest.fixture(scope="session")
-def docker_client_fixture() -> Generator[DockerClient, None, None]:
+def docker_client_fixture(unique_run_num) -> Generator[DockerClient, None, None]:
     docker_client = docker_py.from_env()
+    docker_client.cl_unique_run_num = unique_run_num
     try:
         yield docker_client
     finally:

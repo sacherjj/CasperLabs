@@ -30,14 +30,15 @@ pub const STANDARD_PAYMENT_CONTRACT: &str = "standard_payment.wasm";
 pub const DEFAULT_CHAIN_NAME: &str = "gerald";
 pub const DEFAULT_GENESIS_TIMESTAMP: u64 = 0;
 pub const DEFAULT_BLOCK_TIME: u64 = 0;
-pub const MOCKED_ACCOUNT_ADDRESS: [u8; 32] = [48u8; 32];
+pub const MOCKED_ACCOUNT_ADDRESS: PublicKey = PublicKey::ed25519_from([48u8; 32]);
+
+pub const DEFAULT_ACCOUNT_KEY: PublicKey = DEFAULT_ACCOUNT_ADDR;
 
 lazy_static! {
-    pub static ref DEFAULT_ACCOUNT_KEY: PublicKey = PublicKey::new(DEFAULT_ACCOUNT_ADDR);
     pub static ref DEFAULT_ACCOUNTS: Vec<GenesisAccount> = {
         let mut ret = Vec::new();
         let genesis_account = GenesisAccount::new(
-            PublicKey::new(DEFAULT_ACCOUNT_ADDR),
+            DEFAULT_ACCOUNT_ADDR,
             Motes::new(DEFAULT_ACCOUNT_INITIAL_BALANCE.into()),
             Motes::zero(),
         );

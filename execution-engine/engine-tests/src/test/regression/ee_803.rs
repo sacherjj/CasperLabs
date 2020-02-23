@@ -10,30 +10,24 @@ use engine_test_support::{
     internal::{utils, ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_ACCOUNTS},
     DEFAULT_ACCOUNT_ADDR,
 };
-use types::{
-    account::{PublicKey, PurseId},
-    Key, U512,
-};
+use types::{account::PublicKey, Key, URef, U512};
 
 const CONTRACT_DO_NOTHING: &str = "do_nothing.wasm";
 const CONTRACT_TRANSFER: &str = "transfer_purse_to_account.wasm";
 const CONTRACT_EE_803_REGRESSION: &str = "ee_803_regression.wasm";
 const COMMAND_BOND: &str = "bond";
 const COMMAND_UNBOND: &str = "unbond";
-const ACCOUNT_ADDR_1: [u8; 32] = [1u8; 32];
+const ACCOUNT_ADDR_1: PublicKey = PublicKey::ed25519_from([1u8; 32]);
 const GENESIS_VALIDATOR_STAKE: u64 = 50_000;
 
-fn get_pos_purse_id_by_name(
-    builder: &InMemoryWasmTestBuilder,
-    purse_name: &str,
-) -> Option<PurseId> {
+fn get_pos_purse_by_name(builder: &InMemoryWasmTestBuilder, purse_name: &str) -> Option<URef> {
     let pos_contract = builder.get_pos_contract();
 
     pos_contract
         .named_keys()
         .get(purse_name)
         .and_then(Key::as_uref)
-        .map(|u| PurseId::new(*u))
+        .cloned()
 }
 
 fn get_cost(response: &[Rc<ExecutionResult>]) -> U512 {
@@ -59,7 +53,7 @@ fn should_not_be_able_to_unbond_reward() {
     let accounts = {
         let mut tmp: Vec<GenesisAccount> = DEFAULT_ACCOUNTS.clone();
         let account = GenesisAccount::new(
-            PublicKey::new([42; 32]),
+            PublicKey::ed25519_from([42; 32]),
             Motes::new(GENESIS_VALIDATOR_STAKE.into()) * Motes::new(2.into()),
             Motes::new(GENESIS_VALIDATOR_STAKE.into()),
         );
@@ -85,11 +79,11 @@ fn should_not_be_able_to_unbond_reward() {
 
     builder.exec(exec_request_1).expect_success().commit();
 
-    let rewards_purse = get_pos_purse_id_by_name(&builder, POS_REWARDS_PURSE).unwrap();
+    let rewards_purse = get_pos_purse_by_name(&builder, POS_REWARDS_PURSE).unwrap();
     let default_account_purse = builder
         .get_account(DEFAULT_ACCOUNT_ADDR)
         .expect("should get genesis account")
-        .purse_id();
+        .main_purse();
 
     let rewards_balance_pre = builder.get_purse_balance(rewards_purse);
     let default_acc_balance_pre = builder.get_purse_balance(default_account_purse);

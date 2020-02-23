@@ -414,11 +414,11 @@ class CasperLabsClient:
     @api
     def transfer(self, target_account_hex, amount, **deploy_args):
         target_account_bytes = bytes.fromhex(target_account_hex)
-        deploy_args["session"] = bundled_contract("transfer_to_account.wasm")
+        deploy_args["session"] = bundled_contract("transfer_to_account_u512.wasm")
         deploy_args["session_args"] = abi.ABI.args(
             [
                 abi.ABI.account("account", target_account_bytes),
-                abi.ABI.long_value("amount", amount),
+                abi.ABI.u512("amount", amount),
             ]
         )
         return self.deploy(**deploy_args)
@@ -586,7 +586,7 @@ class CasperLabsClient:
         mintPublic = urefs[0]
 
         mintPublicHex = mintPublic.key.uref.uref.hex()
-        purseAddrHex = account.purse_id.uref.hex()
+        purseAddrHex = account.main_purse.uref.hex()
         localKeyValue = f"{mintPublicHex}:{purseAddrHex}"
 
         balanceURef = self.queryState(block_hash, localKeyValue, "", "local")
@@ -596,20 +596,40 @@ class CasperLabsClient:
         return int(balance.big_int.value)
 
     @api
-    def showDeploy(self, deploy_hash_base16: str, full_view=True):
+    def showDeploy(
+        self,
+        deploy_hash_base16: str,
+        full_view: bool = False,
+        wait_for_processed: bool = False,
+        delay: int = DEPLOY_STATUS_CHECK_DELAY,
+        timeout_seconds: int = DEPLOY_STATUS_TIMEOUT,
+    ):
         """
         Retrieve information about a single deploy by hash.
         """
-        return self.casperService.GetDeployInfo(
-            casper.GetDeployInfoRequest(
-                deploy_hash_base16=deploy_hash_base16,
-                view=(
-                    full_view
-                    and info.DeployInfo.View.FULL
-                    or info.DeployInfo.View.BASIC
-                ),
+        start_time = time.time()
+        while True:
+            deploy_info = self.casperService.GetDeployInfo(
+                casper.GetDeployInfoRequest(
+                    deploy_hash_base16=deploy_hash_base16,
+                    view=(
+                        full_view
+                        and info.DeployInfo.View.FULL
+                        or info.DeployInfo.View.BASIC
+                    ),
+                )
             )
-        )
+            if (
+                wait_for_processed
+                and deploy_info.status.state == info.DeployInfo.State.PENDING
+            ):
+                if time.time() - start_time > timeout_seconds:
+                    raise Exception(
+                        f"Timed out waiting for deploy {deploy_hash_base16} to be processed"
+                    )
+                time.sleep(delay)
+                continue
+            return deploy_info
 
     @api
     def showDeploys(self, block_hash_base16: str, full_view=True):

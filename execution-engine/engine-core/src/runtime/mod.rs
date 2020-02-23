@@ -16,7 +16,7 @@ use contract::args_parser::ArgsParser;
 use engine_shared::{account::Account, contract::Contract, gas::Gas, stored_value::StoredValue};
 use engine_storage::global_state::StateReader;
 use types::{
-    account::{ActionType, PublicKey, PurseId, Weight, PUBLIC_KEY_SERIALIZED_LENGTH},
+    account::{ActionType, PublicKey, Weight},
     bytesrepr::{self, ToBytes},
     system_contract_errors,
     system_contract_errors::mint,
@@ -64,8 +64,11 @@ pub fn instance_and_memory(
     let resolver = create_module_resolver(protocol_version)?;
     let mut imports = ImportsBuilder::new();
     imports.push_resolver("env", &resolver);
-    let instance = ModuleInstance::new(&module, &imports)?.assert_no_start();
-
+    let not_started_module = ModuleInstance::new(&module, &imports)?;
+    if not_started_module.has_start() {
+        return Err(Error::UnsupportedWasmStart);
+    }
+    let instance = not_started_module.not_started_instance().clone();
     let memory = resolver.memory_ref()?;
     Ok((instance, memory))
 }
@@ -1333,103 +1336,6 @@ fn extract_urefs(cl_value: &CLValue) -> Result<Vec<URef>, Error> {
     }
 }
 
-fn sub_call<R>(
-    parity_module: Module,
-    args: Vec<CLValue>,
-    named_keys: &mut BTreeMap<String, Key>,
-    key: Key,
-    current_runtime: &mut Runtime<R>,
-    // Unforgable references passed across the call boundary from caller to callee (necessary if
-    // the contract takes a uref argument).
-    extra_urefs: Vec<Key>,
-    protocol_version: ProtocolVersion,
-) -> Result<CLValue, Error>
-where
-    R: StateReader<Key, StoredValue>,
-    R::Error: Into<Error>,
-{
-    let (instance, memory) = instance_and_memory(parity_module.clone(), protocol_version)?;
-
-    let access_rights = {
-        let mut keys: Vec<Key> = named_keys.values().cloned().collect();
-        keys.extend(extra_urefs);
-        keys.push(current_runtime.get_mint_contract_uref().into());
-        keys.push(current_runtime.get_pos_contract_uref().into());
-        extract_access_rights_from_keys(keys)
-    };
-
-    let system_contract_cache = SystemContractCache::clone(&current_runtime.system_contract_cache);
-
-    let mut runtime = Runtime {
-        system_contract_cache,
-        memory,
-        module: parity_module,
-        host_buffer: None,
-        context: RuntimeContext::new(
-            current_runtime.context.state(),
-            named_keys,
-            access_rights,
-            args,
-            current_runtime.context.authorization_keys().clone(),
-            &current_runtime.context.account(),
-            key,
-            current_runtime.context.get_blocktime(),
-            current_runtime.context.get_deployhash(),
-            current_runtime.context.gas_limit(),
-            current_runtime.context.gas_counter(),
-            current_runtime.context.fn_store_id(),
-            current_runtime.context.address_generator(),
-            protocol_version,
-            current_runtime.context.correlation_id(),
-            current_runtime.context.phase(),
-            current_runtime.context.protocol_data(),
-        ),
-    };
-
-    let result = instance.invoke_export("call", &[], &mut runtime);
-
-    // TODO: To account for the gas used in a subcall, we should uncomment the following lines
-    // if !current_runtime.charge_gas(runtime.context.gas_counter()) {
-    //     return Err(Error::GasLimit);
-    // }
-
-    match result {
-        // If `Ok` and the `host_buffer` is `None`, the contract's execution succeeded but did not
-        // explicitly call `runtime::ret()`.  Treat as though the execution returned the unit type
-        // `()` as per Rust functions which don't specify a return value.
-        Ok(_) => Ok(runtime.take_host_buffer().unwrap_or(CLValue::from_t(())?)),
-        Err(e) => {
-            if let Some(host_error) = e.as_host_error() {
-                // If the "error" was in fact a trap caused by calling `ret` then
-                // this is normal operation and we should return the value captured
-                // in the Runtime result field.
-                let downcasted_error = host_error.downcast_ref::<Error>().unwrap();
-                match downcasted_error {
-                    Error::Ret(ref ret_urefs) => {
-                        //insert extra urefs returned from call
-                        let ret_urefs_map: HashMap<Address, HashSet<AccessRights>> =
-                            extract_access_rights_from_urefs(ret_urefs.clone());
-                        current_runtime.context.access_rights_extend(ret_urefs_map);
-                        // if ret has not set host_buffer consider it programmer error
-                        return runtime.take_host_buffer().ok_or(Error::ExpectedReturnValue);
-                    }
-                    Error::Revert(status) => {
-                        // Propagate revert as revert, instead of passing it as
-                        // InterpreterError.
-                        return Err(Error::Revert(*status));
-                    }
-                    Error::InvalidContext => {
-                        // TODO: https://casperlabs.atlassian.net/browse/EE-771
-                        return Err(Error::InvalidContext);
-                    }
-                    _ => {}
-                }
-            }
-            Err(Error::Interpreter(e))
-        }
-    }
-}
-
 impl<'a, R> Runtime<'a, R>
 where
     R: StateReader<Key, StoredValue>,
@@ -1652,21 +1558,34 @@ where
 
     /// Writes runtime context's account main purse to [dest_ptr] in the Wasm memory.
     fn get_main_purse(&mut self, dest_ptr: u32) -> Result<(), Trap> {
-        let purse_id = self.context.get_main_purse()?;
-        let purse_id_bytes = purse_id.into_bytes().map_err(Error::BytesRepr)?;
+        let purse = self.context.get_main_purse()?;
+        let purse_bytes = purse.into_bytes().map_err(Error::BytesRepr)?;
         self.memory
-            .set(dest_ptr, &purse_id_bytes)
+            .set(dest_ptr, &purse_bytes)
             .map_err(|e| Error::Interpreter(e).into())
     }
 
     /// Writes caller (deploy) account public key to [dest_ptr] in the Wasm
     /// memory.
-    fn get_caller(&mut self, dest_ptr: u32) -> Result<(), Trap> {
-        let key = self.context.get_caller();
-        let bytes = key.into_bytes().map_err(Error::BytesRepr)?;
-        self.memory
-            .set(dest_ptr, &bytes)
-            .map_err(|e| Error::Interpreter(e).into())
+    fn get_caller(&mut self, output_size: u32) -> Result<Result<(), ApiError>, Trap> {
+        if !self.can_write_to_host_buffer() {
+            // Exit early if the host buffer is already occupied
+            return Ok(Err(ApiError::HostBufferFull));
+        }
+        let value = CLValue::from_t(self.context.get_caller()).map_err(Error::CLValue)?;
+        let value_size = value.inner_bytes().len();
+
+        // Save serialized public key into host buffer
+        if let Err(error) = self.write_host_buffer(value) {
+            return Ok(Err(error));
+        }
+
+        // Write output
+        let output_size_bytes = value_size.to_le_bytes(); // Wasm is little-endian
+        if let Err(error) = self.memory.set(output_size, &output_size_bytes) {
+            return Err(Error::Interpreter(error).into());
+        }
+        Ok(Ok(()))
     }
 
     /// Writes runtime context's phase to [dest_ptr] in the Wasm memory.
@@ -1765,18 +1684,94 @@ where
             self.context.validate_key(key)?;
         }
 
-        let mut refs = contract.take_named_keys();
+        let mut named_keys = contract.take_named_keys();
 
-        let result = sub_call(
-            module,
+        let (instance, memory) = instance_and_memory(module.clone(), contract_version)?;
+
+        let access_rights = {
+            let mut keys: Vec<Key> = named_keys.values().cloned().collect();
+            keys.extend(extra_urefs);
+            keys.push(self.get_mint_contract_uref().into());
+            keys.push(self.get_pos_contract_uref().into());
+            extract_access_rights_from_keys(keys)
+        };
+
+        let system_contract_cache = SystemContractCache::clone(&self.system_contract_cache);
+
+        let host_buffer = None;
+
+        let context = RuntimeContext::new(
+            self.context.state(),
+            &mut named_keys,
+            access_rights,
             args,
-            &mut refs,
+            self.context.authorization_keys().clone(),
+            &self.context.account(),
             key,
-            self,
-            extra_urefs,
+            self.context.get_blocktime(),
+            self.context.get_deployhash(),
+            self.context.gas_limit(),
+            self.context.gas_counter(),
+            self.context.fn_store_id(),
+            self.context.address_generator(),
             contract_version,
-        )?;
-        Ok(result)
+            self.context.correlation_id(),
+            self.context.phase(),
+            self.context.protocol_data(),
+        );
+
+        let mut runtime = Runtime {
+            system_contract_cache,
+            memory,
+            module,
+            host_buffer,
+            context,
+        };
+
+        let result = instance.invoke_export("call", &[], &mut runtime);
+
+        // TODO: To account for the gas used in a subcall, we should uncomment the following lines
+        // if !current_runtime.charge_gas(runtime.context.gas_counter()) {
+        //     return Err(Error::GasLimit);
+        // }
+
+        let error = match result {
+            Err(error) => error,
+            // If `Ok` and the `host_buffer` is `None`, the contract's execution succeeded but did
+            // not explicitly call `runtime::ret()`.  Treat as though the execution
+            // returned the unit type `()` as per Rust functions which don't specify a
+            // return value.
+            Ok(_) => return Ok(runtime.take_host_buffer().unwrap_or(CLValue::from_t(())?)),
+        };
+
+        if let Some(host_error) = error.as_host_error() {
+            // If the "error" was in fact a trap caused by calling `ret` then
+            // this is normal operation and we should return the value captured
+            // in the Runtime result field.
+            let downcasted_error = host_error.downcast_ref::<Error>().unwrap();
+            match downcasted_error {
+                Error::Ret(ref ret_urefs) => {
+                    // insert extra urefs returned from call
+                    let ret_urefs_map: HashMap<Address, HashSet<AccessRights>> =
+                        extract_access_rights_from_urefs(ret_urefs.clone());
+                    self.context.access_rights_extend(ret_urefs_map);
+                    // if ret has not set host_buffer consider it programmer error
+                    return runtime.take_host_buffer().ok_or(Error::ExpectedReturnValue);
+                }
+                Error::Revert(status) => {
+                    // Propagate revert as revert, instead of passing it as
+                    // InterpreterError.
+                    return Err(Error::Revert(*status));
+                }
+                Error::InvalidContext => {
+                    // TODO: https://casperlabs.atlassian.net/browse/EE-771
+                    return Err(Error::InvalidContext);
+                }
+                _ => {}
+            }
+        }
+
+        Err(Error::Interpreter(error))
     }
 
     fn call_contract_host_buffer(
@@ -2025,11 +2020,15 @@ where
         Error::Revert(status).into()
     }
 
-    fn add_associated_key(&mut self, public_key_ptr: u32, weight_value: u8) -> Result<i32, Trap> {
+    fn add_associated_key(
+        &mut self,
+        public_key_ptr: u32,
+        public_key_size: usize,
+        weight_value: u8,
+    ) -> Result<i32, Trap> {
         let public_key = {
             // Public key as serialized bytes
-            let source_serialized =
-                self.bytes_from_mem(public_key_ptr, PUBLIC_KEY_SERIALIZED_LENGTH)?;
+            let source_serialized = self.bytes_from_mem(public_key_ptr, public_key_size)?;
             // Public key deserialized
             let source: PublicKey =
                 bytesrepr::deserialize(source_serialized).map_err(Error::BytesRepr)?;
@@ -2049,11 +2048,14 @@ where
         }
     }
 
-    fn remove_associated_key(&mut self, public_key_ptr: u32) -> Result<i32, Trap> {
+    fn remove_associated_key(
+        &mut self,
+        public_key_ptr: u32,
+        public_key_size: usize,
+    ) -> Result<i32, Trap> {
         let public_key = {
             // Public key as serialized bytes
-            let source_serialized =
-                self.bytes_from_mem(public_key_ptr, PUBLIC_KEY_SERIALIZED_LENGTH)?;
+            let source_serialized = self.bytes_from_mem(public_key_ptr, public_key_size)?;
             // Public key deserialized
             let source: PublicKey =
                 bytesrepr::deserialize(source_serialized).map_err(Error::BytesRepr)?;
@@ -2069,12 +2071,12 @@ where
     fn update_associated_key(
         &mut self,
         public_key_ptr: u32,
+        public_key_size: usize,
         weight_value: u8,
     ) -> Result<i32, Trap> {
         let public_key = {
             // Public key as serialized bytes
-            let source_serialized =
-                self.bytes_from_mem(public_key_ptr, PUBLIC_KEY_SERIALIZED_LENGTH)?;
+            let source_serialized = self.bytes_from_mem(public_key_ptr, public_key_size)?;
             // Public key deserialized
             let source: PublicKey =
                 bytesrepr::deserialize(source_serialized).map_err(Error::BytesRepr)?;
@@ -2130,19 +2132,19 @@ where
 
     /// Calls the "create" method on the mint contract at the given mint
     /// contract key
-    fn mint_create(&mut self, mint_contract_key: Key) -> Result<PurseId, Error> {
+    fn mint_create(&mut self, mint_contract_key: Key) -> Result<URef, Error> {
         let args_bytes = {
             let args = ("create",);
             ArgsParser::parse(args)?.into_bytes()?
         };
 
         let result = self.call_contract(mint_contract_key, args_bytes)?;
-        let purse_uref = result.into_t()?;
+        let purse = result.into_t()?;
 
-        Ok(PurseId::new(purse_uref))
+        Ok(purse)
     }
 
-    fn create_purse(&mut self) -> Result<PurseId, Error> {
+    fn create_purse(&mut self) -> Result<URef, Error> {
         let mint_contract_key = self.get_mint_contract_uref().into();
         self.mint_create(mint_contract_key)
     }
@@ -2152,15 +2154,12 @@ where
     fn mint_transfer(
         &mut self,
         mint_contract_key: Key,
-        source: PurseId,
-        target: PurseId,
+        source: URef,
+        target: URef,
         amount: U512,
     ) -> Result<(), Error> {
-        let source_value: URef = source.value();
-        let target_value: URef = target.value();
-
         let args_bytes = {
-            let args = ("transfer", source_value, target_value, amount);
+            let args = ("transfer", source, target, amount);
             ArgsParser::parse(args)?.into_bytes()?
         };
 
@@ -2173,14 +2172,13 @@ where
     /// of motes from the given source purse to the new account's purse.
     fn transfer_to_new_account(
         &mut self,
-        source: PurseId,
+        source: URef,
         target: PublicKey,
         amount: U512,
     ) -> Result<TransferResult, Error> {
         let mint_contract_key = self.get_mint_contract_uref().into();
 
-        let target_addr = target.value();
-        let target_key = Key::Account(target_addr);
+        let target_key = Key::Account(target);
 
         // A precondition check that verifies that the transfer can be done
         // as the source purse has enough funds to cover the transfer.
@@ -2188,13 +2186,13 @@ where
             return Ok(Err(ApiError::Transfer));
         }
 
-        let target_purse_id = self.mint_create(mint_contract_key)?;
+        let target_purse = self.mint_create(mint_contract_key)?;
 
-        if source == target_purse_id {
+        if source == target_purse {
             return Ok(Err(ApiError::Transfer));
         }
 
-        match self.mint_transfer(mint_contract_key, source, target_purse_id, amount) {
+        match self.mint_transfer(mint_contract_key, source, target_purse, amount) {
             Ok(_) => {
                 // After merging in EE-704 system contracts lookup internally uses protocol data and
                 // this is used for backwards compatibility with explorer to query mint/pos urefs.
@@ -2217,7 +2215,7 @@ where
                     }
                 })
                 .collect();
-                let account = Account::create(target_addr, named_keys, target_purse_id);
+                let account = Account::create(target, named_keys, target_purse);
                 self.context.write_account(target_key, account)?;
                 Ok(Ok(TransferredTo::NewAccount))
             }
@@ -2226,18 +2224,18 @@ where
     }
 
     /// Transferring a given amount of motes from the given source purse to the
-    /// new account's purse. Requires that the [`PurseId`]s have already
+    /// new account's purse. Requires that the [`URef`]s have already
     /// been created by the mint contract (or are the genesis account's).
     fn transfer_to_existing_account(
         &mut self,
-        source: PurseId,
-        target: PurseId,
+        source: URef,
+        target: URef,
         amount: U512,
     ) -> Result<TransferResult, Error> {
         let mint_contract_key = self.get_mint_contract_uref().into();
 
         // This appears to be a load-bearing use of `RuntimeContext::insert_uref`.
-        self.context.insert_uref(target.value());
+        self.context.insert_uref(target);
 
         match self.mint_transfer(mint_contract_key, source, target, amount) {
             Ok(_) => Ok(Ok(TransferredTo::ExistingAccount)),
@@ -2260,11 +2258,11 @@ where
     /// If that account does not exist, creates one.
     fn transfer_from_purse_to_account(
         &mut self,
-        source: PurseId,
+        source: URef,
         target: PublicKey,
         amount: U512,
     ) -> Result<TransferResult, Error> {
-        let target_key = Key::Account(target.value());
+        let target_key = Key::Account(target);
         // Look up the account at the given public key's address
         match self.context.read_account(&target_key)? {
             None => {
@@ -2273,7 +2271,7 @@ where
                 self.transfer_to_new_account(source, target, amount)
             }
             Some(StoredValue::Account(account)) => {
-                let target = account.purse_id_add_only();
+                let target = account.main_purse_add_only();
                 if source == target {
                     return Ok(Ok(TransferredTo::ExistingAccount));
                 }
@@ -2297,12 +2295,12 @@ where
         amount_ptr: u32,
         amount_size: u32,
     ) -> Result<Result<(), ApiError>, Error> {
-        let source: PurseId = {
+        let source: URef = {
             let bytes = self.bytes_from_mem(source_ptr, source_size as usize)?;
             bytesrepr::deserialize(bytes).map_err(Error::BytesRepr)?
         };
 
-        let target: PurseId = {
+        let target: URef = {
             let bytes = self.bytes_from_mem(target_ptr, target_size as usize)?;
             bytesrepr::deserialize(bytes).map_err(Error::BytesRepr)?
         };
@@ -2324,10 +2322,10 @@ where
         }
     }
 
-    fn get_balance(&mut self, purse_id: PurseId) -> Result<Option<U512>, Error> {
+    fn get_balance(&mut self, purse: URef) -> Result<Option<U512>, Error> {
         let seed = self.get_mint_contract_uref().addr();
 
-        let key = purse_id.value().addr().into_bytes()?;
+        let key = purse.addr().into_bytes()?;
 
         let uref_key = match self.context.read_ls_with_seed(seed, &key)? {
             Some(cl_value) => {
@@ -2359,8 +2357,8 @@ where
 
     fn get_balance_host_buffer(
         &mut self,
-        purse_id_ptr: u32,
-        purse_id_size: usize,
+        purse_ptr: u32,
+        purse_size: usize,
         output_size_ptr: u32,
     ) -> Result<Result<(), ApiError>, Error> {
         if !self.can_write_to_host_buffer() {
@@ -2368,15 +2366,15 @@ where
             return Ok(Err(ApiError::HostBufferFull));
         }
 
-        let purse_id: PurseId = {
-            let bytes = self.bytes_from_mem(purse_id_ptr, purse_id_size)?;
+        let purse: URef = {
+            let bytes = self.bytes_from_mem(purse_ptr, purse_size)?;
             match bytesrepr::deserialize(bytes) {
-                Ok(purse_id) => purse_id,
+                Ok(purse) => purse,
                 Err(error) => return Ok(Err(error.into())),
             }
         };
 
-        let balance = match self.get_balance(purse_id)? {
+        let balance = match self.get_balance(purse)? {
             Some(balance) => balance,
             None => return Ok(Err(ApiError::InvalidPurse)),
         };

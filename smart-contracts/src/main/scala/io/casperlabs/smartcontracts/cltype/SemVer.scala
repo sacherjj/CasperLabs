@@ -10,12 +10,10 @@ object SemVer {
       ToBytes.toBytes(v.major) ++ ToBytes.toBytes(v.minor) ++ ToBytes.toBytes(v.patch)
   }
 
-  implicit val fromBytesSemVer: FromBytes[SemVer] = new FromBytes[SemVer] {
-    override def fromBytes(bytes: BytesView): Either[FromBytes.Error, (SemVer, BytesView)] =
-      for {
-        (major, rem1) <- FromBytes[Int].fromBytes(bytes)
-        (minor, rem2) <- FromBytes[Int].fromBytes(rem1)
-        (patch, rem3) <- FromBytes[Int].fromBytes(rem2)
-      } yield SemVer(major, minor, patch) -> rem3
-  }
+  val deserializer: FromBytes.Deserializer[SemVer] =
+    for {
+      major <- FromBytes.int
+      minor <- FromBytes.int
+      patch <- FromBytes.int
+    } yield SemVer(major, minor, patch)
 }

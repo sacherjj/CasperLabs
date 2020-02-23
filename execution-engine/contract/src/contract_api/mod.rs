@@ -4,12 +4,9 @@ pub mod account;
 pub mod runtime;
 pub mod storage;
 pub mod system;
-mod turef;
-
-pub use turef::TURef;
 
 use alloc::{
-    alloc::{Alloc, Global},
+    alloc::{AllocRef, Global, Layout},
     vec::Vec,
 };
 
@@ -23,11 +20,16 @@ fn alloc_bytes(n: usize) -> *mut u8 {
         // cannot allocate with size 0
         0 as *mut u8
     } else {
-        Global
-            .alloc_array(n)
-            .map_err(|_| ApiError::OutOfMemory)
-            .unwrap_or_revert()
-            .as_ptr()
+        let layout = Layout::array::<u8>(n)
+            .map_err(|_| ApiError::AllocLayout)
+            .unwrap_or_revert();
+        unsafe {
+            Global
+                .alloc(layout)
+                .map_err(|_| ApiError::OutOfMemory)
+                .unwrap_or_revert()
+                .as_ptr()
+        }
     }
 }
 

@@ -4,8 +4,6 @@ use alloc::{
 };
 use core::fmt::Write;
 
-use base16;
-
 use contract::contract_api::runtime;
 use proof_of_stake::{Stakes, StakesProvider};
 use types::{
@@ -37,7 +35,7 @@ impl StakesProvider for ContractStakes {
             let _bytes_written = base16::decode_slice(hex_key, &mut key_bytes)
                 .map_err(|_| Error::StakesKeyDeserializationFailed)?;
             debug_assert!(_bytes_written == key_bytes.len());
-            let pub_key = PublicKey::new(key_bytes);
+            let pub_key = PublicKey::ed25519_from(key_bytes);
             let balance = split_name
                 .next()
                 .and_then(|b| U512::from_dec_str(b).ok())
@@ -57,11 +55,8 @@ impl StakesProvider for ContractStakes {
             .0
             .iter()
             .map(|(pub_key, balance)| {
-                let key_bytes = pub_key.value();
-                let mut hex_key = String::with_capacity(64);
-                for byte in &key_bytes[..32] {
-                    write!(hex_key, "{:02x}", byte).expect("Writing to a string cannot fail");
-                }
+                let key_bytes = pub_key.as_bytes();
+                let hex_key = base16::encode_lower(&key_bytes);
                 let mut uref = String::new();
                 uref.write_fmt(format_args!("v_{}_{}", hex_key, balance))
                     .expect("Writing to a string cannot fail");

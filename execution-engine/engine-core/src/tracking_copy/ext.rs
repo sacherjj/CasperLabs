@@ -5,12 +5,9 @@ use engine_shared::{
     stored_value::StoredValue, TypeMismatch,
 };
 use engine_storage::global_state::StateReader;
-use types::{bytesrepr::ToBytes, CLValue, Key, URef, U512};
+use types::{account::PublicKey, bytesrepr::ToBytes, CLValue, Key, URef, U512};
 
-use crate::{
-    execution,
-    tracking_copy::{TrackingCopy, TrackingCopyQueryResult},
-};
+use crate::{execution, tracking_copy::TrackingCopy};
 
 pub trait TrackingCopyExt<R> {
     type Error;
@@ -19,7 +16,7 @@ pub trait TrackingCopyExt<R> {
     fn get_account(
         &mut self,
         correlation_id: CorrelationId,
-        account_address: [u8; 32],
+        public_key: PublicKey,
     ) -> Result<Account, Self::Error>;
 
     /// Gets the purse balance key for a given purse id
@@ -55,9 +52,9 @@ where
     fn get_account(
         &mut self,
         correlation_id: CorrelationId,
-        account_address: [u8; 32],
+        public_key: PublicKey,
     ) -> Result<Account, Self::Error> {
-        let account_key = Key::Account(account_address);
+        let account_key = Key::Account(public_key);
         match self.get(correlation_id, &account_key).map_err(Into::into)? {
             Some(StoredValue::Account(account)) => Ok(account),
             Some(other) => Err(execution::Error::TypeMismatch(TypeMismatch::new(
@@ -80,16 +77,18 @@ where
         let local_key_bytes = uref.addr().into_bytes()?;
         let balance_mapping_key = Key::local(mint_contract_uref.addr(), &local_key_bytes);
         match self
-            .query(correlation_id, balance_mapping_key, &[])
+            .read(correlation_id, &balance_mapping_key)
             .map_err(Into::into)?
         {
-            TrackingCopyQueryResult::Success(stored_value) => {
+            Some(stored_value) => {
                 let cl_value: CLValue = stored_value
                     .try_into()
                     .map_err(execution::Error::TypeMismatch)?;
                 Ok(cl_value.into_t()?)
             }
-            TrackingCopyQueryResult::ValueNotFound(msg) => Err(execution::Error::URefNotFound(msg)),
+            None => Err(execution::Error::URefNotFound(
+                "public purse balance".to_string(),
+            )),
         }
     }
 
@@ -98,19 +97,19 @@ where
         correlation_id: CorrelationId,
         key: Key,
     ) -> Result<Motes, Self::Error> {
-        let query_result = match self.query(correlation_id, key, &[]) {
-            Ok(query_result) => query_result,
+        let read_result = match self.read(correlation_id, &key) {
+            Ok(read_result) => read_result,
             Err(_) => return Err(execution::Error::KeyNotFound(key)),
         };
-        match query_result {
-            TrackingCopyQueryResult::Success(stored_value) => {
+        match read_result {
+            Some(stored_value) => {
                 let cl_value: CLValue = stored_value
                     .try_into()
                     .map_err(execution::Error::TypeMismatch)?;
                 let balance: U512 = cl_value.into_t()?;
                 Ok(Motes::new(balance))
             }
-            TrackingCopyQueryResult::ValueNotFound(_) => Err(execution::Error::KeyNotFound(key)),
+            None => Err(execution::Error::KeyNotFound(key)),
         }
     }
 

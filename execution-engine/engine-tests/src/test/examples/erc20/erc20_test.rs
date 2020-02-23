@@ -5,7 +5,7 @@ use engine_shared::motes::Motes;
 use engine_test_support::internal::{
     utils, ExecuteRequestBuilder, InMemoryWasmTestBuilder as TestBuilder, DEFAULT_GENESIS_CONFIG,
 };
-use types::{account::PurseId, bytesrepr::ToBytes, CLValue, Key, U512};
+use types::{account::PublicKey, bytesrepr::ToBytes, CLValue, Key, U512};
 
 const ERC_20_CONTRACT_WASM: &str = "erc20_smart_contract.wasm";
 const TRANFER_TO_ACCOUNT_WASM: &str = "transfer_to_account_u512.wasm";
@@ -29,7 +29,7 @@ pub struct ERC20Test {
 }
 
 impl ERC20Test {
-    pub fn new(sender: [u8; 32], init_balance: U512) -> ERC20Test {
+    pub fn new(sender: PublicKey, init_balance: U512) -> ERC20Test {
         let mut builder = TestBuilder::default();
         builder.run_genesis(&DEFAULT_GENESIS_CONFIG).commit();
         let test = ERC20Test {
@@ -42,7 +42,7 @@ impl ERC20Test {
             .with_contract(sender, TOKEN_NAME)
     }
 
-    pub fn query_contract_hash(&self, account: [u8; 32], name: &str) -> [u8; 32] {
+    pub fn query_contract_hash(&self, account: PublicKey, name: &str) -> [u8; 32] {
         let account_key = Key::Account(account);
         let value: CLValue = self
             .builder
@@ -53,7 +53,7 @@ impl ERC20Test {
         key.into_hash().unwrap()
     }
 
-    pub fn deploy_erc20_contract(mut self, sender: [u8; 32], init_balance: U512) -> Self {
+    pub fn deploy_erc20_contract(mut self, sender: PublicKey, init_balance: U512) -> Self {
         let request = ExecuteRequestBuilder::standard(
             sender,
             ERC_20_CONTRACT_WASM,
@@ -66,8 +66,8 @@ impl ERC20Test {
 
     pub fn call_erc20_transfer(
         mut self,
-        sender: [u8; 32],
-        recipient: [u8; 32],
+        sender: PublicKey,
+        recipient: PublicKey,
         amount: U512,
     ) -> Self {
         let request = ExecuteRequestBuilder::contract_call_by_hash(
@@ -80,7 +80,11 @@ impl ERC20Test {
         self
     }
 
-    pub fn call_erc20_balance_assertion(mut self, sender: [u8; 32], expected_amount: U512) -> Self {
+    pub fn call_erc20_balance_assertion(
+        mut self,
+        sender: PublicKey,
+        expected_amount: U512,
+    ) -> Self {
         let request = ExecuteRequestBuilder::contract_call_by_hash(
             sender,
             self.get_proxy_hash(),
@@ -98,8 +102,8 @@ impl ERC20Test {
 
     pub fn call_erc20_allowance_assertion(
         mut self,
-        owner: [u8; 32],
-        spender: [u8; 32],
+        owner: PublicKey,
+        spender: PublicKey,
         expected_amount: U512,
     ) -> Self {
         let request = ExecuteRequestBuilder::contract_call_by_hash(
@@ -120,7 +124,7 @@ impl ERC20Test {
 
     pub fn call_erc20_total_supply_assertion(
         mut self,
-        sender: [u8; 32],
+        sender: PublicKey,
         expected_amount: U512,
     ) -> Self {
         let request = ExecuteRequestBuilder::contract_call_by_hash(
@@ -139,8 +143,8 @@ impl ERC20Test {
 
     pub fn call_erc20_approve(
         mut self,
-        sender: [u8; 32],
-        recipient: [u8; 32],
+        sender: PublicKey,
+        recipient: PublicKey,
         amount: U512,
     ) -> Self {
         let request = ExecuteRequestBuilder::contract_call_by_hash(
@@ -155,9 +159,9 @@ impl ERC20Test {
 
     pub fn call_erc20_transfer_from(
         mut self,
-        sender: [u8; 32],
-        owner: [u8; 32],
-        recipient: [u8; 32],
+        sender: PublicKey,
+        owner: PublicKey,
+        recipient: PublicKey,
         amount: U512,
     ) -> Self {
         let request = ExecuteRequestBuilder::contract_call_by_hash(
@@ -176,7 +180,7 @@ impl ERC20Test {
         self
     }
 
-    pub fn call_erc20_buy(mut self, sender: [u8; 32], amount: U512) -> Self {
+    pub fn call_erc20_buy(mut self, sender: PublicKey, amount: U512) -> Self {
         let request = ExecuteRequestBuilder::contract_call_by_hash(
             sender,
             self.get_proxy_hash(),
@@ -187,7 +191,7 @@ impl ERC20Test {
         self
     }
 
-    pub fn call_erc20_sell(mut self, sender: [u8; 32], amount: U512) -> Self {
+    pub fn call_erc20_sell(mut self, sender: PublicKey, amount: U512) -> Self {
         let request = ExecuteRequestBuilder::contract_call_by_hash(
             sender,
             self.get_proxy_hash(),
@@ -200,8 +204,8 @@ impl ERC20Test {
 
     pub fn call_clx_transfer_with_success(
         mut self,
-        sender: [u8; 32],
-        recipient: [u8; 32],
+        sender: PublicKey,
+        recipient: PublicKey,
         amount: U512,
     ) -> Self {
         let request =
@@ -227,8 +231,8 @@ impl ERC20Test {
         self
     }
 
-    pub fn assert_clx_account_balance_no_gas(self, account: [u8; 32], expected: U512) -> Self {
-        let account_purse = self.builder.get_account(account).unwrap().purse_id();
+    pub fn assert_clx_account_balance_no_gas(self, account: PublicKey, expected: U512) -> Self {
+        let account_purse = self.builder.get_account(account).unwrap().main_purse();
         let mut account_balance = self.builder.get_purse_balance(account_purse);
         let last_deploy_index = self.builder.get_exec_responses_count();
         let execution_costs = (0..last_deploy_index)
@@ -246,15 +250,15 @@ impl ERC20Test {
             .query(None, Key::Hash(self.get_token_hash()), &[])
             .expect("should have token contract.");
 
-        let purse_uref = token_contract_value
+        let purse = token_contract_value
             .as_contract()
             .unwrap()
             .named_keys()
             .get(TOKEN_PURSE_NAME)
             .unwrap()
-            .as_uref()
+            .into_uref()
             .unwrap();
-        let contract_balance = self.builder.get_purse_balance(PurseId::new(*purse_uref));
+        let contract_balance = self.builder.get_purse_balance(purse);
         assert_eq!(contract_balance, expected);
         self
     }
@@ -262,10 +266,10 @@ impl ERC20Test {
     /// Balances are stored in the local storage and are represented as 33 bytes arrays where:
     /// - the first byte is "1";
     /// - the rest is 32 bytes of the account's public key.
-    pub fn assert_erc20_balance(self, address: [u8; 32], expected: U512) -> Self {
+    pub fn assert_erc20_balance(self, address: PublicKey, expected: U512) -> Self {
         let mut balance_bytes: Vec<u8> = Vec::with_capacity(33);
         balance_bytes.extend(&[1]);
-        balance_bytes.extend(&address);
+        balance_bytes.extend(address.as_bytes());
         let balance_key = Key::local(self.get_token_hash(), &balance_bytes.to_bytes().unwrap());
         let value: CLValue = self
             .builder
@@ -299,11 +303,16 @@ impl ERC20Test {
     /// - the second 32 bytes are token spender's public key.
     pub fn assert_erc20_allowance(
         self,
-        owner: [u8; 32],
-        spender: [u8; 32],
+        owner: PublicKey,
+        spender: PublicKey,
         expected: U512,
     ) -> Self {
-        let allowance_bytes: Vec<u8> = owner.iter().chain(spender.iter()).copied().collect();
+        let allowance_bytes: Vec<u8> = owner
+            .as_bytes()
+            .iter()
+            .chain(spender.as_bytes().iter())
+            .copied()
+            .collect();
         let allowance_key = Key::local(self.get_token_hash(), &allowance_bytes.to_bytes().unwrap());
         let value: CLValue = self
             .builder
@@ -329,7 +338,7 @@ impl ERC20Test {
             .unwrap_or_else(|| panic!("Field proxy_hash not set."))
     }
 
-    pub fn with_contract(mut self, sender: [u8; 32], token_name: &str) -> Self {
+    pub fn with_contract(mut self, sender: PublicKey, token_name: &str) -> Self {
         self.token_hash = Some(self.query_contract_hash(sender, token_name));
         self.proxy_hash = Some(self.query_contract_hash(sender, UREF_NAME_ERC20_PROXY));
         self

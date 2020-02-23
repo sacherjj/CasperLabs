@@ -45,19 +45,19 @@ export declare function revert(err_code: i32): void;
 @external("env", "is_valid_uref")
 export declare function is_valid_uref(target_ptr: usize, target_size: u32): i32;
 @external("env", "add_associated_key")
-export declare function add_associated_key(public_key_ptr: usize, weight: i32): i32;
+export declare function add_associated_key(public_key_ptr: usize, public_key_size: usize, weight: i32): i32;
 @external("env", "remove_associated_key")
-export declare function remove_associated_key(public_key_ptr: usize): i32;
+export declare function remove_associated_key(public_key_ptr: usize, public_key_size: usize): i32;
 @external("env", "update_associated_key")
-export declare function update_associated_key(public_key_ptr: usize, weight: i32): i32;
+export declare function update_associated_key(public_key_ptr: usize, public_key_size: usize, weight: i32): i32;
 @external("env", "set_action_threshold")
 export declare function set_action_threshold(permission_level: u32, threshold: i32): i32;
 @external("env", "get_blocktime")
 export declare function get_blocktime(dest_ptr: usize): void;
 @external("env", "get_caller")
-export declare function get_caller(dest_ptr: usize): void;
+export declare function get_caller(output_size: usize): i32;
 @external("env", "create_purse")
-export declare function create_purse(purse_id_ptr: usize, purse_id_size: u32): i32;
+export declare function create_purse(purse_ptr: usize, purse_size: u32): i32;
 @external("env", "transfer_to_account")
 export declare function transfer_to_account(
     target_ptr: usize,
@@ -84,7 +84,7 @@ export declare function transfer_from_purse_to_purse(
     amount_size: u32,
 ): i32;
 @external("env", "get_balance")
-export declare function get_balance(purse_id_ptr: usize, purse_id_size: usize, result_size: u32): i32;
+export declare function get_balance(purse_ptr: usize, purse_size: usize, result_size: u32): i32;
 @external("env", "get_phase")
 export declare function get_phase(dest_ptr: usize): void;
 @external("env", "upgrade_contract_at_uref")

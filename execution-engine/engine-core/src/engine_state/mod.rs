@@ -37,11 +37,8 @@ use engine_storage::{
 };
 use engine_wasm_prep::{wasm_costs::WasmCosts, Preprocessor};
 use types::{
-    account::{PublicKey, PurseId},
-    bytesrepr::ToBytes,
-    system_contract_errors::mint,
-    AccessRights, BlockTime, Key, Phase, ProtocolVersion, URef, KEY_HASH_LENGTH, U512,
-    UREF_ADDR_LENGTH,
+    account::PublicKey, bytesrepr::ToBytes, system_contract_errors::mint, AccessRights, BlockTime,
+    Key, Phase, ProtocolVersion, URef, KEY_HASH_LENGTH, U512, UREF_ADDR_LENGTH,
 };
 
 use self::{
@@ -72,7 +69,7 @@ use crate::{
 pub const MAX_PAYMENT: u64 = 10_000_000;
 pub const CONV_RATE: u64 = 10;
 
-pub const SYSTEM_ACCOUNT_ADDR: [u8; 32] = [0u8; 32];
+pub const SYSTEM_ACCOUNT_ADDR: PublicKey = PublicKey::ed25519_from([0u8; 32]);
 
 const GENESIS_INITIAL_BLOCKTIME: u64 = 0;
 const MINT_METHOD_NAME: &str = "mint";
@@ -143,7 +140,7 @@ where
         // Spec #3: Create "virtual system account" object.
         let virtual_system_account = {
             let named_keys = BTreeMap::new();
-            let purse = PurseId::new(URef::new(Default::default(), AccessRights::READ_ADD_WRITE));
+            let purse = URef::new(Default::default(), AccessRights::READ_ADD_WRITE);
             Account::create(SYSTEM_ACCOUNT_ADDR, named_keys, purse)
         };
 
@@ -185,7 +182,7 @@ where
         };
 
         let address_generator = {
-            let generator = AddressGenerator::new(install_deploy_hash.into(), phase);
+            let generator = AddressGenerator::new(&install_deploy_hash.value(), phase);
             Rc::new(RefCell::new(generator))
         };
 
@@ -328,11 +325,8 @@ where
                     .into_iter()
                     .map(|account| (account, account_named_keys.clone()))
                     .collect();
-                let system_account = GenesisAccount::new(
-                    PublicKey::new(SYSTEM_ACCOUNT_ADDR),
-                    Motes::zero(),
-                    Motes::zero(),
-                );
+                let system_account =
+                    GenesisAccount::new(SYSTEM_ACCOUNT_ADDR, Motes::zero(), Motes::zero());
                 ret.push((system_account, system_account_named_keys));
                 ret
             };
@@ -363,9 +357,11 @@ where
                 let base_key = Key::URef(mint_reference);
                 let authorization_keys: BTreeSet<PublicKey> = BTreeSet::new();
                 let account_public_key = account.public_key();
+                // NOTE: As Ed25519 keys are currently supported by chainspec, PublicKey::value
+                // returns raw bytes of it
                 let purse_creation_deploy_hash = account_public_key.value();
                 let address_generator = {
-                    let generator = AddressGenerator::new(purse_creation_deploy_hash, phase);
+                    let generator = AddressGenerator::new(&account_public_key.to_bytes()?, phase);
                     Rc::new(RefCell::new(generator))
                 };
                 let system_contract_cache = SystemContractCache::clone(&self.system_contract_cache);
@@ -391,14 +387,13 @@ where
                 )?;
 
                 // ...and write that account to global state...
-                let key = Key::Account(account_public_key.value());
+                let key = Key::Account(account_public_key);
                 let value = {
-                    let account_main_purse = mint_result?;
-                    let purse_id = PurseId::new(account_main_purse);
+                    let main_purse = mint_result?;
                     StoredValue::Account(Account::create(
-                        account_public_key.value(),
+                        account_public_key,
                         named_keys,
-                        purse_id,
+                        main_purse,
                     ))
                 };
 
@@ -520,7 +515,7 @@ where
                 let initial_base_key = Key::Account(SYSTEM_ACCOUNT_ADDR);
                 let authorization_keys = {
                     let mut ret = BTreeSet::new();
-                    ret.insert(PublicKey::new(SYSTEM_ACCOUNT_ADDR));
+                    ret.insert(SYSTEM_ACCOUNT_ADDR);
                     ret
                 };
 
@@ -540,7 +535,7 @@ where
                 let gas_limit = Gas::new(std::u64::MAX.into());
                 let phase = Phase::System;
                 let address_generator = {
-                    let generator = AddressGenerator::new(pre_state_hash.into(), phase);
+                    let generator = AddressGenerator::new(&pre_state_hash.value(), phase);
                     Rc::new(RefCell::new(generator))
                 };
                 let state = Rc::clone(&tracking_copy);
@@ -603,9 +598,9 @@ where
             None => return Ok(QueryResult::RootNotFound),
         };
 
-        let mut mut_tracking_copy = tracking_copy.borrow_mut();
+        let tracking_copy = tracking_copy.borrow();
 
-        Ok(mut_tracking_copy
+        Ok(tracking_copy
             .query(correlation_id, query_request.key(), query_request.path())
             .map_err(|err| Error::Exec(err.into()))?
             .into())
@@ -764,7 +759,7 @@ where
 
         let session = deploy_item.session;
         let payment = deploy_item.payment;
-        let address = Key::Account(deploy_item.address.value());
+        let address = Key::Account(deploy_item.address);
         let authorization_keys = deploy_item.authorization_keys;
         let deploy_hash = deploy_item.deploy_hash;
 
@@ -922,7 +917,7 @@ where
         // Get account main purse balance key
         // validation_spec_5: account main purse minimum balance
         let account_main_purse_balance_key: Key = {
-            let account_key = Key::URef(account.purse_id().value());
+            let account_key = Key::URef(account.main_purse());
             match tracking_copy.borrow_mut().get_purse_balance_key(
                 correlation_id,
                 mint_reference,
@@ -958,7 +953,7 @@ where
         let system_account = Account::new(
             SYSTEM_ACCOUNT_ADDR,
             Default::default(),
-            PurseId::new(URef::new(Default::default(), AccessRights::READ_ADD_WRITE)),
+            URef::new(Default::default(), AccessRights::READ_ADD_WRITE),
             Default::default(),
             Default::default(),
         );

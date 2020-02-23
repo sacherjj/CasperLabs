@@ -8,16 +8,13 @@ use contract::{
     contract_api::{account, runtime, storage, system},
     unwrap_or_revert::UnwrapOrRevert,
 };
-use types::{
-    account::{PublicKey, PurseId},
-    ApiError, Key, U512,
-};
+use types::{account::PublicKey, ApiError, Key, URef, U512};
 
 const DONATION_AMOUNT: u64 = 1;
 // Different name just to make sure any routine that deals with named keys coming from different
 // sources wouldn't overlap (if ever that's possible)
-const DONATION_BOX_COPY: &str = "donation_box_copy";
-const DONATION_BOX: &str = "donation_box";
+const DONATION_PURSE_COPY: &str = "donation_purse_copy";
+const DONATION_PURSE: &str = "donation_purse";
 const GET_MAIN_PURSE: &str = "get_main_purse";
 const MAINTAINER: &str = "maintainer";
 const METHOD_CALL: &str = "call";
@@ -56,16 +53,13 @@ fn get_maintainer_public_key() -> Result<PublicKey, ApiError> {
     maintainer_key
         .into_account()
         .ok_or(ApiError::UnexpectedKeyVariant)
-        .map(PublicKey::new)
 }
 
-fn get_donation_box_purse() -> Result<PurseId, ApiError> {
-    let donation_box_key = runtime::get_key(DONATION_BOX).ok_or(ApiError::GetKey)?;
-    donation_box_key
-        .as_uref()
-        .cloned()
+fn get_donation_purse() -> Result<URef, ApiError> {
+    let donation_key = runtime::get_key(DONATION_PURSE).ok_or(ApiError::GetKey)?;
+    donation_key
+        .into_uref()
         .ok_or(ApiError::UnexpectedKeyVariant)
-        .map(PurseId::new)
 }
 
 /// This method is possibly ran from a context of a different user than the initial deployer
@@ -75,7 +69,7 @@ fn transfer_funds() -> Result<(), ApiError> {
         .map_err(|_| ApiError::InvalidArgument)?;
 
     // Donation box is the purse funds will be transferred into
-    let donation_box_purse = get_donation_box_purse()?;
+    let donation_purse = get_donation_purse()?;
     // This is the address of account which installed the contract
     let maintainer_public_key = get_maintainer_public_key()?;
 
@@ -85,7 +79,7 @@ fn transfer_funds() -> Result<(), ApiError> {
 
             system::transfer_from_purse_to_purse(
                 main_purse,
-                donation_box_purse,
+                donation_purse,
                 U512::from(DONATION_AMOUNT),
             )?
         }
@@ -124,23 +118,24 @@ fn delegate() -> Result<(), ApiError> {
         METHOD_INSTALL => {
             // Create a purse that should be known to the contract regardless of the
             // calling context still owned by the account that deploys the contract
-            let donation_box = system::create_purse();
+            let purse = system::create_purse();
             let maintainer = runtime::get_caller();
             // Keys below will make it possible to use within the called contract
             let known_keys = {
                 let mut keys = BTreeMap::new();
-                // "donation_box" is the purse owner of the contract can transfer funds from callers
-                keys.insert(DONATION_BOX.into(), donation_box.value().into());
+                // "donation_purse" is the purse owner of the contract can transfer funds from
+                // callers
+                keys.insert(DONATION_PURSE.into(), purse.into());
                 // "maintainer" is the person who installed this contract
-                keys.insert(MAINTAINER.into(), Key::Account(maintainer.value()));
+                keys.insert(MAINTAINER.into(), Key::Account(maintainer));
                 keys
             };
             // Install the contract with associated owner-related keys
             let contract_ref = storage::store_function_at_hash(TRANSFER_FUNDS_EXT, known_keys);
             runtime::put_key(TRANSFER_FUNDS_KEY, contract_ref.into());
-            // For easy access in outside world here `donation_box` purse is also attached
+            // For easy access in outside world here `donation` purse is also attached
             // to the account
-            runtime::put_key(DONATION_BOX_COPY, donation_box.value().into());
+            runtime::put_key(DONATION_PURSE_COPY, purse.into());
         }
         METHOD_CALL => {
             // This comes from outside i.e. after deploying the contract, this key is queried, and

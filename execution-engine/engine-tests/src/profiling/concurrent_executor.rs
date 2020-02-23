@@ -11,7 +11,6 @@ use std::{
     time::{Duration, Instant},
 };
 
-use base16;
 use clap::{crate_version, App, Arg};
 use crossbeam_channel::{Iter, Receiver, Sender};
 use grpc::{ClientStubExt, RequestOptions};
@@ -335,7 +334,7 @@ fn new_execute_request(args: &Args) -> ExecuteRequest {
     let account_1_public_key = profiling::account_1_public_key();
     let account_2_public_key = profiling::account_2_public_key();
     ExecuteRequestBuilder::standard(
-        account_1_public_key.value(),
+        account_1_public_key,
         CONTRACT_NAME,
         (account_2_public_key, amount),
     )

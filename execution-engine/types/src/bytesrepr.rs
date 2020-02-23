@@ -385,7 +385,6 @@ macro_rules! impl_to_from_bytes_for_array {
                     }
 
                     let mut result = Vec::with_capacity(approx_size);
-                    result.append(&mut ($N as u32).to_bytes()?);
 
                     for item in self.iter() {
                         result.append(&mut item.to_bytes()?);
@@ -397,12 +396,6 @@ macro_rules! impl_to_from_bytes_for_array {
 
             impl<T: FromBytes> FromBytes for [T; $N] {
                default fn from_bytes(mut bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
-                    let (size, remainder) = u32::from_bytes(bytes)?;
-                    bytes = remainder;
-                    if size != $N as u32 {
-                        return Err(Error::Formatting);
-                    }
-
                     let mut result: MaybeUninit<[T; $N]> = MaybeUninit::uninit();
                     let result_ptr = result.as_mut_ptr() as *mut T;
                     unsafe {

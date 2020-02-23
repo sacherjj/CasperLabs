@@ -52,13 +52,21 @@ extern "C" {
     pub fn remove_key(name_ptr: *const u8, name_size: usize);
     pub fn revert(status: u32) -> !;
     pub fn is_valid_uref(uref_ptr: *const u8, uref_size: usize) -> i32;
-    pub fn add_associated_key(public_key_ptr: *const u8, weight: i32) -> i32;
-    pub fn remove_associated_key(public_key_ptr: *const u8) -> i32;
-    pub fn update_associated_key(public_key_ptr: *const u8, weight: i32) -> i32;
+    pub fn add_associated_key(
+        public_key_ptr: *const u8,
+        public_key_size: usize,
+        weight: i32,
+    ) -> i32;
+    pub fn remove_associated_key(public_key_ptr: *const u8, public_key_size: usize) -> i32;
+    pub fn update_associated_key(
+        public_key_ptr: *const u8,
+        public_key_size: usize,
+        weight: i32,
+    ) -> i32;
     pub fn set_action_threshold(permission_level: u32, threshold: i32) -> i32;
-    pub fn get_caller(dest_ptr: *const u8);
+    pub fn get_caller(output_size: *mut usize) -> i32;
     pub fn get_blocktime(dest_ptr: *const u8);
-    pub fn create_purse(purse_id_ptr: *const u8, purse_id_size: usize) -> i32;
+    pub fn create_purse(purse_ptr: *const u8, purse_size: usize) -> i32;
     pub fn transfer_to_account(
         target_ptr: *const u8,
         target_size: usize,
@@ -81,11 +89,7 @@ extern "C" {
         amount_ptr: *const u8,
         amount_size: usize,
     ) -> i32;
-    pub fn get_balance(
-        purse_id_ptr: *const u8,
-        purse_id_size: usize,
-        result_size: *mut usize,
-    ) -> i32;
+    pub fn get_balance(purse_ptr: *const u8, purse_size: usize, result_size: *mut usize) -> i32;
     pub fn get_phase(dest_ptr: *mut u8);
     pub fn upgrade_contract_at_uref(
         name_ptr: *const u8,

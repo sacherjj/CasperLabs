@@ -5,9 +5,9 @@ use contract::{
     unwrap_or_revert::UnwrapOrRevert,
 };
 use types::{
-    account::{PublicKey, PurseId},
+    account::PublicKey,
     bytesrepr::{FromBytes, ToBytes},
-    CLTyped, U512,
+    CLTyped, URef, U512,
 };
 
 use crate::{api::Api, error::Error};
@@ -152,16 +152,15 @@ fn verify_recipient_account() {
     }
 }
 
-fn transfer_out_clx_to_purse(purse: PurseId, amount: U512) {
+fn transfer_out_clx_to_purse(purse: URef, amount: U512) {
     let local_purse = local_purse();
     system::transfer_from_purse_to_purse(local_purse, purse, amount)
         .unwrap_or_revert_with(Error::PurseTransferError);
 }
 
-fn local_purse() -> PurseId {
+fn local_purse() -> URef {
     let key = runtime::get_key(PURSE_NAME).unwrap_or_revert_with(Error::LocalPurseKeyMissing);
-    let uref = key.as_uref().unwrap_or_revert_with(Error::UnexpectedType);
-    PurseId::new(*uref)
+    key.into_uref().unwrap_or_revert_with(Error::UnexpectedType)
 }
 
 fn key<T: FromBytes + CLTyped>(name: &str) -> T {
@@ -181,7 +180,7 @@ fn set_key<T: ToBytes + CLTyped>(name: &str, value: T) {
             storage::write(key_ref, value);
         }
         None => {
-            let key = storage::new_turef(value).into();
+            let key = storage::new_uref(value).into();
             runtime::put_key(name, key);
         }
     }

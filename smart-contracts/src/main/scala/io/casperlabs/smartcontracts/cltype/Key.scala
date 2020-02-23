@@ -16,11 +16,6 @@ object Key {
 
   object Account {
     val tag: Byte = 0
-
-    def fromBytes(bytes: BytesView): Either[FromBytes.Error, (Key, BytesView)] =
-      FromBytes[ByteArray32].fromBytes(bytes).map {
-        case (addr, tail) => Account(addr) -> tail
-      }
   }
 
   case class Hash(address: ByteArray32) extends Key {
@@ -30,11 +25,6 @@ object Key {
 
   object Hash {
     val tag: Byte = 1
-
-    def fromBytes(bytes: BytesView): Either[FromBytes.Error, (Key, BytesView)] =
-      FromBytes[ByteArray32].fromBytes(bytes).map {
-        case (addr, tail) => Hash(addr) -> tail
-      }
   }
 
   case class URef(uref: cltype.URef) extends Key {
@@ -44,25 +34,16 @@ object Key {
 
   object URef {
     val tag: Byte = 2
-
-    def fromBytes(bytes: BytesView): Either[FromBytes.Error, (Key, BytesView)] =
-      FromBytes[cltype.URef].fromBytes(bytes).map {
-        case (inner, tail) => (URef(inner), tail)
-      }
   }
 
-  case class Local(address: ByteArray32) extends Key {
-    override protected val tag: Byte        = Local.tag
-    protected def innerToBytes: Array[Byte] = ToBytes[ByteArray32].toBytes(address)
+  case class Local(seed: ByteArray32, hash: ByteArray32) extends Key {
+    override protected val tag: Byte = Local.tag
+    protected def innerToBytes: Array[Byte] =
+      ToBytes[ByteArray32].toBytes(seed) ++ ToBytes[ByteArray32].toBytes(hash)
   }
 
   object Local {
     val tag: Byte = 3
-
-    def fromBytes(bytes: BytesView): Either[FromBytes.Error, (Key, BytesView)] =
-      FromBytes[ByteArray32].fromBytes(bytes).map {
-        case (addr, tail) => Local(addr) -> tail
-      }
   }
 
   implicit val toBytesKey: ToBytes[Key] = new ToBytes[Key] {
@@ -70,18 +51,17 @@ object Key {
       k.tag +: k.innerToBytes
   }
 
-  implicit val fromBytesKey: FromBytes[Key] = new FromBytes[Key] {
-    override def fromBytes(bytes: BytesView): Either[FromBytes.Error, (Key, BytesView)] =
-      FromBytes.safePop(bytes).flatMap {
-        case (tag, tail) if tag == Account.tag => Account.fromBytes(tail)
-        case (tag, tail) if tag == Hash.tag    => Hash.fromBytes(tail)
-        case (tag, tail) if tag == URef.tag    => URef.fromBytes(tail)
-        case (tag, tail) if tag == Local.tag   => Local.fromBytes(tail)
-        case (other, _)                        => Left(FromBytes.Error.InvalidVariantTag(other, "Key"))
-      }
-  }
-
-  implicit val clTypedKey: CLTyped[Key] = new CLTyped[Key] {
-    override def clType: CLType = CLType.Key
-  }
+  val deserializer: FromBytes.Deserializer[Key] =
+    FromBytes.byte.flatMap {
+      case tag if tag == Account.tag =>
+        ByteArray32.deserializer.map[Key](address => Account(address))
+      case tag if tag == Hash.tag => ByteArray32.deserializer.map[Key](address => Hash(address))
+      case tag if tag == URef.tag => cltype.URef.deserializer.map[Key](uref => URef(uref))
+      case tag if tag == Local.tag =>
+        for {
+          seed <- ByteArray32.deserializer
+          hash <- ByteArray32.deserializer
+        } yield Local(seed, hash)
+      case other => FromBytes.raise(FromBytes.Error.InvalidVariantTag(other, "Key"))
+    }
 }

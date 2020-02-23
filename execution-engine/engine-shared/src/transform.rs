@@ -299,7 +299,7 @@ pub mod gens {
 mod tests {
     use num::{Bounded, Num};
 
-    use types::{account::PurseId, AccessRights, ProtocolVersion, URef, U128, U256, U512};
+    use types::{account::PublicKey, AccessRights, ProtocolVersion, URef, U128, U256, U512};
 
     use super::*;
     use crate::{
@@ -308,6 +308,7 @@ mod tests {
     };
 
     const ZERO_ARRAY: [u8; 32] = [0; 32];
+    const ZERO_PUBLIC_KEY: PublicKey = PublicKey::ed25519_from(ZERO_ARRAY);
     const TEST_STR: &str = "a";
     const TEST_BOOL: bool = true;
 
@@ -439,9 +440,9 @@ mod tests {
 
         let uref = URef::new(ZERO_ARRAY, AccessRights::READ);
         let account = StoredValue::Account(Account::new(
-            ZERO_ARRAY,
+            ZERO_PUBLIC_KEY,
             BTreeMap::new(),
-            PurseId::new(uref),
+            uref,
             AssociatedKeys::default(),
             ActionThresholds::default(),
         ));

@@ -1,7 +1,5 @@
 #![no_std]
 
-use base16;
-
 use contract::{
     contract_api::{runtime, system},
     unwrap_or_revert::UnwrapOrRevert,
@@ -29,7 +27,7 @@ fn parse_public_key(hex: &[u8]) -> PublicKey {
     if bytes_written != buffer.len() {
         runtime::revert(Error::FailedToParsePublicKey)
     }
-    PublicKey::new(buffer)
+    PublicKey::ed25519_from(buffer)
 }
 
 pub fn create_account(account_addr: &[u8; 64], initial_amount: u64) {

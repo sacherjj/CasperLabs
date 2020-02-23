@@ -44,7 +44,7 @@ use engine_storage::{
     trie_store::lmdb::LmdbTrieStore,
 };
 use types::{
-    account::{PublicKey, PurseId},
+    account::PublicKey,
     bytesrepr::{self, ToBytes},
     CLValue, Key, URef, U512,
 };
@@ -571,27 +571,27 @@ where
             .expect("should find PoS URef")
     }
 
-    pub fn get_purse_balance(&self, purse_id: PurseId) -> U512 {
+    pub fn get_purse_balance(&self, purse: URef) -> U512 {
         let mint = self.get_mint_contract_uref();
-        let purse_addr = purse_id.value().addr();
+        let purse_addr = purse.addr();
         let purse_bytes =
             ToBytes::to_bytes(&purse_addr).expect("should be able to serialize purse bytes");
         let balance_mapping_key = Key::local(mint.addr(), &purse_bytes);
-        let balance_uref = self
+        let base_key = self
             .query(None, balance_mapping_key, &[])
             .and_then(|v| CLValue::try_from(v).map_err(|error| format!("{:?}", error)))
             .and_then(|cl_value| cl_value.into_t().map_err(|error| format!("{:?}", error)))
             .expect("should find balance uref");
 
-        self.query(None, balance_uref, &[])
+        self.query(None, base_key, &[])
             .and_then(|v| CLValue::try_from(v).map_err(|error| format!("{:?}", error)))
             .and_then(|cl_value| cl_value.into_t().map_err(|error| format!("{:?}", error)))
             .expect("should parse balance into a U512")
     }
 
-    pub fn get_account(&self, addr: [u8; 32]) -> Option<Account> {
+    pub fn get_account(&self, public_key: PublicKey) -> Option<Account> {
         let account_value = self
-            .query(None, Key::Account(addr), &[])
+            .query(None, Key::Account(public_key), &[])
             .expect("should query account");
 
         if let StoredValue::Account(account) = account_value {

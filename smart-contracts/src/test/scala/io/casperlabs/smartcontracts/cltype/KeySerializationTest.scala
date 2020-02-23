@@ -8,7 +8,7 @@ import KeySerializationTest.arbKey
 
 class KeySerializationTest extends FlatSpec with Matchers with PropertyChecks {
   "Keys" should "serialize properly" in forAll { (k: Key) =>
-    roundTrip(k)
+    roundTrip(k, Key.deserializer)
   }
 }
 
@@ -16,9 +16,12 @@ object KeySerializationTest {
   val genAccountKey: Gen[Key.Account] =
     ByteArray32SerializationTest.genByteArray32.map(Key.Account(_))
 
-  val genHashKey: Gen[Key.Hash]   = ByteArray32SerializationTest.genByteArray32.map(Key.Hash(_))
-  val genURefKey: Gen[Key.URef]   = URefSerializationTest.genURef.map(Key.URef(_))
-  val genLocalKey: Gen[Key.Local] = ByteArray32SerializationTest.genByteArray32.map(Key.Local(_))
+  val genHashKey: Gen[Key.Hash] = ByteArray32SerializationTest.genByteArray32.map(Key.Hash(_))
+  val genURefKey: Gen[Key.URef] = URefSerializationTest.genURef.map(Key.URef(_))
+  val genLocalKey: Gen[Key.Local] = for {
+    seed <- ByteArray32SerializationTest.genByteArray32
+    hash <- ByteArray32SerializationTest.genByteArray32
+  } yield Key.Local(seed, hash)
 
   val genKey: Gen[Key] = Gen.oneOf(genAccountKey, genHashKey, genURefKey, genLocalKey)
 

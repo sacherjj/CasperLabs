@@ -1,24 +1,7 @@
-SHELL := bash
-
 # This supports environments where $HOME/.cargo/env has not been sourced (CI, CLion Makefile runner)
 CARGO  = $(or $(shell which cargo),  $(HOME)/.cargo/bin/cargo)
 RUSTUP = $(or $(shell which rustup), $(HOME)/.cargo/bin/rustup)
 NPM    = $(or $(shell which npm),    /usr/bin/npm)
-
-# AssemblyScript Compiler
-ASC_VERSION := 0.9.1
-
-# Checks if AssemblyScript compiler is found in $PATH
-ifeq (,$(shell which asc))
-    $(error "No asc in $(PATH). Please run npm install -g assemblyscript@$(ASC_VERSION) first")
-endif
-
-# Checks if AssemblyScript compiler is at correct version
-ASC_VERSION_OUTPUT:=$(shell asc --version | cut -d' ' -f2)
-ifeq (,$(findstring $(ASC_VERSION),$(ASC_VERSION_OUTPUT)))
-    $(error "Found asc version $(ASC_VERSION_OUTPUT) but version $(ASC_VERSION) is required.\
-             Please run npm install -g assemblyscript@$(ASC_VERSION) first")
-endif
 
 RUST_TOOLCHAIN := $(shell cat rust-toolchain)
 
@@ -69,7 +52,7 @@ INTEGRATION_CONTRACTS += \
 	pos-bonding \
 	remove-associated-key \
 	standard-payment \
-	transfer-to-account \
+	transfer-to-account-u512 \
 	unbonding-call
 
 INTEGRATION_CONTRACTS := $(patsubst %, build-integration-contract-rs/%, $(INTEGRATION_CONTRACTS))

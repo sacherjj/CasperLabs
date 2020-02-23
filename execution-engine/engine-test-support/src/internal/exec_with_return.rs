@@ -15,7 +15,8 @@ use engine_shared::{gas::Gas, newtypes::CorrelationId};
 use engine_storage::{global_state::StateProvider, protocol_data::ProtocolData};
 use engine_wasm_prep::Preprocessor;
 use types::{
-    bytesrepr::FromBytes, BlockTime, CLTyped, CLValue, Key, Phase, ProtocolVersion, URef, U512,
+    account::PublicKey, bytesrepr::FromBytes, BlockTime, CLTyped, CLValue, Key, Phase,
+    ProtocolVersion, URef, U512,
 };
 
 use crate::internal::{utils, WasmTestBuilder, DEFAULT_WASM_COSTS};
@@ -28,7 +29,7 @@ const INIT_FN_STORE_ID: u32 = 0;
 /// installer contracts used in the new genesis process.
 pub fn exec<S, T>(
     builder: &mut WasmTestBuilder<S>,
-    address: [u8; 32],
+    address: PublicKey,
     wasm_file: &str,
     block_time: u64,
     deploy_hash: [u8; 32],
@@ -56,7 +57,7 @@ where
 
     let phase = Phase::Session;
     let address_generator = {
-        let address_generator = AddressGenerator::new(deploy_hash, phase);
+        let address_generator = AddressGenerator::new(&deploy_hash, phase);
         Rc::new(RefCell::new(address_generator))
     };
     let gas_counter = Gas::default();

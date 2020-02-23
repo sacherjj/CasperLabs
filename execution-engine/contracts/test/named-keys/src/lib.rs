@@ -12,7 +12,7 @@ use contract::{
 use types::{bytesrepr::ToBytes, ApiError, CLTyped, Key, U512};
 
 fn create_uref<T: CLTyped + ToBytes>(key_name: &str, value: T) {
-    let key: Key = storage::new_turef(value).into();
+    let key: Key = storage::new_uref(value).into();
     runtime::put_key(key_name, key);
 }
 
@@ -44,17 +44,17 @@ pub extern "C" fn call() {
                     .expect("Unable to get hello-world")
                     .clone()
                     .try_into()
-                    .expect("Unable to convert to turef"),
+                    .expect("Unable to convert to uref"),
             )
-            .expect("Unable to deserialize TURef")
+            .expect("Unable to deserialize URef")
             .expect("Unable to find value");
             assert_eq!(hello_world, "Hello, world!");
 
             // Read data through dedicated FFI function
             let uref1 = runtime::get_key("hello-world").unwrap_or_revert();
 
-            let turef = uref1.try_into().unwrap_or_revert_with(ApiError::User(101));
-            let hello_world = storage::read(turef);
+            let uref = uref1.try_into().unwrap_or_revert_with(ApiError::User(101));
+            let hello_world = storage::read(uref);
             assert_eq!(hello_world, Ok(Some("Hello, world!".to_string())));
         }
         COMMAND_TEST_READ_UREF2 => {

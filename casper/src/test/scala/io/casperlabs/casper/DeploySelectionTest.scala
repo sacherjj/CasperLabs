@@ -28,6 +28,7 @@ import io.casperlabs.ipc.DeployResult.Value.{ExecutionResult, PreconditionFailur
 import io.casperlabs.ipc._
 import io.casperlabs.models.ArbitraryConsensus
 import io.casperlabs.smartcontracts.bytesrepr._
+import io.casperlabs.smartcontracts.cltype
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.smartcontracts.ExecutionEngineService.CommitResult
 import monix.eval.Task
@@ -144,21 +145,23 @@ class DeploySelectionTest
   }
 
   it should "return conflicting deploys along the commuting ones if they fit the block size limit" in {
-    val conflicting = List.fill(deploysInSmallBlock)(sample(arbDeploy.arbitrary))
-    val commuting   = List.fill(deploysInSmallBlock)(sample(arbDeploy.arbitrary))
-    val stream = fs2.Stream
-      .fromIterator(conflicting.toIterator)
-      .interleave(fs2.Stream.fromIterator(commuting.toIterator))
+    val mixed          = List.fill(deploysInSmallBlock * 2)(sample(arbDeploy.arbitrary))
+    val sizeLimitBytes = smallBlockSizeBytes * 4
+    val cappedEffects  = takeUnlessTooBig(sizeLimitBytes)(mixed)
+
+    val stream = fs2.Stream.fromIterator(mixed.toIterator)
 
     val counter                                   = AtomicInt(1)
     implicit val ee: ExecutionEngineService[Task] = eeExecMock(everyOtherCommutesExec(counter) _)
 
-    val deploySelection = DeploySelection.create[Task](smallBlockSizeBytes * 4)
+    val deploySelection = DeploySelection.create[Task](sizeLimitBytes)
 
     // The very first WRITE doesn't conflict
-    val expectedCommuting = conflicting.head +: commuting
+    val expectedCommuting = cappedEffects.head +: cappedEffects.zipWithIndex
+      .filter(_._2 % 2 == 1)
+      .map(_._1)
     // Because first WRITE doesn't conflict we will get 1 less of them in conflicting section
-    val expectedConflicting = conflicting.drop(1)
+    val expectedConflicting = cappedEffects.zipWithIndex.filter(_._2 % 2 == 0).map(_._1).tail
 
     val test = deploySelection
       .select((prestate, blocktime, protocolVersion, stream))
@@ -394,6 +397,6 @@ object DeploySelectionTest {
     (_, _, _) => raiseNotImplemented[F, Either[Throwable, UpgradeResult]],
     execFunc,
     (_, _) => raiseNotImplemented[F, Either[Throwable, CommitResult]],
-    (_, _, _) => raiseNotImplemented[F, Either[Throwable, Value]]
+    (_, _, _) => raiseNotImplemented[F, Either[Throwable, cltype.StoredValue]]
   )
 }

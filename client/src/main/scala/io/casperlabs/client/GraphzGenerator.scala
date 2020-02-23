@@ -67,7 +67,7 @@ object GraphzGenerator {
 
     val lastFinalizedBlockHash =
       blockInfos
-        .find(_.getStatus.faultTolerance > 0)
+        .find(_.getStatus.isFinalized)
         .map(x => hexShort(x.getSummary.blockHash))
         .getOrElse("")
 

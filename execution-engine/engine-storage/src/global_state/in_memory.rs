@@ -201,7 +201,7 @@ impl StateProvider for InMemoryGlobalState {
 
 #[cfg(test)]
 mod tests {
-    use types::CLValue;
+    use types::{account::PublicKey, CLValue};
 
     use super::*;
 
@@ -214,11 +214,11 @@ mod tests {
     fn create_test_pairs() -> [TestPair; 2] {
         [
             TestPair {
-                key: Key::Account([1_u8; 32]),
+                key: Key::Account(PublicKey::ed25519_from([1_u8; 32])),
                 value: StoredValue::CLValue(CLValue::from_t(1_i32).unwrap()),
             },
             TestPair {
-                key: Key::Account([2_u8; 32]),
+                key: Key::Account(PublicKey::ed25519_from([2_u8; 32])),
                 value: StoredValue::CLValue(CLValue::from_t(2_i32).unwrap()),
             },
         ]
@@ -227,15 +227,15 @@ mod tests {
     fn create_test_pairs_updated() -> [TestPair; 3] {
         [
             TestPair {
-                key: Key::Account([1u8; 32]),
+                key: Key::Account(PublicKey::ed25519_from([1u8; 32])),
                 value: StoredValue::CLValue(CLValue::from_t("one".to_string()).unwrap()),
             },
             TestPair {
-                key: Key::Account([2u8; 32]),
+                key: Key::Account(PublicKey::ed25519_from([2u8; 32])),
                 value: StoredValue::CLValue(CLValue::from_t("two".to_string()).unwrap()),
             },
             TestPair {
-                key: Key::Account([3u8; 32]),
+                key: Key::Account(PublicKey::ed25519_from([3u8; 32])),
                 value: StoredValue::CLValue(CLValue::from_t(3_i32).unwrap()),
             },
         ]
@@ -347,8 +347,8 @@ mod tests {
     fn initial_state_has_the_expected_hash() {
         let correlation_id = CorrelationId::new();
         let expected_bytes = vec![
-            51, 7, 165, 76, 166, 213, 191, 186, 252, 14, 241, 176, 3, 243, 236, 73, 65, 192, 17,
-            238, 127, 121, 136, 158, 68, 65, 103, 84, 222, 47, 9, 29,
+            243, 47, 248, 24, 18, 220, 95, 83, 103, 81, 100, 141, 145, 156, 26, 225, 23, 211, 126,
+            219, 65, 215, 200, 175, 255, 183, 116, 198, 144, 222, 99, 246,
         ];
         let (_, root_hash) = InMemoryGlobalState::from_pairs(correlation_id, &[]).unwrap();
         assert_eq!(expected_bytes, root_hash.to_vec())

@@ -10,12 +10,10 @@ object Contract {
       ToBytes.toBytes(c.bytes) ++ ToBytes.toBytes(c.namedKeys) ++ ToBytes.toBytes(c.protocolVersion)
   }
 
-  implicit val fromBytesContract: FromBytes[Contract] = new FromBytes[Contract] {
-    override def fromBytes(bytes: BytesView): Either[FromBytes.Error, (Contract, BytesView)] =
-      for {
-        (contractBytes, rem1)   <- FromBytes[Seq[Byte]].fromBytes(bytes)
-        (namedKeys, rem2)       <- FromBytes[Map[String, Key]].fromBytes(rem1)
-        (protocolVersion, rem3) <- FromBytes[SemVer].fromBytes(rem2)
-      } yield Contract(contractBytes.toIndexedSeq, namedKeys, protocolVersion) -> rem3
-  }
+  val deserializer: FromBytes.Deserializer[Contract] =
+    for {
+      contractBytes   <- FromBytes.bytes
+      namedKeys       <- FromBytes.map(FromBytes.string, Key.deserializer)
+      protocolVersion <- SemVer.deserializer
+    } yield Contract(contractBytes.toIndexedSeq, namedKeys, protocolVersion)
 }

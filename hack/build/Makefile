@@ -58,6 +58,9 @@ stop-background-scala-compiler:
 	@echo "Data directory is .make/run/data-dir"
 	@echo "Generating keys..."
 	@$(PROJECT)/hack/key-management/docker-gen-keys.sh .make/run/data-dir
+	@echo "Generating accounts.csv..."
+	@mkdir -p .make/run/data-dir/chainspec/genesis/
+	@echo $$(cat .make/run/data-dir/validator-id)",100000000000000000,100000000000000000" > .make/run/data-dir/chainspec/genesis/accounts.csv
 	@mkdir -p $(dir $@) && touch $@
 
 
@@ -90,7 +93,7 @@ ifneq ($(wildcard .make/run/background-scala-compiler),)
 		--args "--server-data-dir=$(MAKE_DIR)/data-dir" \
 		--args "--casper-validator-sig-algorithm=ed25519" \
 		--args "--casper-validator-public-key-path=$(MAKE_DIR)/data-dir/validator-public.pem" \
-		--args "--casper-validator-private-key-path=$(MAKE_DIR)/data-dir/validator-private.pem" &> $(MAKE_DIR)/node.log &
+		--args "--casper-validator-private-key-path=$(MAKE_DIR)/data-dir/validator-private.pem" | tee $(MAKE_DIR)/node.log &
 	@sleep 1; while ! grep --silent -i "listening for traffic on" .make/run/node.log &> /dev/null; do sleep 1; done
 	@echo Done
 	@mkdir -p $(dir $@) && touch $@

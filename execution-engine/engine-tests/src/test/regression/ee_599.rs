@@ -9,17 +9,14 @@ use engine_test_support::{
     },
     DEFAULT_ACCOUNT_ADDR,
 };
-use types::{
-    account::{PublicKey, PurseId},
-    U512,
-};
+use types::{account::PublicKey, U512};
 
 const CONTRACT_EE_599_REGRESSION: &str = "ee_599_regression.wasm";
 const CONTRACT_TRANSFER_TO_ACCOUNT: &str = "transfer_to_account_u512.wasm";
-const DONATION_BOX_COPY_KEY: &str = "donation_box_copy";
+const DONATION_PURSE_COPY_KEY: &str = "donation_purse_copy";
 const EXPECTED_ERROR: &str = "InvalidContext";
 const TRANSFER_FUNDS_KEY: &str = "transfer_funds";
-const VICTIM_ADDR: [u8; 32] = [42; 32];
+const VICTIM_ADDR: PublicKey = PublicKey::ed25519_from([42; 32]);
 
 lazy_static! {
     static ref VICTIM_INITIAL_FUNDS: U512 = *DEFAULT_PAYMENT * 10;
@@ -28,7 +25,7 @@ lazy_static! {
 fn setup() -> InMemoryWasmTestBuilder {
     // Creates victim account
     let exec_request_1 = {
-        let args = (PublicKey::new(VICTIM_ADDR), *VICTIM_INITIAL_FUNDS);
+        let args = (VICTIM_ADDR, *VICTIM_INITIAL_FUNDS);
         ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, CONTRACT_TRANSFER_TO_ACCOUNT, args)
             .build()
     };
@@ -70,14 +67,13 @@ fn should_not_be_able_to_transfer_funds_with_transfer_purse_to_purse() {
         .get(TRANSFER_FUNDS_KEY)
         .cloned()
         .unwrap_or_else(|| panic!("should have {}", TRANSFER_FUNDS_KEY));
-    let donation_box_copy_key = default_account
+    let donation_purse_copy_key = default_account
         .named_keys()
-        .get(DONATION_BOX_COPY_KEY)
+        .get(DONATION_PURSE_COPY_KEY)
         .cloned()
-        .unwrap_or_else(|| panic!("should have {}", DONATION_BOX_COPY_KEY));
+        .unwrap_or_else(|| panic!("should have {}", DONATION_PURSE_COPY_KEY));
 
-    let donation_box_copy_uref = donation_box_copy_key.as_uref().expect("should be uref");
-    let donation_box_copy = PurseId::new(*donation_box_copy_uref);
+    let donation_purse_copy = donation_purse_copy_key.into_uref().expect("should be uref");
 
     let exec_request_3 = {
         let args = (
@@ -109,7 +105,7 @@ fn should_not_be_able_to_transfer_funds_with_transfer_purse_to_purse() {
 
     let victim_balance_after = result_2
         .builder()
-        .get_purse_balance(victim_account.purse_id());
+        .get_purse_balance(victim_account.main_purse());
 
     assert_eq!(
         *VICTIM_INITIAL_FUNDS - gas_cost.value(),
@@ -117,7 +113,7 @@ fn should_not_be_able_to_transfer_funds_with_transfer_purse_to_purse() {
     );
 
     assert_eq!(
-        result_2.builder().get_purse_balance(donation_box_copy),
+        result_2.builder().get_purse_balance(donation_purse_copy),
         U512::zero(),
     );
 }
@@ -135,21 +131,20 @@ fn should_not_be_able_to_transfer_funds_with_transfer_from_purse_to_account() {
         .get_account(DEFAULT_ACCOUNT_ADDR)
         .expect("should have default account");
 
-    let default_account_balance = builder.get_purse_balance(default_account.purse_id());
+    let default_account_balance = builder.get_purse_balance(default_account.main_purse());
 
     let transfer_funds = default_account
         .named_keys()
         .get(TRANSFER_FUNDS_KEY)
         .cloned()
         .unwrap_or_else(|| panic!("should have {}", TRANSFER_FUNDS_KEY));
-    let donation_box_copy_key = default_account
+    let donation_purse_copy_key = default_account
         .named_keys()
-        .get(DONATION_BOX_COPY_KEY)
+        .get(DONATION_PURSE_COPY_KEY)
         .cloned()
-        .unwrap_or_else(|| panic!("should have {}", DONATION_BOX_COPY_KEY));
+        .unwrap_or_else(|| panic!("should have {}", DONATION_PURSE_COPY_KEY));
 
-    let donation_box_copy_uref = donation_box_copy_key.as_uref().expect("should be uref");
-    let donation_box_copy = PurseId::new(*donation_box_copy_uref);
+    let donation_purse_copy = donation_purse_copy_key.into_uref().expect("should be uref");
 
     let exec_request_3 = {
         let args = (
@@ -182,22 +177,22 @@ fn should_not_be_able_to_transfer_funds_with_transfer_from_purse_to_account() {
 
     let victim_balance_after = result_2
         .builder()
-        .get_purse_balance(victim_account.purse_id());
+        .get_purse_balance(victim_account.main_purse());
 
     assert_eq!(
         *VICTIM_INITIAL_FUNDS - gas_cost.value(),
         victim_balance_after
     );
-    // In this variant of test `donation_box` is left unchanged i.e. zero balance
+    // In this variant of test `donation_purse` is left unchanged i.e. zero balance
     assert_eq!(
-        result_2.builder().get_purse_balance(donation_box_copy),
+        result_2.builder().get_purse_balance(donation_purse_copy),
         U512::zero(),
     );
 
     // Main purse of the contract owner is unchanged
     let updated_default_account_balance = result_2
         .builder()
-        .get_purse_balance(default_account.purse_id());
+        .get_purse_balance(default_account.main_purse());
 
     assert_eq!(
         updated_default_account_balance - default_account_balance,
@@ -218,21 +213,20 @@ fn should_not_be_able_to_transfer_funds_with_transfer_to_account() {
         .get_account(DEFAULT_ACCOUNT_ADDR)
         .expect("should have default account");
 
-    let default_account_balance = builder.get_purse_balance(default_account.purse_id());
+    let default_account_balance = builder.get_purse_balance(default_account.main_purse());
 
     let transfer_funds = default_account
         .named_keys()
         .get(TRANSFER_FUNDS_KEY)
         .cloned()
         .unwrap_or_else(|| panic!("should have {}", TRANSFER_FUNDS_KEY));
-    let donation_box_copy_key = default_account
+    let donation_purse_copy_key = default_account
         .named_keys()
-        .get(DONATION_BOX_COPY_KEY)
+        .get(DONATION_PURSE_COPY_KEY)
         .cloned()
-        .unwrap_or_else(|| panic!("should have {}", DONATION_BOX_COPY_KEY));
+        .unwrap_or_else(|| panic!("should have {}", DONATION_PURSE_COPY_KEY));
 
-    let donation_box_copy_uref = donation_box_copy_key.as_uref().expect("should be uref");
-    let donation_box_copy = PurseId::new(*donation_box_copy_uref);
+    let donation_purse_copy = donation_purse_copy_key.into_uref().expect("should be uref");
 
     let exec_request_3 = {
         let args = (
@@ -265,23 +259,23 @@ fn should_not_be_able_to_transfer_funds_with_transfer_to_account() {
 
     let victim_balance_after = result_2
         .builder()
-        .get_purse_balance(victim_account.purse_id());
+        .get_purse_balance(victim_account.main_purse());
 
     assert_eq!(
         *VICTIM_INITIAL_FUNDS - gas_cost.value(),
         victim_balance_after
     );
 
-    // In this variant of test `donation_box` is left unchanged i.e. zero balance
+    // In this variant of test `donation_purse` is left unchanged i.e. zero balance
     assert_eq!(
-        result_2.builder().get_purse_balance(donation_box_copy),
+        result_2.builder().get_purse_balance(donation_purse_copy),
         U512::zero(),
     );
 
     // Verify that default account's balance didn't change
     let updated_default_account_balance = result_2
         .builder()
-        .get_purse_balance(default_account.purse_id());
+        .get_purse_balance(default_account.main_purse());
 
     assert_eq!(
         updated_default_account_balance - default_account_balance,
@@ -317,7 +311,7 @@ fn should_not_be_able_to_get_main_purse_in_invalid_context() {
         ExecuteRequestBuilder::standard(VICTIM_ADDR, CONTRACT_EE_599_REGRESSION, args).build()
     };
 
-    let victim_balance_before = builder.get_purse_balance(victim_account.purse_id());
+    let victim_balance_before = builder.get_purse_balance(victim_account.main_purse());
 
     let result_2 = builder.exec(exec_request_3).commit().finish();
 
@@ -341,7 +335,7 @@ fn should_not_be_able_to_get_main_purse_in_invalid_context() {
 
     let victim_balance_after = result_2
         .builder()
-        .get_purse_balance(victim_account.purse_id());
+        .get_purse_balance(victim_account.main_purse());
 
     assert_eq!(
         victim_balance_before - gas_cost.value(),

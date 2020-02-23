@@ -2,7 +2,7 @@
 import {getMainPurse} from "../../../../contract-as/assembly/account";
 import * as CL from "../../../../contract-as/assembly";
 import {Error} from "../../../../contract-as/assembly/error";
-import {PurseId} from "../../../../contract-as/assembly/purseid";
+import {URef} from "../../../../contract-as/assembly/uref";
 
 enum Args {
   ExpectedMainPurse = 0,
@@ -21,7 +21,7 @@ export function call(): void {
     Error.fromUserError(<u16>CustomError.MissingExpectedMainPurseArg).revert();
     return;
   }
-  let purseResult = PurseId.fromBytes(expectedMainPurseArg);
+  let purseResult = URef.fromBytes(expectedMainPurseArg);
   if (purseResult === null){
     Error.fromUserError(<u16>CustomError.InvalidExpectedMainPurseArg).revert();
     return;
@@ -32,6 +32,6 @@ export function call(): void {
     Error.fromUserError(<u16>CustomError.UnableToGetMainPurse).revert();
     return;
   }
-  if (<PurseId>expectedMainPurse != <PurseId>actualMainPurse)
+  if (<URef>expectedMainPurse != <URef>actualMainPurse)
     Error.fromUserError(<u16>CustomError.EqualityAssertionFailed).revert();
 }

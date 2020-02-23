@@ -9,13 +9,9 @@ use engine_test_support::{
     },
     DEFAULT_ACCOUNT_ADDR, DEFAULT_ACCOUNT_INITIAL_BALANCE,
 };
-use types::{
-    account::{PublicKey, PurseId},
-    bytesrepr::ToBytes,
-    CLValue, Key, U512,
-};
+use types::{account::PublicKey, bytesrepr::ToBytes, CLValue, Key, URef, U512};
 
-const ACCOUNT_1_ADDR: [u8; 32] = [42u8; 32];
+const ACCOUNT_1_ADDR: PublicKey = PublicKey::ed25519_from([42u8; 32]);
 const STANDARD_PAYMENT_WASM: &str = "standard_payment.wasm";
 const DO_NOTHING_WASM: &str = "do_nothing.wasm";
 const CONTRACT_TRANSFER_PURSE_TO_ACCOUNT: &str = "transfer_purse_to_account.wasm";
@@ -24,7 +20,7 @@ const CONTRACT_REVERT: &str = "revert.wasm";
 #[ignore]
 #[test]
 fn should_raise_insufficient_payment_when_caller_lacks_minimum_balance() {
-    let account_1_public_key = PublicKey::new(ACCOUNT_1_ADDR);
+    let account_1_public_key = ACCOUNT_1_ADDR;
 
     let exec_request = ExecuteRequestBuilder::standard(
         DEFAULT_ACCOUNT_ADDR,
@@ -75,7 +71,7 @@ fn should_raise_insufficient_payment_when_caller_lacks_minimum_balance() {
 #[ignore]
 #[test]
 fn should_raise_insufficient_payment_when_payment_code_does_not_pay_enough() {
-    let account_1_public_key = PublicKey::new(ACCOUNT_1_ADDR);
+    let account_1_public_key = ACCOUNT_1_ADDR;
 
     let exec_request = {
         let deploy = DeployItemBuilder::new()
@@ -86,7 +82,7 @@ fn should_raise_insufficient_payment_when_payment_code_does_not_pay_enough() {
                 (account_1_public_key, U512::from(1)),
             )
             .with_payment_code(STANDARD_PAYMENT_WASM, (U512::from(1),))
-            .with_authorization_keys(&[*DEFAULT_ACCOUNT_KEY])
+            .with_authorization_keys(&[DEFAULT_ACCOUNT_KEY])
             .build();
 
         ExecuteRequestBuilder::new().push_deploy(deploy).build()
@@ -103,7 +99,7 @@ fn should_raise_insufficient_payment_when_payment_code_does_not_pay_enough() {
         builder
             .get_account(DEFAULT_ACCOUNT_ADDR)
             .expect("should have account")
-            .purse_id(),
+            .main_purse(),
     );
     let reward_balance = get_pos_rewards_purse_balance(&builder);
 
@@ -143,7 +139,7 @@ fn should_raise_insufficient_payment_when_payment_code_does_not_pay_enough() {
 #[ignore]
 #[test]
 fn should_raise_insufficient_payment_error_when_out_of_gas() {
-    let account_1_public_key = PublicKey::new(ACCOUNT_1_ADDR);
+    let account_1_public_key = ACCOUNT_1_ADDR;
     let payment_purse_amount: U512 = U512::from(1);
     let transferred_amount = U512::from(1);
 
@@ -156,7 +152,7 @@ fn should_raise_insufficient_payment_error_when_out_of_gas() {
                 "transfer_purse_to_account.wasm",
                 (account_1_public_key, transferred_amount),
             )
-            .with_authorization_keys(&[*DEFAULT_ACCOUNT_KEY])
+            .with_authorization_keys(&[DEFAULT_ACCOUNT_KEY])
             .build();
 
         ExecuteRequestBuilder::new().push_deploy(deploy).build()
@@ -177,7 +173,7 @@ fn should_raise_insufficient_payment_error_when_out_of_gas() {
         builder
             .get_account(DEFAULT_ACCOUNT_ADDR)
             .expect("should have account")
-            .purse_id(),
+            .main_purse(),
     );
     let reward_balance = get_pos_rewards_purse_balance(&builder);
 
@@ -214,7 +210,7 @@ fn should_raise_insufficient_payment_error_when_out_of_gas() {
 #[ignore]
 #[test]
 fn should_forward_payment_execution_runtime_error() {
-    let account_1_public_key = PublicKey::new(ACCOUNT_1_ADDR);
+    let account_1_public_key = ACCOUNT_1_ADDR;
     let transferred_amount = U512::from(1);
 
     let exec_request = {
@@ -226,7 +222,7 @@ fn should_forward_payment_execution_runtime_error() {
                 "transfer_purse_to_account.wasm",
                 (account_1_public_key, transferred_amount),
             )
-            .with_authorization_keys(&[*DEFAULT_ACCOUNT_KEY])
+            .with_authorization_keys(&[DEFAULT_ACCOUNT_KEY])
             .build();
 
         ExecuteRequestBuilder::new().push_deploy(deploy).build()
@@ -247,7 +243,7 @@ fn should_forward_payment_execution_runtime_error() {
         builder
             .get_account(DEFAULT_ACCOUNT_ADDR)
             .expect("should have account")
-            .purse_id(),
+            .main_purse(),
     );
     let reward_balance = get_pos_rewards_purse_balance(&builder);
 
@@ -284,7 +280,7 @@ fn should_forward_payment_execution_runtime_error() {
 #[ignore]
 #[test]
 fn should_forward_payment_execution_gas_limit_error() {
-    let account_1_public_key = PublicKey::new(ACCOUNT_1_ADDR);
+    let account_1_public_key = ACCOUNT_1_ADDR;
     let transferred_amount = U512::from(1);
 
     let exec_request = {
@@ -296,7 +292,7 @@ fn should_forward_payment_execution_gas_limit_error() {
                 "transfer_purse_to_account.wasm",
                 (account_1_public_key, transferred_amount),
             )
-            .with_authorization_keys(&[*DEFAULT_ACCOUNT_KEY])
+            .with_authorization_keys(&[DEFAULT_ACCOUNT_KEY])
             .build();
 
         ExecuteRequestBuilder::new().push_deploy(deploy).build()
@@ -317,7 +313,7 @@ fn should_forward_payment_execution_gas_limit_error() {
         builder
             .get_account(DEFAULT_ACCOUNT_ADDR)
             .expect("should have account")
-            .purse_id(),
+            .main_purse(),
     );
     let reward_balance = get_pos_rewards_purse_balance(&builder);
 
@@ -354,7 +350,7 @@ fn should_forward_payment_execution_gas_limit_error() {
 #[ignore]
 #[test]
 fn should_run_out_of_gas_when_session_code_exceeds_gas_limit() {
-    let account_1_public_key = PublicKey::new(ACCOUNT_1_ADDR);
+    let account_1_public_key = ACCOUNT_1_ADDR;
     let payment_purse_amount = 10_000_000;
     let transferred_amount = 1;
 
@@ -367,7 +363,7 @@ fn should_run_out_of_gas_when_session_code_exceeds_gas_limit() {
                 "endless_loop.wasm",
                 (account_1_public_key, U512::from(transferred_amount)),
             )
-            .with_authorization_keys(&[*DEFAULT_ACCOUNT_KEY])
+            .with_authorization_keys(&[DEFAULT_ACCOUNT_KEY])
             .build();
 
         ExecuteRequestBuilder::new().push_deploy(deploy).build()
@@ -407,7 +403,7 @@ fn should_correctly_charge_when_session_code_runs_out_of_gas() {
             .with_deploy_hash([1; 32])
             .with_payment_code(STANDARD_PAYMENT_WASM, (U512::from(payment_purse_amount),))
             .with_session_code("endless_loop.wasm", ())
-            .with_authorization_keys(&[*DEFAULT_ACCOUNT_KEY])
+            .with_authorization_keys(&[DEFAULT_ACCOUNT_KEY])
             .build();
 
         ExecuteRequestBuilder::new().push_deploy(deploy).build()
@@ -424,7 +420,7 @@ fn should_correctly_charge_when_session_code_runs_out_of_gas() {
     let default_account = builder
         .get_account(DEFAULT_ACCOUNT_ADDR)
         .expect("should get genesis account");
-    let modified_balance: U512 = builder.get_purse_balance(default_account.purse_id());
+    let modified_balance: U512 = builder.get_purse_balance(default_account.main_purse());
     let initial_balance: U512 = U512::from(DEFAULT_ACCOUNT_INITIAL_BALANCE);
 
     assert_ne!(
@@ -456,7 +452,7 @@ fn should_correctly_charge_when_session_code_runs_out_of_gas() {
 #[ignore]
 #[test]
 fn should_correctly_charge_when_session_code_fails() {
-    let account_1_public_key = PublicKey::new(ACCOUNT_1_ADDR);
+    let account_1_public_key = ACCOUNT_1_ADDR;
     let payment_purse_amount = 10_000_000;
     let transferred_amount = 1;
 
@@ -469,7 +465,7 @@ fn should_correctly_charge_when_session_code_fails() {
                 "revert.wasm",
                 (account_1_public_key, U512::from(transferred_amount)),
             )
-            .with_authorization_keys(&[*DEFAULT_ACCOUNT_KEY])
+            .with_authorization_keys(&[DEFAULT_ACCOUNT_KEY])
             .build();
 
         ExecuteRequestBuilder::new().push_deploy(deploy).build()
@@ -486,7 +482,7 @@ fn should_correctly_charge_when_session_code_fails() {
     let default_account = builder
         .get_account(DEFAULT_ACCOUNT_ADDR)
         .expect("should get genesis account");
-    let modified_balance: U512 = builder.get_purse_balance(default_account.purse_id());
+    let modified_balance: U512 = builder.get_purse_balance(default_account.main_purse());
     let initial_balance: U512 = U512::from(DEFAULT_ACCOUNT_INITIAL_BALANCE);
 
     assert_ne!(
@@ -513,7 +509,7 @@ fn should_correctly_charge_when_session_code_fails() {
 #[ignore]
 #[test]
 fn should_correctly_charge_when_session_code_succeeds() {
-    let account_1_public_key = PublicKey::new(ACCOUNT_1_ADDR);
+    let account_1_public_key = ACCOUNT_1_ADDR;
     let payment_purse_amount = 10_000_000;
     let transferred_amount = 1;
 
@@ -526,7 +522,7 @@ fn should_correctly_charge_when_session_code_succeeds() {
                 (account_1_public_key, U512::from(transferred_amount)),
             )
             .with_payment_code(STANDARD_PAYMENT_WASM, (U512::from(payment_purse_amount),))
-            .with_authorization_keys(&[*DEFAULT_ACCOUNT_KEY])
+            .with_authorization_keys(&[DEFAULT_ACCOUNT_KEY])
             .build();
 
         ExecuteRequestBuilder::new().push_deploy(deploy).build()
@@ -544,7 +540,7 @@ fn should_correctly_charge_when_session_code_succeeds() {
     let default_account = builder
         .get_account(DEFAULT_ACCOUNT_ADDR)
         .expect("should get genesis account");
-    let modified_balance: U512 = builder.get_purse_balance(default_account.purse_id());
+    let modified_balance: U512 = builder.get_purse_balance(default_account.main_purse());
     let initial_balance: U512 = U512::from(DEFAULT_ACCOUNT_INITIAL_BALANCE);
 
     assert_ne!(
@@ -573,29 +569,26 @@ fn should_correctly_charge_when_session_code_succeeds() {
     )
 }
 
-fn get_pos_purse_id_by_name(
-    builder: &InMemoryWasmTestBuilder,
-    purse_name: &str,
-) -> Option<PurseId> {
+fn get_pos_purse_by_name(builder: &InMemoryWasmTestBuilder, purse_name: &str) -> Option<URef> {
     let pos_contract = builder.get_pos_contract();
 
     pos_contract
         .named_keys()
         .get(purse_name)
         .and_then(Key::as_uref)
-        .map(|u| PurseId::new(*u))
+        .cloned()
 }
 
 fn get_pos_rewards_purse_balance(builder: &InMemoryWasmTestBuilder) -> U512 {
-    let purse_id = get_pos_purse_id_by_name(builder, POS_REWARDS_PURSE)
-        .expect("should find PoS payment purse");
-    builder.get_purse_balance(purse_id)
+    let purse =
+        get_pos_purse_by_name(builder, POS_REWARDS_PURSE).expect("should find PoS payment purse");
+    builder.get_purse_balance(purse)
 }
 
 #[ignore]
 #[test]
 fn should_finalize_to_rewards_purse() {
-    let account_1_public_key = PublicKey::new(ACCOUNT_1_ADDR);
+    let account_1_public_key = ACCOUNT_1_ADDR;
     let payment_purse_amount = 10_000_000;
     let transferred_amount = 1;
 
@@ -607,7 +600,7 @@ fn should_finalize_to_rewards_purse() {
                 (account_1_public_key, U512::from(transferred_amount)),
             )
             .with_payment_code("standard_payment.wasm", (U512::from(payment_purse_amount),))
-            .with_authorization_keys(&[*DEFAULT_ACCOUNT_KEY])
+            .with_authorization_keys(&[DEFAULT_ACCOUNT_KEY])
             .with_deploy_hash([1; 32])
             .build();
 
@@ -630,7 +623,7 @@ fn should_finalize_to_rewards_purse() {
 #[ignore]
 #[test]
 fn independent_standard_payments_should_not_write_the_same_keys() {
-    let account_1_public_key = PublicKey::new(ACCOUNT_1_ADDR);
+    let account_1_public_key = ACCOUNT_1_ADDR;
     let payment_purse_amount = 10_000_000;
     let transfer_amount = 10_000_000;
 
@@ -644,7 +637,7 @@ fn independent_standard_payments_should_not_write_the_same_keys() {
                 (account_1_public_key, U512::from(transfer_amount)),
             )
             .with_payment_code(STANDARD_PAYMENT_WASM, (U512::from(payment_purse_amount),))
-            .with_authorization_keys(&[*DEFAULT_ACCOUNT_KEY])
+            .with_authorization_keys(&[DEFAULT_ACCOUNT_KEY])
             .with_deploy_hash([1; 32])
             .build();
 
@@ -663,7 +656,7 @@ fn independent_standard_payments_should_not_write_the_same_keys() {
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_session_code(DO_NOTHING_WASM, ())
             .with_payment_code(STANDARD_PAYMENT_WASM, (U512::from(payment_purse_amount),))
-            .with_authorization_keys(&[*DEFAULT_ACCOUNT_KEY])
+            .with_authorization_keys(&[DEFAULT_ACCOUNT_KEY])
             .with_deploy_hash([2; 32])
             .build();
 
@@ -716,7 +709,7 @@ fn should_charge_non_main_purse() {
     // instead of account_1 main purse
     const TEST_PURSE_NAME: &str = "test-purse";
 
-    let account_1_public_key = PublicKey::new(ACCOUNT_1_ADDR);
+    let account_1_public_key = ACCOUNT_1_ADDR;
     let payment_purse_amount = U512::from(10_000_000);
     let account_1_funding_amount = U512::from(100_000_000);
     let account_1_purse_funding_amount = U512::from(50_000_000);
@@ -731,7 +724,7 @@ fn should_charge_non_main_purse() {
                 (account_1_public_key, account_1_funding_amount),
             )
             .with_payment_code(STANDARD_PAYMENT_WASM, (payment_purse_amount,))
-            .with_authorization_keys(&[*DEFAULT_ACCOUNT_KEY])
+            .with_authorization_keys(&[DEFAULT_ACCOUNT_KEY])
             .with_deploy_hash([1; 32])
             .build();
 
@@ -769,12 +762,11 @@ fn should_charge_non_main_purse() {
         .get_account(ACCOUNT_1_ADDR)
         .expect("should have account");
     // get purse
-    let purse_id_key = account_1.named_keys()[TEST_PURSE_NAME];
-    let purse_id = PurseId::new(*purse_id_key.as_uref().expect("should have uref"));
+    let purse_key = account_1.named_keys()[TEST_PURSE_NAME];
+    let purse = purse_key.into_uref().expect("should have uref");
 
     let purse_starting_balance = {
-        let purse_bytes = purse_id
-            .value()
+        let purse_bytes = purse
             .addr()
             .to_bytes()
             .expect("should be able to serialize purse bytes");
@@ -836,8 +828,7 @@ fn should_charge_non_main_purse() {
     let expected_resting_balance = account_1_purse_funding_amount - motes.value();
 
     let purse_final_balance = {
-        let purse_bytes = purse_id
-            .value()
+        let purse_bytes = purse
             .addr()
             .to_bytes()
             .expect("should be able to serialize purse bytes");
