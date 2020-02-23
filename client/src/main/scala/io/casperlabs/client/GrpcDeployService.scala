@@ -149,46 +149,34 @@ class GrpcDeployService(conn: ConnectOptions, scheduler: Scheduler)
       val startTime   = System.currentTimeMillis()
       val timeoutTime = startTime + timeoutSeconds * 1000
 
-      def deployInfo(delayMillis: java.lang.Long): DeployInfo = {
-        Thread.sleep(delayMillis)
-        val future: CancelableFuture[DeployInfo] =
-          casperServiceStub
-            .getDeployInfo(GetDeployInfoRequest(hash, view = DeployInfo.View.BASIC))
-            .runToFuture
-        Await.result(future, 5.seconds)
-      }
+      def deployInfo(sleepDuration: FiniteDuration): Task[DeployInfo] =
+        Task.sleep(sleepDuration) >> casperServiceStub.getDeployInfo(
+          GetDeployInfoRequest(hash, view = DeployInfo.View.BASIC)
+        )
 
-      def deployInfos: Stream[DeployInfo] = deployInfo(0) #:: {
-        if (System.currentTimeMillis() > timeoutTime)
-          Stream.empty
-        else
-          List(deployInfo(1000)).toStream #::: deployInfos
-      }
+      def expired: Boolean = System.currentTimeMillis() > timeoutTime
 
-      Task
-        .eval({
-          deployInfos
-            .find(
-              di =>
-                di.status match {
-                  case Some(state) =>
-                    state match {
-                      case DeployInfo.Status(DeployInfo.State.PENDING, _)         => false
-                      case DeployInfo.Status(DeployInfo.State.DISCARDED, _)       => true
-                      case DeployInfo.Status(DeployInfo.State.FINALIZED, _)       => true
-                      case DeployInfo.Status(DeployInfo.State.PROCESSED, _)       => true
-                      case DeployInfo.Status(DeployInfo.State.UNDEFINED, _)       => true
-                      case DeployInfo.Status(DeployInfo.State.Unrecognized(_), _) => true
-                    }
-                  case None => true
-                }
-            ) match {
-            case Some(di) => Printer.print(di, bytesStandard, json)
-            case None     => throw new RuntimeException(s"Timeout.")
-          }
+      def notPending(deployInfo: DeployInfo): Boolean =
+        deployInfo.status.forall(_.state match {
+          case DeployInfo.State.PENDING => false
+          case _                        => true
         })
-        .attempt
 
+      def deployInfos(sleepDuration: FiniteDuration): Task[String] =
+        for {
+          di <- if (expired) {
+                 Task.raiseError(new RuntimeException("Timeout."))
+               } else {
+                 deployInfo(sleepDuration)
+               }
+          result <- if (notPending(di)) {
+                     Task.pure(Printer.print(di, bytesStandard, json))
+                   } else {
+                     deployInfos(1.second)
+                   }
+        } yield result
+
+      deployInfos(Duration.Zero).attempt
     } else {
       casperServiceStub
         .getDeployInfo(GetDeployInfoRequest(hash, view = DeployInfo.View.BASIC))

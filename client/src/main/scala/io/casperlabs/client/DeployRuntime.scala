@@ -477,19 +477,17 @@ object DeployRuntime {
       json: Boolean = false
   ): F[Either[Throwable, String]] =
     for {
-      a <- DeployService[F].deploy(deploy)
-      _ = print(a match {
-        case Right(message) => message + "\n"
-        case Left(_)        => ""
-      })
-      b <- DeployService[F].showDeploy(
-            Base16.encode(deploy.deployHash.toByteArray),
-            bytesStandard,
-            json,
-            true,
-            timeoutSeconds
-          )
-    } yield b
+      message <- DeployService[F].deploy(deploy).rethrow
+      _       <- Sync[F].delay(println(message))
+      result <- DeployService[F]
+                 .showDeploy(
+                   Base16.encode(deploy.deployHash.toByteArray),
+                   bytesStandard,
+                   json,
+                   waitForProcessed = true,
+                   timeoutSeconds
+                 )
+    } yield result
 
   def deployFileProgram[F[_]: Sync: DeployService](
       from: Option[PublicKey],
