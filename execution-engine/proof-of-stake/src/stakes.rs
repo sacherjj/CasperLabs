@@ -1,4 +1,11 @@
-use alloc::collections::BTreeMap;
+use alloc::{
+    collections::{
+        btree_map::{Iter, Values},
+        BTreeMap,
+    },
+    string::String,
+};
+use core::fmt::Write;
 
 use types::{
     account::PublicKey,
@@ -23,12 +30,40 @@ const MAX_REL_INCREASE: u64 = 1_000_000_000;
 /// The maximum decrease of stakes in millionths of the total stakes in a single unbonding request.
 const MAX_REL_DECREASE: u64 = 900_000;
 
+const WRITE_STRING_EXPECT: &str = "Writing to a string should not fail";
+
 /// The stakes map, assigning the staked amount of motes to each bonded
 /// validator.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Stakes(pub BTreeMap<PublicKey, U512>);
 
 impl Stakes {
+    pub fn new(map: BTreeMap<PublicKey, U512>) -> Stakes {
+        Stakes(map)
+    }
+
+    pub fn iter(&self) -> Iter<PublicKey, U512> {
+        self.0.iter()
+    }
+
+    pub fn values(&self) -> Values<PublicKey, U512> {
+        self.0.values()
+    }
+
+    pub fn strings(&self) -> impl Iterator<Item = String> + '_ {
+        self.iter().map(|(public_key, balance)| {
+            let mut ret = String::new();
+            let key_bytes = public_key.as_bytes();
+            let hex_key = base16::encode_lower(&key_bytes);
+            write!(ret, "v_{}_{}", hex_key, balance).expect(WRITE_STRING_EXPECT);
+            ret
+        })
+    }
+
+    pub fn total_bonds(&self) -> U512 {
+        self.values().fold(U512::zero(), |x, y| x + y)
+    }
+
     /// If `maybe_amount` is `None`, removes all the validator's stakes,
     /// otherwise subtracts the given amount. If the stakes are lower than
     /// the specified amount, it also subtracts all the stakes.

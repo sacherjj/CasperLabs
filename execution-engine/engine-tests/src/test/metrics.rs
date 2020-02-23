@@ -37,7 +37,13 @@ fn should_commit_with_metrics() {
     let (global_state, root_hash) =
         InMemoryGlobalState::from_pairs(correlation_id, &mocked_account).unwrap();
 
-    let engine_config = EngineConfig::new();
+    let engine_config = if cfg!(feature = "turbo") {
+        let mut tmp = EngineConfig::new();
+        tmp.with_turbo(true);
+        tmp
+    } else {
+        EngineConfig::new()
+    };
 
     let result =
         InMemoryWasmTestBuilder::new(global_state, engine_config, root_hash.to_vec()).finish();

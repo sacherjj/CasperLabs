@@ -1,3 +1,4 @@
+use engine_core::engine_state::EngineConfig;
 use engine_shared::{stored_value::StoredValue, transform::Transform};
 use engine_test_support::{
     internal::{exec_with_return, WasmTestBuilder, DEFAULT_BLOCK_TIME, DEFAULT_GENESIS_CONFIG},
@@ -11,10 +12,18 @@ const DEPLOY_HASH_1: [u8; 32] = [1u8; 32];
 #[test]
 fn should_run_mint_install_contract() {
     let mut builder = WasmTestBuilder::default();
+    let engine_config = if cfg!(feature = "turbo") {
+        let mut tmp = EngineConfig::new();
+        tmp.with_turbo(true);
+        tmp
+    } else {
+        EngineConfig::new()
+    };
 
     builder.run_genesis(&DEFAULT_GENESIS_CONFIG);
 
     let (ret_value, ret_urefs, effect): (URef, _, _) = exec_with_return::exec(
+        engine_config,
         &mut builder,
         DEFAULT_ACCOUNT_ADDR,
         "mint_install.wasm",

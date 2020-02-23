@@ -8,4 +8,5 @@ edition = "2018"
 std = []
 
 [dependencies]
+base16 = { version = "0.2.1", default-features = false }
 types = { path = "../types", package = "casperlabs-types" }

@@ -49,8 +49,15 @@ lazy_static! {
     pub static ref DEFAULT_PAYMENT: U512 = 100_000_000.into();
     pub static ref DEFAULT_WASM_COSTS: WasmCosts = test_utils::wasm_costs_mock();
     pub static ref DEFAULT_GENESIS_CONFIG: GenesisConfig = {
-        let mint_installer_bytes = utils::read_wasm_file_bytes(MINT_INSTALL_CONTRACT);
-        let pos_installer_bytes = utils::read_wasm_file_bytes(POS_INSTALL_CONTRACT);
+        let mint_installer_bytes;
+        let pos_installer_bytes;
+        if cfg!(feature = "turbo") {
+            mint_installer_bytes = Vec::new();
+            pos_installer_bytes = Vec::new();
+        } else {
+            mint_installer_bytes = utils::read_wasm_file_bytes(MINT_INSTALL_CONTRACT);
+            pos_installer_bytes = utils::read_wasm_file_bytes(POS_INSTALL_CONTRACT);
+        };
         GenesisConfig::new(
             DEFAULT_CHAIN_NAME.to_string(),
             DEFAULT_GENESIS_TIMESTAMP,

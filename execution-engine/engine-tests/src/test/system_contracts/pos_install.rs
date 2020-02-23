@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 
+use engine_core::engine_state::EngineConfig;
 use engine_test_support::{
     internal::{
         exec_with_return, ExecuteRequestBuilder, WasmTestBuilder, DEFAULT_BLOCK_TIME,
@@ -26,6 +27,13 @@ const POS_REWARDS_PURSE: &str = "pos_rewards_purse";
 #[test]
 fn should_run_pos_install_contract() {
     let mut builder = WasmTestBuilder::default();
+    let engine_config = if cfg!(feature = "turbo") {
+        let mut tmp = EngineConfig::new();
+        tmp.with_turbo(true);
+        tmp
+    } else {
+        EngineConfig::new()
+    };
 
     let exec_request = ExecuteRequestBuilder::standard(
         DEFAULT_ACCOUNT_ADDR,
@@ -47,6 +55,7 @@ fn should_run_pos_install_contract() {
     let total_bond = genesis_validators.values().fold(U512::zero(), |x, y| x + y);
 
     let (ret_value, ret_urefs, effect): (URef, _, _) = exec_with_return::exec(
+        engine_config,
         &mut builder,
         SYSTEM_ADDR,
         "pos_install.wasm",

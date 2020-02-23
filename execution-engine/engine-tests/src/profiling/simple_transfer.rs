@@ -112,8 +112,15 @@ fn main() {
         ExecuteRequestBuilder::new().push_deploy(deploy).build()
     };
 
-    let mut test_builder =
-        LmdbWasmTestBuilder::open(&args.data_dir, EngineConfig::new(), root_hash);
+    let engine_config = if cfg!(feature = "turbo") {
+        let mut tmp = EngineConfig::new();
+        tmp.with_turbo(true);
+        tmp
+    } else {
+        EngineConfig::new()
+    };
+
+    let mut test_builder = LmdbWasmTestBuilder::open(&args.data_dir, engine_config, root_hash);
 
     test_builder.exec(exec_request).expect_success().commit();
 

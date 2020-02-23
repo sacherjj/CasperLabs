@@ -88,7 +88,14 @@ pub struct WasmTestBuilder<S> {
 
 impl Default for InMemoryWasmTestBuilder {
     fn default() -> Self {
-        let engine_config = EngineConfig::new();
+        let engine_config = if cfg!(feature = "turbo") {
+            let mut tmp = EngineConfig::new();
+            tmp.with_turbo(true);
+            tmp
+        } else {
+            EngineConfig::new()
+        };
+
         let global_state = InMemoryGlobalState::empty().expect("should create global state");
         let engine_state = EngineState::new(global_state, engine_config);
 

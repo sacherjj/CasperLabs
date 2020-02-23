@@ -1,5 +1,7 @@
 mod args;
 mod externals;
+mod mint_internal;
+mod proof_of_stake_internal;
 
 use std::{
     cmp,
@@ -12,20 +14,22 @@ use itertools::Itertools;
 use parity_wasm::elements::Module;
 use wasmi::{ImportsBuilder, MemoryRef, ModuleInstance, ModuleRef, Trap, TrapKind};
 
+use ::mint::Mint;
+use ::proof_of_stake::ProofOfStake;
 use contract::args_parser::ArgsParser;
 use engine_shared::{account::Account, contract::Contract, gas::Gas, stored_value::StoredValue};
-use engine_storage::global_state::StateReader;
+use engine_storage::{global_state::StateReader, protocol_data::ProtocolData};
 use types::{
     account::{ActionType, PublicKey, Weight},
-    bytesrepr::{self, ToBytes},
+    bytesrepr::{self, FromBytes, ToBytes},
     system_contract_errors,
     system_contract_errors::mint,
-    AccessRights, ApiError, CLType, CLValue, Key, ProtocolVersion, SystemContractType,
+    AccessRights, ApiError, CLType, CLTyped, CLValue, Key, ProtocolVersion, SystemContractType,
     TransferResult, TransferredTo, URef, U128, U256, U512,
 };
 
 use crate::{
-    engine_state::system_contract_cache::SystemContractCache,
+    engine_state::{system_contract_cache::SystemContractCache, EngineConfig},
     execution::{Error, MINT_NAME, POS_NAME},
     resolvers::{create_module_resolver, memory_resolver::MemoryResolver},
     runtime_context::RuntimeContext,
@@ -34,6 +38,7 @@ use crate::{
 
 pub struct Runtime<'a, R> {
     system_contract_cache: SystemContractCache,
+    config: EngineConfig,
     memory: MemoryRef,
     module: Module,
     host_buffer: Option<CLValue>,
@@ -1342,12 +1347,14 @@ where
     R::Error: Into<Error>,
 {
     pub fn new(
+        config: EngineConfig,
         system_contract_cache: SystemContractCache,
         memory: MemoryRef,
         module: Module,
         context: RuntimeContext<'a, R>,
     ) -> Self {
         Runtime {
+            config,
             system_contract_cache,
             memory,
             module,
@@ -1356,8 +1363,20 @@ where
         }
     }
 
+    pub fn memory(&self) -> &MemoryRef {
+        &self.memory
+    }
+
+    pub fn module(&self) -> &Module {
+        &self.module
+    }
+
     pub fn context(&self) -> &RuntimeContext<'a, R> {
         &self.context
+    }
+
+    pub fn protocol_data(&self) -> ProtocolData {
+        self.context.protocol_data()
     }
 
     /// Charge specified amount of gas
@@ -1636,8 +1655,244 @@ where
         }
     }
 
+    pub fn is_mint(&self, key: Key) -> bool {
+        match key {
+            Key::URef(uref) if self.protocol_data().mint().addr() == uref.addr() => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_proof_of_stake(&self, key: Key) -> bool {
+        match key {
+            Key::URef(uref) if self.protocol_data().proof_of_stake().addr() == uref.addr() => true,
+            _ => false,
+        }
+    }
+
+    fn get_argument<T: FromBytes + CLTyped>(args: &[CLValue], index: usize) -> Result<T, Error> {
+        let arg: CLValue = args
+            .get(index)
+            .cloned()
+            .ok_or_else(|| Error::Revert(ApiError::MissingArgument.into()))?;
+        arg.into_t()
+            .map_err(|_| Error::Revert(ApiError::InvalidArgument.into()))
+    }
+
+    fn reverter<T: Into<ApiError>>(error: T) -> Error {
+        let api_error: ApiError = error.into();
+        Error::Revert(api_error.into())
+    }
+
+    pub fn call_host_mint(
+        &mut self,
+        protocol_version: ProtocolVersion,
+        mut named_keys: BTreeMap<String, Key>,
+        args: &[CLValue],
+        extra_urefs: &[Key],
+    ) -> Result<CLValue, Error> {
+        const METHOD_MINT: &str = "mint";
+        const METHOD_CREATE: &str = "create";
+        const METHOD_BALANCE: &str = "balance";
+        const METHOD_TRANSFER: &str = "transfer";
+
+        let state = self.context.state();
+        let access_rights = {
+            let mut keys: Vec<Key> = named_keys.values().cloned().collect();
+            keys.extend(extra_urefs);
+            keys.push(self.get_mint_contract_uref().into());
+            keys.push(self.get_pos_contract_uref().into());
+            extract_access_rights_from_keys(keys)
+        };
+        let authorization_keys = self.context.authorization_keys().to_owned();
+        let account = self.context.account();
+        let base_key = self.protocol_data().mint().into();
+        let blocktime = self.context.get_blocktime();
+        let deploy_hash = self.context.get_deployhash();
+        let gas_limit = self.context.gas_limit();
+        let gas_counter = self.context.gas_counter();
+        let fn_store_id = self.context.fn_store_id();
+        let address_generator = self.context.address_generator();
+        let correlation_id = self.context.correlation_id();
+        let phase = self.context.phase();
+        let protocol_data = self.context.protocol_data();
+
+        let mut mint_context = RuntimeContext::new(
+            state,
+            &mut named_keys,
+            access_rights,
+            args.to_owned(),
+            authorization_keys,
+            account,
+            base_key,
+            blocktime,
+            deploy_hash,
+            gas_limit,
+            gas_counter,
+            fn_store_id,
+            address_generator,
+            protocol_version,
+            correlation_id,
+            phase,
+            protocol_data,
+        );
+
+        let method_name: String = Self::get_argument(&args, 0)?;
+
+        let ret: CLValue = match method_name.as_str() {
+            // Type: `fn mint(amount: U512) -> Result<URef, Error>`
+            METHOD_MINT => {
+                let amount: U512 = Self::get_argument(&args, 1)?;
+                let result: Result<URef, mint::Error> = mint_context.mint(amount);
+                CLValue::from_t(result)?
+            }
+            // Type: `fn create() -> URef`
+            METHOD_CREATE => {
+                let uref = mint_context.mint(U512::zero()).map_err(Self::reverter)?;
+                CLValue::from_t(uref).map_err(Self::reverter)?
+            }
+            // Type: `fn balance(purse: URef) -> Option<U512>`
+            METHOD_BALANCE => {
+                let uref: URef = Self::get_argument(&args, 1)?;
+                let maybe_balance: Option<U512> =
+                    mint_context.balance(uref).map_err(Self::reverter)?;
+                CLValue::from_t(maybe_balance).map_err(Self::reverter)?
+            }
+            // Type: `fn transfer(source: URef, target: URef, amount: U512) -> Result<(), Error>`
+            METHOD_TRANSFER => {
+                let source: URef = Self::get_argument(&args, 1)?;
+                let target: URef = Self::get_argument(&args, 2)?;
+                let amount: U512 = Self::get_argument(&args, 3)?;
+                let result: Result<(), mint::Error> = mint_context.transfer(source, target, amount);
+                CLValue::from_t(result).map_err(Self::reverter)?
+            }
+            _ => CLValue::from_t(()).map_err(Self::reverter)?,
+        };
+        let urefs = extract_urefs(&ret)?;
+        let access_rights = extract_access_rights_from_urefs(urefs);
+        self.context.access_rights_extend(access_rights);
+        Ok(ret)
+    }
+
+    pub fn call_host_proof_of_stake(
+        &mut self,
+        protocol_version: ProtocolVersion,
+        mut named_keys: BTreeMap<String, Key>,
+        args: &[CLValue],
+        extra_urefs: &[Key],
+    ) -> Result<CLValue, Error> {
+        const METHOD_BOND: &str = "bond";
+        const METHOD_UNBOND: &str = "unbond";
+        const METHOD_STEP: &str = "step";
+        const METHOD_GET_PAYMENT_PURSE: &str = "get_payment_purse";
+        const METHOD_SET_REFUND_PURSE: &str = "set_refund_purse";
+        const METHOD_GET_REFUND_PURSE: &str = "get_refund_purse";
+        const METHOD_FINALIZE_PAYMENT: &str = "finalize_payment";
+
+        let state = self.context.state();
+        let access_rights = {
+            let mut keys: Vec<Key> = named_keys.values().cloned().collect();
+            keys.extend(extra_urefs);
+            keys.push(self.get_mint_contract_uref().into());
+            keys.push(self.get_pos_contract_uref().into());
+            extract_access_rights_from_keys(keys)
+        };
+        let authorization_keys = self.context.authorization_keys().to_owned();
+        let account = self.context.account();
+        let base_key = self.protocol_data().proof_of_stake().into();
+        let blocktime = self.context.get_blocktime();
+        let deploy_hash = self.context.get_deployhash();
+        let gas_limit = self.context.gas_limit();
+        let gas_counter = self.context.gas_counter();
+        let fn_store_id = self.context.fn_store_id();
+        let address_generator = self.context.address_generator();
+        let correlation_id = self.context.correlation_id();
+        let phase = self.context.phase();
+        let protocol_data = self.context.protocol_data();
+
+        let runtime_context = RuntimeContext::new(
+            state,
+            &mut named_keys,
+            access_rights,
+            args.to_owned(),
+            authorization_keys,
+            account,
+            base_key,
+            blocktime,
+            deploy_hash,
+            gas_limit,
+            gas_counter,
+            fn_store_id,
+            address_generator,
+            protocol_version,
+            correlation_id,
+            phase,
+            protocol_data,
+        );
+
+        let mut runtime = Runtime::new(
+            self.config,
+            SystemContractCache::clone(&self.system_contract_cache),
+            self.memory.clone(),
+            self.module.clone(),
+            runtime_context,
+        );
+
+        let method_name: String = Self::get_argument(&args, 0)?;
+
+        let ret: CLValue = match method_name.as_str() {
+            METHOD_BOND => {
+                let validator: PublicKey = runtime.context.get_caller();
+                let amount: U512 = Self::get_argument(&args, 1)?;
+                let source_uref: URef = Self::get_argument(&args, 2)?;
+                runtime
+                    .bond(validator, amount, source_uref)
+                    .map_err(Self::reverter)?;
+                CLValue::from_t(()).map_err(Self::reverter)?
+            }
+            METHOD_UNBOND => {
+                let validator: PublicKey = runtime.context.get_caller();
+                let maybe_amount: Option<U512> = Self::get_argument(&args, 1)?;
+                runtime
+                    .unbond(validator, maybe_amount)
+                    .map_err(Self::reverter)?;
+                CLValue::from_t(()).map_err(Self::reverter)?
+            }
+            METHOD_STEP => {
+                runtime.step().map_err(Self::reverter)?;
+                CLValue::from_t(()).map_err(Self::reverter)?
+            }
+            METHOD_GET_PAYMENT_PURSE => {
+                let rights_controlled_purse =
+                    runtime.get_payment_purse().map_err(Self::reverter)?;
+                CLValue::from_t(rights_controlled_purse).map_err(Self::reverter)?
+            }
+            METHOD_SET_REFUND_PURSE => {
+                let purse: URef = Self::get_argument(&args, 1)?;
+                runtime.set_refund_purse(purse).map_err(Self::reverter)?;
+                CLValue::from_t(()).map_err(Self::reverter)?
+            }
+            METHOD_GET_REFUND_PURSE => {
+                let maybe_purse = runtime.get_refund_purse().map_err(Self::reverter)?;
+                CLValue::from_t(maybe_purse).map_err(Self::reverter)?
+            }
+            METHOD_FINALIZE_PAYMENT => {
+                let amount_spent: U512 = Self::get_argument(&args, 1)?;
+                let account: PublicKey = Self::get_argument(&args, 2)?;
+                runtime
+                    .finalize_payment(amount_spent, account)
+                    .map_err(Self::reverter)?;
+                CLValue::from_t(()).map_err(Self::reverter)?
+            }
+            _ => CLValue::from_t(()).map_err(Self::reverter)?,
+        };
+        let urefs = extract_urefs(&ret)?;
+        let access_rights = extract_access_rights_from_urefs(urefs);
+        self.context.access_rights_extend(access_rights);
+        Ok(ret)
+    }
+
     /// Calls contract living under a `key`, with supplied `args`.
-    fn call_contract(&mut self, key: Key, args_bytes: Vec<u8>) -> Result<CLValue, Error> {
+    pub fn call_contract(&mut self, key: Key, args_bytes: Vec<u8>) -> Result<CLValue, Error> {
         let contract = match self.context.read_gs(&key)? {
             Some(StoredValue::Contract(contract)) => contract,
             Some(_) => {
@@ -1661,16 +1916,6 @@ where
 
         let args: Vec<CLValue> = bytesrepr::deserialize(args_bytes)?;
 
-        let maybe_module = match key {
-            Key::URef(uref) => self.system_contract_cache.get(&uref),
-            _ => None,
-        };
-
-        let module = match maybe_module {
-            Some(module) => module,
-            None => parity_wasm::deserialize_buffer(contract.bytes())?,
-        };
-
         let mut extra_urefs = vec![];
         // A loop is needed to be able to use the '?' operator
         for arg in &args {
@@ -1683,6 +1928,36 @@ where
         for key in &extra_urefs {
             self.context.validate_key(key)?;
         }
+
+        if self.config.turbo() {
+            if self.is_mint(key) {
+                return self.call_host_mint(
+                    self.context.protocol_version(),
+                    contract.take_named_keys(),
+                    &args,
+                    &extra_urefs,
+                );
+            }
+
+            if self.is_proof_of_stake(key) {
+                return self.call_host_proof_of_stake(
+                    self.context.protocol_version(),
+                    contract.take_named_keys(),
+                    &args,
+                    &extra_urefs,
+                );
+            }
+        }
+
+        let maybe_module = match key {
+            Key::URef(uref) => self.system_contract_cache.get(&uref),
+            _ => None,
+        };
+
+        let module = match maybe_module {
+            Some(module) => module,
+            None => parity_wasm::deserialize_buffer(contract.bytes())?,
+        };
 
         let mut named_keys = contract.take_named_keys();
 
@@ -1697,6 +1972,8 @@ where
         };
 
         let system_contract_cache = SystemContractCache::clone(&self.system_contract_cache);
+
+        let config = self.config;
 
         let host_buffer = None;
 
@@ -1722,6 +1999,7 @@ where
 
         let mut runtime = Runtime {
             system_contract_cache,
+            config,
             memory,
             module,
             host_buffer,

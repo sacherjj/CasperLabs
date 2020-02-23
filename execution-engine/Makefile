@@ -129,6 +129,10 @@ test: test-rs test-as
 test-contracts-rs: build-contracts-rs
 	$(CARGO) test $(CARGO_FLAGS) -p casperlabs-engine-tests -- --ignored --nocapture
 
+.PHONY: test-contracts-rs
+test-contracts-rs-turbo: build-contracts-rs
+	$(CARGO) test $(CARGO_FLAGS) --manifest-path "engine-tests/Cargo.toml" --features "turbo" -- --ignored --nocapture
+
 .PHONY: test-contracts-as
 test-contracts-as: build-contracts-rs build-contracts-as
 	@# see https://github.com/rust-lang/cargo/issues/5015#issuecomment-515544290
@@ -155,7 +159,8 @@ check-rs: \
 	check-format \
 	lint \
 	test-rs \
-	test-contracts-rs
+	test-contracts-rs \
+	test-contracts-rs-turbo
 
 .PHONY: check
 check: \

@@ -47,7 +47,15 @@ fn bootstrap(data_dir: &Path, accounts: &[PublicKey], amount: U512) -> LmdbWasmT
     )
     .build();
 
-    let mut builder = LmdbWasmTestBuilder::new_with_config(data_dir, EngineConfig::new());
+    let engine_config = if cfg!(feature = "turbo") {
+        let mut tmp = EngineConfig::new();
+        tmp.with_turbo(true);
+        tmp
+    } else {
+        EngineConfig::new()
+    };
+
+    let mut builder = LmdbWasmTestBuilder::new_with_config(data_dir, engine_config);
 
     builder
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
@@ -241,7 +249,7 @@ pub fn transfer_to_existing_purses(group: &mut BenchmarkGroup<WallTime>, should_
     let bootstrap_accounts = vec![target_account];
 
     let data_dir = TempDir::new().expect("should create temp dir");
-    let mut builder = bootstrap(data_dir.path(), &bootstrap_accounts, *DEFAULT_PAYMENT * 10);
+    let mut builder = bootstrap(data_dir.path(), &bootstrap_accounts, *DEFAULT_PAYMENT * 100);
     let purses = create_purses(&mut builder, target_account, 1, U512::one());
 
     group.bench_function(
