@@ -13,6 +13,7 @@ pub mod trie_store;
 #[cfg(test)]
 use lazy_static::lazy_static;
 
+pub(crate) const GAUGE_METRIC_KEY: &str = "gauge";
 const MAX_DBS: u32 = 2;
 
 #[cfg(test)]

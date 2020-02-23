@@ -27,6 +27,7 @@ use std::{
 };
 
 use grpc::{RequestOptions, ServerBuilder, SingleResponse};
+use log::{info, warn, Level};
 
 use engine_core::engine_state::{
     execute_request::ExecuteRequest,
@@ -36,7 +37,7 @@ use engine_core::engine_state::{
     EngineState, Error as EngineError,
 };
 use engine_shared::{
-    logging::{self, log_duration, log_info, log_level::LogLevel},
+    logging::{self, log_duration},
     newtypes::{Blake2bHash, CorrelationId},
 };
 use engine_storage::global_state::{CommitResult, StateProvider};
@@ -88,7 +89,7 @@ where
             Ok(ret) => ret,
             Err(err) => {
                 let log_message = format!("{:?}", err);
-                logging::log_error(&log_message);
+                warn!("{}", log_message);
                 let mut result = ipc::QueryResponse::new();
                 result.set_failure(log_message);
                 log_duration(
@@ -108,41 +109,39 @@ where
                 let mut result = ipc::QueryResponse::new();
                 match value.to_bytes() {
                     Ok(serialized_value) => {
-                        let log_message =
-                            format!("query successful; correlation_id: {}", correlation_id);
-                        log_info(&log_message);
+                        info!("query successful; correlation_id: {}", correlation_id);
                         result.set_success(serialized_value);
                     }
                     Err(error_msg) => {
                         let log_message = format!("Failed to serialize StoredValue: {}", error_msg);
-                        logging::log_error(&log_message);
+                        warn!("{}", log_message);
                         result.set_failure(log_message);
                     }
                 }
                 result
             }
             Ok(QueryResult::ValueNotFound(msg)) => {
-                logging::log_warning(&msg);
+                info!("{}", msg);
                 let mut result = ipc::QueryResponse::new();
                 result.set_failure(msg);
                 result
             }
             Ok(QueryResult::RootNotFound) => {
                 let log_message = "Root not found";
-                logging::log_error(log_message);
+                info!("{}", log_message);
                 let mut result = ipc::QueryResponse::new();
                 result.set_failure(log_message.to_string());
                 result
             }
             Ok(QueryResult::CircularReference(msg)) => {
-                logging::log_warning(&msg);
+                warn!("{}", msg);
                 let mut result = ipc::QueryResponse::new();
                 result.set_failure(msg);
                 result
             }
             Err(err) => {
                 let log_message = format!("{:?}", err);
-                logging::log_error(&log_message);
+                warn!("{}", log_message);
                 let mut result = ipc::QueryResponse::new();
                 result.set_failure(log_message);
                 result
@@ -179,7 +178,7 @@ where
         let results = match self.run_execute(correlation_id, exec_request) {
             Ok(results) => results,
             Err(error) => {
-                logging::log_error("deploy results error: RootNotFound");
+                info!("deploy results error: RootNotFound");
                 exec_response
                     .mut_missing_parent()
                     .set_hash(error.0.to_vec());
@@ -228,7 +227,7 @@ where
         let pre_state_hash: Blake2bHash = match commit_request.get_prestate_hash().try_into() {
             Err(_) => {
                 let error_message = "Could not parse pre-state hash".to_string();
-                logging::log_error(&error_message);
+                warn!("{}", error_message);
                 let mut commit_response = CommitResponse::new();
                 commit_response
                     .mut_failed_transform()
@@ -241,7 +240,7 @@ where
         // Acquire commit transforms
         let transforms = match TransformMap::try_from(commit_request.take_effects().into_vec()) {
             Err(ParsingError(error_message)) => {
-                logging::log_error(&error_message);
+                warn!("{}", error_message);
                 let mut commit_response = CommitResponse::new();
                 commit_response
                     .mut_failed_transform()
@@ -262,12 +261,12 @@ where
                 }) => {
                     let properties = {
                         let mut tmp = BTreeMap::new();
-                        tmp.insert("post-state-hash".to_string(), format!("{:?}", state_root));
-                        tmp.insert("success".to_string(), true.to_string());
+                        tmp.insert("post-state-hash", format!("{:?}", state_root));
+                        tmp.insert("success", true.to_string());
                         tmp
                     };
                     logging::log_details(
-                        LogLevel::Info,
+                        Level::Info,
                         "effects applied; new state hash is: {post-state-hash}".to_owned(),
                         properties,
                     );
@@ -278,30 +277,24 @@ where
                     commit_result.set_bonded_validators(bonds);
                 }
                 Ok(CommitResult::RootNotFound) => {
-                    logging::log_warning("RootNotFound");
-
+                    warn!("RootNotFound");
                     ret.mut_missing_prestate().set_hash(pre_state_hash.to_vec());
                 }
                 Ok(CommitResult::KeyNotFound(key)) => {
-                    logging::log_warning("KeyNotFound");
-
+                    warn!("{:?} not found", key);
                     ret.set_key_not_found(key.into());
                 }
                 Ok(CommitResult::TypeMismatch(type_mismatch)) => {
-                    logging::log_warning("TypeMismatch");
-
+                    warn!("{:?}", type_mismatch);
                     ret.set_type_mismatch(type_mismatch.into());
                 }
                 Ok(CommitResult::Serialization(error)) => {
-                    logging::log_warning("Serialization");
-
+                    warn!("{:?}", error);
                     ret.mut_failed_transform()
                         .set_message(format!("{:?}", error));
                 }
                 Err(error) => {
-                    let log_message = format!("State error {:?} when applying transforms", error);
-                    logging::log_error(&log_message);
-
+                    warn!("State error {:?} when applying transforms", error);
                     ret.mut_failed_transform()
                         .set_message(format!("{:?}", error));
                 }
@@ -332,7 +325,7 @@ where
             Ok(genesis_config) => genesis_config,
             Err(error) => {
                 let err_msg = error.to_string();
-                logging::log_error(&err_msg);
+                warn!("{}", err_msg);
 
                 let mut genesis_response = GenesisResponse::new();
                 genesis_response.mut_failed_deploy().set_message(err_msg);
@@ -346,7 +339,7 @@ where
                 effect,
             }) => {
                 let success_message = format!("run_genesis successful: {}", post_state_hash);
-                log_info(&success_message);
+                info!("{}", success_message);
 
                 let mut genesis_response = GenesisResponse::new();
                 let genesis_result = genesis_response.mut_success();
@@ -356,7 +349,7 @@ where
             }
             Ok(genesis_result) => {
                 let err_msg = genesis_result.to_string();
-                logging::log_error(&err_msg);
+                warn!("{}", err_msg);
 
                 let mut genesis_response = GenesisResponse::new();
                 genesis_response.mut_failed_deploy().set_message(err_msg);
@@ -364,7 +357,7 @@ where
             }
             Err(err) => {
                 let err_msg = err.to_string();
-                logging::log_error(&err_msg);
+                warn!("{}", err_msg);
 
                 let mut genesis_response = GenesisResponse::new();
                 genesis_response.mut_failed_deploy().set_message(err_msg);
@@ -394,7 +387,7 @@ where
             Ok(upgrade_config) => upgrade_config,
             Err(error) => {
                 let err_msg = error.to_string();
-                logging::log_error(&err_msg);
+                warn!("{}", err_msg);
 
                 let mut upgrade_response = UpgradeResponse::new();
                 upgrade_response.mut_failed_deploy().set_message(err_msg);
@@ -415,9 +408,7 @@ where
                 post_state_hash,
                 effect,
             }) => {
-                let success_message = format!("upgrade successful: {}", post_state_hash);
-                log_info(&success_message);
-
+                info!("upgrade successful: {}", post_state_hash);
                 let mut ret = UpgradeResponse::new();
                 let upgrade_result = ret.mut_success();
                 upgrade_result.set_post_state_hash(post_state_hash.to_vec());
@@ -426,7 +417,7 @@ where
             }
             Ok(upgrade_result) => {
                 let err_msg = upgrade_result.to_string();
-                logging::log_error(&err_msg);
+                warn!("{}", err_msg);
 
                 let mut ret = UpgradeResponse::new();
                 ret.mut_failed_deploy().set_message(err_msg);
@@ -434,7 +425,7 @@ where
             }
             Err(err) => {
                 let err_msg = err.to_string();
-                logging::log_error(&err_msg);
+                warn!("{}", err_msg);
 
                 let mut ret = UpgradeResponse::new();
                 ret.mut_failed_deploy().set_message(err_msg);
