@@ -5,6 +5,8 @@ import cats.effect.concurrent.Semaphore
 import cats.effect.{Concurrent, Resource}
 import cats.implicits._
 import com.google.protobuf.ByteString
+import eu.timepit.refined.api.Refined
+import eu.timepit.refined.numeric.NonNegative
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.MultiParentCasperImpl.Broadcaster
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
@@ -12,7 +14,6 @@ import io.casperlabs.casper._
 import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.consensus.info._
 import io.casperlabs.casper.consensus.state.Key
-import io.casperlabs.casper.validation.Validation
 import io.casperlabs.catscontrib.{Fs2Compiler, MonadThrowable}
 import io.casperlabs.comm.ServiceError
 import io.casperlabs.comm.ServiceError._
@@ -22,6 +23,8 @@ import io.casperlabs.mempool.DeployBuffer
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.shared.{FatalError, Log}
 import io.casperlabs.smartcontracts.ExecutionEngineService
+import io.casperlabs.smartcontracts.cltype
+import io.casperlabs.smartcontracts.cltype.{ByteArray32, CLValueInstance}
 import io.casperlabs.storage.StorageError
 import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.storage.dag.DagStorage
@@ -327,22 +330,75 @@ object BlockAPI {
                .map(_.head) // Safe to unwrap because there is at least a genesis block
       stateHash       = info.getSummary.getHeader.getState.postStateHash
       protocolVersion = info.getSummary.getHeader.getProtocolVersion
-      getState = (keyValue: Key.Value) =>
-        ExecutionEngineService[F].query(stateHash, Key(keyValue), Nil, protocolVersion).rethrow
-      account <- getState(Key.Value.Address(Key.Address(accountKey))).map(_.getAccount)
-      mintPublic = account.namedKeys
-        .find(_.name == "mint")
-        .flatMap(_.key)
-        .get
-        .getUref
-        .uref
-        .toByteArray
-      purse = account.getMainPurse.uref.toByteArray
-      // This is what EE does when creating local key address.
-      hash        = ByteString.copyFrom(Blake2b256.hash(mintPublic ++ purse))
-      balanceUref <- getState(Key.Value.Local(Key.Local(hash))).map(_.getKey.getUref.uref)
-      balance     <- getState(Key.Value.Uref(Key.URef(balanceUref))).map(_.getBigInt.value)
-    } yield balance
-    program.attempt.map(_.toOption)
+      error           = (s: String) => new IllegalStateException(s)
+      getState = (k: cltype.Key) =>
+        ExecutionEngineService[F]
+          .query(stateHash, cltype.ProtoMappings.toProto(k), Nil, protocolVersion)
+          .rethrow
+      accountKey <- MonadThrowable[F].fromOption(
+                     ByteArray32(accountKey.toByteArray),
+                     error("Account key must be 32 bytes long")
+                   )
+      account <- getState(cltype.Key.Account(accountKey)).flatMap {
+                  case cltype.StoredValue.Account(account) => account.pure[F]
+                  case x =>
+                    MonadThrowable[F]
+                      .raiseError[cltype.Account](error(s"Expected cltype.Account, got $x"))
+                }
+      mintPublic <- MonadThrowable[F].fromOption(
+                     account.namedKeys.collectFirst {
+                       case (name, cltype.Key.URef(cltype.URef(address, _))) if name == "mint" =>
+                         address
+                     },
+                     error(s"Couldn't find mint contract in $account")
+                   )
+      hash <- MonadThrowable[F].fromOption(
+               ByteArray32(Blake2b256.hash(account.mainPurse.address.bytes.toArray)),
+               error("Hash must 32 bytes long")
+             )
+      balanceUref <- getState(cltype.Key.Local(mintPublic, hash)).flatMap {
+                      case cltype.StoredValue.CLValue(clValue) =>
+                        cltype.CLValueInstance
+                          .from(clValue)
+                          .fold(
+                            e => MonadThrowable[F].raiseError[ByteArray32](error(e.toString)), {
+                              case CLValueInstance.Key(cltype.Key.URef(uref)) =>
+                                uref.address.pure[F]
+                              case x =>
+                                MonadThrowable[F]
+                                  .raiseError[ByteArray32](
+                                    error(s"Expected cltype.Key.URef, got $x")
+                                  )
+                            }
+                          )
+                      case x =>
+                        MonadThrowable[F]
+                          .raiseError[ByteArray32](error(s"Expected cltype.CLValue, got $x"))
+                    }
+      balance <- getState(cltype.Key.URef(cltype.URef(balanceUref, None))).flatMap {
+                  case cltype.StoredValue.CLValue(clValue) =>
+                    cltype.CLValueInstance
+                      .from(clValue)
+                      .fold(
+                        e =>
+                          MonadThrowable[F]
+                            .raiseError[BigInt Refined NonNegative](error(e.toString)), {
+                          case CLValueInstance.U512(bigInt) =>
+                            bigInt.pure[F]
+                          case x =>
+                            MonadThrowable[F]
+                              .raiseError[BigInt Refined NonNegative](
+                                error(s"Expected cltype.U512, got $x")
+                              )
+                        }
+                      )
+                  case x =>
+                    MonadThrowable[F]
+                      .raiseError[BigInt Refined NonNegative](
+                        error(s"Expected cltype.CLValue, got $x")
+                      )
+                }
+    } yield balance.value.toString(10)
+    program.attempt.map(_.leftMap(e => println(e.getMessage)).toOption)
   }
 }
