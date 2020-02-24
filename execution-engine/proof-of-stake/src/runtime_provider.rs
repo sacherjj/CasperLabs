@@ -1,15 +1,15 @@
 use types::{account::PublicKey, BlockTime, Key, Phase};
 
 pub trait RuntimeProvider {
-    fn get_key(name: &str) -> Option<Key>;
+    fn get_key(&self, name: &str) -> Option<Key>;
 
-    fn put_key(name: &str, key: Key);
+    fn put_key(&mut self, name: &str, key: Key);
 
-    fn remove_key(name: &str);
+    fn remove_key(&mut self, name: &str);
 
-    fn get_phase() -> Phase;
+    fn get_phase(&self) -> Phase;
 
-    fn get_block_time() -> BlockTime;
+    fn get_block_time(&self) -> BlockTime;
 
-    fn get_caller() -> PublicKey;
+    fn get_caller(&self) -> PublicKey;
 }

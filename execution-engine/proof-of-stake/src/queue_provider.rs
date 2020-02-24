@@ -2,14 +2,14 @@ use crate::queue::Queue;
 
 pub trait QueueProvider {
     /// Reads bonding queue.
-    fn read_bonding() -> Queue;
+    fn read_bonding(&mut self) -> Queue;
 
     /// Reads unbonding queue.
-    fn read_unbonding() -> Queue;
+    fn read_unbonding(&mut self) -> Queue;
 
     /// Writes bonding queue.
-    fn write_bonding(queue: Queue);
+    fn write_bonding(&mut self, queue: Queue);
 
     /// Writes unbonding queue.
-    fn write_unbonding(queue: Queue);
+    fn write_unbonding(&mut self, queue: Queue);
 }

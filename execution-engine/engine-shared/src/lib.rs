@@ -15,5 +15,6 @@ pub mod test_utils;
 pub mod transform;
 mod type_mismatch;
 pub mod utils;
+pub mod wasm;
 
 pub use type_mismatch::TypeMismatch;
