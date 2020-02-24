@@ -243,6 +243,7 @@ def deploy_command(casperlabs_client, args):
 
 @guarded_command
 def propose_command(casperlabs_client, args):
+    print("Warning: command propose is deprecated.", file=sys.stderr)
     response = casperlabs_client.propose()
     print(f"Success! Block hash: {response.block_hash.hex()}")
 
@@ -522,7 +523,7 @@ def cli(*arguments) -> int:
                        [('-t', '--target-account'), dict(required=True, type=str, help="base64 or base16 representation of target account's public key")],
                        ] + deploy_options(private_key_accepted=True))
 
-    parser.addCommand('propose', propose_command, 'Force a node to propose a block based on its accumulated deploys.', [])
+    parser.addCommand('propose', propose_command, '[DEPRECATED] Force a node to propose a block based on its accumulated deploys.', [])
 
     parser.addCommand('show-block', show_block_command, 'View properties of a block known by Casper on an existing running node. Output includes: parent hashes, storage contents of the tuplespace.',
                       [[('hash',), dict(type=str, help='the hash value of the block')]])
