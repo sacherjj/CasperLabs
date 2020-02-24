@@ -53,13 +53,13 @@ object Main {
     configuration match {
       case ShowBlock(hash, bytesStandard, json) =>
         DeployRuntime.showBlock[F](hash, bytesStandard, json)
-      case ShowDeploy(hash, bytesStandard, json, waitForProcessed, timeoutSeconds) => {
+      case ShowDeploy(hash, bytesStandard, json, waitForProcessed, timeout) => {
         DeployRuntime.showDeploy[F](
           hash,
           bytesStandard,
           json,
           waitForProcessed,
-          FiniteDuration(timeoutSeconds, TimeUnit.SECONDS)
+          timeout.seconds
         )
       }
       case ShowDeploys(hash, bytesStandard, json) =>
@@ -71,7 +71,7 @@ object Main {
           contracts,
           privateKey,
           waitForProcessed,
-          timeoutSeconds,
+          timeout,
           bytesStandard,
           json
           ) =>
@@ -80,7 +80,7 @@ object Main {
           contracts,
           privateKey,
           waitForProcessed,
-          FiniteDuration(timeoutSeconds, TimeUnit.SECONDS),
+          timeout.seconds,
           bytesStandard,
           json
         )
@@ -89,7 +89,7 @@ object Main {
           contracts,
           privateKey,
           waitForProcessed,
-          timeoutSeconds,
+          timeout,
           bytesStandard,
           json
           ) =>
@@ -98,7 +98,7 @@ object Main {
           contracts,
           privateKey,
           waitForProcessed,
-          FiniteDuration(timeoutSeconds, TimeUnit.SECONDS),
+          timeout.seconds,
           bytesStandard,
           json
         )
@@ -108,7 +108,7 @@ object Main {
           contracts,
           privateKey,
           waitForProcessed,
-          timeoutSeconds,
+          timeout,
           bytesStandard,
           json
           ) =>
@@ -118,7 +118,7 @@ object Main {
           recipientPublicKey,
           amount,
           waitForProcessed,
-          FiniteDuration(timeoutSeconds, TimeUnit.SECONDS),
+          timeout.seconds,
           bytesStandard,
           json
         )
@@ -128,7 +128,7 @@ object Main {
           maybePublicKey,
           maybePrivateKey,
           waitForProcessed,
-          timeoutSeconds,
+          timeout,
           bytesStandard,
           json
           ) =>
@@ -144,7 +144,7 @@ object Main {
               new String(Files.readAllBytes(file.toPath), StandardCharsets.UTF_8).asLeft[PrivateKey]
           ),
           waitForProcessed = waitForProcessed,
-          timeoutSeconds = FiniteDuration(timeoutSeconds, TimeUnit.SECONDS),
+          timeout = timeout.seconds,
           bytesStandard = bytesStandard,
           json = json
         )
@@ -178,11 +178,11 @@ object Main {
           _ <- DeployRuntime.writeDeploy[F](deploy, deployPath)
         } yield ()
 
-      case SendDeploy(deploy, waitForProcessed, timeoutSeconds, bytesStandard, json) =>
+      case SendDeploy(deploy, waitForProcessed, timeout, bytesStandard, json) =>
         DeployRuntime.sendDeploy[F](
           deploy,
           waitForProcessed,
-          FiniteDuration(timeoutSeconds, TimeUnit.SECONDS),
+          timeout.seconds,
           bytesStandard,
           json
         )

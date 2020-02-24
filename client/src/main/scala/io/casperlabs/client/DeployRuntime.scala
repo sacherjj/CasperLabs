@@ -40,10 +40,10 @@ object DeployRuntime {
       ignoreOutput: Boolean = false
   ): F[Unit] =
     gracefulExit(
-      (for {
+      for {
         _      <- Sync[F].delay(System.err.println("Warning: command propose is deprecated."))
         result <- DeployService[F].propose()
-      } yield result).map(_.map(hash => s"Response: Success! Block $hash created and added.")),
+      } yield result.map(hash => s"Response: Success! Block $hash created and added."),
       exit,
       ignoreOutput
     )
@@ -71,10 +71,10 @@ object DeployRuntime {
       bytesStandard: Boolean,
       json: Boolean,
       waitForProcessed: Boolean,
-      timeoutSeconds: FiniteDuration
+      timeout: FiniteDuration
   ): F[Unit] =
     gracefulExit(
-      DeployService[F].showDeploy(hash, bytesStandard, json, waitForProcessed, timeoutSeconds)
+      DeployService[F].showDeploy(hash, bytesStandard, json, waitForProcessed, timeout)
     )
 
   def showBlocks[F[_]: Sync: DeployService](
@@ -121,7 +121,7 @@ object DeployRuntime {
       deployConfig: DeployConfig,
       privateKeyFile: File,
       waitForProcessed: Boolean,
-      timeoutSeconds: FiniteDuration,
+      timeout: FiniteDuration,
       bytesStandard: Boolean = false,
       json: Boolean = false
   ): F[Unit] =
@@ -135,7 +135,7 @@ object DeployRuntime {
             sessionArgs =
               List(optionalArg("amount", maybeAmount)(Deploy.Arg.Value.Value.LongValue(_))),
             waitForProcessed = waitForProcessed,
-            timeoutSeconds = timeoutSeconds,
+            timeout = timeout,
             bytesStandard = bytesStandard,
             json = json
           )
@@ -146,7 +146,7 @@ object DeployRuntime {
       deployConfig: DeployConfig,
       privateKeyFile: File,
       waitForProcessed: Boolean,
-      timeoutSeconds: FiniteDuration,
+      timeout: FiniteDuration,
       bytesStandard: Boolean = false,
       json: Boolean = false
   ): F[Unit] =
@@ -159,7 +159,7 @@ object DeployRuntime {
             maybeEitherPrivateKey = rawPrivateKey.asLeft[PrivateKey].some,
             sessionArgs = List(longArg("amount", amount)),
             waitForProcessed = waitForProcessed,
-            timeoutSeconds = timeoutSeconds,
+            timeout = timeout,
             bytesStandard = bytesStandard,
             json = json
           )
@@ -299,7 +299,7 @@ object DeployRuntime {
       recipientPublicKey: PublicKey,
       amount: Long,
       waitForProcessed: Boolean,
-      timeoutSeconds: FiniteDuration,
+      timeout: FiniteDuration,
       bytesStandard: Boolean,
       json: Boolean
   ): F[Unit] =
@@ -324,7 +324,7 @@ object DeployRuntime {
             recipientPublicKey,
             amount,
             waitForProcessed = waitForProcessed,
-            timeoutSeconds = timeoutSeconds,
+            timeout = timeout,
             bytesStandard = bytesStandard,
             json = json
           )
@@ -339,7 +339,7 @@ object DeployRuntime {
       exit: Boolean = true,
       ignoreOutput: Boolean = false,
       waitForProcessed: Boolean,
-      timeoutSeconds: FiniteDuration,
+      timeout: FiniteDuration,
       bytesStandard: Boolean = false,
       json: Boolean = false
   ): F[Unit] =
@@ -355,7 +355,7 @@ object DeployRuntime {
       exit,
       ignoreOutput,
       waitForProcessed = waitForProcessed,
-      timeoutSeconds = timeoutSeconds,
+      timeout = timeout,
       bytesStandard = bytesStandard,
       json = json
     )
@@ -440,7 +440,7 @@ object DeployRuntime {
   def sendDeploy[F[_]: Sync: DeployService](
       deployBA: Array[Byte],
       waitForProcessed: Boolean,
-      timeoutSeconds: FiniteDuration,
+      timeout: FiniteDuration,
       bytesStandard: Boolean = false,
       json: Boolean = false
   ): F[Unit] =
@@ -448,7 +448,7 @@ object DeployRuntime {
       for {
         deploy <- Sync[F].fromTry(Try(Deploy.parseFrom(deployBA)))
         result <- if (waitForProcessed) {
-                   deployAndWaitForProcessed[F](deploy, timeoutSeconds, bytesStandard, json)
+                   deployAndWaitForProcessed[F](deploy, timeout, bytesStandard, json)
                  } else {
                    DeployService[F].deploy(deploy)
                  }
@@ -473,7 +473,7 @@ object DeployRuntime {
 
   def deployAndWaitForProcessed[F[_]: Sync: DeployService](
       deploy: Deploy,
-      timeoutSeconds: FiniteDuration = Options.TIMEOUT_SECONDS_DEFAULT,
+      timeout: FiniteDuration = Options.TIMEOUT_SECONDS_DEFAULT,
       bytesStandard: Boolean = false,
       json: Boolean = false
   ): F[Either[Throwable, String]] =
@@ -486,7 +486,7 @@ object DeployRuntime {
                    bytesStandard,
                    json,
                    waitForProcessed = true,
-                   timeoutSeconds
+                   timeout
                  )
     } yield result
 
@@ -499,7 +499,7 @@ object DeployRuntime {
       exit: Boolean = true,
       ignoreOutput: Boolean = false,
       waitForProcessed: Boolean = false,
-      timeoutSeconds: FiniteDuration = Options.TIMEOUT_SECONDS_DEFAULT,
+      timeout: FiniteDuration = Options.TIMEOUT_SECONDS_DEFAULT,
       bytesStandard: Boolean = false,
       json: Boolean = false
   ): F[Unit] = {
@@ -528,7 +528,7 @@ object DeployRuntime {
       deploy
         .flatMap({ deploy =>
           if (waitForProcessed) {
-            deployAndWaitForProcessed[F](deploy, timeoutSeconds, bytesStandard, json)
+            deployAndWaitForProcessed[F](deploy, timeout, bytesStandard, json)
           } else {
             DeployService[F].deploy(deploy)
           }

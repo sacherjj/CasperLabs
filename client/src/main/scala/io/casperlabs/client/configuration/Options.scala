@@ -12,10 +12,10 @@ import io.casperlabs.crypto.codec.{Base16, Base64}
 import org.apache.commons.io.IOUtils
 import org.rogach.scallop._
 
-import scala.concurrent.duration.FiniteDuration
+import scala.concurrent.duration._
 
 object Options {
-  val TIMEOUT_SECONDS_DEFAULT = FiniteDuration(3, TimeUnit.MINUTES)
+  val TIMEOUT_SECONDS_DEFAULT = 3.minutes
 
   val hexCheck: String => Boolean  = _.matches("[0-9a-fA-F]+")
   val hashCheck: String => Boolean = x => hexCheck(x) && x.length == 64

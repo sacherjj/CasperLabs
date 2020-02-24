@@ -149,12 +149,9 @@ class GrpcDeployService(conn: ConnectOptions, scheduler: Scheduler)
       casperServiceStub.getDeployInfo(GetDeployInfoRequest(hash, view = DeployInfo.View.BASIC))
 
     if (waitForProcessed) {
-      val startTime             = System.currentTimeMillis()
-      val timeoutTime           = startTime + timeoutSeconds.toSeconds * 1000
-      val delay: FiniteDuration = 1.second
-
-      def deployInfo(sleepDuration: FiniteDuration): Task[DeployInfo] =
-        Task.sleep(sleepDuration) >> deployInfoF
+      val startTime   = System.currentTimeMillis()
+      val timeoutTime = startTime + timeoutSeconds.toSeconds * 1000
+      val delay       = 1.second
 
       def expired: Boolean = System.currentTimeMillis() > timeoutTime
 
@@ -164,25 +161,25 @@ class GrpcDeployService(conn: ConnectOptions, scheduler: Scheduler)
           case _                        => true
         })
 
-      def loop(sleepDuration: FiniteDuration): Task[String] =
+      def loop: Task[String] =
         for {
-          di <- if (expired) {
-                 Task.raiseError(
-                   new java.util.concurrent.TimeoutException(
-                     "Timeout waiting for the deploy to reach non-pending state."
-                   )
-                 )
-               } else {
-                 deployInfo(sleepDuration)
-               }
-          result <- if (notPending(di)) {
-                     Task.pure(Printer.print(di, bytesStandard, json))
+          deployInfo <- if (expired) {
+                         Task.raiseError(
+                           new java.util.concurrent.TimeoutException(
+                             "Timeout waiting for the deploy to reach non-pending state."
+                           )
+                         )
+                       } else {
+                         Task.sleep(delay) >> deployInfoF
+                       }
+          result <- if (notPending(deployInfo)) {
+                     Task.pure(Printer.print(deployInfo, bytesStandard, json))
                    } else {
-                     loop(sleepDuration)
+                     loop
                    }
         } yield result
 
-      loop(delay).attempt
+      loop.attempt
     } else {
       deployInfoF
         .map(Printer.print(_, bytesStandard, json))
