@@ -188,25 +188,21 @@ object FinalityDetectorUtil {
       dag: DagRepresentation[F]
   ): F[Set[BlockHash]] =
     for {
-      finalizedBlocksCache <- Ref[F].of(Set.empty[BlockHash])
       finalizedImplicitly <- DagOperations
                               .bfTraverseF[F, BlockHash](List(block))(
                                 hash =>
-                                  for {
-                                    parentsNotYetFinalized <- dag
-                                                               .lookupUnsafe(hash)
-                                                               .map(
-                                                                 _.parents
-                                                               )
-                                                               .flatMap(
-                                                                 _.toList.filterA(
-                                                                   FinalityStorage[F]
-                                                                     .isFinalized(_)
-                                                                     .map(!_) // Follow parents that haven't been finalized yet.
-                                                                 )
-                                                               )
-                                    _ <- finalizedBlocksCache.update(_ ++ parentsNotYetFinalized)
-                                  } yield parentsNotYetFinalized.toList
+                                  dag
+                                    .lookupUnsafe(hash)
+                                    .map(
+                                      _.parents
+                                    )
+                                    .flatMap(
+                                      _.toList.filterA(
+                                        FinalityStorage[F]
+                                          .isFinalized(_)
+                                          .map(!_) // Follow parents that haven't been finalized yet.
+                                      )
+                                    )
                               )
                               .toList
     } yield finalizedImplicitly.toSet - block // We don't want to include `block`.
