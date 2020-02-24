@@ -2,7 +2,9 @@ CL_CASPER_NUM_VALIDATORS ?= 3
 CL_SERVER_HTTP_PORT ?= 40403
 CL_VERSION ?= latest
 
-REFRESH_TARGETS := ./monitoring/prometheus/refresh-targets.sh
+REFRESH_TARGETS   := ./monitoring/prometheus/refresh-targets.sh
+HIGHWAY_ENV       := .casperlabs/chainspec/genesis/highway.env
+RESET_HIGHWAY_ENV := rm -f $(HIGHWAY_ENV); ./scripts/highway-env.sh > $(HIGHWAY_ENV)
 
 # Don't remove directories created as dependencies.
 .SECONDARY:
@@ -19,12 +21,26 @@ node-%: .casperlabs
 	$(eval N = $*)
 	$(eval ENV = node-$(N)/.env)
 	mkdir node-$(N)
-	# Copy default env values. Create overrides with `export CL_<name>=<value>` before running `make node-X/up` commands.
-	cp ${PWD}/template/.env $(ENV)
 
 	@# Create an .env file to hold template variables for docker-compose.
-	echo CL_VERSION=$(CL_VERSION) >> $(ENV)
 	echo NODE_NUMBER=$(N) >> $(ENV)
+
+	# Set default env values. Create overrides with `export CL_<name>=<value>` before running `make node-X/up` commands,
+	# or override them for individual nodes e.g. `CL_VERSION=0.1.2 make node-0/up`
+	# Capture all CL_ env vars into the .env file so later they don't revert if we run things in another console.
+	# Take overrides from template/.env file.
+	bash -c '\
+	export CL_VERSION=$(CL_VERSION) ; \
+	while read kv; do \
+		k=$$(echo $${kv} | cut -d'=' -f1) ; \
+		v=$$(echo $${kv} | cut -d'=' -f2) ; \
+		if [ -z "$${!k}" ]; then \
+			export $${k}=$${v} ; \
+		fi ; \
+	done < ${PWD}/template/.env ; \
+	for var in $$(compgen -v CL_); do \
+		echo $${var}=$${!var} >> $(ENV) ; \
+	done'
 
 	@# Link Dockerfile so we can change it and reapply.
 	@#ln -s ${PWD}/template/docker-compose.yml node-$(N)/docker-compose.yml
@@ -33,7 +49,8 @@ node-%: .casperlabs
 
 
 # Start node.
-node-%/up: node-% .make/docker/network
+# Only make `highway.env` when the first node is started, so the era epoch doesn't become stale.
+node-%/up: node-% .make/docker/network maybe-reset-highway-env
 	@# Go into the directory to pick up values from .env
 	if [ "$(CL_VERSION)" != "latest" ]; then \
 		cd node-$* && docker-compose pull; \
@@ -41,10 +58,14 @@ node-%/up: node-% .make/docker/network
 	cd node-$* && docker-compose up -d
 	$(REFRESH_TARGETS)
 
-# Tear down node.
+# Tear down node. Using docker to delete logs owned by root for now.
 node-%/down:
 	if [ -d node-$* ]; then \
 		cd node-$* && docker-compose down && cd - && \
+		docker run -it --rm \
+			-v $(PWD)/node-$*/logs:/var/logs/casperlabs \
+			--entrypoint sh casperlabs/node:$(CL_VERSION) \
+			-c 'rm -rf /var/logs/casperlabs/*' && \
 		rm -rf node-$* ; \
 	fi
 	$(REFRESH_TARGETS)
@@ -123,3 +144,20 @@ slow:
 	@# Check that the files we wanted exist and aren't empty.
 	[ -s .casperlabs/chainspec/genesis/accounts.csv ]
 	[ -s .casperlabs/bootstrap/node-id ]
+
+
+# Create common Highway environment overrides for the chainspec defaults,
+# common to all, so a node started later won't choose a different era epoch.
+$(HIGHWAY_ENV): reset-highway-env
+
+# If we need to re-start the nodes after a long time, we might have to recreate the era epoch, if it's short, like 5 minutes.
+reset-highway-env: .casperlabs
+	$(RESET_HIGHWAY_ENV)
+
+# Reset highway env if there are no nodes running at the moment or there's only one node directory created (we are restarting the 1 node we have)
+maybe-reset-highway-env:
+	DEFINED=$$(find . -maxdepth 1 -type d | grep -e node-[0-9] | wc -l); \
+	RUNNING=$$(docker ps --format '{{.Names}}' | grep -e node-[0-9] | wc -l); \
+	if [ "$${RUNNING}" = "0" ] || [ "$${DEFINED}" = "1" ]; then \
+		$(RESET_HIGHWAY_ENV); \
+	fi

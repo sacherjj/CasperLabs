@@ -1411,7 +1411,7 @@ abstract class HashSetCasperTest
       .withJustifications(serializedJustifications)
       .withBodyHash(ProtoUtil.protoHash(body))
       .withState(postState)
-      .withRank(1)
+      .withJRank(1)
     val blockHash = ProtoUtil.protoHash(header)
     val blockThatPointsToInvalidBlock =
       Block()
@@ -1456,8 +1456,8 @@ object HashSetCasperTest {
       })
 
     StorageFixture
-      .createStorages[Task]()
-      .flatMap {
+      .createMemoryStorages[Task]()
+      .use {
         case (
             implicit0(blockStorage: BlockStorage[Task]),
             _,

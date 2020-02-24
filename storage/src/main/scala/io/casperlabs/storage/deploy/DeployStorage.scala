@@ -6,7 +6,7 @@ import io.casperlabs.casper.consensus.{Block, Deploy}
 import io.casperlabs.casper.consensus.info.DeployInfo
 import io.casperlabs.crypto.Keys.PublicKeyBS
 import io.casperlabs.metrics.Metered
-import io.casperlabs.storage.block.BlockStorage.{BlockHash, DeployHash}
+import io.casperlabs.storage.{BlockHash, DeployHash}
 import simulacrum.typeclass
 
 import scala.concurrent.duration._

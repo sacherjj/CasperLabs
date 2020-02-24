@@ -249,6 +249,21 @@ max-block-size-bytes = 10485760
 # Minimum TTL value of a deploy
 min-ttl = "1hour"
 
+# Highway parameters that we can freely choose or tweak; the rest is in the Genesis chain spec.
+[highway]
+
+# Use highway, or stick to NCB.
+enabled = false
+
+# Fraction of time through the round after which we can create an omega message.
+omega-message-time-start = 0.5
+
+# Fraction of time through the round before which we must have created the omega message.
+omega-message-time-end = 0.75
+
+# Initial round exponent to start the node with, before auto-adjustment takes over; corresponds to the tick unit of the chain.
+init-round-exponent = 14
+
 # io.casperlabs.node.configuration.Configuration.Kamon
 [metrics]
 

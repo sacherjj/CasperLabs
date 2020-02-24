@@ -59,7 +59,7 @@ class GraphQL:
             timestamp
             protocolVersion
             deployCount
-            rank
+            jRank
             validatorPublicKey
             validatorBlockSeqNum
             chainId

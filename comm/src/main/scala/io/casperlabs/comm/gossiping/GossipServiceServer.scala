@@ -101,7 +101,7 @@ class GossipServiceServer[F[_]: Concurrent: Parallel: Log: Metrics](
     }
 
     val trySync: F[Either[SyncError, Vector[WaitHandle[F]]]] = for {
-      _ <- Log[F].info(
+      _ <- Log[F].debug(
             s"Received notification about ${newBlockHashes.size} new block(s) from ${source.show -> "peer"}: ${newBlockHashes
               .map(Utils.hex)
               .mkString(", ") -> "blocks"}"
@@ -112,7 +112,7 @@ class GossipServiceServer[F[_]: Concurrent: Parallel: Log: Metrics](
                    )
       errorOrWaiters <- errorOrDag.fold(
                          syncError => logSyncError(syncError), { dag =>
-                           Log[F].info(
+                           Log[F].debug(
                              s"Syncing ${dag.size} blocks with ${source.show -> "peer"}"
                            ) *>
                              dag.traverse { summary =>

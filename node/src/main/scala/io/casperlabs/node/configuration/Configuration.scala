@@ -28,6 +28,7 @@ final case class Configuration(
     grpc: Configuration.Grpc,
     tls: Tls,
     casper: CasperConf,
+    highway: Configuration.Highway,
     blockstorage: Configuration.BlockStorage,
     metrics: Configuration.Kamon,
     influx: Option[Configuration.Influx]
@@ -36,6 +37,7 @@ final case class Configuration(
 object Configuration extends ParserImplicits {
   case class Log(
       level: IzLog.Level,
+      // Directory path where the logs will be sent.
       jsonPath: Option[Path]
   ) extends SubConfig
 
@@ -113,6 +115,13 @@ object Configuration extends ParserImplicits {
       useTls: Boolean
   ) extends SubConfig
 
+  case class Highway(
+      enabled: Boolean,
+      omegaMessageTimeStart: Double Refined Interval.OpenClosed[W.`0.0`.T, W.`1.0`.T],
+      omegaMessageTimeEnd: Double Refined Interval.OpenClosed[W.`0.0`.T, W.`1.0`.T],
+      initRoundExponent: Int Refined NonNegative
+  ) extends SubConfig
+
   sealed trait Command extends Product with Serializable
   object Command {
     final case object Run extends Command
@@ -130,10 +139,7 @@ object Configuration extends ParserImplicits {
       command         <- options.parseCommand
       defaultDataDir  <- readDefaultDataDir
       maybeConfigFile <- options.readConfigFile.map(_.map(parseToml))
-      envSnakeCase = envVars.flatMap {
-        case (k, v) if k.startsWith("CL_") && isSnakeCase(k) => List(SnakeCase(k) -> v)
-        case _                                               => Nil
-      }
+      envSnakeCase    = Utils.collectEnvVars(envVars)
     } yield parse(options.fieldByName, envSnakeCase, maybeConfigFile, defaultDataDir, defaults)
       .map(conf => (command, conf))
     res.fold(_.invalidNel[(Command, Configuration)], identity)

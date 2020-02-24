@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { Block } from 'casperlabs-grpc/io/casperlabs/casper/consensus/consensus_pb';
 import { BlockInfo } from 'casperlabs-grpc/io/casperlabs/casper/consensus/info_pb';
 import { ListInline, Loading, RefreshButton, shortHash } from './Utils';
 import * as d3 from 'd3';
@@ -7,8 +8,9 @@ import { ToggleButton, ToggleStore } from './ToggleButton';
 
 // https://bl.ocks.org/mapio/53fed7d84cd1812d6a6639ed7aa83868
 
-const CircleRadius = 8;
+const CircleRadius = 12;
 const LineColor = '#AAA';
+const FinalizedLineColor = '#83f2a1';
 
 export interface Props {
   title: string;
@@ -75,18 +77,18 @@ export class BlockDAG extends React.Component<Props, {}> {
               {this.props.emptyMessage || 'No blocks to show.'}
             </div>
           ) : (
-            <div className="svg-container">
-              <svg
-                width={this.props.width}
-                height={this.props.height}
-                ref={(ref: SVGSVGElement) => (this.svg = ref)}
-              ></svg>
-              <div
-                className="svg-hint"
-                ref={(ref: HTMLDivElement) => (this.hint = ref)}
-              ></div>
-            </div>
-          )}
+                <div className="svg-container">
+                  <svg
+                    width={this.props.width}
+                    height={this.props.height}
+                    ref={(ref: SVGSVGElement) => (this.svg = ref)}
+                  ></svg>
+                  <div
+                    className="svg-hint"
+                    ref={(ref: HTMLDivElement) => (this.hint = ref)}
+                  ></div>
+                </div>
+              )}
         </div>
         {this.props.footerMessage && (
           <div className="card-footer small text-muted">
@@ -114,7 +116,8 @@ export class BlockDAG extends React.Component<Props, {}> {
     }
     const svg = d3.select(this.svg);
     const hint = d3.select(this.hint);
-    const color = consistentColor();
+    const validatorColor = consistentColor(d3.schemePaired);
+    const eraColor = consistentColor(d3.schemeCategory10);
     // See what the actual width and height is.
     const width = $(this.svg!).width()!;
     const height = $(this.svg!).height()!;
@@ -183,7 +186,7 @@ export class BlockDAG extends React.Component<Props, {}> {
       .data(graph.links)
       .enter()
       .append('line')
-      .attr('stroke', LineColor)
+      .attr('stroke', (d: d3Link) => d.isFinalized ? FinalizedLineColor : LineColor)
       .attr('stroke-width', (d: d3Link) => (d.isMainParent ? 3 : 1))
       .attr('marker-end', 'url(#arrow)') // use the Arrow created above
       .attr('stroke-dasharray', (d: d3Link) =>
@@ -202,14 +205,15 @@ export class BlockDAG extends React.Component<Props, {}> {
     node
       .append('circle')
       .attr('class', 'node')
-      .attr('r', CircleRadius)
+      .attr('r', (d: d3Node) =>
+        CircleRadius * (isBallot(d.block) ? 0.5 : 1.0))
       .attr('stroke', (d: d3Node) =>
-        selectedId && d.id === selectedId ? '#E00' : '#fff'
+        selectedId && d.id === selectedId ? '#E00' : eraColor(d.eraId)
       )
       .attr('stroke-width', (d: d3Node) =>
-        selectedId && d.id === selectedId ? '3px' : '1.5px'
+        selectedId && d.id === selectedId ? '7px' : '4px'
       )
-      .attr('fill', (d: d3Node) => color(d.validator));
+      .attr('fill', (d: d3Node) => validatorColor(d.validator));
 
     // Append a node-label to each node
     const label = node
@@ -220,7 +224,7 @@ export class BlockDAG extends React.Component<Props, {}> {
       .style('font-size', 12)
       .style('pointer-events', 'none') // to prevent mouseover/drag capture
       .style('text-anchor', 'start')
-      .attr('transform', 'rotate(15)'); // rotate so a chain doesn't overlap on a small screen.
+      .attr('transform', 'rotate(25)'); // rotate so a chain doesn't overlap on a small screen.
 
     const focus = (d: any) => {
       let datum = d3.select(d3.event.target).datum() as d3Node;
@@ -234,8 +238,8 @@ export class BlockDAG extends React.Component<Props, {}> {
         x.source.id === datum.id || x.target.id === datum.id
           ? 1
           : x.isJustification
-          ? 0
-          : 0.1
+            ? 0
+            : 0.1
       );
       hint.html(
         `Block: ${datum.id} @ ${datum.rank} <br /> Validator: ${datum.validator}`
@@ -270,8 +274,8 @@ export class BlockDAG extends React.Component<Props, {}> {
       // update position of label
       container
         .selectAll('text.node-label')
-        .attr('x', (d: any) => x(d.x) + 9)
-        .attr('y', (d: any) => y(d.y) + 12)
+        .attr('x', (d: any) => x(d.x) + 5)
+        .attr('y', (d: any) => y(d.y) + 25)
         .style('transform-origin', (d: any) => `${x(d.x)}px ${y(d.y)}px`);
 
       // update positions of line
@@ -303,6 +307,7 @@ interface d3Node {
   id: string;
   title: string;
   validator: string;
+  eraId: string;
   rank: number;
   x?: number;
   y?: number;
@@ -314,6 +319,7 @@ interface d3Link {
   target: d3Node;
   isMainParent: boolean;
   isJustification: boolean;
+  isFinalized: boolean;
 }
 
 class Graph {
@@ -342,10 +348,11 @@ const toGraph = (blocks: BlockInfo[]) => {
       id: id,
       title: shortHash(id),
       validator: validatorHash(block),
+      eraId: keyBlockHash(block),
       rank: block
         .getSummary()!
         .getHeader()!
-        .getRank(),
+        .getJRank(),
       block: block
     };
   });
@@ -354,6 +361,9 @@ const toGraph = (blocks: BlockInfo[]) => {
 
   let links = blocks.flatMap(block => {
     let child = blockHash(block);
+
+    let isChildFinalized = isFinalized(block);
+    let isChildBallot = isBallot(block);
 
     let parents = block
       .getSummary()!
@@ -369,14 +379,18 @@ const toGraph = (blocks: BlockInfo[]) => {
       .getJustificationsList()
       .map(x => encodeBase16(x.getLatestBlockHash_asU8()));
 
+    let source = nodeMap.get(child)!
+
     let parentLinks = parents
       .filter(p => nodeMap.has(p))
       .map(p => {
+        let target = nodeMap.get(p)!
         return {
-          source: nodeMap.get(child)!,
-          target: nodeMap.get(p)!,
+          source: source,
+          target: target,
           isMainParent: p === parents[0],
-          isJustification: false
+          isJustification: false,
+          isFinalized: (isChildFinalized || isChildBallot) && isFinalized(target.block)
         };
       });
 
@@ -384,11 +398,13 @@ const toGraph = (blocks: BlockInfo[]) => {
       .filter(x => !parentSet.has(x))
       .filter(j => nodeMap.has(j))
       .map(j => {
+        let target = nodeMap.get(j)!
         return {
-          source: nodeMap.get(child)!,
-          target: nodeMap.get(j)!,
+          source: source,
+          target: target,
           isMainParent: false,
-          isJustification: true
+          isJustification: true,
+          isFinalized: (isChildFinalized || isChildBallot) && isFinalized(target.block)
         };
       });
 
@@ -449,6 +465,18 @@ const calculateCoordinates = (graph: Graph, width: number, height: number) => {
 const blockHash = (block: BlockInfo) =>
   encodeBase16(block.getSummary()!.getBlockHash_asU8());
 
+const keyBlockHash = (block: BlockInfo) =>
+  encodeBase16(block.getSummary()!.getHeader()!.getKeyBlockHash_asU8());
+
+const isBlock = (block: BlockInfo) =>
+  block.getSummary()!.getHeader()!.getMessageType() === Block.MessageType.BLOCK
+
+const isBallot = (block: BlockInfo) =>
+  !isBlock(block)
+
+const isFinalized = (block: BlockInfo) =>
+  block.getStatus()!.getIsFinalized()
+
 const validatorHash = (block: BlockInfo) =>
   encodeBase16(
     block
@@ -477,7 +505,7 @@ const hashCode = (s: string) => {
   return hash;
 };
 
-const consistentColor = () => {
+const consistentColor = (colors: readonly string[]) => {
   // Display each validator with its own color.
   // https://www.d3-graph-gallery.com/graph/custom_color.html
   // http://bl.ocks.org/curran/3094b37e63b918bab0a06787e161607b
@@ -485,20 +513,11 @@ const consistentColor = () => {
   // const color = d3.scaleOrdinal(d3.schemeCategory10);
   // This can be used with a numeric value:
   // const hashRange: [number, number] = [-2147483648, 2147483647];
-  const steps = 20;
-  const domain: [number, number] = [0, steps - 1];
-  const colors = [
-    d3.scaleSequential(d3.interpolateSpectral).domain(domain),
-    d3.scaleSequential(d3.interpolateSinebow).domain(domain),
-    d3.scaleSequential(d3.interpolateRainbow).domain(domain),
-    d3.scaleSequential(d3.interpolateGreys).domain(domain)
-  ];
+  //   d3.scaleSequential(d3.interpolateSpectral).domain(hashRange),
   const cl = colors.length;
-
   return (s: string) => {
     const h = hashCode(s);
-    const c = Math.abs(h % steps);
-    const i = Math.abs(h % cl);
-    return colors[i](c);
+    const c = Math.abs(h % cl);
+    return colors[c];
   };
 };

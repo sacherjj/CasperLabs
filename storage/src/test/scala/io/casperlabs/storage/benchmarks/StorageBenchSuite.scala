@@ -11,8 +11,8 @@ import io.casperlabs.ipc._
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.shared.Log
 import io.casperlabs.storage.BlockMsgWithTransform
+import io.casperlabs.storage.BlockHash
 import io.casperlabs.storage.BlockMsgWithTransform.StageEffects
-import io.casperlabs.storage.block.BlockStorage.BlockHash
 import io.casperlabs.storage.dag.{DagStorage, IndexedDagStorage}
 import io.casperlabs.{metrics, shared}
 import monix.eval.Task

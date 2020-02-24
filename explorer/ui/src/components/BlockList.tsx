@@ -13,6 +13,7 @@ import { Link, RouteComponentProps, withRouter } from 'react-router-dom';
 import Pages from './Pages';
 import { encodeBase16 } from 'casperlabs-sdk';
 import Timestamp from './TimeStamp';
+import { BlockType } from './BlockDetails';
 import * as H from 'history';
 
 export interface Props extends RouteComponentProps<{}> {
@@ -23,7 +24,7 @@ export interface Props extends RouteComponentProps<{}> {
 
 @observer
 class _BlockList extends RefreshableComponent<Props, {}> {
-  constructor(props:Props) {
+  constructor(props: Props) {
     super(props);
     let maxRank = parseInt(props.maxRank || '') || 0;
     let depth = parseInt(props.depth || '') || 10;
@@ -52,7 +53,7 @@ class _BlockList extends RefreshableComponent<Props, {}> {
         }
         refresh={() => this.refresh()}
         subscribeToggleStore={dag.subscribeToggleStore}
-        headers={['Block hash', 'Rank', 'Timestamp', 'Validator']}
+        headers={['Block Hash', 'j-Rank', 'm-Rank', 'Timestamp', 'Validator', 'Type', 'Key Block Hash']}
         rows={dag.blocks}
         renderRow={(block: BlockInfo) => {
           const header = block.getSummary()!.getHeader()!;
@@ -62,11 +63,18 @@ class _BlockList extends RefreshableComponent<Props, {}> {
               <td>
                 <Link to={Pages.block(id)}>{id}</Link>
               </td>
-              <td>{header.getRank()}</td>
+              <td>{header.getJRank()}</td>
+              <td>{header.getMainRank()}</td>
               <td>
                 <Timestamp timestamp={header.getTimestamp()} />
               </td>
               <td>{shortHash(header.getValidatorPublicKey_asU8())}</td>
+              <td><BlockType header={header} /></td>
+              <td>
+                <Link to={Pages.block(encodeBase16(header.getKeyBlockHash_asU8()))}>
+                  {shortHash(header.getKeyBlockHash_asU8())}
+                </Link>
+              </td>
             </tr>
           );
         }}

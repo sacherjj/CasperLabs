@@ -10,7 +10,7 @@ import io.casperlabs.casper.consensus.info.BlockInfo
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.models.Message
 import io.casperlabs.storage.DagStorageMetricsSource
-import io.casperlabs.storage.block.BlockStorage.BlockHash
+import io.casperlabs.storage.BlockHash
 import io.casperlabs.storage.dag.CachingDagStorage.Rank
 import io.casperlabs.storage.dag.DagRepresentation.Validator
 import io.casperlabs.storage.dag.DagStorage.{MeteredDagRepresentation, MeteredDagStorage}
@@ -76,8 +76,8 @@ class CachingDagStorage[F[_]: Concurrent](
     * */
   private def unsafeCacheNeighborhood(m: Message): F[Unit] = {
     val missingRanks =
-      (m.rank - neighborhoodBefore)
-        .to(m.rank + neighborhoodAfter)
+      (m.jRank - neighborhoodBefore)
+        .to(m.jRank + neighborhoodAfter)
         .toSet
         .diff(ranksRanges.keySet)
         .toList
@@ -107,7 +107,7 @@ class CachingDagStorage[F[_]: Concurrent](
   override def getRepresentation: F[DagRepresentation[F]] =
     (this: DagRepresentation[F]).pure[F]
 
-  override private[storage] def insert(block: Block): F[DagRepresentation[F]] =
+  private[storage] override def insert(block: Block): F[DagRepresentation[F]] =
     for {
       dag     <- underlying.insert(block)
       message <- Sync[F].fromTry(Message.fromBlock(block))
@@ -166,16 +166,8 @@ class CachingDagStorage[F[_]: Concurrent](
   override def topoSortTailValidator(validator: Validator, blocksNum: Int) =
     underlying.topoSortTailValidator(validator, blocksNum)
 
-  override def latestMessageHash(validator: Validator): F[Set[BlockHash]] =
-    underlying.latestMessageHash(validator)
-
-  override def latestMessage(validator: Validator): F[Set[Message]] =
-    underlying.latestMessage(validator)
-
-  override def latestMessageHashes: F[Map[Validator, Set[BlockHash]]] =
-    underlying.latestMessageHashes
-
-  override def latestMessages: F[Map[Validator, Set[Message]]] = underlying.latestMessages
+  override def latestGlobal                         = underlying.latestGlobal
+  override def latestInEra(keyBlockHash: BlockHash) = underlying.latestInEra(keyBlockHash)
 
   override def markAsFinalized(
       mainParent: BlockHash,
@@ -218,7 +210,7 @@ object CachingDagStorage {
     ): RemovalListener[BlockHash, Message] = { n: RemovalNotification[BlockHash, Message] =>
       Option(n.getValue)
         .foreach { m =>
-          ranksRanges -= m.rank
+          ranksRanges -= m.jRank
         }
     }
 

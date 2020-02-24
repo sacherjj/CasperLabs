@@ -17,6 +17,7 @@ import io.casperlabs.casper.util.execengine.{DeploysCheckpoint, ExecEngineUtil}
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.crypto.Keys
 import io.casperlabs.metrics.Metrics
+import io.casperlabs.models.Message
 import io.casperlabs.mempool.DeployBuffer
 import io.casperlabs.p2p.EffectsTestInstances.LogicalTime
 import io.casperlabs.shared.{Log, Time}
@@ -25,9 +26,11 @@ import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.storage.dag.{DagRepresentation, IndexedDagStorage}
 import io.casperlabs.storage.deploy.{DeployStorage, DeployStorageWriter}
 import monix.eval.Task
+import io.casperlabs.shared.Sorting._
 
 import scala.collection.immutable.HashMap
 import scala.language.higherKinds
+import io.casperlabs.storage.dag.DagStorage
 
 object BlockGenerator {
   implicit val timeEff = new LogicalTime[Task]()
@@ -86,7 +89,7 @@ object BlockGenerator {
                  fs2.Stream.fromIterator(deploys.toIterator),
                  b.getHeader.timestamp,
                  ProtocolVersion(1),
-                 rank = 0,
+                 mainRank = Message.asMainRank(0),
                  upgrades = Nil
                )
     } yield result
@@ -185,12 +188,14 @@ trait BlockGenerator {
                           else
                             ProtoUtil.nextValidatorBlockSeqNum(dag, validatorPrevBlockHash)
                         }
-      rank <- if (parentsHashList.isEmpty) 0L.pure[F]
-             else
-               updatedJustifications.values.toList
-                 .flatTraverse(_.toList.traverse(dag.lookup(_)))
-                 .map(_.flatten)
-                 .map(ProtoUtil.nextRank(_))
+      jRank <- if (parentsHashList.isEmpty) Message.asJRank(0L).pure[F]
+              else
+                updatedJustifications.values.toList
+                  .flatTraverse(_.toList.traverse(dag.lookup(_)))
+                  .map(_.flatten)
+                  .map(ProtoUtil.nextJRank(_))
+      parentMessages <- parentsHashList.toList.traverse(dag.lookupBlockUnsafe(_))
+      mainRank       = ProtoUtil.nextMainRank(parentMessages)
       header = ProtoUtil
         .blockHeader(
           body,
@@ -198,7 +203,8 @@ trait BlockGenerator {
           parentsHashList,
           serializedJustifications,
           postState,
-          rank,
+          jRank,
+          mainRank,
           validatorSeqNum,
           validatorPrevBlockHash,
           protocolVersion = ProtocolVersion(1),
@@ -287,7 +293,8 @@ trait BlockGenerator {
       preStateHash: ByteString = ByteString.EMPTY,
       postStateHash: ByteString = ByteString.EMPTY,
       maybeValidatorPrevBlockHash: Option[BlockHash] = None,
-      maybeValidatorBlockSeqNum: Option[Int] = None
+      maybeValidatorBlockSeqNum: Option[Int] = None,
+      keyBlockHash: ByteString = ByteString.EMPTY
   ): F[Block] =
     createAndStoreMessage[F](
       parentsHashList = parents.map(_.blockHash),
@@ -299,6 +306,7 @@ trait BlockGenerator {
       chainName = chainName,
       preStateHash = preStateHash,
       maybeValidatorPrevBlockHash = maybeValidatorPrevBlockHash,
-      maybeValidatorBlockSeqNum = maybeValidatorBlockSeqNum
+      maybeValidatorBlockSeqNum = maybeValidatorBlockSeqNum,
+      keyBlockHash = keyBlockHash
     )
 }

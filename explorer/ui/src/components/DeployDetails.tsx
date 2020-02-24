@@ -122,7 +122,8 @@ const ResultsTable = observer(
                 {proc
                   .getBlockInfo()!
                   .getStatus()!
-                  .getIsFinalized()}
+                  .getIsFinalized()
+                  .toString()}
               </td>
               <td className="text-right">{proc.getCost().toLocaleString()}</td>
               <td className="text-right">

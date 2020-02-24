@@ -27,6 +27,7 @@ import io.casperlabs.ipc.TransformEntry
 import io.casperlabs.models.Message
 import io.casperlabs.shared._
 import io.casperlabs.models.BlockImplicits._
+import io.casperlabs.models.Message.MainRank
 
 import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
 import scala.util.{Success, Try}
@@ -62,6 +63,7 @@ trait Validation[F[_]] {
   def transactions(
       block: Block,
       preStateHash: StateHash,
+      preStateBonds: Seq[Bond],
       effects: BlockEffects
   )(
       implicit ee: ExecutionEngineService[F],
@@ -85,13 +87,19 @@ trait Validation[F[_]] {
       summary: BlockSummary,
       chainName: String
   )(implicit versions: CasperLabsProtocol[F]): F[Unit]
+
+  def checkEquivocation(dag: DagRepresentation[F], block: Block): F[Unit]
 }
 
 object Validation {
   def apply[F[_]](implicit ev: Validation[F]) = ev
 
-  type BlockHeight = Long
+  type BlockHeight = MainRank
   type Data        = Array[Byte]
+
+  // TODO (CON-639): Remove this; but for now NCB validation doesn't work with Highway in some cases.
+  // This only works with env vars, not the CLI or the config file, but I just want to get it going.
+  def isHighway = sys.env.get("CL_HIGHWAY_ENABLED") == Some("true")
 
   /** Represents block's effects indexed by deploy's `stage` value.
     * Deploys with the same `stage` value can be run in parallel.
@@ -144,7 +152,8 @@ object Validation {
       b: BlockSummary,
       dag: DagRepresentation[F]
   ): F[Unit] =
-    for {
+    // TODO (CON-639): A voting ballot appears to be merging swimlanes in the child era.
+    (for {
       equivocators <- dag.getEquivocators
       message      <- MonadThrowable[F].fromTry(Message.fromBlockSummary(b))
       _ <- Monad[F].whenA(equivocators.contains(message.validatorId)) {
@@ -158,7 +167,7 @@ object Validation {
                                     .swimlaneV[F](message.validatorId, message, dag)
                                     .foldWhileLeft(Set.empty[BlockHash]) {
                                       case (seenEquivocations, message) =>
-                                        if (message.rank <= minRank) {
+                                        if (message.jRank <= minRank) {
                                           Right(seenEquivocations)
                                         } else {
                                           if (equivocationsHashes.contains(message.messageHash)) {
@@ -178,7 +187,7 @@ object Validation {
                   }
             } yield ()
           }
-    } yield ()
+    } yield ()).whenA(!isHighway)
 
   /* If we receive block from future then we may fail to propose new block on top of it because of Validation.timestamp */
   def preTimestamp[F[_]: Monad: RaiseValidationError: Time](
@@ -252,8 +261,8 @@ object Validation {
     for {
       justificationMsgs <- (b.parents ++ b.justifications.map(_.latestBlockHash)).toSet.toList
                             .traverse(dag.lookupUnsafe(_))
-      calculatedRank = ProtoUtil.nextRank(justificationMsgs)
-      actuallyRank   = b.rank
+      calculatedRank = ProtoUtil.nextJRank(justificationMsgs)
+      actuallyRank   = b.jRank
       result         = calculatedRank == actuallyRank
       _ <- if (result) {
             Applicative[F].unit
@@ -565,11 +574,11 @@ object Validation {
   // Validates whether block was built using correct protocol version.
   def version[F[_]: Monad: Log](
       b: BlockSummary,
-      m: BlockHeight => F[state.ProtocolVersion]
+      m: MainRank => F[state.ProtocolVersion]
   ): F[Boolean] = {
 
     val blockVersion = b.getHeader.getProtocolVersion
-    val blockHeight  = b.getHeader.rank
+    val blockHeight  = b.mainRank
     m(blockHeight).flatMap { version =>
       if (blockVersion == version) {
         true.pure[F]
@@ -639,7 +648,8 @@ object Validation {
   ): F[Unit] = {
     val prevBlockHash = b.getHeader.validatorPrevBlockHash
     val validatorId   = b.getHeader.validatorPublicKey
-    if (prevBlockHash.isEmpty) {
+    // TODO (CON-639): Going on the j-DAG is not enough, it may lead to a ballot in the parent era.
+    if (prevBlockHash.isEmpty || isHighway) {
       ().pure[F]
     } else {
       def rejectWith(msg: String) =
@@ -650,17 +660,18 @@ object Validation {
           rejectWith(
             s"DagStorage is missing previous block hash ${PrettyPrinter.buildString(prevBlockHash)}"
           )
-        case Some(meta) if meta.validatorId != validatorId =>
+        case Some(prev) if prev.validatorId != validatorId =>
           rejectWith(
             s"Previous block hash ${PrettyPrinter.buildString(prevBlockHash)} was not created by validator ${PrettyPrinter
               .buildString(validatorId)}"
           )
-        case Some(meta) =>
+        case Some(prev) =>
           MonadThrowable[F].fromTry(Message.fromBlockSummary(b)) flatMap { blockMsg =>
             DagOperations
               .toposortJDagDesc(dag, List(blockMsg))
               .find { j =>
-                j.validatorId == validatorId && j.messageHash != b.blockHash || j.rank < meta.rank
+                // Go until we're passed the previous message they point at. It should be the first form this validator.
+                j.validatorId == validatorId && j.messageHash != b.blockHash || j.jRank < prev.jRank
               }
               .flatMap {
                 case Some(msg) if msg.messageHash == prevBlockHash =>
@@ -764,7 +775,7 @@ object Validation {
 
     def singleDeployValidation(d: consensus.Deploy): F[Unit] =
       for {
-        config <- CasperLabsProtocol[F].configAt(b.getHeader.rank).map(_.deployConfig)
+        config <- CasperLabsProtocol[F].configAt(b.mainRank).map(_.deployConfig)
         staticErrors <- deployHeader[F](
                          d,
                          chainName,

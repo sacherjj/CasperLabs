@@ -2,6 +2,7 @@ package io.casperlabs
 
 import io.casperlabs.casper.consensus.BlockSummary
 import io.casperlabs.metrics.Metrics
+import com.google.protobuf.ByteString
 
 package object storage {
   val BlockStorageMetricsSource: Metrics.Source =
@@ -21,4 +22,7 @@ package object storage {
         signature = b.getBlockMessage.signature
       )
   }
+
+  type BlockHash  = ByteString
+  type DeployHash = ByteString
 }

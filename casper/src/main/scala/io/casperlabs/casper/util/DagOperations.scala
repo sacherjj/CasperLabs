@@ -5,7 +5,7 @@ import cats.data.NonEmptyList
 import cats.{Eq, Eval, Monad}
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.Estimator.BlockHash
-import io.casperlabs.casper.consensus.{Block, BlockSummary}
+import io.casperlabs.casper.consensus.{Block, BlockSummary, Era}
 import io.casperlabs.casper.PrettyPrinter
 import io.casperlabs.casper.util.implicits._
 import io.casperlabs.catscontrib.MonadThrowable
@@ -17,6 +17,14 @@ import simulacrum.typeclass
 
 import scala.collection.immutable.{BitSet, HashSet, Queue}
 import scala.collection.mutable
+import io.casperlabs.storage.dag.DagLookup
+import io.casperlabs.storage.dag.DagStorage
+import io.casperlabs.storage.dag.DagRepresentation._
+import EraObservedBehavior._
+import io.casperlabs.casper.highway.MessageProducer
+import io.casperlabs.storage.era.EraStorage
+import io.casperlabs.shared.Sorting.jRankOrdering
+import io.casperlabs.models.Message.asJRank
 
 object DagOperations {
 
@@ -38,6 +46,7 @@ object DagOperations {
     implicit val blockSummaryKey   = instance[BlockSummary, BlockHash](_.blockHash)
     implicit val messageSummaryKey = instance[Message, BlockHash](_.messageHash)
     implicit val blockHashKey      = identity[BlockHash]
+    implicit val eraKey            = instance[Era, BlockHash](_.keyBlockHash)
   }
 
   /** Starts from the list of messages and follows their justifications,
@@ -45,8 +54,8 @@ object DagOperations {
     *
     * Returns a stream.
     */
-  def toposortJDagDesc[F[_]: Monad](
-      dag: DagRepresentation[F],
+  def toposortJDagDesc[F[_]: MonadThrowable](
+      dag: DagLookup[F],
       msgs: List[Message]
   ): StreamT[F, Message] = {
     implicit val blockTopoOrdering: Ordering[Message] = DagOperations.blockTopoOrderingDesc
@@ -54,21 +63,20 @@ object DagOperations {
       msgs
     )(
       _.justifications.toList
-        .traverse(j => dag.lookup(j.latestBlockHash))
-        .map(_.flatten)
+        .traverse(j => dag.lookupUnsafe(j.latestBlockHash))
     )
   }
 
   /** Traverses j-past-cone of the block and returns messages by specified validator.
     */
-  def swimlaneV[F[_]: Monad](
+  def swimlaneV[F[_]: MonadThrowable](
       validator: ByteString,
       message: Message,
       dag: DagRepresentation[F]
   ): StreamT[F, Message] = {
     // Messages visible in the direct justifications of the block.
     val messagePanorama =
-      message.justifications.toList.traverse(j => dag.lookup(j.latestBlockHash)).map(_.flatten)
+      message.justifications.toList.traverse(j => dag.lookupUnsafe(j.latestBlockHash))
     val tail = StreamT.lift(messagePanorama).flatMap { jTips =>
       toposortJDagDesc[F](dag, jTips).filter(_.validatorId == validator)
     }
@@ -117,22 +125,17 @@ object DagOperations {
       case (a, b) =>
         if (a._1 < b._1) true
         else if (b._1 < a._1) false
-        else {
-          val aStr = a._2.toStringUtf8
-          val bStr = b._2.toStringUtf8
-          if (aStr < bStr) true
-          else if (bStr < aStr) false
-          else true
-        }
+        else
+          io.casperlabs.shared.Sorting.byteStringOrdering.lt(a._2, b._2)
     }
 
   val blockTopoOrderingAsc: Ordering[Message] =
     Ordering
-      .by[Message, (Long, ByteString)](m => (m.rank, m.messageHash))(longByteStringOrdering)
+      .by[Message, (Long, ByteString)](m => (m.jRank, m.messageHash))(longByteStringOrdering)
       .reverse
 
   val blockTopoOrderingDesc: Ordering[Message] =
-    Ordering.by[Message, (Long, ByteString)](m => (m.rank, m.messageHash))(longByteStringOrdering)
+    Ordering.by[Message, (Long, ByteString)](m => (m.jRank, m.messageHash))(longByteStringOrdering)
 
   def bfToposortTraverseF[F[_]: Monad](
       start: List[Message]
@@ -467,17 +470,78 @@ object DagOperations {
       for {
         ancestorMeta   <- ancestors.toList.traverse(dag.lookup).map(_.flatten)
         descendantMeta <- descendants.toList.traverse(dag.lookup).map(_.flatten)
-        minRank        = if (ancestorMeta.isEmpty) 0 else ancestorMeta.map(_.rank).min
+        minRank        = if (ancestorMeta.isEmpty) asJRank(0) else ancestorMeta.map(_.jRank).min
         reachable <- bfToposortTraverseF[F](descendantMeta) { blockMeta =>
                       blockMeta.parents.toList.traverse(dag.lookup).map(_.flatten)
                     }.foldWhileLeft(Set.empty[BlockHash]) {
                       case (reachable, msgSummary) if ancestors(msgSummary.messageHash) =>
                         Left(reachable + msgSummary.messageHash)
-                      case (reachable, blockMeta) if blockMeta.rank >= minRank =>
+                      case (reachable, blockMeta) if blockMeta.jRank >= minRank =>
                         Left(reachable)
                       case (reachable, _) =>
                         Right(reachable)
                     }
       } yield reachable
     }
+
+  import DagRepresentation.Validator
+
+  /**
+    * Calculates panorama of a message.
+    *
+    * Panorama is a "view" into the past of the message (j-past-cone).
+    * It is the latest message (or multiple messages) per validator seen
+    * in the j-past-cone of the message.
+    *
+    * This particular method is capped by a "stop block". It won't consider
+    * blocks created before that stop block.
+    *
+    * @param dag
+    * @param message
+    * @param stop
+    * @return
+    */
+  def panoramaOfMessage[F[_]: MonadThrowable](
+      dag: DagLookup[F],
+      message: Message,
+      erasObservedBehavior: LocalDagView[Message],
+      stop: Message
+  ): F[MessageJPast[Message]] =
+    message.justifications.toList
+      .map(_.latestBlockHash)
+      .traverse(dag.lookupUnsafe(_))
+      .flatMap(EraObservedBehavior.messageJPast[F](dag, _, erasObservedBehavior, stop))
+
+  /**
+    * Returns latest messages per era.
+    *
+    * We start collecting from the youngest era to avoid situation
+    * where concurrent addition of a message in the parent era causes
+    * j-past-cone of the child era to contain this message transitively
+    * when latestMessage(parentEra) doesn't.
+    */
+  def latestMessagesInEras[F[_]: Monad](
+      dag: DagRepresentation[F],
+      keyBlocks: List[Message]
+  ): F[Map[ByteString, Map[DagRepresentation.Validator, Set[Message]]]] =
+    keyBlocks
+      .sortBy(_.jRank)(jRankOrdering.reverse)
+      .traverse(kb => dag.latestMessagesInEra(kb.messageHash).map(kb.messageHash -> _))
+      .map(_.toMap)
+
+  /**
+    * Returns per-era latest messages from validators.
+    *
+    * @param keyBlock
+    * @return
+    */
+  def latestMessagesInErasUntil[F[_]: MonadThrowable: EraStorage: DagStorage](
+      keyBlock: ByteString
+  ): F[Map[ByteString, Map[DagRepresentation.Validator, Set[Message]]]] =
+    for {
+      keyBlocks            <- MessageProducer.collectKeyBlocks[F](keyBlock)
+      dag                  <- DagStorage[F].getRepresentation
+      perEraLatestMessages <- latestMessagesInEras(dag, keyBlocks)
+    } yield perEraLatestMessages
+
 }

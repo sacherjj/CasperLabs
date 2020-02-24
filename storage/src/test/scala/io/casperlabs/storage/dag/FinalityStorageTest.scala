@@ -3,7 +3,7 @@ package io.casperlabs.storage.dag
 import cats.implicits._
 import io.casperlabs.storage.SQLiteStorage
 import io.casperlabs.storage.block.BlockStorage
-import io.casperlabs.storage.block.BlockStorage.BlockHash
+import io.casperlabs.storage.BlockHash
 import io.casperlabs.storage.{ArbitraryStorageData, SQLiteFixture}
 import monix.eval.Task
 import org.scalatest.{Assertion, FlatSpec, Matchers}
@@ -74,7 +74,7 @@ class FinalityStorageTest
     storage =>
       val blocks = List.fill(10)(sample(arbBlock.arbitrary)).zipWithIndex.map {
         case (block, idx) =>
-          block.update(_.header.rank := idx.toLong)
+          block.update(_.header.jRank := idx.toLong)
       }
 
       for {

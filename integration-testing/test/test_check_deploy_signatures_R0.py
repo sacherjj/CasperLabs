@@ -118,7 +118,7 @@ class GenerateBlockWithNoSignaturesGossipInterceptor(grpc_proxy.GossipIntercepto
         del block.body.deploys[0].deploy.approvals[:]
         block.header.validator_prev_block_hash = block.block_hash
         block.header.validator_block_seq_num += 1
-        block.header.rank += 1
+        block.header.j_rank += 1
         block.header.justifications.extend([block_justification(block)])
         block.header.timestamp = block.header.timestamp + 1000  # 1 second later
 

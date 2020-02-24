@@ -5,7 +5,6 @@ import cats.data._
 import cats.effect._
 import cats.effect.concurrent._
 import cats.implicits._
-import cats.kernel.Monoid
 import com.google.protobuf.ByteString
 import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.casper.consensus.BlockSummary
@@ -15,10 +14,10 @@ import io.casperlabs.comm.discovery.NodeUtils.showNode
 import io.casperlabs.comm.gossiping._
 import io.casperlabs.comm.gossiping.synchronization.Synchronizer.SyncError
 import io.casperlabs.comm.gossiping.synchronization.Synchronizer.SyncError._
-import io.casperlabs.comm.gossiping.Utils.hex
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.shared.Log
 import scala.util.control.NonFatal
+import io.casperlabs.shared.Sorting.{catsOrder, jRankOrdering}
 
 class SynchronizerImpl[F[_]: Concurrent: Log: Metrics](
     connectToGossip: Node => F[GossipService[F]],
@@ -158,7 +157,7 @@ class SynchronizerImpl[F[_]: Concurrent: Log: Metrics](
   }
 
   private def topologicalSort(syncState: SyncState): Vector[BlockSummary] =
-    syncState.summaries.values.toVector.sortBy(_.rank)
+    syncState.summaries.values.toVector.sortBy(_.jRank)
 
   /** Remember that we got these summaries from this source,
     * so next time we don't have to travel that far back in their DAG. */
@@ -409,7 +408,7 @@ object SynchronizerImpl {
     def append(summary: BlockSummary, iterationDistance: Int, originalDistance: Int): SyncState =
       copy(
         summaries = summaries + (summary.blockHash -> summary),
-        ranks = ranks + summary.rank,
+        ranks = ranks + summary.jRank,
         iterationState = iterationState.append(summary, iterationDistance),
         distanceFromOriginalTargets =
           distanceFromOriginalTargets.updated(summary.blockHash, originalDistance)

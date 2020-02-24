@@ -154,7 +154,7 @@ object DownloadManagerImpl {
           _       <- isShutdown.set(true)
           _       <- managerLoop.cancel.attempt
           workers <- workersRef.get
-          _       <- workers.values.toList.map(_.cancel.attempt).sequence.void
+          _       <- workers.values.toList.traverse(_.cancel.attempt)
         } yield ()
     } map {
       case (_, _, _, manager) => manager
