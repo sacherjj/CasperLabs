@@ -337,8 +337,8 @@ object DeployRuntime {
       amount: Long,
       exit: Boolean = true,
       ignoreOutput: Boolean = false,
-      waitForProcessed: Boolean = false,
-      timeoutSeconds: FiniteDuration = Options.TIMEOUT_SECONDS_DEFAULT,
+      waitForProcessed: Boolean,
+      timeoutSeconds: FiniteDuration,
       bytesStandard: Boolean = false,
       json: Boolean = false
   ): F[Unit] =

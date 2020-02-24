@@ -149,9 +149,9 @@ class GrpcDeployService(conn: ConnectOptions, scheduler: Scheduler)
       casperServiceStub.getDeployInfo(GetDeployInfoRequest(hash, view = DeployInfo.View.BASIC))
 
     if (waitForProcessed) {
-      val startTime   = System.currentTimeMillis()
-      val timeoutTime = startTime + timeoutSeconds.toSeconds * 1000
-      val delay : FiniteDuration = 1.second
+      val startTime             = System.currentTimeMillis()
+      val timeoutTime           = startTime + timeoutSeconds.toSeconds * 1000
+      val delay: FiniteDuration = 1.second
 
       def deployInfo(sleepDuration: FiniteDuration): Task[DeployInfo] =
         Task.sleep(sleepDuration) >> deployInfoF
