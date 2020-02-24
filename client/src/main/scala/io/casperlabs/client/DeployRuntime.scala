@@ -13,7 +13,7 @@ import io.casperlabs.casper.consensus
 import io.casperlabs.casper.consensus.Deploy
 import io.casperlabs.casper.consensus.state
 import io.casperlabs.catscontrib.MonadThrowable
-import io.casperlabs.client.configuration.{DeployConfig, Streaming}
+import io.casperlabs.client.configuration.{DeployConfig, Options, Streaming}
 import io.casperlabs.crypto.Keys.{PrivateKey, PublicKey}
 import io.casperlabs.crypto.codec.{Base16, Base64}
 import io.casperlabs.crypto.hash.Blake2b256
@@ -68,9 +68,13 @@ object DeployRuntime {
   def showDeploy[F[_]: Sync: DeployService](
       hash: String,
       bytesStandard: Boolean,
-      json: Boolean
+      json: Boolean,
+      waitForProcessed: Boolean,
+      timeoutSeconds: Long
   ): F[Unit] =
-    gracefulExit(DeployService[F].showDeploy(hash, bytesStandard, json))
+    gracefulExit(
+      DeployService[F].showDeploy(hash, bytesStandard, json, waitForProcessed, timeoutSeconds)
+    )
 
   def showBlocks[F[_]: Sync: DeployService](
       depth: Int,
@@ -114,7 +118,11 @@ object DeployRuntime {
   def unbond[F[_]: Sync: DeployService](
       maybeAmount: Option[Long],
       deployConfig: DeployConfig,
-      privateKeyFile: File
+      privateKeyFile: File,
+      waitForProcessed: Boolean,
+      timeoutSeconds: Long,
+      bytesStandard: Boolean = false,
+      json: Boolean = false
   ): F[Unit] =
     for {
       rawPrivateKey <- readFileAsString[F](privateKeyFile)
@@ -124,14 +132,22 @@ object DeployRuntime {
             maybeEitherPublicKey = None,
             maybeEitherPrivateKey = rawPrivateKey.asLeft[PrivateKey].some,
             sessionArgs =
-              List(optionalArg("amount", maybeAmount)(Deploy.Arg.Value.Value.LongValue(_)))
+              List(optionalArg("amount", maybeAmount)(Deploy.Arg.Value.Value.LongValue(_))),
+            waitForProcessed = waitForProcessed,
+            timeoutSeconds = timeoutSeconds,
+            bytesStandard = bytesStandard,
+            json = json
           )
     } yield ()
 
   def bond[F[_]: Sync: DeployService](
       amount: Long,
       deployConfig: DeployConfig,
-      privateKeyFile: File
+      privateKeyFile: File,
+      waitForProcessed: Boolean,
+      timeoutSeconds: Long,
+      bytesStandard: Boolean = false,
+      json: Boolean = false
   ): F[Unit] =
     for {
       rawPrivateKey <- readFileAsString[F](privateKeyFile)
@@ -140,7 +156,11 @@ object DeployRuntime {
             deployConfig.withSessionResource(BONDING_WASM_FILE),
             maybeEitherPublicKey = None,
             maybeEitherPrivateKey = rawPrivateKey.asLeft[PrivateKey].some,
-            sessionArgs = List(longArg("amount", amount))
+            sessionArgs = List(longArg("amount", amount)),
+            waitForProcessed = waitForProcessed,
+            timeoutSeconds = timeoutSeconds,
+            bytesStandard = bytesStandard,
+            json = json
           )
     } yield ()
 
@@ -276,7 +296,11 @@ object DeployRuntime {
       deployConfig: DeployConfig,
       privateKeyFile: File,
       recipientPublicKey: PublicKey,
-      amount: Long
+      amount: Long,
+      waitForProcessed: Boolean,
+      timeoutSeconds: Long,
+      bytesStandard: Boolean,
+      json: Boolean
   ): F[Unit] =
     for {
       rawPrivateKey <- readFileAsString[F](privateKeyFile)
@@ -297,7 +321,11 @@ object DeployRuntime {
             publicKey,
             privateKey,
             recipientPublicKey,
-            amount
+            amount,
+            waitForProcessed = waitForProcessed,
+            timeoutSeconds = timeoutSeconds,
+            bytesStandard = bytesStandard,
+            json = json
           )
     } yield ()
 
@@ -308,7 +336,11 @@ object DeployRuntime {
       recipientPublicKey: PublicKey,
       amount: Long,
       exit: Boolean = true,
-      ignoreOutput: Boolean = false
+      ignoreOutput: Boolean = false,
+      waitForProcessed: Boolean = false,
+      timeoutSeconds: Long = Options.TIMEOUT_SECONDS_DEFAULT,
+      bytesStandard: Boolean = false,
+      json: Boolean = false
   ): F[Unit] =
     deployFileProgram[F](
       from = None,
@@ -320,7 +352,11 @@ object DeployRuntime {
         bigIntArg("amount", amount)
       ),
       exit,
-      ignoreOutput
+      ignoreOutput,
+      waitForProcessed = waitForProcessed,
+      timeoutSeconds = timeoutSeconds,
+      bytesStandard = bytesStandard,
+      json = json
     )
 
   private def readKey[F[_]: Sync, A](keyFile: File, keyType: String, f: String => Option[A]): F[A] =
@@ -400,11 +436,21 @@ object DeployRuntime {
       ignoreOutput = true
     )
 
-  def sendDeploy[F[_]: Sync: DeployService](deployBA: Array[Byte]): F[Unit] =
+  def sendDeploy[F[_]: Sync: DeployService](
+      deployBA: Array[Byte],
+      waitForProcessed: Boolean,
+      timeoutSeconds: Long,
+      bytesStandard: Boolean = false,
+      json: Boolean = false
+  ): F[Unit] =
     gracefulExit {
       for {
         deploy <- Sync[F].fromTry(Try(Deploy.parseFrom(deployBA)))
-        result <- DeployService[F].deploy(deploy)
+        result <- if (waitForProcessed) {
+                   deployAndWaitForProcessed[F](deploy, timeoutSeconds, bytesStandard, json)
+                 } else {
+                   DeployService[F].deploy(deploy)
+                 }
       } yield result
     }
 
@@ -424,6 +470,25 @@ object DeployRuntime {
       } yield Printer.print(deploy, bytesStandard, json)).attempt
     }
 
+  def deployAndWaitForProcessed[F[_]: Sync: DeployService](
+      deploy: Deploy,
+      timeoutSeconds: Long = Options.TIMEOUT_SECONDS_DEFAULT,
+      bytesStandard: Boolean = false,
+      json: Boolean = false
+  ): F[Either[Throwable, String]] =
+    for {
+      message <- DeployService[F].deploy(deploy).rethrow
+      _       <- Sync[F].delay(println(message))
+      result <- DeployService[F]
+                 .showDeploy(
+                   Base16.encode(deploy.deployHash.toByteArray),
+                   bytesStandard,
+                   json,
+                   waitForProcessed = true,
+                   timeoutSeconds
+                 )
+    } yield result
+
   def deployFileProgram[F[_]: Sync: DeployService](
       from: Option[PublicKey],
       deployConfig: DeployConfig,
@@ -431,7 +496,11 @@ object DeployRuntime {
       maybeEitherPrivateKey: Option[Either[String, PrivateKey]],
       sessionArgs: Seq[Deploy.Arg] = Seq.empty,
       exit: Boolean = true,
-      ignoreOutput: Boolean = false
+      ignoreOutput: Boolean = false,
+      waitForProcessed: Boolean = false,
+      timeoutSeconds: Long = Options.TIMEOUT_SECONDS_DEFAULT,
+      bytesStandard: Boolean = false,
+      json: Boolean = false
   ): F[Unit] = {
     val maybePrivateKey = maybeEitherPrivateKey.fold(none[PrivateKey]) { either =>
       either.fold(Ed25519.tryParsePrivateKey, _.some)
@@ -446,7 +515,7 @@ object DeployRuntime {
     val deploy = for {
       accountPublicKey <- Sync[F].fromOption(
                            from orElse maybePublicKey,
-                           new IllegalArgumentException("--from or --public-key must be presented")
+                           new IllegalArgumentException("--from or --public-key must be present")
                          )
     } yield {
       val deploy =
@@ -456,7 +525,13 @@ object DeployRuntime {
 
     gracefulExit(
       deploy
-        .flatMap(DeployService[F].deploy)
+        .flatMap({ deploy =>
+          if (waitForProcessed) {
+            deployAndWaitForProcessed[F](deploy, timeoutSeconds, bytesStandard, json)
+          } else {
+            DeployService[F].deploy(deploy)
+          }
+        })
         .handleError(
           ex => Left(new RuntimeException(s"Couldn't make deploy, reason: ${ex.getMessage}", ex))
         ),
