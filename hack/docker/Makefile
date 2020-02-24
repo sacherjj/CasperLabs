@@ -156,8 +156,8 @@ reset-highway-env: .casperlabs
 
 # Reset highway env if there are no nodes running at the moment or there's only one node directory created (we are restarting the 1 node we have)
 maybe-reset-highway-env:
-	DEFINED=$$(find . -maxdepth 1 -type d | grep -e node-[0-9] | wc -l); \
-	RUNNING=$$(docker ps --format '{{.Names}}' | grep -e node-[0-9] | wc -l); \
+	DEFINED=$$(find . -maxdepth 1 -type d | grep -e 'node-[0-9]' | wc -l); \
+	RUNNING=$$(docker ps --format '{{.Names}}' | grep -e 'node-[0-9]' | wc -l); \
 	if [ "$${RUNNING}" = "0" ] || [ "$${DEFINED}" = "1" ]; then \
 		$(RESET_HIGHWAY_ENV); \
 	fi
