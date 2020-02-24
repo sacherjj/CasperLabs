@@ -59,12 +59,13 @@ class SQLiteDagStorage[F[_]: Sync](
     val isFinalized = false
     val insertBlockMetadata =
       (fr"""INSERT OR IGNORE INTO block_metadata
-            (block_hash, validator, j_rank, main_rank, """ ++ blockInfoCols() ++ fr""")
+            (block_hash, validator, j_rank, main_rank, validator_block_seq_num, """ ++ blockInfoCols() ++ fr""")
             VALUES (
               ${block.blockHash},
               ${block.validatorPublicKey},
               $jRank,
               $mainRank,
+              ${block.validatorBlockSeqNum},
               ${blockSummary.toByteString},
               ${block.serializedSize},
               $deployErrorCount,
@@ -249,6 +250,36 @@ class SQLiteDagStorage[F[_]: Sync](
       .stream
       .transact(readXa)
       .groupByRank
+
+  override def topoSortValidator(
+      validator: Validator,
+      blocksNum: Int,
+      endBlockNumber: Long
+  ) = {
+    val subQuery = fr"""SELECT validator_block_seq_num, """ ++ blockInfoCols() ++ fr"""
+          FROM block_metadata
+          WHERE validator_block_seq_num<=$endBlockNumber AND validator=$validator
+          ORDER BY validator_block_seq_num DESC
+          LIMIT $blocksNum"""
+    (fr"SELECT * FROM (" ++ subQuery ++ fr") ORDER BY validator_block_seq_num ASC")
+      .query[(Long, BlockInfo)]
+      .stream
+      .transact(readXa)
+      .groupByRank
+  }
+
+  override def topoSortTailValidator(validator: Validator, blocksNum: Int) = {
+    val subQuery = fr"""SELECT validator_block_seq_num, """ ++ blockInfoCols() ++ fr"""
+          FROM block_metadata
+          WHERE validator=$validator
+          ORDER BY validator_block_seq_num DESC
+          LIMIT $blocksNum"""
+    (fr"SELECT * FROM (" ++ subQuery ++ fr") ORDER BY validator_block_seq_num ASC")
+      .query[(Long, BlockInfo)]
+      .stream
+      .transact(readXa)
+      .groupByRank
+  }
 
   override def latestInEra(keyBlockHash: BlockHash): F[EraTipRepresentation[F]] = Sync[F].delay {
     SQLiteTipRepresentation(keyBlockHash): EraTipRepresentation[F]

@@ -12,7 +12,7 @@ use engine_test_support::{
 use types::{account::PublicKey, ApiError, Key, URef, U512};
 
 const CONTRACT_POS_BONDING: &str = "pos_bonding.wasm";
-const ACCOUNT_1_ADDR: [u8; 32] = [1u8; 32];
+const ACCOUNT_1_ADDR: PublicKey = PublicKey::ed25519_from([1u8; 32]);
 const ACCOUNT_1_SEED_AMOUNT: u64 = 100_000_000 * 2;
 const ACCOUNT_1_STAKE: u64 = 42_000;
 const ACCOUNT_1_UNBOND_1: u64 = 22_000;
@@ -50,7 +50,7 @@ fn should_run_successful_bond_and_unbond() {
     let accounts = {
         let mut tmp: Vec<GenesisAccount> = DEFAULT_ACCOUNTS.clone();
         let account = GenesisAccount::new(
-            PublicKey::new([42; 32]),
+            PublicKey::ed25519_from([42; 32]),
             Motes::new(GENESIS_VALIDATOR_STAKE.into()) * Motes::new(2.into()),
             Motes::new(GENESIS_VALIDATOR_STAKE.into()),
         );
@@ -94,7 +94,7 @@ fn should_run_successful_bond_and_unbond() {
 
     let lookup_key = format!(
         "v_{}_{}",
-        base16::encode_lower(&DEFAULT_ACCOUNT_ADDR),
+        base16::encode_lower(&DEFAULT_ACCOUNT_ADDR.as_bytes()),
         GENESIS_ACCOUNT_STAKE
     );
     assert!(contract.named_keys().contains_key(&lookup_key));
@@ -111,7 +111,7 @@ fn should_run_successful_bond_and_unbond() {
         CONTRACT_POS_BONDING,
         (
             String::from(TEST_SEED_NEW_ACCOUNT),
-            PublicKey::new(ACCOUNT_1_ADDR),
+            ACCOUNT_1_ADDR,
             U512::from(ACCOUNT_1_SEED_AMOUNT),
         ),
     )
@@ -156,7 +156,7 @@ fn should_run_successful_bond_and_unbond() {
 
     let lookup_key = format!(
         "v_{}_{}",
-        base16::encode_lower(&ACCOUNT_1_ADDR),
+        base16::encode_lower(ACCOUNT_1_ADDR.as_bytes()),
         ACCOUNT_1_STAKE
     );
     assert!(contract.named_keys().contains_key(&lookup_key));
@@ -212,14 +212,14 @@ fn should_run_successful_bond_and_unbond() {
 
     let lookup_key = format!(
         "v_{}_{}",
-        base16::encode_lower(&ACCOUNT_1_ADDR),
+        base16::encode_lower(ACCOUNT_1_ADDR.as_bytes()),
         ACCOUNT_1_STAKE
     );
     assert!(!pos_contract.named_keys().contains_key(&lookup_key));
 
     let lookup_key = format!(
         "v_{}_{}",
-        base16::encode_lower(&ACCOUNT_1_ADDR),
+        base16::encode_lower(ACCOUNT_1_ADDR.as_bytes()),
         ACCOUNT_1_UNBOND_2
     );
     // Account 1 is still tracked anymore in the bonding queue with different uref
@@ -316,7 +316,7 @@ fn should_run_successful_bond_and_unbond() {
 
     let lookup_key = format!(
         "v_{}_{}",
-        base16::encode_lower(&ACCOUNT_1_ADDR),
+        base16::encode_lower(ACCOUNT_1_ADDR.as_bytes()),
         ACCOUNT_1_UNBOND_2
     );
     // Account 1 isn't tracked anymore in the bonding queue
@@ -370,7 +370,7 @@ fn should_run_successful_bond_and_unbond() {
     let pos_contract = builder.get_pos_contract();
     let lookup_key = format!(
         "v_{}_{}",
-        base16::encode_lower(&DEFAULT_ACCOUNT_ADDR),
+        base16::encode_lower(&DEFAULT_ACCOUNT_ADDR.as_bytes()),
         GENESIS_ACCOUNT_UNBOND_2
     );
     // Genesis is still tracked anymore in the bonding queue with different uref
@@ -389,7 +389,7 @@ fn should_run_successful_bond_and_unbond() {
             .iter()
             .filter(|(key, _)| key.starts_with(&format!(
                 "v_{}",
-                base16::encode_lower(&DEFAULT_ACCOUNT_ADDR)
+                base16::encode_lower(&DEFAULT_ACCOUNT_ADDR.as_bytes())
             )))
             .count(),
         0
@@ -398,9 +398,10 @@ fn should_run_successful_bond_and_unbond() {
         pos_contract
             .named_keys()
             .iter()
-            .filter(
-                |(key, _)| key.starts_with(&format!("v_{}", base16::encode_lower(&ACCOUNT_1_ADDR)))
-            )
+            .filter(|(key, _)| key.starts_with(&format!(
+                "v_{}",
+                base16::encode_lower(ACCOUNT_1_ADDR.as_bytes())
+            )))
             .count(),
         0
     );
@@ -421,7 +422,7 @@ fn should_fail_bonding_with_insufficient_funds() {
     let accounts = {
         let mut tmp: Vec<GenesisAccount> = DEFAULT_ACCOUNTS.clone();
         let account = GenesisAccount::new(
-            PublicKey::new([42; 32]),
+            PublicKey::ed25519_from([42; 32]),
             Motes::new(GENESIS_VALIDATOR_STAKE.into()) * Motes::new(2.into()),
             Motes::new(GENESIS_VALIDATOR_STAKE.into()),
         );
@@ -436,7 +437,7 @@ fn should_fail_bonding_with_insufficient_funds() {
         CONTRACT_POS_BONDING,
         (
             String::from(TEST_SEED_NEW_ACCOUNT),
-            PublicKey::new(ACCOUNT_1_ADDR),
+            ACCOUNT_1_ADDR,
             *DEFAULT_PAYMENT + GENESIS_ACCOUNT_STAKE,
         ),
     )
@@ -476,7 +477,7 @@ fn should_fail_unbonding_validator_without_bonding_first() {
     let accounts = {
         let mut tmp: Vec<GenesisAccount> = DEFAULT_ACCOUNTS.clone();
         let account = GenesisAccount::new(
-            PublicKey::new([42; 32]),
+            PublicKey::ed25519_from([42; 32]),
             Motes::new(GENESIS_VALIDATOR_STAKE.into()) * Motes::new(2.into()),
             Motes::new(GENESIS_VALIDATOR_STAKE.into()),
         );

@@ -11,9 +11,9 @@ impl StateKey {
     pub fn new(x_player: PublicKey, o_player: PublicKey) -> StateKey {
         let mut result = [0u8; 64];
         for (i, j) in x_player
-            .value()
+            .as_bytes()
             .iter()
-            .chain(o_player.value().iter())
+            .chain(o_player.as_bytes().iter())
             .enumerate()
         {
             result[i] = *j;

@@ -99,7 +99,7 @@ fn main() {
 
     let exec_request = {
         let deploy = DeployItemBuilder::new()
-            .with_address(account_1_public_key.value())
+            .with_address(account_1_public_key)
             .with_deploy_hash([1; 32])
             .with_session_code(
                 "simple_transfer.wasm",

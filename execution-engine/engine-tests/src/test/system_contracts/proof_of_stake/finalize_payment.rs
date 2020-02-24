@@ -20,8 +20,8 @@ const FINALIZE_PAYMENT: &str = "pos_finalize_payment.wasm";
 const LOCAL_REFUND_PURSE: &str = "local_refund_purse";
 const POS_REFUND_PURSE_NAME: &str = "pos_refund_purse";
 
-const SYSTEM_ADDR: [u8; 32] = [0u8; 32];
-const ACCOUNT_ADDR: [u8; 32] = [1u8; 32];
+const SYSTEM_ADDR: PublicKey = PublicKey::ed25519_from([0u8; 32]);
+const ACCOUNT_ADDR: PublicKey = PublicKey::ed25519_from([1u8; 32]);
 
 fn initialize() -> InMemoryWasmTestBuilder {
     let mut builder = InMemoryWasmTestBuilder::default();
@@ -106,7 +106,7 @@ fn finalize_payment_should_refund_to_specified_purse() {
     );
 
     let exec_request = {
-        let genesis_public_key = PublicKey::new(DEFAULT_ACCOUNT_ADDR);
+        let genesis_public_key = DEFAULT_ACCOUNT_ADDR;
 
         let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
@@ -193,7 +193,7 @@ fn get_pos_purse_by_name(builder: &InMemoryWasmTestBuilder, purse_name: &str) ->
 
 fn get_named_account_balance(
     builder: &InMemoryWasmTestBuilder,
-    account_address: [u8; 32],
+    account_address: PublicKey,
     name: &str,
 ) -> Option<U512> {
     let account_key = Key::Account(account_address);

@@ -8,7 +8,7 @@ use crate::{
     internal::{
         DeployItemBuilder, ExecuteRequestBuilder, DEFAULT_PAYMENT, STANDARD_PAYMENT_CONTRACT,
     },
-    Address, Code,
+    Code, PublicKey,
 };
 
 /// A single session, i.e. a single request to execute a single deploy within the test context.
@@ -44,7 +44,7 @@ impl SessionBuilder {
     }
 
     /// Returns `self` with the provided account address set.
-    pub fn with_address(mut self, address: Address) -> Self {
+    pub fn with_address(mut self, address: PublicKey) -> Self {
         self.di_builder = self.di_builder.with_address(address);
         self
     }
@@ -71,7 +71,7 @@ impl SessionBuilder {
     }
 
     /// Returns `self` with the provided authorization keys set.
-    pub fn with_authorization_keys(mut self, keys: &[Address]) -> Self {
+    pub fn with_authorization_keys(mut self, keys: &[PublicKey]) -> Self {
         self.di_builder = self.di_builder.with_authorization_keys(keys);
         self
     }

@@ -8,6 +8,7 @@ use blake2::{
 use hex_fmt::HexFmt;
 
 use crate::{
+    account::{PublicKey, PUBLIC_KEY_SERIALIZED_MAX_LENGTH},
     bytesrepr::{Error, FromBytes, ToBytes},
     AccessRights, ContractRef, URef, UREF_SERIALIZED_LENGTH,
 };
@@ -19,9 +20,9 @@ const LOCAL_ID: u8 = 3;
 
 /// The number of bytes in a Blake2b hash
 pub const BLAKE2B_DIGEST_LENGTH: usize = 32;
-
-/// The number of bytes in a [`Key::Account`].
-pub const KEY_ACCOUNT_LENGTH: usize = 32;
+/// The upper bound of bytes in a serialized [`Key::Account`].
+const KEY_ACCOUNT_SERIALIZED_MAX_LENGTH: usize =
+    KEY_ID_SERIALIZED_LENGTH + PUBLIC_KEY_SERIALIZED_MAX_LENGTH;
 /// The number of bytes in a [`Key::Hash`].
 pub const KEY_HASH_LENGTH: usize = 32;
 /// The number of bytes in a [`Key::Local`].
@@ -30,7 +31,6 @@ pub const KEY_LOCAL_LENGTH: usize = 64;
 pub const KEY_LOCAL_SEED_LENGTH: usize = 32;
 
 const KEY_ID_SERIALIZED_LENGTH: usize = 1; // u8 used to determine the ID
-const KEY_ACCOUNT_SERIALIZED_LENGTH: usize = KEY_ID_SERIALIZED_LENGTH + KEY_ACCOUNT_LENGTH;
 const KEY_HASH_SERIALIZED_LENGTH: usize = KEY_ID_SERIALIZED_LENGTH + KEY_HASH_LENGTH;
 /// Number of bytes taken by a serialized `Key::URef`
 /// TODO: decide if this should be public once contract::storage::new_turef is removed
@@ -54,7 +54,7 @@ fn hash(bytes: &[u8]) -> [u8; BLAKE2B_DIGEST_LENGTH] {
 #[derive(PartialEq, Eq, Clone, Copy, PartialOrd, Ord, Hash)]
 pub enum Key {
     /// A `Key` under which a user account is stored.
-    Account([u8; KEY_ACCOUNT_LENGTH]),
+    Account(PublicKey),
     /// A `Key` under which a smart contract is stored and which is the pseudo-hash of the
     /// contract.
     Hash([u8; KEY_HASH_LENGTH]),
@@ -88,17 +88,6 @@ impl Key {
             Key::Hash(_) => String::from("Key::Hash"),
             Key::URef(_) => String::from("Key::URef"),
             Key::Local { .. } => String::from("Key::Local"),
-        }
-    }
-
-    // TODO - remove this method as it's unused
-    #[doc(hidden)]
-    pub fn serialized_size(&self) -> usize {
-        match self {
-            Key::Account(_) => KEY_ACCOUNT_SERIALIZED_LENGTH,
-            Key::Hash(_) => KEY_HASH_SERIALIZED_LENGTH,
-            Key::URef(_) => KEY_UREF_SERIALIZED_LENGTH,
-            Key::Local { .. } => KEY_LOCAL_SERIALIZED_LENGTH,
         }
     }
 
@@ -146,7 +135,9 @@ impl Key {
     /// Returns a human-readable version of `self`, with the inner bytes encoded to Base16.
     pub fn as_string(&self) -> String {
         match self {
-            Key::Account(addr) => format!("account-{}", base16::encode_lower(addr)),
+            Key::Account(PublicKey::Ed25519(addr)) => {
+                format!("account-ed25519-{}", base16::encode_lower(&addr.value()))
+            }
             Key::Hash(addr) => format!("hash-{}", base16::encode_lower(addr)),
             Key::URef(uref) => uref.as_string(),
             Key::Local { hash, .. } => format!("local-{}", base16::encode_lower(hash)),
@@ -165,7 +156,7 @@ impl Key {
 
     /// Returns the inner bytes of `self` if `self` is of type [`Key::Account`], otherwise returns
     /// `None`.
-    pub fn into_account(self) -> Option<[u8; KEY_ACCOUNT_LENGTH]> {
+    pub fn into_account(self) -> Option<PublicKey> {
         match self {
             Key::Account(bytes) => Some(bytes),
             _ => None,
@@ -216,7 +207,7 @@ impl Key {
 impl Display for Key {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match self {
-            Key::Account(addr) => write!(f, "Key::Account({})", HexFmt(addr)),
+            Key::Account(PublicKey::Ed25519(ed25519)) => write!(f, "Key::Account({})", ed25519),
             Key::Hash(addr) => write!(f, "Key::Hash({})", HexFmt(addr)),
             Key::URef(uref) => write!(f, "Key::{}", uref), /* Display impl for URef will append */
             // URef(…).
@@ -266,10 +257,10 @@ impl From<URef> for Key {
 impl ToBytes for Key {
     fn to_bytes(&self) -> Result<Vec<u8>, Error> {
         match self {
-            Key::Account(addr) => {
-                let mut result = Vec::with_capacity(KEY_ACCOUNT_SERIALIZED_LENGTH);
+            Key::Account(public_key) => {
+                let mut result = Vec::with_capacity(KEY_ACCOUNT_SERIALIZED_MAX_LENGTH);
                 result.push(ACCOUNT_ID);
-                result.append(&mut addr.to_bytes()?);
+                result.append(&mut public_key.to_bytes()?);
                 Ok(result)
             }
             Key::Hash(hash) => {
@@ -300,8 +291,8 @@ impl FromBytes for Key {
         let (id, rest): (u8, &[u8]) = FromBytes::from_bytes(bytes)?;
         match id {
             ACCOUNT_ID => {
-                let (addr, rem): ([u8; KEY_ACCOUNT_LENGTH], &[u8]) = FromBytes::from_bytes(rest)?;
-                Ok((Key::Account(addr), rem))
+                let (public_key, rem): (PublicKey, &[u8]) = FromBytes::from_bytes(rest)?;
+                Ok((Key::Account(public_key), rem))
             }
             HASH_ID => {
                 let (hash, rem): ([u8; KEY_HASH_LENGTH], &[u8]) = FromBytes::from_bytes(rest)?;
@@ -417,10 +408,11 @@ mod tests {
     fn should_display_key() {
         let expected_hash = core::iter::repeat("0").take(64).collect::<String>();
         let addr_array = [0u8; 32];
-        let account_key = Key::Account(addr_array);
+        let public_key = PublicKey::ed25519_from(addr_array);
+        let account_key = Key::Account(public_key);
         assert_eq!(
             format!("{}", account_key),
-            format!("Key::Account({})", expected_hash)
+            format!("Key::Account(Ed25519({}))", expected_hash)
         );
         let uref_key = Key::URef(URef::new(addr_array, AccessRights::READ));
         assert_eq!(
@@ -536,8 +528,9 @@ mod tests {
     #[test]
     fn check_key_account_getters() {
         let account = [42; 32];
-        let key1 = Key::Account(account);
-        assert_eq!(key1.into_account(), Some(account));
+        let public_key = PublicKey::ed25519_from(account);
+        let key1 = Key::Account(public_key);
+        assert_eq!(key1.into_account(), Some(public_key));
         assert!(key1.into_hash().is_none());
         assert!(key1.as_uref().is_none());
         assert!(key1.into_local().is_none());
@@ -579,7 +572,7 @@ mod tests {
     #[test]
     fn key_size_hint() {
         let mut sizes = vec![
-            KEY_ACCOUNT_SERIALIZED_LENGTH,
+            KEY_ACCOUNT_SERIALIZED_MAX_LENGTH,
             KEY_HASH_SERIALIZED_LENGTH,
             KEY_UREF_SERIALIZED_LENGTH,
             KEY_LOCAL_SERIALIZED_LENGTH,

@@ -13,22 +13,10 @@ networks:
     external: true
   cl-||TAG||-5:
     external: true
-  cl-||TAG||-6:
-    external: true
-  cl-||TAG||-7:
-    external: true
-  cl-||TAG||-8:
-    external: true
-  cl-||TAG||-9:
-    external: true
-  cl-||TAG||-10:
-    external: true
-
-
 
 services:
   test:
-    image: casperlabs/integration-testing:||TAG||
+    image: casperlabs/integration-testing:||IMAGE_TAG||
     container_name: test-||TAG||
     hostname: test-||TAG||
     volumes:
@@ -41,11 +29,6 @@ services:
       - cl-||TAG||-3
       - cl-||TAG||-4
       - cl-||TAG||-5
-      - cl-||TAG||-6
-      - cl-||TAG||-7
-      - cl-||TAG||-8
-      - cl-||TAG||-9
-      - cl-||TAG||-10
     environment:
       - TAG_NAME=${TAG_NAME}
-      - TEST_RUN_ARGS=${TEST_RUN_ARGS}
+      - UNIQUE_RUN_NUM=${UNIQUE_RUN_NUM}

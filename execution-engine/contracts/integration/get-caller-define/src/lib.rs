@@ -15,7 +15,7 @@ fn test_get_caller() {
     // public key == 'ae7cd84d61ff556806691be61e6ab217791905677adbbe085b8c540d916e8393'
     // Will fail if we ever change that.
     let caller = runtime::get_caller();
-    let expected_caller = PublicKey::new([
+    let expected_caller = PublicKey::ed25519_from([
         174, 124, 216, 77, 97, 255, 85, 104, 6, 105, 27, 230, 30, 106, 178, 23, 121, 25, 5, 103,
         122, 219, 190, 8, 91, 140, 84, 13, 145, 110, 131, 147,
     ]);

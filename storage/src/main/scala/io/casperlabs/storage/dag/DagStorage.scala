@@ -184,6 +184,16 @@ trait DagRepresentation[F[_]] extends DagLookup[F] {
 
   def topoSortTail(tailLength: Int): fs2.Stream[F, Vector[BlockInfo]]
 
+  /** Similar to [[topoSort]] but in addition filters blocks by a validator*/
+  def topoSortValidator(
+      validator: Validator,
+      blocksNum: Int,
+      endBlockNumber: Long
+  ): fs2.Stream[F, Vector[BlockInfo]]
+
+  /** Similar to [[topoSortTail]] but in addition filters blocks by a validator*/
+  def topoSortTailValidator(validator: Validator, blocksNum: Int): fs2.Stream[F, Vector[BlockInfo]]
+
   /** Get a global representation, which can be used in:
     * 1) naive casper mode, without eras
     * 2) in the gossiping, when nodes ask each other for their latest blocks
@@ -211,6 +221,7 @@ trait DagRepresentation[F[_]] extends DagLookup[F] {
     * The DAG itself, i.e. the parent child relationships are unaffected.
     */
   def latestInEra(keyBlockHash: BlockHash): F[EraTipRepresentation[F]]
+
 }
 
 object DagRepresentation {

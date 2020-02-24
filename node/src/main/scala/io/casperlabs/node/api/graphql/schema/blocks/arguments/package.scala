@@ -17,11 +17,26 @@ package object arguments {
       description = "How many of the top ranks of the DAG to show"
     )
 
+  val BlocksNum =
+    Argument(
+      "blocksNum",
+      IntType,
+      description = "How many of the recent blocks of a validator to show"
+    )
+
   val MaxRank =
     Argument(
       "maxRank",
       OptionInputType(LongType),
       "The maximum rank to to go back from, 0 means go from the current tip of the DAG",
+      0L
+    )
+
+  val MaxBlockSeqNum =
+    Argument(
+      "maxBlockSeqNum",
+      OptionInputType(LongType),
+      "The maximum block sequential number by a validator to to go back from, 0 means go from the latest block of a validator",
       0L
     )
 
@@ -31,6 +46,12 @@ package object arguments {
       StringType,
       description = "Base-16 hash of a deploy, must be 64 characters long"
     )
+
+  val PublicKey = Argument(
+    "publicKey",
+    StringType,
+    description = "Base-16 or Base-64 public key"
+  )
 
   val AccountPublicKeyBase16 =
     Argument(

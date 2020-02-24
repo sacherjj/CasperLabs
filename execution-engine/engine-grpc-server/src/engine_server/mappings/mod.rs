@@ -11,7 +11,7 @@ use std::{
 };
 
 use engine_core::{engine_state, DEPLOY_HASH_LENGTH};
-use types::account::PUBLIC_KEY_LENGTH;
+use types::account::ED25519_LENGTH;
 
 pub use transforms::TransformMap;
 
@@ -46,7 +46,7 @@ pub enum MappingError {
 
 impl MappingError {
     pub fn invalid_public_key_length(actual: usize) -> Self {
-        let expected = PUBLIC_KEY_LENGTH;
+        let expected = ED25519_LENGTH;
         MappingError::InvalidPublicKeyLength { expected, actual }
     }
 

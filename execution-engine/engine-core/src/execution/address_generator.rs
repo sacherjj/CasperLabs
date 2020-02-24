@@ -16,7 +16,7 @@ pub struct AddressGenerator(ChaChaRng);
 
 impl AddressGenerator {
     /// Creates an [`AddressGenerator`] from a 32-byte hash digest and [`Phase`].
-    pub fn new(hash: [u8; 32], phase: Phase) -> AddressGenerator {
+    pub fn new(hash: &[u8], phase: Phase) -> AddressGenerator {
         AddressGeneratorBuilder::new()
             .seed_with(&hash)
             .seed_with(&[phase as u8])
@@ -66,8 +66,8 @@ mod tests {
 
     #[test]
     fn should_generate_different_numbers_for_different_seeds() {
-        let mut ag_a = AddressGenerator::new(DEPLOY_HASH_1, Phase::Session);
-        let mut ag_b = AddressGenerator::new(DEPLOY_HASH_2, Phase::Session);
+        let mut ag_a = AddressGenerator::new(&DEPLOY_HASH_1, Phase::Session);
+        let mut ag_b = AddressGenerator::new(&DEPLOY_HASH_2, Phase::Session);
         let random_a = ag_a.create_address();
         let random_b = ag_b.create_address();
 
@@ -76,8 +76,8 @@ mod tests {
 
     #[test]
     fn should_generate_same_numbers_for_same_seed() {
-        let mut ag_a = AddressGenerator::new(DEPLOY_HASH_1, Phase::Session);
-        let mut ag_b = AddressGenerator::new(DEPLOY_HASH_1, Phase::Session);
+        let mut ag_a = AddressGenerator::new(&DEPLOY_HASH_1, Phase::Session);
+        let mut ag_b = AddressGenerator::new(&DEPLOY_HASH_1, Phase::Session);
         let random_a = ag_a.create_address();
         let random_b = ag_b.create_address();
 
@@ -86,9 +86,9 @@ mod tests {
 
     #[test]
     fn should_not_generate_same_numbers_for_different_phase() {
-        let mut ag_a = AddressGenerator::new(DEPLOY_HASH_1, Phase::Payment);
-        let mut ag_b = AddressGenerator::new(DEPLOY_HASH_1, Phase::Session);
-        let mut ag_c = AddressGenerator::new(DEPLOY_HASH_1, Phase::FinalizePayment);
+        let mut ag_a = AddressGenerator::new(&DEPLOY_HASH_1, Phase::Payment);
+        let mut ag_b = AddressGenerator::new(&DEPLOY_HASH_1, Phase::Session);
+        let mut ag_c = AddressGenerator::new(&DEPLOY_HASH_1, Phase::FinalizePayment);
         let random_a = ag_a.create_address();
         let random_b = ag_b.create_address();
         let random_c = ag_c.create_address();

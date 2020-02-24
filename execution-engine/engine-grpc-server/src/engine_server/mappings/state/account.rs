@@ -17,7 +17,7 @@ impl From<Account> for state::Account {
     fn from(mut account: Account) -> Self {
         let mut pb_account = state::Account::new();
 
-        pb_account.set_public_key(account.pub_key().to_vec());
+        pb_account.set_public_key(account.public_key().as_bytes().to_vec());
 
         let named_keys = mem::replace(account.named_keys_mut(), BTreeMap::new());
         let pb_named_keys: Vec<NamedKey> = NamedKeyMap::new(named_keys).into();
@@ -92,7 +92,7 @@ impl TryFrom<state::Account> for Account {
         };
 
         let account = Account::new(
-            public_key,
+            PublicKey::ed25519_from(public_key),
             named_keys.into_inner(),
             main_purse,
             associated_keys,
@@ -105,7 +105,7 @@ impl TryFrom<state::Account> for Account {
 impl From<(&PublicKey, &Weight)> for Account_AssociatedKey {
     fn from((public_key, weight): (&PublicKey, &Weight)) -> Self {
         let mut pb_associated_key = Account_AssociatedKey::new();
-        pb_associated_key.set_public_key(public_key.to_vec());
+        pb_associated_key.set_public_key(public_key.as_bytes().to_vec());
         pb_associated_key.set_weight(weight.value().into());
         pb_associated_key
     }
@@ -115,7 +115,7 @@ impl TryFrom<Account_AssociatedKey> for (PublicKey, Weight) {
     type Error = ParsingError;
 
     fn try_from(pb_associated_key: Account_AssociatedKey) -> Result<Self, Self::Error> {
-        let public_key = PublicKey::new(mappings::vec_to_array(
+        let public_key = PublicKey::ed25519_from(mappings::vec_to_array(
             pb_associated_key.public_key,
             "Protobuf Account::AssociatedKey",
         )?);

@@ -135,7 +135,7 @@ object StorageFixture {
           Flyway
             .configure()
             .dataSource(ds)
-            .locations(new Location("classpath:/db/migration"))
+            .locations(new Location("classpath:db/migration"))
         conf.load()
       }
       flyway.migrate()

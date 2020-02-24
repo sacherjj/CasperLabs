@@ -25,8 +25,13 @@ import io.netty.handler.ssl.util.SimpleTrustManagerFactory
 import javax.net.ssl._
 import monix.eval.Task
 import monix.execution.Scheduler
+import monix.execution.CancelableFuture
+import monix.execution.Scheduler.Implicits.global
 
 import scala.util.Either
+import monix.execution.Cancelable
+import scala.concurrent.duration._
+import scala.concurrent.Await
 
 class GrpcDeployService(conn: ConnectOptions, scheduler: Scheduler)
     extends DeployService[Task]
@@ -136,12 +141,48 @@ class GrpcDeployService(conn: ConnectOptions, scheduler: Scheduler)
   def showDeploy(
       hash: String,
       bytesStandard: Boolean,
-      json: Boolean
+      json: Boolean,
+      waitForProcessed: Boolean,
+      timeoutSeconds: Long
   ): Task[Either[Throwable, String]] =
-    casperServiceStub
-      .getDeployInfo(GetDeployInfoRequest(hash, view = DeployInfo.View.BASIC))
-      .map(Printer.print(_, bytesStandard, json))
-      .attempt
+    if (waitForProcessed) {
+      val startTime   = System.currentTimeMillis()
+      val timeoutTime = startTime + timeoutSeconds * 1000
+
+      def deployInfo(sleepDuration: FiniteDuration): Task[DeployInfo] =
+        Task.sleep(sleepDuration) >> casperServiceStub.getDeployInfo(
+          GetDeployInfoRequest(hash, view = DeployInfo.View.BASIC)
+        )
+
+      def expired: Boolean = System.currentTimeMillis() > timeoutTime
+
+      def notPending(deployInfo: DeployInfo): Boolean =
+        deployInfo.status.forall(_.state match {
+          case DeployInfo.State.PENDING => false
+          case _                        => true
+        })
+
+      def deployInfos(sleepDuration: FiniteDuration): Task[String] =
+        for {
+          di <- if (expired) {
+                 Task.raiseError(new RuntimeException("Timeout."))
+               } else {
+                 deployInfo(sleepDuration)
+               }
+          result <- if (notPending(di)) {
+                     Task.pure(Printer.print(di, bytesStandard, json))
+                   } else {
+                     deployInfos(1.second)
+                   }
+        } yield result
+
+      deployInfos(Duration.Zero).attempt
+    } else {
+      casperServiceStub
+        .getDeployInfo(GetDeployInfoRequest(hash, view = DeployInfo.View.BASIC))
+        .map(Printer.print(_, bytesStandard, json))
+        .attempt
+    }
 
   def showDeploys(
       hash: String,

@@ -69,7 +69,7 @@ use crate::{
 pub const MAX_PAYMENT: u64 = 10_000_000;
 pub const CONV_RATE: u64 = 10;
 
-pub const SYSTEM_ACCOUNT_ADDR: [u8; 32] = [0u8; 32];
+pub const SYSTEM_ACCOUNT_ADDR: PublicKey = PublicKey::ed25519_from([0u8; 32]);
 
 const GENESIS_INITIAL_BLOCKTIME: u64 = 0;
 const MINT_METHOD_NAME: &str = "mint";
@@ -182,7 +182,7 @@ where
         };
 
         let address_generator = {
-            let generator = AddressGenerator::new(install_deploy_hash.into(), phase);
+            let generator = AddressGenerator::new(&install_deploy_hash.value(), phase);
             Rc::new(RefCell::new(generator))
         };
 
@@ -325,11 +325,8 @@ where
                     .into_iter()
                     .map(|account| (account, account_named_keys.clone()))
                     .collect();
-                let system_account = GenesisAccount::new(
-                    PublicKey::new(SYSTEM_ACCOUNT_ADDR),
-                    Motes::zero(),
-                    Motes::zero(),
-                );
+                let system_account =
+                    GenesisAccount::new(SYSTEM_ACCOUNT_ADDR, Motes::zero(), Motes::zero());
                 ret.push((system_account, system_account_named_keys));
                 ret
             };
@@ -360,9 +357,11 @@ where
                 let base_key = Key::URef(mint_reference);
                 let authorization_keys: BTreeSet<PublicKey> = BTreeSet::new();
                 let account_public_key = account.public_key();
+                // NOTE: As Ed25519 keys are currently supported by chainspec, PublicKey::value
+                // returns raw bytes of it
                 let purse_creation_deploy_hash = account_public_key.value();
                 let address_generator = {
-                    let generator = AddressGenerator::new(purse_creation_deploy_hash, phase);
+                    let generator = AddressGenerator::new(&account_public_key.to_bytes()?, phase);
                     Rc::new(RefCell::new(generator))
                 };
                 let system_contract_cache = SystemContractCache::clone(&self.system_contract_cache);
@@ -388,11 +387,11 @@ where
                 )?;
 
                 // ...and write that account to global state...
-                let key = Key::Account(account_public_key.value());
+                let key = Key::Account(account_public_key);
                 let value = {
                     let main_purse = mint_result?;
                     StoredValue::Account(Account::create(
-                        account_public_key.value(),
+                        account_public_key,
                         named_keys,
                         main_purse,
                     ))
@@ -516,7 +515,7 @@ where
                 let initial_base_key = Key::Account(SYSTEM_ACCOUNT_ADDR);
                 let authorization_keys = {
                     let mut ret = BTreeSet::new();
-                    ret.insert(PublicKey::new(SYSTEM_ACCOUNT_ADDR));
+                    ret.insert(SYSTEM_ACCOUNT_ADDR);
                     ret
                 };
 
@@ -536,7 +535,7 @@ where
                 let gas_limit = Gas::new(std::u64::MAX.into());
                 let phase = Phase::System;
                 let address_generator = {
-                    let generator = AddressGenerator::new(pre_state_hash.into(), phase);
+                    let generator = AddressGenerator::new(&pre_state_hash.value(), phase);
                     Rc::new(RefCell::new(generator))
                 };
                 let state = Rc::clone(&tracking_copy);
@@ -760,7 +759,7 @@ where
 
         let session = deploy_item.session;
         let payment = deploy_item.payment;
-        let address = Key::Account(deploy_item.address.value());
+        let address = Key::Account(deploy_item.address);
         let authorization_keys = deploy_item.authorization_keys;
         let deploy_hash = deploy_item.deploy_hash;
 
