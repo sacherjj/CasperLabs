@@ -144,15 +144,17 @@ class GrpcDeployService(conn: ConnectOptions, scheduler: Scheduler)
       json: Boolean,
       waitForProcessed: Boolean,
       timeoutSeconds: FiniteDuration
-  ): Task[Either[Throwable, String]] =
+  ): Task[Either[Throwable, String]] = {
+    def deployInfoF =
+      casperServiceStub.getDeployInfo(GetDeployInfoRequest(hash, view = DeployInfo.View.BASIC))
+
     if (waitForProcessed) {
       val startTime   = System.currentTimeMillis()
-      val timeoutTime = startTime + timeoutSeconds.toSeconds
+      val timeoutTime = startTime + timeoutSeconds.toSeconds * 1000
+      val delay : FiniteDuration = 1.second
 
       def deployInfo(sleepDuration: FiniteDuration): Task[DeployInfo] =
-        Task.sleep(sleepDuration) >> casperServiceStub.getDeployInfo(
-          GetDeployInfoRequest(hash, view = DeployInfo.View.BASIC)
-        )
+        Task.sleep(sleepDuration) >> deployInfoF
 
       def expired: Boolean = System.currentTimeMillis() > timeoutTime
 
@@ -162,27 +164,31 @@ class GrpcDeployService(conn: ConnectOptions, scheduler: Scheduler)
           case _                        => true
         })
 
-      def deployInfos(sleepDuration: FiniteDuration): Task[String] =
+      def loop(sleepDuration: FiniteDuration): Task[String] =
         for {
           di <- if (expired) {
-                 Task.raiseError(new RuntimeException("Timeout."))
+                 Task.raiseError(
+                   new java.util.concurrent.TimeoutException(
+                     "Timeout waiting for the deploy to reach non-pending state."
+                   )
+                 )
                } else {
                  deployInfo(sleepDuration)
                }
           result <- if (notPending(di)) {
                      Task.pure(Printer.print(di, bytesStandard, json))
                    } else {
-                     deployInfos(1.second)
+                     loop(sleepDuration)
                    }
         } yield result
 
-      deployInfos(Duration.Zero).attempt
+      loop(delay).attempt
     } else {
-      casperServiceStub
-        .getDeployInfo(GetDeployInfoRequest(hash, view = DeployInfo.View.BASIC))
+      deployInfoF
         .map(Printer.print(_, bytesStandard, json))
         .attempt
     }
+  }
 
   def showDeploys(
       hash: String,
