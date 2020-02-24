@@ -341,7 +341,8 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
         for {
           block   <- insertFirstBlock()
           message = Message.fromBlock(block).get
-          _       <- messageExecutor.effectsAfterAdded(message)
+          wait    <- messageExecutor.effectsAfterAdded(message)
+          _       <- wait
           events  <- eventEmitter.events
         } yield {
           forExactly(1, events) { event =>
@@ -373,7 +374,8 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
         for {
           block   <- insertFirstBlock()
           message = Message.fromBlock(block).get
-          _       <- messageExecutor.effectsAfterAdded(message)
+          wait    <- messageExecutor.effectsAfterAdded(message)
+          _       <- wait
           _       <- messageAddedRef.get shouldBeF Some(message)
           _       <- FinalityStorage[Task].isFinalized(block.blockHash) shouldBeF true
           events  <- eventEmitter.events
@@ -394,7 +396,8 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
           _       <- DeployStorage[Task].writer.addAsPending(deploys)
           _       <- BlockStorage[Task].put(block, BlockEffects.empty.effects)
           message = Message.fromBlock(block).get
-          _       <- messageExecutor.effectsAfterAdded(message)
+          wait    <- messageExecutor.effectsAfterAdded(message)
+          _       <- wait
           statuses <- deploys.traverse { d =>
                        DeployStorage[Task].reader.getBufferedStatus(d.deployHash)
                      }
