@@ -6,10 +6,11 @@ use crate::accumulator::Pusher;
 
 const TIME_SERIES_DATA_KEY: &str = "time-series-data";
 const PROPERTIES_KEY: &str = "properties";
+const PAYLOAD_KEY: &str = "payload=";
 
 fn extract_time_series_data(line: String) -> Option<String> {
-    if let Some(idx) = line.find("payload=") {
-        let start = idx + 8;
+    if let Some(idx) = line.find(PAYLOAD_KEY) {
+        let start = idx + PAYLOAD_KEY.len();
         let end = line.len();
         let slice = &line[start..end];
         serde_json::from_str::<Value>(slice)

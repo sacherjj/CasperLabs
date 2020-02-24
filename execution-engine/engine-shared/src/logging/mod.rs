@@ -15,6 +15,8 @@ pub use self::terminal_logger::TerminalLogger;
 use crate::newtypes::CorrelationId;
 pub use settings::{Settings, Style};
 
+#[doc(hidden)]
+pub const PAYLOAD_KEY: &str = "payload=";
 pub(crate) const METRIC_METADATA_TARGET: &str = "METRIC";
 pub(crate) const CASPERLABS_METADATA_TARGET: &str = "casperlabs_";
 pub(crate) const MESSAGE_TEMPLATE_KEY: &str = "message_template";

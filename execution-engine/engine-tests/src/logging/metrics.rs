@@ -5,7 +5,7 @@ use serde_json::Value;
 
 use engine_core::engine_state::EngineConfig;
 use engine_shared::{
-    logging::{self, Settings, TerminalLogger},
+    logging::{self, Settings, TerminalLogger, PAYLOAD_KEY},
     newtypes::CorrelationId,
     test_utils,
 };
@@ -44,8 +44,8 @@ impl log::Log for Logger {
 }
 
 fn extract_correlation_id_property(line: &str) -> Option<String> {
-    if let Some(idx) = line.find("payload=") {
-        let start = idx + 8;
+    if let Some(idx) = line.find(PAYLOAD_KEY) {
+        let start = idx + PAYLOAD_KEY.len();
         let end = line.len();
         let slice = &line[start..end];
         serde_json::from_str::<Value>(slice)

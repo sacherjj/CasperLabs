@@ -10,7 +10,7 @@ use log::{debug, error, info, trace, warn, Level, Metadata, Record};
 use serde::{Deserialize, Serialize};
 
 use casperlabs_engine_shared::{
-    logging::{self, Settings, TerminalLogger},
+    logging::{self, Settings, TerminalLogger, PAYLOAD_KEY},
     newtypes::CorrelationId,
 };
 
@@ -110,8 +110,8 @@ pub struct LogLineItem {
 
 impl LogLineItem {
     fn from_log_line(line: String) -> Option<LogLineItem> {
-        if let Some(idx) = line.find("payload=") {
-            let start = idx + 8;
+        if let Some(idx) = line.find(PAYLOAD_KEY) {
+            let start = idx + PAYLOAD_KEY.len();
             let end = line.len();
             let slice = &line[start..end];
             if let Ok(log_line_item) = serde_json::from_str::<LogLineItem>(slice) {
