@@ -345,6 +345,17 @@ def keygen_command(casperlabs_client, args):
     print(f"Keys successfully created in directory: {str(directory.absolute())}")
 
 
+@guarded_command
+def show_peers_command(casperlabs_client, args):
+    peers = casperlabs_client.show_peers()
+    i = 0
+    for i, node in enumerate(peers, 1):
+        print(f"------------- node {i} ---------------")
+        print(hexify(node))
+    print("-----------------------------------------------------")
+    print(f"count: {i}")
+
+
 def check_directory(path):
     if not os.path.exists(path):
         raise argparse.ArgumentTypeError(f"Directory '{path}' does not exist")
@@ -572,6 +583,7 @@ def cli(*arguments) -> int:
            validator-public.pem  # ed25519 public key"""),
                       [[('directory',), dict(type=check_directory, help="Output directory for keys. Should already exists.")]])
 
+    parser.addCommand('show-peers', show_peers_command, "Show peers connected to the node.", [])
     # fmt:on
     return parser.run([str(a) for a in arguments])
 

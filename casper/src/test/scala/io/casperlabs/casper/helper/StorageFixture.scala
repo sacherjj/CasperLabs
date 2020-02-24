@@ -41,7 +41,13 @@ trait StorageFixture { self: Suite =>
   ): R = {
     val testProgram = StorageFixture.createMemoryStorages[Task](scheduler).use {
       case (blockStorage, dagStorage, deployStorage, finalityStorage) =>
-        f(blockStorage)(dagStorage)(deployStorage)(finalityStorage)
+        f(blockStorage)(dagStorage)(deployStorage)(finalityStorage).recover {
+          case ex: org.sqlite.SQLiteException
+              if ex.getMessage.contains("SQL error or missing database") && sys.env.contains(
+                "DRONE_BRANCH"
+              ) =>
+            cancel("NODE-1231")
+        }
     }
     testProgram.unsafeRunSync(scheduler)
   }
@@ -59,7 +65,13 @@ trait StorageFixture { self: Suite =>
       .createMemoryStorage[Task](ec)
       .replicateA(numStorages)
       .use { storages =>
-        f(storages)
+        f(storages).recover {
+          case ex: org.sqlite.SQLiteException
+              if ex.getMessage.contains("SQL error or missing database") && sys.env.contains(
+                "DRONE_BRANCH"
+              ) =>
+            cancel("NODE-1231")
+        }
       }
     // NOTE: When using the TestScheduler we can't call `runSyncUnsafe` on it, it will time out,
     // so we still have to use the normal Scheduler we have here to wait on the test.
