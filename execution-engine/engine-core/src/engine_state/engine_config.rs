@@ -15,7 +15,7 @@ impl EngineConfig {
         self.turbo
     }
 
-    pub fn with_turbo(&mut self, turbo: bool) -> &mut EngineConfig {
+    pub fn with_turbo(mut self, turbo: bool) -> EngineConfig {
         self.turbo = turbo;
         self
     }

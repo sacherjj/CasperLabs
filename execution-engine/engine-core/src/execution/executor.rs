@@ -180,9 +180,7 @@ impl Executor {
                         }
                     }
                 }
-            }
-
-            if runtime.is_proof_of_stake(base_key) {
+            } else if runtime.is_proof_of_stake(base_key) {
                 match runtime.call_host_proof_of_stake(
                     protocol_version,
                     runtime.context().named_keys().to_owned(),

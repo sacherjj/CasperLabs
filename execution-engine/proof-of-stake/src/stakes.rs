@@ -3,9 +3,9 @@ use alloc::{
         btree_map::{Iter, Values},
         BTreeMap,
     },
+    format,
     string::String,
 };
-use core::fmt::Write;
 
 use types::{
     account::PublicKey,
@@ -30,8 +30,6 @@ const MAX_REL_INCREASE: u64 = 1_000_000_000;
 /// The maximum decrease of stakes in millionths of the total stakes in a single unbonding request.
 const MAX_REL_DECREASE: u64 = 900_000;
 
-const WRITE_STRING_EXPECT: &str = "Writing to a string should not fail";
-
 /// The stakes map, assigning the staked amount of motes to each bonded
 /// validator.
 #[derive(Clone, Debug, PartialEq)]
@@ -52,11 +50,9 @@ impl Stakes {
 
     pub fn strings(&self) -> impl Iterator<Item = String> + '_ {
         self.iter().map(|(public_key, balance)| {
-            let mut ret = String::new();
             let key_bytes = public_key.as_bytes();
             let hex_key = base16::encode_lower(&key_bytes);
-            write!(ret, "v_{}_{}", hex_key, balance).expect(WRITE_STRING_EXPECT);
-            ret
+            format!("v_{}_{}", hex_key, balance)
         })
     }
 

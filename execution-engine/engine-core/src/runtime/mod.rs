@@ -1937,9 +1937,7 @@ where
                     &args,
                     &extra_urefs,
                 );
-            }
-
-            if self.is_proof_of_stake(key) {
+            } else if self.is_proof_of_stake(key) {
                 return self.call_host_proof_of_stake(
                     self.context.protocol_version(),
                     contract.take_named_keys(),

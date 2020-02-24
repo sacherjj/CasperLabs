@@ -38,9 +38,7 @@ fn should_commit_with_metrics() {
         InMemoryGlobalState::from_pairs(correlation_id, &mocked_account).unwrap();
 
     let engine_config = if cfg!(feature = "turbo") {
-        let mut tmp = EngineConfig::new();
-        tmp.with_turbo(true);
-        tmp
+        EngineConfig::new().with_turbo(true)
     } else {
         EngineConfig::new()
     };

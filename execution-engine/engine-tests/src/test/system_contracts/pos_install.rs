@@ -28,9 +28,7 @@ const POS_REWARDS_PURSE: &str = "pos_rewards_purse";
 fn should_run_pos_install_contract() {
     let mut builder = WasmTestBuilder::default();
     let engine_config = if cfg!(feature = "turbo") {
-        let mut tmp = EngineConfig::new();
-        tmp.with_turbo(true);
-        tmp
+        EngineConfig::new().with_turbo(true)
     } else {
         EngineConfig::new()
     };

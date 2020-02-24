@@ -86,7 +86,7 @@ const ARG_THREAD_COUNT_VALUE: &str = "NUM";
 const ARG_THREAD_COUNT_HELP: &str = "Worker thread count";
 const ARG_THREAD_COUNT_EXPECT: &str = "expected valid thread count";
 
-// thread count
+// turbo
 const ARG_TURBO: &str = "turbo";
 const ARG_TURBO_SHORT: &str = "z";
 const ARG_TURBO_HELP: &str = "Turbo mode";
@@ -270,9 +270,7 @@ fn get_thread_count(matches: &ArgMatches) -> usize {
 fn get_engine_config(matches: &ArgMatches) -> EngineConfig {
     // feature flags go here
     let turbo = matches.occurrences_of(ARG_TURBO) > 0;
-    let mut cfg = EngineConfig::new();
-    cfg.with_turbo(turbo);
-    cfg
+    EngineConfig::new().with_turbo(turbo)
 }
 
 /// Builds and returns a gRPC server.

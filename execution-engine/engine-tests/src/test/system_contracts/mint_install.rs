@@ -13,9 +13,7 @@ const DEPLOY_HASH_1: [u8; 32] = [1u8; 32];
 fn should_run_mint_install_contract() {
     let mut builder = WasmTestBuilder::default();
     let engine_config = if cfg!(feature = "turbo") {
-        let mut tmp = EngineConfig::new();
-        tmp.with_turbo(true);
-        tmp
+        EngineConfig::new().with_turbo(true)
     } else {
         EngineConfig::new()
     };
