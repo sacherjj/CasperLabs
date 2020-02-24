@@ -277,7 +277,7 @@ object Configuration {
           options.deploy.publicKey.toOption,
           options.deploy.privateKey.toOption,
           options.deploy.waitForProcessed.getOrElse(false),
-          options.deploy.timeoutSeconds.getOrElse(Options.TIMEOUT_SECONDS_DEFAULT),
+          options.deploy.timeoutSeconds.getOrElse(Options.TIMEOUT_SECONDS_DEFAULT.toSeconds),
           options.deploy.bytesStandard(),
           options.deploy.json()
         )
@@ -292,7 +292,7 @@ object Configuration {
         SendDeploy(
           options.sendDeploy.deployPath(),
           options.sendDeploy.waitForProcessed.getOrElse(false),
-          options.sendDeploy.timeoutSeconds.getOrElse(Options.TIMEOUT_SECONDS_DEFAULT),
+          options.sendDeploy.timeoutSeconds.getOrElse(Options.TIMEOUT_SECONDS_DEFAULT.toSeconds),
           options.sendDeploy.bytesStandard(),
           options.sendDeploy.json()
         )

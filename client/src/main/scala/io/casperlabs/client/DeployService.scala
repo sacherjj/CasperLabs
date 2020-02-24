@@ -5,6 +5,7 @@ import io.casperlabs.casper.consensus.state.Value
 import simulacrum.typeclass
 
 import scala.util.Either
+import scala.concurrent.duration._
 
 @typeclass trait DeployService[F[_]] {
   def deploy(
@@ -24,7 +25,7 @@ import scala.util.Either
       bytesStandard: Boolean,
       json: Boolean,
       waitForProcessed: Boolean,
-      timeoutSeconds: Long
+      timeoutSeconds: FiniteDuration
   ): F[Either[Throwable, String]]
   def showBlocks(depth: Int, bytesStandard: Boolean, json: Boolean): F[Either[Throwable, String]]
   def visualizeDag(depth: Int, showJustificationLines: Boolean): F[Either[Throwable, String]]

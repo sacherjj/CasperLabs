@@ -17,6 +17,7 @@ import monix.eval.Task
 import monix.execution.Scheduler
 import logstage.IzLogger
 import scala.concurrent.duration._
+import java.util.concurrent.TimeUnit
 
 object Main {
 
@@ -52,8 +53,15 @@ object Main {
     configuration match {
       case ShowBlock(hash, bytesStandard, json) =>
         DeployRuntime.showBlock[F](hash, bytesStandard, json)
-      case ShowDeploy(hash, bytesStandard, json, waitForProcessed, timeoutSeconds) =>
-        DeployRuntime.showDeploy[F](hash, bytesStandard, json, waitForProcessed, timeoutSeconds)
+      case ShowDeploy(hash, bytesStandard, json, waitForProcessed, timeoutSeconds) => {
+        DeployRuntime.showDeploy[F](
+          hash,
+          bytesStandard,
+          json,
+          waitForProcessed,
+          FiniteDuration(timeoutSeconds, TimeUnit.SECONDS)
+        )
+      }
       case ShowDeploys(hash, bytesStandard, json) =>
         DeployRuntime.showDeploys[F](hash, bytesStandard, json)
       case ShowBlocks(depth, bytesStandard, json) =>
@@ -72,7 +80,7 @@ object Main {
           contracts,
           privateKey,
           waitForProcessed,
-          timeoutSeconds,
+          FiniteDuration(timeoutSeconds, TimeUnit.SECONDS),
           bytesStandard,
           json
         )
@@ -90,7 +98,7 @@ object Main {
           contracts,
           privateKey,
           waitForProcessed,
-          timeoutSeconds,
+          FiniteDuration(timeoutSeconds, TimeUnit.SECONDS),
           bytesStandard,
           json
         )
@@ -110,7 +118,7 @@ object Main {
           recipientPublicKey,
           amount,
           waitForProcessed,
-          timeoutSeconds,
+          FiniteDuration(timeoutSeconds, TimeUnit.SECONDS),
           bytesStandard,
           json
         )
@@ -136,7 +144,7 @@ object Main {
               new String(Files.readAllBytes(file.toPath), StandardCharsets.UTF_8).asLeft[PrivateKey]
           ),
           waitForProcessed = waitForProcessed,
-          timeoutSeconds = timeoutSeconds,
+          timeoutSeconds = FiniteDuration(timeoutSeconds, TimeUnit.SECONDS),
           bytesStandard = bytesStandard,
           json = json
         )
@@ -171,7 +179,13 @@ object Main {
         } yield ()
 
       case SendDeploy(deploy, waitForProcessed, timeoutSeconds, bytesStandard, json) =>
-        DeployRuntime.sendDeploy[F](deploy, waitForProcessed, timeoutSeconds, bytesStandard, json)
+        DeployRuntime.sendDeploy[F](
+          deploy,
+          waitForProcessed,
+          FiniteDuration(timeoutSeconds, TimeUnit.SECONDS),
+          bytesStandard,
+          json
+        )
 
       case PrintDeploy(deploy, bytesStandard, json) =>
         DeployRuntime.printDeploy[F](deploy, bytesStandard, json)

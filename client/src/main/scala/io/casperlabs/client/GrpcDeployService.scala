@@ -143,11 +143,11 @@ class GrpcDeployService(conn: ConnectOptions, scheduler: Scheduler)
       bytesStandard: Boolean,
       json: Boolean,
       waitForProcessed: Boolean,
-      timeoutSeconds: Long
+      timeoutSeconds: FiniteDuration
   ): Task[Either[Throwable, String]] =
     if (waitForProcessed) {
       val startTime   = System.currentTimeMillis()
-      val timeoutTime = startTime + timeoutSeconds * 1000
+      val timeoutTime = startTime + timeoutSeconds.toSeconds
 
       def deployInfo(sleepDuration: FiniteDuration): Task[DeployInfo] =
         Task.sleep(sleepDuration) >> casperServiceStub.getDeployInfo(

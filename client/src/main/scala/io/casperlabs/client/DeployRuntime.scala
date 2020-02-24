@@ -70,7 +70,7 @@ object DeployRuntime {
       bytesStandard: Boolean,
       json: Boolean,
       waitForProcessed: Boolean,
-      timeoutSeconds: Long
+      timeoutSeconds: FiniteDuration
   ): F[Unit] =
     gracefulExit(
       DeployService[F].showDeploy(hash, bytesStandard, json, waitForProcessed, timeoutSeconds)
@@ -120,7 +120,7 @@ object DeployRuntime {
       deployConfig: DeployConfig,
       privateKeyFile: File,
       waitForProcessed: Boolean,
-      timeoutSeconds: Long,
+      timeoutSeconds: FiniteDuration,
       bytesStandard: Boolean = false,
       json: Boolean = false
   ): F[Unit] =
@@ -145,7 +145,7 @@ object DeployRuntime {
       deployConfig: DeployConfig,
       privateKeyFile: File,
       waitForProcessed: Boolean,
-      timeoutSeconds: Long,
+      timeoutSeconds: FiniteDuration,
       bytesStandard: Boolean = false,
       json: Boolean = false
   ): F[Unit] =
@@ -298,7 +298,7 @@ object DeployRuntime {
       recipientPublicKey: PublicKey,
       amount: Long,
       waitForProcessed: Boolean,
-      timeoutSeconds: Long,
+      timeoutSeconds: FiniteDuration,
       bytesStandard: Boolean,
       json: Boolean
   ): F[Unit] =
@@ -338,7 +338,7 @@ object DeployRuntime {
       exit: Boolean = true,
       ignoreOutput: Boolean = false,
       waitForProcessed: Boolean = false,
-      timeoutSeconds: Long = Options.TIMEOUT_SECONDS_DEFAULT,
+      timeoutSeconds: FiniteDuration = Options.TIMEOUT_SECONDS_DEFAULT,
       bytesStandard: Boolean = false,
       json: Boolean = false
   ): F[Unit] =
@@ -439,7 +439,7 @@ object DeployRuntime {
   def sendDeploy[F[_]: Sync: DeployService](
       deployBA: Array[Byte],
       waitForProcessed: Boolean,
-      timeoutSeconds: Long,
+      timeoutSeconds: FiniteDuration,
       bytesStandard: Boolean = false,
       json: Boolean = false
   ): F[Unit] =
@@ -472,7 +472,7 @@ object DeployRuntime {
 
   def deployAndWaitForProcessed[F[_]: Sync: DeployService](
       deploy: Deploy,
-      timeoutSeconds: Long = Options.TIMEOUT_SECONDS_DEFAULT,
+      timeoutSeconds: FiniteDuration = Options.TIMEOUT_SECONDS_DEFAULT,
       bytesStandard: Boolean = false,
       json: Boolean = false
   ): F[Either[Throwable, String]] =
@@ -498,7 +498,7 @@ object DeployRuntime {
       exit: Boolean = true,
       ignoreOutput: Boolean = false,
       waitForProcessed: Boolean = false,
-      timeoutSeconds: Long = Options.TIMEOUT_SECONDS_DEFAULT,
+      timeoutSeconds: FiniteDuration = Options.TIMEOUT_SECONDS_DEFAULT,
       bytesStandard: Boolean = false,
       json: Boolean = false
   ): F[Unit] = {
