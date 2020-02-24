@@ -40,9 +40,10 @@ object DeployRuntime {
       ignoreOutput: Boolean = false
   ): F[Unit] =
     gracefulExit(
-      DeployService[F]
-        .propose()
-        .map(_.map(hash => s"Response: Success! Block $hash created and added.")),
+      (for {
+        _      <- Sync[F].delay(System.err.println("Warning: command propose is deprecated."))
+        result <- DeployService[F].propose()
+      } yield result).map(_.map(hash => s"Response: Success! Block $hash created and added.")),
       exit,
       ignoreOutput
     )
