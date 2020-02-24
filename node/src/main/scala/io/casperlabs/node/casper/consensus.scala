@@ -221,7 +221,7 @@ object Highway {
                                    lfb,
                                    faultToleranceThreshold
                                  )
-            finalizer <- MultiParentFinalizer.empty[F](
+            finalizer <- MultiParentFinalizer.create[F](
                           dag,
                           lfb,
                           finalityDetector

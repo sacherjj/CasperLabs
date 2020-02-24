@@ -38,7 +38,7 @@ class MultiParentFinalizerTest extends FlatSpec with BlockGenerator with Storage
         genesis                                  <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bonds)
         implicit0(fs: MockFinalityStorage[Task]) <- MockFinalityStorage[Task](genesis.blockHash)
         dag                                      <- dagStorage.getRepresentation
-        multiParentFinalizer <- MultiParentFinalizer.empty[Task](
+        multiParentFinalizer <- MultiParentFinalizer.create[Task](
                                  dag,
                                  genesis.blockHash,
                                  MultiParentFinalizerTest.immediateFinalityStub
@@ -85,7 +85,7 @@ class MultiParentFinalizerTest extends FlatSpec with BlockGenerator with Storage
         dag                                      <- dagStorage.getRepresentation
         finalizer                                <- FinalityDetectorVotingMatrix.of[Task](dag, genesis.blockHash, 0.1)
         implicit0(multiParentFinalizer: MultiParentFinalizer[Task]) <- MultiParentFinalizer
-                                                                        .empty[Task](
+                                                                        .create[Task](
                                                                           dag,
                                                                           genesis.blockHash,
                                                                           finalizer

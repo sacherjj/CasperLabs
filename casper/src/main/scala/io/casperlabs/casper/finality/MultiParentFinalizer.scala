@@ -60,11 +60,4 @@ object MultiParentFinalizer {
                       }
         } yield finalized)
     }
-
-  def empty[F[_]: Concurrent: FinalityStorage](
-      dag: DagRepresentation[F],
-      latestLFB: BlockHash,
-      finalityDetector: FinalityDetector[F]
-  ): F[MultiParentFinalizer[F]] =
-    create[F](dag, latestLFB, finalityDetector)
 }

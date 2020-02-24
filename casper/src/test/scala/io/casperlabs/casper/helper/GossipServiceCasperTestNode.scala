@@ -162,7 +162,7 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
           finalityDetector <- FinalityDetectorVotingMatrix
                                .of[F](dag, genesis.blockHash, faultToleranceThreshold)
           implicit0(fs: FinalityStorage[F]) <- MockFinalityStorage[F](genesis.blockHash)
-          multiParentFinalizer <- MultiParentFinalizer.empty(
+          multiParentFinalizer <- MultiParentFinalizer.create(
                                    dag,
                                    genesis.blockHash,
                                    finalityDetector
@@ -263,7 +263,7 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
                 dag                               <- dagStorage.getRepresentation
                 finalityDetector                  <- FinalityDetectorVotingMatrix.of[F](dag, genesis.blockHash, 0.1)
                 implicit0(fs: FinalityStorage[F]) <- MockFinalityStorage[F](genesis.blockHash)
-                multiParentFinalizer <- MultiParentFinalizer.empty(
+                multiParentFinalizer <- MultiParentFinalizer.create(
                                          dag,
                                          genesis.blockHash,
                                          finalityDetector
