@@ -22,9 +22,9 @@ class MockFinalityStorage[F[_]: Monad](
 }
 
 object MockFinalityStorage {
-  def apply[F[_]: Sync](genesis: BlockHash) =
+  def apply[F[_]: Sync](blocks: BlockHash*): F[MockFinalityStorage[F]] =
     for {
-      lastFinalizedRef <- Ref.of[F, BlockHash](genesis)
-      finalizedRef     <- Ref.of[F, Set[BlockHash]](Set(genesis))
+      lastFinalizedRef <- Ref.of[F, BlockHash](blocks.last)
+      finalizedRef     <- Ref.of[F, Set[BlockHash]](blocks.toSet)
     } yield new MockFinalityStorage(lastFinalizedRef, finalizedRef)
 }

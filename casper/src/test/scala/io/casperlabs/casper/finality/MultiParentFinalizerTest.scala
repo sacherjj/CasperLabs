@@ -19,6 +19,7 @@ import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.storage.dag.{DagRepresentation, IndexedDagStorage}
 import monix.eval.Task
 import org.scalatest.FlatSpec
+import io.casperlabs.casper.mocks.MockFinalityStorage
 
 class MultiParentFinalizerTest extends FlatSpec with BlockGenerator with StorageFixture {
 
@@ -34,8 +35,9 @@ class MultiParentFinalizerTest extends FlatSpec with BlockGenerator with Storage
   it should "cache block finalization so it doesn't revisit already finalized blocks." in withStorage {
     implicit blockStorage => implicit dagStorage => _ => _ =>
       for {
-        genesis <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bonds)
-        dag     <- dagStorage.getRepresentation
+        genesis                                  <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bonds)
+        implicit0(fs: MockFinalityStorage[Task]) <- MockFinalityStorage[Task](genesis.blockHash)
+        dag                                      <- dagStorage.getRepresentation
         multiParentFinalizer <- MultiParentFinalizer.empty[Task](
                                  dag,
                                  genesis.blockHash,
@@ -51,10 +53,14 @@ class MultiParentFinalizerTest extends FlatSpec with BlockGenerator with Storage
             a.blockHash
           )
         )
+        _ <- fs.markAsFinalized(
+              newlyFinalizedBlocksA.mainChain,
+              newlyFinalizedBlocksA.secondaryParents
+            )
         c    <- createAndStoreBlockFull[Task](v1, Seq(b, a), Seq.empty, bonds)
         cMsg <- Task.fromTry(Message.fromBlock(c))
-        // `c`'s main parent is `b`, secondary is a. Since `a` was already finalized through `b`,
-        // it should not be returned now.
+        // `c`'s main parent is `b`, secondary is `a`.
+        // Since `a` was already finalized through `b` it should not be returned now.
         newlyFinalizedBlocksB <- multiParentFinalizer.onNewMessageAdded(cMsg).map(_.get)
         _ = assert(
           newlyFinalizedBlocksB.mainChain == c.blockHash && newlyFinalizedBlocksB.secondaryParents.isEmpty
@@ -74,9 +80,10 @@ class MultiParentFinalizerTest extends FlatSpec with BlockGenerator with Storage
         *      \\= C
         */
       for {
-        genesis   <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bonds)
-        dag       <- dagStorage.getRepresentation
-        finalizer <- FinalityDetectorVotingMatrix.of[Task](dag, genesis.blockHash, 0.1)
+        genesis                                  <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bonds)
+        implicit0(fs: MockFinalityStorage[Task]) <- MockFinalityStorage[Task](genesis.blockHash)
+        dag                                      <- dagStorage.getRepresentation
+        finalizer                                <- FinalityDetectorVotingMatrix.of[Task](dag, genesis.blockHash, 0.1)
         implicit0(multiParentFinalizer: MultiParentFinalizer[Task]) <- MultiParentFinalizer
                                                                         .empty[Task](
                                                                           dag,

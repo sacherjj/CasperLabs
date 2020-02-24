@@ -11,6 +11,7 @@ import io.casperlabs.storage.dag.DagRepresentation
 
 import scala.collection.mutable.{IndexedSeq => MutableSeq}
 import io.casperlabs.casper.validation.Validation
+import io.casperlabs.storage.dag.FinalityStorage
 
 object FinalityDetectorUtil {
 
@@ -182,25 +183,30 @@ object FinalityDetectorUtil {
       .map(_._2)
 
   /** Returns a set of blocks that were finalized indirectly when a block from the main chain is finalized. */
-  def finalizedIndirectly[F[_]: Sync](
+  def finalizedIndirectly[F[_]: Sync: FinalityStorage](
       block: BlockHash,
-      finalizedSoFar: Set[BlockHash],
       dag: DagRepresentation[F]
   ): F[Set[BlockHash]] =
     for {
-      finalizedBlocksCache <- Ref[F].of(finalizedSoFar)
+      finalizedBlocksCache <- Ref[F].of(Set.empty[BlockHash])
       finalizedImplicitly <- DagOperations
                               .bfTraverseF[F, BlockHash](List(block))(
                                 hash =>
                                   for {
-                                    finalizedBlocks <- finalizedBlocksCache.get
-                                    notFinalized <- dag
-                                                     .lookupUnsafe(hash)
-                                                     .map(
-                                                       _.parents.filterNot(finalizedBlocks.contains)
-                                                     )
-                                    _ <- finalizedBlocksCache.update(_ ++ notFinalized)
-                                  } yield notFinalized.toList
+                                    parentsNotYetFinalized <- dag
+                                                               .lookupUnsafe(hash)
+                                                               .map(
+                                                                 _.parents
+                                                               )
+                                                               .flatMap(
+                                                                 _.toList.filterA(
+                                                                   FinalityStorage[F]
+                                                                     .isFinalized(_)
+                                                                     .map(!_) // Follow parents that haven't been finalized yet.
+                                                                 )
+                                                               )
+                                    _ <- finalizedBlocksCache.update(_ ++ parentsNotYetFinalized)
+                                  } yield parentsNotYetFinalized.toList
                               )
                               .toList
     } yield finalizedImplicitly.toSet - block // We don't want to include `block`.

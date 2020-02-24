@@ -543,7 +543,7 @@ object MultiParentCasperImpl {
                              lfb,
                              faultToleranceThreshold
                            )
-      implicit0(multiParentFinalizer: MultiParentFinalizer[F]) <- MultiParentFinalizer.empty[F](
+      implicit0(multiParentFinalizer: MultiParentFinalizer[F]) <- MultiParentFinalizer.create[F](
                                                                    dag,
                                                                    lfb,
                                                                    finalityDetector

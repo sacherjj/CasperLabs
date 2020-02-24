@@ -34,6 +34,7 @@ import io.casperlabs.shared.LogStub
 import scala.collection.immutable.Queue
 import scala.concurrent.duration.FiniteDuration
 import scala.concurrent.duration._
+import io.casperlabs.casper.mocks.MockFinalityStorage
 
 @silent("is never used")
 class GossipServiceCasperTestNode[F[_]](
@@ -160,6 +161,7 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
           _            <- blockStorage.put(genesis.blockHash, genesis, Map.empty)
           finalityDetector <- FinalityDetectorVotingMatrix
                                .of[F](dag, genesis.blockHash, faultToleranceThreshold)
+          implicit0(fs: FinalityStorage[F]) <- MockFinalityStorage[F](genesis.blockHash)
           multiParentFinalizer <- MultiParentFinalizer.empty(
                                    dag,
                                    genesis.blockHash,
@@ -255,11 +257,12 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
                 casperState <- Cell.mvarCell[F, CasperState](
                                 CasperState()
                               )
-                semaphoreMap     <- SemaphoreMap[F, ByteString](1)
-                semaphore        <- Semaphore[F](1)
-                _                <- blockStorage.put(genesis.blockHash, genesis, Map.empty)
-                dag              <- dagStorage.getRepresentation
-                finalityDetector <- FinalityDetectorVotingMatrix.of[F](dag, genesis.blockHash, 0.1)
+                semaphoreMap                      <- SemaphoreMap[F, ByteString](1)
+                semaphore                         <- Semaphore[F](1)
+                _                                 <- blockStorage.put(genesis.blockHash, genesis, Map.empty)
+                dag                               <- dagStorage.getRepresentation
+                finalityDetector                  <- FinalityDetectorVotingMatrix.of[F](dag, genesis.blockHash, 0.1)
+                implicit0(fs: FinalityStorage[F]) <- MockFinalityStorage[F](genesis.blockHash)
                 multiParentFinalizer <- MultiParentFinalizer.empty(
                                          dag,
                                          genesis.blockHash,
