@@ -45,12 +45,13 @@ pub(crate) struct StructuredMessage {
     priority: Priority,
     message_type: String,
     message_type_version: MessageTypeVersion,
+    message_id: MessageId,
     description: String,
     properties: MessageProperties,
 }
 
 impl StructuredMessage {
-    pub fn new(log_level: String, properties: MessageProperties) -> Self {
+    pub fn new(log_level: String, message_id: MessageId, properties: MessageProperties) -> Self {
         let timestamp = TimestampRfc3999::default();
         let process_id = *PROCESS_ID;
         let process_name = PROCESS_NAME.clone();
@@ -69,6 +70,7 @@ impl StructuredMessage {
             priority,
             message_type,
             message_type_version,
+            message_id,
             description,
             properties,
         }
@@ -137,6 +139,15 @@ impl Serialize for MessageTypeVersion {
     {
         let s = format!("{}.{}.{}", self.0.major, self.0.minor, self.0.patch);
         serializer.serialize_str(&s)
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Serialize)]
+pub(crate) struct MessageId(usize);
+
+impl MessageId {
+    pub fn new(id: usize) -> MessageId {
+        MessageId(id)
     }
 }
 
@@ -392,7 +403,7 @@ mod tests {
         let mut properties = MessageProperties::default();
         properties.insert(DEFAULT_MESSAGE_KEY.to_string(), test_msg);
 
-        let l = StructuredMessage::new("Error".to_string(), properties);
+        let l = StructuredMessage::new("Error".to_string(), MessageId::new(1), properties);
 
         assert!(
             should_have_rfc3339_timestamp(&l),

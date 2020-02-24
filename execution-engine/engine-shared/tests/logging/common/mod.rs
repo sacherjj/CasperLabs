@@ -104,6 +104,7 @@ pub struct LogLineItem {
     priority: u8,
     message_type: String,
     message_type_version: String,
+    message_id: usize,
     description: String,
     properties: BTreeMap<String, String>,
 }

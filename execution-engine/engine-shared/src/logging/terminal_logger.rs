@@ -1,7 +1,9 @@
+use std::sync::atomic::{AtomicUsize, Ordering};
+
 use log::{Level, LevelFilter, Log, Metadata, Record};
 
 use crate::logging::{
-    structured_message::{MessageProperties, StructuredMessage, TimestampRfc3999},
+    structured_message::{MessageId, MessageProperties, StructuredMessage, TimestampRfc3999},
     Settings, Style, CASPERLABS_METADATA_TARGET, DEFAULT_MESSAGE_KEY, METRIC_METADATA_TARGET,
 };
 
@@ -11,6 +13,7 @@ pub struct TerminalLogger {
     max_level: LevelFilter,
     metrics_enabled: bool,
     style: Style,
+    next_message_id: AtomicUsize,
 }
 
 impl TerminalLogger {
@@ -19,6 +22,7 @@ impl TerminalLogger {
             max_level: settings.max_level(),
             metrics_enabled: settings.enable_metrics(),
             style: settings.style(),
+            next_message_id: AtomicUsize::new(0),
         }
     }
 
@@ -39,8 +43,13 @@ impl TerminalLogger {
                     );
                 }
 
-                let structured_message =
-                    StructuredMessage::new(level_to_str(record).to_string(), properties);
+                let message_id =
+                    MessageId::new(self.next_message_id.fetch_add(1, Ordering::SeqCst));
+                let structured_message = StructuredMessage::new(
+                    level_to_str(record).to_string(),
+                    message_id,
+                    properties,
+                );
                 format!("{}", structured_message)
             }
             Style::HumanReadable => {
