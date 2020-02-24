@@ -8,8 +8,12 @@ import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.catscontrib.MonadThrowable
 import cats.implicits._
+import shapeless.tag.@@
+import Message.{JRank, MainRank}
 
 import scala.util.{Failure, Success, Try}
+import scala.reflect.quasiquotes.Rank
+import shapeless.tag
 
 /** A sum type representing message types that can be exchanged between validators.
   *
@@ -22,16 +26,24 @@ sealed trait Message {
   val messageHash: Id
   val validatorId: ByteString
   val timestamp: Long
+  val jRank: JRank
+  val mainRank: MainRank
   val parentBlock: Id
   val justifications: Seq[consensus.Block.Justification]
-  val rank: Long
   val validatorMsgSeqNum: Int
   val signature: consensus.Signature
+  val roundId: Long
+
+  // Returns the `keyBlockHash`, but it was considered unintuitive after a while.
+  val eraId: Id
 
   val parents: Seq[Id]
   val blockSummary: BlockSummary
 
   val validatorPrevMessageHash: Id
+
+  def isBlock: Boolean
+  def isBallot: Boolean = !isBlock
 
   def isGenesisLike: Boolean =
     this.parents.isEmpty &&
@@ -40,13 +52,25 @@ sealed trait Message {
 }
 
 object Message {
+  sealed trait JRankTag
+  sealed trait MainRankTag
+
+  type JRank = Long @@ JRankTag
+  def asJRank(l: Long): JRank = l.asInstanceOf[JRank]
+
+  type MainRank = Long @@ MainRankTag
+  def asMainRank(l: Long): MainRank = l.asInstanceOf[MainRank]
+
   case class Block private (
       messageHash: Message#Id,
       validatorId: ByteString,
       timestamp: Long,
+      roundId: Long,
+      eraId: Message#Id,
       parentBlock: Message#Id,
       justifications: Seq[consensus.Block.Justification],
-      rank: Long,
+      jRank: JRank,
+      mainRank: MainRank,
       validatorMsgSeqNum: Int,
       signature: consensus.Signature,
       blockSummary: BlockSummary,
@@ -64,21 +88,27 @@ object Message {
     lazy val weightMap: Map[ByteString, Weight] = blockSummary.getHeader.getState.bonds.map {
       case Bond(validatorPk, stake) => validatorPk -> Weight(stake)
     }.toMap
+
+    def isBlock: Boolean = true
   }
 
   case class Ballot private (
       messageHash: Message#Id,
       validatorId: ByteString,
       timestamp: Long,
+      roundId: Long,
+      eraId: Message#Id,
       parentBlock: Message#Id,
       justifications: Seq[consensus.Block.Justification],
-      rank: Long,
+      jRank: JRank,
+      mainRank: MainRank,
       validatorMsgSeqNum: Int,
       signature: consensus.Signature,
       blockSummary: BlockSummary,
       validatorPrevMessageHash: Message#Id
   ) extends Message {
     override val parents: Seq[Id] = Seq(parentBlock)
+    def isBlock: Boolean          = false
   }
 
   def fromBlockSummary(b: consensus.BlockSummary): Try[Message] =
@@ -86,10 +116,13 @@ object Message {
       val messageHash        = b.blockHash
       val header             = b.getHeader
       val timestamp          = header.timestamp
+      val roundId            = header.roundId
+      val keyBlockHash       = header.keyBlockHash
       val parentBlock        = header.parentHashes.headOption.getOrElse(ByteString.EMPTY)
       val validatorId        = header.validatorPublicKey
       val justifications     = header.justifications
-      val rank               = header.rank
+      val jRank              = asJRank(header.jRank)
+      val mainRank           = asMainRank(header.mainRank)
       val validatorMsgSeqNum = header.validatorBlockSeqNum
       val role               = header.messageType
       val signature          = b.getSignature
@@ -102,9 +135,12 @@ object Message {
               messageHash,
               validatorId,
               timestamp,
+              roundId,
+              keyBlockHash,
               parentBlock,
               justifications,
-              rank,
+              jRank,
+              mainRank,
               validatorMsgSeqNum,
               signature,
               b,
@@ -117,9 +153,12 @@ object Message {
               messageHash,
               validatorId,
               timestamp,
+              roundId,
+              keyBlockHash,
               parentBlock,
               justifications,
-              rank,
+              jRank,
+              mainRank,
               validatorMsgSeqNum,
               signature,
               b,

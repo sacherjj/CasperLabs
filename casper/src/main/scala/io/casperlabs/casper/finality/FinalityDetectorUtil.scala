@@ -10,6 +10,7 @@ import io.casperlabs.models.Message
 import io.casperlabs.storage.dag.DagRepresentation
 
 import scala.collection.mutable.{IndexedSeq => MutableSeq}
+import io.casperlabs.casper.validation.Validation
 
 object FinalityDetectorUtil {
 
@@ -72,7 +73,7 @@ object FinalityDetectorUtil {
       validators: Set[Validator]
   ): F[Map[Validator, Level]] =
     panoramaOfBlockByValidators(blockDag, block, validators)
-      .map(_.mapValues(_.rank))
+      .map(_.mapValues(_.jRank))
 
   /**
     * Get level zero messages of the specified validator and specified candidateBlock
@@ -144,7 +145,8 @@ object FinalityDetectorUtil {
       blockSummary: Message
   ): F[MutableSeq[Level]] =
     for {
-      equivocators <- dag.getEquivocators
+      equivocators <- if (Validation.isHighway) dag.getEquivocatorsInEra(blockSummary.eraId)
+                     else dag.getEquivocators
       latestBlockDagLevelAsMap <- FinalityDetectorUtil
                                    .panoramaDagLevelsOfBlock(
                                      dag,

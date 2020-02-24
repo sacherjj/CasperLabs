@@ -3,12 +3,12 @@
 extern crate alloc;
 
 use alloc::{collections::BTreeMap, string::String};
-use core::fmt::Write;
 
 use contract::{
     contract_api::{runtime, storage},
     unwrap_or_revert::UnwrapOrRevert,
 };
+use proof_of_stake::Stakes;
 use types::{
     account::PublicKey, system_contract_errors::mint, AccessRights, ApiError, CLValue, ContractRef,
     Key, URef, U512,
@@ -42,24 +42,17 @@ pub extern "C" fn call() {
         runtime::get_arg(Args::GenesisValidators as u32)
             .unwrap_or_revert_with(ApiError::MissingArgument)
             .unwrap_or_revert_with(ApiError::InvalidArgument);
+
+    let stakes = Stakes::new(genesis_validators);
+
     // Add genesis validators to PoS contract object.
     // For now, we are storing validators in `named_keys` map of the PoS contract
     // in the form: key: "v_{validator_pk}_{validator_stake}", value: doesn't
     // matter.
-    let mut named_keys: BTreeMap<String, Key> = genesis_validators
-        .iter()
-        .map(|(pub_key, balance)| {
-            let key_bytes = pub_key.as_bytes();
-            let hex_key = base16::encode_lower(&key_bytes);
-            let mut uref = String::new();
-            uref.write_fmt(format_args!("v_{}_{}", hex_key, balance))
-                .unwrap();
-            uref
-        })
-        .map(|key| (key, PLACEHOLDER_KEY))
-        .collect();
+    let mut named_keys: BTreeMap<String, Key> =
+        stakes.strings().map(|key| (key, PLACEHOLDER_KEY)).collect();
 
-    let total_bonds: U512 = genesis_validators.values().fold(U512::zero(), |x, y| x + y);
+    let total_bonds: U512 = stakes.total_bonds();
 
     let bonding_purse = mint_purse(&mint, total_bonds);
     let payment_purse = mint_purse(&mint, U512::zero());

@@ -7,7 +7,7 @@ import doobie.util.transactor.Transactor
 import io.casperlabs.casper.consensus.BlockSummary
 import io.casperlabs.casper.consensus.info.BlockInfo
 import io.casperlabs.metrics.Metrics
-import io.casperlabs.storage.block.BlockStorage.{BlockHash, DeployHash}
+import io.casperlabs.storage.{BlockHash, DeployHash}
 import io.casperlabs.storage.block.CachingBlockStorageTest.{
   createSQLiteBlockStorage,
   CachingBlockStorageTestData,
@@ -26,7 +26,6 @@ class CachingBlockStorageTest
     with Matchers
     with ArbitraryStorageData
     with SQLiteFixture[CachingBlockStorageTestData] {
-  import BlockStorage.BlockHash
 
   override def db: String = "/tmp/caching_block_storage_test.db"
 

@@ -18,6 +18,7 @@ import io.casperlabs.p2p.EffectsTestInstances.LogicalTime
 import io.casperlabs.storage.block.BlockStorage
 import monix.eval.Task
 import org.scalatest.{FlatSpec, Matchers}
+import io.casperlabs.models.Message
 
 class BlockQueryResponseAPITest extends FlatSpec with Matchers with StorageFixture {
   implicit val timeEff = new LogicalTime[Task]
@@ -35,7 +36,8 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with StorageFixtu
       parentHashes = Nil,
       justifications = Nil,
       state = ps,
-      rank = 0,
+      jRank = Message.asJRank(1),
+      mainRank = Message.asMainRank(1),
       protocolVersion = version,
       timestamp = 1527191663,
       chainName = "casperlabs",
@@ -86,11 +88,14 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with StorageFixtu
     ByteString.EMPTY,
     chainName,
     timestamp,
-    1,
+    Message.asJRank(1),
+    Message.asMainRank(1),
     Keys.PublicKey(secondBlockSender.toByteArray),
     Keys.PrivateKey(secondBlockSender.toByteArray),
     Ed25519,
-    ByteString.EMPTY
+    ByteString.EMPTY,
+    0,
+    false
   )
   val secondHashString     = Base16.encode(secondBlock.blockHash.toByteArray)
   val blockHash: BlockHash = secondBlock.blockHash
@@ -111,7 +116,7 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with StorageFixtu
         _ = blockInfo.getStatus.getStats.deployGasPriceAvg should be(
           deployCostAndPrice.map(x => x._1 * x._2).sum / deployCostAndPrice.map(_._1).sum
         )
-        _ = blockInfo.getSummary.getHeader.rank should be(blockNumber)
+        _ = blockInfo.getSummary.getHeader.jRank should be(blockNumber)
         _ = blockInfo.getSummary.getHeader.getProtocolVersion should be(version)
         _ = blockInfo.getSummary.getHeader.deployCount should be(deployCount)
         _ = blockInfo.getSummary.getHeader.parentHashes.head should be(genesisHash)

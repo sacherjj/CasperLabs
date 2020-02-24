@@ -15,9 +15,6 @@ interface Props {
 
 @observer
 class Vesting extends RefreshableComponent<Props, {}> {
-  constructor(props: Props) {
-    super(props);
-  }
 
   refresh() {
     this.props.auth.refreshAccounts();
@@ -27,24 +24,24 @@ class Vesting extends RefreshableComponent<Props, {}> {
     const { vesting } = this.props;
     return (
       <div>
-        <VestingHashesManageForm vestingContainer={this.props.vesting}/>
+        <VestingHashesManageForm vestingContainer={this.props.vesting} />
         {vesting.selectedVestingHash && !vesting.vestingDetails && (
           <div className="col-12">
-            <Loading/>
+            <Loading />
           </div>
         )}
         {vesting.selectedVestingHash && vesting.vestingDetails && (
           <div>
             <Card title="Vesting Schedule">
               <div className="col-8 container">
-                <VestingChart vestingDetail={vesting.vestingDetails}/>
+                <VestingChart vestingDetail={vesting.vestingDetails} />
               </div>
             </Card>
             <VestingDetails hash={vesting.selectedVestingHash!.hashBase16}
-                            vestingDetail={vesting.vestingDetails}
-                            refresh={
-                              () => vesting.init(vesting.selectedVestingHash!.hashBase16)
-                            }/>
+              vestingDetail={vesting.vestingDetails}
+              refresh={
+                () => vesting.init(vesting.selectedVestingHash!.hashBase16)
+              } />
           </div>
         )}
       </div>
@@ -131,10 +128,10 @@ const VestingHashesManageForm = observer(
             onClick={() => vestingContainer.configureImportVestingHash()}
           />
           <Button title="Remove" type="danger" onClick={() => {
-            if(vestingContainer.selectedVestingHash?.hashBase16){
+            if (vestingContainer.selectedVestingHash?.hashBase16) {
               vestingContainer.deleteVestingHash(vestingContainer.selectedVestingHash!.hashBase16);
             }
-          }} disabled={vestingContainer.selectedVestingHash === null}/>
+          }} disabled={vestingContainer.selectedVestingHash === null} />
         </ListInline>
       </Card>
     );
@@ -184,60 +181,60 @@ const VestingDetails = observer(
       >
         <table className="table table-bordered">
           <tbody>
-          <TableRow title="Hash of the Vesting Contract">
-            {props.hash}
-          </TableRow>
-          <TableRow title="Current Time">
-            {moment().format()}
-          </TableRow>
-          <TableRow title="Cliff Timestamp">
-            {moment(vestingDetail.cliffTimestamp).fromNow()}
-          </TableRow>
-          <TableRow title="Cliff Amount">
-            <CLX amount={vestingDetail.cliffAmount}/>
-          </TableRow>
-          <TableRow title="Drip Duration">
-            {duration(vestingDetail.dripDuration)}
-          </TableRow>
-          <TableRow title="Drip Amount">
-            <CLX amount={vestingDetail.dripAmount}/>
-          </TableRow>
-          <TableRow title="Total Amount">
-            <CLX amount={vestingDetail.totalAmount}/>
-          </TableRow>
-          <TableRow title="Released Amount">
-            <CLX amount={vestingDetail.releasedAmount}/>
-          </TableRow>
-          <TableRow title="Admin Release Duration">
-         <span className="mr-3">
-          {duration(vestingDetail.adminReleaseDuration)}
-         </span>
-            {vestingDetail.isReleasable && (
-              <Icon name="check-circle" color="green" title="Available to release"/>
-            )}
-          </TableRow>
-          <TableRow title="Paused State">
-            {vestingDetail.isPaused ? 'Paused' : 'Not Paused'}
-          </TableRow>
-          {
-            vestingDetail.isPaused && (
-              <TableRow title="Last Time Paused">
-                {moment(vestingDetail.lastPauseTimestamp).fromNow()}
-              </TableRow>
-            )
-          }
-          <TableRow title="On Pause Duration">
-            {duration(vestingDetail.onPauseDuration)}
-          </TableRow>
-          <TableRow title="Admin Account">
-            {vestingDetail.adminAccount}
-          </TableRow>
-          <TableRow title="Recipient Account">
-            {vestingDetail.recipientAccount}
-          </TableRow>
-          <TableRow title="Available Amount">
-            <CLX amount={vestingDetail.available_amount}/>
-          </TableRow>
+            <TableRow title="Hash of the Vesting Contract">
+              {props.hash}
+            </TableRow>
+            <TableRow title="Current Time">
+              {moment().format()}
+            </TableRow>
+            <TableRow title="Cliff Timestamp">
+              {moment(vestingDetail.cliffTimestamp).fromNow()}
+            </TableRow>
+            <TableRow title="Cliff Amount">
+              <CLX amount={vestingDetail.cliffAmount} />
+            </TableRow>
+            <TableRow title="Drip Duration">
+              {duration(vestingDetail.dripDuration)}
+            </TableRow>
+            <TableRow title="Drip Amount">
+              <CLX amount={vestingDetail.dripAmount} />
+            </TableRow>
+            <TableRow title="Total Amount">
+              <CLX amount={vestingDetail.totalAmount} />
+            </TableRow>
+            <TableRow title="Released Amount">
+              <CLX amount={vestingDetail.releasedAmount} />
+            </TableRow>
+            <TableRow title="Admin Release Duration">
+              <span className="mr-3">
+                {duration(vestingDetail.adminReleaseDuration)}
+              </span>
+              {vestingDetail.isReleasable && (
+                <Icon name="check-circle" color="green" title="Available to release" />
+              )}
+            </TableRow>
+            <TableRow title="Paused State">
+              {vestingDetail.isPaused ? 'Paused' : 'Not Paused'}
+            </TableRow>
+            {
+              vestingDetail.isPaused && (
+                <TableRow title="Last Time Paused">
+                  {moment(vestingDetail.lastPauseTimestamp).fromNow()}
+                </TableRow>
+              )
+            }
+            <TableRow title="On Pause Duration">
+              {duration(vestingDetail.onPauseDuration)}
+            </TableRow>
+            <TableRow title="Admin Account">
+              {vestingDetail.adminAccount}
+            </TableRow>
+            <TableRow title="Recipient Account">
+              {vestingDetail.recipientAccount}
+            </TableRow>
+            <TableRow title="Available Amount">
+              <CLX amount={vestingDetail.available_amount} />
+            </TableRow>
           </tbody>
         </table>
       </Card>

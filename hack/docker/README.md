@@ -70,6 +70,31 @@ make node-1/up node-2/up
 
 After connection is complete, all node logs will show `Peers: 2`.
 
+### Highway Mode
+
+To start the nextwork in Highway mode, first export an environment variable to enable int, then start nodes, optionally setting different rounds exponents for them.
+
+```console
+export CL_HIGHWAY_ENABLED=true
+CL_HIGHWAY_INIT_ROUND_EXPONENT=14 make node-0/up
+CL_HIGHWAY_INIT_ROUND_EXPONENT=15 make node-1/up
+```
+
+The default values for era length can be found in [highway-env.sh](./scripts/highway-env.sh)
+which is used to generate common overrides for the defaults in the chainspec just
+before the first node is started, and calculate a genesis era epoch so that it
+will be currently active (otherwise the nodes couldn't start their schedule).
+
+If for any reason you need to recreate _all_ nodes, with none of them left to restore the state of the others,
+then the original era will likely have gone out of scope and the nodes will not produce blocks.
+Start them like so, to recreate the necessary genesis era epoch:
+
+```console
+make reset-highway-env node-0/up node-1/up node-2/up
+```
+
+Alternatively you can run `make clean` before bringing back the nodes.
+
 ## Cleanup
 To cleanup the network stopping and removing all containers run the command `make clean`.
 

@@ -22,6 +22,8 @@ hex_fmt = "0.3.0"
 itertools = "0.8.2"
 linked-hash-map = "0.5.2"
 log = "0.4.8"
+mint = { path = "../mint", package = "casperlabs-mint" }
+proof-of-stake = { path = "../proof-of-stake", package = "casperlabs-proof-of-stake" }
 num-derive = "0.3.0"
 num-traits = "0.2.10"
 parity-wasm = "0.31.3"

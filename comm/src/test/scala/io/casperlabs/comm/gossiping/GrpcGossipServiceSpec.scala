@@ -19,7 +19,6 @@ import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.util.{CertificateHelper, CertificatePrinter}
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.models.BlockImplicits._
-import io.casperlabs.models.Message
 import io.casperlabs.shared.{Compression, Log}
 import io.grpc.netty.{NegotiationType, NettyChannelBuilder}
 import io.netty.handler.ssl.ClientAuth
@@ -33,6 +32,7 @@ import org.scalacheck.{Arbitrary, Gen, Shrink}
 import org.scalatest._
 import org.scalatest.concurrent._
 import org.scalatest.prop.GeneratorDrivenPropertyChecks.{forAll, PropertyCheckConfiguration}
+import io.casperlabs.shared.Sorting._
 
 import scala.concurrent.duration._
 
@@ -1244,8 +1244,8 @@ class GrpcGossipServiceSpec
         /* Abstracts over streamDagSlice RPC test, parameters are dag, start and end ranks */
         def test(task: (Vector[BlockSummary], Int, Int) => Task[Unit]): Unit =
           forAll(genSummaryDagFromGenesis) { dag =>
-            val minRank = dag.map(_.rank).min.toInt
-            val maxRank = dag.map(_.rank).max.toInt
+            val minRank = dag.map(_.jRank).min.toInt
+            val maxRank = dag.map(_.jRank).max.toInt
 
             val startGen: Gen[Int] = Gen.choose(minRank, math.max(maxRank - 1, minRank))
             val endGen: Gen[Int]   = startGen.flatMap(start => Gen.choose(start, maxRank))
@@ -1270,13 +1270,13 @@ class GrpcGossipServiceSpec
                         .streamDagSliceBlockSummaries(req)
                         .toListL
               } yield {
-                val expected = dag.filter(s => s.rank >= startRank && s.rank <= endRank)
+                val expected = dag.filter(s => s.jRank >= startRank && s.jRank <= endRank)
                 // Returned slice must be increasing order by rank,
                 // but it may differ from expected if there are multiple summaries for the same rank.
                 // We don't care about it and checking only ranks
                 Inspectors.forAll(res.zip(expected)) {
                   case (a, b) =>
-                    assert(a.rank == b.rank)
+                    assert(a.jRank == b.jRank)
                 }
               }
           }
@@ -1380,9 +1380,9 @@ object GrpcGossipServiceSpec extends TestRuntime with ArbitraryConsensusAndComm 
                   .get()
                   .summaries
                   .values
-                  .filter(s => s.rank >= startRank && s.rank <= endRank)
+                  .filter(s => s.jRank >= startRank && s.jRank <= endRank)
                   .toList
-                  .sortBy(_.rank)
+                  .sortBy(_.jRank)
               )
             )
             .flatMap(Iterant.fromSeq[Task, BlockSummary])

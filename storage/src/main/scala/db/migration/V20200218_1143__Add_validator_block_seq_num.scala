@@ -5,7 +5,7 @@ import doobie.implicits._
 import doobie.util.ExecutionContexts
 import doobie.util.transactor.Transactor
 import io.casperlabs.casper.consensus.BlockSummary
-import io.casperlabs.storage.block.BlockStorage.BlockHash
+import io.casperlabs.storage.BlockHash
 import io.casperlabs.storage.util.DoobieCodecs
 import monix.eval.Task
 import monix.execution.Scheduler

@@ -264,8 +264,14 @@ class GraphQLBlockTypes(
         Field(
           "rank",
           LongType,
-          "Amount of hops needed to reach a genesis from the block".some,
-          resolve = c => c.value._1.getSummary.rank
+          "Amount of hops needed to reach a genesis from the block. Based on block's justifications".some,
+          resolve = c => c.value._1.getSummary.jRank
+        ),
+        Field(
+          "mainRank",
+          LongType,
+          "Block height along the main-tree in the DAG. Based on the block's main parent.".some,
+          resolve = c => c.value._1.getSummary.mainRank
         ),
         Field(
           "validator",

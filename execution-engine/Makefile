@@ -128,6 +128,7 @@ test: test-rs test-as
 .PHONY: test-contracts-rs
 test-contracts-rs: build-contracts-rs
 	$(CARGO) test $(CARGO_FLAGS) -p casperlabs-engine-tests -- --ignored --nocapture
+	$(CARGO) test $(CARGO_FLAGS) --manifest-path "engine-tests/Cargo.toml" --features "turbo" -- --ignored --nocapture
 
 .PHONY: test-contracts-as
 test-contracts-as: build-contracts-rs build-contracts-as
@@ -155,7 +156,7 @@ check-rs: \
 	check-format \
 	lint \
 	test-rs \
-	test-contracts-rs
+	test-contracts-rs \
 
 .PHONY: check
 check: \

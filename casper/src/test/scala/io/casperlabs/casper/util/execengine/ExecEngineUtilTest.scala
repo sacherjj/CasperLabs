@@ -26,7 +26,7 @@ import io.casperlabs.ipc.Op.OpInstance
 import io.casperlabs.ipc._
 import io.casperlabs.mempool.DeployBuffer
 import io.casperlabs.metrics.Metrics
-import io.casperlabs.models.{ArbitraryConsensus, SmartContractEngineError}
+import io.casperlabs.models.{ArbitraryConsensus, Message, SmartContractEngineError}
 import io.casperlabs.p2p.EffectsTestInstances.LogicalTime
 import io.casperlabs.shared.{LogStub, Time}
 import io.casperlabs.smartcontracts.ExecutionEngineService
@@ -154,10 +154,10 @@ class ExecEngineUtilTest
                           fs2.Stream.fromIterator[Task](deploys.toIterator),
                           blocktime,
                           protocolVersion,
-                          rank = 0,
+                          mainRank = Message.asMainRank(0),
                           upgrades = Nil
                         )
-      DeploysCheckpoint(_, _, _, result, _) = computeResult
+      DeploysCheckpoint(_, _, _, result, _, _) = computeResult
     } yield result
 
   "computeDeploysCheckpoint" should "aggregate the result of deploying multiple programs within the block" in withStorage {
@@ -423,7 +423,7 @@ class ExecEngineUtilTest
           fs2.Stream.fromIterator[Task](processedDeploys.map(_.getDeploy).toIterator),
           0L,
           ProtocolVersion(1),
-          rank = 0,
+          mainRank = Message.asMainRank(0),
           upgrades = Nil
         )(Sync[Task], deployStorage, deployBuffer, logEff, ee, deploySelection, Metrics[Task])
         .map { result =>

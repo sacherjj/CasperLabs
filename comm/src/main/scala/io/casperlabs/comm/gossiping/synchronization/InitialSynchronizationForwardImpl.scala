@@ -90,7 +90,7 @@ class InitialSynchronizationForwardImpl[F[_]: Parallel: Log: Timer](
     /** Returns
       * - max returned rank
       * - 'true' if the DAG is fully synced with the peer or 'false' otherwise */
-    def syncDagSlice(peer: Node, rank: Int): F[(Int, Boolean)] = {
+    def syncDagSlice(peer: Node, jRank: Int): F[(Int, Boolean)] = {
       // 1. previously seen hashes
       // 2. wait handles from DownloadManager
       // 3. max rank from a batch
@@ -102,19 +102,19 @@ class InitialSynchronizationForwardImpl[F[_]: Parallel: Log: Timer](
         (_, handles, maxRank) <- gossipService
                                   .streamDagSliceBlockSummaries(
                                     StreamDagSliceBlockSummariesRequest(
-                                      startRank = rank,
-                                      endRank = rank + step
+                                      startRank = jRank,
+                                      endRank = jRank + step
                                     )
                                   )
                                   .foldLeftM(emptyS) {
                                     case ((prevHashes, handles, maxRank), s) =>
                                       val h = s.blockHash
-                                      val r = s.rank
+                                      val r = s.jRank
                                       for {
-                                        _ <- F.whenA(r < rank || r > rank + step) {
+                                        _ <- F.whenA(r < jRank || r > jRank + step) {
                                               val hexHash = hex(h)
                                               Log[F].error(
-                                                s"Failed to sync with ${peer.show -> "show"}, rank of summary $hexHash $r not in range of [${rank -> "from"}, ${rank + step -> "to"}]"
+                                                s"Failed to sync with ${peer.show -> "show"}, rank of summary $hexHash $r not in range of [${jRank -> "from"}, ${jRank + step -> "to"}]"
                                               ) >> F.raiseError(
                                                 SynchronizationError()
                                               )
@@ -122,7 +122,7 @@ class InitialSynchronizationForwardImpl[F[_]: Parallel: Log: Timer](
                                         _ <- F.whenA(prevHashes(h)) {
                                               val hexHash = hex(h)
                                               Log[F].error(
-                                                s"Failed to sync with ${peer.show -> "show"}, $hexHash has seen previously in range of [${rank -> "from"}, ${rank + step -> "to"}]"
+                                                s"Failed to sync with ${peer.show -> "show"}, $hexHash has seen previously in range of [${jRank -> "from"}, ${jRank + step -> "to"}]"
                                               ) >>
                                                 F.raiseError(
                                                   SynchronizationError()
@@ -134,7 +134,7 @@ class InitialSynchronizationForwardImpl[F[_]: Parallel: Log: Timer](
                                         newMaxRank    = math.max(maxRank, r)
                                       } yield (newSeenHashes, newHandles, newMaxRank)
                                   }
-        fullySynced = maxRank < rank + step
+        fullySynced = maxRank < jRank + step
 
         // Wait for all the downloads to finish.
         _ <- handles.sequence.onError {

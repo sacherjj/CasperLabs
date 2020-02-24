@@ -37,6 +37,7 @@ import io.casperlabs.mempool.DeployBuffer
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.implicits._
 import io.casperlabs.models.{Message, SmartContractEngineError}
+import Message.{asJRank, asMainRank, JRank, MainRank}
 import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.shared._
 import io.casperlabs.smartcontracts.ExecutionEngineService
@@ -45,6 +46,8 @@ import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.storage.dag.{DagRepresentation, DagStorage, FinalityStorage}
 import io.casperlabs.storage.deploy.{DeployStorage, DeployStorageReader, DeployStorageWriter}
 import simulacrum.typeclass
+import io.casperlabs.models.BlockImplicits._
+import Sorting._
 
 import scala.concurrent.duration.FiniteDuration
 import scala.util.control.NonFatal
@@ -321,7 +324,8 @@ class MultiParentCasperImpl[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: 
   private case class CreateMessageProps(
       justifications: Seq[Justification],
       parents: Seq[BlockHash],
-      rank: Long,
+      jRank: JRank,
+      mainRank: MainRank,
       protocolVersion: ProtocolVersion,
       configuration: Config,
       validatorSeqNum: Int,
@@ -351,18 +355,20 @@ class MultiParentCasperImpl[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: 
         // `bondedLatestMsgs` won't include Genesis block
         // and in the case when it becomes the main parent we want to include its rank
         // when calculating it for the current block.
-        rank <- MonadThrowable[F].fromTry(
-                 merged.parents.toList
-                   .traverse(Message.fromBlock(_))
-                   .map(_.toSet | bondedLatestMsgs.values.flatten.toSet)
-                   .map(set => ProtoUtil.nextRank(set.toList))
-               )
-        config          <- CasperLabsProtocol[F].configAt(rank)
-        protocolVersion <- CasperLabsProtocol[F].versionAt(rank)
+        jRank <- MonadThrowable[F].fromTry(
+                  merged.parents.toList
+                    .traverse(Message.fromBlock(_))
+                    .map(_.toSet | bondedLatestMsgs.values.flatten.toSet)
+                    .map(set => ProtoUtil.nextJRank(set.toList))
+                )
+        mainRank        = ProtoUtil.nextMainRank(merged.parents.traverse(Message.fromBlock(_)).get)
+        config          <- CasperLabsProtocol[F].configAt(mainRank)
+        protocolVersion <- CasperLabsProtocol[F].versionAt(mainRank)
       } yield CreateMessageProps(
         justifications,
-        merged.parents.map(_.blockHash).toSeq,
-        rank,
+        merged.parents.map(_.blockHash),
+        jRank,
+        mainRank,
         protocolVersion,
         config,
         validatorSeqNum,
@@ -398,7 +404,7 @@ class MultiParentCasperImpl[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: 
                          deployStream,
                          timestamp,
                          props.protocolVersion,
-                         props.rank,
+                         props.mainRank,
                          upgrades
                        )
         result <- Sync[F]
@@ -418,11 +424,14 @@ class MultiParentCasperImpl[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: 
                          props.validatorPrevBlockHash,
                          chainName,
                          timestamp,
-                         props.rank,
+                         props.jRank,
+                         props.mainRank,
                          validatorId,
                          privateKey,
                          sigAlgorithm,
-                         lfbHash
+                         lfbHash,
+                         roundId = 0,
+                         magicBit = false
                        )
                        CreateBlockStatus.created(block)
                      }
@@ -466,11 +475,13 @@ class MultiParentCasperImpl[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: 
         props.validatorPrevBlockHash,
         chainName,
         now,
-        props.rank,
+        props.jRank,
+        props.mainRank,
         validatorId,
         privateKey,
         sigAlgorithm,
-        keyBlockHash
+        keyBlockHash,
+        roundId = 0
       )
     } yield CreateBlockStatus.created(block)
 
@@ -596,7 +607,7 @@ object MultiParentCasperImpl {
                    }
           _ <- Log[F].debug(s"Computing the pre-state hash of ${hashPrefix -> "block"}")
           preStateHash <- ExecEngineUtil
-                           .computePrestate[F](merged, block.getHeader.rank, upgrades)
+                           .computePrestate[F](merged, block.mainRank, upgrades)
                            .timer("computePrestate")
           _ <- Log[F].debug(s"Computing the effects for ${hashPrefix -> "block"}")
           blockEffects <- ExecEngineUtil
@@ -613,9 +624,12 @@ object MultiParentCasperImpl {
           _ <- Metrics[F]
                 .incrementCounter("gas_spent", gasSpent)
           _ <- Log[F].debug(s"Validating the transactions in ${hashPrefix -> "block"}")
+          // Genesis won't have parents.
+          preStateBonds = merged.parents.headOption.getOrElse(block).getHeader.getState.bonds
           _ <- Validation[F].transactions(
                 block,
                 preStateHash,
+                preStateBonds,
                 blockEffects
               )
           _ <- Log[F].debug(s"Validating neglection for ${hashPrefix -> "block"}")

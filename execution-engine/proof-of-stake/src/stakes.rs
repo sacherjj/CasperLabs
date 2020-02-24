@@ -1,4 +1,11 @@
-use alloc::collections::BTreeMap;
+use alloc::{
+    collections::{
+        btree_map::{Iter, Values},
+        BTreeMap,
+    },
+    format,
+    string::String,
+};
 
 use types::{
     account::PublicKey,
@@ -29,6 +36,30 @@ const MAX_REL_DECREASE: u64 = 900_000;
 pub struct Stakes(pub BTreeMap<PublicKey, U512>);
 
 impl Stakes {
+    pub fn new(map: BTreeMap<PublicKey, U512>) -> Stakes {
+        Stakes(map)
+    }
+
+    pub fn iter(&self) -> Iter<PublicKey, U512> {
+        self.0.iter()
+    }
+
+    pub fn values(&self) -> Values<PublicKey, U512> {
+        self.0.values()
+    }
+
+    pub fn strings(&self) -> impl Iterator<Item = String> + '_ {
+        self.iter().map(|(public_key, balance)| {
+            let key_bytes = public_key.as_bytes();
+            let hex_key = base16::encode_lower(&key_bytes);
+            format!("v_{}_{}", hex_key, balance)
+        })
+    }
+
+    pub fn total_bonds(&self) -> U512 {
+        self.values().fold(U512::zero(), |x, y| x + y)
+    }
+
     /// If `maybe_amount` is `None`, removes all the validator's stakes,
     /// otherwise subtracts the given amount. If the stakes are lower than
     /// the specified amount, it also subtracts all the stakes.

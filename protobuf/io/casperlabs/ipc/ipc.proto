@@ -247,6 +247,7 @@ message ChainSpec {
         // costs at genesis
         CostTable costs = 7;
         DeployConfig deploy_config = 8;
+        HighwayConfig highway_config = 9;
     }
 
     message GenesisAccount {
@@ -258,6 +259,21 @@ message ChainSpec {
     message DeployConfig {
         uint32 max_ttl_millis = 2;
         uint32 max_dependencies = 3;
+    }
+
+    message HighwayConfig {
+        // Unix timestamp of the Genesis era start.
+        uint64 genesis_era_start_timestamp = 1;
+        // Fixed length duration of an era.
+        uint64 era_duration_millis = 2;
+        // Amount of time to look back from the start of an era to pick the booking block.
+        uint64 booking_duration_millis = 3;
+        // Amount of time after the booking time to allow for magic bits to accumulate before picking the key block.
+        uint64 entropy_duration_millis = 4;
+        // Fixed length duration of the post-era voting period; used when summit level is zero.
+        uint64 voting_period_duration_millis = 5;
+        // Stop the post-era voting period when the switch block reaches a certain summit level; when 0 use the duration instead.
+        uint32 voting_period_summit_level = 6;
     }
 
     message CostTable {

@@ -18,6 +18,7 @@ import monix.eval.Task
 import org.scalatest.{FlatSpec, Matchers}
 
 import scala.collection.immutable.BitSet
+import io.casperlabs.casper.PrettyPrinter
 
 @silent("deprecated")
 @silent("is never used")
@@ -66,7 +67,7 @@ class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator with 
               .children(b.messageHash)
               .flatMap(_.toList.traverse(l => dag.lookup(l).map(_.get)))
           }(Monad[Task], dagTopoOrderingAsc)
-          _                   <- stream.toList.map(_.map(_.rank) shouldBe List(0, 1, 2, 2, 3, 3, 4, 4))
+          _                   <- stream.toList.map(_.map(_.jRank) shouldBe List(0, 1, 2, 2, 3, 3, 4, 4))
           dagTopoOrderingDesc = DagOperations.blockTopoOrderingDesc
           stream2 = DagOperations
             .bfToposortTraverseF[Task](
@@ -74,7 +75,7 @@ class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator with 
             ) { b =>
               b.parents.toList.traverse(l => dag.lookup(l).map(_.get))
             }(Monad[Task], dagTopoOrderingDesc)
-          _ <- stream2.toList.map(_.map(_.rank) shouldBe List(4, 4, 3, 3, 2, 2, 1, 0))
+          _ <- stream2.toList.map(_.map(_.jRank) shouldBe List(4, 4, 3, 3, 2, 2, 1, 0))
         } yield ()
   }
 
@@ -469,6 +470,379 @@ class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator with 
               .map(_.messageHash)
               .toList shouldBeF List(b3.blockHash, b1.blockHash)
       } yield ()
+  }
+
+  import ByteStringPrettifier._
+  val v1         = generateValidator("V1")
+  val v2         = generateValidator("V2")
+  val v3         = generateValidator("V3")
+  val v1Bond     = Bond(v1, 2)
+  val v2Bond     = Bond(v2, 3)
+  val v3Bond     = Bond(v2, 3)
+  val bondsThree = List(v1Bond, v2Bond, v3Bond)
+
+  val genesisValidator = ByteString.EMPTY
+  val genesisEra       = ByteString.EMPTY
+
+  "panoramaOfBlockByValidators" should "return latest message per validator within single era" in withStorage {
+    implicit blockStorage => implicit dagStorage => _ =>
+      _ =>
+        // Validators A, B and C
+        // All messages within single era.
+        //
+        //    a1
+        //   / \(justification)
+        // G - b1   b2
+        //        \/
+        //        c1 (sees a1)
+        //
+        // Starting point: b2
+        // Expected result: Map(A -> a1, B -> b2, C -> c1)
+
+        for {
+          genesis <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bondsThree)
+          a1 <- createAndStoreBlockFull[Task](
+                 v1,
+                 Seq(genesis),
+                 Seq.empty,
+                 bondsThree,
+                 keyBlockHash = genesis.blockHash
+               )
+          b1 <- createAndStoreBlockFull[Task](
+                 v2,
+                 Seq(genesis),
+                 Seq(a1),
+                 bondsThree,
+                 keyBlockHash = genesis.blockHash
+               )
+          c1 <- createAndStoreBlockFull[Task](
+                 v3,
+                 Seq(b1),
+                 Seq.empty,
+                 bondsThree,
+                 keyBlockHash = genesis.blockHash
+               )
+          b2 <- createAndStoreBlockFull[Task](
+                 v2,
+                 Seq(c1),
+                 Seq.empty,
+                 bondsThree,
+                 keyBlockHash = genesis.blockHash
+               )
+          implicit0(dag: DagRepresentation[Task]) <- dagStorage.getRepresentation
+          b2Message                               = Message.fromBlock(b2).get
+          genesisMessage                          = Message.fromBlock(genesis).get
+          localDagView = EraObservedBehavior.local(
+            Map(
+              genesisEra -> Map(
+                genesisValidator -> Set(genesisMessage)
+              ),
+              genesis.blockHash -> Map(
+                v1 -> Set(Message.fromBlock(a1).get),
+                v2 -> Set(Message.fromBlock(b1).get),
+                v3 -> Set(Message.fromBlock(c1).get)
+              )
+            )
+          )
+          latestMessages <- DagOperations.panoramaOfMessage[Task](
+                             dag,
+                             b2Message,
+                             localDagView,
+                             genesisMessage
+                           )
+          latestGenesisMessageHashes = latestMessages
+            .latestMessagesInEra(genesis.blockHash)
+            .mapValues(_.map(_.messageHash))
+          expected = Map(
+            v1 -> Set(a1.blockHash),
+            v2 -> Set(b1.blockHash),
+            v3 -> Set(c1.blockHash)
+          )
+        } yield assert(latestGenesisMessageHashes == expected)
+  }
+
+  it should "return latest message per validator across multiple eras" in withStorage {
+    implicit blockStorage => implicit dagStorage => _ =>
+      _ =>
+        // Validators A, B and C
+        //                      |
+        //    a1                |      a2
+        //   / \(justification) |     / \
+        // G - b1   b2 -------- |--S_b   \
+        //        \/            |     \   \
+        //        c1 (sees a1)  |      c2-c3
+        //
+        // Starting point: c3
+        // Expected result: Map(A -> a2, B -> S_b, C -> c2)
+
+        for {
+          genesis <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bondsThree)
+          a1 <- createAndStoreBlockFull[Task](
+                 v1,
+                 Seq(genesis),
+                 Seq.empty,
+                 bondsThree,
+                 keyBlockHash = genesis.blockHash
+               )
+          b1 <- createAndStoreBlockFull[Task](
+                 v2,
+                 Seq(genesis),
+                 Seq(a1),
+                 bondsThree,
+                 keyBlockHash = genesis.blockHash
+               )
+          c1 <- createAndStoreBlockFull[Task](
+                 v3,
+                 Seq(b1),
+                 Seq.empty,
+                 bondsThree,
+                 keyBlockHash = genesis.blockHash
+               )
+          b2 <- createAndStoreBlockFull[Task](
+                 v2,
+                 Seq(c1),
+                 Seq.empty,
+                 bondsThree,
+                 keyBlockHash = genesis.blockHash
+               )
+          sb <- createAndStoreBlockFull[Task](
+                 v2,
+                 Seq(b2),
+                 Seq.empty,
+                 bondsThree,
+                 keyBlockHash = genesis.blockHash
+               )
+          a2 <- createAndStoreBlockFull[Task](
+                 v1,
+                 Seq(sb),
+                 Seq.empty,
+                 bondsThree,
+                 keyBlockHash = c1.blockHash
+               )
+          c2 <- createAndStoreBlockFull[Task](
+                 v3,
+                 Seq(sb),
+                 Seq.empty,
+                 bondsThree,
+                 keyBlockHash = c1.blockHash
+               )
+          c3 <- createAndStoreBlockFull[Task](
+                 v3,
+                 Seq(c2),
+                 Seq(a2),
+                 bondsThree,
+                 keyBlockHash = c1.blockHash
+               )
+          implicit0(dag: DagRepresentation[Task]) <- dagStorage.getRepresentation
+          c3Message                               = Message.fromBlock(c3).get
+          genesisMessage                          = Message.fromBlock(genesis).get
+          localDagView = EraObservedBehavior.local(
+            Map(
+              genesisEra -> Map(
+                genesisValidator -> Set(genesisMessage)
+              ),
+              genesis.blockHash -> Map(
+                v1 -> Set(Message.fromBlock(a1).get),
+                v2 -> Set(Message.fromBlock(sb).get),
+                v3 -> Set(Message.fromBlock(c1).get)
+              ),
+              c1.blockHash -> Map(
+                v1 -> Set(Message.fromBlock(a2).get),
+                v3 -> Set(Message.fromBlock(c2).get)
+              )
+            )
+          )
+          latestMessages <- DagOperations.panoramaOfMessage[Task](
+                             dag,
+                             c3Message,
+                             localDagView,
+                             genesisMessage
+                           )
+          latestGenesisMessageHashes = latestMessages
+            .latestMessagesInEra(genesis.blockHash)
+            .mapValues(_.map(_.messageHash))
+          expectedGenesis = Map(
+            v1 -> Set(a1.blockHash),
+            v2 -> Set(sb.blockHash),
+            v3 -> Set(c1.blockHash)
+          )
+          latestChildMessageHashes = latestMessages
+            .latestMessagesInEra(c1.blockHash)
+            .mapValues(_.map(_.messageHash))
+          expectedChild = Map(
+            v1 -> Set(a2.blockHash),
+            v3 -> Set(c2.blockHash)
+          )
+        } yield {
+          assert(latestGenesisMessageHashes == expectedGenesis)
+          assert(latestChildMessageHashes == expectedChild)
+        }
+  }
+
+  it should "detect equivocators" in withStorage {
+    implicit blockStorage => implicit dagStorage => _ =>
+      _ =>
+        //    a1
+        //   /   \
+        // G -a1'-b2
+        //   \   /
+        //    b1
+        //
+        // Note there's no message for C validator
+        for {
+          genesis <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bondsThree)
+          a1 <- createAndStoreBlockFull[Task](
+                 v1,
+                 Seq(genesis),
+                 Seq.empty,
+                 bondsThree,
+                 keyBlockHash = genesis.blockHash
+               )
+          a1Prime <- createAndStoreBlockFull[Task](
+                      v1,
+                      Seq(genesis),
+                      Seq.empty,
+                      bondsThree,
+                      keyBlockHash = genesis.blockHash
+                    )
+          b1 <- createAndStoreBlockFull[Task](
+                 v2,
+                 Seq(genesis),
+                 Seq(a1),
+                 bondsThree,
+                 keyBlockHash = genesis.blockHash
+               )
+          b2 <- createAndStoreBlockFull[Task](
+                 v2,
+                 Seq(b1),
+                 Seq(a1, a1Prime),
+                 bondsThree,
+                 keyBlockHash = genesis.blockHash
+               )
+          genesisMessage = Message.fromBlock(genesis).get
+          localDagView = EraObservedBehavior.local(
+            Map(
+              genesisEra -> Map(
+                genesisValidator -> Set(genesisMessage)
+              ),
+              genesis.blockHash -> Map(
+                v1 -> Set(Message.fromBlock(a1).get, Message.fromBlock(a1Prime).get),
+                v2 -> Set(Message.fromBlock(b1).get)
+              )
+            )
+          )
+          implicit0(dag: DagRepresentation[Task]) <- dagStorage.getRepresentation
+          latestMessages <- DagOperations.panoramaOfMessage[Task](
+                             dag,
+                             Message.fromBlock(b2).get,
+                             localDagView,
+                             genesisMessage
+                           )
+
+          latestGenesisMessageHashes = latestMessages
+            .latestMessagesInEra(genesis.blockHash)
+            .mapValues(_.map(_.messageHash))
+
+          expectedGenesis = Map(
+            v1 -> Set(a1.blockHash, a1Prime.blockHash),
+            v2 -> Set(b1.blockHash)
+          )
+
+          detectedEquivocators = latestMessages.equivocatorsVisibleInEras(Set(genesis.blockHash))
+        } yield {
+          assert(latestGenesisMessageHashes == expectedGenesis)
+          assert(detectedEquivocators == Set(v1))
+        }
+  }
+
+  it should "detect equivocators only after the stop block" in withStorage {
+    implicit blockStorage => implicit dagStorage => _ =>
+      _ =>
+        //    a1     a2-----------
+        //   /   \  /              \
+        // G -a1'-b2 (stop block) - b3
+        //   \   /
+        //    b1
+        //
+        // Note there's no message for C validator and A equivocated before stop block.
+        for {
+          genesis <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bondsThree)
+          a1 <- createAndStoreBlockFull[Task](
+                 v1,
+                 Seq(genesis),
+                 Seq.empty,
+                 bondsThree,
+                 keyBlockHash = genesis.blockHash
+               )
+          a1Prime <- createAndStoreBlockFull[Task](
+                      v1,
+                      Seq(genesis),
+                      Seq.empty,
+                      bondsThree,
+                      keyBlockHash = genesis.blockHash
+                    )
+          b1 <- createAndStoreBlockFull[Task](
+                 v2,
+                 Seq(genesis),
+                 Seq(a1),
+                 bondsThree,
+                 keyBlockHash = genesis.blockHash
+               )
+          b2 <- createAndStoreBlockFull[Task](
+                 v2,
+                 Seq(b1),
+                 Seq(a1, a1Prime),
+                 bondsThree,
+                 keyBlockHash = genesis.blockHash
+               )
+          a2 <- createAndStoreBlockFull[Task](
+                 v1,
+                 Seq(b2),
+                 Seq.empty,
+                 bondsThree,
+                 keyBlockHash = genesis.blockHash
+               )
+          b3 <- createAndStoreBlockFull[Task](
+                 v2,
+                 Seq(b2),
+                 Seq(a2),
+                 bondsThree,
+                 keyBlockHash = genesis.blockHash
+               )
+          genesisMessage = Message.fromBlock(genesis).get
+          localDagView = EraObservedBehavior.local(
+            Map(
+              genesisEra -> Map(
+                genesisValidator -> Set(genesisMessage)
+              ),
+              genesis.blockHash -> Map(
+                v1 -> Set(Message.fromBlock(a1).get, Message.fromBlock(a1Prime).get),
+                v2 -> Set(Message.fromBlock(b2).get)
+              )
+            )
+          )
+          implicit0(dag: DagRepresentation[Task]) <- dagStorage.getRepresentation
+          latestMessages <- DagOperations.panoramaOfMessage[Task](
+                             dag,
+                             Message.fromBlock(b3).get,
+                             localDagView,
+                             Message.fromBlock(b2).get
+                           )
+
+          latestGenesisMessageHashes = latestMessages
+            .latestMessagesInEra(genesis.blockHash)
+            .mapValues(_.map(_.messageHash))
+
+          expectedGenesis = Map(
+            v1 -> Set(a2.blockHash),
+            v2 -> Set(b2.blockHash)
+          )
+
+          detectedEquivocators = latestMessages.equivocatorsVisibleInEras(Set(genesis.blockHash))
+        } yield {
+          assert(latestGenesisMessageHashes == expectedGenesis)
+          assert(detectedEquivocators.isEmpty)
+        }
   }
 
 }

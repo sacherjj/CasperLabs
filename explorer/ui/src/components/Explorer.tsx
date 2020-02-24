@@ -16,6 +16,7 @@ import Pages from './Pages';
 import { encodeBase16 } from 'casperlabs-sdk';
 import { BondedValidatorsTable } from './BondedValidatorsTable';
 import { ToggleButton } from './ToggleButton';
+import { BlockType } from './BlockDetails';
 
 /** Show the tips of the DAG. */
 @observer
@@ -139,13 +140,16 @@ class BlockDetails extends React.Component<
     let id = encodeBase16(summary.getBlockHash_asU8());
     let idB64 = summary.getBlockHash_asB64();
     let validatorId = encodeBase16(header.getValidatorPublicKey_asU8());
-    // Grouped attributes so we could display 2 sets of fields next to each other.
-    let attrs: Array<Array<[string, any]>> = [
+    let attrs: Array<[string, any]> =
       [
         ['Block Hash', <Link to={Pages.block(id)}>{shortHash(id)}</Link>],
-        ['Rank', header.getRank()]
-      ],
-      [
+        ['Key Block Hash',
+          <Link to={Pages.block(encodeBase16(header.getKeyBlockHash_asU8()))}>
+            {shortHash(header.getKeyBlockHash_asU8())}
+          </Link>],
+        ['j-Rank', header.getJRank()],
+        ['m-Rank', header.getMainRank()],
+        ['Type', <BlockType header={header} />],
         [
           'Parents',
           <ul>
@@ -177,17 +181,11 @@ class BlockDetails extends React.Component<
                 </li>
               ))}
           </ul>
-        ]
-      ],
-      [
+        ],
         ['Timestamp', new Date(header.getTimestamp()).toISOString()],
-        ['Deploy Count', header.getDeployCount()]
-      ],
-      [
+        ['Deploy Count', header.getDeployCount()],
         ['Validator', shortHash(validatorId)],
-        ['Validator Block Number', header.getValidatorBlockSeqNum()]
-      ],
-      [
+        ['Validator Block Number', header.getValidatorBlockSeqNum()],
         [
           'Validator Stake',
           (() => {
@@ -213,10 +211,9 @@ class BlockDetails extends React.Component<
           'Is Finalized',
           block
             .getStatus()!
-            .getIsFinalized()
-        ]
-      ]
-    ];
+            .getIsFinalized().toString()
+        ],
+      ];
     return (
       <div
         ref={x => {
@@ -227,21 +224,11 @@ class BlockDetails extends React.Component<
           title={`Block ${shortHash(id)}`}
           headers={[]}
           rows={attrs}
-          renderRow={(group, i) =>
-            // <tr key={i}>
-            //   {
-            //     group.flatMap((attr, j) => [
-            //       <th key={'${i}/${j}/0'}>{attr[0]}</th>,
-            //       <td key={'${i}/${j}/1'}>{attr[1]}</td>
-            //     ])
-            //   }
-            // </tr>
-            group.flatMap((attr, j) => [
-              <tr key={`${i}/${j}`}>
-                <th>{attr[0]}</th>
-                <td>{attr[1]}</td>
-              </tr>
-            ])
+          renderRow={(attr, i) =>
+            <tr key={i}>
+              <th>{attr[0]}</th>
+              <td>{attr[1]}</td>
+            </tr>
           }
           footerMessage="Click the links to select the parents and children."
         />

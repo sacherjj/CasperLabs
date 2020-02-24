@@ -10,26 +10,35 @@ import cats.effect.Sync
 import cats.implicits._
 import doobie.util.transactor.Transactor
 import io.casperlabs.casper.consensus.info.{BlockInfo, DeployInfo}
-import io.casperlabs.casper.consensus.{Block, BlockSummary}
+import io.casperlabs.casper.consensus.{Block, BlockSummary, Era}
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.models.Message
 import io.casperlabs.shared.Time
-import io.casperlabs.storage.block.BlockStorage.{BlockHash, DeployHash}
 import io.casperlabs.storage.block.{BlockStorage, SQLiteBlockStorage}
 import io.casperlabs.storage.dag.DagRepresentation.Validator
 import io.casperlabs.storage.dag.{DagRepresentation, DagStorage, FinalityStorage, SQLiteDagStorage}
+import io.casperlabs.storage.era.{EraStorage, SQLiteEraStorage}
+import java.util.concurrent.TimeUnit
 import fs2._
 
 object SQLiteStorage {
+  type CombinedStorage[F[_]] =
+    BlockStorage[F]
+      with DagStorage[F]
+      with DeployStorage[F]
+      with DagRepresentation[F]
+      with FinalityStorage[F]
+      with EraStorage[F]
+
   def create[F[_]: Sync: Metrics: Time](
       deployStorageChunkSize: Int = 100,
+      tickUnit: TimeUnit = TimeUnit.MILLISECONDS,
       readXa: Transactor[F],
       writeXa: Transactor[F]
-  ): F[BlockStorage[F] with DagStorage[F] with DeployStorage[F] with DagRepresentation[F] with FinalityStorage[
-    F
-  ]] =
+  ): F[CombinedStorage[F]] =
     create[F](
       deployStorageChunkSize = deployStorageChunkSize,
+      tickUnit = tickUnit,
       readXa = readXa,
       writeXa = writeXa,
       wrapBlockStorage = (_: BlockStorage[F]).pure[F],
@@ -38,24 +47,25 @@ object SQLiteStorage {
 
   def create[F[_]: Sync: Metrics: Time](
       deployStorageChunkSize: Int,
+      tickUnit: TimeUnit,
       readXa: Transactor[F],
       writeXa: Transactor[F],
       wrapBlockStorage: BlockStorage[F] => F[BlockStorage[F]],
       wrapDagStorage: DagStorage[F] with DagRepresentation[F] with FinalityStorage[F] => F[
         DagStorage[F] with DagRepresentation[F] with FinalityStorage[F]
       ]
-  ): F[BlockStorage[F] with DagStorage[F] with DeployStorage[F] with DagRepresentation[F] with FinalityStorage[
-    F
-  ]] =
+  ): F[CombinedStorage[F]] =
     for {
       blockStorage  <- SQLiteBlockStorage.create[F](readXa, writeXa) >>= wrapBlockStorage
       dagStorage    <- SQLiteDagStorage.create[F](readXa, writeXa) >>= wrapDagStorage
       deployStorage <- SQLiteDeployStorage.create[F](deployStorageChunkSize, readXa, writeXa)
+      eraStorage    <- SQLiteEraStorage.create[F](tickUnit, readXa, writeXa)
     } yield new BlockStorage[F]
       with DagStorage[F]
       with DeployStorage[F]
       with DagRepresentation[F]
-      with FinalityStorage[F] {
+      with FinalityStorage[F]
+      with EraStorage[F] {
 
       override def writer: DeployStorageWriter[F] =
         deployStorage.writer
@@ -149,17 +159,16 @@ object SQLiteStorage {
       override def topoSortTailValidator(validator: Validator, blocksNum: Int) =
         dagStorage.topoSortTailValidator(validator, blocksNum)
 
-      override def latestMessageHash(validator: Validator): F[Set[BlockHash]] =
-        dagStorage.latestMessageHash(validator)
+      override def latestGlobal =
+        dagStorage.getRepresentation.flatMap(_.latestGlobal)
 
-      override def latestMessage(validator: Validator): F[Set[Message]] =
-        dagStorage.latestMessage(validator)
+      override def latestInEra(keyBlockHash: BlockHash) =
+        dagStorage.getRepresentation.flatMap(_.latestInEra(keyBlockHash))
 
-      override def latestMessageHashes: F[Map[Validator, Set[BlockHash]]] =
-        dagStorage.latestMessageHashes
-
-      override def latestMessages: F[Map[Validator, Set[Message]]] =
-        dagStorage.latestMessages
+      override def addEra(era: Era)               = eraStorage.addEra(era)
+      override def getEra(eraId: BlockHash)       = eraStorage.getEra(eraId)
+      override def getChildEras(eraId: BlockHash) = eraStorage.getChildEras(eraId)
+      override def getChildlessEras               = eraStorage.getChildlessEras
 
       override def markAsFinalized(
           mainParent: BlockHash,
