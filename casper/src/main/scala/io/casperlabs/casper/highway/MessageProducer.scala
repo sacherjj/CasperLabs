@@ -190,7 +190,7 @@ object MessageProducer {
         DeployBuffer[F].requeueOrphanedDeploys(parentHashes) >>= { requeued =>
           Log[F].info(s"Re-queued ${requeued.size} orphaned deploys.").whenA(requeued.nonEmpty)
         }
-      }.forkAndLog
+      }.forkAndLog.void
 
       private def messageProps(
           keyBlockHash: BlockHash,
