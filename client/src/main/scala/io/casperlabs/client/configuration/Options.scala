@@ -393,7 +393,7 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
 
   val propose = new Subcommand("propose") {
     descr(
-      "Force a node to propose a block based on its accumulated deploys."
+      "[DEPRECATED] Force a node to propose a block based on its accumulated deploys."
     )
   }
   addSubcommand(propose)
