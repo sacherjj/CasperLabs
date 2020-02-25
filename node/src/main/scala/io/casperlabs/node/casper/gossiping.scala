@@ -265,14 +265,13 @@ package object gossiping {
   ): Resource[F, Relaying[F]] =
     Resource
       .liftF(RelayingImpl.establishMetrics[F])
-      .map(
-        _ =>
-          RelayingImpl(
-            NodeDiscovery[F],
-            connectToGossip = connectToGossip,
-            relayFactor = conf.server.relayFactor,
-            relaySaturation = conf.server.relaySaturation
-          )
+      .as(
+        RelayingImpl(
+          NodeDiscovery[F],
+          connectToGossip = connectToGossip,
+          relayFactor = conf.server.relayFactor,
+          relaySaturation = conf.server.relaySaturation
+        )
       )
 
   private def makeDownloadManager[F[_]: Concurrent: Log: Time: Timer: Metrics: DagStorage: Consensus](
