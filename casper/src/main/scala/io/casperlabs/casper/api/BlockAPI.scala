@@ -13,7 +13,6 @@ import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper._
 import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.consensus.info._
-import io.casperlabs.casper.consensus.state.Key
 import io.casperlabs.catscontrib.{Fs2Compiler, MonadThrowable}
 import io.casperlabs.comm.ServiceError
 import io.casperlabs.comm.ServiceError._
@@ -321,7 +320,7 @@ object BlockAPI {
 
   def accountBalance[F[_]: MonadThrowable: Log: MultiParentCasperRef: DeployStorage: DagStorage: Fs2Compiler: ExecutionEngineService](
       accountKey: ByteString
-  ): F[Option[String]] = {
+  ): F[Option[BigInt]] = {
     val program = for {
       info <- BlockAPI
                .getBlockInfos[F](1)
@@ -396,7 +395,15 @@ object BlockAPI {
                         error(s"Expected cltype.CLValue, got $x")
                       )
                 }
-    } yield balance.value.toString(10)
-    program.attempt.map(_.leftMap(e => println(e.getMessage)).toOption)
+    } yield balance.value
+    program.attempt >>= { either =>
+      either.fold(
+        ex =>
+          Log[F]
+            .error(s"Failed to query EE for the balance of the account ${accountKey}, $ex")
+            .as(none[BigInt]),
+        _.some.pure[F]
+      )
+    }
   }
 }
