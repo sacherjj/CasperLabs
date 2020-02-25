@@ -648,7 +648,7 @@ package object gossiping {
   /** Start something in a fiber. Make sure it stops if the resource is released. */
   private def makeFiberResource[F[_]: Concurrent: Log, A](f: F[A]): Resource[F, F[A]] =
     f.onError {
-      case NonFatal(ex) => Log[F].error(s"Fiber resource died: $ex")
+      case NonFatal(ex) => Log[F].error(s"Fiber resource died: $ex") *> Concurrent[F].raiseError(ex)
       case fatal        => Sync[F].delay(throw fatal)
     }.background
 
