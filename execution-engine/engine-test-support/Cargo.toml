@@ -20,6 +20,7 @@ engine-wasm-prep = { version = "0.2.0", path = "../engine-wasm-prep", package = 
 grpc = "0.6.1"
 lazy_static = "1"
 lmdb = "0.8.0"
+log = "0.4.8"
 num-traits = "0.2.10"
 rand = "0.7.2"
 protobuf = "=2.8"
@@ -30,3 +31,4 @@ version-sync = "0.8"
 
 [features]
 use-as-wasm = []
+turbo = []

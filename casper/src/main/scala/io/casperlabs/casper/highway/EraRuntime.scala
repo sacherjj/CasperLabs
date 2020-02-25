@@ -443,8 +443,11 @@ class EraRuntime[F[_]: MonadThrowable: Clock: EraStorage: FinalityStorageReader:
 
         case b: Message.Ballot if b.roundId >= endTick =>
           checkF(
-            "A ballot during the voting-only period can only be built on top of a switch block.",
-            dag.lookupUnsafe(b.parentBlock).flatMap(_.isSwitchBlock).map(!_)
+            "A ballot during the voting-only period can only be built on pre-era-end blocks and switch blocks.",
+            for {
+              parent <- dag.lookupUnsafe(b.parentBlock)
+              switch <- parent.isSwitchBlock
+            } yield !(parent.roundId < endTick || switch)
           )
 
         case _ =>

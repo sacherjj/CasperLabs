@@ -5,7 +5,7 @@ use std::{collections::HashMap, fmt, hash::BuildHasher, time::Instant};
 
 use engine_shared::{
     additive_map::AdditiveMap,
-    logging::{log_duration, log_metric, GAUGE},
+    logging::{log_duration, log_metric},
     newtypes::{Blake2bHash, CorrelationId},
     stored_value::StoredValue,
     transform::{self, Transform},
@@ -21,6 +21,7 @@ use crate::{
         operations::{read, write, ReadResult, WriteResult},
         TrieStore,
     },
+    GAUGE_METRIC_KEY,
 };
 
 const GLOBAL_STATE_COMMIT_READS: &str = "global_state_commit_reads";
@@ -197,7 +198,7 @@ where
         correlation_id,
         GLOBAL_STATE_COMMIT_READS,
         COMMIT,
-        GAUGE,
+        GAUGE_METRIC_KEY,
         f64::from(reads),
     );
 
@@ -205,7 +206,7 @@ where
         correlation_id,
         GLOBAL_STATE_COMMIT_WRITES,
         COMMIT,
-        GAUGE,
+        GAUGE_METRIC_KEY,
         f64::from(writes),
     );
 

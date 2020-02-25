@@ -1,20 +1,24 @@
 use engine_core::engine_state::{upgrade::ActivationPoint, Error};
 use engine_grpc_server::engine_server::ipc::DeployCode;
+#[cfg(not(feature = "turbo"))]
 use engine_shared::{stored_value::StoredValue, transform::Transform};
-use engine_test_support::{
-    internal::{
-        utils, ExecuteRequestBuilder, InMemoryWasmTestBuilder, UpgradeRequestBuilder,
-        DEFAULT_GENESIS_CONFIG, DEFAULT_WASM_COSTS,
-    },
-    DEFAULT_ACCOUNT_ADDR,
+use engine_test_support::internal::{
+    utils, InMemoryWasmTestBuilder, UpgradeRequestBuilder, DEFAULT_GENESIS_CONFIG,
+    DEFAULT_WASM_COSTS,
 };
+#[cfg(not(feature = "turbo"))]
+use engine_test_support::{internal::ExecuteRequestBuilder, DEFAULT_ACCOUNT_ADDR};
 use engine_wasm_prep::wasm_costs::WasmCosts;
-use types::{CLValue, Key, ProtocolVersion, U512};
+use types::ProtocolVersion;
+#[cfg(not(feature = "turbo"))]
+use types::{CLValue, Key, U512};
 
 const PROTOCOL_VERSION: ProtocolVersion = ProtocolVersion::V1_0_0;
 const DEFAULT_ACTIVATION_POINT: ActivationPoint = 1;
 const MODIFIED_SYSTEM_UPGRADER_CONTRACT_NAME: &str = "modified_system_upgrader.wasm";
+#[cfg(not(feature = "turbo"))]
 const MODIFIED_MINT_CALLER_CONTRACT_NAME: &str = "modified_mint_caller.wasm";
+#[cfg(not(feature = "turbo"))]
 const PAYMENT_AMOUNT: u64 = 200_000_000;
 
 fn get_upgraded_wasm_costs() -> WasmCosts {
@@ -71,6 +75,7 @@ fn should_upgrade_only_protocol_version() {
     );
 }
 
+#[cfg(not(feature = "turbo"))]
 #[ignore]
 #[test]
 fn should_upgrade_system_contract() {
@@ -146,6 +151,7 @@ fn should_upgrade_system_contract() {
     );
 }
 
+#[cfg(not(feature = "turbo"))]
 #[ignore]
 #[test]
 fn should_upgrade_system_contract_on_patch_bump() {
@@ -224,6 +230,7 @@ fn should_upgrade_system_contract_on_patch_bump() {
     );
 }
 
+#[cfg(not(feature = "turbo"))]
 #[ignore]
 #[test]
 fn should_upgrade_system_contract_on_minor_bump() {
@@ -390,6 +397,7 @@ fn should_allow_only_wasm_costs_minor_version() {
     );
 }
 
+#[cfg(not(feature = "turbo"))]
 #[ignore]
 #[test]
 fn should_upgrade_system_contract_and_wasm_costs_major() {

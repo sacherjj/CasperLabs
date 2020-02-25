@@ -444,14 +444,25 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
       )
     }
 
-    "reject a ballot from a leader not built on a switch block during the voting period" in {
+    "accept a ballot from a leader not built on a switch block but a normal one during the voting period" in {
       implicit val ds = defaultBlockDagStorage
       val leader      = "Alice"
       val runtime     = genesisEraRuntime(none, leaderSequencer = mockSequencer(leader))
       val msg1        = insert(makeBlock(leader, runtime.era, runtime.startTick))
       val msg2        = makeBallot(leader, runtime.era, runtime.endTick, target = msg1.messageHash)
-      runtime.validate(msg2).value shouldBe Left(
-        "A ballot during the voting-only period can only be built on top of a switch block."
+      runtime.validate(msg2).value shouldBe Right(())
+    }
+
+    "reject a ballot from a leader built on an invalid block that itself builds on a switch block" in {
+      implicit val ds = defaultBlockDagStorage
+      val leader      = "Alice"
+      val runtime     = genesisEraRuntime(none, leaderSequencer = mockSequencer(leader))
+      val msg1        = insert(makeBlock(leader, runtime.era, runtime.endTick))
+      val msg2 =
+        insert(makeBlock(leader, runtime.era, runtime.endTick, mainParent = msg1.messageHash))
+      val msg3 = makeBallot(leader, runtime.era, runtime.endTick, target = msg2.messageHash)
+      runtime.validate(msg3).value shouldBe Left(
+        "A ballot during the voting-only period can only be built on pre-era-end blocks and switch blocks."
       )
     }
 

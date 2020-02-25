@@ -81,19 +81,21 @@ class MessageExecutor[F[_]: Concurrent: Log: Time: Metrics: BlockStorage: DagSto
     * so this method needs to be accessible on its own. However it should not be called by the `MessageProducer`
     * itself, because that's not supposed to have side effects beyond persistence, and this here can emit events
     * which end up visible to the outside world.
+    *
+    * Return a wait handle.
     */
-  def effectsAfterAdded(message: ValidatedMessage): F[Unit] =
+  def effectsAfterAdded(message: ValidatedMessage): F[F[Unit]] =
     for {
       _ <- markDeploysAsProcessed(message)
       // Forking event emissions so as not to hold up block processing.
-      _ <- BlockEventEmitter[F].blockAdded(message.messageHash).forkAndLog
-      _ <- updateLastFinalizedBlock(message)
-    } yield ()
+      w1 <- BlockEventEmitter[F].blockAdded(message.messageHash).forkAndLog
+      w2 <- updateLastFinalizedBlock(message)
+    } yield w1 *> w2
 
-  private def updateLastFinalizedBlock(message: Message): F[Unit] =
+  private def updateLastFinalizedBlock(message: Message): F[F[Unit]] =
     for {
       result <- MultiParentFinalizer[F].onNewMessageAdded(message)
-      _ <- result.traverse {
+      w <- result.traverse {
             case MultiParentFinalizer.FinalizedBlocks(mainParent, _, secondary) => {
               val mainParentFinalizedStr = mainParent.show
               val secondaryParentsFinalizedStr =
@@ -102,13 +104,13 @@ class MessageExecutor[F[_]: Concurrent: Log: Time: Metrics: BlockStorage: DagSto
                 _ <- Log[F].info(
                       s"New last finalized block hashes are ${mainParentFinalizedStr -> null}, ${secondaryParentsFinalizedStr -> null}."
                     )
-                _ <- FinalityStorage[F].markAsFinalized(mainParent, secondary)
-                _ <- DeployBuffer[F].removeFinalizedDeploys(secondary + mainParent).forkAndLog
-                _ <- BlockEventEmitter[F].newLastFinalizedBlock(mainParent, secondary).forkAndLog
-              } yield ()
+                _  <- FinalityStorage[F].markAsFinalized(mainParent, secondary)
+                w1 <- DeployBuffer[F].removeFinalizedDeploys(secondary + mainParent).forkAndLog
+                w2 <- BlockEventEmitter[F].newLastFinalizedBlock(mainParent, secondary).forkAndLog
+              } yield w1 *> w2
             }
           }
-    } yield ()
+    } yield w getOrElse ().pure[F]
 
   private def markDeploysAsProcessed(message: Message): F[Unit] =
     for {

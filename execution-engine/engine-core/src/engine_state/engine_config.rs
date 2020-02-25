@@ -1,7 +1,8 @@
 /// The runtime configuration of the execution engine
-#[derive(Debug, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct EngineConfig {
     // feature flags go here
+    turbo: bool,
 }
 
 impl EngineConfig {
@@ -9,10 +10,19 @@ impl EngineConfig {
     pub fn new() -> EngineConfig {
         Default::default()
     }
+
+    pub fn turbo(self) -> bool {
+        self.turbo
+    }
+
+    pub fn with_turbo(mut self, turbo: bool) -> EngineConfig {
+        self.turbo = turbo;
+        self
+    }
 }
 
 impl Default for EngineConfig {
     fn default() -> Self {
-        EngineConfig {}
+        EngineConfig { turbo: false }
     }
 }

@@ -2,16 +2,19 @@
 
 extern crate alloc;
 
-mod contract_runtime;
-mod contract_storage;
-
 use alloc::string::String;
 
-use contract::{contract_api::runtime, unwrap_or_revert::UnwrapOrRevert};
-use mint::Mint;
-use types::{system_contract_errors::mint::Error, ApiError, CLValue, URef, U512};
-
-use crate::{contract_runtime::ContractRuntime, contract_storage::ContractStorage};
+use contract::{
+    contract_api::{runtime, storage},
+    unwrap_or_revert::UnwrapOrRevert,
+};
+use mint::{Mint, RuntimeProvider, StorageProvider};
+use types::{
+    account::PublicKey,
+    bytesrepr::{FromBytes, ToBytes},
+    system_contract_errors::mint::Error,
+    ApiError, CLTyped, CLValue, Key, URef, U512,
+};
 
 const METHOD_MINT: &str = "mint";
 const METHOD_CREATE: &str = "create";
@@ -20,10 +23,51 @@ const METHOD_TRANSFER: &str = "transfer";
 
 pub struct MintContract;
 
-impl Mint<ContractRuntime, ContractStorage> for MintContract {}
+impl RuntimeProvider for MintContract {
+    fn get_caller(&self) -> PublicKey {
+        runtime::get_caller()
+    }
+
+    fn put_key(&mut self, name: &str, key: Key) {
+        runtime::put_key(name, key)
+    }
+}
+
+impl StorageProvider for MintContract {
+    fn new_uref<T: CLTyped + ToBytes>(&mut self, init: T) -> URef {
+        storage::new_uref(init)
+    }
+
+    fn write_local<K: ToBytes, V: CLTyped + ToBytes>(&mut self, key: K, value: V) {
+        storage::write_local(key, value)
+    }
+
+    fn read_local<K: ToBytes, V: CLTyped + FromBytes>(
+        &mut self,
+        key: &K,
+    ) -> Result<Option<V>, Error> {
+        storage::read_local(key).map_err(|_| Error::Storage)
+    }
+
+    fn read<T: CLTyped + FromBytes>(&mut self, uref: URef) -> Result<Option<T>, Error> {
+        storage::read(uref).map_err(|_| Error::Storage)
+    }
+
+    fn write<T: CLTyped + ToBytes>(&mut self, uref: URef, value: T) -> Result<(), Error> {
+        storage::write(uref, value);
+        Ok(())
+    }
+
+    fn add<T: CLTyped + ToBytes>(&mut self, uref: URef, value: T) -> Result<(), Error> {
+        storage::add(uref, value);
+        Ok(())
+    }
+}
+
+impl Mint for MintContract {}
 
 pub fn delegate() {
-    let mint_contract = MintContract;
+    let mut mint_contract = MintContract;
 
     let method_name: String = runtime::get_arg(0)
         .unwrap_or_revert_with(ApiError::MissingArgument)
