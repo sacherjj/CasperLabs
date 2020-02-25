@@ -7,7 +7,7 @@ object Dependencies {
   val circeVersion   = "0.12.1"
   val http4sVersion  = "0.21.0-M5"
   val kamonVersion   = "1.1.3"
-  val catsVersion    = "2.0.0"
+  val catsVersion    = "2.1.0"
   val catsMtlVersion = "0.7.0"
   val doobieVersion  = "0.8.4"
   val fs2Version     = "2.0.1"
