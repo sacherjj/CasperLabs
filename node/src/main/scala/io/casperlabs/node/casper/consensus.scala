@@ -75,6 +75,9 @@ trait Consensus[F[_]] {
 
   /** Provide a rank to start the initial synchronization from. */
   def lastSynchronizedRank: F[Long]
+
+  /** Latest messages for pull based gossiping. */
+  def latestMessages: F[Set[Block.Justification]]
 }
 
 class NCB[F[_]: Concurrent: Time: Log: BlockStorage: DagStorage: ExecutionEngineService: MultiParentCasperRef: Metrics: DeployStorage: DeployBuffer: DeploySelection: FinalityStorage: Validation: CasperLabsProtocol: EventStream](
@@ -194,6 +197,14 @@ class NCB[F[_]: Concurrent: Time: Log: BlockStorage: DagStorage: ExecutionEngine
         .getOrElse(0L)
     } yield minRank
 
+  override def latestMessages: F[Set[Block.Justification]] =
+    for {
+      dag <- DagStorage[F].getRepresentation
+      lm  <- dag.latestMessages
+    } yield lm.values.flatten
+      .map(m => Block.Justification(m.validatorId, m.messageHash))
+      .toSet
+
   private def show(hash: ByteString) =
     PrettyPrinter.buildString(hash)
 }
@@ -307,6 +318,30 @@ object Highway {
             // initial sync to start from their keyblock forever.
             maxRank = keyBlocks.map(_.jRank).max
           } yield maxRank
+
+        /** Serve the latest messages from childless eras and their parents,
+          * to keep the data used in pull based gossiping to a reasonable limit.
+          */
+        override def latestMessages: F[Set[Block.Justification]] =
+          for {
+            eras <- supervisor.eras
+            childless = eras.collect {
+              case entry if entry.children.isEmpty =>
+                entry.runtime.era
+            }
+            active = childless.flatMap { era =>
+              Set(era.parentKeyBlockHash, era.keyBlockHash)
+            }
+            dag <- DagStorage[F].getRepresentation
+            lms <- active.toList.traverse { keyBlockHash =>
+                    dag.latestInEra(keyBlockHash).flatMap(_.latestMessages)
+                  }
+          } yield {
+            lms.flatMap { lm =>
+              lm.values.flatten
+                .map(m => Block.Justification(m.validatorId, m.messageHash))
+            }.toSet
+          }
       }
     } yield cons
   }
