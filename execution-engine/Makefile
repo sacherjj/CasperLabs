@@ -150,11 +150,17 @@ format:
 lint:
 	$(CARGO) clippy --all-targets --all -- -D warnings -A renamed_and_removed_lints
 
+.PHONY: audit
+audit:
+	$(CARGO) generate-lockfile
+	$(CARGO) audit
+
 .PHONY: check-rs
 check-rs: \
 	build \
 	check-format \
 	lint \
+	audit \
 	test-rs \
 	test-contracts-rs \
 
@@ -163,6 +169,7 @@ check: \
 	build \
 	check-format \
 	lint \
+	audit \
 	test \
 	test-contracts
 
@@ -213,6 +220,7 @@ setup-rs: rust-toolchain
 	$(RUSTUP) update
 	$(RUSTUP) toolchain install $(RUST_TOOLCHAIN)
 	$(RUSTUP) target add --toolchain $(RUST_TOOLCHAIN) wasm32-unknown-unknown
+	$(CARGO) install cargo-audit
 
 .PHONY: setup-as
 setup-as: contract-as/package.json
