@@ -40,6 +40,7 @@ impl<T> From<PoisonError<T>> for AccumulationError {
 /// that a call to push is not blocked by a call to drain. The behavior with
 /// multiple pushers is unspecified, as it is currently not designed to be used
 /// with multiple pushers.
+#[derive(Clone)]
 pub struct Accumulator<T> {
     main: Arc<Mutex<VecDeque<T>>>,
     alt: Arc<Mutex<VecDeque<T>>>,
@@ -97,21 +98,6 @@ impl<T: Clone + Send + Sync> Drainer<T> for Accumulator<T> {
         let ret = main_guard.drain(..).collect();
         *timer_guard = Instant::now();
         Ok(ret)
-    }
-}
-
-impl<T> Clone for Accumulator<T> {
-    fn clone(&self) -> Self {
-        let main = Arc::clone(&self.main);
-        let alt = Arc::clone(&self.alt);
-        let timer = Arc::clone(&self.timer);
-        let poll_length = Arc::clone(&self.expiration_duration);
-        Accumulator {
-            main,
-            alt,
-            timer,
-            expiration_duration: poll_length,
-        }
     }
 }
 

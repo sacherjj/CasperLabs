@@ -10,6 +10,7 @@ use std::{
 
 use grpc::RequestOptions;
 use lmdb::DatabaseFlags;
+use log::LevelFilter;
 
 use engine_core::{
     engine_state::{
@@ -32,6 +33,7 @@ use engine_shared::{
     additive_map::AdditiveMap,
     contract::Contract,
     gas::Gas,
+    logging::{self, Settings, Style},
     newtypes::{Blake2bHash, CorrelationId},
     os::get_page_size,
     stored_value::StoredValue,
@@ -86,8 +88,16 @@ pub struct WasmTestBuilder<S> {
     pos_contract_uref: Option<URef>,
 }
 
+impl<S> WasmTestBuilder<S> {
+    fn initialize_logging() {
+        let log_settings = Settings::new(LevelFilter::Warn).with_style(Style::HumanReadable);
+        let _ = logging::initialize(log_settings);
+    }
+}
+
 impl Default for InMemoryWasmTestBuilder {
     fn default() -> Self {
+        Self::initialize_logging();
         let engine_config = if cfg!(feature = "turbo") {
             EngineConfig::new().with_turbo(true)
         } else {
@@ -150,6 +160,7 @@ impl InMemoryWasmTestBuilder {
         engine_config: EngineConfig,
         post_state_hash: Vec<u8>,
     ) -> Self {
+        Self::initialize_logging();
         let engine_state = EngineState::new(global_state, engine_config);
         WasmTestBuilder {
             engine_state: Rc::new(engine_state),
@@ -165,6 +176,7 @@ impl LmdbWasmTestBuilder {
         data_dir: &T,
         engine_config: EngineConfig,
     ) -> Self {
+        Self::initialize_logging();
         let page_size = get_page_size().expect("should get page size");
         let global_state_dir = Self::create_and_get_global_state_dir(data_dir);
         let environment = Arc::new(
@@ -226,6 +238,7 @@ impl LmdbWasmTestBuilder {
         engine_config: EngineConfig,
         post_state_hash: Vec<u8>,
     ) -> Self {
+        Self::initialize_logging();
         let page_size = get_page_size().expect("should get page size");
         let global_state_dir = Self::create_and_get_global_state_dir(data_dir);
         let environment = Arc::new(

@@ -4,7 +4,7 @@ mod tests;
 use std::{mem, time::Instant};
 
 use engine_shared::{
-    logging::{log_duration, log_metric, GAUGE},
+    logging::{log_duration, log_metric},
     newtypes::{Blake2bHash, CorrelationId},
 };
 use types::bytesrepr::{self, FromBytes, ToBytes};
@@ -13,6 +13,7 @@ use crate::{
     transaction_source::{Readable, Writable},
     trie::{self, Parents, Pointer, Trie, RADIX},
     trie_store::TrieStore,
+    GAUGE_METRIC_KEY,
 };
 
 const TRIE_STORE_READ_DURATION: &str = "trie_store_read_duration";
@@ -78,7 +79,7 @@ where
                     correlation_id,
                     TRIE_STORE_READ_GETS,
                     GET,
-                    GAUGE,
+                    GAUGE_METRIC_KEY,
                     f64::from(get_counter),
                 );
                 log_duration(
@@ -111,7 +112,7 @@ where
                                 correlation_id,
                                 TRIE_STORE_READ_GETS,
                                 GET,
-                                GAUGE,
+                                GAUGE_METRIC_KEY,
                                 f64::from(get_counter),
                             );
                             log_duration(
@@ -132,7 +133,7 @@ where
                             correlation_id,
                             TRIE_STORE_READ_GETS,
                             GET,
-                            GAUGE,
+                            GAUGE_METRIC_KEY,
                             f64::from(get_counter),
                         );
                         log_duration(
@@ -161,7 +162,7 @@ where
                                 correlation_id,
                                 TRIE_STORE_READ_GETS,
                                 GET,
-                                GAUGE,
+                                GAUGE_METRIC_KEY,
                                 f64::from(get_counter),
                             );
                             log_duration(
@@ -182,7 +183,7 @@ where
                         correlation_id,
                         TRIE_STORE_READ_GETS,
                         GET,
-                        GAUGE,
+                        GAUGE_METRIC_KEY,
                         f64::from(get_counter),
                     );
                     log_duration(
@@ -244,7 +245,7 @@ where
                     correlation_id,
                     TRIE_STORE_SCAN_GETS,
                     GET,
-                    GAUGE,
+                    GAUGE_METRIC_KEY,
                     f64::from(get_counter),
                 );
                 log_duration(
@@ -272,7 +273,7 @@ where
                             correlation_id,
                             TRIE_STORE_SCAN_GETS,
                             GET,
-                            GAUGE,
+                            GAUGE_METRIC_KEY,
                             f64::from(get_counter),
                         );
                         log_duration(
@@ -297,7 +298,7 @@ where
                             correlation_id,
                             TRIE_STORE_SCAN_GETS,
                             GET,
-                            GAUGE,
+                            GAUGE_METRIC_KEY,
                             f64::from(get_counter),
                         );
                         log_duration(
@@ -321,7 +322,7 @@ where
                         correlation_id,
                         TRIE_STORE_SCAN_GETS,
                         GET,
-                        GAUGE,
+                        GAUGE_METRIC_KEY,
                         f64::from(get_counter),
                     );
                     log_duration(
@@ -349,7 +350,7 @@ where
                             correlation_id,
                             TRIE_STORE_SCAN_GETS,
                             GET,
-                            GAUGE,
+                            GAUGE_METRIC_KEY,
                             f64::from(get_counter),
                         );
                         log_duration(
@@ -716,7 +717,7 @@ where
                 correlation_id,
                 TRIE_STORE_WRITE_PUTS,
                 PUT,
-                GAUGE,
+                GAUGE_METRIC_KEY,
                 f64::from(put_counter),
             );
             log_duration(
