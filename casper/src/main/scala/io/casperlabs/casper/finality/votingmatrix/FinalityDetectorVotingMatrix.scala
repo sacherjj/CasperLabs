@@ -140,9 +140,10 @@ object FinalityDetectorVotingMatrix {
       rFTT: Double
   ): F[FinalityDetectorVotingMatrix[F]] =
     for {
-      _ <- Concurrent[F]
-            .delay(
-              throw io.casperlabs.shared.FatalErrorShutdown(
+      _ <- Concurrent[F].unit.map(_ => println(s"##### Before\trFTT is $rFTT"))
+      _ <- MonadThrowable[F]
+            .raiseError(
+              io.casperlabs.shared.FatalErrorShutdown(
                 s"Relative FTT has to be bigger than 0 and less than 0.5. Got: $rFTT"
               )
             )
