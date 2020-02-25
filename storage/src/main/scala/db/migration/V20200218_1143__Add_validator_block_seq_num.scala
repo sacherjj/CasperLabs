@@ -25,6 +25,10 @@ class V20200218_1143__Add_validator_block_seq_num extends BaseJavaMigration with
       .transact(xa)
       .runSyncUnsafe()
 
+    sql"CREATE INDEX idx_validator_block_seq_num ON block_metadata (validator, validator_block_seq_num)".update.run
+      .transact(xa)
+      .runSyncUnsafe()
+
     val data = sql"SELECT block_hash, data FROM block_metadata"
       .query[(BlockHash, BlockSummary)]
       .stream
