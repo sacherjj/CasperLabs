@@ -177,7 +177,8 @@ class SynchronizerImpl[F[_]: Concurrent: Log: Metrics](
       knownBlockHashes: List[ByteString],
       prevSyncState: SyncState
   ): F[Either[SyncError, SyncState]] = {
-    val currentTargets = targetBlockHashes.toSet
+    val currentTargets   = targetBlockHashes.toSet
+    val currentSyncState = prevSyncState.withZeroIterationDistance(targetBlockHashes)
     service
       .streamAncestorBlockSummaries(
         StreamAncestorBlockSummariesRequest(
@@ -186,7 +187,7 @@ class SynchronizerImpl[F[_]: Concurrent: Log: Metrics](
           maxDepth = maxDepthAncestorsRequest
         )
       )
-      .foldWhileLeftEvalL(prevSyncState.asRight[SyncError].pure[F]) {
+      .foldWhileLeftEvalL(currentSyncState.asRight[SyncError].pure[F]) {
         case (Right(syncState), summary) =>
           val effect = for {
             _ <- EitherT.liftF(
@@ -419,6 +420,12 @@ object SynchronizerImpl {
       // Collect final parent relationships so we can detect missing ones.
       parentToChildren = parentToChildren |+| iterationState.parentToChildren
     )
+
+    def withZeroIterationDistance(targets: List[ByteString]) = copy(
+      iterationState = iterationState.copy(
+        distanceFromTargets = iterationState.distanceFromTargets ++ targets.map(_ -> 0)
+      )
+    )
   }
   object SyncState {
     def initial(originalTargets: Set[ByteString]) =
@@ -426,7 +433,7 @@ object SynchronizerImpl {
         originalTargets,
         summaries = Map.empty,
         ranks = Set.empty,
-        distanceFromOriginalTargets = Map.empty,
+        distanceFromOriginalTargets = originalTargets.toSeq.map(_ -> 0).toMap,
         parentToChildren = Map.empty,
         iterationState = IterationState.empty
       )
