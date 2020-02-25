@@ -168,7 +168,6 @@ steps:
 
 - name: black-and-flake8
   commands:
-  - "python3 -m pip install pipenv"
   - "cd integration-testing"
   - "./run_flake8_black.sh"
   image: "casperlabs/buildenv:latest"
@@ -200,7 +199,6 @@ steps:
 
 - name: black-and-flake8-bors
   commands:
-  - "python3 -m pip install pipenv"
   - "cd integration-testing"
   - "./run_flake8_black.sh"
   image: "casperlabs/buildenv:latest"
@@ -420,8 +418,6 @@ steps:
 
 - name: run-integration-tests-parallel-0
   commands:
-  - "apt-get update && apt-get -y install gcc"
-  - "python3 -m pip install pipenv pytest dataclasses typing_extensions dataclasses grpcio grpcio_tools protobuf in-place ed25519 pyblake2 lz4"
   - "cd integration-testing"
   - "./docker_run_tests.sh --unique_run_num 0"
   environment:
@@ -442,8 +438,6 @@ steps:
 
 - name: run-integration-tests-parallel-1
   commands:
-  - "apt-get update && apt-get -y install gcc"
-  - "python3 -m pip install pipenv pytest dataclasses typing_extensions dataclasses grpcio grpcio_tools protobuf in-place ed25519 pyblake2 lz4"
   - "cd integration-testing"
   - "./docker_run_tests.sh --unique_run_num 1"
   environment:
@@ -464,8 +458,6 @@ steps:
 
 - name: run-integration-tests-parallel-2
   commands:
-  - "apt-get update && apt-get -y install gcc"
-  - "python3 -m pip install pipenv pytest dataclasses typing_extensions dataclasses grpcio grpcio_tools protobuf in-place ed25519 pyblake2 lz4"
   - "cd integration-testing"
   - "./docker_run_tests.sh --unique_run_num 2"
   environment:
@@ -486,8 +478,6 @@ steps:
 
 - name: run-integration-tests-serial-3
   commands:
-  - "apt-get update && apt-get -y install gcc"
-  - "python3 -m pip install pipenv pytest dataclasses typing_extensions dataclasses grpcio grpcio_tools protobuf in-place ed25519 pyblake2 lz4"
   - "cd integration-testing"
   - "./docker_run_tests.sh --unique_run_num 3"
   environment:
