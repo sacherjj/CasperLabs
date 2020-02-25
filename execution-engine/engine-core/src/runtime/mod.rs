@@ -1782,7 +1782,6 @@ where
     ) -> Result<CLValue, Error> {
         const METHOD_BOND: &str = "bond";
         const METHOD_UNBOND: &str = "unbond";
-        const METHOD_STEP: &str = "step";
         const METHOD_GET_PAYMENT_PURSE: &str = "get_payment_purse";
         const METHOD_SET_REFUND_PURSE: &str = "set_refund_purse";
         const METHOD_GET_REFUND_PURSE: &str = "get_refund_purse";
@@ -1855,10 +1854,6 @@ where
                 runtime
                     .unbond(validator, maybe_amount)
                     .map_err(Self::reverter)?;
-                CLValue::from_t(()).map_err(Self::reverter)?
-            }
-            METHOD_STEP => {
-                runtime.step().map_err(Self::reverter)?;
                 CLValue::from_t(()).map_err(Self::reverter)?
             }
             METHOD_GET_PAYMENT_PURSE => {
