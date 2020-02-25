@@ -149,6 +149,7 @@ class BlockDetails extends React.Component<
           </Link>],
         ['j-Rank', header.getJRank()],
         ['m-Rank', header.getMainRank()],
+        ['Round ID', header.getRoundId()],
         ['Type', <BlockType header={header} />],
         [
           'Parents',
