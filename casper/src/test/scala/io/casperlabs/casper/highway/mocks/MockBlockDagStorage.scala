@@ -44,14 +44,15 @@ class MockBlockDagStorage[F[_]: Monad](
     override def lookup(blockHash: BlockHash) =
       messagesRef.get.map(_.get(blockHash))
 
-    override def children(blockHash: BlockHash)                                                = ???
-    override def justificationToBlocks(blockHash: BlockHash)                                   = ???
-    override def contains(blockHash: BlockHash)                                                = ???
-    override def topoSort(startBlockNumber: Long, endBlockNumber: Long)                        = ???
-    override def topoSort(startBlockNumber: Long)                                              = ???
-    override def topoSortTail(tailLength: Int)                                                 = ???
-    override def topoSortTailValidator(validator: Validator, blocksNum: Int)                   = ???
-    override def topoSortValidator(validator: Validator, blocksNum: Int, endBlockNumber: Long) = ???
+    override def children(blockHash: BlockHash)                              = ???
+    override def justificationToBlocks(blockHash: BlockHash)                 = ???
+    override def contains(blockHash: BlockHash)                              = ???
+    override def topoSort(startBlockNumber: Long, endBlockNumber: Long)      = ???
+    override def topoSort(startBlockNumber: Long)                            = ???
+    override def topoSortTail(tailLength: Int)                               = ???
+    override def topoSortTailValidator(validator: Validator, blocksNum: Int) = ???
+    override def topoSortValidator(validator: Validator, sliceDepth: Int, endBlockNumber: Long) =
+      ???
 
     override def latestGlobal = ???
 

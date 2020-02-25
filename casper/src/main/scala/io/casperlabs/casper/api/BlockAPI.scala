@@ -246,7 +246,7 @@ object BlockAPI {
   /* Similar to [[getBlockInfosWithDeploys]] but in addition filters blocks by a validator. */
   def getBlockInfosWithDeploysByValidator[F[_]: MonadThrowable: Log: DeployStorage: DagStorage: Fs2Compiler: BlockStorage](
       validator: Validator,
-      blocksNum: Int,
+      sliceDepth: Int,
       maxBlockSeqNum: Long,
       maybeDeployView: Option[DeployInfo.View],
       blockView: BlockInfo.View
@@ -254,14 +254,13 @@ object BlockAPI {
     DagStorage[F].getRepresentation flatMap { dag =>
       maxBlockSeqNum match {
         case 0 =>
-          dag.topoSortTailValidator(validator, blocksNum).compile.toVector
+          dag
+            .topoSortTailValidator(validator, sliceDepth)
+            .compile
+            .toVector
         case r =>
           dag
-            .topoSortValidator(
-              validator = validator,
-              endBlockNumber = r,
-              blocksNum = blocksNum
-            )
+            .topoSortValidator(validator = validator, endBlockNumber = r, sliceDepth = sliceDepth)
             .compile
             .toVector
       }

@@ -94,7 +94,7 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream
       BlockAPI
         .getBlockInfosWithDeploysByValidator[F](
           validator,
-          blocksNum = blocksNum,
+          sliceDepth = blocksNum,
           maxBlockSeqNum = maxBlockSeqNum,
           maybeDeployView = DeployInfo.View.BASIC.some,
           blockView = BlockInfo.View.FULL

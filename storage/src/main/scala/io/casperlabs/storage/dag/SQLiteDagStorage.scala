@@ -253,33 +253,35 @@ class SQLiteDagStorage[F[_]: Sync](
 
   override def topoSortValidator(
       validator: Validator,
-      blocksNum: Int,
+      sliceDepth: Int,
       endBlockNumber: Long
-  ) = {
-    val subQuery = fr"""SELECT validator_block_seq_num, """ ++ blockInfoCols() ++ fr"""
-          FROM block_metadata
-          WHERE validator_block_seq_num<=$endBlockNumber AND validator=$validator
-          ORDER BY validator_block_seq_num DESC
-          LIMIT $blocksNum"""
-    (fr"SELECT * FROM (" ++ subQuery ++ fr") ORDER BY validator_block_seq_num ASC")
+  ) =
+    (fr"""SELECT validator_block_seq_num, """ ++ blockInfoCols() ++
+      fr"""
+          |FROM block_metadata a
+          |WHERE validator+$validator AND
+          |      validator_block_seq_num > $endBlockNumber - $sliceDepth""".stripMargin)
       .query[(Long, BlockInfo)]
       .stream
       .transact(readXa)
       .groupByRank
-  }
 
-  override def topoSortTailValidator(validator: Validator, blocksNum: Int) = {
-    val subQuery = fr"""SELECT validator_block_seq_num, """ ++ blockInfoCols() ++ fr"""
-          FROM block_metadata
-          WHERE validator=$validator
-          ORDER BY validator_block_seq_num DESC
-          LIMIT $blocksNum"""
-    (fr"SELECT * FROM (" ++ subQuery ++ fr") ORDER BY validator_block_seq_num ASC")
+  override def topoSortTailValidator(validator: Validator, sliceDepth: Int) =
+    (fr"""SELECT a.validator_block_seq_num, """ ++ blockInfoCols("a") ++
+      fr"""
+          |FROM block_metadata a
+          |JOIN (
+          | SELECT max(validator_block_seq_num) as max_validator_block_seq_num
+          | FROM block_metadata
+          | WHERE validator=$validator
+          |) b
+          |ON a.validator=$validator AND
+          |   a.validator_block_seq_num > b.max_validator_block_seq_num - $sliceDepth
+          |ORDER BY a.validator_block_seq_num""".stripMargin)
       .query[(Long, BlockInfo)]
       .stream
       .transact(readXa)
       .groupByRank
-  }
 
   override def latestInEra(keyBlockHash: BlockHash): F[EraTipRepresentation[F]] = Sync[F].delay {
     SQLiteTipRepresentation(keyBlockHash): EraTipRepresentation[F]

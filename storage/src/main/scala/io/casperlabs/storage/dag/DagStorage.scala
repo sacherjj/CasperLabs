@@ -187,7 +187,7 @@ trait DagRepresentation[F[_]] extends DagLookup[F] {
   /** Similar to [[topoSort]] but in addition filters blocks by a validator*/
   def topoSortValidator(
       validator: Validator,
-      blocksNum: Int,
+      sliceDepth: Int,
       endBlockNumber: Long
   ): fs2.Stream[F, Vector[BlockInfo]]
 

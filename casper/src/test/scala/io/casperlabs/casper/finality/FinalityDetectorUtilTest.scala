@@ -168,7 +168,7 @@ object FinalityDetectorUtilTest {
       /** Similar to [[topoSort]] but in addition filters blocks by a validator */
       override def topoSortValidator(
           validator: Validator,
-          blocksNum: Int,
+          sliceDepth: Int,
           endBlockNumber: Level
       ) = ???
 

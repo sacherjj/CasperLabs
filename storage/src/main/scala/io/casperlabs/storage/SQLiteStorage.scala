@@ -152,9 +152,9 @@ object SQLiteStorage {
 
       override def topoSortValidator(
           validator: Validator,
-          blocksNum: Int,
+          sliceDepth: Int,
           endBlockNumber: Long
-      ) = dagStorage.topoSortValidator(validator, blocksNum, endBlockNumber)
+      ) = dagStorage.topoSortValidator(validator, sliceDepth, endBlockNumber)
 
       override def topoSortTailValidator(validator: Validator, blocksNum: Int) =
         dagStorage.topoSortTailValidator(validator, blocksNum)
