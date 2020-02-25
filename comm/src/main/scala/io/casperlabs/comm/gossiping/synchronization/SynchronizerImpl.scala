@@ -306,7 +306,9 @@ class SynchronizerImpl[F[_]: Concurrent: Log: Metrics](
     val hash = summary.blockHash
     def unreachable(msg: String) =
       EitherT(
-        (Unreachable(summary, maxDepthAncestorsRequest, msg): SyncError).asLeft[(Int, Int)].pure[F]
+        (Unreachable(summary, maxDepthAncestorsRequest, targetBlockHashes, msg): SyncError)
+          .asLeft[(Int, Int)]
+          .pure[F]
       )
 
     def tooDeep =
