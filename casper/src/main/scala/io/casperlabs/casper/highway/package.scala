@@ -8,8 +8,11 @@ import io.casperlabs.crypto.Keys.PublicKeyBS
 import io.casperlabs.storage.BlockHash
 import io.casperlabs.models.Message
 import java.time.Instant
+import java.time.temporal.ChronoUnit
 import java.util.concurrent.TimeUnit
+
 import org.apache.commons.math3.util.ArithmeticUtils
+
 import scala.annotation.tailrec
 import scala.concurrent.duration.FiniteDuration
 import shapeless.tag.@@
@@ -50,11 +53,23 @@ package object highway {
   }
 
   implicit class InstantOps(val a: Instant) extends AnyVal {
+
+    /** @see https://bugs.java.com/bugdatabase/view_bug.do?bug_id=8141452 */
+    private def timeUnitToChronoUnit(t: TimeUnit): ChronoUnit = t match {
+      case TimeUnit.NANOSECONDS  => ChronoUnit.NANOS
+      case TimeUnit.MICROSECONDS => ChronoUnit.MICROS
+      case TimeUnit.MILLISECONDS => ChronoUnit.MILLIS
+      case TimeUnit.SECONDS      => ChronoUnit.SECONDS
+      case TimeUnit.MINUTES      => ChronoUnit.MINUTES
+      case TimeUnit.HOURS        => ChronoUnit.HOURS
+      case TimeUnit.DAYS         => ChronoUnit.DAYS
+    }
+
     def plus(b: FiniteDuration) =
-      a.plus(b.length, b.unit.toChronoUnit)
+      a.plus(b.length, timeUnitToChronoUnit(b.unit))
 
     def minus(b: FiniteDuration) =
-      a.minus(b.length, b.unit.toChronoUnit)
+      a.minus(b.length, timeUnitToChronoUnit(b.unit))
   }
 
   implicit class ClockOps[F[_]: Applicative](clock: Clock[F]) {
