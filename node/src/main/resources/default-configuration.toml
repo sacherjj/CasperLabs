@@ -98,7 +98,7 @@ init-sync-skip-failed-nodes = false
 init-sync-step = 100
 
 # Time to wait between initial synchronization attempts.
-init-sync-round-period = "30second"
+init-sync-round-period = "1second"
 
 # Maximum number of blocks to allow to be synced initially.
 init-sync-max-block-count = 1000000
