@@ -90,11 +90,11 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream
   // TODO: Performance issue - make use of Sangria Projections.
   // The same as the TODO #2 of the 'blockFetcher'
   val blocksByValidator: (Validator, Int, Long) => Action[Unit, List[BlockAndMaybeDeploys]] =
-    (validator, blocksNum, maxBlockSeqNum) =>
+    (validator, sliceDepth, maxBlockSeqNum) =>
       BlockAPI
         .getBlockInfosWithDeploysByValidator[F](
           validator,
-          sliceDepth = blocksNum,
+          sliceDepth = sliceDepth,
           maxBlockSeqNum = maxBlockSeqNum,
           maybeDeployView = DeployInfo.View.BASIC.some,
           blockView = BlockInfo.View.FULL

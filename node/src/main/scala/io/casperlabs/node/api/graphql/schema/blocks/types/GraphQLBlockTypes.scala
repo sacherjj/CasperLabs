@@ -160,11 +160,11 @@ class GraphQLBlockTypes(
           "blocks",
           ListType(BlockType),
           "Blocks produced by the validator".some,
-          arguments = blocks.arguments.BlocksNum :: blocks.arguments.MaxBlockSeqNum :: Nil,
+          arguments = blocks.arguments.SliceDepth :: blocks.arguments.MaxBlockSeqNum :: Nil,
           resolve = c =>
             blocksByValidator(
               c.value,
-              c.arg(blocks.arguments.BlocksNum),
+              c.arg(blocks.arguments.SliceDepth),
               c.arg(blocks.arguments.MaxBlockSeqNum)
             )
         )
