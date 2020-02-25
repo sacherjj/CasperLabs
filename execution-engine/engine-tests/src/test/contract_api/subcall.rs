@@ -69,8 +69,6 @@ fn should_charge_gas_for_subcall() {
     );
 }
 
-// TODO: remove `#[should_panic]` once subcalls' gas costs are included in total costs.
-#[should_panic]
 #[ignore]
 #[test]
 fn should_add_all_gas_for_subcall() {
