@@ -360,7 +360,7 @@ class SQLiteDagStorage[F[_]: Sync](
     }
 
     val lfbChainQuery =
-      sql"""INSERT INTO lfb_chain (block_hash, indirectly_finalized)
+      sql"""INSERT OR IGNORE INTO lfb_chain (block_hash, indirectly_finalized)
              VALUES ($mainParent, ${ByteString.copyFrom(secondary.asJava)})""".update.run.void
 
     val transaction = for {
@@ -379,7 +379,7 @@ class SQLiteDagStorage[F[_]: Sync](
       .transact(readXa)
 
   override def getLastFinalizedBlock: F[BlockHash] =
-    sql"""SELECT block_hash FROM lfb_chain ORDER BY id DESC LIMIT 1"""
+    sql"""SELECT block_hash FROM lfb_chain ORDER BY rowid DESC LIMIT 1"""
       .query[BlockHash]
       .unique
       .transact(readXa)

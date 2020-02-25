@@ -12,10 +12,10 @@ import io.casperlabs.crypto.codec.{Base16, Base64}
 import org.apache.commons.io.IOUtils
 import org.rogach.scallop._
 
-import scala.concurrent.duration.FiniteDuration
+import scala.concurrent.duration._
 
 object Options {
-  val TIMEOUT_SECONDS_DEFAULT: Long = 3 * 60
+  val TIMEOUT_SECONDS_DEFAULT = 3.minutes
 
   val hexCheck: String => Boolean  = _.matches("[0-9a-fA-F]+")
   val hashCheck: String => Boolean = x => hexCheck(x) && x.length == 64
@@ -144,7 +144,7 @@ object Options {
       )
 
     val timeoutSeconds =
-      opt[Long](descr = "Timeout in seconds.", default = Option(TIMEOUT_SECONDS_DEFAULT))
+      opt[Long](descr = "Timeout in seconds.", default = Option(TIMEOUT_SECONDS_DEFAULT.toSeconds))
 
     addValidation {
       val sessionsProvided =
@@ -318,7 +318,7 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
       )
 
     val timeoutSeconds =
-      opt[Long](descr = "Timeout in seconds.", default = Option(TIMEOUT_SECONDS_DEFAULT))
+      opt[Long](descr = "Timeout in seconds.", default = Option(TIMEOUT_SECONDS_DEFAULT.toSeconds))
 
   }
   addSubcommand(sendDeploy)
@@ -393,7 +393,7 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
 
   val propose = new Subcommand("propose") {
     descr(
-      "Force a node to propose a block based on its accumulated deploys."
+      "[DEPRECATED] Force a node to propose a block based on its accumulated deploys."
     )
   }
   addSubcommand(propose)
@@ -449,7 +449,7 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
       )
 
     val timeoutSeconds =
-      opt[Long](descr = "Timeout in seconds.", default = Option(TIMEOUT_SECONDS_DEFAULT))
+      opt[Long](descr = "Timeout in seconds.", default = Option(TIMEOUT_SECONDS_DEFAULT.toSeconds))
   }
   addSubcommand(showDeploy)
 

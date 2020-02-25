@@ -127,6 +127,7 @@ object Log {
   private def defaultSink = ConsoleSink.text(colored = false)
 
   private def defaultLevels: Map[String, IzLog.Level] = Map(
+    "com.zaxxer.hikari.pool"                              -> IzLog.Level.Warn,
     "org.http4s"                                          -> IzLog.Level.Warn,
     "io.netty"                                            -> IzLog.Level.Warn,
     "io.grpc"                                             -> IzLog.Level.Error,

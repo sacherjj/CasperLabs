@@ -145,14 +145,14 @@ package object gossiping {
                                    downloadManager,
                                    synchronizer,
                                    connectToGossip,
-                                   awaitApproval.join
+                                   awaitApproval
                                  ),
-                                 Resource.liftF(().pure[F].start)
+                                 Resource.pure[F, F[Unit]](().pure[F])
                                )
 
       // Let the outside world know when we're done.
       _ <- makeFiberResource {
-            awaitSynchronization.join >> onInitialSyncCompleted
+            awaitSynchronization >> onInitialSyncCompleted
           }
 
       // The stashing synchronizer waits for Genesis approval and the initial synchronization
@@ -162,7 +162,7 @@ package object gossiping {
       stashingSynchronizer <- Resource.liftF {
                                StashingSynchronizer.wrap(
                                  synchronizer,
-                                 awaitApproval.join >> awaitSynchronization.join
+                                 awaitApproval >> awaitSynchronization
                                )
                              }
 
@@ -189,7 +189,7 @@ package object gossiping {
             conf,
             gossipServiceServer,
             connectToGossip,
-            awaitApproval.join >> awaitSynchronization.join
+            awaitApproval >> awaitSynchronization
           )
 
       // Start a loop to periodically print peer count, new and disconnected peers, based on NodeDiscovery.
@@ -197,13 +197,6 @@ package object gossiping {
 
     } yield relaying
   }
-
-  /** Check if we have a block yet. */
-  private def isInDag[F[_]: Sync: DagStorage](blockHash: ByteString): F[Boolean] =
-    for {
-      dag  <- DagStorage[F].getRepresentation
-      cont <- dag.contains(blockHash)
-    } yield cont
 
   /** Cached connection resources, closed at the end. */
   private def makeConnectionsCache[F[_]: Concurrent: Log: Metrics](
@@ -270,15 +263,16 @@ package object gossiping {
       conf: Configuration,
       connectToGossip: GossipService.Connector[F]
   ): Resource[F, Relaying[F]] =
-    Resource.liftF(RelayingImpl.establishMetrics[F]) *>
-      Resource.pure {
+    Resource
+      .liftF(RelayingImpl.establishMetrics[F])
+      .as(
         RelayingImpl(
           NodeDiscovery[F],
           connectToGossip = connectToGossip,
           relayFactor = conf.server.relayFactor,
           relaySaturation = conf.server.relaySaturation
         )
-      }
+      )
 
   private def makeDownloadManager[F[_]: Concurrent: Log: Time: Timer: Metrics: DagStorage: Consensus](
       conf: Configuration,
@@ -446,6 +440,9 @@ package object gossiping {
                  )
     } yield approver
 
+  private def show(hash: ByteString) =
+    PrettyPrinter.buildString(hash)
+
   def makeSynchronizer[F[_]: Concurrent: Parallel: Log: Metrics: DagStorage: Validation: CasperLabsProtocol](
       conf: Configuration,
       connectToGossip: GossipService.Connector[F],
@@ -476,6 +473,13 @@ package object gossiping {
                      )
     } yield synchronizer
   }
+
+  /** Check if we have a block yet. */
+  private def isInDag[F[_]: Sync: DagStorage](blockHash: ByteString): F[Boolean] =
+    for {
+      dag  <- DagStorage[F].getRepresentation
+      cont <- dag.contains(blockHash)
+    } yield cont
 
   /** Create gossip service. */
   def makeGossipServiceServer[F[_]: ConcurrentEffect: Parallel: Log: Metrics: BlockStorage: DagStorage](
@@ -549,7 +553,7 @@ package object gossiping {
       synchronizer: Synchronizer[F],
       connectToGossip: GossipService.Connector[F],
       awaitApproved: F[Unit]
-  ): Resource[F, Fiber[F, Unit]] =
+  ): Resource[F, F[Unit]] =
     for {
       initialSync <- Resource.liftF {
                       Consensus[F].lastSynchronizedRank >>= { startRank =>
@@ -571,15 +575,15 @@ package object gossiping {
                         )
                       }
                     }
-      fiber <- makeFiberResource {
-                for {
-                  _         <- awaitApproved
-                  awaitSync <- initialSync.sync()
-                  _         <- awaitSync
-                  _         <- Log[F].info(s"Initial synchronization complete.")
-                } yield ()
-              }
-    } yield fiber
+      handle <- makeFiberResource {
+                 for {
+                   _         <- awaitApproved
+                   awaitSync <- initialSync.sync()
+                   _         <- awaitSync
+                   _         <- Log[F].info(s"Initial synchronization complete.")
+                 } yield ()
+               }
+    } yield handle
 
   /** Periodically sync with a random node. */
   private def makePeriodicSynchronizer[F[_]: Concurrent: Parallel: Log: Timer: NodeDiscovery](
@@ -642,19 +646,11 @@ package object gossiping {
   }
 
   /** Start something in a fiber. Make sure it stops if the resource is released. */
-  private def makeFiberResource[F[_]: Concurrent: Log, A](f: F[A]): Resource[F, Fiber[F, A]] =
-    Resource {
-      Concurrent[F]
-        .start {
-          f.onError {
-            case NonFatal(ex) =>
-              Log[F].error(s"Fiber resource dead: $ex")
-          }
-        }
-        .map { fiber =>
-          (fiber, fiber.cancel.attempt.void)
-        }
-    }
+  private def makeFiberResource[F[_]: Concurrent: Log, A](f: F[A]): Resource[F, F[A]] =
+    f.onError {
+      case NonFatal(ex) => Log[F].error(s"Fiber resource died: $ex") *> Concurrent[F].raiseError(ex)
+      case fatal        => Sync[F].delay(throw fatal)
+    }.background
 
   private def makeRateLimiter[F[_]: Concurrent: Timer: Log](
       conf: Configuration
@@ -682,9 +678,6 @@ package object gossiping {
         )
     }
   }
-
-  private def show(hash: ByteString) =
-    PrettyPrinter.buildString(hash)
 
   def startGrpcServer[F[_]: Sync: TaskLike: ObservableIterant](
       server: GossipServiceServer[F],

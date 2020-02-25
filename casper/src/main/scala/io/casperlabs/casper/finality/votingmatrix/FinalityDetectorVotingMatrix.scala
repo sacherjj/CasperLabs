@@ -142,7 +142,7 @@ object FinalityDetectorVotingMatrix {
     for {
       _ <- MonadThrowable[F]
             .raiseError(
-              new IllegalArgumentException(
+              io.casperlabs.shared.FatalErrorShutdown(
                 s"Relative FTT has to be bigger than 0 and less than 0.5. Got: $rFTT"
               )
             )

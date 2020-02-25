@@ -17,6 +17,7 @@ import monix.eval.Task
 import monix.execution.Scheduler
 import logstage.IzLogger
 import scala.concurrent.duration._
+import java.util.concurrent.TimeUnit
 
 object Main {
 
@@ -52,8 +53,15 @@ object Main {
     configuration match {
       case ShowBlock(hash, bytesStandard, json) =>
         DeployRuntime.showBlock[F](hash, bytesStandard, json)
-      case ShowDeploy(hash, bytesStandard, json, waitForProcessed, timeoutSeconds) =>
-        DeployRuntime.showDeploy[F](hash, bytesStandard, json, waitForProcessed, timeoutSeconds)
+      case ShowDeploy(hash, bytesStandard, json, waitForProcessed, timeout) => {
+        DeployRuntime.showDeploy[F](
+          hash,
+          bytesStandard,
+          json,
+          waitForProcessed,
+          timeout.seconds
+        )
+      }
       case ShowDeploys(hash, bytesStandard, json) =>
         DeployRuntime.showDeploys[F](hash, bytesStandard, json)
       case ShowBlocks(depth, bytesStandard, json) =>
@@ -63,7 +71,7 @@ object Main {
           contracts,
           privateKey,
           waitForProcessed,
-          timeoutSeconds,
+          timeout,
           bytesStandard,
           json
           ) =>
@@ -72,7 +80,7 @@ object Main {
           contracts,
           privateKey,
           waitForProcessed,
-          timeoutSeconds,
+          timeout.seconds,
           bytesStandard,
           json
         )
@@ -81,7 +89,7 @@ object Main {
           contracts,
           privateKey,
           waitForProcessed,
-          timeoutSeconds,
+          timeout,
           bytesStandard,
           json
           ) =>
@@ -90,7 +98,7 @@ object Main {
           contracts,
           privateKey,
           waitForProcessed,
-          timeoutSeconds,
+          timeout.seconds,
           bytesStandard,
           json
         )
@@ -100,7 +108,7 @@ object Main {
           contracts,
           privateKey,
           waitForProcessed,
-          timeoutSeconds,
+          timeout,
           bytesStandard,
           json
           ) =>
@@ -110,7 +118,7 @@ object Main {
           recipientPublicKey,
           amount,
           waitForProcessed,
-          timeoutSeconds,
+          timeout.seconds,
           bytesStandard,
           json
         )
@@ -120,7 +128,7 @@ object Main {
           maybePublicKey,
           maybePrivateKey,
           waitForProcessed,
-          timeoutSeconds,
+          timeout,
           bytesStandard,
           json
           ) =>
@@ -136,7 +144,7 @@ object Main {
               new String(Files.readAllBytes(file.toPath), StandardCharsets.UTF_8).asLeft[PrivateKey]
           ),
           waitForProcessed = waitForProcessed,
-          timeoutSeconds = timeoutSeconds,
+          timeout = timeout.seconds,
           bytesStandard = bytesStandard,
           json = json
         )
@@ -170,8 +178,14 @@ object Main {
           _ <- DeployRuntime.writeDeploy[F](deploy, deployPath)
         } yield ()
 
-      case SendDeploy(deploy, waitForProcessed, timeoutSeconds, bytesStandard, json) =>
-        DeployRuntime.sendDeploy[F](deploy, waitForProcessed, timeoutSeconds, bytesStandard, json)
+      case SendDeploy(deploy, waitForProcessed, timeout, bytesStandard, json) =>
+        DeployRuntime.sendDeploy[F](
+          deploy,
+          waitForProcessed,
+          timeout.seconds,
+          bytesStandard,
+          json
+        )
 
       case PrintDeploy(deploy, bytesStandard, json) =>
         DeployRuntime.printDeploy[F](deploy, bytesStandard, json)

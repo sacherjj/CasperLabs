@@ -186,6 +186,7 @@ const blockAttrs: (block: BlockInfo) => Array<[string, any]> = (
       </Link>],
     ['j-Rank', header.getJRank()],
     ['m-Rank', header.getMainRank()],
+    ['Round ID', header.getRoundId()],
     ['Timestamp', new Date(header.getTimestamp()).toISOString()],
     ['Type', <BlockType header={header} />],
     [
