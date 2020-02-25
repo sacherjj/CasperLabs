@@ -65,6 +65,8 @@ class EraSupervisor[F[_]: Concurrent: Timer: Log: EraStorage: Relaying: ForkChoi
       // See what reactions the protocol dictates.
       (events, ()) <- entry.runtime.handleMessage(message).run
       _            <- handleEvents(events)
+
+      _ <- Log[F].info(s"Finished handling ${block.blockHash.show -> "message"}")
     } yield ()
 
   private def ensureNotShutdown: F[Unit] =
