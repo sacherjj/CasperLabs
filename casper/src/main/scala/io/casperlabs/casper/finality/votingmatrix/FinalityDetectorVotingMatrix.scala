@@ -140,7 +140,6 @@ object FinalityDetectorVotingMatrix {
       rFTT: Double
   ): F[FinalityDetectorVotingMatrix[F]] =
     for {
-      _ <- Concurrent[F].unit.map(_ => println(s"##### Before\trFTT is $rFTT"))
       _ <- MonadThrowable[F]
             .raiseError(
               io.casperlabs.shared.FatalErrorShutdown(
