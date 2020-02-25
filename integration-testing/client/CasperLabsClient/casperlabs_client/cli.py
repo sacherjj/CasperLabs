@@ -29,6 +29,8 @@ from casperlabs_client.crypto import (
 )
 from . import consensus_pb2 as consensus
 
+DEFAULT_PAYMENT_AMOUNT = 10000000
+
 DOT_FORMATS = "canon,cmap,cmapx,cmapx_np,dot,dot_json,eps,fig,gd,gd2,gif,gv,imap,imap_np,ismap,jpe,jpeg,jpg,json,json0,mp,pdf,pic,plain,plain-ext,png,pov,ps,ps2,svg,svgz,tk,vml,vmlz,vrml,wbmp,x11,xdot,xdot1.2,xdot1.4,xdot_json,xlib"
 
 
@@ -147,6 +149,9 @@ def _deploy_kwargs(args, private_key_accepted=True):
         raise Exception(
             "--from must be 32 bytes encoded as 64 characters long hexadecimal"
         )
+
+    if not (args.payment_amount or args.payment_args):
+        args.payment_amount = DEFAULT_PAYMENT_AMOUNT
 
     if args.payment_amount:
         args.payment_args = ABI.args_to_json(
