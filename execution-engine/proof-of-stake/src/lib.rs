@@ -61,23 +61,6 @@ pub trait ProofOfStake:
         Ok(())
     }
 
-    fn step(&mut self) -> Result<()> {
-        let pos_purse = internal::get_bonding_purse(self)?;
-        let timestamp = self.get_block_time();
-        // This is called by the system in every block.
-        let unbonds = internal::step(self, timestamp)?;
-
-        // Mateusz: Moved outside of `step` function so that it [step] can be unit tested.
-        for entry in unbonds {
-            // TODO: We currently ignore `TransferResult::TransferError`s here, since we
-            // can't recover from them and we shouldn't retry indefinitely.
-            // That would mean the contract just keeps the money forever,
-            // though.
-            let _ = self.transfer_purse_to_account(pos_purse, entry.validator, entry.amount);
-        }
-        Ok(())
-    }
-
     fn get_payment_purse(&self) -> Result<URef> {
         let purse = internal::get_payment_purse(self)?;
         // Limit the access rights so only balance query and deposit are allowed.

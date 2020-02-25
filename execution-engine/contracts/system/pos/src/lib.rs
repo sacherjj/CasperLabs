@@ -21,7 +21,6 @@ use types::{
 
 const METHOD_BOND: &str = "bond";
 const METHOD_UNBOND: &str = "unbond";
-const METHOD_STEP: &str = "step";
 const METHOD_GET_PAYMENT_PURSE: &str = "get_payment_purse";
 const METHOD_SET_REFUND_PURSE: &str = "set_refund_purse";
 const METHOD_GET_REFUND_PURSE: &str = "get_refund_purse";
@@ -188,11 +187,6 @@ pub fn delegate() {
             pos_contract
                 .unbond(validator, maybe_amount)
                 .unwrap_or_revert();
-        }
-        // Type of this method: `fn step()`
-        METHOD_STEP => {
-            // This is called by the system in every block.
-            pos_contract.step().unwrap_or_revert();
         }
         // Type of this method: `fn get_payment_purse() -> URef`
         METHOD_GET_PAYMENT_PURSE => {
