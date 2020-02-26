@@ -400,12 +400,22 @@ object SynchronizerImpl {
     def notInDag(blockHash: ByteString): F[Boolean]
   }
 
+  /** Keep track of the state of the syncing process as we ingest the stream of summaries. */
   final case class SyncState(
+      // Block hashes we started the syncing process with.
       originalTargets: Set[ByteString],
+      // Summaries we have received so far.
       summaries: Map[ByteString, BlockSummary],
+      // The set of ranks across all the summaries, to aid width checks.
       ranks: Set[Long],
+      // Memoized distance of each summary we have seen so far from the closest sync target,
+      // to help checking that we're not being fed something farther than we asked.
       distanceFromOriginalTargets: Map[ByteString, Int],
+      // Map to point each parent (any dependency, parent or justification) to their children,
+      // which we can use to check that each item we receive has a legal route to it from the targets.
       parentToChildren: Map[ByteString, Set[ByteString]],
+      // State of the current iteration, which is the current intermediate targets,
+      // used when we have to send followup questions for missing dependencies.
       iterationState: IterationState
   ) {
     def append(summary: BlockSummary, iterationDistance: Int, originalDistance: Int): SyncState =
