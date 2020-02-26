@@ -482,7 +482,7 @@ package object gossiping {
     } yield cont
 
   /** Create gossip service. */
-  def makeGossipServiceServer[F[_]: ConcurrentEffect: Parallel: Log: Metrics: BlockStorage: DagStorage](
+  def makeGossipServiceServer[F[_]: ConcurrentEffect: Parallel: Log: Metrics: BlockStorage: DagStorage: Consensus](
       conf: Configuration,
       synchronizer: Synchronizer[F],
       downloadManager: DownloadManager[F],
@@ -506,12 +506,7 @@ package object gossiping {
                     /** Returns latest messages as seen currently by the node.
                       * NOTE: In the future we will remove redundant messages. */
                     override def latestMessages: F[Set[Block.Justification]] =
-                      for {
-                        dag <- DagStorage[F].getRepresentation
-                        lm  <- dag.latestMessages
-                      } yield lm.values.flatten
-                        .map(m => Block.Justification(m.validatorId, m.messageHash))
-                        .toSet
+                      Consensus[F].latestMessages
 
                     override def dagTopoSort(
                         startRank: Long,
