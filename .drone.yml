@@ -185,6 +185,9 @@ steps:
   - "./integration-testing/build_contracts.sh"
   - "make docker-build/execution-engine docker-build/node docker-build/client docker-build/integration-testing"
   image: "casperlabs/buildenv:latest"
+  volumes:
+  - name: docker_sock
+    path: "/var/run/docker.sock"
   when:
     event:
     - pull_request
