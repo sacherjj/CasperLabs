@@ -535,7 +535,7 @@ def cli(*arguments) -> int:
                        dict(required=False, default=None, type=int, help='Amount of motes to unbond. If not provided then a request to unbond with full staked amount is made.')]] + deploy_options())
 
     parser.addCommand('transfer', transfer_command, 'Transfers funds between accounts',
-                      [[('-a', '--amount'), dict(required=False, default=None, type=int, help='Amount of motes to transfer. Note: a mote is the smallest, indivisible unit of a token.')],
+                      [[('-a', '--amount'), dict(required=True, default=None, type=int, help='Amount of motes to transfer. Note: a mote is the smallest, indivisible unit of a token.')],
                        [('-t', '--target-account'), dict(required=True, type=str, help="base64 or base16 representation of target account's public key")],
                        ] + deploy_options(private_key_accepted=True))
 
