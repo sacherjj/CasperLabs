@@ -179,6 +179,92 @@ steps:
       - "**/.drone.yml"
       - "integration-testing/**"
 
+- name: temp_build_docker_images
+  commands:
+  - "export DOCKER_LATEST_TAG=DRONE-${DRONE_BUILD_NUMBER}"
+  - "./integration-testing/build_contracts.sh"
+  - "make docker-build/execution-engine docker-build/node docker-build/client docker-build/integration-testing"
+  image: "casperlabs/buildenv:latest"
+  when:
+    event:
+    - pull_request
+  depends_on:
+  - sbt-compile-test-pr
+
+- name: temp-run-integration-tests-parallel-0
+  commands:
+  - "cd integration-testing"
+  - "./docker_run_tests.sh --unique_run_num 0"
+  environment:
+    _JAVA_OPTIONS: "-Xms2G -Xmx2G -XX:MaxMetaspaceSize=1G"
+  image: "casperlabs/buildenv:latest"
+  volumes:
+  - name: docker_sock
+    path: "/var/run/docker.sock"
+  - name: temp
+    path: "/tmp"
+  when:
+    event:
+    - pull_request
+  depends_on:
+  - temp_build_docker_images
+
+- name: temp-run-integration-tests-parallel-1
+  commands:
+  - "cd integration-testing"
+  - "./docker_run_tests.sh --unique_run_num 1"
+  environment:
+    _JAVA_OPTIONS: "-Xms2G -Xmx2G -XX:MaxMetaspaceSize=1G"
+  image: "casperlabs/buildenv:latest"
+  volumes:
+  - name: docker_sock
+    path: "/var/run/docker.sock"
+  - name: temp
+    path: "/tmp"
+  when:
+    event:
+    - pull_request
+  depends_on:
+  - temp_build_docker_images
+
+- name: temp-run-integration-tests-parallel-2
+  commands:
+  - "cd integration-testing"
+  - "./docker_run_tests.sh --unique_run_num 2"
+  environment:
+    _JAVA_OPTIONS: "-Xms2G -Xmx2G -XX:MaxMetaspaceSize=1G"
+  image: "casperlabs/buildenv:latest"
+  volumes:
+  - name: docker_sock
+    path: "/var/run/docker.sock"
+  - name: temp
+    path: "/tmp"
+  when:
+    event:
+    - pull_request
+  depends_on:
+  - temp_build_docker_images
+
+- name: temp-run-integration-tests-serial-3
+  commands:
+  - "cd integration-testing"
+  - "./docker_run_tests.sh --unique_run_num 3"
+  environment:
+    _JAVA_OPTIONS: "-Xms2G -Xmx2G -XX:MaxMetaspaceSize=1G"
+  image: "casperlabs/buildenv:latest"
+  volumes:
+  - name: docker_sock
+    path: "/var/run/docker.sock"
+  - name: temp
+    path: "/tmp"
+  when:
+    event:
+    - pull_request
+  depends_on:
+  - temp-run-integration-tests-parallel-0
+  - temp-run-integration-tests-parallel-1
+  - temp-run-integration-tests-parallel-2
+
 # This section is for bors' branches only
 
 #NOTE: allowing failures here since we've seen site temporarily go down and cause
