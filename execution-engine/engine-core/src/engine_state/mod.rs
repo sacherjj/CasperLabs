@@ -915,7 +915,7 @@ where
         // validation_spec_2: prestate_hash check
         let tracking_copy = match self.tracking_copy(prestate_hash) {
             Err(error) => return Ok(ExecutionResult::precondition_failure(error)),
-            Ok(None) => return Err(RootNotFound(prestate_hash)),
+            Ok(None) => return Err(RootNotFound::new(prestate_hash)),
             Ok(Some(tracking_copy)) => Rc::new(RefCell::new(tracking_copy)),
         };
 
