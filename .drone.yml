@@ -182,8 +182,10 @@ steps:
 - name: temp_build_docker_images
   commands:
   - "export DOCKER_LATEST_TAG=DRONE-${DRONE_BUILD_NUMBER}"
+  - "~/.cargo/bin/rustup toolchain install $(cat execution-engine/rust-toolchain)"
+  - "rustup target add --toolchain $(cat execution-engine/rust-toolchain) wasm32-unknown-unknown"
   - "./integration-testing/build_contracts.sh"
-  - "make docker-build/execution-engine docker-build/node docker-build/client docker-build/integration-testing"
+  - "make docker-build/execution-engine docker-build/node docker-build/client docker-build/integration-testing docker-build/explorer docker-build/grpcwebproxy"
   image: "casperlabs/buildenv:latest"
   volumes:
   - name: docker_sock
