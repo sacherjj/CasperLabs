@@ -45,8 +45,10 @@ use types::{bytesrepr::ToBytes, ProtocolVersion};
 
 use self::{
     ipc::{
-        ChainSpec_GenesisConfig, CommitRequest, CommitResponse, ExecuteResponse, GenesisResponse,
-        QueryResponse, UpgradeRequest, UpgradeResponse,
+        BidStateRequest, BidStateResponse, ChainSpec_GenesisConfig, CommitRequest, CommitResponse,
+        DistributeRewardsRequest, DistributeRewardsResponse, ExecuteResponse, GenesisResponse,
+        QueryResponse, SlashRequest, SlashResponse, UnbondPayoutRequest, UnbondPayoutResponse,
+        UpgradeRequest, UpgradeResponse,
     },
     ipc_grpc::{ExecutionEngineService, ExecutionEngineServiceServer},
     mappings::{ParsingError, TransformMap},
@@ -179,9 +181,7 @@ where
             Ok(results) => results,
             Err(error) => {
                 info!("deploy results error: RootNotFound");
-                exec_response
-                    .mut_missing_parent()
-                    .set_hash(error.0.to_vec());
+                exec_response.mut_missing_parent().set_hash(error.to_vec());
                 log_duration(
                     correlation_id,
                     METRIC_DURATION_EXEC,
@@ -441,6 +441,42 @@ where
         );
 
         SingleResponse::completed(upgrade_response)
+    }
+
+    fn bid_state(
+        &self,
+        _request_options: RequestOptions,
+        _bid_state_request: BidStateRequest,
+    ) -> SingleResponse<BidStateResponse> {
+        let response = BidStateResponse::new();
+        SingleResponse::completed(response)
+    }
+
+    fn distribute_rewards(
+        &self,
+        _request_options: RequestOptions,
+        _distribute_rewards_request: DistributeRewardsRequest,
+    ) -> SingleResponse<DistributeRewardsResponse> {
+        let response = DistributeRewardsResponse::new();
+        SingleResponse::completed(response)
+    }
+
+    fn slash(
+        &self,
+        _request_options: RequestOptions,
+        _slash_request: SlashRequest,
+    ) -> SingleResponse<SlashResponse> {
+        let response = SlashResponse::new();
+        SingleResponse::completed(response)
+    }
+
+    fn unbond_payout(
+        &self,
+        _request_options: RequestOptions,
+        _unbond_payout_request: UnbondPayoutRequest,
+    ) -> SingleResponse<UnbondPayoutResponse> {
+        let response = UnbondPayoutResponse::new();
+        SingleResponse::completed(response)
     }
 }
 
