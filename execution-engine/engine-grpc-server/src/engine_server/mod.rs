@@ -181,9 +181,7 @@ where
             Ok(results) => results,
             Err(error) => {
                 info!("deploy results error: RootNotFound");
-                exec_response
-                    .mut_missing_parent()
-                    .set_hash(error.0.to_vec());
+                exec_response.mut_missing_parent().set_hash(error.to_vec());
                 log_duration(
                     correlation_id,
                     METRIC_DURATION_EXEC,
