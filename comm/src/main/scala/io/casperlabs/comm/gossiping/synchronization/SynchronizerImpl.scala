@@ -177,7 +177,8 @@ class SynchronizerImpl[F[_]: Concurrent: Log: Metrics](
       knownBlockHashes: List[ByteString],
       prevSyncState: SyncState
   ): F[Either[SyncError, SyncState]] = {
-    val currentTargets = targetBlockHashes.toSet
+    val currentTargets   = targetBlockHashes.toSet
+    val currentSyncState = prevSyncState.withZeroIterationDistance(targetBlockHashes)
     service
       .streamAncestorBlockSummaries(
         StreamAncestorBlockSummariesRequest(
@@ -186,7 +187,7 @@ class SynchronizerImpl[F[_]: Concurrent: Log: Metrics](
           maxDepth = maxDepthAncestorsRequest
         )
       )
-      .foldWhileLeftEvalL(prevSyncState.asRight[SyncError].pure[F]) {
+      .foldWhileLeftEvalL(currentSyncState.asRight[SyncError].pure[F]) {
         case (Right(syncState), summary) =>
           val effect = for {
             _ <- EitherT.liftF(
@@ -305,7 +306,9 @@ class SynchronizerImpl[F[_]: Concurrent: Log: Metrics](
     val hash = summary.blockHash
     def unreachable(msg: String) =
       EitherT(
-        (Unreachable(summary, maxDepthAncestorsRequest, msg): SyncError).asLeft[(Int, Int)].pure[F]
+        (Unreachable(summary, maxDepthAncestorsRequest, targetBlockHashes, msg): SyncError)
+          .asLeft[(Int, Int)]
+          .pure[F]
       )
 
     def tooDeep =
@@ -397,12 +400,22 @@ object SynchronizerImpl {
     def notInDag(blockHash: ByteString): F[Boolean]
   }
 
+  /** Keep track of the state of the syncing process as we ingest the stream of summaries. */
   final case class SyncState(
+      // Block hashes we started the syncing process with.
       originalTargets: Set[ByteString],
+      // Summaries we have received so far.
       summaries: Map[ByteString, BlockSummary],
+      // The set of ranks across all the summaries, to aid width checks.
       ranks: Set[Long],
+      // Memoized distance of each summary we have seen so far from the closest sync target,
+      // to help checking that we're not being fed something farther than we asked.
       distanceFromOriginalTargets: Map[ByteString, Int],
+      // Map to point each parent (any dependency, parent or justification) to their children,
+      // which we can use to check that each item we receive has a legal route to it from the targets.
       parentToChildren: Map[ByteString, Set[ByteString]],
+      // State of the current iteration, which is the current intermediate targets,
+      // used when we have to send followup questions for missing dependencies.
       iterationState: IterationState
   ) {
     def append(summary: BlockSummary, iterationDistance: Int, originalDistance: Int): SyncState =
@@ -419,6 +432,12 @@ object SynchronizerImpl {
       // Collect final parent relationships so we can detect missing ones.
       parentToChildren = parentToChildren |+| iterationState.parentToChildren
     )
+
+    def withZeroIterationDistance(targets: List[ByteString]) = copy(
+      iterationState = iterationState.copy(
+        distanceFromTargets = iterationState.distanceFromTargets ++ targets.map(_ -> 0)
+      )
+    )
   }
   object SyncState {
     def initial(originalTargets: Set[ByteString]) =
@@ -426,7 +445,7 @@ object SynchronizerImpl {
         originalTargets,
         summaries = Map.empty,
         ranks = Set.empty,
-        distanceFromOriginalTargets = Map.empty,
+        distanceFromOriginalTargets = originalTargets.toSeq.map(_ -> 0).toMap,
         parentToChildren = Map.empty,
         iterationState = IterationState.empty
       )

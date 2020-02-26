@@ -45,6 +45,7 @@ object Synchronizer {
     final case class Unreachable(
         summary: BlockSummary,
         requestedDepth: Int,
+        targets: Set[ByteString],
         reason: String
     ) extends SyncError
     final case class TooMany(hash: ByteString, limit: Int)                     extends SyncError
@@ -61,8 +62,9 @@ object Synchronizer {
           s"Returned DAG is too deep, limit: $limit, exceeded hashes: ${summaries.map(hex)}"
         case SyncError.TooWide(maxBondingRate, depth, maxTotal, total) =>
           s"Returned dag seems to be too wide at depth $depth, max bonding rate: $maxBondingRate, max total summaries: $maxTotal, total returned: $total"
-        case SyncError.Unreachable(summary, requestedDepth, reason) =>
-          s"During streaming source returned unreachable block summary: ${hex(summary)}, requested depth: $requestedDepth, reason: $reason"
+        case SyncError.Unreachable(summary, requestedDepth, targets, reason) =>
+          val ts = targets.map(hex).mkString("[", ",", "]")
+          s"During streaming source returned unreachable block summary: ${hex(summary)}, requested depth: $requestedDepth, targets: $ts, reason: $reason"
         case SyncError.ValidationError(summary, e) =>
           s"Failed to validated the block summary: ${hex(summary)}, reason: $e"
         case SyncError.MissingDependencies(hashes) =>
