@@ -996,6 +996,8 @@ steps:
     - "execution-engine/contract-as"
     fail_on_version_conflict:
     - true
+    access:
+    - "public"
   depends_on:
   - github_publish_release_artifacts
 
