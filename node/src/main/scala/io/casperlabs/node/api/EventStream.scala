@@ -143,7 +143,7 @@ object EventStream {
 
       override def deployAdded(deploy: Deploy): F[Unit] =
         emit {
-          Event().withDeployAdded(DeployAdded().withDeploy(deploy))
+          Event().withDeployAdded(DeployAdded().withDeploy(deploy.clearBody))
         }
 
       override def deploysDiscarded(deployHashesWithReasons: Seq[(DeployHash, String)]): F[Unit] = {
