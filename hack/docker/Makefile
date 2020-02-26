@@ -78,6 +78,9 @@ node-%/metrics:
 # Start common components.
 up: .make/docker/network .casperlabs
 	$(REFRESH_TARGETS)
+	if [ "$(CL_VERSION)" != "latest" ]; then \
+		docker-compose pull; \
+	fi
 	docker-compose -p casperlabs up -d --remove-orphans
 
 # Stop common components.
