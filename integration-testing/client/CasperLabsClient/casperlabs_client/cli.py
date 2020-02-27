@@ -29,6 +29,8 @@ from casperlabs_client.crypto import (
 )
 from . import consensus_pb2 as consensus
 
+DEFAULT_PAYMENT_AMOUNT = 10000000
+
 DOT_FORMATS = "canon,cmap,cmapx,cmapx_np,dot,dot_json,eps,fig,gd,gd2,gif,gv,imap,imap_np,ismap,jpe,jpeg,jpg,json,json0,mp,pdf,pic,plain,plain-ext,png,pov,ps,ps2,svg,svgz,tk,vml,vmlz,vrml,wbmp,x11,xdot,xdot1.2,xdot1.4,xdot_json,xlib"
 
 
@@ -147,6 +149,9 @@ def _deploy_kwargs(args, private_key_accepted=True):
         raise Exception(
             "--from must be 32 bytes encoded as 64 characters long hexadecimal"
         )
+
+    if not (args.payment_amount or args.payment_args):
+        args.payment_amount = DEFAULT_PAYMENT_AMOUNT
 
     if args.payment_amount:
         args.payment_args = ABI.args_to_json(
@@ -399,7 +404,7 @@ def deploy_options(private_key_accepted=True):
         [('-f', '--from'), dict(required=False, type=str, help="The public key of the account which is the context of this deployment, base16 encoded.")],
         [('--chain-name',), dict(required=False, type=str, help="Name of the chain to optionally restrict the deploy from being accidentally included anywhere else.")],
         [('--dependencies',), dict(required=False, nargs="+", default=None, help="List of deploy hashes (base16 encoded) which must be executed before this deploy.")],
-        [('--payment-amount',), dict(required=False, type=int, default=None, help="Standard payment amount. Use this with the default payment, or override with --payment-args if custom payment code is used.")],
+        [('--payment-amount',), dict(required=False, type=int, default=None, help="Standard payment amount. Use this with the default payment, or override with --payment-args if custom payment code is used. By default --payment-amount is set to 10000000")],
         [('--gas-price',), dict(required=False, type=int, default=10, help='The price of gas for this transaction in units dust/gas. Must be positive integer.')],
         [('-p', '--payment'), dict(required=False, type=str, default=None, help='Path to the file with payment code, by default fallbacks to the --session code')],
         [('--payment-hash',), dict(required=False, type=str, default=None, help='Hash of the stored contract to be called in the payment; base16 encoded')],
@@ -530,7 +535,7 @@ def cli(*arguments) -> int:
                        dict(required=False, default=None, type=int, help='Amount of motes to unbond. If not provided then a request to unbond with full staked amount is made.')]] + deploy_options())
 
     parser.addCommand('transfer', transfer_command, 'Transfers funds between accounts',
-                      [[('-a', '--amount'), dict(required=False, default=None, type=int, help='Amount of motes to transfer. Note: a mote is the smallest, indivisible unit of a token.')],
+                      [[('-a', '--amount'), dict(required=True, default=None, type=int, help='Amount of motes to transfer. Note: a mote is the smallest, indivisible unit of a token.')],
                        [('-t', '--target-account'), dict(required=True, type=str, help="base64 or base16 representation of target account's public key")],
                        ] + deploy_options(private_key_accepted=True))
 
