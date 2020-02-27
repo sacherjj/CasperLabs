@@ -395,14 +395,13 @@ object BlockAPI {
                       )
                 }
     } yield balance.value
-    program.attempt >>= { either =>
-      either.fold(
+    program
+      .map(_.some)
+      .handleErrorWith(
         ex =>
           Log[F]
             .error(s"Failed to query EE for the balance of the account ${accountKey}, $ex")
-            .as(none[BigInt]),
-        _.some.pure[F]
+            .as(none[BigInt])
       )
-    }
   }
 }
