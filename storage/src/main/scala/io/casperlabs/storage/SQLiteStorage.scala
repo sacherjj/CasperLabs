@@ -156,8 +156,8 @@ object SQLiteStorage {
           endBlockNumber: Long
       ) = dagStorage.topoSortValidator(validator, sliceDepth, endBlockNumber)
 
-      override def topoSortTailValidator(validator: Validator, blocksNum: Int) =
-        dagStorage.topoSortTailValidator(validator, blocksNum)
+      override def topoSortTailValidator(validator: Validator, sliceDepth: Int) =
+        dagStorage.topoSortTailValidator(validator, sliceDepth)
 
       override def latestGlobal =
         dagStorage.getRepresentation.flatMap(_.latestGlobal)

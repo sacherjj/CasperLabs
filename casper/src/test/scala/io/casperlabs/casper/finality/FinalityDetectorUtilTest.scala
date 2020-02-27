@@ -173,7 +173,7 @@ object FinalityDetectorUtilTest {
       ) = ???
 
       /** Similar to [[topoSortTail]] but in addition filters blocks by a validator */
-      override def topoSortTailValidator(validator: Validator, blocksNum: Int) = ???
+      override def topoSortTailValidator(validator: Validator, sliceDepth: Int) = ???
 
       override def latestGlobal
           : StateT[F, Map[BlockHash, Int], TipRepresentation[StateT[F, Map[BlockHash, Int], *]]] =

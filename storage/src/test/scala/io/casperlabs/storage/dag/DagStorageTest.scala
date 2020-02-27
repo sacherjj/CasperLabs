@@ -2,7 +2,6 @@ package io.casperlabs.storage.dag
 
 import cats.implicits._
 import com.google.protobuf.ByteString
-import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.casper.consensus.Block.Justification
 import io.casperlabs.casper.consensus.{Block, BlockSummary, Era}
 import io.casperlabs.models.BlockImplicits._
@@ -16,7 +15,7 @@ import io.casperlabs.storage.{
 import io.casperlabs.storage.era.EraStorage
 import monix.eval.Task
 import monix.execution.Scheduler
-import org.scalacheck.Shrink
+import org.scalacheck.{Gen, Shrink}
 import org.scalatest._
 import org.scalatest.prop.GeneratorDrivenPropertyChecks
 import org.scalacheck.Arbitrary.arbitrary
@@ -359,6 +358,53 @@ trait DagStorageTest
             _   = lmh shouldBe empty
           } yield ()
         }
+    }
+  }
+
+  it should "return only blocks produced by certain validator with validatorBlockSeqNum in ..." in {
+    val validator = sample(genHash)
+    val blocksDuplicatedSeqNum = Gen
+      .nonEmptyListOf(arbitrary[Block])
+      .map(_.zipWithIndex.map {
+        case (b, i) =>
+          b.update(_.header.validatorPublicKey := validator)
+            .update(_.header.validatorBlockSeqNum := i / 2)
+      })
+    forAll(blocksDuplicatedSeqNum, minSuccessful(2)) { blocks: List[Block] =>
+      val maxValidatorSeqNum =
+        blocks.last.getHeader.validatorBlockSeqNum
+
+      forAll(Gen.choose(0, maxValidatorSeqNum), minSuccessful(2)) { randomValidatorSeqNum =>
+        forAll(Gen.choose(0, randomValidatorSeqNum + 1), minSuccessful(2)) { randomSliceDepth =>
+          withDagStorage { storage =>
+            for {
+              _   <- blocks.traverse(storage.insert)
+              dag <- storage.getRepresentation
+              r1 <- dag
+                     .topoSortTailValidator(validator, randomSliceDepth)
+                     .compile
+                     .toList
+                     .map(_.flatten.map(_.getSummary.getHeader))
+              r2 <- dag
+                     .topoSortValidator(validator, randomSliceDepth, randomValidatorSeqNum.toLong)
+                     .compile
+                     .toList
+                     .map(_.flatten.map(_.getSummary.getHeader))
+            } yield {
+              r1 should contain theSameElementsInOrderAs blocks.collect {
+                case b
+                    if b.getHeader.validatorBlockSeqNum > maxValidatorSeqNum - randomSliceDepth =>
+                  b.getHeader
+              }
+              r2 should contain theSameElementsInOrderAs blocks.collect {
+                case b
+                    if b.getHeader.validatorBlockSeqNum > randomValidatorSeqNum - randomSliceDepth =>
+                  b.getHeader
+              }
+            }
+          }
+        }
+      }
     }
   }
 }
