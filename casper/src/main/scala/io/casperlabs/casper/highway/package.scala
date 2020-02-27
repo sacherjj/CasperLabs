@@ -53,23 +53,11 @@ package object highway {
   }
 
   implicit class InstantOps(val a: Instant) extends AnyVal {
-
-    /** @see https://bugs.java.com/bugdatabase/view_bug.do?bug_id=8141452 */
-    private def timeUnitToChronoUnit(t: TimeUnit): ChronoUnit = t match {
-      case TimeUnit.NANOSECONDS  => ChronoUnit.NANOS
-      case TimeUnit.MICROSECONDS => ChronoUnit.MICROS
-      case TimeUnit.MILLISECONDS => ChronoUnit.MILLIS
-      case TimeUnit.SECONDS      => ChronoUnit.SECONDS
-      case TimeUnit.MINUTES      => ChronoUnit.MINUTES
-      case TimeUnit.HOURS        => ChronoUnit.HOURS
-      case TimeUnit.DAYS         => ChronoUnit.DAYS
-    }
-
     def plus(b: FiniteDuration) =
-      a.plus(b.length, timeUnitToChronoUnit(b.unit))
+      a.plus(b.length, b.unit.toChronoUnit)
 
     def minus(b: FiniteDuration) =
-      a.minus(b.length, timeUnitToChronoUnit(b.unit))
+      a.minus(b.length, b.unit.toChronoUnit)
   }
 
   implicit class ClockOps[F[_]: Applicative](clock: Clock[F]) {
