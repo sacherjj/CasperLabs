@@ -21,6 +21,7 @@ const ADDR_LENGTH = 32;
 export const enum SystemContract {
   Mint = 0,
   ProofOfStake = 1,
+  StandardPayment = 2,
 }
 
 export function getArgSize(i: u32): U32 | null {

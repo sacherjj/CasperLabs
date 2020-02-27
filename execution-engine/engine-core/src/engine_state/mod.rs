@@ -264,14 +264,9 @@ where
             let install_deploy_hash = install_deploy_hash.into();
             let system_contract_cache = SystemContractCache::clone(&self.system_contract_cache);
 
-            // Constructs a partial protocol data with already known urefs to pass the validation
+            // Constructs a partial protocol data with already known uref to pass the validation
             // step
-            let partial_protocol_data = ProtocolData::new(
-                Default::default(),
-                mint_reference,
-                // This is used as unknown key
-                URef::new([0; 32], AccessRights::READ),
-            );
+            let partial_protocol_data = ProtocolData::partial_with_mint(mint_reference);
 
             if self.config.turbo() && proof_of_stake_installer_bytes.is_empty() {
                 let uref = {
@@ -393,8 +388,57 @@ where
             }
         };
 
+        // Execute standard payment installer wasm code
+        //
+        // Note: this deviates from the implementation strategy described in the original
+        // specification.
+        let protocol_data = ProtocolData::partial_without_standard_payment(
+            wasm_costs,
+            mint_reference,
+            proof_of_stake_reference,
+        );
+
+        let standard_payment_reference: URef = {
+            let standard_payment_installer_bytes =
+                genesis_config.standard_payment_installer_bytes();
+
+            let standard_payment_installer_module =
+                preprocessor.preprocess(standard_payment_installer_bytes)?;
+            let args = Vec::new();
+            let mut named_keys = BTreeMap::new();
+            let authorization_keys = BTreeSet::new();
+            let install_deploy_hash = install_deploy_hash.into();
+            let address_generator = Rc::clone(&address_generator);
+            let tracking_copy = Rc::clone(&tracking_copy);
+            let system_contract_cache = SystemContractCache::clone(&self.system_contract_cache);
+
+            executor.exec_system(
+                standard_payment_installer_module,
+                args,
+                &mut named_keys,
+                initial_base_key,
+                &virtual_system_account,
+                authorization_keys,
+                blocktime,
+                install_deploy_hash,
+                gas_limit,
+                address_generator,
+                protocol_version,
+                correlation_id,
+                tracking_copy,
+                phase,
+                protocol_data,
+                system_contract_cache,
+            )?
+        };
+
         // Spec #2: Associate given CostTable with given ProtocolVersion.
-        let protocol_data = ProtocolData::new(wasm_costs, mint_reference, proof_of_stake_reference);
+        let protocol_data = ProtocolData::new(
+            wasm_costs,
+            mint_reference,
+            proof_of_stake_reference,
+            standard_payment_reference,
+        );
 
         self.state
             .put_protocol_data(protocol_version, &protocol_data)
@@ -615,6 +659,7 @@ where
             new_wasm_costs,
             current_protocol_data.mint(),
             current_protocol_data.proof_of_stake(),
+            current_protocol_data.standard_payment(),
         );
 
         self.state
@@ -872,6 +917,21 @@ where
                 }
             }
         };
+        self.get_module_from_key(
+            tracking_copy,
+            stored_contract_key,
+            correlation_id,
+            protocol_version,
+        )
+    }
+
+    fn get_module_from_key(
+        &self,
+        tracking_copy: Rc<RefCell<TrackingCopy<<S as StateProvider>::Reader>>>,
+        stored_contract_key: Key,
+        correlation_id: CorrelationId,
+        protocol_version: &ProtocolVersion,
+    ) -> Result<Module, error::Error> {
         let contract = tracking_copy
             .borrow_mut()
             .get_contract(correlation_id, stored_contract_key)?;
@@ -1115,16 +1175,45 @@ where
             // conv_rate)
             let pay_gas_limit = Gas::from_motes(max_payment_cost, CONV_RATE).unwrap_or_default();
 
+            let module_bytes_is_empty = match payment {
+                ExecutableDeployItem::ModuleBytes {
+                    ref module_bytes, ..
+                } => module_bytes.is_empty(),
+                _ => false,
+            };
+
             // Create payment code module from bytes
             // validation_spec_1: valid wasm bytes
-            let payment_module = match self.get_module(
-                Rc::clone(&tracking_copy),
-                &payment,
-                &account,
-                correlation_id,
-                preprocessor,
-                &protocol_version,
-            ) {
+            let maybe_payment_module = if module_bytes_is_empty {
+                let standard_payment = match self.state.get_protocol_data(protocol_version) {
+                    Ok(Some(protocol_data)) => {
+                        Key::URef(protocol_data.standard_payment()).normalize()
+                    }
+                    Ok(None) => {
+                        return Ok(ExecutionResult::precondition_failure(
+                            Error::InvalidProtocolVersion(protocol_version),
+                        ))
+                    }
+                    Err(_) => return Ok(ExecutionResult::precondition_failure(Error::Deploy)),
+                };
+                self.get_module_from_key(
+                    Rc::clone(&tracking_copy),
+                    standard_payment,
+                    correlation_id,
+                    &protocol_version,
+                )
+            } else {
+                self.get_module(
+                    Rc::clone(&tracking_copy),
+                    &payment,
+                    &account,
+                    correlation_id,
+                    preprocessor,
+                    &protocol_version,
+                )
+            };
+
+            let payment_module = match maybe_payment_module {
                 Ok(module) => module,
                 Err(error) => {
                     return Ok(ExecutionResult::precondition_failure(error));

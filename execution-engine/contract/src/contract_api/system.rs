@@ -58,6 +58,13 @@ pub fn get_proof_of_stake() -> ContractRef {
     get_system_contract(SystemContractType::ProofOfStake)
 }
 
+/// Returns a read-only pointer to the Standard Payment contract.
+///
+/// Any failure will trigger [`revert`](runtime::revert) with an appropriate [`ApiError`].
+pub fn get_standard_payment() -> ContractRef {
+    get_system_contract(SystemContractType::StandardPayment)
+}
+
 /// Creates a new empty purse and returns its [`URef`].
 pub fn create_purse() -> URef {
     let purse = contract_api::alloc_bytes(UREF_SERIALIZED_LENGTH);

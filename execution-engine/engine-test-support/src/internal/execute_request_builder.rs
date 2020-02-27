@@ -6,9 +6,7 @@ use contract::args_parser::ArgsParser;
 use engine_core::engine_state::{deploy_item::DeployItem, execute_request::ExecuteRequest};
 use types::{account::PublicKey, ProtocolVersion};
 
-use crate::internal::{
-    DeployItemBuilder, DEFAULT_BLOCK_TIME, DEFAULT_PAYMENT, STANDARD_PAYMENT_CONTRACT,
-};
+use crate::internal::{DeployItemBuilder, DEFAULT_BLOCK_TIME, DEFAULT_PAYMENT};
 
 pub struct ExecuteRequestBuilder {
     execute_request: ExecuteRequest,
@@ -58,7 +56,7 @@ impl ExecuteRequestBuilder {
         let deploy = DeployItemBuilder::new()
             .with_address(public_key)
             .with_session_code(session_file, session_args)
-            .with_payment_code(STANDARD_PAYMENT_CONTRACT, (*DEFAULT_PAYMENT,))
+            .with_empty_payment_bytes((*DEFAULT_PAYMENT,))
             .with_authorization_keys(&[public_key])
             .with_deploy_hash(deploy_hash)
             .build();
@@ -77,7 +75,7 @@ impl ExecuteRequestBuilder {
         let deploy = DeployItemBuilder::new()
             .with_address(sender)
             .with_stored_session_hash(contract_hash.to_vec(), args)
-            .with_payment_code(STANDARD_PAYMENT_CONTRACT, (*DEFAULT_PAYMENT,))
+            .with_empty_payment_bytes((*DEFAULT_PAYMENT,))
             .with_authorization_keys(&[sender])
             .with_deploy_hash(deploy_hash)
             .build();

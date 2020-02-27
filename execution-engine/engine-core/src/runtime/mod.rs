@@ -2388,17 +2388,25 @@ where
     /// Looks up the public mint contract key in the context's protocol data.
     ///
     /// Returned URef is already attenuated depending on the calling account.
-    fn get_mint_contract_uref(&mut self) -> URef {
+    fn get_mint_contract_uref(&self) -> URef {
         let mint = self.context.protocol_data().mint();
         self.context.attenuate_uref(mint)
     }
 
-    /// Looks up the public PoS contract key in the context's protocol data
+    /// Looks up the public PoS contract key in the context's protocol data.
     ///
     /// Returned URef is already attenuated depending on the calling account.
-    fn get_pos_contract_uref(&mut self) -> URef {
+    fn get_pos_contract_uref(&self) -> URef {
         let pos = self.context.protocol_data().proof_of_stake();
         self.context.attenuate_uref(pos)
+    }
+
+    /// Looks up the public standard payment contract key in the context's protocol data.
+    ///
+    /// Returned URef is already attenuated depending on the calling account.
+    fn get_standard_payment_contract_uref(&self) -> URef {
+        let standard_payment = self.context.protocol_data().standard_payment();
+        self.context.attenuate_uref(standard_payment)
     }
 
     /// Calls the "create" method on the mint contract at the given mint
@@ -2705,6 +2713,7 @@ where
         let attenuated_uref = match SystemContractType::try_from(system_contract_index) {
             Ok(SystemContractType::Mint) => self.get_mint_contract_uref(),
             Ok(SystemContractType::ProofOfStake) => self.get_pos_contract_uref(),
+            Ok(SystemContractType::StandardPayment) => self.get_standard_payment_contract_uref(),
             Err(error) => return Ok(Err(error)),
         };
 
