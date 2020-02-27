@@ -1,4 +1,4 @@
-import { action, observable, reaction, runInAction } from 'mobx';
+import { action, IObservableArray, observable, reaction, runInAction } from 'mobx';
 
 import ErrorContainer from './ErrorContainer';
 import { CasperService, encodeBase16 } from 'casperlabs-sdk';
@@ -60,7 +60,7 @@ enum SubscribeState {
 }
 
 export class DagContainer {
-  @observable blocks: BlockInfo[] | null = null;
+  @observable blocks: IObservableArray<BlockInfo> | null = null;
   @observable selectedBlock: BlockInfo | undefined = undefined;
   @observable depth = 10;
   @observable maxRank = 0;
@@ -181,16 +181,34 @@ export class DagContainer {
                   }
                   remainingBlocks.splice(0, 0, block!);
                   runInAction(() => {
-                    this.blocks = remainingBlocks;
+                    this.blocks = observable.array(remainingBlocks, { deep: true });
                   });
                 }
               }
             } else if (event.hasNewFinalizedBlock()) {
-              this.errors.capture(
-                this.casperService.getLastFinalizedBlockInfo().then(block => {
+              const directFinalizedBlockHash = event.getNewFinalizedBlock()!.getBlockHash_asB64();
+
+              let finalizedBlocks = new Set(event.getNewFinalizedBlock()!.getIndirectlyFinalizedBlockHashesList_asB64());
+              finalizedBlocks.add(directFinalizedBlockHash);
+
+              let updatedLastFinalizedBlock = false;
+              this.blocks?.forEach(block => {
+                let bh = block.getSummary()!.getBlockHash_asB64();
+                if (finalizedBlocks.has(bh)) {
+                  block.getStatus()?.setIsFinalized(true);
+                }
+                if (!updatedLastFinalizedBlock && bh === directFinalizedBlockHash) {
                   this.lastFinalizedBlock = block;
-                })
-              );
+                  updatedLastFinalizedBlock = true;
+                }
+              });
+              if (!updatedLastFinalizedBlock) {
+                this.errors.capture(
+                  this.casperService.getBlockInfo(event.getNewFinalizedBlock()!.getBlockHash()).then(block => {
+                    this.lastFinalizedBlock = block;
+                  })
+                );
+              }
             }
           }
         });
@@ -212,7 +230,7 @@ export class DagContainer {
       this.casperService
         .getBlockInfos(this.depth, this.maxRank)
         .then(blocks => {
-          this.blocks = blocks;
+          this.blocks = observable.array(blocks, { deep: true });
         })
     );
 

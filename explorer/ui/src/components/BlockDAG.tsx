@@ -5,6 +5,8 @@ import { ListInline, Loading, RefreshButton, shortHash } from './Utils';
 import * as d3 from 'd3';
 import { encodeBase16 } from 'casperlabs-sdk';
 import { ToggleButton, ToggleStore } from './ToggleButton';
+import { reaction } from 'mobx';
+import { observer } from 'mobx-react';
 
 // https://bl.ocks.org/mapio/53fed7d84cd1812d6a6639ed7aa83868
 
@@ -27,12 +29,23 @@ export interface Props {
   onSelected?: (block: BlockInfo) => void;
 }
 
+@observer
 export class BlockDAG extends React.Component<Props, {}> {
   svg: SVGSVGElement | null = null;
   hint: HTMLDivElement | null = null;
   xTrans: d3.ScaleLinear<number, number> | null = null;
   yTrans: d3.ScaleLinear<number, number> | null = null;
   initialized = false;
+
+  constructor(props: Props) {
+    super(props);
+    reaction(() => this.props.blocks, (_, reaction) => {
+      this.renderGraph();
+    }, {
+      fireImmediately: false,
+      delay: 100
+    });
+  }
 
   render() {
     return (
@@ -97,11 +110,6 @@ export class BlockDAG extends React.Component<Props, {}> {
         )}
       </div>
     );
-  }
-
-  /** Called when the data is refreshed, when we get the blocks if they were null to begin with. */
-  componentDidUpdate() {
-    this.renderGraph();
   }
 
   componentDidMount() {
