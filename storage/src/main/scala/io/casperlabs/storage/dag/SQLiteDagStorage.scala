@@ -259,7 +259,7 @@ class SQLiteDagStorage[F[_]: Sync](
     (fr"""SELECT validator_block_seq_num, """ ++ blockInfoCols() ++
       fr"""
           |FROM block_metadata a
-          |WHERE validator+$validator AND
+          |WHERE validator=$validator AND
           |      validator_block_seq_num > $endBlockNumber - $sliceDepth""".stripMargin)
       .query[(Long, BlockInfo)]
       .stream
