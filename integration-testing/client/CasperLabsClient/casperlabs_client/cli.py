@@ -10,6 +10,7 @@ import os
 import functools
 import logging
 from pathlib import Path
+import datetime
 from casperlabs_client import (
     CasperLabsClient,
     DEFAULT_HOST,
@@ -357,6 +358,30 @@ def show_peers_command(casperlabs_client, args):
     print(f"count: {i}")
 
 
+@guarded_command
+def stream_events_command(casperlabs_client, args):
+    kwargs = dict(
+        all=args.all,
+        block_added=args.block_added,
+        block_finalized=args.block_finalized,
+        deploy_added=args.deploy_added,
+        deploy_discarded=args.deploy_discarded,
+        deploy_requeued=args.deploy_requeued,
+        deploy_processed=args.deploy_processed,
+        deploy_finalized=args.deploy_finalized,
+        deploy_orphaned=args.deploy_orphaned,
+        account_public_keys=args.account_public_key,
+        deploy_hashes=args.deploy_hash,
+    )
+    if not any(kwargs.values()):
+        raise argparse.ArgumentTypeError("No events chosen")
+    stream = casperlabs_client.stream_events(**kwargs)
+    for event in stream:
+        now = datetime.datetime.now()
+        print(f"------------- {now.strftime('%Y-%m-%d %H:%M:%S')} -------------")
+        print(hexify(event))
+
+
 def check_directory(path):
     if not os.path.exists(path):
         raise argparse.ArgumentTypeError(f"Directory '{path}' does not exist")
@@ -585,6 +610,20 @@ def cli(*arguments) -> int:
                       [[('directory',), dict(type=check_directory, help="Output directory for keys. Should already exists.")]])
 
     parser.addCommand('show-peers', show_peers_command, "Show peers connected to the node.", [])
+
+    parser.addCommand('stream-events', stream_events_command, "Stream block and deploy state transition events.", [
+        [('--all',), dict(action='store_true', help='Subscribe to all events')],
+        [('--block-added',), dict(action='store_true', help='Block added')],
+        [('--block-finalized',), dict(action='store_true', help='Block finalized')],
+        [('--deploy-added',), dict(action='store_true', help='Deploy added')],
+        [('--deploy-discarded',), dict(action='store_true', help='Deploy discarded')],
+        [('--deploy-requeued',), dict(action='store_true', help='Deploy requeued')],
+        [('--deploy-processed',), dict(action='store_true', help='Deploy processed')],
+        [('--deploy-finalized',), dict(action='store_true', help='Deploy finalized')],
+        [('--deploy-orphaned',), dict(action='store_true', help='Deploy orphaned')],
+        [('-k', '--account-public-key'), dict(action='append', help='Filter by (possibly multiple) account public key(s)')],
+        [('-d', '--deploy-hash'), dict(action='append', help='Filter by (possibly multiple) deploy hash(es)')],
+    ])
     # fmt:on
     return parser.run([str(a) for a in arguments])
 
