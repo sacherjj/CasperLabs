@@ -973,6 +973,24 @@ steps:
   - package-ee-tag
   - rsync-mac-tarball-tag
 
+- name: npm-publish
+  image: plugins/npm
+  settings:
+    username:
+      from_secret: npm_user
+    token:
+      from_secret: npm_token
+    email:
+      from_secret: npm_email
+    folder:
+    - "execution-engine/contract-as"
+    fail_on_version_conflict:
+    - true
+    access:
+    - "public"
+  depends_on:
+  - github_publish_release_artifacts
+
 - name: cleanup-mac-tag
   image: appleboy/drone-ssh:1.5.5
   environment:
