@@ -514,7 +514,7 @@ lazy val client = (project in file("client"))
         .GrpcMonixGenerator(flatPackage = true) -> (sourceManaged in Compile).value / "protobuf"
     )
   )
-  .dependsOn(models, graphz)
+  .dependsOn(models, graphz, smartContracts)
 
 lazy val benchmarks = (project in file("benchmarks"))
   .enablePlugins(RpmPlugin, DebianPlugin, JavaAppPackaging, BuildInfoPlugin)

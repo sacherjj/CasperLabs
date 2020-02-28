@@ -8,6 +8,8 @@ import cats.Show
 import cats.effect.{Resource, Sync, Timer}
 import cats.implicits._
 import com.google.protobuf.ByteString
+import eu.timepit.refined._
+import eu.timepit.refined.numeric._
 import guru.nidi.graphviz.engine._
 import io.casperlabs.casper.consensus
 import io.casperlabs.casper.consensus.Deploy
@@ -20,6 +22,7 @@ import io.casperlabs.crypto.hash.Blake2b256
 import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
 import io.casperlabs.crypto.util.{CertificateHelper, CertificatePrinter}
 import io.casperlabs.shared.FilesAPI
+import io.casperlabs.smartcontracts.cltype
 import io.casperlabs.models.DeployImplicits._
 import org.apache.commons.io._
 import scalapb_circe.JsonFormat
@@ -84,33 +87,30 @@ object DeployRuntime {
   ): F[Unit] =
     gracefulExit(DeployService[F].showBlocks(depth, bytesStandard, json))
 
-  private def optionalArg[T](name: String, maybeValue: Option[T])(
-      f: T => Deploy.Arg.Value.Value
-  ) = {
-    val value: Deploy.Arg.Value.Value = maybeValue match {
-      case None    => Deploy.Arg.Value.Value.Empty
-      case Some(x) => f(x)
-    }
-    Deploy
-      .Arg(name)
-      .withValue(
-        Deploy.Arg.Value().withOptionalValue(Deploy.Arg.Value(value))
-      )
-  }
-
-  private def arg[T](name: String, value: Deploy.Arg.Value.Value) =
-    Deploy
-      .Arg(name)
-      .withValue(Deploy.Arg.Value(value))
+  private def arg(name: String, value: state.CLValueInstance) = Deploy.Arg(name, value.some)
 
   private def longArg(name: String, value: Long) =
-    arg(name, Deploy.Arg.Value.Value.LongValue(value))
+    arg(name, cltype.ProtoMappings.toProto(cltype.CLValueInstance.U64(value)))
 
-  private def bigIntArg(name: String, value: BigInt) =
-    arg(name, Deploy.Arg.Value.Value.BigInt(state.BigInt(value.toString, bitWidth = 512)))
+  private def bigIntArg(name: String, value: BigInt) = {
+    val nn = refineV[NonNegative](value).right.get
+    arg(name, cltype.ProtoMappings.toProto(cltype.CLValueInstance.U512(nn)))
+  }
 
   private def bytesArg(name: String, value: Array[Byte]) =
-    arg(name, Deploy.Arg.Value.Value.BytesValue(ByteString.copyFrom(value)))
+    arg(
+      name,
+      cltype.ProtoMappings.toProto(
+        cltype.CLValueInstance
+          .FixedList(
+            value.toSeq.map(cltype.CLValueInstance.U8.apply),
+            cltype.CLType.U8,
+            value.length
+          )
+          .right
+          .get
+      )
+    )
 
   // This is true for any array but I didn't want to go as far as writing type classes.
   private def serializeArray(ba: Array[Byte]): Array[Byte] =
@@ -127,13 +127,17 @@ object DeployRuntime {
   ): F[Unit] =
     for {
       rawPrivateKey <- readFileAsString[F](privateKeyFile)
+      amountValue = cltype.CLValueInstance
+        .Option(maybeAmount.map(cltype.CLValueInstance.U64.apply), cltype.CLType.U64)
+        .right
+        .get
+      amountProto = cltype.ProtoMappings.toProto(amountValue)
       _ <- deployFileProgram[F](
             from = None,
             deployConfig.withSessionResource(UNBONDING_WASM_FILE),
             maybeEitherPublicKey = None,
             maybeEitherPrivateKey = rawPrivateKey.asLeft[PrivateKey].some,
-            sessionArgs =
-              List(optionalArg("amount", maybeAmount)(Deploy.Arg.Value.Value.LongValue(_))),
+            sessionArgs = List(arg("amount", amountProto)),
             waitForProcessed = waitForProcessed,
             timeout = timeout,
             bytesStandard = bytesStandard,
@@ -209,16 +213,18 @@ object DeployRuntime {
           }
           s"$mintPublicHex:$purseAddrHex"
         }
-        balanceURef <- DeployService[F].queryState(blockHash, "local", localKeyValue, "").rethrow
-        balance <- DeployService[F]
-                    .queryState(
-                      blockHash,
-                      "uref",
-                      Base16.encode(balanceURef.getKey.getUref.uref.toByteArray),
-                      ""
-                    )
-                    .rethrow
-      } yield s"Balance:\n$address : ${balance.getBigInt.value}").attempt
+        localQuery  <- DeployService[F].queryState(blockHash, "local", localKeyValue, "").rethrow
+        balanceURef = localQuery.getClValue.getValue.getKey.getUref
+        urefQuery <- DeployService[F]
+                      .queryState(
+                        blockHash,
+                        "uref",
+                        Base16.encode(balanceURef.uref.toByteArray),
+                        ""
+                      )
+                      .rethrow
+        balance = urefQuery.getClValue.getValue.getU512
+      } yield s"Balance:\n$address : ${balance.value}").attempt
     }
 
   def visualizeDag[F[_]: Sync: DeployService: Timer](

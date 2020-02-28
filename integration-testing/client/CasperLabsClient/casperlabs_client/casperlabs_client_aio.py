@@ -230,10 +230,10 @@ class CasperLabsClientAIO(object):
         local_key_value = f"{mint_public_hex}:{purse_addr_hex}"
 
         balance_uref = await self.query_state(block_hash, local_key_value, "", "local")
-        balance = await self.query_state(
-            block_hash, balance_uref.key.uref.uref.hex(), "", "uref"
-        )
-        return int(balance.big_int.value)
+        balance_uref_hex = balance_uref.cl_value.value.key.uref.uref.hex()
+        balance = await self.query_state(block_hash, balance_uref_hex, "", "uref")
+        balance_str_value = balance.cl_value.value.u512.value
+        return int(balance_str_value)
 
     async def show_block(self, block_hash_base16: str, full_view=True):
         return await self.casper_service.GetBlockInfo(

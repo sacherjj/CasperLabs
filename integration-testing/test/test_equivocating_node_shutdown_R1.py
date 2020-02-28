@@ -70,4 +70,5 @@ def test_equivocating_node_shutdown_and_other_nodes_are_working_ok(three_node_ne
                 key_type="address",
                 path="counter/count",
             )
-            assert state.int_value == next(expected_counter_result)
+            int_value = state.cl_value.value.i32
+            assert int_value == next(expected_counter_result)

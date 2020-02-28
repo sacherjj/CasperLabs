@@ -107,7 +107,7 @@ object GrpcCasperService {
           Observable.fromTask(deploys).flatMap(Observable.fromIterable)
         }
 
-        override def getBlockState(request: GetBlockStateRequest): Task[state.Value] =
+        override def getBlockState(request: GetBlockStateRequest): Task[state.StoredValueInstance] =
           batchGetBlockState(
             BatchGetBlockStateRequest(
               request.blockHashBase16,
@@ -138,7 +138,7 @@ object GrpcCasperService {
             stateHash: ByteString,
             query: StateQuery,
             protocolVersion: ProtocolVersion
-        ): F[state.Value] =
+        ): F[state.StoredValueInstance] =
           for {
             key <- toKey[F](query.keyVariant, query.keyBase16)
             possibleResponse <- ExecutionEngineService[F].query(

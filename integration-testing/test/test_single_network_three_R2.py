@@ -47,19 +47,20 @@ test_parameters = [
         Contract.MAILING_LIST_CALL,
         2,
         "mailing/list",
-        lambda r: "CasperLabs" in r.string_list.values,
+        lambda r: "CasperLabs"
+        in [v.str_value for v in r.cl_value.value.list_value.values],
     ),
     (
         Contract.COUNTER_CALL,
         1,
         "counter/count",
-        lambda r: r.int_value == next(expected_counter_result),
+        lambda r: r.cl_value.value.i32 == next(expected_counter_result),
     ),
     (
         Contract.HELLO_NAME_CALL,
         0,
         "helloworld",
-        lambda r: r.string_value == "Hello, World",
+        lambda r: r.cl_value.value.str_value == "Hello, World",
     ),
 ]
 

@@ -968,7 +968,7 @@ def check_cli_local_key(cli):
                  "--block-hash", block_hash,
                  "--key", local_key,
                  "--type", "local")
-    assert result.string_value == 'Hello, world!'
+    assert result.cl_value.value.str_value == 'Hello, world!'
 
     deploy_hash = cli("deploy",
                       "--from", account.public_key_hex,
@@ -982,7 +982,7 @@ def check_cli_local_key(cli):
                  "--block-hash", block_hash,
                  "--key", local_key,
                  "--type", "local")
-    assert result.string_value == 'Hello, world! Hello, world!'
+    assert result.cl_value.value.str_value == 'Hello, world! Hello, world!'
 
 
 def test_transfer_cli_python(cli):

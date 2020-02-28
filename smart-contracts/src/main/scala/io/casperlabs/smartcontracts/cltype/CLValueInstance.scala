@@ -5,12 +5,56 @@ import cats.implicits._
 import eu.timepit.refined._
 import eu.timepit.refined.api.Refined
 import eu.timepit.refined.numeric._
-import io.casperlabs.smartcontracts.bytesrepr.{BytesView, Constants, FromBytes}
+import io.casperlabs.smartcontracts.bytesrepr.{BytesView, Constants, FromBytes, ToBytes}
 import io.casperlabs.smartcontracts.cltype
 import scala.collection.immutable
 
-sealed trait CLValueInstance {
+sealed trait CLValueInstance { self =>
   val clType: CLType
+
+  private def valueBytes: IndexedSeq[Byte] = self match {
+    case CLValueInstance.Bool(b)   => ToBytes.toBytes(b)
+    case CLValueInstance.I32(i)    => ToBytes.toBytes(i)
+    case CLValueInstance.I64(i)    => ToBytes.toBytes(i)
+    case CLValueInstance.U8(i)     => ToBytes.toBytes(i)
+    case CLValueInstance.U32(i)    => ToBytes.toBytes(i)
+    case CLValueInstance.U64(i)    => ToBytes.toBytes(i)
+    case CLValueInstance.U128(i)   => ToBytes.toBytes(i.value)
+    case CLValueInstance.U256(i)   => ToBytes.toBytes(i.value)
+    case CLValueInstance.U512(i)   => ToBytes.toBytes(i.value)
+    case CLValueInstance.Unit      => ToBytes.toBytes(())
+    case CLValueInstance.String(s) => ToBytes.toBytes(s)
+    case CLValueInstance.Key(k)    => ToBytes.toBytes(k)
+    case CLValueInstance.URef(u)   => ToBytes.toBytes(u)
+
+    // TODO: stack safety
+    case CLValueInstance.Option(None, _) => IndexedSeq(Constants.Option.NONE_TAG)
+
+    case CLValueInstance.Option(Some(x), _) => Constants.Option.SOME_TAG +: x.valueBytes
+
+    case CLValueInstance.List(values, _) =>
+      ToBytes.toBytes(values.size) ++ values.toIndexedSeq.flatMap(_.valueBytes)
+
+    case CLValueInstance.FixedList(values, _, _) => values.toIndexedSeq.flatMap(_.valueBytes)
+
+    case CLValueInstance.Result(Left(x), _, _) => Constants.Either.LEFT_TAG +: x.valueBytes
+
+    case CLValueInstance.Result(Right(x), _, _) => Constants.Either.RIGHT_TAG +: x.valueBytes
+
+    case CLValueInstance.Map(values, _, _) =>
+      ToBytes.toBytes(values.size) ++ values.toIndexedSeq.flatMap {
+        case (k, v) => k.valueBytes ++ v.valueBytes
+      }
+
+    case CLValueInstance.Tuple1(x)       => x.valueBytes
+    case CLValueInstance.Tuple2(x, y)    => x.valueBytes ++ y.valueBytes
+    case CLValueInstance.Tuple3(x, y, z) => x.valueBytes ++ y.valueBytes ++ z.valueBytes
+  }
+
+  final def toValue: CLValue = CLValue(
+    clType,
+    valueBytes
+  )
 }
 
 object CLValueInstance {

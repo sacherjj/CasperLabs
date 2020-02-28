@@ -56,7 +56,7 @@ service CasperService {
     }
 
     // Query the value of global state as it was after the execution of a block.
-    rpc GetBlockState(GetBlockStateRequest) returns (io.casperlabs.casper.consensus.state.Value) {
+    rpc GetBlockState(GetBlockStateRequest) returns (io.casperlabs.casper.consensus.state.StoredValueInstance) {
         option (google.api.http) = {
             post: "v2/blocks/{block_hash_base16=*}/state"
             body: "*"
@@ -155,7 +155,8 @@ message BatchGetBlockStateRequest {
 }
 
 message BatchGetBlockStateResponse {
-    repeated io.casperlabs.casper.consensus.state.Value values = 1;
+    reserved 1; // previously repeated io.casperlabs.casper.consensus.state.Value
+    repeated io.casperlabs.casper.consensus.state.StoredValueInstance values = 2;
 }
 
 message ListDeployInfosRequest {
