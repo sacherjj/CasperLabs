@@ -484,25 +484,8 @@ object GenesisApproverSpec extends ArbitraryConsensusAndComm {
     override def banTemp(node: Node): Task[Unit]     = ???
   }
 
-  class MockGossipService extends GossipService[Task] {
-    override def newBlocks(request: NewBlocksRequest)                                       = ???
-    override def streamAncestorBlockSummaries(request: StreamAncestorBlockSummariesRequest) = ???
-    override def streamLatestMessages(
-        request: StreamLatestMessagesRequest
-    ): Iterant[Task, Block.Justification] = ???
-    override def streamBlockSummaries(
-        request: StreamBlockSummariesRequest
-    ): Iterant[Task, BlockSummary]                                    = ???
-    override def getBlockChunked(request: GetBlockChunkedRequest)     = ???
-    override def addApproval(request: AddApprovalRequest): Task[Unit] = ???
-    override def getGenesisCandidate(
-        request: GetGenesisCandidateRequest
-    ): Task[GenesisCandidate] = ???
+  class MockGossipService extends NoOpsGossipService[Task]
 
-    override def streamDagSliceBlockSummaries(
-        request: StreamDagSliceBlockSummariesRequest
-    ): Iterant[Task, BlockSummary] = ???
-  }
   object MockGossipService {
     class Bootstrap(getCandidate: () => Task[GenesisCandidate]) extends MockGossipService() {
       override def getGenesisCandidate(request: GetGenesisCandidateRequest) =

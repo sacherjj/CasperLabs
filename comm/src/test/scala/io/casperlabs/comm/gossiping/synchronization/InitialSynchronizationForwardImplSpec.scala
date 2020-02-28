@@ -292,15 +292,9 @@ object InitialSynchronizationForwardImplSpec extends ArbitraryConsensus {
   }
 
   class MockGossipService(produceDag: Task[Vector[BlockSummary]], correct: Boolean)
-      extends GossipService[Task] {
-    def newBlocks(request: NewBlocksRequest)                                       = ???
-    def streamAncestorBlockSummaries(request: StreamAncestorBlockSummariesRequest) = ???
-    def streamLatestMessages(request: StreamLatestMessagesRequest)                 = ???
-    def streamBlockSummaries(request: StreamBlockSummariesRequest)                 = ???
-    def getBlockChunked(request: GetBlockChunkedRequest)                           = ???
-    def getGenesisCandidate(request: GetGenesisCandidateRequest)                   = ???
-    def addApproval(request: AddApprovalRequest)                                   = ???
-    def streamDagSliceBlockSummaries(request: StreamDagSliceBlockSummariesRequest) =
+      extends NoOpsGossipService[Task] {
+
+    override def streamDagSliceBlockSummaries(request: StreamDagSliceBlockSummariesRequest) =
       Iterant
         .liftF {
           produceDag.flatMap { dag =>

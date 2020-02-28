@@ -22,6 +22,8 @@ trait GossipService[F[_]] {
   /** Get a full block in chunks, optionally compressed, so that it can be transferred over the wire. */
   def getBlockChunked(request: GetBlockChunkedRequest): Iterant[F, Chunk]
 
+  def streamDeploysChunked(request: StreamDeploysChunkedRequest): Iterant[F, Chunk]
+
   def getGenesisCandidate(request: GetGenesisCandidateRequest): F[GenesisCandidate]
 
   def addApproval(request: AddApprovalRequest): F[Unit]
