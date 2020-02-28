@@ -169,7 +169,7 @@ steps:
 - name: run-rust-audit-pr
   commands:
   - "cd execution-engine"
-  - "make setup-rs"
+  - "make setup-audit"
   - "make audit"
   image: "casperlabs/buildenv:latest"
   when:
@@ -332,7 +332,7 @@ steps:
 - name: run-rust-audit-bors
   commands:
   - "cd execution-engine"
-  - "make setup-rs"
+  - "make setup-audit"
   - "make audit"
   image: "casperlabs/buildenv:latest"
   when:

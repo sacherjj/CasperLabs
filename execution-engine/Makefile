@@ -215,12 +215,15 @@ setup-cargo-packagers:
 	$(CARGO) install cargo-rpm || exit 0
 	$(CARGO) install cargo-deb || exit 0
 
+.PHONY: setup-audit
+setup-audit:
+	$(CARGO) install cargo-audit
+
 .PHONY: setup-rs
 setup-rs: rust-toolchain
 	$(RUSTUP) update
 	$(RUSTUP) toolchain install $(RUST_TOOLCHAIN)
 	$(RUSTUP) target add --toolchain $(RUST_TOOLCHAIN) wasm32-unknown-unknown
-	$(CARGO) install cargo-audit
 
 .PHONY: setup-as
 setup-as: contract-as/package.json
