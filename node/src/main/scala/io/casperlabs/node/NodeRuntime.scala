@@ -144,6 +144,7 @@ class NodeRuntime private[node] (
                 ),
               wrapDagStorage = (underlyingDagStorage: DagStorage[Task]
                 with DagRepresentation[Task]
+                with MessageAncestorsStorage[Task]
                 with FinalityStorage[Task]) =>
                 CachingDagStorage[Task](
                   underlyingDagStorage,
@@ -153,7 +154,9 @@ class NodeRuntime private[node] (
                 ).map(
                   cache =>
                     // Compiler fails to infer the proper type without this
-                    cache: DagStorage[Task] with DagRepresentation[Task] with FinalityStorage[Task]
+                    cache: DagStorage[Task] with DagRepresentation[Task] with FinalityStorage[
+                      Task
+                    ] with MessageAncestorsStorage[Task]
                 )
             )
           )

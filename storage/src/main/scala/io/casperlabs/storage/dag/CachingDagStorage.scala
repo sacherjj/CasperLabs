@@ -14,6 +14,7 @@ import io.casperlabs.storage.BlockHash
 import io.casperlabs.storage.dag.CachingDagStorage.Rank
 import io.casperlabs.storage.dag.DagRepresentation.Validator
 import io.casperlabs.storage.dag.DagStorage.{MeteredDagRepresentation, MeteredDagStorage}
+import io.casperlabs.catscontrib.MonadThrowable
 
 import scala.collection.concurrent.TrieMap
 
@@ -22,7 +23,10 @@ class CachingDagStorage[F[_]: Concurrent](
     neighborhoodBefore: Int,
     // How far to go to the future (by ranks) for caching neighborhood of looked up block
     neighborhoodAfter: Int,
-    underlying: DagStorage[F] with DagRepresentation[F] with FinalityStorage[F],
+    underlying: DagStorage[F]
+      with DagRepresentation[F]
+      with FinalityStorage[F]
+      with MessageAncestorsStorage[F],
     private[dag] val childrenCache: Cache[BlockHash, Set[BlockHash]],
     private[dag] val justificationCache: Cache[BlockHash, Set[BlockHash]],
     private[dag] val messagesCache: Cache[BlockHash, Message],
@@ -30,6 +34,7 @@ class CachingDagStorage[F[_]: Concurrent](
     semaphore: Semaphore[F]
 ) extends DagStorage[F]
     with DagRepresentation[F]
+    with MessageAncestorsStorage[F]
     with FinalityStorage[F] {
 
   /** Unsafe to be invoked concurrently */
@@ -106,6 +111,11 @@ class CachingDagStorage[F[_]: Concurrent](
 
   override def getRepresentation: F[DagRepresentation[F]] =
     (this: DagRepresentation[F]).pure[F]
+
+  override implicit val MT: MonadThrowable[F] = Concurrent[F]
+
+  override private[storage] def findAncestor(block: BlockHash, distance: Long) =
+    underlying.findAncestor(block, distance) // TODO(CON-630): Cache
 
   private[storage] override def insert(block: Block): F[DagRepresentation[F]] =
     for {
@@ -185,7 +195,10 @@ object CachingDagStorage {
   type Rank = Long
 
   def apply[F[_]: Concurrent: Metrics](
-      underlying: DagStorage[F] with DagRepresentation[F] with FinalityStorage[F],
+      underlying: DagStorage[F]
+        with DagRepresentation[F]
+        with FinalityStorage[F]
+        with MessageAncestorsStorage[F],
       maxSizeBytes: Long,
       // How far to go to the past (by ranks) for caching neighborhood of looked up block
       neighborhoodBefore: Int,

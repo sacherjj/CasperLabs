@@ -34,9 +34,11 @@ class SQLiteDagStorage[F[_]: Sync](
 )(implicit met: Metrics[F])
     extends DagStorage[F]
     with DagRepresentation[F]
+    with MessageAncestorsStorage[F]
     with FinalityStorage[F]
     with DoobieCodecs {
   import SQLiteDagStorage.StreamOps
+  implicit val MT: MonadThrowable[F] = Sync[F]
 
   override def getRepresentation: F[DagRepresentation[F]] =
     (this: DagRepresentation[F]).pure[F]
@@ -146,6 +148,14 @@ class SQLiteDagStorage[F[_]: Sync](
           .void
       }
 
+    def insertAncestorsSkipList(ancestors: List[(Long, BlockHash)]): ConnectionIO[Unit] =
+      Update[(BlockHash, Long, BlockHash)]("""INSERT OR IGNORE INTO message_ancestors_skiplist
+           (block_hash, distance, ancestor_hash) VALUES (?, ?, ?)""")
+        .updateMany(ancestors.map {
+          case (distance, ancestorHash) => (block.blockHash, distance, ancestorHash)
+        })
+        .void
+
     val transaction = for {
       _ <- insertBlockMetadata
       _ <- insertJustifications
@@ -162,10 +172,19 @@ class SQLiteDagStorage[F[_]: Sync](
     } yield ()
 
     for {
-      _   <- transaction.transact(writeXa)
+      ancestors <- collectMessageAncestors(block)
+      _ <- (transaction >> insertAncestorsSkipList(ancestors).whenA(ancestors.nonEmpty))
+            .transact(writeXa)
       dag <- getRepresentation
     } yield dag
   }
+
+  override def findAncestor(block: BlockHash, distance: Long): F[Option[BlockHash]] =
+    sql"""SELECT ancestor_hash FROM message_ancestors_skiplist 
+          WHERE block_hash=$block AND distance=$distance"""
+      .query[BlockHash]
+      .option
+      .transact(readXa)
 
   override def checkpoint(): F[Unit] = ().pure[F]
 
@@ -456,17 +475,22 @@ object SQLiteDagStorage {
   private[storage] def create[F[_]: Sync](readXa: Transactor[F], writeXa: Transactor[F])(
       implicit
       met: Metrics[F]
-  ): F[DagStorage[F] with DagRepresentation[F] with FinalityStorage[F]] =
+  ): F[
+    DagStorage[F] with DagRepresentation[F] with FinalityStorage[F] with MessageAncestorsStorage[F]
+  ] =
     for {
       dagStorage <- Sync[F].delay(
                      new SQLiteDagStorage[F](readXa, writeXa)
                        with MeteredDagStorage[F]
                        with MeteredDagRepresentation[F]
+                       with MessageAncestorsStorage[F]
                        with FinalityStorage[F] {
                        override implicit val m: Metrics[F] = met
                        override implicit val ms: Source    = MetricsSource
                        override implicit val a: Apply[F]   = Sync[F]
                      }
                    )
-    } yield dagStorage: DagStorage[F] with DagRepresentation[F] with FinalityStorage[F]
+    } yield dagStorage: DagStorage[F] with DagRepresentation[F] with FinalityStorage[F] with MessageAncestorsStorage[
+      F
+    ]
 }

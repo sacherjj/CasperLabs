@@ -23,6 +23,9 @@ import simulacrum.typeclass
 
 import scala.collection.immutable.{BitSet, HashSet, Queue}
 import scala.collection.mutable
+import io.casperlabs.storage.dag.MessageAncestorsStorage
+import io.casperlabs.storage.dag.MessageAncestorsStorage.Relation
+import org.scalacheck.util.Pretty
 
 object DagOperations {
 
@@ -544,5 +547,38 @@ object DagOperations {
       dag                  <- DagStorage[F].getRepresentation
       perEraLatestMessages <- latestMessagesInEras(dag, keyBlocks)
     } yield perEraLatestMessages
+
+  /**
+    * Computes a relationship (in the p-DAG) between `block` and `targetHash`.
+    *
+    * Relation relative to the `block`.
+    *
+    * @param block
+    * @param target
+    * @return Relation between `block` and `target`.
+    */
+  def relation[F[_]: MonadThrowable](start: Message, target: Message)(
+      implicit MAS: MessageAncestorsStorage[F]
+  ): F[Option[Relation]] =
+    if (start.messageHash == target.messageHash) Relation.equal.some.pure[F]
+    else if (start.parentBlock == target.messageHash) Relation.descendant.some.pure[F]
+    else if (target.parentBlock == start.messageHash) Relation.ancestor.some.pure[F]
+    else {
+      (start.mainRank, target.mainRank) match {
+        case (startRank, targetRank) if startRank == targetRank =>
+          if (start.messageHash == target.messageHash) Relation.equal.some.pure[F]
+          else none[Relation].pure[F]
+        case (startRank, targetRank) if startRank < targetRank =>
+          MAS.getAncestorAt(target, start.mainRank).map { targetAncestor =>
+            if (targetAncestor.messageHash == start.messageHash) Relation.ancestor.some
+            else none[Relation]
+          }
+        case (startRank, targetRank) if startRank > targetRank =>
+          MAS.getAncestorAt(start, target.mainRank).map { startAncestor =>
+            if (startAncestor.messageHash == target.messageHash) Relation.descendant.some
+            else none[Relation]
+          }
+      }
+    }
 
 }
