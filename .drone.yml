@@ -179,97 +179,6 @@ steps:
       - "**/.drone.yml"
       - "integration-testing/**"
 
-- name: temp_build_docker_images
-  commands:
-  - "export DOCKER_LATEST_TAG=DRONE-${DRONE_BUILD_NUMBER}"
-  - "~/.cargo/bin/rustup toolchain install $(cat execution-engine/rust-toolchain)"
-  - "rustup target add --toolchain $(cat execution-engine/rust-toolchain) wasm32-unknown-unknown"
-  - "./integration-testing/build_contracts.sh"
-  - "make docker-build/execution-engine docker-build/node docker-build/client docker-build/integration-testing docker-build/explorer docker-build/grpcwebproxy"
-  image: "casperlabs/buildenv:latest"
-  volumes:
-  - name: docker_sock
-    path: "/var/run/docker.sock"
-  when:
-    event:
-    - pull_request
-  depends_on:
-  - sbt-compile-test-pr
-
-- name: temp-run-integration-tests-parallel-0
-  commands:
-  - "cd integration-testing"
-  - "./docker_run_tests.sh --unique_run_num 0"
-  environment:
-    _JAVA_OPTIONS: "-Xms2G -Xmx2G -XX:MaxMetaspaceSize=1G"
-  image: "casperlabs/buildenv:latest"
-  volumes:
-  - name: docker_sock
-    path: "/var/run/docker.sock"
-  - name: temp
-    path: "/tmp"
-  when:
-    event:
-    - pull_request
-  depends_on:
-  - temp_build_docker_images
-
-- name: temp-run-integration-tests-parallel-1
-  commands:
-  - "cd integration-testing"
-  - "./docker_run_tests.sh --unique_run_num 1"
-  environment:
-    _JAVA_OPTIONS: "-Xms2G -Xmx2G -XX:MaxMetaspaceSize=1G"
-  image: "casperlabs/buildenv:latest"
-  volumes:
-  - name: docker_sock
-    path: "/var/run/docker.sock"
-  - name: temp
-    path: "/tmp"
-  when:
-    event:
-    - pull_request
-  depends_on:
-  - temp_build_docker_images
-
-- name: temp-run-integration-tests-parallel-2
-  commands:
-  - "cd integration-testing"
-  - "./docker_run_tests.sh --unique_run_num 2"
-  environment:
-    _JAVA_OPTIONS: "-Xms2G -Xmx2G -XX:MaxMetaspaceSize=1G"
-  image: "casperlabs/buildenv:latest"
-  volumes:
-  - name: docker_sock
-    path: "/var/run/docker.sock"
-  - name: temp
-    path: "/tmp"
-  when:
-    event:
-    - pull_request
-  depends_on:
-  - temp_build_docker_images
-
-- name: temp-run-integration-tests-serial-3
-  commands:
-  - "cd integration-testing"
-  - "./docker_run_tests.sh --unique_run_num 3"
-  environment:
-    _JAVA_OPTIONS: "-Xms2G -Xmx2G -XX:MaxMetaspaceSize=1G"
-  image: "casperlabs/buildenv:latest"
-  volumes:
-  - name: docker_sock
-    path: "/var/run/docker.sock"
-  - name: temp
-    path: "/tmp"
-  when:
-    event:
-    - pull_request
-  depends_on:
-  - temp-run-integration-tests-parallel-0
-  - temp-run-integration-tests-parallel-1
-  - temp-run-integration-tests-parallel-2
-
 # This section is for bors' branches only
 
 #NOTE: allowing failures here since we've seen site temporarily go down and cause
@@ -1063,6 +972,24 @@ steps:
   - package-sbt-artifacts-tag
   - package-ee-tag
   - rsync-mac-tarball-tag
+
+- name: npm-publish
+  image: plugins/npm
+  settings:
+    username:
+      from_secret: npm_user
+    token:
+      from_secret: npm_token
+    email:
+      from_secret: npm_email
+    folder:
+    - "execution-engine/contract-as"
+    fail_on_version_conflict:
+    - true
+    access:
+    - "public"
+  depends_on:
+  - github_publish_release_artifacts
 
 - name: cleanup-mac-tag
   image: appleboy/drone-ssh:1.5.5
