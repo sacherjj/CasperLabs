@@ -6,7 +6,8 @@ import cats.syntax.show
 import cats.effect.{Concurrent, Fiber, Resource, Sync, Timer}
 import cats.effect.concurrent.{Ref, Semaphore}
 import io.casperlabs.casper.consensus.{Block, BlockSummary, Era}
-import io.casperlabs.casper.util.DagOperations, DagOperations.Key
+import io.casperlabs.casper.dag.DagOperations
+import io.casperlabs.casper.dag.DagOperations.Key
 import io.casperlabs.casper.highway.EraRuntime.Agenda
 import io.casperlabs.comm.gossiping.Relaying
 import io.casperlabs.metrics.Metrics
@@ -17,6 +18,7 @@ import io.casperlabs.storage.BlockHash
 import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.storage.dag.{DagRepresentation, DagStorage, FinalityStorageReader}
 import io.casperlabs.storage.era.EraStorage
+
 import scala.concurrent.duration.FiniteDuration
 import scala.util.control.NonFatal
 

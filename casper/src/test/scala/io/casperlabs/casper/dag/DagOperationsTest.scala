@@ -1,4 +1,4 @@
-package io.casperlabs.casper.util
+package io.casperlabs.casper.dag
 
 import cats.data.NonEmptyList
 import cats.implicits._
@@ -11,6 +11,7 @@ import io.casperlabs.casper.helper.BlockUtil.generateValidator
 import io.casperlabs.casper.helper.{BlockGenerator, StorageFixture}
 import io.casperlabs.casper.scalatestcontrib._
 import io.casperlabs.casper.util.BondingUtil.Bond
+import io.casperlabs.casper.util.ByteStringPrettifier
 import io.casperlabs.models.Message
 import io.casperlabs.shared.Sorting.messageSummaryOrdering
 import io.casperlabs.storage.dag.DagRepresentation
@@ -18,7 +19,6 @@ import monix.eval.Task
 import org.scalatest.{FlatSpec, Matchers}
 
 import scala.collection.immutable.BitSet
-import io.casperlabs.casper.PrettyPrinter
 
 @silent("deprecated")
 @silent("is never used")

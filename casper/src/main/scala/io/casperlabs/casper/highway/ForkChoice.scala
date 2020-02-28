@@ -7,7 +7,6 @@ import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.Estimator
 import io.casperlabs.casper.util.ProtoUtil
-import io.casperlabs.casper.util.EraObservedBehavior
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.crypto.Keys.{PublicKey, PublicKeyBS}
 import io.casperlabs.models.Message.Block
@@ -19,9 +18,8 @@ import io.casperlabs.storage.dag.DagRepresentation._
 import io.casperlabs.storage.dag.{DagLookup, DagRepresentation, DagStorage}
 import io.casperlabs.storage.era.EraStorage
 import simulacrum.typeclass
-
-import io.casperlabs.casper.util.DagOperations
 import io.casperlabs.casper.consensus.Bond
+import io.casperlabs.casper.dag.{DagOperations, EraObservedBehavior}
 
 /** Some sort of stateful, memoizing implementation of a fast fork choice.
   * Should have access to the era tree to check what are the latest messages
@@ -374,7 +372,7 @@ object ForkChoice {
       if (currHeight == scores.stopHeight) {
         // We reached the starting block. This means there is no block that has majority of votes.
         // Return a child of starting block that has the highest score.
-        import io.casperlabs.casper.util.DagOperations.bigIntByteStringOrdering
+        import DagOperations.bigIntByteStringOrdering
         scores.votesAtHeight(currHeight).toList.map(_.swap).max(bigIntByteStringOrdering)._2.pure[F]
       } else {
         scores.votesAtHeight(currHeight).toList.filter {

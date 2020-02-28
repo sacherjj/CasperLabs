@@ -5,7 +5,8 @@ import cats.implicits._
 import cats.mtl.FunctorRaise
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.consensus.Block
-import io.casperlabs.casper.util.{DagOperations, ProtoUtil}
+import io.casperlabs.casper.dag.DagOperations
+import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.casper.{CasperState, EquivocatedBlock, InvalidBlock, PrettyPrinter}
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.models.Message

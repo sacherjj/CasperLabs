@@ -1,30 +1,28 @@
-package io.casperlabs.casper.util
+package io.casperlabs.casper.dag
 
-import cats.implicits._
 import cats.data.NonEmptyList
+import cats.implicits._
 import cats.{Eq, Eval, Monad}
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.Estimator.BlockHash
-import io.casperlabs.casper.consensus.{Block, BlockSummary, Era}
 import io.casperlabs.casper.PrettyPrinter
-import io.casperlabs.casper.util.implicits._
+import io.casperlabs.casper.consensus.{Block, BlockSummary, Era}
+import io.casperlabs.casper.dag.EraObservedBehavior.{LocalDagView, MessageJPast}
+import io.casperlabs.casper.highway.MessageProducer
+import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.models.Message
-import io.casperlabs.shared.{Log, StreamT}
+import io.casperlabs.models.Message.asJRank
+import io.casperlabs.shared.Sorting.jRankOrdering
+import io.casperlabs.shared.StreamT
 import io.casperlabs.storage.block.BlockStorage
-import io.casperlabs.storage.dag.DagRepresentation
+import io.casperlabs.storage.dag.DagRepresentation._
+import io.casperlabs.storage.dag.{DagLookup, DagRepresentation, DagStorage}
+import io.casperlabs.storage.era.EraStorage
 import simulacrum.typeclass
 
 import scala.collection.immutable.{BitSet, HashSet, Queue}
 import scala.collection.mutable
-import io.casperlabs.storage.dag.DagLookup
-import io.casperlabs.storage.dag.DagStorage
-import io.casperlabs.storage.dag.DagRepresentation._
-import EraObservedBehavior._
-import io.casperlabs.casper.highway.MessageProducer
-import io.casperlabs.storage.era.EraStorage
-import io.casperlabs.shared.Sorting.jRankOrdering
-import io.casperlabs.models.Message.asJRank
 
 object DagOperations {
 
@@ -488,8 +486,6 @@ object DagOperations {
                     }
       } yield reachable
     }
-
-  import DagRepresentation.Validator
 
   /**
     * Calculates panorama of a message.
