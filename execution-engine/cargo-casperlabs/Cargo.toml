@@ -20,7 +20,7 @@ include = [
 
 [dependencies]
 clap = "2"
-colour = "0.3.0"
+colour = "0.4"
 lazy_static = "1"
 
 [dev-dependencies]
