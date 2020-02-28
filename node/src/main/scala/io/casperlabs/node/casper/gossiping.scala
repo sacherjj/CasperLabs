@@ -13,6 +13,7 @@ import eu.timepit.refined.auto._
 import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper._
 import io.casperlabs.casper.consensus._
+import io.casperlabs.casper.consensus.info.DeployInfo
 import io.casperlabs.casper.util.{CasperLabsProtocol, ProtoUtil}
 import io.casperlabs.casper.validation.Validation
 import io.casperlabs.catscontrib.MonadThrowable
@@ -42,13 +43,14 @@ import io.casperlabs.node.casper.consensus.Consensus
 import io.casperlabs.shared.{Cell, FatalError, Log, Time}
 import io.casperlabs.storage.block._
 import io.casperlabs.storage.dag._
+import io.casperlabs.storage.deploy.DeployStorage
 import io.grpc.{ManagedChannel, Server}
 import io.grpc.netty.{NegotiationType, NettyChannelBuilder}
 import io.netty.handler.ssl.{ClientAuth, SslContext}
+import fs2.interop.reactivestreams._
 import monix.eval.TaskLike
 import monix.execution.Scheduler
 import monix.tail.Iterant
-
 import scala.concurrent.duration._
 import scala.util.Random
 import scala.util.control.{NoStackTrace, NonFatal}
@@ -59,7 +61,7 @@ package object gossiping {
   private implicit val metricsSource: Metrics.Source =
     Metrics.Source(Metrics.Source(Metrics.BaseSource, "node"), "gossiping")
 
-  def apply[F[_]: Parallel: ConcurrentEffect: Log: Metrics: Time: Timer: BlockStorage: DagStorage: NodeDiscovery: NodeAsk: Validation: CasperLabsProtocol: Consensus](
+  def apply[F[_]: Parallel: ConcurrentEffect: Log: Metrics: Time: Timer: BlockStorage: DagStorage: DeployStorage: NodeDiscovery: NodeAsk: Validation: CasperLabsProtocol: Consensus](
       port: Int,
       conf: Configuration,
       maybeValidatorId: Option[ValidatorIdentity],
@@ -482,7 +484,7 @@ package object gossiping {
     } yield cont
 
   /** Create gossip service. */
-  def makeGossipServiceServer[F[_]: ConcurrentEffect: Parallel: Log: Metrics: BlockStorage: DagStorage: Consensus](
+  def makeGossipServiceServer[F[_]: ConcurrentEffect: Parallel: Log: Metrics: BlockStorage: DagStorage: DeployStorage: Consensus](
       conf: Configuration,
       synchronizer: Synchronizer[F],
       downloadManager: DownloadManager[F],
@@ -502,6 +504,14 @@ package object gossiping {
                       BlockStorage[F]
                         .get(blockHash)
                         .map(_.map(_.getBlockMessage))
+
+                    override def getDeploys(deployHashes: Set[ByteString]): Iterant[F, Deploy] =
+                      Iterant.fromReactivePublisher {
+                        DeployStorage[F]
+                          .reader(DeployInfo.View.FULL)
+                          .getByHashes(deployHashes)
+                          .toUnicastPublisher
+                      }
 
                     /** Returns latest messages as seen currently by the node.
                       * NOTE: In the future we will remove redundant messages. */
@@ -647,6 +657,7 @@ package object gossiping {
       case fatal        => Sync[F].delay(throw fatal)
     }.background
 
+  /** Limit the rate of block downloads per peer. */
   private def makeRateLimiter[F[_]: Concurrent: Timer: Log](
       conf: Configuration
   ): Resource[F, RateLimiter[F, ByteString]] = {
