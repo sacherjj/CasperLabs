@@ -114,6 +114,7 @@ lazy val casper = (project in file("casper"))
     libraryDependencies ++= commonDependencies ++ protobufLibDependencies ++ Seq(
       catsCore,
       catsMtl,
+      fs2ReactiveStreams,
       monix,
       nettyAll,
       nettyTransNativeEpoll,
