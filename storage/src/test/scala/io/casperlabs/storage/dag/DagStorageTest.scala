@@ -361,7 +361,7 @@ trait DagStorageTest
     }
   }
 
-  it should "return only blocks produced by certain validator with validatorBlockSeqNum in ..." in {
+  it should "return only blocks produced by certain validator with validatorBlockSeqNum in expected range" in {
     val validator = sample(genHash)
     val blocksDuplicatedSeqNum = Gen
       .nonEmptyListOf(arbitrary[Block])
