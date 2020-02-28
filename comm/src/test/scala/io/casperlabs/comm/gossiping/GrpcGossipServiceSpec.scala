@@ -597,6 +597,7 @@ class GrpcGossipServiceSpec
                   }
                   def hasBlock(blockHash: ByteString)                = ???
                   def getBlockSummary(blockHash: ByteString)         = ???
+                  def getDeploys(deployHashes: Set[ByteString])      = ???
                   def latestMessages: Task[Set[Block.Justification]] = ???
                   def dagTopoSort(startRank: Long, endRank: Long)    = ???
                 }
@@ -1365,6 +1366,14 @@ object GrpcGossipServiceSpec extends TestRuntime with ArbitraryConsensusAndComm 
           Task.delay(testDataRef.get.blocks.get(blockHash))
         def getBlockSummary(blockHash: ByteString) =
           Task.delay(testDataRef.get.summaries.get(blockHash))
+        def getDeploys(deployHashes: Set[ByteString]) = {
+          val deploys = testDataRef.get.blocks.values.flatMap { b =>
+            b.getBody.deploys.map(_.getDeploy).filter(d => deployHashes(d.deployHash))
+          }.toSet
+
+          Iterant.fromIterator(deploys.iterator)
+        }
+
         def latestMessages: Task[Set[Block.Justification]] =
           Task.delay(
             testDataRef.get.summaries.values
