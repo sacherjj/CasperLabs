@@ -150,11 +150,17 @@ format:
 lint:
 	$(CARGO) clippy --all-targets --all -- -D warnings -A renamed_and_removed_lints
 
+.PHONY: audit
+audit:
+	$(CARGO) generate-lockfile
+	$(CARGO) audit
+
 .PHONY: check-rs
 check-rs: \
 	build \
 	check-format \
 	lint \
+	audit \
 	test-rs \
 	test-contracts-rs \
 
@@ -163,6 +169,7 @@ check: \
 	build \
 	check-format \
 	lint \
+	audit \
 	test \
 	test-contracts
 
@@ -207,6 +214,10 @@ bench: build-contracts-rs
 setup-cargo-packagers:
 	$(CARGO) install cargo-rpm || exit 0
 	$(CARGO) install cargo-deb || exit 0
+
+.PHONY: setup-audit
+setup-audit:
+	$(CARGO) install cargo-audit
 
 .PHONY: setup-rs
 setup-rs: rust-toolchain
