@@ -54,6 +54,7 @@ import io.casperlabs.shared.Sorting.jRankOrder
 import scala.util.control.NoStackTrace
 import scala.concurrent.duration._
 import simulacrum.typeclass
+import io.casperlabs.storage.dag.MessageAncestorsStorage
 
 // Stuff we need to pass to gossiping.
 @typeclass
@@ -210,7 +211,7 @@ class NCB[F[_]: Concurrent: Time: Log: BlockStorage: DagStorage: ExecutionEngine
 }
 
 object Highway {
-  def apply[F[_]: Concurrent: Time: Timer: Clock: Log: Metrics: DagStorage: BlockStorage: DeployBuffer: DeployStorage: EraStorage: FinalityStorage: CasperLabsProtocol: ExecutionEngineService: DeploySelection: EventEmitter: Validation: Relaying](
+  def apply[F[_]: Concurrent: Time: Timer: Clock: Log: Metrics: DagStorage: BlockStorage: DeployBuffer: DeployStorage: EraStorage: FinalityStorage: MessageAncestorsStorage: CasperLabsProtocol: ExecutionEngineService: DeploySelection: EventEmitter: Validation: Relaying](
       conf: Configuration,
       chainSpec: ChainSpec,
       maybeValidatorId: Option[ValidatorIdentity],
