@@ -10,3 +10,6 @@ def test_highway(three_node_highway_network):
             logging.info(f"{node} is on Highway!")
         else:
             raise Exception(f"{node} is not on Highway")
+    client = net.docker_nodes[0].p_client.client
+    for block_info in client.stream_events(all=True):
+        print(block_info)
