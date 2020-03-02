@@ -59,13 +59,13 @@ class SQLiteDagStorage[F[_]: Sync](
     val isFinalized = false
     val insertBlockMetadata =
       (fr"""INSERT OR IGNORE INTO block_metadata
-            (block_hash, validator, j_rank, main_rank, validator_block_seq_num, """ ++ blockInfoCols() ++ fr""")
+            (block_hash, validator, j_rank, main_rank, create_time_millis, """ ++ blockInfoCols() ++ fr""")
             VALUES (
               ${block.blockHash},
               ${block.validatorPublicKey},
               $jRank,
               $mainRank,
-              ${block.validatorBlockSeqNum},
+              ${block.timestamp},
               ${blockSummary.toByteString},
               ${block.serializedSize},
               $deployErrorCount,
@@ -250,6 +250,39 @@ class SQLiteDagStorage[F[_]: Sync](
       .stream
       .transact(readXa)
       .groupByRank
+
+  override def getBlockInfosByValidator(
+      validator: Validator,
+      limit: Int,
+      lastTimeStamp: Long,
+      lastBlockHash: BlockHash,
+      isNext: Boolean
+  ) = {
+    val sql = if (isNext) {
+      (fr"SELECT " ++ blockInfoCols() ++ fr""" FROM block_metadata
+             WHERE validator=$validator AND
+             (create_time_millis < $lastTimeStamp OR create_time_millis = $lastTimeStamp AND block_hash < $lastBlockHash)
+             ORDER BY create_time_millis DESC, block_hash DESC
+             LIMIT $limit""")
+    } else {
+      (fr"SELECT summary, " ++ blockInfoCols() ++ fr""" FROM block_metadata
+             WHERE validator=$validator AND
+             (create_time_millis > $lastTimeStamp OR create_time_millis = $lastTimeStamp AND block_hash > $lastBlockHash)
+             ORDER BY create_time_millis ASC, block_hash ASC
+             LIMIT $limit""")
+    }
+    sql
+      .query[BlockInfo]
+      .to[List]
+      .map(l => {
+        if (isNext) {
+          l
+        } else {
+          l.reverse
+        }
+      })
+      .transact(readXa)
+  }
 
   override def topoSortValidator(
       validator: Validator,
