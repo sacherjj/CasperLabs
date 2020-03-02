@@ -30,6 +30,7 @@ from casperlabs_local_net.casperlabs_network import (
     OneNodeNetworkWithChainspecUpgrades,
     ThreeNodeNetworkWithTwoBootstraps,
     OneNodeWithAutoPropose,
+    ThreeNodeHighwayNetwork,
 )
 
 
@@ -256,6 +257,13 @@ def star_network(docker_client_fixture):
             node_count=node_count, network_connections=network_connections
         )
         yield ccn
+
+
+@pytest.fixture(scope="module")
+def three_node_highway_network(docker_client_fixture):
+    with ThreeNodeHighwayNetwork(docker_client_fixture) as tnn:
+        tnn.create_cl_network()
+        yield tnn
 
 
 @pytest.hookimpl(tryfirst=True)
