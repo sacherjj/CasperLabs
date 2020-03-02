@@ -8,7 +8,7 @@ use contract::contract_api::{runtime, storage};
 
 #[no_mangle]
 pub extern "C" fn calculate() -> u64 {
-    let large_prime: u64 = 0xfffffffb;
+    let large_prime: u64 = 0xffff_fffb;
 
     let mut result: u64 = 42;
     // calculate 42^4242 mod large_prime
