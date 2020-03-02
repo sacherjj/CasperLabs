@@ -335,6 +335,7 @@ macro_rules! impl_traits_for_uint {
                 assert_eq!($type::from(8).lcm(&$type::from(9)), $type::from(72));
                 assert_eq!($type::from(11).lcm(&$type::from(5)), $type::from(55));
                 assert_eq!($type::from(15).lcm(&$type::from(17)), $type::from(255));
+                assert_eq!($type::from(4).lcm(&$type::from(8)), $type::from(8));
             }
 
             #[test]
@@ -342,6 +343,7 @@ macro_rules! impl_traits_for_uint {
                 assert!($type::from(6).is_multiple_of(&$type::from(6)));
                 assert!($type::from(6).is_multiple_of(&$type::from(3)));
                 assert!($type::from(6).is_multiple_of(&$type::from(1)));
+                assert!(!$type::from(3).is_multiple_of(&$type::from(5)))
             }
 
             #[test]
@@ -360,6 +362,14 @@ macro_rules! impl_traits_for_uint {
                 assert_eq!($type::from(2).is_odd(), false);
                 assert_eq!($type::from(3).is_odd(), true);
                 assert_eq!($type::from(4).is_odd(), false);
+            }
+
+            #[test]
+            #[should_panic]
+            fn overflow_and_underflow_test() {
+                let _ = $type::MAX * $type::from(2);
+                let _ = $type::MAX + $type::from(1);
+                let _ = $type::zero() - $type::from(1);
             }
         }
     };
