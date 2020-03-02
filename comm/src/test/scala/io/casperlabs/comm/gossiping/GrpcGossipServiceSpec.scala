@@ -661,13 +661,14 @@ class GrpcGossipServiceSpec
             block        <- arbitrary[Block]
             deploys      = block.getBody.deploys.map(_.getDeploy).map(d => d.deployHash -> d).toMap
             deployHashes <- Gen.someOf(deploys.keys)
-          } yield (block, deploys, deployHashes)
+            randomHashes <- Gen.listOf(genHash)
+          } yield (block, deploys, deployHashes, randomHashes)
 
           forAll(data) {
-            case (block, deploys, deployHashes) =>
+            case (block, deploys, existingHashes, nonExistingHashes) =>
               runTestUnsafe(TestData.fromBlock(block), timeout = 5.seconds) {
                 val req = StreamDeploysChunkedRequest(
-                  deployHashes = deployHashes,
+                  deployHashes = nonExistingHashes ++ existingHashes,
                   acceptedCompressionAlgorithms = Seq("lz4")
                 )
                 stub.streamDeploysChunked(req).toListL.map { chunks =>
@@ -684,7 +685,7 @@ class GrpcGossipServiceSpec
                     case _ =>
                       fail("Unexpected data in stream.")
                   }
-                  items should have size (deployHashes.size.toLong)
+                  items should have size (existingHashes.size.toLong)
 
                   Inspectors.forAll(items) {
                     case (header, data) =>
