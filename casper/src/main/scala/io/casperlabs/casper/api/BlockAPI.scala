@@ -243,38 +243,6 @@ object BlockAPI {
       )(_._1.pure[F])
     )
 
-  /* Similar to [[getBlockInfosWithDeploys]] but in addition filters blocks by a validator. */
-  def getBlockInfosWithDeploysByValidator[F[_]: MonadThrowable: Log: DeployStorage: DagStorage: Fs2Compiler: BlockStorage](
-      validator: Validator,
-      sliceDepth: Int,
-      maxBlockSeqNum: Long,
-      maybeDeployView: Option[DeployInfo.View],
-      blockView: BlockInfo.View
-  ): F[List[BlockAndMaybeDeploys]] =
-    DagStorage[F].getRepresentation flatMap { dag =>
-      maxBlockSeqNum match {
-        case 0 =>
-          dag
-            .topoSortTailValidator(validator, sliceDepth)
-            .compile
-            .toVector
-        case r =>
-          dag
-            .topoSortValidator(validator = validator, endBlockNumber = r, sliceDepth = sliceDepth)
-            .compile
-            .toVector
-      }
-    } handleErrorWith {
-      case ex: StorageError =>
-        MonadThrowable[F].raiseError(InvalidArgument(StorageError.errorMessage(ex)))
-      case ex: IllegalArgumentException =>
-        MonadThrowable[F].raiseError(InvalidArgument(ex.getMessage))
-    } flatMap { infosByRank =>
-      infosByRank.flatten.reverse.toList.traverse { info =>
-        withViews[F](info, maybeDeployView, blockView)
-      }
-    }
-
   /** Return block infos and maybe the corresponding deploy summaries in the a slice of the DAG.
     * Use `maxRank` 0 to get the top slice,
     * then we pass previous ranks to paginate backwards. */
