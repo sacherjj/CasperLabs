@@ -231,8 +231,7 @@ export class BlockDAG extends React.Component<Props, {}> {
       .style('font-family', 'Arial')
       .style('font-size', 12)
       .style('pointer-events', 'none') // to prevent mouseover/drag capture
-      .style('text-anchor', 'start')
-      .attr('transform', 'rotate(25)'); // rotate so a chain doesn't overlap on a small screen.
+      .style('text-anchor', 'start');
 
     const focus = (d: any) => {
       let datum = d3.select(d3.event.target).datum() as d3Node;
@@ -284,7 +283,7 @@ export class BlockDAG extends React.Component<Props, {}> {
         .selectAll('text.node-label')
         .attr('x', (d: any) => x(d.x) + 5)
         .attr('y', (d: any) => y(d.y) + 25)
-        .style('transform-origin', (d: any) => `${x(d.x)}px ${y(d.y)}px`);
+        .attr('transform', (d: any) => `rotate(25 ${x(d.x)} ${y(d.y)})`); // rotate so a chain doesn't overlap on a small screen.
 
       // update positions of line
       container
