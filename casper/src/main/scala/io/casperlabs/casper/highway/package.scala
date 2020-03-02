@@ -22,6 +22,8 @@ package highway {
 
 package object highway {
 
+  val HighwayMetricsSource = CasperMetricsSource / "highway"
+
   /** Time since Unix epoch in milliseconds. */
   type Timestamp = Long @@ TimestampTag
   def Timestamp(t: Long) = t.asInstanceOf[Timestamp]
