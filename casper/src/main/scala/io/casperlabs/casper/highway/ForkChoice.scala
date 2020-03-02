@@ -120,12 +120,17 @@ object ForkChoice {
           case (v, lms) if lms.size == 1 && honestValidators.contains(v) => v -> lms.head
         }
         forkChoice <- MonadThrowable[F].tailRecM(eraStartBlock) { startBlock =>
-                       // XXX: `dag.children` might bring a new child that wasn't visible in `latestMessages`.
-                       val noChildren = dag
-                         .children(startBlock.messageHash)
-                         .flatMap(_.toList.traverse(dag.lookupUnsafe(_)))
-                         .map(_.filter(m => m.eraId == keyBlock.messageHash && m.isBlock).isEmpty)
-                         .timerGauge("dag_children")
+                       // Using `dag.children` might bring a new child that wasn't visible in `latestMessages`,
+                       // so we rely on just what we have in latest and do traversal. This should be temporary.
+                       implicit val ord = DagOperations.blockMainRankOrderingDesc
+                       val noChildren = DagOperations
+                         .bfToposortTraverseF[F](
+                           latestHonestMessages.values.toList
+                         )(m => dag.lookupUnsafe(m.parentBlock).map(List(_)))
+                         .takeWhile(_.mainRank > startBlock.mainRank)
+                         .find(_.parentBlock == startBlock.messageHash)
+                         .map(_.isEmpty)
+                         .timerGauge("children")
 
                        noChildren.ifM(
                          startBlock.asRight[Block].pure[F],
@@ -170,14 +175,16 @@ object ForkChoice {
                                     else
                                       scores
                                         .tip[F](Sync[F], dag)
-                                        .map { block =>
-                                          // This can happen if there are no relevant messages due to the panoramas,
-                                          // but we know there was a new child, invisible to the originally visible messages.
-                                          if (block.messageHash == startBlock.messageHash) {
-                                            block.asRight[Block]
-                                          } else {
-                                            block.asLeft[Block]
-                                          }
+                                        .map {
+                                          block =>
+                                            // This can happen if there are no relevant messages due to the panoramas,
+                                            // but we know there was a new child, invisible to the originally visible messages.
+                                            // XXX: Shouldn't be needed if the `noChildren` test was correct.
+                                            if (block.messageHash == startBlock.messageHash) {
+                                              block.asRight[Block]
+                                            } else {
+                                              block.asLeft[Block]
+                                            }
                                         }
                          } yield result
                        )
