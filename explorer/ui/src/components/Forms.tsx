@@ -47,9 +47,15 @@ interface FormProps {
   onSubmit?: () => void;
 }
 
+interface FormRowProps {
+  children?: any;
+  splits: number[];
+}
+
 interface FileUploaderProps {
   id: string;
   label: string;
+  width?: number;
   handleFileSelect: (e: React.ChangeEvent<HTMLInputElement>) => void;
 }
 
@@ -211,7 +217,7 @@ export const RadioField = observer((props: RadioProps) => (
 ));
 
 export const FileSelect = (props: FileUploaderProps) => (
-  <div className="custom-file">
+  <div className={`custom-file col-md-${props.width ?? 12}`}>
     <input
       type="file"
       className="custom-file-input"
@@ -244,6 +250,17 @@ export const Form = (props: FormProps) => {
     </form>
   );
 };
+
+export const FormRow = (props: FormRowProps) => (
+  <div className="form-row">
+    {props.children.map((child: any, idx: number) => (
+      <div className={`col-md-${props.splits[idx] ?? 12}`}>
+        {child}
+      </div>
+    ))}
+  </div>
+);
+
 
 export const ErrorMessage = (props: { error: string | null }) =>
   props.error ? (
