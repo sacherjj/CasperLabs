@@ -4,6 +4,7 @@ import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.Block.Justification
 import io.casperlabs.casper.consensus.{Block, BlockSummary, Era}
+import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.models.Message
 import io.casperlabs.storage.era.EraStorage
@@ -358,6 +359,94 @@ trait DagStorageTest
             _   = lmh shouldBe empty
           } yield ()
         }
+    }
+  }
+
+  it should
+    """
+      |return blocks that conforms the requirements:
+      |1) Produced only by a specified validator.
+      |2) Amount of returned block must not exceed the 'limit' parameter.
+      |3) Return only blocks with timestamps less or equal than 'lastTimeStamp' parameter.
+      |4) If a block has the same timestamp as the 'lastTimeStamp' parameter then its hash must be less than the 'lastBlockHash' parameter.
+      |   Comparison logic is the same as 'memcmp' function from C standard library
+      |5) Returned blocks must be sorted by timestamps and hashes in decreasing order
+      |""".stripMargin in {
+    val validator1    = sample(genHash)
+    val validator2    = sample(genHash)
+    val limit         = 3
+    val lastTimeStamp = 2L
+    val lastBlockHash = ByteString.copyFrom(Base16.decode("ff" * 31 + "fe"))
+    // Must be ignored because block_hash is equal to the lastBlockHash
+    val block1 = sample(arbitrary[Block])
+      .update(_.header.validatorPublicKey := validator1)
+      .update(_.header.timestamp := lastTimeStamp - 2L)
+      .update(_.blockHash := lastBlockHash)
+    // Must be ignored because block_hash is greater than the lastBlockHash
+    val block2 = sample(arbitrary[Block])
+      .update(_.header.validatorPublicKey := validator1)
+      .update(_.header.timestamp := lastTimeStamp - 2L)
+      .update(_.blockHash := ByteString.copyFrom(Base16.decode("ff" * 32)))
+    // Must be ignored because timestamp is greater than the lastTimeStamp
+    val block3 = sample(arbitrary[Block])
+      .update(_.header.validatorPublicKey := validator1)
+      .update(_.header.timestamp := lastTimeStamp + 1L)
+    // Must be ignored because created by a different validator
+    val block4 = sample(arbitrary[Block])
+      .update(_.header.validatorPublicKey := validator2)
+    // Must be included into a response and must be the first because
+    // if blocks' timestamp equal to the lastTimeStamp then they're sorted by their hashes in decreasing order
+    val block5 = sample(arbitrary[Block])
+      .update(_.header.validatorPublicKey := validator1)
+      .update(_.header.timestamp := lastTimeStamp)
+      .update(_.blockHash := ByteString.copyFrom(Base16.decode("ff" * 31 + "fd")))
+    // Must be included into a response and must be the second because
+    // if blocks' timestamp equal to the lastTimeStamp then they're sorted by their hashes in decreasing order
+    val block6 = sample(arbitrary[Block])
+      .update(_.header.validatorPublicKey := validator1)
+      .update(_.header.timestamp := lastTimeStamp)
+      .update(_.blockHash := ByteString.copyFrom(Base16.decode("ff" * 31 + "fc")))
+    // Must be included into a response and must be the third because
+    // its timestamp less than lastTimeStamp
+    val block7 = sample(arbitrary[Block])
+      .update(_.header.validatorPublicKey := validator1)
+      .update(_.header.timestamp := lastTimeStamp - 1)
+    // Must be ignored because we limit for 3 blocks at most and results sorted by decreasing order by timestamps
+    // There are block5 and block6 with the timestamp = 1
+    val block8 = sample(arbitrary[Block])
+      .update(_.header.validatorPublicKey := validator1)
+      .update(_.header.timestamp := lastTimeStamp - 2L)
+
+    withDagStorage { storage =>
+      for {
+        _   <- storage.insert(block1)
+        _   <- storage.insert(block2)
+        _   <- storage.insert(block3)
+        _   <- storage.insert(block4)
+        _   <- storage.insert(block5)
+        _   <- storage.insert(block6)
+        _   <- storage.insert(block7)
+        _   <- storage.insert(block8)
+        dag <- storage.getRepresentation
+        List(b1, b2, b3) <- dag.getBlockInfosByValidator(
+                             validator = validator1,
+                             limit = limit,
+                             lastTimeStamp = lastTimeStamp,
+                             lastBlockHash = lastBlockHash
+                           )
+      } yield {
+        b1.getSummary.blockHash shouldBe block5.blockHash
+        b1.getSummary.validatorPublicKey shouldBe validator1
+        b1.getSummary.timestamp shouldBe lastTimeStamp
+
+        b2.getSummary.blockHash shouldBe block6.blockHash
+        b2.getSummary.validatorPublicKey shouldBe validator1
+        b2.getSummary.timestamp shouldBe lastTimeStamp
+
+        b3.getSummary.blockHash shouldBe block7.blockHash
+        b3.getSummary.validatorPublicKey shouldBe validator1
+        b3.getSummary.timestamp shouldBe lastTimeStamp - 1
+      }
     }
   }
 }

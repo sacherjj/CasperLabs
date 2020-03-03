@@ -10,7 +10,6 @@ import io.casperlabs.storage.BlockHash
 import io.casperlabs.storage.block.BlockStorageWriter
 import io.casperlabs.storage.dag.{DagRepresentation, DagStorage}, DagRepresentation.Validator
 import io.casperlabs.storage.dag.EraTipRepresentation
-import com.google.protobuf.ByteString
 import io.casperlabs.storage.BlockMsgWithTransform
 
 class MockBlockDagStorage[F[_]: Monad](
@@ -54,8 +53,7 @@ class MockBlockDagStorage[F[_]: Monad](
         validator: Validator,
         limit: Int,
         lastTimeStamp: Long,
-        lastBlockHash: BlockHash,
-        isNext: Boolean
+        lastBlockHash: BlockHash
     )                         = ???
     override def latestGlobal = ???
 

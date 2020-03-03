@@ -169,8 +169,7 @@ object FinalityDetectorUtilTest {
           validator: Validator,
           limit: Int,
           lastTimeStamp: Level,
-          lastBlockHash: BlockHash,
-          isNext: Boolean
+          lastBlockHash: BlockHash
       ) = ???
 
       override def latestGlobal

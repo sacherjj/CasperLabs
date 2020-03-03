@@ -111,8 +111,7 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream
                                     validator,
                                     pageSize + 1,
                                     pageTokenParams.lastTimeStamp,
-                                    pageTokenParams.lastBlockHash,
-                                    isNext = true
+                                    pageTokenParams.lastBlockHash
                                   )
           (blocks, hasNextPage) = if (blocksWithOneMoreElem.length == pageSize + 1) {
             (blocksWithOneMoreElem.take(pageSize), true)
@@ -130,8 +129,7 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream
               b =>
                 BlockInfoPageTokenParams(
                   b.getSummary.getHeader.timestamp,
-                  b.getSummary.blockHash,
-                  isNext = true
+                  b.getSummary.blockHash
                 )
             )
           )

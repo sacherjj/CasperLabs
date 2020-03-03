@@ -188,8 +188,7 @@ trait DagRepresentation[F[_]] extends DagLookup[F] {
       validator: Validator,
       limit: Int,
       lastTimeStamp: Long,
-      lastBlockHash: BlockHash,
-      isNext: Boolean
+      lastBlockHash: BlockHash
   ): F[List[BlockInfo]]
 
   /** Get a global representation, which can be used in:

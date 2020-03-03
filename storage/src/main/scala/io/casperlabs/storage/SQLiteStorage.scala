@@ -154,10 +154,9 @@ object SQLiteStorage {
           validator: Validator,
           limit: Int,
           lastTimeStamp: Long,
-          lastBlockHash: BlockHash,
-          isNext: Boolean
+          lastBlockHash: BlockHash
       ) =
-        dagStorage.getBlockInfosByValidator(validator, limit, lastTimeStamp, lastBlockHash, isNext)
+        dagStorage.getBlockInfosByValidator(validator, limit, lastTimeStamp, lastBlockHash)
 
       override def latestGlobal =
         dagStorage.getRepresentation.flatMap(_.latestGlobal)

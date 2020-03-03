@@ -159,9 +159,8 @@ class CachingDagStorage[F[_]: Concurrent](
       validator: Validator,
       limit: Int,
       lastTimeStamp: Rank,
-      lastBlockHash: BlockHash,
-      isNext: Boolean
-  ) = underlying.getBlockInfosByValidator(validator, limit, lastTimeStamp, lastBlockHash, isNext)
+      lastBlockHash: BlockHash
+  ) = underlying.getBlockInfosByValidator(validator, limit, lastTimeStamp, lastBlockHash)
 
   override def latestGlobal                         = underlying.latestGlobal
   override def latestInEra(keyBlockHash: BlockHash) = underlying.latestInEra(keyBlockHash)
