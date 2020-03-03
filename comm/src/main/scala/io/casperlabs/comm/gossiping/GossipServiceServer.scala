@@ -6,7 +6,7 @@ import cats.effect.concurrent._
 import cats.effect.implicits._
 import cats.implicits._
 import com.google.protobuf.ByteString
-import io.casperlabs.casper.consensus.{Block, BlockSummary, GenesisCandidate}
+import io.casperlabs.casper.consensus.{Block, BlockSummary, Deploy, GenesisCandidate}
 import io.casperlabs.comm.ServiceError.NotFound
 import io.casperlabs.comm.discovery.Node
 import io.casperlabs.comm.discovery.NodeUtils.showNode
@@ -223,6 +223,18 @@ class GossipServiceServer[F[_]: Concurrent: Parallel: Log: Metrics](
       }
     }
 
+  override def streamDeploysChunked(request: StreamDeploysChunkedRequest): Iterant[F, Chunk] = {
+    val chunkSize = effectiveChunkSize(request.chunkSize)
+    backend.getDeploys(request.deployHashes.toSet).flatMap { deploy =>
+      val it = chunkIt(
+        deploy.toByteArray,
+        chunkSize,
+        request.acceptedCompressionAlgorithms
+      )
+      Iterant.fromIterator(it)
+    }
+  }
+
   override def getGenesisCandidate(request: GetGenesisCandidateRequest): F[GenesisCandidate] =
     rethrow(genesisApprover.getCandidate)
 
@@ -282,6 +294,7 @@ object GossipServiceServer {
     def hasBlock(blockHash: ByteString): F[Boolean]
     def getBlockSummary(blockHash: ByteString): F[Option[BlockSummary]]
     def getBlock(blockHash: ByteString): F[Option[Block]]
+    def getDeploys(deployHashes: Set[ByteString]): Iterant[F, Deploy]
 
     /** Returns latest messages as seen currently by the node.
       * NOTE: In the future we will remove redundant messages. */
@@ -289,6 +302,7 @@ object GossipServiceServer {
 
     /* Retrieve the DAG slice in topological order, inclusive */
     def dagTopoSort(startRank: Long, endRank: Long): Iterant[F, BlockSummary]
+
   }
 
   def apply[F[_]: Concurrent: Parallel: Log: Metrics](

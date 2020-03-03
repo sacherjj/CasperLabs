@@ -165,15 +165,12 @@ object FinalityDetectorUtilTest {
           tailLength: Int
       ): fs2.Stream[StateT[F, Map[BlockHash, Int], *], Vector[BlockInfo]] = ???
 
-      /** Similar to [[topoSort]] but in addition filters blocks by a validator */
-      override def topoSortValidator(
+      override def getBlockInfosByValidator(
           validator: Validator,
-          blocksNum: Int,
-          endBlockNumber: Level
+          limit: Int,
+          lastTimeStamp: Level,
+          lastBlockHash: BlockHash
       ) = ???
-
-      /** Similar to [[topoSortTail]] but in addition filters blocks by a validator */
-      override def topoSortTailValidator(validator: Validator, blocksNum: Int) = ???
 
       override def latestGlobal
           : StateT[F, Map[BlockHash, Int], TipRepresentation[StateT[F, Map[BlockHash, Int], *]]] =

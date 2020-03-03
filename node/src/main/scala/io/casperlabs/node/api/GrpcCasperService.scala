@@ -173,7 +173,8 @@ object GrpcCasperService {
               (pageSize, pageTokenParams) <- MonadThrowable[F].fromTry(
                                               DeployInfoPagination
                                                 .parsePageToken(
-                                                  request
+                                                  request.pageSize,
+                                                  request.pageToken
                                                 )
                                             )
               accountPublicKeyBs = PublicKey(

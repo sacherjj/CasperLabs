@@ -155,16 +155,12 @@ class CachingDagStorage[F[_]: Concurrent](
   override def topoSortTail(tailLength: Int): fs2.Stream[F, Vector[BlockInfo]] =
     underlying.topoSortTail(tailLength)
 
-  /** Similar to [[topoSort]] but in addition filters blocks by a validator */
-  override def topoSortValidator(
+  override def getBlockInfosByValidator(
       validator: Validator,
-      blocksNum: Int,
-      endBlockNumber: Rank
-  ) = underlying.topoSortValidator(validator, blocksNum, endBlockNumber)
-
-  /** Similar to [[topoSortTail]] but in addition filters blocks by a validator */
-  override def topoSortTailValidator(validator: Validator, blocksNum: Int) =
-    underlying.topoSortTailValidator(validator, blocksNum)
+      limit: Int,
+      lastTimeStamp: Rank,
+      lastBlockHash: BlockHash
+  ) = underlying.getBlockInfosByValidator(validator, limit, lastTimeStamp, lastBlockHash)
 
   override def latestGlobal                         = underlying.latestGlobal
   override def latestInEra(keyBlockHash: BlockHash) = underlying.latestInEra(keyBlockHash)

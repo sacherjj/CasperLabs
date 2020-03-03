@@ -14,6 +14,11 @@ trait MetricsBlockSyntax[A, F[_]] {
       delta: Long = 1
   )(implicit M: Metrics[F], ms: Metrics.Source, B: Bracket[F, Throwable]): F[A] =
     M.gauge(name, delta)(block)
+
+  def timerGauge(
+      name: String
+  )(implicit M: Metrics[F], ms: Metrics.Source, B: Bracket[F, Throwable]): F[A] =
+    M.gauge(s"${name}_ongoing")(M.timer(name)(block))
 }
 
 trait MetricsStreamSyntax[A, F[_]] {
@@ -27,6 +32,9 @@ trait MetricsStreamSyntax[A, F[_]] {
       delta: Long = 1
   )(implicit M: Metrics[F], ms: Metrics.Source): fs2.Stream[F, A] =
     M.gaugeS(name, delta)(stream)
+
+  def timerGauge(name: String)(implicit M: Metrics[F], ms: Metrics.Source): fs2.Stream[F, A] =
+    M.gaugeS(s"${name}_ongoing")(M.timerS(name)(stream))
 }
 
 package object implicits {

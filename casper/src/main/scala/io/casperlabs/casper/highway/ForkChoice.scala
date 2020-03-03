@@ -12,6 +12,8 @@ import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.crypto.Keys.{PublicKey, PublicKeyBS}
 import io.casperlabs.models.Message.Block
 import io.casperlabs.models.{Message, Weight}
+import io.casperlabs.metrics.implicits._
+import io.casperlabs.metrics.Metrics
 import io.casperlabs.storage.BlockHash
 import io.casperlabs.storage.dag.DagRepresentation._
 import io.casperlabs.storage.dag.{DagLookup, DagRepresentation, DagStorage}
@@ -81,7 +83,9 @@ object ForkChoice {
         .mapValues(_.map(_._2).toSet)
   }
 
-  def create[F[_]: Sync: EraStorage: DagStorage]: ForkChoice[F] = new ForkChoice[F] {
+  def create[F[_]: Sync: Metrics: EraStorage: DagStorage]: ForkChoice[F] = new ForkChoice[F] {
+
+    implicit val metricsSource = HighwayMetricsSource / "ForkChoice"
 
     /**
       * Computes fork choice within single era.
@@ -116,10 +120,21 @@ object ForkChoice {
           case (v, lms) if lms.size == 1 && honestValidators.contains(v) => v -> lms.head
         }
         forkChoice <- MonadThrowable[F].tailRecM(eraStartBlock) { startBlock =>
-                       val noChildren = dag
-                         .children(startBlock.messageHash)
-                         .flatMap(_.toList.traverse(dag.lookupUnsafe(_)))
-                         .map(_.filter(m => m.eraId == keyBlock.messageHash && m.isBlock).isEmpty)
+                       // Using `dag.children` might bring a new child that wasn't visible in `latestMessages`,
+                       // so we rely on just what we have in latest and do traversal. This should be temporary.
+                       implicit val ord = DagOperations.blockMainRankOrderingDesc
+                       val noChildren = DagOperations
+                         .bfToposortTraverseF[F](
+                           latestHonestMessages.values.toList
+                         ) { m =>
+                           List(m.parentBlock).filterNot(_.isEmpty).traverse(dag.lookupUnsafe)
+                         }
+                         .takeWhile(_.mainRank > startBlock.mainRank)
+                         .find { x =>
+                           x.parentBlock == startBlock.messageHash && x.isBlock && x.eraId == keyBlock.messageHash
+                         }
+                         .map(_.isEmpty)
+                         .timerGauge("children")
 
                        noChildren.ifM(
                          startBlock.asRight[Block].pure[F],
@@ -135,10 +150,13 @@ object ForkChoice {
                                                           latestMessage,
                                                           startBlock
                                                         ).map(_.fold(acc) { vote =>
-                                                          acc.updated(v, vote)
-                                                        })
+                                                            acc.updated(v, vote)
+                                                          })
+                                                          .timerGauge("previousVoteForDescendant")
                                                     }
                                                 }
+                                                .timerGauge("relevantMessages")
+
                            scores <- relevantMessages.toList
                                       .foldLeftM(Scores.init(startBlock)) {
                                         case (scores, (v, msg)) =>
@@ -181,6 +199,7 @@ object ForkChoice {
                                     _.groupBy(_.validatorId)
                                       .mapValues(_.toSet)
                                   )
+                                  .timerGauge("tipsOfLatestMessages")
       } yield (forkChoice, reducedJustifications)
 
     /**
@@ -222,7 +241,7 @@ object ForkChoice {
                                                          startBlock,
                                                          eraLatestMessages,
                                                          visibleEquivocators
-                                                       )
+                                                       ).timerGauge("eraForkChoice")
             } yield (
               forkChoice,
               accLatestMessages |+| eraLatestMessagesReduced
@@ -237,7 +256,9 @@ object ForkChoice {
         erasLatestMessages <- DagOperations
                                .latestMessagesInEras[F](dag, keyBlocks)
                                .map(EraObservedBehavior.local(_))
+                               .timerGauge("erasLatestMessages")
         (forkChoice, justifications) <- erasForkChoice(keyBlock, keyBlocks, erasLatestMessages)
+                                         .timerGauge("erasForkChoice")
       } yield Result(forkChoice, justifications.values.flatten.toSet)
 
     override def fromJustifications(
@@ -252,19 +273,22 @@ object ForkChoice {
         erasObservedBehaviors <- DagOperations
                                   .latestMessagesInErasUntil[F](keyBlock.messageHash)
                                   .map(EraObservedBehavior.local(_))
+                                  .timerGauge("eraObservedBehaviors")
         justificationsMessages <- justifications.toList.traverse(dag.lookupUnsafe)
-        panoramaOfTheBlock <- EraObservedBehavior.messageJPast[F](
-                               dag,
-                               justificationsMessages,
-                               erasObservedBehaviors,
-                               keyBlock
-                             )
+        panoramaOfTheBlock <- EraObservedBehavior
+                               .messageJPast[F](
+                                 dag,
+                                 justificationsMessages,
+                                 erasObservedBehaviors,
+                                 keyBlock
+                               )
+                               .timerGauge("panoramaOfTheBlock")
         keyBlocks <- MessageProducer.collectKeyBlocks[F](keyBlockHash)
         (forkChoice, forkChoiceJustifications) <- erasForkChoice(
                                                    keyBlock,
                                                    keyBlocks,
                                                    panoramaOfTheBlock
-                                                 )
+                                                 ).timerGauge("erasForkChoice")
       } yield Result(forkChoice, forkChoiceJustifications.values.flatten.toSet)
   }
 
@@ -406,7 +430,7 @@ trait ForkChoiceManager[F[_]] extends ForkChoice[F] {
 }
 
 object ForkChoiceManager {
-  def create[F[_]: Sync: EraStorage: DagStorage]: ForkChoiceManager[F] = {
+  def create[F[_]: Sync: Metrics: EraStorage: DagStorage]: ForkChoiceManager[F] = {
     val fc = ForkChoice.create[F]
     new ForkChoiceManager[F] {
       // TODO (CON-636): Implement the ForkChoiceManager.

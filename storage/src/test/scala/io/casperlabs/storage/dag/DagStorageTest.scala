@@ -2,24 +2,24 @@ package io.casperlabs.storage.dag
 
 import cats.implicits._
 import com.google.protobuf.ByteString
-import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.casper.consensus.Block.Justification
 import io.casperlabs.casper.consensus.{Block, BlockSummary, Era}
+import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.models.Message
+import io.casperlabs.storage.era.EraStorage
 import io.casperlabs.storage.{
   ArbitraryStorageData,
   BlockMsgWithTransform,
   SQLiteFixture,
   SQLiteStorage
 }
-import io.casperlabs.storage.era.EraStorage
 import monix.eval.Task
 import monix.execution.Scheduler
+import org.scalacheck.Arbitrary.arbitrary
 import org.scalacheck.Shrink
 import org.scalatest._
 import org.scalatest.prop.GeneratorDrivenPropertyChecks
-import org.scalacheck.Arbitrary.arbitrary
 
 trait DagStorageTest
     extends FlatSpecLike
@@ -27,7 +27,8 @@ trait DagStorageTest
     with OptionValues
     with GeneratorDrivenPropertyChecks
     with BeforeAndAfterAll
-    with ArbitraryStorageData {
+    with ArbitraryStorageData
+    with GivenWhenThen {
   implicit def noShrink[T]: Shrink[T] = Shrink.shrinkAny
 
   implicit val consensusConfig: ConsensusConfig = ConsensusConfig(
@@ -359,6 +360,97 @@ trait DagStorageTest
             _   = lmh shouldBe empty
           } yield ()
         }
+    }
+  }
+
+  it should "be able to return blocks filtering them by a validator, timestamp and block hash" in {
+    Given("validator1 and validator2, limit, lastTimeStamp and lastBlockHash")
+    val validator1    = sample(genHash)
+    val validator2    = sample(genHash)
+    val limit         = 3
+    val lastTimeStamp = 2L
+    val lastBlockHash = ByteString.copyFrom(Base16.decode("ff" * 31 + "fe"))
+    Given("block1 produced by validator1 with blockHash=lastBlockHash")
+    // Must be ignored because block_hash is equal to the lastBlockHash
+    val block1 = sample(arbitrary[Block])
+      .update(_.header.validatorPublicKey := validator1)
+      .update(_.header.timestamp := lastTimeStamp - 2L)
+      .update(_.blockHash := lastBlockHash)
+    And("block2 produced by validator1 with blockHash>lastBlockHash")
+    // Must be ignored because block_hash is greater than the lastBlockHash
+    val block2 = sample(arbitrary[Block])
+      .update(_.header.validatorPublicKey := validator1)
+      .update(_.header.timestamp := lastTimeStamp - 2L)
+      .update(_.blockHash := ByteString.copyFrom(Base16.decode("ff" * 32)))
+    And("block3 produced by validator1 with timestamp>lastTimeStamp")
+    // Must be ignored because timestamp is greater than the lastTimeStamp
+    val block3 = sample(arbitrary[Block])
+      .update(_.header.validatorPublicKey := validator1)
+      .update(_.header.timestamp := lastTimeStamp + 1L)
+    And("block4 produced by validator2")
+    // Must be ignored because created by a different validator
+    val block4 = sample(arbitrary[Block])
+      .update(_.header.validatorPublicKey := validator2)
+    And("block5 produced by validator1 with timestamp=lastTimeStamp")
+    // Must be included into a response and must be the first because
+    // if blocks' timestamp equal to the lastTimeStamp then they're sorted by their hashes in decreasing order
+    val block5 = sample(arbitrary[Block])
+      .update(_.header.validatorPublicKey := validator1)
+      .update(_.header.timestamp := lastTimeStamp)
+      .update(_.blockHash := ByteString.copyFrom(Base16.decode("ff" * 31 + "fd")))
+    And(
+      "block6 produced by validator1 with timestamp=lastTimeStamp, such that block5.blockHash>block6.blockHash"
+    )
+    // Must be included into a response and must be the second because
+    // if blocks' timestamp equal to the lastTimeStamp then they're sorted by their hashes in decreasing order
+    val block6 = sample(arbitrary[Block])
+      .update(_.header.validatorPublicKey := validator1)
+      .update(_.header.timestamp := lastTimeStamp)
+      .update(_.blockHash := ByteString.copyFrom(Base16.decode("ff" * 31 + "fc")))
+    And("block7 produced by validator1 with timestamp<lastTimeStamp")
+    // Must be included into a response and must be the third because
+    // its timestamp less than lastTimeStamp
+    val block7 = sample(arbitrary[Block])
+      .update(_.header.validatorPublicKey := validator1)
+      .update(_.header.timestamp := lastTimeStamp - 1)
+    // Must be ignored because we limit for 3 blocks at most and results sorted by decreasing order by timestamps
+    // There are block5 and block6 with the timestamp = 1
+    And("block8 produced by validator1 with timestamp<lastTimeStamp")
+    val block8 = sample(arbitrary[Block])
+      .update(_.header.validatorPublicKey := validator1)
+      .update(_.header.timestamp := lastTimeStamp - 2L)
+    When("dag.getBlockInfosByValidator")
+    Then("it should return block5, block6 and block7")
+    withDagStorage { storage =>
+      for {
+        _   <- storage.insert(block1)
+        _   <- storage.insert(block2)
+        _   <- storage.insert(block3)
+        _   <- storage.insert(block4)
+        _   <- storage.insert(block5)
+        _   <- storage.insert(block6)
+        _   <- storage.insert(block7)
+        _   <- storage.insert(block8)
+        dag <- storage.getRepresentation
+        List(b1, b2, b3) <- dag.getBlockInfosByValidator(
+                             validator = validator1,
+                             limit = limit,
+                             lastTimeStamp = lastTimeStamp,
+                             lastBlockHash = lastBlockHash
+                           )
+      } yield {
+        b1.getSummary.blockHash shouldBe block5.blockHash
+        b1.getSummary.validatorPublicKey shouldBe validator1
+        b1.getSummary.timestamp shouldBe lastTimeStamp
+
+        b2.getSummary.blockHash shouldBe block6.blockHash
+        b2.getSummary.validatorPublicKey shouldBe validator1
+        b2.getSummary.timestamp shouldBe lastTimeStamp
+
+        b3.getSummary.blockHash shouldBe block7.blockHash
+        b3.getSummary.validatorPublicKey shouldBe validator1
+        b3.getSummary.timestamp shouldBe lastTimeStamp - 1
+      }
     }
   }
 }
