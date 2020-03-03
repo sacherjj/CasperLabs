@@ -146,6 +146,7 @@ class EraSupervisor[F[_]: Concurrent: Timer: Log: Metrics: EraStorage: Relaying:
                                            .handleAgenda(action)
                                            .run
                                            .timerGauge("schedule_handleAgenda")
+                      _ <- Log[F].info(s"No more agenda items for $era").whenA(agenda.isEmpty)
                       _ <- scheduleRef.update(_ - key)
                       _ <- schedule(runtime, agenda)
                       _ <- handleEvents(events).timerGauge("schedule_handleEvents")
