@@ -104,10 +104,7 @@ pub fn extract_access_rights_from_urefs<I: IntoIterator<Item = URef>>(
         .map(|(key, group)| {
             (
                 key,
-                group
-                    .filter(|(_, x)| !x.is_none())
-                    .map(|(_, x)| x)
-                    .collect::<HashSet<AccessRights>>(),
+                group.map(|(_, x)| x).collect::<HashSet<AccessRights>>(),
             )
         })
         .collect()
@@ -127,10 +124,7 @@ pub fn extract_access_rights_from_keys<I: IntoIterator<Item = Key>>(
         .map(|(key, group)| {
             (
                 key,
-                group
-                    .filter(|(_, x)| !x.is_none())
-                    .map(|(_, x)| x)
-                    .collect::<HashSet<AccessRights>>(),
+                group.map(|(_, x)| x).collect::<HashSet<AccessRights>>(),
             )
         })
         .collect()
