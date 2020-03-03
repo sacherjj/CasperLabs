@@ -366,9 +366,19 @@ macro_rules! impl_traits_for_uint {
 
             #[test]
             #[should_panic]
-            fn overflow_and_underflow_test() {
+            fn overflow_mul_test() {
                 let _ = $type::MAX * $type::from(2);
+            }
+
+            #[test]
+            #[should_panic]
+            fn overflow_add_test() {
                 let _ = $type::MAX + $type::from(1);
+            }
+
+            #[test]
+            #[should_panic]
+            fn underflow_sub_test() {
                 let _ = $type::zero() - $type::from(1);
             }
         }
