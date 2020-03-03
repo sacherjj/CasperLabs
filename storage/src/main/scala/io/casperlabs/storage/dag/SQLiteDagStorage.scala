@@ -156,26 +156,27 @@ class SQLiteDagStorage[F[_]: Sync](
         })
         .void
 
-    val transaction = for {
-      _ <- insertBlockMetadata
-      _ <- insertJustifications
-      _ <- insertTopologicalSorting
-      // Maintain a version of latest messages across the whole DAG, independent of eras,
-      // for pull based gossiping, until era statuses are added which allows us to find active ones easily.
-      _ <- upsertLatestMessages(ByteString.EMPTY)
-      // Update era-specific latest messages in this era. Child eras don't need to be updated because the
-      // application layer can track and cache it on its own.
-      _ <- selectEraExists.ifM(
-            upsertLatestMessages(keyBlockHash),
-            ().pure[ConnectionIO]
-          )
-    } yield ()
+    def transaction(ancestors: List[(Long, BlockHash)]) =
+      for {
+        _ <- insertBlockMetadata
+        _ <- insertJustifications
+        _ <- insertTopologicalSorting
+        // Maintain a version of latest messages across the whole DAG, independent of eras,
+        // for pull based gossiping, until era statuses are added which allows us to find active ones easily.
+        _ <- upsertLatestMessages(ByteString.EMPTY)
+        // Update era-specific latest messages in this era. Child eras don't need to be updated because the
+        // application layer can track and cache it on its own.
+        _ <- selectEraExists.ifM(
+              upsertLatestMessages(keyBlockHash),
+              ().pure[ConnectionIO]
+            )
+        _ <- insertAncestorsSkipList(ancestors).whenA(ancestors.nonEmpty)
+      } yield ()
 
     for {
       ancestors <- collectMessageAncestors(block)
-      _ <- (transaction >> insertAncestorsSkipList(ancestors).whenA(ancestors.nonEmpty))
-            .transact(writeXa)
-      dag <- getRepresentation
+      _         <- transaction(ancestors).transact(writeXa)
+      dag       <- getRepresentation
     } yield dag
   }
 

@@ -40,13 +40,13 @@ class MessageAncestorsStorageTest
 
   def createGenesis: Block = {
     val b = randomMessage
-    b.update(
-        _.header := b.getHeader
+    b.withHeader(
+        b.getHeader
           .withParentHashes(Seq.empty)
           .withValidatorPublicKey(ByteString.EMPTY)
           .withMainRank(0)
       )
-      .withSignature(Signature())
+      .clearSignature
   }
 
   implicit class BlockOps(b: Block) {

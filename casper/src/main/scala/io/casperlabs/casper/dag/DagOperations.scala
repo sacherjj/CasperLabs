@@ -560,8 +560,7 @@ object DagOperations {
   def relation[F[_]: MonadThrowable](start: Message, target: Message)(
       implicit MAS: MessageAncestorsStorage[F]
   ): F[Option[Relation]] =
-    if (start.messageHash == target.messageHash) Relation.equal.some.pure[F]
-    else if (start.parentBlock == target.messageHash) Relation.descendant.some.pure[F]
+    if (start.parentBlock == target.messageHash) Relation.descendant.some.pure[F]
     else if (target.parentBlock == start.messageHash) Relation.ancestor.some.pure[F]
     else {
       (start.mainRank, target.mainRank) match {

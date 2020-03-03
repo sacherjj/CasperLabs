@@ -296,7 +296,7 @@ trait ArbitraryConsensus {
         .update(_.header.jRank := 0)
         .update(_.header.mainRank := 0)
         .update(_.header.validatorPublicKey := ByteString.EMPTY)
-        .withSignature(Signature())
+        .clearSignature
     } flatMap { genesis =>
       loop(Vector(genesis), Set(genesis))
     }

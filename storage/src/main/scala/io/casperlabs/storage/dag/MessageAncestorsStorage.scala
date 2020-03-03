@@ -59,9 +59,9 @@ trait MessageAncestorsStorage[F[_]] { self: DagLookup[F] =>
         findAncestor(b.messageHash, h).flatMap {
           case None =>
             // PrettyPrinter not available here.
-            val hashStr = Base16.encode(b.messageHash.toByteArray).substring(0, 10)
+            val hashStr = Base16.encode(b.messageHash.toByteArray)
             MT.raiseError[Message](
-              new IllegalArgumentException(
+              new IllegalStateException(
                 s"Missing expected ancestor of $hashStr at height $h"
               )
             )

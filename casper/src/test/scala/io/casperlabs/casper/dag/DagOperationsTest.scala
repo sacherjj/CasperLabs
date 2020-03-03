@@ -910,19 +910,7 @@ class DagOperationsTest
         _ <- storage.put(d1.blockHash, d1)
         _ <- storage.put(b1.blockHash, b1)
         _ <- DagOperations.relation[Task](a1, b1) shouldBeF Some(Relation.Ancestor)
-
-        // A is a descendant of B
-        // B - C - D - A
-        b2 = createGenesis
-        c2 = randomMessage.withMainParent(b2).withMainRank(1)
-        d2 = randomMessage.withMainParent(c2).withMainRank(2)
-        a2 = randomMessage.withMainParent(d2).withMainRank(3)
-
-        _ <- storage.put(b2.blockHash, b2)
-        _ <- storage.put(c2.blockHash, c2)
-        _ <- storage.put(d2.blockHash, d2)
-        _ <- storage.put(a2.blockHash, a2)
-        _ <- DagOperations.relation[Task](a2, b2) shouldBeF Some(Relation.Descendant)
+        _ <- DagOperations.relation[Task](b1, a1) shouldBeF Some(Relation.Descendant)
 
         // A comes before B but is not related
         // C - D - B
@@ -936,20 +924,7 @@ class DagOperationsTest
         _  <- storage.put(d3.blockHash, d3)
         _  <- storage.put(b3.blockHash, b3)
         _  <- DagOperations.relation[Task](a3, b3) shouldBeF None
-
-        // A comes after B but is not related
-        // C - D - A
-        //  \_B
-        c4 = createGenesis
-        b4 = randomMessage.withMainParent(c4).withMainRank(1)
-        d4 = randomMessage.withMainParent(c4).withMainRank(1)
-        a4 = randomMessage.withMainParent(d4).withMainRank(2)
-
-        _ <- storage.put(c4.blockHash, c4)
-        _ <- storage.put(b4.blockHash, b4)
-        _ <- storage.put(d4.blockHash, d4)
-        _ <- storage.put(a4.blockHash, a4)
-        _ <- DagOperations.relation[Task](a4, b4) shouldBeF None
+        _  <- DagOperations.relation[Task](b3, a3) shouldBeF None
       } yield ()
   }
 
