@@ -40,6 +40,7 @@ publish: docker-push-all
 clean:
 	$(MAKE) -C execution-engine clean
 	sbt clean
+	cd integration-testing && rm -rf bundled_contracts system_contracts
 	cd explorer/grpc && rm -rf google io node_modules
 	cd explorer/sdk && rm -rf node_modules dist
 	cd explorer/ui && rm -rf node_modules build
