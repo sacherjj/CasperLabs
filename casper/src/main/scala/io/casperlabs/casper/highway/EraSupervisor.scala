@@ -146,8 +146,16 @@ class EraSupervisor[F[_]: Concurrent: Timer: Log: Metrics: EraStorage: Relaying:
                                            .handleAgenda(action)
                                            .run
                                            .timerGauge("schedule_handleAgenda")
-                      _ <- Log[F].info(s"No more agenda items for $era").whenA(agenda.isEmpty)
-                      _ <- scheduleRef.update(_ - key)
+                      empty <- scheduleRef.modify { sch =>
+                                val rem = sch - key
+                                rem -> rem.isEmpty
+                              }
+                      _ <- Log[F]
+                            .info(s"No more agenda items for $era")
+                            .whenA(agenda.isEmpty)
+                      _ <- Log[F]
+                            .warn(s"The whole era schedule is empty!")
+                            .whenA(agenda.isEmpty && empty)
                       _ <- schedule(runtime, agenda)
                       _ <- handleEvents(events).timerGauge("schedule_handleEvents")
                     } yield ()
@@ -307,6 +315,7 @@ object EraSupervisor {
         _ <- activeEras.traverse {
               case (runtime, agenda) => supervisor.start(runtime, agenda)
             }
+        _ <- Log[F].warn("There are no active eras!").whenA(activeEras.isEmpty)
       } yield supervisor
     }(_.shutdown())
 
