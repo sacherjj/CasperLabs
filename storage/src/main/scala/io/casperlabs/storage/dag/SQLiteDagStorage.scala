@@ -15,8 +15,7 @@ import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.Metrics.Source
 import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.models.Message
-import io.casperlabs.storage.DagStorageMetricsSource
-import io.casperlabs.storage.BlockHash
+import io.casperlabs.storage.{BlockHash, DagStorageMetricsSource}
 import io.casperlabs.storage.block.SQLiteBlockStorage.blockInfoCols
 import io.casperlabs.storage.dag.DagRepresentation.Validator
 import io.casperlabs.storage.dag.DagStorage.{
@@ -25,7 +24,7 @@ import io.casperlabs.storage.dag.DagStorage.{
   MeteredTipRepresentation
 }
 import io.casperlabs.storage.util.DoobieCodecs
-import com.google.protobuf.ByteString
+
 import scala.collection.JavaConverters._
 
 class SQLiteDagStorage[F[_]: Sync](
@@ -61,13 +60,13 @@ class SQLiteDagStorage[F[_]: Sync](
     val isFinalized = false
     val insertBlockMetadata =
       (fr"""INSERT OR IGNORE INTO block_metadata
-            (block_hash, validator, j_rank, main_rank, validator_block_seq_num, """ ++ blockInfoCols() ++ fr""")
+            (block_hash, validator, j_rank, main_rank, create_time_millis, """ ++ blockInfoCols() ++ fr""")
             VALUES (
               ${block.blockHash},
               ${block.validatorPublicKey},
               $jRank,
               $mainRank,
-              ${block.validatorBlockSeqNum},
+              ${block.timestamp},
               ${blockSummary.toByteString},
               ${block.serializedSize},
               $deployErrorCount,
@@ -271,35 +270,20 @@ class SQLiteDagStorage[F[_]: Sync](
       .transact(readXa)
       .groupByRank
 
-  override def topoSortValidator(
+  override def getBlockInfosByValidator(
       validator: Validator,
-      blocksNum: Int,
-      endBlockNumber: Long
-  ) = {
-    val subQuery = fr"""SELECT validator_block_seq_num, """ ++ blockInfoCols() ++ fr"""
-          FROM block_metadata
-          WHERE validator_block_seq_num<=$endBlockNumber AND validator=$validator
-          ORDER BY validator_block_seq_num DESC
-          LIMIT $blocksNum"""
-    (fr"SELECT * FROM (" ++ subQuery ++ fr") ORDER BY validator_block_seq_num ASC")
-      .query[(Long, BlockInfo)]
-      .stream
+      limit: Int,
+      lastTimeStamp: Long,
+      lastBlockHash: BlockHash
+  ) =
+    (fr"SELECT " ++ blockInfoCols() ++ fr""" FROM block_metadata
+             WHERE validator=$validator AND
+             (create_time_millis < $lastTimeStamp OR create_time_millis = $lastTimeStamp AND block_hash < $lastBlockHash)
+             ORDER BY create_time_millis DESC, block_hash DESC
+             LIMIT $limit""")
+      .query[BlockInfo]
+      .to[List]
       .transact(readXa)
-      .groupByRank
-  }
-
-  override def topoSortTailValidator(validator: Validator, blocksNum: Int) = {
-    val subQuery = fr"""SELECT validator_block_seq_num, """ ++ blockInfoCols() ++ fr"""
-          FROM block_metadata
-          WHERE validator=$validator
-          ORDER BY validator_block_seq_num DESC
-          LIMIT $blocksNum"""
-    (fr"SELECT * FROM (" ++ subQuery ++ fr") ORDER BY validator_block_seq_num ASC")
-      .query[(Long, BlockInfo)]
-      .stream
-      .transact(readXa)
-      .groupByRank
-  }
 
   override def latestInEra(keyBlockHash: BlockHash): F[EraTipRepresentation[F]] = Sync[F].delay {
     SQLiteTipRepresentation(keyBlockHash): EraTipRepresentation[F]

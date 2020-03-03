@@ -166,14 +166,13 @@ object SQLiteStorage {
       override def topoSortTail(tailLength: Int): Stream[F, Vector[BlockInfo]] =
         dagStorage.topoSortTail(tailLength)
 
-      override def topoSortValidator(
+      override def getBlockInfosByValidator(
           validator: Validator,
-          blocksNum: Int,
-          endBlockNumber: Long
-      ) = dagStorage.topoSortValidator(validator, blocksNum, endBlockNumber)
-
-      override def topoSortTailValidator(validator: Validator, blocksNum: Int) =
-        dagStorage.topoSortTailValidator(validator, blocksNum)
+          limit: Int,
+          lastTimeStamp: Long,
+          lastBlockHash: BlockHash
+      ) =
+        dagStorage.getBlockInfosByValidator(validator, limit, lastTimeStamp, lastBlockHash)
 
       override def latestGlobal =
         dagStorage.getRepresentation.flatMap(_.latestGlobal)
