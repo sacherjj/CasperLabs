@@ -126,7 +126,9 @@ object ForkChoice {
                        val noChildren = DagOperations
                          .bfToposortTraverseF[F](
                            latestHonestMessages.values.toList
-                         )(m => dag.lookupUnsafe(m.parentBlock).map(List(_)))
+                         ) { m =>
+                           List(m.parentBlock).filterNot(_.isEmpty).traverse(dag.lookupUnsafe)
+                         }
                          .takeWhile(_.mainRank > startBlock.mainRank)
                          .find { x =>
                            x.parentBlock == startBlock.messageHash && x.isBlock && x.eraId == keyBlock.messageHash
