@@ -35,6 +35,7 @@ import org.scalatest.prop.GeneratorDrivenPropertyChecks.{forAll, PropertyCheckCo
 import io.casperlabs.shared.Sorting._
 
 import scala.concurrent.duration._
+import io.casperlabs.casper.consensus.Deploy
 
 class GrpcGossipServiceSpec
     extends refspec.RefSpecLike
@@ -76,6 +77,7 @@ class GrpcGossipServiceSpec
 
   override def nestedSuites = Vector(
     GetBlockChunkedSpec,
+    StreamDeploysChunkedSpec,
     StreamBlockSummariesSpec,
     StreamAncestorBlockSummariesSpec,
     StreamLatestMessagesSpec,
@@ -597,6 +599,7 @@ class GrpcGossipServiceSpec
                   }
                   def hasBlock(blockHash: ByteString)                = ???
                   def getBlockSummary(blockHash: ByteString)         = ???
+                  def getDeploys(deployHashes: Set[ByteString])      = ???
                   def latestMessages: Task[Set[Block.Justification]] = ???
                   def dagTopoSort(startRank: Long, endRank: Long)    = ???
                 }
@@ -639,6 +642,66 @@ class GrpcGossipServiceSpec
         }
       }
     }
+  }
+
+  object StreamDeploysChunkedSpec extends WordSpecLike {
+    implicit val propCheckConfig = PropertyCheckConfiguration(minSuccessful = 3)
+    implicit val patienceConfig  = PatienceConfig(5.seconds, 500.millis)
+    implicit val consensusConfig = ConsensusConfig(
+      maxSessionCodeBytes = 750 * 1024,
+      minSessionCodeBytes = 10 * 1024,
+      maxPaymentCodeBytes = 450 * 1024,
+      minPaymentCodeBytes = 10 * 1024
+    )
+
+    "streamDeploysChunked" when {
+      "called with a list of deploy hashes and compression" should {
+        "return a stream of compressed chunks" in {
+          val data = for {
+            block        <- arbitrary[Block]
+            deploys      = block.getBody.deploys.map(_.getDeploy).map(d => d.deployHash -> d).toMap
+            deployHashes <- Gen.someOf(deploys.keys)
+            randomHashes <- Gen.listOf(genHash)
+          } yield (block, deploys, deployHashes, randomHashes)
+
+          forAll(data) {
+            case (block, deploys, existingHashes, nonExistingHashes) =>
+              runTestUnsafe(TestData.fromBlock(block), timeout = 5.seconds) {
+                val req = StreamDeploysChunkedRequest(
+                  deployHashes = nonExistingHashes ++ existingHashes,
+                  acceptedCompressionAlgorithms = Seq("lz4")
+                )
+                stub.streamDeploysChunked(req).toListL.map { chunks =>
+                  val items = chunks.foldLeft(List.empty[(Chunk.Header, Array[Byte])]) {
+                    case (acc, chunk) if chunk.content.isHeader =>
+                      val header = chunk.getHeader
+                      header.compressionAlgorithm shouldBe "lz4"
+                      (header, Array.empty[Byte]) :: acc
+
+                    case ((h, arr) :: acc, chunk) if chunk.content.isData =>
+                      val data = chunk.getData.toByteArray
+                      (h, arr ++ data) :: acc
+
+                    case _ =>
+                      fail("Unexpected data in stream.")
+                  }
+                  items should have size (existingHashes.size.toLong)
+
+                  Inspectors.forAll(items) {
+                    case (header, data) =>
+                      val decompressed =
+                        Compression.decompress(data, header.originalContentLength).get
+                      val deploy   = Deploy.parseFrom(decompressed)
+                      val original = deploys(deploy.deployHash)
+                      (deploy == original) shouldBe true
+                  }
+                }
+              }
+          }
+        }
+      }
+    }
+
   }
 
   object StreamBlockSummariesSpec extends WordSpecLike {
@@ -1365,6 +1428,14 @@ object GrpcGossipServiceSpec extends TestRuntime with ArbitraryConsensusAndComm 
           Task.delay(testDataRef.get.blocks.get(blockHash))
         def getBlockSummary(blockHash: ByteString) =
           Task.delay(testDataRef.get.summaries.get(blockHash))
+        def getDeploys(deployHashes: Set[ByteString]) = {
+          val deploys = testDataRef.get.blocks.values.flatMap { b =>
+            b.getBody.deploys.map(_.getDeploy).filter(d => deployHashes(d.deployHash))
+          }.toSet
+
+          Iterant.fromIterator(deploys.iterator)
+        }
+
         def latestMessages: Task[Set[Block.Justification]] =
           Task.delay(
             testDataRef.get.summaries.values

@@ -648,10 +648,49 @@ class CasperLabsClient:
         )
 
     @api
-    def stream_events(self, block_added: bool = True, block_finalized: bool = True):
+    def stream_events(
+        self,
+        all: bool = True,
+        block_added: bool = True,
+        block_finalized: bool = True,
+        deploy_added: bool = True,
+        deploy_discarded: bool = True,
+        deploy_requeued: bool = True,
+        deploy_processed: bool = True,
+        deploy_finalized: bool = True,
+        deploy_orphaned: bool = True,
+        account_public_keys=None,
+        deploy_hashes=None,
+    ):
+        """
+        See StreamEventsRequest in ~/CasperLabs/protobuf/io/casperlabs/node/api/casper.proto
+        """
+        if all:
+            block_added = True
+            block_finalized = True
+            deploy_added = True
+            deploy_discarded = True
+            deploy_requeued = True
+            deploy_processed = True
+            deploy_finalized = True
+            deploy_orphaned = True
+
         yield from self.casperService.StreamEvents_stream(
             casper.StreamEventsRequest(
-                block_added=block_added, block_finalized=block_finalized
+                block_added=block_added,
+                block_finalized=block_finalized,
+                deploy_added=deploy_added,
+                deploy_discarded=deploy_discarded,
+                deploy_requeued=deploy_requeued,
+                deploy_processed=deploy_processed,
+                deploy_finalized=deploy_finalized,
+                deploy_orphaned=deploy_orphaned,
+                deploy_filter=casper.StreamEventsRequest.DeployFilter(
+                    account_public_keys=[
+                        bytes.fromhex(pk) for pk in account_public_keys or []
+                    ],
+                    deploy_hashes=[bytes.fromhex(h) for h in deploy_hashes or []],
+                ),
             )
         )
 

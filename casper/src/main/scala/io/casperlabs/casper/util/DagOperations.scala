@@ -137,6 +137,11 @@ object DagOperations {
   val blockTopoOrderingDesc: Ordering[Message] =
     Ordering.by[Message, (Long, ByteString)](m => (m.jRank, m.messageHash))(longByteStringOrdering)
 
+  val blockMainRankOrderingDesc: Ordering[Message] =
+    Ordering.by[Message, (Long, ByteString)](m => (m.mainRank, m.messageHash))(
+      longByteStringOrdering
+    )
+
   def bfToposortTraverseF[F[_]: Monad](
       start: List[Message]
   )(
