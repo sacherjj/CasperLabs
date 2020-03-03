@@ -23,8 +23,8 @@ import io.casperlabs.mempool.DeployBuffer
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.shared.{FatalError, Log}
 import io.casperlabs.smartcontracts.ExecutionEngineService
-import io.casperlabs.smartcontracts.cltype
-import io.casperlabs.smartcontracts.cltype.{ByteArray32, CLValueInstance}
+import io.casperlabs.models.cltype
+import io.casperlabs.models.cltype.{ByteArray32, CLValueInstance}
 import io.casperlabs.storage.StorageError
 import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.storage.dag.DagStorage

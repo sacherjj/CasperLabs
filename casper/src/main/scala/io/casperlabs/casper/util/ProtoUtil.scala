@@ -23,8 +23,8 @@ import io.casperlabs.ipc
 import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.models.{Message, SmartContractEngineError, Weight}
 import io.casperlabs.shared.Time
-import io.casperlabs.smartcontracts.cltype
-import io.casperlabs.smartcontracts.bytesrepr._
+import io.casperlabs.models.cltype
+import io.casperlabs.models.bytesrepr._
 import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.storage.dag.DagRepresentation
 import io.casperlabs.models.Message.{asJRank, asMainRank, JRank, MainRank}

@@ -22,7 +22,7 @@ import io.casperlabs.crypto.hash.Blake2b256
 import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
 import io.casperlabs.crypto.util.{CertificateHelper, CertificatePrinter}
 import io.casperlabs.shared.FilesAPI
-import io.casperlabs.smartcontracts.cltype
+import io.casperlabs.models.cltype
 import io.casperlabs.models.DeployImplicits._
 import org.apache.commons.io._
 import scalapb_circe.JsonFormat

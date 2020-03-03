@@ -18,7 +18,7 @@ import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.Metrics.MetricsNOP
 import io.casperlabs.models.SmartContractEngineError
 import io.casperlabs.shared.{Log, Time}
-import io.casperlabs.smartcontracts.cltype
+import io.casperlabs.models.cltype
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.block._
 import io.casperlabs.storage.dag._

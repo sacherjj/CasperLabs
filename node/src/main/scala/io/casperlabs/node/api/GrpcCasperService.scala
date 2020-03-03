@@ -27,7 +27,7 @@ import io.casperlabs.node.api.Utils.{
 import io.casperlabs.node.api.casper._
 import io.casperlabs.shared.Log
 import io.casperlabs.smartcontracts.ExecutionEngineService
-import io.casperlabs.smartcontracts.cltype.ProtoMappings
+import io.casperlabs.models.cltype.ProtoMappings
 import io.casperlabs.storage.block._
 import io.casperlabs.storage.deploy.DeployStorage
 import io.casperlabs.storage.dag.{DagStorage, FinalityStorage}

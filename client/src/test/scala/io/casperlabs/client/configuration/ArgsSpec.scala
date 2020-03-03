@@ -6,7 +6,7 @@ import org.scalatest._
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.casper.consensus.Deploy.Arg
 import io.casperlabs.casper.consensus.state
-import io.casperlabs.smartcontracts.cltype.{CLType, ProtoConstructor, ProtoMappings}
+import io.casperlabs.models.cltype.{CLType, ProtoConstructor, ProtoMappings}
 import com.google.protobuf.ByteString
 
 class ArgsSpec extends FlatSpec with Matchers {

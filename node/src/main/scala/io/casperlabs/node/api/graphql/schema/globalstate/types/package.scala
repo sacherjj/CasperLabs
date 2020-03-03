@@ -1,9 +1,9 @@
 package io.casperlabs.node.api.graphql.schema.globalstate
 
 import io.casperlabs.crypto.codec.Base16
-import io.casperlabs.smartcontracts.bytesrepr._
-import io.casperlabs.smartcontracts.cltype
-import io.casperlabs.smartcontracts.cltype.{CLType, CLValueInstance}
+import io.casperlabs.models.bytesrepr._
+import io.casperlabs.models.cltype
+import io.casperlabs.models.cltype.{CLType, CLValueInstance}
 import io.casperlabs.node.api.graphql.schema.utils.ProtocolVersionType
 import sangria.schema._
 

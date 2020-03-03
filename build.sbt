@@ -184,7 +184,9 @@ lazy val models = (project in file("models"))
   .settings(
     libraryDependencies ++= commonDependencies ++ protobufDependencies ++ Seq(
       catsCore,
+	  catsFree,
       magnolia,
+	  refinement,
       scalapbCompiler,
       scalacheck,
       scalapbRuntimegGrpc
@@ -383,10 +385,8 @@ lazy val smartContracts = (project in file("smart-contracts"))
     name := "smart-contracts",
     version := "0.0.1-SNAPSHOT",
     libraryDependencies ++= commonDependencies ++ protobufLibDependencies ++ Seq(
-      catsFree,
       nettyAll,
       grpcNetty,
-      refinement,
       nettyTransNativeEpoll,
       nettyTransNativeKqueue
     ),
@@ -514,7 +514,7 @@ lazy val client = (project in file("client"))
         .GrpcMonixGenerator(flatPackage = true) -> (sourceManaged in Compile).value / "protobuf"
     )
   )
-  .dependsOn(models, graphz, smartContracts)
+  .dependsOn(models, graphz)
 
 lazy val benchmarks = (project in file("benchmarks"))
   .enablePlugins(RpmPlugin, DebianPlugin, JavaAppPackaging, BuildInfoPlugin)

@@ -9,7 +9,7 @@ import com.google.protobuf.descriptor.FieldDescriptorProto
 import io.casperlabs.casper.consensus.Deploy.{Arg, LegacyArg}
 import io.casperlabs.casper.consensus.state
 import io.casperlabs.crypto.codec.Base16
-import io.casperlabs.smartcontracts.cltype.ProtoConstructor
+import io.casperlabs.models.cltype.ProtoConstructor
 import io.circe.Json
 import org.rogach.scallop._
 import scalapb_circe.{JsonFormat, Parser, Printer}
