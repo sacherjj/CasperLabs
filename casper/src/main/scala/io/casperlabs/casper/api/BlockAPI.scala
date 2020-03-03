@@ -13,7 +13,6 @@ import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper._
 import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.consensus.info._
-import io.casperlabs.casper.consensus.state.Key
 import io.casperlabs.catscontrib.{Fs2Compiler, MonadThrowable}
 import io.casperlabs.comm.ServiceError
 import io.casperlabs.comm.ServiceError._
@@ -244,39 +243,6 @@ object BlockAPI {
       )(_._1.pure[F])
     )
 
-  /* Similar to [[getBlockInfosWithDeploys]] but in addition filters blocks by a validator. */
-  def getBlockInfosWithDeploysByValidator[F[_]: MonadThrowable: Log: DeployStorage: DagStorage: Fs2Compiler: BlockStorage](
-      validator: Validator,
-      blocksNum: Int,
-      maxBlockSeqNum: Long,
-      maybeDeployView: Option[DeployInfo.View],
-      blockView: BlockInfo.View
-  ): F[List[BlockAndMaybeDeploys]] =
-    DagStorage[F].getRepresentation flatMap { dag =>
-      maxBlockSeqNum match {
-        case 0 =>
-          dag.topoSortTailValidator(validator, blocksNum).compile.toVector
-        case r =>
-          dag
-            .topoSortValidator(
-              validator = validator,
-              endBlockNumber = r,
-              blocksNum = blocksNum
-            )
-            .compile
-            .toVector
-      }
-    } handleErrorWith {
-      case ex: StorageError =>
-        MonadThrowable[F].raiseError(InvalidArgument(StorageError.errorMessage(ex)))
-      case ex: IllegalArgumentException =>
-        MonadThrowable[F].raiseError(InvalidArgument(ex.getMessage))
-    } flatMap { infosByRank =>
-      infosByRank.flatten.reverse.toList.traverse { info =>
-        withViews[F](info, maybeDeployView, blockView)
-      }
-    }
-
   /** Return block infos and maybe the corresponding deploy summaries in the a slice of the DAG.
     * Use `maxRank` 0 to get the top slice,
     * then we pass previous ranks to paginate backwards. */
@@ -321,7 +287,7 @@ object BlockAPI {
 
   def accountBalance[F[_]: MonadThrowable: Log: MultiParentCasperRef: DeployStorage: DagStorage: Fs2Compiler: ExecutionEngineService](
       accountKey: ByteString
-  ): F[Option[String]] = {
+  ): F[BigInt] = {
     val program = for {
       info <- BlockAPI
                .getBlockInfos[F](1)
@@ -396,7 +362,9 @@ object BlockAPI {
                         error(s"Expected cltype.CLValue, got $x")
                       )
                 }
-    } yield balance.value.toString(10)
-    program.attempt.map(_.leftMap(e => println(e.getMessage)).toOption)
+    } yield balance.value
+    program.adaptErr {
+      case _ => NotFound.balance(accountKey)
+    }
   }
 }
