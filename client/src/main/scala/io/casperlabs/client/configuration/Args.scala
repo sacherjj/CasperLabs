@@ -9,7 +9,7 @@ import com.google.protobuf.descriptor.FieldDescriptorProto
 import io.casperlabs.casper.consensus.Deploy.{Arg, LegacyArg}
 import io.casperlabs.casper.consensus.state
 import io.casperlabs.crypto.codec.Base16
-import io.casperlabs.models.cltype.ProtoConstructor
+import io.casperlabs.models.cltype.protobuf.Constructor
 import io.circe.Json
 import org.rogach.scallop._
 import scalapb_circe.{JsonFormat, Parser, Printer}
@@ -91,7 +91,7 @@ object Args {
       case LegacyArg.Value.Value.IntList(list) =>
         state.CLValueInstance(
           clType = listType(i32Type).some,
-          value = ProtoConstructor.list(list.values.map(ProtoConstructor.i32)).some
+          value = Constructor.list(list.values.map(Constructor.i32)).some
         )
 
       case LegacyArg.Value.Value.StringValue(s) => stringValue(s)
@@ -99,25 +99,25 @@ object Args {
       case LegacyArg.Value.Value.StringList(list) =>
         state.CLValueInstance(
           clType = listType(stringType).some,
-          value = ProtoConstructor.list(list.values.map(ProtoConstructor.string)).some
+          value = Constructor.list(list.values.map(Constructor.string)).some
         )
 
       case LegacyArg.Value.Value.LongValue(i) =>
         state.CLValueInstance(
           clType = i64Type.some,
-          value = ProtoConstructor.i64(i).some
+          value = Constructor.i64(i).some
         )
 
       case LegacyArg.Value.Value.Key(k) =>
         state.CLValueInstance(
           clType = state.CLType(state.CLType.Variants.SimpleType(state.CLType.Simple.KEY)).some,
-          value = ProtoConstructor.key(k).some
+          value = Constructor.key(k).some
         )
 
       case LegacyArg.Value.Value.BytesValue(bytes) =>
         state.CLValueInstance(
           clType = fixedListType(u8Type, bytes.size).some,
-          value = ProtoConstructor.fixedList(bytes.toByteArray.map(ProtoConstructor.u8)).some
+          value = Constructor.fixedList(bytes.toByteArray.map(Constructor.u8)).some
         )
 
       case LegacyArg.Value.Value.BigInt(x) =>
@@ -135,7 +135,7 @@ object Args {
           case LegacyArg.Value.Value.Empty =>
             state.CLValueInstance(
               clType = optionType(anyType).some,
-              value = ProtoConstructor.option(None).some
+              value = Constructor.option(None).some
             )
 
           case _ =>
@@ -143,7 +143,7 @@ object Args {
             val inner = legacyValueToInstance(x)
             state.CLValueInstance(
               clType = inner.clType.map(optionType),
-              value = ProtoConstructor.option(inner.value).some
+              value = Constructor.option(inner.value).some
             )
         }
     }
@@ -172,7 +172,7 @@ object Args {
 
   private def i32Value(i: Int) = state.CLValueInstance(
     clType = i32Type.some,
-    value = ProtoConstructor.i32(i).some
+    value = Constructor.i32(i).some
   )
 
   private def u128Value(value: String) = state.CLValueInstance(
@@ -210,6 +210,6 @@ object Args {
 
   private def stringValue(s: String) = state.CLValueInstance(
     clType = stringType.some,
-    value = ProtoConstructor.string(s).some
+    value = Constructor.string(s).some
   )
 }

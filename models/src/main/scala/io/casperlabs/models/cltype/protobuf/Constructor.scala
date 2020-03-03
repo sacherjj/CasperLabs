@@ -1,8 +1,9 @@
-package io.casperlabs.models.cltype
+package io.casperlabs.models.cltype.protobuf
 
 import io.casperlabs.casper.consensus.state
+import io.casperlabs.models.cltype._
 
-object ProtoConstructor {
+object Constructor {
   def bool(b: Boolean): state.CLValueInstance.Value = state.CLValueInstance.Value(
     value = state.CLValueInstance.Value.Value.BoolValue(b)
   )

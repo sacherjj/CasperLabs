@@ -331,7 +331,7 @@ object BlockAPI {
       error           = (s: String) => new IllegalStateException(s)
       getState = (k: cltype.Key) =>
         ExecutionEngineService[F]
-          .query(stateHash, cltype.ProtoMappings.toProto(k), Nil, protocolVersion)
+          .query(stateHash, cltype.protobuf.Mappings.toProto(k), Nil, protocolVersion)
           .rethrow
       accountKey <- MonadThrowable[F].fromOption(
                      ByteArray32(accountKey.toByteArray),

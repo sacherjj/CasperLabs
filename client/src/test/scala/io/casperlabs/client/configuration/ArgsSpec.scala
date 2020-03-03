@@ -6,7 +6,8 @@ import org.scalatest._
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.casper.consensus.Deploy.Arg
 import io.casperlabs.casper.consensus.state
-import io.casperlabs.models.cltype.{CLType, ProtoConstructor, ProtoMappings}
+import io.casperlabs.models.cltype.CLType
+import io.casperlabs.models.cltype.protobuf.{Constructor, Mappings}
 import com.google.protobuf.ByteString
 
 class ArgsSpec extends FlatSpec with Matchers {
@@ -159,98 +160,98 @@ class ArgsSpec extends FlatSpec with Matchers {
     args should have size 26
     args(0) shouldBe Arg("bool").withValue(
       state.CLValueInstance(
-        clType = ProtoMappings.toProto(CLType.Bool).some,
-        value = ProtoConstructor.bool(bool).some
+        clType = Mappings.toProto(CLType.Bool).some,
+        value = Constructor.bool(bool).some
       )
     )
     args(1) shouldBe Arg("i32").withValue(
       state.CLValueInstance(
-        clType = ProtoMappings.toProto(CLType.I32).some,
-        value = ProtoConstructor.i32(int).some
+        clType = Mappings.toProto(CLType.I32).some,
+        value = Constructor.i32(int).some
       )
     )
     args(2) shouldBe Arg("i64").withValue(
       state.CLValueInstance(
-        clType = ProtoMappings.toProto(CLType.I64).some,
-        value = ProtoConstructor.i64(long).some
+        clType = Mappings.toProto(CLType.I64).some,
+        value = Constructor.i64(long).some
       )
     )
     args(3) shouldBe Arg("u8").withValue(
       state.CLValueInstance(
-        clType = ProtoMappings.toProto(CLType.U8).some,
-        value = ProtoConstructor.u8(byte).some
+        clType = Mappings.toProto(CLType.U8).some,
+        value = Constructor.u8(byte).some
       )
     )
     args(4) shouldBe Arg("u32").withValue(
       state.CLValueInstance(
-        clType = ProtoMappings.toProto(CLType.U32).some,
-        value = ProtoConstructor.u32(int).some
+        clType = Mappings.toProto(CLType.U32).some,
+        value = Constructor.u32(int).some
       )
     )
     args(5) shouldBe Arg("u64").withValue(
       state.CLValueInstance(
-        clType = ProtoMappings.toProto(CLType.U64).some,
-        value = ProtoConstructor.u64(long).some
+        clType = Mappings.toProto(CLType.U64).some,
+        value = Constructor.u64(long).some
       )
     )
     args(6) shouldBe Arg("u128").withValue(
       state.CLValueInstance(
-        clType = ProtoMappings.toProto(CLType.U128).some,
-        value = ProtoConstructor.u128(bigInt).some
+        clType = Mappings.toProto(CLType.U128).some,
+        value = Constructor.u128(bigInt).some
       )
     )
     args(7) shouldBe Arg("u256").withValue(
       state.CLValueInstance(
-        clType = ProtoMappings.toProto(CLType.U256).some,
-        value = ProtoConstructor.u256(bigInt).some
+        clType = Mappings.toProto(CLType.U256).some,
+        value = Constructor.u256(bigInt).some
       )
     )
     args(8) shouldBe Arg("u512").withValue(
       state.CLValueInstance(
-        clType = ProtoMappings.toProto(CLType.U512).some,
-        value = ProtoConstructor.u512(bigInt).some
+        clType = Mappings.toProto(CLType.U512).some,
+        value = Constructor.u512(bigInt).some
       )
     )
     args(9) shouldBe Arg("unit").withValue(
       state.CLValueInstance(
-        clType = ProtoMappings.toProto(CLType.Unit).some,
-        value = ProtoConstructor.unit.some
+        clType = Mappings.toProto(CLType.Unit).some,
+        value = Constructor.unit.some
       )
     )
     args(10) shouldBe Arg("string").withValue(
       state.CLValueInstance(
-        clType = ProtoMappings.toProto(CLType.String).some,
-        value = ProtoConstructor.string(string).some
+        clType = Mappings.toProto(CLType.String).some,
+        value = Constructor.string(string).some
       )
     )
     args(11) shouldBe Arg("accountKey").withValue(
       state.CLValueInstance(
-        clType = ProtoMappings.toProto(CLType.Key).some,
-        value = ProtoConstructor
+        clType = Mappings.toProto(CLType.Key).some,
+        value = Constructor
           .key(state.Key().withAddress(state.Key.Address(ByteString.copyFrom(address))))
           .some
       )
     )
     args(12) shouldBe Arg("hashKey").withValue(
       state.CLValueInstance(
-        clType = ProtoMappings.toProto(CLType.Key).some,
-        value = ProtoConstructor
+        clType = Mappings.toProto(CLType.Key).some,
+        value = Constructor
           .key(state.Key().withHash(state.Key.Hash(ByteString.copyFrom(address))))
           .some
       )
     )
     args(13) shouldBe Arg("localKey").withValue(
       state.CLValueInstance(
-        clType = ProtoMappings.toProto(CLType.Key).some,
-        value = ProtoConstructor
+        clType = Mappings.toProto(CLType.Key).some,
+        value = Constructor
           .key(state.Key().withLocal(state.Key.Local(ByteString.copyFrom(address))))
           .some
       )
     )
     args(14) shouldBe Arg("urefKey").withValue(
       state.CLValueInstance(
-        clType = ProtoMappings.toProto(CLType.Key).some,
-        value = ProtoConstructor
+        clType = Mappings.toProto(CLType.Key).some,
+        value = Constructor
           .key(
             state
               .Key()
@@ -264,8 +265,8 @@ class ArgsSpec extends FlatSpec with Matchers {
     )
     args(15) shouldBe Arg("uref").withValue(
       state.CLValueInstance(
-        clType = ProtoMappings.toProto(CLType.URef).some,
-        value = ProtoConstructor
+        clType = Mappings.toProto(CLType.URef).some,
+        value = Constructor
           .uref(
             state.Key
               .URef(ByteString.copyFrom(address), state.Key.URef.AccessRights.READ_ADD)
@@ -275,49 +276,49 @@ class ArgsSpec extends FlatSpec with Matchers {
     )
     args(16) shouldBe Arg("maybe_u64").withValue(
       state.CLValueInstance(
-        clType = ProtoMappings.toProto(CLType.Option(CLType.U64)).some,
-        value = ProtoConstructor.option(None).some
+        clType = Mappings.toProto(CLType.Option(CLType.U64)).some,
+        value = Constructor.option(None).some
       )
     )
     args(17) shouldBe Arg("maybe_u64").withValue(
       state.CLValueInstance(
-        clType = ProtoMappings.toProto(CLType.Option(CLType.U64)).some,
-        value = ProtoConstructor.option(Some(ProtoConstructor.u64(long))).some
+        clType = Mappings.toProto(CLType.Option(CLType.U64)).some,
+        value = Constructor.option(Some(Constructor.u64(long))).some
       )
     )
     args(18) shouldBe Arg("list_i32").withValue(
       state.CLValueInstance(
-        clType = ProtoMappings.toProto(CLType.List(CLType.I32)).some,
-        value = ProtoConstructor.list(List(0, 1, 2, 3).map(ProtoConstructor.i32)).some
+        clType = Mappings.toProto(CLType.List(CLType.I32)).some,
+        value = Constructor.list(List(0, 1, 2, 3).map(Constructor.i32)).some
       )
     )
     args(19) shouldBe Arg("fixed_list_str").withValue(
       state.CLValueInstance(
-        clType = ProtoMappings.toProto(CLType.FixedList(CLType.String, 3)).some,
-        value = ProtoConstructor.fixedList(List("A", "B", "C").map(ProtoConstructor.string)).some
+        clType = Mappings.toProto(CLType.FixedList(CLType.String, 3)).some,
+        value = Constructor.fixedList(List("A", "B", "C").map(Constructor.string)).some
       )
     )
     args(20) shouldBe Arg("err_string").withValue(
       state.CLValueInstance(
-        clType = ProtoMappings.toProto(CLType.Result(CLType.Bool, CLType.String)).some,
-        value = ProtoConstructor.result(Left(string).leftMap(ProtoConstructor.string)).some
+        clType = Mappings.toProto(CLType.Result(CLType.Bool, CLType.String)).some,
+        value = Constructor.result(Left(string).leftMap(Constructor.string)).some
       )
     )
     args(21) shouldBe Arg("ok_bool").withValue(
       state.CLValueInstance(
-        clType = ProtoMappings.toProto(CLType.Result(CLType.Bool, CLType.String)).some,
-        value = ProtoConstructor.result(Right(bool).map(ProtoConstructor.bool)).some
+        clType = Mappings.toProto(CLType.Result(CLType.Bool, CLType.String)).some,
+        value = Constructor.result(Right(bool).map(Constructor.bool)).some
       )
     )
     args(22) shouldBe Arg("map_string_i32").withValue(
       state.CLValueInstance(
-        clType = ProtoMappings.toProto(CLType.Map(CLType.String, CLType.I32)).some,
-        value = ProtoConstructor
+        clType = Mappings.toProto(CLType.Map(CLType.String, CLType.I32)).some,
+        value = Constructor
           .map(
             List("A" -> 0, "B" -> 1, "C" -> 2).map {
               case (key, value) =>
                 state.CLValueInstance
-                  .MapEntry(ProtoConstructor.string(key).some, ProtoConstructor.i32(value).some)
+                  .MapEntry(Constructor.string(key).some, Constructor.i32(value).some)
             }
           )
           .some
@@ -325,21 +326,21 @@ class ArgsSpec extends FlatSpec with Matchers {
     )
     args(23) shouldBe Arg("tuple1").withValue(
       state.CLValueInstance(
-        clType = ProtoMappings.toProto(CLType.Tuple1(CLType.U8)).some,
-        value = ProtoConstructor.tuple1(ProtoConstructor.u8(byte)).some
+        clType = Mappings.toProto(CLType.Tuple1(CLType.U8)).some,
+        value = Constructor.tuple1(Constructor.u8(byte)).some
       )
     )
     args(24) shouldBe Arg("tuple2").withValue(
       state.CLValueInstance(
-        clType = ProtoMappings.toProto(CLType.Tuple2(CLType.U8, CLType.U32)).some,
-        value = ProtoConstructor.tuple2(ProtoConstructor.u8(byte), ProtoConstructor.u32(int)).some
+        clType = Mappings.toProto(CLType.Tuple2(CLType.U8, CLType.U32)).some,
+        value = Constructor.tuple2(Constructor.u8(byte), Constructor.u32(int)).some
       )
     )
     args(25) shouldBe Arg("tuple3").withValue(
       state.CLValueInstance(
-        clType = ProtoMappings.toProto(CLType.Tuple3(CLType.U8, CLType.U32, CLType.U64)).some,
-        value = ProtoConstructor
-          .tuple3(ProtoConstructor.u8(byte), ProtoConstructor.u32(int), ProtoConstructor.u64(long))
+        clType = Mappings.toProto(CLType.Tuple3(CLType.U8, CLType.U32, CLType.U64)).some,
+        value = Constructor
+          .tuple3(Constructor.u8(byte), Constructor.u32(int), Constructor.u64(long))
           .some
       )
     )
@@ -376,60 +377,60 @@ class ArgsSpec extends FlatSpec with Matchers {
         args should have size 13
         args(0) shouldBe Arg("my_long_value").withValue(
           state.CLValueInstance(
-            clType = ProtoMappings.toProto(CLType.I64).some,
-            value = ProtoConstructor.i64(amount).some
+            clType = Mappings.toProto(CLType.I64).some,
+            value = Constructor.i64(amount).some
           )
         )
         args(1) shouldBe Arg("my_account").withValue(
           state.CLValueInstance(
-            clType = ProtoMappings.toProto(CLType.FixedList(CLType.U8, 32)).some,
-            value = ProtoConstructor.fixedList(account.map(ProtoConstructor.u8)).some
+            clType = Mappings.toProto(CLType.FixedList(CLType.U8, 32)).some,
+            value = Constructor.fixedList(account.map(Constructor.u8)).some
           )
         )
         args(2) shouldBe Arg("maybe_long").withValue(
           state.CLValueInstance(
-            clType = ProtoMappings.toProto(CLType.Option(CLType.Any)).some,
-            value = ProtoConstructor.option(None).some
+            clType = Mappings.toProto(CLType.Option(CLType.Any)).some,
+            value = Constructor.option(None).some
           )
         )
         args(3) shouldBe Arg("maybe_long").withValue(
           state.CLValueInstance(
-            clType = ProtoMappings.toProto(CLType.Option(CLType.I64)).some,
-            value = ProtoConstructor.option(Some(ProtoConstructor.i64(amount))).some
+            clType = Mappings.toProto(CLType.Option(CLType.I64)).some,
+            value = Constructor.option(Some(Constructor.i64(amount))).some
           )
         )
         args(4) shouldBe Arg("surname").withValue(
           state.CLValueInstance(
-            clType = ProtoMappings.toProto(CLType.String).some,
-            value = ProtoConstructor.string("Nakamoto").some
+            clType = Mappings.toProto(CLType.String).some,
+            value = Constructor.string("Nakamoto").some
           )
         )
         args(5) shouldBe Arg("big_number").withValue(
           state.CLValueInstance(
-            clType = ProtoMappings.toProto(CLType.U512).some,
-            value = ProtoConstructor.u512(2).some
+            clType = Mappings.toProto(CLType.U512).some,
+            value = Constructor.u512(2).some
           )
         )
         args(6) shouldBe Arg("my_hash").withValue(
           state.CLValueInstance(
-            clType = ProtoMappings.toProto(CLType.Key).some,
-            value = ProtoConstructor
+            clType = Mappings.toProto(CLType.Key).some,
+            value = Constructor
               .key(state.Key().withHash(state.Key.Hash(ByteString.copyFrom(account))))
               .some
           )
         )
         args(7) shouldBe Arg("my_address").withValue(
           state.CLValueInstance(
-            clType = ProtoMappings.toProto(CLType.Key).some,
-            value = ProtoConstructor
+            clType = Mappings.toProto(CLType.Key).some,
+            value = Constructor
               .key(state.Key().withAddress(state.Key.Address(ByteString.copyFrom(account))))
               .some
           )
         )
         args(8) shouldBe Arg("my_uref").withValue(
           state.CLValueInstance(
-            clType = ProtoMappings.toProto(CLType.Key).some,
-            value = ProtoConstructor
+            clType = Mappings.toProto(CLType.Key).some,
+            value = Constructor
               .key(
                 state
                   .Key()
@@ -443,28 +444,28 @@ class ArgsSpec extends FlatSpec with Matchers {
         )
         args(9) shouldBe Arg("my_local").withValue(
           state.CLValueInstance(
-            clType = ProtoMappings.toProto(CLType.Key).some,
-            value = ProtoConstructor
+            clType = Mappings.toProto(CLType.Key).some,
+            value = Constructor
               .key(state.Key().withLocal(state.Key.Local(ByteString.copyFrom(account))))
               .some
           )
         )
         args(10) shouldBe Arg("my_int_value").withValue(
           state.CLValueInstance(
-            clType = ProtoMappings.toProto(CLType.I32).some,
-            value = ProtoConstructor.i32(int_value).some
+            clType = Mappings.toProto(CLType.I32).some,
+            value = Constructor.i32(int_value).some
           )
         )
         args(11) shouldBe Arg("my_int_list").withValue(
           state.CLValueInstance(
-            clType = ProtoMappings.toProto(CLType.List(CLType.I32)).some,
-            value = ProtoConstructor.list(List(0, 1, 2).map(ProtoConstructor.i32)).some
+            clType = Mappings.toProto(CLType.List(CLType.I32)).some,
+            value = Constructor.list(List(0, 1, 2).map(Constructor.i32)).some
           )
         )
         args(12) shouldBe Arg("my_string_list").withValue(
           state.CLValueInstance(
-            clType = ProtoMappings.toProto(CLType.List(CLType.String)).some,
-            value = ProtoConstructor.list(List("A", "B", "C").map(ProtoConstructor.string)).some
+            clType = Mappings.toProto(CLType.List(CLType.String)).some,
+            value = Constructor.list(List("A", "B", "C").map(Constructor.string)).some
           )
         )
     }

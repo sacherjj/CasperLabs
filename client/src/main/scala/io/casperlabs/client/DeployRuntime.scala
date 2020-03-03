@@ -90,17 +90,17 @@ object DeployRuntime {
   private def arg(name: String, value: state.CLValueInstance) = Deploy.Arg(name, value.some)
 
   private def longArg(name: String, value: Long) =
-    arg(name, cltype.ProtoMappings.toProto(cltype.CLValueInstance.U64(value)))
+    arg(name, cltype.protobuf.Mappings.toProto(cltype.CLValueInstance.U64(value)))
 
   private def bigIntArg(name: String, value: BigInt) = {
     val nn = refineV[NonNegative](value).right.get
-    arg(name, cltype.ProtoMappings.toProto(cltype.CLValueInstance.U512(nn)))
+    arg(name, cltype.protobuf.Mappings.toProto(cltype.CLValueInstance.U512(nn)))
   }
 
   private def bytesArg(name: String, value: Array[Byte]) =
     arg(
       name,
-      cltype.ProtoMappings.toProto(
+      cltype.protobuf.Mappings.toProto(
         cltype.CLValueInstance
           .FixedList(
             value.toSeq.map(cltype.CLValueInstance.U8.apply),
@@ -131,7 +131,7 @@ object DeployRuntime {
         .Option(maybeAmount.map(cltype.CLValueInstance.U64.apply), cltype.CLType.U64)
         .right
         .get
-      amountProto = cltype.ProtoMappings.toProto(amountValue)
+      amountProto = cltype.protobuf.Mappings.toProto(amountValue)
       _ <- deployFileProgram[F](
             from = None,
             deployConfig.withSessionResource(UNBONDING_WASM_FILE),

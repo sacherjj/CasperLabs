@@ -658,7 +658,7 @@ object ProtoUtil {
   }
 
   def deployCodeToDeployPayload(code: Deploy.Code): Try[ipc.DeployPayload] = {
-    val argsF: Try[ByteString] = code.args.toList.traverse(cltype.ProtoMappings.fromArg) match {
+    val argsF: Try[ByteString] = code.args.toList.traverse(cltype.protobuf.Mappings.fromArg) match {
       case Left(err) =>
         Try(throw new SmartContractEngineError(s"Error parsing deploy arguments: $err"))
       case Right(args) =>

@@ -149,7 +149,7 @@ package object types {
       Field(
         "protocolVersion",
         ProtocolVersionType,
-        resolve = c => cltype.ProtoMappings.toProto(c.value.protocolVersion)
+        resolve = c => cltype.protobuf.Mappings.toProto(c.value.protocolVersion)
       )
     )
   )
