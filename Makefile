@@ -319,7 +319,8 @@ build-node: \
 
 build-node-contracts: \
 	node/src/main/resources/chainspec/genesis/mint_install.wasm \
-	node/src/main/resources/chainspec/genesis/pos_install.wasm
+	node/src/main/resources/chainspec/genesis/pos_install.wasm \
+	node/src/main/resources/chainspec/genesis/standard_payment_install.wasm
 
 build-explorer: \
 	.make/npm/explorer
