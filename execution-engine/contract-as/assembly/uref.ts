@@ -48,22 +48,10 @@ export class URef {
         let urefBytes = bytes.subarray(0, UREF_ADDR_LENGTH);
         let currentPos = 33;
 
-        if (bytes[UREF_ADDR_LENGTH] == 1) {
-            if (bytes.length < 34) {
-                return new Result<URef>(null, Error.EarlyEndOfStream, 0);
-            }
-            let accessRights = bytes[UREF_ADDR_LENGTH + 1];
-            currentPos += 1;
-            let uref = new URef(urefBytes, accessRights);
-            let ref = new Ref<URef>(uref);
-            return new Result<URef>(ref, Error.Ok, currentPos);
-        }
-        else {
-            let urefBytes = bytes.subarray(0, UREF_ADDR_LENGTH);
-            let uref = new URef(urefBytes, AccessRights.NONE);
-            let ref = new Ref<URef>(uref);
-            return new Result<URef>(ref, Error.Ok, currentPos);
-        }
+		let accessRights = bytes[UREF_ADDR_LENGTH];
+		let uref = new URef(urefBytes, accessRights);
+		let ref = new Ref<URef>(uref);
+		return new Result<URef>(ref, Error.Ok, currentPos);
     }
 
     toBytes(): Array<u8> {
@@ -72,12 +60,6 @@ export class URef {
             result[i] = this.bytes[i];
         }
 
-        if (this.accessRights == AccessRights.NONE) {
-            result.push(0);
-            return result;
-        }
-
-        result.push(1);
         result.push(<u8>this.accessRights);
         return result;
     }

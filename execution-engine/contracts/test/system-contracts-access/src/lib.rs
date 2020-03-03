@@ -9,9 +9,7 @@ enum Error {
     MintContractIsNotURef = 101,
     PosContractIsNotURef = 102,
     InvalidMintAccessRights = 103,
-    MintHasNoAccessRights = 104,
     InvalidPosAccessRights = 105,
-    PosHasNoAccessRights = 106,
 }
 
 impl Into<ApiError> for Error {
@@ -48,23 +46,15 @@ fn delegate() {
     let mint_uref = mint_contract
         .into_uref()
         .unwrap_or_else(|| runtime::revert(Error::MintContractIsNotURef));
-    match mint_uref.access_rights() {
-        Some(access_rights) if access_rights != expected_access_rights => {
-            runtime::revert(Error::InvalidMintAccessRights)
-        }
-        Some(_) => {}
-        None => runtime::revert(Error::MintHasNoAccessRights),
+    if mint_uref.access_rights() != expected_access_rights {
+        runtime::revert(Error::InvalidMintAccessRights)
     }
 
     let pos_uref = pos_contract
         .into_uref()
         .unwrap_or_else(|| runtime::revert(Error::PosContractIsNotURef));
-    match pos_uref.access_rights() {
-        Some(access_rights) if access_rights != expected_access_rights => {
-            runtime::revert(Error::InvalidPosAccessRights)
-        }
-        Some(_) => {}
-        None => runtime::revert(Error::PosHasNoAccessRights),
+    if pos_uref.access_rights() != expected_access_rights {
+        runtime::revert(Error::InvalidPosAccessRights)
     }
 }
 

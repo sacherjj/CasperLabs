@@ -82,7 +82,7 @@ pub fn instance_and_memory(
 /// Returns None if `key` is not `Key::URef` as it wouldn't have `AccessRights`
 /// associated with it. Helper function for creating `named_keys` associating
 /// addresses and corresponding `AccessRights`.
-pub fn key_to_tuple(key: Key) -> Option<([u8; 32], Option<AccessRights>)> {
+pub fn key_to_tuple(key: Key) -> Option<([u8; 32], AccessRights)> {
     match key {
         Key::URef(uref) => Some((uref.addr(), uref.access_rights())),
         Key::Account(_) => None,
@@ -105,7 +105,8 @@ pub fn extract_access_rights_from_urefs<I: IntoIterator<Item = URef>>(
             (
                 key,
                 group
-                    .filter_map(|(_, x)| x)
+                    .filter(|(_, x)| !x.is_none())
+                    .map(|(_, x)| x)
                     .collect::<HashSet<AccessRights>>(),
             )
         })
@@ -127,7 +128,8 @@ pub fn extract_access_rights_from_keys<I: IntoIterator<Item = Key>>(
             (
                 key,
                 group
-                    .filter_map(|(_, x)| x)
+                    .filter(|(_, x)| !x.is_none())
+                    .map(|(_, x)| x)
                     .collect::<HashSet<AccessRights>>(),
             )
         })
