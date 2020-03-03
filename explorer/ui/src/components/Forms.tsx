@@ -149,21 +149,24 @@ export const FileSelect = (props: FileUploaderProps) => (
   </div>
 );
 
-export const Form = (props: FormProps) => (
-  <form
-    onSubmit={e => {
-      e.preventDefault();
-      props.onSubmit && props.onSubmit();
-      return false;
-    }}
-  >
-    {props.children.map((group: any, idx: number) => (
-      <div className="form-group" key={idx}>
-        {group}
-      </div>
-    ))}
-  </form>
-);
+export const Form = (props: FormProps) => {
+  const children = [].concat(props.children);
+  return (
+    <form
+      onSubmit={e => {
+        e.preventDefault();
+        props.onSubmit && props.onSubmit();
+        return false;
+      }}
+    >
+      {children.map((group: any, idx: number) => (
+        <div className="form-group" key={idx}>
+          {group}
+        </div>
+      ))}
+    </form>
+  );
+};
 
 export const ErrorMessage = (props: { error: string | null }) =>
   props.error ? (

@@ -29,7 +29,7 @@
     "noEmit": true,
     "jsx": "preserve",
     "typeRoots": [
-      "@types",
+      "src/@types",
       "./@types",
       "./node_modules/@types"
     ]
