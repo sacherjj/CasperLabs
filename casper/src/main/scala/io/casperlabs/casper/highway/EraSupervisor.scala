@@ -136,7 +136,8 @@ class EraSupervisor[F[_]: Concurrent: Timer: Log: Metrics: EraStorage: Relaying:
   private def schedule(runtime: EraRuntime[F], agenda: Agenda): F[Unit] =
     agenda.traverse {
       case delayed @ Agenda.DelayedAction(tick, action) =>
-        val key = (runtime.era.keyBlockHash, delayed)
+        val key     = (runtime.era.keyBlockHash, delayed)
+        val isStart = action.isInstanceOf[Agenda.StartRound]
         for {
           fiber <- scheduleAt(tick) {
                     val era = runtime.era.keyBlockHash.show
@@ -146,16 +147,17 @@ class EraSupervisor[F[_]: Concurrent: Timer: Log: Metrics: EraStorage: Relaying:
                                            .handleAgenda(action)
                                            .run
                                            .timerGauge("schedule_handleAgenda")
-                      empty <- scheduleRef.modify { sch =>
-                                val rem = sch - key
-                                rem -> rem.isEmpty
-                              }
+                      isScheduleEmpty <- scheduleRef.modify { sch =>
+                                          val rem = sch - key
+                                          rem -> rem.isEmpty
+                                        }
                       _ <- Log[F]
-                            .info(s"No more agenda items for $era")
-                            .whenA(agenda.isEmpty)
+                            .info(s"No more rounds for $era")
+                            .whenA(agenda.isEmpty && isStart)
                       _ <- Log[F]
                             .warn(s"The whole era schedule is empty!")
-                            .whenA(agenda.isEmpty && empty)
+                            .whenA(agenda.isEmpty && isScheduleEmpty)
+
                       _ <- schedule(runtime, agenda)
                       _ <- handleEvents(events).timerGauge("schedule_handleEvents")
                     } yield ()
