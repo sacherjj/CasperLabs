@@ -45,17 +45,6 @@ export enum BitWidth {
   B_512 = 512
 }
 
-// export enum URefAccessRight {
-//   UNKNOWN = 0,
-//   READ = 1,
-//   WRITE = 2,
-//   READ_WRITE = 3,
-//   ADD = 4,
-//   READ_ADD = 5,
-//   ADD_WRITE = 6,
-//   READ_ADD_WRITE = 7
-// }
-
 export type DeployArgument = {
   name: FieldState<string>,
   type: FieldState<ArgumentType>,
@@ -82,8 +71,8 @@ export type FormDeployConfiguration = FormState<DeployConfiguration>;
 
 export class DeployContractsContainer {
   @observable deployConfiguration: FormDeployConfiguration = new FormState<DeployConfiguration>({
-    contractType: new FieldState<ContractType | null>(ContractType.Hash/*null*/).validators(valueRequired),
-    contractHash: new FieldState('67c5638670c86ede04cf0dc55880ddeaee997d3fda881abbf539d8b6d2c18e45').disableAutoValidation().validators(isBlockHashBase16),
+    contractType: new FieldState<ContractType | null>(null).validators(valueRequired),
+    contractHash: new FieldState('').disableAutoValidation().validators(isBlockHashBase16),
     gasPrice: new FieldState<number>(10).validators(
       numberBigThan(0),
       isInt
@@ -96,12 +85,13 @@ export class DeployContractsContainer {
   });
   @observable deployArguments: FormDeployArguments = new FormState<FormDeployArgument[]>([]);
   @observable editingDeployArguments: FormDeployArguments = new FormState<FormDeployArgument[]>([]);
-  @observable privateKey = new FieldState<string>('jH8K2LN3pX11dancG356tFPTxebjo6e6HL91SKjtFkAEVJnVGgE+BsbLtXNIQ888fwjWavMS2BI4/+tUJE8YAA==');
+  @observable privateKey = new FieldState<string>('');
   @observable selectedFile: File | null = null;
   @observable editing: boolean = false;
-  @observable signDeployModal: boolean = true;
+  @observable signDeployModal: boolean = false;
   private selectedFileContent: null | ByteArray = null;
 
+  // id for accordion
   accordionId = 'deploy-table-accordion';
 
   constructor(
