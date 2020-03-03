@@ -128,7 +128,9 @@ object ForkChoice {
                            latestHonestMessages.values.toList
                          )(m => dag.lookupUnsafe(m.parentBlock).map(List(_)))
                          .takeWhile(_.mainRank > startBlock.mainRank)
-                         .find(_.parentBlock == startBlock.messageHash)
+                         .find { x =>
+                           x.parentBlock == startBlock.messageHash && x.isBlock && x.eraId == keyBlock.messageHash
+                         }
                          .map(_.isEmpty)
                          .timerGauge("children")
 
@@ -175,17 +177,7 @@ object ForkChoice {
                                     else
                                       scores
                                         .tip[F](Sync[F], dag)
-                                        .map {
-                                          block =>
-                                            // This can happen if there are no relevant messages due to the panoramas,
-                                            // but we know there was a new child, invisible to the originally visible messages.
-                                            // XXX: Shouldn't be needed if the `noChildren` test was correct.
-                                            if (block.messageHash == startBlock.messageHash) {
-                                              block.asRight[Block]
-                                            } else {
-                                              block.asLeft[Block]
-                                            }
-                                        }
+                                        .map(_.asLeft[Block])
                          } yield result
                        )
                      }
