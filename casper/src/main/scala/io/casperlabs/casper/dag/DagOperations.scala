@@ -549,13 +549,13 @@ object DagOperations {
     } yield perEraLatestMessages
 
   /**
-    * Computes a relationship (in the p-DAG) between `block` and `targetHash`.
+    * Computes a relationship (in the p-DAG) between `start` and `target`.
     *
-    * Relation relative to the `block`.
+    * Relation relative to the `start` block.
     *
-    * @param block
+    * @param start
     * @param target
-    * @return Relation between `block` and `target`.
+    * @return Relation between `start` and `target`.
     */
   def relation[F[_]: MonadThrowable](start: Message, target: Message)(
       implicit MAS: MessageAncestorsStorage[F]
