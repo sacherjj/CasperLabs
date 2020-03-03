@@ -265,6 +265,7 @@ trait ArbitraryConsensus {
               )
             })
             .withJRank(parents.map(_.jRank).max + 1)
+            .withMainRank(parents.head.mainRank + 1)
           block.withHeader(header)
         }
 
@@ -293,6 +294,9 @@ trait ArbitraryConsensus {
         .update(_.header.parentHashes := Seq.empty)
         .update(_.header.justifications := Seq.empty)
         .update(_.header.jRank := 0)
+        .update(_.header.mainRank := 0)
+        .update(_.header.validatorPublicKey := ByteString.EMPTY)
+        .withSignature(Signature())
     } flatMap { genesis =>
       loop(Vector(genesis), Set(genesis))
     }

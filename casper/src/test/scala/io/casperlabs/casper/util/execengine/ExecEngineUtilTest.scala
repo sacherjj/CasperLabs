@@ -93,26 +93,25 @@ class ExecEngineUtilTest
         b1              <- createAndStoreMessage[Task](Seq(genesis.blockHash), deploys = b1DeploysCost)
         b2              <- createAndStoreMessage[Task](Seq(b1.blockHash), deploys = b2DeploysCost)
         b3              <- createAndStoreMessage[Task](Seq(b2.blockHash), deploys = b3DeploysCost)
-        dag1            <- dagStorage.getRepresentation
-        blockCheckpoint <- computeBlockCheckpointFromDeploys(genesis, dag1)
+        dag             <- dagStorage.getRepresentation
+        blockCheckpoint <- computeBlockCheckpointFromDeploys(genesis, dag)
         _ <- injectPostStateHash[Task](
               0,
               genesis,
               blockCheckpoint.postStateHash,
               blockCheckpoint.deploysForBlock
             )
-        dag2         <- dagStorage.getRepresentation
-        b1Checkpoint <- computeBlockCheckpointFromDeploys(b1, dag2)
+        b1Checkpoint <- computeBlockCheckpointFromDeploys(b1, dag)
         _ <- injectPostStateHash[Task](
               1,
               b1,
               b1Checkpoint.postStateHash,
               b1Checkpoint.deploysForBlock
             )
-        dag3 <- dagStorage.getRepresentation
+        dag <- dagStorage.getRepresentation
         b2Checkpoint <- computeBlockCheckpointFromDeploys(
                          b2,
-                         dag3
+                         dag
                        )
         _ <- injectPostStateHash[Task](
               2,
@@ -121,16 +120,10 @@ class ExecEngineUtilTest
               b2Checkpoint.deploysForBlock
             )
 
-        dag4 <- dagStorage.getRepresentation
         _ <- computeBlockCheckpointFromDeploys(
               b3,
-              dag4
+              dag
             )
-//          b3PostState          = runtimeManager.storageRepr(postb3StateHash).get
-//
-//          _      = b3PostState.contains("@{1}!(1)") should be(true)
-//          _      = b3PostState.contains("@{1}!(15)") should be(true)
-//          result = b3PostState.contains("@{7}!(7)") should be(true)
       } yield true
   }
 

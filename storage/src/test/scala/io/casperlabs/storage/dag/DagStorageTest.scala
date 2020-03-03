@@ -28,7 +28,6 @@ trait DagStorageTest
     with GeneratorDrivenPropertyChecks
     with BeforeAndAfterAll
     with ArbitraryStorageData {
-  implicit def noShrink[T]: Shrink[T] = Shrink.shrinkAny
 
   implicit val consensusConfig: ConsensusConfig = ConsensusConfig(
     dagSize = 5,
@@ -77,92 +76,72 @@ trait DagStorageTest
     // NOTE: Expects that blocks.size == 2.
     // Updates 2nd block justification list to point at the 1st block.
     def updateLastMessageByValidator(
-        blocks: List[BlockMsgWithTransform]
-    ): List[BlockMsgWithTransform] =
-      if (blocks.size == 1) {
-        // That's the last station.
-        blocks
-      } else {
-        val a = blocks(0)
-        val b = blocks(1)
-        List(
-          b.update(
-              _.blockMessage.update(
-                _.header.validatorPublicKey := a.getBlockMessage.getHeader.validatorPublicKey
-              )
-            )
-            .update(
-              _.blockMessage.update(block => {
+        blocks: List[Block]
+    ): List[Block] =
+      blocks match {
+        case _ :: Nil => blocks // last block by the validator in a sequence
+        case a :: b :: _ =>
+          List(
+            b.update(
+              _.update(block => {
                 block.header.justifications := Seq(
                   Justification(
-                    a.getBlockMessage.getHeader.validatorPublicKey,
-                    a.getBlockMessage.blockHash
+                    a.getHeader.validatorPublicKey,
+                    a.blockHash
                   )
-                )
-                block.header.validatorPrevBlockHash := a.getBlockMessage.blockHash
+                ) ++ b.getHeader.justifications
+                block.header.validatorPrevBlockHash := a.blockHash
               })
             )
-        )
+          )
+        case _ => fail("Expected at most 2 elements.")
       }
 
-    forAll(genBlockMsgWithTransformDagFromGenesis) { initial =>
+    forAll(genBlockDagFromGenesis) { initial =>
       val validatorsToBlocks = initial
-        .groupBy(_.getBlockMessage.getHeader.validatorPublicKey)
-        .mapValues(_.sliding(2).flatMap(updateLastMessageByValidator))
+        .groupBy(_.getHeader.validatorPublicKey)
+        .mapValues(_.toList.sliding(2).flatMap(updateLastMessageByValidator).toList)
 
       // Because we've updated validators' messages so that they always cite its previous block
       // we can just pick the `last` element in each of the validators' swimlanes as the "latest message".
-      val latestBlocksByValidator = validatorsToBlocks.mapValues(msgs => Set(msgs.toList.last))
-      val blockElements           = validatorsToBlocks.values.toList.flatten
+      val latestBlocksByValidator = validatorsToBlocks.mapValues(msgs => Set(msgs.last))
+      val blocks                  = validatorsToBlocks.values.flatten.toList
 
       withDagStorage { dagStorage =>
         for {
-          _ <- blockElements.traverse_(
-                blockMsgWithTransform => dagStorage.insert(blockMsgWithTransform.getBlockMessage)
-              )
+          _   <- blocks.traverse(dagStorage.insert(_))
           dag <- dagStorage.getRepresentation
           tip <- dag.latestGlobal
           // Test that we can lookup all blocks that we've just inserted.
-          _ <- blockElements.traverse {
-                case BlockMsgWithTransform(Some(b), _) =>
-                  dag.lookup(b.blockHash).map(_ shouldBe Message.fromBlock(b).toOption)
-                case _ => ???
+          _ <- blocks.traverse_ { b =>
+                dag.lookupUnsafe(b.blockHash).map(_ shouldBe Message.fromBlock(b).get)
+              }
+          // Note that we're filtering out Genesis block (its validator ID is empty).
+          // Genesis block is not updating `validator_latest_messages` table.
+          latestMessageByValidator = latestBlocksByValidator
+            .filterNot { case (validator, _) => validator == ByteString.EMPTY }
+            .mapValues(
+              _.map(Message.fromBlock(_).get)
+            )
+          latestHashByValidator = latestMessageByValidator.mapValues(_.map(_.messageHash))
+          _ <- tip.latestMessageHashes.map {
+                _.toList should contain theSameElementsAs latestHashByValidator.toList
               }
           // Test that `latestMessageHash(validator)` and `latestMessage(validator)` return
           // expected results.
-          _ <- latestBlocksByValidator.toList.traverse {
-                case (validator, latestBlocks) =>
+          _ <- latestBlocksByValidator.keys.filterNot(_ == ByteString.EMPTY).toList.traverse {
+                validator =>
                   for {
                     latestMessageHash <- tip.latestMessageHash(validator)
                     latestMessage     <- tip.latestMessage(validator)
                   } yield {
-                    latestMessage should contain theSameElementsAs latestBlocks
-                      .map(_.getBlockMessage)
-                      .map(
-                        Message
-                          .fromBlock(_)
-                          .get
-                      )
-
-                    latestMessageHash should contain theSameElementsAs latestBlocks
-                      .map(
-                        _.getBlockMessage.blockHash
-                      )
+                    latestMessage should contain theSameElementsAs latestMessageByValidator(
+                      validator
+                    )
+                    latestMessageHash should contain theSameElementsAs latestHashByValidator(
+                      validator
+                    )
                   }
-                case _ => ???
-              }
-          _ <- tip.latestMessageHashes.map { got =>
-                got.toList should contain theSameElementsAs latestBlocksByValidator
-                  .mapValues(
-                    _.map(_.getBlockMessage.blockHash).toSet
-                  )
-              }
-          _ <- tip.latestMessages.map { got =>
-                val expected = latestBlocksByValidator
-                  .mapValues(
-                    _.map(_.getBlockMessage).map(Message.fromBlock(_).get)
-                  )
-                got.toList should contain theSameElementsAs expected.toList
               }
         } yield ()
       }
