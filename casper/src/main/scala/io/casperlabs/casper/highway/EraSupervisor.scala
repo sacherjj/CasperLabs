@@ -133,11 +133,16 @@ class EraSupervisor[F[_]: Concurrent: Timer: Log: Metrics: EraStorage: Relaying:
     } yield entry
   }
 
+  private def isStartRound(action: Agenda.Action) = action match {
+    case _: Agenda.StartRound => true
+    case _                    => false
+  }
+
   private def schedule(runtime: EraRuntime[F], agenda: Agenda): F[Unit] =
     agenda.traverse {
       case delayed @ Agenda.DelayedAction(tick, action) =>
         val key     = (runtime.era.keyBlockHash, delayed)
-        val isStart = action.isInstanceOf[Agenda.StartRound]
+        val isStart = isStartRound(action)
         for {
           fiber <- scheduleAt(tick) {
                     val era = runtime.era.keyBlockHash.show
@@ -147,16 +152,20 @@ class EraSupervisor[F[_]: Concurrent: Timer: Log: Metrics: EraStorage: Relaying:
                                            .handleAgenda(action)
                                            .run
                                            .timerGauge("schedule_handleAgenda")
+
                       isScheduleEmpty <- scheduleRef.modify { sch =>
                                           val rem = sch - key
                                           rem -> rem.isEmpty
                                         }
+
+                      hasNextStart = agenda.map(_.action).find(isStartRound(_)).nonEmpty
+
                       _ <- Log[F]
-                            .info(s"No more rounds for $era")
-                            .whenA(agenda.isEmpty && isStart)
+                            .info(s"There are no more rounds scheduled for $era")
+                            .whenA(isStart && !hasNextStart)
                       _ <- Log[F]
-                            .warn(s"The whole era schedule is empty!")
-                            .whenA(agenda.isEmpty && isScheduleEmpty)
+                            .warn(s"There are no more actions scheduled for any of the active eras")
+                            .whenA(isScheduleEmpty && agenda.isEmpty)
 
                       _ <- schedule(runtime, agenda)
                       _ <- handleEvents(events).timerGauge("schedule_handleEvents")
