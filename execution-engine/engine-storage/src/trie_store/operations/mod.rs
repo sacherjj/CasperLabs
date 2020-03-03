@@ -833,9 +833,7 @@ where
 
 /// Returns the iterator over the keys at a given root hash.
 ///
-/// Notes:
-/// * The root doesn't necessarily need to be the apex of the trie. It can be the "root" of a
-///   sub-trie.
+/// The root should be the apex of the trie.
 #[allow(dead_code)]
 pub fn keys<'a, 'b, K, V, T, S>(
     _correlation_id: CorrelationId,
@@ -864,4 +862,121 @@ where
         txn,
         state: init_state,
     }
+}
+
+pub enum KeysWithPrefixError<E> {
+    HashNotFound(Blake2bHash),
+    PrefixRootNotFound(Vec<u8>),
+    LeafNotMatchingPrefix { key: Vec<u8>, pfx: Vec<u8> },
+    Store(E),
+}
+
+impl<E> From<E> for KeysWithPrefixError<E> {
+    fn from(error: E) -> Self {
+        KeysWithPrefixError::Store(error)
+    }
+}
+
+/// Get the hash of the node that is the root of the subtrie matching the `prefix`
+fn get_prefix_root<'a, 'b, K, V, T, S>(
+    _correlation_id: CorrelationId,
+    txn: &'b T,
+    store: &'a S,
+    root: &Blake2bHash,
+    mut prefix: &[u8],
+) -> Result<Blake2bHash, KeysWithPrefixError<S::Error>>
+where
+    K: ToBytes + FromBytes + Clone + Eq + std::fmt::Debug,
+    V: ToBytes + FromBytes + Clone + Eq + std::fmt::Debug,
+    T: Readable<Handle = S::Handle>,
+    S: TrieStore<K, V>,
+    S::Error: From<T::Error> + From<bytesrepr::Error>,
+{
+    let mut traversed_prefix = vec![];
+    let mut current_root = *root;
+    while prefix.len() > 0 {
+        match store.get(txn, &current_root)? {
+            None => {
+                return Err(KeysWithPrefixError::HashNotFound(current_root));
+            }
+            Some(Trie::Leaf { key, .. }) => {
+                traversed_prefix.extend(prefix);
+                let key_bytes = key.to_bytes().map_err(|err| S::Error::from(err))?;
+                if key_bytes.starts_with(&traversed_prefix) {
+                    // the leaf is the root of the subtrie
+                    return Ok(current_root);
+                } else {
+                    return Err(KeysWithPrefixError::LeafNotMatchingPrefix {
+                        key: key_bytes,
+                        pfx: traversed_prefix,
+                    });
+                }
+            }
+            Some(Trie::Extension { affix, pointer }) => {
+                if prefix.starts_with(&affix) {
+                    prefix = &prefix[affix.len()..];
+                    traversed_prefix.extend(&affix);
+                    current_root = *pointer.hash();
+                } else if affix.starts_with(prefix) {
+                    // the node the extension points to is the root of the prefix subtrie
+                    return Ok(*pointer.hash());
+                } else {
+                    let first_non_matching = prefix
+                        .iter()
+                        .zip(affix.iter())
+                        .enumerate()
+                        .find(|(_, (pfx, afx))| pfx != afx)
+                        .map(|(i, (_, _))| i)
+                        .unwrap(); // there has to be a non-matching index
+                    traversed_prefix.extend(&prefix[..=first_non_matching]);
+                    return Err(KeysWithPrefixError::PrefixRootNotFound(traversed_prefix));
+                }
+            }
+            Some(Trie::Node { pointer_block }) => {
+                traversed_prefix.push(prefix[0]);
+                match pointer_block[prefix[0] as usize] {
+                    Some(ptr) => {
+                        prefix = &prefix[1..];
+                        current_root = *ptr.hash();
+                    }
+                    None => {
+                        return Err(KeysWithPrefixError::PrefixRootNotFound(traversed_prefix));
+                    }
+                }
+            }
+        }
+    }
+    // we are at the root of the subtrie - return it
+    Ok(current_root)
+}
+
+/// Returns the iterator over the keys in the subtrie matching `prefix`.
+///
+/// The root should be the apex of the trie.
+#[allow(dead_code)]
+pub fn keys_with_prefix<'a, 'b, K, V, T, S>(
+    correlation_id: CorrelationId,
+    txn: &'b T,
+    store: &'a S,
+    root: &Blake2bHash,
+    prefix: &[u8],
+) -> Result<KeysIterator<'a, 'b, K, V, T, S>, KeysWithPrefixError<S::Error>>
+where
+    K: ToBytes + FromBytes + Clone + Eq + std::fmt::Debug,
+    V: ToBytes + FromBytes + Clone + Eq + std::fmt::Debug,
+    T: Readable<Handle = S::Handle>,
+    S: TrieStore<K, V>,
+    S::Error: From<T::Error>,
+{
+    let subtrie_root = get_prefix_root(correlation_id, txn, store, root, prefix)?;
+    let subtrie_root_trie = store
+        .get(txn, &subtrie_root)?
+        .ok_or(KeysWithPrefixError::HashNotFound(subtrie_root))?;
+
+    Ok(KeysIterator {
+        visited: vec![(subtrie_root_trie, None, prefix.to_vec())],
+        store,
+        txn,
+        state: KeysIteratorState::Ok,
+    })
 }
