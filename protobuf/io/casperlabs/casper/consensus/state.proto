@@ -126,7 +126,7 @@ message CLValueInstance {
     message Option {
         Value value = 1;
     }
-    // Technically these types can represent hetrogeneous lists and maps,
+    // Technically these types can represent heterogeneous lists and maps,
     // however it will be considered illegal to do so because there is no way to
     // assign a CLType to such an object.
     message List {
