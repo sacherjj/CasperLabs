@@ -124,7 +124,7 @@ object PrettyPrinter {
 
   private def buildString(a: Key.URef.AccessRights): String =
     a match {
-      case AccessRights.UNKNOWN        => "Unknown"
+      case AccessRights.NONE           => "None"
       case AccessRights.READ           => "Read"
       case AccessRights.ADD            => "Add"
       case AccessRights.WRITE          => "Write"
