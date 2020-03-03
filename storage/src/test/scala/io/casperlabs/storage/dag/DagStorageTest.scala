@@ -27,7 +27,8 @@ trait DagStorageTest
     with OptionValues
     with GeneratorDrivenPropertyChecks
     with BeforeAndAfterAll
-    with ArbitraryStorageData {
+    with ArbitraryStorageData
+    with GivenWhenThen {
   implicit def noShrink[T]: Shrink[T] = Shrink.shrinkAny
 
   implicit val consensusConfig: ConsensusConfig = ConsensusConfig(
@@ -362,50 +363,51 @@ trait DagStorageTest
     }
   }
 
-  it should
-    """
-      |return blocks that conforms the requirements:
-      |1) Produced only by a specified validator.
-      |2) Amount of returned block must not exceed the 'limit' parameter.
-      |3) Return only blocks with timestamps less or equal than 'lastTimeStamp' parameter.
-      |4) If a block has the same timestamp as the 'lastTimeStamp' parameter then its hash must be less than the 'lastBlockHash' parameter.
-      |   Comparison logic is the same as 'memcmp' function from C standard library
-      |5) Returned blocks must be sorted by timestamps and hashes in decreasing order
-      |""".stripMargin in {
+  it should "be able to return blocks filtering them by a validator, timestamp and block hash" in {
+    Given("validator1 and validator2, limit, lastTimeStamp and lastBlockHash")
     val validator1    = sample(genHash)
     val validator2    = sample(genHash)
     val limit         = 3
     val lastTimeStamp = 2L
     val lastBlockHash = ByteString.copyFrom(Base16.decode("ff" * 31 + "fe"))
+    Given("block1 produced by validator1 with blockHash=lastBlockHash")
     // Must be ignored because block_hash is equal to the lastBlockHash
     val block1 = sample(arbitrary[Block])
       .update(_.header.validatorPublicKey := validator1)
       .update(_.header.timestamp := lastTimeStamp - 2L)
       .update(_.blockHash := lastBlockHash)
+    Given("block2 produced by validator1 with blockHash>lastBlockHash")
     // Must be ignored because block_hash is greater than the lastBlockHash
     val block2 = sample(arbitrary[Block])
       .update(_.header.validatorPublicKey := validator1)
       .update(_.header.timestamp := lastTimeStamp - 2L)
       .update(_.blockHash := ByteString.copyFrom(Base16.decode("ff" * 32)))
+    Given("block3 produced by validator1 with timestamp>lastTimeStamp")
     // Must be ignored because timestamp is greater than the lastTimeStamp
     val block3 = sample(arbitrary[Block])
       .update(_.header.validatorPublicKey := validator1)
       .update(_.header.timestamp := lastTimeStamp + 1L)
+    Given("block4 produced by validator2")
     // Must be ignored because created by a different validator
     val block4 = sample(arbitrary[Block])
       .update(_.header.validatorPublicKey := validator2)
+    Given("block5 produced by validator1 with timestamp=lastTimeStamp")
     // Must be included into a response and must be the first because
     // if blocks' timestamp equal to the lastTimeStamp then they're sorted by their hashes in decreasing order
     val block5 = sample(arbitrary[Block])
       .update(_.header.validatorPublicKey := validator1)
       .update(_.header.timestamp := lastTimeStamp)
       .update(_.blockHash := ByteString.copyFrom(Base16.decode("ff" * 31 + "fd")))
+    Given(
+      "block6 produced by validator1 with timestamp=lastTimeStamp, such that block5.blockHash>block6.blockHash"
+    )
     // Must be included into a response and must be the second because
     // if blocks' timestamp equal to the lastTimeStamp then they're sorted by their hashes in decreasing order
     val block6 = sample(arbitrary[Block])
       .update(_.header.validatorPublicKey := validator1)
       .update(_.header.timestamp := lastTimeStamp)
       .update(_.blockHash := ByteString.copyFrom(Base16.decode("ff" * 31 + "fc")))
+    Given("block7 produced by validator1 with timestamp<lastTimeStamp")
     // Must be included into a response and must be the third because
     // its timestamp less than lastTimeStamp
     val block7 = sample(arbitrary[Block])
@@ -413,10 +415,12 @@ trait DagStorageTest
       .update(_.header.timestamp := lastTimeStamp - 1)
     // Must be ignored because we limit for 3 blocks at most and results sorted by decreasing order by timestamps
     // There are block5 and block6 with the timestamp = 1
+    Given("block8 produced by validator1 with timestamp<lastTimeStamp")
     val block8 = sample(arbitrary[Block])
       .update(_.header.validatorPublicKey := validator1)
       .update(_.header.timestamp := lastTimeStamp - 2L)
-
+    When("dag.getBlockInfosByValidator")
+    Then("it should return block5, block6 and block7")
     withDagStorage { storage =>
       for {
         _   <- storage.insert(block1)
