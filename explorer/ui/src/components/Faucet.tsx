@@ -72,9 +72,9 @@ const FaucetForm = observer(
           <TextField
             id="id-public-key-base16"
             label="Public Key (Base16)"
-            value={
+            fieldState={
               auth.selectedAccount &&
-              base64to16(auth.selectedAccount.publicKeyBase64)
+              base64to16(auth.selectedAccount.publicKeyBase64) || ''
             }
             readonly={true}
           />
