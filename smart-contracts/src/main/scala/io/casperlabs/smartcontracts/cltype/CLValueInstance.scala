@@ -7,54 +7,15 @@ import eu.timepit.refined.api.Refined
 import eu.timepit.refined.numeric._
 import io.casperlabs.smartcontracts.bytesrepr.{BytesView, Constants, FromBytes, ToBytes}
 import io.casperlabs.smartcontracts.cltype
+import scala.annotation.tailrec
 import scala.collection.immutable
+import scala.util.{Failure, Success, Try}
 
 sealed trait CLValueInstance { self =>
   val clType: CLType
 
-  private def valueBytes: IndexedSeq[Byte] = self match {
-    case CLValueInstance.Bool(b)   => ToBytes.toBytes(b)
-    case CLValueInstance.I32(i)    => ToBytes.toBytes(i)
-    case CLValueInstance.I64(i)    => ToBytes.toBytes(i)
-    case CLValueInstance.U8(i)     => ToBytes.toBytes(i)
-    case CLValueInstance.U32(i)    => ToBytes.toBytes(i)
-    case CLValueInstance.U64(i)    => ToBytes.toBytes(i)
-    case CLValueInstance.U128(i)   => ToBytes.toBytes(i.value)
-    case CLValueInstance.U256(i)   => ToBytes.toBytes(i.value)
-    case CLValueInstance.U512(i)   => ToBytes.toBytes(i.value)
-    case CLValueInstance.Unit      => ToBytes.toBytes(())
-    case CLValueInstance.String(s) => ToBytes.toBytes(s)
-    case CLValueInstance.Key(k)    => ToBytes.toBytes(k)
-    case CLValueInstance.URef(u)   => ToBytes.toBytes(u)
-
-    // TODO: stack safety
-    case CLValueInstance.Option(None, _) => IndexedSeq(Constants.Option.NONE_TAG)
-
-    case CLValueInstance.Option(Some(x), _) => Constants.Option.SOME_TAG +: x.valueBytes
-
-    case CLValueInstance.List(values, _) =>
-      ToBytes.toBytes(values.size) ++ values.toIndexedSeq.flatMap(_.valueBytes)
-
-    case CLValueInstance.FixedList(values, _, _) => values.toIndexedSeq.flatMap(_.valueBytes)
-
-    case CLValueInstance.Result(Left(x), _, _) => Constants.Either.LEFT_TAG +: x.valueBytes
-
-    case CLValueInstance.Result(Right(x), _, _) => Constants.Either.RIGHT_TAG +: x.valueBytes
-
-    case CLValueInstance.Map(values, _, _) =>
-      ToBytes.toBytes(values.size) ++ values.toIndexedSeq.flatMap {
-        case (k, v) => k.valueBytes ++ v.valueBytes
-      }
-
-    case CLValueInstance.Tuple1(x)       => x.valueBytes
-    case CLValueInstance.Tuple2(x, y)    => x.valueBytes ++ y.valueBytes
-    case CLValueInstance.Tuple3(x, y, z) => x.valueBytes ++ y.valueBytes ++ z.valueBytes
-  }
-
-  final def toValue: CLValue = CLValue(
-    clType,
-    valueBytes
-  )
+  final def toValue: Either[CLValueInstance.Error, CLValue] =
+    CLValueInstance.valueBytes(self :: Nil, Vector.empty).map(CLValue(clType, _))
 }
 
 object CLValueInstance {
@@ -310,6 +271,33 @@ object CLValueInstance {
     }
 
     case class InvalidLength(valueLength: Int, typeLength: Int) extends Error
+
+    case object UnorderedElements extends Error
+  }
+
+  implicit val order: Ordering[CLValueInstance] = Ordering.fromLessThan {
+    case (Bool(x), Bool(y))     => x < y
+    case (I32(x), I32(y))       => x < y
+    case (I64(x), I64(y))       => x < y
+    case (U8(x), U8(y))         => x < y
+    case (U32(x), U32(y))       => x < y
+    case (U64(x), U64(y))       => x < y
+    case (U128(x), U128(y))     => x.value < y.value
+    case (U256(x), U256(y))     => x.value < y.value
+    case (U512(x), U512(y))     => x.value < y.value
+    case (Unit, Unit)           => false // equal, not less than
+    case (String(x), String(y)) => x < y
+    case (URef(x), URef(y))     => cltype.URef.lt(x, y)
+
+    case (Key(cltype.Key.Hash(x)), Key(cltype.Key.Hash(y)))       => ByteArray32.lt(x, y)
+    case (Key(cltype.Key.Account(x)), Key(cltype.Key.Account(y))) => ByteArray32.lt(x, y)
+    case (Key(cltype.Key.URef(x)), Key(cltype.Key.URef(y)))       => cltype.URef.lt(x, y)
+
+    case (Key(cltype.Key.Local(seed1, hash1)), Key(cltype.Key.Local(seed2, hash2))) =>
+      ByteArray32.lt(seed1, seed2) || (seed1 == seed2 && ByteArray32.lt(hash1, hash2))
+
+    // TODO: complete ordering implementation
+    case _ => throw new Exception("Ordering not implemented for recursive CLValueInstances")
   }
 
   private def lift[T <: CLValueInstance, E <: Error](
@@ -331,5 +319,55 @@ object CLValueInstance {
 
         case Right(nn) => FromBytes.pure(nn)
       }
+    }
+
+  @tailrec
+  private def valueBytes(
+      instances: immutable.List[CLValueInstance],
+      acc: Vector[Byte]
+  ): Either[Error, Vector[Byte]] =
+    instances match {
+      case Nil => Right(acc)
+
+      case Bool(b) :: tail   => valueBytes(tail, acc ++ ToBytes.toBytes(b))
+      case I32(i) :: tail    => valueBytes(tail, acc ++ ToBytes.toBytes(i))
+      case I64(i) :: tail    => valueBytes(tail, acc ++ ToBytes.toBytes(i))
+      case U8(i) :: tail     => valueBytes(tail, acc ++ ToBytes.toBytes(i))
+      case U32(i) :: tail    => valueBytes(tail, acc ++ ToBytes.toBytes(i))
+      case U64(i) :: tail    => valueBytes(tail, acc ++ ToBytes.toBytes(i))
+      case U128(i) :: tail   => valueBytes(tail, acc ++ ToBytes.toBytes(i.value))
+      case U256(i) :: tail   => valueBytes(tail, acc ++ ToBytes.toBytes(i.value))
+      case U512(i) :: tail   => valueBytes(tail, acc ++ ToBytes.toBytes(i.value))
+      case Unit :: tail      => valueBytes(tail, acc ++ ToBytes.toBytes(()))
+      case String(s) :: tail => valueBytes(tail, acc ++ ToBytes.toBytes(s))
+      case Key(k) :: tail    => valueBytes(tail, acc ++ ToBytes.toBytes(k))
+      case URef(u) :: tail   => valueBytes(tail, acc ++ ToBytes.toBytes(u))
+
+      case Option(None, _) :: tail    => valueBytes(tail, acc :+ Constants.Option.NONE_TAG)
+      case Option(Some(x), _) :: tail => valueBytes(x :: tail, acc :+ Constants.Option.SOME_TAG)
+
+      case CLValueInstance.List(values, _) :: tail =>
+        valueBytes(values.toList ++ tail, acc ++ ToBytes.toBytes(values.size))
+
+      case CLValueInstance.FixedList(values, _, _) :: tail => valueBytes(values.toList ++ tail, acc)
+
+      case CLValueInstance.Result(Left(x), _, _) :: tail =>
+        valueBytes(x :: tail, acc :+ Constants.Either.LEFT_TAG)
+
+      case CLValueInstance.Result(Right(x), _, _) :: tail =>
+        valueBytes(x :: tail, acc :+ Constants.Either.RIGHT_TAG)
+
+      case CLValueInstance.Map(values, _, _) :: tail =>
+        Try(values.toList.sortBy(_._1)) match {
+          case Failure(_) => Left(Error.UnorderedElements)
+
+          case Success(sortedPairs) =>
+            val sortedElems = sortedPairs.flatMap { case (k, v) => immutable.List(k, v) }
+            valueBytes(sortedElems ++ tail, acc ++ ToBytes.toBytes(values.size))
+        }
+
+      case CLValueInstance.Tuple1(x) :: tail       => valueBytes(x :: tail, acc)
+      case CLValueInstance.Tuple2(x, y) :: tail    => valueBytes(x :: y :: tail, acc)
+      case CLValueInstance.Tuple3(x, y, z) :: tail => valueBytes(x :: y :: z :: tail, acc)
     }
 }

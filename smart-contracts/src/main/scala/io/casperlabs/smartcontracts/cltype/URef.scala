@@ -10,6 +10,12 @@ object URef {
       ToBytes.toBytes(u.address) ++ ToBytes.toBytes(u.accessRights)
   }
 
+  def lt(x: URef, y: URef): Boolean =
+    ByteArray32.lt(x.address, y.address) || (
+      (x.address == y.address) && (x.accessRights.fold[Byte](0)(_.tag) < y.accessRights
+        .fold[Byte](0)(_.tag))
+    )
+
   val deserializer: FromBytes.Deserializer[URef] =
     for {
       address      <- ByteArray32.deserializer

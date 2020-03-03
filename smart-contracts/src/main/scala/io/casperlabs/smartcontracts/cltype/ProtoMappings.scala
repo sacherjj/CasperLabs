@@ -601,8 +601,12 @@ object ProtoMappings {
   }
 
   def fromArg(arg: Deploy.Arg): Either[Error, CLValue] = arg.value match {
-    case None        => Left(Error.MissingArg)
-    case Some(value) => fromProto(value).map(_.toValue)
+    case None => Left(Error.MissingArg)
+    case Some(value) =>
+      for {
+        instance <- fromProto(value)
+        clValue  <- instance.toValue.leftMap(Error.InstanceError.apply)
+      } yield clValue
   }
 
   private def toByteArray32(bytes: ByteString): Either[Error, ByteArray32] =

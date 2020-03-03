@@ -15,6 +15,13 @@ object ByteArray32 {
       b.bytes.toArray
   }
 
+  def lt(a: ByteArray32, b: ByteArray32) = (a, b) match {
+    case (ByteArray32(xs), ByteArray32(ys)) =>
+      xs.iterator.zip(ys.iterator).exists {
+        case (x, y) => x < y
+      }
+  }
+
   val deserializer: FromBytes.Deserializer[ByteArray32] =
     FromBytes.take(32).map(view => new ByteArray32(view.toArray))
 }

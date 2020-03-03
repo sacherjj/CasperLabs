@@ -223,6 +223,7 @@ class CLValueInstanceTest extends FlatSpec with Matchers with PropertyChecks {
     val clInstance = CLValueInstance.from(clValue)
 
     clInstance shouldBe Right(instance(t))
+    clInstance.flatMap(_.toValue) shouldBe Right(clValue)
   }
 
   private def instantiateTestF[F[_]: Functor, T](
