@@ -1,4 +1,7 @@
-use std::collections::{BTreeMap, BTreeSet};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    fmt::Write,
+};
 
 use engine_shared::stored_value::StoredValue;
 use engine_storage::global_state::StateReader;
@@ -11,7 +14,6 @@ use types::{
 };
 
 use crate::{execution, runtime::Runtime};
-use std::fmt::Write;
 
 const BONDING_KEY: u8 = 1;
 const UNBONDING_KEY: u8 = 2;

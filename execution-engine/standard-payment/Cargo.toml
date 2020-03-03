@@ -1,0 +1,11 @@
+[package]
+name = "casperlabs-standard-payment"
+version = "0.1.0"
+authors = ["Fraser Hutchison <fraser@casperlabs.io>"]
+edition = "2018"
+
+[features]
+std = []
+
+[dependencies]
+types = { path = "../types", package = "casperlabs-types" }

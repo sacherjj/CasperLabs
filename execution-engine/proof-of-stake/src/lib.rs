@@ -219,7 +219,7 @@ mod internal {
             })
     }
 
-    /// Returns the purse for accepting payment for tranasactions.
+    /// Returns the purse for accepting payment for transactions.
     pub fn get_payment_purse<R: RuntimeProvider>(runtime_provider: &R) -> Result<URef> {
         get_purse::<R>(runtime_provider, PAYMENT_PURSE_KEY).map_err(PurseLookupError::payment)
     }
