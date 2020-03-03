@@ -2001,10 +2001,10 @@ where
 
         let result = instance.invoke_export("call", &[], &mut runtime);
 
-        // TODO: To account for the gas used in a subcall, we should uncomment the following lines
-        // if !current_runtime.charge_gas(runtime.context.gas_counter()) {
-        //     return Err(Error::GasLimit);
-        // }
+        // The `runtime`'s context was initialized with our counter from before the call and any gas
+        // charged by the sub-call was added to its counter - so let's copy the correct value of the
+        // counter from there to our counter
+        self.context.set_gas_counter(runtime.context.gas_counter());
 
         let error = match result {
             Err(error) => error,
