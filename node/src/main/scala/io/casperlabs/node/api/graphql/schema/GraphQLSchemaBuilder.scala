@@ -141,7 +141,7 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream
       program.unsafeToFuture
   }
 
-  val accountBalance: AccountKey => Action[Unit, Option[BigInt]] = { accountKey =>
+  val accountBalance: AccountKey => Action[Unit, BigInt] = { accountKey =>
     BlockAPI.accountBalance[F](accountKey).unsafeToFuture
   }
 

@@ -287,7 +287,7 @@ object BlockAPI {
 
   def accountBalance[F[_]: MonadThrowable: Log: MultiParentCasperRef: DeployStorage: DagStorage: Fs2Compiler: ExecutionEngineService](
       accountKey: ByteString
-  ): F[Option[BigInt]] = {
+  ): F[BigInt] = {
     val program = for {
       info <- BlockAPI
                .getBlockInfos[F](1)
@@ -363,13 +363,8 @@ object BlockAPI {
                       )
                 }
     } yield balance.value
-    program
-      .map(_.some)
-      .handleErrorWith(
-        ex =>
-          Log[F]
-            .error(s"Failed to query EE for the balance of the account ${accountKey}, $ex")
-            .as(none[BigInt])
-      )
+    program.adaptErr {
+      case _ => NotFound.balance(accountKey)
+    }
   }
 }
