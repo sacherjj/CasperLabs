@@ -400,7 +400,14 @@ where
 
         let standard_payment_reference: URef = {
             let standard_payment_installer_bytes =
-                genesis_config.standard_payment_installer_bytes();
+                if genesis_config.standard_payment_installer_bytes().is_empty() {
+                    // TODO - remove this once Node has been updated to pass the required bytes
+                    include_bytes!(
+                    "../../../target/wasm32-unknown-unknown/release/standard_payment_install.wasm"
+                )
+                } else {
+                    genesis_config.standard_payment_installer_bytes()
+                };
 
             let standard_payment_installer_module =
                 preprocessor.preprocess(standard_payment_installer_bytes)?;
