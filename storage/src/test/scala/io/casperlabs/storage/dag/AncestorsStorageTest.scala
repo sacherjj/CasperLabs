@@ -14,15 +14,15 @@ import io.casperlabs.storage.SQLiteStorage
 import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.storage.BlockMsgWithTransform
 
-class MessageAncestorsStorageTest
+class AncestorsStorageTest
     extends FlatSpec
     with Matchers
     with ArbitraryStorageData
-    with SQLiteFixture[BlockStorage[Task] with MessageAncestorsStorage[Task]] {
+    with SQLiteFixture[BlockStorage[Task] with AncestorsStorage[Task]] {
 
   override def db: String = "/tmp/message_ancestors_test.db"
 
-  override def createTestResource: Task[BlockStorage[Task] with MessageAncestorsStorage[Task]] =
+  override def createTestResource: Task[BlockStorage[Task] with AncestorsStorage[Task]] =
     SQLiteStorage.create[Task](readXa = xa, writeXa = xa)
 
   implicit val consensusConfig: ConsensusConfig = ConsensusConfig(
@@ -63,7 +63,7 @@ class MessageAncestorsStorageTest
     val genesis = createGenesis
 
     runSQLiteTest {
-      case (storage: BlockStorage[Task] with MessageAncestorsStorage[Task]) =>
+      case (storage: BlockStorage[Task] with AncestorsStorage[Task]) =>
         for {
           _         <- storage.put(genesis.blockHash, BlockMsgWithTransform().withBlockMessage(genesis))
           ancestors <- storage.collectMessageAncestors(genesis)
@@ -82,7 +82,7 @@ class MessageAncestorsStorageTest
       BlockMsgWithTransform().withBlockMessage(b)
 
     runSQLiteTest {
-      case (storage: BlockStorage[Task] with MessageAncestorsStorage[Task]) =>
+      case (storage: BlockStorage[Task] with AncestorsStorage[Task]) =>
         for {
           _ <- storage.put(genesis.blockHash, genesis)
           a = randomMessage.withMainParent(genesis)

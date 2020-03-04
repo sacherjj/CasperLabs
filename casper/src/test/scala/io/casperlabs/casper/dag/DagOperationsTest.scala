@@ -24,7 +24,7 @@ import org.scalacheck.Arbitrary
 import io.casperlabs.storage.ArbitraryStorageData
 import io.casperlabs.models.ArbitraryConsensus
 import io.casperlabs.storage.BlockMsgWithTransform
-import io.casperlabs.storage.dag.MessageAncestorsStorage.Relation
+import io.casperlabs.storage.dag.AncestorsStorage.Relation
 
 @silent("deprecated")
 @silent("is never used")

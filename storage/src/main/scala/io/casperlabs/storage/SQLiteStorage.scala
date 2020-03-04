@@ -17,10 +17,10 @@ import io.casperlabs.shared.Time
 import io.casperlabs.storage.block.{BlockStorage, SQLiteBlockStorage}
 import io.casperlabs.storage.dag.DagRepresentation.Validator
 import io.casperlabs.storage.dag.{
+  AncestorsStorage,
   DagRepresentation,
   DagStorage,
   FinalityStorage,
-  MessageAncestorsStorage,
   SQLiteDagStorage
 }
 import io.casperlabs.storage.era.{EraStorage, SQLiteEraStorage}
@@ -35,7 +35,7 @@ object SQLiteStorage {
       with DeployStorage[F]
       with DagRepresentation[F]
       with FinalityStorage[F]
-      with MessageAncestorsStorage[F]
+      with AncestorsStorage[F]
       with EraStorage[F]
 
   def create[F[_]: Sync: Metrics: Time](
@@ -51,7 +51,7 @@ object SQLiteStorage {
       writeXa = writeXa,
       wrapBlockStorage = (_: BlockStorage[F]).pure[F],
       wrapDagStorage =
-        (_: DagStorage[F] with DagRepresentation[F] with FinalityStorage[F] with MessageAncestorsStorage[
+        (_: DagStorage[F] with DagRepresentation[F] with FinalityStorage[F] with AncestorsStorage[
           F
         ]).pure[F]
     )
@@ -62,10 +62,10 @@ object SQLiteStorage {
       readXa: Transactor[F],
       writeXa: Transactor[F],
       wrapBlockStorage: BlockStorage[F] => F[BlockStorage[F]],
-      wrapDagStorage: DagStorage[F] with DagRepresentation[F] with FinalityStorage[F] with MessageAncestorsStorage[
+      wrapDagStorage: DagStorage[F] with DagRepresentation[F] with FinalityStorage[F] with AncestorsStorage[
         F
       ] => F[
-        DagStorage[F] with DagRepresentation[F] with FinalityStorage[F] with MessageAncestorsStorage[
+        DagStorage[F] with DagRepresentation[F] with FinalityStorage[F] with AncestorsStorage[
           F
         ]
       ]
@@ -79,7 +79,7 @@ object SQLiteStorage {
       with DagStorage[F]
       with DeployStorage[F]
       with DagRepresentation[F]
-      with MessageAncestorsStorage[F]
+      with AncestorsStorage[F]
       with FinalityStorage[F]
       with EraStorage[F] {
 

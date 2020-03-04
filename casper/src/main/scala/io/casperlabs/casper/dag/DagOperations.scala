@@ -23,8 +23,8 @@ import simulacrum.typeclass
 
 import scala.collection.immutable.{BitSet, HashSet, Queue}
 import scala.collection.mutable
-import io.casperlabs.storage.dag.MessageAncestorsStorage
-import io.casperlabs.storage.dag.MessageAncestorsStorage.Relation
+import io.casperlabs.storage.dag.AncestorsStorage
+import io.casperlabs.storage.dag.AncestorsStorage.Relation
 import org.scalacheck.util.Pretty
 
 object DagOperations {
@@ -558,7 +558,7 @@ object DagOperations {
     * @return Relation between `start` and `target`.
     */
   def relation[F[_]: MonadThrowable](start: Message, target: Message)(
-      implicit MAS: MessageAncestorsStorage[F]
+      implicit MAS: AncestorsStorage[F]
   ): F[Option[Relation]] =
     if (start.parentBlock == target.messageHash) Relation.descendant.some.pure[F]
     else if (target.parentBlock == start.messageHash) Relation.ancestor.some.pure[F]

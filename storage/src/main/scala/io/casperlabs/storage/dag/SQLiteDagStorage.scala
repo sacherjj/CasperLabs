@@ -33,7 +33,7 @@ class SQLiteDagStorage[F[_]: Sync](
 )(implicit met: Metrics[F])
     extends DagStorage[F]
     with DagRepresentation[F]
-    with MessageAncestorsStorage[F]
+    with AncestorsStorage[F]
     with FinalityStorage[F]
     with DoobieCodecs {
   import SQLiteDagStorage.StreamOps
@@ -461,21 +461,21 @@ object SQLiteDagStorage {
       implicit
       met: Metrics[F]
   ): F[
-    DagStorage[F] with DagRepresentation[F] with FinalityStorage[F] with MessageAncestorsStorage[F]
+    DagStorage[F] with DagRepresentation[F] with FinalityStorage[F] with AncestorsStorage[F]
   ] =
     for {
       dagStorage <- Sync[F].delay(
                      new SQLiteDagStorage[F](readXa, writeXa)
                        with MeteredDagStorage[F]
                        with MeteredDagRepresentation[F]
-                       with MessageAncestorsStorage[F]
+                       with AncestorsStorage[F]
                        with FinalityStorage[F] {
                        override implicit val m: Metrics[F] = met
                        override implicit val ms: Source    = MetricsSource
                        override implicit val a: Apply[F]   = Sync[F]
                      }
                    )
-    } yield dagStorage: DagStorage[F] with DagRepresentation[F] with FinalityStorage[F] with MessageAncestorsStorage[
+    } yield dagStorage: DagStorage[F] with DagRepresentation[F] with FinalityStorage[F] with AncestorsStorage[
       F
     ]
 }

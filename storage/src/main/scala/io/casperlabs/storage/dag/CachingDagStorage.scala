@@ -26,7 +26,7 @@ class CachingDagStorage[F[_]: Concurrent](
     underlying: DagStorage[F]
       with DagRepresentation[F]
       with FinalityStorage[F]
-      with MessageAncestorsStorage[F],
+      with AncestorsStorage[F],
     private[dag] val childrenCache: Cache[BlockHash, Set[BlockHash]],
     private[dag] val justificationCache: Cache[BlockHash, Set[BlockHash]],
     private[dag] val messagesCache: Cache[BlockHash, Message],
@@ -34,7 +34,7 @@ class CachingDagStorage[F[_]: Concurrent](
     semaphore: Semaphore[F]
 ) extends DagStorage[F]
     with DagRepresentation[F]
-    with MessageAncestorsStorage[F]
+    with AncestorsStorage[F]
     with FinalityStorage[F] {
 
   /** Unsafe to be invoked concurrently */
@@ -194,7 +194,7 @@ object CachingDagStorage {
       underlying: DagStorage[F]
         with DagRepresentation[F]
         with FinalityStorage[F]
-        with MessageAncestorsStorage[F],
+        with AncestorsStorage[F],
       maxSizeBytes: Long,
       // How far to go to the past (by ranks) for caching neighborhood of looked up block
       neighborhoodBefore: Int,

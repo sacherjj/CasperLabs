@@ -4,14 +4,12 @@ import cats.implicits._
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.models.Message
 import io.casperlabs.storage.BlockHash
-import io.casperlabs.storage.dag.MessageAncestorsStorage.Relation
 import io.casperlabs.crypto.codec.Base16
 import cats.data.NonEmptyList
 import io.casperlabs.casper.consensus.Block
 import io.casperlabs.models.BlockImplicits._
-import shapeless.ops.fin
 
-trait MessageAncestorsStorage[F[_]] { self: DagLookup[F] =>
+trait AncestorsStorage[F[_]] { self: DagLookup[F] =>
 
   implicit val MT: MonadThrowable[F]
 
@@ -54,7 +52,7 @@ trait MessageAncestorsStorage[F[_]] { self: DagLookup[F] =>
     */
   def getAncestorAt(start: Message, height: Long): F[Message] = {
     val diff = start.mainRank - height
-    MessageAncestorsStorage.decompose(diff).foldM(start) {
+    AncestorsStorage.decompose(diff).foldM(start) {
       case (b, h) =>
         findAncestor(b.messageHash, h).flatMap {
           case None =>
@@ -101,7 +99,7 @@ trait MessageAncestorsStorage[F[_]] { self: DagLookup[F] =>
   private[storage] def findAncestor(block: BlockHash, distance: Long): F[Option[BlockHash]]
 }
 
-object MessageAncestorsStorage {
+object AncestorsStorage {
   sealed trait Relation extends Product with Serializable
   object Relation {
     case object Ancestor   extends Relation

@@ -20,8 +20,8 @@ import io.casperlabs.storage.era.EraStorage
 import simulacrum.typeclass
 import io.casperlabs.casper.consensus.Bond
 import io.casperlabs.casper.dag.{DagOperations, EraObservedBehavior}
-import io.casperlabs.storage.dag.MessageAncestorsStorage
-import io.casperlabs.storage.dag.MessageAncestorsStorage.Relation
+import io.casperlabs.storage.dag.AncestorsStorage
+import io.casperlabs.storage.dag.AncestorsStorage.Relation
 
 /** Some sort of stateful, memoizing implementation of a fast fork choice.
   * Should have access to the era tree to check what are the latest messages
@@ -83,7 +83,7 @@ object ForkChoice {
         .mapValues(_.map(_._2).toSet)
   }
 
-  def create[F[_]: Sync: Metrics: EraStorage: DagStorage: MessageAncestorsStorage]: ForkChoice[F] =
+  def create[F[_]: Sync: Metrics: EraStorage: DagStorage: AncestorsStorage]: ForkChoice[F] =
     new ForkChoice[F] {
 
       implicit val metricsSource = HighwayMetricsSource / "ForkChoice"
@@ -286,7 +286,7 @@ object ForkChoice {
     * Validator can "change his mind". His latest message may be a descendant of different
     * block than his second to last message.
     */
-  private def previousVoteForDescendant[F[_]: MonadThrowable: MessageAncestorsStorage](
+  private def previousVoteForDescendant[F[_]: MonadThrowable: AncestorsStorage](
       dag: DagLookup[F],
       latestMessage: Message,
       target: Block
@@ -418,7 +418,7 @@ trait ForkChoiceManager[F[_]] extends ForkChoice[F] {
 }
 
 object ForkChoiceManager {
-  def create[F[_]: Sync: EraStorage: DagStorage: Metrics: MessageAncestorsStorage]
+  def create[F[_]: Sync: EraStorage: DagStorage: Metrics: AncestorsStorage]
       : ForkChoiceManager[F] = {
     val fc = ForkChoice.create[F]
     new ForkChoiceManager[F] {
