@@ -161,7 +161,6 @@ reset-highway-env: .casperlabs
 maybe-reset-highway-env:
 	DEFINED=$$(find . -maxdepth 1 -type d | grep -e 'node-[0-9]' | wc -l); \
 	RUNNING=$$(docker ps --format '{{.Names}}' | grep -e 'node-[0-9]' | wc -l); \
-	echo "$${DEFINED} $${RUNNING}"; \
 	if [ "$${RUNNING}" -eq "0" ] || [ "$${DEFINED}" -eq "1" ]; then \
 		$(RESET_HIGHWAY_ENV); \
 	fi
