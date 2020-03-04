@@ -66,8 +66,9 @@ TOOL_WASM_DIR             = cargo-casperlabs/wasm
 .PHONY: all
 all: build build-contracts
 
+# TODO - remove dependency on standard-payment-install once Node is updated to pass this via GenesisConfig
 .PHONY: build
-build:
+build: build-contract-rs/standard-payment-install
 	$(CARGO) build $(CARGO_FLAGS)
 
 build-contract-rs/%:
