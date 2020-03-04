@@ -248,7 +248,8 @@ object Highway {
                                  .of[F](
                                    dag,
                                    lfb,
-                                   faultToleranceThreshold
+                                   faultToleranceThreshold,
+                                   isHighway = true
                                  )
             finalizer <- MultiParentFinalizer.create[F](
                           dag,

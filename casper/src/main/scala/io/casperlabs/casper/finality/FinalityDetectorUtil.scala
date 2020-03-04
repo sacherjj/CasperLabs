@@ -143,10 +143,11 @@ object FinalityDetectorUtil {
   private[casper] def panoramaM[F[_]: Monad](
       dag: DagRepresentation[F],
       validatorsToIndex: Map[Validator, Int],
-      blockSummary: Message
+      blockSummary: Message,
+      isHighway: Boolean
   ): F[MutableSeq[Level]] =
     for {
-      equivocators <- if (Validation.isHighway) dag.getEquivocatorsInEra(blockSummary.eraId)
+      equivocators <- if (isHighway) dag.getEquivocatorsInEra(blockSummary.eraId)
                      else dag.getEquivocators
       latestBlockDagLevelAsMap <- FinalityDetectorUtil
                                    .panoramaDagLevelsOfBlock(

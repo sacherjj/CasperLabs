@@ -169,7 +169,12 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
           dag          <- dagStorage.getRepresentation
           _            <- blockStorage.put(genesis.blockHash, genesis, Map.empty)
           finalityDetector <- FinalityDetectorVotingMatrix
-                               .of[F](dag, genesis.blockHash, faultToleranceThreshold)
+                               .of[F](
+                                 dag,
+                                 genesis.blockHash,
+                                 faultToleranceThreshold,
+                                 isHighway = false
+                               )
           implicit0(fs: FinalityStorage[F]) <- MockFinalityStorage[F](genesis.blockHash)
           multiParentFinalizer <- MultiParentFinalizer.create(
                                    dag,
@@ -267,11 +272,12 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
                 casperState <- Cell.mvarCell[F, CasperState](
                                 CasperState()
                               )
-                semaphoreMap                      <- SemaphoreMap[F, ByteString](1)
-                semaphore                         <- Semaphore[F](1)
-                _                                 <- blockStorage.put(genesis.blockHash, genesis, Map.empty)
-                dag                               <- dagStorage.getRepresentation
-                finalityDetector                  <- FinalityDetectorVotingMatrix.of[F](dag, genesis.blockHash, 0.1)
+                semaphoreMap <- SemaphoreMap[F, ByteString](1)
+                semaphore    <- Semaphore[F](1)
+                _            <- blockStorage.put(genesis.blockHash, genesis, Map.empty)
+                dag          <- dagStorage.getRepresentation
+                finalityDetector <- FinalityDetectorVotingMatrix
+                                     .of[F](dag, genesis.blockHash, 0.1, isHighway = false)
                 implicit0(fs: FinalityStorage[F]) <- MockFinalityStorage[F](genesis.blockHash)
                 multiParentFinalizer <- MultiParentFinalizer.create(
                                          dag,

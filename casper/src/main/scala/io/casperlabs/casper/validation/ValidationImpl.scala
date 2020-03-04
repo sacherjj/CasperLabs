@@ -87,8 +87,9 @@ object ValidationImpl {
     }
 }
 
-abstract class ValidationImpl[F[_]: Sync: FunctorRaise[*[_], InvalidBlock]: Log: Time: Metrics]
-    extends Validation[F] {
+abstract class ValidationImpl[F[_]: Sync: FunctorRaise[*[_], InvalidBlock]: Log: Time: Metrics](
+    isHighway: Boolean
+) extends Validation[F] {
   import io.casperlabs.models.BlockImplicits._
 
   type Data        = Array[Byte]
@@ -127,9 +128,11 @@ abstract class ValidationImpl[F[_]: Sync: FunctorRaise[*[_], InvalidBlock]: Log:
       _ <- missingBlocks[F](summary)
       _ <- timestamp[F](summary)
       _ <- blockRank[F](summary, dag)
-      _ <- validatorPrevBlockHash[F](summary, dag)
+      // TODO (CON-639): Going on the j-DAG is not enough, it may lead to a ballot in the parent era.
+      _ <- validatorPrevBlockHash[F](summary, dag).whenA(!isHighway)
       _ <- sequenceNumber[F](summary, dag)
-      _ <- swimlane[F](summary, dag)
+      // TODO (CON-639): A voting ballot appears to be merging swimlanes in the child era.
+      _ <- swimlane[F](summary, dag).whenA(!isHighway)
       // TODO: Validate that blocks only have block parents and ballots have a single parent which is a block.
       // Checks that need the body.
       _ <- blockHash[F](block)
@@ -306,7 +309,7 @@ abstract class ValidationImpl[F[_]: Sync: FunctorRaise[*[_], InvalidBlock]: Log:
 }
 
 class NCBValidationImpl[F[_]: Sync: FunctorRaise[*[_], InvalidBlock]: Log: Time: Metrics]
-    extends ValidationImpl[F] {
+    extends ValidationImpl[F](isHighway = false) {
 
   override def tipsFromLatestMessages(
       dag: DagRepresentation[F],
@@ -323,7 +326,7 @@ class NCBValidationImpl[F[_]: Sync: FunctorRaise[*[_], InvalidBlock]: Log: Time:
 }
 
 class HighwayValidationImpl[F[_]: Sync: FunctorRaise[*[_], InvalidBlock]: Log: Time: Metrics: ForkChoice]
-    extends ValidationImpl[F] {
+    extends ValidationImpl[F](isHighway = true) {
 
   override def tipsFromLatestMessages(
       dag: DagRepresentation[F],
