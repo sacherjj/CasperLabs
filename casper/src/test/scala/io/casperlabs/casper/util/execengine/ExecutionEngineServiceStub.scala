@@ -11,7 +11,7 @@ import io.casperlabs.casper.consensus.state.{Unit => _, _}
 import io.casperlabs.casper.consensus.{Block, Bond}
 import io.casperlabs.casper.util.{CasperLabsProtocol, ProtoUtil}
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
-import io.casperlabs.casper.validation.{Validation, ValidationImpl}
+import io.casperlabs.casper.validation.{NCBValidationImpl, Validation}
 import io.casperlabs.crypto.Keys.PublicKey
 import io.casperlabs.ipc._
 import io.casperlabs.metrics.Metrics
@@ -55,7 +55,7 @@ object ExecutionEngineServiceStub {
       override def sleep(duration: FiniteDuration): F[Unit] = Sync[F].unit
     }
     implicit val metrics    = new MetricsNOP[F]
-    implicit val validation = new ValidationImpl[F]
+    implicit val validation = new NCBValidationImpl[F]
     (for {
       parents <- ProtoUtil.unsafeGetParents[F](b)
       merged  <- ExecutionEngineServiceStub.merge[F](parents, dag)
