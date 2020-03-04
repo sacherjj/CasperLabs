@@ -115,6 +115,7 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
                     justifications = Map.empty,
                     isBookingBlock = false
                   )
+        _     <- forkchoice.set(message)
         block <- BlockStorage[Task].getBlockUnsafe(message.messageHash)
       } yield block
 
@@ -164,7 +165,8 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
       } yield second
 
     override lazy val validation: Validation[Task] =
-      if (validate) new HighwayValidationImpl[Task]() else new NoOpValidation[Task]
+      if (validate) new HighwayValidationImpl[Task](validateEquivocation = true)
+      else new NoOpValidation[Task]
 
     // Collect emitted events.
     override implicit lazy val eventEmitter: MockEventEmitter[Task] =
@@ -441,7 +443,7 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
       validation.raiseValidateErrorThroughApplicativeError[Task]
 
     new ExecutorFixture(db) with ExecEngineSerivceWithFakeEffects {
-      // Fake validation which let's everything through but it raises the one
+      // Fake validation which lets everything through but it raises the one
       // invalid status which should result in a block being saved.
       override lazy val validation = new NoOpValidation[Task] {
         override def checkEquivocation(dag: DagRepresentation[Task], block: Block): Task[Unit] =
