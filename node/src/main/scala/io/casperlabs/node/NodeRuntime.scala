@@ -252,18 +252,16 @@ class NodeRuntime private[node] (
 
       isSyncedRef <- Resource.liftF(Ref.of[Task, Boolean](false))
 
-      consensus <- {
+      implicit0(consensusEff: Consensus[Task]) <- {
         if (conf.highway.enabled)
           Resource.liftF(Log[Task].info(s"Starting in Highway mode.")) *>
             casper.consensus.Highway(conf, chainSpec, maybeValidatorId, genesis, isSyncedRef)
         else
-          Resource.liftF(Log[Task].info(s"Starting in NCB mode.")) *>
+          Resource.liftF(Log[Task].info(s"Starting in NCB mode.")) as {
             casper.consensus
               .NCB[Task](conf, chainSpec, maybeValidatorId)
+          }
       }
-
-      implicit0(consensusEff: Consensus[Task])   = consensus._1
-      implicit0(validationEff: Validation[Task]) = consensus._2
 
       // Creating with 0 permits initially, enabled after the initial synchronization.
       blockApiLock <- Resource.liftF(Semaphore[Task](0))

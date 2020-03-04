@@ -66,6 +66,10 @@ import simulacrum.typeclass
 @typeclass
 trait Consensus[F[_]] {
 
+  def validateSummary(
+      summary: BlockSummary
+  ): F[Unit]
+
   /** Validate and persist a block. Raise an error if there's something wrong. Don't gossip. */
   def validateAndAddBlock(
       block: Block
@@ -92,13 +96,18 @@ object NCB {
       conf: Configuration,
       chainSpec: ChainSpec,
       maybeValidatorId: Option[ValidatorIdentity]
-  ) = Resource.pure[F, (Consensus[F], Validation[F])] {
+  ): Consensus[F] = {
+    val chainName = chainSpec.getGenesis.name
+
     implicit val raise: FunctorRaise[F, InvalidBlock] =
       raiseValidateErrorThroughApplicativeError[F]
 
     implicit val validationEff: Validation[F] = ValidationImpl.metered[F](new NCBValidationImpl[F])
 
-    val consensusEff = new Consensus[F] {
+    new Consensus[F] {
+
+      override def validateSummary(summary: BlockSummary): F[Unit] =
+        Validation[F].blockSummary(summary, chainName)
 
       override def validateAndAddBlock(
           block: Block
@@ -222,8 +231,6 @@ object NCB {
       private def show(hash: ByteString) =
         PrettyPrinter.buildString(hash)
     }
-
-    (consensusEff, validationEff)
   }
 }
 
@@ -234,7 +241,8 @@ object Highway {
       maybeValidatorId: Option[ValidatorIdentity],
       genesis: Block,
       isSyncedRef: Ref[F, Boolean]
-  ): Resource[F, (Consensus[F], Validation[F])] = {
+  ): Resource[F, Consensus[F]] = {
+    val chainName               = chainSpec.getGenesis.name
     val hc                      = chainSpec.getGenesis.getHighwayConfig
     val faultToleranceThreshold = 0.1
 
@@ -321,6 +329,9 @@ object Highway {
                    )
 
       consensusEff = new Consensus[F] {
+        override def validateSummary(summary: BlockSummary): F[Unit] =
+          Validation[F].blockSummary(summary, chainName)
+
         override def validateAndAddBlock(block: Block): F[Unit] =
           supervisor.validateAndAddBlock(block).whenA(block != genesis)
 
@@ -368,6 +379,6 @@ object Highway {
             }.toSet
           }
       }
-    } yield (consensusEff, Validation[F])
+    } yield consensusEff
   }
 }

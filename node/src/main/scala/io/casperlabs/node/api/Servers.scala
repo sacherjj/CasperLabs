@@ -6,7 +6,6 @@ import cats.effect.concurrent.Semaphore
 import cats.implicits._
 import io.casperlabs.casper.MultiParentCasperImpl.Broadcaster
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
-import io.casperlabs.casper.validation.Validation
 import io.casperlabs.catscontrib.Fs2Compiler
 import io.casperlabs.comm.discovery.{NodeDiscovery, NodeIdentifier}
 import io.casperlabs.comm.grpc.{ErrorInterceptor, GrpcServer, MetricsInterceptor}
@@ -80,7 +79,7 @@ object Servers {
   }
 
   /** Start a gRPC server with services meant for users and dApp developers. */
-  def externalServersR[F[_]: Concurrent: TaskLike: Log: FinalityStorage: Metrics: BlockStorage: ExecutionEngineService: DeployStorage: Validation: Fs2Compiler: DeployBuffer: DagStorage: EventStream: NodeDiscovery](
+  def externalServersR[F[_]: Concurrent: TaskLike: Log: FinalityStorage: Metrics: BlockStorage: ExecutionEngineService: DeployStorage: Fs2Compiler: DeployBuffer: DagStorage: EventStream: NodeDiscovery](
       port: Int,
       maxMessageSize: Int,
       ingressScheduler: Scheduler,
