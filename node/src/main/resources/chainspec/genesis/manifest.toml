@@ -18,6 +18,9 @@ mint-code-path = "mint_install.wasm"
 # Path (absolute, or relative to the manifest) to the file containing wasm bytecode for installing the PoS system contract.
 pos-code-path = "pos_install.wasm"
 
+# Path (absolute, or relative to the manifest) to the file containing wasm bytecode for installing the standard payment system contract.
+standard-payment-code-path = "standard_payment_install.wasm"
+
 # Path (absolute, or relative to the manifest) to the CSV file containing initial account balances and bonds.
 # To override the default values, create a file at ~/.casperlabs/chainspec/genesis/accounts.csv
 initial-accounts-path = "accounts.csv"

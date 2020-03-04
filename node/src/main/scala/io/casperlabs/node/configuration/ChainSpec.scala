@@ -105,6 +105,7 @@ object ChainSpec extends ParserImplicits {
       timestamp: Long,
       mintCodePath: Path,
       posCodePath: Path,
+      standardPaymentCodePath: Path,
       initialAccountsPath: Path,
       protocolVersion: ProtocolVersion
   ) extends SubConfig
@@ -303,8 +304,11 @@ object ChainSpecReader {
           for {
             mintCodeBytes <- resolver.asBytes(resolvePath(path, genesis.mintCodePath))
             posCodeBytes  <- resolver.asBytes(resolvePath(path, genesis.posCodePath))
-            accountsCsv   <- resolver.asString(resolvePath(path, genesis.initialAccountsPath))
-            accounts      <- Accounts.parseCsv(accountsCsv, skipHeader = false)
+            standardPaymentCodeBytes <- resolver.asBytes(
+                                         resolvePath(path, genesis.standardPaymentCodePath)
+                                       )
+            accountsCsv <- resolver.asString(resolvePath(path, genesis.initialAccountsPath))
+            accounts    <- Accounts.parseCsv(accountsCsv, skipHeader = false)
           } yield {
             ipc.ChainSpec
               .GenesisConfig()
@@ -317,6 +321,7 @@ object ChainSpecReader {
               )
               .withMintInstaller(ByteString.copyFrom(mintCodeBytes))
               .withPosInstaller(ByteString.copyFrom(posCodeBytes))
+              .withStandardPaymentInstaller(ByteString.copyFrom(standardPaymentCodeBytes))
               .withAccounts(accounts.map { account =>
                 ipc.ChainSpec
                   .GenesisAccount()
