@@ -96,7 +96,9 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
           signatureAlgorithm = Ed25519
         ),
         chainName = chainName,
-        upgrades = Seq.empty
+        upgrades = Seq.empty,
+        // Tests might be torn down before this step is done.
+        asyncRequeueOrphans = false
       )
     }
 
