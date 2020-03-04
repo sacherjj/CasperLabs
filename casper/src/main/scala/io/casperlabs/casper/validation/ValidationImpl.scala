@@ -13,11 +13,13 @@ import io.casperlabs.casper.util.ProtoUtil.bonds
 import io.casperlabs.casper.util.execengine.ExecEngineUtil
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.{StateHash, TransformMap}
 import io.casperlabs.casper.util.{CasperLabsProtocol, ProtoUtil}
+import io.casperlabs.casper.highway.ForkChoice
 import io.casperlabs.catscontrib.Fs2Compiler
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.models.Weight
 import io.casperlabs.shared._
 import io.casperlabs.smartcontracts.ExecutionEngineService
+import io.casperlabs.storage.BlockHash
 import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.storage.dag.DagRepresentation
 import Validation._
@@ -85,12 +87,18 @@ object ValidationImpl {
     }
 }
 
-class ValidationImpl[F[_]: Sync: FunctorRaise[*[_], InvalidBlock]: Log: Time: Metrics]
+abstract class ValidationImpl[F[_]: Sync: FunctorRaise[*[_], InvalidBlock]: Log: Time: Metrics]
     extends Validation[F] {
   import io.casperlabs.models.BlockImplicits._
 
   type Data        = Array[Byte]
   type BlockHeight = Long
+
+  protected def tipsFromLatestMessages(
+      dag: DagRepresentation[F],
+      keyBlockHash: BlockHash,
+      latestMessagesHashes: Map[Estimator.Validator, Set[BlockHash]]
+  ): F[NonEmptyList[BlockHash]]
 
   /** Check the block without executing deploys. */
   override def blockFull(
@@ -156,18 +164,7 @@ class ValidationImpl[F[_]: Sync: FunctorRaise[*[_], InvalidBlock]: Log: Time: Me
       .getJustificationMsgHashes(b.getHeader.justifications)
 
     for {
-      // TODO (CON-639): Need to use the Highway ForkChoice here. For now not validating it at all.
-      tipHashes <- if (isHighway)
-                    NonEmptyList.fromListUnsafe(b.getHeader.parentHashes.toList).pure[F]
-                  else {
-                    EquivocationDetector.detectVisibleFromJustifications(
-                      dag,
-                      latestMessagesHashes
-                    ) flatMap { equivocators =>
-                      Estimator
-                        .tips[F](dag, b.getHeader.keyBlockHash, latestMessagesHashes, equivocators)
-                    }
-                  }
+      tipHashes            <- tipsFromLatestMessages(dag, b.getHeader.keyBlockHash, latestMessagesHashes)
       _                    <- Log[F].debug(s"Estimated tips are ${printHashes(tipHashes) -> "tips"}")
       tips                 <- tipHashes.traverse(ProtoUtil.unsafeGetBlock[F])
       merged               <- ExecEngineUtil.merge[F](tips, dag)
@@ -306,4 +303,36 @@ class ValidationImpl[F[_]: Sync: FunctorRaise[*[_], InvalidBlock]: Log: Time: Me
       _       <- EquivocationDetector.checkEquivocationWithUpdate[F](dag, message)
     } yield ()).whenA(!isHighway)
 
+}
+
+class NCBValidationImpl[F[_]: Sync: FunctorRaise[*[_], InvalidBlock]: Log: Time: Metrics]
+    extends ValidationImpl[F] {
+
+  override def tipsFromLatestMessages(
+      dag: DagRepresentation[F],
+      keyBlockHash: BlockHash,
+      latestMessagesHashes: Map[Estimator.Validator, Set[BlockHash]]
+  ): F[NonEmptyList[BlockHash]] =
+    EquivocationDetector.detectVisibleFromJustifications(
+      dag,
+      latestMessagesHashes
+    ) flatMap { equivocators =>
+      Estimator
+        .tips[F](dag, keyBlockHash, latestMessagesHashes, equivocators)
+    }
+}
+
+class HighwayValidationImpl[F[_]: Sync: FunctorRaise[*[_], InvalidBlock]: Log: Time: Metrics: ForkChoice]
+    extends ValidationImpl[F] {
+
+  override def tipsFromLatestMessages(
+      dag: DagRepresentation[F],
+      keyBlockHash: BlockHash,
+      latestMessagesHashes: Map[Estimator.Validator, Set[BlockHash]]
+  ): F[NonEmptyList[BlockHash]] =
+    for {
+      choice <- ForkChoice[F]
+                 .fromJustifications(keyBlockHash, latestMessagesHashes.values.flatten.toSet)
+      tips = NonEmptyList.one(choice.block.messageHash)
+    } yield tips
 }

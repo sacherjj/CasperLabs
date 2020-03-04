@@ -15,8 +15,8 @@ import io.casperlabs.casper.consensus.info.DeployInfo
 import io.casperlabs.casper.MultiParentCasperImpl.Broadcaster
 import io.casperlabs.casper.finality.MultiParentFinalizer
 import io.casperlabs.casper.finality.votingmatrix.FinalityDetectorVotingMatrix
-import io.casperlabs.casper.validation.Validation
-import io.casperlabs.casper.{DeriveValidation, consensus, _}
+import io.casperlabs.casper.validation.{NCBValidationImpl, Validation}
+import io.casperlabs.casper.{consensus, _}
 import io.casperlabs.comm.discovery.{Node, NodeDiscovery, NodeIdentifier}
 import io.casperlabs.comm.gossiping._
 import io.casperlabs.comm.gossiping.synchronization._
@@ -82,9 +82,9 @@ class GossipServiceCasperTestNode[F[_]](
   implicit val raiseInvalidBlock      = casper.validation.raiseValidateErrorThroughApplicativeError[F]
   implicit val broadcaster: Broadcaster[F] =
     Broadcaster.fromGossipServices(Some(validatorId), relaying)
-  implicit val deploySelection   = DeploySelection.create[F](5 * 1024 * 1024)
-  implicit val derivedValidation = DeriveValidation.deriveValidationImpl[F]
-  implicit val eventEmitter      = NoOpsEventEmitter.create[F]
+  implicit val deploySelection = DeploySelection.create[F](5 * 1024 * 1024)
+  implicit val validationEff   = new NCBValidationImpl[F]
+  implicit val eventEmitter    = NoOpsEventEmitter.create[F]
 
   // `addBlock` called in many ways:
   // - test proposes a block on the node that created it
@@ -118,8 +118,6 @@ class GossipServiceCasperTestNode[F[_]](
 }
 
 trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
-  import DeriveValidation._
-
   type TestNode[F[_]] = GossipServiceCasperTestNode[F]
 
   import GossipServiceCasperTestNodeFactory._
@@ -146,6 +144,7 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
     implicit val nodeAsk   = makeNodeAsk(identity)(concurrentEffectF)
     implicit val functorRaiseInvalidBlock =
       casper.validation.raiseValidateErrorThroughApplicativeError[F]
+    implicit val validationEff = new NCBValidationImpl[F]
 
     // Standalone, so nobody to relay to.
     val relaying = RelayingImpl(
@@ -238,6 +237,7 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
           implicit val nodeAsk   = makeNodeAsk(peer)(concurrentEffectF)
           implicit val functorRaiseInvalidBlock =
             casper.validation.raiseValidateErrorThroughApplicativeError[F]
+          implicit val validationEff = new NCBValidationImpl[F]
 
           val gossipService = new TestGossipService[F]()
           gossipServices += peer -> gossipService

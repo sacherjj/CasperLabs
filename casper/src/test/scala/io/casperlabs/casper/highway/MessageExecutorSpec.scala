@@ -10,7 +10,7 @@ import io.casperlabs.casper.consensus.{Block, Bond}
 import io.casperlabs.casper.consensus.state
 import io.casperlabs.casper.mocks.{MockEventEmitter, NoOpValidation}
 import io.casperlabs.casper.validation
-import io.casperlabs.casper.validation.{Validation, ValidationImpl}
+import io.casperlabs.casper.validation.{HighwayValidationImpl, Validation}
 import io.casperlabs.casper.validation.Errors.ValidateErrorWrapper
 import io.casperlabs.casper.finality.MultiParentFinalizer
 import io.casperlabs.casper.validation.Validation.BlockEffects
@@ -164,7 +164,7 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
       } yield second
 
     override lazy val validation: Validation[Task] =
-      if (validate) new ValidationImpl[Task]() else new NoOpValidation[Task]
+      if (validate) new HighwayValidationImpl[Task]() else new NoOpValidation[Task]
 
     // Collect emitted events.
     override implicit lazy val eventEmitter: MockEventEmitter[Task] =

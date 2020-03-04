@@ -49,13 +49,13 @@ import io.casperlabs.storage.BlockMsgWithTransform
 import io.casperlabs.storage.block._
 import io.casperlabs.storage.dag._
 import io.casperlabs.storage.deploy.DeployStorage
+import io.casperlabs.casper.validation.NCBValidationImpl
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.scalacheck.Arbitrary.arbitrary
 import org.scalatest.{BeforeAndAfterEach, EitherValues, FlatSpec, Matchers}
 import org.scalatest.prop.GeneratorDrivenPropertyChecks.forAll
 import logstage.LogIO
-
 import scala.collection.immutable.HashMap
 import scala.concurrent.duration._
 
@@ -75,7 +75,8 @@ class ValidationTest
     CasperLabsProtocol.unsafe[Task](
       (0L, state.ProtocolVersion(1), Some(DeployConfig(24 * 60 * 60 * 1000, 10)))
     )
-  import DeriveValidation._
+
+  implicit val validationEff = new NCBValidationImpl[Task]()
 
   // Necessary because errors are returned via Sync which has an error type fixed to _ <: Throwable.
   // When raise errors we wrap them with Throwable so we need to do the same here.

@@ -23,6 +23,8 @@ import io.casperlabs.casper.finality.MultiParentFinalizer
 import io.casperlabs.casper.finality.votingmatrix.FinalityDetectorVotingMatrix
 import io.casperlabs.casper.validation.{
   raiseValidateErrorThroughApplicativeError,
+  HighwayValidationImpl,
+  NCBValidationImpl,
   Validation,
   ValidationImpl
 }
@@ -94,7 +96,7 @@ object NCB {
     implicit val raise: FunctorRaise[F, InvalidBlock] =
       raiseValidateErrorThroughApplicativeError[F]
 
-    implicit val validationEff: Validation[F] = ValidationImpl.metered[F](new ValidationImpl[F])
+    implicit val validationEff: Validation[F] = ValidationImpl.metered[F](new NCBValidationImpl[F])
 
     val consensusEff = new Consensus[F] {
 
@@ -263,7 +265,9 @@ object Highway {
 
       implicit0(raise: FunctorRaise[F, InvalidBlock]) = raiseValidateErrorThroughApplicativeError[F]
 
-      implicit0(validationEff: Validation[F]) = ValidationImpl.metered[F](new ValidationImpl[F])
+      implicit0(validationEff: Validation[F]) = ValidationImpl.metered[F](
+        new HighwayValidationImpl[F]
+      )
 
       hwConf = HighwayConf(
         tickUnit = TimeUnit.MILLISECONDS,
