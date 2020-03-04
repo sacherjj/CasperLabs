@@ -4,6 +4,7 @@ import com.google.protobuf.ByteString
 import cats.implicits._
 import cats.effect._
 import cats.effect.concurrent._
+import cats.mtl.FunctorRaise
 import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.{
   BlockStatus,
@@ -15,12 +16,16 @@ import io.casperlabs.casper.{
   PrettyPrinter,
   ValidatorIdentity
 }
-import io.casperlabs.casper.{EquivocatedBlock, Processed, SelfEquivocatedBlock, Valid}
+import io.casperlabs.casper.{EquivocatedBlock, InvalidBlock, Processed, SelfEquivocatedBlock, Valid}
 import io.casperlabs.casper.DeploySelection.DeploySelection
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.finality.MultiParentFinalizer
 import io.casperlabs.casper.finality.votingmatrix.FinalityDetectorVotingMatrix
-import io.casperlabs.casper.validation.Validation
+import io.casperlabs.casper.validation.{
+  raiseValidateErrorThroughApplicativeError,
+  Validation,
+  ValidationImpl
+}
 import io.casperlabs.casper.util.{CasperLabsProtocol, ProtoUtil}
 import io.casperlabs.casper.highway.{
   EraSupervisor,
@@ -81,12 +86,17 @@ trait Consensus[F[_]] {
 }
 
 object NCB {
-  def apply[F[_]: Concurrent: Time: Log: BlockStorage: DagStorage: ExecutionEngineService: MultiParentCasperRef: Metrics: DeployStorage: DeployBuffer: DeploySelection: FinalityStorage: Validation: CasperLabsProtocol: EventStream](
+  def apply[F[_]: Concurrent: Time: Log: BlockStorage: DagStorage: ExecutionEngineService: MultiParentCasperRef: Metrics: DeployStorage: DeployBuffer: DeploySelection: FinalityStorage: CasperLabsProtocol: EventStream](
       conf: Configuration,
       chainSpec: ChainSpec,
       maybeValidatorId: Option[ValidatorIdentity]
-  ) = Resource.pure[F, Consensus[F]] {
-    new Consensus[F] {
+  ) = Resource.pure[F, (Consensus[F], Validation[F])] {
+    implicit val raise: FunctorRaise[F, InvalidBlock] =
+      raiseValidateErrorThroughApplicativeError[F]
+
+    implicit val validationEff: Validation[F] = ValidationImpl.metered[F]
+
+    val consensusEff = new Consensus[F] {
 
       override def validateAndAddBlock(
           block: Block
@@ -210,17 +220,19 @@ object NCB {
       private def show(hash: ByteString) =
         PrettyPrinter.buildString(hash)
     }
+
+    (consensusEff, validationEff)
   }
 }
 
 object Highway {
-  def apply[F[_]: Concurrent: Time: Timer: Clock: Log: Metrics: DagStorage: BlockStorage: DeployBuffer: DeployStorage: EraStorage: FinalityStorage: CasperLabsProtocol: ExecutionEngineService: DeploySelection: EventEmitter: Validation: Relaying](
+  def apply[F[_]: Concurrent: Time: Timer: Clock: Log: Metrics: DagStorage: BlockStorage: DeployBuffer: DeployStorage: EraStorage: FinalityStorage: CasperLabsProtocol: ExecutionEngineService: DeploySelection: EventEmitter: Relaying](
       conf: Configuration,
       chainSpec: ChainSpec,
       maybeValidatorId: Option[ValidatorIdentity],
       genesis: Block,
       isSyncedRef: Ref[F, Boolean]
-  ): Resource[F, Consensus[F]] = {
+  ): Resource[F, (Consensus[F], Validation[F])] = {
     val hc                      = chainSpec.getGenesis.getHighwayConfig
     val faultToleranceThreshold = 0.1
 
@@ -248,6 +260,10 @@ object Highway {
       implicit0(forkchoice: ForkChoiceManager[F]) <- Resource.pure[F, ForkChoiceManager[F]] {
                                                       ForkChoiceManager.create[F]
                                                     }
+
+      implicit0(raise: FunctorRaise[F, InvalidBlock]) = raiseValidateErrorThroughApplicativeError[F]
+
+      implicit0(validationEff: Validation[F]) = ValidationImpl.metered[F]
 
       hwConf = HighwayConf(
         tickUnit = TimeUnit.MILLISECONDS,
@@ -299,7 +315,7 @@ object Highway {
                      isSynced = isSyncedRef.get
                    )
 
-      cons = new Consensus[F] {
+      consensusEff = new Consensus[F] {
         override def validateAndAddBlock(block: Block): F[Unit] =
           supervisor.validateAndAddBlock(block).whenA(block != genesis)
 
@@ -347,6 +363,6 @@ object Highway {
             }.toSet
           }
       }
-    } yield cons
+    } yield (consensusEff, Validation[F])
   }
 }

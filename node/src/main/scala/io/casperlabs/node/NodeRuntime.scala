@@ -221,10 +221,6 @@ class NodeRuntime private[node] (
                                                         egressScheduler
                                                       )
 
-      implicit0(raise: FunctorRaise[Task, InvalidBlock]) = validation
-        .raiseValidateErrorThroughApplicativeError[Task]
-      implicit0(validationEff: Validation[Task]) = ValidationImpl.metered[Task]
-
       // TODO: Only a loop started with the TransportLayer keeps filling this up,
       // so if we use the GossipService it's going to stay empty. The diagnostics
       // should use NodeDiscovery instead.
@@ -256,7 +252,7 @@ class NodeRuntime private[node] (
 
       isSyncedRef <- Resource.liftF(Ref.of[Task, Boolean](false))
 
-      implicit0(consensus: Consensus[Task]) <- {
+      consensus <- {
         if (conf.highway.enabled)
           Resource.liftF(Log[Task].info(s"Starting in Highway mode.")) *>
             casper.consensus.Highway(conf, chainSpec, maybeValidatorId, genesis, isSyncedRef)
@@ -265,6 +261,9 @@ class NodeRuntime private[node] (
             casper.consensus
               .NCB[Task](conf, chainSpec, maybeValidatorId)
       }
+
+      implicit0(consensusEff: Consensus[Task])   = consensus._1
+      implicit0(validationEff: Validation[Task]) = consensus._2
 
       // Creating with 0 permits initially, enabled after the initial synchronization.
       blockApiLock <- Resource.liftF(Semaphore[Task](0))
