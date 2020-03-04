@@ -10,8 +10,6 @@ mint-code-path = "mint_install.wasm"
 
 pos-code-path = "pos_install.wasm"
 
-standard-payment-code-path = "standard_payment_install.wasm"
-
 initial-accounts-path = "accounts.csv"
 
 [highway]
