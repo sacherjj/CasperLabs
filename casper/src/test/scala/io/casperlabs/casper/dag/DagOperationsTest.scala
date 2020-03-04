@@ -883,10 +883,11 @@ class DagOperationsTest
 
   implicit class BlockOps(b: Block) {
     def withMainParent(block: Block): Block =
-      b.update(_.header := b.getHeader.withParentHashes(Seq(block.blockHash)))
-
-    def withMainRank(r: Long): Block =
-      b.update(_.header := b.getHeader.withMainRank(r))
+      b.withHeader(
+        b.getHeader
+          .withParentHashes(Seq(block.blockHash))
+          .withMainRank(block.getHeader.mainRank + 1)
+      )
   }
 
   "relation" should "return correct relation between blocks" in withCombinedStorage() {
@@ -900,9 +901,9 @@ class DagOperationsTest
       // A is an ancestor of B
       // A - C - D - B
       val a1 = createGenesis
-      val c1 = randomMessage.withMainParent(a1).withMainRank(1)
-      val d1 = randomMessage.withMainParent(c1).withMainRank(2)
-      val b1 = randomMessage.withMainParent(d1).withMainRank(3)
+      val c1 = randomMessage.withMainParent(a1)
+      val d1 = randomMessage.withMainParent(c1)
+      val b1 = randomMessage.withMainParent(d1)
 
       for {
         _ <- storage.put(a1.blockHash, a1)
@@ -916,9 +917,9 @@ class DagOperationsTest
         // C - D - B
         //  \_A
         c3 = createGenesis
-        a3 = randomMessage.withMainParent(c3).withMainRank(1)
-        d3 = randomMessage.withMainParent(c3).withMainRank(1)
-        b3 = randomMessage.withMainParent(d3).withMainRank(2)
+        a3 = randomMessage.withMainParent(c3)
+        d3 = randomMessage.withMainParent(c3)
+        b3 = randomMessage.withMainParent(d3)
         _  <- storage.put(c3.blockHash, c3)
         _  <- storage.put(a3.blockHash, a3)
         _  <- storage.put(d3.blockHash, d3)

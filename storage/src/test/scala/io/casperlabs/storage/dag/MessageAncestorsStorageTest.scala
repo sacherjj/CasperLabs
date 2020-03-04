@@ -44,17 +44,17 @@ class MessageAncestorsStorageTest
         b.getHeader
           .withParentHashes(Seq.empty)
           .withValidatorPublicKey(ByteString.EMPTY)
-          .withMainRank(0)
       )
       .clearSignature
   }
 
   implicit class BlockOps(b: Block) {
     def withMainParent(block: Block): Block =
-      b.update(_.header := b.getHeader.withParentHashes(Seq(block.blockHash)))
-
-    def withMainRank(r: Long): Block =
-      b.update(_.header := b.getHeader.withMainRank(r))
+      b.withHeader(
+        b.getHeader
+          .withParentHashes(Seq(block.blockHash))
+          .withMainRank(block.getHeader.mainRank + 1)
+      )
   }
 
   behavior of "collectMessageAncestors"
@@ -85,14 +85,14 @@ class MessageAncestorsStorageTest
       case (storage: BlockStorage[Task] with MessageAncestorsStorage[Task]) =>
         for {
           _ <- storage.put(genesis.blockHash, genesis)
-          a = randomMessage.withMainParent(genesis).withMainRank(1)
-          b = randomMessage.withMainParent(a).withMainRank(2)
-          c = randomMessage.withMainParent(b).withMainRank(3)
-          d = randomMessage.withMainParent(c).withMainRank(4)
-          e = randomMessage.withMainParent(d).withMainRank(5)
-          f = randomMessage.withMainParent(e).withMainRank(6)
-          g = randomMessage.withMainParent(f).withMainRank(7)
-          h = randomMessage.withMainParent(g).withMainRank(8)
+          a = randomMessage.withMainParent(genesis)
+          b = randomMessage.withMainParent(a)
+          c = randomMessage.withMainParent(b)
+          d = randomMessage.withMainParent(c)
+          e = randomMessage.withMainParent(d)
+          f = randomMessage.withMainParent(e)
+          g = randomMessage.withMainParent(f)
+          h = randomMessage.withMainParent(g)
           _ <- storage.put(a.blockHash, a)
           _ <- storage.put(b.blockHash, b)
           _ <- storage.put(c.blockHash, c)
