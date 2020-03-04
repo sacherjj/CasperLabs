@@ -542,7 +542,8 @@ object MultiParentCasperImpl {
                            .of[F](
                              dag,
                              lfb,
-                             faultToleranceThreshold
+                             faultToleranceThreshold,
+                             isHighway = false
                            )
       implicit0(multiParentFinalizer: MultiParentFinalizer[F]) <- MultiParentFinalizer.create[F](
                                                                    dag,

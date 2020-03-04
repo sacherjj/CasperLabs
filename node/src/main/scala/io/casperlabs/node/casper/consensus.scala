@@ -4,6 +4,7 @@ import com.google.protobuf.ByteString
 import cats.implicits._
 import cats.effect._
 import cats.effect.concurrent._
+import cats.mtl.FunctorRaise
 import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.{
   BlockStatus,
@@ -15,12 +16,18 @@ import io.casperlabs.casper.{
   PrettyPrinter,
   ValidatorIdentity
 }
-import io.casperlabs.casper.{EquivocatedBlock, Processed, SelfEquivocatedBlock, Valid}
+import io.casperlabs.casper.{EquivocatedBlock, InvalidBlock, Processed, SelfEquivocatedBlock, Valid}
 import io.casperlabs.casper.DeploySelection.DeploySelection
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.finality.MultiParentFinalizer
 import io.casperlabs.casper.finality.votingmatrix.FinalityDetectorVotingMatrix
-import io.casperlabs.casper.validation.Validation
+import io.casperlabs.casper.validation.{
+  raiseValidateErrorThroughApplicativeError,
+  HighwayValidationImpl,
+  NCBValidationImpl,
+  Validation,
+  ValidationImpl
+}
 import io.casperlabs.casper.util.{CasperLabsProtocol, ProtoUtil}
 import io.casperlabs.casper.highway.{
   EraSupervisor,
@@ -60,6 +67,10 @@ import io.casperlabs.storage.dag.AncestorsStorage
 @typeclass
 trait Consensus[F[_]] {
 
+  def validateSummary(
+      summary: BlockSummary
+  ): F[Unit]
+
   /** Validate and persist a block. Raise an error if there's something wrong. Don't gossip. */
   def validateAndAddBlock(
       block: Block
@@ -81,143 +92,158 @@ trait Consensus[F[_]] {
   def latestMessages: F[Set[Block.Justification]]
 }
 
-class NCB[F[_]: Concurrent: Time: Log: BlockStorage: DagStorage: ExecutionEngineService: MultiParentCasperRef: Metrics: DeployStorage: DeployBuffer: DeploySelection: FinalityStorage: Validation: CasperLabsProtocol: EventStream](
-    conf: Configuration,
-    chainSpec: ChainSpec,
-    maybeValidatorId: Option[ValidatorIdentity]
-) extends Consensus[F] {
+object NCB {
+  def apply[F[_]: Concurrent: Time: Log: BlockStorage: DagStorage: ExecutionEngineService: MultiParentCasperRef: Metrics: DeployStorage: DeployBuffer: DeploySelection: FinalityStorage: CasperLabsProtocol: EventStream](
+      conf: Configuration,
+      chainSpec: ChainSpec,
+      maybeValidatorId: Option[ValidatorIdentity]
+  ): Consensus[F] = {
+    val chainName = chainSpec.getGenesis.name
 
-  override def validateAndAddBlock(
-      block: Block
-  ): F[Unit] =
-    MultiParentCasperRef[F].get
-      .flatMap {
-        case Some(casper) =>
-          casper.addBlock(block)
+    implicit val raise: FunctorRaise[F, InvalidBlock] =
+      raiseValidateErrorThroughApplicativeError[F]
 
-        case None if block.getHeader.parentHashes.isEmpty =>
-          for {
-            _     <- Log[F].info(s"Validating genesis-like ${show(block.blockHash) -> "block"}")
-            state <- Cell.mvarCell[F, CasperState](CasperState())
-            executor <- MultiParentCasperImpl.StatelessExecutor
-                         .create[F](
-                           maybeValidatorId.map(_.publicKey),
-                           chainName = chainSpec.getGenesis.name,
-                           chainSpec.upgrades
+    implicit val validationEff: Validation[F] = ValidationImpl.metered[F](new NCBValidationImpl[F])
+
+    new Consensus[F] {
+
+      override def validateSummary(summary: BlockSummary): F[Unit] =
+        Validation[F].blockSummary(summary, chainName)
+
+      override def validateAndAddBlock(
+          block: Block
+      ): F[Unit] =
+        MultiParentCasperRef[F].get
+          .flatMap {
+            case Some(casper) =>
+              casper.addBlock(block)
+
+            case None if block.getHeader.parentHashes.isEmpty =>
+              for {
+                _     <- Log[F].info(s"Validating genesis-like ${show(block.blockHash) -> "block"}")
+                state <- Cell.mvarCell[F, CasperState](CasperState())
+                executor <- MultiParentCasperImpl.StatelessExecutor
+                             .create[F](
+                               maybeValidatorId.map(_.publicKey),
+                               chainName = chainSpec.getGenesis.name,
+                               chainSpec.upgrades
+                             )
+                status <- executor.validateAndAddBlock(None, block)(state)
+              } yield status
+
+            case None =>
+              MonadThrowable[F].raiseError[BlockStatus](Unavailable("Casper is not yet available."))
+          }
+          .flatMap {
+            case Valid =>
+              Log[F].debug(s"Validated and stored ${show(block.blockHash) -> "block"}")
+
+            case EquivocatedBlock =>
+              Log[F].debug(
+                s"Detected ${show(block.blockHash) -> "block"} equivocated"
+              )
+
+            case Processed =>
+              Log[F].warn(
+                s"${show(block.blockHash) -> "block"} seems to have been processed before."
+              )
+
+            case SelfEquivocatedBlock =>
+              FatalError.selfEquivocationError(block.blockHash)
+
+            case other =>
+              Log[F].debug(s"Received invalid ${show(block.blockHash) -> "block"}: $other") *>
+                MonadThrowable[F].raiseError[Unit](
+                  // Raise an exception to stop the DownloadManager from progressing with this block.
+                  new RuntimeException(s"Non-valid status: $other") with NoStackTrace
+                )
+          }
+
+      override def onGenesisApproved(genesisBlockHash: ByteString): F[Unit] =
+        for {
+          maybeGenesis <- BlockStorage[F].get(genesisBlockHash)
+          genesisStore <- MonadThrowable[F].fromOption(
+                           maybeGenesis,
+                           NotFound(
+                             s"Cannot retrieve ${show(genesisBlockHash) -> "genesis"}"
+                           )
                          )
-            status <- executor.validateAndAddBlock(None, block)(state)
-          } yield status
+          genesis    = genesisStore.getBlockMessage
+          prestate   = ProtoUtil.preStateHash(genesis)
+          transforms = genesisStore.blockEffects.flatMap(_.effects)
+          casper <- MultiParentCasper.fromGossipServices(
+                     maybeValidatorId,
+                     genesis,
+                     prestate,
+                     transforms,
+                     genesis.getHeader.chainName,
+                     conf.casper.minTtl,
+                     chainSpec.upgrades
+                   )
+          _ <- MultiParentCasperRef[F].set(casper)
+          _ <- Log[F].info(s"Making the transition to block processing.")
+        } yield ()
 
-        case None =>
-          MonadThrowable[F].raiseError[BlockStatus](Unavailable("Casper is not yet available."))
-      }
-      .flatMap {
-        case Valid =>
-          Log[F].debug(s"Validated and stored ${show(block.blockHash) -> "block"}")
+      override def onScheduled(summary: BlockSummary): F[Unit] =
+        // The EquivocationDetector treats equivocations with children differently,
+        // so let Casper know about the DAG dependencies up front.
+        MultiParentCasperRef[F].get.flatMap {
+          case Some(casper: MultiParentCasperImpl[F]) =>
+            val partialBlock = Block()
+              .withBlockHash(summary.blockHash)
+              .withHeader(summary.getHeader)
 
-        case EquivocatedBlock =>
-          Log[F].debug(
-            s"Detected ${show(block.blockHash) -> "block"} equivocated"
-          )
+            Log[F].debug(
+              s"Feeding a pending block to Casper: ${show(summary.blockHash) -> "block"}"
+            ) *>
+              casper.addMissingDependencies(partialBlock)
 
-        case Processed =>
-          Log[F].warn(
-            s"${show(block.blockHash) -> "block"} seems to have been processed before."
-          )
+          case _ => ().pure[F]
+        }
 
-        case SelfEquivocatedBlock =>
-          FatalError.selfEquivocationError(block.blockHash)
+      /** Start from the rank of the oldest message of validators bonded at the latest finalized block. */
+      override def lastSynchronizedRank: F[Long] =
+        for {
+          dag            <- DagStorage[F].getRepresentation
+          latestMessages <- dag.latestMessages
+          lfb            <- FinalityStorage[F].getLastFinalizedBlock
+          lfbMessage     <- dag.lookupUnsafe(lfb)
+          // Take only validators who were bonded in the LFB to make sure unbonded
+          // validators don't cause syncing to always start from the rank they left at.
+          bonded = lfbMessage.blockSummary.getHeader.getState.bonds.map(_.validatorPublicKey).toSet
+          // The minimum rank of all latest messages is not exactly
+          minRank = latestMessages
+            .filterKeys(bonded)
+            .values
+            .flatMap(_.map(_.jRank))
+            .toList
+            .minimumOption
+            .getOrElse(0L)
+        } yield minRank
 
-        case other =>
-          Log[F].debug(s"Received invalid ${show(block.blockHash) -> "block"}: $other") *>
-            MonadThrowable[F].raiseError[Unit](
-              // Raise an exception to stop the DownloadManager from progressing with this block.
-              new RuntimeException(s"Non-valid status: $other") with NoStackTrace
-            )
-      }
+      override def latestMessages: F[Set[Block.Justification]] =
+        for {
+          dag <- DagStorage[F].getRepresentation
+          lm  <- dag.latestMessages
+        } yield lm.values.flatten
+          .map(m => Block.Justification(m.validatorId, m.messageHash))
+          .toSet
 
-  override def onGenesisApproved(genesisBlockHash: ByteString): F[Unit] =
-    for {
-      maybeGenesis <- BlockStorage[F].get(genesisBlockHash)
-      genesisStore <- MonadThrowable[F].fromOption(
-                       maybeGenesis,
-                       NotFound(
-                         s"Cannot retrieve ${show(genesisBlockHash) -> "genesis"}"
-                       )
-                     )
-      genesis    = genesisStore.getBlockMessage
-      prestate   = ProtoUtil.preStateHash(genesis)
-      transforms = genesisStore.blockEffects.flatMap(_.effects)
-      casper <- MultiParentCasper.fromGossipServices(
-                 maybeValidatorId,
-                 genesis,
-                 prestate,
-                 transforms,
-                 genesis.getHeader.chainName,
-                 conf.casper.minTtl,
-                 chainSpec.upgrades
-               )
-      _ <- MultiParentCasperRef[F].set(casper)
-      _ <- Log[F].info(s"Making the transition to block processing.")
-    } yield ()
-
-  override def onScheduled(summary: BlockSummary): F[Unit] =
-    // The EquivocationDetector treats equivocations with children differently,
-    // so let Casper know about the DAG dependencies up front.
-    MultiParentCasperRef[F].get.flatMap {
-      case Some(casper: MultiParentCasperImpl[F]) =>
-        val partialBlock = Block()
-          .withBlockHash(summary.blockHash)
-          .withHeader(summary.getHeader)
-
-        Log[F].debug(
-          s"Feeding a pending block to Casper: ${show(summary.blockHash) -> "block"}"
-        ) *>
-          casper.addMissingDependencies(partialBlock)
-
-      case _ => ().pure[F]
+      private def show(hash: ByteString) =
+        PrettyPrinter.buildString(hash)
     }
-
-  /** Start from the rank of the oldest message of validators bonded at the latest finalized block. */
-  override def lastSynchronizedRank: F[Long] =
-    for {
-      dag            <- DagStorage[F].getRepresentation
-      latestMessages <- dag.latestMessages
-      lfb            <- FinalityStorage[F].getLastFinalizedBlock
-      lfbMessage     <- dag.lookupUnsafe(lfb)
-      // Take only validators who were bonded in the LFB to make sure unbonded
-      // validators don't cause syncing to always start from the rank they left at.
-      bonded = lfbMessage.blockSummary.getHeader.getState.bonds.map(_.validatorPublicKey).toSet
-      // The minimum rank of all latest messages is not exactly
-      minRank = latestMessages
-        .filterKeys(bonded)
-        .values
-        .flatMap(_.map(_.jRank))
-        .toList
-        .minimumOption
-        .getOrElse(0L)
-    } yield minRank
-
-  override def latestMessages: F[Set[Block.Justification]] =
-    for {
-      dag <- DagStorage[F].getRepresentation
-      lm  <- dag.latestMessages
-    } yield lm.values.flatten
-      .map(m => Block.Justification(m.validatorId, m.messageHash))
-      .toSet
-
-  private def show(hash: ByteString) =
-    PrettyPrinter.buildString(hash)
+  }
 }
 
 object Highway {
-  def apply[F[_]: Concurrent: Time: Timer: Clock: Log: Metrics: DagStorage: BlockStorage: DeployBuffer: DeployStorage: EraStorage: FinalityStorage: AncestorsStorage: CasperLabsProtocol: ExecutionEngineService: DeploySelection: EventEmitter: Validation: Relaying](
+  def apply[F[_]: Concurrent: Time: Timer: Clock: Log: Metrics: DagStorage: BlockStorage: DeployBuffer: DeployStorage: EraStorage: FinalityStorage: AncestorsStorage: CasperLabsProtocol: ExecutionEngineService: DeploySelection: EventEmitter: Relaying](
       conf: Configuration,
       chainSpec: ChainSpec,
       maybeValidatorId: Option[ValidatorIdentity],
       genesis: Block,
       isSyncedRef: Ref[F, Boolean]
   ): Resource[F, Consensus[F]] = {
+    val chainName               = chainSpec.getGenesis.name
     val hc                      = chainSpec.getGenesis.getHighwayConfig
     val faultToleranceThreshold = 0.1
 
@@ -231,7 +257,8 @@ object Highway {
                                  .of[F](
                                    dag,
                                    lfb,
-                                   faultToleranceThreshold
+                                   faultToleranceThreshold,
+                                   isHighway = true
                                  )
             finalizer <- MultiParentFinalizer.create[F](
                           dag,
@@ -245,6 +272,12 @@ object Highway {
       implicit0(forkchoice: ForkChoiceManager[F]) <- Resource.pure[F, ForkChoiceManager[F]] {
                                                       ForkChoiceManager.create[F]
                                                     }
+
+      implicit0(raise: FunctorRaise[F, InvalidBlock]) = raiseValidateErrorThroughApplicativeError[F]
+
+      implicit0(validationEff: Validation[F]) = ValidationImpl.metered[F](
+        new HighwayValidationImpl[F]
+      )
 
       hwConf = HighwayConf(
         tickUnit = TimeUnit.MILLISECONDS,
@@ -296,7 +329,10 @@ object Highway {
                      isSynced = isSyncedRef.get
                    )
 
-      cons = new Consensus[F] {
+      consensusEff = new Consensus[F] {
+        override def validateSummary(summary: BlockSummary): F[Unit] =
+          Validation[F].blockSummary(summary, chainName)
+
         override def validateAndAddBlock(block: Block): F[Unit] =
           supervisor.validateAndAddBlock(block).whenA(block != genesis)
 
@@ -344,6 +380,6 @@ object Highway {
             }.toSet
           }
       }
-    } yield cons
+    } yield consensusEff
   }
 }

@@ -98,10 +98,6 @@ object Validation {
   type BlockHeight = MainRank
   type Data        = Array[Byte]
 
-  // TODO (CON-639): Remove this; but for now NCB validation doesn't work with Highway in some cases.
-  // This only works with env vars, not the CLI or the config file, but I just want to get it going.
-  def isHighway = sys.env.get("CL_HIGHWAY_ENABLED") == Some("true")
-
   /** Represents block's effects indexed by deploy's `stage` value.
     * Deploys with the same `stage` value can be run in parallel.
     * Execution must be ordered from lowest stage to the highest.
@@ -153,8 +149,7 @@ object Validation {
       b: BlockSummary,
       dag: DagRepresentation[F]
   ): F[Unit] =
-    // TODO (CON-639): A voting ballot appears to be merging swimlanes in the child era.
-    (for {
+    for {
       equivocators <- dag.getEquivocators
       message      <- MonadThrowable[F].fromTry(Message.fromBlockSummary(b))
       _ <- Monad[F].whenA(equivocators.contains(message.validatorId)) {
@@ -188,7 +183,7 @@ object Validation {
                   }
             } yield ()
           }
-    } yield ()).whenA(!isHighway)
+    } yield ()
 
   /* If we receive block from future then we may fail to propose new block on top of it because of Validation.timestamp */
   def preTimestamp[F[_]: Monad: RaiseValidationError: Time](
@@ -650,7 +645,7 @@ object Validation {
     val prevBlockHash = b.getHeader.validatorPrevBlockHash
     val validatorId   = b.getHeader.validatorPublicKey
     // TODO (CON-639): Going on the j-DAG is not enough, it may lead to a ballot in the parent era.
-    if (prevBlockHash.isEmpty || isHighway) {
+    if (prevBlockHash.isEmpty) {
       ().pure[F]
     } else {
       def rejectWith(msg: String) =
