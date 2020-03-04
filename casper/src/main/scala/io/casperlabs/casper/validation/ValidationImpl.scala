@@ -32,10 +32,9 @@ object ValidationImpl {
 
   implicit val metricsSource = CasperMetricsSource / "validation"
 
-  def metered[F[_]: Sync: FunctorRaise[*[_], InvalidBlock]: Log: Time: Metrics]: Validation[F] = {
-
-    val underlying = new ValidationImpl[F]
-
+  def metered[F[_]: Sync: Metrics](
+      underlying: Validation[F]
+  ): Validation[F] =
     new Validation[F] {
       override def neglectedInvalidBlock(
           block: Block,
@@ -84,7 +83,6 @@ object ValidationImpl {
       override def checkEquivocation(dag: DagRepresentation[F], block: Block): F[Unit] =
         Metrics[F].timer("checkEquivocation")(underlying.checkEquivocation(dag, block))
     }
-  }
 }
 
 class ValidationImpl[F[_]: Sync: FunctorRaise[*[_], InvalidBlock]: Log: Time: Metrics]

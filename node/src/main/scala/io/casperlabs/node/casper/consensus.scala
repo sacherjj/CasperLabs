@@ -94,7 +94,7 @@ object NCB {
     implicit val raise: FunctorRaise[F, InvalidBlock] =
       raiseValidateErrorThroughApplicativeError[F]
 
-    implicit val validationEff: Validation[F] = ValidationImpl.metered[F]
+    implicit val validationEff: Validation[F] = ValidationImpl.metered[F](new ValidationImpl[F])
 
     val consensusEff = new Consensus[F] {
 
@@ -263,7 +263,7 @@ object Highway {
 
       implicit0(raise: FunctorRaise[F, InvalidBlock]) = raiseValidateErrorThroughApplicativeError[F]
 
-      implicit0(validationEff: Validation[F]) = ValidationImpl.metered[F]
+      implicit0(validationEff: Validation[F]) = ValidationImpl.metered[F](new ValidationImpl[F])
 
       hwConf = HighwayConf(
         tickUnit = TimeUnit.MILLISECONDS,
