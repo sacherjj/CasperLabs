@@ -102,153 +102,75 @@ object Mappings {
     CLValueInstance.from(v).map(toProto).leftMap(Error.FromBytesError.apply)
 
   def toProto(t: CLType): state.CLType = t match {
-    case CLType.Bool   => state.CLType(state.CLType.Variants.SimpleType(state.CLType.Simple.BOOL))
-    case CLType.I32    => state.CLType(state.CLType.Variants.SimpleType(state.CLType.Simple.I32))
-    case CLType.I64    => state.CLType(state.CLType.Variants.SimpleType(state.CLType.Simple.I64))
-    case CLType.U8     => state.CLType(state.CLType.Variants.SimpleType(state.CLType.Simple.U8))
-    case CLType.U32    => state.CLType(state.CLType.Variants.SimpleType(state.CLType.Simple.U32))
-    case CLType.U64    => state.CLType(state.CLType.Variants.SimpleType(state.CLType.Simple.U64))
-    case CLType.U128   => state.CLType(state.CLType.Variants.SimpleType(state.CLType.Simple.U128))
-    case CLType.U256   => state.CLType(state.CLType.Variants.SimpleType(state.CLType.Simple.U256))
-    case CLType.U512   => state.CLType(state.CLType.Variants.SimpleType(state.CLType.Simple.U512))
-    case CLType.Unit   => state.CLType(state.CLType.Variants.SimpleType(state.CLType.Simple.UNIT))
-    case CLType.String => state.CLType(state.CLType.Variants.SimpleType(state.CLType.Simple.STRING))
-    case CLType.Key    => state.CLType(state.CLType.Variants.SimpleType(state.CLType.Simple.KEY))
-    case CLType.URef   => state.CLType(state.CLType.Variants.SimpleType(state.CLType.Simple.UREF))
+    case CLType.Bool   => dsl.types.bool
+    case CLType.I32    => dsl.types.i32
+    case CLType.I64    => dsl.types.i64
+    case CLType.U8     => dsl.types.u8
+    case CLType.U32    => dsl.types.u32
+    case CLType.U64    => dsl.types.u64
+    case CLType.U128   => dsl.types.u128
+    case CLType.U256   => dsl.types.u256
+    case CLType.U512   => dsl.types.u512
+    case CLType.Unit   => dsl.types.unit
+    case CLType.String => dsl.types.string
+    case CLType.Key    => dsl.types.key
+    case CLType.URef   => dsl.types.uref
 
     case CLType.Option(inner) =>
       //TODO: stack safety
       val innerProto = toProto(inner)
-      state.CLType(state.CLType.Variants.OptionType(state.CLType.OptionProto(innerProto.some)))
+      dsl.types.option(innerProto)
 
     case CLType.List(inner) =>
       val innerProto = toProto(inner)
-      state.CLType(state.CLType.Variants.ListType(state.CLType.List(innerProto.some)))
+      dsl.types.list(innerProto)
 
     case CLType.FixedList(inner, length) =>
       val innerProto = toProto(inner)
-      state.CLType(
-        state.CLType.Variants.FixedListType(state.CLType.FixedList(innerProto.some, length))
-      )
+      dsl.types.fixedList(innerProto, length)
 
     case CLType.Result(ok, err) =>
       val okProto  = toProto(ok)
       val errProto = toProto(err)
-      state.CLType(
-        state.CLType.Variants
-          .ResultType(state.CLType.Result(ok = okProto.some, err = errProto.some))
-      )
+      dsl.types.result(okProto, errProto)
 
     case CLType.Map(key, value) =>
       val keyProto   = toProto(key)
       val valueProto = toProto(value)
-      state.CLType(
-        state.CLType.Variants
-          .MapType(state.CLType.Map(key = keyProto.some, value = valueProto.some))
-      )
+      dsl.types.map(keyProto, valueProto)
 
     case CLType.Tuple1(inner) =>
       val innerProto = toProto(inner)
-      state.CLType(state.CLType.Variants.Tuple1Type(state.CLType.Tuple1(innerProto.some)))
+      dsl.types.tuple1(innerProto)
 
     case CLType.Tuple2(t1, t2) =>
       val t1Proto = toProto(t1)
       val t2Proto = toProto(t2)
-      state.CLType(
-        state.CLType.Variants
-          .Tuple2Type(state.CLType.Tuple2(t1Proto.some, t2Proto.some))
-      )
+      dsl.types.tuple2(t1Proto, t2Proto)
 
     case CLType.Tuple3(t1, t2, t3) =>
       val t1Proto = toProto(t1)
       val t2Proto = toProto(t2)
       val t3Proto = toProto(t3)
-      state.CLType(
-        state.CLType.Variants
-          .Tuple3Type(state.CLType.Tuple3(t1Proto.some, t2Proto.some, t3Proto.some))
-      )
+      dsl.types.tuple3(t1Proto, t2Proto, t3Proto)
 
-    case CLType.Any => state.CLType(state.CLType.Variants.AnyType(state.CLType.Any()))
+    case CLType.Any => dsl.types.any
   }
 
   def toProto(v: CLValueInstance): state.CLValueInstance = v match {
-    case CLValueInstance.Bool(b) =>
-      state.CLValueInstance(
-        clType = state.CLType(state.CLType.Variants.SimpleType(state.CLType.Simple.BOOL)).some,
-        value = Constructor.bool(b).some
-      )
-
-    case CLValueInstance.I32(i) =>
-      state.CLValueInstance(
-        clType = state.CLType(state.CLType.Variants.SimpleType(state.CLType.Simple.I32)).some,
-        value = Constructor.i32(i).some
-      )
-
-    case CLValueInstance.I64(i) =>
-      state.CLValueInstance(
-        clType = state.CLType(state.CLType.Variants.SimpleType(state.CLType.Simple.I64)).some,
-        value = Constructor.i64(i).some
-      )
-
-    case CLValueInstance.U8(i) =>
-      state.CLValueInstance(
-        clType = state.CLType(state.CLType.Variants.SimpleType(state.CLType.Simple.U8)).some,
-        value = Constructor.u8(i).some
-      )
-
-    case CLValueInstance.U32(i) =>
-      state.CLValueInstance(
-        clType = state.CLType(state.CLType.Variants.SimpleType(state.CLType.Simple.U32)).some,
-        value = Constructor.u32(i).some
-      )
-
-    case CLValueInstance.U64(i) =>
-      state.CLValueInstance(
-        clType = state.CLType(state.CLType.Variants.SimpleType(state.CLType.Simple.U64)).some,
-        value = Constructor.u64(i).some
-      )
-
-    case CLValueInstance.U128(i) =>
-      state.CLValueInstance(
-        clType = state.CLType(state.CLType.Variants.SimpleType(state.CLType.Simple.U128)).some,
-        value = Constructor.u128(i.value).some
-      )
-
-    case CLValueInstance.U256(i) =>
-      state.CLValueInstance(
-        clType = state.CLType(state.CLType.Variants.SimpleType(state.CLType.Simple.U256)).some,
-        value = Constructor.u256(i.value).some
-      )
-
-    case CLValueInstance.U512(i) =>
-      state.CLValueInstance(
-        clType = state.CLType(state.CLType.Variants.SimpleType(state.CLType.Simple.U512)).some,
-        value = Constructor.u512(i.value).some
-      )
-
-    case CLValueInstance.Unit =>
-      state.CLValueInstance(
-        clType = state.CLType(state.CLType.Variants.SimpleType(state.CLType.Simple.UNIT)).some,
-        value = Constructor.unit.some
-      )
-
-    case CLValueInstance.String(s) =>
-      state.CLValueInstance(
-        clType = state.CLType(state.CLType.Variants.SimpleType(state.CLType.Simple.STRING)).some,
-        value = Constructor.string(s).some
-      )
-
-    case CLValueInstance.Key(k) =>
-      state.CLValueInstance(
-        clType = state.CLType(state.CLType.Variants.SimpleType(state.CLType.Simple.KEY)).some,
-        value = Constructor.key(toProto(k)).some
-      )
-
-    case CLValueInstance.URef(u) =>
-      state.CLValueInstance(
-        clType = state.CLType(state.CLType.Variants.SimpleType(state.CLType.Simple.UREF)).some,
-        value = Constructor.uref(toProto(u)).some
-      )
+    case CLValueInstance.Bool(b)   => dsl.instances.bool(b)
+    case CLValueInstance.I32(i)    => dsl.instances.i32(i)
+    case CLValueInstance.I64(i)    => dsl.instances.i64(i)
+    case CLValueInstance.U8(i)     => dsl.instances.u8(i)
+    case CLValueInstance.U32(i)    => dsl.instances.u32(i)
+    case CLValueInstance.U64(i)    => dsl.instances.u64(i)
+    case CLValueInstance.U128(i)   => dsl.instances.u128(i.value)
+    case CLValueInstance.U256(i)   => dsl.instances.u256(i.value)
+    case CLValueInstance.U512(i)   => dsl.instances.u512(i.value)
+    case CLValueInstance.Unit      => dsl.instances.unit
+    case CLValueInstance.String(s) => dsl.instances.string(s)
+    case CLValueInstance.Key(k)    => dsl.instances.key(toProto(k))
+    case CLValueInstance.URef(u)   => dsl.instances.uref(toProto(u))
 
     case option @ CLValueInstance.Option(value, _) =>
       val clType = toProto(option.clType)
@@ -256,7 +178,7 @@ object Mappings {
       val innerProto = value.flatMap(v => toProto(v).value)
       state.CLValueInstance(
         clType = clType.some,
-        value = Constructor.option(innerProto).some
+        value = dsl.values.option(innerProto).some
       )
 
     case list @ CLValueInstance.List(values, _) =>
@@ -264,7 +186,7 @@ object Mappings {
       val innerProto = values.flatMap(v => toProto(v).value)
       state.CLValueInstance(
         clType = clType.some,
-        value = Constructor.list(innerProto).some
+        value = dsl.values.list(innerProto).some
       )
 
     case list @ CLValueInstance.FixedList(values, _, _) =>
@@ -272,7 +194,7 @@ object Mappings {
       val innerProto = values.flatMap(v => toProto(v).value)
       state.CLValueInstance(
         clType = clType.some,
-        value = Constructor.fixedList(innerProto).some
+        value = dsl.values.fixedList(innerProto).some
       )
 
     case result @ CLValueInstance.Result(value, _, _) =>
@@ -280,7 +202,7 @@ object Mappings {
       val innerProto = value.bimap(v => toProto(v).value.get, v => toProto(v).value.get)
       state.CLValueInstance(
         clType = clType.some,
-        value = Constructor.result(innerProto).some
+        value = dsl.values.result(innerProto).some
       )
 
     case map @ CLValueInstance.Map(values, _, _) =>
@@ -291,7 +213,7 @@ object Mappings {
       }
       state.CLValueInstance(
         clType = clType.some,
-        value = Constructor.map(innerProto).some
+        value = dsl.values.map(innerProto).some
       )
 
     case tuple1 @ CLValueInstance.Tuple1(value) =>
@@ -299,7 +221,7 @@ object Mappings {
       val innerProto = toProto(value).value.get
       state.CLValueInstance(
         clType = clType.some,
-        value = Constructor.tuple1(innerProto).some
+        value = dsl.values.tuple1(innerProto).some
       )
 
     case tuple2 @ CLValueInstance.Tuple2(value1, value2) =>
@@ -308,7 +230,7 @@ object Mappings {
       val innerProto2 = toProto(value2).value.get
       state.CLValueInstance(
         clType = clType.some,
-        value = Constructor.tuple2(innerProto1, innerProto2).some
+        value = dsl.values.tuple2(innerProto1, innerProto2).some
       )
 
     case tuple3 @ CLValueInstance.Tuple3(value1, value2, value3) =>
@@ -318,7 +240,7 @@ object Mappings {
       val innerProto3 = toProto(value3).value.get
       state.CLValueInstance(
         clType = clType.some,
-        value = Constructor.tuple3(innerProto1, innerProto2, innerProto3).some
+        value = dsl.values.tuple3(innerProto1, innerProto2, innerProto3).some
       )
   }
 

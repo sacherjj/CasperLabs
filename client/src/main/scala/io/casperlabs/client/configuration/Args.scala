@@ -9,7 +9,7 @@ import com.google.protobuf.descriptor.FieldDescriptorProto
 import io.casperlabs.casper.consensus.Deploy.{Arg, LegacyArg}
 import io.casperlabs.casper.consensus.state
 import io.casperlabs.crypto.codec.Base16
-import io.casperlabs.models.cltype.protobuf.Constructor
+import io.casperlabs.models.cltype.protobuf.dsl
 import io.circe.Json
 import org.rogach.scallop._
 import scalapb_circe.{JsonFormat, Parser, Printer}
@@ -73,7 +73,7 @@ object Args {
     } yield args
 
   private def legacyFromJson(js: Json): Try[Arg] =
-    Try(parser.fromJson[LegacyArg](js)).map(legacyArgToArg)
+    Try(parser.fromJson[LegacyArg](js)).flatMap(legacy => Try(legacyArgToArg(legacy)))
 
   private def legacyArgToArg(legacy: LegacyArg): Arg =
     Arg(name = legacy.name, value = legacy.value.map(legacyValueToInstance))
@@ -86,45 +86,37 @@ object Args {
           value = None
         )
 
-      case LegacyArg.Value.Value.IntValue(i) => i32Value(i)
+      case LegacyArg.Value.Value.IntValue(i) => dsl.instances.i32(i)
 
       case LegacyArg.Value.Value.IntList(list) =>
         state.CLValueInstance(
-          clType = listType(i32Type).some,
-          value = Constructor.list(list.values.map(Constructor.i32)).some
+          clType = dsl.types.list(dsl.types.i32).some,
+          value = dsl.values.list(list.values.map(dsl.values.i32)).some
         )
 
-      case LegacyArg.Value.Value.StringValue(s) => stringValue(s)
+      case LegacyArg.Value.Value.StringValue(s) => dsl.instances.string(s)
 
       case LegacyArg.Value.Value.StringList(list) =>
         state.CLValueInstance(
-          clType = listType(stringType).some,
-          value = Constructor.list(list.values.map(Constructor.string)).some
+          clType = dsl.types.list(dsl.types.string).some,
+          value = dsl.values.list(list.values.map(dsl.values.string)).some
         )
 
-      case LegacyArg.Value.Value.LongValue(i) =>
-        state.CLValueInstance(
-          clType = i64Type.some,
-          value = Constructor.i64(i).some
-        )
+      case LegacyArg.Value.Value.LongValue(i) => dsl.instances.i64(i)
 
-      case LegacyArg.Value.Value.Key(k) =>
-        state.CLValueInstance(
-          clType = state.CLType(state.CLType.Variants.SimpleType(state.CLType.Simple.KEY)).some,
-          value = Constructor.key(k).some
-        )
+      case LegacyArg.Value.Value.Key(k) => dsl.instances.key(k)
 
       case LegacyArg.Value.Value.BytesValue(bytes) =>
         state.CLValueInstance(
-          clType = fixedListType(u8Type, bytes.size).some,
-          value = Constructor.fixedList(bytes.toByteArray.map(Constructor.u8)).some
+          clType = dsl.types.fixedList(dsl.types.u8, bytes.size).some,
+          value = dsl.values.fixedList(bytes.toByteArray.map(dsl.values.u8)).some
         )
 
       case LegacyArg.Value.Value.BigInt(x) =>
         x.bitWidth match {
-          case 128 => u128Value(x.value)
-          case 256 => u256Value(x.value)
-          case 512 => u512Value(x.value)
+          case 128 => dsl.instances.u128(BigInt(x.value))
+          case 256 => dsl.instances.u256(BigInt(x.value))
+          case 512 => dsl.instances.u512(BigInt(x.value))
 
           case other =>
             throw new IllegalArgumentException(s"Invalid Legacy BigInt bit width $other")
@@ -134,82 +126,17 @@ object Args {
         x.value match {
           case LegacyArg.Value.Value.Empty =>
             state.CLValueInstance(
-              clType = optionType(anyType).some,
-              value = Constructor.option(None).some
+              clType = dsl.types.option(dsl.types.any).some,
+              value = dsl.values.option(None).some
             )
 
           case _ =>
             // TODO: stack safety
             val inner = legacyValueToInstance(x)
             state.CLValueInstance(
-              clType = inner.clType.map(optionType),
-              value = Constructor.option(inner.value).some
+              clType = inner.clType.map(dsl.types.option),
+              value = dsl.values.option(inner.value).some
             )
         }
     }
-
-  private val u8Type   = state.CLType(state.CLType.Variants.SimpleType(state.CLType.Simple.U8))
-  private val i32Type  = state.CLType(state.CLType.Variants.SimpleType(state.CLType.Simple.I32))
-  private val i64Type  = state.CLType(state.CLType.Variants.SimpleType(state.CLType.Simple.I64))
-  private val u128Type = state.CLType(state.CLType.Variants.SimpleType(state.CLType.Simple.U128))
-  private val u256Type = state.CLType(state.CLType.Variants.SimpleType(state.CLType.Simple.U256))
-  private val u512Type = state.CLType(state.CLType.Variants.SimpleType(state.CLType.Simple.U512))
-
-  private val stringType =
-    state.CLType(state.CLType.Variants.SimpleType(state.CLType.Simple.STRING))
-
-  private val anyType = state.CLType(state.CLType.Variants.AnyType(state.CLType.Any()))
-
-  private def optionType(inner: state.CLType) =
-    state.CLType(state.CLType.Variants.OptionType(state.CLType.OptionProto(inner.some)))
-
-  private def listType(inner: state.CLType) =
-    state.CLType(state.CLType.Variants.ListType(state.CLType.List(inner.some)))
-
-  private def fixedListType(inner: state.CLType, length: Int) = state.CLType(
-    state.CLType.Variants.FixedListType(state.CLType.FixedList(inner.some, length))
-  )
-
-  private def i32Value(i: Int) = state.CLValueInstance(
-    clType = i32Type.some,
-    value = Constructor.i32(i).some
-  )
-
-  private def u128Value(value: String) = state.CLValueInstance(
-    clType = u128Type.some,
-    value = state.CLValueInstance
-      .Value(
-        state.CLValueInstance.Value.Value.U128(
-          state.CLValueInstance.U128(value)
-        )
-      )
-      .some
-  )
-
-  private def u256Value(value: String) = state.CLValueInstance(
-    clType = u256Type.some,
-    value = state.CLValueInstance
-      .Value(
-        state.CLValueInstance.Value.Value.U256(
-          state.CLValueInstance.U256(value)
-        )
-      )
-      .some
-  )
-
-  private def u512Value(value: String) = state.CLValueInstance(
-    clType = u512Type.some,
-    value = state.CLValueInstance
-      .Value(
-        state.CLValueInstance.Value.Value.U512(
-          state.CLValueInstance.U512(value)
-        )
-      )
-      .some
-  )
-
-  private def stringValue(s: String) = state.CLValueInstance(
-    clType = stringType.some,
-    value = Constructor.string(s).some
-  )
 }
