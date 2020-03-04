@@ -3,5 +3,5 @@ CREATE TABLE message_ancestors_skiplist (
     block_hash BLOB NOT NULL,
     distance INTEGER NOT NULL,
     ancestor_hash BLOB NOT NULL,
-    PRIMARY KEY (block_hash, distance, ancestor_hash)
+    PRIMARY KEY (block_hash, distance)
 ) WITHOUT ROWID;
