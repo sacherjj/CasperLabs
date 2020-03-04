@@ -22,7 +22,6 @@ import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.BlockHash
 import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.storage.dag.DagRepresentation
-import Validation._
 import cats.effect.Sync
 import io.casperlabs.casper.consensus.state.ProtocolVersion
 import io.casperlabs.smartcontracts.ExecutionEngineService.CommitResult
@@ -55,7 +54,7 @@ object ValidationImpl {
           block: Block,
           preStateHash: StateHash,
           preStateBonds: Seq[Bond],
-          effects: BlockEffects
+          effects: Validation.BlockEffects
       )(
           implicit ee: ExecutionEngineService[F],
           bs: BlockStorage[F],
@@ -91,6 +90,7 @@ abstract class ValidationImpl[F[_]: Sync: FunctorRaise[*[_], InvalidBlock]: Log:
     isHighway: Boolean
 ) extends Validation[F] {
   import io.casperlabs.models.BlockImplicits._
+  import Validation.{ignore, raise, reject}
 
   type Data        = Array[Byte]
   type BlockHeight = Long
@@ -114,33 +114,33 @@ abstract class ValidationImpl[F[_]: Sync: FunctorRaise[*[_], InvalidBlock]: Log:
   ): F[Unit] = {
     val summary = BlockSummary(block.blockHash, block.header, block.signature)
     for {
-      _ <- checkDroppable(
+      _ <- Validation.checkDroppable(
             if (block.body.isEmpty)
               ignore[F](block.blockHash, s"block body is missing.").as(false)
             else true.pure[F],
             // Validate that the sender is a bonded validator.
             maybeGenesis.fold(summary.isGenesisLike.pure[F]) { _ =>
-              blockSender[F](summary)
+              Validation.blockSender[F](summary)
             }
           )
       _ <- blockSummary(summary, chainName)
       // Checks that need dependencies.
-      _ <- missingBlocks[F](summary)
-      _ <- timestamp[F](summary)
-      _ <- blockRank[F](summary, dag)
+      _ <- Validation.missingBlocks[F](summary)
+      _ <- Validation.timestamp[F](summary)
+      _ <- Validation.blockRank[F](summary, dag)
       // TODO (CON-639): Going on the j-DAG is not enough, it may lead to a ballot in the parent era.
-      _ <- validatorPrevBlockHash[F](summary, dag).whenA(!isHighway)
-      _ <- sequenceNumber[F](summary, dag)
+      _ <- Validation.validatorPrevBlockHash[F](summary, dag).whenA(!isHighway)
+      _ <- Validation.sequenceNumber[F](summary, dag)
       // TODO (CON-639): A voting ballot appears to be merging swimlanes in the child era.
-      _ <- swimlane[F](summary, dag).whenA(!isHighway)
+      _ <- Validation.swimlane[F](summary, dag).whenA(!isHighway)
       // TODO: Validate that blocks only have block parents and ballots have a single parent which is a block.
       // Checks that need the body.
-      _ <- blockHash[F](block)
-      _ <- deployCount[F](block)
-      _ <- deployHashes[F](block)
-      _ <- deploySignatures[F](block)
-      _ <- deployHeaders[F](block, dag, chainName)
-      _ <- deployUniqueness[F](block, dag)
+      _ <- Validation.blockHash[F](block)
+      _ <- Validation.deployCount[F](block)
+      _ <- Validation.deployHashes[F](block)
+      _ <- Validation.deploySignatures[F](block)
+      _ <- Validation.deployHeaders[F](block, dag, chainName)
+      _ <- Validation.deployUniqueness[F](block, dag)
     } yield ()
   }
 
@@ -203,7 +203,7 @@ abstract class ValidationImpl[F[_]: Sync: FunctorRaise[*[_], InvalidBlock]: Log:
       block: Block,
       preStateHash: StateHash,
       preStateBonds: Seq[Bond],
-      blockEffects: BlockEffects
+      blockEffects: Validation.BlockEffects
   )(
       implicit ee: ExecutionEngineService[F],
       bs: BlockStorage[F],
@@ -232,7 +232,7 @@ abstract class ValidationImpl[F[_]: Sync: FunctorRaise[*[_], InvalidBlock]: Log:
                 for {
                   _ <- reject[F](block, InvalidPostStateHash, "invalid post state hash")
                         .whenA(commitResult.postStateHash != blockPostState)
-                  _ <- bondsCache[F](block, commitResult.bondedValidators)
+                  _ <- Validation.bondsCache[F](block, commitResult.bondedValidators)
                 } yield ()
             }
       } yield ()
@@ -277,16 +277,16 @@ abstract class ValidationImpl[F[_]: Sync: FunctorRaise[*[_], InvalidBlock]: Log:
   )(implicit versions: CasperLabsProtocol[F]): F[Unit] = {
     val treatAsGenesis = summary.isGenesisLike
     for {
-      _ <- checkDroppable[F](
-            formatOfFields[F](summary, treatAsGenesis),
-            version(
+      _ <- Validation.checkDroppable[F](
+            Validation.formatOfFields[F](summary, treatAsGenesis),
+            Validation.version(
               summary,
               CasperLabsProtocol[F].versionAt(_)
             ),
-            if (!treatAsGenesis) blockSignature[F](summary) else true.pure[F]
+            if (!treatAsGenesis) Validation.blockSignature[F](summary) else true.pure[F]
           )
-      _ <- summaryHash[F](summary)
-      _ <- chainIdentifier[F](summary, chainName)
+      _ <- Validation.summaryHash[F](summary)
+      _ <- Validation.chainIdentifier[F](summary, chainName)
       _ <- ballot(summary)
     } yield ()
   }
