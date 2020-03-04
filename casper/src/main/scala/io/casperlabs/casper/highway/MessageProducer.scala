@@ -23,7 +23,7 @@ import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.storage.deploy.{DeployStorage, DeployStorageReader}
 import io.casperlabs.casper.util.execengine.ExecEngineUtil
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.{MergeResult, TransformMap}
-import io.casperlabs.casper.util.{CasperLabsProtocol, DagOperations, ProtoUtil}
+import io.casperlabs.casper.util.{CasperLabsProtocol, ProtoUtil}
 import io.casperlabs.casper.util.ProtocolVersions.Config
 import io.casperlabs.shared.Log
 import io.casperlabs.shared.Sorting.byteStringOrdering
@@ -31,6 +31,7 @@ import io.casperlabs.mempool.DeployBuffer
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.ipc
 import io.casperlabs.casper.PrettyPrinter
+import io.casperlabs.casper.dag.DagOperations
 import io.casperlabs.models.Message.{asMainRank, JRank, MainRank}
 import io.casperlabs.shared.Sorting._
 import scala.concurrent.duration._

@@ -133,23 +133,94 @@ object ExecutionEngineServiceStub {
     ): F[Either[Throwable, cltype.StoredValue]] = queryFunc(state, baseKey, path)
   }
 
+  def failExec[F[_]: Applicative](bonds: Seq[Bond] = Seq.empty): ExecutionEngineService[F] =
+    new NoOpExecutionEngineService[F](bonds) {
+      override def exec(
+          prestate: ByteString,
+          blocktime: Long,
+          deploys: Seq[DeployItem],
+          protocolVersion: ProtocolVersion
+      ): F[Either[Throwable, Seq[DeployResult]]] =
+        Either
+          .left[Throwable, Seq[DeployResult]](
+            new RuntimeException("Failed ExecutionEngineService.exec")
+          )
+          .pure[F]
+    }
+
+  def failCommit[F[_]: Applicative](bonds: Seq[Bond] = Seq.empty): ExecutionEngineService[F] =
+    new NoOpExecutionEngineService[F](bonds) {
+      override def commit(
+          prestate: ByteString,
+          effects: Seq[TransformEntry],
+          protocolVersion: ProtocolVersion
+      ): F[Either[Throwable, ExecutionEngineService.CommitResult]] =
+        Either
+          .left[Throwable, ExecutionEngineService.CommitResult](
+            new RuntimeException("Failed ExecutionEngineService.commit")
+          )
+          .pure[F]
+    }
+
   def noOpApi[F[_]: Applicative](
       bonds: Seq[Bond] = Seq.empty
   ): ExecutionEngineService[F] =
-    mock[F](
-      (_) => GenesisResult().asRight[Throwable].pure[F],
-      (_, _, _) => UpgradeResult().asRight[Throwable].pure[F],
-      (_, _, _, _) => Seq.empty[DeployResult].asRight[Throwable].pure[F],
-      (preStateHash, _) =>
-        ExecutionEngineService
-          .CommitResult(preStateHash, bonds)
-          .asRight[Throwable]
-          .pure[F],
-      (_, _, _) =>
-        Applicative[F]
-          .pure[Either[Throwable, cltype.StoredValue]](
-            Left(new SmartContractEngineError("unimplemented"))
+    new NoOpExecutionEngineService[F](bonds)
+
+  class NoOpExecutionEngineService[F[_]: Applicative](bonds: Seq[Bond] = Seq.empty)
+      extends ExecutionEngineService[F] {
+
+    override def emptyStateHash: ByteString = ByteString.EMPTY
+
+    override def runGenesis(
+        genesisConfig: ChainSpec.GenesisConfig
+    ): F[Either[Throwable, GenesisResult]] =
+      GenesisResult().asRight[Throwable].pure[F]
+
+    override def upgrade(
+        prestate: ByteString,
+        upgrade: ChainSpec.UpgradePoint,
+        protocolVersion: ProtocolVersion
+    ): F[Either[Throwable, UpgradeResult]] =
+      UpgradeResult().asRight[Throwable].pure[F]
+
+    override def exec(
+        prestate: ByteString,
+        blocktime: Long,
+        deploys: Seq[DeployItem],
+        protocolVersion: ProtocolVersion
+    ): F[Either[Throwable, Seq[DeployResult]]] =
+      Seq
+        .fill(deploys.size)(
+          DeployResult(
+            DeployResult.Value
+              .PreconditionFailure(DeployResult.PreconditionFailure("Test precondition failure."))
           )
-    )
+        )
+        .asRight[Throwable]
+        .pure[F]
+
+    override def commit(
+        prestate: ByteString,
+        effects: Seq[TransformEntry],
+        protocolVersion: ProtocolVersion
+    ): F[Either[Throwable, ExecutionEngineService.CommitResult]] =
+      ExecutionEngineService
+        .CommitResult(prestate, bonds)
+        .asRight[Throwable]
+        .pure[F]
+
+    override def query(
+        state: ByteString,
+        baseKey: Key,
+        path: Seq[String],
+        protocolVersion: ProtocolVersion
+    ): F[Either[Throwable, cltype.StoredValue]] =
+      (cltype.StoredValue
+        .CLValue(cltype.CLValue(cltype.CLType.Bool, Vector.empty))
+        .asInstanceOf[cltype.StoredValue])
+        .asRight[Throwable]
+        .pure[F]
+  }
 
 }

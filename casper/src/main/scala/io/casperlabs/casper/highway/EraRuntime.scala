@@ -7,8 +7,9 @@ import cats.effect.{Clock, Concurrent, Sync}
 import cats.effect.concurrent.{Ref, Semaphore}
 import com.google.protobuf.ByteString
 import java.time.Instant
+
 import io.casperlabs.casper.consensus.{Block, BlockSummary, Era}
-import io.casperlabs.casper.util.DagOperations
+import io.casperlabs.casper.dag.DagOperations
 import io.casperlabs.catscontrib.{MakeSemaphore, MonadThrowable}
 import io.casperlabs.crypto.Keys.{PublicKey, PublicKeyBS}
 import io.casperlabs.models.Message
@@ -18,6 +19,7 @@ import io.casperlabs.storage.BlockHash
 import io.casperlabs.storage.dag.{DagRepresentation, DagStorage, FinalityStorageReader}
 import io.casperlabs.storage.era.EraStorage
 import io.casperlabs.shared.SemaphoreMap
+
 import scala.util.Random
 
 /** Class to encapsulate the message handling logic of messages in an era.

@@ -4,7 +4,6 @@ import cats.Monad
 import cats.data.NonEmptyList
 import cats.implicits._
 import com.google.protobuf.ByteString
-import io.casperlabs.casper.util.DagOperations
 import io.casperlabs.casper.util.ProtoUtil.weightFromValidatorByDag
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.metrics.Metrics
@@ -13,6 +12,7 @@ import io.casperlabs.models.{Message, Weight}
 import io.casperlabs.storage.dag.{DagLookup, DagRepresentation}
 import io.casperlabs.shared.{Log, Sorting}
 import Sorting.{byteStringOrdering, jRankOrdering}
+import io.casperlabs.casper.dag.DagOperations
 
 import scala.collection.immutable.Map
 

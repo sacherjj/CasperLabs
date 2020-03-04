@@ -733,7 +733,8 @@ class ValidationTest
         b8 <- createValidatorBlock[Task](Seq(b1, b2, b3), bonds, Seq(b1, b2, b3), v2, b0) //parents wrong order
         b9 <- createValidatorBlock[Task](Seq(b6), bonds, Seq.empty, v0, b0)
                .map(b => b.withHeader(b.getHeader.withJustifications(Seq.empty))) //empty justification
-        b10 <- createValidatorBlock[Task](Seq.empty, bonds, Seq.empty, v0, b0) //empty justification
+        // Set obviously incorrect parent. Later we want to test that validation raises `InvalidParent` error.
+        b10 <- createValidatorBlock[Task](Seq(b0), bonds, Seq(b9), v0, b0)
         result <- for {
                    dag <- dagStorage.getRepresentation
                    // Valid

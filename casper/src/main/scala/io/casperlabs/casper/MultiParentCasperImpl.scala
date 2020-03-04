@@ -48,6 +48,7 @@ import io.casperlabs.storage.deploy.{DeployStorage, DeployStorageReader, DeployS
 import simulacrum.typeclass
 import io.casperlabs.models.BlockImplicits._
 import Sorting._
+import io.casperlabs.casper.dag.{BlockDependencyDag, DoublyLinkedDag}
 
 import scala.concurrent.duration.FiniteDuration
 import scala.util.control.NonFatal

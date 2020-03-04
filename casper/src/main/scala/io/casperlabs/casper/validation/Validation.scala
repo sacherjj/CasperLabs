@@ -7,10 +7,11 @@ import com.google.protobuf.ByteString
 import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper._
 import io.casperlabs.casper.consensus.{state, Block, BlockSummary, Bond, Deploy}
+import io.casperlabs.casper.dag.DagOperations
 import io.casperlabs.casper.equivocations.EquivocationDetector
 import io.casperlabs.casper.util.execengine.ExecEngineUtil
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
-import io.casperlabs.casper.util.{CasperLabsProtocol, DagOperations, ProtoUtil}
+import io.casperlabs.casper.util.{CasperLabsProtocol, ProtoUtil}
 import io.casperlabs.casper.validation.Errors.DropErrorWrapper
 import io.casperlabs.casper.validation.Validation.BlockEffects
 import io.casperlabs.crypto.Keys.{PublicKey, Signature}

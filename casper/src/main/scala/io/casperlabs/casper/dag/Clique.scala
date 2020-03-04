@@ -1,4 +1,4 @@
-package io.casperlabs.casper.util
+package io.casperlabs.casper.dag
 
 object Clique {
   def findMaximumCliqueByWeight[A](edges: List[(A, A)], weights: Map[A, Long]): Long = {
