@@ -610,7 +610,7 @@ class ThreeNodeHighwayNetwork(CasperLabsNetwork):
     NODE_ENV = dict(
         # Old defaults
         RUST_BACKTRACE="full",
-        CL_LOG_LEVEL=os.environ.get("CL_LOG_LEVEL", "INFO"),
+        CL_LOG_LEVEL=os.environ.get("CL_LOG_LEVEL", "DEBUG"),
         CL_SERVER_NO_UPNP="true",
         CL_VERSION="test",
         # Highway
@@ -632,6 +632,7 @@ class ThreeNodeHighwayNetwork(CasperLabsNetwork):
             node_env=self.NODE_ENV,
             node_account=kp,
             network=network,
+            number_of_bonds=3,
         )
 
     def create_cl_network(self):

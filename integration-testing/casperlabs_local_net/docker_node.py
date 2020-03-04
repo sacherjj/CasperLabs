@@ -316,7 +316,7 @@ class DockerNode(LoggingDockerBase):
     # TODO: Should be changed to using validator-id from accounts
     def create_genesis_accounts_file(self, path: str = None) -> None:
         bond_amount = self.config.bond_amount
-        N = self.NUMBER_OF_BONDS
+        N = self.config.number_of_bonds or self.NUMBER_OF_BONDS
         try:
             os.makedirs(os.path.dirname(path))
         except OSError:
