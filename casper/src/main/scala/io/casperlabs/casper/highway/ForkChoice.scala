@@ -121,69 +121,55 @@ object ForkChoice {
             case (v, lms) if lms.size == 1 && honestValidators.contains(v) => v -> lms.head
           }
           forkChoice <- MonadThrowable[F].tailRecM(eraStartBlock) { startBlock =>
-                         // Using `dag.children` might bring a new child that wasn't visible in `latestMessages`,
-                         // so we rely on just what we have in latest and do traversal. This should be temporary.
-                         implicit val ord = DagOperations.blockMainRankOrderingDesc
-                         val noChildren = DagOperations
-                           .bfToposortTraverseF[F](
-                             latestHonestMessages.values.toList
-                           ) { m =>
-                             List(m.parentBlock).filterNot(_.isEmpty).traverse(dag.lookupUnsafe)
-                           }
-                           .takeWhile(_.mainRank > startBlock.mainRank)
-                           .find { x =>
-                             x.parentBlock == startBlock.messageHash && x.isBlock && x.eraId == keyBlock.messageHash
-                           }
-                           .map(_.isEmpty)
-                           .timerGauge("children")
+                         for {
+                           // Collect latest messages from honest validators that vote for the block.
+                           relevantMessages <- honestValidators
+                                                .foldLeftM(Map.empty[ByteString, Message]) {
+                                                  case (acc, v) =>
+                                                    latestHonestMessages
+                                                      .get(v)
+                                                      .fold(acc.pure[F]) { latestMessage =>
+                                                        previousVoteForDescendant(
+                                                          dag,
+                                                          latestMessage,
+                                                          startBlock
+                                                        ).map(_.fold(acc) { vote =>
+                                                            acc.updated(v, vote)
+                                                          })
+                                                          .timerGauge("previousVoteForDescendant")
+                                                      }
+                                                }
+                                                .timerGauge("relevantMessages")
 
-                         noChildren.ifM(
-                           startBlock.asRight[Block].pure[F],
-                           for {
-                             // Collect latest messages from honest validators that vote for the block.
-                             relevantMessages <- honestValidators
-                                                  .foldLeftM(Map.empty[ByteString, Message]) {
-                                                    case (acc, v) =>
-                                                      latestHonestMessages
-                                                        .get(v)
-                                                        .fold(acc.pure[F]) { latestMessage =>
-                                                          previousVoteForDescendant(
-                                                            dag,
-                                                            latestMessage,
-                                                            startBlock
-                                                          ).map(_.fold(acc) { vote =>
-                                                              acc.updated(v, vote)
-                                                            })
-                                                            .timerGauge("previousVoteForDescendant")
-                                                        }
-                                                  }
-                                                  .timerGauge("relevantMessages")
+                           scores <- relevantMessages.toList
+                                      .foldLeftM(Scores.init(startBlock)) {
+                                        case (scores, (v, msg)) =>
+                                          msg match {
+                                            case block: Message.Block =>
+                                              // A block is a vote for itself.
+                                              scores.update(block, weights(v)).pure[F]
+                                            case ballot: Message.Ballot
+                                                if ballot.parentBlock != startBlock.messageHash =>
+                                              // Ballot votes for its parent.
+                                              dag
+                                                .lookupBlockUnsafe(ballot.parentBlock)
+                                                .map(block => scores.update(block, weights(v)))
+                                            case ballot: Message.Ballot
+                                                if ballot.parentBlock == startBlock.messageHash =>
+                                              // Ignore ballots that vote for the start block directly.
+                                              // They don't advance the fork choice.
+                                              scores.pure[F]
+                                          }
 
-                             scores <- relevantMessages.toList
-                                        .foldLeftM(Scores.init(startBlock)) {
-                                          case (scores, (v, msg)) =>
-                                            msg match {
-                                              case block: Message.Block =>
-                                                // A block is a vote for itself.
-                                                scores.update(block, weights(v)).pure[F]
-                                              case ballot: Message.Ballot =>
-                                                // Ballot votes for its parent.
-                                                dag
-                                                  .lookupBlockUnsafe(ballot.parentBlock)
-                                                  .map(block => scores.update(block, weights(v)))
-                                            }
-
-                                        }
-
-                             result <- if (scores.isEmpty)
-                                        // No one voted for anything - there are no descendants of `start`.
-                                        startBlock.asRight[Block].pure[F]
-                                      else
-                                        scores
-                                          .tip[F](Sync[F], dag)
-                                          .map(_.asLeft[Block])
-                           } yield result
-                         )
+                                      }
+                           result <- if (scores.isEmpty)
+                                      // No one voted for anything - there are no descendants of `start`.
+                                      startBlock.asRight[Block].pure[F]
+                                    else
+                                      scores
+                                        .tip[F](Sync[F], dag)
+                                        .map(_.asLeft[Block])
+                         } yield result
                        }
           latestMessagesFlattened = NonEmptyList
             .of[Message](
