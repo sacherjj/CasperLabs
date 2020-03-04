@@ -1,7 +1,7 @@
 [package]
-name = "standard-payment-stored"
+name = "standard-payment-install"
 version = "0.1.0"
-authors = ["Henry Till <henrytill@gmail.com>", "Ed Hastings <ed@casperlabs.io>"]
+authors = ["Fraser Hutchison <fraser@casperlabs.io>"]
 edition = "2018"
 
 [lib]
@@ -15,5 +15,5 @@ std = ["contract/std", "types/std"]
 
 [dependencies]
 contract = { path = "../../../contract", package = "casperlabs-contract" }
-standard-payment = { path = "../../system/standard-payment", default-features = false, features = ["lib"] }
+standard-payment = { path = "../standard-payment", default-features = false, features = ["lib"] }
 types = { path = "../../../types", package = "casperlabs-types" }

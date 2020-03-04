@@ -59,7 +59,7 @@ INTEGRATION_CONTRACTS := $(patsubst %, build-integration-contract-rs/%, $(INTEGR
 
 CONTRACT_TARGET_DIR       = target/wasm32-unknown-unknown/release
 CONTRACT_TARGET_DIR_AS    = target-as
-PACKAGED_SYSTEM_CONTRACTS = mint_install.wasm pos_install.wasm
+PACKAGED_SYSTEM_CONTRACTS = mint_install.wasm pos_install.wasm standard_payment_install.wasm
 TOOL_TARGET_DIR           = cargo-casperlabs/target
 TOOL_WASM_DIR             = cargo-casperlabs/wasm
 
