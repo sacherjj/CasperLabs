@@ -44,6 +44,12 @@ object ServiceError {
 
     def block(blockHashBase16: String): ServiceError.Exception =
       apply(s"Block ${blockHashBase16} could not be found.")
+
+    def balance(account: ByteString): ServiceError.Exception =
+      balance(Base16.encode(account.toByteArray))
+
+    def balance(accountBase16: String): ServiceError.Exception =
+      apply(s"Balance of $accountBase16 account could not be found")
   }
 
   // NOTE: See https://github.com/grpc/grpc/blob/master/doc/statuscodes.md about when to use which one.

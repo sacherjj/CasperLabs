@@ -1,18 +1,19 @@
 package io.casperlabs.casper
 
-import cats._
-import cats.implicits._
-import cats.data.WriterT
-import cats.effect.Clock
-import io.casperlabs.crypto.Keys.PublicKeyBS
-import io.casperlabs.storage.BlockHash
-import io.casperlabs.models.Message
 import java.time.Instant
 import java.util.concurrent.TimeUnit
+
+import cats._
+import cats.data.WriterT
+import cats.effect.Clock
+import cats.implicits._
+import io.casperlabs.crypto.Keys.PublicKeyBS
+import io.casperlabs.models.Message
+import io.casperlabs.storage.BlockHash
 import org.apache.commons.math3.util.ArithmeticUtils
-import scala.annotation.tailrec
-import scala.concurrent.duration.FiniteDuration
 import shapeless.tag.@@
+
+import scala.concurrent.duration.FiniteDuration
 
 package highway {
   sealed trait TimestampTag

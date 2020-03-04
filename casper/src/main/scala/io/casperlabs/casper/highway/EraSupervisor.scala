@@ -133,10 +133,16 @@ class EraSupervisor[F[_]: Concurrent: Timer: Log: Metrics: EraStorage: Relaying:
     } yield entry
   }
 
+  private def isStartRound(action: Agenda.Action) = action match {
+    case _: Agenda.StartRound => true
+    case _                    => false
+  }
+
   private def schedule(runtime: EraRuntime[F], agenda: Agenda): F[Unit] =
     agenda.traverse {
       case delayed @ Agenda.DelayedAction(tick, action) =>
-        val key = (runtime.era.keyBlockHash, delayed)
+        val key     = (runtime.era.keyBlockHash, delayed)
+        val isStart = isStartRound(action)
         for {
           fiber <- scheduleAt(tick) {
                     val era = runtime.era.keyBlockHash.show
@@ -146,7 +152,21 @@ class EraSupervisor[F[_]: Concurrent: Timer: Log: Metrics: EraStorage: Relaying:
                                            .handleAgenda(action)
                                            .run
                                            .timerGauge("schedule_handleAgenda")
-                      _ <- scheduleRef.update(_ - key)
+
+                      isScheduleEmpty <- scheduleRef.modify { sch =>
+                                          val rem = sch - key
+                                          rem -> rem.isEmpty
+                                        }
+
+                      hasNextStart = agenda.map(_.action).find(isStartRound(_)).nonEmpty
+
+                      _ <- Log[F]
+                            .info(s"There are no more rounds scheduled for $era")
+                            .whenA(isStart && !hasNextStart)
+                      _ <- Log[F]
+                            .warn(s"There are no more actions scheduled for any of the active eras")
+                            .whenA(isScheduleEmpty && agenda.isEmpty)
+
                       _ <- schedule(runtime, agenda)
                       _ <- handleEvents(events).timerGauge("schedule_handleEvents")
                     } yield ()
@@ -306,6 +326,7 @@ object EraSupervisor {
         _ <- activeEras.traverse {
               case (runtime, agenda) => supervisor.start(runtime, agenda)
             }
+        _ <- Log[F].warn("There are no active eras!").whenA(activeEras.isEmpty)
       } yield supervisor
     }(_.shutdown())
 

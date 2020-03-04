@@ -17,11 +17,12 @@ package object arguments {
       description = "How many of the top ranks of the DAG to show"
     )
 
-  val BlocksNum =
+  val SliceDepth =
     Argument(
-      "blocksNum",
+      "sliceDepth",
       IntType,
-      description = "How many of the recent blocks of a validator to show"
+      description =
+        "How many of the recent blocks of a validator to show by their validator's block sequence number"
     )
 
   val MaxRank =
