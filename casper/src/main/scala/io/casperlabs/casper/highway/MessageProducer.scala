@@ -23,7 +23,7 @@ import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.storage.deploy.{DeployStorage, DeployStorageReader}
 import io.casperlabs.casper.util.execengine.ExecEngineUtil
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.{MergeResult, TransformMap}
-import io.casperlabs.casper.util.{CasperLabsProtocol, DagOperations, ProtoUtil}
+import io.casperlabs.casper.util.{CasperLabsProtocol, ProtoUtil}
 import io.casperlabs.casper.util.ProtocolVersions.Config
 import io.casperlabs.shared.Log
 import io.casperlabs.shared.Sorting.byteStringOrdering
@@ -31,8 +31,10 @@ import io.casperlabs.mempool.DeployBuffer
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.ipc
 import io.casperlabs.casper.PrettyPrinter
+import io.casperlabs.casper.dag.DagOperations
 import io.casperlabs.models.Message.{asMainRank, JRank, MainRank}
 import io.casperlabs.shared.Sorting._
+import scala.concurrent.duration._
 
 /** Produce a signed message, persisted message.
   * The producer should the thread safe, so that when it's
@@ -69,7 +71,8 @@ object MessageProducer {
       validatorIdentity: ValidatorIdentity,
       chainName: String,
       upgrades: Seq[ipc.ChainSpec.UpgradePoint],
-      onlyTakeOwnLatestFromJustifications: Boolean = false
+      onlyTakeOwnLatestFromJustifications: Boolean = false,
+      asyncRequeueOrphans: Boolean = true
   ): MessageProducer[F] =
     new MessageProducer[F] {
       override val validatorId =
@@ -187,10 +190,12 @@ object MessageProducer {
       // This made sense with the AutoProposer, since a new block could be proposed any time;
       // in Highway that's going to the next round, whenever that is.
       private def startRequeueingOrphanedDeploys(parentHashes: Set[BlockHash]): F[Unit] = {
-        DeployBuffer[F].requeueOrphanedDeploys(parentHashes) >>= { requeued =>
-          Log[F].info(s"Re-queued ${requeued.size} orphaned deploys.").whenA(requeued.nonEmpty)
-        }
-      }.forkAndLog.void
+        val requeue =
+          DeployBuffer[F].requeueOrphanedDeploys(parentHashes) >>= { requeued =>
+            Log[F].info(s"Re-queued ${requeued.size} orphaned deploys.").whenA(requeued.nonEmpty)
+          }
+        if (asyncRequeueOrphans) requeue.forkAndLog.void else requeue
+      }
 
       private def messageProps(
           keyBlockHash: BlockHash,

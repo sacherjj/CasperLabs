@@ -344,7 +344,8 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with Sto
         panoramaM <- FinalityDetectorUtil.panoramaM(
                       dag,
                       validatorsToIndex,
-                      Message.fromBlock(b7).get
+                      Message.fromBlock(b7).get,
+                      isHighway = false
                     )
         _ = panoramaM.size shouldBe (validatorsToIndex.size)
         _ = panoramaM shouldBe IndexedSeq(

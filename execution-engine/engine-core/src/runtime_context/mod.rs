@@ -835,7 +835,7 @@ where
     ///
     /// If the account is system account, then given URef receives
     /// full rights (READ_ADD_WRITE). Otherwise READ access is returned.
-    pub(crate) fn attenuate_uref(&mut self, uref: URef) -> URef {
+    pub(crate) fn attenuate_uref(&self, uref: URef) -> URef {
         attenuate_uref_for_account(&self.account(), uref)
     }
 

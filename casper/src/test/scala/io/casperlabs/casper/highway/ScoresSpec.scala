@@ -123,7 +123,7 @@ class ScoresSpec extends FlatSpec with Matchers {
 
   // When there's no one with majority of votes we pick one with the highest stake.
   // If we still get a tie then we use block hash as tie breaker.
-  import io.casperlabs.casper.util.DagOperations.bigIntByteStringOrdering
+  import io.casperlabs.casper.dag.DagOperations.bigIntByteStringOrdering
   def tieBreaker(in: List[Message.Block], weights: Map[ByteString, Int]): Message.Block =
     in.maxBy(b => BigInt(weights(b.validatorId)) -> b.messageHash)(bigIntByteStringOrdering)
 

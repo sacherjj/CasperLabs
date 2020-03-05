@@ -1,5 +1,3 @@
-use std::convert::TryFrom;
-
 use engine_core::engine_state::{genesis::POS_REWARDS_PURSE, CONV_RATE, MAX_PAYMENT};
 use engine_shared::{motes::Motes, transform::Transform};
 use engine_test_support::{
@@ -9,13 +7,13 @@ use engine_test_support::{
     },
     DEFAULT_ACCOUNT_ADDR, DEFAULT_ACCOUNT_INITIAL_BALANCE,
 };
-use types::{account::PublicKey, bytesrepr::ToBytes, CLValue, Key, URef, U512};
+use types::{account::PublicKey, Key, URef, U512};
 
 const ACCOUNT_1_ADDR: PublicKey = PublicKey::ed25519_from([42u8; 32]);
-const STANDARD_PAYMENT_WASM: &str = "standard_payment.wasm";
 const DO_NOTHING_WASM: &str = "do_nothing.wasm";
-const CONTRACT_TRANSFER_PURSE_TO_ACCOUNT: &str = "transfer_purse_to_account.wasm";
-const CONTRACT_REVERT: &str = "revert.wasm";
+const TRANSFER_PURSE_TO_ACCOUNT_WASM: &str = "transfer_purse_to_account.wasm";
+const REVERT_WASM: &str = "revert.wasm";
+const ENDLESS_LOOP_WASM: &str = "endless_loop.wasm";
 
 #[ignore]
 #[test]
@@ -24,7 +22,7 @@ fn should_raise_insufficient_payment_when_caller_lacks_minimum_balance() {
 
     let exec_request = ExecuteRequestBuilder::standard(
         DEFAULT_ACCOUNT_ADDR,
-        CONTRACT_TRANSFER_PURSE_TO_ACCOUNT,
+        TRANSFER_PURSE_TO_ACCOUNT_WASM,
         (account_1_public_key, U512::from(MAX_PAYMENT - 1)),
     )
     .build();
@@ -41,7 +39,7 @@ fn should_raise_insufficient_payment_when_caller_lacks_minimum_balance() {
         .to_owned();
 
     let account_1_request =
-        ExecuteRequestBuilder::standard(ACCOUNT_1_ADDR, CONTRACT_REVERT, ()).build();
+        ExecuteRequestBuilder::standard(ACCOUNT_1_ADDR, REVERT_WASM, ()).build();
 
     let account_1_response = builder
         .exec(account_1_request)
@@ -78,10 +76,10 @@ fn should_raise_insufficient_payment_when_payment_code_does_not_pay_enough() {
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_deploy_hash([1; 32])
             .with_session_code(
-                "transfer_purse_to_account.wasm",
+                TRANSFER_PURSE_TO_ACCOUNT_WASM,
                 (account_1_public_key, U512::from(1)),
             )
-            .with_payment_code(STANDARD_PAYMENT_WASM, (U512::from(1),))
+            .with_empty_payment_bytes((U512::from(1),))
             .with_authorization_keys(&[DEFAULT_ACCOUNT_KEY])
             .build();
 
@@ -147,9 +145,9 @@ fn should_raise_insufficient_payment_error_when_out_of_gas() {
         let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_deploy_hash([1; 32])
-            .with_payment_code(STANDARD_PAYMENT_WASM, (payment_purse_amount,))
+            .with_empty_payment_bytes((payment_purse_amount,))
             .with_session_code(
-                "transfer_purse_to_account.wasm",
+                TRANSFER_PURSE_TO_ACCOUNT_WASM,
                 (account_1_public_key, transferred_amount),
             )
             .with_authorization_keys(&[DEFAULT_ACCOUNT_KEY])
@@ -217,9 +215,9 @@ fn should_forward_payment_execution_runtime_error() {
         let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_deploy_hash([1; 32])
-            .with_payment_code("revert.wasm", ())
+            .with_payment_code(REVERT_WASM, ())
             .with_session_code(
-                "transfer_purse_to_account.wasm",
+                TRANSFER_PURSE_TO_ACCOUNT_WASM,
                 (account_1_public_key, transferred_amount),
             )
             .with_authorization_keys(&[DEFAULT_ACCOUNT_KEY])
@@ -287,9 +285,9 @@ fn should_forward_payment_execution_gas_limit_error() {
         let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_deploy_hash([1; 32])
-            .with_payment_code("endless_loop.wasm", ())
+            .with_payment_code(ENDLESS_LOOP_WASM, ())
             .with_session_code(
-                "transfer_purse_to_account.wasm",
+                TRANSFER_PURSE_TO_ACCOUNT_WASM,
                 (account_1_public_key, transferred_amount),
             )
             .with_authorization_keys(&[DEFAULT_ACCOUNT_KEY])
@@ -358,9 +356,9 @@ fn should_run_out_of_gas_when_session_code_exceeds_gas_limit() {
         let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_deploy_hash([1; 32])
-            .with_payment_code(STANDARD_PAYMENT_WASM, (U512::from(payment_purse_amount),))
+            .with_empty_payment_bytes((U512::from(payment_purse_amount),))
             .with_session_code(
-                "endless_loop.wasm",
+                ENDLESS_LOOP_WASM,
                 (account_1_public_key, U512::from(transferred_amount)),
             )
             .with_authorization_keys(&[DEFAULT_ACCOUNT_KEY])
@@ -401,8 +399,8 @@ fn should_correctly_charge_when_session_code_runs_out_of_gas() {
         let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_deploy_hash([1; 32])
-            .with_payment_code(STANDARD_PAYMENT_WASM, (U512::from(payment_purse_amount),))
-            .with_session_code("endless_loop.wasm", ())
+            .with_empty_payment_bytes((U512::from(payment_purse_amount),))
+            .with_session_code(ENDLESS_LOOP_WASM, ())
             .with_authorization_keys(&[DEFAULT_ACCOUNT_KEY])
             .build();
 
@@ -460,9 +458,9 @@ fn should_correctly_charge_when_session_code_fails() {
         let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_deploy_hash([1; 32])
-            .with_payment_code(STANDARD_PAYMENT_WASM, (U512::from(payment_purse_amount),))
+            .with_empty_payment_bytes((U512::from(payment_purse_amount),))
             .with_session_code(
-                "revert.wasm",
+                REVERT_WASM,
                 (account_1_public_key, U512::from(transferred_amount)),
             )
             .with_authorization_keys(&[DEFAULT_ACCOUNT_KEY])
@@ -518,10 +516,10 @@ fn should_correctly_charge_when_session_code_succeeds() {
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_deploy_hash([1; 32])
             .with_session_code(
-                "transfer_purse_to_account.wasm",
+                TRANSFER_PURSE_TO_ACCOUNT_WASM,
                 (account_1_public_key, U512::from(transferred_amount)),
             )
-            .with_payment_code(STANDARD_PAYMENT_WASM, (U512::from(payment_purse_amount),))
+            .with_empty_payment_bytes((U512::from(payment_purse_amount),))
             .with_authorization_keys(&[DEFAULT_ACCOUNT_KEY])
             .build();
 
@@ -596,10 +594,10 @@ fn should_finalize_to_rewards_purse() {
         let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_session_code(
-                "transfer_purse_to_account.wasm",
+                TRANSFER_PURSE_TO_ACCOUNT_WASM,
                 (account_1_public_key, U512::from(transferred_amount)),
             )
-            .with_payment_code("standard_payment.wasm", (U512::from(payment_purse_amount),))
+            .with_empty_payment_bytes((U512::from(payment_purse_amount),))
             .with_authorization_keys(&[DEFAULT_ACCOUNT_KEY])
             .with_deploy_hash([1; 32])
             .build();
@@ -633,10 +631,10 @@ fn independent_standard_payments_should_not_write_the_same_keys() {
         let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_session_code(
-                "transfer_purse_to_account.wasm",
+                TRANSFER_PURSE_TO_ACCOUNT_WASM,
                 (account_1_public_key, U512::from(transfer_amount)),
             )
-            .with_payment_code(STANDARD_PAYMENT_WASM, (U512::from(payment_purse_amount),))
+            .with_empty_payment_bytes((U512::from(payment_purse_amount),))
             .with_authorization_keys(&[DEFAULT_ACCOUNT_KEY])
             .with_deploy_hash([1; 32])
             .build();
@@ -655,7 +653,7 @@ fn independent_standard_payments_should_not_write_the_same_keys() {
         let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_session_code(DO_NOTHING_WASM, ())
-            .with_payment_code(STANDARD_PAYMENT_WASM, (U512::from(payment_purse_amount),))
+            .with_empty_payment_bytes((U512::from(payment_purse_amount),))
             .with_authorization_keys(&[DEFAULT_ACCOUNT_KEY])
             .with_deploy_hash([2; 32])
             .build();
@@ -667,7 +665,7 @@ fn independent_standard_payments_should_not_write_the_same_keys() {
         let deploy = DeployItemBuilder::new()
             .with_address(ACCOUNT_1_ADDR)
             .with_session_code(DO_NOTHING_WASM, ())
-            .with_payment_code(STANDARD_PAYMENT_WASM, (U512::from(payment_purse_amount),))
+            .with_empty_payment_bytes((U512::from(payment_purse_amount),))
             .with_authorization_keys(&[account_1_public_key])
             .with_deploy_hash([1; 32])
             .build();
@@ -700,158 +698,4 @@ fn independent_standard_payments_should_not_write_the_same_keys() {
     });
 
     assert_eq!(common_write_keys.count(), 0);
-}
-
-#[ignore]
-#[test]
-fn should_charge_non_main_purse() {
-    // as account_1, create & fund a new purse and use that to pay for something
-    // instead of account_1 main purse
-    const TEST_PURSE_NAME: &str = "test-purse";
-
-    let account_1_public_key = ACCOUNT_1_ADDR;
-    let payment_purse_amount = U512::from(10_000_000);
-    let account_1_funding_amount = U512::from(100_000_000);
-    let account_1_purse_funding_amount = U512::from(50_000_000);
-
-    let mut builder = InMemoryWasmTestBuilder::default();
-
-    let setup_exec_request = {
-        let deploy = DeployItemBuilder::new()
-            .with_address(DEFAULT_ACCOUNT_ADDR)
-            .with_session_code(
-                "transfer_purse_to_account.wasm", // creates account_1
-                (account_1_public_key, account_1_funding_amount),
-            )
-            .with_payment_code(STANDARD_PAYMENT_WASM, (payment_purse_amount,))
-            .with_authorization_keys(&[DEFAULT_ACCOUNT_KEY])
-            .with_deploy_hash([1; 32])
-            .build();
-
-        ExecuteRequestBuilder::new().push_deploy(deploy).build()
-    };
-
-    let create_purse_exec_request = {
-        let deploy = DeployItemBuilder::new()
-            .with_address(ACCOUNT_1_ADDR)
-            .with_session_code(
-                "transfer_main_purse_to_new_purse.wasm", // creates test purse
-                (TEST_PURSE_NAME, account_1_purse_funding_amount),
-            )
-            .with_payment_code(STANDARD_PAYMENT_WASM, (payment_purse_amount,))
-            .with_authorization_keys(&[account_1_public_key])
-            .with_deploy_hash([2; 32])
-            .build();
-
-        ExecuteRequestBuilder::new().push_deploy(deploy).build()
-    };
-
-    let transfer_result = builder
-        .run_genesis(&DEFAULT_GENESIS_CONFIG)
-        .exec(setup_exec_request)
-        .expect_success()
-        .commit()
-        .exec(create_purse_exec_request)
-        .expect_success()
-        .commit()
-        .finish();
-
-    // get account_1
-    let account_1 = transfer_result
-        .builder()
-        .get_account(ACCOUNT_1_ADDR)
-        .expect("should have account");
-    // get purse
-    let purse_key = account_1.named_keys()[TEST_PURSE_NAME];
-    let purse = purse_key.into_uref().expect("should have uref");
-
-    let purse_starting_balance = {
-        let purse_bytes = purse
-            .addr()
-            .to_bytes()
-            .expect("should be able to serialize purse bytes");
-
-        let mint = builder.get_mint_contract_uref();
-        let balance_mapping_key = Key::local(mint.addr(), &purse_bytes);
-        let balance_uref = builder
-            .query(None, balance_mapping_key, &[])
-            .and_then(|v| CLValue::try_from(v).map_err(|error| format!("{:?}", error)))
-            .and_then(|cl_value| cl_value.into_t().map_err(|error| format!("{:?}", error)))
-            .expect("should find balance uref");
-
-        let balance: U512 = builder
-            .query(None, balance_uref, &[])
-            .and_then(|v| CLValue::try_from(v).map_err(|error| format!("{:?}", error)))
-            .and_then(|cl_value| cl_value.into_t().map_err(|error| format!("{:?}", error)))
-            .expect("should parse balance into a U512");
-
-        balance
-    };
-
-    assert_eq!(
-        purse_starting_balance, account_1_purse_funding_amount,
-        "purse should be funded with expected amount"
-    );
-
-    // should be able to pay for exec using new purse
-    let account_payment_exec_request = {
-        let deploy = DeployItemBuilder::new()
-            .with_address(ACCOUNT_1_ADDR)
-            .with_session_code(DO_NOTHING_WASM, ())
-            .with_payment_code(
-                "named_purse_payment.wasm",
-                (TEST_PURSE_NAME, payment_purse_amount),
-            )
-            .with_authorization_keys(&[account_1_public_key])
-            .with_deploy_hash([3; 32])
-            .build();
-
-        ExecuteRequestBuilder::new().push_deploy(deploy).build()
-    };
-
-    let transfer_result = builder
-        .exec(account_payment_exec_request)
-        .expect_success()
-        .commit()
-        .finish();
-
-    let response = transfer_result
-        .builder()
-        .get_exec_response(2)
-        .expect("there should be a response")
-        .clone();
-
-    let result = utils::get_success_result(&response);
-    let gas = result.cost();
-    let motes = Motes::from_gas(gas, CONV_RATE).expect("should have motes");
-
-    let expected_resting_balance = account_1_purse_funding_amount - motes.value();
-
-    let purse_final_balance = {
-        let purse_bytes = purse
-            .addr()
-            .to_bytes()
-            .expect("should be able to serialize purse bytes");
-
-        let mint = builder.get_mint_contract_uref();
-        let balance_mapping_key = Key::local(mint.addr(), &purse_bytes);
-        let balance_uref = builder
-            .query(None, balance_mapping_key, &[])
-            .and_then(|v| CLValue::try_from(v).map_err(|error| format!("{:?}", error)))
-            .and_then(|cl_value| cl_value.into_t().map_err(|error| format!("{:?}", error)))
-            .expect("should find balance uref");
-
-        let balance: U512 = builder
-            .query(None, balance_uref, &[])
-            .and_then(|v| CLValue::try_from(v).map_err(|error| format!("{:?}", error)))
-            .and_then(|cl_value| cl_value.into_t().map_err(|error| format!("{:?}", error)))
-            .expect("should parse balance into a U512");
-
-        balance
-    };
-
-    assert_eq!(
-        purse_final_balance, expected_resting_balance,
-        "purse resting balance should equal funding amount minus exec costs"
-    );
 }

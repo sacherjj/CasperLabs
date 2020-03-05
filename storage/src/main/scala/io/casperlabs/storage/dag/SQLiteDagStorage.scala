@@ -33,9 +33,11 @@ class SQLiteDagStorage[F[_]: Sync](
 )(implicit met: Metrics[F])
     extends DagStorage[F]
     with DagRepresentation[F]
+    with AncestorsStorage[F]
     with FinalityStorage[F]
     with DoobieCodecs {
   import SQLiteDagStorage.StreamOps
+  implicit val MT: MonadThrowable[F] = Sync[F]
 
   override def getRepresentation: F[DagRepresentation[F]] =
     (this: DagRepresentation[F]).pure[F]
@@ -145,26 +147,44 @@ class SQLiteDagStorage[F[_]: Sync](
           .void
       }
 
-    val transaction = for {
-      _ <- insertBlockMetadata
-      _ <- insertJustifications
-      _ <- insertTopologicalSorting
-      // Maintain a version of latest messages across the whole DAG, independent of eras,
-      // for pull based gossiping, until era statuses are added which allows us to find active ones easily.
-      _ <- upsertLatestMessages(ByteString.EMPTY)
-      // Update era-specific latest messages in this era. Child eras don't need to be updated because the
-      // application layer can track and cache it on its own.
-      _ <- selectEraExists.ifM(
-            upsertLatestMessages(keyBlockHash),
-            ().pure[ConnectionIO]
-          )
-    } yield ()
+    def insertAncestorsSkipList(ancestors: List[(Long, BlockHash)]): ConnectionIO[Unit] =
+      Update[(BlockHash, Long, BlockHash)]("""INSERT OR IGNORE INTO message_ancestors_skiplist
+           (block_hash, distance, ancestor_hash) VALUES (?, ?, ?)""")
+        .updateMany(ancestors.map {
+          case (distance, ancestorHash) => (block.blockHash, distance, ancestorHash)
+        })
+        .void
+
+    def transaction(ancestors: List[(Long, BlockHash)]) =
+      for {
+        _ <- insertBlockMetadata
+        _ <- insertJustifications
+        _ <- insertTopologicalSorting
+        // Maintain a version of latest messages across the whole DAG, independent of eras,
+        // for pull based gossiping, until era statuses are added which allows us to find active ones easily.
+        _ <- upsertLatestMessages(ByteString.EMPTY)
+        // Update era-specific latest messages in this era. Child eras don't need to be updated because the
+        // application layer can track and cache it on its own.
+        _ <- selectEraExists.ifM(
+              upsertLatestMessages(keyBlockHash),
+              ().pure[ConnectionIO]
+            )
+        _ <- insertAncestorsSkipList(ancestors).whenA(ancestors.nonEmpty)
+      } yield ()
 
     for {
-      _   <- transaction.transact(writeXa)
-      dag <- getRepresentation
+      ancestors <- collectMessageAncestors(block)
+      _         <- transaction(ancestors).transact(writeXa)
+      dag       <- getRepresentation
     } yield dag
   }
+
+  override def findAncestor(block: BlockHash, distance: Long): F[Option[BlockHash]] =
+    sql"""SELECT ancestor_hash FROM message_ancestors_skiplist 
+          WHERE block_hash=$block AND distance=$distance"""
+      .query[BlockHash]
+      .option
+      .transact(readXa)
 
   override def checkpoint(): F[Unit] = ().pure[F]
 
@@ -440,17 +460,22 @@ object SQLiteDagStorage {
   private[storage] def create[F[_]: Sync](readXa: Transactor[F], writeXa: Transactor[F])(
       implicit
       met: Metrics[F]
-  ): F[DagStorage[F] with DagRepresentation[F] with FinalityStorage[F]] =
+  ): F[
+    DagStorage[F] with DagRepresentation[F] with FinalityStorage[F] with AncestorsStorage[F]
+  ] =
     for {
       dagStorage <- Sync[F].delay(
                      new SQLiteDagStorage[F](readXa, writeXa)
                        with MeteredDagStorage[F]
                        with MeteredDagRepresentation[F]
+                       with AncestorsStorage[F]
                        with FinalityStorage[F] {
                        override implicit val m: Metrics[F] = met
                        override implicit val ms: Source    = MetricsSource
                        override implicit val a: Apply[F]   = Sync[F]
                      }
                    )
-    } yield dagStorage: DagStorage[F] with DagRepresentation[F] with FinalityStorage[F]
+    } yield dagStorage: DagStorage[F] with DagRepresentation[F] with FinalityStorage[F] with AncestorsStorage[
+      F
+    ]
 }

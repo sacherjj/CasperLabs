@@ -25,6 +25,7 @@ pub use wasm_test_builder::{
 
 pub const MINT_INSTALL_CONTRACT: &str = "mint_install.wasm";
 pub const POS_INSTALL_CONTRACT: &str = "pos_install.wasm";
+pub const STANDARD_PAYMENT_INSTALL_CONTRACT: &str = "standard_payment_install.wasm";
 pub const STANDARD_PAYMENT_CONTRACT: &str = "standard_payment.wasm";
 
 pub const DEFAULT_CHAIN_NAME: &str = "gerald";
@@ -58,12 +59,16 @@ lazy_static! {
             mint_installer_bytes = utils::read_wasm_file_bytes(MINT_INSTALL_CONTRACT);
             pos_installer_bytes = utils::read_wasm_file_bytes(POS_INSTALL_CONTRACT);
         };
+        // TODO - make this an empty vec for cfg!(feature = "turbo")
+        let standard_payment_installer_bytes =
+            utils::read_wasm_file_bytes(STANDARD_PAYMENT_INSTALL_CONTRACT);
         GenesisConfig::new(
             DEFAULT_CHAIN_NAME.to_string(),
             DEFAULT_GENESIS_TIMESTAMP,
             *DEFAULT_PROTOCOL_VERSION,
             mint_installer_bytes,
             pos_installer_bytes,
+            standard_payment_installer_bytes,
             DEFAULT_ACCOUNTS.clone(),
             *DEFAULT_WASM_COSTS,
         )

@@ -30,7 +30,8 @@ package object votingmatrix {
   def updateVoterPerspective[F[_]: Monad](
       dag: DagRepresentation[F],
       msg: Message,
-      currentVoteValue: BlockHash
+      currentVoteValue: BlockHash,
+      isHighway: Boolean
   )(implicit matrix: VotingMatrix[F]): F[Unit] =
     for {
       validatorToIndex <- (matrix >> 'validatorToIdx).get
@@ -41,7 +42,7 @@ package object votingmatrix {
             ().pure[F]
           } else {
             for {
-              _ <- updateVotingMatrixOnNewBlock[F](dag, msg)
+              _ <- updateVotingMatrixOnNewBlock[F](dag, msg, isHighway)
               _ <- updateFirstZeroLevelVote[F](voter, currentVoteValue, msg.mainRank)
             } yield ()
           }
@@ -54,7 +55,8 @@ package object votingmatrix {
     */
   def checkForCommittee[F[_]: MonadThrowable](
       dag: DagRepresentation[F],
-      rFTT: Double
+      rFTT: Double,
+      isHighway: Boolean
   )(
       implicit matrix: VotingMatrix[F]
   ): F[Option[CommitteeWithConsensusValue]] =
@@ -62,7 +64,7 @@ package object votingmatrix {
       weightMap                 <- (matrix >> 'weightMap).get
       totalWeight               = weightMap.values.sum
       quorum                    = totalWeight * (rFTT + 0.5)
-      committeeApproximationOpt <- findCommitteeApproximation[F](dag, quorum)
+      committeeApproximationOpt <- findCommitteeApproximation[F](dag, quorum, isHighway)
       result <- committeeApproximationOpt match {
                  case Some(
                      CommitteeWithConsensusValue(committeeApproximation, _, consensusValue)
@@ -96,12 +98,13 @@ package object votingmatrix {
 
   private[votingmatrix] def updateVotingMatrixOnNewBlock[F[_]: Monad](
       dag: DagRepresentation[F],
-      msg: Message
+      msg: Message,
+      isHighway: Boolean
   )(implicit matrix: VotingMatrix[F]): F[Unit] =
     for {
       validatorToIndex <- (matrix >> 'validatorToIdx).get
       panoramaM <- FinalityDetectorUtil
-                    .panoramaM[F](dag, validatorToIndex, msg)
+                    .panoramaM[F](dag, validatorToIndex, msg, isHighway)
       // Replace row i in voting-matrix by panoramaM
       _ <- (matrix >> 'votingMatrix).modify(
             _.updated(validatorToIndex(msg.validatorId), panoramaM)
@@ -141,7 +144,8 @@ package object votingmatrix {
     */
   private[votingmatrix] def findCommitteeApproximation[F[_]: MonadThrowable](
       dag: DagRepresentation[F],
-      quorum: Weight
+      quorum: Weight,
+      isHighway: Boolean
   )(implicit matrix: VotingMatrix[F]): F[Option[CommitteeWithConsensusValue]] =
     for {
       weightMap           <- (matrix >> 'weightMap).get
@@ -162,10 +166,11 @@ package object votingmatrix {
                                                                      voteMsg.eraId
                                                                    )
                                                } yield !eraEquivocators.contains(validator)
+
                                                val ncbCheck =
                                                  dag.getEquivocators.map(!_.contains(validator))
 
-                                               if (Validation.isHighway) highwayCheck else ncbCheck
+                                               if (isHighway) highwayCheck else ncbCheck
                                            }
                                            .map(_.groupBy(_._1).mapValues(_.map(_._2)))
       // Get most support voteBranch and its support weight

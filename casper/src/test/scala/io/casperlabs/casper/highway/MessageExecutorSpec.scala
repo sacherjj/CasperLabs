@@ -10,7 +10,7 @@ import io.casperlabs.casper.consensus.{Block, Bond}
 import io.casperlabs.casper.consensus.state
 import io.casperlabs.casper.mocks.{MockEventEmitter, NoOpValidation}
 import io.casperlabs.casper.validation
-import io.casperlabs.casper.validation.{Validation, ValidationImpl}
+import io.casperlabs.casper.validation.{HighwayValidationImpl, Validation}
 import io.casperlabs.casper.validation.Errors.ValidateErrorWrapper
 import io.casperlabs.casper.finality.MultiParentFinalizer
 import io.casperlabs.casper.validation.Validation.BlockEffects
@@ -96,7 +96,9 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
           signatureAlgorithm = Ed25519
         ),
         chainName = chainName,
-        upgrades = Seq.empty
+        upgrades = Seq.empty,
+        // Tests might be torn down before this step is done.
+        asyncRequeueOrphans = false
       )
     }
 
@@ -115,6 +117,7 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
                     justifications = Map.empty,
                     isBookingBlock = false
                   )
+        _     <- forkchoice.set(message)
         block <- BlockStorage[Task].getBlockUnsafe(message.messageHash)
       } yield block
 
@@ -164,7 +167,8 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
       } yield second
 
     override lazy val validation: Validation[Task] =
-      if (validate) new ValidationImpl[Task]() else new NoOpValidation[Task]
+      if (validate) new HighwayValidationImpl[Task](validateEquivocation = true)
+      else new NoOpValidation[Task]
 
     // Collect emitted events.
     override implicit lazy val eventEmitter: MockEventEmitter[Task] =
@@ -441,7 +445,7 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
       validation.raiseValidateErrorThroughApplicativeError[Task]
 
     new ExecutorFixture(db) with ExecEngineSerivceWithFakeEffects {
-      // Fake validation which let's everything through but it raises the one
+      // Fake validation which lets everything through but it raises the one
       // invalid status which should result in a block being saved.
       override lazy val validation = new NoOpValidation[Task] {
         override def checkEquivocation(dag: DagRepresentation[Task], block: Block): Task[Unit] =

@@ -7,7 +7,6 @@ import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.Estimator
 import io.casperlabs.casper.util.ProtoUtil
-import io.casperlabs.casper.util.EraObservedBehavior
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.crypto.Keys.{PublicKey, PublicKeyBS}
 import io.casperlabs.models.Message.Block
@@ -19,9 +18,10 @@ import io.casperlabs.storage.dag.DagRepresentation._
 import io.casperlabs.storage.dag.{DagLookup, DagRepresentation, DagStorage}
 import io.casperlabs.storage.era.EraStorage
 import simulacrum.typeclass
-
-import io.casperlabs.casper.util.DagOperations
 import io.casperlabs.casper.consensus.Bond
+import io.casperlabs.casper.dag.{DagOperations, EraObservedBehavior}
+import io.casperlabs.storage.dag.AncestorsStorage
+import io.casperlabs.storage.dag.AncestorsStorage.Relation
 
 /** Some sort of stateful, memoizing implementation of a fast fork choice.
   * Should have access to the era tree to check what are the latest messages
@@ -83,68 +83,52 @@ object ForkChoice {
         .mapValues(_.map(_._2).toSet)
   }
 
-  def create[F[_]: Sync: Metrics: EraStorage: DagStorage]: ForkChoice[F] = new ForkChoice[F] {
+  def create[F[_]: Sync: Metrics: EraStorage: DagStorage: AncestorsStorage]: ForkChoice[F] =
+    new ForkChoice[F] {
 
-    implicit val metricsSource = HighwayMetricsSource / "ForkChoice"
+      implicit val metricsSource = HighwayMetricsSource / "ForkChoice"
 
-    /**
-      * Computes fork choice within single era.
-      *
-      * @param dag
-      * @param keyBlock key block of the era.
-      * @param eraStartBlock block where fork choice starts from. Note that it may not
-      *                      necessarily belong to the same era as key block (see switch blocks).
-      * @param latestMessages validators' latest messages in that era.
-      * @param equivocators known equivocators. Using latest messages is not enough since
-      *                     we have a "forgiveness period" which states that a validator
-      *                     is an equivocator in the era he equivocated and `n` descendant eras.
-      * @return fork choice and a set of reduced justifications.
-      */
-    private def eraForkChoice(
-        dag: DagRepresentation[F],
-        keyBlock: Message.Block,
-        eraStartBlock: Block,
-        latestMessages: Map[DagRepresentation.Validator, Set[Message]],
-        equivocators: Set[ByteString]
-    ): F[(Block, Map[DagRepresentation.Validator, Set[Message]])] =
-      for {
-        weights <- EraStorage[F]
-                    .getEraUnsafe(keyBlock.messageHash)
-                    .map(_.bonds.map {
-                      case Bond(validator, stake) => validator -> Weight(stake)
-                    }.toMap)
-        honestValidators = weights.keys.toList.filterNot(equivocators(_))
-        latestHonestMessages = latestMessages.collect {
-          // It may be the case that validator is honest in current era,
-          // but equivocated in the past and we haven't yet forgiven him.
-          case (v, lms) if lms.size == 1 && honestValidators.contains(v) => v -> lms.head
-        }
-        forkChoice <- MonadThrowable[F].tailRecM(eraStartBlock) { startBlock =>
-                       // Using `dag.children` might bring a new child that wasn't visible in `latestMessages`,
-                       // so we rely on just what we have in latest and do traversal. This should be temporary.
-                       implicit val ord = DagOperations.blockMainRankOrderingDesc
-                       val noChildren = DagOperations
-                         .bfToposortTraverseF[F](
-                           latestHonestMessages.values.toList
-                         ) { m =>
-                           List(m.parentBlock).filterNot(_.isEmpty).traverse(dag.lookupUnsafe)
-                         }
-                         .takeWhile(_.mainRank > startBlock.mainRank)
-                         .find { x =>
-                           x.parentBlock == startBlock.messageHash && x.isBlock && x.eraId == keyBlock.messageHash
-                         }
-                         .map(_.isEmpty)
-                         .timerGauge("children")
-
-                       noChildren.ifM(
-                         startBlock.asRight[Block].pure[F],
+      /**
+        * Computes fork choice within single era.
+        *
+        * @param dag
+        * @param keyBlock key block of the era.
+        * @param eraStartBlock block where fork choice starts from. Note that it may not
+        *                      necessarily belong to the same era as key block (see switch blocks).
+        * @param latestMessages validators' latest messages in that era.
+        * @param equivocators known equivocators. Using latest messages is not enough since
+        *                     we have a "forgiveness period" which states that a validator
+        *                     is an equivocator in the era he equivocated and `n` descendant eras.
+        * @return fork choice and a set of reduced justifications.
+        */
+      private def eraForkChoice(
+          dag: DagRepresentation[F],
+          keyBlock: Message.Block,
+          eraStartBlock: Block,
+          latestMessages: Map[DagRepresentation.Validator, Set[Message]],
+          equivocators: Set[ByteString]
+      ): F[(Block, Map[DagRepresentation.Validator, Set[Message]])] =
+        for {
+          weights <- EraStorage[F]
+                      .getEraUnsafe(keyBlock.messageHash)
+                      .map(_.bonds.map {
+                        case Bond(validator, stake) => validator -> Weight(stake)
+                      }.toMap)
+          honestValidators = weights.keys.toList.filterNot(equivocators(_))
+          latestHonestMessages = latestMessages.collect {
+            // It may be the case that validator is honest in current era,
+            // but equivocated in the past and we haven't yet forgiven him.
+            case (v, lms) if lms.size == 1 && honestValidators.contains(v) => v -> lms.head
+          }
+          forkChoice <- MonadThrowable[F].tailRecM(eraStartBlock) { startBlock =>
                          for {
                            // Collect latest messages from honest validators that vote for the block.
                            relevantMessages <- honestValidators
                                                 .foldLeftM(Map.empty[ByteString, Message]) {
                                                   case (acc, v) =>
-                                                    latestHonestMessages.get(v).fold(acc.pure[F]) {
-                                                      latestMessage =>
+                                                    latestHonestMessages
+                                                      .get(v)
+                                                      .fold(acc.pure[F]) { latestMessage =>
                                                         previousVoteForDescendant(
                                                           dag,
                                                           latestMessage,
@@ -153,7 +137,7 @@ object ForkChoice {
                                                             acc.updated(v, vote)
                                                           })
                                                           .timerGauge("previousVoteForDescendant")
-                                                    }
+                                                      }
                                                 }
                                                 .timerGauge("relevantMessages")
 
@@ -164,15 +148,20 @@ object ForkChoice {
                                             case block: Message.Block =>
                                               // A block is a vote for itself.
                                               scores.update(block, weights(v)).pure[F]
-                                            case ballot: Message.Ballot =>
+                                            case ballot: Message.Ballot
+                                                if ballot.parentBlock != startBlock.messageHash =>
                                               // Ballot votes for its parent.
                                               dag
                                                 .lookupBlockUnsafe(ballot.parentBlock)
                                                 .map(block => scores.update(block, weights(v)))
+                                            case ballot: Message.Ballot
+                                                if ballot.parentBlock == startBlock.messageHash =>
+                                              // Ignore ballots that vote for the start block directly.
+                                              // They don't advance the fork choice.
+                                              scores.pure[F]
                                           }
 
                                       }
-
                            result <- if (scores.isEmpty)
                                       // No one voted for anything - there are no descendants of `start`.
                                       startBlock.asRight[Block].pure[F]
@@ -181,116 +170,115 @@ object ForkChoice {
                                         .tip[F](Sync[F], dag)
                                         .map(_.asLeft[Block])
                          } yield result
-                       )
-                     }
-        latestMessagesFlattened = NonEmptyList
-          .of[Message](
-            forkChoice,
-            latestMessages.values.flatten.toSeq: _*
-          )
-        // Eliminate tips that are ancestors in the main-tree.
-        reducedJustifications <- Estimator
-                                  .tipsOfLatestMessages[F](
-                                    dag,
-                                    latestMessagesFlattened,
-                                    eraStartBlock.messageHash
-                                  )
-                                  .map(
-                                    _.groupBy(_.validatorId)
-                                      .mapValues(_.toSet)
-                                  )
-                                  .timerGauge("tipsOfLatestMessages")
-      } yield (forkChoice, reducedJustifications)
-
-    /**
-      * Computes the fork choice across multiple eras (as defined by `keyBlock`).
-      *
-      * @param startBlock Starting block for the fork choice (already known DAG tip).
-      * @param keyBlocks List of eras over which we will calculate the fork choice.
-      * @param dagView
-      * @param dag
-      * @return Main parent and set of justifications.
-      */
-    private def erasForkChoice(
-        startBlock: Message.Block,
-        keyBlocks: List[Message.Block],
-        dagView: EraObservedBehavior[Message]
-    )(
-        implicit dag: DagRepresentation[F]
-    ): F[(Block, Map[DagRepresentation.Validator, Set[Message]])] =
-      keyBlocks
-        .foldM(
-          startBlock -> Map
-            .empty[DagRepresentation.Validator, Set[Message]]
-        ) {
-          case ((startBlock, accLatestMessages), currKeyBlock) =>
-            val eraLatestMessages = dagView
-              .latestMessagesInEra(
-                currKeyBlock.messageHash
-              )
-            val visibleEquivocators = dagView
-              .equivocatorsVisibleInEras(
-                // TODO: CON-633
-                // Equivocator count only in era he equivocated
-                Set(currKeyBlock.messageHash)
-              )
-            for {
-              (forkChoice, eraLatestMessagesReduced) <- eraForkChoice(
-                                                         dag,
-                                                         currKeyBlock,
-                                                         startBlock,
-                                                         eraLatestMessages,
-                                                         visibleEquivocators
-                                                       ).timerGauge("eraForkChoice")
-            } yield (
+                       }
+          latestMessagesFlattened = NonEmptyList
+            .of[Message](
               forkChoice,
-              accLatestMessages |+| eraLatestMessagesReduced
+              latestMessages.values.flatten.toSeq: _*
             )
-        }
+          // Eliminate tips that are ancestors in the main-tree.
+          reducedJustifications <- Estimator
+                                    .tipsOfLatestMessages[F](
+                                      dag,
+                                      latestMessagesFlattened,
+                                      eraStartBlock.messageHash
+                                    )
+                                    .map(
+                                      _.groupBy(_.validatorId)
+                                        .mapValues(_.toSet)
+                                    )
+                                    .timerGauge("tipsOfLatestMessages")
+        } yield (forkChoice, reducedJustifications)
 
-    override def fromKeyBlock(keyBlockHash: BlockHash): F[Result] =
-      for {
-        implicit0(dag: DagRepresentation[F]) <- DagStorage[F].getRepresentation
-        keyBlock                             <- dag.lookupBlockUnsafe(keyBlockHash)
-        keyBlocks                            <- MessageProducer.collectKeyBlocks[F](keyBlockHash)
-        erasLatestMessages <- DagOperations
-                               .latestMessagesInEras[F](dag, keyBlocks)
-                               .map(EraObservedBehavior.local(_))
-                               .timerGauge("erasLatestMessages")
-        (forkChoice, justifications) <- erasForkChoice(keyBlock, keyBlocks, erasLatestMessages)
-                                         .timerGauge("erasForkChoice")
-      } yield Result(forkChoice, justifications.values.flatten.toSet)
+      /**
+        * Computes the fork choice across multiple eras (as defined by `keyBlock`).
+        *
+        * @param startBlock Starting block for the fork choice (already known DAG tip).
+        * @param keyBlocks List of eras over which we will calculate the fork choice.
+        * @param dagView
+        * @param dag
+        * @return Main parent and set of justifications.
+        */
+      private def erasForkChoice(
+          startBlock: Message.Block,
+          keyBlocks: List[Message.Block],
+          dagView: EraObservedBehavior[Message]
+      )(
+          implicit dag: DagRepresentation[F]
+      ): F[(Block, Map[DagRepresentation.Validator, Set[Message]])] =
+        keyBlocks
+          .foldM(
+            startBlock -> Map
+              .empty[DagRepresentation.Validator, Set[Message]]
+          ) {
+            case ((startBlock, accLatestMessages), currKeyBlock) =>
+              val eraLatestMessages = dagView
+                .latestMessagesInEra(
+                  currKeyBlock.messageHash
+                )
+              val visibleEquivocators = dagView
+                .equivocatorsVisibleInEras(
+                  // TODO: CON-633
+                  // Equivocator count only in era he equivocated
+                  Set(currKeyBlock.messageHash)
+                )
+              for {
+                (forkChoice, eraLatestMessagesReduced) <- eraForkChoice(
+                                                           dag,
+                                                           currKeyBlock,
+                                                           startBlock,
+                                                           eraLatestMessages,
+                                                           visibleEquivocators
+                                                         ).timerGauge("eraForkChoice")
+              } yield (
+                forkChoice,
+                accLatestMessages |+| eraLatestMessagesReduced
+              )
+          }
 
-    override def fromJustifications(
-        keyBlockHash: BlockHash,
-        justifications: Set[BlockHash]
-    ): F[Result] =
-      for {
-        implicit0(dag: DagRepresentation[F]) <- DagStorage[F].getRepresentation
-        keyBlock                             <- dag.lookupBlockUnsafe(keyBlockHash)
-        // Build a local view of the DAG.
-        // We can use it to optimize calculations of the block's panorama.
-        erasObservedBehaviors <- DagOperations
-                                  .latestMessagesInErasUntil[F](keyBlock.messageHash)
-                                  .map(EraObservedBehavior.local(_))
-                                  .timerGauge("eraObservedBehaviors")
-        justificationsMessages <- justifications.toList.traverse(dag.lookupUnsafe)
-        panoramaOfTheBlock <- EraObservedBehavior
-                               .messageJPast[F](
-                                 dag,
-                                 justificationsMessages,
-                                 erasObservedBehaviors,
-                                 keyBlock
-                               )
-                               .timerGauge("panoramaOfTheBlock")
-        keyBlocks <- MessageProducer.collectKeyBlocks[F](keyBlockHash)
-        (forkChoice, forkChoiceJustifications) <- erasForkChoice(
-                                                   keyBlock,
-                                                   keyBlocks,
-                                                   panoramaOfTheBlock
-                                                 ).timerGauge("erasForkChoice")
-      } yield Result(forkChoice, forkChoiceJustifications.values.flatten.toSet)
-  }
+      override def fromKeyBlock(keyBlockHash: BlockHash): F[Result] =
+        for {
+          implicit0(dag: DagRepresentation[F]) <- DagStorage[F].getRepresentation
+          keyBlock                             <- dag.lookupBlockUnsafe(keyBlockHash)
+          keyBlocks                            <- MessageProducer.collectKeyBlocks[F](keyBlockHash)
+          erasLatestMessages <- DagOperations
+                                 .latestMessagesInEras[F](dag, keyBlocks)
+                                 .map(EraObservedBehavior.local(_))
+                                 .timerGauge("erasLatestMessages")
+          (forkChoice, justifications) <- erasForkChoice(keyBlock, keyBlocks, erasLatestMessages)
+                                           .timerGauge("erasForkChoice")
+        } yield Result(forkChoice, justifications.values.flatten.toSet)
+
+      override def fromJustifications(
+          keyBlockHash: BlockHash,
+          justifications: Set[BlockHash]
+      ): F[Result] =
+        for {
+          implicit0(dag: DagRepresentation[F]) <- DagStorage[F].getRepresentation
+          keyBlock                             <- dag.lookupBlockUnsafe(keyBlockHash)
+          // Build a local view of the DAG.
+          // We can use it to optimize calculations of the block's panorama.
+          erasObservedBehaviors <- DagOperations
+                                    .latestMessagesInErasUntil[F](keyBlock.messageHash)
+                                    .map(EraObservedBehavior.local(_))
+                                    .timerGauge("eraObservedBehaviors")
+          justificationsMessages <- justifications.toList.traverse(dag.lookupUnsafe)
+          panoramaOfTheBlock <- EraObservedBehavior
+                                 .messageJPast[F](
+                                   dag,
+                                   justificationsMessages,
+                                   erasObservedBehaviors,
+                                   keyBlock
+                                 )
+                                 .timerGauge("panoramaOfTheBlock")
+          keyBlocks <- MessageProducer.collectKeyBlocks[F](keyBlockHash)
+          (forkChoice, forkChoiceJustifications) <- erasForkChoice(
+                                                     keyBlock,
+                                                     keyBlocks,
+                                                     panoramaOfTheBlock
+                                                   ).timerGauge("erasForkChoice")
+        } yield Result(forkChoice, forkChoiceJustifications.values.flatten.toSet)
+    }
 
   /** Returns previous message by the creator of `latestMessage` that is a descendant
     * (in the main tree) of the target block. If such message doesn't exists - returns `None`.
@@ -298,29 +286,29 @@ object ForkChoice {
     * Validator can "change his mind". His latest message may be a descendant of different
     * block than his second to last message.
     */
-  private def previousVoteForDescendant[F[_]: MonadThrowable](
+  private def previousVoteForDescendant[F[_]: MonadThrowable: AncestorsStorage](
       dag: DagLookup[F],
       latestMessage: Message,
       target: Block
   ): F[Option[Message]] =
-    if (latestMessage.mainRank <= target.mainRank)
-      none[Message].pure[F]
+    if (latestMessage.mainRank <= target.mainRank) none[Message].pure[F]
     else {
-      ProtoUtil
-        .isInMainChain[F](dag, target, latestMessage.messageHash)
-        .flatMap(
-          isActiveVote =>
-            if (isActiveVote)
-              latestMessage.some.pure[F]
-            else
-              Option(latestMessage.validatorPrevMessageHash)
-                .filterNot(_ == ByteString.EMPTY)
-                .fold(none[Message].pure[F]) { prevMsgHash =>
-                  dag
-                    .lookupUnsafe(prevMsgHash)
-                    .flatMap(previousVoteForDescendant(dag, _, target))
-                }
-        )
+      DagOperations
+        .relation[F](latestMessage, target)
+        .flatMap {
+          case None =>
+            Option(latestMessage.validatorPrevMessageHash)
+              .filterNot(_ == ByteString.EMPTY)
+              .fold(none[Message].pure[F]) { prevMsgHash =>
+                dag
+                  .lookupUnsafe(prevMsgHash)
+                  .flatMap(previousVoteForDescendant(dag, _, target))
+              }
+          case Some(Relation.Ancestor | Relation.Equal) =>
+            none.pure[F]
+          case Some(Relation.Descendant) =>
+            latestMessage.some.pure[F]
+        }
     }
 
   /* The scores map keeps track of the votes for a descendant of `start` by height.
@@ -374,7 +362,7 @@ object ForkChoice {
       if (currHeight == scores.stopHeight) {
         // We reached the starting block. This means there is no block that has majority of votes.
         // Return a child of starting block that has the highest score.
-        import io.casperlabs.casper.util.DagOperations.bigIntByteStringOrdering
+        import DagOperations.bigIntByteStringOrdering
         scores.votesAtHeight(currHeight).toList.map(_.swap).max(bigIntByteStringOrdering)._2.pure[F]
       } else {
         scores.votesAtHeight(currHeight).toList.filter {
@@ -430,7 +418,8 @@ trait ForkChoiceManager[F[_]] extends ForkChoice[F] {
 }
 
 object ForkChoiceManager {
-  def create[F[_]: Sync: Metrics: EraStorage: DagStorage]: ForkChoiceManager[F] = {
+  def create[F[_]: Sync: EraStorage: DagStorage: Metrics: AncestorsStorage]
+      : ForkChoiceManager[F] = {
     val fc = ForkChoice.create[F]
     new ForkChoiceManager[F] {
       // TODO (CON-636): Implement the ForkChoiceManager.
