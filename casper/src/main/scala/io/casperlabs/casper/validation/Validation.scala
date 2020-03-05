@@ -150,15 +150,15 @@ object Validation {
       dag: DagRepresentation[F]
   ): F[Unit] =
     for {
-      equivocators <- dag.getEquivocators
-      message      <- MonadThrowable[F].fromTry(Message.fromBlockSummary(b))
-      _ <- Monad[F].whenA(equivocators.contains(message.validatorId)) {
+      equivocations <- dag.getEquivocations
+      message       <- MonadThrowable[F].fromTry(Message.fromBlockSummary(b))
+      _ <- Monad[F].whenA(equivocations.contains(message.validatorId)) {
+            val validatorEquivocations = equivocations(message.validatorId)
+            val equivocationsHashes    = validatorEquivocations.map(_.messageHash)
+            val minRank = EquivocationDetector
+              .findMinBaseRank(Map(message.validatorId -> validatorEquivocations))
+              .getOrElse(0L) // We know it has to be defined by this point.
             for {
-              equivocations       <- dag.getEquivocations.map(_(message.validatorId))
-              equivocationsHashes = equivocations.map(_.messageHash)
-              minRank = EquivocationDetector
-                .findMinBaseRank(Map(message.validatorId -> equivocations))
-                .getOrElse(0L) // We know it has to be defined by this point.
               seenEquivocations <- DagOperations
                                     .swimlaneV[F](message.validatorId, message, dag)
                                     .foldWhileLeft(Set.empty[BlockHash]) {
