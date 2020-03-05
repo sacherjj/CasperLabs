@@ -147,11 +147,14 @@ object Validation {
   // i.e. an equivocator cannot cite multiple of its latest messages.
   def swimlane[F[_]: MonadThrowable: RaiseValidationError: Log](
       b: BlockSummary,
-      dag: DagRepresentation[F]
+      dag: DagRepresentation[F],
+      isHighway: Boolean
   ): F[Unit] =
     for {
-      equivocations <- dag.getEquivocations
-      message       <- MonadThrowable[F].fromTry(Message.fromBlockSummary(b))
+      equivocations <- if (isHighway)
+                        dag.latestInEra(b.getHeader.keyBlockHash).flatMap(_.getEquivocations)
+                      else dag.getEquivocations
+      message <- MonadThrowable[F].fromTry(Message.fromBlockSummary(b))
       _ <- Monad[F].whenA(equivocations.contains(message.validatorId)) {
             val validatorEquivocations = equivocations(message.validatorId)
             val equivocationsHashes    = validatorEquivocations.map(_.messageHash)
