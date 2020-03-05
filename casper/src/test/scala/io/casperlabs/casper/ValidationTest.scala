@@ -666,6 +666,52 @@ class ValidationTest
         result shouldBe Left(ValidateErrorWrapper(InvalidPrevBlockHash))
       }
   }
+  it should "not fail if it encounters a message in the parent era" in withStorage {
+    implicit blockStorage => implicit dagStorage => _ => _ =>
+      val v1 = generateValidator("v1")
+      // era-0: G = B0 = B1 = b2 = b4
+      //                  \\         \
+      // era-1:             B3 = = = B5
+      for {
+        g  <- createAndStoreMessage[Task](Nil)
+        b0 <- createAndStoreBlockFull[Task](v1, List(g), Nil)
+        b1 <- createAndStoreBlockFull[Task](v1, List(b0), List(b0), keyBlockHash = b0.blockHash)
+        // Voting ballot in the parent era (using StoreBlock because it's easier to pass justifications).
+        b2 <- createAndStoreBlockFull[Task](
+               v1,
+               List(b1),
+               List(b1),
+               keyBlockHash = b0.blockHash
+             )
+        // A block in the child era.
+        b3 <- createAndStoreBlockFull[Task](
+               v1,
+               List(b1),
+               List(b1),
+               maybeValidatorPrevBlockHash = Some(ByteString.EMPTY),
+               maybeValidatorBlockSeqNum = Some(0),
+               keyBlockHash = b1.blockHash
+             )
+        // Another voting ballot.
+        b4 <- createAndStoreBlockFull[Task](
+               v1,
+               List(b1),
+               List(b2),
+               keyBlockHash = b0.blockHash
+             )
+        // Another block that cites the parent era voting ballot.
+        b5 <- createAndStoreBlockFull[Task](
+               v1,
+               List(b3),
+               List(b3, b4),
+               maybeValidatorPrevBlockHash = Some(b3.blockHash),
+               keyBlockHash = b1.blockHash
+             )
+        dag <- dagStorage.getRepresentation
+        _   <- Validation.validatorPrevBlockHash[Task](b3.getSummary, dag)
+        _   <- Validation.validatorPrevBlockHash[Task](b5.getSummary, dag)
+      } yield ()
+  }
 
   "Sender validation" should "return true for genesis and blocks from bonded validators and false otherwise" in withStorage {
     implicit blockStorage => implicit dagStorage => _ => _ =>
