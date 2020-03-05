@@ -2,6 +2,7 @@ package io.casperlabs.client.configuration
 
 import cats._
 import cats.implicits._
+import cats.free.Trampoline
 import cats.syntax.either._
 import com.google.protobuf.wrappers
 import com.google.protobuf.ByteString
@@ -76,47 +77,55 @@ object Args {
     Try(parser.fromJson[LegacyArg](js)).flatMap(legacy => Try(legacyArgToArg(legacy)))
 
   private def legacyArgToArg(legacy: LegacyArg): Arg =
-    Arg(name = legacy.name, value = legacy.value.map(legacyValueToInstance))
+    Arg(name = legacy.name, value = legacy.value.map(v => legacyValueToInstance(v).run))
 
-  private def legacyValueToInstance(value: LegacyArg.Value): state.CLValueInstance =
+  private def legacyValueToInstance(value: LegacyArg.Value): Trampoline[state.CLValueInstance] =
     value.value match {
       case LegacyArg.Value.Value.Empty =>
-        state.CLValueInstance(
-          clType = state.CLType(state.CLType.Variants.Empty).some,
-          value = None
+        Trampoline.done(
+          state.CLValueInstance(
+            clType = state.CLType(state.CLType.Variants.Empty).some,
+            value = None
+          )
         )
 
-      case LegacyArg.Value.Value.IntValue(i) => dsl.instances.i32(i)
+      case LegacyArg.Value.Value.IntValue(i) => Trampoline.done(dsl.instances.i32(i))
 
       case LegacyArg.Value.Value.IntList(list) =>
-        state.CLValueInstance(
-          clType = dsl.types.list(dsl.types.i32).some,
-          value = dsl.values.list(list.values.map(dsl.values.i32)).some
+        Trampoline.done(
+          state.CLValueInstance(
+            clType = dsl.types.list(dsl.types.i32).some,
+            value = dsl.values.list(list.values.map(dsl.values.i32)).some
+          )
         )
 
-      case LegacyArg.Value.Value.StringValue(s) => dsl.instances.string(s)
+      case LegacyArg.Value.Value.StringValue(s) => Trampoline.done(dsl.instances.string(s))
 
       case LegacyArg.Value.Value.StringList(list) =>
-        state.CLValueInstance(
-          clType = dsl.types.list(dsl.types.string).some,
-          value = dsl.values.list(list.values.map(dsl.values.string)).some
+        Trampoline.done(
+          state.CLValueInstance(
+            clType = dsl.types.list(dsl.types.string).some,
+            value = dsl.values.list(list.values.map(dsl.values.string)).some
+          )
         )
 
-      case LegacyArg.Value.Value.LongValue(i) => dsl.instances.i64(i)
+      case LegacyArg.Value.Value.LongValue(i) => Trampoline.done(dsl.instances.i64(i))
 
-      case LegacyArg.Value.Value.Key(k) => dsl.instances.key(k)
+      case LegacyArg.Value.Value.Key(k) => Trampoline.done(dsl.instances.key(k))
 
       case LegacyArg.Value.Value.BytesValue(bytes) =>
-        state.CLValueInstance(
-          clType = dsl.types.fixedList(dsl.types.u8, bytes.size).some,
-          value = dsl.values.fixedList(bytes.toByteArray.map(dsl.values.u8)).some
+        Trampoline.done(
+          state.CLValueInstance(
+            clType = dsl.types.fixedList(dsl.types.u8, bytes.size).some,
+            value = dsl.values.fixedList(bytes.toByteArray.map(dsl.values.u8)).some
+          )
         )
 
       case LegacyArg.Value.Value.BigInt(x) =>
         x.bitWidth match {
-          case 128 => dsl.instances.u128(BigInt(x.value))
-          case 256 => dsl.instances.u256(BigInt(x.value))
-          case 512 => dsl.instances.u512(BigInt(x.value))
+          case 128 => Trampoline.done(dsl.instances.u128(BigInt(x.value)))
+          case 256 => Trampoline.done(dsl.instances.u256(BigInt(x.value)))
+          case 512 => Trampoline.done(dsl.instances.u512(BigInt(x.value)))
 
           case other =>
             throw new IllegalArgumentException(s"Invalid Legacy BigInt bit width $other")
@@ -125,18 +134,15 @@ object Args {
       case LegacyArg.Value.Value.OptionalValue(x) =>
         x.value match {
           case LegacyArg.Value.Value.Empty =>
-            state.CLValueInstance(
-              clType = dsl.types.option(dsl.types.any).some,
-              value = dsl.values.option(None).some
-            )
+            Trampoline.done(dsl.instances.option.none(dsl.types.any))
 
           case _ =>
-            // TODO: stack safety
-            val inner = legacyValueToInstance(x)
-            state.CLValueInstance(
-              clType = inner.clType.map(dsl.types.option),
-              value = dsl.values.option(inner.value).some
-            )
+            Trampoline.defer(legacyValueToInstance(x)).map { inner =>
+              state.CLValueInstance(
+                clType = inner.clType.map(dsl.types.option),
+                value = dsl.values.option(inner.value).some
+              )
+            }
         }
     }
 }
