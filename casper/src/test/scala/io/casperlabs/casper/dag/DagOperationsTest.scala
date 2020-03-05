@@ -1,4 +1,4 @@
-package io.casperlabs.casper.util
+package io.casperlabs.casper.dag
 
 import cats.data.NonEmptyList
 import cats.implicits._
@@ -11,6 +11,7 @@ import io.casperlabs.casper.helper.BlockUtil.generateValidator
 import io.casperlabs.casper.helper.{BlockGenerator, StorageFixture}
 import io.casperlabs.casper.scalatestcontrib._
 import io.casperlabs.casper.util.BondingUtil.Bond
+import io.casperlabs.casper.util.ByteStringPrettifier
 import io.casperlabs.models.Message
 import io.casperlabs.shared.Sorting.messageSummaryOrdering
 import io.casperlabs.storage.dag.DagRepresentation
@@ -18,11 +19,22 @@ import monix.eval.Task
 import org.scalatest.{FlatSpec, Matchers}
 
 import scala.collection.immutable.BitSet
-import io.casperlabs.casper.PrettyPrinter
+import io.casperlabs.casper.consensus.Signature
+import org.scalacheck.Arbitrary
+import io.casperlabs.storage.ArbitraryStorageData
+import io.casperlabs.models.ArbitraryConsensus
+import io.casperlabs.storage.BlockMsgWithTransform
+import io.casperlabs.storage.dag.AncestorsStorage.Relation
 
 @silent("deprecated")
 @silent("is never used")
-class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator with StorageFixture {
+class DagOperationsTest
+    extends FlatSpec
+    with Matchers
+    with BlockGenerator
+    with StorageFixture
+    with ArbitraryConsensus
+    with ArbitraryStorageData {
 
   "bfTraverseF" should "lazily breadth-first traverse a DAG with effectful neighbours" in {
     implicit val intKey = DagOperations.Key.identity[Int]
@@ -843,6 +855,78 @@ class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator with 
           assert(latestGenesisMessageHashes == expectedGenesis)
           assert(detectedEquivocators.isEmpty)
         }
+  }
+
+  implicit val consensusConfig: ConsensusConfig = ConsensusConfig(
+    dagSize = 5,
+    dagDepth = 3,
+    dagBranchingFactor = 1,
+    maxSessionCodeBytes = 1,
+    maxPaymentCodeBytes = 1,
+    minSessionCodeBytes = 1,
+    minPaymentCodeBytes = 1
+  )
+
+  def randomMessage: Block =
+    sample(arbBlock.arbitrary)
+
+  def createGenesis: Block = {
+    val b = randomMessage
+    b.update(
+        _.header := b.getHeader
+          .withParentHashes(Seq.empty)
+          .withValidatorPublicKey(ByteString.EMPTY)
+          .withMainRank(0)
+      )
+      .withSignature(Signature())
+  }
+
+  implicit class BlockOps(b: Block) {
+    def withMainParent(block: Block): Block =
+      b.withHeader(
+        b.getHeader
+          .withParentHashes(Seq(block.blockHash))
+          .withMainRank(block.getHeader.mainRank + 1)
+      )
+  }
+
+  "relation" should "return correct relation between blocks" in withCombinedStorage() {
+    implicit storage =>
+      implicit def `Block => BlockMsgWithTransforms`(b: Block): BlockMsgWithTransform =
+        BlockMsgWithTransform().withBlockMessage(b)
+
+      implicit def `Block => Message`(b: Block): Message =
+        Message.fromBlock(b).get
+
+      // A is an ancestor of B
+      // A - C - D - B
+      val a1 = createGenesis
+      val c1 = randomMessage.withMainParent(a1)
+      val d1 = randomMessage.withMainParent(c1)
+      val b1 = randomMessage.withMainParent(d1)
+
+      for {
+        _ <- storage.put(a1.blockHash, a1)
+        _ <- storage.put(c1.blockHash, c1)
+        _ <- storage.put(d1.blockHash, d1)
+        _ <- storage.put(b1.blockHash, b1)
+        _ <- DagOperations.relation[Task](a1, b1) shouldBeF Some(Relation.Ancestor)
+        _ <- DagOperations.relation[Task](b1, a1) shouldBeF Some(Relation.Descendant)
+
+        // A comes before B but is not related
+        // C - D - B
+        //  \_A
+        c3 = createGenesis
+        a3 = randomMessage.withMainParent(c3)
+        d3 = randomMessage.withMainParent(c3)
+        b3 = randomMessage.withMainParent(d3)
+        _  <- storage.put(c3.blockHash, c3)
+        _  <- storage.put(a3.blockHash, a3)
+        _  <- storage.put(d3.blockHash, d3)
+        _  <- storage.put(b3.blockHash, b3)
+        _  <- DagOperations.relation[Task](a3, b3) shouldBeF None
+        _  <- DagOperations.relation[Task](b3, a3) shouldBeF None
+      } yield ()
   }
 
 }

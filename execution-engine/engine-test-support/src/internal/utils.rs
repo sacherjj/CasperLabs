@@ -18,7 +18,7 @@ use types::Key;
 
 use crate::internal::{
     DEFAULT_CHAIN_NAME, DEFAULT_GENESIS_TIMESTAMP, DEFAULT_PROTOCOL_VERSION, DEFAULT_WASM_COSTS,
-    MINT_INSTALL_CONTRACT, POS_INSTALL_CONTRACT,
+    MINT_INSTALL_CONTRACT, POS_INSTALL_CONTRACT, STANDARD_PAYMENT_INSTALL_CONTRACT,
 };
 
 lazy_static! {
@@ -106,6 +106,7 @@ pub fn create_genesis_config(accounts: Vec<GenesisAccount>) -> GenesisConfig {
     let timestamp = DEFAULT_GENESIS_TIMESTAMP;
     let mint_installer_bytes = read_wasm_file_bytes(MINT_INSTALL_CONTRACT);
     let proof_of_stake_installer_bytes = read_wasm_file_bytes(POS_INSTALL_CONTRACT);
+    let standard_payment_installer_bytes = read_wasm_file_bytes(STANDARD_PAYMENT_INSTALL_CONTRACT);
     let protocol_version = *DEFAULT_PROTOCOL_VERSION;
     let wasm_costs = *DEFAULT_WASM_COSTS;
     GenesisConfig::new(
@@ -114,6 +115,7 @@ pub fn create_genesis_config(accounts: Vec<GenesisAccount>) -> GenesisConfig {
         protocol_version,
         mint_installer_bytes,
         proof_of_stake_installer_bytes,
+        standard_payment_installer_bytes,
         accounts,
         wasm_costs,
     )

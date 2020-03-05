@@ -244,6 +244,8 @@ message ChainSpec {
         bytes mint_installer = 4;
         // wasm bytes for installing the pos system contract
         bytes pos_installer = 5;
+        // wasm bytes for installing the standard payment system contract
+        bytes standard_payment_installer = 10;
         // genesis account information
         repeated GenesisAccount accounts = 6;
         // costs at genesis

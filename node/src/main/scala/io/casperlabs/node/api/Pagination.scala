@@ -3,6 +3,7 @@ package io.casperlabs.node.api
 import java.util
 
 import com.google.protobuf.ByteString
+import io.casperlabs.casper.api.BlockAPI.BlockAndMaybeDeploys
 import io.casperlabs.casper.consensus.Deploy
 import io.casperlabs.comm.ServiceError.InvalidArgument
 import pbdirect._
@@ -15,13 +16,9 @@ trait Pagination {
   type PageSize  = Int
   type PageToken = String
 
-  type RequestWithPagination = {
-    val pageSize: PageSize
-    val pageToken: PageToken
-  }
-
   def parsePageToken(
-      requestWithPagination: RequestWithPagination
+      pageSize: PageSize,
+      pageToken: PageToken
   ): Try[(PageSize, PageTokenParams)]
 
   def createPageToken(pageTokenParamsOpt: Option[PageTokenParams]): PageToken
@@ -40,15 +37,16 @@ object DeployInfoPagination extends Pagination {
   override type PageTokenParams = DeployInfoPageTokenParams
 
   override def parsePageToken(
-      request: RequestWithPagination
+      size: PageSize,
+      token: PageToken
   ): Try[(PageSize, PageTokenParams)] = {
-    val pageSize = math.max(0, math.min(request.pageSize, MAXSIZE))
-    if (request.pageToken.isEmpty) {
+    val pageSize = math.max(0, math.min(size, MAXSIZE))
+    if (token.isEmpty) {
       Try { (pageSize, DeployInfoPageTokenParams(Long.MaxValue, ByteString.EMPTY, isNext = true)) }
     } else
       Try {
         util.Base64.getUrlDecoder
-          .decode(request.pageToken.trim)
+          .decode(token.trim)
           .pbTo[DeployInfoPageTokenParams]
       } match {
         case Failure(_) =>
@@ -131,5 +129,55 @@ object DeployInfoPagination extends Pagination {
           )
       )
       (nextPageToken, prevPageToken)
+    }
+}
+
+/** TODO: common code can be abstracted from together with the [[DeployInfoPagination]].
+  * However and most probably pagination will exist only for deploys and blocks.
+  * Abstract only when a new pagination needs to be added. */
+object BlockInfoPagination extends Pagination {
+  case class BlockInfoPageTokenParams(
+      lastTimeStamp: Long,
+      lastBlockHash: ByteString
+  )
+  val MAXSIZE   = 25
+  val NEXT_PAGE = "N"
+  val PREV_PAGE = "P"
+
+  override type PageTokenParams = BlockInfoPageTokenParams
+
+  override def parsePageToken(
+      size: PageSize,
+      token: PageToken
+  ): Try[(PageSize, PageTokenParams)] = {
+    val pageSize = math.max(0, math.min(size, MAXSIZE))
+    if (token.isEmpty) {
+      Try { (pageSize, BlockInfoPageTokenParams(Long.MaxValue, ByteString.EMPTY)) }
+    } else
+      Try {
+        util.Base64.getUrlDecoder
+          .decode(token.trim)
+          .pbTo[BlockInfoPageTokenParams]
+      } match {
+        case Failure(_) =>
+          Failure(
+            InvalidArgument(
+              "Failed parsing pageToken"
+            )
+          )
+        case Success(pageTokenParams) =>
+          Success {
+            (pageSize, pageTokenParams)
+          }
+      }
+  }
+
+  override def createPageToken(
+      pageTokenParamsOpt: Option[PageTokenParams]
+  ): PageToken =
+    pageTokenParamsOpt match {
+      case None => ""
+      case Some(pageTokenParams) =>
+        util.Base64.getUrlEncoder.encodeToString(pageTokenParams.toPB)
     }
 }

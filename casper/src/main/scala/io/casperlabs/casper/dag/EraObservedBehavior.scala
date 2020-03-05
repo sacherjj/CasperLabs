@@ -1,15 +1,14 @@
-package io.casperlabs.casper.util
+package io.casperlabs.casper.dag
 
 import cats.implicits._
-import shapeless.tag.@@
-import io.casperlabs.storage.dag.DagRepresentation.Validator
-import io.casperlabs.storage.BlockHash
 import com.google.protobuf.ByteString
-import io.casperlabs.models.Message
-import io.casperlabs.casper.util.ObservedValidatorBehavior._
-import com.github.ghik.silencer.silent
+import io.casperlabs.casper.dag.ObservedValidatorBehavior.{Empty, Equivocated, Honest}
 import io.casperlabs.catscontrib.MonadThrowable
+import io.casperlabs.models.Message
+import io.casperlabs.storage.BlockHash
 import io.casperlabs.storage.dag.DagLookup
+import io.casperlabs.storage.dag.DagRepresentation.Validator
+import shapeless.tag.@@
 
 final class EraObservedBehavior[A] private (
     val data: Map[BlockHash, Map[Validator, ObservedValidatorBehavior[A]]]

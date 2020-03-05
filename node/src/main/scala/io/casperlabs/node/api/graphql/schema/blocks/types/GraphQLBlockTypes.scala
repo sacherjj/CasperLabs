@@ -20,13 +20,15 @@ case class PageInfo(endCursor: String, hasNextPage: Boolean)
 
 case class DeployInfosWithPageInfo(deployInfos: List[DeployInfo], pageInfo: PageInfo)
 
+case class BlocksWithPageInfo(blocks: List[BlockAndMaybeDeploys], pageInfo: PageInfo)
+
 /**
   * Contains only GraphQL types without declaring actual ways of retrieving the information
   */
 class GraphQLBlockTypes(
     val blockFetcher: Fetcher[Unit, BlockAndMaybeDeploys, BlockAndMaybeDeploys, BlockHash],
-    val blocksByValidator: (Validator, Int, Long) => Action[Unit, List[BlockAndMaybeDeploys]],
-    val accountBalance: AccountKey => Action[Unit, Option[String]],
+    val blocksByValidator: (Validator, Int, String) => Action[Unit, BlocksWithPageInfo],
+    val accountBalance: AccountKey => Action[Unit, BigInt],
     val accountDeploys: (AccountKey, Int, String) => Action[Unit, DeployInfosWithPageInfo]
 ) {
 
@@ -158,14 +160,14 @@ class GraphQLBlockTypes(
         ),
         Field(
           "blocks",
-          ListType(BlockType),
+          BlocksWithPageInfoType,
           "Blocks produced by the validator".some,
-          arguments = blocks.arguments.BlocksNum :: blocks.arguments.MaxBlockSeqNum :: Nil,
+          arguments = blocks.arguments.First :: blocks.arguments.After :: Nil,
           resolve = c =>
             blocksByValidator(
               c.value,
-              c.arg(blocks.arguments.BlocksNum),
-              c.arg(blocks.arguments.MaxBlockSeqNum)
+              c.arg(blocks.arguments.First),
+              c.arg(blocks.arguments.After)
             )
         )
       )
@@ -190,7 +192,7 @@ class GraphQLBlockTypes(
         ),
         Field(
           "balance",
-          OptionType(StringType),
+          BigIntType,
           "Account's balance at the latest block in motes".some,
           resolve = c => accountBalance(c.value)
         ),
@@ -402,6 +404,15 @@ class GraphQLBlockTypes(
     "A list of deploys for the specified account",
     fields[Unit, DeployInfosWithPageInfo](
       Field("deployInfos", ListType(DeployInfoType), resolve = _.value.deployInfos),
+      Field("pageInfo", PageInfoType, resolve = _.value.pageInfo)
+    )
+  )
+
+  val BlocksWithPageInfoType: ObjectType[Unit, BlocksWithPageInfo] = ObjectType(
+    "blocks",
+    "A list of blocks for the specified validator",
+    fields[Unit, BlocksWithPageInfo](
+      Field("blocks", ListType(BlockType), resolve = _.value.blocks),
       Field("pageInfo", PageInfoType, resolve = _.value.pageInfo)
     )
   )

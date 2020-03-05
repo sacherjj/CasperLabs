@@ -40,6 +40,10 @@ impl DeployItemBuilder {
         self
     }
 
+    pub fn with_empty_payment_bytes(self, args: impl ArgsParser) -> Self {
+        self.with_payment_bytes(vec![], args)
+    }
+
     pub fn with_payment_code<T: AsRef<Path>>(self, file_name: T, args: impl ArgsParser) -> Self {
         let module_bytes = utils::read_wasm_file_bytes(file_name);
         self.with_payment_bytes(module_bytes, args)

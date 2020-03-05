@@ -61,7 +61,7 @@ package object gossiping {
   private implicit val metricsSource: Metrics.Source =
     Metrics.Source(Metrics.Source(Metrics.BaseSource, "node"), "gossiping")
 
-  def apply[F[_]: Parallel: ConcurrentEffect: Log: Metrics: Time: Timer: BlockStorage: DagStorage: DeployStorage: NodeDiscovery: NodeAsk: Validation: CasperLabsProtocol: Consensus](
+  def apply[F[_]: Parallel: ConcurrentEffect: Log: Metrics: Time: Timer: BlockStorage: DagStorage: DeployStorage: NodeDiscovery: NodeAsk: CasperLabsProtocol: Consensus](
       port: Int,
       conf: Configuration,
       maybeValidatorId: Option[ValidatorIdentity],
@@ -111,8 +111,7 @@ package object gossiping {
 
       synchronizer <- makeSynchronizer(
                        conf,
-                       connectToGossip,
-                       genesis.getHeader.chainName
+                       connectToGossip
                      )
 
       downloadManager <- makeDownloadManager(
@@ -445,10 +444,9 @@ package object gossiping {
   private def show(hash: ByteString) =
     PrettyPrinter.buildString(hash)
 
-  def makeSynchronizer[F[_]: Concurrent: Parallel: Log: Metrics: DagStorage: Validation: CasperLabsProtocol](
+  def makeSynchronizer[F[_]: Concurrent: Parallel: Log: Metrics: DagStorage: Consensus: CasperLabsProtocol](
       conf: Configuration,
-      connectToGossip: GossipService.Connector[F],
-      chainName: String
+      connectToGossip: GossipService.Connector[F]
   ): Resource[F, Synchronizer[F]] = Resource.liftF {
     for {
       _ <- SynchronizerImpl.establishMetrics[F]
@@ -463,7 +461,7 @@ package object gossiping {
                            } yield latest.values.flatten.toList
 
                          override def validate(blockSummary: BlockSummary): F[Unit] =
-                           Validation[F].blockSummary(blockSummary, chainName)
+                           Consensus[F].validateSummary(blockSummary)
 
                          override def notInDag(blockHash: ByteString): F[Boolean] =
                            isInDag(blockHash).map(!_)

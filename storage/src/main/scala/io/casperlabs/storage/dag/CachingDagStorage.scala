@@ -14,6 +14,7 @@ import io.casperlabs.storage.BlockHash
 import io.casperlabs.storage.dag.CachingDagStorage.Rank
 import io.casperlabs.storage.dag.DagRepresentation.Validator
 import io.casperlabs.storage.dag.DagStorage.{MeteredDagRepresentation, MeteredDagStorage}
+import io.casperlabs.catscontrib.MonadThrowable
 
 import scala.collection.concurrent.TrieMap
 
@@ -22,7 +23,10 @@ class CachingDagStorage[F[_]: Concurrent](
     neighborhoodBefore: Int,
     // How far to go to the future (by ranks) for caching neighborhood of looked up block
     neighborhoodAfter: Int,
-    underlying: DagStorage[F] with DagRepresentation[F] with FinalityStorage[F],
+    underlying: DagStorage[F]
+      with DagRepresentation[F]
+      with FinalityStorage[F]
+      with AncestorsStorage[F],
     private[dag] val childrenCache: Cache[BlockHash, Set[BlockHash]],
     private[dag] val justificationCache: Cache[BlockHash, Set[BlockHash]],
     private[dag] val messagesCache: Cache[BlockHash, Message],
@@ -30,6 +34,7 @@ class CachingDagStorage[F[_]: Concurrent](
     semaphore: Semaphore[F]
 ) extends DagStorage[F]
     with DagRepresentation[F]
+    with AncestorsStorage[F]
     with FinalityStorage[F] {
 
   /** Unsafe to be invoked concurrently */
@@ -107,6 +112,11 @@ class CachingDagStorage[F[_]: Concurrent](
   override def getRepresentation: F[DagRepresentation[F]] =
     (this: DagRepresentation[F]).pure[F]
 
+  override implicit val MT: MonadThrowable[F] = Concurrent[F]
+
+  override private[storage] def findAncestor(block: BlockHash, distance: Long) =
+    underlying.findAncestor(block, distance) // TODO(CON-630): Cache
+
   private[storage] override def insert(block: Block): F[DagRepresentation[F]] =
     for {
       dag     <- underlying.insert(block)
@@ -155,16 +165,12 @@ class CachingDagStorage[F[_]: Concurrent](
   override def topoSortTail(tailLength: Int): fs2.Stream[F, Vector[BlockInfo]] =
     underlying.topoSortTail(tailLength)
 
-  /** Similar to [[topoSort]] but in addition filters blocks by a validator */
-  override def topoSortValidator(
+  override def getBlockInfosByValidator(
       validator: Validator,
-      blocksNum: Int,
-      endBlockNumber: Rank
-  ) = underlying.topoSortValidator(validator, blocksNum, endBlockNumber)
-
-  /** Similar to [[topoSortTail]] but in addition filters blocks by a validator */
-  override def topoSortTailValidator(validator: Validator, blocksNum: Int) =
-    underlying.topoSortTailValidator(validator, blocksNum)
+      limit: Int,
+      lastTimeStamp: Rank,
+      lastBlockHash: BlockHash
+  ) = underlying.getBlockInfosByValidator(validator, limit, lastTimeStamp, lastBlockHash)
 
   override def latestGlobal                         = underlying.latestGlobal
   override def latestInEra(keyBlockHash: BlockHash) = underlying.latestInEra(keyBlockHash)
@@ -185,7 +191,10 @@ object CachingDagStorage {
   type Rank = Long
 
   def apply[F[_]: Concurrent: Metrics](
-      underlying: DagStorage[F] with DagRepresentation[F] with FinalityStorage[F],
+      underlying: DagStorage[F]
+        with DagRepresentation[F]
+        with FinalityStorage[F]
+        with AncestorsStorage[F],
       maxSizeBytes: Long,
       // How far to go to the past (by ranks) for caching neighborhood of looked up block
       neighborhoodBefore: Int,
