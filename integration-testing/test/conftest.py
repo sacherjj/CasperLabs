@@ -5,6 +5,7 @@ import os
 import pytest
 import shutil
 import logging
+import time
 
 from docker.client import DockerClient
 
@@ -32,6 +33,10 @@ from casperlabs_local_net.casperlabs_network import (
 )
 
 
+NUMBER_OF_DOCKER_PRUNE_RETRIES = 10
+DOCKER_PRUNE_RETRY_DELAY_SECONDS = 2
+
+
 @pytest.fixture(scope="session")
 def unique_run_num(pytestconfig):
     try:
@@ -55,12 +60,29 @@ def docker_client_fixture(unique_run_num) -> Generator[DockerClient, None, None]
     try:
         yield docker_client
     finally:
-        try:
-            docker_client.containers.prune()
-            docker_client.volumes.prune()
-            docker_client.networks.prune()
-        except Exception as e:
-            logging.warning("Exception in docker_client_fixture tear down.", exc_info=e)
+        # Prunning may fail with a docker.errors.APIError: "a prune operation is already running".
+        # So, we will catch exceptions here and retry few times.
+        all_pruned = False
+        number_of_retries = 0
+        while not all_pruned and number_of_retries < NUMBER_OF_DOCKER_PRUNE_RETRIES:
+            try:
+                docker_client.containers.prune()
+                docker_client.volumes.prune()
+                docker_client.networks.prune()
+                all_pruned = True
+            except Exception as e:
+                logging.warning(
+                    "Exception in docker_client_fixture tear down.", exc_info=e
+                )
+                number_of_retries += 1
+                logging.info(
+                    f"Retrying tear down of docker_client_fixture in {DOCKER_PRUNE_RETRY_DELAY_SECONDS} seconds..."
+                )
+                time.sleep(DOCKER_PRUNE_RETRY_DELAY_SECONDS)
+        if not all_pruned:
+            logging.warning(
+                f"docker_client_fixture tear down failed despite {number_of_retries} retries"
+            )
 
 
 @pytest.fixture(scope="module")
