@@ -73,7 +73,7 @@ object DagOperations {
   def swimlaneV[F[_]: MonadThrowable](
       validator: ByteString,
       message: Message,
-      dag: DagRepresentation[F]
+      dag: DagLookup[F]
   ): StreamT[F, Message] = {
     // Messages visible in the direct justifications of the block.
     val messagePanorama =
