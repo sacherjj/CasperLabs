@@ -1,7 +1,8 @@
 package io.casperlabs.models.cltype.protobuf
 
 import cats.implicits._
-import cats.free.Trampoline
+import cats.arrow.FunctionK
+import cats.free.{Free, Trampoline}
 import com.google.protobuf.ByteString
 import eu.timepit.refined._
 import eu.timepit.refined.api.Refined
@@ -271,84 +272,94 @@ object Mappings {
       }
   }
 
-  def fromProto(proto: state.CLType): Either[Error, CLType] = proto match {
-    case state.CLType(state.CLType.Variants.Empty) => Left(Error.EmptyTypeVariant)
+  def fromProto(proto: state.CLType): Either[Error, CLType] =
+    fromProtoLoop(proto).foldMap(interpreter)
+
+  private def fromProtoLoop(proto: state.CLType): FE[CLType] = proto match {
+    case state.CLType(state.CLType.Variants.Empty) => raise(Error.EmptyTypeVariant)
     case state.CLType(state.CLType.Variants.SimpleType(state.CLType.Simple.Unrecognized(i))) =>
-      Left(Error.UnrecognizedSimpleType(i))
+      raise(Error.UnrecognizedSimpleType(i))
 
     case state.CLType(state.CLType.Variants.SimpleType(state.CLType.Simple.BOOL)) =>
-      Right(CLType.Bool)
+      pure(CLType.Bool)
     case state.CLType(state.CLType.Variants.SimpleType(state.CLType.Simple.I32)) =>
-      Right(CLType.I32)
+      pure(CLType.I32)
     case state.CLType(state.CLType.Variants.SimpleType(state.CLType.Simple.I64)) =>
-      Right(CLType.I64)
-    case state.CLType(state.CLType.Variants.SimpleType(state.CLType.Simple.U8)) => Right(CLType.U8)
+      pure(CLType.I64)
+    case state.CLType(state.CLType.Variants.SimpleType(state.CLType.Simple.U8)) => pure(CLType.U8)
     case state.CLType(state.CLType.Variants.SimpleType(state.CLType.Simple.U32)) =>
-      Right(CLType.U32)
+      pure(CLType.U32)
     case state.CLType(state.CLType.Variants.SimpleType(state.CLType.Simple.U64)) =>
-      Right(CLType.U64)
+      pure(CLType.U64)
     case state.CLType(state.CLType.Variants.SimpleType(state.CLType.Simple.U128)) =>
-      Right(CLType.U128)
+      pure(CLType.U128)
     case state.CLType(state.CLType.Variants.SimpleType(state.CLType.Simple.U256)) =>
-      Right(CLType.U256)
+      pure(CLType.U256)
     case state.CLType(state.CLType.Variants.SimpleType(state.CLType.Simple.U512)) =>
-      Right(CLType.U512)
+      pure(CLType.U512)
     case state.CLType(state.CLType.Variants.SimpleType(state.CLType.Simple.UNIT)) =>
-      Right(CLType.Unit)
+      pure(CLType.Unit)
     case state.CLType(state.CLType.Variants.SimpleType(state.CLType.Simple.STRING)) =>
-      Right(CLType.String)
+      pure(CLType.String)
     case state.CLType(state.CLType.Variants.SimpleType(state.CLType.Simple.KEY)) =>
-      Right(CLType.Key)
+      pure(CLType.Key)
     case state.CLType(state.CLType.Variants.SimpleType(state.CLType.Simple.UREF)) =>
-      Right(CLType.URef)
+      pure(CLType.URef)
 
-    // TODO: stack safety
     case state.CLType(state.CLType.Variants.OptionType(state.CLType.OptionProto(innerProto))) =>
-      val inner = innerProto.map(fromProto).getOrElse(Left(Error.MissingType))
-      inner.map(CLType.Option.apply)
+      innerProto match {
+        case None    => raise(Error.MissingType)
+        case Some(t) => defer(fromProtoLoop(t)).map(CLType.Option.apply)
+      }
 
     case state.CLType(state.CLType.Variants.ListType(state.CLType.List(innerProto))) =>
-      val inner = innerProto.map(fromProto).getOrElse(Left(Error.MissingType))
-      inner.map(CLType.List.apply)
+      innerProto match {
+        case None    => raise(Error.MissingType)
+        case Some(t) => defer(fromProtoLoop(t)).map(CLType.List.apply)
+      }
 
     case state.CLType(
         state.CLType.Variants.FixedListType(state.CLType.FixedList(innerProto, length))
         ) =>
-      val inner = innerProto.map(fromProto).getOrElse(Left(Error.MissingType))
-      inner.map(CLType.FixedList(_, length))
+      innerProto match {
+        case None    => raise(Error.MissingType)
+        case Some(t) => defer(fromProtoLoop(t)).map(CLType.FixedList(_, length))
+      }
 
     case state.CLType(state.CLType.Variants.ResultType(state.CLType.Result(okProto, errProto))) =>
       for {
-        ok  <- okProto.map(fromProto).getOrElse(Left(Error.MissingType))
-        err <- errProto.map(fromProto).getOrElse(Left(Error.MissingType))
+        ok  <- okProto.map(t => defer(fromProtoLoop(t))).getOrElse(raise(Error.MissingType))
+        err <- errProto.map(t => defer(fromProtoLoop(t))).getOrElse(raise(Error.MissingType))
       } yield CLType.Result(ok, err)
 
     case state.CLType(state.CLType.Variants.MapType(state.CLType.Map(keyProto, valueProto))) =>
       for {
-        key   <- keyProto.map(fromProto).getOrElse(Left(Error.MissingType))
-        value <- valueProto.map(fromProto).getOrElse(Left(Error.MissingType))
+        key   <- keyProto.map(t => defer(fromProtoLoop(t))).getOrElse(raise(Error.MissingType))
+        value <- valueProto.map(t => defer(fromProtoLoop(t))).getOrElse(raise(Error.MissingType))
       } yield CLType.Map(key, value)
 
     case state.CLType(state.CLType.Variants.Tuple1Type(state.CLType.Tuple1(innerProto))) =>
-      val inner = innerProto.map(fromProto).getOrElse(Left(Error.MissingType))
-      inner.map(CLType.Tuple1.apply)
+      innerProto match {
+        case None    => raise(Error.MissingType)
+        case Some(t) => defer(fromProtoLoop(t)).map(CLType.Tuple1.apply)
+      }
 
     case state.CLType(state.CLType.Variants.Tuple2Type(state.CLType.Tuple2(t1Proto, t2Proto))) =>
       for {
-        t1 <- t1Proto.map(fromProto).getOrElse(Left(Error.MissingType))
-        t2 <- t2Proto.map(fromProto).getOrElse(Left(Error.MissingType))
+        t1 <- t1Proto.map(t => defer(fromProtoLoop(t))).getOrElse(raise(Error.MissingType))
+        t2 <- t2Proto.map(t => defer(fromProtoLoop(t))).getOrElse(raise(Error.MissingType))
       } yield CLType.Tuple2(t1, t2)
 
     case state.CLType(
         state.CLType.Variants.Tuple3Type(state.CLType.Tuple3(t1Proto, t2Proto, t3Proto))
         ) =>
       for {
-        t1 <- t1Proto.map(fromProto).getOrElse(Left(Error.MissingType))
-        t2 <- t2Proto.map(fromProto).getOrElse(Left(Error.MissingType))
-        t3 <- t3Proto.map(fromProto).getOrElse(Left(Error.MissingType))
+        t1 <- t1Proto.map(t => defer(fromProtoLoop(t))).getOrElse(raise(Error.MissingType))
+        t2 <- t2Proto.map(t => defer(fromProtoLoop(t))).getOrElse(raise(Error.MissingType))
+        t3 <- t3Proto.map(t => defer(fromProtoLoop(t))).getOrElse(raise(Error.MissingType))
       } yield CLType.Tuple3(t1, t2, t3)
 
-    case state.CLType(state.CLType.Variants.AnyType(state.CLType.Any())) => Right(CLType.Any)
+    case state.CLType(state.CLType.Variants.AnyType(state.CLType.Any())) => pure(CLType.Any)
   }
 
   def fromProto(
@@ -560,4 +571,16 @@ object Mappings {
     case class UnrecognizedAccessRights(enumValue: Int) extends Error
     case class UnrecognizedSimpleType(enumValue: Int)   extends Error
   }
+
+  private case class Raise[A](error: Error)
+  private type FE[A] = Free[Raise, A]
+
+  private def raise[A](e: Error): FE[A]     = Free.liftF(Raise[A](e))
+  private def pure[A](a: A): FE[A]          = Free.pure(a)
+  private def defer[A](fa: => FE[A]): FE[A] = Free.defer(fa)
+
+  private val interpreter: FunctionK[Raise, Either[Error, *]] =
+    new FunctionK[Raise, Either[Error, *]] {
+      def apply[A](raise: Raise[A]): Either[Error, A] = Left(raise.error)
+    }
 }
