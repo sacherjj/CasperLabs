@@ -352,36 +352,6 @@ class GrpcGossipServiceSpec
           }
         }
 
-        "compression is supported" should {
-          "return a stream of compressed chunks" in {
-            forAll { block: Block =>
-              runTestUnsafe(TestData.fromBlock(block), timeout = 15.seconds) {
-                val req = GetBlockChunkedRequest(
-                  blockHash = block.blockHash,
-                  acceptedCompressionAlgorithms = Seq("lz4")
-                )
-
-                stub.getBlockChunked(req).toListL.map { chunks =>
-                  chunks.head.content.isHeader shouldBe true
-                  val header = chunks.head.getHeader
-                  header.compressionAlgorithm shouldBe "lz4"
-
-                  val content  = chunks.tail.flatMap(_.getData.toByteArray).toArray
-                  val original = block.toByteArray
-                  header.contentLength shouldBe content.length
-                  header.originalContentLength shouldBe original.length
-
-                  val decompressed = Compression
-                    .decompress(content, header.originalContentLength)
-                    .get
-
-                  md5(decompressed) shouldBe md5(original)
-                }
-              }
-            }
-          }
-        }
-
         "chunk size is specified" when {
           def testChunkSize(
               block: Block,
