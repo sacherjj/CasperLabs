@@ -115,8 +115,9 @@ build-contracts-as: \
 .PHONY: build-contracts
 build-contracts: build-contracts-rs build-contracts-as
 
+# TODO - remove dependency on standard-payment-install once Node is updated to pass this via GenesisConfig
 .PHONY: test-rs
-test-rs:
+test-rs: build-contract-rs/standard-payment-install
 	$(CARGO) test $(CARGO_FLAGS) --all -- --nocapture
 
 .PHONY: test-as
@@ -147,8 +148,9 @@ check-format:
 format:
 	$(CARGO) fmt --all
 
+# TODO - remove dependency on standard-payment-install once Node is updated to pass this via GenesisConfig
 .PHONY: lint
-lint:
+lint: build-contract-rs/standard-payment-install
 	$(CARGO) clippy --all-targets --all -- -D warnings -A renamed_and_removed_lints
 
 .PHONY: audit
@@ -182,15 +184,17 @@ clean:
 	rm -rf $(TOOL_WASM_DIR)
 	$(CARGO) clean
 
+# TODO - remove dependency on standard-payment-install once Node is updated to pass this via GenesisConfig
 .PHONY: deb
-deb:
+deb: build-contract-rs/standard-payment-install
 	cd engine-grpc-server && $(CARGO) deb
 
 engine-grpc-server/.rpm:
 	cd engine-grpc-server && $(CARGO) rpm init
 
+# TODO - remove dependency on standard-payment-install once Node is updated to pass this via GenesisConfig
 .PHONY: rpm
-rpm: engine-grpc-server/.rpm
+rpm: engine-grpc-server/.rpm build-contract-rs/standard-payment-install
 	cd engine-grpc-server && $(CARGO) rpm build
 
 target/system-contracts.tar.gz: $(SYSTEM_CONTRACTS)
