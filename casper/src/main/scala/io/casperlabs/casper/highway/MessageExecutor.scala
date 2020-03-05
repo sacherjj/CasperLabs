@@ -155,7 +155,9 @@ class MessageExecutor[F[_]: Concurrent: Log: Time: Metrics: BlockStorage: DagSto
           functorRaiseInvalidBlock.raise(status)
 
       case Processing | Processed =>
-        Sync[F].raiseError(new RuntimeException("A block should not be processing at this stage."))
+        Sync[F].raiseError(
+          new IllegalStateException("A block should not be processing at this stage.")
+        )
 
       case UnexpectedBlockException(ex) =>
         Log[F].error(

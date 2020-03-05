@@ -10,6 +10,7 @@ import java.time.Instant
 
 import io.casperlabs.casper.consensus.{Block, BlockSummary, Era}
 import io.casperlabs.casper.dag.DagOperations
+import io.casperlabs.casper.validation.Errors.ErrorMessageWrapper
 import io.casperlabs.catscontrib.{MakeSemaphore, MonadThrowable}
 import io.casperlabs.crypto.Keys.{PublicKey, PublicKeyBS}
 import io.casperlabs.models.Message
@@ -619,7 +620,9 @@ class EraRuntime[F[_]: Sync: Clock: Metrics: EraStorage: FinalityStorageReader: 
               // and not stop processing, so we'll need to return more detailed statuses from
               // validate to decide what to do, whether to react or not.
               MonadThrowable[F].raiseError[Unit](
-                new IllegalArgumentException(s"Could not validate block against era: $error")
+                new ErrorMessageWrapper(
+                  s"Could not validate block ${block.blockHash.show} against era ${era.keyBlockHash.show}: $error"
+                )
               ),
             _ => ().pure[F]
           )
