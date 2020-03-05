@@ -159,92 +159,75 @@ object Mappings {
     case CLType.Any => Trampoline.done(dsl.types.any)
   }
 
-  def toProto(v: CLValueInstance): state.CLValueInstance = v match {
-    case CLValueInstance.Bool(b)   => dsl.instances.bool(b)
-    case CLValueInstance.I32(i)    => dsl.instances.i32(i)
-    case CLValueInstance.I64(i)    => dsl.instances.i64(i)
-    case CLValueInstance.U8(i)     => dsl.instances.u8(i)
-    case CLValueInstance.U32(i)    => dsl.instances.u32(i)
-    case CLValueInstance.U64(i)    => dsl.instances.u64(i)
-    case CLValueInstance.U128(i)   => dsl.instances.u128(i.value)
-    case CLValueInstance.U256(i)   => dsl.instances.u256(i.value)
-    case CLValueInstance.U512(i)   => dsl.instances.u512(i.value)
-    case CLValueInstance.Unit      => dsl.instances.unit
-    case CLValueInstance.String(s) => dsl.instances.string(s)
-    case CLValueInstance.Key(k)    => dsl.instances.key(toProto(k))
-    case CLValueInstance.URef(u)   => dsl.instances.uref(toProto(u))
+  def toProto(v: CLValueInstance): state.CLValueInstance =
+    state.CLValueInstance(
+      clType = toProto(v.clType).some,
+      value = toProtoValue(v).some
+    )
 
-    case option @ CLValueInstance.Option(value, _) =>
-      val clType = toProto(option.clType)
-      // TODO: stack safety
-      val innerProto = value.flatMap(v => toProto(v).value)
-      state.CLValueInstance(
-        clType = clType.some,
-        value = dsl.values.option(innerProto).some
-      )
+  private def toProtoValue(v: CLValueInstance): state.CLValueInstance.Value =
+    toProtoValueLoop(v).run
 
-    case list @ CLValueInstance.List(values, _) =>
-      val clType     = toProto(list.clType)
-      val innerProto = values.flatMap(v => toProto(v).value)
-      state.CLValueInstance(
-        clType = clType.some,
-        value = dsl.values.list(innerProto).some
-      )
+  private def toProtoValueLoop(v: CLValueInstance): Trampoline[state.CLValueInstance.Value] =
+    v match {
+      case CLValueInstance.Bool(b)   => Trampoline.done(dsl.values.bool(b))
+      case CLValueInstance.I32(i)    => Trampoline.done(dsl.values.i32(i))
+      case CLValueInstance.I64(i)    => Trampoline.done(dsl.values.i64(i))
+      case CLValueInstance.U8(i)     => Trampoline.done(dsl.values.u8(i))
+      case CLValueInstance.U32(i)    => Trampoline.done(dsl.values.u32(i))
+      case CLValueInstance.U64(i)    => Trampoline.done(dsl.values.u64(i))
+      case CLValueInstance.U128(i)   => Trampoline.done(dsl.values.u128(i.value))
+      case CLValueInstance.U256(i)   => Trampoline.done(dsl.values.u256(i.value))
+      case CLValueInstance.U512(i)   => Trampoline.done(dsl.values.u512(i.value))
+      case CLValueInstance.Unit      => Trampoline.done(dsl.values.unit)
+      case CLValueInstance.String(s) => Trampoline.done(dsl.values.string(s))
+      case CLValueInstance.Key(k)    => Trampoline.done(dsl.values.key(toProto(k)))
+      case CLValueInstance.URef(u)   => Trampoline.done(dsl.values.uref(toProto(u)))
 
-    case list @ CLValueInstance.FixedList(values, _, _) =>
-      val clType     = toProto(list.clType)
-      val innerProto = values.flatMap(v => toProto(v).value)
-      state.CLValueInstance(
-        clType = clType.some,
-        value = dsl.values.fixedList(innerProto).some
-      )
+      case CLValueInstance.Option(value, _) =>
+        value.traverse(v => Trampoline.defer(toProtoValueLoop(v))).map(dsl.values.option)
 
-    case result @ CLValueInstance.Result(value, _, _) =>
-      val clType     = toProto(result.clType)
-      val innerProto = value.bimap(v => toProto(v).value.get, v => toProto(v).value.get)
-      state.CLValueInstance(
-        clType = clType.some,
-        value = dsl.values.result(innerProto).some
-      )
+      case CLValueInstance.List(values, _) =>
+        values.toList.traverse(v => Trampoline.defer(toProtoValueLoop(v))).map(dsl.values.list)
 
-    case map @ CLValueInstance.Map(values, _, _) =>
-      val clType = toProto(map.clType)
-      val innerProto = values.toList.map {
-        case (key, value) =>
-          state.CLValueInstance.MapEntry(key = toProto(key).value, value = toProto(value).value)
-      }
-      state.CLValueInstance(
-        clType = clType.some,
-        value = dsl.values.map(innerProto).some
-      )
+      case CLValueInstance.FixedList(values, _, _) =>
+        values.toList.traverse(v => Trampoline.defer(toProtoValueLoop(v))).map(dsl.values.fixedList)
 
-    case tuple1 @ CLValueInstance.Tuple1(value) =>
-      val clType     = toProto(tuple1.clType)
-      val innerProto = toProto(value).value.get
-      state.CLValueInstance(
-        clType = clType.some,
-        value = dsl.values.tuple1(innerProto).some
-      )
+      case CLValueInstance.Result(value, _, _) =>
+        value
+          .bitraverse(
+            v => Trampoline.defer(toProtoValueLoop(v)),
+            v => Trampoline.defer(toProtoValueLoop(v))
+          )
+          .map(dsl.values.result)
 
-    case tuple2 @ CLValueInstance.Tuple2(value1, value2) =>
-      val clType      = toProto(tuple2.clType)
-      val innerProto1 = toProto(value1).value.get
-      val innerProto2 = toProto(value2).value.get
-      state.CLValueInstance(
-        clType = clType.some,
-        value = dsl.values.tuple2(innerProto1, innerProto2).some
-      )
+      case CLValueInstance.Map(values, _, _) =>
+        values.toList
+          .traverse {
+            case (key, value) =>
+              for {
+                keyProto   <- Trampoline.defer(toProtoValueLoop(key))
+                valueProto <- toProtoValueLoop(value)
+              } yield state.CLValueInstance.MapEntry(key = keyProto.some, value = valueProto.some)
+          }
+          .map(dsl.values.map)
 
-    case tuple3 @ CLValueInstance.Tuple3(value1, value2, value3) =>
-      val clType      = toProto(tuple3.clType)
-      val innerProto1 = toProto(value1).value.get
-      val innerProto2 = toProto(value2).value.get
-      val innerProto3 = toProto(value3).value.get
-      state.CLValueInstance(
-        clType = clType.some,
-        value = dsl.values.tuple3(innerProto1, innerProto2, innerProto3).some
-      )
-  }
+      case CLValueInstance.Tuple1(value) =>
+        Trampoline.defer(toProtoValueLoop(value)).map(dsl.values.tuple1)
+
+      case CLValueInstance.Tuple2(value1, value2) =>
+        for {
+          v1 <- Trampoline.defer(toProtoValueLoop(value1))
+          v2 <- toProtoValueLoop(value2)
+        } yield dsl.values.tuple2(v1, v2)
+
+      case CLValueInstance.Tuple3(value1, value2, value3) =>
+        for {
+          v1 <- Trampoline.defer(toProtoValueLoop(value1))
+          v2 <- toProtoValueLoop(value2)
+          v3 <- toProtoValueLoop(value3)
+        } yield dsl.values.tuple3(v1, v2, v3)
+    }
 
   def fromProto(rights: state.Key.URef.AccessRights): Either[Error, Option[AccessRights]] =
     rights match {
