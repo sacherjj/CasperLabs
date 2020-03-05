@@ -640,11 +640,11 @@ object Validation {
     */
   def validatorPrevBlockHash[F[_]: MonadThrowable: RaiseValidationError: Log](
       b: BlockSummary,
-      dag: DagRepresentation[F]
+      dag: DagRepresentation[F],
+      isHighway: Boolean
   ): F[Unit] = {
     val prevBlockHash = b.getHeader.validatorPrevBlockHash
     val validatorId   = b.getHeader.validatorPublicKey
-    // TODO (CON-639): Going on the j-DAG is not enough, it may lead to a ballot in the parent era.
     if (prevBlockHash.isEmpty) {
       ().pure[F]
     } else {
@@ -665,6 +665,9 @@ object Validation {
           MonadThrowable[F].fromTry(Message.fromBlockSummary(b)) flatMap { blockMsg =>
             DagOperations
               .toposortJDagDesc(dag, List(blockMsg))
+              .filter { j =>
+                j.eraId == b.getHeader.keyBlockHash || !isHighway
+              }
               .find { j =>
                 // Go until we're passed the previous message they point at. It should be the first form this validator.
                 j.validatorId == validatorId && j.messageHash != b.blockHash || j.jRank < prev.jRank

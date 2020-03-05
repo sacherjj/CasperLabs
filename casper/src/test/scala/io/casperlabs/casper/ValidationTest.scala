@@ -594,7 +594,7 @@ class ValidationTest
         b1  <- createAndStoreBlockFull[Task](v2, List(b0), List(b0))
         b2  <- createAndStoreBlockFull[Task](v1, List(b1), List(b1))
         dag <- dagStorage.getRepresentation
-        _   <- Validation.validatorPrevBlockHash[Task](b2.getSummary, dag)
+        _   <- Validation.validatorPrevBlockHash[Task](b2.getSummary, dag, isHighway = false)
       } yield ()
   }
   it should "pass if the hash is in the justifications" in withStorage {
@@ -605,7 +605,7 @@ class ValidationTest
         b0  <- createAndStoreBlockFull[Task](v1, List(g), Nil)
         b1  <- createAndStoreBlockFull[Task](v1, List(b0), List(b0))
         dag <- dagStorage.getRepresentation
-        _   <- Validation.validatorPrevBlockHash[Task](b1.getSummary, dag)
+        _   <- Validation.validatorPrevBlockHash[Task](b1.getSummary, dag, isHighway = false)
       } yield ()
   }
   it should "fail if the hash belongs to somebody else" in withStorage {
@@ -621,8 +621,10 @@ class ValidationTest
                List(b1, b0),
                maybeValidatorPrevBlockHash = Some(b1.blockHash)
              )
-        dag    <- dagStorage.getRepresentation
-        result <- Validation.validatorPrevBlockHash[Task](b2.getSummary, dag).attempt
+        dag <- dagStorage.getRepresentation
+        result <- Validation
+                   .validatorPrevBlockHash[Task](b2.getSummary, dag, isHighway = false)
+                   .attempt
       } yield {
         result shouldBe Left(ValidateErrorWrapper(InvalidPrevBlockHash))
       }
@@ -641,8 +643,10 @@ class ValidationTest
                List(b2),
                maybeValidatorPrevBlockHash = Some(b1.blockHash)
              )
-        dag    <- dagStorage.getRepresentation
-        result <- Validation.validatorPrevBlockHash[Task](b3.getSummary, dag).attempt
+        dag <- dagStorage.getRepresentation
+        result <- Validation
+                   .validatorPrevBlockHash[Task](b3.getSummary, dag, isHighway = false)
+                   .attempt
       } yield {
         result shouldBe Left(ValidateErrorWrapper(InvalidPrevBlockHash))
       }
@@ -660,8 +664,10 @@ class ValidationTest
                maybeValidatorPrevBlockHash = Some(bx),
                maybeValidatorBlockSeqNum = Some(1)
              )
-        dag    <- dagStorage.getRepresentation
-        result <- Validation.validatorPrevBlockHash[Task](b0.getSummary, dag).attempt
+        dag <- dagStorage.getRepresentation
+        result <- Validation
+                   .validatorPrevBlockHash[Task](b0.getSummary, dag, isHighway = false)
+                   .attempt
       } yield {
         result shouldBe Left(ValidateErrorWrapper(InvalidPrevBlockHash))
       }
@@ -708,8 +714,8 @@ class ValidationTest
                keyBlockHash = b1.blockHash
              )
         dag <- dagStorage.getRepresentation
-        _   <- Validation.validatorPrevBlockHash[Task](b3.getSummary, dag)
-        _   <- Validation.validatorPrevBlockHash[Task](b5.getSummary, dag)
+        _   <- Validation.validatorPrevBlockHash[Task](b3.getSummary, dag, isHighway = true)
+        _   <- Validation.validatorPrevBlockHash[Task](b5.getSummary, dag, isHighway = true)
       } yield ()
   }
 

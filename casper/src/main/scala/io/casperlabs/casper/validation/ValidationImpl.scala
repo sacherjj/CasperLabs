@@ -128,8 +128,7 @@ abstract class ValidationImpl[F[_]: Sync: FunctorRaise[*[_], InvalidBlock]: Log:
       _ <- Validation.missingBlocks[F](summary)
       _ <- Validation.timestamp[F](summary)
       _ <- Validation.blockRank[F](summary, dag)
-      // TODO (CON-641): Going on the j-DAG is not enough, it may lead to a ballot in the parent era.
-      _ <- Validation.validatorPrevBlockHash[F](summary, dag).whenA(!isHighway)
+      _ <- Validation.validatorPrevBlockHash[F](summary, dag, isHighway)
       _ <- Validation.sequenceNumber[F](summary, dag)
       // TODO (CON-640): A voting ballot appears to be merging swimlanes in the child era.
       _ <- Validation.swimlane[F](summary, dag).whenA(!isHighway)
