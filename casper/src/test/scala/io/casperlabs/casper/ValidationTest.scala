@@ -1011,7 +1011,9 @@ class ValidationTest
         b <- arbitrary[consensus.Block]
       } yield b.withBody(
         b.getBody.withDeploys(
-          b.getBody.deploys.take(1).map(x => x.withDeploy(x.getDeploy.withApprovals(Seq.empty))) ++
+          b.getBody.deploys
+            .take(1)
+            .map(x => x.withDeploy(x.getDeploy.withApprovals(Seq.empty))) ++
             b.getBody.deploys.tail
         )
       )
@@ -1392,7 +1394,7 @@ class ValidationTest
       } yield postStateHash should be(computedPostStateHash)
   }
 
-  "j-past-cone of the block" should "not merge equivocator's swimlane" in withStorage {
+  "swimlane validation" should "not allow merging equivocator's swimlane" in withStorage {
     implicit blockStorage => implicit dagStorage => _ => _ =>
       val v0 = generateValidator("v0")
       val v1 = generateValidator("v1")
@@ -1411,7 +1413,7 @@ class ValidationTest
         c       <- createValidatorBlock[Task](Seq(genesis), bonds, Seq(a), v1, genesis)
         d       <- createValidatorBlock[Task](Seq(b), bonds, Seq(c), v0, genesis)
         dag     <- dagStorage.getRepresentation
-        _ <- Validation.swimlane[Task](d, dag).attempt shouldBeF Left(
+        _ <- Validation.swimlane[Task](d, dag, isHighway = false).attempt shouldBeF Left(
               ValidateErrorWrapper(SwimlaneMerged)
             )
       } yield ()
@@ -1436,7 +1438,36 @@ class ValidationTest
         c       <- createValidatorBlock[Task](Seq(genesis), bonds, Seq(a), v1, genesis)
         d       <- createValidatorBlock[Task](Seq(a), bonds, Seq(c), v0, genesis)
         dag     <- dagStorage.getRepresentation
-        _       <- Validation.swimlane[Task](d, dag).attempt shouldBeF Right(())
+        _       <- Validation.swimlane[Task](d, dag, isHighway = false).attempt shouldBeF Right(())
+      } yield ()
+  }
+
+  it should "not raise when the j-past-cone contain blocks and ballots across eras" in withStorage {
+    implicit blockStorage => implicit dagStorage => _ => _ =>
+      val v1 = generateValidator("v1")
+      // era-0: G - B0 - B1 - B2
+      //                   \
+      // era-1:             B3
+      for {
+        g  <- createAndStoreMessage[Task](Nil)
+        b0 <- createAndStoreBlockFull[Task](v1, List(g), Nil)
+        b1 <- createAndStoreBlockFull[Task](v1, List(b0), List(b0), keyBlockHash = b0.blockHash)
+        b2 <- createAndStoreBlockFull[Task](
+               v1,
+               List(b1),
+               List(b1),
+               keyBlockHash = b0.blockHash
+             )
+        b3 <- createAndStoreBlockFull[Task](
+               v1,
+               List(b1),
+               List(b1, b2),
+               maybeValidatorPrevBlockHash = Some(ByteString.EMPTY),
+               maybeValidatorBlockSeqNum = Some(0),
+               keyBlockHash = b1.blockHash
+             )
+        dag <- dagStorage.getRepresentation
+        _   <- Validation.swimlane[Task](b3, dag, isHighway = true)
       } yield ()
   }
 
