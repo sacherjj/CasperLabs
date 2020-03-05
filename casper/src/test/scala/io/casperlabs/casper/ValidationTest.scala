@@ -1452,12 +1452,7 @@ class ValidationTest
         g  <- createAndStoreMessage[Task](Nil)
         b0 <- createAndStoreBlockFull[Task](v1, List(g), Nil)
         b1 <- createAndStoreBlockFull[Task](v1, List(b0), List(b0), keyBlockHash = b0.blockHash)
-        b2 <- createAndStoreBlockFull[Task](
-               v1,
-               List(b1),
-               List(b1),
-               keyBlockHash = b0.blockHash
-             )
+        b2 <- createAndStoreBlockFull[Task](v1, List(b1), List(b1), keyBlockHash = b0.blockHash)
         b3 <- createAndStoreBlockFull[Task](
                v1,
                List(b1),
@@ -1468,6 +1463,36 @@ class ValidationTest
              )
         dag <- dagStorage.getRepresentation
         _   <- Validation.swimlane[Task](b3, dag, isHighway = true)
+      } yield ()
+  }
+
+  it should "raise when the j-past-cone an equivocation in an era" in withStorage {
+    implicit blockStorage => implicit dagStorage => _ => _ =>
+      val v1 = generateValidator("v1")
+      // era-0: G - B0 - B1 - B2
+      //                   \    \
+      //                    B3   \
+      //                      \   \
+      // era-1:                B4 - B5
+      for {
+        g  <- createAndStoreMessage[Task](Nil)
+        b0 <- createAndStoreBlockFull[Task](v1, List(g), Nil)
+        b1 <- createAndStoreBlockFull[Task](v1, List(b0), List(b0), keyBlockHash = b0.blockHash)
+        b2 <- createAndStoreBlockFull[Task](v1, List(b1), List(b1), keyBlockHash = b0.blockHash)
+        b3 <- createAndStoreBlockFull[Task](v1, List(b1), List(b1), keyBlockHash = b0.blockHash)
+        b4 <- createAndStoreBlockFull[Task](
+               v1,
+               List(b3),
+               List(b3),
+               maybeValidatorPrevBlockHash = Some(ByteString.EMPTY),
+               maybeValidatorBlockSeqNum = Some(0),
+               keyBlockHash = b1.blockHash
+             )
+        b5  <- createAndStoreBlockFull[Task](v1, List(b4), List(b4, b2), keyBlockHash = b1.blockHash)
+        dag <- dagStorage.getRepresentation
+        _ <- Validation.swimlane[Task](b5, dag, isHighway = true).attempt shouldBeF Left(
+              ValidateErrorWrapper(SwimlaneMerged)
+            )
       } yield ()
   }
 
