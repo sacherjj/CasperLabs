@@ -35,11 +35,11 @@ class SQLiteBlockStorage[F[_]: Bracket[*[_], Throwable]: Fs2Compiler](
 
   private def deployBodyCol(alias: String)(implicit dv: DeployInfo.View) =
     if (dv == DeployInfo.View.BASIC) {
-      fr"null"
+      fr"summary, null"
     } else if (alias.isEmpty) {
-      fr"body"
+      fr"summary, body"
     } else {
-      Fragment.const(s"${alias}.body")
+      Fragment.const(s"${alias}.summary, ${alias}.body")
     }
 
   override def get(
