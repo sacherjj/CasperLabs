@@ -365,61 +365,71 @@ object Mappings {
   def fromProto(
       value: state.CLValueInstance.Value,
       clType: CLType
-  ): Either[Error, CLValueInstance] =
+  ): Either[Error, CLValueInstance] = fromProtoLoop(value, clType).foldMap(interpreter)
+
+  private def fromProtoLoop(
+      value: state.CLValueInstance.Value,
+      clType: CLType
+  ): FE[CLValueInstance] =
     value.value match {
-      case state.CLValueInstance.Value.Value.Empty        => Left(Error.EmptyInstanceVariant)
-      case state.CLValueInstance.Value.Value.BoolValue(b) => Right(CLValueInstance.Bool(b))
-      case state.CLValueInstance.Value.Value.I32(i)       => Right(CLValueInstance.I32(i))
-      case state.CLValueInstance.Value.Value.I64(i)       => Right(CLValueInstance.I64(i))
-      case state.CLValueInstance.Value.Value.U8(i)        => Right(CLValueInstance.U8(i.toByte))
-      case state.CLValueInstance.Value.Value.U32(i)       => Right(CLValueInstance.U32(i))
-      case state.CLValueInstance.Value.Value.U64(i)       => Right(CLValueInstance.U64(i))
+      case state.CLValueInstance.Value.Value.Empty        => raise(Error.EmptyInstanceVariant)
+      case state.CLValueInstance.Value.Value.BoolValue(b) => pure(CLValueInstance.Bool(b))
+      case state.CLValueInstance.Value.Value.I32(i)       => pure(CLValueInstance.I32(i))
+      case state.CLValueInstance.Value.Value.I64(i)       => pure(CLValueInstance.I64(i))
+      case state.CLValueInstance.Value.Value.U8(i)        => pure(CLValueInstance.U8(i.toByte))
+      case state.CLValueInstance.Value.Value.U32(i)       => pure(CLValueInstance.U32(i))
+      case state.CLValueInstance.Value.Value.U64(i)       => pure(CLValueInstance.U64(i))
 
       case state.CLValueInstance.Value.Value.U128(i) =>
-        validateBigInt(i.value).map(CLValueInstance.U128.apply)
+        lift(validateBigInt(i.value).map(CLValueInstance.U128.apply))
       case state.CLValueInstance.Value.Value.U256(i) =>
-        validateBigInt(i.value).map(CLValueInstance.U256.apply)
+        lift(validateBigInt(i.value).map(CLValueInstance.U256.apply))
       case state.CLValueInstance.Value.Value.U512(i) =>
-        validateBigInt(i.value).map(CLValueInstance.U512.apply)
+        lift(validateBigInt(i.value).map(CLValueInstance.U512.apply))
 
-      case state.CLValueInstance.Value.Value.Unit(_)     => Right(CLValueInstance.Unit)
-      case state.CLValueInstance.Value.Value.StrValue(s) => Right(CLValueInstance.String(s))
-      case state.CLValueInstance.Value.Value.Key(k)      => fromProto(k).map(CLValueInstance.Key.apply)
-      case state.CLValueInstance.Value.Value.Uref(u)     => fromProto(u).map(CLValueInstance.URef.apply)
+      case state.CLValueInstance.Value.Value.Unit(_)     => pure(CLValueInstance.Unit)
+      case state.CLValueInstance.Value.Value.StrValue(s) => pure(CLValueInstance.String(s))
+      case state.CLValueInstance.Value.Value.Key(k) =>
+        lift(fromProto(k).map(CLValueInstance.Key.apply))
+      case state.CLValueInstance.Value.Value.Uref(u) =>
+        lift(fromProto(u).map(CLValueInstance.URef.apply))
 
-      // TODO: stack safety
       case state.CLValueInstance.Value.Value
             .OptionValue(state.CLValueInstance.OptionProto(innerProto)) =>
         clType match {
           case CLType.Option(innerType) =>
-            innerProto.traverse(v => fromProto(v, innerType)).flatMap { innerValue =>
-              CLValueInstance.Option(innerValue, innerType).leftMap(Error.InstanceError.apply)
+            innerProto.traverse(v => defer(fromProtoLoop(v, innerType))).flatMap { innerValue =>
+              lift(CLValueInstance.Option(innerValue, innerType).leftMap(Error.InstanceError.apply))
             }
 
-          case other => Left(Error.TypeMismatch(other, "Option"))
+          case other => raise(Error.TypeMismatch(other, "Option"))
         }
 
       case state.CLValueInstance.Value.Value.ListValue(state.CLValueInstance.List(innerProto)) =>
         clType match {
           case CLType.List(innerType) =>
-            innerProto.toList.traverse(v => fromProto(v, innerType)).flatMap { innerValue =>
-              CLValueInstance.List(innerValue, innerType).leftMap(Error.InstanceError.apply)
+            innerProto.toList.traverse(v => defer(fromProtoLoop(v, innerType))).flatMap {
+              innerValue =>
+                lift(CLValueInstance.List(innerValue, innerType).leftMap(Error.InstanceError.apply))
             }
 
-          case other => Left(Error.TypeMismatch(other, "List"))
+          case other => raise(Error.TypeMismatch(other, "List"))
         }
 
       case state.CLValueInstance.Value.Value
             .FixedListValue(state.CLValueInstance.FixedList(length, innerProto)) =>
         clType match {
           case CLType.FixedList(innerType, l) if l == length =>
-            innerProto.toList.traverse(v => fromProto(v, innerType)).flatMap { innerValue =>
-              CLValueInstance
-                .FixedList(innerValue, innerType, length)
-                .leftMap(Error.InstanceError.apply)
+            innerProto.toList.traverse(v => defer(fromProtoLoop(v, innerType))).flatMap {
+              innerValue =>
+                lift(
+                  CLValueInstance
+                    .FixedList(innerValue, innerType, length)
+                    .leftMap(Error.InstanceError.apply)
+                )
             }
 
-          case other => Left(Error.TypeMismatch(other, s"FixedList(length == $length)"))
+          case other => raise(Error.TypeMismatch(other, s"FixedList(length == $length)"))
         }
 
       case state.CLValueInstance.Value.Value
@@ -427,24 +437,28 @@ object Mappings {
         clType match {
           case CLType.Result(okType, errType) =>
             innerProto match {
-              case state.CLValueInstance.Result.Value.Empty => Left(Error.EmptyResultVariant)
+              case state.CLValueInstance.Result.Value.Empty => raise(Error.EmptyResultVariant)
 
               case state.CLValueInstance.Result.Value.Err(e) =>
-                fromProto(e, errType).flatMap { innerValue =>
-                  CLValueInstance
-                    .Result(Left(innerValue), okType, errType)
-                    .leftMap(Error.InstanceError.apply)
+                defer(fromProtoLoop(e, errType)).flatMap { innerValue =>
+                  lift(
+                    CLValueInstance
+                      .Result(Left(innerValue), okType, errType)
+                      .leftMap(Error.InstanceError.apply)
+                  )
                 }
 
               case state.CLValueInstance.Result.Value.Ok(k) =>
-                fromProto(k, okType).flatMap { innerValue =>
-                  CLValueInstance
-                    .Result(Right(innerValue), okType, errType)
-                    .leftMap(Error.InstanceError.apply)
+                defer(fromProtoLoop(k, okType)).flatMap { innerValue =>
+                  lift(
+                    CLValueInstance
+                      .Result(Right(innerValue), okType, errType)
+                      .leftMap(Error.InstanceError.apply)
+                  )
                 }
             }
 
-          case other => Left(Error.TypeMismatch(other, "Result"))
+          case other => raise(Error.TypeMismatch(other, "Result"))
         }
 
       case state.CLValueInstance.Value.Value.MapValue(state.CLValueInstance.Map(innerProto)) =>
@@ -454,20 +468,22 @@ object Mappings {
               case state.CLValueInstance.MapEntry(keyProto, valueProto) =>
                 for {
                   key <- keyProto
-                          .map(k => fromProto(k, keyType))
-                          .getOrElse(Left(Error.MissingInstance))
+                          .map(k => defer(fromProtoLoop(k, keyType)))
+                          .getOrElse(raise(Error.MissingInstance))
                   value <- valueProto
-                            .map(v => fromProto(v, valueType))
-                            .getOrElse(Left(Error.MissingInstance))
+                            .map(v => defer(fromProtoLoop(v, valueType)))
+                            .getOrElse(raise(Error.MissingInstance))
                 } yield (key, value)
             }
             values.flatMap { pairs =>
-              CLValueInstance
-                .Map(pairs.toMap, keyType, valueType)
-                .leftMap(Error.InstanceError.apply)
+              lift(
+                CLValueInstance
+                  .Map(pairs.toMap, keyType, valueType)
+                  .leftMap(Error.InstanceError.apply)
+              )
             }
 
-          case other => Left(Error.TypeMismatch(other, "Map"))
+          case other => raise(Error.TypeMismatch(other, "Map"))
         }
 
       case state.CLValueInstance.Value.Value
@@ -475,13 +491,13 @@ object Mappings {
         clType match {
           case CLType.Tuple1(innerType) =>
             innerProto
-              .map(v => fromProto(v, innerType))
-              .getOrElse(Left(Error.MissingInstance))
+              .map(v => defer(fromProtoLoop(v, innerType)))
+              .getOrElse(raise(Error.MissingInstance))
               .map { innerValue =>
                 CLValueInstance.Tuple1(innerValue)
               }
 
-          case other => Left(Error.TypeMismatch(other, "Tuple1"))
+          case other => raise(Error.TypeMismatch(other, "Tuple1"))
         }
 
       case state.CLValueInstance.Value.Value
@@ -489,11 +505,15 @@ object Mappings {
         clType match {
           case CLType.Tuple2(type1, type2) =>
             for {
-              v1 <- t1Proto.map(v => fromProto(v, type1)).getOrElse(Left(Error.MissingInstance))
-              v2 <- t2Proto.map(v => fromProto(v, type2)).getOrElse(Left(Error.MissingInstance))
+              v1 <- t1Proto
+                     .map(v => defer(fromProtoLoop(v, type1)))
+                     .getOrElse(raise(Error.MissingInstance))
+              v2 <- t2Proto
+                     .map(v => defer(fromProtoLoop(v, type2)))
+                     .getOrElse(raise(Error.MissingInstance))
             } yield CLValueInstance.Tuple2(v1, v2)
 
-          case other => Left(Error.TypeMismatch(other, "Tuple2"))
+          case other => raise(Error.TypeMismatch(other, "Tuple2"))
         }
 
       case state.CLValueInstance.Value.Value
@@ -501,12 +521,18 @@ object Mappings {
         clType match {
           case CLType.Tuple3(type1, type2, type3) =>
             for {
-              v1 <- t1Proto.map(v => fromProto(v, type1)).getOrElse(Left(Error.MissingInstance))
-              v2 <- t2Proto.map(v => fromProto(v, type2)).getOrElse(Left(Error.MissingInstance))
-              v3 <- t3Proto.map(v => fromProto(v, type3)).getOrElse(Left(Error.MissingInstance))
+              v1 <- t1Proto
+                     .map(v => defer(fromProtoLoop(v, type1)))
+                     .getOrElse(raise(Error.MissingInstance))
+              v2 <- t2Proto
+                     .map(v => defer(fromProtoLoop(v, type2)))
+                     .getOrElse(raise(Error.MissingInstance))
+              v3 <- t3Proto
+                     .map(v => defer(fromProtoLoop(v, type3)))
+                     .getOrElse(raise(Error.MissingInstance))
             } yield CLValueInstance.Tuple3(v1, v2, v3)
 
-          case other => Left(Error.TypeMismatch(other, "Tuple3"))
+          case other => raise(Error.TypeMismatch(other, "Tuple3"))
         }
     }
 
@@ -578,6 +604,10 @@ object Mappings {
   private def raise[A](e: Error): FE[A]     = Free.liftF(Raise[A](e))
   private def pure[A](a: A): FE[A]          = Free.pure(a)
   private def defer[A](fa: => FE[A]): FE[A] = Free.defer(fa)
+  private def lift[A](either: Either[Error, A]): FE[A] = either match {
+    case Left(err) => raise(err)
+    case Right(a)  => pure(a)
+  }
 
   private val interpreter: FunctionK[Raise, Either[Error, *]] =
     new FunctionK[Raise, Either[Error, *]] {
