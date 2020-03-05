@@ -54,15 +54,15 @@ object Mappings {
     case (n, k) => state.NamedKey(name = n, key = Some(toProto(k)))
   }
 
-  def toProto(rights: Option[AccessRights]): state.Key.URef.AccessRights = rights match {
-    case None                            => state.Key.URef.AccessRights.UNKNOWN
-    case Some(AccessRights.Read)         => state.Key.URef.AccessRights.READ
-    case Some(AccessRights.Write)        => state.Key.URef.AccessRights.WRITE
-    case Some(AccessRights.ReadWrite)    => state.Key.URef.AccessRights.READ_WRITE
-    case Some(AccessRights.Add)          => state.Key.URef.AccessRights.ADD
-    case Some(AccessRights.ReadAdd)      => state.Key.URef.AccessRights.READ_ADD
-    case Some(AccessRights.AddWrite)     => state.Key.URef.AccessRights.ADD_WRITE
-    case Some(AccessRights.ReadAddWrite) => state.Key.URef.AccessRights.READ_ADD_WRITE
+  def toProto(rights: AccessRights): state.Key.URef.AccessRights = rights match {
+    case AccessRights.None         => state.Key.URef.AccessRights.NONE
+    case AccessRights.Read         => state.Key.URef.AccessRights.READ
+    case AccessRights.Write        => state.Key.URef.AccessRights.WRITE
+    case AccessRights.ReadWrite    => state.Key.URef.AccessRights.READ_WRITE
+    case AccessRights.Add          => state.Key.URef.AccessRights.ADD
+    case AccessRights.ReadAdd      => state.Key.URef.AccessRights.READ_ADD
+    case AccessRights.AddWrite     => state.Key.URef.AccessRights.ADD_WRITE
+    case AccessRights.ReadAddWrite => state.Key.URef.AccessRights.READ_ADD_WRITE
   }
 
   def toProto(uref: URef): state.Key.URef = state.Key.URef(
@@ -230,16 +230,16 @@ object Mappings {
         } yield dsl.values.tuple3(v1, v2, v3)
     }
 
-  def fromProto(rights: state.Key.URef.AccessRights): Either[Error, Option[AccessRights]] =
+  def fromProto(rights: state.Key.URef.AccessRights): Either[Error, AccessRights] =
     rights match {
-      case state.Key.URef.AccessRights.UNKNOWN         => Right(None)
-      case state.Key.URef.AccessRights.READ            => Right(Some(AccessRights.Read))
-      case state.Key.URef.AccessRights.WRITE           => Right(Some(AccessRights.Write))
-      case state.Key.URef.AccessRights.READ_WRITE      => Right(Some(AccessRights.ReadWrite))
-      case state.Key.URef.AccessRights.ADD             => Right(Some(AccessRights.Add))
-      case state.Key.URef.AccessRights.READ_ADD        => Right(Some(AccessRights.ReadAdd))
-      case state.Key.URef.AccessRights.ADD_WRITE       => Right(Some(AccessRights.AddWrite))
-      case state.Key.URef.AccessRights.READ_ADD_WRITE  => Right(Some(AccessRights.ReadAddWrite))
+      case state.Key.URef.AccessRights.NONE            => Right(AccessRights.None)
+      case state.Key.URef.AccessRights.READ            => Right(AccessRights.Read)
+      case state.Key.URef.AccessRights.WRITE           => Right(AccessRights.Write)
+      case state.Key.URef.AccessRights.READ_WRITE      => Right(AccessRights.ReadWrite)
+      case state.Key.URef.AccessRights.ADD             => Right(AccessRights.Add)
+      case state.Key.URef.AccessRights.READ_ADD        => Right(AccessRights.ReadAdd)
+      case state.Key.URef.AccessRights.ADD_WRITE       => Right(AccessRights.AddWrite)
+      case state.Key.URef.AccessRights.READ_ADD_WRITE  => Right(AccessRights.ReadAddWrite)
       case state.Key.URef.AccessRights.Unrecognized(i) => Left(Error.UnrecognizedAccessRights(i))
     }
 

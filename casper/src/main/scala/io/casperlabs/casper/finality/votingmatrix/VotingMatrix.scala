@@ -39,7 +39,8 @@ object VotingMatrix {
     */
   private[votingmatrix] def create[F[_]: Concurrent](
       dag: DagRepresentation[F],
-      newFinalizedBlock: BlockHash
+      newFinalizedBlock: BlockHash,
+      isHighway: Boolean
   ): F[VotingMatrix[F]] =
     for {
       // Start a new round, get weightMap and validatorSet from the post-global-state of new finalized block's
@@ -108,7 +109,7 @@ object VotingMatrix {
       implicit0(votingMatrix: VotingMatrix[F]) <- of[F](state)
       // Apply the incremental update step to update voting matrix by taking M := V(i)latest
       _ <- latestMessagesToUpdated.values.toList.traverse { b =>
-            updateVotingMatrixOnNewBlock[F](dag, b)
+            updateVotingMatrixOnNewBlock[F](dag, b, isHighway)
           }
     } yield votingMatrix
 }

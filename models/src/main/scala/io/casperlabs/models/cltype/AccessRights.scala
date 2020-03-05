@@ -7,6 +7,10 @@ sealed trait AccessRights {
 }
 
 object AccessRights {
+  case object None extends AccessRights {
+    val tag: Byte = 0 // 0b000
+  }
+
   case object Read extends AccessRights {
     val tag: Byte = 1 // 0b0001
   }
@@ -41,6 +45,7 @@ object AccessRights {
 
   val deserializer: FromBytes.Deserializer[AccessRights] =
     FromBytes.byte.flatMap {
+      case tag if tag == None.tag         => FromBytes.pure(None)
       case tag if tag == Read.tag         => FromBytes.pure(Read)
       case tag if tag == Write.tag        => FromBytes.pure(Write)
       case tag if tag == ReadWrite.tag    => FromBytes.pure(ReadWrite)

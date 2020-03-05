@@ -22,7 +22,7 @@ import io.casperlabs.casper.helper.{
 }
 import io.casperlabs.casper.helper.BlockUtil.generateValidator
 import io.casperlabs.casper.util._
-import io.casperlabs.casper.validation.Validation
+import io.casperlabs.casper.validation.{NCBValidationImpl, Validation}
 import io.casperlabs.catscontrib.TaskContrib._
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
@@ -50,15 +50,15 @@ class CreateBlockAPITest
     with Inspectors
     with GossipServiceCasperTestNodeFactory {
   import HashSetCasperTest._
-  import DeriveValidation._
 
   implicit val scheduler: Scheduler = Scheduler.fixedPool("create-block-api-test", 4)
   implicit val metrics              = new Metrics.MetricsNOP[Task]
   implicit val raiseValidateErr =
     casper.validation.raiseValidateErrorThroughApplicativeError[Task]
-  implicit val logEff       = LogStub[Task]()
-  implicit val broadcaster  = Broadcaster.noop[Task]
-  implicit val eventEmitter = NoOpsEventEmitter.create[Task]
+  implicit val logEff        = LogStub[Task]()
+  implicit val broadcaster   = Broadcaster.noop[Task]
+  implicit val eventEmitter  = NoOpsEventEmitter.create[Task]
+  implicit val validationEff = new NCBValidationImpl[Task]
 
   private val (validatorKeys, validators)             = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
   private val bonds                                   = createBonds(validators)
@@ -109,7 +109,7 @@ class CreateBlockAPITest
       response2.isRight shouldBe false
       response2.left.get.getMessage should include("ABORTED")
     } finally {
-      node.tearDown()
+      node.tearDown().unsafeRunSync
     }
   }
 
@@ -174,7 +174,7 @@ class CreateBlockAPITest
     try {
       test.unsafeRunSync
     } finally {
-      node.tearDown()
+      node.tearDown().unsafeRunSync
     }
   }
 
@@ -207,7 +207,7 @@ class CreateBlockAPITest
         _            = ex.getMessage should include("No new deploys")
       } yield result).unsafeRunSync
     } finally {
-      node.tearDown()
+      node.tearDown().unsafeRunSync
     }
   }
 
@@ -276,7 +276,7 @@ class CreateBlockAPITest
         result       <- testProgram(blockApiLock)(casperRef)
       } yield result).unsafeRunSync
     } finally {
-      node.tearDown()
+      node.tearDown().unsafeRunSync
     }
   }
 
@@ -317,7 +317,7 @@ class CreateBlockAPITest
         result       <- testProgram(blockApiLock)(casperRef)
       } yield result).unsafeRunSync
     } finally {
-      node.tearDown()
+      node.tearDown().unsafeRunSync
     }
   }
 
@@ -361,7 +361,7 @@ class CreateBlockAPITest
         result       <- testProgram(blockApiLock)(casperRef)
       } yield result).unsafeRunSync
     } finally {
-      node.tearDown()
+      node.tearDown().unsafeRunSync
     }
   }
 }

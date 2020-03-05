@@ -6,7 +6,7 @@ set -e
 
 # Milliseconds since epoch.
 # TIMESTAMP=$(date +%s%3N) # Doesn't work on Mac.
-TIMESTAMP=$(python -c 'from time import time; print int(round(time() * 1000))')
+TIMESTAMP=$(python -c 'from time import time; print(int(round(time() * 1000)))')
 
 # This is not a real chainspec variable. Set it to "true" to make the genesis era start
 # align to rounded era durations, e.g. with 1hour eras they'd start at 0:00, 1:00, 2:00;

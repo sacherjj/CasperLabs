@@ -10,7 +10,6 @@ import io.casperlabs.storage.BlockHash
 import io.casperlabs.storage.block.BlockStorageWriter
 import io.casperlabs.storage.dag.{DagRepresentation, DagStorage}, DagRepresentation.Validator
 import io.casperlabs.storage.dag.EraTipRepresentation
-import com.google.protobuf.ByteString
 import io.casperlabs.storage.BlockMsgWithTransform
 
 class MockBlockDagStorage[F[_]: Monad](
@@ -44,15 +43,18 @@ class MockBlockDagStorage[F[_]: Monad](
     override def lookup(blockHash: BlockHash) =
       messagesRef.get.map(_.get(blockHash))
 
-    override def children(blockHash: BlockHash)                                                = ???
-    override def justificationToBlocks(blockHash: BlockHash)                                   = ???
-    override def contains(blockHash: BlockHash)                                                = ???
-    override def topoSort(startBlockNumber: Long, endBlockNumber: Long)                        = ???
-    override def topoSort(startBlockNumber: Long)                                              = ???
-    override def topoSortTail(tailLength: Int)                                                 = ???
-    override def topoSortTailValidator(validator: Validator, blocksNum: Int)                   = ???
-    override def topoSortValidator(validator: Validator, blocksNum: Int, endBlockNumber: Long) = ???
-
+    override def children(blockHash: BlockHash)                         = ???
+    override def justificationToBlocks(blockHash: BlockHash)            = ???
+    override def contains(blockHash: BlockHash)                         = ???
+    override def topoSort(startBlockNumber: Long, endBlockNumber: Long) = ???
+    override def topoSort(startBlockNumber: Long)                       = ???
+    override def topoSortTail(tailLength: Int)                          = ???
+    override def getBlockInfosByValidator(
+        validator: Validator,
+        limit: Int,
+        lastTimeStamp: Long,
+        lastBlockHash: BlockHash
+    )                         = ???
     override def latestGlobal = ???
 
     override def latestInEra(keyBlockHash: BlockHash) =

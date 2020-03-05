@@ -2,7 +2,7 @@ package io.casperlabs.models.cltype
 
 import io.casperlabs.models.bytesrepr._
 
-case class URef(address: ByteArray32, accessRights: Option[AccessRights])
+case class URef(address: ByteArray32, accessRights: AccessRights)
 
 object URef {
   implicit val toBytesURef: ToBytes[URef] = new ToBytes[URef] {
@@ -12,13 +12,12 @@ object URef {
 
   def lt(x: URef, y: URef): Boolean =
     ByteArray32.lt(x.address, y.address) || (
-      (x.address == y.address) && (x.accessRights.fold[Byte](0)(_.tag) < y.accessRights
-        .fold[Byte](0)(_.tag))
+      (x.address == y.address) && (x.accessRights.tag < y.accessRights.tag)
     )
 
   val deserializer: FromBytes.Deserializer[URef] =
     for {
       address      <- ByteArray32.deserializer
-      accessRights <- FromBytes.option(AccessRights.deserializer)
+      accessRights <- AccessRights.deserializer
     } yield URef(address, accessRights)
 }

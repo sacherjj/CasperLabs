@@ -450,13 +450,12 @@ where
     }
 
     pub fn insert_uref(&mut self, uref: URef) {
-        if let Some(rights) = uref.access_rights() {
-            let entry = self
-                .access_rights
-                .entry(uref.addr())
-                .or_insert_with(|| std::iter::empty().collect());
-            entry.insert(rights);
-        }
+        let rights = uref.access_rights();
+        let entry = self
+            .access_rights
+            .entry(uref.addr())
+            .or_insert_with(|| std::iter::empty().collect());
+        entry.insert(rights);
     }
 
     pub fn effect(&self) -> ExecutionEffect {
@@ -531,30 +530,25 @@ where
         if self.account.main_purse().addr() == uref.addr() {
             // If passed uref matches account's purse then we have to also validate their
             // access rights.
-            if let Some(rights) = self.account.main_purse().access_rights() {
-                if let Some(uref_rights) = uref.access_rights() {
-                    // Access rights of the passed uref, and the account's purse should match
-                    if rights & uref_rights == uref_rights {
-                        return Ok(());
-                    }
-                }
+            let rights = self.account.main_purse().access_rights();
+            let uref_rights = uref.access_rights();
+            // Access rights of the passed uref, and the account's purse should match
+            if rights & uref_rights == uref_rights {
+                return Ok(());
             }
         }
 
         // Check if the `key` is known
         if let Some(known_rights) = self.access_rights.get(&uref.addr()) {
-            if let Some(new_rights) = uref.access_rights() {
-                // check if we have sufficient access rights
-                if known_rights
-                    .iter()
-                    .any(|right| *right & new_rights == new_rights)
-                {
-                    Ok(())
-                } else {
-                    Err(Error::ForgedReference(*uref))
-                }
+            let new_rights = uref.access_rights();
+            // check if we have sufficient access rights
+            if known_rights
+                .iter()
+                .any(|right| *right & new_rights == new_rights)
+            {
+                Ok(())
             } else {
-                Ok(()) // uref is known and no additional rights are needed
+                Err(Error::ForgedReference(*uref))
             }
         } else {
             // uref is not known
@@ -835,7 +829,7 @@ where
     ///
     /// If the account is system account, then given URef receives
     /// full rights (READ_ADD_WRITE). Otherwise READ access is returned.
-    pub(crate) fn attenuate_uref(&mut self, uref: URef) -> URef {
+    pub(crate) fn attenuate_uref(&self, uref: URef) -> URef {
         attenuate_uref_for_account(&self.account(), uref)
     }
 

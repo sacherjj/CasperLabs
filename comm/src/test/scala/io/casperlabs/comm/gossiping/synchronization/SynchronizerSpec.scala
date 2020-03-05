@@ -445,9 +445,10 @@ object SynchronizerSpec {
         dags: Vector[BlockSummary]*
     ): Task[GossipService[Task]] =
       Task.now {
-        new GossipService[Task] {
-          def newBlocks(request: NewBlocksRequest) = ???
-          def streamAncestorBlockSummaries(request: StreamAncestorBlockSummariesRequest) = {
+        new NoOpsGossipService[Task] {
+          override def streamAncestorBlockSummaries(
+              request: StreamAncestorBlockSummariesRequest
+          ) = {
             request.knownBlockHashes.foreach(h => knownHashes += h)
             Iterant
               .resource {
@@ -465,12 +466,6 @@ object SynchronizerSpec {
                 }
               }
           }
-          def streamLatestMessages(request: StreamLatestMessagesRequest)                 = ???
-          def streamBlockSummaries(request: StreamBlockSummariesRequest)                 = ???
-          def getBlockChunked(request: GetBlockChunkedRequest)                           = ???
-          def getGenesisCandidate(request: GetGenesisCandidateRequest)                   = ???
-          def addApproval(request: AddApprovalRequest)                                   = ???
-          def streamDagSliceBlockSummaries(request: StreamDagSliceBlockSummariesRequest) = ???
         }
       }
   }

@@ -12,6 +12,7 @@ import io.casperlabs.casper.consensus.{Block, BlockSummary, Bond, Era}
 import io.casperlabs.casper.consensus.state
 import io.casperlabs.crypto.Keys.{PublicKey, PublicKeyBS}
 import io.casperlabs.models.Message
+import io.casperlabs.metrics.Metrics
 import io.casperlabs.catscontrib.{MakeSemaphore, MonadThrowable}
 import io.casperlabs.storage.BlockHash
 import io.casperlabs.storage.block.BlockStorageWriter
@@ -45,6 +46,8 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
   implicit def defaultClock: Clock[Id] = TestClock.frozen[Id](date(2019, 12, 9))
 
   implicit def `Message => ValidatedMessage`(m: Message): ValidatedMessage = Validated(m)
+
+  implicit val noMetrics = new Metrics.MetricsNOP[Id]
 
   val postEraVotingDuration = days(2)
 
@@ -163,6 +166,7 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
       implicit
       // Let's say we are right at the beginning of the era by default.
       C: Clock[Id] = TestClock.frozen[Id](date(2019, 12, 9)),
+      M: Metrics[Id] = noMetrics,
       DS: BlockDagStorage[Id] = defaultBlockDagStorage,
       ES: EraStorage[Id] = MockEraStorage[Id],
       FS: FinalityStorage[Id] = defaultFinalityStorage,
@@ -175,7 +179,7 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
       roundExponent,
       isSyncedRef.get,
       leaderSequencer
-    )(syncId, makeSemaphoreId, C, DS, ES, FS, FC)
+    )(syncId, makeSemaphoreId, C, M, DS, ES, FS, FC)
 
   /** Create a runtime given an era that's supposedly the child era of another one;
     * otherwise we should be using `genesisEraRuntime` instead. For the same reason
@@ -193,6 +197,7 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
   )(
       implicit
       C: Clock[Id],
+      M: Metrics[Id],
       DS: BlockDagStorage[Id],
       ES: EraStorage[Id],
       FS: FinalityStorage[Id],
@@ -205,7 +210,7 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
       roundExponent,
       isSyncedRef.get,
       leaderSequencer
-    )(syncId, makeSemaphoreId, C, DS, ES, FS, FC)
+    )(syncId, makeSemaphoreId, C, M, DS, ES, FS, FC)
 
   // Make it easier to share common dependencies.
   // TODO (NODE-1199): Use HighwayFixture instead for all tests.

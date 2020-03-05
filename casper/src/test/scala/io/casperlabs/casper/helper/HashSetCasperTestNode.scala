@@ -1,7 +1,7 @@
 package io.casperlabs.casper.helper
 
 import cats.effect.concurrent.Ref
-import cats.effect.{Concurrent, ContextShift, Timer}
+import cats.effect.{Concurrent, ConcurrentEffect, ContextShift, Timer}
 import cats.implicits._
 import cats.{~>, Applicative, Defer, Parallel}
 import com.google.protobuf.ByteString
@@ -145,7 +145,7 @@ trait HashSetCasperTestNodeFactory {
       faultToleranceThreshold: Double = 0.1
   )(
       implicit
-      concurrentF: Concurrent[F],
+      concurrentEffectF: ConcurrentEffect[F],
       parF: Parallel[F],
       timerF: Timer[F],
       contextShift: ContextShift[F]
@@ -160,7 +160,7 @@ trait HashSetCasperTestNodeFactory {
       implicit scheduler: Scheduler
   ): TestNode[Task] =
     standaloneF[Task](genesis, sk, storageSize, faultToleranceThreshold)(
-      Concurrent[Task],
+      ConcurrentEffect[Task],
       Parallel[Task],
       Timer[Task],
       ContextShift[Task]
@@ -174,7 +174,7 @@ trait HashSetCasperTestNodeFactory {
       maybeMakeEE: Option[HashSetCasperTestNode.MakeExecutionEngineService[F]] = None
   )(
       implicit
-      concurrentF: Concurrent[F],
+      concurrentEffectF: ConcurrentEffect[F],
       parF: Parallel[F],
       timerF: Timer[F],
       contextShift: ContextShift[F]
@@ -186,7 +186,7 @@ trait HashSetCasperTestNodeFactory {
       storageSize: Long = 1024L * 1024 * 10,
       faultToleranceThreshold: Double = 0.1,
       maybeMakeEE: Option[MakeExecutionEngineService[Task]] = None
-  ): Task[IndexedSeq[TestNode[Task]]] =
+  )(implicit scheduler: Scheduler): Task[IndexedSeq[TestNode[Task]]] =
     networkF[Task](
       sks,
       genesis,
@@ -194,7 +194,7 @@ trait HashSetCasperTestNodeFactory {
       faultToleranceThreshold,
       maybeMakeEE
     )(
-      Concurrent[Task],
+      ConcurrentEffect[Task],
       Parallel[Task],
       Timer[Task],
       ContextShift[Task]

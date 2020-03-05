@@ -144,6 +144,7 @@ class NodeRuntime private[node] (
                 ),
               wrapDagStorage = (underlyingDagStorage: DagStorage[Task]
                 with DagRepresentation[Task]
+                with AncestorsStorage[Task]
                 with FinalityStorage[Task]) =>
                 CachingDagStorage[Task](
                   underlyingDagStorage,
@@ -153,7 +154,9 @@ class NodeRuntime private[node] (
                 ).map(
                   cache =>
                     // Compiler fails to infer the proper type without this
-                    cache: DagStorage[Task] with DagRepresentation[Task] with FinalityStorage[Task]
+                    cache: DagStorage[Task] with DagRepresentation[Task] with FinalityStorage[
+                      Task
+                    ] with AncestorsStorage[Task]
                 )
             )
           )
@@ -221,10 +224,6 @@ class NodeRuntime private[node] (
                                                         egressScheduler
                                                       )
 
-      implicit0(raise: FunctorRaise[Task, InvalidBlock]) = validation
-        .raiseValidateErrorThroughApplicativeError[Task]
-      implicit0(validationEff: Validation[Task]) = ValidationImpl.metered[Task]
-
       // TODO: Only a loop started with the TransportLayer keeps filling this up,
       // so if we use the GossipService it's going to stay empty. The diagnostics
       // should use NodeDiscovery instead.
@@ -256,19 +255,15 @@ class NodeRuntime private[node] (
 
       isSyncedRef <- Resource.liftF(Ref.of[Task, Boolean](false))
 
-      implicit0(consensus: Consensus[Task]) <- {
+      implicit0(consensusEff: Consensus[Task]) <- {
         if (conf.highway.enabled)
           Resource.liftF(Log[Task].info(s"Starting in Highway mode.")) *>
             casper.consensus.Highway(conf, chainSpec, maybeValidatorId, genesis, isSyncedRef)
         else
-          Resource.liftF(Log[Task].info(s"Starting in NCB mode.")) *>
-            Resource.liftF {
-              new casper.consensus.NCB[Task](
-                conf,
-                chainSpec,
-                maybeValidatorId
-              ).pure[Task]
-            }
+          Resource.liftF(Log[Task].info(s"Starting in NCB mode.")) as {
+            casper.consensus
+              .NCB[Task](conf, chainSpec, maybeValidatorId)
+          }
       }
 
       // Creating with 0 permits initially, enabled after the initial synchronization.

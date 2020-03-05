@@ -22,6 +22,7 @@ import io.casperlabs.crypto.Keys.PublicKeyBS
 import io.casperlabs.ipc
 import io.casperlabs.mempool.DeployBuffer
 import io.casperlabs.models.Message
+import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.implicits._ // for .timer syntax
 import io.casperlabs.shared.{FatalError, Log, Time}
@@ -30,7 +31,7 @@ import io.casperlabs.storage.deploy.{DeployStorage, DeployStorageWriter}
 import io.casperlabs.storage.dag.{DagStorage, FinalityStorage}
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import scala.util.control.NonFatal
-import io.casperlabs.models.BlockImplicits._
+import scala.util.control.NoStackTrace
 
 /** A stateless class to encapsulate the steps to validate, execute and store a block. */
 class MessageExecutor[F[_]: Concurrent: Log: Time: Metrics: BlockStorage: DagStorage: DeployStorage: BlockEventEmitter: Validation: CasperLabsProtocol: ExecutionEngineService: Fs2Compiler: MultiParentFinalizer: FinalityStorage: DeployBuffer](
@@ -155,7 +156,10 @@ class MessageExecutor[F[_]: Concurrent: Log: Time: Metrics: BlockStorage: DagSto
           functorRaiseInvalidBlock.raise(status)
 
       case Processing | Processed =>
-        Sync[F].raiseError(new RuntimeException("A block should not be processing at this stage."))
+        Sync[F].raiseError(
+          new IllegalStateException("A block should not be processing at this stage.")
+            with NoStackTrace
+        )
 
       case UnexpectedBlockException(ex) =>
         Log[F].error(

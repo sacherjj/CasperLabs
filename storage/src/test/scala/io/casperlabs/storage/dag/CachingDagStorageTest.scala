@@ -216,6 +216,8 @@ class CachingDagStorageTest
       resources = prepareTestEnvironment(cacheSize = 1024L * 1024L * 25L, neighborhoodRange = 1),
       test = {
         case CachingDagStorageTestData(underlying, cache, mockMetrics) =>
+          def randomHash = ByteString.copyFromUtf8(scala.util.Random.nextString(10))
+
           def genChild(parent: Block) =
             parent
               .update(_.header.jRank := parent.jRank + 1)
@@ -224,7 +226,7 @@ class CachingDagStorageTest
 
           val grandGrandParent =
             sampleBlock
-              .update(_.header.parentHashes := Nil)
+              .update(_.header.parentHashes := Seq(randomHash))
               .update(_.header.justifications := Nil)
 
           val grandParent =

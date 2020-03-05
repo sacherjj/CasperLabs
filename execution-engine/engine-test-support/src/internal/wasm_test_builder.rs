@@ -86,6 +86,8 @@ pub struct WasmTestBuilder<S> {
     mint_contract_uref: Option<URef>,
     /// PoS contract uref
     pos_contract_uref: Option<URef>,
+    /// Standard payment contract uref
+    standard_payment_uref: Option<URef>,
 }
 
 impl<S> WasmTestBuilder<S> {
@@ -116,9 +118,10 @@ impl Default for InMemoryWasmTestBuilder {
             transforms: Vec::new(),
             bonded_validators: Vec::new(),
             genesis_account: None,
+            genesis_transforms: None,
             mint_contract_uref: None,
             pos_contract_uref: None,
-            genesis_transforms: None,
+            standard_payment_uref: None,
         }
     }
 }
@@ -136,9 +139,10 @@ impl<S> Clone for WasmTestBuilder<S> {
             transforms: self.transforms.clone(),
             bonded_validators: self.bonded_validators.clone(),
             genesis_account: self.genesis_account.clone(),
+            genesis_transforms: self.genesis_transforms.clone(),
             mint_contract_uref: self.mint_contract_uref,
             pos_contract_uref: self.pos_contract_uref,
-            genesis_transforms: self.genesis_transforms.clone(),
+            standard_payment_uref: self.standard_payment_uref,
         }
     }
 }
@@ -203,9 +207,10 @@ impl LmdbWasmTestBuilder {
             transforms: Vec::new(),
             bonded_validators: Vec::new(),
             genesis_account: None,
+            genesis_transforms: None,
             mint_contract_uref: None,
             pos_contract_uref: None,
-            genesis_transforms: None,
+            standard_payment_uref: None,
         }
     }
 
@@ -263,9 +268,10 @@ impl LmdbWasmTestBuilder {
             transforms: Vec::new(),
             bonded_validators: Vec::new(),
             genesis_account: None,
+            genesis_transforms: None,
             mint_contract_uref: None,
             pos_contract_uref: None,
-            genesis_transforms: None,
+            standard_payment_uref: None,
         }
     }
 
@@ -300,6 +306,7 @@ where
             genesis_account: result.0.genesis_account,
             mint_contract_uref: result.0.mint_contract_uref,
             pos_contract_uref: result.0.pos_contract_uref,
+            standard_payment_uref: result.0.standard_payment_uref,
             genesis_transforms: result.0.genesis_transforms,
         }
     }
@@ -345,6 +352,7 @@ where
         self.post_state_hash = Some(state_root_hash.to_vec());
         self.mint_contract_uref = Some(protocol_data.mint());
         self.pos_contract_uref = Some(protocol_data.proof_of_stake());
+        self.standard_payment_uref = Some(protocol_data.standard_payment());
         self.genesis_account = Some(genesis_account);
         self.genesis_transforms = Some(transforms);
         self
@@ -538,6 +546,11 @@ where
     pub fn get_pos_contract_uref(&self) -> URef {
         self.pos_contract_uref
             .expect("Unable to obtain pos contract uref. Please run genesis first.")
+    }
+
+    pub fn get_standard_payment_contract_uref(&self) -> URef {
+        self.standard_payment_uref
+            .expect("Unable to obtain standard payment contract uref. Please run genesis first.")
     }
 
     pub fn get_genesis_transforms(&self) -> &AdditiveMap<Key, engine_shared::transform::Transform> {

@@ -7,16 +7,22 @@ import cats.effect.{Clock, Concurrent, Sync}
 import cats.effect.concurrent.{Ref, Semaphore}
 import com.google.protobuf.ByteString
 import java.time.Instant
+
 import io.casperlabs.casper.consensus.{Block, BlockSummary, Era}
-import io.casperlabs.casper.util.DagOperations
+import io.casperlabs.casper.dag.DagOperations
+import io.casperlabs.casper.validation.Errors.ErrorMessageWrapper
 import io.casperlabs.catscontrib.{MakeSemaphore, MonadThrowable}
 import io.casperlabs.crypto.Keys.{PublicKey, PublicKeyBS}
 import io.casperlabs.models.Message
+import io.casperlabs.metrics.implicits._
+import io.casperlabs.metrics.Metrics
 import io.casperlabs.storage.BlockHash
 import io.casperlabs.storage.dag.{DagRepresentation, DagStorage, FinalityStorageReader}
 import io.casperlabs.storage.era.EraStorage
 import io.casperlabs.shared.SemaphoreMap
+
 import scala.util.Random
+import scala.util.control.NoStackTrace
 
 /** Class to encapsulate the message handling logic of messages in an era.
   *
@@ -35,7 +41,7 @@ import scala.util.Random
   *
   * This should make testing easier: the return values are not opaque.
   */
-class EraRuntime[F[_]: MonadThrowable: Clock: EraStorage: FinalityStorageReader: ForkChoice](
+class EraRuntime[F[_]: Sync: Clock: Metrics: EraStorage: FinalityStorageReader: ForkChoice](
     conf: HighwayConf,
     val era: Era,
     leaderFunction: LeaderFunction,
@@ -62,6 +68,8 @@ class EraRuntime[F[_]: MonadThrowable: Clock: EraStorage: FinalityStorageReader:
 ) {
   import EraRuntime._, Agenda._
   import HighwayConf.VotingDuration
+
+  implicit val metricsSource = HighwayMetricsSource / "EraRuntime"
 
   type HWL[A] = HighwayLog[F, A]
   private val noop = HighwayLog.unit[F]
@@ -152,12 +160,15 @@ class EraRuntime[F[_]: MonadThrowable: Clock: EraStorage: FinalityStorageReader:
         tick =>
           if (tick < endTick) false.pure[F]
           else {
-            ForkChoice[F].fromKeyBlock(era.keyBlockHash).flatMap { choice =>
-              choice.block.isSwitchBlock.ifM(
-                FinalityStorageReader[F].isFinalized(choice.block.messageHash),
-                false.pure[F]
-              )
-            }
+            ForkChoice[F]
+              .fromKeyBlock(era.keyBlockHash)
+              .timerGauge("is_over_forkchoice")
+              .flatMap { choice =>
+                choice.block.isSwitchBlock.ifM(
+                  FinalityStorageReader[F].isFinalized(choice.block.messageHash),
+                  false.pure[F]
+                )
+              }
           }
 
       case VotingDuration.SummitLevel(_) =>
@@ -211,34 +222,39 @@ class EraRuntime[F[_]: MonadThrowable: Clock: EraStorage: FinalityStorageReader:
   ): HWL[Unit] = ifSynced {
     for {
       m <- HighwayLog.liftF {
-            messageProducer.withPermit {
-              for {
-                // We need to cite the lambda message, and our own latest message.
-                // NOTE: The latter will be empty until the validator produces something in this era.
-                tips              <- dag.latestInEra(era.keyBlockHash)
-                ownLatestMessages <- tips.latestMessageHash(messageProducer.validatorId)
-                justifications = List(
-                  PublicKey(lambdaMessage.validatorId) -> Set(lambdaMessage.messageHash),
-                  messageProducer.validatorId          -> ownLatestMessages
-                ).filterNot(_._2.isEmpty).toMap
-                // See what the fork choice is, given the lambda and our own latest message, that is our target.
-                // In the voting period the lambda message is a ballot, so can't be a target,
-                // but in any case our own latest message might point at something with more weight already.
-                choice <- ForkChoice[F].fromJustifications(
-                           lambdaMessage.eraId,
-                           justifications.values.flatten.toSet
-                         )
-                maybeMessage <- ifCanBuildOn(choice) {
-                                 messageProducer
-                                   .ballot(
-                                     keyBlockHash = era.keyBlockHash,
-                                     roundId = Ticks(lambdaMessage.roundId),
-                                     target = choice.block.messageHash,
-                                     justifications = choice.justificationsMap
-                                   )
-                               }
-              } yield maybeMessage
-            }
+            messageProducer
+              .withPermit {
+                for {
+                  // We need to cite the lambda message, and our own latest message.
+                  // NOTE: The latter will be empty until the validator produces something in this era.
+                  tips              <- dag.latestInEra(era.keyBlockHash)
+                  ownLatestMessages <- tips.latestMessageHash(messageProducer.validatorId)
+                  justifications = List(
+                    PublicKey(lambdaMessage.validatorId) -> Set(lambdaMessage.messageHash),
+                    messageProducer.validatorId          -> ownLatestMessages
+                  ).filterNot(_._2.isEmpty).toMap
+                  // See what the fork choice is, given the lambda and our own latest message, that is our target.
+                  // In the voting period the lambda message is a ballot, so can't be a target,
+                  // but in any case our own latest message might point at something with more weight already.
+                  choice <- ForkChoice[F]
+                             .fromJustifications(
+                               lambdaMessage.eraId,
+                               justifications.values.flatten.toSet
+                             )
+                             .timerGauge("response_forkchoice")
+                  maybeMessage <- ifCanBuildOn(choice) {
+                                   messageProducer
+                                     .ballot(
+                                       keyBlockHash = era.keyBlockHash,
+                                       roundId = Ticks(lambdaMessage.roundId),
+                                       target = choice.block.messageHash,
+                                       justifications = choice.justificationsMap
+                                     )
+                                     .timerGauge("response_ballot")
+                                 }
+                } yield maybeMessage
+              }
+              .timerGauge("create_response")
           }
       _ <- m.fold(noop) { msg =>
             HighwayLog.tell[F](HighwayEvent.CreatedLambdaResponse(msg))
@@ -252,41 +268,48 @@ class EraRuntime[F[_]: MonadThrowable: Clock: EraStorage: FinalityStorageReader:
   ): HWL[Unit] = ifSynced {
     for {
       m <- HighwayLog.liftF {
-            messageProducer.withPermit {
-              ForkChoice[F].fromKeyBlock(era.keyBlockHash) flatMap { choice =>
-                ifCanBuildOn(choice) {
-                  // In the active period we create a block, but during voting
-                  // it can only be a ballot, after the switch block has been created.
-                  val block = messageProducer
-                    .block(
-                      keyBlockHash = era.keyBlockHash,
-                      roundId = roundId,
-                      mainParent = choice.block.messageHash,
-                      justifications = choice.justificationsMap,
-                      isBookingBlock = isBookingBoundary(
-                        choice.block.roundInstant,
-                        conf.toInstant(roundId)
-                      )
-                    )
-                    .widen[Message]
+            messageProducer
+              .withPermit {
+                ForkChoice[F]
+                  .fromKeyBlock(era.keyBlockHash)
+                  .timerGauge("lambda_forkchoice")
+                  .flatMap { choice =>
+                    ifCanBuildOn(choice) {
+                      // In the active period we create a block, but during voting
+                      // it can only be a ballot, after the switch block has been created.
+                      val block = messageProducer
+                        .block(
+                          keyBlockHash = era.keyBlockHash,
+                          roundId = roundId,
+                          mainParent = choice.block.messageHash,
+                          justifications = choice.justificationsMap,
+                          isBookingBlock = isBookingBoundary(
+                            choice.block.roundInstant,
+                            conf.toInstant(roundId)
+                          )
+                        )
+                        .timerGauge("lambda_block")
+                        .widen[Message]
 
-                  val ballot = messageProducer
-                    .ballot(
-                      keyBlockHash = era.keyBlockHash,
-                      roundId = roundId,
-                      target = choice.block.messageHash,
-                      justifications = choice.justificationsMap
-                    )
-                    .widen[Message]
+                      val ballot = messageProducer
+                        .ballot(
+                          keyBlockHash = era.keyBlockHash,
+                          roundId = roundId,
+                          target = choice.block.messageHash,
+                          justifications = choice.justificationsMap
+                        )
+                        .timerGauge("lambda_ballot")
+                        .widen[Message]
 
-                  if (roundId < endTick) {
-                    block
-                  } else {
-                    choice.block.isSwitchBlock.ifM(ballot, block)
+                      if (roundId < endTick) {
+                        block
+                      } else {
+                        choice.block.isSwitchBlock.ifM(ballot, block)
+                      }
+                    }
                   }
-                }
               }
-            }
+              .timerGauge("create_lambda")
           }
       _ <- m.fold(noop) { msg =>
             HighwayLog.tell[F](HighwayEvent.CreatedLambdaMessage(msg)) >>
@@ -301,18 +324,25 @@ class EraRuntime[F[_]: MonadThrowable: Clock: EraStorage: FinalityStorageReader:
   ): HWL[Unit] = ifSynced {
     for {
       m <- HighwayLog.liftF {
-            messageProducer.withPermit {
-              ForkChoice[F].fromKeyBlock(era.keyBlockHash) flatMap { choice =>
-                ifCanBuildOn(choice) {
-                  messageProducer.ballot(
-                    keyBlockHash = era.keyBlockHash,
-                    roundId = roundId,
-                    target = choice.block.messageHash,
-                    justifications = choice.justificationsMap
-                  )
-                }
+            messageProducer
+              .withPermit {
+                ForkChoice[F]
+                  .fromKeyBlock(era.keyBlockHash)
+                  .timerGauge("omega_forkchoice")
+                  .flatMap { choice =>
+                    ifCanBuildOn(choice) {
+                      messageProducer
+                        .ballot(
+                          keyBlockHash = era.keyBlockHash,
+                          roundId = roundId,
+                          target = choice.block.messageHash,
+                          justifications = choice.justificationsMap
+                        )
+                        .timerGauge("omega_ballot")
+                    }
+                  }
               }
-            }
+              .timerGauge("create_omega")
           }
       _ <- m.fold(noop) { msg =>
             HighwayLog.tell[F](HighwayEvent.CreatedOmegaMessage(msg))
@@ -482,7 +512,8 @@ class EraRuntime[F[_]: MonadThrowable: Clock: EraStorage: FinalityStorageReader:
     */
   def handleMessage(message: ValidatedMessage): HWL[Unit] = {
     def check(ok: Boolean, error: String) =
-      if (ok) noop else MonadThrowable[HWL].raiseError[Unit](new IllegalStateException(error))
+      if (ok) noop
+      else MonadThrowable[HWL].raiseError[Unit](new IllegalStateException(error) with NoStackTrace)
 
     for {
       _ <- check(
@@ -591,7 +622,9 @@ class EraRuntime[F[_]: MonadThrowable: Clock: EraStorage: FinalityStorageReader:
               // and not stop processing, so we'll need to return more detailed statuses from
               // validate to decide what to do, whether to react or not.
               MonadThrowable[F].raiseError[Unit](
-                new IllegalArgumentException(s"Could not validate block against era: $error")
+                new ErrorMessageWrapper(
+                  s"Could not validate block ${block.blockHash.show} against era ${era.keyBlockHash.show}: $error"
+                )
               ),
             _ => ().pure[F]
           )
@@ -614,7 +647,7 @@ object EraRuntime {
     bonds = genesis.getHeader.getState.bonds
   )
 
-  def fromGenesis[F[_]: Sync: MakeSemaphore: Clock: DagStorage: EraStorage: FinalityStorageReader: ForkChoice](
+  def fromGenesis[F[_]: Sync: MakeSemaphore: Clock: Metrics: DagStorage: EraStorage: FinalityStorageReader: ForkChoice](
       conf: HighwayConf,
       genesis: BlockSummary,
       maybeMessageProducer: Option[MessageProducer[F]],
@@ -626,7 +659,7 @@ object EraRuntime {
     fromEra[F](conf, era, maybeMessageProducer, initRoundExponent, isSynced, leaderSequencer)
   }
 
-  def fromEra[F[_]: Sync: MakeSemaphore: Clock: DagStorage: EraStorage: FinalityStorageReader: ForkChoice](
+  def fromEra[F[_]: Sync: MakeSemaphore: Clock: Metrics: DagStorage: EraStorage: FinalityStorageReader: ForkChoice](
       conf: HighwayConf,
       era: Era,
       maybeMessageProducer: Option[MessageProducer[F]],

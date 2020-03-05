@@ -28,7 +28,6 @@ pub const U128_SERIALIZED_LENGTH: usize = size_of::<u128>();
 pub const U256_SERIALIZED_LENGTH: usize = U128_SERIALIZED_LENGTH * 2;
 /// The number of bytes in a serialized [`U512`](crate::U512).
 pub const U512_SERIALIZED_LENGTH: usize = U256_SERIALIZED_LENGTH * 2;
-pub(crate) const OPTION_TAG_SERIALIZED_LENGTH: usize = 1;
 
 /// A type which can be serialized to a `Vec<u8>`.
 pub trait ToBytes {

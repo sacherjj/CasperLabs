@@ -6,14 +6,17 @@ import com.google.protobuf.ByteString
 import io.casperlabs.casper.InvalidBlock
 import io.casperlabs.casper.PrettyPrinter
 import io.casperlabs.shared.Log
-
+import scala.util.control.NoStackTrace
 import scala.concurrent.duration.FiniteDuration
 
 object Errors {
   // Wrapper for the tests that were originally outside the `attemptAdd` method
   // and meant the block was not getting saved.
-  final case class DropErrorWrapper(status: InvalidBlock)     extends Exception
-  final case class ValidateErrorWrapper(status: InvalidBlock) extends Exception(status.toString)
+  final case class DropErrorWrapper(status: InvalidBlock) extends Exception with NoStackTrace
+  final case class ValidateErrorWrapper(status: InvalidBlock)
+      extends Exception(status.toString)
+      with NoStackTrace
+  final case class ErrorMessageWrapper(message: String) extends Exception(message) with NoStackTrace
 
   sealed trait DeployHeaderError { self =>
     val deployHash: ByteString

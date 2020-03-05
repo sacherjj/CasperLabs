@@ -733,6 +733,7 @@ object DownloadManagerSpec {
           def hasBlock(blockHash: ByteString)                = ???
           def getBlock(blockHash: ByteString)                = Task.now(None)
           def getBlockSummary(blockHash: ByteString)         = ???
+          def getDeploys(deployHashes: Set[ByteString])      = ???
           def latestMessages: Task[Set[Block.Justification]] = ???
           def dagTopoSort(startRank: Long, endRank: Long)    = ???
         },
@@ -761,6 +762,7 @@ object DownloadManagerSpec {
             override def hasBlock(blockHash: ByteString) = ???
             override def getBlock(blockHash: ByteString) =
               regetter(Task.delay(blockMap.get(blockHash)))
+            override def getDeploys(deployHashes: Set[ByteString])      = ???
             override def getBlockSummary(blockHash: ByteString)         = ???
             override def latestMessages: Task[Set[Block.Justification]] = ???
             override def dagTopoSort(startRank: Long, endRank: Long)    = ???

@@ -82,7 +82,7 @@ pub fn instance_and_memory(
 /// Returns None if `key` is not `Key::URef` as it wouldn't have `AccessRights`
 /// associated with it. Helper function for creating `named_keys` associating
 /// addresses and corresponding `AccessRights`.
-pub fn key_to_tuple(key: Key) -> Option<([u8; 32], Option<AccessRights>)> {
+pub fn key_to_tuple(key: Key) -> Option<([u8; 32], AccessRights)> {
     match key {
         Key::URef(uref) => Some((uref.addr(), uref.access_rights())),
         Key::Account(_) => None,
@@ -104,9 +104,7 @@ pub fn extract_access_rights_from_urefs<I: IntoIterator<Item = URef>>(
         .map(|(key, group)| {
             (
                 key,
-                group
-                    .filter_map(|(_, x)| x)
-                    .collect::<HashSet<AccessRights>>(),
+                group.map(|(_, x)| x).collect::<HashSet<AccessRights>>(),
             )
         })
         .collect()
@@ -126,9 +124,7 @@ pub fn extract_access_rights_from_keys<I: IntoIterator<Item = Key>>(
         .map(|(key, group)| {
             (
                 key,
-                group
-                    .filter_map(|(_, x)| x)
-                    .collect::<HashSet<AccessRights>>(),
+                group.map(|(_, x)| x).collect::<HashSet<AccessRights>>(),
             )
         })
         .collect()
@@ -2001,10 +1997,10 @@ where
 
         let result = instance.invoke_export("call", &[], &mut runtime);
 
-        // TODO: To account for the gas used in a subcall, we should uncomment the following lines
-        // if !current_runtime.charge_gas(runtime.context.gas_counter()) {
-        //     return Err(Error::GasLimit);
-        // }
+        // The `runtime`'s context was initialized with our counter from before the call and any gas
+        // charged by the sub-call was added to its counter - so let's copy the correct value of the
+        // counter from there to our counter
+        self.context.set_gas_counter(runtime.context.gas_counter());
 
         let error = match result {
             Err(error) => error,
@@ -2388,17 +2384,25 @@ where
     /// Looks up the public mint contract key in the context's protocol data.
     ///
     /// Returned URef is already attenuated depending on the calling account.
-    fn get_mint_contract_uref(&mut self) -> URef {
+    fn get_mint_contract_uref(&self) -> URef {
         let mint = self.context.protocol_data().mint();
         self.context.attenuate_uref(mint)
     }
 
-    /// Looks up the public PoS contract key in the context's protocol data
+    /// Looks up the public PoS contract key in the context's protocol data.
     ///
     /// Returned URef is already attenuated depending on the calling account.
-    fn get_pos_contract_uref(&mut self) -> URef {
+    fn get_pos_contract_uref(&self) -> URef {
         let pos = self.context.protocol_data().proof_of_stake();
         self.context.attenuate_uref(pos)
+    }
+
+    /// Looks up the public standard payment contract key in the context's protocol data.
+    ///
+    /// Returned URef is already attenuated depending on the calling account.
+    fn get_standard_payment_contract_uref(&self) -> URef {
+        let standard_payment = self.context.protocol_data().standard_payment();
+        self.context.attenuate_uref(standard_payment)
     }
 
     /// Calls the "create" method on the mint contract at the given mint
@@ -2705,6 +2709,7 @@ where
         let attenuated_uref = match SystemContractType::try_from(system_contract_index) {
             Ok(SystemContractType::Mint) => self.get_mint_contract_uref(),
             Ok(SystemContractType::ProofOfStake) => self.get_pos_contract_uref(),
+            Ok(SystemContractType::StandardPayment) => self.get_standard_payment_contract_uref(),
             Err(error) => return Ok(Err(error)),
         };
 

@@ -15,7 +15,7 @@ class URefSerializationTest extends FlatSpec with Matchers with PropertyChecks {
 object URefSerializationTest {
   val genURef: Gen[URef] = for {
     addr   <- ByteArray32SerializationTest.genByteArray32
-    access <- Gen.option(AccessRightsSerializationTest.genAccessRights)
+    access <- AccessRightsSerializationTest.genAccessRights
   } yield URef(addr, access)
 
   implicit val arbURef: Arbitrary[URef] = Arbitrary(genURef)

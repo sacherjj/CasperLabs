@@ -49,13 +49,13 @@ import io.casperlabs.storage.BlockMsgWithTransform
 import io.casperlabs.storage.block._
 import io.casperlabs.storage.dag._
 import io.casperlabs.storage.deploy.DeployStorage
+import io.casperlabs.casper.validation.NCBValidationImpl
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.scalacheck.Arbitrary.arbitrary
 import org.scalatest.{BeforeAndAfterEach, EitherValues, FlatSpec, Matchers}
 import org.scalatest.prop.GeneratorDrivenPropertyChecks.forAll
 import logstage.LogIO
-
 import scala.collection.immutable.HashMap
 import scala.concurrent.duration._
 
@@ -75,7 +75,8 @@ class ValidationTest
     CasperLabsProtocol.unsafe[Task](
       (0L, state.ProtocolVersion(1), Some(DeployConfig(24 * 60 * 60 * 1000, 10)))
     )
-  import DeriveValidation._
+
+  implicit val validationEff = new NCBValidationImpl[Task]()
 
   // Necessary because errors are returned via Sync which has an error type fixed to _ <: Throwable.
   // When raise errors we wrap them with Throwable so we need to do the same here.
@@ -593,7 +594,7 @@ class ValidationTest
         b1  <- createAndStoreBlockFull[Task](v2, List(b0), List(b0))
         b2  <- createAndStoreBlockFull[Task](v1, List(b1), List(b1))
         dag <- dagStorage.getRepresentation
-        _   <- Validation.validatorPrevBlockHash[Task](b2.getSummary, dag)
+        _   <- Validation.validatorPrevBlockHash[Task](b2.getSummary, dag, isHighway = false)
       } yield ()
   }
   it should "pass if the hash is in the justifications" in withStorage {
@@ -604,7 +605,7 @@ class ValidationTest
         b0  <- createAndStoreBlockFull[Task](v1, List(g), Nil)
         b1  <- createAndStoreBlockFull[Task](v1, List(b0), List(b0))
         dag <- dagStorage.getRepresentation
-        _   <- Validation.validatorPrevBlockHash[Task](b1.getSummary, dag)
+        _   <- Validation.validatorPrevBlockHash[Task](b1.getSummary, dag, isHighway = false)
       } yield ()
   }
   it should "fail if the hash belongs to somebody else" in withStorage {
@@ -620,8 +621,10 @@ class ValidationTest
                List(b1, b0),
                maybeValidatorPrevBlockHash = Some(b1.blockHash)
              )
-        dag    <- dagStorage.getRepresentation
-        result <- Validation.validatorPrevBlockHash[Task](b2.getSummary, dag).attempt
+        dag <- dagStorage.getRepresentation
+        result <- Validation
+                   .validatorPrevBlockHash[Task](b2.getSummary, dag, isHighway = false)
+                   .attempt
       } yield {
         result shouldBe Left(ValidateErrorWrapper(InvalidPrevBlockHash))
       }
@@ -640,8 +643,10 @@ class ValidationTest
                List(b2),
                maybeValidatorPrevBlockHash = Some(b1.blockHash)
              )
-        dag    <- dagStorage.getRepresentation
-        result <- Validation.validatorPrevBlockHash[Task](b3.getSummary, dag).attempt
+        dag <- dagStorage.getRepresentation
+        result <- Validation
+                   .validatorPrevBlockHash[Task](b3.getSummary, dag, isHighway = false)
+                   .attempt
       } yield {
         result shouldBe Left(ValidateErrorWrapper(InvalidPrevBlockHash))
       }
@@ -659,11 +664,59 @@ class ValidationTest
                maybeValidatorPrevBlockHash = Some(bx),
                maybeValidatorBlockSeqNum = Some(1)
              )
-        dag    <- dagStorage.getRepresentation
-        result <- Validation.validatorPrevBlockHash[Task](b0.getSummary, dag).attempt
+        dag <- dagStorage.getRepresentation
+        result <- Validation
+                   .validatorPrevBlockHash[Task](b0.getSummary, dag, isHighway = false)
+                   .attempt
       } yield {
         result shouldBe Left(ValidateErrorWrapper(InvalidPrevBlockHash))
       }
+  }
+  it should "not fail if it encounters a message in the parent era" in withStorage {
+    implicit blockStorage => implicit dagStorage => _ => _ =>
+      val v1 = generateValidator("v1")
+      // era-0: G = B0 = B1 = b2 = b4
+      //                  \\         \
+      // era-1:             B3 = = = B5
+      for {
+        g  <- createAndStoreMessage[Task](Nil)
+        b0 <- createAndStoreBlockFull[Task](v1, List(g), Nil)
+        b1 <- createAndStoreBlockFull[Task](v1, List(b0), List(b0), keyBlockHash = b0.blockHash)
+        // Voting ballot in the parent era (using StoreBlock because it's easier to pass justifications).
+        b2 <- createAndStoreBlockFull[Task](
+               v1,
+               List(b1),
+               List(b1),
+               keyBlockHash = b0.blockHash
+             )
+        // A block in the child era.
+        b3 <- createAndStoreBlockFull[Task](
+               v1,
+               List(b1),
+               List(b1),
+               maybeValidatorPrevBlockHash = Some(ByteString.EMPTY),
+               maybeValidatorBlockSeqNum = Some(0),
+               keyBlockHash = b1.blockHash
+             )
+        // Another voting ballot.
+        b4 <- createAndStoreBlockFull[Task](
+               v1,
+               List(b1),
+               List(b2),
+               keyBlockHash = b0.blockHash
+             )
+        // Another block that cites the parent era voting ballot.
+        b5 <- createAndStoreBlockFull[Task](
+               v1,
+               List(b3),
+               List(b3, b4),
+               maybeValidatorPrevBlockHash = Some(b3.blockHash),
+               keyBlockHash = b1.blockHash
+             )
+        dag <- dagStorage.getRepresentation
+        _   <- Validation.validatorPrevBlockHash[Task](b3.getSummary, dag, isHighway = true)
+        _   <- Validation.validatorPrevBlockHash[Task](b5.getSummary, dag, isHighway = true)
+      } yield ()
   }
 
   "Sender validation" should "return true for genesis and blocks from bonded validators and false otherwise" in withStorage {
@@ -732,7 +785,8 @@ class ValidationTest
         b8 <- createValidatorBlock[Task](Seq(b1, b2, b3), bonds, Seq(b1, b2, b3), v2, b0) //parents wrong order
         b9 <- createValidatorBlock[Task](Seq(b6), bonds, Seq.empty, v0, b0)
                .map(b => b.withHeader(b.getHeader.withJustifications(Seq.empty))) //empty justification
-        b10 <- createValidatorBlock[Task](Seq.empty, bonds, Seq.empty, v0, b0) //empty justification
+        // Set obviously incorrect parent. Later we want to test that validation raises `InvalidParent` error.
+        b10 <- createValidatorBlock[Task](Seq(b0), bonds, Seq(b9), v0, b0)
         result <- for {
                    dag <- dagStorage.getRepresentation
                    // Valid

@@ -13,14 +13,15 @@ import io.casperlabs.casper.util.ProtoUtil.bonds
 import io.casperlabs.casper.util.execengine.ExecEngineUtil
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.{StateHash, TransformMap}
 import io.casperlabs.casper.util.{CasperLabsProtocol, ProtoUtil}
+import io.casperlabs.casper.highway.ForkChoice
 import io.casperlabs.catscontrib.Fs2Compiler
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.models.Weight
 import io.casperlabs.shared._
 import io.casperlabs.smartcontracts.ExecutionEngineService
+import io.casperlabs.storage.BlockHash
 import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.storage.dag.DagRepresentation
-import Validation._
 import cats.effect.Sync
 import io.casperlabs.casper.consensus.state.ProtocolVersion
 import io.casperlabs.smartcontracts.ExecutionEngineService.CommitResult
@@ -32,10 +33,9 @@ object ValidationImpl {
 
   implicit val metricsSource = CasperMetricsSource / "validation"
 
-  def metered[F[_]: Sync: FunctorRaise[*[_], InvalidBlock]: Log: Time: Metrics]: Validation[F] = {
-
-    val underlying = new ValidationImpl[F]
-
+  def metered[F[_]: Sync: Metrics](
+      underlying: Validation[F]
+  ): Validation[F] =
     new Validation[F] {
       override def neglectedInvalidBlock(
           block: Block,
@@ -54,7 +54,7 @@ object ValidationImpl {
           block: Block,
           preStateHash: StateHash,
           preStateBonds: Seq[Bond],
-          effects: BlockEffects
+          effects: Validation.BlockEffects
       )(
           implicit ee: ExecutionEngineService[F],
           bs: BlockStorage[F],
@@ -84,15 +84,22 @@ object ValidationImpl {
       override def checkEquivocation(dag: DagRepresentation[F], block: Block): F[Unit] =
         Metrics[F].timer("checkEquivocation")(underlying.checkEquivocation(dag, block))
     }
-  }
 }
 
-class ValidationImpl[F[_]: Sync: FunctorRaise[*[_], InvalidBlock]: Log: Time: Metrics]
-    extends Validation[F] {
+abstract class ValidationImpl[F[_]: Sync: FunctorRaise[*[_], InvalidBlock]: Log: Time: Metrics](
+    isHighway: Boolean
+) extends Validation[F] {
   import io.casperlabs.models.BlockImplicits._
+  import Validation.{ignore, raise, reject}
 
   type Data        = Array[Byte]
   type BlockHeight = Long
+
+  protected def tipsFromLatestMessages(
+      dag: DagRepresentation[F],
+      keyBlockHash: BlockHash,
+      latestMessagesHashes: Map[Estimator.Validator, Set[BlockHash]]
+  ): F[NonEmptyList[BlockHash]]
 
   /** Check the block without executing deploys. */
   override def blockFull(
@@ -107,31 +114,32 @@ class ValidationImpl[F[_]: Sync: FunctorRaise[*[_], InvalidBlock]: Log: Time: Me
   ): F[Unit] = {
     val summary = BlockSummary(block.blockHash, block.header, block.signature)
     for {
-      _ <- checkDroppable(
+      _ <- Validation.checkDroppable(
             if (block.body.isEmpty)
               ignore[F](block.blockHash, s"block body is missing.").as(false)
             else true.pure[F],
             // Validate that the sender is a bonded validator.
             maybeGenesis.fold(summary.isGenesisLike.pure[F]) { _ =>
-              blockSender[F](summary)
+              Validation.blockSender[F](summary)
             }
           )
       _ <- blockSummary(summary, chainName)
       // Checks that need dependencies.
-      _ <- missingBlocks[F](summary)
-      _ <- timestamp[F](summary)
-      _ <- blockRank[F](summary, dag)
-      _ <- validatorPrevBlockHash[F](summary, dag)
-      _ <- sequenceNumber[F](summary, dag)
-      _ <- swimlane[F](summary, dag)
+      _ <- Validation.missingBlocks[F](summary)
+      _ <- Validation.timestamp[F](summary)
+      _ <- Validation.blockRank[F](summary, dag)
+      _ <- Validation.validatorPrevBlockHash[F](summary, dag, isHighway)
+      _ <- Validation.sequenceNumber[F](summary, dag)
+      // TODO (CON-640): A voting ballot appears to be merging swimlanes in the child era.
+      _ <- Validation.swimlane[F](summary, dag).whenA(!isHighway)
       // TODO: Validate that blocks only have block parents and ballots have a single parent which is a block.
       // Checks that need the body.
-      _ <- blockHash[F](block)
-      _ <- deployCount[F](block)
-      _ <- deployHashes[F](block)
-      _ <- deploySignatures[F](block)
-      _ <- deployHeaders[F](block, dag, chainName)
-      _ <- deployUniqueness[F](block, dag)
+      _ <- Validation.blockHash[F](block)
+      _ <- Validation.deployCount[F](block)
+      _ <- Validation.deployHashes[F](block)
+      _ <- Validation.deploySignatures[F](block)
+      _ <- Validation.deployHeaders[F](block, dag, chainName)
+      _ <- Validation.deployUniqueness[F](block, dag)
     } yield ()
   }
 
@@ -158,18 +166,7 @@ class ValidationImpl[F[_]: Sync: FunctorRaise[*[_], InvalidBlock]: Log: Time: Me
       .getJustificationMsgHashes(b.getHeader.justifications)
 
     for {
-      // TODO (CON-639): Need to use the Highway ForkChoice here. For now not validating it at all.
-      tipHashes <- if (isHighway)
-                    NonEmptyList.fromListUnsafe(b.getHeader.parentHashes.toList).pure[F]
-                  else {
-                    EquivocationDetector.detectVisibleFromJustifications(
-                      dag,
-                      latestMessagesHashes
-                    ) flatMap { equivocators =>
-                      Estimator
-                        .tips[F](dag, b.getHeader.keyBlockHash, latestMessagesHashes, equivocators)
-                    }
-                  }
+      tipHashes            <- tipsFromLatestMessages(dag, b.getHeader.keyBlockHash, latestMessagesHashes)
       _                    <- Log[F].debug(s"Estimated tips are ${printHashes(tipHashes) -> "tips"}")
       tips                 <- tipHashes.traverse(ProtoUtil.unsafeGetBlock[F])
       merged               <- ExecEngineUtil.merge[F](tips, dag)
@@ -205,7 +202,7 @@ class ValidationImpl[F[_]: Sync: FunctorRaise[*[_], InvalidBlock]: Log: Time: Me
       block: Block,
       preStateHash: StateHash,
       preStateBonds: Seq[Bond],
-      blockEffects: BlockEffects
+      blockEffects: Validation.BlockEffects
   )(
       implicit ee: ExecutionEngineService[F],
       bs: BlockStorage[F],
@@ -234,7 +231,7 @@ class ValidationImpl[F[_]: Sync: FunctorRaise[*[_], InvalidBlock]: Log: Time: Me
                 for {
                   _ <- reject[F](block, InvalidPostStateHash, "invalid post state hash")
                         .whenA(commitResult.postStateHash != blockPostState)
-                  _ <- bondsCache[F](block, commitResult.bondedValidators)
+                  _ <- Validation.bondsCache[F](block, commitResult.bondedValidators)
                 } yield ()
             }
       } yield ()
@@ -279,16 +276,16 @@ class ValidationImpl[F[_]: Sync: FunctorRaise[*[_], InvalidBlock]: Log: Time: Me
   )(implicit versions: CasperLabsProtocol[F]): F[Unit] = {
     val treatAsGenesis = summary.isGenesisLike
     for {
-      _ <- checkDroppable[F](
-            formatOfFields[F](summary, treatAsGenesis),
-            version(
+      _ <- Validation.checkDroppable[F](
+            Validation.formatOfFields[F](summary, treatAsGenesis),
+            Validation.version(
               summary,
               CasperLabsProtocol[F].versionAt(_)
             ),
-            if (!treatAsGenesis) blockSignature[F](summary) else true.pure[F]
+            if (!treatAsGenesis) Validation.blockSignature[F](summary) else true.pure[F]
           )
-      _ <- summaryHash[F](summary)
-      _ <- chainIdentifier[F](summary, chainName)
+      _ <- Validation.summaryHash[F](summary)
+      _ <- Validation.chainIdentifier[F](summary, chainName)
       _ <- ballot(summary)
     } yield ()
   }
@@ -300,12 +297,51 @@ class ValidationImpl[F[_]: Sync: FunctorRaise[*[_], InvalidBlock]: Log: Time: Me
     FunctorRaise[F, InvalidBlock]
       .raise[Unit](InvalidTargetHash)
       .whenA(b.getHeader.messageType.isBallot && b.getHeader.parentHashes.size != 1)
+}
+
+class NCBValidationImpl[F[_]: Sync: FunctorRaise[*[_], InvalidBlock]: Log: Time: Metrics]
+    extends ValidationImpl[F](isHighway = false) {
+
+  override def tipsFromLatestMessages(
+      dag: DagRepresentation[F],
+      keyBlockHash: BlockHash,
+      latestMessagesHashes: Map[Estimator.Validator, Set[BlockHash]]
+  ): F[NonEmptyList[BlockHash]] =
+    EquivocationDetector.detectVisibleFromJustifications(
+      dag,
+      latestMessagesHashes
+    ) flatMap { equivocators =>
+      Estimator
+        .tips[F](dag, keyBlockHash, latestMessagesHashes, equivocators)
+    }
 
   override def checkEquivocation(dag: DagRepresentation[F], block: Block): F[Unit] =
-    // TODO (CON-639): The equivocation detector doesn't know about eras, so voting ballots are treated incorrectly as equivocations.
+    for {
+      message <- Sync[F].fromTry(Message.fromBlock(block))
+      _       <- EquivocationDetector.checkEquivocationWithUpdate[F](dag, message)
+    } yield ()
+}
+
+class HighwayValidationImpl[F[_]: Sync: FunctorRaise[*[_], InvalidBlock]: Log: Time: Metrics: ForkChoice](
+    // TODO (CON-643): The equivocation detector doesn't know about eras, so voting ballots are treated incorrectly as equivocations.
+    validateEquivocation: Boolean = false
+) extends ValidationImpl[F](isHighway = true) {
+
+  override def tipsFromLatestMessages(
+      dag: DagRepresentation[F],
+      keyBlockHash: BlockHash,
+      latestMessagesHashes: Map[Estimator.Validator, Set[BlockHash]]
+  ): F[NonEmptyList[BlockHash]] =
+    for {
+      choice <- ForkChoice[F]
+                 .fromJustifications(keyBlockHash, latestMessagesHashes.values.flatten.toSet)
+      tips = NonEmptyList.one(choice.block.messageHash)
+    } yield tips
+
+  // TODO (CON-643): The equivocation detector doesn't know about eras, so voting ballots are treated incorrectly as equivocations.
+  override def checkEquivocation(dag: DagRepresentation[F], block: Block): F[Unit] =
     (for {
       message <- Sync[F].fromTry(Message.fromBlock(block))
       _       <- EquivocationDetector.checkEquivocationWithUpdate[F](dag, message)
-    } yield ()).whenA(!isHighway)
-
+    } yield ()).whenA(validateEquivocation)
 }

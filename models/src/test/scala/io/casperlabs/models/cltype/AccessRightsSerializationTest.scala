@@ -13,7 +13,8 @@ class AccessRightsSerializationTest extends FlatSpec with Matchers with Property
 }
 
 object AccessRightsSerializationTest {
-  val genAccessRights: Gen[AccessRights] = Gen.choose[Byte](1, 7).map {
+  val genAccessRights: Gen[AccessRights] = Gen.choose[Byte](0, 7).map {
+    case 0 => AccessRights.None
     case 1 => AccessRights.Read
     case 2 => AccessRights.Write
     case 3 => AccessRights.ReadWrite

@@ -1,4 +1,4 @@
-package io.casperlabs.casper.util
+package io.casperlabs.casper.dag
 
 import io.casperlabs.casper.Estimator.BlockHash
 

@@ -184,15 +184,12 @@ trait DagRepresentation[F[_]] extends DagLookup[F] {
 
   def topoSortTail(tailLength: Int): fs2.Stream[F, Vector[BlockInfo]]
 
-  /** Similar to [[topoSort]] but in addition filters blocks by a validator*/
-  def topoSortValidator(
+  def getBlockInfosByValidator(
       validator: Validator,
-      blocksNum: Int,
-      endBlockNumber: Long
-  ): fs2.Stream[F, Vector[BlockInfo]]
-
-  /** Similar to [[topoSortTail]] but in addition filters blocks by a validator*/
-  def topoSortTailValidator(validator: Validator, blocksNum: Int): fs2.Stream[F, Vector[BlockInfo]]
+      limit: Int,
+      lastTimeStamp: Long,
+      lastBlockHash: BlockHash
+  ): F[List[BlockInfo]]
 
   /** Get a global representation, which can be used in:
     * 1) naive casper mode, without eras
