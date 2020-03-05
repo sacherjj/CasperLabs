@@ -6,12 +6,13 @@ import eu.timepit.refined._
 import eu.timepit.refined.api.Refined
 import eu.timepit.refined.numeric._
 import io.casperlabs.models.bytesrepr.ToBytes
+import org.scalacheck.{Arbitrary, Gen}
 import org.scalatest.{FlatSpec, Matchers}
 import org.scalatest.prop.PropertyChecks
 import scala.annotation.tailrec
 import CLTypeSerializationTest.nested
-import KeySerializationTest.arbKey
-import URefSerializationTest.arbURef
+import KeySerializationTest.{arbKey, genKey}
+import URefSerializationTest.{arbURef, genURef}
 
 class CLValueInstanceTest extends FlatSpec with Matchers with PropertyChecks {
   "CLValue instantiation" should "be stack safe (deep nesting)" in {
@@ -247,4 +248,97 @@ class CLValueInstanceTest extends FlatSpec with Matchers with PropertyChecks {
     // length is not included in a FixedList
     def toBytes(list: List[T]): Array[Byte] = ToBytes.toBytesSeq[T].toBytes(list).drop(4)
   }
+}
+
+object CLValueInstanceTest {
+  def genCLInstance: Gen[CLValueInstance] = Gen.choose(0, 20).flatMap {
+    case 0 => Gen.oneOf(true, false).map(CLValueInstance.Bool.apply)
+    case 1 => Gen.chooseNum(-1000, 1000).map(CLValueInstance.I32.apply)
+    case 2 => Gen.chooseNum(-10000L, 10000L).map(CLValueInstance.I64.apply)
+    case 3 => Gen.chooseNum[Byte](-100, 100).map(CLValueInstance.U8.apply)
+    case 4 => Gen.chooseNum(0, 1000).map(CLValueInstance.U32.apply)
+    case 5 => Gen.chooseNum(0L, 10000L).map(CLValueInstance.U64.apply)
+
+    case 6 =>
+      Gen.chooseNum(0, 10000).map { i =>
+        val nn = refineV[NonNegative](BigInt(i)).right.get
+        CLValueInstance.U128(nn)
+      }
+    case 7 =>
+      Gen.chooseNum(0, 10000).map { i =>
+        val nn = refineV[NonNegative](BigInt(i)).right.get
+        CLValueInstance.U256(nn)
+      }
+    case 8 =>
+      Gen.chooseNum(0, 10000).map { i =>
+        val nn = refineV[NonNegative](BigInt(i)).right.get
+        CLValueInstance.U512(nn)
+      }
+
+    case 9  => Gen.const(CLValueInstance.Unit)
+    case 10 => Gen.alphaStr.map(CLValueInstance.String.apply)
+    case 11 => genKey.map(CLValueInstance.Key.apply)
+    case 12 => genURef.map(CLValueInstance.URef.apply)
+
+    case 13 =>
+      Gen
+        .option(genCLInstance)
+        .map(
+          instance =>
+            CLValueInstance.Option(instance, instance.map(_.clType).getOrElse(CLType.Any)).right.get
+        )
+
+    case 14 =>
+      Gen.oneOf(
+        Gen.const(CLValueInstance.List(Nil, CLType.Any).right.get),
+        genCLInstance.map { instance =>
+          CLValueInstance.List(List.fill(5)(instance), instance.clType).right.get
+        }
+      )
+
+    case 15 =>
+      for {
+        n     <- Gen.choose(1, 100)
+        inner <- genCLInstance
+      } yield CLValueInstance.FixedList(List.fill(n)(inner), inner.clType, n).right.get
+
+    case 16 =>
+      Gen.oneOf(
+        genCLInstance.map(
+          instance => CLValueInstance.Result(Left(instance), CLType.Any, instance.clType).right.get
+        ),
+        genCLInstance.map(
+          instance => CLValueInstance.Result(Right(instance), instance.clType, CLType.Any).right.get
+        )
+      )
+
+    case 17 =>
+      Gen.oneOf(
+        Gen.const(CLValueInstance.Map(Map.empty, CLType.Any, CLType.Any).right.get),
+        for {
+          key   <- genCLInstance
+          value <- genCLInstance
+        } yield CLValueInstance.Map(Map(key -> value), key.clType, value.clType).right.get
+      )
+
+    case 18 => genCLInstance.map(inner => CLValueInstance.Tuple1(inner))
+
+    case 19 =>
+      for {
+        t1 <- genCLInstance
+        t2 <- genCLInstance
+      } yield CLValueInstance.Tuple2(t1, t2)
+
+    case 20 =>
+      for {
+        t1 <- genCLInstance
+        t2 <- genCLInstance
+        t3 <- genCLInstance
+      } yield CLValueInstance.Tuple3(t1, t2, t3)
+
+    // this should never happen since we generate from 0 to 21
+    case _ => Gen.fail
+  }
+
+  implicit val arbCLInstance: Arbitrary[CLValueInstance] = Arbitrary(genCLInstance)
 }
