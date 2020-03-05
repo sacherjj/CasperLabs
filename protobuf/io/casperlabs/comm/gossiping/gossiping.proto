@@ -84,6 +84,7 @@ message GetBlockChunkedRequest {
     bytes block_hash = 1;
     uint32 chunk_size = 2;
     repeated string accepted_compression_algorithms = 3;
+    bool deploys_bodies_excluded = 4;
 }
 
 message StreamDeploysChunkedRequest {

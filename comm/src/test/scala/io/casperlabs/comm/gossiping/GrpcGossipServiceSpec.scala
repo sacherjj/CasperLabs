@@ -6,19 +6,20 @@ import cats.Id
 import cats.effect._
 import cats.implicits._
 import com.google.protobuf.ByteString
-import io.casperlabs.casper.consensus.{Approval, Block, BlockSummary, GenesisCandidate}
+import io.casperlabs.casper.consensus._
 import io.casperlabs.catscontrib.effect.implicits.syncId
 import io.casperlabs.comm.ServiceError.{NotFound, ResourceExhausted, Unauthenticated, Unavailable}
 import io.casperlabs.comm.discovery.Node
-import io.casperlabs.comm.gossiping.synchronization.Synchronizer.SyncError
 import io.casperlabs.comm.gossiping.Utils.hex
 import io.casperlabs.comm.gossiping.synchronization.Synchronizer
+import io.casperlabs.comm.gossiping.synchronization.Synchronizer.SyncError
 import io.casperlabs.comm.grpc.{AuthInterceptor, ErrorInterceptor, GrpcServer, SslContexts}
 import io.casperlabs.comm.{ServiceError, TestRuntime}
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.util.{CertificateHelper, CertificatePrinter}
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.models.BlockImplicits._
+import io.casperlabs.shared.Sorting._
 import io.casperlabs.shared.{Compression, Log}
 import io.grpc.netty.{NegotiationType, NettyChannelBuilder}
 import io.netty.handler.ssl.ClientAuth
@@ -32,10 +33,8 @@ import org.scalacheck.{Arbitrary, Gen, Shrink}
 import org.scalatest._
 import org.scalatest.concurrent._
 import org.scalatest.prop.GeneratorDrivenPropertyChecks.{forAll, PropertyCheckConfiguration}
-import io.casperlabs.shared.Sorting._
 
 import scala.concurrent.duration._
-import io.casperlabs.casper.consensus.Deploy
 
 class GrpcGossipServiceSpec
     extends refspec.RefSpecLike
@@ -586,7 +585,7 @@ class GrpcGossipServiceSpec
 
               val faultyBackend = (_: AtomicReference[TestData]) => {
                 new GossipServiceServer.Backend[Task] {
-                  def getBlock(blockHash: ByteString) = {
+                  def getBlock(blockHash: ByteString, deploysBodiesExcluded: Boolean) = {
                     cnt = cnt + 1
                     cnt match {
                       case 1 =>
@@ -1424,8 +1423,14 @@ object GrpcGossipServiceSpec extends TestRuntime with ArbitraryConsensusAndComm 
       new GossipServiceServer.Backend[Task] {
         def hasBlock(blockHash: ByteString) =
           Task.delay(testDataRef.get.blocks.contains(blockHash))
-        def getBlock(blockHash: ByteString) =
-          Task.delay(testDataRef.get.blocks.get(blockHash))
+        def getBlock(blockHash: ByteString, deploysBodiesExcluded: Boolean) =
+          Task.delay(testDataRef.get.blocks.get(blockHash).map { block =>
+            if (deploysBodiesExcluded) {
+              block.clearDeploysBodies
+            } else {
+              block
+            }
+          })
         def getBlockSummary(blockHash: ByteString) =
           Task.delay(testDataRef.get.summaries.get(blockHash))
         def getDeploys(deployHashes: Set[ByteString]) = {
