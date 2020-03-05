@@ -109,7 +109,7 @@ class CreateBlockAPITest
       response2.isRight shouldBe false
       response2.left.get.getMessage should include("ABORTED")
     } finally {
-      node.tearDown()
+      node.tearDown().unsafeRunSync
     }
   }
 
@@ -174,7 +174,7 @@ class CreateBlockAPITest
     try {
       test.unsafeRunSync
     } finally {
-      node.tearDown()
+      node.tearDown().unsafeRunSync
     }
   }
 
@@ -207,7 +207,7 @@ class CreateBlockAPITest
         _            = ex.getMessage should include("No new deploys")
       } yield result).unsafeRunSync
     } finally {
-      node.tearDown()
+      node.tearDown().unsafeRunSync
     }
   }
 
@@ -276,7 +276,7 @@ class CreateBlockAPITest
         result       <- testProgram(blockApiLock)(casperRef)
       } yield result).unsafeRunSync
     } finally {
-      node.tearDown()
+      node.tearDown().unsafeRunSync
     }
   }
 
@@ -317,7 +317,7 @@ class CreateBlockAPITest
         result       <- testProgram(blockApiLock)(casperRef)
       } yield result).unsafeRunSync
     } finally {
-      node.tearDown()
+      node.tearDown().unsafeRunSync
     }
   }
 
@@ -361,7 +361,7 @@ class CreateBlockAPITest
         result       <- testProgram(blockApiLock)(casperRef)
       } yield result).unsafeRunSync
     } finally {
-      node.tearDown()
+      node.tearDown().unsafeRunSync
     }
   }
 }
