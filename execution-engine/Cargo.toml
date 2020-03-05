@@ -40,8 +40,3 @@ default-members = [
 # perf data.
 [profile.release.package.casperlabs-engine-tests]
 debug = true
-
-# TODO - remove once `failure` v1.0.7 is published
-[patch.crates-io.failure]
-git = "https://github.com/grokse/failure"
-branch = "build_quote_103"
