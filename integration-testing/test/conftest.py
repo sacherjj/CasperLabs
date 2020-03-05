@@ -4,6 +4,7 @@ import docker as docker_py
 import os
 import pytest
 import shutil
+import logging
 
 from docker.client import DockerClient
 
@@ -54,9 +55,12 @@ def docker_client_fixture(unique_run_num) -> Generator[DockerClient, None, None]
     try:
         yield docker_client
     finally:
-        docker_client.networks.prune()
-        docker_client.volumes.prune()
-        docker_client.containers.prune()
+        try:
+            docker_client.networks.prune()
+            docker_client.volumes.prune()
+            docker_client.containers.prune()
+        except Exception as e:
+            logging.warning("Exception in docker_client_fixture tear down.", exc_info=e)
 
 
 @pytest.fixture(scope="module")
