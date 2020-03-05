@@ -308,30 +308,47 @@ class GrpcGossipServiceSpec
 
     "getBlocksChunked" when {
       "called with a valid sender" when {
-        "no compression is supported" should {
-          "return a stream of uncompressed chunks" in {
-            forAll { block: Block =>
-              runTestUnsafe(TestData.fromBlock(block), timeout = 15.seconds) {
-                val req = GetBlockChunkedRequest(blockHash = block.blockHash)
-                stub.getBlockChunked(req).toListL.map { chunks =>
-                  chunks.head.content.isHeader shouldBe true
-                  val header = chunks.head.getHeader
-                  header.compressionAlgorithm shouldBe ""
-                  chunks.size should be > 1
+        "no compression is supported" when {
+          def test(deploysBodiesExcluded: Boolean): Unit = forAll { block: Block =>
+            runTestUnsafe(TestData.fromBlock(block), timeout = 15.seconds) {
+              val req = GetBlockChunkedRequest(
+                blockHash = block.blockHash,
+                deploysBodiesExcluded = deploysBodiesExcluded
+              )
+              stub.getBlockChunked(req).toListL.map { chunks =>
+                chunks.head.content.isHeader shouldBe true
+                val header = chunks.head.getHeader
+                header.compressionAlgorithm shouldBe ""
+                chunks.size should be > 1
 
-                  Inspectors.forAll(chunks.tail) { chunk =>
-                    chunk.content.isData shouldBe true
-                    chunk.getData.size should be <= DefaultMaxChunkSize
-                  }
+                Inspectors.forAll(chunks.tail) { chunk =>
+                  chunk.content.isData shouldBe true
+                  chunk.getData.size should be <= DefaultMaxChunkSize
+                }
 
-                  val content  = chunks.tail.flatMap(_.getData.toByteArray).toArray
-                  val original = block.toByteArray
-                  header.contentLength shouldBe content.length
+                val content  = chunks.tail.flatMap(_.getData.toByteArray).toArray
+                val original = block.toByteArray
+                header.contentLength shouldBe content.length
+                if (deploysBodiesExcluded) {
+                  md5(content) shouldBe md5(block.clearDeploysBodies.toByteArray)
+                } else {
                   header.originalContentLength shouldBe original.length
                   md5(content) shouldBe md5(original)
                 }
               }
             }
+          }
+
+          "specified to exclude deploys bodies" should {
+            "return a stream of uncompressed chunks with deploys bodies excluded" in test(
+              deploysBodiesExcluded = true
+            )
+          }
+
+          "specified to return full blocks" should {
+            "return a stream of uncompressed chunks with deploys bodies included" in test(
+              deploysBodiesExcluded = false
+            )
           }
         }
 
