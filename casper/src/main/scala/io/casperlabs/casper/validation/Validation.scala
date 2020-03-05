@@ -142,6 +142,8 @@ object Validation {
   ): F[Unit] =
     reject[F](summary.blockHash, status, reason)
 
+  private def hex(h: ByteString) = PrettyPrinter.buildString(h)
+
   // Check whether message merges its creator swimlane.
   // A block cannot have more than one latest message in its j-past-cone from its creator.
   // i.e. an equivocator cannot cite multiple of its latest messages.
@@ -151,32 +153,61 @@ object Validation {
       isHighway: Boolean
   ): F[Unit] =
     for {
-      equivocations <- if (isHighway)
-                        dag.latestInEra(b.getHeader.keyBlockHash).flatMap(_.getEquivocations)
-                      else dag.getEquivocations
+      equivocations <- dag.latestGlobal.flatMap(_.getEquivocations)
+      _ = equivocations.foreach {
+        case (v, es) =>
+          println(s"${hex(v)}: ${es.keys.map(e => s"${hex(e)} -> ${es(e).size}").mkString(", ")}")
+      }
       message <- MonadThrowable[F].fromTry(Message.fromBlockSummary(b))
       _ <- Monad[F].whenA(equivocations.contains(message.validatorId)) {
-            val validatorEquivocations = equivocations(message.validatorId)
-            val equivocationsHashes    = validatorEquivocations.map(_.messageHash)
+            val validatorEquivocations      = equivocations(message.validatorId)
+            val validatorEquivocationHashes = validatorEquivocations.mapValues(_.map(_.messageHash))
             val minRank = EquivocationDetector
-              .findMinBaseRank(Map(message.validatorId -> validatorEquivocations))
+              .findMinBaseRank(
+                Map(message.validatorId -> validatorEquivocations.values.flatten.toSet)
+              )
               .getOrElse(0L) // We know it has to be defined by this point.
+            // Look for a pair of equivocations both in the same era.
+            val initAcc =
+              Map.empty[BlockHash, Set[BlockHash]].withDefaultValue(Set.empty[BlockHash])
             for {
               seenEquivocations <- DagOperations
                                     .swimlaneV[F](message.validatorId, message, dag)
-                                    .foldWhileLeft(Set.empty[BlockHash]) {
-                                      case (seenEquivocations, message) =>
+                                    .foldWhileLeft(initAcc) {
+                                      case (acc, message) =>
                                         if (message.jRank <= minRank) {
-                                          Right(seenEquivocations)
+                                          Right(acc)
                                         } else {
-                                          if (equivocationsHashes.contains(message.messageHash)) {
-                                            if (seenEquivocations.nonEmpty) {
-                                              Right(seenEquivocations + message.messageHash)
-                                            } else Left(Set(message.messageHash))
-                                          } else Left(seenEquivocations)
+                                          // In Highway the key block hash is the era;
+                                          // in NCB it's the LFB and should be ignored.
+                                          val keyBlockHash =
+                                            if (isHighway) message.eraId else ByteString.EMPTY
+
+                                          // Which are the equivocations we know about in this era.
+                                          val equivocationHashes =
+                                            validatorEquivocationHashes.getOrElse(
+                                              keyBlockHash,
+                                              Set.empty
+                                            )
+
+                                          println(
+                                            s"checking message ${hex(message.messageHash)} era ${hex(
+                                              keyBlockHash
+                                            )}: ${equivocationHashes.map(hex).mkString(",")}"
+                                          )
+
+                                          // If this is an equivocating message, remember we have seen it,
+                                          // and see its pair from the same era turns up later.
+                                          if (equivocationHashes.contains(message.messageHash)) {
+                                            val prevSeen = acc(keyBlockHash)
+                                            val nextSeen = prevSeen + message.messageHash
+                                            val nextAcc  = acc.updated(keyBlockHash, nextSeen)
+                                            if (nextSeen.size > 1) Right(nextAcc) else Left(nextAcc)
+                                          } else Left(acc)
                                         }
                                     }
-              _ <- Monad[F].whenA(seenEquivocations.size > 1) {
+              maybeSeenEquivocationPair = seenEquivocations.values.find(_.size > 2)
+              _ <- maybeSeenEquivocationPair.fold(().pure[F]) { seenEquivocations =>
                     val msg =
                       s"${PrettyPrinter.buildString(message.messageHash)} cites multiple latest message by its creator ${PrettyPrinter
                         .buildString(message.validatorId)}: ${seenEquivocations

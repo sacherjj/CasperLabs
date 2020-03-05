@@ -180,7 +180,7 @@ class SQLiteDagStorage[F[_]: Sync](
   }
 
   override def findAncestor(block: BlockHash, distance: Long): F[Option[BlockHash]] =
-    sql"""SELECT ancestor_hash FROM message_ancestors_skiplist 
+    sql"""SELECT ancestor_hash FROM message_ancestors_skiplist
           WHERE block_hash=$block AND distance=$distance"""
       .query[BlockHash]
       .option
@@ -286,20 +286,20 @@ class SQLiteDagStorage[F[_]: Sync](
       .transact(readXa)
 
   override def latestInEra(keyBlockHash: BlockHash): F[EraTipRepresentation[F]] = Sync[F].delay {
-    SQLiteTipRepresentation(keyBlockHash): EraTipRepresentation[F]
+    SQLiteTipRepresentation.era(keyBlockHash): EraTipRepresentation[F]
   }
 
-  override def latestGlobal: F[TipRepresentation[F]] =
+  override def latestGlobal: F[GlobalTipRepresentation[F]] =
     globalTipRepresentation.value.pure[F]
 
   private val globalTipRepresentation = Eval.later {
-    SQLiteTipRepresentation(keyBlockHash = ByteString.EMPTY): TipRepresentation[F]
+    SQLiteTipRepresentation.global: GlobalTipRepresentation[F]
   }
 
   // There will be a global representation with an empty key block hash,
   // and the era-specific versions. We can use the global for gossiping,
   // without having to worry about filtering for which era is active.
-  class SQLiteTipRepresentation(keyBlockHash: BlockHash) extends EraTipRepresentation[F] {
+  abstract class SQLiteTipRepresentation(keyBlockHash: BlockHash) extends TipRepresentation[F] {
 
     override def latestMessageHash(validator: Validator): F[Set[BlockHash]] =
       sql"""SELECT block_hash
@@ -340,9 +340,46 @@ class SQLiteDagStorage[F[_]: Sync](
         .flatMap(_.traverse { case (v, bs) => toMessageSummaryF(bs).map(v -> _) })
         .map(_.groupBy(_._1).mapValues(_.map(_._2).toSet))
   }
+
+  abstract class SQLiteGlobalTipRepresentation
+      extends SQLiteTipRepresentation(ByteString.EMPTY)
+      with GlobalTipRepresentation[F] {
+
+    override def getEquivocations(
+        implicit A: Applicative[F]
+    ): F[Map[Validator, Map[BlockHash, Set[Message]]]] =
+      sql"""SELECT v.validator, v.key_block_hash, m.data
+            FROM validator_latest_messages v
+            INNER JOIN block_metadata m ON m.block_hash = v.block_hash
+            WHERE (v.validator, v.key_block_hash) IN (
+              SELECT validator, key_block_hash
+              FROM   validator_latest_messages
+              GROUP BY validator, key_block_hash
+              HAVING COUNT(block_hash) > 1
+            )
+          """
+        .query[(Validator, BlockHash, BlockSummary)]
+        .to[List]
+        .transact(readXa)
+        .flatMap(_.traverse {
+          case (v, k, b) => toMessageSummaryF(b).map((v, k, _))
+        })
+        .map { ms =>
+          ms.groupBy(_._1).mapValues(_.groupBy(_._2).mapValues(_.map(_._3).toSet))
+        }
+  }
+
   object SQLiteTipRepresentation {
-    def apply(keyBlockHash: BlockHash) =
-      new SQLiteTipRepresentation(keyBlockHash) with MeteredTipRepresentation[F] {
+    def era(keyBlockHash: BlockHash) =
+      new SQLiteTipRepresentation(keyBlockHash)
+        with EraTipRepresentation[F]
+        with MeteredTipRepresentation[F] {
+        override implicit val m: Metrics[F] = met
+        override implicit val ms: Source    = SQLiteDagStorage.MetricsSource
+        override implicit val a: Apply[F]   = Sync[F]
+      }
+    def global =
+      new SQLiteGlobalTipRepresentation with MeteredTipRepresentation[F] {
         override implicit val m: Metrics[F] = met
         override implicit val ms: Source    = SQLiteDagStorage.MetricsSource
         override implicit val a: Apply[F]   = Sync[F]
