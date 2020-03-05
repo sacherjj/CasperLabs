@@ -1,6 +1,7 @@
 package io.casperlabs.models.cltype.protobuf
 
 import cats.implicits._
+import cats.free.Trampoline
 import com.google.protobuf.ByteString
 import eu.timepit.refined._
 import eu.timepit.refined.api.Refined
@@ -101,60 +102,61 @@ object Mappings {
   def toProto(v: CLValue): Either[Error, state.CLValueInstance] =
     CLValueInstance.from(v).map(toProto).leftMap(Error.FromBytesError.apply)
 
-  def toProto(t: CLType): state.CLType = t match {
-    case CLType.Bool   => dsl.types.bool
-    case CLType.I32    => dsl.types.i32
-    case CLType.I64    => dsl.types.i64
-    case CLType.U8     => dsl.types.u8
-    case CLType.U32    => dsl.types.u32
-    case CLType.U64    => dsl.types.u64
-    case CLType.U128   => dsl.types.u128
-    case CLType.U256   => dsl.types.u256
-    case CLType.U512   => dsl.types.u512
-    case CLType.Unit   => dsl.types.unit
-    case CLType.String => dsl.types.string
-    case CLType.Key    => dsl.types.key
-    case CLType.URef   => dsl.types.uref
+  def toProto(t: CLType): state.CLType = toProtoLoop(t).run
+
+  private def toProtoLoop(t: CLType): Trampoline[state.CLType] = t match {
+    case CLType.Bool   => Trampoline.done(dsl.types.bool)
+    case CLType.I32    => Trampoline.done(dsl.types.i32)
+    case CLType.I64    => Trampoline.done(dsl.types.i64)
+    case CLType.U8     => Trampoline.done(dsl.types.u8)
+    case CLType.U32    => Trampoline.done(dsl.types.u32)
+    case CLType.U64    => Trampoline.done(dsl.types.u64)
+    case CLType.U128   => Trampoline.done(dsl.types.u128)
+    case CLType.U256   => Trampoline.done(dsl.types.u256)
+    case CLType.U512   => Trampoline.done(dsl.types.u512)
+    case CLType.Unit   => Trampoline.done(dsl.types.unit)
+    case CLType.String => Trampoline.done(dsl.types.string)
+    case CLType.Key    => Trampoline.done(dsl.types.key)
+    case CLType.URef   => Trampoline.done(dsl.types.uref)
 
     case CLType.Option(inner) =>
-      //TODO: stack safety
-      val innerProto = toProto(inner)
-      dsl.types.option(innerProto)
+      Trampoline.defer(toProtoLoop(inner)).map(dsl.types.option)
 
     case CLType.List(inner) =>
-      val innerProto = toProto(inner)
-      dsl.types.list(innerProto)
+      Trampoline.defer(toProtoLoop(inner)).map(dsl.types.list)
 
     case CLType.FixedList(inner, length) =>
-      val innerProto = toProto(inner)
-      dsl.types.fixedList(innerProto, length)
+      Trampoline.defer(toProtoLoop(inner)).map(dsl.types.fixedList(_, length))
 
     case CLType.Result(ok, err) =>
-      val okProto  = toProto(ok)
-      val errProto = toProto(err)
-      dsl.types.result(okProto, errProto)
+      for {
+        okProto  <- Trampoline.defer(toProtoLoop(ok))
+        errProto <- toProtoLoop(err)
+      } yield dsl.types.result(okProto, errProto)
 
     case CLType.Map(key, value) =>
-      val keyProto   = toProto(key)
-      val valueProto = toProto(value)
-      dsl.types.map(keyProto, valueProto)
+      for {
+        keyProto   <- Trampoline.defer(toProtoLoop(key))
+        valueProto <- toProtoLoop(value)
+      } yield dsl.types.map(keyProto, valueProto)
 
     case CLType.Tuple1(inner) =>
-      val innerProto = toProto(inner)
-      dsl.types.tuple1(innerProto)
+      Trampoline.defer(toProtoLoop(inner)).map(dsl.types.tuple1)
 
     case CLType.Tuple2(t1, t2) =>
-      val t1Proto = toProto(t1)
-      val t2Proto = toProto(t2)
-      dsl.types.tuple2(t1Proto, t2Proto)
+      for {
+        t1Proto <- Trampoline.defer(toProtoLoop(t1))
+        t2Proto <- toProtoLoop(t2)
+      } yield dsl.types.tuple2(t1Proto, t2Proto)
 
     case CLType.Tuple3(t1, t2, t3) =>
-      val t1Proto = toProto(t1)
-      val t2Proto = toProto(t2)
-      val t3Proto = toProto(t3)
-      dsl.types.tuple3(t1Proto, t2Proto, t3Proto)
+      for {
+        t1Proto <- Trampoline.defer(toProtoLoop(t1))
+        t2Proto <- toProtoLoop(t2)
+        t3Proto <- toProtoLoop(t3)
+      } yield dsl.types.tuple3(t1Proto, t2Proto, t3Proto)
 
-    case CLType.Any => dsl.types.any
+    case CLType.Any => Trampoline.done(dsl.types.any)
   }
 
   def toProto(v: CLValueInstance): state.CLValueInstance = v match {
