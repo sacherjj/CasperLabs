@@ -22,6 +22,7 @@ import io.casperlabs.storage.era.EraStorage
 import io.casperlabs.shared.SemaphoreMap
 
 import scala.util.Random
+import scala.util.control.NoStackTrace
 
 /** Class to encapsulate the message handling logic of messages in an era.
   *
@@ -511,7 +512,8 @@ class EraRuntime[F[_]: Sync: Clock: Metrics: EraStorage: FinalityStorageReader: 
     */
   def handleMessage(message: ValidatedMessage): HWL[Unit] = {
     def check(ok: Boolean, error: String) =
-      if (ok) noop else MonadThrowable[HWL].raiseError[Unit](new IllegalStateException(error))
+      if (ok) noop
+      else MonadThrowable[HWL].raiseError[Unit](new IllegalStateException(error) with NoStackTrace)
 
     for {
       _ <- check(
