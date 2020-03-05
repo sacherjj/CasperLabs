@@ -56,9 +56,9 @@ def docker_client_fixture(unique_run_num) -> Generator[DockerClient, None, None]
         yield docker_client
     finally:
         try:
-            docker_client.networks.prune()
-            docker_client.volumes.prune()
             docker_client.containers.prune()
+            docker_client.volumes.prune()
+            docker_client.networks.prune()
         except Exception as e:
             logging.warning("Exception in docker_client_fixture tear down.", exc_info=e)
 
