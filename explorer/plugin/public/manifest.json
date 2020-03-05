@@ -1,0 +1,16 @@
+{
+  "manifest_version": 2,
+  "version": "0.0.1",
+  "name": "CasperLabs Clarity Sign Helper",
+  "icons": {
+    "16": "favicon.ico",
+    "48": "logo192.png",
+    "128": "logo512.png"
+  },
+  "content_security_policy": "script-src 'self' 'sha256-WDhufSqZOEoWULzS4Nwz11MNyHzZClVYbQ2JSt1vfkw'; object-src 'self'",
+  "permissions": [],
+  "browser_action": {
+    "default_popup": "index.html",
+    "default_title": "CasperLabs Sign Helper"
+  }
+}
