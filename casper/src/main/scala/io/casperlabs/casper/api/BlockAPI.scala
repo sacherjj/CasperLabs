@@ -339,29 +339,30 @@ object BlockAPI {
                         MonadThrowable[F]
                           .raiseError[ByteArray32](error(s"Expected cltype.CLValue, got $x"))
                     }
-      balance <- getState(cltype.Key.URef(cltype.URef(balanceUref, None))).flatMap {
-                  case cltype.StoredValue.CLValue(clValue) =>
-                    cltype.CLValueInstance
-                      .from(clValue)
-                      .fold(
-                        e =>
-                          MonadThrowable[F]
-                            .raiseError[BigInt Refined NonNegative](error(e.toString)), {
-                          case CLValueInstance.U512(bigInt) =>
-                            bigInt.pure[F]
-                          case x =>
+      balance <- getState(cltype.Key.URef(cltype.URef(balanceUref, cltype.AccessRights.None)))
+                  .flatMap {
+                    case cltype.StoredValue.CLValue(clValue) =>
+                      cltype.CLValueInstance
+                        .from(clValue)
+                        .fold(
+                          e =>
                             MonadThrowable[F]
-                              .raiseError[BigInt Refined NonNegative](
-                                error(s"Expected cltype.U512, got $x")
-                              )
-                        }
-                      )
-                  case x =>
-                    MonadThrowable[F]
-                      .raiseError[BigInt Refined NonNegative](
-                        error(s"Expected cltype.CLValue, got $x")
-                      )
-                }
+                              .raiseError[BigInt Refined NonNegative](error(e.toString)), {
+                            case CLValueInstance.U512(bigInt) =>
+                              bigInt.pure[F]
+                            case x =>
+                              MonadThrowable[F]
+                                .raiseError[BigInt Refined NonNegative](
+                                  error(s"Expected cltype.U512, got $x")
+                                )
+                          }
+                        )
+                    case x =>
+                      MonadThrowable[F]
+                        .raiseError[BigInt Refined NonNegative](
+                          error(s"Expected cltype.CLValue, got $x")
+                        )
+                  }
     } yield balance.value
     program.adaptErr {
       case _ => NotFound.balance(accountKey)

@@ -141,12 +141,15 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
         roundId: Long
     ): Task[Block] =
       for {
-        dag       <- DagStorage[Task].getRepresentation
-        tips      <- dag.latestInEra(parent.getHeader.keyBlockHash)
-        latest    <- tips.latestMessages
-        maybePrev = latest.get(keys.publicKey).map(_.head)
-        nextJRank = ProtoUtil.nextJRank(latest.values.flatten.toSeq)
-        now       <- Clock[Task].currentTimeMillis
+        dag          <- DagStorage[Task].getRepresentation
+        parentTips   <- dag.latestInEra(parent.getHeader.keyBlockHash)
+        currTips     <- dag.latestInEra(keyBlockHash)
+        parentLatest <- parentTips.latestMessages
+        currLatest   <- currTips.latestMessages
+        allLatest    = parentLatest |+| currLatest
+        maybePrev    = currLatest.get(keys.publicKey).map(_.head)
+        nextJRank    = ProtoUtil.nextJRank(allLatest.values.flatten.toSeq)
+        now          <- Clock[Task].currentTimeMillis
         second = keys.signBlock {
           parent.withHeader(
             parent.getHeader
@@ -158,7 +161,7 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
               .withValidatorBlockSeqNum(maybePrev.map(_.validatorMsgSeqNum + 1).getOrElse(1))
               .withValidatorPrevBlockHash(maybePrev.map(_.messageHash).getOrElse(ByteString.EMPTY))
               .withParentHashes(List(parent.blockHash))
-              .withJustifications(latest.toSeq.map {
+              .withJustifications(allLatest.toSeq.map {
                 case (v, ms) =>
                   ms.toSeq.map(m => Block.Justification(v, m.messageHash))
               }.flatten)
@@ -315,10 +318,10 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
             _      <- validateAndAdd(block1)
             _      <- BlockStorage[Task].contains(block1.blockHash) shouldBeF true
           } yield {
-            // TODO (CON-624): Update the EquivocationDetector to only detect in a given era,
+            // TODO (CON-643): Update the EquivocationDetector to only detect in a given era,
             // or only detect in up to the keyblock, but not globally. For now it will detect
             // them and therefore not save the effects they have.
-            if (status != Valid) cancel("CON-624")
+            if (status != Valid) cancel("CON-643")
             status shouldBe Valid
           }
       }
