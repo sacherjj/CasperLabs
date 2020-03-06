@@ -49,6 +49,7 @@ import io.casperlabs.storage.BlockMsgWithTransform
 import io.casperlabs.storage.block._
 import io.casperlabs.storage.dag._
 import io.casperlabs.storage.deploy.DeployStorage
+import io.casperlabs.storage.SQLiteStorage.CombinedStorage
 import io.casperlabs.casper.validation.NCBValidationImpl
 import monix.eval.Task
 import monix.execution.Scheduler
@@ -99,6 +100,15 @@ class ValidationTest
     import Scheduler.Implicits.global
     t.runSyncUnsafe(5.seconds)
   }
+
+  def withCombinedStorageIndexed(
+      f: CombinedStorage[Task] => IndexedDagStorage[Task] => Task[_]
+  ): Unit =
+    withCombinedStorage() { db =>
+      IndexedDagStorage.create[Task](db).flatMap { ids =>
+        f(db)(ids)
+      }
+    }
 
   def createChain[F[_]: MonadThrowable: Time: BlockStorage: IndexedDagStorage](
       length: Int,
@@ -1011,7 +1021,9 @@ class ValidationTest
         b <- arbitrary[consensus.Block]
       } yield b.withBody(
         b.getBody.withDeploys(
-          b.getBody.deploys.take(1).map(x => x.withDeploy(x.getDeploy.withApprovals(Seq.empty))) ++
+          b.getBody.deploys
+            .take(1)
+            .map(x => x.withDeploy(x.getDeploy.withApprovals(Seq.empty))) ++
             b.getBody.deploys.tail
         )
       )
@@ -1392,7 +1404,7 @@ class ValidationTest
       } yield postStateHash should be(computedPostStateHash)
   }
 
-  "j-past-cone of the block" should "not merge equivocator's swimlane" in withStorage {
+  "swimlane validation" should "not allow merging equivocator's swimlane" in withStorage {
     implicit blockStorage => implicit dagStorage => _ => _ =>
       val v0 = generateValidator("v0")
       val v1 = generateValidator("v1")
@@ -1411,7 +1423,7 @@ class ValidationTest
         c       <- createValidatorBlock[Task](Seq(genesis), bonds, Seq(a), v1, genesis)
         d       <- createValidatorBlock[Task](Seq(b), bonds, Seq(c), v0, genesis)
         dag     <- dagStorage.getRepresentation
-        _ <- Validation.swimlane[Task](d, dag).attempt shouldBeF Left(
+        _ <- Validation.swimlane[Task](d, dag, isHighway = false).attempt shouldBeF Left(
               ValidateErrorWrapper(SwimlaneMerged)
             )
       } yield ()
@@ -1436,7 +1448,72 @@ class ValidationTest
         c       <- createValidatorBlock[Task](Seq(genesis), bonds, Seq(a), v1, genesis)
         d       <- createValidatorBlock[Task](Seq(a), bonds, Seq(c), v0, genesis)
         dag     <- dagStorage.getRepresentation
-        _       <- Validation.swimlane[Task](d, dag).attempt shouldBeF Right(())
+        _       <- Validation.swimlane[Task](d, dag, isHighway = false).attempt shouldBeF Right(())
+      } yield ()
+  }
+
+  it should "not raise when the j-past-cone contain blocks and ballots across eras" in withCombinedStorageIndexed {
+    implicit db => implicit dagStorage =>
+      val v1 = generateValidator("v1")
+      // era-0: G - B0 - B1 - B2
+      //                   \
+      // era-1:             B3
+      for {
+        g  <- createAndStoreMessage[Task](Nil)
+        eg <- createAndStoreEra[Task](g.blockHash)
+        b0 <- createAndStoreBlockFull[Task](v1, List(g), Nil, keyBlockHash = eg.keyBlockHash)
+        e0 <- createAndStoreEra[Task](b0.blockHash)
+        b1 <- createAndStoreBlockFull[Task](v1, List(b0), List(b0), keyBlockHash = e0.keyBlockHash)
+        b2 <- createAndStoreBlockFull[Task](v1, List(b1), List(b1), keyBlockHash = e0.keyBlockHash)
+        e1 <- createAndStoreEra[Task](b1.blockHash)
+        b3 <- createAndStoreBlockFull[Task](
+               v1,
+               List(b1),
+               List(b1, b2),
+               maybeValidatorPrevBlockHash = Some(ByteString.EMPTY),
+               maybeValidatorBlockSeqNum = Some(0),
+               keyBlockHash = e1.keyBlockHash
+             )
+        dag <- dagStorage.getRepresentation
+        _   <- Validation.swimlane[Task](b3, dag, isHighway = true).attempt shouldBeF Right(())
+      } yield ()
+  }
+
+  it should "raise when the j-past-cone contains an equivocation in an era" in withCombinedStorageIndexed {
+    implicit db => implicit dagStorage =>
+      val v1 = generateValidator("v1")
+      // era-0: G - B0 - B1 - B2
+      //                   \    \
+      //                    B3   \
+      //                      \   \
+      // era-1:                B4 - B5
+      for {
+        g  <- createAndStoreMessage[Task](Nil)
+        eg <- createAndStoreEra[Task](g.blockHash)
+        b0 <- createAndStoreBlockFull[Task](v1, List(g), Nil, keyBlockHash = eg.keyBlockHash)
+        e0 <- createAndStoreEra[Task](b0.blockHash)
+        b1 <- createAndStoreBlockFull[Task](v1, List(b0), List(b0), keyBlockHash = e0.keyBlockHash)
+        b2 <- createAndStoreBlockFull[Task](v1, List(b1), List(b1), keyBlockHash = e0.keyBlockHash)
+        b3 <- createAndStoreBlockFull[Task](v1, List(b1), List(b1), keyBlockHash = e0.keyBlockHash)
+        e1 <- createAndStoreEra[Task](b1.blockHash)
+        b4 <- createAndStoreBlockFull[Task](
+               v1,
+               List(b3),
+               List(b3),
+               maybeValidatorPrevBlockHash = Some(ByteString.EMPTY),
+               maybeValidatorBlockSeqNum = Some(0),
+               keyBlockHash = e1.keyBlockHash
+             )
+        b5 <- createAndStoreBlockFull[Task](
+               v1,
+               List(b4),
+               List(b4, b2),
+               keyBlockHash = e1.keyBlockHash
+             )
+        dag <- dagStorage.getRepresentation
+        _ <- Validation.swimlane[Task](b5, dag, isHighway = true).attempt shouldBeF Left(
+              ValidateErrorWrapper(SwimlaneMerged)
+            )
       } yield ()
   }
 

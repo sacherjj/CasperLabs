@@ -130,8 +130,7 @@ abstract class ValidationImpl[F[_]: Sync: FunctorRaise[*[_], InvalidBlock]: Log:
       _ <- Validation.blockRank[F](summary, dag)
       _ <- Validation.validatorPrevBlockHash[F](summary, dag, isHighway)
       _ <- Validation.sequenceNumber[F](summary, dag)
-      // TODO (CON-640): A voting ballot appears to be merging swimlanes in the child era.
-      _ <- Validation.swimlane[F](summary, dag).whenA(!isHighway)
+      _ <- Validation.swimlane[F](summary, dag, isHighway)
       // TODO: Validate that blocks only have block parents and ballots have a single parent which is a block.
       // Checks that need the body.
       _ <- Validation.blockHash[F](block)

@@ -16,7 +16,7 @@ import io.casperlabs.storage.dag.{
   DagRepresentation,
   EraTipRepresentation,
   FinalityStorage,
-  TipRepresentation
+  GlobalTipRepresentation
 }
 import io.casperlabs.storage.dag.DagRepresentation.Validator
 import io.casperlabs.casper.mocks.MockFinalityStorage
@@ -172,8 +172,9 @@ object FinalityDetectorUtilTest {
           lastBlockHash: BlockHash
       ) = ???
 
-      override def latestGlobal
-          : StateT[F, Map[BlockHash, Int], TipRepresentation[StateT[F, Map[BlockHash, Int], *]]] =
+      override def latestGlobal: StateT[F, Map[BlockHash, Int], GlobalTipRepresentation[
+        StateT[F, Map[BlockHash, Int], *]
+      ]] =
         ???
       override def latestInEra(
           keyBlockHash: BlockHash
