@@ -272,6 +272,9 @@ object CLValueInstance {
 
     case class InvalidLength(valueLength: Int, typeLength: Int) extends Error
 
+    // This error is raised when serializing (as in the `toValue` method) a
+    // `Map` with keys that cannot be sorted because no ordering is defined. Keys
+    // must be sorted to ensure deterministic serialization.
     case object UnorderedElements extends Error
   }
 
