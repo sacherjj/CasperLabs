@@ -207,7 +207,7 @@ class GossipServiceServer[F[_]: Concurrent: Parallel: Log: Metrics](
       _ => blockDownloadSemaphore.release
     ) flatMap { _ =>
       Iterant.liftF {
-        backend.getBlock(request.blockHash, request.deploysBodiesExcluded)
+        backend.getBlock(request.blockHash, request.excludeDeployBodies)
       } flatMap {
         case Some(block) =>
           val it = chunkIt(

@@ -309,11 +309,11 @@ class GrpcGossipServiceSpec
     "getBlocksChunked" when {
       "called with a valid sender" when {
         "no compression is supported" when {
-          def test(deploysBodiesExcluded: Boolean): Unit = forAll { block: Block =>
+          def test(excludeDeployBodies: Boolean): Unit = forAll { block: Block =>
             runTestUnsafe(TestData.fromBlock(block), timeout = 15.seconds) {
               val req = GetBlockChunkedRequest(
                 blockHash = block.blockHash,
-                deploysBodiesExcluded = deploysBodiesExcluded
+                excludeDeployBodies = excludeDeployBodies
               )
               stub.getBlockChunked(req).toListL.map { chunks =>
                 chunks.head.content.isHeader shouldBe true
@@ -328,7 +328,7 @@ class GrpcGossipServiceSpec
 
                 val content = chunks.tail.flatMap(_.getData.toByteArray).toArray
                 val original =
-                  (if (deploysBodiesExcluded) block.clearDeploysBodies else block).toByteArray
+                  (if (excludeDeployBodies) block.clearDeploysBodies else block).toByteArray
                 header.contentLength shouldBe content.length
                 header.originalContentLength shouldBe original.length
                 md5(content) shouldBe md5(original)
@@ -338,13 +338,13 @@ class GrpcGossipServiceSpec
 
           "specified to exclude deploys bodies" should {
             "return a stream of uncompressed chunks with deploys bodies excluded" in test(
-              deploysBodiesExcluded = true
+              excludeDeployBodies = true
             )
           }
 
           "specified to return full blocks" should {
             "return a stream of uncompressed chunks with deploys bodies included" in test(
-              deploysBodiesExcluded = false
+              excludeDeployBodies = false
             )
           }
         }
@@ -569,7 +569,7 @@ class GrpcGossipServiceSpec
 
               val faultyBackend = (_: AtomicReference[TestData]) => {
                 new GossipServiceServer.Backend[Task] {
-                  def getBlock(blockHash: ByteString, deploysBodiesExcluded: Boolean) = {
+                  def getBlock(blockHash: ByteString, excludeDeployBodies: Boolean) = {
                     cnt = cnt + 1
                     cnt match {
                       case 1 =>
@@ -1407,9 +1407,9 @@ object GrpcGossipServiceSpec extends TestRuntime with ArbitraryConsensusAndComm 
       new GossipServiceServer.Backend[Task] {
         def hasBlock(blockHash: ByteString) =
           Task.delay(testDataRef.get.blocks.contains(blockHash))
-        def getBlock(blockHash: ByteString, deploysBodiesExcluded: Boolean) =
+        def getBlock(blockHash: ByteString, excludeDeployBodies: Boolean) =
           Task.delay(testDataRef.get.blocks.get(blockHash).map { block =>
-            if (deploysBodiesExcluded) {
+            if (excludeDeployBodies) {
               block.clearDeploysBodies
             } else {
               block
