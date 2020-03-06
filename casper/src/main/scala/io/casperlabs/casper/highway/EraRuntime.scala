@@ -16,6 +16,7 @@ import io.casperlabs.crypto.Keys.{PublicKey, PublicKeyBS}
 import io.casperlabs.models.Message
 import io.casperlabs.metrics.implicits._
 import io.casperlabs.metrics.Metrics
+import io.casperlabs.shared.Log
 import io.casperlabs.storage.BlockHash
 import io.casperlabs.storage.dag.{DagRepresentation, DagStorage, FinalityStorageReader}
 import io.casperlabs.storage.era.EraStorage
@@ -41,7 +42,7 @@ import scala.util.control.NoStackTrace
   *
   * This should make testing easier: the return values are not opaque.
   */
-class EraRuntime[F[_]: Sync: Clock: Metrics: EraStorage: FinalityStorageReader: ForkChoice](
+class EraRuntime[F[_]: Sync: Clock: Metrics: Log: EraStorage: FinalityStorageReader: ForkChoice](
     conf: HighwayConf,
     val era: Era,
     leaderFunction: LeaderFunction,
@@ -564,6 +565,9 @@ class EraRuntime[F[_]: Sync: Clock: Metrics: EraStorage: FinalityStorageReader: 
             // it would be good if it was cached and updated only when new messages are added.
             isOverAtCurrent <- isEraOverAt(currentRoundId)
             isOverAtNext    <- isEraOverAt(nextRoundId)
+            _ <- Log[F]
+                  .info(s"No more rounds in ${era.keyBlockHash.show -> "era"}")
+                  .whenA(isOverAtNext)
           } yield {
             val omega = if (!isOverAtCurrent) {
               // Schedule the omega for whatever the current round is, don't bother
@@ -647,7 +651,7 @@ object EraRuntime {
     bonds = genesis.getHeader.getState.bonds
   )
 
-  def fromGenesis[F[_]: Sync: MakeSemaphore: Clock: Metrics: DagStorage: EraStorage: FinalityStorageReader: ForkChoice](
+  def fromGenesis[F[_]: Sync: MakeSemaphore: Clock: Metrics: Log: DagStorage: EraStorage: FinalityStorageReader: ForkChoice](
       conf: HighwayConf,
       genesis: BlockSummary,
       maybeMessageProducer: Option[MessageProducer[F]],
@@ -659,7 +663,7 @@ object EraRuntime {
     fromEra[F](conf, era, maybeMessageProducer, initRoundExponent, isSynced, leaderSequencer)
   }
 
-  def fromEra[F[_]: Sync: MakeSemaphore: Clock: Metrics: DagStorage: EraStorage: FinalityStorageReader: ForkChoice](
+  def fromEra[F[_]: Sync: MakeSemaphore: Clock: Metrics: Log: DagStorage: EraStorage: FinalityStorageReader: ForkChoice](
       conf: HighwayConf,
       era: Era,
       maybeMessageProducer: Option[MessageProducer[F]],
