@@ -142,8 +142,6 @@ object Validation {
   ): F[Unit] =
     reject[F](summary.blockHash, status, reason)
 
-  private def hex(h: ByteString) = PrettyPrinter.buildString(h)
-
   // Check whether message merges its creator swimlane.
   // A block cannot have more than one latest message in its j-past-cone from its creator.
   // i.e. an equivocator cannot cite multiple of its latest messages.
@@ -154,11 +152,7 @@ object Validation {
   ): F[Unit] =
     for {
       equivocations <- dag.latestGlobal.flatMap(_.getEquivocations)
-      _ = equivocations.foreach {
-        case (v, es) =>
-          println(s"${hex(v)}: ${es.keys.map(e => s"${hex(e)} -> ${es(e).size}").mkString(", ")}")
-      }
-      message <- MonadThrowable[F].fromTry(Message.fromBlockSummary(b))
+      message       <- MonadThrowable[F].fromTry(Message.fromBlockSummary(b))
       _ <- Monad[F].whenA(equivocations.contains(message.validatorId)) {
             val validatorEquivocations      = equivocations(message.validatorId)
             val validatorEquivocationHashes = validatorEquivocations.mapValues(_.map(_.messageHash))
@@ -190,12 +184,6 @@ object Validation {
                                               Set.empty
                                             )
 
-                                          println(
-                                            s"checking message ${hex(message.messageHash)} era ${hex(
-                                              keyBlockHash
-                                            )}: ${equivocationHashes.map(hex).mkString(",")}"
-                                          )
-
                                           // If this is an equivocating message, remember we have seen it,
                                           // and see its pair from the same era turns up later.
                                           if (equivocationHashes.contains(message.messageHash)) {
@@ -206,7 +194,7 @@ object Validation {
                                           } else Left(acc)
                                         }
                                     }
-              maybeSeenEquivocationPair = seenEquivocations.values.find(_.size > 2)
+              maybeSeenEquivocationPair = seenEquivocations.values.find(_.size > 1)
               _ <- maybeSeenEquivocationPair.fold(().pure[F]) { seenEquivocations =>
                     val msg =
                       s"${PrettyPrinter.buildString(message.messageHash)} cites multiple latest message by its creator ${PrettyPrinter

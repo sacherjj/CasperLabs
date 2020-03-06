@@ -26,6 +26,7 @@ import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.storage.dag.{DagRepresentation, IndexedDagStorage}
 import io.casperlabs.storage.deploy.{DeployStorage, DeployStorageWriter}
+import io.casperlabs.storage.era.EraStorage
 import monix.eval.Task
 import io.casperlabs.shared.Sorting._
 
@@ -310,4 +311,10 @@ trait BlockGenerator {
       maybeValidatorBlockSeqNum = maybeValidatorBlockSeqNum,
       keyBlockHash = keyBlockHash
     )
+
+  /** Insert an era so we get the behaviour where latest messages are stored per key block hash. */
+  def createAndStoreEra[F[_]: Applicative: EraStorage](keyBlockHash: ByteString): F[Era] = {
+    val era = Era(keyBlockHash)
+    EraStorage[F].addEra(era).as(era)
+  }
 }

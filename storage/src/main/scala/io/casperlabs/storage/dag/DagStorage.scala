@@ -141,9 +141,7 @@ trait EraTipRepresentation[F[_]] extends TipRepresentation[F] {
 trait GlobalTipRepresentation[F[_]] extends TipRepresentation[F] {
 
   /** Get the equivocations across all eras. */
-  def getEquivocations(
-      implicit A: Applicative[F]
-  ): F[Map[Validator, Map[BlockHash, Set[Message]]]]
+  def getEquivocations: F[Map[Validator, Map[BlockHash, Set[Message]]]]
 
   /** Get the equivocators across all eras. */
   def getEquivocators(implicit A: Applicative[F]): F[Set[Validator]] =

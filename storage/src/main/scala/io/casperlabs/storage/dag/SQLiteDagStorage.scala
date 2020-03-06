@@ -26,6 +26,7 @@ import io.casperlabs.storage.dag.DagStorage.{
 import io.casperlabs.storage.util.DoobieCodecs
 
 import scala.collection.JavaConverters._
+import cats.effect.concurrent.Ref
 
 class SQLiteDagStorage[F[_]: Sync](
     readXa: Transactor[F],
@@ -345,28 +346,63 @@ class SQLiteDagStorage[F[_]: Sync](
       extends SQLiteTipRepresentation(ByteString.EMPTY)
       with GlobalTipRepresentation[F] {
 
-    override def getEquivocations(
-        implicit A: Applicative[F]
-    ): F[Map[Validator, Map[BlockHash, Set[Message]]]] =
-      sql"""SELECT v.validator, v.key_block_hash, m.data
+    // As a bit of optimisation, I don't want to retrieve all the false
+    // equivocations that are stored under empty key_block_hash values
+    // in Highway mode. But in NCB mode they are the ones to look for.
+    // Passing the flag to the storage would be easy, but updating all
+    // the tests is tedious. We'll eventually get rid of NCB, so in the
+    // meantime let's just detect which mode we're in based on data.
+
+    private val isHighwayRef = Ref.unsafe[F, Option[Boolean]](None)
+
+    private def isHighway: F[Option[Boolean]] =
+      isHighwayRef.get.flatMap {
+        case None =>
+          // Could look for the presence of eras, but I wanted a query
+          // that can have a yes|no|undecided state. If the query was
+          // somehow run before the first era is inserted, it could
+          // be set to false prematurely.
+          sql"""
+          SELECT MAX(case when key_block_hash = x'' then 0 else 1 end)
+          FROM   validator_latest_messages
+          """
+            .query[Option[Long]]
+            .unique
+            .map(_.map(_ == 1L))
+            .transact(readXa)
+            .flatTap(isHighwayRef.set)
+
+        case value =>
+          value.pure[F]
+      }
+
+    override def getEquivocations: F[Map[Validator, Map[BlockHash, Set[Message]]]] =
+      isHighway flatMap {
+        case None =>
+          Map.empty.pure[F]
+        case Some(isHighway) =>
+          sql"""SELECT v.validator, v.key_block_hash, m.data
             FROM validator_latest_messages v
             INNER JOIN block_metadata m ON m.block_hash = v.block_hash
             WHERE (v.validator, v.key_block_hash) IN (
               SELECT validator, key_block_hash
               FROM   validator_latest_messages
+              WHERE  $isHighway = false AND key_block_hash = x''
+                  OR $isHighway = true AND key_block_hash != x''
               GROUP BY validator, key_block_hash
               HAVING COUNT(block_hash) > 1
             )
           """
-        .query[(Validator, BlockHash, BlockSummary)]
-        .to[List]
-        .transact(readXa)
-        .flatMap(_.traverse {
-          case (v, k, b) => toMessageSummaryF(b).map((v, k, _))
-        })
-        .map { ms =>
-          ms.groupBy(_._1).mapValues(_.groupBy(_._2).mapValues(_.map(_._3).toSet))
-        }
+            .query[(Validator, BlockHash, BlockSummary)]
+            .to[List]
+            .transact(readXa)
+            .flatMap(_.traverse {
+              case (v, k, b) => toMessageSummaryF(b).map((v, k, _))
+            })
+            .map { ms =>
+              ms.groupBy(_._1).mapValues(_.groupBy(_._2).mapValues(_.map(_._3).toSet))
+            }
+      }
   }
 
   object SQLiteTipRepresentation {
