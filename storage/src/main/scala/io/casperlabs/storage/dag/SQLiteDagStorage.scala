@@ -363,12 +363,21 @@ class SQLiteDagStorage[F[_]: Sync](
           // somehow run before the first era is inserted, it could
           // be set to false prematurely.
           sql"""
-          SELECT MAX(case when key_block_hash = x'' then 0 else 1 end)
-          FROM   validator_latest_messages
+          SELECT
+            case when exists(select 1 from validator_latest_messages where key_block_hash = x'')
+                 then true else false end
+              as has_empty,
+            case when exists(select 1 from validator_latest_messages where key_block_hash != x'')
+                 then true else false end
+              as has_defined
           """
-            .query[Option[Long]]
+            .query[(Boolean, Boolean)]
             .unique
-            .map(_.map(_ == 1L))
+            .map {
+              case (_, true) => Some(true)
+              case (true, _) => Some(false)
+              case _         => None
+            }
             .transact(readXa)
             .flatTap(isHighwayRef.set)
 
