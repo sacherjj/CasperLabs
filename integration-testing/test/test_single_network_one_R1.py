@@ -968,7 +968,7 @@ def check_cli_local_key(cli):
                  "--block-hash", block_hash,
                  "--key", local_key,
                  "--type", "local")
-    assert result.string_value == 'Hello, world!'
+    assert result.cl_value.value.str_value == 'Hello, world!'
 
     deploy_hash = cli("deploy",
                       "--from", account.public_key_hex,
@@ -982,7 +982,7 @@ def check_cli_local_key(cli):
                  "--block-hash", block_hash,
                  "--key", local_key,
                  "--type", "local")
-    assert result.string_value == 'Hello, world! Hello, world!'
+    assert result.cl_value.value.str_value == 'Hello, world! Hello, world!'
 
 
 def test_transfer_cli_python(cli):
@@ -1017,7 +1017,7 @@ def test_invalid_bigint(one_node_network):
     # Test covering fix for NODE-1182
     # Use a malformed BigInt contract argument
     node = one_node_network.docker_nodes[0]
-    cli = DockerCLI(node)
+    cli = CLI(node, "casperlabs_client")
     session_wasm = cli.resource(Contract.ARGS_U512)
 
     # Send in u512 with invalid string format, surrounded []

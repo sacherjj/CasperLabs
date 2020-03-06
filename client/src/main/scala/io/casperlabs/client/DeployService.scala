@@ -1,7 +1,7 @@
 package io.casperlabs.client
 import io.casperlabs.casper.consensus
 import io.casperlabs.casper.consensus.info.BlockInfo
-import io.casperlabs.casper.consensus.state.Value
+import io.casperlabs.casper.consensus.state.StoredValueInstance
 import simulacrum.typeclass
 
 import scala.util.Either
@@ -34,5 +34,5 @@ import scala.concurrent.duration._
       keyVariant: String,
       keyValue: String,
       path: String
-  ): F[Either[Throwable, Value]]
+  ): F[Either[Throwable, StoredValueInstance]]
 }

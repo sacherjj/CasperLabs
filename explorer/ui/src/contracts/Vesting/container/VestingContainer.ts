@@ -122,7 +122,8 @@ export class VestingContainer {
     let lastFinalizedBlockInfo = await this.casperService.getLastFinalizedBlockInfo();
     let values = await this.casperService.batchGetBlockState(lastFinalizedBlockInfo.getSummary()!.getBlockHash_asU8(), stateQueries);
     for (let i = 0; i < values.length; i++) {
-      let value = Number(values[i].getBigInt()!.getValue());
+      let u512 = values[i].getClValue()!.getValue()!.getU512()!;
+      let value = Number(u512.getValue());
       // The vesting contract use seconds based timestamp/duration
       // multiple 1000 to be milliseconds based timestamp/duration
       if (paths[i].endsWith('Timestamp') || paths[i].endsWith('Duration')) {

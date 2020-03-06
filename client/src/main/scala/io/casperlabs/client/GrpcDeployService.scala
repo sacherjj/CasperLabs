@@ -10,7 +10,7 @@ import cats.mtl.implicits._
 import cats.syntax.option._
 import io.casperlabs.casper.consensus
 import io.casperlabs.casper.consensus.info.{BlockInfo, DeployInfo}
-import io.casperlabs.casper.consensus.state.Value
+import io.casperlabs.casper.consensus.state.StoredValueInstance
 import io.casperlabs.client.configuration.ConnectOptions
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.util.HostnameTrustManager
@@ -223,11 +223,11 @@ class GrpcDeployService(conn: ConnectOptions, scheduler: Scheduler)
       keyVariant: String,
       keyValue: String,
       path: String
-  ): Task[Either[Throwable, Value]] =
+  ): Task[Either[Throwable, StoredValueInstance]] =
     StateQuery.KeyVariant.values
       .find(_.name == keyVariant.toUpperCase)
       .fold(
-        Task.raiseError[Value](
+        Task.raiseError[StoredValueInstance](
           new java.lang.IllegalArgumentException(s"Unknown key variant: $keyVariant")
         )
       ) { kv =>

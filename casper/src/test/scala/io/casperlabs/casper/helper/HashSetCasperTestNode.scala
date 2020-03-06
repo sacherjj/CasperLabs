@@ -26,8 +26,8 @@ import io.casperlabs.metrics.Metrics
 import io.casperlabs.models.Weight
 import io.casperlabs.p2p.EffectsTestInstances._
 import io.casperlabs.shared.{Cell, Log, Time}
-import io.casperlabs.smartcontracts.bytesrepr._
-import io.casperlabs.smartcontracts.cltype
+import io.casperlabs.models.bytesrepr._
+import io.casperlabs.models.cltype
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.block._
 import io.casperlabs.storage.dag._

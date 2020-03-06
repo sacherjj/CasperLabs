@@ -590,10 +590,10 @@ class CasperLabsClient:
         localKeyValue = f"{mintPublicHex}:{purseAddrHex}"
 
         balanceURef = self.queryState(block_hash, localKeyValue, "", "local")
-        balance = self.queryState(
-            block_hash, balanceURef.key.uref.uref.hex(), "", "uref"
-        )
-        return int(balance.big_int.value)
+        balanceURefHex = balanceURef.cl_value.value.key.uref.uref.hex()
+        balance = self.queryState(block_hash, balanceURefHex, "", "uref")
+        balanceStrValue = balance.cl_value.value.u512.value
+        return int(balanceStrValue)
 
     @api
     def showDeploy(

@@ -89,14 +89,20 @@ message Deploy {
     }
 
     message Arg {
+        reserved 2; // old state.Value representation of args
         string name = 1;
         // Note that until the EE doesn't support kwargs directly, missing an Empty values are
         // not allowed because they would be ambiguous.
+        state.CLValueInstance value = 3;
+    }
+
+    // Old definition of Arg, still kept around to support old JSON format.
+    // TODO: delete this when there are no more usages of the old JSON format
+    message LegacyArg {
+        string name = 1;
         Value value = 2;
-        // Subset of cases in `state.Value` that can be used as input for contract calls.
         message Value {
             oneof value {
-                // Explicitly mark a value as Some or None in the ABI.
                 Value optional_value = 1;
                 bytes bytes_value = 2;
                 int32 int_value = 3;

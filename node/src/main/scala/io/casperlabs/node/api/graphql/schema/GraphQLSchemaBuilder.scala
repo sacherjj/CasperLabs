@@ -30,7 +30,7 @@ import io.casperlabs.node.api.graphql.schema.blocks.types.{
 import io.casperlabs.node.api.{BlockInfoPagination, DeployInfoPagination, Utils}
 import io.casperlabs.shared.Log
 import io.casperlabs.smartcontracts.ExecutionEngineService
-import io.casperlabs.smartcontracts.cltype.StoredValueInstance
+import io.casperlabs.models.cltype.StoredValueInstance
 import io.casperlabs.storage.block._
 import io.casperlabs.storage.dag.DagStorage
 import io.casperlabs.storage.deploy.DeployStorage

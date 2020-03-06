@@ -27,8 +27,8 @@ import io.casperlabs.ipc
 import io.casperlabs.ipc.DeployResult.Value.{ExecutionResult, PreconditionFailure}
 import io.casperlabs.ipc._
 import io.casperlabs.models.ArbitraryConsensus
-import io.casperlabs.smartcontracts.bytesrepr._
-import io.casperlabs.smartcontracts.cltype
+import io.casperlabs.models.bytesrepr._
+import io.casperlabs.models.cltype
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.smartcontracts.ExecutionEngineService.CommitResult
 import monix.eval.Task

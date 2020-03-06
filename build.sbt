@@ -185,7 +185,9 @@ lazy val models = (project in file("models"))
   .settings(
     libraryDependencies ++= commonDependencies ++ protobufDependencies ++ Seq(
       catsCore,
+      catsFree,
       magnolia,
+      refinement,
       scalapbCompiler,
       scalacheck,
       scalapbRuntimegGrpc
@@ -359,10 +361,8 @@ lazy val smartContracts = (project in file("smart-contracts"))
     name := "smart-contracts",
     version := "0.0.1-SNAPSHOT",
     libraryDependencies ++= commonDependencies ++ protobufLibDependencies ++ Seq(
-      catsFree,
       nettyAll,
       grpcNetty,
-      refinement,
       nettyTransNativeEpoll,
       nettyTransNativeKqueue
     ),
