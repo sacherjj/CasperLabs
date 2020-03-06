@@ -326,15 +326,12 @@ class GrpcGossipServiceSpec
                   chunk.getData.size should be <= DefaultMaxChunkSize
                 }
 
-                val content  = chunks.tail.flatMap(_.getData.toByteArray).toArray
-                val original = block.toByteArray
+                val content = chunks.tail.flatMap(_.getData.toByteArray).toArray
+                val original =
+                  (if (deploysBodiesExcluded) block.clearDeploysBodies else block).toByteArray
                 header.contentLength shouldBe content.length
-                if (deploysBodiesExcluded) {
-                  md5(content) shouldBe md5(block.clearDeploysBodies.toByteArray)
-                } else {
-                  header.originalContentLength shouldBe original.length
-                  md5(content) shouldBe md5(original)
-                }
+                header.originalContentLength shouldBe original.length
+                md5(content) shouldBe md5(original)
               }
             }
           }
