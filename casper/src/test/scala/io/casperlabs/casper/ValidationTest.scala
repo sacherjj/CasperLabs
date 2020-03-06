@@ -1475,7 +1475,7 @@ class ValidationTest
                keyBlockHash = e1.keyBlockHash
              )
         dag <- dagStorage.getRepresentation
-        _   <- Validation.swimlane[Task](b3, dag, isHighway = true)
+        _   <- Validation.swimlane[Task](b3, dag, isHighway = true).attempt shouldBeF Right(())
       } yield ()
   }
 
