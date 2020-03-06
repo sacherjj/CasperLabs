@@ -135,16 +135,10 @@ class EraSupervisor[F[_]: Concurrent: Timer: Log: Metrics: EraStorage: Relaying:
     } yield entry
   }
 
-  private def isStartRound(action: Agenda.Action) = action match {
-    case _: Agenda.StartRound => true
-    case _                    => false
-  }
-
   private def schedule(runtime: EraRuntime[F], agenda: Agenda): F[Unit] =
     agenda.traverse {
       case delayed @ Agenda.DelayedAction(tick, action) =>
-        val key     = (runtime.era.keyBlockHash, delayed)
-        val isStart = isStartRound(action)
+        val key = (runtime.era.keyBlockHash, delayed)
         for {
           fiber <- scheduleAt(tick) {
                     val era = runtime.era.keyBlockHash.show
@@ -159,12 +153,6 @@ class EraSupervisor[F[_]: Concurrent: Timer: Log: Metrics: EraStorage: Relaying:
                                           val rem = sch - key
                                           rem -> rem.isEmpty
                                         }
-
-                      hasNextStart = agenda.map(_.action).find(isStartRound(_)).nonEmpty
-
-                      _ <- Log[F]
-                            .info(s"There are no more rounds scheduled for $era")
-                            .whenA(isStart && !hasNextStart)
                       _ <- Log[F]
                             .warn(s"There are no more actions scheduled for any of the active eras")
                             .whenA(isScheduleEmpty && agenda.isEmpty)
