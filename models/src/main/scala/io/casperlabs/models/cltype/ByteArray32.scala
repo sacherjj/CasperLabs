@@ -15,10 +15,11 @@ object ByteArray32 {
       b.bytes.toArray
   }
 
-  def lt(a: ByteArray32, b: ByteArray32) = (a, b) match {
+  def lt(a: ByteArray32, b: ByteArray32): Boolean = (a, b) match {
     case (ByteArray32(xs), ByteArray32(ys)) =>
-      xs.iterator.zip(ys.iterator).exists {
-        case (x, y) => x < y
+      xs.iterator.zip(ys.iterator).find { case (x, y) => x != y } match {
+        case None         => false // a == b since all elements were equal
+        case Some((x, y)) => x < y
       }
   }
 
