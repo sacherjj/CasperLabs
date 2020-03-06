@@ -1017,7 +1017,7 @@ def test_invalid_bigint(one_node_network):
     # Test covering fix for NODE-1182
     # Use a malformed BigInt contract argument
     node = one_node_network.docker_nodes[0]
-    cli = DockerCLI(node)
+    cli = CLI(node, "casperlabs_client")
     session_wasm = cli.resource(Contract.ARGS_U512)
 
     # Send in u512 with invalid string format, surrounded []
