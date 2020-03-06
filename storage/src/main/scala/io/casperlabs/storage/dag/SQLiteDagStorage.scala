@@ -364,12 +364,10 @@ class SQLiteDagStorage[F[_]: Sync](
           // be set to false prematurely.
           sql"""
           SELECT
-            case when exists(select 1 from validator_latest_messages where key_block_hash = x'')
-                 then true else false end
-              as has_empty,
-            case when exists(select 1 from validator_latest_messages where key_block_hash != x'')
-                 then true else false end
-              as has_defined
+            EXISTS(SELECT 1 FROM validator_latest_messages WHERE key_block_hash = x'')
+              AS has_empty,
+            EXISTS(SELECT 1 FROM validator_latest_messages WHERE key_block_hash != x'')
+              AS has_defined
           """
             .query[(Boolean, Boolean)]
             .unique
