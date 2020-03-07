@@ -258,7 +258,8 @@ class EraRuntime[F[_]: Sync: Clock: Metrics: Log: EraStorage: FinalityStorageRea
               .timerGauge("create_response")
           }
       _ <- m.fold(noop) { msg =>
-            HighwayLog.tell[F](HighwayEvent.CreatedLambdaResponse(msg))
+            recordJustificationsDistance(msg) >>
+              HighwayLog.tell[F](HighwayEvent.CreatedLambdaResponse(msg))
           }
     } yield ()
   }
@@ -314,6 +315,7 @@ class EraRuntime[F[_]: Sync: Clock: Metrics: Log: EraStorage: FinalityStorageRea
           }
       _ <- m.fold(noop) { msg =>
             HighwayLog.tell[F](HighwayEvent.CreatedLambdaMessage(msg)) >>
+              recordJustificationsDistance(msg) >>
               handleCriticalMessages(msg)
           }
     } yield ()
@@ -345,11 +347,42 @@ class EraRuntime[F[_]: Sync: Clock: Metrics: Log: EraStorage: FinalityStorageRea
               }
               .timerGauge("create_omega")
           }
-      _ <- m.fold(noop) { msg =>
-            HighwayLog.tell[F](HighwayEvent.CreatedOmegaMessage(msg))
-          }
+      _ <- m.fold(noop)(msg => {
+            val isSameRound: io.casperlabs.casper.consensus.Block.Justification => F[Boolean] = j =>
+              dag
+                .lookupUnsafe(j.latestBlockHash)
+                .map(isSameRoundAs(msg)(_))
+            val sameRoundJustifications = msg.justifications.toList.filterA(isSameRound).map(_.size)
+            val citesRelativeCount      = sameRoundJustifications.map(c => c * 100L / era.bonds.size)
+            // Report how many messages, from the same round, an omega message cites.
+            // This is a metric about how quickly summits are formed.
+            HighwayLog.liftF(
+              citesRelativeCount.flatMap(v => Metrics[F].setGauge("omega_cites", v))
+            ) >> recordJustificationsDistance(msg) >>
+              HighwayLog.tell[F](HighwayEvent.CreatedOmegaMessage(msg))
+          })
     } yield ()
   }
+
+  // Returns a map that represents number of msg justifications at their distance from the message.
+  // Distance is a difference of rounds between the message and cited message.
+  private def justificationsRoundsDistance(msg: Message): F[Map[Long, Int]] =
+    msg.justifications.toList
+      .traverse(j => dag.lookupUnsafe(j.latestBlockHash))
+      .map { justificationMessages =>
+        justificationMessages
+          .map(j => msg.roundId - j.roundId)
+          .groupBy(identity)
+          .mapValues(_.size)
+      }
+
+  private def recordJustificationsDistance(msg: Message): HWL[Unit] =
+    HighwayLog.liftF(justificationsRoundsDistance(msg).flatMap { distances =>
+      distances.toList.traverse {
+        case (rankDistance, count) =>
+          Metrics[F].record("justifications_rank_distances", rankDistance, count.toLong)
+      }.void
+    })
 
   /** Trace the lineage of the switch block back to find a key block,
     * then the corresponding booking block.
