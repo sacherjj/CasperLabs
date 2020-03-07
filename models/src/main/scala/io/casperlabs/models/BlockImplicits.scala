@@ -34,7 +34,7 @@ object BlockImplicits {
 
     def getSummary: BlockSummary =
       BlockSummary(block.blockHash, block.header, block.signature)
-    def clearDeploysBodies: Block = block.update(
+    def clearDeployBodies: Block = block.update(
       _.body.deploys := block.getBody.deploys
         .map(
           processedDeploy => processedDeploy.withDeploy(processedDeploy.getDeploy.clearBody)

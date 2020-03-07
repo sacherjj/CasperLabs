@@ -42,7 +42,7 @@ class CachingBlockStorage[F[_]: Sync](
     dv match {
       case View.FULL => maybeBlock
       case View.BASIC =>
-        maybeBlock.map(_.map(b => b.withBlockMessage(b.getBlockMessage.clearDeploysBodies)))
+        maybeBlock.map(_.map(b => b.withBlockMessage(b.getBlockMessage.clearDeployBodies)))
     }
   }
 

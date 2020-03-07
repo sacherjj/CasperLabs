@@ -328,7 +328,7 @@ class GrpcGossipServiceSpec
 
                 val content = chunks.tail.flatMap(_.getData.toByteArray).toArray
                 val original =
-                  (if (excludeDeployBodies) block.clearDeploysBodies else block).toByteArray
+                  (if (excludeDeployBodies) block.clearDeployBodies else block).toByteArray
                 header.contentLength shouldBe content.length
                 header.originalContentLength shouldBe original.length
                 md5(content) shouldBe md5(original)
@@ -1410,7 +1410,7 @@ object GrpcGossipServiceSpec extends TestRuntime with ArbitraryConsensusAndComm 
         def getBlock(blockHash: ByteString, excludeDeployBodies: Boolean) =
           Task.delay(testDataRef.get.blocks.get(blockHash).map { block =>
             if (excludeDeployBodies) {
-              block.clearDeploysBodies
+              block.clearDeployBodies
             } else {
               block
             }

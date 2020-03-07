@@ -763,7 +763,7 @@ object DownloadManagerSpec {
             override def getBlock(blockHash: ByteString, deploysBodiesExcluded: Boolean) =
               regetter(Task.delay(blockMap.get(blockHash).map { block =>
                 if (deploysBodiesExcluded) {
-                  block.clearDeploysBodies
+                  block.clearDeployBodies
                 } else {
                   block
                 }
