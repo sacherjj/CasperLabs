@@ -17,6 +17,7 @@ def test_highway(three_node_highway_network):
 
 
 def filter_ballots(block_infos):
+    return filter(lambda b: b.summary.header.message_type == consensus.Block.MessageType.BALLOT)
     return [
         b
         for b in block_infos
@@ -25,6 +26,7 @@ def filter_ballots(block_infos):
 
 
 def filter_blocks(block_infos):
+    return filter(lambda b: b.summary.header.message_type == consensus.Block.MessageType.BLOCK)
     return [
         b
         for b in block_infos
@@ -41,6 +43,9 @@ def datetime_from_timestamp(timestamp):
 
 
 def check_eras(blocks_in_eras, client):
+    """
+    :param:  key_block_hashes  Mapping from key_block_hash to nodes in the era.
+    """
     key_block_hashes = list(blocks_in_eras.keys())
     for key_block_hash in key_block_hashes:
         messages = blocks_in_eras[key_block_hash]
@@ -84,7 +89,7 @@ def check_rounds(blocks_in_rounds):
         )
 
 
-def check_highway_dag(client):
+def check_highway_dag(client, number_of_rounds=1):
     blocks_in_rounds = defaultdict(list)
     blocks_in_eras = defaultdict(list)
     for event in client.stream_events(block_added=True):
@@ -98,7 +103,7 @@ def check_highway_dag(client):
         if key_block_hash:
             blocks_in_eras[key_block_hash].append(block_info)
 
-        if len(blocks_in_eras.keys()) > 2:
+        if len(blocks_in_eras.keys()) > number_of_rounds:
             check_eras(blocks_in_eras, client)
             check_rounds(blocks_in_rounds)
             break
