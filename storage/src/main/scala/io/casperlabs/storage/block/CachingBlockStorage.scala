@@ -5,8 +5,10 @@ import cats.effect._
 import cats.implicits._
 import com.google.common.cache.{Cache, CacheBuilder, Weigher}
 import io.casperlabs.casper.consensus.BlockSummary
+import io.casperlabs.casper.consensus.info.DeployInfo.View
 import io.casperlabs.casper.consensus.info.{BlockInfo, DeployInfo}
 import io.casperlabs.metrics.Metrics
+import io.casperlabs.models.BlockImplicits.BlockOps
 import io.casperlabs.storage.block.BlockStorage.MeteredBlockStorage
 import io.casperlabs.storage.{
   BlockHash,
@@ -32,11 +34,17 @@ class CachingBlockStorage[F[_]: Sync](
 
   override def get(
       blockHash: BlockHash
-  )(implicit dv: DeployInfo.View = DeployInfo.View.FULL): F[Option[BlockMsgWithTransform]] =
-    cacheOrUnderlying(
+  )(implicit dv: DeployInfo.View = DeployInfo.View.FULL): F[Option[BlockMsgWithTransform]] = {
+    val maybeBlock = cacheOrUnderlying(
       Option(cache.getIfPresent(blockHash)),
       underlying.get(blockHash)
     )
+    dv match {
+      case View.FULL => maybeBlock
+      case View.BASIC =>
+        maybeBlock.map(_.map(b => b.withBlockMessage(b.getBlockMessage.clearDeploysBodies)))
+    }
+  }
 
   override def getByPrefix(
       blockHashPrefix: String
