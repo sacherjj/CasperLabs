@@ -529,9 +529,10 @@ class EraRuntime[F[_]: Sync: Clock: Metrics: Log: EraStorage: FinalityStorageRea
                     "Shouldn't receive our own messages!"
                   )
               _ <- ifCurrentRound(Ticks(message.roundId)) {
-                    HighwayLog
-                      .liftF(message.isLambdaMessage)
-                      .ifM(createLambdaResponse(mp, message), noop)
+                    HighwayLog.liftF(Metrics[F].incrementCounter("incoming_same_round_message")) >>
+                      HighwayLog
+                        .liftF(message.isLambdaMessage)
+                        .ifM(createLambdaResponse(mp, message), noop)
                   }
             } yield ()
           }

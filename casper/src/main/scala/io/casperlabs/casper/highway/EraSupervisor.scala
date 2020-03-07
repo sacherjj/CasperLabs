@@ -164,7 +164,7 @@ class EraSupervisor[F[_]: Concurrent: Timer: Log: Metrics: EraStorage: Relaying:
                     exec.recoverWith {
                       case NonFatal(ex) =>
                         Metrics[F].incrementCounter("schedule_errors") *>
-                        Log[F].error(s"Error executing $action in $era: $ex")
+                          Log[F].error(s"Error executing $action in $era: $ex")
                     }
                   }
           _ <- scheduleRef.update { s =>
@@ -181,8 +181,8 @@ class EraSupervisor[F[_]: Concurrent: Timer: Log: Metrics: EraStorage: Relaying:
       now   <- Timer[F].clock.realTime(conf.tickUnit)
       delay = math.max(ticks - now, 0L)
       delayedF = Timer[F].sleep(FiniteDuration(delay, conf.tickUnit)) >> effect.onError {
-                  case NonFatal(ex) => Log[F].error(s"Error executing fiber: $ex")
-                }
+        case NonFatal(ex) => Log[F].error(s"Error executing fiber: $ex")
+      }
       fiber <- Concurrent[F].start {
                 Metrics[F].gauge("scheduled_items")(delayedF)
               }
@@ -203,6 +203,7 @@ class EraSupervisor[F[_]: Concurrent: Timer: Log: Metrics: EraStorage: Relaying:
               .timerGauge("created_relay")
         _ <- propagateLatestMessageToDescendantEras(message)
               .timerGauge("created_propagateLatestMessage")
+        _ <- Metrics[F].incrementCounter(s"created_$kind")
       } yield ()
 
     events.traverse {
