@@ -41,15 +41,12 @@ def datetime_from_timestamp(timestamp):
 
 
 def check_eras(blocks_in_eras, client):
-    logging.info(f"""========key_block_hashes: "{list(blocks_in_eras.keys())}" """)
-    key_block_hashes = list(blocks_in_eras.keys()) # [1:-1]
+    key_block_hashes = list(blocks_in_eras.keys())
     for key_block_hash in key_block_hashes:
         messages = blocks_in_eras[key_block_hash]
         ballots, blocks = split_ballots_and_blocks(messages)
 
         assert len(blocks) > 0
-
-        logging.info(f"""=====key_block_hash: "{key_block_hash.hex()}" """)
 
         key_block = client.showBlock(key_block_hash.hex(), full_view=False)
 
