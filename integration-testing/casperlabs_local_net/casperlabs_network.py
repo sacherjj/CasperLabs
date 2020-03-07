@@ -610,14 +610,14 @@ class ThreeNodeHighwayNetwork(CasperLabsNetwork):
     NODE_ENV = dict(
         # Old defaults
         RUST_BACKTRACE="full",
-        CL_LOG_LEVEL=os.environ.get("CL_LOG_LEVEL", "DEBUG"),
+        CL_LOG_LEVEL=os.environ.get("CL_LOG_LEVEL", "INFO"),
         CL_SERVER_NO_UPNP="true",
         CL_VERSION="test",
         # Highway
         CL_HIGHWAY_ENABLED="true",
-        CL_HIGHWAY_INIT_ROUND_EXPONENT=14,
+        CL_HIGHWAY_INIT_ROUND_EXPONENT=13,
         CL_CHAINSPEC_HIGHWAY_GENESIS_ERA_START=TIMESTAMP,
-        CL_CHAINSPEC_HIGHWAY_ERA_DURATION="5minutes",
+        CL_CHAINSPEC_HIGHWAY_ERA_DURATION="2minutes",
         CL_CHAINSPEC_HIGHWAY_BOOKING_DURATION="8minutes",
         CL_CHAINSPEC_HIGHWAY_ENTROPY_DURATION="1minute",
         CL_CHAINSPEC_HIGHWAY_VOTING_PERIOD_DURATION="1minute",
