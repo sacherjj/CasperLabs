@@ -9,6 +9,7 @@ import doobie._
 import doobie.implicits._
 import doobie.util.transactor.Transactor
 import io.casperlabs.casper.consensus.Block.ProcessedDeploy
+import io.casperlabs.casper.consensus.info.DeployInfo.View
 import io.casperlabs.casper.consensus.info.{BlockInfo, DeployInfo}
 import io.casperlabs.casper.consensus.{Block, BlockSummary, Deploy}
 import io.casperlabs.catscontrib.Fs2Compiler
@@ -34,12 +35,11 @@ class SQLiteBlockStorage[F[_]: Bracket[*[_], Throwable]: Fs2Compiler](
   import SQLiteBlockStorage.blockInfoCols
 
   private def deployBodyCol(alias: String)(implicit dv: DeployInfo.View) =
-    if (dv == DeployInfo.View.BASIC) {
-      fr"summary, null"
-    } else if (alias.isEmpty) {
-      fr"summary, body"
-    } else {
-      Fragment.const(s"${alias}.summary, ${alias}.body")
+    dv match {
+      case View.BASIC if alias.nonEmpty => Fragment.const(s"${alias}.summary, null")
+      case View.FULL if alias.nonEmpty  => Fragment.const(s"${alias}.summary, ${alias}.body")
+      case View.BASIC                   => Fragment.const(s"summary, null")
+      case View.FULL                    => Fragment.const(s"summary, body")
     }
 
   override def get(
