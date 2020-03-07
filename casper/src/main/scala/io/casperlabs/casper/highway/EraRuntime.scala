@@ -163,7 +163,7 @@ class EraRuntime[F[_]: Sync: Clock: Metrics: Log: EraStorage: FinalityStorageRea
           else {
             ForkChoice[F]
               .fromKeyBlock(era.keyBlockHash)
-              .timerGauge("is_over_forkchoice")
+              .timerGauge("is_era_over_forkchoice")
               .flatMap { choice =>
                 choice.block.isSwitchBlock.ifM(
                   FinalityStorageReader[F].isFinalized(choice.block.messageHash),
