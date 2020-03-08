@@ -17,34 +17,29 @@ def test_highway(three_node_highway_network):
 
 
 def filter_ballots(block_infos):
-    return filter(lambda b: b.summary.header.message_type == consensus.Block.MessageType.BALLOT)
-    return [
-        b
-        for b in block_infos
-        if b.summary.header.message_type == consensus.Block.MessageType.BALLOT
-    ]
+    return filter(lambda b: b.summary.header.message_type == consensus.Block.MessageType.BALLOT, block_infos)
 
 
 def filter_blocks(block_infos):
-    return filter(lambda b: b.summary.header.message_type == consensus.Block.MessageType.BLOCK)
-    return [
-        b
-        for b in block_infos
-        if b.summary.header.message_type == consensus.Block.MessageType.BLOCK
-    ]
+    return filter(lambda b: b.summary.header.message_type == consensus.Block.MessageType.BLOCK, block_infos)
 
 
 def split_ballots_and_blocks(block_infos):
-    return filter_ballots(block_infos), filter_blocks(block_infos)
+    return map(list, (filter_ballots(block_infos), filter_blocks(block_infos)))
 
 
 def datetime_from_timestamp(timestamp):
     return datetime.fromtimestamp(timestamp / 1000.0)
 
 
+def log_info(s):
+    print(s)
+    logging.info(s)
+
+
 def check_eras(blocks_in_eras, client):
     """
-    :param:  key_block_hashes  Mapping from key_block_hash to nodes in the era.
+    :param:  blocks_in_eras  Mapping from key_block_hash to nodes in the era.
     """
     key_block_hashes = list(blocks_in_eras.keys())
     for key_block_hash in key_block_hashes:
@@ -64,13 +59,28 @@ def check_eras(blocks_in_eras, client):
             key=lambda p: p[1],
             reverse=True,
         )
-        logging.info(
-            f"""key_block_hash: {key_block_hash.hex()} ({datetime_from_timestamp(key_block.summary.header.timestamp)}):
-            {len(blocks)} blocks ({len(blocks)}), {len(ballots)} ballots
-            {", ".join(f"{v}: {f}" for v,f in validator_frequencies)}
+        log_info(
+            f"""key_block_hash: {key_block_hash.hex()} ({datetime_from_timestamp(key_block.summary.header.timestamp)}): {len(blocks)} blocks ({len(blocks)}), {len(ballots)} ballots
+            {format_list(f"{v}: {f}" for v,f in validator_frequencies)}
         """
         )
 
+
+def validator_id(block_info):
+    return block_info.summary.header.validator_public_key.hex()
+
+
+def validator_id_short(block_info):
+    return validator_id(block_info)[:10]
+
+
+def format_list(l):
+    return ",".join(l)
+
+
+def plural(singular_name, l):
+    return len(list(l)) == 1 and singular_name or singular_name + "s" 
+    
 
 def check_rounds(blocks_in_rounds):
     # Skip the first and the last round.
@@ -81,21 +91,19 @@ def check_rounds(blocks_in_rounds):
         # There must be at most one block in a round.
         assert len(blocks) <= 1
 
-        validator_public_keys = [
-            b.summary.header.validator_public_key.hex()[:10] for b in blocks
-        ]
-        logging.info(
-            f"round_id: {round_id} ({datetime_from_timestamp(round_id)}): {len(blocks)} blocks ({validator_public_keys}), {len(ballots)} ballots"
-        )
+        validator_public_keys = map(validator_id_short, blocks)
+        log_info(
+            f"""round_id: {round_id} ({datetime_from_timestamp(round_id)}): {len(blocks)} {plural("block", blocks)} ({format_list(validator_public_keys)})), {len(ballots)} {plural("ballot", ballots)}""")
 
 
-def check_highway_dag(client, number_of_rounds=1):
+def check_highway_dag(client, number_of_eras=2):
     blocks_in_rounds = defaultdict(list)
     blocks_in_eras = defaultdict(list)
     for event in client.stream_events(block_added=True):
-        # print(event)
+        #print(event)
         # import pdb; pdb.set_trace()
         block_info = event.block_added.block
+        log_info(f"Block added: {block_info.summary.block_hash.hex()}, validator: {validator_id_short(block_info)}")
         round_id = block_info.summary.header.round_id
         key_block_hash = block_info.summary.header.key_block_hash
 
@@ -103,7 +111,7 @@ def check_highway_dag(client, number_of_rounds=1):
         if key_block_hash:
             blocks_in_eras[key_block_hash].append(block_info)
 
-        if len(blocks_in_eras.keys()) > number_of_rounds:
+        if len(blocks_in_eras.keys()) > number_of_eras:
             check_eras(blocks_in_eras, client)
             check_rounds(blocks_in_rounds)
             break
