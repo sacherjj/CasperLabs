@@ -33,7 +33,8 @@ all: \
 	docker-build-all \
 	cargo-package-all \
     build-client \
-    build-node
+    build-node \
+    build-python-client \
 
 # Push the local artifacts to repositories.
 publish: docker-push-all
@@ -299,6 +300,9 @@ explorer/contracts/%.wasm: .make/contracts/%
 
 build-client: \
 	.make/sbt-stage/client
+
+build-python-client:
+	integration-testing/client/CasperLabsClient/build.sh
 
 build-client-contracts: \
 	client/src/main/resources/bonding.wasm \
