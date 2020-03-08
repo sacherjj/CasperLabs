@@ -31,7 +31,9 @@ $(eval DOCKER_TEST_TAG = $(shell if [ -z ${DRONE_BUILD_NUMBER} ]; then echo test
 # Build all artifacts locally.
 all: \
 	docker-build-all \
-	cargo-package-all
+	cargo-package-all \
+    build-client \
+    build-node
 
 # Push the local artifacts to repositories.
 publish: docker-push-all
