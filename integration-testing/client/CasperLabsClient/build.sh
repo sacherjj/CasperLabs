@@ -7,4 +7,4 @@ cd ${DIR}
 
 rm -rf dist/*
 python setup.py sdist
-pip install dist/casperlabs_client-*
+# pip install dist/casperlabs_client-*
