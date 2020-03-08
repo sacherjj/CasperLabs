@@ -17,11 +17,17 @@ def test_highway(three_node_highway_network):
 
 
 def filter_ballots(block_infos):
-    return filter(lambda b: b.summary.header.message_type == consensus.Block.MessageType.BALLOT, block_infos)
+    return filter(
+        lambda b: b.summary.header.message_type == consensus.Block.MessageType.BALLOT,
+        block_infos,
+    )
 
 
 def filter_blocks(block_infos):
-    return filter(lambda b: b.summary.header.message_type == consensus.Block.MessageType.BLOCK, block_infos)
+    return filter(
+        lambda b: b.summary.header.message_type == consensus.Block.MessageType.BLOCK,
+        block_infos,
+    )
 
 
 def split_ballots_and_blocks(block_infos):
@@ -79,8 +85,8 @@ def format_list(l):
 
 
 def plural(singular_name, l):
-    return len(list(l)) == 1 and singular_name or singular_name + "s" 
-    
+    return len(list(l)) == 1 and singular_name or singular_name + "s"
+
 
 def check_rounds(blocks_in_rounds):
     # Skip the first and the last round.
@@ -93,17 +99,19 @@ def check_rounds(blocks_in_rounds):
 
         validator_public_keys = map(validator_id_short, blocks)
         log_info(
-            f"""round_id: {round_id} ({datetime_from_timestamp(round_id)}): {len(blocks)} {plural("block", blocks)} ({format_list(validator_public_keys)})), {len(ballots)} {plural("ballot", ballots)}""")
+            f"""round_id: {round_id} ({datetime_from_timestamp(round_id)}): {len(blocks)} {plural("block", blocks)} ({format_list(validator_public_keys)})), {len(ballots)} {plural("ballot", ballots)}"""
+        )
 
 
 def check_highway_dag(client, number_of_eras=2):
     blocks_in_rounds = defaultdict(list)
     blocks_in_eras = defaultdict(list)
     for event in client.stream_events(block_added=True):
-        #print(event)
-        # import pdb; pdb.set_trace()
+        # print(event)
         block_info = event.block_added.block
-        log_info(f"Block added: {block_info.summary.block_hash.hex()}, validator: {validator_id_short(block_info)}")
+        log_info(
+            f"Block added: {block_info.summary.block_hash.hex()}, validator: {validator_id_short(block_info)}"
+        )
         round_id = block_info.summary.header.round_id
         key_block_hash = block_info.summary.header.key_block_hash
 
