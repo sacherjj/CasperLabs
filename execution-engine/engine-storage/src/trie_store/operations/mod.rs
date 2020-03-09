@@ -877,6 +877,57 @@ impl<E> From<E> for KeysWithPrefixError<E> {
     }
 }
 
+impl<E> PartialEq for KeysWithPrefixError<E>
+where
+    E: PartialEq,
+{
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (KeysWithPrefixError::HashNotFound(h1), KeysWithPrefixError::HashNotFound(h2)) => {
+                h1 == h2
+            }
+            (
+                KeysWithPrefixError::PrefixRootNotFound(pfx1),
+                KeysWithPrefixError::PrefixRootNotFound(pfx2),
+            ) => pfx1 == pfx2,
+            (
+                KeysWithPrefixError::LeafNotMatchingPrefix {
+                    pfx: pfx1,
+                    key: key1,
+                },
+                KeysWithPrefixError::LeafNotMatchingPrefix {
+                    pfx: pfx2,
+                    key: key2,
+                },
+            ) => pfx1 == pfx2 && key1 == key2,
+            (KeysWithPrefixError::Store(err1), KeysWithPrefixError::Store(err2)) => err1 == err2,
+            _ => false,
+        }
+    }
+}
+
+impl<E> std::fmt::Debug for KeysWithPrefixError<E>
+where
+    E: std::fmt::Debug,
+{
+    fn fmt(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            KeysWithPrefixError::HashNotFound(hash) => {
+                write!(formatter, "HashNotFound({:?})", hash)
+            }
+            KeysWithPrefixError::PrefixRootNotFound(pfx) => {
+                write!(formatter, "PrefixRootNotFound({:?})", pfx)
+            }
+            KeysWithPrefixError::LeafNotMatchingPrefix { pfx, key } => write!(
+                formatter,
+                "LeafNotMatchingPrefix {{ pfx: {:?}, key: {:?} }}",
+                pfx, key
+            ),
+            KeysWithPrefixError::Store(err) => write!(formatter, "Store({:?})", err),
+        }
+    }
+}
+
 /// Get the hash of the node that is the root of the subtrie matching the `prefix`
 fn get_prefix_root<'a, 'b, K, V, T, S>(
     _correlation_id: CorrelationId,

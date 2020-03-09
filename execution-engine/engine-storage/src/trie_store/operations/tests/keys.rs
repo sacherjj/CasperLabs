@@ -8,8 +8,9 @@ mod partial_tries {
             self,
             tests::{
                 InMemoryTestContext, LmdbTestContext, TestKey, TestValue, TEST_LEAVES,
-                TEST_TRIE_GENERATORS,
+                TEST_LEAVES_PREFIXES, TEST_TRIE_GENERATORS,
             },
+            KeysWithPrefixError,
         },
     };
 
@@ -82,6 +83,46 @@ mod partial_tries {
                 tmp
             };
             assert_eq!(actual, expected);
+
+            for (prefix, expected_result) in TEST_LEAVES_PREFIXES.iter() {
+                let expected = expected_result.as_ref().map(|_| {
+                    let mut tmp = used
+                        .iter()
+                        .filter_map(Trie::key)
+                        .filter(|key| key.0.starts_with(prefix))
+                        .cloned()
+                        .collect::<Vec<TestKey>>();
+                    tmp.sort();
+                    tmp
+                });
+                let actual = {
+                    let txn = context.environment.create_read_txn().unwrap();
+                    operations::keys_with_prefix::<TestKey, TestValue, _, _>(
+                        correlation_id,
+                        &txn,
+                        &context.store,
+                        &root_hash,
+                        prefix,
+                    )
+                    .map(|iterator| {
+                        let mut tmp = iterator.filter_map(Result::ok).collect::<Vec<TestKey>>();
+                        tmp.sort();
+                        tmp
+                    })
+                };
+                match (actual, expected) {
+                    (Ok(actual), Ok(expected)) => assert_eq!(actual, expected),
+                    (Err(act_err), Err(exp_err)) => assert_eq!(&act_err, exp_err),
+                    (Err(e), Ok(keys)) => {
+                        if !keys.is_empty()
+                            || e != KeysWithPrefixError::PrefixRootNotFound(vec![prefix[0]])
+                        {
+                            panic!("expected a set of keys {:?}, got error {:?}!", keys, e)
+                        }
+                    }
+                    (Ok(keys), Err(e)) => panic!("expected error {:?}, got keys {:?}!", e, keys),
+                }
+            }
         }
     }
 }
