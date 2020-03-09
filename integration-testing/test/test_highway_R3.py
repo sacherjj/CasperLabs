@@ -109,8 +109,12 @@ def check_highway_dag(client, number_of_eras=2):
     for event in client.stream_events(block_added=True):
         # print(event)
         block_info = event.block_added.block
+        block_hash = block_info.summary.block_hash
+        if not block_hash:
+            print(event)
+
         log_info(
-            f"Block added: {block_info.summary.block_hash.hex()}, validator: {validator_id_short(block_info)}"
+            f"Block added: {block_hash.hex()}, validator: {validator_id_short(block_info)}"
         )
         round_id = block_info.summary.header.round_id
         key_block_hash = block_info.summary.header.key_block_hash
