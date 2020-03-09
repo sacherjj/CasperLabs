@@ -23,7 +23,7 @@ enum CustomError {
 /// Executes mote transfer to supplied public key.
 /// Transfers the requested amount.
 #[no_mangle]
-pub extern "C" fn call() {
+pub fn delegate() {
     let public_key: PublicKey = runtime::get_arg(Args::AccountPublicKey as u32)
         .unwrap_or_revert_with(ApiError::User(CustomError::MissingAccountPublicKey as u16))
         .unwrap_or_revert_with(ApiError::User(CustomError::InvalidAccountPublicKey as u16));
@@ -31,4 +31,10 @@ pub extern "C" fn call() {
         .unwrap_or_revert_with(ApiError::User(CustomError::MissingAmount as u16))
         .unwrap_or_revert_with(ApiError::User(CustomError::InvalidAmount as u16));
     system::transfer_to_account(public_key, transfer_amount).unwrap_or_revert();
+}
+
+#[cfg(not(feature = "lib"))]
+#[no_mangle]
+pub extern "C" fn call() {
+    delegate();
 }
