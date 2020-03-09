@@ -121,7 +121,7 @@ slow:
 
 # Generate keys and bonds.
 .casperlabs:
-	mkdir -p .casperlabs/bootstrap
+	mkdir -p .casperlabs/nodes
 	mkdir -p .casperlabs/chainspec/genesis
 
 	@# Create a `facet-account` to hold some initial tokens to distribute.
@@ -132,21 +132,17 @@ slow:
 	@# Create bonded validators with 0 balance.
 	bash -c 'i=0 ; while [[ $$i -lt $(CL_CASPER_NUM_VALIDATORS) ]] ; do \
 		echo Generating validator $$i / $(CL_CASPER_NUM_VALIDATORS) ; \
-		mkdir -p .casperlabs/node-$$i ; \
+		mkdir -p .casperlabs/nodes/node-$$i ; \
 		mkdir -p keys/account-$$i ; \
-		../key-management/docker-gen-keys.sh .casperlabs/node-$$i ; \
+		../key-management/docker-gen-keys.sh .casperlabs/nodes/node-$$i ; \
 		../key-management/docker-gen-account-keys.sh keys/account-$$i ; \
 		BOND=$$(( $(CL_CASPER_NUM_VALIDATORS)*10+$$i )) ; \
-		(cat .casperlabs/node-$$i/validator-id; echo ",0,$$BOND") >> .casperlabs/chainspec/genesis/accounts.csv ; \
+		(cat .casperlabs/nodes/node-$$i/validator-id; echo ",0,$$BOND") >> .casperlabs/chainspec/genesis/accounts.csv ; \
 		((i = i + 1)) ; \
 	done'
 
-	@# Copy the bootstrap node to a place where every node can read it from.
-	cp -r .casperlabs/node-0/node-id .casperlabs/bootstrap/node-id
-
 	@# Check that the files we wanted exist and aren't empty.
 	[ -s .casperlabs/chainspec/genesis/accounts.csv ]
-	[ -s .casperlabs/bootstrap/node-id ]
 
 
 # Create common Highway environment overrides for the chainspec defaults,
