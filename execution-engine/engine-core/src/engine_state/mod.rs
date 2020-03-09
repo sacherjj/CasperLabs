@@ -192,7 +192,7 @@ where
 
         // Closure used to store a contract with no named keys and which does nothing.  Used in
         // place of the mint and standard payment contracts when these system contracts aren't
-        // required (turbo mode).
+        // required (i.e. "use-system-contracts" is false).
         let store_do_nothing_contract = || -> Result<URef, Error> {
             let uref = {
                 let addr = address_generator.borrow_mut().create_address();
@@ -216,7 +216,7 @@ where
         let mint_reference: URef = {
             let mint_installer_bytes = genesis_config.mint_installer_bytes();
 
-            if self.config.turbo() && mint_installer_bytes.is_empty() {
+            if !self.config.use_system_contracts() && mint_installer_bytes.is_empty() {
                 store_do_nothing_contract()?
             } else {
                 let mint_installer_module = preprocessor.preprocess(mint_installer_bytes)?;
@@ -270,7 +270,7 @@ where
             // step
             let partial_protocol_data = ProtocolData::partial_with_mint(mint_reference);
 
-            if self.config.turbo() && proof_of_stake_installer_bytes.is_empty() {
+            if !self.config.use_system_contracts() && proof_of_stake_installer_bytes.is_empty() {
                 let uref = {
                     let addr = address_generator.borrow_mut().create_address();
                     URef::new(addr, AccessRights::READ_ADD_WRITE)
@@ -401,7 +401,7 @@ where
         );
 
         let standard_payment_reference: URef = {
-            let standard_payment_installer_bytes = if !self.config.turbo()
+            let standard_payment_installer_bytes = if self.config.use_system_contracts()
                 && genesis_config.standard_payment_installer_bytes().is_empty()
             {
                 // TODO - remove this once Node has been updated to pass the required bytes
@@ -412,7 +412,7 @@ where
                 genesis_config.standard_payment_installer_bytes()
             };
 
-            if self.config.turbo() && standard_payment_installer_bytes.is_empty() {
+            if !self.config.use_system_contracts() && standard_payment_installer_bytes.is_empty() {
                 store_do_nothing_contract()?
             } else {
                 let standard_payment_installer_module =
@@ -543,7 +543,8 @@ where
 
                 let mint_reference = mint_reference.with_access_rights(AccessRights::READ);
 
-                let mint_result: Result<URef, mint::Error> = if self.config.turbo() {
+                let mint_result: Result<URef, mint::Error> = if !self.config.use_system_contracts()
+                {
                     // ...call the Mint's "mint" endpoint to create purse with tokens...
                     let (_instance, mut runtime) = executor.create_runtime(
                         module,
@@ -1210,7 +1211,8 @@ where
                     }
                     Err(_) => return Ok(ExecutionResult::precondition_failure(Error::Deploy)),
                 };
-                // If in turbo mode, the returned module is the "do_nothing" Wasm.
+                // If not in "use-system-contracts" mode, the returned module is the "do_nothing"
+                // Wasm.
                 self.get_module_from_key(
                     Rc::clone(&tracking_copy),
                     standard_payment,
@@ -1238,7 +1240,7 @@ where
 
             // payment_code_spec_2: execute payment code
             let phase = Phase::Payment;
-            if self.config.turbo() && module_bytes_is_empty {
+            if !self.config.use_system_contracts() && module_bytes_is_empty {
                 let mut named_keys = account.named_keys().clone();
                 let address_generator = AddressGenerator::new(&deploy_hash, phase);
 
