@@ -15,6 +15,7 @@ members = [
     "engine-wasm-prep",
     "mint",
     "proof-of-stake",
+    "standard-payment",
     "types"
 ]
 exclude = [
@@ -33,6 +34,7 @@ default-members = [
     "engine-wasm-prep",
     "mint",
     "proof-of-stake",
+    "standard-payment",
     "types"
 ]
 

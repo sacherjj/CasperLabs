@@ -52,16 +52,18 @@ lazy_static! {
     pub static ref DEFAULT_GENESIS_CONFIG: GenesisConfig = {
         let mint_installer_bytes;
         let pos_installer_bytes;
+        let standard_payment_installer_bytes;
         if cfg!(feature = "turbo") {
             mint_installer_bytes = Vec::new();
             pos_installer_bytes = Vec::new();
+            standard_payment_installer_bytes = Vec::new();
         } else {
             mint_installer_bytes = utils::read_wasm_file_bytes(MINT_INSTALL_CONTRACT);
             pos_installer_bytes = utils::read_wasm_file_bytes(POS_INSTALL_CONTRACT);
+            standard_payment_installer_bytes =
+                utils::read_wasm_file_bytes(STANDARD_PAYMENT_INSTALL_CONTRACT);
         };
-        // TODO - make this an empty vec for cfg!(feature = "turbo")
-        let standard_payment_installer_bytes =
-            utils::read_wasm_file_bytes(STANDARD_PAYMENT_INSTALL_CONTRACT);
+
         GenesisConfig::new(
             DEFAULT_CHAIN_NAME.to_string(),
             DEFAULT_GENESIS_TIMESTAMP,

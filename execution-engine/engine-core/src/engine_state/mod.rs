@@ -44,26 +44,23 @@ use types::{
     Key, Phase, ProtocolVersion, URef, KEY_HASH_LENGTH, U512, UREF_ADDR_LENGTH,
 };
 
-use self::{
-    deploy_item::DeployItem,
-    executable_deploy_item::ExecutableDeployItem,
-    execution_result::{ExecutionResult, ForcedTransferResult},
-    genesis::{
-        GenesisAccount, GenesisConfig, GenesisResult, PLACEHOLDER_KEY, POS_PAYMENT_PURSE,
-        POS_REWARDS_PURSE,
-    },
-    system_contract_cache::SystemContractCache,
-};
 pub use self::{
     engine_config::EngineConfig,
     error::{Error, RootNotFound},
 };
 use crate::{
     engine_state::{
+        deploy_item::DeployItem,
         error::Error::MissingSystemContract,
+        executable_deploy_item::ExecutableDeployItem,
         execute_request::ExecuteRequest,
-        genesis::POS_BONDING_PURSE,
+        execution_result::{ExecutionResult, ForcedTransferResult},
+        genesis::{
+            GenesisAccount, GenesisConfig, GenesisResult, PLACEHOLDER_KEY, POS_BONDING_PURSE,
+            POS_PAYMENT_PURSE, POS_REWARDS_PURSE,
+        },
         query::{QueryRequest, QueryResult},
+        system_contract_cache::SystemContractCache,
         upgrade::{UpgradeConfig, UpgradeResult},
     },
     execution::{self, AddressGenerator, Executor, MINT_NAME, POS_NAME},
@@ -193,29 +190,34 @@ where
             Rc::new(RefCell::new(generator))
         };
 
+        // Closure used to store a contract with no named keys and which does nothing.  Used in
+        // place of the mint and standard payment contracts when these system contracts aren't
+        // required (turbo mode).
+        let store_do_nothing_contract = || -> Result<URef, Error> {
+            let uref = {
+                let addr = address_generator.borrow_mut().create_address();
+                URef::new(addr, AccessRights::READ_ADD_WRITE)
+            };
+            let contract = {
+                let do_nothing = {
+                    let do_nothing_bytes = wasm::do_nothing_bytes();
+                    preprocessor.preprocess(&do_nothing_bytes)?
+                };
+                let bytes = parity_wasm::serialize(do_nothing).expect("failed to serialize");
+                Contract::new(bytes, BTreeMap::default(), protocol_version)
+            };
+            let key = Key::URef(uref);
+            let value = StoredValue::Contract(contract);
+            tracking_copy.borrow_mut().write(key, value);
+            Ok(uref)
+        };
+
         // Spec #5: Execute the wasm code from the mint installer bytes
         let mint_reference: URef = {
             let mint_installer_bytes = genesis_config.mint_installer_bytes();
 
             if self.config.turbo() && mint_installer_bytes.is_empty() {
-                let tracking_copy = Rc::clone(&tracking_copy);
-                let uref = {
-                    let address_generator = Rc::clone(&address_generator);
-                    let addr = address_generator.borrow_mut().create_address();
-                    URef::new(addr, AccessRights::READ_ADD_WRITE)
-                };
-                let contract = {
-                    let do_nothing = {
-                        let do_nothing_bytes = wasm::do_nothing_bytes();
-                        preprocessor.preprocess(&do_nothing_bytes)?
-                    };
-                    let bytes = parity_wasm::serialize(do_nothing).expect("failed to serialize");
-                    Contract::new(bytes, BTreeMap::default(), protocol_version)
-                };
-                let key = Key::URef(uref);
-                let value = StoredValue::Contract(contract);
-                tracking_copy.borrow_mut().write(key, value);
-                uref
+                store_do_nothing_contract()?
             } else {
                 let mint_installer_module = preprocessor.preprocess(mint_installer_bytes)?;
                 let args = Vec::new();
@@ -399,44 +401,49 @@ where
         );
 
         let standard_payment_reference: URef = {
-            let standard_payment_installer_bytes =
-                if genesis_config.standard_payment_installer_bytes().is_empty() {
-                    // TODO - remove this once Node has been updated to pass the required bytes
-                    include_bytes!(
+            let standard_payment_installer_bytes = if !self.config.turbo()
+                && genesis_config.standard_payment_installer_bytes().is_empty()
+            {
+                // TODO - remove this once Node has been updated to pass the required bytes
+                include_bytes!(
                     "../../../target/wasm32-unknown-unknown/release/standard_payment_install.wasm"
                 )
-                } else {
-                    genesis_config.standard_payment_installer_bytes()
-                };
+            } else {
+                genesis_config.standard_payment_installer_bytes()
+            };
 
-            let standard_payment_installer_module =
-                preprocessor.preprocess(standard_payment_installer_bytes)?;
-            let args = Vec::new();
-            let mut named_keys = BTreeMap::new();
-            let authorization_keys = BTreeSet::new();
-            let install_deploy_hash = install_deploy_hash.into();
-            let address_generator = Rc::clone(&address_generator);
-            let tracking_copy = Rc::clone(&tracking_copy);
-            let system_contract_cache = SystemContractCache::clone(&self.system_contract_cache);
+            if self.config.turbo() && standard_payment_installer_bytes.is_empty() {
+                store_do_nothing_contract()?
+            } else {
+                let standard_payment_installer_module =
+                    preprocessor.preprocess(standard_payment_installer_bytes)?;
+                let args = Vec::new();
+                let mut named_keys = BTreeMap::new();
+                let authorization_keys = BTreeSet::new();
+                let install_deploy_hash = install_deploy_hash.into();
+                let address_generator = Rc::clone(&address_generator);
+                let tracking_copy = Rc::clone(&tracking_copy);
+                let system_contract_cache = SystemContractCache::clone(&self.system_contract_cache);
 
-            executor.exec_system(
-                standard_payment_installer_module,
-                args,
-                &mut named_keys,
-                initial_base_key,
-                &virtual_system_account,
-                authorization_keys,
-                blocktime,
-                install_deploy_hash,
-                gas_limit,
-                address_generator,
-                protocol_version,
-                correlation_id,
-                tracking_copy,
-                phase,
-                protocol_data,
-                system_contract_cache,
-            )?
+                executor.exec_system(
+                    standard_payment_installer_module,
+                    args,
+                    &mut named_keys,
+                    initial_base_key,
+                    &virtual_system_account,
+                    authorization_keys,
+                    blocktime,
+                    install_deploy_hash,
+                    gas_limit,
+                    address_generator,
+                    protocol_version,
+                    correlation_id,
+                    tracking_copy,
+                    phase,
+                    protocol_data,
+                    system_contract_cache,
+                )?
+            }
         };
 
         // Spec #2: Associate given CostTable with given ProtocolVersion.
@@ -1203,6 +1210,7 @@ where
                     }
                     Err(_) => return Ok(ExecutionResult::precondition_failure(Error::Deploy)),
                 };
+                // If in turbo mode, the returned module is the "do_nothing" Wasm.
                 self.get_module_from_key(
                     Rc::clone(&tracking_copy),
                     standard_payment,
@@ -1229,22 +1237,65 @@ where
             let system_contract_cache = SystemContractCache::clone(&self.system_contract_cache);
 
             // payment_code_spec_2: execute payment code
-            executor.exec(
-                payment_module,
-                payment.take_args(),
-                address,
-                &account,
-                authorization_keys.clone(),
-                blocktime,
-                deploy_hash,
-                pay_gas_limit,
-                protocol_version,
-                correlation_id,
-                Rc::clone(&tracking_copy),
-                Phase::Payment,
-                protocol_data,
-                system_contract_cache,
-            )
+            let phase = Phase::Payment;
+            if self.config.turbo() && module_bytes_is_empty {
+                let mut named_keys = account.named_keys().clone();
+                let address_generator = AddressGenerator::new(&deploy_hash, phase);
+
+                let mut runtime = match executor.create_runtime(
+                    payment_module,
+                    payment.take_args(),
+                    &mut named_keys,
+                    address,
+                    &account,
+                    authorization_keys.clone(),
+                    blocktime,
+                    deploy_hash,
+                    pay_gas_limit,
+                    Rc::new(RefCell::new(address_generator)),
+                    protocol_version,
+                    correlation_id,
+                    Rc::clone(&tracking_copy),
+                    phase,
+                    protocol_data,
+                    system_contract_cache,
+                ) {
+                    Ok((_instance, runtime)) => runtime,
+                    Err(error) => {
+                        return Ok(ExecutionResult::precondition_failure(Error::Exec(error)))
+                    }
+                };
+
+                let effects_snapshot = tracking_copy.borrow().effect();
+                match runtime.call_host_standard_payment() {
+                    Ok(()) => ExecutionResult::Success {
+                        effect: runtime.context().effect(),
+                        cost: runtime.context().gas_counter(),
+                    },
+                    Err(error) => ExecutionResult::Failure {
+                        error: error.into(),
+                        effect: effects_snapshot,
+                        cost: runtime.context().gas_counter(),
+                    },
+                }
+            } else {
+                executor.exec(
+                    payment_module,
+                    payment.take_args(),
+                    address,
+                    &account,
+                    authorization_keys.clone(),
+                    blocktime,
+                    deploy_hash,
+                    pay_gas_limit,
+                    protocol_version,
+                    correlation_id,
+                    Rc::clone(&tracking_copy),
+                    phase,
+                    protocol_data,
+                    system_contract_cache,
+                )
+            }
         };
 
         let payment_result_cost = payment_result.cost();
