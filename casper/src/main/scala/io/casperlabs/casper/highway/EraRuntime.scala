@@ -200,15 +200,11 @@ class EraRuntime[F[_]: Sync: Clock: Metrics: Log: EraStorage: FinalityStorageRea
   private def ifCurrentRound(roundId: Ticks)(thunk: HWL[Unit]): HWL[Unit] =
     // It's okay not to send a response to a message where we *did* participate
     // in the round it belongs to, but we moved on to a newer round.
-    HighwayLog.liftF(isSameRound(roundId)).flatMap {
-      case true  => thunk
-      case false => noop
-    }
+    HighwayLog.liftF(isCurrentRound(roundId)).ifM(thunk, noop)
 
-  private def isSameRound(roundId: Ticks): F[Boolean] =
+  private def isCurrentRound(roundId: Ticks): F[Boolean] =
     currentTick.flatMap(roundBoundariesAt).map {
-      case (from, _) if from == roundId => true
-      case _                            => false
+      case (from, _) => from == roundId
     }
 
   /** Build a block or ballot unless the fork choice is at the moment not something
@@ -573,13 +569,14 @@ class EraRuntime[F[_]: Sync: Clock: Metrics: Log: EraStorage: FinalityStorageRea
                       .liftF(message.isLambdaMessage)
                       .ifM(createLambdaResponse(mp, message), noop)
                   }
-              _ <- HighwayLog.liftF(isSameRound(Ticks(message.roundId))).flatMap {
-                    case true =>
-                      HighwayLog.liftF(Metrics[F].incrementCounter("incoming_same_round_message"))
-                    case false =>
+              _ <- HighwayLog
+                    .liftF(isCurrentRound(Ticks(message.roundId)))
+                    .ifM(
+                      HighwayLog.liftF(Metrics[F].incrementCounter("incoming_same_round_message")),
                       HighwayLog
                         .liftF(Metrics[F].incrementCounter("incoming_different_round_message"))
-                  }
+                    )
+                    .whenA(synced)
             } yield ()
           }
       _ <- handleCriticalMessages(message)
