@@ -935,7 +935,7 @@ fn get_prefix_root<'a, 'b, K, V, T, S>(
     store: &'a S,
     root: &Blake2bHash,
     mut prefix: &[u8],
-) -> Result<Blake2bHash, KeysWithPrefixError<S::Error>>
+) -> Result<(Vec<u8>, Blake2bHash), KeysWithPrefixError<S::Error>>
 where
     K: ToBytes + FromBytes + Clone + Eq + std::fmt::Debug,
     V: ToBytes + FromBytes + Clone + Eq + std::fmt::Debug,
@@ -955,7 +955,7 @@ where
                 let key_bytes = key.to_bytes().map_err(|err| S::Error::from(err))?;
                 if key_bytes.starts_with(&traversed_prefix) {
                     // the leaf is the root of the subtrie
-                    return Ok(current_root);
+                    return Ok((traversed_prefix, current_root));
                 } else {
                     return Err(KeysWithPrefixError::LeafNotMatchingPrefix {
                         key: key_bytes,
@@ -970,7 +970,8 @@ where
                     current_root = *pointer.hash();
                 } else if affix.starts_with(prefix) {
                     // the node the extension points to is the root of the prefix subtrie
-                    return Ok(*pointer.hash());
+                    traversed_prefix.extend(&affix);
+                    return Ok((traversed_prefix, *pointer.hash()));
                 } else {
                     let first_non_matching = prefix
                         .iter()
@@ -998,7 +999,7 @@ where
         }
     }
     // we are at the root of the subtrie - return it
-    Ok(current_root)
+    Ok((traversed_prefix, current_root))
 }
 
 /// Returns the iterator over the keys in the subtrie matching `prefix`.
@@ -1019,13 +1020,13 @@ where
     S: TrieStore<K, V>,
     S::Error: From<T::Error>,
 {
-    let subtrie_root = get_prefix_root(correlation_id, txn, store, root, prefix)?;
+    let (path_prefix, subtrie_root) = get_prefix_root(correlation_id, txn, store, root, prefix)?;
     let subtrie_root_trie = store
         .get(txn, &subtrie_root)?
         .ok_or(KeysWithPrefixError::HashNotFound(subtrie_root))?;
 
     Ok(KeysIterator {
-        visited: vec![(subtrie_root_trie, None, prefix.to_vec())],
+        visited: vec![(subtrie_root_trie, None, path_prefix)],
         store,
         txn,
         state: KeysIteratorState::Ok,
