@@ -87,10 +87,8 @@ fn should_transfer_to_account_stored() {
     let gas = result.cost();
     let motes_bravo = Motes::from_gas(gas, CONV_RATE).expect("should have motes");
 
-    let tally = motes_alpha.value()
-        + motes_bravo.value()
-        + U512::from(transferred_amount)
-        + modified_balance_bravo;
+    let tally =
+        motes_alpha.value() + motes_bravo.value() + transferred_amount + modified_balance_bravo;
 
     assert!(
         modified_balance_alpha < initial_balance,
