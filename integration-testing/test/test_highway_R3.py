@@ -89,29 +89,30 @@ def plural(singular_name, l):
 
 
 def check_rounds(blocks_in_rounds):
-    # Skip the first and the last round.
-    round_ids = sorted(list(blocks_in_rounds.keys()))[1:-1]
+    # Skip the last round, it may be not full/finished.
+    round_ids = sorted(list(blocks_in_rounds.keys()))[:-1]
     for round_id in round_ids:
         ballots, blocks = split_ballots_and_blocks(blocks_in_rounds[round_id])
-
-        # There must be at most one block in a round.
-        assert len(blocks) <= 1
 
         validator_public_keys = map(validator_id_short, blocks)
         log_info(
             f"""round_id: {round_id} ({datetime_from_timestamp(round_id)}): {len(blocks)} {plural("block", blocks)} ({format_list(validator_public_keys)})), {len(ballots)} {plural("ballot", ballots)}"""
         )
 
+        # There must be at most one block in a round.
+        assert len(blocks) <= 1
+
 
 def check_highway_dag(client, number_of_eras=2):
     blocks_in_rounds = defaultdict(list)
     blocks_in_eras = defaultdict(list)
     for event in client.stream_events(block_added=True):
-        # print(event)
+        if not event.HasField("block_added"):
+            log_info(f"Unexpected event: {event}")
+            continue
+
         block_info = event.block_added.block
         block_hash = block_info.summary.block_hash
-        if not block_hash:
-            print(event)
 
         log_info(
             f"Block added: {block_hash.hex()}, validator: {validator_id_short(block_info)}"
