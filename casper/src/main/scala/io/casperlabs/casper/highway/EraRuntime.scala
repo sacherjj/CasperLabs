@@ -350,17 +350,7 @@ class EraRuntime[F[_]: Sync: Clock: Metrics: Log: EraStorage: FinalityStorageRea
               .timerGauge("create_omega")
           }
       _ <- m.fold(noop)(msg => {
-            val isSameRound: io.casperlabs.casper.consensus.Block.Justification => F[Boolean] = j =>
-              dag
-                .lookupUnsafe(j.latestBlockHash)
-                .map(isSameRoundAs(msg)(_))
-            val sameRoundJustifications = msg.justifications.toList.filterA(isSameRound).map(_.size)
-            val citesRelativeCount      = sameRoundJustifications.map(c => c * 100L / era.bonds.size)
-            // Report how many messages, from the same round, an omega message cites.
-            // This is a metric about how quickly summits are formed.
-            HighwayLog.liftF(
-              citesRelativeCount.flatMap(v => Metrics[F].setGauge("omega_cites", v))
-            ) >> recordJustificationsDistance(msg) >>
+            recordJustificationsDistance(msg) >>
               HighwayLog.tell[F](HighwayEvent.CreatedOmegaMessage(msg))
           })
     } yield ()
