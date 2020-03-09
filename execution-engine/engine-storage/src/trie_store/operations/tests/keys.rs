@@ -7,8 +7,8 @@ mod partial_tries {
         trie_store::operations::{
             self,
             tests::{
-                InMemoryTestContext, LmdbTestContext, TestKey, TestValue, TEST_LEAVES,
-                TEST_LEAVES_PREFIXES, TEST_TRIE_GENERATORS,
+                InMemoryTestContext, LmdbTestContext, PrefixTestSpec, TestKey, TestValue,
+                TEST_LEAVES, TEST_LEAVES_PREFIXES, TEST_TRIE_GENERATORS,
             },
             KeysWithPrefixError,
         },
@@ -84,7 +84,11 @@ mod partial_tries {
             };
             assert_eq!(actual, expected);
 
-            for (prefix, expected_result) in TEST_LEAVES_PREFIXES.iter() {
+            for PrefixTestSpec {
+                prefix,
+                expected_result,
+            } in TEST_LEAVES_PREFIXES.iter()
+            {
                 let expected = expected_result.as_ref().map(|_| {
                     let mut tmp = used
                         .iter()

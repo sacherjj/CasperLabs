@@ -125,17 +125,25 @@ const TEST_LEAVES: [TestTrie; TEST_LEAVES_LENGTH] = [
     },
 ];
 
+struct PrefixTestSpec {
+    pub prefix: &'static [u8],
+    pub expected_result: Result<(), KeysWithPrefixError<error::in_memory::Error>>,
+}
+
 lazy_static! {
-    static ref TEST_LEAVES_PREFIXES: [(
-        &'static [u8],
-        Result<(), KeysWithPrefixError<error::in_memory::Error>>,
-    ); 3] = [
-        (&[0; 4], Ok(())),
-        (&[1], Err(KeysWithPrefixError::PrefixRootNotFound(vec![1]))),
-        (
-            &[1, 5, 4],
-            Err(KeysWithPrefixError::PrefixRootNotFound(vec![1]))
-        ),
+    static ref TEST_LEAVES_PREFIXES: [PrefixTestSpec; 3] = [
+        PrefixTestSpec {
+            prefix: &[0; 4],
+            expected_result: Ok(())
+        },
+        PrefixTestSpec {
+            prefix: &[1],
+            expected_result: Err(KeysWithPrefixError::PrefixRootNotFound(vec![1]))
+        },
+        PrefixTestSpec {
+            prefix: &[1, 5, 4],
+            expected_result: Err(KeysWithPrefixError::PrefixRootNotFound(vec![1]))
+        },
     ];
 }
 

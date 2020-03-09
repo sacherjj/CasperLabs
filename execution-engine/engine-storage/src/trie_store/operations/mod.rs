@@ -945,14 +945,14 @@ where
 {
     let mut traversed_prefix = vec![];
     let mut current_root = *root;
-    while prefix.len() > 0 {
+    while !prefix.is_empty() {
         match store.get(txn, &current_root)? {
             None => {
                 return Err(KeysWithPrefixError::HashNotFound(current_root));
             }
             Some(Trie::Leaf { key, .. }) => {
                 traversed_prefix.extend(prefix);
-                let key_bytes = key.to_bytes().map_err(|err| S::Error::from(err))?;
+                let key_bytes = key.to_bytes().map_err(S::Error::from)?;
                 if key_bytes.starts_with(&traversed_prefix) {
                     // the leaf is the root of the subtrie
                     return Ok((traversed_prefix, current_root));
