@@ -364,7 +364,7 @@ class EraRuntime[F[_]: Sync: Clock: Metrics: Log: EraStorage: FinalityStorageRea
       .map { justificationMessages =>
         justificationMessages
           .filter(_.eraId == msg.eraId)
-          .map(j => msg.roundId - j.roundId)
+          .map(j => msg.jRank - j.jRank)
           .groupBy(identity)
           .mapValues(_.size)
       }
@@ -373,7 +373,7 @@ class EraRuntime[F[_]: Sync: Clock: Metrics: Log: EraStorage: FinalityStorageRea
     HighwayLog.liftF(justificationsRoundsDistance(msg).flatMap { distances =>
       distances.toList.traverse {
         case (rankDistance, count) =>
-          Metrics[F].record("justifications_rank_distances", rankDistance, count.toLong)
+          Metrics[F].record("justificationsJRankDistances", rankDistance, count.toLong)
       }.void
     })
 
