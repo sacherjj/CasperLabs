@@ -200,9 +200,15 @@ class EraRuntime[F[_]: Sync: Clock: Metrics: Log: EraStorage: FinalityStorageRea
   private def ifCurrentRound(roundId: Ticks)(thunk: HWL[Unit]): HWL[Unit] =
     // It's okay not to send a response to a message where we *did* participate
     // in the round it belongs to, but we moved on to a newer round.
-    HighwayLog.liftF(currentTick.flatMap(roundBoundariesAt)) flatMap {
-      case (from, _) if from == roundId => thunk
-      case _                            => noop
+    HighwayLog.liftF(isSameRound(roundId)).flatMap {
+      case true  => thunk
+      case false => noop
+    }
+
+  private def isSameRound(roundId: Ticks): F[Boolean] =
+    currentTick.flatMap(roundBoundariesAt).map {
+      case (from, _) if from == roundId => true
+      case _                            => false
     }
 
   /** Build a block or ballot unless the fork choice is at the moment not something
@@ -258,8 +264,8 @@ class EraRuntime[F[_]: Sync: Clock: Metrics: Log: EraStorage: FinalityStorageRea
               .timerGauge("create_response")
           }
       _ <- m.fold(noop) { msg =>
-            recordJustificationsDistance(msg) >>
-              HighwayLog.tell[F](HighwayEvent.CreatedLambdaResponse(msg))
+            HighwayLog.tell[F](HighwayEvent.CreatedLambdaResponse(msg)) >>
+              recordJustificationsDistance(msg)
           }
     } yield ()
   }
@@ -371,6 +377,7 @@ class EraRuntime[F[_]: Sync: Clock: Metrics: Log: EraStorage: FinalityStorageRea
       .traverse(j => dag.lookupUnsafe(j.latestBlockHash))
       .map { justificationMessages =>
         justificationMessages
+          .filter(_.eraId == msg.eraId)
           .map(j => msg.roundId - j.roundId)
           .groupBy(identity)
           .mapValues(_.size)
@@ -562,10 +569,16 @@ class EraRuntime[F[_]: Sync: Clock: Metrics: Log: EraStorage: FinalityStorageRea
                     "Shouldn't receive our own messages!"
                   )
               _ <- ifCurrentRound(Ticks(message.roundId)) {
-                    HighwayLog.liftF(Metrics[F].incrementCounter("incoming_same_round_message")) >>
+                    HighwayLog
+                      .liftF(message.isLambdaMessage)
+                      .ifM(createLambdaResponse(mp, message), noop)
+                  }
+              _ <- HighwayLog.liftF(isSameRound(Ticks(message.roundId))).flatMap {
+                    case true =>
+                      HighwayLog.liftF(Metrics[F].incrementCounter("incoming_same_round_message"))
+                    case false =>
                       HighwayLog
-                        .liftF(message.isLambdaMessage)
-                        .ifM(createLambdaResponse(mp, message), noop)
+                        .liftF(Metrics[F].incrementCounter("incoming_different_round_message"))
                   }
             } yield ()
           }
