@@ -197,12 +197,12 @@ class EraSupervisor[F[_]: Concurrent: Timer: Log: Metrics: EraStorage: Relaying:
             )
         _ <- messageExecutor
               .effectsAfterAdded(Validated(message))
-              .timerGauge("created_effectsAfterAdded")
+              .timerGauge(s"created_${kind}_effectsAfterAdded")
         _ <- Relaying[F]
               .relay(List(message.messageHash))
-              .timerGauge("created_relay")
+              .timerGauge(s"created_${kind}_relay")
         _ <- propagateLatestMessageToDescendantEras(message)
-              .timerGauge("created_propagateLatestMessage")
+              .timerGauge(s"created_${kind}_propagateLatestMessage")
         _ <- Metrics[F].incrementCounter(s"created_$kind")
       } yield ()
 
