@@ -3,33 +3,17 @@ import { action, observable } from 'mobx';
 import ErrorContainer from './ErrorContainer';
 import { CasperService, decodeBase16, decodeBase64, DeployUtil, encodeBase16 } from 'casperlabs-sdk';
 import { FieldState, FormState } from 'formstate';
-import { isBase16, isBlockHashBase16, isInt, numberBigThan, valueRequired } from '../lib/FormsValidator';
+import { isBlockHashBase16, isInt, numberBigThan, valueRequired } from '../lib/FormsValidator';
 import validator from 'validator';
 import * as nacl from 'tweetnacl-ts';
 import $ from 'jquery';
 import { Deploy } from 'casperlabs-grpc/io/casperlabs/casper/consensus/consensus_pb';
-import {
-  BigInt as ValueBigInt,
-  IntList,
-  Key,
-  StringList
-} from 'casperlabs-grpc/io/casperlabs/casper/consensus/state_pb';
+import { CLType, CLValueInstance, Key } from 'casperlabs-grpc/io/casperlabs/casper/consensus/state_pb';
 import paymentWASMUrl from '../standard_payment.png';
 
 export enum ContractType {
   WASM = 'WASM',
   Hash = 'Hash'
-}
-
-export enum ArgumentType {
-  BYTES_VALUE = 'Bytes',
-  INT_VALUE = 'Int',
-  LONG_VALUE = 'Long',
-  BIG_INT = 'BigInt',
-  STRING_VALUE = 'String',
-  INT_LIST = 'Int List',
-  STRING_LIST = 'String List',
-  KEY = 'Key',
 }
 
 export enum KeyType {
@@ -45,9 +29,40 @@ export enum BitWidth {
   B_512 = 512
 }
 
+
+const powerOf2 = (n: number): bigint => {
+  return BigInt(2) ** BigInt(n);
+};
+
+const numberLimitForUnsigned = (bit: number) => {
+  return {
+    min: BigInt(0),
+    max: powerOf2(bit) - BigInt(1)
+  };
+};
+
+const numberLimitForSigned = (bit: number) => {
+  return {
+    min: BigInt(-1) * powerOf2(bit - 1),
+    max: powerOf2(bit - 1) - BigInt(1)
+  };
+};
+
+
+const NumberLimit = {
+  [CLType.Simple.U8]: numberLimitForUnsigned(8),
+  [CLType.Simple.U32]: numberLimitForUnsigned(32),
+  [CLType.Simple.U64]: numberLimitForUnsigned(64),
+  [CLType.Simple.U128]: numberLimitForUnsigned(128),
+  [CLType.Simple.U256]: numberLimitForUnsigned(256),
+  [CLType.Simple.U512]: numberLimitForUnsigned(512),
+  [CLType.Simple.I32]: numberLimitForSigned(32),
+  [CLType.Simple.I64]: numberLimitForSigned(64)
+};
+
 export type DeployArgument = {
   name: FieldState<string>,
-  type: FieldState<ArgumentType>,
+  type: FieldState<CLType.SimpleMap[keyof CLType.SimpleMap]>,
   // if type == ArgumentType.Key then the type of secondType is KeyType
   // and if type == ArgumentType.BIG_INT, then the type of secondType is BitWidth
   // otherwise second equals to null
@@ -111,9 +126,9 @@ export class DeployContractsContainer {
     this.editing = true;
     let newDeployArgument = new FormState({
       name: new FieldState<string>('').disableAutoValidation().validators(valueRequired),
-      type: new FieldState<ArgumentType>(ArgumentType.STRING_VALUE),
+      type: new FieldState<CLType.SimpleMap[keyof CLType.SimpleMap]>(CLType.Simple.BOOL),
       secondType: new FieldState<KeyType | BitWidth | null>(null),
-      URefAccessRight: new FieldState<Key.URef.AccessRightsMap[keyof Key.URef.AccessRightsMap]>(Key.URef.AccessRights.UNKNOWN),
+      URefAccessRight: new FieldState<Key.URef.AccessRightsMap[keyof Key.URef.AccessRightsMap]>(Key.URef.AccessRights.NONE),
       value: new FieldState<string>('').disableAutoValidation().validators(valueRequired)
     }).compose().validators(this.validateDeployArgument);
 
@@ -209,41 +224,47 @@ export class DeployContractsContainer {
       const gasLimit = config.gasLimit.value;
       const gasPrice = config.gasPrice.value;
       let argsProto = args.map((arg: FormState<DeployArgument>) => {
-        const deployArg = new Deploy.Arg();
-        const value = new Deploy.Arg.Value();
-        deployArg.setName(arg.$.name.value);
+        const value = new CLValueInstance.Value();
         const argValueStr: string = arg.$.value.value;
-        switch (arg.$.type.value) {
-          case ArgumentType.BYTES_VALUE:
-            value.setBytesValue(decodeBase16(argValueStr));
+        const simpleType = arg.$.type.$;
+        switch (simpleType) {
+          case CLType.Simple.U8:
+            value.setU8(parseInt(argValueStr));
             break;
-          case ArgumentType.INT_VALUE:
-            value.setIntValue(parseInt(argValueStr));
+          case CLType.Simple.U32:
+            value.setU32(parseInt(argValueStr));
             break;
-          case ArgumentType.LONG_VALUE:
-            value.setLongValue(parseInt(argValueStr));
+          case CLType.Simple.U64:
+            value.setU64(parseInt(argValueStr));
             break;
-          case ArgumentType.BIG_INT:
-            const bigInt = new ValueBigInt();
-            bigInt.setValue(argValueStr);
-            bigInt.setBitWidth(arg.$.secondType as unknown as BitWidth);
+          case CLType.Simple.I32:
+            value.setI32(parseInt(argValueStr));
             break;
-          case ArgumentType.STRING_VALUE:
-            value.setStringValue(argValueStr);
+          case CLType.Simple.I64:
+            value.setI64(parseInt(argValueStr));
             break;
-          case ArgumentType.INT_LIST:
-            const intList = new IntList();
-            let intListValue = JSON.parse(argValueStr) as Array<number>;
-            intList.setValuesList(intListValue);
-            value.setIntList(intList);
+          case CLType.Simple.U128:
+            const u128 = new CLValueInstance.U128();
+            u128.setValue(argValueStr);
+            value.setU128(u128);
             break;
-          case ArgumentType.STRING_LIST:
-            const stringList = new StringList();
-            const stringListValue = JSON.parse(argValueStr) as Array<string>;
-            stringList.setValuesList(stringListValue);
-            value.setStringList(stringList);
+          case CLType.Simple.U256:
+            const u256 = new CLValueInstance.U256();
+            u256.setValue(argValueStr);
+            value.setU256(u256);
             break;
-          case ArgumentType.KEY:
+          case CLType.Simple.U512:
+            const u512 = new CLValueInstance.U512();
+            u512.setValue(argValueStr);
+            value.setU256(u512);
+            break;
+          case CLType.Simple.STRING:
+            value.setStrValue(argValueStr);
+            break;
+          case CLType.Simple.BOOL:
+            value.setBoolValue(validator.toBoolean(argValueStr));
+            break;
+          case CLType.Simple.KEY:
             const key = new Key();
             let keyType = arg.$.secondType.value as KeyType;
             let valueInByteArray = decodeBase16(argValueStr);
@@ -270,8 +291,23 @@ export class DeployContractsContainer {
             }
             value.setKey(key);
             break;
+          case CLType.Simple.UREF:
+            const URef = new Key.URef();
+            URef.setAccessRights(arg.$.URefAccessRight.value!);
+            URef.setUref(decodeBase16(argValueStr));
+            value.setUref(URef);
+            break;
         }
-        deployArg.setValue(value);
+
+        const clValueInstance = new CLValueInstance();
+        const clType = new CLType();
+        clType.setSimpleType(simpleType);
+        clValueInstance.setClType(clType);
+        clValueInstance.setValue(value);
+
+        const deployArg = new Deploy.Arg();
+        deployArg.setName(arg.$.name.value);
+        deployArg.setValue(clValueInstance);
         return deployArg;
       });
       let wasmRequest = await fetch(paymentWASMUrl);
@@ -282,50 +318,36 @@ export class DeployContractsContainer {
 
 
   private validateDeployArgument(deployArgument: DeployArgument): string | false {
-    let isArrayOf = (str: string, type: 'int' | 'string'): false | string => {
-      let obj;
-      let errMsg = `Value is not an array of ${type}.`;
-      try {
-        obj = JSON.parse(str);
-      } catch {
-        return errMsg;
-      }
-      if (!Array.isArray(obj)) {
-        return errMsg;
-      } else {
-        let res = (obj as Array<any>).every(v => {
-          if (type === 'string') {
-            return typeof v === 'string';
-          } else {
-            return Number.isInteger(v);
-          }
-        });
-        return !res && errMsg;
-      }
-    };
-
     const value = deployArgument.value.$;
     switch (deployArgument.type.$) {
-      case ArgumentType.INT_VALUE:
-        if (!validator.isInt(value, { min: -2147483648, max: 2147483647 })) {
-          return 'Value should be an Integer';
+      case CLType.Simple.U8:
+      case CLType.Simple.U32:
+      case CLType.Simple.U64:
+      case CLType.Simple.I32:
+      case CLType.Simple.I64:
+      case CLType.Simple.U128:
+      case CLType.Simple.U256:
+      case CLType.Simple.U512:
+        let limit: { min: bigint, max: bigint } = (NumberLimit as any)[deployArgument.type.value];
+        if (!validator.isNumeric(value)) {
+          return `Value should be a number`;
+        }
+        const v = BigInt(value);
+        if (v < limit.min || v > limit.max) {
+          return `Value should be in [${limit.min.toString(10)}, ${limit.max.toString(10)}]`;
         }
         return false;
-      case ArgumentType.BYTES_VALUE:
-        return isBase16(value);
-      case ArgumentType.INT_LIST:
-        return isArrayOf(value, 'int');
-      case ArgumentType.STRING_VALUE:
+      case CLType.Simple.STRING:
         return false;
-      case ArgumentType.STRING_LIST:
-        return isArrayOf(value, 'string');
-      case ArgumentType.BIG_INT:
-        break;
-      case ArgumentType.KEY:
-        break;
-      case ArgumentType.LONG_VALUE:
-        if (!validator.isInt(value)) {
-          return 'Value should be an Long';
+      case CLType.Simple.BOOL:
+        if (!validator.isBoolean(value)) {
+          return `Value should be true or false`;
+        }
+        return false;
+      case CLType.Simple.KEY:
+      case CLType.Simple.UREF:
+        if (!validator.isHexadecimal(value)) {
+          return `Value should be base16`;
         }
         return false;
     }

@@ -3,7 +3,6 @@ import { FileSelect, Form, FormRow, NumberField, SelectField, TextField } from '
 import { Button, Card, ListInline } from './Utils';
 import React from 'react';
 import {
-  ArgumentType,
   BitWidth,
   ContractType,
   DeployContractsContainer,
@@ -11,7 +10,7 @@ import {
   KeyType
 } from '../containers/DeployContractsContainer';
 import Modal from './Modal';
-import { Key } from 'casperlabs-grpc/io/casperlabs/casper/consensus/state_pb';
+import { CLType, Key } from 'casperlabs-grpc/io/casperlabs/casper/consensus/state_pb';
 
 
 /**
@@ -109,6 +108,8 @@ const ArgumentRow = observer((props: {
   onProductTableUpdate: () => void,
   onDelEvent?: (deployArgument: FormDeployArgument) => void,
 }) => {
+  const firstTypeValue = props.deployArgument.$.type.value;
+  const secondTypeValue = props.deployArgument.$.secondType.value;
   return (
     <tr>
       <td>
@@ -119,29 +120,27 @@ const ArgumentRow = observer((props: {
           <div className="col pl-0 pr-1">
             <select className="form-control" value={props.deployArgument.$.type.$.toString()}
                     onChange={e => {
-                      props.deployArgument.$.type.onChange(e.target.value as ArgumentType);
+                      props.deployArgument.$.type.onChange(parseInt(e.target.value) as any);
                     }}>
               {
-                Object.keys(ArgumentType).map(opt => (
-                  <option key={opt} value={(ArgumentType as any)[opt]}>
-                    {(ArgumentType as any)[opt]}
+                Object.keys(CLType.Simple).filter(opt =>
+                  (CLType.Simple as any)[opt] !== CLType.Simple.UNIT
+                ).map(opt => (
+                  <option key={opt} value={(CLType.Simple as any)[opt]}>
+                    {opt}
                   </option>
                 ))
               }
             </select>
           </div>
-          {(props.deployArgument.$.type.value === ArgumentType.KEY || props.deployArgument.$.type.value === ArgumentType.BIG_INT) && (
+          {firstTypeValue === CLType.Simple.KEY && (
             <div className="col pl-0 pr-1">
               <select className="form-control" value={props.deployArgument.$.secondType.$?.toString()}
                       onChange={e => {
-                        if (props.deployArgument.$.type.value === ArgumentType.KEY) {
-                          props.deployArgument.$.secondType.onChange(e.target.value as KeyType);
-                        } else {
-                          props.deployArgument.$.secondType.onChange(e.target.value as unknown as BitWidth);
-                        }
+                        props.deployArgument.$.secondType.onChange(e.target.value as KeyType);
                       }}>
                 {
-                  props.deployArgument.$.type.value === ArgumentType.KEY && (
+                  firstTypeValue === CLType.Simple.KEY && (
                     Object.keys(KeyType).map(opt => (
                       <option key={opt} value={(KeyType as any)[opt]}>
                         {(KeyType as any)[opt]}
@@ -160,7 +159,7 @@ const ArgumentRow = observer((props: {
               </select>
             </div>
           )}
-          {props.deployArgument.$.type.value === ArgumentType.KEY && props.deployArgument.$.secondType.value === KeyType.UREF && (
+          {(firstTypeValue === CLType.Simple.KEY && secondTypeValue === KeyType.UREF || firstTypeValue === CLType.Simple.UREF) && (
             <div className="col pl-0 pr-0">
               <select className="form-control" value={props.deployArgument.$.URefAccessRight.$ as number}
                       onChange={e => {
