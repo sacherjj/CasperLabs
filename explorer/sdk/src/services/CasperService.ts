@@ -54,7 +54,7 @@ export default class CasperService {
 
         onEnd: (res) => {
           if (res.status === grpc.Code.OK) {
-            resolve(res.message);
+            resolve();
           } else {
             reject(new GrpcError(res.status, res.statusMessage));
           }
