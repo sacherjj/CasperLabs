@@ -7,7 +7,6 @@ mod write;
 
 use std::{collections::HashMap, convert};
 
-use lazy_static::lazy_static;
 use lmdb::DatabaseFlags;
 use tempfile::{tempdir, TempDir};
 
@@ -25,7 +24,7 @@ use crate::{
         self,
         in_memory::InMemoryTrieStore,
         lmdb::LmdbTrieStore,
-        operations::{self, read, write, KeysWithPrefixError, ReadResult, WriteResult},
+        operations::{self, read, write, ReadResult, WriteResult},
         TrieStore,
     },
     TEST_MAP_SIZE,
@@ -125,27 +124,7 @@ const TEST_LEAVES: [TestTrie; TEST_LEAVES_LENGTH] = [
     },
 ];
 
-struct PrefixTestSpec {
-    pub prefix: &'static [u8],
-    pub expected_result: Result<(), KeysWithPrefixError<error::in_memory::Error>>,
-}
-
-lazy_static! {
-    static ref TEST_LEAVES_PREFIXES: [PrefixTestSpec; 3] = [
-        PrefixTestSpec {
-            prefix: &[0; 4],
-            expected_result: Ok(())
-        },
-        PrefixTestSpec {
-            prefix: &[1],
-            expected_result: Err(KeysWithPrefixError::PrefixRootNotFound(vec![1]))
-        },
-        PrefixTestSpec {
-            prefix: &[1, 5, 4],
-            expected_result: Err(KeysWithPrefixError::PrefixRootNotFound(vec![1]))
-        },
-    ];
-}
+const TEST_LEAVES_PREFIXES: [&[u8]; 3] = [&[0; 4], &[1], &[1, 5, 4]];
 
 const TEST_LEAVES_UPDATED: [TestTrie; TEST_LEAVES_LENGTH] = [
     Trie::Leaf {

@@ -7,10 +7,9 @@ mod partial_tries {
         trie_store::operations::{
             self,
             tests::{
-                InMemoryTestContext, LmdbTestContext, PrefixTestSpec, TestKey, TestValue,
-                TEST_LEAVES, TEST_LEAVES_PREFIXES, TEST_TRIE_GENERATORS,
+                InMemoryTestContext, LmdbTestContext, TestKey, TestValue, TEST_LEAVES,
+                TEST_LEAVES_PREFIXES, TEST_TRIE_GENERATORS,
             },
-            KeysWithPrefixError,
         },
     };
 
@@ -84,12 +83,8 @@ mod partial_tries {
             };
             assert_eq!(actual, expected);
 
-            for PrefixTestSpec {
-                prefix,
-                expected_result,
-            } in TEST_LEAVES_PREFIXES.iter()
-            {
-                let expected = expected_result.as_ref().map(|_| {
+            for prefix in TEST_LEAVES_PREFIXES.iter() {
+                let expected = {
                     let mut tmp = used
                         .iter()
                         .filter_map(Trie::key)
@@ -98,34 +93,22 @@ mod partial_tries {
                         .collect::<Vec<TestKey>>();
                     tmp.sort();
                     tmp
-                });
+                };
                 let actual = {
                     let txn = context.environment.create_read_txn().unwrap();
-                    operations::keys_with_prefix::<TestKey, TestValue, _, _>(
+                    let mut tmp = operations::keys_with_prefix::<TestKey, TestValue, _, _>(
                         correlation_id,
                         &txn,
                         &context.store,
                         &root_hash,
                         prefix,
                     )
-                    .map(|iterator| {
-                        let mut tmp = iterator.filter_map(Result::ok).collect::<Vec<TestKey>>();
-                        tmp.sort();
-                        tmp
-                    })
+                    .filter_map(Result::ok)
+                    .collect::<Vec<TestKey>>();
+                    tmp.sort();
+                    tmp
                 };
-                match (actual, expected) {
-                    (Ok(actual), Ok(expected)) => assert_eq!(actual, expected),
-                    (Err(act_err), Err(exp_err)) => assert_eq!(&act_err, exp_err),
-                    (Err(e), Ok(keys)) => {
-                        if !keys.is_empty()
-                            || e != KeysWithPrefixError::PrefixRootNotFound(vec![prefix[0]])
-                        {
-                            panic!("expected a set of keys {:?}, got error {:?}!", keys, e)
-                        }
-                    }
-                    (Ok(keys), Err(e)) => panic!("expected error {:?}, got keys {:?}!", e, keys),
-                }
+                assert_eq!(actual, expected);
             }
         }
     }
