@@ -44,10 +44,16 @@ object EquivocationDetector {
     */
   def checkEquivocation[F[_]: Monad: Log: FunctorRaise[*[_], InvalidBlock]](
       dag: DagRepresentation[F],
-      message: Message
+      message: Message,
+      isHighway: Boolean
   ): F[Unit] =
     for {
-      validatorLatestMessages <- dag.latestMessage(message.validatorId)
+      tips <- if (isHighway) {
+               dag.latestInEra(message.eraId)
+             } else {
+               dag.latestGlobal
+             }
+      validatorLatestMessages <- tips.latestMessage(message.validatorId)
       equivocated             <- isEquivocation[F](message, validatorLatestMessages)
       _                       <- FunctorRaise[F, InvalidBlock].raise[Unit](EquivocatedBlock).whenA(equivocated)
     } yield ()

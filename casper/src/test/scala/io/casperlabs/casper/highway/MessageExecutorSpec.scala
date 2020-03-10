@@ -170,7 +170,7 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
       } yield second
 
     override lazy val validation: Validation[Task] =
-      if (validate) new HighwayValidationImpl[Task](validateEquivocation = true)
+      if (validate) new HighwayValidationImpl[Task]
       else new NoOpValidation[Task]
 
     // Collect emitted events.
