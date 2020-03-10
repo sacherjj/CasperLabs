@@ -84,6 +84,15 @@ trait StorageFixture { self: Suite =>
       timeout: FiniteDuration = 10.seconds
   )(f: SQLiteStorage.CombinedStorage[Task] => Task[_]): Unit =
     withCombinedStorages(ec, timeout, numStorages = 1)(dbs => f(dbs.head))
+
+  def withCombinedStorageIndexed(
+      f: SQLiteStorage.CombinedStorage[Task] => IndexedDagStorage[Task] => Task[_]
+  ): Unit =
+    withCombinedStorage() { db =>
+      IndexedDagStorage.create[Task](db).flatMap { ids =>
+        f(db)(ids)
+      }
+    }
 }
 
 object StorageFixture {
