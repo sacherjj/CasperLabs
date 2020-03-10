@@ -2,6 +2,7 @@ mod args;
 mod externals;
 mod mint_internal;
 mod proof_of_stake_internal;
+mod standard_payment_internal;
 
 use std::{
     cmp,
@@ -15,10 +16,11 @@ use parity_wasm::elements::Module;
 use wasmi::{ImportsBuilder, MemoryRef, ModuleInstance, ModuleRef, Trap, TrapKind};
 
 use ::mint::Mint;
-use ::proof_of_stake::ProofOfStake;
 use contract::args_parser::ArgsParser;
 use engine_shared::{account::Account, contract::Contract, gas::Gas, stored_value::StoredValue};
 use engine_storage::{global_state::StateReader, protocol_data::ProtocolData};
+use proof_of_stake::ProofOfStake;
+use standard_payment::StandardPayment;
 use types::{
     account::{ActionType, PublicKey, Weight},
     bytesrepr::{self, FromBytes, ToBytes},
@@ -1880,6 +1882,15 @@ where
         let access_rights = extract_access_rights_from_urefs(urefs);
         self.context.access_rights_extend(access_rights);
         Ok(ret)
+    }
+
+    pub fn call_host_standard_payment(&mut self) -> Result<(), Error> {
+        let first_arg = match self.context.args().first() {
+            Some(cl_value) => cl_value.clone(),
+            None => return Err(Error::InvalidContext),
+        };
+        let amount = first_arg.into_t()?;
+        self.pay(amount).map_err(Self::reverter)
     }
 
     /// Calls contract living under a `key`, with supplied `args`.

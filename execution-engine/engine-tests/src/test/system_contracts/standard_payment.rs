@@ -66,6 +66,7 @@ fn should_raise_insufficient_payment_when_caller_lacks_minimum_balance() {
     );
 }
 
+#[cfg(not(feature = "turbo"))]
 #[ignore]
 #[test]
 fn should_raise_insufficient_payment_when_payment_code_does_not_pay_enough() {
@@ -134,6 +135,7 @@ fn should_raise_insufficient_payment_when_payment_code_does_not_pay_enough() {
     );
 }
 
+#[cfg(not(feature = "turbo"))]
 #[ignore]
 #[test]
 fn should_raise_insufficient_payment_error_when_out_of_gas() {

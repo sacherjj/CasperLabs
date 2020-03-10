@@ -643,7 +643,7 @@ object MultiParentCasperImpl {
           _       <- Log[F].debug(s"Checking equivocation for ${hashPrefix -> "block"}")
           message <- MonadThrowable[F].fromTry(Message.fromBlock(block))
           _ <- EquivocationDetector
-                .checkEquivocationWithUpdate[F](dag, message)
+                .checkEquivocation[F](dag, message, isHighway = false)
                 .timer("checkEquivocationsWithUpdate")
           _ <- Log[F].debug(s"Block effects calculated for ${hashPrefix -> "block"}")
         } yield blockEffects).attempt
