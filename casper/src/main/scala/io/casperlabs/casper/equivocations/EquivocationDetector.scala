@@ -47,15 +47,9 @@ object EquivocationDetector {
       message: Message
   ): F[Unit] =
     for {
-      equivocators <- dag.getEquivocators
-      equivocated <- if (equivocators.contains(message.validatorId)) {
-                      Log[F].debug(
-                        s"The creator of ${PrettyPrinter.buildString(message.messageHash) -> "message"} has equivocated before"
-                      ) *> true.pure[F]
-                    } else {
-                      createsEquivocation(dag, message)
-                    }
-      _ <- FunctorRaise[F, InvalidBlock].raise[Unit](EquivocatedBlock).whenA(equivocated)
+      validatorLatestMessages <- dag.latestMessage(message.validatorId)
+      equivocated             <- isEquivocation[F](message, validatorLatestMessages)
+      _                       <- FunctorRaise[F, InvalidBlock].raise[Unit](EquivocatedBlock).whenA(equivocated)
     } yield ()
 
   /**
@@ -79,12 +73,11 @@ object EquivocationDetector {
     *   then when adding B4, this method doesn't work, it returns false but actually B4
     *   equivocated with B2.
     */
-  private def createsEquivocation[F[_]: Monad: Log](
-      dag: DagRepresentation[F],
-      message: Message
+  private def isEquivocation[F[_]: Monad: Log](
+      message: Message,
+      validatorLatestMessages: Set[Message]
   ): F[Boolean] =
     for {
-      validatorLatestMessages <- dag.latestMessage(message.validatorId)
       equivocated <- validatorLatestMessages.toList match {
                       case Nil =>
                         // It is the first message by that validator.
