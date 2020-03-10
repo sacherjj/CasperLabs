@@ -9,7 +9,6 @@ import io.casperlabs.casper.api.BlockAPI
 import io.casperlabs.casper.consensus.{state, Block}
 import io.casperlabs.casper.consensus.info._
 import io.casperlabs.casper.consensus.state.ProtocolVersion
-import io.casperlabs.casper.validation.Validation
 import io.casperlabs.casper.MultiParentCasperRef
 import io.casperlabs.catscontrib.{Fs2Compiler, MonadThrowable}
 import io.casperlabs.comm.ServiceError.{FailedPrecondition, InvalidArgument, Unavailable}
@@ -27,7 +26,7 @@ import io.casperlabs.node.api.Utils.{
 import io.casperlabs.node.api.casper._
 import io.casperlabs.shared.Log
 import io.casperlabs.smartcontracts.ExecutionEngineService
-import io.casperlabs.smartcontracts.cltype.ProtoMappings
+import io.casperlabs.models.cltype.protobuf.Mappings
 import io.casperlabs.storage.block._
 import io.casperlabs.storage.deploy.DeployStorage
 import io.casperlabs.storage.dag.{DagStorage, FinalityStorage}
@@ -36,7 +35,7 @@ import monix.reactive.Observable
 
 object GrpcCasperService {
 
-  def apply[F[_]: Concurrent: TaskLike: Log: Metrics: FinalityStorage: BlockStorage: ExecutionEngineService: DeployStorage: Validation: Fs2Compiler: DeployBuffer: DagStorage: EventStream](
+  def apply[F[_]: Concurrent: TaskLike: Log: Metrics: FinalityStorage: BlockStorage: ExecutionEngineService: DeployStorage: Fs2Compiler: DeployBuffer: DagStorage: EventStream](
       isReadOnlyNode: Boolean
   ): F[CasperGrpcMonix.CasperService] =
     BlockAPI.establishMetrics[F] *> Sync[F].delay {
@@ -107,7 +106,7 @@ object GrpcCasperService {
           Observable.fromTask(deploys).flatMap(Observable.fromIterable)
         }
 
-        override def getBlockState(request: GetBlockStateRequest): Task[state.Value] =
+        override def getBlockState(request: GetBlockStateRequest): Task[state.StoredValueInstance] =
           batchGetBlockState(
             BatchGetBlockStateRequest(
               request.blockHashBase16,
@@ -138,7 +137,7 @@ object GrpcCasperService {
             stateHash: ByteString,
             query: StateQuery,
             protocolVersion: ProtocolVersion
-        ): F[state.Value] =
+        ): F[state.StoredValueInstance] =
           for {
             key <- toKey[F](query.keyVariant, query.keyBase16)
             possibleResponse <- ExecutionEngineService[F].query(
@@ -148,7 +147,7 @@ object GrpcCasperService {
                                  protocolVersion
                                )
             protoValue = possibleResponse.flatMap { storedValue =>
-              ProtoMappings
+              Mappings
                 .toProto(storedValue)
                 .leftMap(
                   err => SmartContractEngineError(s"Error with EE response $storedValue:\n$err")
@@ -173,7 +172,8 @@ object GrpcCasperService {
               (pageSize, pageTokenParams) <- MonadThrowable[F].fromTry(
                                               DeployInfoPagination
                                                 .parsePageToken(
-                                                  request
+                                                  request.pageSize,
+                                                  request.pageToken
                                                 )
                                             )
               accountPublicKeyBs = PublicKey(

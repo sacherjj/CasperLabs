@@ -154,7 +154,7 @@ for example:
 ```bash
 # Get the node-id for TLS.
 NODE=0
-NODE_ID=$(cat $DIR/.casperlabs/node-$NODE/node-id)
+NODE_ID=$(cat $DIR/.casperlabs/nodes/node-$NODE/node-id)
 casperlabs-client --host localhost --port 404${NODE}1 --node-id $NODE_ID show-blocks --depth 10
 ```
 

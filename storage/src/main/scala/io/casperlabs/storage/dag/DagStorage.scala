@@ -129,11 +129,23 @@ trait EraTipRepresentation[F[_]] extends TipRepresentation[F] {
   // * the parent block candidate hashes, and
   // * the justifications of the parent block candidates.
 
+  /** Get the equivocators in *this* era. */
   def getEquivocators(implicit A: Applicative[F]): F[Set[Validator]] =
     getEquivocations.map(_.keySet)
 
+  /** Get the equivocations in *this* era. */
   def getEquivocations(implicit A: Applicative[F]): F[Map[Validator, Set[Message]]] =
     latestMessages.map(_.filter(_._2.size > 1))
+}
+
+trait GlobalTipRepresentation[F[_]] extends TipRepresentation[F] {
+
+  /** Get the equivocations across all eras. */
+  def getEquivocations: F[Map[Validator, Map[BlockHash, Set[Message]]]]
+
+  /** Get the equivocators across all eras. */
+  def getEquivocators(implicit A: Applicative[F]): F[Set[Validator]] =
+    getEquivocations.map(_.keySet)
 }
 
 @typeclass trait DagLookup[F[_]] {
@@ -184,15 +196,12 @@ trait DagRepresentation[F[_]] extends DagLookup[F] {
 
   def topoSortTail(tailLength: Int): fs2.Stream[F, Vector[BlockInfo]]
 
-  /** Similar to [[topoSort]] but in addition filters blocks by a validator*/
-  def topoSortValidator(
+  def getBlockInfosByValidator(
       validator: Validator,
-      blocksNum: Int,
-      endBlockNumber: Long
-  ): fs2.Stream[F, Vector[BlockInfo]]
-
-  /** Similar to [[topoSortTail]] but in addition filters blocks by a validator*/
-  def topoSortTailValidator(validator: Validator, blocksNum: Int): fs2.Stream[F, Vector[BlockInfo]]
+      limit: Int,
+      lastTimeStamp: Long,
+      lastBlockHash: BlockHash
+  ): F[List[BlockInfo]]
 
   /** Get a global representation, which can be used in:
     * 1) naive casper mode, without eras
@@ -208,7 +217,7 @@ trait DagRepresentation[F[_]] extends DagLookup[F] {
     *
     * Doesn't guarantee to return immutable representation.
     */
-  def latestGlobal: F[TipRepresentation[F]]
+  def latestGlobal: F[GlobalTipRepresentation[F]]
 
   /** Get a representation restricted to a given era, which mean anyone
     * with more than 1 entry in their latest messages must have equivocated

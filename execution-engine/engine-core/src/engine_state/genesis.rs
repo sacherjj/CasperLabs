@@ -116,17 +116,20 @@ pub struct GenesisConfig {
     protocol_version: ProtocolVersion,
     mint_installer_bytes: Vec<u8>,
     proof_of_stake_installer_bytes: Vec<u8>,
+    standard_payment_installer_bytes: Vec<u8>,
     accounts: Vec<GenesisAccount>,
     wasm_costs: WasmCosts,
 }
 
 impl GenesisConfig {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         name: String,
         timestamp: u64,
         protocol_version: ProtocolVersion,
         mint_installer_bytes: Vec<u8>,
         proof_of_stake_installer_bytes: Vec<u8>,
+        standard_payment_installer_bytes: Vec<u8>,
         accounts: Vec<GenesisAccount>,
         wasm_costs: WasmCosts,
     ) -> Self {
@@ -136,6 +139,7 @@ impl GenesisConfig {
             protocol_version,
             mint_installer_bytes,
             proof_of_stake_installer_bytes,
+            standard_payment_installer_bytes,
             accounts,
             wasm_costs,
         }
@@ -159,6 +163,10 @@ impl GenesisConfig {
 
     pub fn proof_of_stake_installer_bytes(&self) -> &[u8] {
         self.proof_of_stake_installer_bytes.as_slice()
+    }
+
+    pub fn standard_payment_installer_bytes(&self) -> &[u8] {
+        self.standard_payment_installer_bytes.as_slice()
     }
 
     pub fn wasm_costs(&self) -> WasmCosts {
@@ -207,6 +215,10 @@ impl Distribution<GenesisConfig> for Standard {
         let proof_of_stake_installer_bytes =
             iter::repeat(()).map(|_| rng.gen()).take(count).collect();
 
+        count = rng.gen_range(1000, 10_000);
+        let standard_payment_installer_bytes =
+            iter::repeat(()).map(|_| rng.gen()).take(count).collect();
+
         count = rng.gen_range(1, 10);
         let accounts = iter::repeat(()).map(|_| rng.gen()).take(count).collect();
 
@@ -229,6 +241,7 @@ impl Distribution<GenesisConfig> for Standard {
             protocol_version,
             mint_installer_bytes,
             proof_of_stake_installer_bytes,
+            standard_payment_installer_bytes,
             accounts,
             wasm_costs,
         }

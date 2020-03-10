@@ -12,6 +12,8 @@ bitflags! {
     /// [`URef`](crate::URef).
     #[allow(clippy::derive_hash_xor_eq)]
     pub struct AccessRights: u8 {
+        /// No permissions
+        const NONE = 0;
         /// Permission to read the value under the associated `URef`.
         const READ  = 0b001;
         /// Permission to write a value under the associated `URef`.
@@ -44,11 +46,17 @@ impl AccessRights {
     pub fn is_addable(self) -> bool {
         self & AccessRights::ADD == AccessRights::ADD
     }
+
+    /// Returns `true` if no flags are set.
+    pub fn is_none(self) -> bool {
+        self == AccessRights::NONE
+    }
 }
 
 impl core::fmt::Display for AccessRights {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         match *self {
+            AccessRights::NONE => write!(f, "NONE"),
             AccessRights::READ => write!(f, "READ"),
             AccessRights::WRITE => write!(f, "WRITE"),
             AccessRights::ADD => write!(f, "ADD"),

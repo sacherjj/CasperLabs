@@ -6,7 +6,7 @@ import {
 } from 'casperlabs-grpc/io/casperlabs/casper/consensus/info_pb';
 import {
   Key,
-  Value as StateValue
+  StoredValueInstance as StateValue
 } from 'casperlabs-grpc/io/casperlabs/casper/consensus/state_pb';
 import {
   BatchGetBlockStateRequest,
@@ -281,7 +281,7 @@ export default class CasperService {
       const balanceUref = await this.getBlockState(
         blockHash,
         localKeyQuery
-      ).then(res => res.getKey()!.getUref()!);
+      ).then(res => res.getClValue()!.getValue()!.getKey()!.getUref()!);
 
       return balanceUref;
     } catch (err) {
@@ -304,7 +304,7 @@ export default class CasperService {
   ): Promise<number> {
     const balanceQuery = QueryUref(balanceUref);
     const balance = await this.getBlockState(blockHash, balanceQuery).then(
-      res => res.getBigInt()!
+      res => res.getClValue()!.getValue()!.getU512()!
     );
     return Number(balance.getValue());
   }

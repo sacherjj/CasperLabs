@@ -207,7 +207,7 @@ export function testToBytesVecT(): bool {
 
 export function testKeyOfURefVariantSerializes(): bool {
     // URef with access rights
-    const truth = hex2bin("022a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a0107");
+    const truth = hex2bin("022a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a07");
     const urefBytes = hex2bin("2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a");
     let uref = new URef(urefBytes, AccessRights.READ_ADD_WRITE);
     let key = Key.fromURef(uref);
@@ -255,7 +255,7 @@ export function testDecodeURefFromBytesWithoutAccessRights(): bool {
 }
 
 export function testDecodeURefFromBytesWithAccessRights(): bool {
-    const truth = hex2bin("2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a0107");
+    const truth = hex2bin("2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a07");
     const urefResult = URef.fromBytes(truth);
     assert(urefResult.error == Error.Ok);
     assert(urefResult.position == truth.length);
@@ -293,7 +293,7 @@ export function testDecodedOptionalIsSome(): bool {
 export function testDeserMapOfNamedKeys(): bool {
 
     let extraBytes = "fffefd";
-    let truthBytes = "030000000100000041000101010101010101010101010101010101010101010101010101010101010101020000004242020202020202020202020202020202020202020202020202020202020202020202010703000000434343010303030303030303030303030303030303030303030303030303030303030303";
+    let truthBytes = "0300000001000000410001010101010101010101010101010101010101010101010101010101010101010200000042420202020202020202020202020202020202020202020202020202020202020202020703000000434343010303030303030303030303030303030303030303030303030303030303030303";
 
     let truth = hex2bin(truthBytes + extraBytes);
 

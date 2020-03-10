@@ -14,8 +14,8 @@ import io.casperlabs.ipc._
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.models.SmartContractEngineError
 import io.casperlabs.shared.Log
-import io.casperlabs.smartcontracts.bytesrepr.FromBytes
-import io.casperlabs.smartcontracts.cltype.StoredValue
+import io.casperlabs.models.bytesrepr.FromBytes
+import io.casperlabs.models.cltype.StoredValue
 import io.casperlabs.smartcontracts.ExecutionEngineService.Stub
 import monix.eval.{Task, TaskLift}
 import simulacrum.typeclass

@@ -23,8 +23,8 @@ import io.casperlabs.ipc
 import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.models.{Message, SmartContractEngineError, Weight}
 import io.casperlabs.shared.Time
-import io.casperlabs.smartcontracts.cltype
-import io.casperlabs.smartcontracts.bytesrepr._
+import io.casperlabs.models.cltype
+import io.casperlabs.models.bytesrepr._
 import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.storage.dag.DagRepresentation
 import io.casperlabs.models.Message.{asJRank, asMainRank, JRank, MainRank}
@@ -658,7 +658,7 @@ object ProtoUtil {
   }
 
   def deployCodeToDeployPayload(code: Deploy.Code): Try[ipc.DeployPayload] = {
-    val argsF: Try[ByteString] = code.args.toList.traverse(cltype.ProtoMappings.fromArg) match {
+    val argsF: Try[ByteString] = code.args.toList.traverse(cltype.protobuf.Mappings.fromArg) match {
       case Left(err) =>
         Try(throw new SmartContractEngineError(s"Error parsing deploy arguments: $err"))
       case Right(args) =>

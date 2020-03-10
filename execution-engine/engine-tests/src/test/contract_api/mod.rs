@@ -14,3 +14,4 @@ mod transfer;
 mod transfer_purse_to_account;
 mod transfer_purse_to_purse;
 mod transfer_stored;
+mod transfer_u512_stored;

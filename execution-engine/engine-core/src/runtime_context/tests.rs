@@ -961,9 +961,7 @@ fn attenuate_uref_for_system_account() {
     let system_contract_uref = URef::new([42; 32], AccessRights::READ_ADD);
     let attenuated_uref = attenuate_uref_for_account(&account, system_contract_uref);
 
-    let access_rights = attenuated_uref
-        .access_rights()
-        .expect("should have access rights");
+    let access_rights = attenuated_uref.access_rights();
     assert_eq!(access_rights, AccessRights::READ_ADD_WRITE);
 }
 
@@ -973,8 +971,6 @@ fn attenuate_uref_for_user_account() {
     let system_contract_uref = URef::new([42; 32], AccessRights::READ_ADD_WRITE);
     let attenuated_uref = attenuate_uref_for_account(&account, system_contract_uref);
 
-    let access_rights = attenuated_uref
-        .access_rights()
-        .expect("should have access rights");
+    let access_rights = attenuated_uref.access_rights();
     assert_eq!(access_rights, AccessRights::READ);
 }

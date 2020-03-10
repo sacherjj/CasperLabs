@@ -84,7 +84,8 @@ where
     let protocol_data = {
         let mint = builder.get_mint_contract_uref();
         let pos = builder.get_mint_contract_uref();
-        ProtocolData::new(*DEFAULT_WASM_COSTS, mint, pos)
+        let standard_payment = builder.get_standard_payment_contract_uref();
+        ProtocolData::new(*DEFAULT_WASM_COSTS, mint, pos, standard_payment)
     };
 
     let context = RuntimeContext::new(

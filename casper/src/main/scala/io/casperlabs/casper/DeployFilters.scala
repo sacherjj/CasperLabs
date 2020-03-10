@@ -1,12 +1,11 @@
 package io.casperlabs.casper
 
 import cats.implicits._
-
 import com.google.protobuf.ByteString
-
 import io.casperlabs.casper.consensus.Deploy
 import io.casperlabs.casper.Estimator.BlockHash
-import io.casperlabs.casper.util.{DagOperations, ProtoUtil}
+import io.casperlabs.casper.dag.DagOperations
+import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.storage.dag.DagRepresentation

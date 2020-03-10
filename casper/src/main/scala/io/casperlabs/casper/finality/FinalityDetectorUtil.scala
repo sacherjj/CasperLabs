@@ -5,7 +5,8 @@ import cats.effect.Sync
 import cats.effect.concurrent.Ref
 import cats.implicits._
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
-import io.casperlabs.casper.util.{DagOperations, ProtoUtil}
+import io.casperlabs.casper.dag.DagOperations
+import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.models.Message
 import io.casperlabs.storage.dag.DagRepresentation
 
@@ -143,10 +144,11 @@ object FinalityDetectorUtil {
   private[casper] def panoramaM[F[_]: Monad](
       dag: DagRepresentation[F],
       validatorsToIndex: Map[Validator, Int],
-      blockSummary: Message
+      blockSummary: Message,
+      isHighway: Boolean
   ): F[MutableSeq[Level]] =
     for {
-      equivocators <- if (Validation.isHighway) dag.getEquivocatorsInEra(blockSummary.eraId)
+      equivocators <- if (isHighway) dag.getEquivocatorsInEra(blockSummary.eraId)
                      else dag.getEquivocators
       latestBlockDagLevelAsMap <- FinalityDetectorUtil
                                    .panoramaDagLevelsOfBlock(

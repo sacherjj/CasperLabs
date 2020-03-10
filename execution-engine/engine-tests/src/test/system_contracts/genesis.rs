@@ -3,11 +3,12 @@ use engine_core::engine_state::{
     SYSTEM_ACCOUNT_ADDR,
 };
 use engine_shared::{motes::Motes, stored_value::StoredValue};
-use engine_test_support::internal::{utils, InMemoryWasmTestBuilder, DEFAULT_WASM_COSTS};
+use engine_test_support::internal::{
+    utils, InMemoryWasmTestBuilder, DEFAULT_WASM_COSTS, MINT_INSTALL_CONTRACT,
+    POS_INSTALL_CONTRACT, STANDARD_PAYMENT_INSTALL_CONTRACT,
+};
 use types::{account::PublicKey, Key, ProtocolVersion, U512};
 
-const MINT_INSTALL: &str = "mint_install.wasm";
-const POS_INSTALL: &str = "pos_install.wasm";
 const BAD_INSTALL: &str = "standard_payment.wasm";
 
 const CHAIN_NAME: &str = "Jeremiah";
@@ -45,8 +46,10 @@ fn should_run_genesis() {
     };
 
     let name = CHAIN_NAME.to_string();
-    let mint_installer_bytes = utils::read_wasm_file_bytes(MINT_INSTALL);
-    let pos_installer_bytes = utils::read_wasm_file_bytes(POS_INSTALL);
+    let mint_installer_bytes = utils::read_wasm_file_bytes(MINT_INSTALL_CONTRACT);
+    let pos_installer_bytes = utils::read_wasm_file_bytes(POS_INSTALL_CONTRACT);
+    let standard_payment_installer_bytes =
+        utils::read_wasm_file_bytes(STANDARD_PAYMENT_INSTALL_CONTRACT);
     let accounts = vec![account_1, account_2];
     let protocol_version = ProtocolVersion::V1_0_0;
     let wasm_costs = *DEFAULT_WASM_COSTS;
@@ -57,6 +60,7 @@ fn should_run_genesis() {
         protocol_version,
         mint_installer_bytes,
         pos_installer_bytes,
+        standard_payment_installer_bytes,
         accounts,
         wasm_costs,
     );
@@ -128,7 +132,9 @@ fn should_fail_if_bad_mint_install_contract_is_provided() {
         };
         let name = CHAIN_NAME.to_string();
         let mint_installer_bytes = utils::read_wasm_file_bytes(BAD_INSTALL);
-        let pos_installer_bytes = utils::read_wasm_file_bytes(POS_INSTALL);
+        let pos_installer_bytes = utils::read_wasm_file_bytes(POS_INSTALL_CONTRACT);
+        let standard_payment_installer_bytes =
+            utils::read_wasm_file_bytes(STANDARD_PAYMENT_INSTALL_CONTRACT);
         let accounts = vec![account_1, account_2];
         let protocol_version = ProtocolVersion::V1_0_0;
         let wasm_costs = *DEFAULT_WASM_COSTS;
@@ -139,6 +145,7 @@ fn should_fail_if_bad_mint_install_contract_is_provided() {
             protocol_version,
             mint_installer_bytes,
             pos_installer_bytes,
+            standard_payment_installer_bytes,
             accounts,
             wasm_costs,
         )
@@ -175,8 +182,10 @@ fn should_fail_if_bad_pos_install_contract_is_provided() {
             )
         };
         let name = CHAIN_NAME.to_string();
-        let mint_installer_bytes = utils::read_wasm_file_bytes(MINT_INSTALL);
+        let mint_installer_bytes = utils::read_wasm_file_bytes(MINT_INSTALL_CONTRACT);
         let pos_installer_bytes = utils::read_wasm_file_bytes(BAD_INSTALL);
+        let standard_payment_installer_bytes =
+            utils::read_wasm_file_bytes(STANDARD_PAYMENT_INSTALL_CONTRACT);
         let accounts = vec![account_1, account_2];
         let protocol_version = ProtocolVersion::V1_0_0;
         let wasm_costs = *DEFAULT_WASM_COSTS;
@@ -187,6 +196,7 @@ fn should_fail_if_bad_pos_install_contract_is_provided() {
             protocol_version,
             mint_installer_bytes,
             pos_installer_bytes,
+            standard_payment_installer_bytes,
             accounts,
             wasm_costs,
         )

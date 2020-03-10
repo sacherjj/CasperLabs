@@ -32,9 +32,9 @@ impl Package for PosInstall {
 struct StandardPayment;
 
 impl Package for StandardPayment {
-    const ROOT: &'static str = "../contracts/client/standard-payment";
-    const CARGO_TOML: &'static str = "../contracts/client/standard-payment/Cargo.toml";
-    const LIB_RS: &'static str = "../contracts/client/standard-payment/src/lib.rs";
+    const ROOT: &'static str = "../contracts/system/standard-payment";
+    const CARGO_TOML: &'static str = "../contracts/system/standard-payment/Cargo.toml";
+    const LIB_RS: &'static str = "../contracts/system/standard-payment/src/lib.rs";
     const WASM_FILENAME: &'static str = "standard_payment.wasm";
 }
 

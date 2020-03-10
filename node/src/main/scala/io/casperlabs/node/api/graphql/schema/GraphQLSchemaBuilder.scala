@@ -9,28 +9,28 @@ import io.casperlabs.casper.api.BlockAPI.BlockAndMaybeDeploys
 import io.casperlabs.casper.consensus.info.{BlockInfo, DeployInfo}
 import io.casperlabs.catscontrib.{Fs2Compiler, MonadThrowable}
 import io.casperlabs.crypto.Keys.PublicKey
-import io.casperlabs.crypto.codec.Base16
-import io.casperlabs.crypto.codec.StringSyntax
+import io.casperlabs.crypto.codec.{Base16, StringSyntax}
 import io.casperlabs.models.SmartContractEngineError
+import io.casperlabs.node.api.BlockInfoPagination.BlockInfoPageTokenParams
 import io.casperlabs.node.api.DeployInfoPagination.DeployInfoPageTokenParams
 import io.casperlabs.node.api.Utils.{
   validateAccountPublicKey,
   validateBlockHashPrefix,
   validateDeployHash
 }
-import io.casperlabs.node.api.casper.ListDeployInfosRequest
 import io.casperlabs.node.api.graphql.RunToFuture.ops._
 import io.casperlabs.node.api.graphql._
 import io.casperlabs.node.api.graphql.schema.blocks.types.GraphQLBlockTypes.AccountKey
 import io.casperlabs.node.api.graphql.schema.blocks.types.{
+  BlocksWithPageInfo,
   DeployInfosWithPageInfo,
   GraphQLBlockTypes,
   PageInfo
 }
-import io.casperlabs.node.api.{DeployInfoPagination, Utils}
+import io.casperlabs.node.api.{BlockInfoPagination, DeployInfoPagination, Utils}
 import io.casperlabs.shared.Log
 import io.casperlabs.smartcontracts.ExecutionEngineService
-import io.casperlabs.smartcontracts.cltype.StoredValueInstance
+import io.casperlabs.models.cltype.StoredValueInstance
 import io.casperlabs.storage.block._
 import io.casperlabs.storage.dag.DagStorage
 import io.casperlabs.storage.deploy.DeployStorage
@@ -89,19 +89,57 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream
 
   // TODO: Performance issue - make use of Sangria Projections.
   // The same as the TODO #2 of the 'blockFetcher'
-  val blocksByValidator: (Validator, Int, Long) => Action[Unit, List[BlockAndMaybeDeploys]] =
-    (validator, blocksNum, maxBlockSeqNum) =>
-      BlockAPI
-        .getBlockInfosWithDeploysByValidator[F](
-          validator,
-          blocksNum = blocksNum,
-          maxBlockSeqNum = maxBlockSeqNum,
-          maybeDeployView = DeployInfo.View.BASIC.some,
-          blockView = BlockInfo.View.FULL
-        )
-        .unsafeToFuture
+  // TODO: common code can be abstracted from together with the `accountDeploys`.
+  // However and most probably pagination will exist only for deploys and blocks.
+  // Abstract only when a new pagination needs to be added.
+  val blocksByValidator: (Validator, Int, String) => Action[Unit, BlocksWithPageInfo] = {
+    (validator, first, after) =>
+      val deployStorage = DeployStorage[F].reader(deployView)
+      val program =
+        for {
+          first <- Utils
+                    .check[F, Int](
+                      first,
+                      "First must be greater than 0",
+                      _ > 0
+                    )
+          (pageSize, pageTokenParams) <- MonadThrowable[F].fromTry(
+                                          BlockInfoPagination.parsePageToken(first, after)
+                                        )
+          dag <- DagStorage[F].getRepresentation
+          blocksWithOneMoreElem <- dag.getBlockInfosByValidator(
+                                    validator,
+                                    pageSize + 1,
+                                    pageTokenParams.lastTimeStamp,
+                                    pageTokenParams.lastBlockHash
+                                  )
+          (blocks, hasNextPage) = if (blocksWithOneMoreElem.length == pageSize + 1) {
+            (blocksWithOneMoreElem.take(pageSize), true)
+          } else {
+            (blocksWithOneMoreElem, false)
+          }
+          blocksAndMaybeDeploys <- blocks.traverse(
+                                    b =>
+                                      deployStorage
+                                        .getProcessedDeploys(b.getSummary.blockHash)
+                                        .map(l => b -> l.some)
+                                  )
+          endCursor = BlockInfoPagination.createPageToken(
+            blocks.lastOption.map(
+              b =>
+                BlockInfoPageTokenParams(
+                  b.getSummary.getHeader.timestamp,
+                  b.getSummary.blockHash
+                )
+            )
+          )
+          pageInfo = PageInfo(endCursor, hasNextPage)
+          result   = BlocksWithPageInfo(blocksAndMaybeDeploys, pageInfo)
+        } yield result
+      program.unsafeToFuture
+  }
 
-  val accountBalance: AccountKey => Action[Unit, Option[String]] = { accountKey =>
+  val accountBalance: AccountKey => Action[Unit, BigInt] = { accountKey =>
     BlockAPI.accountBalance[F](accountKey).unsafeToFuture
   }
 
@@ -118,10 +156,8 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream
           (pageSize, pageTokenParams) <- MonadThrowable[F].fromTry(
                                           DeployInfoPagination
                                             .parsePageToken(
-                                              ListDeployInfosRequest(
-                                                pageSize = first,
-                                                pageToken = after
-                                              )
+                                              first,
+                                              after
                                             )
                                         )
           accountPublicKeyBs = PublicKey(accountKey)

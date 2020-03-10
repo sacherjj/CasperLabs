@@ -10,7 +10,7 @@ import io.casperlabs.casper.consensus.{Block, Bond}
 import io.casperlabs.casper.consensus.state
 import io.casperlabs.casper.mocks.{MockEventEmitter, NoOpValidation}
 import io.casperlabs.casper.validation
-import io.casperlabs.casper.validation.{Validation, ValidationImpl}
+import io.casperlabs.casper.validation.{HighwayValidationImpl, Validation}
 import io.casperlabs.casper.validation.Errors.ValidateErrorWrapper
 import io.casperlabs.casper.finality.MultiParentFinalizer
 import io.casperlabs.casper.validation.Validation.BlockEffects
@@ -96,7 +96,9 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
           signatureAlgorithm = Ed25519
         ),
         chainName = chainName,
-        upgrades = Seq.empty
+        upgrades = Seq.empty,
+        // Tests might be torn down before this step is done.
+        asyncRequeueOrphans = false
       )
     }
 
@@ -115,6 +117,7 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
                     justifications = Map.empty,
                     isBookingBlock = false
                   )
+        _     <- forkchoice.set(message)
         block <- BlockStorage[Task].getBlockUnsafe(message.messageHash)
       } yield block
 
@@ -138,12 +141,15 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
         roundId: Long
     ): Task[Block] =
       for {
-        dag       <- DagStorage[Task].getRepresentation
-        tips      <- dag.latestInEra(parent.getHeader.keyBlockHash)
-        latest    <- tips.latestMessages
-        maybePrev = latest.get(keys.publicKey).map(_.head)
-        nextJRank = ProtoUtil.nextJRank(latest.values.flatten.toSeq)
-        now       <- Clock[Task].currentTimeMillis
+        dag          <- DagStorage[Task].getRepresentation
+        parentTips   <- dag.latestInEra(parent.getHeader.keyBlockHash)
+        currTips     <- dag.latestInEra(keyBlockHash)
+        parentLatest <- parentTips.latestMessages
+        currLatest   <- currTips.latestMessages
+        allLatest    = parentLatest |+| currLatest
+        maybePrev    = currLatest.get(keys.publicKey).map(_.head)
+        nextJRank    = ProtoUtil.nextJRank(allLatest.values.flatten.toSeq)
+        now          <- Clock[Task].currentTimeMillis
         second = keys.signBlock {
           parent.withHeader(
             parent.getHeader
@@ -155,7 +161,7 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
               .withValidatorBlockSeqNum(maybePrev.map(_.validatorMsgSeqNum + 1).getOrElse(1))
               .withValidatorPrevBlockHash(maybePrev.map(_.messageHash).getOrElse(ByteString.EMPTY))
               .withParentHashes(List(parent.blockHash))
-              .withJustifications(latest.toSeq.map {
+              .withJustifications(allLatest.toSeq.map {
                 case (v, ms) =>
                   ms.toSeq.map(m => Block.Justification(v, m.messageHash))
               }.flatten)
@@ -164,7 +170,8 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
       } yield second
 
     override lazy val validation: Validation[Task] =
-      if (validate) new ValidationImpl[Task]() else new NoOpValidation[Task]
+      if (validate) new HighwayValidationImpl[Task](validateEquivocation = true)
+      else new NoOpValidation[Task]
 
     // Collect emitted events.
     override implicit lazy val eventEmitter: MockEventEmitter[Task] =
@@ -311,10 +318,10 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
             _      <- validateAndAdd(block1)
             _      <- BlockStorage[Task].contains(block1.blockHash) shouldBeF true
           } yield {
-            // TODO (CON-624): Update the EquivocationDetector to only detect in a given era,
+            // TODO (CON-643): Update the EquivocationDetector to only detect in a given era,
             // or only detect in up to the keyblock, but not globally. For now it will detect
             // them and therefore not save the effects they have.
-            if (status != Valid) cancel("CON-624")
+            if (status != Valid) cancel("CON-643")
             status shouldBe Valid
           }
       }
@@ -441,7 +448,7 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
       validation.raiseValidateErrorThroughApplicativeError[Task]
 
     new ExecutorFixture(db) with ExecEngineSerivceWithFakeEffects {
-      // Fake validation which let's everything through but it raises the one
+      // Fake validation which lets everything through but it raises the one
       // invalid status which should result in a block being saved.
       override lazy val validation = new NoOpValidation[Task] {
         override def checkEquivocation(dag: DagRepresentation[Task], block: Block): Task[Unit] =
