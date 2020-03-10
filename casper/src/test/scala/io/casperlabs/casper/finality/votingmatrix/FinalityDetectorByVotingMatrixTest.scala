@@ -565,7 +565,7 @@ class FinalityDetectorByVotingMatrixTest
       // EquivocationDetector works before adding block to DAG
       _ <- Sync[F].attempt(
             EquivocationDetector
-              .checkEquivocationWithUpdate(dag, message)
+              .checkEquivocation(dag, message)
           )
       _   <- BlockStorage[F].put(block.blockHash, block, Map.empty)
       msg <- Sync[F].fromTry(Message.fromBlock(block))

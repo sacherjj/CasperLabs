@@ -317,7 +317,7 @@ class NCBValidationImpl[F[_]: Sync: FunctorRaise[*[_], InvalidBlock]: Log: Time:
   override def checkEquivocation(dag: DagRepresentation[F], block: Block): F[Unit] =
     for {
       message <- Sync[F].fromTry(Message.fromBlock(block))
-      _       <- EquivocationDetector.checkEquivocationWithUpdate[F](dag, message)
+      _       <- EquivocationDetector.checkEquivocation[F](dag, message)
     } yield ()
 }
 
@@ -341,6 +341,6 @@ class HighwayValidationImpl[F[_]: Sync: FunctorRaise[*[_], InvalidBlock]: Log: T
   override def checkEquivocation(dag: DagRepresentation[F], block: Block): F[Unit] =
     (for {
       message <- Sync[F].fromTry(Message.fromBlock(block))
-      _       <- EquivocationDetector.checkEquivocationWithUpdate[F](dag, message)
+      _       <- EquivocationDetector.checkEquivocation[F](dag, message)
     } yield ()).whenA(validateEquivocation)
 }

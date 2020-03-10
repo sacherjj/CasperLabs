@@ -56,7 +56,7 @@ class EquivocationDetectorTest
           )
       message <- Task.fromTry(Message.fromBlock(b))
       blockStatus <- EquivocationDetector
-                      .checkEquivocationWithUpdate(dag, message)
+                      .checkEquivocation(dag, message)
                       .attempt
 
       _ = rankOfLowestBaseBlockExpect match {
