@@ -64,7 +64,7 @@ node-%/up: node-% .make/docker/network maybe-reset-highway-env
 	$(REFRESH_TARGETS)
 
 # Tear down node. Using docker to delete logs owned by root for now.
-node-%/down:
+node-%/down: $(HIGHWAY_ENV)
 	if [ -d node-$* ]; then \
 		cd node-$* && docker-compose down && cd - && \
 		docker run -it --rm \
