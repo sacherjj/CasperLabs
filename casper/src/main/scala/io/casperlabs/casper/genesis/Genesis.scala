@@ -46,7 +46,7 @@ object Genesis {
                           RunGenesisRequest()
                             .withGenesisConfigHash(
                               ByteString.copyFrom(
-                                Blake2b256.hash(genesisConfig.getEeGenesisConfig.toByteArray)
+                                Blake2b256.hash(genesisConfig.toByteArray)
                               )
                             )
                             .withEeGenesisConfig(genesisConfig.getEeGenesisConfig)
