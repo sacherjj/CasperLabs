@@ -44,11 +44,7 @@ object Genesis {
       genesisResult <- ExecutionEngineService[F]
                         .runGenesis(
                           RunGenesisRequest()
-                            .withGenesisConfigHash(
-                              ByteString.copyFrom(
-                                Blake2b256.hash(genesisConfig.toByteArray)
-                              )
-                            )
+                            .withGenesisConfigHash(ProtoUtil.protoHash(genesisConfig))
                             .withEeGenesisConfig(genesisConfig.getEeGenesisConfig)
                         )
                         .rethrow
