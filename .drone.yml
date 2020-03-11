@@ -972,7 +972,7 @@ steps:
   - "pipenv sync"
   - "cd client/CasperLabsClient"
   - "pipenv run python3 setup.py sdist"
-  - "cp dist/casperlabs* artifacts/${DRONE_BRANCH}"
+  - "cp dist/casperlabs* ../../../artifacts/${DRONE_BRANCH}"
   when:
     branch:
     - dev
