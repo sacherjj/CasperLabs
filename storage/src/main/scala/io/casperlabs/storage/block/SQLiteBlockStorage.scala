@@ -61,26 +61,15 @@ class SQLiteBlockStorage[F[_]: Bracket[*[_], Throwable]: Fs2Compiler](
     def createTransaction(blockHash: BlockHash, blockSummary: BlockSummary) =
       for {
         deployBodyColumns <- deployBodyCol(alias = "d")
-        body <- (fr"SELECT " ++ deployBodyColumns ++ fr""", dpr.deploy_position, dpr.cost, dpr.execution_error_message
+        body <- (fr"SELECT " ++ deployBodyColumns ++ fr""", dpr.cost, dpr.execution_error_message, dpr.stage
                       FROM deploy_process_results dpr
                       INNER JOIN deploys d
                       ON dpr.deploy_hash=d.hash
                       WHERE dpr.block_hash=$blockHash
                       ORDER BY dpr.deploy_position""")
-                 .query[(Deploy, Int, Long, Option[String])]
+                 .query[ProcessedDeploy]
                  .to[List]
-                 .map { blockBodyData =>
-                   val processedDeploys = blockBodyData.map {
-                     case (deploy, _, cost, maybeError) =>
-                       ProcessedDeploy(
-                         deploy.some,
-                         cost,
-                         isError = maybeError.nonEmpty,
-                         maybeError.getOrElse("")
-                       )
-                   }
-                   Block.Body(processedDeploys)
-                 }
+                 .map(Block.Body(_))
         transforms <- sql"""|SELECT stage, data
                             |FROM transforms
                             |WHERE block_hash=$blockHash""".stripMargin

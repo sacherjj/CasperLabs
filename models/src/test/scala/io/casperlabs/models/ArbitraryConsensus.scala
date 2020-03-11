@@ -219,10 +219,12 @@ trait ArbitraryConsensus {
         deploy  <- arbitrary[Deploy]
         isError <- arbitrary[Boolean]
         cost    <- arbitrary[Long]
+        stage   <- Gen.choose(0, 5)
       } yield {
         Block
           .ProcessedDeploy()
           .withDeploy(deploy)
+          .withStage(stage)
           .withCost(cost)
           .withIsError(isError)
           .withErrorMessage(if (isError) "Kaboom!" else "")
