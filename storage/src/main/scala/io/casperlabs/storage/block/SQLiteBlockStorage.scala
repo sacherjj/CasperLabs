@@ -12,7 +12,7 @@ import io.casperlabs.casper.consensus.Block.ProcessedDeploy
 import io.casperlabs.casper.consensus.info.DeployInfo.View
 import io.casperlabs.casper.consensus.info.{BlockInfo, DeployInfo}
 import io.casperlabs.casper.consensus.{Block, BlockSummary, Deploy}
-import io.casperlabs.catscontrib.Fs2Compiler
+import io.casperlabs.catscontrib.{Fs2Compiler, MonadThrowable}
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.ipc.TransformEntry
 import io.casperlabs.metrics.Metrics
@@ -36,10 +36,16 @@ class SQLiteBlockStorage[F[_]: Bracket[*[_], Throwable]: Fs2Compiler](
 
   private def deployBodyCol(alias: String)(implicit dv: DeployInfo.View) =
     dv match {
-      case View.BASIC if alias.nonEmpty => Fragment.const(s"${alias}.summary, null")
-      case View.FULL if alias.nonEmpty  => Fragment.const(s"${alias}.summary, ${alias}.body")
-      case View.BASIC                   => Fragment.const(s"summary, null")
-      case View.FULL                    => Fragment.const(s"summary, body")
+      case View.BASIC if alias.nonEmpty =>
+        Fragment.const(s"${alias}.summary, null").pure[ConnectionIO]
+      case View.FULL if alias.nonEmpty =>
+        Fragment.const(s"${alias}.summary, ${alias}.body").pure[ConnectionIO]
+      case View.BASIC => Fragment.const(s"summary, null").pure[ConnectionIO]
+      case View.FULL  => Fragment.const(s"summary, body").pure[ConnectionIO]
+      case View.Unrecognized(_) =>
+        MonadThrowable[ConnectionIO].raiseError[Fragment](
+          new IllegalStateException("Got DeployInfo.View.Unrecognized instead of FULL or BASIC")
+        )
     }
 
   override def get(
@@ -54,7 +60,8 @@ class SQLiteBlockStorage[F[_]: Bracket[*[_], Throwable]: Fs2Compiler](
   )(implicit dv: DeployInfo.View): F[Option[BlockMsgWithTransform]] = {
     def createTransaction(blockHash: BlockHash, blockSummary: BlockSummary) =
       for {
-        body <- (fr"SELECT " ++ deployBodyCol("d") ++ fr""", dpr.deploy_position, dpr.cost, dpr.execution_error_message
+        deployBodyColumns <- deployBodyCol(alias = "d")
+        body <- (fr"SELECT " ++ deployBodyColumns ++ fr""", dpr.deploy_position, dpr.cost, dpr.execution_error_message
                       FROM deploy_process_results dpr
                       INNER JOIN deploys d
                       ON dpr.deploy_hash=d.hash

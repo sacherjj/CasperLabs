@@ -43,6 +43,10 @@ class CachingBlockStorage[F[_]: Sync](
       case View.FULL => maybeBlock
       case View.BASIC =>
         maybeBlock.map(_.map(b => b.withBlockMessage(b.getBlockMessage.clearDeployBodies)))
+      case View.Unrecognized(_) =>
+        Sync[F].raiseError[Option[BlockMsgWithTransform]](
+          new IllegalStateException("Got DeployInfo.View.Unrecognized instead of FULL or BASIC")
+        )
     }
   }
 
