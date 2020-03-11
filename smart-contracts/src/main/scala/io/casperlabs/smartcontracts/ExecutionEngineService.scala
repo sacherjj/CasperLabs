@@ -19,16 +19,16 @@ import io.casperlabs.models.cltype.StoredValue
 import io.casperlabs.smartcontracts.ExecutionEngineService.Stub
 import monix.eval.{Task, TaskLift}
 import simulacrum.typeclass
-import scala.util.{Either, Try}
+
+import scala.util.Either
 import io.casperlabs.catscontrib.MonadThrowable
-import io.casperlabs.ipc.ChainSpec.{GenesisConfig, UpgradePoint}
-import io.netty.handler.ssl.ApplicationProtocolConfig.Protocol
+import io.casperlabs.ipc.ChainSpec.UpgradePoint
 
 @typeclass trait ExecutionEngineService[F[_]] {
   def emptyStateHash: ByteString
 
   def runGenesis(
-      genesisConfig: GenesisConfig
+      genesisConfig: RunGenesisRequest
   ): F[Either[Throwable, GenesisResult]]
 
   def upgrade(
@@ -148,7 +148,7 @@ class GrpcExecutionEngineService[F[_]: Defer: Concurrent: Log: TaskLift: Metrics
   }
 
   override def runGenesis(
-      genesisConfig: GenesisConfig
+      genesisConfig: RunGenesisRequest
   ): F[Either[Throwable, GenesisResult]] =
     sendMessage(genesisConfig, _.runGenesis) {
       _.result match {
