@@ -288,6 +288,27 @@ message ChainSpec {
         uint64 rank = 1;
     }
 
+
+    message EEGenesisConfig {
+        io.casperlabs.casper.consensus.state.ProtocolVersion protocol_version = 1;
+        // wasm bytecode for installing the mint system contract
+        bytes mint_installer = 2;
+        // wasm bytes for installing the pos system contract
+        bytes pos_installer = 3;
+        // wasm bytes for installing the standard payment system contract
+        bytes standard_payment_installer = 4;
+        // genesis account information
+        repeated GenesisAccount accounts = 5;
+        // costs at genesis
+        CostTable costs = 6;
+
+        message GenesisAccount {
+            bytes public_key = 1;
+            io.casperlabs.casper.consensus.state.BigInt balance = 2; // in motes
+            io.casperlabs.casper.consensus.state.BigInt bonded_amount = 3; // in motes, 0 means "not bonded"
+        }
+    }
+
     message CostTable {
         WasmCosts wasm = 1;
         // TODO (https://casperlabs.atlassian.net/browse/EE-638): design host function costs
@@ -430,31 +451,11 @@ message UnbondPayoutResponse {
     }
 }
 
-message EEGenesisConfig {
-    io.casperlabs.casper.consensus.state.ProtocolVersion protocol_version = 1;
-    // wasm bytecode for installing the mint system contract
-    bytes mint_installer = 2;
-    // wasm bytes for installing the pos system contract
-    bytes pos_installer = 3;
-    // wasm bytes for installing the standard payment system contract
-    bytes standard_payment_installer = 4;
-    // genesis account information
-    repeated GenesisAccount accounts = 5;
-    // costs at genesis
-    ChainSpec.CostTable costs = 6;
-
-    message GenesisAccount {
-        bytes public_key = 1;
-        io.casperlabs.casper.consensus.state.BigInt balance = 2; // in motes
-        io.casperlabs.casper.consensus.state.BigInt bonded_amount = 3; // in motes, 0 means "not bonded"
-    }
-}
-
 message RunGenesisRequest {
     // Hash of the Genesis configuration.
     bytes genesis_config_hash = 1;
     // Genesis configuration for the ExecutionEngine.
-    EEGenesisConfig ee_genesis_config = 2;
+    ChainSpec.EEGenesisConfig ee_genesis_config = 2;
 }
 
 // --- END PROOF-OF-STAKE SERVICE DEFINITION --- //

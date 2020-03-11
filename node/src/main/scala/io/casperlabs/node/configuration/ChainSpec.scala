@@ -317,13 +317,13 @@ object ChainSpecReader {
                 protocolVersion
               )
               .withEeGenesisConfig(
-                ipc
+                ipc.ChainSpec
                   .EEGenesisConfig()
                   .withProtocolVersion(protocolVersion)
                   .withMintInstaller(ByteString.copyFrom(mintCodeBytes))
                   .withPosInstaller(ByteString.copyFrom(posCodeBytes))
                   .withAccounts(accounts.map { account =>
-                    ipc.EEGenesisConfig
+                    ipc.ChainSpec.EEGenesisConfig
                       .GenesisAccount()
                       .withPublicKey(ByteString.copyFrom(account.publicKey))
                       .withBalance(state.BigInt(account.initialBalance.toString, bitWidth = 512))

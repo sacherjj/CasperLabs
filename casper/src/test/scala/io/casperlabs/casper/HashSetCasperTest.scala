@@ -1448,10 +1448,10 @@ object HashSetCasperTest {
       .withTimestamp(timestamp)
       .withProtocolVersion(state.ProtocolVersion(1))
       .withEeGenesisConfig(
-        ipc
+        ipc.ChainSpec
           .EEGenesisConfig()
           .withAccounts((bonds.keySet ++ wallets.keySet).toSeq.map { key =>
-            ipc.EEGenesisConfig
+            ipc.ChainSpec.EEGenesisConfig
               .GenesisAccount()
               .withPublicKey(ByteString.copyFrom(key))
               .withBalance(state.BigInt(wallets.getOrElse(key, 0L).toString, bitWidth = 512))
