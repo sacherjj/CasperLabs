@@ -692,11 +692,11 @@ steps:
 - name: package-python-client
   image: "casperlabs/buildenv:latest"
   commands:
+  - "make build-client-contracts"
   - "cd integration-testing"
   - "pipenv sync"
-  - "pipenv shell"
   - "cd client/CasperLabsClient"
-  - "python3 setup.py sdist"
+  - "pipenv run python3 setup.py sdist"
   - "cp dist/casperlabs* artifacts/${DRONE_BRANCH}"
   when:
     branch:
@@ -967,11 +967,11 @@ steps:
 - name: package-python-client-tag
   image: "casperlabs/buildenv:latest"
   commands:
+  - "make build-client-contracts"
   - "cd integration-testing"
   - "pipenv sync"
-  - "pipenv shell"
   - "cd client/CasperLabsClient"
-  - "python3 setup.py sdist"
+  - "pipenv run python3 setup.py sdist"
   - "cp dist/casperlabs* artifacts/${DRONE_BRANCH}"
   when:
     branch:
