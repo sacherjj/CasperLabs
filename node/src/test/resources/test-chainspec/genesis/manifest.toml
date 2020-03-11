@@ -27,6 +27,8 @@ voting-period-duration = "2days"
 
 voting-period-summit-level = 0
 
+ftt = 0.1
+
 [deploys]
 max-ttl-millis = 86400000
 max-dependencies = 10
