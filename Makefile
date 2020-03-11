@@ -301,8 +301,10 @@ explorer/contracts/%.wasm: .make/contracts/%
 build-client: \
 	.make/sbt-stage/client
 
-build-python-client:
-	integration-testing/client/CasperLabsClient/build.sh
+build-python-client: build-client-contracts \
+	$(shell find ./protobuf) \
+	$(shell find ./integration-testing/client/CasperLabsClient/ -name "*.py"|grep -v _grpc.py)
+	cd integration-testing && pipenv run client/CasperLabsClient/build.sh
 
 build-client-contracts: \
 	client/src/main/resources/bonding.wasm \
