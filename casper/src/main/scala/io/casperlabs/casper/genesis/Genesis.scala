@@ -29,6 +29,7 @@ import io.casperlabs.storage.dag.FinalityStorage
 import scala.util._
 import scala.util.control.NoStackTrace
 import io.casperlabs.models.Message
+import io.casperlabs.crypto.hash.Blake2b256
 
 object Genesis {
   import Sorting.byteArrayOrdering
@@ -43,7 +44,11 @@ object Genesis {
       genesisResult <- ExecutionEngineService[F]
                         .runGenesis(
                           RunGenesisRequest()
-                            .withGenesisConfigHash(genesisConfig.getEeGenesisConfig.toByteString)
+                            .withGenesisConfigHash(
+                              ByteString.copyFrom(
+                                Blake2b256.hash(genesisConfig.getEeGenesisConfig.toByteArray)
+                              )
+                            )
                             .withEeGenesisConfig(genesisConfig.getEeGenesisConfig)
                         )
                         .rethrow
