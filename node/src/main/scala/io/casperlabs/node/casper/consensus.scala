@@ -246,7 +246,7 @@ object Highway {
   ): Resource[F, Consensus[F]] = {
     val chainName               = chainSpec.getGenesis.name
     val hc                      = chainSpec.getGenesis.getHighwayConfig
-    val faultToleranceThreshold = 0.1
+    val faultToleranceThreshold = chainSpec.getGenesis.getHighwayConfig.ftt
 
     for {
       implicit0(finalizer: MultiParentFinalizer[F]) <- {
