@@ -188,8 +188,22 @@ object Mappings {
       case CLValueInstance.Option(value, _) =>
         value.traverse(v => Trampoline.defer(toProtoValueLoop(v))).map(dsl.values.option)
 
+      case CLValueInstance.List(values, CLType.U8) =>
+        val bytes: Seq[Byte] = values.map {
+          case CLValueInstance.U8(b) => b
+          case _                     => 0.toByte
+        }
+        Trampoline.done(dsl.values.bytes(bytes))
+
       case CLValueInstance.List(values, _) =>
         values.toList.traverse(v => Trampoline.defer(toProtoValueLoop(v))).map(dsl.values.list)
+
+      case CLValueInstance.FixedList(values, CLType.U8, _) =>
+        val bytes: Seq[Byte] = values.map {
+          case CLValueInstance.U8(b) => b
+          case _                     => 0.toByte
+        }
+        Trampoline.done(dsl.values.bytes(bytes))
 
       case CLValueInstance.FixedList(values, _, _) =>
         values.toList.traverse(v => Trampoline.defer(toProtoValueLoop(v))).map(dsl.values.fixedList)
@@ -393,6 +407,22 @@ object Mappings {
         lift(fromProto(k).map(CLValueInstance.Key.apply))
       case state.CLValueInstance.Value.Value.Uref(u) =>
         lift(fromProto(u).map(CLValueInstance.URef.apply))
+
+      case state.CLValueInstance.Value.Value.BytesValue(bytes) =>
+        val u8Instances = bytes.toByteArray.map(CLValueInstance.U8.apply)
+        clType match {
+          case CLType.List(CLType.U8) =>
+            lift(CLValueInstance.List(u8Instances, CLType.U8).leftMap(Error.InstanceError.apply))
+
+          case CLType.FixedList(CLType.U8, length) =>
+            lift(
+              CLValueInstance
+                .FixedList(u8Instances, CLType.U8, length)
+                .leftMap(Error.InstanceError.apply)
+            )
+
+          case other => raise(Error.TypeMismatch(other, "List(U8) or FixedList(U8)"))
+        }
 
       case state.CLValueInstance.Value.Value
             .OptionValue(state.CLValueInstance.OptionProto(innerProto)) =>
