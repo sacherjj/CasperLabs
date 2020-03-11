@@ -9,6 +9,7 @@ use engine_test_support::internal::{
 };
 use types::{account::PublicKey, Key, ProtocolVersion, U512};
 
+#[cfg(feature = "use-system-contracts")]
 const BAD_INSTALL: &str = "standard_payment.wasm";
 
 const CHAIN_NAME: &str = "Jeremiah";
@@ -105,6 +106,7 @@ fn should_run_genesis() {
     }
 }
 
+#[cfg(feature = "use-system-contracts")]
 #[ignore]
 #[should_panic]
 #[test]
@@ -156,6 +158,7 @@ fn should_fail_if_bad_mint_install_contract_is_provided() {
     builder.run_genesis(&genesis_config);
 }
 
+#[cfg(feature = "use-system-contracts")]
 #[ignore]
 #[should_panic]
 #[test]
