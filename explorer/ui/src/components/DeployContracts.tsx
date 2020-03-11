@@ -13,37 +13,57 @@ import Modal from './Modal';
 import { CLType, Key } from 'casperlabs-grpc/io/casperlabs/casper/consensus/state_pb';
 
 
-/**
- * The ui component to manage hashes of Vesting Contract,
- * including selecting, adding and removing hashes.
- */
-export const DeployContractsForm = observer(
-  (props: { deployContractsContainer: DeployContractsContainer }) => {
+interface Props {
+  deployContractsContainer: DeployContractsContainer
+}
+
+@observer
+export class DeployContractsForm extends React.Component<Props, {}> {
+  private interval: number | null;
+
+  componentDidMount(): void {
+    if (this.interval) {
+      window.clearInterval(this.interval);
+    }
+    this.interval = window.setInterval(() => {
+      this.props.deployContractsContainer.saveToSessionStore();
+    }, 10 * 1000);
+  }
+
+  componentWillUnmount(): void {
+    if(this.interval){
+      window.clearInterval(this.interval);
+      this.interval = null;
+    }
+  }
+
+  render() {
+    const { deployContractsContainer } = this.props;
     let modalAccountForm = (
       <Modal
         id="id-private-key-modal"
         title="Input Private Key"
         submitLabel="Deploy"
-        onSubmit={props.deployContractsContainer.onSubmit}
+        onSubmit={deployContractsContainer.onSubmit}
         onClose={() => {
-          props.deployContractsContainer.signDeployModal = false;
+          deployContractsContainer.signDeployModal = false;
         }}
       >
         <Form>
           <TextField
             id="id-private-key"
             label="Private Key"
-            fieldState={props.deployContractsContainer.privateKey}
+            fieldState={deployContractsContainer.privateKey}
             placeholder="Human readable alias"
           />
         </Form>
       </Modal>
     );
     return (
-      <Card title="Deploy Smart Contracts" accordionId={props.deployContractsContainer.accordionId}>
+      <Card title="Deploy Smart Contracts" accordionId={deployContractsContainer.accordionId}>
         <Form>
           <SelectField id="id-contract-type" label="Type"
-                       value={props.deployContractsContainer.deployConfiguration.$.contractType.$}
+                       value={deployContractsContainer.deployConfiguration.$.contractType.$}
                        placeholder="Please Select the Type of Deploy"
                        options={
                          Object.keys(ContractType).map(t => {
@@ -53,54 +73,48 @@ export const DeployContractsForm = observer(
                            };
                          })}
                        onChange={(value: string) => {
-                         props.deployContractsContainer.deployConfiguration.$.contractType.onChange(value as ContractType);
+                         deployContractsContainer.deployConfiguration.$.contractType.onChange(value as ContractType);
                        }}
           />
           {
-            props.deployContractsContainer.deployConfiguration.$.contractType.$ === ContractType.WASM && (
+            deployContractsContainer.deployConfiguration.$.contractType.$ === ContractType.WASM && (
               <FileSelect id="id-wasm-select"
-                          label={props.deployContractsContainer.selectedFile?.name || 'Select WASM File'}
-                          handleFileSelect={props.deployContractsContainer.handleFileSelect}/>
+                          label={deployContractsContainer.selectedFile?.name || 'Select WASM File'}
+                          handleFileSelect={deployContractsContainer.handleFileSelect}/>
             )
           }
           {
-            props.deployContractsContainer.deployConfiguration.$.contractType.$ === ContractType.Hash && (
+            deployContractsContainer.deployConfiguration.$.contractType.$ === ContractType.Hash && (
               <TextField id="id-contract-hash" label="Hash(Base16) of the Contract"
-                         fieldState={props.deployContractsContainer.deployConfiguration.$.contractHash}/>
+                         fieldState={deployContractsContainer.deployConfiguration.$.contractHash}/>
             )
           }
           <FormRow splits={[6, 6]}>
             <NumberField id="id-gas-price" label="Gas Price"
-                         fieldState={props.deployContractsContainer.deployConfiguration.$.gasPrice}/>
+                         fieldState={deployContractsContainer.deployConfiguration.$.gasPrice}/>
             <NumberField id="id-gas-limit" label="Gas Limit"
-                         fieldState={props.deployContractsContainer.deployConfiguration.$.gasLimit}/>
+                         fieldState={deployContractsContainer.deployConfiguration.$.gasLimit}/>
           </FormRow>
           <TextField id="id-from-address" label="From (Optional)"
-                     fieldState={props.deployContractsContainer.deployConfiguration.$.fromAddress}/>
+                     fieldState={deployContractsContainer.deployConfiguration.$.fromAddress}/>
         </Form>
 
-        {props.deployContractsContainer.signDeployModal && modalAccountForm}
+        {deployContractsContainer.signDeployModal && modalAccountForm}
 
         <Card title="Setting Arguments" accordionId={'arguments-table'}>
-          <ArgumentTable deployContractsContainer={props.deployContractsContainer}/>
+          <ArgumentTable deployContractsContainer={deployContractsContainer}/>
         </Card>
 
         <div className="mt-5">
           <ListInline>
-            <Button size='lg' onClick={props.deployContractsContainer.openSignModal} title={'Sign'}/>
-            <Button size='lg' type='danger' onClick={props.deployContractsContainer.clearForm} title={'Clear'}/>
+            <Button size='lg' onClick={deployContractsContainer.openSignModal} title={'Sign'}/>
+            <Button size='lg' type='danger' onClick={deployContractsContainer.clearForm} title={'Clear'}/>
           </ListInline>
         </div>
       </Card>
     );
   }
-);
-
-// const ArgumentTypeSelect = observer((props: {
-//   deployArgument: FormDeployArgument
-// }) => {
-//   return ();
-// });
+}
 
 const ArgumentRow = observer((props: {
   infix: string,
@@ -236,8 +250,9 @@ const ArgumentTable = observer((props: {
           </tr>
         ) : (
           props.deployContractsContainer.deployArguments.$.map((deployArgument, idx) => (
-            <ArgumentRow key={idx} deployArgument={deployArgument} infix={`saved-${idx}`} onProductTableUpdate={() => {
-            }} onDelEvent={props.deployContractsContainer.removeDeployArgument}/>
+            <ArgumentRow key={idx} deployArgument={deployArgument} infix={`saved-${idx}`}
+                         onProductTableUpdate={() => {
+                         }} onDelEvent={props.deployContractsContainer.removeDeployArgument}/>
           ))
         )
       }
@@ -258,7 +273,8 @@ const ArgumentTable = observer((props: {
         {props.deployContractsContainer.editing && (
           <li className="list-inline-item float-right mr-5">
             <ListInline>
-              <Button onClick={props.deployContractsContainer.cancelEditing} title='cancel' size='xs' type="secondary"/>
+              <Button onClick={props.deployContractsContainer.cancelEditing} title='cancel' size='xs'
+                      type="secondary"/>
               <Button onClick={props.deployContractsContainer.saveEditingDeployArguments} title='save' size='xs'
                       type="success"/>
             </ListInline>

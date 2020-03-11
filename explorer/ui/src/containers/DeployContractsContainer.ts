@@ -84,6 +84,26 @@ export type DeployConfiguration = {
 
 export type FormDeployConfiguration = FormState<DeployConfiguration>;
 
+interface RawDeployArguments {
+  name: string,
+  type: CLType.SimpleMap[keyof CLType.SimpleMap],
+  secondType: KeyType | BitWidth | null,
+  URefAccessRight: Key.URef.AccessRightsMap[keyof Key.URef.AccessRightsMap],
+  value: string
+}
+
+interface UserInputPersistent {
+  deployConfiguration: {
+    contractType: ContractType | null,
+    gasPrice: number,
+    gasLimit: number,
+    fromAddress: string
+  },
+  deployArguments: RawDeployArguments[],
+  editingDeployArguments: RawDeployArguments[],
+  editing: boolean
+}
+
 export class DeployContractsContainer {
   @observable deployConfiguration: FormDeployConfiguration = new FormState<DeployConfiguration>({
     contractType: new FieldState<ContractType | null>(null).validators(valueRequired),
@@ -105,6 +125,7 @@ export class DeployContractsContainer {
   @observable editing: boolean = false;
   @observable signDeployModal: boolean = false;
   private selectedFileContent: null | ByteArray = null;
+  private static PersistentKey = 'deploy-configuration';
 
   // id for accordion
   accordionId = 'deploy-table-accordion';
@@ -113,27 +134,36 @@ export class DeployContractsContainer {
     private errors: ErrorContainer,
     private casperService: CasperService
   ) {
+    this.tryRestore();
   }
 
   @action.bound
   removeDeployArgument(deployArgument: FormDeployArgument) {
     let i = this.deployArguments.$.findIndex((f) => f === deployArgument);
     this.deployArguments.$.splice(i, 1);
+    this.saveToSessionStore();
   }
 
   @action.bound
   addNewEditingDeployArgument() {
     this.editing = true;
-    let newDeployArgument = new FormState({
-      name: new FieldState<string>('').disableAutoValidation().validators(valueRequired),
-      type: new FieldState<CLType.SimpleMap[keyof CLType.SimpleMap]>(CLType.Simple.BOOL),
-      secondType: new FieldState<KeyType | BitWidth | null>(null),
-      URefAccessRight: new FieldState<Key.URef.AccessRightsMap[keyof Key.URef.AccessRightsMap]>(Key.URef.AccessRights.NONE),
-      value: new FieldState<string>('').disableAutoValidation().validators(valueRequired)
+    this.editingDeployArguments.$.push(this.newDeployArgument());
+  }
+
+  private newDeployArgument(
+    name: string = '',
+    type: CLType.SimpleMap[keyof CLType.SimpleMap] = CLType.Simple.BOOL,
+    secondType: KeyType | BitWidth | null = null,
+    accessRight: Key.URef.AccessRightsMap[keyof Key.URef.AccessRightsMap] = Key.URef.AccessRights.NONE,
+    value: string = ''
+  ) {
+    return new FormState({
+      name: new FieldState<string>(name).disableAutoValidation().validators(valueRequired),
+      type: new FieldState<CLType.SimpleMap[keyof CLType.SimpleMap]>(type),
+      secondType: new FieldState<KeyType | BitWidth | null>(secondType),
+      URefAccessRight: new FieldState<Key.URef.AccessRightsMap[keyof Key.URef.AccessRightsMap]>(accessRight),
+      value: new FieldState<string>(value).disableAutoValidation().validators(valueRequired)
     }).compose().validators(this.validateDeployArgument);
-
-
-    this.editingDeployArguments.$.push(newDeployArgument);
   }
 
   @action.bound
@@ -143,7 +173,7 @@ export class DeployContractsContainer {
       this.selectedFile = e.target.files[0];
       const reader = new FileReader();
       reader.readAsArrayBuffer(this.selectedFile);
-      reader.onload = e => {
+      reader.onload = _ => {
         this.selectedFileContent = new Uint8Array(reader.result as ArrayBuffer);
       };
     }
@@ -158,12 +188,15 @@ export class DeployContractsContainer {
       }
       this.editing = false;
     }
+    // persist manually
+    this.saveToSessionStore();
   }
 
   @action.bound
   cancelEditing() {
     this.editingDeployArguments.$.splice(0, this.editingDeployArguments.$.length);
     this.editing = false;
+    this.saveToSessionStore();
   }
 
   @action.bound
@@ -352,5 +385,68 @@ export class DeployContractsContainer {
         return false;
     }
     return false;
+  }
+
+  @action
+  private tryRestore() {
+    const preState = sessionStorage.getItem(DeployContractsContainer.PersistentKey);
+    if (preState !== null) {
+      const value = JSON.parse(preState) as UserInputPersistent;
+
+      this.editing = value.editing;
+
+      this.deployConfiguration.$.gasLimit.onChange(value.deployConfiguration.gasLimit);
+      this.deployConfiguration.$.gasPrice.onChange(value.deployConfiguration.gasPrice);
+      this.deployConfiguration.$.contractType.onChange(value.deployConfiguration.contractType);
+      this.deployConfiguration.$.fromAddress.onChange(value.deployConfiguration.fromAddress);
+
+      this.editingDeployArguments.reset();
+      this.deployArguments.reset();
+
+      value.editingDeployArguments?.forEach(arg => {
+        const deployArgument = this.newDeployArgument(arg.name, arg.type, arg.secondType, arg.URefAccessRight, arg.value);
+        this.editingDeployArguments.$.push(deployArgument);
+      });
+
+      value.deployArguments?.forEach(arg => {
+        const deployArgument = this.newDeployArgument(arg.name, arg.type, arg.secondType, arg.URefAccessRight, arg.value);
+        this.deployArguments.$.push(deployArgument);
+      });
+    }
+  }
+
+  public saveToSessionStore() {
+    let deployConfiguration = this.deployConfiguration.$;
+    let state: UserInputPersistent = {
+      deployArguments: this.deployArguments.$.map(arg => {
+        const value = arg.$;
+        return {
+          name: value.name.value,
+          type: value.type.value,
+          secondType: value.secondType.value,
+          URefAccessRight: value.URefAccessRight.value,
+          value: value.value.value
+        };
+      }),
+      deployConfiguration: {
+        contractType: deployConfiguration.contractType.value,
+        gasPrice: deployConfiguration.gasPrice.value,
+        gasLimit: deployConfiguration.gasLimit.value,
+        fromAddress: deployConfiguration.fromAddress.value
+      },
+      editing: this.editing,
+      editingDeployArguments: this.editingDeployArguments.$.map(arg => {
+        const value = arg.$;
+        return {
+          name: value.name.value,
+          type: value.type.value,
+          secondType: value.secondType.value,
+          URefAccessRight: value.URefAccessRight.value,
+          value: value.value.value
+        };
+      })
+    };
+
+    sessionStorage.setItem(DeployContractsContainer.PersistentKey, JSON.stringify(state));
   }
 }
