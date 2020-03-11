@@ -172,7 +172,7 @@ pub fn get_phase() -> Phase {
 /// currently-executing module is a direct call or a sub-call respectively.
 pub fn get_key(name: &str) -> Option<Key> {
     let (name_ptr, name_size, _bytes) = contract_api::to_ptr(name);
-    let mut key_bytes = vec![0u8; Key::serialized_size_hint()];
+    let mut key_bytes = vec![0u8; Key::max_serialized_length()];
     let mut total_bytes: usize = 0;
     let ret = unsafe {
         ext_ffi::get_key(
