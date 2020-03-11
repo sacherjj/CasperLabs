@@ -32,9 +32,10 @@ $(eval DOCKER_TEST_TAG = $(shell if [ -z ${DRONE_BUILD_NUMBER} ]; then echo test
 all: \
 	docker-build-all \
 	cargo-package-all \
-    build-client \
-    build-node \
-    build-python-client \
+	build-client \
+	build-node \
+	build-python-client 
+
 
 # Push the local artifacts to repositories.
 publish: docker-push-all
@@ -301,7 +302,8 @@ explorer/contracts/%.wasm: .make/contracts/%
 build-client: \
 	.make/sbt-stage/client
 
-build-python-client: build-client-contracts \
+build-python-client: 
+	build-client-contracts \
 	$(shell find ./protobuf) \
 	$(shell find ./integration-testing/client/CasperLabsClient/ -name "*.py"|grep -v _grpc.py)
 	cd integration-testing && pipenv run client/CasperLabsClient/build.sh
