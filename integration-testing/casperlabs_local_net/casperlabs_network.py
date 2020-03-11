@@ -620,7 +620,7 @@ class ThreeNodeHighwayNetwork(CasperLabsNetwork):
         CL_CHAINSPEC_HIGHWAY_ERA_DURATION="2minutes",
         CL_CHAINSPEC_HIGHWAY_BOOKING_DURATION="90seconds",
         CL_CHAINSPEC_HIGHWAY_ENTROPY_DURATION="10seconds",
-        CL_CHAINSPEC_HIGHWAY_VOTING_PERIOD_DURATION="20seconds",
+        CL_CHAINSPEC_HIGHWAY_VOTING_PERIOD_DURATION="10hours",
     )
 
     def get_node_config(self, network):
