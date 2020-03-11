@@ -2,7 +2,6 @@ package io.casperlabs.comm.gossiping
 
 import java.util.concurrent.atomic.AtomicInteger
 
-import cats.Applicative
 import cats.effect.concurrent.Semaphore
 import cats.implicits._
 import com.google.protobuf.ByteString
@@ -14,12 +13,13 @@ import io.casperlabs.comm.discovery.NodeUtils.showNode
 import io.casperlabs.comm.gossiping.DownloadManagerImpl.RetriesConf
 import io.casperlabs.comm.gossiping.synchronization.Synchronizer
 import io.casperlabs.metrics.Metrics
+import io.casperlabs.models.BlockImplicits.BlockOps
 import io.casperlabs.shared.{Log, LogStub}
 import monix.eval.Task
 import monix.execution.Scheduler
 import monix.tail.Iterant
 import org.scalacheck.Arbitrary.arbitrary
-import org.scalacheck.{Arbitrary, Gen}
+import org.scalacheck.Gen
 import org.scalatest._
 
 import scala.concurrent.TimeoutException
@@ -730,12 +730,12 @@ object DownloadManagerSpec {
       implicit val log = Log.NOPLog[Task]
       GossipServiceServer[Task](
         backend = new GossipServiceServer.Backend[Task] {
-          def hasBlock(blockHash: ByteString)                = ???
-          def getBlock(blockHash: ByteString)                = Task.now(None)
-          def getBlockSummary(blockHash: ByteString)         = ???
-          def getDeploys(deployHashes: Set[ByteString])      = ???
-          def latestMessages: Task[Set[Block.Justification]] = ???
-          def dagTopoSort(startRank: Long, endRank: Long)    = ???
+          def hasBlock(blockHash: ByteString)                                 = ???
+          def getBlock(blockHash: ByteString, deploysBodiesExcluded: Boolean) = Task.now(None)
+          def getBlockSummary(blockHash: ByteString)                          = ???
+          def getDeploys(deployHashes: Set[ByteString])                       = ???
+          def latestMessages: Task[Set[Block.Justification]]                  = ???
+          def dagTopoSort(startRank: Long, endRank: Long)                     = ???
         },
         synchronizer = emptySynchronizer,
         downloadManager = emptyDownloadManager,
@@ -760,8 +760,14 @@ object DownloadManagerSpec {
         new GossipServiceServer[Task](
           backend = new GossipServiceServer.Backend[Task] {
             override def hasBlock(blockHash: ByteString) = ???
-            override def getBlock(blockHash: ByteString) =
-              regetter(Task.delay(blockMap.get(blockHash)))
+            override def getBlock(blockHash: ByteString, deploysBodiesExcluded: Boolean) =
+              regetter(Task.delay(blockMap.get(blockHash).map { block =>
+                if (deploysBodiesExcluded) {
+                  block.clearDeployBodies
+                } else {
+                  block
+                }
+              }))
             override def getDeploys(deployHashes: Set[ByteString])      = ???
             override def getBlockSummary(blockHash: ByteString)         = ???
             override def latestMessages: Task[Set[Block.Justification]] = ???

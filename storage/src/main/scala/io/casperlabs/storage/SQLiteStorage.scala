@@ -1,31 +1,26 @@
 package io.casperlabs.storage
 
+import java.util.concurrent.TimeUnit
+
+import cats.effect.Sync
+import cats.implicits._
+import doobie.util.transactor.Transactor
+import io.casperlabs.casper.consensus.info.{BlockInfo, DeployInfo}
+import io.casperlabs.casper.consensus.{Block, BlockSummary, Era}
+import io.casperlabs.catscontrib.MonadThrowable
+import io.casperlabs.metrics.Metrics
+import io.casperlabs.models.Message
+import io.casperlabs.shared.Time
+import io.casperlabs.storage.block.{BlockStorage, SQLiteBlockStorage}
+import io.casperlabs.storage.dag.DagRepresentation.Validator
+import io.casperlabs.storage.dag._
 import io.casperlabs.storage.deploy.{
   DeployStorage,
   DeployStorageReader,
   DeployStorageWriter,
   SQLiteDeployStorage
 }
-import cats.effect.Sync
-import cats.implicits._
-import doobie.util.transactor.Transactor
-import io.casperlabs.casper.consensus.info.{BlockInfo, DeployInfo}
-import io.casperlabs.casper.consensus.{Block, BlockSummary, Era}
-import io.casperlabs.metrics.Metrics
-import io.casperlabs.models.Message
-import io.casperlabs.shared.Time
-import io.casperlabs.storage.block.{BlockStorage, SQLiteBlockStorage}
-import io.casperlabs.storage.dag.DagRepresentation.Validator
-import io.casperlabs.storage.dag.{
-  AncestorsStorage,
-  DagRepresentation,
-  DagStorage,
-  FinalityStorage,
-  SQLiteDagStorage
-}
 import io.casperlabs.storage.era.{EraStorage, SQLiteEraStorage}
-import io.casperlabs.catscontrib.MonadThrowable
-import java.util.concurrent.TimeUnit
 import fs2._
 
 object SQLiteStorage {
@@ -109,10 +104,14 @@ object SQLiteStorage {
           _ <- blockStorage.close()
         } yield ()
 
-      override def get(blockHash: BlockHash): F[Option[BlockMsgWithTransform]] =
+      override def get(
+          blockHash: BlockHash
+      )(implicit dv: DeployInfo.View = DeployInfo.View.FULL): F[Option[BlockMsgWithTransform]] =
         blockStorage.get(blockHash)
 
-      override def getByPrefix(blockHashPrefix: String): F[Option[BlockMsgWithTransform]] =
+      override def getByPrefix(
+          blockHashPrefix: String
+      )(implicit dv: DeployInfo.View = DeployInfo.View.FULL): F[Option[BlockMsgWithTransform]] =
         blockStorage.getByPrefix(blockHashPrefix)
 
       override def isEmpty: F[Boolean] = blockStorage.isEmpty
