@@ -10,8 +10,8 @@ import io.casperlabs.casper.consensus.{Block, BlockSummary, Deploy, GenesisCandi
 import io.casperlabs.comm.ServiceError.NotFound
 import io.casperlabs.comm.discovery.Node
 import io.casperlabs.comm.discovery.NodeUtils.showNode
-import io.casperlabs.comm.gossiping.synchronization.Synchronizer.SyncError
 import io.casperlabs.comm.gossiping.synchronization.Synchronizer
+import io.casperlabs.comm.gossiping.synchronization.Synchronizer.SyncError
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.shared.{Compression, Log}
@@ -207,7 +207,7 @@ class GossipServiceServer[F[_]: Concurrent: Parallel: Log: Metrics](
       _ => blockDownloadSemaphore.release
     ) flatMap { _ =>
       Iterant.liftF {
-        backend.getBlock(request.blockHash)
+        backend.getBlock(request.blockHash, request.excludeDeployBodies)
       } flatMap {
         case Some(block) =>
           val it = chunkIt(
@@ -293,7 +293,7 @@ object GossipServiceServer {
   trait Backend[F[_]] {
     def hasBlock(blockHash: ByteString): F[Boolean]
     def getBlockSummary(blockHash: ByteString): F[Option[BlockSummary]]
-    def getBlock(blockHash: ByteString): F[Option[Block]]
+    def getBlock(blockHash: ByteString, deploysBodiesExcluded: Boolean): F[Option[Block]]
     def getDeploys(deployHashes: Set[ByteString]): Iterant[F, Deploy]
 
     /** Returns latest messages as seen currently by the node.

@@ -9,34 +9,30 @@ import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
 import fs2.interop.reactivestreams._
 import io.casperlabs.casper
-import io.casperlabs.casper.Estimator.BlockHash
-import io.casperlabs.casper.consensus.{Block, BlockSummary, Deploy}
-import io.casperlabs.casper.consensus.info.DeployInfo
 import io.casperlabs.casper.MultiParentCasperImpl.Broadcaster
+import io.casperlabs.casper.consensus.info.DeployInfo
+import io.casperlabs.casper.consensus.{Block, BlockSummary, Deploy}
 import io.casperlabs.casper.finality.MultiParentFinalizer
 import io.casperlabs.casper.finality.votingmatrix.FinalityDetectorVotingMatrix
+import io.casperlabs.casper.mocks.MockFinalityStorage
 import io.casperlabs.casper.validation.{NCBValidationImpl, Validation}
 import io.casperlabs.casper.{consensus, _}
 import io.casperlabs.comm.discovery.{Node, NodeDiscovery, NodeIdentifier}
 import io.casperlabs.comm.gossiping._
 import io.casperlabs.comm.gossiping.synchronization._
 import io.casperlabs.crypto.Keys.PrivateKey
-import io.casperlabs.ipc.TransformEntry
 import io.casperlabs.mempool.DeployBuffer
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.p2p.EffectsTestInstances._
-import io.casperlabs.shared.{Cell, Log, SemaphoreMap, Time}
+import io.casperlabs.shared._
 import io.casperlabs.storage.block._
 import io.casperlabs.storage.dag._
 import io.casperlabs.storage.deploy.DeployStorage
-import monix.tail.Iterant
 import logstage.LogIO
-import io.casperlabs.shared.LogStub
+import monix.tail.Iterant
 
 import scala.collection.immutable.Queue
-import scala.concurrent.duration.FiniteDuration
-import scala.concurrent.duration._
-import io.casperlabs.casper.mocks.MockFinalityStorage
+import scala.concurrent.duration.{FiniteDuration, _}
 
 @silent("is never used")
 class GossipServiceCasperTestNode[F[_]](
@@ -487,7 +483,10 @@ object GossipServiceCasperTestNodeFactory {
                          s"Retrieving block summary ${PrettyPrinter.buildString(blockHash) -> "block" -> null} from storage."
                        ) *> blockStorage.getBlockSummary(blockHash)
 
-                     override def getBlock(blockHash: ByteString): F[Option[consensus.Block]] =
+                     override def getBlock(
+                         blockHash: ByteString,
+                         deploysBodiesExcluded: Boolean
+                     ): F[Option[consensus.Block]] =
                        Log[F].debug(
                          s"Retrieving block ${PrettyPrinter.buildString(blockHash) -> "block" -> null} from storage."
                        ) *>
