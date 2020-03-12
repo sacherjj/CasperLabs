@@ -32,9 +32,12 @@ export enum BitWidth {
   B_512 = 512
 }
 
-
 const powerOf2 = (n: number): bigint => {
-  return BigInt(2) ** BigInt(n);
+  let res = BigInt(1);
+  for (let i = 0; i < n; i++) {
+    res *= BigInt(2);
+  }
+  return res;
 };
 
 const numberLimitForUnsigned = (bit: number) => {
