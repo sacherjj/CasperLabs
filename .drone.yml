@@ -898,7 +898,6 @@ steps:
   settings:
     webhook:
       from_secret: slack_webhook
-    channel: alerts
     template:
     - |
       *{{ uppercasefirst build.status }}*
@@ -1210,7 +1209,6 @@ steps:
   settings:
     webhook:
       from_secret: slack_webhook
-    channel: alerts
     template:
     - |
       macOS Build Status: *{{ uppercasefirst build.status }}*
