@@ -82,6 +82,9 @@ sync-max-bonding-rate = 1.0
 # Maximum DAG depth to ask in iterative requests during syncing.
 sync-max-depth-ancestors-request = 5
 
+# Disable DAG shape validations during synchronization.
+sync-disable-validations = true
+
 # Maximum number of nodes to try to sync with initially in a round.
 init-sync-max-nodes = 5
 

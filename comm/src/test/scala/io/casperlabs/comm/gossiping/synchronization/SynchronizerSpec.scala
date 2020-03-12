@@ -500,7 +500,8 @@ object SynchronizerSpec {
         maxPossibleDepth = maxPossibleDepth,
         minBlockCountToCheckWidth = minBlockCountToCheckWidth,
         maxBondingRate = maxBondingRate,
-        maxDepthAncestorsRequest = maxDepthAncestorsRequest
+        maxDepthAncestorsRequest = maxDepthAncestorsRequest,
+        disableValidations = false
       ).flatMap { synchronizer =>
           test(synchronizer, TestVariables(requestsCounter, requestsGauge, knownHashes))
         }

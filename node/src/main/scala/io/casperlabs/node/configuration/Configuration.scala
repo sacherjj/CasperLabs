@@ -81,6 +81,7 @@ object Configuration extends ParserImplicits {
       syncMinBlockCountToCheckWidth: Int Refined NonNegative,
       syncMaxBondingRate: Double Refined GreaterEqual[W.`0.0`.T],
       syncMaxDepthAncestorsRequest: Int Refined Positive,
+      syncDisableValidations: Boolean,
       initSyncMaxNodes: Int,
       initSyncMinSuccessful: Int Refined Positive,
       initSyncMemoizeNodes: Boolean,
