@@ -56,6 +56,8 @@ import io.casperlabs.storage.era.EraStorage
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import java.util.concurrent.TimeUnit
 import java.time.Instant
+
+import io.casperlabs.casper.finality.MultiParentFinalizer.MeteredMultiParentFinalizer
 import io.casperlabs.shared.Sorting.jRankOrder
 
 import scala.util.control.NoStackTrace
@@ -265,7 +267,8 @@ object Highway {
                           lfb,
                           finalityDetector
                         )
-          } yield finalizer
+            meteredFinalized = MeteredMultiParentFinalizer.of[F](finalizer)
+          } yield meteredFinalized
         }
       }
 
