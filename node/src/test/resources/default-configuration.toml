@@ -32,6 +32,7 @@ sync-max-possible-depth = 1
 sync-min-block-count-to-check-width = 1
 sync-max-bonding-rate = 1.0
 sync-max-depth-ancestors-request = 1
+sync-disable-validations = false
 init-sync-max-nodes = 1
 init-sync-min-successful = 1
 init-sync-memoize-nodes = false
