@@ -296,6 +296,12 @@ abstract class ValidationImpl[F[_]: Sync: FunctorRaise[*[_], InvalidBlock]: Log:
     FunctorRaise[F, InvalidBlock]
       .raise[Unit](InvalidTargetHash)
       .whenA(b.getHeader.messageType.isBallot && b.getHeader.parentHashes.size != 1)
+
+  override def checkEquivocation(dag: DagRepresentation[F], block: Block): F[Unit] =
+    for {
+      message <- Sync[F].fromTry(Message.fromBlock(block))
+      _       <- EquivocationDetector.checkEquivocation[F](dag, message, isHighway)
+    } yield ()
 }
 
 class NCBValidationImpl[F[_]: Sync: FunctorRaise[*[_], InvalidBlock]: Log: Time: Metrics]
@@ -313,18 +319,10 @@ class NCBValidationImpl[F[_]: Sync: FunctorRaise[*[_], InvalidBlock]: Log: Time:
       Estimator
         .tips[F](dag, keyBlockHash, latestMessagesHashes, equivocators)
     }
-
-  override def checkEquivocation(dag: DagRepresentation[F], block: Block): F[Unit] =
-    for {
-      message <- Sync[F].fromTry(Message.fromBlock(block))
-      _       <- EquivocationDetector.checkEquivocationWithUpdate[F](dag, message)
-    } yield ()
 }
 
-class HighwayValidationImpl[F[_]: Sync: FunctorRaise[*[_], InvalidBlock]: Log: Time: Metrics: ForkChoice](
-    // TODO (CON-643): The equivocation detector doesn't know about eras, so voting ballots are treated incorrectly as equivocations.
-    validateEquivocation: Boolean = false
-) extends ValidationImpl[F](isHighway = true) {
+class HighwayValidationImpl[F[_]: Sync: FunctorRaise[*[_], InvalidBlock]: Log: Time: Metrics: ForkChoice]
+    extends ValidationImpl[F](isHighway = true) {
 
   override def tipsFromLatestMessages(
       dag: DagRepresentation[F],
@@ -336,11 +334,4 @@ class HighwayValidationImpl[F[_]: Sync: FunctorRaise[*[_], InvalidBlock]: Log: T
                  .fromJustifications(keyBlockHash, latestMessagesHashes.values.flatten.toSet)
       tips = NonEmptyList.one(choice.block.messageHash)
     } yield tips
-
-  // TODO (CON-643): The equivocation detector doesn't know about eras, so voting ballots are treated incorrectly as equivocations.
-  override def checkEquivocation(dag: DagRepresentation[F], block: Block): F[Unit] =
-    (for {
-      message <- Sync[F].fromTry(Message.fromBlock(block))
-      _       <- EquivocationDetector.checkEquivocationWithUpdate[F](dag, message)
-    } yield ()).whenA(validateEquivocation)
 }

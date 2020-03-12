@@ -24,6 +24,10 @@ impl StateKey {
 
 impl ToBytes for StateKey {
     fn to_bytes(&self) -> Result<Vec<u8>, bytesrepr::Error> {
-        Ok(self.0.to_vec())
+        self.0.to_bytes()
+    }
+
+    fn serialized_length(&self) -> usize {
+        self.0.serialized_length()
     }
 }

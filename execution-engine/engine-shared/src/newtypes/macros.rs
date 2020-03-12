@@ -102,6 +102,10 @@ macro_rules! make_array_newtype {
             fn to_bytes(&self) -> Result<Vec<u8>, bytesrepr::Error> {
                 self.0.to_bytes()
             }
+
+            fn serialized_length(&self) -> usize {
+                self.0.serialized_length()
+            }
         }
 
         impl bytesrepr::FromBytes for $name {

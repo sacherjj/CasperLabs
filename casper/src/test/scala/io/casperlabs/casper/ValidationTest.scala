@@ -49,7 +49,6 @@ import io.casperlabs.storage.BlockMsgWithTransform
 import io.casperlabs.storage.block._
 import io.casperlabs.storage.dag._
 import io.casperlabs.storage.deploy.DeployStorage
-import io.casperlabs.storage.SQLiteStorage.CombinedStorage
 import io.casperlabs.casper.validation.NCBValidationImpl
 import monix.eval.Task
 import monix.execution.Scheduler
@@ -100,15 +99,6 @@ class ValidationTest
     import Scheduler.Implicits.global
     t.runSyncUnsafe(5.seconds)
   }
-
-  def withCombinedStorageIndexed(
-      f: CombinedStorage[Task] => IndexedDagStorage[Task] => Task[_]
-  ): Unit =
-    withCombinedStorage() { db =>
-      IndexedDagStorage.create[Task](db).flatMap { ids =>
-        f(db)(ids)
-      }
-    }
 
   def createChain[F[_]: MonadThrowable: Time: BlockStorage: IndexedDagStorage](
       length: Int,

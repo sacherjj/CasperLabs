@@ -45,6 +45,7 @@ message DeployInfo {
         uint64 cost = 2;
         bool is_error = 3;
         string error_message = 4;
+        uint32 stage = 5;
     }
 
     enum View {

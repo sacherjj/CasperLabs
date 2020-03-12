@@ -30,28 +30,30 @@ trait DoobieCodecs {
     Read[Array[Byte]].map(Deploy.Header.parseFrom)
 
   protected implicit val readProcessingResult: Read[(ByteString, ProcessedDeploy)] = {
-    Read[(Array[Byte], Long, Option[String])].map {
-      case (blockHash, cost, maybeError) =>
+    Read[(Array[Byte], Long, Option[String], Int)].map {
+      case (blockHash, cost, maybeError, stage) =>
         (
           ByteString.copyFrom(blockHash),
           ProcessedDeploy(
             deploy = None,
             cost = cost,
             isError = maybeError.nonEmpty,
-            errorMessage = maybeError.getOrElse("")
+            errorMessage = maybeError.getOrElse(""),
+            stage = stage
           )
         )
     }
   }
 
   protected implicit val readProcessedDeploy: Read[ProcessedDeploy] = {
-    Read[(Deploy, Long, Option[String])].map {
-      case (deploy, cost, maybeError) =>
+    Read[(Deploy, Long, Option[String], Int)].map {
+      case (deploy, cost, maybeError, stage) =>
         ProcessedDeploy(
           deploy = Option(deploy),
           cost = cost,
           isError = maybeError.nonEmpty,
-          errorMessage = maybeError.getOrElse("")
+          errorMessage = maybeError.getOrElse(""),
+          stage = stage
         )
     }
   }
@@ -85,12 +87,13 @@ trait DoobieCodecs {
   }
 
   protected implicit val readDeployAndProcessingResult: Read[ProcessingResult] = {
-    Read[(Long, Option[String], BlockInfo)].map {
-      case (cost, maybeError, blockInfo) =>
+    Read[(Long, Option[String], Int, BlockInfo)].map {
+      case (cost, maybeError, stage, blockInfo) =>
         ProcessingResult(
           cost = cost,
           isError = maybeError.nonEmpty,
-          errorMessage = maybeError.getOrElse("")
+          errorMessage = maybeError.getOrElse(""),
+          stage = stage
         ).withBlockInfo(blockInfo)
     }
   }
