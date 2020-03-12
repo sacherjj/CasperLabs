@@ -27,6 +27,8 @@ import io.casperlabs.storage.util.DoobieCodecs
 
 import scala.collection.JavaConverters._
 import cats.effect.concurrent.Ref
+import io.casperlabs.storage.dag.AncestorsStorage.MeteredAncestorsStorage
+import io.casperlabs.storage.dag.FinalityStorage.MeteredFinalityStorage
 
 class SQLiteDagStorage[F[_]: Sync](
     readXa: Transactor[F],
@@ -180,7 +182,10 @@ class SQLiteDagStorage[F[_]: Sync](
     } yield dag
   }
 
-  override def findAncestor(block: BlockHash, distance: Long): F[Option[BlockHash]] =
+  override private[storage] def findAncestor(
+      block: BlockHash,
+      distance: Long
+  ): F[Option[BlockHash]] =
     sql"""SELECT ancestor_hash FROM message_ancestors_skiplist
           WHERE block_hash=$block AND distance=$distance"""
       .query[BlockHash]
@@ -548,8 +553,8 @@ object SQLiteDagStorage {
                      new SQLiteDagStorage[F](readXa, writeXa)
                        with MeteredDagStorage[F]
                        with MeteredDagRepresentation[F]
-                       with AncestorsStorage[F]
-                       with FinalityStorage[F] {
+                       with MeteredAncestorsStorage[F]
+                       with MeteredFinalityStorage[F] {
                        override implicit val m: Metrics[F] = met
                        override implicit val ms: Source    = MetricsSource
                        override implicit val a: Apply[F]   = Sync[F]
