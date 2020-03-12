@@ -302,7 +302,7 @@ explorer/contracts/%.wasm: .make/contracts/%
 build-client: \
 	.make/sbt-stage/client
 
-build-python-client: 
+build-python-client: \
 	build-client-contracts \
 	$(PROTO_SRC) \
 	$(shell find ./integration-testing/client/CasperLabsClient/ -name "*.py"|grep -v _grpc.py)
