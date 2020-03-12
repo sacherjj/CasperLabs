@@ -53,4 +53,14 @@ class MappingsTest extends FlatSpec with Matchers with PropertyChecks {
     val wideProto = Mappings.toProto(wideType)
     val _         = Mappings.fromProto(wideProto)
   }
+
+  "CLValueInstance.List(U8) and CLValueInstance.FixedList(U8)" should "convert into bytes" in {
+    val bytes          = Array.range(0, 32).map(_.toByte)
+    val bytesInstances = bytes.map(CLValueInstance.U8.apply)
+    val list           = CLValueInstance.List(bytesInstances, CLType.U8).right.get
+    val fixedList      = CLValueInstance.FixedList(bytesInstances, CLType.U8, bytes.length).right.get
+
+    Mappings.toProto(list) shouldBe dsl.instances.bytes(bytes)
+    Mappings.toProto(fixedList) shouldBe dsl.instances.bytesFixedLength(bytes)
+  }
 }
