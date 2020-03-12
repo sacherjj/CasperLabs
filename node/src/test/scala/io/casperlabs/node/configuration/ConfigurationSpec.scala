@@ -85,6 +85,7 @@ class ConfigurationSpec
       syncMinBlockCountToCheckWidth = 1,
       syncMaxBondingRate = 1.0,
       syncMaxDepthAncestorsRequest = 1,
+      syncDisableValidations = false,
       initSyncMaxNodes = 1,
       initSyncMinSuccessful = 1,
       initSyncMemoizeNodes = false,

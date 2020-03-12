@@ -361,6 +361,10 @@ private[configuration] final case class Options private (
       gen[Int]("Maximum DAG depth to ask in iterative requests during syncing.")
 
     @scallop
+    val serverSyncDisableValidations =
+      gen[Flag]("Disable DAG shape validations during synchronization.")
+
+    @scallop
     val serverInitSyncMaxNodes =
       gen[Int]("Maximum number of nodes to try to sync with initially in a round.")
 
