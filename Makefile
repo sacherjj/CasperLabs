@@ -304,7 +304,7 @@ build-client: \
 
 build-python-client: 
 	build-client-contracts \
-	$(shell find ./protobuf) \
+	$(PROTO_SRC) \
 	$(shell find ./integration-testing/client/CasperLabsClient/ -name "*.py"|grep -v _grpc.py)
 	cd integration-testing && pipenv run client/CasperLabsClient/build.sh
 
