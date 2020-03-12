@@ -52,7 +52,7 @@ def check_eras(blocks_in_eras, client):
         messages = blocks_in_eras[key_block_hash]
         ballots, blocks = split_ballots_and_blocks(messages)
 
-        assert len(blocks) > 0
+        assert len(blocks) > 0, "There should be at least one block in each era"
 
         key_block = client.showBlock(key_block_hash.hex(), full_view=False)
 
@@ -99,8 +99,7 @@ def check_rounds(blocks_in_rounds):
             f"""round_id: {round_id} ({datetime_from_timestamp(round_id)}): {len(blocks)} {plural("block", blocks)} ({format_list(validator_public_keys)})), {len(ballots)} {plural("ballot", ballots)}"""
         )
 
-        # There must be at most one block in a round.
-        assert len(blocks) <= 1
+        assert len(blocks) <= 1, "There must be at most one block in a round"
 
 
 def check_highway_dag(client, number_of_eras=2):
