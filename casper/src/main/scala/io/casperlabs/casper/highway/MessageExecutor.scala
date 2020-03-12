@@ -41,6 +41,8 @@ class MessageExecutor[F[_]: Concurrent: Log: Time: Metrics: BlockStorage: DagSto
     maybeValidatorId: Option[PublicKeyBS]
 ) {
 
+  private implicit val metricsSource = HighwayMetricsSource / "MessageExecutor"
+
   private implicit val functorRaiseInvalidBlock =
     validation.raiseValidateErrorThroughApplicativeError[F]
 
@@ -87,15 +89,16 @@ class MessageExecutor[F[_]: Concurrent: Log: Time: Metrics: BlockStorage: DagSto
     */
   def effectsAfterAdded(message: ValidatedMessage): F[F[Unit]] =
     for {
-      _ <- markDeploysAsProcessed(message)
+      _ <- markDeploysAsProcessed(message).timer("markDeploysAsProcessed")
       // Forking event emissions so as not to hold up block processing.
       w1 <- BlockEventEmitter[F].blockAdded(message.messageHash).forkAndLog
-      w2 <- updateLastFinalizedBlock(message)
+      w2 <- updateLastFinalizedBlock(message).timer("updateLastFinalizedBlock")
     } yield w1 *> w2
 
   private def updateLastFinalizedBlock(message: Message): F[F[Unit]] =
     for {
-      result <- MultiParentFinalizer[F].onNewMessageAdded(message)
+      result <- MultiParentFinalizer[F]
+                 .onNewMessageAdded(message)
       w <- result.traverse {
             case MultiParentFinalizer.FinalizedBlocks(mainParent, _, secondary) => {
               val mainParentFinalizedStr = mainParent.show
@@ -107,7 +110,7 @@ class MessageExecutor[F[_]: Concurrent: Log: Time: Metrics: BlockStorage: DagSto
                     )
                 _  <- FinalityStorage[F].markAsFinalized(mainParent, secondary)
                 w1 <- DeployBuffer[F].removeFinalizedDeploys(secondary + mainParent).forkAndLog
-                w2 <- BlockEventEmitter[F].newLastFinalizedBlock(mainParent, secondary).forkAndLog
+                w2 <- BlockEventEmitter[F].newLastFinalizedBlock(mainParent, secondary).timer("emitNewLFB").forkAndLog
               } yield w1 *> w2
             }
           }
