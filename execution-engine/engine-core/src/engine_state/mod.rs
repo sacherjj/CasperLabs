@@ -214,11 +214,10 @@ where
 
         // Spec #5: Execute the wasm code from the mint installer bytes
         let mint_reference: URef = {
-            let mint_installer_bytes = genesis_config.mint_installer_bytes();
-
-            if !self.config.use_system_contracts() && mint_installer_bytes.is_empty() {
+            if !self.config.use_system_contracts() {
                 store_do_nothing_contract()?
             } else {
+                let mint_installer_bytes = genesis_config.mint_installer_bytes();
                 let mint_installer_module = preprocessor.preprocess(mint_installer_bytes)?;
                 let args = Vec::new();
                 let mut named_keys = BTreeMap::new();
@@ -252,8 +251,6 @@ where
         // Spec #7: Execute pos installer wasm code, passing the initially bonded validators as an
         // argument
         let proof_of_stake_reference: URef = {
-            let proof_of_stake_installer_bytes = genesis_config.proof_of_stake_installer_bytes();
-
             // Spec #6: Compute initially bonded validators as the contents of accounts_path
             // filtered to non-zero staked amounts.
             let bonded_validators: BTreeMap<PublicKey, U512> = genesis_config
@@ -270,7 +267,7 @@ where
             // step
             let partial_protocol_data = ProtocolData::partial_with_mint(mint_reference);
 
-            if !self.config.use_system_contracts() && proof_of_stake_installer_bytes.is_empty() {
+            if !self.config.use_system_contracts() {
                 let uref = {
                     let addr = address_generator.borrow_mut().create_address();
                     URef::new(addr, AccessRights::READ_ADD_WRITE)
@@ -357,6 +354,8 @@ where
                 tracking_copy.borrow_mut().write(key, value);
                 uref
             } else {
+                let proof_of_stake_installer_bytes =
+                    genesis_config.proof_of_stake_installer_bytes();
                 let proof_of_stake_installer_module =
                     preprocessor.preprocess(proof_of_stake_installer_bytes)?;
                 let args = {
