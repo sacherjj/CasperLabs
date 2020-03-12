@@ -99,7 +99,7 @@ class ChainSpecTest extends WordSpecLike with Matchers with Inspectors {
           genesis.timestamp shouldBe 1568805354071L
           genesis.getProtocolVersion shouldBe state.ProtocolVersion(0, 1)
 
-          val eeGenesisConfig = genesis.getEeGenesisConfig
+          val eeGenesisConfig = genesis.getEeConfig
 
           new String(eeGenesisConfig.mintInstaller.toByteArray).trim shouldBe "mint contract bytes"
           new String(eeGenesisConfig.posInstaller.toByteArray).trim shouldBe "pos contract bytes"
@@ -185,7 +185,7 @@ class ChainSpecTest extends WordSpecLike with Matchers with Inspectors {
 
       "apply file overrides" in {
         check(readSpec) { spec =>
-          val accounts = spec.getGenesis.getEeGenesisConfig.accounts
+          val accounts = spec.getGenesis.getEeConfig.accounts
           accounts should have size 1
           accounts(0).getBalance.value shouldBe "1000"
           accounts(0).getBondedAmount.value shouldBe "100"

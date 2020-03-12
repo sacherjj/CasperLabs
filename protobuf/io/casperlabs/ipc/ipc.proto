@@ -247,7 +247,26 @@ message ChainSpec {
         io.casperlabs.casper.consensus.state.ProtocolVersion protocol_version = 3;
         DeployConfig deploy_config = 8;
         HighwayConfig highway_config = 9;
-        EEGenesisConfig ee_genesis_config = 11;
+        ExecConfig ee_config = 11;
+
+        message ExecConfig {
+            // wasm bytecode for installing the mint system contract
+            bytes mint_installer = 1;
+            // wasm bytes for installing the pos system contract
+            bytes pos_installer = 2;
+            // wasm bytes for installing the standard payment system contract
+            bytes standard_payment_installer = 3;
+            // genesis account information
+            repeated GenesisAccount accounts = 4;
+            // costs at genesis
+            CostTable costs = 5;
+    
+            message GenesisAccount {
+                bytes public_key = 1;
+                io.casperlabs.casper.consensus.state.BigInt balance = 2; // in motes
+                io.casperlabs.casper.consensus.state.BigInt bonded_amount = 3; // in motes, 0 means "not bonded"
+            }
+        }
     }
 
     message DeployConfig {
@@ -268,25 +287,6 @@ message ChainSpec {
         uint64 voting_period_duration_millis = 5;
         // Stop the post-era voting period when the switch block reaches a certain summit level; when 0 use the duration instead.
         uint32 voting_period_summit_level = 6;
-    }
-
-    message EEGenesisConfig {
-        // wasm bytecode for installing the mint system contract
-        bytes mint_installer = 1;
-        // wasm bytes for installing the pos system contract
-        bytes pos_installer = 2;
-        // wasm bytes for installing the standard payment system contract
-        bytes standard_payment_installer = 3;
-        // genesis account information
-        repeated GenesisAccount accounts = 4;
-        // costs at genesis
-        CostTable costs = 5;
-
-        message GenesisAccount {
-            bytes public_key = 1;
-            io.casperlabs.casper.consensus.state.BigInt balance = 2; // in motes
-            io.casperlabs.casper.consensus.state.BigInt bonded_amount = 3; // in motes, 0 means "not bonded"
-        }
     }
 
     message CostTable {
@@ -454,7 +454,7 @@ message RunGenesisRequest {
     bytes genesis_config_hash = 1;
     io.casperlabs.casper.consensus.state.ProtocolVersion protocol_version = 2;
     // Genesis configuration for the ExecutionEngine.
-    ChainSpec.EEGenesisConfig ee_genesis_config = 3;
+    ChainSpec.GenesisConfig.ExecConfig ee_config = 3;
 }
 
 // --- END PROOF-OF-STAKE SERVICE DEFINITION --- //

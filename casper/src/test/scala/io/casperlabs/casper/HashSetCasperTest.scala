@@ -1447,11 +1447,11 @@ object HashSetCasperTest {
       .withName("casperlabs")
       .withTimestamp(timestamp)
       .withProtocolVersion(state.ProtocolVersion(1))
-      .withEeGenesisConfig(
-        ipc.ChainSpec
-          .EEGenesisConfig()
+      .withEeConfig(
+        ipc.ChainSpec.GenesisConfig
+          .ExecConfig()
           .withAccounts((bonds.keySet ++ wallets.keySet).toSeq.map { key =>
-            ipc.ChainSpec.EEGenesisConfig
+            ipc.ChainSpec.GenesisConfig.ExecConfig
               .GenesisAccount()
               .withPublicKey(ByteString.copyFrom(key))
               .withBalance(state.BigInt(wallets.getOrElse(key, 0L).toString, bitWidth = 512))

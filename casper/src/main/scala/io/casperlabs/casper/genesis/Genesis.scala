@@ -46,14 +46,14 @@ object Genesis {
                           RunGenesisRequest()
                             .withGenesisConfigHash(ProtoUtil.protoHash(genesisConfig))
                             .withProtocolVersion(genesisConfig.getProtocolVersion)
-                            .withEeGenesisConfig(genesisConfig.getEeGenesisConfig)
+                            .withEeConfig(genesisConfig.getEeConfig)
                         )
                         .rethrow
       transforms    = genesisResult.getEffect.transformMap
       postStateHash = genesisResult.poststateHash
 
       // Sorted list of bonded validators.
-      bonds = genesisConfig.getEeGenesisConfig.accounts
+      bonds = genesisConfig.getEeConfig.accounts
         .sortBy { x =>
           x.publicKey -> x.getBondedAmount.value
         }
