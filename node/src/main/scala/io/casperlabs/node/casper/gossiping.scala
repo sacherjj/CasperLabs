@@ -296,12 +296,6 @@ package object gossiping {
                               // Validation has already stored it.
                               ().pure[F]
 
-                            override def storeBlockSummary(
-                                summary: BlockSummary
-                            ): F[Unit] =
-                              // Storing the block automatically stores the summary as well.
-                              ().pure[F]
-
                             override def onScheduled(summary: BlockSummary): F[Unit] =
                               Consensus[F].onScheduled(summary)
 

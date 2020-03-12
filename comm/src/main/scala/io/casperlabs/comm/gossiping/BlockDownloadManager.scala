@@ -57,7 +57,6 @@ trait DownloadManagerCompanion extends DownloadManagerTypes {
     def hasDownloadable(identifier: Identifier): F[Boolean]
     def validateDownloadable(downloadable: Downloadable): F[Unit]
     def storeDownloadable(downloadable: Downloadable): F[Unit]
-    def storeHandler(handle: Handle): F[Unit]
 
     /** Notify about new downloadables we were told about but haven't acquired yet. */
     def onScheduledByHandler(handle: Handle): F[Unit]
@@ -144,7 +143,6 @@ object BlockDownloadManagerImpl extends DownloadManagerCompanion {
     def hasBlock(byteString: ByteString): F[Boolean]
     def validateBlock(downloadable: Block): F[Unit]
     def storeBlock(downloadable: Block): F[Unit]
-    def storeBlockSummary(blockSummary: BlockSummary): F[Unit]
     def onScheduled(blockSummary: BlockSummary): F[Unit]
     def onDownloaded(byteString: ByteString): F[Unit]
 
@@ -153,7 +151,6 @@ object BlockDownloadManagerImpl extends DownloadManagerCompanion {
     override def validateDownloadable(downloadable: Downloadable): F[Unit] =
       validateBlock(downloadable)
     override def storeDownloadable(downloadable: Downloadable): F[Unit] = storeBlock(downloadable)
-    override def storeHandler(handle: Handle): F[Unit]                  = storeBlockSummary(handle)
     override def onScheduledByHandler(handle: Handle): F[Unit]          = onScheduled(handle)
     override def onDownloadedByPartialHandler(identifier: Identifier): F[Unit] =
       onDownloaded(identifier)
@@ -409,12 +406,9 @@ class BlockDownloadManagerImpl[F[_]: Concurrent: Log: Timer: Metrics](
         block <- fetchAndRestore(source, blockHash)
         _     <- backend.validateDownloadable(block)
         _     <- backend.storeDownloadable(block)
-        // This could arguably be done by `storeBlock` but this way it's explicit,
-        // so we don't forget to talk to both kind of storages.
-        _ <- backend.storeHandler(summary)
-        _ <- relaying.relay(List(summary.blockHash)).whenA(relay)
-        _ <- success
-        _ <- Metrics[F].incrementCounter("downloads_succeeded")
+        _     <- relaying.relay(List(summary.blockHash)).whenA(relay)
+        _     <- success
+        _     <- Metrics[F].incrementCounter("downloads_succeeded")
       } yield ()
 
     // Try to download until we succeed or give up.

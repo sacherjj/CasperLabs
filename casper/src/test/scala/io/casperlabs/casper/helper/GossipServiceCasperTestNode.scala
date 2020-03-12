@@ -406,12 +406,6 @@ object GossipServiceCasperTestNodeFactory {
                                  // Validation has already stored it.
                                  ().pure[F]
 
-                               override def storeBlockSummary(
-                                   summary: consensus.BlockSummary
-                               ): F[Unit] =
-                                 // No means to store summaries separately yet.
-                                 ().pure[F]
-
                                override def onScheduled(summary: consensus.BlockSummary) =
                                  // The EquivocationDetector treats equivocations with children differently,
                                  // so let Casper know about the DAG dependencies up front.
