@@ -532,7 +532,7 @@ object MultiParentCasperImpl {
       chainName: String,
       minTtl: FiniteDuration,
       upgrades: Seq[ipc.ChainSpec.UpgradePoint],
-      faultToleranceThreshold: Double = 0.1,
+      faultToleranceThreshold: Double,
       lfbRef: Ref[F, BlockHash]
   ): F[MultiParentCasper[F]] =
     for {

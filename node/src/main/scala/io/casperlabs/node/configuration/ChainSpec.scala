@@ -116,7 +116,8 @@ object ChainSpec extends ParserImplicits {
       bookingDuration: FiniteDuration,
       entropyDuration: FiniteDuration,
       votingPeriodDuration: FiniteDuration,
-      votingPeriodSummitLevel: Int Refined Interval.Closed[W.`0`.T, W.`1`.T]
+      votingPeriodSummitLevel: Int Refined Interval.Closed[W.`0`.T, W.`1`.T],
+      ftt: Double Refined Interval.OpenClosed[W.`0.0`.T, W.`0.5`.T]
   )
 
   final case class Upgrade(
@@ -418,7 +419,8 @@ object ChainSpecReader {
       highwayConfig.bookingDuration.toMillis,
       highwayConfig.entropyDuration.toMillis,
       highwayConfig.votingPeriodDuration.toMillis,
-      highwayConfig.votingPeriodSummitLevel.value
+      highwayConfig.votingPeriodSummitLevel.value,
+      highwayConfig.ftt.value
     )
 
   private def withManifest[A, B](dir: Path, parseManifest: (=> Source) => ValidatedNel[String, A])(

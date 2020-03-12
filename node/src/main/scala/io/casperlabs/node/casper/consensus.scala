@@ -178,7 +178,8 @@ object NCB {
                      transforms,
                      genesis.getHeader.chainName,
                      conf.casper.minTtl,
-                     chainSpec.upgrades
+                     chainSpec.upgrades,
+                     rFTT = chainSpec.getGenesis.getHighwayConfig.ftt
                    )
           _ <- MultiParentCasperRef[F].set(casper)
           _ <- Log[F].info(s"Making the transition to block processing.")
@@ -245,7 +246,7 @@ object Highway {
   ): Resource[F, Consensus[F]] = {
     val chainName               = chainSpec.getGenesis.name
     val hc                      = chainSpec.getGenesis.getHighwayConfig
-    val faultToleranceThreshold = 0.1
+    val faultToleranceThreshold = chainSpec.getGenesis.getHighwayConfig.ftt
 
     for {
       implicit0(finalizer: MultiParentFinalizer[F]) <- {
