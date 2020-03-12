@@ -11,6 +11,8 @@ import {
 } from '../containers/DeployContractsContainer';
 import Modal from './Modal';
 import { CLType, Key } from 'casperlabs-grpc/io/casperlabs/casper/consensus/state_pb';
+import Pages from './Pages';
+import { Link } from 'react-router-dom';
 
 
 interface Props {
@@ -31,7 +33,7 @@ export class DeployContractsForm extends React.Component<Props, {}> {
   }
 
   componentWillUnmount(): void {
-    if(this.interval){
+    if (this.interval) {
       window.clearInterval(this.interval);
       this.interval = null;
     }
@@ -54,65 +56,70 @@ export class DeployContractsForm extends React.Component<Props, {}> {
             id="id-private-key"
             label="Private Key"
             fieldState={deployContractsContainer.privateKey}
-            placeholder="Human readable alias"
           />
         </Form>
       </Modal>
     );
     return (
-      <Card title="Deploy Smart Contracts" accordionId={deployContractsContainer.accordionId}>
-        <Form>
-          <SelectField id="id-contract-type" label="Type"
-                       value={deployContractsContainer.deployConfiguration.$.contractType.$}
-                       placeholder="Please Select the Type of Deploy"
-                       options={
-                         Object.keys(ContractType).map(t => {
-                           return {
-                             label: (ContractType as any)[t],
-                             value: t
-                           };
-                         })}
-                       onChange={(value: string) => {
-                         deployContractsContainer.deployConfiguration.$.contractType.onChange(value as ContractType);
-                       }}
-          />
-          {
-            deployContractsContainer.deployConfiguration.$.contractType.$ === ContractType.WASM && (
-              <FileSelect id="id-wasm-select"
-                          label={deployContractsContainer.selectedFile?.name || 'Select WASM File'}
-                          handleFileSelect={deployContractsContainer.handleFileSelect}/>
-            )
-          }
-          {
-            deployContractsContainer.deployConfiguration.$.contractType.$ === ContractType.Hash && (
-              <TextField id="id-contract-hash" label="Hash(Base16) of the Contract"
-                         fieldState={deployContractsContainer.deployConfiguration.$.contractHash}/>
-            )
-          }
-          <FormRow splits={[6, 6]}>
-            <NumberField id="id-gas-price" label="Gas Price"
-                         fieldState={deployContractsContainer.deployConfiguration.$.gasPrice}/>
-            <NumberField id="id-gas-limit" label="Gas Limit"
-                         fieldState={deployContractsContainer.deployConfiguration.$.gasLimit}/>
-          </FormRow>
-          <TextField id="id-from-address" label="From (Optional)"
-                     fieldState={deployContractsContainer.deployConfiguration.$.fromAddress}/>
-        </Form>
+      <div>
+        <Card title="Deploy Smart Contracts" accordionId={deployContractsContainer.accordionId}>
+          <Form>
+            <SelectField id="id-contract-type" label="Type"
+                         value={deployContractsContainer.deployConfiguration.$.contractType.$}
+                         placeholder="Please Select the Type of Deploy"
+                         options={
+                           Object.keys(ContractType).map(t => {
+                             return {
+                               label: (ContractType as any)[t],
+                               value: t
+                             };
+                           })}
+                         onChange={(value: string) => {
+                           deployContractsContainer.deployConfiguration.$.contractType.onChange(value as ContractType);
+                         }}
+            />
+            {
+              deployContractsContainer.deployConfiguration.$.contractType.$ === ContractType.WASM && (
+                <FileSelect id="id-wasm-select"
+                            label={deployContractsContainer.selectedFile?.name || 'Select WASM File'}
+                            handleFileSelect={deployContractsContainer.handleFileSelect}/>
+              )
+            }
+            {
+              deployContractsContainer.deployConfiguration.$.contractType.$ === ContractType.Hash && (
+                <TextField id="id-contract-hash" label="Hash(Base16) of the Contract"
+                           fieldState={deployContractsContainer.deployConfiguration.$.contractHash}/>
+              )
+            }
+            <FormRow splits={[6, 6]}>
+              <NumberField id="id-gas-price" label="Gas Price"
+                           fieldState={deployContractsContainer.deployConfiguration.$.gasPrice}/>
+              <NumberField id="id-gas-limit" label="Gas Limit"
+                           fieldState={deployContractsContainer.deployConfiguration.$.gasLimit}/>
+            </FormRow>
+            <TextField id="id-from-address" label="From (Optional)"
+                       fieldState={deployContractsContainer.deployConfiguration.$.fromAddress}/>
+          </Form>
 
-        {deployContractsContainer.signDeployModal && modalAccountForm}
+          {deployContractsContainer.signDeployModal && modalAccountForm}
 
-        <Card title="Setting Arguments" accordionId={'arguments-table'}>
-          <ArgumentTable deployContractsContainer={deployContractsContainer}/>
+          <Card title="Setting Arguments" accordionId={'arguments-table'}>
+            <ArgumentTable deployContractsContainer={deployContractsContainer}/>
+          </Card>
+
+          <div className="mt-5">
+            <ListInline>
+              <Button size='lg' onClick={deployContractsContainer.openSignModal} title={'Sign'}/>
+              <Button size='lg' type='danger' onClick={deployContractsContainer.clearForm} title={'Clear'}/>
+            </ListInline>
+          </div>
         </Card>
-
-        <div className="mt-5">
-          <ListInline>
-            <Button size='lg' onClick={deployContractsContainer.openSignModal} title={'Sign'}/>
-            <Button size='lg' type='danger' onClick={deployContractsContainer.clearForm} title={'Clear'}/>
-          </ListInline>
-        </div>
-      </Card>
+        {deployContractsContainer.deployedHash && (<Card title="Deployed Successfully">
+          <Link to={Pages.deploy(deployContractsContainer.deployedHash!)}>{deployContractsContainer.deployedHash}</Link>
+        </Card>)}
+      </div>
     );
+
   }
 }
 
@@ -135,9 +142,9 @@ const ArgumentRow = observer((props: {
             <select className="form-control" value={props.deployArgument.$.type.value}
                     onChange={e => {
                       let v = e.target.value;
-                      if(v === 'Bytes'){
+                      if (v === 'Bytes') {
                         props.deployArgument.$.type.onChange(v);
-                      }else{
+                      } else {
                         props.deployArgument.$.type.onChange(parseInt(e.target.value) as any);
                       }
                     }}>

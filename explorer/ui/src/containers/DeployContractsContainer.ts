@@ -3,7 +3,7 @@ import { action, observable } from 'mobx';
 import ErrorContainer from './ErrorContainer';
 import { CasperService, decodeBase16, decodeBase64, DeployUtil, encodeBase16 } from 'casperlabs-sdk';
 import { FieldState, FormState } from 'formstate';
-import { isBlockHashBase16, isInt, numberBigThan, valueRequired } from '../lib/FormsValidator';
+import { isBase16, isInt, numberBigThan, valueRequired } from '../lib/FormsValidator';
 import validator from 'validator';
 import * as nacl from 'tweetnacl-ts';
 import $ from 'jquery';
@@ -113,7 +113,7 @@ interface UserInputPersistent {
 export class DeployContractsContainer {
   @observable deployConfiguration: FormDeployConfiguration = new FormState<DeployConfiguration>({
     contractType: new FieldState<ContractType | null>(null).validators(valueRequired),
-    contractHash: new FieldState('').disableAutoValidation().validators(isBlockHashBase16),
+    contractHash: new FieldState('').disableAutoValidation(),
     gasPrice: new FieldState<number>(10).validators(
       numberBigThan(0),
       isInt
@@ -123,13 +123,32 @@ export class DeployContractsContainer {
       isInt
     ),
     fromAddress: new FieldState<string>('')
+  }).compose().validators(deployConfiguration => {
+    if (deployConfiguration.contractType.$ === ContractType.Hash) {
+      let value = deployConfiguration.contractHash.value;
+      let v = isBase16(value) || valueRequired(value);
+      if(v !== false){
+        deployConfiguration.contractHash.setError(v);
+      }
+      return v;
+    }else{
+      // WASM
+      if(!this.selectedFile){
+        const msg = "Upload WASM file firstly";
+        alert(msg);
+        return msg;
+      }
+    }
+    return false;
   });
   @observable deployArguments: FormDeployArguments = new FormState<FormDeployArgument[]>([]);
   @observable editingDeployArguments: FormDeployArguments = new FormState<FormDeployArgument[]>([]);
-  @observable privateKey = new FieldState<string>('');
+  @observable privateKey = new FieldState<string>('').validators(valueRequired);
   @observable selectedFile: File | null = null;
   @observable editing: boolean = false;
   @observable signDeployModal: boolean = false;
+  // hash of deploy result
+  @observable deployedHash: string | null = "3cc0a7764cca3b0a229f32388d920b9fec9f0c0b15df581dc2e957e014409ed5";
   private selectedFileContent: null | ByteArray = null;
   private static PersistentKey = 'deploy-configuration';
 
@@ -230,20 +249,22 @@ export class DeployContractsContainer {
 
   @action.bound
   async onSubmit() {
-    let deploy = await this.makeDeploy();
-    let keyPair = nacl.sign_keyPair_fromSecretKey(decodeBase64(this.privateKey.$));
+    this.deployedHash = null;
+    let privateKey = decodeBase64(this.privateKey.$);
+    let keyPair = nacl.sign_keyPair_fromSecretKey(privateKey);
+    let deploy = await this.makeDeploy(keyPair.publicKey);
     let signedDeploy = DeployUtil.signDeploy(deploy!, keyPair);
     try {
       await this.errors.withCapture(this.casperService.deploy(signedDeploy));
       ($(`#${this.accordionId}`) as any).collapse('hide');
-      console.log(encodeBase16(signedDeploy.getDeployHash_asU8()));
+      this.deployedHash = encodeBase16(signedDeploy.getDeployHash_asU8());
       return true;
     } catch {
       return true;
     }
   }
 
-  private async makeDeploy(): Promise<Deploy | null> {
+  private async makeDeploy(publicKey: Uint8Array): Promise<Deploy | null> {
     let deployConfigurationForm = await this.deployConfiguration.validate();
     let deployArguments = await this.deployArguments.validate();
     if (deployConfigurationForm.hasError || deployArguments.hasError) {
@@ -273,8 +294,7 @@ export class DeployContractsContainer {
           const fixedListType = new CLType.FixedList();
           fixedListType.setInner(innerType);
           const bytes = decodeBase16(argValueStr);
-          console.log(`bytes len: ${bytes.length}, args: ${argValueStr.length}`);
-          fixedListType.setLen(argValueStr.length);
+          fixedListType.setLen(bytes.length);
           clType.setFixedListType(fixedListType);
           value.setBytesValue(bytes);
         } else {
@@ -364,7 +384,7 @@ export class DeployContractsContainer {
       });
       let wasmRequest = await fetch(paymentWASMUrl);
       let paymentWASM: ArrayBuffer = await wasmRequest.arrayBuffer();
-      return DeployUtil.makeDeploy(argsProto, type, session, new Uint8Array(paymentWASM), BigInt(gasLimit), new Uint8Array(0), gasPrice);
+      return DeployUtil.makeDeploy(argsProto, type, session, new Uint8Array(paymentWASM), BigInt(gasLimit), publicKey, gasPrice);
     }
   }
 
@@ -403,7 +423,7 @@ export class DeployContractsContainer {
         }
         return false;
       case 'Bytes':
-        if (!validator.isHexadecimal(value)){
+        if (!validator.isHexadecimal(value)) {
           return `Value should be base16`;
         }
         return false;
