@@ -3,7 +3,7 @@ import { action, observable } from 'mobx';
 import ErrorContainer from './ErrorContainer';
 import { CasperService, decodeBase16, decodeBase64, DeployUtil, encodeBase16 } from 'casperlabs-sdk';
 import { FieldState, FormState } from 'formstate';
-import { isBase16, isInt, numberBigThan, valueRequired } from '../lib/FormsValidator';
+import { isBase16, isInt, numberGreaterThan, valueRequired } from '../lib/FormsValidator';
 import validator from 'validator';
 import * as nacl from 'tweetnacl-ts';
 import $ from 'jquery';
@@ -83,8 +83,7 @@ type FormDeployArguments = FormState<FormDeployArgument[]>;
 export type DeployConfiguration = {
   contractType: FieldState<ContractType | null>,
   contractHash: FieldState<string>,
-  gasPrice: FieldState<number>,
-  gasLimit: FieldState<number>,
+  paymentAmount: FieldState<number>,
   fromAddress: FieldState<string>
 }
 
@@ -101,8 +100,7 @@ interface RawDeployArguments {
 interface UserInputPersistent {
   deployConfiguration: {
     contractType: ContractType | null,
-    gasPrice: number,
-    gasLimit: number,
+    paymentAmount: number,
     fromAddress: string
   },
   deployArguments: RawDeployArguments[],
@@ -114,12 +112,8 @@ export class DeployContractsContainer {
   @observable deployConfiguration: FormDeployConfiguration = new FormState<DeployConfiguration>({
     contractType: new FieldState<ContractType | null>(null).validators(valueRequired),
     contractHash: new FieldState('').disableAutoValidation(),
-    gasPrice: new FieldState<number>(10).validators(
-      numberBigThan(0),
-      isInt
-    ),
-    gasLimit: new FieldState<number>(10000000).validators(
-      numberBigThan(0),
+    paymentAmount: new FieldState<number>(10000000).validators(
+      numberGreaterThan(0),
       isInt
     ),
     fromAddress: new FieldState<string>('')
@@ -148,7 +142,7 @@ export class DeployContractsContainer {
   @observable editing: boolean = false;
   @observable signDeployModal: boolean = false;
   // hash of deploy result
-  @observable deployedHash: string | null = "3cc0a7764cca3b0a229f32388d920b9fec9f0c0b15df581dc2e957e014409ed5";
+  @observable deployedHash: string | null = null;
   private selectedFileContent: null | ByteArray = null;
   private static PersistentKey = 'deploy-configuration';
 
@@ -260,7 +254,7 @@ export class DeployContractsContainer {
       this.deployedHash = encodeBase16(signedDeploy.getDeployHash_asU8());
       return true;
     } catch {
-      return true;
+      return false;
     }
   }
 
@@ -281,8 +275,7 @@ export class DeployContractsContainer {
         type = 'WASM';
         session = this.selectedFileContent!;
       }
-      const gasLimit = config.gasLimit.value;
-      const gasPrice = config.gasPrice.value;
+      const paymentAmount = config.paymentAmount.value;
       let argsProto = args.map((arg: FormState<DeployArgument>) => {
         const value = new CLValueInstance.Value();
         const argValueStr: string = arg.$.value.value;
@@ -384,7 +377,9 @@ export class DeployContractsContainer {
       });
       let wasmRequest = await fetch(paymentWASMUrl);
       let paymentWASM: ArrayBuffer = await wasmRequest.arrayBuffer();
-      return DeployUtil.makeDeploy(argsProto, type, session, new Uint8Array(paymentWASM), BigInt(gasLimit), publicKey, gasPrice);
+      // we will remove it completely
+      const gasPrice = 1;
+      return DeployUtil.makeDeploy(argsProto, type, session, new Uint8Array(paymentWASM), BigInt(paymentAmount), publicKey, gasPrice);
     }
   }
 
@@ -433,14 +428,13 @@ export class DeployContractsContainer {
 
   @action
   private tryRestore() {
-    const preState = sessionStorage.getItem(DeployContractsContainer.PersistentKey);
+    const preState = localStorage.getItem(DeployContractsContainer.PersistentKey);
     if (preState !== null) {
       const value = JSON.parse(preState) as UserInputPersistent;
 
       this.editing = value.editing;
 
-      this.deployConfiguration.$.gasLimit.onChange(value.deployConfiguration.gasLimit);
-      this.deployConfiguration.$.gasPrice.onChange(value.deployConfiguration.gasPrice);
+      this.deployConfiguration.$.paymentAmount.onChange(value.deployConfiguration.paymentAmount);
       this.deployConfiguration.$.contractType.onChange(value.deployConfiguration.contractType);
       this.deployConfiguration.$.fromAddress.onChange(value.deployConfiguration.fromAddress);
 
@@ -474,8 +468,7 @@ export class DeployContractsContainer {
       }),
       deployConfiguration: {
         contractType: deployConfiguration.contractType.value,
-        gasPrice: deployConfiguration.gasPrice.value,
-        gasLimit: deployConfiguration.gasLimit.value,
+        paymentAmount: deployConfiguration.paymentAmount.value,
         fromAddress: deployConfiguration.fromAddress.value
       },
       editing: this.editing,
@@ -491,6 +484,6 @@ export class DeployContractsContainer {
       })
     };
 
-    sessionStorage.setItem(DeployContractsContainer.PersistentKey, JSON.stringify(state));
+    localStorage.setItem(DeployContractsContainer.PersistentKey, JSON.stringify(state));
   }
 }

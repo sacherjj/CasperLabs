@@ -3,7 +3,7 @@ import { decodeBase16 } from 'casperlabs-sdk';
 
 export const valueRequired = (val: any) => !val && 'Value required';
 
-export const numberBigThan: (n: number) => (val: number) => string|false = (n: number) => {
+export const numberGreaterThan: (n: number) => (val: number) => string|false = (n: number) => {
   return (val: number) => {
     return !(val > n) && `Value should bigger than ${n}`;
   }
@@ -21,8 +21,8 @@ export const isBase16 = (val: string) => {
 };
 
 export const isBlockHashBase16 = (hashBase16: string) => {
-  if (hashBase16.length < 64)
-    return 'Ths Hash has to be 64 characters long.';
+  if (hashBase16.length !== 64)
+    return 'This Hash has to be 64 characters long.';
 
   return isBase16(hashBase16);
 };

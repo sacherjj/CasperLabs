@@ -91,12 +91,8 @@ export class DeployContractsForm extends React.Component<Props, {}> {
                            fieldState={deployContractsContainer.deployConfiguration.$.contractHash}/>
               )
             }
-            <FormRow splits={[6, 6]}>
-              <NumberField id="id-gas-price" label="Gas Price"
-                           fieldState={deployContractsContainer.deployConfiguration.$.gasPrice}/>
-              <NumberField id="id-gas-limit" label="Gas Limit"
-                           fieldState={deployContractsContainer.deployConfiguration.$.gasLimit}/>
-            </FormRow>
+            <NumberField id="id-payment-amount" label="Payment Amount"
+                         fieldState={deployContractsContainer.deployConfiguration.$.paymentAmount}/>
             <TextField id="id-from-address" label="From (Optional)"
                        fieldState={deployContractsContainer.deployConfiguration.$.fromAddress}/>
           </Form>
