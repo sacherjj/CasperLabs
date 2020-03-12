@@ -25,8 +25,26 @@ import scala.concurrent.duration.{Duration, FiniteDuration}
 import scala.util.control.NonFatal
 
 trait DownloadManagerTypes {
+
+  //TODO: Replace literal DeployDownloadManager to ScalaDoc link
+  /**
+    * Marks a type used to uniquely refer to a [[Downloadable]] on scheduling.
+    * May contain additional information for validation of the target [[Downloadable]].
+    * E.g. [[io.casperlabs.casper.consensus.Deploy.Header]] for DeployDownloadManager or [[BlockSummary]] for [[BlockDownloadManager]]
+    */
   type Handle
+
+  /**
+    * Unique identifier of [[Downloadable]].
+    * E.g. [[Block.blockHash]] or [[io.casperlabs.casper.consensus.Deploy.deployHash]].
+    */
   type Identifier
+
+  //TODO: Replace literal DeployDownloadManager to ScalaDoc link
+  /**
+    * Marks a type needed to be downloaded.
+    * E.g. [[io.casperlabs.casper.consensus.Deploy]] for DeployDownloadManager or [[Block]] for [[BlockDownloadManager]].
+    */
   type Downloadable
 }
 
