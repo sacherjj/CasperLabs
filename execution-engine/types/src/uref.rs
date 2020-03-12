@@ -6,10 +6,7 @@ use core::{
 
 use hex_fmt::HexFmt;
 
-use crate::{
-    bytesrepr::{self, U32_SERIALIZED_LENGTH},
-    AccessRights, ApiError, Key, ACCESS_RIGHTS_SERIALIZED_LENGTH,
-};
+use crate::{bytesrepr, AccessRights, ApiError, Key, ACCESS_RIGHTS_SERIALIZED_LENGTH};
 
 /// The number of bytes in a [`URef`] address.
 pub const UREF_ADDR_LENGTH: usize = 32;
@@ -110,10 +107,14 @@ impl Debug for URef {
 
 impl bytesrepr::ToBytes for URef {
     fn to_bytes(&self) -> Result<Vec<u8>, bytesrepr::Error> {
-        let mut result = Vec::with_capacity(UREF_SERIALIZED_LENGTH);
+        let mut result = bytesrepr::unchecked_allocate_buffer(self);
         result.append(&mut self.0.to_bytes()?);
         result.append(&mut self.1.to_bytes()?);
         Ok(result)
+    }
+
+    fn serialized_length(&self) -> usize {
+        UREF_SERIALIZED_LENGTH
     }
 }
 
@@ -122,36 +123,6 @@ impl bytesrepr::FromBytes for URef {
         let (id, rem): ([u8; 32], &[u8]) = bytesrepr::FromBytes::from_bytes(bytes)?;
         let (access_rights, rem): (AccessRights, &[u8]) = bytesrepr::FromBytes::from_bytes(rem)?;
         Ok((URef(id, access_rights), rem))
-    }
-}
-
-impl bytesrepr::FromBytes for Vec<URef> {
-    fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), bytesrepr::Error> {
-        let (size, mut stream): (u32, &[u8]) = bytesrepr::FromBytes::from_bytes(bytes)?;
-        let mut result = Vec::new();
-        result.try_reserve_exact(size as usize)?;
-        for _ in 0..size {
-            let (uref, rem): (URef, &[u8]) = bytesrepr::FromBytes::from_bytes(stream)?;
-            result.push(uref);
-            stream = rem;
-        }
-        Ok((result, stream))
-    }
-}
-
-impl bytesrepr::ToBytes for Vec<URef> {
-    fn to_bytes(&self) -> Result<Vec<u8>, bytesrepr::Error> {
-        let size = self.len() as u32;
-        let mut result: Vec<u8> = Vec::with_capacity(U32_SERIALIZED_LENGTH);
-        result.extend(size.to_bytes()?);
-        result.extend(
-            self.iter()
-                .map(bytesrepr::ToBytes::to_bytes)
-                .collect::<Result<Vec<_>, _>>()?
-                .into_iter()
-                .flatten(),
-        );
-        Ok(result)
     }
 }
 

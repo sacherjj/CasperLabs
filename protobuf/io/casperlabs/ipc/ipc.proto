@@ -278,6 +278,10 @@ message ChainSpec {
         uint64 voting_period_duration_millis = 5;
         // Stop the post-era voting period when the switch block reaches a certain summit level; when 0 use the duration instead.
         uint32 voting_period_summit_level = 6;
+        // Relative fault tolerance threshold value used by the internal finalizer.
+        // Has to be between 0 and 0.5 .
+        double ftt = 7;
+
     }
 
     message CostTable {

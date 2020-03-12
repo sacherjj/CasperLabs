@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
 use types::{
-    bytesrepr::{Error, FromBytes, ToBytes, U32_SERIALIZED_LENGTH, U64_SERIALIZED_LENGTH},
+    bytesrepr::{self, Error, FromBytes, ToBytes},
     Key, ProtocolVersion,
 };
 
@@ -56,32 +56,25 @@ impl Contract {
 
 impl ToBytes for Contract {
     fn to_bytes(&self) -> Result<Vec<u8>, Error> {
-        if self.bytes.len()
-            + Key::serialized_size_hint() * self.named_keys.len()
-            + U64_SERIALIZED_LENGTH
-            >= u32::max_value() as usize - U32_SERIALIZED_LENGTH * 2
-        {
-            return Err(Error::OutOfMemory);
-        }
-        let size: usize = U32_SERIALIZED_LENGTH +                         //size for length of bytes
-                    self.bytes.len() +                                    //size for elements of bytes
-                    U32_SERIALIZED_LENGTH +                               //size for length of named_keys
-                    Key::serialized_size_hint() * self.named_keys.len() + //size for named_keys elements
-                    U64_SERIALIZED_LENGTH; //size for protocol_version
-
-        let mut result = Vec::with_capacity(size);
+        let mut result = bytesrepr::allocate_buffer(self)?;
         result.append(&mut self.bytes.to_bytes()?);
         result.append(&mut self.named_keys.to_bytes()?);
         result.append(&mut self.protocol_version.to_bytes()?);
         Ok(result)
     }
+
+    fn serialized_length(&self) -> usize {
+        self.bytes.serialized_length()
+            + self.named_keys.serialized_length()
+            + self.protocol_version.serialized_length()
+    }
 }
 
 impl FromBytes for Contract {
     fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
-        let (bytes, rem1): (Vec<u8>, &[u8]) = FromBytes::from_bytes(bytes)?;
-        let (named_keys, rem2): (BTreeMap<String, Key>, &[u8]) = FromBytes::from_bytes(rem1)?;
-        let (protocol_version, rem3): (ProtocolVersion, &[u8]) = FromBytes::from_bytes(rem2)?;
+        let (bytes, rem1) = Vec::<u8>::from_bytes(bytes)?;
+        let (named_keys, rem2) = BTreeMap::<String, Key>::from_bytes(rem1)?;
+        let (protocol_version, rem3) = ProtocolVersion::from_bytes(rem2)?;
         Ok((
             Contract {
                 bytes,

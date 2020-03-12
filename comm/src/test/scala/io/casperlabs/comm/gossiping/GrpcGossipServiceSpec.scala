@@ -6,19 +6,20 @@ import cats.Id
 import cats.effect._
 import cats.implicits._
 import com.google.protobuf.ByteString
-import io.casperlabs.casper.consensus.{Approval, Block, BlockSummary, GenesisCandidate}
+import io.casperlabs.casper.consensus._
 import io.casperlabs.catscontrib.effect.implicits.syncId
 import io.casperlabs.comm.ServiceError.{NotFound, ResourceExhausted, Unauthenticated, Unavailable}
 import io.casperlabs.comm.discovery.Node
-import io.casperlabs.comm.gossiping.synchronization.Synchronizer.SyncError
 import io.casperlabs.comm.gossiping.Utils.hex
 import io.casperlabs.comm.gossiping.synchronization.Synchronizer
+import io.casperlabs.comm.gossiping.synchronization.Synchronizer.SyncError
 import io.casperlabs.comm.grpc.{AuthInterceptor, ErrorInterceptor, GrpcServer, SslContexts}
 import io.casperlabs.comm.{ServiceError, TestRuntime}
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.util.{CertificateHelper, CertificatePrinter}
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.models.BlockImplicits._
+import io.casperlabs.shared.Sorting._
 import io.casperlabs.shared.{Compression, Log}
 import io.grpc.netty.{NegotiationType, NettyChannelBuilder}
 import io.netty.handler.ssl.ClientAuth
@@ -32,10 +33,8 @@ import org.scalacheck.{Arbitrary, Gen, Shrink}
 import org.scalatest._
 import org.scalatest.concurrent._
 import org.scalatest.prop.GeneratorDrivenPropertyChecks.{forAll, PropertyCheckConfiguration}
-import io.casperlabs.shared.Sorting._
 
 import scala.concurrent.duration._
-import io.casperlabs.casper.consensus.Deploy
 
 class GrpcGossipServiceSpec
     extends refspec.RefSpecLike
@@ -309,60 +308,44 @@ class GrpcGossipServiceSpec
 
     "getBlocksChunked" when {
       "called with a valid sender" when {
-        "no compression is supported" should {
-          "return a stream of uncompressed chunks" in {
-            forAll { block: Block =>
-              runTestUnsafe(TestData.fromBlock(block), timeout = 15.seconds) {
-                val req = GetBlockChunkedRequest(blockHash = block.blockHash)
-                stub.getBlockChunked(req).toListL.map { chunks =>
-                  chunks.head.content.isHeader shouldBe true
-                  val header = chunks.head.getHeader
-                  header.compressionAlgorithm shouldBe ""
-                  chunks.size should be > 1
+        "no compression is supported" when {
+          def test(excludeDeployBodies: Boolean): Unit = forAll { block: Block =>
+            runTestUnsafe(TestData.fromBlock(block), timeout = 15.seconds) {
+              val req = GetBlockChunkedRequest(
+                blockHash = block.blockHash,
+                excludeDeployBodies = excludeDeployBodies
+              )
+              stub.getBlockChunked(req).toListL.map { chunks =>
+                chunks.head.content.isHeader shouldBe true
+                val header = chunks.head.getHeader
+                header.compressionAlgorithm shouldBe ""
+                chunks.size should be > 1
 
-                  Inspectors.forAll(chunks.tail) { chunk =>
-                    chunk.content.isData shouldBe true
-                    chunk.getData.size should be <= DefaultMaxChunkSize
-                  }
-
-                  val content  = chunks.tail.flatMap(_.getData.toByteArray).toArray
-                  val original = block.toByteArray
-                  header.contentLength shouldBe content.length
-                  header.originalContentLength shouldBe original.length
-                  md5(content) shouldBe md5(original)
+                Inspectors.forAll(chunks.tail) { chunk =>
+                  chunk.content.isData shouldBe true
+                  chunk.getData.size should be <= DefaultMaxChunkSize
                 }
+
+                val content = chunks.tail.flatMap(_.getData.toByteArray).toArray
+                val original =
+                  (if (excludeDeployBodies) block.clearDeployBodies else block).toByteArray
+                header.contentLength shouldBe content.length
+                header.originalContentLength shouldBe original.length
+                md5(content) shouldBe md5(original)
               }
             }
           }
-        }
 
-        "compression is supported" should {
-          "return a stream of compressed chunks" in {
-            forAll { block: Block =>
-              runTestUnsafe(TestData.fromBlock(block), timeout = 15.seconds) {
-                val req = GetBlockChunkedRequest(
-                  blockHash = block.blockHash,
-                  acceptedCompressionAlgorithms = Seq("lz4")
-                )
+          "specified to exclude deploys bodies" should {
+            "return a stream of uncompressed chunks with deploys bodies excluded" in test(
+              excludeDeployBodies = true
+            )
+          }
 
-                stub.getBlockChunked(req).toListL.map { chunks =>
-                  chunks.head.content.isHeader shouldBe true
-                  val header = chunks.head.getHeader
-                  header.compressionAlgorithm shouldBe "lz4"
-
-                  val content  = chunks.tail.flatMap(_.getData.toByteArray).toArray
-                  val original = block.toByteArray
-                  header.contentLength shouldBe content.length
-                  header.originalContentLength shouldBe original.length
-
-                  val decompressed = Compression
-                    .decompress(content, header.originalContentLength)
-                    .get
-
-                  md5(decompressed) shouldBe md5(original)
-                }
-              }
-            }
+          "specified to return full blocks" should {
+            "return a stream of uncompressed chunks with deploys bodies included" in test(
+              excludeDeployBodies = false
+            )
           }
         }
 
@@ -586,7 +569,7 @@ class GrpcGossipServiceSpec
 
               val faultyBackend = (_: AtomicReference[TestData]) => {
                 new GossipServiceServer.Backend[Task] {
-                  def getBlock(blockHash: ByteString) = {
+                  def getBlock(blockHash: ByteString, excludeDeployBodies: Boolean) = {
                     cnt = cnt + 1
                     cnt match {
                       case 1 =>
@@ -1424,8 +1407,14 @@ object GrpcGossipServiceSpec extends TestRuntime with ArbitraryConsensusAndComm 
       new GossipServiceServer.Backend[Task] {
         def hasBlock(blockHash: ByteString) =
           Task.delay(testDataRef.get.blocks.contains(blockHash))
-        def getBlock(blockHash: ByteString) =
-          Task.delay(testDataRef.get.blocks.get(blockHash))
+        def getBlock(blockHash: ByteString, excludeDeployBodies: Boolean) =
+          Task.delay(testDataRef.get.blocks.get(blockHash).map { block =>
+            if (excludeDeployBodies) {
+              block.clearDeployBodies
+            } else {
+              block
+            }
+          })
         def getBlockSummary(blockHash: ByteString) =
           Task.delay(testDataRef.get.summaries.get(blockHash))
         def getDeploys(deployHashes: Set[ByteString]) = {

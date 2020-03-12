@@ -5,7 +5,7 @@ use types::{
 };
 
 const PROTOCOL_DATA_SERIALIZED_LENGTH: usize =
-    WASM_COSTS_SERIALIZED_LENGTH + UREF_SERIALIZED_LENGTH + UREF_SERIALIZED_LENGTH;
+    WASM_COSTS_SERIALIZED_LENGTH + 3 * UREF_SERIALIZED_LENGTH;
 const DEFAULT_UREF_ADDRESS: [u8; 32] = [0; 32];
 
 /// Represents a protocol's data. Intended to be associated with a given protocol version.
@@ -110,12 +110,16 @@ impl ProtocolData {
 
 impl ToBytes for ProtocolData {
     fn to_bytes(&self) -> Result<Vec<u8>, bytesrepr::Error> {
-        let mut ret: Vec<u8> = Vec::with_capacity(PROTOCOL_DATA_SERIALIZED_LENGTH);
+        let mut ret = bytesrepr::unchecked_allocate_buffer(self);
         ret.append(&mut self.wasm_costs.to_bytes()?);
         ret.append(&mut self.mint.to_bytes()?);
         ret.append(&mut self.proof_of_stake.to_bytes()?);
         ret.append(&mut self.standard_payment.to_bytes()?);
         Ok(ret)
+    }
+
+    fn serialized_length(&self) -> usize {
+        PROTOCOL_DATA_SERIALIZED_LENGTH
     }
 }
 

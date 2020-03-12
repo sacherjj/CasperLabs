@@ -92,7 +92,7 @@ pub enum CLType {
 
 impl CLType {
     /// The `len()` of the `Vec<u8>` resulting from `self.to_bytes()`.
-    pub fn serialized_len(&self) -> usize {
+    pub fn serialized_length(&self) -> usize {
         mem::size_of::<u8>()
             + match self {
                 CLType::Bool
@@ -109,15 +109,15 @@ impl CLType {
                 | CLType::Key
                 | CLType::URef
                 | CLType::Any => 0,
-                CLType::Option(cl_type) | CLType::List(cl_type) => cl_type.serialized_len(),
+                CLType::Option(cl_type) | CLType::List(cl_type) => cl_type.serialized_length(),
                 CLType::FixedList(cl_type, list_len) => {
-                    cl_type.serialized_len() + list_len.to_le_bytes().len()
+                    cl_type.serialized_length() + list_len.to_le_bytes().len()
                 }
-                CLType::Result { ok, err } => ok.serialized_len() + err.serialized_len(),
-                CLType::Map { key, value } => key.serialized_len() + value.serialized_len(),
-                CLType::Tuple1(cl_type_array) => serialized_len_of_cl_tuple_type(cl_type_array),
-                CLType::Tuple2(cl_type_array) => serialized_len_of_cl_tuple_type(cl_type_array),
-                CLType::Tuple3(cl_type_array) => serialized_len_of_cl_tuple_type(cl_type_array),
+                CLType::Result { ok, err } => ok.serialized_length() + err.serialized_length(),
+                CLType::Map { key, value } => key.serialized_length() + value.serialized_length(),
+                CLType::Tuple1(cl_type_array) => serialized_length_of_cl_tuple_type(cl_type_array),
+                CLType::Tuple2(cl_type_array) => serialized_length_of_cl_tuple_type(cl_type_array),
+                CLType::Tuple3(cl_type_array) => serialized_length_of_cl_tuple_type(cl_type_array),
             }
     }
 }
@@ -285,12 +285,12 @@ fn parse_cl_tuple_types(
     Ok((cl_types, bytes))
 }
 
-fn serialized_len_of_cl_tuple_type<'a, T: IntoIterator<Item = &'a Box<CLType>>>(
+fn serialized_length_of_cl_tuple_type<'a, T: IntoIterator<Item = &'a Box<CLType>>>(
     cl_type_array: T,
 ) -> usize {
     cl_type_array
         .into_iter()
-        .map(|cl_type| cl_type.serialized_len())
+        .map(|cl_type| cl_type.serialized_length())
         .sum()
 }
 
@@ -468,7 +468,7 @@ mod tests {
         let cl_value = CLValue::from_t(value.clone()).unwrap();
 
         let serialized_cl_value = cl_value.to_bytes().unwrap();
-        assert_eq!(serialized_cl_value.len(), cl_value.serialized_len());
+        assert_eq!(serialized_cl_value.len(), cl_value.serialized_length());
         let parsed_cl_value: CLValue = bytesrepr::deserialize(serialized_cl_value).unwrap();
         assert_eq!(cl_value, parsed_cl_value);
 
@@ -665,6 +665,10 @@ mod tests {
         impl ToBytes for Any {
             fn to_bytes(&self) -> Result<Vec<u8>, bytesrepr::Error> {
                 self.0.to_bytes()
+            }
+
+            fn serialized_length(&self) -> usize {
+                self.0.serialized_length()
             }
         }
 

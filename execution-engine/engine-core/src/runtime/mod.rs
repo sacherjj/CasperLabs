@@ -1931,7 +1931,7 @@ where
             self.context.validate_key(key)?;
         }
 
-        if self.config.turbo() {
+        if !self.config.use_system_contracts() {
             if self.is_mint(key) {
                 return self.call_host_mint(
                     self.context.protocol_version(),

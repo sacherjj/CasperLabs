@@ -210,12 +210,12 @@ object InitialSynchronizationBackwardImplSpec extends ArbitraryConsensus {
   }
 
   object MockBackend extends GossipServiceServer.Backend[Task] {
-    override def hasBlock(blockHash: ByteString)                = ???
-    override def getBlockSummary(blockHash: ByteString)         = ???
-    override def getBlock(blockHash: ByteString)                = ???
-    override def getDeploys(deployHashes: Set[ByteString])      = ???
-    override def latestMessages: Task[Set[Block.Justification]] = ???
-    override def dagTopoSort(startRank: Long, endRank: Long)    = ???
+    override def hasBlock(blockHash: ByteString)                                 = ???
+    override def getBlockSummary(blockHash: ByteString)                          = ???
+    override def getBlock(blockHash: ByteString, deploysBodiesExcluded: Boolean) = ???
+    override def getDeploys(deployHashes: Set[ByteString])                       = ???
+    override def latestMessages: Task[Set[Block.Justification]]                  = ???
+    override def dagTopoSort(startRank: Long, endRank: Long)                     = ???
   }
 
   object MockSynchronizer extends Synchronizer[Task] {

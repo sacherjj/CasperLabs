@@ -6,9 +6,9 @@ use std::collections::{BTreeMap, BTreeSet};
 use types::{
     account::{
         ActionType, AddKeyFailure, PublicKey, RemoveKeyFailure, SetThresholdFailure,
-        UpdateKeyFailure, Weight, PUBLIC_KEY_SERIALIZED_MAX_LENGTH, WEIGHT_SERIALIZED_LENGTH,
+        UpdateKeyFailure, Weight,
     },
-    bytesrepr::{Error, FromBytes, ToBytes, U32_SERIALIZED_LENGTH, U8_SERIALIZED_LENGTH},
+    bytesrepr::{self, Error, FromBytes, ToBytes},
     AccessRights, Key, URef,
 };
 
@@ -201,38 +201,31 @@ impl Account {
 
 impl ToBytes for Account {
     fn to_bytes(&self) -> Result<Vec<u8>, Error> {
-        let action_thresholds_size = 2 * (WEIGHT_SERIALIZED_LENGTH + U8_SERIALIZED_LENGTH);
-        let associated_keys_size = self.associated_keys.len()
-            * (PUBLIC_KEY_SERIALIZED_MAX_LENGTH + WEIGHT_SERIALIZED_LENGTH)
-            + U32_SERIALIZED_LENGTH;
-        let named_keys_size =
-            Key::serialized_size_hint() * self.named_keys.len() + U32_SERIALIZED_LENGTH;
-        let purse_size = Key::serialized_size_hint();
-        let serialized_account_size = PUBLIC_KEY_SERIALIZED_MAX_LENGTH // pub key
-            + named_keys_size
-            + purse_size
-            + associated_keys_size
-            + action_thresholds_size;
-        if serialized_account_size >= u32::max_value() as usize {
-            return Err(Error::OutOfMemory);
-        }
-        let mut result: Vec<u8> = Vec::with_capacity(serialized_account_size);
-        result.extend(&self.public_key.to_bytes()?);
+        let mut result = bytesrepr::allocate_buffer(self)?;
+        result.append(&mut self.public_key.to_bytes()?);
         result.append(&mut self.named_keys.to_bytes()?);
         result.append(&mut self.main_purse.to_bytes()?);
         result.append(&mut self.associated_keys.to_bytes()?);
         result.append(&mut self.action_thresholds.to_bytes()?);
         Ok(result)
     }
+
+    fn serialized_length(&self) -> usize {
+        self.public_key.serialized_length()
+            + self.named_keys.serialized_length()
+            + self.main_purse.serialized_length()
+            + self.associated_keys.serialized_length()
+            + self.action_thresholds.serialized_length()
+    }
 }
 
 impl FromBytes for Account {
     fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
-        let (public_key, rem): (PublicKey, &[u8]) = FromBytes::from_bytes(bytes)?;
-        let (named_keys, rem): (BTreeMap<String, Key>, &[u8]) = FromBytes::from_bytes(rem)?;
-        let (main_purse, rem): (URef, &[u8]) = FromBytes::from_bytes(rem)?;
-        let (associated_keys, rem): (AssociatedKeys, &[u8]) = FromBytes::from_bytes(rem)?;
-        let (action_thresholds, rem): (ActionThresholds, &[u8]) = FromBytes::from_bytes(rem)?;
+        let (public_key, rem) = PublicKey::from_bytes(bytes)?;
+        let (named_keys, rem) = BTreeMap::<String, Key>::from_bytes(rem)?;
+        let (main_purse, rem) = URef::from_bytes(rem)?;
+        let (associated_keys, rem) = AssociatedKeys::from_bytes(rem)?;
+        let (action_thresholds, rem) = ActionThresholds::from_bytes(rem)?;
         Ok((
             Account {
                 public_key,

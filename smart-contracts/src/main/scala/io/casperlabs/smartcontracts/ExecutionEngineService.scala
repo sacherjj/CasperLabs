@@ -74,8 +74,8 @@ class GrpcExecutionEngineService[F[_]: Defer: Concurrent: Log: TaskLift: Metrics
 
   override def emptyStateHash: ByteString = {
     val arr: Array[Byte] = Array(
-      243, 47, 248, 24, 18, 220, 95, 83, 103, 81, 100, 141, 145, 156, 26, 225, 23, 211, 126, 219,
-      65, 215, 200, 175, 255, 183, 116, 198, 144, 222, 99, 246
+      197, 117, 38, 12, 241, 62, 54, 241, 121, 165, 11, 8, 130, 189, 100, 252, 4, 102, 236, 210, 91,
+      221, 123, 200, 135, 102, 194, 204, 46, 76, 13, 254
     ).map(_.toByte)
     ByteString.copyFrom(arr)
   }

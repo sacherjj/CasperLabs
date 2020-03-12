@@ -21,6 +21,7 @@ fi
 
 pip install pipenv
 pipenv sync
+pipenv run client/CasperLabsClient/build.sh
 pipenv run client/CasperLabsClient/install.sh
 
 # Cannot get the quoted -k arguments passed in via variable replacement.
