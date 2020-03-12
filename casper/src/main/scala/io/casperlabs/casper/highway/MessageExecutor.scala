@@ -24,12 +24,14 @@ import io.casperlabs.mempool.DeployBuffer
 import io.casperlabs.models.Message
 import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.metrics.Metrics
-import io.casperlabs.metrics.implicits._ // for .timer syntax
+import io.casperlabs.metrics.Metrics.Source
+import io.casperlabs.metrics.implicits._
 import io.casperlabs.shared.{FatalError, Log, Time}
 import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.storage.deploy.{DeployStorage, DeployStorageWriter}
 import io.casperlabs.storage.dag.{DagStorage, FinalityStorage}
 import io.casperlabs.smartcontracts.ExecutionEngineService
+
 import scala.util.control.NonFatal
 import scala.util.control.NoStackTrace
 
@@ -40,6 +42,8 @@ class MessageExecutor[F[_]: Concurrent: Log: Time: Metrics: BlockStorage: DagSto
     upgrades: Seq[ipc.ChainSpec.UpgradePoint],
     maybeValidatorId: Option[PublicKeyBS]
 ) {
+
+  private implicit val metricsSource: Source = HighwayMetricsSource / "MessageExecutor"
 
   private implicit val functorRaiseInvalidBlock =
     validation.raiseValidateErrorThroughApplicativeError[F]
@@ -87,15 +91,16 @@ class MessageExecutor[F[_]: Concurrent: Log: Time: Metrics: BlockStorage: DagSto
     */
   def effectsAfterAdded(message: ValidatedMessage): F[F[Unit]] =
     for {
-      _ <- markDeploysAsProcessed(message)
+      _ <- markDeploysAsProcessed(message).timer("markDeploysAsProcessed")
       // Forking event emissions so as not to hold up block processing.
-      w1 <- BlockEventEmitter[F].blockAdded(message.messageHash).forkAndLog
-      w2 <- updateLastFinalizedBlock(message)
+      w1 <- BlockEventEmitter[F].blockAdded(message.messageHash).timer("emitBlockAdded").forkAndLog
+      w2 <- updateLastFinalizedBlock(message).timer("updateLastFinalizedBlock")
     } yield w1 *> w2
 
   private def updateLastFinalizedBlock(message: Message): F[F[Unit]] =
     for {
-      result <- MultiParentFinalizer[F].onNewMessageAdded(message)
+      result <- MultiParentFinalizer[F]
+                 .onNewMessageAdded(message)
       w <- result.traverse {
             case MultiParentFinalizer.FinalizedBlocks(mainParent, _, secondary) => {
               val mainParentFinalizedStr = mainParent.show
@@ -107,7 +112,10 @@ class MessageExecutor[F[_]: Concurrent: Log: Time: Metrics: BlockStorage: DagSto
                     )
                 _  <- FinalityStorage[F].markAsFinalized(mainParent, secondary)
                 w1 <- DeployBuffer[F].removeFinalizedDeploys(secondary + mainParent).forkAndLog
-                w2 <- BlockEventEmitter[F].newLastFinalizedBlock(mainParent, secondary).forkAndLog
+                w2 <- BlockEventEmitter[F]
+                       .newLastFinalizedBlock(mainParent, secondary)
+                       .timer("emitNewLFB")
+                       .forkAndLog
               } yield w1 *> w2
             }
           }
@@ -132,11 +140,12 @@ class MessageExecutor[F[_]: Concurrent: Log: Time: Metrics: BlockStorage: DagSto
   ): F[Unit] =
     status match {
       case MissingBlocks =>
-        Sync[F].raiseError(
-          new RuntimeException(
-            "The DownloadManager should not give us a block with missing dependencies."
+        Metrics[F].incrementCounter("MissingBlocks") >>
+          Sync[F].raiseError(
+            new RuntimeException(
+              "The DownloadManager should not give us a block with missing dependencies."
+            )
           )
-        )
 
       case Valid =>
         save(block, blockEffects) *>
@@ -148,23 +157,26 @@ class MessageExecutor[F[_]: Concurrent: Log: Time: Metrics: BlockStorage: DagSto
           FatalError.selfEquivocationError(block.blockHash).whenA(status == SelfEquivocatedBlock)
 
       case status: StoredInvalid =>
-        save(block, blockEffects) *>
-          Log[F].warn(s"Added slashable ${block.blockHash.show -> "block"}: $status")
+        Metrics[F].incrementCounter("StoredInvalid") >>
+          save(block, blockEffects) *>
+            Log[F].warn(s"Added slashable ${block.blockHash.show -> "block"}: $status")
 
       case status: InvalidBlock =>
         Log[F].warn(s"Ignoring unslashable ${block.blockHash.show -> "block"}: $status") *>
           functorRaiseInvalidBlock.raise(status)
 
       case Processing | Processed =>
-        Sync[F].raiseError(
-          new IllegalStateException("A block should not be processing at this stage.")
-            with NoStackTrace
-        )
+        Metrics[F].incrementCounter("ValidateProcessing") >>
+          Sync[F].raiseError(
+            new IllegalStateException("A block should not be processing at this stage.")
+              with NoStackTrace
+          )
 
       case UnexpectedBlockException(ex) =>
-        Log[F].error(
-          s"Encountered exception in while processing ${block.blockHash.show -> "block"}: $ex"
-        ) >>
+        Metrics[F].incrementCounter("UnexpectedBlockException") >>
+          Log[F].error(
+            s"Encountered exception in while processing ${block.blockHash.show -> "block"}: $ex"
+          ) >>
           ex.raiseError[F, Unit]
     }
 
@@ -176,8 +188,7 @@ class MessageExecutor[F[_]: Concurrent: Log: Time: Metrics: BlockStorage: DagSto
   def computeEffects(
       block: Block,
       isBookingBlock: Boolean
-  ): F[(BlockStatus, BlockEffects)] = {
-    import io.casperlabs.casper.validation.ValidationImpl.metricsSource
+  ): F[(BlockStatus, BlockEffects)] =
     Metrics[F].timer("computeEffects") {
       val hashPrefix = block.blockHash.show
       val effectsF: F[BlockEffects] = for {
@@ -234,7 +245,6 @@ class MessageExecutor[F[_]: Concurrent: Log: Time: Metrics: BlockStorage: DagSto
 
       effectsToStatus(block, effectsF)
     }
-  }
 
   private def effectsToStatus(
       block: Block,

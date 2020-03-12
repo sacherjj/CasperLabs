@@ -17,8 +17,9 @@ import io.casperlabs.comm.gossiping.synchronization.Synchronizer.SyncError._
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.implicits._
 import io.casperlabs.shared.Log
-import scala.util.control.NonFatal
 import io.casperlabs.shared.Sorting.{catsOrder, jRankOrdering}
+import scala.util.control.NonFatal
+import scala.collection.immutable.Queue
 
 class SynchronizerImpl[F[_]: Concurrent: Log: Metrics](
     connectToGossip: Node => F[GossipService[F]],
@@ -40,7 +41,7 @@ class SynchronizerImpl[F[_]: Concurrent: Log: Metrics](
   // This is supposed to be called every time a scheduled download is finished,
   // even when the resolution is that we already had it, so there should be no leaks.
   override def downloaded(blockHash: ByteString) =
-    syncedSummariesRef.update(_ - blockHash)
+    removeSynced(blockHash)
 
   override def syncDag(
       source: Node,
@@ -168,12 +169,36 @@ class SynchronizerImpl[F[_]: Concurrent: Log: Metrics](
     * so next time we don't have to travel that far back in their DAG. */
   private def addSynced(source: Node, syncState: SyncState): F[Unit] =
     syncedSummariesRef.update { syncedSummaries =>
+      // We could filter with `backend.notInDag` to never add ones that have perhaps been
+      // downloaded in the meantime, but that would be a lot of database queries.
+      // Instead, `removeSynced` will clear the dependencies recursively,
+      // so if any descendants gets downloaded it will remove any leftovers.
       syncState.summaries.values.foldLeft(syncedSummaries) {
         case (syncedSummaries, summary) =>
           val ss = syncedSummaries.getOrElse(summary.blockHash, SyncedSummary(summary))
           syncedSummaries + (summary.blockHash -> ss.addSource(source))
       }
-    }
+    } >> recordSyncedSummaries
+
+  /** Recursively clear out summaries and their dependencies from the cache. */
+  private def removeSynced(blockHash: ByteString): F[Unit] = {
+    def remove(queue: Queue[ByteString]): F[Unit] =
+      queue.dequeueOption.fold(().pure[F]) {
+        case (blockHash, queue) =>
+          syncedSummariesRef.modify { ss =>
+            (ss - blockHash) -> ss.get(blockHash)
+          } flatMap {
+            case None =>
+              remove(queue)
+            case Some(s) =>
+              remove(queue.enqueue(dependencies(s.summary)))
+          }
+      }
+    remove(Queue(blockHash)) >> recordSyncedSummaries
+  }
+
+  private def recordSyncedSummaries =
+    syncedSummariesRef.get.flatMap(ss => Metrics[F].setGauge("synced_summaries", ss.size.toLong))
 
   /** Ask the source to traverse back from whatever our last unknown blocks were. */
   private def traverse(
