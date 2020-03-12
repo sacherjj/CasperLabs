@@ -270,25 +270,6 @@ message ChainSpec {
         uint32 voting_period_summit_level = 6;
     }
 
-    message UpgradePoint {
-        // Hiding this behind an abstraction so we are free
-        // to change how such a point is expressed in the future.
-        ActivationPoint activation_point = 1;
-        // The protocol version as of this upgrade
-        io.casperlabs.casper.consensus.state.ProtocolVersion protocol_version = 2;
-        // bytes for a contract to run that applies the upgrades to system contracts
-        DeployCode upgrade_installer = 3;
-        // Note: this is optional; only needed when costs are changing
-        CostTable new_costs = 4;
-        DeployConfig new_deploy_config = 5;
-    }
-
-    message ActivationPoint {
-        // equal to Block.Header.rank
-        uint64 rank = 1;
-    }
-
-
     message EEGenesisConfig {
         // wasm bytecode for installing the mint system contract
         bytes mint_installer = 1;
@@ -333,6 +314,24 @@ message ChainSpec {
             uint32 opcodes_mul = 9;
             uint32 opcodes_div = 10;
         }
+    }
+
+    message UpgradePoint {
+        // Hiding this behind an abstraction so we are free
+        // to change how such a point is expressed in the future.
+        ActivationPoint activation_point = 1;
+        // The protocol version as of this upgrade
+        io.casperlabs.casper.consensus.state.ProtocolVersion protocol_version = 2;
+        // bytes for a contract to run that applies the upgrades to system contracts
+        DeployCode upgrade_installer = 3;
+        // Note: this is optional; only needed when costs are changing
+        CostTable new_costs = 4;
+        DeployConfig new_deploy_config = 5;
+    }
+
+    message ActivationPoint {
+        // equal to Block.Header.rank
+        uint64 rank = 1;
     }
 }
 
