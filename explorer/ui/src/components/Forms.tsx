@@ -90,13 +90,13 @@ export const TextField = observer((props: TextProps) => {
       value={v}
       readOnly={props.readonly || false}
       onChange={e => {
-        if (!props.readonly || props.fieldState instanceof String) {
+        if (!(props.readonly || props.fieldState instanceof String)) {
           (props.fieldState as FieldState<string>).onChange(e.target.value);
         }
       }}
       onBlur={
         () => {
-          if (!props.readonly || props.fieldState instanceof String) {
+          if (!(props.readonly || props.fieldState instanceof String)) {
             (props.fieldState as FieldState<string>).enableAutoValidationAndValidate();
           }
         }
