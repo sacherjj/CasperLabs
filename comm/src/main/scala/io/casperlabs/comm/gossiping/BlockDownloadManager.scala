@@ -48,7 +48,19 @@ trait DownloadManagerTypes {
   type Downloadable
 }
 
+/** Manage the download, validation, storing and gossiping of [[io.casperlabs.comm.gossiping.DownloadManagerTypes#Downloadable]].*/
 trait DownloadManager[F[_]] extends DownloadManagerTypes {
+
+  /** Schedule the download of a full [[Downloadable]] from the `source` node by a [[Handle]].
+    * If `relay` is `true` then gossip it afterwards, if it's valid.
+    * The returned `F[F[Unit]]` represents the success/failure of
+    * the scheduling itself; it fails if there's any error accessing
+    * the local backend, or if the scheduling cannot be carried out
+    * due to missing dependencies (at this point we should have synced
+    * already and the schedule should be called in topological order).
+    *
+    * The unwrapped `F[Unit]` _inside_ the `F[F[Unit]]` can be used to
+    * wait until the actual download finishes, or results in an error. */
   def scheduleDownload(handle: Handle, source: Node, relay: Boolean): F[WaitHandle[F]]
 }
 
@@ -132,18 +144,6 @@ trait BlockDownloadManager[F[_]] extends DownloadManager[F] {
   override type Handle       = BlockSummary
   override type Identifier   = ByteString
   override type Downloadable = Block
-
-  /** Schedule the download of a full block from the `source` node.
-    * If `relay` is `true` then gossip it afterwards, if it's valid.
-    * The returned `F[F[Unit]]` represents the success/failure of
-    * the scheduling itself; it fails if there's any error accessing
-    * the local backend, or if the scheduling cannot be carried out
-    * due to missing dependencies (at this point we should have synced
-    * already and the schedule should be called in topological order).
-    *
-    * The unwrapped `F[Unit]` _inside_ the `F[F[Unit]]` can be used to
-    * wait until the actual download finishes, or results in an error. */
-  def scheduleDownload(summary: BlockSummary, source: Node, relay: Boolean): F[WaitHandle[F]]
 }
 
 object BlockDownloadManagerImpl extends DownloadManagerCompanion {
