@@ -7,6 +7,7 @@ import io.casperlabs.storage.BlockHash
 import io.casperlabs.crypto.codec.Base16
 import cats.data.NonEmptyList
 import io.casperlabs.casper.consensus.Block
+import io.casperlabs.metrics.Metered
 import io.casperlabs.models.BlockImplicits._
 
 trait AncestorsStorage[F[_]] { self: DagLookup[F] =>
@@ -100,6 +101,12 @@ trait AncestorsStorage[F[_]] { self: DagLookup[F] =>
 }
 
 object AncestorsStorage {
+  trait MeteredAncestorsStorage[F[_]] extends AncestorsStorage[F] with Metered[F] {
+    self: DagLookup[F] =>
+    abstract override private[storage] def findAncestor(block: BlockHash, distance: Long) =
+      incAndMeasure("findAncestor", super.findAncestor(block, distance))
+  }
+
   sealed trait Relation extends Product with Serializable
   object Relation {
     case object Ancestor   extends Relation
