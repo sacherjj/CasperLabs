@@ -194,7 +194,7 @@ class BlockDownloadManagerSpec
       "skip the download" in TestFixture() {
         case (manager, backend) =>
           for {
-            _     <- backend.storeBlock(block)
+            _     <- backend.store(block)
             watch <- manager.scheduleDownload(summaryOf(block), source, false)
             _     <- watch
           } yield {
@@ -586,7 +586,7 @@ class BlockDownloadManagerSpec
       val block2 = sample(arbitrary[Block].map(withoutDependencies))
       val remote = MockGossipService(Seq(block1, block2))
       val backend = new MockBackend() {
-        override def hasBlock(blockHash: ByteString) =
+        override def contains(blockHash: ByteString) =
           if (blockHash == block1.blockHash || dependenciesOf(block1).contains(blockHash))
             Task.raiseError(new RuntimeException("Oh no!"))
           else
@@ -660,7 +660,7 @@ object BlockDownloadManagerSpec {
     }
   }
 
-  class MockBackend(validate: Block => Task[Unit] = _ => Task.unit)
+  class MockBackend(validationFunction: Block => Task[Unit] = _ => Task.unit)
       extends BlockDownloadManagerImpl.Backend[Task] {
     // Record what we have been called with.
     @volatile var validations = Vector.empty[ByteString]
@@ -669,21 +669,18 @@ object BlockDownloadManagerSpec {
     @volatile var scheduled   = Vector.empty[ByteString]
     @volatile var downloaded  = Vector.empty[ByteString]
 
-    def hasBlock(blockHash: ByteString): Task[Boolean] =
+    def contains(blockHash: ByteString): Task[Boolean] =
       Task.now(blocks.contains(blockHash))
 
-    def validateBlock(block: Block): Task[Unit] =
+    def validate(block: Block): Task[Unit] =
       Task.delay {
         synchronized { validations = validations :+ block.blockHash }
-      } *> validate(block)
+      } *> validationFunction(block)
 
-    def storeBlock(block: Block): Task[Unit] = Task.delay {
+    def store(block: Block): Task[Unit] = Task.delay {
       synchronized { blocks = blocks :+ block.blockHash }
     }
 
-    def storeBlockSummary(summary: BlockSummary): Task[Unit] = Task.delay {
-      synchronized { summaries = summaries :+ summary.blockHash }
-    }
     def onScheduled(summary: BlockSummary): Task[Unit] = Task.delay {
       synchronized { scheduled = scheduled :+ summary.blockHash }
     }

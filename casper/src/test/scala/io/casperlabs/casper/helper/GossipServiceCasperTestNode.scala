@@ -370,10 +370,10 @@ object GossipServiceCasperTestNodeFactory {
                              maxParallelDownloads = 10,
                              connectToGossip = connectToGossip,
                              backend = new BlockDownloadManagerImpl.Backend[F] {
-                               override def hasBlock(blockHash: ByteString): F[Boolean] =
+                               override def contains(blockHash: ByteString): F[Boolean] =
                                  isInDag(blockHash)
 
-                               override def validateBlock(block: consensus.Block): F[Unit] =
+                               override def validate(block: consensus.Block): F[Unit] =
                                  // Casper can only validate, store, but won't gossip because the Broadcaster we give it
                                  // will assume the DownloadManager will do that.
                                  // Doing this log here as it's evidently happened if we are here, and the tests expect it.
@@ -402,7 +402,7 @@ object GossipServiceCasperTestNodeFactory {
                                        )
                                  }
 
-                               override def storeBlock(block: consensus.Block): F[Unit] =
+                               override def store(block: consensus.Block): F[Unit] =
                                  // Validation has already stored it.
                                  ().pure[F]
 

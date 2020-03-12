@@ -278,10 +278,10 @@ package object gossiping {
                           maxParallelDownloads = conf.server.downloadMaxParallelBlocks,
                           connectToGossip = connectToGossip,
                           backend = new BlockDownloadManagerImpl.Backend[F] {
-                            override def hasBlock(blockHash: ByteString): F[Boolean] =
+                            override def contains(blockHash: ByteString): F[Boolean] =
                               isInDag(blockHash)
 
-                            override def validateBlock(block: Block): F[Unit] =
+                            override def validate(block: Block): F[Unit] =
                               maybeValidatorPublicKey
                                 .filter(_ == block.getHeader.validatorPublicKey)
                                 .fold(().pure[F]) { _ =>
@@ -292,7 +292,7 @@ package object gossiping {
                                 } *>
                                 Consensus[F].validateAndAddBlock(block)
 
-                            override def storeBlock(block: Block): F[Unit] =
+                            override def store(block: Block): F[Unit] =
                               // Validation has already stored it.
                               ().pure[F]
 

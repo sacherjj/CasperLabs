@@ -53,16 +53,16 @@ trait DownloadManagerCompanion extends DownloadManagerTypes {
   type ScheduleFeedback[F[_]] = Feedback[F, DownloadFeedback[F]]
 
   /** Interface to the storage and consensus dependencies and callbacks. */
-  trait InternalBackend[F[_]] {
-    def hasDownloadable(identifier: Identifier): F[Boolean]
-    def validateDownloadable(downloadable: Downloadable): F[Unit]
-    def storeDownloadable(downloadable: Downloadable): F[Unit]
+  trait Backend[F[_]] {
+    def contains(identifier: Identifier): F[Boolean]
+    def validate(downloadable: Downloadable): F[Unit]
+    def store(downloadable: Downloadable): F[Unit]
 
     /** Notify about new downloadables we were told about but haven't acquired yet. */
-    def onScheduledByHandler(handle: Handle): F[Unit]
+    def onScheduled(handle: Handle): F[Unit]
 
     /** Notify about a new downloadable we downloaded, verified and stored. */
-    def onDownloadedByPartialHandler(identifier: Identifier): F[Unit]
+    def onDownloaded(identifier: Identifier): F[Unit]
   }
 
   /** Messages the Download Manager uses inside its scheduler "queue". */
@@ -138,23 +138,6 @@ object BlockDownloadManagerImpl extends DownloadManagerCompanion {
 
   // to use .minimumOption on collections of (Node, Int)
   implicit val sourcesAndCountersOrder: Order[(Node, Int)] = Order[Int].contramap[(Node, Int)](_._2)
-
-  trait Backend[F[_]] extends InternalBackend[F] {
-    def hasBlock(byteString: ByteString): F[Boolean]
-    def validateBlock(downloadable: Block): F[Unit]
-    def storeBlock(downloadable: Block): F[Unit]
-    def onScheduled(blockSummary: BlockSummary): F[Unit]
-    def onDownloaded(byteString: ByteString): F[Unit]
-
-    override def hasDownloadable(identifier: Identifier): F[Boolean] =
-      hasBlock(identifier)
-    override def validateDownloadable(downloadable: Downloadable): F[Unit] =
-      validateBlock(downloadable)
-    override def storeDownloadable(downloadable: Downloadable): F[Unit] = storeBlock(downloadable)
-    override def onScheduledByHandler(handle: Handle): F[Unit]          = onScheduled(handle)
-    override def onDownloadedByPartialHandler(identifier: Identifier): F[Unit] =
-      onDownloaded(identifier)
-  }
 
   /** Start the download manager. */
   def apply[F[_]: Concurrent: Log: Timer: Metrics](
@@ -380,7 +363,7 @@ class BlockDownloadManagerImpl[F[_]: Concurrent: Log: Timer: Metrics](
     itemsRef.get.map(_ contains hash)
 
   private def isDownloaded(hash: ByteString): F[Boolean] =
-    backend.hasDownloadable(hash)
+    backend.contains(hash)
 
   /** Kick off the download and mark the item. */
   private def startWorker(item: Item[F]): F[Unit] =
@@ -404,8 +387,8 @@ class BlockDownloadManagerImpl[F[_]: Concurrent: Log: Timer: Metrics](
     def tryDownload(summary: BlockSummary, source: Node, relay: Boolean) =
       for {
         block <- fetchAndRestore(source, blockHash)
-        _     <- backend.validateDownloadable(block)
-        _     <- backend.storeDownloadable(block)
+        _     <- backend.validate(block)
+        _     <- backend.store(block)
         _     <- relaying.relay(List(summary.blockHash)).whenA(relay)
         _     <- success
         _     <- Metrics[F].incrementCounter("downloads_succeeded")
