@@ -132,9 +132,14 @@ const ArgumentRow = observer((props: {
       <td>
         <div className="row">
           <div className="col pl-0 pr-1">
-            <select className="form-control" value={props.deployArgument.$.type.$.toString()}
+            <select className="form-control" value={props.deployArgument.$.type.value}
                     onChange={e => {
-                      props.deployArgument.$.type.onChange(parseInt(e.target.value) as any);
+                      let v = e.target.value;
+                      if(v === 'Bytes'){
+                        props.deployArgument.$.type.onChange(v);
+                      }else{
+                        props.deployArgument.$.type.onChange(parseInt(e.target.value) as any);
+                      }
                     }}>
               {
                 Object.keys(CLType.Simple).filter(opt =>
@@ -145,6 +150,9 @@ const ArgumentRow = observer((props: {
                   </option>
                 ))
               }
+              <option value={'Bytes'}>
+                BYTES
+              </option>
             </select>
           </div>
           {firstTypeValue === CLType.Simple.KEY && (
