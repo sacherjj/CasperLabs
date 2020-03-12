@@ -279,8 +279,8 @@ object InitialSynchronizationForwardImplSpec extends ArbitraryConsensus {
     def banTemp(node: Node): Task[Unit]     = ???
   }
 
-  class MockBlocksDownloadManager(maybeFail: (Node, BlockSummary) => Option[Throwable])
-      extends BlocksDownloadManager[Task] {
+  class MockBlockDownloadManager(maybeFail: (Node, BlockSummary) => Option[Throwable])
+      extends BlockDownloadManager[Task] {
     val requestsCounter = Atomic(Map.empty[Node, Int].withDefaultValue(0))
 
     def scheduleDownload(summary: BlockSummary, source: Node, relay: Boolean) =
@@ -339,10 +339,10 @@ object InitialSynchronizationForwardImplSpec extends ArbitraryConsensus {
         rankStartFrom: Long = 0L,
         roundPeriod: FiniteDuration = Duration.Zero
     )(
-        test: (InitialSynchronization[Task], MockBlocksDownloadManager) => Task[Unit]
+        test: (InitialSynchronization[Task], MockBlockDownloadManager) => Task[Unit]
     ): Unit = {
       val mockGossipService   = new MockGossipService(produceDag, correctRanges)
-      val mockDownloadManager = new MockBlocksDownloadManager(maybeFail)
+      val mockDownloadManager = new MockBlockDownloadManager(maybeFail)
       val mockSynchronizer    = new MockSynchronizer(sync)
       val effect = new InitialSynchronizationForwardImpl[Task](
         nodeDiscovery = new MockNodeDiscovery(nodes),

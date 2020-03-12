@@ -10,7 +10,7 @@ import io.casperlabs.casper.consensus.{Approval, Block, BlockSummary}
 import io.casperlabs.comm.GossipError
 import io.casperlabs.comm.discovery.Node
 import io.casperlabs.comm.discovery.NodeUtils.showNode
-import io.casperlabs.comm.gossiping.BlocksDownloadManagerImpl.RetriesConf
+import io.casperlabs.comm.gossiping.BlockDownloadManagerImpl.RetriesConf
 import io.casperlabs.comm.gossiping.synchronization.Synchronizer
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.models.BlockImplicits.BlockOps
@@ -25,13 +25,13 @@ import org.scalatest._
 import scala.concurrent.TimeoutException
 import scala.concurrent.duration._
 
-class BlocksDownloadManagerSpec
+class BlockDownloadManagerSpec
     extends WordSpecLike
     with Matchers
     with BeforeAndAfterEach
     with ArbitraryConsensusAndComm {
 
-  import BlocksDownloadManagerSpec._
+  import BlockDownloadManagerSpec._
   import Scheduler.Implicits.global
 
   // Collect log messages. Reset before each test.
@@ -66,7 +66,7 @@ class BlocksDownloadManagerSpec
       val remote   = MockGossipService(dag)
       val relaying = MockRelaying.default
 
-      def scheduleAll(manager: BlocksDownloadManager[Task]): Task[List[Task[Unit]]] =
+      def scheduleAll(manager: BlockDownloadManager[Task]): Task[List[Task[Unit]]] =
         // Add them in the natural topological order they were generated with.
         dag.toList.traverse { block =>
           manager.scheduleDownload(summaryOf(block), source, relay = relayed(block))
@@ -244,7 +244,7 @@ class BlocksDownloadManagerSpec
         val backend = MockBackend()
 
         val test = for {
-          alloc <- BlocksDownloadManagerImpl[Task](
+          alloc <- BlockDownloadManagerImpl[Task](
                     maxParallelDownloads = 1,
                     connectToGossip = _ => remote,
                     backend = backend,
@@ -272,7 +272,7 @@ class BlocksDownloadManagerSpec
 
       "reject further schedules" in {
         val test = for {
-          alloc <- BlocksDownloadManagerImpl[Task](
+          alloc <- BlockDownloadManagerImpl[Task](
                     maxParallelDownloads = 1,
                     connectToGossip = _ => MockGossipService(),
                     backend = MockBackend(),
@@ -612,7 +612,7 @@ class BlocksDownloadManagerSpec
   }
 }
 
-object BlocksDownloadManagerSpec {
+object BlockDownloadManagerSpec {
   implicit val metrics = new Metrics.MetricsNOP[Task]
 
   def summaryOf(block: Block): BlockSummary =
@@ -630,7 +630,7 @@ object BlocksDownloadManagerSpec {
   def toBlockMap(blocks: Seq[Block]) =
     blocks.groupBy(_.blockHash).mapValues(_.head)
 
-  type TestArgs = (BlocksDownloadManager[Task], MockBackend)
+  type TestArgs = (BlockDownloadManager[Task], MockBackend)
 
   object TestFixture {
     def apply(
@@ -644,7 +644,7 @@ object BlocksDownloadManagerSpec {
         test: TestArgs => Task[Unit]
     )(implicit scheduler: Scheduler, log: Log[Task]): Unit = {
 
-      val managerR = BlocksDownloadManagerImpl[Task](
+      val managerR = BlockDownloadManagerImpl[Task](
         maxParallelDownloads = maxParallelDownloads,
         connectToGossip = remote(_),
         backend = backend,
@@ -661,7 +661,7 @@ object BlocksDownloadManagerSpec {
   }
 
   class MockBackend(validate: Block => Task[Unit] = _ => Task.unit)
-      extends BlocksDownloadManagerImpl.Backend[Task] {
+      extends BlockDownloadManagerImpl.Backend[Task] {
     // Record what we have been called with.
     @volatile var validations = Vector.empty[ByteString]
     @volatile var blocks      = Vector.empty[ByteString]
@@ -716,7 +716,7 @@ object BlocksDownloadManagerSpec {
       def syncDag(source: Node, targetBlockHashes: Set[ByteString]) = ???
       def downloaded(blockHash: ByteString): Task[Unit]             = ???
     }
-    private val emptyDownloadManager = new BlocksDownloadManager[Task] {
+    private val emptyDownloadManager = new BlockDownloadManager[Task] {
       def scheduleDownload(summary: BlockSummary, source: Node, relay: Boolean) = ???
     }
     private val emptyGenesisApprover = new GenesisApprover[Task] {
