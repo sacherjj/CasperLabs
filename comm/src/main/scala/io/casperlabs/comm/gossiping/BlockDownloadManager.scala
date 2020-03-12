@@ -152,7 +152,7 @@ object BlockDownloadManagerImpl extends DownloadManagerCompanion {
   override type Downloadable = Block
 
   implicit val metricsSource: Metrics.Source =
-    Metrics.Source(BlocksGossipingMetricsSource, "DownloadManager")
+    Metrics.Source(BlockGossipingMetricsSource, "DownloadManager")
 
   // to use .minimumOption on collections of (Node, Int)
   implicit val sourcesAndCountersOrder: Order[(Node, Int)] = Order[Int].contramap[(Node, Int)](_._2)
