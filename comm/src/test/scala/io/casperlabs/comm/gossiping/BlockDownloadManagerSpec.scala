@@ -678,7 +678,10 @@ object BlockDownloadManagerSpec {
       } *> validationFunction(block)
 
     def store(block: Block): Task[Unit] = Task.delay {
-      synchronized { blocks = blocks :+ block.blockHash }
+      synchronized {
+        blocks = blocks :+ block.blockHash
+        summaries = summaries :+ block.blockHash
+      }
     }
 
     def onScheduled(summary: BlockSummary): Task[Unit] = Task.delay {
