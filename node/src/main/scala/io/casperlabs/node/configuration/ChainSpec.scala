@@ -319,7 +319,6 @@ object ChainSpecReader {
               .withEeGenesisConfig(
                 ipc.ChainSpec
                   .EEGenesisConfig()
-                  .withProtocolVersion(protocolVersion)
                   .withMintInstaller(ByteString.copyFrom(mintCodeBytes))
                   .withPosInstaller(ByteString.copyFrom(posCodeBytes))
                   .withAccounts(accounts.map { account =>

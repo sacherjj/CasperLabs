@@ -290,17 +290,16 @@ message ChainSpec {
 
 
     message EEGenesisConfig {
-        io.casperlabs.casper.consensus.state.ProtocolVersion protocol_version = 1;
         // wasm bytecode for installing the mint system contract
-        bytes mint_installer = 2;
+        bytes mint_installer = 1;
         // wasm bytes for installing the pos system contract
-        bytes pos_installer = 3;
+        bytes pos_installer = 2;
         // wasm bytes for installing the standard payment system contract
-        bytes standard_payment_installer = 4;
+        bytes standard_payment_installer = 3;
         // genesis account information
-        repeated GenesisAccount accounts = 5;
+        repeated GenesisAccount accounts = 4;
         // costs at genesis
-        CostTable costs = 6;
+        CostTable costs = 5;
 
         message GenesisAccount {
             bytes public_key = 1;
@@ -454,8 +453,9 @@ message UnbondPayoutResponse {
 message RunGenesisRequest {
     // Hash of the Genesis configuration.
     bytes genesis_config_hash = 1;
+    io.casperlabs.casper.consensus.state.ProtocolVersion protocol_version = 2;
     // Genesis configuration for the ExecutionEngine.
-    ChainSpec.EEGenesisConfig ee_genesis_config = 2;
+    ChainSpec.EEGenesisConfig ee_genesis_config = 3;
 }
 
 // --- END PROOF-OF-STAKE SERVICE DEFINITION --- //

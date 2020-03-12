@@ -45,6 +45,7 @@ object Genesis {
                         .runGenesis(
                           RunGenesisRequest()
                             .withGenesisConfigHash(ProtoUtil.protoHash(genesisConfig))
+                            .withProtocolVersion(genesisConfig.getProtocolVersion)
                             .withEeGenesisConfig(genesisConfig.getEeGenesisConfig)
                         )
                         .rethrow
