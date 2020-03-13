@@ -30,5 +30,6 @@ types = { version = "0.2.0", path = "../types", package = "casperlabs-types", fe
 version-sync = "0.8"
 
 [features]
+highway = []
 use-as-wasm = []
 use-system-contracts = []
