@@ -104,7 +104,7 @@ const ARG_USE_SYSTEM_CONTRACTS_HELP: &str =
 
 // Highway
 const ARG_HIGHWAY: &str = "highway";
-const ARG_HIGHWAY_SHORT: &str = "h";
+const ARG_HIGHWAY_SHORT: &str = "w";
 const ARG_HIGHWAY_HELP: &str = "Highway consensus mode";
 
 // runnable
