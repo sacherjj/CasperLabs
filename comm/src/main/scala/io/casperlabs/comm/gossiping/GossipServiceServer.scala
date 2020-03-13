@@ -17,7 +17,7 @@ import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.shared.{Compression, Log}
 import monix.tail.Iterant
 
-import scala.collection.immutable.Queue
+import scala.collection.mutable.PriorityQueue
 import scala.util.control.NonFatal
 
 /** Server side implementation talking to the rest of the node such as casper, storage, download manager. */
@@ -143,47 +143,61 @@ class GossipServiceServer[F[_]: Concurrent: Parallel: Log: Metrics](
     // Depth restriction is to be able to periodically reassess targets,
     // to pass back hashes that still have missing dependencies, but not
     // the ones which have connected to the DAG of the caller.
-    def canGoDeeper(depth: Int) =
-      depth < request.maxDepth || request.maxDepth == -1
+    val canFollow: ((BlockSummary, Long)) => Boolean = {
+      case (_, depth) =>
+        depth <= request.maxDepth || request.maxDepth == -1
+    }
+
+    // Order by lowest depth (i.e. highest rank) first.
+    implicit val ord: Ordering[(BlockSummary, Long)] =
+      Ordering
+        .fromLessThan[(BlockSummary, Long)]((a, b) => a._2 < b._2)
+        .reverse
 
     // Visit blocks in simple BFS order rather than try to establish topological sorting because BFS
     // is invariant in maximum depth, while topological sorting could depend on whether we traversed
     // backwards enough to re-join forks with different lengths of sub-paths.
     def loop(
-        queue: Queue[(Int, ByteString)],
+        queue: PriorityQueue[(BlockSummary, Long)],
         visited: Set[ByteString]
     ): Iterant[F, BlockSummary] =
       if (queue.isEmpty)
         Iterant.empty
       else {
-        queue.dequeue match {
-          case ((_, blockHash), queue) if visited(blockHash) =>
+        queue.dequeue() match {
+          case (summary, _) if visited(summary.blockHash) =>
             loop(queue, visited)
 
-          case ((depth, blockHash), queue) =>
-            Iterant.liftF(backend.getBlockSummary(blockHash)) flatMap {
-              case None =>
-                loop(queue, visited + blockHash)
+          case (summary, depth) =>
+            Iterant.liftF {
+              val dependencies =
+                if (knownHashes(summary.blockHash)) Seq.empty
+                else
+                  summary.parentHashes ++ summary.justifications.map(_.latestBlockHash)
 
-              case Some(summary) =>
-                val ancestors =
-                  if (canGoDeeper(depth) && !knownHashes(summary.blockHash)) {
-                    val ancestors =
-                      summary.parentHashes ++
-                        summary.justifications.map(_.latestBlockHash)
+              dependencies.toList
+                .filterNot(visited)
+                .traverse(backend.getBlockSummary)
+                .map(_.flatten)
+            } flatMap { deps =>
+              // Only follow ancestors where the total j-Rank distance is within maxDepth.
+              val follow = deps.map { dep =>
+                val jdepth = summary.getHeader.jRank - dep.getHeader.jRank + depth
+                dep -> jdepth
+              } filter canFollow
 
-                    ancestors.map(depth + 1 -> _)
-                  } else {
-                    Seq.empty
-                  }
-
-                Iterant.pure(summary) ++ loop(queue ++ ancestors, visited + blockHash)
+              // It can happen that all the dependencies are too far, and the client
+              // only gets the targets. But it will see which dependencies it's missing
+              // and ask for them specifically.
+              Iterant.pure(summary) ++ loop(queue ++ follow, visited + summary.blockHash)
             }
         }
       }
 
-    Iterant.delay {
-      Queue(request.targetBlockHashes.map(0 -> _): _*) -> Set.empty[ByteString]
+    Iterant.liftF {
+      request.targetBlockHashes.toList.traverse(backend.getBlockSummary).map { ss =>
+        PriorityQueue(ss.flatten.map(_ -> 0L): _*) -> Set.empty[ByteString]
+      }
     } flatMap {
       case (queue, visited) => loop(queue, visited)
     }
