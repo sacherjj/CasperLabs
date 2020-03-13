@@ -140,26 +140,29 @@ class GossipServiceServer[F[_]: Concurrent: Parallel: Log: Metrics](
     // We return known hashes but not their parents.
     val knownHashes = request.knownBlockHashes.toSet
 
+    type Depth = Long
+
     // Depth restriction is to be able to periodically reassess targets,
     // to pass back hashes that still have missing dependencies, but not
     // the ones which have connected to the DAG of the caller.
-    val canFollow: ((BlockSummary, Long)) => Boolean = {
+    val canFollow: ((BlockSummary, Depth)) => Boolean = {
       case (_, depth) =>
         depth <= request.maxDepth || request.maxDepth == -1
     }
 
-    // Order by highest rank first.
-    implicit val ord: Ordering[(BlockSummary, Long)] =
+    // Take the highest rank first, then the lowest depth.
+    implicit val ord: Ordering[(BlockSummary, Depth)] =
       Ordering.by {
-        case (summary, _) => summary.getHeader.jRank
+        case (summary, depth) => (summary.getHeader.jRank, -depth)
       }
 
-    // Visit blocks in simple BFS order rather than try to establish topological sorting because BFS
-    // is invariant in maximum depth, while topological sorting could depend on whether we traversed
-    // backwards enough to re-join forks with different lengths of sub-paths.
+    // Yield blocks in j-rank based reverse topological order.
     def loop(
-        queue: PriorityQueue[(BlockSummary, Long)],
-        visited: Map[ByteString, Long]
+        queue: PriorityQueue[(BlockSummary, Depth)],
+        // At what depth did we visit a block. It's possible, with multiple targets,
+        // that we'll see it again at a shallower path and can go further into its
+        // dependencies.
+        visited: Map[ByteString, Depth]
     ): Iterant[F, BlockSummary] =
       if (queue.isEmpty)
         Iterant.empty
@@ -167,11 +170,11 @@ class GossipServiceServer[F[_]: Concurrent: Parallel: Log: Metrics](
         queue.dequeue() match {
           case (summary, depth)
               if visited.contains(summary.blockHash) && visited(summary.blockHash) <= depth =>
-            // We visited this block from a smaller distance, so enqueued all the dependencies.
+            // We visited this block from a smaller distance-to-target, so we already enqueued all the dependencies.
             loop(queue, visited)
 
           case (summary, depth) =>
-            // Maybe we visited this block from a longer distance and eliminated more of its dependencies.
+            // Maybe we visited this block from a longer distance-to-target; from this lower distance we can go deeper into dependencies.
             Iterant.liftF {
               val dependencies =
                 if (knownHashes(summary.blockHash) || depth == request.maxDepth) Seq.empty
@@ -197,7 +200,7 @@ class GossipServiceServer[F[_]: Concurrent: Parallel: Log: Metrics](
 
     Iterant.liftF {
       request.targetBlockHashes.toList.traverse(backend.getBlockSummary).map { ss =>
-        PriorityQueue(ss.flatten.map(_ -> 0L): _*) -> Map.empty[ByteString, Long]
+        PriorityQueue(ss.flatten.map(_ -> 0L): _*) -> Map.empty[ByteString, Depth]
       }
     } flatMap {
       case (queue, visited) => loop(queue, visited)
