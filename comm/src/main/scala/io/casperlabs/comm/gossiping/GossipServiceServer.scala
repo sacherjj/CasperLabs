@@ -148,35 +148,37 @@ class GossipServiceServer[F[_]: Concurrent: Parallel: Log: Metrics](
         depth <= request.maxDepth || request.maxDepth == -1
     }
 
-    // Order by lowest depth (i.e. highest rank) first.
+    // Order by highest rank first.
     implicit val ord: Ordering[(BlockSummary, Long)] =
-      Ordering
-        .fromLessThan[(BlockSummary, Long)]((a, b) => a._2 < b._2)
-        .reverse
+      Ordering.by {
+        case (summary, _) => summary.getHeader.jRank
+      }
 
     // Visit blocks in simple BFS order rather than try to establish topological sorting because BFS
     // is invariant in maximum depth, while topological sorting could depend on whether we traversed
     // backwards enough to re-join forks with different lengths of sub-paths.
     def loop(
         queue: PriorityQueue[(BlockSummary, Long)],
-        visited: Set[ByteString]
+        visited: Map[ByteString, Long]
     ): Iterant[F, BlockSummary] =
       if (queue.isEmpty)
         Iterant.empty
       else {
         queue.dequeue() match {
-          case (summary, _) if visited(summary.blockHash) =>
+          case (summary, depth)
+              if visited.contains(summary.blockHash) && visited(summary.blockHash) <= depth =>
+            // We visited this block from a smaller distance, so enqueued all the dependencies.
             loop(queue, visited)
 
           case (summary, depth) =>
+            // Maybe we visited this block from a longer distance and eliminated more of its dependencies.
             Iterant.liftF {
               val dependencies =
-                if (knownHashes(summary.blockHash)) Seq.empty
+                if (knownHashes(summary.blockHash) || depth == request.maxDepth) Seq.empty
                 else
                   summary.parentHashes ++ summary.justifications.map(_.latestBlockHash)
 
               dependencies.toList
-                .filterNot(visited)
                 .traverse(backend.getBlockSummary)
                 .map(_.flatten)
             } flatMap { deps =>
@@ -186,17 +188,16 @@ class GossipServiceServer[F[_]: Concurrent: Parallel: Log: Metrics](
                 dep -> jdepth
               } filter canFollow
 
-              // It can happen that all the dependencies are too far, and the client
-              // only gets the targets. But it will see which dependencies it's missing
-              // and ask for them specifically.
-              Iterant.pure(summary) ++ loop(queue ++ follow, visited + summary.blockHash)
+              def rest = loop(queue ++ follow, visited.updated(summary.blockHash, depth))
+
+              if (visited.contains(summary.blockHash)) rest else Iterant.pure(summary) ++ rest
             }
         }
       }
 
     Iterant.liftF {
       request.targetBlockHashes.toList.traverse(backend.getBlockSummary).map { ss =>
-        PriorityQueue(ss.flatten.map(_ -> 0L): _*) -> Set.empty[ByteString]
+        PriorityQueue(ss.flatten.map(_ -> 0L): _*) -> Map.empty[ByteString, Long]
       }
     } flatMap {
       case (queue, visited) => loop(queue, visited)

@@ -404,6 +404,7 @@ object SynchronizerImpl {
     for {
       semaphoreMap       <- SemaphoreMap[F, Node](1)
       syncedSummariesRef <- Ref[F].of(Map.empty[ByteString, SyncedSummary])
+      _                  <- Log[F].warn("Not going to perform DAG shape validations.").whenA(disableValidations)
     } yield {
       new SynchronizerImpl[F](
         connectToGossip,
