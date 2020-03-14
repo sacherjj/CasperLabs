@@ -266,7 +266,7 @@ trait ArbitraryConsensus {
                 validatorPublicKey = j.validatorPublicKey
               )
             })
-            .withJRank(parents.map(_.jRank).max + 1)
+            .withJRank((parents ++ justifications).map(_.jRank).max + 1)
             .withMainRank(parents.head.mainRank + 1)
           block.withHeader(header)
         }
