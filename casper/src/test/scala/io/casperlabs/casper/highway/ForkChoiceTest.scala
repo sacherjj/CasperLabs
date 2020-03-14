@@ -4,6 +4,7 @@ import cats.effect.Timer
 import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.{state, Bond, Era}
+import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.casper.{DeploySelection, ValidatorIdentity}
 import io.casperlabs.crypto.Keys
 import io.casperlabs.crypto.Keys.PublicKey
@@ -333,16 +334,17 @@ class ForkChoiceTest extends FlatSpec with HighwayFixture {
         withEquivocation: Boolean
     ): Task[List[BlockHash]] =
       for {
-        dag    <- DagStorage[Task].getRepresentation
-        tips   <- dag.latestInEra(era.keyBlockHash)
-        latest <- tips.latestMessages
+        dag         <- DagStorage[Task].getRepresentation
+        tips        <- dag.latestInEra(era.keyBlockHash)
+        parentBlock <- dag.lookupBlockUnsafe(parent)
+        latest      <- tips.latestMessages
         justifications = latest.map {
-          case (v, ms) => PublicKey(v) -> ms.map(_.messageHash)
+          case (v, ms) => PublicKey(v) -> ms
         }
         b <- mp.block(
               era.keyBlockHash,
               roundId = Ticks(era.startTick),
-              mainParent = parent,
+              mainParent = parentBlock,
               justifications = justifications,
               isBookingBlock = false
             )
@@ -350,7 +352,7 @@ class ForkChoiceTest extends FlatSpec with HighwayFixture {
                    mp.ballot(
                        era.keyBlockHash,
                        roundId = Ticks(era.endTick),
-                       target = parent,
+                       target = parentBlock,
                        justifications = justifications
                      )
                      .map(_.messageHash.some)

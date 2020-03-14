@@ -250,7 +250,7 @@ class EraRuntime[F[_]: Sync: Clock: Metrics: Log: EraStorage: FinalityStorageRea
                                      .ballot(
                                        keyBlockHash = era.keyBlockHash,
                                        roundId = Ticks(lambdaMessage.roundId),
-                                       target = choice.block.messageHash,
+                                       target = choice.block,
                                        justifications = choice.justificationsMap
                                      )
                                      .timerGauge("response_ballot")
@@ -285,7 +285,7 @@ class EraRuntime[F[_]: Sync: Clock: Metrics: Log: EraStorage: FinalityStorageRea
                         .block(
                           keyBlockHash = era.keyBlockHash,
                           roundId = roundId,
-                          mainParent = choice.block.messageHash,
+                          mainParent = choice.block,
                           justifications = choice.justificationsMap,
                           isBookingBlock = isBookingBoundary(
                             choice.block.roundInstant,
@@ -299,7 +299,7 @@ class EraRuntime[F[_]: Sync: Clock: Metrics: Log: EraStorage: FinalityStorageRea
                         .ballot(
                           keyBlockHash = era.keyBlockHash,
                           roundId = roundId,
-                          target = choice.block.messageHash,
+                          target = choice.block,
                           justifications = choice.justificationsMap
                         )
                         .timerGauge("lambda_ballot")
@@ -340,7 +340,7 @@ class EraRuntime[F[_]: Sync: Clock: Metrics: Log: EraStorage: FinalityStorageRea
                         .ballot(
                           keyBlockHash = era.keyBlockHash,
                           roundId = roundId,
-                          target = choice.block.messageHash,
+                          target = choice.block,
                           justifications = choice.justificationsMap
                         )
                         .timerGauge("omega_ballot")

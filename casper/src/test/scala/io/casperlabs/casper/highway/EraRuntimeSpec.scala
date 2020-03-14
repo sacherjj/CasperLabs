@@ -1166,12 +1166,12 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
             override def block(
                 eraId: ByteString,
                 roundId: Ticks,
-                mainParent: ByteString,
-                justifications: Map[PublicKeyBS, Set[BlockHash]],
+                mainParent: Message.Block,
+                justifications: Map[PublicKeyBS, Set[Message]],
                 isBookingBlock: Boolean
             ): Id[Message.Block] = {
               isBookingBlock shouldBe true
-              mainParent shouldBe fc.fromKeyBlock(eraId).block.messageHash
+              mainParent.messageHash shouldBe fc.fromKeyBlock(eraId).block.messageHash
               justifications shouldBe fc.fromKeyBlock(eraId).justificationsMap
 
               super.block(eraId, roundId, mainParent, justifications, isBookingBlock)

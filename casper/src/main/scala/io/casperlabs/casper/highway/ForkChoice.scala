@@ -76,9 +76,9 @@ object ForkChoice {
       // on top of the main parent can cite all these justifications.
       justifications: Set[Message]
   ) {
-    lazy val justificationsMap: Map[PublicKeyBS, Set[BlockHash]] =
+    lazy val justificationsMap: Map[PublicKeyBS, Set[Message]] =
       justifications.toSeq
-        .map(j => PublicKey(j.validatorId) -> j.messageHash)
+        .map(j => PublicKey(j.validatorId) -> j)
         .groupBy(_._1)
         .mapValues(_.map(_._2).toSet)
   }
@@ -247,7 +247,8 @@ object ForkChoice {
                                  .latestMessagesInEras[F](dag, keyBlocks)
                                  .map(EraObservedBehavior.local(_))
                                  .timerGauge("fromKeyBlock_latestMessagesInEras")
-          (forkChoice, justifications) <- erasForkChoice(keyBlock, keyBlocks, erasLatestMessages).timerGauge("fromKeyBlock_erasForkChoice")
+          (forkChoice, justifications) <- erasForkChoice(keyBlock, keyBlocks, erasLatestMessages)
+                                           .timerGauge("fromKeyBlock_erasForkChoice")
         } yield Result(forkChoice, justifications.values.flatten.toSet)
 
       override def fromJustifications(
