@@ -33,12 +33,12 @@ final class EraObservedBehavior[A] private (
 
   def latestMessagesInEra(
       keyBlockHash: BlockHash
-  )(implicit ev: A =:= Message): Map[Validator, Set[Message]] =
+  ): Map[Validator, Set[A]] =
     data.get(keyBlockHash) match {
-      case None => Map.empty[Validator, Set[Message]]
+      case None => Map.empty[Validator, Set[A]]
       case Some(lms) =>
         lms.mapValues {
-          case Empty               => Set.empty[Message]
+          case Empty               => Set.empty[A]
           case Honest(msg)         => Set(msg)
           case Equivocated(m1, m2) => Set(m1, m2)
         }
@@ -79,8 +79,11 @@ object EraObservedBehavior {
       erasObservedBehavior: LocalDagView[Message],
       stop: Message
   ): F[MessageJPast[Message]] = {
+
+    type EraId = ByteString
     type PerEraValidatorMessages =
-      Map[ByteString, Map[Validator, ObservedValidatorBehavior[Message]]]
+      Map[EraId, Map[Validator, ObservedValidatorBehavior[Message]]]
+
     import ObservedValidatorBehavior._
 
     val stream = DagOperations
@@ -88,10 +91,8 @@ object EraObservedBehavior {
       .takeUntil(_ == stop)
       .filter(!_.isGenesisLike) // Not interested in Genesis block
 
-    val keyBlockHashes = erasObservedBehavior.keyBlockHashes
-
     val initStates: PerEraValidatorMessages =
-      keyBlockHashes.toList
+      erasObservedBehavior.keyBlockHashes.toList
         .map(
           kbh =>
             kbh -> erasObservedBehavior
