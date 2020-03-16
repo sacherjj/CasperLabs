@@ -4,9 +4,14 @@ import { ByteArray } from '../index';
 import { Args, BigIntValue } from './Args';
 import { protoHash } from './Contracts';
 
+export enum ContractType {
+  WASM = 'WASM',
+  Hash = 'Hash'
+}
+
 export const makeDeploy = (
   args: Deploy.Arg[],
-  type: 'WASM' | 'Hash',
+  type: ContractType,
   session: ByteArray,
   paymentWasm: ByteArray,
   paymentAmount: bigint,
@@ -14,7 +19,7 @@ export const makeDeploy = (
   gasPrice: number
 ): Deploy => {
   const sessionCode = new Deploy.Code();
-  if(type === 'WASM'){
+  if(type === ContractType.WASM){
     sessionCode.setWasm(session);
   }else{
     sessionCode.setHash(session);

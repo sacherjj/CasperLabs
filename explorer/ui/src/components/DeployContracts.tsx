@@ -1,10 +1,9 @@
 import { observer } from 'mobx-react';
-import { FileSelect, Form, FormRow, NumberField, SelectField, TextField } from './Forms';
+import { FileSelect, Form, NumberField, SelectField, TextField } from './Forms';
 import { Button, Card, ListInline } from './Utils';
 import React from 'react';
 import {
   BitWidth,
-  ContractType,
   DeployContractsContainer,
   FormDeployArgument,
   KeyType
@@ -13,6 +12,7 @@ import Modal from './Modal';
 import { CLType, Key } from 'casperlabs-grpc/io/casperlabs/casper/consensus/state_pb';
 import Pages from './Pages';
 import { Link } from 'react-router-dom';
+import { DeployUtil } from 'casperlabs-sdk';
 
 
 interface Props {
@@ -68,25 +68,25 @@ export class DeployContractsForm extends React.Component<Props, {}> {
                          value={deployContractsContainer.deployConfiguration.$.contractType.$}
                          placeholder="Please Select the Type of Deploy"
                          options={
-                           Object.keys(ContractType).map(t => {
+                           Object.keys(DeployUtil.ContractType).map(t => {
                              return {
-                               label: (ContractType as any)[t],
+                               label: (DeployUtil.ContractType as any)[t],
                                value: t
                              };
                            })}
                          onChange={(value: string) => {
-                           deployContractsContainer.deployConfiguration.$.contractType.onChange(value as ContractType);
+                           deployContractsContainer.deployConfiguration.$.contractType.onChange(value as DeployUtil.ContractType);
                          }}
             />
             {
-              deployContractsContainer.deployConfiguration.$.contractType.$ === ContractType.WASM && (
+              deployContractsContainer.deployConfiguration.$.contractType.$ === DeployUtil.ContractType.WASM && (
                 <FileSelect id="id-wasm-select"
                             label={deployContractsContainer.selectedFile?.name || 'Select WASM File'}
                             handleFileSelect={deployContractsContainer.handleFileSelect}/>
               )
             }
             {
-              deployContractsContainer.deployConfiguration.$.contractType.$ === ContractType.Hash && (
+              deployContractsContainer.deployConfiguration.$.contractType.$ === DeployUtil.ContractType.Hash && (
                 <TextField id="id-contract-hash" label="Hash(Base16) of the Contract"
                            fieldState={deployContractsContainer.deployConfiguration.$.contractHash}/>
               )

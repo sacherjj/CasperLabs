@@ -11,13 +11,7 @@ import { Deploy } from 'casperlabs-grpc/io/casperlabs/casper/consensus/consensus
 import { CLType, CLValueInstance, Key } from 'casperlabs-grpc/io/casperlabs/casper/consensus/state_pb';
 import paymentWASMUrl from '../standard_payment.wm';
 
-
 type SupportedType = CLType.SimpleMap[keyof CLType.SimpleMap] | 'Bytes';
-
-export enum ContractType {
-  WASM = 'WASM',
-  Hash = 'Hash'
-}
 
 export enum KeyType {
   ADDRESS = 'Address',
@@ -81,7 +75,7 @@ export type FormDeployArgument = FormState<DeployArgument>;
 type FormDeployArguments = FormState<FormDeployArgument[]>;
 
 export type DeployConfiguration = {
-  contractType: FieldState<ContractType | null>,
+  contractType: FieldState<DeployUtil.ContractType | null>,
   contractHash: FieldState<string>,
   paymentAmount: FieldState<number>,
   fromAddress: FieldState<string>
@@ -99,7 +93,7 @@ interface RawDeployArguments {
 
 interface UserInputPersistent {
   deployConfiguration: {
-    contractType: ContractType | null,
+    contractType: DeployUtil.ContractType | null,
     paymentAmount: number,
     fromAddress: string
   },
@@ -110,7 +104,7 @@ interface UserInputPersistent {
 
 export class DeployContractsContainer {
   @observable deployConfiguration: FormDeployConfiguration = new FormState<DeployConfiguration>({
-    contractType: new FieldState<ContractType | null>(null).validators(valueRequired),
+    contractType: new FieldState<DeployUtil.ContractType | null>(null).validators(valueRequired),
     contractHash: new FieldState('').disableAutoValidation(),
     paymentAmount: new FieldState<number>(10000000).validators(
       numberGreaterThan(0),
@@ -118,7 +112,7 @@ export class DeployContractsContainer {
     ),
     fromAddress: new FieldState<string>('')
   }).compose().validators(deployConfiguration => {
-    if (deployConfiguration.contractType.$ === ContractType.Hash) {
+    if (deployConfiguration.contractType.$ ===DeployUtil.ContractType.Hash) {
       let value = deployConfiguration.contractHash.value;
       let v = validateBase16(value) || valueRequired(value);
       if (v !== false) {
@@ -266,13 +260,13 @@ export class DeployContractsContainer {
     } else {
       const config = deployConfigurationForm.value;
       const args = deployArguments.value;
-      let type: ContractType;
+      let type: DeployUtil.ContractType;
       let session: ByteArray;
-      if (config.contractType.value === ContractType.Hash) {
-        type = ContractType.Hash;
+      if (config.contractType.value ===DeployUtil.ContractType.Hash) {
+        type = DeployUtil.ContractType.Hash;
         session = decodeBase16(config.contractHash.value);
       } else {
-        type = ContractType.WASM;
+        type = DeployUtil.ContractType.WASM;
         session = this.selectedFileContent!;
       }
       let argsProto = args.map((arg: FormState<DeployArgument>) => {
