@@ -139,7 +139,22 @@ object EventStream {
                   }
                 }
               }
-          }.void
+          } >>
+            indirectlyOrphaned.toList.traverse { blockHash =>
+              val rdr = DeployStorage[F].reader
+              for {
+                processed <- rdr.getProcessedDeploys(blockHash)
+                deploys   = processed.map(_.getDeploy)
+                infos     <- rdr.getDeployInfos(deploys)
+                _ <- infos.traverse { info =>
+                      emit {
+                        Event().withDeployOrphaned(
+                          DeployOrphaned().withBlockHash(blockHash).withDeployInfo(info)
+                        )
+                      }
+                    }
+              } yield ()
+            } void
         }
 
       override def deployAdded(deploy: Deploy): F[Unit] =

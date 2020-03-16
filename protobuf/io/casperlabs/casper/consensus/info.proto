@@ -139,7 +139,6 @@ message Event {
         io.casperlabs.casper.consensus.Block.ProcessedDeploy processed_deploy = 2;
     }
 
-    // TODO (CON-631): Emit the anti-finalization event (currently just a placeholder).
     // A block the deploy was included in has been anti-finalized, i.e. orphaned by the LFB.
     // The deploy can still be finalized in a different block, if it was requeued or re-sent.
     message DeployOrphaned {
