@@ -121,14 +121,14 @@ export class DeployContractsContainer {
     if (deployConfiguration.contractType.$ === ContractType.Hash) {
       let value = deployConfiguration.contractHash.value;
       let v = isBase16(value) || valueRequired(value);
-      if(v !== false){
+      if (v !== false) {
         deployConfiguration.contractHash.setError(v);
       }
       return v;
-    }else{
+    } else {
       // WASM
-      if(!this.selectedFile){
-        const msg = "Upload WASM file firstly";
+      if (!this.selectedFile) {
+        const msg = 'Upload WASM file firstly';
         alert(msg);
         return msg;
       }
@@ -266,123 +266,148 @@ export class DeployContractsContainer {
     } else {
       const config = deployConfigurationForm.value;
       const args = deployArguments.value;
-      let type: 'Hash' | 'WASM';
+      let type: ContractType;
       let session: ByteArray;
       if (config.contractType.value === ContractType.Hash) {
-        type = 'Hash';
+        type = ContractType.Hash;
         session = decodeBase16(config.contractHash.value);
       } else {
-        type = 'WASM';
+        type = ContractType.WASM;
         session = this.selectedFileContent!;
       }
-      const paymentAmount = config.paymentAmount.value;
       let argsProto = args.map((arg: FormState<DeployArgument>) => {
-        const value = new CLValueInstance.Value();
-        const argValueStr: string = arg.$.value.value;
-        const type = arg.$.type.$;
-        const clType = new CLType();
-        if (type === 'Bytes') {
-          const innerType = new CLType();
-          innerType.setSimpleType(CLType.Simple.U8);
-          const fixedListType = new CLType.FixedList();
-          fixedListType.setInner(innerType);
-          const bytes = decodeBase16(argValueStr);
-          fixedListType.setLen(bytes.length);
-          clType.setFixedListType(fixedListType);
-          value.setBytesValue(bytes);
-        } else {
-          const simpleType = type as CLType.SimpleMap[keyof CLType.SimpleMap];
-          switch (simpleType) {
-            case CLType.Simple.U8:
-              value.setU8(parseInt(argValueStr));
-              break;
-            case CLType.Simple.U32:
-              value.setU32(parseInt(argValueStr));
-              break;
-            case CLType.Simple.U64:
-              value.setU64(parseInt(argValueStr));
-              break;
-            case CLType.Simple.I32:
-              value.setI32(parseInt(argValueStr));
-              break;
-            case CLType.Simple.I64:
-              value.setI64(parseInt(argValueStr));
-              break;
-            case CLType.Simple.U128:
-              const u128 = new CLValueInstance.U128();
-              u128.setValue(argValueStr);
-              value.setU128(u128);
-              break;
-            case CLType.Simple.U256:
-              const u256 = new CLValueInstance.U256();
-              u256.setValue(argValueStr);
-              value.setU256(u256);
-              break;
-            case CLType.Simple.U512:
-              const u512 = new CLValueInstance.U512();
-              u512.setValue(argValueStr);
-              value.setU256(u512);
-              break;
-            case CLType.Simple.STRING:
-              value.setStrValue(argValueStr);
-              break;
-            case CLType.Simple.BOOL:
-              value.setBoolValue(validator.toBoolean(argValueStr));
-              break;
-            case CLType.Simple.KEY:
-              const key = new Key();
-              let keyType = arg.$.secondType.value as KeyType;
-              let valueInByteArray = decodeBase16(argValueStr);
-              switch (keyType) {
-                case KeyType.ADDRESS:
-                  const address = new Key.Address();
-                  address.setAccount(valueInByteArray);
-                  key.setAddress(address);
-                  break;
-                case KeyType.HASH:
-                  const hash = new Key.Hash();
-                  hash.setHash(valueInByteArray);
-                  key.setHash(hash);
-                  break;
-                case KeyType.UREF:
-                  const URef = new Key.URef();
-                  URef.setUref(valueInByteArray);
-                  URef.setAccessRights(arg.$.URefAccessRight.value!);
-                  break;
-                case KeyType.LOCAL:
-                  const local = new Key.Local();
-                  local.setHash(valueInByteArray);
-                  break;
-              }
-              value.setKey(key);
-              break;
-            case CLType.Simple.UREF:
-              const URef = new Key.URef();
-              URef.setAccessRights(arg.$.URefAccessRight.value!);
-              URef.setUref(decodeBase16(argValueStr));
-              value.setUref(URef);
-              break;
-          }
-          clType.setSimpleType(simpleType);
-        }
-
-        const clValueInstance = new CLValueInstance();
-        clValueInstance.setClType(clType);
-        clValueInstance.setValue(value);
-
-        const deployArg = new Deploy.Arg();
-        deployArg.setName(arg.$.name.value);
-        deployArg.setValue(clValueInstance);
-        return deployArg;
+        return this.buildArgument(arg);
       });
       let wasmRequest = await fetch(paymentWASMUrl);
       let paymentWASM: ArrayBuffer = await wasmRequest.arrayBuffer();
+      const paymentAmount = config.paymentAmount.value;
+
       // we will remove it completely
       const gasPrice = 1;
       return DeployUtil.makeDeploy(argsProto, type, session, new Uint8Array(paymentWASM), BigInt(paymentAmount), publicKey, gasPrice);
     }
   }
 
+  private buildArgument(arg: FormState<DeployArgument>) {
+    const argValueStr: string = arg.$.value.value;
+    const type = arg.$.type.$;
+    let clValueInstance: CLValueInstance;
+    if (type === 'Bytes') {
+      clValueInstance = this.buildBytesTypeArg(argValueStr);
+    } else {
+      const simpleType = type as CLType.SimpleMap[keyof CLType.SimpleMap];
+      clValueInstance = this.buildSimpleTypeArg(simpleType, argValueStr, arg);
+    }
+
+    const deployArg = new Deploy.Arg();
+    deployArg.setName(arg.$.name.value);
+    deployArg.setValue(clValueInstance);
+    return deployArg;
+  }
+
+  private buildBytesTypeArg(argValueStr: string): CLValueInstance {
+    const innerType = new CLType();
+    innerType.setSimpleType(CLType.Simple.U8);
+    const fixedListType = new CLType.FixedList();
+    fixedListType.setInner(innerType);
+    const bytes = decodeBase16(argValueStr);
+    fixedListType.setLen(bytes.length);
+
+    const clType = new CLType();
+    clType.setFixedListType(fixedListType);
+
+    const value = new CLValueInstance.Value();
+    value.setBytesValue(bytes);
+
+    const clValueInstance = new CLValueInstance();
+    clValueInstance.setClType(clType);
+    clValueInstance.setValue(value);
+    return clValueInstance;
+  }
+
+  private buildSimpleTypeArg(simpleType: CLType.SimpleMap[keyof CLType.SimpleMap], argValueStr: string, arg: FormState<DeployArgument>): CLValueInstance {
+    const value = new CLValueInstance.Value();
+    const clType = new CLType();
+    switch (simpleType) {
+      case CLType.Simple.U8:
+        value.setU8(parseInt(argValueStr));
+        break;
+      case CLType.Simple.U32:
+        value.setU32(parseInt(argValueStr));
+        break;
+      case CLType.Simple.U64:
+        value.setU64(parseInt(argValueStr));
+        break;
+      case CLType.Simple.I32:
+        value.setI32(parseInt(argValueStr));
+        break;
+      case CLType.Simple.I64:
+        value.setI64(parseInt(argValueStr));
+        break;
+      case CLType.Simple.U128:
+        const u128 = new CLValueInstance.U128();
+        u128.setValue(argValueStr);
+        value.setU128(u128);
+        break;
+      case CLType.Simple.U256:
+        const u256 = new CLValueInstance.U256();
+        u256.setValue(argValueStr);
+        value.setU256(u256);
+        break;
+      case CLType.Simple.U512:
+        const u512 = new CLValueInstance.U512();
+        u512.setValue(argValueStr);
+        value.setU256(u512);
+        break;
+      case CLType.Simple.STRING:
+        value.setStrValue(argValueStr);
+        break;
+      case CLType.Simple.BOOL:
+        value.setBoolValue(validator.toBoolean(argValueStr));
+        break;
+      case CLType.Simple.KEY:
+        const key = new Key();
+        let keyType = arg.$.secondType.value as KeyType;
+        let valueInByteArray = decodeBase16(argValueStr);
+        switch (keyType) {
+          case KeyType.ADDRESS:
+            const address = new Key.Address();
+            address.setAccount(valueInByteArray);
+            key.setAddress(address);
+            break;
+          case KeyType.HASH:
+            const hash = new Key.Hash();
+            hash.setHash(valueInByteArray);
+            key.setHash(hash);
+            break;
+          case KeyType.UREF:
+            const uRef = new Key.URef();
+            uRef.setUref(valueInByteArray);
+            uRef.setAccessRights(arg.$.URefAccessRight.value!);
+            key.setUref(uRef);
+            break;
+          case KeyType.LOCAL:
+            const local = new Key.Local();
+            local.setHash(valueInByteArray);
+            key.setLocal(local);
+            break;
+        }
+        value.setKey(key);
+        break;
+      case CLType.Simple.UREF:
+        const URef = new Key.URef();
+        URef.setAccessRights(arg.$.URefAccessRight.value!);
+        URef.setUref(decodeBase16(argValueStr));
+        value.setUref(URef);
+        break;
+    }
+    clType.setSimpleType(simpleType);
+
+    const clValueInstance = new CLValueInstance();
+    clValueInstance.setClType(clType);
+    clValueInstance.setValue(value);
+    return clValueInstance;
+  }
 
   private validateDeployArgument(deployArgument: DeployArgument): string | false {
     const value = deployArgument.value.$;
