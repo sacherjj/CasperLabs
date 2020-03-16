@@ -116,7 +116,7 @@ class MessageExecutor[F[_]: Concurrent: Log: Time: Metrics: BlockStorage: DagSto
                 _  <- FinalityStorage[F].markAsFinalized(mainParent, secondary, orphaned)
                 w1 <- DeployBuffer[F].removeFinalizedDeploys(secondary + mainParent).forkAndLog
                 w2 <- BlockEventEmitter[F]
-                       .newLastFinalizedBlock(mainParent, secondary)
+                       .newLastFinalizedBlock(mainParent, secondary, orphaned)
                        .timer("emitNewLFB")
                        .forkAndLog
               } yield w1 *> w2

@@ -189,7 +189,7 @@ class MultiParentCasperImpl[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: 
                   _ <- lfbRef.set(mainParent)
                   _ <- FinalityStorage[F].markAsFinalized(mainParent, secondary, orphaned)
                   _ <- DeployBuffer[F].removeFinalizedDeploys(secondary + mainParent).forkAndLog
-                  _ <- BlockEventEmitter[F].newLastFinalizedBlock(mainParent, secondary)
+                  _ <- BlockEventEmitter[F].newLastFinalizedBlock(mainParent, secondary, orphaned)
                 } yield ()
               }
             }

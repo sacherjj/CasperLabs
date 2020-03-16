@@ -98,7 +98,8 @@ message Event {
         bytes block_hash = 1;
         // Set of blocks that were finalized indirectly (secondary parents of the new main-chain LFB).
         repeated bytes indirectly_finalized_block_hashes = 2;
-        // TODO (CON-631): Add `orphaned_block_hashes`.
+        // Set of blocks which are never going to be finalized now.
+        repeated bytes indirectly_orphaned_block_hashes = 3;
     }
 
     // A deploy was added to the local buffer.

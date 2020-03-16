@@ -119,11 +119,12 @@ object EventStream {
 
       override def newLastFinalizedBlock(
           lfb: BlockHash,
-          indirectlyFinalized: Set[BlockHash]
+          indirectlyFinalized: Set[BlockHash],
+          indirectlyOrphaned: Set[BlockHash]
       ): F[Unit] =
         emit {
           Event().withNewFinalizedBlock(
-            NewFinalizedBlock(lfb, indirectlyFinalized.toSeq)
+            NewFinalizedBlock(lfb, indirectlyFinalized.toSeq, indirectlyOrphaned.toSeq)
           )
         } >> {
           (lfb +: indirectlyFinalized.toList).traverse { blockHash =>
