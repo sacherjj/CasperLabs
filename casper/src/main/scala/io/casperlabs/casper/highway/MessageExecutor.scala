@@ -27,6 +27,7 @@ import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.Metrics.Source
 import io.casperlabs.metrics.implicits._
 import io.casperlabs.shared.{FatalError, Log, Time}
+import io.casperlabs.storage.BlockHash
 import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.storage.deploy.{DeployStorage, DeployStorageWriter}
 import io.casperlabs.storage.dag.{DagStorage, FinalityStorage}
@@ -106,11 +107,13 @@ class MessageExecutor[F[_]: Concurrent: Log: Time: Metrics: BlockStorage: DagSto
               val mainParentFinalizedStr = mainParent.show
               val secondaryParentsFinalizedStr =
                 secondary.map(_.show).mkString("{", ", ", "}")
+              // TODO (CON-631): Orphans.
+              val orphaned = Set.empty[BlockHash]
               for {
                 _ <- Log[F].info(
                       s"New last finalized block hashes are ${mainParentFinalizedStr -> null}, ${secondaryParentsFinalizedStr -> null}."
                     )
-                _  <- FinalityStorage[F].markAsFinalized(mainParent, secondary)
+                _  <- FinalityStorage[F].markAsFinalized(mainParent, secondary, orphaned)
                 w1 <- DeployBuffer[F].removeFinalizedDeploys(secondary + mainParent).forkAndLog
                 w2 <- BlockEventEmitter[F]
                        .newLastFinalizedBlock(mainParent, secondary)

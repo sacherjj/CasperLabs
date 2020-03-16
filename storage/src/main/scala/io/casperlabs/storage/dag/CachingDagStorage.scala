@@ -177,12 +177,13 @@ class CachingDagStorage[F[_]: Concurrent](
 
   override def markAsFinalized(
       mainParent: BlockHash,
-      secondary: Set[BlockHash]
+      secondary: Set[BlockHash],
+      orphaned: Set[BlockHash]
   ): F[Unit] =
-    underlying.markAsFinalized(mainParent, secondary)
+    underlying.markAsFinalized(mainParent, secondary, orphaned)
 
-  override def isFinalized(block: BlockHash): F[Boolean] =
-    underlying.isFinalized(block)
+  override def getFinalityStatus(block: BlockHash): F[FinalityStorage.FinalityStatus] =
+    underlying.getFinalityStatus(block)
 
   override def getLastFinalizedBlock: F[BlockHash] = underlying.getLastFinalizedBlock
 }

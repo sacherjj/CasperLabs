@@ -186,14 +186,15 @@ object SQLiteStorage {
 
       override def markAsFinalized(
           mainParent: BlockHash,
-          secondary: Set[BlockHash]
+          secondary: Set[BlockHash],
+          orphaned: Set[BlockHash]
       ): F[Unit] =
-        dagStorage.markAsFinalized(mainParent, secondary)
+        dagStorage.markAsFinalized(mainParent, secondary, orphaned)
 
       override def getLastFinalizedBlock: F[BlockHash] = dagStorage.getLastFinalizedBlock
 
-      override def isFinalized(block: BlockHash): F[Boolean] =
-        dagStorage.isFinalized(block)
+      override def getFinalityStatus(block: BlockHash): F[FinalityStorage.FinalityStatus] =
+        dagStorage.getFinalityStatus(block)
 
       override implicit val MT: MonadThrowable[F] = Sync[F]
 

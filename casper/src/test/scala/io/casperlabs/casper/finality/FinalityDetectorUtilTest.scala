@@ -109,7 +109,9 @@ class FinalityDetectorUtilTest extends FlatSpec with BlockGenerator with Storage
           e -> 1,
           b -> 1
         ).map(p => (p._1.blockHash, p._2))
-        _ <- finalityStorage.markAsFinalized(c.blockHash, Set(a.blockHash)).run(Map.empty)
+        _ <- finalityStorage
+              .markAsFinalized(c.blockHash, Set(a.blockHash), Set.empty)
+              .run(Map.empty)
         _ <- FinalityDetectorUtil
               .finalizedIndirectly[G](
                 f.blockHash,

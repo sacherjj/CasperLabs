@@ -41,7 +41,7 @@ import Message.{asJRank, asMainRank, JRank, MainRank}
 import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.shared._
 import io.casperlabs.smartcontracts.ExecutionEngineService
-import io.casperlabs.storage.BlockMsgWithTransform
+import io.casperlabs.storage.{BlockHash, BlockMsgWithTransform}
 import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.storage.dag.{DagRepresentation, DagStorage, FinalityStorage}
 import io.casperlabs.storage.deploy.{DeployStorage, DeployStorageReader, DeployStorageWriter}
@@ -180,12 +180,14 @@ class MultiParentCasperImpl[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: 
                 )
                 val secondaryParentsFinalizedStr =
                   secondary.map(PrettyPrinter.buildString).mkString("{", ", ", "}")
+                // TODO (CON-631): Orphans.
+                val orphaned = Set.empty[BlockHash]
                 for {
                   _ <- Log[F].info(
                         s"New last finalized block hashes are ${mainParentFinalizedStr -> null}, ${secondaryParentsFinalizedStr -> null}."
                       )
                   _ <- lfbRef.set(mainParent)
-                  _ <- FinalityStorage[F].markAsFinalized(mainParent, secondary)
+                  _ <- FinalityStorage[F].markAsFinalized(mainParent, secondary, orphaned)
                   _ <- DeployBuffer[F].removeFinalizedDeploys(secondary + mainParent).forkAndLog
                   _ <- BlockEventEmitter[F].newLastFinalizedBlock(mainParent, secondary)
                 } yield ()

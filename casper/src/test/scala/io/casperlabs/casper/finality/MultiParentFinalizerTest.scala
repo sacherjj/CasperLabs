@@ -55,7 +55,8 @@ class MultiParentFinalizerTest extends FlatSpec with BlockGenerator with Storage
         )
         _ <- fs.markAsFinalized(
               newlyFinalizedBlocksA.mainChain,
-              newlyFinalizedBlocksA.secondaryParents
+              newlyFinalizedBlocksA.secondaryParents,
+              Set.empty
             )
         c    <- createAndStoreBlockFull[Task](v1, Seq(b, a), Seq.empty, bonds)
         cMsg <- Task.fromTry(Message.fromBlock(c))
