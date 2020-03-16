@@ -5,7 +5,7 @@ import { Message } from 'google-protobuf';
 import * as nacl from 'tweetnacl-ts';
 import { ByteArray } from '../index';
 import { Args, BigIntValue, BytesValue } from './Args';
-import { makeDeploy, signDeploy } from './DeployUtil';
+import { ContractType, makeDeploy, signDeploy } from './DeployUtil';
 
 // https://www.npmjs.com/package/tweetnacl-ts
 // https://github.com/dcposch/blakejs
@@ -34,7 +34,7 @@ export class Contract {
     signingKeyPair: nacl.SignKeyPair,
     gasPrice: number
   ): Deploy {
-    const deploy = makeDeploy(args, 'WASM', this.sessionWasm, this.paymentWasm, paymentAmount, accountPublicKey, gasPrice);
+    const deploy = makeDeploy(args, ContractType.WASM, this.sessionWasm, this.paymentWasm, paymentAmount, accountPublicKey, gasPrice);
     return signDeploy(deploy, signingKeyPair);
   }
 }
