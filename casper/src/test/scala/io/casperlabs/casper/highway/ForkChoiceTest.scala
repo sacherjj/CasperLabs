@@ -43,7 +43,7 @@ class ForkChoiceTest extends FlatSpec with HighwayFixture {
       }
   }
 
-  it should "return fork choice for a blockchain and reduce justifications" in testFixture {
+  it should "return fork choice for a blockchain and NOT reduce justifications" in testFixture {
     implicit timer => implicit db =>
       new ForkChoiceTestFixture {
 
@@ -60,7 +60,7 @@ class ForkChoiceTest extends FlatSpec with HighwayFixture {
             forkChoice <- ForkChoice.create[Task].fromKeyBlock(genesisEra.keyBlockHash)
           } yield {
             assert(forkChoice.block.messageHash == b)
-            assert(forkChoice.justifications.map(_.messageHash) == Set(b))
+            assert(forkChoice.justifications.map(_.messageHash) == Set(a, b))
           }
       }
   }
@@ -82,7 +82,7 @@ class ForkChoiceTest extends FlatSpec with HighwayFixture {
             forkChoice <- ForkChoice.create[Task].fromKeyBlock(genesisEra.keyBlockHash)
           } yield {
             assert(forkChoice.block.messageHash == genesisEra.keyBlockHash)
-            assert(forkChoice.justifications == Set(genesis))
+            assert(forkChoice.justifications == Set.empty)
           }
       }
   }
@@ -181,7 +181,7 @@ class ForkChoiceTest extends FlatSpec with HighwayFixture {
           forkChoice <- ForkChoice.create[Task].fromKeyBlock(genesisEra.keyBlockHash)
         } yield {
           assert(forkChoice.block.messageHash == b1)
-          assert(forkChoice.justifications.map(_.messageHash) == Set(b1, c2))
+          assert(forkChoice.justifications.map(_.messageHash) == Set(b1, a2, c2))
         }
   }
   }
@@ -229,7 +229,7 @@ class ForkChoiceTest extends FlatSpec with HighwayFixture {
               forkChoice <- ForkChoice.create[Task].fromKeyBlock(childEra.keyBlockHash)
             } yield {
               assert(forkChoice.block.messageHash == c4)
-              assert(forkChoice.justifications.map(_.messageHash) == Set(ba1, bb1, bc1, a4, c4))
+              assert(forkChoice.justifications.map(_.messageHash) == Set(ba1, bb1, bc1, a4, b3, c4))
             }
       }
   }
@@ -283,8 +283,8 @@ class ForkChoiceTest extends FlatSpec with HighwayFixture {
               // This is non-det b/c, when creating a new message in MessageProducer,
               // we will pick non-det validator previous message to put in `message.validatorPrevMsg`
               // field. The new message will override previous equivocation as "latest message" in the DAG.
-              val verC1      = Set(a4, c1, ba1, bb1, bc1, c4)
-              val verC1Prime = Set(a4, c1Prime, ba1, bb1, bc1, c4)
+              val verC1      = Set(a4, c1, ba1, bb1, bc1, b3, c4)
+              val verC1Prime = Set(a4, c1Prime, ba1, bb1, bc1, b3, c4)
               assert(justifications == verC1 || justifications == verC1Prime)
             }
       }

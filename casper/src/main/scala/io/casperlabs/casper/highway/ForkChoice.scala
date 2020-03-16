@@ -171,24 +171,7 @@ object ForkChoice {
                                         .map(_.asLeft[Block])
                          } yield result
                        }
-          latestMessagesFlattened = NonEmptyList
-            .of[Message](
-              forkChoice,
-              latestMessages.values.flatten.toSeq: _*
-            )
-          // Eliminate tips that are ancestors in the main-tree.
-          reducedJustifications <- Estimator
-                                    .tipsOfLatestMessages[F](
-                                      dag,
-                                      latestMessagesFlattened,
-                                      eraStartBlock.messageHash
-                                    )
-                                    .map(
-                                      _.groupBy(_.validatorId)
-                                        .mapValues(_.toSet)
-                                    )
-                                    .timerGauge("tipsOfLatestMessages")
-        } yield (forkChoice, reducedJustifications)
+        } yield (forkChoice, latestMessages)
 
       /**
         * Computes the fork choice across multiple eras (as defined by `keyBlock`).
