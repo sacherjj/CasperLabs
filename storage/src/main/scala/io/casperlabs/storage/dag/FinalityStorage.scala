@@ -34,7 +34,9 @@ object FinalityStorage {
   case class FinalityStatus(
       isFinalized: Boolean,
       isOrphaned: Boolean
-  )
+  ) {
+    def isEmpty = !(isFinalized || isOrphaned)
+  }
 
   trait MeteredFinalityStorage[F[_]] extends FinalityStorage[F] with Metered[F] {
     abstract override def markAsFinalized(

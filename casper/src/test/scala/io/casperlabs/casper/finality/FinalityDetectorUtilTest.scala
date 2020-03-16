@@ -50,8 +50,8 @@ class FinalityDetectorUtilTest extends FlatSpec with BlockGenerator with Storage
                                                                 Seq(genesis.blockHash, a.blockHash): _*
                                                               )
           finalizedIndirectly <- FinalityDetectorUtil.finalizedIndirectly[Task](
-                                  b.blockHash,
-                                  dag
+                                  dag,
+                                  b.blockHash
                                 )
         } yield assert(finalizedIndirectly == Set(a1.blockHash))
   }
@@ -95,8 +95,8 @@ class FinalityDetectorUtilTest extends FlatSpec with BlockGenerator with Storage
                                                          ).runA(Map.empty)
         _ <- FinalityDetectorUtil
               .finalizedIndirectly[G](
-                c.blockHash,
-                stateTDag
+                stateTDag,
+                c.blockHash
               )
               .run(Map.empty) shouldBeF ((expectedNodesVisitedA, Set(a.blockHash)))
         d <- createAndStoreBlockFull[Task](v1, Seq(a), Seq.empty, bonds)
@@ -114,8 +114,8 @@ class FinalityDetectorUtilTest extends FlatSpec with BlockGenerator with Storage
               .run(Map.empty)
         _ <- FinalityDetectorUtil
               .finalizedIndirectly[G](
-                f.blockHash,
-                stateTDag
+                stateTDag,
+                f.blockHash
               )
               .run(Map.empty) shouldBeF (
               (

@@ -73,11 +73,16 @@ object MultiParentFinalizer {
                           for {
                             _ <- lfbCache.set(newLFB)
                             justFinalized <- FinalityDetectorUtil.finalizedIndirectly[F](
-                                              newLFB,
-                                              dag
+                                              dag,
+                                              newLFB
                                             )
+                            justOrphaned <- FinalityDetectorUtil.orphanedIndirectly(
+                                             dag,
+                                             newLFB,
+                                             justFinalized
+                                           )
                           } yield Some(
-                            FinalizedBlocks(newLFB, quorum, justFinalized, orphaned = Set.empty)
+                            FinalizedBlocks(newLFB, quorum, justFinalized, justOrphaned)
                           )
                       }
         } yield finalized)
