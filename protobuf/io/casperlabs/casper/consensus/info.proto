@@ -22,6 +22,9 @@ message BlockInfo {
         // Indicate that this block has reached k=1 summit level and has appeared in the finalized block stream.
         bool is_finalized = 4;
 
+        // Indicate that this block was bypassed by the Last Finalized Block without being finalized, i.e. it will never be finalized now.
+        bool is_orphaned = 5;
+
         // Statistics derived from the full block.
         message Stats {
             uint32 block_size_bytes = 1;

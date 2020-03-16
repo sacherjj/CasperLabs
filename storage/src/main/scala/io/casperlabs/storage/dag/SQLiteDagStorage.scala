@@ -61,6 +61,7 @@ class SQLiteDagStorage[F[_]: Sync](
     val mainRank = block.getHeader.mainRank
 
     val isFinalized = false
+    val isOrphaned  = false
     val insertBlockMetadata =
       (fr"""INSERT OR IGNORE INTO block_metadata
             (block_hash, validator, j_rank, main_rank, create_time_millis, """ ++ blockInfoCols() ++ fr""")
@@ -75,7 +76,8 @@ class SQLiteDagStorage[F[_]: Sync](
               $deployErrorCount,
               $deployCostTotal,
               $deployGasPriceAvg,
-              $isFinalized
+              $isFinalized,
+              $isOrphaned
             )
             """).update.run
 
