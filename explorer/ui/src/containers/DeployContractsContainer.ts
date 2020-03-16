@@ -3,7 +3,7 @@ import { action, observable } from 'mobx';
 import ErrorContainer from './ErrorContainer';
 import { CasperService, decodeBase16, decodeBase64, DeployUtil, encodeBase16 } from 'casperlabs-sdk';
 import { FieldState, FormState } from 'formstate';
-import { isBase16, isInt, numberGreaterThan, valueRequired } from '../lib/FormsValidator';
+import { validateBase16, validateInt, numberGreaterThan, valueRequired } from '../lib/FormsValidator';
 import validator from 'validator';
 import * as nacl from 'tweetnacl-ts';
 import $ from 'jquery';
@@ -114,13 +114,13 @@ export class DeployContractsContainer {
     contractHash: new FieldState('').disableAutoValidation(),
     paymentAmount: new FieldState<number>(10000000).validators(
       numberGreaterThan(0),
-      isInt
+      validateInt
     ),
     fromAddress: new FieldState<string>('')
   }).compose().validators(deployConfiguration => {
     if (deployConfiguration.contractType.$ === ContractType.Hash) {
       let value = deployConfiguration.contractHash.value;
-      let v = isBase16(value) || valueRequired(value);
+      let v = validateBase16(value) || valueRequired(value);
       if (v !== false) {
         deployConfiguration.contractHash.setError(v);
       }
@@ -409,6 +409,11 @@ export class DeployContractsContainer {
     return clValueInstance;
   }
 
+  /**
+   * Implement validator for DeployArgument which can be used in formstate library,
+   * If a truthy string is returned it represents a validation error.
+   * @param deployArgument
+   */
   private validateDeployArgument(deployArgument: DeployArgument): string | false {
     const value = deployArgument.value.$;
     switch (deployArgument.type.$) {
