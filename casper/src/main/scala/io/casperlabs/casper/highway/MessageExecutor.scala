@@ -103,12 +103,10 @@ class MessageExecutor[F[_]: Concurrent: Log: Time: Metrics: BlockStorage: DagSto
       result <- MultiParentFinalizer[F]
                  .onNewMessageAdded(message)
       w <- result.traverse {
-            case MultiParentFinalizer.FinalizedBlocks(mainParent, _, secondary) => {
+            case MultiParentFinalizer.FinalizedBlocks(mainParent, _, secondary, orphaned) => {
               val mainParentFinalizedStr = mainParent.show
               val secondaryParentsFinalizedStr =
                 secondary.map(_.show).mkString("{", ", ", "}")
-              // TODO (CON-631): Orphans.
-              val orphaned = Set.empty[BlockHash]
               for {
                 _ <- Log[F].info(
                       s"New last finalized block hashes are ${mainParentFinalizedStr -> null}, ${secondaryParentsFinalizedStr -> null}."

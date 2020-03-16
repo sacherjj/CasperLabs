@@ -46,7 +46,8 @@ object MultiParentFinalizer {
   final case class FinalizedBlocks(
       mainChain: BlockHash,
       quorum: BigInt,
-      secondaryParents: Set[BlockHash]
+      secondaryParents: Set[BlockHash],
+      orphaned: Set[BlockHash]
   ) {
     def finalizedBlocks: Set[BlockHash] = secondaryParents + mainChain
   }
@@ -75,7 +76,9 @@ object MultiParentFinalizer {
                                               newLFB,
                                               dag
                                             )
-                          } yield Some(FinalizedBlocks(newLFB, quorum, justFinalized))
+                          } yield Some(
+                            FinalizedBlocks(newLFB, quorum, justFinalized, orphaned = Set.empty)
+                          )
                       }
         } yield finalized)
     }

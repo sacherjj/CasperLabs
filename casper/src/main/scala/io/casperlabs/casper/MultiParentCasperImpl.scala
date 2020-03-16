@@ -174,14 +174,12 @@ class MultiParentCasperImpl[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: 
       for {
         result <- MultiParentFinalizer[F].onNewMessageAdded(message)
         _ <- result.traverse {
-              case fb @ FinalizedBlocks(mainParent, _, secondary) => {
+              case fb @ FinalizedBlocks(mainParent, _, secondary, orphaned) => {
                 val mainParentFinalizedStr = PrettyPrinter.buildString(
                   mainParent
                 )
                 val secondaryParentsFinalizedStr =
                   secondary.map(PrettyPrinter.buildString).mkString("{", ", ", "}")
-                // TODO (CON-631): Orphans.
-                val orphaned = Set.empty[BlockHash]
                 for {
                   _ <- Log[F].info(
                         s"New last finalized block hashes are ${mainParentFinalizedStr -> null}, ${secondaryParentsFinalizedStr -> null}."
