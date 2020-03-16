@@ -117,6 +117,17 @@ message Deploy {
     }
 }
 
+// Limited deploy information for gossiping.
+message DeploySummary {
+    // blake2b256 hash of the `header`.
+    bytes deploy_hash = 1;
+    Deploy.Header header = 2;
+    // Signatures over `deploy_hash` with either the `account_public_key`, or some other keys in case of
+    // multi-sig wallets and account recovery (when the private key corresponding to `account_public_key`
+    // is lost.)
+    repeated Approval approvals = 3;
+}
+
 // Limited block information for gossiping.
 message BlockSummary {
     // blake2b256 hash of the `header`.
