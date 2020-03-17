@@ -68,7 +68,7 @@ object GenesisApproverImpl {
   case class BootstrapParams[F[_]](
       bootstraps: NonEmptyList[Node],
       pollInterval: FiniteDuration,
-      downloadManager: DownloadManager[F]
+      downloadManager: BlockDownloadManager[F]
   )
 
   def apply[F[_]: Concurrent: Log: Timer](
@@ -133,7 +133,7 @@ object GenesisApproverImpl {
       relayFactor: Int,
       bootstraps: NonEmptyList[Node],
       pollInterval: FiniteDuration,
-      downloadManager: DownloadManager[F]
+      downloadManager: BlockDownloadManager[F]
   ): Resource[F, GenesisApprover[F]] =
     apply(
       backend,
@@ -234,7 +234,7 @@ class GenesisApproverImpl[F[_]: Concurrent: Log: Timer](
   private def pollBootstraps(
       bootstraps: List[Node],
       pollInterval: FiniteDuration,
-      downloadManager: DownloadManager[F]
+      downloadManager: BlockDownloadManager[F]
   ): F[Unit] = {
 
     def download(bootstrap: Node, service: GossipService[F], blockHash: ByteString): F[Block] =
