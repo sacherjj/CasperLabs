@@ -106,10 +106,6 @@ def check_highway_dag(client, number_of_eras=2):
     blocks_in_rounds = defaultdict(list)
     blocks_in_eras = defaultdict(list)
     for event in client.stream_events(block_added=True):
-        if not event.HasField("block_added"):
-            log_info(f"Unexpected event: {event}")
-            continue
-
         block_info = event.block_added.block
         block_hash = block_info.summary.block_hash
 
