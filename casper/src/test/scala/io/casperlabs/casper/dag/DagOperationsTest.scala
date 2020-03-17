@@ -481,6 +481,10 @@ class DagOperationsTest
               .swimlaneV[Task](v1, message, dag)
               .map(_.messageHash)
               .toList shouldBeF List(b3.blockHash, b1.blockHash)
+        _ <- DagOperations
+              .swimlaneVFromJustifications[Task](v1, List(Message.fromBlock(b3).get), dag)
+              .map(_.messageHash)
+              .toList shouldBeF List(b3.blockHash, b1.blockHash)
       } yield ()
   }
 

@@ -68,6 +68,13 @@ object DagOperations {
     )
   }
 
+  def swimlaneVFromJustifications[F[_]: MonadThrowable](
+      validator: Validator,
+      msgs: List[Message],
+      dag: DagLookup[F]
+  ): StreamT[F, Message] =
+    toposortJDagDesc[F](dag, msgs).filter(_.validatorId == validator)
+
   /** Traverses j-past-cone of the block and returns messages by specified validator.
     */
   def swimlaneV[F[_]: MonadThrowable](
