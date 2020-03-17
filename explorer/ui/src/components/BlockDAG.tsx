@@ -41,8 +41,8 @@ export class BlockDAG extends React.Component<Props, {}> {
   constructor(props: Props) {
     super(props);
     reaction(() => {
-        return this.filterBallots();
-      }, (_, reaction) => {
+        return this.filteredBlocks();
+      }, () => {
         this.renderGraph();
       }, {
         fireImmediately: false,
@@ -51,7 +51,7 @@ export class BlockDAG extends React.Component<Props, {}> {
     );
   }
 
-  private filterBallots() {
+  private filteredBlocks() {
     if (this.props.blocks && this.props.hideBallotsToggleStore?.isPressed) {
       return this.props.blocks.filter(b => isBlock(b));
     } else {
@@ -68,6 +68,7 @@ export class BlockDAG extends React.Component<Props, {}> {
             <ListInline>
               {this.props.hideBallotsToggleStore && (
                 <ToggleButton
+                  label="Hide Ballots"
                   title="Hide Ballots"
                   toggleStore={this.props.hideBallotsToggleStore}
                   size="sm"
@@ -89,7 +90,7 @@ export class BlockDAG extends React.Component<Props, {}> {
                 </select>
               )}
               {this.props.refresh && (
-                <RefreshButton refresh={() => this.props.refresh!()} />
+                <RefreshButton refresh={() => this.props.refresh!()}/>
               )}
               {this.props.subscribeToggleStore && (
                 <ToggleButton
@@ -103,24 +104,24 @@ export class BlockDAG extends React.Component<Props, {}> {
         </div>
         <div className="card-body">
           {this.props.blocks == null ? (
-            <Loading />
+            <Loading/>
           ) : this.props.blocks.length === 0 ? (
             <div className="small text-muted">
               {this.props.emptyMessage || 'No blocks to show.'}
             </div>
           ) : (
-                <div className="svg-container">
-                  <svg
-                    width={this.props.width}
-                    height={this.props.height}
-                    ref={(ref: SVGSVGElement) => (this.svg = ref)}
-                  ></svg>
-                  <div
-                    className="svg-hint"
-                    ref={(ref: HTMLDivElement) => (this.hint = ref)}
-                  ></div>
-                </div>
-              )}
+            <div className="svg-container">
+              <svg
+                width={this.props.width}
+                height={this.props.height}
+                ref={(ref: SVGSVGElement) => (this.svg = ref)}
+              ></svg>
+              <div
+                className="svg-hint"
+                ref={(ref: HTMLDivElement) => (this.hint = ref)}
+              ></div>
+            </div>
+          )}
         </div>
         {this.props.footerMessage && (
           <div className="card-footer small text-muted">
@@ -201,7 +202,7 @@ export class BlockDAG extends React.Component<Props, {}> {
     // Clear previous contents.
     container.selectAll('g').remove();
 
-    let graph: Graph = toGraph(this.filterBallots()!);
+    let graph: Graph = toGraph(this.filteredBlocks()!);
     graph = calculateCoordinates(graph, width, height);
 
     const selectedId = this.props.selected && blockHash(this.props.selected);
@@ -264,8 +265,8 @@ export class BlockDAG extends React.Component<Props, {}> {
         x.source.id === datum.id || x.target.id === datum.id
           ? 1
           : x.isJustification
-            ? 0
-            : 0.1
+          ? 0
+          : 0.1
       );
       hint.html(
         `Block: ${datum.id} @ ${datum.rank} <br /> Validator: ${datum.validator}`
@@ -405,12 +406,12 @@ const toGraph = (blocks: BlockInfo[]) => {
       .getJustificationsList()
       .map(x => encodeBase16(x.getLatestBlockHash_asU8()));
 
-    let source = nodeMap.get(child)!
+    let source = nodeMap.get(child)!;
 
     let parentLinks = parents
       .filter(p => nodeMap.has(p))
       .map(p => {
-        let target = nodeMap.get(p)!
+        let target = nodeMap.get(p)!;
         return {
           source: source,
           target: target,
@@ -424,7 +425,7 @@ const toGraph = (blocks: BlockInfo[]) => {
       .filter(x => !parentSet.has(x))
       .filter(j => nodeMap.has(j))
       .map(j => {
-        let target = nodeMap.get(j)!
+        let target = nodeMap.get(j)!;
         return {
           source: source,
           target: target,
@@ -495,13 +496,13 @@ const keyBlockHash = (block: BlockInfo) =>
   encodeBase16(block.getSummary()!.getHeader()!.getKeyBlockHash_asU8());
 
 const isBlock = (block: BlockInfo) =>
-  block.getSummary()!.getHeader()!.getMessageType() === Block.MessageType.BLOCK
+  block.getSummary()!.getHeader()!.getMessageType() === Block.MessageType.BLOCK;
 
 const isBallot = (block: BlockInfo) =>
-  !isBlock(block)
+  !isBlock(block);
 
 const isFinalized = (block: BlockInfo) =>
-  block.getStatus()!.getIsFinalized()
+  block.getStatus()!.getIsFinalized();
 
 const validatorHash = (block: BlockInfo) =>
   encodeBase16(
