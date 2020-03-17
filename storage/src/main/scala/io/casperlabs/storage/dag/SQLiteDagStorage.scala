@@ -437,14 +437,14 @@ class SQLiteDagStorage[F[_]: Sync](
   }
 
   override def markAsFinalized(
-      mainParent: BlockHash,
-      secondary: Set[BlockHash],
+      lfb: BlockHash,
+      finalized: Set[BlockHash],
       orphaned: Set[BlockHash]
   ): F[Unit] = {
-    val mainPQuery =
-      sql"""UPDATE block_metadata SET is_finalized=TRUE, is_main_chain=TRUE WHERE block_hash=$mainParent""".update.run
+    val lfbQuery =
+      sql"""UPDATE block_metadata SET is_finalized=TRUE, is_main_chain=TRUE WHERE block_hash=$lfb""".update.run
 
-    val secondaryQuery = NonEmptyList.fromList(secondary.toList).fold(doobie.free.connection.unit) {
+    val finalizedQuery = NonEmptyList.fromList(finalized.toList).fold(doobie.free.connection.unit) {
       nel =>
         val q = fr"""UPDATE block_metadata SET is_finalized=TRUE WHERE """ ++ Fragments
           .in(fr"block_hash", nel)
@@ -462,13 +462,13 @@ class SQLiteDagStorage[F[_]: Sync](
 
     val lfbChainQuery =
       sql"""INSERT OR IGNORE INTO lfb_chain (block_hash, indirectly_finalized, indirectly_orphaned)
-             VALUES ($mainParent, ${ByteString.copyFrom(secondary.asJava)}, ${ByteString.copyFrom(
+             VALUES ($lfb, ${ByteString.copyFrom(finalized.asJava)}, ${ByteString.copyFrom(
         orphaned.asJava
       )})""".update.run.void
 
     val transaction = for {
-      _ <- mainPQuery
-      _ <- secondaryQuery
+      _ <- lfbQuery
+      _ <- finalizedQuery
       _ <- orphanedQuery
       _ <- lfbChainQuery
     } yield ()

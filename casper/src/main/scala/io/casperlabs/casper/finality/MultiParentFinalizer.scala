@@ -44,12 +44,13 @@ object MultiParentFinalizer {
   }
 
   final case class FinalizedBlocks(
-      mainChain: BlockHash,
+      // New finalized block in the main chain.
+      newLFB: BlockHash,
       quorum: BigInt,
-      secondaryParents: Set[BlockHash],
-      orphaned: Set[BlockHash]
+      indirectlyFinalized: Set[BlockHash],
+      indirectlyOrphaned: Set[BlockHash]
   ) {
-    def finalizedBlocks: Set[BlockHash] = secondaryParents + mainChain
+    def finalizedBlocks: Set[BlockHash] = indirectlyFinalized + newLFB
   }
 
   def create[F[_]: Concurrent: FinalityStorage](

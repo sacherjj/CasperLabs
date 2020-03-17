@@ -23,8 +23,11 @@ import simulacrum.typeclass
 
 @typeclass trait FinalityStorage[F[_]] extends FinalityStorageReader[F] {
   def markAsFinalized(
-      mainParent: BlockHash,
-      secondary: Set[BlockHash],
+      // The Last Finalized Block, i.e. the block in the main chain that got finalized.
+      lfb: BlockHash,
+      // Secondary parents that got finalized implicitly by the LFB.
+      finalized: Set[BlockHash],
+      // Blocks in the j-past cone of the LFB that _didn't_ get finalized.
       orphaned: Set[BlockHash]
   ): F[Unit]
 }

@@ -49,13 +49,13 @@ class MultiParentFinalizerTest extends FlatSpec with BlockGenerator with Storage
         newlyFinalizedBlocksA <- multiParentFinalizer.onNewMessageAdded(bMsg).map(_.get)
         // `b` is in main chain, `a` is secondary parent.
         _ = assert(
-          newlyFinalizedBlocksA.mainChain == b.blockHash && newlyFinalizedBlocksA.secondaryParents == Set(
+          newlyFinalizedBlocksA.newLFB == b.blockHash && newlyFinalizedBlocksA.indirectlyFinalized == Set(
             a.blockHash
           )
         )
         _ <- fs.markAsFinalized(
-              newlyFinalizedBlocksA.mainChain,
-              newlyFinalizedBlocksA.secondaryParents,
+              newlyFinalizedBlocksA.newLFB,
+              newlyFinalizedBlocksA.indirectlyFinalized,
               Set.empty
             )
         c    <- createAndStoreBlockFull[Task](v1, Seq(b, a), Seq.empty, bonds)
@@ -64,7 +64,7 @@ class MultiParentFinalizerTest extends FlatSpec with BlockGenerator with Storage
         // Since `a` was already finalized through `b` it should not be returned now.
         newlyFinalizedBlocksB <- multiParentFinalizer.onNewMessageAdded(cMsg).map(_.get)
         _ = assert(
-          newlyFinalizedBlocksB.mainChain == c.blockHash && newlyFinalizedBlocksB.secondaryParents.isEmpty
+          newlyFinalizedBlocksB.newLFB == c.blockHash && newlyFinalizedBlocksB.indirectlyFinalized.isEmpty
         )
       } yield ()
   }
@@ -100,7 +100,7 @@ class MultiParentFinalizerTest extends FlatSpec with BlockGenerator with Storage
               .flatMap(ProtoUtil.unsafeGetBlock[Task](_))
         bMsg       <- Task.fromTry(Message.fromBlock(b))
         finalizedA <- multiParentFinalizer.onNewMessageAdded(bMsg).map(_.get)
-        _          = assert(finalizedA.mainChain == a.blockHash && finalizedA.secondaryParents.isEmpty)
+        _          = assert(finalizedA.newLFB == a.blockHash && finalizedA.indirectlyFinalized.isEmpty)
 
         // `aPrime` is sibiling of `a`, another child of Genesis.
         // Since `a` has already been finalized `aPrime` should never become chosen as new LFB.

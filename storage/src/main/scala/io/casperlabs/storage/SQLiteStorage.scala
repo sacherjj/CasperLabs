@@ -185,11 +185,11 @@ object SQLiteStorage {
       override def getChildlessEras               = eraStorage.getChildlessEras
 
       override def markAsFinalized(
-          mainParent: BlockHash,
-          secondary: Set[BlockHash],
+          lfb: BlockHash,
+          finalized: Set[BlockHash],
           orphaned: Set[BlockHash]
       ): F[Unit] =
-        dagStorage.markAsFinalized(mainParent, secondary, orphaned)
+        dagStorage.markAsFinalized(lfb, finalized, orphaned)
 
       override def getLastFinalizedBlock: F[BlockHash] = dagStorage.getLastFinalizedBlock
 
