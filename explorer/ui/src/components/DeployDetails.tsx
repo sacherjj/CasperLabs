@@ -99,7 +99,7 @@ const ResultsTable = observer(
         title={`Results for deploy ${props.deployHashBase16}`}
         headers={[
           'Block Hash',
-          'Is Finalized',
+          'Finality',
           'Cost',
           'Remaining Balance',
           'Result',
@@ -113,17 +113,19 @@ const ResultsTable = observer(
               .getSummary()!
               .getBlockHash_asU8()
           );
+          const isFinalized = proc.getBlockInfo()!.getStatus()!.getIsFinalized()
+          const isOrphaned = proc.getBlockInfo()!.getStatus()!.getIsOrphaned()
           return (
             <tr key={i}>
               <td>
                 <Link to={Pages.block(id)}>{shortHash(id)}</Link>
               </td>
               <td>
-                {proc
-                  .getBlockInfo()!
-                  .getStatus()!
-                  .getIsFinalized()
-                  .toString()}
+                {
+                  isFinalized ? (<Icon name="check-circle" color="green" />) :
+                    isOrphaned ? (<Icon name="times-circle" color="red" />) :
+                      (<Icon name="clock" />)
+                }
               </td>
               <td className="text-right">{proc.getCost().toLocaleString()}</td>
               <td className="text-right">

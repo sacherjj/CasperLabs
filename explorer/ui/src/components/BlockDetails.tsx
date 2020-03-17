@@ -239,6 +239,12 @@ const blockAttrs: (block: BlockInfo) => Array<[string, any]> = (
       block
         .getStatus()!
         .getIsFinalized().toString()
+    ],
+    [
+      'Is Orphaned',
+      block
+        .getStatus()!
+        .getIsOrphaned().toString()
     ]
   ];
 };

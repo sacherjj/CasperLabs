@@ -214,6 +214,12 @@ class BlockDetails extends React.Component<
             .getStatus()!
             .getIsFinalized().toString()
         ],
+        [
+          'Is Orphaned',
+          block
+            .getStatus()!
+            .getIsOrphaned().toString()
+        ],
       ];
     return (
       <div
