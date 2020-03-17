@@ -59,7 +59,7 @@ class FinalityStorageTest
       _    <- storage.markAsFinalized(sampleBlock.blockHash, Set.empty, Set.empty)
       _    <- assertFinalized(storage, sampleBlock.blockHash)
       info <- storage.getBlockInfo(sampleBlock.blockHash)
-      _    = info.get.getStatus.isFinalized shouldBe true
+      _    = info.get.getStatus.finality.isFinalized shouldBe true
     } yield ()
   }
 
