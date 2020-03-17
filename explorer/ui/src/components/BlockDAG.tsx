@@ -18,6 +18,7 @@ export interface Props {
   title: string;
   refresh?: () => void;
   subscribeToggleStore?: ToggleStore;
+  hideBallotsToggleStore?: ToggleStore;
   blocks: BlockInfo[] | null;
   emptyMessage?: any;
   footerMessage?: any;
@@ -39,12 +40,23 @@ export class BlockDAG extends React.Component<Props, {}> {
 
   constructor(props: Props) {
     super(props);
-    reaction(() => this.props.blocks, (_, reaction) => {
-      this.renderGraph();
-    }, {
-      fireImmediately: false,
-      delay: 100
-    });
+    reaction(() => {
+        return this.filterBallots();
+      }, (_, reaction) => {
+        this.renderGraph();
+      }, {
+        fireImmediately: false,
+        delay: 100
+      }
+    );
+  }
+
+  private filterBallots() {
+    if (this.props.blocks && this.props.hideBallotsToggleStore?.isPressed) {
+      return this.props.blocks.filter(b => isBlock(b));
+    } else {
+      return this.props.blocks;
+    }
   }
 
   render() {
@@ -54,6 +66,13 @@ export class BlockDAG extends React.Component<Props, {}> {
           <span>{this.props.title}</span>
           <div className="float-right">
             <ListInline>
+              {this.props.hideBallotsToggleStore && (
+                <ToggleButton
+                  title="Hide Ballots"
+                  toggleStore={this.props.hideBallotsToggleStore}
+                  size="sm"
+                />
+              )}
               {this.props.onDepthChange && (
                 <select
                   title="Depth"
@@ -74,7 +93,7 @@ export class BlockDAG extends React.Component<Props, {}> {
               )}
               {this.props.subscribeToggleStore && (
                 <ToggleButton
-                  title="Subscribing to the latest added blocks"
+                  title="Subscribe to the latest added blocks"
                   toggleStore={this.props.subscribeToggleStore}
                   size="sm"
                 />
@@ -182,7 +201,7 @@ export class BlockDAG extends React.Component<Props, {}> {
     // Clear previous contents.
     container.selectAll('g').remove();
 
-    let graph: Graph = toGraph(this.props.blocks);
+    let graph: Graph = toGraph(this.filterBallots()!);
     graph = calculateCoordinates(graph, width, height);
 
     const selectedId = this.props.selected && blockHash(this.props.selected);

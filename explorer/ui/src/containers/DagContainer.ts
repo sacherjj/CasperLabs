@@ -68,6 +68,7 @@ export class DagContainer {
   @observable lastFinalizedBlock: BlockInfo | undefined = undefined;
   @observable eventsSubscriber: Subscription | null = null;
   @observable subscribeToggleStore: ToggleStore = new ToggleStore(true);
+  @observable hideBallotsToggleStore: ToggleStore = new ToggleStore(false);
 
   constructor(
     private errors: ErrorContainer,
