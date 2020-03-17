@@ -4,6 +4,7 @@ import cats.Applicative
 import cats.implicits._
 import io.casperlabs.metrics.Metered
 import io.casperlabs.storage.BlockHash
+import io.casperlabs.casper.consensus.info.BlockInfo
 import simulacrum.typeclass
 
 @typeclass trait FinalityStorageReader[F[_]] {
@@ -11,6 +12,7 @@ import simulacrum.typeclass
 
   def isFinalized(block: BlockHash)(implicit A: Applicative[F]): F[Boolean] =
     getFinalityStatus(block).map(_.isFinalized)
+
   def isOrphaned(block: BlockHash)(implicit A: Applicative[F]): F[Boolean] =
     getFinalityStatus(block).map(_.isOrphaned)
 
@@ -34,20 +36,21 @@ import simulacrum.typeclass
 
 object FinalityStorage {
 
-  case class FinalityStatus(
-      isFinalized: Boolean,
-      isOrphaned: Boolean
-  ) {
-    def isEmpty = !(isFinalized || isOrphaned)
+  type FinalityStatus = BlockInfo.Status.Finality
+  object FinalityStatus {
+    def apply(isFinalized: Boolean, isOrphaned: Boolean): FinalityStatus =
+      if (isFinalized) BlockInfo.Status.Finality.FINALIZED
+      else if (isOrphaned) BlockInfo.Status.Finality.ORPHANED
+      else BlockInfo.Status.Finality.UNDECIDED
   }
 
   trait MeteredFinalityStorage[F[_]] extends FinalityStorage[F] with Metered[F] {
     abstract override def markAsFinalized(
         mainParent: BlockHash,
-        secondary: Set[BlockHash],
+        finalized: Set[BlockHash],
         orphaned: Set[BlockHash]
     ): F[Unit] =
-      incAndMeasure("markAsFinalized", super.markAsFinalized(mainParent, secondary, orphaned))
+      incAndMeasure("markAsFinalized", super.markAsFinalized(mainParent, finalized, orphaned))
 
     abstract override def getFinalityStatus(block: BlockHash): F[FinalityStorage.FinalityStatus] =
       incAndMeasure("getFinalityStatus", super.getFinalityStatus(block))
@@ -55,4 +58,5 @@ object FinalityStorage {
     abstract override def getLastFinalizedBlock: F[BlockHash] =
       incAndMeasure("getLastFinalizedBlock", super.getLastFinalizedBlock)
   }
+
 }

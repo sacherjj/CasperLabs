@@ -6,6 +6,7 @@ import cats.effect._
 import cats.effect.concurrent.Ref
 import io.casperlabs.storage.BlockHash
 import io.casperlabs.storage.dag.FinalityStorage
+import io.casperlabs.casper.consensus.info.BlockInfo.Status.Finality
 
 class MockFinalityStorage[F[_]: Monad](
     lastFinalizedRef: Ref[F, BlockHash],

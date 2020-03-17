@@ -16,7 +16,7 @@ import Pages from './Pages';
 import { encodeBase16 } from 'casperlabs-sdk';
 import { BondedValidatorsTable } from './BondedValidatorsTable';
 import { ToggleButton } from './ToggleButton';
-import { BlockType } from './BlockDetails';
+import { BlockType, FinalityIcon } from './BlockDetails';
 
 /** Show the tips of the DAG. */
 @observer
@@ -209,17 +209,9 @@ class BlockDetails extends React.Component<
           })()
         ],
         [
-          'Is Finalized',
-          block
-            .getStatus()!
-            .getIsFinalized().toString()
-        ],
-        [
-          'Is Orphaned',
-          block
-            .getStatus()!
-            .getIsOrphaned().toString()
-        ],
+          'Finality',
+          <FinalityIcon finality={block.getStatus()!.getFinality()} />
+        ]
       ];
     return (
       <div

@@ -184,13 +184,13 @@ object FinalityDetectorUtil {
       .map(_._2)
 
   // Follow blocks that haven't been finalized or orphaned yet.
-  private def collectEmptyFinality[F[_]: Sync: FinalityStorage](
+  private def collectUndecided[F[_]: Sync: FinalityStorage](
       blocks: Seq[BlockHash]
   ): F[List[BlockHash]] =
     blocks.toList.filterA { block =>
       FinalityStorage[F]
         .getFinalityStatus(block)
-        .map(_.isEmpty)
+        .map(_.isUndecided)
     }
 
   /** Returns a set of blocks that were finalized indirectly when a block from the main chain is finalized. */
@@ -205,7 +205,7 @@ object FinalityDetectorUtil {
                                   dag
                                     .lookupUnsafe(hash)
                                     .map(_.parents)
-                                    .flatMap(collectEmptyFinality(_))
+                                    .flatMap(collectUndecided(_))
                               )
                               .toList
     } yield finalizedImplicitly.toSet - lfbHash // LFB is directly finalized.
@@ -224,7 +224,7 @@ object FinalityDetectorUtil {
       undecided <- DagOperations
                     .bfTraverseF[F, Message](List(lfb)) { m =>
                       val deps = (m.parents ++ m.justifications.map(_.latestBlockHash)).distinct
-                      collectEmptyFinality(deps).flatMap(_.traverse(dag.lookupUnsafe))
+                      collectUndecided(deps).flatMap(_.traverse(dag.lookupUnsafe))
                     }
                     .filter(_.isBlock)
                     .map(_.messageHash)

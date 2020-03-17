@@ -7,7 +7,7 @@ import { DeployInfo } from 'casperlabs-grpc/io/casperlabs/casper/consensus/info_
 import Pages from './Pages';
 import { RefreshableComponent, Icon, shortHash } from './Utils';
 import ObservableValueMap from '../lib/ObservableValueMap';
-import { Balance } from './BlockDetails';
+import { Balance, FinalityIcon } from './BlockDetails';
 import { decodeBase16, encodeBase16 } from 'casperlabs-sdk';
 
 // URL parameter
@@ -113,19 +113,13 @@ const ResultsTable = observer(
               .getSummary()!
               .getBlockHash_asU8()
           );
-          const isFinalized = proc.getBlockInfo()!.getStatus()!.getIsFinalized()
-          const isOrphaned = proc.getBlockInfo()!.getStatus()!.getIsOrphaned()
           return (
             <tr key={i}>
               <td>
                 <Link to={Pages.block(id)}>{shortHash(id)}</Link>
               </td>
               <td>
-                {
-                  isFinalized ? (<Icon name="check-circle" color="green" />) :
-                    isOrphaned ? (<Icon name="times-circle" color="red" />) :
-                      (<Icon name="clock" />)
-                }
+                <FinalityIcon finality={proc.getBlockInfo()!.getStatus()!.getFinality()} />
               </td>
               <td className="text-right">{proc.getCost().toLocaleString()}</td>
               <td className="text-right">

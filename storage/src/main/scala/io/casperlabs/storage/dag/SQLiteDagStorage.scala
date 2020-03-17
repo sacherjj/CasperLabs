@@ -480,7 +480,10 @@ class SQLiteDagStorage[F[_]: Sync](
     sql"""SELECT is_finalized, is_orphaned FROM block_metadata WHERE block_hash=$block"""
       .query[(Boolean, Boolean)]
       .unique
-      .map(FinalityStorage.FinalityStatus.tupled)
+      .map {
+        case (isFinalized, isOrphaned) =>
+          FinalityStorage.FinalityStatus(isFinalized, isOrphaned)
+      }
       .transact(readXa)
 
   override def getLastFinalizedBlock: F[BlockHash] =
