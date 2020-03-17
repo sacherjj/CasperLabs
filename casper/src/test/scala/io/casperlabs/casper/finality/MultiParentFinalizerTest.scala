@@ -43,29 +43,30 @@ class MultiParentFinalizerTest extends FlatSpec with BlockGenerator with Storage
                                  genesis.blockHash,
                                  MultiParentFinalizerTest.immediateFinalityStub
                                )
-        a                     <- createAndStoreBlockFull[Task](v1, Seq(genesis), Seq.empty, bonds)
-        b                     <- createAndStoreBlockFull[Task](v2, Seq(genesis, a), Seq.empty, bonds)
-        bMsg                  <- Task.fromTry(Message.fromBlock(b))
-        newlyFinalizedBlocksA <- multiParentFinalizer.onNewMessageAdded(bMsg).map(_.get)
-        // `b` is in main chain, `a` is secondary parent.
-        _ = assert(
-          newlyFinalizedBlocksA.newLFB == b.blockHash && newlyFinalizedBlocksA.indirectlyFinalized == Set(
-            a.blockHash
-          )
-        )
+        a0                    <- createAndStoreBlockFull[Task](v1, Seq(genesis), Seq.empty, bonds)
+        a1                    <- createAndStoreBlockFull[Task](v1, Seq(a0), Seq.empty, bonds)
+        b0                    <- createAndStoreBlockFull[Task](v2, Seq(genesis, a0), Seq(a1), bonds)
+        b0Msg                 <- Task.fromTry(Message.fromBlock(b0))
+        newlyFinalizedBlocks0 <- multiParentFinalizer.onNewMessageAdded(b0Msg).map(_.get)
+        // `b0` is in main chain, `a0` is secondary parent.
+        _ = assert(newlyFinalizedBlocks0.newLFB == b0.blockHash)
+        _ = assert(newlyFinalizedBlocks0.indirectlyFinalized == Set(a0.blockHash))
+        _ = assert(newlyFinalizedBlocks0.indirectlyOrphaned == Set(a1.blockHash))
         _ <- fs.markAsFinalized(
-              newlyFinalizedBlocksA.newLFB,
-              newlyFinalizedBlocksA.indirectlyFinalized,
-              Set.empty
+              newlyFinalizedBlocks0.newLFB,
+              newlyFinalizedBlocks0.indirectlyFinalized,
+              newlyFinalizedBlocks0.indirectlyOrphaned
             )
-        c    <- createAndStoreBlockFull[Task](v1, Seq(b, a), Seq.empty, bonds)
-        cMsg <- Task.fromTry(Message.fromBlock(c))
-        // `c`'s main parent is `b`, secondary is `a`.
-        // Since `a` was already finalized through `b` it should not be returned now.
-        newlyFinalizedBlocksB <- multiParentFinalizer.onNewMessageAdded(cMsg).map(_.get)
-        _ = assert(
-          newlyFinalizedBlocksB.newLFB == c.blockHash && newlyFinalizedBlocksB.indirectlyFinalized.isEmpty
-        )
+        a2    <- createAndStoreBlockFull[Task](v1, Seq(b0, a0), Seq(a1), bonds)
+        a2Msg <- Task.fromTry(Message.fromBlock(a2))
+        // `a2`'s main parent is `b0`, secondary is `a0`.
+        // Since `a0` was already finalized through `b0` it should not be returned now.
+        // Similarly `a1` was already orphaned by `b0`.
+        newlyFinalizedBlocks1 <- multiParentFinalizer.onNewMessageAdded(a2Msg).map(_.get)
+
+        _ = assert(newlyFinalizedBlocks1.newLFB == a2.blockHash)
+        _ = assert(newlyFinalizedBlocks1.indirectlyFinalized.isEmpty)
+        _ = assert(newlyFinalizedBlocks1.indirectlyOrphaned.isEmpty)
       } yield ()
   }
 
