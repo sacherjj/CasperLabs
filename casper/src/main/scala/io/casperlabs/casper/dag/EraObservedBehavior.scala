@@ -9,6 +9,8 @@ import io.casperlabs.storage.BlockHash
 import io.casperlabs.storage.dag.DagLookup
 import io.casperlabs.storage.dag.DagRepresentation.Validator
 import shapeless.tag.@@
+import io.casperlabs.casper.PrettyPrinter
+import io.casperlabs.models.Message.JRank
 
 final class EraObservedBehavior[A] private (
     val data: Map[BlockHash, Map[Validator, ObservedValidatorBehavior[A]]]
@@ -18,13 +20,16 @@ final class EraObservedBehavior[A] private (
   def equivocatorsVisibleInEras(
       keyBlockHashes: Set[BlockHash]
   ): Set[Validator] =
+    keyBlockHashes.foldLeft(Set.empty[Validator])(_ ++ equivocators(_))
+
+  private lazy val equivocators: Map[ByteString, Set[Validator]] =
     data
       .collect {
         case (keyBlockHash, lms) if keyBlockHashes(keyBlockHash) =>
-          lms.filter(_._2.isEquivocated).keySet
+          keyBlockHash -> lms.filter(_._2.isEquivocated).keySet
       }
-      .flatten
-      .toSet
+
+  val erasValidators: Map[BlockHash, Set[Validator]] = data.mapValues(_.keySet)
 
   def keyBlockHashes: Set[BlockHash] = data.keySet
 
@@ -43,6 +48,12 @@ final class EraObservedBehavior[A] private (
           case Equivocated(m1, m2) => Set(m1, m2)
         }
     }
+
+  def getStatus(
+      keyBlockHash: BlockHash,
+      validator: Validator
+  ): Option[ObservedValidatorBehavior[A]] =
+    data.get(keyBlockHash).flatMap(_.get(validator))
 }
 
 object EraObservedBehavior {
@@ -70,102 +81,150 @@ object EraObservedBehavior {
     * @param dag
     * @param justifications
     * @param erasObservedBehavior
-    * @param stop
     * @return
     */
   def messageJPast[F[_]: MonadThrowable](
       dag: DagLookup[F],
       justifications: List[Message],
-      erasObservedBehavior: LocalDagView[Message],
-      stop: Message
+      erasObservedBehavior: LocalDagView[Message]
   ): F[MessageJPast[Message]] = {
 
     type EraId = ByteString
-    type PerEraValidatorMessages =
-      Map[EraId, Map[Validator, ObservedValidatorBehavior[Message]]]
 
     import ObservedValidatorBehavior._
 
-    val stream = DagOperations
-      .toposortJDagDesc(dag, justifications)
-      .takeUntil(_ == stop)
-      .filter(!_.isGenesisLike) // Not interested in Genesis block
-
-    val initStates: PerEraValidatorMessages =
-      erasObservedBehavior.keyBlockHashes.toList
-        .map(
-          kbh =>
-            kbh -> erasObservedBehavior
-              .validatorsInEra(kbh)
-              .filterNot(_.isEmpty()) // Not interested in Genesis validator.
-              .map(_ -> ObservedValidatorBehavior.Empty)
-              .toMap
-        )
-        .toMap
-
-    // Previously seen message from the validator.
-    val prevMessageSeen: Map[ByteString, Map[Validator, Message]] = Map.empty
-    val validatorStatusMatches
-        : (ByteString, Validator, ObservedValidatorBehavior[Message]) => Boolean =
-      (era, validator, seenBehavior) => erasObservedBehavior.data(era)(validator) == seenBehavior
-
-    // If we've seen, in the j-past-cone of the message, the same statuses
-    // as ones we have collected locally then we're done.
-    // This is correct b/c a node has to download all dependencies first,
-    // before validating the block.
-    val isDone: PerEraValidatorMessages => Boolean = state =>
-      state.forall {
-        case (era, eraLMS) =>
-          eraLMS.forall {
-            case (validator, seenStatus) =>
-              validatorStatusMatches(era, validator, seenStatus)
+    val toEraMap: Message => F[Map[EraId, Map[Validator, Set[Message]]]] =
+      m =>
+        m.justifications.toList
+          .traverse(j => dag.lookupUnsafe(j.latestBlockHash))
+          .map { messages =>
+            messages
+              .groupBy(_.eraId)
+              .mapValues(_.groupBy(_.validatorId).mapValues(_.toSet)) |+| Map(
+              m.eraId -> Map(m.validatorId -> Set(m))
+            )
           }
-      }
 
-    stream
-      .foldWhileLeft((initStates, prevMessageSeen)) {
-        case ((latestMessages, prevMessages), message) =>
-          if (isDone(latestMessages)) {
-            Right((latestMessages, prevMessages))
-          } else {
-            val msgCreator = message.validatorId
-            val msgEra     = message.eraId
-            val eraMsgs    = latestMessages(msgEra)
-            Left(eraMsgs(msgCreator) match {
-              case Honest(prevMsg) =>
-                if (prevMessages(msgEra)(msgCreator).validatorPrevMessageHash == message.messageHash)
-                  (
-                    latestMessages,
-                    prevMessages
-                      .updated(msgEra, prevMessages(msgEra).updated(msgCreator, message))
-                  )
-                else {
-                  // Validator equivocated in this era
-                  (
-                    latestMessages.updated(
-                      msgEra,
-                      latestMessages(msgEra).updated(msgCreator, Equivocated(prevMsg, message))
-                    ),
-                    prevMessages
-                  )
-                }
-              case Empty =>
-                (
-                  latestMessages
-                    .updated(msgEra, latestMessages(msgEra).updated(msgCreator, Honest(message))),
-                  prevMessages
-                    .updated(
-                      msgEra,
-                      prevMessages.getOrElse(msgEra, Map.empty).updated(msgCreator, message)
-                    )
-                )
-              case Equivocated(_, _) => (latestMessages, prevMessages)
-            })
-          }
-      }
-      .map {
-        case (observedBehaviors, _) =>
-          new EraObservedBehavior[Message](observedBehaviors).asInstanceOf[MessageJPast[Message]]
+    def empty(v: Validator): (Validator, Set[Message]) =
+      (v, Set.empty[Message])
+    def honest(v: Validator, m: Message): (Validator, Set[Message]) =
+      (v, Set(m))
+    def equivocated(v: Validator, msgs: Set[Message]): (Validator, Set[Message]) =
+      (v, msgs)
+
+    // A map from every observed era to a set of validators that produced a message in each of the eras.
+    // We will use it later when merging two p-cones and not skip validators not visible in the direct justifications.
+    val baseMap =
+      erasObservedBehavior.erasValidators
+        .filterNot(_.isEmpty) // filter out Genesis
+        .mapValues(_.toList.map(_ -> Set.empty[Message]).toMap)
+
+    def mergeJPastCones(
+        a: Map[EraId, Map[Validator, Set[Message]]],
+        b: Map[EraId, Map[Validator, Set[Message]]]
+    ): F[Map[EraId, Map[Validator, Set[Message]]]] =
+      for {
+        merged <- (a |+| b).toList
+                   .traverse {
+                     case (era, validatorsLatestMessages) =>
+                       validatorsLatestMessages.toList
+                         .traverse {
+                           case (validator, messages) =>
+                             erasObservedBehavior.getStatus(era, validator) match {
+                               case None =>
+                                 val msg = s"Error when traversing j-past-cone. Expected to have seen a message from validator " +
+                                   s"${PrettyPrinter.buildString(validator)} in era ${PrettyPrinter.buildString(era)} but it was not present."
+                                 MonadThrowable[F].raiseError[(Validator, Set[Message])](
+                                   new IllegalStateException(msg)
+                                 )
+                               case Some(Empty) =>
+                                 // We haven't seen any messages from that validator in this era.
+                                 // There can't be any in the justifications either.
+                                 empty(validator).pure[F]
+                               case Some(Honest(_)) =>
+                                 if (messages.nonEmpty) {
+                                   import io.casperlabs.shared.Sorting.jRankOrdering
+                                   // Since we know that validator is honest we can pick the newest message.
+                                   honest(validator, messages.maxBy(_.jRank)).pure[F]
+                                 } else {
+                                   // There are no messages in the direct justifications
+                                   // but we know that local DAG has seen messages from that validator.
+                                   // We have to look for them in the indirect ones but it still might not be there
+                                   // (because creator of the messages hasn't seen anything from that validator).
+                                   DagOperations
+                                     .swimlaneVFromJustifications[F](
+                                       validator,
+                                       validatorsLatestMessages.values.flatten.toList,
+                                       dag
+                                     )
+                                     .takeWhile(_.eraId == era)
+                                     .headOption
+                                     .map(_.fold(empty(validator))(honest(validator, _)))
+                                 }
+                               case Some(Equivocated(_, _)) =>
+                                 // Local DAG has detected `validator` as an equivocator.
+                                 // We have to find out what's the status of that validator in the j-past-cone.
+                                 if (messages.size == 1)
+                                   // Earlier we validated that `validator_prev_msg` is set correctly
+                                   // for each of the messages separately.
+                                   honest(validator, messages.head).pure[F]
+                                 else {
+                                   val startingPoints =
+                                     if (messages.isEmpty)
+                                       // There's no messages by that validator in an era.
+                                       // Use messages from other validators as starting points.
+                                       validatorsLatestMessages.values.flatten.toList
+                                     else
+                                       // Use latest messages by that validator in an era.
+                                       messages.toList
+
+                                   DagOperations
+                                     .swimlaneVFromJustifications[F](
+                                       validator,
+                                       startingPoints,
+                                       dag
+                                     )
+                                     .takeWhile(_.eraId == era)
+                                     .foldWhileLeft(Map.empty[JRank, Set[Message]]) {
+                                       case (acc, msg) =>
+                                         if (acc.contains(msg.jRank))
+                                           // Stop folding when we detect equivocating pair.
+                                           Right(Map(msg.jRank -> (acc(msg.jRank) + msg)))
+                                         else Left(acc.updated(msg.jRank, Set(msg)))
+                                     }
+                                     .map { validatorsEraMessages =>
+                                       if (validatorsEraMessages.isEmpty)
+                                         empty(validator)
+                                       else {
+                                         validatorsEraMessages
+                                           .find(_._2.size > 1)
+                                           .fold {
+                                             import io.casperlabs.shared.Sorting.jRankOrdering
+                                             // There's no jRank at which there's more than 1 message.
+                                             // Pick the newest one.
+                                             val msg = validatorsEraMessages.maxBy(_._1)._2.head
+                                             honest(validator, msg)
+                                           } {
+                                             case (_, evidences) =>
+                                               // `evidences` is a set of messages that have the same jRank.
+                                               equivocated(validator, evidences)
+                                           }
+                                       }
+                                     }
+                                 }
+                             }
+                         }
+                         .map(era -> _.toMap)
+                   }
+                   .map(_.toMap)
+      } yield merged
+
+    justifications
+      .map(toEraMap)
+      .foldLeftM(baseMap) { case (acc, eraMapF) => eraMapF.flatMap(mergeJPastCones(acc, _)) }
+      .map { tips =>
+        val nonEmptyTips = tips.mapValues(_.filterNot(_._2.isEmpty))
+        apply(nonEmptyTips).asInstanceOf[MessageJPast[Message]]
       }
   }
 

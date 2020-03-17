@@ -515,13 +515,12 @@ object DagOperations {
   def panoramaOfMessage[F[_]: MonadThrowable](
       dag: DagLookup[F],
       message: Message,
-      erasObservedBehavior: LocalDagView[Message],
-      stop: Message
+      erasObservedBehavior: LocalDagView[Message]
   ): F[MessageJPast[Message]] =
     message.justifications.toList
       .map(_.latestBlockHash)
       .traverse(dag.lookupUnsafe(_))
-      .flatMap(EraObservedBehavior.messageJPast[F](dag, _, erasObservedBehavior, stop))
+      .flatMap(EraObservedBehavior.messageJPast[F](dag, _, erasObservedBehavior))
 
   /**
     * Returns latest messages per era.

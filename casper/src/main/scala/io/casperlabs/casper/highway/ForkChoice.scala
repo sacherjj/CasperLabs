@@ -252,8 +252,7 @@ object ForkChoice {
                                  .messageJPast[F](
                                    dag,
                                    justificationsMessages,
-                                   erasObservedBehaviors,
-                                   keyBlock
+                                   erasObservedBehaviors
                                  )
                                  .timerGauge("fromJustifications_messageJPast")
           keyBlocks <- MessageProducer.collectKeyBlocks[F](keyBlockHash)
