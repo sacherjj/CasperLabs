@@ -37,7 +37,7 @@ CLIENT_CONTRACTS_AS  := $(patsubst %, build-contract-as/%, $(CLIENT_CONTRACTS_AS
 TEST_CONTRACTS_AS    := $(patsubst %, build-contract-as/%, $(TEST_CONTRACTS_AS))
 EXAMPLE_CONTRACTS_AS := $(patsubst %, build-contract-as/%, $(EXAMPLE_CONTRACTS_AS))
 
-INTEGRATION_CONTRACTS += \
+INTEGRATION += \
 	bonding-call \
 	counter-call \
 	counter-define \
