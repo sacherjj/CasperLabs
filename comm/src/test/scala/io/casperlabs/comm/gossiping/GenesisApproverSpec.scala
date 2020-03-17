@@ -6,6 +6,7 @@ import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus._
 import io.casperlabs.comm.ServiceError.{InvalidArgument, Unavailable}
 import io.casperlabs.comm.discovery.{Node, NodeDiscovery, NodeIdentifier}
+import io.casperlabs.comm.gossiping.downloadmanager._
 import io.casperlabs.shared.Log
 import monix.eval.Task
 import monix.execution.Scheduler

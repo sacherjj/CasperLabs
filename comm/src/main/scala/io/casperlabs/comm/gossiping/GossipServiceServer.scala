@@ -10,6 +10,7 @@ import io.casperlabs.casper.consensus.{Block, BlockSummary, Deploy, GenesisCandi
 import io.casperlabs.comm.ServiceError.NotFound
 import io.casperlabs.comm.discovery.Node
 import io.casperlabs.comm.discovery.NodeUtils.showNode
+import io.casperlabs.comm.gossiping.downloadmanager.BlockDownloadManager
 import io.casperlabs.comm.gossiping.synchronization.Synchronizer
 import io.casperlabs.comm.gossiping.synchronization.Synchronizer.SyncError
 import io.casperlabs.metrics.Metrics

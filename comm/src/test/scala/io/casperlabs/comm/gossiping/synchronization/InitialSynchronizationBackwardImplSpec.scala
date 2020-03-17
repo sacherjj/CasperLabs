@@ -8,6 +8,7 @@ import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.{Approval, Block, BlockSummary}
 import io.casperlabs.comm.discovery.{Node, NodeDiscovery, NodeIdentifier}
 import io.casperlabs.comm.gossiping._
+import io.casperlabs.comm.gossiping.downloadmanager._
 import io.casperlabs.comm.gossiping.synchronization.InitialSynchronization.SynchronizationError
 import io.casperlabs.comm.gossiping.synchronization.InitialSynchronizationBackwardImplSpec.TestFixture
 import io.casperlabs.comm.gossiping.synchronization.Synchronizer.SyncError
