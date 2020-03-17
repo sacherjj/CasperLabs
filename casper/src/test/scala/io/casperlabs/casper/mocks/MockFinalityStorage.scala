@@ -20,13 +20,13 @@ class MockFinalityStorage[F[_]: Monad](
     }
 
   override def markAsFinalized(
-      mainParent: BlockHash,
-      secondary: Set[BlockHash],
+      lfb: BlockHash,
+      finalized: Set[BlockHash],
       orphaned: Set[BlockHash]
   ): F[Unit] =
-    lastFinalizedRef.set(mainParent) >> finalizedRef.update {
+    lastFinalizedRef.set(lfb) >> finalizedRef.update {
       case (fd, od) =>
-        (fd ++ secondary + mainParent, od ++ orphaned)
+        (fd ++ finalized + lfb, od ++ orphaned)
     }
 }
 
