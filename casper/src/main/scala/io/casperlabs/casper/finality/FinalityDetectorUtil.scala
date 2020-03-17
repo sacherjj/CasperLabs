@@ -9,7 +9,6 @@ import io.casperlabs.casper.dag.DagOperations
 import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.models.Message
 import io.casperlabs.storage.dag.DagRepresentation
-
 import scala.collection.mutable.{IndexedSeq => MutableSeq}
 import io.casperlabs.casper.validation.Validation
 import io.casperlabs.storage.dag.FinalityStorage
@@ -218,21 +217,17 @@ object FinalityDetectorUtil {
   def orphanedIndirectly[F[_]: Sync: FinalityStorage](
       dag: DagRepresentation[F],
       lfbHash: BlockHash,
-      finalizedImplicitly: Set[BlockHash]
+      finalizedIndirectly: Set[BlockHash]
   ): F[Set[BlockHash]] =
     for {
       lfb <- dag.lookupUnsafe(lfbHash)
       undecided <- DagOperations
                     .bfTraverseF[F, Message](List(lfb)) { m =>
-                      val deps = m.parents ++ m.justifications.map(_.latestBlockHash)
-                      collectEmptyFinality {
-                        deps.filterNot(finalizedImplicitly)
-                      } flatMap {
-                        _.traverse(dag.lookupUnsafe)
-                      }
+                      val deps = (m.parents ++ m.justifications.map(_.latestBlockHash)).distinct
+                      collectEmptyFinality(deps).flatMap(_.traverse(dag.lookupUnsafe))
                     }
                     .filter(_.isBlock)
                     .map(_.messageHash)
                     .toList
-    } yield undecided.toSet -- finalizedImplicitly - lfbHash
+    } yield undecided.toSet -- finalizedIndirectly - lfbHash
 }
