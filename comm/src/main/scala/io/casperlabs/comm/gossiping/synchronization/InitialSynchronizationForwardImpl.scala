@@ -40,7 +40,7 @@ class InitialSynchronizationForwardImpl[F[_]: Parallel: Log: Timer](
     minSuccessful: Int,
     skipFailedNodesInNextRounds: Boolean,
     // Schedule items with the DownloadManager.
-    downloadManager: DownloadManager[F],
+    downloadManager: BlockDownloadManager[F],
     // Handle missing dependencies by doing a normal backwards going synchronization.
     synchronizer: Synchronizer[F],
     step: Int,
