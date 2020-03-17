@@ -174,20 +174,17 @@ class MultiParentCasperImpl[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: 
       for {
         result <- MultiParentFinalizer[F].onNewMessageAdded(message)
         _ <- result.traverse {
-              case fb @ FinalizedBlocks(mainParent, _, secondary, orphaned) => {
-                val mainParentFinalizedStr = PrettyPrinter.buildString(
-                  mainParent
-                )
-                val secondaryParentsFinalizedStr =
-                  secondary.map(PrettyPrinter.buildString).mkString("{", ", ", "}")
+              case fb @ FinalizedBlocks(newLFB, _, finalized, orphaned) => {
+                val lfbStr       = PrettyPrinter.buildString(newLFB)
+                val finalizedStr = finalized.map(PrettyPrinter.buildString).mkString("{", ", ", "}")
                 for {
                   _ <- Log[F].info(
-                        s"New last finalized block hashes are ${mainParentFinalizedStr -> null}, ${secondaryParentsFinalizedStr -> null}."
+                        s"New last finalized block hashes are ${lfbStr -> null}, ${finalizedStr -> null}."
                       )
-                  _ <- lfbRef.set(mainParent)
-                  _ <- FinalityStorage[F].markAsFinalized(mainParent, secondary, orphaned)
-                  _ <- DeployBuffer[F].removeFinalizedDeploys(secondary + mainParent).forkAndLog
-                  _ <- BlockEventEmitter[F].newLastFinalizedBlock(mainParent, secondary, orphaned)
+                  _ <- lfbRef.set(newLFB)
+                  _ <- FinalityStorage[F].markAsFinalized(newLFB, finalized, orphaned)
+                  _ <- DeployBuffer[F].removeFinalizedDeploys(finalized + newLFB).forkAndLog
+                  _ <- BlockEventEmitter[F].newLastFinalizedBlock(newLFB, finalized, orphaned)
                 } yield ()
               }
             }

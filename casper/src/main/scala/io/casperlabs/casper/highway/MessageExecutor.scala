@@ -103,18 +103,17 @@ class MessageExecutor[F[_]: Concurrent: Log: Time: Metrics: BlockStorage: DagSto
       result <- MultiParentFinalizer[F]
                  .onNewMessageAdded(message)
       w <- result.traverse {
-            case MultiParentFinalizer.FinalizedBlocks(mainParent, _, secondary, orphaned) => {
-              val mainParentFinalizedStr = mainParent.show
-              val secondaryParentsFinalizedStr =
-                secondary.map(_.show).mkString("{", ", ", "}")
+            case MultiParentFinalizer.FinalizedBlocks(newLFB, _, finalized, orphaned) => {
+              val lfbStr       = newLFB.show
+              val finalizedStr = finalized.map(_.show).mkString("{", ", ", "}")
               for {
                 _ <- Log[F].info(
-                      s"New last finalized block hashes are ${mainParentFinalizedStr -> null}, ${secondaryParentsFinalizedStr -> null}."
+                      s"New last finalized block hashes are ${lfbStr -> null}, ${finalizedStr -> null}."
                     )
-                _  <- FinalityStorage[F].markAsFinalized(mainParent, secondary, orphaned)
-                w1 <- DeployBuffer[F].removeFinalizedDeploys(secondary + mainParent).forkAndLog
+                _  <- FinalityStorage[F].markAsFinalized(newLFB, finalized, orphaned)
+                w1 <- DeployBuffer[F].removeFinalizedDeploys(finalized + newLFB).forkAndLog
                 w2 <- BlockEventEmitter[F]
-                       .newLastFinalizedBlock(mainParent, secondary, orphaned)
+                       .newLastFinalizedBlock(newLFB, finalized, orphaned)
                        .timer("emitNewLFB")
                        .forkAndLog
               } yield w1 *> w2
