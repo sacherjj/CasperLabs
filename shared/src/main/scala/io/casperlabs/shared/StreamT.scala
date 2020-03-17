@@ -169,6 +169,13 @@ sealed abstract class StreamT[F[_], +A] { self =>
       monadError.raiseError[AA](new Exception("Head on empty StreamT!"))
   }
 
+  def headOption[AA >: A](implicit monadError: MonadError[F, Throwable]): F[Option[AA]] =
+    self match {
+      case SCons(head, _)  => monadError.pure[Option[AA]](Some(head))
+      case SLazy(lazyTail) => lazyTail.value.flatMap(_.headOption)
+      case _: SNil[F]      => monadError.pure[Option[AA]](none[AA])
+    }
+
   def map[B](f: A => B)(implicit functor: Functor[F]): StreamT[F, B] = self match {
     case SCons(curr, lazyTail) => StreamT.cons(f(curr), lazyTail.map(_.map(_.map(f))))
     case SLazy(lazyTail)       => StreamT.delay(lazyTail.map(_.map(_.map(f))))

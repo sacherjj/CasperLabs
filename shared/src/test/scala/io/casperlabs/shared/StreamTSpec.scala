@@ -53,6 +53,18 @@ class StreamTSpec extends FunSpec with Matchers with GeneratorDrivenPropertyChec
       }
     }
 
+    it("should correctly compute headOption") {
+      forAll { (list: List[Int]) =>
+        whenever(list.nonEmpty) {
+          val stream: StreamT[Id, Int] = StreamT.fromList[Id, Int](list)
+
+          stream.headOption[Int](mErrId) shouldBe Some(list.head)
+
+          StreamT.fromList[Id, Int](List.empty).headOption[Int](mErrId) shouldBe none[Int]
+        }
+      }
+    }
+
     it("should correctly compute tails") {
       forAll { (list: List[Int]) =>
         whenever(list.nonEmpty) {
