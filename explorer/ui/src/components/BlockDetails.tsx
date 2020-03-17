@@ -236,7 +236,7 @@ const blockAttrs: (block: BlockInfo) => Array<[string, any]> = (
     ['Block Size (bytes)', stats.getBlockSizeBytes().toLocaleString()],
     [
       'Finality',
-      <FinalityIcon finality={block.getStatus()!.getFinality()} />
+      <FinalityIcon block={block} />
     ],
   ];
 };
@@ -261,10 +261,14 @@ export const BlockType = (props: { header: Block.Header }) => {
   return <span>{lbl}</span>;
 }
 
-export const FinalityIcon = (props: { finality: BlockInfo.Status.FinalityMap[keyof BlockInfo.Status.FinalityMap] }) => {
-  if (props.finality === BlockInfo.Status.Finality.FINALIZED) {
+export const FinalityIcon = (props: { block: BlockInfo }) => {
+  if (props.block.getSummary()?.getHeader()!.getMessageType() === Block.MessageType.BALLOT)
+    return null;
+
+  let finality = props.block.getStatus()!.getFinality();
+  if (finality === BlockInfo.Status.Finality.FINALIZED) {
     return <Icon name="check-circle" color="green" />
-  } else if (props.finality === BlockInfo.Status.Finality.ORPHANED)
+  } else if (finality === BlockInfo.Status.Finality.ORPHANED)
     return <Icon name="times-circle" color="red" />
   else {
     return <Icon name="clock" />

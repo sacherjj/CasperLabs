@@ -210,7 +210,7 @@ class BlockDetails extends React.Component<
         ],
         [
           'Finality',
-          <FinalityIcon finality={block.getStatus()!.getFinality()} />
+          <FinalityIcon block={block} />
         ]
       ];
     return (

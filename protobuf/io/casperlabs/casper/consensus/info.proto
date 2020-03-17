@@ -20,6 +20,8 @@ message BlockInfo {
         Stats stats = 2;
         repeated bytes child_hashes = 3;
 
+        // Indicate the finality status of the block, i.e. whether it's in the p-past cone
+        // of the last finalized block. Doesn't apply to ballots, those never get finalized.
         Finality finality = 5;
 
         // Statistics derived from the full block.

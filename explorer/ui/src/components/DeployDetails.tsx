@@ -119,7 +119,7 @@ const ResultsTable = observer(
                 <Link to={Pages.block(id)}>{shortHash(id)}</Link>
               </td>
               <td>
-                <FinalityIcon finality={proc.getBlockInfo()!.getStatus()!.getFinality()} />
+                <FinalityIcon block={proc.getBlockInfo()!} />
               </td>
               <td className="text-right">{proc.getCost().toLocaleString()}</td>
               <td className="text-right">
