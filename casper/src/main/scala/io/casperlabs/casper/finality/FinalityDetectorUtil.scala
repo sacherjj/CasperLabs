@@ -197,11 +197,11 @@ object FinalityDetectorUtil {
   /** Returns a set of blocks that were finalized indirectly when a block from the main chain is finalized. */
   def finalizedIndirectly[F[_]: Sync: FinalityStorage](
       dag: DagRepresentation[F],
-      block: BlockHash
+      lfbHash: BlockHash
   ): F[Set[BlockHash]] =
     for {
       finalizedImplicitly <- DagOperations
-                              .bfTraverseF[F, BlockHash](List(block))(
+                              .bfTraverseF[F, BlockHash](List(lfbHash))(
                                 hash =>
                                   dag
                                     .lookupUnsafe(hash)
@@ -209,7 +209,7 @@ object FinalityDetectorUtil {
                                     .flatMap(collectEmptyFinality(_))
                               )
                               .toList
-    } yield finalizedImplicitly.toSet - block // We don't want to include `block`.
+    } yield finalizedImplicitly.toSet - lfbHash // LFB is directly finalized.
 
   /** A block is orphaned if it's not in the p-past cone of the last finalized block.
     * When a new LFB is found, we traverse it's j-past cone until the previous finalized block
@@ -217,20 +217,22 @@ object FinalityDetectorUtil {
     */
   def orphanedIndirectly[F[_]: Sync: FinalityStorage](
       dag: DagRepresentation[F],
-      block: BlockHash,
-      finalized: Set[BlockHash]
+      lfbHash: BlockHash,
+      finalizedImplicitly: Set[BlockHash]
   ): F[Set[BlockHash]] =
     for {
+      lfb <- dag.lookupUnsafe(lfbHash)
       undecided <- DagOperations
-                    .bfTraverseF[F, BlockHash](List(block))(
-                      hash =>
-                        dag
-                          .lookupUnsafe(hash)
-                          .map { m =>
-                            m.parents ++ m.justifications.map(_.latestBlockHash)
-                          }
-                          .flatMap(collectEmptyFinality(_))
-                    )
+                    .bfTraverseF[F, Message](List(lfb)) { m =>
+                      val deps = m.parents ++ m.justifications.map(_.latestBlockHash)
+                      collectEmptyFinality {
+                        deps.filterNot(finalizedImplicitly)
+                      } flatMap {
+                        _.traverse(dag.lookupUnsafe)
+                      }
+                    }
+                    .filter(_.isBlock)
+                    .map(_.messageHash)
                     .toList
-    } yield undecided.toSet -- finalized - block
+    } yield undecided.toSet -- finalizedImplicitly - lfbHash
 }
