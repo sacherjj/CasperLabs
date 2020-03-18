@@ -10,7 +10,7 @@ import io.casperlabs.casper.consensus.{Approval, Block, BlockSummary}
 import io.casperlabs.comm.GossipError
 import io.casperlabs.comm.discovery.Node
 import io.casperlabs.comm.discovery.NodeUtils.showNode
-import io.casperlabs.comm.gossiping.DownloadManagerImpl.RetriesConf
+import io.casperlabs.comm.gossiping.BlockDownloadManagerImpl.RetriesConf
 import io.casperlabs.comm.gossiping.synchronization.Synchronizer
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.models.BlockImplicits.BlockOps
@@ -25,13 +25,13 @@ import org.scalatest._
 import scala.concurrent.TimeoutException
 import scala.concurrent.duration._
 
-class DownloadManagerSpec
+class BlockDownloadManagerSpec
     extends WordSpecLike
     with Matchers
     with BeforeAndAfterEach
     with ArbitraryConsensusAndComm {
 
-  import DownloadManagerSpec._
+  import BlockDownloadManagerSpec._
   import Scheduler.Implicits.global
 
   // Collect log messages. Reset before each test.
@@ -66,7 +66,7 @@ class DownloadManagerSpec
       val remote   = MockGossipService(dag)
       val relaying = MockRelaying.default
 
-      def scheduleAll(manager: DownloadManager[Task]): Task[List[Task[Unit]]] =
+      def scheduleAll(manager: BlockDownloadManager[Task]): Task[List[Task[Unit]]] =
         // Add them in the natural topological order they were generated with.
         dag.toList.traverse { block =>
           manager.scheduleDownload(summaryOf(block), source, relay = relayed(block))
@@ -194,7 +194,7 @@ class DownloadManagerSpec
       "skip the download" in TestFixture() {
         case (manager, backend) =>
           for {
-            _     <- backend.storeBlock(block)
+            _     <- backend.store(block)
             watch <- manager.scheduleDownload(summaryOf(block), source, false)
             _     <- watch
           } yield {
@@ -244,7 +244,7 @@ class DownloadManagerSpec
         val backend = MockBackend()
 
         val test = for {
-          alloc <- DownloadManagerImpl[Task](
+          alloc <- BlockDownloadManagerImpl[Task](
                     maxParallelDownloads = 1,
                     connectToGossip = _ => remote,
                     backend = backend,
@@ -272,7 +272,7 @@ class DownloadManagerSpec
 
       "reject further schedules" in {
         val test = for {
-          alloc <- DownloadManagerImpl[Task](
+          alloc <- BlockDownloadManagerImpl[Task](
                     maxParallelDownloads = 1,
                     connectToGossip = _ => MockGossipService(),
                     backend = MockBackend(),
@@ -586,7 +586,7 @@ class DownloadManagerSpec
       val block2 = sample(arbitrary[Block].map(withoutDependencies))
       val remote = MockGossipService(Seq(block1, block2))
       val backend = new MockBackend() {
-        override def hasBlock(blockHash: ByteString) =
+        override def contains(blockHash: ByteString) =
           if (blockHash == block1.blockHash || dependenciesOf(block1).contains(blockHash))
             Task.raiseError(new RuntimeException("Oh no!"))
           else
@@ -612,7 +612,7 @@ class DownloadManagerSpec
   }
 }
 
-object DownloadManagerSpec {
+object BlockDownloadManagerSpec {
   implicit val metrics = new Metrics.MetricsNOP[Task]
 
   def summaryOf(block: Block): BlockSummary =
@@ -630,7 +630,7 @@ object DownloadManagerSpec {
   def toBlockMap(blocks: Seq[Block]) =
     blocks.groupBy(_.blockHash).mapValues(_.head)
 
-  type TestArgs = (DownloadManager[Task], MockBackend)
+  type TestArgs = (BlockDownloadManager[Task], MockBackend)
 
   object TestFixture {
     def apply(
@@ -644,7 +644,7 @@ object DownloadManagerSpec {
         test: TestArgs => Task[Unit]
     )(implicit scheduler: Scheduler, log: Log[Task]): Unit = {
 
-      val managerR = DownloadManagerImpl[Task](
+      val managerR = BlockDownloadManagerImpl[Task](
         maxParallelDownloads = maxParallelDownloads,
         connectToGossip = remote(_),
         backend = backend,
@@ -660,8 +660,8 @@ object DownloadManagerSpec {
     }
   }
 
-  class MockBackend(validate: Block => Task[Unit] = _ => Task.unit)
-      extends DownloadManagerImpl.Backend[Task] {
+  class MockBackend(validationFunction: Block => Task[Unit] = _ => Task.unit)
+      extends BlockDownloadManagerImpl.Backend[Task] {
     // Record what we have been called with.
     @volatile var validations = Vector.empty[ByteString]
     @volatile var blocks      = Vector.empty[ByteString]
@@ -669,21 +669,21 @@ object DownloadManagerSpec {
     @volatile var scheduled   = Vector.empty[ByteString]
     @volatile var downloaded  = Vector.empty[ByteString]
 
-    def hasBlock(blockHash: ByteString): Task[Boolean] =
+    def contains(blockHash: ByteString): Task[Boolean] =
       Task.now(blocks.contains(blockHash))
 
-    def validateBlock(block: Block): Task[Unit] =
+    def validate(block: Block): Task[Unit] =
       Task.delay {
         synchronized { validations = validations :+ block.blockHash }
-      } *> validate(block)
+      } *> validationFunction(block)
 
-    def storeBlock(block: Block): Task[Unit] = Task.delay {
-      synchronized { blocks = blocks :+ block.blockHash }
+    def store(block: Block): Task[Unit] = Task.delay {
+      synchronized {
+        blocks = blocks :+ block.blockHash
+        summaries = summaries :+ block.blockHash
+      }
     }
 
-    def storeBlockSummary(summary: BlockSummary): Task[Unit] = Task.delay {
-      synchronized { summaries = summaries :+ summary.blockHash }
-    }
     def onScheduled(summary: BlockSummary): Task[Unit] = Task.delay {
       synchronized { scheduled = scheduled :+ summary.blockHash }
     }
@@ -716,7 +716,7 @@ object DownloadManagerSpec {
       def syncDag(source: Node, targetBlockHashes: Set[ByteString]) = ???
       def downloaded(blockHash: ByteString): Task[Unit]             = ???
     }
-    private val emptyDownloadManager = new DownloadManager[Task] {
+    private val emptyDownloadManager = new BlockDownloadManager[Task] {
       def scheduleDownload(summary: BlockSummary, source: Node, relay: Boolean) = ???
     }
     private val emptyGenesisApprover = new GenesisApprover[Task] {
