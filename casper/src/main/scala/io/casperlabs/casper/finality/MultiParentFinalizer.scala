@@ -44,11 +44,13 @@ object MultiParentFinalizer {
   }
 
   final case class FinalizedBlocks(
-      mainChain: BlockHash,
+      // New finalized block in the main chain.
+      newLFB: BlockHash,
       quorum: BigInt,
-      secondaryParents: Set[BlockHash]
+      indirectlyFinalized: Set[BlockHash],
+      indirectlyOrphaned: Set[BlockHash]
   ) {
-    def finalizedBlocks: Set[BlockHash] = secondaryParents + mainChain
+    def finalizedBlocks: Set[BlockHash] = indirectlyFinalized + newLFB
   }
 
   def create[F[_]: Concurrent: FinalityStorage](
@@ -72,10 +74,17 @@ object MultiParentFinalizer {
                           for {
                             _ <- lfbCache.set(newLFB)
                             justFinalized <- FinalityDetectorUtil.finalizedIndirectly[F](
-                                              newLFB,
-                                              dag
+                                              dag,
+                                              newLFB
                                             )
-                          } yield Some(FinalizedBlocks(newLFB, quorum, justFinalized))
+                            justOrphaned <- FinalityDetectorUtil.orphanedIndirectly(
+                                             dag,
+                                             newLFB,
+                                             justFinalized
+                                           )
+                          } yield Some(
+                            FinalizedBlocks(newLFB, quorum, justFinalized, justOrphaned)
+                          )
                       }
         } yield finalized)
     }

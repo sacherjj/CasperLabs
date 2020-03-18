@@ -372,7 +372,8 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
             .set(Some(message))
             .as(
               Some(
-                MultiParentFinalizer.FinalizedBlocks(message.messageHash, BigInt(0), Set.empty)
+                MultiParentFinalizer
+                  .FinalizedBlocks(message.messageHash, BigInt(0), Set.empty, Set.empty)
               )
             )
       }
