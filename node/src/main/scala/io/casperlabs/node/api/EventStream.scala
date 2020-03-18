@@ -18,6 +18,7 @@ import io.casperlabs.node.api.graphql.FinalizedBlocksStream
 import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.storage.dag.DagStorage
 import io.casperlabs.storage.deploy.DeployStorage
+import io.casperlabs.storage.event.EventStorage
 import monix.execution.{Ack, Scheduler}
 import monix.reactive.{Observable, OverflowStrategy}
 import monix.reactive.subjects.ConcurrentSubject
@@ -29,7 +30,7 @@ import io.casperlabs.shared.Log
 }
 
 object EventStream {
-  def create[F[_]: Concurrent: DeployStorage: BlockStorage: DagStorage: Log: Metrics](
+  def create[F[_]: Concurrent: DeployStorage: BlockStorage: DagStorage: EventStorage: Log: Metrics](
       scheduler: Scheduler,
       eventStreamBufferSize: Int
   ): EventStream[F] = {
@@ -39,8 +40,20 @@ object EventStream {
     val source =
       ConcurrentSubject.publish[Event](OverflowStrategy.DropOld(eventStreamBufferSize))(scheduler)
 
-    def emit(event: Event) =
-      Sync[F].delay(source.onNext(event)).void
+    def push(event: Event): F[Unit] = {
+      implicit val ec = scheduler
+      Async[F].async { k =>
+        source.onNext(event).onComplete { result =>
+          k(result.toEither.void)
+        }
+      }
+    }
+
+    def emit(values: Event.Value*): F[Unit] =
+      for {
+        events <- EventStorage[F].storeEvents(values)
+        _      <- events.traverse(push)
+      } yield ()
 
     new EventStream[F] {
       import Event._
@@ -98,21 +111,16 @@ object EventStream {
           Base16.encode(blockHash.toByteArray),
           BlockInfo.View.FULL
         ) flatMap { blockInfo =>
-          emit {
-            Event().withBlockAdded(BlockAdded().withBlock(blockInfo))
-          }
+          emit(Value.BlockAdded(BlockAdded().withBlock(blockInfo)))
         }
       } >> {
         DeployStorage[F].reader
           .getProcessedDeploys(blockHash)
           .flatMap { deploys =>
-            deploys.traverse { d =>
-              emit {
-                Event().withDeployProcessed(
-                  DeployProcessed().withBlockHash(blockHash).withProcessedDeploy(d)
-                )
-              }
-            }
+            emit(deploys.map { d =>
+              Value
+                .DeployProcessed(DeployProcessed().withBlockHash(blockHash).withProcessedDeploy(d))
+            }: _*)
           }
           .void
       }
@@ -122,22 +130,20 @@ object EventStream {
           indirectlyFinalized: Set[BlockHash],
           indirectlyOrphaned: Set[BlockHash]
       ): F[Unit] =
-        emit {
-          Event().withNewFinalizedBlock(
+        emit(
+          Value.NewFinalizedBlock(
             NewFinalizedBlock(lfb, indirectlyFinalized.toSeq, indirectlyOrphaned.toSeq)
           )
-        } >> {
+        ) >> {
           (lfb +: indirectlyFinalized.toList).traverse { blockHash =>
             DeployStorage[F].reader
               .getProcessedDeploys(blockHash)
               .flatMap { deploys =>
-                deploys.traverse { d =>
-                  emit {
-                    Event().withDeployFinalized(
-                      DeployFinalized().withBlockHash(blockHash).withProcessedDeploy(d)
-                    )
-                  }
-                }
+                emit(deploys.map { d =>
+                  Value.DeployFinalized(
+                    DeployFinalized().withBlockHash(blockHash).withProcessedDeploy(d)
+                  )
+                }: _*)
               }
           } >>
             indirectlyOrphaned.toList.traverse { blockHash =>
@@ -158,20 +164,18 @@ object EventStream {
         }
 
       override def deployAdded(deploy: Deploy): F[Unit] =
-        emit {
-          Event().withDeployAdded(DeployAdded().withDeploy(deploy.clearBody))
-        }
+        emit(Value.DeployAdded(DeployAdded().withDeploy(deploy.clearBody)))
 
       override def deploysDiscarded(deployHashesWithReasons: Seq[(DeployHash, String)]): F[Unit] = {
         val reasons = deployHashesWithReasons.toMap
         DeployStorage[F].reader
           .getByHashes(reasons.keySet)
           .evalMap { deploy =>
-            emit {
-              Event().withDeployDiscarded(
+            emit(
+              Value.DeployDiscarded(
                 DeployDiscarded().withDeploy(deploy).withMessage(reasons(deploy.deployHash))
               )
-            }
+            )
           }
           .compile
           .drain
@@ -181,9 +185,7 @@ object EventStream {
         DeployStorage[F].reader
           .getByHashes(deployHashes.toSet)
           .evalMap { deploy =>
-            emit {
-              Event().withDeployRequeued(DeployRequeued().withDeploy(deploy))
-            }
+            emit(Value.DeployRequeued(DeployRequeued().withDeploy(deploy)))
           }
           .compile
           .drain

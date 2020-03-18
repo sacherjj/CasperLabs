@@ -177,7 +177,7 @@ class NodeRuntime private[node] (
       implicit0(eventStream: EventStream[Task]) <- Resource.pure[Task, EventStream[Task]](
                                                     EventStream
                                                       .create[Task](
-                                                        ingressScheduler,
+                                                        egressScheduler,
                                                         conf.server.eventStreamBufferSize.value
                                                       )
                                                   )

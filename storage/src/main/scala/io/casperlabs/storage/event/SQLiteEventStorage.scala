@@ -14,7 +14,7 @@ class SQLiteEventStorage[F[_]: Sync: Time](
     writeXa: Transactor[F]
 ) extends EventStorage[F]
     with DoobieCodecs {
-  override def storeEvents(values: Seq[Event.Value]): F[Seq[Event]] = {
+  override def storeEvents(values: Seq[Event.Value]): F[List[Event]] = {
     def insert(now: Long, value: Event.Value): ConnectionIO[Event] =
       for {
         _  <- sql"""INSERT INTO events(create_time_millis, value) VALUES ($now, $value)""".update.run

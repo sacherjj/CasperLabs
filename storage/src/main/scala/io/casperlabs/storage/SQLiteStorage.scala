@@ -205,7 +205,7 @@ object SQLiteStorage {
       override def findAncestor(block: BlockHash, distance: Long) =
         dagStorage.findAncestor(block, distance)
 
-      override def storeEvents(values: Seq[Event.Value]): F[Seq[Event]] =
+      override def storeEvents(values: Seq[Event.Value]): F[List[Event]] =
         eventStorage.storeEvents(values)
 
       override def getEvents(minId: Long): fs2.Stream[F, Event] =

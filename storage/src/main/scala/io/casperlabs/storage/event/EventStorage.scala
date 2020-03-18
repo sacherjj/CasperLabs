@@ -1,6 +1,7 @@
 package io.casperlabs.storage.event
 
 import io.casperlabs.casper.consensus.info.Event
+import simulacrum.typeclass
 
 /** Store all the events we return over the gRPC event stream.
   * Give each of them an individual ID so they can be replayed
@@ -9,10 +10,11 @@ import io.casperlabs.casper.consensus.info.Event
   *
   * IDs are going to be different across nodes.
   */
+@typeclass
 trait EventStorage[F[_]] {
 
   /** Store events and assign IDs. */
-  def storeEvents(values: Seq[Event.Value]): F[Seq[Event]]
+  def storeEvents(values: Seq[Event.Value]): F[List[Event]]
 
   /** Retrieve events from a given ID onwards to replay them to a client. */
   def getEvents(minId: Long): fs2.Stream[F, Event]
