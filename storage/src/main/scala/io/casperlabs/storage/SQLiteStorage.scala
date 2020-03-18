@@ -5,7 +5,7 @@ import java.util.concurrent.TimeUnit
 import cats.effect.Sync
 import cats.implicits._
 import doobie.util.transactor.Transactor
-import io.casperlabs.casper.consensus.info.{BlockInfo, DeployInfo}
+import io.casperlabs.casper.consensus.info.{BlockInfo, DeployInfo, Event}
 import io.casperlabs.casper.consensus.{Block, BlockSummary, Era}
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.metrics.Metrics
@@ -20,6 +20,7 @@ import io.casperlabs.storage.deploy.{
   DeployStorageWriter,
   SQLiteDeployStorage
 }
+import io.casperlabs.storage.event.{EventStorage, SQLiteEventStorage}
 import io.casperlabs.storage.era.{EraStorage, SQLiteEraStorage}
 import fs2._
 
@@ -32,6 +33,7 @@ object SQLiteStorage {
       with FinalityStorage[F]
       with AncestorsStorage[F]
       with EraStorage[F]
+      with EventStorage[F]
 
   def create[F[_]: Sync: Metrics: Time](
       deployStorageChunkSize: Int = 100,
@@ -70,13 +72,15 @@ object SQLiteStorage {
       dagStorage    <- SQLiteDagStorage.create[F](readXa, writeXa) >>= wrapDagStorage
       deployStorage <- SQLiteDeployStorage.create[F](deployStorageChunkSize, readXa, writeXa)
       eraStorage    <- SQLiteEraStorage.create[F](tickUnit, readXa, writeXa)
+      eventStorage  <- SQLiteEventStorage.create[F](readXa, writeXa)
     } yield new BlockStorage[F]
       with DagStorage[F]
       with DeployStorage[F]
       with DagRepresentation[F]
       with AncestorsStorage[F]
       with FinalityStorage[F]
-      with EraStorage[F] {
+      with EraStorage[F]
+      with EventStorage[F] {
 
       override def writer: DeployStorageWriter[F] =
         deployStorage.writer
@@ -200,6 +204,12 @@ object SQLiteStorage {
 
       override def findAncestor(block: BlockHash, distance: Long) =
         dagStorage.findAncestor(block, distance)
+
+      override def storeEvents(values: Seq[Event.Value]): F[Seq[Event]] =
+        eventStorage.storeEvents(values)
+
+      override def getEvents(minId: Long): fs2.Stream[F, Event] =
+        eventStorage.getEvents(minId)
 
     }
 }

@@ -42,3 +42,12 @@ class SQLiteEventStorage[F[_]: Sync: Time](
       .stream
       .transact(readXa)
 }
+
+object SQLiteEventStorage {
+  def create[F[_]: Sync: Time](
+      readXa: Transactor[F],
+      writeXa: Transactor[F]
+  ): F[EventStorage[F]] = Sync[F].delay {
+    new SQLiteEventStorage[F](readXa, writeXa)
+  }
+}
