@@ -39,6 +39,7 @@
     "@types/google-protobuf": "^3.7.1",
     "blakejs": "^1.1.0",
     "casperlabs-grpc": "file:../grpc",
+    "minimist": ">=1.2.3",
     "casperlabs-sdk": "file:../sdk",
     "command-line-args": "^5.1.1",
     "dotenv": "^8.0.0",

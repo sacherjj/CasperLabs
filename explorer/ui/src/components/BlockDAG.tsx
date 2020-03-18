@@ -18,6 +18,7 @@ export interface Props {
   title: string;
   refresh?: () => void;
   subscribeToggleStore?: ToggleStore;
+  hideBallotsToggleStore?: ToggleStore;
   blocks: BlockInfo[] | null;
   emptyMessage?: any;
   footerMessage?: any;
@@ -39,12 +40,23 @@ export class BlockDAG extends React.Component<Props, {}> {
 
   constructor(props: Props) {
     super(props);
-    reaction(() => this.props.blocks, (_, reaction) => {
-      this.renderGraph();
-    }, {
-      fireImmediately: false,
-      delay: 100
-    });
+    reaction(() => {
+        return this.filteredBlocks();
+      }, () => {
+        this.renderGraph();
+      }, {
+        fireImmediately: false,
+        delay: 100
+      }
+    );
+  }
+
+  private filteredBlocks() {
+    if (this.props.blocks && this.props.hideBallotsToggleStore?.isPressed) {
+      return this.props.blocks.filter(b => isBlock(b));
+    } else {
+      return this.props.blocks;
+    }
   }
 
   render() {
@@ -54,6 +66,22 @@ export class BlockDAG extends React.Component<Props, {}> {
           <span>{this.props.title}</span>
           <div className="float-right">
             <ListInline>
+              {this.props.hideBallotsToggleStore && (
+                <ToggleButton
+                  label="Hide Ballots"
+                  title="Hide Ballots"
+                  toggleStore={this.props.hideBallotsToggleStore}
+                  size="sm"
+                />
+              )}
+              {this.props.subscribeToggleStore && (
+                <ToggleButton
+                  title="Subscribe to the latest added blocks"
+                  label="Live Feed"
+                  toggleStore={this.props.subscribeToggleStore}
+                  size="sm"
+                />
+              )}
               {this.props.onDepthChange && (
                 <select
                   title="Depth"
@@ -70,38 +98,31 @@ export class BlockDAG extends React.Component<Props, {}> {
                 </select>
               )}
               {this.props.refresh && (
-                <RefreshButton refresh={() => this.props.refresh!()} />
-              )}
-              {this.props.subscribeToggleStore && (
-                <ToggleButton
-                  title="Subscribing to the latest added blocks"
-                  toggleStore={this.props.subscribeToggleStore}
-                  size="sm"
-                />
+                <RefreshButton refresh={() => this.props.refresh!()}/>
               )}
             </ListInline>
           </div>
         </div>
         <div className="card-body">
           {this.props.blocks == null ? (
-            <Loading />
+            <Loading/>
           ) : this.props.blocks.length === 0 ? (
             <div className="small text-muted">
               {this.props.emptyMessage || 'No blocks to show.'}
             </div>
           ) : (
-                <div className="svg-container">
-                  <svg
-                    width={this.props.width}
-                    height={this.props.height}
-                    ref={(ref: SVGSVGElement) => (this.svg = ref)}
-                  ></svg>
-                  <div
-                    className="svg-hint"
-                    ref={(ref: HTMLDivElement) => (this.hint = ref)}
-                  ></div>
-                </div>
-              )}
+            <div className="svg-container">
+              <svg
+                width={this.props.width}
+                height={this.props.height}
+                ref={(ref: SVGSVGElement) => (this.svg = ref)}
+              ></svg>
+              <div
+                className="svg-hint"
+                ref={(ref: HTMLDivElement) => (this.hint = ref)}
+              ></div>
+            </div>
+          )}
         </div>
         {this.props.footerMessage && (
           <div className="card-footer small text-muted">
@@ -182,7 +203,7 @@ export class BlockDAG extends React.Component<Props, {}> {
     // Clear previous contents.
     container.selectAll('g').remove();
 
-    let graph: Graph = toGraph(this.props.blocks);
+    let graph: Graph = toGraph(this.filteredBlocks()!);
     graph = calculateCoordinates(graph, width, height);
 
     const selectedId = this.props.selected && blockHash(this.props.selected);
@@ -245,8 +266,8 @@ export class BlockDAG extends React.Component<Props, {}> {
         x.source.id === datum.id || x.target.id === datum.id
           ? 1
           : x.isJustification
-            ? 0
-            : 0.1
+          ? 0
+          : 0.1
       );
       hint.html(
         `Block: ${datum.id} @ ${datum.rank} <br /> Validator: ${datum.validator}`
@@ -386,12 +407,12 @@ const toGraph = (blocks: BlockInfo[]) => {
       .getJustificationsList()
       .map(x => encodeBase16(x.getLatestBlockHash_asU8()));
 
-    let source = nodeMap.get(child)!
+    let source = nodeMap.get(child)!;
 
     let parentLinks = parents
       .filter(p => nodeMap.has(p))
       .map(p => {
-        let target = nodeMap.get(p)!
+        let target = nodeMap.get(p)!;
         return {
           source: source,
           target: target,
@@ -405,7 +426,7 @@ const toGraph = (blocks: BlockInfo[]) => {
       .filter(x => !parentSet.has(x))
       .filter(j => nodeMap.has(j))
       .map(j => {
-        let target = nodeMap.get(j)!
+        let target = nodeMap.get(j)!;
         return {
           source: source,
           target: target,
@@ -476,13 +497,14 @@ const keyBlockHash = (block: BlockInfo) =>
   encodeBase16(block.getSummary()!.getHeader()!.getKeyBlockHash_asU8());
 
 const isBlock = (block: BlockInfo) =>
-  block.getSummary()!.getHeader()!.getMessageType() === Block.MessageType.BLOCK
+  block.getSummary()!.getHeader()!.getMessageType() === Block.MessageType.BLOCK;
 
 const isBallot = (block: BlockInfo) =>
-  !isBlock(block)
+  !isBlock(block);
 
 const isFinalized = (block: BlockInfo) =>
   block.getStatus()!.getFinality() === BlockInfo.Status.Finality.FINALIZED
+
 
 const validatorHash = (block: BlockInfo) =>
   encodeBase16(

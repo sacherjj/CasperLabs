@@ -54,6 +54,7 @@ class _Explorer extends RefreshableComponent<Props, {}> {
               blocks={dag.blocks}
               refresh={() => this.refresh()}
               subscribeToggleStore={dag.subscribeToggleStore}
+              hideBallotsToggleStore={dag.hideBallotsToggleStore}
               footerMessage={
                 <ListInline>
                   <DagStepButtons
