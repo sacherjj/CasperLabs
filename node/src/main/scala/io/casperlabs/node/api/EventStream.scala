@@ -165,13 +165,11 @@ object EventStream {
                 processed <- rdr.getProcessedDeploys(blockHash)
                 deploys   = processed.map(_.getDeploy)
                 infos     <- rdr.getDeployInfos(deploys)
-                _ <- infos.traverse { info =>
-                      emit {
-                        Event().withDeployOrphaned(
-                          DeployOrphaned().withBlockHash(blockHash).withDeployInfo(info)
-                        )
-                      }
-                    }
+                _ <- emit(infos.map { info =>
+                      Value.DeployOrphaned(
+                        DeployOrphaned().withBlockHash(blockHash).withDeployInfo(info)
+                      )
+                    }: _*)
               } yield ()
             } void
         }
