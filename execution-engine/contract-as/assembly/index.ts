@@ -16,16 +16,32 @@ import {Pair} from "./pair";
 //   fromBytes(bytes: Uint8Array): ToBytes;
 // }
 
+/**
+ * @hidden
+ */
 const ADDR_LENGTH = 32;
 
+/**
+ * System contract types.
+ */
 export const enum SystemContract {
+  /**
+   * Mint contract.
+   */
   Mint = 0,
+  /**
+   * Proof of Stake contract.
+   */
   ProofOfStake = 1,
+  /**
+   * Standard Payment contract.
+   */
   StandardPayment = 2,
 }
 
 /**
  * Returns size in bytes of I-th parameter
+ *
  * @internal
  * @param i I-th parameter
  */
@@ -69,6 +85,7 @@ export function getArg(i: u32): Uint8Array | null {
 
 /**
  * Reads a given amount of bytes from a host buffer
+ *
  * @internal
  * @param count Number of bytes
  * @returns A byte array with bytes received, otherwise a null in case of
@@ -87,6 +104,7 @@ export function readHostBuffer(count: u32): Uint8Array | null {
 
 /**
  * Returns an [[URef]] for a given system contract
+ *
  * @param system_contract System contract variant
  * @returns A valid [[URef]] that points at system contract, otherwise null.
  */
