@@ -74,6 +74,14 @@ export class BlockDAG extends React.Component<Props, {}> {
                   size="sm"
                 />
               )}
+              {this.props.subscribeToggleStore && (
+                <ToggleButton
+                  title="Subscribe to the latest added blocks"
+                  label="Live Feed"
+                  toggleStore={this.props.subscribeToggleStore}
+                  size="sm"
+                />
+              )}
               {this.props.onDepthChange && (
                 <select
                   title="Depth"
@@ -91,13 +99,6 @@ export class BlockDAG extends React.Component<Props, {}> {
               )}
               {this.props.refresh && (
                 <RefreshButton refresh={() => this.props.refresh!()}/>
-              )}
-              {this.props.subscribeToggleStore && (
-                <ToggleButton
-                  title="Subscribe to the latest added blocks"
-                  toggleStore={this.props.subscribeToggleStore}
-                  size="sm"
-                />
               )}
             </ListInline>
           </div>

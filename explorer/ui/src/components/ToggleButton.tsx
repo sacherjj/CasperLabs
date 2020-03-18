@@ -36,7 +36,7 @@ export class ToggleStore {
 }
 
 export const ToggleButton = observer((props: Props) => (
-  <div className="pl-2 pr-2">
+  <div className="pr-1">
     {props.label && (<small>{props.label}</small>)}
     <button
       type="button"
