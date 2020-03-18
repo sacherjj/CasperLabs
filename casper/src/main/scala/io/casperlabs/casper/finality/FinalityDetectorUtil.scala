@@ -9,7 +9,6 @@ import io.casperlabs.casper.dag.DagOperations
 import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.models.Message
 import io.casperlabs.storage.dag.DagRepresentation
-
 import scala.collection.mutable.{IndexedSeq => MutableSeq}
 import io.casperlabs.casper.validation.Validation
 import io.casperlabs.storage.dag.FinalityStorage
@@ -184,28 +183,51 @@ object FinalityDetectorUtil {
       .sortBy(_._1)
       .map(_._2)
 
+  // Follow blocks that haven't been finalized or orphaned yet.
+  private def collectUndecided[F[_]: Sync: FinalityStorage](
+      blocks: Seq[BlockHash]
+  ): F[List[BlockHash]] =
+    blocks.toList.filterA { block =>
+      FinalityStorage[F]
+        .getFinalityStatus(block)
+        .map(_.isUndecided)
+    }
+
   /** Returns a set of blocks that were finalized indirectly when a block from the main chain is finalized. */
   def finalizedIndirectly[F[_]: Sync: FinalityStorage](
-      block: BlockHash,
-      dag: DagRepresentation[F]
+      dag: DagRepresentation[F],
+      lfbHash: BlockHash
   ): F[Set[BlockHash]] =
     for {
       finalizedImplicitly <- DagOperations
-                              .bfTraverseF[F, BlockHash](List(block))(
+                              .bfTraverseF[F, BlockHash](List(lfbHash))(
                                 hash =>
                                   dag
                                     .lookupUnsafe(hash)
-                                    .map(
-                                      _.parents
-                                    )
-                                    .flatMap(
-                                      _.toList.filterA(
-                                        FinalityStorage[F]
-                                          .isFinalized(_)
-                                          .map(!_) // Follow parents that haven't been finalized yet.
-                                      )
-                                    )
+                                    .map(_.parents)
+                                    .flatMap(collectUndecided(_))
                               )
                               .toList
-    } yield finalizedImplicitly.toSet - block // We don't want to include `block`.
+    } yield finalizedImplicitly.toSet - lfbHash // LFB is directly finalized.
+
+  /** A block is orphaned if it's not in the p-past cone of the last finalized block.
+    * When a new LFB is found, we traverse it's j-past cone until the previous finalized block
+    * and collect all the blocks which haven't just been finalized.
+    */
+  def orphanedIndirectly[F[_]: Sync: FinalityStorage](
+      dag: DagRepresentation[F],
+      lfbHash: BlockHash,
+      finalizedIndirectly: Set[BlockHash]
+  ): F[Set[BlockHash]] =
+    for {
+      lfb <- dag.lookupUnsafe(lfbHash)
+      undecided <- DagOperations
+                    .bfTraverseF[F, Message](List(lfb)) { m =>
+                      val deps = (m.parents ++ m.justifications.map(_.latestBlockHash)).distinct
+                      collectUndecided(deps).flatMap(_.traverse(dag.lookupUnsafe))
+                    }
+                    .filter(_.isBlock)
+                    .map(_.messageHash)
+                    .toList
+    } yield undecided.toSet -- finalizedIndirectly - lfbHash
 }

@@ -108,6 +108,7 @@ class DeployDownloadManagerImpl[F[_]](
 
   override def extractIdFromDownloadable(deploy: Deploy) = deploy.deployHash
 
+  // TODO: Inefficient, because asking only for 1 deploy at time
   override def streamChunks(source: Node, bs: ByteString) = {
     val itF = connectToGossip(source).map { stub =>
       val req = StreamDeploysChunkedRequest(

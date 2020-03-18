@@ -68,6 +68,7 @@ export class DagContainer {
   @observable lastFinalizedBlock: BlockInfo | undefined = undefined;
   @observable eventsSubscriber: Subscription | null = null;
   @observable subscribeToggleStore: ToggleStore = new ToggleStore(true);
+  @observable hideBallotsToggleStore: ToggleStore = new ToggleStore(false);
 
   constructor(
     private errors: ErrorContainer,
@@ -195,7 +196,7 @@ export class DagContainer {
               this.blocks?.forEach(block => {
                 let bh = block.getSummary()!.getBlockHash_asB64();
                 if (finalizedBlocks.has(bh)) {
-                  block.getStatus()?.setIsFinalized(true);
+                  block.getStatus()?.setFinality(BlockInfo.Status.Finality.FINALIZED)
                 }
                 if (!updatedLastFinalizedBlock && bh === directFinalizedBlockHash) {
                   this.lastFinalizedBlock = block;

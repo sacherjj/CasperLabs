@@ -21,7 +21,8 @@ object NoOpsEventEmitter {
 
       override def newLastFinalizedBlock(
           lfb: BlockHash,
-          indirectlyFinalized: Set[BlockHash]
+          indirectlyFinalized: Set[BlockHash],
+          indirectlyOrphaned: Set[BlockHash]
       ): F[Unit] = ().pure[F]
 
       override def deployAdded(deploy: Deploy): F[Unit] =
