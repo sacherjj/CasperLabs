@@ -89,6 +89,7 @@ message DeployInfo {
 }
 
 message Event {
+    uint64 event_id = 9;
     oneof value {
         BlockAdded block_added = 1;
         NewFinalizedBlock new_finalized_block = 2;
