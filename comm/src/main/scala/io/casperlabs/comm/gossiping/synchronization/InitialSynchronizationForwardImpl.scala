@@ -170,6 +170,7 @@ class InitialSynchronizationForwardImpl[F[_]: Parallel: Log: Timer](
             )
         _ <- Log[F].debug(s"Next round of syncing with nodes: ${nodes.map(_.show) -> "peers"}")
 
+        _ <- Log[F].info(s"Syncing with ${nodes.size -> "nodes"} from $rank")
         // Sync in parallel
         results <- nodes.parTraverse(n => syncDagSlice(n, rank).attempt.map(result => n -> result))
 
@@ -182,7 +183,7 @@ class InitialSynchronizationForwardImpl[F[_]: Parallel: Log: Timer](
         }
 
         _ <- if (fullSyncs >= minSuccessful) {
-              Log[F].debug(
+              Log[F].info(
                 s"Successfully synced with $fullSyncs nodes, required: $minSuccessful"
               )
             } else {
@@ -199,7 +200,7 @@ class InitialSynchronizationForwardImpl[F[_]: Parallel: Log: Timer](
                                      }
                                    }
                                  }
-                _ <- Log[F].debug(
+                _ <- Log[F].info(
                       s"Haven't reached required $minSuccessful amount of fully synced nodes, currently at $fullSyncs, continuing initial synchronization."
                     )
                 _ <- Timer[F].sleep(roundPeriod)
