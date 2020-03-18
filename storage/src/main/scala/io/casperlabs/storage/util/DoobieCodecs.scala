@@ -5,7 +5,7 @@ import doobie._
 import io.casperlabs.casper.consensus.Block.ProcessedDeploy
 import io.casperlabs.casper.consensus.{BlockSummary, Deploy, Era}
 import io.casperlabs.crypto.Keys.{PublicKey, PublicKeyBS}
-import io.casperlabs.casper.consensus.info.BlockInfo
+import io.casperlabs.casper.consensus.info.{BlockInfo, Event}
 import io.casperlabs.casper.consensus.info.DeployInfo.ProcessingResult
 import io.casperlabs.storage.dag.FinalityStorage.FinalityStatus
 import io.casperlabs.ipc.TransformEntry
@@ -101,11 +101,16 @@ trait DoobieCodecs {
   }
 
   protected implicit val metaBlockSummary: Meta[BlockSummary] =
-    Meta[Array[Byte]].imap(BlockSummary.parseFrom)(_.toByteString.toByteArray)
+    Meta[Array[Byte]].imap(BlockSummary.parseFrom)(_.toByteArray)
 
   protected implicit val metaTransformEntry: Meta[TransformEntry] =
-    Meta[Array[Byte]].imap(TransformEntry.parseFrom)(_.toByteString.toByteArray)
+    Meta[Array[Byte]].imap(TransformEntry.parseFrom)(_.toByteArray)
 
   protected implicit val metaEra: Meta[Era] =
     Meta[Array[Byte]].imap(Era.parseFrom)(_.toByteString.toByteArray)
+
+  protected implicit val metaEventValue: Meta[Event.Value] =
+    // Event.Value is not directly parseable. We want SQLite to generate the ID,
+    // so store it as an Event without ID.
+    Meta[Array[Byte]].imap(Event.parseFrom(_).value)(v => Event(value = v).toByteArray)
 }
