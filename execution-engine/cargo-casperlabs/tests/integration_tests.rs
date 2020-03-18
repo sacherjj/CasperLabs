@@ -59,6 +59,9 @@ fn run_tool_and_resulting_tests(turbo: bool) {
     if !turbo {
         tool_cmd.arg(&*USE_SYSTEM_CONTRACTS);
     }
+    // The CI environment doesn't have a Git user configured, so we can set the env var `USER` for
+    // use by 'cargo new' which is called as a subprocess of 'cargo-casperlabs'.
+    tool_cmd.env("USER", "tester");
     let tool_output = output_from_command(tool_cmd);
     assert_eq!(SUCCESS_EXIT_CODE, tool_output.status.code().unwrap());
 
