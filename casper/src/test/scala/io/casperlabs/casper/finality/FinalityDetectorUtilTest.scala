@@ -47,11 +47,12 @@ class FinalityDetectorUtilTest extends FlatSpec with BlockGenerator with Storage
           b       <- createAndStoreBlockFull[Task](v1, Seq(a, a1), Seq.empty, bonds)
           dag     <- dagStorage.getRepresentation
           implicit0(finalityStorage: FinalityStorage[Task]) <- MockFinalityStorage[Task](
-                                                                Seq(genesis.blockHash, a.blockHash): _*
+                                                                genesis.blockHash,
+                                                                a.blockHash
                                                               )
           finalizedIndirectly <- FinalityDetectorUtil.finalizedIndirectly[Task](
-                                  b.blockHash,
-                                  dag
+                                  dag,
+                                  b.blockHash
                                 )
         } yield assert(finalizedIndirectly == Set(a1.blockHash))
   }
@@ -95,8 +96,8 @@ class FinalityDetectorUtilTest extends FlatSpec with BlockGenerator with Storage
                                                          ).runA(Map.empty)
         _ <- FinalityDetectorUtil
               .finalizedIndirectly[G](
-                c.blockHash,
-                stateTDag
+                stateTDag,
+                c.blockHash
               )
               .run(Map.empty) shouldBeF ((expectedNodesVisitedA, Set(a.blockHash)))
         d <- createAndStoreBlockFull[Task](v1, Seq(a), Seq.empty, bonds)
@@ -109,11 +110,13 @@ class FinalityDetectorUtilTest extends FlatSpec with BlockGenerator with Storage
           e -> 1,
           b -> 1
         ).map(p => (p._1.blockHash, p._2))
-        _ <- finalityStorage.markAsFinalized(c.blockHash, Set(a.blockHash)).run(Map.empty)
+        _ <- finalityStorage
+              .markAsFinalized(c.blockHash, Set(a.blockHash), Set.empty)
+              .run(Map.empty)
         _ <- FinalityDetectorUtil
               .finalizedIndirectly[G](
-                f.blockHash,
-                stateTDag
+                stateTDag,
+                f.blockHash
               )
               .run(Map.empty) shouldBeF (
               (
@@ -122,6 +125,37 @@ class FinalityDetectorUtilTest extends FlatSpec with BlockGenerator with Storage
               )
             )
       } yield ()
+  }
+
+  "orphanedIndirectly" should "orphan blocks in the j-past-cone that aren't already finalized" in withStorage {
+    implicit bs => implicit ds => _ =>
+      _ =>
+        //    B - C
+        //  //
+        // G = A === E* = F
+        //     \\  /
+        //       D
+        for {
+          g   <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bonds)
+          a   <- createAndStoreBlockFull[Task](v1, Seq(g), Seq.empty, bonds)
+          b   <- createAndStoreBlockFull[Task](v2, Seq(g), Seq.empty, bonds)
+          c   <- createAndStoreBlockFull[Task](v2, Seq(b), Seq(b), bonds)
+          d   <- createAndStoreBlockFull[Task](v2, Seq(a), Seq(c), bonds)
+          e   <- createAndStoreBlockFull[Task](v1, Seq(a, d), Seq(), bonds)
+          _   <- createAndStoreBlockFull[Task](v2, Seq(e), Seq(c), bonds)
+          dag <- ds.getRepresentation
+          implicit0(finalityStorage: FinalityStorage[Task]) <- MockFinalityStorage[Task](
+                                                                g.blockHash,
+                                                                a.blockHash
+                                                              )
+          orphanedIndirectly <- FinalityDetectorUtil.orphanedIndirectly[Task](
+                                 dag,
+                                 e.blockHash,
+                                 finalizedIndirectly = Set(d.blockHash)
+                               )
+        } yield {
+          assert(orphanedIndirectly == Set(b.blockHash, c.blockHash))
+        }
   }
 
 }

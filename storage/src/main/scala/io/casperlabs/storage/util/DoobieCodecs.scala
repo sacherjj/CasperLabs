@@ -7,6 +7,7 @@ import io.casperlabs.casper.consensus.{BlockSummary, Deploy, Era}
 import io.casperlabs.crypto.Keys.{PublicKey, PublicKeyBS}
 import io.casperlabs.casper.consensus.info.BlockInfo
 import io.casperlabs.casper.consensus.info.DeployInfo.ProcessingResult
+import io.casperlabs.storage.dag.FinalityStorage.FinalityStatus
 import io.casperlabs.ipc.TransformEntry
 
 trait DoobieCodecs {
@@ -59,14 +60,15 @@ trait DoobieCodecs {
   }
 
   protected implicit val readBlockInfo: Read[BlockInfo] = {
-    Read[(Array[Byte], Int, Int, Long, Long, Boolean)].map {
+    Read[(Array[Byte], Int, Int, Long, Long, Boolean, Boolean)].map {
       case (
           blockSummaryData,
           blockSize,
           deployErrorCount,
           deployCostTotal,
           deployGasPriceAvg,
-          isFinalized
+          isFinalized,
+          isOrphaned
           ) =>
         val blockSummary = BlockSummary.parseFrom(blockSummaryData)
         val blockStatus = BlockInfo
@@ -79,7 +81,7 @@ trait DoobieCodecs {
               .withDeployCostTotal(deployCostTotal)
               .withDeployGasPriceAvg(deployGasPriceAvg)
           )
-          .withIsFinalized(isFinalized)
+          .withFinality(FinalityStatus(isFinalized, isOrphaned))
         BlockInfo()
           .withSummary(blockSummary)
           .withStatus(blockStatus)

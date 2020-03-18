@@ -235,11 +235,9 @@ const blockAttrs: (block: BlockInfo) => Array<[string, any]> = (
     ['Deploy Gas Price Average', stats.getDeployGasPriceAvg().toLocaleString()],
     ['Block Size (bytes)', stats.getBlockSizeBytes().toLocaleString()],
     [
-      'Is Finalized',
-      block
-        .getStatus()!
-        .getIsFinalized().toString()
-    ]
+      'Finality',
+      <FinalityIcon block={block} />
+    ],
   ];
 };
 
@@ -261,6 +259,20 @@ export const BlockType = (props: { header: Block.Header }) => {
   let typ = props.header.getMessageType();
   let lbl = typ === Block.MessageType.BLOCK ? "Block" : typ === Block.MessageType.BALLOT ? "Ballot" : "n/a"
   return <span>{lbl}</span>;
+}
+
+export const FinalityIcon = (props: { block: BlockInfo }) => {
+  if (props.block.getSummary()?.getHeader()!.getMessageType() === Block.MessageType.BALLOT)
+    return null;
+
+  let finality = props.block.getStatus()!.getFinality();
+  if (finality === BlockInfo.Status.Finality.FINALIZED) {
+    return <Icon name="check-circle" color="green" />
+  } else if (finality === BlockInfo.Status.Finality.ORPHANED)
+    return <Icon name="times-circle" color="red" />
+  else {
+    return <Icon name="clock" />
+  }
 }
 
 export default BlockDetails;

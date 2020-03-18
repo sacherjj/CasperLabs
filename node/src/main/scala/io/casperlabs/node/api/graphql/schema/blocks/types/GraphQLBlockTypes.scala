@@ -306,9 +306,10 @@ class GraphQLBlockTypes(
           resolve = c => c.value._2.get.map(_.asLeft[ProcessingResult])
         ),
         Field(
-          "isFinalized",
-          BooleanType,
-          resolve = c => c.value._1.getStatus.isFinalized
+          "finality",
+          StringType,
+          "Indicate whether the block has been finalized or orphaned yet.".some,
+          resolve = c => c.value._1.getStatus.finality.toString
         ),
         Field(
           "blockSizeBytes",

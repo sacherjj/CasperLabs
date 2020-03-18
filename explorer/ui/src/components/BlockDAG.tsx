@@ -482,7 +482,7 @@ const isBallot = (block: BlockInfo) =>
   !isBlock(block)
 
 const isFinalized = (block: BlockInfo) =>
-  block.getStatus()!.getIsFinalized()
+  block.getStatus()!.getFinality() === BlockInfo.Status.Finality.FINALIZED
 
 const validatorHash = (block: BlockInfo) =>
   encodeBase16(

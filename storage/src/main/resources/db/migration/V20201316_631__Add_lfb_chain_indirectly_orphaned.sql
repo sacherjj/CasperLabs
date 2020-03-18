@@ -1,0 +1,3 @@
+ALTER TABLE lfb_chain ADD COLUMN indirectly_orphaned BLOB NOT NULL DEFAULT x'';
+
+ALTER TABLE block_metadata ADD COLUMN is_orphaned BOOLEAN NOT NULL DEFAULT FALSE;

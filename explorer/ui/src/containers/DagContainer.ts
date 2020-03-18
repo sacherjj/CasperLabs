@@ -195,7 +195,7 @@ export class DagContainer {
               this.blocks?.forEach(block => {
                 let bh = block.getSummary()!.getBlockHash_asB64();
                 if (finalizedBlocks.has(bh)) {
-                  block.getStatus()?.setIsFinalized(true);
+                  block.getStatus()?.setFinality(BlockInfo.Status.Finality.FINALIZED)
                 }
                 if (!updatedLastFinalizedBlock && bh === directFinalizedBlockHash) {
                   this.lastFinalizedBlock = block;

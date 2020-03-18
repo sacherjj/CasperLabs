@@ -1078,7 +1078,7 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
 
             val switch = insert(makeBlock("Alice", runtime.era, runtime.endTick))
             fc.set(switch)
-            fs.markAsFinalized(switch.messageHash, secondary = Set.empty)
+            fs.markAsFinalized(switch.messageHash, finalized = Set.empty, orphaned = Set.empty)
 
             val agenda = runtime.handleAgenda(Agenda.StartRound(Ticks(runtime.endTick))).value
 
