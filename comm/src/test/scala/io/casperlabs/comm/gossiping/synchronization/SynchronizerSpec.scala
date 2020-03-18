@@ -307,10 +307,14 @@ class SynchronizerSpec
             maxDepthAncestorsRequest = ancestorsDepthRequest,
             notInDag = bs => Task.now(!finalParents(bs))
           ) { (synchronizer, variables) =>
+            val source = Node()
             for {
-              r1 <- synchronizer.syncDag(Node(), Set(dag.head.blockHash))
-              r2 <- synchronizer.syncDag(Node(), Set(dag.head.blockHash))
+              r1 <- synchronizer.syncDag(source, Set(dag.head.blockHash))
               d1 = r1.fold(throw _, identity)
+              _ <- d1.traverse { d =>
+                    synchronizer.onScheduled(d, source)
+                  }
+              r2 <- synchronizer.syncDag(source, Set(dag.head.blockHash))
               d2 = r2.fold(throw _, identity)
             } yield {
               d2.length should be < d1.length

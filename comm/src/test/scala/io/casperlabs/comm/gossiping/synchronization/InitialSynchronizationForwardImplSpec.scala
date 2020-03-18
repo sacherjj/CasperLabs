@@ -319,8 +319,13 @@ object InitialSynchronizationForwardImplSpec extends ArbitraryConsensus {
     ): Task[Either[Synchronizer.SyncError, Vector[BlockSummary]]] =
       f(targetBlockHashes).map(Right(_))
 
-    def downloaded(
+    def onDownloaded(
         blockHash: ByteString
+    ): Task[Unit] = Task.unit
+
+    def onScheduled(
+        summary: BlockSummary,
+        source: Node
     ): Task[Unit] = Task.unit
   }
 
