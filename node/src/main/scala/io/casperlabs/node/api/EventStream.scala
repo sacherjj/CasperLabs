@@ -13,6 +13,8 @@ import io.casperlabs.casper.consensus.Deploy
 import io.casperlabs.casper.EventEmitter
 import io.casperlabs.mempool.DeployBuffer
 import io.casperlabs.metrics.Metrics
+import io.casperlabs.node.Fs2StreamOps
+import io.casperlabs.node.api.casper.StreamEventsRequest
 import io.casperlabs.node.api.casper.StreamEventsRequest
 import io.casperlabs.node.api.graphql.FinalizedBlocksStream
 import io.casperlabs.storage.block.BlockStorage
@@ -30,7 +32,7 @@ import io.casperlabs.shared.Log
 }
 
 object EventStream {
-  def create[F[_]: Concurrent: DeployStorage: BlockStorage: DagStorage: EventStorage: Log: Metrics](
+  def create[F[_]: ConcurrentEffect: DeployStorage: BlockStorage: DagStorage: EventStorage: Log: Metrics](
       scheduler: Scheduler,
       eventStreamBufferSize: Int
   ): EventStream[F] = {
@@ -58,7 +60,18 @@ object EventStream {
     new EventStream[F] {
       import Event._
 
-      override def subscribe(request: StreamEventsRequest): Observable[Event] = {
+      override def subscribe(request: StreamEventsRequest): Observable[Event] =
+        if (request.minEventId > 0) {
+          // TODO (NODE-1302): Move filtering to the storage.
+          EventStorage[F]
+            .getEvents(request.minEventId)
+            .filter(subscriptionFilter(request))
+            .toMonixObservable
+        } else {
+          source.filter(subscriptionFilter(request))
+        }
+
+      private def subscriptionFilter(request: StreamEventsRequest): Event => Boolean = {
         import Event.Value._
 
         val accountFilter: ByteString => Boolean =
@@ -76,8 +89,8 @@ object EventStream {
         def deployFilter(d: Deploy) =
           accountFilter(d.getHeader.accountPublicKey) && deployHashFilter(d.deployHash)
 
-        source.filter {
-          _.value match {
+        event => {
+          event.value match {
             case Empty => false
             case Value.BlockAdded(_) =>
               request.blockAdded
