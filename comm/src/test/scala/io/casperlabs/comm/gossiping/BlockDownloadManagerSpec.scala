@@ -684,6 +684,8 @@ object BlockDownloadManagerSpec {
       }
     }
 
+    def onScheduled(summary: BlockSummary, source: Node): Task[Unit] = Task.unit
+
     def onScheduled(summary: BlockSummary): Task[Unit] = Task.delay {
       synchronized { scheduled = scheduled :+ summary.blockHash }
     }
@@ -713,8 +715,9 @@ object BlockDownloadManagerSpec {
   /** Test implementation of the remote GossipService to download the blocks from. */
   object MockGossipService {
     private val emptySynchronizer = new Synchronizer[Task] {
-      def syncDag(source: Node, targetBlockHashes: Set[ByteString]) = ???
-      def downloaded(blockHash: ByteString): Task[Unit]             = ???
+      def syncDag(source: Node, targetBlockHashes: Set[ByteString])    = ???
+      def onDownloaded(blockHash: ByteString): Task[Unit]              = ???
+      def onScheduled(summary: BlockSummary, source: Node): Task[Unit] = ???
     }
     private val emptyDownloadManager = new BlockDownloadManager[Task] {
       def scheduleDownload(summary: BlockSummary, source: Node, relay: Boolean) = ???

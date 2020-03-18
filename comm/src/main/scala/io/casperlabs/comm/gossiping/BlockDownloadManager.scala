@@ -88,8 +88,11 @@ trait DownloadManagerCompanion extends DownloadManagerTypes {
     def validate(downloadable: Downloadable): F[Unit]
     def store(downloadable: Downloadable): F[Unit]
 
-    /** Notify about new downloadables we were told about but haven't acquired yet. */
+    /** Notify about new downloadables we were told about but haven't acquired yet. Called once per downloadable.. */
     def onScheduled(handle: Handle): F[Unit]
+
+    /** Notify about new source of a downloadable we were told about but haven't acquired yet. */
+    def onScheduled(handle: Handle, source: Node): F[Unit]
 
     /** Notify about a new downloadable we downloaded, verified and stored. */
     def onDownloaded(identifier: Identifier): F[Unit]
@@ -264,10 +267,20 @@ class BlockDownloadManagerImpl[F[_]: Concurrent: Log: Timer: Metrics](
               items                    <- itemsRef.get
               itemAndFeedback          <- mergeItem(items, summary, source, relay)
               (item, downloadFeedback) = itemAndFeedback
-              _                        <- backend.onScheduled(summary).start.whenA(!items.contains(summary.blockHash))
-              _                        <- itemsRef.update(_ + (summary.blockHash -> item))
-              _                        <- if (item.canStart) startWorker(item) else Sync[F].unit
-              _                        <- setScheduledGauge()
+
+              existingItem = items.get(summary.blockHash)
+              _ <- backend
+                    .onScheduled(summary)
+                    .start
+                    .whenA(existingItem.isEmpty)
+              _ <- backend
+                    .onScheduled(summary, source)
+                    .start
+                    .whenA(existingItem.map(!_.sources(source)) getOrElse true)
+
+              _ <- itemsRef.update(_ + (summary.blockHash -> item))
+              _ <- if (item.canStart) startWorker(item) else Sync[F].unit
+              _ <- setScheduledGauge()
             } yield downloadFeedback
           )
         // Report any startup errors so the caller knows something's fatally wrong, then carry on.

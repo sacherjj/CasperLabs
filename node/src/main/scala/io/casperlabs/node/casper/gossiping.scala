@@ -299,10 +299,13 @@ package object gossiping {
                             override def onScheduled(summary: BlockSummary): F[Unit] =
                               Consensus[F].onScheduled(summary)
 
+                            override def onScheduled(summary: BlockSummary, source: Node): F[Unit] =
+                              synchronizer.onScheduled(summary, source)
+
                             override def onDownloaded(blockHash: ByteString): F[Unit] =
                               // Calling `addBlock` during validation has already stored the block,
                               // so we have nothing more to do here with the consensus.
-                              synchronizer.downloaded(blockHash)
+                              synchronizer.onDownloaded(blockHash)
                           },
                           relaying = relaying,
                           retriesConf = BlockDownloadManagerImpl.RetriesConf(
