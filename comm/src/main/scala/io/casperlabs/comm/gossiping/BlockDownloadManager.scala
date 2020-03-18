@@ -268,6 +268,8 @@ class BlockDownloadManagerImpl[F[_]: Concurrent: Log: Timer: Metrics](
               itemAndFeedback          <- mergeItem(items, summary, source, relay)
               (item, downloadFeedback) = itemAndFeedback
 
+              // Notify the rest of the system if this is the first time we schedule this item
+              // or if we're adding a new source to an item that already existed.
               existingItem = items.get(summary.blockHash)
               _ <- backend
                     .onScheduled(summary)
