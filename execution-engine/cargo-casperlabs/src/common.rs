@@ -6,7 +6,7 @@ use std::{
     str,
 };
 
-use colour::red;
+use colour::e_red;
 use lazy_static::lazy_static;
 
 use crate::{dependency::Dependency, ARGS, FAILURE_EXIT_CODE};
@@ -18,7 +18,7 @@ lazy_static! {
 }
 
 pub fn print_error_and_exit(msg: &str) -> ! {
-    red!("error");
+    e_red!("error");
     eprintln!("{}", msg);
     process::exit(FAILURE_EXIT_CODE)
 }
