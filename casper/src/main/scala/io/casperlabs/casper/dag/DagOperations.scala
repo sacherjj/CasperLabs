@@ -509,7 +509,6 @@ object DagOperations {
     *
     * @param dag
     * @param message
-    * @param stop
     * @return
     */
   def panoramaOfMessage[F[_]: MonadThrowable](

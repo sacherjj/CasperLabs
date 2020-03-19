@@ -771,10 +771,10 @@ class DagOperationsTest
   it should "detect equivocators across multiple eras" in withStorage {
     implicit blockStorage => implicit dagStorage => _ =>
       _ =>
-        //    a1     a2-----------
-        //   /   \  /              \
-        // G -a1'-b2 (stop block) - b3
-        //   \   /
+        //    a1 --- a2
+        //  //   \  //  \
+        // G = a1'-b2 == b3
+        //  \\   //
         //    b1
         //
         // Note there's no message for C validator and A equivocated before stop block.
@@ -797,7 +797,7 @@ class DagOperationsTest
           b1 <- createAndStoreBlockFull[Task](
                  v2,
                  Seq(genesis),
-                 Seq(a1),
+                 Seq.empty,
                  bondsThree,
                  keyBlockHash = genesis.blockHash
                )
@@ -806,21 +806,24 @@ class DagOperationsTest
                  Seq(b1),
                  Seq(a1, a1Prime),
                  bondsThree,
-                 keyBlockHash = genesis.blockHash
+                 keyBlockHash = genesis.blockHash,
+                 maybeValidatorPrevBlockHash = Some(b1.blockHash)
                )
           a2 <- createAndStoreBlockFull[Task](
                  v1,
                  Seq(b2),
-                 Seq.empty,
+                 Seq(a1),
                  bondsThree,
-                 keyBlockHash = genesis.blockHash
+                 keyBlockHash = genesis.blockHash,
+                 maybeValidatorPrevBlockHash = Some(a1.blockHash)
                )
           b3 <- createAndStoreBlockFull[Task](
                  v2,
                  Seq(b2),
                  Seq(a2),
                  bondsThree,
-                 keyBlockHash = genesis.blockHash
+                 keyBlockHash = genesis.blockHash,
+                 maybeValidatorPrevBlockHash = Some(b2.blockHash)
                )
           genesisMessage = Message.fromBlock(genesis).get
           localDagView = EraObservedBehavior.local(
@@ -829,8 +832,8 @@ class DagOperationsTest
                 genesisValidator -> Set(genesisMessage)
               ),
               genesis.blockHash -> Map(
-                v1 -> Set(Message.fromBlock(a1).get, Message.fromBlock(a1Prime).get),
-                v2 -> Set(Message.fromBlock(b2).get)
+                v1 -> Set(Message.fromBlock(a2).get, Message.fromBlock(a1Prime).get),
+                v2 -> Set(Message.fromBlock(b3).get)
               )
             )
           )
@@ -846,7 +849,7 @@ class DagOperationsTest
             .mapValues(_.map(_.messageHash))
 
           expectedGenesis = Map(
-            v1 -> Set(a1.blockHash, a1Prime.blockHash),
+            v1 -> Set(a1.blockHash, a2.blockHash),
             v2 -> Set(b2.blockHash)
           )
 
@@ -990,6 +993,125 @@ class DagOperationsTest
         } yield {
           assert(latestGenesisMessageHashes == expectedGenesis)
           assert(latestChildMessageHashes == expectedChild)
+        }
+  }
+
+  it should "properly detect equivocations when the equivocating pair is further in the j-past-cone" in withStorage {
+    implicit blockStorage => implicit dagStorage => _ =>
+      _ =>
+        // Validators A, B, C and D.
+        //
+        //
+        // Local DAG before receiving `d1`.
+        //    a1
+        //   / \(justification)
+        // G - b1 -a2- b2
+        //  \ /  \    /
+        //   a1'   c1 (sees a1)
+        //
+        // We're handling an incoming message D, that has the following view:
+        //
+        //   a1        d1
+        //  / \       /
+        // G - b1 - a2
+        //  \ /
+        //   a1'
+        //
+        //
+        // Starting point: d1
+        // Expected result: Map( A -> {a2, a1'}, B -> b1, D -> d1)
+        val v4     = generateValidator("V4")
+        val v4Bond = Bond(v4, 3)
+        val bonds  = v4Bond +: bondsThree
+
+        for {
+          genesis <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bonds)
+          a1 <- createAndStoreBlockFull[Task](
+                 v1,
+                 Seq(genesis),
+                 Seq.empty,
+                 bonds,
+                 keyBlockHash = genesis.blockHash
+               )
+          a1Prime <- createAndStoreBlockFull[Task](
+                      v1,
+                      Seq(genesis),
+                      Seq.empty,
+                      bonds,
+                      keyBlockHash = genesis.blockHash
+                    )
+          b1 <- createAndStoreBlockFull[Task](
+                 v2,
+                 Seq(genesis),
+                 Seq(a1, a1Prime),
+                 bonds,
+                 keyBlockHash = genesis.blockHash
+               )
+          c1 <- createAndStoreBlockFull[Task](
+                 v3,
+                 Seq(b1),
+                 Seq.empty,
+                 bonds,
+                 keyBlockHash = genesis.blockHash
+               )
+          a2 <- createAndStoreBlockFull[Task](
+                 v1,
+                 Seq(b1),
+                 Seq.empty,
+                 bonds,
+                 keyBlockHash = genesis.blockHash,
+                 maybeValidatorPrevBlockHash = Some(a1.blockHash)
+               )
+          b2 <- createAndStoreBlockFull[Task](
+                 v2,
+                 Seq(a2),
+                 Seq(c1),
+                 bonds,
+                 keyBlockHash = genesis.blockHash,
+                 maybeValidatorPrevBlockHash = Some(b1.blockHash)
+               )
+          d1 <- createAndStoreBlockFull[Task](
+                 v4,
+                 Seq(a2),
+                 Seq.empty,
+                 bonds,
+                 keyBlockHash = genesis.blockHash
+               )
+          implicit0(dag: DagRepresentation[Task]) <- dagStorage.getRepresentation
+          d1Message                               = Message.fromBlock(d1).get
+          genesisMessage                          = Message.fromBlock(genesis).get
+          localDagView = EraObservedBehavior.local(
+            Map(
+              genesisEra -> Map(
+                genesisValidator -> Set(genesisMessage)
+              ),
+              genesis.blockHash -> Map(
+                v1 -> Set(Message.fromBlock(a2).get, Message.fromBlock(a1).get),
+                v2 -> Set(Message.fromBlock(b2).get),
+                v3 -> Set(Message.fromBlock(c1).get)
+              )
+            )
+          )
+
+          jpastCone <- DagOperations.panoramaOfMessage[Task](
+                        dag,
+                        d1Message,
+                        localDagView
+                      )
+
+          latestGenesisMessageHashes = jpastCone
+            .latestMessagesInEra(genesis.blockHash)
+            .mapValues(_.map(_.messageHash))
+
+          expectedGenesis = Map(
+            v1 -> Set(a2.blockHash, a1Prime.blockHash),
+            v2 -> Set(b1.blockHash)
+          )
+
+          detectedEquivocators = jpastCone.equivocatorsVisibleInEras(Set(genesis.blockHash))
+        } yield {
+          assert(latestGenesisMessageHashes == expectedGenesis)
+          assert(detectedEquivocators == Set(v1))
         }
   }
 
