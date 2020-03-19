@@ -192,6 +192,12 @@ message StreamEventsRequest {
   // Optional filters for deploy events; applies to anything opted into via the flags.
   DeployFilter deploy_filter = 9;
 
+  // Supports replaying events from a given ID.
+  // If the value is 0, it it will subscribe to future events;
+  // if it's non-zero, it will replay all past events from that ID, without subscribing to new.
+  // To catch up with events from the beginning, start from 1.
+  uint64 min_event_id = 10;
+
   // Filters to apply on deploy events; different fields combined with AND operator.
   message DeployFilter {
       // Filter to any of the accounts on the list.

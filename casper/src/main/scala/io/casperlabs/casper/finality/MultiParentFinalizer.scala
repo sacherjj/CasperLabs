@@ -44,17 +44,20 @@ object MultiParentFinalizer {
   }
 
   final case class FinalizedBlocks(
-      mainChain: BlockHash,
+      // New finalized block in the main chain.
+      newLFB: BlockHash,
       quorum: BigInt,
-      secondaryParents: Set[BlockHash]
+      indirectlyFinalized: Set[BlockHash],
+      indirectlyOrphaned: Set[BlockHash]
   ) {
-    def finalizedBlocks: Set[BlockHash] = secondaryParents + mainChain
+    def finalizedBlocks: Set[BlockHash] = indirectlyFinalized + newLFB
   }
 
   def create[F[_]: Concurrent: FinalityStorage](
       dag: DagRepresentation[F],
       latestLFB: BlockHash, // Last LFB from the main chain
-      finalityDetector: FinalityDetector[F]
+      finalityDetector: FinalityDetector[F],
+      isHighway: Boolean
   ): F[MultiParentFinalizer[F]] =
     for {
       lfbCache  <- Ref[F].of[BlockHash](latestLFB)
@@ -72,10 +75,19 @@ object MultiParentFinalizer {
                           for {
                             _ <- lfbCache.set(newLFB)
                             justFinalized <- FinalityDetectorUtil.finalizedIndirectly[F](
+                                              dag,
                                               newLFB,
-                                              dag
+                                              isHighway
                                             )
-                          } yield Some(FinalizedBlocks(newLFB, quorum, justFinalized))
+                            justOrphaned <- FinalityDetectorUtil.orphanedIndirectly(
+                                             dag,
+                                             newLFB,
+                                             justFinalized,
+                                             isHighway
+                                           )
+                          } yield Some(
+                            FinalizedBlocks(newLFB, quorum, justFinalized, justOrphaned)
+                          )
                       }
         } yield finalized)
     }

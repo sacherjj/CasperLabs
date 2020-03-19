@@ -26,7 +26,7 @@ use std::{
     time::Instant,
 };
 
-use grpc::{RequestOptions, ServerBuilder, SingleResponse};
+use grpc::{Error as GrpcError, RequestOptions, ServerBuilder, SingleResponse};
 use log::{info, warn, Level};
 
 use engine_core::engine_state::{
@@ -65,6 +65,8 @@ const TAG_RESPONSE_EXEC: &str = "exec_response";
 const TAG_RESPONSE_QUERY: &str = "query_response";
 const TAG_RESPONSE_GENESIS: &str = "genesis_response";
 const TAG_RESPONSE_UPGRADE: &str = "upgrade_response";
+
+const UNIMPLEMENTED: &str = "unimplemented";
 
 const DEFAULT_PROTOCOL_VERSION: ProtocolVersion = ProtocolVersion::V1_0_0;
 
@@ -448,6 +450,9 @@ where
         _request_options: RequestOptions,
         _bid_state_request: BidStateRequest,
     ) -> SingleResponse<BidStateResponse> {
+        if !self.config().highway() {
+            return SingleResponse::err(GrpcError::Panic(UNIMPLEMENTED.to_string()));
+        }
         let response = BidStateResponse::new();
         SingleResponse::completed(response)
     }
@@ -457,6 +462,9 @@ where
         _request_options: RequestOptions,
         _distribute_rewards_request: DistributeRewardsRequest,
     ) -> SingleResponse<DistributeRewardsResponse> {
+        if !self.config().highway() {
+            return SingleResponse::err(GrpcError::Panic(UNIMPLEMENTED.to_string()));
+        }
         let response = DistributeRewardsResponse::new();
         SingleResponse::completed(response)
     }
@@ -466,6 +474,9 @@ where
         _request_options: RequestOptions,
         _slash_request: SlashRequest,
     ) -> SingleResponse<SlashResponse> {
+        if !self.config().highway() {
+            return SingleResponse::err(GrpcError::Panic(UNIMPLEMENTED.to_string()));
+        }
         let response = SlashResponse::new();
         SingleResponse::completed(response)
     }
@@ -475,6 +486,9 @@ where
         _request_options: RequestOptions,
         _unbond_payout_request: UnbondPayoutRequest,
     ) -> SingleResponse<UnbondPayoutResponse> {
+        if !self.config().highway() {
+            return SingleResponse::err(GrpcError::Panic(UNIMPLEMENTED.to_string()));
+        }
         let response = UnbondPayoutResponse::new();
         SingleResponse::completed(response)
     }

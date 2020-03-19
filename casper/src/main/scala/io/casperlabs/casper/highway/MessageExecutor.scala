@@ -27,6 +27,7 @@ import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.Metrics.Source
 import io.casperlabs.metrics.implicits._
 import io.casperlabs.shared.{FatalError, Log, Time}
+import io.casperlabs.storage.BlockHash
 import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.storage.deploy.{DeployStorage, DeployStorageWriter}
 import io.casperlabs.storage.dag.{DagStorage, FinalityStorage}
@@ -102,18 +103,17 @@ class MessageExecutor[F[_]: Concurrent: Log: Time: Metrics: BlockStorage: DagSto
       result <- MultiParentFinalizer[F]
                  .onNewMessageAdded(message)
       w <- result.traverse {
-            case MultiParentFinalizer.FinalizedBlocks(mainParent, _, secondary) => {
-              val mainParentFinalizedStr = mainParent.show
-              val secondaryParentsFinalizedStr =
-                secondary.map(_.show).mkString("{", ", ", "}")
+            case MultiParentFinalizer.FinalizedBlocks(newLFB, _, finalized, orphaned) => {
+              val lfbStr       = newLFB.show
+              val finalizedStr = finalized.map(_.show).mkString("{", ", ", "}")
               for {
                 _ <- Log[F].info(
-                      s"New last finalized block hashes are ${mainParentFinalizedStr -> null}, ${secondaryParentsFinalizedStr -> null}."
+                      s"New last finalized block hashes are ${lfbStr -> null}, ${finalizedStr -> null}."
                     )
-                _  <- FinalityStorage[F].markAsFinalized(mainParent, secondary)
-                w1 <- DeployBuffer[F].removeFinalizedDeploys(secondary + mainParent).forkAndLog
+                _  <- FinalityStorage[F].markAsFinalized(newLFB, finalized, orphaned)
+                w1 <- DeployBuffer[F].removeFinalizedDeploys(finalized + newLFB).forkAndLog
                 w2 <- BlockEventEmitter[F]
-                       .newLastFinalizedBlock(mainParent, secondary)
+                       .newLastFinalizedBlock(newLFB, finalized, orphaned)
                        .timer("emitNewLFB")
                        .forkAndLog
               } yield w1 *> w2

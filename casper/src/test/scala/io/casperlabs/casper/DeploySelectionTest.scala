@@ -106,11 +106,17 @@ class DeploySelectionTest
       implicit val ee: ExecutionEngineService[Task] = eeExecMock(everythingCommutesExec _)
 
       val deploySelection: DeploySelection[Task] =
-        DeploySelection.create[Task](blockSizeBytes, chunkSize)
+        DeploySelection.create[Task](minChunkSize = chunkSize)
 
       val test = for {
         selected <- deploySelection
-                     .select((prestate, blocktime, protocolVersion, countedStream.stream))
+                     .select(
+                       prestate,
+                       blocktime,
+                       protocolVersion,
+                       blockSizeBytes,
+                       countedStream.stream
+                     )
                      .map(_.commuting.map(_.deploy))
         _ <- Task.delay(assert(scaleWithChunkSize(countedStream.getCount()) == expectedPulls))
       } yield selected should contain theSameElementsAs expected
@@ -133,10 +139,10 @@ class DeploySelectionTest
       eeExecMock(everyOtherInvalidDeploy(counter) _)
 
     val deploySelection: DeploySelection[Task] =
-      DeploySelection.create[Task](smallBlockSizeBytes)
+      DeploySelection.create[Task]()
 
     val test = deploySelection
-      .select((prestate, blocktime, protocolVersion, stream))
+      .select(prestate, blocktime, protocolVersion, smallBlockSizeBytes, stream)
       .map(results => {
         assert(results.commuting.map(_.deploy) == cappedEffects)
       })
@@ -154,7 +160,7 @@ class DeploySelectionTest
     val counter                                   = AtomicInt(1)
     implicit val ee: ExecutionEngineService[Task] = eeExecMock(everyOtherCommutesExec(counter) _)
 
-    val deploySelection = DeploySelection.create[Task](sizeLimitBytes)
+    val deploySelection = DeploySelection.create[Task]()
 
     // The very first WRITE doesn't conflict
     val expectedCommuting = cappedEffects.head +: cappedEffects.zipWithIndex
@@ -164,7 +170,7 @@ class DeploySelectionTest
     val expectedConflicting = cappedEffects.zipWithIndex.filter(_._2 % 2 == 0).map(_._1).tail
 
     val test = deploySelection
-      .select((prestate, blocktime, protocolVersion, stream))
+      .select(prestate, blocktime, protocolVersion, sizeLimitBytes, stream)
       .map {
         case DeploySelectionResult(commutingRes, conflictingRes, _) =>
           conflictingRes should contain theSameElementsAs expectedConflicting
@@ -185,18 +191,18 @@ class DeploySelectionTest
             .tupleRight(size)
       )
   ) {
-    case (deploys, maxBlockSizeMb) =>
+    case (deploys, maxBlockSizeBytes) =>
       val cappedDeploys = deploys
 
       implicit val ee: ExecutionEngineService[Task] = eeExecMock(everythingCommutesExec _)
 
       val deploySelection: DeploySelection[Task] =
-        DeploySelection.create[Task](maxBlockSizeMb)
+        DeploySelection.create[Task]()
 
       val stream = fs2.Stream.fromIterator(cappedDeploys.toIterator)
 
       val test = deploySelection
-        .select((prestate, blocktime, protocolVersion, stream))
+        .select(prestate, blocktime, protocolVersion, maxBlockSizeBytes, stream)
         .map(_.commuting.map(_.deploy))
         .map(_ should contain theSameElementsAs cappedDeploys)
 
@@ -218,11 +224,10 @@ class DeploySelectionTest
 
     val counter                                   = AtomicInt(0)
     implicit val ee: ExecutionEngineService[Task] = eeExecMock(everyOtherInvalidDeploy(counter) _)
-    val deploySelection: DeploySelection[Task] =
-      DeploySelection.create[Task](smallBlockSizeBytes)
+    val deploySelection: DeploySelection[Task]    = DeploySelection.create[Task]()
 
     val test = deploySelection
-      .select((prestate, blocktime, protocolVersion, stream))
+      .select(prestate, blocktime, protocolVersion, smallBlockSizeBytes, stream)
       .map {
         case DeploySelectionResult(chosenDeploys, _, invalidDeploys) => {
           // Assert that all invalid deploys are a subset of the input set of invalid deploys.

@@ -151,6 +151,7 @@ object MessageProducer {
                            timestamp,
                            props.protocolVersion,
                            props.mainRank,
+                           props.configuration.deployConfig.maxBlockSizeBytes,
                            upgrades
                          )
 

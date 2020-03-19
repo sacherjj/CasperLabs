@@ -27,8 +27,9 @@ const POS_REWARDS_PURSE: &str = "pos_rewards_purse";
 #[test]
 fn should_run_pos_install_contract() {
     let mut builder = WasmTestBuilder::default();
-    let engine_config =
-        EngineConfig::new().with_use_system_contracts(cfg!(feature = "use-system-contracts"));
+    let engine_config = EngineConfig::new()
+        .with_use_system_contracts(cfg!(feature = "use-system-contracts"))
+        .with_highway(cfg!(feature = "highway"));
 
     let exec_request = ExecuteRequestBuilder::standard(
         DEFAULT_ACCOUNT_ADDR,

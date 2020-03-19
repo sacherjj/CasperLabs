@@ -169,7 +169,7 @@ trait HighwayFixture
         bonds = genesisBlock.getHeader.getState.bonds
       )
 
-    implicit lazy val deploySelection = DeploySelection.create[Task](sizeLimitBytes = Int.MaxValue)
+    implicit lazy val deploySelection = DeploySelection.create[Task]()
 
     implicit val validationRaise = raiseValidateErrorThroughApplicativeError[Task]
     implicit val protocol = CasperLabsProtocol.unsafe[Task](

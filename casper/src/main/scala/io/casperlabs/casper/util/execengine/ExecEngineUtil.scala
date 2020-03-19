@@ -97,18 +97,18 @@ object ExecEngineUtil {
       blocktime: Long,
       protocolVersion: state.ProtocolVersion,
       mainRank: MainRank,
+      maxBlockSizeBytes: Int,
       upgrades: Seq[ChainSpec.UpgradePoint]
   ): F[DeploysCheckpoint] = Metrics[F].timer("computeDeploysCheckpoint") {
     for {
       preStateHash <- computePrestate[F](merged, mainRank, upgrades).timer("computePrestate")
       DeploySelectionResult(commuting, conflicting, preconditionFailures) <- DeploySelection[F]
                                                                               .select(
-                                                                                (
-                                                                                  preStateHash,
-                                                                                  blocktime,
-                                                                                  protocolVersion,
-                                                                                  deployStream
-                                                                                )
+                                                                                preStateHash,
+                                                                                blocktime,
+                                                                                protocolVersion,
+                                                                                maxBlockSizeBytes,
+                                                                                deployStream
                                                                               )
       _                             <- handleInvalidDeploys[F](preconditionFailures)
       (deploysForBlock, transforms) = ExecEngineUtil.unzipEffectsAndDeploys(commuting).unzip

@@ -16,7 +16,7 @@ import Pages from './Pages';
 import { encodeBase16 } from 'casperlabs-sdk';
 import { BondedValidatorsTable } from './BondedValidatorsTable';
 import { ToggleButton } from './ToggleButton';
-import { BlockType } from './BlockDetails';
+import { BlockType, FinalityIcon } from './BlockDetails';
 
 /** Show the tips of the DAG. */
 @observer
@@ -54,6 +54,7 @@ class _Explorer extends RefreshableComponent<Props, {}> {
               blocks={dag.blocks}
               refresh={() => this.refresh()}
               subscribeToggleStore={dag.subscribeToggleStore}
+              hideBallotsToggleStore={dag.hideBallotsToggleStore}
               footerMessage={
                 <ListInline>
                   <DagStepButtons
@@ -209,11 +210,9 @@ class BlockDetails extends React.Component<
           })()
         ],
         [
-          'Is Finalized',
-          block
-            .getStatus()!
-            .getIsFinalized().toString()
-        ],
+          'Finality',
+          <FinalityIcon block={block} />
+        ]
       ];
     return (
       <div

@@ -11,12 +11,14 @@ import io.casperlabs.comm.discovery.NodeUtils.showNode
 import io.casperlabs.comm.discovery.{Node, NodeDiscovery}
 import io.casperlabs.comm.gossiping.Utils.hex
 import io.casperlabs.comm.gossiping._
+import io.casperlabs.comm.gossiping.downloadmanager.BlockDownloadManager
 import io.casperlabs.comm.gossiping.synchronization.InitialSynchronization.SynchronizationError
 import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.shared.IterantOps.RichIterant
 import io.casperlabs.shared.Log
-import scala.util.control.NonFatal
+
 import scala.concurrent.duration.FiniteDuration
+import scala.util.control.NonFatal
 
 /**
   * Synchronizes the node with peers in rounds by fetching slices of the DAG
@@ -40,7 +42,7 @@ class InitialSynchronizationForwardImpl[F[_]: Parallel: Log: Timer](
     minSuccessful: Int,
     skipFailedNodesInNextRounds: Boolean,
     // Schedule items with the DownloadManager.
-    downloadManager: DownloadManager[F],
+    downloadManager: BlockDownloadManager[F],
     // Handle missing dependencies by doing a normal backwards going synchronization.
     synchronizer: Synchronizer[F],
     step: Int,
@@ -170,6 +172,7 @@ class InitialSynchronizationForwardImpl[F[_]: Parallel: Log: Timer](
             )
         _ <- Log[F].debug(s"Next round of syncing with nodes: ${nodes.map(_.show) -> "peers"}")
 
+        _ <- Log[F].info(s"Syncing with ${nodes.size -> "nodes"} from $rank")
         // Sync in parallel
         results <- nodes.parTraverse(n => syncDagSlice(n, rank).attempt.map(result => n -> result))
 
@@ -182,7 +185,7 @@ class InitialSynchronizationForwardImpl[F[_]: Parallel: Log: Timer](
         }
 
         _ <- if (fullSyncs >= minSuccessful) {
-              Log[F].debug(
+              Log[F].info(
                 s"Successfully synced with $fullSyncs nodes, required: $minSuccessful"
               )
             } else {
@@ -199,7 +202,7 @@ class InitialSynchronizationForwardImpl[F[_]: Parallel: Log: Timer](
                                      }
                                    }
                                  }
-                _ <- Log[F].debug(
+                _ <- Log[F].info(
                       s"Haven't reached required $minSuccessful amount of fully synced nodes, currently at $fullSyncs, continuing initial synchronization."
                     )
                 _ <- Timer[F].sleep(roundPeriod)

@@ -61,6 +61,7 @@ class SQLiteDagStorage[F[_]: Sync](
     val mainRank = block.getHeader.mainRank
 
     val isFinalized = false
+    val isOrphaned  = false
     val insertBlockMetadata =
       (fr"""INSERT OR IGNORE INTO block_metadata
             (block_hash, validator, j_rank, main_rank, create_time_millis, """ ++ blockInfoCols() ++ fr""")
@@ -75,7 +76,8 @@ class SQLiteDagStorage[F[_]: Sync](
               $deployErrorCount,
               $deployCostTotal,
               $deployGasPriceAvg,
-              $isFinalized
+              $isFinalized,
+              $isOrphaned
             )
             """).update.run
 
@@ -435,12 +437,14 @@ class SQLiteDagStorage[F[_]: Sync](
   }
 
   override def markAsFinalized(
-      mainParent: BlockHash,
-      secondary: Set[BlockHash]
+      lfb: BlockHash,
+      finalized: Set[BlockHash],
+      orphaned: Set[BlockHash]
   ): F[Unit] = {
-    val mainPQuery =
-      sql"""UPDATE block_metadata SET is_finalized=TRUE, is_main_chain=TRUE WHERE block_hash=$mainParent""".update.run
-    val secondaryQuery = NonEmptyList.fromList(secondary.toList).fold(doobie.free.connection.unit) {
+    val lfbQuery =
+      sql"""UPDATE block_metadata SET is_finalized=TRUE, is_main_chain=TRUE WHERE block_hash=$lfb""".update.run
+
+    val finalizedQuery = NonEmptyList.fromList(finalized.toList).fold(doobie.free.connection.unit) {
       nel =>
         val q = fr"""UPDATE block_metadata SET is_finalized=TRUE WHERE """ ++ Fragments
           .in(fr"block_hash", nel)
@@ -448,23 +452,38 @@ class SQLiteDagStorage[F[_]: Sync](
         q.update.run.void
     }
 
+    val orphanedQuery =
+      NonEmptyList.fromList(orphaned.toList).fold(doobie.free.connection.unit) { nel =>
+        val q = fr"""UPDATE block_metadata SET is_orphaned=TRUE WHERE """ ++ Fragments
+          .in(fr"block_hash", nel)
+
+        q.update.run.void
+      }
+
     val lfbChainQuery =
-      sql"""INSERT OR IGNORE INTO lfb_chain (block_hash, indirectly_finalized)
-             VALUES ($mainParent, ${ByteString.copyFrom(secondary.asJava)})""".update.run.void
+      sql"""INSERT OR IGNORE INTO lfb_chain (block_hash, indirectly_finalized, indirectly_orphaned)
+             VALUES ($lfb, ${ByteString.copyFrom(finalized.asJava)}, ${ByteString.copyFrom(
+        orphaned.asJava
+      )})""".update.run.void
 
     val transaction = for {
-      _ <- mainPQuery
-      _ <- secondaryQuery
+      _ <- lfbQuery
+      _ <- finalizedQuery
+      _ <- orphanedQuery
       _ <- lfbChainQuery
     } yield ()
 
     transaction.transact(writeXa)
   }
 
-  override def isFinalized(block: BlockHash): F[Boolean] =
-    sql"""SELECT is_finalized FROM block_metadata WHERE block_hash=$block"""
-      .query[Boolean]
+  override def getFinalityStatus(block: BlockHash): F[FinalityStorage.FinalityStatus] =
+    sql"""SELECT is_finalized, is_orphaned FROM block_metadata WHERE block_hash=$block"""
+      .query[(Boolean, Boolean)]
       .unique
+      .map {
+        case (isFinalized, isOrphaned) =>
+          FinalityStorage.FinalityStatus(isFinalized, isOrphaned)
+      }
       .transact(readXa)
 
   override def getLastFinalizedBlock: F[BlockHash] =
