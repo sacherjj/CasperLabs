@@ -175,6 +175,8 @@ trait DownloadManagerImpl[F[_]] extends DownloadManager[F] { self =>
   val backend: companion.Backend[F]
   val relaying: Relaying[F]
   val retriesConf: companion.RetriesConf
+  // Description of 'downloadables' to use in logs
+  val kind: String
 
   def toByteString(id: Identifier): ByteString
 
@@ -418,7 +420,6 @@ trait DownloadManagerImpl[F[_]] extends DownloadManager[F] { self =>
         } else {
           // No sources changes, can continue.
           // Finding least tried source.
-          val idAsString = id.show
           counterPerSource.toList.minimumOption match {
             case None =>
               failure(new IllegalStateException("No source to download from."))
@@ -433,7 +434,7 @@ trait DownloadManagerImpl[F[_]] extends DownloadManager[F] { self =>
               val ex          = lastError.getOrElse(new IllegalStateException("No errors captured."))
               Log[F]
                 .error(
-                  s"Could not download block ${idAsString} from any of the sources; tried $countersSum requests for $sourcesNum sources: $ex"
+                  s"Could not download ${kind} ${id.show -> "id"} from any of the sources; tried $countersSum requests for $sourcesNum sources: $ex"
                 ) *> failure(ex)
 
             case Some((source, attempt)) =>
@@ -446,7 +447,7 @@ trait DownloadManagerImpl[F[_]] extends DownloadManager[F] { self =>
               duration match {
                 case delay: FiniteDuration =>
                   Log[F].debug(
-                    s"Scheduling download of block ${idAsString} from ${source.show -> "peer"} later, $attempt, $delay"
+                    s"Scheduling download of ${kind} ${id.show -> "id"} from ${source.show -> "peer"} later, $attempt, $delay"
                   ) *>
                     Timer[F].sleep(delay) *>
                     tryDownload(item.handle, source, item.relay).handleErrorWith {
@@ -454,7 +455,7 @@ trait DownloadManagerImpl[F[_]] extends DownloadManager[F] { self =>
                         val nextAttempt = attempt + 1
                         Metrics[F].incrementCounter("downloads_failed") *>
                           Log[F].warn(
-                            s"Retrying download of block ${idAsString} from other sources, failed source: ${source.show -> "peer"}, prev $attempt: $ex"
+                            s"Retrying download of ${kind} ${id.show -> "id"} from other sources, failed source: ${source.show -> "peer"}, prev $attempt: $ex"
                           ) *>
                           loop(counterPerSource.updated(source, nextAttempt), ex.some)
                     }
@@ -501,22 +502,22 @@ trait DownloadManagerImpl[F[_]] extends DownloadManager[F] { self =>
                       Left(acc.copy(header = Some(header)))
                     case other =>
                       Right(
-                        acc.invalid(s"Block chunks compressed with unexpected algorithm: $other")
+                        acc.invalid(s"Chunks compressed with unexpected algorithm: $other")
                       )
                   }
 
                 case (acc, chunk) if acc.header.nonEmpty && chunk.content.isHeader =>
-                  Right(acc.invalid("Block chunks contained a second header."))
+                  Right(acc.invalid("Chunks contained a second header."))
 
                 case (acc, _) if acc.header.isEmpty =>
-                  Right(acc.invalid("Block chunks did not start with a header."))
+                  Right(acc.invalid("Chunks did not start with a header."))
 
                 case (acc, chunk) if chunk.getData.isEmpty =>
-                  Right(acc.invalid("Block chunks contained empty data frame."))
+                  Right(acc.invalid("Chunks contained empty data frame."))
 
                 case (acc, chunk)
                     if acc.totalSizeSoFar + chunk.getData.size > acc.header.get.contentLength =>
-                  Right(acc.invalid("Block chunks are exceeding the promised content length."))
+                  Right(acc.invalid("Chunks are exceeding the promised content length."))
 
                 case (acc, chunk) =>
                   Left(acc.append(chunk.getData))
@@ -542,7 +543,9 @@ trait DownloadManagerImpl[F[_]] extends DownloadManager[F] { self =>
 
         downloadable <- Sync[F].delay(parseDownloadable(content))
         _ <- Sync[F]
-              .raiseError(invalid("Retrieved block has unexpected block hash."))
+              .raiseError(
+                invalid(s"Retrieved ${kind} has unexpected ${downloadable.id -> "id"}.")
+              )
               .whenA(downloadable.id =!= id)
       } yield downloadable
 

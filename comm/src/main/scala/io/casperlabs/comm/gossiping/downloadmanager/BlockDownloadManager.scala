@@ -100,6 +100,7 @@ class BlockDownloadManagerImpl[F[_]](
     override val M: Metrics[F]
 ) extends BlockDownloadManager[F]
     with DownloadManagerImpl[F] {
+  override val kind                       = "block"
   override implicit val E: Eq[Identifier] = Eq.instance((a: ByteString, b: ByteString) => a == b)
   override implicit val S: Show[Identifier] =
     Show.show((bs: ByteString) => bs.toByteArray.base16Encode)
