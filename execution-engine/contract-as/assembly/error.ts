@@ -135,6 +135,8 @@ export const enum PosErrorCode {
 }
 
 /**
+ * This class represents error condition and is constructed by passing an error value.
+ *
  * The variants are split into numeric ranges as follows:
  *
  * | Inclusive range | Variant(s)                                   |
@@ -143,6 +145,16 @@ export const enum PosErrorCode {
  * | [65024, 65279]  | `Mint` - instantiation currently unsupported |
  * | [65280, 65535]  | `ProofOfStake` errors created with [[Error.fromPosErrorCode]] |
  * | [65536, 131071] | User error codes created with [[Error.fromUserError]] |
+ *
+ * ## Example usage
+ *
+ * ```typescript
+ * // Creating using user error which adds 65536 to the error value.
+ * Error.fromUserError(1234).revert();
+ *
+ * // Creating using standard error variant.
+ * Error.fromErrorCode(ErrorCode.InvalidArguent).revert();
+ * ```
  */
 export class Error{
     private errorCodeValue: u32;
@@ -167,8 +179,8 @@ export class Error{
      * Results in host interface contains 0 for a successful operation,
      * or a non-zero standardized error otherwise.
      *
-     * @param result A result value obtained from host interface functions
-     * @returns Error object with an error [[ErrorCode]] variant
+     * @param result A result value obtained from host interface functions.
+     * @returns Error object with an error [[ErrorCode]] variant.
      */
     static fromResult(result: u32): Error | null {
         if (result == 0) {
@@ -191,7 +203,7 @@ export class Error{
     /**
      * Creates new error object from an [[ErrorCode]] value.
      *
-     * @param errorCode Variant of a standarized error
+     * @param errorCode Variant of a standarized error.
      */
     static fromErrorCode(errorCode: ErrorCode): Error {
         return new Error(<u32>errorCode);
@@ -199,14 +211,15 @@ export class Error{
 
     /**
      * Creates new error from Proof of Stake error variant.
-     * @param errorCode Variant of a Proof of Stake error
+     * @internal
+     * @param errorCode Variant of a Proof of Stake error.
      */
     static fromPosErrorCode(errorCode: PosErrorCode): Error {
         return new Error(<u32>errorCode + POS_ERROR_CODE_OFFSET);
     }
 
     /**
-     * Returns an error value
+     * Returns an error value.
      */
     value(): u32{
         return this.errorCodeValue;
