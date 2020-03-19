@@ -300,10 +300,6 @@ private[configuration] final case class Options private (
       gen[Int]("Number of deploys to accumulate before proposing.")
 
     @scallop
-    val casperMaxBlockSizeBytes =
-      gen[Int]("Maximum block size [in bytes].")
-
-    @scallop
     val serverBootstrap =
       gen[List[NodeWithoutChainId]](
         "Bootstrap casperlabs node address for initial seed. Accepts multiple instances for redundancy.",

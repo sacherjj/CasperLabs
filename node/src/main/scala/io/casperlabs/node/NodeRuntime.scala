@@ -244,7 +244,7 @@ class NodeRuntime private[node] (
       implicit0(deploySelection: DeploySelection[Task]) <- Resource.liftF(
                                                             DeploySelection
                                                               .createMetered[Task](
-                                                                conf.casper.maxBlockSizeBytes
+                                                                chainSpec.getGenesis.getDeployConfig.maxBlockSizeBytes
                                                               )
                                                               .pure[Task]
                                                           )
