@@ -11,6 +11,7 @@ import io.casperlabs.catscontrib.effect.implicits.syncId
 import io.casperlabs.comm.ServiceError.{NotFound, ResourceExhausted, Unauthenticated, Unavailable}
 import io.casperlabs.comm.discovery.Node
 import io.casperlabs.comm.gossiping.Utils.hex
+import io.casperlabs.comm.gossiping.downloadmanager._
 import io.casperlabs.comm.gossiping.synchronization.Synchronizer
 import io.casperlabs.comm.gossiping.synchronization.Synchronizer.SyncError
 import io.casperlabs.comm.grpc.{AuthInterceptor, ErrorInterceptor, GrpcServer, SslContexts}
@@ -31,12 +32,12 @@ import monix.reactive.Observable
 import monix.tail.Iterant
 import org.scalacheck.Arbitrary.arbitrary
 import org.scalacheck.{Arbitrary, Gen, Shrink}
+import org.scalactic.Prettifier
 import org.scalatest._
 import org.scalatest.concurrent._
 import org.scalatest.prop.GeneratorDrivenPropertyChecks.{forAll, PropertyCheckConfiguration}
 
 import scala.concurrent.duration._
-import org.scalactic.Prettifier
 
 class GrpcGossipServiceSpec
     extends refspec.RefSpecLike

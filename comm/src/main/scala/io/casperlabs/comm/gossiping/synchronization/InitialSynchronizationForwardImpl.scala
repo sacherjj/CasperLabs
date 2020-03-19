@@ -11,12 +11,14 @@ import io.casperlabs.comm.discovery.NodeUtils.showNode
 import io.casperlabs.comm.discovery.{Node, NodeDiscovery}
 import io.casperlabs.comm.gossiping.Utils.hex
 import io.casperlabs.comm.gossiping._
+import io.casperlabs.comm.gossiping.downloadmanager.BlockDownloadManager
 import io.casperlabs.comm.gossiping.synchronization.InitialSynchronization.SynchronizationError
 import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.shared.IterantOps.RichIterant
 import io.casperlabs.shared.Log
-import scala.util.control.NonFatal
+
 import scala.concurrent.duration.FiniteDuration
+import scala.util.control.NonFatal
 
 /**
   * Synchronizes the node with peers in rounds by fetching slices of the DAG
