@@ -76,9 +76,9 @@ object ForkChoice {
       // on top of the main parent can cite all these justifications.
       justifications: Set[Message]
   ) {
-    lazy val justificationsMap: Map[PublicKeyBS, Set[BlockHash]] =
+    lazy val justificationsMap: Map[PublicKeyBS, Set[Message]] =
       justifications.toSeq
-        .map(j => PublicKey(j.validatorId) -> j.messageHash)
+        .map(j => PublicKey(j.validatorId) -> j)
         .groupBy(_._1)
         .mapValues(_.map(_._2).toSet)
   }
@@ -171,24 +171,7 @@ object ForkChoice {
                                         .map(_.asLeft[Block])
                          } yield result
                        }
-          latestMessagesFlattened = NonEmptyList
-            .of[Message](
-              forkChoice,
-              latestMessages.values.flatten.toSeq: _*
-            )
-          // Eliminate tips that are ancestors in the main-tree.
-          reducedJustifications <- Estimator
-                                    .tipsOfLatestMessages[F](
-                                      dag,
-                                      latestMessagesFlattened,
-                                      eraStartBlock.messageHash
-                                    )
-                                    .map(
-                                      _.groupBy(_.validatorId)
-                                        .mapValues(_.toSet)
-                                    )
-                                    .timerGauge("tipsOfLatestMessages")
-        } yield (forkChoice, reducedJustifications)
+        } yield (forkChoice, latestMessages)
 
       /**
         * Computes the fork choice across multiple eras (as defined by `keyBlock`).
@@ -240,13 +223,15 @@ object ForkChoice {
         for {
           implicit0(dag: DagRepresentation[F]) <- DagStorage[F].getRepresentation
           keyBlock                             <- dag.lookupBlockUnsafe(keyBlockHash)
-          keyBlocks                            <- MessageProducer.collectKeyBlocks[F](keyBlockHash)
+          keyBlocks <- MessageProducer
+                        .collectKeyBlocks[F](keyBlockHash)
+                        .timer("fromKeyBlock_collectKeyBlocks")
           erasLatestMessages <- DagOperations
                                  .latestMessagesInEras[F](dag, keyBlocks)
                                  .map(EraObservedBehavior.local(_))
-                                 .timerGauge("erasLatestMessages")
+                                 .timerGauge("fromKeyBlock_latestMessagesInEras")
           (forkChoice, justifications) <- erasForkChoice(keyBlock, keyBlocks, erasLatestMessages)
-                                           .timerGauge("erasForkChoice")
+                                           .timerGauge("fromKeyBlock_erasForkChoice")
         } yield Result(forkChoice, justifications.values.flatten.toSet)
 
       override def fromJustifications(
@@ -261,22 +246,21 @@ object ForkChoice {
           erasObservedBehaviors <- DagOperations
                                     .latestMessagesInErasUntil[F](keyBlock.messageHash)
                                     .map(EraObservedBehavior.local(_))
-                                    .timerGauge("eraObservedBehaviors")
+                                    .timerGauge("fromJustifications_eraObservedBehaviors")
           justificationsMessages <- justifications.toList.traverse(dag.lookupUnsafe)
           panoramaOfTheBlock <- EraObservedBehavior
                                  .messageJPast[F](
                                    dag,
                                    justificationsMessages,
-                                   erasObservedBehaviors,
-                                   keyBlock
+                                   erasObservedBehaviors
                                  )
-                                 .timerGauge("panoramaOfTheBlock")
+                                 .timerGauge("fromJustifications_messageJPast")
           keyBlocks <- MessageProducer.collectKeyBlocks[F](keyBlockHash)
           (forkChoice, forkChoiceJustifications) <- erasForkChoice(
                                                      keyBlock,
                                                      keyBlocks,
                                                      panoramaOfTheBlock
-                                                   ).timerGauge("erasForkChoice")
+                                                   ).timerGauge("fromJustifications_erasForkChoice")
         } yield Result(forkChoice, forkChoiceJustifications.values.flatten.toSet)
     }
 

@@ -245,8 +245,9 @@ class MultiParentCasperImpl[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: 
                 s"Fork-choice is ${PrettyPrinter.buildString(tipHashes.head) -> "block"}."
               )
           // Merged makes sure that we only get blocks.
-          merged  <- ExecEngineUtil.merge[F](tips, dag).timer("mergeTipsEffects")
-          parents = merged.parents
+          tipsMessages <- MonadThrowable[F].fromTry(tips.map(Message.fromBlock(_)).sequence)
+          merged       <- ExecEngineUtil.merge[F](tipsMessages, dag).timer("mergeTipsEffects")
+          parents      = merged.parents
           _ <- Log[F].info(
                 s"${parents.size} parents out of ${tipHashes.size} latest blocks will be used."
               )

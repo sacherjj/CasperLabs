@@ -113,7 +113,7 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
         message <- messageProducer.block(
                     keyBlockHash = genesis.messageHash,
                     roundId = conf.toTicks(conf.genesisEraStart),
-                    mainParent = genesis.messageHash,
+                    mainParent = genesis,
                     justifications = Map.empty,
                     isBookingBlock = false
                   )
