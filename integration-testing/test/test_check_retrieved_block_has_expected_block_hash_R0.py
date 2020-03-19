@@ -55,4 +55,4 @@ def test_check_retrieved_block_has_expected_block_hash(intercepted_two_node_netw
     with raises(Exception):
         wait_for_block_hash_propagated_to_all_nodes(nodes, block_hash)
 
-    assert "Retrieved block has unexpected block hash." in nodes[1].logs()
+    assert "Retrieved block has unexpected" in nodes[1].logs()

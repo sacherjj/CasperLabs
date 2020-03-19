@@ -544,7 +544,7 @@ trait DownloadManagerImpl[F[_]] extends DownloadManager[F] { self =>
         downloadable <- Sync[F].delay(parseDownloadable(content))
         _ <- Sync[F]
               .raiseError(
-                invalid(s"Retrieved ${kind} has unexpected ${downloadable.id -> "id"}.")
+                invalid(s"Retrieved ${kind} has unexpected ${downloadable.id.show -> "id"}.")
               )
               .whenA(downloadable.id =!= id)
       } yield downloadable
