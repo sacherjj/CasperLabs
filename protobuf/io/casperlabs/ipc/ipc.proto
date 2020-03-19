@@ -263,6 +263,7 @@ message ChainSpec {
     message DeployConfig {
         uint32 max_ttl_millis = 2;
         uint32 max_dependencies = 3;
+        uint32 max_block_size_bytes = 4;
     }
 
     message HighwayConfig {

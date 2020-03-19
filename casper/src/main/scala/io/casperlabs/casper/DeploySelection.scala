@@ -52,10 +52,28 @@ object DeploySelection {
       preconditionFailures: List[PreconditionFailure]
   )
 
+  final case class DeploySelectionParams[F[_]](
+      preStateHash: ByteString,
+      timestamp: Long,
+      protocolVersion: ProtocolVersion,
+      maxBlockSizeBytes: Int,
+      deploys: fs2.Stream[F, Deploy]
+  )
+
   trait DeploySelection[F[_]] extends Select[F] {
-    // prestate hash, block time, protocol version, stream of deploys.
-    type A = (ByteString, Long, ProtocolVersion, fs2.Stream[F, Deploy])
+    // prestate hash, block time, protocol version, max block size, stream of deploys.
+    type A = DeploySelectionParams[F]
     type B = DeploySelectionResult
+
+    def select(
+        preStateHash: ByteString,
+        timestamp: Long,
+        protocolVersion: ProtocolVersion,
+        maxBlockSizeBytes: Int,
+        deploys: fs2.Stream[F, Deploy]
+    ): F[B] = select(
+      DeploySelectionParams(preStateHash, timestamp, protocolVersion, maxBlockSizeBytes, deploys)
+    )
   }
 
   def apply[F[_]](implicit ev: DeploySelection[F]): DeploySelection[F] = ev
@@ -99,14 +117,13 @@ object DeploySelection {
       copy(preconditionFailures = failure :: this.preconditionFailures)
   }
 
-  def createMetered[F[_]: Sync: ExecutionEngineService: Fs2Compiler: Metrics](
-      sizeLimitBytes: Int
-  ): DeploySelection[F] = {
+  def createMetered[F[_]: Sync: ExecutionEngineService: Fs2Compiler: Metrics]
+      : DeploySelection[F] = {
     import io.casperlabs.smartcontracts.GrpcExecutionEngineService.EngineMetricsSource
-    val underlying = create[F](sizeLimitBytes)
+    val underlying = create[F]()
     new DeploySelection[F] {
       override def select(
-          in: (DeployHash, Long, ProtocolVersion, fs2.Stream[F, Deploy])
+          in: DeploySelectionParams[F]
       ): F[DeploySelectionResult] =
         Metrics[F].timer("deploySelection")(underlying.select(in))
     }
@@ -124,18 +141,17 @@ object DeploySelection {
     * @return An instance of `DeploySelection` trait.
     */
   def create[F[_]: Sync: ExecutionEngineService: Fs2Compiler](
-      sizeLimitBytes: Int,
       minChunkSize: Int = 10
   ): DeploySelection[F] =
     new DeploySelection[F] {
-      // If size of accumulated deploys is over 90% of the block limit, stop consuming more deploys.
-      def isOversized(state: IntermediateState) =
-        state.size > 0.9 * sizeLimitBytes
 
       override def select(
-          in: (DeployHash, Long, ProtocolVersion, fs2.Stream[F, Deploy])
+          in: DeploySelectionParams[F]
       ): F[DeploySelectionResult] = {
-        val (prestate, blocktime, protocolVersion, deploys) = in
+        // If size of accumulated deploys is over 90% of the block limit, stop consuming more deploys.
+        def isOversized(state: IntermediateState) =
+          state.size > 0.9 * in.maxBlockSizeBytes && in.maxBlockSizeBytes > 0
+
         def go(
             state: IntermediateState,
             chunks: fs2.Stream[F, Deploy]
@@ -146,10 +162,10 @@ object DeploySelection {
             case Some((chunk, deploys)) =>
               val batch = chunk.toList
               val newState = eeExecuteDeploys[F](
-                prestate,
-                blocktime,
+                in.preStateHash,
+                in.timestamp,
                 batch,
-                protocolVersion
+                in.protocolVersion
               )(ExecutionEngineService[F].exec _) map { results =>
                 // Using `Either` as fold for shortcutting semantics.
                 results
@@ -178,7 +194,7 @@ object DeploySelection {
           }
 
         val selectedDeploys =
-          go(IntermediateState(), deploys).stream.compile.last
+          go(IntermediateState(), in.deploys).stream.compile.last
 
         selectedDeploys.map {
           case None =>

@@ -246,9 +246,6 @@ auto-propose-acc-interval = "5seconds"
 # Number of deploys to accumulate before proposing.
 auto-propose-acc-count = 10
 
-# Maximum block size in bytes
-max-block-size-bytes = 10485760
-
 # Minimum TTL value of a deploy
 min-ttl = "1hour"
 

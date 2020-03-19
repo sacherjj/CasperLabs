@@ -79,7 +79,7 @@ class GossipServiceCasperTestNode[F[_]](
   implicit val raiseInvalidBlock      = casper.validation.raiseValidateErrorThroughApplicativeError[F]
   implicit val broadcaster: Broadcaster[F] =
     Broadcaster.fromGossipServices(Some(validatorId), relaying)
-  implicit val deploySelection = DeploySelection.create[F](5 * 1024 * 1024)
+  implicit val deploySelection = DeploySelection.create[F]()
   implicit val validationEff   = new NCBValidationImpl[F]
   implicit val eventEmitter    = NoOpsEventEmitter.create[F]
 
