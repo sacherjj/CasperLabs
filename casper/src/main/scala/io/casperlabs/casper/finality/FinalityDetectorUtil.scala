@@ -183,17 +183,7 @@ object FinalityDetectorUtil {
       .sortBy(_._1)
       .map(_._2)
 
-  // Follow blocks that haven't been finalized or orphaned yet.
   private def collectUndecided[F[_]: Sync: FinalityStorage](
-      blocks: Seq[BlockHash]
-  ): F[List[BlockHash]] =
-    blocks.toList.filterA { block =>
-      FinalityStorage[F]
-        .getFinalityStatus(block)
-        .map(_.isUndecided)
-    }
-
-  private def traverseUndecided[F[_]: Sync: FinalityStorage](
       dag: DagRepresentation[F],
       lfbHash: BlockHash,
       // In Highway we want to stay within the same era, since parent era blocks should only be finalized
@@ -206,14 +196,24 @@ object FinalityDetectorUtil {
       lfb <- dag.lookupUnsafe(lfbHash)
       undecided <- DagOperations
                     .bfTraverseF[F, Message](List(lfb)) { m =>
-                      collectUndecided(next(m))
-                        .flatMap(_.traverse(dag.lookupUnsafe))
-                        .map { ms =>
-                          if (isHighway) ms.filter(_.eraId == lfb.eraId) else ms
-                        }
+                      // Lookup first, that might be cached in memory.
+                      next(m).toList.distinct.traverse(dag.lookupUnsafe).flatMap { deps =>
+                        deps
+                          .filter { dep =>
+                            !isHighway || dep.eraId == lfb.eraId
+                          }
+                          .filterA { dep =>
+                            // Not finalizing or orphaning ballots but we need to traverse them first to get to the blocks.
+                            if (dep.isBallot) true.pure[F]
+                            else
+                              // Follow undecided blocks only. Hits the database.
+                              FinalityStorage[F]
+                                .getFinalityStatus(dep.messageHash)
+                                .map(_.isUndecided)
+                          }
+                      }
                     }
-                    // Not finalizing or orphaning ballots but we need to traverse them first to get to the blocks.
-                    .filter(_.isBlock)
+                    .filter(_.isBlock) // We only want blocks in the result.
                     .map(_.messageHash)
                     .toList
     } yield undecided
@@ -225,7 +225,7 @@ object FinalityDetectorUtil {
       isHighway: Boolean
   ): F[Set[BlockHash]] =
     for {
-      finalizedImplicitly <- traverseUndecided[F](dag, lfbHash, isHighway, _.parents)
+      finalizedImplicitly <- collectUndecided[F](dag, lfbHash, isHighway, _.parents)
     } yield finalizedImplicitly.toSet - lfbHash // LFB is directly finalized.
 
   /** A block is orphaned if it's not in the p-past cone of the last finalized block.
@@ -239,7 +239,7 @@ object FinalityDetectorUtil {
       isHighway: Boolean
   ): F[Set[BlockHash]] =
     for {
-      undecided <- traverseUndecided(
+      undecided <- collectUndecided(
                     dag,
                     lfbHash,
                     isHighway,

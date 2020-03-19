@@ -82,15 +82,20 @@ class FinalityDetectorUtilTest extends FlatSpec with BlockGenerator with Storage
         *  i.e. since A is finalized with C, `finalizedIndirectly(F)` should not visit that node.
         */
       for {
-        genesis   <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bonds)
-        a         <- createAndStoreBlockFull[Task](v1, Seq(genesis), Seq.empty, bonds)
-        b         <- createAndStoreBlockFull[Task](v1, Seq(a), Seq.empty, bonds)
-        c         <- createAndStoreBlockFull[Task](v1, Seq(genesis, a), Seq.empty, bonds)
-        dag       <- dagStorage.getRepresentation
+        genesis <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bonds)
+        a       <- createAndStoreBlockFull[Task](v1, Seq(genesis), Seq.empty, bonds)
+        b       <- createAndStoreBlockFull[Task](v1, Seq(a), Seq.empty, bonds)
+        c       <- createAndStoreBlockFull[Task](v1, Seq(genesis, a), Seq.empty, bonds)
+        dag     <- dagStorage.getRepresentation
+
+        // Create DAG that counts the visits.
         stateTDag = stateTDagRepresentation(Task.catsAsync, dag) // For some reason scalac cannot infer this.
+
+        // First finalizing C.
         expectedNodesVisitedA = Map(
-          c.blockHash -> 1,
-          a.blockHash -> 1
+          c.blockHash       -> 1,
+          a.blockHash       -> 1,
+          genesis.blockHash -> 2
         )
         implicit0(finalityStorage: FinalityStorage[G]) <- MockFinalityStorage[G](
                                                            Seq(genesis.blockHash): _*
@@ -102,6 +107,7 @@ class FinalityDetectorUtilTest extends FlatSpec with BlockGenerator with Storage
                 isHighway = false
               )
               .run(Map.empty) shouldBeF ((expectedNodesVisitedA, Set(a.blockHash)))
+
         d <- createAndStoreBlockFull[Task](v1, Seq(a), Seq.empty, bonds)
         e <- createAndStoreBlockFull[Task](v1, Seq(b), Seq.empty, bonds)
         f <- createAndStoreBlockFull[Task](v1, Seq(c, d, e), Seq.empty, bonds)
@@ -110,7 +116,9 @@ class FinalityDetectorUtilTest extends FlatSpec with BlockGenerator with Storage
           f -> 1,
           d -> 1,
           e -> 1,
-          b -> 1
+          b -> 1,
+          c -> 1,
+          a -> 2
         ).map(p => (p._1.blockHash, p._2))
         _ <- finalityStorage
               .markAsFinalized(c.blockHash, Set(a.blockHash), Set.empty)
