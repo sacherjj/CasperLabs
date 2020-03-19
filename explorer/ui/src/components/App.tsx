@@ -31,6 +31,8 @@ import ConnectedPeersContainer from '../containers/ConnectedPeersContainer';
 import ConnectedPeers from './ConnectedPeers';
 import Vesting from '../contracts/Vesting/component/Vesting';
 import { VestingContainer } from '../contracts/Vesting/container/VestingContainer';
+import { useEffect } from 'react';
+import ReactGA from 'react-ga';
 
 // https://medium.com/@pshrmn/a-simple-react-router-v4-tutorial-7f23ff27adf
 
@@ -303,9 +305,25 @@ function useQuery() {
   return new URLSearchParams(useLocation().search);
 }
 
+
+ReactGA.initialize("UA-133833104-1");
+
+// the hook to send pageView to GA.
+function usePageViews() {
+  let location = useLocation();
+
+  useEffect(
+    () => {
+      ReactGA.pageview( location.pathname);
+    },
+    [location]
+  )
+}
+
 // Render the appropriate page.
 const Content = (props: AppProps) => {
   let query = useQuery();
+  usePageViews();
   return (
     <main>
       <div className="content-wrapper">
