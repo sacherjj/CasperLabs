@@ -243,9 +243,7 @@ class NodeRuntime private[node] (
 
       implicit0(deploySelection: DeploySelection[Task]) <- Resource.liftF(
                                                             DeploySelection
-                                                              .createMetered[Task](
-                                                                chainSpec.getGenesis.getDeployConfig.maxBlockSizeBytes
-                                                              )
+                                                              .createMetered[Task]
                                                               .pure[Task]
                                                           )
 

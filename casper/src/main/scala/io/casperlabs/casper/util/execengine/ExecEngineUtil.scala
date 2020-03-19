@@ -210,6 +210,7 @@ object ExecEngineUtil {
       blocktime: Long,
       protocolVersion: state.ProtocolVersion,
       mainRank: MainRank,
+      maxBlockSizeBytes: Int,
       upgrades: Seq[ChainSpec.UpgradePoint]
   ): F[DeploysCheckpoint] = Metrics[F].timer("computeDeploysCheckpoint") {
     for {
@@ -220,6 +221,7 @@ object ExecEngineUtil {
                                                                                   preStateHash,
                                                                                   blocktime,
                                                                                   protocolVersion,
+                                                                                  maxBlockSizeBytes,
                                                                                   deployStream
                                                                                 )
                                                                               )

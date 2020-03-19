@@ -53,8 +53,8 @@ object DeploySelection {
   )
 
   trait DeploySelection[F[_]] extends Select[F] {
-    // prestate hash, block time, protocol version, stream of deploys.
-    type A = (ByteString, Long, ProtocolVersion, fs2.Stream[F, Deploy])
+    // prestate hash, block time, protocol version, max block size, stream of deploys.
+    type A = (ByteString, Long, ProtocolVersion, Int, fs2.Stream[F, Deploy])
     type B = DeploySelectionResult
   }
 
@@ -99,14 +99,13 @@ object DeploySelection {
       copy(preconditionFailures = failure :: this.preconditionFailures)
   }
 
-  def createMetered[F[_]: Sync: ExecutionEngineService: Fs2Compiler: Metrics](
-      sizeLimitBytes: Int
-  ): DeploySelection[F] = {
+  def createMetered[F[_]: Sync: ExecutionEngineService: Fs2Compiler: Metrics]
+      : DeploySelection[F] = {
     import io.casperlabs.smartcontracts.GrpcExecutionEngineService.EngineMetricsSource
-    val underlying = create[F](sizeLimitBytes)
+    val underlying = create[F]()
     new DeploySelection[F] {
       override def select(
-          in: (DeployHash, Long, ProtocolVersion, fs2.Stream[F, Deploy])
+          in: (DeployHash, Long, ProtocolVersion, Int, fs2.Stream[F, Deploy])
       ): F[DeploySelectionResult] =
         Metrics[F].timer("deploySelection")(underlying.select(in))
     }
@@ -124,18 +123,19 @@ object DeploySelection {
     * @return An instance of `DeploySelection` trait.
     */
   def create[F[_]: Sync: ExecutionEngineService: Fs2Compiler](
-      sizeLimitBytes: Int,
       minChunkSize: Int = 10
   ): DeploySelection[F] =
     new DeploySelection[F] {
-      // If size of accumulated deploys is over 90% of the block limit, stop consuming more deploys.
-      def isOversized(state: IntermediateState) =
-        state.size > 0.9 * sizeLimitBytes
 
       override def select(
-          in: (DeployHash, Long, ProtocolVersion, fs2.Stream[F, Deploy])
+          in: (DeployHash, Long, ProtocolVersion, Int, fs2.Stream[F, Deploy])
       ): F[DeploySelectionResult] = {
-        val (prestate, blocktime, protocolVersion, deploys) = in
+        val (prestate, blocktime, protocolVersion, sizeLimitBytes, deploys) = in
+
+        // If size of accumulated deploys is over 90% of the block limit, stop consuming more deploys.
+        def isOversized(state: IntermediateState) =
+          state.size > 0.9 * sizeLimitBytes
+
         def go(
             state: IntermediateState,
             chunks: fs2.Stream[F, Deploy]

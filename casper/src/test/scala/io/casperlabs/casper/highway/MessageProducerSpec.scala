@@ -127,7 +127,7 @@ class MessageProducerSpec extends FlatSpec with Matchers with Inspectors with Hi
 
         override lazy val messageProducer: MessageProducer[Task] = {
           implicit val deployBuffer    = DeployBuffer.create[Task](chainName, minTtl = Duration.Zero)
-          implicit val deploySelection = DeploySelection.create[Task](sizeLimitBytes = Int.MaxValue)
+          implicit val deploySelection = DeploySelection.create[Task]()
 
           MessageProducer[Task](
             validatorIdentity =
@@ -218,7 +218,7 @@ class MessageProducerSpec extends FlatSpec with Matchers with Inspectors with Hi
 
         override lazy val messageProducer: MessageProducer[Task] = {
           implicit val deployBuffer    = DeployBuffer.create[Task](chainName, minTtl = Duration.Zero)
-          implicit val deploySelection = DeploySelection.create[Task](sizeLimitBytes = Int.MaxValue)
+          implicit val deploySelection = DeploySelection.create[Task]()
 
           MessageProducer[Task](
             validatorIdentity =
