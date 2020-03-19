@@ -336,10 +336,10 @@ object HashSetCasperTestNode {
       0L,
       consensus.state.ProtocolVersion(1),
       Some(
-        DeployConfig(
-          24 * 60 * 60 * 1000, // 1 day
-          10
-        )
+        DeployConfig()
+          .withMaxTtlMillis(24 * 60 * 60 * 1000) // 1 day
+          .withMaxDependencies(10)
+          .withMaxBlockSizeBytes(10 * 1024 * 1024)
       )
     )
   )

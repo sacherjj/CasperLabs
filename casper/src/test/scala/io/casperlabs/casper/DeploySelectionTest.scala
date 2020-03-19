@@ -106,11 +106,17 @@ class DeploySelectionTest
       implicit val ee: ExecutionEngineService[Task] = eeExecMock(everythingCommutesExec _)
 
       val deploySelection: DeploySelection[Task] =
-        DeploySelection.create[Task](blockSizeBytes)
+        DeploySelection.create[Task](minChunkSize = chunkSize)
 
       val test = for {
         selected <- deploySelection
-                     .select(prestate, blocktime, protocolVersion, chunkSize, countedStream.stream)
+                     .select(
+                       prestate,
+                       blocktime,
+                       protocolVersion,
+                       blockSizeBytes,
+                       countedStream.stream
+                     )
                      .map(_.commuting.map(_.deploy))
         _ <- Task.delay(assert(scaleWithChunkSize(countedStream.getCount()) == expectedPulls))
       } yield selected should contain theSameElementsAs expected
