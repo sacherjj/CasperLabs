@@ -411,7 +411,7 @@ where
                 genesis_config.standard_payment_installer_bytes()
             };
 
-            if !self.config.use_system_contracts() && standard_payment_installer_bytes.is_empty() {
+            if !self.config.use_system_contracts() {
                 store_do_nothing_contract()?
             } else {
                 let standard_payment_installer_module =

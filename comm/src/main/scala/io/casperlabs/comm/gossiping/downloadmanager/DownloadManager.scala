@@ -73,8 +73,11 @@ trait DownloadManagerCompanion extends DownloadManagerTypes {
     def validate(downloadable: Downloadable): F[Unit]
     def store(downloadable: Downloadable): F[Unit]
 
-    /** Notify about new downloadables we were told about but haven't acquired yet. */
+    /** Notify about new downloadables we were told about but haven't acquired yet. Called once per downloadable.. */
     def onScheduled(handle: Handle): F[Unit]
+
+    /** Notify about new source of a downloadable we were told about but haven't acquired yet. */
+    def onScheduled(handle: Handle, source: Node): F[Unit]
 
     /** Notify about a new downloadable we downloaded, verified and stored. */
     def onDownloaded(identifier: Identifier): F[Unit]
@@ -242,10 +245,22 @@ trait DownloadManagerImpl[F[_]] extends DownloadManager[F] { self =>
               items                    <- itemsRef.get
               itemAndFeedback          <- mergeItem(items, handle, source, relay)
               (item, downloadFeedback) = itemAndFeedback
-              _                        <- backend.onScheduled(handle).start.whenA(!items.contains(handle.id))
-              _                        <- itemsRef.update(_ + (handle.id -> item))
-              _                        <- if (item.canStart) startWorker(item) else Sync[F].unit
-              _                        <- setScheduledGauge()
+
+              // Notify the rest of the system if this is the first time we schedule this item
+              // or if we're adding a new source to an item that already existed.
+              existingItem = items.get(handle.id)
+              _ <- backend
+                    .onScheduled(handle)
+                    .start
+                    .whenA(existingItem.isEmpty)
+              _ <- backend
+                    .onScheduled(handle, source)
+                    .start
+                    .whenA(existingItem.forall(!_.sources(source)))
+
+              _ <- itemsRef.update(_ + (handle.id -> item))
+              _ <- if (item.canStart) startWorker(item) else Sync[F].unit
+              _ <- setScheduledGauge()
             } yield downloadFeedback
           )
         // Report any startup errors so the caller knows something's fatally wrong, then carry on.

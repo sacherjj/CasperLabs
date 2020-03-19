@@ -38,9 +38,12 @@ class SynchronizerImpl[F[_]: Concurrent: Log: Metrics](
 
   import io.casperlabs.comm.gossiping.synchronization.SynchronizerImpl._
 
+  override def onScheduled(summary: BlockSummary, source: Node): F[Unit] =
+    addSynced(summary, source)
+
   // This is supposed to be called every time a scheduled download is finished,
   // even when the resolution is that we already had it, so there should be no leaks.
-  override def downloaded(blockHash: ByteString) =
+  override def onDownloaded(blockHash: ByteString) =
     removeSynced(blockHash)
 
   override def syncDag(
@@ -122,14 +125,11 @@ class SynchronizerImpl[F[_]: Concurrent: Log: Metrics](
       syncState: SyncState
   ): F[Either[SyncError, Vector[BlockSummary]]] =
     // Check that the stream didn't die before connecting to our DAG.
-    missingDependencies(source, syncState.parentToChildren) flatMap { missing =>
+    missingDependencies(source, syncState.parentToChildren) map { missing =>
       if (missing.isEmpty) {
-        for {
-          _         <- addSynced(source, syncState)
-          summaries = topologicalSort(syncState)
-        } yield summaries.asRight[SyncError]
+        topologicalSort(syncState).asRight[SyncError]
       } else {
-        MissingDependencies(missing.toSet).asLeft[Vector[BlockSummary]].leftWiden[SyncError].pure[F]
+        MissingDependencies(missing.toSet).asLeft[Vector[BlockSummary]].leftWiden[SyncError]
       }
     }
 
@@ -167,17 +167,14 @@ class SynchronizerImpl[F[_]: Concurrent: Log: Metrics](
 
   /** Remember that we got these summaries from this source,
     * so next time we don't have to travel that far back in their DAG. */
-  private def addSynced(source: Node, syncState: SyncState): F[Unit] =
+  private def addSynced(summary: BlockSummary, source: Node): F[Unit] =
     syncedSummariesRef.update { syncedSummaries =>
       // We could filter with `backend.notInDag` to never add ones that have perhaps been
       // downloaded in the meantime, but that would be a lot of database queries.
       // Instead, `removeSynced` will clear the dependencies recursively,
       // so if any descendants gets downloaded it will remove any leftovers.
-      syncState.summaries.values.foldLeft(syncedSummaries) {
-        case (syncedSummaries, summary) =>
-          val ss = syncedSummaries.getOrElse(summary.blockHash, SyncedSummary(summary))
-          syncedSummaries + (summary.blockHash -> ss.addSource(source))
-      }
+      val ss = syncedSummaries.getOrElse(summary.blockHash, SyncedSummary(summary))
+      syncedSummaries + (summary.blockHash -> ss.addSource(source))
     } >> recordSyncedSummaries
 
   /** Recursively clear out summaries and their dependencies from the cache. */

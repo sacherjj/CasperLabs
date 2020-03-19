@@ -18,9 +18,16 @@ trait Synchronizer[F[_]] {
       targetBlockHashes: Set[ByteString]
   ): F[Either[SyncError, Vector[BlockSummary]]]
 
+  /** Called when the block is added to the download manager,
+    * so the synchronizer knows it doesn't have to keep traversing that path. */
+  def onScheduled(
+      summary: BlockSummary,
+      source: Node
+  ): F[Unit]
+
   /** Called when the block is finally downloaded to release any caches
     * the synchronizer keeps around. */
-  def downloaded(
+  def onDownloaded(
       blockHash: ByteString
   ): F[Unit]
 }

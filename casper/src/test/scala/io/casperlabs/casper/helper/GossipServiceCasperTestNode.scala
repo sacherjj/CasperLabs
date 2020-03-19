@@ -422,6 +422,11 @@ object GossipServiceCasperTestNodeFactory {
                                    casper.addMissingDependencies(partialBlock)
                                  }
 
+                               override def onScheduled(
+                                   summary: consensus.BlockSummary,
+                                   source: Node
+                               ) = ().pure[F]
+
                                override def onDownloaded(blockHash: ByteString) =
                                  // Calling `addBlock` during validation has already stored the block.
                                  Log[F].debug(

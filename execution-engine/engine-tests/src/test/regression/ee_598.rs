@@ -73,6 +73,13 @@ fn should_fail_unboding_more_than_it_was_staked_ee_598_regression() {
         .expect("should have a response")
         .to_owned();
     let error_message = utils::get_error_message(response);
-    // Error::UnbondTooLarge => 7,
-    assert!(error_message.contains(&format!("Revert({})", u32::from(ApiError::ProofOfStake(7)))));
+
+    if cfg!(feature = "highway") {
+        assert!(error_message.contains(&format!("Revert({})", u32::from(ApiError::Unhandled))));
+    } else {
+        // Error::UnbondTooLarge => 7,
+        assert!(
+            error_message.contains(&format!("Revert({})", u32::from(ApiError::ProofOfStake(7))))
+        );
+    }
 }

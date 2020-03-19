@@ -220,8 +220,9 @@ object InitialSynchronizationBackwardImplSpec extends ArbitraryConsensus {
   }
 
   object MockSynchronizer extends Synchronizer[Task] {
-    def syncDag(source: Node, targetBlockHashes: Set[ByteString]) = ???
-    def downloaded(blockHash: ByteString): Task[Unit]             = ???
+    def syncDag(source: Node, targetBlockHashes: Set[ByteString])    = ???
+    def onDownloaded(blockHash: ByteString): Task[Unit]              = ???
+    def onScheduled(summary: BlockSummary, source: Node): Task[Unit] = ???
   }
 
   object MockBlockDownloadManager extends BlockDownloadManager[Task] {
