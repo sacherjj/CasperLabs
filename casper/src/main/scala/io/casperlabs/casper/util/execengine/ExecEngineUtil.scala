@@ -217,13 +217,11 @@ object ExecEngineUtil {
       preStateHash <- computePrestate[F](merged, mainRank, upgrades).timer("computePrestate")
       DeploySelectionResult(commuting, conflicting, preconditionFailures) <- DeploySelection[F]
                                                                               .select(
-                                                                                (
-                                                                                  preStateHash,
-                                                                                  blocktime,
-                                                                                  protocolVersion,
-                                                                                  maxBlockSizeBytes,
-                                                                                  deployStream
-                                                                                )
+                                                                                preStateHash,
+                                                                                blocktime,
+                                                                                protocolVersion,
+                                                                                maxBlockSizeBytes,
+                                                                                deployStream
                                                                               )
       _                             <- handleInvalidDeploys[F](preconditionFailures)
       (deploysForBlock, transforms) = ExecEngineUtil.unzipEffectsAndDeploys(commuting).unzip

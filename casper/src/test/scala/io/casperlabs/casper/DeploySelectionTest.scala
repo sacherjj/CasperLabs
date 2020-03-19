@@ -110,9 +110,7 @@ class DeploySelectionTest
 
       val test = for {
         selected <- deploySelection
-                     .select(
-                       (prestate, blocktime, protocolVersion, chunkSize, countedStream.stream)
-                     )
+                     .select(prestate, blocktime, protocolVersion, chunkSize, countedStream.stream)
                      .map(_.commuting.map(_.deploy))
         _ <- Task.delay(assert(scaleWithChunkSize(countedStream.getCount()) == expectedPulls))
       } yield selected should contain theSameElementsAs expected
@@ -138,7 +136,7 @@ class DeploySelectionTest
       DeploySelection.create[Task]()
 
     val test = deploySelection
-      .select((prestate, blocktime, protocolVersion, smallBlockSizeBytes, stream))
+      .select(prestate, blocktime, protocolVersion, smallBlockSizeBytes, stream)
       .map(results => {
         assert(results.commuting.map(_.deploy) == cappedEffects)
       })
@@ -166,7 +164,7 @@ class DeploySelectionTest
     val expectedConflicting = cappedEffects.zipWithIndex.filter(_._2 % 2 == 0).map(_._1).tail
 
     val test = deploySelection
-      .select((prestate, blocktime, protocolVersion, sizeLimitBytes, stream))
+      .select(prestate, blocktime, protocolVersion, sizeLimitBytes, stream)
       .map {
         case DeploySelectionResult(commutingRes, conflictingRes, _) =>
           conflictingRes should contain theSameElementsAs expectedConflicting
@@ -198,7 +196,7 @@ class DeploySelectionTest
       val stream = fs2.Stream.fromIterator(cappedDeploys.toIterator)
 
       val test = deploySelection
-        .select((prestate, blocktime, protocolVersion, maxBlockSizeBytes, stream))
+        .select(prestate, blocktime, protocolVersion, maxBlockSizeBytes, stream)
         .map(_.commuting.map(_.deploy))
         .map(_ should contain theSameElementsAs cappedDeploys)
 
@@ -223,7 +221,7 @@ class DeploySelectionTest
     val deploySelection: DeploySelection[Task]    = DeploySelection.create[Task]()
 
     val test = deploySelection
-      .select((prestate, blocktime, protocolVersion, smallBlockSizeBytes, stream))
+      .select(prestate, blocktime, protocolVersion, smallBlockSizeBytes, stream)
       .map {
         case DeploySelectionResult(chosenDeploys, _, invalidDeploys) => {
           // Assert that all invalid deploys are a subset of the input set of invalid deploys.
