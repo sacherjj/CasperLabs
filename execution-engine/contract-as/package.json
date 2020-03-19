@@ -9,9 +9,11 @@
     "@assemblyscript/loader": "^0.9.1",
     "assemblyscript": "^0.9.1",
     "ava": "^2.4.0",
+    "concat-md": "^0.3.2",
     "ts-loader": "^6.2.1",
     "ts-node": "^8.5.4",
     "typedoc": "^0.17.0",
+    "typedoc-plugin-markdown": "^2.2.17",
     "typescript": "^3.8.3"
   },
   "scripts": {
@@ -23,7 +25,9 @@
     "asbuild:test:utils": "asc tests/assembly/utils.spec.as.ts -b build/utils.spec.as.wasm -t build/utils.spec.as.wat --sourceMap --validate --optimize",
     "asbuild:test": "npm run asbuild:test:bytesrepr && npm run asbuild:test:bignum && npm run asbuild:test:utils",
     "asbuild": "npm run asbuild:untouched && npm run asbuild:optimized",
-    "doc": "typedoc --ignoreCompilerErrors --out docs assembly/"
+    "prepublish-docs": "rm -rf apidoc && mkdir apidoc && node_modules/.bin/typedoc assembly/*.ts assembly/collections/*.ts --theme markdown --readme none --ignoreCompilerErrors --hideBreadcrumbs --skipSidebar --out temp-apidoc/ && concat-md --decrease-title-levels --dir-name-as-title temp-apidoc >> README.md",
+    "prepublishOnly": "cp README.md ._README.md && npm run prepublish-docs",
+    "postpublish": "rm -rf temp-apidoc && mv ._README.md README.md"
   },
   "author": "Michał Papierski <michal@papierski.net>",
   "license": "Apache-2.0",
