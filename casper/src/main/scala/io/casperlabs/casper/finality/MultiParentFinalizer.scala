@@ -56,7 +56,8 @@ object MultiParentFinalizer {
   def create[F[_]: Concurrent: FinalityStorage](
       dag: DagRepresentation[F],
       latestLFB: BlockHash, // Last LFB from the main chain
-      finalityDetector: FinalityDetector[F]
+      finalityDetector: FinalityDetector[F],
+      isHighway: Boolean
   ): F[MultiParentFinalizer[F]] =
     for {
       lfbCache  <- Ref[F].of[BlockHash](latestLFB)
@@ -75,12 +76,14 @@ object MultiParentFinalizer {
                             _ <- lfbCache.set(newLFB)
                             justFinalized <- FinalityDetectorUtil.finalizedIndirectly[F](
                                               dag,
-                                              newLFB
+                                              newLFB,
+                                              isHighway
                                             )
                             justOrphaned <- FinalityDetectorUtil.orphanedIndirectly(
                                              dag,
                                              newLFB,
-                                             justFinalized
+                                             justFinalized,
+                                             isHighway
                                            )
                           } yield Some(
                             FinalizedBlocks(newLFB, quorum, justFinalized, justOrphaned)

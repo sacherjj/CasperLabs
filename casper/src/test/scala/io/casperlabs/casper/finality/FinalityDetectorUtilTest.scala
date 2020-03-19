@@ -52,7 +52,8 @@ class FinalityDetectorUtilTest extends FlatSpec with BlockGenerator with Storage
                                                               )
           finalizedIndirectly <- FinalityDetectorUtil.finalizedIndirectly[Task](
                                   dag,
-                                  b.blockHash
+                                  b.blockHash,
+                                  isHighway = false
                                 )
         } yield assert(finalizedIndirectly == Set(a1.blockHash))
   }
@@ -97,7 +98,8 @@ class FinalityDetectorUtilTest extends FlatSpec with BlockGenerator with Storage
         _ <- FinalityDetectorUtil
               .finalizedIndirectly[G](
                 stateTDag,
-                c.blockHash
+                c.blockHash,
+                isHighway = false
               )
               .run(Map.empty) shouldBeF ((expectedNodesVisitedA, Set(a.blockHash)))
         d <- createAndStoreBlockFull[Task](v1, Seq(a), Seq.empty, bonds)
@@ -116,7 +118,8 @@ class FinalityDetectorUtilTest extends FlatSpec with BlockGenerator with Storage
         _ <- FinalityDetectorUtil
               .finalizedIndirectly[G](
                 stateTDag,
-                f.blockHash
+                f.blockHash,
+                isHighway = false
               )
               .run(Map.empty) shouldBeF (
               (
@@ -151,7 +154,8 @@ class FinalityDetectorUtilTest extends FlatSpec with BlockGenerator with Storage
           orphanedIndirectly <- FinalityDetectorUtil.orphanedIndirectly[Task](
                                  dag,
                                  e.blockHash,
-                                 finalizedIndirectly = Set(d.blockHash)
+                                 finalizedIndirectly = Set(d.blockHash),
+                                 isHighway = false
                                )
         } yield {
           assert(orphanedIndirectly == Set(b.blockHash, c.blockHash))

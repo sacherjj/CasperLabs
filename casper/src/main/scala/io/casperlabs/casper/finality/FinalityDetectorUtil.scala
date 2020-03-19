@@ -193,21 +193,39 @@ object FinalityDetectorUtil {
         .map(_.isUndecided)
     }
 
+  private def traverseUndecided[F[_]: Sync: FinalityStorage](
+      dag: DagRepresentation[F],
+      lfbHash: BlockHash,
+      // In Highway we want to stay within the same era, since parent era blocks should only be finalized
+      // by parent era validators, e.g. the switch block by the voting ballots.
+      isHighway: Boolean,
+      // Which dependencies to follow.
+      next: Message => Seq[BlockHash]
+  ): F[List[BlockHash]] =
+    for {
+      lfb <- dag.lookupUnsafe(lfbHash)
+      undecided <- DagOperations
+                    .bfTraverseF[F, Message](List(lfb)) { m =>
+                      collectUndecided(next(m))
+                        .flatMap(_.traverse(dag.lookupUnsafe))
+                        .map { ms =>
+                          if (isHighway) ms.filter(_.eraId == lfb.eraId) else ms
+                        }
+                    }
+                    // Not finalizing or orphaning ballots but we need to traverse them first to get to the blocks.
+                    .filter(_.isBlock)
+                    .map(_.messageHash)
+                    .toList
+    } yield undecided
+
   /** Returns a set of blocks that were finalized indirectly when a block from the main chain is finalized. */
   def finalizedIndirectly[F[_]: Sync: FinalityStorage](
       dag: DagRepresentation[F],
-      lfbHash: BlockHash
+      lfbHash: BlockHash,
+      isHighway: Boolean
   ): F[Set[BlockHash]] =
     for {
-      finalizedImplicitly <- DagOperations
-                              .bfTraverseF[F, BlockHash](List(lfbHash))(
-                                hash =>
-                                  dag
-                                    .lookupUnsafe(hash)
-                                    .map(_.parents)
-                                    .flatMap(collectUndecided(_))
-                              )
-                              .toList
+      finalizedImplicitly <- traverseUndecided[F](dag, lfbHash, isHighway, _.parents)
     } yield finalizedImplicitly.toSet - lfbHash // LFB is directly finalized.
 
   /** A block is orphaned if it's not in the p-past cone of the last finalized block.
@@ -217,17 +235,15 @@ object FinalityDetectorUtil {
   def orphanedIndirectly[F[_]: Sync: FinalityStorage](
       dag: DagRepresentation[F],
       lfbHash: BlockHash,
-      finalizedIndirectly: Set[BlockHash]
+      finalizedIndirectly: Set[BlockHash],
+      isHighway: Boolean
   ): F[Set[BlockHash]] =
     for {
-      lfb <- dag.lookupUnsafe(lfbHash)
-      undecided <- DagOperations
-                    .bfTraverseF[F, Message](List(lfb)) { m =>
-                      val deps = (m.parents ++ m.justifications.map(_.latestBlockHash)).distinct
-                      collectUndecided(deps).flatMap(_.traverse(dag.lookupUnsafe))
-                    }
-                    .filter(_.isBlock)
-                    .map(_.messageHash)
-                    .toList
+      undecided <- traverseUndecided(
+                    dag,
+                    lfbHash,
+                    isHighway,
+                    m => m.parents ++ m.justifications.map(_.latestBlockHash)
+                  )
     } yield undecided.toSet -- finalizedIndirectly - lfbHash
 }
