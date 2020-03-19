@@ -41,7 +41,8 @@ class MultiParentFinalizerTest extends FlatSpec with BlockGenerator with Storage
         multiParentFinalizer <- MultiParentFinalizer.create[Task](
                                  dag,
                                  genesis.blockHash,
-                                 MultiParentFinalizerTest.immediateFinalityStub
+                                 MultiParentFinalizerTest.immediateFinalityStub,
+                                 isHighway = false
                                )
         a0                    <- createAndStoreBlockFull[Task](v1, Seq(genesis), Seq.empty, bonds)
         a1                    <- createAndStoreBlockFull[Task](v1, Seq(a0), Seq.empty, bonds)
@@ -92,7 +93,8 @@ class MultiParentFinalizerTest extends FlatSpec with BlockGenerator with Storage
                                                                         .create[Task](
                                                                           dag,
                                                                           genesis.blockHash,
-                                                                          finalizer
+                                                                          finalizer,
+                                                                          isHighway = false
                                                                         )
         a        <- createAndStoreBlockFull[Task](v1, Seq(genesis), Seq.empty, bonds)
         nelBonds = NonEmptyList.fromListUnsafe(bonds.toList)
