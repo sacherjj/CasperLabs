@@ -64,7 +64,8 @@ object ChainSpec extends ParserImplicits {
 
   final case class Deploy(
       maxTtlMillis: Int Refined NonNegative,
-      maxDependencies: Int Refined NonNegative
+      maxDependencies: Int Refined NonNegative,
+      maxBlockSizeBytes: Int Refined NonNegative
   ) extends SubConfig
 
   /** The first set of changes should define the Genesis section and the costs. */
