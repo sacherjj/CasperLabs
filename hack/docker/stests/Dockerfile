@@ -18,6 +18,7 @@ RUN curl https://raw.githubusercontent.com/CasperLabs/stests/master/installer | 
 RUN sed -i -E 's/([A-Z_]+)=(.+)/\1=${\1:-\2}/' ~/.casperlabs-stests/vars
 
 # Replace the old client with a new one we prepared with some extra wasms in it.
-COPY .build/casperlabs_client-*.tar.gz .
-RUN pip uninstall casperlabs-client && \
-  pip install casperlabs_client-*.tar.gz
+COPY .build/casperlabs_client-*.tar.gz stests/
+RUN cd stests && \
+  pipenv uninstall casperlabs-client && \
+  pipenv install casperlabs_client-*.tar.gz
