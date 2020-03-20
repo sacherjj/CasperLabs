@@ -182,6 +182,7 @@ stests/console: .casperlabs
 	  --network casperlabs \
 		--name stests \
 		-v ${PWD}/keys:/root/casperlabs/keys \
+		-e KEYS=/root/casperlabs/keys \
 		-e STESTS_BROKER_REDIS_HOST=redis \
 		-e STESTS_CACHE_REDIS_HOST=redis \
 		-e STESTS_MWARE_REDIS_HOST=redis \

@@ -287,7 +287,7 @@ You can run the similar setup as we use at SRE team to test how nodes perform ov
 
 ## stests
 
-We can run [stests](https://github.com/CasperLabs/stests) workflow generators agains locally started nodes. This is possible over the ports they expose, in case we already have `stests` installed with
+We can run [stests](https://github.com/CasperLabs/stests) workflow generators against locally started nodes. This is possible over the ports they expose, in case we already have `stests` installed with
 all of its dependencies as per the project README, however we can also start it in docker.
 
 First build an image that we can use locally:
@@ -308,8 +308,8 @@ Inside the console, we can register a test network:
 
 ```console
 root@6566753ba2f7:~/casperlabs# stests-set-network poc1
-~/casperlabs/stests ~/casperlabs
 2020-03-20 16:06:48.433057 [INFO] [00017] STESTS :: Network poc1 was successfully registered
-~/casperlabs
-root@6566753ba2f7:~/casperlabs# stests-set-network-faucet-key poc1 keys/faucet-account/account-private.pem
+root@6566753ba2f7:~/casperlabs# stests-set-network-faucet-key poc1 $KEYS/faucet-account/account-private.pem
+# stests-set-network-faucet-key poc1 $KEYS/faucet-account/account-private.pem
+2020-03-20 17:43:49.038532 [INFO] [00036] STESTS :: Network poc1 faucet key was successfully registered
 ```
