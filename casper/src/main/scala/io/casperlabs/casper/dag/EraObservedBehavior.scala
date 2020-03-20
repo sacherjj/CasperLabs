@@ -88,9 +88,9 @@ object EraObservedBehavior {
           // message (a3) did not point at it with ``validatorPrevMessageHash`,
           // This is the equivocation.
           Equivocation(
-            Map(
-              tip            -> prev,
-              SwimlaneTip(m) -> PrevSeen(m)
+            Set(
+              Swimlane(tip, prev),
+              Swimlane(SwimlaneTip(m), PrevSeen(m))
             )
           )
       case Equivocation(tips) =>
@@ -98,7 +98,7 @@ object EraObservedBehavior {
         Equivocation(
           tips
             .find {
-              case (_, lastSeen) =>
+              case Swimlane(_, lastSeen) =>
                 lastSeen.validatorPrevMessageHash == m.messageHash
             }
             .fold(
@@ -106,9 +106,9 @@ object EraObservedBehavior {
               // a1 <- a2 <- a3
               //  \ \-a2Prime
               //   \-a1Prime
-              tips.updated(SwimlaneTip(m), PrevSeen(m))
+              tips + Swimlane(SwimlaneTip(m), PrevSeen(m))
             ) {
-              case (tip, _) =>
+              case old @ Swimlane(tip, _) =>
                 // Example:
                 // a1 <- a2 <- a3
                 //  \ \-a2Prime
@@ -117,7 +117,7 @@ object EraObservedBehavior {
                 // points at `a1Prime` with its `validatorPrevMessageHash`.
                 // If we wanted to return all validator's tips we need to update the state.
                 // Replace `lastSeen` because it points at `m` as previous message.
-                tips.updated(tip, PrevSeen(m))
+                tips - old + Swimlane(tip, PrevSeen(m))
             }
         )
     }
@@ -134,7 +134,7 @@ object EraObservedBehavior {
   // `prev` is the previous message we saw in the swimlane.
   private case class Swimlane(tip: SwimlaneTip, prev: PrevSeen) extends ValidatorStatus
   // We still need to store the tip of the swimlane b/c this will be part of justifications.
-  private case class Equivocation(tips: Map[SwimlaneTip, PrevSeen]) extends ValidatorStatus
+  private case class Equivocation(tips: Set[Swimlane]) extends ValidatorStatus
 
   private def unknown: ValidatorStatus = Undefined
 
@@ -259,7 +259,7 @@ object EraObservedBehavior {
                           // Validator is honest in the j-past-cone
                           honest(validator, tip.m)
                         case Equivocation(tips) =>
-                          equivocated(validator, tips.keySet.map(_.m))
+                          equivocated(validator, tips.map(_.tip.m))
                       }
                     }
                 }
