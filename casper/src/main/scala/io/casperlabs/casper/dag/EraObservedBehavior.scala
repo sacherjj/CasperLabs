@@ -63,16 +63,30 @@ object EraObservedBehavior {
   def local(data: Map[ByteString, Map[Validator, Set[Message]]]): LocalDagView[Message] =
     apply(data).asInstanceOf[LocalDagView[Message]]
 
+  // An enum that describes validator's observed state.
+  // When we traverse the j-past-cone of a message we will start from the tips,
+  // following justificiations and learning what was the creator's view of the world.
+  // We need to discover what's the status but at the end return where we started at.
   private sealed trait ValidatorStatus {
+    /* Update validator's state while traversing his swimlane by adding new message.
+     */
     def validate(m: Message): ValidatorStatus = this match {
-      case Undefined => Swmilane(SwmilaneTip(m), PrevSeen(m))
+      case Undefined           => Swmilane(SwmilaneTip(m), PrevSeen(m))
       case Swmilane(tip, prev) =>
+        // Example:
+        // a1 <- a2 <- a3
+        //     \ a2Prime
+        // We start at a3 (the tip of the swmilane) and traverse backwards.
         if (prev.validatorPrevMessageHash == m.messageHash)
           // Honest validator that builds proper chain.
+          // In the above example our previous message would be `a3` and current one `a2`.
           Swmilane(tip, PrevSeen(m))
         else
           // Newer message didn't cite the previous one.
           // We have the first fork in the swimlane.
+          // In the example above, we would see a2Prime now and learn that previous
+          // message (a3) did not point at it with ``validatorPrevMessageHash`,
+          // This is the equivocation.
           Equivocation(
             Map(
               tip            -> prev,
@@ -80,6 +94,7 @@ object EraObservedBehavior {
             )
           )
       case Equivocation(tips) =>
+        // We already know that the validator is equivocator but we're still travering his messages.
         Equivocation(
           tips
             .find {
@@ -87,10 +102,20 @@ object EraObservedBehavior {
                 lastSeen.validatorPrevMessageHash == m.messageHash
             }
             .fold(
-              // New fork in the swmilane
+              // New fork in the swmilane. Example:
+              // a1 <- a2 <- a3
+              //  \ \-a2Prime
+              //   \-a1Prime
               tips.updated(SwmilaneTip(m), PrevSeen(m))
             ) {
               case (tip, _) =>
+                // Example:
+                // a1 <- a2 <- a3
+                //  \ \-a2Prime
+                //   \-a1Prime - a1PrimePrime
+                // Even though we know `a1PrimePrime` is already an equivocation it properly
+                // points at `a1Prime` with its `validatorPrevMessageHash`.
+                // If we wanted to return all validator's tips we need to update the state.
                 // Replace `lastSeen` because it points at `m` as previous message.
                 tips.updated(tip, PrevSeen(m))
             }
