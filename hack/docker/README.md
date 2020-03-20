@@ -283,3 +283,31 @@ make clean
 You can run the similar setup as we use at SRE team to test how nodes perform over time.
 
 [The script to run LRT](/hack/docker/scripts/lrt.sh).
+
+
+## stests
+
+We can run [stests](https://github.com/CasperLabs/stests) workflow generators agains locally started nodes. This is possible over the ports they expose, in case we already have `stests` installed with
+all of its dependencies as per the project README, however we can also start it in docker.
+
+First build an image that we can use locally:
+
+```console
+make stests/build
+```
+
+Then start the nodes and the singleton services, which includes `redis`, the database and message
+broker used by `stests`. Following that we can launch an interactive console where the `stests` command aliases are already registered:
+
+```console
+make up
+make stests/console
+```
+
+Inside the console, we can register a test network:
+```console
+root@a8e09c5af719:/# stests-set-network poc1
+~/casperlabs/stests /
+2020-03-20 15:48:10.116893 [INFO] [00014] STESTS :: Network poc1 was successfully registered
+/
+```

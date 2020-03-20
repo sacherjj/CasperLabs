@@ -165,3 +165,22 @@ maybe-reset-highway-env:
 	if [ "$${RUNNING}" -eq "0" ] || [ "$${DEFINED}" -eq "1" ]; then \
 		$(RESET_HIGHWAY_ENV); \
 	fi
+
+
+# https://github.com/CasperLabs/stests
+stests/build:
+	cd stests && \
+	docker build \
+		--build-arg CACHEBUST=$$(date +%s) \
+		-f Dockerfile -t casperlabs/stests:latest .
+
+# After nodes have been started, and `redis` with `make up`,
+# and an stest image built with `make stests/build`,
+# this command can run stests in interactive mode.
+stests/console:
+	docker run -it --rm \
+	  --network casperlabs \
+		-e STESTS_BROKER_REDIS_HOST=redis \
+		-e STESTS_CACHE_REDIS_HOST=redis \
+		-e STESTS_MWARE_REDIS_HOST=redis \
+		casperlabs/stests:latest bash

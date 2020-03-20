@@ -111,3 +111,10 @@ services:
       - ${PWD}/grpcwebproxy/key.pem:/etc/nginx/tls/key.pem
     networks:
       - casperlabs
+
+  # Redis database required for stests.
+  redis:
+    image: redis:5.0
+    container_name: redis
+    networks:
+      - casperlabs
