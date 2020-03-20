@@ -169,10 +169,26 @@ maybe-reset-highway-env:
 
 # https://github.com/CasperLabs/stests
 stests/build:
-	cd stests && \
+	# Build contracts stests will want to use.
+	cd ../../execution-engine && \
+	  make build-contract-rs/transfer-to-account-u512-stored
+	# Copy them over under the python client; it's where stests will look for them at the moment.
+	cp ../../execution-engine/target/wasm32-unknown-unknown/release/transfer_to_account_u512_stored.wasm \
+	   ../../integration-testing/client/CasperLabsClient/casperlabs_client/
+
+	# Package a the latest Python client; the one on pypi might be older than the latest and greatest; plus lacks some of the wasms.
+	cd ../.. &&	make build-python-client
+
+	# Make the client available to the docker deamon here (smaller context.).
+	rm -rf stests/.build
+	mkdir -p stests/.build
+	cp ../../integration-testing/client/CasperLabsClient/dist/casperlabs_client*.tar.gz stests/.build/
+
 	docker build \
-		--build-arg CACHEBUST=$$(date +%s) \
-		-f Dockerfile -t casperlabs/stests:latest .
+	  --build-arg CACHEBUST=$$(date +%s) \
+		-f stests/Dockerfile -t casperlabs/stests:latest stests
+
+	rm -rf stests/.build
 
 # After nodes have been started, and `redis` with `make up`,
 # and an stest image built with `make stests/build`,

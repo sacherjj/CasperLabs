@@ -304,12 +304,17 @@ make up
 make stests/console
 ```
 
-Inside the console, we can register a test network:
+Inside the console, we can register a test network. Note that we have to use full path to files.
 
 ```console
 root@6566753ba2f7:~/casperlabs# stests-set-network poc1
 2020-03-20 16:06:48.433057 [INFO] [00017] STESTS :: Network poc1 was successfully registered
 root@6566753ba2f7:~/casperlabs# stests-set-network-faucet-key poc1 $KEYS/faucet-account/account-private.pem
-# stests-set-network-faucet-key poc1 $KEYS/faucet-account/account-private.pem
+
+root@6566753ba2f7:~/casperlabs# stests-set-network-faucet-key poc1 $KEYS/faucet-account/account-private.pem
 2020-03-20 17:43:49.038532 [INFO] [00036] STESTS :: Network poc1 faucet key was successfully registered
+
+root@6566753ba2f7:~/casperlabs# stests-set-node poc1:1 node-0:40401 full
+2020-03-20 17:50:39.831992 [INFO] [00048] STESTS :: Node poc1:1 was successfully registered
+
 ```

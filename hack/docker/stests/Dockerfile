@@ -16,3 +16,8 @@ RUN curl https://raw.githubusercontent.com/CasperLabs/stests/master/installer | 
 # `export STESTS_BROKER_REDIS_HOST=localhost` into
 # `export STESTS_BROKER_REDIS_HOST=${STESTS_BROKER_REDIS_HOST:-localhost}`
 RUN sed -i -E 's/([A-Z_]+)=(.+)/\1=${\1:-\2}/' ~/.casperlabs-stests/vars
+
+# Replace the old client with a new one we prepared with some extra wasms in it.
+COPY .build/casperlabs_client-*.tar.gz .
+RUN pip uninstall casperlabs-client && \
+  pip install casperlabs_client-*.tar.gz
