@@ -63,6 +63,81 @@ object EraObservedBehavior {
   def local(data: Map[ByteString, Map[Validator, Set[Message]]]): LocalDagView[Message] =
     apply(data).asInstanceOf[LocalDagView[Message]]
 
+  // An enum that describes validator's observed state.
+  // When we traverse the j-past-cone of a message we will start from the tips,
+  // following justificiations and learning what was the creator's view of the world.
+  // We need to discover what's the status but at the end return where we started at.
+  private sealed trait ValidatorStatus {
+    /* Update validator's state while traversing his swimlane by adding new message.
+     */
+    def validate(m: Message): ValidatorStatus = this match {
+      case Undefined           => Swimlane(SwimlaneTip(m), PrevSeen(m))
+      case Swimlane(tip, prev) =>
+        // Example:
+        // a1 <- a2 <- a3
+        //     \ a2Prime
+        // We start at a3 (the tip of the swimlane) and traverse backwards.
+        if (prev.validatorPrevMessageHash == m.messageHash)
+          // Honest validator that builds proper chain.
+          // In the above example our previous message would be `a3` and current one `a2`.
+          Swimlane(tip, PrevSeen(m))
+        else
+          // Newer message didn't cite the previous one.
+          // We have the first fork in the swimlane.
+          // In the example above, we would see a2Prime now and learn that previous
+          // message (a3) did not point at it with ``validatorPrevMessageHash`,
+          // This is the equivocation.
+          Equivocation(
+            Set(
+              Swimlane(tip, prev),
+              Swimlane(SwimlaneTip(m), PrevSeen(m))
+            )
+          )
+      case Equivocation(tips) =>
+        // We already know that the validator is equivocator but we're still travering his messages.
+        Equivocation(
+          tips
+            .find {
+              case Swimlane(_, lastSeen) =>
+                lastSeen.validatorPrevMessageHash == m.messageHash
+            }
+            .fold(
+              // New fork in the swmilane. Example:
+              // a1 <- a2 <- a3
+              //  \ \-a2Prime
+              //   \-a1Prime
+              tips + Swimlane(SwimlaneTip(m), PrevSeen(m))
+            ) {
+              case old @ Swimlane(tip, _) =>
+                // Example:
+                // a1 <- a2 <- a3
+                //  \ \-a2Prime
+                //   \-a1Prime - a1PrimePrime
+                // Even though we know `a1PrimePrime` is already an equivocation it properly
+                // points at `a1Prime` with its `validatorPrevMessageHash`.
+                // If we wanted to return all validator's tips we need to update the state.
+                // Replace `lastSeen` because it points at `m` as previous message.
+                tips - old + Swimlane(tip, PrevSeen(m))
+            }
+        )
+    }
+  }
+
+  private final case class SwimlaneTip(m: Message)
+  private final case class PrevSeen(m: Message) {
+    def validatorPrevMessageHash: BlockHash = m.validatorPrevMessageHash
+  }
+
+  // Hasn't seen any messages yet.
+  private case object Undefined extends ValidatorStatus
+  // `Tip` is the latest message by that validator observed in the j-past-cone.
+  // `prev` is the previous message we saw in the swimlane.
+  private case class Swimlane(tip: SwimlaneTip, prev: PrevSeen) extends ValidatorStatus
+  // We still need to store the tip of the swimlane b/c this will be part of justifications.
+  private case class Equivocation(tips: Set[Swimlane]) extends ValidatorStatus
+
+  private def unknown: ValidatorStatus = Undefined
+
   /**
     * Calculates panorama of a set of justifications.
     *
@@ -70,10 +145,9 @@ object EraObservedBehavior {
     * It is the latest message (or multiple messages) per validator seen
     * in the j-past-cone of the message.
     *
-    * This particular method is capped by a "stop block". It won't consider
-    * blocks created before that stop block.
+    * We start with the `eraObservedBehavior` which is a local view of the DAG.
+    * It contains superset of what the `justificaions` may point at.
     *
-    * NOTE: In the future, this will be using Andreas' Merkle trie optimization.
     * @param dag
     * @param justifications
     * @param erasObservedBehavior
@@ -90,17 +164,8 @@ object EraObservedBehavior {
     import ObservedValidatorBehavior._
 
     // Map a message's direct justifications to a map that represents its j-past-cone view.
-    val toEraMap: Message => F[Map[EraId, Map[Validator, Set[Message]]]] =
-      m =>
-        m.justifications.toList
-          .traverse(j => dag.lookupUnsafe(j.latestBlockHash))
-          .map { messages =>
-            messages
-              .groupBy(_.eraId)
-              .mapValues(_.groupBy(_.validatorId).mapValues(_.toSet)) |+| Map(
-              m.eraId -> Map(m.validatorId -> Set(m))
-            )
-          }
+    val toEraMap: List[Message] => Map[EraId, Map[Validator, Set[Message]]] =
+      _.groupBy(_.eraId).mapValues(_.groupBy(_.validatorId).mapValues(_.toSet))
 
     def empty(v: Validator): (Validator, Set[Message]) =
       (v, Set.empty[Message])
@@ -113,117 +178,94 @@ object EraObservedBehavior {
     // We will use it later when merging two p-cones and not skip validators not visible in the direct justifications.
     val baseMap =
       erasObservedBehavior.erasValidators
-        .filterNot(_.isEmpty) // filter out Genesis
+        .filterNot(_._1.isEmpty) // filter out Genesis
         .mapValues(_.toList.map(_ -> Set.empty[Message]).toMap)
 
-    def mergeJPastCones(
-        a: Map[EraId, Map[Validator, Set[Message]]],
-        b: Map[EraId, Map[Validator, Set[Message]]]
-    ): F[Map[EraId, Map[Validator, Set[Message]]]] =
-      for {
-        merged <- (a |+| b).toList
-                   .traverse {
-                     case (era, validatorsLatestMessages) =>
-                       validatorsLatestMessages.toList
-                         .traverse {
-                           case (validator, messages) =>
-                             erasObservedBehavior.getStatus(era, validator) match {
-                               case None =>
-                                 val msg = s"Error when traversing j-past-cone. Expected to have seen a message from validator " +
-                                   s"${PrettyPrinter.buildString(validator)} in era ${PrettyPrinter.buildString(era)} but it was not present."
-                                 MonadThrowable[F].raiseError[(Validator, Set[Message])](
-                                   new IllegalStateException(msg) with NoStackTrace
-                                 )
-                               case Some(Empty) =>
-                                 // We haven't seen any messages from that validator in this era.
-                                 // There can't be any in the justifications either.
-                                 empty(validator).pure[F]
-                               case Some(Honest(_)) =>
-                                 if (messages.nonEmpty) {
-                                   import io.casperlabs.shared.Sorting.jRankOrdering
-                                   // Since we know that validator is honest we can pick the newest message.
-                                   honest(validator, messages.maxBy(_.jRank)).pure[F]
-                                 } else {
-                                   // There are no messages in the direct justifications
-                                   // but we know that local DAG has seen messages from that validator.
-                                   // We have to look for them in the indirect ones but it still might not be there
-                                   // (because creator of the messages hasn't seen anything from that validator).
-                                   DagOperations
-                                     .swimlaneVFromJustifications[F](
-                                       validator,
-                                       validatorsLatestMessages.values.flatten.toList,
-                                       dag
-                                     )
-                                     .takeWhile(_.eraId == era)
-                                     .headOption
-                                     .map(_.fold(empty(validator))(honest(validator, _)))
-                                 }
-                               case Some(Equivocated(_, _)) =>
-                                 if (messages.size > 1)
-                                   // `messages` should be the latest messages by that validator in this era.
-                                   // They are tips of his swimlane and evidences for equivocation.
-                                   equivocated(validator, messages).pure[F]
-                                 else {
-                                   val startingPoints =
-                                     validatorsLatestMessages.values.flatten.toList
+    val observedKeyBlocks =
+      erasObservedBehavior.keyBlockHashes.map(PrettyPrinter.buildString(_)).mkString("[", ", ", "]")
 
-                                   // Latest message by that validator in this era visible in the j-past-cone
-                                   // of the message received.
-                                   val jConeTips = DagOperations
-                                     .swimlaneVFromJustifications[F](
-                                       validator,
-                                       startingPoints,
-                                       dag
-                                     )
-                                     .takeWhile(_.eraId == era)
-                                     .foldWhileLeft(Map.empty[Long, Set[Message]]) {
-                                       case (acc, msg) =>
-                                         // We should be traversing the DAG by one j-rank at a time.
-                                         val prevJRank = msg.jRank + 1L
-                                         val updatedAcc = acc
-                                           .getOrElse(prevJRank, Set.empty)
-                                           .find(_.validatorPrevMessageHash == msg.messageHash) // find the chain
-                                           .fold(
-                                             // Current message is not pointed by the newer message by that validator.
-                                             // This is an equivocation.
-                                             acc |+| Map(msg.jRank -> Set(msg))
-                                           )(newerMessage => {
-                                             // Validator's newer message points at `msg` as his previous message.
-                                             // This creates a correct swimlane.
-                                             val prevJRankMessagesUpdated = acc(prevJRank) - newerMessage
-                                             // Update current jRank.
-                                             acc
-                                               .updated(prevJRank, prevJRankMessagesUpdated) |+| Map(
-                                               msg.jRank -> Set(msg)
-                                             )
-                                           })
-                                         if (updatedAcc.filter(_._2.size > 1).size == 2) {
-                                           // We need only two tips if it's the equivocation.
-                                           Right(updatedAcc)
-                                         } else Left(updatedAcc)
-                                     }
+    (baseMap |+| toEraMap(justifications.filterNot(_.isGenesisLike))).toList
+      .traverse {
+        case (era, validatorsLatestMessages) =>
+          validatorsLatestMessages.toList
+            .traverse {
+              case (validator, messages) =>
+                erasObservedBehavior.getStatus(era, validator) match {
+                  case None =>
+                    val msg = s"Message directly cites validator " +
+                      s"${PrettyPrinter.buildString(validator)} in an era ${PrettyPrinter
+                        .buildString(era)} " +
+                      s"but expected messages only from $observedKeyBlocks eras."
+                    MonadThrowable[F].raiseError[(Validator, Set[Message])](
+                      new IllegalStateException(msg) with NoStackTrace
+                    )
+                  case Some(Empty) =>
+                    // We haven't seen any messages from that validator in this era.
+                    // There can't be any in the justifications either.
+                    empty(validator).pure[F]
+                  case Some(Honest(_)) =>
+                    if (messages.nonEmpty) {
+                      import io.casperlabs.shared.Sorting.jRankOrdering
+                      // Since we know that validator is honest we can pick the newest message.
+                      honest(validator, messages.maxBy(_.jRank)).pure[F]
+                    } else {
+                      // There are no messages in the direct justifications
+                      // but we know that local DAG has seen messages from that validator.
+                      // We have to look for them in the indirect ones but it still might not be there
+                      // (because creator of the messages hasn't seen anything from that validator).
+                      DagOperations
+                        .swimlaneVFromJustifications[F](
+                          validator,
+                          validatorsLatestMessages.values.flatten.toList,
+                          dag
+                        )
+                        .takeWhile(_.eraId == era)
+                        .headOption
+                        .map(_.fold(empty(validator))(honest(validator, _)))
+                    }
+                  case Some(Equivocated(_, _)) =>
+                    if (messages.size > 1)
+                      // `messages` should be the latest messages by that validator in this era.
+                      // They are tips of his swimlane and evidences for equivocation.
+                      equivocated(validator, messages).pure[F]
+                    else {
+                      val startingPoints =
+                        validatorsLatestMessages.values.flatten.toList
 
-                                   jConeTips.map(_.values.flatten.toList) map {
-                                     case Nil =>
-                                       // No message in the j-past-cone
-                                       empty(validator)
-                                     case head :: Nil =>
-                                       // Validator is honest in the j-past-cone
-                                       honest(validator, head)
-                                     case equivocations =>
-                                       equivocated(validator, equivocations.toSet)
-                                   }
-                                 }
-                             }
-                         }
-                         .map(era -> _.toMap)
-                   }
-                   .map(_.toMap)
-      } yield merged
+                      // Latest message by that validator in this era visible in the j-past-cone
+                      // of the message received.
+                      val jConeTips = DagOperations
+                        .swimlaneVFromJustifications[F](
+                          validator,
+                          startingPoints,
+                          dag
+                        )
+                        .takeWhile(_.eraId == era)
+                        .foldWhileLeft(unknown) {
+                          case (acc, msg) =>
+                            acc.validate(msg) match {
+                              case Undefined       => unknown.asLeft[ValidatorStatus]
+                              case h: Swimlane     => h.asLeft[ValidatorStatus]
+                              case e: Equivocation => e.asRight[ValidatorStatus]
+                            }
+                        }
 
-    justifications
-      .map(toEraMap)
-      .foldLeftM(baseMap) { case (acc, eraMapF) => eraMapF.flatMap(mergeJPastCones(acc, _)) }
+                      jConeTips.map {
+                        case Undefined =>
+                          // No message in the j-past-cone
+                          empty(validator)
+                        case Swimlane(tip, _) =>
+                          // Validator is honest in the j-past-cone
+                          honest(validator, tip.m)
+                        case Equivocation(tips) =>
+                          equivocated(validator, tips.map(_.tip.m))
+                      }
+                    }
+                }
+            }
+            .map(era -> _.toMap)
+      }
+      .map(_.toMap)
       .map { tips =>
         val nonEmptyTips = tips.mapValues(_.filterNot(_._2.isEmpty))
         apply(nonEmptyTips).asInstanceOf[MessageJPast[Message]]

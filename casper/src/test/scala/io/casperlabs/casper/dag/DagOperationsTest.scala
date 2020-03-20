@@ -644,7 +644,7 @@ class DagOperationsTest
           c3 <- createAndStoreBlockFull[Task](
                  v3,
                  Seq(c2),
-                 Seq(a2),
+                 Seq(a2, sb),
                  bondsThree,
                  keyBlockHash = c1.blockHash
                )
@@ -675,6 +675,7 @@ class DagOperationsTest
           latestGenesisMessageHashes = latestMessages
             .latestMessagesInEra(genesis.blockHash)
             .mapValues(_.map(_.messageHash))
+
           expectedGenesis = Map(
             v1 -> Set(a1.blockHash),
             v2 -> Set(sb.blockHash),
@@ -683,6 +684,7 @@ class DagOperationsTest
           latestChildMessageHashes = latestMessages
             .latestMessagesInEra(c1.blockHash)
             .mapValues(_.map(_.messageHash))
+
           expectedChild = Map(
             v1 -> Set(a2.blockHash),
             v3 -> Set(c2.blockHash)
@@ -849,7 +851,7 @@ class DagOperationsTest
             .mapValues(_.map(_.messageHash))
 
           expectedGenesis = Map(
-            v1 -> Set(a1.blockHash, a2.blockHash),
+            v1 -> Set(a1Prime.blockHash, a2.blockHash),
             v2 -> Set(b2.blockHash)
           )
 
