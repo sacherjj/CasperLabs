@@ -145,10 +145,9 @@ object EraObservedBehavior {
     * It is the latest message (or multiple messages) per validator seen
     * in the j-past-cone of the message.
     *
-    * This particular method is capped by a "stop block". It won't consider
-    * blocks created before that stop block.
+    * We start with the `eraObservedBehavior` which is a local view of the DAG.
+    * It contains superset of what the `justificaions` may point at.
     *
-    * NOTE: In the future, this will be using Andreas' Merkle trie optimization.
     * @param dag
     * @param justifications
     * @param erasObservedBehavior
