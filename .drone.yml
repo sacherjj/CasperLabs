@@ -187,6 +187,7 @@ steps:
 
 - name: black-and-flake8
   commands:
+  - "apt update && apt install python3.7-venv"
   - "cd integration-testing"
   - "./run_flake8_black.sh"
   image: "casperlabs/buildenv:latest"
