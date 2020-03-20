@@ -161,8 +161,7 @@ impl TestKey {
 
 impl ToBytes for TestKey {
     fn to_bytes(&self) -> Result<Vec<u8>, bytesrepr::Error> {
-        // TODO: use Vec::with_capacity
-        let mut ret = Vec::new();
+        let mut ret = Vec::with_capacity(self.serialized_length());
         match self {
             TestKey::Account(public_key) => {
                 ret.push(KEY_ACCOUNT_ID);

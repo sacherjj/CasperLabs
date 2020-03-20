@@ -10,7 +10,7 @@ use hex_fmt::HexFmt;
 use crate::{
     account::PublicKey,
     bytesrepr::{self, Error, FromBytes, ToBytes},
-    AccessRights, ContractRef, URef, UREF_SERIALIZED_LENGTH,
+    ContractRef, URef, UREF_SERIALIZED_LENGTH,
 };
 
 const ACCOUNT_ID: u8 = 0;
@@ -100,33 +100,6 @@ impl Key {
             Key::URef(uref) => Key::URef(uref.remove_access_rights()),
             other => other,
         }
-    }
-
-    // TODO - remove this method as it's unused
-    #[doc(hidden)]
-    /// Creates an instance of `Key::Hash` from the hex-encoded string.  Returns `None` if
-    /// `hex_encodede_hash` does not decode to a 32-byte array.
-    pub fn parse_hash(hex_encodede_hash: &str) -> Option<Key> {
-        decode_from_hex(hex_encodede_hash).map(Key::Hash)
-    }
-
-    // TODO - remove this method as it's unused
-    #[doc(hidden)]
-    /// Creates an instance of `Key::URef` from the hex-encoded string.  Returns `None` if
-    /// `hex_encoded_uref` does not decode to a 32-byte array.
-    pub fn parse_uref(hex_encoded_uref: &str, access_rights: AccessRights) -> Option<Key> {
-        decode_from_hex(hex_encoded_uref).map(|uref| Key::URef(URef::new(uref, access_rights)))
-    }
-
-    // TODO - remove this method as it's unused
-    #[doc(hidden)]
-    /// Creates an instance of `Key::Local` from the hex-encoded strings.  Returns `None` if
-    /// `hex_encoded_seed` does not decode to a 32-byte array, or if `hex_encoded_key_bytes` does
-    /// does not decode from hex.
-    pub fn parse_local(hex_encoded_seed: &str, hex_encoded_key_bytes: &str) -> Option<Key> {
-        let decoded_seed = decode_from_hex(hex_encoded_seed)?;
-        let decoded_key_bytes = base16::decode(drop_hex_prefix(hex_encoded_key_bytes)).ok()?;
-        Some(Key::local(decoded_seed, &decoded_key_bytes))
     }
 
     /// Returns a human-readable version of `self`, with the inner bytes encoded to Base16.
@@ -219,32 +192,6 @@ impl Debug for Key {
     }
 }
 
-/// Drops "0x" prefix from the input string and turns rest of it into a slice.
-fn drop_hex_prefix(s: &str) -> &str {
-    if s.starts_with("0x") {
-        &s[2..]
-    } else {
-        &s
-    }
-}
-
-/// Tries to decode `input` as a 32-byte array.  `input` may be prefixed with "0x".  Returns `None`
-/// if `input` cannot be parsed as hex, or if it does not parse to exactly 32 bytes.
-fn decode_from_hex(input: &str) -> Option<[u8; KEY_HASH_LENGTH]> {
-    const UNDECORATED_INPUT_LEN: usize = 2 * KEY_HASH_LENGTH;
-
-    let undecorated_input = drop_hex_prefix(input);
-
-    if undecorated_input.len() != UNDECORATED_INPUT_LEN {
-        return None;
-    }
-
-    let mut output = [0u8; KEY_HASH_LENGTH];
-    let _bytes_written = base16::decode_slice(undecorated_input, &mut output).ok()?;
-    debug_assert!(_bytes_written == KEY_HASH_LENGTH);
-    Some(output)
-}
-
 impl From<URef> for Key {
     fn from(uref: URef) -> Key {
         Key::URef(uref)
@@ -316,11 +263,6 @@ impl FromBytes for Key {
 
 #[cfg(test)]
 mod tests {
-    use proptest::{
-        prelude::*,
-        string::{string_regex, RegexGeneratorStrategy},
-    };
-
     use super::*;
     use crate::{
         bytesrepr::{Error, FromBytes},
@@ -404,63 +346,6 @@ mod tests {
     }
 
     #[test]
-    fn parse_local_with_arbitrary_length() {
-        let short_key = base16::encode_lower(&[42u8; 32]);
-        let long_key = base16::encode_lower(&vec![42u8; 255]);
-        let seed = "0102010201020102010201020102010201020102010201020102010201020102";
-
-        let local1 = Key::parse_local(seed, &short_key).expect("should parse local with short key");
-        let local2 = Key::parse_local(seed, &long_key).expect("should parse local with long key");
-
-        // verifies that the arbitrary key length doesn't get truncated
-        assert_ne!(local1, local2);
-    }
-
-    /// Create a base16 string of `length` size.
-    fn base16_str_arb(length: usize) -> RegexGeneratorStrategy<String> {
-        string_regex(&format!("[0-9a-f]{{{}}}", length)).unwrap()
-    }
-
-    proptest! {
-
-        #[test]
-        fn should_fail_parse_small_base16_to_key(base16_addr in base16_str_arb(32)) {
-            assert!(Key::parse_hash(&base16_addr).is_none());
-            assert!(Key::parse_uref(&base16_addr, AccessRights::READ).is_none());
-            assert!(Key::parse_local(&base16_addr, &base16_addr).is_none());
-        }
-
-        #[test]
-        fn should_parse_64_base16_to_key(base16_addr in base16_str_arb(64)) {
-            assert!(Key::parse_hash(&base16_addr).is_some());
-            assert!(Key::parse_uref(&base16_addr, AccessRights::READ).is_some());
-            assert!(Key::parse_local(&base16_addr, &base16_addr).is_some());
-        }
-
-        #[test]
-        fn should_fail_parse_long_base16_to_key(base16_addr in base16_str_arb(70)) {
-            assert!(Key::parse_hash(&base16_addr).is_none());
-            assert!(Key::parse_uref(&base16_addr, AccessRights::READ).is_none());
-            assert!(Key::parse_local(&base16_addr, &base16_addr).is_none());
-        }
-
-        #[test]
-        fn should_fail_parse_not_base16_input(invalid_addr in "[f-z]{32}") {
-            // Only a-f characters are valid hex.
-            assert!(Key::parse_hash(&invalid_addr).is_none());
-            assert!(Key::parse_uref(&invalid_addr, AccessRights::READ).is_none());
-            assert!(Key::parse_local(&invalid_addr, &invalid_addr).is_none());
-        }
-
-        #[test]
-        fn should_parse_base16_0x_prefixed(base16_addr in base16_str_arb(64)) {
-            let preppended = format!("0x{}", &base16_addr);
-            assert!(Key::parse_hash(&preppended).is_some());
-            assert_eq!(Key::parse_hash(&preppended), Key::parse_hash(&base16_addr));
-        }
-    }
-
-    #[test]
     fn abuse_vec_key() {
         // Prefix is 2^32-1 = shouldn't allocate that much
         let bytes: Vec<u8> = vec![255, 255, 255, 255, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
@@ -469,28 +354,6 @@ mod tests {
         assert_eq!(res.expect_err("should fail"), Error::OutOfMemory);
         #[cfg(target_os = "macos")]
         assert_eq!(res.expect_err("should fail"), Error::EarlyEndOfStream);
-    }
-
-    #[test]
-    fn decode_from_hex() {
-        let input = [255; 32]; // `255` decimal is `ff` hex
-        let hex_input = "f".repeat(64);
-        assert_eq!(Some(input), super::decode_from_hex(&hex_input));
-
-        let prefixed_hex_input = format!("0x{}", hex_input);
-        assert_eq!(Some(input), super::decode_from_hex(&prefixed_hex_input));
-
-        let bad_prefix = format!("0X{}", hex_input);
-        assert!(super::decode_from_hex(&bad_prefix).is_none());
-
-        let too_short = "f".repeat(63);
-        assert!(super::decode_from_hex(&too_short).is_none());
-
-        let too_long = "f".repeat(65);
-        assert!(super::decode_from_hex(&too_long).is_none());
-
-        let invalid_hex = "g".repeat(64);
-        assert!(super::decode_from_hex(&invalid_hex).is_none());
     }
 
     #[test]
