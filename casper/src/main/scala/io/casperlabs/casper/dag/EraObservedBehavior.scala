@@ -71,16 +71,16 @@ object EraObservedBehavior {
     /* Update validator's state while traversing his swimlane by adding new message.
      */
     def validate(m: Message): ValidatorStatus = this match {
-      case Undefined           => Swmilane(SwmilaneTip(m), PrevSeen(m))
-      case Swmilane(tip, prev) =>
+      case Undefined           => Swimlane(SwimlaneTip(m), PrevSeen(m))
+      case Swimlane(tip, prev) =>
         // Example:
         // a1 <- a2 <- a3
         //     \ a2Prime
-        // We start at a3 (the tip of the swmilane) and traverse backwards.
+        // We start at a3 (the tip of the swimlane) and traverse backwards.
         if (prev.validatorPrevMessageHash == m.messageHash)
           // Honest validator that builds proper chain.
           // In the above example our previous message would be `a3` and current one `a2`.
-          Swmilane(tip, PrevSeen(m))
+          Swimlane(tip, PrevSeen(m))
         else
           // Newer message didn't cite the previous one.
           // We have the first fork in the swimlane.
@@ -90,7 +90,7 @@ object EraObservedBehavior {
           Equivocation(
             Map(
               tip            -> prev,
-              SwmilaneTip(m) -> PrevSeen(m)
+              SwimlaneTip(m) -> PrevSeen(m)
             )
           )
       case Equivocation(tips) =>
@@ -106,7 +106,7 @@ object EraObservedBehavior {
               // a1 <- a2 <- a3
               //  \ \-a2Prime
               //   \-a1Prime
-              tips.updated(SwmilaneTip(m), PrevSeen(m))
+              tips.updated(SwimlaneTip(m), PrevSeen(m))
             ) {
               case (tip, _) =>
                 // Example:
@@ -123,7 +123,7 @@ object EraObservedBehavior {
     }
   }
 
-  private final case class SwmilaneTip(m: Message)
+  private final case class SwimlaneTip(m: Message)
   private final case class PrevSeen(m: Message) {
     def validatorPrevMessageHash: BlockHash = m.validatorPrevMessageHash
   }
@@ -132,9 +132,9 @@ object EraObservedBehavior {
   private case object Undefined extends ValidatorStatus
   // `Tip` is the latest message by that validator observed in the j-past-cone.
   // `prev` is the previous message we saw in the swimlane.
-  private case class Swmilane(tip: SwmilaneTip, prev: PrevSeen) extends ValidatorStatus
+  private case class Swimlane(tip: SwimlaneTip, prev: PrevSeen) extends ValidatorStatus
   // We still need to store the tip of the swimlane b/c this will be part of justifications.
-  private case class Equivocation(tips: Map[SwmilaneTip, PrevSeen]) extends ValidatorStatus
+  private case class Equivocation(tips: Map[SwimlaneTip, PrevSeen]) extends ValidatorStatus
 
   private def unknown: ValidatorStatus = Undefined
 
@@ -246,7 +246,7 @@ object EraObservedBehavior {
                           case (acc, msg) =>
                             acc.validate(msg) match {
                               case Undefined       => unknown.asLeft[ValidatorStatus]
-                              case h: Swmilane     => h.asLeft[ValidatorStatus]
+                              case h: Swimlane     => h.asLeft[ValidatorStatus]
                               case e: Equivocation => e.asRight[ValidatorStatus]
                             }
                         }
@@ -255,7 +255,7 @@ object EraObservedBehavior {
                         case Undefined =>
                           // No message in the j-past-cone
                           empty(validator)
-                        case Swmilane(tip, _) =>
+                        case Swimlane(tip, _) =>
                           // Validator is honest in the j-past-cone
                           honest(validator, tip.m)
                         case Equivocation(tips) =>
