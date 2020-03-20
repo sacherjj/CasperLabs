@@ -17,7 +17,7 @@ import {Pair} from "./pair";
 // }
 
 /**
- * @hidden
+ * Length of address
  */
 const ADDR_LENGTH = 32;
 
