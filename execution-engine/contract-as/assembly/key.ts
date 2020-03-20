@@ -7,27 +7,46 @@ import {Error} from "./error";
 import {checkTypedArrayEqual, typedToArray} from "./utils";
 import {Result, Ref, Error as BytesreprError} from "./bytesrepr";
 
+/**
+ * Enum representing a variant of a [[Key]] - Account, Hash or URef.
+ */
 export enum KeyVariant {
+    /** The Account variant */
     ACCOUNT_ID = 0,
+    /** The Hash variant */
     HASH_ID = 1,
+    /** The URef variant */
     UREF_ID = 2,
 }
 
+/**
+ * The ID of an ED25519 public key.
+ */
 export const PUBLIC_KEY_ED25519_ID: u8 = 0;
 
+/** A cryptographic public key. */
 export class PublicKey {
+    /**
+     * Constructs a new `PublicKey`.
+     *
+     * @param variant An ID of the used key variant.
+     * @param bytes The bytes constituting the public key.
+     */
     constructor(public variant: u8, public bytes: Uint8Array) {}
 
+    /** Checks whether two `PublicKey`s are equal. */
     @operator("==")
     equalsTo(other: PublicKey): bool {
         return this.variant == other.variant && checkTypedArrayEqual(this.bytes, other.bytes);
     }
 
+    /** Checks whether two `PublicKey`s are not equal. */
     @operator("!=")
     notEqualsTo(other: PublicKey): bool {
         return !this.equalsTo(other);
     }
 
+    /** Deserializes a `PublicKey` from an array of bytes. */
     static fromBytes(bytes: Uint8Array): Result<PublicKey> {
         if (bytes.length < 32) {
             return new Result<PublicKey>(null, BytesreprError.EarlyEndOfStream, 0);
@@ -39,17 +58,23 @@ export class PublicKey {
         return new Result<PublicKey>(ref, BytesreprError.Ok, 32);
     }
 
+    /** Serializes a `PublicKey` into an array of bytes. */
     toBytes(): Array<u8> {
         return typedToArray(this.bytes);
     }
 }
 
+/**
+ * The type under which data (e.g. [[CLValue]]s, smart contracts, user accounts)
+ * are indexed on the network.
+ */
 export class Key {
     variant: KeyVariant;
     hash: Uint8Array | null;
     uref: URef | null;
     account: PublicKey | null;
 
+    /** Creates a `Key` from a given [[URef]]. */
     static fromURef(uref: URef): Key {
         let key = new Key();
         key.variant = KeyVariant.UREF_ID;
@@ -57,6 +82,7 @@ export class Key {
         return key;
     }
 
+    /** Creates a `Key` from a given hash. */
     static fromHash(hash: Uint8Array): Key {
         let key = new Key();
         key.variant = KeyVariant.HASH_ID;
@@ -64,6 +90,7 @@ export class Key {
         return key;
     }
 
+    /** Creates a `Key` from a [[PublicKey]] representing an account. */
     static fromAccount(account: PublicKey): Key {
         let key = new Key();
         key.variant = KeyVariant.ACCOUNT_ID;
@@ -71,8 +98,11 @@ export class Key {
         return key;
     }
 
-    /// attempts to write `value` under a new Key::URef
-    /// if a key is returned it is always of KeyVariant.UREF_ID
+    /**
+     * Attempts to write `value` under a new Key::URef
+     *
+     * If a key is returned it is always of [[KeyVariant]].UREF_ID
+     */
     static create(value: CLValue): Key | null {
         const valueBytes = value.toBytes();
         let urefBytes = new Uint8Array(UREF_SERIALIZED_LENGTH);
@@ -88,6 +118,7 @@ export class Key {
         return Key.fromURef(urefResult.value);
     }
 
+    /** Deserializes a `Key` from an array of bytes. */
     static fromBytes(bytes: Uint8Array): Result<Key> {
         if (bytes.length < 1) {
             return new Result<Key>(null, BytesreprError.EarlyEndOfStream, 0);
@@ -129,6 +160,7 @@ export class Key {
         }
     }
 
+    /** Serializes a `Key` into an array of bytes. */
     toBytes(): Array<u8> {
         if(this.variant == KeyVariant.UREF_ID){
             let bytes = new Array<u8>();
@@ -156,14 +188,17 @@ export class Key {
         }
     }
 
+    /** Checks whether the `Key` is of [[KeyVariant]].UREF_ID. */
     isURef(): bool {
         return this.variant == KeyVariant.UREF_ID;
     }
 
+    /** Converts the `Key` into `URef`. */
     toURef(): URef {
         return <URef>this.uref;
     }
 
+    /** Reads the data stored under this `Key`. */
     read(): Uint8Array | null {
         const keyBytes = this.toBytes();
         let valueSize = new Uint8Array(1);
@@ -178,6 +213,7 @@ export class Key {
         return readHostBuffer(valueSize[0]);
     }
 
+    /** Stores a [[CLValue]] under this `Key`. */
     write(value: CLValue): void {
         const keyBytes = this.toBytes();
         const valueBytes = value.toBytes();
@@ -189,6 +225,7 @@ export class Key {
         );
     }
 
+    /** Adds the given `CLValue` to a value already stored under this `Key`. */
     add(value: CLValue): void {
         const keyBytes = this.toBytes();
         const valueBytes = value.toBytes();
@@ -201,6 +238,7 @@ export class Key {
         );
     }
 
+    /** Checks whether two `Key`s are equal. */
     @operator("==")
     equalsTo(other: Key): bool {
         if (this.variant == KeyVariant.UREF_ID) {
@@ -233,6 +271,7 @@ export class Key {
         }
     }
 
+    /** Checks whether two keys are not equal. */
     @operator("!=")
     notEqualsTo(other: Key): bool {
         return !this.equalsTo(other);
