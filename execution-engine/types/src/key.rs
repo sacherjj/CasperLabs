@@ -29,9 +29,7 @@ pub const KEY_LOCAL_SEED_LENGTH: usize = 32;
 
 const KEY_ID_SERIALIZED_LENGTH: usize = 1; // u8 used to determine the ID
 const KEY_HASH_SERIALIZED_LENGTH: usize = KEY_ID_SERIALIZED_LENGTH + KEY_HASH_LENGTH;
-/// Number of bytes taken by a serialized `Key::URef`
-/// TODO: decide if this should be public once contract::storage::new_turef is removed
-pub const KEY_UREF_SERIALIZED_LENGTH: usize = KEY_ID_SERIALIZED_LENGTH + UREF_SERIALIZED_LENGTH;
+const KEY_UREF_SERIALIZED_LENGTH: usize = KEY_ID_SERIALIZED_LENGTH + UREF_SERIALIZED_LENGTH;
 const KEY_LOCAL_SERIALIZED_LENGTH: usize =
     KEY_ID_SERIALIZED_LENGTH + KEY_LOCAL_SEED_LENGTH + BLAKE2B_DIGEST_LENGTH;
 
@@ -227,7 +225,7 @@ impl ToBytes for Key {
         match self {
             Key::Account(public_key) => KEY_ID_SERIALIZED_LENGTH + public_key.serialized_length(),
             Key::Hash(_) => KEY_HASH_SERIALIZED_LENGTH,
-            Key::URef(uref) => KEY_ID_SERIALIZED_LENGTH + uref.serialized_length(),
+            Key::URef(_) => KEY_UREF_SERIALIZED_LENGTH,
             Key::Local { .. } => KEY_LOCAL_SERIALIZED_LENGTH,
         }
     }
@@ -235,26 +233,24 @@ impl ToBytes for Key {
 
 impl FromBytes for Key {
     fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
-        let (id, rest): (u8, &[u8]) = FromBytes::from_bytes(bytes)?;
+        let (id, remainder) = u8::from_bytes(bytes)?;
         match id {
             ACCOUNT_ID => {
-                let (public_key, rem): (PublicKey, &[u8]) = FromBytes::from_bytes(rest)?;
+                let (public_key, rem) = PublicKey::from_bytes(remainder)?;
                 Ok((Key::Account(public_key), rem))
             }
             HASH_ID => {
-                let (hash, rem): ([u8; KEY_HASH_LENGTH], &[u8]) = FromBytes::from_bytes(rest)?;
+                let (hash, rem) = <[u8; KEY_HASH_LENGTH]>::from_bytes(remainder)?;
                 Ok((Key::Hash(hash), rem))
             }
             UREF_ID => {
-                let (uref, rem): (URef, &[u8]) = FromBytes::from_bytes(rest)?;
+                let (uref, rem) = URef::from_bytes(remainder)?;
                 Ok((Key::URef(uref), rem))
             }
             LOCAL_ID => {
-                let (seed, rest): ([u8; KEY_LOCAL_SEED_LENGTH], &[u8]) =
-                    FromBytes::from_bytes(rest)?;
-                let (hash, rest): ([u8; BLAKE2B_DIGEST_LENGTH], &[u8]) =
-                    FromBytes::from_bytes(rest)?;
-                Ok((Key::Local { seed, hash }, rest))
+                let (seed, remainder) = <[u8; KEY_LOCAL_SEED_LENGTH]>::from_bytes(remainder)?;
+                let (hash, remainder) = <[u8; BLAKE2B_DIGEST_LENGTH]>::from_bytes(remainder)?;
+                Ok((Key::Local { seed, hash }, remainder))
             }
             _ => Err(Error::Formatting),
         }

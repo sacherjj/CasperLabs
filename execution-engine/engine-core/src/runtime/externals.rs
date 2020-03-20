@@ -94,11 +94,11 @@ where
             }
 
             FunctionIndex::NewFuncIndex => {
-                // args(0) = pointer to key destination in Wasm memory
+                // args(0) = pointer to uref destination in Wasm memory
                 // args(1) = pointer to initial value
                 // args(2) = size of initial value
-                let (key_ptr, value_ptr, value_size) = Args::parse(args)?;
-                self.new_uref(key_ptr, value_ptr, value_size)?;
+                let (uref_ptr, value_ptr, value_size) = Args::parse(args)?;
+                self.new_uref(uref_ptr, value_ptr, value_size)?;
                 Ok(None)
             }
 

@@ -14,7 +14,7 @@ extern "C" {
     );
     pub fn add(key_ptr: *const u8, key_size: usize, value_ptr: *const u8, value_size: usize);
     pub fn add_local(key_ptr: *const u8, key_size: usize, value_ptr: *const u8, value_size: usize);
-    pub fn new_uref(key_ptr: *mut u8, value_ptr: *const u8, value_size: usize);
+    pub fn new_uref(uref_ptr: *mut u8, value_ptr: *const u8, value_size: usize);
     pub fn store_function(
         function_name_ptr: *const u8,
         function_name_size: usize,

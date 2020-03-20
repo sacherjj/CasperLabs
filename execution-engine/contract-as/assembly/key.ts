@@ -1,6 +1,6 @@
 import * as externals from "./externals";
 import {readHostBuffer} from ".";
-import {KEY_UREF_SERIALIZED_LENGTH} from "./constants";
+import {UREF_SERIALIZED_LENGTH} from "./constants";
 import {URef} from "./uref";
 import {CLValue} from "./clvalue";
 import {Error} from "./error";
@@ -75,21 +75,17 @@ export class Key {
     /// if a key is returned it is always of KeyVariant.UREF_ID
     static create(value: CLValue): Key | null {
         const valueBytes = value.toBytes();
-        let keyBytes = new Uint8Array(KEY_UREF_SERIALIZED_LENGTH);
+        let urefBytes = new Uint8Array(UREF_SERIALIZED_LENGTH);
         externals.new_uref(
-            keyBytes.dataStart,
+            urefBytes.dataStart,
             valueBytes.dataStart,
             valueBytes.length
         );
-        const keyResult = Key.fromBytes(keyBytes);
-        if (keyResult.hasError()) {
+        const urefResult = URef.fromBytes(urefBytes);
+        if (urefResult.hasError()) {
             return null;
         }
-        let key = keyResult.value;
-        if (key.variant != KeyVariant.UREF_ID) {
-            return null;
-        }
-        return key;
+        return Key.fromURef(urefResult.value);
     }
 
     static fromBytes(bytes: Uint8Array): Result<Key> {
@@ -102,7 +98,7 @@ export class Key {
         if (tag == KeyVariant.HASH_ID) {
             var hashBytes = bytes.subarray(1, 32 + 1);
             currentPos += 32;
-            
+
             let key = Key.fromHash(hashBytes);
             let ref = new Ref<Key>(key);
             return new Result<Key>(ref, BytesreprError.Ok, currentPos);

@@ -51,7 +51,6 @@ pub use contract_ref::ContractRef;
 #[doc(inline)]
 pub use key::{
     Key, BLAKE2B_DIGEST_LENGTH, KEY_HASH_LENGTH, KEY_LOCAL_LENGTH, KEY_LOCAL_SEED_LENGTH,
-    KEY_UREF_SERIALIZED_LENGTH,
 };
 pub use phase::{Phase, PHASE_SERIALIZED_LENGTH};
 pub use protocol_version::{ProtocolVersion, VersionCheckResult};
