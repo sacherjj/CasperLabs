@@ -4,6 +4,7 @@ RUN apt update && apt install -y git curl pipenv
 
 # Use bash so up/down arrow work in the interactive console.
 ENV SHELL /bin/bash
+WORKDIR /root/casperlabs
 
 # Add some randomness so cache is busted every time we build.
 # ADD "https://www.random.org/cgi-bin/randbyte?nbytes=10&format=h" skipcache

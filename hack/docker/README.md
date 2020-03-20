@@ -305,9 +305,11 @@ make stests/console
 ```
 
 Inside the console, we can register a test network:
+
 ```console
-root@a8e09c5af719:/# stests-set-network poc1
-~/casperlabs/stests /
-2020-03-20 15:48:10.116893 [INFO] [00014] STESTS :: Network poc1 was successfully registered
-/
+root@6566753ba2f7:~/casperlabs# stests-set-network poc1
+~/casperlabs/stests ~/casperlabs
+2020-03-20 16:06:48.433057 [INFO] [00017] STESTS :: Network poc1 was successfully registered
+~/casperlabs
+root@6566753ba2f7:~/casperlabs# stests-set-network-faucet-key poc1 keys/faucet-account/account-private.pem
 ```

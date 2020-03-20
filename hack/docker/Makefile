@@ -177,9 +177,11 @@ stests/build:
 # After nodes have been started, and `redis` with `make up`,
 # and an stest image built with `make stests/build`,
 # this command can run stests in interactive mode.
-stests/console:
+stests/console: .casperlabs
 	docker run -it --rm \
 	  --network casperlabs \
+		--name stests \
+		-v ${PWD}/keys:/root/casperlabs/keys \
 		-e STESTS_BROKER_REDIS_HOST=redis \
 		-e STESTS_CACHE_REDIS_HOST=redis \
 		-e STESTS_MWARE_REDIS_HOST=redis \
