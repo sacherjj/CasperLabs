@@ -60,7 +60,7 @@ enum SubscribeState {
 }
 
 export class DagContainer {
-  @observable blocks: IObservableArray<BlockInfo> | null = null;
+  @observable blocks: IObservableArray<BlockInfo> = observable.array([], {deep: true});
   @observable selectedBlock: BlockInfo | undefined = undefined;
   @observable depth = 10;
   @observable maxRank = 0;
@@ -123,7 +123,14 @@ export class DagContainer {
       await this.errors.capture(
         this.casperService.getBlockInfo(blockHashBase16, 0).then(block => {
           this.selectedBlock = block;
-          this.blocks!.push(block);
+          let contained = this.blocks!.find(
+            x =>
+              encodeBase16(x.getSummary()!.getBlockHash_asU8()) ===
+              blockHashBase16
+          );
+          if(!contained){
+            this.blocks!.push(block);
+          }
         })
       );
     }
@@ -182,7 +189,7 @@ export class DagContainer {
                   }
                   remainingBlocks.splice(0, 0, block!);
                   runInAction(() => {
-                    this.blocks = observable.array(remainingBlocks, { deep: true });
+                    this.blocks.replace(remainingBlocks);
                   });
                 }
               }
@@ -231,7 +238,7 @@ export class DagContainer {
       this.casperService
         .getBlockInfos(this.depth, this.maxRank)
         .then(blocks => {
-          this.blocks = observable.array(blocks, { deep: true });
+          this.blocks.replace(blocks);
         })
     );
 

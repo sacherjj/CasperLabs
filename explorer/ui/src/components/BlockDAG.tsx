@@ -55,7 +55,7 @@ export class BlockDAG extends React.Component<Props, {}> {
     if (this.props.blocks && this.props.hideBallotsToggleStore?.isPressed) {
       return this.props.blocks.filter(b => isBlock(b));
     } else {
-      return this.props.blocks;
+      return this.props.blocks!.map(b => b);
     }
   }
 
