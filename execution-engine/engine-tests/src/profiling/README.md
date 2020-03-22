@@ -85,7 +85,7 @@ First build the contracts and run `state-initializer`:
 
 ```bash
 cd CasperLabs/execution-engine/
-make build-contracts
+make build-contracts-rs
 cd engine-tests/
 HASH=$(cargo run --release --bin=state-initializer -- --data-dir=/tmp/CasperLabs/DataDir)
 ```
@@ -98,6 +98,8 @@ cargo run --release --bin=casperlabs-engine-grpc-server -- \
     /tmp/CasperLabs/Socket --data-dir=/tmp/CasperLabs/DataDir --threads=8
 ```
 
+**Note: to tell the server to use Wasm system contracts rather than host-side implementations, append ` -z` to the above command.**
+
 Then in the first terminal, run the client:
 
 ```bash
@@ -105,11 +107,12 @@ RUST_LOG=concurrent_executor=info cargo run --release --bin=concurrent-executor 
     --socket=/tmp/CasperLabs/Socket --pre-state-hash=$HASH --threads=8 --requests=200
 ```
 
-There is a bash script which automates this process, and which allows specifying the number of server threadpool threads, the number of client threadpool threads, and the number of messages the client should send.
+There is a bash script which automates this process, and which allows specifying the number of server threadpool threads, the number of client threadpool threads, the number of messages the client should send, and whether to use system contracts or not.
 
 ```bash
 cd CasperLabs/execution-engine/engine-tests/src/profiling/
-./concurrent_executor.sh 8 8 200
+./concurrent_executor.sh 8 8 200     # without system contracts
+./concurrent_executor.sh 8 8 200 -z  # using system contracts
 ```
 
 For logging, again set the `RUST_LOG` env var:

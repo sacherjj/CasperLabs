@@ -96,10 +96,16 @@ const ARG_THREAD_COUNT_VALUE: &str = "NUM";
 const ARG_THREAD_COUNT_HELP: &str = "Worker thread count";
 const ARG_THREAD_COUNT_EXPECT: &str = "expected valid thread count";
 
-// turbo
-const ARG_TURBO: &str = "turbo";
-const ARG_TURBO_SHORT: &str = "z";
-const ARG_TURBO_HELP: &str = "Turbo mode";
+// use system contracts
+const ARG_USE_SYSTEM_CONTRACTS: &str = "use-system-contracts";
+const ARG_USE_SYSTEM_CONTRACTS_SHORT: &str = "z";
+const ARG_USE_SYSTEM_CONTRACTS_HELP: &str =
+    "Use system contracts instead of host-side logic for Mint, Proof of Stake and Standard Payment";
+
+// Highway
+const ARG_HIGHWAY: &str = "highway";
+const ARG_HIGHWAY_SHORT: &str = "w";
+const ARG_HIGHWAY_HELP: &str = "Highway consensus mode";
 
 // runnable
 const SIGINT_HANDLE_EXPECT: &str = "Error setting Ctrl-C handler";
@@ -222,9 +228,14 @@ fn get_args() -> ArgMatches<'static> {
                 .help(ARG_THREAD_COUNT_HELP),
         )
         .arg(
-            Arg::with_name(ARG_TURBO)
-                .short(ARG_TURBO_SHORT)
-                .help(ARG_TURBO_HELP),
+            Arg::with_name(ARG_USE_SYSTEM_CONTRACTS)
+                .short(ARG_USE_SYSTEM_CONTRACTS_SHORT)
+                .help(ARG_USE_SYSTEM_CONTRACTS_HELP),
+        )
+        .arg(
+            Arg::with_name(ARG_HIGHWAY)
+                .short(ARG_HIGHWAY_SHORT)
+                .help(ARG_HIGHWAY_HELP),
         )
         .arg(
             Arg::with_name(ARG_SOCKET)
@@ -289,8 +300,11 @@ fn get_thread_count(arg_matches: &ArgMatches) -> usize {
 /// Returns an [`EngineConfig`].
 fn get_engine_config(arg_matches: &ArgMatches) -> EngineConfig {
     // feature flags go here
-    let turbo = arg_matches.occurrences_of(ARG_TURBO) > 0;
-    EngineConfig::new().with_turbo(turbo)
+    let use_system_contracts = arg_matches.is_present(ARG_USE_SYSTEM_CONTRACTS);
+    let highway = arg_matches.is_present(ARG_HIGHWAY);
+    EngineConfig::new()
+        .with_use_system_contracts(use_system_contracts)
+        .with_highway(highway)
 }
 
 /// Builds and returns a gRPC server.

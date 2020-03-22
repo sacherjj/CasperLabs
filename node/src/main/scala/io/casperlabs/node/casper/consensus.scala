@@ -56,6 +56,8 @@ import io.casperlabs.storage.era.EraStorage
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import java.util.concurrent.TimeUnit
 import java.time.Instant
+
+import io.casperlabs.casper.finality.MultiParentFinalizer.MeteredMultiParentFinalizer
 import io.casperlabs.shared.Sorting.jRankOrder
 
 import scala.util.control.NoStackTrace
@@ -178,7 +180,8 @@ object NCB {
                      transforms,
                      genesis.getHeader.chainName,
                      conf.casper.minTtl,
-                     chainSpec.upgrades
+                     chainSpec.upgrades,
+                     rFTT = chainSpec.getGenesis.getHighwayConfig.ftt
                    )
           _ <- MultiParentCasperRef[F].set(casper)
           _ <- Log[F].info(s"Making the transition to block processing.")
@@ -245,7 +248,7 @@ object Highway {
   ): Resource[F, Consensus[F]] = {
     val chainName               = chainSpec.getGenesis.name
     val hc                      = chainSpec.getGenesis.getHighwayConfig
-    val faultToleranceThreshold = 0.1
+    val faultToleranceThreshold = chainSpec.getGenesis.getHighwayConfig.ftt
 
     for {
       implicit0(finalizer: MultiParentFinalizer[F]) <- {
@@ -263,9 +266,11 @@ object Highway {
             finalizer <- MultiParentFinalizer.create[F](
                           dag,
                           lfb,
-                          finalityDetector
+                          finalityDetector,
+                          isHighway = true
                         )
-          } yield finalizer
+            meteredFinalized = MeteredMultiParentFinalizer.of[F](finalizer)
+          } yield meteredFinalized
         }
       }
 

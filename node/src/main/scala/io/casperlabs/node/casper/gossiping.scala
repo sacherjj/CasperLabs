@@ -19,6 +19,7 @@ import io.casperlabs.comm.ServiceError.{InvalidArgument, Unavailable}
 import io.casperlabs.comm.discovery.NodeUtils._
 import io.casperlabs.comm.discovery.{Node, NodeDiscovery}
 import io.casperlabs.comm.gossiping._
+import io.casperlabs.comm.gossiping.downloadmanager._
 import io.casperlabs.comm.gossiping.synchronization._
 import io.casperlabs.comm.grpc._
 import io.casperlabs.comm.{CachedConnections, NodeAsk}
@@ -268,20 +269,20 @@ package object gossiping {
       relaying: Relaying[F],
       synchronizer: Synchronizer[F],
       maybeValidatorId: Option[ValidatorIdentity]
-  ): Resource[F, DownloadManager[F]] =
+  ): Resource[F, BlockDownloadManager[F]] =
     for {
-      _ <- Resource.liftF(DownloadManagerImpl.establishMetrics[F])
+      _ <- Resource.liftF(BlockDownloadManagerImpl.establishMetrics[F])
       maybeValidatorPublicKey = maybeValidatorId
         .map(x => ByteString.copyFrom(x.publicKey))
         .filterNot(_.isEmpty)
-      downloadManager <- DownloadManagerImpl[F](
+      downloadManager <- BlockDownloadManagerImpl[F](
                           maxParallelDownloads = conf.server.downloadMaxParallelBlocks,
                           connectToGossip = connectToGossip,
-                          backend = new DownloadManagerImpl.Backend[F] {
-                            override def hasBlock(blockHash: ByteString): F[Boolean] =
+                          backend = new BlockDownloadManagerImpl.Backend[F] {
+                            override def contains(blockHash: ByteString): F[Boolean] =
                               isInDag(blockHash)
 
-                            override def validateBlock(block: Block): F[Unit] =
+                            override def validate(block: Block): F[Unit] =
                               maybeValidatorPublicKey
                                 .filter(_ == block.getHeader.validatorPublicKey)
                                 .fold(().pure[F]) { _ =>
@@ -292,26 +293,23 @@ package object gossiping {
                                 } *>
                                 Consensus[F].validateAndAddBlock(block)
 
-                            override def storeBlock(block: Block): F[Unit] =
+                            override def store(block: Block): F[Unit] =
                               // Validation has already stored it.
-                              ().pure[F]
-
-                            override def storeBlockSummary(
-                                summary: BlockSummary
-                            ): F[Unit] =
-                              // Storing the block automatically stores the summary as well.
                               ().pure[F]
 
                             override def onScheduled(summary: BlockSummary): F[Unit] =
                               Consensus[F].onScheduled(summary)
 
+                            override def onScheduled(summary: BlockSummary, source: Node): F[Unit] =
+                              synchronizer.onScheduled(summary, source)
+
                             override def onDownloaded(blockHash: ByteString): F[Unit] =
                               // Calling `addBlock` during validation has already stored the block,
                               // so we have nothing more to do here with the consensus.
-                              synchronizer.downloaded(blockHash)
+                              synchronizer.onDownloaded(blockHash)
                           },
                           relaying = relaying,
-                          retriesConf = DownloadManagerImpl.RetriesConf(
+                          retriesConf = BlockDownloadManagerImpl.RetriesConf(
                             maxRetries = conf.server.downloadMaxRetries,
                             initialBackoffPeriod = conf.server.downloadRetryInitialBackoffPeriod,
                             backoffFactor = conf.server.downloadRetryBackoffFactor
@@ -326,7 +324,7 @@ package object gossiping {
       conf: Configuration,
       maybeValidatorId: Option[ValidatorIdentity],
       connectToGossip: GossipService.Connector[F],
-      downloadManager: DownloadManager[F],
+      downloadManager: BlockDownloadManager[F],
       genesis: Block
   ): Resource[F, GenesisApprover[F]] =
     for {
@@ -456,7 +454,8 @@ package object gossiping {
                        maxPossibleDepth = conf.server.syncMaxPossibleDepth,
                        minBlockCountToCheckWidth = conf.server.syncMinBlockCountToCheckWidth,
                        maxBondingRate = conf.server.syncMaxBondingRate,
-                       maxDepthAncestorsRequest = conf.server.syncMaxDepthAncestorsRequest
+                       maxDepthAncestorsRequest = conf.server.syncMaxDepthAncestorsRequest,
+                       disableValidations = conf.server.syncDisableValidations
                      )
     } yield synchronizer
   }
@@ -472,7 +471,7 @@ package object gossiping {
   def makeGossipServiceServer[F[_]: ConcurrentEffect: Parallel: Log: Metrics: BlockStorage: DagStorage: DeployStorage: Consensus](
       conf: Configuration,
       synchronizer: Synchronizer[F],
-      downloadManager: DownloadManager[F],
+      downloadManager: BlockDownloadManager[F],
       genesisApprover: GenesisApprover[F]
   ): Resource[F, GossipServiceServer[F]] =
     for {
@@ -545,7 +544,7 @@ package object gossiping {
     * Returns handle which will be resolved when initial synchronization is finished. */
   private def makeInitialSynchronizer[F[_]: Concurrent: Parallel: Log: Timer: NodeDiscovery: DagStorage: Consensus](
       conf: Configuration,
-      downloadManager: DownloadManager[F],
+      downloadManager: BlockDownloadManager[F],
       synchronizer: Synchronizer[F],
       connectToGossip: GossipService.Connector[F],
       awaitApproved: F[Unit]

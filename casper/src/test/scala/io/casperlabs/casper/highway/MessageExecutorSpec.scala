@@ -87,7 +87,7 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
     // Make a message producer that's supposed to make valid blocks.
     def makeMessageProducer(keys: AccountKeys): MessageProducer[Task] = {
       implicit val deployBuffer    = DeployBuffer.create[Task](chainName, minTtl = Duration.Zero)
-      implicit val deploySelection = DeploySelection.create[Task](sizeLimitBytes = Int.MaxValue)
+      implicit val deploySelection = DeploySelection.create[Task]()
 
       MessageProducer[Task](
         validatorIdentity = ValidatorIdentity(
@@ -113,7 +113,7 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
         message <- messageProducer.block(
                     keyBlockHash = genesis.messageHash,
                     roundId = conf.toTicks(conf.genesisEraStart),
-                    mainParent = genesis.messageHash,
+                    mainParent = genesis,
                     justifications = Map.empty,
                     isBookingBlock = false
                   )
@@ -372,7 +372,8 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
             .set(Some(message))
             .as(
               Some(
-                MultiParentFinalizer.FinalizedBlocks(message.messageHash, BigInt(0), Set.empty)
+                MultiParentFinalizer
+                  .FinalizedBlocks(message.messageHash, BigInt(0), Set.empty, Set.empty)
               )
             )
       }

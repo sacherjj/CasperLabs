@@ -11,6 +11,7 @@ import io.casperlabs.catscontrib.effect.implicits.syncId
 import io.casperlabs.comm.ServiceError.{NotFound, ResourceExhausted, Unauthenticated, Unavailable}
 import io.casperlabs.comm.discovery.Node
 import io.casperlabs.comm.gossiping.Utils.hex
+import io.casperlabs.comm.gossiping.downloadmanager._
 import io.casperlabs.comm.gossiping.synchronization.Synchronizer
 import io.casperlabs.comm.gossiping.synchronization.Synchronizer.SyncError
 import io.casperlabs.comm.grpc.{AuthInterceptor, ErrorInterceptor, GrpcServer, SslContexts}
@@ -19,6 +20,7 @@ import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.util.{CertificateHelper, CertificatePrinter}
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.models.BlockImplicits._
+import io.casperlabs.models.PartialPrettifier
 import io.casperlabs.shared.Sorting._
 import io.casperlabs.shared.{Compression, Log}
 import io.grpc.netty.{NegotiationType, NettyChannelBuilder}
@@ -30,6 +32,7 @@ import monix.reactive.Observable
 import monix.tail.Iterant
 import org.scalacheck.Arbitrary.arbitrary
 import org.scalacheck.{Arbitrary, Gen, Shrink}
+import org.scalactic.Prettifier
 import org.scalatest._
 import org.scalatest.concurrent._
 import org.scalatest.prop.GeneratorDrivenPropertyChecks.{forAll, PropertyCheckConfiguration}
@@ -67,7 +70,7 @@ class GrpcGossipServiceSpec
   override def afterAll() =
     shutdown.runSyncUnsafe(10.seconds)
 
-  def runTestUnsafe(testData: TestData, timeout: FiniteDuration = 5.seconds)(
+  def runTestUnsafe(testData: TestData, timeout: FiniteDuration = 10.seconds)(
       test: Task[Unit]
   ): Unit = {
     testDataRef.set(testData)
@@ -734,20 +737,22 @@ class GrpcGossipServiceSpec
         target: ByteString,
         maxDepth: Int
     ): Map[ByteString, Int] = {
-      def loop(visited: Map[ByteString, Int], hash: ByteString, depth: Int): Map[ByteString, Int] =
-        if (depth > maxDepth)
-          visited
-        else {
-          val summary     = summaries(hash)
-          val nextVisited = visited + (summary.blockHash -> depth)
-          elders(summary).foldLeft(nextVisited) {
-            case (visited, hash) if visited.contains(hash) && visited(hash) <= depth + 1 =>
+      val targetSummary = summaries(target)
+      def loop(visited: Map[ByteString, Int], summary: BlockSummary): Map[ByteString, Int] =
+        elders(summary)
+          .map(summaries.get)
+          .flatten
+          .map(dep => dep -> (targetSummary.getHeader.jRank - dep.getHeader.jRank).toInt)
+          .foldLeft(visited) {
+            case (visited, (_, dist)) if dist > maxDepth =>
               visited
-            case (visited, hash) =>
-              loop(visited, hash, depth + 1)
+            case (visited, (dep, dist))
+                if visited.contains(dep.blockHash) && visited(dep.blockHash) <= dist =>
+              visited
+            case (visited, (dep, dist)) =>
+              loop(visited.updated(dep.blockHash, dist), dep)
           }
-        }
-      loop(Map.empty, target, 0)
+      loop(Map(target -> 0), targetSummary)
     }
 
     /** Collect the ancestors of all targets and return the minimum distance to the nearest target. */
@@ -796,6 +801,11 @@ class GrpcGossipServiceSpec
         new TestFixture[T](gen, test)
     }
 
+    implicit val prettifier: Prettifier = PartialPrettifier {
+      case bs: ByteString   => hex(bs)
+      case bs: BlockSummary => s"BlockSummary(${hex(bs)})"
+    }
+
     "streamAncestorBlockSummaries" when {
       "called with unknown target hashes" should {
         "return an empty stream" in {
@@ -836,17 +846,20 @@ class GrpcGossipServiceSpec
           )
         } yield TestCase(dag, req)
 
-        "return the targets and their parents + justifications" in TestFixture(genTestCase) {
+        "return the targets and their parents + justifications within 1 rank" in TestFixture(
+          genTestCase
+        ) {
           case tc @ TestCase(_, req) =>
+            val targets = req.targetBlockHashes.map(tc.summaries)
             val expected = (
-              req.targetBlockHashes ++
-                req.targetBlockHashes.flatMap { t =>
-                  elders(tc.summaries(t))
+              targets ++
+                targets.flatMap { t =>
+                  elders(t).map(tc.summaries).filterNot(_.jRank < t.jRank - 1)
                 }
             ).toSet
 
             stub.streamAncestorBlockSummaries(req).toListL.map { ancestors =>
-              ancestors.map(_.blockHash) should contain theSameElementsAs expected
+              ancestors should contain theSameElementsAs expected
             }
         }
       }
@@ -880,7 +893,7 @@ class GrpcGossipServiceSpec
           )
         } yield TestCase(dag, req)
 
-        "return all ancestors of the target up to that depth in reverse breadth first order" in TestFixture(
+        "return all ancestors of the target up to that depth in reverse topological order" in TestFixture(
           genTestCase
         ) {
           case tc @ TestCase(_, req) =>
@@ -909,7 +922,8 @@ class GrpcGossipServiceSpec
       "called with many targets and maximum depth" should {
         val genTestCase = for {
           dag      <- genSummaryDagFromGenesis
-          targets  <- Gen.someOf(dag)
+          targetN  <- Gen.choose(1, math.min(5, dag.size))
+          targets  <- Gen.pick(targetN, dag)
           maxDepth <- Gen.choose(0, dag.size)
           req = StreamAncestorBlockSummariesRequest(
             targetBlockHashes = targets.map(_.blockHash),
@@ -917,12 +931,16 @@ class GrpcGossipServiceSpec
           )
         } yield TestCase(dag, req)
 
-        "start with the targets" in TestFixture(genTestCase) {
-          case TestCase(_, req) =>
+        "start with the target having the highest j-rank" in TestFixture(genTestCase) {
+          case tc @ TestCase(_, req) =>
             stub.streamAncestorBlockSummaries(req).toListL.map { ancestors =>
-              val targetHashes   = req.targetBlockHashes
-              val startingHashes = ancestors.map(_.blockHash).take(targetHashes.size)
-              startingHashes should contain theSameElementsAs targetHashes
+              val targetHashes = req.targetBlockHashes
+              if (targetHashes.isEmpty) ancestors shouldBe empty
+              else {
+                targetHashes should contain(ancestors.head.blockHash)
+                val maxRank = targetHashes.map(tc.summaries).map(_.getHeader.jRank).max
+                ancestors.head.getHeader.jRank shouldBe maxRank
+              }
             }
         }
 
@@ -948,7 +966,9 @@ class GrpcGossipServiceSpec
             }
         }
 
-        "return all ancestors up to that depth from any of the targets" in TestFixture(genTestCase) {
+        "return all ancestors up to that depth from any of the targets" in TestFixture(
+          genTestCase
+        ) {
           case tc @ TestCase(_, req) =>
             stub.streamAncestorBlockSummaries(req).toListL.map { ancestors =>
               val ancestorHashes = ancestors.map(_.blockHash)
@@ -961,10 +981,10 @@ class GrpcGossipServiceSpec
 
               ancestorHashes should contain theSameElementsAs depthsFromNearest.keySet
               // Check partial ordering
-              if (ancestorHashes.nonEmpty) {
-                Inspectors.forAll(ancestorHashes.init zip ancestorHashes.tail) {
+              if (ancestors.nonEmpty) {
+                Inspectors.forAll(ancestors.init zip ancestors.tail) {
                   case (a, b) =>
-                    depthsFromNearest(a) should be <= depthsFromNearest(b)
+                    a.jRank should be >= b.jRank
                 }
               }
             }
@@ -1014,7 +1034,9 @@ class GrpcGossipServiceSpec
             }
         }
 
-        "return the known blocks if they are within the maximum depth" in TestFixture(genTestCase) {
+        "return the known blocks if they are within the maximum depth" in TestFixture(
+          genTestCase
+        ) {
           case tc @ TestCase(_, req0) =>
             // Just using 1 known so we know that we won't stop before reaching it due to
             // other known ancestors on the path.
@@ -1152,10 +1174,11 @@ class GrpcGossipServiceSpec
                       // to `newBlocks` returns before all the syncing and downloading is finished.
                       Task.now(dag.asRight[SyncError]).delayResult(250.millis)
                     }
-                    def downloaded(blockHash: ByteString) = Task.unit
+                    def onDownloaded(blockHash: ByteString)              = Task.unit
+                    def onScheduled(summary: BlockSummary, source: Node) = Task.unit
                   }
 
-                  val downloadManager = new DownloadManager[Task] {
+                  val downloadManager = new BlockDownloadManager[Task] {
                     @volatile var scheduled = Vector.empty[ByteString]
                     def scheduleDownload(summary: BlockSummary, source: Node, relay: Boolean) = {
                       source shouldBe node
@@ -1391,10 +1414,11 @@ object GrpcGossipServiceSpec extends TestRuntime with ArbitraryConsensusAndComm 
 
   object TestEnvironment {
     private val emptySynchronizer = new Synchronizer[Task] {
-      def syncDag(source: Node, targetBlockHashes: Set[ByteString]) = ???
-      def downloaded(blockHash: ByteString): Task[Unit]             = ???
+      def syncDag(source: Node, targetBlockHashes: Set[ByteString])    = ???
+      def onDownloaded(blockHash: ByteString): Task[Unit]              = ???
+      def onScheduled(summary: BlockSummary, source: Node): Task[Unit] = ???
     }
-    private val emptyDownloadManager = new DownloadManager[Task] {
+    private val emptyDownloadManager = new BlockDownloadManager[Task] {
       def scheduleDownload(summary: BlockSummary, source: Node, relay: Boolean) = ???
     }
     private val emptyGenesisApprover = new GenesisApprover[Task] {
@@ -1457,7 +1481,7 @@ object GrpcGossipServiceSpec extends TestRuntime with ArbitraryConsensusAndComm 
         maxParallelBlockDownloads: Int = 100,
         blockChunkConsumerTimeout: FiniteDuration = 10.seconds,
         synchronizer: Synchronizer[Task] = emptySynchronizer,
-        downloadManager: DownloadManager[Task] = emptyDownloadManager,
+        downloadManager: BlockDownloadManager[Task] = emptyDownloadManager,
         genesisApprover: GenesisApprover[Task] = emptyGenesisApprover,
         rateLimiter: RateLimiter[Task, ByteString] = RateLimiter.noOp,
         mkBackend: AtomicReference[TestData] => GossipServiceServer.Backend[Task] = defaultBackend

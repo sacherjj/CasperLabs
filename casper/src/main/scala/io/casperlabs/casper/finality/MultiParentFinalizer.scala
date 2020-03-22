@@ -6,8 +6,9 @@ import cats.syntax.flatMap._
 import cats.effect.Concurrent
 import cats.effect.concurrent.{Ref, Semaphore}
 import io.casperlabs.casper.Estimator.BlockHash
-import io.casperlabs.casper.consensus.Block
 import io.casperlabs.casper.finality.MultiParentFinalizer.FinalizedBlocks
+import io.casperlabs.casper.CasperMetricsSource
+import io.casperlabs.metrics.Metrics
 import io.casperlabs.models.Message
 import io.casperlabs.storage.dag.DagRepresentation
 import simulacrum.typeclass
@@ -24,18 +25,39 @@ import io.casperlabs.storage.dag.FinalityStorage
 }
 
 object MultiParentFinalizer {
+  class MeteredMultiParentFinalizer[F[_]] private (
+      finalizer: MultiParentFinalizer[F],
+      metrics: Metrics[F]
+  ) extends MultiParentFinalizer[F] {
+
+    private implicit val metricsSource = CasperMetricsSource / "MultiParentFinalizer"
+
+    override def onNewMessageAdded(message: Message): F[Option[FinalizedBlocks]] =
+      metrics.timer("onNewMessageAdded")(finalizer.onNewMessageAdded(message))
+  }
+
+  object MeteredMultiParentFinalizer {
+    def of[F[_]](
+        f: MultiParentFinalizer[F]
+    )(implicit M: Metrics[F]): MeteredMultiParentFinalizer[F] =
+      new MeteredMultiParentFinalizer[F](f, M)
+  }
+
   final case class FinalizedBlocks(
-      mainChain: BlockHash,
+      // New finalized block in the main chain.
+      newLFB: BlockHash,
       quorum: BigInt,
-      secondaryParents: Set[BlockHash]
+      indirectlyFinalized: Set[BlockHash],
+      indirectlyOrphaned: Set[BlockHash]
   ) {
-    def finalizedBlocks: Set[BlockHash] = secondaryParents + mainChain
+    def finalizedBlocks: Set[BlockHash] = indirectlyFinalized + newLFB
   }
 
   def create[F[_]: Concurrent: FinalityStorage](
       dag: DagRepresentation[F],
       latestLFB: BlockHash, // Last LFB from the main chain
-      finalityDetector: FinalityDetector[F]
+      finalityDetector: FinalityDetector[F],
+      isHighway: Boolean
   ): F[MultiParentFinalizer[F]] =
     for {
       lfbCache  <- Ref[F].of[BlockHash](latestLFB)
@@ -53,10 +75,19 @@ object MultiParentFinalizer {
                           for {
                             _ <- lfbCache.set(newLFB)
                             justFinalized <- FinalityDetectorUtil.finalizedIndirectly[F](
+                                              dag,
                                               newLFB,
-                                              dag
+                                              isHighway
                                             )
-                          } yield Some(FinalizedBlocks(newLFB, quorum, justFinalized))
+                            justOrphaned <- FinalityDetectorUtil.orphanedIndirectly(
+                                             dag,
+                                             newLFB,
+                                             justFinalized,
+                                             isHighway
+                                           )
+                          } yield Some(
+                            FinalizedBlocks(newLFB, quorum, justFinalized, justOrphaned)
+                          )
                       }
         } yield finalized)
     }

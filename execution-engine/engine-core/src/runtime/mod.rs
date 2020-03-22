@@ -1838,6 +1838,11 @@ where
 
         let ret: CLValue = match method_name.as_str() {
             METHOD_BOND => {
+                if self.config.highway() {
+                    let err = Error::Revert(ApiError::Unhandled.into());
+                    return Err(err);
+                }
+
                 let validator: PublicKey = runtime.context.get_caller();
                 let amount: U512 = Self::get_argument(&args, 1)?;
                 let source_uref: URef = Self::get_argument(&args, 2)?;
@@ -1847,6 +1852,11 @@ where
                 CLValue::from_t(()).map_err(Self::reverter)?
             }
             METHOD_UNBOND => {
+                if self.config.highway() {
+                    let err = Error::Revert(ApiError::Unhandled.into());
+                    return Err(err);
+                }
+
                 let validator: PublicKey = runtime.context.get_caller();
                 let maybe_amount: Option<U512> = Self::get_argument(&args, 1)?;
                 runtime
@@ -1931,7 +1941,7 @@ where
             self.context.validate_key(key)?;
         }
 
-        if self.config.turbo() {
+        if !self.config.use_system_contracts() {
             if self.is_mint(key) {
                 return self.call_host_mint(
                     self.context.protocol_version(),

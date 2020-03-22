@@ -32,6 +32,7 @@ sync-max-possible-depth = 1
 sync-min-block-count-to-check-width = 1
 sync-max-bonding-rate = 1.0
 sync-max-depth-ancestors-request = 1
+sync-disable-validations = false
 init-sync-max-nodes = 1
 init-sync-min-successful = 1
 init-sync-memoize-nodes = false
@@ -79,7 +80,6 @@ auto-propose-check-interval = "1second"
 auto-propose-ballot-interval = "1second"
 auto-propose-acc-interval = "1second"
 auto-propose-acc-count = 1
-max-block-size-bytes = 1
 min-ttl = "1hour"
 
 [highway]

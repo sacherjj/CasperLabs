@@ -7,7 +7,7 @@ import { DeployInfo } from 'casperlabs-grpc/io/casperlabs/casper/consensus/info_
 import Pages from './Pages';
 import { RefreshableComponent, Icon, shortHash } from './Utils';
 import ObservableValueMap from '../lib/ObservableValueMap';
-import { Balance } from './BlockDetails';
+import { Balance, FinalityIcon } from './BlockDetails';
 import { decodeBase16, encodeBase16 } from 'casperlabs-sdk';
 
 // URL parameter
@@ -99,7 +99,7 @@ const ResultsTable = observer(
         title={`Results for deploy ${props.deployHashBase16}`}
         headers={[
           'Block Hash',
-          'Is Finalized',
+          'Finality',
           'Cost',
           'Remaining Balance',
           'Result',
@@ -119,11 +119,7 @@ const ResultsTable = observer(
                 <Link to={Pages.block(id)}>{shortHash(id)}</Link>
               </td>
               <td>
-                {proc
-                  .getBlockInfo()!
-                  .getStatus()!
-                  .getIsFinalized()
-                  .toString()}
+                <FinalityIcon block={proc.getBlockInfo()!} />
               </td>
               <td className="text-right">{proc.getCost().toLocaleString()}</td>
               <td className="text-right">

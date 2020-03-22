@@ -81,17 +81,16 @@ object BlockGenerator {
       parents <- ProtoUtil.unsafeGetParents[F](b)
       deploys = ProtoUtil.deploys(b).values.flatMap(_.toList).flatMap(_.deploy)
 
-      merged <- ExecutionEngineServiceStub.merge[F](parents, dag)
-      implicit0(deploySelection: DeploySelection[F]) = DeploySelection.create[F](
-        5 * 1024 * 1024
-      )
-      _ <- DeployStorageWriter[F].addAsPending(deploys.toList)
+      merged                                         <- ExecutionEngineServiceStub.merge[F](parents, dag)
+      implicit0(deploySelection: DeploySelection[F]) = DeploySelection.create[F]()
+      _                                              <- DeployStorageWriter[F].addAsPending(deploys.toList)
       result <- computeDeploysCheckpoint[F](
                  merged,
                  fs2.Stream.fromIterator(deploys.toIterator),
                  b.getHeader.timestamp,
                  ProtocolVersion(1),
                  mainRank = Message.asMainRank(0),
+                 maxBlockSizeBytes = 5 * 1024 * 1024,
                  upgrades = Nil
                )
     } yield result

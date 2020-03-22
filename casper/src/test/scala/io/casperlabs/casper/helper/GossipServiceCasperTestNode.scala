@@ -19,6 +19,7 @@ import io.casperlabs.casper.validation.{NCBValidationImpl, Validation}
 import io.casperlabs.casper.{consensus, _}
 import io.casperlabs.comm.discovery.{Node, NodeDiscovery, NodeIdentifier}
 import io.casperlabs.comm.gossiping._
+import io.casperlabs.comm.gossiping.downloadmanager._
 import io.casperlabs.comm.gossiping.synchronization._
 import io.casperlabs.crypto.Keys.PrivateKey
 import io.casperlabs.mempool.DeployBuffer
@@ -78,7 +79,7 @@ class GossipServiceCasperTestNode[F[_]](
   implicit val raiseInvalidBlock      = casper.validation.raiseValidateErrorThroughApplicativeError[F]
   implicit val broadcaster: Broadcaster[F] =
     Broadcaster.fromGossipServices(Some(validatorId), relaying)
-  implicit val deploySelection = DeploySelection.create[F](5 * 1024 * 1024)
+  implicit val deploySelection = DeploySelection.create[F]()
   implicit val validationEff   = new NCBValidationImpl[F]
   implicit val eventEmitter    = NoOpsEventEmitter.create[F]
 
@@ -175,7 +176,8 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
           multiParentFinalizer <- MultiParentFinalizer.create(
                                    dag,
                                    genesis.blockHash,
-                                   finalityDetector
+                                   finalityDetector,
+                                   isHighway = false
                                  )
           node = new GossipServiceCasperTestNode[F](
             identity,
@@ -278,7 +280,8 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
                 multiParentFinalizer <- MultiParentFinalizer.create(
                                          dag,
                                          genesis.blockHash,
-                                         finalityDetector
+                                         finalityDetector,
+                                         isHighway = false
                                        )
                 chainName    = "casperlabs"
                 minTTL       = 1.minute
@@ -366,14 +369,14 @@ object GossipServiceCasperTestNodeFactory {
         } yield cont
 
       for {
-        downloadManagerR <- DownloadManagerImpl[F](
+        downloadManagerR <- BlockDownloadManagerImpl[F](
                              maxParallelDownloads = 10,
                              connectToGossip = connectToGossip,
-                             backend = new DownloadManagerImpl.Backend[F] {
-                               override def hasBlock(blockHash: ByteString): F[Boolean] =
+                             backend = new BlockDownloadManagerImpl.Backend[F] {
+                               override def contains(blockHash: ByteString): F[Boolean] =
                                  isInDag(blockHash)
 
-                               override def validateBlock(block: consensus.Block): F[Unit] =
+                               override def validate(block: consensus.Block): F[Unit] =
                                  // Casper can only validate, store, but won't gossip because the Broadcaster we give it
                                  // will assume the DownloadManager will do that.
                                  // Doing this log here as it's evidently happened if we are here, and the tests expect it.
@@ -402,14 +405,8 @@ object GossipServiceCasperTestNodeFactory {
                                        )
                                  }
 
-                               override def storeBlock(block: consensus.Block): F[Unit] =
+                               override def store(block: consensus.Block): F[Unit] =
                                  // Validation has already stored it.
-                                 ().pure[F]
-
-                               override def storeBlockSummary(
-                                   summary: consensus.BlockSummary
-                               ): F[Unit] =
-                                 // No means to store summaries separately yet.
                                  ().pure[F]
 
                                override def onScheduled(summary: consensus.BlockSummary) =
@@ -427,6 +424,11 @@ object GossipServiceCasperTestNodeFactory {
                                    casper.addMissingDependencies(partialBlock)
                                  }
 
+                               override def onScheduled(
+                                   summary: consensus.BlockSummary,
+                                   source: Node
+                               ) = ().pure[F]
+
                                override def onDownloaded(blockHash: ByteString) =
                                  // Calling `addBlock` during validation has already stored the block.
                                  Log[F].debug(
@@ -435,7 +437,7 @@ object GossipServiceCasperTestNodeFactory {
 
                              },
                              relaying = relaying,
-                             retriesConf = DownloadManagerImpl.RetriesConf.noRetries
+                             retriesConf = BlockDownloadManagerImpl.RetriesConf.noRetries
                            ).allocated
 
         (downloadManager, downloadManagerShutdown) = downloadManagerR
@@ -468,7 +470,8 @@ object GossipServiceCasperTestNodeFactory {
                          maxPossibleDepth = Int.MaxValue,
                          minBlockCountToCheckWidth = Int.MaxValue,
                          maxBondingRate = 1.0,
-                         maxDepthAncestorsRequest = 1 // Just so we don't see the full DAG being synced all the time. We should have justifications for early stop.
+                         maxDepthAncestorsRequest = 1, // Just so we don't see the full DAG being synced all the time. We should have justifications for early stop.
+                         disableValidations = false    // See any problems in testing.
                        )
 
         server <- GossipServiceServer[F](

@@ -47,9 +47,9 @@ trait MessageProducer[F[_]] {
   def ballot(
       keyBlockHash: BlockHash,
       roundId: Ticks,
-      target: BlockHash,
+      target: Message.Block,
       // For lambda responses we want to limit the justifications to just direct ones.
-      justifications: Map[PublicKeyBS, Set[BlockHash]]
+      justifications: Map[PublicKeyBS, Set[Message]]
   ): F[Message.Ballot]
 
   /** Pick whatever secondary parents are compatible with the chosen main parent
@@ -60,8 +60,8 @@ trait MessageProducer[F[_]] {
   def block(
       keyBlockHash: BlockHash,
       roundId: Ticks,
-      mainParent: BlockHash,
-      justifications: Map[PublicKeyBS, Set[BlockHash]],
+      mainParent: Message.Block,
+      justifications: Map[PublicKeyBS, Set[Message]],
       isBookingBlock: Boolean
   ): F[Message.Block]
 }
@@ -81,21 +81,19 @@ object MessageProducer {
       override def ballot(
           keyBlockHash: BlockHash,
           roundId: Ticks,
-          target: BlockHash,
-          justifications: Map[PublicKeyBS, Set[BlockHash]]
+          target: Message.Block,
+          justifications: Map[PublicKeyBS, Set[Message]]
       ): F[Message.Ballot] =
         for {
-          parent        <- BlockStorage[F].getBlockSummaryUnsafe(target)
-          parentMessage <- MonadThrowable[F].fromTry(Message.fromBlockSummary(parent))
-          props         <- messageProps(keyBlockHash, List(parentMessage), justifications)
-          timestamp     <- Clock[F].currentTimeMillis
+          props     <- messageProps(keyBlockHash, List(target), justifications)
+          timestamp <- Clock[F].currentTimeMillis
 
           signed = ProtoUtil.ballot(
             props.justifications,
-            parent.getHeader.getState.postStateHash,
-            parent.getHeader.getState.bonds,
+            target.blockSummary.getHeader.getState.postStateHash,
+            target.blockSummary.getHeader.getState.bonds,
             props.protocolVersion,
-            parent.blockHash,
+            target.messageHash,
             props.validatorSeqNum,
             props.validatorPrevBlockHash,
             chainName,
@@ -118,8 +116,8 @@ object MessageProducer {
       override def block(
           keyBlockHash: BlockHash,
           roundId: Ticks,
-          mainParent: BlockHash,
-          justifications: Map[PublicKeyBS, Set[BlockHash]],
+          mainParent: Message.Block,
+          justifications: Map[PublicKeyBS, Set[Message]],
           isBookingBlock: Boolean
       ): F[Message.Block] =
         for {
@@ -153,6 +151,7 @@ object MessageProducer {
                            timestamp,
                            props.protocolVersion,
                            props.mainRank,
+                           props.configuration.deployConfig.maxBlockSizeBytes,
                            upgrades
                          )
 
@@ -200,29 +199,22 @@ object MessageProducer {
       private def messageProps(
           keyBlockHash: BlockHash,
           parents: Seq[Message],
-          justifications: Map[PublicKeyBS, Set[BlockHash]]
-      ): F[MessageProps] =
+          justifications: Map[PublicKeyBS, Set[Message]]
+      ): F[MessageProps] = {
         // NCB used to filter justifications to be only the bonded ones.
         // In Highway, we must include the justifications of the parent era _when_ there's a
         // new message that that we haven't included before. Transitive elimination should
         // take care of it, eventually, when it's implemented.
+
+        // NOTE: The validator sequence number restarts in each era, and `justifications`
+        // can contain entries for the parent era as well as the child.
+        val justificationMessages = justifications.values.flatten.toSet.toList
+
+        // Find the latest justification of the validator. They might be eliminated with transitives.
+        val validatorLatests = justificationMessages.filter { j =>
+          j.validatorId == validatorId && j.eraId == keyBlockHash
+        }
         for {
-          // NOTE: The validator sequence number restarts in each era, and `justifications`
-          // can contain entries for the parent era as well as the child.
-          justificationMessages <- justifications.values.flatten.toSet.toList
-                                    .traverse { h =>
-                                      BlockStorage[F]
-                                        .getBlockSummaryUnsafe(h)
-                                        .flatMap { s =>
-                                          MonadThrowable[F].fromTry(Message.fromBlockSummary(s))
-                                        }
-                                    }
-
-          // Find the latest justification of the validator. They might be eliminated with transitives.
-          validatorLatests = justificationMessages.filter { j =>
-            j.validatorId == validatorId && j.eraId == keyBlockHash
-          }
-
           // If they were eliminated we can look them up, as long as we make sure they don't change
           // due to concurrency since the time the justifications were collected, otherwise we could
           // be equivocating. This, currently, is catered for by a Semaphore in the EraRuntime around
@@ -261,6 +253,7 @@ object MessageProducer {
           protocolVersion,
           ProtoUtil.toJustification(justificationMessages)
         )
+      }
     }
 
   case class MessageProps(
@@ -277,8 +270,8 @@ object MessageProducer {
   def selectParents[F[_]: MonadThrowable: Metrics: BlockStorage: DagStorage: EraStorage](
       dag: DagRepresentation[F],
       keyBlockHash: BlockHash,
-      mainParent: BlockHash,
-      justifications: Map[PublicKeyBS, Set[BlockHash]]
+      mainParent: Message.Block,
+      justifications: Map[PublicKeyBS, Set[Message]]
   ): F[MergeResult[TransformMap, Block]] = {
     // TODO (CON-627): The merge doesn't deal with ballots that are cast in response to protocol
     // messages such as the switch block or lambda message. It wouldn't properly return all possible
@@ -286,25 +279,24 @@ object MessageProducer {
     // Until that's fixed, and other stuff noted in CON-628, don't use secondary parents at all.
     val secondaryParentsEnabled = false
 
-    val secondaryCandidates: F[List[BlockHash]] =
+    val secondaryCandidates: F[List[Message]] = {
+      val latestMessages: NonEmptyList[Message] =
+        NonEmptyList(mainParent, justifications.values.flatten.toList)
       for {
-        latestMessages <- (mainParent +: justifications.values.flatten.toList)
-                           .traverse(dag.lookupUnsafe(_))
-                           .map(NonEmptyList.fromListUnsafe(_))
         tips         <- Estimator.tipsOfLatestMessages[F](dag, latestMessages, stopHash = keyBlockHash)
         equivocators <- collectEquivocators[F](keyBlockHash)
         // TODO: There are no scores here for ordering secondary parents. Another reason for the fork choice to give these.
         secondaries = tips
-          .filterNot(m => equivocators(m.validatorId) || m.messageHash == mainParent)
-          .map(_.messageHash)
-          .sorted
+          .filterNot(m => equivocators(m.validatorId) || m.messageHash == mainParent.messageHash)
+          .sortBy(_.messageHash)
       } yield secondaries
+    }
 
     for {
-      secondaries <- if (secondaryParentsEnabled) secondaryCandidates else Nil.pure[F]
-      candidates  = NonEmptyList(mainParent, secondaries)
-      blocks      <- candidates.traverse(BlockStorage[F].getBlockUnsafe)
-      merged      <- ExecEngineUtil.merge[F](blocks, dag)
+      secondaries <- if (secondaryParentsEnabled) secondaryCandidates
+                    else List.empty[Message].pure[F]
+      candidates = NonEmptyList(mainParent, secondaries)
+      merged     <- ExecEngineUtil.merge[F](candidates, dag)
     } yield merged
   }
 

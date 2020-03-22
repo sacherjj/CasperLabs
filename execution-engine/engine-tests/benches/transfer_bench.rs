@@ -47,11 +47,9 @@ fn bootstrap(data_dir: &Path, accounts: &[PublicKey], amount: U512) -> LmdbWasmT
     )
     .build();
 
-    let engine_config = if cfg!(feature = "turbo") {
-        EngineConfig::new().with_turbo(true)
-    } else {
-        EngineConfig::new()
-    };
+    let engine_config = EngineConfig::new()
+        .with_use_system_contracts(cfg!(feature = "use-system-contracts"))
+        .with_highway(cfg!(feature = "highway"));
 
     let mut builder = LmdbWasmTestBuilder::new_with_config(data_dir, engine_config);
 

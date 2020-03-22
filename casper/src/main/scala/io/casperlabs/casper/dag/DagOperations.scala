@@ -68,6 +68,13 @@ object DagOperations {
     )
   }
 
+  def swimlaneVFromJustifications[F[_]: MonadThrowable](
+      validator: Validator,
+      msgs: List[Message],
+      dag: DagLookup[F]
+  ): StreamT[F, Message] =
+    toposortJDagDesc[F](dag, msgs).filter(_.validatorId == validator)
+
   /** Traverses j-past-cone of the block and returns messages by specified validator.
     */
   def swimlaneV[F[_]: MonadThrowable](
@@ -502,19 +509,17 @@ object DagOperations {
     *
     * @param dag
     * @param message
-    * @param stop
     * @return
     */
   def panoramaOfMessage[F[_]: MonadThrowable](
       dag: DagLookup[F],
       message: Message,
-      erasObservedBehavior: LocalDagView[Message],
-      stop: Message
+      erasObservedBehavior: LocalDagView[Message]
   ): F[MessageJPast[Message]] =
     message.justifications.toList
       .map(_.latestBlockHash)
       .traverse(dag.lookupUnsafe(_))
-      .flatMap(EraObservedBehavior.messageJPast[F](dag, _, erasObservedBehavior, stop))
+      .flatMap(EraObservedBehavior.messageJPast[F](dag, _, erasObservedBehavior))
 
   /**
     * Returns latest messages per era.

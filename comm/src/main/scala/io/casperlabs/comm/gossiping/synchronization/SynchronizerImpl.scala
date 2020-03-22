@@ -15,9 +15,11 @@ import io.casperlabs.comm.gossiping._
 import io.casperlabs.comm.gossiping.synchronization.Synchronizer.SyncError
 import io.casperlabs.comm.gossiping.synchronization.Synchronizer.SyncError._
 import io.casperlabs.metrics.Metrics
+import io.casperlabs.metrics.implicits._
 import io.casperlabs.shared.Log
-import scala.util.control.NonFatal
 import io.casperlabs.shared.Sorting.{catsOrder, jRankOrdering}
+import scala.util.control.NonFatal
+import scala.collection.immutable.Queue
 
 class SynchronizerImpl[F[_]: Concurrent: Log: Metrics](
     connectToGossip: Node => F[GossipService[F]],
@@ -29,16 +31,20 @@ class SynchronizerImpl[F[_]: Concurrent: Log: Metrics](
     // Only allow 1 sync per node at a time to not traverse the same thing twice.
     sourceSemaphoreMap: SemaphoreMap[F, Node],
     // Keep the synced DAG in memory so we can avoid traversing them repeatedly.
-    syncedSummariesRef: Ref[F, Map[ByteString, SynchronizerImpl.SyncedSummary]]
+    syncedSummariesRef: Ref[F, Map[ByteString, SynchronizerImpl.SyncedSummary]],
+    disableValidations: Boolean
 ) extends Synchronizer[F] {
   type Effect[A] = EitherT[F, SyncError, A]
 
   import io.casperlabs.comm.gossiping.synchronization.SynchronizerImpl._
 
+  override def onScheduled(summary: BlockSummary, source: Node): F[Unit] =
+    addSynced(summary, source)
+
   // This is supposed to be called every time a scheduled download is finished,
   // even when the resolution is that we already had it, so there should be no leaks.
-  override def downloaded(blockHash: ByteString) =
-    syncedSummariesRef.update(_ - blockHash)
+  override def onDownloaded(blockHash: ByteString) =
+    removeSynced(blockHash)
 
   override def syncDag(
       source: Node,
@@ -55,10 +61,13 @@ class SynchronizerImpl[F[_]: Concurrent: Log: Metrics](
                            targetBlockHashes.toList,
                            justifications,
                            SyncState.initial(targetBlockHashes)
-                         )
+                         ).timerGauge("loop")
       res <- syncStateOrError.fold(
               _.asLeft[Vector[BlockSummary]].pure[F],
-              finalizeResult(source, _)
+              state =>
+                Metrics[F].record("summaries", state.summaries.size.toLong) >>
+                  Metrics[F].record("ranks", state.ranks.size.toLong) >>
+                  finalizeResult(source, state).timerGauge("finalizeResult")
             )
       _ <- Metrics[F].incrementCounter(if (res.isLeft) "syncs_failed" else "syncs_succeeded")
     } yield res
@@ -89,7 +98,7 @@ class SynchronizerImpl[F[_]: Concurrent: Log: Metrics](
         targetBlockHashes,
         knownBlockHashes,
         prevSyncState
-      ).flatMap {
+      ).timerGauge("traverse").flatMap {
         case left @ Left(_) => (left: Either[SyncError, SyncState]).pure[F]
         case Right(newSyncState) =>
           missingDependencies(source, newSyncState.parentToChildren)
@@ -116,14 +125,11 @@ class SynchronizerImpl[F[_]: Concurrent: Log: Metrics](
       syncState: SyncState
   ): F[Either[SyncError, Vector[BlockSummary]]] =
     // Check that the stream didn't die before connecting to our DAG.
-    missingDependencies(source, syncState.parentToChildren) flatMap { missing =>
+    missingDependencies(source, syncState.parentToChildren) map { missing =>
       if (missing.isEmpty) {
-        for {
-          _         <- addSynced(source, syncState)
-          summaries = topologicalSort(syncState)
-        } yield summaries.asRight[SyncError]
+        topologicalSort(syncState).asRight[SyncError]
       } else {
-        MissingDependencies(missing.toSet).asLeft[Vector[BlockSummary]].leftWiden[SyncError].pure[F]
+        MissingDependencies(missing.toSet).asLeft[Vector[BlockSummary]].leftWiden[SyncError]
       }
     }
 
@@ -161,14 +167,35 @@ class SynchronizerImpl[F[_]: Concurrent: Log: Metrics](
 
   /** Remember that we got these summaries from this source,
     * so next time we don't have to travel that far back in their DAG. */
-  private def addSynced(source: Node, syncState: SyncState): F[Unit] =
+  private def addSynced(summary: BlockSummary, source: Node): F[Unit] =
     syncedSummariesRef.update { syncedSummaries =>
-      syncState.summaries.values.foldLeft(syncedSummaries) {
-        case (syncedSummaries, summary) =>
-          val ss = syncedSummaries.getOrElse(summary.blockHash, SyncedSummary(summary))
-          syncedSummaries + (summary.blockHash -> ss.addSource(source))
+      // We could filter with `backend.notInDag` to never add ones that have perhaps been
+      // downloaded in the meantime, but that would be a lot of database queries.
+      // Instead, `removeSynced` will clear the dependencies recursively,
+      // so if any descendants gets downloaded it will remove any leftovers.
+      val ss = syncedSummaries.getOrElse(summary.blockHash, SyncedSummary(summary))
+      syncedSummaries + (summary.blockHash -> ss.addSource(source))
+    } >> recordSyncedSummaries
+
+  /** Recursively clear out summaries and their dependencies from the cache. */
+  private def removeSynced(blockHash: ByteString): F[Unit] = {
+    def remove(queue: Queue[ByteString]): F[Unit] =
+      queue.dequeueOption.fold(().pure[F]) {
+        case (blockHash, queue) =>
+          syncedSummariesRef.modify { ss =>
+            (ss - blockHash) -> ss.get(blockHash)
+          } flatMap {
+            case None =>
+              remove(queue)
+            case Some(s) =>
+              remove(queue.enqueue(dependencies(s.summary)))
+          }
       }
-    }
+    remove(Queue(blockHash)) >> recordSyncedSummaries
+  }
+
+  private def recordSyncedSummaries =
+    syncedSummariesRef.get.flatMap(ss => Metrics[F].setGauge("synced_summaries", ss.size.toLong))
 
   /** Ask the source to traverse back from whatever our last unknown blocks were. */
   private def traverse(
@@ -193,15 +220,18 @@ class SynchronizerImpl[F[_]: Concurrent: Log: Metrics](
             _ <- EitherT.liftF(
                   Metrics[F].incrementCounter("summaries_traversed")
                 )
-            _ <- validate(summary)
-            _ <- noCycles(syncState, summary)
-            (iterDist, origDist) <- reachable(
-                                     syncState,
-                                     summary,
-                                     currentTargets
-                                   )
+            _ <- validate(summary) // This is good validation.
+            _ <- noCycles(syncState, summary).whenA(!disableValidations)
+            (iterDist, origDist) <- if (disableValidations)
+                                     EitherT((0 -> 0).asRight[SyncError].pure[F])
+                                   else
+                                     reachable(
+                                       syncState,
+                                       summary,
+                                       currentTargets
+                                     )
             newSyncState = syncState.append(summary, iterDist, origDist)
-            _            <- notTooWide(newSyncState)
+            _            <- notTooWide(newSyncState).whenA(!disableValidations)
           } yield newSyncState
 
           // If it's an error, stop the fold, otherwise carry on.
@@ -365,11 +395,13 @@ object SynchronizerImpl {
       maxPossibleDepth: Int,
       minBlockCountToCheckWidth: Int,
       maxBondingRate: Double,
-      maxDepthAncestorsRequest: Int
+      maxDepthAncestorsRequest: Int,
+      disableValidations: Boolean
   ) =
     for {
       semaphoreMap       <- SemaphoreMap[F, Node](1)
       syncedSummariesRef <- Ref[F].of(Map.empty[ByteString, SyncedSummary])
+      _                  <- Log[F].warn("Not going to perform DAG shape validations.").whenA(disableValidations)
     } yield {
       new SynchronizerImpl[F](
         connectToGossip,
@@ -379,7 +411,8 @@ object SynchronizerImpl {
         maxBondingRate,
         maxDepthAncestorsRequest,
         semaphoreMap,
-        syncedSummariesRef
+        syncedSummariesRef,
+        disableValidations
       )
     }
 

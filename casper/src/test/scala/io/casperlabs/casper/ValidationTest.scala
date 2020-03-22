@@ -1352,9 +1352,7 @@ class ValidationTest
     implicit blockStorage => implicit dagStorage => implicit deployStorage => _ =>
       val deploys =
         Vector(ProtoUtil.deploy(System.currentTimeMillis, ByteString.EMPTY))
-      implicit val deploySelection: DeploySelection[Task] = DeploySelection.create[Task](
-        5 * 1024 * 1024
-      )
+      implicit val deploySelection: DeploySelection[Task] = DeploySelection.create[Task]()
 
       implicit val deployBuffer = DeployBuffer.create[Task]("casperlabs", Duration.Zero)
 
@@ -1366,6 +1364,7 @@ class ValidationTest
                               System.currentTimeMillis,
                               ProtocolVersion(1),
                               mainRank = 0,
+                              maxBlockSizeBytes = 5 * 1024 * 1024,
                               upgrades = Nil
                             )
         DeploysCheckpoint(

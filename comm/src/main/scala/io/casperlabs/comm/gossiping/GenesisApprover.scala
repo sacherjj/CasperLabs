@@ -1,10 +1,9 @@
 package io.casperlabs.comm.gossiping
 
-import cats._
+import cats.data.NonEmptyList
 import cats.effect._
 import cats.effect.concurrent._
 import cats.implicits._
-import cats.syntax._
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus._
 import io.casperlabs.comm.ServiceError
@@ -12,12 +11,12 @@ import io.casperlabs.comm.ServiceError.{Internal, InvalidArgument, NotFound, Una
 import io.casperlabs.comm.discovery.NodeUtils._
 import io.casperlabs.comm.discovery.{Node, NodeDiscovery}
 import io.casperlabs.comm.gossiping.Utils._
+import io.casperlabs.comm.gossiping.downloadmanager.BlockDownloadManager
 import io.casperlabs.shared.Log
 
-import scala.concurrent.duration.{Duration, FiniteDuration}
+import scala.concurrent.duration.FiniteDuration
 import scala.util.Random
 import scala.util.control.NonFatal
-import cats.data.NonEmptyList
 
 /** Accumulate approvals for the Genesis block. When enough of them is
   * present to pass a threshold which is the preorgative of this node,
@@ -68,7 +67,7 @@ object GenesisApproverImpl {
   case class BootstrapParams[F[_]](
       bootstraps: NonEmptyList[Node],
       pollInterval: FiniteDuration,
-      downloadManager: DownloadManager[F]
+      downloadManager: BlockDownloadManager[F]
   )
 
   def apply[F[_]: Concurrent: Log: Timer](
@@ -133,7 +132,7 @@ object GenesisApproverImpl {
       relayFactor: Int,
       bootstraps: NonEmptyList[Node],
       pollInterval: FiniteDuration,
-      downloadManager: DownloadManager[F]
+      downloadManager: BlockDownloadManager[F]
   ): Resource[F, GenesisApprover[F]] =
     apply(
       backend,
@@ -234,7 +233,7 @@ class GenesisApproverImpl[F[_]: Concurrent: Log: Timer](
   private def pollBootstraps(
       bootstraps: List[Node],
       pollInterval: FiniteDuration,
-      downloadManager: DownloadManager[F]
+      downloadManager: BlockDownloadManager[F]
   ): F[Unit] = {
 
     def download(bootstrap: Node, service: GossipService[F], blockHash: ByteString): F[Block] =
