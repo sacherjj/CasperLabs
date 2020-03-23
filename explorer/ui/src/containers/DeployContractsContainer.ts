@@ -9,7 +9,6 @@ import * as nacl from 'tweetnacl-ts';
 import $ from 'jquery';
 import { Deploy } from 'casperlabs-grpc/io/casperlabs/casper/consensus/consensus_pb';
 import { CLType, CLValueInstance, Key } from 'casperlabs-grpc/io/casperlabs/casper/consensus/state_pb';
-import paymentWASMUrl from '../standard_payment.wm';
 
 type SupportedType = CLType.SimpleMap[keyof CLType.SimpleMap] | 'Bytes';
 
@@ -272,13 +271,9 @@ export class DeployContractsContainer {
       let argsProto = args.map((arg: FormState<DeployArgument>) => {
         return this.buildArgument(arg);
       });
-      let wasmRequest = await fetch(paymentWASMUrl);
-      let paymentWASM: ArrayBuffer = await wasmRequest.arrayBuffer();
       const paymentAmount = config.paymentAmount.value;
 
-      // we will remove it completely
-      const gasPrice = 1;
-      return DeployUtil.makeDeploy(argsProto, type, session, new Uint8Array(paymentWASM), BigInt(paymentAmount), publicKey, gasPrice);
+      return DeployUtil.makeDeploy(argsProto, type, session, null, BigInt(paymentAmount), publicKey);
     }
   }
 
