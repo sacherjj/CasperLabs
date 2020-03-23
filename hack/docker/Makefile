@@ -202,6 +202,10 @@ stests/console: .casperlabs
 	@# after this console has registered all the required containers.
 	$(eval NODES = $(shell find . -maxdepth 1 -type d -name "node-*" | sort | sed 's/.\///'))
 
+	@# Make sure stests workers pick up newly registered nodes.
+	@# This will be happening automatically at some point in stests.
+	sh -c 'sleep 30s && docker restart stests' > /dev/null 2>&1 &
+
 	docker run -it --rm \
 	  --network casperlabs \
 		--name stests-console \
