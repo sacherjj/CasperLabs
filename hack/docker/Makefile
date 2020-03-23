@@ -129,7 +129,7 @@ slow:
 	mkdir -p .casperlabs/nodes
 	mkdir -p .casperlabs/chainspec/genesis
 
-	@# Create a `facet-account` to hold some initial tokens to distribute.
+	@# Create a `faucet-account` to hold some initial tokens to distribute.
 	mkdir -p keys/faucet-account
 	../key-management/docker-gen-account-keys.sh keys/faucet-account
 	(cat keys/faucet-account/account-id; echo ",10000000000,0") > .casperlabs/chainspec/genesis/accounts.csv
@@ -194,6 +194,13 @@ stests/build:
 # and an stest image built with `make stests/build`,
 # this command can run stests in interactive mode.
 stests/console: .casperlabs
+	@# Collect existing nodes, so we can register them automatically.
+	@# stests workers will try to connect to them as soon as they are registered so
+	@# they should be running as well; but maybe it can handle nodes that will go
+	@# on and offline, so this is now based on just the fact that these nodes are declared.
+	@# Otherwise we could just list the running docker containers.
+	$(eval NODES = $(shell find . -maxdepth 1 -type d -name "node-*" | sort | sed 's/.\///'))
+
 	docker run -it --rm \
 	  --network casperlabs \
 		--name stests-console \
@@ -204,4 +211,5 @@ stests/console: .casperlabs
 		-e STESTS_CACHE_REDIS_HOST=redis \
 		-e STESTS_MWARE_REDIS_HOST=redis \
 		-e NETWORK=poc1 \
+		-e NODES='$(NODES)' \
 		casperlabs/stests:latest bash -c 'chmod +x start-console.sh && ./start-console.sh'
