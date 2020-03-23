@@ -31,7 +31,7 @@ import monix.execution.Scheduler
 import org.http4s.implicits._
 import org.http4s.server.Router
 import org.http4s.server.blaze.BlazeServerBuilder
-
+import scala.concurrent.duration.FiniteDuration
 import scala.concurrent.ExecutionContext
 
 object Servers {
@@ -45,6 +45,7 @@ object Servers {
   def internalServersR(
       port: Int,
       maxMessageSize: Int,
+      shutdownTimeout: FiniteDuration,
       ingressScheduler: Scheduler,
       blockApiLock: Semaphore[Task],
       maybeSslContext: Option[SslContext]
@@ -72,7 +73,8 @@ object Servers {
         new MetricsInterceptor(),
         ErrorInterceptor.default
       ),
-      sslContext = maybeSslContext
+      sslContext = maybeSslContext,
+      shutdownTimeout = shutdownTimeout
     ) *> Resource.liftF(
       logStarted[Task]("Internal", port, maybeSslContext.isDefined)
     )
@@ -82,6 +84,7 @@ object Servers {
   def externalServersR[F[_]: Concurrent: TaskLike: Log: FinalityStorage: Metrics: BlockStorage: ExecutionEngineService: DeployStorage: Fs2Compiler: DeployBuffer: DagStorage: EventStream: NodeDiscovery](
       port: Int,
       maxMessageSize: Int,
+      shutdownTimeout: FiniteDuration,
       ingressScheduler: Scheduler,
       maybeSslContext: Option[SslContext],
       isReadOnlyNode: Boolean
@@ -104,7 +107,8 @@ object Servers {
         new MetricsInterceptor(),
         ErrorInterceptor.default
       ),
-      sslContext = maybeSslContext
+      sslContext = maybeSslContext,
+      shutdownTimeout = shutdownTimeout
     ) *>
       Resource.liftF(
         logStarted[F]("External", port, maybeSslContext.isDefined)

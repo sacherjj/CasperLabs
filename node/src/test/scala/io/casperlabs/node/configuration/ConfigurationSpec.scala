@@ -50,6 +50,7 @@ class ConfigurationSpec
       dynamicHostAddress = false,
       noUpnp = false,
       defaultTimeout = FiniteDuration(1, TimeUnit.SECONDS),
+      shutdownTimeout = FiniteDuration(1, TimeUnit.SECONDS),
       bootstrap = List(
         NodeWithoutChainId(
           Node(
