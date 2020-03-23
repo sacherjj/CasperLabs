@@ -3,6 +3,8 @@ import { Route, RouteProps } from 'react-router-dom';
 import { observer } from 'mobx-react';
 import AuthContainer from '../containers/AuthContainer';
 import { encodeBase16 } from 'casperlabs-sdk';
+import { Helmet } from "react-helmet";
+
 
 export const Spinner = (msg: String) => (
   <div className="text-center">
@@ -215,3 +217,9 @@ export const Card = (props: {
     </div>
   );
 };
+
+export const Title = (props:{title:string}) => (
+  <Helmet>
+    <title>CasperLabs Clarity - {props.title}</title>
+  </Helmet>
+);

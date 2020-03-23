@@ -41,6 +41,8 @@
     "react": "^16.8.6",
     "react-chartjs-2": "^2.9.0",
     "react-dom": "^16.8.6",
+    "react-ga": "^2.7.0",
+    "react-helmet": "^5.2.1",
     "react-router-dom": "^5.1.0",
     "react-scripts": "^3.3.0-next.80",
     "rxjs": "^6.5.3",
@@ -83,7 +85,8 @@
   },
   "devDependencies": {
     "@types/validator": "^12.0.1",
-    "husky": "^2.7.0"
+    "husky": "^2.7.0",
+    "@types/react-helmet": "^5.0.15"
   },
   "proxy": "http://localhost:8001/"
 }

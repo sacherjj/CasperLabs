@@ -5,7 +5,7 @@ Feature: Clarity
      Given: Single Node Network With Clarity
        And: A running seleniumHQ container
       When: Visiting http://CLARITY-HOST-NAME:8080
-      Then: The content of page contains "<title>CasperLabs Clarity</title>"
+      Then: The content of page contains "<title>CasperLabs Clarity - Home</title>"
 
   # Implemented test_clarity.py : test_create_account_key
   Scenario: User can create/delete account key and request tokens
