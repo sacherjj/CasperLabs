@@ -8,7 +8,7 @@ mod partial_tries {
             self,
             tests::{
                 InMemoryTestContext, LmdbTestContext, TestKey, TestValue, TEST_LEAVES,
-                TEST_LEAVES_PREFIXES, TEST_TRIE_GENERATORS,
+                TEST_TRIE_GENERATORS,
             },
         },
     };
@@ -82,34 +82,6 @@ mod partial_tries {
                 tmp
             };
             assert_eq!(actual, expected);
-
-            for prefix in TEST_LEAVES_PREFIXES.iter() {
-                let expected = {
-                    let mut tmp = used
-                        .iter()
-                        .filter_map(Trie::key)
-                        .filter(|key| key.0.starts_with(prefix))
-                        .cloned()
-                        .collect::<Vec<TestKey>>();
-                    tmp.sort();
-                    tmp
-                };
-                let actual = {
-                    let txn = context.environment.create_read_txn().unwrap();
-                    let mut tmp = operations::keys_with_prefix::<TestKey, TestValue, _, _>(
-                        correlation_id,
-                        &txn,
-                        &context.store,
-                        &root_hash,
-                        prefix,
-                    )
-                    .filter_map(Result::ok)
-                    .collect::<Vec<TestKey>>();
-                    tmp.sort();
-                    tmp
-                };
-                assert_eq!(actual, expected);
-            }
         }
     }
 }
@@ -271,5 +243,67 @@ mod keys_iterator {
     fn should_panic_on_pointer_to_nonexisting_hash() {
         let (root_hash, tries) = return_on_err!(create_invalid_hash_trie());
         test_trie(root_hash, tries);
+    }
+}
+
+mod keys_with_prefix_iterator {
+    use engine_shared::newtypes::CorrelationId;
+
+    use crate::{
+        transaction_source::TransactionSource,
+        trie::Trie,
+        trie_store::operations::{
+            self,
+            tests::{create_6_leaf_trie, InMemoryTestContext, TestKey, TestValue, TEST_LEAVES},
+        },
+    };
+
+    fn expected_keys(prefix: &[u8]) -> Vec<TestKey> {
+        let mut tmp = TEST_LEAVES
+            .iter()
+            .filter_map(Trie::key)
+            .filter(|key| key.0.starts_with(prefix))
+            .cloned()
+            .collect::<Vec<TestKey>>();
+        tmp.sort();
+        tmp
+    }
+
+    fn test_prefix(prefix: &[u8]) {
+        let correlation_id = CorrelationId::new();
+        let (root_hash, tries) = create_6_leaf_trie().expect("should create a trie");
+        let context = InMemoryTestContext::new(&tries).expect("should create a new context");
+        let txn = context
+            .environment
+            .create_read_txn()
+            .expect("should create a read txn");
+        let expected = expected_keys(prefix);
+        let mut actual = operations::keys_with_prefix::<TestKey, TestValue, _, _>(
+            correlation_id,
+            &txn,
+            &context.store,
+            &root_hash,
+            prefix,
+        )
+        .filter_map(Result::ok)
+        .collect::<Vec<_>>();
+        actual.sort();
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn test_prefixes() {
+        test_prefix(&[]); // 6 leaves
+        test_prefix(&[0]); // 6 leaves
+        test_prefix(&[0, 1]); // 1 leaf
+        test_prefix(&[0, 1, 0]); // 1 leaf
+        test_prefix(&[0, 1, 1]); // 0 leaves
+        test_prefix(&[0, 0]); // 5 leaves
+        test_prefix(&[0, 0, 1]); // 0 leaves
+        test_prefix(&[0, 0, 2]); // 1 leaf
+        test_prefix(&[0, 0, 0, 0]); // 3 leaves, prefix points to an Extension
+        test_prefix(&[0, 0, 0, 0, 0]); // 3 leaves
+        test_prefix(&[0, 0, 0, 0, 0, 0]); // 2 leaves
+        test_prefix(&[0, 0, 0, 0, 0, 0, 1]); // 1 leaf
     }
 }

@@ -124,8 +124,6 @@ const TEST_LEAVES: [TestTrie; TEST_LEAVES_LENGTH] = [
     },
 ];
 
-const TEST_LEAVES_PREFIXES: [&[u8]; 3] = [&[0; 4], &[1], &[1, 5, 4]];
-
 const TEST_LEAVES_UPDATED: [TestTrie; TEST_LEAVES_LENGTH] = [
     Trie::Leaf {
         key: TestKey([0u8, 0, 0, 0, 0, 0, 0]),
