@@ -34,7 +34,7 @@ class FinalityDetectorByVotingMatrixTest
 
   behavior of "Finality Detector of Voting Matrix"
 
-  implicit val logEff = LogStub[Task](printEnabled = true)
+  implicit val logEff = LogStub[Task]()
   implicit val raiseValidateErr: FunctorRaise[Task, InvalidBlock] =
     validation.raiseValidateErrorThroughApplicativeError[Task]
 
@@ -548,6 +548,75 @@ class FinalityDetectorByVotingMatrixTest
         // After creating b7, all validators know they all vote for v1, but b1 still can not get finalized, because v1 and v3 equivocated
         result = c7 shouldBe None
       } yield result
+  }
+
+  it should "not count child era messages towards finality of the parent bocks" in withStorage {
+    implicit blockStore => implicit dagStorage => implicit deployStorage =>
+      _ =>
+        /* The DAG looks like:
+         * era-1:
+         *    a1 ----
+         *           \
+         *            c1
+         *          /
+         *        b1
+         *      /
+         * era-0:
+         *    a0
+         *      \
+         *      genesis
+         */
+        val v1     = generateValidator("V1")
+        val v2     = generateValidator("V2")
+        val v3     = generateValidator("V3")
+        val v1Bond = Bond(v1, 10)
+        val v2Bond = Bond(v2, 10)
+        val v3Bond = Bond(v3, 10)
+        val bonds  = Seq(v1Bond, v2Bond, v3Bond)
+        for {
+          genesis <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bonds)
+          dag     <- dagStorage.getRepresentation
+          implicit0(detector: FinalityDetectorVotingMatrix[Task]) <- mkVotingMatrix(
+                                                                      dag,
+                                                                      genesis,
+                                                                      isHighway = true
+                                                                    )
+          (a0, c1) <- createBlockAndUpdateFinalityDetector[Task](
+                       Seq(genesis.blockHash),
+                       genesis.blockHash,
+                       v1,
+                       bonds,
+                       lfb = genesis
+                     )
+          _ = c1 shouldBe None
+          (b1, c2) <- createBlockAndUpdateFinalityDetector[Task](
+                       Seq(a0.blockHash),
+                       a0.blockHash,
+                       v2,
+                       bonds,
+                       HashMap(v1 -> a0.blockHash),
+                       lfb = genesis
+                     )
+          _ = c2 shouldBe None
+          (c1, c3) <- createBlockAndUpdateFinalityDetector[Task](
+                       Seq(b1.blockHash),
+                       a0.blockHash,
+                       v3,
+                       bonds,
+                       HashMap(v1 -> a0.blockHash, v2 -> b1.blockHash),
+                       lfb = genesis
+                     )
+          _ = c3 shouldBe None
+          (a1, c4) <- createBlockAndUpdateFinalityDetector[Task](
+                       Seq(c1.blockHash),
+                       a0.blockHash,
+                       v1,
+                       bonds,
+                       HashMap(v1 -> a0.blockHash, v2 -> b1.blockHash, v3 -> c1.blockHash),
+                       lfb = genesis
+                     )
+          _ = c4 shouldBe none
+        } yield ()
   }
 
   def createBlockAndUpdateFinalityDetector[F[_]: Sync: Time: Log: BlockStorage: IndexedDagStorage: FinalityDetectorVotingMatrix: FunctorRaise[
