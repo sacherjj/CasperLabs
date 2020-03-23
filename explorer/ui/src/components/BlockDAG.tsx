@@ -1,19 +1,24 @@
 import * as React from 'react';
+import { Block } from 'casperlabs-grpc/io/casperlabs/casper/consensus/consensus_pb';
 import { BlockInfo } from 'casperlabs-grpc/io/casperlabs/casper/consensus/info_pb';
 import { ListInline, Loading, RefreshButton, shortHash } from './Utils';
 import * as d3 from 'd3';
 import { encodeBase16 } from 'casperlabs-sdk';
 import { ToggleButton, ToggleStore } from './ToggleButton';
+import { reaction } from 'mobx';
+import { observer } from 'mobx-react';
 
 // https://bl.ocks.org/mapio/53fed7d84cd1812d6a6639ed7aa83868
 
-const CircleRadius = 8;
+const CircleRadius = 12;
 const LineColor = '#AAA';
+const FinalizedLineColor = '#83f2a1';
 
 export interface Props {
   title: string;
   refresh?: () => void;
   subscribeToggleStore?: ToggleStore;
+  hideBallotsToggleStore?: ToggleStore;
   blocks: BlockInfo[] | null;
   emptyMessage?: any;
   footerMessage?: any;
@@ -25,12 +30,34 @@ export interface Props {
   onSelected?: (block: BlockInfo) => void;
 }
 
+@observer
 export class BlockDAG extends React.Component<Props, {}> {
   svg: SVGSVGElement | null = null;
   hint: HTMLDivElement | null = null;
   xTrans: d3.ScaleLinear<number, number> | null = null;
   yTrans: d3.ScaleLinear<number, number> | null = null;
   initialized = false;
+
+  constructor(props: Props) {
+    super(props);
+    reaction(() => {
+        return this.filteredBlocks();
+      }, () => {
+        this.renderGraph();
+      }, {
+        fireImmediately: false,
+        delay: 100
+      }
+    );
+  }
+
+  private filteredBlocks() {
+    if (this.props.blocks && this.props.hideBallotsToggleStore?.isPressed) {
+      return this.props.blocks.filter(b => isBlock(b));
+    } else {
+      return this.props.blocks!.map(b => b);
+    }
+  }
 
   render() {
     return (
@@ -39,6 +66,22 @@ export class BlockDAG extends React.Component<Props, {}> {
           <span>{this.props.title}</span>
           <div className="float-right">
             <ListInline>
+              {this.props.hideBallotsToggleStore && (
+                <ToggleButton
+                  label="Hide Ballots"
+                  title="Hide Ballots"
+                  toggleStore={this.props.hideBallotsToggleStore}
+                  size="sm"
+                />
+              )}
+              {this.props.subscribeToggleStore && (
+                <ToggleButton
+                  title="Subscribe to the latest added blocks"
+                  label="Live Feed"
+                  toggleStore={this.props.subscribeToggleStore}
+                  size="sm"
+                />
+              )}
               {this.props.onDepthChange && (
                 <select
                   title="Depth"
@@ -55,21 +98,14 @@ export class BlockDAG extends React.Component<Props, {}> {
                 </select>
               )}
               {this.props.refresh && (
-                <RefreshButton refresh={() => this.props.refresh!()} />
-              )}
-              {this.props.subscribeToggleStore && (
-                <ToggleButton
-                  title="Subscribing to the latest added blocks"
-                  toggleStore={this.props.subscribeToggleStore}
-                  size="sm"
-                />
+                <RefreshButton refresh={() => this.props.refresh!()}/>
               )}
             </ListInline>
           </div>
         </div>
         <div className="card-body">
           {this.props.blocks == null ? (
-            <Loading />
+            <Loading/>
           ) : this.props.blocks.length === 0 ? (
             <div className="small text-muted">
               {this.props.emptyMessage || 'No blocks to show.'}
@@ -97,11 +133,6 @@ export class BlockDAG extends React.Component<Props, {}> {
     );
   }
 
-  /** Called when the data is refreshed, when we get the blocks if they were null to begin with. */
-  componentDidUpdate() {
-    this.renderGraph();
-  }
-
   componentDidMount() {
     this.renderGraph();
   }
@@ -114,7 +145,8 @@ export class BlockDAG extends React.Component<Props, {}> {
     }
     const svg = d3.select(this.svg);
     const hint = d3.select(this.hint);
-    const color = consistentColor();
+    const validatorColor = consistentColor(d3.schemePaired);
+    const eraColor = consistentColor(d3.schemeCategory10);
     // See what the actual width and height is.
     const width = $(this.svg!).width()!;
     const height = $(this.svg!).height()!;
@@ -171,7 +203,7 @@ export class BlockDAG extends React.Component<Props, {}> {
     // Clear previous contents.
     container.selectAll('g').remove();
 
-    let graph: Graph = toGraph(this.props.blocks);
+    let graph: Graph = toGraph(this.filteredBlocks()!);
     graph = calculateCoordinates(graph, width, height);
 
     const selectedId = this.props.selected && blockHash(this.props.selected);
@@ -183,7 +215,7 @@ export class BlockDAG extends React.Component<Props, {}> {
       .data(graph.links)
       .enter()
       .append('line')
-      .attr('stroke', LineColor)
+      .attr('stroke', (d: d3Link) => d.isFinalized ? FinalizedLineColor : LineColor)
       .attr('stroke-width', (d: d3Link) => (d.isMainParent ? 3 : 1))
       .attr('marker-end', 'url(#arrow)') // use the Arrow created above
       .attr('stroke-dasharray', (d: d3Link) =>
@@ -202,14 +234,15 @@ export class BlockDAG extends React.Component<Props, {}> {
     node
       .append('circle')
       .attr('class', 'node')
-      .attr('r', CircleRadius)
+      .attr('r', (d: d3Node) =>
+        CircleRadius * (isBallot(d.block) ? 0.5 : 1.0))
       .attr('stroke', (d: d3Node) =>
-        selectedId && d.id === selectedId ? '#E00' : '#fff'
+        selectedId && d.id === selectedId ? '#E00' : eraColor(d.eraId)
       )
       .attr('stroke-width', (d: d3Node) =>
-        selectedId && d.id === selectedId ? '3px' : '1.5px'
+        selectedId && d.id === selectedId ? '7px' : '4px'
       )
-      .attr('fill', (d: d3Node) => color(d.validator));
+      .attr('fill', (d: d3Node) => validatorColor(d.validator));
 
     // Append a node-label to each node
     const label = node
@@ -219,8 +252,7 @@ export class BlockDAG extends React.Component<Props, {}> {
       .style('font-family', 'Arial')
       .style('font-size', 12)
       .style('pointer-events', 'none') // to prevent mouseover/drag capture
-      .style('text-anchor', 'start')
-      .attr('transform', 'rotate(15)'); // rotate so a chain doesn't overlap on a small screen.
+      .style('text-anchor', 'start');
 
     const focus = (d: any) => {
       let datum = d3.select(d3.event.target).datum() as d3Node;
@@ -270,9 +302,9 @@ export class BlockDAG extends React.Component<Props, {}> {
       // update position of label
       container
         .selectAll('text.node-label')
-        .attr('x', (d: any) => x(d.x) + 9)
-        .attr('y', (d: any) => y(d.y) + 12)
-        .style('transform-origin', (d: any) => `${x(d.x)}px ${y(d.y)}px`);
+        .attr('x', (d: any) => x(d.x) + 5)
+        .attr('y', (d: any) => y(d.y) + 25)
+        .attr('transform', (d: any) => `rotate(25 ${x(d.x)} ${y(d.y)})`); // rotate so a chain doesn't overlap on a small screen.
 
       // update positions of line
       container
@@ -303,6 +335,7 @@ interface d3Node {
   id: string;
   title: string;
   validator: string;
+  eraId: string;
   rank: number;
   x?: number;
   y?: number;
@@ -314,6 +347,7 @@ interface d3Link {
   target: d3Node;
   isMainParent: boolean;
   isJustification: boolean;
+  isFinalized: boolean;
 }
 
 class Graph {
@@ -342,10 +376,11 @@ const toGraph = (blocks: BlockInfo[]) => {
       id: id,
       title: shortHash(id),
       validator: validatorHash(block),
+      eraId: keyBlockHash(block),
       rank: block
         .getSummary()!
         .getHeader()!
-        .getRank(),
+        .getJRank(),
       block: block
     };
   });
@@ -354,6 +389,9 @@ const toGraph = (blocks: BlockInfo[]) => {
 
   let links = blocks.flatMap(block => {
     let child = blockHash(block);
+
+    let isChildFinalized = isFinalized(block);
+    let isChildBallot = isBallot(block);
 
     let parents = block
       .getSummary()!
@@ -369,14 +407,18 @@ const toGraph = (blocks: BlockInfo[]) => {
       .getJustificationsList()
       .map(x => encodeBase16(x.getLatestBlockHash_asU8()));
 
+    let source = nodeMap.get(child)!;
+
     let parentLinks = parents
       .filter(p => nodeMap.has(p))
       .map(p => {
+        let target = nodeMap.get(p)!;
         return {
-          source: nodeMap.get(child)!,
-          target: nodeMap.get(p)!,
+          source: source,
+          target: target,
           isMainParent: p === parents[0],
-          isJustification: false
+          isJustification: false,
+          isFinalized: (isChildFinalized || isChildBallot) && isFinalized(target.block)
         };
       });
 
@@ -384,11 +426,13 @@ const toGraph = (blocks: BlockInfo[]) => {
       .filter(x => !parentSet.has(x))
       .filter(j => nodeMap.has(j))
       .map(j => {
+        let target = nodeMap.get(j)!;
         return {
-          source: nodeMap.get(child)!,
-          target: nodeMap.get(j)!,
+          source: source,
+          target: target,
           isMainParent: false,
-          isJustification: true
+          isJustification: true,
+          isFinalized: (isChildFinalized || isChildBallot) && isFinalized(target.block)
         };
       });
 
@@ -449,6 +493,19 @@ const calculateCoordinates = (graph: Graph, width: number, height: number) => {
 const blockHash = (block: BlockInfo) =>
   encodeBase16(block.getSummary()!.getBlockHash_asU8());
 
+const keyBlockHash = (block: BlockInfo) =>
+  encodeBase16(block.getSummary()!.getHeader()!.getKeyBlockHash_asU8());
+
+const isBlock = (block: BlockInfo) =>
+  block.getSummary()!.getHeader()!.getMessageType() === Block.MessageType.BLOCK;
+
+const isBallot = (block: BlockInfo) =>
+  !isBlock(block);
+
+const isFinalized = (block: BlockInfo) =>
+  block.getStatus()!.getFinality() === BlockInfo.Status.Finality.FINALIZED
+
+
 const validatorHash = (block: BlockInfo) =>
   encodeBase16(
     block
@@ -477,7 +534,7 @@ const hashCode = (s: string) => {
   return hash;
 };
 
-const consistentColor = () => {
+const consistentColor = (colors: readonly string[]) => {
   // Display each validator with its own color.
   // https://www.d3-graph-gallery.com/graph/custom_color.html
   // http://bl.ocks.org/curran/3094b37e63b918bab0a06787e161607b
@@ -485,20 +542,11 @@ const consistentColor = () => {
   // const color = d3.scaleOrdinal(d3.schemeCategory10);
   // This can be used with a numeric value:
   // const hashRange: [number, number] = [-2147483648, 2147483647];
-  const steps = 20;
-  const domain: [number, number] = [0, steps - 1];
-  const colors = [
-    d3.scaleSequential(d3.interpolateSpectral).domain(domain),
-    d3.scaleSequential(d3.interpolateSinebow).domain(domain),
-    d3.scaleSequential(d3.interpolateRainbow).domain(domain),
-    d3.scaleSequential(d3.interpolateGreys).domain(domain)
-  ];
+  //   d3.scaleSequential(d3.interpolateSpectral).domain(hashRange),
   const cl = colors.length;
-
   return (s: string) => {
     const h = hashCode(s);
-    const c = Math.abs(h % steps);
-    const i = Math.abs(h % cl);
-    return colors[i](c);
+    const c = Math.abs(h % cl);
+    return colors[c];
   };
 };

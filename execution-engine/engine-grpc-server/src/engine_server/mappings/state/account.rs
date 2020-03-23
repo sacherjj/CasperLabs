@@ -5,7 +5,7 @@ use std::{
 };
 
 use engine_shared::account::{Account, ActionThresholds, AssociatedKeys};
-use types::account::{PublicKey, PurseId, Weight};
+use types::account::{PublicKey, Weight};
 
 use super::NamedKeyMap;
 use crate::engine_server::{
@@ -17,13 +17,13 @@ impl From<Account> for state::Account {
     fn from(mut account: Account) -> Self {
         let mut pb_account = state::Account::new();
 
-        pb_account.set_public_key(account.pub_key().to_vec());
+        pb_account.set_public_key(account.public_key().as_bytes().to_vec());
 
         let named_keys = mem::replace(account.named_keys_mut(), BTreeMap::new());
         let pb_named_keys: Vec<NamedKey> = NamedKeyMap::new(named_keys).into();
         pb_account.set_named_keys(pb_named_keys.into());
 
-        pb_account.set_purse_id(account.purse_id().value().into());
+        pb_account.set_main_purse(account.main_purse().into());
 
         let associated_keys: Vec<Account_AssociatedKey> =
             account.get_associated_keys().map(Into::into).collect();
@@ -50,12 +50,12 @@ impl TryFrom<state::Account> for Account {
 
         let named_keys: NamedKeyMap = pb_account.named_keys.into_vec().try_into()?;
 
-        let purse_id = {
+        let main_purse = {
             let pb_uref = pb_account
-                .purse_id
+                .main_purse
                 .into_option()
-                .ok_or_else(|| ParsingError::from("Protobuf Account missing PurseId field"))?;
-            PurseId::new(pb_uref.try_into()?)
+                .ok_or_else(|| ParsingError::from("Protobuf Account missing MainPurse field"))?;
+            pb_uref.try_into()?
         };
 
         let associated_keys = {
@@ -92,9 +92,9 @@ impl TryFrom<state::Account> for Account {
         };
 
         let account = Account::new(
-            public_key,
+            PublicKey::ed25519_from(public_key),
             named_keys.into_inner(),
-            purse_id,
+            main_purse,
             associated_keys,
             action_thresholds,
         );
@@ -105,7 +105,7 @@ impl TryFrom<state::Account> for Account {
 impl From<(&PublicKey, &Weight)> for Account_AssociatedKey {
     fn from((public_key, weight): (&PublicKey, &Weight)) -> Self {
         let mut pb_associated_key = Account_AssociatedKey::new();
-        pb_associated_key.set_public_key(public_key.to_vec());
+        pb_associated_key.set_public_key(public_key.as_bytes().to_vec());
         pb_associated_key.set_weight(weight.value().into());
         pb_associated_key
     }
@@ -115,7 +115,7 @@ impl TryFrom<Account_AssociatedKey> for (PublicKey, Weight) {
     type Error = ParsingError;
 
     fn try_from(pb_associated_key: Account_AssociatedKey) -> Result<Self, Self::Error> {
-        let public_key = PublicKey::new(mappings::vec_to_array(
+        let public_key = PublicKey::ed25519_from(mappings::vec_to_array(
             pb_associated_key.public_key,
             "Protobuf Account::AssociatedKey",
         )?);

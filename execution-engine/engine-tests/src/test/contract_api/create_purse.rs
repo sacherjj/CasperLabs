@@ -5,11 +5,10 @@ use engine_test_support::{
     internal::{ExecuteRequestBuilder, WasmTestBuilder, DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT},
     DEFAULT_ACCOUNT_ADDR,
 };
-use types::{account::PurseId, Key, U512};
-
+use types::{account::PublicKey, Key, U512};
 const CONTRACT_CREATE_PURSE_01: &str = "create_purse_01.wasm";
 const CONTRACT_TRANSFER_PURSE_TO_ACCOUNT: &str = "transfer_purse_to_account.wasm";
-const ACCOUNT_1_ADDR: [u8; 32] = [1u8; 32];
+const ACCOUNT_1_ADDR: PublicKey = PublicKey::ed25519_from([1u8; 32]);
 const TEST_PURSE_NAME: &str = "test_purse";
 
 lazy_static! {
@@ -39,8 +38,8 @@ fn get_purse_key_from_mint_transform(mint_transform: &Transform) -> Key {
         )
     );
 
-    let decoded_purse_id = base16::decode(&map_key[5..69]).expect("should decode base16");
-    assert_eq!(decoded_purse_id.len(), 32);
+    let decoded_purse = base16::decode(&map_key[5..69]).expect("should decode base16");
+    assert_eq!(decoded_purse.len(), 32);
 
     *map_value
 }
@@ -116,7 +115,7 @@ fn should_insert_account_into_named_keys() {
 
 #[ignore]
 #[test]
-fn should_create_usable_purse_id() {
+fn should_create_usable_purse() {
     let exec_request_1 = ExecuteRequestBuilder::standard(
         DEFAULT_ACCOUNT_ADDR,
         CONTRACT_TRANSFER_PURSE_TO_ACCOUNT,
@@ -145,14 +144,14 @@ fn should_create_usable_purse_id() {
         .get_account(ACCOUNT_1_ADDR)
         .expect("should have account");
 
-    let purse_key = account_1
+    let purse = account_1
         .named_keys()
         .get(TEST_PURSE_NAME)
-        .expect("should have known key");
+        .expect("should have known key")
+        .into_uref()
+        .expect("should have uref");
 
-    let purse_id = PurseId::new(*purse_key.as_uref().expect("should have uref"));
-
-    let purse_balance = result.builder().get_purse_balance(purse_id);
+    let purse_balance = result.builder().get_purse_balance(purse);
     assert!(
         purse_balance.is_zero(),
         "when created directly a purse has 0 balance"

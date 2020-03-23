@@ -15,10 +15,14 @@ import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.consensus.info.{BlockInfo, DeployInfo}
 import io.casperlabs.casper.consensus.info.BlockInfo.Status.Stats
 import io.casperlabs.casper.consensus.info.DeployInfo.ProcessingResult
-import io.casperlabs.casper.helper.{GossipServiceCasperTestNodeFactory, HashSetCasperTestNode}
+import io.casperlabs.casper.helper.{
+  GossipServiceCasperTestNodeFactory,
+  HashSetCasperTestNode,
+  NoOpsEventEmitter
+}
 import io.casperlabs.casper.helper.BlockUtil.generateValidator
 import io.casperlabs.casper.util._
-import io.casperlabs.casper.validation.Validation
+import io.casperlabs.casper.validation.{NCBValidationImpl, Validation}
 import io.casperlabs.catscontrib.TaskContrib._
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
@@ -46,14 +50,15 @@ class CreateBlockAPITest
     with Inspectors
     with GossipServiceCasperTestNodeFactory {
   import HashSetCasperTest._
-  import DeriveValidation._
 
   implicit val scheduler: Scheduler = Scheduler.fixedPool("create-block-api-test", 4)
   implicit val metrics              = new Metrics.MetricsNOP[Task]
   implicit val raiseValidateErr =
     casper.validation.raiseValidateErrorThroughApplicativeError[Task]
-  implicit val logEff      = LogStub[Task]()
-  implicit val broadcaster = Broadcaster.noop[Task]
+  implicit val logEff        = LogStub[Task]()
+  implicit val broadcaster   = Broadcaster.noop[Task]
+  implicit val eventEmitter  = NoOpsEventEmitter.create[Task]
+  implicit val validationEff = new NCBValidationImpl[Task]
 
   private val (validatorKeys, validators)             = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
   private val bonds                                   = createBonds(validators)
@@ -76,9 +81,8 @@ class CreateBlockAPITest
       )
     )
 
-    implicit val logEff       = LogStub[Task]()
-    implicit val blockStorage = node.blockStorage
-    implicit val db           = node.deployBuffer
+    implicit val logEff = LogStub[Task]()
+    implicit val db     = node.deployBuffer
 
     def testProgram(blockApiLock: Semaphore[Task])(
         implicit casperRef: MultiParentCasperRef[Task]
@@ -105,7 +109,7 @@ class CreateBlockAPITest
       response2.isRight shouldBe false
       response2.left.get.getMessage should include("ABORTED")
     } finally {
-      node.tearDown()
+      node.tearDown().unsafeRunSync
     }
   }
 
@@ -120,7 +124,6 @@ class CreateBlockAPITest
     // fact that each rank is occupied by a single block.
     val node = standaloneEff(genesis, validatorKeys.head)
 
-    implicit val bs = node.blockStorage
     implicit val db = node.deployBuffer
 
     def deployAndPropose(
@@ -155,7 +158,7 @@ class CreateBlockAPITest
       blocks should have size (1L + successCount.toLong)
 
       // Check that we have no forks.
-      val blocksPerRank = blocks.groupBy(_.getSummary.getHeader.rank)
+      val blocksPerRank = blocks.groupBy(_.getSummary.getHeader.jRank)
       blocksPerRank should have size (blocks.size.toLong)
       forAll(blocksPerRank.values)(_ should have size 1)
 
@@ -171,7 +174,7 @@ class CreateBlockAPITest
     try {
       test.unsafeRunSync
     } finally {
-      node.tearDown()
+      node.tearDown().unsafeRunSync
     }
   }
 
@@ -180,9 +183,8 @@ class CreateBlockAPITest
     val node =
       standaloneEff(genesis, validatorKeys.head)
 
-    implicit val logEff       = LogStub[Task]()
-    implicit val blockStorage = node.blockStorage
-    implicit val db           = node.deployBuffer
+    implicit val logEff = LogStub[Task]()
+    implicit val db     = node.deployBuffer
 
     def testProgram(blockApiLock: Semaphore[Task])(
         implicit casperRef: MultiParentCasperRef[Task]
@@ -205,7 +207,7 @@ class CreateBlockAPITest
         _            = ex.getMessage should include("No new deploys")
       } yield result).unsafeRunSync
     } finally {
-      node.tearDown()
+      node.tearDown().unsafeRunSync
     }
   }
 
@@ -274,7 +276,7 @@ class CreateBlockAPITest
         result       <- testProgram(blockApiLock)(casperRef)
       } yield result).unsafeRunSync
     } finally {
-      node.tearDown()
+      node.tearDown().unsafeRunSync
     }
   }
 
@@ -315,7 +317,7 @@ class CreateBlockAPITest
         result       <- testProgram(blockApiLock)(casperRef)
       } yield result).unsafeRunSync
     } finally {
-      node.tearDown()
+      node.tearDown().unsafeRunSync
     }
   }
 
@@ -325,7 +327,6 @@ class CreateBlockAPITest
       standaloneEff(genesis, validatorKeys.head)
 
     implicit val logEff        = LogStub[Task]()
-    implicit val blockStorage  = node.blockStorage
     implicit val deployStorage = node.deployStorage
     implicit val db            = node.deployBuffer
 
@@ -360,7 +361,7 @@ class CreateBlockAPITest
         result       <- testProgram(blockApiLock)(casperRef)
       } yield result).unsafeRunSync
     } finally {
-      node.tearDown()
+      node.tearDown().unsafeRunSync
     }
   }
 }

@@ -5,12 +5,14 @@ import cats.implicits._
 import cats.mtl.FunctorRaise
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.consensus.Block
-import io.casperlabs.casper.util.{DagOperations, ProtoUtil}
+import io.casperlabs.casper.dag.DagOperations
+import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.casper.{CasperState, EquivocatedBlock, InvalidBlock, PrettyPrinter}
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.models.Message
 import io.casperlabs.shared.{Cell, Log, LogSource, StreamT}
 import io.casperlabs.storage.dag.DagRepresentation
+import io.casperlabs.shared.Sorting.jRankOrdering
 
 import scala.collection.immutable.{Map, Set}
 
@@ -18,54 +20,50 @@ object EquivocationDetector {
 
   /** !!!CAUTION!!!: Must be called before storing block in the DAG
     *
-    * Check whether a block creates equivocations when adding a new block to the block dag,
-    * if so store the validator with the lowest rank of any base block from
-    * the same validator to `EquivocationsTracker`, then an error is `EquivocatedBlock` returned.
-    * The base block of equivocation record is the latest unequivocating block from the same validator.
+    * Check whether a new block creates an equivocation when being added to the DAG,
+    * if so raise an `EquivocatedBlock` error.
     *
     * For example:
     *
     *    v0            v1             v2
     *
-    *           |  b3    b4    |
-    *           |     \   /    |
-    *           |     b2     b5|
-    *           |      |    /  |
+    *           |  b3     b4   |
+    *           |    \   /     |
+    *           |     b2   b5  |
+    *           |      |  /    |
     *           |      b1      |
     *
     * When the node receives b4, `checkEquivocations` will detect that b4 and b3 don't cite each other;
-    * in other words, b4 creates an equivocation. Then the base block of b4 and b3 is b2, so we add
-    * a record (v1,the rank of b2) to `equivocationsTracker`. After a while, the node receives b5,
-    * since we had added all equivocating messages to the BlockDag, then once
+    * in other words, b4 creates an equivocation. After a while, the node receives b5;
+    * since we had added all equivocating messages to the block DAG, once
     * a validator has been detected as equivocating, then for every message M1 he creates later,
     * we can find least one message M2 that M1 and M2 don't cite each other. In other words, a block
     * created by a validator who has equivocated will create another equivocation. In this way, b5
     * doesn't cite blocks (b2, b3, and b4), and blocks (b2, b3, and b4) don't cite b5 either. So b5
-    * creates equivocations. And the base block of b5 is b1, whose rank is smaller than that of b2, so
-    * we will update the `equivocationsTracker`, setting the value of key v1 to be rank of b1.
+    * creates equivocations.
     */
-  def checkEquivocationWithUpdate[F[_]: Monad: Log: FunctorRaise[*[_], InvalidBlock]](
+  def checkEquivocation[F[_]: Monad: Log: FunctorRaise[*[_], InvalidBlock]](
       dag: DagRepresentation[F],
-      message: Message
+      message: Message,
+      isHighway: Boolean
   ): F[Unit] =
     for {
-      equivocators <- dag.getEquivocators
-      equivocated <- if (equivocators.contains(message.validatorId)) {
-                      Log[F].debug(
-                        s"The creator of ${PrettyPrinter.buildString(message.messageHash) -> "message"} has equivocated before"
-                      ) *> true.pure[F]
-                    } else {
-                      checkEquivocations(dag, message)
-                    }
-      _ <- FunctorRaise[F, InvalidBlock].raise[Unit](EquivocatedBlock).whenA(equivocated)
+      tips <- if (isHighway) {
+               dag.latestInEra(message.eraId)
+             } else {
+               dag.latestGlobal
+             }
+      validatorLatestMessages <- tips.latestMessage(message.validatorId)
+      equivocated             <- isEquivocation[F](message, validatorLatestMessages)
+      _                       <- FunctorRaise[F, InvalidBlock].raise[Unit](EquivocatedBlock).whenA(equivocated)
     } yield ()
 
   /**
-    * check whether block creates equivocations
+    * Check whether block creates equivocations
     *
     * Caution:
-    *   Always use method `checkEquivocationWithUpdate`.
-    *   It may not work when receiving a block created by a validator who has equivocated.
+    *   Always use method `checkEquivocation` instead of calling this one directly.
+    *   It may not work when receiving further blocks created by a validator who has equivocated.
     *   For example:
     *
     *       |   v0   |
@@ -78,15 +76,14 @@ object EquivocationDetector {
     *       |   B1   |
     *
     *   Local node could detect that Validator v0 has equivocated after receiving B3,
-    *   then when adding B4, this method doesn't work, it return false but actually B4
+    *   then when adding B4, this method doesn't work, it returns false but actually B4
     *   equivocated with B2.
     */
-  private def checkEquivocations[F[_]: Monad: Log](
-      dag: DagRepresentation[F],
-      message: Message
+  private def isEquivocation[F[_]: Monad: Log](
+      message: Message,
+      validatorLatestMessages: Set[Message]
   ): F[Boolean] =
     for {
-      validatorLatestMessages <- dag.latestMessage(message.validatorId)
       equivocated <- validatorLatestMessages.toList match {
                       case Nil =>
                         // It is the first message by that validator.
@@ -129,7 +126,7 @@ object EquivocationDetector {
     * @tparam F effect type
     * @return validators that can be seen equivocating from the view of latestMessages
     */
-  def detectVisibleFromJustifications[F[_]: Monad](
+  def detectVisibleFromJustifications[F[_]: MonadThrowable](
       dag: DagRepresentation[F],
       justificationMsgHashes: Map[Validator, Set[BlockHash]]
   ): F[Set[Validator]] =
@@ -148,7 +145,8 @@ object EquivocationDetector {
                                    case (state, b) =>
                                      val creator            = b.validatorId
                                      val creatorBlockSeqNum = b.validatorMsgSeqNum
-                                     if (state.allDetected(equivocators) || b.rank <= minBaseRank) {
+                                     if (state
+                                           .allDetected(equivocators) || b.jRank <= minBaseRank) {
                                        // Stop traversal if all known equivocations has been found in j-past-cone
                                        // of `b` or we traversed beyond the minimum rank of all equivocations.
                                        Right(state)
@@ -182,7 +180,7 @@ object EquivocationDetector {
   def findMinBaseRank(latestMessages: Map[Validator, Set[Message]]): Option[Long] = {
     val equivocators = latestMessages.filter(_._2.size > 1)
     if (equivocators.isEmpty) None
-    else Some(equivocators.values.flatten.minBy(_.rank).rank - 1)
+    else Some(equivocators.values.flatten.minBy(_.jRank).jRank - 1)
   }
 
 }

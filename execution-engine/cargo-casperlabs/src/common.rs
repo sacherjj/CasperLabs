@@ -6,19 +6,19 @@ use std::{
     str,
 };
 
-use colour::red;
+use colour::e_red;
 use lazy_static::lazy_static;
 
 use crate::{dependency::Dependency, ARGS, FAILURE_EXIT_CODE};
 
 lazy_static! {
     pub static ref CL_CONTRACT: Dependency =
-        Dependency::new("casperlabs-contract", "0.2.0", "contract");
-    pub static ref CL_TYPES: Dependency = Dependency::new("casperlabs-types", "0.2.0", "types");
+        Dependency::new("casperlabs-contract", "0.3.0", "contract");
+    pub static ref CL_TYPES: Dependency = Dependency::new("casperlabs-types", "0.3.0", "types");
 }
 
 pub fn print_error_and_exit(msg: &str) -> ! {
-    red!("error");
+    e_red!("error");
     eprintln!("{}", msg);
     process::exit(FAILURE_EXIT_CODE)
 }

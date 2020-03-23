@@ -36,20 +36,21 @@ services:
       - socketvolume:/root/.casperlabs/sockets
       # Common bonds file
       - $PWD/../.casperlabs/chainspec:/root/.casperlabs/chainspec
-      # Bootstrap node ID
-      - $PWD/../.casperlabs/bootstrap:/root/.casperlabs/bootstrap
+      # Bootstrap node IDs
+      - $PWD/../.casperlabs/nodes:/root/.casperlabs/nodes
       # Node keys
-      - $PWD/../.casperlabs/node-${NODE_NUMBER}:/root/.casperlabs/node
+      - $PWD/../.casperlabs/nodes/node-${NODE_NUMBER}:/root/.casperlabs/node
       - $PWD/../template/start-node.sh:/opt/docker/start-node.sh
+      # Make logs available in JSON, stack traces are only available there.
+      - $PWD/logs:/var/logs/casperlabs
     networks:
       - casperlabs
     environment:
       HOME: /root
-      BOOTSTRAP_HOSTNAME: node-0
+      BOOTSTRAP_HOSTNAMES: ${BOOTSTRAP_HOSTNAMES}
       CL_GRPC_SOCKET: /root/.casperlabs/sockets/.casper-node.sock
       CL_SERVER_RELAY_FACTOR: 1
       CL_SERVER_NO_UPNP: "true"
-      CL_LOG_LEVEL: $CL_LOG_LEVEL
       CL_CASPER_VALIDATOR_PUBLIC_KEY_PATH: /root/.casperlabs/node/validator-public.pem
       CL_CASPER_VALIDATOR_PRIVATE_KEY_PATH: /root/.casperlabs/node/validator-private.pem
       CL_TLS_CERTIFICATE: /root/.casperlabs/node/node.certificate.pem
@@ -58,7 +59,12 @@ services:
       CL_TLS_API_KEY: /root/.casperlabs/node/node.key.pem
       CL_GRPC_USE_TLS: "false"
       CL_METRICS_PROMETHEUS: "true"
-      CL_CASPER_AUTO_PROPOSE_ENABLED: ${CL_CASPER_AUTO_PROPOSE_ENABLED}
+      CL_SERVER_ALIVE_PEERS_CACHE_EXPIRATION_PERIOD: 15second
+      CL_SERVER_SHUTDOWN_TIMEOUT: 5second
+      CL_LOG_JSON_PATH: /var/logs/casperlabs
+    env_file:
+      - .env
+      - $PWD/../.casperlabs/chainspec/genesis/highway.env
     entrypoint:
       - sh
       - -c

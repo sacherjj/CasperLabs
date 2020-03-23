@@ -5,13 +5,17 @@ import cats.implicits._
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.finality.votingmatrix.VotingMatrix.{Vote, VotingMatrix}
 import io.casperlabs.catscontrib.MonadStateOps._
+import io.casperlabs.models.Message.MainRank
 import io.casperlabs.models.{Message, Weight}
 import io.casperlabs.storage.dag.DagRepresentation
+import io.casperlabs.casper.validation.Validation
 
 import scala.annotation.tailrec
 import scala.collection.mutable.{IndexedSeq => MutableSeq}
 
 package object votingmatrix {
+
+  import io.casperlabs.catscontrib.MonadThrowable
 
   import Weight.Implicits._
   import Weight.Zero
@@ -26,7 +30,8 @@ package object votingmatrix {
   def updateVoterPerspective[F[_]: Monad](
       dag: DagRepresentation[F],
       msg: Message,
-      currentVoteValue: BlockHash
+      currentVoteValue: BlockHash,
+      isHighway: Boolean
   )(implicit matrix: VotingMatrix[F]): F[Unit] =
     for {
       validatorToIndex <- (matrix >> 'validatorToIdx).get
@@ -37,8 +42,8 @@ package object votingmatrix {
             ().pure[F]
           } else {
             for {
-              _ <- updateVotingMatrixOnNewBlock[F](dag, msg)
-              _ <- updateFirstZeroLevelVote[F](voter, currentVoteValue, msg.rank)
+              _ <- updateVotingMatrixOnNewBlock[F](dag, msg, isHighway)
+              _ <- updateFirstZeroLevelVote[F](voter, currentVoteValue, msg.mainRank)
             } yield ()
           }
     } yield ()
@@ -48,9 +53,10 @@ package object votingmatrix {
     * @param rFTT the relative fault tolerance threshold
     * @return
     */
-  def checkForCommittee[F[_]: Monad](
+  def checkForCommittee[F[_]: MonadThrowable](
       dag: DagRepresentation[F],
-      rFTT: Double
+      rFTT: Double,
+      isHighway: Boolean
   )(
       implicit matrix: VotingMatrix[F]
   ): F[Option[CommitteeWithConsensusValue]] =
@@ -58,7 +64,7 @@ package object votingmatrix {
       weightMap                 <- (matrix >> 'weightMap).get
       totalWeight               = weightMap.values.sum
       quorum                    = totalWeight * (rFTT + 0.5)
-      committeeApproximationOpt <- findCommitteeApproximation[F](dag, quorum)
+      committeeApproximationOpt <- findCommitteeApproximation[F](dag, quorum, isHighway)
       result <- committeeApproximationOpt match {
                  case Some(
                      CommitteeWithConsensusValue(committeeApproximation, _, consensusValue)
@@ -92,12 +98,13 @@ package object votingmatrix {
 
   private[votingmatrix] def updateVotingMatrixOnNewBlock[F[_]: Monad](
       dag: DagRepresentation[F],
-      msg: Message
+      msg: Message,
+      isHighway: Boolean
   )(implicit matrix: VotingMatrix[F]): F[Unit] =
     for {
       validatorToIndex <- (matrix >> 'validatorToIdx).get
       panoramaM <- FinalityDetectorUtil
-                    .panoramaM[F](dag, validatorToIndex, msg)
+                    .panoramaM[F](dag, validatorToIndex, msg, isHighway)
       // Replace row i in voting-matrix by panoramaM
       _ <- (matrix >> 'votingMatrix).modify(
             _.updated(validatorToIndex(msg.validatorId), panoramaM)
@@ -107,7 +114,7 @@ package object votingmatrix {
   private[votingmatrix] def updateFirstZeroLevelVote[F[_]: Monad](
       validator: Validator,
       newVote: BlockHash,
-      dagLevel: Long
+      dagLevel: MainRank
   )(implicit matrix: VotingMatrix[F]): F[Unit] =
     for {
       firstLevelZeroMsgs <- (matrix >> 'firstLevelZeroVotes).get
@@ -135,21 +142,37 @@ package object votingmatrix {
     * @param quorum
     * @return
     */
-  private[votingmatrix] def findCommitteeApproximation[F[_]: Monad](
+  private[votingmatrix] def findCommitteeApproximation[F[_]: MonadThrowable](
       dag: DagRepresentation[F],
-      quorum: Weight
+      quorum: Weight,
+      isHighway: Boolean
   )(implicit matrix: VotingMatrix[F]): F[Option[CommitteeWithConsensusValue]] =
     for {
-      equivocators        <- dag.getEquivocators
       weightMap           <- (matrix >> 'weightMap).get
       validators          <- (matrix >> 'validators).get
       firstLevelZeroVotes <- (matrix >> 'firstLevelZeroVotes).get
       // Get Map[VoteBranch, List[Validator]] directly from firstLevelZeroVotes
-      consensusValueToHonestValidators = firstLevelZeroVotes.zipWithIndex
-        .collect { case (Some((blockHash, _)), idx) => (blockHash, validators(idx)) }
-        .filterNot { case (_, validator) => equivocators.contains(validator) }
-        .groupBy(_._1)
-        .mapValues(_.map(_._2))
+      consensusValueToHonestValidators <- firstLevelZeroVotes.zipWithIndex
+                                           .collect {
+                                             case (Some((blockHash, _)), idx) =>
+                                               (blockHash, validators(idx))
+                                           }
+                                           .toList
+                                           .filterA {
+                                             case (voteHash, validator) =>
+                                               val highwayCheck = for {
+                                                 voteMsg <- dag.lookupUnsafe(voteHash)
+                                                 eraEquivocators <- dag.getEquivocatorsInEra(
+                                                                     voteMsg.eraId
+                                                                   )
+                                               } yield !eraEquivocators.contains(validator)
+
+                                               val ncbCheck =
+                                                 dag.getEquivocators.map(!_.contains(validator))
+
+                                               if (isHighway) highwayCheck else ncbCheck
+                                           }
+                                           .map(_.groupBy(_._1).mapValues(_.map(_._2)))
       // Get most support voteBranch and its support weight
       mostSupport = consensusValueToHonestValidators
         .mapValues(_.map(weightMap.getOrElse(_, Zero)).sum)

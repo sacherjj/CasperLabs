@@ -79,10 +79,105 @@ message CLValue {
     bytes serialized_value = 2;
 }
 
+// CLValue where the bytes are re-consistituted as an object
+message CLValueInstance {
+    CLType cl_type = 1;
+    Value value = 2;
+
+    message Value {
+        oneof value {
+            bool bool_value = 1;
+            int32 i32 = 2;
+            int64 i64 = 3;
+            // Protobuf does not have an 8-bit primitive, so we use the 32-bit
+            // primitive and will validate the value is in the range [0, 255].
+            int32 u8 = 4;
+            uint32 u32 = 5;
+            uint64 u64 = 6;
+            U128 u128 = 7;
+            U256 u256 = 8;
+            U512 u512 = 9;
+            Unit unit = 10;
+            string str_value = 11;
+            Key key = 12;
+            Key.URef uref = 13;
+            Option option_value = 14;
+            List list_value = 15;
+            FixedList fixed_list_value = 16;
+            Result result_value = 17;
+            Map map_value = 18;
+            Tuple1 tuple1_value = 19;
+            Tuple2 tuple2_value = 20;
+            Tuple3 tuple3_value = 21;
+            bytes bytes_value = 22; // convenience for representing List(U8) / FixedList(U8)
+        }
+    }
+
+    // The BigInt types encode their values as strings; it is invalid to have a
+    // string which cannot be parsed as a non-negative whole number.
+    message U128 {
+        string value = 1;
+    }
+    message U256 {
+        string value = 1;
+    }
+    message U512 {
+        string value = 1;
+    }
+    message Option {
+        Value value = 1;
+    }
+    // Technically these types can represent heterogeneous lists and maps,
+    // however it will be considered illegal to do so because there is no way to
+    // assign a CLType to such an object.
+    message List {
+        repeated Value values = 1;
+    }
+    message FixedList {
+        uint32 length = 1;
+        // length of this list must be equal to length above
+        repeated Value values = 2;
+    }
+    message Result {
+        oneof value {
+            Value ok = 1;
+            Value err = 2;
+        }
+    }
+    message Map {
+        // key-value pairs
+        repeated MapEntry values = 1;
+    }
+    message MapEntry {
+        Value key = 1;
+        Value value = 2;
+    }
+    message Tuple1 {
+        Value value_1 = 1;
+    }
+    message Tuple2 {
+        Value value_1 = 1;
+        Value value_2 = 2;
+    }
+    message Tuple3 {
+        Value value_1 = 1;
+        Value value_2 = 2;
+        Value value_3 = 3;
+    }
+}
+
 // Value stored under a key in global state.
 message StoredValue {
     oneof variants {
         CLValue cl_value = 1;
+        Account account = 2;
+        Contract contract = 3;
+    }
+}
+
+message StoredValueInstance {
+    oneof value {
+        CLValueInstance cl_value = 1;
         Account account = 2;
         Contract contract = 3;
     }
@@ -142,7 +237,7 @@ message Key {
         // NOTE: Numeric values correspond to values of the domain
         // AccessRights struct. DO NOT CHANGE.
 		enum AccessRights {
-			UNKNOWN        = 0;
+			NONE           = 0;
 			READ           = 1;
 			WRITE          = 2;
 			ADD            = 4;
@@ -176,7 +271,7 @@ message Account {
 	reserved 7;
 
 	bytes public_key = 1;
-	Key.URef purse_id = 3;
+	Key.URef main_purse = 3;
 	repeated NamedKey named_keys = 4;
 	repeated AssociatedKey associated_keys = 5;
 	ActionThresholds action_thresholds = 6;

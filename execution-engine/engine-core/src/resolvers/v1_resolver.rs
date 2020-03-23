@@ -121,15 +121,15 @@ impl ModuleImportResolver for RuntimeModuleImportResolver {
                 FunctionIndex::RevertFuncIndex.into(),
             ),
             "add_associated_key" => FuncInstance::alloc_host(
-                Signature::new(&[ValueType::I32; 2][..], Some(ValueType::I32)),
+                Signature::new(&[ValueType::I32; 3][..], Some(ValueType::I32)),
                 FunctionIndex::AddAssociatedKeyFuncIndex.into(),
             ),
             "remove_associated_key" => FuncInstance::alloc_host(
-                Signature::new(&[ValueType::I32; 1][..], Some(ValueType::I32)),
+                Signature::new(&[ValueType::I32; 2][..], Some(ValueType::I32)),
                 FunctionIndex::RemoveAssociatedKeyFuncIndex.into(),
             ),
             "update_associated_key" => FuncInstance::alloc_host(
-                Signature::new(&[ValueType::I32; 2][..], Some(ValueType::I32)),
+                Signature::new(&[ValueType::I32; 3][..], Some(ValueType::I32)),
                 FunctionIndex::UpdateAssociatedKeyFuncIndex.into(),
             ),
             "set_action_threshold" => FuncInstance::alloc_host(
@@ -141,7 +141,7 @@ impl ModuleImportResolver for RuntimeModuleImportResolver {
                 FunctionIndex::RemoveKeyFuncIndex.into(),
             ),
             "get_caller" => FuncInstance::alloc_host(
-                Signature::new(&[ValueType::I32; 1][..], None),
+                Signature::new(&[ValueType::I32; 1][..], Some(ValueType::I32)),
                 FunctionIndex::GetCallerIndex.into(),
             ),
             "get_blocktime" => FuncInstance::alloc_host(

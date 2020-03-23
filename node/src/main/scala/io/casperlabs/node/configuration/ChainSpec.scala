@@ -22,6 +22,7 @@ import org.apache.commons.io.IOUtils
 import scala.io.Source
 import scala.util.Try
 import scala.collection.JavaConverters._
+import scala.concurrent.duration.FiniteDuration
 import simulacrum.typeclass
 
 /**
@@ -29,14 +30,25 @@ import simulacrum.typeclass
   * https://casperlabs.atlassian.net/wiki/spaces/EN/pages/133529693/Genesis+process+design+doc
   */
 object ChainSpec extends ParserImplicits {
+  import Utils.SnakeCase
 
   class ConfCompanion[T](confParser: ConfParser[T]) {
+    // For convenience, allow overriding the settings in the genesis manifest,
+    // but not the upgrades because they won't be unique.
+    protected def parseEnvVars: Map[SnakeCase, String] = Map.empty
+
     def parseManifest(manifest: => Source): ValidatedNel[String, T] =
       Utils.readFile(manifest).toValidatedNel[String].andThen { raw =>
         confParser
           .parse(
             cliByName = _ => None,
-            envVars = Map.empty,
+            envVars = parseEnvVars,
+            // NOTE: If we passed a config file and maybe took the default values from the resources
+            // we could allow partial overrides, and later add new fields to the spec; without it
+            // a new field would just cause a parsing error. On the other hand a new non-optional field
+            // appearing in the default configuration would change the hash of the spec and cause nodes
+            // not to be able to connect to each other, and not match their genesis block hash either.
+            // Therefore adding new non-optional fields is a breaking change.
             configFile = None,
             defaultConfigFile = Utils.parseToml(raw),
             pathToField = Nil
@@ -52,16 +64,34 @@ object ChainSpec extends ParserImplicits {
 
   final case class Deploy(
       maxTtlMillis: Int Refined NonNegative,
-      maxDependencies: Int Refined NonNegative
+      maxDependencies: Int Refined NonNegative,
+      maxBlockSizeBytes: Int Refined NonNegative
   ) extends SubConfig
 
   /** The first set of changes should define the Genesis section and the costs. */
   final case class GenesisConf(
       genesis: Genesis,
       wasmCosts: WasmCosts,
-      deploys: Deploy
+      deploys: Deploy,
+      highway: Highway
   )
-  object GenesisConf extends ConfCompanion[GenesisConf](ConfParser.gen[GenesisConf])
+  object GenesisConf extends ConfCompanion[GenesisConf](ConfParser.gen[GenesisConf]) {
+    // Allow overriding genesis configuration so we can do things like bounce the network
+    // and restart with a new chain name or an updated era start time.
+    override def parseEnvVars: Map[SnakeCase, String] = {
+      // Use some extra prefixing to disambiguate from normal Highway config.
+      val chainSpecPrefix = "CL_CHAINSPEC_"
+      Utils.collectEnvVars(prefix = chainSpecPrefix).collect {
+        case (k, v) =>
+          // Get rid of the extra to make it just what the parser expects,
+          // e.g. `export CL_CHAINSPEC_HIGHWAY_GENESIS_ERA_START=...`
+          // and  `export CL_CHAINSPEC_GENESIS_NAME=...` would be the ones to set,
+          // and they would internally be mapped to the structure of `GenesisConf`,
+          // e.g. `CL_GENESIS_NAME`.
+          SnakeCase("CL_" + k.stripPrefix(chainSpecPrefix)) -> v
+      }
+    }
+  }
 
   /** Subsequent changes describe upgrades. */
   final case class UpgradeConf(
@@ -79,6 +109,17 @@ object ChainSpec extends ParserImplicits {
       initialAccountsPath: Path,
       protocolVersion: ProtocolVersion
   ) extends SubConfig
+
+  final case class Highway(
+      // Unix timestamp of the genesis era.
+      genesisEraStart: Long,
+      eraDuration: FiniteDuration,
+      bookingDuration: FiniteDuration,
+      entropyDuration: FiniteDuration,
+      votingPeriodDuration: FiniteDuration,
+      votingPeriodSummitLevel: Int Refined Interval.Closed[W.`0`.T, W.`1`.T],
+      ftt: Double Refined Interval.OpenClosed[W.`0.0`.T, W.`0.5`.T]
+  )
 
   final case class Upgrade(
       activationPointRank: Long,
@@ -260,7 +301,7 @@ object ChainSpecReader {
   implicit val `ChainSpecReader[GenesisConfig]` = new ChainSpecReader[ipc.ChainSpec.GenesisConfig] {
     override def fromDirectory(path: Path)(implicit resolver: Resolver) =
       withManifest[GenesisConf, ipc.ChainSpec.GenesisConfig](path, GenesisConf.parseManifest) {
-        case GenesisConf(genesis, wasmCosts, deployConfig) =>
+        case GenesisConf(genesis, wasmCosts, deployConfig, highwayConfig) =>
           for {
             mintCodeBytes <- resolver.asBytes(resolvePath(path, genesis.mintCodePath))
             posCodeBytes  <- resolver.asBytes(resolvePath(path, genesis.posCodePath))
@@ -289,6 +330,7 @@ object ChainSpecReader {
               })
               .withCosts(toCostTable(wasmCosts))
               .withDeployConfig(toDeployConfig(deployConfig))
+              .withHighwayConfig(toHighwayConfig(highwayConfig))
           }
       }
   }
@@ -369,6 +411,17 @@ object ChainSpecReader {
     ipc.ChainSpec.DeployConfig(
       deployConfig.maxTtlMillis.value,
       deployConfig.maxDependencies.value
+    )
+
+  private def toHighwayConfig(highwayConfig: Highway): ipc.ChainSpec.HighwayConfig =
+    ipc.ChainSpec.HighwayConfig(
+      highwayConfig.genesisEraStart,
+      highwayConfig.eraDuration.toMillis,
+      highwayConfig.bookingDuration.toMillis,
+      highwayConfig.entropyDuration.toMillis,
+      highwayConfig.votingPeriodDuration.toMillis,
+      highwayConfig.votingPeriodSummitLevel.value,
+      highwayConfig.ftt.value
     )
 
   private def withManifest[A, B](dir: Path, parseManifest: (=> Source) => ValidatedNel[String, A])(

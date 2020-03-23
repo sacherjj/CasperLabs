@@ -15,16 +15,16 @@
 //! #![no_std]
 //!
 //! use casperlabs_contract::{
-//!     contract_api::{runtime, storage, TURef},
+//!     contract_api::{runtime, storage},
 //!     unwrap_or_revert::UnwrapOrRevert,
 //! };
-//! use casperlabs_types::{ApiError, Key};
+//! use casperlabs_types::{ApiError, Key, URef};
 //!
 //! const KEY: &str = "special_value";
 //!
 //! fn store(value: i32) {
 //!     // Store `value` under a new unforgeable reference.
-//!     let value_ref: TURef<i32> = storage::new_turef(value);
+//!     let value_ref: URef = storage::new_uref(value);
 //!
 //!     // Wrap the unforgeable reference in a value of type `Key`.
 //!     let value_key: Key = value_ref.into();
@@ -62,7 +62,7 @@
     core_intrinsics,
     lang_items
 )]
-#![doc(html_root_url = "https://docs.rs/casperlabs-contract/0.2.0")]
+#![doc(html_root_url = "https://docs.rs/casperlabs-contract/0.3.0")]
 #![doc(
     html_favicon_url = "https://raw.githubusercontent.com/CasperLabs/CasperLabs/dev/images/CasperLabs_Logo_Favicon_RGB_50px.png",
     html_logo_url = "https://raw.githubusercontent.com/CasperLabs/CasperLabs/dev/images/CasperLabs_Logo_Symbol_RGB.png",
@@ -72,7 +72,6 @@
 
 extern crate alloc;
 #[cfg(any(feature = "std", test))]
-#[macro_use]
 extern crate std;
 
 /// An instance of [`WeeAlloc`](https://docs.rs/wee_alloc) which allows contracts built as `no_std`

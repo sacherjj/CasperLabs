@@ -6,7 +6,7 @@ use core::convert::{TryFrom, TryInto};
 use failure::Fail;
 
 use crate::{
-    bytesrepr::{self, FromBytes, ToBytes},
+    bytesrepr::{self, FromBytes, ToBytes, U8_SERIALIZED_LENGTH},
     AccessRights, CLType, CLTyped,
 };
 
@@ -23,10 +23,10 @@ pub enum Error {
     /// Destination purse not found.
     #[fail(display = "Destination not found")]
     DestNotFound = 2,
-    /// See [`PurseIdError::InvalidURef`].
+    /// See [`PurseError::InvalidURef`].
     #[fail(display = "Invalid URef")]
     InvalidURef = 3,
-    /// See [`PurseIdError::InvalidAccessRights`].
+    /// See [`PurseError::InvalidAccessRights`].
     #[fail(display = "Invalid AccessRights")]
     InvalidAccessRights = 4,
     /// Tried to create a new purse with a non-zero initial balance.
@@ -40,12 +40,12 @@ pub enum Error {
     PurseNotFound = 7,
 }
 
-impl From<PurseIdError> for Error {
-    fn from(purse_id_error: PurseIdError) -> Error {
-        match purse_id_error {
-            PurseIdError::InvalidURef => Error::InvalidURef,
-            PurseIdError::InvalidAccessRights(_) => {
-                // This one does not carry state from PurseIdError to the new Error enum. The reason
+impl From<PurseError> for Error {
+    fn from(purse_error: PurseError) -> Error {
+        match purse_error {
+            PurseError::InvalidURef => Error::InvalidURef,
+            PurseError::InvalidAccessRights(_) => {
+                // This one does not carry state from PurseError to the new Error enum. The reason
                 // is that Error is supposed to be simple in serialization and deserialization, so
                 // extra state is currently discarded.
                 Error::InvalidAccessRights
@@ -89,6 +89,10 @@ impl ToBytes for Error {
         let value = *self as u8;
         value.to_bytes()
     }
+
+    fn serialized_length(&self) -> usize {
+        U8_SERIALIZED_LENGTH
+    }
 }
 
 impl FromBytes for Error {
@@ -105,7 +109,7 @@ impl FromBytes for Error {
 
 /// Errors relating to validity of source or destination purses.
 #[derive(Debug, Copy, Clone)]
-pub enum PurseIdError {
+pub enum PurseError {
     /// The given [`URef`](crate::URef) does not reference the account holder's purse, or such a
     /// [`URef`](crate::URef) does not have the required [`AccessRights`].
     InvalidURef,
@@ -115,11 +119,11 @@ pub enum PurseIdError {
     InvalidAccessRights(Option<AccessRights>),
 }
 
-impl fmt::Display for PurseIdError {
+impl fmt::Display for PurseError {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         match self {
-            PurseIdError::InvalidURef => write!(f, "invalid uref"),
-            PurseIdError::InvalidAccessRights(maybe_access_rights) => {
+            PurseError::InvalidURef => write!(f, "invalid uref"),
+            PurseError::InvalidAccessRights(maybe_access_rights) => {
                 write!(f, "invalid access rights: {:?}", maybe_access_rights)
             }
         }

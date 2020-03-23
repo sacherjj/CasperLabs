@@ -11,16 +11,16 @@ const METHOD_SET_KEY_WEIGHT: &str = "set_key_weight";
 const METHOD_SET_DEPLOYMENT_THRESHOLD: &str = "set_deployment_threshold";
 const METHOD_SET_KEY_MANAGEMENT_THRESHOLD: &str = "set_key_management_threshold";
 
-const ALICE: [u8; 32] = DEFAULT_ACCOUNT_ADDR;
-const BOB: [u8; 32] = [2u8; 32];
+const ALICE: PublicKey = DEFAULT_ACCOUNT_ADDR;
+const BOB: PublicKey = PublicKey::ed25519_from([2u8; 32]);
 
 struct KeysManagerTest {
     pub builder: TestBuilder,
-    pub sender: [u8; 32],
+    pub sender: PublicKey,
 }
 
 impl KeysManagerTest {
-    pub fn new(sender: [u8; 32]) -> KeysManagerTest {
+    pub fn new(sender: PublicKey) -> KeysManagerTest {
         let mut builder = TestBuilder::default();
         builder.run_genesis(&DEFAULT_GENESIS_CONFIG).commit();
         KeysManagerTest { builder, sender }
@@ -31,7 +31,7 @@ impl KeysManagerTest {
         self
     }
 
-    pub fn set_key_weight(mut self, key: [u8; 32], weight: u8) -> Self {
+    pub fn set_key_weight(mut self, key: PublicKey, weight: Weight) -> Self {
         let request = ExecuteRequestBuilder::standard(
             self.sender,
             CONTRACT_WASM,
@@ -58,7 +58,7 @@ impl KeysManagerTest {
         self.update_threshold(METHOD_SET_KEY_MANAGEMENT_THRESHOLD, threshold)
     }
 
-    pub fn assert_keys(self, expected: Vec<([u8; 32], u8)>) -> Self {
+    pub fn assert_keys(self, mut expected: Vec<(PublicKey, Weight)>) -> Self {
         // Get and sort existing keys.
         let account = self.builder.get_account(self.sender).unwrap();
         let keys_iter = account.get_associated_keys();
@@ -66,14 +66,10 @@ impl KeysManagerTest {
         keys.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
 
         // Sort and parse expected keys.
-        let mut expected_parsed: Vec<(PublicKey, Weight)> = expected
-            .iter()
-            .map(|(key, weight)| (PublicKey::new(*key), Weight::new(*weight)))
-            .collect();
-        expected_parsed.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
+        expected.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
 
         // Compare keys.
-        assert_eq!(keys, expected_parsed, "Associated keys don't match.");
+        assert_eq!(keys, expected, "Associated keys don't match.");
         self
     }
 
@@ -104,7 +100,7 @@ impl KeysManagerTest {
 #[test]
 fn test_init_setup() {
     KeysManagerTest::new(ALICE)
-        .assert_keys(vec![(ALICE, 1)])
+        .assert_keys(vec![(ALICE, Weight::new(1))])
         .assert_deployment_threshold(1)
         .assert_key_management_threshold(1);
 }
@@ -113,51 +109,51 @@ fn test_init_setup() {
 #[test]
 fn test_add_key() {
     KeysManagerTest::new(ALICE)
-        .set_key_weight(BOB, 1)
+        .set_key_weight(BOB, Weight::new(1))
         .assert_success_status_and_commit()
-        .assert_keys(vec![(ALICE, 1), (BOB, 1)]);
+        .assert_keys(vec![(ALICE, Weight::new(1)), (BOB, Weight::new(1))]);
 }
 
 #[ignore]
 #[test]
 fn test_update_key() {
     KeysManagerTest::new(ALICE)
-        .set_key_weight(BOB, 1)
+        .set_key_weight(BOB, Weight::new(1))
         .assert_success_status_and_commit()
-        .set_key_weight(BOB, 2)
+        .set_key_weight(BOB, Weight::new(2))
         .assert_success_status_and_commit()
-        .assert_keys(vec![(ALICE, 1), (BOB, 2)]);
+        .assert_keys(vec![(ALICE, Weight::new(1)), (BOB, Weight::new(2))]);
 }
 
 #[ignore]
 #[test]
 fn test_update_self_key() {
     KeysManagerTest::new(ALICE)
-        .set_key_weight(ALICE, 10)
+        .set_key_weight(ALICE, Weight::new(10))
         .assert_success_status_and_commit()
-        .assert_keys(vec![(ALICE, 10)]);
+        .assert_keys(vec![(ALICE, Weight::new(10))]);
 }
 
 #[ignore]
 #[test]
 fn test_remove_key() {
     KeysManagerTest::new(ALICE)
-        .set_key_weight(BOB, 1)
+        .set_key_weight(BOB, Weight::new(1))
         .assert_success_status_and_commit()
-        .set_key_weight(BOB, 0)
+        .set_key_weight(BOB, Weight::new(0))
         .assert_success_status_and_commit()
-        .assert_keys(vec![(ALICE, 1)]);
+        .assert_keys(vec![(ALICE, Weight::new(1))]);
 }
 
 #[ignore]
 #[test]
 fn test_key_management_threshold() {
     KeysManagerTest::new(ALICE)
-        .set_key_weight(ALICE, 3)
+        .set_key_weight(ALICE, Weight::new(3))
         .assert_success_status_and_commit()
         .set_key_management_threshold(3)
         .assert_success_status_and_commit()
-        .assert_keys(vec![(ALICE, 3)])
+        .assert_keys(vec![(ALICE, Weight::new(3))])
         .assert_key_management_threshold(3);
 }
 
@@ -165,13 +161,13 @@ fn test_key_management_threshold() {
 #[test]
 fn test_set_deployment_threshold() {
     KeysManagerTest::new(ALICE)
-        .set_key_weight(ALICE, 3)
+        .set_key_weight(ALICE, Weight::new(3))
         .assert_success_status_and_commit()
         .set_key_management_threshold(3)
         .assert_success_status_and_commit()
         .set_deployment_threshold(2)
         .assert_success_status_and_commit()
-        .assert_keys(vec![(ALICE, 3)])
+        .assert_keys(vec![(ALICE, Weight::new(3))])
         .assert_key_management_threshold(3)
         .assert_deployment_threshold(2);
 }

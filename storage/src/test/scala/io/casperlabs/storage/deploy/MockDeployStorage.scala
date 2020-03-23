@@ -9,7 +9,7 @@ import io.casperlabs.casper.consensus.info.DeployInfo
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.Keys.{PublicKey, PublicKeyBS}
 import io.casperlabs.shared.Log
-import io.casperlabs.storage.block.BlockStorage.{BlockHash, DeployHash}
+import io.casperlabs.storage.{BlockHash, DeployHash}
 import io.casperlabs.storage.deploy.MockDeployStorage.Metadata
 import io.casperlabs.shared.Sorting.byteStringOrdering
 
@@ -122,18 +122,23 @@ class MockDeployStorage[F[_]: Sync: Log](
       }) >> logCurrentState()
     }
 
-    override def markAsDiscarded(expirationPeriod: FiniteDuration): F[Unit] =
+    override def markAsDiscarded(
+        expirationPeriod: FiniteDuration,
+        message: String
+    ): F[Set[ByteString]] =
       logOperation(
         s"markAsDiscarded(expirationPeriod = ${expirationPeriod.toCoarsest.toString()})",
-        deploysWithMetadataRef.update(_.map {
-          case (deploy, Metadata(`PendingStatusCode`, _, updatedAt, createdAt, processingResults))
-              if updatedAt < now - expirationPeriod.toMillis =>
-            (
-              deploy,
-              Metadata(DiscardedStatusCode, "Expired.", now, createdAt, processingResults)
-            )
-          case x => x
-        })
+        deploysWithMetadataRef.modify { data =>
+          val expired = data.collect {
+            case (deploy, Metadata(`PendingStatusCode`, _, updatedAt, createdAt, processingResults))
+                if updatedAt < now - expirationPeriod.toMillis =>
+              (
+                deploy,
+                Metadata(DiscardedStatusCode, "Expired.", now, createdAt, processingResults)
+              )
+          }
+          (data ++ expired, expired.keySet.map(_.deployHash))
+        }
       )
 
     override def cleanupDiscarded(expirationPeriod: FiniteDuration): F[Int] = {

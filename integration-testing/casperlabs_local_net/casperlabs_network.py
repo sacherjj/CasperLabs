@@ -146,11 +146,12 @@ class CasperLabsNetwork:
         """
         Should be implemented with each network class to setup custom nodes and networks.
         """
-        raise NotImplementedError("Must implement '_create_network' in subclass.")
+        raise NotImplementedError("Must implement 'create_cl_network' in subclass.")
 
     def create_docker_network(self) -> str:
         with self._lock:
-            tag_name = os.environ.get("TAG_NAME") or "test"
+            tag_name = os.environ.get("TAG_NAME") or "latest"
+            tag_name += f"-{self.docker_client.cl_unique_run_num}"
             network_name = f"casperlabs_{random_string(5)}_{tag_name}"
             self._created_networks.append(network_name)
             self.docker_client.networks.create(network_name, driver="bridge")
@@ -627,7 +628,7 @@ class ThreeNodeNetworkWithTwoBootstraps(CasperLabsNetwork):
 
     def _node_address(self, config):
         node_id = extract_common_name(config.tls_certificate_local_path())
-        return f"casperlabs://{node_id}@node-{config.number}-{config.rand_str}-{self._docker_tag(config)}?protocol=40400&discovery=40404"
+        return f"casperlabs://{node_id}@node-{config.number}-{config.rand_str}-{self._docker_tag(config)}-{config.unique_run_num}?protocol=40400&discovery=40404"
 
     def create_cl_network(self):
 

@@ -6,7 +6,7 @@ $(eval MAKE_DIR = $(shell echo $$(pwd)/.make/run))
 
 # Runs the engine and node in the background using incremental compilation.
 # 'make start-background-scala-compiler' must be run explicitly before.
-start: .make/run/start
+start: stop .make/run/start
 
 # Runs Bloop server with SBT in background and automatically updates Bloop configuration on SBT build configuration changes.
 # To stop them both run 'make stop-background-scala-compiler'.
@@ -24,7 +24,7 @@ start: .make/run/start
 # 4. We use `bloop run ...` in the `make start` task below run the Scala part of CasperLabs Node.
 #
 # To stop background SBT and Bloop server run `make stop-background-scala-compiler`.
-start-background-scala-compiler: .make/run/background-scala-compiler
+start-background-scala-compiler: stop-background-scala-compiler .make/run/background-scala-compiler
 
 .make/run/background-scala-compiler: $(PROJECT)/project/reload.sbt
 	@mkdir -p .make/run/data-dir
@@ -42,7 +42,7 @@ $(PROJECT)/project/reload.sbt:
 	@echo "// Created by the 'make start'" >> $(PROJECT)/project/reload.sbt
 	@echo "Global / onChangedBuildSource := ReloadOnSourceChanges" >> $(PROJECT)/project/reload.sbt
 
-stop-background-scala-compiler:
+stop-background-scala-compiler: stop
 	@echo "Stopping backgroung sbt..."
 	@ps -ax | grep bloopInstall | grep -v 'grep' | awk '{print $$1}' | xargs -I _ kill -9 _ &> /dev/null || true
 	@rm -rf .make/run/sbt.log
@@ -58,6 +58,9 @@ stop-background-scala-compiler:
 	@echo "Data directory is .make/run/data-dir"
 	@echo "Generating keys..."
 	@$(PROJECT)/hack/key-management/docker-gen-keys.sh .make/run/data-dir
+	@echo "Generating accounts.csv..."
+	@mkdir -p .make/run/data-dir/chainspec/genesis/
+	@echo $$(cat .make/run/data-dir/validator-id)",100000000000000000,100000000000000000" > .make/run/data-dir/chainspec/genesis/accounts.csv
 	@mkdir -p $(dir $@) && touch $@
 
 
@@ -90,7 +93,7 @@ ifneq ($(wildcard .make/run/background-scala-compiler),)
 		--args "--server-data-dir=$(MAKE_DIR)/data-dir" \
 		--args "--casper-validator-sig-algorithm=ed25519" \
 		--args "--casper-validator-public-key-path=$(MAKE_DIR)/data-dir/validator-public.pem" \
-		--args "--casper-validator-private-key-path=$(MAKE_DIR)/data-dir/validator-private.pem" &> $(MAKE_DIR)/node.log &
+		--args "--casper-validator-private-key-path=$(MAKE_DIR)/data-dir/validator-private.pem" | tee $(MAKE_DIR)/node.log &
 	@sleep 1; while ! grep --silent -i "listening for traffic on" .make/run/node.log &> /dev/null; do sleep 1; done
 	@echo Done
 	@mkdir -p $(dir $@) && touch $@

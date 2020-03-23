@@ -6,10 +6,10 @@ use alloc::{string::String, vec::Vec};
 use core::convert::{From, TryInto};
 
 use contract::{
-    contract_api::{runtime, storage, TURef},
+    contract_api::{runtime, storage},
     unwrap_or_revert::UnwrapOrRevert,
 };
-use types::{ApiError, Key};
+use types::{ApiError, Key, URef};
 
 const MAIL_FEED_KEY: &str = "mail_feed";
 const MAILING_KEY: &str = "mailing";
@@ -56,8 +56,8 @@ pub extern "C" fn call() {
     let args = (PUB_METHOD, message);
     runtime::call_contract::<_, ()>(contract_ref, args);
 
-    let list_key: TURef<Vec<String>> = sub_key.try_into().unwrap_or_revert();
-    let messages = storage::read(list_key)
+    let list_uref: URef = sub_key.try_into().unwrap_or_revert();
+    let messages: Vec<String> = storage::read(list_uref)
         .unwrap_or_revert_with(Error::GetMessagesURef)
         .unwrap_or_revert_with(Error::FindMessagesURef);
 

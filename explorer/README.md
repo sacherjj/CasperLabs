@@ -28,6 +28,27 @@ make up node-0/up
 cd -
 ```
 
+Start the `server` in one console:
+
+```sh
+cd server
+npm run dev
+```
+
+and the `ui` in another one:
+
+```sh
+cd ui
+npm start
+```
+
+A new browser window will automatically open pointing at the app running at http://localhost:8000
+
+The server should serve the config that will route traffic to the `grpcwebproxy` container running in Docker,
+while we can work on the UI and see it reload after each change. Check out the `server` README for details
+about how it can be configured to tell the UI to connect to a remote server like devnet.
+
+
 ### Fund the Faucet
 
 If we were not using the `faucet-account` that's created in the `hack/docker` setup as the Faucet account,
@@ -50,7 +71,7 @@ Run the transfer from the genesis account to our test faucet account.
 ```sh
 node ./server/dist/transfer.js \
   --host-url http://localhost:8401 \
-  --transfer-contract-path contracts/transfer_to_account.wasm \
+  --transfer-contract-path contracts/transfer_to_account_u512.wasm \
   --payment-contract-path contracts/standard_payment.wasm \
   --payment-amount 100000 \
   --gas-price 10 \
@@ -138,7 +159,7 @@ $ ./client.sh node-0 query-state \
 
 account {
   public_key: "045499d51a013e06c6cbb5734843cf3c7f08d66af312d81238ffeb54244f1800"
-  purse_id {
+  main_purse {
     uref: "e698d314cd8004ca6cdfc5b5ea94b8c930aa3cd108bb32d6a5e9f53bcc201f75"
     access_rights: READ_ADD_WRITE
   }
@@ -189,7 +210,7 @@ account {
 }
 ```
 
-Based on the `purse_id` we can issue a followup request to check the balance:
+Based on the `main_purse` we can issue a followup request to check the balance:
 
 ```console
 $ ./client.sh node-0 query-state \

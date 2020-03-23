@@ -1,32 +1,29 @@
 package io.casperlabs.casper.util
 
-import cats._
 import cats.implicits._
-import io.casperlabs.catscontrib.MonadThrowable
-import io.casperlabs.casper.consensus.Block
+import io.casperlabs.casper.consensus.{state, Block}
 import io.casperlabs.casper.util.ProtocolVersions.Config
-import io.casperlabs.casper.consensus.state
-import io.casperlabs.ipc
 import io.casperlabs.ipc.ChainSpec.DeployConfig
-import simulacrum.typeclass
+import io.casperlabs.models.BlockImplicits._
+import io.casperlabs.models.Message._
 
 class ProtocolVersions private (l: List[Config]) {
-  private def configAtHeight(blockHeight: Long): Config =
+  private def configAtHeight(blockHeight: MainRank): Config =
     l.collectFirst {
       case c @ Config(blockHeightMin, _, _) if blockHeightMin <= blockHeight =>
         c
     }.get // This cannot throw because we validate in `apply` that list is never empty.
 
-  def versionAt(blockHeight: Long): state.ProtocolVersion =
+  def versionAt(blockHeight: MainRank): state.ProtocolVersion =
     configAtHeight(blockHeight).version
 
-  def configAt(blockHeight: Long): Config =
+  def configAt(blockHeight: MainRank): Config =
     configAtHeight(blockHeight)
 
   def fromBlock(
       b: Block
   ): state.ProtocolVersion =
-    versionAt(b.getHeader.rank)
+    versionAt(b.mainRank)
 }
 
 object ProtocolVersions {

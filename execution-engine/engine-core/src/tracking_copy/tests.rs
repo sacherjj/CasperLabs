@@ -12,7 +12,7 @@ use engine_shared::{
 };
 use engine_storage::global_state::{in_memory::InMemoryGlobalState, StateProvider, StateReader};
 use types::{
-    account::{PublicKey, PurseId, Weight, PUBLIC_KEY_LENGTH},
+    account::{PublicKey, Weight, ED25519_LENGTH},
     gens::*,
     AccessRights, CLValue, Key, ProtocolVersion, URef,
 };
@@ -175,14 +175,14 @@ fn tracking_copy_add_i32() {
 
 #[test]
 fn tracking_copy_add_named_key() {
+    let zero_public_key = PublicKey::ed25519_from([0u8; ED25519_LENGTH]);
     let correlation_id = CorrelationId::new();
     // DB now holds an `Account` so that we can test adding a `NamedKey`
-    let associated_keys =
-        AssociatedKeys::new(PublicKey::new([0u8; PUBLIC_KEY_LENGTH]), Weight::new(1));
+    let associated_keys = AssociatedKeys::new(zero_public_key, Weight::new(1));
     let account = Account::new(
-        [0u8; PUBLIC_KEY_LENGTH],
+        zero_public_key,
         BTreeMap::new(),
-        PurseId::new(URef::new([0u8; 32], AccessRights::READ_ADD_WRITE)),
+        URef::new([0u8; 32], AccessRights::READ_ADD_WRITE),
         associated_keys,
         Default::default(),
     );
@@ -291,7 +291,7 @@ proptest! {
         let correlation_id = CorrelationId::new();
         let (gs, root_hash) = InMemoryGlobalState::from_pairs(correlation_id, &[(k, v.to_owned())]).unwrap();
         let view = gs.checkout(root_hash).unwrap().unwrap();
-        let mut tc = TrackingCopy::new(view);
+        let tc = TrackingCopy::new(view);
         let empty_path = Vec::new();
         if let Ok(TrackingCopyQueryResult::Success(result)) = tc.query(correlation_id, k, &empty_path) {
             assert_eq!(v, result);
@@ -326,7 +326,7 @@ proptest! {
             &[(k, v.to_owned()), (contract_key, contract)]
         ).unwrap();
         let view = gs.checkout(root_hash).unwrap().unwrap();
-        let mut tc = TrackingCopy::new(view);
+        let tc = TrackingCopy::new(view);
         let path = vec!(name.clone());
         if let Ok(TrackingCopyQueryResult::Success(result)) = tc.query(correlation_id, contract_key, &path) {
             assert_eq!(v, result);
@@ -347,17 +347,17 @@ proptest! {
         v in stored_value_arb(), // value in account state
         name in "\\PC*", // human-readable name for state
         missing_name in "\\PC*",
-        pk in u8_slice_32(), // account public key
-        address in u8_slice_32(), // address for account key
+        pk in public_key_arb(), // account public key
+        address in public_key_arb(), // address for account key
     ) {
         let correlation_id = CorrelationId::new();
         let named_keys = iter::once((name.clone(), k)).collect();
-        let purse_id = PurseId::new(URef::new([0u8; 32], AccessRights::READ_ADD_WRITE));
-        let associated_keys = AssociatedKeys::new(PublicKey::new(pk), Weight::new(1));
+        let purse = URef::new([0u8; 32], AccessRights::READ_ADD_WRITE);
+        let associated_keys = AssociatedKeys::new(pk, Weight::new(1));
         let account = Account::new(
             pk,
             named_keys,
-            purse_id,
+            purse,
             associated_keys,
             Default::default(),
         );
@@ -368,7 +368,7 @@ proptest! {
             &[(k, v.to_owned()), (account_key, StoredValue::Account(account))],
         ).unwrap();
         let view = gs.checkout(root_hash).unwrap().unwrap();
-        let mut tc = TrackingCopy::new(view);
+        let tc = TrackingCopy::new(view);
         let path = vec!(name.clone());
         if let Ok(TrackingCopyQueryResult::Success(result)) = tc.query(correlation_id, account_key, &path) {
             assert_eq!(v, result);
@@ -388,8 +388,8 @@ proptest! {
         v in stored_value_arb(), // value in contract state
         state_name in "\\PC*", // human-readable name for state
         contract_name in "\\PC*", // human-readable name for contract
-        pk in u8_slice_32(), // account public key
-        address in u8_slice_32(), // address for account key
+        pk in public_key_arb(), // account public key
+        address in public_key_arb(), // address for account key
         body in vec(any::<u8>(), 1..1000), //contract body
         hash in u8_slice_32(), // hash for contract key
     ) {
@@ -405,12 +405,12 @@ proptest! {
         // create account which knows about contract
         let mut account_named_keys = BTreeMap::new();
         account_named_keys.insert(contract_name.clone(), contract_key);
-        let purse_id = PurseId::new(URef::new([0u8; 32], AccessRights::READ_ADD_WRITE));
-        let associated_keys = AssociatedKeys::new(PublicKey::new(pk), Weight::new(1));
+        let purse = URef::new([0u8; 32], AccessRights::READ_ADD_WRITE);
+        let associated_keys = AssociatedKeys::new(pk, Weight::new(1));
         let account = Account::new(
             pk,
             account_named_keys,
-            purse_id,
+            purse,
             associated_keys,
             Default::default(),
         );
@@ -422,7 +422,7 @@ proptest! {
             (account_key, StoredValue::Account(account)),
         ]).unwrap();
         let view = gs.checkout(root_hash).unwrap().unwrap();
-        let mut tc = TrackingCopy::new(view);
+        let tc = TrackingCopy::new(view);
         let path = vec!(contract_name, state_name);
         if let Ok(TrackingCopyQueryResult::Success(result)) = tc.query(correlation_id, account_key, &path) {
             assert_eq!(v, result);
@@ -477,4 +477,54 @@ fn cache_writes_not_invalidated() {
     assert_eq!(tc_cache.get(&k1), Some(&v1));
     assert_eq!(tc_cache.get(&k2), Some(&v2)); // k2 and k3 should be there
     assert_eq!(tc_cache.get(&k3), Some(&v3));
+}
+
+#[test]
+fn query_for_circular_references_should_fail() {
+    // create self-referential key
+    let cl_value_key = Key::URef(URef::new([255; 32], AccessRights::READ));
+    let cl_value = StoredValue::CLValue(CLValue::from_t(cl_value_key).unwrap());
+    let key_name = "key".to_string();
+
+    // create contract with this self-referential key in its named keys, and also a key referring to
+    // itself in its named keys.
+    let contract_key = Key::URef(URef::new([1; 32], AccessRights::READ));
+    let contract_name = "contract".to_string();
+    let mut named_keys = BTreeMap::new();
+    named_keys.insert(key_name.clone(), cl_value_key);
+    named_keys.insert(contract_name.clone(), contract_key);
+    let contract =
+        StoredValue::Contract(Contract::new(vec![], named_keys, ProtocolVersion::V1_0_0));
+
+    let correlation_id = CorrelationId::new();
+    let (global_state, root_hash) = InMemoryGlobalState::from_pairs(
+        correlation_id,
+        &[(cl_value_key, cl_value), (contract_key, contract)],
+    )
+    .unwrap();
+    let view = global_state.checkout(root_hash).unwrap().unwrap();
+    let tracking_copy = TrackingCopy::new(view);
+
+    // query for the self-referential key (second path element of arbitrary value required to cause
+    // iteration _into_ the self-referential key)
+    let path = vec![key_name, String::new()];
+    if let Ok(TrackingCopyQueryResult::CircularReference(msg)) =
+        tracking_copy.query(correlation_id, contract_key, &path)
+    {
+        let expected_path_msg = format!("at path: {:?}/{}", contract_key, path[0]);
+        assert!(msg.contains(&expected_path_msg));
+    } else {
+        panic!("Query didn't fail with a circular reference error");
+    }
+
+    // query for itself in its own named keys
+    let path = vec![contract_name];
+    if let Ok(TrackingCopyQueryResult::CircularReference(msg)) =
+        tracking_copy.query(correlation_id, contract_key, &path)
+    {
+        let expected_path_msg = format!("at path: {:?}/{}", contract_key, path[0]);
+        assert!(msg.contains(&expected_path_msg));
+    } else {
+        panic!("Query didn't fail with a circular reference error");
+    }
 }

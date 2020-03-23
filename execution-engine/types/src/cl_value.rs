@@ -1,5 +1,4 @@
 use alloc::vec::Vec;
-use core::u32;
 
 use crate::{
     bytesrepr::{self, FromBytes, ToBytes, U32_SERIALIZED_LENGTH},
@@ -87,8 +86,8 @@ impl CLValue {
     /// Returns the length of the `Vec<u8>` yielded after calling `self.to_bytes()`.
     ///
     /// Note, this method doesn't actually serialize `self`, and hence is relatively cheap.
-    pub fn serialized_len(&self) -> usize {
-        self.cl_type.serialized_len() + U32_SERIALIZED_LENGTH + self.bytes.len()
+    pub fn serialized_length(&self) -> usize {
+        self.cl_type.serialized_length() + U32_SERIALIZED_LENGTH + self.bytes.len()
     }
 }
 
@@ -102,6 +101,10 @@ impl ToBytes for CLValue {
         self.cl_type.append_bytes(&mut result);
         Ok(result)
     }
+
+    fn serialized_length(&self) -> usize {
+        self.bytes.serialized_length() + self.cl_type.serialized_length()
+    }
 }
 
 impl FromBytes for CLValue {
@@ -110,56 +113,5 @@ impl FromBytes for CLValue {
         let (cl_type, remainder) = CLType::from_bytes(remainder)?;
         let cl_value = CLValue { cl_type, bytes };
         Ok((cl_value, remainder))
-    }
-}
-
-impl ToBytes for Vec<CLValue> {
-    fn to_bytes(&self) -> Result<Vec<u8>, bytesrepr::Error> {
-        let serialized_len = self.iter().map(CLValue::serialized_len).sum();
-        if serialized_len > u32::max_value() as usize - U32_SERIALIZED_LENGTH {
-            return Err(bytesrepr::Error::OutOfMemory);
-        }
-
-        let mut result = Vec::with_capacity(serialized_len);
-        let len = self.len() as u32;
-        result.append(&mut len.to_bytes()?);
-
-        for cl_value in self {
-            result.append(&mut cl_value.to_bytes()?);
-        }
-
-        Ok(result)
-    }
-
-    fn into_bytes(self) -> Result<Vec<u8>, bytesrepr::Error> {
-        let serialized_len = self.iter().map(CLValue::serialized_len).sum();
-        if serialized_len > u32::max_value() as usize - U32_SERIALIZED_LENGTH {
-            return Err(bytesrepr::Error::OutOfMemory);
-        }
-
-        let mut result = Vec::with_capacity(serialized_len);
-        let len = self.len() as u32;
-        result.append(&mut len.to_bytes()?);
-
-        for cl_value in self {
-            result.append(&mut cl_value.into_bytes()?);
-        }
-
-        Ok(result)
-    }
-}
-
-impl FromBytes for Vec<CLValue> {
-    fn from_bytes(mut bytes: &[u8]) -> Result<(Self, &[u8]), bytesrepr::Error> {
-        let (len, remainder) = u32::from_bytes(bytes)?;
-        bytes = remainder;
-
-        let mut result = Vec::with_capacity(len as usize);
-        for _ in 0..len {
-            let (cl_value, remainder) = CLValue::from_bytes(bytes)?;
-            result.push(cl_value);
-            bytes = remainder;
-        }
-        Ok((result, bytes))
     }
 }

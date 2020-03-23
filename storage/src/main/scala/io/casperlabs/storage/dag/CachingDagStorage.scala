@@ -10,10 +10,11 @@ import io.casperlabs.casper.consensus.info.BlockInfo
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.models.Message
 import io.casperlabs.storage.DagStorageMetricsSource
-import io.casperlabs.storage.block.BlockStorage.BlockHash
+import io.casperlabs.storage.BlockHash
 import io.casperlabs.storage.dag.CachingDagStorage.Rank
 import io.casperlabs.storage.dag.DagRepresentation.Validator
 import io.casperlabs.storage.dag.DagStorage.{MeteredDagRepresentation, MeteredDagStorage}
+import io.casperlabs.catscontrib.MonadThrowable
 
 import scala.collection.concurrent.TrieMap
 
@@ -22,7 +23,10 @@ class CachingDagStorage[F[_]: Concurrent](
     neighborhoodBefore: Int,
     // How far to go to the future (by ranks) for caching neighborhood of looked up block
     neighborhoodAfter: Int,
-    underlying: DagStorage[F] with DagRepresentation[F] with FinalityStorage[F],
+    underlying: DagStorage[F]
+      with DagRepresentation[F]
+      with FinalityStorage[F]
+      with AncestorsStorage[F],
     private[dag] val childrenCache: Cache[BlockHash, Set[BlockHash]],
     private[dag] val justificationCache: Cache[BlockHash, Set[BlockHash]],
     private[dag] val messagesCache: Cache[BlockHash, Message],
@@ -30,6 +34,7 @@ class CachingDagStorage[F[_]: Concurrent](
     semaphore: Semaphore[F]
 ) extends DagStorage[F]
     with DagRepresentation[F]
+    with AncestorsStorage[F]
     with FinalityStorage[F] {
 
   /** Unsafe to be invoked concurrently */
@@ -76,8 +81,8 @@ class CachingDagStorage[F[_]: Concurrent](
     * */
   private def unsafeCacheNeighborhood(m: Message): F[Unit] = {
     val missingRanks =
-      (m.rank - neighborhoodBefore)
-        .to(m.rank + neighborhoodAfter)
+      (m.jRank - neighborhoodBefore)
+        .to(m.jRank + neighborhoodAfter)
         .toSet
         .diff(ranksRanges.keySet)
         .toList
@@ -107,7 +112,12 @@ class CachingDagStorage[F[_]: Concurrent](
   override def getRepresentation: F[DagRepresentation[F]] =
     (this: DagRepresentation[F]).pure[F]
 
-  override private[storage] def insert(block: Block): F[DagRepresentation[F]] =
+  override implicit val MT: MonadThrowable[F] = Concurrent[F]
+
+  override private[storage] def findAncestor(block: BlockHash, distance: Long) =
+    underlying.findAncestor(block, distance) // TODO(CON-630): Cache
+
+  private[storage] override def insert(block: Block): F[DagRepresentation[F]] =
     for {
       dag     <- underlying.insert(block)
       message <- Sync[F].fromTry(Message.fromBlock(block))
@@ -155,25 +165,25 @@ class CachingDagStorage[F[_]: Concurrent](
   override def topoSortTail(tailLength: Int): fs2.Stream[F, Vector[BlockInfo]] =
     underlying.topoSortTail(tailLength)
 
-  override def latestMessageHash(validator: Validator): F[Set[BlockHash]] =
-    underlying.latestMessageHash(validator)
+  override def getBlockInfosByValidator(
+      validator: Validator,
+      limit: Int,
+      lastTimeStamp: Rank,
+      lastBlockHash: BlockHash
+  ) = underlying.getBlockInfosByValidator(validator, limit, lastTimeStamp, lastBlockHash)
 
-  override def latestMessage(validator: Validator): F[Set[Message]] =
-    underlying.latestMessage(validator)
-
-  override def latestMessageHashes: F[Map[Validator, Set[BlockHash]]] =
-    underlying.latestMessageHashes
-
-  override def latestMessages: F[Map[Validator, Set[Message]]] = underlying.latestMessages
+  override def latestGlobal                         = underlying.latestGlobal
+  override def latestInEra(keyBlockHash: BlockHash) = underlying.latestInEra(keyBlockHash)
 
   override def markAsFinalized(
       mainParent: BlockHash,
-      secondary: Set[BlockHash]
+      secondary: Set[BlockHash],
+      orphaned: Set[BlockHash]
   ): F[Unit] =
-    underlying.markAsFinalized(mainParent, secondary)
+    underlying.markAsFinalized(mainParent, secondary, orphaned)
 
-  override def isFinalized(block: BlockHash): F[Boolean] =
-    underlying.isFinalized(block)
+  override def getFinalityStatus(block: BlockHash): F[FinalityStorage.FinalityStatus] =
+    underlying.getFinalityStatus(block)
 
   override def getLastFinalizedBlock: F[BlockHash] = underlying.getLastFinalizedBlock
 }
@@ -182,7 +192,10 @@ object CachingDagStorage {
   type Rank = Long
 
   def apply[F[_]: Concurrent: Metrics](
-      underlying: DagStorage[F] with DagRepresentation[F] with FinalityStorage[F],
+      underlying: DagStorage[F]
+        with DagRepresentation[F]
+        with FinalityStorage[F]
+        with AncestorsStorage[F],
       maxSizeBytes: Long,
       // How far to go to the past (by ranks) for caching neighborhood of looked up block
       neighborhoodBefore: Int,
@@ -207,7 +220,7 @@ object CachingDagStorage {
     ): RemovalListener[BlockHash, Message] = { n: RemovalNotification[BlockHash, Message] =>
       Option(n.getValue)
         .foreach { m =>
-          ranksRanges -= m.rank
+          ranksRanges -= m.jRank
         }
     }
 

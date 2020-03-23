@@ -1,10 +1,10 @@
 #[cfg(test)]
 mod tests;
 
-use std::time::Instant;
+use std::{mem, time::Instant};
 
 use engine_shared::{
-    logging::{log_duration, log_metric, GAUGE},
+    logging::{log_duration, log_metric},
     newtypes::{Blake2bHash, CorrelationId},
 };
 use types::bytesrepr::{self, FromBytes, ToBytes};
@@ -13,6 +13,7 @@ use crate::{
     transaction_source::{Readable, Writable},
     trie::{self, Parents, Pointer, Trie, RADIX},
     trie_store::TrieStore,
+    GAUGE_METRIC_KEY,
 };
 
 const TRIE_STORE_READ_DURATION: &str = "trie_store_read_duration";
@@ -78,7 +79,7 @@ where
                     correlation_id,
                     TRIE_STORE_READ_GETS,
                     GET,
-                    GAUGE,
+                    GAUGE_METRIC_KEY,
                     f64::from(get_counter),
                 );
                 log_duration(
@@ -111,7 +112,7 @@ where
                                 correlation_id,
                                 TRIE_STORE_READ_GETS,
                                 GET,
-                                GAUGE,
+                                GAUGE_METRIC_KEY,
                                 f64::from(get_counter),
                             );
                             log_duration(
@@ -132,7 +133,7 @@ where
                             correlation_id,
                             TRIE_STORE_READ_GETS,
                             GET,
-                            GAUGE,
+                            GAUGE_METRIC_KEY,
                             f64::from(get_counter),
                         );
                         log_duration(
@@ -161,7 +162,7 @@ where
                                 correlation_id,
                                 TRIE_STORE_READ_GETS,
                                 GET,
-                                GAUGE,
+                                GAUGE_METRIC_KEY,
                                 f64::from(get_counter),
                             );
                             log_duration(
@@ -182,7 +183,7 @@ where
                         correlation_id,
                         TRIE_STORE_READ_GETS,
                         GET,
-                        GAUGE,
+                        GAUGE_METRIC_KEY,
                         f64::from(get_counter),
                     );
                     log_duration(
@@ -244,7 +245,7 @@ where
                     correlation_id,
                     TRIE_STORE_SCAN_GETS,
                     GET,
-                    GAUGE,
+                    GAUGE_METRIC_KEY,
                     f64::from(get_counter),
                 );
                 log_duration(
@@ -272,7 +273,7 @@ where
                             correlation_id,
                             TRIE_STORE_SCAN_GETS,
                             GET,
-                            GAUGE,
+                            GAUGE_METRIC_KEY,
                             f64::from(get_counter),
                         );
                         log_duration(
@@ -297,7 +298,7 @@ where
                             correlation_id,
                             TRIE_STORE_SCAN_GETS,
                             GET,
-                            GAUGE,
+                            GAUGE_METRIC_KEY,
                             f64::from(get_counter),
                         );
                         log_duration(
@@ -321,7 +322,7 @@ where
                         correlation_id,
                         TRIE_STORE_SCAN_GETS,
                         GET,
-                        GAUGE,
+                        GAUGE_METRIC_KEY,
                         f64::from(get_counter),
                     );
                     log_duration(
@@ -349,7 +350,7 @@ where
                             correlation_id,
                             TRIE_STORE_SCAN_GETS,
                             GET,
-                            GAUGE,
+                            GAUGE_METRIC_KEY,
                             f64::from(get_counter),
                         );
                         log_duration(
@@ -716,7 +717,7 @@ where
                 correlation_id,
                 TRIE_STORE_WRITE_PUTS,
                 PUT,
-                GAUGE,
+                GAUGE_METRIC_KEY,
                 f64::from(put_counter),
             );
             log_duration(
@@ -730,78 +731,137 @@ where
     }
 }
 
-/// Returns the keys at a given root hash.
+enum KeysIteratorState<K, V, S: TrieStore<K, V>> {
+    /// Iterate normally
+    Ok,
+    /// Return the error and stop iterating
+    ReturnError(S::Error),
+    /// Already failed, only return None
+    Failed,
+}
+
+pub struct KeysIterator<'a, 'b, K, V, T, S: TrieStore<K, V>> {
+    #[allow(clippy::type_complexity)]
+    visited: Vec<(Trie<K, V>, Option<usize>, Vec<u8>)>,
+    store: &'a S,
+    txn: &'b T,
+    state: KeysIteratorState<K, V, S>,
+}
+
+impl<'a, 'b, K, V, T, S> Iterator for KeysIterator<'a, 'b, K, V, T, S>
+where
+    K: ToBytes + FromBytes + Clone + Eq + std::fmt::Debug,
+    V: ToBytes + FromBytes + Clone + Eq + std::fmt::Debug,
+    T: Readable<Handle = S::Handle>,
+    S: TrieStore<K, V>,
+    S::Error: From<T::Error> + From<types::bytesrepr::Error>,
+{
+    type Item = Result<K, S::Error>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match mem::replace(&mut self.state, KeysIteratorState::Ok) {
+            KeysIteratorState::Ok => (),
+            KeysIteratorState::ReturnError(e) => {
+                self.state = KeysIteratorState::Failed;
+                return Some(Err(e));
+            }
+            KeysIteratorState::Failed => {
+                return None;
+            }
+        }
+        while let Some((trie, maybe_index, mut path)) = self.visited.pop() {
+            let mut maybe_next_trie: Option<Trie<K, V>> = None;
+
+            match trie {
+                Trie::Leaf { key, .. } => {
+                    debug_assert!({
+                        let key_bytes = match key.to_bytes() {
+                            Ok(bytes) => bytes,
+                            Err(e) => {
+                                self.state = KeysIteratorState::Failed;
+                                return Some(Err(e.into()));
+                            }
+                        };
+                        key_bytes.starts_with(&path)
+                    });
+                    return Some(Ok(key));
+                }
+                Trie::Node { ref pointer_block } => {
+                    let mut index: usize = maybe_index.unwrap_or_default();
+                    while index < RADIX {
+                        if let Some(ref pointer) = pointer_block[index] {
+                            maybe_next_trie = match self.store.get(self.txn, pointer.hash()) {
+                                Ok(trie) => trie,
+                                Err(e) => {
+                                    self.state = KeysIteratorState::Failed;
+                                    return Some(Err(e));
+                                }
+                            };
+                            debug_assert!(maybe_next_trie.is_some());
+                            self.visited.push((trie, Some(index + 1), path.clone()));
+                            path.push(index as u8);
+                            break;
+                        }
+                        index += 1;
+                    }
+                }
+                Trie::Extension { affix, pointer } => {
+                    maybe_next_trie = match self.store.get(self.txn, pointer.hash()) {
+                        Ok(trie) => trie,
+                        Err(e) => {
+                            self.state = KeysIteratorState::Failed;
+                            return Some(Err(e));
+                        }
+                    };
+                    debug_assert!({
+                        match &maybe_next_trie {
+                            Some(Trie::Node { .. }) => true,
+                            _ => false,
+                        }
+                    });
+                    path.extend(affix);
+                }
+            }
+
+            if let Some(next_trie) = maybe_next_trie {
+                self.visited.push((next_trie, None, path));
+            }
+        }
+        None
+    }
+}
+
+/// Returns the iterator over the keys at a given root hash.
 ///
 /// Notes:
-/// * This should be rewritten as an Iterator in the future.
 /// * The root doesn't necessarily need to be the apex of the trie. It can be the "root" of a
 ///   sub-trie.
 #[allow(dead_code)]
-pub fn keys<K, V, T, S, E>(
+pub fn keys<'a, 'b, K, V, T, S>(
     _correlation_id: CorrelationId,
-    txn: &T,
-    store: &S,
+    txn: &'b T,
+    store: &'a S,
     root: &Blake2bHash,
-) -> Result<Vec<K>, E>
+) -> KeysIterator<'a, 'b, K, V, T, S>
 where
     K: ToBytes + FromBytes + Clone + Eq + std::fmt::Debug,
     V: ToBytes + FromBytes + Clone + Eq + std::fmt::Debug,
     T: Readable<Handle = S::Handle>,
     S: TrieStore<K, V>,
     S::Error: From<T::Error>,
-    E: From<S::Error> + From<types::bytesrepr::Error>,
 {
-    let mut ret = Vec::new();
-
     #[allow(clippy::type_complexity)]
-    let mut visited: Vec<(Trie<K, V>, Option<usize>, Vec<u8>)> = {
-        let root = match store.get(txn, root)? {
-            None => return Ok(ret),
-            Some(current_root) => current_root,
+    let (visited, init_state): (Vec<(Trie<K, V>, Option<usize>, Vec<u8>)>, _) =
+        match store.get(txn, root) {
+            Ok(None) => (vec![], KeysIteratorState::Ok),
+            Err(e) => (vec![], KeysIteratorState::ReturnError(e)),
+            Ok(Some(current_root)) => (vec![(current_root, None, vec![])], KeysIteratorState::Ok),
         };
-        vec![(root, None, vec![])]
-    };
 
-    while let Some((trie, maybe_index, mut path)) = visited.pop() {
-        let mut maybe_next_trie: Option<Trie<K, V>> = None;
-
-        match trie {
-            Trie::Leaf { key, .. } => {
-                debug_assert!({
-                    let key_bytes = key.to_bytes()?;
-                    key_bytes.starts_with(&path)
-                });
-                ret.push(key);
-            }
-            Trie::Node { ref pointer_block } => {
-                let mut index: usize = maybe_index.unwrap_or_default();
-                while index < RADIX {
-                    if let Some(ref pointer) = pointer_block[index] {
-                        maybe_next_trie = store.get(txn, pointer.hash())?;
-                        debug_assert!(maybe_next_trie.is_some());
-                        visited.push((trie, Some(index + 1), path.clone()));
-                        path.push(index as u8);
-                        break;
-                    }
-                    index += 1;
-                }
-            }
-            Trie::Extension { affix, pointer } => {
-                maybe_next_trie = store.get(txn, pointer.hash())?;
-                debug_assert!({
-                    match &maybe_next_trie {
-                        Some(Trie::Node { .. }) => true,
-                        _ => false,
-                    }
-                });
-                path.extend(affix);
-            }
-        }
-
-        if let Some(next_trie) = maybe_next_trie {
-            visited.push((next_trie, None, path));
-        }
+    KeysIterator {
+        visited,
+        store,
+        txn,
+        state: init_state,
     }
-
-    Ok(ret)
 }

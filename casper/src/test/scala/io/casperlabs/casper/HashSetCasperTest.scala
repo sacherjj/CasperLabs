@@ -46,6 +46,8 @@ abstract class HashSetCasperTest
 
   import HashSetCasperTest._
 
+  implicit val emitter = NoOpsEventEmitter.create[Task]
+
   implicit class TestNodeOps(node: TestNode[Task]) {
     def addAndBroadcast(b: Block): Task[BlockStatus] =
       node.casperEff.addBlock(b).flatTap(node.broadcaster.networkEffects(b, _))
@@ -1409,7 +1411,7 @@ abstract class HashSetCasperTest
       .withJustifications(serializedJustifications)
       .withBodyHash(ProtoUtil.protoHash(body))
       .withState(postState)
-      .withRank(1)
+      .withJRank(1)
     val blockHash = ProtoUtil.protoHash(header)
     val blockThatPointsToInvalidBlock =
       Block()
@@ -1454,8 +1456,8 @@ object HashSetCasperTest {
       })
 
     StorageFixture
-      .createStorages[Task]()
-      .flatMap {
+      .createMemoryStorages[Task]()
+      .use {
         case (
             implicit0(blockStorage: BlockStorage[Task]),
             _,

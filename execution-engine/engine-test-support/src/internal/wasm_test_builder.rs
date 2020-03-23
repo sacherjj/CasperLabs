@@ -10,6 +10,7 @@ use std::{
 
 use grpc::RequestOptions;
 use lmdb::DatabaseFlags;
+use log::LevelFilter;
 
 use engine_core::{
     engine_state::{
@@ -32,6 +33,7 @@ use engine_shared::{
     additive_map::AdditiveMap,
     contract::Contract,
     gas::Gas,
+    logging::{self, Settings, Style},
     newtypes::{Blake2bHash, CorrelationId},
     os::get_page_size,
     stored_value::StoredValue,
@@ -44,7 +46,7 @@ use engine_storage::{
     trie_store::lmdb::LmdbTrieStore,
 };
 use types::{
-    account::{PublicKey, PurseId},
+    account::PublicKey,
     bytesrepr::{self, ToBytes},
     CLValue, Key, URef, U512,
 };
@@ -53,8 +55,8 @@ use crate::internal::utils;
 
 /// LMDB initial map size is calculated based on DEFAULT_LMDB_PAGES and systems page size.
 ///
-/// This default value should give 1MiB initial map size by default.
-const DEFAULT_LMDB_PAGES: usize = 2560;
+/// This default value should give 50MiB initial map size by default.
+const DEFAULT_LMDB_PAGES: usize = 128_000;
 
 /// This is appended to the data dir path provided to the `LmdbWasmTestBuilder` in order to match
 /// the behavior of `get_data_dir()` in "engine-grpc-server/src/main.rs".
@@ -84,11 +86,24 @@ pub struct WasmTestBuilder<S> {
     mint_contract_uref: Option<URef>,
     /// PoS contract uref
     pos_contract_uref: Option<URef>,
+    /// Standard payment contract uref
+    standard_payment_uref: Option<URef>,
+}
+
+impl<S> WasmTestBuilder<S> {
+    fn initialize_logging() {
+        let log_settings = Settings::new(LevelFilter::Warn).with_style(Style::HumanReadable);
+        let _ = logging::initialize(log_settings);
+    }
 }
 
 impl Default for InMemoryWasmTestBuilder {
     fn default() -> Self {
-        let engine_config = EngineConfig::new();
+        Self::initialize_logging();
+        let engine_config = EngineConfig::new()
+            .with_use_system_contracts(cfg!(feature = "use-system-contracts"))
+            .with_highway(cfg!(feature = "highway"));
+
         let global_state = InMemoryGlobalState::empty().expect("should create global state");
         let engine_state = EngineState::new(global_state, engine_config);
 
@@ -101,9 +116,10 @@ impl Default for InMemoryWasmTestBuilder {
             transforms: Vec::new(),
             bonded_validators: Vec::new(),
             genesis_account: None,
+            genesis_transforms: None,
             mint_contract_uref: None,
             pos_contract_uref: None,
-            genesis_transforms: None,
+            standard_payment_uref: None,
         }
     }
 }
@@ -121,9 +137,10 @@ impl<S> Clone for WasmTestBuilder<S> {
             transforms: self.transforms.clone(),
             bonded_validators: self.bonded_validators.clone(),
             genesis_account: self.genesis_account.clone(),
+            genesis_transforms: self.genesis_transforms.clone(),
             mint_contract_uref: self.mint_contract_uref,
             pos_contract_uref: self.pos_contract_uref,
-            genesis_transforms: self.genesis_transforms.clone(),
+            standard_payment_uref: self.standard_payment_uref,
         }
     }
 }
@@ -145,6 +162,7 @@ impl InMemoryWasmTestBuilder {
         engine_config: EngineConfig,
         post_state_hash: Vec<u8>,
     ) -> Self {
+        Self::initialize_logging();
         let engine_state = EngineState::new(global_state, engine_config);
         WasmTestBuilder {
             engine_state: Rc::new(engine_state),
@@ -160,6 +178,7 @@ impl LmdbWasmTestBuilder {
         data_dir: &T,
         engine_config: EngineConfig,
     ) -> Self {
+        Self::initialize_logging();
         let page_size = get_page_size().expect("should get page size");
         let global_state_dir = Self::create_and_get_global_state_dir(data_dir);
         let environment = Arc::new(
@@ -186,9 +205,10 @@ impl LmdbWasmTestBuilder {
             transforms: Vec::new(),
             bonded_validators: Vec::new(),
             genesis_account: None,
+            genesis_transforms: None,
             mint_contract_uref: None,
             pos_contract_uref: None,
-            genesis_transforms: None,
+            standard_payment_uref: None,
         }
     }
 
@@ -221,6 +241,7 @@ impl LmdbWasmTestBuilder {
         engine_config: EngineConfig,
         post_state_hash: Vec<u8>,
     ) -> Self {
+        Self::initialize_logging();
         let page_size = get_page_size().expect("should get page size");
         let global_state_dir = Self::create_and_get_global_state_dir(data_dir);
         let environment = Arc::new(
@@ -245,9 +266,10 @@ impl LmdbWasmTestBuilder {
             transforms: Vec::new(),
             bonded_validators: Vec::new(),
             genesis_account: None,
+            genesis_transforms: None,
             mint_contract_uref: None,
             pos_contract_uref: None,
-            genesis_transforms: None,
+            standard_payment_uref: None,
         }
     }
 
@@ -282,6 +304,7 @@ where
             genesis_account: result.0.genesis_account,
             mint_contract_uref: result.0.mint_contract_uref,
             pos_contract_uref: result.0.pos_contract_uref,
+            standard_payment_uref: result.0.standard_payment_uref,
             genesis_transforms: result.0.genesis_transforms,
         }
     }
@@ -327,6 +350,7 @@ where
         self.post_state_hash = Some(state_root_hash.to_vec());
         self.mint_contract_uref = Some(protocol_data.mint());
         self.pos_contract_uref = Some(protocol_data.proof_of_stake());
+        self.standard_payment_uref = Some(protocol_data.standard_payment());
         self.genesis_account = Some(genesis_account);
         self.genesis_transforms = Some(transforms);
         self
@@ -522,6 +546,11 @@ where
             .expect("Unable to obtain pos contract uref. Please run genesis first.")
     }
 
+    pub fn get_standard_payment_contract_uref(&self) -> URef {
+        self.standard_payment_uref
+            .expect("Unable to obtain standard payment contract uref. Please run genesis first.")
+    }
+
     pub fn get_genesis_transforms(&self) -> &AdditiveMap<Key, engine_shared::transform::Transform> {
         &self
             .genesis_transforms
@@ -571,27 +600,27 @@ where
             .expect("should find PoS URef")
     }
 
-    pub fn get_purse_balance(&self, purse_id: PurseId) -> U512 {
+    pub fn get_purse_balance(&self, purse: URef) -> U512 {
         let mint = self.get_mint_contract_uref();
-        let purse_addr = purse_id.value().addr();
+        let purse_addr = purse.addr();
         let purse_bytes =
             ToBytes::to_bytes(&purse_addr).expect("should be able to serialize purse bytes");
         let balance_mapping_key = Key::local(mint.addr(), &purse_bytes);
-        let balance_uref = self
+        let base_key = self
             .query(None, balance_mapping_key, &[])
             .and_then(|v| CLValue::try_from(v).map_err(|error| format!("{:?}", error)))
             .and_then(|cl_value| cl_value.into_t().map_err(|error| format!("{:?}", error)))
             .expect("should find balance uref");
 
-        self.query(None, balance_uref, &[])
+        self.query(None, base_key, &[])
             .and_then(|v| CLValue::try_from(v).map_err(|error| format!("{:?}", error)))
             .and_then(|cl_value| cl_value.into_t().map_err(|error| format!("{:?}", error)))
             .expect("should parse balance into a U512")
     }
 
-    pub fn get_account(&self, addr: [u8; 32]) -> Option<Account> {
+    pub fn get_account(&self, public_key: PublicKey) -> Option<Account> {
         let account_value = self
-            .query(None, Key::Account(addr), &[])
+            .query(None, Key::Account(public_key), &[])
             .expect("should query account");
 
         if let StoredValue::Account(account) = account_value {

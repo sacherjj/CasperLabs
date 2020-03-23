@@ -3,6 +3,8 @@ import { Route, RouteProps } from 'react-router-dom';
 import { observer } from 'mobx-react';
 import AuthContainer from '../containers/AuthContainer';
 import { encodeBase16 } from 'casperlabs-sdk';
+import { Helmet } from "react-helmet";
+
 
 export const Spinner = (msg: String) => (
   <div className="text-center">
@@ -14,11 +16,21 @@ export const Spinner = (msg: String) => (
 export const Loading = () => Spinner('Loading');
 
 // https://fontawesome.com/icons?d=gallery&q=ground&m=free
-export const Icon = (props: { name: string; color?: string }) => {
+export const Icon = (props: {
+  name: string;
+  color?: string;
+  title?: string;
+}) => {
   const styles = {
     color: props.color
   };
-  return <i className={'fa fa-fw fa-' + props.name} style={styles} />;
+  return (
+    <i
+      className={'fa fa-fw fa-' + props.name}
+      style={styles}
+      title={props.title}
+    />
+  );
 };
 
 export const IconButton = (props: {
@@ -31,7 +43,7 @@ export const IconButton = (props: {
     title={props.title}
     className="link icon-button"
   >
-    <Icon name={props.icon} />
+    <Icon name={props.icon}/>
   </button>
 );
 
@@ -43,11 +55,13 @@ export const Button = (props: {
   onClick: () => void;
   title: string;
   disabled?: boolean;
+  type?: 'primary' | 'danger' | 'secondary' | 'success';
+  size?: 'lg' | 'sm' | 'xs';
 }) => (
   <button
     type="button"
     onClick={_ => props.onClick()}
-    className="btn btn-primary"
+    className={`btn ${props.size ? `btn-${props.size}` : ''} btn-${props.type || 'primary'}`}
     disabled={props.disabled || false}
   >
     {props.title}
@@ -122,12 +136,16 @@ export const CommandLineHint = (props: { children: any }) => {
     <div className="card shadow mb-3">
       <div className="card-header bg-info">
         <h5 className="card-title font-weight-bold text-white">
-          <Icon name="terminal" />
+          <Icon name="terminal"/>
         </h5>
       </div>
       <div className="card-body">{props.children}</div>
     </div>
   );
+};
+
+export const CLX = (props: {amount: number}) => {
+  return <span>{props.amount.toLocaleString()} CLX</span>
 };
 
 interface PrivateRouteProps extends RouteProps {
@@ -154,14 +172,54 @@ export const Card = (props: {
   title: string;
   children: any;
   footerMessage?: any;
-}) => (
-  <div className="card mb-3">
-    <div className="card-header">
-      <span>{props.title}</span>
+  refresh?: () => void;
+  accordionId?: string;
+}) => {
+  let cardHeader = (
+    <div>
+      <a className="card-title">{props.title}</a>
+      <div className="float-right">
+        {props.refresh && (
+          <RefreshButton refresh={() => props.refresh!()}/>
+        )}
+      </div>
     </div>
-    <div className="card-body">{props.children}</div>
-    {props.footerMessage && (
-      <div className="card-footer small text-muted">{props.footerMessage}</div>
-    )}
-  </div>
+  );
+  return (
+    <div className={`card mb-3 ${props.accordionId ? 'accordion' : 'ac'}`}>
+      {props.accordionId ? (
+        <div className="card-header" id={`collapse-header-${props.accordionId}`} data-toggle="collapse"
+             data-target={`#${props.accordionId}`}
+             aria-expanded="true" aria-controls={props.accordionId}>
+          {cardHeader}
+        </div>
+      ) : (
+        <div className="card-header">
+          {cardHeader}
+        </div>
+      )}
+      {props.accordionId ? (
+          <div id={`${props.accordionId}-parent`}>
+            <div id={props.accordionId} className="collapse show"
+                 aria-labelledby={`collapse-header-${props.accordionId}`}
+                 data-parent={`#${props.accordionId}-parent`}>
+              <div className="card-body">{props.children}</div>
+            </div>
+          </div>
+        ) :
+        (
+          <div className="card-body">{props.children}</div>
+        )
+      }
+      {props.footerMessage && (
+        <div className="card-footer small text-muted">{props.footerMessage}</div>
+      )}
+    </div>
+  );
+};
+
+export const Title = (props:{title:string}) => (
+  <Helmet>
+    <title>CasperLabs Clarity - {props.title}</title>
+  </Helmet>
 );

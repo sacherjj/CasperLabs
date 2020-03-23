@@ -169,25 +169,11 @@ object RelayingSpec {
                 maxConcurrentRequests.transform(math.max(_, concurrency.get()))
                 concurrency.decrement()
               }
-        } yield new GossipService[Task] {
+        } yield new NoOpsGossipService[Task] {
           override def newBlocks(request: NewBlocksRequest): Task[NewBlocksResponse] =
             acceptOrFailure(peer).fold(
               Task.raiseError[NewBlocksResponse](new RuntimeException("Boom"))
             )(accepted => Task.now(NewBlocksResponse(accepted)))
-
-          override def streamAncestorBlockSummaries(
-              request: StreamAncestorBlockSummariesRequest
-          ) = ???
-          override def streamLatestMessages(
-              request: StreamLatestMessagesRequest
-          ): Iterant[Task, Block.Justification]                                   = ???
-          override def streamBlockSummaries(request: StreamBlockSummariesRequest) = ???
-          override def getBlockChunked(request: GetBlockChunkedRequest)           = ???
-          override def addApproval(request: AddApprovalRequest)                   = ???
-          override def getGenesisCandidate(request: GetGenesisCandidateRequest)   = ???
-          override def streamDagSliceBlockSummaries(
-              request: StreamDagSliceBlockSummariesRequest
-          ): Iterant[Task, BlockSummary] = ???
         }
 
       val relayingImpl = RelayingImpl[Task](nd, gossipService, relayFactor, relaySaturation)(

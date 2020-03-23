@@ -4,9 +4,8 @@ use alloc::vec::Vec;
 use core::mem::MaybeUninit;
 
 use casperlabs_types::{
-    account::{PublicKey, PurseId, PURSE_ID_SERIALIZED_LENGTH},
-    api_error, bytesrepr, ApiError, ContractRef, SystemContractType, TransferResult, TransferredTo,
-    URef, U512, UREF_SERIALIZED_LENGTH,
+    account::PublicKey, api_error, bytesrepr, ApiError, ContractRef, SystemContractType,
+    TransferResult, TransferredTo, URef, U512, UREF_SERIALIZED_LENGTH,
 };
 
 use crate::{
@@ -59,17 +58,20 @@ pub fn get_proof_of_stake() -> ContractRef {
     get_system_contract(SystemContractType::ProofOfStake)
 }
 
-/// Creates a new empty purse and returns its [`PurseId`].
-pub fn create_purse() -> PurseId {
-    let purse_id_ptr = contract_api::alloc_bytes(PURSE_ID_SERIALIZED_LENGTH);
+/// Returns a read-only pointer to the Standard Payment contract.
+///
+/// Any failure will trigger [`revert`](runtime::revert) with an appropriate [`ApiError`].
+pub fn get_standard_payment() -> ContractRef {
+    get_system_contract(SystemContractType::StandardPayment)
+}
+
+/// Creates a new empty purse and returns its [`URef`].
+pub fn create_purse() -> URef {
+    let purse = contract_api::alloc_bytes(UREF_SERIALIZED_LENGTH);
     unsafe {
-        let ret = ext_ffi::create_purse(purse_id_ptr, PURSE_ID_SERIALIZED_LENGTH);
+        let ret = ext_ffi::create_purse(purse, UREF_SERIALIZED_LENGTH);
         if ret == 0 {
-            let bytes = Vec::from_raw_parts(
-                purse_id_ptr,
-                PURSE_ID_SERIALIZED_LENGTH,
-                PURSE_ID_SERIALIZED_LENGTH,
-            );
+            let bytes = Vec::from_raw_parts(purse, UREF_SERIALIZED_LENGTH, UREF_SERIALIZED_LENGTH);
             bytesrepr::deserialize(bytes).unwrap_or_revert()
         } else {
             runtime::revert(ApiError::PurseNotCreated)
@@ -78,13 +80,12 @@ pub fn create_purse() -> PurseId {
 }
 
 /// Returns the balance in motes of the given purse.
-pub fn get_balance(purse_id: PurseId) -> Option<U512> {
-    let (purse_id_ptr, purse_id_size, _bytes) = contract_api::to_ptr(purse_id);
+pub fn get_balance(purse: URef) -> Option<U512> {
+    let (purse_ptr, purse_size, _bytes) = contract_api::to_ptr(purse);
 
     let value_size = {
         let mut output_size = MaybeUninit::uninit();
-        let ret =
-            unsafe { ext_ffi::get_balance(purse_id_ptr, purse_id_size, output_size.as_mut_ptr()) };
+        let ret = unsafe { ext_ffi::get_balance(purse_ptr, purse_size, output_size.as_mut_ptr()) };
         match api_error::result_from(ret) {
             Ok(_) => unsafe { output_size.assume_init() },
             Err(ApiError::InvalidPurse) => return None,
@@ -109,7 +110,7 @@ pub fn transfer_to_account(target: PublicKey, amount: U512) -> TransferResult {
 /// Transfers `amount` of motes from `source` purse to `target` account.  If `target` does not exist
 /// it will be created.
 pub fn transfer_from_purse_to_account(
-    source: PurseId,
+    source: URef,
     target: PublicKey,
     amount: U512,
 ) -> TransferResult {
@@ -132,8 +133,8 @@ pub fn transfer_from_purse_to_account(
 /// Transfers `amount` of motes from `source` purse to `target` purse.  If `target` does not exist
 /// the transfer fails.
 pub fn transfer_from_purse_to_purse(
-    source: PurseId,
-    target: PurseId,
+    source: URef,
+    target: URef,
     amount: U512,
 ) -> Result<(), ApiError> {
     let (source_ptr, source_size, _bytes1) = contract_api::to_ptr(source);

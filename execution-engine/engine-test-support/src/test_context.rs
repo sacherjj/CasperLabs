@@ -2,14 +2,11 @@ use num_traits::identities::Zero;
 
 use engine_core::engine_state::genesis::{GenesisAccount, GenesisConfig};
 use engine_shared::motes::Motes;
-use types::{
-    account::{PublicKey, PurseId},
-    AccessRights, Key, URef, U512,
-};
+use types::{AccessRights, Key, URef, U512};
 
 use crate::{
     internal::{InMemoryWasmTestBuilder, DEFAULT_GENESIS_CONFIG},
-    Address, Error, Result, Session, URefAddr, Value,
+    Error, PublicKey, Result, Session, URefAddr, Value,
 };
 
 /// Context in which to run a test of a Wasm smart contract.
@@ -32,7 +29,7 @@ impl TestContext {
     /// Queries for a [`Value`] stored under the given `key` and `path`.
     ///
     /// Returns an [`Error`] if not found.
-    pub fn query<T: AsRef<str>>(&self, key: Address, path: &[T]) -> Result<Value> {
+    pub fn query<T: AsRef<str>>(&self, key: PublicKey, path: &[T]) -> Result<Value> {
         let path = path.iter().map(AsRef::as_ref).collect::<Vec<_>>();
         self.inner
             .query(None, Key::Account(key), &path)
@@ -42,10 +39,10 @@ impl TestContext {
 
     /// Gets the balance of the purse under the given [`URefAddr`].
     ///
-    /// Note that this requires performing an earlier query to retrieve `purse_id_addr`.
-    pub fn get_balance(&self, purse_id_addr: URefAddr) -> U512 {
-        let purse_id = PurseId::new(URef::new(purse_id_addr, AccessRights::READ));
-        self.inner.get_purse_balance(purse_id)
+    /// Note that this requires performing an earlier query to retrieve `purse_addr`.
+    pub fn get_balance(&self, purse_addr: URefAddr) -> U512 {
+        let purse = URef::new(purse_addr, AccessRights::READ);
+        self.inner.get_purse_balance(purse)
     }
 }
 
@@ -69,12 +66,8 @@ impl TestContextBuilder {
     /// the Genesis block.
     ///
     /// Note: `initial_balance` represents the number of motes.
-    pub fn with_account(mut self, address: Address, initial_balance: U512) -> Self {
-        let new_account = GenesisAccount::new(
-            PublicKey::new(address),
-            Motes::new(initial_balance),
-            Motes::zero(),
-        );
+    pub fn with_account(mut self, address: PublicKey, initial_balance: U512) -> Self {
+        let new_account = GenesisAccount::new(address, Motes::new(initial_balance), Motes::zero());
         self.genesis_config.push_account(new_account);
         self
     }

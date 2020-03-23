@@ -1,31 +1,33 @@
 package io.casperlabs.casper.api
 
-import cats.effect.concurrent.Semaphore
-import cats.effect.{Concurrent, Resource, Sync}
-import cats.implicits._
 import cats.Monad
+import cats.effect.concurrent.Semaphore
+import cats.effect.{Concurrent, Resource}
+import cats.implicits._
 import com.google.protobuf.ByteString
-import io.casperlabs.casper.Estimator.BlockHash
+import eu.timepit.refined.api.Refined
+import eu.timepit.refined.numeric.NonNegative
+import io.casperlabs.casper.Estimator.{BlockHash, Validator}
+import io.casperlabs.casper.MultiParentCasperImpl.Broadcaster
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper._
 import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.consensus.info._
-import io.casperlabs.casper.util.ProtoUtil
-import io.casperlabs.casper.validation.Validation
-import io.casperlabs.catscontrib.Fs2Compiler
-import io.casperlabs.catscontrib.MonadThrowable
+import io.casperlabs.catscontrib.{Fs2Compiler, MonadThrowable}
 import io.casperlabs.comm.ServiceError
 import io.casperlabs.comm.ServiceError._
 import io.casperlabs.crypto.codec.Base16
+import io.casperlabs.crypto.hash.Blake2b256
+import io.casperlabs.mempool.DeployBuffer
 import io.casperlabs.metrics.Metrics
-import io.casperlabs.shared.{FatalError, FatalErrorShutdown, Log}
+import io.casperlabs.shared.{FatalError, Log}
+import io.casperlabs.smartcontracts.ExecutionEngineService
+import io.casperlabs.models.cltype
+import io.casperlabs.models.cltype.{ByteArray32, CLValueInstance}
 import io.casperlabs.storage.StorageError
 import io.casperlabs.storage.block.BlockStorage
-import io.casperlabs.storage.deploy.{DeployStorage, DeployStorageReader}
-import cats.Applicative
-import io.casperlabs.casper.MultiParentCasperImpl.Broadcaster
-import io.casperlabs.mempool.DeployBuffer
 import io.casperlabs.storage.dag.DagStorage
+import io.casperlabs.storage.deploy.{DeployStorage, DeployStorageReader}
 
 object BlockAPI {
 
@@ -54,7 +56,7 @@ object BlockAPI {
       _ <- Metrics[F].incrementCounter("create-blocks-success", 0)
     } yield ()
 
-  def deploy[F[_]: MonadThrowable: DeployBuffer: MultiParentCasperRef: BlockStorage: Validation: Log: Metrics](
+  def deploy[F[_]: MonadThrowable: DeployBuffer: Metrics](
       d: Deploy
   ): F[Unit] =
     for {
@@ -62,7 +64,7 @@ object BlockAPI {
       r <- DeployBuffer[F].addDeploy(d)
       _ <- r match {
             case Right(_) =>
-              Metrics[F].incrementCounter("deploys-success") *> ().pure[F]
+              Metrics[F].incrementCounter("deploys-success")
             case Left(ex: IllegalArgumentException) =>
               MonadThrowable[F].raiseError[Unit](InvalidArgument(ex.getMessage))
             case Left(ex: IllegalStateException) =>
@@ -135,7 +137,7 @@ object BlockAPI {
     }
   }
 
-  def getDeployInfoOpt[F[_]: MonadThrowable: Log: MultiParentCasperRef: BlockStorage: DeployStorage](
+  def getDeployInfoOpt[F[_]: MonadThrowable: Log: BlockStorage: DeployStorage](
       deployHashBase16: String,
       deployView: DeployInfo.View
   ): F[Option[DeployInfo]] =
@@ -146,7 +148,7 @@ object BlockAPI {
       DeployStorage[F].reader(deployView).getDeployInfo(deployHash)
     }
 
-  def getDeployInfo[F[_]: MonadThrowable: Log: MultiParentCasperRef: BlockStorage: DeployStorage](
+  def getDeployInfo[F[_]: MonadThrowable: Log: BlockStorage: DeployStorage](
       deployHashBase16: String,
       deployView: DeployInfo.View
   ): F[DeployInfo] =
@@ -169,7 +171,7 @@ object BlockAPI {
         }
       }
 
-  def getBlockInfoWithDeploys[F[_]: MonadThrowable: MultiParentCasperRef: BlockStorage: DeployStorage: DagStorage](
+  def getBlockInfoWithDeploys[F[_]: MonadThrowable: BlockStorage: DeployStorage: DagStorage](
       blockHash: BlockHash,
       maybeDeployView: Option[DeployInfo.View],
       blockView: BlockInfo.View
@@ -206,11 +208,10 @@ object BlockAPI {
       maybeDeployView: Option[DeployInfo.View],
       blockView: BlockInfo.View
   ): F[BlockAndMaybeDeploys] = {
-    val deploysF = maybeDeployView.fold((none[List[Block.ProcessedDeploy]]).pure[F]) {
-      implicit dv =>
-        DeployStorageReader[F]
-          .getProcessedDeploys(blockInfo.getSummary.blockHash)
-          .map(_.some)
+    val deploysF = maybeDeployView.fold(none[List[Block.ProcessedDeploy]].pure[F]) { implicit dv =>
+      DeployStorageReader[F]
+        .getProcessedDeploys(blockInfo.getSummary.blockHash)
+        .map(_.some)
     }
 
     val childrenF = blockView match {
@@ -229,7 +230,7 @@ object BlockAPI {
     }
   }
 
-  def getBlockInfo[F[_]: MonadThrowable: Log: BlockStorage: DeployStorage: DagStorage](
+  def getBlockInfo[F[_]: MonadThrowable: BlockStorage: DeployStorage: DagStorage](
       blockHashBase16: String,
       blockView: BlockInfo.View
   ): F[BlockInfo] =
@@ -245,44 +246,126 @@ object BlockAPI {
   /** Return block infos and maybe the corresponding deploy summaries in the a slice of the DAG.
     * Use `maxRank` 0 to get the top slice,
     * then we pass previous ranks to paginate backwards. */
-  def getBlockInfosWithDeploys[F[_]: MonadThrowable: Log: MultiParentCasperRef: DeployStorage: DagStorage: Fs2Compiler](
+  def getBlockInfosWithDeploys[F[_]: MonadThrowable: Log: DeployStorage: DagStorage: Fs2Compiler](
       depth: Int,
       maxRank: Long,
       maybeDeployView: Option[DeployInfo.View],
       blockView: BlockInfo.View
   ): F[List[BlockAndMaybeDeploys]] =
-    unsafeWithCasper[F, List[BlockAndMaybeDeploys]]("Could not show blocks.") { implicit casper =>
-      casper.dag flatMap { dag =>
-        maxRank match {
-          case 0 =>
-            dag.topoSortTail(depth).compile.toVector
-          case r =>
-            dag
-              .topoSort(
-                endBlockNumber = r,
-                startBlockNumber = math.max(r - depth + 1, 0)
-              )
-              .compile
-              .toVector
-        }
-      } handleErrorWith {
-        case ex: StorageError =>
-          MonadThrowable[F].raiseError(InvalidArgument(StorageError.errorMessage(ex)))
-        case ex: IllegalArgumentException =>
-          MonadThrowable[F].raiseError(InvalidArgument(ex.getMessage))
-      } flatMap { infosByRank =>
-        infosByRank.flatten.reverse.toList.traverse { info =>
-          withViews[F](info, maybeDeployView, blockView)
-        }
+    DagStorage[F].getRepresentation flatMap { dag =>
+      maxRank match {
+        case 0 =>
+          dag.topoSortTail(depth).compile.toVector
+        case r =>
+          dag
+            .topoSort(
+              endBlockNumber = r,
+              startBlockNumber = math.max(r - depth + 1, 0)
+            )
+            .compile
+            .toVector
+      }
+    } handleErrorWith {
+      case ex: StorageError =>
+        MonadThrowable[F].raiseError(InvalidArgument(StorageError.errorMessage(ex)))
+      case ex: IllegalArgumentException =>
+        MonadThrowable[F].raiseError(InvalidArgument(ex.getMessage))
+    } flatMap { infosByRank =>
+      infosByRank.flatten.reverse.toList.traverse { info =>
+        withViews[F](info, maybeDeployView, blockView)
       }
     }
 
   /** Return block infos in the a slice of the DAG. Use `maxRank` 0 to get the top slice,
     * then we pass previous ranks to paginate backwards. */
-  def getBlockInfos[F[_]: MonadThrowable: Log: MultiParentCasperRef: DeployStorage: DagStorage: Fs2Compiler](
+  def getBlockInfos[F[_]: MonadThrowable: Log: DeployStorage: DagStorage: Fs2Compiler](
       depth: Int,
       maxRank: Long = 0,
       blockView: BlockInfo.View = BlockInfo.View.BASIC
   ): F[List[BlockInfo]] =
     getBlockInfosWithDeploys[F](depth, maxRank, None, blockView).map(_.map(_._1))
+
+  def accountBalance[F[_]: MonadThrowable: Log: MultiParentCasperRef: DeployStorage: DagStorage: Fs2Compiler: ExecutionEngineService](
+      accountKey: ByteString
+  ): F[BigInt] = {
+    val program = for {
+      info <- BlockAPI
+               .getBlockInfos[F](1)
+               .map(_.head) // Safe to unwrap because there is at least a genesis block
+      stateHash       = info.getSummary.getHeader.getState.postStateHash
+      protocolVersion = info.getSummary.getHeader.getProtocolVersion
+      error           = (s: String) => new IllegalStateException(s)
+      getState = (k: cltype.Key) =>
+        ExecutionEngineService[F]
+          .query(stateHash, cltype.protobuf.Mappings.toProto(k), Nil, protocolVersion)
+          .rethrow
+      accountKey <- MonadThrowable[F].fromOption(
+                     ByteArray32(accountKey.toByteArray),
+                     error("Account key must be 32 bytes long")
+                   )
+      account <- getState(cltype.Key.Account(accountKey)).flatMap {
+                  case cltype.StoredValue.Account(account) => account.pure[F]
+                  case x =>
+                    MonadThrowable[F]
+                      .raiseError[cltype.Account](error(s"Expected cltype.Account, got $x"))
+                }
+      mintPublic <- MonadThrowable[F].fromOption(
+                     account.namedKeys.collectFirst {
+                       case (name, cltype.Key.URef(cltype.URef(address, _))) if name == "mint" =>
+                         address
+                     },
+                     error(s"Couldn't find mint contract in $account")
+                   )
+      hash <- MonadThrowable[F].fromOption(
+               ByteArray32(Blake2b256.hash(account.mainPurse.address.bytes.toArray)),
+               error("Hash must 32 bytes long")
+             )
+      balanceUref <- getState(cltype.Key.Local(mintPublic, hash)).flatMap {
+                      case cltype.StoredValue.CLValue(clValue) =>
+                        cltype.CLValueInstance
+                          .from(clValue)
+                          .fold(
+                            e => MonadThrowable[F].raiseError[ByteArray32](error(e.toString)), {
+                              case CLValueInstance.Key(cltype.Key.URef(uref)) =>
+                                uref.address.pure[F]
+                              case x =>
+                                MonadThrowable[F]
+                                  .raiseError[ByteArray32](
+                                    error(s"Expected cltype.Key.URef, got $x")
+                                  )
+                            }
+                          )
+                      case x =>
+                        MonadThrowable[F]
+                          .raiseError[ByteArray32](error(s"Expected cltype.CLValue, got $x"))
+                    }
+      balance <- getState(cltype.Key.URef(cltype.URef(balanceUref, cltype.AccessRights.None)))
+                  .flatMap {
+                    case cltype.StoredValue.CLValue(clValue) =>
+                      cltype.CLValueInstance
+                        .from(clValue)
+                        .fold(
+                          e =>
+                            MonadThrowable[F]
+                              .raiseError[BigInt Refined NonNegative](error(e.toString)), {
+                            case CLValueInstance.U512(bigInt) =>
+                              bigInt.pure[F]
+                            case x =>
+                              MonadThrowable[F]
+                                .raiseError[BigInt Refined NonNegative](
+                                  error(s"Expected cltype.U512, got $x")
+                                )
+                          }
+                        )
+                    case x =>
+                      MonadThrowable[F]
+                        .raiseError[BigInt Refined NonNegative](
+                          error(s"Expected cltype.CLValue, got $x")
+                        )
+                  }
+    } yield balance.value
+    program.adaptErr {
+      case _ => NotFound.balance(accountKey)
+    }
+  }
 }

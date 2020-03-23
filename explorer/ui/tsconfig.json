@@ -10,6 +10,7 @@
     "experimentalDecorators": true,
     "sourceMap": true,
     "noImplicitAny": true,
+    "strictPropertyInitialization": false,
     "strictNullChecks": true,
     "noImplicitReturns": true,
     "noImplicitThis": true,
@@ -28,7 +29,7 @@
     "noEmit": true,
     "jsx": "preserve",
     "typeRoots": [
-      "@types",
+      "src/@types",
       "./@types",
       "./node_modules/@types"
     ]

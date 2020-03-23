@@ -7,7 +7,7 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #![feature(specialization, try_reserve)]
-#![doc(html_root_url = "https://docs.rs/casperlabs-types/0.2.0")]
+#![doc(html_root_url = "https://docs.rs/casperlabs-types/0.3.0")]
 #![doc(
     html_favicon_url = "https://raw.githubusercontent.com/CasperLabs/CasperLabs/dev/images/CasperLabs_Logo_Favicon_RGB_50px.png",
     html_logo_url = "https://raw.githubusercontent.com/CasperLabs/CasperLabs/dev/images/CasperLabs_Logo_Symbol_RGB.png",
@@ -49,7 +49,10 @@ pub use cl_type::{named_key_type, CLType, CLTyped};
 pub use cl_value::{CLTypeMismatch, CLValue, CLValueError};
 pub use contract_ref::ContractRef;
 #[doc(inline)]
-pub use key::{Key, KEY_ACCOUNT_LENGTH, KEY_HASH_LENGTH, KEY_LOCAL_LENGTH, KEY_LOCAL_SEED_LENGTH};
+pub use key::{
+    Key, BLAKE2B_DIGEST_LENGTH, KEY_HASH_LENGTH, KEY_LOCAL_LENGTH, KEY_LOCAL_SEED_LENGTH,
+    KEY_UREF_SERIALIZED_LENGTH,
+};
 pub use phase::{Phase, PHASE_SERIALIZED_LENGTH};
 pub use protocol_version::{ProtocolVersion, VersionCheckResult};
 pub use semver::SemVer;

@@ -16,7 +16,7 @@ class DeployInfoPaginationSpec extends PropSpec with Matchers with GeneratorDriv
         val pageTokenParams = DeployInfoPageTokenParams(l, bs, t)
         val pageToken       = DeployInfoPagination.createPageToken(Some(pageTokenParams))
         val (_, p) =
-          DeployInfoPagination.parsePageToken(ListDeployInfosRequest().withPageToken(pageToken)).get
+          DeployInfoPagination.parsePageToken(0, pageToken).get
         p should be(pageTokenParams)
     }
   }

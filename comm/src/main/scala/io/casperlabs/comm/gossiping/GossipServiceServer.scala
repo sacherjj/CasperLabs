@@ -6,25 +6,26 @@ import cats.effect.concurrent._
 import cats.effect.implicits._
 import cats.implicits._
 import com.google.protobuf.ByteString
-import io.casperlabs.casper.consensus.{Block, BlockSummary, GenesisCandidate}
+import io.casperlabs.casper.consensus.{Block, BlockSummary, Deploy, GenesisCandidate}
 import io.casperlabs.comm.ServiceError.NotFound
 import io.casperlabs.comm.discovery.Node
 import io.casperlabs.comm.discovery.NodeUtils.showNode
-import io.casperlabs.comm.gossiping.synchronization.Synchronizer.SyncError
+import io.casperlabs.comm.gossiping.downloadmanager.BlockDownloadManager
 import io.casperlabs.comm.gossiping.synchronization.Synchronizer
+import io.casperlabs.comm.gossiping.synchronization.Synchronizer.SyncError
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.shared.{Compression, Log}
 import monix.tail.Iterant
 
-import scala.collection.immutable.Queue
+import scala.collection.mutable.PriorityQueue
 import scala.util.control.NonFatal
 
 /** Server side implementation talking to the rest of the node such as casper, storage, download manager. */
 class GossipServiceServer[F[_]: Concurrent: Parallel: Log: Metrics](
     backend: GossipServiceServer.Backend[F],
     synchronizer: Synchronizer[F],
-    downloadManager: DownloadManager[F],
+    downloadManager: BlockDownloadManager[F],
     genesisApprover: GenesisApprover[F],
     maxChunkSize: Int,
     blockDownloadSemaphore: Semaphore[F]
@@ -101,7 +102,7 @@ class GossipServiceServer[F[_]: Concurrent: Parallel: Log: Metrics](
     }
 
     val trySync: F[Either[SyncError, Vector[WaitHandle[F]]]] = for {
-      _ <- Log[F].info(
+      _ <- Log[F].debug(
             s"Received notification about ${newBlockHashes.size} new block(s) from ${source.show -> "peer"}: ${newBlockHashes
               .map(Utils.hex)
               .mkString(", ") -> "blocks"}"
@@ -112,7 +113,7 @@ class GossipServiceServer[F[_]: Concurrent: Parallel: Log: Metrics](
                    )
       errorOrWaiters <- errorOrDag.fold(
                          syncError => logSyncError(syncError), { dag =>
-                           Log[F].info(
+                           Log[F].debug(
                              s"Syncing ${dag.size} blocks with ${source.show -> "peer"}"
                            ) *>
                              dag.traverse { summary =>
@@ -140,50 +141,68 @@ class GossipServiceServer[F[_]: Concurrent: Parallel: Log: Metrics](
     // We return known hashes but not their parents.
     val knownHashes = request.knownBlockHashes.toSet
 
+    type Depth = Long
+
     // Depth restriction is to be able to periodically reassess targets,
     // to pass back hashes that still have missing dependencies, but not
     // the ones which have connected to the DAG of the caller.
-    def canGoDeeper(depth: Int) =
-      depth < request.maxDepth || request.maxDepth == -1
+    val canFollow: ((BlockSummary, Depth)) => Boolean = {
+      case (_, depth) =>
+        depth <= request.maxDepth || request.maxDepth == -1
+    }
 
-    // Visit blocks in simple BFS order rather than try to establish topological sorting because BFS
-    // is invariant in maximum depth, while topological sorting could depend on whether we traversed
-    // backwards enough to re-join forks with different lengths of sub-paths.
+    // Take the highest rank first, then the lowest depth.
+    implicit val ord: Ordering[(BlockSummary, Depth)] =
+      Ordering.by {
+        case (summary, depth) => (summary.getHeader.jRank, -depth)
+      }
+
+    // Yield blocks in j-rank based reverse topological order.
     def loop(
-        queue: Queue[(Int, ByteString)],
-        visited: Set[ByteString]
+        queue: PriorityQueue[(BlockSummary, Depth)],
+        // At what depth did we visit a block. It's possible, with multiple targets,
+        // that we'll see it again at a shallower path and can go further into its
+        // dependencies.
+        visited: Map[ByteString, Depth]
     ): Iterant[F, BlockSummary] =
       if (queue.isEmpty)
         Iterant.empty
       else {
-        queue.dequeue match {
-          case ((_, blockHash), queue) if visited(blockHash) =>
+        queue.dequeue() match {
+          case (summary, depth)
+              if visited.contains(summary.blockHash) && visited(summary.blockHash) <= depth =>
+            // We visited this block from a smaller distance-to-target, so we already enqueued all the dependencies.
             loop(queue, visited)
 
-          case ((depth, blockHash), queue) =>
-            Iterant.liftF(backend.getBlockSummary(blockHash)) flatMap {
-              case None =>
-                loop(queue, visited + blockHash)
+          case (summary, depth) =>
+            // Maybe we visited this block from a longer distance-to-target; from this lower distance we can go deeper into dependencies.
+            Iterant.liftF {
+              val dependencies =
+                if (knownHashes(summary.blockHash) || depth == request.maxDepth) Seq.empty
+                else
+                  summary.parentHashes ++ summary.justifications.map(_.latestBlockHash)
 
-              case Some(summary) =>
-                val ancestors =
-                  if (canGoDeeper(depth) && !knownHashes(summary.blockHash)) {
-                    val ancestors =
-                      summary.parentHashes ++
-                        summary.justifications.map(_.latestBlockHash)
+              dependencies.toList
+                .traverse(backend.getBlockSummary)
+                .map(_.flatten)
+            } flatMap { deps =>
+              // Only follow ancestors where the total j-Rank distance is within maxDepth.
+              val follow = deps.map { dep =>
+                val jdepth = summary.getHeader.jRank - dep.getHeader.jRank + depth
+                dep -> jdepth
+              } filter canFollow
 
-                    ancestors.map(depth + 1 -> _)
-                  } else {
-                    Seq.empty
-                  }
+              def rest = loop(queue ++ follow, visited.updated(summary.blockHash, depth))
 
-                Iterant.pure(summary) ++ loop(queue ++ ancestors, visited + blockHash)
+              if (visited.contains(summary.blockHash)) rest else Iterant.pure(summary) ++ rest
             }
         }
       }
 
-    Iterant.delay {
-      Queue(request.targetBlockHashes.map(0 -> _): _*) -> Set.empty[ByteString]
+    Iterant.liftF {
+      request.targetBlockHashes.toList.traverse(backend.getBlockSummary).map { ss =>
+        PriorityQueue(ss.flatten.map(_ -> 0L): _*) -> Map.empty[ByteString, Depth]
+      }
     } flatMap {
       case (queue, visited) => loop(queue, visited)
     }
@@ -207,7 +226,7 @@ class GossipServiceServer[F[_]: Concurrent: Parallel: Log: Metrics](
       _ => blockDownloadSemaphore.release
     ) flatMap { _ =>
       Iterant.liftF {
-        backend.getBlock(request.blockHash)
+        backend.getBlock(request.blockHash, request.excludeDeployBodies)
       } flatMap {
         case Some(block) =>
           val it = chunkIt(
@@ -222,6 +241,18 @@ class GossipServiceServer[F[_]: Concurrent: Parallel: Log: Metrics](
           Iterant.raiseError(NotFound.block(request.blockHash))
       }
     }
+
+  override def streamDeploysChunked(request: StreamDeploysChunkedRequest): Iterant[F, Chunk] = {
+    val chunkSize = effectiveChunkSize(request.chunkSize)
+    backend.getDeploys(request.deployHashes.toSet).flatMap { deploy =>
+      val it = chunkIt(
+        deploy.toByteArray,
+        chunkSize,
+        request.acceptedCompressionAlgorithms
+      )
+      Iterant.fromIterator(it)
+    }
+  }
 
   override def getGenesisCandidate(request: GetGenesisCandidateRequest): F[GenesisCandidate] =
     rethrow(genesisApprover.getCandidate)
@@ -281,7 +312,8 @@ object GossipServiceServer {
   trait Backend[F[_]] {
     def hasBlock(blockHash: ByteString): F[Boolean]
     def getBlockSummary(blockHash: ByteString): F[Option[BlockSummary]]
-    def getBlock(blockHash: ByteString): F[Option[Block]]
+    def getBlock(blockHash: ByteString, deploysBodiesExcluded: Boolean): F[Option[Block]]
+    def getDeploys(deployHashes: Set[ByteString]): Iterant[F, Deploy]
 
     /** Returns latest messages as seen currently by the node.
       * NOTE: In the future we will remove redundant messages. */
@@ -289,12 +321,13 @@ object GossipServiceServer {
 
     /* Retrieve the DAG slice in topological order, inclusive */
     def dagTopoSort(startRank: Long, endRank: Long): Iterant[F, BlockSummary]
+
   }
 
   def apply[F[_]: Concurrent: Parallel: Log: Metrics](
       backend: GossipServiceServer.Backend[F],
       synchronizer: Synchronizer[F],
-      downloadManager: DownloadManager[F],
+      downloadManager: BlockDownloadManager[F],
       genesisApprover: GenesisApprover[F],
       maxChunkSize: Int,
       maxParallelBlockDownloads: Int

@@ -17,7 +17,10 @@ class GraphQL:
                             blockSizeBytes"""
     DEFAULT_DEPLOY_SUB_SELECT = """deploy {
                                 deployHash
-                                accountId
+                                account {
+                                    publicKeyBase16
+                                    publicKeyBase64
+                                }
                                 timestamp
                                 gasPrice
                             }
@@ -56,7 +59,7 @@ class GraphQL:
             timestamp
             protocolVersion
             deployCount
-            rank
+            jRank
             validatorPublicKey
             validatorBlockSeqNum
             chainId

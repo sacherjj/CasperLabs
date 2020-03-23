@@ -57,6 +57,7 @@ integration-testing.log
 *.sublime-workspace
 .metals/
 .vscode/
+project/metals.sbt
 
 # wasms
 node/src/main/resources/**/*.wasm

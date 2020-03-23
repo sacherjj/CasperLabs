@@ -1,8 +1,17 @@
 import { grpc } from '@improbable-eng/grpc-web';
-import { Block } from 'casperlabs-grpc/io/casperlabs/casper/consensus/consensus_pb';
-import { BlockInfo, DeployInfo } from 'casperlabs-grpc/io/casperlabs/casper/consensus/info_pb';
-import { Key, Value as StateValue } from 'casperlabs-grpc/io/casperlabs/casper/consensus/state_pb';
+import { Block, Deploy } from 'casperlabs-grpc/io/casperlabs/casper/consensus/consensus_pb';
 import {
+  BlockInfo,
+  DeployInfo
+} from 'casperlabs-grpc/io/casperlabs/casper/consensus/info_pb';
+import {
+  Key,
+  StoredValueInstance as StateValue
+} from 'casperlabs-grpc/io/casperlabs/casper/consensus/state_pb';
+import {
+  BatchGetBlockStateRequest,
+  BatchGetBlockStateResponse,
+  DeployRequest,
   GetBlockInfoRequest,
   GetBlockStateRequest,
   GetDeployInfoRequest,
@@ -27,13 +36,31 @@ export interface SubscribeTopics {
   blockFinalized?: boolean;
 }
 
-
 export default class CasperService {
   constructor(
     // Point at either at a URL on a different port where grpcwebproxy is listening,
     // or use nginx to serve the UI files, the API and gRPC all on the same port without CORS.
     private url: string
-  ) {
+  ) {}
+
+  public deploy(deploy: Deploy) {
+    return new Promise<void>((resolve, reject) => {
+      const deployRequest = new DeployRequest();
+      deployRequest.setDeploy(deploy);
+
+      grpc.unary(GrpcCasperService.Deploy, {
+        host: this.url,
+        request: deployRequest,
+
+        onEnd: (res) => {
+          if (res.status === grpc.Code.OK) {
+            resolve();
+          } else {
+            reject(new GrpcError(res.status, res.statusMessage));
+          }
+        }
+      });
+    });
   }
 
   getDeployInfo(deployHash: ByteArray): Promise<DeployInfo> {
@@ -205,6 +232,26 @@ export default class CasperService {
     });
   }
 
+  batchGetBlockState(blockHash: BlockHash, querys: StateQuery[]): Promise<StateValue[]> {
+    return new Promise<StateValue[]>((resolve, reject) => {
+      const request = new BatchGetBlockStateRequest();
+      request.setBlockHashBase16(encodeBase16(blockHash));
+      request.setQueriesList(querys);
+
+      grpc.unary(GrpcCasperService.BatchGetBlockState, {
+        host: this.url,
+        request,
+        onEnd: res => {
+          if (res.status === grpc.Code.OK) {
+            resolve((res.message as BatchGetBlockStateResponse).getValuesList());
+          } else {
+            reject(new GrpcError(res.status, res.statusMessage));
+          }
+        }
+      });
+    });
+  }
+
   /** Get the reference to the balance so we can cache it.
    *  Returns `undefined` if the account doesn't exist yet.
    */
@@ -228,13 +275,13 @@ export default class CasperService {
           .getKey()!
           .getUref()!
           .getUref_asU8(),
-        ByteArrayArg(account.getPurseId()!.getUref_asU8())
+        ByteArrayArg(account.getMainPurse()!.getUref_asU8())
       );
 
       const balanceUref = await this.getBlockState(
         blockHash,
         localKeyQuery
-      ).then(res => res.getKey()!.getUref()!);
+      ).then(res => res.getClValue()!.getValue()!.getKey()!.getUref()!);
 
       return balanceUref;
     } catch (err) {
@@ -257,7 +304,7 @@ export default class CasperService {
   ): Promise<number> {
     const balanceQuery = QueryUref(balanceUref);
     const balance = await this.getBlockState(blockHash, balanceQuery).then(
-      res => res.getBigInt()!
+      res => res.getClValue()!.getValue()!.getU512()!
     );
     return Number(balance.getValue());
   }
@@ -298,7 +345,7 @@ export default class CasperService {
 
       return function unsubscribe() {
         client.close();
-      }
+      };
     });
   }
 }

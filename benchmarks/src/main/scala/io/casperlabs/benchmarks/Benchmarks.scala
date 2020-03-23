@@ -15,7 +15,7 @@ import io.casperlabs.crypto.codec.Base64
 import io.casperlabs.crypto.signatures.SignatureAlgorithm
 import io.casperlabs.shared.{FilesAPI, Log}
 
-import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
+import scala.concurrent.duration._
 
 object Benchmarks {
 
@@ -66,7 +66,9 @@ object Benchmarks {
       recipientPublicKey = recipientPublicKey,
       amount = amount,
       exit = false,
-      ignoreOutput = true
+      ignoreOutput = true,
+      false,
+      3.minutes
     )
 
     def createAccountKeyPair(): (Keys.PrivateKey, Keys.PublicKey) =

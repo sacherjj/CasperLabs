@@ -46,6 +46,7 @@ pub enum Error {
     },
     CLValue(CLValueError),
     HostBufferEmpty,
+    UnsupportedWasmStart,
 }
 
 impl fmt::Display for Error {

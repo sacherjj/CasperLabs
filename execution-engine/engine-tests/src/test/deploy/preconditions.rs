@@ -7,13 +7,13 @@ use engine_test_support::{
 };
 use types::{account::PublicKey, U512};
 
-const ACCOUNT_1_ADDR: [u8; 32] = [42u8; 32];
+const ACCOUNT_1_ADDR: PublicKey = PublicKey::ed25519_from([42u8; 32]);
 
 #[ignore]
 #[test]
 fn should_raise_precondition_authorization_failure_invalid_account() {
-    let account_1_public_key = PublicKey::new(ACCOUNT_1_ADDR);
-    let nonexistent_account_addr = [99u8; 32];
+    let account_1_public_key = ACCOUNT_1_ADDR;
+    let nonexistent_account_addr = PublicKey::ed25519_from([99u8; 32]);
     let payment_purse_amount = 10_000_000;
     let transferred_amount = 1;
 
@@ -27,7 +27,7 @@ fn should_raise_precondition_authorization_failure_invalid_account() {
             )
             .with_address(nonexistent_account_addr)
             .with_payment_code("standard_payment.wasm", (U512::from(payment_purse_amount),))
-            .with_authorization_keys(&[PublicKey::new(nonexistent_account_addr)])
+            .with_authorization_keys(&[nonexistent_account_addr])
             .build();
 
         ExecuteRequestBuilder::new().push_deploy(deploy).build()
@@ -89,8 +89,8 @@ fn should_raise_precondition_authorization_failure_empty_authorized_keys() {
 #[ignore]
 #[test]
 fn should_raise_precondition_authorization_failure_invalid_authorized_keys() {
-    let account_1_public_key = PublicKey::new(ACCOUNT_1_ADDR);
-    let nonexistent_account_addr = [99u8; 32];
+    let account_1_public_key = ACCOUNT_1_ADDR;
+    let nonexistent_account_addr = PublicKey::ed25519_from([99u8; 32]);
     let payment_purse_amount = 10_000_000;
     let transferred_amount = 1;
 
@@ -104,7 +104,7 @@ fn should_raise_precondition_authorization_failure_invalid_authorized_keys() {
             )
             .with_payment_code("standard_payment.wasm", (U512::from(payment_purse_amount),))
             // invalid authorization key to force error
-            .with_authorization_keys(&[PublicKey::new(nonexistent_account_addr)])
+            .with_authorization_keys(&[nonexistent_account_addr])
             .build();
 
         ExecuteRequestBuilder::new().push_deploy(deploy).build()

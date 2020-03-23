@@ -56,7 +56,7 @@ service CasperService {
     }
 
     // Query the value of global state as it was after the execution of a block.
-    rpc GetBlockState(GetBlockStateRequest) returns (io.casperlabs.casper.consensus.state.Value) {
+    rpc GetBlockState(GetBlockStateRequest) returns (io.casperlabs.casper.consensus.state.StoredValueInstance) {
         option (google.api.http) = {
             post: "v2/blocks/{block_hash_base16=*}/state"
             body: "*"
@@ -155,7 +155,8 @@ message BatchGetBlockStateRequest {
 }
 
 message BatchGetBlockStateResponse {
-    repeated io.casperlabs.casper.consensus.state.Value values = 1;
+    reserved 1; // previously repeated io.casperlabs.casper.consensus.state.Value
+    repeated io.casperlabs.casper.consensus.state.StoredValueInstance values = 2;
 }
 
 message ListDeployInfosRequest {
@@ -181,4 +182,27 @@ message GetLastFinalizedBlockInfoRequest {
 message StreamEventsRequest {
   bool block_added = 1;
   bool block_finalized = 2;
+  bool deploy_added = 3;
+  bool deploy_discarded = 4;
+  bool deploy_requeued = 5;
+  bool deploy_processed = 6;
+  bool deploy_finalized = 7;
+  bool deploy_orphaned = 8;
+
+  // Optional filters for deploy events; applies to anything opted into via the flags.
+  DeployFilter deploy_filter = 9;
+
+  // Supports replaying events from a given ID.
+  // If the value is 0, it it will subscribe to future events;
+  // if it's non-zero, it will replay all past events from that ID, without subscribing to new.
+  // To catch up with events from the beginning, start from 1.
+  uint64 min_event_id = 10;
+
+  // Filters to apply on deploy events; different fields combined with AND operator.
+  message DeployFilter {
+      // Filter to any of the accounts on the list.
+      repeated bytes account_public_keys = 1;
+      // Filter for specific deploy hashes.
+      repeated bytes deploy_hashes = 2;
+  }
 }

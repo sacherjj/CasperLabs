@@ -55,6 +55,8 @@ mod tests {
     use lazy_static::lazy_static;
     use rand::{self, Rng};
 
+    use types::{BLAKE2B_DIGEST_LENGTH, KEY_LOCAL_SEED_LENGTH};
+
     use super::*;
 
     const MIN_ELEMENTS: u8 = 1;
@@ -64,21 +66,39 @@ mod tests {
         static ref LEFT_ONLY: AdditiveMap<Key, Transform> = {
             let mut map = AdditiveMap::new();
             for i in 0..random_element_count() {
-                map.insert(Key::Local([i; 32]), Transform::AddInt32(i.into()));
+                map.insert(
+                    Key::Local {
+                        seed: [i; KEY_LOCAL_SEED_LENGTH],
+                        hash: [i; BLAKE2B_DIGEST_LENGTH],
+                    },
+                    Transform::AddInt32(i.into()),
+                );
             }
             map
         };
         static ref BOTH: AdditiveMap<Key, Transform> = {
             let mut map = AdditiveMap::new();
             for i in 0..random_element_count() {
-                map.insert(Key::Local([i + MAX_ELEMENTS; 32]), Transform::Identity);
+                map.insert(
+                    Key::Local {
+                        seed: [i + MAX_ELEMENTS; KEY_LOCAL_SEED_LENGTH],
+                        hash: [i + MAX_ELEMENTS; BLAKE2B_DIGEST_LENGTH],
+                    },
+                    Transform::Identity,
+                );
             }
             map
         };
         static ref RIGHT_ONLY: AdditiveMap<Key, Transform> = {
             let mut map = AdditiveMap::new();
             for i in 0..random_element_count() {
-                map.insert(Key::Local([i; 32]), Transform::AddUInt512(i.into()));
+                map.insert(
+                    Key::Local {
+                        seed: [i; KEY_LOCAL_SEED_LENGTH],
+                        hash: [i; BLAKE2B_DIGEST_LENGTH],
+                    },
+                    Transform::AddUInt512(i.into()),
+                );
             }
             map
         };

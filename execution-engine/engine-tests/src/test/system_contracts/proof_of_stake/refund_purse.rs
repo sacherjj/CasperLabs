@@ -8,7 +8,7 @@ use engine_test_support::{
 use types::{account::PublicKey, U512};
 
 const CONTRACT_TRANSFER_PURSE_TO_ACCOUNT: &str = "transfer_purse_to_account.wasm";
-const ACCOUNT_1_ADDR: [u8; 32] = [1u8; 32];
+const ACCOUNT_1_ADDR: PublicKey = PublicKey::ed25519_from([1u8; 32]);
 
 #[ignore]
 #[test]
@@ -33,9 +33,8 @@ fn initialize() -> InMemoryWasmTestBuilder {
     builder
 }
 
-fn transfer(builder: &mut InMemoryWasmTestBuilder, address: [u8; 32], amount: U512) {
+fn transfer(builder: &mut InMemoryWasmTestBuilder, public_key: PublicKey, amount: U512) {
     let exec_request = {
-        let public_key = PublicKey::new(address);
         ExecuteRequestBuilder::standard(
             DEFAULT_ACCOUNT_ADDR,
             CONTRACT_TRANSFER_PURSE_TO_ACCOUNT,
@@ -47,12 +46,10 @@ fn transfer(builder: &mut InMemoryWasmTestBuilder, address: [u8; 32], amount: U5
     builder.exec(exec_request).expect_success().commit();
 }
 
-fn refund_tests(builder: &mut InMemoryWasmTestBuilder, address: [u8; 32]) {
+fn refund_tests(builder: &mut InMemoryWasmTestBuilder, public_key: PublicKey) {
     let exec_request = {
-        let public_key = PublicKey::new(address);
-
         let deploy = DeployItemBuilder::new()
-            .with_address(address)
+            .with_address(public_key)
             .with_deploy_hash([2; 32])
             .with_session_code("do_nothing.wasm", ())
             .with_payment_code("pos_refund_purse.wasm", (*DEFAULT_PAYMENT,))

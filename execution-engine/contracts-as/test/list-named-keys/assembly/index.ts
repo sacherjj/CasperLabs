@@ -37,11 +37,13 @@ export function call(): void {
   }
   let expectedInitialNamedKeys = mapResult.value;
 
+
   let actualNamedKeys = CL.listNamedKeys();
   if (actualNamedKeys === null) {
     Error.fromUserError(<u16>CustomError.MissingActualNamedKeys).revert();
     return;
   }
+
 
   if (!checkItemsEqual(expectedInitialNamedKeys, actualNamedKeys)) {
     Error.fromUserError(<u16>CustomError.MismatchedKeys).revert();
@@ -53,6 +55,7 @@ export function call(): void {
     Error.fromUserError(<u16>CustomError.MissingNewNamedKeys).revert();
     return;
   }
+
 
   const mapResult2 = fromBytesMap<String, Key>(
     newNamedKeysBytes,

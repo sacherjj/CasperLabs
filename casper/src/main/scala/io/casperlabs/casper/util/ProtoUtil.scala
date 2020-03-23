@@ -23,15 +23,17 @@ import io.casperlabs.ipc
 import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.models.{Message, SmartContractEngineError, Weight}
 import io.casperlabs.shared.Time
-import io.casperlabs.smartcontracts.cltype
-import io.casperlabs.smartcontracts.bytesrepr._
+import io.casperlabs.models.cltype
+import io.casperlabs.models.bytesrepr._
 import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.storage.dag.DagRepresentation
-
+import io.casperlabs.models.Message.{asJRank, asMainRank, JRank, MainRank}
 import scala.collection.immutable
 import scala.concurrent.duration.FiniteDuration
 import scala.concurrent.duration._
 import scala.util.Try
+import io.casperlabs.storage.dag.DagLookup
+import io.casperlabs.shared.Sorting._
 
 object ProtoUtil {
   import Weight._
@@ -41,7 +43,7 @@ object ProtoUtil {
    */
   // TODO: Move into DAG and remove corresponding param once that is moved over from simulator
   def isInMainChain[F[_]: Monad](
-      dag: DagRepresentation[F],
+      dag: DagLookup[F],
       candidateBlockSummary: Message.Block,
       targetBlockHash: BlockHash
   ): F[Boolean] =
@@ -52,7 +54,7 @@ object ProtoUtil {
         targetBlockOpt <- dag.lookup(targetBlockHash)
         result <- targetBlockOpt match {
                    case Some(targetBlockMeta) =>
-                     if (targetBlockMeta.rank <= candidateBlockSummary.rank)
+                     if (targetBlockMeta.jRank <= candidateBlockSummary.jRank)
                        false.pure[F]
                      else {
                        targetBlockMeta.parents.headOption match {
@@ -100,7 +102,7 @@ object ProtoUtil {
       latestFinalizedBlock: Message,
       newBlock: Message
   ): F[Option[BlockHash]] =
-    if (newBlock.rank <= latestFinalizedBlock.rank) {
+    if (newBlock.jRank <= latestFinalizedBlock.jRank) {
       none[BlockHash].pure[F]
     } else {
       for {
@@ -148,38 +150,20 @@ object ProtoUtil {
   }
 
   def unsafeGetBlockSummary[F[_]: MonadThrowable: BlockStorage](hash: BlockHash): F[BlockSummary] =
-    for {
-      maybeBlock <- BlockStorage[F].getBlockSummary(hash)
-      block <- maybeBlock match {
-                case Some(b) => b.pure[F]
-                case None =>
-                  MonadThrowable[F].raiseError(
-                    new NoSuchElementException(
-                      s"BlockStorage is missing hash ${PrettyPrinter.buildString(hash)}"
-                    )
-                  )
-              }
-    } yield block
+    BlockStorage[F].getBlockSummaryUnsafe(hash)
 
   def unsafeGetBlock[F[_]: MonadThrowable: BlockStorage](hash: BlockHash): F[Block] =
-    for {
-      maybeBlock <- BlockStorage[F].getBlockMessage(hash)
-      block <- maybeBlock match {
-                case Some(b) => b.pure[F]
-                case None =>
-                  MonadThrowable[F].raiseError(
-                    new NoSuchElementException(
-                      s"BlockStorage is missing hash ${PrettyPrinter.buildString(hash)}"
-                    )
-                  )
-              }
-    } yield block
+    BlockStorage[F].getBlockUnsafe(hash)
 
-  def nextRank(justificationMsgs: Seq[Message]): Long =
-    if (justificationMsgs.isEmpty) 0 // Genesis has rank=0
+  def nextJRank(justificationMsgs: Seq[Message]): JRank =
+    if (justificationMsgs.isEmpty) asJRank(0) // Genesis has rank=0
     else
       // For any other block `rank` should be 1 higher than the highest rank in its justifications.
-      justificationMsgs.map(_.rank).max + 1
+      asJRank(justificationMsgs.map(_.jRank).max + 1)
+
+  def nextMainRank(parents: Seq[Message]): MainRank =
+    if (parents.isEmpty) asMainRank(0)
+    else asMainRank(parents.head.mainRank + 1)
 
   def nextValidatorBlockSeqNum[F[_]: MonadThrowable](
       dag: DagRepresentation[F],
@@ -338,7 +322,7 @@ object ProtoUtil {
     b.getHeader.getState.bonds
 
   def blockNumber(b: Block): Long =
-    b.getHeader.rank
+    b.getHeader.jRank
 
   /** Removes redundant messages that are available in the immediate justifications of another message in the set */
   def removeRedundantMessages(
@@ -436,11 +420,14 @@ object ProtoUtil {
       validatorPrevBlockHash: ByteString,
       chainName: String,
       now: Long,
-      rank: Long,
+      jRank: JRank,
+      mainRank: MainRank,
       publicKey: Keys.PublicKey,
       privateKey: Keys.PrivateKey,
       sigAlgorithm: SignatureAlgorithm,
-      keyBlockHash: ByteString
+      keyBlockHash: ByteString,
+      roundId: Long,
+      magicBit: Boolean
   ): Block = {
     val body = Block.Body().withDeploys(deploys)
     val postState = Block
@@ -454,17 +441,21 @@ object ProtoUtil {
       parentHashes = parents,
       justifications = justifications,
       state = postState,
-      rank = rank,
+      jRank = jRank,
+      mainRank = mainRank,
       protocolVersion = protocolVersion,
       timestamp = now,
       chainName = chainName,
       creator = publicKey,
       validatorSeqNum = validatorSeqNum,
       validatorPrevBlockHash = validatorPrevBlockHash,
-      keyBlockHash = keyBlockHash
+      keyBlockHash = keyBlockHash,
+      roundId = roundId,
+      magicBit = magicBit
     )
 
     val unsigned = unsignedBlockProto(body, header)
+
     signBlock(
       unsigned,
       privateKey,
@@ -483,11 +474,13 @@ object ProtoUtil {
       validatorPrevBlockHash: ByteString,
       chainName: String,
       now: Long,
-      rank: Long,
+      jRank: JRank,
+      mainRank: MainRank,
       publicKey: Keys.PublicKey,
       privateKey: Keys.PrivateKey,
       sigAlgorithm: SignatureAlgorithm,
-      keyBlockHash: ByteString
+      keyBlockHash: ByteString,
+      roundId: Long
   ): Block = {
     val body = Block.Body()
 
@@ -502,14 +495,16 @@ object ProtoUtil {
       parentHashes = List(parent),
       justifications = justifications,
       state = postState,
-      rank = rank,
+      jRank = jRank,
+      mainRank = mainRank,
       protocolVersion = protocolVersion,
       timestamp = now,
       chainName = chainName,
       creator = publicKey,
       validatorSeqNum = validatorSeqNum,
       validatorPrevBlockHash = validatorPrevBlockHash,
-      keyBlockHash = keyBlockHash
+      keyBlockHash = keyBlockHash,
+      roundId = roundId
     ).withMessageType(Block.MessageType.BALLOT)
 
     val unsigned = unsignedBlockProto(body, header)
@@ -527,22 +522,28 @@ object ProtoUtil {
       parentHashes: Seq[ByteString],
       justifications: Seq[Justification],
       state: Block.GlobalState,
-      rank: Long,
+      jRank: JRank,
+      mainRank: MainRank,
       validatorSeqNum: Int,
       validatorPrevBlockHash: ByteString,
       protocolVersion: ProtocolVersion,
       timestamp: Long,
       chainName: String,
-      keyBlockHash: ByteString = ByteString.EMPTY // For Genesis it will be empty.
+      keyBlockHash: ByteString = ByteString.EMPTY, // For Genesis it will be empty.
+      roundId: Long = 0,
+      magicBit: Boolean = false
   ): Block.Header =
     Block
       .Header()
       .withKeyBlockHash(keyBlockHash)
+      .withRoundId(roundId)
+      .withMagicBit(magicBit)
       .withParentHashes(parentHashes)
       .withJustifications(justifications)
       .withDeployCount(body.deploys.size)
       .withState(state)
-      .withRank(rank)
+      .withJRank(jRank)
+      .withMainRank(mainRank)
       .withValidatorPublicKey(ByteString.copyFrom(creator))
       .withValidatorBlockSeqNum(validatorSeqNum)
       .withValidatorPrevBlockHash(validatorPrevBlockHash)
@@ -657,7 +658,7 @@ object ProtoUtil {
   }
 
   def deployCodeToDeployPayload(code: Deploy.Code): Try[ipc.DeployPayload] = {
-    val argsF: Try[ByteString] = code.args.toList.traverse(cltype.ProtoMappings.fromArg) match {
+    val argsF: Try[ByteString] = code.args.toList.traverse(cltype.protobuf.Mappings.fromArg) match {
       case Left(err) =>
         Try(throw new SmartContractEngineError(s"Error parsing deploy arguments: $err"))
       case Right(args) =>

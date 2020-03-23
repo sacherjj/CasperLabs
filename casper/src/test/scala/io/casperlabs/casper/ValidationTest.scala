@@ -13,6 +13,7 @@ import io.casperlabs.casper.helper.{
   BlockGenerator,
   DeployOps,
   HashSetCasperTestNode,
+  NoOpsEventEmitter,
   StorageFixture
 }
 import io.casperlabs.casper.helper.DeployOps.ChangeDeployOps
@@ -36,6 +37,8 @@ import io.casperlabs.crypto.Keys.PrivateKey
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
 import io.casperlabs.ipc.ChainSpec.DeployConfig
+import io.casperlabs.models.{ArbitraryConsensus, Message}
+import io.casperlabs.mempool.DeployBuffer
 import io.casperlabs.models.ArbitraryConsensus
 import io.casperlabs.models.BlockImplicits.BlockOps
 import io.casperlabs.p2p.EffectsTestInstances.LogicalTime
@@ -46,13 +49,13 @@ import io.casperlabs.storage.BlockMsgWithTransform
 import io.casperlabs.storage.block._
 import io.casperlabs.storage.dag._
 import io.casperlabs.storage.deploy.DeployStorage
+import io.casperlabs.casper.validation.NCBValidationImpl
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.scalacheck.Arbitrary.arbitrary
 import org.scalatest.{BeforeAndAfterEach, EitherValues, FlatSpec, Matchers}
 import org.scalatest.prop.GeneratorDrivenPropertyChecks.forAll
 import logstage.LogIO
-
 import scala.collection.immutable.HashMap
 import scala.concurrent.duration._
 
@@ -64,6 +67,7 @@ class ValidationTest
     with BlockGenerator
     with StorageFixture
     with ArbitraryConsensus {
+  implicit val emitter                                = NoOpsEventEmitter.create[Task]
   implicit val timeEff                                = new LogicalTime[Task](System.currentTimeMillis)
   override implicit val log: LogIO[Task] with LogStub = LogStub[Task]()
   implicit val raiseValidateErr                       = validation.raiseValidateErrorThroughApplicativeError[Task]
@@ -71,12 +75,15 @@ class ValidationTest
     CasperLabsProtocol.unsafe[Task](
       (0L, state.ProtocolVersion(1), Some(DeployConfig(24 * 60 * 60 * 1000, 10)))
     )
-  import DeriveValidation._
+
+  implicit val validationEff = new NCBValidationImpl[Task]()
 
   // Necessary because errors are returned via Sync which has an error type fixed to _ <: Throwable.
   // When raise errors we wrap them with Throwable so we need to do the same here.
   implicit def wrapWithThrowable[A <: InvalidBlock](err: A): Throwable =
     ValidateErrorWrapper(err)
+
+  implicit def `Long => MainRank`(in: Long): Message.MainRank = Message.asMainRank(in)
 
   implicit val consensusConfig = ConsensusConfig()
 
@@ -159,7 +166,7 @@ class ValidationTest
   implicit class ChangeBlockOps(b: Block) {
     def changeBlockNumber(n: Long): Block = {
       val header    = b.getHeader
-      val newHeader = header.withRank(n)
+      val newHeader = header.withJRank(n)
       // NOTE: blockHash should be recalculated.
       b.withHeader(newHeader)
     }
@@ -251,11 +258,14 @@ class ValidationTest
       ByteString.EMPTY,
       "casperlabs",
       1,
-      0,
+      Message.asJRank(1),
+      Message.asMainRank(1),
       pk,
       sk,
       Ed25519,
-      ByteString.EMPTY
+      ByteString.EMPTY,
+      0,
+      false
     )
     Validation.blockSignature[Task](block) shouldBeF true
   }
@@ -584,7 +594,7 @@ class ValidationTest
         b1  <- createAndStoreBlockFull[Task](v2, List(b0), List(b0))
         b2  <- createAndStoreBlockFull[Task](v1, List(b1), List(b1))
         dag <- dagStorage.getRepresentation
-        _   <- Validation.validatorPrevBlockHash[Task](b2.getSummary, dag)
+        _   <- Validation.validatorPrevBlockHash[Task](b2.getSummary, dag, isHighway = false)
       } yield ()
   }
   it should "pass if the hash is in the justifications" in withStorage {
@@ -595,7 +605,7 @@ class ValidationTest
         b0  <- createAndStoreBlockFull[Task](v1, List(g), Nil)
         b1  <- createAndStoreBlockFull[Task](v1, List(b0), List(b0))
         dag <- dagStorage.getRepresentation
-        _   <- Validation.validatorPrevBlockHash[Task](b1.getSummary, dag)
+        _   <- Validation.validatorPrevBlockHash[Task](b1.getSummary, dag, isHighway = false)
       } yield ()
   }
   it should "fail if the hash belongs to somebody else" in withStorage {
@@ -611,8 +621,10 @@ class ValidationTest
                List(b1, b0),
                maybeValidatorPrevBlockHash = Some(b1.blockHash)
              )
-        dag    <- dagStorage.getRepresentation
-        result <- Validation.validatorPrevBlockHash[Task](b2.getSummary, dag).attempt
+        dag <- dagStorage.getRepresentation
+        result <- Validation
+                   .validatorPrevBlockHash[Task](b2.getSummary, dag, isHighway = false)
+                   .attempt
       } yield {
         result shouldBe Left(ValidateErrorWrapper(InvalidPrevBlockHash))
       }
@@ -631,8 +643,10 @@ class ValidationTest
                List(b2),
                maybeValidatorPrevBlockHash = Some(b1.blockHash)
              )
-        dag    <- dagStorage.getRepresentation
-        result <- Validation.validatorPrevBlockHash[Task](b3.getSummary, dag).attempt
+        dag <- dagStorage.getRepresentation
+        result <- Validation
+                   .validatorPrevBlockHash[Task](b3.getSummary, dag, isHighway = false)
+                   .attempt
       } yield {
         result shouldBe Left(ValidateErrorWrapper(InvalidPrevBlockHash))
       }
@@ -650,11 +664,59 @@ class ValidationTest
                maybeValidatorPrevBlockHash = Some(bx),
                maybeValidatorBlockSeqNum = Some(1)
              )
-        dag    <- dagStorage.getRepresentation
-        result <- Validation.validatorPrevBlockHash[Task](b0.getSummary, dag).attempt
+        dag <- dagStorage.getRepresentation
+        result <- Validation
+                   .validatorPrevBlockHash[Task](b0.getSummary, dag, isHighway = false)
+                   .attempt
       } yield {
         result shouldBe Left(ValidateErrorWrapper(InvalidPrevBlockHash))
       }
+  }
+  it should "not fail if it encounters a message in the parent era" in withStorage {
+    implicit blockStorage => implicit dagStorage => _ => _ =>
+      val v1 = generateValidator("v1")
+      // era-0: G = B0 = B1 = b2 = b4
+      //                  \\         \
+      // era-1:             B3 = = = B5
+      for {
+        g  <- createAndStoreMessage[Task](Nil)
+        b0 <- createAndStoreBlockFull[Task](v1, List(g), Nil)
+        b1 <- createAndStoreBlockFull[Task](v1, List(b0), List(b0), keyBlockHash = b0.blockHash)
+        // Voting ballot in the parent era (using StoreBlock because it's easier to pass justifications).
+        b2 <- createAndStoreBlockFull[Task](
+               v1,
+               List(b1),
+               List(b1),
+               keyBlockHash = b0.blockHash
+             )
+        // A block in the child era.
+        b3 <- createAndStoreBlockFull[Task](
+               v1,
+               List(b1),
+               List(b1),
+               maybeValidatorPrevBlockHash = Some(ByteString.EMPTY),
+               maybeValidatorBlockSeqNum = Some(0),
+               keyBlockHash = b1.blockHash
+             )
+        // Another voting ballot.
+        b4 <- createAndStoreBlockFull[Task](
+               v1,
+               List(b1),
+               List(b2),
+               keyBlockHash = b0.blockHash
+             )
+        // Another block that cites the parent era voting ballot.
+        b5 <- createAndStoreBlockFull[Task](
+               v1,
+               List(b3),
+               List(b3, b4),
+               maybeValidatorPrevBlockHash = Some(b3.blockHash),
+               keyBlockHash = b1.blockHash
+             )
+        dag <- dagStorage.getRepresentation
+        _   <- Validation.validatorPrevBlockHash[Task](b3.getSummary, dag, isHighway = true)
+        _   <- Validation.validatorPrevBlockHash[Task](b5.getSummary, dag, isHighway = true)
+      } yield ()
   }
 
   "Sender validation" should "return true for genesis and blocks from bonded validators and false otherwise" in withStorage {
@@ -723,7 +785,8 @@ class ValidationTest
         b8 <- createValidatorBlock[Task](Seq(b1, b2, b3), bonds, Seq(b1, b2, b3), v2, b0) //parents wrong order
         b9 <- createValidatorBlock[Task](Seq(b6), bonds, Seq.empty, v0, b0)
                .map(b => b.withHeader(b.getHeader.withJustifications(Seq.empty))) //empty justification
-        b10 <- createValidatorBlock[Task](Seq.empty, bonds, Seq.empty, v0, b0) //empty justification
+        // Set obviously incorrect parent. Later we want to test that validation raises `InvalidParent` error.
+        b10 <- createValidatorBlock[Task](Seq(b0), bonds, Seq(b9), v0, b0)
         result <- for {
                    dag <- dagStorage.getRepresentation
                    // Valid
@@ -948,7 +1011,9 @@ class ValidationTest
         b <- arbitrary[consensus.Block]
       } yield b.withBody(
         b.getBody.withDeploys(
-          b.getBody.deploys.take(1).map(x => x.withDeploy(x.getDeploy.withApprovals(Seq.empty))) ++
+          b.getBody.deploys
+            .take(1)
+            .map(x => x.withDeploy(x.getDeploy.withApprovals(Seq.empty))) ++
             b.getBody.deploys.tail
         )
       )
@@ -1287,9 +1352,10 @@ class ValidationTest
     implicit blockStorage => implicit dagStorage => implicit deployStorage => _ =>
       val deploys =
         Vector(ProtoUtil.deploy(System.currentTimeMillis, ByteString.EMPTY))
-      implicit val deploySelection: DeploySelection[Task] = DeploySelection.create[Task](
-        5 * 1024 * 1024
-      )
+      implicit val deploySelection: DeploySelection[Task] = DeploySelection.create[Task]()
+
+      implicit val deployBuffer = DeployBuffer.create[Task]("casperlabs", Duration.Zero)
+
       for {
         _ <- deployStorage.writer.addAsPending(deploys.toList)
         deploysCheckpoint <- ExecEngineUtil.computeDeploysCheckpoint[Task](
@@ -1297,7 +1363,8 @@ class ValidationTest
                               fs2.Stream.fromIterator[Task](deploys.toIterator),
                               System.currentTimeMillis,
                               ProtocolVersion(1),
-                              rank = 0,
+                              mainRank = 0,
+                              maxBlockSizeBytes = 5 * 1024 * 1024,
                               upgrades = Nil
                             )
         DeploysCheckpoint(
@@ -1305,6 +1372,7 @@ class ValidationTest
           computedPostStateHash,
           bondedValidators,
           processedDeploys,
+          _,
           _
         ) = deploysCheckpoint
         block <- createAndStoreMessage[Task](
@@ -1325,7 +1393,7 @@ class ValidationTest
       } yield postStateHash should be(computedPostStateHash)
   }
 
-  "j-past-cone of the block" should "not merge equivocator's swimlane" in withStorage {
+  "swimlane validation" should "not allow merging equivocator's swimlane" in withStorage {
     implicit blockStorage => implicit dagStorage => _ => _ =>
       val v0 = generateValidator("v0")
       val v1 = generateValidator("v1")
@@ -1344,7 +1412,7 @@ class ValidationTest
         c       <- createValidatorBlock[Task](Seq(genesis), bonds, Seq(a), v1, genesis)
         d       <- createValidatorBlock[Task](Seq(b), bonds, Seq(c), v0, genesis)
         dag     <- dagStorage.getRepresentation
-        _ <- Validation.swimlane[Task](d, dag).attempt shouldBeF Left(
+        _ <- Validation.swimlane[Task](d, dag, isHighway = false).attempt shouldBeF Left(
               ValidateErrorWrapper(SwimlaneMerged)
             )
       } yield ()
@@ -1369,7 +1437,72 @@ class ValidationTest
         c       <- createValidatorBlock[Task](Seq(genesis), bonds, Seq(a), v1, genesis)
         d       <- createValidatorBlock[Task](Seq(a), bonds, Seq(c), v0, genesis)
         dag     <- dagStorage.getRepresentation
-        _       <- Validation.swimlane[Task](d, dag).attempt shouldBeF Right(())
+        _       <- Validation.swimlane[Task](d, dag, isHighway = false).attempt shouldBeF Right(())
+      } yield ()
+  }
+
+  it should "not raise when the j-past-cone contain blocks and ballots across eras" in withCombinedStorageIndexed {
+    implicit db => implicit dagStorage =>
+      val v1 = generateValidator("v1")
+      // era-0: G - B0 - B1 - B2
+      //                   \
+      // era-1:             B3
+      for {
+        g  <- createAndStoreMessage[Task](Nil)
+        eg <- createAndStoreEra[Task](g.blockHash)
+        b0 <- createAndStoreBlockFull[Task](v1, List(g), Nil, keyBlockHash = eg.keyBlockHash)
+        e0 <- createAndStoreEra[Task](b0.blockHash)
+        b1 <- createAndStoreBlockFull[Task](v1, List(b0), List(b0), keyBlockHash = e0.keyBlockHash)
+        b2 <- createAndStoreBlockFull[Task](v1, List(b1), List(b1), keyBlockHash = e0.keyBlockHash)
+        e1 <- createAndStoreEra[Task](b1.blockHash)
+        b3 <- createAndStoreBlockFull[Task](
+               v1,
+               List(b1),
+               List(b1, b2),
+               maybeValidatorPrevBlockHash = Some(ByteString.EMPTY),
+               maybeValidatorBlockSeqNum = Some(0),
+               keyBlockHash = e1.keyBlockHash
+             )
+        dag <- dagStorage.getRepresentation
+        _   <- Validation.swimlane[Task](b3, dag, isHighway = true).attempt shouldBeF Right(())
+      } yield ()
+  }
+
+  it should "raise when the j-past-cone contains an equivocation in an era" in withCombinedStorageIndexed {
+    implicit db => implicit dagStorage =>
+      val v1 = generateValidator("v1")
+      // era-0: G - B0 - B1 - B2
+      //                   \    \
+      //                    B3   \
+      //                      \   \
+      // era-1:                B4 - B5
+      for {
+        g  <- createAndStoreMessage[Task](Nil)
+        eg <- createAndStoreEra[Task](g.blockHash)
+        b0 <- createAndStoreBlockFull[Task](v1, List(g), Nil, keyBlockHash = eg.keyBlockHash)
+        e0 <- createAndStoreEra[Task](b0.blockHash)
+        b1 <- createAndStoreBlockFull[Task](v1, List(b0), List(b0), keyBlockHash = e0.keyBlockHash)
+        b2 <- createAndStoreBlockFull[Task](v1, List(b1), List(b1), keyBlockHash = e0.keyBlockHash)
+        b3 <- createAndStoreBlockFull[Task](v1, List(b1), List(b1), keyBlockHash = e0.keyBlockHash)
+        e1 <- createAndStoreEra[Task](b1.blockHash)
+        b4 <- createAndStoreBlockFull[Task](
+               v1,
+               List(b3),
+               List(b3),
+               maybeValidatorPrevBlockHash = Some(ByteString.EMPTY),
+               maybeValidatorBlockSeqNum = Some(0),
+               keyBlockHash = e1.keyBlockHash
+             )
+        b5 <- createAndStoreBlockFull[Task](
+               v1,
+               List(b4),
+               List(b4, b2),
+               keyBlockHash = e1.keyBlockHash
+             )
+        dag <- dagStorage.getRepresentation
+        _ <- Validation.swimlane[Task](b5, dag, isHighway = true).attempt shouldBeF Left(
+              ValidateErrorWrapper(SwimlaneMerged)
+            )
       } yield ()
   }
 

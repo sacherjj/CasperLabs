@@ -22,10 +22,43 @@ pos-code-path = "pos_install.wasm"
 # To override the default values, create a file at ~/.casperlabs/chainspec/genesis/accounts.csv
 initial-accounts-path = "accounts.csv"
 
+[highway]
+
+# Tick unit is milliseconds.
+
+# Unix timestamp for the genesis era. At least one node has to be started when the genesis era
+# is active in order to make key blocks for the upcoming eras. If the era is over by the time
+# we start the nodes, they'll not be able to produce blocks in it, and there won't be a new
+# era build either. That means when a completely new network is started, the genesis era
+# start time has to be adjusted to be active at the time.
+genesis-era-start = 1583712000000
+
+# Era duration defined as a fixed amount of time.
+era-duration = "7days"
+
+# Amount of time to go back before the start of the era for picking the booking block.
+booking-duration = "10days"
+
+# Amount of time to wait after the booking before we pick the key block, collecting the magic bits along the way.
+entropy-duration = "3hours"
+
+# Keep voting on the switch block for a fixed amount of time; effective if the summit level is zero.
+voting-period-duration = "2days"
+
+# Alternative voting duration based on the finality level of the switch block; effective if it's non-zero.
+voting-period-summit-level = 0
+
+# Relative fault tolerance thresholds used by the internal finalizer.
+# Has to be between 0 and 0.5
+ftt = 0.1
+
 [deploys]
 # 1 day
 max-ttl-millis = 86400000
 max-dependencies = 10
+
+# Maximum block size in bytes
+max-block-size-bytes = 10485760
 
 [wasm-costs]
 # Default opcode cost

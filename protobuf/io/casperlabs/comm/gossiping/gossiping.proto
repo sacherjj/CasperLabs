@@ -23,6 +23,13 @@ service GossipService {
     // Retrieve an arbitrarily sized block as a stream of chunks, with optionally compressed content.
     rpc GetBlockChunked(GetBlockChunkedRequest) returns (stream Chunk);
 
+    // Retrieve an arbitrary list of deploys, with optionally compressed contents.
+    // One use case would be to gossip deploys between nodes so that they can be included
+    // in a block by the first validator who gets to propose a block. The second case is
+    // to retrieve all the deploys which are missing from the body of a block, i.e. haven't
+    // been downloaded yet as part of earlier blocks or deploy gossiping.
+    rpc StreamDeploysChunked(StreamDeploysChunkedRequest) returns (stream Chunk);
+
     // Retrieve the Genesis candidate supported by this node. Every node should either produce one from specification,
     // get one from its bootstrap, or have it persisted from earlier runs.
     // While the node is initializing and it hasn't obtained the candidate yet it will return UNAVAILABLE.
@@ -75,6 +82,13 @@ message StreamLatestMessagesRequest {}
 
 message GetBlockChunkedRequest {
     bytes block_hash = 1;
+    uint32 chunk_size = 2;
+    repeated string accepted_compression_algorithms = 3;
+    bool exclude_deploy_bodies = 4;
+}
+
+message StreamDeploysChunkedRequest {
+    repeated bytes deploy_hashes = 1;
     uint32 chunk_size = 2;
     repeated string accepted_compression_algorithms = 3;
 }

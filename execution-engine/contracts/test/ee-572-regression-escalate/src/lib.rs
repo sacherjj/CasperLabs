@@ -1,7 +1,7 @@
 #![no_std]
 
 use contract::{
-    contract_api::{runtime, storage, TURef},
+    contract_api::{runtime, storage},
     unwrap_or_revert::UnwrapOrRevert,
 };
 use types::{AccessRights, ApiError, Key, URef};
@@ -27,10 +27,7 @@ pub extern "C" fn call() {
 
     let reference: URef = runtime::call_contract(contract_pointer, ());
 
-    let forged_reference: TURef<&str> = {
-        let ret = URef::new(reference.addr(), AccessRights::READ_ADD_WRITE);
-        TURef::from_uref(ret).unwrap_or_revert()
-    };
+    let forged_reference: URef = URef::new(reference.addr(), AccessRights::READ_ADD_WRITE);
 
-    storage::write(forged_reference, &REPLACEMENT_DATA)
+    storage::write(forged_reference, REPLACEMENT_DATA)
 }

@@ -52,24 +52,32 @@ sealed abstract class MultiParentCasperInstances {
       genesisEffects: ExecEngineUtil.TransformMap
   ) =
     for {
-      _ <- Validation[F].transactions(genesis, genesisPreState, BlockEffects(genesisEffects))
+      _ <- Validation[F].transactions(
+            genesis,
+            genesisPreState,
+            genesis.getHeader.getState.bonds,
+            BlockEffects(genesisEffects)
+          )
       casperState <- Cell.mvarCell[F, CasperState](
                       CasperState()
                     )
     } yield casperState
 
   /** Create a MultiParentCasper instance from the new RPC style gossiping. */
-  def fromGossipServices[F[_]: Concurrent: Log: Time: Metrics: BlockStorage: DagStorage: DeployBuffer: FinalityStorage: ExecutionEngineService: DeployStorage: Validation: DeploySelection: CasperLabsProtocol: EventEmitter](
+  def fromGossipServices[F[_]: Concurrent: Log: Time: Metrics: BlockStorage: DagStorage: DeployBuffer: FinalityStorage: ExecutionEngineService: DeployStorage: Validation: DeploySelection: CasperLabsProtocol: BlockEventEmitter](
       validatorId: Option[ValidatorIdentity],
       genesis: Block,
       genesisPreState: StateHash,
       genesisEffects: ExecEngineUtil.TransformMap,
       chainName: String,
       minTtl: FiniteDuration,
-      upgrades: Seq[ipc.ChainSpec.UpgradePoint]
+      upgrades: Seq[ipc.ChainSpec.UpgradePoint],
+      rFTT: Double
   ): F[MultiParentCasper[F]] =
     for {
-      lfbRef <- FinalityStorage[F].getLastFinalizedBlock.flatMap(Ref.of(_))
+      lfbHash <- FinalityStorage[F].getLastFinalizedBlock
+      _       <- Log[F].info(s"Restored LFB: ${PrettyPrinter.buildString(lfbHash) -> "lfb_hash"}")
+      lfbRef  <- Ref.of(lfbHash)
       implicit0(casperState: Cell[F, CasperState]) <- init(
                                                        genesis,
                                                        genesisPreState,
@@ -86,7 +94,8 @@ sealed abstract class MultiParentCasperInstances {
                  chainName,
                  minTtl,
                  upgrades,
-                 lfbRef = lfbRef
+                 lfbRef = lfbRef,
+                 faultToleranceThreshold = rFTT
                )
     } yield casper
 }

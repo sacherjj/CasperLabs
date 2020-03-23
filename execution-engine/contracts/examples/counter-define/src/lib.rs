@@ -6,7 +6,7 @@ use alloc::{collections::BTreeMap, string::String};
 use core::convert::TryInto;
 
 use contract::{
-    contract_api::{runtime, storage, TURef},
+    contract_api::{runtime, storage},
     unwrap_or_revert::UnwrapOrRevert,
 };
 use types::{ApiError, CLValue, Key};
@@ -36,7 +36,7 @@ impl Into<ApiError> for Error {
 
 #[no_mangle]
 pub extern "C" fn counter_ext() {
-    let turef: TURef<i32> = runtime::get_key(COUNT_KEY)
+    let uref = runtime::get_key(COUNT_KEY)
         .unwrap_or_revert()
         .try_into()
         .unwrap_or_revert();
@@ -46,11 +46,9 @@ pub extern "C" fn counter_ext() {
         .unwrap_or_revert_with(ApiError::InvalidArgument);
 
     match method_name.as_str() {
-        INC_METHOD => storage::add(turef, 1),
+        INC_METHOD => storage::add(uref, 1),
         GET_METHOD => {
-            let result = storage::read(turef)
-                .unwrap_or_revert_with(ApiError::Read)
-                .unwrap_or_revert_with(ApiError::ValueNotFound);
+            let result: i32 = storage::read_or_revert(uref);
             let return_value = CLValue::from_t(result).unwrap_or_revert();
             runtime::ret(return_value);
         }
@@ -74,7 +72,7 @@ pub extern "C" fn counter_increment() {
 
 #[no_mangle]
 pub extern "C" fn call() {
-    let counter_local_key = storage::new_turef(0); //initialize counter
+    let counter_local_key = storage::new_uref(0); //initialize counter
 
     //create map of references for stored contract
     let mut counter_urefs: BTreeMap<String, Key> = BTreeMap::new();

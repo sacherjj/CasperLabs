@@ -23,6 +23,7 @@ import monix.eval.Task
 import org.scalatest.{Assertion, FlatSpec, Matchers}
 
 import scala.collection.immutable.{HashMap, Map}
+import io.casperlabs.storage.dag.DagRepresentation
 
 @silent("is never used")
 class VotingMatrixTest extends FlatSpec with Matchers with BlockGenerator with StorageFixture {
@@ -30,6 +31,12 @@ class VotingMatrixTest extends FlatSpec with Matchers with BlockGenerator with S
   behavior of "Voting Matrix"
 
   implicit val logEff = LogStub[Task]()
+
+  def ncbCheckForCommitte(
+      dag: DagRepresentation[Task],
+      rFTT: Double = 0.1
+  )(implicit vm: VotingMatrix[Task]): Task[Option[CommitteeWithConsensusValue]] =
+    io.casperlabs.casper.finality.votingmatrix.checkForCommittee[Task](dag, rFTT, isHighway = false)
 
   def checkWeightMap(
       expect: Map[Validator, Long]
@@ -105,7 +112,8 @@ class VotingMatrixTest extends FlatSpec with Matchers with BlockGenerator with S
           implicit0(votingMatrix: VotingMatrix[Task]) <- VotingMatrix
                                                           .create[Task](
                                                             dag,
-                                                            genesis.blockHash
+                                                            genesis.blockHash,
+                                                            isHighway = false
                                                           )
           _            <- checkMatrix(Map.empty)
           _            <- checkFirstLevelZeroVote(Map(v1 -> None, v2 -> None))
@@ -120,17 +128,17 @@ class VotingMatrixTest extends FlatSpec with Matchers with BlockGenerator with S
           _ <- checkWeightMap(Map(v1 -> 10, v2 -> 10)) // don't change, because b1 haven't finalized
           _ <- checkMatrix(
                 Map(
-                  v1 -> Map(v1 -> b1.getHeader.rank, v2 -> 0),
-                  v2 -> Map(v1 -> 0, v2                 -> 0)
+                  v1 -> Map(v1 -> b1.getHeader.jRank, v2 -> 0),
+                  v2 -> Map(v1 -> 0, v2                  -> 0)
                 )
               )
           _ <- checkFirstLevelZeroVote(
                 Map(
-                  v1 -> Some((b1.blockHash, b1.getHeader.rank)),
+                  v1 -> Some((b1.blockHash, b1.getHeader.jRank)),
                   v2 -> None
                 )
               )
-          committee <- checkForCommittee[Task](dag, 0.1)
+          committee <- ncbCheckForCommitte(dag)
           _         = committee shouldBe None
           b2 <- createBlockAndUpdateVotingMatrix[Task](
                  Seq(genesis.blockHash),
@@ -140,17 +148,17 @@ class VotingMatrixTest extends FlatSpec with Matchers with BlockGenerator with S
                )
           _ <- checkMatrix(
                 Map(
-                  v1 -> Map(v1 -> b1.getHeader.rank, v2 -> 0),
-                  v2 -> Map(v1 -> 0, v2                 -> b2.getHeader.rank)
+                  v1 -> Map(v1 -> b1.getHeader.jRank, v2 -> 0),
+                  v2 -> Map(v1 -> 0, v2                  -> b2.getHeader.jRank)
                 )
               )
           _ <- checkFirstLevelZeroVote(
                 Map(
-                  v1 -> Some((b1.blockHash, b1.getHeader.rank)),
-                  v2 -> Some((b2.blockHash, b2.getHeader.rank))
+                  v1 -> Some((b1.blockHash, b1.getHeader.jRank)),
+                  v2 -> Some((b2.blockHash, b2.getHeader.jRank))
                 )
               )
-          committee <- checkForCommittee[Task](dag, 0.1)
+          committee <- ncbCheckForCommitte(dag)
           _         = committee shouldBe None
           b3 <- createBlockAndUpdateVotingMatrix[Task](
                  Seq(b1.blockHash),
@@ -161,17 +169,17 @@ class VotingMatrixTest extends FlatSpec with Matchers with BlockGenerator with S
                )
           _ <- checkMatrix(
                 Map(
-                  v1 -> Map(v1 -> b3.getHeader.rank, v2 -> b2.getHeader.rank),
-                  v2 -> Map(v1 -> 0, v2                 -> b2.getHeader.rank)
+                  v1 -> Map(v1 -> b3.getHeader.jRank, v2 -> b2.getHeader.jRank),
+                  v2 -> Map(v1 -> 0, v2                  -> b2.getHeader.jRank)
                 )
               )
           _ <- checkFirstLevelZeroVote(
                 Map(
-                  v1 -> Some((b1.blockHash, b1.getHeader.rank)),
-                  v2 -> Some((b2.blockHash, b2.getHeader.rank))
+                  v1 -> Some((b1.blockHash, b1.getHeader.jRank)),
+                  v2 -> Some((b2.blockHash, b2.getHeader.jRank))
                 )
               )
-          committee <- checkForCommittee[Task](dag, 0.1)
+          committee <- ncbCheckForCommitte(dag)
           _         = committee shouldBe None
           b4 <- createBlockAndUpdateVotingMatrix[Task](
                  Seq(b3.blockHash),
@@ -182,18 +190,18 @@ class VotingMatrixTest extends FlatSpec with Matchers with BlockGenerator with S
                )
           _ <- checkMatrix(
                 Map(
-                  v1 -> Map(v1 -> b3.getHeader.rank, v2 -> b2.getHeader.rank),
-                  v2 -> Map(v1 -> b3.getHeader.rank, v2 -> b4.getHeader.rank)
+                  v1 -> Map(v1 -> b3.getHeader.jRank, v2 -> b2.getHeader.jRank),
+                  v2 -> Map(v1 -> b3.getHeader.jRank, v2 -> b4.getHeader.jRank)
                 )
               )
           _ <- checkFirstLevelZeroVote(
                 Map(
-                  v1 -> Some((b1.blockHash, b1.getHeader.rank)),
-                  v2 -> Some((b1.blockHash, b4.getHeader.rank))
+                  v1 -> Some((b1.blockHash, b1.getHeader.jRank)),
+                  v2 -> Some((b1.blockHash, b4.getHeader.jRank))
                 )
               )
 
-          committee <- checkForCommittee[Task](dag, 0.1)
+          committee <- ncbCheckForCommitte(dag)
           _         = committee shouldBe None
 
           b5 <- createBlockAndUpdateVotingMatrix[Task](
@@ -205,21 +213,21 @@ class VotingMatrixTest extends FlatSpec with Matchers with BlockGenerator with S
                )
           _ <- checkMatrix(
                 Map(
-                  v1 -> Map(v1 -> b5.getHeader.rank, v2 -> b4.getHeader.rank),
-                  v2 -> Map(v1 -> b3.getHeader.rank, v2 -> b4.getHeader.rank)
+                  v1 -> Map(v1 -> b5.getHeader.jRank, v2 -> b4.getHeader.jRank),
+                  v2 -> Map(v1 -> b3.getHeader.jRank, v2 -> b4.getHeader.jRank)
                 )
               )
           _ <- checkFirstLevelZeroVote(
                 Map(
-                  v1 -> Some((b1.blockHash, b1.getHeader.rank)),
-                  v2 -> Some((b1.blockHash, b4.getHeader.rank))
+                  v1 -> Some((b1.blockHash, b1.getHeader.jRank)),
+                  v2 -> Some((b1.blockHash, b4.getHeader.jRank))
                 )
               )
 
-          committee <- checkForCommittee[Task](dag, 0.1)
+          committee <- ncbCheckForCommitte(dag)
           _         = committee shouldBe Some(CommitteeWithConsensusValue(Set(v1, v2), 20, b1.blockHash))
 
-          committee <- checkForCommittee[Task](dag, 0.4)
+          committee <- ncbCheckForCommitte(dag, rFTT = 0.4)
           _ = committee shouldBe Some(
             CommitteeWithConsensusValue(Set(v1, v2), 20, b1.blockHash)
           )
@@ -229,19 +237,20 @@ class VotingMatrixTest extends FlatSpec with Matchers with BlockGenerator with S
           newVotingMatrix <- VotingMatrix
                               .create[Task](
                                 updatedDag,
-                                b1.blockHash
+                                b1.blockHash,
+                                isHighway = false
                               )
           _ <- checkWeightMap(Map(v1 -> 20, v2 -> 10))(newVotingMatrix)
           _ <- checkMatrix(
                 Map(
-                  v1 -> Map(v1 -> b5.getHeader.rank, v2 -> b4.getHeader.rank),
-                  v2 -> Map(v1 -> b3.getHeader.rank, v2 -> b4.getHeader.rank)
+                  v1 -> Map(v1 -> b5.getHeader.jRank, v2 -> b4.getHeader.jRank),
+                  v2 -> Map(v1 -> b3.getHeader.jRank, v2 -> b4.getHeader.jRank)
                 )
               )(newVotingMatrix)
           result <- checkFirstLevelZeroVote(
                      Map(
-                       v1 -> Some((b3.blockHash, b3.getHeader.rank)),
-                       v2 -> Some((b3.blockHash, b4.getHeader.rank))
+                       v1 -> Some((b3.blockHash, b3.getHeader.jRank)),
+                       v2 -> Some((b3.blockHash, b4.getHeader.jRank))
                      )
                    )(newVotingMatrix)
         } yield result
@@ -269,7 +278,8 @@ class VotingMatrixTest extends FlatSpec with Matchers with BlockGenerator with S
       _ <- updateVoterPerspective(
             dag,
             Message.fromBlock(b).get,
-            votedBranch.get
+            votedBranch.get,
+            isHighway = false
           )
     } yield b
 }

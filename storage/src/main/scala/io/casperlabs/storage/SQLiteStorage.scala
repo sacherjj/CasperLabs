@@ -1,61 +1,86 @@
 package io.casperlabs.storage
 
+import java.util.concurrent.TimeUnit
+
+import cats.effect.Sync
+import cats.implicits._
+import doobie.util.transactor.Transactor
+import io.casperlabs.casper.consensus.info.{BlockInfo, DeployInfo, Event}
+import io.casperlabs.casper.consensus.{Block, BlockSummary, Era}
+import io.casperlabs.catscontrib.MonadThrowable
+import io.casperlabs.metrics.Metrics
+import io.casperlabs.models.Message
+import io.casperlabs.shared.Time
+import io.casperlabs.storage.block.{BlockStorage, SQLiteBlockStorage}
+import io.casperlabs.storage.dag.DagRepresentation.Validator
+import io.casperlabs.storage.dag._
 import io.casperlabs.storage.deploy.{
   DeployStorage,
   DeployStorageReader,
   DeployStorageWriter,
   SQLiteDeployStorage
 }
-import cats.effect.Sync
-import cats.implicits._
-import doobie.util.transactor.Transactor
-import io.casperlabs.casper.consensus.info.{BlockInfo, DeployInfo}
-import io.casperlabs.casper.consensus.{Block, BlockSummary}
-import io.casperlabs.metrics.Metrics
-import io.casperlabs.models.Message
-import io.casperlabs.shared.Time
-import io.casperlabs.storage.block.BlockStorage.{BlockHash, DeployHash}
-import io.casperlabs.storage.block.{BlockStorage, SQLiteBlockStorage}
-import io.casperlabs.storage.dag.DagRepresentation.Validator
-import io.casperlabs.storage.dag.{DagRepresentation, DagStorage, FinalityStorage, SQLiteDagStorage}
+import io.casperlabs.storage.event.{EventStorage, SQLiteEventStorage}
+import io.casperlabs.storage.era.{EraStorage, SQLiteEraStorage}
 import fs2._
 
 object SQLiteStorage {
+  type CombinedStorage[F[_]] =
+    BlockStorage[F]
+      with DagStorage[F]
+      with DeployStorage[F]
+      with DagRepresentation[F]
+      with FinalityStorage[F]
+      with AncestorsStorage[F]
+      with EraStorage[F]
+      with EventStorage[F]
+
   def create[F[_]: Sync: Metrics: Time](
       deployStorageChunkSize: Int = 100,
+      tickUnit: TimeUnit = TimeUnit.MILLISECONDS,
       readXa: Transactor[F],
       writeXa: Transactor[F]
-  ): F[BlockStorage[F] with DagStorage[F] with DeployStorage[F] with DagRepresentation[F] with FinalityStorage[
-    F
-  ]] =
+  ): F[CombinedStorage[F]] =
     create[F](
       deployStorageChunkSize = deployStorageChunkSize,
+      tickUnit = tickUnit,
       readXa = readXa,
       writeXa = writeXa,
       wrapBlockStorage = (_: BlockStorage[F]).pure[F],
-      wrapDagStorage = (_: DagStorage[F] with DagRepresentation[F] with FinalityStorage[F]).pure[F]
+      wrapDagStorage =
+        (_: DagStorage[F] with DagRepresentation[F] with FinalityStorage[F] with AncestorsStorage[
+          F
+        ]).pure[F]
     )
 
   def create[F[_]: Sync: Metrics: Time](
       deployStorageChunkSize: Int,
+      tickUnit: TimeUnit,
       readXa: Transactor[F],
       writeXa: Transactor[F],
       wrapBlockStorage: BlockStorage[F] => F[BlockStorage[F]],
-      wrapDagStorage: DagStorage[F] with DagRepresentation[F] with FinalityStorage[F] => F[
-        DagStorage[F] with DagRepresentation[F] with FinalityStorage[F]
+      wrapDagStorage: DagStorage[F] with DagRepresentation[F] with FinalityStorage[F] with AncestorsStorage[
+        F
+      ] => F[
+        DagStorage[F] with DagRepresentation[F] with FinalityStorage[F] with AncestorsStorage[
+          F
+        ]
       ]
-  ): F[BlockStorage[F] with DagStorage[F] with DeployStorage[F] with DagRepresentation[F] with FinalityStorage[
-    F
-  ]] =
+  ): F[CombinedStorage[F]] =
     for {
       blockStorage  <- SQLiteBlockStorage.create[F](readXa, writeXa) >>= wrapBlockStorage
       dagStorage    <- SQLiteDagStorage.create[F](readXa, writeXa) >>= wrapDagStorage
       deployStorage <- SQLiteDeployStorage.create[F](deployStorageChunkSize, readXa, writeXa)
+      eraStorage    <- SQLiteEraStorage.create[F](tickUnit, readXa, writeXa)
+      eventStorage  <- SQLiteEventStorage.create[F](readXa, writeXa)
     } yield new BlockStorage[F]
       with DagStorage[F]
       with DeployStorage[F]
       with DagRepresentation[F]
-      with FinalityStorage[F] {
+      with AncestorsStorage[F]
+      with FinalityStorage[F]
+      with EraStorage[F]
+      with EventStorage[F] {
 
       override def writer: DeployStorageWriter[F] =
         deployStorage.writer
@@ -83,10 +108,14 @@ object SQLiteStorage {
           _ <- blockStorage.close()
         } yield ()
 
-      override def get(blockHash: BlockHash): F[Option[BlockMsgWithTransform]] =
+      override def get(
+          blockHash: BlockHash
+      )(implicit dv: DeployInfo.View = DeployInfo.View.FULL): F[Option[BlockMsgWithTransform]] =
         blockStorage.get(blockHash)
 
-      override def getByPrefix(blockHashPrefix: String): F[Option[BlockMsgWithTransform]] =
+      override def getByPrefix(
+          blockHashPrefix: String
+      )(implicit dv: DeployInfo.View = DeployInfo.View.FULL): F[Option[BlockMsgWithTransform]] =
         blockStorage.getByPrefix(blockHashPrefix)
 
       override def isEmpty: F[Boolean] = blockStorage.isEmpty
@@ -140,27 +169,47 @@ object SQLiteStorage {
       override def topoSortTail(tailLength: Int): Stream[F, Vector[BlockInfo]] =
         dagStorage.topoSortTail(tailLength)
 
-      override def latestMessageHash(validator: Validator): F[Set[BlockHash]] =
-        dagStorage.latestMessageHash(validator)
+      override def getBlockInfosByValidator(
+          validator: Validator,
+          limit: Int,
+          lastTimeStamp: Long,
+          lastBlockHash: BlockHash
+      ) =
+        dagStorage.getBlockInfosByValidator(validator, limit, lastTimeStamp, lastBlockHash)
 
-      override def latestMessage(validator: Validator): F[Set[Message]] =
-        dagStorage.latestMessage(validator)
+      override def latestGlobal =
+        dagStorage.getRepresentation.flatMap(_.latestGlobal)
 
-      override def latestMessageHashes: F[Map[Validator, Set[BlockHash]]] =
-        dagStorage.latestMessageHashes
+      override def latestInEra(keyBlockHash: BlockHash) =
+        dagStorage.getRepresentation.flatMap(_.latestInEra(keyBlockHash))
 
-      override def latestMessages: F[Map[Validator, Set[Message]]] =
-        dagStorage.latestMessages
+      override def addEra(era: Era)               = eraStorage.addEra(era)
+      override def getEra(eraId: BlockHash)       = eraStorage.getEra(eraId)
+      override def getChildEras(eraId: BlockHash) = eraStorage.getChildEras(eraId)
+      override def getChildlessEras               = eraStorage.getChildlessEras
 
       override def markAsFinalized(
-          mainParent: BlockHash,
-          secondary: Set[BlockHash]
+          lfb: BlockHash,
+          finalized: Set[BlockHash],
+          orphaned: Set[BlockHash]
       ): F[Unit] =
-        dagStorage.markAsFinalized(mainParent, secondary)
+        dagStorage.markAsFinalized(lfb, finalized, orphaned)
 
       override def getLastFinalizedBlock: F[BlockHash] = dagStorage.getLastFinalizedBlock
 
-      override def isFinalized(block: BlockHash): F[Boolean] =
-        dagStorage.isFinalized(block)
+      override def getFinalityStatus(block: BlockHash): F[FinalityStorage.FinalityStatus] =
+        dagStorage.getFinalityStatus(block)
+
+      override implicit val MT: MonadThrowable[F] = Sync[F]
+
+      override def findAncestor(block: BlockHash, distance: Long) =
+        dagStorage.findAncestor(block, distance)
+
+      override def storeEvents(values: Seq[Event.Value]): F[List[Event]] =
+        eventStorage.storeEvents(values)
+
+      override def getEvents(minId: Long): fs2.Stream[F, Event] =
+        eventStorage.getEvents(minId)
+
     }
 }

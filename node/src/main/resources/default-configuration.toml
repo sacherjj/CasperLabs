@@ -33,6 +33,9 @@ no-upnp = false
 # Default timeout for roundtrip connections.
 default-timeout = "5second"
 
+# Timeout for shutting down gRPC services.
+shutdown-timeout = "1minute"
+
 # Bootstrap casperlabs node addresses for initial seeds. Empty defaut provided for standalone mode.
 # bootstrap = "casperlabs://<keccak-hash-of-tls-public-key>:<chain id>@<host>?protocol=<intra-node-port>&discovery=<kademila-port>"
 bootstrap = ""
@@ -47,7 +50,7 @@ max-num-of-connections = 500
 max-message-size = 4194304
 
 # Size of the buffer to store emitted block events
-event-stream-buffer-size = 10
+event-stream-buffer-size = 1000
 
 # Target parallelism for execution engine requests.
 engine-parallelism = 1
@@ -68,7 +71,7 @@ approval-relay-factor = 10
 approval-poll-interval = "30second"
 
 # Time to cache live peers for and to ban unresponsive ones.
-alive-peers-cache-expiration-period = "5minute"
+alive-peers-cache-expiration-period = "1minute"
 
 # Maximum DAG depth to allow when syncing after a new block notification.
 sync-max-possible-depth = 1000
@@ -81,6 +84,9 @@ sync-max-bonding-rate = 1.0
 
 # Maximum DAG depth to ask in iterative requests during syncing.
 sync-max-depth-ancestors-request = 5
+
+# Disable DAG shape validations during synchronization.
+sync-disable-validations = true
 
 # Maximum number of nodes to try to sync with initially in a round.
 init-sync-max-nodes = 5
@@ -98,7 +104,7 @@ init-sync-skip-failed-nodes = false
 init-sync-step = 100
 
 # Time to wait between initial synchronization attempts.
-init-sync-round-period = "30second"
+init-sync-round-period = "1second"
 
 # Maximum number of blocks to allow to be synced initially.
 init-sync-max-block-count = 1000000
@@ -243,11 +249,23 @@ auto-propose-acc-interval = "5seconds"
 # Number of deploys to accumulate before proposing.
 auto-propose-acc-count = 10
 
-# Maximum block size in bytes
-max-block-size-bytes = 10485760
-
 # Minimum TTL value of a deploy
 min-ttl = "1hour"
+
+# Highway parameters that we can freely choose or tweak; the rest is in the Genesis chain spec.
+[highway]
+
+# Use highway, or stick to NCB.
+enabled = false
+
+# Fraction of time through the round after which we can create an omega message.
+omega-message-time-start = 0.5
+
+# Fraction of time through the round before which we must have created the omega message.
+omega-message-time-end = 0.75
+
+# Initial round exponent to start the node with, before auto-adjustment takes over; corresponds to the tick unit of the chain.
+init-round-exponent = 14
 
 # io.casperlabs.node.configuration.Configuration.Kamon
 [metrics]

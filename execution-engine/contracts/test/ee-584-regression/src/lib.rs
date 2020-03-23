@@ -9,6 +9,6 @@ use types::ApiError;
 
 #[no_mangle]
 pub extern "C" fn call() {
-    let _ = storage::new_turef(String::from("Hello, World!"));
+    let _ = storage::new_uref(String::from("Hello, World!"));
     runtime::revert(ApiError::User(999))
 }

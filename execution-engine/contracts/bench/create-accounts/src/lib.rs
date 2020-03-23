@@ -3,7 +3,6 @@
 extern crate alloc;
 
 use alloc::vec::Vec;
-use core::convert::TryFrom;
 
 use contract::{
     contract_api::{runtime, system},
@@ -18,7 +17,7 @@ pub extern "C" fn call() {
             .unwrap_or_revert_with(ApiError::MissingArgument)
             .unwrap_or_revert_with(ApiError::InvalidArgument);
         data.into_iter()
-            .map(|bytes| PublicKey::try_from(bytes.as_slice()).unwrap_or_revert())
+            .map(|bytes| PublicKey::ed25519_try_from(bytes.as_slice()).unwrap_or_revert())
             .collect()
     };
     let seed_amount: U512 = runtime::get_arg(1)

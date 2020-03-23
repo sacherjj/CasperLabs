@@ -11,7 +11,7 @@ use types::{
 
 #[no_mangle]
 pub extern "C" fn call() {
-    match account::add_associated_key(PublicKey::new([123; 32]), Weight::new(100)) {
+    match account::add_associated_key(PublicKey::ed25519_from([123; 32]), Weight::new(100)) {
         Err(AddKeyFailure::DuplicateKey) => {}
         Err(_) => runtime::revert(ApiError::User(50)),
         Ok(_) => {}

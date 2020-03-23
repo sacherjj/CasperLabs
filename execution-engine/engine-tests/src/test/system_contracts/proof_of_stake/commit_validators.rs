@@ -10,11 +10,11 @@ use engine_test_support::{
 use types::{account::PublicKey, U512};
 
 const CONTRACT_LOCAL_STATE: &str = "local_state.wasm";
-const ACCOUNT_1_ADDR: [u8; 32] = [1u8; 32];
+const ACCOUNT_1_ADDR: PublicKey = PublicKey::ed25519_from([1u8; 32]);
 const ACCOUNT_1_BALANCE: u64 = 2000;
 const ACCOUNT_1_BOND: u64 = 1000;
 
-const ACCOUNT_2_ADDR: [u8; 32] = [2u8; 32];
+const ACCOUNT_2_ADDR: PublicKey = PublicKey::ed25519_from([2u8; 32]);
 const ACCOUNT_2_BALANCE: u64 = 2000;
 const ACCOUNT_2_BOND: u64 = 200;
 
@@ -24,12 +24,12 @@ fn should_return_bonded_validators() {
     let accounts = {
         let mut tmp: Vec<GenesisAccount> = DEFAULT_ACCOUNTS.clone();
         let account_1 = GenesisAccount::new(
-            PublicKey::new(ACCOUNT_1_ADDR),
+            ACCOUNT_1_ADDR,
             Motes::new(ACCOUNT_1_BALANCE.into()),
             Motes::new(ACCOUNT_1_BOND.into()),
         );
         let account_2 = GenesisAccount::new(
-            PublicKey::new(ACCOUNT_2_ADDR),
+            ACCOUNT_2_ADDR,
             Motes::new(ACCOUNT_2_BALANCE.into()),
             Motes::new(ACCOUNT_2_BOND.into()),
         );

@@ -14,8 +14,8 @@ use types::{
 #[no_mangle]
 pub extern "C" fn call() {
     // Starts with deployment=1, key_management=1
-    let key_1 = PublicKey::new([42; 32]);
-    let key_2 = PublicKey::new([43; 32]);
+    let key_1 = PublicKey::ed25519_from([42; 32]);
+    let key_2 = PublicKey::ed25519_from([43; 32]);
 
     // Total keys weight = 11 (identity + new key's weight)
     account::add_associated_key(key_1, Weight::new(10)).unwrap_or_revert();

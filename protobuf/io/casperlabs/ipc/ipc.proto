@@ -5,6 +5,8 @@ package io.casperlabs.ipc;
 import "io/casperlabs/casper/consensus/state.proto";
 import "io/casperlabs/ipc/transforms.proto";
 
+// --- BEGIN EXECUTION ENGINE SERVICE DEFINITION --- //
+
 message DeployCode {
   bytes code = 1; // wasm byte code
   bytes args = 2; // ABI-encoded arguments
@@ -242,11 +244,14 @@ message ChainSpec {
         bytes mint_installer = 4;
         // wasm bytes for installing the pos system contract
         bytes pos_installer = 5;
+        // wasm bytes for installing the standard payment system contract
+        bytes standard_payment_installer = 10;
         // genesis account information
         repeated GenesisAccount accounts = 6;
         // costs at genesis
         CostTable costs = 7;
         DeployConfig deploy_config = 8;
+        HighwayConfig highway_config = 9;
     }
 
     message GenesisAccount {
@@ -258,6 +263,26 @@ message ChainSpec {
     message DeployConfig {
         uint32 max_ttl_millis = 2;
         uint32 max_dependencies = 3;
+        uint32 max_block_size_bytes = 4;
+    }
+
+    message HighwayConfig {
+        // Unix timestamp of the Genesis era start.
+        uint64 genesis_era_start_timestamp = 1;
+        // Fixed length duration of an era.
+        uint64 era_duration_millis = 2;
+        // Amount of time to look back from the start of an era to pick the booking block.
+        uint64 booking_duration_millis = 3;
+        // Amount of time after the booking time to allow for magic bits to accumulate before picking the key block.
+        uint64 entropy_duration_millis = 4;
+        // Fixed length duration of the post-era voting period; used when summit level is zero.
+        uint64 voting_period_duration_millis = 5;
+        // Stop the post-era voting period when the switch block reaches a certain summit level; when 0 use the duration instead.
+        uint32 voting_period_summit_level = 6;
+        // Relative fault tolerance threshold value used by the internal finalizer.
+        // Has to be between 0 and 0.5 .
+        double ftt = 7;
+
     }
 
     message CostTable {
@@ -328,12 +353,112 @@ message UpgradeResponse {
     }
 }
 
+// --- END EXECUTION ENGINE SERVICE DEFINITION --- //
+
+// --- BEGIN PROOF-OF-STAKE SERVICE DEFINITION --- //
+
+message BidStateRequest {
+    bytes parent_state_hash = 1;
+    io.casperlabs.casper.consensus.state.ProtocolVersion protocol_version = 2;
+}
+
+message BidState {
+    repeated Bid bids = 1;
+
+    message Bid {
+        bytes id = 1;
+        io.casperlabs.casper.consensus.state.BigInt value = 2;
+    }
+}
+
+message BidStateResponse {
+    oneof result {
+        BidState success = 1;
+        RootNotFound missing_parent = 2;
+    }
+}
+
+message DistributeRewardsRequest {
+    bytes parent_state_hash = 1;
+    repeated ValidatorReward rewards = 2;
+    io.casperlabs.casper.consensus.state.ProtocolVersion protocol_version = 3;
+
+    message ValidatorReward {
+        bytes validator_id = 1;
+        io.casperlabs.casper.consensus.state.BigInt value = 2;
+    }
+}
+
+message DistibuteRewardsError {
+    string message = 1; // TODO: enum of possible errors
+}
+
+message DistributeRewardsResponse {
+    oneof result {
+        // effects of rewards distribution are committed automatically, so commit result is returned in the success case
+        CommitResult success = 1;
+        RootNotFound missing_parent = 2;
+        DistibuteRewardsError error = 3;
+    }
+}
+
+message SlashRequest {
+    bytes parent_state_hash = 1;
+    repeated ValidatorSlash slashes = 2;
+    io.casperlabs.casper.consensus.state.ProtocolVersion protocol_version = 3;
+
+    message ValidatorSlash{
+        bytes validator_id = 1;
+        io.casperlabs.casper.consensus.state.BigInt value = 2;
+    }
+}
+
+message SlashError {
+    string message = 1; // TODO: enum of possible errors
+}
+
+message SlashResponse {
+    oneof result {
+        // effects of slashing are committed automatically, so commit result is returned in the success case
+        CommitResult success = 1;
+        RootNotFound missing_parent = 2;
+        SlashError error = 3;
+    }
+}
+
+message UnbondPayoutRequest {
+    bytes parent_state_hash = 1;
+    uint64 era_height = 2;
+    io.casperlabs.casper.consensus.state.ProtocolVersion protocol_version = 3;
+}
+
+message UnbondPayoutError {
+    string message = 1; // TODO: enum of possible errors
+}
+
+message UnbondPayoutResponse {
+    oneof result {
+        // effects of unbond payment are committed automatically, so commit result is returned in the success case
+        CommitResult success = 1;
+        RootNotFound missing_parent = 2;
+        UnbondPayoutError error = 3;
+    }
+}
+
+// --- END PROOF-OF-STAKE SERVICE DEFINITION --- //
+
 // Definition of the service.
 // ExecutionEngine implements server part while Consensus implements client part.
 service ExecutionEngineService {
+    // execution endpoints
     rpc commit (CommitRequest) returns (CommitResponse) {}
     rpc query (QueryRequest) returns (QueryResponse) {}
     rpc execute (ExecuteRequest) returns (ExecuteResponse) {}
     rpc run_genesis (ChainSpec.GenesisConfig) returns (GenesisResponse) {}
     rpc upgrade (UpgradeRequest) returns (UpgradeResponse) {}
+    // proof-of-stake endpoints
+    rpc bid_state(BidStateRequest) returns (BidStateResponse) {}
+    rpc distribute_rewards(DistributeRewardsRequest) returns (DistributeRewardsResponse) {}
+    rpc slash(SlashRequest) returns (SlashResponse) {}
+    rpc unbond_payout(UnbondPayoutRequest) returns (UnbondPayoutResponse) {}
 }

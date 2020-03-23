@@ -11,13 +11,14 @@ import io.casperlabs.casper.finality.FinalityDetectorUtil
 import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.models.Message
+import io.casperlabs.models.Message.MainRank
 import io.casperlabs.storage.dag.DagRepresentation
 
 import scala.collection.mutable.{IndexedSeq => MutableSeq}
 
 object VotingMatrix {
   // (Consensus value, DagLevel of the block)
-  type Vote               = (BlockHash, Long)
+  type Vote               = (BlockHash, MainRank)
   type VotingMatrix[F[_]] = MonadState[F, VotingMatrixState]
 
   private[votingmatrix] def of[F[_]: Sync](
@@ -38,7 +39,8 @@ object VotingMatrix {
     */
   private[votingmatrix] def create[F[_]: Concurrent](
       dag: DagRepresentation[F],
-      newFinalizedBlock: BlockHash
+      newFinalizedBlock: BlockHash,
+      isHighway: Boolean
   ): F[VotingMatrix[F]] =
     for {
       // Start a new round, get weightMap and validatorSet from the post-global-state of new finalized block's
@@ -86,7 +88,7 @@ object VotingMatrix {
                                     .levelZeroMsgsOfValidator(dag, v, voteValue)
                                     .map(
                                       _.lastOption
-                                        .map(b => (v, (voteValue, b.rank)))
+                                        .map(b => (v, (voteValue, b.mainRank)))
                                     )
                               }
                               .map(_.flatten.toMap)
@@ -107,7 +109,7 @@ object VotingMatrix {
       implicit0(votingMatrix: VotingMatrix[F]) <- of[F](state)
       // Apply the incremental update step to update voting matrix by taking M := V(i)latest
       _ <- latestMessagesToUpdated.values.toList.traverse { b =>
-            updateVotingMatrixOnNewBlock[F](dag, b)
+            updateVotingMatrixOnNewBlock[F](dag, b, isHighway)
           }
     } yield votingMatrix
 }

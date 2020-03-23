@@ -8,6 +8,7 @@ import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.crypto.Keys.PrivateKey
 import io.casperlabs.crypto.hash.Blake2b256
 import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
+import io.casperlabs.shared.Sorting.jRankOrdering
 import org.scalacheck.{Arbitrary, Gen, Shrink}
 
 import scala.collection.JavaConverters._
@@ -57,7 +58,9 @@ trait ArbitraryConsensus {
     loop(10)
   }
 
-  private def protoHash[T <: scalapb.GeneratedMessage](proto: T): ByteString =
+  def sample[T](implicit a: Arbitrary[T]): T = sample(arbitrary[T])
+
+  protected def protoHash[T <: scalapb.GeneratedMessage](proto: T): ByteString =
     ByteString.copyFrom(Blake2b256.hash(proto.toByteArray))
 
   val genHash = genBytes(32)
@@ -216,10 +219,12 @@ trait ArbitraryConsensus {
         deploy  <- arbitrary[Deploy]
         isError <- arbitrary[Boolean]
         cost    <- arbitrary[Long]
+        stage   <- Gen.choose(0, 5)
       } yield {
         Block
           .ProcessedDeploy()
           .withDeploy(deploy)
+          .withStage(stage)
           .withCost(cost)
           .withIsError(isError)
           .withErrorMessage(if (isError) "Kaboom!" else "")
@@ -261,7 +266,8 @@ trait ArbitraryConsensus {
                 validatorPublicKey = j.validatorPublicKey
               )
             })
-            .withRank(parents.map(_.rank).max + 1)
+            .withJRank((parents ++ justifications).map(_.jRank).max + 1)
+            .withMainRank(parents.head.mainRank + 1)
           block.withHeader(header)
         }
 
@@ -289,7 +295,10 @@ trait ArbitraryConsensus {
       summary
         .update(_.header.parentHashes := Seq.empty)
         .update(_.header.justifications := Seq.empty)
-        .update(_.header.rank := 0)
+        .update(_.header.jRank := 0)
+        .update(_.header.mainRank := 0)
+        .update(_.header.validatorPublicKey := ByteString.EMPTY)
+        .clearSignature
     } flatMap { genesis =>
       loop(Vector(genesis), Set(genesis))
     }
@@ -348,7 +357,7 @@ trait ArbitraryConsensus {
                               s.getHeader
                                 .withParentHashes(Seq.empty)
                                 .withJustifications(Seq.empty)
-                                .withRank((c.dagDepth - depth).toLong)
+                                .withJRank((c.dagDepth - depth).toLong)
                             )
                         )
                       )
@@ -367,11 +376,34 @@ trait ArbitraryConsensus {
             newest.getHeader
               .withParentHashes(Seq.empty)
               .withJustifications(Seq.empty)
-              .withRank(c.dagDepth.toLong)
+              .withJRank(c.dagDepth.toLong)
           )
         ),
         1
       )
+    }
+  }
+
+  implicit val arbEra: Arbitrary[Era] = Arbitrary {
+    for {
+      keyBlockHash       <- genHash
+      bookingBlockHash   <- genHash
+      parentKeyBlockHash <- Gen.oneOf(Gen.const(ByteString.EMPTY), genHash)
+      length             <- Gen.choose(1, 168).map(_ * 60 * 60 * 1000)
+      now                = System.currentTimeMillis
+      startTick          <- Gen.choose(now - length, now)
+      endTick            = startTick + length
+      bonds              <- arbitrary[List[Bond]]
+      seed               <- genHash
+    } yield {
+      Era()
+        .withKeyBlockHash(keyBlockHash)
+        .withParentKeyBlockHash(parentKeyBlockHash)
+        .withBookingBlockHash(bookingBlockHash)
+        .withStartTick(startTick)
+        .withEndTick(endTick)
+        .withBonds(bonds)
+        .withLeaderSeed(seed)
     }
   }
 

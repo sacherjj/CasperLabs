@@ -12,6 +12,7 @@ doctest = false
 [features]
 std = ["contract/std", "types/std"]
 lib = []
+highway = []
 
 [dependencies]
 base16 = { version = "0.2.1", default-features = false }

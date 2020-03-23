@@ -1,0 +1,19 @@
+[package]
+name = "standard-payment-install"
+version = "0.1.0"
+authors = ["Fraser Hutchison <fraser@casperlabs.io>"]
+edition = "2018"
+
+[lib]
+crate-type = ["cdylib"]
+bench = false
+doctest = false
+test = false
+
+[features]
+std = ["contract/std", "types/std"]
+
+[dependencies]
+contract = { path = "../../../contract", package = "casperlabs-contract" }
+standard-payment = { path = "../standard-payment", default-features = false, features = ["lib"] }
+types = { path = "../../../types", package = "casperlabs-types" }

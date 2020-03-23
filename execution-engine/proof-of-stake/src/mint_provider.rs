@@ -1,20 +1,19 @@
-use types::{
-    account::{PublicKey, PurseId},
-    TransferResult, U512,
-};
+use types::{account::PublicKey, TransferResult, URef, U512};
 
 pub trait MintProvider {
-    fn transfer_from_purse_to_account(
-        source: PurseId,
+    fn transfer_purse_to_account(
+        &mut self,
+        source: URef,
         target: PublicKey,
         amount: U512,
     ) -> TransferResult;
 
-    fn transfer_from_purse_to_purse(
-        source: PurseId,
-        target: PurseId,
+    fn transfer_purse_to_purse(
+        &mut self,
+        source: URef,
+        target: URef,
         amount: U512,
     ) -> Result<(), ()>;
 
-    fn get_balance(purse: PurseId) -> Option<U512>;
+    fn balance(&mut self, purse: URef) -> Option<U512>;
 }

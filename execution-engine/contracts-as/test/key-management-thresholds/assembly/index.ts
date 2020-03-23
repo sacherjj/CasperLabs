@@ -1,6 +1,8 @@
 import * as CL from "../../../../contract-as/assembly";
 import {Error, ErrorCode} from "../../../../contract-as/assembly/error";
 import {fromBytesString} from "../../../../contract-as/assembly/bytesrepr";
+import {arrayToTyped} from "../../../../contract-as/assembly/utils";
+import {PublicKey, PUBLIC_KEY_ED25519_ID} from "../../../../contract-as/assembly/key";
 import {addAssociatedKey, AddKeyFailure,
         setActionThreshold, ActionType, SetThresholdFailure,
         updateAssociatedKey, UpdateKeyFailure,
@@ -20,15 +22,17 @@ export function call(): void {
   }
   let stage = stageResult.value;
 
-  let key42s = new Array<u8>(32);
-  key42s.fill(42);
+  let key42sBytes = new Array<u8>(32);
+  key42sBytes.fill(42);
+  let key42s = new PublicKey(PUBLIC_KEY_ED25519_ID, arrayToTyped(key42sBytes));
 
-  let key43s = new Array<u8>(32);
-  key43s.fill(43);
+  let key43sBytes = new Array<u8>(32);
+  key43sBytes.fill(43);
+  let key43s = new PublicKey(PUBLIC_KEY_ED25519_ID, arrayToTyped(key43sBytes));
 
-  let key1s = new Array<u8>(32);
-  key1s.fill(1);
-
+  let key1sBytes = new Array<u8>(32);
+  key1sBytes.fill(1);
+  let key1s = new PublicKey(PUBLIC_KEY_ED25519_ID, arrayToTyped(key1sBytes));
 
   if (stage == "init") {
     if (addAssociatedKey(key42s, 100) != AddKeyFailure.Ok) {
@@ -50,8 +54,9 @@ export function call(): void {
     }
   }
   else if (stage == "test-permission-denied") {
-    let key44s = new Array<u8>(32);
-    key44s.fill(44);
+    let key44sBytes = new Array<u8>(32);
+    key44sBytes.fill(44);
+    let key44s = new PublicKey(PUBLIC_KEY_ED25519_ID, arrayToTyped(key44sBytes));
     switch (addAssociatedKey(key44s, 1)) {
       case AddKeyFailure.Ok:
         Error.fromUserError(200).revert();
@@ -63,8 +68,10 @@ export function call(): void {
         break;
     }
 
-    let key43s = new Array<u8>(32);
-    key43s.fill(43);
+    let key43sBytes = new Array<u8>(32);
+    key43sBytes.fill(43);
+    let key43s = new PublicKey(PUBLIC_KEY_ED25519_ID, arrayToTyped(key43sBytes));
+
     switch (updateAssociatedKey(key43s, 2)) {
       case UpdateKeyFailure.Ok:
         Error.fromUserError(300).revert();
@@ -99,8 +106,9 @@ export function call(): void {
     }
   }
   else if (stage == "test-key-mgmnt-succeed") {
-    let key44s = new Array<u8>(32);
-    key44s.fill(44);
+    let key44sBytes = new Array<u8>(32);
+    key44sBytes.fill(44);
+    let key44s = new PublicKey(PUBLIC_KEY_ED25519_ID, arrayToTyped(key44sBytes));
 
     // Has to be executed with keys of total weight >= 254
     if (addAssociatedKey(key44s, 1) != AddKeyFailure.Ok) {

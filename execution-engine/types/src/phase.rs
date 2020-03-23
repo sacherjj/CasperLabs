@@ -34,11 +34,15 @@ impl ToBytes for Phase {
 
         Ok(vec![id])
     }
+
+    fn serialized_length(&self) -> usize {
+        PHASE_SERIALIZED_LENGTH
+    }
 }
 
 impl FromBytes for Phase {
     fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
-        let (id, rest): (u8, &[u8]) = FromBytes::from_bytes(bytes)?;
+        let (id, rest) = u8::from_bytes(bytes)?;
         let phase = FromPrimitive::from_u8(id).ok_or(Error::Formatting)?;
         Ok((phase, rest))
     }

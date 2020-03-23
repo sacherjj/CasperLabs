@@ -1,47 +1,47 @@
 [genesis]
 
-# Human readable name for convenience; the genesis_hash is the true identifier.
-# The name influences the genesis hash by contributing to the seeding of the pseudo-
-# random number generator used in execution engine for computing genesis post-state.
 name = "test-chain"
 
-# Timestamp for the genesis block, also used in seeding the pseudo-random number
-# generator used in execution engine for computing genesis post-state.
 timestamp = 1568805354071
 
 protocol-version = "0.1"
 
-# Path (absolute, or relative to the manifest) to the file containing wasm bytecode for installing the mint system contract.
 mint-code-path = "mint.wasm"
 
-# Path (absolute, or relative to the manifest) to the file containing wasm bytecode for installing the PoS system contract.
 pos-code-path = "pos.wasm"
 
-# Path (absolute, or relative to the manifest) to the CSV file containing initial account balances and bonds.
 initial-accounts-path = "accounts.csv"
 
+[highway]
+
+
+genesis-era-start = 1583712000000
+
+era-duration = "7days"
+
+booking-duration = "10days"
+
+entropy-duration = "3hours"
+
+voting-period-duration = "2days"
+
+voting-period-summit-level = 0
+
+ftt = 0.1
+
 [deploys]
-# 1 day
 max-ttl-millis = 86400000
 max-dependencies = 10
+max-block-size-bytes = 10485760
 
 [wasm-costs]
-# Default opcode cost
 regular = 1
-# Div operations multiplier.
 div-multiplier = 2
-# Mul operations multiplier.
 mul-multiplier = 3
-# Memory (load/store) operations multiplier.
 mem-multiplier = 4
-# Amount of free memory (in 64kb pages) each contract can use for stack.
 mem-initial-pages = 5
-# Grow memory cost, per page (64kb)
 mem-grow-per-page = 6
-# Memory copy cost, per byte
 mem-copy-per-byte = 7
-# Max stack height (native WebAssembly stack limiter)
 max-stack-height = 8
-# Cost of wasm opcode is calculated as TABLE_ENTRY_COST * `opcodes_mul` / `opcodes_div`
 opcodes-multiplier = 9
 opcodes-divisor = 10

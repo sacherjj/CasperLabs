@@ -6,11 +6,13 @@ import cats.syntax.flatMap._
 import cats.effect.Concurrent
 import cats.effect.concurrent.{Ref, Semaphore}
 import io.casperlabs.casper.Estimator.BlockHash
-import io.casperlabs.casper.consensus.Block
 import io.casperlabs.casper.finality.MultiParentFinalizer.FinalizedBlocks
+import io.casperlabs.casper.CasperMetricsSource
+import io.casperlabs.metrics.Metrics
 import io.casperlabs.models.Message
 import io.casperlabs.storage.dag.DagRepresentation
 import simulacrum.typeclass
+import io.casperlabs.storage.dag.FinalityStorage
 
 @typeclass trait MultiParentFinalizer[F[_]] {
 
@@ -23,25 +25,43 @@ import simulacrum.typeclass
 }
 
 object MultiParentFinalizer {
-  final case class FinalizedBlocks(
-      mainChain: BlockHash,
-      quorum: BigInt,
-      secondaryParents: Set[BlockHash]
-  ) {
-    def finalizedBlocks: Set[BlockHash] = secondaryParents + mainChain
+  class MeteredMultiParentFinalizer[F[_]] private (
+      finalizer: MultiParentFinalizer[F],
+      metrics: Metrics[F]
+  ) extends MultiParentFinalizer[F] {
+
+    private implicit val metricsSource = CasperMetricsSource / "MultiParentFinalizer"
+
+    override def onNewMessageAdded(message: Message): F[Option[FinalizedBlocks]] =
+      metrics.timer("onNewMessageAdded")(finalizer.onNewMessageAdded(message))
   }
 
-  // TODO: Populate `latestLFB` and `finalizedBlocks` from the DB on startup.
-  def create[F[_]: Concurrent](
+  object MeteredMultiParentFinalizer {
+    def of[F[_]](
+        f: MultiParentFinalizer[F]
+    )(implicit M: Metrics[F]): MeteredMultiParentFinalizer[F] =
+      new MeteredMultiParentFinalizer[F](f, M)
+  }
+
+  final case class FinalizedBlocks(
+      // New finalized block in the main chain.
+      newLFB: BlockHash,
+      quorum: BigInt,
+      indirectlyFinalized: Set[BlockHash],
+      indirectlyOrphaned: Set[BlockHash]
+  ) {
+    def finalizedBlocks: Set[BlockHash] = indirectlyFinalized + newLFB
+  }
+
+  def create[F[_]: Concurrent: FinalityStorage](
       dag: DagRepresentation[F],
-      latestLFB: BlockHash,            // Last LFB from the main chain
-      finalizedBlocks: Set[BlockHash], // Set of blocks finalized so far. Will be used as a cache.
-      finalityDetector: FinalityDetector[F]
+      latestLFB: BlockHash, // Last LFB from the main chain
+      finalityDetector: FinalityDetector[F],
+      isHighway: Boolean
   ): F[MultiParentFinalizer[F]] =
     for {
-      finalizedBlocksCache <- Ref[F].of[Set[BlockHash]](finalizedBlocks)
-      lfbCache             <- Ref[F].of[BlockHash](latestLFB)
-      semaphore            <- Semaphore[F](1)
+      lfbCache  <- Ref[F].of[BlockHash](latestLFB)
+      semaphore <- Semaphore[F](1)
     } yield new MultiParentFinalizer[F] {
 
       /** Returns set of finalized blocks */
@@ -53,23 +73,22 @@ object MultiParentFinalizer {
           finalized <- finalizedBlock.fold(Applicative[F].pure(None: Option[FinalizedBlocks])) {
                         case CommitteeWithConsensusValue(_, quorum, newLFB) =>
                           for {
-                            _              <- lfbCache.set(newLFB)
-                            finalizedSoFar <- finalizedBlocksCache.get
+                            _ <- lfbCache.set(newLFB)
                             justFinalized <- FinalityDetectorUtil.finalizedIndirectly[F](
+                                              dag,
                                               newLFB,
-                                              finalizedSoFar,
-                                              dag
+                                              isHighway
                                             )
-                            _ <- finalizedBlocksCache.update(_ ++ justFinalized + newLFB)
-                          } yield Some(FinalizedBlocks(newLFB, quorum, justFinalized))
+                            justOrphaned <- FinalityDetectorUtil.orphanedIndirectly(
+                                             dag,
+                                             newLFB,
+                                             justFinalized,
+                                             isHighway
+                                           )
+                          } yield Some(
+                            FinalizedBlocks(newLFB, quorum, justFinalized, justOrphaned)
+                          )
                       }
         } yield finalized)
     }
-
-  def empty[F[_]: Concurrent](
-      dag: DagRepresentation[F],
-      latestLFB: BlockHash,
-      finalityDetector: FinalityDetector[F]
-  ): F[MultiParentFinalizer[F]] =
-    create[F](dag, latestLFB, Set(latestLFB), finalityDetector)
 }

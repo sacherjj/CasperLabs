@@ -33,4 +33,8 @@ def cleanup(tag_name: str):
 
 
 if __name__ == "__main__":
-    cleanup(os.environ.get("TAG_NAME") or "latest")
+    unique_run_name = os.environ.get("UNIQUE_RUN_NAME")
+    if not unique_run_name:
+        unique_run_name = "0"
+    tag_name = os.environ.get("TAG_NAME") or "latest"
+    cleanup(f"{tag_name}-{unique_run_name}")

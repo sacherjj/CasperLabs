@@ -121,14 +121,17 @@ impl ProtocolVersion {
 
 impl ToBytes for ProtocolVersion {
     fn to_bytes(&self) -> Result<Vec<u8>, Error> {
-        let value_bytes = self.value().to_bytes()?;
-        Ok(value_bytes.to_vec())
+        self.value().to_bytes()
+    }
+
+    fn serialized_length(&self) -> usize {
+        self.value().serialized_length()
     }
 }
 
 impl FromBytes for ProtocolVersion {
     fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
-        let (version, rem): (SemVer, &[u8]) = FromBytes::from_bytes(bytes)?;
+        let (version, rem) = SemVer::from_bytes(bytes)?;
         let protocol_version = ProtocolVersion::new(version);
         Ok((protocol_version, rem))
     }

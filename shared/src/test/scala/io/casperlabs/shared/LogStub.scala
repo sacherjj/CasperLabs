@@ -11,7 +11,11 @@ import izumi.logstage.api.{Log => IzLog}
 
 // https://medium.com/@rtwnk/logstage-zero-cost-structured-logging-in-scala-part-2-practical-example-3ef27e67e7ee
 // https://github.com/7mind/izumi/blob/baea35e54dd482e54cd2d075e774cfd26806897a/logstage/logstage-core/src/main/scala/izumi/logstage/api/rendering/StringRenderingPolicy.scala
-class LogSinkStub(prefix: String = "", printEnabled: Boolean = false) extends LogSink {
+class LogSinkStub(
+    prefix: String,
+    printEnabled: Boolean,
+    printLevel: Log.Level
+) extends LogSink {
 
   @volatile var debugs: Vector[String]    = Vector.empty[String]
   @volatile var infos: Vector[String]     = Vector.empty[String]
@@ -53,7 +57,8 @@ class LogSinkStub(prefix: String = "", printEnabled: Boolean = false) extends Lo
         "ERROR"
       case IzLog.Level.Crit => ???
     }
-    if (printEnabled) println(s"${lvl.padTo(5, " ").mkString("")} $prefix $msg")
+    if (printEnabled && entry.context.dynamic.level >= printLevel)
+      println(s"${lvl.padTo(5, " ").mkString("")} $prefix $msg")
   }
 }
 
@@ -73,9 +78,10 @@ trait LogStub {
 object LogStub {
   def apply[F[_]: Sync](
       prefix: String = "",
-      printEnabled: Boolean = false
+      printEnabled: Boolean = false,
+      printLevel: Log.Level = Log.Level.Debug
   ): LogIO[F] with LogStub = {
-    val sink   = new LogSinkStub(prefix, printEnabled)
+    val sink   = new LogSinkStub(prefix, printEnabled, printLevel)
     val logger = IzLogger(IzLog.Level.Debug, List(sink))
     apply[F](logger, sink)
   }

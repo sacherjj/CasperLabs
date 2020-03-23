@@ -81,6 +81,10 @@ class DockerBase:
             return "latest"
 
     @property
+    def unique_test_run_name(self):
+        return f"{self.docker_tag}-{self.config.unique_run_num}"
+
+    @property
     def is_in_docker(self) -> bool:
         return os.environ.get("TAG_NAME") is not None
 
@@ -95,7 +99,7 @@ class DockerBase:
 
     @property
     def container_name(self) -> str:
-        return f"{self.container_type}-{self.config.number}-{self.config.rand_str}-{self.docker_tag}"
+        return f"{self.container_type}-{self.config.number}-{self.config.rand_str}-{self.unique_test_run_name}"
 
     @property
     def container_type(self) -> str:

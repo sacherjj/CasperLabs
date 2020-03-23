@@ -4,12 +4,12 @@ import cats.data.NonEmptyList
 import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
+import io.casperlabs.casper.dag.DagOperations
 import io.casperlabs.casper.equivocations.EquivocationDetector
 import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.helper.BlockUtil.generateValidator
 import io.casperlabs.casper.helper.{BlockGenerator, StorageFixture}
 import io.casperlabs.casper.util.BondingUtil.Bond
-import io.casperlabs.casper.util.DagOperations
 import io.casperlabs.models.Weight
 import io.casperlabs.storage.dag.DagRepresentation
 import monix.eval.Task

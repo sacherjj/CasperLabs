@@ -7,6 +7,7 @@ use std::{collections::BTreeMap, iter};
 use test::{black_box, Bencher};
 
 use casperlabs_types::{
+    account::PublicKey,
     bytesrepr::{self, FromBytes, ToBytes},
     AccessRights, CLTyped, CLValue, Key, URef, U128, U256, U512,
 };
@@ -59,7 +60,7 @@ fn deserialize_vector_of_u8(b: &mut Bencher) {
         .collect::<Vec<_>>()
         .to_bytes()
         .unwrap();
-    b.iter(|| Vec::<i32>::from_bytes(&data))
+    b.iter(|| Vec::<u8>::from_bytes(&data))
 }
 
 #[bench]
@@ -221,14 +222,14 @@ fn deserialize_unit(b: &mut Bencher) {
 
 #[bench]
 fn serialize_key_account(b: &mut Bencher) {
-    let account = Key::Account([0u8; 32]);
+    let account = Key::Account(PublicKey::ed25519_from([0u8; 32]));
 
     b.iter(|| ToBytes::to_bytes(black_box(&account)))
 }
 
 #[bench]
 fn deserialize_key_account(b: &mut Bencher) {
-    let account = Key::Account([0u8; 32]);
+    let account = Key::Account(PublicKey::ed25519_from([0u8; 32]));
     let account_bytes = account.to_bytes().unwrap();
 
     b.iter(|| Key::from_bytes(black_box(&account_bytes)))
@@ -429,12 +430,23 @@ fn deserialize_cl_value_liststring(b: &mut Bencher) {
 
 #[bench]
 fn serialize_cl_value_namedkey(b: &mut Bencher) {
-    b.iter(|| serialize_cl_value((TEST_STR_1.to_string(), Key::Account([0xffu8; 32]))));
+    b.iter(|| {
+        serialize_cl_value((
+            TEST_STR_1.to_string(),
+            Key::Account(PublicKey::ed25519_from([0xffu8; 32])),
+        ))
+    });
 }
 
 #[bench]
 fn deserialize_cl_value_namedkey(b: &mut Bencher) {
-    benchmark_deserialization(b, (TEST_STR_1.to_string(), Key::Account([0xffu8; 32])));
+    benchmark_deserialization(
+        b,
+        (
+            TEST_STR_1.to_string(),
+            Key::Account(PublicKey::ed25519_from([0xffu8; 32])),
+        ),
+    );
 }
 
 #[bench]

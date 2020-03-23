@@ -15,9 +15,14 @@ message BlockInfo {
     }
 
     message Status {
-        float fault_tolerance = 1;
+        reserved 1; // fault_tolerance;
+        reserved 4; // is_finalized;
         Stats stats = 2;
         repeated bytes child_hashes = 3;
+
+        // Indicate the finality status of the block, i.e. whether it's in the p-past cone
+        // of the last finalized block. Doesn't apply to ballots, those never get finalized.
+        Finality finality = 5;
 
         // Statistics derived from the full block.
         message Stats {
@@ -26,6 +31,15 @@ message BlockInfo {
             uint64 deploy_cost_total = 3;
             // Average gas price across all deploys in the block weighted by the gas cost of the deploys.
             uint64 deploy_gas_price_avg = 4;
+        }
+
+        enum Finality {
+            // The fate of the block hasn't been decided yet.
+            UNDECIDED = 0;
+            // The block has reached k=1 summit level and has appeared in the finalized block stream.
+            FINALIZED = 1;
+            // The block was bypassed by the Last Finalized Block without being finalized, i.e. it will never be finalized now.
+            ORPHANED = 2;
         }
     }
 }
@@ -42,6 +56,7 @@ message DeployInfo {
         uint64 cost = 2;
         bool is_error = 3;
         string error_message = 4;
+        uint32 stage = 5;
     }
 
     enum View {
@@ -73,10 +88,17 @@ message DeployInfo {
     }
 }
 
-message Event{
+message Event {
+    uint64 event_id = 9;
     oneof value {
         BlockAdded block_added = 1;
         NewFinalizedBlock new_finalized_block = 2;
+        DeployAdded deploy_added = 3;
+        DeployRequeued deploy_requeued = 4;
+        DeployDiscarded deploy_discarded = 5;
+        DeployProcessed deploy_processed = 6;
+        DeployFinalized deploy_finalized = 7;
+        DeployOrphaned deploy_orphaned = 8;
     }
 
     message BlockAdded {
@@ -88,5 +110,52 @@ message Event{
         bytes block_hash = 1;
         // Set of blocks that were finalized indirectly (secondary parents of the new main-chain LFB).
         repeated bytes indirectly_finalized_block_hashes = 2;
+        // Set of blocks which are never going to be finalized now.
+        repeated bytes indirectly_orphaned_block_hashes = 3;
+    }
+
+    // A deploy was added to the local buffer.
+    message DeployAdded {
+        io.casperlabs.casper.consensus.Deploy deploy = 1;
+    }
+
+    // A deploy was discarded from the local buffer either due to a pre-condition error or TTL expiration.
+    message DeployDiscarded {
+        io.casperlabs.casper.consensus.Deploy deploy = 1;
+        string message = 2;
+    }
+
+    // A deploy has been requeued in the local buffer because none of the blocks it was included in are
+    // in the p-past cone of the fork choice. Some of the existing blocks may become un-orphaned again if
+    // the fork choice switches back to their branch.
+    message DeployRequeued {
+        io.casperlabs.casper.consensus.Deploy deploy = 1;
+    }
+
+    // A deploy was executed and included in a block.
+    message DeployProcessed {
+        bytes block_hash = 1;
+        io.casperlabs.casper.consensus.Block.ProcessedDeploy processed_deploy = 2;
+    }
+
+    // A block the deploy was included in has been finalized. Every `DeployProcessed` event should
+    // eventually end up being finalized or orphaned (anti-finalized).
+    message DeployFinalized {
+        // This block has been finalized directly or indirectly.
+        bytes block_hash = 1;
+        // This deploy cannot appear in the descendants of the finalized block as that would be a duplicate,
+        // so these results are considered final.
+        io.casperlabs.casper.consensus.Block.ProcessedDeploy processed_deploy = 2;
+    }
+
+    // A block the deploy was included in has been anti-finalized, i.e. orphaned by the LFB.
+    // The deploy can still be finalized in a different block, if it was requeued or re-sent.
+    message DeployOrphaned {
+       // This block has been passed by the Last Finalized Block and will never be included in the main chain.
+       bytes block_hash = 1;
+       // Including the full `DeployInfo `with all the alternative processing results so we can see if there's another,
+       // finalized block, or something else to wait for. Otherwise the client could pair up Processed and
+       // Finalized/Anti-finalized events but if they miss something they'd most likely query the status of the deploy anyway.
+       DeployInfo deploy_info = 2;
     }
 }

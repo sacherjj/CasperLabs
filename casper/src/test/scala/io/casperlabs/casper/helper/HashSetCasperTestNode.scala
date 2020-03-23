@@ -1,7 +1,7 @@
 package io.casperlabs.casper.helper
 
 import cats.effect.concurrent.Ref
-import cats.effect.{Concurrent, ContextShift, Timer}
+import cats.effect.{Concurrent, ConcurrentEffect, ContextShift, Timer}
 import cats.implicits._
 import cats.{~>, Applicative, Defer, Parallel}
 import com.google.protobuf.ByteString
@@ -26,7 +26,8 @@ import io.casperlabs.metrics.Metrics
 import io.casperlabs.models.Weight
 import io.casperlabs.p2p.EffectsTestInstances._
 import io.casperlabs.shared.{Cell, Log, Time}
-import io.casperlabs.smartcontracts.bytesrepr._
+import io.casperlabs.models.bytesrepr._
+import io.casperlabs.models.cltype
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.block._
 import io.casperlabs.storage.dag._
@@ -144,7 +145,7 @@ trait HashSetCasperTestNodeFactory {
       faultToleranceThreshold: Double = 0.1
   )(
       implicit
-      concurrentF: Concurrent[F],
+      concurrentEffectF: ConcurrentEffect[F],
       parF: Parallel[F],
       timerF: Timer[F],
       contextShift: ContextShift[F]
@@ -159,7 +160,7 @@ trait HashSetCasperTestNodeFactory {
       implicit scheduler: Scheduler
   ): TestNode[Task] =
     standaloneF[Task](genesis, sk, storageSize, faultToleranceThreshold)(
-      Concurrent[Task],
+      ConcurrentEffect[Task],
       Parallel[Task],
       Timer[Task],
       ContextShift[Task]
@@ -173,7 +174,7 @@ trait HashSetCasperTestNodeFactory {
       maybeMakeEE: Option[HashSetCasperTestNode.MakeExecutionEngineService[F]] = None
   )(
       implicit
-      concurrentF: Concurrent[F],
+      concurrentEffectF: ConcurrentEffect[F],
       parF: Parallel[F],
       timerF: Timer[F],
       contextShift: ContextShift[F]
@@ -185,7 +186,7 @@ trait HashSetCasperTestNodeFactory {
       storageSize: Long = 1024L * 1024 * 10,
       faultToleranceThreshold: Double = 0.1,
       maybeMakeEE: Option[MakeExecutionEngineService[Task]] = None
-  ): Task[IndexedSeq[TestNode[Task]]] =
+  )(implicit scheduler: Scheduler): Task[IndexedSeq[TestNode[Task]]] =
     networkF[Task](
       sks,
       genesis,
@@ -193,7 +194,7 @@ trait HashSetCasperTestNodeFactory {
       faultToleranceThreshold,
       maybeMakeEE
     )(
-      Concurrent[Task],
+      ConcurrentEffect[Task],
       Parallel[Task],
       Timer[Task],
       ContextShift[Task]
@@ -201,7 +202,7 @@ trait HashSetCasperTestNodeFactory {
 
   protected def initStorage[F[_]: Concurrent: Log: Metrics: ContextShift: Time]()
       : F[(BlockStorage[F], IndexedDagStorage[F], DeployStorage[F], FinalityStorage[F])] =
-    StorageFixture.createStorages[F]()
+    StorageFixture.createFileStorages[F]()
 }
 
 object HashSetCasperTestNode {
@@ -320,8 +321,8 @@ object HashSetCasperTestNode {
           baseKey: Key,
           path: Seq[String],
           protocolVersion: ProtocolVersion
-      ): F[Either[Throwable, Value]] =
-        Applicative[F].pure[Either[Throwable, Value]](
+      ): F[Either[Throwable, cltype.StoredValue]] =
+        Applicative[F].pure[Either[Throwable, cltype.StoredValue]](
           Left(new Exception("Method `query` not implemented on this instance!"))
         )
     }
@@ -335,10 +336,10 @@ object HashSetCasperTestNode {
       0L,
       consensus.state.ProtocolVersion(1),
       Some(
-        DeployConfig(
-          24 * 60 * 60 * 1000, // 1 day
-          10
-        )
+        DeployConfig()
+          .withMaxTtlMillis(24 * 60 * 60 * 1000) // 1 day
+          .withMaxDependencies(10)
+          .withMaxBlockSizeBytes(10 * 1024 * 1024)
       )
     )
   )

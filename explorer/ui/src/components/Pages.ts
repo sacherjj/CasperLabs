@@ -11,7 +11,9 @@ export default class Pages {
     '/accounts/:accountPublicKeyBase16/deploys';
   static readonly Deploy = '/deploys/:deployHashBase16';
   static readonly Search = '/search';
+  static readonly Vesting = '/contracts/vesting';
   static readonly ConnectedPeers = '/peers';
+  static readonly DeployContracts= '/deploy';
 
   static readonly block = (blockHashBase16: string) =>
     `/blocks/${blockHashBase16}`;

@@ -5,10 +5,10 @@ use crate::{
     error::Error,
 };
 use contract::{
-    contract_api::{account, runtime, storage, system, TURef},
+    contract_api::{account, runtime, storage, system},
     unwrap_or_revert::UnwrapOrRevert,
 };
-use types::{account::PublicKey, ContractRef, Key};
+use types::{account::PublicKey, ContractRef, Key, URef};
 
 use crate::vesting::PURSE_NAME;
 
@@ -36,12 +36,12 @@ fn deploy_vesting_contract(
     let vesting_purse = system::create_purse();
     system::transfer_from_purse_to_purse(main_purse, vesting_purse, vesting_config.total_amount)
         .unwrap_or_revert_with(Error::PurseTransferError);
-    let mut vesting_urefs: BTreeMap<String, Key> = BTreeMap::new();
-    vesting_urefs.insert(String::from(PURSE_NAME), vesting_purse.value().into());
+    let mut vesting_keys: BTreeMap<String, Key> = BTreeMap::new();
+    vesting_keys.insert(String::from(PURSE_NAME), vesting_purse.into());
 
     // Create vesting instance.
     let vesting_ref: ContractRef =
-        storage::store_function_at_hash(VESTING_CONTRACT_NAME, vesting_urefs);
+        storage::store_function_at_hash(VESTING_CONTRACT_NAME, vesting_keys);
 
     // Initialize vesting contract.
     runtime::call_contract::<_, ()>(
@@ -59,11 +59,13 @@ fn deploy_vesting_contract(
         ),
     );
 
-    // Save it under a new TURef.
-    let vesting_turef: TURef<Key> = storage::new_turef(vesting_ref.into());
+    let vesting_key: Key = vesting_ref.into();
 
-    // Save TURef under readable name.
-    runtime::put_key(&name, vesting_turef.into());
+    // Save it under a new URef.
+    let vesting_uref: URef = storage::new_uref(vesting_key);
+
+    // Save URef under readable name.
+    runtime::put_key(&name, vesting_uref.into());
 }
 
 fn deploy_proxy() {
@@ -71,9 +73,11 @@ fn deploy_proxy() {
     let proxy_ref: ContractRef =
         storage::store_function_at_hash(VESTING_PROXY_CONTRACT_NAME, Default::default());
 
-    // Save it under a new TURef.
-    let proxy_turef: TURef<Key> = storage::new_turef(proxy_ref.into());
+    let proxy_key: Key = proxy_ref.into();
 
-    // Save TURef under readable name.
-    runtime::put_key(VESTING_PROXY_CONTRACT_NAME, proxy_turef.into());
+    // Save it under a new URef.
+    let proxy_uref: URef = storage::new_uref(proxy_key);
+
+    // Save URef under readable name.
+    runtime::put_key(VESTING_PROXY_CONTRACT_NAME, proxy_uref.into());
 }

@@ -1,6 +1,6 @@
 use types::{
     account::{ActionType, SetThresholdFailure, Weight, WEIGHT_SERIALIZED_LENGTH},
-    bytesrepr::{Error, FromBytes, ToBytes},
+    bytesrepr::{self, Error, FromBytes, ToBytes},
 };
 
 /// Thresholds that have to be met when executing an action of a certain type.
@@ -91,17 +91,21 @@ impl Default for ActionThresholds {
 
 impl ToBytes for ActionThresholds {
     fn to_bytes(&self) -> Result<Vec<u8>, Error> {
-        let mut result = Vec::with_capacity(2 * WEIGHT_SERIALIZED_LENGTH);
-        result.extend(&self.deployment.to_bytes()?);
-        result.extend(&self.key_management.to_bytes()?);
+        let mut result = bytesrepr::unchecked_allocate_buffer(self);
+        result.append(&mut self.deployment.to_bytes()?);
+        result.append(&mut self.key_management.to_bytes()?);
         Ok(result)
+    }
+
+    fn serialized_length(&self) -> usize {
+        2 * WEIGHT_SERIALIZED_LENGTH
     }
 }
 
 impl FromBytes for ActionThresholds {
     fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
-        let (deployment, rem): (Weight, &[u8]) = FromBytes::from_bytes(&bytes)?;
-        let (key_management, rem): (Weight, &[u8]) = FromBytes::from_bytes(&rem)?;
+        let (deployment, rem) = Weight::from_bytes(&bytes)?;
+        let (key_management, rem) = Weight::from_bytes(&rem)?;
         let ret = ActionThresholds {
             deployment,
             key_management,
@@ -135,5 +139,11 @@ mod tests {
     fn should_not_create_action_thresholds_with_invalid_deployment_threshold() {
         // deployment cant be greater than key management
         assert!(ActionThresholds::new(Weight::new(5), Weight::new(1)).is_err());
+    }
+
+    #[test]
+    fn serialization_roundtrip() {
+        let action_thresholds = ActionThresholds::new(Weight::new(1), Weight::new(42)).unwrap();
+        bytesrepr::test_serialization_roundtrip(&action_thresholds);
     }
 }

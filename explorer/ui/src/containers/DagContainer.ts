@@ -1,4 +1,4 @@
-import { action, observable, reaction, runInAction } from 'mobx';
+import { action, IObservableArray, observable, reaction, runInAction } from 'mobx';
 
 import ErrorContainer from './ErrorContainer';
 import { CasperService, encodeBase16 } from 'casperlabs-sdk';
@@ -34,7 +34,7 @@ export class DagStep {
       this.container
         .blocks![0].getSummary()!
         .getHeader()!
-        .getRank();
+        .getJRank();
     return this.maxRank === 0 && blockRank ? blockRank : this.maxRank;
   }
 
@@ -44,8 +44,8 @@ export class DagStep {
     this.maxRank === 0 && this.currentMaxRank <= this.depth
       ? 0
       : this.currentMaxRank > this.depth
-      ? this.currentMaxRank - this.depth
-      : this.currentMaxRank
+        ? this.currentMaxRank - this.depth
+        : this.currentMaxRank
   );
 
   next = this.step(() => this.currentMaxRank + this.depth);
@@ -60,7 +60,7 @@ enum SubscribeState {
 }
 
 export class DagContainer {
-  @observable blocks: BlockInfo[] | null = null;
+  @observable blocks: IObservableArray<BlockInfo> = observable.array([], {deep: true});
   @observable selectedBlock: BlockInfo | undefined = undefined;
   @observable depth = 10;
   @observable maxRank = 0;
@@ -68,6 +68,7 @@ export class DagContainer {
   @observable lastFinalizedBlock: BlockInfo | undefined = undefined;
   @observable eventsSubscriber: Subscription | null = null;
   @observable subscribeToggleStore: ToggleStore = new ToggleStore(true);
+  @observable hideBallotsToggleStore: ToggleStore = new ToggleStore(false);
 
   constructor(
     private errors: ErrorContainer,
@@ -83,7 +84,7 @@ export class DagContainer {
   }
 
   @action
-  updateMaxRankAndDepth(rank: number, depth: number){
+  updateMaxRankAndDepth(rank: number, depth: number) {
     this.maxRank = rank;
     this.depth = depth;
   }
@@ -122,7 +123,14 @@ export class DagContainer {
       await this.errors.capture(
         this.casperService.getBlockInfo(blockHashBase16, 0).then(block => {
           this.selectedBlock = block;
-          this.blocks!.push(block);
+          let contained = this.blocks!.find(
+            x =>
+              encodeBase16(x.getSummary()!.getBlockHash_asU8()) ===
+              blockHashBase16
+          );
+          if(!contained){
+            this.blocks!.push(block);
+          }
         })
       );
     }
@@ -168,11 +176,11 @@ export class DagContainer {
 
                 if (index === -1) {
                   // blocks with rank < N+1-depth will be culled
-                  let culledThreshold = block!.getSummary()!.getHeader()!.getRank() + 1 - this.depth;
+                  let culledThreshold = block!.getSummary()!.getHeader()!.getJRank() + 1 - this.depth;
                   let remainingBlocks: BlockInfo[] = [];
                   if (this.blocks !== null) {
                     remainingBlocks = this.blocks.filter(b => {
-                      let rank = b.getSummary()?.getHeader()?.getRank();
+                      let rank = b.getSummary()?.getHeader()?.getJRank();
                       if (rank !== undefined) {
                         return rank >= culledThreshold;
                       }
@@ -181,16 +189,34 @@ export class DagContainer {
                   }
                   remainingBlocks.splice(0, 0, block!);
                   runInAction(() => {
-                    this.blocks = remainingBlocks;
+                    this.blocks.replace(remainingBlocks);
                   });
                 }
               }
             } else if (event.hasNewFinalizedBlock()) {
-              this.errors.capture(
-                this.casperService.getLastFinalizedBlockInfo().then(block => {
+              const directFinalizedBlockHash = event.getNewFinalizedBlock()!.getBlockHash_asB64();
+
+              let finalizedBlocks = new Set(event.getNewFinalizedBlock()!.getIndirectlyFinalizedBlockHashesList_asB64());
+              finalizedBlocks.add(directFinalizedBlockHash);
+
+              let updatedLastFinalizedBlock = false;
+              this.blocks?.forEach(block => {
+                let bh = block.getSummary()!.getBlockHash_asB64();
+                if (finalizedBlocks.has(bh)) {
+                  block.getStatus()?.setFinality(BlockInfo.Status.Finality.FINALIZED)
+                }
+                if (!updatedLastFinalizedBlock && bh === directFinalizedBlockHash) {
                   this.lastFinalizedBlock = block;
-                })
-              );
+                  updatedLastFinalizedBlock = true;
+                }
+              });
+              if (!updatedLastFinalizedBlock) {
+                this.errors.capture(
+                  this.casperService.getBlockInfo(event.getNewFinalizedBlock()!.getBlockHash()).then(block => {
+                    this.lastFinalizedBlock = block;
+                  })
+                );
+              }
             }
           }
         });
@@ -212,7 +238,7 @@ export class DagContainer {
       this.casperService
         .getBlockInfos(this.depth, this.maxRank)
         .then(blocks => {
-          this.blocks = blocks;
+          this.blocks.replace(blocks);
         })
     );
 

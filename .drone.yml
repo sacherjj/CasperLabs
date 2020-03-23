@@ -166,9 +166,27 @@ steps:
   depends_on:
   - rust-compile-test-pr
 
+- name: run-rust-audit-pr
+  commands:
+  - "cd execution-engine"
+  - "make setup-audit"
+  - "make audit"
+  image: "casperlabs/buildenv:latest"
+  when:
+    event:
+    - pull_request
+    changeset:
+      includes:
+      - "**/.drone.yml"
+      - "**/**.rs"
+      - "**/**.proto"
+      - "**/Cargo.lock"
+      - "**/Cargo.toml"
+  depends_on:
+  - rust-compile-test-pr
+
 - name: black-and-flake8
   commands:
-  - "python3 -m pip install pipenv"
   - "cd integration-testing"
   - "./run_flake8_black.sh"
   image: "casperlabs/buildenv:latest"
@@ -200,7 +218,6 @@ steps:
 
 - name: black-and-flake8-bors
   commands:
-  - "python3 -m pip install pipenv"
   - "cd integration-testing"
   - "./run_flake8_black.sh"
   image: "casperlabs/buildenv:latest"
@@ -306,6 +323,27 @@ steps:
       - "**/Cargo.toml"
       - "**/casperlabs-engine-grpc-server.spec"
       - "**/rustfmt.toml"
+  depends_on:
+  - rust-compile-test-bors
+  - sbt-test-docker-bors
+
+- name: run-rust-audit-bors
+  commands:
+  - "cd execution-engine"
+  - "make setup-audit"
+  - "make audit"
+  image: "casperlabs/buildenv:latest"
+  when:
+    branch:
+    - staging
+    - trying
+    changeset:
+      includes:
+      - "**/.drone.yml"
+      - "**/**.rs"
+      - "**/**.proto"
+      - "**/Cargo.lock"
+      - "**/Cargo.toml"
   depends_on:
   - rust-compile-test-bors
   - sbt-test-docker-bors
@@ -418,12 +456,10 @@ steps:
   depends_on:
   - docker-build-key-bors
 
-- name: run-integration-tests
+- name: run-integration-tests-parallel-0
   commands:
-  - "apt-get update && apt-get -y install gcc"
-  - "python3 -m pip install pipenv pytest dataclasses typing_extensions dataclasses grpcio grpcio_tools protobuf in-place ed25519 pyblake2 lz4"
   - "cd integration-testing"
-  - "./docker_run_tests.sh"
+  - "./docker_run_tests.sh --unique_run_num 0"
   environment:
     _JAVA_OPTIONS: "-Xms2G -Xmx2G -XX:MaxMetaspaceSize=1G"
   image: "casperlabs/buildenv:latest"
@@ -439,6 +475,67 @@ steps:
   depends_on:
   - docker-build-ee-int-bors
   - docker-build-explorer-bors
+
+- name: run-integration-tests-parallel-1
+  commands:
+  - "cd integration-testing"
+  - "./docker_run_tests.sh --unique_run_num 1"
+  environment:
+    _JAVA_OPTIONS: "-Xms2G -Xmx2G -XX:MaxMetaspaceSize=1G"
+  image: "casperlabs/buildenv:latest"
+  volumes:
+  - name: docker_sock
+    path: "/var/run/docker.sock"
+  - name: temp
+    path: "/tmp"
+  when:
+    branch:
+    - staging
+    - trying
+  depends_on:
+  - docker-build-ee-int-bors
+  - docker-build-explorer-bors
+
+- name: run-integration-tests-parallel-2
+  commands:
+  - "cd integration-testing"
+  - "./docker_run_tests.sh --unique_run_num 2"
+  environment:
+    _JAVA_OPTIONS: "-Xms2G -Xmx2G -XX:MaxMetaspaceSize=1G"
+  image: "casperlabs/buildenv:latest"
+  volumes:
+  - name: docker_sock
+    path: "/var/run/docker.sock"
+  - name: temp
+    path: "/tmp"
+  when:
+    branch:
+    - staging
+    - trying
+  depends_on:
+  - docker-build-ee-int-bors
+  - docker-build-explorer-bors
+
+- name: run-integration-tests-serial-3
+  commands:
+  - "cd integration-testing"
+  - "./docker_run_tests.sh --unique_run_num 3"
+  environment:
+    _JAVA_OPTIONS: "-Xms2G -Xmx2G -XX:MaxMetaspaceSize=1G"
+  image: "casperlabs/buildenv:latest"
+  volumes:
+  - name: docker_sock
+    path: "/var/run/docker.sock"
+  - name: temp
+    path: "/tmp"
+  when:
+    branch:
+    - staging
+    - trying
+  depends_on:
+  - run-integration-tests-parallel-0
+  - run-integration-tests-parallel-1
+  - run-integration-tests-parallel-2
 
 # The below section is for post-bors push webhooks
 - name: rust-compile-for-make
@@ -548,7 +645,9 @@ steps:
   commands:
   - "make build-client-contracts build-node-contracts"
   - "rm -rf project/target project/project/target"
-  - "sbt update test client/debian:packageBin client/universal:packageZipTarball client/rpm:packageBin node/debian:packageBin node/universal:packageZipTarball node/rpm:packageBin node/docker:publishLocal client/docker:publishLocal"
+  - "sbt update test client/debian:packageBin client/universal:packageZipTarball client/rpm:packageBin node/debian:packageBin node/universal:packageZipTarball node/rpm:packageBin"
+  - "export DOCKER_LATEST_TAG=DRONE-${DRONE_BUILD_NUMBER}"
+  - "make docker-build/node docker-build/client"
   - "mkdir -p artifacts/${DRONE_BRANCH}"
   - "cp client/target/casperlabs-client_*_all.deb client/target/universal/*.tgz artifacts/${DRONE_BRANCH}"
   - "cp client/target/rpm/RPMS/noarch/casperlabs-client-*.noarch.rpm artifacts/${DRONE_BRANCH}"
@@ -590,6 +689,25 @@ steps:
   depends_on:
   - package-sbt-artifacts-merge
 
+- name: package-python-client
+  image: "casperlabs/buildenv:latest"
+  commands:
+  - "make build-client-contracts"
+  - "cd integration-testing"
+  - "pipenv sync"
+  - "cd client/CasperLabsClient"
+  - "pipenv run python3 setup.py sdist"
+  - "cp dist/casperlabs* ../../../artifacts/${DRONE_BRANCH}"
+  when:
+    branch:
+    - dev
+    - release-*
+    - master
+    event:
+    - push
+  depends_on:
+    - package-ee
+
 - name: rsync-artifacts
   image: drillster/drone-rsync
   settings:
@@ -618,6 +736,7 @@ steps:
   depends_on:
   - package-sbt-artifacts-merge
   - package-ee
+  - package-python-client
 
 - name: docker-publish
   commands:
@@ -708,6 +827,7 @@ steps:
   commands:
   - "docker images --filter \"dangling=true\" -q --no-trunc | xargs --no-run-if-empty docker rmi -f || true"
   - "docker images | grep \"DRONE-${DRONE_BUILD_NUMBER}\" | awk '{print $3}' | xargs --no-run-if-empty docker rmi -f || true"
+  - "docker images | grep DRONE | grep -E '([1-9][0-9]|[4-9]).hours' | awk '{print $3}' | sort -n | uniq | xargs --no-run-if-empty docker rmi -f || true"
   environment:
     _JAVA_OPTIONS: "-Xms2G -Xmx2G -XX:MaxMetaspaceSize=1G"
   image: "casperlabs/buildenv:latest"
@@ -737,6 +857,36 @@ depends_on:
 
 ---
 kind: pipeline
+name: rebuild-buildenv
+
+clone:
+  disable: true
+
+steps:
+- name: update-buildenv
+  image: plugins/downstream
+  settings:
+    repositories:
+    - "CasperLabs/buildenv@master"
+  environment:
+    DOWNSTREAM_SERVER:
+      from_secret: downstream_server
+    DOWNSTREAM_TOKEN:
+      from_secret: downstream_token
+
+trigger:
+  status:
+  - success
+  branch:
+  - dev
+  event:
+  - push
+
+depends_on:
+- build-bors-merge
+
+---
+kind: pipeline
 name: failed-build-alert
 
 clone:
@@ -748,7 +898,6 @@ steps:
   settings:
     webhook:
       from_secret: slack_webhook
-    channel: alerts
     template:
     - |
       *{{ uppercasefirst build.status }}*
@@ -813,6 +962,25 @@ steps:
     - refs/tags/v*
   depends_on:
   - package-sbt-artifacts-tag
+
+- name: package-python-client-tag
+  image: "casperlabs/buildenv:latest"
+  commands:
+  - "make build-client-contracts"
+  - "cd integration-testing"
+  - "pipenv sync"
+  - "cd client/CasperLabsClient"
+  - "pipenv run python3 setup.py sdist"
+  - "cp dist/casperlabs* ../../../artifacts/${DRONE_BRANCH}"
+  when:
+    branch:
+    - dev
+    - release-*
+    - master
+    event:
+    - push
+  depends_on:
+    - package-ee-tag
 
 - name: mac-ee-tarball-tag
   image: appleboy/drone-ssh:1.5.5
@@ -884,6 +1052,25 @@ steps:
   - package-sbt-artifacts-tag
   - package-ee-tag
   - rsync-mac-tarball-tag
+  - package-python-client-tag
+
+- name: npm-publish
+  image: plugins/npm
+  settings:
+    username:
+      from_secret: npm_user
+    token:
+      from_secret: npm_token
+    email:
+      from_secret: npm_email
+    folder:
+    - "execution-engine/contract-as"
+    fail_on_version_conflict:
+    - true
+    access:
+    - "public"
+  depends_on:
+  - github_publish_release_artifacts
 
 - name: cleanup-mac-tag
   image: appleboy/drone-ssh:1.5.5
@@ -1022,7 +1209,6 @@ steps:
   settings:
     webhook:
       from_secret: slack_webhook
-    channel: alerts
     template:
     - |
       macOS Build Status: *{{ uppercasefirst build.status }}*
@@ -1033,6 +1219,31 @@ steps:
 
 trigger:
   cron: [ mac-hourly-cron ]
+
+---
+kind: pipeline
+name: drone-docker-image-cleanup-cron
+
+clone:
+  disable: true
+
+steps:
+- name: drone-docker-image-cleanup
+  image: casperlabs/buildenv:latest
+  commands:
+  - "docker images --filter \"dangling=true\" -q --no-trunc | xargs --no-run-if-empty docker rmi -f || true"
+  - "docker images | grep DRONE | grep -E '([1-9][0-9]|[4-9]).hours' | awk '{print $3}' | sort -n | uniq | xargs --no-run-if-empty docker rmi -f || true"
+  volumes:
+  - name: docker_sock
+    path: "/var/run/docker.sock"
+
+volumes:
+- name: docker_sock
+  host:
+    path: "/var/run/docker.sock"
+
+trigger:
+  cron: [ drone-docker-image-cleanup-cron ]
 
 # Signature for Drone
 ---

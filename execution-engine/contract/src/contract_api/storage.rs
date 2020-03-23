@@ -6,18 +6,18 @@ use core::{convert::From, mem::MaybeUninit};
 use casperlabs_types::{
     api_error,
     bytesrepr::{self, FromBytes, ToBytes},
-    AccessRights, ApiError, CLTyped, CLValue, ContractRef, Key, URef,
+    AccessRights, ApiError, CLTyped, CLValue, ContractRef, Key, URef, KEY_UREF_SERIALIZED_LENGTH,
 };
 
 use crate::{
-    contract_api::{self, runtime, TURef},
+    contract_api::{self, runtime},
     ext_ffi,
     unwrap_or_revert::UnwrapOrRevert,
 };
 
-/// Reads value under `turef` in the global state.
-pub fn read<T: CLTyped + FromBytes>(turef: TURef<T>) -> Result<Option<T>, bytesrepr::Error> {
-    let key: Key = turef.into();
+/// Reads value under `uref` in the global state.
+pub fn read<T: CLTyped + FromBytes>(uref: URef) -> Result<Option<T>, bytesrepr::Error> {
+    let key: Key = uref.into();
     let (key_ptr, key_size, _bytes) = contract_api::to_ptr(key);
 
     let value_size = {
@@ -32,6 +32,13 @@ pub fn read<T: CLTyped + FromBytes>(turef: TURef<T>) -> Result<Option<T>, bytesr
 
     let value_bytes = runtime::read_host_buffer(value_size).unwrap_or_revert();
     Ok(Some(bytesrepr::deserialize(value_bytes)?))
+}
+
+/// Reads value under `uref` in the global state, reverts if value not found or is not `T`.
+pub fn read_or_revert<T: CLTyped + FromBytes>(uref: URef) -> T {
+    read(uref)
+        .unwrap_or_revert_with(ApiError::Read)
+        .unwrap_or_revert_with(ApiError::ValueNotFound)
 }
 
 /// Reads the value under `key` in the context-local partition of global state.
@@ -56,9 +63,9 @@ pub fn read_local<K: ToBytes, V: CLTyped + FromBytes>(
     Ok(Some(bytesrepr::deserialize(value_bytes)?))
 }
 
-/// Writes `value` under `turef` in the global state.
-pub fn write<T: CLTyped + ToBytes>(turef: TURef<T>, value: T) {
-    let key = Key::from(turef);
+/// Writes `value` under `uref` in the global state.
+pub fn write<T: CLTyped + ToBytes>(uref: URef, value: T) {
+    let key = Key::from(uref);
     let (key_ptr, key_size, _bytes1) = contract_api::to_ptr(key);
 
     let cl_value = CLValue::from_t(value).unwrap_or_revert();
@@ -81,9 +88,9 @@ pub fn write_local<K: ToBytes, V: CLTyped + ToBytes>(key: K, value: V) {
     }
 }
 
-/// Adds `value` to the one currently under `turef` in the global state.
-pub fn add<T: CLTyped + ToBytes>(turef: TURef<T>, value: T) {
-    let key = Key::from(turef);
+/// Adds `value` to the one currently under `uref` in the global state.
+pub fn add<T: CLTyped + ToBytes>(uref: URef, value: T) {
+    let key = Key::from(uref);
     let (key_ptr, key_size, _bytes1) = contract_api::to_ptr(key);
 
     let cl_value = CLValue::from_t(value).unwrap_or_revert();
@@ -131,22 +138,22 @@ pub fn store_function_at_hash(name: &str, named_keys: BTreeMap<String, Key>) -> 
     ContractRef::Hash(addr)
 }
 
-/// Returns a new unforgeable pointer, where the value is initialized to `init`
-pub fn new_turef<T: CLTyped + ToBytes>(init: T) -> TURef<T> {
-    let key_ptr = contract_api::alloc_bytes(Key::serialized_size_hint());
+/// Returns a new unforgeable pointer, where the value is initialized to `init`.
+pub fn new_uref<T: CLTyped + ToBytes>(init: T) -> URef {
+    let key_ptr = contract_api::alloc_bytes(Key::max_serialized_length());
     let cl_value = CLValue::from_t(init).unwrap_or_revert();
     let (cl_value_ptr, cl_value_size, _cl_value_bytes) = contract_api::to_ptr(cl_value);
     let bytes = unsafe {
-        ext_ffi::new_uref(key_ptr, cl_value_ptr, cl_value_size); // URef has `READ_ADD_WRITE` access
+        ext_ffi::new_uref(key_ptr, cl_value_ptr, cl_value_size); // URef has `READ_ADD_WRITE`
         Vec::from_raw_parts(
             key_ptr,
-            Key::serialized_size_hint(),
-            Key::serialized_size_hint(),
+            KEY_UREF_SERIALIZED_LENGTH,
+            KEY_UREF_SERIALIZED_LENGTH,
         )
     };
     let key: Key = bytesrepr::deserialize(bytes).unwrap_or_revert();
     if let Key::URef(uref) = key {
-        TURef::from_uref(uref).unwrap_or_revert()
+        uref
     } else {
         runtime::revert(ApiError::UnexpectedKeyVariant);
     }

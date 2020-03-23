@@ -12,6 +12,7 @@ import {
   Keys
 } from 'casperlabs-sdk';
 import ObservableValueMap from '../lib/ObservableValueMap';
+import { FieldState } from 'formstate';
 
 // https://www.npmjs.com/package/tweetnacl-ts#signatures
 // https://tweetnacl.js.org/#/sign
@@ -21,10 +22,10 @@ type AccountB64 = string;
 export class AuthContainer {
   @observable user: User | null = null;
   @observable accounts: UserAccount[] | null = null;
+  @observable private contracts: Contracts | null = null;
 
   // An account we are creating or importing, while we're configuring it.
   @observable accountForm: NewAccountFormData | ImportAccountFormData | null = null;
-
   @observable selectedAccount: UserAccount | null = null;
 
   // Balance for each public key.
@@ -66,6 +67,7 @@ export class AuthContainer {
   async logout() {
     this.user = null;
     this.accounts = null;
+    this.contracts = null;
     this.balances.clear();
     sessionStorage.clear();
     this.authService.logout();
@@ -83,6 +85,7 @@ export class AuthContainer {
         this.user.sub
       );
       this.accounts = meta.accounts || [];
+      this.contracts = meta.contracts || { vestingContracts: [] };
     }
   }
 
@@ -132,12 +135,12 @@ export class AuthContainer {
     let form = this.accountForm!;
     if (form instanceof NewAccountFormData && form.clean()) {
       // Save the private and public keys to disk.
-      saveToFile(form.privateKeyBase64, `${form.name}.private.key`);
-      saveToFile(form.publicKeyBase64, `${form.name}.public.key`);
+      saveToFile(form.privateKeyBase64, `${form.name.$}.private.key`);
+      saveToFile(form.publicKeyBase64.$!, `${form.name.$}.public.key`);
       // Add the public key to the accounts and save it to Auth0.
       await this.addAccount({
-        name: form.name,
-        publicKeyBase64: form.publicKeyBase64
+        name: form.name.$!,
+        publicKeyBase64: form.publicKeyBase64.$!
       });
       return true;
     } else {
@@ -149,8 +152,8 @@ export class AuthContainer {
     let form = this.accountForm!;
     if (form instanceof ImportAccountFormData && form.clean()) {
       await this.addAccount({
-        name: form.name,
-        publicKeyBase64: form.publicKeyBase64
+        name: form.name.$,
+        publicKeyBase64: form.publicKeyBase64.$
       });
       return true;
     } else {
@@ -158,21 +161,41 @@ export class AuthContainer {
     }
   }
 
-  deleteAccount(name: String) {
+  async deleteAccount(name: String) {
     if (window.confirm(`Are you sure you want to delete account '${name}'?`)) {
       this.accounts = this.accounts!.filter(x => x.name !== name);
-      this.errors.capture(this.saveAccounts());
+      await this.errors.capture(this.saveMetaData());
     }
   }
 
   private async addAccount(account: UserAccount) {
     this.accounts!.push(account);
-    await this.errors.capture(this.saveAccounts());
+    await this.errors.capture(this.saveMetaData());
   }
 
-  private async saveAccounts() {
+  public getContracts<K extends keyof Contracts>(key:K): Contracts[K] {
+    if(!this.contracts){
+      this.contracts = {};
+    }
+    return this.contracts[key];
+  }
+
+  public async updateContracts<K extends keyof Contracts>(
+    key: K,
+    f: (oldState: Contracts[K]) => Contracts[K]
+  ) {
+    if (!this.contracts) {
+      this.contracts = {};
+    }
+    let oldState = this.contracts[key];
+    this.contracts[key] = f(oldState);
+    await this.errors.capture(this.saveMetaData());
+  }
+
+  private async saveMetaData() {
     await this.authService.updateUserMetadata(this.user!.sub, {
-      accounts: this.accounts || undefined
+      accounts: this.accounts || undefined,
+      contracts: this.contracts || undefined
     });
   }
 
@@ -187,23 +210,24 @@ function saveToFile(content: string, filename: string) {
 }
 
 class AccountFormData extends CleanableFormData {
-  @observable name: string = '';
-  @observable publicKeyBase64: string = '';
+  name: FieldState<string> = new FieldState<string>("");
+  publicKeyBase64: FieldState<string> = new FieldState("");
 
   constructor(private accounts: UserAccount[]) {
     super();
   }
 
   protected check() {
-    if (this.name === '') return 'Name cannot be empty!';
+    let name = this.name.$;
+    if (name === '') return 'Name cannot be empty!';
 
-    if (this.name.indexOf(' ') > -1)
+    if (name.indexOf(' ') > -1)
       return 'The account name should not include spaces.';
 
-    if (this.accounts.some(x => x.name === this.name))
-      return `An account with name '${this.name}' already exists.`;
+    if (this.accounts.some(x => x.name === name))
+      return `An account with name '${name}' already exists.`;
 
-    if (this.accounts.some(x => x.publicKeyBase64 === this.publicKeyBase64))
+    if (this.accounts.some(x => x.publicKeyBase64 === this.publicKeyBase64.$))
       return 'An account with this public key already exists.';
 
     return null;
@@ -217,7 +241,7 @@ export class NewAccountFormData extends AccountFormData {
     super(accounts);
     // Generate key pair and assign to public and private keys.
     const keys = nacl.sign_keyPair();
-    this.publicKeyBase64 = encodeBase64(keys.publicKey);
+    this.publicKeyBase64 = new FieldState<string>(encodeBase64(keys.publicKey));
     this.privateKeyBase64 = encodeBase64(keys.secretKey);
   }
 }
@@ -236,8 +260,8 @@ export class ImportAccountFormData extends AccountFormData {
         this.fileContent = reader.result as string;
         this.error = this.checkFileContent();
         if (this.error === null) {
-          this.name = this.fileName!.split('.')[0];
-          this.publicKeyBase64 = encodeBase64(this.key!);
+          this.name.onChange(this.fileName!.split('.')[0]);
+          this.publicKeyBase64.onChange(encodeBase64(this.key!));
         }
       };
     }
@@ -256,7 +280,9 @@ export class ImportAccountFormData extends AccountFormData {
       return 'The content of imported file cannot be empty!';
     }
     try {
-      this.key = Keys.Ed25519.parsePublicKey(Keys.Ed25519.readBase64WithPEM(this.fileContent));
+      this.key = Keys.Ed25519.parsePublicKey(
+        Keys.Ed25519.readBase64WithPEM(this.fileContent)
+      );
     } catch (e) {
       return e.message;
     }

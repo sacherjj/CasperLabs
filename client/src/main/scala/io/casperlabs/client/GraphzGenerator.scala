@@ -67,7 +67,7 @@ object GraphzGenerator {
 
     val lastFinalizedBlockHash =
       blockInfos
-        .find(_.getStatus.faultTolerance > 0)
+        .find(_.getStatus.finality.isFinalized)
         .map(x => hexShort(x.getSummary.blockHash))
         .getOrElse("")
 
@@ -127,7 +127,7 @@ object GraphzGenerator {
   private def toDagInfo[G[_]](
       blockInfos: List[BlockInfo]
   ): DagInfo[G] = {
-    val ranks = blockInfos.map(_.getSummary.rank).distinct
+    val ranks = blockInfos.map(_.getSummary.jRank).distinct
 
     val validators = blockInfos
       .map(_.getSummary)
@@ -142,8 +142,8 @@ object GraphzGenerator {
           .toSet
           .toList
 
-        val validatorBlocks =
-          Map(b.rank -> List(ValidatorBlock(blockHash, parents, justifications)))
+        val validatorBlocks: Map[Long, List[io.casperlabs.client.ValidatorBlock]] =
+          Map(b.jRank -> List(ValidatorBlock(blockHash, parents, justifications)))
 
         Map(blockSenderHash -> validatorBlocks)
       }

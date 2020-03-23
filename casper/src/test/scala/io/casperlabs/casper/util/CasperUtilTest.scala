@@ -228,7 +228,7 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with Sto
                               validators.toSet
                             )
         _ = panoramaDagLevel1 shouldEqual Map(
-          v0 -> b1.getHeader.rank
+          v0 -> b1.getHeader.jRank
         )
 
         panoramaDagLevel2 <- FinalityDetectorUtil.panoramaDagLevelsOfBlock(
@@ -237,8 +237,8 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with Sto
                               validators.toSet
                             )
         _ = panoramaDagLevel2 shouldEqual Map(
-          v0 -> b1.getHeader.rank,
-          v1 -> b3.getHeader.rank
+          v0 -> b1.getHeader.jRank,
+          v1 -> b3.getHeader.jRank
         )
 
         panoramaDagLevel3 <- FinalityDetectorUtil.panoramaDagLevelsOfBlock(
@@ -247,9 +247,9 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with Sto
                               validators.toSet
                             )
         _ = panoramaDagLevel3 shouldEqual Map(
-          v0 -> b1.getHeader.rank,
-          v1 -> b3.getHeader.rank,
-          v3 -> b5.getHeader.rank
+          v0 -> b1.getHeader.jRank,
+          v1 -> b3.getHeader.jRank,
+          v3 -> b5.getHeader.jRank
         )
 
         panoramaDagLevel4 <- FinalityDetectorUtil.panoramaDagLevelsOfBlock(
@@ -258,10 +258,10 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with Sto
                               validators.toSet
                             )
         _ = panoramaDagLevel4 shouldEqual Map(
-          v0 -> b4.getHeader.rank,
-          v1 -> b3.getHeader.rank,
-          v2 -> b6.getHeader.rank,
-          v3 -> b5.getHeader.rank
+          v0 -> b4.getHeader.jRank,
+          v1 -> b3.getHeader.jRank,
+          v2 -> b6.getHeader.jRank,
+          v3 -> b5.getHeader.jRank
         )
 
         panoramaDagLevel5 <- FinalityDetectorUtil.panoramaDagLevelsOfBlock(
@@ -270,10 +270,10 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with Sto
                               validators.toSet
                             )
         _ = panoramaDagLevel5 shouldEqual Map(
-          v0 -> b4.getHeader.rank,
-          v1 -> b3.getHeader.rank,
-          v2 -> b7.getHeader.rank,
-          v3 -> b5.getHeader.rank
+          v0 -> b4.getHeader.jRank,
+          v1 -> b3.getHeader.jRank,
+          v2 -> b7.getHeader.jRank,
+          v3 -> b5.getHeader.jRank
         )
       } yield ()
   }
@@ -344,14 +344,15 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with Sto
         panoramaM <- FinalityDetectorUtil.panoramaM(
                       dag,
                       validatorsToIndex,
-                      Message.fromBlock(b7).get
+                      Message.fromBlock(b7).get,
+                      isHighway = false
                     )
         _ = panoramaM.size shouldBe (validatorsToIndex.size)
         _ = panoramaM shouldBe IndexedSeq(
-          b4.getHeader.rank,
+          b4.getHeader.jRank,
           0, // V(1) happens to be an equivocator
-          b7.getHeader.rank,
-          b5.getHeader.rank,
+          b7.getHeader.jRank,
+          b5.getHeader.jRank,
           0 // V(4)-swimlane is empty
         )
       } yield ()

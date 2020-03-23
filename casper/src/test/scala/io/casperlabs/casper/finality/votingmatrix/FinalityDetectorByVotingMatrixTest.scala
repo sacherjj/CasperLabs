@@ -23,6 +23,7 @@ import monix.eval.Task
 import org.scalatest.{FlatSpec, Matchers}
 
 import scala.collection.immutable.HashMap
+import io.casperlabs.storage.dag.DagRepresentation
 
 @silent("is never used")
 class FinalityDetectorByVotingMatrixTest
@@ -36,6 +37,15 @@ class FinalityDetectorByVotingMatrixTest
   implicit val logEff = LogStub[Task]()
   implicit val raiseValidateErr: FunctorRaise[Task, InvalidBlock] =
     validation.raiseValidateErrorThroughApplicativeError[Task]
+
+  def mkVotingMatrix(dag: DagRepresentation[Task], genesis: Block) =
+    FinalityDetectorVotingMatrix
+      .of[Task](
+        dag,
+        genesis.blockHash,
+        rFTT = 0.1,
+        isHighway = false
+      )
 
   it should "detect ballots finalizing a block" in withStorage {
     implicit blockStore => implicit dagStorage => implicit deployStorage =>
@@ -64,14 +74,9 @@ class FinalityDetectorByVotingMatrixTest
           implicit0(casperState: Cell[Task, CasperState]) <- Cell.mvarCell[Task, CasperState](
                                                               CasperState()
                                                             )
-          genesis <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bonds)
-          dag     <- dagStorage.getRepresentation
-          implicit0(detector: FinalityDetectorVotingMatrix[Task]) <- FinalityDetectorVotingMatrix
-                                                                      .of[Task](
-                                                                        dag,
-                                                                        genesis.blockHash,
-                                                                        rFTT = 0.1
-                                                                      )
+          genesis                                                 <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bonds)
+          dag                                                     <- dagStorage.getRepresentation
+          implicit0(detector: FinalityDetectorVotingMatrix[Task]) <- mkVotingMatrix(dag, genesis)
           (a1, c1) <- createBlockAndUpdateFinalityDetector[Task](
                        Seq(genesis.blockHash),
                        genesis.blockHash,
@@ -128,14 +133,9 @@ class FinalityDetectorByVotingMatrixTest
           implicit0(casperState: Cell[Task, CasperState]) <- Cell.mvarCell[Task, CasperState](
                                                               CasperState()
                                                             )
-          genesis <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bonds)
-          dag     <- dagStorage.getRepresentation
-          implicit0(detector: FinalityDetectorVotingMatrix[Task]) <- FinalityDetectorVotingMatrix
-                                                                      .of[Task](
-                                                                        dag,
-                                                                        genesis.blockHash,
-                                                                        rFTT = 0.1
-                                                                      )
+          genesis                                                 <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bonds)
+          dag                                                     <- dagStorage.getRepresentation
+          implicit0(detector: FinalityDetectorVotingMatrix[Task]) <- mkVotingMatrix(dag, genesis)
           (b1, c1) <- createBlockAndUpdateFinalityDetector[Task](
                        Seq(genesis.blockHash),
                        genesis.blockHash,
@@ -193,14 +193,9 @@ class FinalityDetectorByVotingMatrixTest
           implicit0(casperState: Cell[Task, CasperState]) <- Cell.mvarCell[Task, CasperState](
                                                               CasperState()
                                                             )
-          genesis <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bonds)
-          dag     <- dagStorage.getRepresentation
-          implicit0(detector: FinalityDetectorVotingMatrix[Task]) <- FinalityDetectorVotingMatrix
-                                                                      .of[Task](
-                                                                        dag,
-                                                                        genesis.blockHash,
-                                                                        rFTT = 0.1
-                                                                      )
+          genesis                                                 <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bonds)
+          dag                                                     <- dagStorage.getRepresentation
+          implicit0(detector: FinalityDetectorVotingMatrix[Task]) <- mkVotingMatrix(dag, genesis)
           (b1, c1) <- createBlockAndUpdateFinalityDetector[Task](
                        Seq(genesis.blockHash),
                        genesis.blockHash,
@@ -269,14 +264,9 @@ class FinalityDetectorByVotingMatrixTest
           implicit0(casperState: Cell[Task, CasperState]) <- Cell.mvarCell[Task, CasperState](
                                                               CasperState()
                                                             )
-          genesis <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bonds)
-          dag     <- dagStorage.getRepresentation
-          implicit0(detector: FinalityDetectorVotingMatrix[Task]) <- FinalityDetectorVotingMatrix
-                                                                      .of[Task](
-                                                                        dag,
-                                                                        genesis.blockHash,
-                                                                        rFTT = 0.1
-                                                                      )
+          genesis                                                 <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bonds)
+          dag                                                     <- dagStorage.getRepresentation
+          implicit0(detector: FinalityDetectorVotingMatrix[Task]) <- mkVotingMatrix(dag, genesis)
           (b1, c1) <- createBlockAndUpdateFinalityDetector[Task](
                        Seq(genesis.blockHash),
                        genesis.blockHash,
@@ -350,14 +340,9 @@ class FinalityDetectorByVotingMatrixTest
         implicit0(casperState: Cell[Task, CasperState]) <- Cell.mvarCell[Task, CasperState](
                                                             CasperState()
                                                           )
-        genesis <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bonds)
-        dag     <- blockDagStorage.getRepresentation
-        implicit0(detector: FinalityDetectorVotingMatrix[Task]) <- FinalityDetectorVotingMatrix
-                                                                    .of[Task](
-                                                                      dag,
-                                                                      genesis.blockHash,
-                                                                      rFTT = 0.1
-                                                                    )
+        genesis                                                 <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bonds)
+        dag                                                     <- blockDagStorage.getRepresentation
+        implicit0(detector: FinalityDetectorVotingMatrix[Task]) <- mkVotingMatrix(dag, genesis)
         (b1, c1) <- createBlockAndUpdateFinalityDetector[Task](
                      Seq(genesis.blockHash),
                      genesis.blockHash,
@@ -420,14 +405,9 @@ class FinalityDetectorByVotingMatrixTest
         implicit0(casperState: Cell[Task, CasperState]) <- Cell.mvarCell[Task, CasperState](
                                                             CasperState()
                                                           )
-        genesis <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bonds)
-        dag     <- blockDagStorage.getRepresentation
-        implicit0(detector: FinalityDetectorVotingMatrix[Task]) <- FinalityDetectorVotingMatrix
-                                                                    .of[Task](
-                                                                      dag,
-                                                                      genesis.blockHash,
-                                                                      rFTT = 0.1
-                                                                    )
+        genesis                                                 <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bonds)
+        dag                                                     <- blockDagStorage.getRepresentation
+        implicit0(detector: FinalityDetectorVotingMatrix[Task]) <- mkVotingMatrix(dag, genesis)
         (b1, c1) <- createBlockAndUpdateFinalityDetector[Task](
                      Seq(genesis.blockHash),
                      genesis.blockHash,
@@ -489,14 +469,9 @@ class FinalityDetectorByVotingMatrixTest
         implicit0(casperState: Cell[Task, CasperState]) <- Cell.mvarCell[Task, CasperState](
                                                             CasperState()
                                                           )
-        genesis <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bonds)
-        dag     <- blockDagStorage.getRepresentation
-        implicit0(detector: FinalityDetectorVotingMatrix[Task]) <- FinalityDetectorVotingMatrix
-                                                                    .of[Task](
-                                                                      dag,
-                                                                      genesis.blockHash,
-                                                                      rFTT = 0.1
-                                                                    )
+        genesis                                                 <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bonds)
+        dag                                                     <- blockDagStorage.getRepresentation
+        implicit0(detector: FinalityDetectorVotingMatrix[Task]) <- mkVotingMatrix(dag, genesis)
         (b1, c1) <- createBlockAndUpdateFinalityDetector[Task](
                      Seq(genesis.blockHash),
                      genesis.blockHash,
@@ -590,7 +565,7 @@ class FinalityDetectorByVotingMatrixTest
       // EquivocationDetector works before adding block to DAG
       _ <- Sync[F].attempt(
             EquivocationDetector
-              .checkEquivocationWithUpdate(dag, message)
+              .checkEquivocation(dag, message, isHighway = false)
           )
       _   <- BlockStorage[F].put(block.blockHash, block, Map.empty)
       msg <- Sync[F].fromTry(Message.fromBlock(block))

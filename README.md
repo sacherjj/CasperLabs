@@ -1,8 +1,9 @@
-[![LOGO](CASPERLABS_HORIZONTAL.png)](https://casperlabs.io/)
+[![LOGO](CasperLabs_Logo_Horizontal_RGB.png)](https://casperlabs.io/)
 
 [![Build Status](https://drone-auto.casperlabs.io/api/badges/CasperLabs/CasperLabs/status.svg?branch=dev)](http://drone-auto.casperlabs.io/CasperLabs/CasperLabs)
 [![Current Release](https://img.shields.io/github/release-pre/CasperLabs/CasperLabs.svg?color=red)](https://github.com/CasperLabs/CasperLabs/releases)
-[![Crates.io](https://img.shields.io/crates/v/casperlabs-contract-ffi)](https://crates.io/crates/casperlabs-contract-ffi)
+[![Crates.io](https://img.shields.io/crates/v/casperlabs-contract)](https://crates.io/crates/casperlabs-contract)
+[![npm](https://img.shields.io/npm/v/@casperlabs/contract?color=teal)](https://www.npmjs.com/package/@casperlabs/contract)
 [![PyPI](https://img.shields.io/pypi/v/casperlabs-client?color=purple)](https://pypi.org/project/casperlabs-client)
 [![License](https://img.shields.io/badge/license-COSL-blue.svg)](https://github.com/CasperLabs/CasperLabs/blob/master/LICENSE)
 

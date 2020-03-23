@@ -194,10 +194,10 @@ where
             }
 
             FunctionIndex::GetCallerIndex => {
-                // args(0) = pointer to Wasm memory where to write.
-                let dest_ptr = Args::parse(args)?;
-                self.get_caller(dest_ptr)?;
-                Ok(None)
+                // args(0) = pointer where a size of serialized bytes will be stored
+                let output_size = Args::parse(args)?;
+                let ret = self.get_caller(output_size)?;
+                Ok(Some(RuntimeValue::I32(api_error::i32_from(ret))))
             }
 
             FunctionIndex::GetBlocktimeIndex => {
@@ -274,24 +274,37 @@ where
 
             FunctionIndex::AddAssociatedKeyFuncIndex => {
                 // args(0) = pointer to array of bytes of a public key
-                // args(1) = weight of the key
-                let (public_key_ptr, weight_value): (u32, u8) = Args::parse(args)?;
-                let value = self.add_associated_key(public_key_ptr, weight_value)?;
+                // args(1) = size of a public key
+                // args(2) = weight of the key
+                let (public_key_ptr, public_key_size, weight_value): (u32, u32, u8) =
+                    Args::parse(args)?;
+                let value = self.add_associated_key(
+                    public_key_ptr,
+                    public_key_size as usize,
+                    weight_value,
+                )?;
                 Ok(Some(RuntimeValue::I32(value)))
             }
 
             FunctionIndex::RemoveAssociatedKeyFuncIndex => {
                 // args(0) = pointer to array of bytes of a public key
-                let public_key_ptr: u32 = Args::parse(args)?;
-                let value = self.remove_associated_key(public_key_ptr)?;
+                // args(1) = size of a public key
+                let (public_key_ptr, public_key_size): (_, u32) = Args::parse(args)?;
+                let value = self.remove_associated_key(public_key_ptr, public_key_size as usize)?;
                 Ok(Some(RuntimeValue::I32(value)))
             }
 
             FunctionIndex::UpdateAssociatedKeyFuncIndex => {
                 // args(0) = pointer to array of bytes of a public key
-                // args(1) = weight of the key
-                let (public_key_ptr, weight_value): (u32, u8) = Args::parse(args)?;
-                let value = self.update_associated_key(public_key_ptr, weight_value)?;
+                // args(1) = size of a public key
+                // args(2) = weight of the key
+                let (public_key_ptr, public_key_size, weight_value): (u32, u32, u8) =
+                    Args::parse(args)?;
+                let value = self.update_associated_key(
+                    public_key_ptr,
+                    public_key_size as usize,
+                    weight_value,
+                )?;
                 Ok(Some(RuntimeValue::I32(value)))
             }
 
@@ -307,11 +320,11 @@ where
                 // args(0) = pointer to array for return value
                 // args(1) = length of array for return value
                 let (dest_ptr, dest_size): (u32, u32) = Args::parse(args)?;
-                let purse_id = self.create_purse()?;
-                let purse_id_bytes = purse_id.into_bytes().map_err(Error::BytesRepr)?;
-                assert_eq!(dest_size, purse_id_bytes.len() as u32);
+                let purse = self.create_purse()?;
+                let purse_bytes = purse.into_bytes().map_err(Error::BytesRepr)?;
+                assert_eq!(dest_size, purse_bytes.len() as u32);
                 self.memory
-                    .set(dest_ptr, &purse_id_bytes)
+                    .set(dest_ptr, &purse_bytes)
                     .map_err(Error::Interpreter)?;
                 Ok(Some(RuntimeValue::I32(0)))
             }
@@ -388,8 +401,8 @@ where
             }
 
             FunctionIndex::GetBalanceIndex => {
-                // args(0) = pointer to purse_id input
-                // args(1) = length of purse_id
+                // args(0) = pointer to purse input
+                // args(1) = length of purse
                 // args(2) = pointer to output size (output)
                 let (ptr, ptr_size, output_size_ptr): (_, u32, _) = Args::parse(args)?;
                 let ret = self.get_balance_host_buffer(ptr, ptr_size as usize, output_size_ptr)?;

@@ -6,16 +6,19 @@ import cats.effect.implicits._
 import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.BlockSummary
+import io.casperlabs.comm.GossipError
 import io.casperlabs.comm.discovery.NodeUtils.showNode
 import io.casperlabs.comm.discovery.{Node, NodeDiscovery}
 import io.casperlabs.comm.gossiping.Utils.hex
 import io.casperlabs.comm.gossiping._
+import io.casperlabs.comm.gossiping.downloadmanager.BlockDownloadManager
 import io.casperlabs.comm.gossiping.synchronization.InitialSynchronization.SynchronizationError
 import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.shared.IterantOps.RichIterant
 import io.casperlabs.shared.Log
 
 import scala.concurrent.duration.FiniteDuration
+import scala.util.control.NonFatal
 
 /**
   * Synchronizes the node with peers in rounds by fetching slices of the DAG
@@ -38,7 +41,10 @@ class InitialSynchronizationForwardImpl[F[_]: Parallel: Log: Timer](
     connector: GossipService.Connector[F],
     minSuccessful: Int,
     skipFailedNodesInNextRounds: Boolean,
-    downloadManager: DownloadManager[F],
+    // Schedule items with the DownloadManager.
+    downloadManager: BlockDownloadManager[F],
+    // Handle missing dependencies by doing a normal backwards going synchronization.
+    synchronizer: Synchronizer[F],
     step: Int,
     rankStartFrom: Long,
     roundPeriod: FiniteDuration
@@ -46,59 +52,100 @@ class InitialSynchronizationForwardImpl[F[_]: Parallel: Log: Timer](
     extends InitialSynchronization[F] {
   override def sync(): F[WaitHandle[F]] = {
 
-    /* DownloadManager validates dependencies on scheduling, so no need to check them here */
-    def schedule(p: Node, s: BlockSummary): F[WaitHandle[F]] =
-      downloadManager.scheduleDownload(s, p, relay = false)
+    /* The DownloadManager validates the dependencies on scheduling, so no need to check them here,
+     * but it's possible that the node might have received a message in range [N, N+100] that depends
+     * on a message that wasn't there previously in the [N-100, N] range.
+     * We can try to sync such messages using the regular synchronizer.
+     *
+     * For example say we go in rank ranges [0-4],[5-9] and in our first round we get blocks [G,A,B,C,D],
+     * but by the time we finish downloading them and move on to [5-9] there are some new block in the [0-4]
+     * range. We get [F,L,G,H,I] in the slice, but L is rejected because K is missing. We use the Synchronizer
+     * to get the missing DAG part [J,K], download them, then try L again.
+     * G - A - B - C - D -|- F - G - H - I
+     *           \ J - K -|- L
+     * */
+    def schedule(peer: Node, summary: BlockSummary): F[WaitHandle[F]] = {
+      val download = downloadManager.scheduleDownload(summary, peer, relay = false)
+
+      // Map over the wait handle returned by the schedule without waiting on it,
+      // so that we can schedule the rest of them (some of it can be downloaddd in parallel).
+      download.map { handle =>
+        // Attach an error handler to the handle.
+        handle.recoverWith {
+          case GossipError.MissingDependencies(_, missing) =>
+            for {
+              missingDag <- synchronizer.syncDag(peer, missing.toSet).rethrow
+              missingHandles <- missingDag.traverse { dep =>
+                                 downloadManager.scheduleDownload(dep, peer, relay = false)
+                               }
+              // Wait for all these extra backfilling downloads to finish.
+              _ <- missingHandles.sequence
+              // Now try the original download again.
+              retryHandle <- download
+              // Whoever is waiting on `handle` now has to wait on the `retryHandle` instead.
+              _ <- retryHandle
+            } yield ()
+        }
+      }
+    }
 
     /** Returns
       * - max returned rank
       * - 'true' if the DAG is fully synced with the peer or 'false' otherwise */
-    def syncDagSlice(peer: Node, rank: Int): F[(Int, Boolean)] = {
+    def syncDagSlice(peer: Node, jRank: Int): F[(Int, Boolean)] = {
       // 1. previously seen hashes
-      // 2. wait handlers from DownloadManager
+      // 2. wait handles from DownloadManager
       // 3. max rank from a batch
       type S = (Set[ByteString], Vector[WaitHandle[F]], Long)
       val emptyS: S = (Set.empty, Vector.empty, -1)
 
       for {
         gossipService <- connector(peer)
-        (_, handlers, maxRank) <- gossipService
-                                   .streamDagSliceBlockSummaries(
-                                     StreamDagSliceBlockSummariesRequest(
-                                       startRank = rank,
-                                       endRank = rank + step
-                                     )
-                                   )
-                                   .foldLeftM(emptyS) {
-                                     case ((prevHashes, handlers, maxRank), s) =>
-                                       val h = s.blockHash
-                                       val r = s.rank
-                                       for {
-                                         _ <- F.whenA(r < rank || r > rank + step) {
-                                               val hexHash = hex(h)
-                                               Log[F].error(
-                                                 s"Failed to sync with ${peer.show -> "show"}, rank of summary $hexHash $r not in range of [${rank -> "from"}, ${rank + step -> "to"}]"
-                                               ) >> F.raiseError(
-                                                 SynchronizationError()
-                                               )
-                                             }
-                                         _ <- F.whenA(prevHashes(h)) {
-                                               val hexHash = hex(h)
-                                               Log[F].error(
-                                                 s"Failed to sync with ${peer.show -> "show"}, $hexHash has seen previously in range of [${rank -> "from"}, ${rank + step -> "to"}]"
-                                               ) >>
-                                                 F.raiseError(
-                                                   SynchronizationError()
-                                                 )
-                                             }
-                                         wh            <- schedule(peer, s)
-                                         newSeenHashes = prevHashes + h
-                                         newHandlers   = handlers :+ wh
-                                         newMaxRank    = math.max(maxRank, r)
-                                       } yield (newSeenHashes, newHandlers, newMaxRank)
-                                   }
-        fullySynced = maxRank < rank + step
-        _           <- handlers.sequence
+        (_, handles, maxRank) <- gossipService
+                                  .streamDagSliceBlockSummaries(
+                                    StreamDagSliceBlockSummariesRequest(
+                                      startRank = jRank,
+                                      endRank = jRank + step
+                                    )
+                                  )
+                                  .foldLeftM(emptyS) {
+                                    case ((prevHashes, handles, maxRank), s) =>
+                                      val h = s.blockHash
+                                      val r = s.jRank
+                                      for {
+                                        _ <- F.whenA(r < jRank || r > jRank + step) {
+                                              val hexHash = hex(h)
+                                              Log[F].error(
+                                                s"Failed to sync with ${peer.show -> "show"}, rank of summary $hexHash $r not in range of [${jRank -> "from"}, ${jRank + step -> "to"}]"
+                                              ) >> F.raiseError(
+                                                SynchronizationError()
+                                              )
+                                            }
+                                        _ <- F.whenA(prevHashes(h)) {
+                                              val hexHash = hex(h)
+                                              Log[F].error(
+                                                s"Failed to sync with ${peer.show -> "show"}, $hexHash has seen previously in range of [${jRank -> "from"}, ${jRank + step -> "to"}]"
+                                              ) >>
+                                                F.raiseError(
+                                                  SynchronizationError()
+                                                )
+                                            }
+                                        wh            <- schedule(peer, s)
+                                        newSeenHashes = prevHashes + h
+                                        newHandles    = handles :+ wh
+                                        newMaxRank    = math.max(maxRank, r)
+                                      } yield (newSeenHashes, newHandles, newMaxRank)
+                                  }
+        fullySynced = maxRank < jRank + step
+
+        // Wait for all the downloads to finish.
+        _ <- handles.sequence.onError {
+              case NonFatal(ex) =>
+                Log[F].error(
+                  s"Failed to sync with ${peer.show -> "peer"}: $ex"
+                )
+            }
+
         //TODO: Maybe use int64 protobuf type for StreamDagSliceBlockSummariesRequest to use Long everywhere?
         //      Or start dealing with complex specifics of protobuf unsigned numbers encodings in Java?
         //      https://developers.google.com/protocol-buffers/docs/proto3#scalar
@@ -124,17 +171,21 @@ class InitialSynchronizationForwardImpl[F[_]: Parallel: Log: Timer](
                 F.raiseError(SynchronizationError())
             )
         _ <- Log[F].debug(s"Next round of syncing with nodes: ${nodes.map(_.show) -> "peers"}")
+
+        _ <- Log[F].info(s"Syncing with ${nodes.size -> "nodes"} from $rank")
         // Sync in parallel
         results <- nodes.parTraverse(n => syncDagSlice(n, rank).attempt.map(result => n -> result))
+
         (fullSyncs, successful, newFailed, prevRoundRank) = results.foldLeft(emptyS) {
-          case ((i, s, f, r), (node, Right((prevRank, true)))) =>
-            (i + 1, node :: s, f, math.max(r, prevRank))
-          case ((i, s, f, r), (node, Right((prevRank, false)))) =>
-            (i, node :: s, f, math.max(r, prevRank))
-          case ((i, s, f, r), (node, Left(_))) => (i, s, f + node, r)
+          case ((i, s, f, r), (node, Right((prevRank, isFull)))) =>
+            (i + (if (isFull) 1 else 0), node :: s, f, math.max(r, prevRank))
+
+          case ((i, s, f, r), (node, Left(_))) =>
+            (i, s, f + node, r)
         }
+
         _ <- if (fullSyncs >= minSuccessful) {
-              Log[F].debug(
+              Log[F].info(
                 s"Successfully synced with $fullSyncs nodes, required: $minSuccessful"
               )
             } else {
@@ -151,7 +202,7 @@ class InitialSynchronizationForwardImpl[F[_]: Parallel: Log: Timer](
                                      }
                                    }
                                  }
-                _ <- Log[F].debug(
+                _ <- Log[F].info(
                       s"Haven't reached required $minSuccessful amount of fully synced nodes, currently at $fullSyncs, continuing initial synchronization."
                     )
                 _ <- Timer[F].sleep(roundPeriod)

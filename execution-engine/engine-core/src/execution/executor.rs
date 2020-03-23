@@ -5,6 +5,7 @@ use std::{
 };
 
 use parity_wasm::elements::Module;
+use wasmi::ModuleRef;
 
 use engine_shared::{
     account::Account, gas::Gas, newtypes::CorrelationId, stored_value::StoredValue,
@@ -17,7 +18,9 @@ use types::{
 };
 
 use crate::{
-    engine_state::{execution_result::ExecutionResult, system_contract_cache::SystemContractCache},
+    engine_state::{
+        execution_result::ExecutionResult, system_contract_cache::SystemContractCache, EngineConfig,
+    },
     execution::{address_generator::AddressGenerator, Error, FN_STORE_ID_INITIAL},
     runtime::{extract_access_rights_from_keys, instance_and_memory, Runtime},
     runtime_context::{self, RuntimeContext},
@@ -30,6 +33,7 @@ macro_rules! on_fail_charge {
             Ok(res) => res,
             Err(e) => {
                 let exec_err: crate::execution::Error = e.into();
+                log::warn!("Execution failed: {:?}", exec_err);
                 return ExecutionResult::precondition_failure(exec_err.into());
             }
         }
@@ -39,6 +43,7 @@ macro_rules! on_fail_charge {
             Ok(res) => res,
             Err(e) => {
                 let exec_err: crate::execution::Error = e.into();
+                log::warn!("Execution failed: {:?}", exec_err);
                 return ExecutionResult::Failure {
                     error: exec_err.into(),
                     effect: Default::default(),
@@ -52,6 +57,7 @@ macro_rules! on_fail_charge {
             Ok(res) => res,
             Err(e) => {
                 let exec_err: crate::execution::Error = e.into();
+                log::warn!("Execution failed: {:?}", exec_err);
                 return ExecutionResult::Failure {
                     error: exec_err.into(),
                     effect: $effect,
@@ -62,10 +68,20 @@ macro_rules! on_fail_charge {
     };
 }
 
-pub struct Executor;
+pub struct Executor {
+    config: EngineConfig,
+}
 
 #[allow(clippy::too_many_arguments)]
 impl Executor {
+    pub fn new(config: EngineConfig) -> Self {
+        Executor { config }
+    }
+
+    pub fn config(&self) -> EngineConfig {
+        self.config
+    }
+
     pub fn exec<R>(
         &self,
         parity_module: Module,
@@ -101,14 +117,14 @@ impl Executor {
                 extract_access_rights_from_keys(keys)
             };
 
-        let address_generator = AddressGenerator::new(deploy_hash, phase);
+        let address_generator = AddressGenerator::new(&deploy_hash, phase);
         let gas_counter: Gas = Gas::default();
 
         // Snapshot of effects before execution, so in case of error
         // only nonce update can be returned.
         let effects_snapshot = tc.borrow().effect();
 
-        let arguments: Vec<CLValue> = if args.is_empty() {
+        let args: Vec<CLValue> = if args.is_empty() {
             Vec::new()
         } else {
             // TODO: figure out how this works with the cost model
@@ -121,7 +137,7 @@ impl Executor {
             tc,
             &mut named_keys,
             access_rights,
-            arguments,
+            args.clone(),
             authorized_keys,
             &account,
             base_key,
@@ -137,7 +153,60 @@ impl Executor {
             protocol_data,
         );
 
-        let mut runtime = Runtime::new(system_contract_cache, memory, parity_module, context);
+        let mut runtime = Runtime::new(
+            self.config,
+            system_contract_cache,
+            memory,
+            parity_module,
+            context,
+        );
+
+        if !self.config.use_system_contracts() {
+            if runtime.is_mint(base_key) {
+                match runtime.call_host_mint(
+                    protocol_version,
+                    runtime.context().named_keys().to_owned(),
+                    &args,
+                    Default::default(),
+                ) {
+                    Ok(_value) => {
+                        return ExecutionResult::Success {
+                            effect: runtime.context().effect(),
+                            cost: runtime.context().gas_counter(),
+                        }
+                    }
+                    Err(error) => {
+                        return ExecutionResult::Failure {
+                            error: error.into(),
+                            effect: effects_snapshot,
+                            cost: runtime.context().gas_counter(),
+                        }
+                    }
+                }
+            } else if runtime.is_proof_of_stake(base_key) {
+                match runtime.call_host_proof_of_stake(
+                    protocol_version,
+                    runtime.context().named_keys().to_owned(),
+                    &args,
+                    Default::default(),
+                ) {
+                    Ok(_value) => {
+                        return ExecutionResult::Success {
+                            effect: runtime.context().effect(),
+                            cost: runtime.context().gas_counter(),
+                        }
+                    }
+                    Err(error) => {
+                        return ExecutionResult::Failure {
+                            error: error.into(),
+                            effect: effects_snapshot,
+                            cost: runtime.context().gas_counter(),
+                        }
+                    }
+                }
+            }
+        }
+
         on_fail_charge!(
             instance.invoke_export("call", &[], &mut runtime),
             runtime.context().gas_counter(),
@@ -150,7 +219,7 @@ impl Executor {
         }
     }
 
-    pub fn exec_direct<R>(
+    pub fn exec_finalize<R>(
         &self,
         parity_module: Module,
         args: Vec<u8>,
@@ -172,6 +241,10 @@ impl Executor {
         R: StateReader<Key, StoredValue>,
         R::Error: Into<Error>,
     {
+        if Some(&protocol_data.proof_of_stake()) != base_key.as_uref() {
+            panic!("exec_finalize should only be called with the proof of stake contract");
+        }
+
         let mut named_keys = named_keys.clone();
         let access_rights =
             {
@@ -183,7 +256,7 @@ impl Executor {
             };
 
         let address_generator = {
-            let address_generator = AddressGenerator::new(deploy_hash, phase);
+            let address_generator = AddressGenerator::new(&deploy_hash, phase);
             Rc::new(RefCell::new(address_generator))
         };
         let gas_counter = Gas::default(); // maybe const?
@@ -203,7 +276,7 @@ impl Executor {
             state,
             &mut named_keys,
             access_rights,
-            args,
+            args.clone(),
             authorization_keys,
             &account,
             base_key,
@@ -222,59 +295,81 @@ impl Executor {
         let (instance, memory) =
             on_fail_charge!(instance_and_memory(parity_module.clone(), protocol_version));
 
-        let mut runtime = Runtime::new(system_contract_cache, memory, parity_module, context);
+        let mut runtime = Runtime::new(
+            self.config,
+            system_contract_cache,
+            memory,
+            parity_module,
+            context,
+        );
 
-        match instance.invoke_export("call", &[], &mut runtime) {
-            Ok(_) => ExecutionResult::Success {
-                effect: runtime.context().effect(),
-                cost: runtime.context().gas_counter(),
-            },
-            Err(e) => {
-                if let Some(host_error) = e.as_host_error() {
-                    // `ret` Trap is a success; downcast and attempt to extract result
-                    let downcasted_error = host_error.downcast_ref::<Error>().unwrap();
-                    match downcasted_error {
-                        Error::Ret(ref _ret_urefs) => {
-                            // NOTE: currently, ExecutionResult does not include runtime.result or
-                            // extra urefs  and thus we cannot get back
-                            // a value from the executed contract...
-                            // TODO?: add ability to include extra_urefs and runtime.result to
-                            // ExecutionResult::Success
-
-                            return ExecutionResult::Success {
-                                effect: runtime.context().effect(),
-                                cost: runtime.context().gas_counter(),
-                            };
-                        }
-                        Error::Revert(status) => {
-                            // Propagate revert as revert, instead of passing it as
-                            // InterpreterError.
-                            return ExecutionResult::Failure {
-                                error: Error::Revert(*status).into(),
-                                effect: effects_snapshot,
-                                cost: runtime.context().gas_counter(),
-                            };
-                        }
-                        _ => {}
+        if !self.config.use_system_contracts() {
+            match runtime.call_host_proof_of_stake(
+                protocol_version,
+                runtime.context().named_keys().to_owned(),
+                &args,
+                Default::default(),
+            ) {
+                Ok(_value) => {
+                    return ExecutionResult::Success {
+                        effect: runtime.context().effect(),
+                        cost: runtime.context().gas_counter(),
                     }
                 }
-
-                ExecutionResult::Failure {
-                    error: Error::Interpreter(e).into(),
-                    effect: effects_snapshot,
-                    cost: runtime.context().gas_counter(),
+                Err(error) => {
+                    return ExecutionResult::Failure {
+                        error: error.into(),
+                        effect: effects_snapshot,
+                        cost: runtime.context().gas_counter(),
+                    }
                 }
             }
         }
+
+        let error = match instance.invoke_export("call", &[], &mut runtime) {
+            Err(error) => error,
+            Ok(_) => {
+                return ExecutionResult::Success {
+                    effect: runtime.context().effect(),
+                    cost: runtime.context().gas_counter(),
+                }
+            }
+        };
+
+        if let Some(host_error) = error.as_host_error() {
+            let downcasted_error = host_error.downcast_ref::<Error>().unwrap();
+            match downcasted_error {
+                Error::Ret(ref _ret_urefs) => {
+                    return ExecutionResult::Success {
+                        effect: runtime.context().effect(),
+                        cost: runtime.context().gas_counter(),
+                    };
+                }
+                Error::Revert(status) => {
+                    return ExecutionResult::Failure {
+                        error: Error::Revert(*status).into(),
+                        effect: effects_snapshot,
+                        cost: runtime.context().gas_counter(),
+                    };
+                }
+                _ => {}
+            }
+        }
+
+        ExecutionResult::Failure {
+            error: Error::Interpreter(error).into(),
+            effect: effects_snapshot,
+            cost: runtime.context().gas_counter(),
+        }
     }
 
-    pub fn better_exec<R, T>(
+    pub fn create_runtime<'a, R>(
         &self,
         module: Module,
         args: Vec<u8>,
-        keys: &mut BTreeMap<String, Key>,
+        keys: &'a mut BTreeMap<String, Key>,
         base_key: Key,
-        account: &Account,
+        account: &'a Account,
         authorization_keys: BTreeSet<PublicKey>,
         blocktime: BlockTime,
         deploy_hash: [u8; 32],
@@ -286,11 +381,10 @@ impl Executor {
         phase: Phase,
         protocol_data: ProtocolData,
         system_contract_cache: SystemContractCache,
-    ) -> Result<T, Error>
+    ) -> Result<(ModuleRef, Runtime<'a, R>), Error>
     where
         R: StateReader<Key, StoredValue>,
         R::Error: Into<Error>,
-        T: FromBytes + CLTyped,
     {
         let access_rights =
             {
@@ -331,9 +425,61 @@ impl Executor {
 
         let (instance, memory) = instance_and_memory(module.clone(), protocol_version)?;
 
-        let mut runtime = Runtime::new(system_contract_cache, memory, module, runtime_context);
+        let runtime = Runtime::new(
+            self.config,
+            system_contract_cache,
+            memory,
+            module,
+            runtime_context,
+        );
 
-        let return_error: wasmi::Error = match instance.invoke_export("call", &[], &mut runtime) {
+        Ok((instance, runtime))
+    }
+
+    pub fn exec_system<R, T>(
+        &self,
+        module: Module,
+        args: Vec<u8>,
+        keys: &mut BTreeMap<String, Key>,
+        base_key: Key,
+        account: &Account,
+        authorization_keys: BTreeSet<PublicKey>,
+        blocktime: BlockTime,
+        deploy_hash: [u8; 32],
+        gas_limit: Gas,
+        address_generator: Rc<RefCell<AddressGenerator>>,
+        protocol_version: ProtocolVersion,
+        correlation_id: CorrelationId,
+        state: Rc<RefCell<TrackingCopy<R>>>,
+        phase: Phase,
+        protocol_data: ProtocolData,
+        system_contract_cache: SystemContractCache,
+    ) -> Result<T, Error>
+    where
+        R: StateReader<Key, StoredValue>,
+        R::Error: Into<Error>,
+        T: FromBytes + CLTyped,
+    {
+        let (instance, mut runtime) = self.create_runtime(
+            module,
+            args,
+            keys,
+            base_key,
+            account,
+            authorization_keys,
+            blocktime,
+            deploy_hash,
+            gas_limit,
+            address_generator,
+            protocol_version,
+            correlation_id,
+            state,
+            phase,
+            protocol_data,
+            system_contract_cache,
+        )?;
+
+        let error: wasmi::Error = match instance.invoke_export("call", &[], &mut runtime) {
             Err(error) => error,
             Ok(_) => {
                 // This duplicates the behavior of sub_call, but is admittedly rather questionable.
@@ -348,7 +494,7 @@ impl Executor {
             }
         };
 
-        let return_value: CLValue = match return_error
+        let return_value: CLValue = match error
             .as_host_error()
             .and_then(|host_error| host_error.downcast_ref::<Error>())
         {
@@ -356,7 +502,7 @@ impl Executor {
                 .take_host_buffer()
                 .ok_or(Error::ExpectedReturnValue)?,
             Some(Error::Revert(code)) => return Err(Error::Revert(*code)),
-            _ => return Err(Error::Interpreter(return_error)),
+            _ => return Err(Error::Interpreter(error)),
         };
 
         let ret = return_value.into_t()?;

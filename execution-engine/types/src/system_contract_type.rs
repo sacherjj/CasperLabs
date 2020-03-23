@@ -15,6 +15,8 @@ pub enum SystemContractType {
     Mint,
     /// Proof of Stake contract.
     ProofOfStake,
+    /// Standard Payment contract.
+    StandardPayment,
 }
 
 impl From<SystemContractType> for u32 {
@@ -22,6 +24,7 @@ impl From<SystemContractType> for u32 {
         match system_contract_type {
             SystemContractType::Mint => 0,
             SystemContractType::ProofOfStake => 1,
+            SystemContractType::StandardPayment => 2,
         }
     }
 }
@@ -34,6 +37,7 @@ impl TryFrom<u32> for SystemContractType {
         match value {
             0 => Ok(SystemContractType::Mint),
             1 => Ok(SystemContractType::ProofOfStake),
+            2 => Ok(SystemContractType::StandardPayment),
             _ => Err(ApiError::InvalidSystemContract),
         }
     }
@@ -44,6 +48,7 @@ impl Display for SystemContractType {
         match *self {
             SystemContractType::Mint => write!(f, "mint"),
             SystemContractType::ProofOfStake => write!(f, "pos"),
+            SystemContractType::StandardPayment => write!(f, "standard payment"),
         }
     }
 }
@@ -69,6 +74,16 @@ mod tests {
     }
 
     #[test]
+    fn get_index_of_standard_payment_contract() {
+        let index: u32 = SystemContractType::StandardPayment.into();
+        assert_eq!(index, 2u32);
+        assert_eq!(
+            SystemContractType::StandardPayment.to_string(),
+            "standard payment"
+        );
+    }
+
+    #[test]
     fn create_mint_variant_from_int() {
         let mint = SystemContractType::try_from(0).ok().unwrap();
         assert_eq!(mint, SystemContractType::Mint);
@@ -76,14 +91,20 @@ mod tests {
 
     #[test]
     fn create_pos_variant_from_int() {
-        let pos = SystemContractType::try_from(0).ok().unwrap();
-        assert_eq!(pos, SystemContractType::Mint);
+        let pos = SystemContractType::try_from(1).ok().unwrap();
+        assert_eq!(pos, SystemContractType::ProofOfStake);
+    }
+
+    #[test]
+    fn create_standard_payment_variant_from_int() {
+        let pos = SystemContractType::try_from(2).ok().unwrap();
+        assert_eq!(pos, SystemContractType::StandardPayment);
     }
 
     #[test]
     fn create_unknown_system_contract_variant() {
-        assert!(SystemContractType::try_from(2).is_err());
         assert!(SystemContractType::try_from(3).is_err());
+        assert!(SystemContractType::try_from(4).is_err());
         assert!(SystemContractType::try_from(10).is_err());
         assert!(SystemContractType::try_from(u32::max_value()).is_err());
     }

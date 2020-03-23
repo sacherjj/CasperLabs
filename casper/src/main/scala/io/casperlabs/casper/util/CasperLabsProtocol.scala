@@ -8,12 +8,13 @@ import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.ipc
 import io.casperlabs.ipc.ChainSpec.DeployConfig
 import simulacrum.typeclass
+import io.casperlabs.models.Message.MainRank
 
 @typeclass
 trait CasperLabsProtocol[F[_]] {
 
   /** Returns a [[state.ProtocolVersion]] at block height. */
-  def versionAt(blockHeight: Long): F[state.ProtocolVersion]
+  def versionAt(blockHeight: MainRank): F[state.ProtocolVersion]
 
   /** Returns a [[state.ProtocolVersion]] at specific block. */
   def protocolFromBlock(b: Block): F[state.ProtocolVersion]
@@ -21,10 +22,10 @@ trait CasperLabsProtocol[F[_]] {
   /** Returns a configuration at specific block height.
     *
     * Note that this "merges" all configurations up to that block height.
-    * Specifically if certain conifguration parameter isn't defined at latest
+    * Specifically if certain configuration parameter isn't defined at latest
     * upgrade point, latest one will be used.
     */
-  def configAt(blockHeight: Long): F[Config]
+  def configAt(blockHeight: MainRank): F[Config]
 }
 
 object CasperLabsProtocol {
@@ -34,9 +35,7 @@ object CasperLabsProtocol {
       versions: (Long, state.ProtocolVersion, Option[ipc.ChainSpec.DeployConfig])*
   ): CasperLabsProtocol[F] = {
     def toDeployConfig(ipcDeployConfig: Option[ipc.ChainSpec.DeployConfig]): DeployConfig =
-      ipcDeployConfig
-        .map(d => DeployConfig(d.maxTtlMillis, d.maxDependencies))
-        .getOrElse(DeployConfig())
+      ipcDeployConfig.getOrElse(DeployConfig())
 
     def toConfig(
         blockHeightMin: Long,
@@ -63,10 +62,10 @@ object CasperLabsProtocol {
       )
 
     new CasperLabsProtocol[F] {
-      def versionAt(blockHeight: Long): F[state.ProtocolVersion] =
+      def versionAt(blockHeight: MainRank): F[state.ProtocolVersion] =
         underlying.versionAt(blockHeight).pure[F]
       def protocolFromBlock(b: Block): F[state.ProtocolVersion] = underlying.fromBlock(b).pure[F]
-      def configAt(blockHeight: Long): F[Config]                = merged.configAt(blockHeight).pure[F]
+      def configAt(blockHeight: MainRank): F[Config]            = merged.configAt(blockHeight).pure[F]
     }
   }
 

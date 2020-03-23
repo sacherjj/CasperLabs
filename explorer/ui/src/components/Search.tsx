@@ -50,8 +50,7 @@ const SearchForm = observer((props: { container: SearchContainer }) => {
         <TextField
           id="id-search-hash-base16"
           label="Hash (Base16)"
-          value={form.hashBase16}
-          onChange={x => (form.hashBase16 = x)}
+          fieldState={form.hashBase16}
         />
         <ErrorMessage error={form.error} />
       </Form>

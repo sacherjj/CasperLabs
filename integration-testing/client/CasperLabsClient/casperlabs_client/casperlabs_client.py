@@ -45,6 +45,10 @@ from . import casper_pb2_grpc
 # ~/CasperLabs/protobuf/io/casperlabs/casper/consensus/info.proto
 from . import info_pb2 as info
 
+# ~/CasperLabs/protobuf/io/casperlabs/node/api/diagnostics.proto
+from . import diagnostics_pb2_grpc
+from . import empty_pb2
+
 from . import vdag
 from . import abi
 from casperlabs_client.utils import (
@@ -256,12 +260,23 @@ class CasperLabsClient:
                 node_id,
                 certificate_file,
             )
+            self.diagnosticsService = SecureGRPCService(
+                host,
+                port,
+                diagnostics_pb2_grpc.DiagnosticsStub,
+                node_id,
+                certificate_file,
+            )
+
         else:
             self.casperService = InsecureGRPCService(
                 host, port, casper_pb2_grpc.CasperServiceStub
             )
             self.controlService = InsecureGRPCService(
                 host, port_internal, control_pb2_grpc.ControlServiceStub
+            )
+            self.diagnosticsService = InsecureGRPCService(
+                host, port, diagnostics_pb2_grpc.DiagnosticsStub
             )
 
     @api
@@ -399,11 +414,11 @@ class CasperLabsClient:
     @api
     def transfer(self, target_account_hex, amount, **deploy_args):
         target_account_bytes = bytes.fromhex(target_account_hex)
-        deploy_args["session"] = bundled_contract("transfer_to_account.wasm")
+        deploy_args["session"] = bundled_contract("transfer_to_account_u512.wasm")
         deploy_args["session_args"] = abi.ABI.args(
             [
                 abi.ABI.account("account", target_account_bytes),
-                abi.ABI.long_value("amount", amount),
+                abi.ABI.u512("amount", amount),
             ]
         )
         return self.deploy(**deploy_args)
@@ -571,30 +586,50 @@ class CasperLabsClient:
         mintPublic = urefs[0]
 
         mintPublicHex = mintPublic.key.uref.uref.hex()
-        purseAddrHex = account.purse_id.uref.hex()
+        purseAddrHex = account.main_purse.uref.hex()
         localKeyValue = f"{mintPublicHex}:{purseAddrHex}"
 
         balanceURef = self.queryState(block_hash, localKeyValue, "", "local")
-        balance = self.queryState(
-            block_hash, balanceURef.key.uref.uref.hex(), "", "uref"
-        )
-        return int(balance.big_int.value)
+        balanceURefHex = balanceURef.cl_value.value.key.uref.uref.hex()
+        balance = self.queryState(block_hash, balanceURefHex, "", "uref")
+        balanceStrValue = balance.cl_value.value.u512.value
+        return int(balanceStrValue)
 
     @api
-    def showDeploy(self, deploy_hash_base16: str, full_view=True):
+    def showDeploy(
+        self,
+        deploy_hash_base16: str,
+        full_view: bool = False,
+        wait_for_processed: bool = False,
+        delay: int = DEPLOY_STATUS_CHECK_DELAY,
+        timeout_seconds: int = DEPLOY_STATUS_TIMEOUT,
+    ):
         """
         Retrieve information about a single deploy by hash.
         """
-        return self.casperService.GetDeployInfo(
-            casper.GetDeployInfoRequest(
-                deploy_hash_base16=deploy_hash_base16,
-                view=(
-                    full_view
-                    and info.DeployInfo.View.FULL
-                    or info.DeployInfo.View.BASIC
-                ),
+        start_time = time.time()
+        while True:
+            deploy_info = self.casperService.GetDeployInfo(
+                casper.GetDeployInfoRequest(
+                    deploy_hash_base16=deploy_hash_base16,
+                    view=(
+                        full_view
+                        and info.DeployInfo.View.FULL
+                        or info.DeployInfo.View.BASIC
+                    ),
+                )
             )
-        )
+            if (
+                wait_for_processed
+                and deploy_info.status.state == info.DeployInfo.State.PENDING
+            ):
+                if time.time() - start_time > timeout_seconds:
+                    raise Exception(
+                        f"Timed out waiting for deploy {deploy_hash_base16} to be processed"
+                    )
+                time.sleep(delay)
+                continue
+            return deploy_info
 
     @api
     def showDeploys(self, block_hash_base16: str, full_view=True):
@@ -613,10 +648,56 @@ class CasperLabsClient:
         )
 
     @api
-    def stream_events(self, block_added: bool = True, block_finalized: bool = True):
+    def stream_events(
+        self,
+        all: bool = False,
+        block_added: bool = False,
+        block_finalized: bool = False,
+        deploy_added: bool = False,
+        deploy_discarded: bool = False,
+        deploy_requeued: bool = False,
+        deploy_processed: bool = False,
+        deploy_finalized: bool = False,
+        deploy_orphaned: bool = False,
+        account_public_keys=None,
+        deploy_hashes=None,
+        min_event_id: int = 0,
+    ):
+        """
+        See StreamEventsRequest in
+            ~/CasperLabs/protobuf/io/casperlabs/node/api/casper.proto
+        for description of types of events.
+
+        Note, you must subscribe to some events (pass True to some keywords other than account_public_keys or deploy_hashes)
+        otherwise this generator will block forever.
+        """
+        if all:
+            block_added = True
+            block_finalized = True
+            deploy_added = True
+            deploy_discarded = True
+            deploy_requeued = True
+            deploy_processed = True
+            deploy_finalized = True
+            deploy_orphaned = True
+
         yield from self.casperService.StreamEvents_stream(
             casper.StreamEventsRequest(
-                block_added=block_added, block_finalized=block_finalized
+                block_added=block_added,
+                block_finalized=block_finalized,
+                deploy_added=deploy_added,
+                deploy_discarded=deploy_discarded,
+                deploy_requeued=deploy_requeued,
+                deploy_processed=deploy_processed,
+                deploy_finalized=deploy_finalized,
+                deploy_orphaned=deploy_orphaned,
+                deploy_filter=casper.StreamEventsRequest.DeployFilter(
+                    account_public_keys=[
+                        bytes.fromhex(pk) for pk in account_public_keys or []
+                    ],
+                    deploy_hashes=[bytes.fromhex(h) for h in deploy_hashes or []],
+                ),
+                min_event_id=min_event_id,
             )
         )
 
@@ -651,6 +732,10 @@ class CasperLabsClient:
                     f"Deploy {deploy_hash} execution error: {last_processing_result.error_message}"
                 )
         return result
+
+    @api
+    def show_peers(self):
+        return list(self.diagnosticsService.ListPeers(empty_pb2.Empty()).peers)
 
     def cli(self, *arguments) -> int:
         from . import cli

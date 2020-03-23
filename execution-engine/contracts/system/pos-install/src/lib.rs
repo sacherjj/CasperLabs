@@ -3,16 +3,15 @@
 extern crate alloc;
 
 use alloc::{collections::BTreeMap, string::String};
-use core::fmt::Write;
 
 use contract::{
     contract_api::{runtime, storage},
     unwrap_or_revert::UnwrapOrRevert,
 };
+use proof_of_stake::Stakes;
 use types::{
-    account::{PublicKey, PurseId},
-    system_contract_errors::mint,
-    AccessRights, ApiError, CLValue, ContractRef, Key, URef, U512,
+    account::PublicKey, system_contract_errors::mint, AccessRights, ApiError, CLValue, ContractRef,
+    Key, URef, U512,
 };
 
 const PLACEHOLDER_KEY: Key = Key::Hash([0u8; 32]);
@@ -43,27 +42,17 @@ pub extern "C" fn call() {
         runtime::get_arg(Args::GenesisValidators as u32)
             .unwrap_or_revert_with(ApiError::MissingArgument)
             .unwrap_or_revert_with(ApiError::InvalidArgument);
+
+    let stakes = Stakes::new(genesis_validators);
+
     // Add genesis validators to PoS contract object.
     // For now, we are storing validators in `named_keys` map of the PoS contract
     // in the form: key: "v_{validator_pk}_{validator_stake}", value: doesn't
     // matter.
-    let mut named_keys: BTreeMap<String, Key> = genesis_validators
-        .iter()
-        .map(|(pub_key, balance)| {
-            let key_bytes = pub_key.value();
-            let mut hex_key = String::with_capacity(64);
-            for byte in &key_bytes[..32] {
-                write!(hex_key, "{:02x}", byte).unwrap();
-            }
-            let mut uref = String::new();
-            uref.write_fmt(format_args!("v_{}_{}", hex_key, balance))
-                .unwrap();
-            uref
-        })
-        .map(|key| (key, PLACEHOLDER_KEY))
-        .collect();
+    let mut named_keys: BTreeMap<String, Key> =
+        stakes.strings().map(|key| (key, PLACEHOLDER_KEY)).collect();
 
-    let total_bonds: U512 = genesis_validators.values().fold(U512::zero(), |x, y| x + y);
+    let total_bonds: U512 = stakes.total_bonds();
 
     let bonding_purse = mint_purse(&mint, total_bonds);
     let payment_purse = mint_purse(&mint, U512::zero());
@@ -71,9 +60,9 @@ pub extern "C" fn call() {
 
     // Include PoS purses in its named_keys
     [
-        (POS_BONDING_PURSE, bonding_purse.value()),
-        (POS_PAYMENT_PURSE, payment_purse.value()),
-        (POS_REWARDS_PURSE, rewards_purse.value()),
+        (POS_BONDING_PURSE, bonding_purse),
+        (POS_PAYMENT_PURSE, payment_purse),
+        (POS_REWARDS_PURSE, rewards_purse),
     ]
     .iter()
     .for_each(|(name, uref)| {
@@ -88,8 +77,8 @@ pub extern "C" fn call() {
     runtime::ret(return_value);
 }
 
-fn mint_purse(mint: &ContractRef, amount: U512) -> PurseId {
+fn mint_purse(mint: &ContractRef, amount: U512) -> URef {
     let result: Result<URef, mint::Error> = runtime::call_contract(mint.clone(), ("mint", amount));
 
-    result.map(PurseId::new).unwrap_or_revert()
+    result.unwrap_or_revert()
 }

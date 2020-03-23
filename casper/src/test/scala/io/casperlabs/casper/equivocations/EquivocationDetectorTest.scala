@@ -39,11 +39,12 @@ class EquivocationDetectorTest
       creator: Validator = ByteString.EMPTY,
       justifications: collection.Map[Validator, BlockHash] = HashMap.empty[Validator, BlockHash],
       rankOfLowestBaseBlockExpect: Option[Long],
-      messageType: Block.MessageType = Block.MessageType.BLOCK
+      messageType: Block.MessageType = Block.MessageType.BLOCK,
+      isHighway: Boolean = false
   )(
       implicit dagStorage: IndexedDagStorage[Task],
       blockStorage: BlockStorage[Task],
-      log: LogStub with LogIO[Task]
+      log: LogStub with LogIO[Task] = LogStub[Task]()
   ): Task[Block] =
     for {
       dag <- dagStorage.getRepresentation
@@ -56,7 +57,7 @@ class EquivocationDetectorTest
           )
       message <- Task.fromTry(Message.fromBlock(b))
       blockStatus <- EquivocationDetector
-                      .checkEquivocationWithUpdate(dag, message)
+                      .checkEquivocation(dag, message, isHighway)
                       .attempt
 
       _ = rankOfLowestBaseBlockExpect match {
@@ -66,12 +67,12 @@ class EquivocationDetectorTest
           blockStatus shouldBe Left(ValidateErrorWrapper(EquivocatedBlock))
       }
       _ <- blockStorage.put(b.blockHash, b, Map.empty)
-      rankOfLowestBaseBlock <- dag
-                                .latestMessage(creator)
-                                .map(
-                                  msgs => EquivocationDetector.findMinBaseRank(Map(creator -> msgs))
-                                )
-      _ = rankOfLowestBaseBlock shouldBe rankOfLowestBaseBlockExpect
+      latestMessages <- if (isHighway)
+                         dag.latestInEra(b.getHeader.keyBlockHash).flatMap(_.latestMessage(creator))
+                       else
+                         dag.latestMessage(creator)
+      rankOfLowestBaseBlock = EquivocationDetector.findMinBaseRank(Map(creator -> latestMessages))
+      _                     = rankOfLowestBaseBlock shouldBe rankOfLowestBaseBlockExpect
     } yield b
 
   def createBlockAndCheckEquivocatorsFromViewOfBlock(
@@ -144,7 +145,7 @@ class EquivocationDetectorTest
               genesis,
               v0,
               justifications = HashMap(v0 -> b1.blockHash),
-              rankOfLowestBaseBlockExpect = b1.getHeader.rank.some,
+              rankOfLowestBaseBlockExpect = b1.getHeader.jRank.some,
               messageType = rightMessageType
             )
       } yield ()
@@ -166,6 +167,112 @@ class EquivocationDetectorTest
     Block.MessageType.BLOCK,
     Block.MessageType.BALLOT
   )
+
+  it should "detect equivocation in the current era" in withCombinedStorageIndexed {
+    implicit db => implicit dagStorage =>
+      val v1 = generateValidator("v1")
+      // era-0: G - B0
+      //          \
+      //            B1
+      for {
+        g <- createAndStoreMessage[Task](Nil)
+        _ <- createAndStoreEra[Task](g.blockHash)
+        _ <- createMessageAndTestEquivocateDetector(
+              List(g.blockHash),
+              g,
+              v1,
+              rankOfLowestBaseBlockExpect = None,
+              isHighway = true
+            )
+        _ <- createMessageAndTestEquivocateDetector(
+              List(g.blockHash),
+              g,
+              v1,
+              rankOfLowestBaseBlockExpect = g.getHeader.jRank.some,
+              isHighway = true
+            )
+      } yield ()
+  }
+
+  it should "not detect parent era ballots as equivocations" in withCombinedStorageIndexed {
+    implicit db => implicit dagStorage =>
+      val v1 = generateValidator("v1")
+      // era-0: G - B0 - b2
+      //               \
+      // era-1:         B1
+      for {
+        g <- createAndStoreMessage[Task](Nil)
+        _ <- createAndStoreEra[Task](g.blockHash)
+        b0 <- createMessageAndTestEquivocateDetector(
+               List(g.blockHash),
+               g,
+               v1,
+               rankOfLowestBaseBlockExpect = None,
+               isHighway = true
+             )
+        _ <- createMessageAndTestEquivocateDetector(
+              List(b0.blockHash),
+              g,
+              v1,
+              justifications = Map(v1 -> b0.blockHash),
+              rankOfLowestBaseBlockExpect = None,
+              isHighway = true
+            )
+        _ <- createMessageAndTestEquivocateDetector(
+              List(b0.blockHash),
+              b0,
+              v1,
+              justifications = Map.empty,
+              rankOfLowestBaseBlockExpect = None,
+              isHighway = true
+            )
+      } yield ()
+  }
+
+  it should "not detect parent era equivocations in the child era" in withCombinedStorageIndexed {
+    implicit db => implicit dagStorage =>
+      val v1 = generateValidator("v1")
+      // era-0: G - B0 - B1
+      //               \
+      //                 B2
+      //                   \
+      // era-1:             B3
+      for {
+        g <- createAndStoreMessage[Task](Nil)
+        _ <- createAndStoreEra[Task](g.blockHash)
+        b0 <- createMessageAndTestEquivocateDetector(
+               List(g.blockHash),
+               g,
+               v1,
+               rankOfLowestBaseBlockExpect = None,
+               isHighway = true
+             )
+        _ <- createMessageAndTestEquivocateDetector(
+              List(b0.blockHash),
+              g,
+              v1,
+              justifications = Map(v1 -> b0.blockHash),
+              rankOfLowestBaseBlockExpect = None,
+              isHighway = true
+            )
+        b2 <- createMessageAndTestEquivocateDetector(
+               List(b0.blockHash),
+               g,
+               v1,
+               justifications = Map(v1 -> b0.blockHash),
+               rankOfLowestBaseBlockExpect = Some(b0.getHeader.jRank),
+               isHighway = true
+             )
+        _ <- createMessageAndTestEquivocateDetector(
+              List(b2.blockHash),
+              b0,
+              v1,
+              justifications = Map.empty,
+              rankOfLowestBaseBlockExpect = None,
+              isHighway = true
+            )
+      } yield ()
+  }
 
   it should "not report equivocation when references a message creating an equivocation that was created by other validator" in withStorage {
     implicit blockStorage => implicit dagStorage => _ =>
@@ -325,14 +432,14 @@ class EquivocationDetectorTest
                  genesis,
                  v0,
                  justifications = HashMap(v0 -> b1.blockHash),
-                 rankOfLowestBaseBlockExpect = b1.getHeader.rank.some
+                 rankOfLowestBaseBlockExpect = b1.getHeader.jRank.some
                )
           _ <- createMessageAndTestEquivocateDetector(
                 Seq(b3.blockHash),
                 genesis,
                 v0,
                 justifications = HashMap(v0 -> b3.blockHash),
-                rankOfLowestBaseBlockExpect = b1.getHeader.rank.some
+                rankOfLowestBaseBlockExpect = b1.getHeader.jRank.some
               )
         } yield ()
   }
@@ -393,7 +500,7 @@ class EquivocationDetectorTest
                 genesis,
                 v0,
                 justifications = HashMap(v0 -> b2.blockHash),
-                rankOfLowestBaseBlockExpect = b2.getHeader.rank.some
+                rankOfLowestBaseBlockExpect = b2.getHeader.jRank.some
               )
           // When v0 creates another equivocation, and the base block(i.e. block b1) of the
           // equivocation is smaller, then update the rank of lowest base block to be the rank of b1
@@ -402,7 +509,7 @@ class EquivocationDetectorTest
                 genesis,
                 v0,
                 justifications = HashMap(v0 -> b1.blockHash),
-                rankOfLowestBaseBlockExpect = b1.getHeader.rank.some
+                rankOfLowestBaseBlockExpect = b1.getHeader.jRank.some
               )
         } yield ()
   }

@@ -1,13 +1,13 @@
 mod vesting_test;
 
 use engine_test_support::{DEFAULT_ACCOUNT_ADDR, DEFAULT_ACCOUNT_INITIAL_BALANCE};
-use types::U512;
+use types::{account::PublicKey, U512};
 
 use vesting_test::{VestingConfig, VestingTest};
 
-const FAUCET: [u8; 32] = DEFAULT_ACCOUNT_ADDR;
-const RECIPIENT: [u8; 32] = [2u8; 32];
-const ADMIN: [u8; 32] = [3u8; 32];
+const FAUCET: PublicKey = DEFAULT_ACCOUNT_ADDR;
+const RECIPIENT: PublicKey = PublicKey::ed25519_from([2u8; 32]);
+const ADMIN: PublicKey = PublicKey::ed25519_from([3u8; 32]);
 
 const NOT_ADMIN_ERROR_CODE: u32 = 65544;
 const NOT_RECIPIENT_ERROR_CODE: u32 = 65545;

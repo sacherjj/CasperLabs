@@ -17,6 +17,7 @@ import monix.eval.Task
 import monix.execution.Scheduler
 import logstage.IzLogger
 import scala.concurrent.duration._
+import java.util.concurrent.TimeUnit
 
 object Main {
 
@@ -52,8 +53,15 @@ object Main {
     configuration match {
       case ShowBlock(hash, bytesStandard, json) =>
         DeployRuntime.showBlock[F](hash, bytesStandard, json)
-      case ShowDeploy(hash, bytesStandard, json) =>
-        DeployRuntime.showDeploy[F](hash, bytesStandard, json)
+      case ShowDeploy(hash, bytesStandard, json, waitForProcessed, timeout) => {
+        DeployRuntime.showDeploy[F](
+          hash,
+          bytesStandard,
+          json,
+          waitForProcessed,
+          timeout.seconds
+        )
+      }
       case ShowDeploys(hash, bytesStandard, json) =>
         DeployRuntime.showDeploys[F](hash, bytesStandard, json)
       case ShowBlocks(depth, bytesStandard, json) =>
@@ -61,40 +69,68 @@ object Main {
       case Unbond(
           amount,
           contracts,
-          privateKey
+          privateKey,
+          waitForProcessed,
+          timeout,
+          bytesStandard,
+          json
           ) =>
         DeployRuntime.unbond[F](
           amount,
           contracts,
-          privateKey
+          privateKey,
+          waitForProcessed,
+          timeout.seconds,
+          bytesStandard,
+          json
         )
       case Bond(
           amount,
           contracts,
-          privateKey
+          privateKey,
+          waitForProcessed,
+          timeout,
+          bytesStandard,
+          json
           ) =>
         DeployRuntime.bond[F](
           amount,
           contracts,
-          privateKey
+          privateKey,
+          waitForProcessed,
+          timeout.seconds,
+          bytesStandard,
+          json
         )
       case Transfer(
           amount,
           recipientPublicKey,
           contracts,
-          privateKey
+          privateKey,
+          waitForProcessed,
+          timeout,
+          bytesStandard,
+          json
           ) =>
         DeployRuntime.transferCLI[F](
           contracts,
           privateKey,
           recipientPublicKey,
-          amount
+          amount,
+          waitForProcessed,
+          timeout.seconds,
+          bytesStandard,
+          json
         )
       case Deploy(
           from,
           contracts,
           maybePublicKey,
-          maybePrivateKey
+          maybePrivateKey,
+          waitForProcessed,
+          timeout,
+          bytesStandard,
+          json
           ) =>
         DeployRuntime.deployFileProgram[F](
           from,
@@ -106,7 +142,11 @@ object Main {
           maybePrivateKey.map(
             file =>
               new String(Files.readAllBytes(file.toPath), StandardCharsets.UTF_8).asLeft[PrivateKey]
-          )
+          ),
+          waitForProcessed = waitForProcessed,
+          timeout = timeout.seconds,
+          bytesStandard = bytesStandard,
+          json = json
         )
       case MakeDeploy(
           from,
@@ -138,8 +178,14 @@ object Main {
           _ <- DeployRuntime.writeDeploy[F](deploy, deployPath)
         } yield ()
 
-      case SendDeploy(deploy) =>
-        DeployRuntime.sendDeploy[F](deploy)
+      case SendDeploy(deploy, waitForProcessed, timeout, bytesStandard, json) =>
+        DeployRuntime.sendDeploy[F](
+          deploy,
+          waitForProcessed,
+          timeout.seconds,
+          bytesStandard,
+          json
+        )
 
       case PrintDeploy(deploy, bytesStandard, json) =>
         DeployRuntime.printDeploy[F](deploy, bytesStandard, json)

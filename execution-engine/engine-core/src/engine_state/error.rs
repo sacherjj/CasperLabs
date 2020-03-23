@@ -83,4 +83,14 @@ impl From<!> for Error {
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub struct RootNotFound(pub Blake2bHash);
+pub struct RootNotFound(Blake2bHash);
+
+impl RootNotFound {
+    pub fn new(hash: Blake2bHash) -> Self {
+        RootNotFound(hash)
+    }
+
+    pub fn to_vec(&self) -> Vec<u8> {
+        self.0.to_vec()
+    }
+}

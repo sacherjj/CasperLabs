@@ -13,15 +13,16 @@ pub mod trie_store;
 #[cfg(test)]
 use lazy_static::lazy_static;
 
+pub(crate) const GAUGE_METRIC_KEY: &str = "gauge";
 const MAX_DBS: u32 = 2;
 
 #[cfg(test)]
 lazy_static! {
-    // 10 MiB = 10485760 bytes
+    // 50 MiB = 52428800 bytes
     // page size on x86_64 linux = 4096 bytes
-    // 10485760 / 4096 = 2560
+    // 52428800 / 4096 = 12800
     static ref TEST_MAP_SIZE: usize = {
         let page_size = engine_shared::os::get_page_size().unwrap();
-        page_size * 2560
+        page_size * 12800
     };
 }

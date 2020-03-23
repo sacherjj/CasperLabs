@@ -14,7 +14,8 @@ use types::{
 const CONTRACT_ADD_UPDATE_ASSOCIATED_KEY: &str = "add_update_associated_key.wasm";
 const CONTRACT_REMOVE_ASSOCIATED_KEY: &str = "remove_associated_key.wasm";
 const CONTRACT_TRANSFER_PURSE_TO_ACCOUNT: &str = "transfer_purse_to_account.wasm";
-const ACCOUNT_1_ADDR: [u8; 32] = [1u8; 32];
+const ACCOUNT_1_ADDR: PublicKey = PublicKey::ed25519_from([1u8; 32]);
+
 lazy_static! {
     static ref ACCOUNT_1_INITIAL_FUND: U512 = *DEFAULT_PAYMENT * 10;
 }
@@ -38,16 +39,16 @@ fn should_manage_associated_key() {
         (DEFAULT_ACCOUNT_ADDR,),
     )
     .build();
-    let builder = builder
+
+    builder
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
         .exec(exec_request_1)
         .expect_success()
-        .commit()
-        .exec(exec_request_2)
-        .expect_success()
         .commit();
 
-    let genesis_key = PublicKey::new(DEFAULT_ACCOUNT_ADDR);
+    builder.exec(exec_request_2).expect_success().commit();
+
+    let genesis_key = DEFAULT_ACCOUNT_ADDR;
 
     let account_1 = builder
         .get_account(ACCOUNT_1_ADDR)

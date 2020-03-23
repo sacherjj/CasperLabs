@@ -5,7 +5,7 @@ extern crate alloc;
 use alloc::string::ToString;
 
 use contract::{
-    contract_api::{runtime, storage, TURef},
+    contract_api::{runtime, storage},
     unwrap_or_revert::UnwrapOrRevert,
 };
 use types::{ApiError, ContractRef, Key, URef};
@@ -20,7 +20,7 @@ pub extern "C" fn call() {
 
     let result: URef = runtime::call_contract(contract_pointer, ());
 
-    let value = storage::read(TURef::from_uref(result).unwrap());
+    let value = storage::read(result);
 
     assert_eq!(Ok(Some("Hello, world!".to_string())), value);
 }

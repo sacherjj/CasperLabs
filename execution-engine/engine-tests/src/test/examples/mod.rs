@@ -12,3 +12,6 @@ pub mod mailing_list;
 
 #[cfg(test)]
 pub mod vesting;
+
+#[cfg(test)]
+pub mod tic_tac_toe;

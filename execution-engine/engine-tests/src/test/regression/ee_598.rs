@@ -12,7 +12,7 @@ use engine_test_support::{
 use types::{account::PublicKey, ApiError, U512};
 
 const CONTRACT_POS_BONDING: &str = "pos_bonding.wasm";
-const ACCOUNT_1_ADDR: [u8; 32] = [7u8; 32];
+const ACCOUNT_1_ADDR: PublicKey = PublicKey::ed25519_from([7u8; 32]);
 
 const GENESIS_VALIDATOR_STAKE: u64 = 50_000;
 lazy_static! {
@@ -27,7 +27,7 @@ fn should_fail_unboding_more_than_it_was_staked_ee_598_regression() {
     let accounts = {
         let mut tmp: Vec<GenesisAccount> = DEFAULT_ACCOUNTS.clone();
         let account = GenesisAccount::new(
-            PublicKey::new([42; 32]),
+            PublicKey::ed25519_from([42; 32]),
             Motes::new(GENESIS_VALIDATOR_STAKE.into()) * Motes::new(2.into()),
             Motes::new(GENESIS_VALIDATOR_STAKE.into()),
         );
@@ -42,7 +42,7 @@ fn should_fail_unboding_more_than_it_was_staked_ee_598_regression() {
         CONTRACT_POS_BONDING,
         (
             String::from("seed_new_account"),
-            PublicKey::new(ACCOUNT_1_ADDR),
+            ACCOUNT_1_ADDR,
             *ACCOUNT_1_BALANCE,
         ),
     )
@@ -53,7 +53,7 @@ fn should_fail_unboding_more_than_it_was_staked_ee_598_regression() {
             .with_payment_code(STANDARD_PAYMENT_CONTRACT, (*ACCOUNT_1_FUND,))
             .with_session_code("ee_598_regression.wasm", (*ACCOUNT_1_BOND,))
             .with_deploy_hash([2u8; 32])
-            .with_authorization_keys(&[PublicKey::new(ACCOUNT_1_ADDR)])
+            .with_authorization_keys(&[ACCOUNT_1_ADDR])
             .build();
         ExecuteRequestBuilder::from_deploy_item(deploy).build()
     };
@@ -73,6 +73,13 @@ fn should_fail_unboding_more_than_it_was_staked_ee_598_regression() {
         .expect("should have a response")
         .to_owned();
     let error_message = utils::get_error_message(response);
-    // Error::UnbondTooLarge => 7,
-    assert!(error_message.contains(&format!("Revert({})", u32::from(ApiError::ProofOfStake(7)))));
+
+    if cfg!(feature = "highway") {
+        assert!(error_message.contains(&format!("Revert({})", u32::from(ApiError::Unhandled))));
+    } else {
+        // Error::UnbondTooLarge => 7,
+        assert!(
+            error_message.contains(&format!("Revert({})", u32::from(ApiError::ProofOfStake(7))))
+        );
+    }
 }

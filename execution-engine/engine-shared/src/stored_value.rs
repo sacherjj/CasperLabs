@@ -1,7 +1,7 @@
-use std::{convert::TryFrom, mem, u32};
+use std::convert::TryFrom;
 
 use types::{
-    bytesrepr::{self, FromBytes, ToBytes},
+    bytesrepr::{self, FromBytes, ToBytes, U8_SERIALIZED_LENGTH},
     CLValue,
 };
 
@@ -94,25 +94,26 @@ impl TryFrom<StoredValue> for Contract {
     }
 }
 
-fn to_bytes<T: ToBytes>(value: &T, tag: Tag) -> Result<Vec<u8>, bytesrepr::Error> {
-    let mut bytes = value.to_bytes()?;
-    if bytes.len() >= u32::max_value() as usize - mem::size_of::<Tag>() {
-        return Err(bytesrepr::Error::OutOfMemory);
-    }
-
-    let mut result = Vec::with_capacity(bytes.len() + mem::size_of::<Tag>());
-    result.push(tag as u8);
-    result.append(&mut bytes);
-    Ok(result)
-}
-
 impl ToBytes for StoredValue {
     fn to_bytes(&self) -> Result<Vec<u8>, bytesrepr::Error> {
-        match self {
-            StoredValue::CLValue(cl_value) => to_bytes(cl_value, Tag::CLValue),
-            StoredValue::Account(account) => to_bytes(account, Tag::Account),
-            StoredValue::Contract(contract) => to_bytes(contract, Tag::Contract),
-        }
+        let mut result = bytesrepr::allocate_buffer(self)?;
+        let (tag, mut serialized_data) = match self {
+            StoredValue::CLValue(cl_value) => (Tag::CLValue, cl_value.to_bytes()?),
+            StoredValue::Account(account) => (Tag::Account, account.to_bytes()?),
+            StoredValue::Contract(contract) => (Tag::Contract, contract.to_bytes()?),
+        };
+        result.push(tag as u8);
+        result.append(&mut serialized_data);
+        Ok(result)
+    }
+
+    fn serialized_length(&self) -> usize {
+        U8_SERIALIZED_LENGTH
+            + match self {
+                StoredValue::CLValue(cl_value) => cl_value.serialized_length(),
+                StoredValue::Account(account) => account.serialized_length(),
+                StoredValue::Contract(contract) => contract.serialized_length(),
+            }
     }
 }
 
@@ -145,5 +146,19 @@ pub mod gens {
             account_arb().prop_map(StoredValue::Account),
             contract_arb().prop_map(StoredValue::Contract),
         ]
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use proptest::proptest;
+
+    use super::*;
+
+    proptest! {
+        #[test]
+        fn serialization_roundtrip(v in gens::stored_value_arb()) {
+            bytesrepr::test_serialization_roundtrip(&v);
+        }
     }
 }

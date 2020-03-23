@@ -31,6 +31,6 @@ pub extern "C" fn call() {
             .unwrap_or_revert();
 
         let name = format!("purse:{}", i);
-        runtime::put_key(&name, new_purse.value().into());
+        runtime::put_key(&name, new_purse.into());
     }
 }

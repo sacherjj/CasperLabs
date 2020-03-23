@@ -12,10 +12,7 @@ use engine_test_support::{
     },
     DEFAULT_ACCOUNT_ADDR,
 };
-use types::{
-    account::{PublicKey, PurseId},
-    Key, U512,
-};
+use types::{account::PublicKey, Key, URef, U512};
 
 const CONTRACT_FINALIZE_PAYMENT: &str = "pos_finalize_payment.wasm";
 const CONTRACT_TRANSFER_PURSE_TO_ACCOUNT: &str = "transfer_purse_to_account.wasm";
@@ -23,8 +20,8 @@ const FINALIZE_PAYMENT: &str = "pos_finalize_payment.wasm";
 const LOCAL_REFUND_PURSE: &str = "local_refund_purse";
 const POS_REFUND_PURSE_NAME: &str = "pos_refund_purse";
 
-const SYSTEM_ADDR: [u8; 32] = [0u8; 32];
-const ACCOUNT_ADDR: [u8; 32] = [1u8; 32];
+const SYSTEM_ADDR: PublicKey = PublicKey::ed25519_from([0u8; 32]);
+const ACCOUNT_ADDR: PublicKey = PublicKey::ed25519_from([1u8; 32]);
 
 fn initialize() -> InMemoryWasmTestBuilder {
     let mut builder = InMemoryWasmTestBuilder::default();
@@ -61,7 +58,7 @@ fn finalize_payment_should_not_be_run_by_non_system_accounts() {
     let mut builder = initialize();
     let payment_amount = U512::from(300);
     let spent_amount = U512::from(75);
-    let refund_purse: Option<PurseId> = None;
+    let refund_purse: Option<URef> = None;
     let args = (
         payment_amount,
         refund_purse,
@@ -109,7 +106,7 @@ fn finalize_payment_should_refund_to_specified_purse() {
     );
 
     let exec_request = {
-        let genesis_public_key = PublicKey::new(DEFAULT_ACCOUNT_ADDR);
+        let genesis_public_key = DEFAULT_ACCOUNT_ADDR;
 
         let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
@@ -166,42 +163,37 @@ fn finalize_payment_should_refund_to_specified_purse() {
 // ------------- utility functions -------------------- //
 
 fn get_pos_payment_purse_balance(builder: &InMemoryWasmTestBuilder) -> U512 {
-    let purse_id = get_pos_purse_id_by_name(builder, POS_PAYMENT_PURSE)
-        .expect("should find PoS payment purse");
-    builder.get_purse_balance(purse_id)
+    let purse =
+        get_pos_purse_by_name(builder, POS_PAYMENT_PURSE).expect("should find PoS payment purse");
+    builder.get_purse_balance(purse)
 }
 
 fn get_pos_rewards_purse_balance(builder: &InMemoryWasmTestBuilder) -> U512 {
-    let purse_id = get_pos_purse_id_by_name(builder, POS_REWARDS_PURSE)
-        .expect("should find PoS rewards purse");
-    builder.get_purse_balance(purse_id)
+    let purse =
+        get_pos_purse_by_name(builder, POS_REWARDS_PURSE).expect("should find PoS rewards purse");
+    builder.get_purse_balance(purse)
 }
 
 fn get_pos_refund_purse(builder: &InMemoryWasmTestBuilder) -> Option<Key> {
     let pos_contract = builder.get_pos_contract();
-
     pos_contract
         .named_keys()
         .get(POS_REFUND_PURSE_NAME)
         .cloned()
 }
 
-fn get_pos_purse_id_by_name(
-    builder: &InMemoryWasmTestBuilder,
-    purse_name: &str,
-) -> Option<PurseId> {
+fn get_pos_purse_by_name(builder: &InMemoryWasmTestBuilder, purse_name: &str) -> Option<URef> {
     let pos_contract = builder.get_pos_contract();
-
     pos_contract
         .named_keys()
         .get(purse_name)
         .and_then(Key::as_uref)
-        .map(|u| PurseId::new(*u))
+        .cloned()
 }
 
 fn get_named_account_balance(
     builder: &InMemoryWasmTestBuilder,
-    account_address: [u8; 32],
+    account_address: PublicKey,
     name: &str,
 ) -> Option<U512> {
     let account_key = Key::Account(account_address);
@@ -211,11 +203,11 @@ fn get_named_account_balance(
         .and_then(|v| v.try_into().map_err(|error| format!("{:?}", error)))
         .expect("should find balance uref");
 
-    let purse_id = account
+    let purse = account
         .named_keys()
         .get(name)
         .and_then(Key::as_uref)
-        .map(|u| PurseId::new(*u));
+        .cloned();
 
-    purse_id.map(|id| builder.get_purse_balance(id))
+    purse.map(|uref| builder.get_purse_balance(uref))
 }

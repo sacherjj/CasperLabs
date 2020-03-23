@@ -89,14 +89,20 @@ message Deploy {
     }
 
     message Arg {
+        reserved 2; // old state.Value representation of args
         string name = 1;
         // Note that until the EE doesn't support kwargs directly, missing an Empty values are
         // not allowed because they would be ambiguous.
+        state.CLValueInstance value = 3;
+    }
+
+    // Old definition of Arg, still kept around to support old JSON format.
+    // TODO: delete this when there are no more usages of the old JSON format
+    message LegacyArg {
+        string name = 1;
         Value value = 2;
-        // Subset of cases in `state.Value` that can be used as input for contract calls.
         message Value {
             oneof value {
-                // Explicitly mark a value as Some or None in the ABI.
                 Value optional_value = 1;
                 bytes bytes_value = 2;
                 int32 int_value = 3;
@@ -109,6 +115,17 @@ message Deploy {
             }
         }
     }
+}
+
+// Limited deploy information for gossiping.
+message DeploySummary {
+    // blake2b256 hash of the `header`.
+    bytes deploy_hash = 1;
+    Deploy.Header header = 2;
+    // Signatures over `deploy_hash` with either the `account_public_key`, or some other keys in case of
+    // multi-sig wallets and account recovery (when the private key corresponding to `account_public_key`
+    // is lost.)
+    repeated Approval approvals = 3;
 }
 
 // Limited block information for gossiping.
@@ -136,6 +153,7 @@ message Block {
         GlobalState state = 3;
         // Hash of the body structure as a whole.
         bytes body_hash = 4;
+        // Unix timestamp from when the block was created.
         uint64 timestamp = 5;
         state.ProtocolVersion protocol_version = 13;
         uint32 deploy_count = 7;
@@ -149,10 +167,23 @@ message Block {
         // validator_block_seq_num - 1.
         bytes validator_prev_block_hash = 14;
         // Distance from Genesis.
-        uint64 rank = 11;
+        // This is a rank based on the justifications of the message.
+        uint64 j_rank = 11;
         MessageType message_type = 12;
         // A block from where the fork choice is calculated.
+        // Corresponds to the era the block belongs to.
         bytes key_block_hash = 15;
+        // The round ID (the idealistic protocol timestamp) to which the block belongs;
+        // this will be slightly different from the timestamp, which is the wall clock time
+        // of when the block was _actually_ created.
+        uint64 round_id = 16;
+        // A random bit set by the creator of the block which is goes towards the leader seed
+        // of the era. Only leader blocks (i.e. lambda messages) have to set it; should be
+        // empty for ballots.
+        bool magic_bit = 17;
+        // Block height.
+        // Different from `j_rank` because it's incremented along main tree in the DAG, based on the parents.
+        uint64 main_rank = 18;
     }
 
     enum MessageType {
@@ -214,4 +245,29 @@ message GenesisCandidate {
 
     // Approvals from bonded validators with signatures over the `block_hash`.
     repeated Approval approvals = 2;
+}
+
+
+message Era {
+    // Key block of the era, which is basically its identifier.
+    bytes key_block_hash = 1;
+    // Identifier of the parent era.
+    bytes parent_key_block_hash = 2;
+    // Number of ticks since Unix epoch (in the protocol specific units) when the era starts.
+    uint64 start_tick = 3;
+    // Last round of the era (non-inclusive), after which the first block is the switch block.
+    uint64 end_tick = 4;
+    // The hash of the booking block which was reachable from the key block;
+    // this is where the bonds are coming, included in the era for reference.
+    bytes booking_block_hash = 5;
+    // The random seed compiled from the magic bits between the booking block and the key block.
+    // 1. Concatenate all the magic bits into an array of bytes, padding on the right with 0s to make it divisble by 8.
+    // 2. Concatenate the byte array to the parent leader seed.
+    // 3. Let the leader_seed be the blake2b256 hash of the resulting array.
+    // 4. Convert any uint64 tick to bytes in little-endian format.
+    // 5. Concatentate the the bytes of the tick to the leader_seed and use the array as a seed to a SHA1PRNG generator.
+    // 6. Generate a random double r between [0, 1) and seek the first validator in `bonds` where the total cumulative weight exceeds r * total.
+    bytes leader_seed = 6;
+    // Bonded validator weights from the booking block.
+    repeated Bond bonds = 7;
 }

@@ -12,13 +12,16 @@ import cats.syntax.flatMap._
 import cats.syntax.functor._
 import cats.syntax.show._
 import com.olegpy.meow.effects._
+import com.google.protobuf.ByteString
 import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper._
 import io.casperlabs.casper.MultiParentCasperImpl.Broadcaster
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
+import io.casperlabs.casper.DeploySelection.DeploySelection
 import io.casperlabs.casper.consensus.Block
 import io.casperlabs.casper.genesis.Genesis
 import io.casperlabs.casper.validation.{Validation, ValidationImpl}
+import io.casperlabs.casper.util.CasperLabsProtocol
 import io.casperlabs.catscontrib._
 import io.casperlabs.catscontrib.Catscontrib._
 import io.casperlabs.catscontrib.TaskContrib._
@@ -28,12 +31,14 @@ import io.casperlabs.comm.discovery._
 import io.casperlabs.comm.discovery.NodeUtils._
 import io.casperlabs.comm.grpc.SslContexts
 import io.casperlabs.comm.rp._
+import io.casperlabs.comm.gossiping.{Relaying, WaitHandle}
 import io.casperlabs.ipc.ChainSpec
 import io.casperlabs.mempool.DeployBuffer
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.node.api.graphql.FinalizedBlocksStream
 import io.casperlabs.node.api.EventStream
 import io.casperlabs.node.configuration.Configuration
+import io.casperlabs.node.casper.consensus.Consensus
 import io.casperlabs.shared._
 import io.casperlabs.smartcontracts.{ExecutionEngineService, GrpcExecutionEngineService}
 import io.casperlabs.storage.SQLiteStorage
@@ -43,12 +48,12 @@ import io.casperlabs.storage.deploy.{DeployStorage, DeployStorageWriter}
 import io.casperlabs.storage.util.fileIO._
 import io.casperlabs.storage.util.fileIO.IOError._
 import io.netty.handler.ssl.ClientAuth
+import java.util.concurrent.TimeUnit
 import monix.eval.Task
 import monix.execution.Scheduler
 import monix.execution.atomic.AtomicLong
 import org.flywaydb.core.Flyway
 import org.flywaydb.core.api.Location
-
 import scala.concurrent.duration._
 
 class NodeRuntime private[node] (
@@ -61,6 +66,7 @@ class NodeRuntime private[node] (
     logId: Log[Id],
     uncaughtExceptionHandler: UncaughtExceptionHandler
 ) {
+  import NodeRuntime.RelayingProxy
 
   private[this] val loopScheduler =
     Scheduler.fixedPool("loop", 2, reporter = uncaughtExceptionHandler)
@@ -98,7 +104,6 @@ class NodeRuntime private[node] (
 
   val main: Task[Unit] = {
     implicit val metricsId: Metrics[Id] = diagnostics.effects.metrics[Id](syncId)
-    implicit val filesApiEff            = FilesAPI.create[Task](Sync[Task], log)
 
     // SSL context to use for the public facing API.
     val maybeApiSslContext = if (conf.grpc.useTls) {
@@ -125,12 +130,11 @@ class NodeRuntime private[node] (
       _ <- Resource.liftF(runRdmbsMigrations(conf.server.dataDir))
 
       implicit0(
-        storage: BlockStorage[Task] with DagStorage[Task] with DeployStorage[Task] with FinalityStorage[
-          Task
-        ]
+        storage: SQLiteStorage.CombinedStorage[Task]
       ) <- Resource.liftF(
             SQLiteStorage.create[Task](
               deployStorageChunkSize = conf.blockstorage.deployStreamChunkSize,
+              tickUnit = TimeUnit.MILLISECONDS,
               readXa = readTransactor,
               writeXa = writeTransactor,
               wrapBlockStorage = (underlyingBlockStorage: BlockStorage[Task]) =>
@@ -140,6 +144,7 @@ class NodeRuntime private[node] (
                 ),
               wrapDagStorage = (underlyingDagStorage: DagStorage[Task]
                 with DagRepresentation[Task]
+                with AncestorsStorage[Task]
                 with FinalityStorage[Task]) =>
                 CachingDagStorage[Task](
                   underlyingDagStorage,
@@ -149,7 +154,9 @@ class NodeRuntime private[node] (
                 ).map(
                   cache =>
                     // Compiler fails to infer the proper type without this
-                    cache: DagStorage[Task] with DagRepresentation[Task] with FinalityStorage[Task]
+                    cache: DagStorage[Task] with DagRepresentation[Task] with FinalityStorage[
+                      Task
+                    ] with AncestorsStorage[Task]
                 )
             )
           )
@@ -165,7 +172,15 @@ class NodeRuntime private[node] (
 
       genesis <- makeGenesis[Task](chainSpec)
 
-      validatorId <- Resource.liftF(ValidatorIdentity.fromConfig[Task](conf.casper))
+      maybeValidatorId <- Resource.liftF(ValidatorIdentity.fromConfig[Task](conf.casper))
+
+      implicit0(eventStream: EventStream[Task]) <- Resource.pure[Task, EventStream[Task]](
+                                                    EventStream
+                                                      .create[Task](
+                                                        egressScheduler,
+                                                        conf.server.eventStreamBufferSize.value
+                                                      )
+                                                  )
 
       implicit0(deployBuffer: DeployBuffer[Task]) <- Resource.pure[Task, DeployBuffer[Task]](
                                                       DeployBuffer.create[Task](
@@ -193,14 +208,6 @@ class NodeRuntime private[node] (
               storage.getLastFinalizedBlock
             )
 
-      implicit0(eventsStream: EventStream[Task]) <- Resource.pure[Task, EventStream[Task]](
-                                                     EventStream
-                                                       .create[Task](
-                                                         ingressScheduler,
-                                                         conf.server.eventStreamBufferSize.value
-                                                       )
-                                                   )
-
       implicit0(finalizedBlocksStream: FinalizedBlocksStream[Task]) <- Resource.suspend(
                                                                         FinalizedBlocksStream
                                                                           .of[Task](lfb)
@@ -217,10 +224,6 @@ class NodeRuntime private[node] (
                                                         egressScheduler
                                                       )
 
-      implicit0(raise: FunctorRaise[Task, InvalidBlock]) = validation
-        .raiseValidateErrorThroughApplicativeError[Task]
-      implicit0(validationEff: Validation[Task]) = ValidationImpl.metered[Task]
-
       // TODO: Only a loop started with the TransportLayer keeps filling this up,
       // so if we use the GossipService it's going to stay empty. The diagnostics
       // should use NodeDiscovery instead.
@@ -233,27 +236,64 @@ class NodeRuntime private[node] (
                                                                         .of[Task]
                                                                     )
 
+      implicit0(protocolVersions: CasperLabsProtocol[Task]) <- Resource.liftF(
+                                                                CasperLabsProtocol
+                                                                  .fromChainSpec[Task](chainSpec)
+                                                              )
+
+      implicit0(deploySelection: DeploySelection[Task]) <- Resource.liftF(
+                                                            DeploySelection
+                                                              .createMetered[Task]
+                                                              .pure[Task]
+                                                          )
+
+      implicit0(relayingProxy: RelayingProxy[Task]) <- Resource.liftF[Task, RelayingProxy[Task]](
+                                                        RelayingProxy[Task]
+                                                      )
+
+      isSyncedRef <- Resource.liftF(Ref.of[Task, Boolean](false))
+
+      implicit0(consensusEff: Consensus[Task]) <- {
+        if (conf.highway.enabled)
+          Resource.liftF(Log[Task].info(s"Starting in Highway mode.")) *>
+            casper.consensus.Highway(conf, chainSpec, maybeValidatorId, genesis, isSyncedRef)
+        else
+          Resource.liftF(Log[Task].info(s"Starting in NCB mode.")) as {
+            casper.consensus
+              .NCB[Task](conf, chainSpec, maybeValidatorId)
+          }
+      }
+
       // Creating with 0 permits initially, enabled after the initial synchronization.
       blockApiLock <- Resource.liftF(Semaphore[Task](0))
 
       // Set up gossiping machinery and start synchronizing with the network.
-      broadcastAndSync <- casper.gossiping
-                           .apply[
-                             Task
-                           ](
-                             port,
-                             conf,
-                             chainSpec,
-                             genesis,
-                             ingressScheduler,
-                             egressScheduler
-                           )
+      relaying <- casper.gossiping
+                   .apply[
+                     Task
+                   ](
+                     port,
+                     conf,
+                     maybeValidatorId,
+                     genesis,
+                     ingressScheduler,
+                     egressScheduler,
+                     // Enable block production after sync.
+                     onInitialSyncCompleted = blockApiLock.releaseN(1) *> isSyncedRef.set(true)
+                   )
 
-      implicit0(broadcaster: Broadcaster[Task]) = broadcastAndSync._1
-      awaitSynchronization                      = broadcastAndSync._2
+      // Update the relaying we passed to consensus to use the real one.
+      _ <- Resource.liftF(relayingProxy.set(relaying))
 
-      // Enable block production after sync.
-      _ <- Resource.liftF((awaitSynchronization >> blockApiLock.releaseN(1)).start)
+      // The BlockAPI does relaying of blocks its creating on its own and wants to have a broadcaster.
+      implicit0(broadcaster: Broadcaster[Task]) <- Resource.liftF(
+                                                    MultiParentCasperImpl.Broadcaster
+                                                      .fromGossipServices(
+                                                        maybeValidatorId,
+                                                        relaying
+                                                      )
+                                                      .pure[Task]
+                                                  )
 
       // For now just either starting the auto-proposer or not, but ostensibly we
       // could pass it the flag to run or not and also wire it into the ControlService
@@ -264,12 +304,13 @@ class NodeRuntime private[node] (
             accInterval = conf.casper.autoProposeAccInterval,
             accCount = conf.casper.autoProposeAccCount,
             blockApiLock = blockApiLock
-          ).whenA(conf.casper.autoProposeEnabled)
+          ).whenA(conf.casper.autoProposeEnabled && !conf.highway.enabled)
 
       _ <- api.Servers
             .internalServersR(
               conf.grpc.portInternal,
               conf.server.maxMessageSize,
+              conf.server.shutdownTimeout,
               ingressScheduler,
               blockApiLock,
               maybeApiSslContext
@@ -278,9 +319,10 @@ class NodeRuntime private[node] (
       _ <- api.Servers.externalServersR[Task](
             conf.grpc.portExternal,
             conf.server.maxMessageSize,
+            conf.server.shutdownTimeout,
             ingressScheduler,
             maybeApiSslContext,
-            validatorId.isEmpty
+            maybeValidatorId.isEmpty
           )
 
       _ <- api.Servers.httpServerR[Task](
@@ -289,12 +331,12 @@ class NodeRuntime private[node] (
             id,
             ingressScheduler
           )
-    } yield (nodeAsk, nodeDiscovery, storage.writer)
+    } yield (nodeAsk, nodeDiscovery, storage.writer, deployBuffer)
 
     resources.allocated flatMap {
-      case ((nodeAsk, nodeDiscovery, deployStorage), release) =>
+      case ((nodeAsk, nodeDiscovery, deployStorage, deployBuffer), release) =>
         handleUnrecoverableErrors {
-          nodeProgram(nodeAsk, nodeDiscovery, deployStorage, release)
+          nodeProgram(nodeAsk, nodeDiscovery, deployStorage, deployBuffer, release)
         }
     }
 
@@ -307,7 +349,7 @@ class NodeRuntime private[node] (
         Flyway
           .configure()
           .dataSource(s"jdbc:sqlite:$db", "", "")
-          .locations(new Location("classpath:/db/migration"))
+          .locations(new Location("classpath:db/migration"))
       val flyway = conf.load()
       flyway.migrate()
       ()
@@ -319,6 +361,7 @@ class NodeRuntime private[node] (
       localAsk: NodeAsk[Task],
       nodeDiscovery: NodeDiscovery[Task],
       deployStorageWriter: DeployStorageWriter[Task],
+      deployBuffer: DeployBuffer[Task],
       release: Task[Unit]
   ): Task[Unit] = {
 
@@ -338,7 +381,7 @@ class NodeRuntime private[node] (
     } yield ()
 
     val checkPendingDeploysExpirationLoop: Task[Unit] = for {
-      _ <- deployStorageWriter.markAsDiscarded(24.hours)
+      _ <- DeployBuffer[Task].discardExpiredDeploys(24.hours)
       _ <- time.sleep(1.minute)
     } yield ()
 
@@ -459,4 +502,25 @@ object NodeRuntime {
       id      <- NodeEnvironment.create(conf)
       runtime <- Task.delay(new NodeRuntime(conf, chainSpec, id, scheduler))
     } yield runtime
+
+  /** There's a forward dependency between Highway consensus and the gossiping. */
+  class RelayingProxy[F[_]: Monad](
+      underlyingRef: Ref[F, Option[Relaying[F]]]
+  ) extends Relaying[F] {
+    override def relay(hashes: List[ByteString]): F[WaitHandle[F]] =
+      underlyingRef.get.flatMap {
+        case None =>
+          ().pure[F].pure[F]
+        case Some(underlying) =>
+          underlying.relay(hashes)
+      }
+
+    def set(underlying: Relaying[F]) =
+      underlyingRef.set(Some(underlying))
+  }
+  object RelayingProxy {
+    def apply[F[_]: Sync]: F[RelayingProxy[F]] =
+      Ref.of[F, Option[Relaying[F]]](None) map (new RelayingProxy(_))
+  }
+
 }

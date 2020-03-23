@@ -22,8 +22,7 @@ use engine_storage::global_state::{
 };
 use types::{
     account::{
-        ActionType, AddKeyFailure, PublicKey, PurseId, RemoveKeyFailure, SetThresholdFailure,
-        Weight,
+        ActionType, AddKeyFailure, PublicKey, RemoveKeyFailure, SetThresholdFailure, Weight,
     },
     AccessRights, BlockTime, CLValue, Key, Phase, ProtocolVersion, URef, KEY_LOCAL_SEED_LENGTH,
 };
@@ -62,29 +61,29 @@ fn mock_tc(init_key: Key, init_account: Account) -> TrackingCopy<InMemoryGlobalS
     TrackingCopy::new(reader)
 }
 
-fn mock_account_with_purse_id(addr: [u8; 32], purse_id: [u8; 32]) -> (Key, Account) {
-    let associated_keys = AssociatedKeys::new(PublicKey::new(addr), Weight::new(1));
+fn mock_account_with_purse(public_key: PublicKey, purse: [u8; 32]) -> (Key, Account) {
+    let associated_keys = AssociatedKeys::new(public_key, Weight::new(1));
     let account = Account::new(
-        addr,
+        public_key,
         BTreeMap::new(),
-        PurseId::new(URef::new(purse_id, AccessRights::READ_ADD_WRITE)),
+        URef::new(purse, AccessRights::READ_ADD_WRITE),
         associated_keys,
         Default::default(),
     );
-    let key = Key::Account(addr);
+    let key = Key::Account(public_key);
 
     (key, account)
 }
 
-fn mock_account(addr: [u8; 32]) -> (Key, Account) {
-    mock_account_with_purse_id(addr, [0; 32])
+fn mock_account(public_key: PublicKey) -> (Key, Account) {
+    mock_account_with_purse(public_key, [0; 32])
 }
 
 // create random account key.
 fn random_account_key<G: RngCore>(entropy_source: &mut G) -> Key {
     let mut key = [0u8; 32];
     entropy_source.fill_bytes(&mut key);
-    Key::Account(key)
+    Key::Account(PublicKey::ed25519_from(key))
 }
 
 // create random contract key.
@@ -119,7 +118,7 @@ fn mock_runtime_context<'a>(
         named_keys,
         access_rights,
         Vec::new(),
-        BTreeSet::from_iter(vec![PublicKey::new([0; 32])]),
+        BTreeSet::from_iter(vec![PublicKey::ed25519_from([0; 32])]),
         &account,
         base_key,
         BlockTime::new(0),
@@ -159,10 +158,11 @@ where
     F: FnOnce(RuntimeContext<InMemoryGlobalStateView>) -> Result<T, Error>,
 {
     let base_acc_addr = [0u8; 32];
+    let base_acc = PublicKey::ed25519_from(base_acc_addr);
     let deploy_hash = [1u8; 32];
-    let (key, account) = mock_account(base_acc_addr);
+    let (key, account) = mock_account(base_acc);
     let mut uref_map = BTreeMap::new();
-    let address_generator = AddressGenerator::new(deploy_hash, Phase::Session);
+    let address_generator = AddressGenerator::new(&deploy_hash, Phase::Session);
     let runtime_context = mock_runtime_context(
         &account,
         key,
@@ -176,7 +176,7 @@ where
 #[test]
 fn use_uref_valid() {
     // Test fixture
-    let mut rng = AddressGenerator::new(DEPLOY_HASH, PHASE);
+    let mut rng = AddressGenerator::new(&DEPLOY_HASH, PHASE);
     let uref = create_uref(&mut rng, AccessRights::READ_WRITE);
     let access_rights = extract_access_rights_from_keys(vec![uref]);
     // Use uref as the key to perform an action on the global state.
@@ -189,7 +189,7 @@ fn use_uref_valid() {
 #[test]
 fn use_uref_forged() {
     // Test fixture
-    let mut rng = AddressGenerator::new(DEPLOY_HASH, PHASE);
+    let mut rng = AddressGenerator::new(&DEPLOY_HASH, PHASE);
     let uref = create_uref(&mut rng, AccessRights::READ_WRITE);
     let access_rights = HashMap::new();
     let value = StoredValue::CLValue(CLValue::from_t(43_i32).unwrap());
@@ -200,7 +200,7 @@ fn use_uref_forged() {
 
 #[test]
 fn store_contract_with_uref_valid() {
-    let mut rng = AddressGenerator::new(DEPLOY_HASH, PHASE);
+    let mut rng = AddressGenerator::new(&DEPLOY_HASH, PHASE);
     let uref = create_uref(&mut rng, AccessRights::READ_WRITE);
     let access_rights = extract_access_rights_from_keys(vec![uref]);
 
@@ -227,7 +227,7 @@ fn store_contract_with_uref_valid() {
 
 #[test]
 fn store_contract_with_uref_forged() {
-    let mut rng = AddressGenerator::new(DEPLOY_HASH, PHASE);
+    let mut rng = AddressGenerator::new(&DEPLOY_HASH, PHASE);
     let uref = create_uref(&mut rng, AccessRights::READ_WRITE);
     let contract = StoredValue::Contract(Contract::new(
         Vec::new(),
@@ -246,7 +246,7 @@ fn store_contract_with_uref_forged() {
 fn store_contract_under_uref_valid() {
     // Test that storing contract under URef that is known and has WRITE access
     // works.
-    let mut rng = AddressGenerator::new(DEPLOY_HASH, PHASE);
+    let mut rng = AddressGenerator::new(&DEPLOY_HASH, PHASE);
     let contract_uref = create_uref(&mut rng, AccessRights::READ_WRITE);
     let access_rights = extract_access_rights_from_keys(vec![contract_uref]);
     let contract = StoredValue::Contract(Contract::new(
@@ -272,7 +272,7 @@ fn store_contract_under_uref_valid() {
 fn store_contract_under_uref_forged() {
     // Test that storing contract under URef that is not known fails with
     // ForgedReference error.
-    let mut rng = AddressGenerator::new(DEPLOY_HASH, PHASE);
+    let mut rng = AddressGenerator::new(&DEPLOY_HASH, PHASE);
     let contract_uref = create_uref(&mut rng, AccessRights::READ_WRITE);
     let contract = StoredValue::Contract(Contract::new(
         Vec::new(),
@@ -291,7 +291,7 @@ fn store_contract_under_uref_forged() {
 fn store_contract_uref_invalid_access() {
     // Test that storing contract under URef that is known but is not writeable
     // fails.
-    let mut rng = AddressGenerator::new(DEPLOY_HASH, PHASE);
+    let mut rng = AddressGenerator::new(&DEPLOY_HASH, PHASE);
     let contract_uref = create_uref(&mut rng, AccessRights::READ);
     let access_rights = extract_access_rights_from_keys(vec![contract_uref]);
     let contract = StoredValue::Contract(Contract::new(
@@ -354,7 +354,7 @@ fn account_key_readable_invalid() {
 fn account_key_addable_valid() {
     // Account key is addable if it is a "base" key - current context of the
     // execution.
-    let mut rng = AddressGenerator::new(DEPLOY_HASH, PHASE);
+    let mut rng = AddressGenerator::new(&DEPLOY_HASH, PHASE);
     let uref = create_uref(&mut rng, AccessRights::READ);
     let access_rights = extract_access_rights_from_keys(vec![uref]);
     let query_result = test(access_rights, |mut rc| {
@@ -426,8 +426,9 @@ fn contract_key_addable_valid() {
     // Contract key is addable if it is a "base" key - current context of the
     // execution.
     let base_acc_addr = [0u8; 32];
-    let (account_key, account) = mock_account(base_acc_addr);
-    let mut address_generator = AddressGenerator::new(DEPLOY_HASH, PHASE);
+    let base_acc = PublicKey::ed25519_from(base_acc_addr);
+    let (account_key, account) = mock_account(base_acc);
+    let mut address_generator = AddressGenerator::new(&DEPLOY_HASH, PHASE);
     let mut rng = rand::thread_rng();
     let contract_key = random_contract_key(&mut rng);
     let contract = StoredValue::Contract(Contract::new(
@@ -448,7 +449,7 @@ fn contract_key_addable_valid() {
         &mut uref_map,
         access_rights,
         Vec::new(),
-        BTreeSet::from_iter(vec![PublicKey::new(base_acc_addr)]),
+        BTreeSet::from_iter(vec![PublicKey::ed25519_from(base_acc_addr)]),
         &account,
         contract_key,
         BlockTime::new(0),
@@ -487,8 +488,9 @@ fn contract_key_addable_invalid() {
     // Contract key is addable if it is a "base" key - current context of the
     // execution.
     let base_acc_addr = [0u8; 32];
-    let (account_key, account) = mock_account(base_acc_addr);
-    let mut address_generator = AddressGenerator::new(DEPLOY_HASH, PHASE);
+    let base_acc = PublicKey::ed25519_from(base_acc_addr);
+    let (account_key, account) = mock_account(base_acc);
+    let mut address_generator = AddressGenerator::new(&DEPLOY_HASH, PHASE);
     let mut rng = rand::thread_rng();
     let contract_key = random_contract_key(&mut rng);
     let other_contract_key = random_contract_key(&mut rng);
@@ -509,7 +511,7 @@ fn contract_key_addable_invalid() {
         &mut uref_map,
         access_rights,
         Vec::new(),
-        BTreeSet::from_iter(vec![PublicKey::new(base_acc_addr)]),
+        BTreeSet::from_iter(vec![PublicKey::ed25519_from(base_acc_addr)]),
         &account,
         other_contract_key,
         BlockTime::new(0),
@@ -534,7 +536,7 @@ fn contract_key_addable_invalid() {
 
 #[test]
 fn uref_key_readable_valid() {
-    let mut rng = AddressGenerator::new(DEPLOY_HASH, PHASE);
+    let mut rng = AddressGenerator::new(&DEPLOY_HASH, PHASE);
     let uref_key = create_uref(&mut rng, AccessRights::READ);
     let access_rights = extract_access_rights_from_keys(vec![uref_key]);
     let query_result = test(access_rights, |mut rc| rc.read_gs(&uref_key));
@@ -543,7 +545,7 @@ fn uref_key_readable_valid() {
 
 #[test]
 fn uref_key_readable_invalid() {
-    let mut rng = AddressGenerator::new(DEPLOY_HASH, PHASE);
+    let mut rng = AddressGenerator::new(&DEPLOY_HASH, PHASE);
     let uref_key = create_uref(&mut rng, AccessRights::WRITE);
     let access_rights = extract_access_rights_from_keys(vec![uref_key]);
     let query_result = test(access_rights, |mut rc| rc.read_gs(&uref_key));
@@ -552,7 +554,7 @@ fn uref_key_readable_invalid() {
 
 #[test]
 fn uref_key_writeable_valid() {
-    let mut rng = AddressGenerator::new(DEPLOY_HASH, PHASE);
+    let mut rng = AddressGenerator::new(&DEPLOY_HASH, PHASE);
     let uref_key = create_uref(&mut rng, AccessRights::WRITE);
     let access_rights = extract_access_rights_from_keys(vec![uref_key]);
     let query_result = test(access_rights, |mut rc| {
@@ -566,7 +568,7 @@ fn uref_key_writeable_valid() {
 
 #[test]
 fn uref_key_writeable_invalid() {
-    let mut rng = AddressGenerator::new(DEPLOY_HASH, PHASE);
+    let mut rng = AddressGenerator::new(&DEPLOY_HASH, PHASE);
     let uref_key = create_uref(&mut rng, AccessRights::READ);
     let access_rights = extract_access_rights_from_keys(vec![uref_key]);
     let query_result = test(access_rights, |mut rc| {
@@ -580,7 +582,7 @@ fn uref_key_writeable_invalid() {
 
 #[test]
 fn uref_key_addable_valid() {
-    let mut rng = AddressGenerator::new(DEPLOY_HASH, PHASE);
+    let mut rng = AddressGenerator::new(&DEPLOY_HASH, PHASE);
     let uref_key = create_uref(&mut rng, AccessRights::ADD_WRITE);
     let access_rights = extract_access_rights_from_keys(vec![uref_key]);
     let query_result = test(access_rights, |mut rc| {
@@ -599,7 +601,7 @@ fn uref_key_addable_valid() {
 
 #[test]
 fn uref_key_addable_invalid() {
-    let mut rng = AddressGenerator::new(DEPLOY_HASH, PHASE);
+    let mut rng = AddressGenerator::new(&DEPLOY_HASH, PHASE);
     let uref_key = create_uref(&mut rng, AccessRights::WRITE);
     let access_rights = extract_access_rights_from_keys(vec![uref_key]);
     let query_result = test(access_rights, |mut rc| {
@@ -695,7 +697,7 @@ fn manage_associated_keys() {
     // making sure `account_dirty` mutated
     let access_rights = HashMap::new();
     let query = |mut runtime_context: RuntimeContext<InMemoryGlobalStateView>| {
-        let public_key = PublicKey::new([42; 32]);
+        let public_key = PublicKey::ed25519_from([42; 32]);
         let weight = Weight::new(155);
 
         // Add a key (this doesn't check for all invariants as `add_key`
@@ -763,7 +765,7 @@ fn action_thresholds_management() {
     let access_rights = HashMap::new();
     let query = |mut runtime_context: RuntimeContext<InMemoryGlobalStateView>| {
         runtime_context
-            .add_associated_key(PublicKey::new([42; 32]), Weight::new(254))
+            .add_associated_key(PublicKey::ed25519_from([42; 32]), Weight::new(254))
             .expect("Unable to add associated key with maximum weight");
         runtime_context
             .set_action_threshold(ActionType::KeyManagement, Weight::new(253))
@@ -808,7 +810,7 @@ fn should_verify_ownership_before_adding_key() {
         runtime_context.base_key = Key::Hash([1; 32]);
 
         let err = runtime_context
-            .add_associated_key(PublicKey::new([84; 32]), Weight::new(123))
+            .add_associated_key(PublicKey::ed25519_from([84; 32]), Weight::new(123))
             .expect_err("This operation should return error");
 
         match err {
@@ -832,7 +834,7 @@ fn should_verify_ownership_before_removing_a_key() {
         runtime_context.base_key = Key::Hash([1; 32]);
 
         let err = runtime_context
-            .remove_associated_key(PublicKey::new([84; 32]))
+            .remove_associated_key(PublicKey::ed25519_from([84; 32]))
             .expect_err("This operation should return error");
 
         match err {
@@ -896,9 +898,10 @@ fn remove_uref_works() {
 
     let named_keys = HashMap::new();
     let base_acc_addr = [0u8; 32];
+    let base_acc = PublicKey::ed25519_from(base_acc_addr);
     let deploy_hash = [1u8; 32];
-    let (key, account) = mock_account(base_acc_addr);
-    let mut address_generator = AddressGenerator::new(deploy_hash, Phase::Session);
+    let (key, account) = mock_account(base_acc);
+    let mut address_generator = AddressGenerator::new(&deploy_hash, Phase::Session);
     let uref_name = "Foo".to_owned();
     let uref_key = create_uref(&mut address_generator, AccessRights::READ);
     let mut uref_map = iter::once((uref_name.clone(), uref_key)).collect();
@@ -919,36 +922,37 @@ fn remove_uref_works() {
 }
 
 #[test]
-fn validate_valid_purse_id_of_an_account() {
-    // Tests that URef which matches a purse_id of a given context gets validated
-    let mock_purse_id = [42u8; 32];
+fn validate_valid_purse_of_an_account() {
+    // Tests that URef which matches a purse of a given context gets validated
+    let mock_purse = [42u8; 32];
     let named_keys = HashMap::new();
     let base_acc_addr = [0u8; 32];
+    let base_acc = PublicKey::ed25519_from(base_acc_addr);
     let deploy_hash = [1u8; 32];
-    let (key, account) = mock_account_with_purse_id(base_acc_addr, mock_purse_id);
-    let address_generator = AddressGenerator::new(deploy_hash, Phase::Session);
+    let (key, account) = mock_account_with_purse(base_acc, mock_purse);
+    let address_generator = AddressGenerator::new(&deploy_hash, Phase::Session);
     let mut uref_map = BTreeMap::new();
     let runtime_context =
         mock_runtime_context(&account, key, &mut uref_map, named_keys, address_generator);
 
-    // URef that has the same id as purse_id of an account gets validated
+    // URef that has the same id as purse of an account gets validated
     // successfully.
-    let purse_id = URef::new(mock_purse_id, AccessRights::READ_ADD_WRITE);
-    assert!(runtime_context.validate_uref(&purse_id).is_ok());
+    let purse = URef::new(mock_purse, AccessRights::READ_ADD_WRITE);
+    assert!(runtime_context.validate_uref(&purse).is_ok());
 
-    // URef that has the same id as purse_id of an account gets validated
+    // URef that has the same id as purse of an account gets validated
     // successfully as the passed purse has only subset of the privileges
-    let purse_id = URef::new(mock_purse_id, AccessRights::READ);
-    assert!(runtime_context.validate_uref(&purse_id).is_ok());
-    let purse_id = URef::new(mock_purse_id, AccessRights::ADD);
-    assert!(runtime_context.validate_uref(&purse_id).is_ok());
-    let purse_id = URef::new(mock_purse_id, AccessRights::WRITE);
-    assert!(runtime_context.validate_uref(&purse_id).is_ok());
+    let purse = URef::new(mock_purse, AccessRights::READ);
+    assert!(runtime_context.validate_uref(&purse).is_ok());
+    let purse = URef::new(mock_purse, AccessRights::ADD);
+    assert!(runtime_context.validate_uref(&purse).is_ok());
+    let purse = URef::new(mock_purse, AccessRights::WRITE);
+    assert!(runtime_context.validate_uref(&purse).is_ok());
 
-    // Purse ID that doesn't match account's purse_id should fail as it's also not
+    // Purse ID that doesn't match account's purse should fail as it's also not
     // in known urefs.
-    let purse_id = URef::new([53; 32], AccessRights::READ_ADD_WRITE);
-    assert!(runtime_context.validate_uref(&purse_id).is_err());
+    let purse = URef::new([53; 32], AccessRights::READ_ADD_WRITE);
+    assert!(runtime_context.validate_uref(&purse).is_err());
 }
 
 #[test]
@@ -957,20 +961,16 @@ fn attenuate_uref_for_system_account() {
     let system_contract_uref = URef::new([42; 32], AccessRights::READ_ADD);
     let attenuated_uref = attenuate_uref_for_account(&account, system_contract_uref);
 
-    let access_rights = attenuated_uref
-        .access_rights()
-        .expect("should have access rights");
+    let access_rights = attenuated_uref.access_rights();
     assert_eq!(access_rights, AccessRights::READ_ADD_WRITE);
 }
 
 #[test]
 fn attenuate_uref_for_user_account() {
-    let (_key, account) = mock_account([42; 32]);
+    let (_key, account) = mock_account(PublicKey::ed25519_from([42; 32]));
     let system_contract_uref = URef::new([42; 32], AccessRights::READ_ADD_WRITE);
     let attenuated_uref = attenuate_uref_for_account(&account, system_contract_uref);
 
-    let access_rights = attenuated_uref
-        .access_rights()
-        .expect("should have access rights");
+    let access_rights = attenuated_uref.access_rights();
     assert_eq!(access_rights, AccessRights::READ);
 }

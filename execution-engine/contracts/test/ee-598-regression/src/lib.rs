@@ -4,12 +4,12 @@ use contract::{
     contract_api::{account, runtime, system},
     unwrap_or_revert::UnwrapOrRevert,
 };
-use types::{account::PurseId, ApiError, ContractRef, U512};
+use types::{ApiError, ContractRef, URef, U512};
 
 const POS_BOND: &str = "bond";
 const POS_UNBOND: &str = "unbond";
 
-fn bond(pos: ContractRef, amount: U512, source: PurseId) {
+fn bond(pos: ContractRef, amount: U512, source: URef) {
     runtime::call_contract::<_, ()>(pos, (POS_BOND, amount, source));
 }
 

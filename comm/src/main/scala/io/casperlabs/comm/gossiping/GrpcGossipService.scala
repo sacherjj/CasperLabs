@@ -99,6 +99,17 @@ object GrpcGossipService {
             .flatten
         }
 
+      // TODO: Use a similar rate limiter than the block download?
+      def streamDeploysChunked(request: StreamDeploysChunkedRequest): Observable[Chunk] =
+        service
+          .streamDeploysChunked(request)
+          .toObservable
+          .withConsumerTimeout(blockChunkConsumerTimeout)
+          .onErrorRecoverWith {
+            case ex: TimeoutException =>
+              Observable.raiseError(DeadlineExceeded(ex.getMessage))
+          }
+
       def getGenesisCandidate(request: GetGenesisCandidateRequest): Task[GenesisCandidate] =
         TaskLike[F].apply(service.getGenesisCandidate(request))
 
@@ -150,6 +161,9 @@ object GrpcGossipService {
 
       def getBlockChunked(request: GetBlockChunkedRequest): Iterant[F, Chunk] =
         withErrorCallback(stub.getBlockChunked(request))
+
+      def streamDeploysChunked(request: StreamDeploysChunkedRequest): Iterant[F, Chunk] =
+        withErrorCallback(stub.streamDeploysChunked(request))
 
       def getGenesisCandidate(request: GetGenesisCandidateRequest): F[GenesisCandidate] =
         withErrorCallback(stub.getGenesisCandidate(request))

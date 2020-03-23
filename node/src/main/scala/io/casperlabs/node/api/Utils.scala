@@ -123,8 +123,8 @@ object Utils {
                 .whenA(seed.length != 32)
         } yield {
           // This is what EE does when creating local key address.
-          val hash = Blake2b256.hash(seed ++ bytes)
-          state.Key(state.Key.Value.Local(state.Key.Local(ByteString.copyFrom(hash))))
+          val hash = Blake2b256.hash(bytes)
+          state.Key(state.Key.Value.Local(state.Key.Local(ByteString.copyFrom(seed ++ hash))))
         }
       case _ =>
         appErr.raiseError(

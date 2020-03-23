@@ -13,14 +13,11 @@ use std::{
 use clap::{App, Arg, ArgMatches};
 use dirs::home_dir;
 use engine_core::engine_state::{EngineConfig, EngineState};
-use lazy_static::lazy_static;
 use lmdb::DatabaseFlags;
+use log::{error, info, Level, LevelFilter};
 
 use engine_shared::{
-    logging::{
-        self, log_level,
-        log_settings::{self, LogLevelFilter, LogSettings},
-    },
+    logging::{self, Settings, Style},
     os::get_page_size,
     socket,
 };
@@ -35,10 +32,8 @@ use engine_storage::protocol_data_store::lmdb::LmdbProtocolDataStore;
 // exe / proc
 const PROC_NAME: &str = "casperlabs-engine-grpc-server";
 const APP_NAME: &str = "CasperLabs Execution Engine Server";
-const SERVER_START_MESSAGE: &str = "starting Execution Engine Server";
 const SERVER_LISTENING_TEMPLATE: &str = "{listener} is listening on socket: {socket}";
 const SERVER_START_EXPECT: &str = "failed to start Execution Engine Server";
-const SERVER_STOP_MESSAGE: &str = "stopping Execution Engine Server";
 
 // data-dir / lmdb
 const ARG_DATA_DIR: &str = "data-dir";
@@ -70,13 +65,28 @@ const ARG_SOCKET: &str = "socket";
 const ARG_SOCKET_HELP: &str =
     "Path to socket.  Note that this path is independent of the data directory.";
 const ARG_SOCKET_EXPECT: &str = "socket required";
-const REMOVING_SOCKET_FILE_MESSAGE: &str = "removing old socket file";
-const REMOVING_SOCKET_FILE_EXPECT: &str = "failed to remove old socket file";
 
-// loglevel
-const ARG_LOG_LEVEL: &str = "loglevel";
-const ARG_LOG_LEVEL_VALUE: &str = "LOGLEVEL";
-const ARG_LOG_LEVEL_HELP: &str = "[ fatal | error | warning | info | debug ]";
+// log level
+const ARG_LOG_LEVEL: &str = "log-level";
+const ARG_LOG_LEVEL_VALUE: &str = "LEVEL";
+const ARG_LOG_LEVEL_HELP: &str = "Sets the max logging level";
+const LOG_LEVEL_OFF: &str = "off";
+const LOG_LEVEL_ERROR: &str = "error";
+const LOG_LEVEL_WARN: &str = "warn";
+const LOG_LEVEL_INFO: &str = "info";
+const LOG_LEVEL_DEBUG: &str = "debug";
+const LOG_LEVEL_TRACE: &str = "trace";
+
+// metrics
+const ARG_LOG_METRICS: &str = "log-metrics";
+const ARG_LOG_METRICS_HELP: &str = "Enables logging of metrics regardless of log-level setting";
+
+// log style
+const ARG_LOG_STYLE: &str = "log-style";
+const ARG_LOG_STYLE_VALUE: &str = "STYLE";
+const ARG_LOG_STYLE_HELP: &str = "Sets logging style to structured or human-readable";
+const LOG_STYLE_STRUCTURED: &str = "structured";
+const LOG_STYLE_HUMAN_READABLE: &str = "human";
 
 // thread count
 const ARG_THREAD_COUNT: &str = "threads";
@@ -86,43 +96,44 @@ const ARG_THREAD_COUNT_VALUE: &str = "NUM";
 const ARG_THREAD_COUNT_HELP: &str = "Worker thread count";
 const ARG_THREAD_COUNT_EXPECT: &str = "expected valid thread count";
 
+// use system contracts
+const ARG_USE_SYSTEM_CONTRACTS: &str = "use-system-contracts";
+const ARG_USE_SYSTEM_CONTRACTS_SHORT: &str = "z";
+const ARG_USE_SYSTEM_CONTRACTS_HELP: &str =
+    "Use system contracts instead of host-side logic for Mint, Proof of Stake and Standard Payment";
+
+// Highway
+const ARG_HIGHWAY: &str = "highway";
+const ARG_HIGHWAY_SHORT: &str = "w";
+const ARG_HIGHWAY_HELP: &str = "Highway consensus mode";
+
 // runnable
 const SIGINT_HANDLE_EXPECT: &str = "Error setting Ctrl-C handler";
 const RUNNABLE_CHECK_INTERVAL_SECONDS: u64 = 3;
 
-// Command line arguments instance
-lazy_static! {
-    static ref ARG_MATCHES: clap::ArgMatches<'static> = get_args();
-}
-
-// LogSettings instance to be used within this application
-lazy_static! {
-    static ref LOG_SETTINGS: log_settings::LogSettings = get_log_settings();
-}
-
 fn main() {
     set_panic_hook();
 
-    log_settings::set_log_settings_provider(&*LOG_SETTINGS);
+    let arg_matches = get_args();
 
-    logging::log_info(SERVER_START_MESSAGE);
+    let _ = logging::initialize(get_log_settings(&arg_matches));
 
-    let matches: &clap::ArgMatches = &*ARG_MATCHES;
+    info!("starting Execution Engine Server");
 
-    let socket = get_socket(matches);
+    let socket = get_socket(&arg_matches);
 
     match socket.remove_file() {
-        Err(e) => panic!("{}: {:?}", REMOVING_SOCKET_FILE_EXPECT, e),
-        Ok(_) => logging::log_info(REMOVING_SOCKET_FILE_MESSAGE),
+        Err(e) => panic!("failed to remove old socket file: {:?}", e),
+        Ok(_) => info!("removing old socket file"),
     };
 
-    let data_dir = get_data_dir(matches);
+    let data_dir = get_data_dir(&arg_matches);
 
-    let map_size = get_map_size(matches);
+    let map_size = get_map_size(&arg_matches);
 
-    let thread_count = get_thread_count(matches);
+    let thread_count = get_thread_count(&arg_matches);
 
-    let engine_config: EngineConfig = get_engine_config(matches);
+    let engine_config: EngineConfig = get_engine_config(&arg_matches);
 
     let _server = get_grpc_server(&socket, data_dir, map_size, thread_count, engine_config);
 
@@ -136,26 +147,21 @@ fn main() {
         std::thread::park_timeout(interval);
     }
 
-    logging::log_info(SERVER_STOP_MESSAGE);
+    info!("stopping Execution Engine Server");
 }
 
 /// Sets panic hook for logging panic info
 fn set_panic_hook() {
-    let hook: Box<dyn Fn(&std::panic::PanicInfo) + 'static + Sync + Send> =
-        Box::new(move |panic_info| {
-            match panic_info.payload().downcast_ref::<&str>() {
-                Some(s) => {
-                    let panic_message = format!("{:?}", s);
-                    logging::log_fatal(&panic_message);
-                }
-                None => {
-                    let panic_message = format!("{:?}", panic_info);
-                    logging::log_fatal(&panic_message);
-                }
+    let hook: Box<dyn Fn(&std::panic::PanicInfo) + 'static + Sync + Send> = Box::new(
+        move |panic_info| match panic_info.payload().downcast_ref::<&str>() {
+            Some(s) => {
+                error!("{:?}", s);
             }
-
-            logging::log_info(SERVER_STOP_MESSAGE);
-        });
+            None => {
+                error!("{:?}", panic_info);
+            }
+        },
+    );
     std::panic::set_hook(hook);
 }
 
@@ -168,8 +174,33 @@ fn get_args() -> ArgMatches<'static> {
                 .required(false)
                 .long(ARG_LOG_LEVEL)
                 .takes_value(true)
+                .possible_value(LOG_LEVEL_OFF)
+                .possible_value(LOG_LEVEL_ERROR)
+                .possible_value(LOG_LEVEL_WARN)
+                .possible_value(LOG_LEVEL_INFO)
+                .possible_value(LOG_LEVEL_DEBUG)
+                .possible_value(LOG_LEVEL_TRACE)
+                .default_value(LOG_LEVEL_INFO)
                 .value_name(ARG_LOG_LEVEL_VALUE)
                 .help(ARG_LOG_LEVEL_HELP),
+        )
+        .arg(
+            Arg::with_name(ARG_LOG_METRICS)
+                .required(false)
+                .long(ARG_LOG_METRICS)
+                .takes_value(false)
+                .help(ARG_LOG_METRICS_HELP),
+        )
+        .arg(
+            Arg::with_name(ARG_LOG_STYLE)
+                .required(false)
+                .long(ARG_LOG_STYLE)
+                .takes_value(true)
+                .possible_value(LOG_STYLE_STRUCTURED)
+                .possible_value(LOG_STYLE_HUMAN_READABLE)
+                .default_value(LOG_STYLE_STRUCTURED)
+                .value_name(ARG_LOG_STYLE_VALUE)
+                .help(ARG_LOG_STYLE_HELP),
         )
         .arg(
             Arg::with_name(ARG_DATA_DIR)
@@ -197,6 +228,16 @@ fn get_args() -> ArgMatches<'static> {
                 .help(ARG_THREAD_COUNT_HELP),
         )
         .arg(
+            Arg::with_name(ARG_USE_SYSTEM_CONTRACTS)
+                .short(ARG_USE_SYSTEM_CONTRACTS_SHORT)
+                .help(ARG_USE_SYSTEM_CONTRACTS_HELP),
+        )
+        .arg(
+            Arg::with_name(ARG_HIGHWAY)
+                .short(ARG_HIGHWAY_SHORT)
+                .help(ARG_HIGHWAY_HELP),
+        )
+        .arg(
             Arg::with_name(ARG_SOCKET)
                 .required(true)
                 .help(ARG_SOCKET_HELP)
@@ -217,15 +258,15 @@ fn get_sigint_handle() -> Arc<AtomicBool> {
 }
 
 /// Gets value of socket argument
-fn get_socket(matches: &ArgMatches) -> socket::Socket {
-    let socket = matches.value_of(ARG_SOCKET).expect(ARG_SOCKET_EXPECT);
+fn get_socket(arg_matches: &ArgMatches) -> socket::Socket {
+    let socket = arg_matches.value_of(ARG_SOCKET).expect(ARG_SOCKET_EXPECT);
 
     socket::Socket::new(socket.to_owned())
 }
 
 /// Gets value of data-dir argument
-fn get_data_dir(matches: &ArgMatches) -> PathBuf {
-    let mut buf = matches.value_of(ARG_DATA_DIR).map_or(
+fn get_data_dir(arg_matches: &ArgMatches) -> PathBuf {
+    let mut buf = arg_matches.value_of(ARG_DATA_DIR).map_or(
         {
             let mut dir = home_dir().expect(GET_HOME_DIR_EXPECT);
             dir.push(DEFAULT_DATA_DIR_RELATIVE);
@@ -239,17 +280,17 @@ fn get_data_dir(matches: &ArgMatches) -> PathBuf {
 }
 
 ///  Parses pages argument and returns map size
-fn get_map_size(matches: &ArgMatches) -> usize {
+fn get_map_size(arg_matches: &ArgMatches) -> usize {
     let page_size = get_page_size().unwrap();
-    let pages = matches
+    let pages = arg_matches
         .value_of(ARG_PAGES)
         .map_or(Ok(DEFAULT_PAGES), usize::from_str)
         .expect(GET_PAGES_EXPECT);
     page_size * pages
 }
 
-fn get_thread_count(matches: &ArgMatches) -> usize {
-    matches
+fn get_thread_count(arg_matches: &ArgMatches) -> usize {
+    arg_matches
         .value_of(ARG_THREAD_COUNT)
         .map(str::parse)
         .expect(ARG_THREAD_COUNT_EXPECT)
@@ -257,9 +298,13 @@ fn get_thread_count(matches: &ArgMatches) -> usize {
 }
 
 /// Returns an [`EngineConfig`].
-fn get_engine_config(_matches: &ArgMatches) -> EngineConfig {
+fn get_engine_config(arg_matches: &ArgMatches) -> EngineConfig {
     // feature flags go here
+    let use_system_contracts = arg_matches.is_present(ARG_USE_SYSTEM_CONTRACTS);
+    let highway = arg_matches.is_present(ARG_HIGHWAY);
     EngineConfig::new()
+        .with_use_system_contracts(use_system_contracts)
+        .with_highway(highway)
 }
 
 /// Builds and returns a gRPC server.
@@ -306,24 +351,41 @@ fn get_engine_state(
     EngineState::new(global_state, engine_config)
 }
 
-/// Builds and returns log_settings
-fn get_log_settings() -> log_settings::LogSettings {
-    let matches: &clap::ArgMatches = &*ARG_MATCHES;
+/// Builds and returns log settings
+fn get_log_settings(arg_matches: &ArgMatches) -> Settings {
+    let max_level = match arg_matches
+        .value_of(ARG_LOG_LEVEL)
+        .expect("should have default value if not explicitly set")
+    {
+        LOG_LEVEL_OFF => LevelFilter::Off,
+        LOG_LEVEL_ERROR => LevelFilter::Error,
+        LOG_LEVEL_WARN => LevelFilter::Warn,
+        LOG_LEVEL_INFO => LevelFilter::Info,
+        LOG_LEVEL_DEBUG => LevelFilter::Debug,
+        LOG_LEVEL_TRACE => LevelFilter::Trace,
+        _ => unreachable!("should validate log-level arg to match one of the options"),
+    };
 
-    let log_level_filter = LogLevelFilter::from_input(matches.value_of(ARG_LOG_LEVEL));
+    let enable_metrics = arg_matches.is_present(ARG_LOG_METRICS);
 
-    LogSettings::new(PROC_NAME, log_level_filter)
+    let style = match arg_matches.value_of(ARG_LOG_STYLE) {
+        Some(LOG_STYLE_HUMAN_READABLE) => Style::HumanReadable,
+        _ => Style::Structured,
+    };
+
+    Settings::new(max_level)
+        .with_metrics_enabled(enable_metrics)
+        .with_style(style)
 }
 
 /// Logs listening on socket message
 fn log_listening_message(socket: &socket::Socket) {
-    let mut properties: BTreeMap<String, String> = BTreeMap::new();
-
-    properties.insert("listener".to_string(), PROC_NAME.to_owned());
-    properties.insert("socket".to_string(), socket.value());
+    let mut properties = BTreeMap::new();
+    properties.insert("listener", PROC_NAME.to_owned());
+    properties.insert("socket", socket.value());
 
     logging::log_details(
-        log_level::LogLevel::Info,
+        Level::Info,
         (&*SERVER_LISTENING_TEMPLATE).to_string(),
         properties,
     );

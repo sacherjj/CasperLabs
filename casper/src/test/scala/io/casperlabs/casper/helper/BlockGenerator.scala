@@ -4,34 +4,41 @@ import cats._
 import cats.effect.Sync
 import cats.implicits._
 import com.google.protobuf.ByteString
-import io.casperlabs.casper.DeploySelection
+import io.casperlabs.casper.{DeployEventEmitter, DeploySelection}
 import io.casperlabs.casper.DeploySelection.DeploySelection
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.consensus.Block.ProcessedDeploy
 import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.consensus.state.ProtocolVersion
+import io.casperlabs.casper.dag.DagOperations
 import io.casperlabs.casper.util.execengine.ExecutionEngineServiceStub
-import io.casperlabs.casper.util.{DagOperations, ProtoUtil}
+import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.{computeDeploysCheckpoint, StateHash}
 import io.casperlabs.casper.util.execengine.{DeploysCheckpoint, ExecEngineUtil}
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.crypto.Keys
 import io.casperlabs.metrics.Metrics
+import io.casperlabs.models.Message
+import io.casperlabs.mempool.DeployBuffer
 import io.casperlabs.p2p.EffectsTestInstances.LogicalTime
 import io.casperlabs.shared.{Log, Time}
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.storage.dag.{DagRepresentation, IndexedDagStorage}
 import io.casperlabs.storage.deploy.{DeployStorage, DeployStorageWriter}
+import io.casperlabs.storage.era.EraStorage
 import monix.eval.Task
+import io.casperlabs.shared.Sorting._
 
 import scala.collection.immutable.HashMap
 import scala.language.higherKinds
+import io.casperlabs.storage.dag.DagStorage
 
 object BlockGenerator {
   implicit val timeEff = new LogicalTime[Task]()
+  implicit val emitter = NoOpsEventEmitter.create[Task]
 
-  def updateChainWithBlockStateUpdate[F[_]: Sync: BlockStorage: IndexedDagStorage: DeployStorage: ExecutionEngineService: Log: Metrics](
+  def updateChainWithBlockStateUpdate[F[_]: Sync: BlockStorage: IndexedDagStorage: DeployStorage: DeployBuffer: ExecutionEngineService: Log: Metrics](
       id: Int
   ): F[Block] =
     for {
@@ -66,7 +73,7 @@ object BlockGenerator {
       IndexedDagStorage[F].inject(id, updatedBlock)
   }
 
-  private[casper] def computeBlockCheckpointFromDeploys[F[_]: Sync: BlockStorage: DeployStorage: Log: ExecutionEngineService: Metrics](
+  private[casper] def computeBlockCheckpointFromDeploys[F[_]: Sync: BlockStorage: DeployStorage: DeployBuffer: Log: ExecutionEngineService: Metrics](
       b: Block,
       dag: DagRepresentation[F]
   ): F[DeploysCheckpoint] =
@@ -74,17 +81,16 @@ object BlockGenerator {
       parents <- ProtoUtil.unsafeGetParents[F](b)
       deploys = ProtoUtil.deploys(b).values.flatMap(_.toList).flatMap(_.deploy)
 
-      merged <- ExecutionEngineServiceStub.merge[F](parents, dag)
-      implicit0(deploySelection: DeploySelection[F]) = DeploySelection.create[F](
-        5 * 1024 * 1024
-      )
-      _ <- DeployStorageWriter[F].addAsPending(deploys.toList)
+      merged                                         <- ExecutionEngineServiceStub.merge[F](parents, dag)
+      implicit0(deploySelection: DeploySelection[F]) = DeploySelection.create[F]()
+      _                                              <- DeployStorageWriter[F].addAsPending(deploys.toList)
       result <- computeDeploysCheckpoint[F](
                  merged,
                  fs2.Stream.fromIterator(deploys.toIterator),
                  b.getHeader.timestamp,
                  ProtocolVersion(1),
-                 rank = 0,
+                 mainRank = Message.asMainRank(0),
+                 maxBlockSizeBytes = 5 * 1024 * 1024,
                  upgrades = Nil
                )
     } yield result
@@ -183,12 +189,14 @@ trait BlockGenerator {
                           else
                             ProtoUtil.nextValidatorBlockSeqNum(dag, validatorPrevBlockHash)
                         }
-      rank <- if (parentsHashList.isEmpty) 0L.pure[F]
-             else
-               updatedJustifications.values.toList
-                 .flatTraverse(_.toList.traverse(dag.lookup(_)))
-                 .map(_.flatten)
-                 .map(ProtoUtil.nextRank(_))
+      jRank <- if (parentsHashList.isEmpty) Message.asJRank(0L).pure[F]
+              else
+                updatedJustifications.values.toList
+                  .flatTraverse(_.toList.traverse(dag.lookup(_)))
+                  .map(_.flatten)
+                  .map(ProtoUtil.nextJRank(_))
+      parentMessages <- parentsHashList.toList.traverse(dag.lookupBlockUnsafe(_))
+      mainRank       = ProtoUtil.nextMainRank(parentMessages)
       header = ProtoUtil
         .blockHeader(
           body,
@@ -196,7 +204,8 @@ trait BlockGenerator {
           parentsHashList,
           serializedJustifications,
           postState,
-          rank,
+          jRank,
+          mainRank,
           validatorSeqNum,
           validatorPrevBlockHash,
           protocolVersion = ProtocolVersion(1),
@@ -285,7 +294,8 @@ trait BlockGenerator {
       preStateHash: ByteString = ByteString.EMPTY,
       postStateHash: ByteString = ByteString.EMPTY,
       maybeValidatorPrevBlockHash: Option[BlockHash] = None,
-      maybeValidatorBlockSeqNum: Option[Int] = None
+      maybeValidatorBlockSeqNum: Option[Int] = None,
+      keyBlockHash: ByteString = ByteString.EMPTY
   ): F[Block] =
     createAndStoreMessage[F](
       parentsHashList = parents.map(_.blockHash),
@@ -297,6 +307,13 @@ trait BlockGenerator {
       chainName = chainName,
       preStateHash = preStateHash,
       maybeValidatorPrevBlockHash = maybeValidatorPrevBlockHash,
-      maybeValidatorBlockSeqNum = maybeValidatorBlockSeqNum
+      maybeValidatorBlockSeqNum = maybeValidatorBlockSeqNum,
+      keyBlockHash = keyBlockHash
     )
+
+  /** Insert an era so we get the behaviour where latest messages are stored per key block hash. */
+  def createAndStoreEra[F[_]: Applicative: EraStorage](keyBlockHash: ByteString): F[Era] = {
+    val era = Era(keyBlockHash)
+    EraStorage[F].addEra(era).as(era)
+  }
 }

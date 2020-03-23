@@ -10,6 +10,7 @@ use crate::engine_server::{
 impl From<AccessRights> for Key_URef_AccessRights {
     fn from(access_rights: AccessRights) -> Self {
         match access_rights {
+            AccessRights::NONE => Key_URef_AccessRights::NONE,
             AccessRights::READ => Key_URef_AccessRights::READ,
             AccessRights::WRITE => Key_URef_AccessRights::WRITE,
             AccessRights::ADD => Key_URef_AccessRights::ADD,
@@ -17,7 +18,7 @@ impl From<AccessRights> for Key_URef_AccessRights {
             AccessRights::READ_WRITE => Key_URef_AccessRights::READ_WRITE,
             AccessRights::ADD_WRITE => Key_URef_AccessRights::ADD_WRITE,
             AccessRights::READ_ADD_WRITE => Key_URef_AccessRights::READ_ADD_WRITE,
-            _ => Key_URef_AccessRights::UNKNOWN,
+            _ => Key_URef_AccessRights::NONE,
         }
     }
 }
@@ -26,9 +27,8 @@ impl From<URef> for Key_URef {
     fn from(uref: URef) -> Self {
         let mut pb_uref = Key_URef::new();
         pb_uref.set_uref(uref.addr().to_vec());
-        if let Some(access_rights) = uref.access_rights() {
-            pb_uref.set_access_rights(access_rights.into());
-        }
+        let access_rights = uref.access_rights();
+        pb_uref.set_access_rights(access_rights.into());
         pb_uref
     }
 }
@@ -39,21 +39,18 @@ impl TryFrom<Key_URef> for URef {
     fn try_from(pb_uref: Key_URef) -> Result<Self, Self::Error> {
         let addr = mappings::vec_to_array(pb_uref.uref, "Protobuf URef addr")?;
 
-        let maybe_access_rights = match pb_uref.access_rights {
-            Key_URef_AccessRights::UNKNOWN => None,
-            Key_URef_AccessRights::READ => Some(AccessRights::READ),
-            Key_URef_AccessRights::WRITE => Some(AccessRights::WRITE),
-            Key_URef_AccessRights::ADD => Some(AccessRights::ADD),
-            Key_URef_AccessRights::READ_ADD => Some(AccessRights::READ_ADD),
-            Key_URef_AccessRights::READ_WRITE => Some(AccessRights::READ_WRITE),
-            Key_URef_AccessRights::ADD_WRITE => Some(AccessRights::ADD_WRITE),
-            Key_URef_AccessRights::READ_ADD_WRITE => Some(AccessRights::READ_ADD_WRITE),
+        let access_rights = match pb_uref.access_rights {
+            Key_URef_AccessRights::NONE => AccessRights::NONE,
+            Key_URef_AccessRights::READ => AccessRights::READ,
+            Key_URef_AccessRights::WRITE => AccessRights::WRITE,
+            Key_URef_AccessRights::ADD => AccessRights::ADD,
+            Key_URef_AccessRights::READ_ADD => AccessRights::READ_ADD,
+            Key_URef_AccessRights::READ_WRITE => AccessRights::READ_WRITE,
+            Key_URef_AccessRights::ADD_WRITE => AccessRights::ADD_WRITE,
+            Key_URef_AccessRights::READ_ADD_WRITE => AccessRights::READ_ADD_WRITE,
         };
 
-        let uref = match maybe_access_rights {
-            Some(access_rights) => URef::new(addr, access_rights),
-            None => URef::new(addr, AccessRights::READ).remove_access_rights(),
-        };
+        let uref = URef::new(addr, access_rights);
 
         Ok(uref)
     }
@@ -99,7 +96,7 @@ mod tests {
         let addr: [u8; UREF_ADDR_LENGTH] = rand::random();
         let mut pb_uref = Key_URef::new();
         pb_uref.set_uref(addr.to_vec());
-        pb_uref.set_access_rights(Key_URef_AccessRights::UNKNOWN);
+        pb_uref.set_access_rights(Key_URef_AccessRights::NONE);
         let parsed_uref = URef::try_from(pb_uref).unwrap();
         assert_eq!(addr, parsed_uref.addr());
         assert!(parsed_uref.access_rights().is_none());

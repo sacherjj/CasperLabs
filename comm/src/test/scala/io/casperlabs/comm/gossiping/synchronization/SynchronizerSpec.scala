@@ -47,6 +47,22 @@ class SynchronizerSpec
   def genDoubleGreaterEqualOf0(max: Double): Gen[Double] =
     Gen.choose(0.0, max)
 
+  // A dependency-free summary.
+  def sampleSummary = {
+    val s = sample[BlockSummary]
+    s.withHeader(s.getHeader.clearJustifications.clearParentHashes)
+  }
+  implicit class SampleSummaryOps(s: BlockSummary) {
+    def withParents(ps: BlockSummary*) =
+      s.withHeader(s.getHeader.withParentHashes(ps.map(_.blockHash)))
+    def sampleChild: BlockSummary =
+      sampleSummary.withParents(s)
+  }
+  implicit class SampleSummaryListOps(ss: List[BlockSummary]) {
+    def sampleChild: BlockSummary =
+      sampleSummary.withParents(ss: _*)
+  }
+
   "Synchronizer" when {
     "streamed DAG contains cycle" should {
       "return SyncError.Cycle" in forAll(genPartialDagFromTips) { dag =>
@@ -137,6 +153,7 @@ class SynchronizerSpec
         }
       }
     }
+
     "streamed summary can not be connected to initial block hashes" should {
       "return SyncError.Unreachable" in forAll(
         genPartialDagFromTips,
@@ -151,6 +168,7 @@ class SynchronizerSpec
         }
       }
     }
+
     "streamed summary is too far away from initial block hashes" should {
       "return SyncError.Unreachable" in forAll(
         genPartialDagFromTips,
@@ -165,6 +183,45 @@ class SynchronizerSpec
         }
       }
     }
+
+    "there are multiple paths leading to the same block" should {
+      "use the shortest for reachability checks" in {
+        // Say we have the following DAG and sync from J with max depth 2; all we have is A.
+        //            E - G - I
+        //          /          \
+        // A - B - C - F - H --- J
+        //
+        // First we'll get [J,I,H,G,F], which will tell us that we are missing parent hashes C and E.
+        // Second time we set targets [C,E] and get [E,C,B,A]. The distance check of A must be on the
+        // the shorter [A,B,C] path, not the longer [A,B,C,E] which would be over the limit.
+
+        val a = sampleSummary
+        val b = a.sampleChild
+        val c = b.sampleChild
+        val e = c.sampleChild
+        val f = c.sampleChild
+        val g = e.sampleChild
+        val h = f.sampleChild
+        val i = g.sampleChild
+        val j = List(h, i).sampleChild
+
+        val first  = Vector(j, i, h, g, f)
+        val second = Vector(e, c, b, a)
+
+        TestFixture(first, second)(
+          maxDepthAncestorsRequest = 2,
+          notInDag = hash => Task.now(hash != a.blockHash)
+        ) { (synchronizer, _) =>
+          synchronizer.syncDag(Node(), Set(j.blockHash)).foreachL { dagOrError =>
+            dagOrError match {
+              case Left(err)  => fail(err.getMessage)
+              case Right(dag) => dag should have size (first.size + second.size).toLong
+            }
+          }
+        }
+      }
+    }
+
     "streamed block summary can not be validated" should {
       "return SyncError.ValidationError" in forAll(
         genPartialDagFromTips
@@ -250,10 +307,14 @@ class SynchronizerSpec
             maxDepthAncestorsRequest = ancestorsDepthRequest,
             notInDag = bs => Task.now(!finalParents(bs))
           ) { (synchronizer, variables) =>
+            val source = Node()
             for {
-              r1 <- synchronizer.syncDag(Node(), Set(dag.head.blockHash))
-              r2 <- synchronizer.syncDag(Node(), Set(dag.head.blockHash))
+              r1 <- synchronizer.syncDag(source, Set(dag.head.blockHash))
               d1 = r1.fold(throw _, identity)
+              _ <- d1.traverse { d =>
+                    synchronizer.onScheduled(d, source)
+                  }
+              r2 <- synchronizer.syncDag(source, Set(dag.head.blockHash))
               d2 = r2.fold(throw _, identity)
             } yield {
               d2.length should be < d1.length
@@ -388,9 +449,10 @@ object SynchronizerSpec {
         dags: Vector[BlockSummary]*
     ): Task[GossipService[Task]] =
       Task.now {
-        new GossipService[Task] {
-          def newBlocks(request: NewBlocksRequest) = ???
-          def streamAncestorBlockSummaries(request: StreamAncestorBlockSummariesRequest) = {
+        new NoOpsGossipService[Task] {
+          override def streamAncestorBlockSummaries(
+              request: StreamAncestorBlockSummariesRequest
+          ) = {
             request.knownBlockHashes.foreach(h => knownHashes += h)
             Iterant
               .resource {
@@ -408,12 +470,6 @@ object SynchronizerSpec {
                 }
               }
           }
-          def streamLatestMessages(request: StreamLatestMessagesRequest)                 = ???
-          def streamBlockSummaries(request: StreamBlockSummariesRequest)                 = ???
-          def getBlockChunked(request: GetBlockChunkedRequest)                           = ???
-          def getGenesisCandidate(request: GetGenesisCandidateRequest)                   = ???
-          def addApproval(request: AddApprovalRequest)                                   = ???
-          def streamDagSliceBlockSummaries(request: StreamDagSliceBlockSummariesRequest) = ???
         }
       }
   }
@@ -425,6 +481,8 @@ object SynchronizerSpec {
   )
 
   object TestFixture {
+
+    /** The `dags` contain successive responses to requests. */
     def apply(dags: Vector[BlockSummary]*)(
         maxPossibleDepth: Int = Int.MaxValue,
         maxBondingRate: Double = 1.0,
@@ -446,7 +504,8 @@ object SynchronizerSpec {
         maxPossibleDepth = maxPossibleDepth,
         minBlockCountToCheckWidth = minBlockCountToCheckWidth,
         maxBondingRate = maxBondingRate,
-        maxDepthAncestorsRequest = maxDepthAncestorsRequest
+        maxDepthAncestorsRequest = maxDepthAncestorsRequest,
+        disableValidations = false
       ).flatMap { synchronizer =>
           test(synchronizer, TestVariables(requestsCounter, requestsGauge, knownHashes))
         }

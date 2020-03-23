@@ -10,7 +10,7 @@ import cats.mtl.implicits._
 import cats.syntax.option._
 import io.casperlabs.casper.consensus
 import io.casperlabs.casper.consensus.info.{BlockInfo, DeployInfo}
-import io.casperlabs.casper.consensus.state.Value
+import io.casperlabs.casper.consensus.state.StoredValueInstance
 import io.casperlabs.client.configuration.ConnectOptions
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.util.HostnameTrustManager
@@ -25,8 +25,13 @@ import io.netty.handler.ssl.util.SimpleTrustManagerFactory
 import javax.net.ssl._
 import monix.eval.Task
 import monix.execution.Scheduler
+import monix.execution.CancelableFuture
+import monix.execution.Scheduler.Implicits.global
 
 import scala.util.Either
+import monix.execution.Cancelable
+import scala.concurrent.duration._
+import scala.concurrent.Await
 
 class GrpcDeployService(conn: ConnectOptions, scheduler: Scheduler)
     extends DeployService[Task]
@@ -136,12 +141,51 @@ class GrpcDeployService(conn: ConnectOptions, scheduler: Scheduler)
   def showDeploy(
       hash: String,
       bytesStandard: Boolean,
-      json: Boolean
-  ): Task[Either[Throwable, String]] =
-    casperServiceStub
-      .getDeployInfo(GetDeployInfoRequest(hash, view = DeployInfo.View.BASIC))
-      .map(Printer.print(_, bytesStandard, json))
-      .attempt
+      json: Boolean,
+      waitForProcessed: Boolean,
+      timeoutSeconds: FiniteDuration
+  ): Task[Either[Throwable, String]] = {
+    def deployInfoF =
+      casperServiceStub.getDeployInfo(GetDeployInfoRequest(hash, view = DeployInfo.View.BASIC))
+
+    if (waitForProcessed) {
+      val startTime   = System.currentTimeMillis()
+      val timeoutTime = startTime + timeoutSeconds.toSeconds * 1000
+      val delay       = 1.second
+
+      def expired: Boolean = System.currentTimeMillis() > timeoutTime
+
+      def notPending(deployInfo: DeployInfo): Boolean =
+        deployInfo.status.forall(_.state match {
+          case DeployInfo.State.PENDING => false
+          case _                        => true
+        })
+
+      def loop: Task[String] =
+        for {
+          deployInfo <- if (expired) {
+                         Task.raiseError(
+                           new java.util.concurrent.TimeoutException(
+                             "Timeout waiting for the deploy to reach non-pending state."
+                           )
+                         )
+                       } else {
+                         Task.sleep(delay) >> deployInfoF
+                       }
+          result <- if (notPending(deployInfo)) {
+                     Task.pure(Printer.print(deployInfo, bytesStandard, json))
+                   } else {
+                     loop
+                   }
+        } yield result
+
+      loop.attempt
+    } else {
+      deployInfoF
+        .map(Printer.print(_, bytesStandard, json))
+        .attempt
+    }
+  }
 
   def showDeploys(
       hash: String,
@@ -179,11 +223,11 @@ class GrpcDeployService(conn: ConnectOptions, scheduler: Scheduler)
       keyVariant: String,
       keyValue: String,
       path: String
-  ): Task[Either[Throwable, Value]] =
+  ): Task[Either[Throwable, StoredValueInstance]] =
     StateQuery.KeyVariant.values
       .find(_.name == keyVariant.toUpperCase)
       .fold(
-        Task.raiseError[Value](
+        Task.raiseError[StoredValueInstance](
           new java.lang.IllegalArgumentException(s"Unknown key variant: $keyVariant")
         )
       ) { kv =>
@@ -224,7 +268,7 @@ class GrpcDeployService(conn: ConnectOptions, scheduler: Scheduler)
           Printer.print(bi, bytesStandard, json = true)
         } else {
           s"""
-           |------------- block @ ${bi.getSummary.rank} ---------------
+           |------------- block @ ${bi.getSummary.jRank} ---------------
            |${Printer.print(bi, bytesStandard, json = false)}
            |-----------------------------------------------------
            |""".stripMargin

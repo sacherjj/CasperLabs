@@ -47,8 +47,11 @@ class StashingSynchronizer[F[_]: Concurrent: Parallel](
       res     <- attempt.rethrow
     } yield res
 
-  override def downloaded(blockHash: ByteString) =
-    underlying.downloaded(blockHash)
+  override def onDownloaded(blockHash: ByteString) =
+    underlying.onDownloaded(blockHash)
+
+  override def onScheduled(summary: BlockSummary, source: Node): F[Unit] =
+    underlying.onScheduled(summary, source)
 
   private def run: F[Unit] =
     for {

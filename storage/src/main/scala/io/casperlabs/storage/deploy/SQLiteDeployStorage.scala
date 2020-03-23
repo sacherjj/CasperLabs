@@ -16,7 +16,7 @@ import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.Metrics.Source
 import io.casperlabs.shared.Time
 import io.casperlabs.storage.DeployStorageMetricsSource
-import io.casperlabs.storage.block.BlockStorage.DeployHash
+import io.casperlabs.storage.DeployHash
 import io.casperlabs.storage.block.SQLiteBlockStorage.blockInfoCols
 import io.casperlabs.storage.util.DoobieCodecs
 
@@ -46,8 +46,6 @@ class SQLiteDeployStorage[F[_]: Time: Sync](
     ProcessedStatusCode -> DeployInfo.State.PROCESSED,
     DiscardedStatusCode -> DeployInfo.State.DISCARDED
   ).withDefaultValue(DeployInfo.State.UNDEFINED)
-
-  private val StatusMessageTtlExpired = "TTL expired"
 
   private val readers: TrieMap[DeployInfo.View, DeployStorageReader[F]] = TrieMap.empty
 
@@ -87,7 +85,7 @@ class SQLiteDeployStorage[F[_]: Time: Sync](
       )
 
       val writeToProcessResultsTable =
-        Update[(ByteString, ByteString, Int, ByteString, Long, Long, Long, Option[String])](
+        Update[(ByteString, ByteString, Int, ByteString, Long, Long, Long, Option[String], Int)](
           """
           INSERT OR IGNORE INTO deploy_process_results
           (
@@ -98,8 +96,9 @@ class SQLiteDeployStorage[F[_]: Time: Sync](
            create_time_millis,
            execute_time_millis,
            cost,
-           execution_error_message
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+           execution_error_message,
+           stage
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
           """
         ).updateMany(
           block.getBody.deploys.zipWithIndex.map {
@@ -112,7 +111,8 @@ class SQLiteDeployStorage[F[_]: Time: Sync](
                 pd.getDeploy.getHeader.timestamp,
                 block.getHeader.timestamp,
                 pd.cost,
-                if (pd.isError) pd.errorMessage.some else none[String]
+                if (pd.isError) pd.errorMessage.some else none[String],
+                pd.stage
               )
           }.toList
         )
@@ -226,15 +226,32 @@ class SQLiteDeployStorage[F[_]: Time: Sync](
       } yield deletedNum
     }
 
-    override def markAsDiscarded(expirationPeriod: FiniteDuration): F[Unit] =
+    override def markAsDiscarded(
+        expirationPeriod: FiniteDuration,
+        message: String
+    ): F[Set[ByteString]] = {
+      def transaction(now: Long, threshold: Long) =
+        for {
+          hashes <- sql"""
+            SELECT hash
+            FROM buffered_deploys
+            WHERE status=$PendingStatusCode AND receive_time_millis<$threshold
+            """.query[ByteString].to[List]
+
+          _ <- Update[(Int, Long, String, ByteString)](s"""
+                UPDATE buffered_deploys
+                SET status=?, update_time_millis=?, status_message=?
+                WHERE hash=?""").updateMany(hashes.map { h =>
+                (DiscardedStatusCode, now, message, h)
+              })
+        } yield hashes
+
       for {
         now       <- Time[F].currentMillis
         threshold = now - expirationPeriod.toMillis
-        _ <- sql"""UPDATE buffered_deploys
-                   SET status=$DiscardedStatusCode, update_time_millis=$now, status_message=$StatusMessageTtlExpired
-                   WHERE status=$PendingStatusCode AND receive_time_millis<$threshold""".update.run
-              .transact(writeXa)
-      } yield ()
+        hashes    <- transaction(now, threshold).transact(writeXa)
+      } yield hashes.toSet
+    }
 
     private def countByStatus(status: Int): F[Long] =
       sql"SELECT COUNT(hash) FROM buffered_deploys WHERE status=$status"
@@ -362,7 +379,7 @@ class SQLiteDeployStorage[F[_]: Time: Sync](
       getByHashes(Set(deployHash)).compile.last
 
     override def getProcessedDeploys(blockHash: ByteString): F[List[ProcessedDeploy]] =
-      (fr"SELECT d.summary, " ++ bodyCol("d") ++ fr""", cost, execution_error_message
+      (fr"SELECT d.summary, " ++ bodyCol("d") ++ fr""", cost, execution_error_message, stage
           FROM deploy_process_results dpr
           JOIN deploys d
             ON d.hash = dpr.deploy_hash
@@ -382,7 +399,7 @@ class SQLiteDeployStorage[F[_]: Time: Sync](
           .transact(readXa)
 
       val readProcessingResults =
-        sql"""SELECT block_hash, cost, execution_error_message
+        sql"""SELECT block_hash, cost, execution_error_message, stage
               FROM deploy_process_results
               WHERE deploy_hash=$deployHash
               ORDER BY execute_time_millis DESC"""
@@ -470,7 +487,7 @@ class SQLiteDeployStorage[F[_]: Time: Sync](
         NonEmptyList
           .fromList[ByteString](deployHashes)
           .fold(Map.empty[DeployHash, List[ProcessingResult]].pure[F])(nel => {
-            val q = fr"""SELECT dpr.deploy_hash, dpr.cost, dpr.execution_error_message,
+            val q = fr"""SELECT dpr.deploy_hash, dpr.cost, dpr.execution_error_message, dpr.stage,
                                 """ ++ blockInfoCols("bm") ++ fr"""
                         FROM deploy_process_results dpr
                         JOIN block_metadata bm ON dpr.block_hash = bm.block_hash

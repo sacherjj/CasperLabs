@@ -7,7 +7,7 @@ use alloc::{collections::BTreeMap, string::String, vec::Vec};
 use core::mem::MaybeUninit;
 
 use casperlabs_types::{
-    account::{PublicKey, PUBLIC_KEY_SERIALIZED_LENGTH},
+    account::PublicKey,
     api_error,
     bytesrepr::{self, FromBytes},
     ApiError, BlockTime, CLTyped, CLValue, ContractRef, Key, Phase, URef,
@@ -133,16 +133,14 @@ pub fn get_arg<T: FromBytes>(i: u32) -> Option<Result<T, bytesrepr::Error>> {
 /// Returns the caller of the current context, i.e. the [`PublicKey`] of the account which made the
 /// deploy request.
 pub fn get_caller() -> PublicKey {
-    let dest_ptr = contract_api::alloc_bytes(PUBLIC_KEY_SERIALIZED_LENGTH);
-    unsafe { ext_ffi::get_caller(dest_ptr) };
-    let bytes = unsafe {
-        Vec::from_raw_parts(
-            dest_ptr,
-            PUBLIC_KEY_SERIALIZED_LENGTH,
-            PUBLIC_KEY_SERIALIZED_LENGTH,
-        )
+    let output_size = {
+        let mut output_size = MaybeUninit::uninit();
+        let ret = unsafe { ext_ffi::get_caller(output_size.as_mut_ptr()) };
+        api_error::result_from(ret).unwrap_or_revert();
+        unsafe { output_size.assume_init() }
     };
-    bytesrepr::deserialize(bytes).unwrap_or_revert()
+    let buf = read_host_buffer(output_size).unwrap_or_revert();
+    bytesrepr::deserialize(buf).unwrap_or_revert()
 }
 
 /// Returns the current [`BlockTime`].
@@ -174,7 +172,7 @@ pub fn get_phase() -> Phase {
 /// currently-executing module is a direct call or a sub-call respectively.
 pub fn get_key(name: &str) -> Option<Key> {
     let (name_ptr, name_size, _bytes) = contract_api::to_ptr(name);
-    let mut key_bytes = vec![0u8; Key::serialized_size_hint()];
+    let mut key_bytes = vec![0u8; Key::max_serialized_length()];
     let mut total_bytes: usize = 0;
     let ret = unsafe {
         ext_ffi::get_key(
@@ -246,11 +244,7 @@ pub fn list_named_keys() -> BTreeMap<String, Key> {
     bytesrepr::deserialize(bytes).unwrap_or_revert()
 }
 
-/// Returns `true` if the given [`URef`] is the account's
-/// [`PurseId`](casperlabs_types::account::PurseId) with identical
-/// [`AccessRights`](casperlabs_types::AccessRights), or if it's a member of the named keys with
-/// [`AccessRights`](casperlabs_types::AccessRights) no more permissive than those of the one in
-/// named keys.
+/// Validates uref against named keys.
 pub fn is_valid_uref(uref: URef) -> bool {
     let (uref_ptr, uref_size, _bytes) = contract_api::to_ptr(uref);
     let result = unsafe { ext_ffi::is_valid_uref(uref_ptr, uref_size) };

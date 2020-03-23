@@ -6,8 +6,8 @@ edition = "2018"
 
 [dependencies]
 clap = "2"
-engine-shared = { path = "../engine-shared", package = "casperlabs-engine-shared" }
 hyper = "0.12.29"
+serde_json = "1"
 
 [dev-dependencies]
 futures = "0.1.27"

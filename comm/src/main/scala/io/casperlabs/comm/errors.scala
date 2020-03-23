@@ -44,6 +44,12 @@ object ServiceError {
 
     def block(blockHashBase16: String): ServiceError.Exception =
       apply(s"Block ${blockHashBase16} could not be found.")
+
+    def balance(account: ByteString): ServiceError.Exception =
+      balance(Base16.encode(account.toByteArray))
+
+    def balance(accountBase16: String): ServiceError.Exception =
+      apply(s"Balance of $accountBase16 account could not be found")
   }
 
   // NOTE: See https://github.com/grpc/grpc/blob/master/doc/statuscodes.md about when to use which one.
@@ -68,13 +74,17 @@ object GossipError {
   final case class InvalidChunks(msg: String, source: Node) extends Exception(msg) with GossipError
 
   /** Tried to schedule a download for which we don't have the dependencies. */
-  final case class MissingDependencies(msg: String) extends Exception(msg) with GossipError
+  final case class MissingDependencies(msg: String, missing: Seq[ByteString])
+      extends Exception(msg)
+      with GossipError
+
   object MissingDependencies {
     def apply(blockHash: ByteString, missing: Seq[ByteString]): MissingDependencies =
       MissingDependencies(
         s"Block ${Base16.encode(blockHash.toByteArray)} has missing dependencies: [${missing
           .map(x => Base16.encode(x.toByteArray))
-          .mkString(", ")}]"
+          .mkString(", ")}]",
+        missing
       )
   }
 }

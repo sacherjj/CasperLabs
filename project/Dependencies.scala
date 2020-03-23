@@ -7,7 +7,7 @@ object Dependencies {
   val circeVersion   = "0.12.1"
   val http4sVersion  = "0.21.0-M5"
   val kamonVersion   = "1.1.3"
-  val catsVersion    = "2.0.0"
+  val catsVersion    = "2.1.0"
   val catsMtlVersion = "0.7.0"
   val doobieVersion  = "0.8.4"
   val fs2Version     = "2.0.1"
@@ -19,6 +19,7 @@ object Dependencies {
   val bouncyProvCastle    = "org.bouncycastle"    % "bcprov-jdk15on"        % "1.61"
   val bouncyPkixCastle    = "org.bouncycastle"    % "bcpkix-jdk15on"        % "1.61"
   val catsCore            = "org.typelevel"       %% "cats-core"            % catsVersion
+  val catsFree            = "org.typelevel"       %% "cats-free"            % catsVersion
   val catsLawsTest        = "org.typelevel"       %% "cats-laws"            % catsVersion % "test"
   val catsLawsTestkitTest = "org.typelevel"       %% "cats-testkit"         % catsVersion % "test"
   val catsEffect          = "org.typelevel"       %% "cats-effect"          % catsVersion

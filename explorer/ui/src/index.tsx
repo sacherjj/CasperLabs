@@ -18,7 +18,11 @@ import FaucetContainer from './containers/FaucetContainer';
 import AuthContainer from './containers/AuthContainer';
 import ErrorContainer from './containers/ErrorContainer';
 import FaucetService from './services/FaucetService';
-import { BalanceService, CasperService, DiagnosticsService } from 'casperlabs-sdk';
+import {
+  BalanceService,
+  CasperService,
+  DiagnosticsService
+} from 'casperlabs-sdk';
 import { Auth0Service, MockAuthService } from './services/AuthService';
 import DagContainer from './containers/DagContainer';
 import BlockContainer from './containers/BlockContainer';
@@ -27,6 +31,8 @@ import SearchContainer from './containers/SearchContainer';
 import { DeployInfoListContainer } from './containers/DeployInfoListContainer';
 import AccountSelectorContainer from './containers/AccountSelectorContainer';
 import ConnectedPeersContainer from './containers/ConnectedPeersContainer';
+import { VestingContainer } from './contracts/Vesting/container/VestingContainer';
+import { DeployContractsContainer } from './containers/DeployContractsContainer';
 
 let w = window as any;
 w.$ = w.jQuery = jQuery;
@@ -59,6 +65,7 @@ const faucet = new FaucetContainer(
   // Update the balances when a new faucet request went through.
   () => auth.refreshBalances(true)
 );
+const vesting = new VestingContainer(errors, auth, casperService);
 const dag = new DagContainer(errors, casperService);
 const block = new BlockContainer(errors, casperService, balanceService);
 const deploy = new DeployContainer(errors, casperService, balanceService);
@@ -66,6 +73,7 @@ const deployInfoList = new DeployInfoListContainer(errors, casperService);
 const search = new SearchContainer(errors, casperService);
 const accountSelectorContainer = new AccountSelectorContainer();
 const connectedPeersContainer = new ConnectedPeersContainer(errors, diagnosticsService);
+const deployContractsContainer = new DeployContractsContainer(errors, casperService);
 
 ReactDOM.render(
   <HashRouter>
@@ -73,6 +81,7 @@ ReactDOM.render(
       errors={errors}
       auth={auth}
       faucet={faucet}
+      vesting={vesting}
       dag={dag}
       block={block}
       deploy={deploy}
@@ -80,6 +89,7 @@ ReactDOM.render(
       accountSelectorContainer={accountSelectorContainer}
       connectedPeersContainer={connectedPeersContainer}
       search={search}
+      deployContractsContainer={deployContractsContainer}
     />
   </HashRouter>,
   document.getElementById('root')

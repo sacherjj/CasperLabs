@@ -8,7 +8,7 @@ use contract::{
     contract_api::{runtime, system},
     unwrap_or_revert::UnwrapOrRevert,
 };
-use types::{account::PurseId, ApiError, U512};
+use types::{ApiError, URef, U512};
 
 const GET_PAYMENT_PURSE: &str = "get_payment_purse";
 const SET_REFUND_PURSE: &str = "set_refund_purse";
@@ -38,19 +38,18 @@ pub extern "C" fn call() {
     let name: String = runtime::get_arg(Arg::Name as u32)
         .unwrap_or_revert_with(ApiError::MissingArgument)
         .unwrap_or_revert_with(ApiError::InvalidArgument);
-    let purse: PurseId = get_named_purse(&name).unwrap_or_revert_with(Error::PosNotFound);
+    let purse: URef = get_named_purse(&name).unwrap_or_revert_with(Error::PosNotFound);
 
     let pos_pointer = system::get_proof_of_stake();
-    let payment_purse: PurseId = runtime::call_contract(pos_pointer.clone(), (GET_PAYMENT_PURSE,));
+    let payment_purse: URef = runtime::call_contract(pos_pointer.clone(), (GET_PAYMENT_PURSE,));
 
     runtime::call_contract::<_, ()>(pos_pointer, (SET_REFUND_PURSE, purse));
 
     system::transfer_from_purse_to_purse(purse, payment_purse, amount).unwrap_or_revert();
 }
 
-fn get_named_purse(name: &str) -> Option<PurseId> {
+fn get_named_purse(name: &str) -> Option<URef> {
     let key = runtime::get_key(name).unwrap_or_revert_with(Error::NamedPurseNotFound);
-    let uref = key.as_uref()?;
-
-    Some(PurseId::new(*uref))
+    let uref = key.into_uref()?;
+    Some(uref)
 }

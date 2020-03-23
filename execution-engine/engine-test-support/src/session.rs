@@ -5,10 +5,8 @@ use engine_core::engine_state::execute_request::ExecuteRequest;
 use types::ProtocolVersion;
 
 use crate::{
-    internal::{
-        DeployItemBuilder, ExecuteRequestBuilder, DEFAULT_PAYMENT, STANDARD_PAYMENT_CONTRACT,
-    },
-    Address, Code,
+    internal::{DeployItemBuilder, ExecuteRequestBuilder, DEFAULT_PAYMENT},
+    Code, PublicKey,
 };
 
 /// A single session, i.e. a single request to execute a single deploy within the test context.
@@ -24,11 +22,10 @@ pub struct SessionBuilder {
 
 impl SessionBuilder {
     /// Constructs a new `SessionBuilder` containing a deploy with the provided session code and
-    /// session args, and with default values for the account address, payment code, payment code
-    /// args, gas price, authorization keys and protocol version.
+    /// session args, and with default values for the account address, payment code args, gas price,
+    /// authorization keys and protocol version.
     pub fn new(session_code: Code, session_args: impl ArgsParser) -> Self {
-        let di_builder = DeployItemBuilder::new()
-            .with_payment_code(STANDARD_PAYMENT_CONTRACT, (*DEFAULT_PAYMENT,));
+        let di_builder = DeployItemBuilder::new().with_empty_payment_bytes((*DEFAULT_PAYMENT,));
         let di_builder = match session_code {
             Code::Path(path) => di_builder.with_session_code(path, session_args),
             Code::NamedKey(name) => di_builder.with_stored_session_named_key(&name, session_args),
@@ -44,7 +41,7 @@ impl SessionBuilder {
     }
 
     /// Returns `self` with the provided account address set.
-    pub fn with_address(mut self, address: Address) -> Self {
+    pub fn with_address(mut self, address: PublicKey) -> Self {
         self.di_builder = self.di_builder.with_address(address);
         self
     }
@@ -71,7 +68,7 @@ impl SessionBuilder {
     }
 
     /// Returns `self` with the provided authorization keys set.
-    pub fn with_authorization_keys(mut self, keys: &[Address]) -> Self {
+    pub fn with_authorization_keys(mut self, keys: &[PublicKey]) -> Self {
         self.di_builder = self.di_builder.with_authorization_keys(keys);
         self
     }

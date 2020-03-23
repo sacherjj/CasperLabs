@@ -67,6 +67,13 @@ class DockerConfig:
         if java_options is not None:
             self.node_env["_JAVA_OPTIONS"] = java_options
 
+    @property
+    def unique_run_num(self) -> int:
+        """
+        Created to give unique flag for docker object creation and cleanup for test runs.
+        """
+        return self.docker_client.cl_unique_run_num
+
     def tls_certificate_path(self):
         return f"{BOOTSTRAP_PATH}/node-{self.number}.certificate.pem"
 

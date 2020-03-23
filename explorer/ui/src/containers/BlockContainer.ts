@@ -61,7 +61,7 @@ export class BlockContainer {
       this.block
         .getSummary()!
         .getHeader()!
-        .getRank() +
+        .getJRank() +
       this.depth / 2;
 
     // Adjust the depth so it doesn't result in a negative start value.

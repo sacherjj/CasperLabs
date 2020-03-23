@@ -2,9 +2,12 @@ package io.casperlabs.casper.util
 
 import io.casperlabs.casper.consensus.state.ProtocolVersion
 import io.casperlabs.ipc.ChainSpec
+import io.casperlabs.models.Message
 import org.scalatest.{Matchers, WordSpec}
 
 class CasperLabsProtocolSpec extends WordSpec with Matchers {
+
+  implicit def `Long => MainRank`(in: Long): Message.MainRank = Message.asMainRank(in)
 
   "CasperLabsProtocol" when {
     val genesisDeployConfig = ChainSpec.DeployConfig(1, 1)

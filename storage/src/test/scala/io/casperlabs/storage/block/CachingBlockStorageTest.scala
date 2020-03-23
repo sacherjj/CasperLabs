@@ -5,9 +5,8 @@ import cats.implicits._
 import com.google.protobuf.ByteString
 import doobie.util.transactor.Transactor
 import io.casperlabs.casper.consensus.BlockSummary
-import io.casperlabs.casper.consensus.info.BlockInfo
+import io.casperlabs.casper.consensus.info.{BlockInfo, DeployInfo}
 import io.casperlabs.metrics.Metrics
-import io.casperlabs.storage.block.BlockStorage.{BlockHash, DeployHash}
 import io.casperlabs.storage.block.CachingBlockStorageTest.{
   createSQLiteBlockStorage,
   CachingBlockStorageTestData,
@@ -15,7 +14,13 @@ import io.casperlabs.storage.block.CachingBlockStorageTest.{
 }
 import io.casperlabs.storage.dag.SQLiteDagStorage
 import io.casperlabs.storage.deploy.SQLiteDeployStorage
-import io.casperlabs.storage.{ArbitraryStorageData, BlockMsgWithTransform, SQLiteFixture}
+import io.casperlabs.storage.{
+  ArbitraryStorageData,
+  BlockHash,
+  BlockMsgWithTransform,
+  DeployHash,
+  SQLiteFixture
+}
 import monix.eval.Task
 import org.scalatest._
 
@@ -26,7 +31,6 @@ class CachingBlockStorageTest
     with Matchers
     with ArbitraryStorageData
     with SQLiteFixture[CachingBlockStorageTestData] {
-  import BlockStorage.BlockHash
 
   override def db: String = "/tmp/caching_block_storage_test.db"
 
@@ -212,10 +216,14 @@ object CachingBlockStorageTest {
       dagStorage             <- SQLiteDagStorage.create[Task](xa, xa)
       deployStorage          <- SQLiteDeployStorage.create[Task](100, xa, xa)
     } yield new BlockStorage[Task] {
-      override def get(blockHash: BlockHash): Task[Option[BlockMsgWithTransform]] =
+      override def get(
+          blockHash: BlockHash
+      )(implicit dv: DeployInfo.View = DeployInfo.View.FULL): Task[Option[BlockMsgWithTransform]] =
         underlyingBlockStorage.get(blockHash)
 
-      override def getByPrefix(blockHashPrefix: String): Task[Option[BlockMsgWithTransform]] =
+      override def getByPrefix(
+          blockHashPrefix: String
+      )(implicit dv: DeployInfo.View = DeployInfo.View.FULL): Task[Option[BlockMsgWithTransform]] =
         underlyingBlockStorage.getByPrefix(blockHashPrefix)
 
       override def isEmpty: Task[Boolean] = underlyingBlockStorage.isEmpty

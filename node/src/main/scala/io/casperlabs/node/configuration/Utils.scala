@@ -28,6 +28,15 @@ private[configuration] object Utils {
   def isSnakeCase(s: String): Boolean = s.matches("[A-Z_]+")
   def SnakeCase(s: String): SnakeCase = s.asInstanceOf[SnakeCase]
 
+  def collectEnvVars(
+      envVars: Map[String, String] = sys.env,
+      prefix: String = "CL_"
+  ): Map[SnakeCase, String] =
+    envVars.collect {
+      case (k, v) if k.startsWith(prefix) && isSnakeCase(k) =>
+        SnakeCase(k) -> v
+    }
+
   def readFile(source: => Source): Either[String, String] = {
     val src = source
     try {

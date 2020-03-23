@@ -37,7 +37,7 @@ object CodeConfig {
 }
 
 /** Encapsulate reading session and payment contracts from disk or resources
-  * before putting them into the the format expected by the API.
+  * before putting them into the format expected by the API.
   */
 final case class DeployConfig(
     sessionOptions: CodeConfig,
@@ -143,8 +143,13 @@ final case class MakeDeploy(
 ) extends Configuration
 
 final case class SendDeploy(
-    deploy: Array[Byte]
+    deploy: Array[Byte],
+    waitForProcessed: Boolean,
+    timeoutSeconds: Long,
+    bytesStandard: Boolean,
+    json: Boolean
 ) extends Configuration
+    with Formatting
 
 final case class PrintDeploy(
     deploy: Array[Byte],
@@ -157,8 +162,13 @@ final case class Deploy(
     from: Option[PublicKey],
     deployConfig: DeployConfig,
     publicKey: Option[File],
-    privateKey: Option[File]
+    privateKey: Option[File],
+    waitForProcessed: Boolean,
+    timeoutSeconds: Long,
+    bytesStandard: Boolean,
+    json: Boolean
 ) extends Configuration
+    with Formatting
 
 /** Client command to sign a deploy.
   */
@@ -177,8 +187,13 @@ final case class ShowBlock(blockHash: String, bytesStandard: Boolean, json: Bool
 final case class ShowDeploys(blockHash: String, bytesStandard: Boolean, json: Boolean)
     extends Configuration
     with Formatting
-final case class ShowDeploy(deployHash: String, bytesStandard: Boolean, json: Boolean)
-    extends Configuration
+final case class ShowDeploy(
+    deployHash: String,
+    bytesStandard: Boolean,
+    json: Boolean,
+    waitForProcessed: Boolean,
+    timeoutSeconds: Long
+) extends Configuration
     with Formatting
 final case class ShowBlocks(depth: Int, bytesStandard: Boolean, json: Boolean)
     extends Configuration
@@ -186,19 +201,34 @@ final case class ShowBlocks(depth: Int, bytesStandard: Boolean, json: Boolean)
 final case class Bond(
     amount: Long,
     deployConfig: DeployConfig,
-    privateKey: File
+    privateKey: File,
+    waitForProcessed: Boolean,
+    timeoutSeconds: Long,
+    bytesStandard: Boolean,
+    json: Boolean
 ) extends Configuration
+    with Formatting
 final case class Transfer(
     amount: Long,
     recipientPublicKey: PublicKey,
     deployConfig: DeployConfig,
-    privateKey: File
+    privateKey: File,
+    waitForProcessed: Boolean,
+    timeoutSeconds: Long,
+    bytesStandard: Boolean,
+    json: Boolean
 ) extends Configuration
+    with Formatting
 final case class Unbond(
     amount: Option[Long],
     deployConfig: DeployConfig,
-    privateKey: File
+    privateKey: File,
+    waitForProcessed: Boolean,
+    timeoutSeconds: Long,
+    bytesStandard: Boolean,
+    json: Boolean
 ) extends Configuration
+    with Formatting
 final case class VisualizeDag(
     depth: Int,
     showJustificationLines: Boolean,
@@ -245,7 +275,11 @@ object Configuration {
           options.deploy.from.toOption,
           DeployConfig(options.deploy),
           options.deploy.publicKey.toOption,
-          options.deploy.privateKey.toOption
+          options.deploy.privateKey.toOption,
+          options.deploy.waitForProcessed.getOrElse(false),
+          options.deploy.timeoutSeconds.getOrElse(Options.TIMEOUT_SECONDS_DEFAULT.toSeconds),
+          options.deploy.bytesStandard(),
+          options.deploy.json()
         )
       case options.makeDeploy =>
         MakeDeploy(
@@ -255,7 +289,13 @@ object Configuration {
           options.makeDeploy.deployPath.toOption
         )
       case options.sendDeploy =>
-        SendDeploy(options.sendDeploy.deployPath())
+        SendDeploy(
+          options.sendDeploy.deployPath(),
+          options.sendDeploy.waitForProcessed.getOrElse(false),
+          options.sendDeploy.timeoutSeconds.getOrElse(Options.TIMEOUT_SECONDS_DEFAULT.toSeconds),
+          options.sendDeploy.bytesStandard(),
+          options.sendDeploy.json()
+        )
       case options.printDeploy =>
         PrintDeploy(
           options.printDeploy.deployPath(),
@@ -287,7 +327,9 @@ object Configuration {
         ShowDeploy(
           options.showDeploy.hash(),
           options.showDeploy.bytesStandard(),
-          options.showDeploy.json()
+          options.showDeploy.json(),
+          options.showDeploy.waitForProcessed(),
+          options.showDeploy.timeoutSeconds()
         )
       case options.showBlocks =>
         ShowBlocks(
@@ -299,20 +341,32 @@ object Configuration {
         Unbond(
           options.unbond.amount.toOption,
           DeployConfig(options.unbond),
-          options.unbond.privateKey()
+          options.unbond.privateKey(),
+          options.unbond.waitForProcessed(),
+          options.unbond.timeoutSeconds(),
+          options.unbond.bytesStandard(),
+          options.unbond.json()
         )
       case options.bond =>
         Bond(
           options.bond.amount(),
           DeployConfig(options.bond),
-          options.bond.privateKey()
+          options.bond.privateKey(),
+          options.bond.waitForProcessed(),
+          options.bond.timeoutSeconds(),
+          options.bond.bytesStandard(),
+          options.bond.json()
         )
       case options.transfer =>
         Transfer(
           options.transfer.amount(),
           options.transfer.targetAccount(),
           DeployConfig(options.transfer),
-          options.transfer.privateKey()
+          options.transfer.privateKey(),
+          options.transfer.waitForProcessed(),
+          options.transfer.timeoutSeconds(),
+          options.transfer.bytesStandard(),
+          options.transfer.json()
         )
       case options.visualizeBlocks =>
         VisualizeDag(

@@ -12,7 +12,7 @@ use types::{account::PublicKey, U512};
 const CONTRACT_TRANSFER_TO_ACCOUNT_NAME: &str = "transfer_to_account";
 const STANDARD_PAYMENT_CONTRACT_NAME: &str = "standard_payment";
 const STORE_AT_HASH: &str = "hash";
-const ACCOUNT_1_ADDR: [u8; 32] = [1u8; 32];
+const ACCOUNT_1_ADDR: PublicKey = PublicKey::ed25519_from([1u8; 32]);
 
 #[ignore]
 #[test]
@@ -49,7 +49,7 @@ fn should_transfer_to_account_stored() {
     let gas = result.cost();
     let motes_alpha = Motes::from_gas(gas, CONV_RATE).expect("should have motes");
 
-    let modified_balance_alpha: U512 = builder.get_purse_balance(default_account.purse_id());
+    let modified_balance_alpha: U512 = builder.get_purse_balance(default_account.main_purse());
 
     let transferred_amount: u64 = 1;
     let payment_purse_amount = 10_000_000;
@@ -58,15 +58,12 @@ fn should_transfer_to_account_stored() {
     let exec_request = {
         let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
-            .with_stored_session_hash(
-                contract_hash.to_vec(),
-                (PublicKey::new(ACCOUNT_1_ADDR), transferred_amount),
-            )
+            .with_stored_session_hash(contract_hash.to_vec(), (ACCOUNT_1_ADDR, transferred_amount))
             .with_payment_code(
                 &format!("{}.wasm", STANDARD_PAYMENT_CONTRACT_NAME),
                 (U512::from(payment_purse_amount),),
             )
-            .with_authorization_keys(&[*DEFAULT_ACCOUNT_KEY])
+            .with_authorization_keys(&[DEFAULT_ACCOUNT_KEY])
             .with_deploy_hash([2; 32])
             .build();
 
@@ -75,7 +72,7 @@ fn should_transfer_to_account_stored() {
 
     builder.exec_commit_finish(exec_request);
 
-    let modified_balance_bravo: U512 = builder.get_purse_balance(default_account.purse_id());
+    let modified_balance_bravo: U512 = builder.get_purse_balance(default_account.main_purse());
 
     let initial_balance: U512 = U512::from(DEFAULT_ACCOUNT_INITIAL_BALANCE);
 

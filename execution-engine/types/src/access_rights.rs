@@ -12,6 +12,8 @@ bitflags! {
     /// [`URef`](crate::URef).
     #[allow(clippy::derive_hash_xor_eq)]
     pub struct AccessRights: u8 {
+        /// No permissions
+        const NONE = 0;
         /// Permission to read the value under the associated `URef`.
         const READ  = 0b001;
         /// Permission to write a value under the associated `URef`.
@@ -44,11 +46,17 @@ impl AccessRights {
     pub fn is_addable(self) -> bool {
         self & AccessRights::ADD == AccessRights::ADD
     }
+
+    /// Returns `true` if no flags are set.
+    pub fn is_none(self) -> bool {
+        self == AccessRights::NONE
+    }
 }
 
 impl core::fmt::Display for AccessRights {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         match *self {
+            AccessRights::NONE => write!(f, "NONE"),
             AccessRights::READ => write!(f, "READ"),
             AccessRights::WRITE => write!(f, "WRITE"),
             AccessRights::ADD => write!(f, "ADD"),
@@ -65,11 +73,15 @@ impl bytesrepr::ToBytes for AccessRights {
     fn to_bytes(&self) -> Result<Vec<u8>, bytesrepr::Error> {
         self.bits.to_bytes()
     }
+
+    fn serialized_length(&self) -> usize {
+        ACCESS_RIGHTS_SERIALIZED_LENGTH
+    }
 }
 
 impl bytesrepr::FromBytes for AccessRights {
     fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), bytesrepr::Error> {
-        let (id, rem): (u8, &[u8]) = bytesrepr::FromBytes::from_bytes(bytes)?;
+        let (id, rem) = u8::from_bytes(bytes)?;
         match AccessRights::from_bits(id) {
             Some(rights) => Ok((rights, rem)),
             None => Err(bytesrepr::Error::Formatting),
@@ -79,7 +91,7 @@ impl bytesrepr::FromBytes for AccessRights {
 
 #[cfg(test)]
 mod tests {
-    use super::AccessRights;
+    use super::*;
 
     fn test_readable(right: AccessRights, is_true: bool) {
         assert_eq!(right.is_readable(), is_true)

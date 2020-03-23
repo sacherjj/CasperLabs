@@ -4,7 +4,7 @@ use contract::args_parser::ArgsParser;
 use engine_core::{
     engine_state::{
         executable_deploy_item::ExecutableDeployItem, execution_effect::ExecutionEffect,
-        EngineState,
+        EngineConfig, EngineState,
     },
     execution::{self, AddressGenerator},
     runtime::{self, Runtime},
@@ -15,7 +15,8 @@ use engine_shared::{gas::Gas, newtypes::CorrelationId};
 use engine_storage::{global_state::StateProvider, protocol_data::ProtocolData};
 use engine_wasm_prep::Preprocessor;
 use types::{
-    bytesrepr::FromBytes, BlockTime, CLTyped, CLValue, Key, Phase, ProtocolVersion, URef, U512,
+    account::PublicKey, bytesrepr::FromBytes, BlockTime, CLTyped, CLValue, Key, Phase,
+    ProtocolVersion, URef, U512,
 };
 
 use crate::internal::{utils, WasmTestBuilder, DEFAULT_WASM_COSTS};
@@ -26,9 +27,11 @@ const INIT_FN_STORE_ID: u32 = 0;
 /// output. It is essentially the same functionality as `Executor::exec`, but the return value of
 /// the contract is returned along with the effects. The purpose of this function is to test
 /// installer contracts used in the new genesis process.
+#[allow(clippy::too_many_arguments)]
 pub fn exec<S, T>(
+    config: EngineConfig,
     builder: &mut WasmTestBuilder<S>,
-    address: [u8; 32],
+    address: PublicKey,
     wasm_file: &str,
     block_time: u64,
     deploy_hash: [u8; 32],
@@ -56,7 +59,7 @@ where
 
     let phase = Phase::Session;
     let address_generator = {
-        let address_generator = AddressGenerator::new(deploy_hash, phase);
+        let address_generator = AddressGenerator::new(&deploy_hash, phase);
         Rc::new(RefCell::new(address_generator))
     };
     let gas_counter = Gas::default();
@@ -78,6 +81,13 @@ where
         ret
     };
 
+    let protocol_data = {
+        let mint = builder.get_mint_contract_uref();
+        let pos = builder.get_mint_contract_uref();
+        let standard_payment = builder.get_standard_payment_contract_uref();
+        ProtocolData::new(*DEFAULT_WASM_COSTS, mint, pos, standard_payment)
+    };
+
     let context = RuntimeContext::new(
         Rc::clone(&tracking_copy),
         &mut named_keys,
@@ -95,7 +105,7 @@ where
         protocol_version,
         correlation_id,
         phase,
-        ProtocolData::default(),
+        protocol_data,
     );
 
     let wasm_bytes = utils::read_wasm_file_bytes(wasm_file);
@@ -122,7 +132,7 @@ where
     let (instance, memory) = runtime::instance_and_memory(parity_module.clone(), protocol_version)
         .expect("should be able to make wasm instance from module");
 
-    let mut runtime = Runtime::new(Default::default(), memory, parity_module, context);
+    let mut runtime = Runtime::new(config, Default::default(), memory, parity_module, context);
 
     match instance.invoke_export("call", &[], &mut runtime) {
         Ok(_) => None,

@@ -110,22 +110,31 @@ private[configuration] trait ConfParserImplicits {
         defaultConfigFile: Map[CamelCase, String],
         pathToField: List[String]
     ) =>
-      val fromCli =
-        parseFromCli[A](cliByName, pathToField, P)
-      val fromEnv = parseFromEnv(envVars, pathToField, P)
-      val fromConfigFile =
-        configFile
-          .map(parseFromConfigFile(_, pathToField, P))
-          .getOrElse(Valid(none[A]))
-      val fromDefaultConfigFile =
-        parseFromConfigFile(defaultConfigFile, pathToField, P)
+      {
+        val fromCli =
+          parseFromCli[A](cliByName, pathToField, P)
+        val fromEnv = parseFromEnv(envVars, pathToField, P)
+        val fromConfigFile =
+          configFile
+            .map(parseFromConfigFile(_, pathToField, P))
+            .getOrElse(Valid(none[A]))
+        val fromDefaultConfigFile =
+          parseFromConfigFile(defaultConfigFile, pathToField, P)
 
-      (fromCli, fromEnv, fromConfigFile, fromDefaultConfigFile).mapN {
-        (maybeFromCli, maybeFromEnv, maybeFromConfigFile, maybeFromDefaultConfigFile) =>
-          maybeFromCli
-            .orElse(maybeFromEnv)
-            .orElse(maybeFromConfigFile)
-            .orElse(maybeFromDefaultConfigFile)
+        // When in doubt, this can help shed some light on what's going on:
+        // if (pathToField.last == "highway") {
+        //   println(pathToField)
+        //   println(envVars)
+        //   println(List(fromCli, fromEnv, fromConfigFile, fromDefaultConfigFile))
+        // }
+
+        (fromCli, fromEnv, fromConfigFile, fromDefaultConfigFile).mapN {
+          (maybeFromCli, maybeFromEnv, maybeFromConfigFile, maybeFromDefaultConfigFile) =>
+            maybeFromCli
+              .orElse(maybeFromEnv)
+              .orElse(maybeFromConfigFile)
+              .orElse(maybeFromDefaultConfigFile)
+        }
       }
   }
 }

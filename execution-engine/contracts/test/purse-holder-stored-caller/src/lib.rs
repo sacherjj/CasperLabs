@@ -50,7 +50,7 @@ pub extern "C" fn call() {
         METHOD_VERSION => {
             let version: String =
                 runtime::call_contract(purse_holder_contract_pointer, (method_name,));
-            let version_key = storage::new_turef(version).into();
+            let version_key = storage::new_uref(version).into();
             runtime::put_key(METHOD_VERSION, version_key);
         }
         _ => {

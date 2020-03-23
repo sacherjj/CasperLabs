@@ -1,4 +1,4 @@
-// Converts typed array to array
+/** Converts typed array to array */
 export function typedToArray(arr: Uint8Array): Array<u8> {
   let result = new Array<u8>(arr.length);
   for (let i = 0; i < arr.length; i++) {
@@ -7,7 +7,7 @@ export function typedToArray(arr: Uint8Array): Array<u8> {
   return result;
 }
 
-// Converts array to typed array
+/** Converts array to typed array */
 export function arrayToTyped(arr: Array<u8>): Uint8Array {
   let result = new Uint8Array(arr.length);
   for (let i = 0; i < arr.length; i++) {
@@ -16,7 +16,7 @@ export function arrayToTyped(arr: Array<u8>): Uint8Array {
   return result;
 }
 
-// Checks if items in two unordered arrays are equal
+/** Checks if items in two unordered arrays are equal */
 export function checkItemsEqual<T>(a: Array<T>, b: Array<T>): bool {
   for (let i = 0; i < a.length; i++) {
     const idx = b.indexOf(a[i]);
@@ -28,7 +28,7 @@ export function checkItemsEqual<T>(a: Array<T>, b: Array<T>): bool {
   return b.length === 0;
 }
 
-// Checks if two ordered arrays are equal
+/** Checks if two ordered arrays are equal */
 export function checkArraysEqual<T>(a: Array<T>, b: Array<T>, len: i32 = 0): bool {
   if (!len) {
     len = a.length;
@@ -45,7 +45,7 @@ export function checkArraysEqual<T>(a: Array<T>, b: Array<T>, len: i32 = 0): boo
 }
 
 
-// Checks if two ordered arrays are equal
+/** Checks if two ordered arrays are equal */
 export function checkTypedArrayEqual(a: Uint8Array, b: Uint8Array, len: i32 = 0): bool {
   if (!len) {
     len = a.length;

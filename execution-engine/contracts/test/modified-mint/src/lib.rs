@@ -12,7 +12,7 @@ use types::{system_contract_errors::mint::Error, ApiError, CLValue, URef, U512};
 const VERSION: &str = "1.1.0";
 
 pub fn delegate() {
-    let mint = MintContract;
+    let mut mint = MintContract;
     let method_name: String = runtime::get_arg(0)
         .unwrap_or_revert_with(ApiError::MissingArgument)
         .unwrap_or_revert_with(ApiError::InvalidArgument);

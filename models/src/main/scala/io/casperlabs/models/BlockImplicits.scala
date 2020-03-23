@@ -2,10 +2,9 @@ package io.casperlabs.models
 
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.Block.{GlobalState, Justification}
-import io.casperlabs.casper.consensus.{Block, BlockSummary}
-import io.casperlabs.casper.consensus.info.BlockInfo
-import io.casperlabs.casper.consensus.info.BlockInfo.Status.Stats
 import io.casperlabs.casper.consensus.state.ProtocolVersion
+import io.casperlabs.casper.consensus.{Block, BlockSummary}
+import io.casperlabs.models.Message._
 
 object BlockImplicits {
   implicit class BlockOps(val block: Block) extends AnyVal {
@@ -26,7 +25,8 @@ object BlockImplicits {
     def chainName: String                    = block.getHeader.chainName
     def validatorBlockSeqNum: Int            = block.getHeader.validatorBlockSeqNum
     def validatorPublicKey: ByteString       = block.getHeader.validatorPublicKey
-    def rank: Long                           = block.getHeader.rank
+    def jRank: JRank                         = asJRank(block.getHeader.jRank)
+    def mainRank: MainRank                   = asMainRank(block.getHeader.mainRank)
     def weightMap: Map[ByteString, Weight] =
       block.getHeader.getState.bonds
         .map(b => (b.validatorPublicKey, Weight(b.stake)))
@@ -34,6 +34,12 @@ object BlockImplicits {
 
     def getSummary: BlockSummary =
       BlockSummary(block.blockHash, block.header, block.signature)
+    def clearDeployBodies: Block = block.update(
+      _.body.deploys := block.getBody.deploys
+        .map(
+          processedDeploy => processedDeploy.withDeploy(processedDeploy.getDeploy.clearBody)
+        )
+    )
   }
 
   implicit class BlockSummaryOps(val summary: BlockSummary) extends AnyVal {
@@ -52,7 +58,8 @@ object BlockImplicits {
     def chainName: String                  = summary.getHeader.chainName
     def validatorBlockSeqNum: Int          = summary.getHeader.validatorBlockSeqNum
     def validatorPublicKey: ByteString     = summary.getHeader.validatorPublicKey
-    def rank: Long                         = summary.getHeader.rank
+    def jRank: JRank                       = asJRank(summary.getHeader.jRank)
+    def mainRank: MainRank                 = asMainRank(summary.getHeader.mainRank)
     def weightMap: Map[ByteString, Weight] =
       summary.getHeader.getState.bonds
         .map(b => (b.validatorPublicKey, Weight(b.stake)))

@@ -15,8 +15,9 @@ import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.models.Message
 import io.casperlabs.shared.Log
 import io.casperlabs.storage.dag.DagRepresentation
+import io.casperlabs.casper.validation.Validation
 
-class FinalityDetectorVotingMatrix[F[_]: Concurrent: Log] private (rFTT: Double)(
+class FinalityDetectorVotingMatrix[F[_]: Concurrent: Log] private (rFTT: Double, isHighway: Boolean)(
     implicit private val matrix: _votingMatrixS[F]
 ) extends FinalityDetector[F] {
 
@@ -31,11 +32,24 @@ class FinalityDetectorVotingMatrix[F[_]: Concurrent: Log] private (rFTT: Double)
       dag: DagRepresentation[F],
       message: Message,
       latestFinalizedBlock: BlockHash
-  ): F[Option[CommitteeWithConsensusValue]] =
-    dag.getEquivocators
+  ): F[Option[CommitteeWithConsensusValue]] = {
+    val highwayCheck = dag
+      .getEquivocatorsInEra(
+        message.eraId
+      )
       .map(_.contains(message.validatorId))
+
+    val ncbCheck = dag.getEquivocators.map(_.contains(message.validatorId))
+
+    val isEquivocator = if (isHighway) highwayCheck else ncbCheck
+
+    isEquivocator
       .ifM(
-        none[CommitteeWithConsensusValue].pure[F], {
+        Log[F].debug(
+          s"Message ${PrettyPrinter.buildString(message.messageHash) -> "message"} is from an equivocator ${PrettyPrinter
+            .buildString(message.validatorId)                        -> "validator"}"
+        ) *>
+          none[CommitteeWithConsensusValue].pure[F], {
           matrix
             .withPermit(
               for {
@@ -46,18 +60,30 @@ class FinalityDetectorVotingMatrix[F[_]: Concurrent: Log] private (rFTT: Double)
                                _ <- updateVoterPerspective[F](
                                      dag,
                                      message,
-                                     branch
+                                     branch,
+                                     isHighway
                                    )
-                               result <- checkForCommittee[F](dag, rFTT)
-                               _ <- result match {
-                                     case Some(newLFB) =>
-                                       // On new LFB we rebuild VotingMatrix and start the new game.
-                                       VotingMatrix
-                                         .create[F](dag, newLFB.consensusValue)
-                                         .flatMap(_.get.flatMap(matrix.set))
-                                     case None =>
-                                       Applicative[F].unit
-                                   }
+                               result <- checkForCommittee[F](dag, rFTT, isHighway).flatMap {
+                                          case Some(newLFB) =>
+                                            val isBlock: F[Boolean] =
+                                              dag.lookupUnsafe(newLFB.consensusValue).map(_.isBlock)
+
+                                            // On new LFB (but only if it's a block) we rebuild VotingMatrix and start the new game.
+                                            Monad[F].ifM(isBlock)(
+                                              VotingMatrix
+                                                .create[F](dag, newLFB.consensusValue, isHighway)
+                                                .flatMap(_.get.flatMap(matrix.set))
+                                                .as(Option(newLFB)),
+                                              Log[F].info(
+                                                s"New LFB is a ballot: ${PrettyPrinter
+                                                  .buildString(newLFB.consensusValue) -> "message"}"
+                                              ) *> Applicative[F]
+                                                .pure(none[CommitteeWithConsensusValue])
+                                            )
+
+                                          case None =>
+                                            Applicative[F].pure(none[CommitteeWithConsensusValue])
+                                        }
                              } yield result
 
                            // If block doesn't vote on any of main children of latestFinalizedBlock,
@@ -74,6 +100,7 @@ class FinalityDetectorVotingMatrix[F[_]: Concurrent: Log] private (rFTT: Double)
             )
         }
       )
+  }
 }
 
 object FinalityDetectorVotingMatrix {
@@ -111,18 +138,23 @@ object FinalityDetectorVotingMatrix {
   def of[F[_]: Concurrent: Log](
       dag: DagRepresentation[F],
       finalizedBlock: BlockHash,
-      rFTT: Double
+      rFTT: Double,
+      isHighway: Boolean
   ): F[FinalityDetectorVotingMatrix[F]] =
     for {
       _ <- MonadThrowable[F]
             .raiseError(
-              new IllegalArgumentException(
+              io.casperlabs.shared.FatalErrorShutdown(
                 s"Relative FTT has to be bigger than 0 and less than 0.5. Got: $rFTT"
               )
             )
             .whenA(rFTT < 0 || rFTT > 0.5)
       lock                 <- Semaphore[F](1)
-      votingMatrix         <- VotingMatrix.create[F](dag, finalizedBlock)
+      votingMatrix         <- VotingMatrix.create[F](dag, finalizedBlock, isHighway)
       votingMatrixWithLock = synchronizedVotingMatrix(lock, votingMatrix)
-    } yield new FinalityDetectorVotingMatrix[F](rFTT) (Concurrent[F], Log[F], votingMatrixWithLock)
+    } yield new FinalityDetectorVotingMatrix[F](rFTT, isHighway) (
+      Concurrent[F],
+      Log[F],
+      votingMatrixWithLock
+    )
 }

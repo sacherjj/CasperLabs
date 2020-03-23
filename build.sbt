@@ -114,6 +114,7 @@ lazy val casper = (project in file("casper"))
     libraryDependencies ++= commonDependencies ++ protobufLibDependencies ++ Seq(
       catsCore,
       catsMtl,
+      fs2ReactiveStreams,
       monix,
       nettyAll,
       nettyTransNativeEpoll,
@@ -184,7 +185,9 @@ lazy val models = (project in file("models"))
   .settings(
     libraryDependencies ++= commonDependencies ++ protobufDependencies ++ Seq(
       catsCore,
+      catsFree,
       magnolia,
+      refinement,
       scalapbCompiler,
       scalacheck,
       scalapbRuntimegGrpc
@@ -210,7 +213,7 @@ lazy val models = (project in file("models"))
   )
   .dependsOn(crypto % "compile->compile;test->test")
 
-val nodeAndClientVersion = "0.14.0"
+val nodeAndClientVersion = "0.15.0"
 
 lazy val node = (project in file("node"))
   .settings(commonSettings: _*)
@@ -283,31 +286,6 @@ lazy val node = (project in file("node"))
         fi
       }
     """,
-    /* Dockerization */
-    dockerUsername := Some("casperlabs"),
-    version in Docker := version.value +
-      git.gitHeadCommit.value.fold("")("-git" + _.take(8)),
-    dockerAliases ++=
-      sys.env
-        .get("DRONE_BUILD_NUMBER")
-        .toSeq
-        .map(num => dockerAlias.value.withTag(Some(s"DRONE-$num"))),
-    dockerUpdateLatest := sys.env.get("DRONE").isEmpty,
-    dockerBaseImage := "openjdk:11-jre-slim",
-    dockerCommands := {
-      Seq(
-        Cmd("FROM", dockerBaseImage.value),
-        ExecCmd("RUN", "apt", "clean"),
-        ExecCmd("RUN", "apt", "update"),
-        ExecCmd("RUN", "apt", "install", "-yq", "openssl", "curl"),
-        Cmd("LABEL", s"""MAINTAINER="${maintainer.value}""""),
-        Cmd("WORKDIR", (defaultLinuxInstallLocation in Docker).value),
-        Cmd("ADD", "opt /opt"),
-        Cmd("USER", "root"),
-        ExecCmd("ENTRYPOINT", "bin/casperlabs-node"),
-        ExecCmd("CMD", "run")
-      )
-    },
     /* Packaging */
     linuxPackageMappings ++= {
       val service_file = baseDirectory.value / "casperlabs-node.service"
@@ -424,28 +402,6 @@ lazy val client = (project in file("client"))
     ),
     buildInfoKeys := Seq[BuildInfoKey](name, version, scalaVersion, sbtVersion, git.gitHeadCommit),
     buildInfoPackage := "io.casperlabs.client",
-    /* Dockerization */
-    dockerUsername := Some("casperlabs"),
-    version in Docker := version.value +
-      git.gitHeadCommit.value.fold("")("-git" + _.take(8)),
-    dockerAliases ++=
-      sys.env
-        .get("DRONE_BUILD_NUMBER")
-        .toSeq
-        .map(num => dockerAlias.value.withTag(Some(s"DRONE-$num"))),
-    dockerUpdateLatest := sys.env.get("DRONE").isEmpty,
-    dockerBaseImage := "openjdk:11-jre-slim",
-    dockerCommands := {
-      Seq(
-        Cmd("FROM", dockerBaseImage.value),
-        Cmd("LABEL", s"""MAINTAINER="${maintainer.value}""""),
-        Cmd("WORKDIR", (defaultLinuxInstallLocation in Docker).value),
-        Cmd("ADD", "opt /opt"),
-        Cmd("USER", "root"),
-        ExecCmd("ENTRYPOINT", "bin/casperlabs-client"),
-        ExecCmd("CMD", "run")
-      )
-    },
     /*
      * This monstrosity exists because
      * a) we want to get rid of annoying JVM >= 9 warnings,

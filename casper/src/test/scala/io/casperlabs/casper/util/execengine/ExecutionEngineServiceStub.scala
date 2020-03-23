@@ -7,21 +7,21 @@ import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.casper
-import io.casperlabs.casper.CasperMetricsSource
 import io.casperlabs.casper.consensus.state.{Unit => _, _}
 import io.casperlabs.casper.consensus.{Block, Bond}
 import io.casperlabs.casper.util.{CasperLabsProtocol, ProtoUtil}
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
-import io.casperlabs.casper.validation.{Validation, ValidationImpl}
+import io.casperlabs.casper.validation.{NCBValidationImpl, Validation}
 import io.casperlabs.crypto.Keys.PublicKey
 import io.casperlabs.ipc._
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.Metrics.MetricsNOP
-import io.casperlabs.models.SmartContractEngineError
+import io.casperlabs.models.{cltype, Message, SmartContractEngineError}
 import io.casperlabs.shared.{Log, Time}
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.block._
 import io.casperlabs.storage.dag._
+import io.casperlabs.models.BlockImplicits._
 
 import scala.concurrent.duration.FiniteDuration
 import scala.util.Either
@@ -39,7 +39,9 @@ object ExecutionEngineServiceStub {
       dag: DagRepresentation[F]
   ): F[MergeResult[TransformMap, Block]] =
     NonEmptyList.fromList(candidateParentBlocks) map { blocks =>
-      ExecEngineUtil.merge[F](blocks, dag).map(x => x: MergeResult[TransformMap, Block])
+      MonadThrowable[F]
+        .fromTry(blocks.traverse(Message.fromBlock(_)))
+        .flatMap(ExecEngineUtil.merge[F](_, dag).map(x => x: MergeResult[TransformMap, Block]))
     } getOrElse {
       MergeResult.empty[TransformMap, Block].pure[F]
     }
@@ -54,12 +56,13 @@ object ExecutionEngineServiceStub {
       override def sleep(duration: FiniteDuration): F[Unit] = Sync[F].unit
     }
     implicit val metrics    = new MetricsNOP[F]
-    implicit val validation = new ValidationImpl[F]
+    implicit val validation = new NCBValidationImpl[F]
     (for {
       parents <- ProtoUtil.unsafeGetParents[F](b)
       merged  <- ExecutionEngineServiceStub.merge[F](parents, dag)
       preStateHash <- ExecEngineUtil
-                       .computePrestate[F](merged, rank = b.getHeader.rank, upgrades = Nil)
+                       .computePrestate[F](merged, rank = b.mainRank, upgrades = Nil)
+      preStateBonds = merged.parents.headOption.getOrElse(b).getHeader.getState.bonds
       effects <- ExecEngineUtil
                   .effectsForBlock[F](b, preStateHash)
                   .map(
@@ -72,7 +75,7 @@ object ExecutionEngineServiceStub {
                         Validation.BlockEffects(Map(0 -> Seq.empty))
                       else be
                   )
-      _ <- Validation[F].transactions(b, preStateHash, effects)
+      _ <- Validation[F].transactions(b, preStateHash, preStateBonds, effects)
     } yield ProtoUtil.postStateHash(b)).attempt
   }
 
@@ -95,7 +98,7 @@ object ExecutionEngineServiceStub {
           ByteString,
           Seq[TransformEntry]
       ) => F[Either[Throwable, ExecutionEngineService.CommitResult]],
-      queryFunc: (ByteString, Key, Seq[String]) => F[Either[Throwable, Value]]
+      queryFunc: (ByteString, Key, Seq[String]) => F[Either[Throwable, cltype.StoredValue]]
   ): ExecutionEngineService[F] = new ExecutionEngineService[F] {
     override def emptyStateHash: ByteString = ByteString.EMPTY
     override def runGenesis(
@@ -128,22 +131,97 @@ object ExecutionEngineServiceStub {
         baseKey: Key,
         path: Seq[String],
         protocolVersion: ProtocolVersion
-    ): F[Either[Throwable, Value]] = queryFunc(state, baseKey, path)
+    ): F[Either[Throwable, cltype.StoredValue]] = queryFunc(state, baseKey, path)
   }
 
-  def noOpApi[F[_]: Applicative](): ExecutionEngineService[F] =
-    mock[F](
-      (_) => GenesisResult().asRight[Throwable].pure[F],
-      (_, _, _) => UpgradeResult().asRight[Throwable].pure[F],
-      (_, _, _, _) => Seq.empty[DeployResult].asRight[Throwable].pure[F],
-      (_, _) =>
-        ExecutionEngineService
-          .CommitResult(ByteString.EMPTY, Seq.empty[Bond])
-          .asRight[Throwable]
-          .pure[F],
-      (_, _, _) =>
-        Applicative[F]
-          .pure[Either[Throwable, Value]](Left(new SmartContractEngineError("unimplemented")))
-    )
+  def failExec[F[_]: Applicative](bonds: Seq[Bond] = Seq.empty): ExecutionEngineService[F] =
+    new NoOpExecutionEngineService[F](bonds) {
+      override def exec(
+          prestate: ByteString,
+          blocktime: Long,
+          deploys: Seq[DeployItem],
+          protocolVersion: ProtocolVersion
+      ): F[Either[Throwable, Seq[DeployResult]]] =
+        Either
+          .left[Throwable, Seq[DeployResult]](
+            new RuntimeException("Failed ExecutionEngineService.exec")
+          )
+          .pure[F]
+    }
+
+  def failCommit[F[_]: Applicative](bonds: Seq[Bond] = Seq.empty): ExecutionEngineService[F] =
+    new NoOpExecutionEngineService[F](bonds) {
+      override def commit(
+          prestate: ByteString,
+          effects: Seq[TransformEntry],
+          protocolVersion: ProtocolVersion
+      ): F[Either[Throwable, ExecutionEngineService.CommitResult]] =
+        Either
+          .left[Throwable, ExecutionEngineService.CommitResult](
+            new RuntimeException("Failed ExecutionEngineService.commit")
+          )
+          .pure[F]
+    }
+
+  def noOpApi[F[_]: Applicative](
+      bonds: Seq[Bond] = Seq.empty
+  ): ExecutionEngineService[F] =
+    new NoOpExecutionEngineService[F](bonds)
+
+  class NoOpExecutionEngineService[F[_]: Applicative](bonds: Seq[Bond] = Seq.empty)
+      extends ExecutionEngineService[F] {
+
+    override def emptyStateHash: ByteString = ByteString.EMPTY
+
+    override def runGenesis(
+        genesisConfig: ChainSpec.GenesisConfig
+    ): F[Either[Throwable, GenesisResult]] =
+      GenesisResult().asRight[Throwable].pure[F]
+
+    override def upgrade(
+        prestate: ByteString,
+        upgrade: ChainSpec.UpgradePoint,
+        protocolVersion: ProtocolVersion
+    ): F[Either[Throwable, UpgradeResult]] =
+      UpgradeResult().asRight[Throwable].pure[F]
+
+    override def exec(
+        prestate: ByteString,
+        blocktime: Long,
+        deploys: Seq[DeployItem],
+        protocolVersion: ProtocolVersion
+    ): F[Either[Throwable, Seq[DeployResult]]] =
+      Seq
+        .fill(deploys.size)(
+          DeployResult(
+            DeployResult.Value
+              .PreconditionFailure(DeployResult.PreconditionFailure("Test precondition failure."))
+          )
+        )
+        .asRight[Throwable]
+        .pure[F]
+
+    override def commit(
+        prestate: ByteString,
+        effects: Seq[TransformEntry],
+        protocolVersion: ProtocolVersion
+    ): F[Either[Throwable, ExecutionEngineService.CommitResult]] =
+      ExecutionEngineService
+        .CommitResult(prestate, bonds)
+        .asRight[Throwable]
+        .pure[F]
+
+    override def query(
+        state: ByteString,
+        baseKey: Key,
+        path: Seq[String],
+        protocolVersion: ProtocolVersion
+    ): F[Either[Throwable, cltype.StoredValue]] =
+      (cltype.StoredValue
+        .CLValue(cltype.CLValue(cltype.CLType.Bool, Vector.empty))
+        .asInstanceOf[cltype.StoredValue])
+        .asRight[Throwable]
+        .pure[F]
+  }
 
 }

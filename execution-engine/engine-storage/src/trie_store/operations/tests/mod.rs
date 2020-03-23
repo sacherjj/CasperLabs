@@ -40,6 +40,10 @@ impl ToBytes for TestKey {
     fn to_bytes(&self) -> Result<Vec<u8>, bytesrepr::Error> {
         Ok(self.0.to_vec())
     }
+
+    fn serialized_length(&self) -> usize {
+        TEST_KEY_LENGTH
+    }
 }
 
 impl FromBytes for TestKey {
@@ -60,6 +64,10 @@ struct TestValue([u8; TEST_VAL_LENGTH]);
 impl ToBytes for TestValue {
     fn to_bytes(&self) -> Result<Vec<u8>, bytesrepr::Error> {
         Ok(self.0.to_vec())
+    }
+
+    fn serialized_length(&self) -> usize {
+        TEST_VAL_LENGTH
     }
 }
 
@@ -611,7 +619,9 @@ where
         tmp
     };
     let actual = {
-        let mut tmp = operations::keys::<_, _, _, _, E>(correlation_id, txn, store, root)?;
+        let mut tmp = operations::keys::<_, _, _, _>(correlation_id, txn, store, root)
+            .filter_map(Result::ok)
+            .collect::<Vec<K>>();
         tmp.sort();
         tmp
     };
@@ -735,8 +745,9 @@ where
             tmp
         };
         let actual = {
-            let mut tmp =
-                operations::keys::<_, _, _, _, E>(correlation_id, &txn, store, root_hash)?;
+            let mut tmp = operations::keys::<_, _, _, _>(correlation_id, &txn, store, root_hash)
+                .filter_map(Result::ok)
+                .collect::<Vec<K>>();
             tmp.sort();
             tmp
         };

@@ -6,9 +6,7 @@ use contract::args_parser::ArgsParser;
 use engine_core::engine_state::{deploy_item::DeployItem, execute_request::ExecuteRequest};
 use types::{account::PublicKey, ProtocolVersion};
 
-use crate::internal::{
-    DeployItemBuilder, DEFAULT_BLOCK_TIME, DEFAULT_PAYMENT, STANDARD_PAYMENT_CONTRACT,
-};
+use crate::internal::{DeployItemBuilder, DEFAULT_BLOCK_TIME, DEFAULT_PAYMENT};
 
 pub struct ExecuteRequestBuilder {
     execute_request: ExecuteRequest,
@@ -47,15 +45,19 @@ impl ExecuteRequestBuilder {
         self.execute_request
     }
 
-    pub fn standard(addr: [u8; 32], session_file: &str, session_args: impl ArgsParser) -> Self {
+    pub fn standard(
+        public_key: PublicKey,
+        session_file: &str,
+        session_args: impl ArgsParser,
+    ) -> Self {
         let mut rng = rand::thread_rng();
         let deploy_hash: [u8; 32] = rng.gen();
 
         let deploy = DeployItemBuilder::new()
-            .with_address(addr)
+            .with_address(public_key)
             .with_session_code(session_file, session_args)
-            .with_payment_code(STANDARD_PAYMENT_CONTRACT, (*DEFAULT_PAYMENT,))
-            .with_authorization_keys(&[PublicKey::new(addr)])
+            .with_empty_payment_bytes((*DEFAULT_PAYMENT,))
+            .with_authorization_keys(&[public_key])
             .with_deploy_hash(deploy_hash)
             .build();
 
@@ -63,7 +65,7 @@ impl ExecuteRequestBuilder {
     }
 
     pub fn contract_call_by_hash(
-        sender: [u8; 32],
+        sender: PublicKey,
         contract_hash: [u8; 32],
         args: impl ArgsParser,
     ) -> Self {
@@ -73,8 +75,8 @@ impl ExecuteRequestBuilder {
         let deploy = DeployItemBuilder::new()
             .with_address(sender)
             .with_stored_session_hash(contract_hash.to_vec(), args)
-            .with_payment_code(STANDARD_PAYMENT_CONTRACT, (*DEFAULT_PAYMENT,))
-            .with_authorization_keys(&[PublicKey::new(sender)])
+            .with_empty_payment_bytes((*DEFAULT_PAYMENT,))
+            .with_authorization_keys(&[sender])
             .with_deploy_hash(deploy_hash)
             .build();
 

@@ -444,5 +444,5 @@ class DockerClient(CasperLabsClientBase, LoggingMixin):
     def show_deploy(self, hash: str):
         return parse(self.invoke_client(f"show-deploy {hash}"))
 
-    def query_purse_balance(self, block_hash: str, purse_id: str) -> Optional[float]:
+    def query_purse_balance(self, block_hash: str, purse: str) -> Optional[float]:
         raise NotImplementedError()

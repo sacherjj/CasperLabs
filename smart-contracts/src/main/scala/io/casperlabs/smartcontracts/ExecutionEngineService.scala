@@ -14,8 +14,8 @@ import io.casperlabs.ipc._
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.models.SmartContractEngineError
 import io.casperlabs.shared.Log
-import io.casperlabs.smartcontracts.bytesrepr.FromBytes
-import io.casperlabs.smartcontracts.cltype.StoredValue
+import io.casperlabs.models.bytesrepr.FromBytes
+import io.casperlabs.models.cltype.StoredValue
 import io.casperlabs.smartcontracts.ExecutionEngineService.Stub
 import monix.eval.{Task, TaskLift}
 import simulacrum.typeclass
@@ -56,7 +56,7 @@ import io.netty.handler.ssl.ApplicationProtocolConfig.Protocol
       baseKey: Key,
       path: Seq[String],
       protocolVersion: ProtocolVersion
-  ): F[Either[Throwable, Value]]
+  ): F[Either[Throwable, StoredValue]]
 }
 
 class GrpcExecutionEngineService[F[_]: Defer: Concurrent: Log: TaskLift: Metrics] private[smartcontracts] (
@@ -74,8 +74,8 @@ class GrpcExecutionEngineService[F[_]: Defer: Concurrent: Log: TaskLift: Metrics
 
   override def emptyStateHash: ByteString = {
     val arr: Array[Byte] = Array(
-      51, 7, 165, 76, 166, 213, 191, 186, 252, 14, 241, 176, 3, 243, 236, 73, 65, 192, 17, 238, 127,
-      121, 136, 158, 68, 65, 103, 84, 222, 47, 9, 29
+      197, 117, 38, 12, 241, 62, 54, 241, 121, 165, 11, 8, 130, 189, 100, 252, 4, 102, 236, 210, 91,
+      221, 123, 200, 135, 102, 194, 204, 46, 76, 13, 254
     ).map(_.toByte)
     ByteString.copyFrom(arr)
   }
@@ -208,22 +208,13 @@ class GrpcExecutionEngineService[F[_]: Defer: Concurrent: Log: TaskLift: Metrics
       baseKey: Key,
       path: Seq[String],
       protocolVersion: ProtocolVersion
-  ): F[Either[Throwable, Value]] =
+  ): F[Either[Throwable, StoredValue]] =
     sendMessage(QueryRequest(state, Some(baseKey), path, Some(protocolVersion)), _.query) {
       _.result match {
         case QueryResponse.Result.Success(bytes) =>
-          FromBytes.deserialize[StoredValue](bytes.toByteArray) match {
-            case Left(err) => Left(SmartContractEngineError(s"Error in parsing EE response: $err"))
-
-            // TODO: We should map to state.StoredValue instead of state.Value
-            // After that we can remove state.Value (and its variants; state.StringList, state.IntList, etc.).
-            case Right(v) =>
-              cltype.ProtoMappings
-                .toProto(v)
-                .leftMap(
-                  err => SmartContractEngineError(s"Error with EE response $v:\n$err")
-                )
-          }
+          FromBytes
+            .deserialize(StoredValue.deserializer, bytes.toByteArray)
+            .leftMap(err => SmartContractEngineError(s"Error in parsing EE response: $err"))
 
         case QueryResponse.Result.Empty        => Left(SmartContractEngineError("empty response"))
         case QueryResponse.Result.Failure(err) => Left(SmartContractEngineError(err))

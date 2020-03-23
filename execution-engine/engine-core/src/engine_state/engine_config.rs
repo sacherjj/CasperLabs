@@ -1,7 +1,9 @@
 /// The runtime configuration of the execution engine
-#[derive(Debug, Clone)]
+#[derive(Debug, Copy, Clone, Default)]
 pub struct EngineConfig {
     // feature flags go here
+    use_system_contracts: bool,
+    highway: bool,
 }
 
 impl EngineConfig {
@@ -9,10 +11,22 @@ impl EngineConfig {
     pub fn new() -> EngineConfig {
         Default::default()
     }
-}
 
-impl Default for EngineConfig {
-    fn default() -> Self {
-        EngineConfig {}
+    pub fn use_system_contracts(self) -> bool {
+        self.use_system_contracts
+    }
+
+    pub fn with_use_system_contracts(mut self, use_system_contracts: bool) -> EngineConfig {
+        self.use_system_contracts = use_system_contracts;
+        self
+    }
+
+    pub fn highway(self) -> bool {
+        self.highway
+    }
+
+    pub fn with_highway(mut self, highway: bool) -> EngineConfig {
+        self.highway = highway;
+        self
     }
 }

@@ -13,7 +13,7 @@ use uuid::Uuid;
 
 use types::bytesrepr::{self, FromBytes, ToBytes};
 
-pub const BLAKE2B_DIGEST_LENGTH: usize = 32;
+pub use types::BLAKE2B_DIGEST_LENGTH;
 
 /// Represents a 32-byte BLAKE2b hash digest
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -30,6 +30,11 @@ impl Blake2bHash {
         Blake2bHash(ret)
     }
 
+    /// Returns the underlying BLKAE2b hash bytes
+    pub fn value(&self) -> [u8; BLAKE2B_DIGEST_LENGTH] {
+        self.0
+    }
+
     /// Converts the underlying BLAKE2b hash digest array to a `Vec`
     pub fn to_vec(&self) -> Vec<u8> {
         self.0.to_vec()
@@ -38,7 +43,7 @@ impl Blake2bHash {
 
 impl core::fmt::LowerHex for Blake2bHash {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
-        let hex_string = base16::encode_lower(&self.to_vec());
+        let hex_string = base16::encode_lower(&self.value());
         if f.alternate() {
             write!(f, "0x{}", hex_string)
         } else {
@@ -49,7 +54,7 @@ impl core::fmt::LowerHex for Blake2bHash {
 
 impl core::fmt::UpperHex for Blake2bHash {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
-        let hex_string = base16::encode_upper(&self.to_vec());
+        let hex_string = base16::encode_upper(&self.value());
         if f.alternate() {
             write!(f, "0x{}", hex_string)
         } else {
@@ -92,7 +97,11 @@ impl Into<[u8; BLAKE2B_DIGEST_LENGTH]> for Blake2bHash {
 
 impl ToBytes for Blake2bHash {
     fn to_bytes(&self) -> Result<Vec<u8>, bytesrepr::Error> {
-        ToBytes::to_bytes(&self.0)
+        self.0.to_bytes()
+    }
+
+    fn serialized_length(&self) -> usize {
+        self.0.serialized_length()
     }
 }
 

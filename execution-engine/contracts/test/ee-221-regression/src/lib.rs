@@ -8,7 +8,7 @@ pub extern "C" fn call() {
     let res1 = runtime::get_key("nonexistinguref");
     assert!(res1.is_none());
 
-    let key = Key::URef(storage::new_turef(()).into());
+    let key = Key::URef(storage::new_uref(()));
     runtime::put_key("nonexistinguref", key);
 
     let res2 = runtime::get_key("nonexistinguref");

@@ -180,8 +180,15 @@ const blockAttrs: (block: BlockInfo) => Array<[string, any]> = (
   const stats = block.getStatus()!.getStats()!;
   return [
     ['Block Hash', id],
-    ['Rank', header.getRank()],
+    ['Key Block Hash',
+      <Link to={Pages.block(encodeBase16(header.getKeyBlockHash_asU8()))}>
+        {shortHash(header.getKeyBlockHash_asU8())}
+      </Link>],
+    ['j-Rank', header.getJRank()],
+    ['m-Rank', header.getMainRank()],
+    ['Round ID', header.getRoundId()],
     ['Timestamp', new Date(header.getTimestamp()).toISOString()],
+    ['Type', <BlockType header={header} />],
     [
       'Parents',
       <ul>
@@ -228,12 +235,9 @@ const blockAttrs: (block: BlockInfo) => Array<[string, any]> = (
     ['Deploy Gas Price Average', stats.getDeployGasPriceAvg().toLocaleString()],
     ['Block Size (bytes)', stats.getBlockSizeBytes().toLocaleString()],
     [
-      'Fault Tolerance',
-      block
-        .getStatus()!
-        .getFaultTolerance()
-        .toFixed(3)
-    ]
+      'Finality',
+      <FinalityIcon block={block} />
+    ],
   ];
 };
 
@@ -250,5 +254,25 @@ export const Balance = observer(
     return <span>{value.toLocaleString()}</span>;
   }
 );
+
+export const BlockType = (props: { header: Block.Header }) => {
+  let typ = props.header.getMessageType();
+  let lbl = typ === Block.MessageType.BLOCK ? "Block" : typ === Block.MessageType.BALLOT ? "Ballot" : "n/a"
+  return <span>{lbl}</span>;
+}
+
+export const FinalityIcon = (props: { block: BlockInfo }) => {
+  if (props.block.getSummary()?.getHeader()!.getMessageType() === Block.MessageType.BALLOT)
+    return null;
+
+  let finality = props.block.getStatus()!.getFinality();
+  if (finality === BlockInfo.Status.Finality.FINALIZED) {
+    return <Icon name="check-circle" color="green" />
+  } else if (finality === BlockInfo.Status.Finality.ORPHANED)
+    return <Icon name="times-circle" color="red" />
+  else {
+    return <Icon name="clock" />
+  }
+}
 
 export default BlockDetails;

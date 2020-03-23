@@ -4,7 +4,7 @@ import cats.implicits._
 import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
 import io.casperlabs.crypto.codec.Base16
-import io.casperlabs.storage.block.BlockStorage.{BlockHash, DeployHash}
+import io.casperlabs.storage.{BlockHash, DeployHash}
 import io.casperlabs.storage.{
   ArbitraryStorageData,
   BlockMsgWithTransform,
@@ -56,104 +56,96 @@ trait BlockStorageTest
     }
 
   it should "return Some(message) on get for a published key and return Some(blockSummary) on getSummary" in {
-    forAll(blockElementsGen) { blockStorageElements =>
-      withStorage { storage =>
-        val items = blockStorageElements
-        for {
-          _ <- items.traverse_(storage.put)
-          _ <- items.traverse[Task, Assertion] { block =>
-                storage.get(block.getBlockMessage.blockHash).map(_ shouldBe Some(block)) *>
-                  storage
-                    .getBlockSummary(block.getBlockMessage.blockHash)
-                    .map(
-                      _ shouldBe Some(
-                        block.toBlockSummary
-                      )
+    withStorage { storage =>
+      val items = sample(blockElementsGen)
+      for {
+        _ <- items.traverse_(storage.put)
+        _ <- items.traverse[Task, Assertion] { block =>
+              storage.get(block.getBlockMessage.blockHash).map(_ shouldBe Some(block)) *>
+                storage
+                  .getBlockSummary(block.getBlockMessage.blockHash)
+                  .map(
+                    _ shouldBe Some(
+                      block.toBlockSummary
                     )
-              }
-          _ <- checkAllHashes(storage, items.map(_.getBlockMessage.blockHash).toList)
-        } yield ()
-      }
+                  )
+            }
+        _ <- checkAllHashes(storage, items.map(_.getBlockMessage.blockHash).toList)
+      } yield ()
     }
   }
 
   it should "discover blocks/summaries by block hash prefix" in {
-    forAll(blockElementsGen) { blockStorageElements =>
-      withStorage { storage =>
-        val items = blockStorageElements
-        for {
-          _ <- items.traverse_(storage.put)
-          _ <- items.traverse[Task, Unit] { blockMsg =>
-                val randomPrefix =
-                  Base16.encode(
-                    blockMsg.getBlockMessage.blockHash.toByteArray.take(Random.nextInt(32) + 1)
-                  )
+    withStorage { storage =>
+      val items = sample(blockElementsGen)
+      for {
+        _ <- items.traverse_(storage.put)
+        _ <- items.traverse[Task, Unit] { blockMsg =>
+              val randomPrefix =
+                Base16.encode(
+                  blockMsg.getBlockMessage.blockHash.toByteArray.take(Random.nextInt(32) + 1)
+                )
 
-                for {
-                  _ <- storage
-                        .getByPrefix(randomPrefix)
-                        .map { maybeBlock =>
-                          maybeBlock should not be empty
-                          assert(
-                            maybeBlock.get.getBlockMessage.blockHash
-                              .startsWith(ByteString.copyFrom(Base16.decode(randomPrefix)))
-                          )
-                        }
-                  _ <- storage.getBlockInfoByPrefix(randomPrefix).map { maybeInfo =>
-                        maybeInfo should not be empty
+              for {
+                _ <- storage
+                      .getByPrefix(randomPrefix)
+                      .map { maybeBlock =>
+                        maybeBlock should not be empty
                         assert(
-                          maybeInfo.get.getSummary.blockHash
+                          maybeBlock.get.getBlockMessage.blockHash
                             .startsWith(ByteString.copyFrom(Base16.decode(randomPrefix)))
                         )
                       }
-                } yield ()
-              }
-        } yield ()
-      }
+                _ <- storage.getBlockInfoByPrefix(randomPrefix).map { maybeInfo =>
+                      maybeInfo should not be empty
+                      assert(
+                        maybeInfo.get.getSummary.blockHash
+                          .startsWith(ByteString.copyFrom(Base16.decode(randomPrefix)))
+                      )
+                    }
+              } yield ()
+            }
+      } yield ()
     }
   }
 
   it should "be able to get a Map from deploy to the blocks containing the deploy on findBlockHashesWithDeployHashes" in {
-    forAll(blockElementsGen) { blockStorageElements =>
-      val deployHashToBlockHashes =
-        blockStorageElements
-          .flatMap(
-            b =>
-              b.getBlockMessage.getBody.deploys
-                .map(
-                  _.getDeploy.deployHash -> b.getBlockMessage.blockHash
-                )
-                .toSet
-          )
-          .groupBy(_._1)
-          .mapValues(_.map(_._2).toSet)
+    val blockStorageElements = sample(blockElementsGen)
+    val deployHashToBlockHashes = blockStorageElements
+      .flatMap(
+        b =>
+          b.getBlockMessage.getBody.deploys
+            .map(
+              _.getDeploy.deployHash -> b.getBlockMessage.blockHash
+            )
+            .toSet
+      )
+      .groupBy(_._1)
+      .mapValues(_.map(_._2).toSet)
 
-      withStorage { storage =>
-        val items = blockStorageElements
-        for {
-          _            <- items.traverse_(storage.put)
-          deployHashes = deployHashToBlockHashes.keys.toList
+    withStorage { storage =>
+      val items = blockStorageElements
+      for {
+        _            <- items.traverse_(storage.put)
+        deployHashes = deployHashToBlockHashes.keys.toList
 
-          result <- storage.findBlockHashesWithDeployHashes(deployHashes)
-          _      = result shouldBe deployHashToBlockHashes
-        } yield ()
-      }
+        result <- storage.findBlockHashesWithDeployHashes(deployHashes)
+        _      = result shouldBe deployHashToBlockHashes
+      } yield ()
     }
   }
 
   it should "returns a empty list for the deploy which is not contained in any blocks on findBlockHashesWithDeployHashes" in {
-    forAll(blockElementsGen) { blockStorageElements =>
-      val deployHashes = blockStorageElements
-        .flatMap(
-          b => b.getBlockMessage.getBody.deploys.map(_.getDeploy.deployHash)
-        )
+    val deployHashes = sample(blockElementsGen)
+      .flatMap(
+        b => b.getBlockMessage.getBody.deploys.map(_.getDeploy.deployHash)
+      )
 
-      withStorage { storage =>
-        for {
-          result <- storage.findBlockHashesWithDeployHashes(deployHashes)
-          _      = deployHashes.foreach(d => result.get(d) shouldBe (Some(Set.empty[BlockHash])))
-        } yield ()
-      }
+    withStorage { storage =>
+      for {
+        result <- storage.findBlockHashesWithDeployHashes(deployHashes)
+        _      = deployHashes.foreach(d => result.get(d) shouldBe (Some(Set.empty[BlockHash])))
+      } yield ()
     }
   }
 
@@ -164,12 +156,12 @@ trait BlockStorageTest
         for {
           _          <- storage.put(b)
           maybeBlock <- storage.get(b.getBlockMessage.blockHash)
-          _ <- Task {
-                maybeBlock should not be None
-                val got = maybeBlock.get.toByteArray
-                assert(before.sameElements(got))
-              }
-        } yield ()
+        } yield {
+          maybeBlock should not be None
+          maybeBlock.get shouldBe b
+          val got = maybeBlock.get.toByteArray
+          assert(before.sameElements(got))
+        }
       }
     }
   }

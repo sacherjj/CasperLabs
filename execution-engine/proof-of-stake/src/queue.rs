@@ -3,7 +3,7 @@ use core::result;
 
 use types::{
     account::PublicKey,
-    bytesrepr::{self, FromBytes, ToBytes},
+    bytesrepr::{self, FromBytes, ToBytes, U64_SERIALIZED_LENGTH},
     system_contract_errors::pos::{Error, Result},
     BlockTime, CLType, CLTyped, U512,
 };
@@ -30,6 +30,22 @@ impl QueueEntry {
     }
 }
 
+impl ToBytes for QueueEntry {
+    fn to_bytes(&self) -> result::Result<Vec<u8>, bytesrepr::Error> {
+        let mut bytes = bytesrepr::allocate_buffer(self)?;
+        bytes.append(&mut self.validator.to_bytes()?);
+        bytes.append(&mut self.amount.to_bytes()?);
+        bytes.append(&mut self.timestamp.to_bytes()?);
+        Ok(bytes)
+    }
+
+    fn serialized_length(&self) -> usize {
+        self.validator.serialized_length()
+            + self.amount.serialized_length()
+            + self.timestamp.serialized_length()
+    }
+}
+
 impl FromBytes for QueueEntry {
     fn from_bytes(bytes: &[u8]) -> result::Result<(Self, &[u8]), bytesrepr::Error> {
         let (validator, bytes) = PublicKey::from_bytes(bytes)?;
@@ -44,15 +60,6 @@ impl FromBytes for QueueEntry {
     }
 }
 
-impl ToBytes for QueueEntry {
-    fn to_bytes(&self) -> result::Result<Vec<u8>, bytesrepr::Error> {
-        Ok((self.validator.to_bytes()?.into_iter())
-            .chain(self.amount.to_bytes()?)
-            .chain(self.timestamp.to_bytes()?)
-            .collect())
-    }
-}
-
 impl CLTyped for QueueEntry {
     fn cl_type() -> CLType {
         CLType::Any
@@ -60,7 +67,7 @@ impl CLTyped for QueueEntry {
 }
 
 /// A queue of bonding or unbonding requests, sorted by timestamp in ascending order.
-#[derive(Clone, Default)]
+#[derive(Clone, Default, PartialEq)]
 pub struct Queue(pub Vec<QueueEntry>);
 
 impl Queue {
@@ -91,6 +98,21 @@ impl Queue {
     }
 }
 
+impl ToBytes for Queue {
+    fn to_bytes(&self) -> result::Result<Vec<u8>, bytesrepr::Error> {
+        let mut bytes = bytesrepr::allocate_buffer(self)?;
+        bytes.append(&mut (self.0.len() as u64).to_bytes()?);
+        for entry in &self.0 {
+            bytes.append(&mut entry.to_bytes()?);
+        }
+        Ok(bytes)
+    }
+
+    fn serialized_length(&self) -> usize {
+        U64_SERIALIZED_LENGTH + self.0.iter().map(ToBytes::serialized_length).sum::<usize>()
+    }
+}
+
 impl FromBytes for Queue {
     fn from_bytes(bytes: &[u8]) -> result::Result<(Self, &[u8]), bytesrepr::Error> {
         let (len, mut bytes) = u64::from_bytes(bytes)?;
@@ -104,16 +126,6 @@ impl FromBytes for Queue {
     }
 }
 
-impl ToBytes for Queue {
-    fn to_bytes(&self) -> result::Result<Vec<u8>, bytesrepr::Error> {
-        let mut bytes = (self.0.len() as u64).to_bytes()?; // TODO: Allocate correct capacity.
-        for entry in &self.0 {
-            bytes.append(&mut entry.to_bytes()?);
-        }
-        Ok(bytes)
-    }
-}
-
 impl CLTyped for Queue {
     fn cl_type() -> CLType {
         CLType::List(Box::new(QueueEntry::cl_type()))
@@ -124,7 +136,9 @@ impl CLTyped for Queue {
 mod tests {
     use alloc::vec;
 
-    use types::{account::PublicKey, system_contract_errors::pos::Error, BlockTime, U512};
+    use types::{
+        account::PublicKey, bytesrepr, system_contract_errors::pos::Error, BlockTime, U512,
+    };
 
     use super::{Queue, QueueEntry};
 
@@ -134,9 +148,9 @@ mod tests {
 
     #[test]
     fn test_push() {
-        let val1 = PublicKey::new(KEY1);
-        let val2 = PublicKey::new(KEY2);
-        let val3 = PublicKey::new(KEY3);
+        let val1 = PublicKey::ed25519_from(KEY1);
+        let val2 = PublicKey::ed25519_from(KEY2);
+        let val3 = PublicKey::ed25519_from(KEY3);
         let mut queue: Queue = Default::default();
         assert_eq!(Ok(()), queue.push(val1, U512::from(5), BlockTime::new(100)));
         assert_eq!(Ok(()), queue.push(val2, U512::from(5), BlockTime::new(101)));
@@ -152,9 +166,9 @@ mod tests {
 
     #[test]
     fn test_pop_due() {
-        let val1 = PublicKey::new(KEY1);
-        let val2 = PublicKey::new(KEY2);
-        let val3 = PublicKey::new(KEY3);
+        let val1 = PublicKey::ed25519_from(KEY1);
+        let val2 = PublicKey::ed25519_from(KEY2);
+        let val3 = PublicKey::ed25519_from(KEY3);
         let mut queue: Queue = Default::default();
         assert_eq!(Ok(()), queue.push(val1, U512::from(5), BlockTime::new(100)));
         assert_eq!(Ok(()), queue.push(val2, U512::from(6), BlockTime::new(101)));
@@ -170,5 +184,17 @@ mod tests {
             vec![QueueEntry::new(val3, U512::from(7), BlockTime::new(102)),],
             queue.pop_due(BlockTime::new(105))
         );
+    }
+
+    #[test]
+    fn serialization_roundtrip() {
+        let val1 = PublicKey::ed25519_from(KEY1);
+        let val2 = PublicKey::ed25519_from(KEY2);
+        let val3 = PublicKey::ed25519_from(KEY3);
+        let mut queue: Queue = Default::default();
+        queue.push(val1, U512::from(5), BlockTime::new(0)).unwrap();
+        queue.push(val2, U512::from(6), BlockTime::new(1)).unwrap();
+        queue.push(val3, U512::from(7), BlockTime::new(2)).unwrap();
+        bytesrepr::test_serialization_roundtrip(&queue);
     }
 }

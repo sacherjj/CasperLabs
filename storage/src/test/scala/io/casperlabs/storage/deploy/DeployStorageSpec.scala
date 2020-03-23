@@ -347,10 +347,10 @@ trait DeployStorageSpec
             _ <- writer.addAsProcessed(List(second))
             _ <- writer.markAsPending(List(second))
             _ <- reader.pendingNum.foreachL(_ shouldBe 2)
-            _ <- writer.markAsDiscarded(expirationPeriod = 1.second)
+            _ <- writer.markAsDiscarded(expirationPeriod = 1.second, "TTL Expired")
             _ <- reader.pendingNum.foreachL(_ shouldBe 1)
             _ <- Task.sleep(2.seconds)
-            _ <- writer.markAsDiscarded(expirationPeriod = 1.second)
+            _ <- writer.markAsDiscarded(expirationPeriod = 1.second, "TTL Expired")
             _ <- reader.pendingNum.foreachL(_ shouldBe 0)
           } yield ()
         },

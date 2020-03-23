@@ -31,7 +31,11 @@ $(eval DOCKER_TEST_TAG = $(shell if [ -z ${DRONE_BUILD_NUMBER} ]; then echo test
 # Build all artifacts locally.
 all: \
 	docker-build-all \
-	cargo-package-all
+	cargo-package-all \
+	build-client \
+	build-node \
+	build-python-client 
+
 
 # Push the local artifacts to repositories.
 publish: docker-push-all
@@ -40,6 +44,7 @@ publish: docker-push-all
 clean:
 	$(MAKE) -C execution-engine clean
 	sbt clean
+	cd integration-testing && rm -rf bundled_contracts system_contracts
 	cd explorer/grpc && rm -rf google io node_modules
 	cd explorer/sdk && rm -rf node_modules dist
 	cd explorer/ui && rm -rf node_modules build
@@ -63,8 +68,8 @@ docker-push-all: \
 	docker-push/key-generator \
 	docker-push/explorer
 
-docker-build/node: .make/docker-build/universal/node
-docker-build/client: .make/docker-build/universal/client
+docker-build/node: .make/docker-build/debian/node
+docker-build/client: .make/docker-build/debian/client
 docker-build/execution-engine: .make/docker-build/execution-engine
 docker-build/integration-testing: .make/docker-build/integration-testing
 docker-build/key-generator: .make/docker-build/key-generator
@@ -95,26 +100,11 @@ cargo-native-packager/%:
 	fi
 
 # Build the `latest` docker image for local testing. Works with Scala.
-.make/docker-build/universal/%: \
+.make/docker-build/debian/%: \
 		%/Dockerfile \
-		.make/sbt-stage/%
+		.make/sbt-deb/%
 	$(eval PROJECT = $*)
-	$(eval STAGE = $(PROJECT)/target/universal/stage)
-	rm -rf $(STAGE)/.docker
-	# Copy the 3rd party dependencies to a separate directory so if they don't change we can push faster.
-	mkdir -p $(STAGE)/.docker/layers/3rd
-	find $(STAGE)/lib \
-	    -type f -not -wholename "*/io.casperlabs.*.jar" \
-	    -exec cp {} $(STAGE)/.docker/layers/3rd \;
-	# Copy our own code.
-	mkdir -p $(STAGE)/.docker/layers/1st
-	find $(STAGE)/lib \
-	    -type f -wholename "*/io.casperlabs.*.jar" \
-	    -exec cp {} $(STAGE)/.docker/layers/1st \;
-	# Use the Dockerfile to build the project. Has to be within the context.
-	cp $(PROJECT)/Dockerfile $(STAGE)/Dockerfile
-	docker build -f $(STAGE)/Dockerfile -t $(DOCKER_USERNAME)/$(PROJECT):$(DOCKER_LATEST_TAG) $(STAGE)
-	rm -rf $(STAGE)/.docker $(STAGE)/Dockerfile
+	docker build -f $(PROJECT)/Dockerfile -t $(DOCKER_USERNAME)/$(PROJECT):$(DOCKER_LATEST_TAG) $(PROJECT)
 	mkdir -p $(dir $@) && touch $@
 
 # Dockerize the Integration Tests
@@ -233,6 +223,10 @@ cargo-native-packager/%:
 	sbt -mem 5000 $(PROJECT)/universal:stage
 	mkdir -p $(dir $@) && touch $@
 
+.make/sbt-deb/%: $(SCALA_SRC) build-%-contracts
+	$(eval PROJECT = $*)
+	sbt -mem 5000 $(PROJECT)/debian:packageBin
+	mkdir -p $(dir $@) && touch $@
 
 # Create .rpm and .deb packages natively. `cargo rpm build` doesn't work on MacOS.
 #
@@ -308,10 +302,16 @@ explorer/contracts/%.wasm: .make/contracts/%
 build-client: \
 	.make/sbt-stage/client
 
+build-python-client: \
+	build-client-contracts \
+	$(PROTO_SRC) \
+	$(shell find ./integration-testing/client/CasperLabsClient/ -name "*.py"|grep -v _grpc.py)
+	cd integration-testing && pipenv run client/CasperLabsClient/build.sh
+
 build-client-contracts: \
 	client/src/main/resources/bonding.wasm \
 	client/src/main/resources/unbonding.wasm \
-	client/src/main/resources/transfer_to_account.wasm \
+	client/src/main/resources/transfer_to_account_u512.wasm \
 	client/src/main/resources/standard_payment.wasm
 
 build-node: \
@@ -319,15 +319,19 @@ build-node: \
 
 build-node-contracts: \
 	node/src/main/resources/chainspec/genesis/mint_install.wasm \
-	node/src/main/resources/chainspec/genesis/pos_install.wasm
+	node/src/main/resources/chainspec/genesis/pos_install.wasm \
+	node/src/main/resources/chainspec/genesis/standard_payment_install.wasm
 
 build-explorer: \
 	.make/npm/explorer
 
 build-explorer-contracts: \
-	explorer/contracts/transfer_to_account.wasm \
+	explorer/contracts/transfer_to_account_u512.wasm \
 	explorer/contracts/standard_payment.wasm \
 	explorer/contracts/faucet.wasm
+	# Change the extension since webpack has experiment support for WASM, but we just want to read as ArrayBuffer and use it
+	# in Clarity Deploy interface
+	cp explorer/contracts/standard_payment.wasm explorer/ui/src/standard_payment.wm
 
 # Get the .proto files for REST annotations for Github. This is here for reference about what to get from where, the files are checked in.
 # There were alternatives, like adding a reference to a Maven project called `googleapis-commons-protos` but it had version conflicts.

@@ -200,11 +200,11 @@ class CasperLabsClientAIO(object):
         )
 
     async def transfer(self, target_account_hex, amount, **deploy_args):
-        deploy_args["session"] = bundled_contract("transfer_to_account.wasm")
+        deploy_args["session"] = bundled_contract("transfer_to_account_u512.wasm")
         deploy_args["session_args"] = abi.ABI.args(
             [
                 abi.ABI.account("account", bytes.fromhex(target_account_hex)),
-                abi.ABI.long_value("amount", amount),
+                abi.ABI.u512("amount", amount),
             ]
         )
         return await self.deploy(**deploy_args)
@@ -226,14 +226,14 @@ class CasperLabsClientAIO(object):
         mint_public = urefs[0]
 
         mint_public_hex = mint_public.key.uref.uref.hex()
-        purse_addr_hex = account.purse_id.uref.hex()
+        purse_addr_hex = account.main_purse.uref.hex()
         local_key_value = f"{mint_public_hex}:{purse_addr_hex}"
 
         balance_uref = await self.query_state(block_hash, local_key_value, "", "local")
-        balance = await self.query_state(
-            block_hash, balance_uref.key.uref.uref.hex(), "", "uref"
-        )
-        return int(balance.big_int.value)
+        balance_uref_hex = balance_uref.cl_value.value.key.uref.uref.hex()
+        balance = await self.query_state(block_hash, balance_uref_hex, "", "uref")
+        balance_str_value = balance.cl_value.value.u512.value
+        return int(balance_str_value)
 
     async def show_block(self, block_hash_base16: str, full_view=True):
         return await self.casper_service.GetBlockInfo(

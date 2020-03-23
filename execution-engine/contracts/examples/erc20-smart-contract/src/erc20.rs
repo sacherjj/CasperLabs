@@ -4,10 +4,7 @@ use contract::{
     contract_api::{runtime, storage, system},
     unwrap_or_revert::UnwrapOrRevert,
 };
-use types::{
-    account::{PublicKey, PurseId},
-    CLValue, U512,
-};
+use types::{account::PublicKey, CLValue, URef, U512};
 
 use crate::{api::Api, error::Error};
 use erc20_logic::{ERC20BurnError, ERC20Trait, ERC20TransferError, ERC20TransferFromError};
@@ -115,28 +112,27 @@ fn mark_as_initialized() {
 }
 
 fn balance_key(public_key: &PublicKey) -> Vec<u8> {
-    let len = public_key.value().len() + 1;
+    let len = public_key.as_bytes().len() + 1;
     let mut result: Vec<u8> = Vec::with_capacity(len);
     result.extend(&[BALANCE_BYTE]);
-    result.extend(&public_key.value());
+    result.extend(public_key.as_bytes());
     result
 }
 
 fn allowance_key(owner: &PublicKey, spender: &PublicKey) -> Vec<u8> {
-    let len = owner.value().len() + spender.value().len();
+    let len = owner.as_bytes().len() + spender.as_bytes().len();
     let mut result: Vec<u8> = Vec::with_capacity(len);
-    result.extend(&owner.value());
-    result.extend(&spender.value());
+    result.extend(owner.as_bytes());
+    result.extend(spender.as_bytes());
     result
 }
 
-fn local_purse() -> PurseId {
+fn local_purse() -> URef {
     let key = runtime::get_key(PURSE_NAME).unwrap_or_revert_with(Error::LocalPurseKeyMissing);
-    let uref = key.as_uref().unwrap_or_revert_with(Error::NotAnURef);
-    PurseId::new(*uref)
+    key.into_uref().unwrap_or_revert_with(Error::NotAnURef)
 }
 
-fn transfer_in_clx_from_purse(purse: PurseId) -> U512 {
+fn transfer_in_clx_from_purse(purse: URef) -> U512 {
     let local_purse = local_purse();
     let clx_amount = system::get_balance(purse)
         .unwrap_or_revert_with(Error::TransferFromFailureNotEnoughAllowance);
@@ -145,7 +141,7 @@ fn transfer_in_clx_from_purse(purse: PurseId) -> U512 {
     clx_amount
 }
 
-fn transfer_out_clx_to_purse(purse: PurseId, amount: U512) {
+fn transfer_out_clx_to_purse(purse: URef, amount: U512) {
     let local_purse = local_purse();
     system::transfer_from_purse_to_purse(local_purse, purse, amount)
         .unwrap_or_revert_with(Error::PurseTransferError);

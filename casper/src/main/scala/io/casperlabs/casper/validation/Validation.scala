@@ -7,10 +7,11 @@ import com.google.protobuf.ByteString
 import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper._
 import io.casperlabs.casper.consensus.{state, Block, BlockSummary, Bond, Deploy}
+import io.casperlabs.casper.dag.DagOperations
 import io.casperlabs.casper.equivocations.EquivocationDetector
 import io.casperlabs.casper.util.execengine.ExecEngineUtil
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
-import io.casperlabs.casper.util.{CasperLabsProtocol, DagOperations, ProtoUtil}
+import io.casperlabs.casper.util.{CasperLabsProtocol, ProtoUtil}
 import io.casperlabs.casper.validation.Errors.DropErrorWrapper
 import io.casperlabs.casper.validation.Validation.BlockEffects
 import io.casperlabs.crypto.Keys.{PublicKey, Signature}
@@ -27,6 +28,7 @@ import io.casperlabs.ipc.TransformEntry
 import io.casperlabs.models.Message
 import io.casperlabs.shared._
 import io.casperlabs.models.BlockImplicits._
+import io.casperlabs.models.Message.MainRank
 
 import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
 import scala.util.{Success, Try}
@@ -62,6 +64,7 @@ trait Validation[F[_]] {
   def transactions(
       block: Block,
       preStateHash: StateHash,
+      preStateBonds: Seq[Bond],
       effects: BlockEffects
   )(
       implicit ee: ExecutionEngineService[F],
@@ -85,12 +88,14 @@ trait Validation[F[_]] {
       summary: BlockSummary,
       chainName: String
   )(implicit versions: CasperLabsProtocol[F]): F[Unit]
+
+  def checkEquivocation(dag: DagRepresentation[F], block: Block): F[Unit]
 }
 
 object Validation {
   def apply[F[_]](implicit ev: Validation[F]) = ev
 
-  type BlockHeight = Long
+  type BlockHeight = MainRank
   type Data        = Array[Byte]
 
   /** Represents block's effects indexed by deploy's `stage` value.
@@ -142,33 +147,55 @@ object Validation {
   // i.e. an equivocator cannot cite multiple of its latest messages.
   def swimlane[F[_]: MonadThrowable: RaiseValidationError: Log](
       b: BlockSummary,
-      dag: DagRepresentation[F]
+      dag: DagRepresentation[F],
+      isHighway: Boolean
   ): F[Unit] =
     for {
-      equivocators <- dag.getEquivocators
-      message      <- MonadThrowable[F].fromTry(Message.fromBlockSummary(b))
-      _ <- Monad[F].whenA(equivocators.contains(message.validatorId)) {
+      equivocations <- dag.latestGlobal.flatMap(_.getEquivocations)
+      message       <- MonadThrowable[F].fromTry(Message.fromBlockSummary(b))
+      _ <- Monad[F].whenA(equivocations.contains(message.validatorId)) {
+            val validatorEquivocations      = equivocations(message.validatorId)
+            val validatorEquivocationHashes = validatorEquivocations.mapValues(_.map(_.messageHash))
+            val minRank = EquivocationDetector
+              .findMinBaseRank(
+                Map(message.validatorId -> validatorEquivocations.values.flatten.toSet)
+              )
+              .getOrElse(0L) // We know it has to be defined by this point.
+            // Look for a pair of equivocations both in the same era.
+            val initAcc =
+              Map.empty[BlockHash, Set[BlockHash]].withDefaultValue(Set.empty[BlockHash])
             for {
-              equivocations       <- dag.getEquivocations.map(_(message.validatorId))
-              equivocationsHashes = equivocations.map(_.messageHash)
-              minRank = EquivocationDetector
-                .findMinBaseRank(Map(message.validatorId -> equivocations))
-                .getOrElse(0L) // We know it has to be defined by this point.
               seenEquivocations <- DagOperations
                                     .swimlaneV[F](message.validatorId, message, dag)
-                                    .foldWhileLeft(Set.empty[BlockHash]) {
-                                      case (seenEquivocations, message) =>
-                                        if (message.rank <= minRank) {
-                                          Right(seenEquivocations)
+                                    .foldWhileLeft(initAcc) {
+                                      case (acc, message) =>
+                                        if (message.jRank <= minRank) {
+                                          Right(acc)
                                         } else {
-                                          if (equivocationsHashes.contains(message.messageHash)) {
-                                            if (seenEquivocations.nonEmpty) {
-                                              Right(seenEquivocations + message.messageHash)
-                                            } else Left(Set(message.messageHash))
-                                          } else Left(seenEquivocations)
+                                          // In Highway the key block hash is the era;
+                                          // in NCB it's the LFB and should be ignored.
+                                          val keyBlockHash =
+                                            if (isHighway) message.eraId else ByteString.EMPTY
+
+                                          // Which are the equivocations we know about in this era.
+                                          val equivocationHashes =
+                                            validatorEquivocationHashes.getOrElse(
+                                              keyBlockHash,
+                                              Set.empty
+                                            )
+
+                                          // If this is an equivocating message, remember we have seen it,
+                                          // and see its pair from the same era turns up later.
+                                          if (equivocationHashes.contains(message.messageHash)) {
+                                            val prevSeen = acc(keyBlockHash)
+                                            val nextSeen = prevSeen + message.messageHash
+                                            val nextAcc  = acc.updated(keyBlockHash, nextSeen)
+                                            if (nextSeen.size > 1) Right(nextAcc) else Left(nextAcc)
+                                          } else Left(acc)
                                         }
                                     }
-              _ <- Monad[F].whenA(seenEquivocations.size > 1) {
+              maybeSeenEquivocationPair = seenEquivocations.values.find(_.size > 1)
+              _ <- maybeSeenEquivocationPair.fold(().pure[F]) { seenEquivocations =>
                     val msg =
                       s"${PrettyPrinter.buildString(message.messageHash)} cites multiple latest message by its creator ${PrettyPrinter
                         .buildString(message.validatorId)}: ${seenEquivocations
@@ -252,8 +279,8 @@ object Validation {
     for {
       justificationMsgs <- (b.parents ++ b.justifications.map(_.latestBlockHash)).toSet.toList
                             .traverse(dag.lookupUnsafe(_))
-      calculatedRank = ProtoUtil.nextRank(justificationMsgs)
-      actuallyRank   = b.rank
+      calculatedRank = ProtoUtil.nextJRank(justificationMsgs)
+      actuallyRank   = b.jRank
       result         = calculatedRank == actuallyRank
       _ <- if (result) {
             Applicative[F].unit
@@ -565,11 +592,11 @@ object Validation {
   // Validates whether block was built using correct protocol version.
   def version[F[_]: Monad: Log](
       b: BlockSummary,
-      m: BlockHeight => F[state.ProtocolVersion]
+      m: MainRank => F[state.ProtocolVersion]
   ): F[Boolean] = {
 
     val blockVersion = b.getHeader.getProtocolVersion
-    val blockHeight  = b.getHeader.rank
+    val blockHeight  = b.mainRank
     m(blockHeight).flatMap { version =>
       if (blockVersion == version) {
         true.pure[F]
@@ -635,7 +662,8 @@ object Validation {
     */
   def validatorPrevBlockHash[F[_]: MonadThrowable: RaiseValidationError: Log](
       b: BlockSummary,
-      dag: DagRepresentation[F]
+      dag: DagRepresentation[F],
+      isHighway: Boolean
   ): F[Unit] = {
     val prevBlockHash = b.getHeader.validatorPrevBlockHash
     val validatorId   = b.getHeader.validatorPublicKey
@@ -650,17 +678,21 @@ object Validation {
           rejectWith(
             s"DagStorage is missing previous block hash ${PrettyPrinter.buildString(prevBlockHash)}"
           )
-        case Some(meta) if meta.validatorId != validatorId =>
+        case Some(prev) if prev.validatorId != validatorId =>
           rejectWith(
             s"Previous block hash ${PrettyPrinter.buildString(prevBlockHash)} was not created by validator ${PrettyPrinter
               .buildString(validatorId)}"
           )
-        case Some(meta) =>
+        case Some(prev) =>
           MonadThrowable[F].fromTry(Message.fromBlockSummary(b)) flatMap { blockMsg =>
             DagOperations
               .toposortJDagDesc(dag, List(blockMsg))
+              .filter { j =>
+                j.eraId == b.getHeader.keyBlockHash || !isHighway
+              }
               .find { j =>
-                j.validatorId == validatorId && j.messageHash != b.blockHash || j.rank < meta.rank
+                // Go until we're passed the previous message they point at. It should be the first form this validator.
+                j.validatorId == validatorId && j.messageHash != b.blockHash || j.jRank < prev.jRank
               }
               .flatMap {
                 case Some(msg) if msg.messageHash == prevBlockHash =>
@@ -764,7 +796,7 @@ object Validation {
 
     def singleDeployValidation(d: consensus.Deploy): F[Unit] =
       for {
-        config <- CasperLabsProtocol[F].configAt(b.getHeader.rank).map(_.deployConfig)
+        config <- CasperLabsProtocol[F].configAt(b.mainRank).map(_.deployConfig)
         staticErrors <- deployHeader[F](
                          d,
                          chainName,

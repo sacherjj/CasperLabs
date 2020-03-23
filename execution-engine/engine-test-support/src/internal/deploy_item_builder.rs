@@ -28,23 +28,25 @@ impl DeployItemBuilder {
         Default::default()
     }
 
-    pub fn with_address(mut self, address: [u8; 32]) -> Self {
-        self.deploy_item.address = Some(address.into());
+    pub fn with_address(mut self, address: PublicKey) -> Self {
+        self.deploy_item.address = Some(address);
         self
     }
 
-    pub fn with_payment_code<T: AsRef<Path>>(
-        mut self,
-        file_name: T,
-        args: impl ArgsParser,
-    ) -> Self {
-        let wasm_bytes = utils::read_wasm_file_bytes(file_name);
+    pub fn with_payment_bytes(mut self, module_bytes: Vec<u8>, args: impl ArgsParser) -> Self {
         let args = Self::serialize_args(args);
-        self.deploy_item.payment_code = Some(ExecutableDeployItem::ModuleBytes {
-            module_bytes: wasm_bytes,
-            args,
-        });
+        self.deploy_item.payment_code =
+            Some(ExecutableDeployItem::ModuleBytes { module_bytes, args });
         self
+    }
+
+    pub fn with_empty_payment_bytes(self, args: impl ArgsParser) -> Self {
+        self.with_payment_bytes(vec![], args)
+    }
+
+    pub fn with_payment_code<T: AsRef<Path>>(self, file_name: T, args: impl ArgsParser) -> Self {
+        let module_bytes = utils::read_wasm_file_bytes(file_name);
+        self.with_payment_bytes(module_bytes, args)
     }
 
     pub fn with_stored_payment_hash(mut self, hash: Vec<u8>, args: impl ArgsParser) -> Self {
@@ -85,18 +87,16 @@ impl DeployItemBuilder {
         self
     }
 
-    pub fn with_session_code<T: AsRef<Path>>(
-        mut self,
-        file_name: T,
-        args: impl ArgsParser,
-    ) -> Self {
-        let wasm_bytes = utils::read_wasm_file_bytes(file_name);
+    pub fn with_session_bytes(mut self, module_bytes: Vec<u8>, args: impl ArgsParser) -> Self {
         let args = Self::serialize_args(args);
-        self.deploy_item.session_code = Some(ExecutableDeployItem::ModuleBytes {
-            module_bytes: wasm_bytes,
-            args,
-        });
+        self.deploy_item.session_code =
+            Some(ExecutableDeployItem::ModuleBytes { module_bytes, args });
         self
+    }
+
+    pub fn with_session_code<T: AsRef<Path>>(self, file_name: T, args: impl ArgsParser) -> Self {
+        let module_bytes = utils::read_wasm_file_bytes(file_name);
+        self.with_session_bytes(module_bytes, args)
     }
 
     pub fn with_stored_session_hash(mut self, hash: Vec<u8>, args: impl ArgsParser) -> Self {
@@ -161,7 +161,10 @@ impl DeployItemBuilder {
 
     pub fn build(self) -> DeployItem {
         DeployItem {
-            address: self.deploy_item.address.unwrap_or_else(|| [0u8; 32].into()),
+            address: self
+                .deploy_item
+                .address
+                .unwrap_or_else(|| PublicKey::ed25519_from([0u8; 32])),
             session: self.deploy_item.session_code.unwrap(),
             payment: self.deploy_item.payment_code.unwrap(),
             gas_price: self.deploy_item.gas_price,

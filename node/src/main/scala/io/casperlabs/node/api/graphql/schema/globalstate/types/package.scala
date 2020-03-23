@@ -1,7 +1,9 @@
 package io.casperlabs.node.api.graphql.schema.globalstate
 
 import io.casperlabs.crypto.codec.Base16
-import io.casperlabs.casper.consensus.state
+import io.casperlabs.models.bytesrepr._
+import io.casperlabs.models.cltype
+import io.casperlabs.models.cltype.{CLType, CLValueInstance}
 import io.casperlabs.node.api.graphql.schema.utils.ProtocolVersionType
 import sangria.schema._
 
@@ -9,41 +11,41 @@ package object types {
   // Everything defined as ObjectTypes because
   // sangria doesn't support UnionTypes created from with ScalarTypes.
 
-  lazy val AccessRightsEnum: EnumType[state.Key.URef.AccessRights] =
-    EnumType[state.Key.URef.AccessRights](
+  lazy val AccessRightsEnum: EnumType[Option[cltype.AccessRights]] =
+    EnumType[Option[cltype.AccessRights]](
       "AccessRightsType",
       values = List(
         EnumValue(
           "UNKNOWN",
-          value = state.Key.URef.AccessRights.UNKNOWN
+          value = None
         ),
         EnumValue(
           "READ",
-          value = state.Key.URef.AccessRights.READ
+          value = Some(cltype.AccessRights.Read)
         ),
         EnumValue(
           "WRITE",
-          value = state.Key.URef.AccessRights.WRITE
+          value = Some(cltype.AccessRights.Write)
         ),
         EnumValue(
           "ADD",
-          value = state.Key.URef.AccessRights.ADD
+          value = Some(cltype.AccessRights.Add)
         ),
         EnumValue(
           "READ_ADD",
-          value = state.Key.URef.AccessRights.READ_ADD
+          value = Some(cltype.AccessRights.ReadAdd)
         ),
         EnumValue(
           "READ_WRITE",
-          value = state.Key.URef.AccessRights.READ_WRITE
+          value = Some(cltype.AccessRights.ReadWrite)
         ),
         EnumValue(
           "ADD_WRITE",
-          value = state.Key.URef.AccessRights.ADD_WRITE
+          value = Some(cltype.AccessRights.AddWrite)
         ),
         EnumValue(
           "READ_ADD_WRITE",
-          value = state.Key.URef.AccessRights.READ_ADD_WRITE
+          value = Some(cltype.AccessRights.ReadAddWrite)
         )
       )
     )
@@ -51,49 +53,56 @@ package object types {
   lazy val KeyAddress =
     ObjectType(
       "KeyAddress",
-      fields[Unit, state.Key.Address](
+      fields[Unit, cltype.Key.Account](
         Field(
           "value",
           StringType,
-          resolve = c => Base16.encode(c.value.account.toByteArray)
+          resolve = c => Base16.encode(c.value.address.bytes.toArray)
         )
       )
     )
 
   lazy val KeyHash = ObjectType(
     "KeyHash",
-    fields[Unit, state.Key.Hash](
+    fields[Unit, cltype.Key.Hash](
       Field(
         "value",
         StringType,
-        resolve = c => Base16.encode(c.value.hash.toByteArray)
+        resolve = c => Base16.encode(c.value.address.bytes.toArray)
+      )
+    )
+  )
+
+  lazy val URef = ObjectType(
+    "URef",
+    fields[Unit, CLValueInstance.URef](
+      Field(
+        "address",
+        StringType,
+        resolve = c => Base16.encode(c.value.value.address.bytes.toArray)
+      ),
+      Field(
+        "accessRights",
+        AccessRightsEnum,
+        resolve = _.value.value.accessRights
       )
     )
   )
 
   lazy val KeyURef = ObjectType(
-    "KeyUref",
-    fields[Unit, state.Key.URef](
-      Field(
-        "uref",
-        StringType,
-        resolve = c => Base16.encode(c.value.uref.toByteArray)
-      ),
-      Field(
-        "accessRights",
-        AccessRightsEnum,
-        resolve = _.value.accessRights
-      )
+    "KeyURef",
+    fields[Unit, cltype.Key.URef](
+      Field("uref", URef, resolve = c => CLValueInstance.URef(c.value.uref))
     )
   )
 
   lazy val KeyLocal = ObjectType(
     "KeyLocal",
-    fields[Unit, state.Key.Local](
+    fields[Unit, cltype.Key.Local](
       Field(
         "hash",
         StringType,
-        resolve = c => Base16.encode(c.value.hash.toByteArray)
+        resolve = c => Base16.encode((c.value.seed.bytes ++ c.value.hash.bytes).toArray)
       )
     )
   )
@@ -110,16 +119,15 @@ package object types {
 
   lazy val KeyType = ObjectType(
     "Key",
-    fields[Unit, state.Key](
+    fields[Unit, CLValueInstance.Key](
       Field(
         "value",
         KeyUnion,
         resolve = _.value.value match {
-          case state.Key.Value.Local(value)   => value
-          case state.Key.Value.Hash(value)    => value
-          case state.Key.Value.Address(value) => value
-          case state.Key.Value.Uref(value)    => value
-          case state.Key.Value.Empty          => ???
+          case value: cltype.Key.Local   => value
+          case value: cltype.Key.Hash    => value
+          case value: cltype.Key.Account => value
+          case value: cltype.Key.URef    => value
         }
       )
     )
@@ -127,161 +135,319 @@ package object types {
 
   lazy val NamedKey = ObjectType(
     "NamedKey",
-    fields[Unit, state.NamedKey](
-      Field("name", StringType, resolve = _.value.name),
-      Field("key", KeyType, resolve = _.value.key.get)
+    fields[Unit, (String, cltype.Key)](
+      Field("name", StringType, resolve = _.value._1),
+      Field("key", KeyType, resolve = c => CLValueInstance.Key(c.value._2))
     )
   )
 
   lazy val Contract = ObjectType(
     "Contract",
-    fields[Unit, state.Contract](
-      Field("body", StringType, resolve = c => Base16.encode(c.value.body.toByteArray)),
-      Field("namedKeys", ListType(NamedKey), resolve = _.value.namedKeys),
-      Field("protocolVersion", ProtocolVersionType, resolve = _.value.getProtocolVersion)
+    fields[Unit, cltype.Contract](
+      Field("body", StringType, resolve = c => Base16.encode(c.value.bytes.toArray)),
+      Field("namedKeys", ListType(NamedKey), resolve = _.value.namedKeys.toList),
+      Field(
+        "protocolVersion",
+        ProtocolVersionType,
+        resolve = c => cltype.protobuf.Mappings.toProto(c.value.protocolVersion)
+      )
     )
   )
 
   lazy val AccountAssociatedKey = ObjectType(
     "AccountAssociatedKey",
-    fields[Unit, state.Account.AssociatedKey](
+    fields[Unit, (cltype.Account.PublicKey, cltype.Account.Weight)](
       Field(
         "pubKey",
         StringType,
-        resolve = c => Base16.encode(c.value.publicKey.toByteArray)
+        resolve = c => Base16.encode(c.value._1.bytes.toArray)
       ),
-      Field("weight", IntType, resolve = _.value.weight)
+      Field("weight", IntType, resolve = _.value._2.toInt)
     )
   )
 
   lazy val AccountActionThresholds = ObjectType(
     "AccountActionThresholds",
-    fields[Unit, state.Account.ActionThresholds](
-      Field("deploymentThreshold", IntType, resolve = _.value.deploymentThreshold),
-      Field("keyManagementThreshold", IntType, resolve = _.value.keyManagementThreshold)
+    fields[Unit, cltype.Account.ActionThresholds](
+      Field("deploymentThreshold", IntType, resolve = _.value.deployment.toInt),
+      Field("keyManagementThreshold", IntType, resolve = _.value.keyManagement.toInt)
     )
   )
 
   lazy val Account = ObjectType(
     "Account",
-    fields[Unit, state.Account](
-      Field("pubKey", StringType, resolve = c => Base16.encode(c.value.publicKey.toByteArray)),
-      Field("purseId", KeyURef, resolve = _.value.purseId.get),
-      Field("namedKeys", ListType(NamedKey), resolve = _.value.namedKeys),
-      Field("associatedKeys", ListType(AccountAssociatedKey), resolve = _.value.associatedKeys),
-      Field("actionThreshold", AccountActionThresholds, resolve = _.value.actionThresholds.get)
+    fields[Unit, cltype.Account](
+      Field("pubKey", StringType, resolve = c => Base16.encode(c.value.publicKey.bytes.toArray)),
+      Field("mainPurse", KeyURef, resolve = c => cltype.Key.URef(c.value.mainPurse)),
+      Field("namedKeys", ListType(NamedKey), resolve = _.value.namedKeys.toList),
+      Field(
+        "associatedKeys",
+        ListType(AccountAssociatedKey),
+        resolve = _.value.associatedKeys.toList
+      ),
+      Field("actionThreshold", AccountActionThresholds, resolve = _.value.actionThresholds)
     )
   )
 
-  lazy val ValueInt =
-    ObjectType(
-      "IntValue",
-      fields[Unit, state.Value.Value.IntValue](
-        Field(
-          "value",
-          IntType,
-          resolve = _.value.value
-        )
-      )
-    )
-
-  lazy val ValueByteArray =
-    ObjectType(
-      "ByteString",
-      fields[Unit, state.Value.Value.BytesValue](
-        Field(
-          "value",
-          StringType,
-          resolve = c => Base16.encode(c.value.value.toByteArray)
-        )
-      )
-    )
-
-  lazy val IntList =
-    ObjectType(
-      "IntList",
-      fields[Unit, state.IntList](
-        Field("value", ListType(IntType), resolve = _.value.values)
-      )
-    )
-
-  lazy val ValueString =
-    ObjectType(
-      "StringValue",
-      fields[Unit, state.Value.Value.StringValue](
-        Field("value", StringType, resolve = _.value.value)
-      )
-    )
-
-  lazy val StringList =
-    ObjectType(
-      "StringList",
-      fields[Unit, state.StringList](
-        Field("value", ListType(StringType), resolve = _.value.values)
-      )
-    )
-
-  lazy val RustBigInt =
-    ObjectType(
-      "BigIntValue",
-      fields[Unit, state.BigInt](
-        Field("value", StringType, resolve = _.value.value),
-        Field("bitWidth", IntType, resolve = _.value.bitWidth)
-      )
-    )
-
-  lazy val UnitType = ObjectType(
-    "Unit",
-    fields[Unit, state.Unit](
-      Field("value", StringType, resolve = _ => "Unit")
+  lazy val Bool = ObjectType(
+    "Bool",
+    fields[Unit, CLValueInstance.Bool](
+      Field("value", BooleanType, resolve = _.value.value)
     )
   )
 
-  lazy val ValueLong = ObjectType(
-    "LongValue",
-    fields[Unit, state.Value.Value.LongValue](
+  lazy val I32 = ObjectType(
+    "I32",
+    fields[Unit, CLValueInstance.I32](
+      Field("value", IntType, resolve = _.value.value)
+    )
+  )
+
+  lazy val I64 = ObjectType(
+    "I64",
+    fields[Unit, CLValueInstance.I64](
       Field("value", LongType, resolve = _.value.value)
     )
   )
 
-  lazy val ValueUnion = UnionType(
-    "ValueUnion",
-    types = List(
-      ValueInt,
-      ValueByteArray,
-      ValueLong,
-      IntList,
-      ValueString,
-      Account,
-      Contract,
-      StringList,
-      NamedKey,
-      RustBigInt,
-      KeyType,
-      UnitType
+  lazy val U8 = ObjectType(
+    "U8",
+    fields[Unit, CLValueInstance.U8](
+      Field("value", IntType, resolve = _.value.value.toInt)
     )
   )
 
-  lazy val Value = ObjectType(
-    "Value",
-    fields[Unit, state.Value](
+  lazy val U32 = ObjectType(
+    "U32",
+    fields[Unit, CLValueInstance.U32](
+      Field("value", IntType, resolve = _.value.value)
+    )
+  )
+
+  lazy val U64 = ObjectType(
+    "U64",
+    fields[Unit, CLValueInstance.U64](
+      Field("value", LongType, resolve = _.value.value)
+    )
+  )
+
+  lazy val U128 = ObjectType(
+    "U128",
+    fields[Unit, CLValueInstance.U128](
+      Field("value", BigIntType, resolve = _.value.value.value)
+    )
+  )
+
+  lazy val U256 = ObjectType(
+    "U256",
+    fields[Unit, CLValueInstance.U256](
+      Field("value", BigIntType, resolve = _.value.value.value)
+    )
+  )
+
+  lazy val U512 = ObjectType(
+    "U512",
+    fields[Unit, CLValueInstance.U512](
+      Field("value", BigIntType, resolve = _.value.value.value)
+    )
+  )
+
+  lazy val UnitType = ObjectType(
+    "Unit",
+    fields[Unit, CLValueInstance.Unit.type](
+      Field("value", StringType, resolve = _ => "Unit")
+    )
+  )
+
+  lazy val CLString = ObjectType(
+    "CLString",
+    fields[Unit, CLValueInstance.String](
+      Field("value", StringType, resolve = _.value.value)
+    )
+  )
+
+  lazy val CLOption: ObjectType[Unit, CLValueInstance.Option] = ObjectType(
+    "Option",
+    () =>
+      fields[Unit, CLValueInstance.Option](
+        Field("value", OptionType(CLValueUnion), resolve = _.value.value)
+      )
+  )
+
+  lazy val CLList: ObjectType[Unit, CLValueInstance.List] = ObjectType(
+    "List",
+    () =>
+      fields[Unit, CLValueInstance.List](
+        Field("value", ListType(CLValueUnion), resolve = _.value.value)
+      )
+  )
+
+  lazy val FixedList = ObjectType(
+    "FixedList",
+    () =>
+      fields[Unit, CLValueInstance.FixedList](
+        Field("value", ListType(CLValueUnion), resolve = _.value.value),
+        Field("length", IntType, resolve = _.value.length)
+      )
+  )
+
+  lazy val ResultUnion = UnionType(
+    "Either",
+    types = List(
+      ObjectType(
+        "ResultError",
+        () =>
+          fields[Unit, Left[CLValueInstance, CLValueInstance]](
+            Field("value", CLValueUnion, resolve = _.value.value)
+          )
+      ),
+      ObjectType(
+        "ResultOk",
+        () =>
+          fields[Unit, Right[CLValueInstance, CLValueInstance]](
+            Field("value", CLValueUnion, resolve = _.value.value)
+          )
+      )
+    )
+  )
+
+  lazy val Result = ObjectType(
+    "Result",
+    () =>
+      fields[Unit, CLValueInstance.Result](
+        Field("value", ResultUnion, resolve = _.value.value match {
+          case err: Left[CLValueInstance, CLValueInstance] => err
+          case ok: Right[CLValueInstance, CLValueInstance] => ok
+        })
+      )
+  )
+
+  lazy val CLMap = ObjectType(
+    "Map",
+    () =>
+      fields[Unit, CLValueInstance.Map](
+        Field("value", ListType(Tuple2), resolve = _.value.value.toSeq.map {
+          case (key, value) => CLValueInstance.Tuple2(key, value)
+        })
+      )
+  )
+
+  lazy val Tuple1 = ObjectType(
+    "Tuple1",
+    () =>
+      fields[Unit, CLValueInstance.Tuple1](
+        Field("_1", CLValueUnion, resolve = _.value._1)
+      )
+  )
+
+  lazy val Tuple2 = ObjectType(
+    "Tuple2",
+    () =>
+      fields[Unit, CLValueInstance.Tuple2](
+        Field("_1", CLValueUnion, resolve = _.value._1),
+        Field("_2", CLValueUnion, resolve = _.value._2)
+      )
+  )
+
+  lazy val Tuple3 = ObjectType(
+    "Tuple3",
+    () =>
+      fields[Unit, CLValueInstance.Tuple3](
+        Field("_1", CLValueUnion, resolve = _.value._1),
+        Field("_2", CLValueUnion, resolve = _.value._2),
+        Field("_3", CLValueUnion, resolve = _.value._3)
+      )
+  )
+
+  lazy val CLValueUnion: UnionType[Unit] = UnionType(
+    "CLValueUnion",
+    types = List(
+      Bool,
+      I32,
+      I64,
+      U8,
+      U32,
+      U64,
+      U128,
+      U256,
+      U512,
+      UnitType,
+      CLString,
+      KeyType,
+      URef,
+      CLOption,
+      CLList,
+      FixedList,
+      Result,
+      CLMap,
+      Tuple1,
+      Tuple2,
+      Tuple3
+    )
+  )
+
+  lazy val StoredValueUnion: UnionType[Unit] = UnionType(
+    "StoredValueUnion",
+    types = List(
+      Account,
+      Contract,
+      Bool,
+      I32,
+      I64,
+      U8,
+      U32,
+      U64,
+      U128,
+      U256,
+      U512,
+      UnitType,
+      CLString,
+      KeyType,
+      URef,
+      CLOption,
+      CLList,
+      FixedList,
+      Result,
+      CLMap,
+      Tuple1,
+      Tuple2,
+      Tuple3
+    )
+  )
+
+  lazy val StoredValue = ObjectType(
+    "StoredValue",
+    fields[Unit, cltype.StoredValueInstance](
       Field(
         "value",
-        ValueUnion,
-        resolve = _.value.value match {
-          case state.Value.Value.Contract(value)    => value
-          case state.Value.Value.BytesValue(value)  => value
-          case state.Value.Value.BigInt(value)      => value
-          case state.Value.Value.LongValue(value)   => value
-          case value: state.Value.Value.StringValue => value
-          case state.Value.Value.Key(value)         => value
-          case state.Value.Value.Unit(value)        => value
-          case value: state.Value.Value.IntValue    => value
-          case state.Value.Value.NamedKey(value)    => value
-          case state.Value.Value.Account(value)     => value
-          case state.Value.Value.StringList(value)  => value
-          case state.Value.Value.IntList(value)     => value
-          case state.Value.Value.Empty              => ???
+        StoredValueUnion,
+        resolve = _.value match {
+          case cltype.StoredValueInstance.Contract(value) => value
+          case cltype.StoredValueInstance.Account(value)  => value
+          case cltype.StoredValueInstance.CLValue(value) =>
+            value match {
+              case v: CLValueInstance.Bool      => v
+              case v: CLValueInstance.I32       => v
+              case v: CLValueInstance.I64       => v
+              case v: CLValueInstance.U8        => v
+              case v: CLValueInstance.U32       => v
+              case v: CLValueInstance.U64       => v
+              case v: CLValueInstance.U128      => v
+              case v: CLValueInstance.U256      => v
+              case v: CLValueInstance.U512      => v
+              case CLValueInstance.Unit         => CLValueInstance.Unit
+              case v: CLValueInstance.String    => v
+              case v: CLValueInstance.Key       => v
+              case v: CLValueInstance.URef      => v
+              case v: CLValueInstance.Option    => v
+              case v: CLValueInstance.List      => v
+              case v: CLValueInstance.FixedList => v
+              case v: CLValueInstance.Result    => v
+              case v: CLValueInstance.Map       => v
+              case v: CLValueInstance.Tuple1    => v
+              case v: CLValueInstance.Tuple2    => v
+              case v: CLValueInstance.Tuple3    => v
+            }
         }
       )
     )

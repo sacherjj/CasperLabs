@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 
+use engine_core::engine_state::EngineConfig;
 use engine_test_support::{
     internal::{
         exec_with_return, ExecuteRequestBuilder, WasmTestBuilder, DEFAULT_BLOCK_TIME,
@@ -7,14 +8,11 @@ use engine_test_support::{
     },
     DEFAULT_ACCOUNT_ADDR,
 };
-use types::{
-    account::{PublicKey, PurseId},
-    AccessRights, Key, URef, U512,
-};
+use types::{account::PublicKey, AccessRights, Key, URef, U512};
 
 const CONTRACT_TRANSFER_TO_ACCOUNT: &str = "transfer_to_account_u512.wasm";
 const TRANSFER_AMOUNT: u64 = 250_000_000 + 1000;
-const SYSTEM_ADDR: [u8; 32] = [0u8; 32];
+const SYSTEM_ADDR: PublicKey = PublicKey::ed25519_from([0u8; 32]);
 const DEPLOY_HASH_2: [u8; 32] = [2u8; 32];
 const N_VALIDATORS: u8 = 5;
 
@@ -29,6 +27,9 @@ const POS_REWARDS_PURSE: &str = "pos_rewards_purse";
 #[test]
 fn should_run_pos_install_contract() {
     let mut builder = WasmTestBuilder::default();
+    let engine_config = EngineConfig::new()
+        .with_use_system_contracts(cfg!(feature = "use-system-contracts"))
+        .with_highway(cfg!(feature = "highway"));
 
     let exec_request = ExecuteRequestBuilder::standard(
         DEFAULT_ACCOUNT_ADDR,
@@ -44,12 +45,13 @@ fn should_run_pos_install_contract() {
 
     let mint_uref = URef::new(builder.get_mint_contract_uref().addr(), AccessRights::READ);
     let genesis_validators: BTreeMap<PublicKey, U512> = (1u8..=N_VALIDATORS)
-        .map(|i| (PublicKey::new([i; 32]), U512::from(i)))
+        .map(|i| (PublicKey::ed25519_from([i; 32]), U512::from(i)))
         .collect();
 
     let total_bond = genesis_validators.values().fold(U512::zero(), |x, y| x + y);
 
     let (ret_value, ret_urefs, effect): (URef, _, _) = exec_with_return::exec(
+        engine_config,
         &mut builder,
         SYSTEM_ADDR,
         "pos_install.wasm",
@@ -96,10 +98,9 @@ fn should_run_pos_install_contract() {
     assert_eq!(rewards_purse_balance, U512::zero());
 }
 
-fn get_purse(named_keys: &BTreeMap<String, Key>, name: &str) -> Option<PurseId> {
+fn get_purse(named_keys: &BTreeMap<String, Key>, name: &str) -> Option<URef> {
     named_keys
         .get(name)
-        .and_then(Key::as_uref)
-        .cloned()
-        .map(PurseId::new)
+        .expect("should have named key")
+        .into_uref()
 }

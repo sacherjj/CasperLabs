@@ -52,12 +52,12 @@ object PrettyPrinter {
         Account(
           pk,
           urefs,
-          purseId,
+          mainPurse,
           associatedKeys,
           actionThresholds
         )
         ) =>
-      s"Account(${buildString(pk)}, {${urefs.map(buildString).mkString(",")}}, ${purseId
+      s"Account(${buildString(pk)}, {${urefs.map(buildString).mkString(",")}}, ${mainPurse
         .map(buildString)}, {${associatedKeys
         .map(buildString)
         .mkString(",")}, {${actionThresholds.map(buildString)}})"
@@ -73,12 +73,12 @@ object PrettyPrinter {
         Account(
           pk,
           urefs,
-          purseId,
+          mainPurse,
           associatedKeys,
           actionThresholds
         )
         ) =>
-      s"Account(${buildString(pk)}, {${urefs.map(buildString).mkString(",")}}, ${purseId
+      s"Account(${buildString(pk)}, {${urefs.map(buildString).mkString(",")}}, ${mainPurse
         .map(buildString)}, {${associatedKeys
         .map(buildString)
         .mkString(",")}, {${actionThresholds.map(buildString)}})"
@@ -101,7 +101,7 @@ object PrettyPrinter {
       header     <- b.header
       mainParent <- header.parentHashes.headOption
       postState  <- header.state
-    } yield s"Block #${header.rank} (${buildString(b.blockHash)}) " +
+    } yield s"Block j-rank #${header.jRank} main-rank #${header.mainRank} (${buildString(b.blockHash)}) " +
       s"-- Sender ID ${buildString(header.validatorPublicKey)} " +
       s"-- M Parent Hash ${buildString(mainParent)} " +
       s"-- Contents ${buildString(postState.postStateHash)}" +
@@ -124,7 +124,7 @@ object PrettyPrinter {
 
   private def buildString(a: Key.URef.AccessRights): String =
     a match {
-      case AccessRights.UNKNOWN        => "Unknown"
+      case AccessRights.NONE           => "None"
       case AccessRights.READ           => "Read"
       case AccessRights.ADD            => "Add"
       case AccessRights.WRITE          => "Write"

@@ -1,34 +1,74 @@
 import { Deploy } from 'casperlabs-grpc/io/casperlabs/casper/consensus/consensus_pb';
-import { BigInt } from 'casperlabs-grpc/io/casperlabs/casper/consensus/state_pb';
+import { CLType, CLValueInstance } from 'casperlabs-grpc/io/casperlabs/casper/consensus/state_pb';
 import { ByteArray } from '../index';
 
 // Functions to convert data to protobuf Deploy.Arg
 
-type ToValue<T> = (x: T) => Deploy.Arg.Value;
+type ToValue<T> = (x: T) => CLValueInstance;
 
-function toValue<T>(set: (value: Deploy.Arg.Value, x: T) => void): ToValue<T> {
+function toValue<T>(set: (value: CLValueInstance, x: T) => void): ToValue<T> {
   return (x: T) => {
-    const value = new Deploy.Arg.Value();
+    const value = new CLValueInstance();
     set(value, x);
     return value;
   };
 }
 
-export const BytesValue = toValue<ByteArray>((value, x) =>
-  value.setBytesValue(x)
-);
-export const LongValue = toValue<bigint>((value, x) =>
-  value.setLongValue(Number(x))
-);
-export const BigIntValue = toValue<bigint>((value, x) => {
-  const bi = new BigInt();
-  bi.setBitWidth(512);
-  bi.setValue(x.toString());
-  value.setBigInt(bi);
+export const BytesValue = toValue<ByteArray>((value, x) => {
+  const innerType = new CLType();
+  innerType.setSimpleType(CLType.Simple.U8);
+  const t = new CLType();
+  const fixedListType = new CLType.FixedList();
+  fixedListType.setInner(innerType);
+  fixedListType.setLen(x.length);
+  t.setFixedListType(fixedListType);
+
+  const v = new CLValueInstance.Value();
+  const fixedListValue = new CLValueInstance.FixedList();
+  const bytes = Array.from(x, b => {
+    const byteValue = new CLValueInstance.Value();
+    byteValue.setU8(b);
+    return byteValue;
+  });
+  fixedListValue.setLength(bytes.length);
+  fixedListValue.setValuesList(bytes);
+  v.setFixedListValue(fixedListValue)
+
+  value.setClType(t);
+  value.setValue(v);
+
   return value;
 });
 
-export function Args(...args: Array<[string, Deploy.Arg.Value]>): Deploy.Arg[] {
+export const LongValue = toValue<bigint>((value, x) => {
+  const t = new CLType();
+  t.setSimpleType(CLType.Simple.I64);
+
+  const v = new CLValueInstance.Value();
+  v.setI64(Number(x));
+
+  value.setClType(t);
+  value.setValue(v);
+
+  return value;
+});
+
+export const BigIntValue = toValue<bigint>((value, x) => {
+  const t = new CLType();
+  t.setSimpleType(CLType.Simple.U512);
+
+  const v = new CLValueInstance.Value();
+  const n = new CLValueInstance.U512();
+  n.setValue(x.toString());
+  v.setU512(n);
+
+  value.setClType(t);
+  value.setValue(v);
+
+  return value;
+});
+
+export function Args(...args: Array<[string, CLValueInstance]>): Deploy.Arg[] {
   return args.map(x => {
     const [name, value] = x;
     const arg = new Deploy.Arg();

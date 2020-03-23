@@ -3,13 +3,13 @@ package io.casperlabs.storage.util
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.Block
 import io.casperlabs.crypto.codec.Base16
-import io.casperlabs.storage.block.BlockStorage.BlockHash
+import io.casperlabs.storage.BlockHash
 
 object TopologicalSortUtil {
   type BlockSort = Vector[Vector[BlockHash]]
   def update(sort: BlockSort, offset: Long, block: Block): BlockSort = {
     val hash             = block.blockHash
-    val offsetDiff: Long = block.getHeader.rank - offset
+    val offsetDiff: Long = block.getHeader.jRank - offset
 
     assert(offsetDiff <= Int.MaxValue)
     val number = offsetDiff.toInt

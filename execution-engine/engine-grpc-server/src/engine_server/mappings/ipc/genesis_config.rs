@@ -17,6 +17,9 @@ impl From<GenesisConfig> for ChainSpec_GenesisConfig {
         pb_genesis_config.set_mint_installer(genesis_config.mint_installer_bytes().to_vec());
         pb_genesis_config
             .set_pos_installer(genesis_config.proof_of_stake_installer_bytes().to_vec());
+        pb_genesis_config.set_standard_payment_installer(
+            genesis_config.standard_payment_installer_bytes().to_vec(),
+        );
         {
             let accounts = genesis_config
                 .accounts()
@@ -48,12 +51,14 @@ impl TryFrom<ChainSpec_GenesisConfig> for GenesisConfig {
         let wasm_costs = pb_genesis_config.take_costs().take_wasm().into();
         let mint_initializer_bytes = pb_genesis_config.mint_installer;
         let proof_of_stake_initializer_bytes = pb_genesis_config.pos_installer;
+        let standard_payment_installer_bytes = pb_genesis_config.standard_payment_installer;
         Ok(GenesisConfig::new(
             name,
             timestamp,
             protocol_version,
             mint_initializer_bytes,
             proof_of_stake_initializer_bytes,
+            standard_payment_installer_bytes,
             accounts,
             wasm_costs,
         ))
