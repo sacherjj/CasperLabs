@@ -195,11 +195,11 @@ stests/build:
 # this command can run stests in interactive mode.
 stests/console: .casperlabs
 	@# Collect existing nodes, so we can register them automatically.
-	@# I think stests workers will try to connect to them as soon as they are registered,
-	@# (if not then they will after a `docker restart stests`),
-	@# so these nodes are expected to be running as well.
 	@# To not assume nodes will be online/offline, the registration is based on declared directories,
 	@# but if that doesn't work we could just list the running docker containers.
+	@# Unfortunately the stests workers will only subscribe to events in the beginning,
+	@# but not when nodes are registered later, so we have to do a `docker restart stests`
+	@# after this console has registered all the required containers.
 	$(eval NODES = $(shell find . -maxdepth 1 -type d -name "node-*" | sort | sed 's/.\///'))
 
 	docker run -it --rm \
