@@ -8,6 +8,7 @@ import {
   DeployInfo
 } from 'casperlabs-grpc/io/casperlabs/casper/consensus/info_pb';
 import { grpc } from '@improbable-eng/grpc-web';
+import { FieldState } from 'formstate';
 
 export enum Target {
   Block,
@@ -16,17 +17,19 @@ export enum Target {
 
 class SearchFormData extends CleanableFormData {
   @observable target: Target = Target.Block;
-  @observable hashBase16: string = '';
+  hashBase16: FieldState<string> = new FieldState("");
 
   protected check() {
-    if (this.hashBase16 === '') return 'Hash cannot be empty.';
+    let hashBase16 = this.hashBase16.$;
+
+    if (hashBase16 === '') return 'Hash cannot be empty.';
 
     if (this.target === Target.Deploy) {
-      if (this.hashBase16.length < 64)
+      if (hashBase16.length < 64)
         return 'Deploy hash has to be 64 characters long.';
 
       try {
-        decodeBase16(this.hashBase16);
+        decodeBase16(hashBase16);
       } catch (e) {
         return 'Could not decode as Base16 hash.';
       }
@@ -54,10 +57,10 @@ export class SearchContainer {
     if (this.searchForm.clean()) {
       switch (this.searchForm.target) {
         case Target.Block:
-          await this.searchBlock(this.searchForm.hashBase16);
+          await this.searchBlock(this.searchForm.hashBase16.$);
           break;
         case Target.Deploy:
-          await this.searchDeploy(this.searchForm.hashBase16);
+          await this.searchDeploy(this.searchForm.hashBase16.$);
           break;
         default:
           throw new Error(

@@ -12,6 +12,7 @@ import {
   Keys
 } from 'casperlabs-sdk';
 import ObservableValueMap from '../lib/ObservableValueMap';
+import { FieldState } from 'formstate';
 
 // https://www.npmjs.com/package/tweetnacl-ts#signatures
 // https://tweetnacl.js.org/#/sign
@@ -134,12 +135,12 @@ export class AuthContainer {
     let form = this.accountForm!;
     if (form instanceof NewAccountFormData && form.clean()) {
       // Save the private and public keys to disk.
-      saveToFile(form.privateKeyBase64, `${form.name}.private.key`);
-      saveToFile(form.publicKeyBase64, `${form.name}.public.key`);
+      saveToFile(form.privateKeyBase64, `${form.name.$}.private.key`);
+      saveToFile(form.publicKeyBase64.$!, `${form.name.$}.public.key`);
       // Add the public key to the accounts and save it to Auth0.
       await this.addAccount({
-        name: form.name,
-        publicKeyBase64: form.publicKeyBase64
+        name: form.name.$!,
+        publicKeyBase64: form.publicKeyBase64.$!
       });
       return true;
     } else {
@@ -151,8 +152,8 @@ export class AuthContainer {
     let form = this.accountForm!;
     if (form instanceof ImportAccountFormData && form.clean()) {
       await this.addAccount({
-        name: form.name,
-        publicKeyBase64: form.publicKeyBase64
+        name: form.name.$,
+        publicKeyBase64: form.publicKeyBase64.$
       });
       return true;
     } else {
@@ -209,23 +210,24 @@ function saveToFile(content: string, filename: string) {
 }
 
 class AccountFormData extends CleanableFormData {
-  @observable name: string = '';
-  @observable publicKeyBase64: string = '';
+  name: FieldState<string> = new FieldState<string>("");
+  publicKeyBase64: FieldState<string> = new FieldState("");
 
   constructor(private accounts: UserAccount[]) {
     super();
   }
 
   protected check() {
-    if (this.name === '') return 'Name cannot be empty!';
+    let name = this.name.$;
+    if (name === '') return 'Name cannot be empty!';
 
-    if (this.name.indexOf(' ') > -1)
+    if (name.indexOf(' ') > -1)
       return 'The account name should not include spaces.';
 
-    if (this.accounts.some(x => x.name === this.name))
-      return `An account with name '${this.name}' already exists.`;
+    if (this.accounts.some(x => x.name === name))
+      return `An account with name '${name}' already exists.`;
 
-    if (this.accounts.some(x => x.publicKeyBase64 === this.publicKeyBase64))
+    if (this.accounts.some(x => x.publicKeyBase64 === this.publicKeyBase64.$))
       return 'An account with this public key already exists.';
 
     return null;
@@ -239,7 +241,7 @@ export class NewAccountFormData extends AccountFormData {
     super(accounts);
     // Generate key pair and assign to public and private keys.
     const keys = nacl.sign_keyPair();
-    this.publicKeyBase64 = encodeBase64(keys.publicKey);
+    this.publicKeyBase64 = new FieldState<string>(encodeBase64(keys.publicKey));
     this.privateKeyBase64 = encodeBase64(keys.secretKey);
   }
 }
@@ -258,8 +260,8 @@ export class ImportAccountFormData extends AccountFormData {
         this.fileContent = reader.result as string;
         this.error = this.checkFileContent();
         if (this.error === null) {
-          this.name = this.fileName!.split('.')[0];
-          this.publicKeyBase64 = encodeBase64(this.key!);
+          this.name.onChange(this.fileName!.split('.')[0]);
+          this.publicKeyBase64.onChange(encodeBase64(this.key!));
         }
       };
     }

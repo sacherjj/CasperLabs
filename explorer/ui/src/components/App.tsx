@@ -31,6 +31,8 @@ import ConnectedPeersContainer from '../containers/ConnectedPeersContainer';
 import ConnectedPeers from './ConnectedPeers';
 import Vesting from '../contracts/Vesting/component/Vesting';
 import { VestingContainer } from '../contracts/Vesting/container/VestingContainer';
+import { DeployContractsForm } from './DeployContracts';
+import { DeployContractsContainer } from '../containers/DeployContractsContainer';
 import { useEffect } from 'react';
 import ReactGA from 'react-ga';
 
@@ -94,6 +96,8 @@ const SideMenuItems: (MenuItem | GroupedMenuItem)[] = [
   new MenuItem(Pages.Home, 'Home', 'home', true),
   new MenuItem(Pages.Accounts, 'Account Keys', 'address-book'),
   new MenuItem(Pages.Faucet, 'Faucet', 'coins'),
+  // TODO (ECO-313) Open it when we have implement the plugin()
+  // new MenuItem(Pages.DeployContracts, 'Deploy Contract', 'rocket'),
   new MenuItem(Pages.Explorer, 'Explorer', 'project-diagram'),
   new MenuItem(Pages.Blocks, 'Blocks', 'th-large'),
   new MenuItem(Pages.Deploys, 'Deploys', 'tasks'),
@@ -116,6 +120,7 @@ export interface AppProps {
   accountSelectorContainer: AccountSelectorContainer;
   connectedPeersContainer: ConnectedPeersContainer;
   search: SearchContainer;
+  deployContractsContainer: DeployContractsContainer;
 }
 
 // The entry point for rendering.
@@ -377,6 +382,7 @@ const Content = (props: AppProps) => {
               <Title title="Vesting Contract"/>
               <Vesting {...props} />
             </Route>
+            <Route path={Pages.DeployContracts} render={_ => <DeployContractsForm {...props}/>}/>
             <Route path={Pages.Deploys}>
               <Title title={"Deploys"}/>
               <AccountSelector {...props}/>

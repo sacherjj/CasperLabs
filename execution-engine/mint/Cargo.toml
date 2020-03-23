@@ -5,7 +5,7 @@ authors = ["Henry Till <henrytill@gmail.com>"]
 edition = "2018"
 
 [features]
-std = []
+std = ["types/std"]
 
 [dependencies]
-types = { path = "../types", package = "casperlabs-types" }
+types = { version = "0.3.0", path = "../types", package = "casperlabs-types" }

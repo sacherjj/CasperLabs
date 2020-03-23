@@ -1,5 +1,5 @@
 import { grpc } from '@improbable-eng/grpc-web';
-import { Block } from 'casperlabs-grpc/io/casperlabs/casper/consensus/consensus_pb';
+import { Block, Deploy } from 'casperlabs-grpc/io/casperlabs/casper/consensus/consensus_pb';
 import {
   BlockInfo,
   DeployInfo
@@ -11,6 +11,7 @@ import {
 import {
   BatchGetBlockStateRequest,
   BatchGetBlockStateResponse,
+  DeployRequest,
   GetBlockInfoRequest,
   GetBlockStateRequest,
   GetDeployInfoRequest,
@@ -41,6 +42,26 @@ export default class CasperService {
     // or use nginx to serve the UI files, the API and gRPC all on the same port without CORS.
     private url: string
   ) {}
+
+  public deploy(deploy: Deploy) {
+    return new Promise<void>((resolve, reject) => {
+      const deployRequest = new DeployRequest();
+      deployRequest.setDeploy(deploy);
+
+      grpc.unary(GrpcCasperService.Deploy, {
+        host: this.url,
+        request: deployRequest,
+
+        onEnd: (res) => {
+          if (res.status === grpc.Code.OK) {
+            resolve();
+          } else {
+            reject(new GrpcError(res.status, res.statusMessage));
+          }
+        }
+      });
+    });
+  }
 
   getDeployInfo(deployHash: ByteArray): Promise<DeployInfo> {
     return new Promise<DeployInfo>((resolve, reject) => {

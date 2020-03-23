@@ -216,7 +216,12 @@ class EraRuntime[F[_]: Sync: Clock: Metrics: Log: EraStorage: FinalityStorageRea
     */
   private def ifCanBuildOn[T](choice: ForkChoice.Result)(build: => F[T]): F[Option[T]] =
     // Doesn't apply on Genesis.
-    if (!choice.block.parentBlock.isEmpty && choice.block.roundId < startTick) none.pure[F]
+    if (!choice.block.parentBlock.isEmpty && choice.block.roundId < startTick)
+      Log[F]
+        .warn(
+          s"Skipping the build: fork choice ${choice.block.messageHash.show -> "message"} is before the era start."
+        )
+        .as(none)
     else build.map(_.some)
 
   private def createLambdaResponse(

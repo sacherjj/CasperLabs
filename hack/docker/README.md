@@ -283,3 +283,104 @@ make clean
 You can run the similar setup as we use at SRE team to test how nodes perform over time.
 
 [The script to run LRT](/hack/docker/scripts/lrt.sh).
+
+
+## stests
+
+We can run [stests](https://github.com/CasperLabs/stests) workflow generators against locally started nodes. This is possible over the ports they expose, in case we already have `stests` installed with
+all of its dependencies as per the project README, however we can also start it in docker.
+
+First build an image that we can use locally:
+
+```console
+make stests/build
+```
+
+Then start the nodes and the singleton services, which includes `redis`, the database and message
+broker used by `stests`. Following that we can launch an interactive console where the `stests` command aliases are already registered:
+
+```console
+make up
+make stests/console
+```
+
+Inside the console, we can register a test network. Note that we have to use full path to files.
+The existing nodes will be registered automatically under the network name `poc1`.
+
+```console
+1. Register network + faucet key:
+2020-03-23 11:06:26.476677 [INFO] [00016] STESTS :: Network poc1 was successfully registered
+2020-03-23 11:06:28.224201 [INFO] [00027] STESTS :: Network poc1 faucet key was successfully registered
+2. Register nodes + node bonding keys:
+Registering node-0...
+2020-03-23 11:06:29.890818 [INFO] [00041] STESTS :: Node poc1:1 was successfully registered
+2020-03-23 11:06:31.631960 [INFO] [00052] STESTS :: Node poc1:1 bonding key was successfully registered
+Registering node-1...
+2020-03-23 11:06:33.320199 [INFO] [00066] STESTS :: Node poc1:2 was successfully registered
+2020-03-23 11:06:35.032807 [INFO] [00077] STESTS :: Node poc1:2 bonding key was successfully registered
+Registering node-2...
+2020-03-23 11:06:36.744621 [INFO] [00091] STESTS :: Node poc1:3 was successfully registered
+2020-03-23 11:06:38.458501 [INFO] [00102] STESTS :: Node poc1:3 bonding key was successfully registered
+3. Switching to interactive mode:
+root@2ccf027c80ff:~/casperlabs# stests-ls-nodes poc1
+---------------------------------
+ ID  Host:Port     Type   Status
+---------------------------------
+ 1   node-0:40401  FULL  HEALTHY
+ 2   node-1:40411  FULL  HEALTHY
+ 3   node-2:40421  FULL  HEALTHY
+---------------------------------
+POC-01 node count = 3
+```
+
+Alternatively you can manually register networks and nodes like so:
+
+```bash
+stests-set-network poc1
+stests-set-network-faucet-key poc1 $KEYS/faucet-account/account-private.pem
+
+stests-set-node poc1:1 node-0:40401 full
+stests-set-node-bonding-key poc1:1 $KEYS/account-0/account-private.pem
+```
+
+When stests is up and running then the testing workflow becomes something like:
+
+```bash
+# Launch a generator
+stests-wg-100 poc1 --user-accounts 5 --run 1
+# Check it is running
+stests-ls-runs poc1
+# Check what stage it is at
+stests-ls-run poc1 wg-100 1
+# Check what deploys it has dispatched
+stests-ls-run-deploys poc1 wg-100 1
+# Launch generator on a loop
+stests-wg-110 poc1 --user-accounts 5 --run 1 --loop-count 9
+# Check the status of of the runs
+stests-ls-runs poc1
+```
+
+To see what the workers are doing, check the docker logs:
+
+```
+$ docker logs -f stests
+[2020-03-23 11:14:17,164] [PID 17] [MainThread] [dramatiq.MainProcess] [INFO] Dramatiq '1.8.1' is booting up.
+2020-03-23 11:14:16.458145 [INFO] [00027] STESTS :: CORE :: established connection to REDIS MQ broker
+[2020-03-23 11:14:17,169] [PID 72] [MainThread] [dramatiq.ForkProcess(0)] [INFO] Fork process 'dramatiq.middleware.prometheus:_run_exposition_server' is ready for action.
+2020-03-23 11:14:17.230114 [INFO] [00028] STESTS :: PYCLX :: stream_events :: executing ...
+[2020-03-23 11:14:17,236] [PID 28] [MainThread] [dramatiq.WorkerProcess(1)] [INFO] Worker process is ready for action.
+2020-03-23 11:14:17.237550 [INFO] [00036] STESTS :: PYCLX :: stream_events :: executing ...
+2020-03-23 11:14:17.238025 [INFO] [00028] STESTS :: PYCLX :: connecting to node :: POC-01:N-0003 :: node-2:40401
+2020-03-23 11:20:19.178203 [INFO] [00029] STESTS :: WFLOW :: WG-100 :: R-001 -> starts
+2020-03-23 11:20:19.189840 [INFO] [00029] STESTS :: WFLOW :: WG-100 :: R-001 :: P-01 -> starts
+2020-03-23 11:20:19.209768 [INFO] [00029] STESTS :: WFLOW :: WG-100 :: R-001 :: P-01 :: S-01 :: create-accounts -> starts
+2020-03-23 11:20:19.362629 [INFO] [00028] STESTS :: WFLOW :: WG-100 :: R-001 :: P-01 :: S-01 :: create-accounts -> end
+2020-03-23 11:20:19.380875 [INFO] [00028] STESTS :: WFLOW :: WG-100 :: R-001 :: P-01 :: S-02 :: fund-faucet -> starts
+2020-03-23 11:20:19.382372 [INFO] [00028] STESTS :: WFLOW :: WG-100 :: R-001 :: P-01 :: S-02 :: fund-faucet -> listening for chain events
+2020-03-23 11:20:19.391230 [INFO] [00036] STESTS :: PYCLX :: do_transfer :: executing ...
+2020-03-23 11:20:19.395011 [INFO] [00036] STESTS :: PYCLX :: connecting to node :: POC-01:N-0002 :: node-1:40401
+2020-03-23 11:20:19.625877 [INFO] [00036] STESTS :: PYCLX :: transfer :: 77c60f7769a742927d434fc98162eb1efec046258c214eab09acbff1058a34a8 :: 10000000000 CLX :: 5609d011 -> 044e0bc6
+...
+```
+
+Unlike other containers, `stests` logs go to `stderr`, so if we want to look for something we have to do it like this: `docker logs stests 2>&1 | grep <blockhash>`.

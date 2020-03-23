@@ -60,6 +60,7 @@ services:
       CL_GRPC_USE_TLS: "false"
       CL_METRICS_PROMETHEUS: "true"
       CL_SERVER_ALIVE_PEERS_CACHE_EXPIRATION_PERIOD: 15second
+      CL_SERVER_SHUTDOWN_TIMEOUT: 5second
       CL_LOG_JSON_PATH: /var/logs/casperlabs
     env_file:
       - .env

@@ -33,6 +33,9 @@ no-upnp = false
 # Default timeout for roundtrip connections.
 default-timeout = "5second"
 
+# Timeout for shutting down gRPC services.
+shutdown-timeout = "1minute"
+
 # Bootstrap casperlabs node addresses for initial seeds. Empty defaut provided for standalone mode.
 # bootstrap = "casperlabs://<keccak-hash-of-tls-public-key>:<chain id>@<host>?protocol=<intra-node-port>&discovery=<kademila-port>"
 bootstrap = ""

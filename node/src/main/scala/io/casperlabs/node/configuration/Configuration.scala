@@ -65,6 +65,7 @@ object Configuration extends ParserImplicits {
       dynamicHostAddress: Boolean,
       noUpnp: Boolean,
       defaultTimeout: FiniteDuration,
+      shutdownTimeout: FiniteDuration,
       bootstrap: List[NodeWithoutChainId],
       dataDir: Path,
       maxNumOfConnections: Int,
