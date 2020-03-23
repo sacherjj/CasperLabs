@@ -329,7 +329,8 @@ build-explorer-contracts: \
 	explorer/contracts/transfer_to_account_u512.wasm \
 	explorer/contracts/standard_payment.wasm \
 	explorer/contracts/faucet.wasm
-	# Change the extension since webpack has experiment support for WASM, but here we just want to read as ArrayBuffer.
+	# Change the extension since webpack has experiment support for WASM, but we just want to read as ArrayBuffer and use it
+	# in Clarity Deploy interface
 	cp explorer/contracts/standard_payment.wasm explorer/ui/src/standard_payment.wm
 
 # Get the .proto files for REST annotations for Github. This is here for reference about what to get from where, the files are checked in.
