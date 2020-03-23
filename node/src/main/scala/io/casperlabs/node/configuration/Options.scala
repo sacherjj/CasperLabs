@@ -229,6 +229,12 @@ private[configuration] final case class Options private (
       )
 
     @scallop
+    val serverShutdownTimeout =
+      gen[FiniteDuration](
+        "Timeout for shutting down gRPC services."
+      )
+
+    @scallop
     val tlsCertificate =
       gen[Path](
         "Path to node's X.509 certificate file, that is being used for identification.",

@@ -310,6 +310,7 @@ class NodeRuntime private[node] (
             .internalServersR(
               conf.grpc.portInternal,
               conf.server.maxMessageSize,
+              conf.server.shutdownTimeout,
               ingressScheduler,
               blockApiLock,
               maybeApiSslContext
@@ -318,6 +319,7 @@ class NodeRuntime private[node] (
       _ <- api.Servers.externalServersR[Task](
             conf.grpc.portExternal,
             conf.server.maxMessageSize,
+            conf.server.shutdownTimeout,
             ingressScheduler,
             maybeApiSslContext,
             maybeValidatorId.isEmpty
