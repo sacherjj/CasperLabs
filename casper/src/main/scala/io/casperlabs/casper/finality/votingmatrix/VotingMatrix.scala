@@ -39,13 +39,13 @@ object VotingMatrix {
     */
   private[votingmatrix] def create[F[_]: Concurrent](
       dag: DagRepresentation[F],
-      newFinalizedBlock: BlockHash,
+      lfbHash: BlockHash,
       isHighway: Boolean
   ): F[VotingMatrix[F]] =
     for {
       // Start a new round, get weightMap and validatorSet from the post-global-state of new finalized block's
-      message <- dag.lookup(newFinalizedBlock)
-      block <- message.get match {
+      lfb <- dag.lookupUnsafe(lfbHash)
+      block <- lfb match {
                 case b: Message.Block => b.pure[F]
                 case ballot: Message.Ballot =>
                   MonadThrowable[F].raiseError[Message.Block](
@@ -68,7 +68,7 @@ object VotingMatrix {
                              ProtoUtil
                                .votedBranch[F](
                                  dag,
-                                 newFinalizedBlock,
+                                 lfbHash,
                                  b.messageHash
                                )
                                .map {
