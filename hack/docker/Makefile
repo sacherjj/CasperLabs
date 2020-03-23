@@ -198,8 +198,10 @@ stests/console: .casperlabs
 	  --network casperlabs \
 		--name stests-console \
 		-v ${PWD}/keys:/root/casperlabs/keys \
+		-v ${PWD}/stests/start-console.sh:/root/casperlabs/start-console.sh \
 		-e KEYS=/root/casperlabs/keys \
 		-e STESTS_BROKER_REDIS_HOST=redis \
 		-e STESTS_CACHE_REDIS_HOST=redis \
 		-e STESTS_MWARE_REDIS_HOST=redis \
-		casperlabs/stests:latest bash
+		-e NETWORK=poc1 \
+		casperlabs/stests:latest bash -c 'chmod +x start-console.sh && ./start-console.sh'

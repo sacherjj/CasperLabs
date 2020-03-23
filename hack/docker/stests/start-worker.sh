@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 
-source $STESTS_HOME/sh/utils/set_paths.sh
-source $STESTS_PATH_ROOT/vars
+set -e
+
+shopt -s expand_aliases
+
+source $HOME/.bashrc
 
 exec $STESTS_PATH_SH/workers/interactive.sh
