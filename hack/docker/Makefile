@@ -132,7 +132,7 @@ slow:
 	@# Create a `faucet-account` to hold some initial tokens to distribute.
 	mkdir -p keys/faucet-account
 	../key-management/docker-gen-account-keys.sh keys/faucet-account
-	(cat keys/faucet-account/account-id; echo ",10000000000,0") > .casperlabs/chainspec/genesis/accounts.csv
+	(cat keys/faucet-account/account-id; echo ",1000000000000000000,0") > .casperlabs/chainspec/genesis/accounts.csv
 
 	@# Create bonded validators with 0 balance.
 	bash -c 'i=0 ; while [[ $$i -lt $(CL_CASPER_NUM_VALIDATORS) ]] ; do \
