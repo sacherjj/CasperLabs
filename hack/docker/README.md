@@ -316,5 +316,23 @@ root@6566753ba2f7:~/casperlabs# stests-set-network-faucet-key poc1 $KEYS/faucet-
 
 root@6566753ba2f7:~/casperlabs# stests-set-node poc1:1 node-0:40401 full
 2020-03-20 17:50:39.831992 [INFO] [00048] STESTS :: Node poc1:1 was successfully registered
-
 ```
+
+When you get stests up and running then the testing workflow becomes something like:
+
+```bash
+# Launch a generator
+stests-wg-100 poc1 --user-accounts 5 --run 1
+# Check it is running
+stests-ls-runs poc1
+# Check what stage it is at
+stests-ls-run poc1 wg-100 1
+# Check what deploys it has dispatched
+stests-ls-run-deploys poc1 wg-100 1
+# Launch generator on a loop
+stests-wg-110 poc1 --user-accounts 5 --run 1 --loop-count 9
+# Check the status of of the runs
+stests-ls-runs poc1
+```
+
+To see what the workers are doing, run `docker logs -f stests`.

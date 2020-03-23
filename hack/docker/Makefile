@@ -196,7 +196,7 @@ stests/build:
 stests/console: .casperlabs
 	docker run -it --rm \
 	  --network casperlabs \
-		--name stests \
+		--name stests-console \
 		-v ${PWD}/keys:/root/casperlabs/keys \
 		-e KEYS=/root/casperlabs/keys \
 		-e STESTS_BROKER_REDIS_HOST=redis \
