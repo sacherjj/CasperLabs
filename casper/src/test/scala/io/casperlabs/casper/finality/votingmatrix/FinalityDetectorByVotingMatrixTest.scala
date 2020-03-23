@@ -16,7 +16,7 @@ import io.casperlabs.casper.util.BondingUtil.Bond
 import io.casperlabs.casper.{validation, CasperState, InvalidBlock}
 import io.casperlabs.models.Message
 import io.casperlabs.shared.LogStub
-import io.casperlabs.shared.{Cell, Log, Time}
+import io.casperlabs.shared.{Log, Time}
 import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.storage.dag.IndexedDagStorage
 import monix.eval.Task
@@ -71,9 +71,6 @@ class FinalityDetectorByVotingMatrixTest
         val bonds  = Seq(v1Bond, v2Bond)
 
         for {
-          implicit0(casperState: Cell[Task, CasperState]) <- Cell.mvarCell[Task, CasperState](
-                                                              CasperState()
-                                                            )
           genesis                                                 <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bonds)
           dag                                                     <- dagStorage.getRepresentation
           implicit0(detector: FinalityDetectorVotingMatrix[Task]) <- mkVotingMatrix(dag, genesis)
@@ -130,9 +127,6 @@ class FinalityDetectorByVotingMatrixTest
         val bonds  = Seq(v1Bond, v2Bond)
 
         for {
-          implicit0(casperState: Cell[Task, CasperState]) <- Cell.mvarCell[Task, CasperState](
-                                                              CasperState()
-                                                            )
           genesis                                                 <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bonds)
           dag                                                     <- dagStorage.getRepresentation
           implicit0(detector: FinalityDetectorVotingMatrix[Task]) <- mkVotingMatrix(dag, genesis)
@@ -190,9 +184,6 @@ class FinalityDetectorByVotingMatrixTest
         val v1Bond = Bond(v1, 10)
         val bonds  = Seq(v1Bond)
         for {
-          implicit0(casperState: Cell[Task, CasperState]) <- Cell.mvarCell[Task, CasperState](
-                                                              CasperState()
-                                                            )
           genesis                                                 <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bonds)
           dag                                                     <- dagStorage.getRepresentation
           implicit0(detector: FinalityDetectorVotingMatrix[Task]) <- mkVotingMatrix(dag, genesis)
@@ -261,9 +252,6 @@ class FinalityDetectorByVotingMatrixTest
         val v3Bond = Bond(v3, 10)
         val bonds  = Seq(v1Bond, v2Bond, v3Bond)
         for {
-          implicit0(casperState: Cell[Task, CasperState]) <- Cell.mvarCell[Task, CasperState](
-                                                              CasperState()
-                                                            )
           genesis                                                 <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bonds)
           dag                                                     <- dagStorage.getRepresentation
           implicit0(detector: FinalityDetectorVotingMatrix[Task]) <- mkVotingMatrix(dag, genesis)
@@ -337,9 +325,6 @@ class FinalityDetectorByVotingMatrixTest
       val bonds  = Seq(v1Bond, v2Bond, v3Bond)
 
       for {
-        implicit0(casperState: Cell[Task, CasperState]) <- Cell.mvarCell[Task, CasperState](
-                                                            CasperState()
-                                                          )
         genesis                                                 <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bonds)
         dag                                                     <- blockDagStorage.getRepresentation
         implicit0(detector: FinalityDetectorVotingMatrix[Task]) <- mkVotingMatrix(dag, genesis)
@@ -402,9 +387,6 @@ class FinalityDetectorByVotingMatrixTest
       val bonds  = Seq(v1Bond, v2Bond, v3Bond)
 
       for {
-        implicit0(casperState: Cell[Task, CasperState]) <- Cell.mvarCell[Task, CasperState](
-                                                            CasperState()
-                                                          )
         genesis                                                 <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bonds)
         dag                                                     <- blockDagStorage.getRepresentation
         implicit0(detector: FinalityDetectorVotingMatrix[Task]) <- mkVotingMatrix(dag, genesis)
@@ -466,9 +448,6 @@ class FinalityDetectorByVotingMatrixTest
       val v3Bond = Bond(v3, 10)
       val bonds  = Seq(v1Bond, v2Bond, v3Bond)
       for {
-        implicit0(casperState: Cell[Task, CasperState]) <- Cell.mvarCell[Task, CasperState](
-                                                            CasperState()
-                                                          )
         genesis                                                 <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bonds)
         dag                                                     <- blockDagStorage.getRepresentation
         implicit0(detector: FinalityDetectorVotingMatrix[Task]) <- mkVotingMatrix(dag, genesis)
@@ -547,8 +526,6 @@ class FinalityDetectorByVotingMatrixTest
       justifications: collection.Map[Validator, BlockHash] = HashMap.empty[Validator, BlockHash],
       postStateHash: ByteString = ByteString.copyFromUtf8(scala.util.Random.nextString(64)),
       messageType: Block.MessageType = Block.MessageType.BLOCK
-  )(
-      implicit casperState: Cell[F, CasperState]
   ): F[(Block, Option[CommitteeWithConsensusValue])] =
     for {
       block <- createMessage[F](
