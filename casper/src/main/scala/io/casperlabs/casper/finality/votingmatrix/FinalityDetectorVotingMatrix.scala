@@ -58,12 +58,16 @@ class FinalityDetectorVotingMatrix[F[_]: Concurrent: Log] private (rFTT: Double,
                 result <- votedBranch match {
                            case Some(lfbChildHash) =>
                              for {
-                               lfbChild                  <- dag.lookupUnsafe(lfbChildHash)
+                               lfbChild <- dag.lookupUnsafe(lfbChildHash)
                                // Check if the vote (message) is in different era than LFB's child it votes for.
                                // We disallow validators from different era to advance the LFB chain.
                                votedBranchIsDifferentEra = isHighway && lfbChild.eraId != message.eraId
                                result <- if (votedBranchIsDifferentEra)
-                                          none[CommitteeWithConsensusValue].pure[F]
+                                          Log[F].debug(
+                                            s"${PrettyPrinter.buildString(message.messageHash) -> "Message"} from ${message.eraId -> "era"} votes on an LFB child ${PrettyPrinter
+                                              .buildString(lfbChildHash)                       -> "hash"} from a different era."
+                                          ) >>
+                                            none[CommitteeWithConsensusValue].pure[F]
                                         else {
                                           for {
                                             _ <- updateVoterPerspective[F](
