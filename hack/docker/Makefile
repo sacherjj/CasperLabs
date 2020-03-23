@@ -129,7 +129,7 @@ slow:
 	mkdir -p .casperlabs/nodes
 	mkdir -p .casperlabs/chainspec/genesis
 
-	@# Create a `facet-account` to hold some initial tokens to distribute.
+	@# Create a `faucet-account` to hold some initial tokens to distribute.
 	mkdir -p keys/faucet-account
 	../key-management/docker-gen-account-keys.sh keys/faucet-account
 	(cat keys/faucet-account/account-id; echo ",10000000000,0") > .casperlabs/chainspec/genesis/accounts.csv
@@ -165,3 +165,56 @@ maybe-reset-highway-env:
 	if [ "$${RUNNING}" -eq "0" ] || [ "$${DEFINED}" -eq "1" ]; then \
 		$(RESET_HIGHWAY_ENV); \
 	fi
+
+
+# https://github.com/CasperLabs/stests
+stests/build:
+	# Build contracts stests will want to use.
+	cd ../../execution-engine && \
+	  make build-contract-rs/transfer-to-account-u512-stored
+	# Copy them over under the python client; it's where stests will look for them at the moment.
+	cp ../../execution-engine/target/wasm32-unknown-unknown/release/transfer_to_account_u512_stored.wasm \
+	   ../../integration-testing/client/CasperLabsClient/casperlabs_client/
+
+	# Package a the latest Python client; the one on pypi might be older than the latest and greatest; plus lacks some of the wasms.
+	cd ../.. &&	make build-python-client
+
+	# Make the client available to the docker deamon here (smaller context.).
+	rm -rf stests/.build
+	mkdir -p stests/.build
+	cp ../../integration-testing/client/CasperLabsClient/dist/casperlabs_client*.tar.gz stests/.build/
+
+	docker build \
+	  --build-arg CACHEBUST=$$(date +%s) \
+		-f stests/Dockerfile -t casperlabs/stests:latest stests
+
+	rm -rf stests/.build
+
+# After nodes have been started, and `redis` with `make up`,
+# and an stest image built with `make stests/build`,
+# this command can run stests in interactive mode.
+stests/console: .casperlabs
+	@# Collect existing nodes, so we can register them automatically.
+	@# To not assume nodes will be online/offline, the registration is based on declared directories,
+	@# but if that doesn't work we could just list the running docker containers.
+	@# Unfortunately the stests workers will only subscribe to events in the beginning,
+	@# but not when nodes are registered later, so we have to do a `docker restart stests`
+	@# after this console has registered all the required containers.
+	$(eval NODES = $(shell find . -maxdepth 1 -type d -name "node-*" | sort | sed 's/.\///'))
+
+	@# Make sure stests workers pick up newly registered nodes.
+	@# This will be happening automatically at some point in stests.
+	sh -c 'sleep 30s && docker restart stests' > /dev/null 2>&1 &
+
+	docker run -it --rm \
+	  --network casperlabs \
+		--name stests-console \
+		-v ${PWD}/keys:/root/casperlabs/keys \
+		-v ${PWD}/stests/start-console.sh:/root/casperlabs/start-console.sh \
+		-e KEYS=/root/casperlabs/keys \
+		-e STESTS_BROKER_REDIS_HOST=redis \
+		-e STESTS_CACHE_REDIS_HOST=redis \
+		-e STESTS_MWARE_REDIS_HOST=redis \
+		-e NETWORK=poc1 \
+		-e NODES='$(NODES)' \
+		casperlabs/stests:latest bash -c 'chmod +x start-console.sh && ./start-console.sh'

@@ -52,11 +52,12 @@ class EraSupervisor[F[_]: Concurrent: Timer: Log: Metrics: EraStorage: Relaying:
     * it will be gossiped if it's successfully validated. Only need to broadcast responses. */
   def validateAndAddBlock(block: Block): F[Unit] =
     for {
-      _      <- ensureNotShutdown
-      header = block.getHeader
-      hash   = block.blockHash.show
+      _       <- ensureNotShutdown
+      header  = block.getHeader
+      hash    = block.blockHash.show
+      instant = conf.toInstant(Ticks(header.roundId))
       _ <- Log[F].info(
-            s"Handling incoming ${hash -> "message"} from ${header.validatorPublicKey.show -> "validator"} in ${header.roundId -> "round"} ${header.keyBlockHash.show -> "era"}"
+            s"Handling incoming ${hash -> "message"} from ${header.validatorPublicKey.show -> "validator"} in ${header.roundId -> "round"} $instant ${header.keyBlockHash.show -> "era"}"
           )
       entry <- load(header.keyBlockHash)
 
@@ -118,6 +119,7 @@ class EraSupervisor[F[_]: Concurrent: Timer: Log: Metrics: EraStorage: Relaying:
       era     <- EraStorage[F].getEraUnsafe(keyBlockHash)
       runtime <- makeRuntime(era)
       agenda  <- runtime.initAgenda
+      _       <- Log[F].info(s"${era.keyBlockHash.show -> "era"} has ${agenda.size} initial actions.")
       entry   <- start(runtime, agenda)
     } yield entry
 
@@ -138,12 +140,14 @@ class EraSupervisor[F[_]: Concurrent: Timer: Log: Metrics: EraStorage: Relaying:
   private def schedule(runtime: EraRuntime[F], agenda: Agenda): F[Unit] =
     agenda.traverse {
       case delayed @ Agenda.DelayedAction(tick, action) =>
-        val key = (runtime.era.keyBlockHash, delayed)
+        val key     = (runtime.era.keyBlockHash, delayed)
+        val instant = conf.toInstant(tick)
         for {
+          _ <- Log[F].info(s"Scheduling $action to $instant")
           fiber <- scheduleAt(tick) {
                     val era = runtime.era.keyBlockHash.show
                     val exec = for {
-                      _ <- Log[F].debug(s"Executing $action in $era")
+                      _ <- Log[F].info(s"Executing $action scheduled to $instant in $era")
                       (events, agenda) <- runtime
                                            .handleAgenda(action)
                                            .run
@@ -208,13 +212,15 @@ class EraSupervisor[F[_]: Concurrent: Timer: Log: Metrics: EraStorage: Relaying:
 
     events.traverse {
       case HighwayEvent.CreatedEra(era) =>
-        val eraHash    = era.keyBlockHash.show
-        val parentHash = era.parentKeyBlockHash.show
-        val tick       = era.startTick
-        val start      = conf.toInstant(Ticks(tick))
+        val eraHash      = era.keyBlockHash.show
+        val parentHash   = era.parentKeyBlockHash.show
+        val startTick    = era.startTick
+        val startInstant = conf.toInstant(Ticks(era.endTick))
+        val endTick      = era.endTick
+        val endInstant   = conf.toInstant(Ticks(era.endTick))
         for {
           _ <- Log[F].info(
-                s"Created ${eraHash -> "era"} starting at ${tick -> "tick"} ${start -> "instant"} child of ${parentHash -> "parent"}"
+                s"Created ${eraHash -> "era"} from ${startInstant} (${startTick}) to ${endInstant} ($endTick) child of ${parentHash -> "parent"}"
               )
           // Schedule the child era.
           child <- load(era.keyBlockHash)
