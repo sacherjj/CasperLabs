@@ -380,6 +380,7 @@ $ docker logs -f stests
 2020-03-23 11:20:19.391230 [INFO] [00036] STESTS :: PYCLX :: do_transfer :: executing ...
 2020-03-23 11:20:19.395011 [INFO] [00036] STESTS :: PYCLX :: connecting to node :: POC-01:N-0002 :: node-1:40401
 2020-03-23 11:20:19.625877 [INFO] [00036] STESTS :: PYCLX :: transfer :: 77c60f7769a742927d434fc98162eb1efec046258c214eab09acbff1058a34a8 :: 10000000000 CLX :: 5609d011 -> 044e0bc6
-
 ...
 ```
+
+Unlike other containers, `stests` logs go to `stderr`, so if we want to look for something we have to do it like this: `docker logs stests 2>&1 | grep <blockhash>`.
