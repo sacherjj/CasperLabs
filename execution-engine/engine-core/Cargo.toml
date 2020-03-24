@@ -9,6 +9,11 @@ documentation = "https://docs.rs/casperlabs-engine-core"
 homepage = "https://casperlabs.io"
 repository = "https://github.com/CasperLabs/CasperLabs/tree/master/execution-engine/engine-core"
 license-file = "../../LICENSE"
+include = [
+    "src/**/*.rs",
+    "wasm/standard_payment_install.wasm",
+    "Cargo.toml",
+]
 
 [dependencies]
 base16 = "0.2.1"
