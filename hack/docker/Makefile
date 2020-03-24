@@ -92,6 +92,12 @@ up: .make/docker/network .casperlabs
 down:
 	docker-compose -p casperlabs down
 
+# Start all nodes and supporting services, for convenience.
+up-all: up
+	bash -c 'i=0 ; while [[ $$i -lt $(CL_CASPER_NUM_VALIDATORS) ]] ; do \
+		$(MAKE) node-$$i/up ; \
+		((i = i + 1)) ; \
+	done'
 
 # Slow down traffic between nodes to simulate network effects and large blocks.
 # If we slow it down too much then the client won't be able to connect though.
