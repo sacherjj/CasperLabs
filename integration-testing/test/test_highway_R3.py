@@ -39,7 +39,6 @@ def datetime_from_timestamp(timestamp):
 
 
 def log_info(s):
-    print(s)
     logging.info(s)
 
 
@@ -56,9 +55,7 @@ def check_eras(blocks_in_eras, client):
 
         key_block = client.showBlock(key_block_hash.hex(), full_view=False)
 
-        block_validator_public_keys = [
-            validator_id(b) for b in blocks
-        ]
+        block_validator_public_keys = [validator_id(b) for b in blocks]
         unique_validators = sorted(set(block_validator_public_keys))
         validator_frequencies = sorted(
             [(v, block_validator_public_keys.count(v)) for v in unique_validators],
@@ -90,13 +87,14 @@ def plural(singular_name, l):
 
 def check_rounds(blocks_in_rounds):
     # Skip the last round, it may be not full/finished.
-    round_ids = sorted(list(blocks_in_rounds.keys()))[:-1]
-    for round_id in round_ids:
-        ballots, blocks = split_ballots_and_blocks(blocks_in_rounds[round_id])
+    for round_id, key_block_hash in sorted(list(blocks_in_rounds.keys()))[:-1]:
+        ballots, blocks = split_ballots_and_blocks(
+            blocks_in_rounds[(round_id, key_block_hash)]
+        )
 
         validator_public_keys = map(validator_id_short, blocks)
         log_info(
-            f"""round_id: {round_id} ({datetime_from_timestamp(round_id)}): {len(blocks)} {plural("block", blocks)} ({format_list(validator_public_keys)})), {len(ballots)} {plural("ballot", ballots)}"""
+            f"""round_id: {round_id} key_block_hash: {key_block_hash.hex()[:10]} ({datetime_from_timestamp(round_id)}): {len(blocks)} {plural("block", blocks)} ({format_list(validator_public_keys)})), {len(ballots)} {plural("ballot", ballots)}"""
         )
 
         assert len(blocks) <= 1, "There must be at most one block in a round"
@@ -115,7 +113,7 @@ def check_highway_dag(client, number_of_validators, number_of_eras=2):
         round_id = block_info.summary.header.round_id
         key_block_hash = block_info.summary.header.key_block_hash
 
-        blocks_in_rounds[round_id].append(block_info)
+        blocks_in_rounds[(round_id, key_block_hash)].append(block_info)
         if key_block_hash:
             blocks_in_eras[key_block_hash].append(block_info)
 
