@@ -3,6 +3,11 @@ name = "casperlabs-standard-payment"
 version = "0.1.0"
 authors = ["Fraser Hutchison <fraser@casperlabs.io>"]
 edition = "2018"
+description = "Defines the standard payment api"
+documentation = "https://docs.rs/casperlabs-standard-payment"
+homepage = "https://casperlabs.io"
+repository = "https://github.com/CasperLabs/CasperLabs/tree/master/execution-engine/standard-payment"
+license-file = "../../LICENSE"
 
 [features]
 std = ["types/std"]
