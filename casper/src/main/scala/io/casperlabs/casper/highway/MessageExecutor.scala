@@ -108,7 +108,7 @@ class MessageExecutor[F[_]: Concurrent: Log: Time: Metrics: BlockStorage: DagSto
               val finalizedStr = finalized.map(_.show).mkString("{", ", ", "}")
               for {
                 _ <- Log[F].info(
-                      s"New last finalized block hashes are ${lfbStr -> null}, ${finalizedStr -> null}."
+                      s"New last finalized block hashes are ${lfbStr -> null}, ${finalizedStr -> null}. Orphaned ${orphaned.size} messages."
                     )
                 _  <- FinalityStorage[F].markAsFinalized(newLFB, finalized, orphaned)
                 w1 <- DeployBuffer[F].removeFinalizedDeploys(finalized + newLFB).forkAndLog
