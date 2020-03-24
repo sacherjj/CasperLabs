@@ -13,7 +13,7 @@ def test_highway(three_node_highway_network):
         else:
             raise Exception(f"{node} is not on Highway")
     client = net.docker_nodes[0].p_client.client
-    check_highway_dag(client)
+    check_highway_dag(client, len(net.docker_nodes))
 
 
 def filter_ballots(block_infos):
@@ -102,7 +102,7 @@ def check_rounds(blocks_in_rounds):
         assert len(blocks) <= 1, "There must be at most one block in a round"
 
 
-def check_highway_dag(client, number_of_eras=2):
+def check_highway_dag(client, number_of_validators, number_of_eras=2):
     blocks_in_rounds = defaultdict(list)
     blocks_in_eras = defaultdict(list)
     for event in client.stream_events(block_added=True):
@@ -119,12 +119,17 @@ def check_highway_dag(client, number_of_eras=2):
         if key_block_hash:
             blocks_in_eras[key_block_hash].append(block_info)
 
-        if len(blocks_in_eras.keys()) > number_of_eras:
-            check_eras(blocks_in_eras, client)
+        full_eras = {
+            k: blocks_in_eras[k]
+            for k in blocks_in_eras
+            if len(blocks_in_eras[k]) >= 2 * number_of_validators
+        }
+        if len(full_eras) > number_of_eras:
+            check_eras(full_eras, client)
             check_rounds(blocks_in_rounds)
             break
 
 
 if __name__ == "__main__":
     client = CasperLabsClient()
-    check_highway_dag(client)
+    check_highway_dag(client, len(client.show_peers()) + 1)
