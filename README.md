@@ -7,10 +7,16 @@
 [![PyPI](https://img.shields.io/pypi/v/casperlabs-client?color=purple)](https://pypi.org/project/casperlabs-client)
 [![License](https://img.shields.io/badge/license-COSL-blue.svg)](https://github.com/CasperLabs/CasperLabs/blob/master/LICENSE)
 
-The open-source CasperLabs project is building a decentralized, economic, censorship-resistant, public compute infrastructure and blockchain. It will host and execute programs popularly referred to as “smart contracts”. It will be trustworthy, scalable, concurrent, with proof-of-stake consensus and content delivery.
+The open-source CasperLabs project is building a decentralized, censorship-resistant, public compute infrastructure and blockchain. It will host and execute programs popularly referred to as “smart contracts”. It will be trustworthy, scalable, concurrent, with pure proof-of-stake consensus.
+
+We strive to scale opportunity for everyone - forever.  Read more about our mission at: https://casperlabs.io/company
+
+## Current Development Status
+The status on development is reported during the Community calls and is found [here](https://github.com/CasperLabs/Governance/wiki/Current-Status)
 
 ## Documentation
 
+- [Technical Specification](https://techspec.casperlabs.io/en/latest/)
 - [Installing the CasperLabs Node](docs/INSTALL.md)
 - [Building the CasperLabs Node](docs/BUILD.md)
 - [Creating Keys](docs/KEYS.md)
@@ -30,4 +36,4 @@ The open-source CasperLabs project is building a decentralized, economic, censor
 
 ## Issues
 
-If you find any issues, please [file an issue](https://github.com/CasperLabs/CasperLabs/issues/new).
+If you find any issues, please [file an issue](https://casperlabs.atlassian.net/servicedesk/customer/portal/3).
