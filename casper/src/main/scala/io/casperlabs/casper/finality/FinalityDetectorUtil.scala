@@ -243,7 +243,14 @@ object FinalityDetectorUtil {
                     dag,
                     lfbHash,
                     isHighway,
-                    m => m.parents ++ m.justifications.map(_.latestBlockHash)
+                    m => {
+                      val msgDeps = m.parents ++ m.justifications.map(_.latestBlockHash)
+                      // We don't want to follow the dependencies that we know are finalized.
+                      // This is really only necessary in the very first step but there's no way around it with current interfaces.
+                      // And it should be cheap anyway.
+                      val sansFinalized = msgDeps.toSet -- finalizedIndirectly - lfbHash
+                      sansFinalized.toSeq
+                    }
                   )
-    } yield undecided.toSet -- finalizedIndirectly - lfbHash
+    } yield undecided.toSet
 }
