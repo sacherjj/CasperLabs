@@ -14,6 +14,8 @@ DEFAULT_NODE_ENV = {
     "CL_LOG_LEVEL": os.environ.get("CL_LOG_LEVEL", "INFO"),
     "CL_SERVER_NO_UPNP": "true",
     "CL_VERSION": "test",
+    # Disable highway while most of the tests assume NCB mode.
+    "CL_HIGHWAY_ENABLED": "false",
 }
 
 

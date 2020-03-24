@@ -256,7 +256,7 @@ min-ttl = "1hour"
 [highway]
 
 # Use highway, or stick to NCB.
-enabled = false
+enabled = true
 
 # Fraction of time through the round after which we can create an omega message.
 omega-message-time-start = 0.5
