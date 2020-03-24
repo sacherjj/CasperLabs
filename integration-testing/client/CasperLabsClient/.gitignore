@@ -3,5 +3,6 @@
 build
 dist
 casperlabs_client/proto
+casperlabs_client/*_grpc.py
 report.json
 *.egg-info
