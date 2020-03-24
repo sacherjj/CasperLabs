@@ -57,7 +57,7 @@ def check_eras(blocks_in_eras, client):
         key_block = client.showBlock(key_block_hash.hex(), full_view=False)
 
         block_validator_public_keys = [
-            b.summary.header.validator_public_key.hex() for b in blocks
+            validator_id(b) for b in blocks
         ]
         unique_validators = sorted(set(block_validator_public_keys))
         validator_frequencies = sorted(
