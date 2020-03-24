@@ -175,16 +175,35 @@ class MultiParentCasperImpl[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: 
         result <- MultiParentFinalizer[F].onNewMessageAdded(message)
         _ <- result.traverse {
               case fb @ FinalizedBlocks(newLFB, _, finalized, orphaned) => {
-                val lfbStr       = PrettyPrinter.buildString(newLFB)
-                val finalizedStr = finalized.map(PrettyPrinter.buildString).mkString("{", ", ", "}")
+                val lfbStr = PrettyPrinter.buildString(newLFB)
+                val finalizedStr = finalized
+                  .filter(_.isBlock)
+                  .map(_.messageHash)
+                  .map(PrettyPrinter.buildString)
+                  .mkString("{", ", ", "}")
                 for {
                   _ <- Log[F].info(
                         s"New last finalized block hashes are ${lfbStr -> null}, ${finalizedStr -> null}."
                       )
-                  _ <- lfbRef.set(newLFB)
-                  _ <- FinalityStorage[F].markAsFinalized(newLFB, finalized, orphaned)
-                  _ <- DeployBuffer[F].removeFinalizedDeploys(finalized + newLFB).forkAndLog
-                  _ <- BlockEventEmitter[F].newLastFinalizedBlock(newLFB, finalized, orphaned)
+                  _               <- lfbRef.set(newLFB)
+                  finalizedHashes = finalized.map(_.messageHash)
+                  orphanedHashes  = orphaned.map(_.messageHash)
+                  _ <- FinalityStorage[F].markAsFinalized(
+                        newLFB,
+                        finalizedHashes,
+                        orphanedHashes
+                      )
+                  _ <- DeployBuffer[F].removeFinalizedDeploys(finalizedHashes + newLFB).forkAndLog
+                  // Ballots cannot be really finalized but we mark them as such in the DAG
+                  // to improve the performance of the finalizer (that has to follow all justifications).
+                  // Send out notification about blocks ONLY.
+                  orphanedBlockHashes  = orphaned.filter(_.isBlock).map(_.messageHash)
+                  finalizedBlockHashes = finalized.filter(_.isBlock).map(_.messageHash)
+                  _ <- BlockEventEmitter[F].newLastFinalizedBlock(
+                        newLFB,
+                        finalizedBlockHashes,
+                        orphanedBlockHashes
+                      )
                 } yield ()
               }
             }

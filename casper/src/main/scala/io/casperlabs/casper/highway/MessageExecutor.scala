@@ -104,16 +104,35 @@ class MessageExecutor[F[_]: Concurrent: Log: Time: Metrics: BlockStorage: DagSto
                  .onNewMessageAdded(message)
       w <- result.traverse {
             case MultiParentFinalizer.FinalizedBlocks(newLFB, _, finalized, orphaned) => {
-              val lfbStr       = newLFB.show
-              val finalizedStr = finalized.map(_.show).mkString("{", ", ", "}")
+              val lfbStr = newLFB.show
+              val finalizedStr = finalized
+                .filter(_.isBlock)
+                .map(_.messageHash)
+                .map(PrettyPrinter.buildString)
+                .mkString("{", ", ", "}")
               for {
                 _ <- Log[F].info(
                       s"New last finalized block hashes are ${lfbStr -> null}, ${finalizedStr -> null}. Orphaned ${orphaned.size} messages."
                     )
-                _  <- FinalityStorage[F].markAsFinalized(newLFB, finalized, orphaned)
-                w1 <- DeployBuffer[F].removeFinalizedDeploys(finalized + newLFB).forkAndLog
+                finalizedHashes = finalized.map(_.messageHash)
+                orphanedHashes  = orphaned.map(_.messageHash)
+                _ <- FinalityStorage[F].markAsFinalized(
+                      newLFB,
+                      finalizedHashes,
+                      orphanedHashes
+                    )
+                w1 <- DeployBuffer[F].removeFinalizedDeploys(finalizedHashes + newLFB).forkAndLog
+                // Ballots cannot be really finalized but we mark them as such in the DAG
+                // to improve the performance of the finalizer (that has to follow all justifications).
+                // Send out notification about blocks ONLY.
+                orphanedBlockHashes  = orphaned.filter(_.isBlock).map(_.messageHash)
+                finalizedBlockHashes = finalized.filter(_.isBlock).map(_.messageHash)
                 w2 <- BlockEventEmitter[F]
-                       .newLastFinalizedBlock(newLFB, finalized, orphaned)
+                       .newLastFinalizedBlock(
+                         newLFB,
+                         finalizedBlockHashes,
+                         orphanedBlockHashes
+                       )
                        .timer("emitNewLFB")
                        .forkAndLog
               } yield w1 *> w2

@@ -48,11 +48,9 @@ object MultiParentFinalizer {
       // New finalized block in the main chain.
       newLFB: BlockHash,
       quorum: BigInt,
-      indirectlyFinalized: Set[BlockHash],
-      indirectlyOrphaned: Set[BlockHash]
-  ) {
-    def finalizedBlocks: Set[BlockHash] = indirectlyFinalized + newLFB
-  }
+      indirectlyFinalized: Set[Message],
+      indirectlyOrphaned: Set[Message]
+  )
 
   def create[F[_]: Concurrent: FinalityStorage: Metrics](
       dag: DagRepresentation[F],
@@ -87,7 +85,7 @@ object MultiParentFinalizer {
                                              .orphanedIndirectly(
                                                dag,
                                                newLFB,
-                                               justFinalized,
+                                               justFinalized.map(_.messageHash),
                                                isHighway
                                              )
                                              .timer("orphanedIndirectly")
