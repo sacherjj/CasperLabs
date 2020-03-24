@@ -615,12 +615,14 @@ class ThreeNodeHighwayNetwork(CasperLabsNetwork):
         CL_VERSION="test",
         # Highway
         CL_HIGHWAY_ENABLED="true",
-        CL_HIGHWAY_INIT_ROUND_EXPONENT=13,
+        CL_HIGHWAY_INIT_ROUND_EXPONENT=14,
         CL_CHAINSPEC_HIGHWAY_GENESIS_ERA_START=str(TIMESTAMP),
-        CL_CHAINSPEC_HIGHWAY_ERA_DURATION="3minutes",
+        CL_CHAINSPEC_HIGHWAY_ERA_DURATION="4minutes",
         CL_CHAINSPEC_HIGHWAY_BOOKING_DURATION="90seconds",
-        CL_CHAINSPEC_HIGHWAY_ENTROPY_DURATION="10seconds",
-        CL_CHAINSPEC_HIGHWAY_VOTING_PERIOD_DURATION="10hours",
+        CL_CHAINSPEC_HIGHWAY_ENTROPY_DURATION="30seconds",
+        CL_CHAINSPEC_HIGHWAY_VOTING_PERIOD_DURATION="2minutes",
+        # Other node settings
+        CL_SERVER_RELAY_FACTOR=2,
     )
 
     def get_node_config(self, network):

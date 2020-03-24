@@ -100,7 +100,7 @@ def check_rounds(blocks_in_rounds):
         assert len(blocks) <= 1, "There must be at most one block in a round"
 
 
-def check_highway_dag(client, number_of_validators, number_of_eras=2):
+def check_highway_dag(client, number_of_validators, number_of_eras=3):
     blocks_in_rounds = defaultdict(list)
     blocks_in_eras = defaultdict(list)
     for event in client.stream_events(block_added=True):
