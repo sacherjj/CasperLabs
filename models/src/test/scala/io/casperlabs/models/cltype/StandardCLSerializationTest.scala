@@ -21,7 +21,7 @@ class StandardCLSerializationTest extends FlatSpec with Matchers {
 
   val tests = TestCase.getArr(spec, "test")
 
-  "Serialization" should "work" in {}
+  behavior of "Serialization"
   for (t <- tests) {
     val test = TestCase.from(t)
 
