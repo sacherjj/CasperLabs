@@ -67,6 +67,8 @@ CONTRACT_TARGET_DIR_AS    = target-as
 PACKAGED_SYSTEM_CONTRACTS = mint_install.wasm pos_install.wasm standard_payment_install.wasm
 TOOL_TARGET_DIR           = cargo-casperlabs/target
 TOOL_WASM_DIR             = cargo-casperlabs/wasm
+ENGINE_CORE_TARGET_DIR    = engine-core/target
+ENGINE_CORE_WASM_DIR      = engine-core/wasm
 
 .PHONY: all
 all: build build-contracts
@@ -210,6 +212,8 @@ clean:
 	rm -rf $(CONTRACT_TARGET_DIR_AS)
 	rm -rf $(TOOL_TARGET_DIR)
 	rm -rf $(TOOL_WASM_DIR)
+	rm -rf $(ENGINE_CORE_TARGET_DIR)
+	rm -rf $(ENGINE_CORE_WASM_DIR)
 	$(CARGO) clean
 
 .PHONY: deb

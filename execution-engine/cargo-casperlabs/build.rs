@@ -38,6 +38,15 @@ impl Package for StandardPayment {
     const WASM_FILENAME: &'static str = "standard_payment.wasm";
 }
 
+struct StandardPaymentInstall;
+
+impl Package for StandardPaymentInstall {
+    const ROOT: &'static str = "../contracts/system/standard-payment-install";
+    const CARGO_TOML: &'static str = "../contracts/system/standard-payment-install/Cargo.toml";
+    const LIB_RS: &'static str = "../contracts/system/standard-payment-install/src/lib.rs";
+    const WASM_FILENAME: &'static str = "standard_payment_install.wasm";
+}
+
 const TARGET_DIR_FOR_WASM: &str = "target/built-contracts";
 const ORIGINAL_WASM_DIR: &str = "wasm32-unknown-unknown/release";
 const NEW_WASM_DIR: &str = "wasm";
@@ -101,23 +110,28 @@ fn main() {
     let mint_install_source_exists = Path::new(MintInstall::CARGO_TOML).is_file();
     let pos_install_source_exists = Path::new(PosInstall::CARGO_TOML).is_file();
     let standard_payment_source_exists = Path::new(StandardPayment::CARGO_TOML).is_file();
+    let standard_payment_install_source_exists =
+        Path::new(StandardPaymentInstall::CARGO_TOML).is_file();
 
     match (
         mint_install_source_exists,
         pos_install_source_exists,
         standard_payment_source_exists,
+        standard_payment_install_source_exists,
     ) {
-        (true, true, true) => {
+        (true, true, true, true) => {
             // We're building from within CasperLabs repo - build the contracts.
             build_package::<MintInstall>();
             build_package::<PosInstall>();
             build_package::<StandardPayment>();
+            build_package::<StandardPaymentInstall>();
         }
-        (false, false, false) => {
+        (false, false, false, false) => {
             // We're outside the CasperLabs repo - the compiled contracts should exist locally.
             assert_wasm_file_exists::<MintInstall>();
             assert_wasm_file_exists::<PosInstall>();
             assert_wasm_file_exists::<StandardPayment>();
+            assert_wasm_file_exists::<StandardPaymentInstall>();
         }
         _ => panic!("Some, but not all required contract sources exist locally."),
     }
