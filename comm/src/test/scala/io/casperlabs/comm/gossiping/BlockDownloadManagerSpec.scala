@@ -694,6 +694,8 @@ object BlockDownloadManagerSpec {
     def onDownloaded(blockHash: ByteString): Task[Unit] = Task.delay {
       synchronized { downloaded = downloaded :+ blockHash }
     }
+
+    def onFailed(blockHash: ByteString): Task[Unit] = Task.unit
   }
   object MockBackend {
     def default                                               = apply()

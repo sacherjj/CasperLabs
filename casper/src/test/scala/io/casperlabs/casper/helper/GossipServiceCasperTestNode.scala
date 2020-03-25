@@ -435,6 +435,10 @@ object GossipServiceCasperTestNodeFactory {
                                    s"Download ready for ${PrettyPrinter.buildString(blockHash) -> "block" -> null}"
                                  )
 
+                               override def onFailed(blockHash: ByteString) =
+                                 Log[F].debug(
+                                   s"Download failed for ${PrettyPrinter.buildString(blockHash) -> "block" -> null}"
+                                 )
                              },
                              relaying = relaying,
                              retriesConf = BlockDownloadManagerImpl.RetriesConf.noRetries
