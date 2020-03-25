@@ -183,7 +183,14 @@ class SynchronizerImpl[F[_]: Concurrent: Log: Metrics](
       syncedSummaries + (summary.blockHash -> ss.addSource(source))
     } >> recordSyncedSummaries
 
-  /** Recursively clear out summaries and their ancestors from the cache. */
+  /** Recursively clear out summaries and their ancestors from the cache.
+    * This caters for a case when the sync overshoots the already downloaded
+    * summaries due to the fixed size of the ancestor requests, and `addSync`
+    * adds some entries that have already been downloaded. By removing the
+    * dependencies we make sure that whenever a descendant is downloaded,
+    * we are not leaving dangling references in the cache, potentially
+    * leaking memory.
+    */
   private def removeSyncedAncestors(blockHash: ByteString): F[Unit] = {
     def remove(queue: Queue[ByteString]): F[Unit] =
       queue.dequeueOption.fold(().pure[F]) {
@@ -200,7 +207,16 @@ class SynchronizerImpl[F[_]: Concurrent: Log: Metrics](
     remove(Queue(blockHash)) >> recordSyncedSummaries
   }
 
-  /** Recursively clear out summaries and their descendants from the cache. */
+  /** Recursively clear out summaries and their descendants from the cache.
+    * This caters for the case when the download manager ultimately fails to
+    * fetch a block, despite all the retries it does. If that happens, it's
+    * up to the synchronizer to schedule the block again, if it comes up
+    * as a dependency of something newer. But that can only be done if it's
+    * visited during traversal, which will not happen as long as it's in the
+    * cache. So we clear out anything that depends on the failed item, so
+    * that next time we sync we again visit this one, if we have to,
+    * causing another download cycle to be scheduled.
+    */
   private def removeSyncedDescendants(blockHash: ByteString): F[Unit] = {
     def remove(queue: Queue[ByteString], dependants: Map[ByteString, Set[ByteString]]): F[Unit] =
       queue.dequeueOption.fold(().pure[F]) {

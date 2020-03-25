@@ -83,7 +83,7 @@ trait DownloadManagerCompanion extends DownloadManagerTypes {
     def onDownloaded(identifier: Identifier): F[Unit]
 
     /** Notify about a downloadable having exhausted all its retries and ultimately failed.
-      * It won't be reattempted until its rescheduled.
+      * It won't be reattempted until it's rescheduled.
       */
     def onFailed(identifier: Identifier): F[Unit]
   }
