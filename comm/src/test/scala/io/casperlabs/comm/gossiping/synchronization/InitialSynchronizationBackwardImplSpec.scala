@@ -222,6 +222,7 @@ object InitialSynchronizationBackwardImplSpec extends ArbitraryConsensus {
   object MockSynchronizer extends Synchronizer[Task] {
     def syncDag(source: Node, targetBlockHashes: Set[ByteString])    = ???
     def onDownloaded(blockHash: ByteString): Task[Unit]              = ???
+    def onFailed(blockHash: ByteString): Task[Unit]                  = ???
     def onScheduled(summary: BlockSummary, source: Node): Task[Unit] = ???
   }
 

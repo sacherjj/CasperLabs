@@ -30,6 +30,12 @@ trait Synchronizer[F[_]] {
   def onDownloaded(
       blockHash: ByteString
   ): F[Unit]
+
+  /** Called when a block scheduled for download exhausted all its retry options and failed,
+    * so that the synchronizer can update its caches. */
+  def onFailed(
+      blockHash: ByteString
+  ): F[Unit]
 }
 
 object Synchronizer {

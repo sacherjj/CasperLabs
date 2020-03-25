@@ -718,6 +718,7 @@ object BlockDownloadManagerSpec {
     private val emptySynchronizer = new Synchronizer[Task] {
       def syncDag(source: Node, targetBlockHashes: Set[ByteString])    = ???
       def onDownloaded(blockHash: ByteString): Task[Unit]              = ???
+      def onFailed(blockHash: ByteString): Task[Unit]                  = ???
       def onScheduled(summary: BlockSummary, source: Node): Task[Unit] = ???
     }
     private val emptyDownloadManager = new BlockDownloadManager[Task] {

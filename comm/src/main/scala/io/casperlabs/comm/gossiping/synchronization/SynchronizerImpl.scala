@@ -44,7 +44,12 @@ class SynchronizerImpl[F[_]: Concurrent: Log: Metrics](
   // This is supposed to be called every time a scheduled download is finished,
   // even when the resolution is that we already had it, so there should be no leaks.
   override def onDownloaded(blockHash: ByteString) =
-    removeSynced(blockHash)
+    removeSyncedAncestors(blockHash)
+
+  // This will be called if the download failed, so we invalidate everythig in the cache that
+  // depended on this item, which should next time cause it to be traversed again, if it comes up.
+  override def onFailed(blockHash: ByteString) =
+    removeSyncedDescendants(blockHash)
 
   override def syncDag(
       source: Node,
@@ -173,12 +178,13 @@ class SynchronizerImpl[F[_]: Concurrent: Log: Metrics](
       // downloaded in the meantime, but that would be a lot of database queries.
       // Instead, `removeSynced` will clear the dependencies recursively,
       // so if any descendants gets downloaded it will remove any leftovers.
-      val ss = syncedSummaries.getOrElse(summary.blockHash, SyncedSummary(summary))
+      val ss =
+        syncedSummaries.getOrElse(summary.blockHash, SyncedSummary(summary, dependencies(summary)))
       syncedSummaries + (summary.blockHash -> ss.addSource(source))
     } >> recordSyncedSummaries
 
-  /** Recursively clear out summaries and their dependencies from the cache. */
-  private def removeSynced(blockHash: ByteString): F[Unit] = {
+  /** Recursively clear out summaries and their ancestors from the cache. */
+  private def removeSyncedAncestors(blockHash: ByteString): F[Unit] = {
     def remove(queue: Queue[ByteString]): F[Unit] =
       queue.dequeueOption.fold(().pure[F]) {
         case (blockHash, queue) =>
@@ -188,10 +194,44 @@ class SynchronizerImpl[F[_]: Concurrent: Log: Metrics](
             case None =>
               remove(queue)
             case Some(s) =>
-              remove(queue.enqueue(dependencies(s.summary)))
+              remove(queue.enqueue(s.dependencies))
           }
       }
     remove(Queue(blockHash)) >> recordSyncedSummaries
+  }
+
+  /** Recursively clear out summaries and their descendants from the cache. */
+  private def removeSyncedDescendants(blockHash: ByteString): F[Unit] = {
+    def remove(queue: Queue[ByteString], dependants: Map[ByteString, Set[ByteString]]): F[Unit] =
+      queue.dequeueOption.fold(().pure[F]) {
+        case (blockHash, queue) =>
+          syncedSummariesRef.modify { ss =>
+            (ss - blockHash) -> ss.get(blockHash)
+          } flatMap {
+            case None =>
+              remove(queue, dependants)
+            case Some(s) =>
+              remove(queue.enqueue(dependants(s.summary.blockHash)), dependants)
+          }
+      }
+
+    def parentToChildrenMap(syncedSummaries: Map[ByteString, SyncedSummary]) =
+      syncedSummaries.foldLeft(
+        Map.empty[ByteString, Set[ByteString]].withDefaultValue(Set.empty)
+      ) {
+        case (dependants, (blockHash, s)) =>
+          s.dependencies.toSeq.foldLeft(dependants) {
+            case (dependants, dep) =>
+              dependants.updated(blockHash, dependants(blockHash) + dep)
+          }
+      }
+
+    for {
+      syncedSummaries <- syncedSummariesRef.get
+      dependants      = parentToChildrenMap(syncedSummaries)
+      _               <- remove(Queue(blockHash), dependants)
+      _               <- recordSyncedSummaries
+    } yield ()
   }
 
   private def recordSyncedSummaries =
@@ -384,6 +424,7 @@ object SynchronizerImpl {
     */
   case class SyncedSummary(
       summary: BlockSummary,
+      dependencies: List[ByteString],
       sources: Set[Node] = Set.empty
   ) {
     def addSource(source: Node) = copy(sources = sources + source)

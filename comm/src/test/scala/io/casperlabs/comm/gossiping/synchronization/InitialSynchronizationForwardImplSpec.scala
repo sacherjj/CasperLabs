@@ -325,6 +325,10 @@ object InitialSynchronizationForwardImplSpec extends ArbitraryConsensus {
         blockHash: ByteString
     ): Task[Unit] = Task.unit
 
+    def onFailed(
+        blockHash: ByteString
+    ): Task[Unit] = Task.unit
+
     def onScheduled(
         summary: BlockSummary,
         source: Node
