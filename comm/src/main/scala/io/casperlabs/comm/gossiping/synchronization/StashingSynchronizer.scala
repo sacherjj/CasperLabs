@@ -50,6 +50,9 @@ class StashingSynchronizer[F[_]: Concurrent: Parallel](
   override def onDownloaded(blockHash: ByteString) =
     underlying.onDownloaded(blockHash)
 
+  override def onFailed(blockHash: ByteString) =
+    underlying.onFailed(blockHash)
+
   override def onScheduled(summary: BlockSummary, source: Node): F[Unit] =
     underlying.onScheduled(summary, source)
 

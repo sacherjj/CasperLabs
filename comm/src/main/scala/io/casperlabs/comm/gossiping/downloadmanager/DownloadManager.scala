@@ -81,6 +81,11 @@ trait DownloadManagerCompanion extends DownloadManagerTypes {
 
     /** Notify about a new downloadable we downloaded, verified and stored. */
     def onDownloaded(identifier: Identifier): F[Unit]
+
+    /** Notify about a downloadable having exhausted all its retries and ultimately failed.
+      * It won't be reattempted until it's rescheduled.
+      */
+    def onFailed(identifier: Identifier): F[Unit]
   }
 
   /** Messages the Download Manager uses inside its scheduler "queue". */
@@ -249,16 +254,17 @@ trait DownloadManagerImpl[F[_]] extends DownloadManager[F] { self =>
               (item, downloadFeedback) = itemAndFeedback
 
               // Notify the rest of the system if this is the first time we schedule this item
-              // or if we're adding a new source to an item that already existed.
+              // or if we're adding a new source to an item that already existed,
+              // or if the item has been scheduled again after failure and will now be retried.
               existingItem = items.get(handle.id)
               _ <- backend
                     .onScheduled(handle)
                     .start
-                    .whenA(existingItem.isEmpty)
+                    .whenA(item.canStart || existingItem.isEmpty)
               _ <- backend
                     .onScheduled(handle, source)
                     .start
-                    .whenA(existingItem.forall(!_.sources(source)))
+                    .whenA(item.canStart || existingItem.forall(!_.sources(source)))
 
               _ <- itemsRef.update(_ + (handle.id -> item))
               _ <- if (item.canStart) startWorker(item) else Sync[F].unit
@@ -308,6 +314,7 @@ trait DownloadManagerImpl[F[_]] extends DownloadManager[F] { self =>
                      }
           // Tell whoever scheduled it before that it's over.
           _ <- watchers.traverse(_.complete(Left(ex)).attempt.void)
+          _ <- backend.onFailed(id).start
           _ <- setScheduledGauge()
         } yield ()
 

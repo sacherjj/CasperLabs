@@ -316,6 +316,9 @@ package object gossiping {
                               // Calling `addBlock` during validation has already stored the block,
                               // so we have nothing more to do here with the consensus.
                               synchronizer.onDownloaded(blockHash)
+
+                            override def onFailed(blockHash: ByteString): F[Unit] =
+                              synchronizer.onFailed(blockHash)
                           },
                           relaying = relaying,
                           retriesConf = BlockDownloadManagerImpl.RetriesConf(
