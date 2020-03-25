@@ -11,172 +11,206 @@
 [[test]]
     name = "Boolean -- false"
     expected = "0x00"
-    data = { boolean_value = false }
+    [test.data]
+        boolean_value = false
 
 [[test]]
     name = "Boolean -- true"
     expected = "0x01"
-    data = { boolean_value = true }
+    [test.data]
+        boolean_value = true
 
 [[test]]
     name = "Signed 32-bit integer -- negative"
     expected = "0xc7cfffff"
-    data = { i32_value = -12345 }
+    [test.data]
+        i32_value = -12345
 
 [[test]]
     name = "Signed 32-bit integer -- positive"    
     expected = "0x78563412"
-    data = { i32_value = 305419896 }
+    [test.data]
+        i32_value = 305419896
 
 [[test]]
     name = "Signed 32-bit integer -- zero"
     expected = "0x00000000"
-    data = { i32_value = 0 }
+    [test.data]
+        i32_value = 0
 
 [[test]]
     name = "Signed 64-bit integer -- negative"
     expected = "0x8d9e4c3f14b946da"
-    data = { i64_value = -2718281828459045235 }
+    [test.data]
+        i64_value = -2718281828459045235
 
 [[test]]
     name = "Signed 64-bit integer -- positive"
     expected = "0xefcdab9078563412"
-    data = { i64_value = 1311768467294899695 }
+    [test.data]
+        i64_value = 1311768467294899695
 
 [[test]]
     name = "Signed 64-bit integer -- zero"
     expected = "0x0000000000000000"
-    data = { i64_value = 0 }
+    [test.data]
+        i64_value = 0
 
 [[test]]
     name = "Unsigned 8-bit integer -- positive"
     expected = "0xb7"
-    data = { u8_value = 183 }
+    [test.data]
+        u8_value = 183
 
 [[test]]
     name = "Unsigned 8-bit integer -- zero"
     expected = "0x00"
-    data = { u8_value = 0 }
+    [test.data]
+        u8_value = 0
 
 [[test]]
     name = "Unsigned 32-bit integer -- positive"
     expected = "0xefcdab00"
-    data = { u32_value = 11259375 }
+    [test.data]
+        u32_value = 11259375
 
 [[test]]
     name = "Unsigned 32-bit integer -- zero"
     expected = "0x00000000"
-    data = { u32_value = 0 }
+    [test.data]
+        u32_value = 0
 
 [[test]]
     name = "Unsigned 64-bit integer -- positive"
     expected = "0xefcdab9078563412"
-    data = { u64_value = 1311768467294899695 }
+    [test.data]
+        u64_value = 1311768467294899695
 
 [[test]]
     name = "Unsigned 64-bit integer -- zero"
     expected = "0x0000000000000000"
-    data = { u64_value = 0 }
+    [test.data]
+        u64_value = 0
 
 [[test]]
     name = "Unsigned 128-bit integer -- large positive"
     expected = "0x0e5bb763b088c8fc461b5b55868c01"
-    data = { u128_value = "31415926535897932384626433832795" }
+    [test.data]
+        u128_value = "31415926535897932384626433832795"
 
 [[test]]
     name = "Unsigned 128-bit integer -- small positive"
     expected = "0x0189"
-    data = { u128_value = "137" }
+    [test.data]
+        u128_value = "137"
 
 [[test]]
     name = "Unsigned 128-bit integer -- zero"
     expected = "0x00"
-    data = { u128_value = "0" }
+    [test.data]
+        u128_value = "0"
 
 [[test]]
     name = "Unsigned 256-bit integer -- large positive"
     expected = "0x15e676e4331e32a3df014d6a66d70480e6dbacdcf4d6"
-    data = { u256_value = "314159265358979323846264338327950288419716939937510" }
+    [test.data]
+        u256_value = "314159265358979323846264338327950288419716939937510"
 
 [[test]]
     name = "Unsigned 256-bit integer -- small positive"
     expected = "0x012a"
-    data = { u256_value = "42" }
+    [test.data]
+        u256_value = "42"
 
 [[test]]
     name = "Unsigned 256-bit integer -- zero"
     expected = "0x00"
-    data = { u256_value = "0" }
+    [test.data]
+        u256_value = "0"
 
 [[test]]
     name = "Unsigned 512-bit integer -- large positive"
     expected = "0x2af7ef59b52ee64c94ba0654fa64dbef6c32ee911debf6789eb070b481872019012b0d7d08d7e587eb7339"
-    data = { u512_value = "31415926535897932384626433832795028841971693993751058209749445923078164062862089986280348253421170679" }
+    [test.data]
+        u512_value = "31415926535897932384626433832795028841971693993751058209749445923078164062862089986280348253421170679"
 
 [[test]]
     name = "Unsigned 512-bit integer -- small positive"
     expected = "0x020001"
-    data = { u512_value = "256" }
+    [test.data]
+        u512_value = "256"
 
 [[test]]
     name = "Unsigned 512-bit integer -- zero"
     expected = "0x00"
-    data = { u512_value = "0" }
+    [test.data]
+        u512_value = "0"
 
 [[test]]
     name = "Unit"
     expected = ""
-    data = { unit_value = [] }
+    [test.data]
+        unit_value = []
 
 [[test]]
     name = "String -- non-empty"
     expected = "0x0d00000048656c6c6f2c20576f726c6421"
-    data = { string_value = "Hello, World!" }
+    [test.data]
+        string_value = "Hello, World!"
 
 [[test]]
     name = "String -- empty"
     expected = "0x00000000"
-    data = { string_value = "" }
+    [test.data]
+        string_value = ""
 
 [[test]]
     name = "Access Right -- NONE"
     expected = "0x00"
-    data = { access_rights = "NONE" }
+    [test.data]
+        access_rights = "NONE"
 
 [[test]]
     name = "Access Right -- READ"
     expected = "0x01"
-    data = { access_rights = "READ" }
+    [test.data]
+        access_rights = "READ"
 
 [[test]]
     name = "Access Right -- WRITE"
     expected = "0x02"
-    data = { access_rights = "WRITE" }
+    [test.data]
+        access_rights = "WRITE"
 
 [[test]]
     name = "Access Right -- READ_WRITE"
     expected = "0x03"
-    data = { access_rights = "READ_WRITE" }
+    [test.data]
+        access_rights = "READ_WRITE"
 
 [[test]]
     name = "Access Right -- ADD"
     expected = "0x04"
-    data = { access_rights = "ADD" }
+    [test.data]
+        access_rights = "ADD"
 
 [[test]]
     name = "Access Right -- READ_ADD"
     expected = "0x05"
-    data = { access_rights = "READ_ADD" }
+    [test.data]
+        access_rights = "READ_ADD"
 
 [[test]]
     name = "Access Right -- ADD_WRITE"
     expected = "0x06"
-    data = { access_rights = "ADD_WRITE" }
+    [test.data]
+        access_rights = "ADD_WRITE"
 
 [[test]]
     name = "Access Right -- READ_ADD_WRITE"
     expected = "0x07"
-    data = { access_rights = "READ_ADD_WRITE" }
+    [test.data]
+        access_rights = "READ_ADD_WRITE"
 
 [[test]]
     name = "URef"
@@ -225,7 +259,8 @@
 [[test]]
     name = "List -- empty"
     expected = "0x00000000"
-    data = { list_value = [] }
+    [test.data]
+        list_value = []
 
 [[test]]
     name = "List -- non-empty"
@@ -254,7 +289,8 @@
 [[test]]
     name = "Map -- empty"
     expected = "0x00000000"
-    data = { map_value = [] }
+    [test.data]
+        map_value = []
 
 [[test]]
     name = "Map -- non-empty"
