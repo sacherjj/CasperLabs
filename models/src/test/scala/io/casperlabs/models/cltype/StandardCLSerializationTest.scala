@@ -390,7 +390,8 @@ object StandardCLSerializationTest {
       case "READ_ADD"       => AccessRights.ReadAdd
       case "ADD_WRITE"      => AccessRights.AddWrite
       case "READ_ADD_WRITE" => AccessRights.ReadAddWrite
-      case _                => AccessRights.None
+      case "NONE"           => AccessRights.None
+      case other            => throw new IllegalArgumentException(s"Invalid AccessRights string: $other")
     }
 
     def getBigInt(table: Tbl, key: String): BigInt Refined NonNegative = {
