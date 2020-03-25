@@ -53,7 +53,7 @@ export function counter_ext(): void {
             Error.fromUserError(4).revert();
             return;
         }
-        
+
         let returnValue = CLValue.fromI32(i32Result.value);
         ret(returnValue);
     }
@@ -75,10 +75,5 @@ export function call(): void {
         toBytesPair(toBytesString(COUNT_KEY), counterLocalKey.toBytes()),
     ]);
     var pointer = storeFunctionAtHash(COUNTER_EXT, namedKeys);
-    if (pointer === null) {
-        Error.fromUserError(2).revert();
-        return;
-    }
-
-    putKey(COUNTER_KEY, <Key>pointer);
+    putKey(COUNTER_KEY, pointer);
 }

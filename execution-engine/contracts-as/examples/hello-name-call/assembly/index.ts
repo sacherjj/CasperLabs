@@ -20,10 +20,6 @@ export function call(): void {
         CLValue.fromString(WORLD),
     ]);
 
-    if (output === null) {
-        Error.fromUserError(1).revert();
-        return;
-    }
     let outputMessageResult = fromBytesString(output);
     if (outputMessageResult.hasError()) {
         Error.fromUserError(2).revert();

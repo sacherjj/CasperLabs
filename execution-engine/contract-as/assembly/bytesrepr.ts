@@ -1,5 +1,14 @@
 import { Pair } from "./pair";
 import { typedToArray } from "./utils";
+import { ErrorCode, Error as StdError } from "./error";
+
+/**
+ * Boxes a value which could then be nullable in any context.
+ */
+export class Ref<T> {
+    constructor(public value: T) {}
+}
+
 
 /**
  * Enum representing possible results of deserialization.
@@ -20,11 +29,21 @@ export enum Error {
 }
 
 /**
- * Boxes a value which could then be nullable in any context.
+ * Converts bytesrepr's [[Error]] into a standard [[ErrorCode]].
+ * @internal
+ * @returns An instance of [[Ref]] object for non-zero error code, otherwise a null.
  */
-export class Ref<T> {
-    constructor(public value: T) {}
+function toErrorCode(error: Error): Ref<ErrorCode> | null {
+    switch (error) {
+        case Error.EarlyEndOfStream:
+            return new Ref<ErrorCode>(ErrorCode.EarlyEndOfStream);
+        case Error.FormattingError:
+            return new Ref<ErrorCode>(ErrorCode.Formatting);
+        default:
+            return null;
+    }
 }
+
 
 /**
  * Class representing a result of an operation that might have failed. Can contain either a value
@@ -70,6 +89,19 @@ export class Result<T> {
      */
     ok(): T | null {
         return this.hasValue() ? this.value : null;
+    }
+
+    /**
+     * Unwraps decoded value for success variant, and reverts the execution otherwise.
+     */
+    unwrap(): T {
+        const errorCode = toErrorCode(this.error);
+        if (errorCode != null) {
+            const error = new StdError(errorCode.value);
+            error.revert();
+            return <T>unreachable();
+        }
+        return this.value;
     }
 }
 

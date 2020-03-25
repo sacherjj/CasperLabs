@@ -170,15 +170,12 @@ export function removeAssociatedKey(publicKey: PublicKey): RemoveKeyFailure {
 /**
  * Gets the [[URef]] representing the main purse of the account.
  *
- * @returns The [[URef]] that can be used to access the main purse, or `null` if there is an error.
+ * @returns The [[URef]] that can be used to access the main purse
  */
-export function getMainPurse(): URef | null {
+export function getMainPurse(): URef {
     let data = new Uint8Array(UREF_SERIALIZED_LENGTH);
     data.fill(0);
     externals.get_main_purse(data.dataStart);
     let urefResult = URef.fromBytes(data);
-    if (urefResult.hasError()) {
-        return null;
-    }
-    return urefResult.value;
+    return urefResult.unwrap();
 }
