@@ -81,7 +81,10 @@ node-%/metrics:
 
 
 # Start common components.
-up: .make/docker/network .casperlabs
+up: \
+		.make/docker/network \
+		.make/stests/build \
+		.casperlabs
 	$(REFRESH_TARGETS)
 	if [ "$(CL_VERSION)" != "latest" ]; then \
 		docker-compose pull; \
@@ -195,6 +198,13 @@ stests/build:
 		-f stests/Dockerfile -t casperlabs/stests:latest stests
 
 	rm -rf stests/.build
+
+# stests is part of the docker-compose that runs on `up`, but it has to be built, it's not published yet.
+.make/stests/build:
+	BUILT=$$(docker images | grep casperlabs/stests | wc -l); \
+	if [ "$${BUILT}" -eq "0" ]; then \
+		$(MAKE) stests/build; \
+	fi
 
 # After nodes have been started, and `redis` with `make up`,
 # and an stest image built with `make stests/build`,
