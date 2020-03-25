@@ -23,13 +23,12 @@ fn alloc_bytes(n: usize) -> *mut u8 {
         let layout = Layout::array::<u8>(n)
             .map_err(|_| ApiError::AllocLayout)
             .unwrap_or_revert();
-        unsafe {
-            Global
-                .alloc(layout)
-                .map_err(|_| ApiError::OutOfMemory)
-                .unwrap_or_revert()
-                .as_ptr()
-        }
+        Global
+            .alloc(layout)
+            .map(|(non_null_ptr, _size)| non_null_ptr)
+            .map_err(|_| ApiError::OutOfMemory)
+            .unwrap_or_revert()
+            .as_ptr()
     }
 }
 

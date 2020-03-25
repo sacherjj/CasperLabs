@@ -1,6 +1,6 @@
 [package]
 name = "casperlabs-standard-payment"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["Fraser Hutchison <fraser@casperlabs.io>"]
 edition = "2018"
 description = "Defines the standard payment api"
@@ -13,4 +13,4 @@ license-file = "../../LICENSE"
 std = ["types/std"]
 
 [dependencies]
-types = { version = "0.3.0", path = "../types", package = "casperlabs-types" }
+types = { version = "0.4.0", path = "../types", package = "casperlabs-types" }

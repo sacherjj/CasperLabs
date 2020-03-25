@@ -404,9 +404,10 @@ where
                 && genesis_config.standard_payment_installer_bytes().is_empty()
             {
                 // TODO - remove this once Node has been updated to pass the required bytes
-                include_bytes!(
-                    "../../../target/wasm32-unknown-unknown/release/standard_payment_install.wasm"
-                )
+                include_bytes!(concat!(
+                    env!("CARGO_MANIFEST_DIR"),
+                    "/wasm/standard_payment_install.wasm"
+                ))
             } else {
                 genesis_config.standard_payment_installer_bytes()
             };
