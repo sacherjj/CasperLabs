@@ -74,6 +74,9 @@ const checkJwt: express.RequestHandler = isMock ?
 app.get("/config.js", (_, res) => {
   const conf = {
     auth0: config.auth0,
+    graphql: {
+      url: process.env.UI_GRAPHQL_URL
+    },
     auth: {
       mock: {
         enabled: isMock

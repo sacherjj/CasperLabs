@@ -52,10 +52,14 @@ export class BlockDAG extends React.Component<Props, {}> {
   }
 
   private filteredBlocks() {
-    if (this.props.blocks && this.props.hideBallotsToggleStore?.isPressed) {
-      return this.props.blocks.filter(b => isBlock(b));
+    if (this.props.blocks === null) {
+      return null;
     } else {
-      return this.props.blocks!.map(b => b);
+      if (this.props.hideBallotsToggleStore?.isPressed) {
+        return this.props.blocks.filter(b => isBlock(b));
+      } else {
+        return this.props.blocks.map(b => b);
+      }
     }
   }
 
