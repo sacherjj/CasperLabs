@@ -6,7 +6,9 @@ interface Window {
 
 interface Config {
   auth0: Auth0Config;
-  graphqlUrl?: string;
+  graphql:{
+    url?: string;
+  };
   auth: {
     mock: {
       enabled: boolean;

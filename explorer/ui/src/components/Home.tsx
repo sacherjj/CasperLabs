@@ -159,7 +159,7 @@ const GraphQLCard = (_: {}) => {
     <Card
       background="info"
       icon="flask"
-      to={window.config.graphqlUrl || 'http://devnet-graphql.casperlabs.io:40403/graphql'}
+      to={window.config.graphql.url}
     >
       <CardMessage message="Try the GraphQL console!" />
     </Card>

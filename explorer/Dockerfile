@@ -16,6 +16,8 @@ ENV STATIC_ROOT=/app/ui
 ENV PAYMENT_AMOUNT=10000000
 ENV TRANSFER_AMOUNT=1000000000
 ENV GAS_PRICE=10
+# The link to graphql playground, used in Home page of UI.
+ENV UI_GRAPHQL_URL=http://devnet-graphql.casperlabs.io:40403/graphql
 ENV PAYMENT_CONTRACT_PATH=/app/contracts/payment.wasm
 ENV FAUCET_CONTRACT_PATH=/app/contracts/faucet.wasm
 ENTRYPOINT node server.js
