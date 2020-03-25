@@ -5,6 +5,7 @@ import java.util.concurrent.{TimeUnit, TimeoutException}
 import cats._
 import cats.data.NonEmptyList
 import cats.effect._
+import cats.effect.concurrent.Ref
 import cats.effect.implicits._
 import cats.implicits._
 import com.google.protobuf.ByteString
@@ -102,12 +103,15 @@ package object gossiping {
                        connectToGossip
                      )
 
+      isInitialSyncDoneRef <- Resource.liftF(Ref.of[F, Boolean](false))
+
       downloadManager <- makeDownloadManager(
                           conf,
                           connectToGossip,
                           relaying,
                           synchronizer,
-                          maybeValidatorId
+                          maybeValidatorId,
+                          isInitialSyncDoneRef
                         )
 
       genesisApprover <- makeGenesisApprover(
@@ -141,7 +145,7 @@ package object gossiping {
 
       // Let the outside world know when we're done.
       _ <- makeFiberResource {
-            awaitSynchronization >> onInitialSyncCompleted
+            awaitSynchronization >> isInitialSyncDoneRef.set(true) >> onInitialSyncCompleted
           }
 
       // The stashing synchronizer waits for Genesis approval and the initial synchronization
@@ -268,7 +272,8 @@ package object gossiping {
       connectToGossip: GossipService.Connector[F],
       relaying: Relaying[F],
       synchronizer: Synchronizer[F],
-      maybeValidatorId: Option[ValidatorIdentity]
+      maybeValidatorId: Option[ValidatorIdentity],
+      isInitialSyncDoneRef: Ref[F, Boolean]
   ): Resource[F, BlockDownloadManager[F]] =
     for {
       _ <- Resource.liftF(BlockDownloadManagerImpl.establishMetrics[F])
@@ -283,14 +288,18 @@ package object gossiping {
                               isInDag(blockHash)
 
                             override def validate(block: Block): F[Unit] =
-                              maybeValidatorPublicKey
-                                .filter(_ == block.getHeader.validatorPublicKey)
-                                .fold(().pure[F]) { _ =>
-                                  Log[F]
-                                    .warn(
-                                      s"${PrettyPrinter.buildString(block) -> "block" -> null} seems to be created by a doppelganger using the same validator key!"
-                                    )
-                                } *>
+                              isInitialSyncDoneRef.get.flatMap { isInitialSyncDone =>
+                                maybeValidatorPublicKey
+                                  .filter {
+                                    _ == block.getHeader.validatorPublicKey && isInitialSyncDone
+                                  }
+                                  .fold(().pure[F]) { _ =>
+                                    Log[F]
+                                      .warn(
+                                        s"${PrettyPrinter.buildString(block) -> "block" -> null} seems to be created by a doppelganger using the same validator key!"
+                                      )
+                                  }
+                              } *>
                                 Consensus[F].validateAndAddBlock(block)
 
                             override def store(block: Block): F[Unit] =

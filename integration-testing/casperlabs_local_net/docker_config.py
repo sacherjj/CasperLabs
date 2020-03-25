@@ -59,6 +59,7 @@ class DockerConfig:
     # CLI or DockerCLI, for running keygen
     cli_class: Optional[CLI] = None
     etc_casperlabs_directory: str = "etc_casperlabs_empty"
+    number_of_bonds: int = None  # If not set default NUMBER_OF_BONDS in DockerNode will be used
 
     def __post_init__(self):
         if self.rand_str is None:
