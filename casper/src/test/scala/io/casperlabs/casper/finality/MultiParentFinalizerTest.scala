@@ -12,7 +12,7 @@ import io.casperlabs.casper.finality.votingmatrix.FinalityDetectorVotingMatrix
 import io.casperlabs.casper.helper.BlockUtil.generateValidator
 import io.casperlabs.casper.helper.{BlockGenerator, StorageFixture}
 import io.casperlabs.casper.util.BondingUtil.Bond
-import io.casperlabs.casper.util.ProtoUtil
+import io.casperlabs.casper.util.{ByteStringPrettifier, ProtoUtil}
 import io.casperlabs.models.Message
 import io.casperlabs.shared.{LogStub, Time}
 import io.casperlabs.storage.block.BlockStorage
@@ -21,7 +21,11 @@ import monix.eval.Task
 import org.scalatest.FlatSpec
 import io.casperlabs.casper.mocks.MockFinalityStorage
 
-class MultiParentFinalizerTest extends FlatSpec with BlockGenerator with StorageFixture {
+class MultiParentFinalizerTest
+    extends FlatSpec
+    with BlockGenerator
+    with ByteStringPrettifier
+    with StorageFixture {
 
   behavior of "MultiParentFinalizer"
 
@@ -51,12 +55,19 @@ class MultiParentFinalizerTest extends FlatSpec with BlockGenerator with Storage
         newlyFinalizedBlocks0 <- multiParentFinalizer.onNewMessageAdded(b0Msg).map(_.get)
         // `b0` is in main chain, `a0` is secondary parent.
         _ = assert(newlyFinalizedBlocks0.newLFB == b0.blockHash)
-        _ = assert(newlyFinalizedBlocks0.indirectlyFinalized == Set(a0.blockHash))
-        _ = assert(newlyFinalizedBlocks0.indirectlyOrphaned == Set(a1.blockHash))
+        _ = assert(
+          newlyFinalizedBlocks0.indirectlyFinalized.map(_.messageHash) == Set(
+            a0.blockHash
+          )
+        )
+        _ = assert(
+          newlyFinalizedBlocks0.indirectlyOrphaned
+            .map(_.messageHash) == Set(a1.blockHash)
+        )
         _ <- fs.markAsFinalized(
               newlyFinalizedBlocks0.newLFB,
-              newlyFinalizedBlocks0.indirectlyFinalized,
-              newlyFinalizedBlocks0.indirectlyOrphaned
+              newlyFinalizedBlocks0.indirectlyFinalized.map(_.messageHash),
+              newlyFinalizedBlocks0.indirectlyOrphaned.map(_.messageHash)
             )
         a2    <- createAndStoreBlockFull[Task](v1, Seq(b0, a0), Seq(a1), bonds)
         a2Msg <- Task.fromTry(Message.fromBlock(a2))
