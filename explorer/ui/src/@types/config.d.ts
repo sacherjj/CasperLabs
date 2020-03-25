@@ -6,13 +6,14 @@ interface Window {
 
 interface Config {
   auth0: Auth0Config;
+  graphqlUrl?: string;
   auth: {
     mock: {
       enabled: boolean;
     };
   };
   grpc: {
-    url: string | undefined;
+    url?: string;
   };
 }
 
