@@ -121,12 +121,14 @@ class MessageExecutor[F[_]: Concurrent: Log: Time: Metrics: BlockStorage: DagSto
                       finalizedHashes,
                       orphanedHashes
                     )
-                w1 <- DeployBuffer[F].removeFinalizedDeploys(finalizedHashes + newLFB).forkAndLog
+                finalizedBlockHashes = finalized.filter(_.isBlock).map(_.messageHash)
+                w1 <- DeployBuffer[F]
+                       .removeFinalizedDeploys(finalizedBlockHashes + newLFB)
+                       .forkAndLog
                 // Ballots cannot be really finalized but we mark them as such in the DAG
                 // to improve the performance of the finalizer (that has to follow all justifications).
                 // Send out notification about blocks ONLY.
-                orphanedBlockHashes  = orphaned.filter(_.isBlock).map(_.messageHash)
-                finalizedBlockHashes = finalized.filter(_.isBlock).map(_.messageHash)
+                orphanedBlockHashes = orphaned.filter(_.isBlock).map(_.messageHash)
                 w2 <- BlockEventEmitter[F]
                        .newLastFinalizedBlock(
                          newLFB,

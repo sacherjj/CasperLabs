@@ -99,8 +99,9 @@ class FinalityDetectorUtilTest
 
         // First finalizing C.
         expectedNodesVisitedA = Map(
-          c.blockHash -> 1,
-          a.blockHash -> 1
+          c.blockHash       -> 1,
+          a.blockHash       -> 1,
+          genesis.blockHash -> 2
         )
         implicit0(finalityStorage: FinalityStorage[G]) <- MockFinalityStorage[G](
                                                            Seq(genesis.blockHash): _*
@@ -123,7 +124,9 @@ class FinalityDetectorUtilTest
           f -> 1,
           d -> 1,
           e -> 1,
-          b -> 1
+          b -> 1,
+          c -> 1,
+          a -> 2
         ).map(p => (p._1.blockHash, p._2))
 
         _ <- finalityStorage
@@ -160,7 +163,7 @@ class FinalityDetectorUtilTest
           b   <- createAndStoreBlockFull[Task](v2, Seq(g), Seq.empty, bonds)
           c   <- createAndStoreBlockFull[Task](v2, Seq(b), Seq(b), bonds)
           d   <- createAndStoreBlockFull[Task](v2, Seq(a), Seq(c), bonds)
-          e   <- createAndStoreBlockFull[Task](v1, Seq(a, d), Seq(c), bonds)
+          e   <- createAndStoreBlockFull[Task](v1, Seq(a, d), Seq(), bonds)
           _   <- createAndStoreBlockFull[Task](v2, Seq(e), Seq(), bonds)
           dag <- ds.getRepresentation
           implicit0(finalityStorage: FinalityStorage[Task]) <- MockFinalityStorage[Task](

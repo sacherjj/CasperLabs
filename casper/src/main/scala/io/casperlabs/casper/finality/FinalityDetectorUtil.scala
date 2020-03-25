@@ -197,18 +197,18 @@ object FinalityDetectorUtil {
       undecided <- DagOperations
                     .bfTraverseF[F, Message](List(lfb)) { m =>
                       next(m).toList.distinct
-                        .filterA(
-                          hash =>
-                            FinalityStorage[F]
-                              .getFinalityStatus(hash)
-                              .map(_.isUndecided)
-                        )
-                        .flatMap(_.traverse(dag.lookupUnsafe))
-                        .map { deps =>
+                        .traverse(dag.lookupUnsafe(_))
+                        .flatMap { deps =>
                           deps
                             .filter { dep =>
                               !isHighway || dep.eraId == lfb.eraId
                             }
+                            .filterA(
+                              message =>
+                                FinalityStorage[F]
+                                  .getFinalityStatus(message.messageHash)
+                                  .map(_.isUndecided)
+                            )
                         }
                     }
                     .toList
@@ -222,8 +222,7 @@ object FinalityDetectorUtil {
   ): F[Set[Message]] =
     for {
       messagesFinalizedImplicitly <- collectUndecided[F](dag, lfbHash, isHighway, _.parents)
-      blocksFinalizedImplicitly   = messagesFinalizedImplicitly.filter(_.isBlock)
-    } yield blocksFinalizedImplicitly
+    } yield messagesFinalizedImplicitly
       .filterNot(_.messageHash == lfbHash) // LFB is directly finalized.
       .toSet
 
@@ -242,14 +241,8 @@ object FinalityDetectorUtil {
                     dag,
                     lfbHash,
                     isHighway,
-                    m => {
-                      val msgDeps = m.parents ++ m.justifications.map(_.latestBlockHash)
-                      // We don't want to follow the dependencies that we know are finalized.
-                      // This is really only necessary in the very first step but there's no way around it with current interfaces.
-                      // And it should be cheap anyway.
-                      val sansFinalized = msgDeps.toSet -- finalizedIndirectly
-                      sansFinalized.toSeq
-                    }
+                    m => m.parents ++ m.justifications.map(_.latestBlockHash)
                   )
-    } yield undecided.filterNot(_.messageHash == lfbHash).toSet
+      finalizedSet = finalizedIndirectly + lfbHash
+    } yield undecided.filterNot(m => finalizedSet.contains(m.messageHash)).toSet
 }
