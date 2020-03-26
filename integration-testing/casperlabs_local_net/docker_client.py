@@ -48,7 +48,7 @@ NUMBER_OF_RETRIES = 5
 INITIAL_DELAY = 0.3
 
 
-def retry_on_conflict(method, *args, **kwargs):
+def retry_on_conflict(initial_delay=INITIAL_DELAY, number_of_retries=NUMBER_OF_RETRIES):
     """
     Retry on
 
@@ -57,20 +57,23 @@ def retry_on_conflict(method, *args, **kwargs):
     This is probably caused by tear down of another test running in parallel.
     """
 
-    def wrap(self, *args, **kwargs):
-        delay = INITIAL_DELAY
-        for i in range(NUMBER_OF_RETRIES):
-            try:
-                return method(self, *args, **kwargs)
-            except docker.errors.APIError as e:
-                if e.response.status_code == 409 and i < NUMBER_OF_RETRIES - 1:
-                    delay += delay
-                    logging.warning(f"Retrying after {e} in {delay} seconds")
-                    time.sleep(delay)
-                else:
-                    raise
+    def decorator(method, *args, **kwargs):
+        def wrap(self, *args, **kwargs):
+            delay = initial_delay
+            for i in range(number_of_retries):
+                try:
+                    return method(self, *args, **kwargs)
+                except docker.errors.APIError as e:
+                    if e.response.status_code == 409 and i < number_of_retries - 1:
+                        delay += delay
+                        logging.warning(f"Retrying after {e} in {delay} seconds")
+                        time.sleep(delay)
+                    else:
+                        raise
 
-    return wrap
+        return wrap
+
+    return decorator
 
 
 class DockerClient(CasperLabsClientBase, LoggingMixin):
@@ -86,7 +89,7 @@ class DockerClient(CasperLabsClientBase, LoggingMixin):
     def client_type(self) -> str:
         return "docker"
 
-    @retry_on_conflict
+    @retry_on_conflict()
     def invoke_client(
         self, command: str, decode_stdout: bool = True, add_host: bool = True
     ) -> str:
