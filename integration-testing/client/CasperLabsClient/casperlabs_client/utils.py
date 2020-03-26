@@ -68,7 +68,8 @@ def _encode_contract(contract_options, contract_args):
         return Code(name=name, args=contract_args)
     if uref:
         return Code(uref=uref, args=contract_args)
-    return Code(args=contract_args)
+    # Send empty WASM to use system payment contract
+    return Code(wasm=b"", args=contract_args)
 
 
 def _serialize(o) -> bytes:
