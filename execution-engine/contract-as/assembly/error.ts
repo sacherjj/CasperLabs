@@ -7,12 +7,6 @@ import * as externals from "./externals";
 const SYSTEM_CONTRACT_ERROR_CODE_OFFSET: u32 = 65024;
 
 /**
- * Offset of Proof of Stake system contract errors
- * @internal
- */
-const POS_ERROR_CODE_OFFSET: u32 = 65280;
-
-/**
  * Offset of user errors
  */
 const USER_ERROR_CODE_OFFSET: u32 = 65535;
@@ -94,45 +88,6 @@ export const enum ErrorCode {
     HostBufferFull = 34,
 }
 
-/**
- * Represents Proof of Stake errors
- *
- * @internal
- */
-export const enum PosErrorCode {
-    NotBonded = 0,
-    TooManyEventsInQueue = 1,
-    CannotUnbondLastValidator = 2,
-    SpreadTooHigh = 3,
-    MultipleRequests = 4,
-    BondTooSmall = 5,
-    BondTooLarge = 6,
-    UnbondTooLarge = 7,
-    BondTransferFailed = 8,
-    UnbondTransferFailed = 9,
-    MissingArgument = 10,
-    InvalidArgument = 11,
-    TimeWentBackwards = 12,
-    StakesNotFound = 13,
-    PaymentPurseNotFound = 14,
-    PaymentPurseKeyUnexpectedType = 15,
-    PaymentPurseBalanceNotFound = 16,
-    BondingPurseNotFound = 17,
-    BondingPurseKeyUnexpectedType = 18,
-    RefundPurseKeyUnexpectedType = 19,
-    RewardsPurseNotFound = 20,
-    RewardsPurseKeyUnexpectedType = 21,
-    QueueNotStoredAsByteArray = 22,
-    QueueDeserializationFailed = 23,
-    QueueDeserializationExtraBytes = 24,
-    StakesKeyDeserializationFailed = 25,
-    StakesDeserializationFailed = 26,
-    SystemFunctionCalledByUserAccount = 27,
-    InsufficientPaymentForAmountSpent = 28,
-    FailedTransferToRewardsPurse = 29,
-    FailedTransferToAccountPurse = 30,
-    SetRefundPurseCalledOutsidePayment = 31,
-}
 
 /**
  * This class represents error condition and is constructed by passing an error value.
@@ -143,7 +98,7 @@ export const enum PosErrorCode {
  * | ----------------| ---------------------------------------------|
  * | [1, 65023]      | all except `Mint`, `ProofOfStake` and `User`. Can be created with [[Error.fromErrorCode]] |
  * | [65024, 65279]  | `Mint` - instantiation currently unsupported |
- * | [65280, 65535]  | `ProofOfStake` errors created with [[Error.fromPosErrorCode]] |
+ * | [65280, 65535]  | `ProofOfStake` errors |
  * | [65536, 131071] | User error codes created with [[Error.fromUserError]] |
  *
  * ## Example usage
@@ -156,7 +111,7 @@ export const enum PosErrorCode {
  * Error.fromErrorCode(ErrorCode.InvalidArguent).revert();
  * ```
  */
-export class Error{
+export class Error {
     private errorCodeValue: u32;
 
     /**
@@ -166,7 +121,6 @@ export class Error{
      *
      * * [[Error.fromUserCode]]
      * * [[Error.fromErrorCode]]
-     * * [[Error.fromPosErrorCode]]
      * @param value Error value
      */
     constructor(value: u32) {
@@ -207,15 +161,6 @@ export class Error{
      */
     static fromErrorCode(errorCode: ErrorCode): Error {
         return new Error(<u32>errorCode);
-    }
-
-    /**
-     * Creates new error from Proof of Stake error variant.
-     * @internal
-     * @param errorCode Variant of a Proof of Stake error.
-     */
-    static fromPosErrorCode(errorCode: PosErrorCode): Error {
-        return new Error(<u32>errorCode + POS_ERROR_CODE_OFFSET);
     }
 
     /**

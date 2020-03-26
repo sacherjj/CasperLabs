@@ -24,17 +24,11 @@ enum CustomError{
     MissingAmountArg = 1,
     InvalidAmountArg = 2,
     MissingDestinationAccountArg = 3,
-    UnableToGetMainPurse = 4,
     UnableToGetBalance = 103
 }
 
 export function delegate(): void {
-    const maybeMainPurse = getMainPurse();
-    if (maybeMainPurse === null) {
-        Error.fromUserError(<u16>CustomError.UnableToGetMainPurse).revert();
-        return;
-    }
-    const mainPurse = <URef>maybeMainPurse;
+    const mainPurse = getMainPurse();
     const destinationAccountAddrArg = CL.getArg(Args.DestinationAccount);
     if (destinationAccountAddrArg === null) {
         Error.fromUserError(<u16>CustomError.MissingDestinationAccountArg).revert();

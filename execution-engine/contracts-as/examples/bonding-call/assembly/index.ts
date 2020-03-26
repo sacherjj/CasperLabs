@@ -1,5 +1,5 @@
 import * as CL from "../../../../contract-as/assembly";
-import {Error, ErrorCode, PosErrorCode} from "../../../../contract-as/assembly/error";
+import {Error, ErrorCode} from "../../../../contract-as/assembly/error";
 import {CLValue} from "../../../../contract-as/assembly/clvalue";
 import {Key} from "../../../../contract-as/assembly/key";
 import {U512} from "../../../../contract-as/assembly/bignum";
@@ -10,22 +10,8 @@ const POS_ACTION = "bond";
 
 export function call(): void {
     let proofOfStake = CL.getSystemContract(CL.SystemContract.ProofOfStake);
-    if (proofOfStake === null) {
-        Error.fromErrorCode(ErrorCode.InvalidSystemContract).revert();
-        return;
-    }
-
     let mainPurse = getMainPurse();
-    if (mainPurse === null) {
-        Error.fromErrorCode(ErrorCode.MissingArgument).revert();
-        return;
-    }
-
     let bondingPurse = createPurse();
-    if (bondingPurse === null) {
-        Error.fromErrorCode(ErrorCode.PurseNotCreated).revert();
-        return;
-    }
 
     let amountBytes = CL.getArg(0);
     if (amountBytes === null) {
@@ -58,9 +44,5 @@ export function call(): void {
         bondingPurseValue
     ];
 
-    let output = CL.callContract(key, args);
-    if (output === null) {
-        Error.fromPosErrorCode(PosErrorCode.BondTransferFailed).revert();
-        return;
-    }
+    CL.callContract(key, args);
 }

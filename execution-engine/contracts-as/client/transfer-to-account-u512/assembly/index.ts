@@ -27,10 +27,7 @@ export function call(): void {
     }
     let amount = amountResult.value;
     const mainPurse = getMainPurse();
-    if (mainPurse === null){
-        Error.fromErrorCode(ErrorCode.InvalidPurse).revert();
-        return;
-    }
+
     const result = transferFromPurseToAccount(mainPurse, accountBytes, amount);
     if (result == TransferredTo.TransferError){
         Error.fromErrorCode(ErrorCode.Transfer).revert();
