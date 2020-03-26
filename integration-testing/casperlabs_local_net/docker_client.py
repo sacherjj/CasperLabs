@@ -121,7 +121,7 @@ class DockerClient(CasperLabsClientBase, LoggingMixin):
             stdout = decode_stdout and stdout_raw.decode("utf-8") or stdout_raw
             stderr = container.logs(stdout=False, stderr=True).decode("utf-8")
 
-            # TODO: I don't understand why bug if I just call `self.logger.debug` then
+            # TODO: I don't understand why but if I just call `self.logger.debug` then
             # it doesn't print anything, even though the level is clearly set.
             if self.log_level == "DEBUG" or status_code != 0:
                 self.logger.info(
