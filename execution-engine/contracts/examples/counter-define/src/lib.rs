@@ -61,7 +61,10 @@ pub extern "C" fn counter_increment() {
     // This function will call the stored counter contract (defined above) and increment it.
     // It is stored in `call` below so that it can be called directly by the client
     // (without needing to send any further wasm).
-    let counter_key = runtime::get_key(COUNTER_KEY).unwrap_or_revert_with(ApiError::GetKey);
+    let counter_key = runtime::get_arg(0)
+        .map(|arg| arg.unwrap_or_revert_with(ApiError::InvalidArgument))
+        .unwrap_or_else(|| runtime::get_key(COUNTER_KEY).unwrap_or_revert_with(ApiError::GetKey));
+
     let contract_ref = counter_key
         .to_contract_ref()
         .unwrap_or_revert_with(ApiError::UnexpectedKeyVariant);
