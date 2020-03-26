@@ -45,7 +45,7 @@ class MenuItem {
     public label: string,
     public icon?: string,
     public exact: boolean = false
-  ) {}
+  ) { }
 
   toRoute() {
     return <NavLink item={this} key={this.path} />;
@@ -58,11 +58,11 @@ class GroupedMenuItem {
     public label: string,
     public icon: string,
     public secondLevelChildren: MenuItem[]
-  ) {}
+  ) { }
 
   toRoute() {
     return (
-      <li className="nav-item">
+      <li className="nav-item" key={this.id}>
         <a
           className="nav-link collapsed"
           href="#"
@@ -146,7 +146,7 @@ export default class App extends React.Component<AppProps, {}> {
     // })
 
     // Toggle the side navigation
-    $('#sidenavToggler').click(function(e) {
+    $('#sidenavToggler').click(function (e) {
       e.preventDefault();
       $('body').toggleClass('sidenav-toggled');
       $('.navbar-sidenav .nav-link-collapse').addClass('collapsed');
@@ -156,7 +156,7 @@ export default class App extends React.Component<AppProps, {}> {
     });
 
     // Force the toggled class to be removed when a collapsible nav link is clicked
-    $('.navbar-sidenav .nav-link-collapse').click(function(e) {
+    $('.navbar-sidenav .nav-link-collapse').click(function (e) {
       e.preventDefault();
       $('body').removeClass('sidenav-toggled');
     });
@@ -164,7 +164,7 @@ export default class App extends React.Component<AppProps, {}> {
     // Prevent the content wrapper from scrolling when the fixed side navigation hovered over
     $(
       'body.fixed-nav .navbar-sidenav, body.fixed-nav .sidenav-toggler, body.fixed-nav .navbar-collapse'
-    ).on('mousewheel DOMMouseScroll', function(e: any) {
+    ).on('mousewheel DOMMouseScroll', function (e: any) {
       var e0 = e.originalEvent,
         delta = e0.wheelDelta || -e0.detail;
       this.scrollTop += (delta < 0 ? 1 : -1) * 30;
@@ -172,7 +172,7 @@ export default class App extends React.Component<AppProps, {}> {
     });
 
     // Scroll to top button appear
-    $(document).scroll(function() {
+    $(document).scroll(function () {
       var scrollDistance = $(this).scrollTop()!;
       if (scrollDistance > 100) {
         $('.scroll-to-top').fadeIn();
@@ -182,7 +182,7 @@ export default class App extends React.Component<AppProps, {}> {
     });
 
     // Scroll to top
-    $(document).on('click', 'a.scroll-to-top', function(e) {
+    $(document).on('click', 'a.scroll-to-top', function (e) {
       var anchor = $(this);
       var offset = $(anchor.attr('href')!).offset()!;
       $('html, body')
@@ -236,8 +236,8 @@ const NavLink = (props: { item: MenuItem }) => {
 // Moved `withRouter` to a separate line.
 @observer
 class _Navigation extends React.Component<
-  AppProps & RouteComponentProps<any>,
-  {}
+AppProps & RouteComponentProps<any>,
+{}
 > {
   render() {
     return (
@@ -246,7 +246,7 @@ class _Navigation extends React.Component<
         id="mainNav"
       >
         <a className="navbar-brand" href="https://casperlabs.io/">
-          <img src={logo} alt="logo"/>
+          <img src={logo} alt="logo" />
         </a>
         <button
           className="navbar-toggler navbar-toggler-right"
@@ -287,10 +287,10 @@ class _Navigation extends React.Component<
                   <i className="fa fa-fw fa-sign-out-alt"></i>Sign Out
                 </a>
               ) : (
-                <a className="nav-link" onClick={_ => this.props.auth.login()}>
-                  <i className="fa fa-fw fa-sign-in-alt"></i>Sign In
-                </a>
-              )}
+                  <a className="nav-link" onClick={_ => this.props.auth.login()}>
+                    <i className="fa fa-fw fa-sign-in-alt"></i>Sign In
+                  </a>
+                )}
             </li>
           </ul>
         </div>
@@ -336,26 +336,26 @@ const Content = (props: AppProps) => {
           <Alerts {...props} />
           <Switch>
             <Route exact path={Pages.Home}>
-              <Title title="Home"/>
+              <Title title="Home" />
               <Home {...props} />
             </Route>
             <Route path={Pages.DeploysOfAccount}>
-              <Title title="Deploys"/>
+              <Title title="Deploys" />
               <DeployInfoListDetails
                 pageToken={query.get('pageToken')}
                 {...props}
               />
             </Route>
             <PrivateRoute path={Pages.Accounts} auth={props.auth}>
-              <Title title="Account Keys"/>
-              <Accounts {...props}/>
+              <Title title="Account Keys" />
+              <Accounts {...props} />
             </PrivateRoute>
             <PrivateRoute path={Pages.Faucet} auth={props.auth}>
-               <Title title="Faucet"/>
-               <Faucet {...props} />
+              <Title title="Faucet" />
+              <Faucet {...props} />
             </PrivateRoute>
             <Route path={Pages.Explorer}>
-              <Title title="Explorer"/>
+              <Title title="Explorer" />
               <Explorer
                 maxRank={query.get('maxRank')}
                 depth={query.get('depth')}
@@ -363,11 +363,11 @@ const Content = (props: AppProps) => {
               />
             </Route>
             <Route path={Pages.Block}>
-              <Title title="Block Detail"/>
-              <BlockDetails {...props}/>
+              <Title title="Block Detail" />
+              <BlockDetails {...props} />
             </Route>
             <Route path={Pages.Blocks}>
-              <Title title="Blocks"/>
+              <Title title="Blocks" />
               <BlockList
                 maxRank={query.get('maxRank')}
                 depth={query.get('depth')}
@@ -375,25 +375,25 @@ const Content = (props: AppProps) => {
               />
             </Route>
             <Route path={Pages.Deploy}>
-              <Title title="Deploy Detail"/>
-              <DeployDetails {...props}/>
+              <Title title="Deploy Detail" />
+              <DeployDetails {...props} />
             </Route>
             <Route path={Pages.Vesting}>
-              <Title title="Vesting Contract"/>
+              <Title title="Vesting Contract" />
               <Vesting {...props} />
             </Route>
-            <Route path={Pages.DeployContracts} render={_ => <DeployContractsForm {...props}/>}/>
+            <Route path={Pages.DeployContracts} render={_ => <DeployContractsForm {...props} />} />
             <Route path={Pages.Deploys}>
-              <Title title={"Deploys"}/>
-              <AccountSelector {...props}/>
+              <Title title={"Deploys"} />
+              <AccountSelector {...props} />
             </Route>
             <Route path={Pages.Search}>
-              <Title title="Search"/>
+              <Title title="Search" />
               <Search {...props} />
             </Route>
             <Route path={Pages.ConnectedPeers}>
-              <Title title="Connected Peers"/>
-              <ConnectedPeers {...props}/>
+              <Title title="Connected Peers" />
+              <ConnectedPeers {...props} />
             </Route>
           </Switch>
         </div>
