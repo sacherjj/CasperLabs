@@ -37,13 +37,15 @@ export class BlockDAG extends React.Component<Props, {}> {
   xTrans: d3.ScaleLinear<number, number> | null = null;
   yTrans: d3.ScaleLinear<number, number> | null = null;
   initialized = false;
+  renderedBlocks: BlockInfo[] | null;
 
   constructor(props: Props) {
     super(props);
     reaction(() => {
+      // Needed for "Hide Ballots" to work.
       return this.filteredBlocks();
-    }, () => {
-      this.renderGraph();
+    }, (blocks) => {
+      this.renderGraph(blocks);
     }, {
       fireImmediately: false,
       delay: 100
@@ -140,7 +142,7 @@ export class BlockDAG extends React.Component<Props, {}> {
   /** Called so that the SVG is added when the component has been rendered,
     * however data will most likely still be uninitialized. */
   componentDidMount() {
-    this.renderGraph();
+    this.renderGraph(this.filteredBlocks());
   }
 
   /** Called when the data is refreshed, when we get the blocks if they were null to begin with.
@@ -148,15 +150,20 @@ export class BlockDAG extends React.Component<Props, {}> {
    * would re-render with no SVG at all.
    */
   componentDidUpdate() {
-    this.renderGraph();
+    this.renderGraph(this.filteredBlocks());
   }
 
-  renderGraph() {
-    if (this.props.blocks == null || this.props.blocks.length === 0) {
+  renderGraph(blocks: BlockInfo[] | null) {
+    if (blocks == null || blocks.length === 0) {
       // The renderer will have removed the svg.
       this.initialized = false;
       return;
     }
+
+    // Avoid double rendering by componentDidUpdate and reaction.
+    if (arraysEqual(blocks, this.renderedBlocks)) return;
+    this.renderedBlocks = blocks;
+
     const svg = d3.select(this.svg);
     const hint = d3.select(this.hint);
     const validatorColor = consistentColor(d3.schemePaired);
@@ -217,8 +224,7 @@ export class BlockDAG extends React.Component<Props, {}> {
     // Clear previous contents.
     container.selectAll('g').remove();
 
-    let graph: Graph = toGraph(this.filteredBlocks()!);
-    graph = calculateCoordinates(graph, width, height);
+    let graph: Graph = calculateCoordinates(toGraph(blocks), width, height);
 
     const selectedId = this.props.selected && blockHash(this.props.selected);
 
@@ -564,3 +570,14 @@ const consistentColor = (colors: readonly string[]) => {
     return colors[c];
   };
 };
+
+
+function arraysEqual<T>(a: T[] | null, b: T[] | null) {
+  if (a === b) return true;
+  if (a == null || b == null) return false;
+  if (a.length != b.length) return false;
+  for (let i = 0; i < a.length; ++i) {
+    if (a[i] !== b[i]) return false;
+  }
+  return true;
+}
