@@ -92,7 +92,7 @@ export class Result<T> {
     }
 
     /**
-     * Unwraps decoded value for success variant, and reverts the execution otherwise.
+     * Returns success value, or reverts error value.
      */
     unwrap(): T {
         const errorCode = toErrorCode(this.error);
