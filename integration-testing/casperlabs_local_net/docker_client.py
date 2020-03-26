@@ -2,6 +2,8 @@ from typing import Optional, Union, Any, Iterable
 from dataclasses import dataclass
 import docker.errors
 import json
+import time
+import logging
 from pathlib import Path
 
 from casperlabs_local_net import LoggingMixin
@@ -40,6 +42,37 @@ class Arg:
     value: Optional[Any]
 
 
+NUMBER_OF_RETRIES = 5
+
+# Initial delay in seconds before an attempt to retry
+INITIAL_DELAY = 0.3
+
+
+def retry_on_conflict(method, *args, **kwargs):
+    """
+    Retry on
+
+     E   docker.errors.APIError: 409 Client Error: Conflict ("can not get logs from container which is dead or marked for removal")
+
+    This is probably caused by tear down of another test running in parallel.
+    """
+
+    def wrap(self, *args, **kwargs):
+        delay = INITIAL_DELAY
+        for i in range(NUMBER_OF_RETRIES):
+            try:
+                return method(self, *args, **kwargs)
+            except docker.errors.APIError as e:
+                if e.response.status_code == 409 and i < NUMBER_OF_RETRIES - 1:
+                    delay += delay
+                    logging.warning(f"Retrying after {e} in {delay} seconds")
+                    time.sleep(delay)
+                else:
+                    raise
+
+    return wrap
+
+
 class DockerClient(CasperLabsClientBase, LoggingMixin):
     def __init__(self, node: "DockerNode"):  # NOQA
         self.node = node
@@ -53,6 +86,7 @@ class DockerClient(CasperLabsClientBase, LoggingMixin):
     def client_type(self) -> str:
         return "docker"
 
+    @retry_on_conflict
     def invoke_client(
         self, command: str, decode_stdout: bool = True, add_host: bool = True
     ) -> str:
@@ -68,42 +102,44 @@ class DockerClient(CasperLabsClientBase, LoggingMixin):
                 )
                 command = f"--node-id {node_id} {command}"
         self.logger.info(f"COMMAND {command}")
-        container = self.docker_client.containers.run(
-            image=f"casperlabs/client:{self.node.docker_tag}",
-            name=f"client-{self.node.config.number}-{random_string(5)}",
-            command=command,
-            network=self.node.config.network,
-            volumes=volumes,
-            detach=True,
-            stderr=True,
-            stdout=True,
-        )
-        r = container.wait()
-        status_code = r["StatusCode"]
-        stdout_raw = container.logs(stdout=True, stderr=False)
-        stdout = decode_stdout and stdout_raw.decode("utf-8") or stdout_raw
-        stderr = container.logs(stdout=False, stderr=True).decode("utf-8")
-
-        # TODO: I don't understand why bug if I just call `self.logger.debug` then
-        # it doesn't print anything, even though the level is clearly set.
-        if self.log_level == "DEBUG" or status_code != 0:
-            self.logger.info(
-                f"EXITED exit_code: {status_code} STDERR: {stderr} STDOUT: {stdout}"
-            )
-
+        status_code = None
+        container = None
         try:
-            container.remove()
-        except docker.errors.APIError as e:
-            self.logger.warning(
-                f"Exception while removing docker client container: {str(e)}"
+            container = self.docker_client.containers.run(
+                image=f"casperlabs/client:{self.node.docker_tag}",
+                name=f"client-{self.node.config.number}-{random_string(5)}",
+                command=command,
+                network=self.node.config.network,
+                volumes=volumes,
+                detach=True,
+                stderr=True,
+                stdout=True,
             )
+            r = container.wait()
+            status_code = r["StatusCode"]
+            stdout_raw = container.logs(stdout=True, stderr=False)
+            stdout = decode_stdout and stdout_raw.decode("utf-8") or stdout_raw
+            stderr = container.logs(stdout=False, stderr=True).decode("utf-8")
 
-        if status_code:
-            raise NonZeroExitCodeError(
-                command=(command, status_code), exit_code=status_code, output=stderr
-            )
-
-        return stdout
+            # TODO: I don't understand why bug if I just call `self.logger.debug` then
+            # it doesn't print anything, even though the level is clearly set.
+            if self.log_level == "DEBUG" or status_code != 0:
+                self.logger.info(
+                    f"EXITED exit_code: {status_code} STDERR: {stderr} STDOUT: {stdout}"
+                )
+            if status_code:
+                raise NonZeroExitCodeError(
+                    command=(command, status_code), exit_code=status_code, output=stderr
+                )
+            return stdout
+        finally:
+            try:
+                if container:
+                    container.remove()
+            except docker.errors.APIError as e:
+                self.logger.warning(
+                    f"Exception while removing docker client container: {str(e)}"
+                )
 
     def get_balance(self, account_address: str, block_hash: str) -> int:
         """
