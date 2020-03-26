@@ -55,6 +55,7 @@ final case class DeployConfig(
     copy(sessionOptions = sessionOptions.copy(resource = Some(resource)))
   def withPaymentResource(resource: String) =
     copy(paymentOptions = paymentOptions.copy(resource = Some(resource)))
+  def withEmptyPaymentWasm = copy(paymentOptions = paymentOptions.copy(resource = Some("")))
 }
 
 object DeployConfig {
@@ -109,8 +110,11 @@ object DeployConfig {
       }
     } orElse {
       opts.resource.map { x =>
-        val wasm =
+        val wasm = if (x.isEmpty) {
+          ByteString.EMPTY
+        } else {
           ByteString.copyFrom(consumeInputStream(getClass.getClassLoader.getResourceAsStream(x)))
+        }
         Contract.Wasm(wasm)
       }
     } getOrElse {

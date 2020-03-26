@@ -405,7 +405,7 @@ object DeployRuntime {
     val session = deployConfig.session(sessionArgs)
     // It is advisable to provide payment via --payment-name or --payment-hash, if it's stored.
     val payment = deployConfig
-      .withPaymentResource(PAYMENT_WASM_FILE)
+      .withPaymentResource("")
       .payment(
         deployConfig.paymentAmount.map(bigIntArg("amount", _)).toList
       )
