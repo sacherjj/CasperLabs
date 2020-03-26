@@ -67,13 +67,14 @@ CONTRACT_TARGET_DIR_AS    = target-as
 PACKAGED_SYSTEM_CONTRACTS = mint_install.wasm pos_install.wasm standard_payment_install.wasm
 TOOL_TARGET_DIR           = cargo-casperlabs/target
 TOOL_WASM_DIR             = cargo-casperlabs/wasm
+ENGINE_CORE_TARGET_DIR    = engine-core/target
+ENGINE_CORE_WASM_DIR      = engine-core/wasm
 
 .PHONY: all
 all: build build-contracts
 
-# TODO - remove dependency on standard-payment-install once Node is updated to pass this via GenesisConfig
 .PHONY: build
-build: build-contract-rs/standard-payment-install
+build:
 	$(CARGO) build $(CARGO_FLAGS)
 
 build-contract-rs/%:
@@ -140,9 +141,8 @@ build-contracts-as: \
 .PHONY: build-contracts
 build-contracts: build-contracts-rs build-contracts-as
 
-# TODO - remove dependency on standard-payment-install once Node is updated to pass this via GenesisConfig
 .PHONY: test-rs
-test-rs: build-contract-rs/standard-payment-install
+test-rs:
 	$(CARGO) test $(CARGO_FLAGS) --all -- --nocapture
 
 .PHONY: test-as
@@ -178,9 +178,8 @@ check-format:
 format:
 	$(CARGO) fmt --all
 
-# TODO - remove dependency on standard-payment-install once Node is updated to pass this via GenesisConfig
 .PHONY: lint
-lint: build-contract-rs/standard-payment-install
+lint:
 	$(CARGO) clippy --all-targets --all -- -D warnings -A renamed_and_removed_lints
 
 .PHONY: audit
@@ -213,19 +212,19 @@ clean:
 	rm -rf $(CONTRACT_TARGET_DIR_AS)
 	rm -rf $(TOOL_TARGET_DIR)
 	rm -rf $(TOOL_WASM_DIR)
+	rm -rf $(ENGINE_CORE_TARGET_DIR)
+	rm -rf $(ENGINE_CORE_WASM_DIR)
 	$(CARGO) clean
 
-# TODO - remove dependency on standard-payment-install once Node is updated to pass this via GenesisConfig
 .PHONY: deb
-deb: build-contract-rs/standard-payment-install
+deb:
 	cd engine-grpc-server && $(CARGO) deb
 
 engine-grpc-server/.rpm:
 	cd engine-grpc-server && $(CARGO) rpm init
 
-# TODO - remove dependency on standard-payment-install once Node is updated to pass this via GenesisConfig
 .PHONY: rpm
-rpm: engine-grpc-server/.rpm build-contract-rs/standard-payment-install
+rpm: engine-grpc-server/.rpm
 	cd engine-grpc-server && $(CARGO) rpm build
 
 target/system-contracts.tar.gz: $(SYSTEM_CONTRACTS)

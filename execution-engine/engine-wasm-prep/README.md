@@ -1,6 +1,6 @@
 # `casperlabs-engine-wasm-prep`
 
-[![LOGO](https://raw.githubusercontent.com/CasperLabs/CasperLabs/master/CASPERLABS_HORIZONTAL.png)](https://casperlabs.io/)
+[![LOGO](https://raw.githubusercontent.com/CasperLabs/CasperLabs/master/CasperLabs_Logo_Horizontal_RGB.png)](https://casperlabs.io/)
 
 [![Build Status](https://drone-auto.casperlabs.io/api/badges/CasperLabs/CasperLabs/status.svg?branch=dev)](http://drone-auto.casperlabs.io/CasperLabs/CasperLabs)
 [![Crates.io](https://img.shields.io/crates/v/casperlabs-engine-wasm-prep)](https://crates.io/crates/casperlabs-engine-wasm-prep)

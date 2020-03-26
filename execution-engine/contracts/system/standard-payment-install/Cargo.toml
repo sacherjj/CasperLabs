@@ -15,5 +15,5 @@ std = ["contract/std", "types/std"]
 
 [dependencies]
 contract = { path = "../../../contract", package = "casperlabs-contract" }
-standard-payment = { path = "../standard-payment", default-features = false, features = ["lib"] }
-types = { path = "../../../types", package = "casperlabs-types" }
+standard-payment = { version = "0.1.0", path = "../standard-payment", default-features = false, features = ["lib"] }
+types = { version = "0.4.0", path = "../../../types", package = "casperlabs-types" }
