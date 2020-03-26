@@ -41,13 +41,13 @@ export class BlockDAG extends React.Component<Props, {}> {
   constructor(props: Props) {
     super(props);
     reaction(() => {
-        return this.filteredBlocks();
-      }, () => {
-        this.renderGraph();
-      }, {
-        fireImmediately: false,
-        delay: 100
-      }
+      return this.filteredBlocks();
+    }, () => {
+      this.renderGraph();
+    }, {
+      fireImmediately: false,
+      delay: 100
+    }
     );
   }
 
@@ -102,31 +102,31 @@ export class BlockDAG extends React.Component<Props, {}> {
                 </select>
               )}
               {this.props.refresh && (
-                <RefreshButton refresh={() => this.props.refresh!()}/>
+                <RefreshButton refresh={() => this.props.refresh!()} />
               )}
             </ListInline>
           </div>
         </div>
         <div className="card-body">
           {this.props.blocks == null ? (
-            <Loading/>
+            <Loading />
           ) : this.props.blocks.length === 0 ? (
             <div className="small text-muted">
               {this.props.emptyMessage || 'No blocks to show.'}
             </div>
           ) : (
-            <div className="svg-container">
-              <svg
-                width={this.props.width}
-                height={this.props.height}
-                ref={(ref: SVGSVGElement) => (this.svg = ref)}
-              ></svg>
-              <div
-                className="svg-hint"
-                ref={(ref: HTMLDivElement) => (this.hint = ref)}
-              ></div>
-            </div>
-          )}
+                <div className="svg-container">
+                  <svg
+                    width={this.props.width}
+                    height={this.props.height}
+                    ref={(ref: SVGSVGElement) => (this.svg = ref)}
+                  ></svg>
+                  <div
+                    className="svg-hint"
+                    ref={(ref: HTMLDivElement) => (this.hint = ref)}
+                  ></div>
+                </div>
+              )}
         </div>
         {this.props.footerMessage && (
           <div className="card-footer small text-muted">
@@ -137,7 +137,17 @@ export class BlockDAG extends React.Component<Props, {}> {
     );
   }
 
+  /** Called so that the SVG is added when the component has been rendered,
+    * however data will most likely still be uninitialized. */
   componentDidMount() {
+    this.renderGraph();
+  }
+
+  /** Called when the data is refreshed, when we get the blocks if they were null to begin with.
+   * Also required for navigating between nodes on block details view, otherwise the component
+   * would re-render with no SVG at all.
+   */
+  componentDidUpdate() {
     this.renderGraph();
   }
 
@@ -270,8 +280,8 @@ export class BlockDAG extends React.Component<Props, {}> {
         x.source.id === datum.id || x.target.id === datum.id
           ? 1
           : x.isJustification
-          ? 0
-          : 0.1
+            ? 0
+            : 0.1
       );
       hint.html(
         `Block: ${datum.id} @ ${datum.rank} <br /> Validator: ${datum.validator}`
