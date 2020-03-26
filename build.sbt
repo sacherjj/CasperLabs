@@ -190,7 +190,8 @@ lazy val models = (project in file("models"))
       refinement,
       scalapbCompiler,
       scalacheck,
-      scalapbRuntimegGrpc
+      scalapbRuntimegGrpc,
+      tomlScala
     ),
     // TODO: As we refactor the interfaces this project should only depend on consensus
     // related models, ones that get stored, passed to client. The client for example

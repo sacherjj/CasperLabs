@@ -1,0 +1,533 @@
+# This document gives a set of tests a compliant implementation of the
+# CasperLabs serialization format must pass. The definition of this format is
+# found in the CasperLabs technical specification:
+# https://techspec.casperlabs.io/en/latest/implementation/global-state.html#values
+#
+# The tests are given as an array of tables (in the TOML sense). Each test has a
+# name, and contains a `data` sub-table describing the data to be serialized,
+# and an `expected` key which gives the expected serialization in hexadecimal
+# format.
+
+[[test]]
+    name = "Boolean -- false"
+    expected = "0x00"
+    [test.data]
+        boolean_value = false
+
+[[test]]
+    name = "Boolean -- true"
+    expected = "0x01"
+    [test.data]
+        boolean_value = true
+
+[[test]]
+    name = "Signed 32-bit integer -- negative"
+    expected = "0xc7cfffff"
+    [test.data]
+        i32_value = -12345
+
+[[test]]
+    name = "Signed 32-bit integer -- positive"    
+    expected = "0x78563412"
+    [test.data]
+        i32_value = 305419896
+
+[[test]]
+    name = "Signed 32-bit integer -- zero"
+    expected = "0x00000000"
+    [test.data]
+        i32_value = 0
+
+[[test]]
+    name = "Signed 64-bit integer -- negative"
+    expected = "0x8d9e4c3f14b946da"
+    [test.data]
+        i64_value = -2718281828459045235
+
+[[test]]
+    name = "Signed 64-bit integer -- positive"
+    expected = "0xefcdab9078563412"
+    [test.data]
+        i64_value = 1311768467294899695
+
+[[test]]
+    name = "Signed 64-bit integer -- zero"
+    expected = "0x0000000000000000"
+    [test.data]
+        i64_value = 0
+
+[[test]]
+    name = "Unsigned 8-bit integer -- positive"
+    expected = "0xb7"
+    [test.data]
+        u8_value = 183
+
+[[test]]
+    name = "Unsigned 8-bit integer -- zero"
+    expected = "0x00"
+    [test.data]
+        u8_value = 0
+
+[[test]]
+    name = "Unsigned 32-bit integer -- positive"
+    expected = "0xefcdab00"
+    [test.data]
+        u32_value = 11259375
+
+[[test]]
+    name = "Unsigned 32-bit integer -- zero"
+    expected = "0x00000000"
+    [test.data]
+        u32_value = 0
+
+[[test]]
+    name = "Unsigned 64-bit integer -- positive"
+    expected = "0xefcdab9078563412"
+    [test.data]
+        u64_value = 1311768467294899695
+
+[[test]]
+    name = "Unsigned 64-bit integer -- zero"
+    expected = "0x0000000000000000"
+    [test.data]
+        u64_value = 0
+
+[[test]]
+    name = "Unsigned 128-bit integer -- large positive"
+    expected = "0x0e5bb763b088c8fc461b5b55868c01"
+    [test.data]
+        u128_value = "31415926535897932384626433832795"
+
+[[test]]
+    name = "Unsigned 128-bit integer -- small positive"
+    expected = "0x0189"
+    [test.data]
+        u128_value = "137"
+
+[[test]]
+    name = "Unsigned 128-bit integer -- zero"
+    expected = "0x00"
+    [test.data]
+        u128_value = "0"
+
+[[test]]
+    name = "Unsigned 256-bit integer -- large positive"
+    expected = "0x15e676e4331e32a3df014d6a66d70480e6dbacdcf4d6"
+    [test.data]
+        u256_value = "314159265358979323846264338327950288419716939937510"
+
+[[test]]
+    name = "Unsigned 256-bit integer -- small positive"
+    expected = "0x012a"
+    [test.data]
+        u256_value = "42"
+
+[[test]]
+    name = "Unsigned 256-bit integer -- zero"
+    expected = "0x00"
+    [test.data]
+        u256_value = "0"
+
+[[test]]
+    name = "Unsigned 512-bit integer -- large positive"
+    expected = "0x2af7ef59b52ee64c94ba0654fa64dbef6c32ee911debf6789eb070b481872019012b0d7d08d7e587eb7339"
+    [test.data]
+        u512_value = "31415926535897932384626433832795028841971693993751058209749445923078164062862089986280348253421170679"
+
+[[test]]
+    name = "Unsigned 512-bit integer -- small positive"
+    expected = "0x020001"
+    [test.data]
+        u512_value = "256"
+
+[[test]]
+    name = "Unsigned 512-bit integer -- zero"
+    expected = "0x00"
+    [test.data]
+        u512_value = "0"
+
+[[test]]
+    name = "Unit"
+    expected = ""
+    [test.data]
+        unit_value = []
+
+[[test]]
+    name = "String -- non-empty"
+    expected = "0x0d00000048656c6c6f2c20576f726c6421"
+    [test.data]
+        string_value = "Hello, World!"
+
+[[test]]
+    name = "String -- empty"
+    expected = "0x00000000"
+    [test.data]
+        string_value = ""
+
+[[test]]
+    name = "Access Right -- NONE"
+    expected = "0x00"
+    [test.data]
+        access_rights = "NONE"
+
+[[test]]
+    name = "Access Right -- READ"
+    expected = "0x01"
+    [test.data]
+        access_rights = "READ"
+
+[[test]]
+    name = "Access Right -- WRITE"
+    expected = "0x02"
+    [test.data]
+        access_rights = "WRITE"
+
+[[test]]
+    name = "Access Right -- READ_WRITE"
+    expected = "0x03"
+    [test.data]
+        access_rights = "READ_WRITE"
+
+[[test]]
+    name = "Access Right -- ADD"
+    expected = "0x04"
+    [test.data]
+        access_rights = "ADD"
+
+[[test]]
+    name = "Access Right -- READ_ADD"
+    expected = "0x05"
+    [test.data]
+        access_rights = "READ_ADD"
+
+[[test]]
+    name = "Access Right -- ADD_WRITE"
+    expected = "0x06"
+    [test.data]
+        access_rights = "ADD_WRITE"
+
+[[test]]
+    name = "Access Right -- READ_ADD_WRITE"
+    expected = "0x07"
+    [test.data]
+        access_rights = "READ_ADD_WRITE"
+
+[[test]]
+    name = "URef"
+    expected = "0xf65a147aa3cab084b02cb7a72eb790415cdf67450696ed74146a84036b30c80204"
+    [test.data.uref_value]
+        address = "0xf65a147aa3cab084b02cb7a72eb790415cdf67450696ed74146a84036b30c802"
+        access_rights = "ADD"
+
+[[test]]
+    name = "Key -- Account"
+    expected = "0x0009b5d44f1798c5ea240ac9fbb16f955aa5c463ca138ef2fb0b3651812ed066b2"
+    [test.data.key_value]
+        account = "0x09b5d44f1798c5ea240ac9fbb16f955aa5c463ca138ef2fb0b3651812ed066b2"
+
+[[test]]
+    name = "Key -- Hash"
+    expected = "0x012889bc48ad2009b4eee676a228669e09df2822da82cc5e55dc3c78e50ee9ca2c"
+    [test.data.key_value]
+        hash = "0x2889bc48ad2009b4eee676a228669e09df2822da82cc5e55dc3c78e50ee9ca2c"
+
+[[test]]
+    name = "Key -- URef"
+    expected = "0x02860ed27eb80a8c7a0b00ebe44d992c41e31d49d0661058983c448535327e0bfe01"
+    [test.data.key_value.uref_value]
+        address = "0x860ed27eb80a8c7a0b00ebe44d992c41e31d49d0661058983c448535327e0bfe"
+        access_rights = "READ"
+
+[[test]]
+    name = "Key -- Local"
+    expected = "0x030067050bbc6ec463e6105df87ebb721f5e526424e658e307efab508477e10c9c756f693af2155c6db754f3a66e8d7cfc6a517f2f49431084d08fcdba1cef9e75"
+    [test.data.key_value.local]
+        seed = "0x0067050bbc6ec463e6105df87ebb721f5e526424e658e307efab508477e10c9c"
+        hash = "0x756f693af2155c6db754f3a66e8d7cfc6a517f2f49431084d08fcdba1cef9e75"
+
+[[test]]
+    name = "Option -- empty"
+    expected = "0x00"
+    [test.data.option_value]
+
+[[test]]
+    name = "Option -- present"
+    expected = "0x0192100000"
+    [test.data.option_value]
+        u32_value = 4242
+
+[[test]]
+    name = "List -- empty"
+    expected = "0x00000000"
+    [test.data]
+        list_value = []
+
+[[test]]
+    name = "List -- non-empty"
+    expected = "0x020000000500000048656c6c6f06000000576f726c6421"
+    [test.data]
+        list_value = [{string_value = "Hello"}, {string_value = "World!"}]
+
+[[test]]
+    name = "FixedList -- length = 4"
+    expected = "0x00000000010000000200000003000000"
+    [test.data]
+        fixed_list_value = [{u32_value = 0}, {u32_value = 1}, {u32_value = 2}, {u32_value = 3}]
+
+[[test]]
+    name = "Result -- err"
+    expected = "0x000c000000536f6d65206d657373616765"
+    [test.data.result_value.err]
+        string_value = "Some message"
+
+[[test]]
+    name = "Result -- ok"
+    expected = "0x010de0b88af0dfaf58c1d39f1a950f"
+    [test.data.result_value.ok]
+        u512_value = "1234567891011121314151617181920"
+
+[[test]]
+    name = "Map -- empty"
+    expected = "0x00000000"
+    [test.data]
+        map_value = []
+
+[[test]]
+    name = "Map -- non-empty"
+    expected = "0x030000000b000000616e6f74686572206b657901030000006b6579000f00000079657420616e6f74686572206b657901"
+    [[test.data.map_value]]
+        key = { string_value = "key" }
+        value = { boolean_value = false }
+    [[test.data.map_value]]
+        key = { string_value = "another key" }
+        value = { boolean_value = true }
+    [[test.data.map_value]]
+        key = { string_value = "yet another key" }
+        value = { boolean_value = true }
+
+[[test]]
+    name = "Tuple1"
+    expected = "0x07"
+    [test.data.tuple1_value._0]
+        u8_value = 7
+
+[[test]]
+    name = "Tuple2"
+    expected = "0x0746000000"
+    [test.data.tuple2_value]
+        _0 = { u8_value = 7 }
+        _1 = { u32_value = 70 }
+
+[[test]]
+    name = "Tuple3"
+    expected = "0x0746000000bc02000000000000"
+    [test.data.tuple3_value]
+        _0 = { u8_value = 7 }
+        _1 = { u32_value = 70 }
+        _2 = { u64_value = 700 }
+
+[[test]]
+    name = "CLType -- BOOL"
+    expected = "0x00"
+    [test.data.cl_type]
+        simple_type = "BOOL"
+
+[[test]]
+    name = "CLType -- I32"
+    expected = "0x01"
+    [test.data.cl_type]
+        simple_type = "I32"
+
+[[test]]
+    name = "CLType -- I64"
+    expected = "0x02"
+    [test.data.cl_type]
+        simple_type = "I64"
+
+[[test]]
+    name = "CLType -- U8"
+    expected = "0x03"
+    [test.data.cl_type]
+        simple_type = "U8"
+
+[[test]]
+    name = "CLType -- U32"
+    expected = "0x04"
+    [test.data.cl_type]
+        simple_type = "U32"
+
+[[test]]
+    name = "CLType -- U64"
+    expected = "0x05"
+    [test.data.cl_type]
+        simple_type = "U64"
+
+[[test]]
+    name = "CLType -- U128"
+    expected = "0x06"
+    [test.data.cl_type]
+        simple_type = "U128"
+
+[[test]]
+    name = "CLType -- U256"
+    expected = "0x07"
+    [test.data.cl_type]
+        simple_type = "U256"
+
+[[test]]
+    name = "CLType -- U512"
+    expected = "0x08"
+    [test.data.cl_type]
+        simple_type = "U512"
+
+[[test]]
+    name = "CLType -- UNIT"
+    expected = "0x09"
+    [test.data.cl_type]
+        simple_type = "UNIT"
+
+[[test]]
+    name = "CLType -- STRING"
+    expected = "0x0a"
+    [test.data.cl_type]
+        simple_type = "STRING"
+
+[[test]]
+    name = "CLType -- KEY"
+    expected = "0x0b"
+    [test.data.cl_type]
+        simple_type = "KEY"
+
+[[test]]
+    name = "CLType -- UREF"
+    expected = "0x0c"
+    [test.data.cl_type]
+        simple_type = "UREF"
+
+[[test]]
+    name = "CLType -- OPTION"
+    expected = "0x0d00"
+    [test.data.cl_type]
+        option_type = { simple_type = "BOOL" }
+
+[[test]]
+    name = "CLType -- LIST"
+    expected = "0x0e0a"
+    [test.data.cl_type]
+        list_type = { simple_type = "STRING" }
+
+[[test]]
+    name = "CLType -- FIXED_LIST"
+    expected = "0x0f0320000000"
+    [test.data.cl_type.fixed_list_type]
+        inner_type = { simple_type = "U8" }
+        length = 32
+
+[[test]]
+    name = "CLType -- RESULT"
+    expected = "0x10010a"
+    [test.data.cl_type.result_type]
+        ok_type = { simple_type = "I32" }
+        err_type = { simple_type = "STRING" }
+
+[[test]]
+    name = "CLType -- MAP"
+    expected = "0x110a0b"
+    [test.data.cl_type.map_type]
+        key_type = { simple_type = "STRING" }
+        value_type = { simple_type = "KEY" }
+
+[[test]]
+    name = "CLType -- TUPLE1"
+    expected = "0x1203"
+    [test.data.cl_type.tuple1_type]
+        _0 = { simple_type = "U8" }
+
+[[test]]
+    name = "CLType -- TUPLE2"
+    expected = "0x130304"
+    [test.data.cl_type.tuple2_type]
+        _0 = { simple_type = "U8" }
+        _1 = { simple_type = "U32" }
+
+[[test]]
+    name = "CLType -- TUPLE3"
+    expected = "0x14030405"
+    [test.data.cl_type.tuple3_type]
+        _0 = { simple_type = "U8" }
+        _1 = { simple_type = "U32" }
+        _2 = { simple_type = "U64" }
+
+[[test]]
+    name = "CLType -- ANY"
+    expected = "0x15"
+    [test.data.cl_type]
+        simple_type = "ANY"
+
+[[test]]
+    name = "CLValue"
+    expected = "0x17000000020000000500000048656c6c6f06000000576f726c64210e0a"
+    [test.data.cl_value]
+        cl_type = { list_type = { simple_type = "STRING" } }
+        bytes = "0x020000000500000048656c6c6f06000000576f726c6421"
+
+[[test]]
+    name = "Account"
+    expected = "0x62ea715c51082859013cd0c03d96f6f6f26f2f503668c0d4cdb7c17355287f3e02000000040000006d696e740291456c4d75a9957a7ffabca4c4e9bc29051bbde004c0b56257c9d7e7256f7a9101100000006d795f636f6f6c5f636f6e747261637401f95f9c4e61d6995984e56da7c739b96a4df77ff9777e6938d62518efbae9154d697dcc4b36f7af7b833ac7c3975d5ce65a35eae8c68450cf7851a30974ce88c7070200000049572fee52c3d70588e358ceb5b662b6a9ee95f6258883c94827e4e6774acd160162ea715c51082859013cd0c03d96f6f6f26f2f503668c0d4cdb7c17355287f3e010101"
+    [test.data.account]
+        public_key = "0x62ea715c51082859013cd0c03d96f6f6f26f2f503668c0d4cdb7c17355287f3e"
+        named_keys = [
+            {key = "my_cool_contract", value = {hash = "0xf95f9c4e61d6995984e56da7c739b96a4df77ff9777e6938d62518efbae9154d"}},
+            {key = "mint", value = {uref_value = {address = "0x91456c4d75a9957a7ffabca4c4e9bc29051bbde004c0b56257c9d7e7256f7a91", access_rights = "READ"}}}
+        ]
+        main_purse = { address = "0x697dcc4b36f7af7b833ac7c3975d5ce65a35eae8c68450cf7851a30974ce88c7", access_rights = "READ_ADD_WRITE" }
+        associated_keys = [
+            {key = "0x62ea715c51082859013cd0c03d96f6f6f26f2f503668c0d4cdb7c17355287f3e", value = 1},
+            {key = "0x49572fee52c3d70588e358ceb5b662b6a9ee95f6258883c94827e4e6774acd16", value = 1}
+        ]
+        action_thresholds = {deployment = 1, key_management = 1}
+
+[[test]]
+    name = "Contract"
+    expected = "0x20000000e82187cbd30654c56c93a2acb8b67eb0c1df1d2e13e5117972e35bb632ef113202000000040000006d696e74022f1a106b3e87ce5727ce47e2b4821a6cf151c6f6ab49f57a37dd47348ae695be01180000006d795f7368617265645f73746174655f7661726961626c6502f813be901d901954ce95e3fcc4a5a16646e8bd0011930c41cdae85d4386e867107010000000000000000000000"
+    [test.data.contract]
+        bytes = "0xe82187cbd30654c56c93a2acb8b67eb0c1df1d2e13e5117972e35bb632ef1132"
+        named_keys = [
+            {key = "my_shared_state_variable", value = {uref_value = {address = "0xf813be901d901954ce95e3fcc4a5a16646e8bd0011930c41cdae85d4386e8671", access_rights = "READ_ADD_WRITE"}}},
+            {key = "mint", value = {uref_value = {address = "0x2f1a106b3e87ce5727ce47e2b4821a6cf151c6f6ab49f57a37dd47348ae695be", access_rights = "READ"}}}
+        ]
+        protocol_version = { major = 1, minor = 0, patch = 0 }
+
+[[test]]
+    name = "StoredValue -- CLValue"
+    expected = "0x0017000000020000000500000048656c6c6f06000000576f726c64210e0a"
+    [test.data.stored_value.cl_value]
+        cl_type = { list_type = { simple_type = "STRING" } }
+        bytes = "0x020000000500000048656c6c6f06000000576f726c6421"
+
+[[test]]
+    name = "StoredValue -- Account"
+    expected = "0x0162ea715c51082859013cd0c03d96f6f6f26f2f503668c0d4cdb7c17355287f3e02000000040000006d696e740291456c4d75a9957a7ffabca4c4e9bc29051bbde004c0b56257c9d7e7256f7a9101100000006d795f636f6f6c5f636f6e747261637401f95f9c4e61d6995984e56da7c739b96a4df77ff9777e6938d62518efbae9154d697dcc4b36f7af7b833ac7c3975d5ce65a35eae8c68450cf7851a30974ce88c7070200000049572fee52c3d70588e358ceb5b662b6a9ee95f6258883c94827e4e6774acd160162ea715c51082859013cd0c03d96f6f6f26f2f503668c0d4cdb7c17355287f3e010101"
+    [test.data.stored_value.account]
+        public_key = "0x62ea715c51082859013cd0c03d96f6f6f26f2f503668c0d4cdb7c17355287f3e"
+        named_keys = [
+            {key = "my_cool_contract", value = {hash = "0xf95f9c4e61d6995984e56da7c739b96a4df77ff9777e6938d62518efbae9154d"}},
+            {key = "mint", value = {uref_value = {address = "0x91456c4d75a9957a7ffabca4c4e9bc29051bbde004c0b56257c9d7e7256f7a91", access_rights = "READ"}}}
+        ]
+        main_purse = { address = "0x697dcc4b36f7af7b833ac7c3975d5ce65a35eae8c68450cf7851a30974ce88c7", access_rights = "READ_ADD_WRITE" }
+        associated_keys = [
+            {key = "0x62ea715c51082859013cd0c03d96f6f6f26f2f503668c0d4cdb7c17355287f3e", value = 1},
+            {key = "0x49572fee52c3d70588e358ceb5b662b6a9ee95f6258883c94827e4e6774acd16", value = 1}
+        ]
+        action_thresholds = {deployment = 1, key_management = 1}
+
+[[test]]
+    name = "StoredValue -- Contract"
+    expected = "0x0220000000e82187cbd30654c56c93a2acb8b67eb0c1df1d2e13e5117972e35bb632ef113202000000040000006d696e74022f1a106b3e87ce5727ce47e2b4821a6cf151c6f6ab49f57a37dd47348ae695be01180000006d795f7368617265645f73746174655f7661726961626c6502f813be901d901954ce95e3fcc4a5a16646e8bd0011930c41cdae85d4386e867107010000000000000000000000"
+    [test.data.stored_value.contract]
+        bytes = "0xe82187cbd30654c56c93a2acb8b67eb0c1df1d2e13e5117972e35bb632ef1132"
+        named_keys = [
+            {key = "my_shared_state_variable", value = {uref_value = {address = "0xf813be901d901954ce95e3fcc4a5a16646e8bd0011930c41cdae85d4386e8671", access_rights = "READ_ADD_WRITE"}}},
+            {key = "mint", value = {uref_value = {address = "0x2f1a106b3e87ce5727ce47e2b4821a6cf151c6f6ab49f57a37dd47348ae695be", access_rights = "READ"}}}
+        ]
+        protocol_version = { major = 1, minor = 0, patch = 0 }
