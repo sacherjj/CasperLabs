@@ -54,7 +54,7 @@ export class DeployContractsForm extends React.Component<Props, {}> {
         <Form>
           <TextField
             id="id-private-key"
-            label="Private Key"
+            label="Private Key (Base64)"
             fieldState={deployContractsContainer.privateKey}
           />
         </Form>
