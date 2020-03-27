@@ -31,7 +31,7 @@ dynamic-host-address = false
 no-upnp = false
 
 # Default timeout for roundtrip connections.
-default-timeout = "5second"
+default-timeout = "15second"
 
 # Timeout for shutting down gRPC services.
 shutdown-timeout = "1minute"
