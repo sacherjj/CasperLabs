@@ -12,6 +12,7 @@ import io.casperlabs.shared.SemaphoreMap
 import io.casperlabs.comm.discovery.Node
 import io.casperlabs.comm.discovery.NodeUtils.showNode
 import io.casperlabs.comm.gossiping._
+import io.casperlabs.comm.gossiping.Utils.hex
 import io.casperlabs.comm.gossiping.synchronization.Synchronizer.SyncError
 import io.casperlabs.comm.gossiping.synchronization.Synchronizer.SyncError._
 import io.casperlabs.metrics.Metrics
@@ -49,7 +50,15 @@ class SynchronizerImpl[F[_]: Concurrent: Log: Metrics](
   // This will be called if the download failed, so we invalidate everythig in the cache that
   // depended on this item, which should next time cause it to be traversed again, if it comes up.
   override def onFailed(blockHash: ByteString) =
-    removeSyncedDescendants(blockHash)
+    // Tried recursively clearing out the synced summaries moving forward, but it didn't seem to work,
+    // somehow the failed summary didn't have any dependants, yet they kept piling up, preventing
+    // further downloads. For now just clear the whole cache.
+    for {
+      removed <- removeSyncedDescendants(blockHash)
+      _ <- Log[F].info(
+            s"Cleared ${removed} blocks from the cache after the failure of ${hex(blockHash) -> "block"}"
+          )
+    } yield ()
 
   override def syncDag(
       source: Node,
@@ -217,17 +226,21 @@ class SynchronizerImpl[F[_]: Concurrent: Log: Metrics](
     * that next time we sync we again visit this one, if we have to,
     * causing another download cycle to be scheduled.
     */
-  private def removeSyncedDescendants(blockHash: ByteString): F[Unit] = {
-    def remove(queue: Queue[ByteString], dependants: Map[ByteString, Set[ByteString]]): F[Unit] =
-      queue.dequeueOption.fold(().pure[F]) {
+  private def removeSyncedDescendants(blockHash: ByteString): F[Int] = {
+    def remove(
+        removed: Int,
+        queue: Queue[ByteString],
+        dependants: Map[ByteString, Set[ByteString]]
+    ): F[Int] =
+      queue.dequeueOption.fold(removed.pure[F]) {
         case (blockHash, queue) =>
           syncedSummariesRef.modify { ss =>
             (ss - blockHash) -> ss.get(blockHash)
           } flatMap {
             case None =>
-              remove(queue, dependants)
+              remove(removed, queue, dependants)
             case Some(s) =>
-              remove(queue.enqueue(dependants(s.summary.blockHash)), dependants)
+              remove(removed + 1, queue.enqueue(dependants(s.summary.blockHash)), dependants)
           }
       }
 
@@ -235,19 +248,19 @@ class SynchronizerImpl[F[_]: Concurrent: Log: Metrics](
       syncedSummaries.foldLeft(
         Map.empty[ByteString, Set[ByteString]].withDefaultValue(Set.empty)
       ) {
-        case (dependants, (blockHash, s)) =>
+        case (dependants, (childBlockHash, s)) =>
           s.dependencies.toSeq.foldLeft(dependants) {
-            case (dependants, dep) =>
-              dependants.updated(blockHash, dependants(blockHash) + dep)
+            case (dependants, parentBlockHash) =>
+              dependants.updated(parentBlockHash, dependants(parentBlockHash) + childBlockHash)
           }
       }
 
     for {
       syncedSummaries <- syncedSummariesRef.get
       dependants      = parentToChildrenMap(syncedSummaries)
-      _               <- remove(Queue(blockHash), dependants)
+      removed         <- remove(0, Queue(blockHash), dependants)
       _               <- recordSyncedSummaries
-    } yield ()
+    } yield removed
   }
 
   private def recordSyncedSummaries =
