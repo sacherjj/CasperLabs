@@ -36,9 +36,6 @@ object DeployRuntime {
   val BONDING_WASM_FILE   = "bonding.wasm"
   val UNBONDING_WASM_FILE = "unbonding.wasm"
   val TRANSFER_WASM_FILE  = "transfer_to_account_u512.wasm"
-  // A virtual empty file used as payment. When EE receives empty WASM as payment
-  // it will use built-in system payment contract.
-  val EMPTY_WASM_FILE = ""
 
   def propose[F[_]: Sync: DeployService](
       exit: Boolean = true,
@@ -407,7 +404,6 @@ object DeployRuntime {
     val session = deployConfig.session(sessionArgs)
     // By default send empty WASM as payment to indicate that EE system payment contract should be used.
     val payment = deployConfig
-      .withPaymentResource(EMPTY_WASM_FILE)
       .payment(
         deployConfig.paymentAmount.map(bigIntArg("amount", _)).toList
       )

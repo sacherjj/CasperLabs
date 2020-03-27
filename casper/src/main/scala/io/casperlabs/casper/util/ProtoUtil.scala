@@ -680,7 +680,7 @@ object ProtoUtil {
         case Deploy.Code.Contract.Uref(uref) =>
           ipc.DeployPayload.Payload.StoredContractUref(ipc.StoredContractURef(uref, args))
         case Deploy.Code.Contract.Empty =>
-          ipc.DeployPayload.Payload.Empty
+          ipc.DeployPayload.Payload.DeployCode(ipc.DeployCode(ByteString.EMPTY, args))
       }
       ipc.DeployPayload(payload)
     }

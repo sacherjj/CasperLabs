@@ -109,12 +109,8 @@ object DeployConfig {
       }
     } orElse {
       opts.resource.map { x =>
-        // Check if this is the pseudo empty file that indicates EE should use system payment contract.
-        val wasm = if (x.isEmpty) {
-          ByteString.EMPTY
-        } else {
+        val wasm =
           ByteString.copyFrom(consumeInputStream(getClass.getClassLoader.getResourceAsStream(x)))
-        }
         Contract.Wasm(wasm)
       }
     } getOrElse {
