@@ -5,6 +5,7 @@ import { CasperService, BalanceService, encodeBase16 } from 'casperlabs-sdk';
 import { BlockInfo } from 'casperlabs-grpc/io/casperlabs/casper/consensus/info_pb';
 import { Block } from 'casperlabs-grpc/io/casperlabs/casper/consensus/consensus_pb';
 import ObservableValueMap from '../lib/ObservableValueMap';
+import { ToggleStore } from '../components/ToggleButton';
 
 type AccountB16 = string;
 
@@ -14,6 +15,7 @@ export class BlockContainer {
   @observable neighborhood: BlockInfo[] | null = null;
   // How much of the DAG to load around the block.
   @observable depth = 10;
+  @observable hideBallotsToggleStore: ToggleStore = new ToggleStore(false);
   @observable deploys: Block.ProcessedDeploy[] | null = null;
   @observable balances: ObservableValueMap<
     AccountB16,

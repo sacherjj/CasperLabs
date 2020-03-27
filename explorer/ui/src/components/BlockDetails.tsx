@@ -70,6 +70,7 @@ class _BlockDetails extends RefreshableComponent<Props, {}> {
           title={`Neighborhood of block ${this.blockHashBase16}`}
           refresh={() => this.container.loadNeighborhood()}
           blocks={this.container.neighborhood}
+          hideBallotsToggleStore={this.container.hideBallotsToggleStore}
           width="100%"
           height="400px"
           selected={this.container.block!}
