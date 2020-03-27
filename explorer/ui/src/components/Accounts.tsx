@@ -106,6 +106,12 @@ export default class Accounts extends RefreshableComponent<Props, {}> {
                 fieldState={importAccountForm.publicKeyBase64}
                 readonly={true}
               />
+              <TextField
+                id="id-public-key-base16"
+                label="Public Key (Base16)"
+                fieldState={base64to16(importAccountForm.publicKeyBase64.value)}
+                readonly={true}
+              />
             </Form>
           </Modal>
         );
@@ -118,7 +124,6 @@ export default class Accounts extends RefreshableComponent<Props, {}> {
           rows={this.props.auth.accounts}
           headers={[
             'Name',
-            'Public Key (Base64)',
             'Public Key (Base16)',
             'Balance',
             ''
@@ -130,7 +135,6 @@ export default class Accounts extends RefreshableComponent<Props, {}> {
             return (
               <tr key={account.name}>
                 <td>{account.name}</td>
-                <td>{account.publicKeyBase64}</td>
                 <td>{base64to16(account.publicKeyBase64)}</td>
                 <td>
                   <Balance balance={balance}/>
