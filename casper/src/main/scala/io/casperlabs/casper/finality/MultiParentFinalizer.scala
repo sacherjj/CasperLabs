@@ -88,6 +88,11 @@ object MultiParentFinalizer {
                                                isHighway
                                              )
                                              .timer("orphanedIndirectly")
+                            _ <- FinalityStorage[F].markAsFinalized(
+                                  newLFB,
+                                  justFinalized.map(_.messageHash),
+                                  justOrphaned.map(_.messageHash)
+                                )
                           } yield FinalizedBlocks(newLFB, quorum, justFinalized, justOrphaned)
                       }
         } yield finalized)

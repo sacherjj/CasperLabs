@@ -187,14 +187,7 @@ class MultiParentCasperImpl[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: 
                           s"New last finalized block hashes are ${lfbStr -> null}, ${finalizedStr -> null}."
                         )
                     _                    <- lfbRef.set(newLFB)
-                    finalizedHashes      = finalized.map(_.messageHash)
-                    orphanedHashes       = orphaned.map(_.messageHash)
                     finalizedBlockHashes = finalized.filter(_.isBlock).map(_.messageHash)
-                    _ <- FinalityStorage[F].markAsFinalized(
-                          newLFB,
-                          finalizedHashes,
-                          orphanedHashes
-                        )
                     _ <- DeployBuffer[F]
                           .removeFinalizedDeploys(finalizedBlockHashes + newLFB)
                     // Ballots cannot be really finalized but we mark them as such in the DAG

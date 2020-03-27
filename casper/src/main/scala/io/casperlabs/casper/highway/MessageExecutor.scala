@@ -114,13 +114,6 @@ class MessageExecutor[F[_]: Concurrent: Log: Time: Metrics: BlockStorage: DagSto
                   _ <- Log[F].info(
                         s"New last finalized block hashes are ${lfbStr -> null}, ${finalizedStr -> null}. Orphaned ${orphaned.size} messages."
                       )
-                  finalizedHashes = finalized.map(_.messageHash)
-                  orphanedHashes  = orphaned.map(_.messageHash)
-                  _ <- FinalityStorage[F].markAsFinalized(
-                        newLFB,
-                        finalizedHashes,
-                        orphanedHashes
-                      )
                   finalizedBlockHashes = finalized.filter(_.isBlock).map(_.messageHash)
                   _ <- DeployBuffer[F]
                         .removeFinalizedDeploys(finalizedBlockHashes + newLFB)
