@@ -230,11 +230,13 @@ fn get_args() -> ArgMatches<'static> {
         .arg(
             Arg::with_name(ARG_USE_SYSTEM_CONTRACTS)
                 .short(ARG_USE_SYSTEM_CONTRACTS_SHORT)
+                .long(ARG_USE_SYSTEM_CONTRACTS)
                 .help(ARG_USE_SYSTEM_CONTRACTS_HELP),
         )
         .arg(
             Arg::with_name(ARG_ENABLE_BONDING)
                 .short(ARG_ENABLE_BONDING_SHORT)
+                .long(ARG_ENABLE_BONDING)
                 .help(ARG_ENABLE_BONDING_HELP),
         )
         .arg(
