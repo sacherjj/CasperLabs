@@ -235,6 +235,18 @@ private[configuration] final case class Options private (
       )
 
     @scallop
+    val serverMainThreads =
+      gen[Int]("Size of the main thread pool.")
+
+    @scallop
+    val serverIngressThreads =
+      gen[Int]("Size of the thread pool used to handle incoming requests.")
+
+    @scallop
+    val serverDbThreads =
+      gen[Int]("Size of the thread pool for database connections.")
+
+    @scallop
     val tlsCertificate =
       gen[Path](
         "Path to node's X.509 certificate file, that is being used for identification.",

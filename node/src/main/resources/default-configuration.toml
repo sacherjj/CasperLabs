@@ -145,6 +145,15 @@ block-upload-rate-period = "0s"
 # if 0 then unlimited, if reached max size then peer will receive RESOURCE_EXHAUSTED response.
 block-upload-rate-max-throttled = 0
 
+# Size of the main thread pool.
+main-threads = 64
+
+# Size of the thread pool used to handle incoming requests.
+ingress-threads = 32
+
+# Size of the thread pool for database connections.
+db-threads = 48
+
 # io.casperlabs.node.configuration.Configuration.BlockStorage
 [blockstorage]
 

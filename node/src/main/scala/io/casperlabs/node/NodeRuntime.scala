@@ -73,13 +73,23 @@ class NodeRuntime private[node] (
 
   // Bounded thread pool for incoming traffic. Limited thread pool size so loads of request cannot exhaust all resources.
   private[this] val ingressScheduler =
-    Scheduler.cached("ingress-io", 2, 64, reporter = uncaughtExceptionHandler)
+    Scheduler.cached(
+      "ingress-io",
+      2,
+      conf.server.ingressThreads.value,
+      reporter = uncaughtExceptionHandler
+    )
   // Unbounded thread pool for outgoing, blocking IO. It is recommended to have unlimited thread pools for waiting on IO.
   private[this] val egressScheduler =
     Scheduler.cached("egress-io", 2, Int.MaxValue, reporter = uncaughtExceptionHandler)
 
   private[this] val dbConnScheduler =
-    Scheduler.cached("db-conn", 1, 64, reporter = uncaughtExceptionHandler)
+    Scheduler.cached(
+      "db-conn",
+      1,
+      conf.server.dbThreads.value,
+      reporter = uncaughtExceptionHandler
+    )
   private[this] val dbIOScheduler =
     Scheduler.cached("db-io", 1, Int.MaxValue, reporter = uncaughtExceptionHandler)
 

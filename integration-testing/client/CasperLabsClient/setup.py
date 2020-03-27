@@ -178,12 +178,7 @@ def prepare_sdist():
     )
     bundled_contracts = [
         f"{contracts_dir}/{f}"
-        for f in [
-            "bonding.wasm",
-            "standard_payment.wasm",
-            "transfer_to_account_u512.wasm",
-            "unbonding.wasm",
-        ]
+        for f in ["bonding.wasm", "transfer_to_account_u512.wasm", "unbonding.wasm"]
     ]
     for file_name in bundled_contracts:
         if not os.path.exists(file_name):

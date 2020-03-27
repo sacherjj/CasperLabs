@@ -52,6 +52,9 @@ clean-block-storage = false
 block-upload-rate-max-requests = 0
 block-upload-rate-period = "0s"
 block-upload-rate-max-throttled = 0
+main-threads=1
+ingress-threads=1
+db-threads=1
 
 [grpc]
 socket = "/tmp/test"

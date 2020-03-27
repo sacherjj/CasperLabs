@@ -23,10 +23,21 @@ import { BlockType, FinalityIcon } from './BlockDetails';
 class _Explorer extends RefreshableComponent<Props, {}> {
   constructor(props: Props) {
     super(props);
-    let maxRank = parseInt(props.maxRank || '') || 0;
-    let depth = parseInt(props.depth || '') || 10;
+    this.refreshWithDepthAndMaxRank(props.maxRank, props.depth);
+  }
+
+  refreshWithDepthAndMaxRank(maxRankStr: string | null, depthStr: string | null) {
+    let maxRank = parseInt(maxRankStr || '') || 0;
+    let depth = parseInt(depthStr || '') || 10;
     this.props.dag.updateMaxRankAndDepth(maxRank, depth);
     this.props.dag.refreshBlockDagAndSetupSubscriber();
+  }
+
+  componentWillReceiveProps(nextProps: Props) {
+    if (this.props.depth === nextProps.depth && this.props.maxRank === nextProps.maxRank) {
+      return;
+    }
+    this.refreshWithDepthAndMaxRank(nextProps.maxRank, nextProps.depth);
   }
 
   async refresh() {
