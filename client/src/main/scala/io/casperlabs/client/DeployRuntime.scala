@@ -402,7 +402,7 @@ object DeployRuntime {
       sessionArgs: Seq[Deploy.Arg]
   ): Deploy = {
     val session = deployConfig.session(sessionArgs)
-    // By default send empty WASM as payment to indicate that EE system payment contract should be used.
+    // By default send empty payment code to indicate that EE system payment contract should be used.
     val payment = deployConfig
       .payment(
         deployConfig.paymentAmount.map(bigIntArg("amount", _)).toList
