@@ -53,12 +53,7 @@ class SynchronizerImpl[F[_]: Concurrent: Log: Metrics](
     // Tried recursively clearing out the synced summaries moving forward, but it didn't seem to work,
     // somehow the failed summary didn't have any dependants, yet they kept piling up, preventing
     // further downloads. For now just clear the whole cache.
-    for {
-      removed <- removeSyncedDescendants(blockHash)
-      _ <- Log[F].info(
-            s"Cleared ${removed} blocks from the cache after the failure of ${hex(blockHash) -> "block"}"
-          )
-    } yield ()
+    syncedSummariesRef.set(Map.empty)
 
   override def syncDag(
       source: Node,
@@ -214,53 +209,6 @@ class SynchronizerImpl[F[_]: Concurrent: Log: Metrics](
           }
       }
     remove(Queue(blockHash)) >> recordSyncedSummaries
-  }
-
-  /** Recursively clear out summaries and their descendants from the cache.
-    * This caters for the case when the download manager ultimately fails to
-    * fetch a block, despite all the retries it does. If that happens, it's
-    * up to the synchronizer to schedule the block again, if it comes up
-    * as a dependency of something newer. But that can only be done if it's
-    * visited during traversal, which will not happen as long as it's in the
-    * cache. So we clear out anything that depends on the failed item, so
-    * that next time we sync we again visit this one, if we have to,
-    * causing another download cycle to be scheduled.
-    */
-  private def removeSyncedDescendants(blockHash: ByteString): F[Int] = {
-    def remove(
-        removed: Int,
-        queue: Queue[ByteString],
-        dependants: Map[ByteString, Set[ByteString]]
-    ): F[Int] =
-      queue.dequeueOption.fold(removed.pure[F]) {
-        case (blockHash, queue) =>
-          syncedSummariesRef.modify { ss =>
-            (ss - blockHash) -> ss.get(blockHash)
-          } flatMap {
-            case None =>
-              remove(removed, queue, dependants)
-            case Some(s) =>
-              remove(removed + 1, queue.enqueue(dependants(s.summary.blockHash)), dependants)
-          }
-      }
-
-    def parentToChildrenMap(syncedSummaries: Map[ByteString, SyncedSummary]) =
-      syncedSummaries.foldLeft(
-        Map.empty[ByteString, Set[ByteString]].withDefaultValue(Set.empty)
-      ) {
-        case (dependants, (childBlockHash, s)) =>
-          s.dependencies.toSeq.foldLeft(dependants) {
-            case (dependants, parentBlockHash) =>
-              dependants.updated(parentBlockHash, dependants(parentBlockHash) + childBlockHash)
-          }
-      }
-
-    for {
-      syncedSummaries <- syncedSummariesRef.get
-      dependants      = parentToChildrenMap(syncedSummaries)
-      removed         <- remove(0, Queue(blockHash), dependants)
-      _               <- recordSyncedSummaries
-    } yield removed
   }
 
   private def recordSyncedSummaries =
