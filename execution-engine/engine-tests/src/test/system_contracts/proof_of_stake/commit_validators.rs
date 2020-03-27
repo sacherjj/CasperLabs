@@ -38,13 +38,13 @@ fn should_return_bonded_validators() {
         tmp
     };
 
-    let genesis_config = utils::create_genesis_config(accounts.clone());
+    let run_genesis_request = utils::create_run_genesis_request(accounts.clone());
 
     let exec_request =
         ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, CONTRACT_LOCAL_STATE, ()).build();
 
     let actual = InMemoryWasmTestBuilder::default()
-        .run_genesis(&genesis_config)
+        .run_genesis(&run_genesis_request)
         .exec(exec_request)
         .commit()
         .get_bonded_validators()[0]

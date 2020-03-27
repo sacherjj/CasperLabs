@@ -1,6 +1,6 @@
 use engine_storage::global_state::in_memory::InMemoryGlobalState;
 use engine_test_support::{
-    internal::{ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_GENESIS_CONFIG},
+    internal::{ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_RUN_GENESIS_REQUEST},
     DEFAULT_ACCOUNT_ADDR,
 };
 
@@ -15,7 +15,7 @@ fn regression_test_genesis_hash_mismatch() {
         ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, CONTRACT_LOCAL_STATE, ()).build();
 
     // Step 1.
-    let builder = builder_base.run_genesis(&DEFAULT_GENESIS_CONFIG);
+    let builder = builder_base.run_genesis(&DEFAULT_RUN_GENESIS_REQUEST);
 
     // This is trie's post state hash after calling run_genesis endpoint.
     // Step 1a)
@@ -41,7 +41,7 @@ fn regression_test_genesis_hash_mismatch() {
 
     // No step 3.
     // Step 4.
-    builder.run_genesis(&DEFAULT_GENESIS_CONFIG);
+    builder.run_genesis(&DEFAULT_RUN_GENESIS_REQUEST);
 
     // Step 4a)
     let second_genesis_run_hash = builder.get_genesis_hash();

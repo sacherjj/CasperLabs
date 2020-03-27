@@ -1,6 +1,6 @@
 use engine_core::engine_state::Error;
 use engine_test_support::internal::{
-    ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_GENESIS_CONFIG,
+    ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_RUN_GENESIS_REQUEST,
 };
 use types::account::PublicKey;
 
@@ -17,7 +17,7 @@ fn should_run_ee_532_get_uref_regression_test() {
         ExecuteRequestBuilder::standard(UNKNOWN_ADDR, CONTRACT_EE_532_REGRESSION, ()).build();
 
     let result = InMemoryWasmTestBuilder::default()
-        .run_genesis(&DEFAULT_GENESIS_CONFIG)
+        .run_genesis(&DEFAULT_RUN_GENESIS_REQUEST)
         .exec(exec_request)
         .commit()
         .finish();

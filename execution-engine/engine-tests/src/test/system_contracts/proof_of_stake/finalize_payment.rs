@@ -7,8 +7,8 @@ use engine_core::engine_state::{
 use engine_shared::{account::Account, motes::Motes};
 use engine_test_support::{
     internal::{
-        utils, DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder,
-        DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT,
+        utils, DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_PAYMENT,
+        DEFAULT_RUN_GENESIS_REQUEST,
     },
     DEFAULT_ACCOUNT_ADDR,
 };
@@ -41,7 +41,7 @@ fn initialize() -> InMemoryWasmTestBuilder {
     .build();
 
     builder
-        .run_genesis(&DEFAULT_GENESIS_CONFIG)
+        .run_genesis(&DEFAULT_RUN_GENESIS_REQUEST)
         .exec(exec_request_1)
         .expect_success()
         .commit()
@@ -88,7 +88,7 @@ fn finalize_payment_should_refund_to_specified_purse() {
     let args: (U512, u8, Option<U512>, Option<PublicKey>) =
         (payment_amount, refund_purse_flag, None, None);
 
-    builder.run_genesis(&DEFAULT_GENESIS_CONFIG);
+    builder.run_genesis(&DEFAULT_RUN_GENESIS_REQUEST);
 
     let payment_pre_balance = get_pos_payment_purse_balance(&builder);
     let rewards_pre_balance = get_pos_rewards_purse_balance(&builder);

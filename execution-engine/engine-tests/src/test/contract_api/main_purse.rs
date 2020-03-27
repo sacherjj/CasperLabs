@@ -1,7 +1,8 @@
 use engine_shared::stored_value::StoredValue;
 use engine_test_support::{
     internal::{
-        ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT,
+        ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_PAYMENT,
+        DEFAULT_RUN_GENESIS_REQUEST,
     },
     DEFAULT_ACCOUNT_ADDR,
 };
@@ -16,7 +17,7 @@ const ACCOUNT_1_ADDR: PublicKey = PublicKey::ed25519_from([1u8; 32]);
 fn should_run_main_purse_contract_default_account() {
     let mut builder = InMemoryWasmTestBuilder::default();
 
-    let builder = builder.run_genesis(&DEFAULT_GENESIS_CONFIG);
+    let builder = builder.run_genesis(&DEFAULT_RUN_GENESIS_REQUEST);
 
     let default_account = if let Ok(StoredValue::Account(account)) =
         builder.query(None, Key::Account(DEFAULT_ACCOUNT_ADDR), &[])
@@ -49,7 +50,7 @@ fn should_run_main_purse_contract_account_1() {
     .build();
 
     let builder = builder
-        .run_genesis(&DEFAULT_GENESIS_CONFIG)
+        .run_genesis(&DEFAULT_RUN_GENESIS_REQUEST)
         .exec(exec_request_1)
         .expect_success()
         .commit();

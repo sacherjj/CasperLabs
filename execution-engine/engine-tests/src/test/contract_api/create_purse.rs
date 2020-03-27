@@ -2,7 +2,9 @@ use lazy_static::lazy_static;
 
 use engine_shared::transform::Transform;
 use engine_test_support::{
-    internal::{ExecuteRequestBuilder, WasmTestBuilder, DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT},
+    internal::{
+        ExecuteRequestBuilder, WasmTestBuilder, DEFAULT_PAYMENT, DEFAULT_RUN_GENESIS_REQUEST,
+    },
     DEFAULT_ACCOUNT_ADDR,
 };
 use types::{account::PublicKey, Key, U512};
@@ -62,7 +64,7 @@ fn should_insert_mint_add_keys_transform() {
 
     let mint_transform: &Transform = {
         let result = WasmTestBuilder::default()
-            .run_genesis(&DEFAULT_GENESIS_CONFIG)
+            .run_genesis(&DEFAULT_RUN_GENESIS_REQUEST)
             .exec(exec_request_1)
             .expect_success()
             .commit()
@@ -95,7 +97,7 @@ fn should_insert_account_into_named_keys() {
     )
     .build();
     let account_1 = WasmTestBuilder::default()
-        .run_genesis(&DEFAULT_GENESIS_CONFIG)
+        .run_genesis(&DEFAULT_RUN_GENESIS_REQUEST)
         .exec(exec_request_1)
         .expect_success()
         .commit()
@@ -130,7 +132,7 @@ fn should_create_usable_purse() {
     )
     .build();
     let result = WasmTestBuilder::default()
-        .run_genesis(&DEFAULT_GENESIS_CONFIG)
+        .run_genesis(&DEFAULT_RUN_GENESIS_REQUEST)
         .exec(exec_request_1)
         .expect_success()
         .commit()

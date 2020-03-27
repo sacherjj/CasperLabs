@@ -114,11 +114,7 @@ pub struct GenesisConfig {
     name: String,
     timestamp: u64,
     protocol_version: ProtocolVersion,
-    mint_installer_bytes: Vec<u8>,
-    proof_of_stake_installer_bytes: Vec<u8>,
-    standard_payment_installer_bytes: Vec<u8>,
-    accounts: Vec<GenesisAccount>,
-    wasm_costs: WasmCosts,
+    ee_config: ExecConfig,
 }
 
 impl GenesisConfig {
@@ -127,21 +123,13 @@ impl GenesisConfig {
         name: String,
         timestamp: u64,
         protocol_version: ProtocolVersion,
-        mint_installer_bytes: Vec<u8>,
-        proof_of_stake_installer_bytes: Vec<u8>,
-        standard_payment_installer_bytes: Vec<u8>,
-        accounts: Vec<GenesisAccount>,
-        wasm_costs: WasmCosts,
+        ee_config: ExecConfig,
     ) -> Self {
         GenesisConfig {
             name,
             timestamp,
             protocol_version,
-            mint_installer_bytes,
-            proof_of_stake_installer_bytes,
-            standard_payment_installer_bytes,
-            accounts,
-            wasm_costs,
+            ee_config,
         }
     }
 
@@ -157,6 +145,67 @@ impl GenesisConfig {
         self.protocol_version
     }
 
+    pub fn ee_config(&self) -> &ExecConfig {
+        &self.ee_config
+    }
+
+    pub fn ee_config_mut(&mut self) -> &mut ExecConfig {
+        &mut self.ee_config
+    }
+
+    pub fn take_ee_config(self) -> ExecConfig {
+        self.ee_config
+    }
+}
+
+impl Distribution<GenesisConfig> for Standard {
+    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> GenesisConfig {
+        let count = rng.gen_range(1, 1000);
+        let name = iter::repeat(())
+            .map(|_| rng.gen::<char>())
+            .take(count)
+            .collect();
+
+        let timestamp = rng.gen();
+
+        let protocol_version = ProtocolVersion::from_parts(rng.gen(), rng.gen(), rng.gen());
+
+        let ee_config = rng.gen();
+
+        GenesisConfig {
+            name,
+            timestamp,
+            protocol_version,
+            ee_config,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ExecConfig {
+    mint_installer_bytes: Vec<u8>,
+    proof_of_stake_installer_bytes: Vec<u8>,
+    standard_payment_installer_bytes: Vec<u8>,
+    accounts: Vec<GenesisAccount>,
+    wasm_costs: WasmCosts,
+}
+
+impl ExecConfig {
+    pub fn new(
+        mint_installer_bytes: Vec<u8>,
+        proof_of_stake_installer_bytes: Vec<u8>,
+        standard_payment_installer_bytes: Vec<u8>,
+        accounts: Vec<GenesisAccount>,
+        wasm_costs: WasmCosts,
+    ) -> ExecConfig {
+        ExecConfig {
+            mint_installer_bytes,
+            proof_of_stake_installer_bytes,
+            standard_payment_installer_bytes,
+            accounts,
+            wasm_costs,
+        }
+    }
     pub fn mint_installer_bytes(&self) -> &[u8] {
         self.mint_installer_bytes.as_slice()
     }
@@ -192,23 +241,13 @@ impl GenesisConfig {
     }
 
     pub fn push_account(&mut self, account: GenesisAccount) {
-        self.accounts.push(account);
+        self.accounts.push(account)
     }
 }
 
-impl Distribution<GenesisConfig> for Standard {
-    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> GenesisConfig {
-        let mut count = rng.gen_range(1, 1000);
-        let name = iter::repeat(())
-            .map(|_| rng.gen::<char>())
-            .take(count)
-            .collect();
-
-        let timestamp = rng.gen();
-
-        let protocol_version = ProtocolVersion::from_parts(rng.gen(), rng.gen(), rng.gen());
-
-        count = rng.gen_range(1000, 10_000);
+impl Distribution<ExecConfig> for Standard {
+    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> ExecConfig {
+        let mut count = rng.gen_range(1000, 10_000);
         let mint_installer_bytes = iter::repeat(()).map(|_| rng.gen()).take(count).collect();
 
         count = rng.gen_range(1000, 10_000);
@@ -235,10 +274,7 @@ impl Distribution<GenesisConfig> for Standard {
             opcodes_div: rng.gen(),
         };
 
-        GenesisConfig {
-            name,
-            timestamp,
-            protocol_version,
+        ExecConfig {
             mint_installer_bytes,
             proof_of_stake_installer_bytes,
             standard_payment_installer_bytes,

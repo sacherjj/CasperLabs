@@ -8,13 +8,15 @@ use lazy_static::lazy_static;
 
 use engine_core::engine_state::{
     execution_result::ExecutionResult,
-    genesis::{GenesisAccount, GenesisConfig},
+    genesis::{ExecConfig, GenesisAccount, GenesisConfig},
+    run_genesis_request::RunGenesisRequest,
 };
 use engine_shared::{
-    account::Account, additive_map::AdditiveMap, gas::Gas, stored_value::StoredValue,
-    transform::Transform,
+    account::Account, additive_map::AdditiveMap, gas::Gas, newtypes::Blake2bHash,
+    stored_value::StoredValue, transform::Transform,
 };
-use types::Key;
+use engine_wasm_prep::wasm_costs::WasmCosts;
+use types::{bytesrepr::ToBytes, Key};
 
 use crate::internal::{
     DEFAULT_CHAIN_NAME, DEFAULT_GENESIS_TIMESTAMP, DEFAULT_PROTOCOL_VERSION, DEFAULT_WASM_COSTS,
@@ -101,24 +103,49 @@ pub fn read_wasm_file_bytes<T: AsRef<Path>>(contract_file: T) -> Vec<u8> {
     panic!("{}\n", error_msg);
 }
 
-pub fn create_genesis_config(accounts: Vec<GenesisAccount>) -> GenesisConfig {
-    let name = DEFAULT_CHAIN_NAME.to_string();
-    let timestamp = DEFAULT_GENESIS_TIMESTAMP;
+pub fn create_exec_config(accounts: Vec<GenesisAccount>) -> ExecConfig {
     let mint_installer_bytes = read_wasm_file_bytes(MINT_INSTALL_CONTRACT);
     let proof_of_stake_installer_bytes = read_wasm_file_bytes(POS_INSTALL_CONTRACT);
     let standard_payment_installer_bytes = read_wasm_file_bytes(STANDARD_PAYMENT_INSTALL_CONTRACT);
-    let protocol_version = *DEFAULT_PROTOCOL_VERSION;
     let wasm_costs = *DEFAULT_WASM_COSTS;
-    GenesisConfig::new(
-        name,
-        timestamp,
-        protocol_version,
+    ExecConfig::new(
         mint_installer_bytes,
         proof_of_stake_installer_bytes,
         standard_payment_installer_bytes,
         accounts,
         wasm_costs,
     )
+}
+
+pub fn create_genesis_config(accounts: Vec<GenesisAccount>) -> GenesisConfig {
+    let name = DEFAULT_CHAIN_NAME.to_string();
+    let timestamp = DEFAULT_GENESIS_TIMESTAMP;
+    let protocol_version = *DEFAULT_PROTOCOL_VERSION;
+    let exec_config = create_exec_config(accounts);
+
+    GenesisConfig::new(name, timestamp, protocol_version, exec_config)
+}
+
+pub fn create_genesis_config_hash(
+    chain_name: &str,
+    timestamp: u64,
+    wasm_costs: WasmCosts,
+) -> Blake2bHash {
+    let mut data = Vec::new();
+    data.extend_from_slice(chain_name.as_bytes());
+    data.extend_from_slice(&timestamp.to_le_bytes());
+    data.extend_from_slice(&wasm_costs.to_bytes().expect("should serialize wasm table"));
+    Blake2bHash::new(&data)
+}
+
+pub fn create_run_genesis_request(accounts: Vec<GenesisAccount>) -> RunGenesisRequest {
+    let genesis_config_hash = create_genesis_config_hash(
+        DEFAULT_CHAIN_NAME,
+        DEFAULT_GENESIS_TIMESTAMP,
+        *DEFAULT_WASM_COSTS,
+    );
+    let exec_config = create_exec_config(accounts);
+    RunGenesisRequest::new(genesis_config_hash, *DEFAULT_PROTOCOL_VERSION, exec_config)
 }
 
 pub fn get_exec_costs<T: AsRef<ExecutionResult>, I: IntoIterator<Item = T>>(

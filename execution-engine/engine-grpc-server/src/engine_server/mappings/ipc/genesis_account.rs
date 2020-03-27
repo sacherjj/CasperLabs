@@ -4,11 +4,13 @@ use engine_core::engine_state::genesis::GenesisAccount;
 use engine_shared::motes::Motes;
 use types::account::PublicKey;
 
-use crate::engine_server::{ipc::ChainSpec_GenesisAccount, mappings::MappingError};
+use crate::engine_server::{
+    ipc::ChainSpec_GenesisConfig_ExecConfig_GenesisAccount, mappings::MappingError,
+};
 
-impl From<GenesisAccount> for ChainSpec_GenesisAccount {
+impl From<GenesisAccount> for ChainSpec_GenesisConfig_ExecConfig_GenesisAccount {
     fn from(genesis_account: GenesisAccount) -> Self {
-        let mut pb_genesis_account = ChainSpec_GenesisAccount::new();
+        let mut pb_genesis_account = ChainSpec_GenesisConfig_ExecConfig_GenesisAccount::new();
 
         pb_genesis_account.set_public_key(genesis_account.public_key().as_bytes().to_vec());
         pb_genesis_account.set_balance(genesis_account.balance().value().into());
@@ -18,10 +20,12 @@ impl From<GenesisAccount> for ChainSpec_GenesisAccount {
     }
 }
 
-impl TryFrom<ChainSpec_GenesisAccount> for GenesisAccount {
+impl TryFrom<ChainSpec_GenesisConfig_ExecConfig_GenesisAccount> for GenesisAccount {
     type Error = MappingError;
 
-    fn try_from(mut pb_genesis_account: ChainSpec_GenesisAccount) -> Result<Self, Self::Error> {
+    fn try_from(
+        mut pb_genesis_account: ChainSpec_GenesisConfig_ExecConfig_GenesisAccount,
+    ) -> Result<Self, Self::Error> {
         // TODO: our TryFromSliceForPublicKeyError should convey length info
         let public_key =
             PublicKey::ed25519_try_from(pb_genesis_account.get_public_key()).map_err(|_| {
@@ -47,8 +51,9 @@ mod tests {
     #[test]
     fn round_trip() {
         let genesis_account = rand::random();
-        test_utils::protobuf_round_trip::<GenesisAccount, ChainSpec_GenesisAccount>(
-            genesis_account,
-        );
+        test_utils::protobuf_round_trip::<
+            GenesisAccount,
+            ChainSpec_GenesisConfig_ExecConfig_GenesisAccount,
+        >(genesis_account);
     }
 }
