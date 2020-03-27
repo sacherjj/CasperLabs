@@ -11,5 +11,5 @@ trait FinalityDetector[F[_]] {
       dag: DagRepresentation[F],
       message: Message,
       latestFinalizedBlock: BlockHash
-  ): F[Option[CommitteeWithConsensusValue]]
+  ): F[Seq[CommitteeWithConsensusValue]]
 }

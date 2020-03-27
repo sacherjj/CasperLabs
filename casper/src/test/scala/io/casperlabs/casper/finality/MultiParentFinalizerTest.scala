@@ -48,11 +48,11 @@ class MultiParentFinalizerTest
                                  MultiParentFinalizerTest.immediateFinalityStub,
                                  isHighway = false
                                )
-        a0                    <- createAndStoreBlockFull[Task](v1, Seq(genesis), Seq.empty, bonds)
-        a1                    <- createAndStoreBlockFull[Task](v1, Seq(a0), Seq.empty, bonds)
-        b0                    <- createAndStoreBlockFull[Task](v2, Seq(genesis, a0), Seq(a1), bonds)
-        b0Msg                 <- Task.fromTry(Message.fromBlock(b0))
-        newlyFinalizedBlocks0 <- multiParentFinalizer.onNewMessageAdded(b0Msg).map(_.get)
+        a0                         <- createAndStoreBlockFull[Task](v1, Seq(genesis), Seq.empty, bonds)
+        a1                         <- createAndStoreBlockFull[Task](v1, Seq(a0), Seq.empty, bonds)
+        b0                         <- createAndStoreBlockFull[Task](v2, Seq(genesis, a0), Seq(a1), bonds)
+        b0Msg                      <- Task.fromTry(Message.fromBlock(b0))
+        Seq(newlyFinalizedBlocks0) <- multiParentFinalizer.onNewMessageAdded(b0Msg)
         // `b0` is in main chain, `a0` is secondary parent.
         _ = assert(newlyFinalizedBlocks0.newLFB == b0.blockHash)
         _ = assert(
@@ -74,7 +74,7 @@ class MultiParentFinalizerTest
         // `a2`'s main parent is `b0`, secondary is `a0`.
         // Since `a0` was already finalized through `b0` it should not be returned now.
         // Similarly `a1` was already orphaned by `b0`.
-        newlyFinalizedBlocks1 <- multiParentFinalizer.onNewMessageAdded(a2Msg).map(_.get)
+        Seq(newlyFinalizedBlocks1) <- multiParentFinalizer.onNewMessageAdded(a2Msg)
 
         _ = assert(newlyFinalizedBlocks1.newLFB == a2.blockHash)
         _ = assert(newlyFinalizedBlocks1.indirectlyFinalized.isEmpty)
@@ -112,9 +112,9 @@ class MultiParentFinalizerTest
         b <- MultiParentFinalizerTest
               .finalizeBlock[Task](a.blockHash, nelBonds)
               .flatMap(ProtoUtil.unsafeGetBlock[Task](_))
-        bMsg       <- Task.fromTry(Message.fromBlock(b))
-        finalizedA <- multiParentFinalizer.onNewMessageAdded(bMsg).map(_.get)
-        _          = assert(finalizedA.newLFB == a.blockHash && finalizedA.indirectlyFinalized.isEmpty)
+        bMsg            <- Task.fromTry(Message.fromBlock(b))
+        Seq(finalizedA) <- multiParentFinalizer.onNewMessageAdded(bMsg)
+        _               = assert(finalizedA.newLFB == a.blockHash && finalizedA.indirectlyFinalized.isEmpty)
 
         // `aPrime` is sibiling of `a`, another child of Genesis.
         // Since `a` has already been finalized `aPrime` should never become chosen as new LFB.
@@ -200,7 +200,7 @@ object MultiParentFinalizerTest extends BlockGenerator {
         dag: DagRepresentation[Task],
         message: Message,
         latestFinalizedBlock: BlockHash
-    ): Task[Option[CommitteeWithConsensusValue]] =
-      Task(Some(CommitteeWithConsensusValue(Set.empty, 1L, message.messageHash)))
+    ): Task[Seq[CommitteeWithConsensusValue]] =
+      Task(Seq(CommitteeWithConsensusValue(Set.empty, 1L, message.messageHash)))
   }
 }

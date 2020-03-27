@@ -159,7 +159,7 @@ trait HighwayFixture
     implicit lazy val finalizer = new MultiParentFinalizer[Task] {
       override def onNewMessageAdded(
           message: Message
-      ): Task[Option[MultiParentFinalizer.FinalizedBlocks]] = none.pure[Task]
+      ): Task[Seq[MultiParentFinalizer.FinalizedBlocks]] = Seq.empty.pure[Task]
     }
 
     implicit lazy val deployBuffer = DeployBuffer.create[Task](chainName, minTtl = Duration.Zero)
