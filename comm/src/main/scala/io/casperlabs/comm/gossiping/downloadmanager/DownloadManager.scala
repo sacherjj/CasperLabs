@@ -17,6 +17,7 @@ import io.casperlabs.comm.gossiping.{Chunk, GossipService, Relaying, WaitHandle}
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.shared.Log._
 import io.casperlabs.shared.{Compression, Log}
+import io.casperlabs.catscontrib.effect.implicits.fiberSyntax
 import monix.tail.Iterant
 
 import scala.concurrent.duration.{Duration, FiniteDuration}
@@ -259,11 +260,11 @@ trait DownloadManagerImpl[F[_]] extends DownloadManager[F] { self =>
               existingItem = items.get(handle.id)
               _ <- backend
                     .onScheduled(handle)
-                    .start
+                    .forkAndLog
                     .whenA(item.canStart || existingItem.isEmpty)
               _ <- backend
                     .onScheduled(handle, source)
-                    .start
+                    .forkAndLog
                     .whenA(item.canStart || existingItem.forall(!_.sources(source)))
 
               _ <- itemsRef.update(_ + (handle.id -> item))
@@ -293,7 +294,7 @@ trait DownloadManagerImpl[F[_]] extends DownloadManager[F] { self =>
                  }
           (watchers, startables) = next
           _                      <- watchers.traverse(_.complete(Right(())).attempt.void)
-          _                      <- backend.onDownloaded(id).start
+          _                      <- backend.onDownloaded(id).forkAndLog
           _                      <- startables.traverse(startWorker)
           _                      <- setScheduledGauge()
         } yield ()
@@ -314,7 +315,7 @@ trait DownloadManagerImpl[F[_]] extends DownloadManager[F] { self =>
                      }
           // Tell whoever scheduled it before that it's over.
           _ <- watchers.traverse(_.complete(Left(ex)).attempt.void)
-          _ <- backend.onFailed(id).start
+          _ <- backend.onFailed(id).forkAndLog
           _ <- setScheduledGauge()
         } yield ()
 
