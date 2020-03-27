@@ -5,55 +5,44 @@ import java.util.concurrent.{TimeUnit, TimeoutException}
 import cats._
 import cats.data.NonEmptyList
 import cats.effect._
+import cats.effect.concurrent.Ref
 import cats.effect.implicits._
-import cats.effect.concurrent._
 import cats.implicits._
 import com.google.protobuf.ByteString
 import eu.timepit.refined.auto._
-import io.casperlabs.casper.Estimator.BlockHash
+import fs2.interop.reactivestreams._
 import io.casperlabs.casper._
 import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.consensus.info.DeployInfo
-import io.casperlabs.casper.util.{CasperLabsProtocol, ProtoUtil}
+import io.casperlabs.casper.util.CasperLabsProtocol
 import io.casperlabs.casper.validation.Validation
-import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.comm.ServiceError.{InvalidArgument, Unavailable}
 import io.casperlabs.comm.discovery.NodeUtils._
 import io.casperlabs.comm.discovery.{Node, NodeDiscovery}
 import io.casperlabs.comm.gossiping._
-import io.casperlabs.comm.gossiping.synchronization.{
-  InitialSynchronization,
-  InitialSynchronizationBackwardImpl,
-  InitialSynchronizationForwardImpl,
-  StashingSynchronizer,
-  Synchronizer,
-  SynchronizerImpl
-}
+import io.casperlabs.comm.gossiping.downloadmanager._
+import io.casperlabs.comm.gossiping.synchronization._
 import io.casperlabs.comm.grpc._
 import io.casperlabs.comm.{CachedConnections, NodeAsk}
-import io.casperlabs.crypto.Keys
 import io.casperlabs.crypto.Keys.PublicKey
 import io.casperlabs.crypto.codec.Base16
-import io.casperlabs.ipc
-import io.casperlabs.ipc.ChainSpec
 import io.casperlabs.metrics.Metrics
-import io.casperlabs.models.BlockImplicits._
-import io.casperlabs.node.configuration.Configuration
 import io.casperlabs.node.casper.consensus.Consensus
-import io.casperlabs.shared.{Cell, FatalError, Log, Time}
+import io.casperlabs.node.configuration.Configuration
+import io.casperlabs.shared.{Log, Time}
 import io.casperlabs.storage.block._
 import io.casperlabs.storage.dag._
 import io.casperlabs.storage.deploy.DeployStorage
-import io.grpc.{ManagedChannel, Server}
 import io.grpc.netty.{NegotiationType, NettyChannelBuilder}
+import io.grpc.{ManagedChannel, Server}
 import io.netty.handler.ssl.{ClientAuth, SslContext}
-import fs2.interop.reactivestreams._
 import monix.eval.TaskLike
 import monix.execution.Scheduler
 import monix.tail.Iterant
+
 import scala.concurrent.duration._
 import scala.util.Random
-import scala.util.control.{NoStackTrace, NonFatal}
+import scala.util.control.NonFatal
 
 /** Create the Casper stack using the GossipService. */
 package object gossiping {
@@ -114,12 +103,15 @@ package object gossiping {
                        connectToGossip
                      )
 
+      isInitialSyncDoneRef <- Resource.liftF(Ref.of[F, Boolean](false))
+
       downloadManager <- makeDownloadManager(
                           conf,
                           connectToGossip,
                           relaying,
                           synchronizer,
-                          maybeValidatorId
+                          maybeValidatorId,
+                          isInitialSyncDoneRef
                         )
 
       genesisApprover <- makeGenesisApprover(
@@ -153,7 +145,7 @@ package object gossiping {
 
       // Let the outside world know when we're done.
       _ <- makeFiberResource {
-            awaitSynchronization >> onInitialSyncCompleted
+            awaitSynchronization >> isInitialSyncDoneRef.set(true) >> onInitialSyncCompleted
           }
 
       // The stashing synchronizer waits for Genesis approval and the initial synchronization
@@ -280,51 +272,56 @@ package object gossiping {
       connectToGossip: GossipService.Connector[F],
       relaying: Relaying[F],
       synchronizer: Synchronizer[F],
-      maybeValidatorId: Option[ValidatorIdentity]
-  ): Resource[F, DownloadManager[F]] =
+      maybeValidatorId: Option[ValidatorIdentity],
+      isInitialSyncDoneRef: Ref[F, Boolean]
+  ): Resource[F, BlockDownloadManager[F]] =
     for {
-      _ <- Resource.liftF(DownloadManagerImpl.establishMetrics[F])
+      _ <- Resource.liftF(BlockDownloadManagerImpl.establishMetrics[F])
       maybeValidatorPublicKey = maybeValidatorId
         .map(x => ByteString.copyFrom(x.publicKey))
         .filterNot(_.isEmpty)
-      downloadManager <- DownloadManagerImpl[F](
+      downloadManager <- BlockDownloadManagerImpl[F](
                           maxParallelDownloads = conf.server.downloadMaxParallelBlocks,
                           connectToGossip = connectToGossip,
-                          backend = new DownloadManagerImpl.Backend[F] {
-                            override def hasBlock(blockHash: ByteString): F[Boolean] =
+                          backend = new BlockDownloadManagerImpl.Backend[F] {
+                            override def contains(blockHash: ByteString): F[Boolean] =
                               isInDag(blockHash)
 
-                            override def validateBlock(block: Block): F[Unit] =
-                              maybeValidatorPublicKey
-                                .filter(_ == block.getHeader.validatorPublicKey)
-                                .fold(().pure[F]) { _ =>
-                                  Log[F]
-                                    .warn(
-                                      s"${PrettyPrinter.buildString(block) -> "block" -> null} seems to be created by a doppelganger using the same validator key!"
-                                    )
-                                } *>
+                            override def validate(block: Block): F[Unit] =
+                              isInitialSyncDoneRef.get.flatMap { isInitialSyncDone =>
+                                maybeValidatorPublicKey
+                                  .filter {
+                                    _ == block.getHeader.validatorPublicKey && isInitialSyncDone
+                                  }
+                                  .fold(().pure[F]) { _ =>
+                                    Log[F]
+                                      .warn(
+                                        s"${PrettyPrinter.buildString(block) -> "block" -> null} seems to be created by a doppelganger using the same validator key!"
+                                      )
+                                  }
+                              } *>
                                 Consensus[F].validateAndAddBlock(block)
 
-                            override def storeBlock(block: Block): F[Unit] =
+                            override def store(block: Block): F[Unit] =
                               // Validation has already stored it.
-                              ().pure[F]
-
-                            override def storeBlockSummary(
-                                summary: BlockSummary
-                            ): F[Unit] =
-                              // Storing the block automatically stores the summary as well.
                               ().pure[F]
 
                             override def onScheduled(summary: BlockSummary): F[Unit] =
                               Consensus[F].onScheduled(summary)
 
+                            override def onScheduled(summary: BlockSummary, source: Node): F[Unit] =
+                              synchronizer.onScheduled(summary, source)
+
                             override def onDownloaded(blockHash: ByteString): F[Unit] =
                               // Calling `addBlock` during validation has already stored the block,
                               // so we have nothing more to do here with the consensus.
-                              synchronizer.downloaded(blockHash)
+                              synchronizer.onDownloaded(blockHash)
+
+                            override def onFailed(blockHash: ByteString): F[Unit] =
+                              synchronizer.onFailed(blockHash)
                           },
                           relaying = relaying,
-                          retriesConf = DownloadManagerImpl.RetriesConf(
+                          retriesConf = BlockDownloadManagerImpl.RetriesConf(
                             maxRetries = conf.server.downloadMaxRetries,
                             initialBackoffPeriod = conf.server.downloadRetryInitialBackoffPeriod,
                             backoffFactor = conf.server.downloadRetryBackoffFactor
@@ -339,7 +336,7 @@ package object gossiping {
       conf: Configuration,
       maybeValidatorId: Option[ValidatorIdentity],
       connectToGossip: GossipService.Connector[F],
-      downloadManager: DownloadManager[F],
+      downloadManager: BlockDownloadManager[F],
       genesis: Block
   ): Resource[F, GenesisApprover[F]] =
     for {
@@ -469,7 +466,8 @@ package object gossiping {
                        maxPossibleDepth = conf.server.syncMaxPossibleDepth,
                        minBlockCountToCheckWidth = conf.server.syncMinBlockCountToCheckWidth,
                        maxBondingRate = conf.server.syncMaxBondingRate,
-                       maxDepthAncestorsRequest = conf.server.syncMaxDepthAncestorsRequest
+                       maxDepthAncestorsRequest = conf.server.syncMaxDepthAncestorsRequest,
+                       disableValidations = conf.server.syncDisableValidations
                      )
     } yield synchronizer
   }
@@ -485,7 +483,7 @@ package object gossiping {
   def makeGossipServiceServer[F[_]: ConcurrentEffect: Parallel: Log: Metrics: BlockStorage: DagStorage: DeployStorage: Consensus](
       conf: Configuration,
       synchronizer: Synchronizer[F],
-      downloadManager: DownloadManager[F],
+      downloadManager: BlockDownloadManager[F],
       genesisApprover: GenesisApprover[F]
   ): Resource[F, GossipServiceServer[F]] =
     for {
@@ -498,9 +496,15 @@ package object gossiping {
                       BlockStorage[F]
                         .getBlockSummary(blockHash)
 
-                    override def getBlock(blockHash: ByteString): F[Option[Block]] =
+                    override def getBlock(
+                        blockHash: ByteString,
+                        deploysBodiesExcluded: Boolean
+                    ): F[Option[Block]] =
                       BlockStorage[F]
-                        .get(blockHash)
+                        .get(blockHash)(
+                          if (deploysBodiesExcluded) DeployInfo.View.BASIC
+                          else DeployInfo.View.FULL
+                        )
                         .map(_.map(_.getBlockMessage))
 
                     override def getDeploys(deployHashes: Set[ByteString]): Iterant[F, Deploy] =
@@ -552,7 +556,7 @@ package object gossiping {
     * Returns handle which will be resolved when initial synchronization is finished. */
   private def makeInitialSynchronizer[F[_]: Concurrent: Parallel: Log: Timer: NodeDiscovery: DagStorage: Consensus](
       conf: Configuration,
-      downloadManager: DownloadManager[F],
+      downloadManager: BlockDownloadManager[F],
       synchronizer: Synchronizer[F],
       connectToGossip: GossipService.Connector[F],
       awaitApproved: F[Unit]

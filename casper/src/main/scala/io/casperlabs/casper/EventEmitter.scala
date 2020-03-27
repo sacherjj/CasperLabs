@@ -19,7 +19,8 @@ import simulacrum.typeclass
   def blockAdded(blockHash: BlockHash): F[Unit]
   def newLastFinalizedBlock(
       lfb: BlockHash,
-      indirectlyFinalized: Set[BlockHash]
+      indirectlyFinalized: Set[BlockHash],
+      indirectlyOrphaned: Set[BlockHash]
   ): F[Unit]
 }
 

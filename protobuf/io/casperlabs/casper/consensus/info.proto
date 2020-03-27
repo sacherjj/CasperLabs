@@ -16,11 +16,13 @@ message BlockInfo {
 
     message Status {
         reserved 1; // fault_tolerance;
+        reserved 4; // is_finalized;
         Stats stats = 2;
         repeated bytes child_hashes = 3;
 
-        // Indicate that this block has reached k=1 summit level and has appeared in the finalized block stream.
-        bool is_finalized = 4;
+        // Indicate the finality status of the block, i.e. whether it's in the p-past cone
+        // of the last finalized block. Doesn't apply to ballots, those never get finalized.
+        Finality finality = 5;
 
         // Statistics derived from the full block.
         message Stats {
@@ -29,6 +31,15 @@ message BlockInfo {
             uint64 deploy_cost_total = 3;
             // Average gas price across all deploys in the block weighted by the gas cost of the deploys.
             uint64 deploy_gas_price_avg = 4;
+        }
+
+        enum Finality {
+            // The fate of the block hasn't been decided yet.
+            UNDECIDED = 0;
+            // The block has reached k=1 summit level and has appeared in the finalized block stream.
+            FINALIZED = 1;
+            // The block was bypassed by the Last Finalized Block without being finalized, i.e. it will never be finalized now.
+            ORPHANED = 2;
         }
     }
 }
@@ -45,6 +56,7 @@ message DeployInfo {
         uint64 cost = 2;
         bool is_error = 3;
         string error_message = 4;
+        uint32 stage = 5;
     }
 
     enum View {
@@ -77,6 +89,7 @@ message DeployInfo {
 }
 
 message Event {
+    uint64 event_id = 9;
     oneof value {
         BlockAdded block_added = 1;
         NewFinalizedBlock new_finalized_block = 2;
@@ -97,7 +110,8 @@ message Event {
         bytes block_hash = 1;
         // Set of blocks that were finalized indirectly (secondary parents of the new main-chain LFB).
         repeated bytes indirectly_finalized_block_hashes = 2;
-        // TODO (CON-631): Add `orphaned_block_hashes`.
+        // Set of blocks which are never going to be finalized now.
+        repeated bytes indirectly_orphaned_block_hashes = 3;
     }
 
     // A deploy was added to the local buffer.
@@ -134,7 +148,6 @@ message Event {
         io.casperlabs.casper.consensus.Block.ProcessedDeploy processed_deploy = 2;
     }
 
-    // TODO (CON-631): Emit the anti-finalization event (currently just a placeholder).
     // A block the deploy was included in has been anti-finalized, i.e. orphaned by the LFB.
     // The deploy can still be finalized in a different block, if it was requeued or re-sent.
     message DeployOrphaned {

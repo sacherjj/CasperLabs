@@ -163,7 +163,7 @@ class EraRuntime[F[_]: Sync: Clock: Metrics: Log: EraStorage: FinalityStorageRea
           else {
             ForkChoice[F]
               .fromKeyBlock(era.keyBlockHash)
-              .timerGauge("is_over_forkchoice")
+              .timerGauge("is_era_over_forkchoice")
               .flatMap { choice =>
                 choice.block.isSwitchBlock.ifM(
                   FinalityStorageReader[F].isFinalized(choice.block.messageHash),
@@ -200,9 +200,11 @@ class EraRuntime[F[_]: Sync: Clock: Metrics: Log: EraStorage: FinalityStorageRea
   private def ifCurrentRound(roundId: Ticks)(thunk: HWL[Unit]): HWL[Unit] =
     // It's okay not to send a response to a message where we *did* participate
     // in the round it belongs to, but we moved on to a newer round.
-    HighwayLog.liftF(currentTick.flatMap(roundBoundariesAt)) flatMap {
-      case (from, _) if from == roundId => thunk
-      case _                            => noop
+    HighwayLog.liftF(isCurrentRound(roundId)).ifM(thunk, noop)
+
+  private def isCurrentRound(roundId: Ticks): F[Boolean] =
+    currentTick.flatMap(roundBoundariesAt).map {
+      case (from, _) => from == roundId
     }
 
   /** Build a block or ballot unless the fork choice is at the moment not something
@@ -214,7 +216,12 @@ class EraRuntime[F[_]: Sync: Clock: Metrics: Log: EraStorage: FinalityStorageRea
     */
   private def ifCanBuildOn[T](choice: ForkChoice.Result)(build: => F[T]): F[Option[T]] =
     // Doesn't apply on Genesis.
-    if (!choice.block.parentBlock.isEmpty && choice.block.roundId < startTick) none.pure[F]
+    if (!choice.block.parentBlock.isEmpty && choice.block.roundId < startTick)
+      Log[F]
+        .warn(
+          s"Skipping the build: fork choice ${choice.block.messageHash.show -> "message"} is before the era start."
+        )
+        .as(none)
     else build.map(_.some)
 
   private def createLambdaResponse(
@@ -248,7 +255,7 @@ class EraRuntime[F[_]: Sync: Clock: Metrics: Log: EraStorage: FinalityStorageRea
                                      .ballot(
                                        keyBlockHash = era.keyBlockHash,
                                        roundId = Ticks(lambdaMessage.roundId),
-                                       target = choice.block.messageHash,
+                                       target = choice.block,
                                        justifications = choice.justificationsMap
                                      )
                                      .timerGauge("response_ballot")
@@ -258,7 +265,8 @@ class EraRuntime[F[_]: Sync: Clock: Metrics: Log: EraStorage: FinalityStorageRea
               .timerGauge("create_response")
           }
       _ <- m.fold(noop) { msg =>
-            HighwayLog.tell[F](HighwayEvent.CreatedLambdaResponse(msg))
+            HighwayLog.tell[F](HighwayEvent.CreatedLambdaResponse(msg)) >>
+              recordJustificationsDistance(msg)
           }
     } yield ()
   }
@@ -282,7 +290,7 @@ class EraRuntime[F[_]: Sync: Clock: Metrics: Log: EraStorage: FinalityStorageRea
                         .block(
                           keyBlockHash = era.keyBlockHash,
                           roundId = roundId,
-                          mainParent = choice.block.messageHash,
+                          mainParent = choice.block,
                           justifications = choice.justificationsMap,
                           isBookingBlock = isBookingBoundary(
                             choice.block.roundInstant,
@@ -296,7 +304,7 @@ class EraRuntime[F[_]: Sync: Clock: Metrics: Log: EraStorage: FinalityStorageRea
                         .ballot(
                           keyBlockHash = era.keyBlockHash,
                           roundId = roundId,
-                          target = choice.block.messageHash,
+                          target = choice.block,
                           justifications = choice.justificationsMap
                         )
                         .timerGauge("lambda_ballot")
@@ -314,6 +322,7 @@ class EraRuntime[F[_]: Sync: Clock: Metrics: Log: EraStorage: FinalityStorageRea
           }
       _ <- m.fold(noop) { msg =>
             HighwayLog.tell[F](HighwayEvent.CreatedLambdaMessage(msg)) >>
+              recordJustificationsDistance(msg) >>
               handleCriticalMessages(msg)
           }
     } yield ()
@@ -336,7 +345,7 @@ class EraRuntime[F[_]: Sync: Clock: Metrics: Log: EraStorage: FinalityStorageRea
                         .ballot(
                           keyBlockHash = era.keyBlockHash,
                           roundId = roundId,
-                          target = choice.block.messageHash,
+                          target = choice.block,
                           justifications = choice.justificationsMap
                         )
                         .timerGauge("omega_ballot")
@@ -345,11 +354,33 @@ class EraRuntime[F[_]: Sync: Clock: Metrics: Log: EraStorage: FinalityStorageRea
               }
               .timerGauge("create_omega")
           }
-      _ <- m.fold(noop) { msg =>
-            HighwayLog.tell[F](HighwayEvent.CreatedOmegaMessage(msg))
-          }
+      _ <- m.fold(noop)(msg => {
+            recordJustificationsDistance(msg) >>
+              HighwayLog.tell[F](HighwayEvent.CreatedOmegaMessage(msg))
+          })
     } yield ()
   }
+
+  // Returns a map that represents number of msg justifications at their distance from the message.
+  // Distance is a difference of rounds between the message and cited message.
+  private def justificationsRoundsDistance(msg: Message): F[Map[Long, Int]] =
+    msg.justifications.toList
+      .traverse(j => dag.lookupUnsafe(j.latestBlockHash))
+      .map { justificationMessages =>
+        justificationMessages
+          .filter(_.eraId == msg.eraId)
+          .map(j => msg.jRank - j.jRank)
+          .groupBy(identity)
+          .mapValues(_.size)
+      }
+
+  private def recordJustificationsDistance(msg: Message): HWL[Unit] =
+    HighwayLog.liftF(justificationsRoundsDistance(msg).flatMap { distances =>
+      distances.toList.traverse {
+        case (rankDistance, count) =>
+          Metrics[F].record("justificationsJRankDistances", rankDistance, count.toLong)
+      }.void
+    })
 
   /** Trace the lineage of the switch block back to find a key block,
     * then the corresponding booking block.
@@ -533,6 +564,14 @@ class EraRuntime[F[_]: Sync: Clock: Metrics: Log: EraStorage: FinalityStorageRea
                       .liftF(message.isLambdaMessage)
                       .ifM(createLambdaResponse(mp, message), noop)
                   }
+              _ <- HighwayLog
+                    .liftF(isCurrentRound(Ticks(message.roundId)))
+                    .ifM(
+                      HighwayLog.liftF(Metrics[F].incrementCounter("incoming_same_round_message")),
+                      HighwayLog
+                        .liftF(Metrics[F].incrementCounter("incoming_different_round_message"))
+                    )
+                    .whenA(synced)
             } yield ()
           }
       _ <- handleCriticalMessages(message)

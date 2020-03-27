@@ -1,12 +1,14 @@
 package io.casperlabs.comm.gossiping.synchronization
 
 import java.util.concurrent.TimeoutException
+
 import cats.effect.concurrent.Ref
 import com.google.protobuf.ByteString
-import io.casperlabs.casper.consensus.{Block, BlockSummary}
+import io.casperlabs.casper.consensus.BlockSummary
 import io.casperlabs.comm.GossipError
 import io.casperlabs.comm.discovery.{Node, NodeDiscovery, NodeIdentifier}
 import io.casperlabs.comm.gossiping._
+import io.casperlabs.comm.gossiping.downloadmanager._
 import io.casperlabs.comm.gossiping.synchronization.InitialSynchronization.SynchronizationError
 import io.casperlabs.comm.gossiping.synchronization.InitialSynchronizationForwardImplSpec.TestFixture
 import io.casperlabs.metrics.Metrics
@@ -279,8 +281,8 @@ object InitialSynchronizationForwardImplSpec extends ArbitraryConsensus {
     def banTemp(node: Node): Task[Unit]     = ???
   }
 
-  class MockDownloadManager(maybeFail: (Node, BlockSummary) => Option[Throwable])
-      extends DownloadManager[Task] {
+  class MockBlockDownloadManager(maybeFail: (Node, BlockSummary) => Option[Throwable])
+      extends BlockDownloadManager[Task] {
     val requestsCounter = Atomic(Map.empty[Node, Int].withDefaultValue(0))
 
     def scheduleDownload(summary: BlockSummary, source: Node, relay: Boolean) =
@@ -319,8 +321,17 @@ object InitialSynchronizationForwardImplSpec extends ArbitraryConsensus {
     ): Task[Either[Synchronizer.SyncError, Vector[BlockSummary]]] =
       f(targetBlockHashes).map(Right(_))
 
-    def downloaded(
+    def onDownloaded(
         blockHash: ByteString
+    ): Task[Unit] = Task.unit
+
+    def onFailed(
+        blockHash: ByteString
+    ): Task[Unit] = Task.unit
+
+    def onScheduled(
+        summary: BlockSummary,
+        source: Node
     ): Task[Unit] = Task.unit
   }
 
@@ -339,10 +350,10 @@ object InitialSynchronizationForwardImplSpec extends ArbitraryConsensus {
         rankStartFrom: Long = 0L,
         roundPeriod: FiniteDuration = Duration.Zero
     )(
-        test: (InitialSynchronization[Task], MockDownloadManager) => Task[Unit]
+        test: (InitialSynchronization[Task], MockBlockDownloadManager) => Task[Unit]
     ): Unit = {
       val mockGossipService   = new MockGossipService(produceDag, correctRanges)
-      val mockDownloadManager = new MockDownloadManager(maybeFail)
+      val mockDownloadManager = new MockBlockDownloadManager(maybeFail)
       val mockSynchronizer    = new MockSynchronizer(sync)
       val effect = new InitialSynchronizationForwardImpl[Task](
         nodeDiscovery = new MockNodeDiscovery(nodes),

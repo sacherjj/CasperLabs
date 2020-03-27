@@ -3,3 +3,4 @@ node-*
 .casperlabs
 monitoring/prometheus/targets.yml
 keys
+stests/.build

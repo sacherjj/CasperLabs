@@ -44,11 +44,11 @@ class MockMessageProducer[F[_]: Sync: BlockStorageWriter: DagStorage](
   }
 
   private def withParent[A <: Message](
-      parentBlockHash: BlockHash
+      parentBlockHash: Message
   )(f: Message => F[A]): F[A] =
     for {
       dag <- DagStorage[F].getRepresentation
-      parent <- dag.lookupUnsafe(parentBlockHash).recoverWith {
+      parent <- dag.lookupUnsafe(parentBlockHash.messageHash).recoverWith {
                  case NonFatal(ex) =>
                    Sync[F].raiseError(
                      new IllegalStateException(
@@ -63,26 +63,26 @@ class MockMessageProducer[F[_]: Sync: BlockStorageWriter: DagStorage](
   override def ballot(
       keyBlockHash: BlockHash,
       roundId: Ticks,
-      target: ByteString,
-      justifications: Map[PublicKeyBS, Set[BlockHash]]
-  ): F[Message.Ballot] = withParent(target) { parent =>
+      target: Message.Block,
+      justifications: Map[PublicKeyBS, Set[Message]]
+  ): F[Message.Ballot] = withParent(target) { _ =>
     val unsigned = BlockSummary()
       .withHeader(
         Block
           .Header()
           .withMessageType(Block.MessageType.BALLOT)
           .withValidatorPublicKey(validatorId)
-          .withParentHashes(List(target))
+          .withParentHashes(List(target.messageHash))
           .withJustifications(
             for {
               kv <- justifications.toList
-              h  <- kv._2.toList
+              h  <- kv._2.toList.map(_.messageHash)
             } yield Block.Justification(kv._1, h)
           )
           .withRoundId(roundId)
           .withKeyBlockHash(keyBlockHash)
           .withState(
-            Block.GlobalState().withBonds(parent.blockSummary.getHeader.getState.bonds)
+            Block.GlobalState().withBonds(target.blockSummary.getHeader.getState.bonds)
           )
       )
     val hash   = ProtoUtil.protoHash(unsigned)
@@ -96,27 +96,27 @@ class MockMessageProducer[F[_]: Sync: BlockStorageWriter: DagStorage](
   override def block(
       keyBlockHash: ByteString,
       roundId: Ticks,
-      mainParent: ByteString,
-      justifications: Map[PublicKeyBS, Set[BlockHash]],
+      mainParent: Message.Block,
+      justifications: Map[PublicKeyBS, Set[Message]],
       isBookingBlock: Boolean
   ): F[Message.Block] =
-    withParent(mainParent) { parent =>
+    withParent(mainParent) { _ =>
       val unsigned = BlockSummary()
         .withHeader(
           Block
             .Header()
             .withValidatorPublicKey(validatorId)
-            .withParentHashes(List(mainParent))
+            .withParentHashes(List(mainParent.messageHash))
             .withJustifications(
               for {
                 kv <- justifications.toList
-                h  <- kv._2.toList
+                h  <- kv._2.toList.map(_.messageHash)
               } yield Block.Justification(kv._1, h)
             )
             .withRoundId(roundId)
             .withKeyBlockHash(keyBlockHash)
             .withState(
-              Block.GlobalState().withBonds(parent.blockSummary.getHeader.getState.bonds)
+              Block.GlobalState().withBonds(mainParent.blockSummary.getHeader.getState.bonds)
             )
         )
       val hash   = ProtoUtil.protoHash(unsigned)

@@ -2,25 +2,51 @@ const OPTION_TAG_NONE: u8 = 0;
 const OPTION_TAG_SOME: u8 = 1;
 
 // TODO: explore Option<T> (without interfaces to constrain T with, is it practical?)
+/**
+ * A class representing an optional value, i.e. it might contain either a value of some type or
+ * no value at all. Similar to Rust's `Option` or Haskell's `Maybe`.
+ */
 export class Option{
     private bytes: Uint8Array | null;
 
+	/**
+	 * Constructs a new option containing the value of `bytes`. `bytes` can be `null`, which
+	 * indicates no value.
+	 */
     constructor(bytes: Uint8Array | null) {
         this.bytes = bytes;
     }
 
+	/**
+	 * Checks whether the `Option` contains no value.
+	 *
+	 * @returns True if the `Option` has no value.
+	 */
     isNone(): bool{
         return this.bytes === null;
     }
 
+	/**
+	 * Checks whether the `Option` contains a value.
+	 *
+	 * @returns True if the `Option` has some value.
+	 */
     isSome() : bool{
         return this.bytes != null;
     }
 
+	/**
+	 * Unwraps the `Option`, returning the inner value (or `null` if there was none).
+	 *
+	 * @returns The inner value, or `null` if there was none.
+	 */
     unwrap(): Uint8Array | null{
         return this.bytes;
     }
 
+	/**
+	 * Serializes the `Option` into an array of bytes.
+	 */
     toBytes(): Array<u8>{
         if (this.bytes === null){
             let result = new Array<u8>(1);
@@ -38,6 +64,9 @@ export class Option{
         return result;
     }
 
+	/**
+	 * Deserializes an array of bytes into an `Option`.
+	 */
     static fromBytes(bytes: Uint8Array): Option{
         // check SOME / NONE flag at head
         // TODO: what if length is exactly 1?

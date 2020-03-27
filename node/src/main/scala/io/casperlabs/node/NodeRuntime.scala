@@ -177,7 +177,7 @@ class NodeRuntime private[node] (
       implicit0(eventStream: EventStream[Task]) <- Resource.pure[Task, EventStream[Task]](
                                                     EventStream
                                                       .create[Task](
-                                                        ingressScheduler,
+                                                        egressScheduler,
                                                         conf.server.eventStreamBufferSize.value
                                                       )
                                                   )
@@ -243,9 +243,7 @@ class NodeRuntime private[node] (
 
       implicit0(deploySelection: DeploySelection[Task]) <- Resource.liftF(
                                                             DeploySelection
-                                                              .createMetered[Task](
-                                                                conf.casper.maxBlockSizeBytes
-                                                              )
+                                                              .createMetered[Task]
                                                               .pure[Task]
                                                           )
 
@@ -312,6 +310,7 @@ class NodeRuntime private[node] (
             .internalServersR(
               conf.grpc.portInternal,
               conf.server.maxMessageSize,
+              conf.server.shutdownTimeout,
               ingressScheduler,
               blockApiLock,
               maybeApiSslContext
@@ -320,6 +319,7 @@ class NodeRuntime private[node] (
       _ <- api.Servers.externalServersR[Task](
             conf.grpc.portExternal,
             conf.server.maxMessageSize,
+            conf.server.shutdownTimeout,
             ingressScheduler,
             maybeApiSslContext,
             maybeValidatorId.isEmpty

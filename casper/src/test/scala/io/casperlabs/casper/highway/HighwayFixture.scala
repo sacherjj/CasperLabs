@@ -169,7 +169,7 @@ trait HighwayFixture
         bonds = genesisBlock.getHeader.getState.bonds
       )
 
-    implicit lazy val deploySelection = DeploySelection.create[Task](sizeLimitBytes = Int.MaxValue)
+    implicit lazy val deploySelection = DeploySelection.create[Task]()
 
     implicit val validationRaise = raiseValidateErrorThroughApplicativeError[Task]
     implicit val protocol = CasperLabsProtocol.unsafe[Task](
@@ -209,34 +209,37 @@ trait HighwayFixture
         db.addEra(childEra).as(childEra)
       }
 
+      // It's the same as in `ForkChoiceTest` :( or vice versa
       def ballot(mp: MessageProducer[Task], parent: BlockHash): Task[BlockHash] =
         for {
-          dag    <- db.getRepresentation
-          tips   <- dag.latestInEra(era.keyBlockHash)
-          latest <- tips.latestMessages
+          dag         <- db.getRepresentation
+          tips        <- dag.latestInEra(era.keyBlockHash)
+          latest      <- tips.latestMessages
+          parentBlock <- dag.lookupBlockUnsafe(parent)
           justifications = latest.map {
-            case (v, ms) => PublicKey(v) -> ms.map(_.messageHash)
+            case (v, ms) => PublicKey(v) -> ms
           }
           b <- mp.ballot(
                 era.keyBlockHash,
                 roundId = Ticks(era.startTick),
-                target = parent,
+                target = parentBlock,
                 justifications = justifications
               )
         } yield b.messageHash
 
       def block(mp: MessageProducer[Task], parent: BlockHash): Task[BlockHash] =
         for {
-          dag    <- db.getRepresentation
-          tips   <- dag.latestInEra(era.keyBlockHash)
-          latest <- tips.latestMessages
+          dag         <- db.getRepresentation
+          tips        <- dag.latestInEra(era.keyBlockHash)
+          parentBlock <- dag.lookupBlockUnsafe(parent)
+          latest      <- tips.latestMessages
           justifications = latest.map {
-            case (v, ms) => PublicKey(v) -> ms.map(_.messageHash)
+            case (v, ms) => PublicKey(v) -> ms
           }
           b <- mp.block(
                 era.keyBlockHash,
                 roundId = Ticks(era.startTick),
-                mainParent = parent,
+                mainParent = parentBlock,
                 justifications = justifications,
                 isBookingBlock = false
               )

@@ -106,13 +106,17 @@ impl AssociatedKeys {
 
 impl ToBytes for AssociatedKeys {
     fn to_bytes(&self) -> Result<Vec<u8>, Error> {
-        ToBytes::to_bytes(&self.0)
+        self.0.to_bytes()
+    }
+
+    fn serialized_length(&self) -> usize {
+        self.0.serialized_length()
     }
 }
 
 impl FromBytes for AssociatedKeys {
     fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
-        let (keys_map, rem): (BTreeMap<PublicKey, Weight>, &[u8]) = FromBytes::from_bytes(bytes)?;
+        let (keys_map, rem) = BTreeMap::<PublicKey, Weight>::from_bytes(bytes)?;
         let mut keys = AssociatedKeys::default();
         keys_map.into_iter().for_each(|(k, v)| {
             // NOTE: we're ignoring potential errors (duplicate key, maximum number of
@@ -146,7 +150,10 @@ pub mod gens {
 mod tests {
     use std::{collections::BTreeSet, iter::FromIterator};
 
-    use types::account::{AddKeyFailure, PublicKey, Weight, ED25519_LENGTH, MAX_ASSOCIATED_KEYS};
+    use types::{
+        account::{AddKeyFailure, PublicKey, Weight, ED25519_LENGTH, MAX_ASSOCIATED_KEYS},
+        bytesrepr,
+    };
 
     use super::AssociatedKeys;
 
@@ -307,5 +314,17 @@ mod tests {
             ])),
             saturated_weight,
         );
+    }
+
+    #[test]
+    fn serialization_roundtrip() {
+        let mut keys = AssociatedKeys::default();
+        keys.add_key(PublicKey::ed25519_from([1; 32]), Weight::new(1))
+            .unwrap();
+        keys.add_key(PublicKey::ed25519_from([2; 32]), Weight::new(2))
+            .unwrap();
+        keys.add_key(PublicKey::ed25519_from([3; 32]), Weight::new(3))
+            .unwrap();
+        bytesrepr::test_serialization_roundtrip(&keys);
     }
 }

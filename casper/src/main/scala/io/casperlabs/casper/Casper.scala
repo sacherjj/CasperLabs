@@ -71,7 +71,8 @@ sealed abstract class MultiParentCasperInstances {
       genesisEffects: ExecEngineUtil.TransformMap,
       chainName: String,
       minTtl: FiniteDuration,
-      upgrades: Seq[ipc.ChainSpec.UpgradePoint]
+      upgrades: Seq[ipc.ChainSpec.UpgradePoint],
+      rFTT: Double
   ): F[MultiParentCasper[F]] =
     for {
       lfbHash <- FinalityStorage[F].getLastFinalizedBlock
@@ -93,7 +94,8 @@ sealed abstract class MultiParentCasperInstances {
                  chainName,
                  minTtl,
                  upgrades,
-                 lfbRef = lfbRef
+                 lfbRef = lfbRef,
+                 faultToleranceThreshold = rFTT
                )
     } yield casper
 }

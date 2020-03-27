@@ -99,3 +99,17 @@ footer.sticky-footer {
 //.bg-success {
 //  background-color: #b70404!important;
 //}
+
+
+.accordion .card-header>div:after {
+  content: "\f068";
+  font-family: 'Font Awesome 5 Free';
+  float: right;
+  font-style: normal;
+  font-weight: 900;
+  text-decoration: inherit;
+}
+
+.accordion .card-header.collapsed>div:after {
+  content: "\f067";
+}

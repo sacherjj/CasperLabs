@@ -14,6 +14,7 @@ kademlia-port = 1
 dynamic-host-address = false
 no-upnp = false
 default-timeout = "1second"
+shutdown-timeout = "1second"
 standalone = false
 map-size = 1
 bootstrap = "casperlabs://de6eed5d00cf080fc587eeb412cb31a75fd10358@52.119.8.109?protocol=1&discovery=1 casperlabs://de6eed5d00cf080fc587eeb412cb31a75fd10358@127.0.0.1?protocol=1&discovery=1"
@@ -32,6 +33,7 @@ sync-max-possible-depth = 1
 sync-min-block-count-to-check-width = 1
 sync-max-bonding-rate = 1.0
 sync-max-depth-ancestors-request = 1
+sync-disable-validations = false
 init-sync-max-nodes = 1
 init-sync-min-successful = 1
 init-sync-memoize-nodes = false
@@ -79,7 +81,6 @@ auto-propose-check-interval = "1second"
 auto-propose-ballot-interval = "1second"
 auto-propose-acc-interval = "1second"
 auto-propose-acc-count = 1
-max-block-size-bytes = 1
 min-ttl = "1hour"
 
 [highway]

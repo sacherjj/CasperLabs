@@ -650,20 +650,26 @@ class CasperLabsClient:
     @api
     def stream_events(
         self,
-        all: bool = True,
-        block_added: bool = True,
-        block_finalized: bool = True,
-        deploy_added: bool = True,
-        deploy_discarded: bool = True,
-        deploy_requeued: bool = True,
-        deploy_processed: bool = True,
-        deploy_finalized: bool = True,
-        deploy_orphaned: bool = True,
+        all: bool = False,
+        block_added: bool = False,
+        block_finalized: bool = False,
+        deploy_added: bool = False,
+        deploy_discarded: bool = False,
+        deploy_requeued: bool = False,
+        deploy_processed: bool = False,
+        deploy_finalized: bool = False,
+        deploy_orphaned: bool = False,
         account_public_keys=None,
         deploy_hashes=None,
+        min_event_id: int = 0,
     ):
         """
-        See StreamEventsRequest in ~/CasperLabs/protobuf/io/casperlabs/node/api/casper.proto
+        See StreamEventsRequest in
+            ~/CasperLabs/protobuf/io/casperlabs/node/api/casper.proto
+        for description of types of events.
+
+        Note, you must subscribe to some events (pass True to some keywords other than account_public_keys or deploy_hashes)
+        otherwise this generator will block forever.
         """
         if all:
             block_added = True
@@ -691,6 +697,7 @@ class CasperLabsClient:
                     ],
                     deploy_hashes=[bytes.fromhex(h) for h in deploy_hashes or []],
                 ),
+                min_event_id=min_event_id,
             )
         )
 

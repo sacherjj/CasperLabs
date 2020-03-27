@@ -219,10 +219,12 @@ trait ArbitraryConsensus {
         deploy  <- arbitrary[Deploy]
         isError <- arbitrary[Boolean]
         cost    <- arbitrary[Long]
+        stage   <- Gen.choose(0, 5)
       } yield {
         Block
           .ProcessedDeploy()
           .withDeploy(deploy)
+          .withStage(stage)
           .withCost(cost)
           .withIsError(isError)
           .withErrorMessage(if (isError) "Kaboom!" else "")
@@ -264,7 +266,7 @@ trait ArbitraryConsensus {
                 validatorPublicKey = j.validatorPublicKey
               )
             })
-            .withJRank(parents.map(_.jRank).max + 1)
+            .withJRank((parents ++ justifications).map(_.jRank).max + 1)
             .withMainRank(parents.head.mainRank + 1)
           block.withHeader(header)
         }

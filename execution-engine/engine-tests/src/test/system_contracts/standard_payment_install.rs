@@ -14,11 +14,8 @@ const DEPLOY_HASH_1: [u8; 32] = [1u8; 32];
 #[test]
 fn should_run_standard_payment_install_contract() {
     let mut builder = WasmTestBuilder::default();
-    let engine_config = if cfg!(feature = "turbo") {
-        EngineConfig::new().with_turbo(true)
-    } else {
-        EngineConfig::new()
-    };
+    let engine_config =
+        EngineConfig::new().with_use_system_contracts(cfg!(feature = "use-system-contracts"));
 
     builder.run_genesis(&DEFAULT_RUN_GENESIS_REQUEST);
 

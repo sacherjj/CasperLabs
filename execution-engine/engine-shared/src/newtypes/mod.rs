@@ -97,7 +97,11 @@ impl Into<[u8; BLAKE2B_DIGEST_LENGTH]> for Blake2bHash {
 
 impl ToBytes for Blake2bHash {
     fn to_bytes(&self) -> Result<Vec<u8>, bytesrepr::Error> {
-        ToBytes::to_bytes(&self.0)
+        self.0.to_bytes()
+    }
+
+    fn serialized_length(&self) -> usize {
+        self.0.serialized_length()
     }
 }
 

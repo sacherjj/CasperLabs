@@ -25,15 +25,15 @@
 //! The test could be written as follows:
 //! ```no_run
 //! # use types as casperlabs_types;
-//! use casperlabs_engine_test_support::{TestContextBuilder, SessionBuilder, Value, Error, Code};
-//! use casperlabs_types::account::PublicKey;
+//! use casperlabs_engine_test_support::{Code, Error, SessionBuilder, TestContextBuilder, Value};
+//! use casperlabs_types::{account::PublicKey, U512};
 //!
 //! const MY_ACCOUNT: PublicKey = PublicKey::ed25519_from([7u8; 32]);
 //! const KEY: &str = "special_value";
 //! const VALUE: &str = "hello world";
 //!
 //! let mut context = TestContextBuilder::new()
-//!     .with_account(MY_ACCOUNT, 128_000_000.into())
+//!     .with_account(MY_ACCOUNT, U512::from(128_000_000))
 //!     .build();
 //!
 //! // The test framework checks for compiled Wasm files in '<current working dir>/wasm'.  Paths
@@ -46,9 +46,7 @@
 //!     .with_authorization_keys(&[MY_ACCOUNT])
 //!     .build();
 //!
-//! let result_of_query: Result<Value, Error> = context
-//!     .run(session)
-//!     .query(MY_ACCOUNT, &[KEY]);
+//! let result_of_query: Result<Value, Error> = context.run(session).query(MY_ACCOUNT, &[KEY]);
 //!
 //! let returned_value = result_of_query.expect("should be a value");
 //!
@@ -56,7 +54,7 @@
 //! assert_eq!(expected_value, returned_value);
 //! ```
 
-#![doc(html_root_url = "https://docs.rs/casperlabs-engine-test-support/0.3.0")]
+#![doc(html_root_url = "https://docs.rs/casperlabs-engine-test-support/0.5.0")]
 #![doc(
     html_favicon_url = "https://raw.githubusercontent.com/CasperLabs/CasperLabs/dev/images/CasperLabs_Logo_Favicon_RGB_50px.png",
     html_logo_url = "https://raw.githubusercontent.com/CasperLabs/CasperLabs/dev/images/CasperLabs_Logo_Symbol_RGB.png",

@@ -41,7 +41,7 @@ import Message.{asJRank, asMainRank, JRank, MainRank}
 import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.shared._
 import io.casperlabs.smartcontracts.ExecutionEngineService
-import io.casperlabs.storage.BlockMsgWithTransform
+import io.casperlabs.storage.{BlockHash, BlockMsgWithTransform}
 import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.storage.dag.{DagRepresentation, DagStorage, FinalityStorage}
 import io.casperlabs.storage.deploy.{DeployStorage, DeployStorageReader, DeployStorageWriter}
@@ -174,20 +174,38 @@ class MultiParentCasperImpl[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: 
       for {
         result <- MultiParentFinalizer[F].onNewMessageAdded(message)
         _ <- result.traverse {
-              case fb @ FinalizedBlocks(mainParent, _, secondary) => {
-                val mainParentFinalizedStr = PrettyPrinter.buildString(
-                  mainParent
-                )
-                val secondaryParentsFinalizedStr =
-                  secondary.map(PrettyPrinter.buildString).mkString("{", ", ", "}")
+              case fb @ FinalizedBlocks(newLFB, _, finalized, orphaned) => {
+                val lfbStr = PrettyPrinter.buildString(newLFB)
+                val finalizedStr = finalized
+                  .filter(_.isBlock)
+                  .map(_.messageHash)
+                  .map(PrettyPrinter.buildString)
+                  .mkString("{", ", ", "}")
                 for {
                   _ <- Log[F].info(
-                        s"New last finalized block hashes are ${mainParentFinalizedStr -> null}, ${secondaryParentsFinalizedStr -> null}."
+                        s"New last finalized block hashes are ${lfbStr -> null}, ${finalizedStr -> null}."
                       )
-                  _ <- lfbRef.set(mainParent)
-                  _ <- FinalityStorage[F].markAsFinalized(mainParent, secondary)
-                  _ <- DeployBuffer[F].removeFinalizedDeploys(secondary + mainParent).forkAndLog
-                  _ <- BlockEventEmitter[F].newLastFinalizedBlock(mainParent, secondary)
+                  _                    <- lfbRef.set(newLFB)
+                  finalizedHashes      = finalized.map(_.messageHash)
+                  orphanedHashes       = orphaned.map(_.messageHash)
+                  finalizedBlockHashes = finalized.filter(_.isBlock).map(_.messageHash)
+                  _ <- FinalityStorage[F].markAsFinalized(
+                        newLFB,
+                        finalizedHashes,
+                        orphanedHashes
+                      )
+                  _ <- DeployBuffer[F]
+                        .removeFinalizedDeploys(finalizedBlockHashes + newLFB)
+                        .forkAndLog
+                  // Ballots cannot be really finalized but we mark them as such in the DAG
+                  // to improve the performance of the finalizer (that has to follow all justifications).
+                  // Send out notification about blocks ONLY.
+                  orphanedBlockHashes = orphaned.filter(_.isBlock).map(_.messageHash)
+                  _ <- BlockEventEmitter[F].newLastFinalizedBlock(
+                        newLFB,
+                        finalizedBlockHashes,
+                        orphanedBlockHashes
+                      )
                 } yield ()
               }
             }
@@ -248,8 +266,9 @@ class MultiParentCasperImpl[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: 
                 s"Fork-choice is ${PrettyPrinter.buildString(tipHashes.head) -> "block"}."
               )
           // Merged makes sure that we only get blocks.
-          merged  <- ExecEngineUtil.merge[F](tips, dag).timer("mergeTipsEffects")
-          parents = merged.parents
+          tipsMessages <- MonadThrowable[F].fromTry(tips.map(Message.fromBlock(_)).sequence)
+          merged       <- ExecEngineUtil.merge[F](tipsMessages, dag).timer("mergeTipsEffects")
+          parents      = merged.parents
           _ <- Log[F].info(
                 s"${parents.size} parents out of ${tipHashes.size} latest blocks will be used."
               )
@@ -406,6 +425,7 @@ class MultiParentCasperImpl[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: 
                          timestamp,
                          props.protocolVersion,
                          props.mainRank,
+                         props.configuration.deployConfig.maxBlockSizeBytes,
                          upgrades
                        )
         result <- Sync[F]
@@ -532,7 +552,7 @@ object MultiParentCasperImpl {
       chainName: String,
       minTtl: FiniteDuration,
       upgrades: Seq[ipc.ChainSpec.UpgradePoint],
-      faultToleranceThreshold: Double = 0.1,
+      faultToleranceThreshold: Double,
       lfbRef: Ref[F, BlockHash]
   ): F[MultiParentCasper[F]] =
     for {
@@ -548,7 +568,8 @@ object MultiParentCasperImpl {
       implicit0(multiParentFinalizer: MultiParentFinalizer[F]) <- MultiParentFinalizer.create[F](
                                                                    dag,
                                                                    lfb,
-                                                                   finalityDetector
+                                                                   finalityDetector,
+                                                                   isHighway = false
                                                                  )
     } yield new MultiParentCasperImpl[F](
       semaphoreMap,

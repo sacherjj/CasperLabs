@@ -14,6 +14,7 @@ import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.models.Message
 import io.casperlabs.shared.Log
+import io.casperlabs.catscontrib.MonadStateOps._
 import io.casperlabs.storage.dag.DagRepresentation
 import io.casperlabs.casper.validation.Validation
 
@@ -55,34 +56,59 @@ class FinalityDetectorVotingMatrix[F[_]: Concurrent: Log] private (rFTT: Double,
               for {
                 votedBranch <- ProtoUtil.votedBranch(dag, latestFinalizedBlock, message.messageHash)
                 result <- votedBranch match {
-                           case Some(branch) =>
+                           case Some(lfbChildHash) =>
                              for {
-                               _ <- updateVoterPerspective[F](
-                                     dag,
-                                     message,
-                                     branch,
-                                     isHighway
-                                   )
-                               result <- checkForCommittee[F](dag, rFTT, isHighway).flatMap {
-                                          case Some(newLFB) =>
-                                            val isBlock: F[Boolean] =
-                                              dag.lookupUnsafe(newLFB.consensusValue).map(_.isBlock)
+                               lfbChild <- dag.lookupUnsafe(lfbChildHash)
+                               // Check if the vote (message) is in different era than LFB's child it votes for.
+                               // We disallow validators from different era to advance the LFB chain.
+                               votedBranchIsDifferentEra = isHighway && lfbChild.eraId != message.eraId
+                               result <- if (votedBranchIsDifferentEra)
+                                          Log[F].debug(
+                                            s"${PrettyPrinter.buildString(message.messageHash) -> "Message"} from ${message.eraId -> "era"} votes on an LFB child ${PrettyPrinter
+                                              .buildString(lfbChildHash)                       -> "hash"} from a different era."
+                                          ) >>
+                                            none[CommitteeWithConsensusValue].pure[F]
+                                        else {
+                                          for {
+                                            _ <- updateVoterPerspective[F](
+                                                  dag,
+                                                  message,
+                                                  lfbChildHash,
+                                                  isHighway
+                                                )
+                                            result <- checkForCommittee[F](dag, rFTT, isHighway)
+                                                       .flatMap {
+                                                         case Some(newLFB) =>
+                                                           val isBlock: F[Boolean] =
+                                                             dag
+                                                               .lookupUnsafe(newLFB.consensusValue)
+                                                               .map(_.isBlock)
 
-                                            // On new LFB (but only if it's a block) we rebuild VotingMatrix and start the new game.
-                                            Monad[F].ifM(isBlock)(
-                                              VotingMatrix
-                                                .create[F](dag, newLFB.consensusValue, isHighway)
-                                                .flatMap(_.get.flatMap(matrix.set))
-                                                .as(Option(newLFB)),
-                                              Log[F].info(
-                                                s"New LFB is a ballot: ${PrettyPrinter
-                                                  .buildString(newLFB.consensusValue) -> "message"}"
-                                              ) *> Applicative[F]
-                                                .pure(none[CommitteeWithConsensusValue])
-                                            )
+                                                           // On new LFB (but only if it's a block) we rebuild VotingMatrix and start the new game.
+                                                           Monad[F].ifM(isBlock)(
+                                                             VotingMatrix
+                                                               .create[F](
+                                                                 dag,
+                                                                 newLFB.consensusValue,
+                                                                 isHighway
+                                                               )
+                                                               .flatMap(_.get.flatMap(matrix.set))
+                                                               .as(Option(newLFB)),
+                                                             Log[F].info(
+                                                               s"New LFB is a ballot: ${PrettyPrinter
+                                                                 .buildString(newLFB.consensusValue) -> "message"}"
+                                                             ) *> Applicative[F]
+                                                               .pure(
+                                                                 none[CommitteeWithConsensusValue]
+                                                               )
+                                                           )
 
-                                          case None =>
-                                            Applicative[F].pure(none[CommitteeWithConsensusValue])
+                                                         case None =>
+                                                           Applicative[F].pure(
+                                                             none[CommitteeWithConsensusValue]
+                                                           )
+                                                       }
+                                          } yield result
                                         }
                              } yield result
 

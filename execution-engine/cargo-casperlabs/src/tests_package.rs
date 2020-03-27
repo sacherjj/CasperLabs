@@ -15,13 +15,14 @@ const PACKAGE_NAME: &str = "tests";
 const MINT_INSTALL: &str = "mint_install.wasm";
 const POS_INSTALL: &str = "pos_install.wasm";
 const STANDARD_PAYMENT: &str = "standard_payment.wasm";
+const STANDARD_PAYMENT_INSTALL: &str = "standard_payment_install.wasm";
 
 const INTEGRATION_TESTS_RS_CONTENTS: &str = r#"#[cfg(test)]
 mod tests {
     use casperlabs_engine_test_support::{Code, Error, SessionBuilder, TestContextBuilder, Value};
-    use casperlabs_types::U512;
+    use casperlabs_types::{account::PublicKey, U512};
 
-    const MY_ACCOUNT: [u8; 32] = [7u8; 32];
+    const MY_ACCOUNT: PublicKey = PublicKey::ed25519_from([7u8; 32]);
     // define KEY constant to match that in the contract
     const KEY: &str = "special_value";
     const VALUE: &str = "hello world";
@@ -104,7 +105,7 @@ lazy_static! {
         .join("src/integration_tests.rs");
     static ref ENGINE_TEST_SUPPORT: Dependency = Dependency::new(
         "casperlabs-engine-test-support",
-        "0.3.0",
+        "0.5.0",
         "engine-test-support"
     );
     static ref CARGO_TOML_ADDITIONAL_CONTENTS: String = format!(
@@ -119,8 +120,7 @@ name = "integration-tests"
 path = "src/integration_tests.rs"
 
 [features]
-default = ["casperlabs-contract/std", "casperlabs-types/std"]
-"#,
+default = ["casperlabs-contract/std", "casperlabs-types/std""#,
         *CL_CONTRACT, *CL_TYPES, *ENGINE_TEST_SUPPORT,
     );
     static ref WASM_SRC_DIR: PathBuf = Path::new(env!("CARGO_MANIFEST_DIR")).join("wasm");
@@ -131,8 +131,17 @@ pub fn run_cargo_new() {
     common::run_cargo_new(PACKAGE_NAME);
 }
 
-pub fn update_cargo_toml() {
-    common::append_to_file(&*CARGO_TOML, &*CARGO_TOML_ADDITIONAL_CONTENTS);
+pub fn update_cargo_toml(use_system_contracts: bool) {
+    let cargo_toml_additional_contents = format!(
+        "{}{}\n",
+        &*CARGO_TOML_ADDITIONAL_CONTENTS,
+        if use_system_contracts {
+            ", \"casperlabs-engine-test-support/use-system-contracts\"]"
+        } else {
+            "]"
+        }
+    );
+    common::append_to_file(&*CARGO_TOML, cargo_toml_additional_contents);
 }
 
 pub fn add_rust_toolchain() {
@@ -161,6 +170,10 @@ pub fn copy_wasm_files() {
     common::copy_file(
         WASM_SRC_DIR.join(STANDARD_PAYMENT),
         WASM_DEST_DIR.join(STANDARD_PAYMENT),
+    );
+    common::copy_file(
+        WASM_SRC_DIR.join(STANDARD_PAYMENT_INSTALL),
+        WASM_DEST_DIR.join(STANDARD_PAYMENT_INSTALL),
     );
 }
 

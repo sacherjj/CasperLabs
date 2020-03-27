@@ -3,6 +3,8 @@ import { Route, RouteProps } from 'react-router-dom';
 import { observer } from 'mobx-react';
 import AuthContainer from '../containers/AuthContainer';
 import { encodeBase16 } from 'casperlabs-sdk';
+import { Helmet } from "react-helmet";
+
 
 export const Spinner = (msg: String) => (
   <div className="text-center">
@@ -53,12 +55,13 @@ export const Button = (props: {
   onClick: () => void;
   title: string;
   disabled?: boolean;
-  type?: 'primary' | 'danger';
+  type?: 'primary' | 'danger' | 'secondary' | 'success';
+  size?: 'lg' | 'sm' | 'xs';
 }) => (
   <button
     type="button"
     onClick={_ => props.onClick()}
-    className={`btn btn-${props.type || 'primary'}`}
+    className={`btn ${props.size ? `btn-${props.size}` : ''} btn-${props.type || 'primary'}`}
     disabled={props.disabled || false}
   >
     {props.title}
@@ -170,19 +173,53 @@ export const Card = (props: {
   children: any;
   footerMessage?: any;
   refresh?: () => void;
-}) => (
-  <div className="card mb-3">
-    <div className="card-header">
-      <span>{props.title}</span>
-      {props.refresh && (
-        <div className="float-right">
-          <RefreshButton refresh={() => props.refresh!()} />
+  accordionId?: string;
+}) => {
+  let cardHeader = (
+    <div>
+      <a className="card-title">{props.title}</a>
+      <div className="float-right">
+        {props.refresh && (
+          <RefreshButton refresh={() => props.refresh!()}/>
+        )}
+      </div>
+    </div>
+  );
+  return (
+    <div className={`card mb-3 ${props.accordionId ? 'accordion' : 'ac'}`}>
+      {props.accordionId ? (
+        <div className="card-header" id={`collapse-header-${props.accordionId}`} data-toggle="collapse"
+             data-target={`#${props.accordionId}`}
+             aria-expanded="true" aria-controls={props.accordionId}>
+          {cardHeader}
+        </div>
+      ) : (
+        <div className="card-header">
+          {cardHeader}
         </div>
       )}
+      {props.accordionId ? (
+          <div id={`${props.accordionId}-parent`}>
+            <div id={props.accordionId} className="collapse show"
+                 aria-labelledby={`collapse-header-${props.accordionId}`}
+                 data-parent={`#${props.accordionId}-parent`}>
+              <div className="card-body">{props.children}</div>
+            </div>
+          </div>
+        ) :
+        (
+          <div className="card-body">{props.children}</div>
+        )
+      }
+      {props.footerMessage && (
+        <div className="card-footer small text-muted">{props.footerMessage}</div>
+      )}
     </div>
-    <div className="card-body">{props.children}</div>
-    {props.footerMessage && (
-      <div className="card-footer small text-muted">{props.footerMessage}</div>
-    )}
-  </div>
+  );
+};
+
+export const Title = (props:{title:string}) => (
+  <Helmet>
+    <title>CasperLabs Clarity - {props.title}</title>
+  </Helmet>
 );

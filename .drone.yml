@@ -689,6 +689,25 @@ steps:
   depends_on:
   - package-sbt-artifacts-merge
 
+- name: package-python-client
+  image: "casperlabs/buildenv:latest"
+  commands:
+  - "make build-client-contracts"
+  - "cd integration-testing"
+  - "pipenv sync"
+  - "cd client/CasperLabsClient"
+  - "pipenv run python3 setup.py sdist"
+  - "cp dist/casperlabs* ../../../artifacts/${DRONE_BRANCH}"
+  when:
+    branch:
+    - dev
+    - release-*
+    - master
+    event:
+    - push
+  depends_on:
+    - package-ee
+
 - name: rsync-artifacts
   image: drillster/drone-rsync
   settings:
@@ -717,6 +736,7 @@ steps:
   depends_on:
   - package-sbt-artifacts-merge
   - package-ee
+  - package-python-client
 
 - name: docker-publish
   commands:
@@ -878,7 +898,6 @@ steps:
   settings:
     webhook:
       from_secret: slack_webhook
-    channel: alerts
     template:
     - |
       *{{ uppercasefirst build.status }}*
@@ -943,6 +962,25 @@ steps:
     - refs/tags/v*
   depends_on:
   - package-sbt-artifacts-tag
+
+- name: package-python-client-tag
+  image: "casperlabs/buildenv:latest"
+  commands:
+  - "make build-client-contracts"
+  - "cd integration-testing"
+  - "pipenv sync"
+  - "cd client/CasperLabsClient"
+  - "pipenv run python3 setup.py sdist"
+  - "cp dist/casperlabs* ../../../artifacts/${DRONE_BRANCH}"
+  when:
+    branch:
+    - dev
+    - release-*
+    - master
+    event:
+    - push
+  depends_on:
+    - package-ee-tag
 
 - name: mac-ee-tarball-tag
   image: appleboy/drone-ssh:1.5.5
@@ -1014,6 +1052,7 @@ steps:
   - package-sbt-artifacts-tag
   - package-ee-tag
   - rsync-mac-tarball-tag
+  - package-python-client-tag
 
 - name: npm-publish
   image: plugins/npm
@@ -1170,7 +1209,6 @@ steps:
   settings:
     webhook:
       from_secret: slack_webhook
-    channel: alerts
     template:
     - |
       macOS Build Status: *{{ uppercasefirst build.status }}*

@@ -26,9 +26,14 @@ class MockEventEmitter[F[_]: Applicative](
 
   override def newLastFinalizedBlock(
       lfb: BlockHash,
-      indirectlyFinalized: Set[BlockHash]
+      indirectlyFinalized: Set[BlockHash],
+      indirectlyOrphaned: Set[BlockHash]
   ): F[Unit] =
-    add(Event().withNewFinalizedBlock(Event.NewFinalizedBlock(lfb, indirectlyFinalized.toSeq)))
+    add(
+      Event().withNewFinalizedBlock(
+        Event.NewFinalizedBlock(lfb, indirectlyFinalized.toSeq, indirectlyOrphaned.toSeq)
+      )
+    )
 
   override def deployAdded(deploy: Deploy): F[Unit] =
     add(Event().withDeployAdded(Event.DeployAdded().withDeploy(deploy)))

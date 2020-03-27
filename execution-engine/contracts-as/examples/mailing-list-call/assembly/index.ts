@@ -32,10 +32,6 @@ export function call(): void {
         CLValue.fromString(name),
     ]);
 
-    if (maybeSubKeyBytes === null) {
-        Error.fromUserError(10000).revert();
-    }
-
     const maybeSubKey = Option.fromBytes(<Uint8Array>maybeSubKeyBytes);
     if (maybeSubKey === null || maybeSubKey.isNone()) {
         Error.fromUserError(<u16>UserError.NoSubKey).revert();
@@ -44,12 +40,11 @@ export function call(): void {
 
     let subKeyBytes = <Uint8Array>maybeSubKey.unwrap();
     let subKeyResult = Key.fromBytes(subKeyBytes);
-    if (subKeyResult === null) {
+    if (subKeyResult.hasError()) {
         Error.fromUserError(<u16>UserError.NoSubKey).revert();
         return;
     }
-    let subKey = subKeyResult.value;
-
+    let subKey = subKeyResult.unwrap();
     putKey(MAIL_FEED_KEY, subKey);
 
     let maybeMailFeedKey = getKey(MAIL_FEED_KEY);

@@ -71,6 +71,10 @@ impl ToBytes for PlayerData {
 
         Ok(result)
     }
+
+    fn serialized_length(&self) -> usize {
+        PLAYER_DATA_BYTES_SIZE
+    }
 }
 
 impl FromBytes for PlayerData {
@@ -98,11 +102,7 @@ impl FromBytes for PlayerData {
 #[cfg(test)]
 mod tests {
     use super::PlayerData;
-    use types::{
-        account::PublicKey,
-        bytesrepr::{FromBytes, ToBytes},
-        AccessRights, URef,
-    };
+    use types::{account::PublicKey, bytesrepr, AccessRights, URef};
 
     use tic_tac_toe_logic::player::Player;
 
@@ -113,9 +113,6 @@ mod tests {
             opponent: PublicKey::ed25519_from([3u8; 32]),
             status_key: URef::new([5u8; 32], AccessRights::READ_ADD_WRITE),
         };
-        let value = player_data.to_bytes().expect("Should serialize");
-        let player_data_2: (PlayerData, &[u8]) =
-            PlayerData::from_bytes(&value).expect("Should deserialize");
-        assert_eq!(player_data, player_data_2.0);
+        bytesrepr::test_serialization_roundtrip(&player_data);
     }
 }

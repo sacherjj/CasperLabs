@@ -6,6 +6,7 @@ import moment from 'moment';
 import { snakeCase } from 'change-case';
 import { AsyncCleanableFormData } from '../../../containers/FormData';
 import AuthContainer from '../../../containers/AuthContainer';
+import { FieldState } from 'formstate';
 
 
 export class VestingContainer {
@@ -88,8 +89,8 @@ export class VestingContainer {
     if (clean) {
       // Save it to Auth0.
       await this.addVestingHash({
-        name: form.name,
-        hashBase16: form.hashBase16
+        name: form.name.$,
+        hashBase16: form.hashBase16.$
       });
       return true;
     } else {
@@ -245,24 +246,26 @@ export class VestingDetail {
 }
 
 class ImportVestingFormData extends AsyncCleanableFormData {
-  @observable name: string = '';
-  @observable hashBase16: string = '';
+  name: FieldState<string> = new FieldState<string>("");
+  hashBase16: FieldState<string> = new FieldState<string>("");
 
   constructor(private vestingHashes: NamedHash[], private casperService: CasperService) {
     super();
   }
 
   protected async check() {
-    if (this.name === '') return 'Name cannot be empty!';
+    let name = this.name.$;
+    let hashBase16 = this.hashBase16.$;
+    if (name === '') return 'Name cannot be empty!';
 
-    if (this.vestingHashes.some(x => x.name === this.name))
+    if (this.vestingHashes.some(x => x.name === name))
       return `An item with name '${this.name}' already exists.`;
 
-    if (this.vestingHashes.some(x => x.hashBase16 === this.hashBase16))
+    if (this.vestingHashes.some(x => x.hashBase16 === hashBase16))
       return 'An item with this contract hash already exists.';
 
     let stateQuery = new StateQuery();
-    stateQuery.setKeyBase16(this.hashBase16);
+    stateQuery.setKeyBase16(hashBase16);
     stateQuery.setKeyVariant(StateQuery.KeyVariant.HASH);
     stateQuery.setPathSegmentsList(['cliff_timestamp']);
     let lastFinalizedBlockInfo = await this.casperService.getLastFinalizedBlockInfo();

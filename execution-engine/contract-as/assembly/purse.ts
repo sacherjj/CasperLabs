@@ -5,13 +5,29 @@ import {Error, ErrorCode} from "./error";
 import {UREF_SERIALIZED_LENGTH} from "./constants";
 import {URef} from "./uref";
 
+/**
+ * The result of a successful transfer between purses.
+ */
 export enum TransferredTo {
+    /**
+     * The transfer operation resulted in an error.
+     */
     TransferError = -1,
+    /**
+     * The destination account already existed.
+     */
     ExistingAccount = 0,
+    /**
+     * The destination account was created.
+     */
     NewAccount = 1,
 }
 
-export function createPurse(): URef | null {
+/**
+ * Creates a new empty purse and returns its [[URef]], or a null in case a
+ * purse couldn't be created.
+ */
+export function createPurse(): URef {
     let bytes = new Uint8Array(UREF_SERIALIZED_LENGTH);
     let ret = externals.create_purse(
         bytes.dataStart,
@@ -20,18 +36,22 @@ export function createPurse(): URef | null {
     let error = Error.fromResult(<u32>ret);
     if (error !== null){
         error.revert();
-        return null;
+        return <URef>unreachable();
     }
 
     let urefResult = URef.fromBytes(bytes);
     if (urefResult.hasError()) {
         Error.fromErrorCode(ErrorCode.PurseNotCreated).revert();
-        return null;
+        return <URef>unreachable();
     }
 
     return urefResult.value;
 }
 
+/**
+ * Returns the balance in motes of the given purse or a null if given purse
+ * is invalid.
+ */
 export function getPurseBalance(purse: URef): U512 | null {
     let purseBytes = purse.toBytes();
     let balanceSize = new Array<u32>(1);
@@ -42,19 +62,30 @@ export function getPurseBalance(purse: URef): U512 | null {
         purseBytes.length,
         balanceSize.dataStart,
     );
-    if (retBalance > 0) {
-        return null;
+
+    const error = Error.fromResult(retBalance);
+    if (error != null) {
+        if (error.value() == ErrorCode.InvalidPurse) {
+            return null;
+        }
+        error.revert();
+        return <U512>unreachable();
     }
 
     let balanceBytes = readHostBuffer(balanceSize[0]);
-    if (balanceBytes === null) {
-        return null;
-    }
-
     let balanceResult = U512.fromBytes(balanceBytes);
-    return balanceResult.ok();
+    return balanceResult.unwrap();
 }
 
+/**
+ * Transfers `amount` of motes from `source` purse to `target` account.
+ * If `target` does not exist it will be created.
+ *
+ * @param amount Amount is denominated in motes
+ * @returns This function will return a [[TransferredTo.TransferError]] in
+ * case of transfer error, in case of any other variant the transfer itself
+ * can be considered successful.
+ */
 export function transferFromPurseToAccount(sourcePurse: URef, targetAccount: Uint8Array, amount: U512): TransferredTo {
     let purseBytes = sourcePurse.toBytes();
     let targetBytes = new Array<u8>(targetAccount.length);
@@ -80,6 +111,12 @@ export function transferFromPurseToAccount(sourcePurse: URef, targetAccount: Uin
     return TransferredTo.TransferError;
 }
 
+/**
+ * Transfers `amount` of motes from `source` purse to `target` purse.  If `target` does not exist
+ * the transfer fails.
+ *
+ * @returns This function returns non-zero value on error.
+ */
 export function transferFromPurseToPurse(sourcePurse: URef, targetPurse: URef, amount: U512): i32 {
     let sourceBytes = sourcePurse.toBytes();
     let targetBytes = targetPurse.toBytes();

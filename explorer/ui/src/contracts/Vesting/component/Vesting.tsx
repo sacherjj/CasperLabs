@@ -15,7 +15,6 @@ interface Props {
 
 @observer
 class Vesting extends RefreshableComponent<Props, {}> {
-
   refresh() {
     this.props.auth.refreshAccounts();
   }
@@ -75,19 +74,13 @@ const VestingHashesManageForm = observer(
           <TextField
             id="id-import-vesting-hash-base64"
             label="Hash of vesting contract (Base16)"
-            value={vestingContainer.importVestingForm!.hashBase16 || ''}
-            onChange={x => {
-              vestingContainer.importVestingForm!.hashBase16 = x;
-            }}
+            fieldState={vestingContainer.importVestingForm!.hashBase16}
           />
           <TextField
             id="id-import-vesting-hash-name"
             label="Name"
-            value={vestingContainer.importVestingForm!.name || ''}
+            fieldState={vestingContainer.importVestingForm!.name}
             placeholder="Human readable alias"
-            onChange={x => {
-              vestingContainer.importVestingForm!.name = x;
-            }}
           />
         </Form>
       </Modal>
@@ -117,7 +110,7 @@ const VestingHashesManageForm = observer(
           <TextField
             id="id-vesting-hash-base16"
             label="Hash of vesting contract (Base16)"
-            value={vestingContainer.selectedVestingHash?.hashBase16 || null}
+            fieldState={vestingContainer.selectedVestingHash?.hashBase16 || ""}
             readonly={true}
           />
         </Form>

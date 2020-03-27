@@ -7,13 +7,11 @@ import DeployService from "./services/DeployService";
 const optionDefinitions = [
   { name: "host-url", type: String },
   { name: "transfer-contract-path", type: String },
-  { name: "payment-contract-path", type: String },
   { name: "from-public-key-path", type: String },
   { name: "from-private-key-path", type: String },
   { name: "to-public-key-path", type: String },
   { name: "amount", type: BigInt },
-  { name: "payment-amount", type: BigInt },
-  { name: "gas-price", type: Number, defaultValue: 10},
+  { name: "payment-amount", type: BigInt }
 ];
 
 const options = commandLineArgs(optionDefinitions);
@@ -32,12 +30,12 @@ const contractKeys =
 
 const hex = (x: ByteArray) => Buffer.from(x).toString("hex");
 
-const accountPublicKey =  Keys.Ed25519.parsePublicKeyFile(options["to-public-key-path"]);
+const accountPublicKey = Keys.Ed25519.parsePublicKeyFile(options["to-public-key-path"]);
 const accountPublicKeyBase16 = hex(accountPublicKey);
 
 const transfer = new Contracts.Contract(
-  options["transfer-contract-path"],
-  options["payment-contract-path"]);
+  options["transfer-contract-path"]
+);
 
 const args = Contracts.Transfer.args(accountPublicKey, options.amount);
 
@@ -45,8 +43,8 @@ const deploy = transfer.deploy(
   args,
   options["payment-amount"],
   contractKeys.publicKey,
-  contractKeys,
-  options["gas-price"]);
+  contractKeys
+);
 
 const deployHashBase16 = hex(deploy.getDeployHash_asU8());
 

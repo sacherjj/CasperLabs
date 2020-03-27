@@ -229,6 +229,12 @@ private[configuration] final case class Options private (
       )
 
     @scallop
+    val serverShutdownTimeout =
+      gen[FiniteDuration](
+        "Timeout for shutting down gRPC services."
+      )
+
+    @scallop
     val tlsCertificate =
       gen[Path](
         "Path to node's X.509 certificate file, that is being used for identification.",
@@ -300,10 +306,6 @@ private[configuration] final case class Options private (
       gen[Int]("Number of deploys to accumulate before proposing.")
 
     @scallop
-    val casperMaxBlockSizeBytes =
-      gen[Int]("Maximum block size [in bytes].")
-
-    @scallop
     val serverBootstrap =
       gen[List[NodeWithoutChainId]](
         "Bootstrap casperlabs node address for initial seed. Accepts multiple instances for redundancy.",
@@ -359,6 +361,10 @@ private[configuration] final case class Options private (
     @scallop
     val serverSyncMaxDepthAncestorsRequest =
       gen[Int]("Maximum DAG depth to ask in iterative requests during syncing.")
+
+    @scallop
+    val serverSyncDisableValidations =
+      gen[Flag]("Disable DAG shape validations during synchronization.")
 
     @scallop
     val serverInitSyncMaxNodes =

@@ -100,11 +100,9 @@ impl<S> WasmTestBuilder<S> {
 impl Default for InMemoryWasmTestBuilder {
     fn default() -> Self {
         Self::initialize_logging();
-        let engine_config = if cfg!(feature = "turbo") {
-            EngineConfig::new().with_turbo(true)
-        } else {
-            EngineConfig::new()
-        };
+        let engine_config = EngineConfig::new()
+            .with_use_system_contracts(cfg!(feature = "use-system-contracts"))
+            .with_highway(cfg!(feature = "highway"));
 
         let global_state = InMemoryGlobalState::empty().expect("should create global state");
         let engine_state = EngineState::new(global_state, engine_config);

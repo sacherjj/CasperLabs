@@ -102,6 +102,10 @@ object Genesis {
 
       // And store the block as well since we won't have any other means of retrieving its effects.
       _ <- BlockStorage[F].put(genesis)
-      _ <- FinalityStorage[F].markAsFinalized(genesis.getBlockMessage.blockHash, Set.empty)
+      _ <- FinalityStorage[F].markAsFinalized(
+            genesis.getBlockMessage.blockHash,
+            Set.empty,
+            Set.empty
+          )
     } yield genesis
 }

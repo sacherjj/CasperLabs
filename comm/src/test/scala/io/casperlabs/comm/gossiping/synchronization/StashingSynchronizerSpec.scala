@@ -160,7 +160,12 @@ object StashingSynchronizerSpec {
         }
       }
 
-    def downloaded(blockHash: ByteString): Task[Unit] = Task.unit
+    def onDownloaded(blockHash: ByteString): Task[Unit] = Task.unit
+    def onFailed(blockHash: ByteString): Task[Unit]     = Task.unit
+    def onScheduled(
+        summary: BlockSummary,
+        source: Node
+    ): Task[Unit] = Task.unit
   }
 
   object TestFixture {

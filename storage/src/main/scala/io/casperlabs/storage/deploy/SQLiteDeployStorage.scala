@@ -85,7 +85,7 @@ class SQLiteDeployStorage[F[_]: Time: Sync](
       )
 
       val writeToProcessResultsTable =
-        Update[(ByteString, ByteString, Int, ByteString, Long, Long, Long, Option[String])](
+        Update[(ByteString, ByteString, Int, ByteString, Long, Long, Long, Option[String], Int)](
           """
           INSERT OR IGNORE INTO deploy_process_results
           (
@@ -96,8 +96,9 @@ class SQLiteDeployStorage[F[_]: Time: Sync](
            create_time_millis,
            execute_time_millis,
            cost,
-           execution_error_message
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+           execution_error_message,
+           stage
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
           """
         ).updateMany(
           block.getBody.deploys.zipWithIndex.map {
@@ -110,7 +111,8 @@ class SQLiteDeployStorage[F[_]: Time: Sync](
                 pd.getDeploy.getHeader.timestamp,
                 block.getHeader.timestamp,
                 pd.cost,
-                if (pd.isError) pd.errorMessage.some else none[String]
+                if (pd.isError) pd.errorMessage.some else none[String],
+                pd.stage
               )
           }.toList
         )
@@ -377,7 +379,7 @@ class SQLiteDeployStorage[F[_]: Time: Sync](
       getByHashes(Set(deployHash)).compile.last
 
     override def getProcessedDeploys(blockHash: ByteString): F[List[ProcessedDeploy]] =
-      (fr"SELECT d.summary, " ++ bodyCol("d") ++ fr""", cost, execution_error_message
+      (fr"SELECT d.summary, " ++ bodyCol("d") ++ fr""", cost, execution_error_message, stage
           FROM deploy_process_results dpr
           JOIN deploys d
             ON d.hash = dpr.deploy_hash
@@ -397,7 +399,7 @@ class SQLiteDeployStorage[F[_]: Time: Sync](
           .transact(readXa)
 
       val readProcessingResults =
-        sql"""SELECT block_hash, cost, execution_error_message
+        sql"""SELECT block_hash, cost, execution_error_message, stage
               FROM deploy_process_results
               WHERE deploy_hash=$deployHash
               ORDER BY execute_time_millis DESC"""
@@ -485,7 +487,7 @@ class SQLiteDeployStorage[F[_]: Time: Sync](
         NonEmptyList
           .fromList[ByteString](deployHashes)
           .fold(Map.empty[DeployHash, List[ProcessingResult]].pure[F])(nel => {
-            val q = fr"""SELECT dpr.deploy_hash, dpr.cost, dpr.execution_error_message,
+            val q = fr"""SELECT dpr.deploy_hash, dpr.cost, dpr.execution_error_message, dpr.stage,
                                 """ ++ blockInfoCols("bm") ++ fr"""
                         FROM deploy_process_results dpr
                         JOIN block_metadata bm ON dpr.block_hash = bm.block_hash

@@ -16,9 +16,8 @@ import io.casperlabs.crypto.Keys.PublicKey
 import io.casperlabs.ipc._
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.Metrics.MetricsNOP
-import io.casperlabs.models.SmartContractEngineError
+import io.casperlabs.models.{cltype, Message, SmartContractEngineError}
 import io.casperlabs.shared.{Log, Time}
-import io.casperlabs.models.cltype
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.block._
 import io.casperlabs.storage.dag._
@@ -40,7 +39,9 @@ object ExecutionEngineServiceStub {
       dag: DagRepresentation[F]
   ): F[MergeResult[TransformMap, Block]] =
     NonEmptyList.fromList(candidateParentBlocks) map { blocks =>
-      ExecEngineUtil.merge[F](blocks, dag).map(x => x: MergeResult[TransformMap, Block])
+      MonadThrowable[F]
+        .fromTry(blocks.traverse(Message.fromBlock(_)))
+        .flatMap(ExecEngineUtil.merge[F](_, dag).map(x => x: MergeResult[TransformMap, Block]))
     } getOrElse {
       MergeResult.empty[TransformMap, Block].pure[F]
     }

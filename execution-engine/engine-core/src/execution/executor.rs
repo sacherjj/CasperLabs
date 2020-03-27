@@ -161,7 +161,7 @@ impl Executor {
             context,
         );
 
-        if self.config.turbo() {
+        if !self.config.use_system_contracts() {
             if runtime.is_mint(base_key) {
                 match runtime.call_host_mint(
                     protocol_version,
@@ -303,7 +303,7 @@ impl Executor {
             context,
         );
 
-        if self.config.turbo() {
+        if !self.config.use_system_contracts() {
             match runtime.call_host_proof_of_stake(
                 protocol_version,
                 runtime.context().named_keys().to_owned(),

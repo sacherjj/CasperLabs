@@ -2,17 +2,17 @@ package io.casperlabs.storage.block
 
 import cats.Applicative
 import cats.implicits._
-import com.google.protobuf.ByteString
+import io.casperlabs.casper.consensus.info.{BlockInfo, DeployInfo}
 import io.casperlabs.casper.consensus.{Block, BlockSummary}
-import io.casperlabs.casper.consensus.info.BlockInfo
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.ipc.TransformEntry
 import io.casperlabs.metrics.Metered
-import io.casperlabs.storage.{BlockHash, BlockMsgWithTransform, DeployHash}
 import io.casperlabs.storage.BlockMsgWithTransform.StageEffects
-import scala.language.higherKinds
+import io.casperlabs.storage.{BlockHash, BlockMsgWithTransform, DeployHash}
 import simulacrum.typeclass
+
+import scala.language.higherKinds
 
 @typeclass
 trait BlockStorageWriter[F[_]] {
@@ -44,15 +44,22 @@ trait BlockStorageWriter[F[_]] {
 
 @typeclass
 trait BlockStorageReader[F[_]] extends BlockStorageWriter[F] {
-  def get(blockHash: BlockHash): F[Option[BlockMsgWithTransform]]
+  def get(blockHash: BlockHash)(
+      implicit dv: DeployInfo.View = DeployInfo.View.FULL
+  ): F[Option[BlockMsgWithTransform]]
 
-  def getByPrefix(blockHashPrefix: String): F[Option[BlockMsgWithTransform]]
+  def getByPrefix(blockHashPrefix: String)(
+      implicit dv: DeployInfo.View = DeployInfo.View.FULL
+  ): F[Option[BlockMsgWithTransform]]
 
   def isEmpty: F[Boolean]
 
   def apply(
       blockHash: BlockHash
-  )(implicit applicativeF: Applicative[F]): F[BlockMsgWithTransform] =
+  )(
+      implicit applicativeF: Applicative[F],
+      dv: DeployInfo.View = DeployInfo.View.FULL
+  ): F[BlockMsgWithTransform] =
     get(blockHash).map(_.get)
 
   def contains(blockHash: BlockHash)(implicit applicativeF: Applicative[F]): F[Boolean] =
@@ -74,13 +81,21 @@ trait BlockStorageReader[F[_]] extends BlockStorageWriter[F] {
 
   def getBlockMessage(
       blockHash: BlockHash
-  )(implicit applicative: Applicative[F]): F[Option[Block]] =
+  )(
+      implicit applicative: Applicative[F],
+      dv: DeployInfo.View = DeployInfo.View.FULL
+  ): F[Option[Block]] =
     get(blockHash).map(_.flatMap(_.blockMessage))
 
-  def getUnsafe(hash: BlockHash)(implicit MT: MonadThrowable[F]): F[BlockMsgWithTransform] =
+  def getUnsafe(hash: BlockHash)(
+      implicit MT: MonadThrowable[F],
+      dv: DeployInfo.View = DeployInfo.View.FULL
+  ): F[BlockMsgWithTransform] =
     unsafe(hash, get)
 
-  def getBlockUnsafe(hash: BlockHash)(implicit MT: MonadThrowable[F]): F[Block] =
+  def getBlockUnsafe(
+      hash: BlockHash
+  )(implicit MT: MonadThrowable[F], dv: DeployInfo.View = DeployInfo.View.FULL): F[Block] =
     getUnsafe(hash).map(_.getBlockMessage)
 
   def getBlockSummaryUnsafe(hash: BlockHash)(implicit MT: MonadThrowable[F]): F[BlockSummary] =
@@ -116,12 +131,12 @@ object BlockStorage {
 
     abstract override def get(
         blockHash: BlockHash
-    ): F[Option[BlockMsgWithTransform]] =
+    )(implicit dv: DeployInfo.View = DeployInfo.View.FULL): F[Option[BlockMsgWithTransform]] =
       incAndMeasure("get", super.get(blockHash))
 
     abstract override def getByPrefix(
         blockHashPrefix: String
-    ): F[Option[BlockMsgWithTransform]] =
+    )(implicit dv: DeployInfo.View = DeployInfo.View.FULL): F[Option[BlockMsgWithTransform]] =
       incAndMeasure("getByPrefix", super.getByPrefix(blockHashPrefix))
 
     abstract override def isEmpty: F[Boolean] =

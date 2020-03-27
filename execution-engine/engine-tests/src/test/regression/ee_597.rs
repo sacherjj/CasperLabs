@@ -28,6 +28,13 @@ fn should_fail_when_bonding_amount_is_zero_ee_597_regression() {
         .to_owned();
 
     let error_message = utils::get_error_message(response);
-    // Error::BondTooSmall => 5,
-    assert!(error_message.contains(&format!("Revert({})", u32::from(ApiError::ProofOfStake(5)))));
+
+    if cfg!(feature = "highway") {
+        assert!(error_message.contains(&format!("Revert({})", u32::from(ApiError::Unhandled))));
+    } else {
+        // Error::BondTooSmall => 5,
+        assert!(
+            error_message.contains(&format!("Revert({})", u32::from(ApiError::ProofOfStake(5))))
+        );
+    }
 }

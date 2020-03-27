@@ -109,6 +109,7 @@ message CLValueInstance {
             Tuple1 tuple1_value = 19;
             Tuple2 tuple2_value = 20;
             Tuple3 tuple3_value = 21;
+            bytes bytes_value = 22; // convenience for representing List(U8) / FixedList(U8)
         }
     }
 

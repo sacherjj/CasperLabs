@@ -21,13 +21,13 @@ use casperlabs_contract::{
     contract_api::{runtime, storage},
     unwrap_or_revert::UnwrapOrRevert,
 };
-use casperlabs_types::{ApiError, Key};
+use casperlabs_types::{ApiError, Key, URef};
 
 const KEY: &str = "special_value";
 
 fn store(value: String) {
     // Store `value` under a new unforgeable reference.
-    let value_ref = storage::new_uref(value);
+    let value_ref: URef = storage::new_uref(value);
 
     // Wrap the unforgeable reference in a value of type `Key`.
     let value_key: Key = value_ref.into();

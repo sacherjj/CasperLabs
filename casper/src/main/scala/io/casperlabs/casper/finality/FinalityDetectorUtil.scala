@@ -9,7 +9,6 @@ import io.casperlabs.casper.dag.DagOperations
 import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.models.Message
 import io.casperlabs.storage.dag.DagRepresentation
-
 import scala.collection.mutable.{IndexedSeq => MutableSeq}
 import io.casperlabs.casper.validation.Validation
 import io.casperlabs.storage.dag.FinalityStorage
@@ -184,28 +183,66 @@ object FinalityDetectorUtil {
       .sortBy(_._1)
       .map(_._2)
 
+  private def collectUndecided[F[_]: Sync: FinalityStorage](
+      dag: DagRepresentation[F],
+      lfbHash: BlockHash,
+      // In Highway we want to stay within the same era, since parent era blocks should only be finalized
+      // by parent era validators, e.g. the switch block by the voting ballots.
+      isHighway: Boolean,
+      // Which dependencies to follow.
+      next: Message => Seq[BlockHash]
+  ): F[List[Message]] =
+    for {
+      lfb <- dag.lookupUnsafe(lfbHash)
+      undecided <- DagOperations
+                    .bfTraverseF[F, Message](List(lfb)) { m =>
+                      next(m).toList.distinct
+                        .traverse(dag.lookupUnsafe(_))
+                        .flatMap { deps =>
+                          deps
+                            .filter { dep =>
+                              !isHighway || dep.eraId == lfb.eraId
+                            }
+                            .filterA(
+                              message =>
+                                FinalityStorage[F]
+                                  .getFinalityStatus(message.messageHash)
+                                  .map(_.isUndecided)
+                            )
+                        }
+                    }
+                    .toList
+    } yield undecided
+
   /** Returns a set of blocks that were finalized indirectly when a block from the main chain is finalized. */
   def finalizedIndirectly[F[_]: Sync: FinalityStorage](
-      block: BlockHash,
-      dag: DagRepresentation[F]
-  ): F[Set[BlockHash]] =
+      dag: DagRepresentation[F],
+      lfbHash: BlockHash,
+      isHighway: Boolean
+  ): F[Set[Message]] =
     for {
-      finalizedImplicitly <- DagOperations
-                              .bfTraverseF[F, BlockHash](List(block))(
-                                hash =>
-                                  dag
-                                    .lookupUnsafe(hash)
-                                    .map(
-                                      _.parents
-                                    )
-                                    .flatMap(
-                                      _.toList.filterA(
-                                        FinalityStorage[F]
-                                          .isFinalized(_)
-                                          .map(!_) // Follow parents that haven't been finalized yet.
-                                      )
-                                    )
-                              )
-                              .toList
-    } yield finalizedImplicitly.toSet - block // We don't want to include `block`.
+      messagesFinalizedImplicitly <- collectUndecided[F](dag, lfbHash, isHighway, _.parents)
+    } yield messagesFinalizedImplicitly
+      .filterNot(_.messageHash == lfbHash) // LFB is directly finalized.
+      .toSet
+
+  /** A block is orphaned if it's not in the p-past cone of the last finalized block.
+    * When a new LFB is found, we traverse it's j-past cone until the previous finalized block
+    * and collect all the blocks which haven't just been finalized.
+    */
+  def orphanedIndirectly[F[_]: Sync: FinalityStorage](
+      dag: DagRepresentation[F],
+      lfbHash: BlockHash,
+      finalizedIndirectly: Set[BlockHash],
+      isHighway: Boolean
+  ): F[Set[Message]] =
+    for {
+      undecided <- collectUndecided(
+                    dag,
+                    lfbHash,
+                    isHighway,
+                    m => m.parents ++ m.justifications.map(_.latestBlockHash)
+                  )
+      finalizedSet = finalizedIndirectly + lfbHash
+    } yield undecided.filterNot(m => finalizedSet.contains(m.messageHash)).toSet
 }

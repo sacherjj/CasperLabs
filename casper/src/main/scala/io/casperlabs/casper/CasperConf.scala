@@ -30,7 +30,6 @@ final case class CasperConf(
     autoProposeBallotInterval: FiniteDuration,
     autoProposeAccInterval: FiniteDuration,
     autoProposeAccCount: Int,
-    maxBlockSizeBytes: Int,
     minTtl: FiniteDuration
 ) extends SubConfig
 

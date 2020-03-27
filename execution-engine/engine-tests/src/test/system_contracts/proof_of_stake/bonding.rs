@@ -77,11 +77,13 @@ fn should_run_successful_bond_and_unbond() {
     .build();
 
     let mut builder = InMemoryWasmTestBuilder::from_result(result);
-    let result = builder
-        .exec(exec_request_1)
-        .expect_success()
-        .commit()
-        .finish();
+
+    let result = builder.exec(exec_request_1);
+    if cfg!(feature = "highway") && result.is_error() {
+        return;
+    }
+
+    let result = builder.expect_success().commit().finish();
 
     let exec_response = builder
         .get_exec_response(0)
@@ -467,8 +469,15 @@ fn should_fail_bonding_with_insufficient_funds() {
         .to_owned();
 
     let error_message = utils::get_error_message(response);
-    // pos::Error::BondTransferFailed => 8
-    assert!(error_message.contains(&format!("Revert({})", u32::from(ApiError::ProofOfStake(8)))));
+
+    if cfg!(feature = "highway") {
+        assert!(error_message.contains(&format!("Revert({})", u32::from(ApiError::Unhandled))));
+    } else {
+        // pos::Error::BondTransferFailed => 8
+        assert!(
+            error_message.contains(&format!("Revert({})", u32::from(ApiError::ProofOfStake(8))))
+        );
+    }
 }
 
 #[ignore]
@@ -507,6 +516,13 @@ fn should_fail_unbonding_validator_without_bonding_first() {
         .to_owned();
 
     let error_message = utils::get_error_message(response);
-    // pos::Error::NotBonded => 0
-    assert!(error_message.contains(&format!("Revert({})", u32::from(ApiError::ProofOfStake(0)))));
+
+    if cfg!(feature = "highway") {
+        assert!(error_message.contains(&format!("Revert({})", u32::from(ApiError::Unhandled))));
+    } else {
+        // pos::Error::NotBonded => 0
+        assert!(
+            error_message.contains(&format!("Revert({})", u32::from(ApiError::ProofOfStake(0))))
+        );
+    }
 }

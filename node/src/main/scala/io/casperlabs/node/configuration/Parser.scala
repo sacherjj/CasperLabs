@@ -97,6 +97,14 @@ private[configuration] trait ParserImplicits {
         w <- refineV[Interval.OpenClosed[W.`0.0`.T, W.`1.0`.T]](d)
       } yield w
 
+  implicit val gt0lte05DoubleParser
+      : Parser[Refined[Double, Interval.OpenClosed[W.`0.0`.T, W.`0.5`.T]]] =
+    s =>
+      for {
+        d <- Try(s.toDouble).toEither.leftMap(_.getMessage)
+        w <- refineV[Interval.OpenClosed[W.`0.0`.T, W.`0.5`.T]](d)
+      } yield w
+
   implicit val gte0lte1IntParser: Parser[Refined[Int, Interval.Closed[W.`0`.T, W.`1`.T]]] =
     s =>
       for {

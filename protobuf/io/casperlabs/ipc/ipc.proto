@@ -272,6 +272,7 @@ message ChainSpec {
     message DeployConfig {
         uint32 max_ttl_millis = 2;
         uint32 max_dependencies = 3;
+        uint32 max_block_size_bytes = 4;
     }
 
     message HighwayConfig {
@@ -287,6 +288,10 @@ message ChainSpec {
         uint64 voting_period_duration_millis = 5;
         // Stop the post-era voting period when the switch block reaches a certain summit level; when 0 use the duration instead.
         uint32 voting_period_summit_level = 6;
+        // Relative fault tolerance threshold value used by the internal finalizer.
+        // Has to be between 0 and 0.5 .
+        double ftt = 7;
+
     }
 
     message CostTable {

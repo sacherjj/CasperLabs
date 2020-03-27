@@ -35,9 +35,7 @@ object CasperLabsProtocol {
       versions: (Long, state.ProtocolVersion, Option[ipc.ChainSpec.DeployConfig])*
   ): CasperLabsProtocol[F] = {
     def toDeployConfig(ipcDeployConfig: Option[ipc.ChainSpec.DeployConfig]): DeployConfig =
-      ipcDeployConfig
-        .map(d => DeployConfig(d.maxTtlMillis, d.maxDependencies))
-        .getOrElse(DeployConfig())
+      ipcDeployConfig.getOrElse(DeployConfig())
 
     def toConfig(
         blockHeightMin: Long,

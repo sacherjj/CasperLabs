@@ -11,26 +11,13 @@ const POS_ACTION = "get_payment_purse";
 
 export function entryPoint(amount: U512): void {
   let proofOfStake = CL.getSystemContract(CL.SystemContract.ProofOfStake);
-  if (proofOfStake === null) {
-    Error.fromErrorCode(ErrorCode.InvalidSystemContract).revert();
-    return;
-  }
 
   let mainPurse = getMainPurse();
-  if (mainPurse === null) {
-    Error.fromErrorCode(ErrorCode.MissingArgument).revert();
-    return;
-  }
 
   let key = Key.fromURef(proofOfStake);
   let output = CL.callContract(key, [
     CLValue.fromString(POS_ACTION),
   ]);
-  if (output === null) {
-    Error.fromErrorCode(ErrorCode.PurseNotCreated).revert();
-    return;
-  }
-
   let paymentPurseResult = URef.fromBytes(output);
   if (paymentPurseResult.hasError()) {
     Error.fromErrorCode(ErrorCode.InvalidPurse).revert();

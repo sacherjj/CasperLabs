@@ -68,11 +68,9 @@ class ExecEngineUtilTest
       deployBuffer: DeployBuffer[Task]
   ): Task[Seq[ProcessedDeploy]] =
     for {
-      blocktime <- Task.delay(System.currentTimeMillis)
-      implicit0(deploySelection: DeploySelection[Task]) = DeploySelection.create[Task](
-        5 * 1024 * 1024
-      )
-      _ <- deployStorage.writer.addAsPending(deploys.toList)
+      blocktime                                         <- Task.delay(System.currentTimeMillis)
+      implicit0(deploySelection: DeploySelection[Task]) = DeploySelection.create[Task]()
+      _                                                 <- deployStorage.writer.addAsPending(deploys.toList)
       computeResult <- ExecEngineUtil
                         .computeDeploysCheckpoint[Task](
                           ExecEngineUtil.MergeResult.empty,
@@ -80,6 +78,7 @@ class ExecEngineUtilTest
                           blocktime,
                           protocolVersion,
                           mainRank = Message.asMainRank(0),
+                          maxBlockSizeBytes = 5 * 1024 * 1024,
                           upgrades = Nil
                         )
       DeploysCheckpoint(_, _, _, result, _, _) = computeResult
@@ -275,9 +274,8 @@ class ExecEngineUtilTest
         (_, _, _) => new Throwable("Keep calm.").asLeft.pure[Task]
       )
 
-      implicit val deploySelection = DeploySelection.create[Task](
-        5 * 1024 * 1024
-      )(Sync[Task], ee, fs2.Stream.Compiler.syncInstance[Task])
+      implicit val deploySelection =
+        DeploySelection.create[Task]()(Sync[Task], ee, fs2.Stream.Compiler.syncInstance[Task])
 
       ExecEngineUtil
         .computeDeploysCheckpoint[Task](
@@ -286,6 +284,7 @@ class ExecEngineUtilTest
           0L,
           ProtocolVersion(1),
           mainRank = Message.asMainRank(0),
+          maxBlockSizeBytes = 5 * 1024 * 1024,
           upgrades = Nil
         )(Sync[Task], deployStorage, deployBuffer, logEff, ee, deploySelection, Metrics[Task])
         .map { result =>

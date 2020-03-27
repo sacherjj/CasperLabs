@@ -53,7 +53,7 @@ impl WasmCosts {
 
 impl ToBytes for WasmCosts {
     fn to_bytes(&self) -> Result<Vec<u8>, bytesrepr::Error> {
-        let mut ret: Vec<u8> = Vec::with_capacity(WASM_COSTS_SERIALIZED_LENGTH);
+        let mut ret = bytesrepr::unchecked_allocate_buffer(self);
         ret.append(&mut self.regular.to_bytes()?);
         ret.append(&mut self.div.to_bytes()?);
         ret.append(&mut self.mul.to_bytes()?);
@@ -65,6 +65,10 @@ impl ToBytes for WasmCosts {
         ret.append(&mut self.opcodes_mul.to_bytes()?);
         ret.append(&mut self.opcodes_div.to_bytes()?);
         Ok(ret)
+    }
+
+    fn serialized_length(&self) -> usize {
+        WASM_COSTS_SERIALIZED_LENGTH
     }
 }
 

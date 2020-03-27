@@ -3,7 +3,9 @@ import {Pair} from "./pair";
 
 const HEX_LOWERCASE: string[] = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'];
 
-// Fast lookup of ascii character into it's numerical value in base16
+/**
+ * Fast lookup of ascii character into it's numerical value in base16
+ */
 const HEX_DIGITS: i32[] =
 [ -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
   -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
@@ -22,40 +24,67 @@ const HEX_DIGITS: i32[] =
   -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
   -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1 ];
 
+/**
+ * An implementation of 512-bit unsigned integers.
+ */
 export class U512 {
     private pn: Uint32Array;
 
+    /**
+     * Constructs a new instance of U512.
+     */
     constructor() {
         this.pn = new Uint32Array(16); // 512 bits total
     }
 
+    /**
+     * @returns The maximum possible value of a U512.
+     */
     static get MAX_VALUE(): U512 {
         let value = new U512();
         value.pn.fill(0xffffffff);
         return value;
     }
 
+    /**
+     * @returns The minimum possible value of a U512 (which is 0).
+     */
     static get MIN_VALUE(): U512 {
         return new U512();
     }
 
+    /**
+     * Constructs a new U512 from a string of hex digits.
+     */
     static fromHex(hex: String): U512 {
         let res = new U512();
         res.setHex(hex);
         return res;
     }
 
+    /**
+     * Converts a 64-bit unsigned integer into a U512.
+     *
+     * @param value The value to be converted.
+     */
     static fromU64(value: u64): U512 {
         let res = new U512();
         res.setU64(value);
         return res;
     }
 
-    // Gets width in bytes
+    /**
+     * Gets the width of the number in bytes.
+     */
     get width(): i32 {
         return this.pn.length * 4;
     }
 
+    /**
+     * Sets the value of this U512 to a given 64-bit value.
+     *
+     * @param value The desired new value of this U512.
+     */
     setU64(value: u64): void {
         this.pn.fill(0);
         assert(this.pn.length >= 2);
@@ -63,6 +92,11 @@ export class U512 {
         this.pn[1] = <u32>(value >> 32);
     }
 
+    /**
+     * Sets the value of this U512 to a value represented by the given string of hex digits.
+     *
+     * @param value The string of hex digits representing the desired value.
+     */
     setHex(value: String): void {
         if (value.length >= 2 && value[0] == '0' && (value[1] == 'x' || value[1] == 'X'))
             value = value.substr(2);
@@ -91,6 +125,11 @@ export class U512 {
         this.setBytesLE(bytes);
     }
 
+    /**
+     * Checks whether this U512 is equal to 0.
+     *
+     * @returns True if this U512 is 0, false otherwise.
+     */
     isZero(): bool {
         for (let i = 0; i < this.pn.length; i++) {
             if (this.pn[i] != 0) {
@@ -100,6 +139,9 @@ export class U512 {
         return true;
     }
 
+    /**
+     * The addition operator - adds two U512 numbers together.
+     */
     @operator("+")
     add(other: U512): U512 {
         assert(this.pn.length == other.pn.length);
@@ -115,6 +157,9 @@ export class U512 {
         return this;
     }
 
+    /**
+     * The negation operator - returns the two's complement of the argument.
+     */
     @operator.prefix("-")
     neg(): U512 {
         let ret = new U512();
@@ -125,11 +170,17 @@ export class U512 {
         return ret;
     }
 
+    /**
+     * The subtraction operator - subtracts the two U512s.
+     */
     @operator("-")
     sub(other: U512): U512 {
         return this.add(-other);
     }
 
+    /**
+     * The multiplication operator - calculates the product of the two arguments.
+     */
     @operator("*")
     mul(other: U512): U512 {
         assert(this.pn.length == other.pn.length);
@@ -147,6 +198,9 @@ export class U512 {
         return ret;
     }
 
+    /**
+     * Increments this U512.
+     */
     private increment(): void {
         let i = 0;
         while (i < this.pn.length && ++this.pn[i] == 0) {
@@ -154,6 +208,9 @@ export class U512 {
         }
     }
 
+    /**
+     * Decrements this U512.
+     */
     private decrement(): void {
         let i = 0;
         while (i < this.pn.length && --this.pn[i] == u32.MAX_VALUE) {
@@ -161,18 +218,27 @@ export class U512 {
         }
     }
 
+    /**
+     * Prefix operator `++` - increments this U512.
+     */
     @operator.prefix("++")
     prefixInc(): U512 {
         this.increment();
         return this;
     }
 
+    /**
+     * Prefix operator `--` - decrements this U512.
+     */
     @operator.prefix("--")
     prefixDec(): U512 {
         this.decrement();
         return this;
     }
 
+    /**
+     * Postfix operator `++` - increments this U512.
+     */
     @operator.postfix("++")
     postfixInc(): U512 {
         let cloned = this.clone();
@@ -180,6 +246,9 @@ export class U512 {
         return cloned;
     }
 
+    /**
+     * Postfix operator `--` - decrements this U512.
+     */
     @operator.postfix("--")
     postfixDec(): U512 {
         let cloned = this.clone();
@@ -187,19 +256,29 @@ export class U512 {
         return cloned;
     }
 
+    /**
+     * Sets the values of the internally kept 32-bit "digits" (or "limbs") of the U512.
+     *
+     * @param pn The array of unsigned 32-bit integers to be used as the "digits"/"limbs".
+     */
     setValues(pn: Uint32Array): void {
         for (let i = 0; i < this.pn.length; i++) {
             this.pn[i] = pn[i];
         }
     }
 
+    /**
+     * Clones the U512.
+     */
     clone(): U512 {
         let U512val = new U512();
         U512val.setValues(this.pn);
         return U512val;
     }
 
-    // Returns length of the integer in bits
+    /**
+     * Returns length of the integer in bits (not counting the leading zero bits).
+     */
     bits(): u32 {
         for (let i = this.pn.length - 1; i >= 0; i--) {
             if (this.pn[i] > 0) {
@@ -210,6 +289,12 @@ export class U512 {
         return 0;
     }
 
+    /**
+     * Performs the integer division of `this/other`.
+     *
+     * @param other The divisor.
+     * @returns A pair consisting of the quotient and the remainder, or null if the divisor was 0.
+     */
     divMod(other: U512): Pair<U512, U512> | null {
         assert(this.pn.length == other.pn.length);
 
@@ -247,6 +332,9 @@ export class U512 {
         return new Pair<U512, U512>(res, num);
     }
 
+    /**
+     * The division operator - divides the arguments.
+     */
     @operator("/")
     div(other: U512): U512 {
         let divModResult = this.divMod(other);
@@ -254,6 +342,9 @@ export class U512 {
         return (<Pair<U512, U512>>divModResult).first;
     }
 
+    /**
+     * The 'modulo' operator - calculates the remainder from the division of the arguments.
+     */
     @operator("%")
     rem(other: U512): U512 {
         let divModResult = this.divMod(other);
@@ -261,6 +352,9 @@ export class U512 {
         return (<Pair<U512, U512>>divModResult).second;
     }
 
+    /**
+     * The bitwise left-shift operator.
+     */
     @operator("<<")
     shl(shift: u32): U512 {
         let res = new U512();
@@ -280,6 +374,9 @@ export class U512 {
         return res;
     }
 
+    /**
+     * The bitwise right-shift operator.
+     */
     @operator(">>")
     shr(shift: u32): U512 {
         let res = new U512();
@@ -299,6 +396,13 @@ export class U512 {
         return res;
     }
 
+    /**
+     * Compares `this` and `other`.
+     *
+     * @param other The number to compare `this` to.
+     * @returns -1 if `this` is less than `other`, 1 if `this` is greater than `other`, 0 if `this`
+     *     and `other` are equal.
+     */
     cmp(other: U512): i32 {
         assert(this.pn.length == other.pn.length);
         for (let i = this.pn.length - 1; i >= 0; --i) {
@@ -312,36 +416,70 @@ export class U512 {
         return 0;
     }
 
+    /**
+     * The equality operator.
+     *
+     * @returns True if `this` and `other` are equal, false otherwise.
+     */
     @operator("==")
     eq(other: U512): bool {
         return this.cmp(other) == 0;
     }
 
+    /**
+     * The not-equal operator.
+     *
+     * @returns False if `this` and `other` are equal, true otherwise.
+     */
     @operator("!=")
     neq(other: U512): bool {
         return this.cmp(other) != 0;
     }
 
+    /**
+     * The greater-than operator.
+     *
+     * @returns True if `this` is greater than `other`, false otherwise.
+     */
     @operator(">")
     gt(other: U512): bool {
         return this.cmp(other) == 1;
     }
 
+    /**
+     * The less-than operator.
+     *
+     * @returns True if `this` is less than `other`, false otherwise.
+     */
     @operator("<")
     lt(other: U512): bool {
         return this.cmp(other) == -1;
     }
 
+    /**
+     * The greater-than-or-equal operator.
+     *
+     * @returns True if `this` is greater than or equal to `other`, false otherwise.
+     */
     @operator(">=")
     gte(other: U512): bool {
         return this.cmp(other) >= 0;
     }
 
+    /**
+     * The less-than-or-equal operator.
+     *
+     * @returns True if `this` is less than or equal to `other`, false otherwise.
+     */
     @operator("<=")
     lte(other: U512): bool {
         return this.cmp(other) <= 0;
     }
 
+    /**
+     * Returns a little-endian byte-array representation of this U512 (i.e. `result[0]` is the least
+     * significant byte.
+     */
     toBytesLE(): Uint8Array {
         let bytes = new Uint8Array(this.width);
         // Copy array of u32 into array of u8
@@ -351,6 +489,10 @@ export class U512 {
         return bytes;
     }
 
+    /**
+     * Sets the value of this U512 to the value represented by `bytes` when treated as a
+     * little-endian representation of a number.
+     */
     setBytesLE(bytes: Uint8Array): void {
         for (let i = 0; i < this.pn.length; i++) {
             let num = load<u32>(bytes.dataStart + (i * 4));
@@ -358,6 +500,9 @@ export class U512 {
         }
     }
 
+    /**
+     * Returns a string of hex digits representing the value of this U512.
+     */
     private toHex(): String {
         let bytes = this.toBytesLE();
         let result = "";
@@ -388,10 +533,20 @@ export class U512 {
         return result;
     }
 
+    /**
+     * An alias for [[toHex]].
+     */
     toString(): String {
         return this.toHex();
     }
 
+    /**
+     * Deserializes a U512 from an array of bytes. The array should represent a correct U512 in the
+     * CasperLabs serialization format.
+     *
+     * @returns A [[Result]] that contains the deserialized U512 if the deserialization was
+     *    successful, or an error otherwise.
+     */
     static fromBytes(bytes: Uint8Array): Result<U512> {
         if (bytes.length < 1) {
             return new Result<U512>(null, Error.EarlyEndOfStream, 0);
@@ -411,6 +566,10 @@ export class U512 {
         return new Result<U512>(ref, Error.Ok, 1 + lengthPrefix);
     }
 
+    /**
+     * Serializes the U512 into an array of bytes that represents it in the CasperLabs serialization
+     * format.
+     */
     toBytes(): Array<u8> {
         let bytes = this.toBytesLE();
         let skipZeros = bytes.length - 1;

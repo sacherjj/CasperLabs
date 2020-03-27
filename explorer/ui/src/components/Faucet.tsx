@@ -72,9 +72,9 @@ const FaucetForm = observer(
           <TextField
             id="id-public-key-base16"
             label="Public Key (Base16)"
-            value={
-              auth.selectedAccount &&
-              base64to16(auth.selectedAccount.publicKeyBase64)
+            fieldState={
+              (auth.selectedAccount &&
+                base64to16(auth.selectedAccount.publicKeyBase64)) || ''
             }
             readonly={true}
           />
@@ -118,24 +118,24 @@ const StatusTable = observer(
     onRefresh: () => void;
     lastRefresh?: Date;
   }) => (
-    <DataTable
-      title="Recent Faucet Requests"
-      refresh={() => props.onRefresh()}
-      rows={props.requests}
-      headers={['Timestamp', 'Account', 'Deploy Hash', 'Status']}
-      renderRow={(request: FaucetRequest, idx: number) => {
-        return (
-          <tr key={idx}>
-            <td>{request.timestamp.toLocaleString()}</td>
-            <td>{request.account.name}</td>
-            <td>{encodeBase16(request.deployHash)}</td>
-            <StatusCell request={request} />
-          </tr>
-        );
-      }}
-      footerMessage={<span>Wait until the deploy is included in a block.</span>}
-    />
-  )
+      <DataTable
+        title="Recent Faucet Requests"
+        refresh={() => props.onRefresh()}
+        rows={props.requests}
+        headers={['Timestamp', 'Account', 'Deploy Hash', 'Status']}
+        renderRow={(request: FaucetRequest, idx: number) => {
+          return (
+            <tr key={idx}>
+              <td>{request.timestamp.toLocaleString()}</td>
+              <td>{request.account.name}</td>
+              <td>{encodeBase16(request.deployHash)}</td>
+              <StatusCell request={request} />
+            </tr>
+          );
+        }}
+        footerMessage={<span>Wait until the deploy is included in a block.</span>}
+      />
+    )
 );
 
 const StatusCell = observer((props: { request: FaucetRequest }) => {
@@ -160,8 +160,8 @@ const StatusCell = observer((props: { request: FaucetRequest }) => {
           errm === 'Exit code: 1'
             ? '. It looks like you already funded this account!'
             : errm === 'Exit code: 2'
-            ? '. It looks like the faucet ran out of funds!'
-            : '';
+              ? '. It looks like the faucet ran out of funds!'
+              : '';
         return [
           <Icon name="times-circle" color="red" />,
           `Failed in block ${blockHash(failure)}: ${errm + hint}`

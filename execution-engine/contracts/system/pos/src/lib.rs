@@ -167,6 +167,10 @@ pub fn delegate() {
     match method_name.as_str() {
         // Type of this method: `fn bond(amount: U512, purse: URef)`
         METHOD_BOND => {
+            if cfg!(feature = "highway") {
+                runtime::revert(ApiError::Unhandled)
+            }
+
             let validator = runtime::get_caller();
             let amount: U512 = runtime::get_arg(1)
                 .unwrap_or_revert_with(ApiError::MissingArgument)
@@ -180,6 +184,10 @@ pub fn delegate() {
         }
         // Type of this method: `fn unbond(amount: Option<U512>)`
         METHOD_UNBOND => {
+            if cfg!(feature = "highway") {
+                runtime::revert(ApiError::Unhandled)
+            }
+
             let validator = runtime::get_caller();
             let maybe_amount = runtime::get_arg(1)
                 .unwrap_or_revert_with(ApiError::MissingArgument)

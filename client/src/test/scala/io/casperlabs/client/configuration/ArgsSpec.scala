@@ -151,13 +151,29 @@ class ArgsSpec extends FlatSpec with Matchers {
             "value_3" : {"u64" : $long}
           }}
         }
+      },
+
+      {
+        "name" : "raw_bytes",
+        "value" : {
+          "cl_type" : {"list_type" : {"inner" : {"simple_type" : "U8"}}},
+          "value" : {"bytes_value" : "$addressHex"}
+        }
+      },
+
+      {
+        "name" : "raw_bytes_fixed",
+        "value" : {
+          "cl_type" : {"fixed_list_type" : {"inner" : {"simple_type" : "U8"}, "len" : 32}},
+          "value" : {"bytes_value" : "$addressHex"}
+        }
       }
     ]
     """
 
     val args = Args.fromJson(json).fold(e => fail(e), identity)
 
-    args should have size 26
+    args should have size 28
     args(0) shouldBe Arg("bool").withValue(
       dsl.instances.bool(bool)
     )
@@ -280,6 +296,12 @@ class ArgsSpec extends FlatSpec with Matchers {
     )
     args(25) shouldBe Arg("tuple3").withValue(
       dsl.instances.tuple3(dsl.instances.u8(byte), dsl.instances.u32(int), dsl.instances.u64(long))
+    )
+    args(26) shouldBe Arg("raw_bytes").withValue(
+      dsl.instances.bytes(address)
+    )
+    args(27) shouldBe Arg("raw_bytes_fixed").withValue(
+      dsl.instances.bytesFixedLength(address)
     )
   }
 

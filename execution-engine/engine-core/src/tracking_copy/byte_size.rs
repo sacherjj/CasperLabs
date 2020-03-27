@@ -47,7 +47,7 @@ impl ByteSize for StoredValue {
     fn byte_size(&self) -> usize {
         mem::size_of::<Self>()
             + match self {
-                StoredValue::CLValue(cl_value) => cl_value.serialized_len(),
+                StoredValue::CLValue(cl_value) => cl_value.serialized_length(),
                 StoredValue::Account(account) => account.heap_size(),
                 StoredValue::Contract(contract) => contract.heap_size(),
             }

@@ -4,6 +4,7 @@ import { computed, observable } from 'mobx';
 
 interface Props {
   title?: string;
+  label?: string;
   toggleStore: ToggleStore;
   size: 'lg' | 'sm' | 'xs';
 }
@@ -35,13 +36,16 @@ export class ToggleStore {
 }
 
 export const ToggleButton = observer((props: Props) => (
-  <button
-    type="button"
-    className={`btn btn-${props.size} btn-toggle ${props.toggleStore
-      .isPressed && 'active'}`}
-    onClick={_ => props.toggleStore.toggle()}
-    title={props.title}
-  >
-    <div className="handle" />
-  </button>
+  <div className="pr-1">
+    {props.label && (<small>{props.label}</small>)}
+    <button
+      type="button"
+      className={`btn btn-${props.size} btn-toggle ${props.toggleStore
+        .isPressed && 'active'}`}
+      onClick={_ => props.toggleStore.toggle()}
+      title={props.title}
+    >
+      <div className="handle"/>
+    </button>
+  </div>
 ));

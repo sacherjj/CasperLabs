@@ -365,7 +365,7 @@ def show_peers_command(casperlabs_client, args):
 
 @guarded_command
 def stream_events_command(casperlabs_client, args):
-    kwargs = dict(
+    subscribed_events = dict(
         all=args.all,
         block_added=args.block_added,
         block_finalized=args.block_finalized,
@@ -375,12 +375,16 @@ def stream_events_command(casperlabs_client, args):
         deploy_processed=args.deploy_processed,
         deploy_finalized=args.deploy_finalized,
         deploy_orphaned=args.deploy_orphaned,
+    )
+    if not any(subscribed_events.values()):
+        raise argparse.ArgumentTypeError("No events chosen")
+
+    stream = casperlabs_client.stream_events(
         account_public_keys=args.account_public_key,
         deploy_hashes=args.deploy_hash,
+        min_event_id=args.min_event_id,
+        **subscribed_events,
     )
-    if not any(kwargs.values()):
-        raise argparse.ArgumentTypeError("No events chosen")
-    stream = casperlabs_client.stream_events(**kwargs)
     for event in stream:
         now = datetime.datetime.now()
         print(f"------------- {now.strftime('%Y-%m-%d %H:%M:%S')} -------------")
@@ -628,6 +632,7 @@ def cli(*arguments) -> int:
         [('--deploy-orphaned',), dict(action='store_true', help='Deploy orphaned')],
         [('-k', '--account-public-key'), dict(action='append', help='Filter by (possibly multiple) account public key(s)')],
         [('-d', '--deploy-hash'), dict(action='append', help='Filter by (possibly multiple) deploy hash(es)')],
+        [('--min-event-id',), dict(required=False, default=0, type=int, help="Supports replaying events from a given ID. If the value is 0, it it will subscribe to future events; if it's non-zero, it will replay all past events from that ID, without subscribing to new. To catch up with events from the beginning, start from 1.")],
     ])
     # fmt:on
     return parser.run([str(a) for a in arguments])

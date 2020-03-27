@@ -18,6 +18,7 @@ export interface Props {
   title: string;
   refresh?: () => void;
   subscribeToggleStore?: ToggleStore;
+  hideBallotsToggleStore?: ToggleStore;
   blocks: BlockInfo[] | null;
   emptyMessage?: any;
   footerMessage?: any;
@@ -36,15 +37,32 @@ export class BlockDAG extends React.Component<Props, {}> {
   xTrans: d3.ScaleLinear<number, number> | null = null;
   yTrans: d3.ScaleLinear<number, number> | null = null;
   initialized = false;
+  renderedBlocks: BlockInfo[] | null;
 
   constructor(props: Props) {
     super(props);
-    reaction(() => this.props.blocks, (_, reaction) => {
-      this.renderGraph();
+    reaction(() => {
+      // Needed for "Hide Ballots" to work.
+      return this.filteredBlocks();
+    }, (blocks) => {
+      this.renderGraph(blocks);
     }, {
       fireImmediately: false,
       delay: 100
-    });
+    }
+    );
+  }
+
+  private filteredBlocks() {
+    if (this.props.blocks === null) {
+      return null;
+    } else {
+      if (this.props.hideBallotsToggleStore?.isPressed) {
+        return this.props.blocks.filter(b => isBlock(b));
+      } else {
+        return this.props.blocks.map(b => b);
+      }
+    }
   }
 
   render() {
@@ -54,6 +72,22 @@ export class BlockDAG extends React.Component<Props, {}> {
           <span>{this.props.title}</span>
           <div className="float-right">
             <ListInline>
+              {this.props.hideBallotsToggleStore && (
+                <ToggleButton
+                  label="Hide Ballots"
+                  title="Hide Ballots"
+                  toggleStore={this.props.hideBallotsToggleStore}
+                  size="sm"
+                />
+              )}
+              {this.props.subscribeToggleStore && (
+                <ToggleButton
+                  title="Subscribe to the latest added blocks"
+                  label="Live Feed"
+                  toggleStore={this.props.subscribeToggleStore}
+                  size="sm"
+                />
+              )}
               {this.props.onDepthChange && (
                 <select
                   title="Depth"
@@ -71,13 +105,6 @@ export class BlockDAG extends React.Component<Props, {}> {
               )}
               {this.props.refresh && (
                 <RefreshButton refresh={() => this.props.refresh!()} />
-              )}
-              {this.props.subscribeToggleStore && (
-                <ToggleButton
-                  title="Subscribing to the latest added blocks"
-                  toggleStore={this.props.subscribeToggleStore}
-                  size="sm"
-                />
               )}
             </ListInline>
           </div>
@@ -112,16 +139,31 @@ export class BlockDAG extends React.Component<Props, {}> {
     );
   }
 
+  /** Called so that the SVG is added when the component has been rendered,
+    * however data will most likely still be uninitialized. */
   componentDidMount() {
-    this.renderGraph();
+    this.renderGraph(this.filteredBlocks());
   }
 
-  renderGraph() {
-    if (this.props.blocks == null || this.props.blocks.length === 0) {
+  /** Called when the data is refreshed, when we get the blocks if they were null to begin with.
+   * Also required for navigating between nodes on block details view, otherwise the component
+   * would re-render with no SVG at all.
+   */
+  componentDidUpdate() {
+    this.renderGraph(this.filteredBlocks());
+  }
+
+  renderGraph(blocks: BlockInfo[] | null) {
+    if (blocks == null || blocks.length === 0) {
       // The renderer will have removed the svg.
       this.initialized = false;
       return;
     }
+
+    // Avoid double rendering by componentDidUpdate and reaction.
+    if (arraysEqual(blocks, this.renderedBlocks)) return;
+    this.renderedBlocks = blocks;
+
     const svg = d3.select(this.svg);
     const hint = d3.select(this.hint);
     const validatorColor = consistentColor(d3.schemePaired);
@@ -182,8 +224,7 @@ export class BlockDAG extends React.Component<Props, {}> {
     // Clear previous contents.
     container.selectAll('g').remove();
 
-    let graph: Graph = toGraph(this.props.blocks);
-    graph = calculateCoordinates(graph, width, height);
+    let graph: Graph = calculateCoordinates(toGraph(blocks), width, height);
 
     const selectedId = this.props.selected && blockHash(this.props.selected);
 
@@ -386,12 +427,12 @@ const toGraph = (blocks: BlockInfo[]) => {
       .getJustificationsList()
       .map(x => encodeBase16(x.getLatestBlockHash_asU8()));
 
-    let source = nodeMap.get(child)!
+    let source = nodeMap.get(child)!;
 
     let parentLinks = parents
       .filter(p => nodeMap.has(p))
       .map(p => {
-        let target = nodeMap.get(p)!
+        let target = nodeMap.get(p)!;
         return {
           source: source,
           target: target,
@@ -405,7 +446,7 @@ const toGraph = (blocks: BlockInfo[]) => {
       .filter(x => !parentSet.has(x))
       .filter(j => nodeMap.has(j))
       .map(j => {
-        let target = nodeMap.get(j)!
+        let target = nodeMap.get(j)!;
         return {
           source: source,
           target: target,
@@ -476,13 +517,14 @@ const keyBlockHash = (block: BlockInfo) =>
   encodeBase16(block.getSummary()!.getHeader()!.getKeyBlockHash_asU8());
 
 const isBlock = (block: BlockInfo) =>
-  block.getSummary()!.getHeader()!.getMessageType() === Block.MessageType.BLOCK
+  block.getSummary()!.getHeader()!.getMessageType() === Block.MessageType.BLOCK;
 
 const isBallot = (block: BlockInfo) =>
-  !isBlock(block)
+  !isBlock(block);
 
 const isFinalized = (block: BlockInfo) =>
-  block.getStatus()!.getIsFinalized()
+  block.getStatus()!.getFinality() === BlockInfo.Status.Finality.FINALIZED
+
 
 const validatorHash = (block: BlockInfo) =>
   encodeBase16(
@@ -528,3 +570,14 @@ const consistentColor = (colors: readonly string[]) => {
     return colors[c];
   };
 };
+
+
+function arraysEqual<T>(a: T[] | null, b: T[] | null) {
+  if (a === b) return true;
+  if (a == null || b == null) return false;
+  if (a.length != b.length) return false;
+  for (let i = 0; i < a.length; ++i) {
+    if (a[i] !== b[i]) return false;
+  }
+  return true;
+}

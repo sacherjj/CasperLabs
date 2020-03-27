@@ -13,11 +13,14 @@ import io.casperlabs.casper.consensus.Deploy
 import io.casperlabs.casper.EventEmitter
 import io.casperlabs.mempool.DeployBuffer
 import io.casperlabs.metrics.Metrics
+import io.casperlabs.node.Fs2StreamOps
+import io.casperlabs.node.api.casper.StreamEventsRequest
 import io.casperlabs.node.api.casper.StreamEventsRequest
 import io.casperlabs.node.api.graphql.FinalizedBlocksStream
 import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.storage.dag.DagStorage
 import io.casperlabs.storage.deploy.DeployStorage
+import io.casperlabs.storage.event.EventStorage
 import monix.execution.{Ack, Scheduler}
 import monix.reactive.{Observable, OverflowStrategy}
 import monix.reactive.subjects.ConcurrentSubject
@@ -29,7 +32,7 @@ import io.casperlabs.shared.Log
 }
 
 object EventStream {
-  def create[F[_]: Concurrent: DeployStorage: BlockStorage: DagStorage: Log: Metrics](
+  def create[F[_]: ConcurrentEffect: DeployStorage: BlockStorage: DagStorage: EventStorage: Log: Metrics](
       scheduler: Scheduler,
       eventStreamBufferSize: Int
   ): EventStream[F] = {
@@ -39,13 +42,36 @@ object EventStream {
     val source =
       ConcurrentSubject.publish[Event](OverflowStrategy.DropOld(eventStreamBufferSize))(scheduler)
 
-    def emit(event: Event) =
-      Sync[F].delay(source.onNext(event)).void
+    def push(event: Event): F[Unit] = {
+      implicit val ec = scheduler
+      Async[F].async { k =>
+        source.onNext(event).onComplete { result =>
+          k(result.toEither.void)
+        }
+      }
+    }
+
+    def emit(values: Event.Value*): F[Unit] =
+      for {
+        events <- EventStorage[F].storeEvents(values)
+        _      <- events.traverse(push)
+      } yield ()
 
     new EventStream[F] {
       import Event._
 
-      override def subscribe(request: StreamEventsRequest): Observable[Event] = {
+      override def subscribe(request: StreamEventsRequest): Observable[Event] =
+        if (request.minEventId > 0) {
+          // TODO (NODE-1302): Move filtering to the storage.
+          EventStorage[F]
+            .getEvents(request.minEventId)
+            .filter(subscriptionFilter(request))
+            .toMonixObservable
+        } else {
+          source.filter(subscriptionFilter(request))
+        }
+
+      private def subscriptionFilter(request: StreamEventsRequest): Event => Boolean = {
         import Event.Value._
 
         val accountFilter: ByteString => Boolean =
@@ -63,8 +89,8 @@ object EventStream {
         def deployFilter(d: Deploy) =
           accountFilter(d.getHeader.accountPublicKey) && deployHashFilter(d.deployHash)
 
-        source.filter {
-          _.value match {
+        event => {
+          event.value match {
             case Empty => false
             case Value.BlockAdded(_) =>
               request.blockAdded
@@ -98,64 +124,69 @@ object EventStream {
           Base16.encode(blockHash.toByteArray),
           BlockInfo.View.FULL
         ) flatMap { blockInfo =>
-          emit {
-            Event().withBlockAdded(BlockAdded().withBlock(blockInfo))
-          }
+          emit(Value.BlockAdded(BlockAdded().withBlock(blockInfo)))
         }
       } >> {
         DeployStorage[F].reader
           .getProcessedDeploys(blockHash)
           .flatMap { deploys =>
-            deploys.traverse { d =>
-              emit {
-                Event().withDeployProcessed(
-                  DeployProcessed().withBlockHash(blockHash).withProcessedDeploy(d)
-                )
-              }
-            }
+            emit(deploys.map { d =>
+              Value
+                .DeployProcessed(DeployProcessed().withBlockHash(blockHash).withProcessedDeploy(d))
+            }: _*)
           }
           .void
       }
 
       override def newLastFinalizedBlock(
           lfb: BlockHash,
-          indirectlyFinalized: Set[BlockHash]
+          indirectlyFinalized: Set[BlockHash],
+          indirectlyOrphaned: Set[BlockHash]
       ): F[Unit] =
-        emit {
-          Event().withNewFinalizedBlock(
-            NewFinalizedBlock(lfb, indirectlyFinalized.toSeq)
+        emit(
+          Value.NewFinalizedBlock(
+            NewFinalizedBlock(lfb, indirectlyFinalized.toSeq, indirectlyOrphaned.toSeq)
           )
-        } >> {
+        ) >> {
           (lfb +: indirectlyFinalized.toList).traverse { blockHash =>
             DeployStorage[F].reader
               .getProcessedDeploys(blockHash)
               .flatMap { deploys =>
-                deploys.traverse { d =>
-                  emit {
-                    Event().withDeployFinalized(
-                      DeployFinalized().withBlockHash(blockHash).withProcessedDeploy(d)
-                    )
-                  }
-                }
+                emit(deploys.map { d =>
+                  Value.DeployFinalized(
+                    DeployFinalized().withBlockHash(blockHash).withProcessedDeploy(d)
+                  )
+                }: _*)
               }
-          }.void
+          } >>
+            indirectlyOrphaned.toList.traverse { blockHash =>
+              val rdr = DeployStorage[F].reader
+              for {
+                processed <- rdr.getProcessedDeploys(blockHash)
+                deploys   = processed.map(_.getDeploy)
+                infos     <- rdr.getDeployInfos(deploys)
+                _ <- emit(infos.map { info =>
+                      Value.DeployOrphaned(
+                        DeployOrphaned().withBlockHash(blockHash).withDeployInfo(info)
+                      )
+                    }: _*)
+              } yield ()
+            } void
         }
 
       override def deployAdded(deploy: Deploy): F[Unit] =
-        emit {
-          Event().withDeployAdded(DeployAdded().withDeploy(deploy.clearBody))
-        }
+        emit(Value.DeployAdded(DeployAdded().withDeploy(deploy.clearBody)))
 
       override def deploysDiscarded(deployHashesWithReasons: Seq[(DeployHash, String)]): F[Unit] = {
         val reasons = deployHashesWithReasons.toMap
         DeployStorage[F].reader
           .getByHashes(reasons.keySet)
           .evalMap { deploy =>
-            emit {
-              Event().withDeployDiscarded(
+            emit(
+              Value.DeployDiscarded(
                 DeployDiscarded().withDeploy(deploy).withMessage(reasons(deploy.deployHash))
               )
-            }
+            )
           }
           .compile
           .drain
@@ -165,9 +196,7 @@ object EventStream {
         DeployStorage[F].reader
           .getByHashes(deployHashes.toSet)
           .evalMap { deploy =>
-            emit {
-              Event().withDeployRequeued(DeployRequeued().withDeploy(deploy))
-            }
+            emit(Value.DeployRequeued(DeployRequeued().withDeploy(deploy)))
           }
           .compile
           .drain

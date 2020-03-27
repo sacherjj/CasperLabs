@@ -3,7 +3,10 @@
 use alloc::vec::Vec;
 use core::result;
 
-use crate::{bytesrepr, bytesrepr::ToBytes, CLType, CLTyped};
+use crate::{
+    bytesrepr::{self, ToBytes, U8_SERIALIZED_LENGTH},
+    CLType, CLTyped,
+};
 
 /// Errors which can occur while executing the Proof of Stake contract.
 // TODO: Split this up into user errors vs. system errors.
@@ -86,6 +89,10 @@ impl ToBytes for Error {
     fn to_bytes(&self) -> result::Result<Vec<u8>, bytesrepr::Error> {
         let value = *self as u8;
         value.to_bytes()
+    }
+
+    fn serialized_length(&self) -> usize {
+        U8_SERIALIZED_LENGTH
     }
 }
 

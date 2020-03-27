@@ -6,6 +6,8 @@ import io.grpc.{Server, ServerInterceptor, ServerServiceDefinition}
 import io.grpc.netty.NettyServerBuilder
 import io.netty.handler.ssl.SslContext
 import monix.execution.Scheduler
+import java.util.concurrent.{TimeUnit, TimeoutException}
+import scala.concurrent.duration._
 
 object GrpcServer {
   type ServiceBinder[F[_]] = Scheduler => F[ServerServiceDefinition]
@@ -16,7 +18,8 @@ object GrpcServer {
       services: List[ServiceBinder[F]],
       interceptors: List[ServerInterceptor] = Nil,
       sslContext: Option[SslContext] = None,
-      maxMessageSize: Option[Int] = None
+      maxMessageSize: Option[Int] = None,
+      shutdownTimeout: FiniteDuration = 10.seconds
   )(
       implicit scheduler: Scheduler
   ): Resource[F, Server] =
@@ -36,9 +39,10 @@ object GrpcServer {
     )(
       server =>
         Sync[F].delay {
-          // NOTE: The node used to call call `awaitTermination(<timeout>)`
-          // and then `.shutdownNow()` if this didn't work immediately.
-          server.shutdown().awaitTermination()
+          // Calling `awaitTermination(<timeout>)` and then `.shutdownNow()` if this didn't work immediately,
+          // otherwise shutting down docker containers take quite a long time.
+          if (!server.shutdown().awaitTermination(shutdownTimeout.toSeconds, TimeUnit.SECONDS))
+            server.shutdownNow()
         }
     )
 }

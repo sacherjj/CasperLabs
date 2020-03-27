@@ -156,12 +156,12 @@ trait BlockStorageTest
         for {
           _          <- storage.put(b)
           maybeBlock <- storage.get(b.getBlockMessage.blockHash)
-          _ <- Task {
-                maybeBlock should not be None
-                val got = maybeBlock.get.toByteArray
-                assert(before.sameElements(got))
-              }
-        } yield ()
+        } yield {
+          maybeBlock should not be None
+          maybeBlock.get shouldBe b
+          val got = maybeBlock.get.toByteArray
+          assert(before.sameElements(got))
+        }
       }
     }
   }

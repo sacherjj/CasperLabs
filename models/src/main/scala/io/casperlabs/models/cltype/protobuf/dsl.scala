@@ -1,6 +1,7 @@
 package io.casperlabs.models.cltype.protobuf
 
 import cats.syntax.option._
+import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.state.{CLType, CLValueInstance, Key, Unit}
 
 object dsl {
@@ -118,6 +119,10 @@ object dsl {
 
     def uref(u: Key.URef): CLValueInstance.Value = CLValueInstance.Value(
       value = CLValueInstance.Value.Value.Uref(u)
+    )
+
+    def bytes(bs: Seq[Byte]): CLValueInstance.Value = CLValueInstance.Value(
+      value = CLValueInstance.Value.Value.BytesValue(ByteString.copyFrom(bs.toArray))
     )
 
     def option(inner: Option[CLValueInstance.Value]): CLValueInstance.Value =
@@ -252,6 +257,16 @@ object dsl {
     def uref(u: Key.URef): CLValueInstance = CLValueInstance(
       clType = types.uref.some,
       value = values.uref(u).some
+    )
+
+    def bytes(bs: Seq[Byte]): CLValueInstance = CLValueInstance(
+      clType = types.list(types.u8).some,
+      value = values.bytes(bs).some
+    )
+
+    def bytesFixedLength(bs: Seq[Byte]): CLValueInstance = CLValueInstance(
+      clType = types.fixedList(types.u8, bs.size).some,
+      value = values.bytes(bs).some
     )
 
     object option {

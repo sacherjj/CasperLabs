@@ -290,7 +290,7 @@ class SynchronizerSpec
 
     "syncs repeatedy" when {
       "using the same source" should {
-        "not traverse the DAG twice" in forAll(
+        "not traverse the DAG twice unless the download fails" in forAll(
           genPartialDagFromTips
         ) { dag =>
           // This was copied from the iterative test.
@@ -303,19 +303,39 @@ class SynchronizerSpec
             groups.grouped(ancestorsDepthRequest).toVector.map(_.flatten)
           }
           val finalParents = dag.takeRight(consensusConfig.dagWidth).map(_.blockHash).toSet
-          TestFixture((grouped ++ grouped): _*)(
+          // Initial request, second attempt with cache in place, third attempt after failure.
+          TestFixture((grouped ++ grouped.take(1) ++ grouped): _*)(
             maxDepthAncestorsRequest = ancestorsDepthRequest,
             notInDag = bs => Task.now(!finalParents(bs))
           ) { (synchronizer, variables) =>
+            val source = Node()
             for {
-              r1 <- synchronizer.syncDag(Node(), Set(dag.head.blockHash))
-              r2 <- synchronizer.syncDag(Node(), Set(dag.head.blockHash))
+              r1 <- synchronizer.syncDag(source, Set(dag.head.blockHash))
               d1 = r1.fold(throw _, identity)
+
+              // Simulate the DownloadManager telling the Synchronizer about the items being scheduled.
+              _ <- d1.traverse { d =>
+                    synchronizer.onScheduled(d, source)
+                  }
+
+              // Second time it should not go back as far as it did the first time.
+              r2 <- synchronizer.syncDag(source, Set(dag.head.blockHash))
               d2 = r2.fold(throw _, identity)
-            } yield {
-              d2.length should be < d1.length
-              variables.requestsCounter.get should be < ((grouped.size.toDouble / ancestorsDepthRequest).ceil.toInt + 1) * 2
-            }
+              _  = d2.length shouldBe grouped(0).size
+              // Shouldn't ask everything twice.
+              _ = variables.requestsCounter.get should be < ((grouped.size.toDouble / ancestorsDepthRequest).ceil.toInt + 1) * 2
+
+              // Simulate the DownloadManager telling the Synchronizer about the first items having failed.
+              // Notifying about all of them just so that we can make sure that all of `d1` gets traversed again,
+              // not just a part that depends on for example d1.head
+              _ <- grouped(0).traverse(s => synchronizer.onFailed(s.blockHash))
+
+              // Third time it should go back right to the failed block again.
+              r3 <- synchronizer.syncDag(source, Set(dag.head.blockHash))
+              d3 = r3.fold(throw _, identity)
+              _  = d3.length shouldBe d1.length
+
+            } yield {}
           }
         }
       }
@@ -500,7 +520,8 @@ object SynchronizerSpec {
         maxPossibleDepth = maxPossibleDepth,
         minBlockCountToCheckWidth = minBlockCountToCheckWidth,
         maxBondingRate = maxBondingRate,
-        maxDepthAncestorsRequest = maxDepthAncestorsRequest
+        maxDepthAncestorsRequest = maxDepthAncestorsRequest,
+        disableValidations = false
       ).flatMap { synchronizer =>
           test(synchronizer, TestVariables(requestsCounter, requestsGauge, knownHashes))
         }

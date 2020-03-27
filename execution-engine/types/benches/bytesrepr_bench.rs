@@ -60,7 +60,7 @@ fn deserialize_vector_of_u8(b: &mut Bencher) {
         .collect::<Vec<_>>()
         .to_bytes()
         .unwrap();
-    b.iter(|| Vec::<i32>::from_bytes(&data))
+    b.iter(|| Vec::<u8>::from_bytes(&data))
 }
 
 #[bench]

@@ -8,6 +8,7 @@ import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.{Approval, Block, BlockSummary}
 import io.casperlabs.comm.discovery.{Node, NodeDiscovery, NodeIdentifier}
 import io.casperlabs.comm.gossiping._
+import io.casperlabs.comm.gossiping.downloadmanager._
 import io.casperlabs.comm.gossiping.synchronization.InitialSynchronization.SynchronizationError
 import io.casperlabs.comm.gossiping.synchronization.InitialSynchronizationBackwardImplSpec.TestFixture
 import io.casperlabs.comm.gossiping.synchronization.Synchronizer.SyncError
@@ -210,20 +211,22 @@ object InitialSynchronizationBackwardImplSpec extends ArbitraryConsensus {
   }
 
   object MockBackend extends GossipServiceServer.Backend[Task] {
-    override def hasBlock(blockHash: ByteString)                = ???
-    override def getBlockSummary(blockHash: ByteString)         = ???
-    override def getBlock(blockHash: ByteString)                = ???
-    override def getDeploys(deployHashes: Set[ByteString])      = ???
-    override def latestMessages: Task[Set[Block.Justification]] = ???
-    override def dagTopoSort(startRank: Long, endRank: Long)    = ???
+    override def hasBlock(blockHash: ByteString)                                 = ???
+    override def getBlockSummary(blockHash: ByteString)                          = ???
+    override def getBlock(blockHash: ByteString, deploysBodiesExcluded: Boolean) = ???
+    override def getDeploys(deployHashes: Set[ByteString])                       = ???
+    override def latestMessages: Task[Set[Block.Justification]]                  = ???
+    override def dagTopoSort(startRank: Long, endRank: Long)                     = ???
   }
 
   object MockSynchronizer extends Synchronizer[Task] {
-    def syncDag(source: Node, targetBlockHashes: Set[ByteString]) = ???
-    def downloaded(blockHash: ByteString): Task[Unit]             = ???
+    def syncDag(source: Node, targetBlockHashes: Set[ByteString])    = ???
+    def onDownloaded(blockHash: ByteString): Task[Unit]              = ???
+    def onFailed(blockHash: ByteString): Task[Unit]                  = ???
+    def onScheduled(summary: BlockSummary, source: Node): Task[Unit] = ???
   }
 
-  object MockDownloadManager extends DownloadManager[Task] {
+  object MockBlockDownloadManager extends BlockDownloadManager[Task] {
     def scheduleDownload(summary: BlockSummary, source: Node, relay: Boolean) = ???
   }
 
@@ -239,7 +242,7 @@ object InitialSynchronizationBackwardImplSpec extends ArbitraryConsensus {
       extends GossipServiceServer[Task](
         MockBackend,
         MockSynchronizer,
-        MockDownloadManager,
+        MockBlockDownloadManager,
         MockGenesisApprover,
         0,
         MockSemaphore

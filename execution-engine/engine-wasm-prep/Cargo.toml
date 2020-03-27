@@ -1,6 +1,6 @@
 [package]
 name = "casperlabs-engine-wasm-prep"
-version = "0.2.0"
+version = "0.4.0"
 authors = ["Michael Birch <birchmd@casperlabs.io>", "Mateusz Górski <gorski.mateusz@protonmail.ch>"]
 edition = "2018"
 description = "Preprocessor of Wasm modules for use as smart contracts on the CasperLabs network."
@@ -14,4 +14,4 @@ license-file = "../../LICENSE"
 parity-wasm = "0.31.3"
 proptest = "0.9.4"
 pwasm-utils = "0.6.2"
-types = { version = "0.2.0", path = "../types", package = "casperlabs-types", features = ["std"] }
+types = { version = "0.4.0", path = "../types", package = "casperlabs-types", features = ["std"] }

@@ -9,18 +9,22 @@ import doobie._
 import doobie.implicits._
 import doobie.util.transactor.Transactor
 import io.casperlabs.casper.consensus.Block.ProcessedDeploy
-import io.casperlabs.casper.consensus.info.BlockInfo
+import io.casperlabs.casper.consensus.info.DeployInfo.View
+import io.casperlabs.casper.consensus.info.{BlockInfo, DeployInfo}
 import io.casperlabs.casper.consensus.{Block, BlockSummary, Deploy}
-import io.casperlabs.casper.consensus.info.DeployInfo.ProcessingResult
-import io.casperlabs.catscontrib.Fs2Compiler
+import io.casperlabs.catscontrib.{Fs2Compiler, MonadThrowable}
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.ipc.TransformEntry
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.Metrics.Source
-import io.casperlabs.storage.{BlockHash, DeployHash}
 import io.casperlabs.storage.block.BlockStorage.MeteredBlockStorage
 import io.casperlabs.storage.util.DoobieCodecs
-import io.casperlabs.storage.{BlockMsgWithTransform, BlockStorageMetricsSource}
+import io.casperlabs.storage.{
+  BlockHash,
+  BlockMsgWithTransform,
+  BlockStorageMetricsSource,
+  DeployHash
+}
 
 class SQLiteBlockStorage[F[_]: Bracket[*[_], Throwable]: Fs2Compiler](
     readXa: Transactor[F],
@@ -30,36 +34,42 @@ class SQLiteBlockStorage[F[_]: Bracket[*[_], Throwable]: Fs2Compiler](
 
   import SQLiteBlockStorage.blockInfoCols
 
-  override def get(blockHash: BlockHash): F[Option[BlockMsgWithTransform]] =
+  private def deployBodyCol(alias: String)(implicit dv: DeployInfo.View) =
+    dv match {
+      case View.BASIC if alias.nonEmpty =>
+        Fragment.const(s"${alias}.summary, null").pure[ConnectionIO]
+      case View.FULL if alias.nonEmpty =>
+        Fragment.const(s"${alias}.summary, ${alias}.body").pure[ConnectionIO]
+      case View.BASIC => Fragment.const(s"summary, null").pure[ConnectionIO]
+      case View.FULL  => Fragment.const(s"summary, body").pure[ConnectionIO]
+      case View.Unrecognized(_) =>
+        MonadThrowable[ConnectionIO].raiseError[Fragment](
+          new IllegalStateException("Got DeployInfo.View.Unrecognized instead of FULL or BASIC")
+        )
+    }
+
+  override def get(
+      blockHash: BlockHash
+  )(implicit dv: DeployInfo.View = DeployInfo.View.FULL): F[Option[BlockMsgWithTransform]] =
     get(sql"""|SELECT block_hash, data
               |FROM block_metadata
               |WHERE block_hash=$blockHash""".stripMargin.query[(BlockHash, BlockSummary)].option)
 
   private def get(
       initial: ConnectionIO[Option[(BlockHash, BlockSummary)]]
-  ): F[Option[BlockMsgWithTransform]] = {
+  )(implicit dv: DeployInfo.View): F[Option[BlockMsgWithTransform]] = {
     def createTransaction(blockHash: BlockHash, blockSummary: BlockSummary) =
       for {
-        body <- sql"""|SELECT d.summary, d.body, dpr.deploy_position, dpr.cost, dpr.execution_error_message
-                      |FROM deploy_process_results dpr
-                      |INNER JOIN deploys d
-                      |ON dpr.deploy_hash=d.hash
-                      |WHERE dpr.block_hash=$blockHash
-                      |ORDER BY dpr.deploy_position""".stripMargin
-                 .query[(Deploy, Int, Long, Option[String])]
+        deployBodyColumns <- deployBodyCol(alias = "d")
+        body <- (fr"SELECT " ++ deployBodyColumns ++ fr""", dpr.cost, dpr.execution_error_message, dpr.stage
+                      FROM deploy_process_results dpr
+                      INNER JOIN deploys d
+                      ON dpr.deploy_hash=d.hash
+                      WHERE dpr.block_hash=$blockHash
+                      ORDER BY dpr.deploy_position""")
+                 .query[ProcessedDeploy]
                  .to[List]
-                 .map { blockBodyData =>
-                   val processedDeploys = blockBodyData.map {
-                     case (deploy, _, cost, maybeError) =>
-                       ProcessedDeploy(
-                         deploy.some,
-                         cost,
-                         isError = maybeError.nonEmpty,
-                         maybeError.getOrElse("")
-                       )
-                   }
-                   Block.Body(processedDeploys)
-                 }
+                 .map(Block.Body(_))
         transforms <- sql"""|SELECT stage, data
                             |FROM transforms
                             |WHERE block_hash=$blockHash""".stripMargin
@@ -78,7 +88,9 @@ class SQLiteBlockStorage[F[_]: Bracket[*[_], Throwable]: Fs2Compiler](
     transaction.transact(readXa)
   }
 
-  override def getByPrefix(blockHashPrefix: String): F[Option[BlockMsgWithTransform]] = {
+  override def getByPrefix(
+      blockHashPrefix: String
+  )(implicit dv: DeployInfo.View): F[Option[BlockMsgWithTransform]] = {
     def query(lowerBound: Array[Byte], upperBound: Array[Byte]) =
       get(
         sql"""|SELECT block_hash, data
@@ -91,7 +103,7 @@ class SQLiteBlockStorage[F[_]: Bracket[*[_], Throwable]: Fs2Compiler](
 
     getByPrefix[BlockMsgWithTransform](
       blockHashPrefix,
-      get,
+      blockHash => get(blockHash),
       (lowerBound, upperBound) => query(lowerBound, upperBound)
     )
   }
@@ -225,7 +237,8 @@ object SQLiteBlockStorage {
         "deploy_error_count",
         "deploy_cost_total",
         "deploy_gas_price_avg",
-        "is_finalized"
+        "is_finalized",
+        "is_orphaned"
       )
     Fragment.const(cols.map(col => if (alias.isEmpty) col else s"${alias}.${col}").mkString(", "))
   }

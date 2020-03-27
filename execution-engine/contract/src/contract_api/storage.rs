@@ -140,7 +140,7 @@ pub fn store_function_at_hash(name: &str, named_keys: BTreeMap<String, Key>) -> 
 
 /// Returns a new unforgeable pointer, where the value is initialized to `init`.
 pub fn new_uref<T: CLTyped + ToBytes>(init: T) -> URef {
-    let key_ptr = contract_api::alloc_bytes(Key::serialized_size_hint());
+    let key_ptr = contract_api::alloc_bytes(Key::max_serialized_length());
     let cl_value = CLValue::from_t(init).unwrap_or_revert();
     let (cl_value_ptr, cl_value_size, _cl_value_bytes) = contract_api::to_ptr(cl_value);
     let bytes = unsafe {

@@ -6,8 +6,10 @@ import cats.syntax.flatMap._
 import cats.effect.Concurrent
 import cats.effect.concurrent.{Ref, Semaphore}
 import io.casperlabs.casper.Estimator.BlockHash
-import io.casperlabs.casper.consensus.Block
 import io.casperlabs.casper.finality.MultiParentFinalizer.FinalizedBlocks
+import io.casperlabs.casper.CasperMetricsSource
+import io.casperlabs.metrics.implicits._
+import io.casperlabs.metrics.Metrics
 import io.casperlabs.models.Message
 import io.casperlabs.storage.dag.DagRepresentation
 import simulacrum.typeclass
@@ -24,18 +26,37 @@ import io.casperlabs.storage.dag.FinalityStorage
 }
 
 object MultiParentFinalizer {
-  final case class FinalizedBlocks(
-      mainChain: BlockHash,
-      quorum: BigInt,
-      secondaryParents: Set[BlockHash]
-  ) {
-    def finalizedBlocks: Set[BlockHash] = secondaryParents + mainChain
+  private implicit val metricsSource = CasperMetricsSource / "MultiParentFinalizer"
+
+  class MeteredMultiParentFinalizer[F[_]] private (
+      finalizer: MultiParentFinalizer[F],
+      metrics: Metrics[F]
+  ) extends MultiParentFinalizer[F] {
+
+    override def onNewMessageAdded(message: Message): F[Option[FinalizedBlocks]] =
+      metrics.timer("onNewMessageAdded")(finalizer.onNewMessageAdded(message))
   }
 
-  def create[F[_]: Concurrent: FinalityStorage](
+  object MeteredMultiParentFinalizer {
+    def of[F[_]](
+        f: MultiParentFinalizer[F]
+    )(implicit M: Metrics[F]): MeteredMultiParentFinalizer[F] =
+      new MeteredMultiParentFinalizer[F](f, M)
+  }
+
+  final case class FinalizedBlocks(
+      // New finalized block in the main chain.
+      newLFB: BlockHash,
+      quorum: BigInt,
+      indirectlyFinalized: Set[Message],
+      indirectlyOrphaned: Set[Message]
+  )
+
+  def create[F[_]: Concurrent: FinalityStorage: Metrics](
       dag: DagRepresentation[F],
       latestLFB: BlockHash, // Last LFB from the main chain
-      finalityDetector: FinalityDetector[F]
+      finalityDetector: FinalityDetector[F],
+      isHighway: Boolean
   ): F[MultiParentFinalizer[F]] =
     for {
       lfbCache  <- Ref[F].of[BlockHash](latestLFB)
@@ -48,15 +69,29 @@ object MultiParentFinalizer {
           previousLFB <- lfbCache.get
           finalizedBlock <- finalityDetector
                              .onNewMessageAddedToTheBlockDag(dag, message, previousLFB)
+                             .timer("onNewMessageAddedToTheBlockDag")
           finalized <- finalizedBlock.fold(Applicative[F].pure(None: Option[FinalizedBlocks])) {
                         case CommitteeWithConsensusValue(_, quorum, newLFB) =>
                           for {
                             _ <- lfbCache.set(newLFB)
-                            justFinalized <- FinalityDetectorUtil.finalizedIndirectly[F](
-                                              newLFB,
-                                              dag
-                                            )
-                          } yield Some(FinalizedBlocks(newLFB, quorum, justFinalized))
+                            justFinalized <- FinalityDetectorUtil
+                                              .finalizedIndirectly[F](
+                                                dag,
+                                                newLFB,
+                                                isHighway
+                                              )
+                                              .timer("finalizedIndirectly")
+                            justOrphaned <- FinalityDetectorUtil
+                                             .orphanedIndirectly(
+                                               dag,
+                                               newLFB,
+                                               justFinalized.map(_.messageHash),
+                                               isHighway
+                                             )
+                                             .timer("orphanedIndirectly")
+                          } yield Some(
+                            FinalizedBlocks(newLFB, quorum, justFinalized, justOrphaned)
+                          )
                       }
         } yield finalized)
     }

@@ -1,14 +1,11 @@
 import blake from 'blakejs';
-import {
-  Approval,
-  Deploy,
-  Signature
-} from 'casperlabs-grpc/io/casperlabs/casper/consensus/consensus_pb';
+import { Deploy } from 'casperlabs-grpc/io/casperlabs/casper/consensus/consensus_pb';
 import * as fs from 'fs';
 import { Message } from 'google-protobuf';
 import * as nacl from 'tweetnacl-ts';
 import { ByteArray } from '../index';
 import { Args, BigIntValue, BytesValue } from './Args';
+import { ContractType, makeDeploy, signDeploy } from './DeployUtil';
 
 // https://www.npmjs.com/package/tweetnacl-ts
 // https://github.com/dcposch/blakejs
@@ -25,9 +22,13 @@ export class Contract {
   private sessionWasm: ByteArray;
   private paymentWasm: ByteArray;
 
-  constructor(sessionPath: string, paymentPath: string) {
+  constructor(sessionPath: string, paymentPath?: string) {
     this.sessionWasm = fs.readFileSync(sessionPath);
-    this.paymentWasm = fs.readFileSync(paymentPath);
+    if(!paymentPath){
+      this.paymentWasm = Buffer.from("");
+    }else {
+      this.paymentWasm = fs.readFileSync(paymentPath);
+    }
   }
 
   public deploy(
@@ -35,44 +36,9 @@ export class Contract {
     paymentAmount: bigint,
     accountPublicKey: ByteArray,
     signingKeyPair: nacl.SignKeyPair,
-    gasPrice: number
   ): Deploy {
-    const session = new Deploy.Code();
-    session.setWasm(this.sessionWasm);
-    session.setArgsList(args);
-
-    const payment = new Deploy.Code();
-    payment.setWasm(this.paymentWasm);
-    payment.setArgsList(Args(['amount', BigIntValue(paymentAmount)]));
-
-    const body = new Deploy.Body();
-    body.setSession(session);
-    body.setPayment(payment);
-
-    const header = new Deploy.Header();
-    header.setAccountPublicKey(accountPublicKey);
-    header.setTimestamp(new Date().getTime());
-    header.setBodyHash(protoHash(body));
-    header.setGasPrice(gasPrice);
-
-    const deploy = new Deploy();
-    deploy.setBody(body);
-    deploy.setHeader(header);
-    deploy.setDeployHash(protoHash(header));
-
-    const signature = new Signature();
-    signature.setSigAlgorithm('ed25519');
-    signature.setSig(
-      nacl.sign_detached(deploy.getDeployHash_asU8(), signingKeyPair.secretKey)
-    );
-
-    const approval = new Approval();
-    approval.setApproverPublicKey(signingKeyPair.publicKey);
-    approval.setSignature(signature);
-
-    deploy.setApprovalsList([approval]);
-
-    return deploy;
+    const deploy = makeDeploy(args, ContractType.WASM, this.sessionWasm, this.paymentWasm, paymentAmount, accountPublicKey);
+    return signDeploy(deploy, signingKeyPair);
   }
 }
 
@@ -83,13 +49,12 @@ export class BoundContract {
     private contractKeyPair: nacl.SignKeyPair
   ) {}
 
-  public deploy(args: Deploy.Arg[], paymentAmount: bigint, gasPrice: number): Deploy {
+  public deploy(args: Deploy.Arg[], paymentAmount: bigint): Deploy {
     return this.contract.deploy(
       args,
       paymentAmount,
       this.contractKeyPair.publicKey,
-      this.contractKeyPair,
-      gasPrice
+      this.contractKeyPair
     );
   }
 }

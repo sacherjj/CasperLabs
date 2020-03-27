@@ -48,12 +48,12 @@ class MessageProducerSpec extends FlatSpec with Matchers with Inspectors with Hi
             tips   <- dag.latestInEra(era.keyBlockHash)
             latest <- tips.latestMessages
             justifications = latest.map {
-              case (v, ms) => PublicKey(v) -> ms.map(_.messageHash)
+              case (v, ms) => PublicKey(v) -> ms
             }
             b <- mp.block(
                   era.keyBlockHash,
                   roundId = Ticks(era.startTick),
-                  mainParent = genesis.messageHash,
+                  mainParent = genesis,
                   justifications = justifications,
                   isBookingBlock = false
                 )
@@ -61,7 +61,7 @@ class MessageProducerSpec extends FlatSpec with Matchers with Inspectors with Hi
                   .ballot(
                     era.keyBlockHash,
                     roundId = Ticks(era.endTick),
-                    target = genesis.messageHash,
+                    target = genesis,
                     justifications = justifications
                   )
                   .whenA(withEquivocation)
@@ -127,7 +127,7 @@ class MessageProducerSpec extends FlatSpec with Matchers with Inspectors with Hi
 
         override lazy val messageProducer: MessageProducer[Task] = {
           implicit val deployBuffer    = DeployBuffer.create[Task](chainName, minTtl = Duration.Zero)
-          implicit val deploySelection = DeploySelection.create[Task](sizeLimitBytes = Int.MaxValue)
+          implicit val deploySelection = DeploySelection.create[Task]()
 
           MessageProducer[Task](
             validatorIdentity =
@@ -144,7 +144,7 @@ class MessageProducerSpec extends FlatSpec with Matchers with Inspectors with Hi
             b1 <- messageProducer.ballot(
                    e0.keyBlockHash,
                    roundId = Ticks(e0.startTick),
-                   target = genesis.messageHash,
+                   target = genesis,
                    justifications = Map.empty
                  )
 
@@ -158,8 +158,8 @@ class MessageProducerSpec extends FlatSpec with Matchers with Inspectors with Hi
             b2 <- messageProducer.ballot(
                    e0.keyBlockHash,
                    roundId = Ticks(e0.endTick),
-                   target = genesis.messageHash,
-                   justifications = Map(validatorId -> Set(b1.messageHash))
+                   target = genesis,
+                   justifications = Map(validatorId -> Set(b1))
                  )
 
             _ = b2.jRank shouldBe 2
@@ -171,8 +171,8 @@ class MessageProducerSpec extends FlatSpec with Matchers with Inspectors with Hi
             b3 <- messageProducer.ballot(
                    e1.keyBlockHash,
                    roundId = Ticks(e1.startTick),
-                   target = genesis.messageHash,
-                   justifications = Map(validatorId -> Set(b2.messageHash))
+                   target = genesis,
+                   justifications = Map(validatorId -> Set(b2))
                  )
 
             _ = b3.jRank shouldBe 3
@@ -183,8 +183,8 @@ class MessageProducerSpec extends FlatSpec with Matchers with Inspectors with Hi
             b4 <- messageProducer.ballot(
                    e1.keyBlockHash,
                    roundId = Ticks(e1.endTick),
-                   target = genesis.messageHash,
-                   justifications = Map(validatorId -> Set(b2.messageHash, b3.messageHash))
+                   target = genesis,
+                   justifications = Map(validatorId -> Set(b2, b3))
                  )
 
             _ = b4.jRank shouldBe 4
@@ -218,7 +218,7 @@ class MessageProducerSpec extends FlatSpec with Matchers with Inspectors with Hi
 
         override lazy val messageProducer: MessageProducer[Task] = {
           implicit val deployBuffer    = DeployBuffer.create[Task](chainName, minTtl = Duration.Zero)
-          implicit val deploySelection = DeploySelection.create[Task](sizeLimitBytes = Int.MaxValue)
+          implicit val deploySelection = DeploySelection.create[Task]()
 
           MessageProducer[Task](
             validatorIdentity =
@@ -235,7 +235,7 @@ class MessageProducerSpec extends FlatSpec with Matchers with Inspectors with Hi
             b1 <- messageProducer.block(
                    e0.keyBlockHash,
                    roundId = Ticks(e0.startTick),
-                   mainParent = genesis.messageHash,
+                   mainParent = genesis,
                    justifications = Map.empty,
                    isBookingBlock = false
                  )
@@ -251,8 +251,8 @@ class MessageProducerSpec extends FlatSpec with Matchers with Inspectors with Hi
             b2 <- messageProducer.block(
                    e0.keyBlockHash,
                    roundId = Ticks(e0.endTick),
-                   mainParent = b1.messageHash,
-                   justifications = Map(validatorId -> Set(b1.messageHash)),
+                   mainParent = b1,
+                   justifications = Map(validatorId -> Set(b1)),
                    isBookingBlock = false
                  )
 
@@ -265,8 +265,8 @@ class MessageProducerSpec extends FlatSpec with Matchers with Inspectors with Hi
             b3 <- messageProducer.block(
                    e1.keyBlockHash,
                    roundId = Ticks(e1.startTick),
-                   mainParent = b2.messageHash,
-                   justifications = Map(validatorId -> Set(b2.messageHash)),
+                   mainParent = b2,
+                   justifications = Map(validatorId -> Set(b2)),
                    isBookingBlock = false
                  )
 
@@ -278,8 +278,8 @@ class MessageProducerSpec extends FlatSpec with Matchers with Inspectors with Hi
             b4 <- messageProducer.block(
                    e1.keyBlockHash,
                    roundId = Ticks(e1.endTick),
-                   mainParent = b3.messageHash,
-                   justifications = Map(validatorId -> Set(b2.messageHash, b3.messageHash)),
+                   mainParent = b3,
+                   justifications = Map(validatorId -> Set(b2, b3)),
                    isBookingBlock = false
                  )
 

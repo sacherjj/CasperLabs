@@ -3,17 +3,19 @@ package io.casperlabs.storage.block
 import cats._
 import cats.effect._
 import cats.implicits._
-import com.google.protobuf.ByteString
 import com.google.common.cache.{Cache, CacheBuilder, Weigher}
 import io.casperlabs.casper.consensus.BlockSummary
-import io.casperlabs.casper.consensus.info.BlockInfo
-import io.casperlabs.crypto.codec.Base16
+import io.casperlabs.casper.consensus.info.DeployInfo.View
+import io.casperlabs.casper.consensus.info.{BlockInfo, DeployInfo}
 import io.casperlabs.metrics.Metrics
-import io.casperlabs.storage.{BlockHash, DeployHash}
+import io.casperlabs.models.BlockImplicits.BlockOps
 import io.casperlabs.storage.block.BlockStorage.MeteredBlockStorage
-import io.casperlabs.storage.{BlockMsgWithTransform, BlockStorageMetricsSource}
-
-import scala.collection.JavaConverters._
+import io.casperlabs.storage.{
+  BlockHash,
+  BlockMsgWithTransform,
+  BlockStorageMetricsSource,
+  DeployHash
+}
 
 /** Caches recently created blocks so queries that need the full body
   * (e.g. ones that return a deploy, or ones that want block statistics)
@@ -30,13 +32,27 @@ class CachingBlockStorage[F[_]: Sync](
       case maybeHit => maybeHit.pure[F]
     }
 
-  override def get(blockHash: BlockHash): F[Option[BlockMsgWithTransform]] =
-    cacheOrUnderlying(
+  override def get(
+      blockHash: BlockHash
+  )(implicit dv: DeployInfo.View = DeployInfo.View.FULL): F[Option[BlockMsgWithTransform]] = {
+    val maybeBlock = cacheOrUnderlying(
       Option(cache.getIfPresent(blockHash)),
       underlying.get(blockHash)
     )
+    dv match {
+      case View.FULL => maybeBlock
+      case View.BASIC =>
+        maybeBlock.map(_.map(b => b.withBlockMessage(b.getBlockMessage.clearDeployBodies)))
+      case View.Unrecognized(_) =>
+        Sync[F].raiseError[Option[BlockMsgWithTransform]](
+          new IllegalStateException("Got DeployInfo.View.Unrecognized instead of FULL or BASIC")
+        )
+    }
+  }
 
-  override def getByPrefix(blockHashPrefix: String): F[Option[BlockMsgWithTransform]] =
+  override def getByPrefix(
+      blockHashPrefix: String
+  )(implicit dv: DeployInfo.View = DeployInfo.View.FULL): F[Option[BlockMsgWithTransform]] =
     underlying.getByPrefix(blockHashPrefix)
 
   override def getBlockInfoByPrefix(blockHashPrefix: String): F[Option[BlockInfo]] =
