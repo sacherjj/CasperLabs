@@ -14,7 +14,7 @@ fn should_run_mint_install_contract() {
     let mut builder = WasmTestBuilder::default();
     let engine_config = EngineConfig::new()
         .with_use_system_contracts(cfg!(feature = "use-system-contracts"))
-        .with_highway(cfg!(feature = "highway"));
+        .with_enable_bonding(cfg!(feature = "enable-bonding"));
 
     builder.run_genesis(&DEFAULT_GENESIS_CONFIG);
 

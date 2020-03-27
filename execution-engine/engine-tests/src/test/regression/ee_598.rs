@@ -74,7 +74,7 @@ fn should_fail_unboding_more_than_it_was_staked_ee_598_regression() {
         .to_owned();
     let error_message = utils::get_error_message(response);
 
-    if cfg!(feature = "highway") {
+    if !cfg!(feature = "enable-bonding") {
         assert!(error_message.contains(&format!("Revert({})", u32::from(ApiError::Unhandled))));
     } else {
         // Error::UnbondTooLarge => 7,

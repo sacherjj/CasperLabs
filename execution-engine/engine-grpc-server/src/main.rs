@@ -103,9 +103,9 @@ const ARG_USE_SYSTEM_CONTRACTS_HELP: &str =
     "Use system contracts instead of host-side logic for Mint, Proof of Stake and Standard Payment";
 
 // Highway
-const ARG_HIGHWAY: &str = "highway";
-const ARG_HIGHWAY_SHORT: &str = "w";
-const ARG_HIGHWAY_HELP: &str = "Highway consensus mode";
+const ARG_ENABLE_BONDING: &str = "enable-bonding";
+const ARG_ENABLE_BONDING_SHORT: &str = "b";
+const ARG_ENABLE_BONDING_HELP: &str = "Enable bonding";
 
 // runnable
 const SIGINT_HANDLE_EXPECT: &str = "Error setting Ctrl-C handler";
@@ -233,9 +233,9 @@ fn get_args() -> ArgMatches<'static> {
                 .help(ARG_USE_SYSTEM_CONTRACTS_HELP),
         )
         .arg(
-            Arg::with_name(ARG_HIGHWAY)
-                .short(ARG_HIGHWAY_SHORT)
-                .help(ARG_HIGHWAY_HELP),
+            Arg::with_name(ARG_ENABLE_BONDING)
+                .short(ARG_ENABLE_BONDING_SHORT)
+                .help(ARG_ENABLE_BONDING_HELP),
         )
         .arg(
             Arg::with_name(ARG_SOCKET)
@@ -301,10 +301,10 @@ fn get_thread_count(arg_matches: &ArgMatches) -> usize {
 fn get_engine_config(arg_matches: &ArgMatches) -> EngineConfig {
     // feature flags go here
     let use_system_contracts = arg_matches.is_present(ARG_USE_SYSTEM_CONTRACTS);
-    let highway = arg_matches.is_present(ARG_HIGHWAY);
+    let enable_bonding = arg_matches.is_present(ARG_ENABLE_BONDING);
     EngineConfig::new()
         .with_use_system_contracts(use_system_contracts)
-        .with_highway(highway)
+        .with_enable_bonding(enable_bonding)
 }
 
 /// Builds and returns a gRPC server.
