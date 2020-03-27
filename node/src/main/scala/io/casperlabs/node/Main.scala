@@ -41,7 +41,7 @@ object Main {
               // We could move this to config, but NodeRuntime creates even more.
               // Let's see if it helps with the issue we see in long term tests where
               // block processing just stops at some point.
-              maxThreads = 64,
+              maxThreads = conf.server.mainThreads.value,
               name = "node-runner",
               reporter = uncaughtExceptionHandler
             )
