@@ -12,7 +12,7 @@ test = false
 
 [features]
 std = ["contract/std", "types/std"]
-highway = ["pos/highway"]
+enable-bonding = ["pos/enable-bonding"]
 
 [dependencies]
 base16 = { version = "0.2.1", default-features = false }

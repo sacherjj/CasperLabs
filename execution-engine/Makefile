@@ -108,8 +108,8 @@ build-contracts-rs: \
 	$(SYSTEM_CONTRACTS) \
 	$(TEST_CONTRACTS)
 
-build-contracts-highway-rs: FEATURES := highway
-build-contracts-highway-rs: \
+build-contracts-enable-bonding-rs: FEATURES := enable-bonding
+build-contracts-enable-bonding-rs: \
 	$(BENCH_CONTRACTS) \
 	$(CLIENT_CONTRACTS) \
 	$(EXAMPLE_CONTRACTS) \
@@ -157,10 +157,10 @@ test-contracts-rs: build-contracts-rs
 	$(CARGO) test $(CARGO_FLAGS) -p casperlabs-engine-tests -- --ignored --nocapture
 	$(CARGO) test $(CARGO_FLAGS) --manifest-path "engine-tests/Cargo.toml" --features "use-system-contracts" -- --ignored --nocapture
 
-.PHONY: test-contracts-highway-rs
-test-contracts-highway-rs: build-contracts-highway-rs
-	$(CARGO) test $(CARGO_FLAGS) --manifest-path "engine-tests/Cargo.toml" --features "highway" -- --ignored --nocapture
-	$(CARGO) test $(CARGO_FLAGS) --manifest-path "engine-tests/Cargo.toml" --features "highway,use-system-contracts" -- --ignored --nocapture
+.PHONY: test-contracts-enable-bonding-rs
+test-contracts-enable-bonding-rs: build-contracts-enable-bonding-rs
+	$(CARGO) test $(CARGO_FLAGS) --manifest-path "engine-tests/Cargo.toml" --features "enable-bonding" -- --ignored --nocapture
+	$(CARGO) test $(CARGO_FLAGS) --manifest-path "engine-tests/Cargo.toml" --features "enable-bonding,use-system-contracts" -- --ignored --nocapture
 
 .PHONY: test-contracts-as
 test-contracts-as: build-contracts-rs build-contracts-as
@@ -195,7 +195,7 @@ check-rs: \
 	audit \
 	test-rs \
 	test-contracts-rs \
-	test-contracts-highway-rs
+	test-contracts-enable-bonding-rs
 
 .PHONY: check
 check: \
