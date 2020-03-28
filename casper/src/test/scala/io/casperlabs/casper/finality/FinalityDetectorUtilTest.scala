@@ -202,7 +202,9 @@ object FinalityDetectorUtilTest {
       override def children(blockHash: BlockHash): StateT[F, Map[BlockHash, Int], Set[BlockHash]] =
         ???
 
-      override def getMainChildren(blockHash: io.casperlabs.storage.BlockHash): StateT[F, Map[BlockHash, Int], Set[BlockHash]] =
+      override def getMainChildren(
+          blockHash: io.casperlabs.storage.BlockHash
+      ): StateT[F, Map[BlockHash, Int], Set[BlockHash]] =
         ???
 
       /** Return blocks that having a specify justification */
