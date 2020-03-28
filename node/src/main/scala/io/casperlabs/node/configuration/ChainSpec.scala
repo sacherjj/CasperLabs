@@ -410,7 +410,8 @@ object ChainSpecReader {
   private def toDeployConfig(deployConfig: Deploy): ipc.ChainSpec.DeployConfig =
     ipc.ChainSpec.DeployConfig(
       deployConfig.maxTtlMillis.value,
-      deployConfig.maxDependencies.value
+      deployConfig.maxDependencies.value,
+      deployConfig.maxBlockSizeBytes.value
     )
 
   private def toHighwayConfig(highwayConfig: Highway): ipc.ChainSpec.HighwayConfig =
