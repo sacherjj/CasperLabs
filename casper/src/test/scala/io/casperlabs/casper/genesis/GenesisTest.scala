@@ -3,6 +3,7 @@ package io.casperlabs.casper.genesis
 import java.io.PrintWriter
 import java.nio.file.{Files, Path, Paths}
 import java.util.Base64
+
 import cats.effect.Sync
 import cats.implicits._
 import io.casperlabs.casper.consensus.state
@@ -12,7 +13,7 @@ import io.casperlabs.casper.util.{CasperLabsProtocol, ProtoUtil}
 import io.casperlabs.casper.util.execengine.ExecutionEngineServiceStub
 import io.casperlabs.crypto.Keys
 import io.casperlabs.ipc
-import io.casperlabs.models.Weight
+import io.casperlabs.models.{Message, Weight}
 import io.casperlabs.shared.LogStub
 import io.casperlabs.shared.PathOps.RichPath
 import io.casperlabs.shared.Log
@@ -32,6 +33,10 @@ class GenesisTest extends FlatSpec with Matchers with StorageFixture {
         ("a/GydTUB0C04Z4lQam2TaB0imcbt/URV9Za5e8VyWWg=", 100, 0)
       )
 
+      val maxBlockSizeBytes = 10 * 1024 * 1024
+      val maxTtlMillis      = 1000
+      val maxDependencies   = 10
+
       val spec = ipc.ChainSpec
         .GenesisConfig()
         .withName("casperlabs")
@@ -45,6 +50,13 @@ class GenesisTest extends FlatSpec with Matchers with StorageFixture {
               .withBalance(state.BigInt(balance.toString, bitWidth = 512))
               .withBondedAmount(state.BigInt(bond.toString, bitWidth = 512))
         })
+        .withDeployConfig(
+          ipc.ChainSpec
+            .DeployConfig()
+            .withMaxBlockSizeBytes(maxBlockSizeBytes)
+            .withMaxDependencies(maxDependencies)
+            .withMaxTtlMillis(maxTtlMillis)
+        )
 
       val validatorsMap =
         accounts.collect {
@@ -63,6 +75,12 @@ class GenesisTest extends FlatSpec with Matchers with StorageFixture {
                                                               .ChainSpec()
                                                               .withGenesis(spec)
                                                           )
+
+        deployConfig <- versions.configAt(Message.asMainRank(0L)).map(_.deployConfig)
+        _            = assert(deployConfig.maxTtlMillis == maxTtlMillis)
+        _            = assert(deployConfig.maxDependencies == maxDependencies)
+        _            = assert(deployConfig.maxBlockSizeBytes == maxBlockSizeBytes)
+
         BlockMsgWithTransform(Some(genesis), _) = genesisWithTransform
 
         _ = genesis.getHeader.chainName shouldBe "casperlabs"

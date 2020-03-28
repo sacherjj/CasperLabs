@@ -73,7 +73,7 @@ class ValidationTest
   implicit val raiseValidateErr                       = validation.raiseValidateErrorThroughApplicativeError[Task]
   implicit val versions =
     CasperLabsProtocol.unsafe[Task](
-      (0L, state.ProtocolVersion(1), Some(DeployConfig(24 * 60 * 60 * 1000, 10)))
+      (0L, state.ProtocolVersion(1), Some(DeployConfig(24 * 60 * 60 * 1000, 10, 10 * 1024 * 1024)))
     )
 
   implicit val validationEff = new NCBValidationImpl[Task]()
