@@ -21,6 +21,7 @@ import io.casperlabs.storage.dag.{
 import io.casperlabs.storage.dag.DagRepresentation.Validator
 import io.casperlabs.casper.mocks.MockFinalityStorage
 import io.casperlabs.casper.util.ByteStringPrettifier
+import cats.data.IndexedStateT
 
 class FinalityDetectorUtilTest
     extends FlatSpec
@@ -199,6 +200,9 @@ object FinalityDetectorUtilTest {
 
       // We're not interested in these
       override def children(blockHash: BlockHash): StateT[F, Map[BlockHash, Int], Set[BlockHash]] =
+        ???
+
+      override def getMainChildren(blockHash: io.casperlabs.storage.BlockHash): StateT[F, Map[BlockHash, Int], Set[BlockHash]] =
         ???
 
       /** Return blocks that having a specify justification */

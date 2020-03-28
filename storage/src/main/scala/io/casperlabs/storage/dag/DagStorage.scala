@@ -61,6 +61,9 @@ object DagStorage {
     abstract override def children(blockHash: BlockHash): F[Set[BlockHash]] =
       incAndMeasure("children", super.children(blockHash))
 
+    abstract override def getMainChildren(blockHash: BlockHash): F[Set[BlockHash]] =
+      incAndMeasure("getMainChildren", super.getMainChildren(blockHash))
+
     abstract override def justificationToBlocks(blockHash: BlockHash): F[Set[BlockHash]] =
       incAndMeasure("justificationToBlocks", super.justificationToBlocks(blockHash))
 
@@ -180,6 +183,8 @@ trait GlobalTipRepresentation[F[_]] extends TipRepresentation[F] {
 }
 
 trait DagRepresentation[F[_]] extends DagLookup[F] {
+  def getMainChildren(blockHash: BlockHash): F[Set[BlockHash]]
+
   def children(blockHash: BlockHash): F[Set[BlockHash]]
 
   /** Return blocks which have a specific block in their justifications. */
@@ -239,22 +244,6 @@ object DagRepresentation {
   implicit class DagRepresentationRich[F[_]: Monad](
       dagRepresentation: DagRepresentation[F]
   ) {
-    def getMainChildren(
-        blockHash: BlockHash
-    ): F[List[BlockHash]] =
-      dagRepresentation
-        .children(blockHash)
-        .flatMap(
-          _.toList
-            .filterA(
-              child =>
-                dagRepresentation.lookup(child).map {
-                  // make sure child's main parent's hash equal to `blockHash`
-                  case Some(blockSummary) => blockSummary.parents.head == blockHash
-                  case None               => false
-                }
-            )
-        )
 
     // Returns a set of validators that this node has seen equivocating.
     def getEquivocators: F[Set[Validator]] =
