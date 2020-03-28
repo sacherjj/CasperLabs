@@ -51,7 +51,7 @@ object MultiParentFinalizer {
       indirectlyOrphaned: Set[Message]
   )
 
-  def create[F[_]: Monad: Concurrent: FinalityStorage: Metrics](
+  def create[F[_]: Concurrent: FinalityStorage: Metrics](
       dag: DagRepresentation[F],
       latestLFB: BlockHash, // Last LFB from the main chain
       finalityDetector: FinalityDetector[F],
