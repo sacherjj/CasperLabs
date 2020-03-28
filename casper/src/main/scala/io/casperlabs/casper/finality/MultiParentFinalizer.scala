@@ -1,8 +1,7 @@
 package io.casperlabs.casper.finality
 
-import cats.Applicative
-import cats.syntax.functor._
-import cats.syntax.flatMap._
+import cats.Monad
+import cats.implicits._
 import cats.effect.Concurrent
 import cats.effect.concurrent.{Ref, Semaphore}
 import io.casperlabs.casper.Estimator.BlockHash
@@ -22,7 +21,7 @@ import io.casperlabs.storage.dag.FinalityStorage
     * NOTE: This mimicks [[io.casperlabs.casper.finality.votingmatrix.FinalityDetectorVotingMatrix]] API because we are working with the multi-parent
     * fork choice.
     */
-  def onNewMessageAdded(message: Message): F[Option[FinalizedBlocks]]
+  def onNewMessageAdded(message: Message): F[Seq[FinalizedBlocks]]
 }
 
 object MultiParentFinalizer {
@@ -33,7 +32,7 @@ object MultiParentFinalizer {
       metrics: Metrics[F]
   ) extends MultiParentFinalizer[F] {
 
-    override def onNewMessageAdded(message: Message): F[Option[FinalizedBlocks]] =
+    override def onNewMessageAdded(message: Message): F[Seq[FinalizedBlocks]] =
       metrics.timer("onNewMessageAdded")(finalizer.onNewMessageAdded(message))
   }
 
@@ -64,13 +63,13 @@ object MultiParentFinalizer {
     } yield new MultiParentFinalizer[F] {
 
       /** Returns set of finalized blocks */
-      override def onNewMessageAdded(message: Message): F[Option[FinalizedBlocks]] =
+      override def onNewMessageAdded(message: Message): F[Seq[FinalizedBlocks]] =
         semaphore.withPermit(for {
           previousLFB <- lfbCache.get
-          finalizedBlock <- finalityDetector
-                             .onNewMessageAddedToTheBlockDag(dag, message, previousLFB)
-                             .timer("onNewMessageAddedToTheBlockDag")
-          finalized <- finalizedBlock.fold(Applicative[F].pure(None: Option[FinalizedBlocks])) {
+          finalizedBlocks <- finalityDetector
+                              .onNewMessageAddedToTheBlockDag(dag, message, previousLFB)
+                              .timer("onNewMessageAddedToTheBlockDag")
+          finalized <- finalizedBlocks.toList.traverse {
                         case CommitteeWithConsensusValue(_, quorum, newLFB) =>
                           for {
                             _ <- lfbCache.set(newLFB)
@@ -89,9 +88,12 @@ object MultiParentFinalizer {
                                                isHighway
                                              )
                                              .timer("orphanedIndirectly")
-                          } yield Some(
-                            FinalizedBlocks(newLFB, quorum, justFinalized, justOrphaned)
-                          )
+                            _ <- FinalityStorage[F].markAsFinalized(
+                                  newLFB,
+                                  justFinalized.map(_.messageHash),
+                                  justOrphaned.map(_.messageHash)
+                                )
+                          } yield FinalizedBlocks(newLFB, quorum, justFinalized, justOrphaned)
                       }
         } yield finalized)
     }
