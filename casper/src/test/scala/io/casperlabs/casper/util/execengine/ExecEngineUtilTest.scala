@@ -322,7 +322,18 @@ class ExecEngineUtilTest
         .map(_.mapValues(_.toSet))
         .foldLeft(Map.empty[Int, Set[TransformEntry]])(_ |+| _)
 
-      implicit val cl = CasperLabsProtocol.unsafe[Task]((0, ProtocolVersion(1), None))
+      implicit val cl = CasperLabsProtocol.unsafe[Task](
+        (
+          0,
+          ProtocolVersion(1),
+          Some(
+            DeployConfig()
+              .withMaxTtlMillis(24 * 60 * 60 * 1000) // 1 day
+              .withMaxDependencies(10)
+              .withMaxBlockSizeBytes(10 * 1024 * 1024)
+          )
+        )
+      )
 
       val stageCounter = AtomicInt(0)
 

@@ -102,6 +102,9 @@ class CachingDagStorage[F[_]: Concurrent](
       underlying.children(blockHash)
     )
 
+  override def getMainChildren(blockHash: BlockHash): F[Set[BlockHash]] =
+    underlying.getMainChildren(blockHash)
+
   /** Return blocks that having a specify justification */
   override def justificationToBlocks(blockHash: BlockHash): F[Set[BlockHash]] =
     cacheOrUnderlying(

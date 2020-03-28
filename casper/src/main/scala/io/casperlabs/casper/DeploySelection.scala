@@ -150,7 +150,7 @@ object DeploySelection {
       ): F[DeploySelectionResult] = {
         // If size of accumulated deploys is over 90% of the block limit, stop consuming more deploys.
         def isOversized(state: IntermediateState) =
-          state.size > 0.9 * in.maxBlockSizeBytes && in.maxBlockSizeBytes > 0
+          state.size > 0.9 * in.maxBlockSizeBytes
 
         def go(
             state: IntermediateState,
