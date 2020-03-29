@@ -25,78 +25,77 @@ import org.scalatest.{FlatSpec, Matchers}
 
 class GenesisTest extends FlatSpec with Matchers with StorageFixture {
 
-  it should "create a valid genesis block" in withStorage {
-    implicit blockStorage => implicit dagStorage => _ => implicit fs =>
-      val accounts = Seq(
-        ("KZZwxShJ8aqC6N/lvocsFrYAvwnMiYPgS5A0ETWPLeY=", 0, 100),
-        ("V3dfs7swdXYE68RTvQObGZ6PCadHZKwWkPc25zS33hg=", 0, 200),
-        ("a/GydTUB0C04Z4lQam2TaB0imcbt/URV9Za5e8VyWWg=", 100, 0)
+  it should "create a valid genesis block" in withCombinedStorageIndexed { implicit storage => _ =>
+    val accounts = Seq(
+      ("KZZwxShJ8aqC6N/lvocsFrYAvwnMiYPgS5A0ETWPLeY=", 0, 100),
+      ("V3dfs7swdXYE68RTvQObGZ6PCadHZKwWkPc25zS33hg=", 0, 200),
+      ("a/GydTUB0C04Z4lQam2TaB0imcbt/URV9Za5e8VyWWg=", 100, 0)
+    )
+
+    val maxBlockSizeBytes = 10 * 1024 * 1024
+    val maxTtlMillis      = 1000
+    val maxDependencies   = 10
+
+    val spec = ipc.ChainSpec
+      .GenesisConfig()
+      .withName("casperlabs")
+      .withTimestamp(1234567890L)
+      .withProtocolVersion(state.ProtocolVersion(1))
+      .withAccounts(accounts map {
+        case (key, balance, bond) =>
+          ipc.ChainSpec
+            .GenesisAccount()
+            .withPublicKey(ByteString.copyFrom(java.util.Base64.getDecoder.decode(key)))
+            .withBalance(state.BigInt(balance.toString, bitWidth = 512))
+            .withBondedAmount(state.BigInt(bond.toString, bitWidth = 512))
+      })
+      .withDeployConfig(
+        ipc.ChainSpec
+          .DeployConfig()
+          .withMaxBlockSizeBytes(maxBlockSizeBytes)
+          .withMaxDependencies(maxDependencies)
+          .withMaxTtlMillis(maxTtlMillis)
       )
 
-      val maxBlockSizeBytes = 10 * 1024 * 1024
-      val maxTtlMillis      = 1000
-      val maxDependencies   = 10
+    val validatorsMap =
+      accounts.collect {
+        case (key, _, bond) if bond > 0 =>
+          (Keys.PublicKey(java.util.Base64.getDecoder.decode(key)), Weight(bond))
+      }.toMap
 
-      val spec = ipc.ChainSpec
-        .GenesisConfig()
-        .withName("casperlabs")
-        .withTimestamp(1234567890L)
-        .withProtocolVersion(state.ProtocolVersion(1))
-        .withAccounts(accounts map {
-          case (key, balance, bond) =>
-            ipc.ChainSpec
-              .GenesisAccount()
-              .withPublicKey(ByteString.copyFrom(java.util.Base64.getDecoder.decode(key)))
-              .withBalance(state.BigInt(balance.toString, bitWidth = 512))
-              .withBondedAmount(state.BigInt(bond.toString, bitWidth = 512))
-        })
-        .withDeployConfig(
-          ipc.ChainSpec
-            .DeployConfig()
-            .withMaxBlockSizeBytes(maxBlockSizeBytes)
-            .withMaxDependencies(maxDependencies)
-            .withMaxTtlMillis(maxTtlMillis)
-        )
+    implicit val casperSmartContractsApi = HashSetCasperTestNode.simpleEEApi[Task](validatorsMap)
+    implicit val logEff                  = LogStub[Task]()
 
-      val validatorsMap =
-        accounts.collect {
-          case (key, _, bond) if bond > 0 =>
-            (Keys.PublicKey(java.util.Base64.getDecoder.decode(key)), Weight(bond))
-        }.toMap
+    for {
+      genesisWithTransform <- Genesis.fromChainSpec[Task](spec)
+      implicit0(versions: CasperLabsProtocol[Task]) <- CasperLabsProtocol
+                                                        .fromChainSpec[Task](
+                                                          ipc
+                                                            .ChainSpec()
+                                                            .withGenesis(spec)
+                                                        )
 
-      implicit val casperSmartContractsApi = HashSetCasperTestNode.simpleEEApi[Task](validatorsMap)
-      implicit val logEff                  = LogStub[Task]()
+      deployConfig <- versions.configAt(Message.asMainRank(0L)).map(_.deployConfig)
+      _            = assert(deployConfig.maxTtlMillis == maxTtlMillis)
+      _            = assert(deployConfig.maxDependencies == maxDependencies)
+      _            = assert(deployConfig.maxBlockSizeBytes == maxBlockSizeBytes)
 
-      for {
-        genesisWithTransform <- Genesis.fromChainSpec[Task](spec)
-        implicit0(versions: CasperLabsProtocol[Task]) <- CasperLabsProtocol
-                                                          .fromChainSpec[Task](
-                                                            ipc
-                                                              .ChainSpec()
-                                                              .withGenesis(spec)
-                                                          )
+      BlockMsgWithTransform(Some(genesis), _) = genesisWithTransform
 
-        deployConfig <- versions.configAt(Message.asMainRank(0L)).map(_.deployConfig)
-        _            = assert(deployConfig.maxTtlMillis == maxTtlMillis)
-        _            = assert(deployConfig.maxDependencies == maxDependencies)
-        _            = assert(deployConfig.maxBlockSizeBytes == maxBlockSizeBytes)
+      _ = genesis.getHeader.chainName shouldBe "casperlabs"
+      _ = genesis.getHeader.timestamp shouldBe 1234567890L
+      _ = genesis.getHeader.getProtocolVersion shouldBe state.ProtocolVersion(1)
+      _ = genesis.getHeader.getState.bonds should have size 2
 
-        BlockMsgWithTransform(Some(genesis), _) = genesisWithTransform
+      stored <- storage.get(genesis.blockHash)
+      _      = stored should not be (empty)
 
-        _ = genesis.getHeader.chainName shouldBe "casperlabs"
-        _ = genesis.getHeader.timestamp shouldBe 1234567890L
-        _ = genesis.getHeader.getProtocolVersion shouldBe state.ProtocolVersion(1)
-        _ = genesis.getHeader.getState.bonds should have size 2
-
-        stored <- blockStorage.get(genesis.blockHash)
-        _      = stored should not be (empty)
-
-        dag <- dagStorage.getRepresentation
-        maybePostGenesisStateHash <- ExecutionEngineServiceStub
-                                      .validateBlockCheckpoint[Task](
-                                        genesis,
-                                        dag
-                                      )
-      } yield maybePostGenesisStateHash shouldBe 'right
+      dag <- storage.getRepresentation
+      maybePostGenesisStateHash <- ExecutionEngineServiceStub
+                                    .validateBlockCheckpoint[Task](
+                                      genesis,
+                                      dag
+                                    )
+    } yield maybePostGenesisStateHash shouldBe 'right
   }
 }

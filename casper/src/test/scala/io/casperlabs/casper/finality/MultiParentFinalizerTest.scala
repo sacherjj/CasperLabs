@@ -2,6 +2,7 @@ package io.casperlabs.casper.finality
 
 import cats.Functor
 import cats.data.NonEmptyList
+import cats.effect.Concurrent
 import io.casperlabs.catscontrib.{Fs2Compiler, MonadThrowable}
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.Estimator.BlockHash
@@ -36,18 +37,18 @@ class MultiParentFinalizerTest
   val v2Bond = Bond(v2, 3)
   val bonds  = Seq(v1Bond, v2Bond)
 
-  it should "cache block finalization so it doesn't revisit already finalized blocks." in withStorage {
-    implicit blockStorage => implicit dagStorage => _ => _ =>
+  it should "cache block finalization so it doesn't revisit already finalized blocks." in withCombinedStorageIndexed {
+    implicit storage => implicit dagStorage =>
       for {
         genesis                                  <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bonds)
         implicit0(fs: MockFinalityStorage[Task]) <- MockFinalityStorage[Task](genesis.blockHash)
-        dag                                      <- dagStorage.getRepresentation
+        dag                                      <- storage.getRepresentation
         multiParentFinalizer <- MultiParentFinalizer.create[Task](
                                  dag,
                                  genesis.blockHash,
                                  MultiParentFinalizerTest.immediateFinalityStub,
                                  isHighway = false
-                               )
+                               )(Concurrent[Task], fs, metrics)
         a0                         <- createAndStoreBlockFull[Task](v1, Seq(genesis), Seq.empty, bonds)
         a1                         <- createAndStoreBlockFull[Task](v1, Seq(a0), Seq.empty, bonds)
         b0                         <- createAndStoreBlockFull[Task](v2, Seq(genesis, a0), Seq(a1), bonds)
@@ -82,8 +83,8 @@ class MultiParentFinalizerTest
       } yield ()
   }
 
-  it should "cache LFB from the main chain; not return LFB when new block doesn't vote on LFB's child" in withStorage {
-    implicit blockStorage => implicit dagStorage => _ => _ =>
+  it should "cache LFB from the main chain; not return LFB when new block doesn't vote on LFB's child" in withCombinedStorageIndexed {
+    implicit storage => implicit dagStorage =>
       implicit val noopLog = LogStub[Task]()
 
       /** `B` is LFB but `C` doesn't vote for any of `B`'s children (empty vote).
@@ -96,7 +97,7 @@ class MultiParentFinalizerTest
       for {
         genesis                                  <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bonds)
         implicit0(fs: MockFinalityStorage[Task]) <- MockFinalityStorage[Task](genesis.blockHash)
-        dag                                      <- dagStorage.getRepresentation
+        dag                                      <- storage.getRepresentation
         fft                                      = 0.1
         finalizer <- FinalityDetectorVotingMatrix
                       .of[Task](dag, genesis.blockHash, fft, isHighway = false)
@@ -106,6 +107,10 @@ class MultiParentFinalizerTest
                                                                           genesis.blockHash,
                                                                           finalizer,
                                                                           isHighway = false
+                                                                        )(
+                                                                          Concurrent[Task],
+                                                                          fs,
+                                                                          metrics
                                                                         )
         a        <- createAndStoreBlockFull[Task](v1, Seq(genesis), Seq.empty, bonds)
         nelBonds = NonEmptyList.fromListUnsafe(bonds.toList)
