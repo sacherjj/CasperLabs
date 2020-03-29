@@ -104,7 +104,7 @@ class EquivocationDetectorTest
     } yield block
 
   def simpleEquivocation(leftMessageType: Block.MessageType, rightMessageType: Block.MessageType) =
-    withStorage { implicit blockStorage => implicit dagStorage => _ => _ =>
+    withCombinedStorageIndexed { implicit storage => implicit dagStorage =>
       /*
        * The Dag looks like
        *
@@ -123,9 +123,6 @@ class EquivocationDetectorTest
 
       for {
         genesis <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY)
-        implicit0(casperState: Cell[Task, CasperState]) <- Cell.mvarCell[Task, CasperState](
-                                                            CasperState()
-                                                          )
         b1 <- createMessageAndTestEquivocateDetector(
                Seq(genesis.blockHash),
                genesis,
@@ -274,9 +271,9 @@ class EquivocationDetectorTest
       } yield ()
   }
 
-  it should "not report equivocation when references a message creating an equivocation that was created by other validator" in withStorage {
-    implicit blockStorage => implicit dagStorage => _ =>
-      _ =>
+  it should "not report equivocation when references a message creating an equivocation that was created by other validator" in withCombinedStorageIndexed {
+    implicit storage =>
+      implicit dagStorage =>
         /*
          * The Dag looks like
          *
@@ -295,9 +292,6 @@ class EquivocationDetectorTest
         val v0              = generateValidator("V0")
         val v1              = generateValidator("V1")
         for {
-          implicit0(casperState: Cell[Task, CasperState]) <- Cell.mvarCell[Task, CasperState](
-                                                              CasperState()
-                                                            )
           genesis <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY)
           _ <- createMessageAndTestEquivocateDetector(
                 Seq(genesis.blockHash),
@@ -321,9 +315,9 @@ class EquivocationDetectorTest
         } yield ()
   }
 
-  it should "not report equivocation when block indirectly references previous creator's block" in withStorage {
-    implicit blockStorage => implicit dagStorage => _ =>
-      _ =>
+  it should "not report equivocation when block indirectly references previous creator's block" in withCombinedStorageIndexed {
+    implicit storage =>
+      implicit dagStorage =>
         /*
          * The Dag looks like
          *
@@ -386,9 +380,9 @@ class EquivocationDetectorTest
         } yield ()
   }
 
-  it should "should detect equivocation when receiving a block created by a validator who has been detected equivocating" in withStorage {
-    implicit blockStorage => implicit dagStorage => _ =>
-      _ =>
+  it should "should detect equivocation when receiving a block created by a validator who has been detected equivocating" in withCombinedStorageIndexed {
+    implicit storage =>
+      implicit dagStorage =>
         /*
          * The Dag looks like
          *
@@ -410,9 +404,6 @@ class EquivocationDetectorTest
 
         for {
           genesis <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY)
-          implicit0(casperState: Cell[Task, CasperState]) <- Cell.mvarCell[Task, CasperState](
-                                                              CasperState()
-                                                            )
           b1 <- createMessageAndTestEquivocateDetector(
                  Seq(genesis.blockHash),
                  genesis,
@@ -444,9 +435,9 @@ class EquivocationDetectorTest
         } yield ()
   }
 
-  it should "detect equivocation and update the rank of lowest base block correctly when receiving a block created by a validator who has been detected equivocating" in withStorage {
-    implicit blockStorage => implicit dagStorage => _ =>
-      _ =>
+  it should "detect equivocation and update the rank of lowest base block correctly when receiving a block created by a validator who has been detected equivocating" in withCombinedStorageIndexed {
+    implicit storage =>
+      implicit dagStorage =>
         /*
          * The Dag looks like
          *
@@ -470,9 +461,6 @@ class EquivocationDetectorTest
 
         for {
           genesis <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY)
-          implicit0(casperState: Cell[Task, CasperState]) <- Cell.mvarCell[Task, CasperState](
-                                                              CasperState()
-                                                            )
           b1 <- createMessageAndTestEquivocateDetector(
                  Seq(genesis.blockHash),
                  genesis,
@@ -515,16 +503,13 @@ class EquivocationDetectorTest
   }
 
   // See [[casper/src/test/resources/casper/tipsHavingEquivocations.png]]
-  "detectVisibleFromJustificationMsgHashes" should "find validators who has equivocated from the j-past-cone of block's justifications" in withStorage {
-    implicit blockStorage => implicit dagStorage => _ => _ =>
+  "detectVisibleFromJustificationMsgHashes" should "find validators who has equivocated from the j-past-cone of block's justifications" in withCombinedStorageIndexed {
+    implicit storage => implicit dagStorage =>
       implicit val logEff = LogStub[Task]()
       val v1              = generateValidator("V1")
       val v2              = generateValidator("V2")
 
       for {
-        implicit0(casperState: Cell[Task, CasperState]) <- Cell.mvarCell[Task, CasperState](
-                                                            CasperState()
-                                                          )
         genesis <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY)
         a1 <- createBlockAndCheckEquivocatorsFromViewOfBlock(
                Seq(genesis.blockHash),

@@ -47,9 +47,9 @@ class FinalityDetectorByVotingMatrixTest
         isHighway
       )
 
-  it should "detect ballots finalizing a block" in withStorage {
-    implicit blockStore => implicit dagStorage => implicit deployStorage =>
-      _ =>
+  it should "detect ballots finalizing a block" in withCombinedStorageIndexed {
+    implicit storage =>
+      implicit dagStorage =>
         /* The DAG looks like:
          *
          *
@@ -72,7 +72,7 @@ class FinalityDetectorByVotingMatrixTest
 
         for {
           genesis                                                 <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bonds)
-          dag                                                     <- dagStorage.getRepresentation
+          dag                                                     <- storage.getRepresentation
           implicit0(detector: FinalityDetectorVotingMatrix[Task]) <- mkVotingMatrix(dag, genesis)
           (a1, c1) <- createBlockAndUpdateFinalityDetector[Task](
                        Seq(genesis.blockHash),
@@ -107,9 +107,9 @@ class FinalityDetectorByVotingMatrixTest
         } yield ()
   }
 
-  it should "detect finality as appropriate" in withStorage {
-    implicit blockStore => implicit dagStorage => implicit deployStorage =>
-      _ =>
+  it should "detect finality as appropriate" in withCombinedStorageIndexed {
+    implicit storage =>
+      implicit dagStorage =>
         /* The DAG looks like:
          *
          *
@@ -131,7 +131,7 @@ class FinalityDetectorByVotingMatrixTest
 
         for {
           genesis                                                 <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bonds)
-          dag                                                     <- dagStorage.getRepresentation
+          dag                                                     <- storage.getRepresentation
           implicit0(detector: FinalityDetectorVotingMatrix[Task]) <- mkVotingMatrix(dag, genesis)
           (b1, c1) <- createBlockAndUpdateFinalityDetector[Task](
                        Seq(genesis.blockHash),
@@ -172,9 +172,9 @@ class FinalityDetectorByVotingMatrixTest
         } yield result
   }
 
-  it should "finalize blocks properly with only one validator" in withStorage {
-    implicit blockStore => implicit dagStorage => implicit deployStorage =>
-      _ =>
+  it should "finalize blocks properly with only one validator" in withCombinedStorageIndexed {
+    implicit storage =>
+      implicit dagStorage =>
         /* The DAG looks like:
          *
          *    b4
@@ -192,7 +192,7 @@ class FinalityDetectorByVotingMatrixTest
         val bonds  = Seq(v1Bond)
         for {
           genesis                                                 <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bonds)
-          dag                                                     <- dagStorage.getRepresentation
+          dag                                                     <- storage.getRepresentation
           implicit0(detector: FinalityDetectorVotingMatrix[Task]) <- mkVotingMatrix(dag, genesis)
           (b1, c1) <- createBlockAndUpdateFinalityDetector[Task](
                        Seq(genesis.blockHash),
@@ -233,9 +233,9 @@ class FinalityDetectorByVotingMatrixTest
         } yield result
   }
 
-  it should "increment last finalized block as appropriate in round robin" in withStorage {
-    implicit blockStore => implicit dagStorage => implicit deployStorage =>
-      _ =>
+  it should "increment last finalized block as appropriate in round robin" in withCombinedStorageIndexed {
+    implicit storage =>
+      implicit dagStorage =>
         /* The DAG looks like:
          *
          *
@@ -264,7 +264,7 @@ class FinalityDetectorByVotingMatrixTest
         val bonds  = Seq(v1Bond, v2Bond, v3Bond)
         for {
           genesis                                                 <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bonds)
-          dag                                                     <- dagStorage.getRepresentation
+          dag                                                     <- storage.getRepresentation
           implicit0(detector: FinalityDetectorVotingMatrix[Task]) <- mkVotingMatrix(dag, genesis)
           (b1, c1) <- createBlockAndUpdateFinalityDetector[Task](
                        Seq(genesis.blockHash),
@@ -332,8 +332,8 @@ class FinalityDetectorByVotingMatrixTest
   }
 
   // See [[casper/src/test/resources/casper/finalityDetectorWithEquivocations.png]]
-  it should "exclude the weight of validator who have been detected equivocating when searching for the committee" in withStorage {
-    implicit blockStore => implicit blockDagStorage => _ => _ =>
+  it should "exclude the weight of validator who have been detected equivocating when searching for the committee" in withCombinedStorageIndexed {
+    implicit storage => implicit dagStorage =>
       val v1     = generateValidator("V1")
       val v2     = generateValidator("V2")
       val v3     = generateValidator("V3")
@@ -344,7 +344,7 @@ class FinalityDetectorByVotingMatrixTest
 
       for {
         genesis                                                 <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bonds)
-        dag                                                     <- blockDagStorage.getRepresentation
+        dag                                                     <- storage.getRepresentation
         implicit0(detector: FinalityDetectorVotingMatrix[Task]) <- mkVotingMatrix(dag, genesis)
         (b1, c1) <- createBlockAndUpdateFinalityDetector[Task](
                      Seq(genesis.blockHash),
@@ -399,8 +399,8 @@ class FinalityDetectorByVotingMatrixTest
   }
 
   // See [[casper/src/test/resources/casper/equivocatingBlockGetFinalized.png]]
-  it should "finalize equivocator's block when enough honest validators votes for it" in withStorage {
-    implicit blockStore => implicit blockDagStorage => _ => _ =>
+  it should "finalize equivocator's block when enough honest validators votes for it" in withCombinedStorageIndexed {
+    implicit storage => implicit dagStorage =>
       val v1     = generateValidator("V1")
       val v2     = generateValidator("V2")
       val v3     = generateValidator("V3")
@@ -411,7 +411,7 @@ class FinalityDetectorByVotingMatrixTest
 
       for {
         genesis                                                 <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bonds)
-        dag                                                     <- blockDagStorage.getRepresentation
+        dag                                                     <- storage.getRepresentation
         implicit0(detector: FinalityDetectorVotingMatrix[Task]) <- mkVotingMatrix(dag, genesis)
         (b1, c1) <- createBlockAndUpdateFinalityDetector[Task](
                      Seq(genesis.blockHash),
@@ -469,8 +469,8 @@ class FinalityDetectorByVotingMatrixTest
   }
 
   // See [[casper/src/test/resources/casper/equivocatingBlockCantGetFinalized.png]]
-  it should "not finalize equivocator's blocks, no matter how many votes equivocating validators cast" in withStorage {
-    implicit blockStore => implicit blockDagStorage => _ => _ =>
+  it should "not finalize equivocator's blocks, no matter how many votes equivocating validators cast" in withCombinedStorageIndexed {
+    implicit storage => implicit dagStorage =>
       val v1     = generateValidator("V1")
       val v2     = generateValidator("V2")
       val v3     = generateValidator("V3")
@@ -480,7 +480,7 @@ class FinalityDetectorByVotingMatrixTest
       val bonds  = Seq(v1Bond, v2Bond, v3Bond)
       for {
         genesis                                                 <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bonds)
-        dag                                                     <- blockDagStorage.getRepresentation
+        dag                                                     <- storage.getRepresentation
         implicit0(detector: FinalityDetectorVotingMatrix[Task]) <- mkVotingMatrix(dag, genesis)
         (b1, c1) <- createBlockAndUpdateFinalityDetector[Task](
                      Seq(genesis.blockHash),
@@ -553,9 +553,9 @@ class FinalityDetectorByVotingMatrixTest
       } yield result
   }
 
-  it should "not count child era messages towards finality of the parent bocks" in withStorage {
-    implicit blockStore => implicit dagStorage => implicit deployStorage =>
-      _ =>
+  it should "not count child era messages towards finality of the parent bocks" in withCombinedStorageIndexed {
+    implicit storage =>
+      implicit dagStorage =>
         /* The DAG looks like:
          * era-1:
          *    a1 ----
@@ -578,7 +578,7 @@ class FinalityDetectorByVotingMatrixTest
         val bonds  = Seq(v1Bond, v2Bond, v3Bond)
         for {
           genesis <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bonds)
-          dag     <- dagStorage.getRepresentation
+          dag     <- storage.getRepresentation
           implicit0(detector: FinalityDetectorVotingMatrix[Task]) <- mkVotingMatrix(
                                                                       dag,
                                                                       genesis,

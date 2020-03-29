@@ -37,8 +37,10 @@ import monix.eval.Task
 import monix.execution.Scheduler
 import monix.execution.atomic.{AtomicInt, AtomicLong}
 import org.scalatest.{Assertion, FlatSpec, Matchers}
+
 import scala.concurrent.duration._
 import io.casperlabs.models.BlockImplicits._
+import io.casperlabs.storage.SQLiteStorage.CombinedStorage
 
 class ExecEngineUtilTest
     extends FlatSpec
@@ -53,9 +55,7 @@ class ExecEngineUtilTest
 
   implicit def deployBuffer(
       implicit
-      blockStorage: BlockStorage[Task],
-      dagStorage: DagStorage[Task],
-      deployStorage: DeployStorage[Task]
+      combinedStorage: CombinedStorage[Task]
   ): DeployBuffer[Task] =
     DeployBuffer.create[Task]("casperlabs", Duration.Zero)
 
@@ -84,8 +84,8 @@ class ExecEngineUtilTest
       DeploysCheckpoint(_, _, _, result, _, _) = computeResult
     } yield result
 
-  "computeDeploysCheckpoint" should "aggregate the result of deploying multiple programs within the block" in withStorage {
-    implicit blockStorage => implicit dagStorage => implicit deployStorage => _ =>
+  "computeDeploysCheckpoint" should "aggregate the result of deploying multiple programs within the block" in withCombinedStorageIndexed {
+    implicit storage => _ =>
       implicit val executionEngineService: ExecutionEngineService[Task] =
         HashSetCasperTestNode.simpleEEApi[Task](Map.empty)
 
@@ -115,8 +115,8 @@ class ExecEngineUtilTest
       } yield batchResult should contain theSameElementsAs singleResults
   }
 
-  it should "throw exception when EE Service Failed" in withStorage {
-    implicit blockStorage => implicit dagStorage => implicit deployStorage => _ =>
+  it should "throw exception when EE Service Failed" in withCombinedStorageIndexed {
+    implicit storage => implicit dagStorage =>
       val failedExecEEService: ExecutionEngineService[Task] =
         ExecutionEngineServiceStub.failExec[Task]()
 
@@ -130,7 +130,7 @@ class ExecEngineUtilTest
       // An intermediate method for better UX when overriding ExecutionEngineService
       def computeCheckpoint(block: Block)(implicit ec: ExecutionEngineService[Task]) =
         for {
-          dag    <- dagStorage.getRepresentation
+          dag    <- storage.getRepresentation
           result <- computeBlockCheckpointFromDeploys(block, dag)
         } yield result
 
@@ -155,8 +155,8 @@ class ExecEngineUtilTest
       } yield ()
   }
 
-  it should "include conflicting deploys in the result" in withStorage {
-    implicit blockStorage => implicit dagStorage => implicit deployStorage => _ =>
+  it should "include conflicting deploys in the result" in withCombinedStorageIndexed {
+    implicit storage => _ =>
       val nonConflictingDeploys = List.fill(5)(ProtoUtil.basicDeploy[Task]()).sequence
       implicit val executionEngineService: ExecutionEngineService[Task] =
         HashSetCasperTestNode.simpleEEApi[Task](Map.empty)
@@ -173,8 +173,8 @@ class ExecEngineUtilTest
       }
   }
 
-  it should "use post-state hash and bonded validators values of the last deploy execution" in withStorage {
-    implicit blockStorage => implicit dagStorage => implicit deployStorage => _ =>
+  it should "use post-state hash and bonded validators values of the last deploy execution" in withCombinedStorageIndexed {
+    implicit storage => _ =>
       import cats.implicits._
 
       import monix.execution.Scheduler.Implicits.global
@@ -286,15 +286,15 @@ class ExecEngineUtilTest
           mainRank = Message.asMainRank(0),
           maxBlockSizeBytes = 5 * 1024 * 1024,
           upgrades = Nil
-        )(Sync[Task], deployStorage, deployBuffer, logEff, ee, deploySelection, Metrics[Task])
+        )(Sync[Task], storage, deployBuffer, logEff, ee, deploySelection, Metrics[Task])
         .map { result =>
           assert(result.postStateHash == lastPostStateHash)
           assert(result.bondedValidators == lastBondedValidators)
         }
   }
 
-  "effectsForBlock" should "extract block's effects properly" in withStorage {
-    implicit bs => _ => _ => _ =>
+  "effectsForBlock" should "extract block's effects properly" in withCombinedStorageIndexed {
+    implicit storage => _ =>
       import io.casperlabs.catscontrib.effect.implicits._
       import cats.implicits._
 
@@ -376,7 +376,7 @@ class ExecEngineUtilTest
                          .effectsForBlock[Task](block, ByteString.EMPTY)(
                            Sync[Task],
                            ee,
-                           bs,
+                           storage,
                            cl
                          )
         _ <- Task {

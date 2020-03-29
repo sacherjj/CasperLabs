@@ -5,7 +5,6 @@ import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.Era
 import io.casperlabs.models.ArbitraryConsensus
-import io.casperlabs.storage.SQLiteFixture
 import io.casperlabs.storage.{SQLiteFixture, SQLiteStorage}
 import monix.eval.Task
 import org.scalatest._

@@ -42,9 +42,9 @@ class DagOperationsTest
     stream.take(10).toList shouldBe List(1, 2, 3, 4, 6, 9, 8, 12, 18, 27)
   }
 
-  "bfToposortTraverseF" should "lazily breadth-first and order by rank when traverse a DAG with effectful neighbours" in withStorage {
-    implicit blockStorage => implicit dagStorage => implicit deployStorage =>
-      _ =>
+  "bfToposortTraverseF" should "lazily breadth-first and order by rank when traverse a DAG with effectful neighbours" in withCombinedStorageIndexed {
+    implicit storage =>
+      implicit dagStorage =>
         /*
          * DAG Looks like this:
          *
@@ -72,7 +72,7 @@ class DagOperationsTest
           b6      <- createAndStoreMessage[Task](Seq(b2.blockHash, b4.blockHash), v1)
           b7      <- createAndStoreMessage[Task](Seq(b4.blockHash, b5.blockHash), v3)
 
-          dag                <- dagStorage.getRepresentation
+          dag                <- storage.getRepresentation
           dagTopoOrderingAsc = DagOperations.blockTopoOrderingAsc
           stream = DagOperations.bfToposortTraverseF[Task](Message.fromBlock(genesis).toList) { b =>
             dag
@@ -91,9 +91,9 @@ class DagOperationsTest
         } yield ()
   }
 
-  "Greatest common ancestor" should "be computed properly" in withStorage {
-    implicit blockStorage => implicit dagStorage => implicit deployStorage =>
-      _ =>
+  "Greatest common ancestor" should "be computed properly" in withCombinedStorageIndexed {
+    implicit storage =>
+      implicit dagStorage =>
         /*
          * DAG Looks like this:
          *
@@ -117,7 +117,7 @@ class DagOperationsTest
           b6      <- createAndStoreMessage[Task](Seq(b2.blockHash, b4.blockHash))
           b7      <- createAndStoreMessage[Task](Seq(b4.blockHash, b5.blockHash))
 
-          dag <- dagStorage.getRepresentation
+          dag <- storage.getRepresentation
 
           _      <- DagOperations.greatestCommonAncestorF[Task](b1, b5, genesis, dag) shouldBeF b1
           _      <- DagOperations.greatestCommonAncestorF[Task](b3, b2, genesis, dag) shouldBeF b1
@@ -127,8 +127,8 @@ class DagOperationsTest
         } yield result
   }
 
-  "Latest Common Ancestor" should "be computed properly for various j-DAGs" in withStorage {
-    implicit blockStorage => implicit dagStorage => implicit deployStorage => _ =>
+  "Latest Common Ancestor" should "be computed properly for various j-DAGs" in withCombinedStorageIndexed {
+    implicit storage => implicit dagStorage =>
       val v1 = generateValidator("One")
       val v2 = generateValidator("Two")
       val v3 = generateValidator("Three")
@@ -145,7 +145,7 @@ class DagOperationsTest
         b1             <- createAndStoreMessage[Task](Seq(genesis.blockHash), v1)
         b2             <- createAndStoreMessage[Task](Seq(genesis.blockHash), v2)
         b3             <- createAndStoreMessage[Task](Seq(genesis.blockHash), v3)
-        dag            <- dagStorage.getRepresentation
+        dag            <- storage.getRepresentation
         latestMessages <- dag.latestMessageHashes
         lca <- DagOperations.latestCommonAncestorsMainParent(
                 dag,
@@ -165,7 +165,7 @@ class DagOperationsTest
         genesis        <- createAndStoreMessage[Task](Seq.empty)
         b1             <- createAndStoreMessage[Task](Seq(genesis.blockHash), v1)
         b2             <- createAndStoreMessage[Task](Seq(genesis.blockHash), v2)
-        dag            <- dagStorage.getRepresentation
+        dag            <- storage.getRepresentation
         latestMessages <- dag.latestMessageHashes
         lca <- DagOperations.latestCommonAncestorsMainParent(
                 dag,
@@ -194,7 +194,7 @@ class DagOperationsTest
         b4             <- createAndStoreMessage[Task](Seq(b3.blockHash), v2)
         b5             <- createAndStoreMessage[Task](Seq(b3.blockHash), v3)
         b6             <- createAndStoreMessage[Task](Seq(b5.blockHash), v3)
-        dag            <- dagStorage.getRepresentation
+        dag            <- storage.getRepresentation
         latestMessages <- dag.latestMessageHashes
         lca <- DagOperations.latestCommonAncestorsMainParent(
                 dag,
@@ -223,7 +223,7 @@ class DagOperationsTest
         b4             <- createAndStoreMessage[Task](Seq(b1.blockHash), v2)
         b5             <- createAndStoreMessage[Task](Seq(b3.blockHash), v3)
         b6             <- createAndStoreMessage[Task](Seq(b5.blockHash), v3)
-        dag            <- dagStorage.getRepresentation
+        dag            <- storage.getRepresentation
         latestMessages <- dag.latestMessageHashes
         lca <- DagOperations.latestCommonAncestorsMainParent(
                 dag,
@@ -251,8 +251,8 @@ class DagOperationsTest
         b5             <- createAndStoreMessage[Task](Seq(b3.blockHash), v3)
         b6             <- createAndStoreMessage[Task](Seq(b4.blockHash), v1)
         b7             <- createAndStoreMessage[Task](Seq(b4.blockHash), v3)
-        dag            <- dagStorage.getRepresentation
-        latestMessages <- dag.latestMessageHashes
+        dag            <- storage.getRepresentation
+        latestMessages <- storage.latestMessageHashes
         lca <- DagOperations.latestCommonAncestorsMainParent(
                 dag,
                 NonEmptyList.fromListUnsafe(latestMessages.values.flatten.toList)
@@ -292,7 +292,7 @@ class DagOperationsTest
         k            <- createAndStoreMessage[Task](Seq(h.blockHash), v2, Seq.empty)
         l            <- createAndStoreMessage[Task](Seq(i.blockHash), v3, Seq.empty)
         m            <- createAndStoreMessage[Task](Seq(l.blockHash), v2, Seq.empty, Map(v2 -> k.blockHash))
-        dag          <- dagStorage.getRepresentation
+        dag          <- storage.getRepresentation
         latestBlocks <- dag.latestMessageHashes
         lca <- DagOperations.latestCommonAncestorsMainParent(
                 dag,
@@ -301,9 +301,9 @@ class DagOperationsTest
       } yield assert(lca.messageHash == f.blockHash)
   }
 
-  "uncommon ancestors" should "be computed properly" in withStorage {
-    implicit blockStorage => implicit dagStorage => implicit deployStorage =>
-      _ =>
+  "uncommon ancestors" should "be computed properly" in withCombinedStorageIndexed {
+    implicit storage =>
+      implicit dagStorage =>
         /*
          *  DAG Looks like this:
          *
@@ -329,7 +329,7 @@ class DagOperationsTest
           b6      <- createAndStoreMessage[Task](Seq(b4.blockHash, b5.blockHash))
           b7      <- createAndStoreMessage[Task](Seq(b2.blockHash, b5.blockHash))
 
-          dag <- dagStorage.getRepresentation
+          dag <- storage.getRepresentation
 
           _ <- DagOperations.uncommonAncestors[Task](Vector(b6, b7), dag) shouldBeF Map(
                 toMessageSummary(b6) -> BitSet(0),
@@ -358,8 +358,8 @@ class DagOperationsTest
   }
 
   "anyDescendantPathExists" should
-    "return whether there is a path from any of the possible ancestor blocks to any of the potential descendants" in withStorage {
-    implicit blockStorage => implicit dagStorage => implicit deployStorage => _ =>
+    "return whether there is a path from any of the possible ancestor blocks to any of the potential descendants" in withCombinedStorageIndexed {
+    implicit storage => implicit dagStorage =>
       def anyDescendantPathExists(
           dag: DagRepresentation[Task],
           start: Set[Block],
@@ -392,7 +392,7 @@ class DagOperationsTest
         b5      <- createAndStoreMessage[Task](Seq(b3.blockHash))
         b6      <- createAndStoreMessage[Task](Seq(b2.blockHash, b4.blockHash))
         b7      <- createAndStoreMessage[Task](Seq(b4.blockHash, b5.blockHash))
-        dag     <- dagStorage.getRepresentation
+        dag     <- storage.getRepresentation
         // self
         _ <- anyDescendantPathExists(dag, Set(genesis), Set(genesis)) shouldBeF true
         // any descendant
@@ -411,8 +411,8 @@ class DagOperationsTest
   }
 
   "collectWhereDescendantPathExists" should
-    "return from the possible ancestor blocks the ones which have a path to any of the potential descendants" in withStorage {
-    implicit blockStorage => implicit dagStorage => implicit deployStorage => _ =>
+    "return from the possible ancestor blocks the ones which have a path to any of the potential descendants" in withCombinedStorageIndexed {
+    implicit storage => implicit dagStorage =>
       def collect(
           dag: DagRepresentation[Task],
           start: Set[Block],
@@ -445,7 +445,7 @@ class DagOperationsTest
         b5      <- createAndStoreMessage[Task](Seq(b3.blockHash))
         b6      <- createAndStoreMessage[Task](Seq(b2.blockHash, b4.blockHash))
         b7      <- createAndStoreMessage[Task](Seq(b4.blockHash, b5.blockHash))
-        dag     <- dagStorage.getRepresentation
+        dag     <- storage.getRepresentation
         // self
         _ <- collect(dag, Set(genesis), Set(genesis)) shouldBeF Set(genesis.blockHash)
         // any descendant
@@ -464,8 +464,8 @@ class DagOperationsTest
       } yield ()
   }
 
-  "swimlaneV" should "return correct stream of blocks even if they are referenced indirectly" in withStorage {
-    implicit blockStorage => implicit dagStorage => _ => _ =>
+  "swimlaneV" should "return correct stream of blocks even if they are referenced indirectly" in withCombinedStorageIndexed {
+    implicit storage => implicit dagStorage =>
       val v1    = generateValidator("v1")
       val v2    = generateValidator("v2")
       val bonds = Seq(Bond(v1, 10), Bond(v2, 10))
@@ -475,7 +475,7 @@ class DagOperationsTest
         b1      <- createAndStoreMessage[Task](Seq(genesis.blockHash), v1, bonds)
         b2      <- createAndStoreMessage[Task](Seq(b1.blockHash), v2, bonds, Map(v1 -> b1.blockHash))
         b3      <- createAndStoreMessage[Task](Seq(b2.blockHash), v1, bonds, Map(v2 -> b2.blockHash))
-        dag     <- dagStorage.getRepresentation
+        dag     <- storage.getRepresentation
         message <- Task.fromTry(Message.fromBlock(b3))
         _ <- DagOperations
               .swimlaneV[Task](v1, message, dag)
@@ -500,9 +500,9 @@ class DagOperationsTest
   val genesisValidator = ByteString.EMPTY
   val genesisEra       = ByteString.EMPTY
 
-  "panoramaOfBlockByValidators" should "return latest message per validator within single era" in withStorage {
-    implicit blockStorage => implicit dagStorage => _ =>
-      _ =>
+  "panoramaOfBlockByValidators" should "return latest message per validator within single era" in withCombinedStorageIndexed {
+    implicit storage =>
+      implicit dagStorage =>
         // Validators A, B and C
         // All messages within single era.
         //
@@ -545,7 +545,7 @@ class DagOperationsTest
                  bondsThree,
                  keyBlockHash = genesis.blockHash
                )
-          implicit0(dag: DagRepresentation[Task]) <- dagStorage.getRepresentation
+          implicit0(dag: DagRepresentation[Task]) <- storage.getRepresentation
           b2Message                               = Message.fromBlock(b2).get
           genesisMessage                          = Message.fromBlock(genesis).get
           localDagView = EraObservedBehavior.local(
@@ -576,9 +576,9 @@ class DagOperationsTest
         } yield assert(latestGenesisMessageHashes == expected)
   }
 
-  it should "return latest message per validator across multiple eras" in withStorage {
-    implicit blockStorage => implicit dagStorage => _ =>
-      _ =>
+  it should "return latest message per validator across multiple eras" in withCombinedStorageIndexed {
+    implicit storage =>
+      implicit dagStorage =>
         // Validators A, B and C
         //                      |
         //    a1                |      a2
@@ -648,7 +648,7 @@ class DagOperationsTest
                  bondsThree,
                  keyBlockHash = c1.blockHash
                )
-          implicit0(dag: DagRepresentation[Task]) <- dagStorage.getRepresentation
+          implicit0(dag: DagRepresentation[Task]) <- storage.getRepresentation
           c3Message                               = Message.fromBlock(c3).get
           genesisMessage                          = Message.fromBlock(genesis).get
           localDagView = EraObservedBehavior.local(
@@ -692,12 +692,12 @@ class DagOperationsTest
         } yield {
           assert(latestGenesisMessageHashes == expectedGenesis)
           assert(latestChildMessageHashes == expectedChild)
-        }
+      }
   }
 
-  it should "detect equivocators" in withStorage {
-    implicit blockStorage => implicit dagStorage => _ =>
-      _ =>
+  it should "detect equivocators" in withCombinedStorageIndexed {
+    implicit storage =>
+      implicit dagStorage =>
         //    a1
         //   /   \
         // G -a1'-b2
@@ -747,7 +747,7 @@ class DagOperationsTest
               )
             )
           )
-          implicit0(dag: DagRepresentation[Task]) <- dagStorage.getRepresentation
+          implicit0(dag: DagRepresentation[Task]) <- storage.getRepresentation
           latestMessages <- DagOperations.panoramaOfMessage[Task](
                              dag,
                              Message.fromBlock(b2).get,
@@ -767,12 +767,12 @@ class DagOperationsTest
         } yield {
           assert(latestGenesisMessageHashes == expectedGenesis)
           assert(detectedEquivocators == Set(v1))
-        }
+      }
   }
 
-  it should "detect equivocators across multiple eras" in withStorage {
-    implicit blockStorage => implicit dagStorage => _ =>
-      _ =>
+  it should "detect equivocators across multiple eras" in withCombinedStorageIndexed {
+    implicit storage =>
+      implicit dagStorage =>
         //    a1 --- a2
         //  //   \  //  \
         // G = a1'-b2 == b3
@@ -839,7 +839,7 @@ class DagOperationsTest
               )
             )
           )
-          implicit0(dag: DagRepresentation[Task]) <- dagStorage.getRepresentation
+          implicit0(dag: DagRepresentation[Task]) <- storage.getRepresentation
           latestMessages <- DagOperations.panoramaOfMessage[Task](
                              dag,
                              Message.fromBlock(b3).get,
@@ -859,12 +859,12 @@ class DagOperationsTest
         } yield {
           assert(detectedEquivocators == Set(v1))
           assert(latestGenesisMessageHashes == expectedGenesis)
-        }
+      }
   }
 
-  it should "use only messages visible in the justifications (not local DAG)" in withStorage {
-    implicit blockStorage => implicit dagStorage => _ =>
-      _ =>
+  it should "use only messages visible in the justifications (not local DAG)" in withCombinedStorageIndexed {
+    implicit storage =>
+      implicit dagStorage =>
         // Validators A, B, C and D
         //                      |
         //    a1                |      a2
@@ -953,7 +953,7 @@ class DagOperationsTest
                  bonds,
                  keyBlockHash = genesis.blockHash
                )
-          implicit0(dag: DagRepresentation[Task]) <- dagStorage.getRepresentation
+          implicit0(dag: DagRepresentation[Task]) <- storage.getRepresentation
           d1Message                               = Message.fromBlock(d1).get
           genesisMessage                          = Message.fromBlock(genesis).get
           localDagView = EraObservedBehavior.local(
@@ -995,12 +995,12 @@ class DagOperationsTest
         } yield {
           assert(latestGenesisMessageHashes == expectedGenesis)
           assert(latestChildMessageHashes == expectedChild)
-        }
+      }
   }
 
-  it should "properly detect equivocations when the equivocating pair is further in the j-past-cone" in withStorage {
-    implicit blockStorage => implicit dagStorage => _ =>
-      _ =>
+  it should "properly detect equivocations when the equivocating pair is further in the j-past-cone" in withCombinedStorageIndexed {
+    implicit storage =>
+      implicit dagStorage =>
         // Validators A, B, C and D.
         //
         //
@@ -1079,7 +1079,7 @@ class DagOperationsTest
                  bonds,
                  keyBlockHash = genesis.blockHash
                )
-          implicit0(dag: DagRepresentation[Task]) <- dagStorage.getRepresentation
+          implicit0(dag: DagRepresentation[Task]) <- storage.getRepresentation
           d1Message                               = Message.fromBlock(d1).get
           genesisMessage                          = Message.fromBlock(genesis).get
           localDagView = EraObservedBehavior.local(
@@ -1114,7 +1114,7 @@ class DagOperationsTest
         } yield {
           assert(latestGenesisMessageHashes == expectedGenesis)
           assert(detectedEquivocators == Set(v1))
-        }
+      }
   }
 
   implicit val consensusConfig: ConsensusConfig = ConsensusConfig(
