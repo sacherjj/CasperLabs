@@ -1,6 +1,6 @@
 [package]
 name = "casperlabs-engine-core"
-version = "0.4.0"
+version = "0.5.0"
 authors = ["Michael Birch <birchmd@casperlabs.io>", "Mateusz Górski <gorski.mateusz@protonmail.ch>"]
 edition = "2018"
 description = "Main component of the CasperLabs Wasm execution engine."
@@ -20,7 +20,7 @@ base16 = "0.2.1"
 blake2 = "0.8.1"
 contract = { version = "0.4.0", path = "../contract",  package = "casperlabs-contract", features = ["std"] }
 engine-shared = { version = "0.5.0", path = "../engine-shared", package = "casperlabs-engine-shared" }
-engine-storage = { version = "0.4.0", path = "../engine-storage", package = "casperlabs-engine-storage" }
+engine-storage = { version = "0.5.0", path = "../engine-storage", package = "casperlabs-engine-storage" }
 engine-wasm-prep = { version = "0.4.0", path = "../engine-wasm-prep", package = "casperlabs-engine-wasm-prep" }
 failure = "0.1.6"
 hex_fmt = "0.3.0"
