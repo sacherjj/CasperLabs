@@ -111,6 +111,7 @@ steps:
 - name: rust-compile-test-latest-nightly-pr
   environment:
     CARGO_OPTS: +nightly
+    CARGO_FLAGS: --all-targets
   commands:
   - "cd execution-engine/"
   - "make setup-nightly-rs"
