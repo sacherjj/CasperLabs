@@ -57,6 +57,7 @@ object DeploySelection {
       timestamp: Long,
       protocolVersion: ProtocolVersion,
       maxBlockSizeBytes: Int,
+      maxBlockCost: Option[BigInt],
       deploys: fs2.Stream[F, Deploy]
   )
 
@@ -70,9 +71,17 @@ object DeploySelection {
         timestamp: Long,
         protocolVersion: ProtocolVersion,
         maxBlockSizeBytes: Int,
+        maxBlockCost: Option[BigInt],
         deploys: fs2.Stream[F, Deploy]
     ): F[B] = select(
-      DeploySelectionParams(preStateHash, timestamp, protocolVersion, maxBlockSizeBytes, deploys)
+      DeploySelectionParams(
+        preStateHash,
+        timestamp,
+        protocolVersion,
+        maxBlockSizeBytes,
+        maxBlockCost,
+        deploys
+      )
     )
   }
 

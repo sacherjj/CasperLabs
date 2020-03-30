@@ -1380,6 +1380,7 @@ class ValidationTest
                               ProtocolVersion(1),
                               mainRank = 0,
                               maxBlockSizeBytes = 5 * 1024 * 1024,
+                              maxBlockCost = None,
                               upgrades = Nil
                             )
         DeploysCheckpoint(

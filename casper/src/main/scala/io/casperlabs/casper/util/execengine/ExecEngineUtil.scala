@@ -98,16 +98,19 @@ object ExecEngineUtil {
       protocolVersion: state.ProtocolVersion,
       mainRank: MainRank,
       maxBlockSizeBytes: Int,
+      maxBlockCost: Option[state.BigInt],
       upgrades: Seq[ChainSpec.UpgradePoint]
   ): F[DeploysCheckpoint] = Metrics[F].timer("computeDeploysCheckpoint") {
     for {
-      preStateHash <- computePrestate[F](merged, mainRank, upgrades).timer("computePrestate")
+      preStateHash      <- computePrestate[F](merged, mainRank, upgrades).timer("computePrestate")
+      maybeMaxBlockCost = maxBlockCost.map(x => BigInt(x.value)).filterNot(_ == BigInt("0"))
       DeploySelectionResult(commuting, conflicting, preconditionFailures) <- DeploySelection[F]
                                                                               .select(
                                                                                 preStateHash,
                                                                                 blocktime,
                                                                                 protocolVersion,
                                                                                 maxBlockSizeBytes,
+                                                                                maybeMaxBlockCost,
                                                                                 deployStream
                                                                               )
       _                             <- handleInvalidDeploys[F](preconditionFailures)

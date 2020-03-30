@@ -421,6 +421,7 @@ class MultiParentCasperImpl[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: 
                          props.protocolVersion,
                          props.mainRank,
                          props.configuration.deployConfig.maxBlockSizeBytes,
+                         props.configuration.deployConfig.maxBlockCost,
                          upgrades
                        )
         result <- Sync[F]

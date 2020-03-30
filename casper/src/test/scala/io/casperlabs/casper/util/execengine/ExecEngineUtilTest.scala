@@ -79,6 +79,7 @@ class ExecEngineUtilTest
                           protocolVersion,
                           mainRank = Message.asMainRank(0),
                           maxBlockSizeBytes = 5 * 1024 * 1024,
+                          maxBlockCost = None,
                           upgrades = Nil
                         )
       DeploysCheckpoint(_, _, _, result, _, _) = computeResult
@@ -285,6 +286,7 @@ class ExecEngineUtilTest
           ProtocolVersion(1),
           mainRank = Message.asMainRank(0),
           maxBlockSizeBytes = 5 * 1024 * 1024,
+          maxBlockCost = None,
           upgrades = Nil
         )(Sync[Task], storage, deployBuffer, logEff, ee, deploySelection, Metrics[Task])
         .map { result =>
