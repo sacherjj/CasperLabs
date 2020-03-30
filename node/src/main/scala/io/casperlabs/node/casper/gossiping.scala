@@ -43,6 +43,7 @@ import monix.tail.Iterant
 import scala.concurrent.duration._
 import scala.util.Random
 import scala.util.control.NonFatal
+import io.casperlabs.shared.ByteStringPrettyPrinter._
 
 /** Create the Casper stack using the GossipService. */
 package object gossiping {
@@ -296,7 +297,7 @@ package object gossiping {
                                   .fold(().pure[F]) { _ =>
                                     Log[F]
                                       .warn(
-                                        s"${PrettyPrinter.buildString(block) -> "message" -> null} seems to be created by a doppelganger using the same validator key!"
+                                        s"${block -> "message" -> null} seems to be created by a doppelganger using the same validator key!"
                                       )
                                   }
                               } *>
@@ -355,7 +356,7 @@ package object gossiping {
             for {
               // Validate it to make sure that code path is exercised.
               _ <- Log[F].info(
-                    s"Trying to validate and run the Genesis ${show(genesis.blockHash) -> "candidate"}"
+                    s"Trying to validate and run the Genesis ${genesis.blockHash.show -> "candidate"}"
                   )
               _ <- Consensus[F].validateAndAddBlock(genesis)
             } yield ()
@@ -391,7 +392,7 @@ package object gossiping {
             maybeApproveBlock(block).asRight.pure[F]
           } else {
             InvalidArgument(
-              s"${show(block.blockHash) -> "candidate"} did not equal the expected Genesis ${show(genesis.blockHash) -> "genesis"}"
+              s"${block.blockHash.show -> "candidate"} did not equal the expected Genesis ${genesis.blockHash.show -> "genesis"}"
             ).asLeft.pure[F].widen
           }
 
@@ -437,9 +438,6 @@ package object gossiping {
                    maybeApproval = maybeApproveBlock(genesis)
                  )
     } yield approver
-
-  private def show(hash: ByteString) =
-    PrettyPrinter.buildString(hash)
 
   def makeSynchronizer[F[_]: Concurrent: Parallel: Log: Metrics: DagStorage: Consensus: CasperLabsProtocol](
       conf: Configuration,

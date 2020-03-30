@@ -38,6 +38,7 @@ import io.casperlabs.smartcontracts.ExecutionEngineService.CommitResult
 
 import scala.util.{Failure, Success}
 import scala.util.Either
+import io.casperlabs.shared.ByteStringPrettyPrinter._
 
 case class DeploysCheckpoint(
     preStateHash: StateHash,
@@ -512,13 +513,13 @@ object ExecEngineUtil {
         case Some(_: Message.Ballot) =>
           MonadThrowable[F].raiseError(
             new IllegalStateException(
-              s"${PrettyPrinter.buildString(child)} has a ballot as a parent: ${PrettyPrinter.buildString(parent)}"
+              s"${child.show} has a ballot as a parent: ${parent.show}"
             )
           )
         case None =>
           MonadThrowable[F].raiseError(
             new IllegalStateException(
-              s"${PrettyPrinter.buildString(child)} has missing parent: ${PrettyPrinter.buildString(parent)}"
+              s"${child.show} has missing parent: ${parent.show}"
             )
           )
       }

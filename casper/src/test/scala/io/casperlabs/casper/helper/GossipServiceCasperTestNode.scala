@@ -31,6 +31,7 @@ import io.casperlabs.storage.dag._
 import io.casperlabs.storage.deploy.DeployStorage
 import logstage.LogIO
 import monix.tail.Iterant
+import io.casperlabs.shared.ByteStringPrettyPrinter._
 
 import scala.collection.immutable.Queue
 import scala.concurrent.duration.{FiniteDuration, _}
@@ -432,12 +433,12 @@ object GossipServiceCasperTestNodeFactory {
                                override def onDownloaded(blockHash: ByteString) =
                                  // Calling `addBlock` during validation has already stored the block.
                                  Log[F].debug(
-                                   s"Download ready for ${PrettyPrinter.buildString(blockHash) -> "message" -> null}"
+                                   s"Download ready for ${blockHash.show -> "message" -> null}"
                                  )
 
                                override def onFailed(blockHash: ByteString) =
                                  Log[F].debug(
-                                   s"Download failed for ${PrettyPrinter.buildString(blockHash) -> "message" -> null}"
+                                   s"Download failed for ${blockHash.show -> "message" -> null}"
                                  )
                              },
                              relaying = relaying,
@@ -487,7 +488,7 @@ object GossipServiceCasperTestNodeFactory {
                          blockHash: ByteString
                      ): F[Option[consensus.BlockSummary]] =
                        Log[F].debug(
-                         s"Retrieving block summary ${PrettyPrinter.buildString(blockHash) -> "message" -> null} from storage."
+                         s"Retrieving block summary ${blockHash.show -> "message" -> null} from storage."
                        ) *> blockStorage.getBlockSummary(blockHash)
 
                      override def getBlock(
@@ -495,7 +496,7 @@ object GossipServiceCasperTestNodeFactory {
                          deploysBodiesExcluded: Boolean
                      ): F[Option[consensus.Block]] =
                        Log[F].debug(
-                         s"Retrieving block ${PrettyPrinter.buildString(blockHash) -> "message" -> null} from storage."
+                         s"Retrieving block ${blockHash.show -> "message" -> null} from storage."
                        ) *>
                          blockStorage
                            .get(blockHash)

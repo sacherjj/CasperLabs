@@ -49,6 +49,7 @@ import simulacrum.typeclass
 import io.casperlabs.models.BlockImplicits._
 import Sorting._
 import io.casperlabs.casper.dag.{BlockDependencyDag, DoublyLinkedDag}
+import ByteStringPrettyPrinter._
 
 import scala.concurrent.duration.FiniteDuration
 import scala.util.control.NonFatal
@@ -104,7 +105,7 @@ class MultiParentCasperImpl[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: 
           status <- if (inDag) {
                      Log[F]
                        .info(
-                         s"Block ${PrettyPrinter.buildString(blockHash)} has already been processed by another thread."
+                         s"${blockHash.show -> "message"} has already been processed by another thread."
                        ) *>
                        BlockStatus.processed.pure[F]
                    } else {
@@ -128,7 +129,7 @@ class MultiParentCasperImpl[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: 
         addBlock(statelessExecutor.validateAndAddBlock)
       case Right(Some(delay)) =>
         Log[F].info(
-          s"${PrettyPrinter.buildString(block.blockHash) -> "message"} is ahead for $delay from now, will retry adding later"
+          s"${block.blockHash.show -> "message"} is ahead for $delay from now, will retry adding later"
         ) >>
           Time[F].sleep(delay) >>
           addBlock(statelessExecutor.validateAndAddBlock)
@@ -176,7 +177,7 @@ class MultiParentCasperImpl[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: 
         _ <- result.toList
               .traverse {
                 case fb @ FinalizedBlocks(newLFB, _, finalized, orphaned) => {
-                  val lfbStr = PrettyPrinter.buildString(newLFB)
+                  val lfbStr = newLFB.show
                   val finalizedStr = finalized
                     .filter(_.isBlock)
                     .map(_.messageHash)

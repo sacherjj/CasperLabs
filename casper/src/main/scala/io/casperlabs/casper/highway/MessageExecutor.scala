@@ -32,6 +32,7 @@ import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.storage.deploy.{DeployStorage, DeployStorageWriter}
 import io.casperlabs.storage.dag.{DagStorage, FinalityStorage}
 import io.casperlabs.smartcontracts.ExecutionEngineService
+import io.casperlabs.shared.ByteStringPrettyPrinter._
 
 import scala.util.control.NonFatal
 import scala.util.control.NoStackTrace
