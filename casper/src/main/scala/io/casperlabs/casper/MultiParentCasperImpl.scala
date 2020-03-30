@@ -728,7 +728,7 @@ object MultiParentCasperImpl {
             InvalidDeployHash | InvalidDeploySignature | InvalidPreStateHash |
             InvalidPostStateHash | InvalidTargetHash | InvalidDeployHeader |
             InvalidDeployChainName | DeployDependencyNotMet | DeployExpired | DeployFromFuture |
-            SwimlaneMerged =>
+            SwimlaneMerged | TooExpensive =>
           handleInvalidBlockEffect(status, block)
 
         case Processing | Processed =>
@@ -870,7 +870,7 @@ object MultiParentCasperImpl {
               InvalidSequenceNumber | InvalidPrevBlockHash | NeglectedInvalidBlock |
               InvalidTransaction | InvalidBondsCache | InvalidChainName | InvalidBlockHash |
               InvalidDeployCount | InvalidPreStateHash | InvalidPostStateHash | SwimlaneMerged |
-              InvalidTargetHash | Processing | Processed =>
+              InvalidTargetHash | TooExpensive | Processing | Processed =>
             ().pure[F]
 
           case InvalidRepeatDeploy | InvalidChainName | InvalidDeployHash | InvalidDeploySignature |

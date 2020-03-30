@@ -139,6 +139,7 @@ abstract class ValidationImpl[F[_]: Sync: FunctorRaise[*[_], InvalidBlock]: Log:
       _ <- Validation.deploySignatures[F](block)
       _ <- Validation.deployHeaders[F](block, dag, chainName)
       _ <- Validation.deployUniqueness[F](block, dag)
+      _ <- Validation.totalCost[F](block)
     } yield ()
   }
 

@@ -75,7 +75,11 @@ class ValidationTest
   implicit val raiseValidateErr                       = validation.raiseValidateErrorThroughApplicativeError[Task]
   implicit val versions =
     CasperLabsProtocol.unsafe[Task](
-      (0L, state.ProtocolVersion(1), Some(DeployConfig(24 * 60 * 60 * 1000, 10, 10 * 1024 * 1024)))
+      (
+        0L,
+        state.ProtocolVersion(1),
+        Some(DeployConfig(24 * 60 * 60 * 1000, 10, 10 * 1024 * 1024, Some(state.BigInt("0", 512))))
+      )
     )
 
   implicit val validationEff = new NCBValidationImpl[Task]()
@@ -1321,7 +1325,33 @@ class ValidationTest
       } yield result shouldBe Left(ValidateErrorWrapper(InvalidRepeatDeploy))
   }
 
-  it should "return InvalidPostStateHash when postStateHash of block is not correct" in withCombinedStorageIndexed {
+  "totalCost" should "return TooExpensive when the cost is above the maximum" in withCombinedStorageIndexed {
+    implicit storage => implicit dagStorage =>
+      val maxCost = 5L
+      implicit val versions =
+        CasperLabsProtocol.unsafe[Task](
+          (
+            0L,
+            state.ProtocolVersion(1),
+            Some(
+              DeployConfig(24 * 60 * 60 * 1000, 10, 10 * 1024 * 1024)
+                .withMaxBlockCost(state.BigInt(maxCost.toString, 512))
+            )
+          )
+        )
+      val contract = ByteString.copyFromUtf8("some contract")
+      val deploysWithCost =
+        Vector.fill(2)(prepareDeploys(Vector(contract), cost = maxCost - 1)).flatten
+      for {
+        block <- createAndStoreMessage[Task](
+                  Seq.empty,
+                  deploys = deploysWithCost
+                )
+        result <- Validation.totalCost[Task](block).attempt
+      } yield result shouldBe Left(ValidateErrorWrapper(TooExpensive))
+  }
+
+  "Validation" should "return InvalidPostStateHash when postStateHash of block is not correct" in withCombinedStorageIndexed {
     implicit storage => implicit dagStorage =>
       implicit val executionEngineService: ExecutionEngineService[Task] =
         HashSetCasperTestNode.simpleEEApi[Task](Map.empty)
