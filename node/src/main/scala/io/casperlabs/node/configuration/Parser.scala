@@ -75,6 +75,13 @@ private[configuration] trait ParserImplicits {
         p <- refineV[NonNegative](i)
       } yield p
 
+  implicit val nonNegativeLongParser: Parser[Refined[Long, NonNegative]] =
+    s =>
+      for {
+        i <- Try(s.toLong).toEither.leftMap(_.getMessage)
+        p <- refineV[NonNegative](i)
+      } yield p
+
   implicit val gte1DoubleParser: Parser[Refined[Double, GreaterEqual[W.`1.0`.T]]] =
     s =>
       for {

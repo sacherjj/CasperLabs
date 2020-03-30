@@ -272,6 +272,26 @@ object Validation {
     }
   }
 
+  def totalCost[F[_]: MonadThrowable: RaiseValidationError: Log](
+      block: Block
+  )(
+      implicit versions: CasperLabsProtocol[F]
+  ): F[Unit] =
+    for {
+      config  <- versions.configAt(Message.asMainRank(block.getHeader.mainRank))
+      zero    = 0L
+      maxCost = config.deployConfig.maxBlockCost
+      totalCost = if (maxCost == zero) zero
+      else block.getBody.deploys.map(_.cost).foldLeft(zero)(_ + _)
+      _ <- if (zero < maxCost && maxCost < totalCost) {
+            reject[F](
+              block,
+              TooExpensive,
+              s"total gas cost $totalCost is higher than the maximum $maxCost"
+            )
+          } else ().pure[F]
+    } yield ()
+
   // Block rank is 1 plus the maximum of the rank of its justifications.
   def blockRank[F[_]: MonadThrowable: RaiseValidationError: Log](
       b: BlockSummary,

@@ -60,7 +60,8 @@ class DeploySelectionTest
   val blocktime       = 0L
   val protocolVersion = ProtocolVersion(1)
 
-  val smallBlockSizeBytes = 5 * 1024
+  val smallBlockSizeBytes               = 5 * 1024
+  val defaultMaxBlockCost: Option[Long] = None
 
   val sampleDeploy        = sample(arbDeploy.arbitrary)
   val deploysInSmallBlock = smallBlockSizeBytes / sampleDeploy.serializedSize
@@ -115,10 +116,53 @@ class DeploySelectionTest
                        blocktime,
                        protocolVersion,
                        blockSizeBytes,
+                       defaultMaxBlockCost,
                        countedStream.stream
                      )
                      .map(_.commuting.map(_.deploy))
         _ <- Task.delay(assert(scaleWithChunkSize(countedStream.getCount()) == expectedPulls))
+      } yield selected should contain theSameElementsAs expected
+
+      test.unsafeRunSync
+  }
+
+  it should "stop consuming the stream when block cost limit is reached" in forAll(
+    arbDeploy.arbitrary,
+    Gen.chooseNum(0, 5 * SomeCost.value.value.toInt)
+  ) {
+    case (deploy, maxBlockCost) =>
+      val chunkSize  = 2
+      val maxDeploys = maxBlockCost / SomeCost.value.value.toInt
+      // It should pull `chunkSize` items at a time from the source,
+      // which it will send in batches for execution, and then add
+      // the results one by one until the cost exceed the maximum.
+      // So if we know we want to find 3 deploys, it will execute 2+2,
+      // but if we want just 2, it will still execute 2+2 and stop after.
+      // Therefore we truncate the maxDeploys based on chunkSize and
+      // allow one more batch.
+      val maxPulls = maxDeploys - maxDeploys % chunkSize + chunkSize
+      val deploys  = List.fill(maxDeploys * 5)(deploy)
+      val expected = deploys.take(maxDeploys)
+
+      val countedStream = CountedStream(fs2.Stream.fromIterator(deploys.toIterator))
+
+      implicit val ee: ExecutionEngineService[Task] = eeExecMock(everythingCommutesExec _)
+
+      val deploySelection: DeploySelection[Task] =
+        DeploySelection.create[Task](minChunkSize = chunkSize)
+
+      val test = for {
+        selected <- deploySelection
+                     .select(
+                       prestate,
+                       blocktime,
+                       protocolVersion,
+                       maxBlockSizeBytes = 5 * 1024 * 1024,
+                       maxBlockCost = Option(maxBlockCost.toLong),
+                       countedStream.stream
+                     )
+                     .map(_.commuting.map(_.deploy))
+        _ <- Task.delay(assert(countedStream.getCount() <= maxPulls))
       } yield selected should contain theSameElementsAs expected
 
       test.unsafeRunSync
@@ -142,7 +186,14 @@ class DeploySelectionTest
       DeploySelection.create[Task]()
 
     val test = deploySelection
-      .select(prestate, blocktime, protocolVersion, smallBlockSizeBytes, stream)
+      .select(
+        prestate,
+        blocktime,
+        protocolVersion,
+        smallBlockSizeBytes,
+        defaultMaxBlockCost,
+        stream
+      )
       .map(results => {
         assert(results.commuting.map(_.deploy) == cappedEffects)
       })
@@ -170,7 +221,7 @@ class DeploySelectionTest
     val expectedConflicting = cappedEffects.zipWithIndex.filter(_._2 % 2 == 0).map(_._1).tail
 
     val test = deploySelection
-      .select(prestate, blocktime, protocolVersion, sizeLimitBytes, stream)
+      .select(prestate, blocktime, protocolVersion, sizeLimitBytes, defaultMaxBlockCost, stream)
       .map {
         case DeploySelectionResult(commutingRes, conflictingRes, _) =>
           conflictingRes should contain theSameElementsAs expectedConflicting
@@ -202,7 +253,14 @@ class DeploySelectionTest
       val stream = fs2.Stream.fromIterator(cappedDeploys.toIterator)
 
       val test = deploySelection
-        .select(prestate, blocktime, protocolVersion, maxBlockSizeBytes, stream)
+        .select(
+          prestate,
+          blocktime,
+          protocolVersion,
+          maxBlockSizeBytes,
+          defaultMaxBlockCost,
+          stream
+        )
         .map(_.commuting.map(_.deploy))
         .map(_ should contain theSameElementsAs cappedDeploys)
 
@@ -227,7 +285,14 @@ class DeploySelectionTest
     val deploySelection: DeploySelection[Task]    = DeploySelection.create[Task]()
 
     val test = deploySelection
-      .select(prestate, blocktime, protocolVersion, smallBlockSizeBytes, stream)
+      .select(
+        prestate,
+        blocktime,
+        protocolVersion,
+        smallBlockSizeBytes,
+        defaultMaxBlockCost,
+        stream
+      )
       .map {
         case DeploySelectionResult(chosenDeploys, _, invalidDeploys) => {
           // Assert that all invalid deploys are a subset of the input set of invalid deploys.
