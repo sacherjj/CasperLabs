@@ -735,8 +735,9 @@ object MultiParentCasperImpl {
           throw new RuntimeException(s"A block should not be processing at this stage.")
 
         case UnexpectedBlockException(ex) =>
-          Log[F].error(s"Encountered exception in while processing ${PrettyPrinter
-            .buildString(block.blockHash) -> "message"}: $ex")
+          Log[F].error(
+            s"Encountered exception in while processing ${block.blockHash.show -> "message"}: $ex"
+          )
       }
 
     /** Remember a block as being invalid, then save it to storage. */
@@ -746,7 +747,7 @@ object MultiParentCasperImpl {
     )(implicit state: Cell[F, CasperState]): F[Unit] =
       for {
         _ <- Log[F].warn(
-              s"Recording invalid ${PrettyPrinter.buildString(block.blockHash) -> "message"} for $status."
+              s"Recording invalid ${block.blockHash.show -> "message"} for $status."
             )
         // TODO: Slash block for status except InvalidUnslashableBlock
         // TODO: Persist invalidBlockTracker into Dag

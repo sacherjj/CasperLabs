@@ -382,24 +382,23 @@ object GossipServiceCasperTestNodeFactory {
                                  // will assume the DownloadManager will do that.
                                  // Doing this log here as it's evidently happened if we are here, and the tests expect it.
                                  Log[F].info(
-                                   s"Requested missing ${PrettyPrinter.buildString(block.blockHash) -> "message"} Now validating."
+                                   s"Requested missing ${block.blockHash.show -> "message"} Now validating."
                                  ) *>
                                    casper
                                      .addBlock(block) flatMap {
                                    case Valid =>
-                                     Log[F].debug(s"Validated and stored block ${PrettyPrinter
-                                       .buildString(block.blockHash) -> "message" -> null}")
+                                     Log[F].debug(
+                                       s"Validated and stored block ${block.blockHash.show -> "message" -> null}"
+                                     )
 
                                    case EquivocatedBlock =>
                                      Log[F].debug(
-                                       s"Detected Equivocation on block ${PrettyPrinter
-                                         .buildString(block.blockHash) -> "message" -> null}"
+                                       s"Detected Equivocation on block ${block.blockHash.show -> "message" -> null}"
                                      )
 
                                    case other =>
                                      Log[F].debug(
-                                       s"Received invalid block ${PrettyPrinter
-                                         .buildString(block.blockHash) -> "message" -> null}: $other"
+                                       s"Received invalid block ${block.blockHash.show -> "message" -> null}: $other"
                                      ) *>
                                        Sync[F].raiseError(
                                          new RuntimeException(s"Non-valid status: $other")
@@ -414,8 +413,7 @@ object GossipServiceCasperTestNodeFactory {
                                  // The EquivocationDetector treats equivocations with children differently,
                                  // so let Casper know about the DAG dependencies up front.
                                  Log[F].debug(
-                                   s"Feeding pending block to Casper: ${PrettyPrinter
-                                     .buildString(summary.blockHash) -> "message" -> null}"
+                                   s"Feeding pending block to Casper: ${summary.blockHash.show -> "message" -> null}"
                                  ) *> {
                                    val partialBlock = consensus
                                      .Block()
@@ -460,8 +458,7 @@ object GossipServiceCasperTestNodeFactory {
                            override def validate(blockSummary: consensus.BlockSummary): F[Unit] =
                              for {
                                _ <- Log[F].debug(
-                                     s"Trying to validate block summary ${PrettyPrinter
-                                       .buildString(blockSummary.blockHash) -> "message" -> null}"
+                                     s"Trying to validate block summary ${blockSummary.blockHash.show -> "message" -> null}"
                                    )
                                _ <- Validation[F].blockSummary(
                                      blockSummary,
