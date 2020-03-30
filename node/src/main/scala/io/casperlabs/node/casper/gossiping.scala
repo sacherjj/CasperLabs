@@ -296,7 +296,7 @@ package object gossiping {
                                   .fold(().pure[F]) { _ =>
                                     Log[F]
                                       .warn(
-                                        s"${PrettyPrinter.buildString(block) -> "block" -> null} seems to be created by a doppelganger using the same validator key!"
+                                        s"${PrettyPrinter.buildString(block) -> "message" -> null} seems to be created by a doppelganger using the same validator key!"
                                       )
                                   }
                               } *>

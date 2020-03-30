@@ -128,14 +128,14 @@ class MultiParentCasperImpl[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: 
         addBlock(statelessExecutor.validateAndAddBlock)
       case Right(Some(delay)) =>
         Log[F].info(
-          s"${PrettyPrinter.buildString(block.blockHash) -> "block"} is ahead for $delay from now, will retry adding later"
+          s"${PrettyPrinter.buildString(block.blockHash) -> "message"} is ahead for $delay from now, will retry adding later"
         ) >>
           Time[F].sleep(delay) >>
           addBlock(statelessExecutor.validateAndAddBlock)
       case _ =>
         Log[F]
           .warn(
-            s"${PrettyPrinter.buildString(block.blockHash) -> "block"} timestamp exceeded threshold"
+            s"${PrettyPrinter.buildString(block.blockHash) -> "message"} timestamp exceeded threshold"
           ) >>
           addBlock(handleInvalidTimestamp)
     }
@@ -162,9 +162,9 @@ class MultiParentCasperImpl[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: 
       _          <- removeAdded(List(block -> status), canRemove = _ != MissingBlocks)
       hashPrefix = PrettyPrinter.buildString(block.blockHash)
       // Update the last finalized block; remove finalized deploys from the buffer
-      _ <- Log[F].debug(s"Updating last finalized block after adding ${hashPrefix -> "block"}")
+      _ <- Log[F].debug(s"Updating last finalized block after adding ${hashPrefix -> "message"}")
       _ <- updateLastFinalizedBlock(message, dag).whenA(status == Valid)
-      _ <- Log[F].debug(s"Finished adding ${hashPrefix -> "block"}")
+      _ <- Log[F].debug(s"Finished adding ${hashPrefix -> "message"}")
     } yield status
   }
 
@@ -258,7 +258,7 @@ class MultiParentCasperImpl[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: 
                 s"Estimates are ${tipHashes.toList.map(PrettyPrinter.buildString).mkString(", ") -> "tips"}"
               )
           _ <- Log[F].info(
-                s"Fork-choice is ${PrettyPrinter.buildString(tipHashes.head) -> "block"}."
+                s"Fork-choice is ${PrettyPrinter.buildString(tipHashes.head) -> "message"}."
               )
           // Merged makes sure that we only get blocks.
           tipsMessages <- MonadThrowable[F].fromTry(tips.map(Message.fromBlock(_)).sequence)
@@ -604,7 +604,7 @@ object MultiParentCasperImpl {
       Metrics[F].timer("validateAndAddBlock") {
         val hashPrefix = PrettyPrinter.buildString(block.blockHash)
         val validationStatus = (for {
-          _   <- Log[F].info(s"Attempting to add ${hashPrefix -> "block"} to the DAG.")
+          _   <- Log[F].info(s"Attempting to add ${hashPrefix -> "message"} to the DAG.")
           dag <- DagStorage[F].getRepresentation
           _ <- Validation[F].blockFull(
                 block,
@@ -615,7 +615,7 @@ object MultiParentCasperImpl {
           casperState <- Cell[F, CasperState].read
           // Confirm the parents are correct (including checking they commute) and capture
           // the effect needed to compute the correct pre-state as well.
-          _ <- Log[F].debug(s"Validating the parents of ${hashPrefix -> "block"}")
+          _ <- Log[F].debug(s"Validating the parents of ${hashPrefix -> "message"}")
           merged <- maybeContext.fold(
                      ExecEngineUtil.MergeResult
                        .empty[ExecEngineUtil.TransformMap, Block]
@@ -623,17 +623,17 @@ object MultiParentCasperImpl {
                    ) { _ =>
                      Validation[F].parents(block, dag)
                    }
-          _ <- Log[F].debug(s"Computing the pre-state hash of ${hashPrefix -> "block"}")
+          _ <- Log[F].debug(s"Computing the pre-state hash of ${hashPrefix -> "message"}")
           preStateHash <- ExecEngineUtil
                            .computePrestate[F](merged, block.mainRank, upgrades)
                            .timer("computePrestate")
-          _ <- Log[F].debug(s"Computing the effects for ${hashPrefix -> "block"}")
+          _ <- Log[F].debug(s"Computing the effects for ${hashPrefix -> "message"}")
           blockEffects <- ExecEngineUtil
                            .effectsForBlock[F](block, preStateHash)
                            .recoverWith {
                              case NonFatal(ex) =>
                                Log[F].error(
-                                 s"Could not calculate effects for ${hashPrefix -> "block"}: $ex"
+                                 s"Could not calculate effects for ${hashPrefix -> "message"}: $ex"
                                ) *>
                                  FunctorRaise[F, InvalidBlock].raise(InvalidTransaction)
                            }
@@ -641,7 +641,7 @@ object MultiParentCasperImpl {
           gasSpent = block.getBody.deploys.foldLeft(0L) { case (acc, next) => acc + next.cost }
           _ <- Metrics[F]
                 .incrementCounter("gas_spent", gasSpent)
-          _ <- Log[F].debug(s"Validating the transactions in ${hashPrefix -> "block"}")
+          _ <- Log[F].debug(s"Validating the transactions in ${hashPrefix -> "message"}")
           // Genesis won't have parents.
           preStateBonds = merged.parents.headOption.getOrElse(block).getHeader.getState.bonds
           _ <- Validation[F].transactions(
@@ -650,18 +650,18 @@ object MultiParentCasperImpl {
                 preStateBonds,
                 blockEffects
               )
-          _ <- Log[F].debug(s"Validating neglection for ${hashPrefix -> "block"}")
+          _ <- Log[F].debug(s"Validating neglection for ${hashPrefix -> "mesage"}")
           _ <- Validation[F]
                 .neglectedInvalidBlock(
                   block,
                   casperState.invalidBlockTracker
                 )
-          _       <- Log[F].debug(s"Checking equivocation for ${hashPrefix -> "block"}")
+          _       <- Log[F].debug(s"Checking equivocation for ${hashPrefix -> "message"}")
           message <- MonadThrowable[F].fromTry(Message.fromBlock(block))
           _ <- EquivocationDetector
                 .checkEquivocation[F](dag, message, isHighway = false)
                 .timer("checkEquivocationsWithUpdate")
-          _ <- Log[F].debug(s"Block effects calculated for ${hashPrefix -> "block"}")
+          _ <- Log[F].debug(s"Block effects calculated for ${hashPrefix -> "message"}")
         } yield blockEffects).attempt
 
         validationStatus.flatMap {
@@ -684,7 +684,7 @@ object MultiParentCasperImpl {
             for {
               _ <- Log[F].error(
                     s"Unexpected exception during validation of ${PrettyPrinter
-                      .buildString(block.blockHash) -> "block"}: $ex"
+                      .buildString(block.blockHash) -> "message"}: $ex"
                   )
               _ <- ex.raiseError[F, BlockStatus]
             } yield UnexpectedBlockException(ex)
@@ -706,7 +706,7 @@ object MultiParentCasperImpl {
           for {
             _ <- addToState(block, transforms)
             _ <- Log[F].info(
-                  s"Added ${PrettyPrinter.buildString(block.blockHash) -> "block"}"
+                  s"Added ${PrettyPrinter.buildString(block.blockHash) -> "message"}"
                 )
           } yield ()
 
@@ -717,7 +717,7 @@ object MultiParentCasperImpl {
           for {
             _ <- addToState(block, transforms)
             _ <- Log[F].info(
-                  s"Added equivocated ${PrettyPrinter.buildString(block.blockHash) -> "block"}"
+                  s"Added equivocated ${PrettyPrinter.buildString(block.blockHash) -> "message"}"
                 )
           } yield ()
 
@@ -735,7 +735,7 @@ object MultiParentCasperImpl {
 
         case UnexpectedBlockException(ex) =>
           Log[F].error(s"Encountered exception in while processing ${PrettyPrinter
-            .buildString(block.blockHash) -> "block"}: $ex")
+            .buildString(block.blockHash) -> "message"}: $ex")
       }
 
     /** Remember a block as being invalid, then save it to storage. */
@@ -745,7 +745,7 @@ object MultiParentCasperImpl {
     )(implicit state: Cell[F, CasperState]): F[Unit] =
       for {
         _ <- Log[F].warn(
-              s"Recording invalid ${PrettyPrinter.buildString(block.blockHash) -> "block"} for $status."
+              s"Recording invalid ${PrettyPrinter.buildString(block.blockHash) -> "message"} for $status."
             )
         // TODO: Slash block for status except InvalidUnslashableBlock
         // TODO: Persist invalidBlockTracker into Dag

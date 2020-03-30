@@ -80,7 +80,7 @@ class AutoProposer[F[_]: Concurrent: Time: Log: Metrics: MultiParentCasperRef: D
   /** Try to propose a block or ballot. Return true if anything was created. */
   private def tryPropose(canCreateBallot: Boolean): F[Boolean] =
     BlockAPI.propose(blockApiLock, canCreateBallot).flatMap { blockHash =>
-      Log[F].info(s"Proposed ${PrettyPrinter.buildString(blockHash) -> "block"}").as(true)
+      Log[F].info(s"Proposed ${PrettyPrinter.buildString(blockHash) -> "message"}").as(true)
     } handleErrorWith {
       case NonFatal(ex) =>
         Log[F].error(s"Could not propose block: $ex").as(false)

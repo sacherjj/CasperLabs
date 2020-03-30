@@ -115,7 +115,7 @@ object Validation {
 
   def ignore[F[_]: Log](blockHash: ByteString, reason: String): F[Unit] =
     Log[F].warn(
-      s"Ignoring ${PrettyPrinter.buildString(blockHash) -> "block"} because ${reason -> "reason" -> null}"
+      s"Ignoring ${PrettyPrinter.buildString(blockHash) -> "message"} because ${reason -> "reason" -> null}"
     )
 
   def raise[F[_]: RaiseValidationError](status: InvalidBlock): F[Unit] =
