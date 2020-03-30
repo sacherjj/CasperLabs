@@ -111,11 +111,11 @@ steps:
 - name: rust-compile-test-latest-nightly-pr
   environment:
     CARGO_OPTS: +nightly
-    CARGO_FLAGS: --all-targets
   commands:
   - "cd execution-engine/"
   - "make setup-nightly-rs"
-  - "make build build-contracts-rs"
+  - "make build CARGO_FLAGS=--all-targets"
+  - "make build-contracts-rs"
   image: "casperlabs/buildenv:latest"
   when:
     event:
