@@ -96,7 +96,8 @@ object DeploySelection {
       // Deploys that conflict with `accumulated` but will be included
       // as SEQ deploys.
       conflicting: List[Deploy] = List.empty,
-      preconditionFailures: List[PreconditionFailure] = List.empty
+      preconditionFailures: List[PreconditionFailure] = List.empty,
+      totalCost: BigInt = BigInt("0")
   ) {
     def effectsCommutativity: (List[DeployEffects], OpMap[state.Key]) =
       (commuting, accumulatedOps)
@@ -114,12 +115,17 @@ object DeploySelection {
       if (accOps ~ ops) {
         copy(
           commuting = deploysEffects :: accEffects,
-          accumulatedOps = accOps + ops
+          accumulatedOps = accOps + ops,
+          totalCost = totalCost + deploysEffects.cost
         )
       } else
         // We're not updating the `diff` here since its elements are pushed
         // to the stream and we do that for commuting elements.
-        copy(conflicting = deploysEffects.deploy :: this.conflicting)
+        copy(
+          conflicting = deploysEffects.deploy :: this.conflicting,
+          // These are going in the SEQ section.
+          totalCost = totalCost + deploysEffects.cost
+        )
     }
 
     def addPreconditionFailure(failure: PreconditionFailure): IntermediateState =
@@ -159,7 +165,8 @@ object DeploySelection {
       ): F[DeploySelectionResult] = {
         // If size of accumulated deploys is over 90% of the block limit, stop consuming more deploys.
         def isOversized(state: IntermediateState) =
-          state.size > 0.9 * in.maxBlockSizeBytes
+          state.size > 0.9 * in.maxBlockSizeBytes ||
+            in.maxBlockCost.fold(false)(_ < state.totalCost)
 
         def go(
             state: IntermediateState,
@@ -168,6 +175,7 @@ object DeploySelection {
           chunks.pull.unconsN(minChunkSize, allowFewer = true).flatMap {
             case None =>
               fs2.Pull.output1(state)
+
             case Some((chunk, deploys)) =>
               val batch = chunk.toList
               val newState = eeExecuteDeploys[F](
@@ -187,6 +195,7 @@ object DeploySelection {
                         accState.asLeft[IntermediateState]
                       else
                         newState.asRight[IntermediateState]
+
                     case (accState, element: PreconditionFailure) =>
                       // PreconditionFailure-s should be pushed into the stream
                       // for later handling (like discarding invalid deploys).

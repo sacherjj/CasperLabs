@@ -126,6 +126,41 @@ class DeploySelectionTest
       test.unsafeRunSync
   }
 
+  it should "stop consuming the stream when block cost limit is reached" in forAll(
+    arbDeploy.arbitrary,
+    Gen.chooseNum(0, 5 * SomeCost.value.value.toInt)
+  ) {
+    case (deploy, maxBlockCost) =>
+      val chunkSize  = 2
+      val maxDeploys = maxBlockCost / SomeCost.value.value.toInt
+      val maxPulls   = maxDeploys - maxDeploys % chunkSize + chunkSize
+      val deploys    = List.fill(maxDeploys * 5)(deploy)
+      val expected   = deploys.take(maxDeploys)
+
+      val countedStream = CountedStream(fs2.Stream.fromIterator(deploys.toIterator))
+
+      implicit val ee: ExecutionEngineService[Task] = eeExecMock(everythingCommutesExec _)
+
+      val deploySelection: DeploySelection[Task] =
+        DeploySelection.create[Task](minChunkSize = chunkSize)
+
+      val test = for {
+        selected <- deploySelection
+                     .select(
+                       prestate,
+                       blocktime,
+                       protocolVersion,
+                       maxBlockSizeBytes = 5 * 1024 * 1024,
+                       maxBlockCost = Option(scala.math.BigInt(maxBlockCost.toString)),
+                       countedStream.stream
+                     )
+                     .map(_.commuting.map(_.deploy))
+        _ <- Task.delay(assert(countedStream.getCount() <= maxPulls))
+      } yield selected should contain theSameElementsAs expected
+
+      test.unsafeRunSync
+  }
+
   it should "skip elements that won't be included in a block (precondition failures)" +
     " and continue consuming the stream" in {
     val preconditionFailures = List.fill(deploysInSmallBlock * 2)(sample(arbDeploy.arbitrary))

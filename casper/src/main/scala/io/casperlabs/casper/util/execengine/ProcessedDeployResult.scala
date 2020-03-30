@@ -9,6 +9,7 @@ sealed trait ProcessedDeployResult {
 
 sealed trait DeployEffects extends ProcessedDeployResult {
   val effects: ipc.ExecutionEffect
+  val cost: Long
 }
 
 // Precondition failures don't have effects or cost.
@@ -46,6 +47,7 @@ object ProcessedDeployResult {
               deploy,
               error,
               ipc.ExecutionEffect.defaultInstance,
+              // NOTE: This one's because the gas goes into metrics, which only take Long.
               cost.fold(0L)(_.value.toLong)
             )
           case ipc.DeployResult.ExecutionResult(Some(effects), None, cost) =>
