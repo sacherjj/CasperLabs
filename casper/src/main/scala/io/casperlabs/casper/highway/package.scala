@@ -86,9 +86,6 @@ package object highway {
 
   type LeaderFunction = Ticks => PublicKeyBS
 
-  implicit val `Show[BlockHash]` =
-    Show.show[BlockHash](PrettyPrinter.buildString(_))
-
   type ValidatedMessage = Message @@ ValidatedTag
   def Validated(m: Message) = m.asInstanceOf[ValidatedMessage]
 }

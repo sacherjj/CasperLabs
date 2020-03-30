@@ -224,7 +224,7 @@ abstract class ValidationImpl[F[_]: Sync: FunctorRaise[*[_], InvalidBlock]: Log:
         _ <- possibleCommitResult match {
               case Left(ex) =>
                 Log[F].error(
-                  s"Could not commit effects of ${PrettyPrinter.buildString(block.blockHash) -> "block"}: $ex"
+                  s"Could not commit effects of ${PrettyPrinter.buildString(block.blockHash) -> "message"}: $ex"
                 ) *>
                   raise(InvalidTransaction)
               case Right(commitResult) =>

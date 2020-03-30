@@ -289,7 +289,7 @@ class BlockContainsString:
 
 class LastFinalisedHash(LogsContainMessage):
     def __init__(self, node: DockerNode, hash_string: str) -> None:
-        super().__init__(node, f"Added block={hash_string[:10]}...")
+        super().__init__(node, f"Added message={hash_string[:10]}...")
 
 
 class NoNewDeploys(LogsContainMessage):

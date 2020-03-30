@@ -25,7 +25,7 @@ import scala.collection.immutable.{BitSet, HashSet, Queue}
 import scala.collection.mutable
 import io.casperlabs.storage.dag.AncestorsStorage
 import io.casperlabs.storage.dag.AncestorsStorage.Relation
-import org.scalacheck.util.Pretty
+import io.casperlabs.shared.ByteStringPrettyPrinter._
 
 object DagOperations {
 
@@ -435,7 +435,7 @@ object DagOperations {
         .flatMap(
           MonadThrowable[F].fromOption(
             _,
-            new IllegalStateException(s"Missing dependency: ${PrettyPrinter.buildString(hash)}")
+            new IllegalStateException(s"Missing dependency: ${hash.show}")
           )
         )
 

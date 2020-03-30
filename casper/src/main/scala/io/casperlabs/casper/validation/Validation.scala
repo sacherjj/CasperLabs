@@ -1,6 +1,6 @@
 package io.casperlabs.casper.validation
 
-import cats.{Applicative, Monad}
+import cats.{Applicative, Monad, Show}
 import cats.implicits._
 import cats.mtl.FunctorRaise
 import com.google.protobuf.ByteString
@@ -32,6 +32,7 @@ import io.casperlabs.models.Message.MainRank
 
 import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
 import scala.util.{Success, Try}
+import io.casperlabs.shared.ByteStringPrettyPrinter._
 
 trait Validation[F[_]] {
 
@@ -115,7 +116,7 @@ object Validation {
 
   def ignore[F[_]: Log](blockHash: ByteString, reason: String): F[Unit] =
     Log[F].warn(
-      s"Ignoring ${PrettyPrinter.buildString(blockHash) -> "block"} because ${reason -> "reason" -> null}"
+      s"Ignoring ${blockHash.show -> "message"} because ${reason -> "reason" -> null}"
     )
 
   def raise[F[_]: RaiseValidationError](status: InvalidBlock): F[Unit] =
@@ -262,7 +263,7 @@ object Validation {
                 reject[F](
                   block,
                   InvalidRepeatDeploy,
-                  s"block contains a duplicate ${PrettyPrinter.buildString(exampleDeploy)} already present in ${PrettyPrinter
+                  s"block contains a duplicate ${exampleDeploy.show} already present in ${PrettyPrinter
                     .buildString(exampleBlockHash)}"
                 )
               }
@@ -676,11 +677,11 @@ object Validation {
       dag.lookup(prevBlockHash).flatMap {
         case None =>
           rejectWith(
-            s"DagStorage is missing previous block hash ${PrettyPrinter.buildString(prevBlockHash)}"
+            s"DagStorage is missing previous block hash ${prevBlockHash.show}"
           )
         case Some(prev) if prev.validatorId != validatorId =>
           rejectWith(
-            s"Previous block hash ${PrettyPrinter.buildString(prevBlockHash)} was not created by validator ${PrettyPrinter
+            s"Previous block hash ${prevBlockHash.show} was not created by validator ${PrettyPrinter
               .buildString(validatorId)}"
           )
         case Some(prev) =>
@@ -700,7 +701,7 @@ object Validation {
                 case Some(msg) if msg.validatorId == validatorId =>
                   rejectWith(
                     s"The previous block hash from this validator in the j-past-cone is ${PrettyPrinter
-                      .buildString(msg.messageHash)}, not the expected ${PrettyPrinter.buildString(prevBlockHash)}"
+                      .buildString(msg.messageHash)}, not the expected ${prevBlockHash.show}"
                   )
                 case _ =>
                   rejectWith(
@@ -737,16 +738,15 @@ object Validation {
         b.bodyHash == bodyHashComputed) {
       Applicative[F].unit
     } else {
-      def show(hash: ByteString) = PrettyPrinter.buildString(hash)
       for {
         _ <- Log[F]
               .warn(
-                s"Expected block hash ${show(blockHashComputed) -> "expectedBlockHash"}; got ${show(b.blockHash) -> "blockHash"}"
+                s"Expected block hash ${blockHashComputed.show -> "expectedBlockHash"}; got ${b.blockHash.show -> "blockHash"}"
               )
               .whenA(b.blockHash != blockHashComputed)
         _ <- Log[F]
               .warn(
-                s"Expected body hash ${show(bodyHashComputed) -> "expectedBodyHash"}; got ${show(b.bodyHash) -> "bodyHash"}"
+                s"Expected body hash ${bodyHashComputed.show -> "expectedBodyHash"}; got ${b.bodyHash.show -> "bodyHash"}"
               )
               .whenA(b.bodyHash != bodyHashComputed)
         _ <- reject[F](
@@ -816,7 +816,7 @@ object Validation {
       reject[F](b, InvalidDeployHeader, errors.map(_.errorMessage).mkString(". "))
 
     def raiseFutureDeploy(deployHash: DeployHash, header: consensus.Deploy.Header): F[Unit] = {
-      val hash = PrettyPrinter.buildString(deployHash)
+      val hash = deployHash.show
       reject[F](
         b,
         DeployFromFuture,
@@ -829,7 +829,7 @@ object Validation {
         header: consensus.Deploy.Header,
         defaultMaxTTL: Int
     ): F[Unit] = {
-      val hash           = PrettyPrinter.buildString(deployHash)
+      val hash           = deployHash.show
       val ttl            = ProtoUtil.getTimeToLive(header, defaultMaxTTL)
       val expirationTime = header.timestamp + ttl
       reject[F](

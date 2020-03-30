@@ -10,6 +10,7 @@ import io.casperlabs.casper.api.BlockAPI
 import io.casperlabs.storage.deploy.{DeployStorage, DeployStorageReader}
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.shared.{Log, Time}
+import io.casperlabs.shared.ByteStringPrettyPrinter._
 
 import scala.concurrent.duration._
 import scala.util.control.NonFatal
@@ -80,7 +81,7 @@ class AutoProposer[F[_]: Concurrent: Time: Log: Metrics: MultiParentCasperRef: D
   /** Try to propose a block or ballot. Return true if anything was created. */
   private def tryPropose(canCreateBallot: Boolean): F[Boolean] =
     BlockAPI.propose(blockApiLock, canCreateBallot).flatMap { blockHash =>
-      Log[F].info(s"Proposed ${PrettyPrinter.buildString(blockHash) -> "block"}").as(true)
+      Log[F].info(s"Proposed ${blockHash.show -> "message"}").as(true)
     } handleErrorWith {
       case NonFatal(ex) =>
         Log[F].error(s"Could not propose block: $ex").as(false)

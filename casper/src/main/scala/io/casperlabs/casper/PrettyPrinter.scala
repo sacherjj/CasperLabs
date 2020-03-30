@@ -5,10 +5,9 @@ import io.casperlabs.casper.consensus.state.Key.URef.AccessRights
 import io.casperlabs.crypto.codec._
 import io.casperlabs.ipc._
 import io.casperlabs.casper.consensus.state._
+import io.casperlabs.shared.ByteStringPrettyPrinter
 
-object PrettyPrinter {
-
-  def buildStringNoLimit(b: ByteString): String = Base16.encode(b.toByteArray)
+object PrettyPrinter extends ByteStringPrettyPrinter {
 
   def buildString(k: Key): String = k.value match {
     case Key.Value.Empty                         => "KeyEmpty"
@@ -111,16 +110,6 @@ object PrettyPrinter {
       case None      => s"Block with missing elements (${buildString(b.blockHash)})"
     }
   }
-
-  private def limit(str: String, maxLength: Int): String =
-    if (str.length > maxLength) {
-      str.substring(0, maxLength) + "..."
-    } else {
-      str
-    }
-
-  def buildString(b: ByteString): String =
-    limit(Base16.encode(b.toByteArray), 10)
 
   private def buildString(a: Key.URef.AccessRights): String =
     a match {
