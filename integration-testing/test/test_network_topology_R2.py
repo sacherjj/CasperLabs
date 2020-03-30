@@ -1,6 +1,9 @@
 import logging
 
-from casperlabs_local_net.wait import wait_for_block_contains, wait_for_added_block
+from casperlabs_local_net.wait import (
+    wait_for_block_contains,
+    wait_for_block_hash_propagated_to_all_nodes,
+)
 from casperlabs_local_net.casperlabs_accounts import GENESIS_ACCOUNT
 from casperlabs_local_net.common import Contract
 
@@ -36,4 +39,4 @@ def test_star_network(star_network):
     )
     # Validate all nodes get block.
     for node in star_network.docker_nodes:
-        wait_for_added_block(node, block_hash, node.timeout)
+        wait_for_block_hash_propagated_to_all_nodes([node], block_hash)
