@@ -25,7 +25,7 @@ def make_transfers(client, account, target_account, amount, n):
         session_args=ABI.args(
             [
                 ABI.account("account", bytes.fromhex(target_account.public_key_hex)),
-                ABI.u512("amount", 1),
+                ABI.u512("amount", amount),
             ]
         ),
         payment_amount=10000000,
@@ -58,15 +58,18 @@ def test_max_block_size_bytes(chainspec_upgrades_network_minor):
     client = node.p_client.client
     account = GENESIS_ACCOUNT
     target_account = Account(1)
+    amount = 1
     number_of_deploys = 15
 
     deploy_hash, deploy_hashes = make_transfers(
-        client, account, target_account, 1, number_of_deploys
+        client, account, target_account, amount, number_of_deploys
     )
 
+    # Wait for the deploy that all others depend on to be included in a block.
     deploy_info = client.showDeploy(deploy_hash, wait_for_processed=True)
     logging.info(f"==>  {deploy_info}")
 
+    # Retrieve info on all deploys included in the block.
     deploy_infos = list(
         client.showDeploys(
             deploy_info.processing_results[0].block_info.summary.block_hash.hex(),
