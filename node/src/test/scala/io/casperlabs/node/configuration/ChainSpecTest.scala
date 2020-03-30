@@ -23,7 +23,7 @@ class ChainSpecTest extends WordSpecLike with Matchers with Inspectors {
         conf.genesis.timestamp shouldBe 1568805354071L
         conf.genesis.mintCodePath.toString shouldBe "mint.wasm"
         conf.deploys.maxBlockSizeBytes.value shouldBe 10 * 1024 * 1024
-        conf.deploys.maxBlockCost.value shouldBe BigInt(250000)
+        conf.deploys.maxBlockCost.value shouldBe 250000L
         conf.wasmCosts.regular.value shouldBe 1
         conf.wasmCosts.memInitialPages.value shouldBe 5
         conf.wasmCosts.opcodesDivisor.value shouldBe 10
