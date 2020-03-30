@@ -28,6 +28,7 @@ pub mod bytesrepr;
 mod cl_type;
 mod cl_value;
 mod contract_ref;
+mod contract_header;
 #[cfg(any(feature = "gens", test))]
 pub mod gens;
 mod key;
