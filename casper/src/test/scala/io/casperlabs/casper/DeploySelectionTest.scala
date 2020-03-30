@@ -133,9 +133,16 @@ class DeploySelectionTest
     case (deploy, maxBlockCost) =>
       val chunkSize  = 2
       val maxDeploys = maxBlockCost / SomeCost.value.value.toInt
-      val maxPulls   = maxDeploys - maxDeploys % chunkSize + chunkSize
-      val deploys    = List.fill(maxDeploys * 5)(deploy)
-      val expected   = deploys.take(maxDeploys)
+      // It should pull `chunkSize` items at a time from the source,
+      // which it will send in batches for execution, and then add
+      // the results one by one until the cost exceed the maximum.
+      // So if we know we want to find 3 deploys, it will execute 2+2,
+      // but if we want just 2, it will still execute 2+2 and stop after.
+      // Therefore we truncate the maxDeploys based on chunkSize and
+      // allow one more batch.
+      val maxPulls = maxDeploys - maxDeploys % chunkSize + chunkSize
+      val deploys  = List.fill(maxDeploys * 5)(deploy)
+      val expected = deploys.take(maxDeploys)
 
       val countedStream = CountedStream(fs2.Stream.fromIterator(deploys.toIterator))
 
