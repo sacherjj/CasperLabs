@@ -60,6 +60,9 @@ max-dependencies = 10
 # Maximum block size in bytes
 max-block-size-bytes = 10485760
 
+# Maximum total gas cost of deploys in a block. 0 means unlimited.
+max-block-cost = 0
+
 [wasm-costs]
 # Default opcode cost
 regular = 1

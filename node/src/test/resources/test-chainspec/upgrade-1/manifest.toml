@@ -12,6 +12,7 @@ installer-code-path = "installer.wasm"
 max-ttl-millis = 864000000
 max-dependencies = 10
 max-block-size-bytes = 10485760
+max-block-cost = 250000
 
 [wasm-costs]
 # Default opcode cost
