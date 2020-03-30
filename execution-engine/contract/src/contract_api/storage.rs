@@ -144,9 +144,9 @@ pub fn new_uref<T: CLTyped + ToBytes>(init: T) -> URef {
     let cl_value = CLValue::from_t(init).unwrap_or_revert();
     let (cl_value_ptr, cl_value_size, _cl_value_bytes) = contract_api::to_ptr(cl_value);
     let bytes = unsafe {
-        ext_ffi::new_uref(key_ptr, cl_value_ptr, cl_value_size); // URef has `READ_ADD_WRITE`
+        ext_ffi::new_uref(key_ptr.as_ptr(), cl_value_ptr, cl_value_size); // URef has `READ_ADD_WRITE`
         Vec::from_raw_parts(
-            key_ptr,
+            key_ptr.as_ptr(),
             KEY_UREF_SERIALIZED_LENGTH,
             KEY_UREF_SERIALIZED_LENGTH,
         )
