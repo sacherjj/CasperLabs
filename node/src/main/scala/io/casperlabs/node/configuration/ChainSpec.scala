@@ -66,7 +66,7 @@ object ChainSpec extends ParserImplicits {
       maxTtlMillis: Int Refined NonNegative,
       maxDependencies: Int Refined NonNegative,
       maxBlockSizeBytes: Int Refined Positive,
-      maxBlockCost: BigInt Refined NonNegative
+      maxBlockCost: Long Refined NonNegative
   ) extends SubConfig
 
   /** The first set of changes should define the Genesis section and the costs. */
@@ -413,7 +413,7 @@ object ChainSpecReader {
       deployConfig.maxTtlMillis.value,
       deployConfig.maxDependencies.value,
       deployConfig.maxBlockSizeBytes.value,
-      state.BigInt(deployConfig.maxBlockCost.value.toString, bitWidth = 512).some
+      deployConfig.maxBlockCost.value
     )
 
   private def toHighwayConfig(highwayConfig: Highway): ipc.ChainSpec.HighwayConfig =

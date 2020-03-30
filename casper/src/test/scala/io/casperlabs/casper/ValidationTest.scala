@@ -78,7 +78,7 @@ class ValidationTest
       (
         0L,
         state.ProtocolVersion(1),
-        Some(DeployConfig(24 * 60 * 60 * 1000, 10, 10 * 1024 * 1024, Some(state.BigInt("0", 512))))
+        Some(DeployConfig(24 * 60 * 60 * 1000, 10, 10 * 1024 * 1024, 0))
       )
     )
 
@@ -1334,8 +1334,7 @@ class ValidationTest
             0L,
             state.ProtocolVersion(1),
             Some(
-              DeployConfig(24 * 60 * 60 * 1000, 10, 10 * 1024 * 1024)
-                .withMaxBlockCost(state.BigInt(maxCost.toString, 512))
+              DeployConfig(24 * 60 * 60 * 1000, 10, 10 * 1024 * 1024, maxCost)
             )
           )
         )
@@ -1410,7 +1409,7 @@ class ValidationTest
                               ProtocolVersion(1),
                               mainRank = 0,
                               maxBlockSizeBytes = 5 * 1024 * 1024,
-                              maxBlockCost = None,
+                              maxBlockCost = 0,
                               upgrades = Nil
                             )
         DeploysCheckpoint(

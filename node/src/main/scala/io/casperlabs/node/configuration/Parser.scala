@@ -75,10 +75,10 @@ private[configuration] trait ParserImplicits {
         p <- refineV[NonNegative](i)
       } yield p
 
-  implicit val nonNegativeBigIntParser: Parser[Refined[BigInt, NonNegative]] =
+  implicit val nonNegativeLongParser: Parser[Refined[Long, NonNegative]] =
     s =>
       for {
-        i <- Try(BigInt(s)).toEither.leftMap(_.getMessage)
+        i <- Try(s.toLong).toEither.leftMap(_.getMessage)
         p <- refineV[NonNegative](i)
       } yield p
 

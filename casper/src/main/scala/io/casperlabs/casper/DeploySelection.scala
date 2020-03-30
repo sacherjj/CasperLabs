@@ -57,7 +57,7 @@ object DeploySelection {
       timestamp: Long,
       protocolVersion: ProtocolVersion,
       maxBlockSizeBytes: Int,
-      maxBlockCost: Option[BigInt],
+      maxBlockCost: Option[Long],
       deploys: fs2.Stream[F, Deploy]
   )
 
@@ -71,7 +71,7 @@ object DeploySelection {
         timestamp: Long,
         protocolVersion: ProtocolVersion,
         maxBlockSizeBytes: Int,
-        maxBlockCost: Option[BigInt],
+        maxBlockCost: Option[Long],
         deploys: fs2.Stream[F, Deploy]
     ): F[B] = select(
       DeploySelectionParams(
@@ -97,7 +97,7 @@ object DeploySelection {
       // as SEQ deploys.
       conflicting: List[Deploy] = List.empty,
       preconditionFailures: List[PreconditionFailure] = List.empty,
-      totalCost: BigInt = BigInt("0")
+      totalCost: Long = 0
   ) {
     def effectsCommutativity: (List[DeployEffects], OpMap[state.Key]) =
       (commuting, accumulatedOps)

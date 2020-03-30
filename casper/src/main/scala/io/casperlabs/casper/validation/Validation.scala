@@ -278,8 +278,8 @@ object Validation {
   ): F[Unit] =
     for {
       config  <- versions.configAt(Message.asMainRank(block.getHeader.mainRank))
-      zero    = BigInt("0")
-      maxCost = config.deployConfig.maxBlockCost.fold(zero)(x => BigInt(x.value))
+      zero    = 0L
+      maxCost = config.deployConfig.maxBlockCost
       totalCost = if (maxCost == zero) zero
       else block.getBody.deploys.map(_.cost).foldLeft(zero)(_ + _)
       _ <- if (zero < maxCost && maxCost < totalCost) {

@@ -60,8 +60,8 @@ class DeploySelectionTest
   val blocktime       = 0L
   val protocolVersion = ProtocolVersion(1)
 
-  val smallBlockSizeBytes                            = 5 * 1024
-  val defaultMaxBlockCost: Option[scala.math.BigInt] = None
+  val smallBlockSizeBytes               = 5 * 1024
+  val defaultMaxBlockCost: Option[Long] = None
 
   val sampleDeploy        = sample(arbDeploy.arbitrary)
   val deploysInSmallBlock = smallBlockSizeBytes / sampleDeploy.serializedSize
@@ -158,7 +158,7 @@ class DeploySelectionTest
                        blocktime,
                        protocolVersion,
                        maxBlockSizeBytes = 5 * 1024 * 1024,
-                       maxBlockCost = Option(scala.math.BigInt(maxBlockCost.toString)),
+                       maxBlockCost = Option(maxBlockCost.toLong),
                        countedStream.stream
                      )
                      .map(_.commuting.map(_.deploy))
