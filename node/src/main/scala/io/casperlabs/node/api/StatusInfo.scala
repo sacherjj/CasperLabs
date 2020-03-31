@@ -210,6 +210,9 @@ object StatusInfo {
         } yield tooOld
       }
 
+    private def findLatest(messages: Set[Message]): Option[Message] =
+      if (messages.isEmpty) none else messages.maxBy(_.timestamp).some
+
     def lastFinalizedBlock[F[_]: Sync: Time: FinalityStorage: DagStorage: Consensus](
         genesis: Block
     ) =
@@ -243,7 +246,7 @@ object StatusInfo {
         received = messages.values.flatten.filter { m =>
           maybeValidatorId.fold(true)(_ != m.validatorId)
         }
-        latest   = if (received.nonEmpty) received.maxBy(_.timestamp).some else none
+        latest   = findLatest(received)
         isTooOld <- isTooOld(latest)
 
       } yield Check[Unit](
@@ -269,7 +272,7 @@ object StatusInfo {
                       messages <- tips.latestMessage(id)
                     } yield messages
                   }
-        latest   = if (created.nonEmpty) created.maxBy(_.timestamp).some else none
+        latest   = findLatest(created)
         isTooOld <- isTooOld(latest)
       } yield Check[Unit](
         ok = !isTooOld,
