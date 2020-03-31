@@ -160,8 +160,8 @@ object StatusInfo {
         Check(
           ok = conf.casper.standalone || nodes.nonEmpty,
           message = Some {
-            if (conf.casper.standalone) s"Standalone mode, connected to ${nodes.length} peers."
-            else s"Connected to ${nodes.length} recently alive peers."
+            if (conf.casper.standalone) s"Standalone mode, connected to ${nodes.length} peer(s)."
+            else s"Connected to ${nodes.length} recently alive peer(s)."
           },
           details = PeerDetails(count = nodes.size).some
         )
@@ -176,7 +176,7 @@ object StatusInfo {
           ok = bootstrapNodes.isEmpty || connected.nonEmpty,
           message = Some {
             if (bootstrapNodes.nonEmpty)
-              s"Connected to ${connected.size} of the bootstrap nodes out of the ${bootstrapNodes.size} configured."
+              s"Connected to ${connected.size} of the bootstrap node(s) out of the ${bootstrapNodes.size} configured."
             else
               "No bootstraps configured."
           },
@@ -347,7 +347,7 @@ object StatusInfo {
               ok = bonded.nonEmpty,
               message = Some {
                 if (bonded.isEmpty) "Not bonded in any active era."
-                else s"Bonded in ${bonded.size} active eras."
+                else s"Bonded in ${bonded.size} active era(s)."
               },
               details = ErasDetails(bonded).some
             )
