@@ -95,11 +95,11 @@ class RelayingImpl[F[_]: Concurrent: Parallel: Log: Metrics: NodeAsk](
       response <- service.newBlocks(NewBlocksRequest(sender = local.some, blockHashes = List(hash)))
       counter <- if (response.isNew)
                   Log[F]
-                    .debug(s"${peer.show -> "peer"} accepted ${hex(hash) -> "block"}")
+                    .debug(s"${peer.show -> "peer"} accepted ${hex(hash) -> "message"}")
                     .as("relay_accepted")
                 else
                   Log[F]
-                    .debug(s"${peer.show -> "peer"} rejected ${hex(hash) -> "block"}")
+                    .debug(s"${peer.show -> "peer"} rejected ${hex(hash) -> "message"}")
                     .as("relay_rejected")
       _ <- Metrics[F].incrementCounter(counter)
     } yield response.isNew).handleErrorWith { ex =>

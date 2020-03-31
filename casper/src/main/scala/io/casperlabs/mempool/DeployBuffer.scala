@@ -19,6 +19,7 @@ import io.casperlabs.shared.Log
 import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.storage.dag.{DagRepresentation, DagStorage}
 import simulacrum.typeclass
+import io.casperlabs.shared.ByteStringPrettyPrinter._
 
 @typeclass trait DeployBuffer[F[_]] {
 

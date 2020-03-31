@@ -152,6 +152,7 @@ object MessageProducer {
                            props.protocolVersion,
                            props.mainRank,
                            props.configuration.deployConfig.maxBlockSizeBytes,
+                           props.configuration.deployConfig.maxBlockCost,
                            upgrades
                          )
 

@@ -24,6 +24,7 @@ import io.casperlabs.shared.SemaphoreMap
 
 import scala.util.Random
 import scala.util.control.NoStackTrace
+import io.casperlabs.shared.ByteStringPrettyPrinter._
 
 /** Class to encapsulate the message handling logic of messages in an era.
   *
