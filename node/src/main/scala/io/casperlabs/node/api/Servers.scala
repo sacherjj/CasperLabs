@@ -122,6 +122,7 @@ object Servers {
       conf: Configuration,
       genesis: Block,
       maybeValidatorId: Option[ValidatorIdentity],
+      readXa: doobie.util.transactor.Transactor[F],
       id: NodeIdentifier,
       ec: ExecutionContext
   ): Resource[F, Unit] = {
@@ -143,7 +144,7 @@ object Servers {
               Router(
                 "/metrics" -> prometheusService,
                 "/version" -> VersionInfo.service,
-                "/status"  -> StatusInfo.service(conf, genesis, maybeValidatorId),
+                "/status"  -> StatusInfo.service(conf, genesis, maybeValidatorId, readXa),
                 "/graphql" -> GraphQL.service[F](ec)
               ).orNotFound
             )

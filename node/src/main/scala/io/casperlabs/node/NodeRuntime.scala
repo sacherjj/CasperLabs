@@ -340,6 +340,7 @@ class NodeRuntime private[node] (
             conf,
             genesis,
             maybeValidatorId,
+            readTransactor,
             id,
             ingressScheduler
           )

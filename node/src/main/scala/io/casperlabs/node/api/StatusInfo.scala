@@ -3,6 +3,7 @@ package io.casperlabs.node.api
 import cats.effect.Sync
 import cats.implicits._
 import com.google.protobuf.ByteString
+import doobie.util.transactor.Transactor
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.casper.consensus.Block
 import io.casperlabs.comm.discovery.NodeDiscovery
@@ -33,6 +34,14 @@ object StatusInfo {
         timestamp: Option[Long],
         jRank: Option[Long]
     ) extends Check
+
+    def database[F[_]: Sync](readXa: Transactor[F]) = {
+      import doobie._
+      import doobie.implicits._
+      sql"""select 1""".query[Int].unique.transact(readXa).map { _ =>
+        Checked(ok = true)
+      }
+    }
 
     def peers[F[_]: Sync: NodeDiscovery](conf: Configuration) =
       NodeDiscovery[F].recentlyAlivePeersAscendingDistance.map { nodes =>
@@ -96,6 +105,7 @@ object StatusInfo {
   }
 
   case class CheckList(
+      database: Check.Checked,
       peers: Check.Checked,
       bootstrap: Check.Checked,
       lastReceivedBlock: Check.LastBlock,
@@ -104,21 +114,24 @@ object StatusInfo {
     // I thought about putting everything in a `List[_ <: Check]` and having a custom Json Encoder to
     // show them as an object, or producing a Json object first and parsing the flags, or using Shapeless.
     // This pedestrian version is the most straight forward, but in the future I'd go with Shapeless.
-    def ok = List(peers, bootstrap, lastReceivedBlock, lastCreatedBlock).forall(_.ok)
+    def ok = List(database, peers, bootstrap, lastReceivedBlock, lastCreatedBlock).forall(_.ok)
   }
 
   def status[F[_]: Sync: NodeDiscovery: DagStorage](
       conf: Configuration,
       genesis: Block,
-      maybeValidatorId: Option[ByteString]
+      maybeValidatorId: Option[ByteString],
+      readXa: Transactor[F]
   ): F[Status] =
     for {
       version           <- Sync[F].delay(VersionInfo.get)
+      database          <- Check.database[F](readXa)
       peers             <- Check.peers[F](conf)
       bootstrap         <- Check.bootstrap[F](conf, genesis)
       lastReceivedBlock <- Check.lastReceivedBlock[F](conf, maybeValidatorId)
       lastCreatedBlock  <- Check.lastCreatedBlock[F](maybeValidatorId)
       checklist = CheckList(
+        database = database,
         peers = peers,
         bootstrap = bootstrap,
         lastReceivedBlock = lastReceivedBlock,
@@ -129,7 +142,8 @@ object StatusInfo {
   def service[F[_]: Sync: NodeDiscovery: DagStorage](
       conf: Configuration,
       genesis: Block,
-      maybeValidatorId: Option[ValidatorIdentity]
+      maybeValidatorId: Option[ValidatorIdentity],
+      readXa: Transactor[F]
   ): HttpRoutes[F] = {
     import io.circe.generic.auto._
     import io.circe.syntax._
@@ -138,12 +152,14 @@ object StatusInfo {
     val dsl = org.http4s.dsl.Http4sDsl[F]
     import dsl._
 
+    val maybeValidatorKey = maybeValidatorId.map(id => ByteString.copyFrom(id.publicKey))
+
     HttpRoutes.of[F] {
       // Could return a different HTTP status code, but it really depends on what we want from this.
       // An 50x would mean the service is kaput, which may be too harsh.
       case GET -> Root =>
         Ok(
-          status(conf, genesis, maybeValidatorId.map(id => ByteString.copyFrom(id.publicKey)))
+          status(conf, genesis, maybeValidatorKey, readXa)
             .map(_.asJson)
         )
     }
