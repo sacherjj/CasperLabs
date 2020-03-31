@@ -2,6 +2,7 @@ package io.casperlabs.node.api
 
 import cats.effect.Sync
 import cats.implicits._
+import com.google.protobuf.ByteString
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.casper.consensus.Block
 import io.casperlabs.comm.discovery.NodeDiscovery
@@ -29,7 +30,8 @@ object StatusInfo {
         ok: Boolean,
         message: Option[String] = None,
         blockHash: Option[String],
-        timestamp: Option[Long]
+        timestamp: Option[Long],
+        jRank: Option[Long]
     ) extends Check
 
     def peers[F[_]: Sync: NodeDiscovery](conf: Configuration) =
@@ -53,21 +55,42 @@ object StatusInfo {
 
     def lastReceivedBlock[F[_]: Sync: DagStorage](
         conf: Configuration,
-        maybeValidatorId: Option[ValidatorIdentity]
+        maybeValidatorId: Option[ByteString]
     ): F[LastBlock] =
       for {
         dag      <- DagStorage[F].getRepresentation
         tips     <- dag.latestGlobal
         messages <- tips.latestMessages
-        latests = messages.values.flatten.filter { m =>
-          maybeValidatorId.fold(true)(id => id.publicKey != m.validatorId.toByteArray)
+        received = messages.values.flatten.filter { m =>
+          maybeValidatorId.fold(true)(_ != m.validatorId)
         }
-        latest = if (latests.nonEmpty) latests.maxBy(_.timestamp).some else none
+        latest = if (received.nonEmpty) received.maxBy(_.timestamp).some else none
       } yield LastBlock(
         ok = conf.casper.standalone || latest.nonEmpty,
         message = latest.fold("Haven't received any blocks yet.".some)(_ => none),
         blockHash = latest.map(m => Base16.encode(m.messageHash.toByteArray)),
-        timestamp = latest.map(_.timestamp)
+        timestamp = latest.map(_.timestamp),
+        jRank = latest.map(_.jRank)
+      )
+
+    def lastCreatedBlock[F[_]: Sync: DagStorage](
+        maybeValidatorId: Option[ByteString]
+    ): F[LastBlock] =
+      for {
+        created <- maybeValidatorId.fold(Set.empty[Message].pure[F]) { id =>
+                    for {
+                      dag      <- DagStorage[F].getRepresentation
+                      tips     <- dag.latestGlobal
+                      messages <- tips.latestMessage(id)
+                    } yield messages
+                  }
+        latest = if (created.nonEmpty) created.maxBy(_.timestamp).some else none
+      } yield LastBlock(
+        ok = maybeValidatorId.isEmpty || created.nonEmpty,
+        message = latest.fold("Haven't created any blocks yet.".some)(_ => none),
+        blockHash = latest.map(m => Base16.encode(m.messageHash.toByteArray)),
+        timestamp = latest.map(_.timestamp),
+        jRank = latest.map(_.jRank)
       )
 
   }
@@ -75,28 +98,31 @@ object StatusInfo {
   case class CheckList(
       peers: Check.Checked,
       bootstrap: Check.Checked,
-      lastReceivedBlock: Check.LastBlock
+      lastReceivedBlock: Check.LastBlock,
+      lastCreatedBlock: Check.LastBlock
   ) {
     // I thought about putting everything in a `List[_ <: Check]` and having a custom Json Encoder to
     // show them as an object, or producing a Json object first and parsing the flags, or using Shapeless.
     // This pedestrian version is the most straight forward, but in the future I'd go with Shapeless.
-    def ok = List(peers, bootstrap, lastReceivedBlock).forall(_.ok)
+    def ok = List(peers, bootstrap, lastReceivedBlock, lastCreatedBlock).forall(_.ok)
   }
 
   def status[F[_]: Sync: NodeDiscovery: DagStorage](
       conf: Configuration,
       genesis: Block,
-      maybeValidatorId: Option[ValidatorIdentity]
+      maybeValidatorId: Option[ByteString]
   ): F[Status] =
     for {
       version           <- Sync[F].delay(VersionInfo.get)
       peers             <- Check.peers[F](conf)
       bootstrap         <- Check.bootstrap[F](conf, genesis)
       lastReceivedBlock <- Check.lastReceivedBlock[F](conf, maybeValidatorId)
+      lastCreatedBlock  <- Check.lastCreatedBlock[F](maybeValidatorId)
       checklist = CheckList(
         peers = peers,
         bootstrap = bootstrap,
-        lastReceivedBlock = lastReceivedBlock
+        lastReceivedBlock = lastReceivedBlock,
+        lastCreatedBlock = lastCreatedBlock
       )
     } yield Status(version, checklist.ok, checklist)
 
@@ -115,7 +141,11 @@ object StatusInfo {
     HttpRoutes.of[F] {
       // Could return a different HTTP status code, but it really depends on what we want from this.
       // An 50x would mean the service is kaput, which may be too harsh.
-      case GET -> Root => Ok(status(conf, genesis, maybeValidatorId).map(_.asJson))
+      case GET -> Root =>
+        Ok(
+          status(conf, genesis, maybeValidatorId.map(id => ByteString.copyFrom(id.publicKey)))
+            .map(_.asJson)
+        )
     }
   }
 }
