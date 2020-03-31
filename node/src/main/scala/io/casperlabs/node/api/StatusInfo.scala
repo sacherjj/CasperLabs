@@ -24,10 +24,11 @@ object StatusInfo {
       checklist: CheckList
   )
 
-  trait Check {
-    val ok: Boolean
-    val message: Option[String]
-  }
+  case class Check[T](
+      ok: Boolean,
+      message: Option[String] = None,
+      details: Option[T] = None
+  )
   object Check {
     implicit class BoolStateOps[F[_]: Sync, T](s: StateT[F, Boolean, T]) {
       def withoutAccumulation: StateT[F, Boolean, T] = StateT { acc =>
@@ -37,73 +38,40 @@ object StatusInfo {
       }
     }
 
-    case class Basic(val ok: Boolean, val message: Option[String] = None) extends Check
-    object Basic {
-
-      /** Constructor that will catch errors in the check function as well as
-        * aggregate the overall `ok` field across all the checks.
-        */
-      def apply[F[_]: Sync](f: F[Basic]): StateT[F, Boolean, Basic] = StateT { acc =>
-        f.attempt.map {
-          // All subclasses need error handling. Alternatively we could use `Either` with custom JSON encoding.
-          case Left(ex) => (false, Basic(ok = false, message = ex.getMessage.some))
-          case Right(x) => (acc && x.ok, x)
-        }
+    /** Constructor that will catch errors in the check function as well as
+      * aggregate the overall `ok` field across all the checks.
+      */
+    def apply[F[_]: Sync, T](f: F[Check[T]]): StateT[F, Boolean, Check[T]] = StateT { acc =>
+      f.attempt.map {
+        case Left(ex) => (false, Check[T](ok = false, message = ex.getMessage.some, details = None))
+        case Right(x) => (acc && x.ok, x)
       }
     }
 
-    case class LastBlock(
-        ok: Boolean,
-        message: Option[String] = None,
-        blockHash: Option[String],
-        timestamp: Option[Long],
-        jRank: Option[Long]
-    ) extends Check
-    object LastBlock {
-      def apply[F[_]: Sync](f: F[LastBlock]): StateT[F, Boolean, LastBlock] = StateT { acc =>
-        f.attempt.map {
-          case Left(ex) =>
-            (
-              false,
-              LastBlock(
-                ok = false,
-                message = ex.getMessage.some,
-                blockHash = None,
-                timestamp = None,
-                jRank = None
-              )
-            )
-          case Right(x) => (acc && x.ok, x)
-        }
-      }
-    }
+    case class BlockDetails(
+        blockHash: String,
+        timestamp: Long,
+        jRank: Long
+    )
 
-    case class Eras(val ok: Boolean, val message: Option[String] = None, eras: List[String])
-        extends Check
-    object Eras {
-      def apply[F[_]: Sync](f: F[Eras]): StateT[F, Boolean, Eras] = StateT { acc =>
-        f.attempt.map {
-          case Left(ex) => (false, Eras(ok = false, message = ex.getMessage.some, eras = Nil))
-          case Right(x) => (acc && x.ok, x)
-        }
-      }
-    }
+    case class PeerDetails(
+        count: Int
+    )
 
-    case class Nodes(val ok: Boolean, val message: Option[String] = None, count: Int) extends Check
-    object Nodes {
-      def apply[F[_]: Sync](f: F[Nodes]): StateT[F, Boolean, Nodes] = StateT { acc =>
-        f.attempt.map {
-          case Left(ex) => (false, Nodes(ok = false, message = ex.getMessage.some, count = 0))
-          case Right(x) => (acc && x.ok, x)
-        }
-      }
-    }
+    case class EraDetails(
+        eras: List[String]
+    )
+
+    type Basic     = Check[Unit]
+    type LastBlock = Check[BlockDetails]
+    type Peers     = Check[PeerDetails]
+    type Eras      = Check[EraDetails]
   }
 
   case class CheckList(
       database: Check.Basic,
-      peers: Check.Nodes,
-      bootstrap: Check.Nodes,
+      peers: Check.Peers,
+      bootstrap: Check.Peers,
       initialSynchronization: Check.Basic,
       lastFinalizedBlock: Check.LastBlock,
       lastReceivedBlock: Check.Basic,
@@ -144,32 +112,32 @@ object StatusInfo {
         )
       } yield checklist
 
-    def database[F[_]: Sync](readXa: Transactor[F]) = Basic {
+    def database[F[_]: Sync](readXa: Transactor[F]) = Check {
       import doobie._
       import doobie.implicits._
       sql"""select 1""".query[Int].unique.transact(readXa).map { _ =>
-        Basic(ok = true)
+        Check[Unit](ok = true)
       }
     }
 
-    def peers[F[_]: Sync: NodeDiscovery](conf: Configuration) = Nodes {
+    def peers[F[_]: Sync: NodeDiscovery](conf: Configuration) = Check {
       NodeDiscovery[F].recentlyAlivePeersAscendingDistance.map { nodes =>
-        Nodes(
+        Check(
           ok = conf.casper.standalone || nodes.nonEmpty,
           message = Some {
             val mode = if (conf.casper.standalone) "Running in standalone mode. " else ""
             mode + s"Connected to ${nodes.length} recently alive peers."
           },
-          count = nodes.size
+          details = PeerDetails(count = nodes.size).some
         )
       }
     }
 
-    def bootstrap[F[_]: Sync: NodeDiscovery](conf: Configuration, genesis: Block) = Nodes {
+    def bootstrap[F[_]: Sync: NodeDiscovery](conf: Configuration, genesis: Block) = Check {
       val bootstrapNodes = conf.server.bootstrap.map(_.withChainId(genesis.blockHash))
       NodeDiscovery[F].recentlyAlivePeersAscendingDistance.map(_.toSet).map { nodes =>
         val connected = bootstrapNodes.filter(nodes)
-        Nodes(
+        Check(
           ok = bootstrapNodes.isEmpty || connected.nonEmpty,
           message = Some {
             if (bootstrapNodes.isEmpty)
@@ -177,15 +145,15 @@ object StatusInfo {
             else
               "Not bootstraps configured."
           },
-          count = nodes.size
+          details = PeerDetails(count = nodes.size).some
         )
       }
     }
 
     def initialSynchronization[F[_]: Sync](getIsSynced: F[Boolean]) =
-      Basic {
+      Check {
         getIsSynced.map { synced =>
-          Basic(
+          Check[Unit](
             ok = synced,
             message = Option(
               if (synced) "Initial synchronization complete."
@@ -212,7 +180,7 @@ object StatusInfo {
     def lastFinalizedBlock[F[_]: Sync: Time: FinalityStorage: DagStorage: Consensus](
         genesis: Block
     ) =
-      LastBlock {
+      Check {
         for {
           lfbHash  <- FinalityStorage[F].getLastFinalizedBlock
           dag      <- DagStorage[F].getRepresentation
@@ -224,12 +192,14 @@ object StatusInfo {
           else if (isTooOld) "Last block was finalized a too long ago.".some
           else none
 
-        } yield LastBlock(
+        } yield Check(
           ok = maybeError.isEmpty,
           message = maybeError,
-          blockHash = hex(lfb.messageHash).some,
-          timestamp = lfb.timestamp.some,
-          jRank = lfb.jRank.some
+          details = BlockDetails(
+            blockHash = hex(lfb.messageHash),
+            timestamp = lfb.timestamp,
+            jRank = lfb.jRank
+          ).some
         )
       }
 
@@ -238,7 +208,7 @@ object StatusInfo {
     def lastReceivedBlock[F[_]: Sync: Time: DagStorage: Consensus](
         conf: Configuration,
         maybeValidatorId: Option[ByteString]
-    ) = Basic {
+    ) = Check {
       for {
         dag      <- DagStorage[F].getRepresentation
         tips     <- dag.latestGlobal
@@ -256,7 +226,7 @@ object StatusInfo {
 
         maybeAlone = if (conf.casper.standalone) "Running in standalone mode.".some else none
 
-      } yield Basic(
+      } yield Check[Unit](
         ok = maybeError.isEmpty,
         message = maybeError orElse maybeAlone
       )
@@ -265,7 +235,7 @@ object StatusInfo {
     // Returning basic info so as not to reveal the validator identity through the block ID.
     def lastCreatedBlock[F[_]: Sync: Time: DagStorage: Consensus](
         maybeValidatorId: Option[ByteString]
-    ) = Basic {
+    ) = Check {
       for {
         created <- maybeValidatorId.fold(Set.empty[Message].pure[F]) { id =>
                     for {
@@ -276,7 +246,7 @@ object StatusInfo {
                   }
         latest   = if (created.nonEmpty) created.maxBy(_.timestamp).some else none
         isTooOld <- isTooOld(latest)
-      } yield Basic(
+      } yield Check[Unit](
         ok = maybeValidatorId.isEmpty || created.nonEmpty && !isTooOld,
         message =
           if (maybeValidatorId.isEmpty) "Running in read-only mode.".some
@@ -286,9 +256,9 @@ object StatusInfo {
       )
     }
 
-    def activeEras[F[_]: Sync: Time: Consensus](conf: Configuration) = Eras {
+    def activeEras[F[_]: Sync: Time: Consensus](conf: Configuration) = Check {
       if (!conf.highway.enabled)
-        Eras(ok = true, message = "Not in highway mode.".some, eras = Nil).pure[F]
+        Check(ok = true, message = "Not in highway mode.".some, details = none[EraDetails]).pure[F]
       else
         for {
           active       <- Consensus[F].activeEras
@@ -298,10 +268,10 @@ object StatusInfo {
           else if (curr.size > 1) "There are more than 1 current eras.".some
           else none
         } yield {
-          Eras(
+          Check(
             ok = maybeError.isEmpty,
             message = maybeError,
-            eras = active.map(_.keyBlockHash).toList.map(hex)
+            details = EraDetails(eras = active.map(_.keyBlockHash).toList.map(hex)).some
           )
         }
     }
@@ -309,28 +279,29 @@ object StatusInfo {
     def bondedEras[F[_]: Sync: Consensus](
         conf: Configuration,
         maybeValidatorId: Option[ByteString]
-    ) = Eras {
-      if (!conf.highway.enabled)
-        Eras(ok = true, message = "Not in highway mode.".some, eras = Nil).pure[F]
-      else
-        maybeValidatorId match {
-          case None =>
-            Eras(ok = true, message = "Running in read-only mode".some, eras = Nil).pure[F]
-          case Some(id) =>
-            for {
-              active <- Consensus[F].activeEras
-              bonded = active
-                .filter(era => era.bonds.exists(_.validatorPublicKey == id))
-                .map(_.keyBlockHash)
-            } yield {
-              Eras(
-                ok = bonded.nonEmpty,
-                message = Option("Not bonded in any active era.").filter(_ => bonded.isEmpty),
-                eras = bonded.toList.map(hex)
-              )
-            }
+    ) = Check {
+      maybeValidatorId match {
+        case _ if !conf.highway.enabled =>
+          Check(ok = true, message = "Not in highway mode.".some, details = none[EraDetails])
+            .pure[F]
+        case None =>
+          Check(ok = true, message = "Running in read-only mode".some, details = none[EraDetails])
+            .pure[F]
+        case Some(id) =>
+          for {
+            active <- Consensus[F].activeEras
+            bonded = active
+              .filter(era => era.bonds.exists(_.validatorPublicKey == id))
+              .map(_.keyBlockHash)
+          } yield {
+            Check(
+              ok = bonded.nonEmpty,
+              message = Option("Not bonded in any active era.").filter(_ => bonded.isEmpty),
+              details = EraDetails(eras = bonded.toList.map(hex)).some
+            )
+          }
 
-        }
+      }
     }
 
     private def hex(h: ByteString) = Base16.encode(h.toByteArray)
