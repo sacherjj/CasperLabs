@@ -14,6 +14,7 @@ import io.casperlabs.comm.discovery.NodeDiscovery
 import io.casperlabs.node.casper.consensus.Consensus
 import io.casperlabs.node.configuration.Configuration
 import io.casperlabs.models.Message
+import io.casperlabs.shared.Time
 import io.casperlabs.storage.dag.DagStorage
 
 object StatusInfo {
@@ -103,7 +104,7 @@ object StatusInfo {
   object CheckList {
     import Check._
 
-    def apply[F[_]: Sync: NodeDiscovery: DagStorage: Consensus](
+    def apply[F[_]: Sync: Time: NodeDiscovery: DagStorage: Consensus](
         conf: Configuration,
         genesis: Block,
         maybeValidatorId: Option[ByteString],
@@ -180,7 +181,7 @@ object StatusInfo {
         }
       }.withoutAccumulation
 
-    def lastReceivedBlock[F[_]: Sync: DagStorage: Consensus](
+    def lastReceivedBlock[F[_]: Sync: Time: DagStorage: Consensus](
         conf: Configuration,
         maybeValidatorId: Option[ByteString]
     ) = LastBlock {
@@ -193,12 +194,11 @@ object StatusInfo {
         }
         latest = if (received.nonEmpty) received.maxBy(_.timestamp).some else none
         eras   <- Consensus[F].activeEras
-
+        now    <- Time[F].currentMillis
         isTooOld = if (eras.isEmpty) false
         else {
           // Shorter alternative would be the booking duration from the ChainSpec.
           val eraDuration = eras.head.endTick - eras.head.startTick
-          val now         = System.currentTimeMillis
           latest.fold(false)(now - _.timestamp > eraDuration)
         }
 
@@ -292,7 +292,7 @@ object StatusInfo {
     private def hex(h: ByteString) = Base16.encode(h.toByteArray)
   }
 
-  def status[F[_]: Sync: NodeDiscovery: DagStorage: Consensus](
+  def status[F[_]: Sync: Time: NodeDiscovery: DagStorage: Consensus](
       conf: Configuration,
       genesis: Block,
       maybeValidatorId: Option[ByteString],
@@ -305,7 +305,7 @@ object StatusInfo {
                           .run(true)
     } yield Status(version, ok, checklist)
 
-  def service[F[_]: Sync: NodeDiscovery: DagStorage: Consensus](
+  def service[F[_]: Sync: Time: NodeDiscovery: DagStorage: Consensus](
       conf: Configuration,
       genesis: Block,
       maybeValidatorId: Option[ValidatorIdentity],
