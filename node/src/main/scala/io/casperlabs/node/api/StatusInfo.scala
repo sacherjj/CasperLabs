@@ -106,7 +106,7 @@ object StatusInfo {
       bootstrap: Check.Nodes,
       initialSynchronization: Check.Basic,
       lastReceivedBlock: Check.LastBlock,
-      lastCreatedBlock: Check.LastBlock,
+      lastCreatedBlock: Check.Basic,
       activeEras: Check.Eras,
       bondedEras: Check.Eras
   )
@@ -229,9 +229,10 @@ object StatusInfo {
       )
     }
 
-    def lastCreatedBlock[F[_]: Sync: DagStorage](
+    // Returning basic info so as not to reveal the validator identity through the block ID.
+    def lastCreatedBlock[F[_]: Sync: Time: DagStorage: Consensus](
         maybeValidatorId: Option[ByteString]
-    ) = LastBlock {
+    ) = Basic {
       for {
         created <- maybeValidatorId.fold(Set.empty[Message].pure[F]) { id =>
                     for {
@@ -241,15 +242,20 @@ object StatusInfo {
                     } yield messages
                   }
         latest = if (created.nonEmpty) created.maxBy(_.timestamp).some else none
-      } yield LastBlock(
-        ok = maybeValidatorId.isEmpty || created.nonEmpty,
+        eras   <- Consensus[F].activeEras
+        now    <- Time[F].currentMillis
+        isTooOld = if (eras.isEmpty) false
+        else {
+          val eraDuration = eras.head.endTick - eras.head.startTick
+          latest.fold(false)(now - _.timestamp > eraDuration)
+        }
+      } yield Basic(
+        ok = maybeValidatorId.isEmpty || created.nonEmpty && !isTooOld,
         message =
           if (maybeValidatorId.isEmpty) "Running in read-only mode.".some
           else if (latest.isEmpty) "Haven't created any blocks yet.".some
-          else none,
-        blockHash = latest.map(m => hex(m.messageHash)),
-        timestamp = latest.map(_.timestamp),
-        jRank = latest.map(_.jRank)
+          else if (isTooOld) "The last created block was too long ago.".some
+          else none
       )
     }
 
