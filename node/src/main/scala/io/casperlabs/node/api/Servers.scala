@@ -19,12 +19,14 @@ import io.casperlabs.node.api.casper.CasperGrpcMonix
 import io.casperlabs.node.api.control.ControlGrpcMonix
 import io.casperlabs.node.api.diagnostics.DiagnosticsGrpcMonix
 import io.casperlabs.node.api.graphql.{FinalizedBlocksStream, GraphQL}
+import io.casperlabs.node.casper.consensus.Consensus
 import io.casperlabs.node.configuration.Configuration
 import io.casperlabs.node.diagnostics.{GrpcDiagnosticsService, NewPrometheusReporter}
 import io.casperlabs.shared._
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.block._
 import io.casperlabs.storage.dag.{DagStorage, FinalityStorage}
+import io.casperlabs.storage.era.EraStorage
 import io.casperlabs.storage.deploy.DeployStorage
 import io.netty.handler.ssl.SslContext
 import kamon.Kamon
@@ -117,7 +119,7 @@ object Servers {
       )
   }
 
-  def httpServerR[F[_]: Log: NodeDiscovery: ConnectionsCell: Timer: ConcurrentEffect: MultiParentCasperRef: BlockStorage: ContextShift: FinalizedBlocksStream: ExecutionEngineService: DeployStorage: DagStorage: Fs2Compiler: Metrics](
+  def httpServerR[F[_]: Log: NodeDiscovery: ConnectionsCell: Timer: ConcurrentEffect: MultiParentCasperRef: BlockStorage: ContextShift: FinalizedBlocksStream: ExecutionEngineService: DeployStorage: DagStorage: EraStorage: Fs2Compiler: Metrics: Consensus](
       port: Int,
       conf: Configuration,
       genesis: Block,
