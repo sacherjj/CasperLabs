@@ -17,6 +17,7 @@ import io.casperlabs.models.Message
 import io.casperlabs.shared.{ByteStringPrettyPrinter, Time}
 import io.casperlabs.storage.dag.{DagStorage, FinalityStorage}
 import io.casperlabs.storage.era.EraStorage
+import io.casperlabs.ipc.ChainSpec
 
 object StatusInfo {
   import ByteStringPrettyPrinter.byteStringShow
@@ -115,6 +116,7 @@ object StatusInfo {
 
     def apply[F[_]: Sync: Time: NodeDiscovery: DagStorage: FinalityStorage: EraStorage: Consensus](
         conf: Configuration,
+        chainSpec: ChainSpec,
         genesis: Block,
         maybeValidatorId: Option[ByteString],
         getIsSynced: F[Boolean],
@@ -125,9 +127,9 @@ object StatusInfo {
         peers                  <- peers[F](conf)
         bootstrap              <- bootstrap[F](conf, genesis)
         initialSynchronization <- initialSynchronization[F](getIsSynced)
-        lastFinalizedBlock     <- lastFinalizedBlock[F](genesis)
-        lastReceivedBlock      <- lastReceivedBlock[F](conf, maybeValidatorId)
-        lastCreatedBlock       <- lastCreatedBlock[F](maybeValidatorId)
+        lastFinalizedBlock     <- lastFinalizedBlock[F](chainSpec, genesis)
+        lastReceivedBlock      <- lastReceivedBlock[F](conf, chainSpec, maybeValidatorId)
+        lastCreatedBlock       <- lastCreatedBlock[F](chainSpec, maybeValidatorId)
         activeEras             <- activeEras[F](conf)
         bondedEras             <- bondedEras[F](conf, maybeValidatorId)
         genesisEra             <- genesisEra[F](conf, genesis)
@@ -196,18 +198,17 @@ object StatusInfo {
         }
       }.withoutAccumulation
 
-    private def isTooOld[F[_]: Sync: Time: Consensus](maybeMessage: Option[Message]): F[Boolean] =
+    private def isTooOld[F[_]: Sync: Time](
+        chainSpec: ChainSpec,
+        maybeMessage: Option[Message]
+    ): F[Boolean] =
       maybeMessage.fold(false.pure[F]) { message =>
         for {
-          eras <- Consensus[F].activeEras
-          now  <- Time[F].currentMillis
-          tooOld = if (eras.isEmpty) false
-          else {
-            // A tighter alternative would be the entropy duration from the ChainSpec.
-            val latestEra   = eras.maxBy(_.endTick)
-            val eraDuration = latestEra.endTick - latestEra.startTick
-            now - message.timestamp > eraDuration
-          }
+          now <- Time[F].currentMillis
+          // Using the entropy duration, which is a timespan during which there must be some blocks.
+          entropyDurationMillis = chainSpec.getGenesis.getHighwayConfig.entropyDurationMillis
+          tooOld = if (entropyDurationMillis == 0) false
+          else now - message.timestamp > entropyDurationMillis
         } yield tooOld
       }
 
@@ -215,6 +216,7 @@ object StatusInfo {
       if (messages.isEmpty) none else messages.maxBy(_.timestamp).some
 
     def lastFinalizedBlock[F[_]: Sync: Time: FinalityStorage: DagStorage: Consensus](
+        chainSpec: ChainSpec,
         genesis: Block
     ) =
       Check {
@@ -222,7 +224,7 @@ object StatusInfo {
           lfbHash  <- FinalityStorage[F].getLastFinalizedBlock
           dag      <- DagStorage[F].getRepresentation
           lfb      <- dag.lookupUnsafe(lfbHash)
-          isTooOld <- isTooOld(lfb.some)
+          isTooOld <- isTooOld(chainSpec, lfb.some)
         } yield Check(
           ok = !isTooOld,
           message = Some {
@@ -238,17 +240,18 @@ object StatusInfo {
     // i.e. which validator's block is it that this node _never_ says it received.
     def lastReceivedBlock[F[_]: Sync: Time: DagStorage: Consensus](
         conf: Configuration,
+        chainSpec: ChainSpec,
         maybeValidatorId: Option[ByteString]
     ) = Check {
       for {
         dag      <- DagStorage[F].getRepresentation
         tips     <- dag.latestGlobal
         messages <- tips.latestMessages
-        received = messages.values.flatten.filter { m =>
+        received = messages.values.flatten.toSet.filter { m =>
           maybeValidatorId.fold(true)(_ != m.validatorId)
         }
         latest   = findLatest(received)
-        isTooOld <- isTooOld(latest)
+        isTooOld <- isTooOld(chainSpec, latest)
 
       } yield Check[Unit](
         ok = !isTooOld,
@@ -263,6 +266,7 @@ object StatusInfo {
 
     // Returning basic info so as not to reveal the validator identity through the block ID.
     def lastCreatedBlock[F[_]: Sync: Time: DagStorage: Consensus](
+        chainSpec: ChainSpec,
         maybeValidatorId: Option[ByteString]
     ) = Check {
       for {
@@ -274,7 +278,7 @@ object StatusInfo {
                     } yield messages
                   }
         latest   = findLatest(created)
-        isTooOld <- isTooOld(latest)
+        isTooOld <- isTooOld(chainSpec, latest)
       } yield Check[Unit](
         ok = !isTooOld,
         message = Some {
@@ -356,6 +360,7 @@ object StatusInfo {
 
   class Service[F[_]: Sync: Time: NodeDiscovery: DagStorage: FinalityStorage: EraStorage: Consensus](
       conf: Configuration,
+      chainSpec: ChainSpec,
       genesis: Block,
       maybeValidatorId: Option[ByteString],
       getIsSynced: F[Boolean],
@@ -364,8 +369,14 @@ object StatusInfo {
     def getStatus: F[Status] =
       for {
         version <- Sync[F].delay(VersionInfo.get)
-        (ok, checklist) <- CheckList[F](conf, genesis, maybeValidatorId, getIsSynced, readXa)
-                            .run(true)
+        (ok, checklist) <- CheckList[F](
+                            conf,
+                            chainSpec,
+                            genesis,
+                            maybeValidatorId,
+                            getIsSynced,
+                            readXa
+                          ).run(true)
       } yield Status(version, ok, checklist)
   }
 

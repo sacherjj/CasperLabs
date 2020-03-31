@@ -318,6 +318,7 @@ class NodeRuntime private[node] (
 
       statusSvc = new api.StatusInfo.Service[Task](
         conf,
+        chainSpec,
         genesis,
         maybeValidatorId.map(id => ByteString.copyFrom(id.publicKey)),
         isSyncedRef.get,
