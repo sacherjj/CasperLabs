@@ -339,6 +339,7 @@ class NodeRuntime private[node] (
             conf.server.httpPort,
             conf,
             genesis,
+            maybeValidatorId,
             id,
             ingressScheduler
           )

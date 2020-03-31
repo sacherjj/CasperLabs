@@ -7,6 +7,7 @@ import cats.implicits._
 import io.casperlabs.casper.MultiParentCasperImpl.Broadcaster
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.consensus.Block
+import io.casperlabs.casper.ValidatorIdentity
 import io.casperlabs.catscontrib.Fs2Compiler
 import io.casperlabs.comm.discovery.{NodeDiscovery, NodeIdentifier}
 import io.casperlabs.comm.grpc.{ErrorInterceptor, GrpcServer, MetricsInterceptor}
@@ -120,6 +121,7 @@ object Servers {
       port: Int,
       conf: Configuration,
       genesis: Block,
+      maybeValidatorId: Option[ValidatorIdentity],
       id: NodeIdentifier,
       ec: ExecutionContext
   ): Resource[F, Unit] = {
@@ -141,7 +143,7 @@ object Servers {
               Router(
                 "/metrics" -> prometheusService,
                 "/version" -> VersionInfo.service,
-                "/status"  -> StatusInfo.service(conf, genesis),
+                "/status"  -> StatusInfo.service(conf, genesis, maybeValidatorId),
                 "/graphql" -> GraphQL.service[F](ec)
               ).orNotFound
             )
