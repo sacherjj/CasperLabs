@@ -2,6 +2,7 @@ package io.casperlabs.node.api
 
 import cats.effect.Sync
 import cats.implicits._
+import cats.data.StateT
 import com.google.protobuf.ByteString
 import doobie.util.transactor.Transactor
 import io.casperlabs.crypto.codec.Base16
@@ -27,6 +28,19 @@ object StatusInfo {
   }
   object Check {
     case class Checked(val ok: Boolean, val message: Option[String] = None) extends Check
+    object Checked {
+
+      /** Constructor that will catch errors in the check function as well as
+        * aggregate the overall `ok` field across all the checks.
+        */
+      def apply[F[_]: Sync](f: F[Checked]): StateT[F, Boolean, Checked] = StateT { acc =>
+        f.attempt.map {
+          case Left(ex) => (false, Checked(ok = false, message = ex.getMessage.some))
+          case Right(x) => (acc && x.ok, x)
+        }
+      }
+    }
+
     case class LastBlock(
         ok: Boolean,
         message: Option[String] = None,
@@ -34,8 +48,59 @@ object StatusInfo {
         timestamp: Option[Long],
         jRank: Option[Long]
     ) extends Check
+    object LastBlock {
+      def apply[F[_]: Sync](f: F[LastBlock]): StateT[F, Boolean, LastBlock] = StateT { acc =>
+        f.attempt.map {
+          case Left(ex) =>
+            (
+              false,
+              // All subclasses need error handling. Alternatively we could use `Either` with custom JSON encoding.
+              LastBlock(
+                ok = false,
+                message = ex.getMessage.some,
+                blockHash = None,
+                timestamp = None,
+                jRank = None
+              )
+            )
+          case Right(x) => (acc && x.ok, x)
+        }
+      }
+    }
+  }
 
-    def database[F[_]: Sync](readXa: Transactor[F]) = {
+  case class CheckList(
+      database: Check.Checked,
+      peers: Check.Checked,
+      bootstrap: Check.Checked,
+      lastReceivedBlock: Check.LastBlock,
+      lastCreatedBlock: Check.LastBlock
+  )
+  object CheckList {
+    import Check._
+
+    def apply[F[_]: Sync: NodeDiscovery: DagStorage](
+        conf: Configuration,
+        genesis: Block,
+        maybeValidatorId: Option[ByteString],
+        readXa: Transactor[F]
+    ): StateT[F, Boolean, CheckList] =
+      for {
+        database          <- database[F](readXa)
+        peers             <- peers[F](conf)
+        bootstrap         <- bootstrap[F](conf, genesis)
+        lastReceivedBlock <- lastReceivedBlock[F](conf, maybeValidatorId)
+        lastCreatedBlock  <- lastCreatedBlock[F](maybeValidatorId)
+        checklist = CheckList(
+          database = database,
+          peers = peers,
+          bootstrap = bootstrap,
+          lastReceivedBlock = lastReceivedBlock,
+          lastCreatedBlock = lastCreatedBlock
+        )
+      } yield checklist
+
+    def database[F[_]: Sync](readXa: Transactor[F]) = Checked {
       import doobie._
       import doobie.implicits._
       sql"""select 1""".query[Int].unique.transact(readXa).map { _ =>
@@ -43,15 +108,16 @@ object StatusInfo {
       }
     }
 
-    def peers[F[_]: Sync: NodeDiscovery](conf: Configuration) =
+    def peers[F[_]: Sync: NodeDiscovery](conf: Configuration) = Checked {
       NodeDiscovery[F].recentlyAlivePeersAscendingDistance.map { nodes =>
         Checked(
           ok = conf.casper.standalone || nodes.nonEmpty,
           message = s"${nodes.length} recently alive peers.".some
         )
       }
+    }
 
-    def bootstrap[F[_]: Sync: NodeDiscovery](conf: Configuration, genesis: Block) = {
+    def bootstrap[F[_]: Sync: NodeDiscovery](conf: Configuration, genesis: Block) = Checked {
       val bootstrapNodes = conf.server.bootstrap.map(_.withChainId(genesis.blockHash))
       NodeDiscovery[F].recentlyAlivePeersAscendingDistance.map(_.toSet).map { nodes =>
         val connected = bootstrapNodes.filter(nodes)
@@ -65,7 +131,7 @@ object StatusInfo {
     def lastReceivedBlock[F[_]: Sync: DagStorage](
         conf: Configuration,
         maybeValidatorId: Option[ByteString]
-    ): F[LastBlock] =
+    ) = LastBlock {
       for {
         dag      <- DagStorage[F].getRepresentation
         tips     <- dag.latestGlobal
@@ -81,10 +147,11 @@ object StatusInfo {
         timestamp = latest.map(_.timestamp),
         jRank = latest.map(_.jRank)
       )
+    }
 
     def lastCreatedBlock[F[_]: Sync: DagStorage](
         maybeValidatorId: Option[ByteString]
-    ): F[LastBlock] =
+    ) = LastBlock {
       for {
         created <- maybeValidatorId.fold(Set.empty[Message].pure[F]) { id =>
                     for {
@@ -101,20 +168,7 @@ object StatusInfo {
         timestamp = latest.map(_.timestamp),
         jRank = latest.map(_.jRank)
       )
-
-  }
-
-  case class CheckList(
-      database: Check.Checked,
-      peers: Check.Checked,
-      bootstrap: Check.Checked,
-      lastReceivedBlock: Check.LastBlock,
-      lastCreatedBlock: Check.LastBlock
-  ) {
-    // I thought about putting everything in a `List[_ <: Check]` and having a custom Json Encoder to
-    // show them as an object, or producing a Json object first and parsing the flags, or using Shapeless.
-    // This pedestrian version is the most straight forward, but in the future I'd go with Shapeless.
-    def ok = List(database, peers, bootstrap, lastReceivedBlock, lastCreatedBlock).forall(_.ok)
+    }
   }
 
   def status[F[_]: Sync: NodeDiscovery: DagStorage](
@@ -124,20 +178,9 @@ object StatusInfo {
       readXa: Transactor[F]
   ): F[Status] =
     for {
-      version           <- Sync[F].delay(VersionInfo.get)
-      database          <- Check.database[F](readXa)
-      peers             <- Check.peers[F](conf)
-      bootstrap         <- Check.bootstrap[F](conf, genesis)
-      lastReceivedBlock <- Check.lastReceivedBlock[F](conf, maybeValidatorId)
-      lastCreatedBlock  <- Check.lastCreatedBlock[F](maybeValidatorId)
-      checklist = CheckList(
-        database = database,
-        peers = peers,
-        bootstrap = bootstrap,
-        lastReceivedBlock = lastReceivedBlock,
-        lastCreatedBlock = lastCreatedBlock
-      )
-    } yield Status(version, checklist.ok, checklist)
+      version         <- Sync[F].delay(VersionInfo.get)
+      (ok, checklist) <- CheckList[F](conf, genesis, maybeValidatorId, readXa).run(true)
+    } yield Status(version, ok, checklist)
 
   def service[F[_]: Sync: NodeDiscovery: DagStorage](
       conf: Configuration,
