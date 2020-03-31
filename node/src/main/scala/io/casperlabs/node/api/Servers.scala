@@ -118,7 +118,7 @@ object Servers {
       )
   }
 
-  def httpServerR[F[_]: Log: NodeDiscovery: ConnectionsCell: Timer: ConcurrentEffect: MultiParentCasperRef: BlockStorage: ContextShift: FinalizedBlocksStream: ExecutionEngineService: DeployStorage: DagStorage: Fs2Compiler: Metrics: Consensus](
+  def httpServerR[F[_]: Log: NodeDiscovery: ConnectionsCell: Timer: ConcurrentEffect: MultiParentCasperRef: BlockStorage: ContextShift: FinalizedBlocksStream: ExecutionEngineService: DeployStorage: DagStorage: FinalityStorage: Fs2Compiler: Metrics: Consensus](
       port: Int,
       conf: Configuration,
       genesis: Block,

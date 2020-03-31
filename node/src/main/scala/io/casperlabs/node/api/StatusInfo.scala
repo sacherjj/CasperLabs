@@ -14,7 +14,7 @@ import io.casperlabs.node.casper.consensus.Consensus
 import io.casperlabs.node.configuration.Configuration
 import io.casperlabs.models.Message
 import io.casperlabs.shared.Time
-import io.casperlabs.storage.dag.DagStorage
+import io.casperlabs.storage.dag.{DagStorage, FinalityStorage}
 
 object StatusInfo {
 
@@ -105,6 +105,7 @@ object StatusInfo {
       peers: Check.Nodes,
       bootstrap: Check.Nodes,
       initialSynchronization: Check.Basic,
+      lastFinalizedBlock: Check.LastBlock,
       lastReceivedBlock: Check.LastBlock,
       lastCreatedBlock: Check.Basic,
       activeEras: Check.Eras,
@@ -113,7 +114,7 @@ object StatusInfo {
   object CheckList {
     import Check._
 
-    def apply[F[_]: Sync: Time: NodeDiscovery: DagStorage: Consensus](
+    def apply[F[_]: Sync: Time: NodeDiscovery: DagStorage: FinalityStorage: Consensus](
         conf: Configuration,
         genesis: Block,
         maybeValidatorId: Option[ByteString],
@@ -125,6 +126,7 @@ object StatusInfo {
         peers                  <- peers[F](conf)
         bootstrap              <- bootstrap[F](conf, genesis)
         initialSynchronization <- initialSynchronization[F](getIsSynced)
+        lastFinalizedBlock     <- lastFinalizedBlock[F](genesis)
         lastReceivedBlock      <- lastReceivedBlock[F](conf, maybeValidatorId)
         lastCreatedBlock       <- lastCreatedBlock[F](maybeValidatorId)
         activeEras             <- activeEras[F](conf)
@@ -134,6 +136,7 @@ object StatusInfo {
           peers = peers,
           bootstrap = bootstrap,
           initialSynchronization = initialSynchronization,
+          lastFinalizedBlock = lastFinalizedBlock,
           lastReceivedBlock = lastReceivedBlock,
           lastCreatedBlock = lastCreatedBlock,
           activeEras = activeEras,
@@ -192,6 +195,44 @@ object StatusInfo {
         }
       }.withoutAccumulation
 
+    private def isTooOld[F[_]: Sync: Time: Consensus](maybeMessage: Option[Message]): F[Boolean] =
+      maybeMessage.fold(false.pure[F]) { message =>
+        for {
+          eras <- Consensus[F].activeEras
+          now  <- Time[F].currentMillis
+          tooOld = if (eras.isEmpty) false
+          else {
+            // Shorter alternative would be the booking duration from the ChainSpec.
+            val eraDuration = eras.head.endTick - eras.head.startTick
+            now - message.timestamp > eraDuration
+          }
+        } yield tooOld
+      }
+
+    def lastFinalizedBlock[F[_]: Sync: Time: FinalityStorage: DagStorage: Consensus](
+        genesis: Block
+    ) =
+      LastBlock {
+        for {
+          lfbHash  <- FinalityStorage[F].getLastFinalizedBlock
+          dag      <- DagStorage[F].getRepresentation
+          lfb      <- dag.lookupUnsafe(lfbHash)
+          isTooOld <- isTooOld(lfb.some)
+
+          maybeError = if (lfbHash == genesis.blockHash)
+            "The last finalized block is the Genesis.".some
+          else if (isTooOld) "Last block was finalized a too long ago.".some
+          else none
+
+        } yield LastBlock(
+          ok = maybeError.isEmpty,
+          message = maybeError,
+          blockHash = hex(lfb.messageHash).some,
+          timestamp = lfb.timestamp.some,
+          jRank = lfb.jRank.some
+        )
+      }
+
     def lastReceivedBlock[F[_]: Sync: Time: DagStorage: Consensus](
         conf: Configuration,
         maybeValidatorId: Option[ByteString]
@@ -203,15 +244,8 @@ object StatusInfo {
         received = messages.values.flatten.filter { m =>
           maybeValidatorId.fold(true)(_ != m.validatorId)
         }
-        latest = if (received.nonEmpty) received.maxBy(_.timestamp).some else none
-        eras   <- Consensus[F].activeEras
-        now    <- Time[F].currentMillis
-        isTooOld = if (eras.isEmpty) false
-        else {
-          // Shorter alternative would be the booking duration from the ChainSpec.
-          val eraDuration = eras.head.endTick - eras.head.startTick
-          latest.fold(false)(now - _.timestamp > eraDuration)
-        }
+        latest   = if (received.nonEmpty) received.maxBy(_.timestamp).some else none
+        isTooOld <- isTooOld(latest)
 
         maybeError = if (conf.casper.standalone) none[String]
         else if (isTooOld) "Last block was received too long ago.".some
@@ -241,14 +275,8 @@ object StatusInfo {
                       messages <- tips.latestMessage(id)
                     } yield messages
                   }
-        latest = if (created.nonEmpty) created.maxBy(_.timestamp).some else none
-        eras   <- Consensus[F].activeEras
-        now    <- Time[F].currentMillis
-        isTooOld = if (eras.isEmpty) false
-        else {
-          val eraDuration = eras.head.endTick - eras.head.startTick
-          latest.fold(false)(now - _.timestamp > eraDuration)
-        }
+        latest   = if (created.nonEmpty) created.maxBy(_.timestamp).some else none
+        isTooOld <- isTooOld(latest)
       } yield Basic(
         ok = maybeValidatorId.isEmpty || created.nonEmpty && !isTooOld,
         message =
@@ -309,7 +337,7 @@ object StatusInfo {
     private def hex(h: ByteString) = Base16.encode(h.toByteArray)
   }
 
-  def status[F[_]: Sync: Time: NodeDiscovery: DagStorage: Consensus](
+  def status[F[_]: Sync: Time: NodeDiscovery: DagStorage: FinalityStorage: Consensus](
       conf: Configuration,
       genesis: Block,
       maybeValidatorId: Option[ByteString],
@@ -322,7 +350,7 @@ object StatusInfo {
                           .run(true)
     } yield Status(version, ok, checklist)
 
-  def service[F[_]: Sync: Time: NodeDiscovery: DagStorage: Consensus](
+  def service[F[_]: Sync: Time: NodeDiscovery: DagStorage: FinalityStorage: Consensus](
       conf: Configuration,
       genesis: Block,
       maybeValidatorId: Option[ValidatorIdentity],
