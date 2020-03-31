@@ -106,7 +106,7 @@ object StatusInfo {
       bootstrap: Check.Nodes,
       initialSynchronization: Check.Basic,
       lastFinalizedBlock: Check.LastBlock,
-      lastReceivedBlock: Check.LastBlock,
+      lastReceivedBlock: Check.Basic,
       lastCreatedBlock: Check.Basic,
       activeEras: Check.Eras,
       bondedEras: Check.Eras
@@ -233,10 +233,12 @@ object StatusInfo {
         )
       }
 
+    // Only returning basic info so as not to reveal the validator identity by process of elimination,
+    // i.e. which validator's block is it that this node _never_ says it received.
     def lastReceivedBlock[F[_]: Sync: Time: DagStorage: Consensus](
         conf: Configuration,
         maybeValidatorId: Option[ByteString]
-    ) = LastBlock {
+    ) = Basic {
       for {
         dag      <- DagStorage[F].getRepresentation
         tips     <- dag.latestGlobal
@@ -254,12 +256,9 @@ object StatusInfo {
 
         maybeAlone = if (conf.casper.standalone) "Running in standalone mode.".some else none
 
-      } yield LastBlock(
+      } yield Basic(
         ok = maybeError.isEmpty,
-        message = maybeError orElse maybeAlone,
-        blockHash = latest.map(m => Base16.encode(m.messageHash.toByteArray)),
-        timestamp = latest.map(_.timestamp),
-        jRank = latest.map(_.jRank)
+        message = maybeError orElse maybeAlone
       )
     }
 
