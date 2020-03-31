@@ -5,6 +5,7 @@ import cats.implicits._
 import cats.data.StateT
 import com.google.protobuf.ByteString
 import org.http4s.HttpRoutes
+import java.time.Instant
 import doobie.util.transactor.Transactor
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.casper.consensus.{Block, Era}
@@ -52,14 +53,14 @@ object StatusInfo {
 
     case class BlockDetails(
         blockHash: String,
-        timestamp: Long,
+        timestamp: String,
         jRank: Long
     )
     object BlockDetails {
       def apply(message: Message): BlockDetails =
         BlockDetails(
           blockHash = message.messageHash.show,
-          timestamp = message.timestamp,
+          timestamp = Instant.ofEpochMilli(message.timestamp).toString,
           jRank = message.jRank
         )
     }
@@ -70,8 +71,8 @@ object StatusInfo {
 
     case class EraDetails(
         keyBlockHash: String,
-        startTimestamp: Long,
-        endTimestamp: Long
+        startTimestamp: String,
+        endTimestamp: String
     )
 
     case class ErasDetails(
@@ -84,8 +85,8 @@ object StatusInfo {
             era =>
               EraDetails(
                 keyBlockHash = era.keyBlockHash.show,
-                startTimestamp = era.startTick,
-                endTimestamp = era.endTick
+                startTimestamp = Instant.ofEpochMilli(era.startTick).toString,
+                endTimestamp = Instant.ofEpochMilli(era.endTick).toString
               )
           )
         )
@@ -172,12 +173,12 @@ object StatusInfo {
         Check(
           ok = bootstrapNodes.isEmpty || connected.nonEmpty,
           message = Some {
-            if (bootstrapNodes.isEmpty)
+            if (bootstrapNodes.nonEmpty)
               s"Connected to ${connected.size} of the bootstrap nodes out of the ${bootstrapNodes.size} configured."
             else
               "No bootstraps configured."
           },
-          details = PeerDetails(count = nodes.size).some
+          details = PeerDetails(count = connected.size).some
         )
       }
     }
@@ -218,15 +219,13 @@ object StatusInfo {
           dag      <- DagStorage[F].getRepresentation
           lfb      <- dag.lookupUnsafe(lfbHash)
           isTooOld <- isTooOld(lfb.some)
-
-          maybeError = if (lfbHash == genesis.blockHash)
-            "The last finalized block is the Genesis.".some
-          else if (isTooOld) "Last block was finalized a too long ago.".some
-          else none
-
         } yield Check(
-          ok = maybeError.isEmpty,
-          message = maybeError,
+          ok = !isTooOld,
+          message = Some {
+            if (isTooOld) "Last block was finalized too long ago."
+            else if (lfbHash == genesis.blockHash) "The last finalized block is the Genesis."
+            else "The last finalized block was moved not too long ago."
+          },
           details = BlockDetails(lfb).some
         )
       }
@@ -247,16 +246,14 @@ object StatusInfo {
         latest   = if (received.nonEmpty) received.maxBy(_.timestamp).some else none
         isTooOld <- isTooOld(latest)
 
-        maybeError = if (conf.casper.standalone) none[String]
-        else if (isTooOld) "Last block was received too long ago.".some
-        else if (latest.isEmpty) "Haven't received any blocks yet".some
-        else none
-
-        maybeAlone = if (conf.casper.standalone) "Running in standalone mode.".some else none
-
       } yield Check[Unit](
-        ok = maybeError.isEmpty,
-        message = maybeError orElse maybeAlone
+        ok = !isTooOld,
+        message = Some {
+          if (isTooOld) "Last block was received too long ago."
+          else if (latest.nonEmpty) "Received a block not too long ago."
+          else if (conf.casper.standalone) "Running in standalone mode."
+          else "Haven't received a block yet."
+        }
       )
     }
 
@@ -275,12 +272,13 @@ object StatusInfo {
         latest   = if (created.nonEmpty) created.maxBy(_.timestamp).some else none
         isTooOld <- isTooOld(latest)
       } yield Check[Unit](
-        ok = maybeValidatorId.isEmpty || created.nonEmpty && !isTooOld,
-        message =
-          if (maybeValidatorId.isEmpty) "Running in read-only mode.".some
-          else if (latest.isEmpty) "Haven't created any blocks yet.".some
-          else if (isTooOld) "The last created block was too long ago.".some
-          else none
+        ok = !isTooOld,
+        message = Some {
+          if (isTooOld) "The last created block was too long ago."
+          else if (maybeValidatorId.isEmpty) "Running in read-only mode."
+          else if (latest.isEmpty) "Haven't created any blocks yet."
+          else "Created a block not too long ago."
+        }
       )
     }
 
