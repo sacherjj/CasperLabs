@@ -1,6 +1,7 @@
 package io.casperlabs.node.api
 
 import cats.effect.Sync
+import cats.effect.concurrent.Ref
 import cats.implicits._
 import cats.data.StateT
 import com.google.protobuf.ByteString
@@ -29,6 +30,14 @@ object StatusInfo {
     val message: Option[String]
   }
   object Check {
+    implicit class BoolStateOps[F[_]: Sync, T](s: StateT[F, Boolean, T]) {
+      def withoutAccumulation: StateT[F, Boolean, T] = StateT { acc =>
+        s.run(acc).map {
+          case (_, x) => (acc, x)
+        }
+      }
+    }
+
     case class Basic(val ok: Boolean, val message: Option[String] = None) extends Check
     object Basic {
 
@@ -86,6 +95,7 @@ object StatusInfo {
       database: Check.Basic,
       peers: Check.Basic,
       bootstrap: Check.Basic,
+      initialSynchronization: Check.Basic,
       lastReceivedBlock: Check.LastBlock,
       lastCreatedBlock: Check.LastBlock,
       activeEras: Check.Eras,
@@ -98,20 +108,23 @@ object StatusInfo {
         conf: Configuration,
         genesis: Block,
         maybeValidatorId: Option[ByteString],
+        isSyncedRef: Ref[F, Boolean],
         readXa: Transactor[F]
     ): StateT[F, Boolean, CheckList] =
       for {
-        database          <- database[F](readXa)
-        peers             <- peers[F](conf)
-        bootstrap         <- bootstrap[F](conf, genesis)
-        lastReceivedBlock <- lastReceivedBlock[F](conf, maybeValidatorId)
-        lastCreatedBlock  <- lastCreatedBlock[F](maybeValidatorId)
-        activeEras        <- activeEras[F](conf)
-        bondedEras        <- bondedEras[F](conf, maybeValidatorId)
+        database               <- database[F](readXa)
+        peers                  <- peers[F](conf)
+        bootstrap              <- bootstrap[F](conf, genesis)
+        initialSynchronization <- initialSynchronization[F](isSyncedRef)
+        lastReceivedBlock      <- lastReceivedBlock[F](conf, maybeValidatorId)
+        lastCreatedBlock       <- lastCreatedBlock[F](maybeValidatorId)
+        activeEras             <- activeEras[F](conf)
+        bondedEras             <- bondedEras[F](conf, maybeValidatorId)
         checklist = CheckList(
           database = database,
           peers = peers,
           bootstrap = bootstrap,
+          initialSynchronization = initialSynchronization,
           lastReceivedBlock = lastReceivedBlock,
           lastCreatedBlock = lastCreatedBlock,
           activeEras = activeEras,
@@ -146,6 +159,19 @@ object StatusInfo {
         )
       }
     }
+
+    def initialSynchronization[F[_]: Sync: NodeDiscovery](isSyncedRef: Ref[F, Boolean]) =
+      Basic {
+        isSyncedRef.get.map { synced =>
+          Basic(
+            ok = synced,
+            message = Option(
+              if (synced) "Initial synchronization complete."
+              else "Initial synchronization running."
+            )
+          )
+        }
+      }.withoutAccumulation
 
     def lastReceivedBlock[F[_]: Sync: DagStorage](
         conf: Configuration,
@@ -245,17 +271,20 @@ object StatusInfo {
       conf: Configuration,
       genesis: Block,
       maybeValidatorId: Option[ByteString],
+      isSyncedRef: Ref[F, Boolean],
       readXa: Transactor[F]
   ): F[Status] =
     for {
-      version         <- Sync[F].delay(VersionInfo.get)
-      (ok, checklist) <- CheckList[F](conf, genesis, maybeValidatorId, readXa).run(true)
+      version <- Sync[F].delay(VersionInfo.get)
+      (ok, checklist) <- CheckList[F](conf, genesis, maybeValidatorId, isSyncedRef, readXa)
+                          .run(true)
     } yield Status(version, ok, checklist)
 
   def service[F[_]: Sync: NodeDiscovery: DagStorage: EraStorage: Consensus](
       conf: Configuration,
       genesis: Block,
       maybeValidatorId: Option[ValidatorIdentity],
+      isSyncedRef: Ref[F, Boolean],
       readXa: Transactor[F]
   ): HttpRoutes[F] = {
     import io.circe.generic.auto._
@@ -272,7 +301,7 @@ object StatusInfo {
       // An 50x would mean the service is kaput, which may be too harsh.
       case GET -> Root =>
         Ok(
-          status(conf, genesis, maybeValidatorKey, readXa)
+          status(conf, genesis, maybeValidatorKey, isSyncedRef, readXa)
             .map(_.asJson)
         )
     }
