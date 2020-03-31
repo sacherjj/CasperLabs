@@ -24,17 +24,18 @@ use standard_payment::StandardPayment;
 use types::{
     account::{ActionType, PublicKey, Weight},
     bytesrepr::{self, FromBytes, ToBytes},
+    contract_header::{self, ContractHeader, ContractMetadata},
     system_contract_errors,
     system_contract_errors::mint,
-    AccessRights, ApiError, CLType, CLTyped, CLValue, Key, ProtocolVersion, SystemContractType,
-    TransferResult, TransferredTo, URef, U128, U256, U512,
+    AccessRights, ApiError, CLType, CLTyped, CLValue, Key, ProtocolVersion, SemVer,
+    SystemContractType, TransferResult, TransferredTo, URef, U128, U256, U512,
 };
 
 use crate::{
     engine_state::{system_contract_cache::SystemContractCache, EngineConfig},
     execution::{Error, MINT_NAME, POS_NAME},
     resolvers::{create_module_resolver, memory_resolver::MemoryResolver},
-    runtime_context::RuntimeContext,
+    runtime_context::{self, RuntimeContext},
     Address,
 };
 
@@ -146,6 +147,7 @@ fn extract_urefs(cl_value: &CLValue) -> Result<Vec<URef>, Error> {
         | CLType::U512
         | CLType::Unit
         | CLType::String
+        | CLType::Contract // TODO: Double check we don't want to catpure the access key
         | CLType::Any => Ok(vec![]),
         CLType::Option(ty) => match **ty {
             CLType::URef => {
@@ -1407,6 +1409,11 @@ where
         self.memory.get(ptr, size).map_err(Into::into)
     }
 
+    fn t_from_mem<T: FromBytes>(&self, ptr: u32, size: u32) -> Result<T, Error> {
+        let bytes = self.bytes_from_mem(ptr, size as usize)?;
+        bytesrepr::deserialize(bytes).map_err(Into::into)
+    }
+
     /// Reads key (defined as `key_ptr` and `key_size` tuple) from Wasm memory.
     fn key_from_mem(&mut self, key_ptr: u32, key_size: u32) -> Result<Key, Error> {
         let bytes = self.bytes_from_mem(key_ptr, key_size as usize)?;
@@ -1452,6 +1459,27 @@ where
             parity_wasm::serialize(module).map_err(|e| Error::ParityWasm(e).into())
         } else {
             Err(Error::FunctionNotFound(name).into())
+        }
+    }
+
+    fn get_module_by_header(&mut self, header: &ContractHeader) -> Result<Vec<u8>, Error> {
+        let export_section = self
+            .module
+            .export_section()
+            .ok_or_else(|| Error::FunctionNotFound(String::from("Missing Export Section")))?;
+
+        let maybe_missing_name: Option<String> = export_section
+            .entries()
+            .iter()
+            .map(|export_entry| String::from(export_entry.field()))
+            .find(|name| !header.has_method_name(name.as_str()));
+
+        if let Some(missing_name) = maybe_missing_name {
+            Err(Error::FunctionNotFound(missing_name).into())
+        } else {
+            let mut module = self.module.clone();
+            pwasm_utils::optimize(&mut module, header.method_names()).unwrap();
+            parity_wasm::serialize(module).map_err(|e| Error::ParityWasm(e).into())
         }
     }
 
@@ -2153,6 +2181,106 @@ where
             .context
             .store_function_at_hash(StoredValue::Contract(contract))?;
         Ok(new_hash)
+    }
+
+    fn create_contract_value(&mut self) -> Result<CLValue, Error> {
+        let cl_unit = CLValue::from_components(CLType::Unit, Vec::new());
+        let access_key = self
+            .context
+            .new_uref(StoredValue::CLValue(cl_unit))?
+            .into_uref()
+            .expect("new_uref must always produce a Key::URef");
+        let contract = ContractMetadata::new(access_key);
+
+        CLValue::from_t(contract).map_err(|err| Error::CLValue(err))
+    }
+
+    fn create_contract(&mut self) -> Result<[u8; 32], Error> {
+        let cl_value = self.create_contract_value()?;
+        let key = self.context.new_uref(StoredValue::CLValue(cl_value))?;
+
+        let addr = key
+            .into_uref()
+            .map(|u| u.addr())
+            .expect("new_uref must always produce a Key::URef");
+        Ok(addr)
+    }
+
+    fn create_contract_at_hash(&mut self) -> Result<[u8; 32], Error> {
+        let addr = self.context.new_function_address()?;
+        let key = Key::Hash(addr);
+        let cl_value = self.create_contract_value()?;
+
+        self.context.write_gs(key, StoredValue::CLValue(cl_value))?;
+        Ok(addr)
+    }
+
+    fn add_contract_version(
+        &mut self,
+        metadata_key: Key,
+        access_key: URef,
+        version: SemVer,
+        header: ContractHeader,
+        named_keys: BTreeMap<String, Key>,
+    ) -> Result<Option<contract_header::Error>, Error> {
+        self.context.validate_key(&metadata_key)?;
+        self.context.validate_uref(&access_key)?;
+
+        let cl_value = self.context.read_gs_typed(&metadata_key)?;
+        let mut metadata: ContractMetadata =
+            CLValue::into_t(cl_value).map_err(|err| Error::CLValue(err))?;
+
+        if metadata.access_key() != access_key {
+            return Ok(Some(contract_header::Error::InvalidAccessKey));
+        }
+
+        if let Err(err) = metadata.with_version(version, header.clone()) {
+            return Ok(Some(err));
+        }
+
+        let module_bytes = self.get_module_by_header(&header)?;
+        let contract = Contract::new(module_bytes, named_keys, header.protocol_version());
+        let seed = runtime_context::key_into_seed(metadata_key);
+        let version_bytes = version.to_bytes()?;
+        let contract_key = Key::local(seed, &version_bytes); // TODO: Does this actually work? Using local key as base could be risky.
+
+        self.context
+            .state()
+            .borrow_mut()
+            .write(contract_key, StoredValue::Contract(contract));
+        let cl_value = CLValue::from_t(metadata).map_err(|err| Error::CLValue(err))?;
+        self.context
+            .write_gs(metadata_key, StoredValue::CLValue(cl_value))?;
+
+        Ok(None)
+    }
+
+    fn remove_contract_version(
+        &mut self,
+        metadata_key: Key,
+        access_key: URef,
+        version: SemVer,
+    ) -> Result<Option<contract_header::Error>, Error> {
+        self.context.validate_key(&metadata_key)?;
+        self.context.validate_uref(&access_key)?;
+
+        let cl_value = self.context.read_gs_typed(&metadata_key)?;
+        let mut metadata: ContractMetadata =
+            CLValue::into_t(cl_value).map_err(|err| Error::CLValue(err))?;
+
+        if metadata.access_key() != access_key {
+            return Ok(Some(contract_header::Error::InvalidAccessKey));
+        }
+
+        if let Err(err) = metadata.remove_version(version) {
+            return Ok(Some(err));
+        }
+
+        let cl_value = CLValue::from_t(metadata).map_err(|err| Error::CLValue(err))?;
+        self.context
+            .write_gs(metadata_key, StoredValue::CLValue(cl_value))?;
+
+        Ok(None)
     }
 
     /// Writes function address (`hash_bytes`) into the Wasm memory (at

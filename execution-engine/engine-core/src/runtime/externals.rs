@@ -1,4 +1,4 @@
-use std::convert::TryFrom;
+use std::{collections::BTreeMap, convert::TryFrom};
 
 use wasmi::{Externals, RuntimeArgs, RuntimeValue, Trap};
 
@@ -6,7 +6,8 @@ use types::{
     account::PublicKey,
     api_error,
     bytesrepr::{self, ToBytes},
-    Key, TransferredTo, U512,
+    contract_header::ContractHeader,
+    Key, TransferredTo, SEM_VER_SERIALIZED_LENGTH, U512, UREF_SERIALIZED_LENGTH,
 };
 
 use engine_shared::{gas::Gas, stored_value::StoredValue};
@@ -448,6 +449,88 @@ where
                 let ret = self.read_host_buffer(dest_ptr, dest_size as usize, bytes_written_ptr)?;
                 Ok(Some(RuntimeValue::I32(api_error::i32_from(ret))))
             }
+
+            FunctionIndex::CreateContract => {
+                // args(0) = pointer to wasm memory where to write 32-byte URef address
+                let dest_ptr = Args::parse(args)?;
+                let addr = self.create_contract()?;
+                self.function_address(addr, dest_ptr)?;
+                Ok(None)
+            }
+
+            FunctionIndex::CreateContractAtHash => {
+                // args(0) = pointer to wasm memory where to write 32-byte URef address
+                let dest_ptr = Args::parse(args)?;
+                let addr = self.create_contract_at_hash()?;
+                self.function_address(addr, dest_ptr)?;
+                Ok(None)
+            }
+
+            FunctionIndex::AddContractVersion => {
+                // args(0) = pointer to metadata key in wasm memory
+                // args(1) = size of metadata key in wasm memory
+                // args(2) = pointer to access key in wasm memory
+                // args(3) = pointer to contract version in wasm memory
+                // args(4) = pointer to contract header in wasm memory
+                // args(5) = size of contract header in wasm memory
+                // args(6) = pointer to named keys in wasm memory
+                // args(7) = size of named keys in wasm memory
+                let (
+                    meta_key_ptr,
+                    meta_key_size,
+                    access_key_ptr,
+                    version_ptr,
+                    header_ptr,
+                    header_size,
+                    named_keys_ptr,
+                    named_keys_size,
+                ) = Args::parse(args)?;
+
+                let metadata_key = self.key_from_mem(meta_key_ptr, meta_key_size)?;
+                let access_key = {
+                    let bytes = self.bytes_from_mem(access_key_ptr, UREF_SERIALIZED_LENGTH)?;
+                    bytesrepr::deserialize(bytes).map_err(Error::BytesRepr)?
+                };
+                let version = {
+                    let bytes = self.bytes_from_mem(version_ptr, SEM_VER_SERIALIZED_LENGTH)?;
+                    bytesrepr::deserialize(bytes).map_err(Error::BytesRepr)?
+                };
+                let header: ContractHeader = self.t_from_mem(header_ptr, header_size)?;
+                let named_keys: BTreeMap<String, Key> =
+                    self.t_from_mem(named_keys_ptr, named_keys_size)?;
+
+                let result = self
+                    .add_contract_version(metadata_key, access_key, version, header, named_keys)?
+                    .map(|err| err.to_u8())
+                    .unwrap_or(0);
+                Ok(Some(RuntimeValue::I32(result as i32)))
+            }
+
+            FunctionIndex::RemoveContractVersion => {
+                // args(0) = pointer to metadata key in wasm memory
+                // args(1) = size of metadata key in wasm memory
+                // args(2) = pointer to access key in wasm memory
+                // args(3) = pointer to contract version in wasm memory
+                let (meta_key_ptr, meta_key_size, access_key_ptr, version_ptr) = Args::parse(args)?;
+
+                let metadata_key = self.key_from_mem(meta_key_ptr, meta_key_size)?;
+                let access_key = {
+                    let bytes = self.bytes_from_mem(access_key_ptr, UREF_SERIALIZED_LENGTH)?;
+                    bytesrepr::deserialize(bytes).map_err(Error::BytesRepr)?
+                };
+                let version = {
+                    let bytes = self.bytes_from_mem(version_ptr, SEM_VER_SERIALIZED_LENGTH)?;
+                    bytesrepr::deserialize(bytes).map_err(Error::BytesRepr)?
+                };
+
+                let result = self
+                    .remove_contract_version(metadata_key, access_key, version)?
+                    .map(|err| err.to_u8())
+                    .unwrap_or(0);
+                Ok(Some(RuntimeValue::I32(result as i32)))
+            }
+
+            FunctionIndex::CallVersionedContract => Ok(None), // TODO
         }
     }
 }

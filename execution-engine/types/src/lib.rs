@@ -27,8 +27,8 @@ mod block_time;
 pub mod bytesrepr;
 mod cl_type;
 mod cl_value;
+pub mod contract_header;
 mod contract_ref;
-mod contract_header;
 #[cfg(any(feature = "gens", test))]
 pub mod gens;
 mod key;
@@ -56,7 +56,7 @@ pub use key::{
 };
 pub use phase::{Phase, PHASE_SERIALIZED_LENGTH};
 pub use protocol_version::{ProtocolVersion, VersionCheckResult};
-pub use semver::SemVer;
+pub use semver::{SemVer, SEM_VER_SERIALIZED_LENGTH};
 pub use system_contract_type::SystemContractType;
 pub use transfer_result::{TransferResult, TransferredTo};
 pub use uref::{URef, UREF_ADDR_LENGTH, UREF_SERIALIZED_LENGTH};

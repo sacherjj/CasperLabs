@@ -50,6 +50,16 @@ pub(crate) fn attenuate_uref_for_account(account: &Account, uref: URef) -> URef 
     }
 }
 
+/// Creates the seed of a local key for a context with the given base key.
+pub fn key_into_seed(base_key: Key) -> [u8; KEY_LOCAL_SEED_LENGTH] {
+    match base_key {
+        Key::Account(PublicKey::Ed25519(bytes)) => bytes.value(),
+        Key::Hash(bytes) => bytes,
+        Key::URef(uref) => uref.addr(),
+        Key::Local { seed, .. } => seed,
+    }
+}
+
 /// Holds information specific to the deployed contract.
 pub struct RuntimeContext<'a, R> {
     state: Rc<RefCell<TrackingCopy<R>>>,
@@ -256,12 +266,7 @@ where
     }
 
     pub fn seed(&self) -> [u8; KEY_LOCAL_SEED_LENGTH] {
-        match self.base_key {
-            Key::Account(PublicKey::Ed25519(bytes)) => bytes.value(),
-            Key::Hash(bytes) => bytes,
-            Key::URef(uref) => uref.addr(),
-            Key::Local { seed, .. } => seed,
-        }
+        key_into_seed(self.base_key)
     }
 
     pub fn protocol_version(&self) -> ProtocolVersion {
@@ -484,6 +489,7 @@ where
                 | CLType::Map { .. }
                 | CLType::Tuple1(_)
                 | CLType::Tuple3(_)
+                | CLType::Contract
                 | CLType::Any => Ok(()),
                 CLType::Key => {
                     let key: Key = cl_value.to_owned().into_t()?; // TODO: optimize?

@@ -43,6 +43,11 @@ pub enum FunctionIndex {
     GetMainPurseIndex,
     GetArgSizeFuncIndex,
     ReadHostBufferIndex,
+    CreateContract,
+    CreateContractAtHash,
+    AddContractVersion,
+    RemoveContractVersion,
+    CallVersionedContract,
 }
 
 impl Into<usize> for FunctionIndex {

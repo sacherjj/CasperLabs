@@ -67,6 +67,7 @@ impl From<CLType> for state::CLType {
             CLType::Any => {
                 let _pb_any = pb_type.mut_any_type();
             }
+            CLType::Contract => unimplemented!(), // TODO: push out to ipc layer
         };
         pb_type
     }

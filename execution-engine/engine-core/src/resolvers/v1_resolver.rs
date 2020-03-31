@@ -188,6 +188,26 @@ impl ModuleImportResolver for RuntimeModuleImportResolver {
                 Signature::new(&[ValueType::I32; 3][..], Some(ValueType::I32)),
                 FunctionIndex::ReadHostBufferIndex.into(),
             ),
+            "create_contract" => FuncInstance::alloc_host(
+                Signature::new(&[ValueType::I32; 1][..], None),
+                FunctionIndex::CreateContract.into(),
+            ),
+            "create_contract_at_hash" => FuncInstance::alloc_host(
+                Signature::new(&[ValueType::I32; 1][..], None),
+                FunctionIndex::CreateContractAtHash.into(),
+            ),
+            "add_contract_version" => FuncInstance::alloc_host(
+                Signature::new(&[ValueType::I32; 7][..], Some(ValueType::I32)),
+                FunctionIndex::AddContractVersion.into(),
+            ),
+            "remove_contract_version" => FuncInstance::alloc_host(
+                Signature::new(&[ValueType::I32; 1][..], None), // TODO: signature
+                FunctionIndex::RemoveContractVersion.into(),
+            ),
+            "call_versioned_contract" => FuncInstance::alloc_host(
+                Signature::new(&[ValueType::I32; 1][..], None), // TODO: signature
+                FunctionIndex::CallVersionedContract.into(),
+            ),
             _ => {
                 return Err(InterpreterError::Function(format!(
                     "host module doesn't export function with name {}",

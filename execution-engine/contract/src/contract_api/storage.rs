@@ -6,7 +6,9 @@ use core::{convert::From, mem::MaybeUninit};
 use casperlabs_types::{
     api_error,
     bytesrepr::{self, FromBytes, ToBytes},
-    AccessRights, ApiError, CLTyped, CLValue, ContractRef, Key, URef, KEY_UREF_SERIALIZED_LENGTH,
+    contract_header::{self, ContractHeader},
+    AccessRights, ApiError, CLTyped, CLValue, ContractRef, Key, SemVer, URef,
+    KEY_UREF_SERIALIZED_LENGTH,
 };
 
 use crate::{
@@ -111,6 +113,85 @@ pub fn add_local<K: ToBytes, V: CLTyped + ToBytes>(key: K, value: V) {
 
     unsafe {
         ext_ffi::add_local(key_ptr, key_size, cl_value_ptr, cl_value_size);
+    }
+}
+
+/// Create a new (versioned) contract stored under a Key::URef. Initially there
+/// are no versions; a version must be added via `add_contract_version` before
+/// the contract can be executed.
+pub fn create_contract() -> ContractRef {
+    let mut addr = [0u8; 32];
+    unsafe {
+        ext_ffi::create_contract(addr.as_mut_ptr());
+    }
+    ContractRef::URef(URef::new(addr, AccessRights::READ_ADD_WRITE))
+}
+
+/// Create a new (versioned) contract stored under a Key::Hash. Initially there
+/// are no versions; a version must be added via `add_contract_version` before
+/// the contract can be executed.
+pub fn create_contract_at_hash() -> ContractRef {
+    let mut addr = [0u8; 32];
+    unsafe {
+        ext_ffi::create_contract_at_hash(addr.as_mut_ptr());
+    }
+    ContractRef::Hash(addr)
+}
+
+/// Add a new version of a contract to the contract stored at the given
+/// `ContractRef`. Note that this contract must have been created by
+/// `create_contract` or `create_contract_at_hash` first.
+pub fn add_contract_version(
+    contract: ContractRef,
+    access_key: URef,
+    version: SemVer,
+    header: ContractHeader,
+    named_keys: BTreeMap<String, Key>,
+) -> Result<(), contract_header::Error> {
+    let (meta_ptr, meta_size, _bytes1) = contract_api::to_ptr(Key::from(contract));
+    let (access_ptr, _access_size, _bytes2) = contract_api::to_ptr(access_key);
+    let (version_ptr, _version_size, _bytes3) = contract_api::to_ptr(version);
+    let (header_ptr, header_size, _bytes4) = contract_api::to_ptr(header);
+    let (keys_ptr, keys_size, _bytes5) = contract_api::to_ptr(named_keys);
+
+    let result = unsafe {
+        ext_ffi::add_contract_version(
+            meta_ptr,
+            meta_size,
+            access_ptr,
+            version_ptr,
+            header_ptr,
+            header_size,
+            keys_ptr,
+            keys_size,
+        )
+    };
+
+    match contract_header::Error::from_i32(result) {
+        None => Ok(()),
+        Some(err) => Err(err),
+    }
+}
+
+/// Remove a version of a contract to the contract stored at the given
+/// `ContractRef`. That version of the contract will no longer be callable by
+/// `call_versioned_contract`. Note that this contract must have been created by
+/// `create_contract` or `create_contract_at_hash` first.
+pub fn remove_contract_version(
+    contract: ContractRef,
+    access_key: URef,
+    version: SemVer,
+) -> Result<(), contract_header::Error> {
+    let (meta_ptr, meta_size, _bytes1) = contract_api::to_ptr(Key::from(contract));
+    let (access_ptr, _access_size, _bytes2) = contract_api::to_ptr(access_key);
+    let (version_ptr, _version_size, _bytes3) = contract_api::to_ptr(version);
+
+    let result =
+        unsafe { ext_ffi::remove_contract_version(meta_ptr, meta_size, access_ptr, version_ptr) };
+
+    match contract_header::Error::from_i32(result) {
+        None => Ok(()),
+        Some(err) => Err(err),
     }
 }
 
