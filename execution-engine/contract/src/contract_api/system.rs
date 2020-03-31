@@ -67,12 +67,12 @@ pub fn get_standard_payment() -> ContractRef {
 
 /// Creates a new empty purse and returns its [`URef`].
 pub fn create_purse() -> URef {
-    let purse = contract_api::alloc_bytes(UREF_SERIALIZED_LENGTH);
+    let purse_non_null_ptr = contract_api::alloc_bytes(UREF_SERIALIZED_LENGTH);
     unsafe {
-        let ret = ext_ffi::create_purse(purse.as_ptr(), UREF_SERIALIZED_LENGTH);
+        let ret = ext_ffi::create_purse(purse_non_null_ptr.as_ptr(), UREF_SERIALIZED_LENGTH);
         if ret == 0 {
             let bytes = Vec::from_raw_parts(
-                purse.as_ptr(),
+                purse_non_null_ptr.as_ptr(),
                 UREF_SERIALIZED_LENGTH,
                 UREF_SERIALIZED_LENGTH,
             );
