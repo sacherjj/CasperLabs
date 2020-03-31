@@ -172,7 +172,7 @@ object StatusInfo {
         }
       }.withoutAccumulation
 
-    def lastReceivedBlock[F[_]: Sync: DagStorage](
+    def lastReceivedBlock[F[_]: Sync: DagStorage: Consensus](
         conf: Configuration,
         maybeValidatorId: Option[ByteString]
     ) = LastBlock {
@@ -184,10 +184,21 @@ object StatusInfo {
           maybeValidatorId.fold(true)(_ != m.validatorId)
         }
         latest = if (received.nonEmpty) received.maxBy(_.timestamp).some else none
+        eras   <- Consensus[F].activeEras
+        isTooOld = if (eras.isEmpty) false
+        else {
+          // Shorter alternative would be the booking duration from the ChainSpec.
+          val eraDuration = eras.head.endTick - eras.head.startTick
+          val now         = System.currentTimeMillis
+          latest.fold(false)(now - _.timestamp > eraDuration)
+        }
+        maybeError = if (conf.casper.standalone) none[String]
+        else if (isTooOld) "Last block was received too long ago.".some
+        else if (latest.isEmpty) "Haven't received any blocks yet".some
+        else none
       } yield LastBlock(
-        ok = conf.casper.standalone || latest.nonEmpty,
-        // TODO: Check how old it is.
-        message = latest.fold("Haven't received any blocks yet.".some)(_ => none),
+        ok = maybeError.isEmpty,
+        message = maybeError,
         blockHash = latest.map(m => Base16.encode(m.messageHash.toByteArray)),
         timestamp = latest.map(_.timestamp),
         jRank = latest.map(_.jRank)
