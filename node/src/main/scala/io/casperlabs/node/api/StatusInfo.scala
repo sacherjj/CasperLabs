@@ -88,7 +88,8 @@ object StatusInfo {
       bootstrap: Check.Basic,
       lastReceivedBlock: Check.LastBlock,
       lastCreatedBlock: Check.LastBlock,
-      activeEras: Check.Eras
+      activeEras: Check.Eras,
+      bondedEras: Check.Eras
   )
   object CheckList {
     import Check._
@@ -106,13 +107,15 @@ object StatusInfo {
         lastReceivedBlock <- lastReceivedBlock[F](conf, maybeValidatorId)
         lastCreatedBlock  <- lastCreatedBlock[F](maybeValidatorId)
         activeEras        <- activeEras[F](conf)
+        bondedEras        <- bondedEras[F](conf, maybeValidatorId)
         checklist = CheckList(
           database = database,
           peers = peers,
           bootstrap = bootstrap,
           lastReceivedBlock = lastReceivedBlock,
           lastCreatedBlock = lastCreatedBlock,
-          activeEras = activeEras
+          activeEras = activeEras,
+          bondedEras = bondedEras
         )
       } yield checklist
 
@@ -158,6 +161,7 @@ object StatusInfo {
         latest = if (received.nonEmpty) received.maxBy(_.timestamp).some else none
       } yield LastBlock(
         ok = conf.casper.standalone || latest.nonEmpty,
+        // TODO: Check how old it is.
         message = latest.fold("Haven't received any blocks yet.".some)(_ => none),
         blockHash = latest.map(m => Base16.encode(m.messageHash.toByteArray)),
         timestamp = latest.map(_.timestamp),
@@ -179,7 +183,10 @@ object StatusInfo {
         latest = if (created.nonEmpty) created.maxBy(_.timestamp).some else none
       } yield LastBlock(
         ok = maybeValidatorId.isEmpty || created.nonEmpty,
-        message = latest.fold("Haven't created any blocks yet.".some)(_ => none),
+        message =
+          if (maybeValidatorId.isEmpty) "Running in read-only mode.".some
+          else if (latest.isEmpty) "Haven't created any blocks yet.".some
+          else none,
         blockHash = latest.map(m => hex(m.messageHash)),
         timestamp = latest.map(_.timestamp),
         jRank = latest.map(_.jRank)
@@ -200,6 +207,34 @@ object StatusInfo {
           else none
         } yield {
           Eras(ok = maybeError.isEmpty, message = maybeError, eras = active.toList.map(hex))
+        }
+    }
+
+    def bondedEras[F[_]: Sync: EraStorage: Consensus](
+        conf: Configuration,
+        maybeValidatorId: Option[ByteString]
+    ) = Eras {
+      if (!conf.highway.enabled)
+        Eras(ok = true, message = "Not in highway mode.".some, eras = Nil).pure[F]
+      else
+        maybeValidatorId match {
+          case None =>
+            Eras(ok = true, message = "Running in read-only mode".some, eras = Nil).pure[F]
+          case Some(id) =>
+            for {
+              active <- Consensus[F].activeEras
+              eras   <- active.toList.traverse(EraStorage[F].getEraUnsafe)
+              bonded = eras
+                .filter(era => era.bonds.exists(_.validatorPublicKey == id))
+                .map(_.keyBlockHash)
+            } yield {
+              Eras(
+                ok = bonded.nonEmpty,
+                message = Option("Not bonded in any active era.").filter(_ => bonded.isEmpty),
+                eras = bonded.toList.map(hex)
+              )
+            }
+
         }
     }
 
