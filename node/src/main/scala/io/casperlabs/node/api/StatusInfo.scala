@@ -15,6 +15,7 @@ import io.casperlabs.node.configuration.Configuration
 import io.casperlabs.models.Message
 import io.casperlabs.shared.Time
 import io.casperlabs.storage.dag.{DagStorage, FinalityStorage}
+import io.casperlabs.storage.era.EraStorage
 
 object StatusInfo {
 
@@ -77,12 +78,13 @@ object StatusInfo {
       lastReceivedBlock: Check.Basic,
       lastCreatedBlock: Check.Basic,
       activeEras: Check.Eras,
-      bondedEras: Check.Eras
+      bondedEras: Check.Eras,
+      genesisEra: Check.Eras
   )
   object CheckList {
     import Check._
 
-    def apply[F[_]: Sync: Time: NodeDiscovery: DagStorage: FinalityStorage: Consensus](
+    def apply[F[_]: Sync: Time: NodeDiscovery: DagStorage: FinalityStorage: EraStorage: Consensus](
         conf: Configuration,
         genesis: Block,
         maybeValidatorId: Option[ByteString],
@@ -99,6 +101,7 @@ object StatusInfo {
         lastCreatedBlock       <- lastCreatedBlock[F](maybeValidatorId)
         activeEras             <- activeEras[F](conf)
         bondedEras             <- bondedEras[F](conf, maybeValidatorId)
+        genesisEra             <- genesisEra[F](conf, genesis)
         checklist = CheckList(
           database = database,
           peers = peers,
@@ -108,7 +111,8 @@ object StatusInfo {
           lastReceivedBlock = lastReceivedBlock,
           lastCreatedBlock = lastCreatedBlock,
           activeEras = activeEras,
-          bondedEras = bondedEras
+          bondedEras = bondedEras,
+          genesisEra = genesisEra
         )
       } yield checklist
 
@@ -125,8 +129,8 @@ object StatusInfo {
         Check(
           ok = conf.casper.standalone || nodes.nonEmpty,
           message = Some {
-            val mode = if (conf.casper.standalone) "Running in standalone mode. " else ""
-            mode + s"Connected to ${nodes.length} recently alive peers."
+            if (conf.casper.standalone) s"Standalone mode, connected to ${nodes.length} peers."
+            else s"Connected to ${nodes.length} recently alive peers."
           },
           details = PeerDetails(count = nodes.size).some
         )
@@ -276,6 +280,23 @@ object StatusInfo {
         }
     }
 
+    def genesisEra[F[_]: Sync: Time: EraStorage](conf: Configuration, genesis: Block) = Check {
+      if (!conf.highway.enabled)
+        Check(ok = true, message = "Not in highway mode.".some, details = none[EraDetails]).pure[F]
+      else
+        for {
+          now        <- Time[F].currentMillis
+          genesisEra <- EraStorage[F].getEraUnsafe(genesis.blockHash)
+        } yield {
+          Check(
+            ok = true,
+            message =
+              if (genesisEra.startTick > now) "Genesis era hasn't started yet.".some else none,
+            details = EraDetails(eras = List(hex(genesisEra.keyBlockHash))).some
+          )
+        }
+    }
+
     def bondedEras[F[_]: Sync: Consensus](
         conf: Configuration,
         maybeValidatorId: Option[ByteString]
@@ -307,7 +328,7 @@ object StatusInfo {
     private def hex(h: ByteString) = Base16.encode(h.toByteArray)
   }
 
-  def status[F[_]: Sync: Time: NodeDiscovery: DagStorage: FinalityStorage: Consensus](
+  def status[F[_]: Sync: Time: NodeDiscovery: DagStorage: FinalityStorage: EraStorage: Consensus](
       conf: Configuration,
       genesis: Block,
       maybeValidatorId: Option[ByteString],
@@ -320,7 +341,7 @@ object StatusInfo {
                           .run(true)
     } yield Status(version, ok, checklist)
 
-  def service[F[_]: Sync: Time: NodeDiscovery: DagStorage: FinalityStorage: Consensus](
+  def service[F[_]: Sync: Time: NodeDiscovery: DagStorage: FinalityStorage: EraStorage: Consensus](
       conf: Configuration,
       genesis: Block,
       maybeValidatorId: Option[ValidatorIdentity],

@@ -36,6 +36,7 @@ import org.http4s.server.Router
 import org.http4s.server.blaze.BlazeServerBuilder
 import scala.concurrent.duration.FiniteDuration
 import scala.concurrent.ExecutionContext
+import io.casperlabs.storage.era.EraStorage
 
 object Servers {
 
@@ -118,7 +119,7 @@ object Servers {
       )
   }
 
-  def httpServerR[F[_]: Log: NodeDiscovery: ConnectionsCell: Timer: ConcurrentEffect: MultiParentCasperRef: BlockStorage: ContextShift: FinalizedBlocksStream: ExecutionEngineService: DeployStorage: DagStorage: FinalityStorage: Fs2Compiler: Metrics: Consensus](
+  def httpServerR[F[_]: Log: NodeDiscovery: ConnectionsCell: Timer: ConcurrentEffect: MultiParentCasperRef: BlockStorage: ContextShift: FinalizedBlocksStream: ExecutionEngineService: DeployStorage: DagStorage: FinalityStorage: EraStorage: Fs2Compiler: Metrics: Consensus](
       port: Int,
       conf: Configuration,
       genesis: Block,
