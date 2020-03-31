@@ -143,7 +143,10 @@ object StatusInfo {
       NodeDiscovery[F].recentlyAlivePeersAscendingDistance.map { nodes =>
         Basic(
           ok = conf.casper.standalone || nodes.nonEmpty,
-          message = s"${nodes.length} recently alive peers.".some
+          message = Some {
+            val mode = if (conf.casper.standalone) "Running in standalone mode. " else ""
+            mode + s"Connected to ${nodes.length} recently alive peers."
+          }
         )
       }
     }
@@ -154,12 +157,13 @@ object StatusInfo {
         val connected = bootstrapNodes.filter(nodes)
         Basic(
           ok = bootstrapNodes.isEmpty || connected.nonEmpty,
-          message = s"Connected to ${connected.size} of the bootstrap nodes.".some
+          message = Option(s"Connected to ${connected.size} of the bootstrap nodes.")
+            .filter(_ => bootstrapNodes.nonEmpty)
         )
       }
     }
 
-    def initialSynchronization[F[_]: Sync: NodeDiscovery](isSyncedRef: Ref[F, Boolean]) =
+    def initialSynchronization[F[_]: Sync](isSyncedRef: Ref[F, Boolean]) =
       Basic {
         isSyncedRef.get.map { synced =>
           Basic(
@@ -185,6 +189,7 @@ object StatusInfo {
         }
         latest = if (received.nonEmpty) received.maxBy(_.timestamp).some else none
         eras   <- Consensus[F].activeEras
+
         isTooOld = if (eras.isEmpty) false
         else {
           // Shorter alternative would be the booking duration from the ChainSpec.
@@ -192,13 +197,17 @@ object StatusInfo {
           val now         = System.currentTimeMillis
           latest.fold(false)(now - _.timestamp > eraDuration)
         }
+
         maybeError = if (conf.casper.standalone) none[String]
         else if (isTooOld) "Last block was received too long ago.".some
         else if (latest.isEmpty) "Haven't received any blocks yet".some
         else none
+
+        maybeAlone = if (conf.casper.standalone) "Running in standalone mode.".some else none
+
       } yield LastBlock(
         ok = maybeError.isEmpty,
-        message = maybeError,
+        message = maybeError orElse maybeAlone,
         blockHash = latest.map(m => Base16.encode(m.messageHash.toByteArray)),
         timestamp = latest.map(_.timestamp),
         jRank = latest.map(_.jRank)
