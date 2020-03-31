@@ -337,7 +337,10 @@ object StatusInfo {
           } yield {
             Check(
               ok = bonded.nonEmpty,
-              message = Option("Not bonded in any active era.").filter(_ => bonded.isEmpty),
+              message = Some {
+                if (bonded.isEmpty) "Not bonded in any active era."
+                else s"Bonded in ${bonded.size} active eras."
+              },
               details = ErasDetails(bonded).some
             )
           }
