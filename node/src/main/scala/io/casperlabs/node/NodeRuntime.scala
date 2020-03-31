@@ -316,6 +316,14 @@ class NodeRuntime private[node] (
             blockApiLock = blockApiLock
           ).whenA(conf.casper.autoProposeEnabled && !conf.highway.enabled)
 
+      statusSvc = new api.StatusInfo.Service[Task](
+        conf,
+        genesis,
+        maybeValidatorId.map(id => ByteString.copyFrom(id.publicKey)),
+        isSyncedRef.get,
+        readTransactor
+      )
+
       _ <- api.Servers
             .internalServersR(
               conf.grpc.portInternal,
@@ -338,10 +346,7 @@ class NodeRuntime private[node] (
       _ <- api.Servers.httpServerR[Task](
             conf.server.httpPort,
             conf,
-            genesis,
-            maybeValidatorId,
-            isSyncedRef.get,
-            readTransactor,
+            statusSvc,
             id,
             ingressScheduler
           )

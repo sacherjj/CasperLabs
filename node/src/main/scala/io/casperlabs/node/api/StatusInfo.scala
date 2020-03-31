@@ -349,25 +349,23 @@ object StatusInfo {
 
   }
 
-  def status[F[_]: Sync: Time: NodeDiscovery: DagStorage: FinalityStorage: EraStorage: Consensus](
+  class Service[F[_]: Sync: Time: NodeDiscovery: DagStorage: FinalityStorage: EraStorage: Consensus](
       conf: Configuration,
       genesis: Block,
       maybeValidatorId: Option[ByteString],
       getIsSynced: F[Boolean],
       readXa: Transactor[F]
-  ): F[Status] =
-    for {
-      version <- Sync[F].delay(VersionInfo.get)
-      (ok, checklist) <- CheckList[F](conf, genesis, maybeValidatorId, getIsSynced, readXa)
-                          .run(true)
-    } yield Status(version, ok, checklist)
+  ) {
+    def getStatus: F[Status] =
+      for {
+        version <- Sync[F].delay(VersionInfo.get)
+        (ok, checklist) <- CheckList[F](conf, genesis, maybeValidatorId, getIsSynced, readXa)
+                            .run(true)
+      } yield Status(version, ok, checklist)
+  }
 
-  def service[F[_]: Sync: Time: NodeDiscovery: DagStorage: FinalityStorage: EraStorage: Consensus](
-      conf: Configuration,
-      genesis: Block,
-      maybeValidatorId: Option[ValidatorIdentity],
-      getIsSynced: F[Boolean],
-      readXa: Transactor[F]
+  def service[F[_]: Sync](
+      service: Service[F]
   ): HttpRoutes[F] = {
     import io.circe.generic.auto._
     import io.circe.syntax._
@@ -376,16 +374,10 @@ object StatusInfo {
     val dsl = org.http4s.dsl.Http4sDsl[F]
     import dsl._
 
-    val maybeValidatorKey = maybeValidatorId.map(id => ByteString.copyFrom(id.publicKey))
-
     HttpRoutes.of[F] {
       // Could return a different HTTP status code, but it really depends on what we want from this.
       // An 50x would mean the service is kaput, which may be too harsh.
-      case GET -> Root =>
-        Ok(
-          status(conf, genesis, maybeValidatorKey, getIsSynced, readXa)
-            .map(_.asJson)
-        )
+      case GET -> Root => Ok(service.getStatus.map(_.asJson))
     }
   }
 }
