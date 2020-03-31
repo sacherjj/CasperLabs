@@ -13,11 +13,12 @@ import io.casperlabs.comm.discovery.NodeDiscovery
 import io.casperlabs.node.casper.consensus.Consensus
 import io.casperlabs.node.configuration.Configuration
 import io.casperlabs.models.Message
-import io.casperlabs.shared.Time
+import io.casperlabs.shared.{ByteStringPrettyPrinter, Time}
 import io.casperlabs.storage.dag.{DagStorage, FinalityStorage}
 import io.casperlabs.storage.era.EraStorage
 
 object StatusInfo {
+  import ByteStringPrettyPrinter.byteStringShow
 
   case class Status(
       version: String,
@@ -54,6 +55,14 @@ object StatusInfo {
         timestamp: Long,
         jRank: Long
     )
+    object BlockDetails {
+      def apply(message: Message): BlockDetails =
+        BlockDetails(
+          blockHash = message.messageHash.show,
+          timestamp = message.timestamp,
+          jRank = message.jRank
+        )
+    }
 
     case class PeerDetails(
         count: Int
@@ -74,7 +83,7 @@ object StatusInfo {
           eras.toList.map(
             era =>
               EraDetails(
-                keyBlockHash = hex(era.keyBlockHash),
+                keyBlockHash = era.keyBlockHash.show,
                 startTimestamp = era.startTick,
                 endTimestamp = era.endTick
               )
@@ -218,11 +227,7 @@ object StatusInfo {
         } yield Check(
           ok = maybeError.isEmpty,
           message = maybeError,
-          details = BlockDetails(
-            blockHash = hex(lfb.messageHash),
-            timestamp = lfb.timestamp,
-            jRank = lfb.jRank
-          ).some
+          details = BlockDetails(lfb).some
         )
       }
 
@@ -343,7 +348,6 @@ object StatusInfo {
     }
 
   }
-  private def hex(h: ByteString) = Base16.encode(h.toByteArray)
 
   def status[F[_]: Sync: Time: NodeDiscovery: DagStorage: FinalityStorage: EraStorage: Consensus](
       conf: Configuration,
