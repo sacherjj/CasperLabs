@@ -6,6 +6,8 @@ import cats.effect.concurrent.Semaphore
 import cats.implicits._
 import io.casperlabs.casper.MultiParentCasperImpl.Broadcaster
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
+import io.casperlabs.casper.consensus.Block
+import io.casperlabs.casper.ValidatorIdentity
 import io.casperlabs.catscontrib.Fs2Compiler
 import io.casperlabs.comm.discovery.{NodeDiscovery, NodeIdentifier}
 import io.casperlabs.comm.grpc.{ErrorInterceptor, GrpcServer, MetricsInterceptor}
@@ -17,6 +19,7 @@ import io.casperlabs.node.api.casper.CasperGrpcMonix
 import io.casperlabs.node.api.control.ControlGrpcMonix
 import io.casperlabs.node.api.diagnostics.DiagnosticsGrpcMonix
 import io.casperlabs.node.api.graphql.{FinalizedBlocksStream, GraphQL}
+import io.casperlabs.node.casper.consensus.Consensus
 import io.casperlabs.node.configuration.Configuration
 import io.casperlabs.node.diagnostics.{GrpcDiagnosticsService, NewPrometheusReporter}
 import io.casperlabs.shared._
@@ -115,9 +118,10 @@ object Servers {
       )
   }
 
-  def httpServerR[F[_]: Log: NodeDiscovery: ConnectionsCell: Timer: ConcurrentEffect: MultiParentCasperRef: BlockStorage: ContextShift: FinalizedBlocksStream: ExecutionEngineService: DeployStorage: DagStorage: Fs2Compiler: Metrics](
+  def httpServerR[F[_]: Log: Timer: ConcurrentEffect: MultiParentCasperRef: BlockStorage: ContextShift: FinalizedBlocksStream: ExecutionEngineService: DeployStorage: DagStorage: FinalityStorage: Fs2Compiler: Metrics: Consensus](
       port: Int,
       conf: Configuration,
+      statusSvc: StatusInfo.Service[F],
       id: NodeIdentifier,
       ec: ExecutionContext
   ): Resource[F, Unit] = {
@@ -139,7 +143,7 @@ object Servers {
               Router(
                 "/metrics" -> prometheusService,
                 "/version" -> VersionInfo.service,
-                "/status"  -> StatusInfo.service,
+                "/status"  -> StatusInfo.service(statusSvc),
                 "/graphql" -> GraphQL.service[F](ec)
               ).orNotFound
             )
