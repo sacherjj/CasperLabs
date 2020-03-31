@@ -89,12 +89,22 @@ object StatusInfo {
         }
       }
     }
+
+    case class Nodes(val ok: Boolean, val message: Option[String] = None, count: Int) extends Check
+    object Nodes {
+      def apply[F[_]: Sync](f: F[Nodes]): StateT[F, Boolean, Nodes] = StateT { acc =>
+        f.attempt.map {
+          case Left(ex) => (false, Nodes(ok = false, message = ex.getMessage.some, count = 0))
+          case Right(x) => (acc && x.ok, x)
+        }
+      }
+    }
   }
 
   case class CheckList(
       database: Check.Basic,
-      peers: Check.Basic,
-      bootstrap: Check.Basic,
+      peers: Check.Nodes,
+      bootstrap: Check.Nodes,
       initialSynchronization: Check.Basic,
       lastReceivedBlock: Check.LastBlock,
       lastCreatedBlock: Check.LastBlock,
@@ -140,30 +150,32 @@ object StatusInfo {
       }
     }
 
-    def peers[F[_]: Sync: NodeDiscovery](conf: Configuration) = Basic {
+    def peers[F[_]: Sync: NodeDiscovery](conf: Configuration) = Nodes {
       NodeDiscovery[F].recentlyAlivePeersAscendingDistance.map { nodes =>
-        Basic(
+        Nodes(
           ok = conf.casper.standalone || nodes.nonEmpty,
           message = Some {
             val mode = if (conf.casper.standalone) "Running in standalone mode. " else ""
             mode + s"Connected to ${nodes.length} recently alive peers."
-          }
+          },
+          count = nodes.size
         )
       }
     }
 
-    def bootstrap[F[_]: Sync: NodeDiscovery](conf: Configuration, genesis: Block) = Basic {
+    def bootstrap[F[_]: Sync: NodeDiscovery](conf: Configuration, genesis: Block) = Nodes {
       val bootstrapNodes = conf.server.bootstrap.map(_.withChainId(genesis.blockHash))
       NodeDiscovery[F].recentlyAlivePeersAscendingDistance.map(_.toSet).map { nodes =>
         val connected = bootstrapNodes.filter(nodes)
-        Basic(
+        Nodes(
           ok = bootstrapNodes.isEmpty || connected.nonEmpty,
           message = Some {
             if (bootstrapNodes.isEmpty)
               s"Connected to ${connected.size} of the bootstrap nodes."
             else
               "Not bootstraps configured."
-          }
+          },
+          count = nodes.size
         )
       }
     }
