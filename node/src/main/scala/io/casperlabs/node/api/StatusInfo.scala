@@ -15,7 +15,6 @@ import io.casperlabs.node.casper.consensus.Consensus
 import io.casperlabs.node.configuration.Configuration
 import io.casperlabs.models.Message
 import io.casperlabs.storage.dag.DagStorage
-import io.casperlabs.storage.era.EraStorage
 
 object StatusInfo {
 
@@ -104,7 +103,7 @@ object StatusInfo {
   object CheckList {
     import Check._
 
-    def apply[F[_]: Sync: NodeDiscovery: DagStorage: EraStorage: Consensus](
+    def apply[F[_]: Sync: NodeDiscovery: DagStorage: Consensus](
         conf: Configuration,
         genesis: Block,
         maybeValidatorId: Option[ByteString],
@@ -219,24 +218,27 @@ object StatusInfo {
       )
     }
 
-    def activeEras[F[_]: Sync: EraStorage: Consensus](conf: Configuration) = Eras {
+    def activeEras[F[_]: Sync: Consensus](conf: Configuration) = Eras {
       if (!conf.highway.enabled)
         Eras(ok = true, message = "Not in highway mode.".some, eras = Nil).pure[F]
       else
         for {
           active       <- Consensus[F].activeEras
-          eras         <- active.toList.traverse(EraStorage[F].getEraUnsafe)
           now          = System.currentTimeMillis
-          (past, curr) = eras.partition(era => era.startTick < now)
+          (past, curr) = active.partition(era => era.startTick < now)
           maybeError = if (active.isEmpty) "There are no active eras.".some
           else if (curr.size > 1) "There are more than 1 current eras.".some
           else none
         } yield {
-          Eras(ok = maybeError.isEmpty, message = maybeError, eras = active.toList.map(hex))
+          Eras(
+            ok = maybeError.isEmpty,
+            message = maybeError,
+            eras = active.map(_.keyBlockHash).toList.map(hex)
+          )
         }
     }
 
-    def bondedEras[F[_]: Sync: EraStorage: Consensus](
+    def bondedEras[F[_]: Sync: Consensus](
         conf: Configuration,
         maybeValidatorId: Option[ByteString]
     ) = Eras {
@@ -249,8 +251,7 @@ object StatusInfo {
           case Some(id) =>
             for {
               active <- Consensus[F].activeEras
-              eras   <- active.toList.traverse(EraStorage[F].getEraUnsafe)
-              bonded = eras
+              bonded = active
                 .filter(era => era.bonds.exists(_.validatorPublicKey == id))
                 .map(_.keyBlockHash)
             } yield {
@@ -267,7 +268,7 @@ object StatusInfo {
     private def hex(h: ByteString) = Base16.encode(h.toByteArray)
   }
 
-  def status[F[_]: Sync: NodeDiscovery: DagStorage: EraStorage: Consensus](
+  def status[F[_]: Sync: NodeDiscovery: DagStorage: Consensus](
       conf: Configuration,
       genesis: Block,
       maybeValidatorId: Option[ByteString],
@@ -280,7 +281,7 @@ object StatusInfo {
                           .run(true)
     } yield Status(version, ok, checklist)
 
-  def service[F[_]: Sync: NodeDiscovery: DagStorage: EraStorage: Consensus](
+  def service[F[_]: Sync: NodeDiscovery: DagStorage: Consensus](
       conf: Configuration,
       genesis: Block,
       maybeValidatorId: Option[ValidatorIdentity],

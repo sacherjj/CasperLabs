@@ -95,7 +95,7 @@ trait Consensus[F[_]] {
   def latestMessages: F[Set[Block.Justification]]
 
   /** Return the list of active eras, if applicable. */
-  def activeEras: F[Set[BlockHash]]
+  def activeEras: F[Set[Era]]
 }
 
 object NCB {

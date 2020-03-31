@@ -26,7 +26,6 @@ import io.casperlabs.shared._
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.block._
 import io.casperlabs.storage.dag.{DagStorage, FinalityStorage}
-import io.casperlabs.storage.era.EraStorage
 import io.casperlabs.storage.deploy.DeployStorage
 import io.netty.handler.ssl.SslContext
 import kamon.Kamon
@@ -119,7 +118,7 @@ object Servers {
       )
   }
 
-  def httpServerR[F[_]: Log: NodeDiscovery: ConnectionsCell: Timer: ConcurrentEffect: MultiParentCasperRef: BlockStorage: ContextShift: FinalizedBlocksStream: ExecutionEngineService: DeployStorage: DagStorage: EraStorage: Fs2Compiler: Metrics: Consensus](
+  def httpServerR[F[_]: Log: NodeDiscovery: ConnectionsCell: Timer: ConcurrentEffect: MultiParentCasperRef: BlockStorage: ContextShift: FinalizedBlocksStream: ExecutionEngineService: DeployStorage: DagStorage: Fs2Compiler: Metrics: Consensus](
       port: Int,
       conf: Configuration,
       genesis: Block,
