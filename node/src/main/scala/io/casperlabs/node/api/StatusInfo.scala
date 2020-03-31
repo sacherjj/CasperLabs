@@ -203,8 +203,9 @@ object StatusInfo {
           now  <- Time[F].currentMillis
           tooOld = if (eras.isEmpty) false
           else {
-            // Shorter alternative would be the booking duration from the ChainSpec.
-            val eraDuration = eras.head.endTick - eras.head.startTick
+            // A tighter alternative would be the entropy duration from the ChainSpec.
+            val latestEra   = eras.maxBy(_.endTick)
+            val eraDuration = latestEra.endTick - latestEra.startTick
             now - message.timestamp > eraDuration
           }
         } yield tooOld
