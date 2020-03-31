@@ -340,7 +340,7 @@ class NodeRuntime private[node] (
             conf,
             genesis,
             maybeValidatorId,
-            isSyncedRef,
+            isSyncedRef.get,
             readTransactor,
             id,
             ingressScheduler

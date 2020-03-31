@@ -2,7 +2,7 @@ package io.casperlabs.node.api
 
 import cats.Id
 import cats.effect.{Effect => _, _}
-import cats.effect.concurrent.{Ref, Semaphore}
+import cats.effect.concurrent.Semaphore
 import cats.implicits._
 import io.casperlabs.casper.MultiParentCasperImpl.Broadcaster
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
@@ -123,7 +123,7 @@ object Servers {
       conf: Configuration,
       genesis: Block,
       maybeValidatorId: Option[ValidatorIdentity],
-      isSyncedRef: Ref[F, Boolean],
+      getIsSynced: F[Boolean],
       readXa: doobie.util.transactor.Transactor[F],
       id: NodeIdentifier,
       ec: ExecutionContext
@@ -147,7 +147,7 @@ object Servers {
                 "/metrics" -> prometheusService,
                 "/version" -> VersionInfo.service,
                 "/status" -> StatusInfo
-                  .service(conf, genesis, maybeValidatorId, isSyncedRef, readXa),
+                  .service(conf, genesis, maybeValidatorId, getIsSynced, readXa),
                 "/graphql" -> GraphQL.service[F](ec)
               ).orNotFound
             )

@@ -1,7 +1,6 @@
 package io.casperlabs.node.api
 
 import cats.effect.Sync
-import cats.effect.concurrent.Ref
 import cats.implicits._
 import cats.data.StateT
 import com.google.protobuf.ByteString
@@ -118,14 +117,14 @@ object StatusInfo {
         conf: Configuration,
         genesis: Block,
         maybeValidatorId: Option[ByteString],
-        isSyncedRef: Ref[F, Boolean],
+        getIsSynced: F[Boolean],
         readXa: Transactor[F]
     ): StateT[F, Boolean, CheckList] =
       for {
         database               <- database[F](readXa)
         peers                  <- peers[F](conf)
         bootstrap              <- bootstrap[F](conf, genesis)
-        initialSynchronization <- initialSynchronization[F](isSyncedRef)
+        initialSynchronization <- initialSynchronization[F](getIsSynced)
         lastReceivedBlock      <- lastReceivedBlock[F](conf, maybeValidatorId)
         lastCreatedBlock       <- lastCreatedBlock[F](maybeValidatorId)
         activeEras             <- activeEras[F](conf)
@@ -180,9 +179,9 @@ object StatusInfo {
       }
     }
 
-    def initialSynchronization[F[_]: Sync](isSyncedRef: Ref[F, Boolean]) =
+    def initialSynchronization[F[_]: Sync](getIsSynced: F[Boolean]) =
       Basic {
-        isSyncedRef.get.map { synced =>
+        getIsSynced.map { synced =>
           Basic(
             ok = synced,
             message = Option(
@@ -254,13 +253,13 @@ object StatusInfo {
       )
     }
 
-    def activeEras[F[_]: Sync: Consensus](conf: Configuration) = Eras {
+    def activeEras[F[_]: Sync: Time: Consensus](conf: Configuration) = Eras {
       if (!conf.highway.enabled)
         Eras(ok = true, message = "Not in highway mode.".some, eras = Nil).pure[F]
       else
         for {
           active       <- Consensus[F].activeEras
-          now          = System.currentTimeMillis
+          now          <- Time[F].currentMillis
           (past, curr) = active.partition(era => era.startTick < now)
           maybeError = if (active.isEmpty) "There are no active eras.".some
           else if (curr.size > 1) "There are more than 1 current eras.".some
@@ -308,12 +307,12 @@ object StatusInfo {
       conf: Configuration,
       genesis: Block,
       maybeValidatorId: Option[ByteString],
-      isSyncedRef: Ref[F, Boolean],
+      getIsSynced: F[Boolean],
       readXa: Transactor[F]
   ): F[Status] =
     for {
       version <- Sync[F].delay(VersionInfo.get)
-      (ok, checklist) <- CheckList[F](conf, genesis, maybeValidatorId, isSyncedRef, readXa)
+      (ok, checklist) <- CheckList[F](conf, genesis, maybeValidatorId, getIsSynced, readXa)
                           .run(true)
     } yield Status(version, ok, checklist)
 
@@ -321,7 +320,7 @@ object StatusInfo {
       conf: Configuration,
       genesis: Block,
       maybeValidatorId: Option[ValidatorIdentity],
-      isSyncedRef: Ref[F, Boolean],
+      getIsSynced: F[Boolean],
       readXa: Transactor[F]
   ): HttpRoutes[F] = {
     import io.circe.generic.auto._
@@ -338,7 +337,7 @@ object StatusInfo {
       // An 50x would mean the service is kaput, which may be too harsh.
       case GET -> Root =>
         Ok(
-          status(conf, genesis, maybeValidatorKey, isSyncedRef, readXa)
+          status(conf, genesis, maybeValidatorKey, getIsSynced, readXa)
             .map(_.asJson)
         )
     }
