@@ -170,7 +170,7 @@ object StatusInfo {
           ok = bootstrapNodes.isEmpty || connected.nonEmpty,
           message = Some {
             if (bootstrapNodes.isEmpty)
-              s"Connected to ${connected.size} of the bootstrap nodes."
+              s"Connected to ${connected.size} of the bootstrap nodes out of the ${bootstrapNodes.size} configured."
             else
               "Not bootstraps configured."
           },
