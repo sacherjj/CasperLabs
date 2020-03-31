@@ -7,7 +7,7 @@ import com.google.protobuf.ByteString
 import org.http4s.HttpRoutes
 import doobie.util.transactor.Transactor
 import io.casperlabs.crypto.codec.Base16
-import io.casperlabs.casper.consensus.Block
+import io.casperlabs.casper.consensus.{Block, Era}
 import io.casperlabs.casper.ValidatorIdentity
 import io.casperlabs.comm.discovery.NodeDiscovery
 import io.casperlabs.node.casper.consensus.Consensus
@@ -60,13 +60,32 @@ object StatusInfo {
     )
 
     case class EraDetails(
-        eras: List[String]
+        keyBlockHash: String,
+        startTimestamp: Long,
+        endTimestamp: Long
     )
+
+    case class ErasDetails(
+        eras: List[EraDetails]
+    )
+    object ErasDetails {
+      def apply(eras: Set[Era]): ErasDetails =
+        ErasDetails(
+          eras.toList.map(
+            era =>
+              EraDetails(
+                keyBlockHash = hex(era.keyBlockHash),
+                startTimestamp = era.startTick,
+                endTimestamp = era.endTick
+              )
+          )
+        )
+    }
 
     type Basic     = Check[Unit]
     type LastBlock = Check[BlockDetails]
     type Peers     = Check[PeerDetails]
-    type Eras      = Check[EraDetails]
+    type Eras      = Check[ErasDetails]
   }
 
   case class CheckList(
@@ -147,7 +166,7 @@ object StatusInfo {
             if (bootstrapNodes.isEmpty)
               s"Connected to ${connected.size} of the bootstrap nodes out of the ${bootstrapNodes.size} configured."
             else
-              "Not bootstraps configured."
+              "No bootstraps configured."
           },
           details = PeerDetails(count = nodes.size).some
         )
@@ -262,7 +281,7 @@ object StatusInfo {
 
     def activeEras[F[_]: Sync: Time: Consensus](conf: Configuration) = Check {
       if (!conf.highway.enabled)
-        Check(ok = true, message = "Not in highway mode.".some, details = none[EraDetails]).pure[F]
+        Check[ErasDetails](ok = true, message = "Not in highway mode.".some).pure[F]
       else
         for {
           active       <- Consensus[F].activeEras
@@ -275,14 +294,14 @@ object StatusInfo {
           Check(
             ok = maybeError.isEmpty,
             message = maybeError,
-            details = EraDetails(eras = active.map(_.keyBlockHash).toList.map(hex)).some
+            details = ErasDetails(active).some
           )
         }
     }
 
     def genesisEra[F[_]: Sync: Time: EraStorage](conf: Configuration, genesis: Block) = Check {
       if (!conf.highway.enabled)
-        Check(ok = true, message = "Not in highway mode.".some, details = none[EraDetails]).pure[F]
+        Check[ErasDetails](ok = true, message = "Not in highway mode.".some).pure[F]
       else
         for {
           now        <- Time[F].currentMillis
@@ -292,7 +311,7 @@ object StatusInfo {
             ok = true,
             message =
               if (genesisEra.startTick > now) "Genesis era hasn't started yet.".some else none,
-            details = EraDetails(eras = List(hex(genesisEra.keyBlockHash))).some
+            details = ErasDetails(Set(genesisEra)).some
           )
         }
     }
@@ -303,30 +322,28 @@ object StatusInfo {
     ) = Check {
       maybeValidatorId match {
         case _ if !conf.highway.enabled =>
-          Check(ok = true, message = "Not in highway mode.".some, details = none[EraDetails])
+          Check[ErasDetails](ok = true, message = "Not in highway mode.".some)
             .pure[F]
         case None =>
-          Check(ok = true, message = "Running in read-only mode".some, details = none[EraDetails])
+          Check[ErasDetails](ok = true, message = "Running in read-only mode".some)
             .pure[F]
         case Some(id) =>
           for {
             active <- Consensus[F].activeEras
-            bonded = active
-              .filter(era => era.bonds.exists(_.validatorPublicKey == id))
-              .map(_.keyBlockHash)
+            bonded = active.filter(era => era.bonds.exists(_.validatorPublicKey == id))
           } yield {
             Check(
               ok = bonded.nonEmpty,
               message = Option("Not bonded in any active era.").filter(_ => bonded.isEmpty),
-              details = EraDetails(eras = bonded.toList.map(hex)).some
+              details = ErasDetails(bonded).some
             )
           }
 
       }
     }
 
-    private def hex(h: ByteString) = Base16.encode(h.toByteArray)
   }
+  private def hex(h: ByteString) = Base16.encode(h.toByteArray)
 
   def status[F[_]: Sync: Time: NodeDiscovery: DagStorage: FinalityStorage: EraStorage: Consensus](
       conf: Configuration,
