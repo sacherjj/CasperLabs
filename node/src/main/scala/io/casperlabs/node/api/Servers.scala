@@ -139,7 +139,7 @@ object Servers {
               Router(
                 "/metrics" -> prometheusService,
                 "/version" -> VersionInfo.service,
-                "/status"  -> StatusInfo.service,
+                "/status"  -> StatusInfo.service(conf),
                 "/graphql" -> GraphQL.service[F](ec)
               ).orNotFound
             )
