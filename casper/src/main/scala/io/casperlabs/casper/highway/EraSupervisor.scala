@@ -279,6 +279,16 @@ class EraSupervisor[F[_]: Concurrent: Timer: Log: Metrics: EraStorage: Relaying:
       val parentKeyBlockHash = child.runtime.era.parentKeyBlockHash
       eras.updated(parentKeyBlockHash, eras(parentKeyBlockHash).withChild(child))
     }
+
+  def activeEras: F[Set[Era]] =
+    for {
+      active <- scheduleRef.get.map { schedule =>
+                 schedule.keySet.map(_._1)
+               }
+      eras <- erasRef.get
+    } yield {
+      active.flatMap(eras.get(_).map(_.runtime.era))
+    }
 }
 
 object EraSupervisor {
