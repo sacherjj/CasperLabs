@@ -3,11 +3,11 @@
 # Human readable name for convenience; the genesis_hash is the true identifier.
 # The name influences the genesis hash by contributing to the seeding of the pseudo-
 # random number generator used in execution engine for computing genesis post-state.
-name = "casperlabs-testnet-2020:03:31:23:59:59"
+name = "casperlabs-testnet-alpha"
 
 # Timestamp for the genesis block, also used in seeding the pseudo-random number
 # generator used in execution engine for computing genesis post-state.
-timestamp = 0
+timestamp = 1585699199000
 
 # Later will be replaced by semver.
 protocol-version = "1.0.0"
@@ -59,6 +59,9 @@ max-dependencies = 10
 
 # Maximum block size in bytes
 max-block-size-bytes = 10485760
+
+# Maximum total gas cost of deploys in a block. 0 means unlimited.
+max-block-cost = 0
 
 [wasm-costs]
 # Default opcode cost
