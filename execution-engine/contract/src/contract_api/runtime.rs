@@ -73,8 +73,9 @@ pub fn call_contract<A: ArgsParser, T: CLTyped + FromBytes>(c_ptr: ContractRef, 
         // NOTE: this is a copy of the contents of `read_host_buffer()`.  Calling that directly from
         // here causes several contracts to fail with a Wasmi `Unreachable` error.
         let bytes_non_null_ptr = contract_api::alloc_bytes(bytes_written);
-        let mut dest: Vec<u8> =
-            unsafe { Vec::from_raw_parts(bytes_non_null_ptr.as_ptr(), bytes_written, bytes_written) };
+        let mut dest: Vec<u8> = unsafe {
+            Vec::from_raw_parts(bytes_non_null_ptr.as_ptr(), bytes_written, bytes_written)
+        };
         read_host_buffer_into(&mut dest).unwrap_or_revert();
         dest
     };
@@ -120,7 +121,8 @@ pub fn get_arg<T: FromBytes>(i: u32) -> Option<Result<T, bytesrepr::Error>> {
         let res = {
             let data_non_null_ptr = contract_api::alloc_bytes(arg_size);
             let ret = unsafe { ext_ffi::get_arg(i as usize, data_non_null_ptr.as_ptr(), arg_size) };
-            let data = unsafe { Vec::from_raw_parts(data_non_null_ptr.as_ptr(), arg_size, arg_size) };
+            let data =
+                unsafe { Vec::from_raw_parts(data_non_null_ptr.as_ptr(), arg_size, arg_size) };
             api_error::result_from(ret).map(|_| data)
         };
         // Assumed to be safe as `get_arg_size` checks the argument already
