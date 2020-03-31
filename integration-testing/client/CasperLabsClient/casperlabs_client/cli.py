@@ -158,16 +158,11 @@ def _deploy_kwargs(args, private_key_accepted=True):
         args.payment_args = ABI.args_to_json(
             ABI.args([ABI.big_int("amount", int(args.payment_amount))])
         )
-        # Unless one of payment* options supplied use bundled standard-payment
-        if not any(
-            (args.payment, args.payment_name, args.payment_hash, args.payment_uref)
-        ):
-            args.payment = bundled_contract("standard_payment.wasm")
 
     d = dict(
         from_addr=from_addr,
         gas_price=args.gas_price,
-        payment=args.payment or args.session,
+        payment=args.payment,
         session=args.session,
         public_key=args.public_key or None,
         session_args=args.session_args
@@ -435,7 +430,7 @@ def deploy_options(private_key_accepted=True):
         [('--dependencies',), dict(required=False, nargs="+", default=None, help="List of deploy hashes (base16 encoded) which must be executed before this deploy.")],
         [('--payment-amount',), dict(required=False, type=int, default=None, help="Standard payment amount. Use this with the default payment, or override with --payment-args if custom payment code is used. By default --payment-amount is set to 10000000")],
         [('--gas-price',), dict(required=False, type=int, default=10, help='The price of gas for this transaction in units dust/gas. Must be positive integer.')],
-        [('-p', '--payment'), dict(required=False, type=str, default=None, help='Path to the file with payment code, by default fallbacks to the --session code')],
+        [('-p', '--payment'), dict(required=False, type=str, default=None, help='Path to the file with payment code')],
         [('--payment-hash',), dict(required=False, type=str, default=None, help='Hash of the stored contract to be called in the payment; base16 encoded')],
         [('--payment-name',), dict(required=False, type=str, default=None, help='Name of the stored contract (associated with the executing account) to be called in the payment')],
         [('--payment-uref',), dict(required=False, type=str, default=None, help='URef of the stored contract to be called in the payment; base16 encoded')],

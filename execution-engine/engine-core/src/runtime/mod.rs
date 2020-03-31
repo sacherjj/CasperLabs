@@ -1838,7 +1838,7 @@ where
 
         let ret: CLValue = match method_name.as_str() {
             METHOD_BOND => {
-                if self.config.highway() {
+                if !self.config.enable_bonding() {
                     let err = Error::Revert(ApiError::Unhandled.into());
                     return Err(err);
                 }
@@ -1852,7 +1852,7 @@ where
                 CLValue::from_t(()).map_err(Self::reverter)?
             }
             METHOD_UNBOND => {
-                if self.config.highway() {
+                if !self.config.enable_bonding() {
                     let err = Error::Revert(ApiError::Unhandled.into());
                     return Err(err);
                 }

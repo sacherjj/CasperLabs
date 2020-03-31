@@ -13,8 +13,7 @@ enum Args {
 
 enum CustomError {
   MissingPurseNameArg = 1,
-  InvalidPurseNameArg = 2,
-  UnableToCreatePurse = 3
+  InvalidPurseNameArg = 2
 }
 
 export function call(): void {
@@ -31,13 +30,8 @@ export function call(): void {
   }
   let purseName = purseNameResult.value;
 
-  const maybePurse = createPurse();
-  if (maybePurse === null){
-    Error.fromUserError(<u16>CustomError.UnableToCreatePurse).revert();
-    return;
-  }
+  const purse = createPurse();
 
-  const key = Key.fromURef(<URef>maybePurse);
-
+  const key = Key.fromURef(purse);
   putKey(purseName, <Key>key);
 }

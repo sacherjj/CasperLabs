@@ -311,8 +311,7 @@ build-python-client: \
 build-client-contracts: \
 	client/src/main/resources/bonding.wasm \
 	client/src/main/resources/unbonding.wasm \
-	client/src/main/resources/transfer_to_account_u512.wasm \
-	client/src/main/resources/standard_payment.wasm
+	client/src/main/resources/transfer_to_account_u512.wasm
 
 build-node: \
 	.make/sbt-stage/node
@@ -327,11 +326,7 @@ build-explorer: \
 
 build-explorer-contracts: \
 	explorer/contracts/transfer_to_account_u512.wasm \
-	explorer/contracts/standard_payment.wasm \
 	explorer/contracts/faucet.wasm
-	# Change the extension since webpack has experiment support for WASM, but we just want to read as ArrayBuffer and use it
-	# in Clarity Deploy interface
-	cp explorer/contracts/standard_payment.wasm explorer/ui/src/standard_payment.wm
 
 # Get the .proto files for REST annotations for Github. This is here for reference about what to get from where, the files are checked in.
 # There were alternatives, like adding a reference to a Maven project called `googleapis-commons-protos` but it had version conflicts.

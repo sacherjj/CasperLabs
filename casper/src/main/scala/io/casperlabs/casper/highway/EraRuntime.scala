@@ -24,6 +24,7 @@ import io.casperlabs.shared.SemaphoreMap
 
 import scala.util.Random
 import scala.util.control.NoStackTrace
+import io.casperlabs.shared.ByteStringPrettyPrinter._
 
 /** Class to encapsulate the message handling logic of messages in an era.
   *
@@ -522,14 +523,17 @@ class EraRuntime[F[_]: Sync: Clock: Metrics: Log: EraStorage: FinalityStorageRea
   def initAgenda: F[Agenda] =
     maybeMessageProducer.fold(Agenda.empty.pure[F]) { _ =>
       currentTick flatMap { tick =>
-        isEraOverAt(tick).ifM(
-          Agenda.empty.pure[F],
-          roundBoundariesAt(tick) flatMap {
-            case (from, to) =>
-              val roundId = if (from >= tick) from else to
-              Agenda(roundId -> StartRound(roundId)).pure[F]
-          }
-        )
+        if (tick < startTick)
+          Agenda(startTick -> StartRound(startTick)).pure[F]
+        else
+          isEraOverAt(tick).ifM(
+            Agenda.empty.pure[F],
+            roundBoundariesAt(tick) flatMap {
+              case (from, to) =>
+                val roundId = if (from >= tick) from else to
+                Agenda(roundId -> StartRound(roundId)).pure[F]
+            }
+          )
       }
     }
 

@@ -21,6 +21,7 @@ import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.storage.dag.{DagRepresentation, DagStorage, FinalityStorage}
 import io.casperlabs.storage.deploy.DeployStorage
+import ByteStringPrettyPrinter._
 
 import scala.concurrent.duration.FiniteDuration
 
@@ -76,7 +77,7 @@ sealed abstract class MultiParentCasperInstances {
   ): F[MultiParentCasper[F]] =
     for {
       lfbHash <- FinalityStorage[F].getLastFinalizedBlock
-      _       <- Log[F].info(s"Restored LFB: ${PrettyPrinter.buildString(lfbHash) -> "lfb_hash"}")
+      _       <- Log[F].info(s"Restored LFB: ${lfbHash.show -> "lfb_hash"}")
       lfbRef  <- Ref.of(lfbHash)
       implicit0(casperState: Cell[F, CasperState]) <- init(
                                                        genesis,

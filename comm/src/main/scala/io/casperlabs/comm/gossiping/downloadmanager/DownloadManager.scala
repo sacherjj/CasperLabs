@@ -17,6 +17,7 @@ import io.casperlabs.comm.gossiping.{Chunk, GossipService, Relaying, WaitHandle}
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.shared.Log._
 import io.casperlabs.shared.{Compression, Log}
+import io.casperlabs.catscontrib.effect.implicits.fiberSyntax
 import monix.tail.Iterant
 
 import scala.concurrent.duration.{Duration, FiniteDuration}
@@ -81,6 +82,11 @@ trait DownloadManagerCompanion extends DownloadManagerTypes {
 
     /** Notify about a new downloadable we downloaded, verified and stored. */
     def onDownloaded(identifier: Identifier): F[Unit]
+
+    /** Notify about a downloadable having exhausted all its retries and ultimately failed.
+      * It won't be reattempted until it's rescheduled.
+      */
+    def onFailed(identifier: Identifier): F[Unit]
   }
 
   /** Messages the Download Manager uses inside its scheduler "queue". */
@@ -249,16 +255,17 @@ trait DownloadManagerImpl[F[_]] extends DownloadManager[F] { self =>
               (item, downloadFeedback) = itemAndFeedback
 
               // Notify the rest of the system if this is the first time we schedule this item
-              // or if we're adding a new source to an item that already existed.
+              // or if we're adding a new source to an item that already existed,
+              // or if the item has been scheduled again after failure and will now be retried.
               existingItem = items.get(handle.id)
               _ <- backend
                     .onScheduled(handle)
-                    .start
-                    .whenA(existingItem.isEmpty)
+                    .forkAndLog
+                    .whenA(item.canStart || existingItem.isEmpty)
               _ <- backend
                     .onScheduled(handle, source)
-                    .start
-                    .whenA(existingItem.forall(!_.sources(source)))
+                    .forkAndLog
+                    .whenA(item.canStart || existingItem.forall(!_.sources(source)))
 
               _ <- itemsRef.update(_ + (handle.id -> item))
               _ <- if (item.canStart) startWorker(item) else Sync[F].unit
@@ -287,7 +294,7 @@ trait DownloadManagerImpl[F[_]] extends DownloadManager[F] { self =>
                  }
           (watchers, startables) = next
           _                      <- watchers.traverse(_.complete(Right(())).attempt.void)
-          _                      <- backend.onDownloaded(id).start
+          _                      <- backend.onDownloaded(id).forkAndLog
           _                      <- startables.traverse(startWorker)
           _                      <- setScheduledGauge()
         } yield ()
@@ -308,6 +315,7 @@ trait DownloadManagerImpl[F[_]] extends DownloadManager[F] { self =>
                      }
           // Tell whoever scheduled it before that it's over.
           _ <- watchers.traverse(_.complete(Left(ex)).attempt.void)
+          _ <- backend.onFailed(id).forkAndLog
           _ <- setScheduledGauge()
         } yield ()
 

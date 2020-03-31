@@ -19,7 +19,7 @@ export function readLocal(local: Uint8Array): Uint8Array | null {
     const error = Error.fromResult(ret);
     if (error != null) {
         error.revert();
-        return null;
+        return <Uint8Array>unreachable();
     }
     return readHostBuffer(valueSize[0]);
 }

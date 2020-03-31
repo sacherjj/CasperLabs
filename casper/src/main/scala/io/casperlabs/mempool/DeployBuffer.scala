@@ -19,6 +19,7 @@ import io.casperlabs.shared.Log
 import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.storage.dag.{DagRepresentation, DagStorage}
 import simulacrum.typeclass
+import io.casperlabs.shared.ByteStringPrettyPrinter._
 
 @typeclass trait DeployBuffer[F[_]] {
 
@@ -79,10 +80,9 @@ object DeployBuffer {
           }
 
         for {
-          _ <- (deploy.getBody.session, deploy.getBody.payment) match {
-                case (None, _) | (_, None) | (Some(Deploy.Code(_, Deploy.Code.Contract.Empty)), _) |
-                    (_, Some(Deploy.Code(_, Deploy.Code.Contract.Empty))) =>
-                  illegal(s"Deploy was missing session and/or payment code.")
+          _ <- deploy.getBody.session match {
+                case None | Some(Deploy.Code(_, Deploy.Code.Contract.Empty)) =>
+                  illegal(s"Deploy was missing session code.")
                 case _ => ().pure[F]
               }
           _ <- check("Invalid deploy hash.")(Validation.deployHash[F](deploy))

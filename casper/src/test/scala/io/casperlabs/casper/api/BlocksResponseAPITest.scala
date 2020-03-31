@@ -7,10 +7,13 @@ import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper._
 import io.casperlabs.casper.consensus._
+import io.casperlabs.casper.consensus.info.BlockInfo
 import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.helper.BlockUtil.generateValidator
 import io.casperlabs.casper.helper._
 import io.casperlabs.casper.util.BondingUtil.Bond
+import io.casperlabs.catscontrib.{Fs2Compiler, MonadThrowable}
+import io.casperlabs.models.cltype.protobuf.dsl.instances.result
 import io.casperlabs.storage.BlockMsgWithTransform
 import monix.eval.Task
 import org.scalatest.{FlatSpec, Matchers}
@@ -29,8 +32,8 @@ class BlocksResponseAPITest extends FlatSpec with Matchers with BlockGenerator w
   val v3Bond = Bond(v3, 15)
   val bonds  = Seq(v1Bond, v2Bond, v3Bond)
 
-  "showBlocks" should "return all blocks" in withStorage {
-    implicit blockStorage => implicit dagStorage => implicit deployStorage => _ =>
+  "showBlocks" should "return all blocks" in withCombinedStorageIndexed {
+    implicit storage => implicit dagStorage =>
       for {
         genesis <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bonds)
         b2 <- createAndStoreMessage[Task](
@@ -75,7 +78,7 @@ class BlocksResponseAPITest extends FlatSpec with Matchers with BlockGenerator w
               bonds,
               HashMap(v1 -> b6.blockHash, v2 -> b5.blockHash, v3 -> b4.blockHash)
             )
-        dag                 <- dagStorage.getRepresentation
+        dag                 <- storage.getRepresentation
         latestMessageHashes <- dag.latestMessageHashes
         equivocators        <- dag.getEquivocators
         tips <- Estimator.tips[Task](
@@ -87,16 +90,22 @@ class BlocksResponseAPITest extends FlatSpec with Matchers with BlockGenerator w
         casperEffect <- NoOpsCasperEffect[Task](
                          HashMap.empty[BlockHash, BlockMsgWithTransform],
                          tips
-                       )
+                       )(Sync[Task], storage, storage)
         implicit0(casperRef: MultiParentCasperRef[Task]) <- MultiParentCasperRef.of[Task]
         _                                                <- casperRef.set(casperEffect)
-        blocksResponse                                   <- BlockAPI.getBlockInfos[Task](Int.MaxValue)
+        blocksResponse <- BlockAPI.getBlockInfos[Task](Int.MaxValue)(
+                           MonadThrowable[Task],
+                           log,
+                           storage,
+                           storage,
+                           implicitly[Fs2Compiler[Task]]
+                         )
       } yield blocksResponse.length should be(8) // TODO: Switch to 4 when we implement block height correctly
   }
 
-  it should "return until depth" in withStorage {
-    implicit blockStorage => implicit dagStorage => implicit deployStorage =>
-      _ =>
+  it should "return until depth" in withCombinedStorageIndexed {
+    implicit storage =>
+      implicit dagStorage =>
         /**
           * The Dag looks like
           *
@@ -156,7 +165,7 @@ class BlocksResponseAPITest extends FlatSpec with Matchers with BlockGenerator w
                  bonds,
                  HashMap(v1 -> b6.blockHash, v2 -> b5.blockHash, v3 -> b4.blockHash)
                )
-          dag                  <- dagStorage.getRepresentation
+          dag                  <- storage.getRepresentation
           latestMessagesHashes <- dag.latestMessageHashes
           equivocators         <- dag.getEquivocators
           tips <- Estimator
@@ -169,19 +178,28 @@ class BlocksResponseAPITest extends FlatSpec with Matchers with BlockGenerator w
           casperEffect <- NoOpsCasperEffect[Task](
                            HashMap.empty[BlockHash, BlockMsgWithTransform],
                            tips
-                         )
+                         )(Sync[Task], storage, storage)
           implicit0(casperRef: MultiParentCasperRef[Task]) <- MultiParentCasperRef.of[Task]
           _                                                <- casperRef.set(casperEffect)
 
-          blocksWithRankBelow1 <- BlockAPI.getBlockInfos[Task](1)
+          // TODO: Remove once we get rid of IndexedDagStorage
+          localGetBlockInfos = (depth: Int) =>
+            BlockAPI.getBlockInfos[Task](depth)(
+              MonadThrowable[Task],
+              log,
+              storage,
+              storage,
+              implicitly[Fs2Compiler[Task]]
+            )
+          blocksWithRankBelow1 <- localGetBlockInfos(1)
           _                    = blocksWithRankBelow1.length shouldBe 1
-          blocksWithRankBelow2 <- BlockAPI.getBlockInfos[Task](2)
+          blocksWithRankBelow2 <- localGetBlockInfos(2)
           _                    = blocksWithRankBelow2.length shouldBe 3
-          blocksWithRankBelow3 <- BlockAPI.getBlockInfos[Task](3)
+          blocksWithRankBelow3 <- localGetBlockInfos(3)
           _                    = blocksWithRankBelow3.length shouldBe 5
-          blocksWithRankBelow4 <- BlockAPI.getBlockInfos[Task](4)
+          blocksWithRankBelow4 <- localGetBlockInfos(4)
           _                    = blocksWithRankBelow4.length shouldBe 7
-          blocksWithRankBelow5 <- BlockAPI.getBlockInfos[Task](5)
+          blocksWithRankBelow5 <- localGetBlockInfos(5)
           result               = blocksWithRankBelow5.length shouldBe 8
         } yield result
   }

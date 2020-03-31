@@ -3,7 +3,7 @@
 pub struct EngineConfig {
     // feature flags go here
     use_system_contracts: bool,
-    highway: bool,
+    enable_bonding: bool,
 }
 
 impl EngineConfig {
@@ -21,12 +21,12 @@ impl EngineConfig {
         self
     }
 
-    pub fn highway(self) -> bool {
-        self.highway
+    pub fn enable_bonding(self) -> bool {
+        self.enable_bonding
     }
 
-    pub fn with_highway(mut self, highway: bool) -> EngineConfig {
-        self.highway = highway;
+    pub fn with_enable_bonding(mut self, enable_bonding: bool) -> EngineConfig {
+        self.enable_bonding = enable_bonding;
         self
     }
 }

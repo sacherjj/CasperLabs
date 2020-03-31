@@ -27,7 +27,7 @@ export enum TransferredTo {
  * Creates a new empty purse and returns its [[URef]], or a null in case a
  * purse couldn't be created.
  */
-export function createPurse(): URef | null {
+export function createPurse(): URef {
     let bytes = new Uint8Array(UREF_SERIALIZED_LENGTH);
     let ret = externals.create_purse(
         bytes.dataStart,
@@ -36,21 +36,21 @@ export function createPurse(): URef | null {
     let error = Error.fromResult(<u32>ret);
     if (error !== null){
         error.revert();
-        return null;
+        return <URef>unreachable();
     }
 
     let urefResult = URef.fromBytes(bytes);
     if (urefResult.hasError()) {
         Error.fromErrorCode(ErrorCode.PurseNotCreated).revert();
-        return null;
+        return <URef>unreachable();
     }
 
     return urefResult.value;
 }
 
 /**
- * Returns the balance in motes of the given purse or a null if a balance
- * couldn't be obtained.
+ * Returns the balance in motes of the given purse or a null if given purse
+ * is invalid.
  */
 export function getPurseBalance(purse: URef): U512 | null {
     let purseBytes = purse.toBytes();
@@ -62,17 +62,19 @@ export function getPurseBalance(purse: URef): U512 | null {
         purseBytes.length,
         balanceSize.dataStart,
     );
-    if (retBalance > 0) {
-        return null;
+
+    const error = Error.fromResult(retBalance);
+    if (error != null) {
+        if (error.value() == ErrorCode.InvalidPurse) {
+            return null;
+        }
+        error.revert();
+        return <U512>unreachable();
     }
 
     let balanceBytes = readHostBuffer(balanceSize[0]);
-    if (balanceBytes === null) {
-        return null;
-    }
-
     let balanceResult = U512.fromBytes(balanceBytes);
-    return balanceResult.ok();
+    return balanceResult.unwrap();
 }
 
 /**

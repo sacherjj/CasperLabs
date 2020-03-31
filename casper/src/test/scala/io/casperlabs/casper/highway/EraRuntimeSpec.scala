@@ -583,6 +583,17 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
         genesisEraRuntime(validator = "Alice".some).initAgenda shouldBe empty
       }
     }
+
+    "the era hasn't started yet" should {
+      "schedule the first round for the beginning" in {
+        implicit val clock = TestClock.frozen[Id](conf.genesisEraStart minus 8.hours)
+        val runtime        = genesisEraRuntime(validator = "Alice".some)
+        val agenda         = runtime.initAgenda
+        agenda should have size 1
+        agenda.head.tick shouldBe runtime.startTick
+        agenda.head.action shouldBe Agenda.StartRound(runtime.startTick)
+      }
+    }
   }
 
   "handleMessage" when {

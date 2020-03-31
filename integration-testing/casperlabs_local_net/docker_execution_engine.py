@@ -8,7 +8,7 @@ class DockerExecutionEngine(LoggingDockerBase):
 
     @property
     def command(self) -> str:
-        return f".casperlabs/sockets/.casper-node.sock"
+        return f"--enable-bonding .casperlabs/sockets/.casper-node.sock"
 
     @property
     def volumes(self) -> dict:

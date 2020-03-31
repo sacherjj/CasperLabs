@@ -32,6 +32,7 @@ import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.storage.deploy.{DeployStorage, DeployStorageWriter}
 import io.casperlabs.storage.dag.{DagStorage, FinalityStorage}
 import io.casperlabs.smartcontracts.ExecutionEngineService
+import io.casperlabs.shared.ByteStringPrettyPrinter._
 
 import scala.util.control.NonFatal
 import scala.util.control.NoStackTrace
@@ -58,7 +59,7 @@ class MessageExecutor[F[_]: Concurrent: Log: Time: Metrics: BlockStorage: DagSto
     Validation.preTimestamp[F](block).attempt.flatMap {
       case Right(Some(delay)) =>
         Log[F].info(
-          s"${block.blockHash.show -> "block"} is ahead for $delay from now, will retry adding later"
+          s"${block.blockHash.show -> "message"} is ahead for $delay from now, will retry adding later"
         ) >>
           Time[F].sleep(delay) >>
           validateAndAdd(semaphore, block, isBookingBlock)
@@ -75,7 +76,7 @@ class MessageExecutor[F[_]: Concurrent: Log: Time: Metrics: BlockStorage: DagSto
         semaphore.withPermit {
           Log[F]
             .warn(
-              s"${block.blockHash.show -> "block"} timestamp exceeded threshold"
+              s"${block.blockHash.show -> "message"} timestamp exceeded threshold"
             ) >>
             addEffects(InvalidUnslashableBlock, block, BlockEffects.empty)
         }
@@ -100,26 +101,40 @@ class MessageExecutor[F[_]: Concurrent: Log: Time: Metrics: BlockStorage: DagSto
 
   private def updateLastFinalizedBlock(message: Message): F[F[Unit]] =
     for {
-      result <- MultiParentFinalizer[F]
-                 .onNewMessageAdded(message)
-      w <- result.traverse {
-            case MultiParentFinalizer.FinalizedBlocks(newLFB, _, finalized, orphaned) => {
-              val lfbStr       = newLFB.show
-              val finalizedStr = finalized.map(_.show).mkString("{", ", ", "}")
-              for {
-                _ <- Log[F].info(
-                      s"New last finalized block hashes are ${lfbStr -> null}, ${finalizedStr -> null}."
-                    )
-                _  <- FinalityStorage[F].markAsFinalized(newLFB, finalized, orphaned)
-                w1 <- DeployBuffer[F].removeFinalizedDeploys(finalized + newLFB).forkAndLog
-                w2 <- BlockEventEmitter[F]
-                       .newLastFinalizedBlock(newLFB, finalized, orphaned)
-                       .timer("emitNewLFB")
-                       .forkAndLog
-              } yield w1 *> w2
+      results <- MultiParentFinalizer[F].onNewMessageAdded(message)
+      w <- results.toList
+            .traverse {
+              case MultiParentFinalizer.FinalizedBlocks(newLFB, _, finalized, orphaned) => {
+                val lfbStr = newLFB.show
+                val finalizedStr = finalized
+                  .filter(_.isBlock)
+                  .map(_.messageHash)
+                  .map(PrettyPrinter.buildString)
+                  .mkString("{", ", ", "}")
+                for {
+                  _ <- Log[F].info(
+                        s"New last finalized block hashes are ${lfbStr -> null}, ${finalizedStr -> null}. Orphaned ${orphaned.size} messages."
+                      )
+                  finalizedBlockHashes = finalized.filter(_.isBlock).map(_.messageHash)
+                  _ <- DeployBuffer[F]
+                        .removeFinalizedDeploys(finalizedBlockHashes + newLFB)
+                  // Ballots cannot be really finalized but we mark them as such in the DAG
+                  // to improve the performance of the finalizer (that has to follow all justifications).
+                  // Send out notification about blocks ONLY.
+                  orphanedBlockHashes = orphaned.filter(_.isBlock).map(_.messageHash)
+                  _ <- BlockEventEmitter[F]
+                        .newLastFinalizedBlock(
+                          newLFB,
+                          finalizedBlockHashes,
+                          orphanedBlockHashes
+                        )
+                        .timer("emitNewLFB")
+                } yield ()
+              }
             }
-          }
-    } yield w getOrElse ().pure[F]
+            .void
+            .forkAndLog
+    } yield w
 
   private def markDeploysAsProcessed(message: Message): F[Unit] =
     for {
@@ -149,20 +164,20 @@ class MessageExecutor[F[_]: Concurrent: Log: Time: Metrics: BlockStorage: DagSto
 
       case Valid =>
         save(block, blockEffects) *>
-          Log[F].info(s"Added ${block.blockHash.show -> "block"}")
+          Log[F].info(s"Added ${block.blockHash.show -> "message"}")
 
       case EquivocatedBlock | SelfEquivocatedBlock =>
         save(block, blockEffects) *>
-          Log[F].info(s"Added equivocated ${block.blockHash.show -> "block"}") *>
+          Log[F].info(s"Added equivocated ${block.blockHash.show -> "message"}") *>
           FatalError.selfEquivocationError(block.blockHash).whenA(status == SelfEquivocatedBlock)
 
       case status: StoredInvalid =>
         Metrics[F].incrementCounter("StoredInvalid") >>
           save(block, blockEffects) *>
-            Log[F].warn(s"Added slashable ${block.blockHash.show -> "block"}: $status")
+            Log[F].warn(s"Added slashable ${block.blockHash.show -> "message"}: $status")
 
       case status: InvalidBlock =>
-        Log[F].warn(s"Ignoring unslashable ${block.blockHash.show -> "block"}: $status") *>
+        Log[F].warn(s"Ignoring unslashable ${block.blockHash.show -> "message"}: $status") *>
           functorRaiseInvalidBlock.raise(status)
 
       case Processing | Processed =>
@@ -175,7 +190,7 @@ class MessageExecutor[F[_]: Concurrent: Log: Time: Metrics: BlockStorage: DagSto
       case UnexpectedBlockException(ex) =>
         Metrics[F].incrementCounter("UnexpectedBlockException") >>
           Log[F].error(
-            s"Encountered exception in while processing ${block.blockHash.show -> "block"}: $ex"
+            s"Encountered exception in while processing ${block.blockHash.show -> "message"}: $ex"
           ) >>
           ex.raiseError[F, Unit]
     }
@@ -192,28 +207,30 @@ class MessageExecutor[F[_]: Concurrent: Log: Time: Metrics: BlockStorage: DagSto
     Metrics[F].timer("computeEffects") {
       val hashPrefix = block.blockHash.show
       val effectsF: F[BlockEffects] = for {
-        _   <- Log[F].info(s"Attempting to add $isBookingBlock ${hashPrefix -> "block"} to the DAG.")
+        _ <- Log[F].info(
+              s"Attempting to add $isBookingBlock ${hashPrefix -> "message"} to the DAG."
+            )
         dag <- DagStorage[F].getRepresentation
         _   <- Validation[F].blockFull(block, dag, chainName, genesis.some)
         // Confirm the parents are correct (including checking they commute) and capture
         // the effect needed to compute the correct pre-state as well.
-        _      <- Log[F].debug(s"Validating the parents of ${hashPrefix -> "block"}")
+        _      <- Log[F].debug(s"Validating the parents of ${hashPrefix -> "message"}")
         merged <- Validation[F].parents(block, dag)
         // TODO (CON-626): Pass the isBookingBlock information to the effects calculation. Or should it be computePrestate?
         _ <- Log[F].debug(
-              s"Computing the pre-state hash of $isBookingBlock ${hashPrefix -> "block"}"
+              s"Computing the pre-state hash of $isBookingBlock ${hashPrefix -> "message"}"
             )
         preStateHash <- ExecEngineUtil
                          .computePrestate[F](merged, block.mainRank, upgrades) //TODO: This should probably use p-rank
                          .timer("computePrestate")
         preStateBonds = merged.parents.headOption.getOrElse(block).getHeader.getState.bonds
-        _             <- Log[F].debug(s"Computing the effects for ${hashPrefix -> "block"}")
+        _             <- Log[F].debug(s"Computing the effects for ${hashPrefix -> "message"}")
         blockEffects <- ExecEngineUtil
                          .effectsForBlock[F](block, preStateHash)
                          .recoverWith {
                            case NonFatal(ex) =>
                              Log[F].error(
-                               s"Could not calculate effects for ${hashPrefix -> "block"}: $ex"
+                               s"Could not calculate effects for ${hashPrefix -> "message"}: $ex"
                              ) *>
                                FunctorRaise[F, InvalidBlock].raise(InvalidTransaction)
                          }
@@ -221,7 +238,7 @@ class MessageExecutor[F[_]: Concurrent: Log: Time: Metrics: BlockStorage: DagSto
         gasSpent = block.getBody.deploys.foldLeft(0L) { case (acc, next) => acc + next.cost }
         _ <- Metrics[F]
               .incrementCounter("gas_spent", gasSpent)
-        _ <- Log[F].debug(s"Validating the transactions in ${hashPrefix -> "block"}")
+        _ <- Log[F].debug(s"Validating the transactions in ${hashPrefix -> "message"}")
         _ <- Validation[F].transactions(
               block,
               preStateHash,
@@ -232,15 +249,15 @@ class MessageExecutor[F[_]: Concurrent: Log: Time: Metrics: BlockStorage: DagSto
         // It's not clear why we need to do this, the DM will not download a block if it depends on
         // an invalid one that could not be validated. Is it equivocations? Wouldn't the hash change,
         // because of hashing affecting the post state hash?
-        // _ <- Log[F].debug(s"Validating neglection for ${hashPrefix -> "block"}")
+        // _ <- Log[F].debug(s"Validating neglection for ${hashPrefix -> "message"}")
         // _ <- Validation[F]
         //       .neglectedInvalidBlock(
         //         block,
         //         invalidBlockTracker = Set.empty
         //       )
-        _ <- Log[F].debug(s"Checking equivocation for ${hashPrefix -> "block"}")
+        _ <- Log[F].debug(s"Checking equivocation for ${hashPrefix -> "message"}")
         _ <- Validation[F].checkEquivocation(dag, block).timer("checkEquivocationsWithUpdate")
-        _ <- Log[F].debug(s"Block effects calculated for ${hashPrefix -> "block"}")
+        _ <- Log[F].debug(s"Block effects calculated for ${hashPrefix -> "message"}")
       } yield blockEffects
 
       effectsToStatus(block, effectsF)
@@ -274,7 +291,7 @@ class MessageExecutor[F[_]: Concurrent: Log: Time: Metrics: BlockStorage: DagSto
 
       case Left(ex) =>
         Log[F].error(
-          s"Unexpected exception during validation of ${block.blockHash.show -> "block"}: $ex"
+          s"Unexpected exception during validation of ${block.blockHash.show -> "message"}: $ex"
         ) *>
           ex.raiseError[F, (BlockStatus, BlockEffects)]
     }

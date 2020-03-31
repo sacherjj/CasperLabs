@@ -34,24 +34,6 @@ trait StorageFixture { self: Suite =>
   implicit val metrics: Metrics[Task] = new MetricsNOP[Task]()
   implicit val log: Log[Task]         = Log.NOPLog[Task]
 
-  def withStorage[R](
-      f: BlockStorage[Task] => IndexedDagStorage[Task] => DeployStorage[Task] => FinalityStorage[
-        Task
-      ] => Task[R]
-  ): R = {
-    val testProgram = StorageFixture.createMemoryStorages[Task](scheduler).use {
-      case (blockStorage, dagStorage, deployStorage, finalityStorage) =>
-        f(blockStorage)(dagStorage)(deployStorage)(finalityStorage).recover {
-          case ex: org.sqlite.SQLiteException
-              if ex.getMessage.contains("SQL error or missing database") && sys.env.contains(
-                "DRONE_BRANCH"
-              ) =>
-            cancel("NODE-1231")
-        }
-    }
-    testProgram.unsafeRunSync(scheduler)
-  }
-
   /** Create a number of in-memory storages and run a test against them. */
   def withCombinedStorages(
       ec: Scheduler = scheduler,

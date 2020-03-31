@@ -214,6 +214,14 @@ class SQLiteDagStorage[F[_]: Sync](
       .to[Set]
       .transact(readXa)
 
+  override def getMainChildren(blockHash: BlockHash): F[Set[BlockHash]] =
+    sql"""|SELECT child_block_hash
+          |FROM block_parents
+          |WHERE parent_block_hash=$blockHash AND is_main=true""".stripMargin
+      .query[BlockHash]
+      .to[Set]
+      .transact(readXa)
+
   override def justificationToBlocks(blockHash: BlockHash): F[Set[BlockHash]] =
     sql"""|SELECT block_hash
           |FROM block_justifications

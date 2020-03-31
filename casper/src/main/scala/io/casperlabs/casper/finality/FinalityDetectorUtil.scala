@@ -191,30 +191,26 @@ object FinalityDetectorUtil {
       isHighway: Boolean,
       // Which dependencies to follow.
       next: Message => Seq[BlockHash]
-  ): F[List[BlockHash]] =
+  ): F[List[Message]] =
     for {
       lfb <- dag.lookupUnsafe(lfbHash)
       undecided <- DagOperations
                     .bfTraverseF[F, Message](List(lfb)) { m =>
-                      // Lookup first, that might be cached in memory.
-                      next(m).toList.distinct.traverse(dag.lookupUnsafe).flatMap { deps =>
-                        deps
-                          .filter { dep =>
-                            !isHighway || dep.eraId == lfb.eraId
-                          }
-                          .filterA { dep =>
-                            // Not finalizing or orphaning ballots but we need to traverse them first to get to the blocks.
-                            if (dep.isBallot) true.pure[F]
-                            else
-                              // Follow undecided blocks only. Hits the database.
-                              FinalityStorage[F]
-                                .getFinalityStatus(dep.messageHash)
-                                .map(_.isUndecided)
-                          }
-                      }
+                      next(m).toList.distinct
+                        .traverse(dag.lookupUnsafe(_))
+                        .flatMap { deps =>
+                          deps
+                            .filter { dep =>
+                              !isHighway || dep.eraId == lfb.eraId
+                            }
+                            .filterA(
+                              message =>
+                                FinalityStorage[F]
+                                  .getFinalityStatus(message.messageHash)
+                                  .map(_.isUndecided)
+                            )
+                        }
                     }
-                    .filter(_.isBlock) // We only want blocks in the result.
-                    .map(_.messageHash)
                     .toList
     } yield undecided
 
@@ -223,10 +219,12 @@ object FinalityDetectorUtil {
       dag: DagRepresentation[F],
       lfbHash: BlockHash,
       isHighway: Boolean
-  ): F[Set[BlockHash]] =
+  ): F[Set[Message]] =
     for {
-      finalizedImplicitly <- collectUndecided[F](dag, lfbHash, isHighway, _.parents)
-    } yield finalizedImplicitly.toSet - lfbHash // LFB is directly finalized.
+      messagesFinalizedImplicitly <- collectUndecided[F](dag, lfbHash, isHighway, _.parents)
+    } yield messagesFinalizedImplicitly
+      .filterNot(_.messageHash == lfbHash) // LFB is directly finalized.
+      .toSet
 
   /** A block is orphaned if it's not in the p-past cone of the last finalized block.
     * When a new LFB is found, we traverse it's j-past cone until the previous finalized block
@@ -237,7 +235,7 @@ object FinalityDetectorUtil {
       lfbHash: BlockHash,
       finalizedIndirectly: Set[BlockHash],
       isHighway: Boolean
-  ): F[Set[BlockHash]] =
+  ): F[Set[Message]] =
     for {
       undecided <- collectUndecided(
                     dag,
@@ -245,5 +243,6 @@ object FinalityDetectorUtil {
                     isHighway,
                     m => m.parents ++ m.justifications.map(_.latestBlockHash)
                   )
-    } yield undecided.toSet -- finalizedIndirectly - lfbHash
+      finalizedSet = finalizedIndirectly + lfbHash
+    } yield undecided.filterNot(m => finalizedSet.contains(m.messageHash)).toSet
 }

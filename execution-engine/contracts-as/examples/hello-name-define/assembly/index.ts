@@ -57,10 +57,5 @@ export function call(): void {
         toBytesPair(toBytesString(HELLO_NAME_KEY), key.toBytes()),
     ]);
     var pointer = storeFunctionAtHash(HELLO_NAME_EXT, namedKeys);
-    if (pointer === null) {
-        Error.fromUserError(2).revert();
-        return;
-    }
-
-    putKey(HELLO_NAME_KEY, <Key>pointer);
+    putKey(HELLO_NAME_KEY, pointer);
 }

@@ -1,7 +1,6 @@
 import os
 import time
 import ssl
-import logging
 import pkg_resources
 import google.protobuf.text_format
 from . import abi
@@ -60,16 +59,16 @@ def key_variant(key_type):
 
 def _encode_contract(contract_options, contract_args):
     file_name, hash, name, uref = contract_options
-    C = consensus.Deploy.Code
+    Code = consensus.Deploy.Code
     if file_name:
-        return C(wasm=_read_binary(file_name), args=contract_args)
+        return Code(wasm=_read_binary(file_name), args=contract_args)
     if hash:
-        return C(hash=hash, args=contract_args)
+        return Code(hash=hash, args=contract_args)
     if name:
-        return C(name=name, args=contract_args)
+        return Code(name=name, args=contract_args)
     if uref:
-        return C(uref=uref, args=contract_args)
-    raise Exception("One of wasm, hash, name or uref is required")
+        return Code(uref=uref, args=contract_args)
+    return Code(args=contract_args)
 
 
 def _serialize(o) -> bytes:
@@ -108,26 +107,17 @@ def make_deploy(
     if payment_amount:
         payment_args = abi.ABI.args([abi.ABI.big_int("amount", int(payment_amount))])
 
-    # Unless one of payment* options supplied use bundled standard-payment
-    if not any((payment, payment_name, payment_hash, payment_uref)):
-        payment = bundled_contract("standard_payment.wasm")
-
     session_options = (session, session_hash, session_name, session_uref)
     payment_options = (payment, payment_hash, payment_name, payment_uref)
 
-    # Compatibility mode, should be removed when payment is obligatory
-    if len(list(filter(None, payment_options))) == 0:
-        logging.info("No payment contract provided, using session as payment")
-        payment_options = session_options
-
     if len(list(filter(None, session_options))) != 1:
         raise TypeError(
-            "deploy: only one of session, session_hash, session_name, session_uref must be provided"
+            "deploy: exactly one of session, session_hash, session_name or session_uref must be provided"
         )
 
-    if len(list(filter(None, payment_options))) != 1:
+    if len(list(filter(None, payment_options))) > 1:
         raise TypeError(
-            "deploy: only one of payment, payment_hash, payment_name, payment_uref must be provided"
+            "deploy: only one of payment, payment_hash, payment_name or payment_uref can be provided"
         )
 
     # session_args must go to payment as well for now cause otherwise we'll get GASLIMIT error,

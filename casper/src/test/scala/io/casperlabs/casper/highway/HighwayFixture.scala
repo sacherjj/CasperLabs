@@ -29,11 +29,13 @@ import java.util.concurrent.TimeUnit
 import monix.catnap.SchedulerEffect
 import monix.eval.Task
 import monix.execution.schedulers.TestScheduler
+
 import scala.concurrent.duration._
 import org.scalatest.Suite
 import io.casperlabs.casper.util.execengine.ExecutionEngineServiceStub
 import io.casperlabs.casper.finality.MultiParentFinalizer
 import io.casperlabs.casper.util.ByteStringPrettifier
+import io.casperlabs.ipc.ChainSpec.DeployConfig
 import io.casperlabs.storage.dag.DagStorage
 
 trait HighwayFixture
@@ -159,7 +161,7 @@ trait HighwayFixture
     implicit lazy val finalizer = new MultiParentFinalizer[Task] {
       override def onNewMessageAdded(
           message: Message
-      ): Task[Option[MultiParentFinalizer.FinalizedBlocks]] = none.pure[Task]
+      ): Task[Seq[MultiParentFinalizer.FinalizedBlocks]] = Seq.empty.pure[Task]
     }
 
     implicit lazy val deployBuffer = DeployBuffer.create[Task](chainName, minTtl = Duration.Zero)
@@ -173,7 +175,17 @@ trait HighwayFixture
 
     implicit val validationRaise = raiseValidateErrorThroughApplicativeError[Task]
     implicit val protocol = CasperLabsProtocol.unsafe[Task](
-      (0L, ProtocolVersion(0, 0, 0), none)
+      (
+        0L,
+        ProtocolVersion(0, 0, 0),
+        Some(
+          DeployConfig()
+            .withMaxTtlMillis(24 * 60 * 60 * 1000) // 1 day
+            .withMaxDependencies(10)
+            .withMaxBlockSizeBytes(10 * 1024 * 1024)
+            .withMaxBlockCost(0)
+        )
+      )
     )
     // While we're using the MockMessageProducer we can't fully validate blocks.
     implicit lazy val validation: Validation[Task] = new NoOpValidation[Task]

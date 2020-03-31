@@ -31,7 +31,7 @@ dynamic-host-address = false
 no-upnp = false
 
 # Default timeout for roundtrip connections.
-default-timeout = "5second"
+default-timeout = "15second"
 
 # Timeout for shutting down gRPC services.
 shutdown-timeout = "1minute"
@@ -145,6 +145,15 @@ block-upload-rate-period = "0s"
 # if 0 then unlimited, if reached max size then peer will receive RESOURCE_EXHAUSTED response.
 block-upload-rate-max-throttled = 0
 
+# Size of the main thread pool.
+main-threads = 64
+
+# Size of the thread pool used to handle incoming requests.
+ingress-threads = 32
+
+# Size of the thread pool for database connections.
+db-threads = 48
+
 # io.casperlabs.node.configuration.Configuration.BlockStorage
 [blockstorage]
 
@@ -256,7 +265,7 @@ min-ttl = "1hour"
 [highway]
 
 # Use highway, or stick to NCB.
-enabled = false
+enabled = true
 
 # Fraction of time through the round after which we can create an omega message.
 omega-message-time-start = 0.5

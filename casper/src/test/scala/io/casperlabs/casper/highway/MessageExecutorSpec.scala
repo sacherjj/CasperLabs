@@ -367,15 +367,14 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
       override lazy val finalizer = new MultiParentFinalizer[Task] {
         override def onNewMessageAdded(
             message: Message
-        ) =
-          messageAddedRef
-            .set(Some(message))
-            .as(
-              Some(
-                MultiParentFinalizer
-                  .FinalizedBlocks(message.messageHash, BigInt(0), Set.empty, Set.empty)
-              )
-            )
+        ): Task[Seq[MultiParentFinalizer.FinalizedBlocks]] =
+          for {
+            _ <- messageAddedRef.set(Some(message))
+            _ <- FinalityStorage[Task].markAsFinalized(message.messageHash, Set.empty, Set.empty)
+          } yield Seq(
+            MultiParentFinalizer
+              .FinalizedBlocks(message.messageHash, BigInt(0), Set.empty, Set.empty)
+          )
       }
 
       override def test =

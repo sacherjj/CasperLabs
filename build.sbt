@@ -190,7 +190,8 @@ lazy val models = (project in file("models"))
       refinement,
       scalapbCompiler,
       scalacheck,
-      scalapbRuntimegGrpc
+      scalapbRuntimegGrpc,
+      tomlScala
     ),
     // TODO: As we refactor the interfaces this project should only depend on consensus
     // related models, ones that get stored, passed to client. The client for example
@@ -213,7 +214,7 @@ lazy val models = (project in file("models"))
   )
   .dependsOn(crypto % "compile->compile;test->test")
 
-val nodeAndClientVersion = "0.16.0"
+val nodeAndClientVersion = "0.17.0"
 
 lazy val node = (project in file("node"))
   .settings(commonSettings: _*)

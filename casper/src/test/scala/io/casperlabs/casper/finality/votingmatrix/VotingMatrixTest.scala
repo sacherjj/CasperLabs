@@ -85,9 +85,9 @@ class VotingMatrixTest extends FlatSpec with Matchers with BlockGenerator with S
       ))
     } yield result
 
-  it should "detect finality as appropriate" in withStorage {
-    implicit blockStore => implicit dagStorage => implicit deployStorage =>
-      _ =>
+  it should "detect finality as appropriate" in withCombinedStorageIndexed {
+    implicit storage =>
+      implicit dagStorage =>
         /*
          * The Dag looks like
          *
@@ -108,7 +108,7 @@ class VotingMatrixTest extends FlatSpec with Matchers with BlockGenerator with S
         val bonds  = Seq(v1Bond, v2Bond)
         for {
           genesis <- createAndStoreMessage[Task](Seq(), bonds = bonds)
-          dag     <- dagStorage.getRepresentation
+          dag     <- storage.getRepresentation
           implicit0(votingMatrix: VotingMatrix[Task]) <- VotingMatrix
                                                           .create[Task](
                                                             dag,
@@ -232,11 +232,10 @@ class VotingMatrixTest extends FlatSpec with Matchers with BlockGenerator with S
             CommitteeWithConsensusValue(Set(v1, v2), 20, b1.blockHash)
           )
 
-          updatedDag <- dagStorage.getRepresentation
           // rebuild from new finalized block b1
           newVotingMatrix <- VotingMatrix
                               .create[Task](
-                                updatedDag,
+                                dag,
                                 b1.blockHash,
                                 isHighway = false
                               )

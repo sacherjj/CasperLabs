@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests;
 
-use std::{mem, time::Instant};
+use std::{cmp, collections::VecDeque, mem, time::Instant};
 
 use engine_shared::{
     logging::{log_duration, log_metric},
@@ -740,9 +740,15 @@ enum KeysIteratorState<K, V, S: TrieStore<K, V>> {
     Failed,
 }
 
+struct VisitedTrieNode<K, V> {
+    trie: Trie<K, V>,
+    maybe_index: Option<usize>,
+    path: Vec<u8>,
+}
+
 pub struct KeysIterator<'a, 'b, K, V, T, S: TrieStore<K, V>> {
-    #[allow(clippy::type_complexity)]
-    visited: Vec<(Trie<K, V>, Option<usize>, Vec<u8>)>,
+    initial_descend: VecDeque<u8>,
+    visited: Vec<VisitedTrieNode<K, V>>,
     store: &'a S,
     txn: &'b T,
     state: KeysIteratorState<K, V, S>,
@@ -769,25 +775,40 @@ where
                 return None;
             }
         }
-        while let Some((trie, maybe_index, mut path)) = self.visited.pop() {
+        while let Some(VisitedTrieNode {
+            trie,
+            maybe_index,
+            mut path,
+        }) = self.visited.pop()
+        {
             let mut maybe_next_trie: Option<Trie<K, V>> = None;
 
             match trie {
                 Trie::Leaf { key, .. } => {
-                    debug_assert!({
-                        let key_bytes = match key.to_bytes() {
-                            Ok(bytes) => bytes,
-                            Err(e) => {
-                                self.state = KeysIteratorState::Failed;
-                                return Some(Err(e.into()));
-                            }
-                        };
-                        key_bytes.starts_with(&path)
-                    });
-                    return Some(Ok(key));
+                    let key_bytes = match key.to_bytes() {
+                        Ok(bytes) => bytes,
+                        Err(e) => {
+                            self.state = KeysIteratorState::Failed;
+                            return Some(Err(e.into()));
+                        }
+                    };
+                    debug_assert!(key_bytes.starts_with(&path));
+                    // only return the leaf if it matches the initial descend path
+                    path.extend(&self.initial_descend);
+                    if key_bytes.starts_with(&path) {
+                        return Some(Ok(key));
+                    }
                 }
                 Trie::Node { ref pointer_block } => {
-                    let mut index: usize = maybe_index.unwrap_or_default();
+                    // if we are still initially descending (and initial_descend is not empty), take
+                    // the first index we should descend to, otherwise take maybe_index from the
+                    // visited stack
+                    let mut index: usize = self
+                        .initial_descend
+                        .front()
+                        .map(|i| *i as usize)
+                        .or(maybe_index)
+                        .unwrap_or_default();
                     while index < RADIX {
                         if let Some(ref pointer) = pointer_block[index] {
                             maybe_next_trie = match self.store.get(self.txn, pointer.hash()) {
@@ -798,33 +819,60 @@ where
                                 }
                             };
                             debug_assert!(maybe_next_trie.is_some());
-                            self.visited.push((trie, Some(index + 1), path.clone()));
+                            if self.initial_descend.pop_front().is_none() {
+                                self.visited.push(VisitedTrieNode {
+                                    trie,
+                                    maybe_index: Some(index + 1),
+                                    path: path.clone(),
+                                });
+                            }
                             path.push(index as u8);
+                            break;
+                        }
+                        // only continue the loop if we are not initially descending;
+                        // if we are descending and we land here, it means that there is no subtrie
+                        // along the descend path and we will return no results
+                        if !self.initial_descend.is_empty() {
                             break;
                         }
                         index += 1;
                     }
                 }
                 Trie::Extension { affix, pointer } => {
-                    maybe_next_trie = match self.store.get(self.txn, pointer.hash()) {
-                        Ok(trie) => trie,
-                        Err(e) => {
-                            self.state = KeysIteratorState::Failed;
-                            return Some(Err(e));
-                        }
-                    };
-                    debug_assert!({
-                        match &maybe_next_trie {
-                            Some(Trie::Node { .. }) => true,
-                            _ => false,
-                        }
-                    });
-                    path.extend(affix);
+                    let descend_len = cmp::min(self.initial_descend.len(), affix.len());
+                    let check_prefix = self
+                        .initial_descend
+                        .drain(..descend_len)
+                        .collect::<Vec<_>>();
+                    // if we are initially descending, we only want to continue if the affix
+                    // matches the descend path
+                    // if we are not, the check_prefix will be empty, so we will enter the if
+                    // anyway
+                    if affix.starts_with(&check_prefix) {
+                        maybe_next_trie = match self.store.get(self.txn, pointer.hash()) {
+                            Ok(trie) => trie,
+                            Err(e) => {
+                                self.state = KeysIteratorState::Failed;
+                                return Some(Err(e));
+                            }
+                        };
+                        debug_assert!({
+                            match &maybe_next_trie {
+                                Some(Trie::Node { .. }) => true,
+                                _ => false,
+                            }
+                        });
+                        path.extend(affix);
+                    }
                 }
             }
 
             if let Some(next_trie) = maybe_next_trie {
-                self.visited.push((next_trie, None, path));
+                self.visited.push(VisitedTrieNode {
+                    trie: next_trie,
+                    maybe_index: None,
+                    path,
+                });
             }
         }
         None
@@ -833,12 +881,10 @@ where
 
 /// Returns the iterator over the keys at a given root hash.
 ///
-/// Notes:
-/// * The root doesn't necessarily need to be the apex of the trie. It can be the "root" of a
-///   sub-trie.
+/// The root should be the apex of the trie.
 #[allow(dead_code)]
 pub fn keys<'a, 'b, K, V, T, S>(
-    _correlation_id: CorrelationId,
+    correlation_id: CorrelationId,
     txn: &'b T,
     store: &'a S,
     root: &Blake2bHash,
@@ -850,15 +896,42 @@ where
     S: TrieStore<K, V>,
     S::Error: From<T::Error>,
 {
-    #[allow(clippy::type_complexity)]
-    let (visited, init_state): (Vec<(Trie<K, V>, Option<usize>, Vec<u8>)>, _) =
-        match store.get(txn, root) {
-            Ok(None) => (vec![], KeysIteratorState::Ok),
-            Err(e) => (vec![], KeysIteratorState::ReturnError(e)),
-            Ok(Some(current_root)) => (vec![(current_root, None, vec![])], KeysIteratorState::Ok),
-        };
+    keys_with_prefix(correlation_id, txn, store, root, &[])
+}
+
+/// Returns the iterator over the keys in the subtrie matching `prefix`.
+///
+/// The root should be the apex of the trie.
+#[allow(dead_code)]
+pub fn keys_with_prefix<'a, 'b, K, V, T, S>(
+    _correlation_id: CorrelationId,
+    txn: &'b T,
+    store: &'a S,
+    root: &Blake2bHash,
+    prefix: &[u8],
+) -> KeysIterator<'a, 'b, K, V, T, S>
+where
+    K: ToBytes + FromBytes + Clone + Eq + std::fmt::Debug,
+    V: ToBytes + FromBytes + Clone + Eq + std::fmt::Debug,
+    T: Readable<Handle = S::Handle>,
+    S: TrieStore<K, V>,
+    S::Error: From<T::Error>,
+{
+    let (visited, init_state): (Vec<VisitedTrieNode<K, V>>, _) = match store.get(txn, root) {
+        Ok(None) => (vec![], KeysIteratorState::Ok),
+        Err(e) => (vec![], KeysIteratorState::ReturnError(e)),
+        Ok(Some(current_root)) => (
+            vec![VisitedTrieNode {
+                trie: current_root,
+                maybe_index: None,
+                path: vec![],
+            }],
+            KeysIteratorState::Ok,
+        ),
+    };
 
     KeysIterator {
+        initial_descend: prefix.iter().cloned().collect(),
         visited,
         store,
         txn,

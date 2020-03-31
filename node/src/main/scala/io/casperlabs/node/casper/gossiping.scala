@@ -5,6 +5,7 @@ import java.util.concurrent.{TimeUnit, TimeoutException}
 import cats._
 import cats.data.NonEmptyList
 import cats.effect._
+import cats.effect.concurrent.Ref
 import cats.effect.implicits._
 import cats.implicits._
 import com.google.protobuf.ByteString
@@ -42,6 +43,7 @@ import monix.tail.Iterant
 import scala.concurrent.duration._
 import scala.util.Random
 import scala.util.control.NonFatal
+import io.casperlabs.shared.ByteStringPrettyPrinter._
 
 /** Create the Casper stack using the GossipService. */
 package object gossiping {
@@ -102,12 +104,15 @@ package object gossiping {
                        connectToGossip
                      )
 
+      isInitialSyncDoneRef <- Resource.liftF(Ref.of[F, Boolean](false))
+
       downloadManager <- makeDownloadManager(
                           conf,
                           connectToGossip,
                           relaying,
                           synchronizer,
-                          maybeValidatorId
+                          maybeValidatorId,
+                          isInitialSyncDoneRef
                         )
 
       genesisApprover <- makeGenesisApprover(
@@ -141,7 +146,7 @@ package object gossiping {
 
       // Let the outside world know when we're done.
       _ <- makeFiberResource {
-            awaitSynchronization >> onInitialSyncCompleted
+            awaitSynchronization >> isInitialSyncDoneRef.set(true) >> onInitialSyncCompleted
           }
 
       // The stashing synchronizer waits for Genesis approval and the initial synchronization
@@ -268,7 +273,8 @@ package object gossiping {
       connectToGossip: GossipService.Connector[F],
       relaying: Relaying[F],
       synchronizer: Synchronizer[F],
-      maybeValidatorId: Option[ValidatorIdentity]
+      maybeValidatorId: Option[ValidatorIdentity],
+      isInitialSyncDoneRef: Ref[F, Boolean]
   ): Resource[F, BlockDownloadManager[F]] =
     for {
       _ <- Resource.liftF(BlockDownloadManagerImpl.establishMetrics[F])
@@ -283,14 +289,18 @@ package object gossiping {
                               isInDag(blockHash)
 
                             override def validate(block: Block): F[Unit] =
-                              maybeValidatorPublicKey
-                                .filter(_ == block.getHeader.validatorPublicKey)
-                                .fold(().pure[F]) { _ =>
-                                  Log[F]
-                                    .warn(
-                                      s"${PrettyPrinter.buildString(block) -> "block" -> null} seems to be created by a doppelganger using the same validator key!"
-                                    )
-                                } *>
+                              isInitialSyncDoneRef.get.flatMap { isInitialSyncDone =>
+                                maybeValidatorPublicKey
+                                  .filter {
+                                    _ == block.getHeader.validatorPublicKey && isInitialSyncDone
+                                  }
+                                  .fold(().pure[F]) { _ =>
+                                    Log[F]
+                                      .warn(
+                                        s"${block -> "message" -> null} seems to be created by a doppelganger using the same validator key!"
+                                      )
+                                  }
+                              } *>
                                 Consensus[F].validateAndAddBlock(block)
 
                             override def store(block: Block): F[Unit] =
@@ -307,6 +317,9 @@ package object gossiping {
                               // Calling `addBlock` during validation has already stored the block,
                               // so we have nothing more to do here with the consensus.
                               synchronizer.onDownloaded(blockHash)
+
+                            override def onFailed(blockHash: ByteString): F[Unit] =
+                              synchronizer.onFailed(blockHash)
                           },
                           relaying = relaying,
                           retriesConf = BlockDownloadManagerImpl.RetriesConf(
@@ -343,7 +356,7 @@ package object gossiping {
             for {
               // Validate it to make sure that code path is exercised.
               _ <- Log[F].info(
-                    s"Trying to validate and run the Genesis ${show(genesis.blockHash) -> "candidate"}"
+                    s"Trying to validate and run the Genesis ${genesis.blockHash.show -> "candidate"}"
                   )
               _ <- Consensus[F].validateAndAddBlock(genesis)
             } yield ()
@@ -379,7 +392,7 @@ package object gossiping {
             maybeApproveBlock(block).asRight.pure[F]
           } else {
             InvalidArgument(
-              s"${show(block.blockHash) -> "candidate"} did not equal the expected Genesis ${show(genesis.blockHash) -> "genesis"}"
+              s"${block.blockHash.show -> "candidate"} did not equal the expected Genesis ${genesis.blockHash.show -> "genesis"}"
             ).asLeft.pure[F].widen
           }
 
@@ -425,9 +438,6 @@ package object gossiping {
                    maybeApproval = maybeApproveBlock(genesis)
                  )
     } yield approver
-
-  private def show(hash: ByteString) =
-    PrettyPrinter.buildString(hash)
 
   def makeSynchronizer[F[_]: Concurrent: Parallel: Log: Metrics: DagStorage: Consensus: CasperLabsProtocol](
       conf: Configuration,

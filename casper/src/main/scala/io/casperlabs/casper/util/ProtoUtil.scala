@@ -34,6 +34,7 @@ import scala.concurrent.duration._
 import scala.util.Try
 import io.casperlabs.storage.dag.DagLookup
 import io.casperlabs.shared.Sorting._
+import io.casperlabs.shared.ByteStringPrettyPrinter._
 
 object ProtoUtil {
   import Weight._
@@ -181,7 +182,7 @@ object ProtoUtil {
         case None =>
           MonadThrowable[F].raiseError[Int](
             new NoSuchElementException(
-              s"DagStorage is missing previous block hash ${PrettyPrinter.buildString(validatorPrevBlockHash)}"
+              s"DagStorage is missing previous block hash ${validatorPrevBlockHash.show}"
             )
           )
       }
@@ -373,7 +374,7 @@ object ProtoUtil {
           case None =>
             MonadThrowable[F].raiseError(
               new NoSuchElementException(
-                s"DagStorage is missing hash ${PrettyPrinter.buildString(hash)}"
+                s"DagStorage is missing hash ${hash.show}"
               )
             )
         }
@@ -680,7 +681,7 @@ object ProtoUtil {
         case Deploy.Code.Contract.Uref(uref) =>
           ipc.DeployPayload.Payload.StoredContractUref(ipc.StoredContractURef(uref, args))
         case Deploy.Code.Contract.Empty =>
-          ipc.DeployPayload.Payload.Empty
+          ipc.DeployPayload.Payload.DeployCode(ipc.DeployCode(ByteString.EMPTY, args))
       }
       ipc.DeployPayload(payload)
     }

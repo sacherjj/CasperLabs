@@ -338,7 +338,7 @@ abstract class HashSetCasperTest
       Created(signedBlock) = createBlockResult
       status               <- node.casperEff.addBlock(signedBlock)
       _                    = assert(status == InvalidUnslashableBlock)
-      _                    = exactly(1, node.logEff.warns) should include("Ignoring block")
+      _                    = exactly(1, node.logEff.warns) should include("Ignoring message")
       _                    <- node.tearDownNode()
       result <- node.validateBlockStorage { blockStorage =>
                  blockStorage.getBlockMessage(signedBlock.blockHash) shouldBeF None
@@ -647,7 +647,7 @@ abstract class HashSetCasperTest
       _ <- nodes(2).casperEff.contains(signedBlock2) shouldBeF true
       // TransportLayer gets 1 block, 1 is missing. GossipService gets 1 hash, 2 block missing.
       _ = nodes(2).logEff.infos
-        .count(_ startsWith "Requested missing block") should (be >= 1 and be <= 2)
+        .count(_ startsWith "Requested missing message") should (be >= 1 and be <= 2)
       // TransportLayer controlled by .receive calls, only node(1) responds. GossipService has unlimited retrieve, goes to node(0).
       result = (0 to 1)
         .flatMap(nodes(_).logEff.infos)
@@ -952,7 +952,7 @@ abstract class HashSetCasperTest
       _ <- nodes(1).casperEff
             .addBlock(signedInvalidBlock)
 
-      _ = nodes(1).logEff.warns.count(_ startsWith "Recording invalid block") should be(1)
+      _ = nodes(1).logEff.warns.count(_ startsWith "Recording invalid message") should be(1)
       _ <- nodes(1).casperEff.contains(signedInvalidBlock) shouldBeF false
       _ <- nodes.map(_.tearDown()).toList.sequence
     } yield ()
@@ -985,7 +985,7 @@ abstract class HashSetCasperTest
       // We simulate a network failure here by not allowing block #10 to get passed to nodes(1)
       _ <- nodes(0).receive()
 
-      reqCnt = nodes(1).logEff.infos.count(_ startsWith "Requested missing block")
+      reqCnt = nodes(1).logEff.infos.count(_ startsWith "Requested missing message")
       _      = reqCnt should be >= 10 // TransportLayer
       _      = reqCnt should be <= 11 // GossipService
 
@@ -1015,7 +1015,7 @@ abstract class HashSetCasperTest
       _ <- nodes(0).casperEff
             .addBlock(invalidBlock1)
             .flatTap(nodes(0).broadcaster.networkEffects(invalidBlock1, _))
-      _ = nodes(0).logEff.warns.count(_ startsWith "Recording invalid block") should be(1)
+      _ = nodes(0).logEff.warns.count(_ startsWith "Recording invalid message") should be(1)
       // nodes(0) won't send invalid blocks
       _ <- nodes(1).receive()
       _ <- nodes(1).casperEff

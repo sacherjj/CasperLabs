@@ -347,7 +347,7 @@ When stests is up and running then the testing workflow becomes something like:
 
 ```bash
 # Launch a generator
-stests-wg-100 poc1 --user-accounts 5 --run 1
+stests-wg-100 poc1 --user-accounts 5
 # Check it is running
 stests-ls-runs poc1
 # Check what stage it is at

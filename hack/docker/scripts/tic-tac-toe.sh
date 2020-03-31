@@ -75,7 +75,7 @@ player_status() {
         --block-hash ${BLOCK_HASH} \
         --type hash \
         --key ${GAME_CONTRACT_HASH} \
-        --path "PublicKey(${PLAYER_ACCOUNT})")
+        --path "PublicKey(Ed25519(${PLAYER_ACCOUNT}))")
     HASH=$(echo $RESPONSE | awk -F "\"" '{print $2}')
     echo $HASH    
 }
@@ -96,7 +96,7 @@ game_status() {
         --block-hash ${BLOCK_HASH} \
         --type hash \
         --key ${GAME_CONTRACT_HASH} \
-        --path "Game PublicKey(${ACCOUNT_1}) vs PublicKey(${ACCOUNT_2})")
+        --path "Game PublicKey(Ed25519(${ACCOUNT_1})) vs PublicKey(Ed25519(${ACCOUNT_2}))")
     HASH=$(echo $RESPONSE | awk -F "\"" '{print $2}')
     echo $HASH    
 }
@@ -123,7 +123,7 @@ command_game_status () {
     GAME_HASH=$(contract_hash_by_name ${HOST_PUBLIC_KEY} ${GAME_CONTRACT_NAME} ${BLOCK_HASH})
     PROXY_HASH=$(contract_hash_by_name ${HOST_PUBLIC_KEY} ${PROXY_CONTRACT_NAME} ${BLOCK_HASH})
     PLAYER_STATUS=$(player_status ${GAME_HASH} ${BLOCK_HASH} ${PLAYER_PUBLIC_KEY})
-    OPPONENT_PUBLIC_KEY=$(echo ${PLAYER_STATUS} | awk -F "(" '{print $2}' | awk -F ")" '{print $1}')
+    OPPONENT_PUBLIC_KEY=$(echo ${PLAYER_STATUS} | awk -F "(" '{print $3}' | awk -F ")" '{print $1}')
     OPPONENT_STATUS=$(player_status ${GAME_HASH} ${BLOCK_HASH} ${OPPONENT_PUBLIC_KEY})
     GAME_STATUS=$(game_status ${GAME_HASH} ${BLOCK_HASH} ${PLAYER_PUBLIC_KEY} ${OPPONENT_PUBLIC_KEY})
     S=$(echo ${GAME_STATUS} | sed "s/_/ /g")
@@ -150,12 +150,31 @@ command_start () {
     BLOCK_HASH=$(last_block)
     GAME_HASH=$(contract_hash_by_name ${HOST_PUBLIC_KEY} ${GAME_CONTRACT_NAME} ${BLOCK_HASH})
     PROXY_HASH=$(contract_hash_by_name ${HOST_PUBLIC_KEY} ${PROXY_CONTRACT_NAME} ${BLOCK_HASH})
-    ARGS="[\
-        {\"name\": \"game\", \"value\": {\"bytes_value\": \"${GAME_HASH}\"}}, \
-        {\"name\": \"method\", \"value\": {\"string_value\": \"start\"}}, \
-        {\"name\": \"player_x\", \"value\": {\"bytes_value\": \"${PLAYER_X_PUBLIC_KEY}\"}}, \
-        {\"name\": \"player_o\", \"value\": {\"bytes_value\": \"${PLAYER_O_PUBLIC_KEY}\"}} \
-    ]"
+    ARGS='[{
+        "name" : "game",
+        "value" : {
+            "cl_type" : {"fixed_list_type" : {"inner" : {"simple_type" : "U8"}, "len" : 32}},
+            "value" : {"bytes_value" : "'${GAME_HASH}'"}
+        }
+    }, {
+        "name" : "method",
+        "value" : {
+            "cl_type" : { "simple_type" : "STRING" },
+            "value" : { "str_value" : "start" }
+        }
+    }, {
+        "name" : "player_x",
+        "value" : {
+            "cl_type" : {"fixed_list_type" : {"inner" : {"simple_type" : "U8"}, "len" : 32}},
+            "value" : {"bytes_value" : "'${PLAYER_X_PUBLIC_KEY}'"}
+        }
+    }, {
+        "name" : "player_o",
+        "value" : {
+            "cl_type" : {"fixed_list_type" : {"inner" : {"simple_type" : "U8"}, "len" : 32}},
+            "value" : {"bytes_value" : "'${PLAYER_O_PUBLIC_KEY}'"}
+        }
+    }]'
     RESPONSE=$($CL_CLIENT --host $CL_HOST deploy \
         --private-key $DEPLOYER_PRIVATE_KEY \
         --payment-amount 10000000 \
@@ -186,12 +205,31 @@ command_move () {
     BLOCK_HASH=$(last_block)
     GAME_HASH=$(contract_hash_by_name ${HOST_PUBLIC_KEY} ${GAME_CONTRACT_NAME} ${BLOCK_HASH})
     PROXY_HASH=$(contract_hash_by_name ${HOST_PUBLIC_KEY} ${PROXY_CONTRACT_NAME} ${BLOCK_HASH})
-    ARGS="[\
-        {\"name\": \"game\", \"value\": {\"bytes_value\": \"${GAME_HASH}\"}}, \
-        {\"name\": \"method\", \"value\": {\"string_value\": \"move\"}}, \
-        {\"name\": \"row\", \"value\": {\"int_value\": \"${X}\"}}, \
-        {\"name\": \"column\", \"value\": {\"int_value\": \"${Y}\"}} \
-    ]"
+    ARGS='[{
+        "name" : "game",
+        "value" : {
+            "cl_type" : {"fixed_list_type" : {"inner" : {"simple_type" : "U8"}, "len" : 32}},
+            "value" : {"bytes_value" : "'${GAME_HASH}'"}
+        }
+    }, {
+        "name" : "method",
+        "value" : {
+            "cl_type" : { "simple_type" : "STRING" },
+            "value" : { "str_value" : "move" }
+        }
+    }, {
+        "name" : "row",
+        "value" : {
+            "cl_type" : { "simple_type" : "U32" },
+            "value" : { "u32" : '${X}' }
+        }
+    }, {
+        "name" : "column",
+        "value" : {
+            "cl_type" : { "simple_type" : "U32" },
+            "value" : { "u32" : '${Y}' }
+        }
+    }]'
     RESPONSE=$($CL_CLIENT --host $CL_HOST deploy \
         --private-key $DEPLOYER_PRIVATE_KEY \
         --payment-amount 10000000 \
@@ -211,10 +249,19 @@ command_concede () {
     BLOCK_HASH=$(last_block)
     GAME_HASH=$(contract_hash_by_name ${HOST_PUBLIC_KEY} ${GAME_CONTRACT_NAME} ${BLOCK_HASH})
     PROXY_HASH=$(contract_hash_by_name ${HOST_PUBLIC_KEY} ${PROXY_CONTRACT_NAME} ${BLOCK_HASH})
-    ARGS="[\
-        {\"name\": \"game\", \"value\": {\"bytes_value\": \"${GAME_HASH}\"}}, \
-        {\"name\": \"method\", \"value\": {\"string_value\": \"concede\"}} \
-    ]"
+    ARGS='[{
+        "name" : "game",
+        "value" : {
+            "cl_type" : {"fixed_list_type" : {"inner" : {"simple_type" : "U8"}, "len" : 32}},
+            "value" : {"bytes_value" : "'${GAME_HASH}'"}
+        }
+    }, {
+        "name" : "method",
+        "value" : {
+            "cl_type" : { "simple_type" : "STRING" },
+            "value" : { "str_value" : "concede" }
+        }
+    }]'
     RESPONSE=$($CL_CLIENT --host $CL_HOST deploy \
         --private-key $DEPLOYER_PRIVATE_KEY \
         --payment-amount 10000000 \

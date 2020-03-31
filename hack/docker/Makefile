@@ -81,7 +81,10 @@ node-%/metrics:
 
 
 # Start common components.
-up: .make/docker/network .casperlabs
+up: \
+		.make/docker/network \
+		.make/stests/build \
+		.casperlabs
 	$(REFRESH_TARGETS)
 	if [ "$(CL_VERSION)" != "latest" ]; then \
 		docker-compose pull; \
@@ -92,6 +95,12 @@ up: .make/docker/network .casperlabs
 down:
 	docker-compose -p casperlabs down
 
+# Start all nodes and supporting services, for convenience.
+up-all: up
+	bash -c 'i=0 ; while [[ $$i -lt $(CL_CASPER_NUM_VALIDATORS) ]] ; do \
+		$(MAKE) node-$$i/up ; \
+		((i = i + 1)) ; \
+	done'
 
 # Slow down traffic between nodes to simulate network effects and large blocks.
 # If we slow it down too much then the client won't be able to connect though.
@@ -132,7 +141,7 @@ slow:
 	@# Create a `faucet-account` to hold some initial tokens to distribute.
 	mkdir -p keys/faucet-account
 	../key-management/docker-gen-account-keys.sh keys/faucet-account
-	(cat keys/faucet-account/account-id; echo ",10000000000,0") > .casperlabs/chainspec/genesis/accounts.csv
+	(cat keys/faucet-account/account-id; echo ",1000000000000000000,0") > .casperlabs/chainspec/genesis/accounts.csv
 
 	@# Create bonded validators with 0 balance.
 	bash -c 'i=0 ; while [[ $$i -lt $(CL_CASPER_NUM_VALIDATORS) ]] ; do \
@@ -189,6 +198,13 @@ stests/build:
 		-f stests/Dockerfile -t casperlabs/stests:latest stests
 
 	rm -rf stests/.build
+
+# stests is part of the docker-compose that runs on `up`, but it has to be built, it's not published yet.
+.make/stests/build:
+	BUILT=$$(docker images | grep casperlabs/stests | wc -l); \
+	if [ "$${BUILT}" -eq "0" ]; then \
+		$(MAKE) stests/build; \
+	fi
 
 # After nodes have been started, and `redis` with `make up`,
 # and an stest image built with `make stests/build`,

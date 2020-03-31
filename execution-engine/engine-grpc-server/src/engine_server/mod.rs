@@ -450,11 +450,7 @@ where
         _request_options: RequestOptions,
         _bid_state_request: BidStateRequest,
     ) -> SingleResponse<BidStateResponse> {
-        if !self.config().highway() {
-            return SingleResponse::err(GrpcError::Panic(UNIMPLEMENTED.to_string()));
-        }
-        let response = BidStateResponse::new();
-        SingleResponse::completed(response)
+        SingleResponse::err(GrpcError::Panic(UNIMPLEMENTED.to_string()))
     }
 
     fn distribute_rewards(
@@ -462,11 +458,7 @@ where
         _request_options: RequestOptions,
         _distribute_rewards_request: DistributeRewardsRequest,
     ) -> SingleResponse<DistributeRewardsResponse> {
-        if !self.config().highway() {
-            return SingleResponse::err(GrpcError::Panic(UNIMPLEMENTED.to_string()));
-        }
-        let response = DistributeRewardsResponse::new();
-        SingleResponse::completed(response)
+        SingleResponse::err(GrpcError::Panic(UNIMPLEMENTED.to_string()))
     }
 
     fn slash(
@@ -474,11 +466,7 @@ where
         _request_options: RequestOptions,
         _slash_request: SlashRequest,
     ) -> SingleResponse<SlashResponse> {
-        if !self.config().highway() {
-            return SingleResponse::err(GrpcError::Panic(UNIMPLEMENTED.to_string()));
-        }
-        let response = SlashResponse::new();
-        SingleResponse::completed(response)
+        SingleResponse::err(GrpcError::Panic(UNIMPLEMENTED.to_string()))
     }
 
     fn unbond_payout(
@@ -486,11 +474,7 @@ where
         _request_options: RequestOptions,
         _unbond_payout_request: UnbondPayoutRequest,
     ) -> SingleResponse<UnbondPayoutResponse> {
-        if !self.config().highway() {
-            return SingleResponse::err(GrpcError::Panic(UNIMPLEMENTED.to_string()));
-        }
-        let response = UnbondPayoutResponse::new();
-        SingleResponse::completed(response)
+        SingleResponse::err(GrpcError::Panic(UNIMPLEMENTED.to_string()))
     }
 }
 

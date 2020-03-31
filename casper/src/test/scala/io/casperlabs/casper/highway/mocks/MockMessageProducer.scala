@@ -5,21 +5,21 @@ import cats.implicits._
 import cats.syntax.show
 import cats.effect.Sync
 import com.google.protobuf.ByteString
-import io.casperlabs.casper.consensus.{Block, BlockSummary, Bond}
+import io.casperlabs.casper.consensus.{Block, BlockSummary}
 import io.casperlabs.casper.highway.{MessageProducer, Ticks}
 import io.casperlabs.casper.util.ProtoUtil
-import io.casperlabs.crypto.Keys.{PublicKey, PublicKeyBS}
+import io.casperlabs.crypto.Keys.PublicKeyBS
 import io.casperlabs.storage.BlockHash
 import io.casperlabs.storage.BlockMsgWithTransform
 import io.casperlabs.storage.block.BlockStorageWriter
 import io.casperlabs.storage.dag.DagStorage
 import io.casperlabs.models.Message
 import scala.util.control.NonFatal
+import io.casperlabs.shared.ByteStringPrettyPrinter._
 
 class MockMessageProducer[F[_]: Sync: BlockStorageWriter: DagStorage](
     val validatorId: PublicKeyBS
 ) extends MessageProducer[F] {
-  import io.casperlabs.casper.highway.`Show[BlockHash]`
 
   private def insert(message: Message): F[Unit] = {
     val summary = message.blockSummary
