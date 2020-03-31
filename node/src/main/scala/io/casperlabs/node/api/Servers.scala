@@ -6,6 +6,7 @@ import cats.effect.concurrent.Semaphore
 import cats.implicits._
 import io.casperlabs.casper.MultiParentCasperImpl.Broadcaster
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
+import io.casperlabs.casper.consensus.Block
 import io.casperlabs.catscontrib.Fs2Compiler
 import io.casperlabs.comm.discovery.{NodeDiscovery, NodeIdentifier}
 import io.casperlabs.comm.grpc.{ErrorInterceptor, GrpcServer, MetricsInterceptor}
@@ -118,6 +119,7 @@ object Servers {
   def httpServerR[F[_]: Log: NodeDiscovery: ConnectionsCell: Timer: ConcurrentEffect: MultiParentCasperRef: BlockStorage: ContextShift: FinalizedBlocksStream: ExecutionEngineService: DeployStorage: DagStorage: Fs2Compiler: Metrics](
       port: Int,
       conf: Configuration,
+      genesis: Block,
       id: NodeIdentifier,
       ec: ExecutionContext
   ): Resource[F, Unit] = {
@@ -139,7 +141,7 @@ object Servers {
               Router(
                 "/metrics" -> prometheusService,
                 "/version" -> VersionInfo.service,
-                "/status"  -> StatusInfo.service(conf),
+                "/status"  -> StatusInfo.service(conf, genesis),
                 "/graphql" -> GraphQL.service[F](ec)
               ).orNotFound
             )

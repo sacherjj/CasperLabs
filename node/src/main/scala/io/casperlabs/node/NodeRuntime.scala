@@ -338,6 +338,7 @@ class NodeRuntime private[node] (
       _ <- api.Servers.httpServerR[Task](
             conf.server.httpPort,
             conf,
+            genesis,
             id,
             ingressScheduler
           )
