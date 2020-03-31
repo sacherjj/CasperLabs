@@ -157,8 +157,12 @@ object StatusInfo {
         val connected = bootstrapNodes.filter(nodes)
         Basic(
           ok = bootstrapNodes.isEmpty || connected.nonEmpty,
-          message = Option(s"Connected to ${connected.size} of the bootstrap nodes.")
-            .filter(_ => bootstrapNodes.nonEmpty)
+          message = Some {
+            if (bootstrapNodes.isEmpty)
+              s"Connected to ${connected.size} of the bootstrap nodes."
+            else
+              "Not bootstraps configured."
+          }
         )
       }
     }
