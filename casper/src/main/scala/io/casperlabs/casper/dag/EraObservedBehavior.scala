@@ -11,6 +11,7 @@ import io.casperlabs.storage.dag.DagRepresentation.Validator
 import shapeless.tag.@@
 import io.casperlabs.casper.PrettyPrinter
 import scala.util.control.NoStackTrace
+import io.casperlabs.shared.ByteStringPrettyPrinter._
 
 final class EraObservedBehavior[A] private (
     val data: Map[BlockHash, Map[Validator, ObservedValidatorBehavior[A]]]
@@ -182,7 +183,7 @@ object EraObservedBehavior {
         .mapValues(_.toList.map(_ -> Set.empty[Message]).toMap)
 
     val observedKeyBlocks =
-      erasObservedBehavior.keyBlockHashes.map(PrettyPrinter.buildString(_)).mkString("[", ", ", "]")
+      erasObservedBehavior.keyBlockHashes.map(_.show).mkString("[", ", ", "]")
 
     (baseMap |+| toEraMap(justifications.filterNot(_.isGenesisLike))).toList
       .traverse {
@@ -193,7 +194,7 @@ object EraObservedBehavior {
                 erasObservedBehavior.getStatus(era, validator) match {
                   case None =>
                     val msg = s"Message directly cites validator " +
-                      s"${PrettyPrinter.buildString(validator)} in an era ${PrettyPrinter
+                      s"${validator.show} in an era ${PrettyPrinter
                         .buildString(era)} " +
                       s"but expected messages only from $observedKeyBlocks eras."
                     MonadThrowable[F].raiseError[(Validator, Set[Message])](

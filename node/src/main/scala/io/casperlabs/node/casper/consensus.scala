@@ -64,6 +64,7 @@ import scala.util.control.NoStackTrace
 import scala.concurrent.duration._
 import simulacrum.typeclass
 import io.casperlabs.storage.dag.AncestorsStorage
+import io.casperlabs.shared.ByteStringPrettyPrinter._
 
 // Stuff we need to pass to gossiping.
 @typeclass
@@ -122,7 +123,7 @@ object NCB {
 
             case None if block.getHeader.parentHashes.isEmpty =>
               for {
-                _     <- Log[F].info(s"Validating genesis-like ${show(block.blockHash) -> "block"}")
+                _     <- Log[F].info(s"Validating genesis-like ${block.blockHash.show -> "message"}")
                 state <- Cell.mvarCell[F, CasperState](CasperState())
                 executor <- MultiParentCasperImpl.StatelessExecutor
                              .create[F](
@@ -138,23 +139,23 @@ object NCB {
           }
           .flatMap {
             case Valid =>
-              Log[F].debug(s"Validated and stored ${show(block.blockHash) -> "block"}")
+              Log[F].debug(s"Validated and stored ${block.blockHash.show -> "message"}")
 
             case EquivocatedBlock =>
               Log[F].debug(
-                s"Detected ${show(block.blockHash) -> "block"} equivocated"
+                s"Detected ${block.blockHash.show -> "message"} equivocated"
               )
 
             case Processed =>
               Log[F].warn(
-                s"${show(block.blockHash) -> "block"} seems to have been processed before."
+                s"${block.blockHash.show -> "message"} seems to have been processed before."
               )
 
             case SelfEquivocatedBlock =>
               FatalError.selfEquivocationError(block.blockHash)
 
             case other =>
-              Log[F].debug(s"Received invalid ${show(block.blockHash) -> "block"}: $other") *>
+              Log[F].debug(s"Received invalid ${block.blockHash.show -> "message"}: $other") *>
                 MonadThrowable[F].raiseError[Unit](
                   // Raise an exception to stop the DownloadManager from progressing with this block.
                   new RuntimeException(s"Non-valid status: $other") with NoStackTrace
@@ -167,7 +168,7 @@ object NCB {
           genesisStore <- MonadThrowable[F].fromOption(
                            maybeGenesis,
                            NotFound(
-                             s"Cannot retrieve ${show(genesisBlockHash) -> "genesis"}"
+                             s"Cannot retrieve ${genesisBlockHash.show -> "genesis"}"
                            )
                          )
           genesis    = genesisStore.getBlockMessage
@@ -197,7 +198,7 @@ object NCB {
               .withHeader(summary.getHeader)
 
             Log[F].debug(
-              s"Feeding a pending block to Casper: ${show(summary.blockHash) -> "block"}"
+              s"Feeding a pending block to Casper: ${summary.blockHash.show -> "message"}"
             ) *>
               casper.addMissingDependencies(partialBlock)
 
@@ -231,9 +232,6 @@ object NCB {
         } yield lm.values.flatten
           .map(m => Block.Justification(m.validatorId, m.messageHash))
           .toSet
-
-      private def show(hash: ByteString) =
-        PrettyPrinter.buildString(hash)
     }
   }
 }

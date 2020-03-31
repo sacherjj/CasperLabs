@@ -264,6 +264,7 @@ message ChainSpec {
         uint32 max_ttl_millis = 2;
         uint32 max_dependencies = 3;
         uint32 max_block_size_bytes = 4;
+        uint64 max_block_cost = 5;
     }
 
     message HighwayConfig {

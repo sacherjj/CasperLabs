@@ -340,6 +340,7 @@ object HashSetCasperTestNode {
           .withMaxTtlMillis(24 * 60 * 60 * 1000) // 1 day
           .withMaxDependencies(10)
           .withMaxBlockSizeBytes(10 * 1024 * 1024)
+          .withMaxBlockCost(0)
       )
     )
   )
