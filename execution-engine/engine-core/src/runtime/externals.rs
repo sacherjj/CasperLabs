@@ -448,6 +448,13 @@ where
                 let ret = self.read_host_buffer(dest_ptr, dest_size as usize, bytes_written_ptr)?;
                 Ok(Some(RuntimeValue::I32(api_error::i32_from(ret))))
             }
+
+            #[cfg(feature = "print-function")]
+            FunctionIndex::PrintIndex => {
+                let (text_ptr, text_size) = Args::parse(args)?;
+                self.print(text_ptr, text_size)?;
+                Ok(None)
+            }
         }
     }
 }

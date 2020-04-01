@@ -2797,6 +2797,13 @@ where
 
         Ok(Ok(()))
     }
+
+    #[cfg(feature = "print-function")]
+    fn print(&mut self, text_ptr: u32, text_size: u32) -> Result<(), Trap> {
+        let text = self.string_from_mem(text_ptr, text_size)?;
+        println!("{}", text);
+        Ok(())
+    }
 }
 
 #[cfg(test)]

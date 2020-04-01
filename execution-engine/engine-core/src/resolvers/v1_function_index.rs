@@ -43,6 +43,8 @@ pub enum FunctionIndex {
     GetMainPurseIndex,
     GetArgSizeFuncIndex,
     ReadHostBufferIndex,
+    #[cfg(feature = "print-function")]
+    PrintIndex,
 }
 
 impl Into<usize> for FunctionIndex {
