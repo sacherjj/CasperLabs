@@ -50,19 +50,19 @@ class GossipServiceServer[F[_]: Concurrent: Parallel: Log: Metrics](
           for {
             remoteService <- connector(request.getSender)
             // TODO: Defend against malicious nodes similar to Synchronizer
-            deploySummaries <- remoteService
-                                .streamDeploySummaries(
-                                  StreamDeploySummariesRequest(newDeployHashes)
-                                )
-                                .toListL
             // Runs in background asynchronously
-            _ <- deploySummaries
-                  .traverse(
-                    deploySummary =>
-                      deployDownloadManager
-                        .scheduleDownload(deploySummary, request.getSender, relay = true)
+            _ <- (remoteService
+                  .streamDeploySummaries(
+                    StreamDeploySummariesRequest(newDeployHashes)
                   )
-                  .start
+                  .toListL >>= { deploySummaries =>
+                  deploySummaries
+                    .traverse(
+                      deploySummary =>
+                        deployDownloadManager
+                          .scheduleDownload(deploySummary, request.getSender, relay = true)
+                    )
+                }).start
           } yield NewDeploysResponse(isNew = true)
         }
       }
