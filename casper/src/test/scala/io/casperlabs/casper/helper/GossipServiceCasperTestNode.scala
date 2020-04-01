@@ -55,6 +55,7 @@ class GossipServiceCasperTestNode[F[_]](
     dagStorage: DagStorage[F],
     finalityStorage: FinalityStorage[F],
     deployStorage: DeployStorage[F],
+    ancestorsStorage: AncestorsStorage[F],
     deployBuffer: DeployBuffer[F],
     finalityDetector: MultiParentFinalizer[F],
     val timeEff: LogicalTime[F],
@@ -152,11 +153,12 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
       relaySaturation = 0
     )
 
-    initStorage() flatMap {
-      case (blockStorage, dagStorage, deployStorage, finalityStorage) =>
-        implicit val ds = deployStorage
-        implicit val bs = blockStorage
-        implicit val gs = dagStorage
+    initStorage().flatMap {
+      case (blockStorage, dagStorage, deployStorage, _, ancestorsStorage) =>
+        implicit val ds: DeployStorage[F]    = deployStorage
+        implicit val bs: BlockStorage[F]     = blockStorage
+        implicit val gs: DagStorage[F]       = dagStorage
+        implicit val as: AncestorsStorage[F] = ancestorsStorage
         for {
           casperState  <- Cell.mvarCell[F, CasperState](CasperState())
           semaphoreMap <- SemaphoreMap[F, ByteString](1)
@@ -192,10 +194,11 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
             minTTL = minTTL
           ) (
             concurrentEffectF,
-            blockStorage,
-            dagStorage,
-            finalityStorage,
-            deployStorage,
+            bs,
+            gs,
+            fs,
+            ds,
+            as,
             deployBuffer,
             multiParentFinalizer,
             timeEff,
@@ -262,19 +265,20 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
             isSynchronous = true
           )
 
-          initStorage() flatMap {
-            case (blockStorage, dagStorage, deployStorage, finalityStorage) =>
-              implicit val ds = deployStorage
-              implicit val bs = blockStorage
-              implicit val gs = dagStorage
+          initStorage().flatMap {
+            case (blockStorage, dagStorage, deployStorage, _, ancestorsStorage) =>
+              implicit val ds: DeployStorage[F]    = deployStorage
+              implicit val bs: BlockStorage[F]     = blockStorage
+              implicit val gs: DagStorage[F]       = dagStorage
+              implicit val as: AncestorsStorage[F] = ancestorsStorage
               for {
                 casperState <- Cell.mvarCell[F, CasperState](
                                 CasperState()
                               )
                 semaphoreMap <- SemaphoreMap[F, ByteString](1)
                 semaphore    <- Semaphore[F](1)
-                _            <- blockStorage.put(genesis.blockHash, genesis, Map.empty)
-                dag          <- dagStorage.getRepresentation
+                _            <- bs.put(genesis.blockHash, genesis, Map.empty)
+                dag          <- gs.getRepresentation
                 finalityDetector <- FinalityDetectorVotingMatrix
                                      .of[F](dag, genesis.blockHash, 0.1, isHighway = false)
                 implicit0(fs: FinalityStorage[F]) <- MockFinalityStorage[F](genesis.blockHash)
@@ -300,10 +304,11 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
                   minTTL = minTTL
                 ) (
                   concurrentEffectF,
-                  blockStorage,
-                  dagStorage,
-                  finalityStorage,
-                  deployStorage,
+                  bs,
+                  gs,
+                  fs,
+                  ds,
+                  as,
                   deployBuffer,
                   multiParentFinalizer,
                   timeEff,
@@ -313,8 +318,8 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
                 )
                 _ <- gossipService.init(
                       node.casperEff,
-                      blockStorage,
-                      deployStorage,
+                      bs,
+                      ds,
                       relaying,
                       connectToGossip
                     )
