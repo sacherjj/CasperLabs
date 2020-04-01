@@ -31,6 +31,7 @@ import io.casperlabs.storage.dag._
 import io.casperlabs.storage.deploy.DeployStorage
 import logstage.LogIO
 import monix.tail.Iterant
+import monix.execution.Scheduler
 import io.casperlabs.shared.ByteStringPrettyPrinter._
 
 import scala.collection.immutable.Queue
@@ -131,7 +132,8 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
       concurrentEffectF: ConcurrentEffect[F],
       parF: Parallel[F],
       timerF: Timer[F],
-      contextShift: ContextShift[F]
+      contextShift: ContextShift[F],
+      scheduler: Scheduler
   ): F[GossipServiceCasperTestNode[F]] = {
     val name               = "standalone"
     val identity           = peerNode(name, 40400)
@@ -146,6 +148,7 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
 
     // Standalone, so nobody to relay to.
     val relaying = RelayingImpl(
+      scheduler,
       new TestNodeDiscovery[F](Nil),
       connectToGossip = _ => ???,
       relayFactor = 0,
@@ -219,7 +222,8 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
       concurrentEffectF: ConcurrentEffect[F],
       parF: Parallel[F],
       timerF: Timer[F],
-      contextShift: ContextShift[F]
+      contextShift: ContextShift[F],
+      scheduler: Scheduler
   ): F[IndexedSeq[GossipServiceCasperTestNode[F]]] = {
     val n     = sks.length
     val names = (0 until n).map(i => s"node-$i")
@@ -253,6 +257,7 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
             peer => gossipServices(peer).asInstanceOf[GossipService[F]].pure[F]
 
           val relaying = RelayingImpl(
+            scheduler,
             nodeDiscovery,
             connectToGossip = connectToGossip,
             relayFactor = peers.size - 1,

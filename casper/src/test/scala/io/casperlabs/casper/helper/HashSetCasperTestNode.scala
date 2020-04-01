@@ -148,7 +148,8 @@ trait HashSetCasperTestNodeFactory {
       concurrentEffectF: ConcurrentEffect[F],
       parF: Parallel[F],
       timerF: Timer[F],
-      contextShift: ContextShift[F]
+      contextShift: ContextShift[F],
+      scheduler: Scheduler
   ): F[TestNode[F]]
 
   def standaloneEff(
@@ -163,7 +164,8 @@ trait HashSetCasperTestNodeFactory {
       ConcurrentEffect[Task],
       Parallel[Task],
       Timer[Task],
-      ContextShift[Task]
+      ContextShift[Task],
+      scheduler
     ).unsafeRunSync
 
   def networkF[F[_]](
@@ -177,7 +179,8 @@ trait HashSetCasperTestNodeFactory {
       concurrentEffectF: ConcurrentEffect[F],
       parF: Parallel[F],
       timerF: Timer[F],
-      contextShift: ContextShift[F]
+      contextShift: ContextShift[F],
+      scheduler: Scheduler
   ): F[IndexedSeq[TestNode[F]]]
 
   def networkEff(
@@ -197,7 +200,8 @@ trait HashSetCasperTestNodeFactory {
       ConcurrentEffect[Task],
       Parallel[Task],
       Timer[Task],
-      ContextShift[Task]
+      ContextShift[Task],
+      scheduler
     )
 
   protected def initStorage[F[_]: Concurrent: Log: Metrics: ContextShift: Time]()
