@@ -1,5 +1,5 @@
 import { IObservableArray, observable } from 'mobx';
-import { SignMessage } from '../background/lib/SignMessageManager';
+import { SignMessage } from '../background/SignMessageManager';
 
 export class AppState {
   @observable isUnlocked: boolean = false;

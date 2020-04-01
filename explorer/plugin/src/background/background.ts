@@ -3,9 +3,10 @@ import { browser } from 'webextension-polyfill-ts';
 import { Rpc } from '../lib/rpc/rpc';
 import { AppState } from '../lib/MemStore';
 import { autorun } from 'mobx';
-import SignMessageManager, { SignMessage } from './lib/SignMessageManager';
+import SignMessageManager, { SignMessage } from './SignMessageManager';
 import { PopupManager } from './PopupManager';
 import * as nacl from 'tweetnacl-ts';
+import { updateBadge } from './utils';
 
 
 const appState = new AppState();
@@ -33,6 +34,7 @@ async function setupPopupAPIServer() {
   // once appState update, send updated appState to popup
   autorun(() => {
     rpc.call<void>('popup.updateState', appState);
+    updateBadge(appState);
   });
   rpc.register('account.unlock', accountController.unlock.bind(accountController));
   rpc.register('account.createNewVault', accountController.createNewVault.bind(accountController));
@@ -59,7 +61,6 @@ async function setupInjectPageAPIServer() {
   });
   rpc.register('sign', function(message: string) {
     const promise = signMessageManager.addUnsignedMessageAsync(message);
-    popupManager.show();
     return promise;
   });
 }

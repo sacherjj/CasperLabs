@@ -3,7 +3,7 @@ import { Rpc } from '../lib/rpc/rpc';
 import { AppState } from '../lib/MemStore';
 import { action } from 'mobx';
 import ErrorContainer from './container/ErrorContainer';
-import { SignMessage } from '../background/lib/SignMessageManager';
+import { SignMessage } from '../background/SignMessageManager';
 
 export class BackgroundManager {
   private rpc: Rpc;

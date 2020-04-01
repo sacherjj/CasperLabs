@@ -1,5 +1,5 @@
 import * as events from 'events';
-import { AppState } from '../../lib/MemStore';
+import { AppState } from '../lib/MemStore';
 
 type SignMessageStatus = 'unsigned' | 'signed' | 'rejected';
 
