@@ -70,6 +70,8 @@ import cats.mtl.ApplicativeAsk
   def close(): F[Unit]
 }
 @typeclass trait DeployStorageReader[F[_]] {
+  def contains(deployHash: DeployHash): F[Boolean]
+
   def getDeploySummary(deployHash: DeployHash): F[Option[DeploySummary]]
 
   def readProcessed: F[List[Deploy]]
@@ -171,6 +173,9 @@ object DeployStorageReader {
     ev.reader
 
   trait MeteredDeployStorageReader[F[_]] extends DeployStorageReader[F] with Metered[F] {
+    abstract override def contains(deployHash: DeployHash) =
+      incAndMeasure("contains", super.contains(deployHash))
+
     abstract override def readProcessed =
       incAndMeasure("readProcessed", super.readProcessed)
 

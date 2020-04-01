@@ -287,6 +287,13 @@ class SQLiteDeployStorage[F[_]: Time: Sync](
         Fragment.const(s"${alias}.body")
       }
 
+    override def contains(deployHash: DeployHash) =
+      sql"SELECT 1 FROM deploys WHERE hash=${deployHash}"
+        .query[Int]
+        .option
+        .map(_.isDefined)
+        .transact(readXa)
+
     override def getDeploySummary(deployHash: DeployHash): F[Option[DeploySummary]] =
       sql"SELECT summary FROM deploys WHERE hash=${deployHash}"
         .query[DeploySummary]

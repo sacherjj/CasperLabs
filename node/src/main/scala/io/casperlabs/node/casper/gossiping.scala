@@ -297,7 +297,7 @@ package object gossiping {
                           connectToGossip = connectToGossip,
                           backend = new DeployDownloadManagerImpl.Backend[F] {
                             override def contains(deployHash: ByteString): F[Boolean] =
-                              DeployStorage[F].reader.getDeploySummary(deployHash).map(_.isDefined)
+                              DeployStorage[F].reader.contains(deployHash)
 
                             // Empty because deploy validated during adding into the DeployBuffer anyway
                             override def validate(deploy: Deploy): F[Unit] = ().pure[F]
@@ -555,7 +555,7 @@ package object gossiping {
                       DeployStorage[F].reader.getDeploySummary(deployHash)
 
                     override def hasDeploy(deployHash: DeployHash): F[Boolean] =
-                      DeployStorage[F].reader.getDeploySummary(deployHash).map(_.isDefined)
+                      DeployStorage[F].reader.contains(deployHash)
 
                     override def hasBlock(blockHash: ByteString): F[Boolean] =
                       isInDag(blockHash)

@@ -166,6 +166,8 @@ class MockDeployStorage[F[_]: Sync: Log](
 
   override def reader(implicit dv: DeployInfo.View) = new DeployStorageReader[F] {
 
+    override def contains(deployHash: DeployHash) = getByHash(deployHash).map(_.isDefined)
+
     override def getDeploySummary(deployHash: DeployHash): F[Option[DeploySummary]] =
       getByHash(deployHash).map(_.map(_.getSummary))
 
