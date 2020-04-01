@@ -50,10 +50,12 @@ export const IconButton = (props: {
 export const Icon = (props: {
   name: string;
   color?: string;
+  fontSize?: number;
   title?: string;
 }) => {
   const styles = {
-    color: props.color
+    color: props.color,
+    fontSize: props.fontSize
   };
   return (
     <i

@@ -16,6 +16,7 @@ interface Props extends RouteComponentProps{
 class ImportAccountPage extends React.Component<Props, {}> {
   async onSubmit() {
     await this.props.authContainer.importUserAccount(this.props.importAccountContainer.name.$, this.props.importAccountContainer.privateKey.$);
+    this.props.importAccountContainer.resetFields();
     this.props.history.goBack();
   }
 

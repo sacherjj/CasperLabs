@@ -30,6 +30,7 @@ export class BackgroundManager {
   private onStateUpdate(appState: AppState) {
     this.appState.isUnlocked = appState.isUnlocked;
     this.appState.hasCreatedVault = appState.hasCreatedVault;
+    this.appState.selectedUserAccount = appState.selectedUserAccount;
     this.appState.userAccounts.replace(appState.userAccounts);
     this.appState.toSignMessages.replace(appState.toSignMessages);
   }
@@ -60,5 +61,9 @@ export class BackgroundManager {
 
   public rejectSignMessage(msg: SignMessage) {
     return this.errors.withCapture(this.rpc.call<void>('sign.rejectMessage', msg));
+  }
+
+  public switchToAccount(account: SignKeyPairWithAlias) {
+    return this.errors.withCapture(this.rpc.call<void>('account.switchToAccount', account));
   }
 }

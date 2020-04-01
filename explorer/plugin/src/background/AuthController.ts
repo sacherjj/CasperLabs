@@ -32,6 +32,15 @@ class AuthController implements AccountApi {
   }
 
   @action
+  switchToAccount(account: SignKeyPairWithAlias) {
+    let i = this.appState.userAccounts.findIndex(a => a.name === account.name);
+    if (i === -1) {
+      throw new Error('Couldn\'t switch to this account because it doesn\'t exist');
+    }
+    this.appState.selectedUserAccount = account;
+  }
+
+  @action
   async importUserAccount(name: string, privateKey: string) {
     if (!this.appState.isUnlocked) {
       throw new Error('Unlock it before adding new account');
@@ -42,6 +51,9 @@ class AuthController implements AccountApi {
       name: name,
       signKeyPair: keyPair
     });
+    if (this.appState.selectedUserAccount === null) {
+      this.appState.selectedUserAccount = this.appState.userAccounts[0];
+    }
     this.persistVault(this.password!);
   }
 

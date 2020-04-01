@@ -39,6 +39,7 @@ async function setupPopupAPIServer() {
   rpc.register('account.hasCreatedVault', accountController.hasCreatedVault.bind(accountController));
   rpc.register('account.lock', accountController.lock.bind(accountController));
   rpc.register('account.importUserAccount', accountController.importUserAccount.bind(accountController));
+  rpc.register('account.switchToAccount', accountController.switchToAccount.bind(accountController));
   rpc.register('background.getState', () => {
     return appState;
   });

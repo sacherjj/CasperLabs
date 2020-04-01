@@ -15,6 +15,11 @@ class AccountManager {
     return this.backgroundManager.importUserAccount(name, privateKey);
   }
 
+  switchToAccount(account: SignKeyPairWithAlias){
+    return this.backgroundManager.switchToAccount(account);
+  }
+
+
   @computed
   get userAccounts(): IObservableArray<SignKeyPairWithAlias> {
     return this.appState.userAccounts;
@@ -42,6 +47,11 @@ class AccountManager {
   async clearAccount() {
     // this.userAccount = [];
     return;
+  }
+
+  @computed
+  get selectedUserAccount(){
+    return this.appState.selectedUserAccount;
   }
 
   @computed

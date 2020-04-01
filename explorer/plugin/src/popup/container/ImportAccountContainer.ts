@@ -1,6 +1,6 @@
 import { FieldState } from 'formstate';
 import { fieldSubmittable, valueRequired } from '../../lib/FormValidator';
-import { computed } from 'mobx';
+import { action, computed } from 'mobx';
 
 
 export class ImportAccountContainer {
@@ -11,5 +11,12 @@ export class ImportAccountContainer {
   @computed
   get submitDisabled(): boolean {
     return !(fieldSubmittable(this.privateKey) && fieldSubmittable(this.name));
+  }
+
+  @action
+  resetFields(){
+    this.privateKey.reset();
+    this.publicKey.reset();
+    this.name.reset();
   }
 }

@@ -20,8 +20,8 @@ const CustomToggle = React.forwardRef<HTMLButtonElement, ButtonProps>(({ childre
       e.preventDefault();
       onClick && onClick(e);
     }}
-    title={"menu"}
-    style={{fontSize: 20}}
+    title={'menu'}
+    style={{ fontSize: 20 }}
     className="link icon-button"
   >
     {children}
@@ -37,9 +37,20 @@ export default class Menu extends React.Component<Props, any> {
         <Dropdown alignRight={true}>
           <Dropdown.Toggle id="dropdown-basic" as={CustomToggle}/>
           <Dropdown.Menu>
-            <Dropdown.Item onClick={() => {
-              console.log('cc');
-            }}>Action</Dropdown.Item>
+            <Dropdown.Header>Accounts</Dropdown.Header>
+            {this.props.authContainer.userAccounts.map((account, i) => {
+              return (
+                <Dropdown.Item key={i} onClick={() => {
+                  this.props.authContainer.switchToAccount(account);
+                }}>
+                  {account.name === this.props.authContainer.selectedUserAccount?.name ?
+                    (<Icon name={'check'} fontSize={12}/>) :
+                    (<i style={{ fontSize: 12 }} className={'fa fa-fw'}/>)
+                  }
+                  {account.name}
+                </Dropdown.Item>
+              );
+            })}
             <Dropdown.Divider/>
             <Dropdown.Item href={Pages.UnlockPage}>Another action</Dropdown.Item>
             <Dropdown.Item href="#/action-3">Something else</Dropdown.Item>
