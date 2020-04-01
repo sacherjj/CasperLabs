@@ -489,7 +489,7 @@ where
                 | CLType::Map { .. }
                 | CLType::Tuple1(_)
                 | CLType::Tuple3(_)
-                | CLType::Contract
+                | CLType::ContractMetadata
                 | CLType::Any => Ok(()),
                 CLType::Key => {
                     let key: Key = cl_value.to_owned().into_t()?; // TODO: optimize?

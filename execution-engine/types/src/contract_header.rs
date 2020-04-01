@@ -93,7 +93,7 @@ impl ContractMetadata {
 
 impl CLTyped for ContractMetadata {
     fn cl_type() -> CLType {
-        CLType::Contract
+        CLType::ContractMetadata
     }
 }
 
