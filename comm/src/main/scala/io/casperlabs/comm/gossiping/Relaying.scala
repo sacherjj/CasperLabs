@@ -10,6 +10,7 @@ import io.casperlabs.comm.discovery.NodeUtils._
 import io.casperlabs.comm.discovery.{Node, NodeDiscovery}
 import io.casperlabs.comm.gossiping.Utils._
 import io.casperlabs.metrics.Metrics
+import io.casperlabs.metrics.implicits._
 import io.casperlabs.shared.Log
 import simulacrum.typeclass
 
@@ -75,10 +76,12 @@ class RelayingImpl[F[_]: Concurrent: Parallel: Log: Metrics: NodeAsk](
       }
     }
 
-    val run = for {
-      peers <- nd.recentlyAlivePeersAscendingDistance
-      _     <- hashes.parTraverse(hash => loop(hash, Random.shuffle(peers), 0, 0))
-    } yield ()
+    val run = {
+      for {
+        peers <- nd.recentlyAlivePeersAscendingDistance
+        _     <- hashes.parTraverse(hash => loop(hash, Random.shuffle(peers), 0, 0))
+      } yield ()
+    }.timerGauge("relay")
 
     if (isSynchronous) {
       run *> ().pure[F].pure[F]

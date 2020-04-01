@@ -87,7 +87,7 @@ class EraSupervisor[F[_]: Concurrent: Timer: Log: Metrics: EraStorage: Relaying:
       _ <- handleEvents(events)
             .timerGauge("incoming_handleEvents")
 
-      _ <- Log[F].info(s"Finished handling ${hash -> "message"}")
+      _ <- Log[F].info(s"Finished handling incoming ${hash -> "message"}")
     } yield ()
 
   private def ensureNotShutdown: F[Unit] =
@@ -200,15 +200,17 @@ class EraSupervisor[F[_]: Concurrent: Timer: Log: Metrics: EraStorage: Relaying:
         _ <- Log[F].info(
               s"Created $kind ${message.messageHash.show -> "message"} in ${message.roundId -> "round"} ${message.eraId.show -> "era"} child of ${message.parentBlock.show -> "parent"}"
             )
-        _ <- messageExecutor
-              .effectsAfterAdded(Validated(message))
-              .timerGauge(s"created_${kind}_effectsAfterAdded")
+        // Relay ASAP so it won't get orphaned. We can the local DB with further effects after that.
         _ <- Relaying[F]
               .relay(List(message.messageHash))
               .timerGauge(s"created_${kind}_relay")
+        _ <- messageExecutor
+              .effectsAfterAdded(Validated(message))
+              .timerGauge(s"created_${kind}_effectsAfterAdded")
         _ <- propagateLatestMessageToDescendantEras(message)
               .timerGauge(s"created_${kind}_propagateLatestMessage")
         _ <- Metrics[F].incrementCounter(s"created_$kind")
+        _ <- Log[F].info(s"Finished handling created ${message.messageHash.show -> "message"}")
       } yield ()
 
     events.traverse {
