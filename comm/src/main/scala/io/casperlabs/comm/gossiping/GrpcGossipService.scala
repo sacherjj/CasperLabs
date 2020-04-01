@@ -83,7 +83,7 @@ object GrpcGossipService {
         service.streamBlockSummaries(request).toObservable
 
       def streamDeploySummaries(request: StreamDeploySummariesRequest): Observable[DeploySummary] =
-        ???
+        service.streamDeploySummaries(request).toObservable
 
       def getBlockChunked(request: GetBlockChunkedRequest): Observable[Chunk] =
         Observable
