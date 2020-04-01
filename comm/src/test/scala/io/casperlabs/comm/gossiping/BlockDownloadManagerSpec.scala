@@ -6,7 +6,7 @@ import cats.effect.concurrent.Semaphore
 import cats.implicits._
 import com.google.protobuf.ByteString
 import eu.timepit.refined.auto._
-import io.casperlabs.casper.consensus.{Approval, Block, BlockSummary}
+import io.casperlabs.casper.consensus.{Approval, Block, BlockSummary, DeploySummary}
 import io.casperlabs.comm.GossipError
 import io.casperlabs.comm.discovery.Node
 import io.casperlabs.comm.discovery.NodeUtils.showNode
@@ -726,7 +726,10 @@ object BlockDownloadManagerSpec {
       def onFailed(blockHash: ByteString): Task[Unit]                  = ???
       def onScheduled(summary: BlockSummary, source: Node): Task[Unit] = ???
     }
-    private val emptyDownloadManager = new BlockDownloadManager[Task] {
+    private val emptyDeployDownloadManager = new DeployDownloadManager[Task] {
+      def scheduleDownload(summary: DeploySummary, source: Node, relay: Boolean) = ???
+    }
+    private val emptyBlockDownloadManager = new BlockDownloadManager[Task] {
       def scheduleDownload(summary: BlockSummary, source: Node, relay: Boolean) = ???
     }
     private val emptyGenesisApprover = new GenesisApprover[Task] {
@@ -740,15 +743,19 @@ object BlockDownloadManagerSpec {
       implicit val log = Log.NOPLog[Task]
       GossipServiceServer[Task](
         backend = new GossipServiceServer.Backend[Task] {
+          def hasDeploy(deployHash: ByteString)                               = ???
           def hasBlock(blockHash: ByteString)                                 = ???
           def getBlock(blockHash: ByteString, deploysBodiesExcluded: Boolean) = Task.now(None)
           def getBlockSummary(blockHash: ByteString)                          = ???
+          def getDeploySummary(deployHash: ByteString)                        = ???
           def getDeploys(deployHashes: Set[ByteString])                       = ???
           def latestMessages: Task[Set[Block.Justification]]                  = ???
           def dagTopoSort(startRank: Long, endRank: Long)                     = ???
         },
         synchronizer = emptySynchronizer,
-        downloadManager = emptyDownloadManager,
+        connector = _ => ???,
+        deployDownloadManager = emptyDeployDownloadManager,
+        blockDownloadManager = emptyBlockDownloadManager,
         genesisApprover = emptyGenesisApprover,
         maxChunkSize = 100 * 1024,
         maxParallelBlockDownloads = 100
@@ -769,7 +776,8 @@ object BlockDownloadManagerSpec {
         // Using `new` because I want to override `getBlockChunked`.
         new GossipServiceServer[Task](
           backend = new GossipServiceServer.Backend[Task] {
-            override def hasBlock(blockHash: ByteString) = ???
+            override def hasDeploy(deployHash: ByteString): Task[Boolean] = ???
+            override def hasBlock(blockHash: ByteString)                  = ???
             override def getBlock(blockHash: ByteString, deploysBodiesExcluded: Boolean) =
               regetter(Task.delay(blockMap.get(blockHash).map { block =>
                 if (deploysBodiesExcluded) {
@@ -780,12 +788,15 @@ object BlockDownloadManagerSpec {
               }))
             override def getDeploys(deployHashes: Set[ByteString])      = ???
             override def getBlockSummary(blockHash: ByteString)         = ???
+            override def getDeploySummary(deployHash: ByteString)       = ???
             override def latestMessages: Task[Set[Block.Justification]] = ???
             override def dagTopoSort(startRank: Long, endRank: Long)    = ???
 
           },
           synchronizer = emptySynchronizer,
-          downloadManager = emptyDownloadManager,
+          connector = _ => ???,
+          deployDownloadManager = emptyDeployDownloadManager,
+          blockDownloadManager = emptyBlockDownloadManager,
           genesisApprover = emptyGenesisApprover,
           maxChunkSize = 100 * 1024,
           blockDownloadSemaphore = semaphore

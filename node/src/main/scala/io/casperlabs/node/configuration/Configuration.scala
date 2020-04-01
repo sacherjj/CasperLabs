@@ -92,6 +92,7 @@ object Configuration extends ParserImplicits {
       initSyncMaxBlockCount: Int Refined Positive,
       periodicSyncRoundPeriod: FiniteDuration,
       downloadMaxParallelBlocks: Int,
+      downloadMaxParallelDeploys: Int,
       downloadMaxRetries: Int Refined NonNegative,
       downloadRetryInitialBackoffPeriod: FiniteDuration,
       downloadRetryBackoffFactor: Double Refined GreaterEqual[W.`1.0`.T],

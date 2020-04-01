@@ -2,7 +2,7 @@ package io.casperlabs.models
 
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus
-import io.casperlabs.casper.consensus.Deploy
+import io.casperlabs.casper.consensus.{Deploy, DeploySummary}
 import io.casperlabs.crypto.Keys.{PrivateKey, PublicKey}
 import io.casperlabs.crypto.hash.Blake2b256
 import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
@@ -30,5 +30,7 @@ object DeployImplicits {
       val approvals = d.approvals.toList :+ approval
       d.withApprovals(approvals.distinct.sortBy(_.approverPublicKey))
     }
+
+    def getSummary: DeploySummary = DeploySummary(d.deployHash, d.header, d.approvals)
   }
 }

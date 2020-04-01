@@ -11,7 +11,7 @@ import fs2.interop.reactivestreams._
 import io.casperlabs.casper
 import io.casperlabs.casper.MultiParentCasperImpl.Broadcaster
 import io.casperlabs.casper.consensus.info.DeployInfo
-import io.casperlabs.casper.consensus.{Block, BlockSummary, Deploy}
+import io.casperlabs.casper.consensus.{Block, BlockSummary, Deploy, DeploySummary}
 import io.casperlabs.casper.finality.MultiParentFinalizer
 import io.casperlabs.casper.finality.votingmatrix.FinalityDetectorVotingMatrix
 import io.casperlabs.casper.mocks.MockFinalityStorage
@@ -381,81 +381,88 @@ object GossipServiceCasperTestNodeFactory {
         } yield cont
 
       for {
-        downloadManagerR <- BlockDownloadManagerImpl[F](
-                             maxParallelDownloads = 10,
-                             connectToGossip = connectToGossip,
-                             backend = new BlockDownloadManagerImpl.Backend[F] {
-                               override def contains(blockHash: ByteString): F[Boolean] =
-                                 isInDag(blockHash)
+        blockDownloadManagerR <- BlockDownloadManagerImpl[F](
+                                  maxParallelDownloads = 10,
+                                  connectToGossip = connectToGossip,
+                                  backend = new BlockDownloadManagerImpl.Backend[F] {
+                                    override def contains(blockHash: ByteString): F[Boolean] =
+                                      isInDag(blockHash)
 
-                               override def validate(block: consensus.Block): F[Unit] =
-                                 // Casper can only validate, store, but won't gossip because the Broadcaster we give it
-                                 // will assume the DownloadManager will do that.
-                                 // Doing this log here as it's evidently happened if we are here, and the tests expect it.
-                                 Log[F].info(
-                                   s"Requested missing ${block.blockHash.show -> "message"} Now validating."
-                                 ) *>
-                                   casper
-                                     .addBlock(block) flatMap {
-                                   case Valid =>
-                                     Log[F].debug(
-                                       s"Validated and stored block ${block.blockHash.show -> "message" -> null}"
-                                     )
+                                    override def validate(block: consensus.Block): F[Unit] =
+                                      // Casper can only validate, store, but won't gossip because the Broadcaster we give it
+                                      // will assume the DownloadManager will do that.
+                                      // Doing this log here as it's evidently happened if we are here, and the tests expect it.
+                                      Log[F].info(
+                                        s"Requested missing ${block.blockHash.show -> "message"} Now validating."
+                                      ) *>
+                                        casper
+                                          .addBlock(block) flatMap {
+                                        case Valid =>
+                                          Log[F].debug(
+                                            s"Validated and stored block ${block.blockHash.show -> "message" -> null}"
+                                          )
 
-                                   case EquivocatedBlock =>
-                                     Log[F].debug(
-                                       s"Detected Equivocation on block ${block.blockHash.show -> "message" -> null}"
-                                     )
+                                        case EquivocatedBlock =>
+                                          Log[F].debug(
+                                            s"Detected Equivocation on block ${block.blockHash.show -> "message" -> null}"
+                                          )
 
-                                   case other =>
-                                     Log[F].debug(
-                                       s"Received invalid block ${block.blockHash.show -> "message" -> null}: $other"
-                                     ) *>
-                                       Sync[F].raiseError(
-                                         new RuntimeException(s"Non-valid status: $other")
-                                       )
-                                 }
+                                        case other =>
+                                          Log[F].debug(
+                                            s"Received invalid block ${block.blockHash.show -> "message" -> null}: $other"
+                                          ) *>
+                                            Sync[F].raiseError(
+                                              new RuntimeException(s"Non-valid status: $other")
+                                            )
+                                      }
 
-                               override def store(block: consensus.Block): F[Unit] =
-                                 // Validation has already stored it.
-                                 ().pure[F]
+                                    override def store(block: consensus.Block): F[Unit] =
+                                      // Validation has already stored it.
+                                      ().pure[F]
 
-                               override def onScheduled(summary: consensus.BlockSummary) =
-                                 // The EquivocationDetector treats equivocations with children differently,
-                                 // so let Casper know about the DAG dependencies up front.
-                                 Log[F].debug(
-                                   s"Feeding pending block to Casper: ${summary.blockHash.show -> "message" -> null}"
-                                 ) *> {
-                                   val partialBlock = consensus
-                                     .Block()
-                                     .withBlockHash(summary.blockHash)
-                                     .withHeader(summary.getHeader)
+                                    override def onScheduled(summary: consensus.BlockSummary) =
+                                      // The EquivocationDetector treats equivocations with children differently,
+                                      // so let Casper know about the DAG dependencies up front.
+                                      Log[F].debug(
+                                        s"Feeding pending block to Casper: ${summary.blockHash.show -> "message" -> null}"
+                                      ) *> {
+                                        val partialBlock = consensus
+                                          .Block()
+                                          .withBlockHash(summary.blockHash)
+                                          .withHeader(summary.getHeader)
 
-                                   casper.addMissingDependencies(partialBlock)
-                                 }
+                                        casper.addMissingDependencies(partialBlock)
+                                      }
 
-                               override def onScheduled(
-                                   summary: consensus.BlockSummary,
-                                   source: Node
-                               ) = ().pure[F]
+                                    override def onScheduled(
+                                        summary: consensus.BlockSummary,
+                                        source: Node
+                                    ) = ().pure[F]
 
-                               override def onDownloaded(blockHash: ByteString) =
-                                 // Calling `addBlock` during validation has already stored the block.
-                                 Log[F].debug(
-                                   s"Download ready for ${blockHash.show -> "message" -> null}"
-                                 )
+                                    override def onDownloaded(blockHash: ByteString) =
+                                      // Calling `addBlock` during validation has already stored the block.
+                                      Log[F].debug(
+                                        s"Download ready for ${blockHash.show -> "message" -> null}"
+                                      )
 
-                               override def onFailed(blockHash: ByteString) =
-                                 Log[F].debug(
-                                   s"Download failed for ${blockHash.show -> "message" -> null}"
-                                 )
-                             },
-                             relaying = relaying,
-                             retriesConf = BlockDownloadManagerImpl.RetriesConf.noRetries,
-                             egressScheduler = implicitly[Scheduler]
-                           ).allocated
+                                    override def onFailed(blockHash: ByteString) =
+                                      Log[F].debug(
+                                        s"Download failed for ${blockHash.show -> "message" -> null}"
+                                      )
+                                  },
+                                  relaying = relaying,
+                                  retriesConf = BlockDownloadManagerImpl.RetriesConf.noRetries,
+                                  egressScheduler = implicitly[Scheduler]
+                                ).allocated
 
-        (downloadManager, downloadManagerShutdown) = downloadManagerR
+        deployDownloadManager = new DeployDownloadManager[F] {
+          override def scheduleDownload(
+              handle: DeploySummary,
+              source: Node,
+              relay: Boolean
+          ): F[WaitHandle[F]] = ???
+        }
+        (blockDownloadManager, downloadManagerShutdown) = blockDownloadManagerR
 
         synchronizer <- SynchronizerImpl[F](
                          connectToGossip = connectToGossip,
@@ -490,6 +497,9 @@ object GossipServiceCasperTestNodeFactory {
 
         server <- GossipServiceServer[F](
                    backend = new GossipServiceServer.Backend[F] {
+                     override def hasDeploy(deployHash: DeployHash): F[Boolean] =
+                       deployStorage.reader.getByHash(deployHash).map(_.isDefined)
+
                      override def hasBlock(blockHash: ByteString): F[Boolean] =
                        isInDag(blockHash)
 
@@ -499,6 +509,13 @@ object GossipServiceCasperTestNodeFactory {
                        Log[F].debug(
                          s"Retrieving block summary ${blockHash.show -> "message" -> null} from storage."
                        ) *> blockStorage.getBlockSummary(blockHash)
+
+                     override def getDeploySummary(
+                         deployHash: DeployHash
+                     ): F[Option[DeploySummary]] =
+                       Log[F].debug(
+                         s"Retrieving deploy summary ${deployHash.show -> "message" -> null} from storage."
+                       ) *> deployStorage.reader.getDeploySummary(deployHash)
 
                      override def getBlock(
                          blockHash: ByteString,
@@ -524,7 +541,9 @@ object GossipServiceCasperTestNodeFactory {
                      override def dagTopoSort(startRank: Long, endRank: Long) = ???
                    },
                    synchronizer = synchronizer,
-                   downloadManager = downloadManager,
+                   connector = _ => ???,
+                   deployDownloadManager = deployDownloadManager,
+                   blockDownloadManager = blockDownloadManager,
                    // Not testing the genesis ceremony.
                    genesisApprover = new GenesisApprover[F] {
                      override def getCandidate = ???
@@ -596,6 +615,18 @@ object GossipServiceCasperTestNodeFactory {
         _ <- notificationQueue.set(Queue.empty)
       } yield ()
 
+    override def newDeploys(request: NewDeploysRequest): F[NewDeploysResponse] =
+      Log[F].info(
+        s"Received notification about deploy ${PrettyPrinter.buildString(request.deployHashes.head) -> "message" -> null}"
+      ) *>
+        notificationQueue
+          .update { q =>
+            q enqueue underlying
+              .newDeploys(request)
+              .void
+          }
+          .as(NewDeploysResponse(isNew = true))
+
     override def newBlocks(request: NewBlocksRequest): F[NewBlocksResponse] =
       Log[F].info(
         s"Received notification about block ${PrettyPrinter.buildString(request.blockHashes.head) -> "message" -> null}"
@@ -653,6 +684,9 @@ object GossipServiceCasperTestNodeFactory {
     override def streamBlockSummaries(
         request: StreamBlockSummariesRequest
     ): Iterant[F, consensus.BlockSummary] = ???
+    override def streamDeploySummaries(
+        request: StreamDeploySummariesRequest
+    ): Iterant[F, DeploySummary] = ???
     override def streamDagSliceBlockSummaries(
         request: StreamDagSliceBlockSummariesRequest
     ): Iterant[F, BlockSummary] = ???

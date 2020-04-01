@@ -5,7 +5,7 @@ import java.util.concurrent.TimeoutException
 import cats.effect.concurrent.Semaphore
 import cats.syntax.either._
 import com.google.protobuf.ByteString
-import io.casperlabs.casper.consensus.{Approval, Block, BlockSummary}
+import io.casperlabs.casper.consensus.{Approval, Block, BlockSummary, DeploySummary}
 import io.casperlabs.comm.discovery.{Node, NodeDiscovery, NodeIdentifier}
 import io.casperlabs.comm.gossiping._
 import io.casperlabs.comm.gossiping.downloadmanager._
@@ -211,8 +211,10 @@ object InitialSynchronizationBackwardImplSpec extends ArbitraryConsensus {
   }
 
   object MockBackend extends GossipServiceServer.Backend[Task] {
+    override def hasDeploy(deployHash: ByteString)                               = ???
     override def hasBlock(blockHash: ByteString)                                 = ???
     override def getBlockSummary(blockHash: ByteString)                          = ???
+    override def getDeploySummary(deployHash: ByteString)                        = ???
     override def getBlock(blockHash: ByteString, deploysBodiesExcluded: Boolean) = ???
     override def getDeploys(deployHashes: Set[ByteString])                       = ???
     override def latestMessages: Task[Set[Block.Justification]]                  = ???
@@ -224,6 +226,14 @@ object InitialSynchronizationBackwardImplSpec extends ArbitraryConsensus {
     def onDownloaded(blockHash: ByteString): Task[Unit]              = ???
     def onFailed(blockHash: ByteString): Task[Unit]                  = ???
     def onScheduled(summary: BlockSummary, source: Node): Task[Unit] = ???
+  }
+
+  object MockGossipServiceConnector extends (Node => Task[GossipService[Task]]) {
+    override def apply(node: Node): Task[GossipService[Task]] = ???
+  }
+
+  object MockDeployDownloadManager extends DeployDownloadManager[Task] {
+    def scheduleDownload(summary: DeploySummary, source: Node, relay: Boolean) = ???
   }
 
   object MockBlockDownloadManager extends BlockDownloadManager[Task] {
@@ -242,6 +252,8 @@ object InitialSynchronizationBackwardImplSpec extends ArbitraryConsensus {
       extends GossipServiceServer[Task](
         MockBackend,
         MockSynchronizer,
+        MockGossipServiceConnector,
+        MockDeployDownloadManager,
         MockBlockDownloadManager,
         MockGenesisApprover,
         0,

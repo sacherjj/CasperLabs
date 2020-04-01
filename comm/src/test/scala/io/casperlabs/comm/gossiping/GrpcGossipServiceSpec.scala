@@ -572,6 +572,8 @@ class GrpcGossipServiceSpec
 
               val faultyBackend = (_: AtomicReference[TestData]) => {
                 new GossipServiceServer.Backend[Task] {
+                  def getDeploySummary(deployHash: ByteString) = ???
+                  def hasDeploy(deployHash: ByteString)        = ???
                   def getBlock(blockHash: ByteString, excludeDeployBodies: Boolean) = {
                     cnt = cnt + 1
                     cnt match {
@@ -1200,7 +1202,7 @@ class GrpcGossipServiceSpec
                     testDataRef,
                     clientCert = Some(stubCert),
                     synchronizer = synchronizer,
-                    downloadManager = downloadManager
+                    blockDownloadManager = downloadManager
                   ).use { stub =>
                     stub.newBlocks(req) map { res =>
                       val unknownHashes = unknownBlocks.map(_.blockHash)
@@ -1420,7 +1422,10 @@ object GrpcGossipServiceSpec extends TestRuntime with ArbitraryConsensusAndComm 
       def onFailed(blockHash: ByteString): Task[Unit]                  = ???
       def onScheduled(summary: BlockSummary, source: Node): Task[Unit] = ???
     }
-    private val emptyDownloadManager = new BlockDownloadManager[Task] {
+    private val emptyDeployDownloadManager = new DeployDownloadManager[Task] {
+      def scheduleDownload(summary: DeploySummary, source: Node, relay: Boolean) = ???
+    }
+    private val emptyBlockDownloadManager = new BlockDownloadManager[Task] {
       def scheduleDownload(summary: BlockSummary, source: Node, relay: Boolean) = ???
     }
     private val emptyGenesisApprover = new GenesisApprover[Task] {
@@ -1431,6 +1436,8 @@ object GrpcGossipServiceSpec extends TestRuntime with ArbitraryConsensusAndComm 
 
     private def defaultBackend(testDataRef: AtomicReference[TestData]) =
       new GossipServiceServer.Backend[Task] {
+        def getDeploySummary(deployHash: ByteString): Task[Option[DeploySummary]] = ???
+        def hasDeploy(deployHash: ByteString): Task[Boolean]                      = ???
         def hasBlock(blockHash: ByteString) =
           Task.delay(testDataRef.get.blocks.contains(blockHash))
         def getBlock(blockHash: ByteString, excludeDeployBodies: Boolean) =
@@ -1483,7 +1490,9 @@ object GrpcGossipServiceSpec extends TestRuntime with ArbitraryConsensusAndComm 
         maxParallelBlockDownloads: Int = 100,
         blockChunkConsumerTimeout: FiniteDuration = 10.seconds,
         synchronizer: Synchronizer[Task] = emptySynchronizer,
-        downloadManager: BlockDownloadManager[Task] = emptyDownloadManager,
+        connector: GossipService.Connector[Task] = _ => ???,
+        deployDownloadManager: DeployDownloadManager[Task] = emptyDeployDownloadManager,
+        blockDownloadManager: BlockDownloadManager[Task] = emptyBlockDownloadManager,
         genesisApprover: GenesisApprover[Task] = emptyGenesisApprover,
         rateLimiter: RateLimiter[Task, ByteString] = RateLimiter.noOp,
         mkBackend: AtomicReference[TestData] => GossipServiceServer.Backend[Task] = defaultBackend
@@ -1505,7 +1514,9 @@ object GrpcGossipServiceSpec extends TestRuntime with ArbitraryConsensusAndComm 
             GossipServiceServer[Task](
               backend = mkBackend(testDataRef),
               synchronizer = synchronizer,
-              downloadManager = downloadManager,
+              connector = connector,
+              deployDownloadManager = deployDownloadManager,
+              blockDownloadManager = blockDownloadManager,
               genesisApprover = genesisApprover,
               maxChunkSize = DefaultMaxChunkSize,
               maxParallelBlockDownloads = maxParallelBlockDownloads

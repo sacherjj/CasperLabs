@@ -427,6 +427,11 @@ private[configuration] final case class Options private (
     @scallop
     val serverDownloadMaxParallelBlocks =
       gen[Int]("Maximum number of parallel block downloads initiated by the download manager.")
+
+    @scallop
+    val serverDownloadMaxParallelDeploys =
+      gen[Int]("Maximum number of parallel deploy downloads initiated by the download manager.")
+
     @scallop
     val serverDownloadMaxRetries =
       gen[Int]("Maximum number of times to retry to download a block from the same node.")
