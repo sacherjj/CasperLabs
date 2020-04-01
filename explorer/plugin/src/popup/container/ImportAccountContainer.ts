@@ -5,7 +5,6 @@ import { action, computed } from 'mobx';
 
 export class ImportAccountContainer {
   privateKey: FieldState<string> = new FieldState<string>('').validators(valueRequired);
-  publicKey: FieldState<string> = new FieldState<string>('').validators(valueRequired);
   name: FieldState<string> = new FieldState<string>('').validators(valueRequired);
 
   @computed
@@ -16,7 +15,6 @@ export class ImportAccountContainer {
   @action
   resetFields(){
     this.privateKey.reset();
-    this.publicKey.reset();
     this.name.reset();
   }
 }

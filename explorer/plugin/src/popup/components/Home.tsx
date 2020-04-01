@@ -51,8 +51,11 @@ class Home extends React.Component<Props, {}> {
   renderAccountLists() {
     return (
       <div>
-        <h5 className="mt-5 mb-4 text-center">
-          You have {this.props.authContainer.userAccounts.length} accounts
+        <div className="mt-5 mb-4 text-center">
+          <img src={logo} alt="logo" width={120}/>
+        </div>
+        <h5 className="mt-4 mb-3 text-center">
+          You have {this.props.authContainer.userAccounts.length} account key(s)
         </h5>
         <div className="text-center" style={{ marginTop: '100px' }}>
           <LinkButton title="Import Account" path={Pages.ImportAccount}/>

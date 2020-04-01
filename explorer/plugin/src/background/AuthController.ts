@@ -47,6 +47,14 @@ class AuthController implements AccountApi {
     }
 
     const keyPair = nacl.sign.keyPair.fromSecretKey(decodeBase64(privateKey));
+    let account = this.appState.userAccounts.find(account => {
+      return account.name === name || encodeBase64(account.signKeyPair.secretKey) === encodeBase64(keyPair.secretKey);
+    });
+
+    if (account) {
+      throw new Error(`A account with same ${account.name === name ? 'name' : 'private key'} already exists`);
+    }
+
     this.appState.userAccounts.push({
       name: name,
       signKeyPair: keyPair

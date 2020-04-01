@@ -29,11 +29,10 @@ class ImportAccountPage extends React.Component<Props, {}> {
           }}>
             <TextField label="Private Key" placeholder="" id="import-private-key"
                        fieldState={this.props.importAccountContainer.privateKey}/>
-            <TextField label="Public Key" placeholder="" id="import-public-key"
-                       fieldState={this.props.importAccountContainer.publicKey}/>
             <TextField label="Name" placeholder="Human Readable Alias" id="import-name"
                        fieldState={this.props.importAccountContainer.name}/>
             <Button
+              className='mt-5'
               disabled={this.props.importAccountContainer.submitDisabled}
               type='submit'
               block={true}>Import</Button>
