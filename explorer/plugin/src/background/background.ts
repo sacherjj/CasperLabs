@@ -53,7 +53,7 @@ async function setupPopupAPIServer() {
 // Setup RPC server for inject page
 async function setupInjectPageAPIServer() {
   const rpc = new Rpc({
-    addListener: browser.runtime.onMessageExternal.addListener,
+    addListener: browser.runtime.onMessage.addListener,
     destination: 'page',
     source: 'background'
   });
