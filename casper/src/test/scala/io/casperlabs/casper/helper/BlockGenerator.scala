@@ -55,6 +55,7 @@ object BlockGenerator {
                  ProtocolVersion(1),
                  mainRank = Message.asMainRank(0),
                  maxBlockSizeBytes = 5 * 1024 * 1024,
+                 maxBlockCost = 0,
                  upgrades = Nil
                )
     } yield result

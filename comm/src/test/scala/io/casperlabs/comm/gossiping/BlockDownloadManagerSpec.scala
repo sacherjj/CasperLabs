@@ -250,7 +250,8 @@ class BlockDownloadManagerSpec
                     connectToGossip = _ => remote,
                     backend = backend,
                     relaying = MockRelaying.default,
-                    retriesConf = RetriesConf.noRetries
+                    retriesConf = RetriesConf.noRetries,
+                    egressScheduler = implicitly[Scheduler]
                   ).allocated
           (manager, release) = alloc
           w                  <- manager.scheduleDownload(summaryOf(block), source, relay = false)
@@ -278,7 +279,8 @@ class BlockDownloadManagerSpec
                     connectToGossip = _ => MockGossipService(),
                     backend = MockBackend(),
                     relaying = MockRelaying.default,
-                    retriesConf = RetriesConf.noRetries
+                    retriesConf = RetriesConf.noRetries,
+                    egressScheduler = implicitly[Scheduler]
                   ).allocated
           (manager, release) = alloc
           _                  <- release
@@ -650,7 +652,8 @@ object BlockDownloadManagerSpec {
         connectToGossip = remote(_),
         backend = backend,
         relaying = relaying,
-        retriesConf = retriesConf
+        retriesConf = retriesConf,
+        egressScheduler = scheduler
       )
 
       val runTest = managerR.use { manager =>

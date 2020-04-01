@@ -19,7 +19,7 @@ import io.casperlabs.shared.Log._
 import io.casperlabs.shared.{Compression, Log}
 import io.casperlabs.catscontrib.effect.implicits.fiberSyntax
 import monix.tail.Iterant
-
+import monix.execution.Scheduler
 import scala.concurrent.duration.{Duration, FiniteDuration}
 import scala.util.control.NonFatal
 
@@ -160,6 +160,7 @@ trait DownloadManagerImpl[F[_]] extends DownloadManager[F] { self =>
   import companion._
 
   // Can't specify context bounds in traits
+  implicit val H: ContextShift[F]
   implicit val C: Concurrent[F]
   implicit val T: Timer[F]
   implicit val L: Log[F]
@@ -178,6 +179,7 @@ trait DownloadManagerImpl[F[_]] extends DownloadManager[F] { self =>
   val signal: MVar[F, companion.Signal[F]]
   // Establish gRPC connection to another node.
   val connectToGossip: GossipService.Connector[F]
+  val egressScheduler: Scheduler
   val backend: companion.Backend[F]
   val relaying: Relaying[F]
   val retriesConf: companion.RetriesConf
@@ -561,7 +563,7 @@ trait DownloadManagerImpl[F[_]] extends DownloadManager[F] { self =>
     // we configured we'd know where we'd have to raise it to allow maximum throughput.
     Metrics[F].gauge("fetches_ongoing") {
       semaphore.withPermit {
-        effect
+        ContextShift[F].evalOn(egressScheduler)(effect)
       }
     }
   }

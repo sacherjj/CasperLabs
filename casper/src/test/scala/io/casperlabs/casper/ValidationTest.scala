@@ -75,7 +75,11 @@ class ValidationTest
   implicit val raiseValidateErr                       = validation.raiseValidateErrorThroughApplicativeError[Task]
   implicit val versions =
     CasperLabsProtocol.unsafe[Task](
-      (0L, state.ProtocolVersion(1), Some(DeployConfig(24 * 60 * 60 * 1000, 10, 10 * 1024 * 1024)))
+      (
+        0L,
+        state.ProtocolVersion(1),
+        Some(DeployConfig(24 * 60 * 60 * 1000, 10, 10 * 1024 * 1024, 0))
+      )
     )
 
   implicit val validationEff = new NCBValidationImpl[Task]()
@@ -1300,8 +1304,33 @@ class ValidationTest
       } yield result shouldBe Left(ValidateErrorWrapper(InvalidRepeatDeploy))
   }
 
-  it should "return InvalidPostStateHash when postStateHash of block is not correct" in withCombinedStorage() {
+  "totalCost" should "return TooExpensive when the cost is above the maximum" in withCombinedStorage() {
     implicit storage =>
+      val maxCost = 5L
+      implicit val versions =
+        CasperLabsProtocol.unsafe[Task](
+          (
+            0L,
+            state.ProtocolVersion(1),
+            Some(
+              DeployConfig(24 * 60 * 60 * 1000, 10, 10 * 1024 * 1024, maxCost)
+            )
+          )
+        )
+      val contract = ByteString.copyFromUtf8("some contract")
+      val deploysWithCost =
+        Vector.fill(2)(prepareDeploys(Vector(contract), cost = maxCost - 1)).flatten
+      for {
+        block <- createAndStoreMessage[Task](
+                  Seq.empty,
+                  deploys = deploysWithCost
+                )
+        result <- Validation.totalCost[Task](block).attempt
+      } yield result shouldBe Left(ValidateErrorWrapper(TooExpensive))
+  }
+
+  "Validation" should "return InvalidPostStateHash when postStateHash of block is not correct" in withCombinedStorageIndexed {
+    implicit storage => implicit dagStorage =>
       implicit val executionEngineService: ExecutionEngineService[Task] =
         HashSetCasperTestNode.simpleEEApi[Task](Map.empty)
       val deploys          = Vector(ProtoUtil.deploy(System.currentTimeMillis, ByteString.EMPTY))
@@ -1359,6 +1388,7 @@ class ValidationTest
                               ProtocolVersion(1),
                               mainRank = 0,
                               maxBlockSizeBytes = 5 * 1024 * 1024,
+                              maxBlockCost = 0,
                               upgrades = Nil
                             )
         DeploysCheckpoint(
