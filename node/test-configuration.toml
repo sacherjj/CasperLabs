@@ -1,0 +1,88 @@
+[grpc]
+socket = "/r:q:i:g:b:a:c:o:G:j:q:q:d:c:W:h:b:t"
+port-external = 167353221
+port-internal = 0
+use-tls = true
+[server]
+init-sync-max-block-count = 1603100496
+dynamic-host-address = true
+sync-disable-validations = true
+ingress-threads = 1903574950
+download-retry-backoff-factor = 6.600088390641013
+max-num-of-connections = 0
+approval-poll-interval = "817618450milliseconds"
+sync-max-possible-depth = 1906078029
+relay-saturation = 96134031
+download-retry-initial-backoff-period = "78304740milliseconds"
+sync-max-bonding-rate = 5.142695420380944
+relay-block-chunk-consumer-timeout = "180103975milliseconds"
+data-dir = "/m:v:b:v:b:0:D:b:H:v:g:W:b:E:t:h:3:g"
+init-sync-step = 546215661
+periodic-sync-round-period = "351343135milliseconds"
+max-message-size = -989886934
+sync-min-block-count-to-check-width = 1906041739
+http-port = 2147483647
+main-threads = 59890252
+init-sync-memoize-nodes = true
+init-sync-min-successful = 362896288
+block-upload-rate-period = "1949610837milliseconds"
+init-sync-skip-failed-nodes = true
+default-timeout = "139418242milliseconds"
+download-max-retries = 669564187
+sync-max-depth-ancestors-request = 871222653
+relay-factor = -1070220452
+shutdown-timeout = "1152724468milliseconds"
+event-stream-buffer-size = 1517749823
+port = 1
+db-threads = 107070924
+alive-peers-cache-expiration-period = "900587566milliseconds"
+kademlia-port = 2147483647
+parallelism-cpu-multiplier = 8.52378421861726
+relay-max-parallel-blocks = -1
+clean-block-storage = true
+no-upnp = true
+init-sync-max-nodes = -630978623
+block-upload-rate-max-throttled = 561607577
+init-sync-round-period = "766129899milliseconds"
+download-max-parallel-blocks = 2147483647
+approval-relay-factor = -1
+engine-parallelism = 1773148558
+block-upload-rate-max-requests = 780746122
+chunk-size = 1940180912
+[influx]
+hostname = "dmhxoujograxpilfhxlbwbgigtmvabvcnardxefbduwwcibrnax"
+port = -1
+database = "ajvyhgikhnosfnod"
+protocol = "wkhdujofdzqtwtmdjrdoganetmjoxvpegdptpvjbodysehzmaiozbrtnsonflextkanfj"
+[casper]
+auto-propose-acc-interval = "906365447milliseconds"
+standalone = true
+min-ttl = "1290624423milliseconds"
+auto-propose-ballot-interval = "516344485milliseconds"
+required-sigs = 1907021312
+validator-sig-algorithm = "dfqvzhlezlunlfqqvwjebashlzg"
+auto-propose-acc-count = -1528393294
+auto-propose-enabled = true
+auto-propose-check-interval = "1088583577milliseconds"
+[highway]
+enabled = true
+omega-message-time-start = 0.4053975329192243
+omega-message-time-end = 0.2680883994797695
+init-round-exponent = 1865995061
+[tls]
+certificate = "/y:a:p:u:y:c:6:9:y:3:v:y:5:4:w:7:x:x:v:n:x"
+key = "/B:f:y:1:f:8"
+api-certificate = "/y:y:p:k:o:m:a:q:w:L:y:l:d:i:g:n:f:j:g:l:8:N:r:l"
+api-key = "/f:o:u:y:t:o:0:e:n:z:l:c:v:i:d:x:7:4:8:i:0:l:y:d:e:c:q:k:a:w"
+[blockstorage]
+cache-max-size-bytes = -1
+cache-neighborhood-before = -310235376
+cache-neighborhood-after = -1975506484
+deploy-stream-chunk-size = -2147483648
+[metrics]
+prometheus = true
+zipkin = true
+sigar = true
+influx = true
+[log]
+level = Info

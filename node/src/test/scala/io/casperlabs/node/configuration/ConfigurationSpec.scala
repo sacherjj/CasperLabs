@@ -107,7 +107,8 @@ class ConfigurationSpec
       blockUploadRateMaxThrottled = 0,
       mainThreads = 1,
       ingressThreads = 1,
-      dbThreads = 1
+      dbThreads = 1,
+      parallelismCpuMultiplier = 1.0
     )
     val grpcServer = Configuration.Grpc(
       socket = Paths.get("/tmp/test"),

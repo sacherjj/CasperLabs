@@ -103,7 +103,8 @@ object Configuration extends ParserImplicits {
       blockUploadRateMaxThrottled: Int Refined NonNegative,
       mainThreads: Int Refined Positive,
       ingressThreads: Int Refined Positive,
-      dbThreads: Int Refined Positive
+      dbThreads: Int Refined Positive,
+      parallelismCpuMultiplier: Double Refined Positive
   ) extends SubConfig
 
   case class BlockStorage(

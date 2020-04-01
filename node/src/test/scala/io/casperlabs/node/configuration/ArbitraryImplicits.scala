@@ -81,6 +81,12 @@ trait ArbitraryImplicits {
     } yield refineV[GreaterEqual[W.`0.0`.T]](d).right.get
   }
 
+  implicit val positiveDoubleGen: Arbitrary[Refined[Double, Positive]] = Arbitrary {
+    for {
+      d <- Gen.choose(0.0, 10.0).filter(_ > 0)
+    } yield refineV[Positive](d).right.get
+  }
+
   implicit val gt0lte1DoubleGen
       : Arbitrary[Refined[Double, Interval.OpenClosed[W.`0.0`.T, W.`1.0`.T]]] = Arbitrary {
     for {

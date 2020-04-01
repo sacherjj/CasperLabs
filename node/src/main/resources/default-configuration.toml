@@ -154,6 +154,9 @@ ingress-threads = 32
 # Size of the thread pool for database connections.
 db-threads = 48
 
+# Parallelism per CPU core.
+parallelism-cpu-multiplier = 1.0
+
 # io.casperlabs.node.configuration.Configuration.BlockStorage
 [blockstorage]
 
