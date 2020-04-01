@@ -95,7 +95,7 @@ class MessageExecutor[F[_]: Concurrent: Log: Time: Metrics: BlockStorage: DagSto
     for {
       _ <- markDeploysAsProcessed(message)
             .timer("markDeploysAsProcessed")
-            .whenA(message.isBlock && maybeValidatorId.contains(message.validatorId))
+            .whenA(message.isBlock)
       // Forking event emissions so as not to hold up block processing.
       w1 <- BlockEventEmitter[F].blockAdded(message.messageHash).timer("emitBlockAdded").forkAndLog
       w2 <- updateLastFinalizedBlock(message).timer("updateLastFinalizedBlock")
