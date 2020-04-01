@@ -269,3 +269,10 @@ pub(crate) fn read_host_buffer(size: usize) -> Result<Vec<u8>, ApiError> {
     read_host_buffer_into(&mut dest)?;
     Ok(dest)
 }
+
+#[cfg(feature = "print-function")]
+/// Prints a debug message
+pub fn print(text: &str) {
+    let (text_ptr, text_size, _bytes) = contract_api::to_ptr(text);
+    unsafe { ext_ffi::print(text_ptr, text_size) }
+}
