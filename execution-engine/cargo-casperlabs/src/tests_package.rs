@@ -120,7 +120,7 @@ name = "integration-tests"
 path = "src/integration_tests.rs"
 
 [features]
-default = ["casperlabs-contract/std", "casperlabs-types/std""#,
+default = ["casperlabs-contract/std", "casperlabs-types/std", "casperlabs-engine-test-support/print-function", "casperlabs-contract/print-function""#,
         *CL_CONTRACT, *CL_TYPES, *ENGINE_TEST_SUPPORT,
     );
     static ref WASM_SRC_DIR: PathBuf = Path::new(env!("CARGO_MANIFEST_DIR")).join("wasm");
