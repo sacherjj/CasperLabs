@@ -112,7 +112,8 @@ package object gossiping {
                           relaying,
                           synchronizer,
                           maybeValidatorId,
-                          isInitialSyncDoneRef
+                          isInitialSyncDoneRef,
+                          egressScheduler
                         )
 
       genesisApprover <- makeGenesisApprover(
@@ -270,13 +271,14 @@ package object gossiping {
         )
       )
 
-  private def makeDownloadManager[F[_]: Concurrent: Log: Time: Timer: Metrics: DagStorage: Consensus](
+  private def makeDownloadManager[F[_]: ContextShift: Concurrent: Log: Time: Timer: Metrics: DagStorage: Consensus](
       conf: Configuration,
       connectToGossip: GossipService.Connector[F],
       relaying: Relaying[F],
       synchronizer: Synchronizer[F],
       maybeValidatorId: Option[ValidatorIdentity],
-      isInitialSyncDoneRef: Ref[F, Boolean]
+      isInitialSyncDoneRef: Ref[F, Boolean],
+      egressScheduler: Scheduler
   ): Resource[F, BlockDownloadManager[F]] =
     for {
       _ <- Resource.liftF(BlockDownloadManagerImpl.establishMetrics[F])
@@ -328,7 +330,8 @@ package object gossiping {
                             maxRetries = conf.server.downloadMaxRetries,
                             initialBackoffPeriod = conf.server.downloadRetryInitialBackoffPeriod,
                             backoffFactor = conf.server.downloadRetryBackoffFactor
-                          )
+                          ),
+                          egressScheduler = egressScheduler
                         )
     } yield downloadManager
 

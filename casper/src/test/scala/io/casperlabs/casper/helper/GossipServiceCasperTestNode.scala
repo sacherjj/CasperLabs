@@ -349,8 +349,9 @@ object GossipServiceCasperTestNodeFactory {
     }
 
   /** Accumulate messages until receive is called by the test. */
-  class TestGossipService[F[_]: ConcurrentEffect: Timer: Time: Parallel: Log: Validation]()
-      extends GossipService[F] {
+  class TestGossipService[F[_]: ContextShift: ConcurrentEffect: Timer: Time: Parallel: Log: Validation]()(
+      implicit scheduler: Scheduler
+  ) extends GossipService[F] {
 
     implicit val metrics  = new Metrics.MetricsNOP[F]
     implicit val versions = HashSetCasperTestNode.protocolVersions[F]
@@ -445,7 +446,8 @@ object GossipServiceCasperTestNodeFactory {
                                  )
                              },
                              relaying = relaying,
-                             retriesConf = BlockDownloadManagerImpl.RetriesConf.noRetries
+                             retriesConf = BlockDownloadManagerImpl.RetriesConf.noRetries,
+                             egressScheduler = implicitly[Scheduler]
                            ).allocated
 
         (downloadManager, downloadManagerShutdown) = downloadManagerR
