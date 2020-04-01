@@ -52,12 +52,11 @@ export default class Menu extends React.Component<Props, any> {
               );
             })}
             <Dropdown.Divider/>
-            <Dropdown.Item href={Pages.UnlockPage}>Another action</Dropdown.Item>
-            <Dropdown.Item href="#/action-3">Something else</Dropdown.Item>
-            <Dropdown.Divider/>
             <Dropdown.Item onClick={() => {
               this.props.authContainer.lock();
-            }}>Lock</Dropdown.Item>
+            }}>
+              <Icon name={"lock"} color={"green"}/> Lock
+            </Dropdown.Item>
           </Dropdown.Menu>
         </Dropdown>
       </div>
