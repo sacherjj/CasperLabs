@@ -8,6 +8,7 @@ use types::{
     bytesrepr, system_contract_errors, AccessRights, CLValueError, Key, URef,
 };
 
+use super::revert::Revert;
 use crate::resolvers::error::ResolverError;
 
 #[derive(Debug)]
@@ -30,7 +31,7 @@ pub enum Error {
     Rng(rand::Error),
     Resolver(ResolverError),
     /// Reverts execution with a provided status
-    Revert(u32),
+    Revert(Revert),
     AddKeyFailure(AddKeyFailure),
     RemoveKeyFailure(RemoveKeyFailure),
     UpdateKeyFailure(UpdateKeyFailure),

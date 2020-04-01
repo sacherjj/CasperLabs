@@ -312,11 +312,14 @@ fn should_fail_when_insufficient_funds() {
         .commit()
         .finish();
 
-    assert!(result
+    let error_msg = result
         .builder()
         .exec_error_message(2)
-        .expect("should have error message")
-        .contains("Trap(Trap { kind: Host(Revert(14)) })"))
+        .expect("should have error message");
+    assert!(
+        error_msg.contains("Trap(Trap { kind: Host(Revert(Revert(14))) })"),
+        error_msg
+    );
 }
 
 #[ignore]

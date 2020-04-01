@@ -2305,7 +2305,7 @@ where
 
     /// Reverts contract execution with a status specified.
     fn revert(&mut self, status: u32) -> Trap {
-        Error::Revert(status).into()
+        Error::Revert(status.into()).into()
     }
 
     fn add_associated_key(
