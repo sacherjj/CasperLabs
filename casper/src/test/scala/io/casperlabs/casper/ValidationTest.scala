@@ -1329,8 +1329,8 @@ class ValidationTest
       } yield result shouldBe Left(ValidateErrorWrapper(TooExpensive))
   }
 
-  "Validation" should "return InvalidPostStateHash when postStateHash of block is not correct" in withCombinedStorageIndexed {
-    implicit storage => implicit dagStorage =>
+  "Validation" should "return InvalidPostStateHash when postStateHash of block is not correct" in withCombinedStorage() {
+    implicit storage =>
       implicit val executionEngineService: ExecutionEngineService[Task] =
         HashSetCasperTestNode.simpleEEApi[Task](Map.empty)
       val deploys          = Vector(ProtoUtil.deploy(System.currentTimeMillis, ByteString.EMPTY))
