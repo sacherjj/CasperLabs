@@ -43,6 +43,13 @@ impl StoredValue {
         }
     }
 
+    pub fn to_contract(self) -> Option<Contract> {
+        match self {
+            StoredValue::Contract(contract) => Some(contract),
+            _ => None,
+        }
+    }
+
     pub fn type_name(&self) -> String {
         match self {
             StoredValue::CLValue(cl_value) => format!("{:?}", cl_value.cl_type()),

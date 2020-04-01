@@ -5,7 +5,7 @@ use parity_wasm::elements;
 use engine_shared::TypeMismatch;
 use types::{
     account::{AddKeyFailure, RemoveKeyFailure, SetThresholdFailure, UpdateKeyFailure},
-    bytesrepr, system_contract_errors, AccessRights, CLValueError, Key, URef,
+    bytesrepr, system_contract_errors, AccessRights, CLType, CLValueError, Key, URef,
 };
 
 use crate::resolvers::error::ResolverError;
@@ -47,6 +47,17 @@ pub enum Error {
     CLValue(CLValueError),
     HostBufferEmpty,
     UnsupportedWasmStart,
+    InvalidContractVersion,
+    NoSuchMethod,
+}
+
+impl Error {
+    pub fn type_mismatch(expected: CLType, found: CLType) -> Error {
+        Error::TypeMismatch(TypeMismatch {
+            expected: format!("{:?}", expected),
+            found: format!("{:?}", found),
+        })
+    }
 }
 
 impl fmt::Display for Error {

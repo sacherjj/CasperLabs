@@ -201,11 +201,11 @@ impl ModuleImportResolver for RuntimeModuleImportResolver {
                 FunctionIndex::AddContractVersion.into(),
             ),
             "remove_contract_version" => FuncInstance::alloc_host(
-                Signature::new(&[ValueType::I32; 1][..], None), // TODO: signature
+                Signature::new(&[ValueType::I32; 4][..], Some(ValueType::I32)),
                 FunctionIndex::RemoveContractVersion.into(),
             ),
             "call_versioned_contract" => FuncInstance::alloc_host(
-                Signature::new(&[ValueType::I32; 1][..], None), // TODO: signature
+                Signature::new(&[ValueType::I32; 7][..], Some(ValueType::I32)),
                 FunctionIndex::CallVersionedContract.into(),
             ),
             _ => {

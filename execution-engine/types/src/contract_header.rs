@@ -67,6 +67,11 @@ impl ContractMetadata {
         self.access_key
     }
 
+    /// Get the contract header for the given version (if present)
+    pub fn get_version(mut self, version: &SemVer) -> Option<ContractHeader> {
+        self.active_versions.remove(version)
+    }
+
     /// Modify the collection of active versions to include the given one.
     pub fn with_version(&mut self, version: SemVer, header: ContractHeader) -> Result<(), Error> {
         if self.removed_versions.contains(&version) || self.active_versions.contains_key(&version) {
@@ -131,6 +136,11 @@ impl ContractHeader {
         self.methods.keys().map(|s| s.as_str()).collect()
     }
 
+    /// Returns the type signature for the given `method`.
+    pub fn get_method(mut self, method: &String) -> Option<EntryPoint> {
+        self.methods.remove(method)
+    }
+
     /// Get the protocol version this header is targeting.
     pub fn protocol_version(&self) -> ProtocolVersion {
         self.protocol_version
@@ -162,9 +172,23 @@ pub struct EntryPoint {
     ret: CLType,
 }
 
+impl EntryPoint {
+    /// Get the arguments for this method.
+    pub fn args(&self) -> &[Arg] {
+        self.args.as_slice()
+    }
+}
+
 /// Argument to a method
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Arg {
     name: String,
     cl_type: CLType,
+}
+
+impl Arg {
+    /// Get the type of this argument.
+    pub fn cl_type(&self) -> &CLType {
+        &self.cl_type
+    }
 }

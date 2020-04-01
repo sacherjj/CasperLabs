@@ -122,4 +122,14 @@ extern "C" {
         access_ptr: *const u8,
         version_ptr: *const u8,
     ) -> i32;
+    pub fn call_versioned_contract(
+        key_ptr: *const u8,
+        key_size: usize,
+        version_ptr: *const u8,
+        method_ptr: *const u8,
+        method_size: usize,
+        args_ptr: *const u8,
+        args_size: usize,
+        result_size: *mut usize,
+    ) -> i32;
 }

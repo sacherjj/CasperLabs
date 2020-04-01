@@ -530,7 +530,43 @@ where
                 Ok(Some(RuntimeValue::I32(result as i32)))
             }
 
-            FunctionIndex::CallVersionedContract => Ok(None), // TODO
+            FunctionIndex::CallVersionedContract => {
+                // args(0) = pointer to key where contract is at in global state
+                // args(1) = size of key
+                // args(2) = pointer to contract version in wasm memory
+                // args(3) = pointer to method name in wasm memory
+                // args(4) = size of method name in wasm memory
+                // args(5) = pointer to function arguments in Wasm memory
+                // args(6) = size of arguments
+                // args(7) = pointer to result size (output)
+                let (
+                    key_ptr,
+                    key_size,
+                    version_ptr,
+                    method_ptr,
+                    method_size,
+                    args_ptr,
+                    args_size,
+                    result_size_ptr,
+                ) = Args::parse(args)?;
+
+                let key_contract: Key = self.key_from_mem(key_ptr, key_size)?;
+                let version = {
+                    let bytes = self.bytes_from_mem(version_ptr, SEM_VER_SERIALIZED_LENGTH)?;
+                    bytesrepr::deserialize(bytes).map_err(Error::BytesRepr)?
+                };
+                let method: String = self.t_from_mem(method_ptr, method_size)?;
+                let args_bytes: Vec<u8> = self.t_from_mem(args_ptr, args_size)?;
+
+                let ret = self.call_versioned_contract_host_buffer(
+                    key_contract,
+                    version,
+                    method,
+                    args_bytes,
+                    result_size_ptr,
+                )?;
+                Ok(Some(RuntimeValue::I32(api_error::i32_from(ret))))
+            }
         }
     }
 }

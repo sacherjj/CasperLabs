@@ -10,7 +10,7 @@ use casperlabs_types::{
     account::PublicKey,
     api_error,
     bytesrepr::{self, FromBytes},
-    ApiError, BlockTime, CLTyped, CLValue, ContractRef, Key, Phase, URef,
+    ApiError, BlockTime, CLTyped, CLValue, ContractRef, Key, Phase, SemVer, URef,
     BLOCKTIME_SERIALIZED_LENGTH, PHASE_SERIALIZED_LENGTH,
 };
 
@@ -66,6 +66,50 @@ pub fn call_contract<A: ArgsParser, T: CLTyped + FromBytes>(c_ptr: ContractRef, 
         unsafe { bytes_written.assume_init() }
     };
 
+    deserialize_contract_result(bytes_written)
+}
+
+/// Calls the given version stored contract, invoking the given method and
+/// passing the given arguments to it.
+///
+/// The return value rules are the same as for `call_contract`.
+#[allow(clippy::ptr_arg)]
+pub fn call_versioned_contract<A: ArgsParser, T: CLTyped + FromBytes>(
+    c_ptr: ContractRef,
+    version: SemVer,
+    method: String,
+    args: A,
+) -> T {
+    let contract_key: Key = c_ptr.into();
+    let (key_ptr, key_size, _bytes1) = contract_api::to_ptr(contract_key);
+    let (version_ptr, _version_size, _bytes2) = contract_api::to_ptr(version);
+    let (method_ptr, method_size, _bytes2) = contract_api::to_ptr(method);
+    let (args_ptr, args_size, _bytes2) = ArgsParser::parse(args)
+        .map(contract_api::to_ptr)
+        .unwrap_or_revert();
+
+    let bytes_written = {
+        let mut bytes_written = MaybeUninit::uninit();
+        let ret = unsafe {
+            ext_ffi::call_versioned_contract(
+                key_ptr,
+                key_size,
+                version_ptr,
+                method_ptr,
+                method_size,
+                args_ptr,
+                args_size,
+                bytes_written.as_mut_ptr(),
+            )
+        };
+        api_error::result_from(ret).unwrap_or_revert();
+        unsafe { bytes_written.assume_init() }
+    };
+
+    deserialize_contract_result(bytes_written)
+}
+
+fn deserialize_contract_result<T: CLTyped + FromBytes>(bytes_written: usize) -> T {
     let serialized_result = if bytes_written == 0 {
         // If no bytes were written, the host buffer hasn't been set and hence shouldn't be read.
         vec![]

@@ -1943,7 +1943,72 @@ where
             }
             None => return Err(Error::KeyNotFound(key)),
         };
+        self.execute_contract(key, contract, args, "call")
+    }
 
+    /// Calls `version` of the contract living at `key`, invoking `method` with
+    /// supplied `args`. This function also checks the args conform with the
+    /// types given in the contract header.
+    fn call_versioned_contract(
+        &mut self,
+        key: Key,
+        version: SemVer,
+        method: String,
+        args: Vec<CLValue>,
+    ) -> Result<CLValue, Error> {
+        let contract = match self.context.read_gs(&key)? {
+            Some(StoredValue::CLValue(cl_value))
+                if *cl_value.cl_type() == CLType::ContractMetadata =>
+            {
+                let metadata: ContractMetadata = CLValue::into_t(cl_value)?;
+                let header = metadata
+                    .get_version(&version)
+                    .ok_or_else(|| Error::InvalidContractVersion)?;
+                let entry_point = header
+                    .get_method(&method)
+                    .ok_or_else(|| Error::NoSuchMethod)?;
+
+                for (expected, found) in entry_point
+                    .args()
+                    .iter()
+                    .map(|a| a.cl_type())
+                    .cloned()
+                    .zip(args.iter().map(|v| v.cl_type()).cloned())
+                {
+                    if expected != found {
+                        return Err(Error::type_mismatch(expected, found));
+                    }
+                }
+
+                let seed = runtime_context::key_into_seed(key);
+                let version_bytes = version.to_bytes()?;
+                let contract_key = Key::local(seed, &version_bytes);
+                let contract = self
+                    .context
+                    .read_gs_direct(&contract_key)?
+                    .and_then(|sv| sv.to_contract())
+                    .ok_or_else(|| Error::InvalidContractVersion)?;
+
+                contract
+            }
+            Some(_) => {
+                return Err(Error::FunctionNotFound(format!(
+                    "Value at {:?} is not a versioned contract",
+                    key
+                )))
+            }
+            None => return Err(Error::KeyNotFound(key)),
+        };
+        self.execute_contract(key, contract, args, method.as_str())
+    }
+
+    fn execute_contract(
+        &mut self,
+        key: Key,
+        contract: Contract,
+        args: Vec<CLValue>,
+        entry_point: &str,
+    ) -> Result<CLValue, Error> {
         // Check for major version compatibility before calling
         let contract_version = contract.protocol_version();
         let current_version = self.context.protocol_version();
@@ -2042,7 +2107,7 @@ where
             context,
         };
 
-        let result = instance.invoke_export("call", &[], &mut runtime);
+        let result = instance.invoke_export(entry_point, &[], &mut runtime);
 
         // The `runtime`'s context was initialized with our counter from before the call and any gas
         // charged by the sub-call was added to its counter - so let's copy the correct value of the
@@ -2094,13 +2159,45 @@ where
         args_bytes: Vec<u8>,
         result_size_ptr: u32,
     ) -> Result<Result<(), ApiError>, Error> {
-        if !self.can_write_to_host_buffer() {
-            // Exit early if the host buffer is already occupied
-            return Ok(Err(ApiError::HostBufferFull));
+        // Exit early if the host buffer is already occupied
+        if let Err(err) = self.check_host_buffer() {
+            return Ok(Err(err));
         }
-
         let args: Vec<CLValue> = bytesrepr::deserialize(args_bytes)?;
         let result = self.call_contract(key, args)?;
+        self.manage_call_contract_host_buffer(result_size_ptr, result)
+    }
+
+    fn call_versioned_contract_host_buffer(
+        &mut self,
+        key: Key,
+        version: SemVer,
+        method: String,
+        args_bytes: Vec<u8>,
+        result_size_ptr: u32,
+    ) -> Result<Result<(), ApiError>, Error> {
+        // Exit early if the host buffer is already occupied
+        if let Err(err) = self.check_host_buffer() {
+            return Ok(Err(err));
+        }
+        let args: Vec<CLValue> = bytesrepr::deserialize(args_bytes)?;
+        let result = self.call_versioned_contract(key, version, method, args)?;
+        self.manage_call_contract_host_buffer(result_size_ptr, result)
+    }
+
+    fn check_host_buffer(&mut self) -> Result<(), ApiError> {
+        if !self.can_write_to_host_buffer() {
+            Err(ApiError::HostBufferFull)
+        } else {
+            Ok(())
+        }
+    }
+
+    fn manage_call_contract_host_buffer(
+        &mut self,
+        result_size_ptr: u32,
+        result: CLValue,
+    ) -> Result<Result<(), ApiError>, Error> {
         let result_size = result.inner_bytes().len() as u32; // considered to be safe
 
         // leave the host buffer set to `None` if there's nothing to write there
