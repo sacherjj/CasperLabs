@@ -40,6 +40,9 @@ protoc-rust-grpc = "0.6.1"
 parity-wasm = "0.31.3"
 rand = "0.7.2"
 
+[features]
+print-function = ["engine-core/print-function"]
+
 [[bin]]
 name = "casperlabs-engine-grpc-server"
 path = "src/main.rs"
