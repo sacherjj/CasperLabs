@@ -247,6 +247,14 @@ private[configuration] final case class Options private (
       gen[Int]("Size of the thread pool for database connections.")
 
     @scallop
+    val serverParallelismCpuMultiplier =
+      gen[Double]("Parallelism per CPU core.")
+
+    @scallop
+    val serverMinParallelism =
+      gen[Int]("Minimum parallelism.")
+
+    @scallop
     val tlsCertificate =
       gen[Path](
         "Path to node's X.509 certificate file, that is being used for identification.",

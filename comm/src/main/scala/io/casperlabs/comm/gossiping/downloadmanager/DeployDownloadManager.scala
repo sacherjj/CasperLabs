@@ -14,6 +14,7 @@ import io.casperlabs.crypto.codec.ByteArraySyntax
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.shared.Log
 import monix.tail.Iterant
+import monix.execution.Scheduler
 
 trait DeployDownloadManager[F[_]] extends DownloadManager[F] {
   override type Handle       = DeploySummary
@@ -30,12 +31,13 @@ object DeployDownloadManagerImpl extends DownloadManagerCompanion {
     Metrics.Source(DeployGossipingMetricsSource, "DownloadManager")
 
   /** Start the download manager. */
-  def apply[F[_]: Concurrent: Log: Timer: Metrics](
+  def apply[F[_]: ContextShift: Concurrent: Log: Timer: Metrics](
       maxParallelDownloads: Int,
       connectToGossip: GossipService.Connector[F],
       backend: Backend[F],
       relaying: Relaying[F],
-      retriesConf: RetriesConf
+      retriesConf: RetriesConf,
+      egressScheduler: Scheduler
   ): Resource[F, DeployDownloadManager[F]] =
     Resource.make {
       for {
@@ -54,7 +56,8 @@ object DeployDownloadManagerImpl extends DownloadManagerCompanion {
           connectToGossip,
           backend,
           relaying,
-          retriesConf
+          retriesConf,
+          egressScheduler
         )
         managerLoop <- manager.run.start
       } yield (isShutdown, workersRef, managerLoop, manager)
@@ -90,9 +93,12 @@ class DeployDownloadManagerImpl[F[_]](
     val connectToGossip: GossipService.Connector[F],
     val backend: DeployDownloadManagerImpl.Backend[F],
     val relaying: Relaying[F],
-    val retriesConf: RetriesConf
+    val retriesConf: RetriesConf,
+    val egressScheduler: Scheduler
 )(
-    implicit override val C: Concurrent[F],
+    implicit
+    override val H: ContextShift[F],
+    override val C: Concurrent[F],
     override val T: Timer[F],
     override val L: Log[F],
     override val M: Metrics[F]
