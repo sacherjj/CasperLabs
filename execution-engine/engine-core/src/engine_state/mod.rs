@@ -303,17 +303,11 @@ where
                 let total_bonds_args = {
                     let total_bonds: U512 = stakes.total_bonds();
                     let args = ("mint", total_bonds);
-                    ArgsParser::parse(args)
-                        .expect("args should convert to `Vec<CLValue>`")
-                        .into_bytes()
-                        .expect("args should serialize")
+                    ArgsParser::parse(args).expect("args should convert to `Vec<CLValue>`")
                 };
                 let zero_args = {
                     let args = ("mint", U512::zero());
-                    ArgsParser::parse(args)
-                        .expect("args should convert to `Vec<CLValue>`")
-                        .into_bytes()
-                        .expect("args should serialize")
+                    ArgsParser::parse(args).expect("args should convert to `Vec<CLValue>`")
                 };
                 let bonding_purse = runtime
                     .call_contract(mint_reference.into(), total_bonds_args)?
@@ -521,11 +515,9 @@ where
                 let args = {
                     let motes = account.balance().value();
                     let args = (MINT_METHOD_NAME, motes);
-                    ArgsParser::parse(args)
-                        .expect("args should convert to `Vec<CLValue>`")
-                        .into_bytes()
-                        .expect("args should serialize")
+                    ArgsParser::parse(args).expect("args should convert to `Vec<CLValue>`")
                 };
+                let args_bytes = args.to_bytes().expect("args should serialize");
                 let tracking_copy_exec = Rc::clone(&tracking_copy);
                 let tracking_copy_write = Rc::clone(&tracking_copy);
                 let mut named_keys_exec = BTreeMap::new();
@@ -548,7 +540,7 @@ where
                     // ...call the Mint's "mint" endpoint to create purse with tokens...
                     let (_instance, mut runtime) = executor.create_runtime(
                         module,
-                        args.clone(),
+                        args_bytes,
                         &mut named_keys_exec,
                         base_key,
                         &virtual_system_account,
@@ -573,7 +565,7 @@ where
                     // ...call the Mint's "mint" endpoint to create purse with tokens...
                     executor.exec_system(
                         module,
-                        args,
+                        args_bytes,
                         &mut named_keys_exec,
                         base_key,
                         &virtual_system_account,

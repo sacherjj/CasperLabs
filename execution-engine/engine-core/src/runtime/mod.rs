@@ -1932,7 +1932,7 @@ where
     }
 
     /// Calls contract living under a `key`, with supplied `args`.
-    pub fn call_contract(&mut self, key: Key, args_bytes: Vec<u8>) -> Result<CLValue, Error> {
+    pub fn call_contract(&mut self, key: Key, args: Vec<CLValue>) -> Result<CLValue, Error> {
         let contract = match self.context.read_gs(&key)? {
             Some(StoredValue::Contract(contract)) => contract,
             Some(_) => {
@@ -1953,8 +1953,6 @@ where
                 expected: contract_version.value().major,
             });
         }
-
-        let args: Vec<CLValue> = bytesrepr::deserialize(args_bytes)?;
 
         let mut extra_urefs = vec![];
         // A loop is needed to be able to use the '?' operator
@@ -2101,7 +2099,8 @@ where
             return Ok(Err(ApiError::HostBufferFull));
         }
 
-        let result = self.call_contract(key, args_bytes)?;
+        let args: Vec<CLValue> = bytesrepr::deserialize(args_bytes)?;
+        let result = self.call_contract(key, args)?;
         let result_size = result.inner_bytes().len() as u32; // considered to be safe
 
         // leave the host buffer set to `None` if there's nothing to write there
@@ -2557,12 +2556,12 @@ where
     /// Calls the "create" method on the mint contract at the given mint
     /// contract key
     fn mint_create(&mut self, mint_contract_key: Key) -> Result<URef, Error> {
-        let args_bytes = {
+        let args_values = {
             let args = ("create",);
-            ArgsParser::parse(args)?.into_bytes()?
+            ArgsParser::parse(args)?
         };
 
-        let result = self.call_contract(mint_contract_key, args_bytes)?;
+        let result = self.call_contract(mint_contract_key, args_values)?;
         let purse = result.into_t()?;
 
         Ok(purse)
@@ -2582,12 +2581,12 @@ where
         target: URef,
         amount: U512,
     ) -> Result<(), Error> {
-        let args_bytes = {
+        let args_values = {
             let args = ("transfer", source, target, amount);
-            ArgsParser::parse(args)?.into_bytes()?
+            ArgsParser::parse(args)?
         };
 
-        let result = self.call_contract(mint_contract_key, args_bytes)?;
+        let result = self.call_contract(mint_contract_key, args_values)?;
         let result: Result<(), mint::Error> = result.into_t()?;
         Ok(result.map_err(system_contract_errors::Error::from)?)
     }
