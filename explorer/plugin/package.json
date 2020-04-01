@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "dependencies": {
+    "@fortawesome/fontawesome-free": "^5.13.0",
     "@ont-community/window-post-message-proxy": "^0.2.14",
     "@testing-library/jest-dom": "^4.2.4",
     "@testing-library/react": "^9.5.0",
@@ -28,11 +29,11 @@
     "readable-stream": "latest",
     "store": "^2.0.12",
     "tweetnacl": "^1.0.3",
+    "tweetnacl-ts": "latest",
     "tweetnacl-util": "^0.15.1",
     "validator": "^12.2.0",
     "webpack-extension-reloader": "^1.1.4",
-    "yup": "^0.28.1",
-    "tweetnacl-ts": "latest"
+    "yup": "^0.28.1"
   },
   "scripts": {
     "start": "react-scripts start",

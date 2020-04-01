@@ -3,6 +3,7 @@ import './App.scss';
 import { Route, Switch } from 'react-router-dom';
 import Pages from './components/Pages';
 import 'bootstrap/dist/css/bootstrap.min.css';
+import '@fortawesome/fontawesome-free/css/all.min.css';
 import Home from './components/Home';
 import UnlockPage from './components/UnlockPage';
 import { UnlockPageContainer } from './container/UnlockPageContainer';

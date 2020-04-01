@@ -31,3 +31,35 @@ export const ListInline = (props: { children: any }) => {
     </ul>
   );
 };
+
+export const IconButton = (props: {
+  onClick: () => void;
+  title: string;
+  icon: string;
+}) => (
+  <button
+    onClick={_ => props.onClick()}
+    title={props.title}
+    className="link icon-button"
+  >
+    <Icon name={props.icon}/>
+  </button>
+);
+
+// https://fontawesome.com/icons?d=gallery&q=ground&m=free
+export const Icon = (props: {
+  name: string;
+  color?: string;
+  title?: string;
+}) => {
+  const styles = {
+    color: props.color
+  };
+  return (
+    <i
+      className={'fa fa-fw fa-' + props.name}
+      style={styles}
+      title={props.title}
+    />
+  );
+};
