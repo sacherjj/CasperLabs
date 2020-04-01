@@ -41,6 +41,7 @@ from casperlabs_local_net.wait import (
     wait_for_node_started,
     wait_for_peers_count_at_least,
     wait_for_selenium_started,
+    node_started_and_not_failed_to_bind,
 )
 from casperlabs_client import extract_common_name
 
@@ -159,11 +160,17 @@ class CasperLabsNetwork:
             logging.info(f"Docker network {network_name} created.")
             return network_name
 
-    def _add_cl_node(self, config: DockerConfig) -> None:
+    def _add_cl_node(self, config: DockerConfig, number_of_retries = 3) -> None:
         with self._lock:
             config.number = self.node_count
-            cl_node = CasperLabsNode(self, config)
-            self.cl_nodes.append(cl_node)
+            for _ in range(number_of_retries):
+                cl_node = CasperLabsNode(self, config)
+                if node_started_and_not_failed_to_bind(cl_node.node):
+                    self.cl_nodes.append(cl_node)
+                    return
+                else:
+                    logging.warning(f"Node failed to bind")
+            raise Exception(f"Node started {number_of_retries} times but failed to bind each time")
 
     def add_new_node_to_network(
         self, generate_config=None, account: Account = None
