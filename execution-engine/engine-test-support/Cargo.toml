@@ -33,3 +33,4 @@ version-sync = "0.8"
 highway = []
 use-as-wasm = []
 use-system-contracts = []
+print-function = ["engine-core/print-function", "engine-grpc-server/print-function", "contract/print-function"]
