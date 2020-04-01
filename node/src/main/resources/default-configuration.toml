@@ -157,6 +157,9 @@ db-threads = 48
 # Parallelism per CPU core.
 parallelism-cpu-multiplier = 1.0
 
+# Minimum parallelism.
+min-parallelism = 4
+
 # io.casperlabs.node.configuration.Configuration.BlockStorage
 [blockstorage]
 

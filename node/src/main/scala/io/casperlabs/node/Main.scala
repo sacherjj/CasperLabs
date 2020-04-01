@@ -40,7 +40,7 @@ object Main {
               val cpus  = java.lang.Runtime.getRuntime.availableProcessors()
               val multi = conf.server.parallelismCpuMultiplier.value
               Scheduler.forkJoin(
-                parallelism = Math.max((cpus * multi).toInt, 4),
+                parallelism = Math.max((cpus * multi).toInt, conf.server.minParallelism.value),
                 maxThreads = conf.server.mainThreads.value,
                 name = "node-runner",
                 reporter = uncaughtExceptionHandler
