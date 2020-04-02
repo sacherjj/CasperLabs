@@ -1,59 +1,58 @@
 package io.casperlabs.node
 
 import java.nio.file.Path
+import java.util.concurrent.TimeUnit
 
 import cats._
 import cats.effect._
 import cats.effect.concurrent.{Ref, Semaphore}
-import cats.mtl.{FunctorRaise, MonadState}
+import cats.mtl.MonadState
 import cats.syntax.applicative._
 import cats.syntax.apply._
 import cats.syntax.flatMap._
 import cats.syntax.functor._
 import cats.syntax.show._
-import com.olegpy.meow.effects._
 import com.google.protobuf.ByteString
+import com.olegpy.meow.effects._
+import io.casperlabs.casper.DeploySelection.DeploySelection
 import io.casperlabs.casper.Estimator.BlockHash
-import io.casperlabs.casper._
 import io.casperlabs.casper.MultiParentCasperImpl.Broadcaster
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
-import io.casperlabs.casper.DeploySelection.DeploySelection
+import io.casperlabs.casper._
 import io.casperlabs.casper.consensus.Block
 import io.casperlabs.casper.genesis.Genesis
-import io.casperlabs.casper.validation.{Validation, ValidationImpl}
 import io.casperlabs.casper.util.CasperLabsProtocol
-import io.casperlabs.catscontrib._
 import io.casperlabs.catscontrib.Catscontrib._
 import io.casperlabs.catscontrib.TaskContrib._
+import io.casperlabs.catscontrib._
 import io.casperlabs.catscontrib.effect.implicits.syncId
 import io.casperlabs.comm._
-import io.casperlabs.comm.discovery._
 import io.casperlabs.comm.discovery.NodeUtils._
+import io.casperlabs.comm.discovery._
+import io.casperlabs.comm.gossiping.{BlockRelaying, WaitHandle}
 import io.casperlabs.comm.grpc.SslContexts
 import io.casperlabs.comm.rp._
-import io.casperlabs.comm.gossiping.{Relaying, WaitHandle}
 import io.casperlabs.ipc.ChainSpec
 import io.casperlabs.mempool.DeployBuffer
 import io.casperlabs.metrics.Metrics
-import io.casperlabs.node.api.graphql.FinalizedBlocksStream
 import io.casperlabs.node.api.EventStream
-import io.casperlabs.node.configuration.Configuration
+import io.casperlabs.node.api.graphql.FinalizedBlocksStream
 import io.casperlabs.node.casper.consensus.Consensus
+import io.casperlabs.node.configuration.Configuration
 import io.casperlabs.shared._
 import io.casperlabs.smartcontracts.{ExecutionEngineService, GrpcExecutionEngineService}
 import io.casperlabs.storage.SQLiteStorage
 import io.casperlabs.storage.block._
 import io.casperlabs.storage.dag._
-import io.casperlabs.storage.deploy.{DeployStorage, DeployStorageWriter}
-import io.casperlabs.storage.util.fileIO._
+import io.casperlabs.storage.deploy.DeployStorageWriter
 import io.casperlabs.storage.util.fileIO.IOError._
+import io.casperlabs.storage.util.fileIO._
 import io.netty.handler.ssl.ClientAuth
-import java.util.concurrent.TimeUnit
 import monix.eval.Task
 import monix.execution.Scheduler
-import monix.execution.atomic.AtomicLong
 import org.flywaydb.core.Flyway
 import org.flywaydb.core.api.Location
+
 import scala.concurrent.duration._
 
 class NodeRuntime private[node] (
@@ -525,8 +524,8 @@ object NodeRuntime {
 
   /** There's a forward dependency between Highway consensus and the gossiping. */
   class RelayingProxy[F[_]: Monad](
-      underlyingRef: Ref[F, Option[Relaying[F]]]
-  ) extends Relaying[F] {
+      underlyingRef: Ref[F, Option[BlockRelaying[F]]]
+  ) extends BlockRelaying[F] {
     override def relay(hashes: List[ByteString]): F[WaitHandle[F]] =
       underlyingRef.get.flatMap {
         case None =>
@@ -535,12 +534,12 @@ object NodeRuntime {
           underlying.relay(hashes)
       }
 
-    def set(underlying: Relaying[F]) =
+    def set(underlying: BlockRelaying[F]) =
       underlyingRef.set(Some(underlying))
   }
   object RelayingProxy {
     def apply[F[_]: Sync]: F[RelayingProxy[F]] =
-      Ref.of[F, Option[Relaying[F]]](None) map (new RelayingProxy(_))
+      Ref.of[F, Option[BlockRelaying[F]]](None) map (new RelayingProxy(_))
   }
 
 }
