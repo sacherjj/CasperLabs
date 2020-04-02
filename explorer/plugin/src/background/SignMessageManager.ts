@@ -1,5 +1,6 @@
 import * as events from 'events';
 import { AppState } from '../lib/MemStore';
+import { encodeBase64 } from 'tweetnacl-ts';
 
 type SignMessageStatus = 'unsigned' | 'signed' | 'rejected';
 
@@ -41,6 +42,15 @@ export default class SignMessageManager extends events.EventEmitter {
         }
       });
     });
+  }
+
+  getSelectedPublicKey() {
+    let pk = this.appState.selectedUserAccount?.signKeyPair.publicKey;
+    console.log(pk);
+    if (pk) {
+      return encodeBase64(pk);
+    }
+    return undefined;
   }
 
   // Reject message by msgId

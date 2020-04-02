@@ -34,4 +34,5 @@ export function setupInjectPageAPIServer(provider: SignMessageManager, logMessag
     source: 'background'
   });
   rpc.register('sign', provider.addUnsignedMessageAsync.bind(provider));
+  rpc.register('getSelectedPublicKey', provider.getSelectedPublicKey.bind(provider))
 }

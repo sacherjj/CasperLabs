@@ -11,8 +11,12 @@ class CasperLabsPluginHelper {
     return true;
   }
 
-  async sign(message: Uint8Array) {
-    return this.call<Uint8Array>('sign', message);
+  async sign(message: String) {
+    return this.call<string>('sign', message);
+  }
+
+  async getSelectedPublicKey(){
+    return this.call<string>('getSelectedPublicKey');
   }
 }
 

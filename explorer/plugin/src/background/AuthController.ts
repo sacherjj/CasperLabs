@@ -36,7 +36,7 @@ class AuthController {
     if (i === -1) {
       throw new Error('Couldn\'t switch to this account because it doesn\'t exist');
     }
-    this.appState.selectedUserAccount = account;
+    this.appState.selectedUserAccount = this.appState.userAccounts[i];
   }
 
   @action
