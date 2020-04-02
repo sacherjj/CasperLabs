@@ -19,6 +19,7 @@ export interface Props {
   refresh?: () => void;
   subscribeToggleStore?: ToggleStore;
   hideBallotsToggleStore?: ToggleStore;
+  hideBlockHashToggleStore?: ToggleStore;
   blocks: BlockInfo[] | null;
   emptyMessage?: any;
   footerMessage?: any;
@@ -38,18 +39,20 @@ export class BlockDAG extends React.Component<Props, {}> {
   yTrans: d3.ScaleLinear<number, number> | null = null;
   initialized = false;
   renderedBlocks: BlockInfo[] | null;
+  hideBlockHash: boolean | undefined;
+
 
   constructor(props: Props) {
     super(props);
     reaction(() => {
-      // Needed for "Hide Ballots" to work.
-      return this.filteredBlocks();
-    }, (blocks) => {
-      this.renderGraph(blocks);
-    }, {
-      fireImmediately: false,
-      delay: 100
-    }
+        // Needed for "Hide Ballots" to work.
+        return { blocks: this.filteredBlocks(), isPressed: this.props.hideBlockHashToggleStore?.isPressed };
+      }, ({ blocks, isPressed }) => {
+        this.renderGraph(blocks, isPressed);
+      }, {
+        fireImmediately: false,
+        delay: 100
+      }
     );
   }
 
@@ -85,6 +88,14 @@ export class BlockDAG extends React.Component<Props, {}> {
                   title="Subscribe to the latest added blocks"
                   label="Live Feed"
                   toggleStore={this.props.subscribeToggleStore}
+                  size="sm"
+                />
+              )}
+              {this.props.hideBlockHashToggleStore && (
+                <ToggleButton
+                  title="Hide BlockHash Label"
+                  label="Hide Label"
+                  toggleStore={this.props.hideBlockHashToggleStore}
                   size="sm"
                 />
               )}
@@ -140,9 +151,9 @@ export class BlockDAG extends React.Component<Props, {}> {
   }
 
   /** Called so that the SVG is added when the component has been rendered,
-    * however data will most likely still be uninitialized. */
+   * however data will most likely still be uninitialized. */
   componentDidMount() {
-    this.renderGraph(this.filteredBlocks());
+    this.renderGraph(this.filteredBlocks(), this.props.hideBlockHashToggleStore?.isPressed);
   }
 
   /** Called when the data is refreshed, when we get the blocks if they were null to begin with.
@@ -150,10 +161,10 @@ export class BlockDAG extends React.Component<Props, {}> {
    * would re-render with no SVG at all.
    */
   componentDidUpdate() {
-    this.renderGraph(this.filteredBlocks());
+    this.renderGraph(this.filteredBlocks(), this.props.hideBlockHashToggleStore?.isPressed);
   }
 
-  renderGraph(blocks: BlockInfo[] | null) {
+  renderGraph(blocks: BlockInfo[] | null, hideBlockHash?: boolean) {
     if (blocks == null || blocks.length === 0) {
       // The renderer will have removed the svg.
       this.initialized = false;
@@ -161,8 +172,9 @@ export class BlockDAG extends React.Component<Props, {}> {
     }
 
     // Avoid double rendering by componentDidUpdate and reaction.
-    if (arraysEqual(blocks, this.renderedBlocks)) return;
+    if (arraysEqual(blocks, this.renderedBlocks) && this.hideBlockHash === hideBlockHash) return;
     this.renderedBlocks = blocks;
+    this.hideBlockHash = hideBlockHash;
 
     const svg = d3.select(this.svg);
     const hint = d3.select(this.hint);
@@ -272,7 +284,9 @@ export class BlockDAG extends React.Component<Props, {}> {
       .style('font-family', 'Arial')
       .style('font-size', 12)
       .style('pointer-events', 'none') // to prevent mouseover/drag capture
-      .style('text-anchor', 'start');
+      .style('text-anchor', 'start')
+      .attr('display', hideBlockHash ? 'none' : 'block');
+
 
     const focus = (d: any) => {
       let datum = d3.select(d3.event.target).datum() as d3Node;
@@ -296,7 +310,7 @@ export class BlockDAG extends React.Component<Props, {}> {
     };
 
     const unfocus = () => {
-      label.attr('display', 'block');
+      label.attr('display', hideBlockHash ? 'none' : 'block');
       node.style('opacity', 1);
       link.style('opacity', x => (x.isJustification ? 0 : 1));
       hint.style('display', 'none');
