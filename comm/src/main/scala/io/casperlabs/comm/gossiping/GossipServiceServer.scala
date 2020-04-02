@@ -8,6 +8,7 @@ import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.{Block, BlockSummary, Deploy, DeploySummary, GenesisCandidate}
 import io.casperlabs.comm.ServiceError.NotFound
+import io.casperlabs.catscontrib.effect.implicits._
 import io.casperlabs.comm.discovery.Node
 import io.casperlabs.comm.discovery.NodeUtils.showNode
 import io.casperlabs.comm.gossiping.downloadmanager.{BlockDownloadManager, DeployDownloadManager}
@@ -62,7 +63,7 @@ class GossipServiceServer[F[_]: Concurrent: Parallel: Log: Metrics](
                         deployDownloadManager
                           .scheduleDownload(deploySummary, request.getSender, relay = true)
                     )
-                }).start
+                }).forkAndLog
           } yield NewDeploysResponse(isNew = true)
         }
       }
