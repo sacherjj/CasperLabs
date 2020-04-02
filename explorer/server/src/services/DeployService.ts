@@ -12,7 +12,7 @@ export default class DeployService {
   private readonly transport: grpc.TransportFactory;
 
   constructor(
-    private nodeUrl: string,
+    private nodeUrls: string[]
   ) {
     // NOTE: To talk to backends with self-signed certificates we either need to copy the code from
     // https://github.com/improbable-eng/grpc-web/blob/master/client/grpc-web-node-http-transport/src/index.ts
@@ -23,7 +23,7 @@ export default class DeployService {
       // We can see more details about the error if we log it here.
       opts.onEnd = (err) => {
         if (err !== undefined) {
-          console.log(`error calling CasperService at ${this.nodeUrl}: `, err);
+          console.log(`error calling CasperService`, err);
         }
         onEnd(err);
       };
@@ -35,24 +35,26 @@ export default class DeployService {
     return new Promise<void>((resolve, reject) => {
       const deployRequest = new DeployRequest();
       deployRequest.setDeploy(deploy);
+      const index = Math.floor(Math.random() * this.nodeUrls.length);
+      const nodeUrl = this.nodeUrls[index];
 
       grpc.unary(CasperService.Deploy, {
-        host: this.nodeUrl,
+        host: nodeUrl,
         request: deployRequest,
         transport: this.transport,
         onEnd: (res) => {
           if (res.status === grpc.Code.OK) {
             resolve();
           } else {
-            reject(this.error(res));
+            reject(this.error(res, nodeUrl));
           }
         }
       });
     });
   }
 
-  private error<T extends ProtobufMessage>(res: grpc.UnaryOutput<T>) {
-    const msg = `error calling CasperService at ${this.nodeUrl}: ` +
+  private error<T extends ProtobufMessage>(res: grpc.UnaryOutput<T>, nodeUrl: string) {
+    const msg = `error calling CasperService at ${nodeUrl}: ` +
       `gRPC error: code=${res.status}, message="${res.statusMessage}"`;
     console.log(msg);
     return new Error(msg);

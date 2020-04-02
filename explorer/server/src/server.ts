@@ -39,8 +39,13 @@ const paymentAmount = BigInt(process.env.PAYMENT_AMOUNT!);
 // How much to send to a user in a faucet request.
 const transferAmount = BigInt(process.env.TRANSFER_AMOUNT)!;
 
+const urls = process.env.CASPER_SERVICE_URLS!;
+const nodeUrls = urls.split(';')
+  .filter((u) => u)
+  .map((u) => u.trim());
+
 // gRPC client to the node.
-const deployService = new DeployService(process.env.CASPER_SERVICE_URL!);
+const deployService = new DeployService(nodeUrls);
 
 const app = express();
 
@@ -66,8 +71,8 @@ const checkJwt: express.RequestHandler = isMock ?
       cache: true,
       jwksRequestsPerMinute: 5,
       jwksUri: `https://${config.auth0.domain}/.well-known/jwks.json`,
-      rateLimit: true,
-    }),
+      rateLimit: true
+    })
   });
 
 // Render the `config.js` file dynamically.
@@ -155,7 +160,7 @@ if (process.env.SERVER_USE_TLS === "true") {
   const key = process.env.SERVER_TLS_KEY_PATH!;
   https.createServer({
     key: fs.readFileSync(key),
-    cert: fs.readFileSync(cert),
+    cert: fs.readFileSync(cert)
   }, app)
     .listen(port, () => {
       // tslint:disable-next-line:no-console
