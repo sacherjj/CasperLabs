@@ -3,10 +3,11 @@ package io.casperlabs.storage.util
 import com.google.protobuf.ByteString
 import doobie._
 import io.casperlabs.casper.consensus.Block.ProcessedDeploy
-import io.casperlabs.casper.consensus.{BlockSummary, Deploy, Era}
+import io.casperlabs.casper.consensus.{BlockSummary, Deploy, DeploySummary, Era}
 import io.casperlabs.crypto.Keys.{PublicKey, PublicKeyBS}
 import io.casperlabs.casper.consensus.info.{BlockInfo, Event}
 import io.casperlabs.casper.consensus.info.DeployInfo.ProcessingResult
+import io.casperlabs.models.DeployImplicits.DeployOps
 import io.casperlabs.storage.dag.FinalityStorage.FinalityStatus
 import io.casperlabs.ipc.TransformEntry
 
@@ -26,6 +27,10 @@ trait DoobieCodecs {
           .map(Deploy.Body.parseFrom) orElse deploy.body
         maybeBody.map(deploy.withBody).getOrElse(deploy)
     }
+
+  protected implicit val readDeploySummary: Read[DeploySummary] = Read[Array[Byte]].map {
+    case deploySummaryBytes => Deploy.parseFrom(deploySummaryBytes).getSummary
+  }
 
   protected implicit val readDeployHeader: Read[Deploy.Header] =
     Read[Array[Byte]].map(Deploy.Header.parseFrom)

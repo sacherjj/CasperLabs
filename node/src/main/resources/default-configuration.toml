@@ -115,6 +115,9 @@ periodic-sync-round-period = "60second"
 # Maximum number of parallel block downloads initiated by the download manager.
 download-max-parallel-blocks = 10
 
+# Maximum number of parallel deploy downloads initiated by the download manager.
+download-max-parallel-deploys = 10
+
 # Maximum number of times to retry to download a block from the same node.
 download-max-retries = 0
 

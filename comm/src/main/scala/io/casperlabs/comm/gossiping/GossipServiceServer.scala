@@ -6,11 +6,12 @@ import cats.effect.concurrent._
 import cats.effect.implicits._
 import cats.implicits._
 import com.google.protobuf.ByteString
-import io.casperlabs.casper.consensus.{Block, BlockSummary, Deploy, GenesisCandidate}
+import io.casperlabs.casper.consensus.{Block, BlockSummary, Deploy, DeploySummary, GenesisCandidate}
 import io.casperlabs.comm.ServiceError.NotFound
+import io.casperlabs.catscontrib.effect.implicits._
 import io.casperlabs.comm.discovery.Node
 import io.casperlabs.comm.discovery.NodeUtils.showNode
-import io.casperlabs.comm.gossiping.downloadmanager.BlockDownloadManager
+import io.casperlabs.comm.gossiping.downloadmanager.{BlockDownloadManager, DeployDownloadManager}
 import io.casperlabs.comm.gossiping.synchronization.Synchronizer
 import io.casperlabs.comm.gossiping.synchronization.Synchronizer.SyncError
 import io.casperlabs.metrics.Metrics
@@ -25,7 +26,9 @@ import scala.util.control.NonFatal
 class GossipServiceServer[F[_]: Concurrent: Parallel: Log: Metrics](
     backend: GossipServiceServer.Backend[F],
     synchronizer: Synchronizer[F],
-    downloadManager: BlockDownloadManager[F],
+    connector: GossipService.Connector[F],
+    deployDownloadManager: DeployDownloadManager[F],
+    blockDownloadManager: BlockDownloadManager[F],
     genesisApprover: GenesisApprover[F],
     maxChunkSize: Int,
     blockDownloadSemaphore: Semaphore[F]
@@ -33,8 +36,41 @@ class GossipServiceServer[F[_]: Concurrent: Parallel: Log: Metrics](
   import GossipServiceServer._
 
   //TODO: Rate limit here as well?
+  def newDeploys(request: NewDeploysRequest): F[NewDeploysResponse] =
+    // Filter out the deploys which we don't have yet;
+    // reply about those that we are going to download and relay them,
+    // then schedule the downloads.
+    request.deployHashes.distinct.toList
+      .filterA { deployHash =>
+        backend.hasDeploy(deployHash).map(!_)
+      }
+      .flatMap { newDeployHashes =>
+        if (newDeployHashes.isEmpty) {
+          NewDeploysResponse(isNew = false).pure[F]
+        } else {
+          for {
+            remoteService <- connector(request.getSender)
+            // TODO: Defend against malicious nodes similar to Synchronizer
+            // Runs in background asynchronously
+            _ <- (remoteService
+                  .streamDeploySummaries(
+                    StreamDeploySummariesRequest(newDeployHashes)
+                  )
+                  .toListL >>= { deploySummaries =>
+                  deploySummaries
+                    .traverse(
+                      deploySummary =>
+                        deployDownloadManager
+                          .scheduleDownload(deploySummary, request.getSender, relay = true)
+                    )
+                }).forkAndLog
+          } yield NewDeploysResponse(isNew = true)
+        }
+      }
+
+  //TODO: Rate limit here as well?
   override def newBlocks(request: NewBlocksRequest): F[NewBlocksResponse] =
-    // Collect the blocks which we don't have yet;
+    // Filter out the blocks which we don't have yet;
     // reply about those that we are going to download and relay them,
     // then asynchronously sync the DAG, and schedule the downloads.
     newBlocks(
@@ -98,7 +134,7 @@ class GossipServiceServer[F[_]: Concurrent: Parallel: Log: Metrics](
     def logSyncError(syncError: SyncError) = {
       val prefix  = s"Failed to sync DAG, source: ${source.show -> "peer"}."
       val message = syncError.getMessage
-      Log[F].warn(s"$prefix $message").as(syncError.asLeft)
+      Log[F].warn(s"$prefix $message").as(syncError.asLeft[Vector[WaitHandle[F]]])
     }
 
     val trySync: F[Either[SyncError, Vector[WaitHandle[F]]]] = for {
@@ -117,7 +153,7 @@ class GossipServiceServer[F[_]: Concurrent: Parallel: Log: Metrics](
                              s"Syncing ${dag.size} blocks with ${source.show -> "peer"}"
                            ) *>
                              dag.traverse { summary =>
-                               downloadManager.scheduleDownload(
+                               blockDownloadManager.scheduleDownload(
                                  summary,
                                  source = source,
                                  relay = !skipRelaying && newBlockHashes(summary.blockHash)
@@ -221,6 +257,14 @@ class GossipServiceServer[F[_]: Concurrent: Parallel: Log: Metrics](
       .mapEval(backend.getBlockSummary(_))
       .flatMap(Iterant.fromIterable(_))
 
+  override def streamDeploySummaries(
+      request: StreamDeploySummariesRequest
+  ): Iterant[F, DeploySummary] =
+    Iterant[F]
+      .fromSeq(request.deployHashes)
+      .mapEval(backend.getDeploySummary(_))
+      .flatMap(Iterant.fromIterable(_))
+
   override def getBlockChunked(request: GetBlockChunkedRequest): Iterant[F, Chunk] =
     Iterant.resource(blockDownloadSemaphore.acquire)(
       _ => blockDownloadSemaphore.release
@@ -310,7 +354,9 @@ object GossipServiceServer {
 
   /** Interface to storage and consensus. */
   trait Backend[F[_]] {
+    def getDeploySummary(deployHash: ByteString): F[Option[DeploySummary]]
     def hasBlock(blockHash: ByteString): F[Boolean]
+    def hasDeploy(deployHash: ByteString): F[Boolean]
     def getBlockSummary(blockHash: ByteString): F[Option[BlockSummary]]
     def getBlock(blockHash: ByteString, deploysBodiesExcluded: Boolean): F[Option[Block]]
     def getDeploys(deployHashes: Set[ByteString]): Iterant[F, Deploy]
@@ -327,7 +373,9 @@ object GossipServiceServer {
   def apply[F[_]: Concurrent: Parallel: Log: Metrics](
       backend: GossipServiceServer.Backend[F],
       synchronizer: Synchronizer[F],
-      downloadManager: BlockDownloadManager[F],
+      connector: GossipService.Connector[F],
+      deployDownloadManager: DeployDownloadManager[F],
+      blockDownloadManager: BlockDownloadManager[F],
       genesisApprover: GenesisApprover[F],
       maxChunkSize: Int,
       maxParallelBlockDownloads: Int
@@ -337,7 +385,9 @@ object GossipServiceServer {
     } yield new GossipServiceServer(
       backend,
       synchronizer,
-      downloadManager,
+      connector,
+      deployDownloadManager,
+      blockDownloadManager,
       genesisApprover,
       maxChunkSize,
       blockDownloadSemaphore
