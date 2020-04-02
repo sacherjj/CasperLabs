@@ -1,4 +1,5 @@
 import { browser } from 'webextension-polyfill-ts';
+import { registerContentProxy } from '../lib/rpc/Provider';
 
 // Injects a script tag into the current document
 function injectCustomJs() {
@@ -18,23 +19,6 @@ function injectCustomJs() {
   }
 }
 
-// inject page -> content script -> background
-function setUpProxy() {
-  // forward messages from inpage to background
-  window.addEventListener('message', receiveMessage, false);
-
-  async function receiveMessage(event: MessageEvent) {
-    const msg = event.data;
-    console.log('receive message', msg);
-    // validate message type
-    if (typeof msg !== 'object') return;
-    if (msg.type !== 'request') return;
-    let reply = await browser.runtime.sendMessage(msg.payload);
-    msg.value = reply;
-    msg.type = 'reply';
-    window.postMessage(msg, '*');
-  }
-}
-
 injectCustomJs();
-setUpProxy();
+// inject page -> content script -> background
+registerContentProxy();

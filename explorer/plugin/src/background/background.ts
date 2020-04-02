@@ -4,23 +4,21 @@ import { Rpc } from '../lib/rpc/rpc';
 import { AppState } from '../lib/MemStore';
 import { autorun } from 'mobx';
 import SignMessageManager, { SignMessage } from './SignMessageManager';
-import { PopupManager } from './PopupManager';
 import * as nacl from 'tweetnacl-ts';
 import { updateBadge } from './utils';
+import { registerContentProxy, setupInjectPageAPIServer } from '../lib/rpc/Provider';
 
 
 const appState = new AppState();
 const accountController = new AccountController(appState);
 const signMessageManager = new SignMessageManager(appState);
-const popupManager = new PopupManager();
 
 initialize().catch(console.error);
 
 async function initialize() {
   await setupPopupAPIServer();
-  // popupManager = new PopupManager();
-  // popupManager.show();
-  await setupInjectPageAPIServer();
+  // Setup RPC server for inject page
+  setupInjectPageAPIServer(signMessageManager);
 }
 
 // Setup RPC server for Popup
@@ -50,17 +48,4 @@ async function setupPopupAPIServer() {
     return signMessageManager.setMsgStatusSigned(msg.id, nacl.encodeBase64(sig));
   });
   rpc.register('sign.rejectMessage', signMessageManager.rejectMsg.bind(signMessageManager));
-}
-
-// Setup RPC server for inject page
-async function setupInjectPageAPIServer() {
-  const rpc = new Rpc({
-    addListener: browser.runtime.onMessage.addListener,
-    destination: 'page',
-    source: 'background'
-  });
-  rpc.register('sign', function(message: string) {
-    const promise = signMessageManager.addUnsignedMessageAsync(message);
-    return promise;
-  });
 }

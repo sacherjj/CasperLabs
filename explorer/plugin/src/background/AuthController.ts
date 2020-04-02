@@ -3,10 +3,9 @@ import passworder from 'browser-passworder';
 import store from 'store';
 import * as nacl from 'tweetnacl';
 import { decodeBase64, encodeBase64 } from 'tweetnacl-util';
-import { AccountApi } from '../lib/rpc/api';
 import { AppState } from '../lib/MemStore';
 
-class AuthController implements AccountApi {
+class AuthController {
   private encryptedVaultStr: string | null = null;
   private password: string | null = null;
   private encryptedVaultKey = 'encryptedVault';
