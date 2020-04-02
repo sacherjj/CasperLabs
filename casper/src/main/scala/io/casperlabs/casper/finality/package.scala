@@ -14,6 +14,12 @@ import io.casperlabs.storage.dag.{AncestorsStorage, DagRepresentation}
 package object finality {
   type Level = Long
 
+  /**
+    * Returns a child of previous LFB that the `message` votes for
+    * (is descendant along the main-tree path).
+    *
+    * Returns `None` if `message` is not descendant of previous LFB.
+    */
   def votedBranch[F[_]: MonadThrowable: AncestorsStorage](
       dag: DagRepresentation[F],
       lfbHash: BlockHash,
