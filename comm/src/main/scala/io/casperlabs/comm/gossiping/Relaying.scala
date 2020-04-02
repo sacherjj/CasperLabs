@@ -10,10 +10,12 @@ import io.casperlabs.comm.discovery.NodeUtils._
 import io.casperlabs.comm.discovery.{Node, NodeDiscovery}
 import io.casperlabs.comm.gossiping.Utils._
 import io.casperlabs.metrics.Metrics
+import io.casperlabs.metrics.implicits._
 import io.casperlabs.shared.Log
 import simulacrum.typeclass
 
 import scala.util.Random
+import monix.execution.Scheduler
 
 @typeclass
 trait Relaying[F[_]] {
@@ -34,8 +36,9 @@ object RelayingImpl {
       _ <- Metrics[F].incrementCounter("relay_failed", 0)
     } yield ()
 
-  def apply[F[_]: Concurrent: Parallel: Log: Metrics: NodeAsk](
-      nd: NodeDiscovery[F],
+  def apply[F[_]: ContextShift: Concurrent: Parallel: Log: Metrics: NodeAsk](
+      egressScheduler: Scheduler,
+      nodeDiscovery: NodeDiscovery[F],
       connectToGossip: GossipService.Connector[F],
       relayFactor: Int,
       relaySaturation: Int,
@@ -46,15 +49,23 @@ object RelayingImpl {
     } else {
       (relayFactor * 100) / (100 - relaySaturation)
     }
-    new RelayingImpl[F](nd, connectToGossip, relayFactor, maxToTry, isSynchronous)
+    new RelayingImpl[F](
+      egressScheduler,
+      nodeDiscovery,
+      connectToGossip,
+      relayFactor,
+      maxToTry,
+      isSynchronous
+    )
   }
 }
 
 /**
   * https://techspec.casperlabs.io/technical-details/global-state/communications#picking-nodes-for-gossip
   */
-class RelayingImpl[F[_]: Concurrent: Parallel: Log: Metrics: NodeAsk](
-    nd: NodeDiscovery[F],
+class RelayingImpl[F[_]: ContextShift: Concurrent: Parallel: Log: Metrics: NodeAsk](
+    egressScheduler: Scheduler,
+    nodeDiscovery: NodeDiscovery[F],
     connectToGossip: Node => F[GossipService[F]],
     relayFactor: Int,
     maxToTry: Int,
@@ -75,10 +86,12 @@ class RelayingImpl[F[_]: Concurrent: Parallel: Log: Metrics: NodeAsk](
       }
     }
 
-    val run = for {
-      peers <- nd.recentlyAlivePeersAscendingDistance
-      _     <- hashes.parTraverse(hash => loop(hash, Random.shuffle(peers), 0, 0))
-    } yield ()
+    val run = {
+      for {
+        peers <- nodeDiscovery.recentlyAlivePeersAscendingDistance
+        _     <- hashes.parTraverse(hash => loop(hash, Random.shuffle(peers), 0, 0))
+      } yield ()
+    }.timerGauge("relay")
 
     if (isSynchronous) {
       run *> ().pure[F].pure[F]
@@ -90,9 +103,13 @@ class RelayingImpl[F[_]: Concurrent: Parallel: Log: Metrics: NodeAsk](
   /** Try to relay to a peer, return whether it was new, or false if failed. */
   private def relay(peer: Node, hash: ByteString): F[Boolean] =
     (for {
-      service  <- connectToGossip(peer)
-      local    <- NodeAsk[F].ask
-      response <- service.newBlocks(NewBlocksRequest(sender = local.some, blockHashes = List(hash)))
+      service <- connectToGossip(peer)
+      local   <- NodeAsk[F].ask
+      response <- ContextShift[F].evalOn(egressScheduler) {
+                   service.newBlocks(
+                     NewBlocksRequest(sender = local.some, blockHashes = List(hash))
+                   )
+                 }
       counter <- if (response.isNew)
                   Log[F]
                     .debug(s"${peer.show -> "peer"} accepted ${hex(hash) -> "message"}")

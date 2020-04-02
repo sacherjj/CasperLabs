@@ -89,12 +89,33 @@ steps:
   depends_on:
   - sbt-compile-test-pr
 
-#Adding dependency on sbt due to sbt hanging frequently running in parallel with this step
 - name: rust-compile-test-pr
   commands:
   - "cd execution-engine/"
   - "make setup-rs"
   - "make test-rs test-contracts-rs"
+  image: "casperlabs/buildenv:latest"
+  when:
+    event:
+    - pull_request
+    changeset:
+      includes:
+      - "**/.drone.yml"
+      - "**/**.rs"
+      - "**/**.proto"
+      - "**/Cargo.lock"
+      - "**/Cargo.toml"
+      - "**/casperlabs-engine-grpc-server.spec"
+      - "**/rustfmt.toml"
+
+- name: rust-compile-test-latest-nightly-pr
+  environment:
+    CARGO_OPTS: +nightly
+  commands:
+  - "cd execution-engine/"
+  - "make setup-nightly-rs"
+  - "make build CARGO_FLAGS=--all-targets"
+  - "make build-contracts-rs"
   image: "casperlabs/buildenv:latest"
   when:
     event:

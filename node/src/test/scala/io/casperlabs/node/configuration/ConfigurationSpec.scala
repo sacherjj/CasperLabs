@@ -95,6 +95,7 @@ class ConfigurationSpec
       initSyncRoundPeriod = FiniteDuration(1, TimeUnit.SECONDS),
       initSyncMaxBlockCount = 1,
       periodicSyncRoundPeriod = FiniteDuration(1, TimeUnit.SECONDS),
+      downloadMaxParallelDeploys = 1,
       downloadMaxParallelBlocks = 1,
       downloadMaxRetries = 1,
       downloadRetryInitialBackoffPeriod = FiniteDuration(1, TimeUnit.SECONDS),
@@ -107,7 +108,9 @@ class ConfigurationSpec
       blockUploadRateMaxThrottled = 0,
       mainThreads = 1,
       ingressThreads = 1,
-      dbThreads = 1
+      dbThreads = 1,
+      parallelismCpuMultiplier = 1.0,
+      minParallelism = 1
     )
     val grpcServer = Configuration.Grpc(
       socket = Paths.get("/tmp/test"),

@@ -79,6 +79,9 @@ node-%/down: $(HIGHWAY_ENV)
 node-%/metrics:
 	docker run --rm --network casperlabs appropriate/curl -s http://node-$*:$(CL_SERVER_HTTP_PORT)/metrics
 
+node-%/status:
+	docker run --rm --network casperlabs appropriate/curl -s http://node-$*:$(CL_SERVER_HTTP_PORT)/status | jq
+
 
 # Start common components.
 up: \

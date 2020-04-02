@@ -103,8 +103,8 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with StorageFixtu
 
   // TODO: Test tsCheckpoint:
   // we should be able to stub in a tuplespace dump but there is currently no way to do that.
-  "showBlock" should "return successful block info response" in withCombinedStorageIndexed {
-    implicit storage => _ =>
+  "showBlock" should "return successful block info response" in withCombinedStorage() {
+    implicit storage =>
       for {
         _         <- initData(storage)
         blockInfo <- BlockAPI.getBlockInfo[Task](secondBlockQuery, BlockInfo.View.BASIC)
@@ -126,7 +126,7 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with StorageFixtu
       } yield ()
   }
 
-  it should "return children in FULL view" in withCombinedStorageIndexed { implicit storage => _ =>
+  it should "return children in FULL view" in withCombinedStorage() { implicit storage =>
     for {
       _         <- initData(storage)
       basicInfo <- BlockAPI.getBlockInfo[Task](genesisHashString, BlockInfo.View.BASIC)
@@ -136,16 +136,15 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with StorageFixtu
     } yield ()
   }
 
-  it should "return error when no block exists" in withCombinedStorageIndexed {
-    implicit storage => _ =>
-      for {
-        blockQueryResponse <- BlockAPI
-                               .getBlockInfo[Task](badTestHashQuery, BlockInfo.View.BASIC)
-                               .attempt
-      } yield {
-        blockQueryResponse.isLeft shouldBe true
-        blockQueryResponse.left.get.getMessage should include("NOT_FOUND")
-      }
+  it should "return error when no block exists" in withCombinedStorage() { implicit storage =>
+    for {
+      blockQueryResponse <- BlockAPI
+                             .getBlockInfo[Task](badTestHashQuery, BlockInfo.View.BASIC)
+                             .attempt
+    } yield {
+      blockQueryResponse.isLeft shouldBe true
+      blockQueryResponse.left.get.getMessage should include("NOT_FOUND")
+    }
   }
 
   private def initData(blockStorage: BlockStorage[Task]): Task[Unit] =

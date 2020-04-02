@@ -1,7 +1,7 @@
 package io.casperlabs.casper.helper
 
 import cats.effect.concurrent.Ref
-import cats.effect.{Concurrent, ConcurrentEffect, ContextShift, Timer}
+import cats.effect.{Concurrent, ConcurrentEffect, ContextShift, Resource, Timer}
 import cats.implicits._
 import cats.{~>, Applicative, Defer, Parallel}
 import com.google.protobuf.ByteString
@@ -37,6 +37,7 @@ import monix.execution.Scheduler
 import logstage.LogIO
 import io.casperlabs.shared.LogStub
 import io.casperlabs.storage.BlockMsgWithTransform
+import io.casperlabs.storage.SQLiteStorage.CombinedStorage
 
 import scala.concurrent.duration.FiniteDuration
 import scala.concurrent.duration._
@@ -148,7 +149,8 @@ trait HashSetCasperTestNodeFactory {
       concurrentEffectF: ConcurrentEffect[F],
       parF: Parallel[F],
       timerF: Timer[F],
-      contextShift: ContextShift[F]
+      contextShift: ContextShift[F],
+      scheduler: Scheduler
   ): F[TestNode[F]]
 
   def standaloneEff(
@@ -163,7 +165,8 @@ trait HashSetCasperTestNodeFactory {
       ConcurrentEffect[Task],
       Parallel[Task],
       Timer[Task],
-      ContextShift[Task]
+      ContextShift[Task],
+      scheduler
     ).unsafeRunSync
 
   def networkF[F[_]](
@@ -177,7 +180,8 @@ trait HashSetCasperTestNodeFactory {
       concurrentEffectF: ConcurrentEffect[F],
       parF: Parallel[F],
       timerF: Timer[F],
-      contextShift: ContextShift[F]
+      contextShift: ContextShift[F],
+      scheduler: Scheduler
   ): F[IndexedSeq[TestNode[F]]]
 
   def networkEff(
@@ -197,11 +201,19 @@ trait HashSetCasperTestNodeFactory {
       ConcurrentEffect[Task],
       Parallel[Task],
       Timer[Task],
-      ContextShift[Task]
+      ContextShift[Task],
+      scheduler
     )
 
-  protected def initStorage[F[_]: Concurrent: Log: Metrics: ContextShift: Time]()
-      : F[(BlockStorage[F], IndexedDagStorage[F], DeployStorage[F], FinalityStorage[F])] =
+  protected def initStorage[F[_]: Concurrent: Log: Metrics: ContextShift: Time](): F[
+    (
+        BlockStorage[F],
+        DagStorage[F],
+        DeployStorage[F],
+        FinalityStorage[F],
+        AncestorsStorage[F]
+    )
+  ] =
     StorageFixture.createFileStorages[F]()
 }
 

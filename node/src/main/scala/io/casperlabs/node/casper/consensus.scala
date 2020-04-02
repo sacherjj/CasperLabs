@@ -93,6 +93,9 @@ trait Consensus[F[_]] {
 
   /** Latest messages for pull based gossiping. */
   def latestMessages: F[Set[Block.Justification]]
+
+  /** Return the list of active eras, if applicable. */
+  def activeEras: F[Set[Era]]
 }
 
 object NCB {
@@ -232,6 +235,8 @@ object NCB {
         } yield lm.values.flatten
           .map(m => Block.Justification(m.validatorId, m.messageHash))
           .toSet
+
+      override def activeEras = Set.empty.pure[F]
     }
   }
 }
@@ -382,6 +387,9 @@ object Highway {
                 .map(m => Block.Justification(m.validatorId, m.messageHash))
             }.toSet
           }
+
+        override def activeEras =
+          supervisor.activeEras
       }
     } yield consensusEff
   }

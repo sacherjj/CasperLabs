@@ -24,6 +24,7 @@ import org.scalatest.{BeforeAndAfterEach, Inspectors, Matchers, WordSpecLike}
 
 import scala.concurrent.duration._
 import scala.util.Random
+import monix.execution.Scheduler
 
 class RelayingSpec
     extends WordSpecLike
@@ -176,13 +177,21 @@ object RelayingSpec {
             )(accepted => Task.now(NewBlocksResponse(accepted)))
         }
 
-      val relayingImpl = RelayingImpl[Task](nd, gossipService, relayFactor, relaySaturation)(
-        Concurrent[Task],
-        Parallel[Task],
-        log,
-        metrics,
-        ask
-      )
+      val relayingImpl =
+        RelayingImpl[Task](
+          implicitly[Scheduler],
+          nd,
+          gossipService,
+          relayFactor,
+          relaySaturation
+        )(
+          ContextShift[Task],
+          Concurrent[Task],
+          Parallel[Task],
+          log,
+          metrics,
+          ask
+        )
       test(relayingImpl, asked, maxConcurrentRequests).runSyncUnsafe(5.seconds)
     }
   }

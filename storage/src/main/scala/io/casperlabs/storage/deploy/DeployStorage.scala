@@ -2,7 +2,7 @@ package io.casperlabs.storage.deploy
 
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.Block.ProcessedDeploy
-import io.casperlabs.casper.consensus.{Block, Deploy}
+import io.casperlabs.casper.consensus.{Block, Deploy, DeploySummary}
 import io.casperlabs.casper.consensus.info.DeployInfo
 import io.casperlabs.crypto.Keys.PublicKeyBS
 import io.casperlabs.metrics.Metered
@@ -70,6 +70,10 @@ import cats.mtl.ApplicativeAsk
   def close(): F[Unit]
 }
 @typeclass trait DeployStorageReader[F[_]] {
+  def contains(deployHash: DeployHash): F[Boolean]
+
+  def getDeploySummary(deployHash: DeployHash): F[Option[DeploySummary]]
+
   def readProcessed: F[List[Deploy]]
 
   def readProcessedByAccount(account: ByteString): F[List[Deploy]]
@@ -169,6 +173,9 @@ object DeployStorageReader {
     ev.reader
 
   trait MeteredDeployStorageReader[F[_]] extends DeployStorageReader[F] with Metered[F] {
+    abstract override def contains(deployHash: DeployHash) =
+      incAndMeasure("contains", super.contains(deployHash))
+
     abstract override def readProcessed =
       incAndMeasure("readProcessed", super.readProcessed)
 
@@ -234,5 +241,8 @@ object DeployStorageReader {
           next
         )
       )
+
+    abstract override def getDeploySummary(deployHash: DeployHash): F[Option[DeploySummary]] =
+      incAndMeasure("getDeploySummary", super.getDeploySummary(deployHash))
   }
 }

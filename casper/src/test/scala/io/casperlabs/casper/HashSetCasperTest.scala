@@ -1462,7 +1462,8 @@ object HashSetCasperTest {
             implicit0(blockStorage: BlockStorage[Task]),
             _,
             _,
-            implicit0(fs: FinalityStorage[Task])
+            implicit0(fs: FinalityStorage[Task]),
+            _
             ) =>
           Genesis.fromChainSpec[Task](spec)
       }
