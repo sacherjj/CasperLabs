@@ -14,8 +14,8 @@ import io.casperlabs.crypto.codec.ByteArraySyntax
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.shared.Log
-import monix.tail.Iterant
 import monix.execution.Scheduler
+import monix.tail.Iterant
 
 /** Manages the download, validation, storing and gossiping of blocks. */
 trait BlockDownloadManager[F[_]] extends DownloadManager[F] {
@@ -37,7 +37,7 @@ object BlockDownloadManagerImpl extends DownloadManagerCompanion {
       maxParallelDownloads: Int,
       connectToGossip: GossipService.Connector[F],
       backend: Backend[F],
-      relaying: Relaying[F],
+      relaying: BlockRelaying[F],
       retriesConf: RetriesConf,
       egressScheduler: Scheduler
   ): Resource[F, BlockDownloadManager[F]] =
@@ -94,7 +94,7 @@ class BlockDownloadManagerImpl[F[_]](
     // Establish gRPC connection to another node.
     val connectToGossip: GossipService.Connector[F],
     val backend: BlockDownloadManagerImpl.Backend[F],
-    val relaying: Relaying[F],
+    val relaying: BlockRelaying[F],
     val retriesConf: RetriesConf,
     val egressScheduler: Scheduler
 )(

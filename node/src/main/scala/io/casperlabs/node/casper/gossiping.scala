@@ -31,6 +31,7 @@ import io.casperlabs.mempool.DeployBuffer
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.node.casper.consensus.Consensus
 import io.casperlabs.node.configuration.Configuration
+import io.casperlabs.shared.ByteStringPrettyPrinter._
 import io.casperlabs.shared.{Log, Time}
 import io.casperlabs.storage.block._
 import io.casperlabs.storage.dag._
@@ -45,7 +46,6 @@ import monix.tail.Iterant
 import scala.concurrent.duration._
 import scala.util.Random
 import scala.util.control.NonFatal
-import io.casperlabs.shared.ByteStringPrettyPrinter._
 
 /** Create the Casper stack using the GossipService. */
 package object gossiping {
@@ -64,7 +64,7 @@ package object gossiping {
   )(
       implicit logId: Log[Id],
       metricsId: Metrics[Id]
-  ): Resource[F, Relaying[F]] = {
+  ): Resource[F, BlockRelaying[F]] = {
 
     val (cert, key) = conf.tls.readIntraNodeCertAndKey
 
@@ -268,11 +268,11 @@ package object gossiping {
       conf: Configuration,
       connectToGossip: GossipService.Connector[F],
       egressScheduler: Scheduler
-  ): Resource[F, Relaying[F]] =
+  ): Resource[F, BlockRelaying[F]] =
     Resource
-      .liftF(RelayingImpl.establishMetrics[F])
+      .liftF(BlockRelayingImpl.establishMetrics[F])
       .as(
-        RelayingImpl(
+        BlockRelayingImpl(
           egressScheduler,
           NodeDiscovery[F],
           connectToGossip = connectToGossip,
@@ -325,7 +325,7 @@ package object gossiping {
   private def makeBlockDownloadManager[F[_]: ContextShift: Concurrent: Log: Time: Timer: Metrics: DagStorage: Consensus](
       conf: Configuration,
       connectToGossip: GossipService.Connector[F],
-      relaying: Relaying[F],
+      relaying: BlockRelaying[F],
       synchronizer: Synchronizer[F],
       maybeValidatorId: Option[ValidatorIdentity],
       isInitialSyncDoneRef: Ref[F, Boolean],

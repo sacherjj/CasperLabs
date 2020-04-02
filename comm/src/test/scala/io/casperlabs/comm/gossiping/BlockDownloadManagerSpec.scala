@@ -705,7 +705,7 @@ object BlockDownloadManagerSpec {
     def apply(validate: Block => Task[Unit] = _ => Task.unit) = new MockBackend(validate)
   }
 
-  class MockRelaying extends Relaying[Task] {
+  class MockRelaying extends BlockRelaying[Task] {
     @volatile var relayed = Vector.empty[ByteString]
 
     override def relay(hashes: List[ByteString]): Task[Task[Unit]] = Task.delay {

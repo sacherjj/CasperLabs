@@ -1,9 +1,9 @@
 package io.casperlabs.comm.gossiping
 
-import cats.{Monad, Parallel}
 import cats.effect._
 import cats.effect.implicits._
 import cats.implicits._
+import cats.{Monad, Parallel}
 import com.google.protobuf.ByteString
 import io.casperlabs.comm.NodeAsk
 import io.casperlabs.comm.discovery.NodeUtils._
@@ -12,20 +12,24 @@ import io.casperlabs.comm.gossiping.Utils._
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.implicits._
 import io.casperlabs.shared.Log
+import monix.execution.Scheduler
 import simulacrum.typeclass
 
 import scala.util.Random
-import monix.execution.Scheduler
 
 @typeclass
 trait Relaying[F[_]] {
 
-  /** Notify peers about the availability of some blocks.
+  /** Notify peers about the availability of some data by hashes (blocks or deploys).
     * Return a handle that can be waited upon. */
   def relay(hashes: List[ByteString]): F[WaitHandle[F]]
 }
 
-object RelayingImpl {
+trait BlockRelaying[F[_]] extends Relaying[F]
+
+trait DeployRelaying[F[_]] extends Relaying[F]
+
+object BlockRelayingImpl {
   implicit val metricsSource: Metrics.Source = Metrics.Source(GossipingMetricsSource, "Relaying")
 
   /** Export base 0 values so we have non-empty series for charts. */
@@ -43,13 +47,13 @@ object RelayingImpl {
       relayFactor: Int,
       relaySaturation: Int,
       isSynchronous: Boolean = false
-  ): Relaying[F] = {
+  ): BlockRelaying[F] = {
     val maxToTry = if (relaySaturation == 100) {
       Int.MaxValue
     } else {
       (relayFactor * 100) / (100 - relaySaturation)
     }
-    new RelayingImpl[F](
+    new BlockRelayingImpl[F](
       egressScheduler,
       nodeDiscovery,
       connectToGossip,
@@ -63,15 +67,15 @@ object RelayingImpl {
 /**
   * https://techspec.casperlabs.io/technical-details/global-state/communications#picking-nodes-for-gossip
   */
-class RelayingImpl[F[_]: ContextShift: Concurrent: Parallel: Log: Metrics: NodeAsk](
+class BlockRelayingImpl[F[_]: ContextShift: Concurrent: Parallel: Log: Metrics: NodeAsk](
     egressScheduler: Scheduler,
     nodeDiscovery: NodeDiscovery[F],
     connectToGossip: Node => F[GossipService[F]],
     relayFactor: Int,
     maxToTry: Int,
     isSynchronous: Boolean
-) extends Relaying[F] {
-  import RelayingImpl._
+) extends BlockRelaying[F] {
+  import BlockRelayingImpl._
 
   override def relay(hashes: List[ByteString]): F[WaitHandle[F]] = {
     def loop(hash: ByteString, peers: List[Node], relayed: Int, contacted: Int): F[Unit] = {

@@ -1,22 +1,19 @@
 package io.casperlabs.comm.gossiping
 
-import cats.{Applicative, Parallel}
 import cats.effect._
 import cats.mtl.DefaultApplicativeAsk
 import cats.syntax.option._
+import cats.{Applicative, Parallel}
 import com.google.protobuf.ByteString
-import io.casperlabs.casper.consensus.{Block, BlockSummary}
 import io.casperlabs.comm.NodeAsk
 import io.casperlabs.comm.discovery.NodeUtils._
 import io.casperlabs.comm.discovery.{Node, NodeDiscovery, NodeIdentifier}
 import io.casperlabs.metrics.Metrics
-import io.casperlabs.shared.LogStub
-import io.casperlabs.shared.Log
+import io.casperlabs.shared.{Log, LogStub}
 import monix.eval.Task
-import monix.eval.instances.CatsParallelForTask
+import monix.execution.Scheduler
 import monix.execution.Scheduler.Implicits.global
 import monix.execution.atomic.AtomicInt
-import monix.tail.Iterant
 import org.scalacheck.Arbitrary.arbitrary
 import org.scalacheck.{Gen, Shrink}
 import org.scalatest.prop.GeneratorDrivenPropertyChecks
@@ -24,7 +21,6 @@ import org.scalatest.{BeforeAndAfterEach, Inspectors, Matchers, WordSpecLike}
 
 import scala.concurrent.duration._
 import scala.util.Random
-import monix.execution.Scheduler
 
 class RelayingSpec
     extends WordSpecLike
@@ -178,7 +174,7 @@ object RelayingSpec {
         }
 
       val relayingImpl =
-        RelayingImpl[Task](
+        BlockRelayingImpl[Task](
           implicitly[Scheduler],
           nd,
           gossipService,
