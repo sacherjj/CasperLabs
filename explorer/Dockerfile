@@ -17,8 +17,5 @@ ENV TRANSFER_AMOUNT=1000000000
 ENV GAS_PRICE=10
 # The link to graphql playground, used in Home page of UI.
 ENV UI_GRAPHQL_URL=http://devnet-graphql.casperlabs.io:40403/graphql
-# A set of urls where node accepting deploy requests.
-# Separated by ';'
-ENV CASPER_SERVICE_URL=http://localhost:8401;
 ENV FAUCET_CONTRACT_PATH=/app/contracts/faucet.wasm
 ENTRYPOINT node server.js
