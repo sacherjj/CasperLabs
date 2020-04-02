@@ -199,7 +199,7 @@ class EraSupervisor[F[_]: Concurrent: Timer: Log: Metrics: EraStorage: BlockRela
             )
         // Relay ASAP so it won't get orphaned. We can the local DB with further effects after that.
         _ <- BlockRelaying[F]
-              .relay(List(message.messageHash))
+              .relay(message)
               .timerGauge(s"created_${kind}_relay")
         _ <- messageExecutor
               .effectsAfterAdded(Validated(message))
