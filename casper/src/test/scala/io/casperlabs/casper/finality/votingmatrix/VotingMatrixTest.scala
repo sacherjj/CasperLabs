@@ -17,7 +17,7 @@ import io.casperlabs.models.Message
 import io.casperlabs.shared.LogStub
 import io.casperlabs.shared.Time
 import io.casperlabs.storage.block.BlockStorage
-import io.casperlabs.storage.dag.{DagRepresentation, DagStorage}
+import io.casperlabs.storage.dag.{AncestorsStorage, DagRepresentation, DagStorage}
 import io.casperlabs.storage.deploy.DeployStorage
 import monix.eval.Task
 import org.scalatest.{Assertion, FlatSpec, Matchers}
@@ -252,7 +252,7 @@ class VotingMatrixTest extends FlatSpec with Matchers with BlockGenerator with S
     } yield result
   }
 
-  def createBlockAndUpdateVotingMatrix[F[_]: MonadThrowable: Time: BlockStorage: DagStorage: DeployStorage](
+  def createBlockAndUpdateVotingMatrix[F[_]: MonadThrowable: Time: BlockStorage: DagStorage: DeployStorage: AncestorsStorage](
       parentsHashList: Seq[BlockHash],
       latestFinalizedBlockHash: BlockHash,
       creator: Validator = ByteString.EMPTY,
@@ -269,12 +269,14 @@ class VotingMatrixTest extends FlatSpec with Matchers with BlockGenerator with S
             justifications,
             keyBlockHash = latestFinalizedBlockHash
           )
-      dag         <- DagStorage[F].getRepresentation
-      votedBranch <- ProtoUtil.votedBranch(dag, latestFinalizedBlockHash, b.blockHash)
+      bMessage <- MonadThrowable[F].fromTry(Message.fromBlock(b))
+      dag      <- DagStorage[F].getRepresentation
+      votedBranch <- io.casperlabs.casper.finality
+                      .votedBranch(dag, latestFinalizedBlockHash, bMessage)
       _ <- updateVoterPerspective(
             dag,
             Message.fromBlock(b).get,
-            votedBranch.get,
+            votedBranch.get.messageHash,
             isHighway = false
           )
     } yield b

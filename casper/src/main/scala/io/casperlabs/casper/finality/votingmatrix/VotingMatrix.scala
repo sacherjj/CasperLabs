@@ -12,7 +12,7 @@ import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.models.Message
 import io.casperlabs.models.Message.MainRank
-import io.casperlabs.storage.dag.DagRepresentation
+import io.casperlabs.storage.dag.{AncestorsStorage, DagRepresentation}
 
 import scala.collection.mutable.{IndexedSeq => MutableSeq}
 
@@ -37,7 +37,7 @@ object VotingMatrix {
 
   /** Creates a new voting matrix basing new finalized block.
     */
-  private[votingmatrix] def create[F[_]: Concurrent](
+  private[votingmatrix] def create[F[_]: Concurrent: AncestorsStorage](
       dag: DagRepresentation[F],
       lfbHash: BlockHash,
       isHighway: Boolean
@@ -65,11 +65,11 @@ object VotingMatrix {
       voteOnLFBChild <- latestMessagesOfHonestVoters.toList
                          .traverse {
                            case (v, b) =>
-                             ProtoUtil
+                             io.casperlabs.casper.finality
                                .votedBranch[F](
                                  dag,
                                  lfbHash,
-                                 b.messageHash
+                                 b
                                )
                                .map {
                                  _.map(
@@ -85,10 +85,10 @@ object VotingMatrix {
                               .traverse {
                                 case (v, voteValue) =>
                                   FinalityDetectorUtil
-                                    .levelZeroMsgsOfValidator(dag, v, voteValue)
+                                    .levelZeroMsgsOfValidator(dag, v, voteValue.messageHash)
                                     .map(
                                       _.lastOption
-                                        .map(b => (v, (voteValue, b.mainRank)))
+                                        .map(b => (v, (voteValue.messageHash, b.mainRank)))
                                     )
                               }
                               .map(_.flatten.toMap)
