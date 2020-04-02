@@ -27,6 +27,24 @@ const POS_ERROR_OFFSET: u32 = RESERVED_ERROR_MAX - u8::MAX as u32; // 65280..=65
 /// added to them when being converted to a `u32`.
 const MINT_ERROR_OFFSET: u32 = (POS_ERROR_OFFSET - 1) - u8::MAX as u32; // 65024..=65279
 
+/// Minimum value of user error's inclusive range.
+pub const USER_ERROR_MIN: u32 = RESERVED_ERROR_MAX + 1;
+
+/// Maximum value of user error's inclusive range.
+pub const USER_ERROR_MAX: u32 = 2 * RESERVED_ERROR_MAX + 1;
+
+/// Minimum value of Mint error's inclusive range.
+pub const MINT_ERROR_MIN: u32 = MINT_ERROR_OFFSET;
+
+/// Maximum value of Mint error's inclusive range.
+pub const MINT_ERROR_MAX: u32 = POS_ERROR_OFFSET - 1;
+
+/// Minimum value of Proof of Stake error's inclusive range.
+pub const POS_ERROR_MIN: u32 = POS_ERROR_OFFSET;
+
+/// Maximum value of Prof of Stake error's inclusive range.
+pub const POS_ERROR_MAX: u32 = RESERVED_ERROR_MAX;
+
 /// Errors which can be encountered while running a smart contract.
 ///
 /// An `ApiError` can be converted to a `u32` in order to be passed via the execution engine's
@@ -622,11 +640,11 @@ pub fn result_from(value: i32) -> Result<(), ApiError> {
         34 => Err(ApiError::HostBufferFull),
         35 => Err(ApiError::AllocLayout),
         _ => {
-            if value > RESERVED_ERROR_MAX as i32 && value <= (2 * RESERVED_ERROR_MAX + 1) as i32 {
+            if (USER_ERROR_MIN as i32..=USER_ERROR_MAX as i32).contains(&value) {
                 Err(ApiError::User(value as u16))
-            } else if value >= POS_ERROR_OFFSET as i32 && value <= RESERVED_ERROR_MAX as i32 {
+            } else if (POS_ERROR_MIN as i32..=POS_ERROR_MAX as i32).contains(&value) {
                 Err(ApiError::ProofOfStake(value as u8))
-            } else if value >= MINT_ERROR_OFFSET as i32 && value < POS_ERROR_OFFSET as i32 {
+            } else if (MINT_ERROR_MIN as i32..=MINT_ERROR_MAX as i32).contains(&value) {
                 Err(ApiError::Mint(value as u8))
             } else {
                 Err(ApiError::Unhandled)
