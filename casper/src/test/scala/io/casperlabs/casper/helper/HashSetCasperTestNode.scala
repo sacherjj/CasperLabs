@@ -1,7 +1,7 @@
 package io.casperlabs.casper.helper
 
 import cats.effect.concurrent.Ref
-import cats.effect.{Concurrent, ConcurrentEffect, ContextShift, Timer}
+import cats.effect.{Concurrent, ConcurrentEffect, ContextShift, Resource, Timer}
 import cats.implicits._
 import cats.{~>, Applicative, Defer, Parallel}
 import com.google.protobuf.ByteString
@@ -37,6 +37,7 @@ import monix.execution.Scheduler
 import logstage.LogIO
 import io.casperlabs.shared.LogStub
 import io.casperlabs.storage.BlockMsgWithTransform
+import io.casperlabs.storage.SQLiteStorage.CombinedStorage
 
 import scala.concurrent.duration.FiniteDuration
 import scala.concurrent.duration._
@@ -204,8 +205,15 @@ trait HashSetCasperTestNodeFactory {
       scheduler
     )
 
-  protected def initStorage[F[_]: Concurrent: Log: Metrics: ContextShift: Time]()
-      : F[(BlockStorage[F], IndexedDagStorage[F], DeployStorage[F], FinalityStorage[F])] =
+  protected def initStorage[F[_]: Concurrent: Log: Metrics: ContextShift: Time](): F[
+    (
+        BlockStorage[F],
+        DagStorage[F],
+        DeployStorage[F],
+        FinalityStorage[F],
+        AncestorsStorage[F]
+    )
+  ] =
     StorageFixture.createFileStorages[F]()
 }
 
