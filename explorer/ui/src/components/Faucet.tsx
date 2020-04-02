@@ -8,7 +8,7 @@ import {
   Button,
   CommandLineHint,
   Icon,
-  Card
+  Card, FailIcon
 } from './Utils';
 import DataTable from './DataTable';
 import { DeployInfo } from 'casperlabs-grpc/io/casperlabs/casper/consensus/info_pb';
@@ -163,7 +163,7 @@ const StatusCell = observer((props: { request: FaucetRequest }) => {
               ? '. It looks like the faucet ran out of funds!'
               : '';
         return [
-          <Icon name="times-circle" color="red" />,
+          <FailIcon/>,
           `Failed in block ${blockHash(failure)}: ${errm + hint}`
         ];
       }

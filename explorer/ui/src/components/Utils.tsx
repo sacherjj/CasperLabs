@@ -3,12 +3,12 @@ import { Route, RouteProps } from 'react-router-dom';
 import { observer } from 'mobx-react';
 import AuthContainer from '../containers/AuthContainer';
 import { encodeBase16 } from 'casperlabs-sdk';
-import { Helmet } from "react-helmet";
+import { Helmet } from 'react-helmet';
 
 
 export const Spinner = (msg: String) => (
   <div className="text-center">
-    <i className="fa fa-fw fa-spin fa-spinner" />
+    <i className="fa fa-fw fa-spin fa-spinner"/>
     {msg}...
   </div>
 );
@@ -33,6 +33,10 @@ export const Icon = (props: {
   );
 };
 
+export const SuccessIcon = () => <Icon name="check-circle" color="green"/>;
+export const FailIcon = () => <Icon name="times-circle" color="red"/>;
+
+
 export const IconButton = (props: {
   onClick: () => void;
   title: string;
@@ -48,7 +52,7 @@ export const IconButton = (props: {
 );
 
 export const RefreshButton = (props: { refresh: () => void }) => (
-  <IconButton onClick={() => props.refresh()} title="Refresh" icon="redo" />
+  <IconButton onClick={() => props.refresh()} title="Refresh" icon="redo"/>
 );
 
 export const Button = (props: {
@@ -144,8 +148,8 @@ export const CommandLineHint = (props: { children: any }) => {
   );
 };
 
-export const CLX = (props: {amount: number}) => {
-  return <span>{props.amount.toLocaleString()} CLX</span>
+export const CLX = (props: { amount: number }) => {
+  return <span>{props.amount.toLocaleString()} CLX</span>;
 };
 
 interface PrivateRouteProps extends RouteProps {
@@ -218,7 +222,7 @@ export const Card = (props: {
   );
 };
 
-export const Title = (props:{title:string}) => (
+export const Title = (props: { title: string }) => (
   <Helmet>
     <title>CasperLabs Clarity - {props.title}</title>
   </Helmet>

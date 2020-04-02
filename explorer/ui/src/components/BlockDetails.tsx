@@ -5,7 +5,7 @@ import { BlockContainer } from '../containers/BlockContainer';
 import DataTable from './DataTable';
 import { BlockInfo } from 'casperlabs-grpc/io/casperlabs/casper/consensus/info_pb';
 import Pages from './Pages';
-import { RefreshableComponent, Icon } from './Utils';
+import { RefreshableComponent, Icon, SuccessIcon, FailIcon } from './Utils';
 import { BlockDAG } from './BlockDAG';
 import { Block } from 'casperlabs-grpc/io/casperlabs/casper/consensus/consensus_pb';
 import { shortHash } from './Utils';
@@ -158,9 +158,9 @@ const DeploysTable = observer(
               </td>
               <td className="text-center">
                 {deploy.getIsError() ? (
-                  <Icon name="times-circle" color="red" />
+                  <SuccessIcon/>
                 ) : (
-                    <Icon name="check-circle" color="green" />
+                    <FailIcon/>
                   )}
               </td>
               <td>{deploy.getErrorMessage()}</td>
@@ -268,9 +268,9 @@ export const FinalityIcon = (props: { block: BlockInfo }) => {
 
   let finality = props.block.getStatus()!.getFinality();
   if (finality === BlockInfo.Status.Finality.FINALIZED) {
-    return <Icon name="check-circle" color="green" />
+    return <SuccessIcon/>
   } else if (finality === BlockInfo.Status.Finality.ORPHANED)
-    return <Icon name="times-circle" color="red" />
+    return <FailIcon/>
   else {
     return <Icon name="clock" />
   }
