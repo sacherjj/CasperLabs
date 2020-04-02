@@ -26,27 +26,20 @@ trait Relaying[F[_]] {
   def relay(hashes: List[ByteString]): F[WaitHandle[F]]
 }
 
-trait RelayingImpl[F[_]] extends Relaying[F] {
-  // Can't specify context bounds in traits
-  implicit val CS: ContextShift[F]
-  implicit val C: Concurrent[F]
-  implicit val P: Parallel[F]
-  implicit val L: Log[F]
-  implicit val M: Metrics[F]
-  implicit val N: NodeAsk[F]
-  implicit val S: Metrics.Source
+abstract class RelayingImpl[F[_]: ContextShift: Concurrent: Parallel: Log: Metrics: NodeAsk](
+    val egressScheduler: Scheduler,
+    val nodeDiscovery: NodeDiscovery[F],
+    val connectToGossip: Node => F[GossipService[F]],
+    val relayFactor: Int,
+    val maxToTry: Int,
+    val isSynchronous: Boolean
+)(implicit val metricsSource: Metrics.Source)
+    extends Relaying[F] {
 
-  val egressScheduler: Scheduler
-  val nodeDiscovery: NodeDiscovery[F]
-  val connectToGossip: Node => F[GossipService[F]]
-  val relayFactor: Int
-  val maxToTry: Int
-  val isSynchronous: Boolean
-
-  // Args: (remote service of a peer relaying to, local node, hashes of items to relay)
-  // Returns: True  - at least one item is new to a peer
-  //          False - all items already known by peer
-  val request: (GossipService[F], Node, List[ByteString]) => F[Boolean]
+  /**
+    * @return 'true' if at least one item is new to a peer and 'false' if all items already known by peer
+    */
+  def request(gossipService: GossipService[F], local: Node, hashes: List[ByteString]): F[Boolean]
   // For logs
   val requestName: String
 
