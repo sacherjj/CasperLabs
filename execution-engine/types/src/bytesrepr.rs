@@ -4,7 +4,7 @@
 #[rustfmt::skip]
 use alloc::vec;
 use alloc::{
-    collections::{BTreeMap, TryReserveError},
+    collections::{BTreeMap, BTreeSet, TryReserveError},
     string::String,
     vec::Vec,
 };
@@ -469,6 +469,43 @@ impl_to_from_bytes_for_byte_array! {
     30 31 32
     64 128 256 512
 }
+
+impl<V: ToBytes> ToBytes for BTreeSet<V> {
+    fn to_bytes(&self) -> Result<Vec<u8>, Error> {
+        let mut result = allocate_buffer(self)?;
+
+        let num_keys = self.len() as u32;
+        result.append(&mut num_keys.to_bytes()?);
+
+        for value in self.iter() {
+            result.append(&mut value.to_bytes()?);
+        }
+
+        Ok(result)
+    }
+
+    fn serialized_length(&self) -> usize {
+        U32_SERIALIZED_LENGTH
+            + self
+                .iter()
+                .map(|v| v.serialized_length())
+                .sum::<usize>()
+    }
+}
+
+impl<V: FromBytes + Ord> FromBytes for BTreeSet<V> {
+    fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
+        let (num_keys, mut stream) = u32::from_bytes(bytes)?;
+        let mut result = BTreeSet::new();
+        for _ in 0..num_keys {
+            let (v, rem) = V::from_bytes(stream)?;
+            result.insert(v);
+            stream = rem;
+        }
+        Ok((result, stream))
+    }
+}
+
 
 impl<K, V> ToBytes for BTreeMap<K, V>
 where

@@ -104,17 +104,34 @@ impl CLTyped for ContractMetadata {
 
 impl ToBytes for ContractMetadata {
     fn to_bytes(&self) -> Result<Vec<u8>, bytesrepr::Error> {
-        Ok(Vec::new()) // TODO: real serialization
+        let mut result = bytesrepr::allocate_buffer(self)?;
+
+        result.append(&mut self.access_key.to_bytes()?);
+        result.append(&mut self.active_versions.to_bytes()?);
+        result.append(&mut self.removed_versions.to_bytes()?);
+
+        Ok(result)
     }
 
     fn serialized_length(&self) -> usize {
-        0
+        self.access_key.serialized_length()
+            + self.active_versions.serialized_length()
+            + self.removed_versions.serialized_length()
     }
 }
 
 impl FromBytes for ContractMetadata {
     fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), bytesrepr::Error> {
-        Err(bytesrepr::Error::Formatting) // TODO: real serialization
+        let (access_key, bytes) = URef::from_bytes(bytes)?;
+        let (active_versions, bytes) = BTreeMap::<SemVer, ContractHeader>::from_bytes(bytes)?;
+        let (removed_versions, bytes) = BTreeSet::<SemVer>::from_bytes(bytes)?;
+        let result = ContractMetadata {
+            access_key,
+            active_versions,
+            removed_versions,
+        };
+
+        Ok((result, bytes))
     }
 }
 
@@ -149,17 +166,28 @@ impl ContractHeader {
 
 impl ToBytes for ContractHeader {
     fn to_bytes(&self) -> Result<Vec<u8>, bytesrepr::Error> {
-        Ok(Vec::new()) // TODO: real serialization
+        let mut result = ToBytes::to_bytes(&self.methods)?;
+        result.append(&mut self.protocol_version.to_bytes()?);
+        Ok(result)
     }
 
     fn serialized_length(&self) -> usize {
-        0
+        ToBytes::serialized_length(&self.methods)
+            + ToBytes::serialized_length(&self.protocol_version)
     }
 }
 
 impl FromBytes for ContractHeader {
     fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), bytesrepr::Error> {
-        Err(bytesrepr::Error::Formatting) // TODO: real serialization
+        let (methods, bytes) = BTreeMap::<String, EntryPoint>::from_bytes(bytes)?;
+        let (protocol_version, bytes) = ProtocolVersion::from_bytes(bytes)?;
+        Ok((
+            ContractHeader {
+                methods,
+                protocol_version,
+            },
+            bytes,
+        ))
     }
 }
 
@@ -179,6 +207,28 @@ impl EntryPoint {
     }
 }
 
+impl ToBytes for EntryPoint {
+    fn to_bytes(&self) -> Result<Vec<u8>, bytesrepr::Error> {
+        let mut result = ToBytes::to_bytes(&self.args)?;
+        self.ret.append_bytes(&mut result);
+
+        Ok(result)
+    }
+
+    fn serialized_length(&self) -> usize {
+        ToBytes::serialized_length(&self.args) + self.ret.serialized_length()
+    }
+}
+
+impl FromBytes for EntryPoint {
+    fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), bytesrepr::Error> {
+        let (args, bytes) = Vec::<Arg>::from_bytes(bytes)?;
+        let (ret, bytes) = CLType::from_bytes(bytes)?;
+
+        Ok((EntryPoint { args, ret }, bytes))
+    }
+}
+
 /// Argument to a method
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Arg {
@@ -190,5 +240,27 @@ impl Arg {
     /// Get the type of this argument.
     pub fn cl_type(&self) -> &CLType {
         &self.cl_type
+    }
+}
+
+impl ToBytes for Arg {
+    fn to_bytes(&self) -> Result<Vec<u8>, bytesrepr::Error> {
+        let mut result = ToBytes::to_bytes(&self.name)?;
+        self.cl_type.append_bytes(&mut result);
+
+        Ok(result)
+    }
+
+    fn serialized_length(&self) -> usize {
+        ToBytes::serialized_length(&self.name) + self.cl_type.serialized_length()
+    }
+}
+
+impl FromBytes for Arg {
+    fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), bytesrepr::Error> {
+        let (name, bytes) = String::from_bytes(bytes)?;
+        let (cl_type, bytes) = CLType::from_bytes(bytes)?;
+
+        Ok((Arg { name, cl_type }, bytes))
     }
 }
