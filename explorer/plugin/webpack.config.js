@@ -5,15 +5,20 @@ module.exports = {
     // Background scripts.
     'background/background.js': './src/background/background.ts',
     // Content scripts.
-    'content/content.js': "./src/content/contentscript.ts",
-    'content/inject.js': "./src/content/inject.ts"
+    'content/content.js'      : './src/content/contentscript.ts',
+    'content/inject.js'       : './src/content/inject.ts'
   },
   devtool: 'inline-source-map',
   module : {
     rules: [
       {
         test   : /\.ts$/,
-        use    : 'ts-loader',
+        use    : [{
+          loader : 'ts-loader',
+          options: {
+            configFile: 'tsconfig.webpack.json'
+          }
+        }],
         include: path.resolve(__dirname, 'src')
       }
     ]
