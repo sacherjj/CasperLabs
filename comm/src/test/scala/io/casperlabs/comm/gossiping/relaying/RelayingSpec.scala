@@ -28,6 +28,11 @@ import org.scalatest.{BeforeAndAfterEach, Inspectors, Matchers, WordSpecLike}
 import scala.concurrent.duration._
 import scala.util.Random
 
+/**
+  * TODO: Uses [[BlockRelayingImpl]] for testing.
+  * It's ok for now, because the most of the code shared between [[DeployRelayingImpl]].
+  * However, if it's going to change, then we'll need to revisit this.
+  */
 class RelayingSpec
     extends WordSpecLike
     with Matchers
