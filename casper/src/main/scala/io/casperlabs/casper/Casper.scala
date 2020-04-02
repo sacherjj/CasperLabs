@@ -24,6 +24,7 @@ import io.casperlabs.storage.deploy.DeployStorage
 import ByteStringPrettyPrinter._
 
 import scala.concurrent.duration.FiniteDuration
+import io.casperlabs.storage.dag.AncestorsStorage
 
 trait MultiParentCasper[F[_]] {
   //// Brought from Casper trait
@@ -65,7 +66,7 @@ sealed abstract class MultiParentCasperInstances {
     } yield casperState
 
   /** Create a MultiParentCasper instance from the new RPC style gossiping. */
-  def fromGossipServices[F[_]: Concurrent: Log: Time: Metrics: BlockStorage: DagStorage: DeployBuffer: FinalityStorage: ExecutionEngineService: DeployStorage: Validation: DeploySelection: CasperLabsProtocol: BlockEventEmitter](
+  def fromGossipServices[F[_]: Concurrent: Log: Time: Metrics: BlockStorage: DagStorage: DeployBuffer: FinalityStorage: ExecutionEngineService: DeployStorage: Validation: DeploySelection: AncestorsStorage: CasperLabsProtocol: BlockEventEmitter](
       validatorId: Option[ValidatorIdentity],
       genesis: Block,
       genesisPreState: StateHash,

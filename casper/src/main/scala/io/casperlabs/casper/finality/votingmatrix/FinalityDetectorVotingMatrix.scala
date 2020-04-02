@@ -4,21 +4,22 @@ import cats.effect.Concurrent
 import cats.effect.concurrent.Semaphore
 import cats.implicits._
 import cats.mtl.MonadState
-import cats.{Applicative, Monad}
+import cats.Monad
 import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.PrettyPrinter
-import io.casperlabs.casper.consensus.Block
 import io.casperlabs.casper.finality.{CommitteeWithConsensusValue, FinalityDetector}
 import io.casperlabs.casper.finality.votingmatrix.FinalityDetectorVotingMatrix._votingMatrixS
-import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.models.Message
 import io.casperlabs.shared.Log
-import io.casperlabs.catscontrib.MonadStateOps._
 import io.casperlabs.storage.dag.DagRepresentation
-import io.casperlabs.casper.validation.Validation
+import io.casperlabs.casper.dag.DagOperations
+import io.casperlabs.storage.dag.AncestorsStorage
 
-class FinalityDetectorVotingMatrix[F[_]: Concurrent: Log] private (rFTT: Double, isHighway: Boolean)(
+class FinalityDetectorVotingMatrix[F[_]: Concurrent: Log: AncestorsStorage] private (
+    rFTT: Double,
+    isHighway: Boolean
+)(
     implicit private val matrix: _votingMatrixS[F]
 ) extends FinalityDetector[F] {
 
@@ -90,14 +91,15 @@ class FinalityDetectorVotingMatrix[F[_]: Concurrent: Log] private (rFTT: Double,
           matrix
             .withPermit(
               for {
-                votedBranch <- ProtoUtil.votedBranch(dag, latestFinalizedBlock, message.messageHash)
+                votedBranch <- io.casperlabs.casper.finality
+                                .votedBranch[F](dag, latestFinalizedBlock, message)
                 result <- votedBranch match {
-                           case Some(lfbChildHash) =>
+                           case Some(lfbChild) =>
+                             // Check if the vote (message) is in different era than LFB's child it votes for.
+                             // We disallow validators from different era to advance the LFB chain.
+                             val votedBranchIsDifferentEra = isHighway && lfbChild.eraId != message.eraId
+                             val lfbChildHash              = lfbChild.messageHash
                              for {
-                               lfbChild <- dag.lookupUnsafe(lfbChildHash)
-                               // Check if the vote (message) is in different era than LFB's child it votes for.
-                               // We disallow validators from different era to advance the LFB chain.
-                               votedBranchIsDifferentEra = isHighway && lfbChild.eraId != message.eraId
                                result <- if (votedBranchIsDifferentEra)
                                           Log[F].debug(
                                             s"${PrettyPrinter.buildString(message.messageHash) -> "Message"} from ${message.eraId -> "era"} votes on an LFB child ${PrettyPrinter
@@ -166,7 +168,7 @@ object FinalityDetectorVotingMatrix {
     *
     * NOTE: Raises an error if rFTT parameters is less than 0 or bigger than 0.5.
     */
-  def of[F[_]: Concurrent: Log](
+  def of[F[_]: Concurrent: Log: AncestorsStorage](
       dag: DagRepresentation[F],
       finalizedBlock: BlockHash,
       rFTT: Double,
@@ -186,6 +188,7 @@ object FinalityDetectorVotingMatrix {
     } yield new FinalityDetectorVotingMatrix[F](rFTT, isHighway) (
       Concurrent[F],
       Log[F],
+      AncestorsStorage[F],
       votingMatrixWithLock
     )
 }
