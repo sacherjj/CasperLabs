@@ -13,7 +13,7 @@ license-file = "../../LICENSE"
 [dependencies]
 contract = { version = "0.4.0", path = "../contract", package = "casperlabs-contract" }
 engine-core = { version = "0.5.0", path = "../engine-core", package = "casperlabs-engine-core" }
-engine-grpc-server = { version = "0.17.0", path = "../engine-grpc-server", package = "casperlabs-engine-grpc-server" }
+engine-grpc-server = { version = "0.17.1", path = "../engine-grpc-server", package = "casperlabs-engine-grpc-server" }
 engine-shared = { version = "0.5.0", path = "../engine-shared", package = "casperlabs-engine-shared" }
 engine-storage = { version = "0.5.0", path = "../engine-storage", package = "casperlabs-engine-storage" }
 engine-wasm-prep = { version = "0.4.0", path = "../engine-wasm-prep", package = "casperlabs-engine-wasm-prep" }
