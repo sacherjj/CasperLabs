@@ -1,4 +1,4 @@
-package io.casperlabs.comm.gossiping
+package io.casperlabs.comm.gossiping.relaying
 
 import cats.effect._
 import cats.mtl.DefaultApplicativeAsk
@@ -8,6 +8,12 @@ import com.google.protobuf.ByteString
 import io.casperlabs.comm.NodeAsk
 import io.casperlabs.comm.discovery.NodeUtils._
 import io.casperlabs.comm.discovery.{Node, NodeDiscovery, NodeIdentifier}
+import io.casperlabs.comm.gossiping.{
+  ArbitraryConsensusAndComm,
+  NewBlocksRequest,
+  NewBlocksResponse,
+  NoOpsGossipService
+}
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.shared.{Log, LogStub}
 import monix.eval.Task

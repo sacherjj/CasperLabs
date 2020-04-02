@@ -1,4 +1,4 @@
-package io.casperlabs.comm.gossiping
+package io.casperlabs.comm.gossiping.downloadmanager
 
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -11,8 +11,9 @@ import io.casperlabs.comm.GossipError
 import io.casperlabs.comm.discovery.Node
 import io.casperlabs.comm.discovery.NodeUtils.showNode
 import io.casperlabs.comm.gossiping.downloadmanager.BlockDownloadManagerImpl._
-import io.casperlabs.comm.gossiping.downloadmanager._
+import io.casperlabs.comm.gossiping.relaying.BlockRelaying
 import io.casperlabs.comm.gossiping.synchronization.Synchronizer
+import io.casperlabs.comm.gossiping._
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.models.BlockImplicits.BlockOps
 import io.casperlabs.shared.{Log, LogStub}

@@ -29,7 +29,8 @@ import io.casperlabs.catscontrib.effect.implicits.syncId
 import io.casperlabs.comm._
 import io.casperlabs.comm.discovery.NodeUtils._
 import io.casperlabs.comm.discovery._
-import io.casperlabs.comm.gossiping.{BlockRelaying, WaitHandle}
+import io.casperlabs.comm.gossiping.WaitHandle
+import io.casperlabs.comm.gossiping.relaying.BlockRelaying
 import io.casperlabs.comm.grpc.SslContexts
 import io.casperlabs.comm.rp._
 import io.casperlabs.ipc.ChainSpec

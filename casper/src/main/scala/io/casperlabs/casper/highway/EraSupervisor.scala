@@ -7,7 +7,7 @@ import io.casperlabs.casper.consensus.{Block, BlockSummary, Era}
 import io.casperlabs.casper.dag.DagOperations
 import io.casperlabs.casper.dag.DagOperations.Key
 import io.casperlabs.casper.highway.EraRuntime.Agenda
-import io.casperlabs.comm.gossiping.{BlockRelaying, Relaying}
+import io.casperlabs.comm.gossiping.relaying.BlockRelaying
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.implicits._
 import io.casperlabs.models.Message
@@ -198,7 +198,7 @@ class EraSupervisor[F[_]: Concurrent: Timer: Log: Metrics: EraStorage: BlockRela
               s"Created $kind ${message.messageHash.show -> "message"} in ${message.roundId -> "round"} ${message.eraId.show -> "era"} child of ${message.parentBlock.show -> "parent"}"
             )
         // Relay ASAP so it won't get orphaned. We can the local DB with further effects after that.
-        _ <- Relaying[F]
+        _ <- BlockRelaying[F]
               .relay(List(message.messageHash))
               .timerGauge(s"created_${kind}_relay")
         _ <- messageExecutor

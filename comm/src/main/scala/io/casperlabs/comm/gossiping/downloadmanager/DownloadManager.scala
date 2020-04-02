@@ -13,14 +13,16 @@ import eu.timepit.refined.numeric._
 import io.casperlabs.comm.GossipError
 import io.casperlabs.comm.discovery.Node
 import io.casperlabs.comm.discovery.NodeUtils.showNode
-import io.casperlabs.comm.gossiping.{Chunk, GossipService, Relaying, WaitHandle}
+import io.casperlabs.comm.gossiping.{Chunk, GossipService, WaitHandle}
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.implicits._
 import io.casperlabs.shared.Log._
 import io.casperlabs.shared.{Compression, Log}
 import io.casperlabs.catscontrib.effect.implicits.fiberSyntax
+import io.casperlabs.comm.gossiping.relaying.Relaying
 import monix.tail.Iterant
 import monix.execution.Scheduler
+
 import scala.concurrent.duration.{Duration, FiniteDuration}
 import scala.util.control.NonFatal
 import scala.collection.immutable.Queue

@@ -26,7 +26,7 @@ import io.casperlabs.casper.validation._
 import io.casperlabs.casper._
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.comm.ServiceError.{NotFound, Unavailable}
-import io.casperlabs.comm.gossiping.BlockRelaying
+import io.casperlabs.comm.gossiping.relaying.BlockRelaying
 import io.casperlabs.crypto.Keys.PublicKey
 import io.casperlabs.ipc.ChainSpec
 import io.casperlabs.mempool.DeployBuffer

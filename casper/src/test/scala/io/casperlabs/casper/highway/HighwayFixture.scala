@@ -17,7 +17,8 @@ import io.casperlabs.casper.mocks.NoOpValidation
 import io.casperlabs.casper.util.{ByteStringPrettifier, CasperLabsProtocol}
 import io.casperlabs.casper.util.execengine.ExecutionEngineServiceStub
 import io.casperlabs.casper.validation.{raiseValidateErrorThroughApplicativeError, Validation}
-import io.casperlabs.comm.gossiping.{BlockRelaying, WaitHandle}
+import io.casperlabs.comm.gossiping.WaitHandle
+import io.casperlabs.comm.gossiping.relaying.BlockRelaying
 import io.casperlabs.crypto.Keys.{PublicKey, PublicKeyBS}
 import io.casperlabs.ipc.ChainSpec.DeployConfig
 import io.casperlabs.mempool.DeployBuffer

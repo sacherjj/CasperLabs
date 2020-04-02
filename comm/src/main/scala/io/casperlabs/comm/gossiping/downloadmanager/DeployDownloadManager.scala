@@ -10,6 +10,7 @@ import io.casperlabs.casper.consensus.{Deploy, DeploySummary}
 import io.casperlabs.comm.discovery.Node
 import io.casperlabs.comm.gossiping._
 import io.casperlabs.comm.gossiping.downloadmanager.DeployDownloadManagerImpl.RetriesConf
+import io.casperlabs.comm.gossiping.relaying.DeployRelaying
 import io.casperlabs.crypto.codec.ByteArraySyntax
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.shared.Log
