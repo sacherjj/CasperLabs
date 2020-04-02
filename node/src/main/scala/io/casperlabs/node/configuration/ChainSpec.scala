@@ -170,7 +170,7 @@ object ChainSpec extends ParserImplicits {
         .sequence
 
     private def parsePublicKey(publicKey: String) =
-      if (publicKey.matches("[0-9a-fA-F]+")) {
+      if (publicKey.matches("[0-9a-fA-F]{64}")) {
         PublicKey(Base16.decode(publicKey)).asRight[String]
       } else
         Base64.tryDecode(publicKey) match {
