@@ -12,7 +12,7 @@ import eu.timepit.refined.numeric._
 import io.casperlabs.casper.consensus.state
 import io.casperlabs.configuration.SubConfig
 import io.casperlabs.crypto.Keys.PublicKey
-import io.casperlabs.crypto.codec.Base64
+import io.casperlabs.crypto.codec.{Base16, Base64}
 import io.casperlabs.ipc
 import java.io.{ByteArrayOutputStream, File}
 import java.nio.file.{Files, Path, Paths}
@@ -155,9 +155,9 @@ object ChainSpec extends ParserImplicits {
         .filterNot(_.isEmpty)
         .map { line =>
           line.split(',') match {
-            case Array(publicKeyBase64, balanceStr, bondedAmountStr) =>
+            case Array(publicKeyStr, balanceStr, bondedAmountStr) =>
               for {
-                publicKey    <- parsePublicKey(publicKeyBase64)
+                publicKey    <- parsePublicKey(publicKeyStr)
                 balance      <- parseBigInt(balanceStr)
                 bondedAmount <- parseBigInt(bondedAmountStr)
               } yield Account(publicKey, balance, bondedAmount)
@@ -169,11 +169,15 @@ object ChainSpec extends ParserImplicits {
         .toList
         .sequence
 
-    private def parsePublicKey(publicKeyBase64: String) =
-      Base64.tryDecode(publicKeyBase64) match {
-        case None        => s"Could not decode public key as Base64: $publicKeyBase64".asLeft[PublicKey]
-        case Some(bytes) => PublicKey(bytes).asRight[String]
-      }
+    private def parsePublicKey(publicKey: String) =
+      if (publicKey.matches("[0-9a-fA-F]+")) {
+        PublicKey(Base16.decode(publicKey)).asRight[String]
+      } else
+        Base64.tryDecode(publicKey) match {
+          case None =>
+            s"Could not decode public key as Base16 or Base64: $publicKey".asLeft[PublicKey]
+          case Some(bytes) => PublicKey(bytes).asRight[String]
+        }
 
     private def parseBigInt(amount: String) =
       Try(BigInt(amount)).fold(
