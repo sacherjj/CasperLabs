@@ -27,6 +27,11 @@ import org.scalatest._
 import scala.concurrent.TimeoutException
 import scala.concurrent.duration._
 
+/**
+  * TODO: Uses [[BlockDownloadManagerImpl]] for testing.
+  * It's ok for now, because the most of the code shared between [[DeployDownloadManagerImpl]].
+  * However, if it's going to change, then we'll need to revisit this.
+  */
 class BlockDownloadManagerSpec
     extends WordSpecLike
     with Matchers
