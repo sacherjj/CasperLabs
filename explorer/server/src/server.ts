@@ -39,10 +39,11 @@ const paymentAmount = BigInt(process.env.PAYMENT_AMOUNT!);
 // How much to send to a user in a faucet request.
 const transferAmount = BigInt(process.env.TRANSFER_AMOUNT)!;
 
-const urls = process.env.CASPER_SERVICE_URLS!;
+const urls = process.env.CASPER_SERVICE_URL!;
+
 const nodeUrls = urls.split(';')
-  .filter((u) => u)
-  .map((u) => u.trim());
+  .map((u) => u.trim())
+  .filter((u) => u);
 
 // gRPC client to the node.
 const deployService = new DeployService(nodeUrls);
