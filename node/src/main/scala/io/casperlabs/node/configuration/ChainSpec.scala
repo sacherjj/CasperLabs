@@ -12,7 +12,7 @@ import eu.timepit.refined.numeric._
 import io.casperlabs.casper.consensus.state
 import io.casperlabs.configuration.SubConfig
 import io.casperlabs.crypto.Keys.PublicKey
-import io.casperlabs.crypto.codec.{Base16, Base64}
+import io.casperlabs.crypto.codec.StringSyntax
 import io.casperlabs.ipc
 import java.io.{ByteArrayOutputStream, File}
 import java.nio.file.{Files, Path, Paths}
@@ -170,14 +170,14 @@ object ChainSpec extends ParserImplicits {
         .sequence
 
     private def parsePublicKey(publicKey: String) =
-      if (publicKey.matches("[0-9a-fA-F]{64}")) {
-        PublicKey(Base16.decode(publicKey)).asRight[String]
-      } else
-        Base64.tryDecode(publicKey) match {
-          case None =>
-            s"Could not decode public key as Base16 or Base64: $publicKey".asLeft[PublicKey]
-          case Some(bytes) => PublicKey(bytes).asRight[String]
-        }
+      publicKey.tryBase64AndBase16Decode match {
+        case None =>
+          s"Could not decode public key as Base16 or Base64: $publicKey".asLeft[PublicKey]
+        case Some(key) if key.length != 32 =>
+          s"Unexpected key size ${key.size}: $publicKey".asLeft[PublicKey]
+        case Some(key) =>
+          PublicKey(key).asRight[String]
+      }
 
     private def parseBigInt(amount: String) =
       Try(BigInt(amount)).fold(
