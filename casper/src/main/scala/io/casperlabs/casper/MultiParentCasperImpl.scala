@@ -831,7 +831,7 @@ object MultiParentCasperImpl {
     /** Network access using the new RPC style gossiping. */
     def fromGossipServices[F[_]: Applicative](
         validatorId: Option[ValidatorIdentity],
-        relaying: gossiping.BlockRelaying[F]
+        relaying: gossiping.relaying.BlockRelaying[F]
     ): Broadcaster[F] = new Broadcaster[F] {
 
       private val maybeOwnPublicKey = validatorId map {

@@ -3,7 +3,8 @@ package io.casperlabs.casper.highway
 import cats.effect.Resource
 import cats.effect.concurrent.Ref
 import cats.implicits._
-import io.casperlabs.comm.gossiping.{BlockRelaying, WaitHandle}
+import io.casperlabs.comm.gossiping.WaitHandle
+import io.casperlabs.comm.gossiping.relaying.BlockRelaying
 import io.casperlabs.crypto.Keys.PublicKeyBS
 import io.casperlabs.models.Message
 import io.casperlabs.storage.{BlockHash, SQLiteStorage}

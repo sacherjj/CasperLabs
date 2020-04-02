@@ -10,6 +10,7 @@ import io.casperlabs.casper.consensus.{Block, BlockSummary}
 import io.casperlabs.comm.discovery.Node
 import io.casperlabs.comm.gossiping._
 import io.casperlabs.comm.gossiping.downloadmanager.BlockDownloadManagerImpl.RetriesConf
+import io.casperlabs.comm.gossiping.relaying.BlockRelaying
 import io.casperlabs.crypto.codec.ByteArraySyntax
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.models.BlockImplicits._
