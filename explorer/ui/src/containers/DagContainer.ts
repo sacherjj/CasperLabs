@@ -60,7 +60,7 @@ enum SubscribeState {
 }
 
 export class DagContainer {
-  @observable blocks: IObservableArray<BlockInfo> = observable.array([], {deep: true});
+  @observable blocks: IObservableArray<BlockInfo> = observable.array([], { deep: true });
   @observable selectedBlock: BlockInfo | undefined = undefined;
   @observable depth = 10;
   @observable maxRank = 0;
@@ -69,6 +69,7 @@ export class DagContainer {
   @observable eventsSubscriber: Subscription | null = null;
   @observable subscribeToggleStore: ToggleStore = new ToggleStore(true);
   @observable hideBallotsToggleStore: ToggleStore = new ToggleStore(false);
+  @observable hideBlockHashToggleStore: ToggleStore = new ToggleStore(false);
 
   constructor(
     private errors: ErrorContainer,
