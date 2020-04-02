@@ -111,7 +111,6 @@ package object gossiping {
       deployDownloadManager <- makeDeployDownloadManager(
                                 conf,
                                 connectToGossip,
-                                relaying,
                                 egressScheduler
                               )
 
@@ -282,12 +281,9 @@ package object gossiping {
         )
       )
 
-  //TODO: Update Relaying to be more generic and be able working with deploys as well,
-  // it's completely broken for now because it assumes deploy hashes as block hashes
   private def makeDeployDownloadManager[F[_]: ContextShift: Concurrent: Log: Time: Timer: Metrics: DagStorage: Consensus: DeployStorage: DeployBuffer](
       conf: Configuration,
       connectToGossip: GossipService.Connector[F],
-      relaying: Relaying[F],
       egressScheduler: Scheduler
   ): Resource[F, DeployDownloadManager[F]] =
     for {
@@ -315,7 +311,8 @@ package object gossiping {
 
                             override def onFailed(deployHash: ByteString): F[Unit] = ().pure[F]
                           },
-                          relaying = relaying,
+                          //TODO: Relaying, NODE-1178
+                          relaying = (_: List[DeployHash]) => ???,
                           retriesConf = DeployDownloadManagerImpl.RetriesConf(
                             maxRetries = conf.server.downloadMaxRetries,
                             initialBackoffPeriod = conf.server.downloadRetryInitialBackoffPeriod,
