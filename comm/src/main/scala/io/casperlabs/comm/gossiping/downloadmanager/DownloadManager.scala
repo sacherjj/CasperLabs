@@ -153,7 +153,7 @@ trait DownloadManager[F[_]] extends DownloadManagerTypes {
   def isScheduled(id: Identifier): F[Boolean]
 
   /** Add a new source to an existing schedule and all of its dependencies. */
-  def addSource(id: Identifier, source: Node): F[Vector[WaitHandle[F]]]
+  def addSource(id: Identifier, source: Node): F[WaitHandle[F]]
 }
 
 trait DownloadManagerImpl[F[_]] extends DownloadManager[F] { self =>
@@ -251,17 +251,20 @@ trait DownloadManagerImpl[F[_]] extends DownloadManager[F] { self =>
     * If the item is no longer scheduled (because it has been downloaded),
     * then return a completed wait handle.
     */
-  override def addSource(id: Identifier, source: Node): F[Vector[WaitHandle[F]]] =
+  override def addSource(id: Identifier, source: Node): F[WaitHandle[F]] =
     itemsRef.get.flatMap {
       case items if !items.contains(id) =>
-        Vector(().pure[F]).pure[F]
+        ().pure[F].pure[F]
 
       case items =>
-        val item = items(id)
-        for {
-          wss <- item.dependencies.toVector.traverse(addSource(_, source))
-          w   <- scheduleDownload(item.handle, source, relay = false)
-        } yield wss.flatten :+ w
+        val item        = items(id)
+        val waiter      = scheduleDownload(item.handle, source, relay = false)
+        val isNewSource = !item.sources(source)
+        if (isNewSource) {
+          item.dependencies.toVector.traverse(addSource(_, source)) >> waiter
+        } else {
+          waiter
+        }
     }
 
   /** Run the manager loop which listens to signals and starts workers when it can. */

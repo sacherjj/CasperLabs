@@ -289,8 +289,8 @@ object InitialSynchronizationForwardImplSpec extends ArbitraryConsensus {
       }
 
     override def isScheduled(id: ByteString): Task[Boolean] = Task.now(false)
-    override def addSource(id: ByteString, source: Node): Task[Vector[Task[Unit]]] =
-      Task.now(Vector(Task.unit))
+    override def addSource(id: ByteString, source: Node): Task[Task[Unit]] =
+      Task.now(Task.unit)
 
   }
 
