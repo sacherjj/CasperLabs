@@ -136,6 +136,16 @@ trait DownloadManagerCompanion extends DownloadManagerTypes {
   /** All dependencies that need to be downloaded before a downloadable. */
   def dependencies(handle: Handle): Seq[Identifier]
 
+  /** When we first get a notificaton about a new item, we add it as new.
+    * Subsequent sources can be added with `scheduleDownload` individually,
+    * however that would require first syncing with them to the their dependencies
+    * as well, so the new source can be added to all missing items, not just the tip.
+    * The `addSource` method makes this easier when we know the item is already scheduled
+    * by recursively adding the new source to all dependencies we already know about.
+    *
+    * This method collects the the ancestors of an item we already have where the
+    * peer that is now telling us about it was not yet available as a source.
+    */
   def collectAncestorsForNewSource[F[_]](
       items: Map[Identifier, Item[F]],
       id: Identifier,
