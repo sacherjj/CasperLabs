@@ -17,7 +17,7 @@ import io.casperlabs.casper.util.{ByteStringPrettifier, ProtoUtil}
 import io.casperlabs.models.Message
 import io.casperlabs.shared.{LogStub, Time}
 import io.casperlabs.storage.block.BlockStorage
-import io.casperlabs.storage.dag.{DagRepresentation, IndexedDagStorage}
+import io.casperlabs.storage.dag.{DagRepresentation, DagStorage}
 import monix.eval.Task
 import org.scalatest.FlatSpec
 import io.casperlabs.casper.mocks.MockFinalityStorage
@@ -37,8 +37,8 @@ class MultiParentFinalizerTest
   val v2Bond = Bond(v2, 3)
   val bonds  = Seq(v1Bond, v2Bond)
 
-  it should "cache block finalization so it doesn't revisit already finalized blocks." in withCombinedStorageIndexed {
-    implicit storage => implicit dagStorage =>
+  it should "cache block finalization so it doesn't revisit already finalized blocks." in withCombinedStorage() {
+    implicit storage =>
       for {
         genesis                                  <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bonds)
         implicit0(fs: MockFinalityStorage[Task]) <- MockFinalityStorage[Task](genesis.blockHash)
@@ -83,8 +83,8 @@ class MultiParentFinalizerTest
       } yield ()
   }
 
-  it should "cache LFB from the main chain; not return LFB when new block doesn't vote on LFB's child" in withCombinedStorageIndexed {
-    implicit storage => implicit dagStorage =>
+  it should "cache LFB from the main chain; not return LFB when new block doesn't vote on LFB's child" in withCombinedStorage() {
+    implicit storage =>
       implicit val noopLog = LogStub[Task]()
 
       /** `B` is LFB but `C` doesn't vote for any of `B`'s children (empty vote).
@@ -163,7 +163,7 @@ object MultiParentFinalizerTest extends BlockGenerator {
     *
     * Returns last block hash in chain.
     */
-  def createChainOfBlocks[F[_]: MonadThrowable: Time: BlockStorage: IndexedDagStorage](
+  def createChainOfBlocks[F[_]: MonadThrowable: Time: BlockStorage: DagStorage](
       start: BlockHash,
       bonds: NonEmptyList[Bond]
   ): F[List[BlockHash]] =
@@ -181,7 +181,7 @@ object MultiParentFinalizerTest extends BlockGenerator {
     *
     * Returns last block hash in chain.
     */
-  def finalizeBlock[F[_]: MonadThrowable: Time: BlockStorage: IndexedDagStorage: MultiParentFinalizer](
+  def finalizeBlock[F[_]: MonadThrowable: Time: BlockStorage: DagStorage: MultiParentFinalizer](
       start: BlockHash,
       bonds: NonEmptyList[Bond]
   ): F[BlockHash] =

@@ -15,6 +15,7 @@ import io.casperlabs.metrics.Metrics
 import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.shared.Log
 import monix.tail.Iterant
+import monix.execution.Scheduler
 
 /** Manages the download, validation, storing and gossiping of blocks. */
 trait BlockDownloadManager[F[_]] extends DownloadManager[F] {
@@ -32,12 +33,13 @@ object BlockDownloadManagerImpl extends DownloadManagerCompanion {
     Metrics.Source(BlockGossipingMetricsSource, "DownloadManager")
 
   /** Start the download manager. */
-  def apply[F[_]: Concurrent: Log: Timer: Metrics](
+  def apply[F[_]: ContextShift: Concurrent: Log: Timer: Metrics](
       maxParallelDownloads: Int,
       connectToGossip: GossipService.Connector[F],
       backend: Backend[F],
       relaying: Relaying[F],
-      retriesConf: RetriesConf
+      retriesConf: RetriesConf,
+      egressScheduler: Scheduler
   ): Resource[F, BlockDownloadManager[F]] =
     Resource.make {
       for {
@@ -56,7 +58,8 @@ object BlockDownloadManagerImpl extends DownloadManagerCompanion {
           connectToGossip,
           backend,
           relaying,
-          retriesConf
+          retriesConf,
+          egressScheduler
         )
         managerLoop <- manager.run.start
       } yield (isShutdown, workersRef, managerLoop, manager)
@@ -92,9 +95,12 @@ class BlockDownloadManagerImpl[F[_]](
     val connectToGossip: GossipService.Connector[F],
     val backend: BlockDownloadManagerImpl.Backend[F],
     val relaying: Relaying[F],
-    val retriesConf: RetriesConf
+    val retriesConf: RetriesConf,
+    val egressScheduler: Scheduler
 )(
-    implicit override val C: Concurrent[F],
+    implicit
+    override val H: ContextShift[F],
+    override val C: Concurrent[F],
     override val T: Timer[F],
     override val L: Log[F],
     override val M: Metrics[F]

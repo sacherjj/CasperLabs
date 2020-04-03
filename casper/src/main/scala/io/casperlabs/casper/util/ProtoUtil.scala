@@ -86,41 +86,6 @@ object ProtoUtil {
                }
     } yield result
 
-  // calculate which branch of latestFinalizedBlockHash that the newBlockHash vote for
-  def votedBranch[F[_]: Monad](
-      dag: DagRepresentation[F],
-      latestFinalizeBlockHash: BlockHash,
-      newBlockHash: BlockHash
-  ): F[Option[BlockHash]] =
-    for {
-      newBlock             <- dag.lookup(newBlockHash)
-      latestFinalizedBlock <- dag.lookup(latestFinalizeBlockHash)
-      r                    <- votedBranch(dag, latestFinalizedBlock.get, newBlock.get)
-    } yield r
-
-  def votedBranch[F[_]: Monad](
-      dag: DagRepresentation[F],
-      latestFinalizedBlock: Message,
-      newBlock: Message
-  ): F[Option[BlockHash]] =
-    if (newBlock.jRank <= latestFinalizedBlock.jRank) {
-      none[BlockHash].pure[F]
-    } else {
-      for {
-        result <- newBlock.parents.headOption match {
-                   case Some(mainParentHash) =>
-                     if (mainParentHash == latestFinalizedBlock.messageHash) {
-                       newBlock.messageHash.some.pure[F]
-                     } else {
-                       dag
-                         .lookup(mainParentHash)
-                         .flatMap(b => votedBranch(dag, latestFinalizedBlock, b.get))
-                     }
-                   case None => none[BlockHash].pure[F]
-                 }
-      } yield result
-    }
-
   def getMainChainUntilDepth[F[_]: MonadThrowable: BlockStorage](
       estimate: Block,
       acc: IndexedSeq[Block],

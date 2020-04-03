@@ -247,6 +247,14 @@ private[configuration] final case class Options private (
       gen[Int]("Size of the thread pool for database connections.")
 
     @scallop
+    val serverParallelismCpuMultiplier =
+      gen[Double]("Parallelism per CPU core.")
+
+    @scallop
+    val serverMinParallelism =
+      gen[Int]("Minimum parallelism.")
+
+    @scallop
     val tlsCertificate =
       gen[Path](
         "Path to node's X.509 certificate file, that is being used for identification.",
@@ -419,6 +427,11 @@ private[configuration] final case class Options private (
     @scallop
     val serverDownloadMaxParallelBlocks =
       gen[Int]("Maximum number of parallel block downloads initiated by the download manager.")
+
+    @scallop
+    val serverDownloadMaxParallelDeploys =
+      gen[Int]("Maximum number of parallel deploy downloads initiated by the download manager.")
+
     @scallop
     val serverDownloadMaxRetries =
       gen[Int]("Maximum number of times to retry to download a block from the same node.")

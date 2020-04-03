@@ -10,6 +10,9 @@ service GossipService {
     // Notify the callee about new blocks being available on the caller.
     rpc NewBlocks(NewBlocksRequest) returns (NewBlocksResponse);
 
+    // Notify the callee about new deploys being available on the caller.
+    rpc NewDeploys(NewDeploysRequest) returns (NewDeploysResponse);
+
     // Retrieve the ancestors of certain blocks in the DAG; to be called repeatedly
     // as necessary to synchronize DAGs between peers.
     rpc StreamAncestorBlockSummaries(StreamAncestorBlockSummariesRequest) returns (stream io.casperlabs.casper.consensus.BlockSummary);
@@ -19,6 +22,9 @@ service GossipService {
 
     // Retrieve arbitrary block summaries, if the callee knows about them.
     rpc StreamBlockSummaries(StreamBlockSummariesRequest) returns (stream io.casperlabs.casper.consensus.BlockSummary);
+
+    // Retrieve arbitrary deploy summaries, if the callee knows about them.
+    rpc StreamDeploySummaries(StreamDeploySummariesRequest) returns (stream io.casperlabs.casper.consensus.DeploySummary);
 
     // Retrieve an arbitrarily sized block as a stream of chunks, with optionally compressed content.
     rpc GetBlockChunked(GetBlockChunkedRequest) returns (stream Chunk);
@@ -57,8 +63,24 @@ message NewBlocksResponse {
     bool is_new = 1;
 }
 
+message NewDeploysRequest {
+    // Address of the caller from where the callee can download the deploys from.
+    io.casperlabs.comm.discovery.Node sender = 1;
+    repeated bytes deploy_hashes = 2;
+}
+
+message NewDeploysResponse {
+    // Indicate that some of the deploys in the notifications were new and the callee will attempt
+    // to gossip them to further nodes when it gets around to downloading them.
+    bool is_new = 1;
+}
+
 message StreamBlockSummariesRequest {
     repeated bytes block_hashes = 1;
+}
+
+message StreamDeploySummariesRequest {
+    repeated bytes deploy_hashes = 1;
 }
 
 message StreamAncestorBlockSummariesRequest {

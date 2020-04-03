@@ -190,26 +190,6 @@ const blockAttrs: (block: BlockInfo) => Array<[string, any]> = (
     ['Round ID', header.getRoundId()],
     ['Timestamp', new Date(header.getTimestamp()).toISOString()],
     ['Type', <BlockType header={header} />],
-    [
-      'Parents',
-      <ul>
-        {header.getParentHashesList_asU8().map((x, idx) => (
-          <li key={idx}>
-            <BlockLink blockHash={x} />
-          </li>
-        ))}
-      </ul>
-    ],
-    [
-      'Children',
-      <ul>
-        {block.getStatus()!.getChildHashesList_asU8().map((x, idx) => (
-          <li key={idx}>
-            <BlockLink blockHash={x} />
-          </li>
-        ))}
-      </ul>
-    ],
     ['Validator', validatorId],
     ['Validator Block Number', header.getValidatorBlockSeqNum()],
     [
@@ -238,6 +218,26 @@ const blockAttrs: (block: BlockInfo) => Array<[string, any]> = (
     [
       'Finality',
       <FinalityIcon block={block} />
+    ],
+    [
+      'Parents',
+      <ul>
+        {header.getParentHashesList_asU8().map((x, idx) => (
+          <li key={idx}>
+            <BlockLink blockHash={x} />
+          </li>
+        ))}
+      </ul>
+    ],
+    [
+      'Children',
+      <ul>
+        {block.getStatus()!.getChildHashesList_asU8().map((x, idx) => (
+          <li key={idx}>
+            <BlockLink blockHash={x} />
+          </li>
+        ))}
+      </ul>
     ],
   ];
 };

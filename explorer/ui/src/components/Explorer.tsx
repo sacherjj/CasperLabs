@@ -66,6 +66,7 @@ class _Explorer extends RefreshableComponent<Props, {}> {
               refresh={() => this.refresh()}
               subscribeToggleStore={dag.subscribeToggleStore}
               hideBallotsToggleStore={dag.hideBallotsToggleStore}
+              hideBlockHashToggleStore={dag.hideBlockHashToggleStore}
               footerMessage={
                 <ListInline>
                   <DagStepButtons
@@ -163,6 +164,35 @@ class BlockDetails extends React.Component<
         ['m-Rank', header.getMainRank()],
         ['Round ID', header.getRoundId()],
         ['Type', <BlockType header={header} />],
+        ['Timestamp', new Date(header.getTimestamp()).toISOString()],
+        ['Deploy Count', header.getDeployCount()],
+        ['Validator', shortHash(validatorId)],
+        ['Validator Block Number', header.getValidatorBlockSeqNum()],
+        [
+          'Validator Stake',
+          (() => {
+            let validatorBond = header
+              .getState()!
+              .getBondsList()
+              .find(
+                x =>
+                  encodeBase16(x.getValidatorPublicKey_asU8()) === validatorId
+              );
+            // Genesis doesn't have a validator.
+            return (
+              (validatorBond &&
+                validatorBond.getStake() &&
+                Number(
+                  validatorBond.getStake()!.getValue()
+                ).toLocaleString()) ||
+              null
+            );
+          })()
+        ],
+        [
+          'Finality',
+          <FinalityIcon block={block} />
+        ],
         [
           'Parents',
           <ul>
@@ -195,35 +225,6 @@ class BlockDetails extends React.Component<
               ))}
           </ul>
         ],
-        ['Timestamp', new Date(header.getTimestamp()).toISOString()],
-        ['Deploy Count', header.getDeployCount()],
-        ['Validator', shortHash(validatorId)],
-        ['Validator Block Number', header.getValidatorBlockSeqNum()],
-        [
-          'Validator Stake',
-          (() => {
-            let validatorBond = header
-              .getState()!
-              .getBondsList()
-              .find(
-                x =>
-                  encodeBase16(x.getValidatorPublicKey_asU8()) === validatorId
-              );
-            // Genesis doesn't have a validator.
-            return (
-              (validatorBond &&
-                validatorBond.getStake() &&
-                Number(
-                  validatorBond.getStake()!.getValue()
-                ).toLocaleString()) ||
-              null
-            );
-          })()
-        ],
-        [
-          'Finality',
-          <FinalityIcon block={block} />
-        ]
       ];
     return (
       <div

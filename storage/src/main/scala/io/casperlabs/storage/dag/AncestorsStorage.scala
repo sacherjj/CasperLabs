@@ -101,17 +101,29 @@ trait AncestorsStorage[F[_]] { self: DagLookup[F] =>
 }
 
 object AncestorsStorage {
+  def apply[F[_]](implicit ev: AncestorsStorage[F]): AncestorsStorage[F] = ev
+
   trait MeteredAncestorsStorage[F[_]] extends AncestorsStorage[F] with Metered[F] {
     self: DagLookup[F] =>
     abstract override private[storage] def findAncestor(block: BlockHash, distance: Long) =
       incAndMeasure("findAncestor", super.findAncestor(block, distance))
   }
 
-  sealed trait Relation extends Product with Serializable
+  sealed trait Relation extends Product with Serializable {
+    def isAncestor   = false
+    def isDescendant = false
+    def isEqual      = false
+  }
   object Relation {
-    case object Ancestor   extends Relation
-    case object Descendant extends Relation
-    case object Equal      extends Relation
+    case object Ancestor extends Relation {
+      override def isAncestor: Boolean = true
+    }
+    case object Descendant extends Relation {
+      override def isDescendant: Boolean = true
+    }
+    case object Equal extends Relation {
+      override def isEqual: Boolean = true
+    }
 
     def equal: Relation      = Equal
     def ancestor: Relation   = Ancestor

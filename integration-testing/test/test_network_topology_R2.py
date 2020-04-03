@@ -14,23 +14,6 @@ def test_metrics_api_socket(two_node_network):
         assert exit_code == 0, "Could not get the metrics for node {node.name}"
 
 
-def check_blocks(node, expected_string, network, context, block_hash):
-    logging.info("Check all peer logs for blocks containing {}".format(expected_string))
-
-    other_nodes = [n for n in network.nodes if n.container.name != node.container.name]
-
-    for node in other_nodes:
-        wait_for_block_contains(
-            node, block_hash, expected_string, context.receive_timeout
-        )
-
-
-def mk_expected_string(node, random_token):
-    return "<{name}:{random_token}>".format(
-        name=node.container.name, random_token=random_token
-    )
-
-
 def test_star_network(star_network):
     # Deploy on one of the star edge nodes.
     node1 = star_network.docker_nodes[1]
@@ -38,5 +21,4 @@ def test_star_network(star_network):
         GENESIS_ACCOUNT, Contract.HELLO_NAME_DEFINE
     )
     # Validate all nodes get block.
-    for node in star_network.docker_nodes:
-        wait_for_block_hash_propagated_to_all_nodes([node], block_hash)
+    wait_for_block_hash_propagated_to_all_nodes(star_network.docker_nodes, block_hash)

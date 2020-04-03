@@ -6,7 +6,8 @@ import monix.eval.Task
 import monix.tail.Iterant
 
 trait NoOpsGossipService[F[_]] extends GossipService[F] {
-  override def newBlocks(request: NewBlocksRequest): F[NewBlocksResponse] = ???
+  override def newBlocks(request: NewBlocksRequest): F[NewBlocksResponse]    = ???
+  override def newDeploys(request: NewDeploysRequest): F[NewDeploysResponse] = ???
   override def streamAncestorBlockSummaries(
       request: StreamAncestorBlockSummariesRequest
   ): Iterant[F, BlockSummary] = ???
@@ -15,7 +16,10 @@ trait NoOpsGossipService[F[_]] extends GossipService[F] {
   ): Iterant[F, Block.Justification] = ???
   override def streamBlockSummaries(
       request: StreamBlockSummariesRequest
-  ): Iterant[F, BlockSummary]                                                                = ???
+  ): Iterant[F, BlockSummary] = ???
+  override def streamDeploySummaries(
+      request: StreamDeploySummariesRequest
+  ): Iterant[F, DeploySummary]                                                               = ???
   override def getBlockChunked(request: GetBlockChunkedRequest): Iterant[F, Chunk]           = ???
   override def streamDeploysChunked(request: StreamDeploysChunkedRequest): Iterant[F, Chunk] = ???
   override def addApproval(request: AddApprovalRequest): F[Unit]                             = ???

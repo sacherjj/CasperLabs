@@ -13,17 +13,17 @@ import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.helper.BlockUtil.generateValidator
 import io.casperlabs.casper.helper.{BlockGenerator, StorageFixture}
 import io.casperlabs.casper.util.BondingUtil.Bond
-import io.casperlabs.casper.{validation, CasperState, InvalidBlock, PrettyPrinter}
+import io.casperlabs.casper.{validation, InvalidBlock}
 import io.casperlabs.models.Message
 import io.casperlabs.shared.LogStub
 import io.casperlabs.shared.{Log, Time}
 import io.casperlabs.storage.block.BlockStorage
-import io.casperlabs.storage.dag.IndexedDagStorage
+import io.casperlabs.storage.dag.{AncestorsStorage, DagRepresentation, DagStorage}
 import monix.eval.Task
 import org.scalatest.{FlatSpec, Matchers}
+import io.casperlabs.shared.ByteStringPrettyPrinter._
 
 import scala.collection.immutable.HashMap
-import io.casperlabs.storage.dag.DagRepresentation
 
 @silent("is never used")
 class FinalityDetectorByVotingMatrixTest
@@ -38,7 +38,9 @@ class FinalityDetectorByVotingMatrixTest
   implicit val raiseValidateErr: FunctorRaise[Task, InvalidBlock] =
     validation.raiseValidateErrorThroughApplicativeError[Task]
 
-  def mkVotingMatrix(dag: DagRepresentation[Task], genesis: Block, isHighway: Boolean = false) =
+  def mkVotingMatrix(dag: DagRepresentation[Task], genesis: Block, isHighway: Boolean = false)(
+      implicit AS: AncestorsStorage[Task]
+  ) =
     FinalityDetectorVotingMatrix
       .of[Task](
         dag,
@@ -47,293 +49,287 @@ class FinalityDetectorByVotingMatrixTest
         isHighway
       )
 
-  it should "detect ballots finalizing a block" in withCombinedStorageIndexed {
-    implicit storage =>
-      implicit dagStorage =>
-        /* The DAG looks like:
-         *
-         *
-         *
-         *
-         *     Ballot
-         *       \
-         *       b1
-         *      /
-         *    a1
-         *      \
-         *      genesis
-         */
+  it should "detect ballots finalizing a block" in withCombinedStorage() { implicit storage =>
+    /* The DAG looks like:
+     *
+     *
+     *
+     *
+     *     Ballot
+     *       \
+     *       b1
+     *      /
+     *    a1
+     *      \
+     *      genesis
+     */
 
-        val v1     = generateValidator("V1")
-        val v2     = generateValidator("V2")
-        val v1Bond = Bond(v1, 10)
-        val v2Bond = Bond(v2, 10)
-        val bonds  = Seq(v1Bond, v2Bond)
+    val v1     = generateValidator("V1")
+    val v2     = generateValidator("V2")
+    val v1Bond = Bond(v1, 10)
+    val v2Bond = Bond(v2, 10)
+    val bonds  = Seq(v1Bond, v2Bond)
 
-        for {
-          genesis                                                 <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bonds)
-          dag                                                     <- storage.getRepresentation
-          implicit0(detector: FinalityDetectorVotingMatrix[Task]) <- mkVotingMatrix(dag, genesis)
-          (a1, c1) <- createBlockAndUpdateFinalityDetector[Task](
-                       Seq(genesis.blockHash),
+    for {
+      genesis                                                 <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bonds)
+      dag                                                     <- storage.getRepresentation
+      implicit0(detector: FinalityDetectorVotingMatrix[Task]) <- mkVotingMatrix(dag, genesis)
+      (a1, c1) <- createBlockAndUpdateFinalityDetector[Task](
+                   Seq(genesis.blockHash),
+                   genesis.blockHash,
+                   v1,
+                   bonds,
+                   HashMap(v1 -> genesis.blockHash),
+                   messageType = Block.MessageType.BLOCK,
+                   lfb = genesis
+                 )
+      _ = c1 shouldBe empty
+      (b1, c2) <- createBlockAndUpdateFinalityDetector[Task](
+                   Seq(a1.blockHash),
+                   genesis.blockHash,
+                   v2,
+                   bonds,
+                   HashMap(v1 -> a1.blockHash),
+                   messageType = Block.MessageType.BLOCK,
+                   lfb = genesis
+                 )
+      _ = c2 shouldBe empty
+      (ballot, c3) <- createBlockAndUpdateFinalityDetector[Task](
+                       Seq(b1.blockHash),
                        genesis.blockHash,
                        v1,
                        bonds,
-                       HashMap(v1 -> genesis.blockHash),
-                       messageType = Block.MessageType.BLOCK,
+                       HashMap(v1 -> b1.blockHash),
+                       messageType = Block.MessageType.BALLOT,
                        lfb = genesis
                      )
-          _ = c1 shouldBe empty
-          (b1, c2) <- createBlockAndUpdateFinalityDetector[Task](
-                       Seq(a1.blockHash),
-                       genesis.blockHash,
-                       v2,
-                       bonds,
-                       HashMap(v1 -> a1.blockHash),
-                       messageType = Block.MessageType.BLOCK,
-                       lfb = genesis
-                     )
-          _ = c2 shouldBe empty
-          (ballot, c3) <- createBlockAndUpdateFinalityDetector[Task](
-                           Seq(b1.blockHash),
-                           genesis.blockHash,
-                           v1,
-                           bonds,
-                           HashMap(v1 -> b1.blockHash),
-                           messageType = Block.MessageType.BALLOT,
-                           lfb = genesis
-                         )
-          _ = c3 shouldBe Seq(CommitteeWithConsensusValue(Set(v1, v2), 20, a1.blockHash))
-        } yield ()
+      _ = c3 shouldBe Seq(CommitteeWithConsensusValue(Set(v1, v2), 20, a1.blockHash))
+    } yield ()
   }
 
-  it should "detect finality as appropriate" in withCombinedStorageIndexed {
-    implicit storage =>
-      implicit dagStorage =>
-        /* The DAG looks like:
-         *
-         *
-         *
-         *
-         *   b4
-         *   |  \
-         *   b3  b2
-         *    \ /
-         *    b1
-         *      \
-         *      genesis
-         */
-        val v1     = generateValidator("V1")
-        val v2     = generateValidator("V2")
-        val v1Bond = Bond(v1, 20)
-        val v2Bond = Bond(v2, 10)
-        val bonds  = Seq(v1Bond, v2Bond)
+  it should "detect finality as appropriate" in withCombinedStorage() { implicit storage =>
+    /* The DAG looks like:
+     *
+     *
+     *
+     *
+     *   b4
+     *   |  \
+     *   b3  b2
+     *    \ /
+     *    b1
+     *      \
+     *      genesis
+     */
+    val v1     = generateValidator("V1")
+    val v2     = generateValidator("V2")
+    val v1Bond = Bond(v1, 20)
+    val v2Bond = Bond(v2, 10)
+    val bonds  = Seq(v1Bond, v2Bond)
 
-        for {
-          genesis                                                 <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bonds)
-          dag                                                     <- storage.getRepresentation
-          implicit0(detector: FinalityDetectorVotingMatrix[Task]) <- mkVotingMatrix(dag, genesis)
-          (b1, c1) <- createBlockAndUpdateFinalityDetector[Task](
-                       Seq(genesis.blockHash),
-                       genesis.blockHash,
-                       v1,
-                       bonds,
-                       HashMap(v1 -> genesis.blockHash),
-                       lfb = genesis
-                     )
-          _ = c1 shouldBe Seq(CommitteeWithConsensusValue(Set(v1), 20, b1.blockHash))
-          (b2, c2) <- createBlockAndUpdateFinalityDetector[Task](
-                       Seq(b1.blockHash),
-                       b1.blockHash,
-                       v2,
-                       bonds,
-                       HashMap(v1 -> b1.blockHash),
-                       lfb = b1
-                     )
-          _ = c2 shouldBe empty
-          (b3, c3) <- createBlockAndUpdateFinalityDetector[Task](
-                       Seq(b1.blockHash),
-                       b1.blockHash,
-                       v1,
-                       bonds,
-                       HashMap(v1 -> b1.blockHash),
-                       lfb = b1
-                     )
-          _ = c3 shouldBe Seq(CommitteeWithConsensusValue(Set(v1), 20, b3.blockHash))
-          (b4, c4) <- createBlockAndUpdateFinalityDetector[Task](
-                       Seq(b3.blockHash),
-                       b3.blockHash,
-                       v1,
-                       bonds,
-                       HashMap(v1 -> b3.blockHash, v2 -> b2.blockHash),
-                       lfb = b3
-                     )
-          result = c4 shouldBe Seq(CommitteeWithConsensusValue(Set(v1), 20, b4.blockHash))
-        } yield result
+    for {
+      genesis                                                 <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bonds)
+      dag                                                     <- storage.getRepresentation
+      implicit0(detector: FinalityDetectorVotingMatrix[Task]) <- mkVotingMatrix(dag, genesis)
+      (b1, c1) <- createBlockAndUpdateFinalityDetector[Task](
+                   Seq(genesis.blockHash),
+                   genesis.blockHash,
+                   v1,
+                   bonds,
+                   HashMap(ByteString.EMPTY -> genesis.blockHash),
+                   lfb = genesis
+                 )
+      _ = c1 shouldBe Seq(CommitteeWithConsensusValue(Set(v1), 20, b1.blockHash))
+      (b2, c2) <- createBlockAndUpdateFinalityDetector[Task](
+                   Seq(b1.blockHash),
+                   b1.blockHash,
+                   v2,
+                   bonds,
+                   HashMap(v1 -> b1.blockHash),
+                   lfb = b1
+                 )
+      _ = c2 shouldBe empty
+      (b3, c3) <- createBlockAndUpdateFinalityDetector[Task](
+                   Seq(b1.blockHash),
+                   b1.blockHash,
+                   v1,
+                   bonds,
+                   HashMap(v1 -> b1.blockHash),
+                   lfb = b1
+                 )
+      _ = c3 shouldBe Seq(CommitteeWithConsensusValue(Set(v1), 20, b3.blockHash))
+      (b4, c4) <- createBlockAndUpdateFinalityDetector[Task](
+                   Seq(b3.blockHash),
+                   b3.blockHash,
+                   v1,
+                   bonds,
+                   HashMap(v1 -> b3.blockHash, v2 -> b2.blockHash),
+                   lfb = b3
+                 )
+      result = c4 shouldBe Seq(CommitteeWithConsensusValue(Set(v1), 20, b4.blockHash))
+    } yield result
   }
 
-  it should "finalize blocks properly with only one validator" in withCombinedStorageIndexed {
+  it should "finalize blocks properly with only one validator" in withCombinedStorage() {
     implicit storage =>
-      implicit dagStorage =>
-        /* The DAG looks like:
-         *
-         *    b4
-         *    |
-         *    b3
-         *    |
-         *    b2
-         *    |
-         *    b1
-         *      \
-         *      genesis
-         */
-        val v1     = generateValidator("V1")
-        val v1Bond = Bond(v1, 10)
-        val bonds  = Seq(v1Bond)
-        for {
-          genesis                                                 <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bonds)
-          dag                                                     <- storage.getRepresentation
-          implicit0(detector: FinalityDetectorVotingMatrix[Task]) <- mkVotingMatrix(dag, genesis)
-          (b1, c1) <- createBlockAndUpdateFinalityDetector[Task](
-                       Seq(genesis.blockHash),
-                       genesis.blockHash,
-                       v1,
-                       bonds,
-                       lfb = genesis
-                     )
+      /* The DAG looks like:
+       *
+       *    b4
+       *    |
+       *    b3
+       *    |
+       *    b2
+       *    |
+       *    b1
+       *      \
+       *      genesis
+       */
+      val v1     = generateValidator("V1")
+      val v1Bond = Bond(v1, 10)
+      val bonds  = Seq(v1Bond)
+      for {
+        genesis                                                 <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bonds)
+        dag                                                     <- storage.getRepresentation
+        implicit0(detector: FinalityDetectorVotingMatrix[Task]) <- mkVotingMatrix(dag, genesis)
+        (b1, c1) <- createBlockAndUpdateFinalityDetector[Task](
+                     Seq(genesis.blockHash),
+                     genesis.blockHash,
+                     v1,
+                     bonds,
+                     lfb = genesis
+                   )
 
-          _ = c1 shouldBe Seq(CommitteeWithConsensusValue(Set(v1), 10, b1.blockHash))
-          (b2, c2) <- createBlockAndUpdateFinalityDetector[Task](
-                       Seq(b1.blockHash),
-                       b1.blockHash,
-                       v1,
-                       bonds,
-                       HashMap(v1 -> b1.blockHash),
-                       lfb = b1
-                     )
-          _ = c2 shouldBe Seq(CommitteeWithConsensusValue(Set(v1), 10, b2.blockHash))
-          (b3, c3) <- createBlockAndUpdateFinalityDetector[Task](
-                       Seq(b2.blockHash),
-                       b2.blockHash,
-                       v1,
-                       bonds,
-                       HashMap(v1 -> b2.blockHash),
-                       lfb = b2
-                     )
-          _ = c3 shouldBe Seq(CommitteeWithConsensusValue(Set(v1), 10, b3.blockHash))
-          (b4, c4) <- createBlockAndUpdateFinalityDetector[Task](
-                       Seq(b3.blockHash),
-                       b3.blockHash,
-                       v1,
-                       bonds,
-                       HashMap(v1 -> b3.blockHash),
-                       lfb = b3
-                     )
-          result = c4 shouldBe Seq(CommitteeWithConsensusValue(Set(v1), 10, b4.blockHash))
-        } yield result
+        _ = c1 shouldBe Seq(CommitteeWithConsensusValue(Set(v1), 10, b1.blockHash))
+        (b2, c2) <- createBlockAndUpdateFinalityDetector[Task](
+                     Seq(b1.blockHash),
+                     b1.blockHash,
+                     v1,
+                     bonds,
+                     HashMap(v1 -> b1.blockHash),
+                     lfb = b1
+                   )
+        _ = c2 shouldBe Seq(CommitteeWithConsensusValue(Set(v1), 10, b2.blockHash))
+        (b3, c3) <- createBlockAndUpdateFinalityDetector[Task](
+                     Seq(b2.blockHash),
+                     b2.blockHash,
+                     v1,
+                     bonds,
+                     HashMap(v1 -> b2.blockHash),
+                     lfb = b2
+                   )
+        _ = c3 shouldBe Seq(CommitteeWithConsensusValue(Set(v1), 10, b3.blockHash))
+        (b4, c4) <- createBlockAndUpdateFinalityDetector[Task](
+                     Seq(b3.blockHash),
+                     b3.blockHash,
+                     v1,
+                     bonds,
+                     HashMap(v1 -> b3.blockHash),
+                     lfb = b3
+                   )
+        result = c4 shouldBe Seq(CommitteeWithConsensusValue(Set(v1), 10, b4.blockHash))
+      } yield result
   }
 
-  it should "increment last finalized block as appropriate in round robin" in withCombinedStorageIndexed {
+  it should "increment last finalized block as appropriate in round robin" in withCombinedStorage() {
     implicit storage =>
-      implicit dagStorage =>
-        /* The DAG looks like:
-         *
-         *
-         *    b7 ----
-         *           \
-         *            b6
-         *           /
-         *        b5
-         *      /
-         *    b4 ----
-         *           \
-         *            b3
-         *          /
-         *        b2
-         *      /
-         *    b1
-         *      \
-         *      genesis
-         */
-        val v1     = generateValidator("V1")
-        val v2     = generateValidator("V2")
-        val v3     = generateValidator("V3")
-        val v1Bond = Bond(v1, 10)
-        val v2Bond = Bond(v2, 10)
-        val v3Bond = Bond(v3, 10)
-        val bonds  = Seq(v1Bond, v2Bond, v3Bond)
-        for {
-          genesis                                                 <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bonds)
-          dag                                                     <- storage.getRepresentation
-          implicit0(detector: FinalityDetectorVotingMatrix[Task]) <- mkVotingMatrix(dag, genesis)
-          (b1, c1) <- createBlockAndUpdateFinalityDetector[Task](
-                       Seq(genesis.blockHash),
-                       genesis.blockHash,
-                       v1,
-                       bonds,
-                       lfb = genesis
-                     )
-          _ = c1 shouldBe empty
-          (b2, c2) <- createBlockAndUpdateFinalityDetector[Task](
-                       Seq(b1.blockHash),
-                       genesis.blockHash,
-                       v2,
-                       bonds,
-                       HashMap(v1 -> b1.blockHash),
-                       lfb = genesis
-                     )
-          _ = c2 shouldBe empty
-          (b3, c3) <- createBlockAndUpdateFinalityDetector[Task](
-                       Seq(b2.blockHash),
-                       genesis.blockHash,
-                       v3,
-                       bonds,
-                       HashMap(v1 -> b1.blockHash, v2 -> b2.blockHash),
-                       lfb = genesis
-                     )
-          _ = c3 shouldBe empty
-          (b4, c4) <- createBlockAndUpdateFinalityDetector[Task](
-                       Seq(b3.blockHash),
-                       genesis.blockHash,
-                       v1,
-                       bonds,
-                       HashMap(v1 -> b1.blockHash, v2 -> b2.blockHash, v3 -> b3.blockHash),
-                       lfb = genesis
-                     )
-          _ = c4 shouldBe Seq(CommitteeWithConsensusValue(Set(v1, v2, v3), 30, b1.blockHash))
-          (b5, c5) <- createBlockAndUpdateFinalityDetector[Task](
-                       Seq(b4.blockHash),
-                       b1.blockHash,
-                       v2,
-                       bonds,
-                       HashMap(v1 -> b4.blockHash, v2 -> b2.blockHash, v3 -> b3.blockHash),
-                       lfb = b1
-                     )
-          _ = c5 shouldBe Seq(CommitteeWithConsensusValue(Set(v1, v2, v3), 30, b2.blockHash))
-          (b6, c6) <- createBlockAndUpdateFinalityDetector[Task](
-                       Seq(b5.blockHash),
-                       b2.blockHash,
-                       v3,
-                       bonds,
-                       HashMap(v1 -> b4.blockHash, v2 -> b5.blockHash, v3 -> b3.blockHash),
-                       lfb = b2
-                     )
-          _ = c6 shouldBe Seq(CommitteeWithConsensusValue(Set(v1, v2, v3), 30, b3.blockHash))
-          (b7, c7) <- createBlockAndUpdateFinalityDetector[Task](
-                       Seq(b6.blockHash),
-                       b3.blockHash,
-                       v1,
-                       bonds,
-                       HashMap(v1 -> b4.blockHash, v2 -> b5.blockHash, v3 -> b6.blockHash),
-                       lfb = b3
-                     )
-          result = c7 shouldBe Seq(CommitteeWithConsensusValue(Set(v1, v2, v3), 30, b4.blockHash))
-        } yield result
+      /* The DAG looks like:
+       *
+       *
+       *    b7 ----
+       *           \
+       *            b6
+       *           /
+       *        b5
+       *      /
+       *    b4 ----
+       *           \
+       *            b3
+       *          /
+       *        b2
+       *      /
+       *    b1
+       *      \
+       *      genesis
+       */
+      val v1     = generateValidator("V1")
+      val v2     = generateValidator("V2")
+      val v3     = generateValidator("V3")
+      val v1Bond = Bond(v1, 10)
+      val v2Bond = Bond(v2, 10)
+      val v3Bond = Bond(v3, 10)
+      val bonds  = Seq(v1Bond, v2Bond, v3Bond)
+      for {
+        genesis                                                 <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bonds)
+        dag                                                     <- storage.getRepresentation
+        implicit0(detector: FinalityDetectorVotingMatrix[Task]) <- mkVotingMatrix(dag, genesis)
+        (b1, c1) <- createBlockAndUpdateFinalityDetector[Task](
+                     Seq(genesis.blockHash),
+                     genesis.blockHash,
+                     v1,
+                     bonds,
+                     lfb = genesis
+                   )
+        _ = c1 shouldBe empty
+        (b2, c2) <- createBlockAndUpdateFinalityDetector[Task](
+                     Seq(b1.blockHash),
+                     genesis.blockHash,
+                     v2,
+                     bonds,
+                     HashMap(v1 -> b1.blockHash),
+                     lfb = genesis
+                   )
+        _ = c2 shouldBe empty
+        (b3, c3) <- createBlockAndUpdateFinalityDetector[Task](
+                     Seq(b2.blockHash),
+                     genesis.blockHash,
+                     v3,
+                     bonds,
+                     HashMap(v1 -> b1.blockHash, v2 -> b2.blockHash),
+                     lfb = genesis
+                   )
+        _ = c3 shouldBe empty
+        (b4, c4) <- createBlockAndUpdateFinalityDetector[Task](
+                     Seq(b3.blockHash),
+                     genesis.blockHash,
+                     v1,
+                     bonds,
+                     HashMap(v1 -> b1.blockHash, v2 -> b2.blockHash, v3 -> b3.blockHash),
+                     lfb = genesis
+                   )
+        _ = c4 shouldBe Seq(CommitteeWithConsensusValue(Set(v1, v2, v3), 30, b1.blockHash))
+        (b5, c5) <- createBlockAndUpdateFinalityDetector[Task](
+                     Seq(b4.blockHash),
+                     b1.blockHash,
+                     v2,
+                     bonds,
+                     HashMap(v1 -> b4.blockHash, v2 -> b2.blockHash, v3 -> b3.blockHash),
+                     lfb = b1
+                   )
+        _ = c5 shouldBe Seq(CommitteeWithConsensusValue(Set(v1, v2, v3), 30, b2.blockHash))
+        (b6, c6) <- createBlockAndUpdateFinalityDetector[Task](
+                     Seq(b5.blockHash),
+                     b2.blockHash,
+                     v3,
+                     bonds,
+                     HashMap(v1 -> b4.blockHash, v2 -> b5.blockHash, v3 -> b3.blockHash),
+                     lfb = b2
+                   )
+        _ = c6 shouldBe Seq(CommitteeWithConsensusValue(Set(v1, v2, v3), 30, b3.blockHash))
+        (b7, c7) <- createBlockAndUpdateFinalityDetector[Task](
+                     Seq(b6.blockHash),
+                     b3.blockHash,
+                     v1,
+                     bonds,
+                     HashMap(v1 -> b4.blockHash, v2 -> b5.blockHash, v3 -> b6.blockHash),
+                     lfb = b3
+                   )
+        result = c7 shouldBe Seq(CommitteeWithConsensusValue(Set(v1, v2, v3), 30, b4.blockHash))
+      } yield result
   }
 
   // See [[casper/src/test/resources/casper/finalityDetectorWithEquivocations.png]]
-  it should "exclude the weight of validator who have been detected equivocating when searching for the committee" in withCombinedStorageIndexed {
-    implicit storage => implicit dagStorage =>
+  it should "exclude the weight of validator who have been detected equivocating when searching for the committee" in withCombinedStorage() {
+    implicit storage =>
       val v1     = generateValidator("V1")
       val v2     = generateValidator("V2")
       val v3     = generateValidator("V3")
@@ -399,8 +395,8 @@ class FinalityDetectorByVotingMatrixTest
   }
 
   // See [[casper/src/test/resources/casper/equivocatingBlockGetFinalized.png]]
-  it should "finalize equivocator's block when enough honest validators votes for it" in withCombinedStorageIndexed {
-    implicit storage => implicit dagStorage =>
+  it should "finalize equivocator's block when enough honest validators votes for it" in withCombinedStorage() {
+    implicit storage =>
       val v1     = generateValidator("V1")
       val v2     = generateValidator("V2")
       val v3     = generateValidator("V3")
@@ -469,8 +465,8 @@ class FinalityDetectorByVotingMatrixTest
   }
 
   // See [[casper/src/test/resources/casper/equivocatingBlockCantGetFinalized.png]]
-  it should "not finalize equivocator's blocks, no matter how many votes equivocating validators cast" in withCombinedStorageIndexed {
-    implicit storage => implicit dagStorage =>
+  it should "not finalize equivocator's blocks, no matter how many votes equivocating validators cast" in withCombinedStorage() {
+    implicit storage =>
       val v1     = generateValidator("V1")
       val v2     = generateValidator("V2")
       val v3     = generateValidator("V3")
@@ -553,76 +549,75 @@ class FinalityDetectorByVotingMatrixTest
       } yield result
   }
 
-  it should "not count child era messages towards finality of the parent bocks" in withCombinedStorageIndexed {
+  it should "not count child era messages towards finality of the parent bocks" in withCombinedStorage() {
     implicit storage =>
-      implicit dagStorage =>
-        /* The DAG looks like:
-         * era-1:
-         *    a1 ----
-         *           \
-         *            c1
-         *          /
-         *        b1
-         *      /
-         * era-0:
-         *    a0
-         *      \
-         *      genesis
-         */
-        val v1     = generateValidator("V1")
-        val v2     = generateValidator("V2")
-        val v3     = generateValidator("V3")
-        val v1Bond = Bond(v1, 10)
-        val v2Bond = Bond(v2, 10)
-        val v3Bond = Bond(v3, 10)
-        val bonds  = Seq(v1Bond, v2Bond, v3Bond)
-        for {
-          genesis <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bonds)
-          dag     <- storage.getRepresentation
-          implicit0(detector: FinalityDetectorVotingMatrix[Task]) <- mkVotingMatrix(
-                                                                      dag,
-                                                                      genesis,
-                                                                      isHighway = true
-                                                                    )
-          (a0, c1) <- createBlockAndUpdateFinalityDetector[Task](
-                       Seq(genesis.blockHash),
-                       genesis.blockHash,
-                       v1,
-                       bonds,
-                       lfb = genesis
-                     )
-          _ = c1 shouldBe empty
-          (b1, c2) <- createBlockAndUpdateFinalityDetector[Task](
-                       Seq(a0.blockHash),
-                       a0.blockHash,
-                       v2,
-                       bonds,
-                       HashMap(v1 -> a0.blockHash),
-                       lfb = genesis
-                     )
-          _ = c2 shouldBe empty
-          (c1, c3) <- createBlockAndUpdateFinalityDetector[Task](
-                       Seq(b1.blockHash),
-                       a0.blockHash,
-                       v3,
-                       bonds,
-                       HashMap(v1 -> a0.blockHash, v2 -> b1.blockHash),
-                       lfb = genesis
-                     )
-          _ = c3 shouldBe empty
-          (a1, c4) <- createBlockAndUpdateFinalityDetector[Task](
-                       Seq(c1.blockHash),
-                       a0.blockHash,
-                       v1,
-                       bonds,
-                       HashMap(v1 -> a0.blockHash, v2 -> b1.blockHash, v3 -> c1.blockHash),
-                       lfb = genesis
-                     )
-          _ = c4 shouldBe empty
-        } yield ()
+      /* The DAG looks like:
+       * era-1:
+       *    a1 ----
+       *           \
+       *            c1
+       *          /
+       *        b1
+       *      /
+       * era-0:
+       *    a0
+       *      \
+       *      genesis
+       */
+      val v1     = generateValidator("V1")
+      val v2     = generateValidator("V2")
+      val v3     = generateValidator("V3")
+      val v1Bond = Bond(v1, 10)
+      val v2Bond = Bond(v2, 10)
+      val v3Bond = Bond(v3, 10)
+      val bonds  = Seq(v1Bond, v2Bond, v3Bond)
+      for {
+        genesis <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bonds)
+        dag     <- storage.getRepresentation
+        implicit0(detector: FinalityDetectorVotingMatrix[Task]) <- mkVotingMatrix(
+                                                                    dag,
+                                                                    genesis,
+                                                                    isHighway = true
+                                                                  )
+        (a0, c1) <- createBlockAndUpdateFinalityDetector[Task](
+                     Seq(genesis.blockHash),
+                     genesis.blockHash,
+                     v1,
+                     bonds,
+                     lfb = genesis
+                   )
+        _ = c1 shouldBe empty
+        (b1, c2) <- createBlockAndUpdateFinalityDetector[Task](
+                     Seq(a0.blockHash),
+                     a0.blockHash,
+                     v2,
+                     bonds,
+                     HashMap(v1 -> a0.blockHash),
+                     lfb = genesis
+                   )
+        _ = c2 shouldBe empty
+        (c1, c3) <- createBlockAndUpdateFinalityDetector[Task](
+                     Seq(b1.blockHash),
+                     a0.blockHash,
+                     v3,
+                     bonds,
+                     HashMap(v1 -> a0.blockHash, v2 -> b1.blockHash),
+                     lfb = genesis
+                   )
+        _ = c3 shouldBe empty
+        (a1, c4) <- createBlockAndUpdateFinalityDetector[Task](
+                     Seq(c1.blockHash),
+                     a0.blockHash,
+                     v1,
+                     bonds,
+                     HashMap(v1 -> a0.blockHash, v2 -> b1.blockHash, v3 -> c1.blockHash),
+                     lfb = genesis
+                   )
+        _ = c4 shouldBe empty
+      } yield ()
   }
 
-  def createBlockAndUpdateFinalityDetector[F[_]: Sync: Time: Log: BlockStorage: IndexedDagStorage: FinalityDetectorVotingMatrix: FunctorRaise[
+  def createBlockAndUpdateFinalityDetector[F[_]: Sync: Time: Log: BlockStorage: DagStorage: FinalityDetectorVotingMatrix: FunctorRaise[
     *[_],
     InvalidBlock
   ]](
@@ -645,7 +640,7 @@ class FinalityDetectorByVotingMatrixTest
                 postStateHash = postStateHash,
                 messageType = messageType
               )
-      dag     <- IndexedDagStorage[F].getRepresentation
+      dag     <- DagStorage[F].getRepresentation
       message <- Sync[F].fromTry(Message.fromBlock(block))
       // EquivocationDetector works before adding block to DAG
       _ <- Sync[F].attempt(
