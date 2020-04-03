@@ -456,13 +456,8 @@ object GossipServiceCasperTestNodeFactory {
                                   egressScheduler = implicitly[Scheduler]
                                 ).allocated
 
-        deployDownloadManager = new DeployDownloadManager[F] {
-          override def scheduleDownload(
-              handle: DeploySummary,
-              source: Node,
-              relay: Boolean
-          ): F[WaitHandle[F]] = ???
-        }
+        deployDownloadManager = new NoOpsDeployDownloadManager[F] {}
+
         (blockDownloadManager, downloadManagerShutdown) = blockDownloadManagerR
 
         synchronizer <- SynchronizerImpl[F](

@@ -726,37 +726,18 @@ object BlockDownloadManagerSpec {
 
   /** Test implementation of the remote GossipService to download the blocks from. */
   object MockGossipService {
-    private val emptySynchronizer = new Synchronizer[Task] {
-      def syncDag(source: Node, targetBlockHashes: Set[ByteString])    = ???
-      def onDownloaded(blockHash: ByteString): Task[Unit]              = ???
-      def onFailed(blockHash: ByteString): Task[Unit]                  = ???
-      def onScheduled(summary: BlockSummary, source: Node): Task[Unit] = ???
-    }
-    private val emptyDeployDownloadManager = new DeployDownloadManager[Task] {
-      def scheduleDownload(summary: DeploySummary, source: Node, relay: Boolean) = ???
-    }
-    private val emptyBlockDownloadManager = new BlockDownloadManager[Task] {
-      def scheduleDownload(summary: BlockSummary, source: Node, relay: Boolean) = ???
-    }
-    private val emptyGenesisApprover = new GenesisApprover[Task] {
-      def getCandidate                                           = ???
-      def addApproval(blockHash: ByteString, approval: Approval) = ???
-      def awaitApproval                                          = ???
-    }
+    private val emptySynchronizer          = new NoOpsSynchronizer[Task]          {}
+    private val emptyDeployDownloadManager = new NoOpsDeployDownloadManager[Task] {}
+    private val emptyBlockDownloadManager  = new NoOpsBlockDownloadManager[Task]  {}
+    private val emptyGenesisApprover       = new NoOpsGenesisApprover[Task]       {}
 
     // Used only as a default argument for when we aren't touching the remote service in a test.
     val default = {
       implicit val log = Log.NOPLog[Task]
       GossipServiceServer[Task](
-        backend = new GossipServiceServer.Backend[Task] {
-          def hasDeploy(deployHash: ByteString)                               = ???
-          def hasBlock(blockHash: ByteString)                                 = ???
-          def getBlock(blockHash: ByteString, deploysBodiesExcluded: Boolean) = Task.now(None)
-          def getBlockSummary(blockHash: ByteString)                          = ???
-          def getDeploySummary(deployHash: ByteString)                        = ???
-          def getDeploys(deployHashes: Set[ByteString])                       = ???
-          def latestMessages: Task[Set[Block.Justification]]                  = ???
-          def dagTopoSort(startRank: Long, endRank: Long)                     = ???
+        backend = new NoOpsGossipServiceServerBackend[Task] {
+          override def getBlock(blockHash: ByteString, deploysBodiesExcluded: Boolean) =
+            Task.now(None)
         },
         synchronizer = emptySynchronizer,
         connector = _ => ???,
@@ -781,9 +762,7 @@ object BlockDownloadManagerSpec {
       } yield {
         // Using `new` because I want to override `getBlockChunked`.
         new GossipServiceServer[Task](
-          backend = new GossipServiceServer.Backend[Task] {
-            override def hasDeploy(deployHash: ByteString): Task[Boolean] = ???
-            override def hasBlock(blockHash: ByteString)                  = ???
+          backend = new NoOpsGossipServiceServerBackend[Task] {
             override def getBlock(blockHash: ByteString, deploysBodiesExcluded: Boolean) =
               regetter(Task.delay(blockMap.get(blockHash).map { block =>
                 if (deploysBodiesExcluded) {
@@ -792,11 +771,6 @@ object BlockDownloadManagerSpec {
                   block
                 }
               }))
-            override def getDeploys(deployHashes: Set[ByteString])      = ???
-            override def getBlockSummary(blockHash: ByteString)         = ???
-            override def getDeploySummary(deployHash: ByteString)       = ???
-            override def latestMessages: Task[Set[Block.Justification]] = ???
-            override def dagTopoSort(startRank: Long, endRank: Long)    = ???
 
           },
           synchronizer = emptySynchronizer,
