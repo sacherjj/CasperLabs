@@ -6,7 +6,7 @@ import { autorun } from 'mobx';
 import SignMessageManager, { SignMessage } from './SignMessageManager';
 import * as nacl from 'tweetnacl-ts';
 import { updateBadge } from './utils';
-import { registerContentProxy, setupInjectPageAPIServer } from '../lib/rpc/Provider';
+import { setupInjectPageAPIServer } from '../lib/rpc/Provider';
 
 
 const appState = new AppState();
@@ -44,8 +44,11 @@ async function setupPopupAPIServer() {
     return appState;
   });
   rpc.register('sign.signMessage', (msg: SignMessage) => {
-    let sig = nacl.sign_detached(nacl.decodeBase64(msg.data), appState.userAccounts[0].signKeyPair.secretKey);
-    return signMessageManager.setMsgStatusSigned(msg.id, nacl.encodeBase64(sig));
+    if (!appState.selectedUserAccount) {
+      throw new Error(`Please select the account firstly`);
+    }
+    let sig = nacl.sign_detached(nacl.decodeBase64(msg.data), appState.selectedUserAccount.signKeyPair.secretKey);
+    return signMessageManager.approveMsg(msg.id, nacl.encodeBase64(sig));
   });
   rpc.register('sign.rejectMessage', signMessageManager.rejectMsg.bind(signMessageManager));
 }
