@@ -19,20 +19,21 @@ import io.casperlabs.casper.validation.{NCBValidationImpl, Validation}
 import io.casperlabs.casper.{consensus, _}
 import io.casperlabs.comm.discovery.{Node, NodeDiscovery, NodeIdentifier}
 import io.casperlabs.comm.gossiping._
+import io.casperlabs.comm.gossiping.relaying._
 import io.casperlabs.comm.gossiping.downloadmanager._
 import io.casperlabs.comm.gossiping.synchronization._
 import io.casperlabs.crypto.Keys.PrivateKey
 import io.casperlabs.mempool.DeployBuffer
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.p2p.EffectsTestInstances._
+import io.casperlabs.shared.ByteStringPrettyPrinter._
 import io.casperlabs.shared._
 import io.casperlabs.storage.block._
 import io.casperlabs.storage.dag._
 import io.casperlabs.storage.deploy.DeployStorage
 import logstage.LogIO
-import monix.tail.Iterant
 import monix.execution.Scheduler
-import io.casperlabs.shared.ByteStringPrettyPrinter._
+import monix.tail.Iterant
 
 import scala.collection.immutable.Queue
 import scala.concurrent.duration.{FiniteDuration, _}
@@ -47,7 +48,7 @@ class GossipServiceCasperTestNode[F[_]](
     maybeMakeEE: Option[HashSetCasperTestNode.MakeExecutionEngineService[F]] = None,
     minTTL: FiniteDuration = 1.minute,
     chainName: String = "casperlabs",
-    relaying: Relaying[F],
+    relaying: BlockRelaying[F],
     gossipService: GossipServiceCasperTestNodeFactory.TestGossipService[F]
 )(
     implicit
@@ -148,7 +149,7 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
     implicit val validationEff = new NCBValidationImpl[F]
 
     // Standalone, so nobody to relay to.
-    val relaying = RelayingImpl(
+    val relaying = BlockRelayingImpl(
       scheduler,
       new TestNodeDiscovery[F](Nil),
       connectToGossip = _ => ???,
@@ -259,7 +260,7 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
           val connectToGossip: GossipService.Connector[F] =
             peer => gossipServices(peer).asInstanceOf[GossipService[F]].pure[F]
 
-          val relaying = RelayingImpl(
+          val relaying = BlockRelayingImpl(
             scheduler,
             nodeDiscovery,
             connectToGossip = connectToGossip,
@@ -370,7 +371,7 @@ object GossipServiceCasperTestNodeFactory {
         casper: MultiParentCasperImpl[F],
         blockStorage: BlockStorage[F],
         deployStorage: DeployStorage[F],
-        relaying: Relaying[F],
+        relaying: BlockRelaying[F],
         connectToGossip: GossipService.Connector[F]
     ): F[Unit] = {
 
@@ -455,13 +456,8 @@ object GossipServiceCasperTestNodeFactory {
                                   egressScheduler = implicitly[Scheduler]
                                 ).allocated
 
-        deployDownloadManager = new DeployDownloadManager[F] {
-          override def scheduleDownload(
-              handle: DeploySummary,
-              source: Node,
-              relay: Boolean
-          ): F[WaitHandle[F]] = ???
-        }
+        deployDownloadManager = new NoOpsDeployDownloadManager[F] {}
+
         (blockDownloadManager, downloadManagerShutdown) = blockDownloadManagerR
 
         synchronizer <- SynchronizerImpl[F](

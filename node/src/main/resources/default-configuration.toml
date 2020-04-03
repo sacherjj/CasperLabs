@@ -149,13 +149,13 @@ block-upload-rate-period = "0s"
 block-upload-rate-max-throttled = 0
 
 # Size of the main thread pool.
-main-threads = 64
+main-threads = 50
 
 # Size of the thread pool used to handle incoming requests.
-ingress-threads = 32
+ingress-threads = 60
 
 # Size of the thread pool for database connections.
-db-threads = 48
+db-threads = 70
 
 # Parallelism per CPU core.
 parallelism-cpu-multiplier = 1.0
