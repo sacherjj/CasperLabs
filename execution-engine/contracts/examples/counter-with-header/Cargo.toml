@@ -1,0 +1,15 @@
+[package]
+name = "counter-with-header"
+version = "0.1.0"
+authors = ["Michael Birch <birchmd@casperlabs.io>"]
+edition = "2018"
+
+[lib]
+crate-type = ["cdylib"]
+bench = false
+doctest = false
+test = false
+
+[dependencies]
+contract = { path = "../../../contract", package = "casperlabs-contract" }
+types = { path = "../../../types", package = "casperlabs-types" }
