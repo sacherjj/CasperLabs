@@ -41,19 +41,6 @@ export const BytesValue = toValue<ByteArray>((value, x) => {
   return value;
 });
 
-export const LongValue = toValue<bigint>((value, x) => {
-  const t = new CLType();
-  t.setSimpleType(CLType.Simple.I64);
-
-  const v = new CLValueInstance.Value();
-  v.setI64(Number(x));
-
-  value.setClType(t);
-  value.setValue(v);
-
-  return value;
-});
-
 export const BigIntValue = toValue<bigint | JSBI>((value, x) => {
   const t = new CLType();
   t.setSimpleType(CLType.Simple.U512);
