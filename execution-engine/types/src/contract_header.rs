@@ -143,6 +143,14 @@ pub struct ContractHeader {
 }
 
 impl ContractHeader {
+    /// `ContractHeader` constructor.
+    pub fn new(methods: BTreeMap<String, EntryPoint>, protocol_version: ProtocolVersion) -> Self {
+        ContractHeader {
+            methods,
+            protocol_version,
+        }
+    }
+
     /// Checks whether there is a method with the given name
     pub fn has_method_name(&self, name: &str) -> bool {
         self.methods.contains_key(name)
@@ -201,6 +209,11 @@ pub struct EntryPoint {
 }
 
 impl EntryPoint {
+    /// `EntryPoint` constructor.
+    pub fn new(args: Vec<Arg>, ret: CLType) -> Self {
+        EntryPoint { args, ret }
+    }
+
     /// Get the arguments for this method.
     pub fn args(&self) -> &[Arg] {
         self.args.as_slice()
@@ -237,6 +250,11 @@ pub struct Arg {
 }
 
 impl Arg {
+    /// `Arg` constructor.
+    pub fn new(name: String, cl_type: CLType) -> Self {
+        Arg { name, cl_type }
+    }
+
     /// Get the type of this argument.
     pub fn cl_type(&self) -> &CLType {
         &self.cl_type
