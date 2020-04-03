@@ -2309,7 +2309,10 @@ where
         let key = Key::Hash(addr);
         let (cl_value, access_key) = self.create_contract_value()?;
 
-        self.context.write_gs(key, StoredValue::CLValue(cl_value))?;
+        self.context
+            .state()
+            .borrow_mut()
+            .write(key, StoredValue::CLValue(cl_value));
         Ok((addr, access_key.addr()))
     }
 
