@@ -274,11 +274,8 @@ object InitialSynchronizationForwardImplSpec extends ArbitraryConsensus {
   implicit val logNoOp = Log.NOPLog[Task]
   implicit val metris  = new Metrics.MetricsNOP[Task]
 
-  class MockNodeDiscovery(nodes: List[Node]) extends NodeDiscovery[Task] {
-    def discover                            = ???
-    def lookup(id: NodeIdentifier)          = ???
-    def recentlyAlivePeersAscendingDistance = Task.now(nodes)
-    def banTemp(node: Node): Task[Unit]     = ???
+  class MockNodeDiscovery(nodes: List[Node]) extends NoOpsNodeDiscovery[Task] {
+    override def recentlyAlivePeersAscendingDistance = Task.now(nodes)
   }
 
   class MockBlockDownloadManager(maybeFail: (Node, BlockSummary) => Option[Throwable])
@@ -290,6 +287,10 @@ object InitialSynchronizationForwardImplSpec extends ArbitraryConsensus {
         requestsCounter.transform(m => m + (source -> (m(source) + 1)))
         maybeFail(source, summary).fold(Task.unit)(Task.raiseError(_))
       }
+
+    override def isScheduled(id: ByteString): Task[Boolean] = Task.now(false)
+    override def addSource(id: ByteString, source: Node): Task[Vector[Task[Unit]]] =
+      Task.now(Vector(Task.unit))
 
   }
 
