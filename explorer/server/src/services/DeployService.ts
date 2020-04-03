@@ -49,7 +49,7 @@ export default class DeployService {
               if (res.status === grpc.Code.OK) {
                 reject();
               } else {
-                resolve(this.error(res, nodeUrl));
+                resolve(this.errorMsg(res, nodeUrl));
               }
             }
           });
@@ -66,10 +66,10 @@ export default class DeployService {
     });
   }
 
-  private error<T extends ProtobufMessage>(res: grpc.UnaryOutput<T>, nodeUrl: string) {
+  private errorMsg<T extends ProtobufMessage>(res: grpc.UnaryOutput<T>, nodeUrl: string) {
     const msg = `error calling CasperService at ${nodeUrl}: ` +
       `gRPC error: code=${res.status}, message="${res.statusMessage}"`;
     console.log(msg);
-    return new Error(msg);
+    return msg;
   }
 }
