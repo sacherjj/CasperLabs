@@ -1562,8 +1562,10 @@ object GrpcGossipServiceSpec extends TestRuntime with ArbitraryConsensusAndComm 
     trait EmptyGossipService extends NoOpsGossipService[Task]
     private val emptySynchronizer          = new NoOpsSynchronizer[Task]          {}
     private val emptyDeployDownloadManager = new NoOpsDeployDownloadManager[Task] {}
-    private val emptyBlockDownloadManager  = new NoOpsBlockDownloadManager[Task]  {}
-    private val emptyGenesisApprover       = new NoOpsGenesisApprover[Task]       {}
+    private val emptyBlockDownloadManager = new NoOpsBlockDownloadManager[Task] {
+      override def isScheduled(id: ByteString): Task[Boolean] = false.pure[Task]
+    }
+    private val emptyGenesisApprover = new NoOpsGenesisApprover[Task] {}
 
     private def defaultBackend(testDataRef: AtomicReference[TestData]) =
       new GossipServiceServer.Backend[Task] {
