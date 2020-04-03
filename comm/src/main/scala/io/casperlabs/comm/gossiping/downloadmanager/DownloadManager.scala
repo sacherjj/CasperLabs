@@ -152,18 +152,43 @@ trait DownloadManagerCompanion extends DownloadManagerTypes {
       source: Node
   ): Set[Identifier] = {
     def loop(
-        acc: Set[Identifier],
+        visited: Set[Identifier],
         queue: Queue[Identifier]
     ): Set[Identifier] =
-      queue.dequeueOption.fold(acc) {
-        case (id, queue) if acc(id) =>
-          loop(acc, queue)
+      queue.dequeueOption.fold(visited) {
+        case (id, queue) if visited(id) =>
+          loop(visited, queue)
         case (id, queue) if !items.contains(id) =>
-          loop(acc, queue)
+          loop(visited, queue)
         case (id, queue) if items(id).sources(source) =>
-          loop(acc, queue)
+          loop(visited, queue)
         case (id, queue) =>
-          loop(acc + id, queue ++ items(id).dependencies)
+          loop(visited + id, queue ++ items(id).dependencies)
+      }
+
+    loop(Set.empty, Queue(id)) - id
+  }
+
+  /** Collect every scheduled item that depends on something.
+    * This is used only rarely, when an item fails to download completely.
+    */
+  def collectDescendants[F[_]](
+      items: Map[Identifier, Item[F]],
+      id: Identifier
+  ): Set[Identifier] = {
+    def loop(
+        visited: Set[Identifier],
+        queue: Queue[Identifier]
+    ): Set[Identifier] =
+      queue.dequeueOption.fold(visited) {
+        case (id, queue) if visited(id) =>
+          loop(visited, queue)
+
+        case (id, queue) =>
+          val dependants = items.collect {
+            case (hash, dep) if dep.dependencies contains id => hash
+          }
+          loop(visited + id, queue ++ dependants)
       }
 
     loop(Set.empty, Queue(id)) - id
@@ -369,14 +394,19 @@ trait DownloadManagerImpl[F[_]] extends DownloadManager[F] { self =>
       case Signal.DownloadFailure(id, ex) =>
         val finish = for {
           _ <- workersRef.update(_ - id)
-          // Keep item so its dependencies are not downloaded.
-          // If it's scheduled again we'll try once more.
-          // Old stuff will be forgotten when the node is restarted.
           watchers <- itemsRef.modify { items =>
-                       val item = items(id)
-                       val tombstone: Item[F] =
-                         item.copy(isDownloading = false, isError = true, maybeWatcher = None)
-                       (items + (id -> tombstone), item.maybeWatcher.toList)
+                       // Mark every descendant as faulty, so we know we have to retry them if re-scheduled.
+                       val descendants = collectDescendants(items, id)
+                       val tombstones: Seq[(Identifier, Item[F])] =
+                         (descendants + id).toSeq.map { id =>
+                           val tombstone: Item[F] = items(id).copy(
+                             isDownloading = false,
+                             isError = true,
+                             maybeWatcher = None
+                           )
+                           id -> tombstone
+                         }
+                       (items ++ tombstones, items(id).maybeWatcher.toList)
                      }
           // Tell whoever scheduled it before that it's over.
           _ <- watchers.traverse(_.complete(Left(ex)).attempt.void)
