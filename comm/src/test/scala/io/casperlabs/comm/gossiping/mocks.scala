@@ -38,9 +38,9 @@ trait NoOpsBlockDownloadManager[F[_]] extends BlockDownloadManager[F] {
       summary: BlockSummary,
       source: Node,
       relay: Boolean
-  ): F[WaitHandle[F]]                                                            = ???
-  override def isScheduled(id: ByteString): F[Boolean]                           = ???
-  override def addSource(id: ByteString, source: Node): F[Vector[WaitHandle[F]]] = ???
+  ): F[WaitHandle[F]]                                                    = ???
+  override def isScheduled(id: ByteString): F[Boolean]                   = ???
+  override def addSource(id: ByteString, source: Node): F[WaitHandle[F]] = ???
 }
 
 trait NoOpsDeployDownloadManager[F[_]] extends DeployDownloadManager[F] {
@@ -48,9 +48,9 @@ trait NoOpsDeployDownloadManager[F[_]] extends DeployDownloadManager[F] {
       summary: DeploySummary,
       source: Node,
       relay: Boolean
-  ): F[WaitHandle[F]]                                                            = ???
-  override def isScheduled(id: ByteString): F[Boolean]                           = ???
-  override def addSource(id: ByteString, source: Node): F[Vector[WaitHandle[F]]] = ???
+  ): F[WaitHandle[F]]                                                    = ???
+  override def isScheduled(id: ByteString): F[Boolean]                   = ???
+  override def addSource(id: ByteString, source: Node): F[WaitHandle[F]] = ???
 }
 
 trait NoOpsGenesisApprover[F[_]] extends GenesisApprover[F] {

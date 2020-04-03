@@ -520,8 +520,8 @@ object GenesisApproverSpec extends ArbitraryConsensusAndComm {
         Task.unit
       }
     override def isScheduled(id: ByteString): Task[Boolean] = false.pure[Task]
-    override def addSource(id: ByteString, source: Node): Task[Vector[Task[Unit]]] =
-      Vector(Task.unit).pure[Task]
+    override def addSource(id: ByteString, source: Node): Task[Task[Unit]] =
+      ().pure[Task].pure[Task]
     override def validateCandidate(block: Block)                           = Task.now(Right(none[Approval]))
     override def canTransition(block: Block, signatories: Set[ByteString]) = true
     override def validateSignature(

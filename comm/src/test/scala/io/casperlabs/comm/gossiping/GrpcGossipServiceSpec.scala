@@ -1193,9 +1193,8 @@ class GrpcGossipServiceSpec
                       }
                       Task.now(Task.unit)
                     }
-                    override def isScheduled(id: ByteString) = false.pure[Task]
-                    override def addSource(id: ByteString, source: Node) =
-                      Vector(Task.unit).pure[Task]
+                    override def isScheduled(id: ByteString)             = false.pure[Task]
+                    override def addSource(id: ByteString, source: Node) = ().pure[Task].pure[Task]
                   }
 
                   TestEnvironment(
@@ -1328,9 +1327,8 @@ class GrpcGossipServiceSpec
                       }
                       Task.now(Task.unit)
                     }
-                    override def isScheduled(id: ByteString) = false.pure[Task]
-                    override def addSource(id: ByteString, source: Node) =
-                      Vector(Task.unit).pure[Task]
+                    override def isScheduled(id: ByteString)             = false.pure[Task]
+                    override def addSource(id: ByteString, source: Node) = ().pure[Task].pure[Task]
                   }
 
                   TestEnvironment(

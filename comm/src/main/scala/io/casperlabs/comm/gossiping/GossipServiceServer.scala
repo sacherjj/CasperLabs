@@ -163,7 +163,6 @@ class GossipServiceServer[F[_]: Concurrent: Parallel: Log: Metrics](
                      .map(_.blockHash)
                      .toVector
                      .traverse(blockDownloadManager.addSource(_, source))
-                     .map(_.flatten)
 
       // Sync only what hasn't been scheduled yet.
       errorOrDag <- if (unscheduled.nonEmpty)
