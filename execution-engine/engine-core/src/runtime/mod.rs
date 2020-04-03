@@ -2348,7 +2348,9 @@ where
             .write(contract_key, StoredValue::Contract(contract));
         let cl_value = CLValue::from_t(metadata).map_err(|err| Error::CLValue(err))?;
         self.context
-            .write_gs(metadata_key, StoredValue::CLValue(cl_value))?;
+            .state()
+            .borrow_mut()
+            .write(metadata_key, StoredValue::CLValue(cl_value));
 
         Ok(None)
     }
@@ -2376,7 +2378,9 @@ where
 
         let cl_value = CLValue::from_t(metadata).map_err(|err| Error::CLValue(err))?;
         self.context
-            .write_gs(metadata_key, StoredValue::CLValue(cl_value))?;
+            .state()
+            .borrow_mut()
+            .write(metadata_key, StoredValue::CLValue(cl_value));
 
         Ok(None)
     }
