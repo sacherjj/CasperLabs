@@ -10,7 +10,7 @@ use crate::{
         AddKeyFailure, RemoveKeyFailure, SetThresholdFailure, TryFromIntError,
         TryFromSliceForPublicKeyError, UpdateKeyFailure,
     },
-    bytesrepr,
+    bytesrepr, contract_header,
     system_contract_errors::{mint, pos},
     CLValueError,
 };
@@ -26,6 +26,10 @@ const POS_ERROR_OFFSET: u32 = RESERVED_ERROR_MAX - u8::MAX as u32; // 65280..=65
 /// Mint errors (defined in "contracts/system/mint/src/error.rs") will have this value
 /// added to them when being converted to a `u32`.
 const MINT_ERROR_OFFSET: u32 = (POS_ERROR_OFFSET - 1) - u8::MAX as u32; // 65024..=65279
+
+/// Contract header errors (defined in "types/src/contract_header.rs") will have this value
+/// added to them when being converted to a `u32`.
+const HEADER_ERROR_OFFSET: u32 = (MINT_ERROR_OFFSET - 1) - u8::MAX as u32; // 64768..=65023
 
 /// Errors which can be encountered while running a smart contract.
 ///
@@ -382,6 +386,8 @@ pub enum ApiError {
     HostBufferFull,
     /// Could not lay out an array in memory
     AllocLayout,
+    /// Contract header errors.
+    ContractHeader(u8),
     /// Error specific to Mint contract.
     Mint(u8),
     /// Error specific to Proof of Stake contract.
@@ -452,6 +458,12 @@ impl From<CLValueError> for ApiError {
     }
 }
 
+impl From<contract_header::Error> for ApiError {
+    fn from(error: contract_header::Error) -> Self {
+        ApiError::ContractHeader(error.to_u8())
+    }
+}
+
 // This conversion is not intended to be used by third party crates.
 #[doc(hidden)]
 impl From<TryFromIntError> for ApiError {
@@ -516,6 +528,7 @@ impl From<ApiError> for u32 {
             ApiError::HostBufferEmpty => 33,
             ApiError::HostBufferFull => 34,
             ApiError::AllocLayout => 35,
+            ApiError::ContractHeader(value) => HEADER_ERROR_OFFSET + u32::from(value),
             ApiError::Mint(value) => MINT_ERROR_OFFSET + u32::from(value),
             ApiError::ProofOfStake(value) => POS_ERROR_OFFSET + u32::from(value),
             ApiError::User(value) => RESERVED_ERROR_MAX + 1 + u32::from(value),
@@ -563,6 +576,7 @@ impl Debug for ApiError {
             ApiError::HostBufferEmpty => write!(f, "ApiError::HostBufferEmpty")?,
             ApiError::HostBufferFull => write!(f, "ApiError::HostBufferFull")?,
             ApiError::AllocLayout => write!(f, "ApiError::AllocLayout")?,
+            ApiError::ContractHeader(value) => write!(f, "ApiError::ContractHeader({})", value)?,
             ApiError::Mint(value) => write!(f, "ApiError::Mint({})", value)?,
             ApiError::ProofOfStake(value) => write!(f, "ApiError::ProofOfStake({})", value)?,
             ApiError::User(value) => write!(f, "ApiError::User({})", value)?,
