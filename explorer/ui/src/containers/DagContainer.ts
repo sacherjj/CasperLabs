@@ -60,6 +60,7 @@ enum SubscribeState {
 }
 
 export class DagContainer {
+  // order by jRank desc
   @observable blocks: IObservableArray<BlockInfo> = observable.array([], { deep: true });
   @observable selectedBlock: BlockInfo | undefined = undefined;
   @observable depth = 10;
@@ -178,25 +179,27 @@ export class DagContainer {
                 if (index === -1) {
                   // blocks with rank < maxRank+1-depth will be culled
                   let blockRank = block!.getSummary()!.getHeader()!.getJRank();
-                  let maxRank = Math.max(Math.max(...this.blocks.map(b => b.getSummary()!.getHeader()!.getJRank())), blockRank);
+                  let oldMaxRank = this.blocks ? this.blocks[0].getSummary()!.getHeader()!.getJRank() : 0;
+                  let maxRank = Math.max(oldMaxRank, blockRank);
                   let culledThreshold = maxRank + 1 - this.depth;
                   if (blockRank >= culledThreshold) {
                     // The new block should be added to DAG.
-                    let remainingBlocks: BlockInfo[] = [];
-                    if (this.blocks !== null) {
-                      remainingBlocks = this.blocks.filter(b => {
-                        let rank = b.getSummary()?.getHeader()?.getJRank();
-                        if (rank !== undefined) {
-                          return rank >= culledThreshold;
-                        }
-                        return false;
-                      });
+                    let remainingBlocks = this.blocks ? this.blocks.filter(b => {
+                      let rank = b.getSummary()?.getHeader()?.getJRank();
+                      if (rank !== undefined) {
+                        return rank >= culledThreshold;
+                      }
+                      return false;
+                    }) : [];
+                    // insert item to an ordered array
+                    // find first index I so that the newAddedBlock.jRank >= remainingBlocks[i].jRank
+                    let i = 0;
+                    for (; i < remainingBlocks.length; i++) {
+                      if (blockRank >= remainingBlocks[i].getSummary()!.getHeader()!.getJRank()) {
+                        break;
+                      }
                     }
-                    remainingBlocks.push(block);
-                    // order by desc, so that when showing block in Blocks table, the order is right.
-                    remainingBlocks.sort((a, b) => {
-                      return -1 * (a.getSummary()!.getHeader()!.getJRank() - b.getSummary()!.getHeader()!.getJRank());
-                    });
+                    remainingBlocks.splice(i, 0, block);
                     runInAction(() => {
                       this.blocks.replace(remainingBlocks);
                     });
