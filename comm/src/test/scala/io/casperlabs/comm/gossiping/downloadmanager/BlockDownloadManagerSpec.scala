@@ -1,4 +1,4 @@
-package io.casperlabs.comm.gossiping
+package io.casperlabs.comm.gossiping.downloadmanager
 
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -11,8 +11,9 @@ import io.casperlabs.comm.GossipError
 import io.casperlabs.comm.discovery.Node
 import io.casperlabs.comm.discovery.NodeUtils.showNode
 import io.casperlabs.comm.gossiping.downloadmanager.BlockDownloadManagerImpl._
-import io.casperlabs.comm.gossiping.downloadmanager._
+import io.casperlabs.comm.gossiping.relaying.BlockRelaying
 import io.casperlabs.comm.gossiping.synchronization.Synchronizer
+import io.casperlabs.comm.gossiping._
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.models.BlockImplicits.BlockOps
 import io.casperlabs.shared.{Log, LogStub}
@@ -26,6 +27,11 @@ import org.scalatest._
 import scala.concurrent.TimeoutException
 import scala.concurrent.duration._
 
+/**
+  * TODO: Uses [[BlockDownloadManagerImpl]] for testing.
+  * It's ok for now, because the most of the code shared between [[DeployDownloadManagerImpl]].
+  * However, if it's going to change, then we'll need to revisit this.
+  */
 class BlockDownloadManagerSpec
     extends WordSpecLike
     with Matchers
@@ -705,7 +711,7 @@ object BlockDownloadManagerSpec {
     def apply(validate: Block => Task[Unit] = _ => Task.unit) = new MockBackend(validate)
   }
 
-  class MockRelaying extends Relaying[Task] {
+  class MockRelaying extends BlockRelaying[Task] {
     @volatile var relayed = Vector.empty[ByteString]
 
     override def relay(hashes: List[ByteString]): Task[Task[Unit]] = Task.delay {

@@ -10,11 +10,12 @@ import io.casperlabs.casper.consensus.{Deploy, DeploySummary}
 import io.casperlabs.comm.discovery.Node
 import io.casperlabs.comm.gossiping._
 import io.casperlabs.comm.gossiping.downloadmanager.DeployDownloadManagerImpl.RetriesConf
+import io.casperlabs.comm.gossiping.relaying.DeployRelaying
 import io.casperlabs.crypto.codec.ByteArraySyntax
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.shared.Log
-import monix.tail.Iterant
 import monix.execution.Scheduler
+import monix.tail.Iterant
 
 trait DeployDownloadManager[F[_]] extends DownloadManager[F] {
   override type Handle       = DeploySummary
@@ -35,7 +36,7 @@ object DeployDownloadManagerImpl extends DownloadManagerCompanion {
       maxParallelDownloads: Int,
       connectToGossip: GossipService.Connector[F],
       backend: Backend[F],
-      relaying: Relaying[F],
+      relaying: DeployRelaying[F],
       retriesConf: RetriesConf,
       egressScheduler: Scheduler
   ): Resource[F, DeployDownloadManager[F]] =
@@ -92,7 +93,7 @@ class DeployDownloadManagerImpl[F[_]](
     // Establish gRPC connection to another node.
     val connectToGossip: GossipService.Connector[F],
     val backend: DeployDownloadManagerImpl.Backend[F],
-    val relaying: Relaying[F],
+    val relaying: DeployRelaying[F],
     val retriesConf: RetriesConf,
     val egressScheduler: Scheduler
 )(

@@ -1,55 +1,49 @@
 package io.casperlabs.casper
 
+import cats.Applicative
 import cats.data.NonEmptyList
-import cats.effect.{Concurrent, Sync}
 import cats.effect.concurrent.{Ref, Semaphore}
+import cats.effect.{Concurrent, Sync}
 import cats.implicits._
 import cats.mtl.FunctorRaise
-import cats.Applicative
 import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.DeploySelection.DeploySelection
-import io.casperlabs.casper.Estimator.BlockHash
-import io.casperlabs.casper.api.BlockAPI
+import io.casperlabs.casper.consensus.Block.Justification
 import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.consensus.state.ProtocolVersion
-import io.casperlabs.casper.consensus.Block.Justification
-import io.casperlabs.casper.consensus.info.BlockInfo
+import io.casperlabs.casper.dag.{BlockDependencyDag, DoublyLinkedDag}
 import io.casperlabs.casper.equivocations.EquivocationDetector
-import io.casperlabs.casper.finality.MultiParentFinalizer.FinalizedBlocks
 import io.casperlabs.casper.finality.MultiParentFinalizer
+import io.casperlabs.casper.finality.MultiParentFinalizer.FinalizedBlocks
 import io.casperlabs.casper.finality.votingmatrix.FinalityDetectorVotingMatrix
-import io.casperlabs.casper.util._
-import io.casperlabs.casper.util.ProtocolVersions.Config
 import io.casperlabs.casper.util.ProtoUtil._
+import io.casperlabs.casper.util.ProtocolVersions.Config
+import io.casperlabs.casper.util._
 import io.casperlabs.casper.util.execengine.ExecEngineUtil
 import io.casperlabs.casper.validation.Errors._
 import io.casperlabs.casper.validation.Validation
 import io.casperlabs.casper.validation.Validation.BlockEffects
-import io.casperlabs.catscontrib._
 import io.casperlabs.catscontrib.effect.implicits.fiberSyntax
+import io.casperlabs.catscontrib._
 import io.casperlabs.comm.gossiping
 import io.casperlabs.crypto.Keys
-import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.signatures.SignatureAlgorithm
 import io.casperlabs.ipc
 import io.casperlabs.mempool.DeployBuffer
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.implicits._
-import io.casperlabs.models.{Message, SmartContractEngineError}
-import Message.{asJRank, asMainRank, JRank, MainRank}
 import io.casperlabs.models.BlockImplicits._
+import io.casperlabs.models.Message.{JRank, MainRank}
+import io.casperlabs.models.{Message, SmartContractEngineError}
+import io.casperlabs.shared.ByteStringPrettyPrinter._
 import io.casperlabs.shared._
 import io.casperlabs.smartcontracts.ExecutionEngineService
-import io.casperlabs.storage.{BlockHash, BlockMsgWithTransform}
+import io.casperlabs.storage.BlockHash
 import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.storage.dag.{DagRepresentation, DagStorage, FinalityStorage}
 import io.casperlabs.storage.deploy.{DeployStorage, DeployStorageReader, DeployStorageWriter}
 import simulacrum.typeclass
-import io.casperlabs.models.BlockImplicits._
-import Sorting._
-import io.casperlabs.casper.dag.{BlockDependencyDag, DoublyLinkedDag}
-import ByteStringPrettyPrinter._
 
 import scala.concurrent.duration.FiniteDuration
 import scala.util.control.NonFatal
@@ -837,7 +831,7 @@ object MultiParentCasperImpl {
     /** Network access using the new RPC style gossiping. */
     def fromGossipServices[F[_]: Applicative](
         validatorId: Option[ValidatorIdentity],
-        relaying: gossiping.Relaying[F]
+        relaying: gossiping.relaying.BlockRelaying[F]
     ): Broadcaster[F] = new Broadcaster[F] {
 
       private val maybeOwnPublicKey = validatorId map {
@@ -853,7 +847,7 @@ object MultiParentCasperImpl {
           case Valid | EquivocatedBlock =>
             maybeOwnPublicKey match {
               case Some(key) if key == block.getHeader.validatorPublicKey =>
-                relaying.relay(List(block.blockHash)).void
+                relaying.relay(block).void
               case _ =>
                 // We were adding somebody else's block. The DownloadManager did the gossiping.
                 ().pure[F]
