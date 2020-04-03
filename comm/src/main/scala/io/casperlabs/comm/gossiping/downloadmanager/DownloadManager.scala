@@ -15,6 +15,7 @@ import io.casperlabs.comm.discovery.Node
 import io.casperlabs.comm.discovery.NodeUtils.showNode
 import io.casperlabs.comm.gossiping.{Chunk, GossipService, Relaying, WaitHandle}
 import io.casperlabs.metrics.Metrics
+import io.casperlabs.metrics.implicits._
 import io.casperlabs.shared.Log._
 import io.casperlabs.shared.{Compression, Log}
 import io.casperlabs.catscontrib.effect.implicits.fiberSyntax
@@ -420,9 +421,7 @@ trait DownloadManagerImpl[F[_]] extends DownloadManager[F] { self =>
       _ <- itemsRef.update(_ + (item.handle.id -> item.copy(isDownloading = true)))
       worker <- Concurrent[F].start {
                  // Indicate how many items are currently being attempted, including their retry wait time.
-                 Metrics[F].gauge("downloads_ongoing") {
-                   download(item.handle.id)
-                 }
+                 download(item.handle.id).timerGauge("downloads")
                }
       _ <- workersRef.update(_ + (item.handle.id -> worker))
     } yield ()
@@ -585,10 +584,10 @@ trait DownloadManagerImpl[F[_]] extends DownloadManager[F] { self =>
 
     // Indicate how many fetches we are trying to do at a time. If it's larger then the semaphore
     // we configured we'd know where we'd have to raise it to allow maximum throughput.
-    Metrics[F].gauge("fetches_ongoing") {
-      semaphore.withPermit {
-        ContextShift[F].evalOn(egressScheduler)(effect)
+    semaphore
+      .withPermit {
+        ContextShift[F].evalOn(egressScheduler)(effect.timerGauge("restore"))
       }
-    }
+      .timerGauge("fetches")
   }
 }
