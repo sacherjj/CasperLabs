@@ -23,6 +23,7 @@ import monix.tail.Iterant
 import monix.execution.Scheduler
 import scala.concurrent.duration.{Duration, FiniteDuration}
 import scala.util.control.NonFatal
+import scala.collection.immutable.Queue
 
 trait DownloadManagerTypes {
 
@@ -132,6 +133,29 @@ trait DownloadManagerCompanion extends DownloadManagerTypes {
 
   /** All dependencies that need to be downloaded before a downloadable. */
   def dependencies(handle: Handle): Seq[Identifier]
+
+  def collectAncestorsForNewSource[F[_]](
+      items: Map[Identifier, Item[F]],
+      id: Identifier,
+      source: Node
+  ): Set[Identifier] = {
+    def loop(
+        acc: Set[Identifier],
+        queue: Queue[Identifier]
+    ): Set[Identifier] =
+      queue.dequeueOption.fold(acc) {
+        case (id, queue) if acc(id) =>
+          loop(acc, queue)
+        case (id, queue) if !items.contains(id) =>
+          loop(acc, queue)
+        case (id, queue) if items(id).sources(source) =>
+          loop(acc, queue)
+        case (id, queue) =>
+          loop(acc + id, queue ++ items(id).dependencies)
+      }
+
+    loop(Set.empty, Queue(id)) - id
+  }
 }
 
 /** Manages the download, validation, storing and gossiping of [[DownloadManagerTypes#Downloadable]].*/
@@ -257,14 +281,9 @@ trait DownloadManagerImpl[F[_]] extends DownloadManager[F] { self =>
         ().pure[F].pure[F]
 
       case items =>
-        val item        = items(id)
-        val waiter      = scheduleDownload(item.handle, source, relay = false)
-        val isNewSource = !item.sources(source)
-        if (isNewSource) {
-          item.dependencies.toVector.traverse(addSource(_, source)) >> waiter
-        } else {
-          waiter
-        }
+        val ancestors = collectAncestorsForNewSource(items, id, source)
+        ancestors.toVector.traverse(addSource(_, source)) >>
+          scheduleDownload(items(id).handle, source, relay = false)
     }
 
   /** Run the manager loop which listens to signals and starts workers when it can. */
