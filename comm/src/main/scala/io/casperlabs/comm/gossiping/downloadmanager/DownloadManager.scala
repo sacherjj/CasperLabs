@@ -147,6 +147,12 @@ trait DownloadManager[F[_]] extends DownloadManagerTypes {
     * The unwrapped `F[Unit]` _inside_ the `F[F[Unit]]` can be used to
     * wait until the actual download finishes, or results in an error. */
   def scheduleDownload(handle: Handle, source: Node, relay: Boolean): F[WaitHandle[F]]
+
+  /** Check if an item has already been scheduled for download. */
+  def isScheduled(id: Identifier): F[Boolean]
+
+  /** Add a new source to an existing schedule and all of its dependencies. */
+  def addSource(id: Identifier, source: Node): F[Vector[WaitHandle[F]]]
 }
 
 trait DownloadManagerImpl[F[_]] extends DownloadManager[F] { self =>
@@ -229,7 +235,7 @@ trait DownloadManagerImpl[F[_]] extends DownloadManager[F] { self =>
     *
     * The unwrapped `F[Unit]` _inside_ the `F[F[Unit]]` can be used to
     * wait until the actual download finishes, or results in an error. */
-  def scheduleDownload(handle: Handle, source: Node, relay: Boolean): F[WaitHandle[F]] =
+  override def scheduleDownload(handle: Handle, source: Node, relay: Boolean): F[WaitHandle[F]] =
     for {
       // Fail rather than block forever.
       _ <- ensureNotShutdown
@@ -238,6 +244,24 @@ trait DownloadManagerImpl[F[_]] extends DownloadManager[F] { self =>
       _  <- signal.put(Signal.Download(handle, source, relay, sf))
       df <- Sync[F].rethrow(sf.get)
     } yield Sync[F].rethrow(df.get)
+
+  /** Try to add an alternative source to an existing download.
+    * The caller is supposed to check before with `isScheduled` whether this makes sense.
+    * If the item is no longer scheduled (because it has been downloaded),
+    * then return a completed wait handle.
+    */
+  override def addSource(id: Identifier, source: Node): F[Vector[WaitHandle[F]]] =
+    itemsRef.get.flatMap {
+      case items if !items.contains(id) =>
+        Vector(().pure[F]).pure[F]
+
+      case items =>
+        val item = items(id)
+        for {
+          wss <- item.dependencies.toVector.traverse(addSource(_, source))
+          w   <- scheduleDownload(item.handle, source, relay = false)
+        } yield wss.flatten :+ w
+    }
 
   /** Run the manager loop which listens to signals and starts workers when it can. */
   def run: F[Unit] =
@@ -384,7 +408,7 @@ trait DownloadManagerImpl[F[_]] extends DownloadManager[F] { self =>
         )
     }
 
-  private def isScheduled(id: Identifier): F[Boolean] =
+  override def isScheduled(id: Identifier): F[Boolean] =
     itemsRef.get.map(_ contains id)
 
   private def isDownloaded(id: Identifier): F[Boolean] =

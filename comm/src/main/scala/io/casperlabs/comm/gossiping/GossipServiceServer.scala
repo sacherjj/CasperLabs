@@ -35,6 +35,12 @@ class GossipServiceServer[F[_]: Concurrent: Parallel: Log: Metrics](
 ) extends GossipService[F] {
   import GossipServiceServer._
 
+  case class NewBlocksInfo(
+      blockHash: ByteString,
+      isScheduled: Boolean,
+      isDownloaded: Boolean
+  )
+
   //TODO: Rate limit here as well?
   def newDeploys(request: NewDeploysRequest): F[NewDeploysResponse] =
     // Filter out the deploys which we don't have yet;
@@ -107,15 +113,19 @@ class GossipServiceServer[F[_]: Concurrent: Parallel: Log: Metrics](
       start: (Option[F[Either[SyncError, Vector[WaitHandle[F]]]]], NewBlocksResponse) => F[T]
   ): F[T] =
     request.blockHashes.distinct.toList
-      .filterA { blockHash =>
-        backend.hasBlock(blockHash).map(!_)
+      .traverse { blockHash =>
+        for {
+          isScheduled  <- blockDownloadManager.isScheduled(blockHash)
+          isDownloaded <- if (isScheduled) false.pure[F] else backend.hasBlock(blockHash)
+        } yield NewBlocksInfo(blockHash, isScheduled, isDownloaded)
       }
-      .flatMap { newBlockHashes =>
-        if (newBlockHashes.isEmpty) {
+      .map(_.filterNot(_.isDownloaded))
+      .flatMap { newBlocks =>
+        if (newBlocks.isEmpty) {
           start(none, NewBlocksResponse(isNew = false))
         } else {
           start(
-            sync(request.getSender, newBlockHashes.toSet, skipRelaying).some,
+            sync(request.getSender, newBlocks.toSet, skipRelaying).some,
             NewBlocksResponse(isNew = true)
           )
         }
@@ -128,7 +138,7 @@ class GossipServiceServer[F[_]: Concurrent: Parallel: Log: Metrics](
     * asynchronously in the background. */
   private def sync(
       source: Node,
-      newBlockHashes: Set[ByteString],
+      newBlocks: Set[NewBlocksInfo],
       skipRelaying: Boolean
   ): F[Either[SyncError, Vector[WaitHandle[F]]]] = {
     def logSyncError(syncError: SyncError) = {
@@ -139,18 +149,34 @@ class GossipServiceServer[F[_]: Concurrent: Parallel: Log: Metrics](
 
     val trySync: F[Either[SyncError, Vector[WaitHandle[F]]]] = for {
       _ <- Log[F].debug(
-            s"Received notification about ${newBlockHashes.size} new block(s) from ${source.show -> "peer"}: ${newBlockHashes
+            s"Received notification about ${newBlocks.size} new block(s) from ${source.show -> "peer"}: ${newBlocks
+              .map(_.blockHash)
               .map(Utils.hex)
               .mkString(", ") -> "blocks"}"
           )
-      errorOrDag <- synchronizer.syncDag(
-                     source = source,
-                     targetBlockHashes = newBlockHashes
-                   )
+
+      newBlockHashes           = newBlocks.map(_.blockHash)
+      (scheduled, unscheduled) = newBlocks.partition(_.isScheduled)
+
+      // Add the source as alternatives for already scheduled items.
+      oldWaiters <- scheduled
+                     .map(_.blockHash)
+                     .toVector
+                     .traverse(blockDownloadManager.addSource(_, source))
+                     .map(_.flatten)
+
+      // Sync only what hasn't been scheduled yet.
+      errorOrDag <- if (unscheduled.nonEmpty)
+                     synchronizer.syncDag(
+                       source = source,
+                       targetBlockHashes = unscheduled.map(_.blockHash)
+                     )
+                   else Vector.empty[BlockSummary].asRight[Synchronizer.SyncError].pure[F]
+
       errorOrWaiters <- errorOrDag.fold(
                          syncError => logSyncError(syncError), { dag =>
                            Log[F].debug(
-                             s"Syncing ${dag.size} blocks with ${source.show -> "peer"}"
+                             s"Synced ${dag.size} blocks with ${source.show -> "peer"}"
                            ) *>
                              dag.traverse { summary =>
                                blockDownloadManager.scheduleDownload(
@@ -158,8 +184,8 @@ class GossipServiceServer[F[_]: Concurrent: Parallel: Log: Metrics](
                                  source = source,
                                  relay = !skipRelaying && newBlockHashes(summary.blockHash)
                                )
-                             } map { waiters =>
-                             waiters.asRight[SyncError]
+                             } map { newWaiters =>
+                             (oldWaiters ++ newWaiters).asRight[SyncError]
                            }
                          }
                        )
