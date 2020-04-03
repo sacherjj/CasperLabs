@@ -1181,7 +1181,7 @@ class GrpcGossipServiceSpec
 
                   val downloadManager = new DeployDownloadManager[Task] {
                     @volatile var scheduled = Vector.empty[ByteString]
-                    def scheduleDownload(
+                    override def scheduleDownload(
                         summary: DeploySummary,
                         source: Node,
                         relay: Boolean
@@ -1193,6 +1193,9 @@ class GrpcGossipServiceSpec
                       }
                       Task.now(Task.unit)
                     }
+                    override def isScheduled(id: ByteString) = false.pure[Task]
+                    override def addSource(id: ByteString, source: Node) =
+                      Vector(Task.unit).pure[Task]
                   }
 
                   TestEnvironment(
@@ -1308,7 +1311,11 @@ class GrpcGossipServiceSpec
 
                   val downloadManager = new BlockDownloadManager[Task] {
                     @volatile var scheduled = Vector.empty[ByteString]
-                    def scheduleDownload(summary: BlockSummary, source: Node, relay: Boolean) = {
+                    override def scheduleDownload(
+                        summary: BlockSummary,
+                        source: Node,
+                        relay: Boolean
+                    ) = {
                       source shouldBe node
                       unknownBlocks.map(_.blockHash) should contain(summary.blockHash)
                       if (relay) {
@@ -1321,6 +1328,9 @@ class GrpcGossipServiceSpec
                       }
                       Task.now(Task.unit)
                     }
+                    override def isScheduled(id: ByteString) = false.pure[Task]
+                    override def addSource(id: ByteString, source: Node) =
+                      Vector(Task.unit).pure[Task]
                   }
 
                   TestEnvironment(
@@ -1549,51 +1559,11 @@ object GrpcGossipServiceSpec extends TestRuntime with ArbitraryConsensusAndComm 
   }
 
   object TestEnvironment {
-    trait EmptyGossipService extends GossipService[Task] {
-      override def newDeploys(request: NewDeploysRequest): Task[NewDeploysResponse] = ???
-      override def newBlocks(request: NewBlocksRequest): Task[NewBlocksResponse]    = ???
-      override def streamAncestorBlockSummaries(
-          request: StreamAncestorBlockSummariesRequest
-      ): Iterant[Task, BlockSummary] = ???
-      override def streamLatestMessages(
-          request: StreamLatestMessagesRequest
-      ): Iterant[Task, Block.Justification] = ???
-      override def streamBlockSummaries(
-          request: StreamBlockSummariesRequest
-      ): Iterant[Task, BlockSummary] = ???
-      override def streamDeploySummaries(
-          request: StreamDeploySummariesRequest
-      ): Iterant[Task, DeploySummary]                                                     = ???
-      override def getBlockChunked(request: GetBlockChunkedRequest): Iterant[Task, Chunk] = ???
-      override def streamDeploysChunked(
-          request: StreamDeploysChunkedRequest
-      ): Iterant[Task, Chunk] = ???
-      override def getGenesisCandidate(
-          request: GetGenesisCandidateRequest
-      ): Task[GenesisCandidate]                                         = ???
-      override def addApproval(request: AddApprovalRequest): Task[Unit] = ???
-      override def streamDagSliceBlockSummaries(
-          request: StreamDagSliceBlockSummariesRequest
-      ): Iterant[Task, BlockSummary] = ???
-    }
-
-    private val emptySynchronizer = new Synchronizer[Task] {
-      def syncDag(source: Node, targetBlockHashes: Set[ByteString])    = ???
-      def onDownloaded(blockHash: ByteString): Task[Unit]              = ???
-      def onFailed(blockHash: ByteString): Task[Unit]                  = ???
-      def onScheduled(summary: BlockSummary, source: Node): Task[Unit] = ???
-    }
-    private val emptyDeployDownloadManager = new DeployDownloadManager[Task] {
-      def scheduleDownload(summary: DeploySummary, source: Node, relay: Boolean) = ???
-    }
-    private val emptyBlockDownloadManager = new BlockDownloadManager[Task] {
-      def scheduleDownload(summary: BlockSummary, source: Node, relay: Boolean) = ???
-    }
-    private val emptyGenesisApprover = new GenesisApprover[Task] {
-      def getCandidate                                           = ???
-      def addApproval(blockHash: ByteString, approval: Approval) = ???
-      def awaitApproval                                          = ???
-    }
+    trait EmptyGossipService extends NoOpsGossipService[Task]
+    private val emptySynchronizer          = new NoOpsSynchronizer[Task]          {}
+    private val emptyDeployDownloadManager = new NoOpsDeployDownloadManager[Task] {}
+    private val emptyBlockDownloadManager  = new NoOpsBlockDownloadManager[Task]  {}
+    private val emptyGenesisApprover       = new NoOpsGenesisApprover[Task]       {}
 
     private def defaultBackend(testDataRef: AtomicReference[TestData]) =
       new GossipServiceServer.Backend[Task] {

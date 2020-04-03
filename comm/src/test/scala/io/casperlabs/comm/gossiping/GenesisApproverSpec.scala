@@ -478,11 +478,8 @@ object GenesisApproverSpec extends ArbitraryConsensusAndComm {
   val correctApproval = sample(arbitrary[Approval])
     .withApproverPublicKey(genesis.getHeader.getState.bonds.last.validatorPublicKey)
 
-  class MockNodeDiscovery(peers: List[Node]) extends NodeDiscovery[Task] {
-    override def discover                            = ???
-    override def lookup(id: NodeIdentifier)          = ???
+  class MockNodeDiscovery(peers: List[Node]) extends NoOpsNodeDiscovery[Task] {
     override def recentlyAlivePeersAscendingDistance = Task.now(peers)
-    override def banTemp(node: Node): Task[Unit]     = ???
   }
 
   class MockGossipService extends NoOpsGossipService[Task]
@@ -522,6 +519,9 @@ object GenesisApproverSpec extends ArbitraryConsensusAndComm {
         downloaded = true
         Task.unit
       }
+    override def isScheduled(id: ByteString): Task[Boolean] = false.pure[Task]
+    override def addSource(id: ByteString, source: Node): Task[Vector[Task[Unit]]] =
+      Vector(Task.unit).pure[Task]
     override def validateCandidate(block: Block)                           = Task.now(Right(none[Approval]))
     override def canTransition(block: Block, signatories: Set[ByteString]) = true
     override def validateSignature(
