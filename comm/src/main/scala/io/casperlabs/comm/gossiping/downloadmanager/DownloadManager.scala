@@ -168,6 +168,7 @@ trait DownloadManagerCompanion extends DownloadManagerTypes {
 
     loop(Set.empty, Queue(id)) - id
   }
+
 }
 
 /** Manages the download, validation, storing and gossiping of [[DownloadManagerTypes#Downloadable]].*/
@@ -293,9 +294,12 @@ trait DownloadManagerImpl[F[_]] extends DownloadManager[F] { self =>
         ().pure[F].pure[F]
 
       case items =>
-        val ancestors = collectAncestorsForNewSource(items, id, source)
-        ancestors.toVector.traverse(addSource(_, source)) >>
+        def schedule(id: Identifier) =
           scheduleDownload(items(id).handle, source, relay = false)
+
+        val ancestors = collectAncestorsForNewSource(items, id, source)
+
+        ancestors.toList.traverse(schedule) >> schedule(id)
     }
 
   /** Run the manager loop which listens to signals and starts workers when it can. */
