@@ -69,3 +69,17 @@ export const signDeploy = (
 
   return deploy;
 };
+
+export const setSignature = (deploy: Deploy, sig: ByteArray, publicKey: ByteArray): Deploy => {
+  const signature = new Signature();
+  signature.setSigAlgorithm('ed25519');
+  signature.setSig(sig);
+
+  const approval = new Approval();
+  approval.setApproverPublicKey(publicKey);
+  approval.setSignature(signature);
+
+  deploy.setApprovalsList([approval]);
+
+  return deploy;
+};
