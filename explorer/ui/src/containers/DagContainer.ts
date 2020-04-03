@@ -176,22 +176,33 @@ export class DagContainer {
                 );
 
                 if (index === -1) {
-                  // blocks with rank < N+1-depth will be culled
-                  let culledThreshold = block!.getSummary()!.getHeader()!.getJRank() + 1 - this.depth;
-                  let remainingBlocks: BlockInfo[] = [];
-                  if (this.blocks !== null) {
-                    remainingBlocks = this.blocks.filter(b => {
-                      let rank = b.getSummary()?.getHeader()?.getJRank();
-                      if (rank !== undefined) {
-                        return rank >= culledThreshold;
-                      }
-                      return false;
+                  // blocks with rank < maxRank+1-depth will be culled
+                  let blockRank = block!.getSummary()!.getHeader()!.getJRank();
+                  let maxRank = Math.max(Math.max(...this.blocks.map(b => b.getSummary()!.getHeader()!.getJRank())), blockRank);
+                  let culledThreshold = maxRank + 1 - this.depth;
+                  if (blockRank >= culledThreshold) {
+                    // The new block should be added to DAG.
+                    let remainingBlocks: BlockInfo[] = [];
+                    if (this.blocks !== null) {
+                      remainingBlocks = this.blocks.filter(b => {
+                        let rank = b.getSummary()?.getHeader()?.getJRank();
+                        if (rank !== undefined) {
+                          return rank >= culledThreshold;
+                        }
+                        return false;
+                      });
+                    }
+                    remainingBlocks.push(block);
+                    // order by desc, so that when showing block in Blocks table, the order is right.
+                    remainingBlocks.sort((a, b) => {
+                      return -1 * (a.getSummary()!.getHeader()!.getJRank() - b.getSummary()!.getHeader()!.getJRank());
                     });
+                    runInAction(() => {
+                      this.blocks.replace(remainingBlocks);
+                    });
+                  }else{
+                    // otherwise ignore the new block and do nothing
                   }
-                  remainingBlocks.splice(0, 0, block!);
-                  runInAction(() => {
-                    this.blocks.replace(remainingBlocks);
-                  });
                 }
               }
             } else if (event.hasNewFinalizedBlock()) {
@@ -204,7 +215,7 @@ export class DagContainer {
               this.blocks?.forEach(block => {
                 let bh = block.getSummary()!.getBlockHash_asB64();
                 if (finalizedBlocks.has(bh)) {
-                  block.getStatus()?.setFinality(BlockInfo.Status.Finality.FINALIZED)
+                  block.getStatus()?.setFinality(BlockInfo.Status.Finality.FINALIZED);
                 }
                 if (!updatedLastFinalizedBlock && bh === directFinalizedBlockHash) {
                   this.lastFinalizedBlock = block;
