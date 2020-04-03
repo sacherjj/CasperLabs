@@ -1468,11 +1468,17 @@ where
             .export_section()
             .ok_or_else(|| Error::FunctionNotFound(String::from("Missing Export Section")))?;
 
-        let maybe_missing_name: Option<String> = export_section
-            .entries()
+        let maybe_missing_name: Option<String> = header
+            .method_names()
             .iter()
-            .map(|export_entry| String::from(export_entry.field()))
-            .find(|name| !header.has_method_name(name.as_str()));
+            .find(|name| {
+                export_section
+                    .entries()
+                    .iter()
+                    .find(|export_entry| export_entry.field() == **name)
+                    .is_none()
+            })
+            .map(|s| String::from(*s));
 
         if let Some(missing_name) = maybe_missing_name {
             Err(Error::FunctionNotFound(missing_name).into())
