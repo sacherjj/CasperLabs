@@ -158,12 +158,13 @@ trait DownloadManagerCompanion extends DownloadManagerTypes {
       queue.dequeueOption.fold(visited) {
         case (id, queue) if visited(id) =>
           loop(visited, queue)
-        case (id, queue) if !items.contains(id) =>
-          loop(visited, queue)
-        case (id, queue) if items(id).sources(source) =>
-          loop(visited, queue)
         case (id, queue) =>
-          loop(visited + id, queue ++ items(id).dependencies)
+          items.get(id) match {
+            case Some(item) if item.isError || !item.sources(source) =>
+              loop(visited + id, queue ++ item.dependencies)
+            case _ =>
+              loop(visited, queue)
+          }
       }
 
     loop(Set.empty, Queue(id)) - id
