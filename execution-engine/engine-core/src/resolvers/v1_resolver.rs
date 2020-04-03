@@ -189,11 +189,11 @@ impl ModuleImportResolver for RuntimeModuleImportResolver {
                 FunctionIndex::ReadHostBufferIndex.into(),
             ),
             "create_contract" => FuncInstance::alloc_host(
-                Signature::new(&[ValueType::I32; 1][..], None),
+                Signature::new(&[ValueType::I32; 2][..], None),
                 FunctionIndex::CreateContract.into(),
             ),
             "create_contract_at_hash" => FuncInstance::alloc_host(
-                Signature::new(&[ValueType::I32; 1][..], None),
+                Signature::new(&[ValueType::I32; 2][..], None),
                 FunctionIndex::CreateContractAtHash.into(),
             ),
             "add_contract_version" => FuncInstance::alloc_host(

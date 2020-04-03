@@ -119,23 +119,31 @@ pub fn add_local<K: ToBytes, V: CLTyped + ToBytes>(key: K, value: V) {
 /// Create a new (versioned) contract stored under a Key::URef. Initially there
 /// are no versions; a version must be added via `add_contract_version` before
 /// the contract can be executed.
-pub fn create_contract() -> ContractRef {
-    let mut addr = [0u8; 32];
+pub fn create_contract() -> (ContractRef, URef) {
+    let mut uref_addr = [0u8; 32];
+    let mut access_addr = [0u8; 32];
     unsafe {
-        ext_ffi::create_contract(addr.as_mut_ptr());
+        ext_ffi::create_contract(uref_addr.as_mut_ptr(), access_addr.as_mut_ptr());
     }
-    ContractRef::URef(URef::new(addr, AccessRights::READ_ADD_WRITE))
+    let contract_ref = ContractRef::URef(URef::new(uref_addr, AccessRights::READ_ADD_WRITE));
+    let access_key = URef::new(access_addr, AccessRights::READ_ADD_WRITE);
+
+    (contract_ref, access_key)
 }
 
 /// Create a new (versioned) contract stored under a Key::Hash. Initially there
 /// are no versions; a version must be added via `add_contract_version` before
 /// the contract can be executed.
-pub fn create_contract_at_hash() -> ContractRef {
-    let mut addr = [0u8; 32];
+pub fn create_contract_at_hash() -> (ContractRef, URef) {
+    let mut hash_addr = [0u8; 32];
+    let mut access_addr = [0u8; 32];
     unsafe {
-        ext_ffi::create_contract_at_hash(addr.as_mut_ptr());
+        ext_ffi::create_contract_at_hash(hash_addr.as_mut_ptr(), access_addr.as_mut_ptr());
     }
-    ContractRef::Hash(addr)
+    let contract_ref = ContractRef::Hash(hash_addr);
+    let access_key = URef::new(access_addr, AccessRights::READ_ADD_WRITE);
+
+    (contract_ref, access_key)
 }
 
 /// Add a new version of a contract to the contract stored at the given

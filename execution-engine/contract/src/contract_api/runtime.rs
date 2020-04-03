@@ -77,7 +77,7 @@ pub fn call_contract<A: ArgsParser, T: CLTyped + FromBytes>(c_ptr: ContractRef, 
 pub fn call_versioned_contract<A: ArgsParser, T: CLTyped + FromBytes>(
     c_ptr: ContractRef,
     version: SemVer,
-    method: String,
+    method: &str,
     args: A,
 ) -> T {
     let contract_key: Key = c_ptr.into();

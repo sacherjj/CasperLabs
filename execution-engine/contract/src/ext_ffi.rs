@@ -104,8 +104,8 @@ extern "C" {
     ) -> i32;
     pub fn get_main_purse(dest_ptr: *mut u8);
     pub fn read_host_buffer(dest_ptr: *mut u8, dest_size: usize, bytes_written: *mut usize) -> i32;
-    pub fn create_contract(addr_ptr: *mut u8);
-    pub fn create_contract_at_hash(addr_ptr: *mut u8);
+    pub fn create_contract(uref_addr_ptr: *mut u8, access_addr_ptr: *mut u8);
+    pub fn create_contract_at_hash(hash_addr_ptr: *mut u8, access_addr_ptr: *mut u8);
     pub fn add_contract_version(
         meta_ptr: *const u8,
         meta_size: usize,

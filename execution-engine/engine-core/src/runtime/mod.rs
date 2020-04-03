@@ -2279,7 +2279,7 @@ where
         Ok(new_hash)
     }
 
-    fn create_contract_value(&mut self) -> Result<CLValue, Error> {
+    fn create_contract_value(&mut self) -> Result<(CLValue, URef), Error> {
         let cl_unit = CLValue::from_components(CLType::Unit, Vec::new());
         let access_key = self
             .context
@@ -2288,27 +2288,29 @@ where
             .expect("new_uref must always produce a Key::URef");
         let contract = ContractMetadata::new(access_key);
 
-        CLValue::from_t(contract).map_err(|err| Error::CLValue(err))
+        let value = CLValue::from_t(contract).map_err(|err| Error::CLValue(err))?;
+
+        Ok((value, access_key))
     }
 
-    fn create_contract(&mut self) -> Result<[u8; 32], Error> {
-        let cl_value = self.create_contract_value()?;
+    fn create_contract(&mut self) -> Result<([u8; 32], [u8; 32]), Error> {
+        let (cl_value, access_key) = self.create_contract_value()?;
         let key = self.context.new_uref(StoredValue::CLValue(cl_value))?;
 
         let addr = key
             .into_uref()
             .map(|u| u.addr())
             .expect("new_uref must always produce a Key::URef");
-        Ok(addr)
+        Ok((addr, access_key.addr()))
     }
 
-    fn create_contract_at_hash(&mut self) -> Result<[u8; 32], Error> {
+    fn create_contract_at_hash(&mut self) -> Result<([u8; 32], [u8; 32]), Error> {
         let addr = self.context.new_function_address()?;
         let key = Key::Hash(addr);
-        let cl_value = self.create_contract_value()?;
+        let (cl_value, access_key) = self.create_contract_value()?;
 
         self.context.write_gs(key, StoredValue::CLValue(cl_value))?;
-        Ok(addr)
+        Ok((addr, access_key.addr()))
     }
 
     fn add_contract_version(
