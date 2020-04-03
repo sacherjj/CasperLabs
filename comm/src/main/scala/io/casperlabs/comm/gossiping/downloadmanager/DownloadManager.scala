@@ -152,18 +152,18 @@ trait DownloadManagerCompanion extends DownloadManagerTypes {
       source: Node
   ): Set[Identifier] = {
     def loop(
-        visited: Set[Identifier],
+        acc: Set[Identifier],
         queue: Queue[Identifier]
     ): Set[Identifier] =
-      queue.dequeueOption.fold(visited) {
-        case (id, queue) if visited(id) =>
-          loop(visited, queue)
+      queue.dequeueOption.fold(acc) {
+        case (id, queue) if acc(id) =>
+          loop(acc, queue)
         case (id, queue) =>
           items.get(id) match {
             case Some(item) if item.isError || !item.sources(source) =>
-              loop(visited + id, queue ++ item.dependencies)
+              loop(acc + id, queue ++ item.dependencies)
             case _ =>
-              loop(visited, queue)
+              loop(acc, queue)
           }
       }
 
@@ -178,18 +178,18 @@ trait DownloadManagerCompanion extends DownloadManagerTypes {
       id: Identifier
   ): Set[Identifier] = {
     def loop(
-        visited: Set[Identifier],
+        acc: Set[Identifier],
         queue: Queue[Identifier]
     ): Set[Identifier] =
-      queue.dequeueOption.fold(visited) {
-        case (id, queue) if visited(id) =>
-          loop(visited, queue)
+      queue.dequeueOption.fold(acc) {
+        case (id, queue) if acc(id) =>
+          loop(acc, queue)
 
         case (id, queue) =>
           val dependants = items.collect {
             case (hash, dep) if dep.dependencies contains id => hash
           }
-          loop(visited + id, queue ++ dependants)
+          loop(acc + id, queue ++ dependants)
       }
 
     loop(Set.empty, Queue(id)) - id
