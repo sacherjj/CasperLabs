@@ -1,6 +1,6 @@
-package io.casperlabs.comm.gossiping
+package io.casperlabs.comm.gossiping.relaying
 
-import cats.{Monad, Parallel}
+import cats.Parallel
 import cats.effect._
 import cats.effect.implicits._
 import cats.implicits._
@@ -9,69 +9,39 @@ import io.casperlabs.comm.NodeAsk
 import io.casperlabs.comm.discovery.NodeUtils._
 import io.casperlabs.comm.discovery.{Node, NodeDiscovery}
 import io.casperlabs.comm.gossiping.Utils._
+import io.casperlabs.comm.gossiping.{GossipService, WaitHandle}
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.implicits._
 import io.casperlabs.shared.Log
+import monix.execution.Scheduler
 import simulacrum.typeclass
 
 import scala.util.Random
-import monix.execution.Scheduler
 
 @typeclass
 trait Relaying[F[_]] {
 
-  /** Notify peers about the availability of some blocks.
+  /** Notify peers about the availability of some data by hashes (blocks or deploys).
     * Return a handle that can be waited upon. */
   def relay(hashes: List[ByteString]): F[WaitHandle[F]]
 }
 
-object RelayingImpl {
-  implicit val metricsSource: Metrics.Source = Metrics.Source(GossipingMetricsSource, "Relaying")
+abstract class RelayingImpl[F[_]: ContextShift: Concurrent: Parallel: Log: Metrics: NodeAsk](
+    val egressScheduler: Scheduler,
+    val nodeDiscovery: NodeDiscovery[F],
+    val connectToGossip: Node => F[GossipService[F]],
+    val relayFactor: Int,
+    val maxToTry: Int,
+    val isSynchronous: Boolean
+)(implicit val metricsSource: Metrics.Source)
+    extends Relaying[F] {
 
-  /** Export base 0 values so we have non-empty series for charts. */
-  def establishMetrics[F[_]: Monad: Metrics] =
-    for {
-      _ <- Metrics[F].incrementCounter("relay_accepted", 0)
-      _ <- Metrics[F].incrementCounter("relay_rejected", 0)
-      _ <- Metrics[F].incrementCounter("relay_failed", 0)
-    } yield ()
-
-  def apply[F[_]: ContextShift: Concurrent: Parallel: Log: Metrics: NodeAsk](
-      egressScheduler: Scheduler,
-      nodeDiscovery: NodeDiscovery[F],
-      connectToGossip: GossipService.Connector[F],
-      relayFactor: Int,
-      relaySaturation: Int,
-      isSynchronous: Boolean = false
-  ): Relaying[F] = {
-    val maxToTry = if (relaySaturation == 100) {
-      Int.MaxValue
-    } else {
-      (relayFactor * 100) / (100 - relaySaturation)
-    }
-    new RelayingImpl[F](
-      egressScheduler,
-      nodeDiscovery,
-      connectToGossip,
-      relayFactor,
-      maxToTry,
-      isSynchronous
-    )
-  }
-}
-
-/**
-  * https://techspec.casperlabs.io/technical-details/global-state/communications#picking-nodes-for-gossip
-  */
-class RelayingImpl[F[_]: ContextShift: Concurrent: Parallel: Log: Metrics: NodeAsk](
-    egressScheduler: Scheduler,
-    nodeDiscovery: NodeDiscovery[F],
-    connectToGossip: Node => F[GossipService[F]],
-    relayFactor: Int,
-    maxToTry: Int,
-    isSynchronous: Boolean
-) extends Relaying[F] {
-  import RelayingImpl._
+  /**
+    * @return 'true' if at least one item is new to a peer and 'false' if all items already known by peer
+    */
+  def request(gossipService: GossipService[F], local: Node, hashes: List[ByteString]): F[Boolean]
+  // For logs
+  val requestName: String
 
   override def relay(hashes: List[ByteString]): F[WaitHandle[F]] = {
     def loop(hash: ByteString, peers: List[Node], relayed: Int, contacted: Int): F[Unit] = {
@@ -105,12 +75,10 @@ class RelayingImpl[F[_]: ContextShift: Concurrent: Parallel: Log: Metrics: NodeA
     (for {
       service <- connectToGossip(peer)
       local   <- NodeAsk[F].ask
-      response <- ContextShift[F].evalOn(egressScheduler) {
-                   service.newBlocks(
-                     NewBlocksRequest(sender = local.some, blockHashes = List(hash))
-                   )
-                 }
-      counter <- if (response.isNew)
+      isNew <- ContextShift[F].evalOn(egressScheduler) {
+                request(service, local, List(hash))
+              }
+      counter <- if (isNew)
                   Log[F]
                     .debug(s"${peer.show -> "peer"} accepted ${hex(hash) -> "message"}")
                     .as("relay_accepted")
@@ -119,9 +87,9 @@ class RelayingImpl[F[_]: ContextShift: Concurrent: Parallel: Log: Metrics: NodeA
                     .debug(s"${peer.show -> "peer"} rejected ${hex(hash) -> "message"}")
                     .as("relay_rejected")
       _ <- Metrics[F].incrementCounter(counter)
-    } yield response.isNew).handleErrorWith { ex =>
+    } yield isNew).handleErrorWith { ex =>
       for {
-        _ <- Log[F].debug(s"NewBlocks request failed ${peer.show -> "peer"}, $ex")
+        _ <- Log[F].debug(s"$requestName request failed ${peer.show -> "peer"}, $ex")
         _ <- Metrics[F].incrementCounter("relay_failed")
       } yield false
     }

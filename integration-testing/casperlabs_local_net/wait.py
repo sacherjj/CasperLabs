@@ -201,11 +201,11 @@ class NodeDidNotGossip:
     def is_satisfied(self) -> bool:
         _, data = self.node.get_metrics()
         relay_accepted_total = re.compile(
-            r"^casperlabs_comm_gossiping_Relaying_relay_accepted_total (\d+).0\s*$",
+            r"^casperlabs_comm_gossiping_blocks_Relaying_relay_accepted_total (\d+).0\s*$",
             re.MULTILINE | re.DOTALL,
         )
         relay_rejected_total = re.compile(
-            r"^casperlabs_comm_gossiping_Relaying_relay_rejected_total (\d+).0\s*$",
+            r"^casperlabs_comm_gossiping_blocks_Relaying_relay_rejected_total (\d+).0\s*$",
             re.MULTILINE | re.DOTALL,
         )
         accepted_blocks = relay_accepted_total.search(data)
