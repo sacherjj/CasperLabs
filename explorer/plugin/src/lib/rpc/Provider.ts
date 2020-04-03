@@ -2,7 +2,14 @@ import { browser } from 'webextension-polyfill-ts';
 import { Rpc } from './rpc';
 import SignMessageManager from '../../background/SignMessageManager';
 
-// inject page -> content script -> background
+/*
+ * A proxy set up in Content Script
+ * Communication:
+ *              window.postMessage                   browser.sendMessage
+ * inject page --------------------> content script <---------------------> background
+ *             <--------------------
+ *              window.addEventListener
+ */
 export function registerContentProxy(
   logMessages = false
 ) {
@@ -26,6 +33,7 @@ export function registerContentProxy(
 let rpc: Rpc;
 
 // Setup RPC server for inject page
+// used in background.ts
 export function setupInjectPageAPIServer(provider: SignMessageManager, logMessages: boolean = false) {
   rpc = new Rpc({
     addListener: browser.runtime.onMessage.addListener,
@@ -34,5 +42,5 @@ export function setupInjectPageAPIServer(provider: SignMessageManager, logMessag
     source: 'background'
   });
   rpc.register('sign', provider.addUnsignedMessageAsync.bind(provider));
-  rpc.register('getSelectedPublicKey', provider.getSelectedPublicKey.bind(provider))
+  rpc.register('getSelectedPublicKey', provider.getSelectedPublicKey.bind(provider));
 }

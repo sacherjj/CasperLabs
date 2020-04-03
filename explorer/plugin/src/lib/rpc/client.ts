@@ -1,6 +1,17 @@
 import { Rpc } from './rpc';
 import { Request } from './tunnel';
 
+/**
+ * RPC client which is used in Inject Script
+ *
+ * Inject script can't use browser.sendMessage, it can only use window.postMessage,
+ * which will not return result.
+ *
+ * So we need assign each message a unique messageId and PAGE_ID, so that we could
+ * find the reply message for each request.
+ *
+ * @param logMessages
+ */
 export function registerClient(
   logMessages = false
 ) {
@@ -14,8 +25,11 @@ export function registerClient(
     destination: 'background',
     logMessages,
     postMessage: (msg: Request) => {
+
       return new Promise((resolve, reject) => {
         const msgId = generateNewMessageId();
+        // inspired by postmate
+        // https://github.com/dollarshaveclub/postmate/blob/master/src/postmate.js#L136
         window.postMessage({ type: 'request', pageId: PAGE_ID, msgId, payload: msg }, '*');
 
         let transact = (e: MessageEvent) => {

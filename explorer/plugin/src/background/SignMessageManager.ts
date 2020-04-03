@@ -12,6 +12,16 @@ export interface SignMessage {
   status: SignMessageStatus
 }
 
+/**
+ * Sign Message Manager
+ *
+ * Algorithm:
+ *    1. Injected script call `SignMessageManager.addUnsignedMessageAsync`, we return a Promise, inside the Promise, we will
+ *       construct a message and assign it a unique id msgId and then we set up a event listen for `${msgId}:finished`.
+ *       Resolve or reject when the event emits.
+ *    2. Popup call `SignMessageManager.{rejectMsg|approveMsg}` either to reject or commit the signature request,
+ *       and both methods will fire a event `${msgId}:finished`, which is listened by step 1.
+ */
 export default class SignMessageManager extends events.EventEmitter {
   private messages: SignMessage[];
   private id: number;
@@ -22,14 +32,10 @@ export default class SignMessageManager extends events.EventEmitter {
     this.id = Math.round(Math.random() * Number.MAX_SAFE_INTEGER);
   }
 
-  getUnsignedMsgs() {
-    return this.messages.filter((msg) => msg.status === 'unsigned');
-  }
-
-  addUnsignedMessageAsync(data: string) {
+  public addUnsignedMessageAsync(data: string) {
     return new Promise((resolve, reject) => {
       const msgId = this.addUnsignedMessage(data);
-      // await finished
+      // await finished, listen to finish event, which will be fired by `rejectMsg` or `signMsg`.
       this.once(`${msgId}:finished`, (data) => {
         switch (data.status) {
           case 'signed':
@@ -44,7 +50,8 @@ export default class SignMessageManager extends events.EventEmitter {
     });
   }
 
-  getSelectedPublicKey() {
+  // return public key of the current selected account
+  public getSelectedPublicKey() {
     let pk = this.appState.selectedUserAccount?.signKeyPair.publicKey;
     console.log(pk);
     if (pk) {
@@ -53,12 +60,13 @@ export default class SignMessageManager extends events.EventEmitter {
     return undefined;
   }
 
-  // Reject message by msgId
-  rejectMsg(msg: SignMessage) {
+  // Reject signature request
+  public rejectMsg(msg: SignMessage) {
     this.setMsgStatus(msg.id, 'rejected');
   }
 
-  public setMsgStatusSigned(msgId: number, rawSig: string) {
+  // Approve signature request
+  public approveMsg(msgId: number, rawSig: string) {
     const msg = this.getMsg(msgId);
     if (msg === undefined) {
       throw new Error(`Could not find message with id ${msgId}`);
@@ -66,6 +74,10 @@ export default class SignMessageManager extends events.EventEmitter {
     msg.rawSig = rawSig;
     this.updateMsg(msg);
     this.setMsgStatus(msgId, 'signed');
+  }
+
+  private getUnsignedMsgs() {
+    return this.messages.filter((msg) => msg.status === 'unsigned');
   }
 
   private createId() {
@@ -94,7 +106,11 @@ export default class SignMessageManager extends events.EventEmitter {
     this.updateAppState();
   }
 
-  addUnsignedMessage(data: string) {
+  /**
+   * Construct a SignMessage and add it to AppState.toSignMessages
+   * @param data
+   */
+  private addUnsignedMessage(data: string) {
     const time = (new Date()).getTime();
     const msgId = this.createId();
     const msgData: SignMessage = {
@@ -108,6 +124,7 @@ export default class SignMessageManager extends events.EventEmitter {
     return msgId;
   }
 
+  // Update toSignMessage, and it will trigger the autorun in background.ts, and send updated state to Popup
   private updateAppState() {
     const unsignedMessages = this.getUnsignedMsgs();
     this.appState.toSignMessages.replace(unsignedMessages);
@@ -118,6 +135,10 @@ export default class SignMessageManager extends events.EventEmitter {
     this.updateAppState();
   }
 
+  /**
+   * Find msg by msgId
+   * @param msgId
+   */
   private getMsg(msgId: number): SignMessage | undefined {
     return this.messages.find((msg) => msg.id === msgId);
   }

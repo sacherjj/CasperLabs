@@ -1,6 +1,7 @@
 import { browser } from 'webextension-polyfill-ts';
 import { registerContentProxy } from '../lib/rpc/Provider';
 
+// See README.MD for details
 // Injects a script tag into the current document
 function injectCustomJs() {
   try {

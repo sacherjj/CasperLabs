@@ -1,5 +1,6 @@
 import { registerClient } from '../lib/rpc/client';
 
+// See README.md for details
 class CasperLabsPluginHelper {
   private readonly call: <RESULT>(method: string, ...params: any[]) => Promise<RESULT>;
 
@@ -20,5 +21,5 @@ class CasperLabsPluginHelper {
   }
 }
 
-// inject to window
+// inject to window, so that Clarity code could use it.
 (window as any).casperlabsHelper = new CasperLabsPluginHelper();

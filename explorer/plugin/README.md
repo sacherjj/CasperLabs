@@ -1,68 +1,44 @@
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+# CasperLabs Signing Helper Browser Extension
 
-## Available Scripts
 
-In the project directory, you can run:
+## Architecture 
 
-### `npm start`
+There are four roles in the browser extension.
 
-Runs the app in the development mode.<br />
-Open [http://localhost:3000](http://localhost:3000) to view it in the browser.
+### 1. Popup
 
-The page will reload if you make edits.<br />
-You will also see any lint errors in the console.
+The directory `src/popup` contains the UI part of WebExtension, which is written in React. Since all states lose when the user closes the WebExtension, we need to use the background script as a server. 
 
-### `npm test`
+#### State Synchronization
 
-Launches the test runner in the interactive watch mode.<br />
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+Popup call RPC method to background script to modify state, then background scripts push its updated state to popup.
 
-### `npm run build`
+### 2. Background script
 
-Builds the app for production to the `build` folder.<br />
-It correctly bundles React in production mode and optimizes the build for the best performance.
+Background work as a backend server, it provides RPC methods for injecting page and popup. The related source code is in `src/background`.
 
-The build is minified and the filenames include the hashes.<br />
-Your app is ready to be deployed!
+### 3. Content Script
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+A content script is a part of your extension that runs in the context of a particular web page. You can specify which webpage can run the content script by specifying rule in `manifest.json/content_scripts`. 
 
-### `npm run eject`
+The code is in `src/content/contentscript.ts`. When Clarity is visited, the WebExtension creates a new ContentScript in Clarity's page context. This script represents a per-page setup process, which injects `inject.ts` into the DOM before anything loads.  And then content script sets up a Proxy, it receives requests from the injected script and forwards it to background script.
 
-**Note: this is a one-way operation. Once you `eject`, you can’t go back!**
+### 4. Inject Script
 
-If you aren’t satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+Inject script run inside the context of Clarity, which is injected by content script. It just creates a global instance of `CasperLabsPluginHelper`, so that Clarity code could use it by `window.casperlabsHelper`.
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you’re on your own.
+## Develop locally
 
-You don’t have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn’t feel obligated to use this feature. However we understand that this tool wouldn’t be useful if you couldn’t customize it when you are ready for it.
+Here we provide some useful npm command for developing.
 
-## Learn More
+### `npm run watch`
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
+It will build Popup and output bundle files to `build` directory, and it will also rebuild every time when you modified the code of Popup, however, you still need to reopen or refresh the Popup.
 
-To learn React, check out the [React documentation](https://reactjs.org/).
+### `npm run scripts_watch`
 
-### Code Splitting
+It will build background, content, and inject scrips in watch mode. However, you have to reload the extension in Chrome's Extension Manage Page.
 
-This section has moved here: https://facebook.github.io/create-react-app/docs/code-splitting
+## Build & Publish
 
-### Analyzing the Bundle Size
-
-This section has moved here: https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size
-
-### Making a Progressive Web App
-
-This section has moved here: https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app
-
-### Advanced Configuration
-
-This section has moved here: https://facebook.github.io/create-react-app/docs/advanced-configuration
-
-### Deployment
-
-This section has moved here: https://facebook.github.io/create-react-app/docs/deployment
-
-### `npm run build` fails to minify
-
-This section has moved here: https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify
+Run `npm run complete`, and then you can find a built browser extension in `artifacts` directory.

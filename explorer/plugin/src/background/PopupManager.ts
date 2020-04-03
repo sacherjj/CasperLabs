@@ -5,6 +5,10 @@ import { browser } from 'webextension-polyfill-ts';
 const width = 300;
 const height = 460;
 
+/**
+ * A Class to manager Popup
+ * Provide inject and background a way to show popup.
+ */
 export class PopupManager {
   private popupId: number | null = null;
 

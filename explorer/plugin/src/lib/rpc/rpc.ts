@@ -1,3 +1,6 @@
+/*
+ * https://github.com/ontio/ontology-dapi/blob/master/src/rpc/rpc.ts
+ */
 import { Caller, Tunnel, TunnelOptions } from './tunnel';
 
 export type MethodType = (...params: any[]) => any;

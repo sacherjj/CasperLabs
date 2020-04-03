@@ -41,7 +41,7 @@
     "watch": "node watch.js",
     "scripts_watch": "export INLINE_RUNTIME_CHUNK=false && webpack --watch",
     "package": "web-ext build --config=webext.config.js",
-    "complete": "npm run build && npm run package",
+    "complete": "npm run build && npm run build_scripts && npm run package",
     "test": "react-scripts test",
     "eject": "react-scripts eject"
   },
