@@ -9,6 +9,7 @@ import * as nacl from 'tweetnacl-ts';
 import $ from 'jquery';
 import { Deploy } from 'casperlabs-grpc/io/casperlabs/casper/consensus/consensus_pb';
 import { CLType, CLValueInstance, Key } from 'casperlabs-grpc/io/casperlabs/casper/consensus/state_pb';
+import JSBI from 'jsbi';
 
 type SupportedType = CLType.SimpleMap[keyof CLType.SimpleMap] | 'Bytes';
 
@@ -25,25 +26,21 @@ export enum BitWidth {
   B_512 = 512
 }
 
-const powerOf2 = (n: number): bigint => {
-  let res = BigInt(1);
-  for (let i = 0; i < n; i++) {
-    res *= BigInt(2);
-  }
-  return res;
+const powerOf2 = (n: number): JSBI => {
+  return JSBI.exponentiate(JSBI.BigInt(2), JSBI.BigInt(n));
 };
 
 const numberLimitForUnsigned = (bit: number) => {
   return {
-    min: BigInt(0),
-    max: powerOf2(bit) - BigInt(1)
+    min: JSBI.BigInt(0),
+    max: JSBI.subtract(powerOf2(bit), JSBI.BigInt(1))
   };
 };
 
 const numberLimitForSigned = (bit: number) => {
   return {
-    min: BigInt(-1) * powerOf2(bit - 1),
-    max: powerOf2(bit - 1) - BigInt(1)
+    min: JSBI.multiply(JSBI.BigInt(-1), powerOf2(bit - 1)),
+    max: JSBI.subtract(powerOf2(bit - 1), JSBI.BigInt(1))
   };
 };
 
@@ -273,7 +270,7 @@ export class DeployContractsContainer {
       });
       const paymentAmount = config.paymentAmount.value;
 
-      return DeployUtil.makeDeploy(argsProto, type, session, null, BigInt(paymentAmount), publicKey);
+      return DeployUtil.makeDeploy(argsProto, type, session, null, JSBI.BigInt(paymentAmount), publicKey);
     }
   }
 
@@ -414,11 +411,11 @@ export class DeployContractsContainer {
       case CLType.Simple.U128:
       case CLType.Simple.U256:
       case CLType.Simple.U512:
-        let limit: { min: bigint, max: bigint } = (NumberLimit as any)[deployArgument.type.value];
+        let limit: { min: JSBI, max: JSBI } = (NumberLimit as any)[deployArgument.type.value];
         if (!validator.isNumeric(value)) {
           return `Value should be a number`;
         }
-        const v = BigInt(value);
+        const v = JSBI.BigInt(value);
         if (v < limit.min || v > limit.max) {
           return `Value should be in [${limit.min.toString(10)}, ${limit.max.toString(10)}]`;
         }
