@@ -394,6 +394,9 @@ impl<R: StateReader<Key, StoredValue>> TrackingCopy<R> {
                     );
                     return Ok(query.into_not_found_result(&msg_prefix));
                 }
+
+                // TODO: maybe parse name into version and continue?
+                StoredValue::ContractMetadata(_metadata) => unimplemented!(),
             }
         }
     }

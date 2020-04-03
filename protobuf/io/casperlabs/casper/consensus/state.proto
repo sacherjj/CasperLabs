@@ -172,6 +172,7 @@ message StoredValue {
         CLValue cl_value = 1;
         Account account = 2;
         Contract contract = 3;
+	bytes contract_metadata = 4; // TODO: make proper protobuf representation
     }
 }
 

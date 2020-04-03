@@ -489,7 +489,7 @@ where
                 | CLType::Map { .. }
                 | CLType::Tuple1(_)
                 | CLType::Tuple3(_)
-                | CLType::ContractMetadata
+                | CLType::ContractHeader
                 | CLType::Any => Ok(()),
                 CLType::Key => {
                     let key: Key = cl_value.to_owned().into_t()?; // TODO: optimize?
@@ -517,6 +517,8 @@ where
                 .named_keys()
                 .values()
                 .try_for_each(|key| self.validate_key(key)),
+            // TODO: anything to validate here?
+            StoredValue::ContractMetadata(_) => Ok(()),
         }
     }
 

@@ -89,8 +89,8 @@ pub enum CLType {
     Tuple3([Box<CLType>; 3]),
     /// Unspecified type.
     Any,
-    /// Smart contract metadata.
-    ContractMetadata,
+    /// Smart contract type signature.
+    ContractHeader,
 }
 
 impl CLType {
@@ -111,7 +111,7 @@ impl CLType {
                 | CLType::String
                 | CLType::Key
                 | CLType::URef
-                | CLType::ContractMetadata
+                | CLType::ContractHeader
                 | CLType::Any => 0,
                 CLType::Option(cl_type) | CLType::List(cl_type) => cl_type.serialized_length(),
                 CLType::FixedList(cl_type, list_len) => {
@@ -180,7 +180,7 @@ impl CLType {
                 serialize_cl_tuple_type(CL_TYPE_TAG_TUPLE3, cl_type_array, stream)
             }
             CLType::Any => stream.push(CL_TYPE_TAG_ANY),
-            CLType::ContractMetadata => stream.push(CL_TYPE_TAG_CONTRACT),
+            CLType::ContractHeader => stream.push(CL_TYPE_TAG_CONTRACT),
         }
     }
 }

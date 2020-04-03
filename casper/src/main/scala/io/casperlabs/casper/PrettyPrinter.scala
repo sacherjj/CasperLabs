@@ -62,8 +62,9 @@ object PrettyPrinter extends ByteStringPrettyPrinter {
         .mkString(",")}, {${actionThresholds.map(buildString)}})"
     case StoredValue.Variants.Contract(Contract(body, urefs, protocolVersion)) =>
       s"Contract(${buildString(body)}, {${urefs.map(buildString).mkString(",")}}, ${buildString(protocolVersion)})"
-    case StoredValue.Variants.ClValue(_) => "ClValue"
-    case StoredValue.Variants.Empty      => "Empty"
+    case StoredValue.Variants.ClValue(_)          => "ClValue"
+    case StoredValue.Variants.ContractMetadata(_) => "ContractMetadata"
+    case StoredValue.Variants.Empty               => "Empty"
   }
 
   def buildString(v: Value): String = v.value match {

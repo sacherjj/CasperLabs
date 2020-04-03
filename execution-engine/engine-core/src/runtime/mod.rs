@@ -147,7 +147,7 @@ fn extract_urefs(cl_value: &CLValue) -> Result<Vec<URef>, Error> {
         | CLType::U512
         | CLType::Unit
         | CLType::String
-        | CLType::ContractMetadata // TODO: Double check we don't want to catpure the access key
+        | CLType::ContractHeader
         | CLType::Any => Ok(vec![]),
         CLType::Option(ty) => match **ty {
             CLType::URef => {
@@ -1963,10 +1963,7 @@ where
         args: Vec<CLValue>,
     ) -> Result<CLValue, Error> {
         let contract = match self.context.read_gs(&key)? {
-            Some(StoredValue::CLValue(cl_value))
-                if *cl_value.cl_type() == CLType::ContractMetadata =>
-            {
-                let metadata: ContractMetadata = CLValue::into_t(cl_value)?;
+            Some(StoredValue::ContractMetadata(metadata)) => {
                 let header = metadata
                     .get_version(&version)
                     .ok_or_else(|| Error::InvalidContractVersion)?;
@@ -2285,7 +2282,7 @@ where
         Ok(new_hash)
     }
 
-    fn create_contract_value(&mut self) -> Result<(CLValue, URef), Error> {
+    fn create_contract_value(&mut self) -> Result<(StoredValue, URef), Error> {
         let cl_unit = CLValue::from_components(CLType::Unit, Vec::new());
         let access_key = self
             .context
@@ -2294,14 +2291,14 @@ where
             .expect("new_uref must always produce a Key::URef");
         let contract = ContractMetadata::new(access_key);
 
-        let value = CLValue::from_t(contract).map_err(|err| Error::CLValue(err))?;
+        let value = StoredValue::ContractMetadata(contract);
 
         Ok((value, access_key))
     }
 
     fn create_contract(&mut self) -> Result<([u8; 32], [u8; 32]), Error> {
-        let (cl_value, access_key) = self.create_contract_value()?;
-        let key = self.context.new_uref(StoredValue::CLValue(cl_value))?;
+        let (stored_value, access_key) = self.create_contract_value()?;
+        let key = self.context.new_uref(stored_value)?;
 
         let addr = key
             .into_uref()
@@ -2313,12 +2310,9 @@ where
     fn create_contract_at_hash(&mut self) -> Result<([u8; 32], [u8; 32]), Error> {
         let addr = self.context.new_function_address()?;
         let key = Key::Hash(addr);
-        let (cl_value, access_key) = self.create_contract_value()?;
+        let (stored_value, access_key) = self.create_contract_value()?;
 
-        self.context
-            .state()
-            .borrow_mut()
-            .write(key, StoredValue::CLValue(cl_value));
+        self.context.state().borrow_mut().write(key, stored_value);
         Ok((addr, access_key.addr()))
     }
 
@@ -2333,9 +2327,7 @@ where
         self.context.validate_key(&metadata_key)?;
         self.context.validate_uref(&access_key)?;
 
-        let cl_value = self.context.read_gs_typed(&metadata_key)?;
-        let mut metadata: ContractMetadata =
-            CLValue::into_t(cl_value).map_err(|err| Error::CLValue(err))?;
+        let mut metadata: ContractMetadata = self.context.read_gs_typed(&metadata_key)?;
 
         if metadata.access_key() != access_key {
             return Ok(Some(contract_header::Error::InvalidAccessKey));
@@ -2355,11 +2347,11 @@ where
             .state()
             .borrow_mut()
             .write(contract_key, StoredValue::Contract(contract));
-        let cl_value = CLValue::from_t(metadata).map_err(|err| Error::CLValue(err))?;
+
         self.context
             .state()
             .borrow_mut()
-            .write(metadata_key, StoredValue::CLValue(cl_value));
+            .write(metadata_key, StoredValue::ContractMetadata(metadata));
 
         Ok(None)
     }
@@ -2373,9 +2365,7 @@ where
         self.context.validate_key(&metadata_key)?;
         self.context.validate_uref(&access_key)?;
 
-        let cl_value = self.context.read_gs_typed(&metadata_key)?;
-        let mut metadata: ContractMetadata =
-            CLValue::into_t(cl_value).map_err(|err| Error::CLValue(err))?;
+        let mut metadata: ContractMetadata = self.context.read_gs_typed(&metadata_key)?;
 
         if metadata.access_key() != access_key {
             return Ok(Some(contract_header::Error::InvalidAccessKey));
@@ -2385,11 +2375,10 @@ where
             return Ok(Some(err));
         }
 
-        let cl_value = CLValue::from_t(metadata).map_err(|err| Error::CLValue(err))?;
         self.context
             .state()
             .borrow_mut()
-            .write(metadata_key, StoredValue::CLValue(cl_value));
+            .write(metadata_key, StoredValue::ContractMetadata(metadata));
 
         Ok(None)
     }
@@ -3079,7 +3068,7 @@ mod tests {
                 | CLType::Tuple1(_)
                 | CLType::Tuple2(_)
                 | CLType::Tuple3(_)
-                | CLType::ContractMetadata
+                | CLType::ContractHeader
                 | CLType::Any => (),
             }
         };

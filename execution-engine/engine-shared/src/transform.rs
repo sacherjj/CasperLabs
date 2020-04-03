@@ -159,6 +159,11 @@ impl Transform {
                     let found = format!("{:?}", cl_value.cl_type());
                     Err(TypeMismatch::new(expected, found).into())
                 }
+                StoredValue::ContractMetadata(_) => {
+                    let expected = "Contract or Account".to_string();
+                    let found = "ContractMetadata".to_string();
+                    Err(TypeMismatch::new(expected, found).into())
+                }
             },
             Transform::Failure(error) => Err(error),
         }

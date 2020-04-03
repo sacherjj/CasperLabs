@@ -2,6 +2,7 @@ use std::convert::TryFrom;
 
 use types::{
     bytesrepr::{self, FromBytes, ToBytes, U8_SERIALIZED_LENGTH},
+    contract_header::ContractMetadata,
     CLValue,
 };
 
@@ -12,6 +13,7 @@ enum Tag {
     CLValue = 0,
     Account = 1,
     Contract = 2,
+    ContractMetadata = 3,
 }
 
 #[derive(Eq, PartialEq, Clone, Debug)]
@@ -19,6 +21,7 @@ pub enum StoredValue {
     CLValue(CLValue),
     Account(Account),
     Contract(Contract),
+    ContractMetadata(ContractMetadata),
 }
 
 impl StoredValue {
@@ -50,11 +53,19 @@ impl StoredValue {
         }
     }
 
+    pub fn to_contract_metadata(self) -> Option<ContractMetadata> {
+        match self {
+            StoredValue::ContractMetadata(metadata) => Some(metadata),
+            _ => None,
+        }
+    }
+
     pub fn type_name(&self) -> String {
         match self {
             StoredValue::CLValue(cl_value) => format!("{:?}", cl_value.cl_type()),
             StoredValue::Account(_) => "Account".to_string(),
             StoredValue::Contract(_) => "Contract".to_string(),
+            StoredValue::ContractMetadata(_) => "ContractMetadata".to_string(),
         }
     }
 }
@@ -101,6 +112,20 @@ impl TryFrom<StoredValue> for Contract {
     }
 }
 
+impl TryFrom<StoredValue> for ContractMetadata {
+    type Error = TypeMismatch;
+
+    fn try_from(stored_value: StoredValue) -> Result<Self, Self::Error> {
+        match stored_value {
+            StoredValue::ContractMetadata(metadata) => Ok(metadata),
+            _ => Err(TypeMismatch::new(
+                "Contract".to_string(),
+                stored_value.type_name(),
+            )),
+        }
+    }
+}
+
 impl ToBytes for StoredValue {
     fn to_bytes(&self) -> Result<Vec<u8>, bytesrepr::Error> {
         let mut result = bytesrepr::allocate_buffer(self)?;
@@ -108,6 +133,9 @@ impl ToBytes for StoredValue {
             StoredValue::CLValue(cl_value) => (Tag::CLValue, cl_value.to_bytes()?),
             StoredValue::Account(account) => (Tag::Account, account.to_bytes()?),
             StoredValue::Contract(contract) => (Tag::Contract, contract.to_bytes()?),
+            StoredValue::ContractMetadata(metadata) => {
+                (Tag::ContractMetadata, metadata.to_bytes()?)
+            }
         };
         result.push(tag as u8);
         result.append(&mut serialized_data);
@@ -120,6 +148,7 @@ impl ToBytes for StoredValue {
                 StoredValue::CLValue(cl_value) => cl_value.serialized_length(),
                 StoredValue::Account(account) => account.serialized_length(),
                 StoredValue::Contract(contract) => contract.serialized_length(),
+                StoredValue::ContractMetadata(metadata) => metadata.serialized_length(),
             }
     }
 }
@@ -134,6 +163,8 @@ impl FromBytes for StoredValue {
                 .map(|(account, remainder)| (StoredValue::Account(account), remainder)),
             tag if tag == Tag::Contract as u8 => Contract::from_bytes(remainder)
                 .map(|(contract, remainder)| (StoredValue::Contract(contract), remainder)),
+            tag if tag == Tag::ContractMetadata as u8 => ContractMetadata::from_bytes(remainder)
+                .map(|(metadata, remainder)| (StoredValue::ContractMetadata(metadata), remainder)),
             _ => Err(bytesrepr::Error::Formatting),
         }
     }

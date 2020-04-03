@@ -96,12 +96,6 @@ impl ContractMetadata {
     }
 }
 
-impl CLTyped for ContractMetadata {
-    fn cl_type() -> CLType {
-        CLType::ContractMetadata
-    }
-}
-
 impl ToBytes for ContractMetadata {
     fn to_bytes(&self) -> Result<Vec<u8>, bytesrepr::Error> {
         let mut result = bytesrepr::allocate_buffer(self)?;
@@ -169,6 +163,12 @@ impl ContractHeader {
     /// Get the protocol version this header is targeting.
     pub fn protocol_version(&self) -> ProtocolVersion {
         self.protocol_version
+    }
+}
+
+impl CLTyped for ContractHeader {
+    fn cl_type() -> CLType {
+        CLType::ContractHeader
     }
 }
 

@@ -1,5 +1,10 @@
 use std::convert::{TryFrom, TryInto};
 
+use types::{
+    bytesrepr::{self, ToBytes},
+    contract_header::ContractMetadata,
+};
+
 use engine_shared::stored_value::StoredValue;
 
 use crate::engine_server::{
@@ -15,6 +20,9 @@ impl From<StoredValue> for state::StoredValue {
             StoredValue::CLValue(cl_value) => pb_value.set_cl_value(cl_value.into()),
             StoredValue::Account(account) => pb_value.set_account(account.into()),
             StoredValue::Contract(contract) => pb_value.set_contract(contract.into()),
+            StoredValue::ContractMetadata(metadata) => {
+                pb_value.set_contract_metadata(metadata.to_bytes().unwrap())
+            }
         }
 
         pb_value
@@ -38,6 +46,13 @@ impl TryFrom<state::StoredValue> for StoredValue {
             }
             StoredValue_oneof_variants::contract(pb_contract) => {
                 StoredValue::Contract(pb_contract.try_into()?)
+            }
+            StoredValue_oneof_variants::contract_metadata(pb_contract_metadata) => {
+                let metadata: ContractMetadata = bytesrepr::deserialize(pb_contract_metadata)
+                    .map_err(|_| {
+                        ParsingError("Failed to deserialized contract metadata".to_string())
+                    })?;
+                StoredValue::ContractMetadata(metadata)
             }
         };
 
