@@ -12,7 +12,7 @@ export default class DeployService {
   private readonly transport: grpc.TransportFactory;
 
   constructor(
-    private nodeUrl: string,
+    private nodeUrls: string[]
   ) {
     // NOTE: To talk to backends with self-signed certificates we either need to copy the code from
     // https://github.com/improbable-eng/grpc-web/blob/master/client/grpc-web-node-http-transport/src/index.ts
@@ -23,7 +23,7 @@ export default class DeployService {
       // We can see more details about the error if we log it here.
       opts.onEnd = (err) => {
         if (err !== undefined) {
-          console.log(`error calling CasperService at ${this.nodeUrl}: `, err);
+          console.log(`error calling CasperService`, err);
         }
         onEnd(err);
       };
@@ -32,29 +32,44 @@ export default class DeployService {
   }
 
   public deploy(deploy: Deploy) {
-    return new Promise<void>((resolve, reject) => {
+    return new Promise((topResolve, topReject) => {
       const deployRequest = new DeployRequest();
       deployRequest.setDeploy(deploy);
 
-      grpc.unary(CasperService.Deploy, {
-        host: this.nodeUrl,
-        request: deployRequest,
-        transport: this.transport,
-        onEnd: (res) => {
-          if (res.status === grpc.Code.OK) {
-            resolve();
-          } else {
-            reject(this.error(res));
-          }
-        }
+      // Because Promise.any is experiment supported, we have to use Promise.all
+      // here we create inverse logic,reject when request succeed,
+      // and resolve when request failed
+      const inversePromises = this.nodeUrls.map((nodeUrl) => {
+        return new Promise<string>((resolve, reject) => {
+          grpc.unary(CasperService.Deploy, {
+            host: nodeUrl,
+            request: deployRequest,
+            transport: this.transport,
+            onEnd: (res) => {
+              if (res.status === grpc.Code.OK) {
+                reject();
+              } else {
+                resolve(this.errorMsg(res, nodeUrl));
+              }
+            }
+          });
+        });
+      });
+
+      Promise.all(inversePromises).then((res) => {
+        // when all request return an error, then we return error
+        topReject(res[0]);
+      }).catch(() => {
+        // resolve when any request succeed.
+        topResolve();
       });
     });
   }
 
-  private error<T extends ProtobufMessage>(res: grpc.UnaryOutput<T>) {
-    const msg = `error calling CasperService at ${this.nodeUrl}: ` +
+  private errorMsg<T extends ProtobufMessage>(res: grpc.UnaryOutput<T>, nodeUrl: string) {
+    const msg = `error calling CasperService at ${nodeUrl}: ` +
       `gRPC error: code=${res.status}, message="${res.statusMessage}"`;
     console.log(msg);
-    return new Error(msg);
+    return msg;
   }
 }
