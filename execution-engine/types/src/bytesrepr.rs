@@ -485,11 +485,7 @@ impl<V: ToBytes> ToBytes for BTreeSet<V> {
     }
 
     fn serialized_length(&self) -> usize {
-        U32_SERIALIZED_LENGTH
-            + self
-                .iter()
-                .map(|v| v.serialized_length())
-                .sum::<usize>()
+        U32_SERIALIZED_LENGTH + self.iter().map(|v| v.serialized_length()).sum::<usize>()
     }
 }
 
@@ -505,7 +501,6 @@ impl<V: FromBytes + Ord> FromBytes for BTreeSet<V> {
         Ok((result, stream))
     }
 }
-
 
 impl<K, V> ToBytes for BTreeMap<K, V>
 where
