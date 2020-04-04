@@ -7,7 +7,7 @@ name = "casperlabs-testnet-alpha"
 
 # Timestamp for the genesis block, also used in seeding the pseudo-random number
 # generator used in execution engine for computing genesis post-state.
-timestamp = 1585850400000
+timestamp = 1586026800000
 
 # Later will be replaced by semver.
 protocol-version = "1.0.0"
@@ -31,16 +31,16 @@ initial-accounts-path = "accounts.csv"
 # we start the nodes, they'll not be able to produce blocks in it, and there won't be a new
 # era build either. That means when a completely new network is started, the genesis era
 # start time has to be adjusted to be active at the time.
-genesis-era-start = 1585850400000
+genesis-era-start = 1586026800000
 
 # Era duration defined as a fixed amount of time.
-era-duration = "3hours"
+era-duration = "60minutes"
 
 # Amount of time to go back before the start of the era for picking the booking block.
-booking-duration = "270minutes"
+booking-duration = "80minutes"
 
 # Amount of time to wait after the booking before we pick the key block, collecting the magic bits along the way.
-entropy-duration = "45minutes"
+entropy-duration = "10minutes"
 
 # Keep voting on the switch block for a fixed amount of time; effective if the summit level is zero.
 voting-period-duration = "2days"
@@ -50,7 +50,7 @@ voting-period-summit-level = 1
 
 # Relative fault tolerance thresholds used by the internal finalizer.
 # Has to be between 0 and 0.5
-ftt = 0.1
+ftt = 0.01
 
 [deploys]
 # 1 day

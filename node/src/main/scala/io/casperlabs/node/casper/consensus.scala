@@ -1,9 +1,11 @@
 package io.casperlabs.node.casper.consensus
 
-import com.google.protobuf.ByteString
-import cats.implicits._
+import java.time.Instant
+import java.util.concurrent.TimeUnit
+
 import cats.effect._
 import cats.effect.concurrent._
+import cats.implicits._
 import cats.mtl.FunctorRaise
 import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.{
@@ -16,18 +18,13 @@ import io.casperlabs.casper.{
   ValidatorIdentity
 }
 import io.casperlabs.casper.{EquivocatedBlock, InvalidBlock, Processed, SelfEquivocatedBlock, Valid}
+import com.google.protobuf.ByteString
 import io.casperlabs.casper.DeploySelection.DeploySelection
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
+import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.finality.MultiParentFinalizer
+import io.casperlabs.casper.finality.MultiParentFinalizer.MeteredMultiParentFinalizer
 import io.casperlabs.casper.finality.votingmatrix.FinalityDetectorVotingMatrix
-import io.casperlabs.casper.validation.{
-  raiseValidateErrorThroughApplicativeError,
-  HighwayValidationImpl,
-  NCBValidationImpl,
-  Validation,
-  ValidationImpl
-}
-import io.casperlabs.casper.util.{CasperLabsProtocol, ProtoUtil}
 import io.casperlabs.casper.highway.{
   EraSupervisor,
   ForkChoiceManager,
@@ -35,33 +32,36 @@ import io.casperlabs.casper.highway.{
   MessageExecutor,
   MessageProducer
 }
+import io.casperlabs.casper.util.{CasperLabsProtocol, ProtoUtil}
+import io.casperlabs.casper.validation._
+import io.casperlabs.casper._
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.comm.ServiceError.{NotFound, Unavailable}
-import io.casperlabs.comm.gossiping.Relaying
+import io.casperlabs.comm.gossiping.relaying.BlockRelaying
 import io.casperlabs.crypto.Keys.PublicKey
 import io.casperlabs.ipc.ChainSpec
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.mempool.DeployBuffer
+import io.casperlabs.metrics.Metrics
 import io.casperlabs.node.api.EventStream
 import io.casperlabs.node.configuration.Configuration
 import io.casperlabs.shared.{Cell, FatalError, Log, Sorting, Time}
 import io.casperlabs.storage.deploy.DeployStorage
-import io.casperlabs.storage.block.BlockStorage
-import io.casperlabs.storage.dag.DagStorage
-import io.casperlabs.storage.dag.FinalityStorage
-import io.casperlabs.storage.era.EraStorage
+import io.casperlabs.shared.ByteStringPrettyPrinter._
+import io.casperlabs.shared.Sorting.jRankOrder
+import io.casperlabs.shared.{Cell, FatalError, Log, Time}
 import io.casperlabs.smartcontracts.ExecutionEngineService
-import java.util.concurrent.TimeUnit
-import java.time.Instant
+import io.casperlabs.storage.block.BlockStorage
+import io.casperlabs.storage.dag.{AncestorsStorage, DagStorage, FinalityStorage}
+import io.casperlabs.storage.deploy.DeployStorage
+import io.casperlabs.storage.era.EraStorage
+import simulacrum.typeclass
 
+import scala.concurrent.duration._
 import cats.Parallel
 import io.casperlabs.casper.finality.MultiParentFinalizer.MeteredMultiParentFinalizer
 
 import scala.util.control.NoStackTrace
-import scala.concurrent.duration._
-import simulacrum.typeclass
-import io.casperlabs.storage.dag.AncestorsStorage
-import io.casperlabs.shared.ByteStringPrettyPrinter._
 
 // Stuff we need to pass to gossiping.
 @typeclass
@@ -239,7 +239,7 @@ object NCB {
 }
 
 object Highway {
-  def apply[F[_]: Parallel: Concurrent: Time: Timer: Clock: Log: Metrics: DagStorage: BlockStorage: DeployBuffer: DeployStorage: EraStorage: FinalityStorage: AncestorsStorage: CasperLabsProtocol: ExecutionEngineService: DeploySelection: EventEmitter: Relaying](
+  def apply[F[_]: Parallel: Concurrent: Time: Timer: Clock: Log: Metrics: DagStorage: BlockStorage: DeployBuffer: DeployStorage: EraStorage: FinalityStorage: AncestorsStorage: CasperLabsProtocol: ExecutionEngineService: DeploySelection: EventEmitter: BlockRelaying](
       conf: Configuration,
       chainSpec: ChainSpec,
       maybeValidatorId: Option[ValidatorIdentity],
