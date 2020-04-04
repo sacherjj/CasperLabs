@@ -113,7 +113,8 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
                     roundId = conf.toTicks(conf.genesisEraStart),
                     mainParent = genesis,
                     justifications = Map.empty,
-                    isBookingBlock = false
+                    isBookingBlock = false,
+                    messageRole = Block.MessageRole.PROPOSAL
                   )
         _     <- forkchoice.set(message)
         block <- BlockStorage[Task].getBlockUnsafe(message.messageHash)

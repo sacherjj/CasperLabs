@@ -138,6 +138,14 @@ class EraRuntime[F[_]: Sync: Clock: Metrics: Log: EraStorage: FinalityStorageRea
           case b: Message.Ballot => isLambdaLikeBallot(dag, b, endTick)
         }
       else false.pure[F]
+
+    def isBallotLike: Boolean = {
+      import Block.MessageRole._
+      msg.messageRole match {
+        case CONFIRMATION | WITNESS => true
+        case _                      => msg.isBallot
+      }
+    }
   }
 
   private implicit class MessageProducerOps(mp: MessageProducer[F]) {
@@ -257,7 +265,8 @@ class EraRuntime[F[_]: Sync: Clock: Metrics: Log: EraStorage: FinalityStorageRea
                                        keyBlockHash = era.keyBlockHash,
                                        roundId = Ticks(lambdaMessage.roundId),
                                        target = choice.block,
-                                       justifications = choice.justificationsMap
+                                       justifications = choice.justificationsMap,
+                                       messageRole = Block.MessageRole.CONFIRMATION
                                      )
                                      .timerGauge("response_ballot")
                                  }
@@ -296,7 +305,8 @@ class EraRuntime[F[_]: Sync: Clock: Metrics: Log: EraStorage: FinalityStorageRea
                           isBookingBlock = isBookingBoundary(
                             choice.block.roundInstant,
                             conf.toInstant(roundId)
-                          )
+                          ),
+                          messageRole = Block.MessageRole.PROPOSAL
                         )
                         .timerGauge("lambda_block")
                         .widen[Message]
@@ -306,7 +316,8 @@ class EraRuntime[F[_]: Sync: Clock: Metrics: Log: EraStorage: FinalityStorageRea
                           keyBlockHash = era.keyBlockHash,
                           roundId = roundId,
                           target = choice.block,
-                          justifications = choice.justificationsMap
+                          justifications = choice.justificationsMap,
+                          messageRole = Block.MessageRole.PROPOSAL
                         )
                         .timerGauge("lambda_ballot")
                         .widen[Message]
@@ -347,7 +358,8 @@ class EraRuntime[F[_]: Sync: Clock: Metrics: Log: EraStorage: FinalityStorageRea
                           keyBlockHash = era.keyBlockHash,
                           roundId = roundId,
                           target = choice.block,
-                          justifications = choice.justificationsMap
+                          justifications = choice.justificationsMap,
+                          messageRole = Block.MessageRole.WITNESS
                         )
                         .timerGauge("omega_ballot")
                     }
@@ -490,17 +502,22 @@ class EraRuntime[F[_]: Sync: Clock: Metrics: Log: EraStorage: FinalityStorageRea
         case b: Message.Block =>
           check(
             "The block is not coming from the leader of the round.",
-            leaderFunction(Ticks(message.roundId)) != message.validatorId
+            !b.isBallotLike && leaderFunction(Ticks(message.roundId)) != message.validatorId
           ) >>
+            check(
+              "Ballot-like blocks cannot be built during the voting-only period.",
+              b.isBallotLike && b.roundId >= endTick
+            ) >>
             checkF(
               "The leader has already sent a lambda message in this round.",
               // Not going to check this for ballots: two lambda-like ballots
               // can only be an equivocation, otherwise the 2nd one cites the first
               // and that means it's not lambda-like.
-              hasOtherLambdaMessageInSameRound[F](dag, b, endTick)
+              if (b.isBallotLike) false.pure[F]
+              else hasOtherLambdaMessageInSameRound[F](dag, b, endTick)
             ) >>
             checkF(
-              "Only ballots should be build on top of a switch block in the current era.",
+              "Only ballots should be built on top of a switch block in the current era.",
               dag.lookupUnsafe(message.parentBlock).flatMap(_.isSwitchBlock)
             )
 

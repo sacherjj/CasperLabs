@@ -147,13 +147,17 @@ object ForkChoice {
                                           msg match {
                                             case block: Message.Block =>
                                               // A block is a vote for itself.
+                                              // Even if it's an omega-block, it votes for its parent as well,
+                                              // and itself can become the fork choice.
                                               scores.update(block, weights(v)).pure[F]
+
                                             case ballot: Message.Ballot
                                                 if ballot.parentBlock != startBlock.messageHash =>
                                               // Ballot votes for its parent.
                                               dag
                                                 .lookupBlockUnsafe(ballot.parentBlock)
                                                 .map(block => scores.update(block, weights(v)))
+
                                             case ballot: Message.Ballot
                                                 if ballot.parentBlock == startBlock.messageHash =>
                                               // Ignore ballots that vote for the start block directly.

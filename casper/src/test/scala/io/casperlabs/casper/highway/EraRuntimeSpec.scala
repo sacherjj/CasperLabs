@@ -449,7 +449,7 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
       val msg2 = insert(build(runtime.endTick, msg1.messageHash))
       val msg3 = build(Ticks(runtime.endTick + 1), msg2.messageHash)
       runtime.validate(msg3).value shouldBe Left(
-        "Only ballots should be build on top of a switch block in the current era."
+        "Only ballots should be built on top of a switch block in the current era."
       )
     }
 
@@ -1179,13 +1179,14 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
                 roundId: Ticks,
                 mainParent: Message.Block,
                 justifications: Map[PublicKeyBS, Set[Message]],
-                isBookingBlock: Boolean
+                isBookingBlock: Boolean,
+                messageRole: Block.MessageRole
             ): Id[Message.Block] = {
               isBookingBlock shouldBe true
               mainParent.messageHash shouldBe fc.fromKeyBlock(eraId).block.messageHash
               justifications shouldBe fc.fromKeyBlock(eraId).justificationsMap
 
-              super.block(eraId, roundId, mainParent, justifications, isBookingBlock)
+              super.block(eraId, roundId, mainParent, justifications, isBookingBlock, messageRole)
             }
           }
 
