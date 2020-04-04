@@ -71,9 +71,8 @@ class EraSupervisor[F[_]: Concurrent: Timer: Log: Metrics: EraStorage: BlockRela
       _ <- propagateLatestMessageToDescendantEras(message)
             .timerGauge("incoming_propagateLatestMessage")
 
-      isChildless <- isChildlessEra(message.eraId)
       _ <- messageExecutor
-            .effectsAfterAdded(message, isChildless)
+            .effectsAfterAdded(message)
             .timerGauge("incoming_effectsAfterAdded")
 
       // See what reactions the protocol dictates.
@@ -202,9 +201,8 @@ class EraSupervisor[F[_]: Concurrent: Timer: Log: Metrics: EraStorage: BlockRela
         _ <- BlockRelaying[F]
               .relay(message)
               .timerGauge(s"created_${kind}_relay")
-        isChildless <- isChildlessEra(message.eraId)
         _ <- messageExecutor
-              .effectsAfterAdded(Validated(message), isChildless)
+              .effectsAfterAdded(Validated(message))
               .timerGauge(s"created_${kind}_effectsAfterAdded")
         _ <- propagateLatestMessageToDescendantEras(message)
               .timerGauge(s"created_${kind}_propagateLatestMessage")
@@ -236,7 +234,7 @@ class EraSupervisor[F[_]: Concurrent: Timer: Log: Metrics: EraStorage: BlockRela
     } void
   }
 
-  /** Update this and descendant eras' latest messages. Return whether the era is a leaf in the tree. */
+  /** Update this and descendant eras' latest messages. */
   private def propagateLatestMessageToDescendantEras(message: Message): F[Unit] =
     for {
       // Let this era know as well. You'd expect that the message production will
@@ -280,9 +278,6 @@ class EraSupervisor[F[_]: Concurrent: Timer: Log: Metrics: EraStorage: BlockRela
       val parentKeyBlockHash = child.runtime.era.parentKeyBlockHash
       eras.updated(parentKeyBlockHash, eras(parentKeyBlockHash).withChild(child))
     }
-
-  private def isChildlessEra(keyBlockHash: BlockHash): F[Boolean] =
-    load(keyBlockHash).map(_.children.isEmpty)
 
   def activeEras: F[Set[Era]] =
     for {
