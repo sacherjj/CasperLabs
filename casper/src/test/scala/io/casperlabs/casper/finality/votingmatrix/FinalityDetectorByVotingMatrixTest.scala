@@ -18,9 +18,10 @@ import io.casperlabs.models.Message
 import io.casperlabs.shared.LogStub
 import io.casperlabs.shared.{Log, Time}
 import io.casperlabs.storage.block.BlockStorage
-import io.casperlabs.storage.dag.{DagRepresentation, DagStorage}
+import io.casperlabs.storage.dag.{AncestorsStorage, DagRepresentation, DagStorage}
 import monix.eval.Task
 import org.scalatest.{FlatSpec, Matchers}
+import io.casperlabs.shared.ByteStringPrettyPrinter._
 
 import scala.collection.immutable.HashMap
 
@@ -37,7 +38,9 @@ class FinalityDetectorByVotingMatrixTest
   implicit val raiseValidateErr: FunctorRaise[Task, InvalidBlock] =
     validation.raiseValidateErrorThroughApplicativeError[Task]
 
-  def mkVotingMatrix(dag: DagRepresentation[Task], genesis: Block, isHighway: Boolean = false) =
+  def mkVotingMatrix(dag: DagRepresentation[Task], genesis: Block, isHighway: Boolean = false)(
+      implicit AS: AncestorsStorage[Task]
+  ) =
     FinalityDetectorVotingMatrix
       .of[Task](
         dag,
@@ -133,7 +136,7 @@ class FinalityDetectorByVotingMatrixTest
                    genesis.blockHash,
                    v1,
                    bonds,
-                   HashMap(v1 -> genesis.blockHash),
+                   HashMap(ByteString.EMPTY -> genesis.blockHash),
                    lfb = genesis
                  )
       _ = c1 shouldBe Seq(CommitteeWithConsensusValue(Set(v1), 20, b1.blockHash))

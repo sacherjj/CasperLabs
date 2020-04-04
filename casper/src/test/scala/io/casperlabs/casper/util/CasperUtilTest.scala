@@ -30,19 +30,27 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with Sto
       a: Block,
       b: Block,
       result: Option[Block]
-  )(implicit dag: DagRepresentation[Task]): Task[Assertion] = {
+  )(implicit dag: DagRepresentation[Task], as: AncestorsStorage[Task]): Task[Unit] = {
     require(a.blockHash != b.blockHash)
-    (isInMainChain(dag, a.blockHash, b.blockHash) shouldBeF result.isDefined) *>
-      (votedBranch(dag, a.blockHash, b.blockHash) shouldBeF result.map(_.blockHash))
+    for {
+      _        <- isInMainChain(dag, a.blockHash, b.blockHash) shouldBeF result.isDefined
+      bMessage <- Task.fromTry(Message.fromBlock(b))
+      _ <- io.casperlabs.casper.finality
+            .votedBranch(dag, a.blockHash, bMessage)
+            .map(_.map(_.messageHash)) shouldBeF result
+            .map(_.blockHash)
+    } yield ()
   }
 
   "isInMainChain and votedBranch" should "classify appropriately when using the same block" in withCombinedStorage() {
     implicit storage =>
       for {
-        b      <- createAndStoreMessage[Task](Seq())
-        dag    <- storage.getRepresentation
-        _      <- isInMainChain(dag, b.blockHash, b.blockHash) shouldBeF true
-        result <- votedBranch(dag, b.blockHash, b.blockHash) shouldBeF None
+        b        <- createAndStoreMessage[Task](Seq())
+        dag      <- storage.getRepresentation
+        _        <- isInMainChain(dag, b.blockHash, b.blockHash) shouldBeF true
+        bMessage <- Task.fromTry(Message.fromBlock(b))
+        result <- io.casperlabs.casper.finality
+                   .votedBranch(dag, b.blockHash, bMessage) shouldBeF None
       } yield result
   }
 
@@ -62,13 +70,13 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with Sto
       b2      <- createAndStoreMessage[Task](Seq(genesis.blockHash))
       b3      <- createAndStoreMessage[Task](Seq(b2.blockHash))
 
-      _      <- testVoteBranchAndIsInMainChain(genesis, b2, Some(b2))
-      _      <- testVoteBranchAndIsInMainChain(b2, genesis, None)
-      _      <- testVoteBranchAndIsInMainChain(genesis, b3, Some(b2))
-      _      <- testVoteBranchAndIsInMainChain(b3, genesis, None)
-      _      <- testVoteBranchAndIsInMainChain(b2, b3, Some(b3))
-      result <- testVoteBranchAndIsInMainChain(b3, b2, None)
-    } yield result
+      _ <- testVoteBranchAndIsInMainChain(genesis, b2, Some(b2))
+      _ <- testVoteBranchAndIsInMainChain(b2, genesis, None)
+      _ <- testVoteBranchAndIsInMainChain(genesis, b3, Some(b2))
+      _ <- testVoteBranchAndIsInMainChain(b3, genesis, None)
+      _ <- testVoteBranchAndIsInMainChain(b2, b3, Some(b3))
+      _ <- testVoteBranchAndIsInMainChain(b3, b2, None)
+    } yield ()
   }
 
   it should "classify diamond DAGs appropriately" in withCombinedStorage() { implicit storage =>
@@ -89,12 +97,12 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with Sto
 
       implicit0(dag: DagRepresentation[Task]) <- storage.getRepresentation
 
-      _      <- testVoteBranchAndIsInMainChain(genesis, b2, Some(b2))
-      _      <- testVoteBranchAndIsInMainChain(genesis, b3, Some(b3))
-      _      <- testVoteBranchAndIsInMainChain(genesis, b4, Some(b2))
-      _      <- testVoteBranchAndIsInMainChain(b2, b4, Some(b4))
-      result <- testVoteBranchAndIsInMainChain(b3, b4, None)
-    } yield result
+      _ <- testVoteBranchAndIsInMainChain(genesis, b2, Some(b2))
+      _ <- testVoteBranchAndIsInMainChain(genesis, b3, Some(b3))
+      _ <- testVoteBranchAndIsInMainChain(genesis, b4, Some(b2))
+      _ <- testVoteBranchAndIsInMainChain(b2, b4, Some(b4))
+      _ <- testVoteBranchAndIsInMainChain(b3, b4, None)
+    } yield ()
   }
 
   it should "classify complicated chains appropriately" in withCombinedStorage() {
@@ -131,23 +139,23 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with Sto
 
         implicit0(dag: DagRepresentation[Task]) <- storage.getRepresentation
 
-        _      <- testVoteBranchAndIsInMainChain(genesis, b2, Some(b2))
-        _      <- testVoteBranchAndIsInMainChain(genesis, b3, Some(b3))
-        _      <- testVoteBranchAndIsInMainChain(genesis, b4, Some(b2))
-        _      <- testVoteBranchAndIsInMainChain(genesis, b5, Some(b2))
-        _      <- testVoteBranchAndIsInMainChain(genesis, b8, Some(b2))
-        _      <- testVoteBranchAndIsInMainChain(b2, b3, None)
-        _      <- testVoteBranchAndIsInMainChain(b3, b4, None)
-        _      <- testVoteBranchAndIsInMainChain(b4, b5, None)
-        _      <- testVoteBranchAndIsInMainChain(b5, b6, None)
-        _      <- testVoteBranchAndIsInMainChain(b6, b7, None)
-        _      <- testVoteBranchAndIsInMainChain(b7, b8, Some(b8))
-        _      <- testVoteBranchAndIsInMainChain(b2, b6, Some(b4))
-        _      <- testVoteBranchAndIsInMainChain(b2, b8, Some(b4))
-        _      <- testVoteBranchAndIsInMainChain(b4, b8, Some(b7))
-        _      <- testVoteBranchAndIsInMainChain(b5, b8, None)
-        result <- testVoteBranchAndIsInMainChain(b4, b2, None)
-      } yield result
+        _ <- testVoteBranchAndIsInMainChain(genesis, b2, Some(b2))
+        _ <- testVoteBranchAndIsInMainChain(genesis, b3, Some(b3))
+        _ <- testVoteBranchAndIsInMainChain(genesis, b4, Some(b2))
+        _ <- testVoteBranchAndIsInMainChain(genesis, b5, Some(b2))
+        _ <- testVoteBranchAndIsInMainChain(genesis, b8, Some(b2))
+        _ <- testVoteBranchAndIsInMainChain(b2, b3, None)
+        _ <- testVoteBranchAndIsInMainChain(b3, b4, None)
+        _ <- testVoteBranchAndIsInMainChain(b4, b5, None)
+        _ <- testVoteBranchAndIsInMainChain(b5, b6, None)
+        _ <- testVoteBranchAndIsInMainChain(b6, b7, None)
+        _ <- testVoteBranchAndIsInMainChain(b7, b8, Some(b8))
+        _ <- testVoteBranchAndIsInMainChain(b2, b6, Some(b4))
+        _ <- testVoteBranchAndIsInMainChain(b2, b8, Some(b4))
+        _ <- testVoteBranchAndIsInMainChain(b4, b8, Some(b7))
+        _ <- testVoteBranchAndIsInMainChain(b5, b8, None)
+        _ <- testVoteBranchAndIsInMainChain(b4, b2, None)
+      } yield ()
   }
 
   // See [[casper/src/test/resources/casper/panoramaForEquivocatorSwimlaneIsEmpty.png]]

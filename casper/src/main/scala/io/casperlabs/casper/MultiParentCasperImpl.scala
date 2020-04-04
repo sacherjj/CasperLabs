@@ -47,6 +47,7 @@ import simulacrum.typeclass
 
 import scala.concurrent.duration.FiniteDuration
 import scala.util.control.NonFatal
+import io.casperlabs.storage.dag.AncestorsStorage
 
 /**
   * Encapsulates mutable state of the MultiParentCasperImpl
@@ -532,7 +533,7 @@ class MultiParentCasperImpl[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: 
 
 object MultiParentCasperImpl {
 
-  def create[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: DagStorage: DeployBuffer: FinalityStorage: ExecutionEngineService: DeployStorage: Validation: CasperLabsProtocol: Cell[
+  def create[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: DagStorage: DeployBuffer: FinalityStorage: ExecutionEngineService: DeployStorage: AncestorsStorage: Validation: CasperLabsProtocol: Cell[
     *[_],
     CasperState
   ]: DeploySelection: BlockEventEmitter](
