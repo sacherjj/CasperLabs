@@ -276,6 +276,7 @@ class EraRuntime[F[_]: Sync: Clock: Metrics: Log: EraStorage: FinalityStorageRea
           }
       _ <- m.fold(noop) { msg =>
             HighwayLog.tell[F](HighwayEvent.CreatedLambdaResponse(msg)) >>
+              handleCriticalMessages(msg) >>
               recordJustificationsDistance(msg)
           }
     } yield ()
@@ -334,8 +335,8 @@ class EraRuntime[F[_]: Sync: Clock: Metrics: Log: EraStorage: FinalityStorageRea
           }
       _ <- m.fold(noop) { msg =>
             HighwayLog.tell[F](HighwayEvent.CreatedLambdaMessage(msg)) >>
-              recordJustificationsDistance(msg) >>
-              handleCriticalMessages(msg)
+              handleCriticalMessages(msg) >>
+              recordJustificationsDistance(msg)
           }
     } yield ()
   }
@@ -395,8 +396,9 @@ class EraRuntime[F[_]: Sync: Clock: Metrics: Log: EraStorage: FinalityStorageRea
               .timerGauge("create_omega")
           }
       _ <- m.fold(noop)(msg => {
-            recordJustificationsDistance(msg) >>
-              HighwayLog.tell[F](HighwayEvent.CreatedOmegaMessage(msg))
+            HighwayLog.tell[F](HighwayEvent.CreatedOmegaMessage(msg)) >>
+              handleCriticalMessages(msg) >>
+              recordJustificationsDistance(msg)
           })
     } yield ()
   }
