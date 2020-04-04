@@ -66,6 +66,9 @@ trait MessageProducer[F[_]] {
       isBookingBlock: Boolean,
       messageRole: Block.MessageRole
   ): F[Message.Block]
+
+  /** Check if we can produce a block, when there's a choice between a ballot or a block. */
+  def hasPendingDeploys: F[Boolean]
 }
 
 object MessageProducer {
@@ -78,6 +81,9 @@ object MessageProducer {
     new MessageProducer[F] {
       override val validatorId =
         PublicKey(ByteString.copyFrom(validatorIdentity.publicKey))
+
+      override def hasPendingDeploys: F[Boolean] =
+        DeployStorage[F].reader.readPendingHashes.map(_.nonEmpty)
 
       override def ballot(
           keyBlockHash: BlockHash,

@@ -353,7 +353,28 @@ class EraRuntime[F[_]: Sync: Clock: Metrics: Log: EraStorage: FinalityStorageRea
                   .timerGauge("omega_forkchoice")
                   .flatMap { choice =>
                     ifCanBuildOn(choice) {
-                      messageProducer
+
+                      // The protocol allows us to create a block instead of a ballot,
+                      // which we can take advantage of if we have to slow down the rounds
+                      // a lot due to the high number of validators. The omega messages
+                      // are spread out in time, so they could form a chain of blocks,
+                      // and achieve finality less often.
+                      val block = messageProducer
+                        .block(
+                          keyBlockHash = era.keyBlockHash,
+                          roundId = roundId,
+                          mainParent = choice.block,
+                          justifications = choice.justificationsMap,
+                          isBookingBlock = isBookingBoundary(
+                            choice.block.roundInstant,
+                            conf.toInstant(roundId)
+                          ),
+                          messageRole = Block.MessageRole.WITNESS
+                        )
+                        .timerGauge("omega_block")
+                        .widen[Message]
+
+                      val ballot = messageProducer
                         .ballot(
                           keyBlockHash = era.keyBlockHash,
                           roundId = roundId,
@@ -362,6 +383,12 @@ class EraRuntime[F[_]: Sync: Clock: Metrics: Log: EraStorage: FinalityStorageRea
                           messageRole = Block.MessageRole.WITNESS
                         )
                         .timerGauge("omega_ballot")
+                        .widen[Message]
+
+                      if (roundId >= endTick)
+                        ballot
+                      else
+                        messageProducer.hasPendingDeploys.ifM(block, ballot)
                     }
                   }
               }

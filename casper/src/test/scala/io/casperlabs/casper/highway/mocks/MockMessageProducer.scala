@@ -21,6 +21,8 @@ class MockMessageProducer[F[_]: Sync: BlockStorageWriter: DagStorage](
     val validatorId: PublicKeyBS
 ) extends MessageProducer[F] {
 
+  override def hasPendingDeploys = false.pure[F]
+
   private def insert(message: Message): F[Unit] = {
     val summary = message.blockSummary
     for {
