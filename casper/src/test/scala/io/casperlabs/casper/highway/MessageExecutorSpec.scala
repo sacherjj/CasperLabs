@@ -359,22 +359,25 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
     }
   }
 
-  it should "update the last finalized block" in executorFixture { implicit db =>
+  it should "update the finalizer state" in executorFixture { implicit db =>
     new ExecutorFixture(db) {
 
       val messageAddedRef = Ref.unsafe[Task, Option[Message]](none)
 
       override lazy val finalizer = new MultiParentFinalizer[Task] {
-        override def onNewMessageAdded(
-            message: Message
-        ): Task[Seq[MultiParentFinalizer.FinalizedBlocks]] =
+
+        override def addMessage(message: Message): Task[Unit] =
+          messageAddedRef.set(Some(message))
+
+        override def checkFinality: Task[Seq[MultiParentFinalizer.FinalizedBlocks]] =
           for {
-            _ <- messageAddedRef.set(Some(message))
-            _ <- FinalityStorage[Task].markAsFinalized(message.messageHash, Set.empty, Set.empty)
+            message <- messageAddedRef.get.map(_.get)
+            _       <- FinalityStorage[Task].markAsFinalized(message.messageHash, Set.empty, Set.empty)
           } yield Seq(
             MultiParentFinalizer
               .FinalizedBlocks(message.messageHash, BigInt(0), Set.empty, Set.empty)
           )
+
       }
 
       override def test =
@@ -384,6 +387,7 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
           wait    <- messageExecutor.effectsAfterAdded(message)
           _       <- wait
           _       <- messageAddedRef.get shouldBeF Some(message)
+          _       <- messageExecutor.checkFinality
           _       <- FinalityStorage[Task].isFinalized(block.blockHash) shouldBeF true
           events  <- eventEmitter.events
         } yield {

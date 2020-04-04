@@ -1,8 +1,11 @@
 package io.casperlabs.casper.finality
 
-import cats.Functor
+import java.util.concurrent.atomic.AtomicReference
+
+import cats.{Functor, Monad}
 import cats.data.NonEmptyList
 import cats.effect.Concurrent
+import cats.effect.concurrent.Ref
 import io.casperlabs.catscontrib.{Fs2Compiler, MonadThrowable}
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.Estimator.BlockHash
@@ -30,6 +33,8 @@ class MultiParentFinalizerTest
 
   behavior of "MultiParentFinalizer"
 
+  import MultiParentFinalizerTest._
+
   // Who creates what doesn't matter in these tests.
   val v1     = generateValidator("A")
   val v2     = generateValidator("Z")
@@ -53,7 +58,7 @@ class MultiParentFinalizerTest
         a1                         <- createAndStoreBlockFull[Task](v1, Seq(a0), Seq.empty, bonds)
         b0                         <- createAndStoreBlockFull[Task](v2, Seq(genesis, a0), Seq(a1), bonds)
         b0Msg                      <- Task.fromTry(Message.fromBlock(b0))
-        Seq(newlyFinalizedBlocks0) <- multiParentFinalizer.onNewMessageAdded(b0Msg)
+        Seq(newlyFinalizedBlocks0) <- onNewMessageAdded(multiParentFinalizer, b0Msg)
         // `b0` is in main chain, `a0` is secondary parent.
         _ = assert(newlyFinalizedBlocks0.newLFB == b0.blockHash)
         _ = assert(
@@ -75,7 +80,7 @@ class MultiParentFinalizerTest
         // `a2`'s main parent is `b0`, secondary is `a0`.
         // Since `a0` was already finalized through `b0` it should not be returned now.
         // Similarly `a1` was already orphaned by `b0`.
-        Seq(newlyFinalizedBlocks1) <- multiParentFinalizer.onNewMessageAdded(a2Msg)
+        Seq(newlyFinalizedBlocks1) <- onNewMessageAdded(multiParentFinalizer, a2Msg)
 
         _ = assert(newlyFinalizedBlocks1.newLFB == a2.blockHash)
         _ = assert(newlyFinalizedBlocks1.indirectlyFinalized.isEmpty)
@@ -118,7 +123,7 @@ class MultiParentFinalizerTest
               .finalizeBlock[Task](a.blockHash, nelBonds)
               .flatMap(ProtoUtil.unsafeGetBlock[Task](_))
         bMsg            <- Task.fromTry(Message.fromBlock(b))
-        Seq(finalizedA) <- multiParentFinalizer.onNewMessageAdded(bMsg)
+        Seq(finalizedA) <- onNewMessageAdded(multiParentFinalizer, bMsg)
         _               = assert(finalizedA.newLFB == a.blockHash && finalizedA.indirectlyFinalized.isEmpty)
 
         // `aPrime` is sibiling of `a`, another child of Genesis.
@@ -129,7 +134,7 @@ class MultiParentFinalizerTest
                    .finalizeBlock[Task](aPrime.blockHash, nelBonds)
                    .flatMap(ProtoUtil.unsafeGetBlock[Task](_))
         bPrimeMsg  <- Task.fromTry(Message.fromBlock(bPrime))
-        finalizedB <- multiParentFinalizer.onNewMessageAdded(bPrimeMsg)
+        finalizedB <- onNewMessageAdded(multiParentFinalizer, bPrimeMsg)
         _          = assert(finalizedB.isEmpty)
       } yield ()
   }
@@ -174,6 +179,12 @@ object MultiParentFinalizerTest extends BlockGenerator {
         } yield block.blockHash :: chain
     }
 
+  def onNewMessageAdded[F[_]: Monad](
+      finalizer: MultiParentFinalizer[F],
+      m: Message
+  ): F[Seq[FinalizedBlocks]] =
+    finalizer.addMessage(m).flatMap(_ => finalizer.checkFinality)
+
   /** Finalizes a `start` block.
     *
     * To finalize a block, we need level-1 summit (i.e. enough validators has to see enough validators voting for a block).
@@ -193,7 +204,7 @@ object MultiParentFinalizerTest extends BlockGenerator {
               for {
                 block <- ProtoUtil.unsafeGetBlock[F](hash)
                 msg   <- MonadThrowable[F].fromTry(Message.fromBlock(block))
-                res   <- MultiParentFinalizer[F].onNewMessageAdded(msg)
+                res   <- onNewMessageAdded(MultiParentFinalizer[F], msg)
               } yield res
           )
       b <- createAndStoreMessage[F](Seq(chain.head), bonds.head.validatorPublicKey) // Create level-1 summit
@@ -201,11 +212,19 @@ object MultiParentFinalizerTest extends BlockGenerator {
 
   // Finalizes block it receives as argument.
   val immediateFinalityStub = new FinalityDetector[Task] {
-    override def onNewMessageAddedToTheBlockDag(
+
+    private val prevMsg: AtomicReference[Message] = new AtomicReference()
+
+    override def addMessage(
         dag: DagRepresentation[Task],
         message: Message,
         latestFinalizedBlock: BlockHash
+    ): Task[Unit] =
+      Task(prevMsg.set(message))
+
+    override def checkFinality(
+        dag: DagRepresentation[Task]
     ): Task[Seq[CommitteeWithConsensusValue]] =
-      Task(Seq(CommitteeWithConsensusValue(Set.empty, 1L, message.messageHash)))
+      Task(Seq(CommitteeWithConsensusValue(Set.empty, 1L, prevMsg.get().messageHash)))
   }
 }

@@ -13,7 +13,6 @@ import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.models.Message
 import io.casperlabs.shared.Log
 import io.casperlabs.storage.dag.DagRepresentation
-import io.casperlabs.casper.dag.DagOperations
 import io.casperlabs.storage.dag.AncestorsStorage
 
 class FinalityDetectorVotingMatrix[F[_]: Concurrent: Log: AncestorsStorage] private (
@@ -23,18 +22,11 @@ class FinalityDetectorVotingMatrix[F[_]: Concurrent: Log: AncestorsStorage] priv
     implicit private val matrix: _votingMatrixS[F]
 ) extends FinalityDetector[F] {
 
-  /**
-    * Incremental update voting matrix when a new block added to the dag
-    * @param dag block dag
-    * @param message the new added block
-    * @param latestFinalizedBlock latest finalized block
-    * @return
-    */
-  override def onNewMessageAddedToTheBlockDag(
+  override def addMessage(
       dag: DagRepresentation[F],
       message: Message,
       latestFinalizedBlock: BlockHash
-  ): F[Seq[CommitteeWithConsensusValue]] = {
+  ): F[Unit] = {
     val highwayCheck = dag
       .getEquivocatorsInEra(
         message.eraId
@@ -45,6 +37,56 @@ class FinalityDetectorVotingMatrix[F[_]: Concurrent: Log: AncestorsStorage] priv
 
     val isEquivocator = if (isHighway) highwayCheck else ncbCheck
 
+    isEquivocator
+      .ifM(
+        Log[F].debug(
+          s"Message ${PrettyPrinter.buildString(message.messageHash) -> "message"} is from an equivocator ${PrettyPrinter
+            .buildString(message.validatorId)                        -> "validator"}"
+        ), {
+          matrix
+            .withPermit(
+              for {
+                votedBranch <- io.casperlabs.casper.finality
+                                .votedBranch[F](dag, latestFinalizedBlock, message)
+                result <- votedBranch match {
+                           case Some(lfbChild) =>
+                             // Check if the vote (message) is in different era than LFB's child it votes for.
+                             // We disallow validators from different era to advance the LFB chain.
+                             val votedBranchIsDifferentEra = isHighway && lfbChild.eraId != message.eraId
+                             val lfbChildHash              = lfbChild.messageHash
+                             for {
+                               _ <- if (votedBranchIsDifferentEra)
+                                     Log[F].debug(
+                                       s"${PrettyPrinter.buildString(message.messageHash) -> "Message"} from ${message.eraId -> "era"} votes on an LFB child ${PrettyPrinter
+                                         .buildString(lfbChildHash)                       -> "hash"} from a different era."
+                                     )
+                                   else {
+                                     updateVoterPerspective[F](
+                                       dag,
+                                       message,
+                                       lfbChildHash,
+                                       isHighway
+                                     )
+                                   }
+                             } yield ()
+
+                           // If block doesn't vote on any of main children of latestFinalizedBlock,
+                           // then don't update voting matrix
+                           case None =>
+                             Log[F]
+                               .info(
+                                 s"The ${PrettyPrinter.buildString(message.messageHash) -> "message"} doesn't vote any main child of ${PrettyPrinter
+                                   .buildString(latestFinalizedBlock)                   -> "latestFinalizedBlock"}"
+                               )
+                               .void
+                         }
+              } yield result
+            )
+        }
+      )
+  }
+
+  override def checkFinality(dag: DagRepresentation[F]): F[Seq[CommitteeWithConsensusValue]] = {
     val checkFinality: F[Option[CommitteeWithConsensusValue]] =
       checkForCommittee[F](dag, rFTT, isHighway)
         .flatTap(_.traverse { newLFB =>
@@ -81,58 +123,7 @@ class FinalityDetectorVotingMatrix[F[_]: Concurrent: Log: AncestorsStorage] priv
           checkFinalityLoop.map(tail => committee +: tail)
       }
 
-    isEquivocator
-      .ifM(
-        Log[F].debug(
-          s"Message ${PrettyPrinter.buildString(message.messageHash) -> "message"} is from an equivocator ${PrettyPrinter
-            .buildString(message.validatorId)                        -> "validator"}"
-        ) *>
-          Seq.empty[CommitteeWithConsensusValue].pure[F], {
-          matrix
-            .withPermit(
-              for {
-                votedBranch <- io.casperlabs.casper.finality
-                                .votedBranch[F](dag, latestFinalizedBlock, message)
-                result <- votedBranch match {
-                           case Some(lfbChild) =>
-                             // Check if the vote (message) is in different era than LFB's child it votes for.
-                             // We disallow validators from different era to advance the LFB chain.
-                             val votedBranchIsDifferentEra = isHighway && lfbChild.eraId != message.eraId
-                             val lfbChildHash              = lfbChild.messageHash
-                             for {
-                               result <- if (votedBranchIsDifferentEra)
-                                          Log[F].debug(
-                                            s"${PrettyPrinter.buildString(message.messageHash) -> "Message"} from ${message.eraId -> "era"} votes on an LFB child ${PrettyPrinter
-                                              .buildString(lfbChildHash)                       -> "hash"} from a different era."
-                                          ) >>
-                                            Seq.empty[CommitteeWithConsensusValue].pure[F]
-                                        else {
-                                          for {
-                                            _ <- updateVoterPerspective[F](
-                                                  dag,
-                                                  message,
-                                                  lfbChildHash,
-                                                  isHighway
-                                                )
-                                            results <- checkFinalityLoop
-                                          } yield results
-                                        }
-                             } yield result
-
-                           // If block doesn't vote on any of main children of latestFinalizedBlock,
-                           // then don't update voting matrix
-                           case None =>
-                             Log[F]
-                               .info(
-                                 s"The ${PrettyPrinter.buildString(message.messageHash) -> "message"} doesn't vote any main child of ${PrettyPrinter
-                                   .buildString(latestFinalizedBlock)                   -> "latestFinalizedBlock"}"
-                               )
-                               .as(Seq.empty[CommitteeWithConsensusValue])
-                         }
-              } yield result
-            )
-        }
-      )
+    matrix.withPermit(checkFinalityLoop)
   }
 }
 

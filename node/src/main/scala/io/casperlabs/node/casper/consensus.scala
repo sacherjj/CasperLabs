@@ -13,7 +13,6 @@ import io.casperlabs.casper.{
   MultiParentCasper,
   MultiParentCasperImpl,
   MultiParentCasperRef,
-  PrettyPrinter,
   ValidatorIdentity
 }
 import io.casperlabs.casper.{EquivocatedBlock, InvalidBlock, Processed, SelfEquivocatedBlock, Valid}
@@ -41,13 +40,11 @@ import io.casperlabs.comm.ServiceError.{NotFound, Unavailable}
 import io.casperlabs.comm.gossiping.Relaying
 import io.casperlabs.crypto.Keys.PublicKey
 import io.casperlabs.ipc.ChainSpec
-import io.casperlabs.models.Message
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.mempool.DeployBuffer
 import io.casperlabs.node.api.EventStream
 import io.casperlabs.node.configuration.Configuration
-import io.casperlabs.shared.{Cell, FatalError, Log, Time}
-import io.casperlabs.storage.BlockHash
+import io.casperlabs.shared.{Cell, FatalError, Log, Sorting, Time}
 import io.casperlabs.storage.deploy.DeployStorage
 import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.storage.dag.DagStorage
@@ -57,8 +54,8 @@ import io.casperlabs.smartcontracts.ExecutionEngineService
 import java.util.concurrent.TimeUnit
 import java.time.Instant
 
+import cats.Parallel
 import io.casperlabs.casper.finality.MultiParentFinalizer.MeteredMultiParentFinalizer
-import io.casperlabs.shared.Sorting.jRankOrder
 
 import scala.util.control.NoStackTrace
 import scala.concurrent.duration._
@@ -224,7 +221,7 @@ object NCB {
             .values
             .flatMap(_.map(_.jRank))
             .toList
-            .minimumOption
+            .minimumOption(Sorting.jRankOrder)
             .getOrElse(0L)
         } yield minRank
 
@@ -242,7 +239,7 @@ object NCB {
 }
 
 object Highway {
-  def apply[F[_]: Concurrent: Time: Timer: Clock: Log: Metrics: DagStorage: BlockStorage: DeployBuffer: DeployStorage: EraStorage: FinalityStorage: AncestorsStorage: CasperLabsProtocol: ExecutionEngineService: DeploySelection: EventEmitter: Relaying](
+  def apply[F[_]: Parallel: Concurrent: Time: Timer: Clock: Log: Metrics: DagStorage: BlockStorage: DeployBuffer: DeployStorage: EraStorage: FinalityStorage: AncestorsStorage: CasperLabsProtocol: ExecutionEngineService: DeploySelection: EventEmitter: Relaying](
       conf: Configuration,
       chainSpec: ChainSpec,
       maybeValidatorId: Option[ValidatorIdentity],
@@ -326,7 +323,7 @@ object Highway {
                          upgrades = chainSpec.upgrades
                        )
                      },
-                     messageExecutor = new MessageExecutor(
+                     messageExecutor = new MessageExecutor[F](
                        chainName = chainSpec.getGenesis.name,
                        genesis = genesis,
                        upgrades = chainSpec.upgrades,
@@ -361,7 +358,7 @@ object Highway {
             keyBlocks       <- keyBlocksHashes.traverse(dag.lookupUnsafe)
             // Take the latest, to allow eras to be killed without causing
             // initial sync to start from their keyblock forever.
-            maxRank = keyBlocks.map(_.jRank).max
+            maxRank = keyBlocks.map(_.jRank).max(Sorting.jRankOrdering)
           } yield maxRank
 
         /** Serve the latest messages from childless eras and their parents,
