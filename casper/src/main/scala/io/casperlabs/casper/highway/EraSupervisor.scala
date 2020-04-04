@@ -63,10 +63,6 @@ class EraSupervisor[F[_]: Concurrent: Timer: Log: Metrics: EraStorage: BlockRela
                   .validateAndAddBlock(messageExecutor, block)
                   .timerGauge("incoming_validateAndAddBlock")
 
-      _ <- messageExecutor
-            .effectsAfterAdded(message)
-            .timerGauge("incoming_effectsAfterAdded")
-
       // Tell descendant eras for the next time they create a block that this era received a message.
       // NOTE: If the events create an era it will only be loaded later, so the first time
       // the fork choice will be asked about that era it will not have been notified about
@@ -74,6 +70,11 @@ class EraSupervisor[F[_]: Concurrent: Timer: Log: Metrics: EraStorage: BlockRela
       // parent era the first time it's asked, and only rely on incremental updates later.
       _ <- propagateLatestMessageToDescendantEras(message)
             .timerGauge("incoming_propagateLatestMessage")
+
+      isChildless <- isChildlessEra(message.eraId)
+      _ <- messageExecutor
+            .effectsAfterAdded(message, isChildless)
+            .timerGauge("incoming_effectsAfterAdded")
 
       // See what reactions the protocol dictates.
       (events, ()) <- entry.runtime
@@ -201,8 +202,9 @@ class EraSupervisor[F[_]: Concurrent: Timer: Log: Metrics: EraStorage: BlockRela
         _ <- BlockRelaying[F]
               .relay(message)
               .timerGauge(s"created_${kind}_relay")
+        isChildless <- isChildlessEra(message.eraId)
         _ <- messageExecutor
-              .effectsAfterAdded(Validated(message))
+              .effectsAfterAdded(Validated(message), isChildless)
               .timerGauge(s"created_${kind}_effectsAfterAdded")
         _ <- propagateLatestMessageToDescendantEras(message)
               .timerGauge(s"created_${kind}_propagateLatestMessage")
@@ -234,7 +236,7 @@ class EraSupervisor[F[_]: Concurrent: Timer: Log: Metrics: EraStorage: BlockRela
     } void
   }
 
-  /** Update this and descendant eras' latest messages. */
+  /** Update this and descendant eras' latest messages. Return whether the era is a leaf in the tree. */
   private def propagateLatestMessageToDescendantEras(message: Message): F[Unit] =
     for {
       // Let this era know as well. You'd expect that the message production will
@@ -278,6 +280,9 @@ class EraSupervisor[F[_]: Concurrent: Timer: Log: Metrics: EraStorage: BlockRela
       val parentKeyBlockHash = child.runtime.era.parentKeyBlockHash
       eras.updated(parentKeyBlockHash, eras(parentKeyBlockHash).withChild(child))
     }
+
+  private def isChildlessEra(keyBlockHash: BlockHash): F[Boolean] =
+    load(keyBlockHash).map(_.children.isEmpty)
 
   def activeEras: F[Set[Era]] =
     for {

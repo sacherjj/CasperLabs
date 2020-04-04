@@ -38,7 +38,7 @@ import scala.util.control.NonFatal
 import scala.util.control.NoStackTrace
 
 /** A stateless class to encapsulate the steps to validate, execute and store a block. */
-class MessageExecutor[F[_]: Concurrent: Log: Time: Metrics: BlockStorage: DagStorage: DeployStorage: BlockEventEmitter: Validation: CasperLabsProtocol: ExecutionEngineService: Fs2Compiler: MultiParentFinalizer: FinalityStorage: DeployBuffer](
+class MessageExecutor[F[_]: Concurrent: Log: Time: Metrics: BlockStorage: DagStorage: DeployStorage: BlockEventEmitter: Validation: CasperLabsProtocol: ExecutionEngineService: Fs2Compiler: MultiParentFinalizer: FinalityStorage: DeployBuffer: ForkChoice](
     chainName: String,
     genesis: Block,
     upgrades: Seq[ipc.ChainSpec.UpgradePoint],
@@ -91,17 +91,17 @@ class MessageExecutor[F[_]: Concurrent: Log: Time: Metrics: BlockStorage: DagSto
     *
     * Return a wait handle.
     */
-  def effectsAfterAdded(message: ValidatedMessage): F[F[Unit]] =
+  def effectsAfterAdded(message: ValidatedMessage, isChildlessEra: Boolean): F[F[Unit]] =
     for {
       _ <- markDeploysAsProcessed(message)
             .timer("markDeploysAsProcessed")
             .whenA(message.isBlock)
       // Forking event emissions so as not to hold up block processing.
       w1 <- BlockEventEmitter[F].blockAdded(message.messageHash).timer("emitBlockAdded").forkAndLog
-      w2 <- updateLastFinalizedBlock(message).timer("updateLastFinalizedBlock")
+      w2 <- updateLastFinalizedBlock(message, isChildlessEra).timer("updateLastFinalizedBlock")
     } yield w1 *> w2
 
-  private def updateLastFinalizedBlock(message: Message): F[F[Unit]] =
+  private def updateLastFinalizedBlock(message: Message, isChildlessEra: Boolean): F[F[Unit]] =
     for {
       results <- MultiParentFinalizer[F].onNewMessageAdded(message)
       w <- results.toList
@@ -131,12 +131,32 @@ class MessageExecutor[F[_]: Concurrent: Log: Time: Metrics: BlockStorage: DagSto
                           orphanedBlockHashes
                         )
                         .timer("emitNewLFB")
-                } yield ()
+
+                  ownOrphanedblockHashes = orphaned.collect {
+                    case msg if msg.isBlock && maybeValidatorId.contains(msg.validatorId) =>
+                      msg.messageHash
+                  }
+                } yield ownOrphanedblockHashes
               }
             }
-            .void
+            .map(_.flatten)
+            .flatMap { ownOrphanedblockHashes =>
+              requeueOrphanedDeploys(message.eraId)
+                .timer("requeueOrphanedDeploys")
+                .whenA(
+                  ownOrphanedblockHashes.nonEmpty && isChildlessEra
+                )
+            }
             .forkAndLog
     } yield w
+
+  /** Requeue orphaned deploys if they are not in the p-past cone of the fork choice in the given era. */
+  private def requeueOrphanedDeploys(keyBlockHash: BlockHash): F[Unit] =
+    for {
+      choice   <- ForkChoice[F].fromKeyBlock(keyBlockHash)
+      requeued <- DeployBuffer[F].requeueOrphanedDeploys(tips = Set(choice.block.messageHash))
+      _        <- Log[F].info(s"Re-queued ${requeued.size} orphaned deploys.").whenA(requeued.nonEmpty)
+    } yield ()
 
   private def markDeploysAsProcessed(message: Message): F[Unit] =
     for {
