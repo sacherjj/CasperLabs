@@ -385,7 +385,7 @@ class EraRuntime[F[_]: Sync: Clock: Metrics: Log: EraStorage: FinalityStorageRea
                         .timerGauge("omega_ballot")
                         .widen[Message]
 
-                      if (roundId >= endTick)
+                      if (roundId >= endTick || !conf.omegaBlocksEnabled)
                         ballot
                       else
                         messageProducer.hasPendingDeploys.ifM(block, ballot)

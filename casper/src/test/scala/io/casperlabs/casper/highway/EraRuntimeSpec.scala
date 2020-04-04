@@ -61,7 +61,8 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
     entropyDuration = hours(3),
     postEraVotingDuration = VotingDuration.FixedLength(postEraVotingDuration),
     omegaMessageTimeStart = 0.5,
-    omegaMessageTimeEnd = 0.75
+    omegaMessageTimeEnd = 0.75,
+    omegaBlocksEnabled = false
   )
 
   val genesis = Message

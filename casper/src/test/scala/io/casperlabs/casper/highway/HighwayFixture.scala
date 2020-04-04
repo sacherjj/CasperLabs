@@ -84,7 +84,8 @@ trait HighwayFixture
     entropyDuration = hours(3),
     postEraVotingDuration = VotingDuration.FixedLength(postEraVotingDuration),
     omegaMessageTimeStart = 0.5,
-    omegaMessageTimeEnd = 0.75
+    omegaMessageTimeEnd = 0.75,
+    omegaBlocksEnabled = false
   )
 
   trait FixtureLike {

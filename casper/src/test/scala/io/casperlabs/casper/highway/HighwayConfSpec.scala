@@ -17,7 +17,8 @@ class HighwayConfSpec extends WordSpec with Matchers with TickUtils {
     entropyDuration = Zero,
     postEraVotingDuration = VotingDuration.FixedLength(Zero),
     omegaMessageTimeStart = 0.0,
-    omegaMessageTimeEnd = 0.0
+    omegaMessageTimeEnd = 0.0,
+    omegaBlocksEnabled = false
   )
 
   "toTicks" should {
