@@ -559,8 +559,7 @@ object MultiParentCasperImpl {
       implicit0(multiParentFinalizer: MultiParentFinalizer[F]) <- MultiParentFinalizer.create[F](
                                                                    dag,
                                                                    lfb,
-                                                                   finalityDetector,
-                                                                   isHighway = false
+                                                                   finalityDetector
                                                                  )
     } yield new MultiParentCasperImpl[F](
       semaphoreMap,

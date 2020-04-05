@@ -183,8 +183,7 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
           multiParentFinalizer <- MultiParentFinalizer.create(
                                    dag,
                                    genesis.blockHash,
-                                   finalityDetector,
-                                   isHighway = false
+                                   finalityDetector
                                  )
           node = new GossipServiceCasperTestNode[F](
             identity,
@@ -291,8 +290,7 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
                 multiParentFinalizer <- MultiParentFinalizer.create(
                                          dag,
                                          genesis.blockHash,
-                                         finalityDetector,
-                                         isHighway = false
+                                         finalityDetector
                                        )
                 chainName    = "casperlabs"
                 minTTL       = 1.minute

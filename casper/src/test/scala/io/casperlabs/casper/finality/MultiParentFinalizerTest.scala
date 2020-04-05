@@ -46,8 +46,7 @@ class MultiParentFinalizerTest
         multiParentFinalizer <- MultiParentFinalizer.create[Task](
                                  dag,
                                  genesis.blockHash,
-                                 MultiParentFinalizerTest.immediateFinalityStub,
-                                 isHighway = false
+                                 MultiParentFinalizerTest.immediateFinalityStub
                                )(Concurrent[Task], fs, metrics)
         a0                         <- createAndStoreBlockFull[Task](v1, Seq(genesis), Seq.empty, bonds)
         a1                         <- createAndStoreBlockFull[Task](v1, Seq(a0), Seq.empty, bonds)
@@ -105,8 +104,7 @@ class MultiParentFinalizerTest
                                                                         .create[Task](
                                                                           dag,
                                                                           genesis.blockHash,
-                                                                          finalizer,
-                                                                          isHighway = false
+                                                                          finalizer
                                                                         )(
                                                                           Concurrent[Task],
                                                                           fs,

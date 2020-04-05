@@ -249,8 +249,7 @@ object Highway {
             finalizer <- MultiParentFinalizer.create[F](
                           dag,
                           lfb,
-                          finalityDetector,
-                          isHighway = true
+                          finalityDetector
                         )
             meteredFinalized = MeteredMultiParentFinalizer.of[F](finalizer)
           } yield meteredFinalized
