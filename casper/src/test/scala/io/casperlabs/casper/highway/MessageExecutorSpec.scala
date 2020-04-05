@@ -370,14 +370,7 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
           messageAddedRef.set(Some(message))
 
         override def checkFinality: Task[Seq[MultiParentFinalizer.FinalizedBlocks]] =
-          for {
-            message <- messageAddedRef.get.map(_.get)
-            _       <- FinalityStorage[Task].markAsFinalized(message.messageHash, Set.empty, Set.empty)
-          } yield Seq(
-            MultiParentFinalizer
-              .FinalizedBlocks(message.messageHash, BigInt(0), Set.empty, Set.empty)
-          )
-
+          Task(Seq.empty)
       }
 
       override def test =
@@ -387,14 +380,7 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
           wait    <- messageExecutor.effectsAfterAdded(message)
           _       <- wait
           _       <- messageAddedRef.get shouldBeF Some(message)
-          _       <- messageExecutor.checkFinality
-          _       <- FinalityStorage[Task].isFinalized(block.blockHash) shouldBeF true
-          events  <- eventEmitter.events
-        } yield {
-          forExactly(1, events) { event =>
-            event.value.isNewFinalizedBlock shouldBe true
-          }
-        }
+        } yield ()
     }
   }
 
