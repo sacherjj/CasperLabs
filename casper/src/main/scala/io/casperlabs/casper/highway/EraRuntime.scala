@@ -139,13 +139,8 @@ class EraRuntime[F[_]: Sync: Clock: Metrics: Log: EraStorage: FinalityStorageRea
         }
       else false.pure[F]
 
-    def isBallotLike: Boolean = {
-      import Block.MessageRole._
-      msg.messageRole match {
-        case CONFIRMATION | WITNESS => true
-        case _                      => msg.isBallot
-      }
-    }
+    def isBallotLike: Boolean =
+      isBallotLikeMessage(msg)
   }
 
   private implicit class MessageProducerOps(mp: MessageProducer[F]) {
@@ -386,10 +381,15 @@ class EraRuntime[F[_]: Sync: Clock: Metrics: Log: EraStorage: FinalityStorageRea
                         .timerGauge("omega_ballot")
                         .widen[Message]
 
-                      if (roundId >= endTick || !conf.omegaBlocksEnabled)
-                        ballot
-                      else
+                      val ifHasDeploysBlockElseBallot =
                         messageProducer.hasPendingDeploys.ifM(block, ballot)
+
+                      if (!conf.omegaBlocksEnabled)
+                        ballot
+                      else if (roundId < endTick)
+                        ifHasDeploysBlockElseBallot
+                      else
+                        choice.block.isSwitchBlock.ifM(ballot, ifHasDeploysBlockElseBallot)
                     }
                   }
               }
@@ -533,21 +533,23 @@ class EraRuntime[F[_]: Sync: Clock: Metrics: Log: EraStorage: FinalityStorageRea
             "The block is not coming from the leader of the round.",
             !b.isBallotLike && leaderFunction(Ticks(message.roundId)) != message.validatorId
           ) >>
-            check(
-              "Ballot-like blocks cannot be built during the voting-only period.",
-              b.isBallotLike && b.roundId >= endTick
-            ) >>
             checkF(
               "The leader has already sent a lambda message in this round.",
               // Not going to check this for ballots: two lambda-like ballots
               // can only be an equivocation, otherwise the 2nd one cites the first
               // and that means it's not lambda-like.
+              // Also not relevant for non-lambda blocks.
               if (b.isBallotLike) false.pure[F]
               else hasOtherLambdaMessageInSameRound[F](dag, b, endTick)
             ) >>
             checkF(
               "Only ballots should be built on top of a switch block in the current era.",
               dag.lookupUnsafe(message.parentBlock).flatMap(_.isSwitchBlock)
+            ) >>
+            checkF(
+              "Blocks during the voting-only period can only be switch blocks.",
+              if (message.roundId < endTick) false.pure[F]
+              else message.isSwitchBlock.map(!_)
             )
 
         case b: Message.Ballot if b.roundId >= endTick =>
@@ -869,6 +871,14 @@ object EraRuntime {
     if (ballot.roundId < eraEndTick) false.pure[F]
     else citesOwnMessageInSameRound(dag, ballot).map(!_)
 
+  def isBallotLikeMessage(message: Message): Boolean = {
+    import Block.MessageRole._
+    message.messageRole match {
+      case CONFIRMATION | WITNESS => true
+      case _                      => message.isBallot
+    }
+  }
+
   /** Given a lambda message from the leader of a round, check if the validator has sent
     * another lambda message already in the same round. Ignores equivocations, just the
     * checks the legal j-DAG.
@@ -890,14 +900,15 @@ object EraRuntime {
       .takeWhile(isSameRoundAs(message))
       // Try to find a lambda message.
       .findF {
-        case _: Message.Block =>
-          // We established that this validator is the lead, so a block from them is a lambda.
-          true.pure[F]
+        case b: Message.Block =>
+          // We established that this validator is the lead, but a block may not be a lambda.
+          (!isBallotLikeMessage(b)).pure[F]
         case b: Message.Ballot =>
           // The era is over, so this is a voting only period message.
           // In the active period, it's easy to know that a ballot is either a lambda response or an omega.
           // In the voting only period, however, lambda messages are ballots too.
           // The only way to tell if a ballot might be a lambda message is that it cites nothing from this round.
+          // We could also look at the `messageRole` now that it's been added, but it's not validated.
           isLambdaLikeBallot(dag, b, eraEndTick)
         case _ =>
           false.pure[F]
