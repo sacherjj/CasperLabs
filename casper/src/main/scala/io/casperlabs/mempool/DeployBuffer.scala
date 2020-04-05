@@ -185,7 +185,7 @@ object DeployBuffer {
 
             deployToBlocks <- BlockStorage[F].findBlockHashesWithDeployHashes(deployHashes)
 
-            blockFinality <- deployToBlocks.values.flatten.toList
+            blockFinality <- deployToBlocks.values.flatten.toSet.toList
                               .traverse { blockHash =>
                                 FinalityStorage[F].getFinalityStatus(blockHash).map(blockHash -> _)
                               }
