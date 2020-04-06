@@ -169,7 +169,7 @@ class MultiParentCasperImpl[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: 
     Metrics[F].timer("updateLastFinalizedBlock") {
       for {
         _      <- MultiParentFinalizer[F].addMessage(message)
-        result <- MultiParentFinalizer[F].checkFinality
+        result <- MultiParentFinalizer[F].checkFinality()
         _ <- result.toList
               .traverse {
                 case fb @ FinalizedBlocks(newLFB, _, finalized, orphaned) => {

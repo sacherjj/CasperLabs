@@ -156,7 +156,8 @@ trait HighwayFixture
 
       override def addMessage(message: Message): Task[Unit] = Task.unit
 
-      override def checkFinality: Task[Seq[MultiParentFinalizer.FinalizedBlocks]] = Task(Seq.empty)
+      override def checkFinality(): Task[Seq[MultiParentFinalizer.FinalizedBlocks]] =
+        Task(Seq.empty)
     }
 
     implicit lazy val deployBuffer = DeployBuffer.create[Task](chainName, minTtl = Duration.Zero)

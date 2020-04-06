@@ -183,7 +183,7 @@ object MultiParentFinalizerTest extends BlockGenerator {
       finalizer: MultiParentFinalizer[F],
       m: Message
   ): F[Seq[FinalizedBlocks]] =
-    finalizer.addMessage(m).flatMap(_ => finalizer.checkFinality)
+    finalizer.addMessage(m).flatMap(_ => finalizer.checkFinality())
 
   /** Finalizes a `start` block.
     *

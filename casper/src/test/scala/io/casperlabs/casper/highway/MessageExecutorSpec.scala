@@ -369,7 +369,7 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
         override def addMessage(message: Message): Task[Unit] =
           messageAddedRef.set(Some(message))
 
-        override def checkFinality: Task[Seq[MultiParentFinalizer.FinalizedBlocks]] =
+        override def checkFinality(): Task[Seq[MultiParentFinalizer.FinalizedBlocks]] =
           Task(Seq.empty)
       }
 

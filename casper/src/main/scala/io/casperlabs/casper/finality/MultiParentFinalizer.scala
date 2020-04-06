@@ -16,7 +16,7 @@ import io.casperlabs.storage.dag.FinalityStorage
 @typeclass trait MultiParentFinalizer[F[_]] {
   def addMessage(message: Message): F[Unit]
 
-  def checkFinality: F[Seq[FinalizedBlocks]]
+  def checkFinality(): F[Seq[FinalizedBlocks]]
 }
 
 object MultiParentFinalizer {
@@ -30,8 +30,8 @@ object MultiParentFinalizer {
     override def addMessage(message: Message): F[Unit] =
       metrics.timer("addMessage")(finalizer.addMessage(message))
 
-    override def checkFinality: F[Seq[FinalizedBlocks]] =
-      metrics.timer("checkFinality")(finalizer.checkFinality)
+    override def checkFinality(): F[Seq[FinalizedBlocks]] =
+      metrics.timer("checkFinality")(finalizer.checkFinality())
 
   }
 
@@ -68,7 +68,7 @@ object MultiParentFinalizer {
                 .addMessage(dag, message, previousLFB)
         } yield ())
 
-      override def checkFinality: F[Seq[FinalizedBlocks]] =
+      override def checkFinality(): F[Seq[FinalizedBlocks]] =
         semaphore.withPermit {
           for {
             finalizedBlocks <- finalityDetector.checkFinality(dag)

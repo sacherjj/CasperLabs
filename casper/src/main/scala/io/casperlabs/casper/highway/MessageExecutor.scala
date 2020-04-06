@@ -99,7 +99,7 @@ class MessageExecutor[F[_]: Parallel: Concurrent: Log: Time: Metrics: BlockStora
 
   def checkFinality: F[Unit] =
     for {
-      results <- MultiParentFinalizer[F].checkFinality
+      results <- MultiParentFinalizer[F].checkFinality()
       _ <- results.toList.traverse {
             case MultiParentFinalizer.FinalizedBlocks(newLFB, _, finalized, orphaned) => {
               val lfbStr = newLFB.show
