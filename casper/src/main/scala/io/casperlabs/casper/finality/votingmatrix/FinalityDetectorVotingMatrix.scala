@@ -42,47 +42,43 @@ class FinalityDetectorVotingMatrix[F[_]: Concurrent: Log: AncestorsStorage] priv
         Log[F].debug(
           s"Message ${PrettyPrinter.buildString(message.messageHash) -> "message"} is from an equivocator ${PrettyPrinter
             .buildString(message.validatorId)                        -> "validator"}"
-        ), {
-          matrix
-            .withPermit(
-              for {
-                votedBranch <- io.casperlabs.casper.finality
-                                .votedBranch[F](dag, latestFinalizedBlock, message)
-                result <- votedBranch match {
-                           case Some(lfbChild) =>
-                             // Check if the vote (message) is in different era than LFB's child it votes for.
-                             // We disallow validators from different era to advance the LFB chain.
-                             val votedBranchIsDifferentEra = isHighway && lfbChild.eraId != message.eraId
-                             val lfbChildHash              = lfbChild.messageHash
-                             for {
-                               _ <- if (votedBranchIsDifferentEra)
-                                     Log[F].debug(
-                                       s"${PrettyPrinter.buildString(message.messageHash) -> "Message"} from ${message.eraId -> "era"} votes on an LFB child ${PrettyPrinter
-                                         .buildString(lfbChildHash)                       -> "hash"} from a different era."
-                                     )
-                                   else {
-                                     updateVoterPerspective[F](
-                                       dag,
-                                       message,
-                                       lfbChildHash,
-                                       isHighway
-                                     )
-                                   }
-                             } yield ()
-
-                           // If block doesn't vote on any of main children of latestFinalizedBlock,
-                           // then don't update voting matrix
-                           case None =>
-                             Log[F]
-                               .info(
-                                 s"The ${PrettyPrinter.buildString(message.messageHash) -> "message"} doesn't vote any main child of ${PrettyPrinter
-                                   .buildString(latestFinalizedBlock)                   -> "latestFinalizedBlock"}"
-                               )
-                               .void
-                         }
-              } yield result
-            )
-        }
+        ),
+        for {
+          votedBranch <- io.casperlabs.casper.finality
+                          .votedBranch[F](dag, latestFinalizedBlock, message)
+          _ <- votedBranch match {
+                case Some(lfbChild) =>
+                  // Check if the vote (message) is in different era than LFB's child it votes for.
+                  // We disallow validators from different era to advance the LFB chain.
+                  val votedBranchIsDifferentEra = isHighway && lfbChild.eraId != message.eraId
+                  val lfbChildHash              = lfbChild.messageHash
+                  for {
+                    _ <- if (votedBranchIsDifferentEra)
+                          Log[F].debug(
+                            s"${PrettyPrinter.buildString(message.messageHash) -> "Message"} from ${message.eraId -> "era"} votes on an LFB child ${PrettyPrinter
+                              .buildString(lfbChildHash)                       -> "hash"} from a different era."
+                          )
+                        else
+                          matrix.withPermit(
+                            updateVoterPerspective[F](
+                              dag,
+                              message,
+                              lfbChildHash,
+                              isHighway
+                            )
+                          )
+                  } yield ()
+                // If block doesn't vote on any of main children of latestFinalizedBlock,
+                // then don't update voting matrix
+                case None =>
+                  Log[F]
+                    .info(
+                      s"The ${PrettyPrinter.buildString(message.messageHash) -> "message"} doesn't vote any main child of ${PrettyPrinter
+                        .buildString(latestFinalizedBlock)                   -> "latestFinalizedBlock"}"
+                    )
+                    .void
+              }
+        } yield ()
       )
   }
 
