@@ -188,7 +188,7 @@ impl ModuleImportResolver for RuntimeModuleImportResolver {
                 Signature::new(&[ValueType::I32; 3][..], Some(ValueType::I32)),
                 FunctionIndex::ReadHostBufferIndex.into(),
             ),
-            #[cfg(feature = "print-function")]
+            #[cfg(feature = "test-support")]
             "print" => FuncInstance::alloc_host(
                 Signature::new(&[ValueType::I32; 2][..], None),
                 FunctionIndex::PrintIndex.into(),

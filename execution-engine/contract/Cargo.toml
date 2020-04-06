@@ -13,7 +13,7 @@ license-file = "../../LICENSE"
 [features]
 default = []
 std = ["casperlabs-types/std"]
-print-function = []
+test-support = []
 
 [dependencies]
 casperlabs-types = { version = "0.4.0", path = "../types" }

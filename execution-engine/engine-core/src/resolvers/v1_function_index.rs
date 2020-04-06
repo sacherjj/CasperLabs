@@ -43,7 +43,7 @@ pub enum FunctionIndex {
     GetMainPurseIndex,
     GetArgSizeFuncIndex,
     ReadHostBufferIndex,
-    #[cfg(feature = "print-function")]
+    #[cfg(feature = "test-support")]
     PrintIndex,
 }
 

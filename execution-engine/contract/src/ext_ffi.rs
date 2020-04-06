@@ -104,6 +104,6 @@ extern "C" {
     ) -> i32;
     pub fn get_main_purse(dest_ptr: *mut u8);
     pub fn read_host_buffer(dest_ptr: *mut u8, dest_size: usize, bytes_written: *mut usize) -> i32;
-    #[cfg(feature = "print-function")]
+    #[cfg(feature = "test-support")]
     pub fn print(text_ptr: *const u8, text_size: usize);
 }

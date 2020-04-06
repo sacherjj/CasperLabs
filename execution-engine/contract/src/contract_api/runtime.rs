@@ -270,7 +270,7 @@ pub(crate) fn read_host_buffer(size: usize) -> Result<Vec<u8>, ApiError> {
     Ok(dest)
 }
 
-#[cfg(feature = "print-function")]
+#[cfg(feature = "test-support")]
 /// Prints a debug message
 pub fn print(text: &str) {
     let (text_ptr, text_size, _bytes) = contract_api::to_ptr(text);

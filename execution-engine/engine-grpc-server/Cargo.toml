@@ -41,7 +41,7 @@ parity-wasm = "0.31.3"
 rand = "0.7.2"
 
 [features]
-print-function = ["engine-core/print-function"]
+test-support = ["engine-core/test-support"]
 
 [[bin]]
 name = "casperlabs-engine-grpc-server"

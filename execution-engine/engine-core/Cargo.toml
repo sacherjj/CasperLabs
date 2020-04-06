@@ -46,4 +46,4 @@ matches = "0.1.8"
 proptest = "0.9.4"
 
 [features]
-print-function = []
+test-support = []

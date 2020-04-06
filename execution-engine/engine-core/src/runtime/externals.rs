@@ -449,7 +449,7 @@ where
                 Ok(Some(RuntimeValue::I32(api_error::i32_from(ret))))
             }
 
-            #[cfg(feature = "print-function")]
+            #[cfg(feature = "test-support")]
             FunctionIndex::PrintIndex => {
                 let (text_ptr, text_size) = Args::parse(args)?;
                 self.print(text_ptr, text_size)?;
