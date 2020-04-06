@@ -97,7 +97,7 @@ class MessageExecutor[F[_]: Concurrent: Log: Time: Metrics: BlockStorage: DagSto
       w1 <- BlockEventEmitter[F].blockAdded(message.messageHash).timer("emitBlockAdded").forkAndLog
     } yield w1
 
-  def checkFinality: F[F[Unit]] =
+  def checkFinality(): F[F[Unit]] =
     Metrics[F].timer("checkFinality") {
       for {
         results <- MultiParentFinalizer[F].checkFinality()
