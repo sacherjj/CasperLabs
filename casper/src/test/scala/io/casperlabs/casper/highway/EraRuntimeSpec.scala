@@ -617,12 +617,12 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
             val msg    = makeBlock(leader, runtime.era, runtime.startTick)
             val events = runtime.handleMessage(msg).written
             events should have size 2
-            assert(events.collect {
-              case HighwayEvent.CreatedLambdaResponse(_) => true
-            }.size == 1)
-            assert(events.collect {
-              case HighwayEvent.HandledLambdaMessage => true
-            }.size == 1)
+            assertEvent(events) {
+              case HighwayEvent.CreatedLambdaResponse(_) =>
+            }
+            assertEvent(events) {
+              case HighwayEvent.HandledLambdaMessage =>
+            }
           }
 
           "only cite the lambda message and validators own latest message" in {
