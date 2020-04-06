@@ -560,7 +560,10 @@ where
                     bytesrepr::deserialize(bytes).map_err(Error::BytesRepr)?
                 };
                 let method: String = self.t_from_mem(method_ptr, method_size)?;
-                let args_bytes: Vec<u8> = self.t_from_mem(args_ptr, args_size)?;
+                let args_bytes: Vec<u8> = {
+                    let args_size: u32 = args_size;
+                    self.bytes_from_mem(args_ptr, args_size as usize)?
+                };
 
                 let ret = self.call_versioned_contract_host_buffer(
                     key_contract,
