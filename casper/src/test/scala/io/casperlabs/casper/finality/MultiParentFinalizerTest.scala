@@ -48,16 +48,21 @@ class MultiParentFinalizerTest
         genesis                                  <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bonds)
         implicit0(fs: MockFinalityStorage[Task]) <- MockFinalityStorage[Task](genesis.blockHash)
         dag                                      <- storage.getRepresentation
-        multiParentFinalizer <- MultiParentFinalizer.create[Task](
-                                 dag,
-                                 genesis.blockHash,
-                                 MultiParentFinalizerTest.immediateFinalityStub
-                               )(Concurrent[Task], fs, metrics)
+        implicit0(multiParentFinalizer: MultiParentFinalizer[Task]) <- MultiParentFinalizer
+                                                                        .create[Task](
+                                                                          dag,
+                                                                          genesis.blockHash,
+                                                                          MultiParentFinalizerTest.immediateFinalityStub
+                                                                        )(
+                                                                          Concurrent[Task],
+                                                                          fs,
+                                                                          metrics
+                                                                        )
         a0                         <- createAndStoreBlockFull[Task](v1, Seq(genesis), Seq.empty, bonds)
         a1                         <- createAndStoreBlockFull[Task](v1, Seq(a0), Seq.empty, bonds)
         b0                         <- createAndStoreBlockFull[Task](v2, Seq(genesis, a0), Seq(a1), bonds)
         b0Msg                      <- Task.fromTry(Message.fromBlock(b0))
-        Seq(newlyFinalizedBlocks0) <- onNewMessageAdded(multiParentFinalizer, b0Msg)
+        Seq(newlyFinalizedBlocks0) <- onNewMessageAdded[Task](b0Msg)
         // `b0` is in main chain, `a0` is secondary parent.
         _ = assert(newlyFinalizedBlocks0.newLFB == b0.blockHash)
         _ = assert(
@@ -79,7 +84,7 @@ class MultiParentFinalizerTest
         // `a2`'s main parent is `b0`, secondary is `a0`.
         // Since `a0` was already finalized through `b0` it should not be returned now.
         // Similarly `a1` was already orphaned by `b0`.
-        Seq(newlyFinalizedBlocks1) <- onNewMessageAdded(multiParentFinalizer, a2Msg)
+        Seq(newlyFinalizedBlocks1) <- onNewMessageAdded[Task](a2Msg)
 
         _ = assert(newlyFinalizedBlocks1.newLFB == a2.blockHash)
         _ = assert(newlyFinalizedBlocks1.indirectlyFinalized.isEmpty)
@@ -121,7 +126,7 @@ class MultiParentFinalizerTest
               .finalizeBlock[Task](a.blockHash, nelBonds)
               .flatMap(ProtoUtil.unsafeGetBlock[Task](_))
         bMsg            <- Task.fromTry(Message.fromBlock(b))
-        Seq(finalizedA) <- onNewMessageAdded(multiParentFinalizer, bMsg)
+        Seq(finalizedA) <- onNewMessageAdded[Task](bMsg)
         _               = assert(finalizedA.newLFB == a.blockHash && finalizedA.indirectlyFinalized.isEmpty)
 
         // `aPrime` is sibiling of `a`, another child of Genesis.
@@ -132,7 +137,7 @@ class MultiParentFinalizerTest
                    .finalizeBlock[Task](aPrime.blockHash, nelBonds)
                    .flatMap(ProtoUtil.unsafeGetBlock[Task](_))
         bPrimeMsg  <- Task.fromTry(Message.fromBlock(bPrime))
-        finalizedB <- onNewMessageAdded(multiParentFinalizer, bPrimeMsg)
+        finalizedB <- onNewMessageAdded[Task](bPrimeMsg)
         _          = assert(finalizedB.isEmpty)
       } yield ()
   }
@@ -177,11 +182,10 @@ object MultiParentFinalizerTest extends BlockGenerator {
         } yield block.blockHash :: chain
     }
 
-  def onNewMessageAdded[F[_]: Monad](
-      finalizer: MultiParentFinalizer[F],
+  def onNewMessageAdded[F[_]: Monad: MultiParentFinalizer](
       m: Message
   ): F[Seq[FinalizedBlocks]] =
-    finalizer.addMessage(m).flatMap(_ => finalizer.checkFinality())
+    MultiParentFinalizer[F].addMessage(m) *> MultiParentFinalizer[F].checkFinality()
 
   /** Finalizes a `start` block.
     *
@@ -202,7 +206,7 @@ object MultiParentFinalizerTest extends BlockGenerator {
               for {
                 block <- ProtoUtil.unsafeGetBlock[F](hash)
                 msg   <- MonadThrowable[F].fromTry(Message.fromBlock(block))
-                res   <- onNewMessageAdded(MultiParentFinalizer[F], msg)
+                res   <- onNewMessageAdded[F](msg)
               } yield res
           )
       b <- createAndStoreMessage[F](Seq(chain.head), bonds.head.validatorPublicKey) // Create level-1 summit
