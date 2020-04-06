@@ -35,6 +35,7 @@ object FinalityDetectorUtil {
   private[casper] def panoramaOfBlockByValidators[F[_]: Monad](
       dag: DagRepresentation[F],
       block: Message,
+      lfb: Message,
       validators: Set[Validator]
   ): F[Map[Validator, Message]] = {
     implicit val blockTopoOrdering: Ordering[Message] =
@@ -43,12 +44,15 @@ object FinalityDetectorUtil {
     val stream = DagOperations.bfToposortTraverseF(List(block)) { b =>
       b.justifications.toList
         .traverse(justification => {
-          dag.lookup(justification.latestBlockHash)
+          dag
+            .lookup(justification.latestBlockHash)
+            .map(_.filter(_.eraId == block.eraId)) // We want only panorama from the same era as the message.
         })
         .map(_.flatten)
     }
 
     stream
+      .takeWhile(_.jRank > lfb.jRank) // No need to go past the LFB.
       .foldWhileLeft((validators, Map.empty[Validator, Message])) {
         case ((remainingValidators, acc), b) =>
           if (remainingValidators.isEmpty) {
@@ -67,14 +71,6 @@ object FinalityDetectorUtil {
       }
       .map(_._2)
   }
-
-  private[casper] def panoramaDagLevelsOfBlock[F[_]: Monad](
-      blockDag: DagRepresentation[F],
-      block: Message,
-      validators: Set[Validator]
-  ): F[Map[Validator, Level]] =
-    panoramaOfBlockByValidators(blockDag, block, validators)
-      .map(_.mapValues(_.jRank))
 
   /**
     * Get level zero messages of the specified validator and specified candidateBlock
@@ -144,17 +140,13 @@ object FinalityDetectorUtil {
       dag: DagRepresentation[F],
       validatorsToIndex: Map[Validator, Int],
       blockSummary: Message,
+      messagePanorama: Map[Validator, Message],
       isHighway: Boolean
   ): F[MutableSeq[Level]] =
     for {
       equivocators <- if (isHighway) dag.getEquivocatorsInEra(blockSummary.eraId)
                      else dag.getEquivocators
-      latestBlockDagLevelAsMap <- FinalityDetectorUtil
-                                   .panoramaDagLevelsOfBlock(
-                                     dag,
-                                     blockSummary,
-                                     validatorsToIndex.keySet
-                                   )
+      latestBlockDagLevelAsMap = messagePanorama.mapValues(_.jRank)
     } yield fromMapToArray(
       validatorsToIndex,
       validator => {

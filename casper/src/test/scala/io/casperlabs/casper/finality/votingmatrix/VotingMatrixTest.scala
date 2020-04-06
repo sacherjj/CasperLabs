@@ -269,13 +269,18 @@ class VotingMatrixTest extends FlatSpec with Matchers with BlockGenerator with S
             justifications,
             keyBlockHash = latestFinalizedBlockHash
           )
-      bMessage <- MonadThrowable[F].fromTry(Message.fromBlock(b))
-      dag      <- DagStorage[F].getRepresentation
+      bMessage   <- MonadThrowable[F].fromTry(Message.fromBlock(b))
+      dag        <- DagStorage[F].getRepresentation
+      lfbMsg     <- dag.lookupUnsafe(latestFinalizedBlockHash)
+      validators = bonds.map(_.validatorPublicKey).toSet
       votedBranch <- io.casperlabs.casper.finality
                       .votedBranch(dag, latestFinalizedBlockHash, bMessage)
+      panorama <- FinalityDetectorUtil
+                   .panoramaOfBlockByValidators[F](dag, bMessage, lfbMsg, validators)
       _ <- updateVoterPerspective(
             dag,
             Message.fromBlock(b).get,
+            panorama,
             votedBranch.get.messageHash,
             isHighway = false
           )

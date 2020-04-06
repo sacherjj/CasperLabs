@@ -159,7 +159,7 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with Sto
   }
 
   // See [[casper/src/test/resources/casper/panoramaForEquivocatorSwimlaneIsEmpty.png]]
-  "panoramaDagLevelsOfBlock" should "properly return the panorama of message B" in withCombinedStorage() {
+  "panoramaOfBlockByValidators" should "properly return the panorama of message B" in withCombinedStorage() {
     implicit storage =>
       val v0         = generateValidator("V0")
       val v1         = generateValidator("V1")
@@ -171,7 +171,21 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with Sto
       val bonds = validators.map(v => Bond(v, 1))
 
       for {
-        genesis <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY)
+        genesis        <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY)
+        dag            <- storage.getRepresentation
+        genesisMessage = Message.fromBlock(genesis).get
+
+        messagePanorama = (b: Block) => {
+          FinalityDetectorUtil
+            .panoramaOfBlockByValidators(
+              dag,
+              Message.fromBlock(b).get,
+              genesisMessage,
+              validators.toSet
+            )
+            .map(_.mapValues(_.messageHash))
+        }
+
         b1 <- createAndStoreMessage[Task](
                Seq(genesis.blockHash),
                v0,
@@ -215,67 +229,48 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with Sto
                bonds,
                Map(v2 -> b6.blockHash)
              )
-        dag <- storage.getRepresentation
 
-        panoramaDagLevel <- FinalityDetectorUtil.panoramaDagLevelsOfBlock(
-                             dag,
-                             Message.fromBlock(genesis).get,
-                             validators.toSet
-                           )
+        panoramaDagLevel <- messagePanorama(genesis)
+
         _ = panoramaDagLevel shouldEqual Map()
 
-        panoramaDagLevel1 <- FinalityDetectorUtil.panoramaDagLevelsOfBlock(
-                              dag,
-                              Message.fromBlock(b1).get,
-                              validators.toSet
-                            )
+        panoramaDagLevel1 <- messagePanorama(b1)
+
         _ = panoramaDagLevel1 shouldEqual Map(
-          v0 -> b1.getHeader.jRank
+          v0 -> b1.blockHash
         )
 
-        panoramaDagLevel2 <- FinalityDetectorUtil.panoramaDagLevelsOfBlock(
-                              dag,
-                              Message.fromBlock(b3).get,
-                              validators.toSet
-                            )
+        panoramaDagLevel2 <- messagePanorama(b3)
+
         _ = panoramaDagLevel2 shouldEqual Map(
-          v0 -> b1.getHeader.jRank,
-          v1 -> b3.getHeader.jRank
+          v0 -> b1.blockHash,
+          v1 -> b3.blockHash
         )
 
-        panoramaDagLevel3 <- FinalityDetectorUtil.panoramaDagLevelsOfBlock(
-                              dag,
-                              Message.fromBlock(b5).get,
-                              validators.toSet
-                            )
+        panoramaDagLevel3 <- messagePanorama(b5)
+
         _ = panoramaDagLevel3 shouldEqual Map(
-          v0 -> b1.getHeader.jRank,
-          v1 -> b3.getHeader.jRank,
-          v3 -> b5.getHeader.jRank
+          v0 -> b1.blockHash,
+          v1 -> b3.blockHash,
+          v3 -> b5.blockHash
         )
 
-        panoramaDagLevel4 <- FinalityDetectorUtil.panoramaDagLevelsOfBlock(
-                              dag,
-                              Message.fromBlock(b6).get,
-                              validators.toSet
-                            )
+        panoramaDagLevel4 <- messagePanorama(b6)
+
         _ = panoramaDagLevel4 shouldEqual Map(
-          v0 -> b4.getHeader.jRank,
-          v1 -> b3.getHeader.jRank,
-          v2 -> b6.getHeader.jRank,
-          v3 -> b5.getHeader.jRank
+          v0 -> b4.blockHash,
+          v1 -> b3.blockHash,
+          v2 -> b6.blockHash,
+          v3 -> b5.blockHash
         )
 
-        panoramaDagLevel5 <- FinalityDetectorUtil.panoramaDagLevelsOfBlock(
-                              dag,
-                              Message.fromBlock(b7).get,
-                              validators.toSet
-                            )
+        panoramaDagLevel5 <- messagePanorama(b7)
+
         _ = panoramaDagLevel5 shouldEqual Map(
-          v0 -> b4.getHeader.jRank,
-          v1 -> b3.getHeader.jRank,
-          v2 -> b7.getHeader.jRank,
-          v3 -> b5.getHeader.jRank
+          v0 -> b4.blockHash,
+          v1 -> b3.blockHash,
+          v2 -> b7.blockHash,
+          v3 -> b5.blockHash
         )
       } yield ()
   }
@@ -342,11 +337,16 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with Sto
               bonds,
               Map(v2 -> b4.blockHash) // skip v1 last message in justifications
             )
-        dag <- storage.getRepresentation
+        b7Msg      = Message.fromBlock(b7).get
+        genesisMsg = Message.fromBlock(genesis).get
+        dag        <- storage.getRepresentation
+        b7Panorama <- FinalityDetectorUtil
+                       .panoramaOfBlockByValidators[Task](dag, b7Msg, genesisMsg, validators.toSet)
         panoramaM <- FinalityDetectorUtil.panoramaM(
                       dag,
                       validatorsToIndex,
-                      Message.fromBlock(b7).get,
+                      b7Msg,
+                      b7Panorama,
                       isHighway = false
                     )
         _ = panoramaM.size shouldBe (validatorsToIndex.size)
