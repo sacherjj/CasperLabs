@@ -479,6 +479,68 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
     }
   }
 
+  it should "remove finalized deploys" in executorFixture { implicit db =>
+    new ExecutorFixture(db) {
+      @volatile var messagesMade = Set.empty[Message]
+
+      // Mock finalizer that marks anything as final.
+      override lazy val finalizer = new MultiParentFinalizer[Task] {
+        override def onNewMessageAdded(
+            message: Message
+        ): Task[Seq[MultiParentFinalizer.FinalizedBlocks]] =
+          for {
+            _ <- FinalityStorage[Task].markAsFinalized(
+                  message.messageHash,
+                  (messagesMade - message).map(_.messageHash),
+                  Set.empty
+                )
+          } yield List(
+            MultiParentFinalizer
+              .FinalizedBlocks(
+                message.messageHash,
+                BigInt(0),
+                indirectlyFinalized = messagesMade - message,
+                indirectlyOrphaned = Set.empty
+              )
+          )
+      }
+
+      def makeBlock(): Task[Message] = {
+        val block   = sample(arbBlock.arbitrary.filter(_.getBody.deploys.size > 0))
+        val deploys = block.getBody.deploys.map(_.getDeploy).toList
+        val message = Message.fromBlock(block).get
+        messagesMade = messagesMade + message
+        for {
+          _ <- DeployStorage[Task].writer.addAsProcessed(deploys)
+          _ <- BlockStorage[Task].put(block, BlockEffects.empty.effects)
+        } yield message
+      }
+
+      def getStatuses(message: Message) =
+        for {
+          block   <- BlockStorage[Task].getBlockUnsafe(message.messageHash)
+          deploys = block.getBody.deploys.map(_.getDeploy).toList
+          statuses <- deploys.traverse { d =>
+                       DeployStorage[Task].reader.getBufferedStatus(d.deployHash)
+                     }
+        } yield statuses
+
+      override def test =
+        for {
+          indirectMsg       <- makeBlock()
+          finalizedMsg      <- makeBlock()
+          wait              <- messageExecutor.effectsAfterAdded(finalizedMsg)
+          _                 <- wait
+          indirectStatuses  <- getStatuses(indirectMsg)
+          finalizedStatuses <- getStatuses(finalizedMsg)
+        } yield {
+          forAll(indirectStatuses ++ finalizedStatuses) { maybeStatus =>
+            maybeStatus shouldBe empty
+          }
+        }
+    }
+  }
+
   behavior of "computeEffects"
 
   trait ExecEngineSerivceWithFakeEffects { self: ExecutorFixture =>
