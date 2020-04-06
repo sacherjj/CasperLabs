@@ -4,6 +4,7 @@ import cats.implicits._
 import cats.effect.{Concurrent, Sync}
 import cats.mtl.FunctorRaise
 import cats.effect.concurrent.Semaphore
+import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.consensus.Block
 import io.casperlabs.casper.finality.MultiParentFinalizer
 import io.casperlabs.casper.validation.Validation
@@ -129,13 +130,26 @@ class MessageExecutor[F[_]: Concurrent: Log: Time: Metrics: BlockStorage: DagSto
                             orphanedBlockHashes
                           )
                           .timer("emitNewLFB")
-                  } yield ()
+                    // Return all orphaned blocks to check for deploys we need to put back to pending.
+                    // These blocks can be made by others, but if this node has the same deploy in its
+                    // buffer it might re-propose it before the others, which is what users would want.
+                  } yield orphanedBlockHashes
                 }
               }
-              .void
+              .map(_.flatten.toSet)
+              .flatMap(requeueOrphanedDeploys)
               .forkAndLog
       } yield h
     }
+
+  private def requeueOrphanedDeploys(orphanedBlockHashes: Set[BlockHash]): F[Unit] = {
+    val effect = for {
+      requeued <- DeployBuffer[F].requeueOrphanedDeploysInBlocks(orphanedBlockHashes)
+      _        <- Log[F].info(s"Re-queued ${requeued.size} orphaned deploys.").whenA(requeued.nonEmpty)
+    } yield ()
+
+    effect.timer("requeueOrphanedDeploys").whenA(orphanedBlockHashes.nonEmpty)
+  }
 
   private def markDeploysAsProcessed(message: Message): F[Unit] =
     for {

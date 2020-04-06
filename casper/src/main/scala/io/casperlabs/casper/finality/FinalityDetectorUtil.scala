@@ -186,9 +186,6 @@ object FinalityDetectorUtil {
   private def collectUndecided[F[_]: Sync: FinalityStorage](
       dag: DagRepresentation[F],
       lfbHash: BlockHash,
-      // In Highway we want to stay within the same era, since parent era blocks should only be finalized
-      // by parent era validators, e.g. the switch block by the voting ballots.
-      isHighway: Boolean,
       // Which dependencies to follow.
       next: Message => Seq[BlockHash]
   ): F[List[Message]] =
@@ -200,9 +197,6 @@ object FinalityDetectorUtil {
                         .traverse(dag.lookupUnsafe(_))
                         .flatMap { deps =>
                           deps
-                            .filter { dep =>
-                              !isHighway || dep.eraId == lfb.eraId
-                            }
                             .filterA(
                               message =>
                                 FinalityStorage[F]
@@ -217,11 +211,10 @@ object FinalityDetectorUtil {
   /** Returns a set of blocks that were finalized indirectly when a block from the main chain is finalized. */
   def finalizedIndirectly[F[_]: Sync: FinalityStorage](
       dag: DagRepresentation[F],
-      lfbHash: BlockHash,
-      isHighway: Boolean
+      lfbHash: BlockHash
   ): F[Set[Message]] =
     for {
-      messagesFinalizedImplicitly <- collectUndecided[F](dag, lfbHash, isHighway, _.parents)
+      messagesFinalizedImplicitly <- collectUndecided[F](dag, lfbHash, _.parents)
     } yield messagesFinalizedImplicitly
       .filterNot(_.messageHash == lfbHash) // LFB is directly finalized.
       .toSet
@@ -233,14 +226,12 @@ object FinalityDetectorUtil {
   def orphanedIndirectly[F[_]: Sync: FinalityStorage](
       dag: DagRepresentation[F],
       lfbHash: BlockHash,
-      finalizedIndirectly: Set[BlockHash],
-      isHighway: Boolean
+      finalizedIndirectly: Set[BlockHash]
   ): F[Set[Message]] =
     for {
       undecided <- collectUndecided(
                     dag,
                     lfbHash,
-                    isHighway,
                     m => m.parents ++ m.justifications.map(_.latestBlockHash)
                   )
       finalizedSet = finalizedIndirectly + lfbHash
