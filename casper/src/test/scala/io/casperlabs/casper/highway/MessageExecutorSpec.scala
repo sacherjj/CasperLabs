@@ -415,6 +415,70 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
     }
   }
 
+  it should "requeue orphaned deploys in own blocks" in executorFixture { implicit db =>
+    new ExecutorFixture(db) {
+      // Mock finalizer that marks anything as orphaned.
+      override lazy val finalizer = new MultiParentFinalizer[Task] {
+        override def onNewMessageAdded(
+            message: Message
+        ): Task[Seq[MultiParentFinalizer.FinalizedBlocks]] =
+          for {
+            _ <- FinalityStorage[Task].markAsFinalized(
+                  ByteString.EMPTY,
+                  Set.empty,
+                  Set(message.messageHash)
+                )
+          } yield List(
+            MultiParentFinalizer
+              .FinalizedBlocks(
+                ByteString.EMPTY,
+                BigInt(0),
+                Set.empty,
+                indirectlyOrphaned = Set(message)
+              )
+          )
+      }
+
+      def makeOrphan(own: Boolean) = {
+        val block = {
+          val randomBlock = sample(arbBlock.arbitrary.filter(_.getBody.deploys.size > 0))
+          if (!own)
+            randomBlock
+          else
+            randomBlock.withHeader(
+              randomBlock.getHeader.withValidatorPublicKey(validator)
+            )
+        }
+        val deploys = block.getBody.deploys.map(_.getDeploy).toList
+        val message = Message.fromBlock(block).get
+        for {
+          _    <- DeployStorage[Task].writer.addAsProcessed(deploys)
+          _    <- BlockStorage[Task].put(block, BlockEffects.empty.effects)
+          wait <- messageExecutor.effectsAfterAdded(message)
+          _    <- wait
+          statuses <- deploys.traverse { d =>
+                       DeployStorage[Task].reader.getBufferedStatus(d.deployHash)
+                     }
+        } yield statuses
+      }
+
+      override def test =
+        for {
+          ownStatuses   <- makeOrphan(own = true)
+          otherStatuses <- makeOrphan(own = false)
+        } yield {
+          forAll(ownStatuses) { maybeStatus =>
+            maybeStatus should not be empty
+            maybeStatus.get.state shouldBe DeployInfo.State.PENDING
+          }
+          forAll(otherStatuses) { maybeStatus =>
+            maybeStatus should not be empty
+            maybeStatus.get.state shouldBe DeployInfo.State.PROCESSED
+          }
+        }
+    }
+  }
+
   behavior of "computeEffects"
 
   trait ExecEngineSerivceWithFakeEffects { self: ExecutorFixture =>
