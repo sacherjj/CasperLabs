@@ -69,10 +69,10 @@ object MultiParentFinalizer {
         } yield ())
 
       override def checkFinality(): F[Seq[FinalizedBlocks]] =
-        semaphore.withPermit {
-          for {
-            finalizedBlocks <- finalityDetector.checkFinality(dag)
-            finalized <- finalizedBlocks.toList.traverse {
+        for {
+          finalizedBlocks <- finalityDetector.checkFinality(dag)
+          finalized <- semaphore.withPermit {
+                        finalizedBlocks.toList.traverse {
                           case CommitteeWithConsensusValue(_, quorum, newLFB) =>
                             for {
                               _ <- lfbCache.set(newLFB)
@@ -98,7 +98,7 @@ object MultiParentFinalizer {
                                   )
                             } yield FinalizedBlocks(newLFB, quorum, justFinalized, justOrphaned)
                         }
-          } yield finalized
-        }
+                      }
+        } yield finalized
     }
 }
