@@ -63,10 +63,6 @@ class EraSupervisor[F[_]: Concurrent: Timer: Log: Metrics: EraStorage: BlockRela
                   .validateAndAddBlock(messageExecutor, block)
                   .timerGauge("incoming_validateAndAddBlock")
 
-      _ <- messageExecutor
-            .effectsAfterAdded(message)
-            .timerGauge("incoming_effectsAfterAdded")
-
       // Tell descendant eras for the next time they create a block that this era received a message.
       // NOTE: If the events create an era it will only be loaded later, so the first time
       // the fork choice will be asked about that era it will not have been notified about
@@ -74,6 +70,10 @@ class EraSupervisor[F[_]: Concurrent: Timer: Log: Metrics: EraStorage: BlockRela
       // parent era the first time it's asked, and only rely on incremental updates later.
       _ <- propagateLatestMessageToDescendantEras(message)
             .timerGauge("incoming_propagateLatestMessage")
+
+      _ <- messageExecutor
+            .effectsAfterAdded(message)
+            .timerGauge("incoming_effectsAfterAdded")
 
       // See what reactions the protocol dictates.
       (events, ()) <- entry.runtime
