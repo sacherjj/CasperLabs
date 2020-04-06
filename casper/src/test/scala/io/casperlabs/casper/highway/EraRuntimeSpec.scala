@@ -162,6 +162,13 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
     new MockMessageProducer[Id](validator)
   }
 
+  val messageProducerWithPendingDeploys: String => BlockDagStorage[Id] => MessageProducer[Id] = {
+    validator => implicit bds =>
+      new MockMessageProducer[Id](validator) {
+        override def hasPendingDeploys = true
+      }
+  }
+
   def genesisEraRuntime(
       validator: Option[String] = none,
       roundExponent: Int = 0,
@@ -1260,20 +1267,57 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
               msg.isBallot shouldBe true
           }
         }
-        "create a block if there are pending deploys in the buffer" in (pending)
+        "create a block if there are pending deploys in the buffer" in {
+          val runtime =
+            genesisEraRuntime("Alice".some, messageProducer = messageProducerWithPendingDeploys)
+          val events =
+            runtime.handleAgenda(Agenda.CreateOmegaMessage(runtime.startTick)).written
+
+          assertEvent(events) {
+            case HighwayEvent.CreatedOmegaMessage(msg) =>
+              msg.isBlock shouldBe true
+              msg.messageRole shouldBe Block.MessageRole.WITNESS
+          }
+        }
       }
       "in the post-era voting period" should {
+        implicit val clock = TestClock.frozen(conf.genesisEraEnd)
         "create an omega message" in {
-          implicit val clock = TestClock.frozen(conf.genesisEraEnd)
-          val runtime        = genesisEraRuntime("Alice".some)
+          val runtime = genesisEraRuntime("Alice".some)
           val events =
             runtime.handleAgenda(Agenda.CreateOmegaMessage(runtime.endTick)).written
           assertEvent(events) {
             case HighwayEvent.CreatedOmegaMessage(_) =>
           }
         }
-        "create a switch block if there are pending deploys in the buffer" in (pending)
-        "create a ballot if there are deploys but a switch block has been created before" in (pending)
+        "create a switch block if there are pending deploys in the buffer" in {
+          val runtime =
+            genesisEraRuntime("Alice".some, messageProducer = messageProducerWithPendingDeploys)
+          val events =
+            runtime.handleAgenda(Agenda.CreateOmegaMessage(runtime.endTick)).written
+
+          assertEvent(events) {
+            case HighwayEvent.CreatedOmegaMessage(msg) =>
+              msg.isBlock shouldBe true
+              msg.messageRole shouldBe Block.MessageRole.WITNESS
+          }
+        }
+        "create a ballot if there are deploys but a switch block has been created before" in {
+          implicit val ds = defaultBlockDagStorage
+          implicit val fc = defaultForkChoice
+
+          val runtime =
+            genesisEraRuntime("Alice".some, messageProducer = messageProducerWithPendingDeploys)
+
+          fc.set(insert(makeBlock("Alice", runtime.era, runtime.endTick)))
+
+          val events =
+            runtime.handleAgenda(Agenda.CreateOmegaMessage(runtime.endTick)).written
+
+          assertEvent(events) {
+            case HighwayEvent.CreatedOmegaMessage(_: Message.Ballot) =>
+          }
+        }
       }
       "the fork choice points at a previous era" should {
         "skip the round" in {
