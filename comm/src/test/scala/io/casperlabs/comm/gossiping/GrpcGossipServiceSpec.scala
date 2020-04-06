@@ -79,17 +79,24 @@ class GrpcGossipServiceSpec
     test.runSyncUnsafe(timeout)
   }
 
-  override def nestedSuites = Vector(
-    GetBlockChunkedSpec,
-    StreamDeploysChunkedSpec,
-    StreamBlockSummariesSpec,
-    StreamAncestorBlockSummariesSpec,
-    StreamLatestMessagesSpec,
-    NewDeploysSpec,
-    NewBlocksSpec,
-    GenesisApprovalSpec,
-    StreamDagSliceBlockSummariesSpec
-  )
+  override def nestedSuites =
+    Vector(
+      GetBlockChunkedSpec,
+      StreamDeploysChunkedSpec,
+      StreamBlockSummariesSpec,
+      StreamAncestorBlockSummariesSpec,
+      StreamLatestMessagesSpec,
+      NewDeploysSpec,
+      NewBlocksSpec,
+      GenesisApprovalSpec,
+      StreamDagSliceBlockSummariesSpec
+    ) ++ {
+      if (sys.env.contains("DRONE_BRANCH")) Vector.empty
+      else
+        Vector(
+          NewDeploysSpec // TODO (NODE-1354)
+        )
+    }
 
   trait AuthSpec extends WordSpecLike {
     implicit val hashGen: Arbitrary[ByteString] = Arbitrary(genHash)
