@@ -16,10 +16,14 @@ use crate::{contract_api, ext_ffi, unwrap_or_revert::UnwrapOrRevert};
 
 /// Retrieves the ID of the account's main purse.
 pub fn get_main_purse() -> URef {
-    let dest_ptr = contract_api::alloc_bytes(UREF_SERIALIZED_LENGTH);
+    let dest_non_null_ptr = contract_api::alloc_bytes(UREF_SERIALIZED_LENGTH);
     let bytes = unsafe {
-        ext_ffi::get_main_purse(dest_ptr);
-        Vec::from_raw_parts(dest_ptr, UREF_SERIALIZED_LENGTH, UREF_SERIALIZED_LENGTH)
+        ext_ffi::get_main_purse(dest_non_null_ptr.as_ptr());
+        Vec::from_raw_parts(
+            dest_non_null_ptr.as_ptr(),
+            UREF_SERIALIZED_LENGTH,
+            UREF_SERIALIZED_LENGTH,
+        )
     };
     bytesrepr::deserialize(bytes).unwrap_or_revert()
 }
