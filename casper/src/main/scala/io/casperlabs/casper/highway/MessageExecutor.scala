@@ -131,12 +131,10 @@ class MessageExecutor[F[_]: Concurrent: Log: Time: Metrics: BlockStorage: DagSto
                           orphanedBlockHashes
                         )
                         .timer("emitNewLFB")
-
-                  ownOrphanedblockHashes = orphaned.collect {
-                    case msg if msg.isBlock && maybeValidatorId.contains(msg.validatorId) =>
-                      msg.messageHash
-                  }
-                } yield ownOrphanedblockHashes
+                  // Return all orphaned blocks to check for deploys we need to put back to pending.
+                  // These blocks can be made by others, but if this node has the same deploy in its
+                  // buffer it might re-propose it before the others, which is what users would want.
+                } yield orphanedBlockHashes
               }
             }
             .map(_.flatten.toSet)

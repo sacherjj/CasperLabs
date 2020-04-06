@@ -192,6 +192,7 @@ object DeployBuffer {
                               .map(_.toMap)
 
             orphanedDeploys = deployToBlocks.collect {
+              // If we have Finalized or Undecided blocks we don't have to requeue (yet).
               case (deployHash, blockHashes) if blockHashes.forall(blockFinality(_).isOrphaned) =>
                 deployHash
             }.toList

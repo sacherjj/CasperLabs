@@ -415,7 +415,7 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
     }
   }
 
-  it should "requeue orphaned deploys in own blocks" in executorFixture { implicit db =>
+  it should "requeue orphaned deploys in blocks" in executorFixture { implicit db =>
     new ExecutorFixture(db) {
       // Mock finalizer that marks anything as orphaned.
       override lazy val finalizer = new MultiParentFinalizer[Task] {
@@ -471,9 +471,11 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
             maybeStatus should not be empty
             maybeStatus.get.state shouldBe DeployInfo.State.PENDING
           }
+          // Requeue deploys processed by others if we have them in the buffer too,
+          // so that it's consistent across all nodes and all of them can re-propose.
           forAll(otherStatuses) { maybeStatus =>
             maybeStatus should not be empty
-            maybeStatus.get.state shouldBe DeployInfo.State.PROCESSED
+            maybeStatus.get.state shouldBe DeployInfo.State.PENDING
           }
         }
     }
