@@ -1,6 +1,5 @@
 package io.casperlabs.casper.highway
 
-import cats.Parallel
 import cats.implicits._
 import cats.effect.{Concurrent, Sync}
 import cats.mtl.FunctorRaise
@@ -34,7 +33,7 @@ import scala.util.control.NonFatal
 import scala.util.control.NoStackTrace
 
 /** A stateless class to encapsulate the steps to validate, execute and store a block. */
-class MessageExecutor[F[_]: Parallel: Concurrent: Log: Time: Metrics: BlockStorage: DagStorage: DeployStorage: BlockEventEmitter: Validation: CasperLabsProtocol: ExecutionEngineService: Fs2Compiler: MultiParentFinalizer: FinalityStorage: DeployBuffer](
+class MessageExecutor[F[_]: Concurrent: Log: Time: Metrics: BlockStorage: DagStorage: DeployStorage: BlockEventEmitter: Validation: CasperLabsProtocol: ExecutionEngineService: Fs2Compiler: MultiParentFinalizer: FinalityStorage: DeployBuffer](
     chainName: String,
     genesis: Block,
     upgrades: Seq[ipc.ChainSpec.UpgradePoint],
@@ -97,42 +96,46 @@ class MessageExecutor[F[_]: Parallel: Concurrent: Log: Time: Metrics: BlockStora
       w1 <- BlockEventEmitter[F].blockAdded(message.messageHash).timer("emitBlockAdded").forkAndLog
     } yield w1
 
-  def checkFinality: F[Unit] =
-    for {
-      results <- MultiParentFinalizer[F].checkFinality()
-      _ <- results.toList.traverse {
-            case MultiParentFinalizer.FinalizedBlocks(newLFB, _, finalized, orphaned) => {
-              val lfbStr = newLFB.show
-              val finalizedStr = finalized
-                .filter(_.isBlock)
-                .map(_.messageHash)
-                .map(PrettyPrinter.buildString)
-                .mkString("{", ", ", "}")
+  def checkFinality: F[F[Unit]] =
+    Metrics[F].timer("checkFinality") {
+      for {
+        results <- MultiParentFinalizer[F].checkFinality()
+        h <- results.toList
+              .traverse {
+                case MultiParentFinalizer.FinalizedBlocks(newLFB, _, finalized, orphaned) => {
+                  val lfbStr = newLFB.show
+                  val finalizedStr = finalized
+                    .filter(_.isBlock)
+                    .map(_.messageHash)
+                    .map(PrettyPrinter.buildString)
+                    .mkString("{", ", ", "}")
 
-              val orphanedBlockHashes  = orphaned.filter(_.isBlock).map(_.messageHash)
-              val finalizedBlockHashes = finalized.filter(_.isBlock).map(_.messageHash)
-              val log = Log[F].info(
-                s"New last finalized block hashes are ${lfbStr -> null}, ${finalizedStr -> null}. Orphaned ${orphaned.size} messages."
-              )
+                  val orphanedBlockHashes  = orphaned.filter(_.isBlock).map(_.messageHash)
+                  val finalizedBlockHashes = finalized.filter(_.isBlock).map(_.messageHash)
 
-              val deployBuffer = DeployBuffer[F]
-                .removeFinalizedDeploys(finalizedBlockHashes + newLFB)
-
-              // Ballots cannot be really finalized but we mark them as such in the DAG
-              // to improve the performance of the finalizer (that has to follow all justifications).
-              // Send out notification about blocks ONLY.
-              val eventEmitter = BlockEventEmitter[F]
-                .newLastFinalizedBlock(
-                  newLFB,
-                  finalizedBlockHashes,
-                  orphanedBlockHashes
-                )
-                .timer("emitNewLFB")
-
-              Parallel.parSequence(List(log, deployBuffer, eventEmitter)).void
-            }
-          }
-    } yield ()
+                  for {
+                    _ <- Log[F].info(
+                          s"New last finalized block hashes are ${lfbStr -> null}, ${finalizedStr -> null}. Orphaned ${orphaned.size} messages."
+                        )
+                    _ <- DeployBuffer[F]
+                          .removeFinalizedDeploys(finalizedBlockHashes + newLFB)
+                    // Ballots cannot be really finalized but we mark them as such in the DAG
+                    // to improve the performance of the finalizer (that has to follow all justifications).
+                    // Send out notification about blocks ONLY.
+                    _ <- BlockEventEmitter[F]
+                          .newLastFinalizedBlock(
+                            newLFB,
+                            finalizedBlockHashes,
+                            orphanedBlockHashes
+                          )
+                          .timer("emitNewLFB")
+                  } yield ()
+                }
+              }
+              .void
+              .forkAndLog
+      } yield h
+    }
 
   private def markDeploysAsProcessed(message: Message): F[Unit] =
     for {

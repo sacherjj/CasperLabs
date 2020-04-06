@@ -233,7 +233,7 @@ class EraSupervisor[F[_]: Concurrent: Timer: Log: Metrics: EraStorage: BlockRela
       case HighwayEvent.CreatedOmegaMessage(m) =>
         handleCreatedMessage(m, "omega-message")
       case HighwayEvent.HandledLambdaMessage =>
-        messageExecutor.checkFinality
+        messageExecutor.checkFinality.void
     } void
   }
 
