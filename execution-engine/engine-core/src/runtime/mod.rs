@@ -24,7 +24,7 @@ use standard_payment::StandardPayment;
 use types::{
     account::{ActionType, PublicKey, Weight},
     bytesrepr::{self, FromBytes, ToBytes},
-    contract_header::{self, ContractHeader, ContractMetadata},
+    contract_header::{self, ContractHeader, ContractMetadata, EntryPointAccess},
     system_contract_errors,
     system_contract_errors::mint,
     AccessRights, ApiError, CLType, CLTyped, CLValue, Key, ProtocolVersion, SemVer,
@@ -1963,13 +1963,27 @@ where
         args: Vec<CLValue>,
     ) -> Result<CLValue, Error> {
         let contract = match self.context.read_gs(&key)? {
-            Some(StoredValue::ContractMetadata(metadata)) => {
+            Some(StoredValue::ContractMetadata(mut metadata)) => {
                 let header = metadata
                     .get_version(&version)
                     .ok_or_else(|| Error::InvalidContractVersion)?;
                 let entry_point = header
                     .get_method(&method)
                     .ok_or_else(|| Error::NoSuchMethod)?;
+
+                if let EntryPointAccess::Groups(groups) = entry_point.access() {
+                    if let None = groups.iter().find(|g| {
+                        metadata
+                            .groups()
+                            .get(g)
+                            .and_then(|set| {
+                                set.iter().find(|u| self.context.validate_uref(u).is_ok())
+                            })
+                            .is_some()
+                    }) {
+                        return Err(Error::InvalidContext);
+                    }
+                }
 
                 for (expected, found) in entry_point
                     .args()

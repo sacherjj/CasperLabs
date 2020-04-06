@@ -11,7 +11,7 @@ use contract::{
     unwrap_or_revert::UnwrapOrRevert,
 };
 use types::{
-    contract_header::{Arg, ContractHeader, EntryPoint},
+    contract_header::{Arg, ContractHeader, EntryPoint, EntryPointAccess},
     ApiError, CLType, CLValue, Key, ProtocolVersion, SemVer, URef,
 };
 
@@ -85,11 +85,12 @@ pub extern "C" fn call() {
         [
             (
                 String::from(GET_METHOD),
-                EntryPoint::new(Vec::new(), CLType::I32),
+                EntryPoint::new(EntryPointAccess::public(), Vec::new(), CLType::I32),
             ),
             (
                 String::from(INC_METHOD),
                 EntryPoint::new(
+                    EntryPointAccess::public(),
                     vec![Arg::new(String::from("step"), CLType::I32)],
                     CLType::Unit,
                 ),

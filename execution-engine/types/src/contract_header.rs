@@ -41,6 +41,27 @@ impl Error {
     }
 }
 
+/// A (labelled) "user group". Each method of a versioned contract may be
+/// assoicated with one or more user groups which are allowed to call it.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Group(String);
+
+impl ToBytes for Group {
+    fn to_bytes(&self) -> Result<Vec<u8>, bytesrepr::Error> {
+        self.0.to_bytes()
+    }
+
+    fn serialized_length(&self) -> usize {
+        self.0.serialized_length()
+    }
+}
+
+impl FromBytes for Group {
+    fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), bytesrepr::Error> {
+        String::from_bytes(bytes).map(|(label, bytes)| (Group(label), bytes))
+    }
+}
+
 /// Collection of different versions of the same contract.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ContractMetadata {
@@ -50,6 +71,11 @@ pub struct ContractMetadata {
     active_versions: BTreeMap<SemVer, ContractHeader>,
     /// Old versions that are no longer supported
     removed_versions: BTreeSet<SemVer>,
+    /// Mapping maintaining the set of URefs assoicated with each "user
+    /// group". This can be used to control access to methods in a particular
+    /// version of the contract. A method is callable by any context which
+    /// "knows" any of the URefs assoicated with the mthod's user group.
+    groups: BTreeMap<Group, BTreeSet<URef>>,
 }
 
 impl ContractMetadata {
@@ -59,6 +85,7 @@ impl ContractMetadata {
             access_key,
             active_versions: BTreeMap::new(),
             removed_versions: BTreeSet::new(),
+            groups: BTreeMap::new(),
         }
     }
 
@@ -67,8 +94,13 @@ impl ContractMetadata {
         self.access_key
     }
 
+    /// Get the group definitions for this contract.
+    pub fn groups(&self) -> &BTreeMap<Group, BTreeSet<URef>> {
+        &self.groups
+    }
+
     /// Get the contract header for the given version (if present)
-    pub fn get_version(mut self, version: &SemVer) -> Option<ContractHeader> {
+    pub fn get_version(&mut self, version: &SemVer) -> Option<ContractHeader> {
         self.active_versions.remove(version)
     }
 
@@ -103,6 +135,7 @@ impl ToBytes for ContractMetadata {
         result.append(&mut self.access_key.to_bytes()?);
         result.append(&mut self.active_versions.to_bytes()?);
         result.append(&mut self.removed_versions.to_bytes()?);
+        result.append(&mut self.groups.to_bytes()?);
 
         Ok(result)
     }
@@ -111,6 +144,7 @@ impl ToBytes for ContractMetadata {
         self.access_key.serialized_length()
             + self.active_versions.serialized_length()
             + self.removed_versions.serialized_length()
+            + self.groups.serialized_length()
     }
 }
 
@@ -119,10 +153,12 @@ impl FromBytes for ContractMetadata {
         let (access_key, bytes) = URef::from_bytes(bytes)?;
         let (active_versions, bytes) = BTreeMap::<SemVer, ContractHeader>::from_bytes(bytes)?;
         let (removed_versions, bytes) = BTreeSet::<SemVer>::from_bytes(bytes)?;
+        let (groups, bytes) = BTreeMap::<Group, BTreeSet<URef>>::from_bytes(bytes)?;
         let result = ContractMetadata {
             access_key,
             active_versions,
             removed_versions,
+            groups,
         };
 
         Ok((result, bytes))
@@ -203,15 +239,20 @@ impl FromBytes for ContractHeader {
 /// referenced by index as well as name.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EntryPoint {
-    // TODO: I wonder if we could have access-controlled methods
+    access: EntryPointAccess,
     args: Vec<Arg>,
     ret: CLType,
 }
 
 impl EntryPoint {
     /// `EntryPoint` constructor.
-    pub fn new(args: Vec<Arg>, ret: CLType) -> Self {
-        EntryPoint { args, ret }
+    pub fn new(access: EntryPointAccess, args: Vec<Arg>, ret: CLType) -> Self {
+        EntryPoint { access, args, ret }
+    }
+
+    /// Get access enum.
+    pub fn access(&self) -> &EntryPointAccess {
+        &self.access
     }
 
     /// Get the arguments for this method.
@@ -222,23 +263,110 @@ impl EntryPoint {
 
 impl ToBytes for EntryPoint {
     fn to_bytes(&self) -> Result<Vec<u8>, bytesrepr::Error> {
-        let mut result = ToBytes::to_bytes(&self.args)?;
+        let mut result = bytesrepr::allocate_buffer(self)?;
+
+        result.append(&mut self.access.to_bytes()?);
+        result.append(&mut self.args.to_bytes()?);
         self.ret.append_bytes(&mut result);
 
         Ok(result)
     }
 
     fn serialized_length(&self) -> usize {
-        ToBytes::serialized_length(&self.args) + self.ret.serialized_length()
+        self.access.serialized_length()
+            + self.args.serialized_length()
+            + self.ret.serialized_length()
     }
 }
 
 impl FromBytes for EntryPoint {
     fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), bytesrepr::Error> {
+        let (access, bytes) = EntryPointAccess::from_bytes(bytes)?;
         let (args, bytes) = Vec::<Arg>::from_bytes(bytes)?;
         let (ret, bytes) = CLType::from_bytes(bytes)?;
 
-        Ok((EntryPoint { args, ret }, bytes))
+        Ok((EntryPoint { access, args, ret }, bytes))
+    }
+}
+
+/// Enum describing the possible access control options for a contract entry
+/// point (method).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum EntryPointAccess {
+    /// Anyone can call this method (no access controls).
+    Public,
+    /// Only users from the listed groups may call this method. Note: if the
+    /// list is empty then this method is not callable from outside the
+    /// contract.
+    Groups(Vec<Group>),
+}
+
+impl EntryPointAccess {
+    /// Constructor for public access.
+    pub fn public() -> Self {
+        EntryPointAccess::Public
+    }
+
+    /// Constructor for access granted to only listed groups.
+    pub fn groups(labels: &[&str]) -> Self {
+        let list: Vec<Group> = labels.iter().map(|s| Group(String::from(*s))).collect();
+        EntryPointAccess::Groups(list)
+    }
+
+    fn tag(&self) -> EntryPointAccessTag {
+        match self {
+            EntryPointAccess::Public => EntryPointAccessTag::Public,
+            EntryPointAccess::Groups(_) => EntryPointAccessTag::Groups,
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Clone, Copy, FromPrimitive)]
+#[repr(u8)]
+enum EntryPointAccessTag {
+    Public = 0,
+    Groups = 1,
+}
+
+impl EntryPointAccessTag {
+    fn to_u8(&self) -> u8 {
+        *self as u8
+    }
+}
+
+impl ToBytes for EntryPointAccess {
+    fn to_bytes(&self) -> Result<Vec<u8>, bytesrepr::Error> {
+        let mut result = bytesrepr::allocate_buffer(self)?;
+
+        result.push(self.tag().to_u8());
+        if let EntryPointAccess::Groups(groups) = self {
+            result.append(&mut groups.to_bytes()?);
+        }
+
+        Ok(result)
+    }
+
+    fn serialized_length(&self) -> usize {
+        match self {
+            EntryPointAccess::Public => 1,
+            EntryPointAccess::Groups(groups) => 1 + groups.serialized_length(),
+        }
+    }
+}
+
+impl FromBytes for EntryPointAccess {
+    fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), bytesrepr::Error> {
+        let (tag, bytes) = u8::from_bytes(bytes)?;
+
+        match EntryPointAccessTag::from_u8(tag) {
+            None => Err(bytesrepr::Error::Formatting),
+            Some(EntryPointAccessTag::Public) => Ok((EntryPointAccess::Public, bytes)),
+            Some(EntryPointAccessTag::Groups) => {
+                let (groups, bytes) = Vec::<Group>::from_bytes(bytes)?;
+                let result = EntryPointAccess::Groups(groups);
+                Ok((result, bytes))
+            }
+        }
     }
 }
 
