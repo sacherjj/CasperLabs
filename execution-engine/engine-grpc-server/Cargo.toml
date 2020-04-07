@@ -1,6 +1,6 @@
 [package]
 name = "casperlabs-engine-grpc-server"
-version = "0.17.2"
+version = "0.18.0"
 authors = ["Mateusz Górski <gorski.mateusz@protonmail.ch>"]
 edition = "2018"
 description = "Wasm execution engine for CasperLabs smart contracts."
