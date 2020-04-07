@@ -16,7 +16,6 @@ use types::{
 };
 
 const COUNT_KEY: &str = "count";
-const COUNTER_ACCESS: &str = "counter_access";
 const COUNTER_INCREMENT: &str = "counter_increment";
 const COUNTER_KEY: &str = "counter";
 const COUNTER_INC_KEY: &str = "counter_inc";
@@ -121,9 +120,9 @@ pub extern "C" fn create_counter() -> ! {
     )
     .unwrap_or_revert();
 
+    // TODO: it should return the access key too, but that would require extracting urefs from a tuple3...
     let return_value = CLValue::from_t((
         contract_key,
-        access_key,
         counter_variable.with_access_rights(AccessRights::READ),
     ))
     .unwrap_or_revert();
@@ -144,11 +143,10 @@ pub extern "C" fn factory_session() {
         .to_contract_ref()
         .unwrap_or_revert_with(ApiError::UnexpectedKeyVariant);
 
-    let (counter_contract, access_key, count_var): (Key, URef, URef) =
+    let (counter_contract, count_var): (Key, URef) =
         runtime::call_versioned_contract(contract_ref, VERSION, CREATE_COUNTER_METHOD, ());
 
     runtime::put_key(COUNTER_KEY, counter_contract);
-    runtime::put_key(COUNTER_ACCESS, access_key.into());
     // store counter variable in account too for easier query
     runtime::put_key(COUNT_KEY, count_var.into());
 }
@@ -191,13 +189,12 @@ pub extern "C" fn call() {
                     // This method is public so anyone can create counters
                     EntryPointAccess::public(),
                     Vec::new(),
-                    // Returns the key for the new contract, its access key and
+                    // Returns the key for the new contract, and
                     // a read-only uref for the counter variable itself (for
                     // query convenience until querying versioned contracts is
                     // possible).
-                    CLType::Tuple3([
+                    CLType::Tuple2([
                         Box::new(CLType::Key),
-                        Box::new(CLType::URef),
                         Box::new(CLType::URef),
                     ]),
                 ),
