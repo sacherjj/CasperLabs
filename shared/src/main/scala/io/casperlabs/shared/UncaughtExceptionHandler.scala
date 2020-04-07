@@ -23,7 +23,7 @@ class UncaughtExceptionHandler(shutdownTimeout: FiniteDuration)(implicit logId: 
         val timestamp = dateTimeFormatter.format(Instant.now())
         println(
           s"ERROR $timestamp (UncaughtExceptionHandler.scala) Exception thrown when logging. " +
-            s"Original stacktrace:\n"
+            s"Original stacktrace:\n${ex.getMessage}"
         )
         ex.printStackTrace()
     }
