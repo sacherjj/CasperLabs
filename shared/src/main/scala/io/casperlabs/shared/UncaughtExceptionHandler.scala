@@ -23,7 +23,7 @@ class UncaughtExceptionHandler(shutdownTimeout: FiniteDuration)(implicit logId: 
     ex match {
       case _: VirtualMachineError | _: LinkageError | _: FatalErrorShutdown =>
         // To flush logs
-        Thread.sleep(1000)
+        Thread.sleep(3000)
         exitOrHalt(1, shutdownTimeout)
       case _ =>
     }
