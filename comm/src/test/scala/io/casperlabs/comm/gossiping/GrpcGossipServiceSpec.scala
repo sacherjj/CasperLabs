@@ -86,7 +86,6 @@ class GrpcGossipServiceSpec
       StreamBlockSummariesSpec,
       StreamAncestorBlockSummariesSpec,
       StreamLatestMessagesSpec,
-      NewDeploysSpec,
       NewBlocksSpec,
       GenesisApprovalSpec,
       StreamDagSliceBlockSummariesSpec
