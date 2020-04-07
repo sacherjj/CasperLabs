@@ -49,7 +49,8 @@ trait MessageProducer[F[_]] {
       roundId: Ticks,
       target: Message.Block,
       // For lambda responses we want to limit the justifications to just direct ones.
-      justifications: Map[PublicKeyBS, Set[Message]]
+      justifications: Map[PublicKeyBS, Set[Message]],
+      messageRole: Block.MessageRole
   ): F[Message.Ballot]
 
   /** Pick whatever secondary parents are compatible with the chosen main parent
@@ -62,8 +63,12 @@ trait MessageProducer[F[_]] {
       roundId: Ticks,
       mainParent: Message.Block,
       justifications: Map[PublicKeyBS, Set[Message]],
-      isBookingBlock: Boolean
+      isBookingBlock: Boolean,
+      messageRole: Block.MessageRole
   ): F[Message.Block]
+
+  /** Check if we can produce a block, when there's a choice between a ballot or a block. */
+  def hasPendingDeploys: F[Boolean]
 }
 
 object MessageProducer {
@@ -77,11 +82,15 @@ object MessageProducer {
       override val validatorId =
         PublicKey(ByteString.copyFrom(validatorIdentity.publicKey))
 
+      override def hasPendingDeploys: F[Boolean] =
+        DeployStorage[F].reader.readPendingHashes.map(_.nonEmpty)
+
       override def ballot(
           keyBlockHash: BlockHash,
           roundId: Ticks,
           target: Message.Block,
-          justifications: Map[PublicKeyBS, Set[Message]]
+          justifications: Map[PublicKeyBS, Set[Message]],
+          messageRole: Block.MessageRole
       ): F[Message.Ballot] =
         for {
           props     <- messageProps(keyBlockHash, List(target), justifications)
@@ -103,7 +112,8 @@ object MessageProducer {
             validatorIdentity.privateKey,
             validatorIdentity.signatureAlgorithm,
             keyBlockHash,
-            roundId
+            roundId,
+            messageRole
           )
 
           message <- MonadThrowable[F].fromTry(Message.fromBlock(signed))
@@ -117,7 +127,8 @@ object MessageProducer {
           roundId: Ticks,
           mainParent: Message.Block,
           justifications: Map[PublicKeyBS, Set[Message]],
-          isBookingBlock: Boolean
+          isBookingBlock: Boolean,
+          messageRole: Block.MessageRole
       ): F[Message.Block] =
         for {
           dag          <- DagStorage[F].getRepresentation
@@ -175,7 +186,8 @@ object MessageProducer {
             validatorIdentity.signatureAlgorithm,
             keyBlockHash,
             roundId,
-            magicBit
+            magicBit,
+            messageRole
           )
 
           message <- MonadThrowable[F].fromTry(Message.fromBlock(signed))

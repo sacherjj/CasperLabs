@@ -296,7 +296,8 @@ object Highway {
             .FixedLength(hc.votingPeriodDurationMillis.millis)
         },
         omegaMessageTimeStart = conf.highway.omegaMessageTimeStart.value,
-        omegaMessageTimeEnd = conf.highway.omegaMessageTimeEnd.value
+        omegaMessageTimeEnd = conf.highway.omegaMessageTimeEnd.value,
+        omegaBlocksEnabled = conf.highway.omegaBlocksEnabled
       )
 
       _ <- Resource.liftF {
@@ -309,6 +310,9 @@ object Highway {
               Log[F].info(s"Voting duration is ${hwConf.postEraVotingDuration}") >>
               Log[F].info(
                 s"Initial round exponent is ${conf.highway.initRoundExponent.value -> "exponent"}"
+              ) >>
+              Log[F].info(
+                s"Omega message time ${hwConf.omegaMessageTimeStart} to ${hwConf.omegaMessageTimeEnd}; blocks ${hwConf.omegaBlocksEnabled}"
               )
           }
 

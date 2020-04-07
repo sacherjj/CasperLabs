@@ -93,6 +93,7 @@ min-ttl = "1hour"
 enabled = false
 omega-message-time-start = 1.0
 omega-message-time-end = 1.0
+omega-blocks-enabled = false
 init-round-exponent = 0
 
 [blockstorage]

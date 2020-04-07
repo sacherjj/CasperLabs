@@ -282,6 +282,9 @@ omega-message-time-start = 0.5
 # Fraction of time through the round before which we must have created the omega message.
 omega-message-time-end = 0.75
 
+# Enable the creating blocks instead of ballots as omega-messages.
+omega-blocks-enabled = false
+
 # Initial round exponent to start the node with, before auto-adjustment takes over; corresponds to the tick unit of the chain.
 init-round-exponent = 14
 

@@ -18,7 +18,7 @@ object HighwayEvent {
   case class CreatedLambdaResponse(message: Message.Ballot) extends HighwayEvent
 
   /** Created an omega message, some time during the round. */
-  case class CreatedOmegaMessage(message: Message.Ballot) extends HighwayEvent
+  case class CreatedOmegaMessage(message: Message) extends HighwayEvent
 
   /** Create a new era based on a previously unused key block. */
   case class CreatedEra(era: Era) extends HighwayEvent

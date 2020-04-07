@@ -84,7 +84,8 @@ trait HighwayFixture
     entropyDuration = hours(3),
     postEraVotingDuration = VotingDuration.FixedLength(postEraVotingDuration),
     omegaMessageTimeStart = 0.5,
-    omegaMessageTimeEnd = 0.75
+    omegaMessageTimeEnd = 0.75,
+    omegaBlocksEnabled = false
   )
 
   trait FixtureLike {
@@ -231,7 +232,8 @@ trait HighwayFixture
                 era.keyBlockHash,
                 roundId = Ticks(era.startTick),
                 target = parentBlock,
-                justifications = justifications
+                justifications = justifications,
+                messageRole = Block.MessageRole.WITNESS
               )
         } yield b.messageHash
 
@@ -249,7 +251,8 @@ trait HighwayFixture
                 roundId = Ticks(era.startTick),
                 mainParent = parentBlock,
                 justifications = justifications,
-                isBookingBlock = false
+                isBookingBlock = false,
+                messageRole = Block.MessageRole.PROPOSAL
               )
         } yield b.messageHash
     }
