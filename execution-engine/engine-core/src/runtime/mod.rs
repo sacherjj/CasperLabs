@@ -1671,14 +1671,14 @@ where
         let arg: CLValue = args
             .get(index)
             .cloned()
-            .ok_or_else(|| Error::Revert(ApiError::MissingArgument.into()))?;
+            .ok_or_else(|| Error::Revert(ApiError::MissingArgument))?;
         arg.into_t()
-            .map_err(|_| Error::Revert(ApiError::InvalidArgument.into()))
+            .map_err(|_| Error::Revert(ApiError::InvalidArgument))
     }
 
     fn reverter<T: Into<ApiError>>(error: T) -> Error {
         let api_error: ApiError = error.into();
-        Error::Revert(api_error.into())
+        Error::Revert(api_error)
     }
 
     pub fn call_host_mint(
@@ -1839,7 +1839,7 @@ where
         let ret: CLValue = match method_name.as_str() {
             METHOD_BOND => {
                 if !self.config.enable_bonding() {
-                    let err = Error::Revert(ApiError::Unhandled.into());
+                    let err = Error::Revert(ApiError::Unhandled);
                     return Err(err);
                 }
 
@@ -1853,7 +1853,7 @@ where
             }
             METHOD_UNBOND => {
                 if !self.config.enable_bonding() {
-                    let err = Error::Revert(ApiError::Unhandled.into());
+                    let err = Error::Revert(ApiError::Unhandled);
                     return Err(err);
                 }
 

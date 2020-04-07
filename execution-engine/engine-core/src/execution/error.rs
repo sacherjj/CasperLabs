@@ -5,10 +5,9 @@ use parity_wasm::elements;
 use engine_shared::TypeMismatch;
 use types::{
     account::{AddKeyFailure, RemoveKeyFailure, SetThresholdFailure, UpdateKeyFailure},
-    bytesrepr, system_contract_errors, AccessRights, CLValueError, Key, URef,
+    bytesrepr, system_contract_errors, AccessRights, ApiError, CLValueError, Key, URef,
 };
 
-use super::revert::Revert;
 use crate::resolvers::error::ResolverError;
 
 #[derive(Debug)]
@@ -31,7 +30,7 @@ pub enum Error {
     Rng(rand::Error),
     Resolver(ResolverError),
     /// Reverts execution with a provided status
-    Revert(Revert),
+    Revert(ApiError),
     AddKeyFailure(AddKeyFailure),
     RemoveKeyFailure(RemoveKeyFailure),
     UpdateKeyFailure(UpdateKeyFailure),

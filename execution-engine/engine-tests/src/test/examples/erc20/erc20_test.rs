@@ -5,7 +5,7 @@ use engine_shared::motes::Motes;
 use engine_test_support::internal::{
     utils, ExecuteRequestBuilder, InMemoryWasmTestBuilder as TestBuilder, DEFAULT_GENESIS_CONFIG,
 };
-use types::{account::PublicKey, bytesrepr::ToBytes, CLValue, Key, U512};
+use types::{account::PublicKey, bytesrepr::ToBytes, ApiError, CLValue, Key, U512};
 
 const ERC_20_CONTRACT_WASM: &str = "erc20_smart_contract.wasm";
 const TRANFER_TO_ACCOUNT_WASM: &str = "transfer_to_account_u512.wasm";
@@ -226,7 +226,7 @@ impl ERC20Test {
             .builder
             .exec_error_message(last_deploy_index - 1)
             .unwrap();
-        let expected_message = format!("Revert({:?})", code);
+        let expected_message = format!("{:?}", ApiError::from(code));
         assert!(deploy_error.contains(&expected_message));
         self
     }

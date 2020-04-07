@@ -163,9 +163,8 @@ mod detail {
 mod tests {
     use std::convert::TryInto;
 
-    use engine_core::execution::Revert;
     use engine_shared::{additive_map::AdditiveMap, transform::Transform};
-    use types::{bytesrepr::Error as BytesReprError, AccessRights, Key, URef, U512};
+    use types::{bytesrepr::Error as BytesReprError, AccessRights, ApiError, Key, URef, U512};
 
     use super::*;
 
@@ -245,7 +244,7 @@ mod tests {
 
     #[test]
     fn revert_error_maps_to_execution_error() {
-        let expected_revert = Revert::new(10);
+        let expected_revert = ApiError::UnexpectedContractRefVariant;
         let revert_error = ExecutionError::Revert(expected_revert);
         let amount = U512::from(15);
         let exec_result = ExecutionResult::Failure {
