@@ -33,3 +33,4 @@ version-sync = "0.8"
 enable-bonding = []
 use-as-wasm = []
 use-system-contracts = []
+test-support = ["engine-core/test-support", "engine-grpc-server/test-support", "contract/test-support"]
