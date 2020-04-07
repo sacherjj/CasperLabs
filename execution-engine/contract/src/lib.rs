@@ -62,7 +62,7 @@
     core_intrinsics,
     lang_items
 )]
-#![doc(html_root_url = "https://docs.rs/casperlabs-contract/0.4.0")]
+#![doc(html_root_url = "https://docs.rs/casperlabs-contract/0.4.1")]
 #![doc(
     html_favicon_url = "https://raw.githubusercontent.com/CasperLabs/CasperLabs/dev/images/CasperLabs_Logo_Favicon_RGB_50px.png",
     html_logo_url = "https://raw.githubusercontent.com/CasperLabs/CasperLabs/dev/images/CasperLabs_Logo_Symbol_RGB.png",
