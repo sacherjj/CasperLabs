@@ -7,7 +7,11 @@ import cats.mtl.MonadState
 import cats.Monad
 import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.PrettyPrinter
-import io.casperlabs.casper.finality.{CommitteeWithConsensusValue, FinalityDetector}
+import io.casperlabs.casper.finality.{
+  CommitteeWithConsensusValue,
+  FinalityDetector,
+  FinalityDetectorUtil
+}
 import io.casperlabs.casper.finality.votingmatrix.FinalityDetectorVotingMatrix._votingMatrixS
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.models.Message
@@ -59,14 +63,27 @@ class FinalityDetectorVotingMatrix[F[_]: Concurrent: Log: AncestorsStorage] priv
                               .buildString(lfbChildHash)                       -> "hash"} from a different era."
                           )
                         else
-                          matrix.withPermit(
-                            updateVoterPerspective[F](
-                              dag,
-                              message,
-                              lfbChildHash,
-                              isHighway
-                            )
-                          )
+                          for {
+                            lfb        <- dag.lookupBlockUnsafe(latestFinalizedBlock)
+                            validators = lfb.weightMap.keySet
+                            panorama <- FinalityDetectorUtil
+                                         .panoramaOfBlockByValidators[F](
+                                           dag,
+                                           message,
+                                           lfb,
+                                           validators
+                                         )
+                            _ <- matrix.withPermit(
+                                  updateVoterPerspective[F](
+                                    dag,
+                                    message,
+                                    panorama,
+                                    lfbChildHash,
+                                    isHighway
+                                  )
+                                )
+                          } yield ()
+
                   } yield ()
                 // If block doesn't vote on any of main children of latestFinalizedBlock,
                 // then don't update voting matrix

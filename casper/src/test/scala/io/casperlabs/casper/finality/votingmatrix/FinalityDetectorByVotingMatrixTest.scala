@@ -299,7 +299,7 @@ class FinalityDetectorByVotingMatrixTest
         _ = c4 shouldBe Seq(CommitteeWithConsensusValue(Set(v1, v2, v3), 30, b1.blockHash))
         (b5, c5) <- createBlockAndUpdateFinalityDetector[Task](
                      Seq(b4.blockHash),
-                     b1.blockHash,
+                     genesis.blockHash,
                      v2,
                      bonds,
                      HashMap(v1 -> b4.blockHash, v2 -> b2.blockHash, v3 -> b3.blockHash),
@@ -308,7 +308,7 @@ class FinalityDetectorByVotingMatrixTest
         _ = c5 shouldBe Seq(CommitteeWithConsensusValue(Set(v1, v2, v3), 30, b2.blockHash))
         (b6, c6) <- createBlockAndUpdateFinalityDetector[Task](
                      Seq(b5.blockHash),
-                     b2.blockHash,
+                     genesis.blockHash,
                      v3,
                      bonds,
                      HashMap(v1 -> b4.blockHash, v2 -> b5.blockHash, v3 -> b3.blockHash),
@@ -317,7 +317,7 @@ class FinalityDetectorByVotingMatrixTest
         _ = c6 shouldBe Seq(CommitteeWithConsensusValue(Set(v1, v2, v3), 30, b3.blockHash))
         (b7, c7) <- createBlockAndUpdateFinalityDetector[Task](
                      Seq(b6.blockHash),
-                     b3.blockHash,
+                     genesis.blockHash,
                      v1,
                      bonds,
                      HashMap(v1 -> b4.blockHash, v2 -> b5.blockHash, v3 -> b6.blockHash),
