@@ -312,6 +312,16 @@ where
         Ok(key)
     }
 
+    /// Creates a new URef where the value it stores is CLType::Unit.
+    pub fn new_unit_uref(&mut self) -> Result<URef, Error> {
+        let cl_unit = CLValue::from_components(CLType::Unit, Vec::new());
+        let uref = self
+            .new_uref(StoredValue::CLValue(cl_unit))?
+            .into_uref()
+            .expect("new_uref must always produce a Key::URef");
+        Ok(uref)
+    }
+
     /// Puts `key` to the map of named keys of current context.
     pub fn put_key(&mut self, name: String, key: Key) -> Result<(), Error> {
         // No need to perform actual validation on the base key because an account or contract (i.e.

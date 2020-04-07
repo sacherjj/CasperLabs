@@ -1,4 +1,7 @@
-use std::{collections::BTreeMap, convert::TryFrom};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    convert::TryFrom,
+};
 
 use wasmi::{Externals, RuntimeArgs, RuntimeValue, Trap};
 
@@ -7,7 +10,7 @@ use types::{
     api_error,
     bytesrepr::{self, ToBytes},
     contract_header::ContractHeader,
-    Key, TransferredTo, SEM_VER_SERIALIZED_LENGTH, U512, UREF_SERIALIZED_LENGTH,
+    Key, TransferredTo, URef, SEM_VER_SERIALIZED_LENGTH, U512, UREF_SERIALIZED_LENGTH,
 };
 
 use engine_shared::{gas::Gas, stored_value::StoredValue};
@@ -468,6 +471,48 @@ where
                 self.function_address(hash_addr, hash_dest_ptr)?;
                 self.function_address(access_addr, access_dest_ptr)?;
                 Ok(None)
+            }
+
+            FunctionIndex::CreateContractUserGroup => {
+                // args(0) = pointer to metadata key in wasm memory
+                // args(1) = size of metadata key in wasm memory
+                // args(2) = pointer to access key in wasm memory
+                // args(3) = pointer to group label in wasm memory
+                // args(4) = size of group label in wasm memory
+                // args(5) = number of new urefs to generate for the group
+                // args(6) = pointer to existing_urefs in wasm memory
+                // args(7) = size of existing_urefs in wasm memory
+                // args(8) = pointer to location to write size of output (written to host buffer)
+                let (
+                    meta_key_ptr,
+                    meta_key_size,
+                    access_key_ptr,
+                    label_ptr,
+                    label_size,
+                    num_new_urefs,
+                    existing_urefs_ptr,
+                    existing_urefs_size,
+                    output_size_ptr,
+                ) = Args::parse(args)?;
+
+                let metadata_key = self.key_from_mem(meta_key_ptr, meta_key_size)?;
+                let access_key = {
+                    let bytes = self.bytes_from_mem(access_key_ptr, UREF_SERIALIZED_LENGTH)?;
+                    bytesrepr::deserialize(bytes).map_err(Error::BytesRepr)?
+                };
+                let label: String = self.t_from_mem(label_ptr, label_size)?;
+                let existing_urefs: BTreeSet<URef> =
+                    self.t_from_mem(existing_urefs_ptr, existing_urefs_size)?;
+
+                let ret = self.create_contract_user_group(
+                    metadata_key,
+                    access_key,
+                    label,
+                    num_new_urefs,
+                    existing_urefs,
+                    output_size_ptr,
+                )?;
+                Ok(Some(RuntimeValue::I32(api_error::i32_from(ret))))
             }
 
             FunctionIndex::AddContractVersion => {

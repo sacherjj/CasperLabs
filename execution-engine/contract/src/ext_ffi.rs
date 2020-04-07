@@ -106,6 +106,17 @@ extern "C" {
     pub fn read_host_buffer(dest_ptr: *mut u8, dest_size: usize, bytes_written: *mut usize) -> i32;
     pub fn create_contract(uref_addr_ptr: *mut u8, access_addr_ptr: *mut u8);
     pub fn create_contract_at_hash(hash_addr_ptr: *mut u8, access_addr_ptr: *mut u8);
+    pub fn create_contract_user_group(
+        meta_ptr: *const u8,
+        meta_size: usize,
+        access_ptr: *const u8,
+        label_ptr: *const u8,
+        leabel_size: usize,
+        num_new_urefs: u8,
+        existing_urefs_ptr: *const u8,
+        existing_urefs_size: usize,
+        output_size_ptr: *mut usize,
+    ) -> i32;
     pub fn add_contract_version(
         meta_ptr: *const u8,
         meta_size: usize,

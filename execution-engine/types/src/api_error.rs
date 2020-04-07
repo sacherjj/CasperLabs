@@ -642,6 +642,8 @@ pub fn result_from(value: i32) -> Result<(), ApiError> {
                 Err(ApiError::ProofOfStake(value as u8))
             } else if value >= MINT_ERROR_OFFSET as i32 && value < POS_ERROR_OFFSET as i32 {
                 Err(ApiError::Mint(value as u8))
+            } else if value >= HEADER_ERROR_OFFSET as i32 && value < MINT_ERROR_OFFSET as i32 {
+                Err(ApiError::ContractHeader(value as u8))
             } else {
                 Err(ApiError::Unhandled)
             }

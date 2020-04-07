@@ -196,6 +196,10 @@ impl ModuleImportResolver for RuntimeModuleImportResolver {
                 Signature::new(&[ValueType::I32; 2][..], None),
                 FunctionIndex::CreateContractAtHash.into(),
             ),
+            "create_contract_user_group" => FuncInstance::alloc_host(
+                Signature::new(&[ValueType::I32; 9][..], Some(ValueType::I32)),
+                FunctionIndex::CreateContractUserGroup.into(),
+            ),
             "add_contract_version" => FuncInstance::alloc_host(
                 Signature::new(&[ValueType::I32; 8][..], Some(ValueType::I32)),
                 FunctionIndex::AddContractVersion.into(),

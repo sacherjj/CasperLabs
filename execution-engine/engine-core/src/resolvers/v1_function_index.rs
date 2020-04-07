@@ -48,6 +48,7 @@ pub enum FunctionIndex {
     AddContractVersion,
     RemoveContractVersion,
     CallVersionedContract,
+    CreateContractUserGroup,
 }
 
 impl Into<usize> for FunctionIndex {

@@ -26,6 +26,9 @@ pub enum Error {
     PreviouslyUsedVersion = 2,
     /// Attempted to remove a version that does not exist.
     VersionNotFound = 3,
+    /// Attempted to create a user group which already exists (use the update
+    /// function to change an existing user group).
+    GroupAlreadyExists = 4,
 }
 
 impl Error {
@@ -35,6 +38,11 @@ impl Error {
     }
 
     /// Construct from byte (for serialization purposes).
+    pub fn from_u8(x: u8) -> Self {
+        FromPrimitive::from_u8(x).unwrap()
+    }
+
+    /// Construct from integer (for return from host purposes).
     pub fn from_i32(x: i32) -> Option<Self> {
         let y: u8 = x.try_into().ok()?;
         FromPrimitive::from_u8(y)
@@ -45,6 +53,13 @@ impl Error {
 /// assoicated with one or more user groups which are allowed to call it.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Group(String);
+
+impl Group {
+    /// Basic constructor
+    pub fn new(s: String) -> Self {
+        Group(s)
+    }
+}
 
 impl ToBytes for Group {
     fn to_bytes(&self) -> Result<Vec<u8>, bytesrepr::Error> {
@@ -97,6 +112,11 @@ impl ContractMetadata {
     /// Get the group definitions for this contract.
     pub fn groups(&self) -> &BTreeMap<Group, BTreeSet<URef>> {
         &self.groups
+    }
+
+    /// Get a mutable reference to the group definitions for this contract.
+    pub fn groups_mut(&mut self) -> &mut BTreeMap<Group, BTreeSet<URef>> {
+        &mut self.groups
     }
 
     /// Get the contract header for the given version (if present)

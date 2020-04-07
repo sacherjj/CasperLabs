@@ -1,6 +1,10 @@
 //! Functions for accessing and mutating local and global state.
 
-use alloc::{collections::BTreeMap, string::String, vec::Vec};
+use alloc::{
+    collections::{BTreeMap, BTreeSet},
+    string::String,
+    vec::Vec,
+};
 use core::{convert::From, mem::MaybeUninit};
 
 use casperlabs_types::{
@@ -145,6 +149,53 @@ pub fn create_contract_at_hash() -> (ContractRef, URef) {
 
     (contract_ref, access_key)
 }
+
+/// Create a new "user group" for a (versioned) contract. User groups associate
+/// a set of URefs with a label. Methods on a contracts can be given a list of
+/// labels they accept and the runtime will check that a URef from at least one
+/// of the allowed groups is present in the caller's context before
+/// execution. This allows access control for methods of a contract. This
+/// function returns the list of new URefs created for the group (the list will
+/// contain `num_new_urefs` elements).
+pub fn create_contract_user_group(
+    contract: ContractRef,
+    access_key: URef,
+    group_label: &str,
+    num_new_urefs: u8, // number of new urefs to populate the group with
+    existing_urefs: BTreeSet<URef>, // also include these existing urefs in the group
+) -> Result<Vec<URef>, contract_header::Error> {
+    let (meta_ptr, meta_size, _bytes1) = contract_api::to_ptr(Key::from(contract));
+    let (access_ptr, _access_size, _bytes2) = contract_api::to_ptr(access_key);
+    let (label_ptr, label_size, _bytes3) = contract_api::to_ptr(group_label);
+    let (existing_urefs_ptr, existing_urefs_size, _bytes4) = contract_api::to_ptr(existing_urefs);
+
+    let value_size = {
+        let mut value_size = MaybeUninit::uninit();
+        let ret = unsafe {
+            ext_ffi::create_contract_user_group(
+                meta_ptr,
+                meta_size,
+                access_ptr,
+                label_ptr,
+                label_size,
+                num_new_urefs,
+                existing_urefs_ptr,
+                existing_urefs_size,
+                value_size.as_mut_ptr(),
+            )
+        };
+        match api_error::result_from(ret) {
+            Ok(_) => unsafe { value_size.assume_init() },
+            Err(ApiError::ContractHeader(id)) => return Err(contract_header::Error::from_u8(id)),
+            Err(e) => runtime::revert(e),
+        }
+    };
+
+    let value_bytes = runtime::read_host_buffer(value_size).unwrap_or_revert();
+    Ok(bytesrepr::deserialize(value_bytes).unwrap_or_revert())
+}
+
+// TODO: functions for removing user groups, adding/removing urefs from an existing group
 
 /// Add a new version of a contract to the contract stored at the given
 /// `ContractRef`. Note that this contract must have been created by

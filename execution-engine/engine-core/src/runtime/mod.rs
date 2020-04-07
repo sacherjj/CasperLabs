@@ -6,7 +6,7 @@ mod standard_payment_internal;
 
 use std::{
     cmp,
-    collections::{BTreeMap, HashMap, HashSet},
+    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     convert::TryFrom,
     iter::IntoIterator,
 };
@@ -24,7 +24,7 @@ use standard_payment::StandardPayment;
 use types::{
     account::{ActionType, PublicKey, Weight},
     bytesrepr::{self, FromBytes, ToBytes},
-    contract_header::{self, ContractHeader, ContractMetadata, EntryPointAccess},
+    contract_header::{self, ContractHeader, ContractMetadata, EntryPointAccess, Group},
     system_contract_errors,
     system_contract_errors::mint,
     AccessRights, ApiError, CLType, CLTyped, CLValue, Key, ProtocolVersion, SemVer,
@@ -2297,12 +2297,7 @@ where
     }
 
     fn create_contract_value(&mut self) -> Result<(StoredValue, URef), Error> {
-        let cl_unit = CLValue::from_components(CLType::Unit, Vec::new());
-        let access_key = self
-            .context
-            .new_uref(StoredValue::CLValue(cl_unit))?
-            .into_uref()
-            .expect("new_uref must always produce a Key::URef");
+        let access_key = self.context.new_unit_uref()?;
         let contract = ContractMetadata::new(access_key);
 
         let value = StoredValue::ContractMetadata(contract);
@@ -2328,6 +2323,69 @@ where
 
         self.context.state().borrow_mut().write(key, stored_value);
         Ok((addr, access_key.addr()))
+    }
+
+    fn create_contract_user_group(
+        &mut self,
+        metadata_key: Key,
+        access_key: URef,
+        label: String,
+        num_new_urefs: u32,
+        mut existing_urefs: BTreeSet<URef>,
+        output_size_ptr: u32,
+    ) -> Result<Result<(), ApiError>, Error> {
+        self.context.validate_key(&metadata_key)?;
+        self.context.validate_uref(&access_key)?;
+
+        let mut metadata: ContractMetadata = self.context.read_gs_typed(&metadata_key)?;
+
+        if metadata.access_key() != access_key {
+            let err = contract_header::Error::InvalidAccessKey;
+            return Ok(Err(ApiError::ContractHeader(err.to_u8())));
+        }
+
+        let groups = metadata.groups_mut();
+        let new_group = Group::new(label);
+
+        if let Some(_) = groups.get(&new_group) {
+            let err = contract_header::Error::GroupAlreadyExists;
+            return Ok(Err(ApiError::ContractHeader(err.to_u8())));
+        }
+
+        let mut new_urefs = Vec::with_capacity(num_new_urefs as usize);
+        for _ in 0..num_new_urefs {
+            let u = self.context.new_unit_uref()?;
+            new_urefs.push(u);
+        }
+
+        for u in new_urefs.iter().cloned() {
+            existing_urefs.insert(u);
+        }
+        groups.insert(new_group, existing_urefs);
+
+        // check we can write to the host buffer
+        if let Err(err) = self.check_host_buffer() {
+            return Ok(Err(err));
+        }
+        // create CLValue for return value
+        let new_urefs_value = CLValue::from_t(new_urefs)?;
+        let value_size = new_urefs_value.inner_bytes().len();
+        // write return value to buffer
+        if let Err(err) = self.write_host_buffer(new_urefs_value) {
+            return Ok(Err(err));
+        }
+        // Write return value size to output location
+        let output_size_bytes = value_size.to_le_bytes(); // Wasm is little-endian
+        if let Err(error) = self.memory.set(output_size_ptr, &output_size_bytes) {
+            return Err(Error::Interpreter(error).into());
+        }
+
+        self.context
+            .state()
+            .borrow_mut()
+            .write(metadata_key, StoredValue::ContractMetadata(metadata));
+
+        Ok(Ok(()))
     }
 
     fn add_contract_version(
