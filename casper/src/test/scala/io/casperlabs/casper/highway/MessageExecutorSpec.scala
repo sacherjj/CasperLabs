@@ -450,6 +450,7 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
           _    <- BlockStorage[Task].put(block, BlockEffects.empty.effects)
           wait <- messageExecutor.effectsAfterAdded(message)
           _    <- wait
+          _    <- messageExecutor.checkFinality().flatMap(identity)
           statuses <- deploys.traverse { d =>
                        DeployStorage[Task].reader.getBufferedStatus(d.deployHash)
                      }
@@ -528,6 +529,7 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
           finalizedMsg      <- makeBlock()
           wait              <- messageExecutor.effectsAfterAdded(finalizedMsg)
           _                 <- wait
+          _                 <- messageExecutor.checkFinality().flatMap(identity)
           indirectStatuses  <- getStatuses(indirectMsg)
           finalizedStatuses <- getStatuses(finalizedMsg)
         } yield {
