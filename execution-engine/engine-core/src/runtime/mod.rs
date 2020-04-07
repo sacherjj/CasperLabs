@@ -2165,11 +2165,11 @@ where
 
     /// Generates new unforgable reference and adds it to the context's
     /// access_rights set.
-    fn new_uref(&mut self, key_ptr: u32, value_ptr: u32, value_size: u32) -> Result<(), Trap> {
+    fn new_uref(&mut self, uref_ptr: u32, value_ptr: u32, value_size: u32) -> Result<(), Trap> {
         let cl_value = self.cl_value_from_mem(value_ptr, value_size)?; // read initial value from memory
-        let key = self.context.new_uref(StoredValue::CLValue(cl_value))?;
+        let uref = self.context.new_uref(StoredValue::CLValue(cl_value))?;
         self.memory
-            .set(key_ptr, &key.into_bytes().map_err(Error::BytesRepr)?)
+            .set(uref_ptr, &uref.into_bytes().map_err(Error::BytesRepr)?)
             .map_err(|e| Error::Interpreter(e).into())
     }
 
@@ -2796,6 +2796,13 @@ where
         }
 
         Ok(Ok(()))
+    }
+
+    #[cfg(feature = "test-support")]
+    fn print(&mut self, text_ptr: u32, text_size: u32) -> Result<(), Trap> {
+        let text = self.string_from_mem(text_ptr, text_size)?;
+        println!("{}", text);
+        Ok(())
     }
 }
 

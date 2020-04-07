@@ -693,13 +693,22 @@ class EraRuntime[F[_]: Sync: Clock: Metrics: Log: EraStorage: FinalityStorageRea
     * - key blocks don't need special handling when they are made
     * - switch blocks might be the ones that grant the rewards,
     *   according to how many blocks were finalized on time during the era
+    * - if it's a lambda message, propagate this information to higher layers
+    *   so that the finalizer can be updated.
     */
   private def handleCriticalMessages(message: Message): HWL[Unit] =
-    message match {
-      case _: Message.Ballot =>
+    HighwayLog
+      .liftF(message.isLambdaMessage)
+      .ifM(
+        HighwayLog.tell[F](HighwayEvent.HandledLambdaMessage),
         noop
-      case block: Message.Block =>
-        HighwayLog.liftF(block.isSwitchBlock).ifM(createEra(block), noop)
+      ) >> {
+      message match {
+        case _: Message.Ballot =>
+          noop
+        case block: Message.Block =>
+          HighwayLog.liftF(block.isSwitchBlock).ifM(createEra(block), noop)
+      }
     }
 
   /** Perform the validation and persistence of an incoming block.

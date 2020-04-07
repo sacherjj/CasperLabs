@@ -154,9 +154,11 @@ trait HighwayFixture
     implicit lazy val forkchoice = MockForkChoice.unsafe[Task](genesis)
 
     implicit lazy val finalizer = new MultiParentFinalizer[Task] {
-      override def onNewMessageAdded(
-          message: Message
-      ): Task[Seq[MultiParentFinalizer.FinalizedBlocks]] = Seq.empty.pure[Task]
+
+      override def addMessage(message: Message): Task[Unit] = Task.unit
+
+      override def checkFinality(): Task[Seq[MultiParentFinalizer.FinalizedBlocks]] =
+        Task(Seq.empty)
     }
 
     implicit lazy val deployBuffer = DeployBuffer.create[Task](chainName, minTtl = Duration.Zero)

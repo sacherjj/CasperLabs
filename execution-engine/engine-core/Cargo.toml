@@ -44,3 +44,6 @@ wasmi = "0.4.2"
 lazy_static = "1"
 matches = "0.1.8"
 proptest = "0.9.4"
+
+[features]
+test-support = []

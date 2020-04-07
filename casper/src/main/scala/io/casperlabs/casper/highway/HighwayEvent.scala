@@ -22,4 +22,6 @@ object HighwayEvent {
 
   /** Create a new era based on a previously unused key block. */
   case class CreatedEra(era: Era) extends HighwayEvent
+
+  case object HandledLambdaMessage extends HighwayEvent
 }
