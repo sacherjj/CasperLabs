@@ -248,7 +248,7 @@ object ForkChoice {
                                     .map(EraObservedBehavior.local(_))
                                     .timerGauge("fromJustifications_eraObservedBehaviors")
           justificationsMessages <- justifications.toList.traverse(dag.lookupUnsafe)
-          panoramaOfTheBlock <- EraObservedBehavior
+          panoramaOfTheBlock <- DagOperations
                                  .messageJPast[F](
                                    dag,
                                    justificationsMessages,

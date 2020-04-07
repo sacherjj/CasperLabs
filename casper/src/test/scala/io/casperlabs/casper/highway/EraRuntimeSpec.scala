@@ -8,6 +8,7 @@ import cats.effect.{Clock, Sync}
 import cats.effect.concurrent.{Ref, Semaphore}
 import com.google.protobuf.ByteString
 import java.util.concurrent.TimeUnit
+
 import io.casperlabs.casper.consensus.{Block, BlockSummary, Bond, Era}
 import io.casperlabs.casper.consensus.state
 import io.casperlabs.crypto.Keys.{PublicKey, PublicKeyBS}
@@ -19,7 +20,7 @@ import io.casperlabs.storage.BlockHash
 import io.casperlabs.storage.block.BlockStorageWriter
 import io.casperlabs.storage.dag.{DagStorage, FinalityStorage}
 import io.casperlabs.storage.era.EraStorage
-import io.casperlabs.casper.mocks.{MockFinalityStorage}
+import io.casperlabs.casper.mocks.MockFinalityStorage
 import io.casperlabs.casper.highway.mocks.{
   MockBlockDagStorage,
   MockEraStorage,
@@ -31,8 +32,11 @@ import org.scalactic.source
 import org.scalactic.Prettifier
 import org.scalatest.prop.GeneratorDrivenPropertyChecks.{forAll => forAllGen}
 import org.scalacheck._
+
 import scala.concurrent.duration._
 import java.time.temporal.ChronoUnit
+
+import io.casperlabs.casper.highway.HighwayEvent.HandledLambdaMessage
 
 class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUtils {
   import EraRuntimeSpec._
@@ -612,9 +616,12 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
           "create a lambda response" in {
             val msg    = makeBlock(leader, runtime.era, runtime.startTick)
             val events = runtime.handleMessage(msg).written
-            events should have size 1
+            events should have size 2
             assertEvent(events) {
               case HighwayEvent.CreatedLambdaResponse(_) =>
+            }
+            assertEvent(events) {
+              case HighwayEvent.HandledLambdaMessage =>
             }
           }
 
@@ -688,7 +695,7 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
 
               FC.set(insert(makeBlock(leader, parentRuntime.era, parentRuntime.startTick)))
 
-              childRuntime.handleMessage(msg).written shouldBe empty
+              childRuntime.handleMessage(msg).written shouldBe Vector(HandledLambdaMessage)
             }
           }
         }
@@ -758,10 +765,10 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
         }
 
         "in a round which is not corresponding to the validator's current round ID" should {
-          "not respond" in {
+          "not respond but trigger an updated of the finalizer state" in {
             val msg =
               makeBlock(leader, runtime.era, roundId = Ticks(runtime.startTick + 1))
-            runtime.handleMessage(msg).written shouldBe empty
+            runtime.handleMessage(msg).written shouldBe Vector(HandledLambdaMessage)
           }
         }
 
@@ -792,12 +799,14 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
 
           "coming from the leader" should {
             "create a lambda response" in {
-              val msg = makeBallot("Bob", runtime.era, runtime.endTick)
-              assertEvent(runtime.handleMessage(msg).written) {
+              val msg    = makeBallot("Bob", runtime.era, runtime.endTick)
+              val events = runtime.handleMessage(msg).written
+              assertEvent(events) {
                 case HighwayEvent.CreatedLambdaResponse(ballot: Message.Ballot) =>
                   ballot.roundId shouldBe msg.roundId
                   ballot.parentBlock shouldBe switch.messageHash
               }
+              assertEvent(events) { case HighwayEvent.HandledLambdaMessage => }
             }
           }
           "coming from a non-leader" should {
@@ -821,7 +830,7 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
 
       "given a lambda message" should {
         "not respond" in {
-          runtime.handleMessage(blocks.head).written shouldBe empty
+          runtime.handleMessage(blocks.head).written shouldBe Vector(HandledLambdaMessage)
         }
       }
 
@@ -844,7 +853,7 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
           leaderSequencer = mockSequencer(leader)
         )
         val msg = makeBlock(leader, runtime.era, runtime.startTick)
-        runtime.handleMessage(msg).written shouldBe empty
+        runtime.handleMessage(msg).written shouldBe Vector(HandledLambdaMessage)
         isSyncedRef.set(true) // Works with `Id` only because of the `=> F[Boolean]`
         runtime.handleMessage(msg).written should not be empty
       }
@@ -873,10 +882,13 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
           val (events, agenda) = runtime.handleAgenda(Agenda.StartRound(roundId)).run
 
           "create a lambda message" in {
-            events should have size 1
+            events should have size 2
             assertEvent(events) {
               case event: HighwayEvent.CreatedLambdaMessage =>
                 event.message.roundId shouldBe roundId
+            }
+            assertEvent(events) {
+              case HighwayEvent.HandledLambdaMessage =>
             }
           }
 

@@ -1,6 +1,7 @@
 package io.casperlabs.casper.highway
 
-import cats._
+import java.util.concurrent.atomic.AtomicReference
+
 import cats.implicits._
 import cats.effect.{Clock, Timer}
 import cats.effect.concurrent.{Ref, Semaphore}
@@ -29,6 +30,7 @@ import io.casperlabs.storage.deploy.DeployStorage
 import io.casperlabs.shared.Log
 import monix.eval.Task
 import org.scalatest._
+
 import scala.concurrent.duration._
 import io.casperlabs.storage.dag.DagRepresentation
 import io.casperlabs.storage.dag.FinalityStorage
@@ -357,22 +359,18 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
     }
   }
 
-  it should "update the last finalized block" in executorFixture { implicit db =>
+  it should "update the finalizer state" in executorFixture { implicit db =>
     new ExecutorFixture(db) {
 
       val messageAddedRef = Ref.unsafe[Task, Option[Message]](none)
 
       override lazy val finalizer = new MultiParentFinalizer[Task] {
-        override def onNewMessageAdded(
-            message: Message
-        ): Task[Seq[MultiParentFinalizer.FinalizedBlocks]] =
-          for {
-            _ <- messageAddedRef.set(Some(message))
-            _ <- FinalityStorage[Task].markAsFinalized(message.messageHash, Set.empty, Set.empty)
-          } yield Seq(
-            MultiParentFinalizer
-              .FinalizedBlocks(message.messageHash, BigInt(0), Set.empty, Set.empty)
-          )
+
+        override def addMessage(message: Message): Task[Unit] =
+          messageAddedRef.set(Some(message))
+
+        override def checkFinality(): Task[Seq[MultiParentFinalizer.FinalizedBlocks]] =
+          Task(Seq.empty)
       }
 
       override def test =
@@ -382,13 +380,7 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
           wait    <- messageExecutor.effectsAfterAdded(message)
           _       <- wait
           _       <- messageAddedRef.get shouldBeF Some(message)
-          _       <- FinalityStorage[Task].isFinalized(block.blockHash) shouldBeF true
-          events  <- eventEmitter.events
-        } yield {
-          forExactly(1, events) { event =>
-            event.value.isNewFinalizedBlock shouldBe true
-          }
-        }
+        } yield ()
     }
   }
 
@@ -419,14 +411,16 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
     new ExecutorFixture(db) {
       // Mock finalizer that marks anything as orphaned.
       override lazy val finalizer = new MultiParentFinalizer[Task] {
-        override def onNewMessageAdded(
-            message: Message
-        ): Task[Seq[MultiParentFinalizer.FinalizedBlocks]] =
+        private val messageRef = new AtomicReference[Message]()
+
+        override def addMessage(message: Message): Task[Unit] = Task(messageRef.set(message))
+
+        override def checkFinality(): Task[Seq[MultiParentFinalizer.FinalizedBlocks]] =
           for {
             _ <- FinalityStorage[Task].markAsFinalized(
                   ByteString.EMPTY,
                   Set.empty,
-                  Set(message.messageHash)
+                  Set(messageRef.get.messageHash)
                 )
           } yield List(
             MultiParentFinalizer
@@ -434,7 +428,7 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
                 ByteString.EMPTY,
                 BigInt(0),
                 Set.empty,
-                indirectlyOrphaned = Set(message)
+                indirectlyOrphaned = Set(messageRef.get)
               )
           )
       }
@@ -456,6 +450,7 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
           _    <- BlockStorage[Task].put(block, BlockEffects.empty.effects)
           wait <- messageExecutor.effectsAfterAdded(message)
           _    <- wait
+          _    <- messageExecutor.checkFinality().flatMap(identity)
           statuses <- deploys.traverse { d =>
                        DeployStorage[Task].reader.getBufferedStatus(d.deployHash)
                      }
@@ -487,21 +482,22 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
 
       // Mock finalizer that marks anything as final.
       override lazy val finalizer = new MultiParentFinalizer[Task] {
-        override def onNewMessageAdded(
-            message: Message
-        ): Task[Seq[MultiParentFinalizer.FinalizedBlocks]] =
+        private val messageRef                                = new AtomicReference[Message]()
+        override def addMessage(message: Message): Task[Unit] = Task(messageRef.set(message))
+
+        override def checkFinality(): Task[Seq[MultiParentFinalizer.FinalizedBlocks]] =
           for {
             _ <- FinalityStorage[Task].markAsFinalized(
-                  message.messageHash,
-                  (messagesMade - message).map(_.messageHash),
+                  messageRef.get.messageHash,
+                  (messagesMade - messageRef.get).map(_.messageHash),
                   Set.empty
                 )
           } yield List(
             MultiParentFinalizer
               .FinalizedBlocks(
-                message.messageHash,
+                messageRef.get.messageHash,
                 BigInt(0),
-                indirectlyFinalized = messagesMade - message,
+                indirectlyFinalized = messagesMade - messageRef.get,
                 indirectlyOrphaned = Set.empty
               )
           )
@@ -533,6 +529,7 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
           finalizedMsg      <- makeBlock()
           wait              <- messageExecutor.effectsAfterAdded(finalizedMsg)
           _                 <- wait
+          _                 <- messageExecutor.checkFinality().flatMap(identity)
           indirectStatuses  <- getStatuses(indirectMsg)
           finalizedStatuses <- getStatuses(finalizedMsg)
         } yield {

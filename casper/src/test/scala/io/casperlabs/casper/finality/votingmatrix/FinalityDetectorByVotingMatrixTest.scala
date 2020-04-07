@@ -647,12 +647,9 @@ class FinalityDetectorByVotingMatrixTest
             EquivocationDetector
               .checkEquivocation(dag, message, isHighway = false)
           )
-      _   <- BlockStorage[F].put(block.blockHash, block, Map.empty)
-      msg <- Sync[F].fromTry(Message.fromBlock(block))
-      finalizedBlockOpt <- FinalityDetectorVotingMatrix[F].onNewMessageAddedToTheBlockDag(
-                            dag,
-                            msg,
-                            lfb.blockHash
-                          )
+      _                 <- BlockStorage[F].put(block.blockHash, block, Map.empty)
+      msg               <- Sync[F].fromTry(Message.fromBlock(block))
+      _                 <- FinalityDetectorVotingMatrix[F].addMessage(dag, msg, lfb.blockHash)
+      finalizedBlockOpt <- FinalityDetectorVotingMatrix[F].checkFinality(dag)
     } yield block -> finalizedBlockOpt
 }
