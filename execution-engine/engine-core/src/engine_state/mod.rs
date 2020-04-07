@@ -64,7 +64,7 @@ use crate::{
         system_contract_cache::SystemContractCache,
         upgrade::{UpgradeConfig, UpgradeResult},
     },
-    execution::{self, AddressGenerator, Executor, MINT_NAME, POS_NAME},
+    execution::{self, AddressGenerator, AddressGeneratorBuilder, Executor, MINT_NAME, POS_NAME},
     tracking_copy::{TrackingCopy, TrackingCopyExt},
     KnownKeys,
 };
@@ -521,7 +521,11 @@ where
                 // returns raw bytes of it
                 let purse_creation_deploy_hash = account_public_key.value();
                 let address_generator = {
-                    let generator = AddressGenerator::new(&account_public_key.to_bytes()?, phase);
+                    let generator = AddressGeneratorBuilder::new()
+                        .seed_with(&genesis_config_hash.value())
+                        .seed_with(&account_public_key.to_bytes()?)
+                        .seed_with(&[phase as u8])
+                        .build();
                     Rc::new(RefCell::new(generator))
                 };
                 let system_contract_cache = SystemContractCache::clone(&self.system_contract_cache);
