@@ -14,6 +14,11 @@ use core::convert::TryInto;
 use num_derive::{FromPrimitive, ToPrimitive};
 use num_traits::{FromPrimitive, ToPrimitive};
 
+/// Maximum number of distinct user groups.
+pub const MAX_GROUPS: u8 = 10;
+/// Maximum number of URefs which can be assigned across all user groups.
+pub const MAX_TOTAL_UREFS: u8 = 100;
+
 /// Set of errors which may happen when working with contract headers.
 #[derive(Debug, PartialEq, FromPrimitive, ToPrimitive)]
 #[repr(u8)]
@@ -29,6 +34,12 @@ pub enum Error {
     /// Attempted to create a user group which already exists (use the update
     /// function to change an existing user group).
     GroupAlreadyExists = 4,
+    /// Attempted to add a new user group which exceeds the allowed maximum
+    /// number of groups.
+    MaxGroupsExceeded = 5,
+    /// Attempted to add a new URef to a group, which resulted in the total
+    /// number of URefs across all user groups to exceed the allowed maximum.
+    MaxTotalURefsExceeded = 6,
 }
 
 impl Error {

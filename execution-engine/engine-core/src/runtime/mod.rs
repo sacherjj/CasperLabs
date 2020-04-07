@@ -2347,11 +2347,28 @@ where
         let groups = metadata.groups_mut();
         let new_group = Group::new(label);
 
+        // Ensure group does not already exist
         if let Some(_) = groups.get(&new_group) {
             let err = contract_header::Error::GroupAlreadyExists;
             return Ok(Err(ApiError::ContractHeader(err.to_u8())));
         }
 
+        // Ensure there are not too many groups
+        if groups.len() >= (contract_header::MAX_GROUPS as usize) {
+            let err = contract_header::Error::MaxGroupsExceeded;
+            return Ok(Err(ApiError::ContractHeader(err.to_u8())));
+        }
+
+        // Ensure there are not too many urefs
+        let total_urefs: usize = groups.values().map(|urefs| urefs.len()).sum::<usize>()
+            + (num_new_urefs as usize)
+            + existing_urefs.len();
+        if total_urefs > (contract_header::MAX_TOTAL_UREFS as usize) {
+            let err = contract_header::Error::MaxTotalURefsExceeded;
+            return Ok(Err(ApiError::ContractHeader(err.to_u8())));
+        }
+
+        // Proceed with creating user group
         let mut new_urefs = Vec::with_capacity(num_new_urefs as usize);
         for _ in 0..num_new_urefs {
             let u = self.context.new_unit_uref()?;
@@ -2380,6 +2397,7 @@ where
             return Err(Error::Interpreter(error).into());
         }
 
+	// Write updated metadata to the global state
         self.context
             .state()
             .borrow_mut()
