@@ -120,7 +120,9 @@ pub extern "C" fn create_counter() -> ! {
     )
     .unwrap_or_revert();
 
-    // TODO: it should return the access key too, but that would require extracting urefs from a tuple3...
+    // TODO: it should return the access key too, but that would require extracting urefs from a
+    // tuple3 (at least until we stop returning the counter variable uref, i.e. fix query for
+    // versioned contracts)
     let return_value = CLValue::from_t((
         contract_key,
         counter_variable.with_access_rights(AccessRights::READ),
@@ -135,9 +137,7 @@ pub extern "C" fn create_counter() -> ! {
 pub extern "C" fn factory_session() {
     let factory_key = runtime::get_arg(0)
         .map(|arg| arg.unwrap_or_revert_with(ApiError::InvalidArgument))
-        .unwrap_or_else(|| {
-            runtime::get_key(FACTORY_KEY).unwrap_or_revert_with(ApiError::GetKey)
-        });
+        .unwrap_or_else(|| runtime::get_key(FACTORY_KEY).unwrap_or_revert_with(ApiError::GetKey));
 
     let contract_ref = factory_key
         .to_contract_ref()
@@ -193,10 +193,7 @@ pub extern "C" fn call() {
                     // a read-only uref for the counter variable itself (for
                     // query convenience until querying versioned contracts is
                     // possible).
-                    CLType::Tuple2([
-                        Box::new(CLType::Key),
-                        Box::new(CLType::URef),
-                    ]),
+                    CLType::Tuple2([Box::new(CLType::Key), Box::new(CLType::URef)]),
                 ),
             ),
         ]
