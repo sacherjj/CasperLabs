@@ -132,6 +132,7 @@ pub extern "C" fn create_counter() -> ! {
 
 /// Calls create counter function, then stores the contract reference and access key (meant to be
 /// run as session code).
+#[no_mangle]
 pub extern "C" fn factory_session() {
     let factory_key = runtime::get_arg(0)
         .map(|arg| arg.unwrap_or_revert_with(ApiError::InvalidArgument))
