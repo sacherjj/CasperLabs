@@ -12,7 +12,7 @@ import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.models.Message
 import io.casperlabs.models.Message.MainRank
-import io.casperlabs.storage.dag.DagRepresentation
+import io.casperlabs.storage.dag.{AncestorsStorage, DagRepresentation}
 
 import scala.collection.mutable.{IndexedSeq => MutableSeq}
 
@@ -37,15 +37,15 @@ object VotingMatrix {
 
   /** Creates a new voting matrix basing new finalized block.
     */
-  private[votingmatrix] def create[F[_]: Concurrent](
+  private[votingmatrix] def create[F[_]: Concurrent: AncestorsStorage](
       dag: DagRepresentation[F],
-      newFinalizedBlock: BlockHash,
+      lfbHash: BlockHash,
       isHighway: Boolean
   ): F[VotingMatrix[F]] =
     for {
       // Start a new round, get weightMap and validatorSet from the post-global-state of new finalized block's
-      message <- dag.lookup(newFinalizedBlock)
-      block <- message.get match {
+      lfb <- dag.lookupUnsafe(lfbHash)
+      block <- lfb match {
                 case b: Message.Block => b.pure[F]
                 case ballot: Message.Ballot =>
                   MonadThrowable[F].raiseError[Message.Block](
@@ -65,11 +65,11 @@ object VotingMatrix {
       voteOnLFBChild <- latestMessagesOfHonestVoters.toList
                          .traverse {
                            case (v, b) =>
-                             ProtoUtil
+                             io.casperlabs.casper.finality
                                .votedBranch[F](
                                  dag,
-                                 newFinalizedBlock,
-                                 b.messageHash
+                                 lfbHash,
+                                 b
                                )
                                .map {
                                  _.map(
@@ -85,10 +85,10 @@ object VotingMatrix {
                               .traverse {
                                 case (v, voteValue) =>
                                   FinalityDetectorUtil
-                                    .levelZeroMsgsOfValidator(dag, v, voteValue)
+                                    .levelZeroMsgsOfValidator(dag, v, voteValue.messageHash)
                                     .map(
                                       _.lastOption
-                                        .map(b => (v, (voteValue, b.mainRank)))
+                                        .map(b => (v, (voteValue.messageHash, b.mainRank)))
                                     )
                               }
                               .map(_.flatten.toMap)

@@ -10,6 +10,7 @@ import io.casperlabs.casper.consensus._
 import io.casperlabs.catscontrib.effect.implicits.syncId
 import io.casperlabs.comm.ServiceError.{NotFound, ResourceExhausted, Unauthenticated, Unavailable}
 import io.casperlabs.comm.discovery.Node
+import io.casperlabs.comm.gossiping.GrpcGossipServiceSpec.TestEnvironment.EmptyGossipService
 import io.casperlabs.comm.gossiping.Utils.hex
 import io.casperlabs.comm.gossiping.downloadmanager._
 import io.casperlabs.comm.gossiping.synchronization.Synchronizer
@@ -20,6 +21,7 @@ import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.util.{CertificateHelper, CertificatePrinter}
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.models.BlockImplicits._
+import io.casperlabs.models.DeployImplicits._
 import io.casperlabs.models.PartialPrettifier
 import io.casperlabs.shared.Sorting._
 import io.casperlabs.shared.{Compression, Log}
@@ -77,16 +79,24 @@ class GrpcGossipServiceSpec
     test.runSyncUnsafe(timeout)
   }
 
-  override def nestedSuites = Vector(
-    GetBlockChunkedSpec,
-    StreamDeploysChunkedSpec,
-    StreamBlockSummariesSpec,
-    StreamAncestorBlockSummariesSpec,
-    StreamLatestMessagesSpec,
-    NewBlocksSpec,
-    GenesisApprovalSpec,
-    StreamDagSliceBlockSummariesSpec
-  )
+  override def nestedSuites =
+    Vector(
+      GetBlockChunkedSpec,
+      StreamDeploysChunkedSpec,
+      StreamBlockSummariesSpec,
+      StreamAncestorBlockSummariesSpec,
+      StreamLatestMessagesSpec,
+      NewDeploysSpec,
+      NewBlocksSpec,
+      GenesisApprovalSpec,
+      StreamDagSliceBlockSummariesSpec
+    ) ++ {
+      if (sys.env.contains("DRONE_BRANCH")) Vector.empty
+      else
+        Vector(
+          NewDeploysSpec // TODO (NODE-1354)
+        )
+    }
 
   trait AuthSpec extends WordSpecLike {
     implicit val hashGen: Arbitrary[ByteString] = Arbitrary(genHash)
@@ -572,6 +582,8 @@ class GrpcGossipServiceSpec
 
               val faultyBackend = (_: AtomicReference[TestData]) => {
                 new GossipServiceServer.Backend[Task] {
+                  def getDeploySummary(deployHash: ByteString) = ???
+                  def hasDeploy(deployHash: ByteString)        = ???
                   def getBlock(blockHash: ByteString, excludeDeployBodies: Boolean) = {
                     cnt = cnt + 1
                     cnt match {
@@ -706,7 +718,7 @@ class GrpcGossipServiceSpec
 
           forAll(genTestCase) {
             case (summaries, known, other) =>
-              runTestUnsafe(TestData(summaries = summaries.toSeq)) {
+              runTestUnsafe(TestData(blockSummaries = summaries.toSeq)) {
                 val req =
                   StreamBlockSummariesRequest(
                     // Sending some unknown ones to see that it won't choke on them.
@@ -786,12 +798,12 @@ class GrpcGossipServiceSpec
     // For example if we select N targets from the DAG it can narrow down the data to where the DAG
     // has 0 items but there are non-zero targets.
     case class TestCase[T](dag: Vector[BlockSummary], data: T) {
-      lazy val summaries = TestData(summaries = dag).summaries
+      lazy val summaries = TestData(blockSummaries = dag).blockSummaries
     }
 
     class TestFixture[T](gen: Gen[TestCase[T]], test: TestCase[T] => Task[Unit]) {
       forAll(gen) { tc =>
-        runTestUnsafe(TestData(summaries = tc.dag)) {
+        runTestUnsafe(TestData(blockSummaries = tc.dag)) {
           test(tc)
         }
       }
@@ -810,7 +822,7 @@ class GrpcGossipServiceSpec
       "called with unknown target hashes" should {
         "return an empty stream" in {
           forAll(genSummaryDagFromGenesis, arbitrary[List[ByteString]]) { (dag, targets) =>
-            runTestUnsafe(TestData(summaries = dag)) {
+            runTestUnsafe(TestData(blockSummaries = dag)) {
               val req = StreamAncestorBlockSummariesRequest(targetBlockHashes = targets)
 
               stub.streamAncestorBlockSummaries(req).toListL.map { ancestors =>
@@ -1021,7 +1033,7 @@ class GrpcGossipServiceSpec
               // at that parent through another, previously unknown child.
               Inspectors.forAll(knownHashes) { knownHash =>
                 val eldersOfKnown =
-                  elders(testDataRef.get.summaries(knownHash)).filter(ancestorHashes)
+                  elders(testDataRef.get.blockSummaries(knownHash)).filter(ancestorHashes)
                 Inspectors.forAll(eldersOfKnown) { elderHash =>
                   assert {
                     targetHashes(elderHash) ||
@@ -1077,11 +1089,135 @@ class GrpcGossipServiceSpec
             .flatten
             .map(s => Block.Justification(s.getHeader.validatorPublicKey, s.blockHash))
             .toList
-          runTestUnsafe(TestData(summaries = dag)) {
+          runTestUnsafe(TestData(blockSummaries = dag)) {
             TestEnvironment(testDataRef).use { stub =>
               stub.streamLatestMessages(StreamLatestMessagesRequest()).toListL map { res =>
                 res should contain theSameElementsAs expected
               }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  object NewDeploysSpec extends WordSpecLike with AuthSpec {
+    override def rpcName: String = "newDeploys"
+
+    override def query
+        : (Option[Node], List[ByteString]) => GossipingGrpcMonix.GossipServiceStub => Task[Unit] =
+      (maybeSender, blockHashes) =>
+        client => client.newBlocks(NewBlocksRequest(maybeSender, blockHashes)).void
+
+    override def ignoreSender: Boolean = false
+
+    def expectError(
+        req: NewBlocksRequest,
+        client: GossipingGrpcMonix.GossipServiceStub = stub
+    )(pf: PartialFunction[Throwable, Unit]): Task[Unit] =
+      client.newBlocks(req).attempt.map { res =>
+        res.isLeft shouldBe true
+        pf.lift(res.left.get) getOrElse {
+          fail(s"Unexpected error: ${res.left.get}")
+        }
+      }
+
+    "newDeploys" when {
+      "called with a valid sender" when {
+        implicit val config = PropertyCheckConfiguration(minSuccessful = 5)
+
+        "receives no previously unknown deploys" should {
+          "return false and not download anything" in {
+            val genTestCase = for {
+              deploys <- Gen.nonEmptyListOf(arbDeploy.arbitrary)
+              node    <- arbitrary[Node].map(_.withId(stubCert.keyHash))
+              n       <- Gen.choose(0, deploys.size)
+            } yield (deploys, node, n)
+
+            forAll(genTestCase) {
+              case (deploys, node, n) =>
+                runTestUnsafe(TestData(deploys = deploys)) {
+                  val req = NewDeploysRequest()
+                    .withSender(node)
+                    .withDeployHashes(deploys.takeRight(n).map(_.deployHash))
+
+                  // If `newDeploy` called any of the default empty mock classes they would throw.
+                  stub.newDeploys(req) map { res =>
+                    res.isNew shouldBe false
+                  }
+                }
+            }
+          }
+        }
+
+        "receives new deploys" should {
+          "download the new ones" in {
+            val genTestCase = for {
+              n       <- Gen.choose(3, 5)
+              deploys <- Gen.listOfN(n, arbDeploy.arbitrary)
+              node    <- arbNode.arbitrary.map(_.withId(stubCert.keyHash))
+              k       <- Gen.choose(1, deploys.size / 2)
+            } yield (deploys, node, k)
+
+            forAll(genTestCase) {
+              case (deploys, node, k) =>
+                val (knownDeploys, unknownDeploys) = deploys.splitAt(k)
+                val allHashes                      = deploys.map(_.deployHash)
+                val unknownHashes                  = unknownDeploys.map(_.deployHash)
+
+                // Only pass the known part to the backend of the service.
+                runTestUnsafe(
+                  TestData(deploys = knownDeploys, deploySummaries = knownDeploys.map(_.getSummary))
+                ) {
+                  val req = NewDeploysRequest()
+                    .withSender(node)
+                    .withDeployHashes(allHashes)
+
+                  val connector: Node => Task[GossipService[Task]] = n =>
+                    Task.pure {
+                      n shouldBe node
+                      new EmptyGossipService {
+                        override def streamDeploySummaries(request: StreamDeploySummariesRequest) =
+                          Iterant.fromList[Task, DeploySummary](
+                            request.deployHashes.toList.flatMap { deployHash =>
+                              deploys.find(_.deployHash == deployHash).map(_.getSummary).toList
+                            }
+                          )
+                      }
+                    }
+
+                  val downloadManager = new DeployDownloadManager[Task] {
+                    @volatile var scheduled = Vector.empty[ByteString]
+                    override def scheduleDownload(
+                        summary: DeploySummary,
+                        source: Node,
+                        relay: Boolean
+                    ): Task[WaitHandle[Task]] = {
+                      source shouldBe node
+                      unknownHashes should contain(summary.deployHash)
+                      synchronized {
+                        scheduled = scheduled :+ summary.deployHash
+                      }
+                      Task.now(Task.unit)
+                    }
+                    override def isScheduled(id: ByteString)             = false.pure[Task]
+                    override def addSource(id: ByteString, source: Node) = ().pure[Task].pure[Task]
+                  }
+
+                  TestEnvironment(
+                    testDataRef,
+                    clientCert = Some(stubCert),
+                    connector = connector,
+                    deployDownloadManager = downloadManager
+                  ).use { stub =>
+                    stub.newDeploys(req) map { res =>
+                      res.isNew shouldBe true
+                      eventually {
+                        downloadManager.scheduled should contain theSameElementsAs unknownHashes
+                      }
+                    }
+                  }
+                }
             }
           }
         }
@@ -1175,12 +1311,17 @@ class GrpcGossipServiceSpec
                       Task.now(dag.asRight[SyncError]).delayResult(250.millis)
                     }
                     def onDownloaded(blockHash: ByteString)              = Task.unit
+                    def onFailed(blockHash: ByteString)                  = Task.unit
                     def onScheduled(summary: BlockSummary, source: Node) = Task.unit
                   }
 
                   val downloadManager = new BlockDownloadManager[Task] {
                     @volatile var scheduled = Vector.empty[ByteString]
-                    def scheduleDownload(summary: BlockSummary, source: Node, relay: Boolean) = {
+                    override def scheduleDownload(
+                        summary: BlockSummary,
+                        source: Node,
+                        relay: Boolean
+                    ) = {
                       source shouldBe node
                       unknownBlocks.map(_.blockHash) should contain(summary.blockHash)
                       if (relay) {
@@ -1193,13 +1334,15 @@ class GrpcGossipServiceSpec
                       }
                       Task.now(Task.unit)
                     }
+                    override def isScheduled(id: ByteString)             = false.pure[Task]
+                    override def addSource(id: ByteString, source: Node) = ().pure[Task].pure[Task]
                   }
 
                   TestEnvironment(
                     testDataRef,
                     clientCert = Some(stubCert),
                     synchronizer = synchronizer,
-                    downloadManager = downloadManager
+                    blockDownloadManager = downloadManager
                   ).use { stub =>
                     stub.newBlocks(req) map { res =>
                       val unknownHashes = unknownBlocks.map(_.blockHash)
@@ -1390,8 +1533,10 @@ object GrpcGossipServiceSpec extends TestRuntime with ArbitraryConsensusAndComm 
       .withSignature(block.getSignature)
 
   trait TestData {
-    def summaries: Map[ByteString, BlockSummary]
+    def blockSummaries: Map[ByteString, BlockSummary]
     def blocks: Map[ByteString, Block]
+    def deploySummaries: Map[ByteString, DeploySummary]
+    def deploys: Map[ByteString, Deploy]
   }
 
   object TestData {
@@ -1400,35 +1545,39 @@ object GrpcGossipServiceSpec extends TestRuntime with ArbitraryConsensusAndComm 
     def fromBlock(block: Block) = TestData(blocks = Seq(block))
 
     def apply(
-        summaries: Seq[BlockSummary] = Seq.empty,
-        blocks: Seq[Block] = Seq.empty
+        blockSummaries: Seq[BlockSummary] = Seq.empty,
+        blocks: Seq[Block] = Seq.empty,
+        deploySummaries: Seq[DeploySummary] = Seq.empty,
+        deploys: Seq[Deploy] = Seq.empty
     ): TestData = {
-      val ss = summaries
-      val bs = blocks
+      val bss = blockSummaries
+      val bs  = blocks
+      val dss = deploySummaries
+      val ds  = deploys
       new TestData {
-        val summaries = ss.groupBy(_.blockHash).mapValues(_.head)
-        val blocks    = bs.groupBy(_.blockHash).mapValues(_.head)
+        val blockSummaries  = bss.groupBy(_.blockHash).mapValues(_.head)
+        val blocks          = bs.groupBy(_.blockHash).mapValues(_.head)
+        val deploySummaries = dss.groupBy(_.deployHash).mapValues(_.head)
+        val deploys         = ds.groupBy(_.deployHash).mapValues(_.head)
       }
     }
   }
 
   object TestEnvironment {
-    private val emptySynchronizer = new Synchronizer[Task] {
-      def syncDag(source: Node, targetBlockHashes: Set[ByteString])    = ???
-      def onDownloaded(blockHash: ByteString): Task[Unit]              = ???
-      def onScheduled(summary: BlockSummary, source: Node): Task[Unit] = ???
+    trait EmptyGossipService extends NoOpsGossipService[Task]
+    private val emptySynchronizer          = new NoOpsSynchronizer[Task]          {}
+    private val emptyDeployDownloadManager = new NoOpsDeployDownloadManager[Task] {}
+    private val emptyBlockDownloadManager = new NoOpsBlockDownloadManager[Task] {
+      override def isScheduled(id: ByteString): Task[Boolean] = false.pure[Task]
     }
-    private val emptyDownloadManager = new BlockDownloadManager[Task] {
-      def scheduleDownload(summary: BlockSummary, source: Node, relay: Boolean) = ???
-    }
-    private val emptyGenesisApprover = new GenesisApprover[Task] {
-      def getCandidate                                           = ???
-      def addApproval(blockHash: ByteString, approval: Approval) = ???
-      def awaitApproval                                          = ???
-    }
+    private val emptyGenesisApprover = new NoOpsGenesisApprover[Task] {}
 
     private def defaultBackend(testDataRef: AtomicReference[TestData]) =
       new GossipServiceServer.Backend[Task] {
+        def getDeploySummary(deployHash: ByteString): Task[Option[DeploySummary]] =
+          Task.delay(testDataRef.get.deploySummaries.get(deployHash))
+        def hasDeploy(deployHash: ByteString): Task[Boolean] =
+          Task.delay(testDataRef.get.deploys.contains(deployHash))
         def hasBlock(blockHash: ByteString) =
           Task.delay(testDataRef.get.blocks.contains(blockHash))
         def getBlock(blockHash: ByteString, excludeDeployBodies: Boolean) =
@@ -1440,7 +1589,7 @@ object GrpcGossipServiceSpec extends TestRuntime with ArbitraryConsensusAndComm 
             }
           })
         def getBlockSummary(blockHash: ByteString) =
-          Task.delay(testDataRef.get.summaries.get(blockHash))
+          Task.delay(testDataRef.get.blockSummaries.get(blockHash))
         def getDeploys(deployHashes: Set[ByteString]) = {
           val deploys = testDataRef.get.blocks.values.flatMap { b =>
             b.getBody.deploys.map(_.getDeploy).filter(d => deployHashes(d.deployHash))
@@ -1451,7 +1600,7 @@ object GrpcGossipServiceSpec extends TestRuntime with ArbitraryConsensusAndComm 
 
         def latestMessages: Task[Set[Block.Justification]] =
           Task.delay(
-            testDataRef.get.summaries.values
+            testDataRef.get.blockSummaries.values
               .map(bs => Block.Justification(bs.getHeader.validatorPublicKey, bs.blockHash))
               .toSet
           )
@@ -1462,7 +1611,7 @@ object GrpcGossipServiceSpec extends TestRuntime with ArbitraryConsensusAndComm 
               Task.delay(
                 testDataRef
                   .get()
-                  .summaries
+                  .blockSummaries
                   .values
                   .filter(s => s.jRank >= startRank && s.jRank <= endRank)
                   .toList
@@ -1481,7 +1630,9 @@ object GrpcGossipServiceSpec extends TestRuntime with ArbitraryConsensusAndComm 
         maxParallelBlockDownloads: Int = 100,
         blockChunkConsumerTimeout: FiniteDuration = 10.seconds,
         synchronizer: Synchronizer[Task] = emptySynchronizer,
-        downloadManager: BlockDownloadManager[Task] = emptyDownloadManager,
+        connector: GossipService.Connector[Task] = _ => ???,
+        deployDownloadManager: DeployDownloadManager[Task] = emptyDeployDownloadManager,
+        blockDownloadManager: BlockDownloadManager[Task] = emptyBlockDownloadManager,
         genesisApprover: GenesisApprover[Task] = emptyGenesisApprover,
         rateLimiter: RateLimiter[Task, ByteString] = RateLimiter.noOp,
         mkBackend: AtomicReference[TestData] => GossipServiceServer.Backend[Task] = defaultBackend
@@ -1503,7 +1654,9 @@ object GrpcGossipServiceSpec extends TestRuntime with ArbitraryConsensusAndComm 
             GossipServiceServer[Task](
               backend = mkBackend(testDataRef),
               synchronizer = synchronizer,
-              downloadManager = downloadManager,
+              connector = connector,
+              deployDownloadManager = deployDownloadManager,
+              blockDownloadManager = blockDownloadManager,
               genesisApprover = genesisApprover,
               maxChunkSize = DefaultMaxChunkSize,
               maxParallelBlockDownloads = maxParallelBlockDownloads

@@ -49,7 +49,6 @@ services:
       HOME: /root
       BOOTSTRAP_HOSTNAMES: ${BOOTSTRAP_HOSTNAMES}
       CL_GRPC_SOCKET: /root/.casperlabs/sockets/.casper-node.sock
-      CL_SERVER_RELAY_FACTOR: 1
       CL_SERVER_NO_UPNP: "true"
       CL_CASPER_VALIDATOR_PUBLIC_KEY_PATH: /root/.casperlabs/node/validator-public.pem
       CL_CASPER_VALIDATOR_PRIVATE_KEY_PATH: /root/.casperlabs/node/validator-private.pem
@@ -60,6 +59,7 @@ services:
       CL_GRPC_USE_TLS: "false"
       CL_METRICS_PROMETHEUS: "true"
       CL_SERVER_ALIVE_PEERS_CACHE_EXPIRATION_PERIOD: 15second
+      CL_SERVER_SHUTDOWN_TIMEOUT: 5second
       CL_LOG_JSON_PATH: /var/logs/casperlabs
     env_file:
       - .env

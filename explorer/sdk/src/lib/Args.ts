@@ -1,5 +1,6 @@
 import { Deploy } from 'casperlabs-grpc/io/casperlabs/casper/consensus/consensus_pb';
 import { CLType, CLValueInstance } from 'casperlabs-grpc/io/casperlabs/casper/consensus/state_pb';
+import JSBI from 'jsbi';
 import { ByteArray } from '../index';
 
 // Functions to convert data to protobuf Deploy.Arg
@@ -32,7 +33,7 @@ export const BytesValue = toValue<ByteArray>((value, x) => {
   });
   fixedListValue.setLength(bytes.length);
   fixedListValue.setValuesList(bytes);
-  v.setFixedListValue(fixedListValue)
+  v.setFixedListValue(fixedListValue);
 
   value.setClType(t);
   value.setValue(v);
@@ -40,20 +41,7 @@ export const BytesValue = toValue<ByteArray>((value, x) => {
   return value;
 });
 
-export const LongValue = toValue<bigint>((value, x) => {
-  const t = new CLType();
-  t.setSimpleType(CLType.Simple.I64);
-
-  const v = new CLValueInstance.Value();
-  v.setI64(Number(x));
-
-  value.setClType(t);
-  value.setValue(v);
-
-  return value;
-});
-
-export const BigIntValue = toValue<bigint>((value, x) => {
+export const BigIntValue = toValue<bigint | JSBI>((value, x) => {
   const t = new CLType();
   t.setSimpleType(CLType.Simple.U512);
 

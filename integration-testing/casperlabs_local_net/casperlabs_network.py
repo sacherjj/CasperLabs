@@ -4,6 +4,7 @@ import os
 import threading
 import errno
 import shutil
+import time
 from typing import Callable, Dict, List
 
 from docker import DockerClient
@@ -40,6 +41,7 @@ from casperlabs_local_net.wait import (
     wait_for_node_started,
     wait_for_peers_count_at_least,
     wait_for_selenium_started,
+    node_started_and_not_failed_to_bind,
 )
 from casperlabs_client import extract_common_name
 
@@ -158,11 +160,17 @@ class CasperLabsNetwork:
             logging.info(f"Docker network {network_name} created.")
             return network_name
 
-    def _add_cl_node(self, config: DockerConfig) -> None:
+    def _add_cl_node(self, config: DockerConfig, number_of_retries = 3) -> None:
         with self._lock:
             config.number = self.node_count
-            cl_node = CasperLabsNode(self, config)
-            self.cl_nodes.append(cl_node)
+            for _ in range(number_of_retries):
+                cl_node = CasperLabsNode(self, config)
+                if node_started_and_not_failed_to_bind(cl_node.node):
+                    self.cl_nodes.append(cl_node)
+                    return
+                else:
+                    logging.warning(f"Node failed to bind")
+            raise Exception(f"Node started {number_of_retries} times but failed to bind each time")
 
     def add_new_node_to_network(
         self, generate_config=None, account: Account = None
@@ -604,6 +612,47 @@ class ThreeNodeNetwork(CasperLabsNetwork):
         self.wait_for_peers()
 
 
+class ThreeNodeHighwayNetwork(CasperLabsNetwork):
+    TIMESTAMP = int(round(time.time() * 1000))
+    NODE_ENV = dict(
+        # Old defaults
+        RUST_BACKTRACE="full",
+        CL_LOG_LEVEL=os.environ.get("CL_LOG_LEVEL", "INFO"),
+        CL_SERVER_NO_UPNP="true",
+        CL_VERSION="test",
+        # Highway
+        CL_HIGHWAY_ENABLED="true",
+        CL_HIGHWAY_INIT_ROUND_EXPONENT=14,
+        CL_CHAINSPEC_HIGHWAY_GENESIS_ERA_START=str(TIMESTAMP),
+        CL_CHAINSPEC_HIGHWAY_ERA_DURATION="4minutes",
+        CL_CHAINSPEC_HIGHWAY_BOOKING_DURATION="90seconds",
+        CL_CHAINSPEC_HIGHWAY_ENTROPY_DURATION="30seconds",
+        CL_CHAINSPEC_HIGHWAY_VOTING_PERIOD_DURATION="2minutes",
+        # Other node settings
+        CL_SERVER_RELAY_FACTOR=2,
+    )
+
+    def get_node_config(self, network):
+        kp = self.get_key()
+        logging.debug(f"ENV: {self.NODE_ENV}")
+        return DockerConfig(
+            self.docker_client,
+            node_private_key=kp.private_key,
+            node_public_key=kp.public_key,
+            node_env=self.NODE_ENV,
+            node_account=kp,
+            network=network,
+            number_of_bonds=3,
+        )
+
+    def create_cl_network(self):
+        network = self.create_docker_network()
+        self.add_bootstrap(self.get_node_config(network))
+        self.add_cl_node(self.get_node_config(network))
+        self.add_cl_node(self.get_node_config(network))
+        self.wait_for_peers()
+
+
 class ThreeNodeNetworkWithTwoBootstraps(CasperLabsNetwork):
     """
     A three nodes network where
@@ -803,7 +852,6 @@ class NetworkWithTaggedDev(CasperLabsNetwork):
 if __name__ == "__main__":
     # For testing adding new networks.
     import sys
-    import time
     import docker
 
     root = logging.getLogger()

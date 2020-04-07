@@ -1,6 +1,6 @@
 [package]
 name = "cargo-casperlabs"
-version = "0.3.0"
+version = "0.7.1"
 authors = ["Fraser Hutchison <fraser@casperlabs.io>"]
 edition = "2018"
 description = "Command line tool for creating a Wasm smart contract and tests for use on the CasperLabs network."
@@ -14,6 +14,7 @@ include = [
     "wasm/mint_install.wasm",
     "wasm/pos_install.wasm",
     "wasm/standard_payment.wasm",
+    "wasm/standard_payment_install.wasm",
     "Cargo.lock",
     "Cargo.toml",
 ]

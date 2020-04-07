@@ -148,6 +148,9 @@ object SQLiteStorage {
       override def children(blockHash: BlockHash): F[Set[BlockHash]] =
         dagStorage.children(blockHash)
 
+      override def getMainChildren(blockHash: BlockHash): F[Set[BlockHash]] =
+        dagStorage.getMainChildren(blockHash)
+
       override def justificationToBlocks(blockHash: BlockHash): F[Set[BlockHash]] =
         dagStorage.justificationToBlocks(blockHash)
 

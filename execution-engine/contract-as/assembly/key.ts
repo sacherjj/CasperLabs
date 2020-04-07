@@ -3,7 +3,7 @@ import {readHostBuffer} from ".";
 import {UREF_SERIALIZED_LENGTH} from "./constants";
 import {URef} from "./uref";
 import {CLValue} from "./clvalue";
-import {Error} from "./error";
+import {Error, ErrorCode} from "./error";
 import {checkTypedArrayEqual, typedToArray} from "./utils";
 import {Result, Ref, Error as BytesreprError} from "./bytesrepr";
 
@@ -205,9 +205,11 @@ export class Key {
         const ret = externals.read_value(keyBytes.dataStart, keyBytes.length, valueSize.dataStart);
         const error = Error.fromResult(ret);
         if (error != null) {
-            // TODO: How do we differentiate lack of value from other errors?
+            if (error.value() == ErrorCode.ValueNotFound) {
+                return null;
+            }
             error.revert();
-            return null;
+            return <Uint8Array>unreachable();
         }
         // TODO: How can we have `read<T>` that would deserialize host bytes into T?
         return readHostBuffer(valueSize[0]);

@@ -103,10 +103,10 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with StorageFixtu
 
   // TODO: Test tsCheckpoint:
   // we should be able to stub in a tuplespace dump but there is currently no way to do that.
-  "showBlock" should "return successful block info response" in withStorage {
-    implicit blockStorage => implicit dagStorage => implicit deployStorage => _ =>
+  "showBlock" should "return successful block info response" in withCombinedStorage() {
+    implicit storage =>
       for {
-        _         <- initData(blockStorage)
+        _         <- initData(storage)
         blockInfo <- BlockAPI.getBlockInfo[Task](secondBlockQuery, BlockInfo.View.BASIC)
         _         = blockInfo.getSummary.blockHash should be(blockHash)
         _         = blockInfo.getStatus.getStats.blockSizeBytes should be(secondBlock.serializedSize)
@@ -126,27 +126,25 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with StorageFixtu
       } yield ()
   }
 
-  it should "return children in FULL view" in withStorage {
-    implicit blockStorage => implicit dagStorage => implicit deployStorage => _ =>
-      for {
-        _         <- initData(blockStorage)
-        basicInfo <- BlockAPI.getBlockInfo[Task](genesisHashString, BlockInfo.View.BASIC)
-        fullInfo  <- BlockAPI.getBlockInfo[Task](genesisHashString, BlockInfo.View.FULL)
-        _         = basicInfo.getStatus.childHashes shouldBe empty
-        _         = fullInfo.getStatus.childHashes should not be empty
-      } yield ()
+  it should "return children in FULL view" in withCombinedStorage() { implicit storage =>
+    for {
+      _         <- initData(storage)
+      basicInfo <- BlockAPI.getBlockInfo[Task](genesisHashString, BlockInfo.View.BASIC)
+      fullInfo  <- BlockAPI.getBlockInfo[Task](genesisHashString, BlockInfo.View.FULL)
+      _         = basicInfo.getStatus.childHashes shouldBe empty
+      _         = fullInfo.getStatus.childHashes should not be empty
+    } yield ()
   }
 
-  it should "return error when no block exists" in withStorage {
-    implicit blockStorage => implicit dagStorage => implicit deployStorage => _ =>
-      for {
-        blockQueryResponse <- BlockAPI
-                               .getBlockInfo[Task](badTestHashQuery, BlockInfo.View.BASIC)
-                               .attempt
-      } yield {
-        blockQueryResponse.isLeft shouldBe true
-        blockQueryResponse.left.get.getMessage should include("NOT_FOUND")
-      }
+  it should "return error when no block exists" in withCombinedStorage() { implicit storage =>
+    for {
+      blockQueryResponse <- BlockAPI
+                             .getBlockInfo[Task](badTestHashQuery, BlockInfo.View.BASIC)
+                             .attempt
+    } yield {
+      blockQueryResponse.isLeft shouldBe true
+      blockQueryResponse.left.get.getMessage should include("NOT_FOUND")
+    }
   }
 
   private def initData(blockStorage: BlockStorage[Task]): Task[Unit] =

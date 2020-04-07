@@ -12,6 +12,7 @@ import io.casperlabs.shared.SemaphoreMap
 import io.casperlabs.comm.discovery.Node
 import io.casperlabs.comm.discovery.NodeUtils.showNode
 import io.casperlabs.comm.gossiping._
+import io.casperlabs.comm.gossiping.Utils.hex
 import io.casperlabs.comm.gossiping.synchronization.Synchronizer.SyncError
 import io.casperlabs.comm.gossiping.synchronization.Synchronizer.SyncError._
 import io.casperlabs.metrics.Metrics
@@ -44,7 +45,15 @@ class SynchronizerImpl[F[_]: Concurrent: Log: Metrics](
   // This is supposed to be called every time a scheduled download is finished,
   // even when the resolution is that we already had it, so there should be no leaks.
   override def onDownloaded(blockHash: ByteString) =
-    removeSynced(blockHash)
+    removeSyncedAncestors(blockHash)
+
+  // This will be called if the download failed, so we invalidate everythig in the cache that
+  // depended on this item, which should next time cause it to be traversed again, if it comes up.
+  override def onFailed(blockHash: ByteString) =
+    // Tried recursively clearing out the synced summaries moving forward, but it didn't seem to work,
+    // somehow the failed summary didn't have any dependants, yet they kept piling up, preventing
+    // further downloads. For now just clear the whole cache.
+    syncedSummariesRef.set(Map.empty)
 
   override def syncDag(
       source: Node,
@@ -173,12 +182,20 @@ class SynchronizerImpl[F[_]: Concurrent: Log: Metrics](
       // downloaded in the meantime, but that would be a lot of database queries.
       // Instead, `removeSynced` will clear the dependencies recursively,
       // so if any descendants gets downloaded it will remove any leftovers.
-      val ss = syncedSummaries.getOrElse(summary.blockHash, SyncedSummary(summary))
+      val ss =
+        syncedSummaries.getOrElse(summary.blockHash, SyncedSummary(summary, dependencies(summary)))
       syncedSummaries + (summary.blockHash -> ss.addSource(source))
     } >> recordSyncedSummaries
 
-  /** Recursively clear out summaries and their dependencies from the cache. */
-  private def removeSynced(blockHash: ByteString): F[Unit] = {
+  /** Recursively clear out summaries and their ancestors from the cache.
+    * This caters for a case when the sync overshoots the already downloaded
+    * summaries due to the fixed size of the ancestor requests, and `addSync`
+    * adds some entries that have already been downloaded. By removing the
+    * dependencies we make sure that whenever a descendant is downloaded,
+    * we are not leaving dangling references in the cache, potentially
+    * leaking memory.
+    */
+  private def removeSyncedAncestors(blockHash: ByteString): F[Unit] = {
     def remove(queue: Queue[ByteString]): F[Unit] =
       queue.dequeueOption.fold(().pure[F]) {
         case (blockHash, queue) =>
@@ -188,7 +205,7 @@ class SynchronizerImpl[F[_]: Concurrent: Log: Metrics](
             case None =>
               remove(queue)
             case Some(s) =>
-              remove(queue.enqueue(dependencies(s.summary)))
+              remove(queue.enqueue(s.dependencies))
           }
       }
     remove(Queue(blockHash)) >> recordSyncedSummaries
@@ -384,6 +401,7 @@ object SynchronizerImpl {
     */
   case class SyncedSummary(
       summary: BlockSummary,
+      dependencies: List[ByteString],
       sources: Set[Node] = Set.empty
   ) {
     def addSource(source: Node) = copy(sources = sources + source)

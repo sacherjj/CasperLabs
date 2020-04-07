@@ -71,8 +71,7 @@ object MessageProducer {
       validatorIdentity: ValidatorIdentity,
       chainName: String,
       upgrades: Seq[ipc.ChainSpec.UpgradePoint],
-      onlyTakeOwnLatestFromJustifications: Boolean = false,
-      asyncRequeueOrphans: Boolean = true
+      onlyTakeOwnLatestFromJustifications: Boolean = false
   ): MessageProducer[F] =
     new MessageProducer[F] {
       override val validatorId =
@@ -124,7 +123,6 @@ object MessageProducer {
           dag          <- DagStorage[F].getRepresentation
           merged       <- selectParents(dag, keyBlockHash, mainParent, justifications)
           parentHashes = merged.parents.map(_.blockHash).toSet
-          _            <- startRequeueingOrphanedDeploys(parentHashes)
           parentMessages <- MonadThrowable[F].fromTry {
                              merged.parents.toList.traverse(Message.fromBlock(_))
                            }
@@ -152,6 +150,7 @@ object MessageProducer {
                            props.protocolVersion,
                            props.mainRank,
                            props.configuration.deployConfig.maxBlockSizeBytes,
+                           props.configuration.deployConfig.maxBlockCost,
                            upgrades
                          )
 
@@ -184,17 +183,6 @@ object MessageProducer {
           _ <- BlockStorage[F].put(signed, transforms = checkpoint.stageEffects)
 
         } yield message.asInstanceOf[Message.Block]
-
-      // NOTE: Currently this will requeue deploys in the background, some will make it, some won't.
-      // This made sense with the AutoProposer, since a new block could be proposed any time;
-      // in Highway that's going to the next round, whenever that is.
-      private def startRequeueingOrphanedDeploys(parentHashes: Set[BlockHash]): F[Unit] = {
-        val requeue =
-          DeployBuffer[F].requeueOrphanedDeploys(parentHashes) >>= { requeued =>
-            Log[F].info(s"Re-queued ${requeued.size} orphaned deploys.").whenA(requeued.nonEmpty)
-          }
-        if (asyncRequeueOrphans) requeue.forkAndLog.void else requeue
-      }
 
       private def messageProps(
           keyBlockHash: BlockHash,

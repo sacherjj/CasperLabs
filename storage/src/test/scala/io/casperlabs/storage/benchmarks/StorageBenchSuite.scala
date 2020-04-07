@@ -3,7 +3,6 @@ package io.casperlabs.storage.benchmarks
 import java.util.Properties
 
 import com.google.protobuf.ByteString
-import io.casperlabs.casper.consensus.{Block, BlockSummary, Deploy}
 import io.casperlabs.casper.consensus.state.{Key, ProtocolVersion}
 import io.casperlabs.casper.consensus.{Block, Deploy}
 import io.casperlabs.ipc.Transform.TransformInstance
@@ -13,7 +12,7 @@ import io.casperlabs.shared.Log
 import io.casperlabs.storage.BlockMsgWithTransform
 import io.casperlabs.storage.BlockHash
 import io.casperlabs.storage.BlockMsgWithTransform.StageEffects
-import io.casperlabs.storage.dag.{DagStorage, IndexedDagStorage}
+import io.casperlabs.storage.dag.DagStorage
 import io.casperlabs.{metrics, shared}
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
@@ -145,10 +144,4 @@ object StorageBenchSuite {
           (next, elems(next))
       }
       .map(_._2)
-}
-
-object Init {
-
-  def indexedDagStorage(dagStorage: DagStorage[Task]) =
-    IndexedDagStorage.create[Task](dagStorage).runSyncUnsafe()
 }

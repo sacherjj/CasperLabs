@@ -1,22 +1,25 @@
-package io.casperlabs.comm.gossiping
+package io.casperlabs.comm.gossiping.relaying
 
-import cats.{Applicative, Parallel}
 import cats.effect._
 import cats.mtl.DefaultApplicativeAsk
 import cats.syntax.option._
+import cats.{Applicative, Parallel}
 import com.google.protobuf.ByteString
-import io.casperlabs.casper.consensus.{Block, BlockSummary}
 import io.casperlabs.comm.NodeAsk
 import io.casperlabs.comm.discovery.NodeUtils._
 import io.casperlabs.comm.discovery.{Node, NodeDiscovery, NodeIdentifier}
+import io.casperlabs.comm.gossiping.{
+  ArbitraryConsensusAndComm,
+  NewBlocksRequest,
+  NewBlocksResponse,
+  NoOpsGossipService
+}
 import io.casperlabs.metrics.Metrics
-import io.casperlabs.shared.LogStub
-import io.casperlabs.shared.Log
+import io.casperlabs.shared.{Log, LogStub}
 import monix.eval.Task
-import monix.eval.instances.CatsParallelForTask
+import monix.execution.Scheduler
 import monix.execution.Scheduler.Implicits.global
 import monix.execution.atomic.AtomicInt
-import monix.tail.Iterant
 import org.scalacheck.Arbitrary.arbitrary
 import org.scalacheck.{Gen, Shrink}
 import org.scalatest.prop.GeneratorDrivenPropertyChecks
@@ -25,6 +28,11 @@ import org.scalatest.{BeforeAndAfterEach, Inspectors, Matchers, WordSpecLike}
 import scala.concurrent.duration._
 import scala.util.Random
 
+/**
+  * TODO: Uses [[BlockRelayingImpl]] for testing.
+  * It's ok for now, because the most of the code shared between [[DeployRelayingImpl]].
+  * However, if it's going to change, then we'll need to revisit this.
+  */
 class RelayingSpec
     extends WordSpecLike
     with Matchers
@@ -176,13 +184,21 @@ object RelayingSpec {
             )(accepted => Task.now(NewBlocksResponse(accepted)))
         }
 
-      val relayingImpl = RelayingImpl[Task](nd, gossipService, relayFactor, relaySaturation)(
-        Concurrent[Task],
-        Parallel[Task],
-        log,
-        metrics,
-        ask
-      )
+      val relayingImpl =
+        BlockRelayingImpl[Task](
+          implicitly[Scheduler],
+          nd,
+          gossipService,
+          relayFactor,
+          relaySaturation
+        )(
+          ContextShift[Task],
+          Concurrent[Task],
+          Parallel[Task],
+          log,
+          metrics,
+          ask
+        )
       test(relayingImpl, asked, maxConcurrentRequests).runSyncUnsafe(5.seconds)
     }
   }

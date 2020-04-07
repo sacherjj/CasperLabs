@@ -34,17 +34,12 @@ object CasperLabsProtocol {
   def unsafe[F[_]: Applicative](
       versions: (Long, state.ProtocolVersion, Option[ipc.ChainSpec.DeployConfig])*
   ): CasperLabsProtocol[F] = {
-    def toDeployConfig(ipcDeployConfig: Option[ipc.ChainSpec.DeployConfig]): DeployConfig =
-      ipcDeployConfig.getOrElse(DeployConfig())
 
-    def toConfig(
-        blockHeightMin: Long,
-        protocolVersion: state.ProtocolVersion,
-        deployConfig: Option[ipc.ChainSpec.DeployConfig]
-    ): Config =
-      Config(blockHeightMin, protocolVersion, toDeployConfig(deployConfig))
-
-    val underlying = ProtocolVersions(versions.toList.map((toConfig _).tupled))
+    val underlying = ProtocolVersions(versions.toList.map {
+      case (minBlockHeight, protocolVersion, maybeDeployConfig) =>
+        // It's fine for an upgrade to not change the deploy configuration.
+        Config(minBlockHeight, protocolVersion, maybeDeployConfig.getOrElse(DeployConfig()))
+    })
 
     type T[A1] = (Long, state.ProtocolVersion, Option[A1])
     def merge[A1](c1: T[A1], c2: T[A1]): T[A1] = (c2._1, c2._2, c2._3.orElse(c1._3))
@@ -56,9 +51,22 @@ object CasperLabsProtocol {
         versions
           .sortBy(_._1)
           .scan(versions.head)(merge)
-          .map((toConfig _).tupled)
-          .toList
           .drop(1) // We have to drop the first element since `scan` will return Genesis twice (Genesis, Genesis or Genesis, …).
+          .map {
+            case (minBlockHeight, protocolVersion, maybeDeployConfig) =>
+              // We've collapsed all the upgrade configurations into Genesis.
+              // We should have the deploy config from the Genesis at least.
+              Config(
+                minBlockHeight,
+                protocolVersion,
+                maybeDeployConfig.getOrElse(
+                  throw new IllegalArgumentException(
+                    "Missing DeployConfiguration. There was none in the Genesis config."
+                  )
+                )
+              )
+          }
+          .toList
       )
 
     new CasperLabsProtocol[F] {

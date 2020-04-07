@@ -23,19 +23,15 @@ enum Args {
 }
 
 enum CustomError {
-    UnableToGetMainPurse = 1,
-    UnableToGetMainPurseKey = 2,
-    MissingSourcePurseArg = 3,
-    InvalidSourcePurseArg = 4,
-    MissingDestinationPurseArg = 5,
-    InvalidDestinationPurseArg = 6,
-    UnableToCreateDestinationPurse = 7,
-    UnableToCreateDestinationPurseKey = 8,
-    MissingDestinationPurse = 9,
-    UnableToStoreResult = 10,
-    UnableToStoreBalance = 11,
-    MissingAmountArg = 12,
-    InvalidAmountArg = 13,
+    MissingSourcePurseArg = 1,
+    InvalidSourcePurseArg = 2,
+    MissingDestinationPurseArg = 3,
+    InvalidDestinationPurseArg = 4,
+    MissingDestinationPurse = 5,
+    UnableToStoreResult = 6,
+    UnableToStoreBalance = 7,
+    MissingAmountArg = 8,
+    InvalidAmountArg = 9,
     InvalidSourcePurseKey = 103,
     UnexpectedSourcePurseKeyVariant = 104,
     InvalidDestinationPurseKey = 105,
@@ -44,18 +40,9 @@ enum CustomError {
 }
 
 export function call(): void {
-    const maybeMainPurse = getMainPurse();
-    if (maybeMainPurse === null) {
-        Error.fromUserError(<u16>CustomError.UnableToGetMainPurse).revert();
-        return;
-    }
-    const mainPurse = <URef>maybeMainPurse;
+    const mainPurse = getMainPurse();
     const mainPurseKey = Key.fromURef(mainPurse);
-    if(mainPurseKey === null){
-        Error.fromUserError(<u16>CustomError.UnableToGetMainPurseKey).revert();
-        return;
-    }
-    putKey(PURSE_MAIN, <Key>mainPurseKey);
+    putKey(PURSE_MAIN, mainPurseKey);
     const sourcePurseKeyNameArg = CL.getArg(Args.SourcePurse);
     if (sourcePurseKeyNameArg === null) {
         Error.fromUserError(<u16>CustomError.MissingSourcePurseArg).revert();
@@ -93,16 +80,8 @@ export function call(): void {
     let destinationKey: Key | null;
     if(!hasKey(destinationPurseKeyName)){
         destinationPurse = createPurse();
-        if (destinationPurse === null){
-            Error.fromUserError(<u16>CustomError.UnableToCreateDestinationPurse).revert();
-            return;
-        }
         destinationKey = Key.fromURef(destinationPurse);
-        if(destinationKey === null){
-            Error.fromUserError(<u16>CustomError.UnableToCreateDestinationPurseKey).revert();
-            return;
-        }
-        putKey(destinationPurseKeyName, <Key>destinationKey);
+        putKey(destinationPurseKeyName, destinationKey);
     } else {
         destinationKey = getKey(destinationPurseKeyName);
         if(destinationKey === null){

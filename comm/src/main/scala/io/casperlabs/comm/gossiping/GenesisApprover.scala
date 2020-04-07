@@ -13,7 +13,8 @@ import io.casperlabs.comm.discovery.{Node, NodeDiscovery}
 import io.casperlabs.comm.gossiping.Utils._
 import io.casperlabs.comm.gossiping.downloadmanager.BlockDownloadManager
 import io.casperlabs.shared.Log
-
+import io.casperlabs.shared.ByteStringPrettyPrinter.byteStringShow
+import io.casperlabs.catscontrib.effect.implicits.fiberSyntax
 import scala.concurrent.duration.FiniteDuration
 import scala.util.Random
 import scala.util.control.NonFatal
@@ -197,10 +198,10 @@ class GenesisApproverImpl[F[_]: Concurrent: Log: Timer](
       case Right(Some(newStatus)) =>
         for {
           _ <- Log[F].info(
-                s"Added new approval; got ${newStatus.candidate.approvals.size} in total."
+                s"Added new approval for ${blockHash.show -> "candidate"} from ${approval.approverPublicKey.show -> "approver"}; got ${newStatus.candidate.approvals.size} in total."
               )
           transitioned <- tryTransition(newStatus)
-          _            <- Concurrent[F].start(relayApproval(blockHash, approval))
+          _            <- relayApproval(blockHash, approval).forkAndLog
         } yield {
           Right(transitioned)
         }
@@ -252,7 +253,7 @@ class GenesisApproverImpl[F[_]: Concurrent: Log: Timer](
         block <- maybeBlock.toOptionT[F].getOrElseF {
                   Sync[F].raiseError[Block](Internal("Cannot retrieve downloaded block."))
                 }
-        _ <- Log[F].info(s"Downloaded Genesis candidate ${hex(blockHash)} from bootstrap.")
+        _ <- Log[F].info(s"Downloaded Genesis ${blockHash.show -> "candidate"} from bootstrap.")
       } yield block
 
     // Establish th status by downloading the block if we don't have it yet.
@@ -294,7 +295,7 @@ class GenesisApproverImpl[F[_]: Concurrent: Log: Timer](
         .handleErrorWith {
           case NonFatal(ex) =>
             Log[F].warn(
-              s"Failed to sync genesis candidate with bootstrap ${bootstrap.show -> "peer"}: $ex"
+              s"Failed to sync Genesis candidate with bootstrap ${bootstrap.show -> "peer"}: $ex"
             ) *>
               (prevApprovals, false).pure[F]
         }
@@ -365,18 +366,18 @@ class GenesisApproverImpl[F[_]: Concurrent: Log: Timer](
     }
 
   private def relayApproval(blockHash: ByteString, approval: Approval): F[Unit] = {
-    val id = hex(blockHash)
+    val candidate = blockHash.show
 
     def relayTo(peer: Node): F[Boolean] = {
       val tryRelay = for {
         service <- connectToGossip(peer)
         _       <- service.addApproval(AddApprovalRequest(blockHash).withApproval(approval))
-        _       <- Log[F].debug(s"Relayed an approval for $id to ${peer.show -> "peer"}")
+        _       <- Log[F].debug(s"Relayed an approval for $candidate to ${peer.show -> "peer"}")
       } yield true
 
       tryRelay.handleErrorWith {
         case NonFatal(ex) =>
-          Log[F].warn(s"Could not relay the approval for $id to ${peer.show -> "peer"}: $ex") *> false
+          Log[F].warn(s"Could not relay the approval for $candidate to ${peer.show -> "peer"}: $ex") *> false
             .pure[F]
       }
     }
@@ -388,7 +389,7 @@ class GenesisApproverImpl[F[_]: Concurrent: Log: Timer](
             loop(peers, relayed + (if (ok) 1 else 0))
           }
         case _ =>
-          Log[F].debug(s"Relayed an approval for $id to $relayed peers.")
+          Log[F].debug(s"Relayed an approval for $candidate to $relayed peers.")
       }
 
     nodeDiscovery.recentlyAlivePeersAscendingDistance.flatMap { peers =>

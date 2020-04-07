@@ -59,13 +59,13 @@ trait ArbitraryImplicits {
 
   implicit val positiveIntGen: Arbitrary[Refined[Int, Positive]] = Arbitrary {
     for {
-      n <- Gen.choose(1, Int.MaxValue)
+      n <- Gen.choose(1, 10)
     } yield refineV[Positive](n).right.get
   }
 
   implicit val nonNegativeIntGen: Arbitrary[Refined[Int, NonNegative]] = Arbitrary {
     for {
-      n <- Gen.choose(0, Int.MaxValue)
+      n <- Gen.choose(0, 10)
     } yield refineV[NonNegative](n).right.get
   }
 
@@ -79,6 +79,12 @@ trait ArbitraryImplicits {
     for {
       d <- Gen.choose(0.0, 10.0)
     } yield refineV[GreaterEqual[W.`0.0`.T]](d).right.get
+  }
+
+  implicit val positiveDoubleGen: Arbitrary[Refined[Double, Positive]] = Arbitrary {
+    for {
+      d <- doubleGen.arbitrary
+    } yield refineV[Positive](d).right.get
   }
 
   implicit val gt0lte1DoubleGen

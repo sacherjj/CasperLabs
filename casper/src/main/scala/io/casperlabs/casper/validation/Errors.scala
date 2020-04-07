@@ -8,6 +8,7 @@ import io.casperlabs.casper.PrettyPrinter
 import io.casperlabs.shared.Log
 import scala.util.control.NoStackTrace
 import scala.concurrent.duration.FiniteDuration
+import io.casperlabs.shared.ByteStringPrettyPrinter._
 
 object Errors {
   // Wrapper for the tests that were originally outside the `attemptAdd` method
@@ -64,19 +65,19 @@ object Errors {
 
     final case class MissingHeader(deployHash: ByteString) extends DeployHeaderError {
       def errorMessage: String =
-        s"Deploy ${PrettyPrinter.buildString(deployHash)} does not contain a header"
+        s"Deploy ${deployHash.show} does not contain a header"
     }
 
     final case class TimeToLiveTooShort(deployHash: ByteString, ttl: Int, minTTL: FiniteDuration)
         extends DeployHeaderError {
       def errorMessage: String =
-        s"Time to live $ttl in deploy ${PrettyPrinter.buildString(deployHash)} is shorter than minimum valid time to live ${minTTL.toMillis}"
+        s"Time to live $ttl in deploy ${deployHash.show} is shorter than minimum valid time to live ${minTTL.toMillis}"
     }
 
     final case class TimeToLiveTooLong(deployHash: ByteString, ttl: Int, maxTTL: Int)
         extends DeployHeaderError {
       def errorMessage: String =
-        s"Time to live $ttl in deploy ${PrettyPrinter.buildString(deployHash)} is longer than maximum valid time to live $maxTTL"
+        s"Time to live $ttl in deploy ${deployHash.show} is longer than maximum valid time to live $maxTTL"
     }
 
     final case class TooManyDependencies(
@@ -85,14 +86,14 @@ object Errors {
         maxDependencies: Int
     ) extends DeployHeaderError {
       def errorMessage: String =
-        s"Deploy ${PrettyPrinter.buildString(deployHash)} with $numDependencies is invalid. The maximum number of dependencies is $maxDependencies"
+        s"Deploy ${deployHash.show} with $numDependencies is invalid. The maximum number of dependencies is $maxDependencies"
     }
 
     final case class InvalidDependency(deployHash: ByteString, dependency: ByteString)
         extends DeployHeaderError {
       def errorMessage: String = {
-        val deploy = PrettyPrinter.buildString(deployHash)
-        val dep    = PrettyPrinter.buildString(dependency)
+        val deploy = deployHash.show
+        val dep    = dependency.show
 
         s"Deploy $deploy with dependency $dep is invalid. Dependencies are expected to be 32 bytes."
       }
@@ -104,7 +105,7 @@ object Errors {
         expectedChainName: String
     ) extends DeployHeaderError {
       def errorMessage: String =
-        s"Deploy ${PrettyPrinter.buildString(deployHash)} with chain name '$deployChainName' is invalid. Expected empty chain or '$expectedChainName'."
+        s"Deploy ${deployHash.show} with chain name '$deployChainName' is invalid. Expected empty chain or '$expectedChainName'."
     }
 
     final case class TimestampInFuture(
@@ -113,7 +114,7 @@ object Errors {
         drift: Int
     ) extends DeployHeaderError {
       def errorMessage: String =
-        s"Deploy ${PrettyPrinter.buildString(deployHash)} has timestamp $timestamp which is more than ${drift}ms in the future."
+        s"Deploy ${deployHash.show} has timestamp $timestamp which is more than ${drift}ms in the future."
     }
   }
 }

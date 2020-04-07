@@ -25,10 +25,7 @@ export function delegate(): void {
 function storeAtHash(): Key {
   let namedKeys = toBytesMap([]);
   var key = CL.storeFunctionAtHash("delegate", namedKeys);
-  if (key === null) {
-    Error.fromErrorCode(ErrorCode.UnexpectedKeyVariant).revert();
-  }
-  return <Key>key;
+  return key;
 }
 
 function storeAtURef(): Key {

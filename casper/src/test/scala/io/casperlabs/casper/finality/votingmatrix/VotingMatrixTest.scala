@@ -5,7 +5,7 @@ import cats.mtl.MonadState
 import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
-import io.casperlabs.casper.consensus.{Block}
+import io.casperlabs.casper.consensus.Block
 import io.casperlabs.casper.finality.votingmatrix.VotingMatrix.VotingMatrix
 import io.casperlabs.casper.finality.{CommitteeWithConsensusValue, FinalityDetectorUtil}
 import io.casperlabs.casper.helper.BlockUtil.generateValidator
@@ -17,13 +17,12 @@ import io.casperlabs.models.Message
 import io.casperlabs.shared.LogStub
 import io.casperlabs.shared.Time
 import io.casperlabs.storage.block.BlockStorage
-import io.casperlabs.storage.dag.IndexedDagStorage
+import io.casperlabs.storage.dag.{AncestorsStorage, DagRepresentation, DagStorage}
 import io.casperlabs.storage.deploy.DeployStorage
 import monix.eval.Task
 import org.scalatest.{Assertion, FlatSpec, Matchers}
 
 import scala.collection.immutable.{HashMap, Map}
-import io.casperlabs.storage.dag.DagRepresentation
 
 @silent("is never used")
 class VotingMatrixTest extends FlatSpec with Matchers with BlockGenerator with StorageFixture {
@@ -85,178 +84,175 @@ class VotingMatrixTest extends FlatSpec with Matchers with BlockGenerator with S
       ))
     } yield result
 
-  it should "detect finality as appropriate" in withStorage {
-    implicit blockStore => implicit dagStorage => implicit deployStorage =>
-      _ =>
-        /*
-         * The Dag looks like
-         *
-         *        b5
-         *           \
-         *             b4
-         *           // |
-         *        b3    |
-         *        || \  |
-         *        b1   b2
-         *         \   /
-         *         genesis
-         */
-        val v1     = generateValidator("V1")
-        val v2     = generateValidator("V2")
-        val v1Bond = Bond(v1, 10)
-        val v2Bond = Bond(v2, 10)
-        val bonds  = Seq(v1Bond, v2Bond)
-        for {
-          genesis <- createAndStoreMessage[Task](Seq(), bonds = bonds)
-          dag     <- dagStorage.getRepresentation
-          implicit0(votingMatrix: VotingMatrix[Task]) <- VotingMatrix
-                                                          .create[Task](
-                                                            dag,
-                                                            genesis.blockHash,
-                                                            isHighway = false
-                                                          )
-          _            <- checkMatrix(Map.empty)
-          _            <- checkFirstLevelZeroVote(Map(v1 -> None, v2 -> None))
-          _            <- checkWeightMap(Map(v1 -> 10, v2 -> 10))
-          updatedBonds = Seq(Bond(v1, 20), v2Bond) // let v1 dominate the chain after finalizing b1
-          b1 <- createBlockAndUpdateVotingMatrix[Task](
-                 Seq(genesis.blockHash),
-                 genesis.blockHash,
-                 v1,
-                 updatedBonds
-               )
-          _ <- checkWeightMap(Map(v1 -> 10, v2 -> 10)) // don't change, because b1 haven't finalized
-          _ <- checkMatrix(
-                Map(
-                  v1 -> Map(v1 -> b1.getHeader.jRank, v2 -> 0),
-                  v2 -> Map(v1 -> 0, v2                  -> 0)
-                )
-              )
-          _ <- checkFirstLevelZeroVote(
-                Map(
-                  v1 -> Some((b1.blockHash, b1.getHeader.jRank)),
-                  v2 -> None
-                )
-              )
-          committee <- ncbCheckForCommitte(dag)
-          _         = committee shouldBe None
-          b2 <- createBlockAndUpdateVotingMatrix[Task](
-                 Seq(genesis.blockHash),
-                 genesis.blockHash,
-                 v2,
-                 bonds
-               )
-          _ <- checkMatrix(
-                Map(
-                  v1 -> Map(v1 -> b1.getHeader.jRank, v2 -> 0),
-                  v2 -> Map(v1 -> 0, v2                  -> b2.getHeader.jRank)
-                )
-              )
-          _ <- checkFirstLevelZeroVote(
-                Map(
-                  v1 -> Some((b1.blockHash, b1.getHeader.jRank)),
-                  v2 -> Some((b2.blockHash, b2.getHeader.jRank))
-                )
-              )
-          committee <- ncbCheckForCommitte(dag)
-          _         = committee shouldBe None
-          b3 <- createBlockAndUpdateVotingMatrix[Task](
-                 Seq(b1.blockHash),
-                 genesis.blockHash,
-                 v1,
-                 bonds,
-                 Map(v1 -> b1.blockHash, v2 -> b2.blockHash)
-               )
-          _ <- checkMatrix(
-                Map(
-                  v1 -> Map(v1 -> b3.getHeader.jRank, v2 -> b2.getHeader.jRank),
-                  v2 -> Map(v1 -> 0, v2                  -> b2.getHeader.jRank)
-                )
-              )
-          _ <- checkFirstLevelZeroVote(
-                Map(
-                  v1 -> Some((b1.blockHash, b1.getHeader.jRank)),
-                  v2 -> Some((b2.blockHash, b2.getHeader.jRank))
-                )
-              )
-          committee <- ncbCheckForCommitte(dag)
-          _         = committee shouldBe None
-          b4 <- createBlockAndUpdateVotingMatrix[Task](
-                 Seq(b3.blockHash),
-                 genesis.blockHash,
-                 v2,
-                 bonds,
-                 Map(v1 -> b3.blockHash, v2 -> b2.blockHash)
-               )
-          _ <- checkMatrix(
-                Map(
-                  v1 -> Map(v1 -> b3.getHeader.jRank, v2 -> b2.getHeader.jRank),
-                  v2 -> Map(v1 -> b3.getHeader.jRank, v2 -> b4.getHeader.jRank)
-                )
-              )
-          _ <- checkFirstLevelZeroVote(
-                Map(
-                  v1 -> Some((b1.blockHash, b1.getHeader.jRank)),
-                  v2 -> Some((b1.blockHash, b4.getHeader.jRank))
-                )
-              )
-
-          committee <- ncbCheckForCommitte(dag)
-          _         = committee shouldBe None
-
-          b5 <- createBlockAndUpdateVotingMatrix[Task](
-                 Seq(b4.blockHash),
-                 genesis.blockHash,
-                 v1,
-                 bonds,
-                 Map(v1 -> b3.blockHash, v2 -> b4.blockHash)
-               )
-          _ <- checkMatrix(
-                Map(
-                  v1 -> Map(v1 -> b5.getHeader.jRank, v2 -> b4.getHeader.jRank),
-                  v2 -> Map(v1 -> b3.getHeader.jRank, v2 -> b4.getHeader.jRank)
-                )
-              )
-          _ <- checkFirstLevelZeroVote(
-                Map(
-                  v1 -> Some((b1.blockHash, b1.getHeader.jRank)),
-                  v2 -> Some((b1.blockHash, b4.getHeader.jRank))
-                )
-              )
-
-          committee <- ncbCheckForCommitte(dag)
-          _         = committee shouldBe Some(CommitteeWithConsensusValue(Set(v1, v2), 20, b1.blockHash))
-
-          committee <- ncbCheckForCommitte(dag, rFTT = 0.4)
-          _ = committee shouldBe Some(
-            CommitteeWithConsensusValue(Set(v1, v2), 20, b1.blockHash)
+  it should "detect finality as appropriate" in withCombinedStorage() { implicit storage =>
+    /*
+     * The Dag looks like
+     *
+     *        b5
+     *           \
+     *             b4
+     *           // |
+     *        b3    |
+     *        || \  |
+     *        b1   b2
+     *         \   /
+     *         genesis
+     */
+    val v1     = generateValidator("V1")
+    val v2     = generateValidator("V2")
+    val v1Bond = Bond(v1, 10)
+    val v2Bond = Bond(v2, 10)
+    val bonds  = Seq(v1Bond, v2Bond)
+    for {
+      genesis <- createAndStoreMessage[Task](Seq(), bonds = bonds)
+      dag     <- storage.getRepresentation
+      implicit0(votingMatrix: VotingMatrix[Task]) <- VotingMatrix
+                                                      .create[Task](
+                                                        dag,
+                                                        genesis.blockHash,
+                                                        isHighway = false
+                                                      )
+      _            <- checkMatrix(Map.empty)
+      _            <- checkFirstLevelZeroVote(Map(v1 -> None, v2 -> None))
+      _            <- checkWeightMap(Map(v1 -> 10, v2 -> 10))
+      updatedBonds = Seq(Bond(v1, 20), v2Bond) // let v1 dominate the chain after finalizing b1
+      b1 <- createBlockAndUpdateVotingMatrix[Task](
+             Seq(genesis.blockHash),
+             genesis.blockHash,
+             v1,
+             updatedBonds
+           )
+      _ <- checkWeightMap(Map(v1 -> 10, v2 -> 10)) // don't change, because b1 haven't finalized
+      _ <- checkMatrix(
+            Map(
+              v1 -> Map(v1 -> b1.getHeader.jRank, v2 -> 0),
+              v2 -> Map(v1 -> 0, v2                  -> 0)
+            )
+          )
+      _ <- checkFirstLevelZeroVote(
+            Map(
+              v1 -> Some((b1.blockHash, b1.getHeader.jRank)),
+              v2 -> None
+            )
+          )
+      committee <- ncbCheckForCommitte(dag)
+      _         = committee shouldBe None
+      b2 <- createBlockAndUpdateVotingMatrix[Task](
+             Seq(genesis.blockHash),
+             genesis.blockHash,
+             v2,
+             bonds
+           )
+      _ <- checkMatrix(
+            Map(
+              v1 -> Map(v1 -> b1.getHeader.jRank, v2 -> 0),
+              v2 -> Map(v1 -> 0, v2                  -> b2.getHeader.jRank)
+            )
+          )
+      _ <- checkFirstLevelZeroVote(
+            Map(
+              v1 -> Some((b1.blockHash, b1.getHeader.jRank)),
+              v2 -> Some((b2.blockHash, b2.getHeader.jRank))
+            )
+          )
+      committee <- ncbCheckForCommitte(dag)
+      _         = committee shouldBe None
+      b3 <- createBlockAndUpdateVotingMatrix[Task](
+             Seq(b1.blockHash),
+             genesis.blockHash,
+             v1,
+             bonds,
+             Map(v1 -> b1.blockHash, v2 -> b2.blockHash)
+           )
+      _ <- checkMatrix(
+            Map(
+              v1 -> Map(v1 -> b3.getHeader.jRank, v2 -> b2.getHeader.jRank),
+              v2 -> Map(v1 -> 0, v2                  -> b2.getHeader.jRank)
+            )
+          )
+      _ <- checkFirstLevelZeroVote(
+            Map(
+              v1 -> Some((b1.blockHash, b1.getHeader.jRank)),
+              v2 -> Some((b2.blockHash, b2.getHeader.jRank))
+            )
+          )
+      committee <- ncbCheckForCommitte(dag)
+      _         = committee shouldBe None
+      b4 <- createBlockAndUpdateVotingMatrix[Task](
+             Seq(b3.blockHash),
+             genesis.blockHash,
+             v2,
+             bonds,
+             Map(v1 -> b3.blockHash, v2 -> b2.blockHash)
+           )
+      _ <- checkMatrix(
+            Map(
+              v1 -> Map(v1 -> b3.getHeader.jRank, v2 -> b2.getHeader.jRank),
+              v2 -> Map(v1 -> b3.getHeader.jRank, v2 -> b4.getHeader.jRank)
+            )
+          )
+      _ <- checkFirstLevelZeroVote(
+            Map(
+              v1 -> Some((b1.blockHash, b1.getHeader.jRank)),
+              v2 -> Some((b1.blockHash, b4.getHeader.jRank))
+            )
           )
 
-          updatedDag <- dagStorage.getRepresentation
-          // rebuild from new finalized block b1
-          newVotingMatrix <- VotingMatrix
-                              .create[Task](
-                                updatedDag,
-                                b1.blockHash,
-                                isHighway = false
-                              )
-          _ <- checkWeightMap(Map(v1 -> 20, v2 -> 10))(newVotingMatrix)
-          _ <- checkMatrix(
-                Map(
-                  v1 -> Map(v1 -> b5.getHeader.jRank, v2 -> b4.getHeader.jRank),
-                  v2 -> Map(v1 -> b3.getHeader.jRank, v2 -> b4.getHeader.jRank)
-                )
-              )(newVotingMatrix)
-          result <- checkFirstLevelZeroVote(
-                     Map(
-                       v1 -> Some((b3.blockHash, b3.getHeader.jRank)),
-                       v2 -> Some((b3.blockHash, b4.getHeader.jRank))
-                     )
-                   )(newVotingMatrix)
-        } yield result
+      committee <- ncbCheckForCommitte(dag)
+      _         = committee shouldBe None
+
+      b5 <- createBlockAndUpdateVotingMatrix[Task](
+             Seq(b4.blockHash),
+             genesis.blockHash,
+             v1,
+             bonds,
+             Map(v1 -> b3.blockHash, v2 -> b4.blockHash)
+           )
+      _ <- checkMatrix(
+            Map(
+              v1 -> Map(v1 -> b5.getHeader.jRank, v2 -> b4.getHeader.jRank),
+              v2 -> Map(v1 -> b3.getHeader.jRank, v2 -> b4.getHeader.jRank)
+            )
+          )
+      _ <- checkFirstLevelZeroVote(
+            Map(
+              v1 -> Some((b1.blockHash, b1.getHeader.jRank)),
+              v2 -> Some((b1.blockHash, b4.getHeader.jRank))
+            )
+          )
+
+      committee <- ncbCheckForCommitte(dag)
+      _         = committee shouldBe Some(CommitteeWithConsensusValue(Set(v1, v2), 20, b1.blockHash))
+
+      committee <- ncbCheckForCommitte(dag, rFTT = 0.4)
+      _ = committee shouldBe Some(
+        CommitteeWithConsensusValue(Set(v1, v2), 20, b1.blockHash)
+      )
+
+      // rebuild from new finalized block b1
+      newVotingMatrix <- VotingMatrix
+                          .create[Task](
+                            dag,
+                            b1.blockHash,
+                            isHighway = false
+                          )
+      _ <- checkWeightMap(Map(v1 -> 20, v2 -> 10))(newVotingMatrix)
+      _ <- checkMatrix(
+            Map(
+              v1 -> Map(v1 -> b5.getHeader.jRank, v2 -> b4.getHeader.jRank),
+              v2 -> Map(v1 -> b3.getHeader.jRank, v2 -> b4.getHeader.jRank)
+            )
+          )(newVotingMatrix)
+      result <- checkFirstLevelZeroVote(
+                 Map(
+                   v1 -> Some((b3.blockHash, b3.getHeader.jRank)),
+                   v2 -> Some((b3.blockHash, b4.getHeader.jRank))
+                 )
+               )(newVotingMatrix)
+    } yield result
   }
 
-  def createBlockAndUpdateVotingMatrix[F[_]: MonadThrowable: Time: BlockStorage: IndexedDagStorage: DeployStorage](
+  def createBlockAndUpdateVotingMatrix[F[_]: MonadThrowable: Time: BlockStorage: DagStorage: DeployStorage: AncestorsStorage](
       parentsHashList: Seq[BlockHash],
       latestFinalizedBlockHash: BlockHash,
       creator: Validator = ByteString.EMPTY,
@@ -273,12 +269,14 @@ class VotingMatrixTest extends FlatSpec with Matchers with BlockGenerator with S
             justifications,
             keyBlockHash = latestFinalizedBlockHash
           )
-      dag         <- IndexedDagStorage[F].getRepresentation
-      votedBranch <- ProtoUtil.votedBranch(dag, latestFinalizedBlockHash, b.blockHash)
+      bMessage <- MonadThrowable[F].fromTry(Message.fromBlock(b))
+      dag      <- DagStorage[F].getRepresentation
+      votedBranch <- io.casperlabs.casper.finality
+                      .votedBranch(dag, latestFinalizedBlockHash, bMessage)
       _ <- updateVoterPerspective(
             dag,
             Message.fromBlock(b).get,
-            votedBranch.get,
+            votedBranch.get.messageHash,
             isHighway = false
           )
     } yield b

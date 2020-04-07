@@ -6,6 +6,8 @@ import cats.effect.concurrent.Semaphore
 import cats.implicits._
 import io.casperlabs.casper.MultiParentCasperImpl.Broadcaster
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
+import io.casperlabs.casper.consensus.Block
+import io.casperlabs.casper.ValidatorIdentity
 import io.casperlabs.catscontrib.Fs2Compiler
 import io.casperlabs.comm.discovery.{NodeDiscovery, NodeIdentifier}
 import io.casperlabs.comm.grpc.{ErrorInterceptor, GrpcServer, MetricsInterceptor}
@@ -17,6 +19,7 @@ import io.casperlabs.node.api.casper.CasperGrpcMonix
 import io.casperlabs.node.api.control.ControlGrpcMonix
 import io.casperlabs.node.api.diagnostics.DiagnosticsGrpcMonix
 import io.casperlabs.node.api.graphql.{FinalizedBlocksStream, GraphQL}
+import io.casperlabs.node.casper.consensus.Consensus
 import io.casperlabs.node.configuration.Configuration
 import io.casperlabs.node.diagnostics.{GrpcDiagnosticsService, NewPrometheusReporter}
 import io.casperlabs.shared._
@@ -31,7 +34,7 @@ import monix.execution.Scheduler
 import org.http4s.implicits._
 import org.http4s.server.Router
 import org.http4s.server.blaze.BlazeServerBuilder
-
+import scala.concurrent.duration.FiniteDuration
 import scala.concurrent.ExecutionContext
 
 object Servers {
@@ -45,6 +48,7 @@ object Servers {
   def internalServersR(
       port: Int,
       maxMessageSize: Int,
+      shutdownTimeout: FiniteDuration,
       ingressScheduler: Scheduler,
       blockApiLock: Semaphore[Task],
       maybeSslContext: Option[SslContext]
@@ -72,7 +76,8 @@ object Servers {
         new MetricsInterceptor(),
         ErrorInterceptor.default
       ),
-      sslContext = maybeSslContext
+      sslContext = maybeSslContext,
+      shutdownTimeout = shutdownTimeout
     ) *> Resource.liftF(
       logStarted[Task]("Internal", port, maybeSslContext.isDefined)
     )
@@ -82,6 +87,7 @@ object Servers {
   def externalServersR[F[_]: Concurrent: TaskLike: Log: FinalityStorage: Metrics: BlockStorage: ExecutionEngineService: DeployStorage: Fs2Compiler: DeployBuffer: DagStorage: EventStream: NodeDiscovery](
       port: Int,
       maxMessageSize: Int,
+      shutdownTimeout: FiniteDuration,
       ingressScheduler: Scheduler,
       maybeSslContext: Option[SslContext],
       isReadOnlyNode: Boolean
@@ -104,16 +110,18 @@ object Servers {
         new MetricsInterceptor(),
         ErrorInterceptor.default
       ),
-      sslContext = maybeSslContext
+      sslContext = maybeSslContext,
+      shutdownTimeout = shutdownTimeout
     ) *>
       Resource.liftF(
         logStarted[F]("External", port, maybeSslContext.isDefined)
       )
   }
 
-  def httpServerR[F[_]: Log: NodeDiscovery: ConnectionsCell: Timer: ConcurrentEffect: MultiParentCasperRef: BlockStorage: ContextShift: FinalizedBlocksStream: ExecutionEngineService: DeployStorage: DagStorage: Fs2Compiler: Metrics](
+  def httpServerR[F[_]: Log: Timer: ConcurrentEffect: MultiParentCasperRef: BlockStorage: ContextShift: FinalizedBlocksStream: ExecutionEngineService: DeployStorage: DagStorage: FinalityStorage: Fs2Compiler: Metrics: Consensus](
       port: Int,
       conf: Configuration,
+      statusSvc: StatusInfo.Service[F],
       id: NodeIdentifier,
       ec: ExecutionContext
   ): Resource[F, Unit] = {
@@ -135,7 +143,7 @@ object Servers {
               Router(
                 "/metrics" -> prometheusService,
                 "/version" -> VersionInfo.service,
-                "/status"  -> StatusInfo.service,
+                "/status"  -> StatusInfo.service(statusSvc),
                 "/graphql" -> GraphQL.service[F](ec)
               ).orNotFound
             )

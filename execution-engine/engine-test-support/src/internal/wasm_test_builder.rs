@@ -102,7 +102,7 @@ impl Default for InMemoryWasmTestBuilder {
         Self::initialize_logging();
         let engine_config = EngineConfig::new()
             .with_use_system_contracts(cfg!(feature = "use-system-contracts"))
-            .with_highway(cfg!(feature = "highway"));
+            .with_enable_bonding(cfg!(feature = "enable-bonding"));
 
         let global_state = InMemoryGlobalState::empty().expect("should create global state");
         let engine_state = EngineState::new(global_state, engine_config);

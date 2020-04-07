@@ -6,31 +6,31 @@ pub mod storage;
 pub mod system;
 
 use alloc::{
-    alloc::{AllocRef, Global, Layout},
+    alloc::{alloc, Layout},
     vec::Vec,
 };
+use core::{mem, ptr::NonNull};
 
 use casperlabs_types::{bytesrepr::ToBytes, ApiError};
 
 use crate::unwrap_or_revert::UnwrapOrRevert;
 
-#[allow(clippy::zero_ptr)]
-fn alloc_bytes(n: usize) -> *mut u8 {
-    if n == 0 {
-        // cannot allocate with size 0
-        0 as *mut u8
-    } else {
-        let layout = Layout::array::<u8>(n)
-            .map_err(|_| ApiError::AllocLayout)
-            .unwrap_or_revert();
-        unsafe {
-            Global
-                .alloc(layout)
-                .map_err(|_| ApiError::OutOfMemory)
-                .unwrap_or_revert()
-                .as_ptr()
-        }
-    }
+/// Calculates size and alignment for an array of T.
+const fn size_align_for_array<T>(n: usize) -> (usize, usize) {
+    (n * mem::size_of::<T>(), mem::align_of::<T>())
+}
+
+fn alloc_bytes(n: usize) -> NonNull<u8> {
+    let (size, align) = size_align_for_array::<u8>(n);
+    // We treat allocated memory as raw bytes, that will be later passed to deserializer which also
+    // operates on raw bytes.
+    let layout = Layout::from_size_align(size, align)
+        .map_err(|_| ApiError::AllocLayout)
+        .unwrap_or_revert();
+    let raw_ptr = unsafe { alloc(layout) };
+    NonNull::new(raw_ptr)
+        .ok_or(ApiError::OutOfMemory)
+        .unwrap_or_revert()
 }
 
 fn to_ptr<T: ToBytes>(t: T) -> (*const u8, usize, Vec<u8>) {

@@ -5,7 +5,7 @@ import java.util.concurrent.TimeoutException
 import cats.effect.concurrent.Semaphore
 import cats.syntax.either._
 import com.google.protobuf.ByteString
-import io.casperlabs.casper.consensus.{Approval, Block, BlockSummary}
+import io.casperlabs.casper.consensus.{Approval, Block, BlockSummary, DeploySummary}
 import io.casperlabs.comm.discovery.{Node, NodeDiscovery, NodeIdentifier}
 import io.casperlabs.comm.gossiping._
 import io.casperlabs.comm.gossiping.downloadmanager._
@@ -203,37 +203,22 @@ object InitialSynchronizationBackwardImplSpec extends ArbitraryConsensus {
   implicit val logNoOp = Log.NOPLog[Task]
   implicit val metris  = new Metrics.MetricsNOP[Task]
 
-  class MockNodeDiscovery(nodes: List[Node]) extends NodeDiscovery[Task] {
-    def discover                            = ???
-    def lookup(id: NodeIdentifier)          = ???
-    def recentlyAlivePeersAscendingDistance = Task.now(nodes)
-    def banTemp(node: Node): Task[Unit]     = ???
+  class MockNodeDiscovery(nodes: List[Node]) extends NoOpsNodeDiscovery[Task] {
+    override def recentlyAlivePeersAscendingDistance = Task.now(nodes)
   }
 
-  object MockBackend extends GossipServiceServer.Backend[Task] {
-    override def hasBlock(blockHash: ByteString)                                 = ???
-    override def getBlockSummary(blockHash: ByteString)                          = ???
-    override def getBlock(blockHash: ByteString, deploysBodiesExcluded: Boolean) = ???
-    override def getDeploys(deployHashes: Set[ByteString])                       = ???
-    override def latestMessages: Task[Set[Block.Justification]]                  = ???
-    override def dagTopoSort(startRank: Long, endRank: Long)                     = ???
+  object MockBackend extends NoOpsGossipServiceServerBackend[Task] {}
+
+  object MockSynchronizer extends NoOpsSynchronizer[Task] {}
+
+  object MockGossipServiceConnector extends (Node => Task[GossipService[Task]]) {
+    override def apply(node: Node): Task[GossipService[Task]] = ???
   }
 
-  object MockSynchronizer extends Synchronizer[Task] {
-    def syncDag(source: Node, targetBlockHashes: Set[ByteString])    = ???
-    def onDownloaded(blockHash: ByteString): Task[Unit]              = ???
-    def onScheduled(summary: BlockSummary, source: Node): Task[Unit] = ???
-  }
+  object MockDeployDownloadManager extends NoOpsDeployDownloadManager[Task] {}
+  object MockBlockDownloadManager  extends NoOpsBlockDownloadManager[Task]  {}
 
-  object MockBlockDownloadManager extends BlockDownloadManager[Task] {
-    def scheduleDownload(summary: BlockSummary, source: Node, relay: Boolean) = ???
-  }
-
-  object MockGenesisApprover extends GenesisApprover[Task] {
-    def getCandidate                                           = ???
-    def addApproval(blockHash: ByteString, approval: Approval) = ???
-    def awaitApproval                                          = ???
-  }
+  object MockGenesisApprover extends NoOpsGenesisApprover[Task] {}
 
   val MockSemaphore = Semaphore[Task](1).runSyncUnsafe(1.second)
 
@@ -241,6 +226,8 @@ object InitialSynchronizationBackwardImplSpec extends ArbitraryConsensus {
       extends GossipServiceServer[Task](
         MockBackend,
         MockSynchronizer,
+        MockGossipServiceConnector,
+        MockDeployDownloadManager,
         MockBlockDownloadManager,
         MockGenesisApprover,
         0,

@@ -168,10 +168,5 @@ export function call(): void {
         toBytesPair(toBytesString(LIST_KEY), counterLocalKey.toBytes()),
     ]);
     var pointer = storeFunctionAtHash(MAILING_LIST_EXT, namedKeys);
-    if (pointer === null) {
-        Error.fromUserError(2).revert();
-        return;
-    }
-
-    putKey(MAILING_KEY, <Key>pointer);
+    putKey(MAILING_KEY, pointer);
 }

@@ -6,6 +6,7 @@ import io.casperlabs.casper.DeployFilters.filterDeploysNotInPast
 import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.{DeployEventEmitter, DeployFilters, DeployHash, PrettyPrinter}
 import io.casperlabs.casper.consensus.Deploy
+import io.casperlabs.casper.consensus.info.DeployInfo
 import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.casper.validation.Validation
 import io.casperlabs.catscontrib.{Fs2Compiler, MonadThrowable}
@@ -13,12 +14,12 @@ import io.casperlabs.ipc.ChainSpec.DeployConfig
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.implicits._
 import io.casperlabs.storage.deploy.{DeployStorage, DeployStorageReader, DeployStorageWriter}
-
-import scala.concurrent.duration.FiniteDuration
+import io.casperlabs.shared.ByteStringPrettyPrinter._
 import io.casperlabs.shared.Log
 import io.casperlabs.storage.block.BlockStorage
-import io.casperlabs.storage.dag.{DagRepresentation, DagStorage}
+import io.casperlabs.storage.dag.{DagRepresentation, DagStorage, FinalityStorage}
 import simulacrum.typeclass
+import scala.concurrent.duration.FiniteDuration
 
 @typeclass trait DeployBuffer[F[_]] {
 
@@ -37,9 +38,16 @@ import simulacrum.typeclass
 
   /** If another node proposed a block which orphaned something proposed by this node,
     * and we still have these deploys in the `processedDeploys` buffer then put them
-    * back into the `pendingDeploys` so that the `AutoProposer` can pick them up again. */
+    * back into the `pendingDeploys` so that the `AutoProposer` can pick them up again.
+    *
+    * This method requeues processed deploys not in the p-past cone of the tips. */
   def requeueOrphanedDeploys(
       tips: Set[BlockHash]
+  ): F[Set[DeployHash]]
+
+  /** This method requeues processed deploys in the given orphaned blocks. */
+  def requeueOrphanedDeploysInBlocks(
+      orphanedBlockHashes: Set[BlockHash]
   ): F[Set[DeployHash]]
 
   /** Remove deploys from the buffer which are included in blocks that are finalized.
@@ -63,7 +71,7 @@ object DeployBuffer {
   implicit val DeployBufferMetricsSource: Metrics.Source =
     Metrics.Source(Metrics.BaseSource, "deploy_buffer")
 
-  def create[F[_]: MonadThrowable: Fs2Compiler: Log: Metrics: DeployStorage: BlockStorage: DagStorage: DeployEventEmitter](
+  def create[F[_]: MonadThrowable: Fs2Compiler: Log: Metrics: DeployStorage: BlockStorage: DagStorage: FinalityStorage: DeployEventEmitter](
       chainName: String,
       minTtl: FiniteDuration
   ): DeployBuffer[F] =
@@ -79,10 +87,9 @@ object DeployBuffer {
           }
 
         for {
-          _ <- (deploy.getBody.session, deploy.getBody.payment) match {
-                case (None, _) | (_, None) | (Some(Deploy.Code(_, Deploy.Code.Contract.Empty)), _) |
-                    (_, Some(Deploy.Code(_, Deploy.Code.Contract.Empty))) =>
-                  illegal(s"Deploy was missing session and/or payment code.")
+          _ <- deploy.getBody.session match {
+                case None | Some(Deploy.Code(_, Deploy.Code.Contract.Empty)) =>
+                  illegal(s"Deploy was missing session code.")
                 case _ => ().pure[F]
               }
           _ <- check("Invalid deploy hash.")(Validation.deployHash[F](deploy))
@@ -154,6 +161,42 @@ object DeployBuffer {
                                 tips,
                                 processedDeploys
                               ).timer("requeueOrphanedDeploys_filterDeploysNotInPast")
+            _ <- DeployStorageWriter[F]
+                  .markAsPendingByHashes(orphanedDeploys) whenA orphanedDeploys.nonEmpty
+            _ <- DeployEventEmitter[F].deploysRequeued(orphanedDeploys)
+          } yield orphanedDeploys.toSet
+        }
+
+      def requeueOrphanedDeploysInBlocks(
+          orphanedBlockHashes: Set[BlockHash]
+      ): F[Set[DeployHash]] =
+        // Using the same timer so we don't have to update Grafana.
+        // Only one of the variants is used, depending on mode.
+        Metrics[F].timer("requeueOrphanedDeploys") {
+          for {
+            deployHashes <- orphanedBlockHashes.toList
+                             .traverse { blockHash =>
+                               DeployStorage[F]
+                                 .reader(DeployInfo.View.BASIC)
+                                 .getProcessedDeploys(blockHash)
+                                 .map(_.map(_.getDeploy.deployHash))
+                             }
+                             .map(_.flatten)
+
+            deployToBlocks <- BlockStorage[F].findBlockHashesWithDeployHashes(deployHashes)
+
+            blockFinality <- deployToBlocks.values.flatten.toSet.toList
+                              .traverse { blockHash =>
+                                FinalityStorage[F].getFinalityStatus(blockHash).map(blockHash -> _)
+                              }
+                              .map(_.toMap)
+
+            orphanedDeploys = deployToBlocks.collect {
+              // If we have Finalized or Undecided blocks we don't have to requeue (yet).
+              case (deployHash, blockHashes) if blockHashes.forall(blockFinality(_).isOrphaned) =>
+                deployHash
+            }.toList
+
             _ <- DeployStorageWriter[F]
                   .markAsPendingByHashes(orphanedDeploys) whenA orphanedDeploys.nonEmpty
             _ <- DeployEventEmitter[F].deploysRequeued(orphanedDeploys)

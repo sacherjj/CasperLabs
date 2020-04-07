@@ -1,22 +1,20 @@
 package io.casperlabs.casper.highway
 
-import cats._
-import cats.implicits._
-import cats.syntax.show
-import cats.effect.{Concurrent, Fiber, Resource, Sync, Timer}
 import cats.effect.concurrent.{Ref, Semaphore}
+import cats.effect.{Concurrent, Fiber, Resource, Sync, Timer}
+import cats.implicits._
 import io.casperlabs.casper.consensus.{Block, BlockSummary, Era}
 import io.casperlabs.casper.dag.DagOperations
 import io.casperlabs.casper.dag.DagOperations.Key
 import io.casperlabs.casper.highway.EraRuntime.Agenda
-import io.casperlabs.comm.gossiping.Relaying
+import io.casperlabs.comm.gossiping.relaying.BlockRelaying
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.implicits._
 import io.casperlabs.models.Message
+import io.casperlabs.shared.ByteStringPrettyPrinter._
 import io.casperlabs.shared.Log
 import io.casperlabs.storage.BlockHash
-import io.casperlabs.storage.block.BlockStorage
-import io.casperlabs.storage.dag.{DagRepresentation, DagStorage, FinalityStorageReader}
+import io.casperlabs.storage.dag.{DagStorage, FinalityStorageReader}
 import io.casperlabs.storage.era.EraStorage
 
 import scala.concurrent.duration.FiniteDuration
@@ -27,7 +25,7 @@ import scala.util.control.NonFatal
   * - manages the scheduling of the agendas of the eras by acting as a trampoline for them
   * - propagates messages received or created by parent eras to the descendants to keep the latest messsages up to date.
   */
-class EraSupervisor[F[_]: Concurrent: Timer: Log: Metrics: EraStorage: Relaying: ForkChoiceManager](
+class EraSupervisor[F[_]: Concurrent: Timer: Log: Metrics: EraStorage: BlockRelaying: ForkChoiceManager](
     conf: HighwayConf,
     // Once the supervisor is shut down, reject incoming messages.
     isShutdownRef: Ref[F, Boolean],
@@ -52,21 +50,18 @@ class EraSupervisor[F[_]: Concurrent: Timer: Log: Metrics: EraStorage: Relaying:
     * it will be gossiped if it's successfully validated. Only need to broadcast responses. */
   def validateAndAddBlock(block: Block): F[Unit] =
     for {
-      _      <- ensureNotShutdown
-      header = block.getHeader
-      hash   = block.blockHash.show
+      _       <- ensureNotShutdown
+      header  = block.getHeader
+      hash    = block.blockHash.show
+      instant = conf.toInstant(Ticks(header.roundId))
       _ <- Log[F].info(
-            s"Handling incoming ${hash -> "message"} from ${header.validatorPublicKey.show -> "validator"} in ${header.roundId -> "round"} ${header.keyBlockHash.show -> "era"}"
+            s"Handling incoming ${hash -> "message"} from ${header.validatorPublicKey.show -> "validator"} in ${header.roundId -> "round"} $instant ${header.keyBlockHash.show -> "era"}"
           )
       entry <- load(header.keyBlockHash)
 
       message <- entry.runtime
                   .validateAndAddBlock(messageExecutor, block)
                   .timerGauge("incoming_validateAndAddBlock")
-
-      _ <- messageExecutor
-            .effectsAfterAdded(message)
-            .timerGauge("incoming_effectsAfterAdded")
 
       // Tell descendant eras for the next time they create a block that this era received a message.
       // NOTE: If the events create an era it will only be loaded later, so the first time
@@ -75,6 +70,10 @@ class EraSupervisor[F[_]: Concurrent: Timer: Log: Metrics: EraStorage: Relaying:
       // parent era the first time it's asked, and only rely on incremental updates later.
       _ <- propagateLatestMessageToDescendantEras(message)
             .timerGauge("incoming_propagateLatestMessage")
+
+      _ <- messageExecutor
+            .effectsAfterAdded(message)
+            .timerGauge("incoming_effectsAfterAdded")
 
       // See what reactions the protocol dictates.
       (events, ()) <- entry.runtime
@@ -85,7 +84,7 @@ class EraSupervisor[F[_]: Concurrent: Timer: Log: Metrics: EraStorage: Relaying:
       _ <- handleEvents(events)
             .timerGauge("incoming_handleEvents")
 
-      _ <- Log[F].info(s"Finished handling ${hash -> "message"}")
+      _ <- Log[F].info(s"Finished handling incoming ${hash -> "message"}")
     } yield ()
 
   private def ensureNotShutdown: F[Unit] =
@@ -118,6 +117,7 @@ class EraSupervisor[F[_]: Concurrent: Timer: Log: Metrics: EraStorage: Relaying:
       era     <- EraStorage[F].getEraUnsafe(keyBlockHash)
       runtime <- makeRuntime(era)
       agenda  <- runtime.initAgenda
+      _       <- Log[F].info(s"${era.keyBlockHash.show -> "era"} has ${agenda.size} initial actions.")
       entry   <- start(runtime, agenda)
     } yield entry
 
@@ -138,12 +138,14 @@ class EraSupervisor[F[_]: Concurrent: Timer: Log: Metrics: EraStorage: Relaying:
   private def schedule(runtime: EraRuntime[F], agenda: Agenda): F[Unit] =
     agenda.traverse {
       case delayed @ Agenda.DelayedAction(tick, action) =>
-        val key = (runtime.era.keyBlockHash, delayed)
+        val key     = (runtime.era.keyBlockHash, delayed)
+        val instant = conf.toInstant(tick)
         for {
+          _ <- Log[F].info(s"Scheduling $action to $instant")
           fiber <- scheduleAt(tick) {
                     val era = runtime.era.keyBlockHash.show
                     val exec = for {
-                      _ <- Log[F].debug(s"Executing $action in $era")
+                      _ <- Log[F].info(s"Executing $action scheduled to $instant in $era")
                       (events, agenda) <- runtime
                                            .handleAgenda(action)
                                            .run
@@ -195,26 +197,30 @@ class EraSupervisor[F[_]: Concurrent: Timer: Log: Metrics: EraStorage: Relaying:
         _ <- Log[F].info(
               s"Created $kind ${message.messageHash.show -> "message"} in ${message.roundId -> "round"} ${message.eraId.show -> "era"} child of ${message.parentBlock.show -> "parent"}"
             )
+        // Relay ASAP so it won't get orphaned. We can the local DB with further effects after that.
+        _ <- BlockRelaying[F]
+              .relay(message)
+              .timerGauge(s"created_${kind}_relay")
         _ <- messageExecutor
               .effectsAfterAdded(Validated(message))
               .timerGauge(s"created_${kind}_effectsAfterAdded")
-        _ <- Relaying[F]
-              .relay(List(message.messageHash))
-              .timerGauge(s"created_${kind}_relay")
         _ <- propagateLatestMessageToDescendantEras(message)
               .timerGauge(s"created_${kind}_propagateLatestMessage")
         _ <- Metrics[F].incrementCounter(s"created_$kind")
+        _ <- Log[F].info(s"Finished handling created ${message.messageHash.show -> "message"}")
       } yield ()
 
     events.traverse {
       case HighwayEvent.CreatedEra(era) =>
-        val eraHash    = era.keyBlockHash.show
-        val parentHash = era.parentKeyBlockHash.show
-        val tick       = era.startTick
-        val start      = conf.toInstant(Ticks(tick))
+        val eraHash      = era.keyBlockHash.show
+        val parentHash   = era.parentKeyBlockHash.show
+        val startTick    = era.startTick
+        val startInstant = conf.toInstant(Ticks(era.endTick))
+        val endTick      = era.endTick
+        val endInstant   = conf.toInstant(Ticks(era.endTick))
         for {
           _ <- Log[F].info(
-                s"Created ${eraHash -> "era"} starting at ${tick -> "tick"} ${start -> "instant"} child of ${parentHash -> "parent"}"
+                s"Created ${eraHash -> "era"} from ${startInstant} (${startTick}) to ${endInstant} ($endTick) child of ${parentHash -> "parent"}"
               )
           // Schedule the child era.
           child <- load(era.keyBlockHash)
@@ -272,11 +278,21 @@ class EraSupervisor[F[_]: Concurrent: Timer: Log: Metrics: EraStorage: Relaying:
       val parentKeyBlockHash = child.runtime.era.parentKeyBlockHash
       eras.updated(parentKeyBlockHash, eras(parentKeyBlockHash).withChild(child))
     }
+
+  def activeEras: F[Set[Era]] =
+    for {
+      active <- scheduleRef.get.map { schedule =>
+                 schedule.keySet.map(_._1)
+               }
+      eras <- erasRef.get
+    } yield {
+      active.flatMap(eras.get(_).map(_.runtime.era))
+    }
 }
 
 object EraSupervisor {
 
-  def apply[F[_]: Concurrent: Timer: Log: Metrics: EraStorage: DagStorage: FinalityStorageReader: Relaying: ForkChoiceManager](
+  def apply[F[_]: Concurrent: Timer: Log: Metrics: EraStorage: DagStorage: FinalityStorageReader: BlockRelaying: ForkChoiceManager](
       conf: HighwayConf,
       genesis: BlockSummary,
       maybeMessageProducer: Option[MessageProducer[F]],

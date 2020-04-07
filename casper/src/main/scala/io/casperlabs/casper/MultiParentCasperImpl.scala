@@ -1,57 +1,53 @@
 package io.casperlabs.casper
 
+import cats.Applicative
 import cats.data.NonEmptyList
-import cats.effect.{Concurrent, Sync}
 import cats.effect.concurrent.{Ref, Semaphore}
+import cats.effect.{Concurrent, Sync}
 import cats.implicits._
 import cats.mtl.FunctorRaise
-import cats.Applicative
 import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.DeploySelection.DeploySelection
-import io.casperlabs.casper.Estimator.BlockHash
-import io.casperlabs.casper.api.BlockAPI
+import io.casperlabs.casper.consensus.Block.Justification
 import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.consensus.state.ProtocolVersion
-import io.casperlabs.casper.consensus.Block.Justification
-import io.casperlabs.casper.consensus.info.BlockInfo
+import io.casperlabs.casper.dag.{BlockDependencyDag, DoublyLinkedDag}
 import io.casperlabs.casper.equivocations.EquivocationDetector
-import io.casperlabs.casper.finality.MultiParentFinalizer.FinalizedBlocks
 import io.casperlabs.casper.finality.MultiParentFinalizer
+import io.casperlabs.casper.finality.MultiParentFinalizer.FinalizedBlocks
 import io.casperlabs.casper.finality.votingmatrix.FinalityDetectorVotingMatrix
-import io.casperlabs.casper.util._
-import io.casperlabs.casper.util.ProtocolVersions.Config
 import io.casperlabs.casper.util.ProtoUtil._
+import io.casperlabs.casper.util.ProtocolVersions.Config
+import io.casperlabs.casper.util._
 import io.casperlabs.casper.util.execengine.ExecEngineUtil
 import io.casperlabs.casper.validation.Errors._
 import io.casperlabs.casper.validation.Validation
 import io.casperlabs.casper.validation.Validation.BlockEffects
-import io.casperlabs.catscontrib._
 import io.casperlabs.catscontrib.effect.implicits.fiberSyntax
+import io.casperlabs.catscontrib._
 import io.casperlabs.comm.gossiping
 import io.casperlabs.crypto.Keys
-import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.signatures.SignatureAlgorithm
 import io.casperlabs.ipc
 import io.casperlabs.mempool.DeployBuffer
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.implicits._
-import io.casperlabs.models.{Message, SmartContractEngineError}
-import Message.{asJRank, asMainRank, JRank, MainRank}
 import io.casperlabs.models.BlockImplicits._
+import io.casperlabs.models.Message.{JRank, MainRank}
+import io.casperlabs.models.{Message, SmartContractEngineError}
+import io.casperlabs.shared.ByteStringPrettyPrinter._
 import io.casperlabs.shared._
 import io.casperlabs.smartcontracts.ExecutionEngineService
-import io.casperlabs.storage.{BlockHash, BlockMsgWithTransform}
+import io.casperlabs.storage.BlockHash
 import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.storage.dag.{DagRepresentation, DagStorage, FinalityStorage}
 import io.casperlabs.storage.deploy.{DeployStorage, DeployStorageReader, DeployStorageWriter}
 import simulacrum.typeclass
-import io.casperlabs.models.BlockImplicits._
-import Sorting._
-import io.casperlabs.casper.dag.{BlockDependencyDag, DoublyLinkedDag}
 
 import scala.concurrent.duration.FiniteDuration
 import scala.util.control.NonFatal
+import io.casperlabs.storage.dag.AncestorsStorage
 
 /**
   * Encapsulates mutable state of the MultiParentCasperImpl
@@ -104,7 +100,7 @@ class MultiParentCasperImpl[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: 
           status <- if (inDag) {
                      Log[F]
                        .info(
-                         s"Block ${PrettyPrinter.buildString(blockHash)} has already been processed by another thread."
+                         s"${blockHash.show -> "message"} has already been processed by another thread."
                        ) *>
                        BlockStatus.processed.pure[F]
                    } else {
@@ -128,14 +124,14 @@ class MultiParentCasperImpl[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: 
         addBlock(statelessExecutor.validateAndAddBlock)
       case Right(Some(delay)) =>
         Log[F].info(
-          s"${PrettyPrinter.buildString(block.blockHash) -> "block"} is ahead for $delay from now, will retry adding later"
+          s"${block.blockHash.show -> "message"} is ahead for $delay from now, will retry adding later"
         ) >>
           Time[F].sleep(delay) >>
           addBlock(statelessExecutor.validateAndAddBlock)
       case _ =>
         Log[F]
           .warn(
-            s"${PrettyPrinter.buildString(block.blockHash) -> "block"} timestamp exceeded threshold"
+            s"${PrettyPrinter.buildString(block.blockHash) -> "message"} timestamp exceeded threshold"
           ) >>
           addBlock(handleInvalidTimestamp)
     }
@@ -162,9 +158,9 @@ class MultiParentCasperImpl[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: 
       _          <- removeAdded(List(block -> status), canRemove = _ != MissingBlocks)
       hashPrefix = PrettyPrinter.buildString(block.blockHash)
       // Update the last finalized block; remove finalized deploys from the buffer
-      _ <- Log[F].debug(s"Updating last finalized block after adding ${hashPrefix -> "block"}")
+      _ <- Log[F].debug(s"Updating last finalized block after adding ${hashPrefix -> "message"}")
       _ <- updateLastFinalizedBlock(message, dag).whenA(status == Valid)
-      _ <- Log[F].debug(s"Finished adding ${hashPrefix -> "block"}")
+      _ <- Log[F].debug(s"Finished adding ${hashPrefix -> "message"}")
     } yield status
   }
 
@@ -173,21 +169,37 @@ class MultiParentCasperImpl[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: 
     Metrics[F].timer("updateLastFinalizedBlock") {
       for {
         result <- MultiParentFinalizer[F].onNewMessageAdded(message)
-        _ <- result.traverse {
-              case fb @ FinalizedBlocks(newLFB, _, finalized, orphaned) => {
-                val lfbStr       = PrettyPrinter.buildString(newLFB)
-                val finalizedStr = finalized.map(PrettyPrinter.buildString).mkString("{", ", ", "}")
-                for {
-                  _ <- Log[F].info(
-                        s"New last finalized block hashes are ${lfbStr -> null}, ${finalizedStr -> null}."
-                      )
-                  _ <- lfbRef.set(newLFB)
-                  _ <- FinalityStorage[F].markAsFinalized(newLFB, finalized, orphaned)
-                  _ <- DeployBuffer[F].removeFinalizedDeploys(finalized + newLFB).forkAndLog
-                  _ <- BlockEventEmitter[F].newLastFinalizedBlock(newLFB, finalized, orphaned)
-                } yield ()
+        _ <- result.toList
+              .traverse {
+                case fb @ FinalizedBlocks(newLFB, _, finalized, orphaned) => {
+                  val lfbStr = newLFB.show
+                  val finalizedStr = finalized
+                    .filter(_.isBlock)
+                    .map(_.messageHash)
+                    .map(PrettyPrinter.buildString)
+                    .mkString("{", ", ", "}")
+                  for {
+                    _ <- Log[F].info(
+                          s"New last finalized block hashes are ${lfbStr -> null}, ${finalizedStr -> null}."
+                        )
+                    _                    <- lfbRef.set(newLFB)
+                    finalizedBlockHashes = finalized.filter(_.isBlock).map(_.messageHash)
+                    _ <- DeployBuffer[F]
+                          .removeFinalizedDeploys(finalizedBlockHashes + newLFB)
+                    // Ballots cannot be really finalized but we mark them as such in the DAG
+                    // to improve the performance of the finalizer (that has to follow all justifications).
+                    // Send out notification about blocks ONLY.
+                    orphanedBlockHashes = orphaned.filter(_.isBlock).map(_.messageHash)
+                    _ <- BlockEventEmitter[F].newLastFinalizedBlock(
+                          newLFB,
+                          finalizedBlockHashes,
+                          orphanedBlockHashes
+                        )
+                  } yield ()
+                }
               }
-            }
+              .void
+              .forkAndLog
       } yield ()
     }
 
@@ -242,7 +254,7 @@ class MultiParentCasperImpl[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: 
                 s"Estimates are ${tipHashes.toList.map(PrettyPrinter.buildString).mkString(", ") -> "tips"}"
               )
           _ <- Log[F].info(
-                s"Fork-choice is ${PrettyPrinter.buildString(tipHashes.head) -> "block"}."
+                s"Fork-choice is ${PrettyPrinter.buildString(tipHashes.head) -> "message"}."
               )
           // Merged makes sure that we only get blocks.
           tipsMessages <- MonadThrowable[F].fromTry(tips.map(Message.fromBlock(_)).sequence)
@@ -405,6 +417,7 @@ class MultiParentCasperImpl[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: 
                          props.protocolVersion,
                          props.mainRank,
                          props.configuration.deployConfig.maxBlockSizeBytes,
+                         props.configuration.deployConfig.maxBlockCost,
                          upgrades
                        )
         result <- Sync[F]
@@ -520,7 +533,7 @@ class MultiParentCasperImpl[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: 
 
 object MultiParentCasperImpl {
 
-  def create[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: DagStorage: DeployBuffer: FinalityStorage: ExecutionEngineService: DeployStorage: Validation: CasperLabsProtocol: Cell[
+  def create[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: DagStorage: DeployBuffer: FinalityStorage: ExecutionEngineService: DeployStorage: AncestorsStorage: Validation: CasperLabsProtocol: Cell[
     *[_],
     CasperState
   ]: DeploySelection: BlockEventEmitter](
@@ -547,8 +560,7 @@ object MultiParentCasperImpl {
       implicit0(multiParentFinalizer: MultiParentFinalizer[F]) <- MultiParentFinalizer.create[F](
                                                                    dag,
                                                                    lfb,
-                                                                   finalityDetector,
-                                                                   isHighway = false
+                                                                   finalityDetector
                                                                  )
     } yield new MultiParentCasperImpl[F](
       semaphoreMap,
@@ -588,7 +600,7 @@ object MultiParentCasperImpl {
       Metrics[F].timer("validateAndAddBlock") {
         val hashPrefix = PrettyPrinter.buildString(block.blockHash)
         val validationStatus = (for {
-          _   <- Log[F].info(s"Attempting to add ${hashPrefix -> "block"} to the DAG.")
+          _   <- Log[F].info(s"Attempting to add ${hashPrefix -> "message"} to the DAG.")
           dag <- DagStorage[F].getRepresentation
           _ <- Validation[F].blockFull(
                 block,
@@ -599,7 +611,7 @@ object MultiParentCasperImpl {
           casperState <- Cell[F, CasperState].read
           // Confirm the parents are correct (including checking they commute) and capture
           // the effect needed to compute the correct pre-state as well.
-          _ <- Log[F].debug(s"Validating the parents of ${hashPrefix -> "block"}")
+          _ <- Log[F].debug(s"Validating the parents of ${hashPrefix -> "message"}")
           merged <- maybeContext.fold(
                      ExecEngineUtil.MergeResult
                        .empty[ExecEngineUtil.TransformMap, Block]
@@ -607,17 +619,17 @@ object MultiParentCasperImpl {
                    ) { _ =>
                      Validation[F].parents(block, dag)
                    }
-          _ <- Log[F].debug(s"Computing the pre-state hash of ${hashPrefix -> "block"}")
+          _ <- Log[F].debug(s"Computing the pre-state hash of ${hashPrefix -> "message"}")
           preStateHash <- ExecEngineUtil
                            .computePrestate[F](merged, block.mainRank, upgrades)
                            .timer("computePrestate")
-          _ <- Log[F].debug(s"Computing the effects for ${hashPrefix -> "block"}")
+          _ <- Log[F].debug(s"Computing the effects for ${hashPrefix -> "message"}")
           blockEffects <- ExecEngineUtil
                            .effectsForBlock[F](block, preStateHash)
                            .recoverWith {
                              case NonFatal(ex) =>
                                Log[F].error(
-                                 s"Could not calculate effects for ${hashPrefix -> "block"}: $ex"
+                                 s"Could not calculate effects for ${hashPrefix -> "message"}: $ex"
                                ) *>
                                  FunctorRaise[F, InvalidBlock].raise(InvalidTransaction)
                            }
@@ -625,7 +637,7 @@ object MultiParentCasperImpl {
           gasSpent = block.getBody.deploys.foldLeft(0L) { case (acc, next) => acc + next.cost }
           _ <- Metrics[F]
                 .incrementCounter("gas_spent", gasSpent)
-          _ <- Log[F].debug(s"Validating the transactions in ${hashPrefix -> "block"}")
+          _ <- Log[F].debug(s"Validating the transactions in ${hashPrefix -> "message"}")
           // Genesis won't have parents.
           preStateBonds = merged.parents.headOption.getOrElse(block).getHeader.getState.bonds
           _ <- Validation[F].transactions(
@@ -634,18 +646,18 @@ object MultiParentCasperImpl {
                 preStateBonds,
                 blockEffects
               )
-          _ <- Log[F].debug(s"Validating neglection for ${hashPrefix -> "block"}")
+          _ <- Log[F].debug(s"Validating neglection for ${hashPrefix -> "mesage"}")
           _ <- Validation[F]
                 .neglectedInvalidBlock(
                   block,
                   casperState.invalidBlockTracker
                 )
-          _       <- Log[F].debug(s"Checking equivocation for ${hashPrefix -> "block"}")
+          _       <- Log[F].debug(s"Checking equivocation for ${hashPrefix -> "message"}")
           message <- MonadThrowable[F].fromTry(Message.fromBlock(block))
           _ <- EquivocationDetector
                 .checkEquivocation[F](dag, message, isHighway = false)
                 .timer("checkEquivocationsWithUpdate")
-          _ <- Log[F].debug(s"Block effects calculated for ${hashPrefix -> "block"}")
+          _ <- Log[F].debug(s"Block effects calculated for ${hashPrefix -> "message"}")
         } yield blockEffects).attempt
 
         validationStatus.flatMap {
@@ -668,7 +680,7 @@ object MultiParentCasperImpl {
             for {
               _ <- Log[F].error(
                     s"Unexpected exception during validation of ${PrettyPrinter
-                      .buildString(block.blockHash) -> "block"}: $ex"
+                      .buildString(block.blockHash) -> "message"}: $ex"
                   )
               _ <- ex.raiseError[F, BlockStatus]
             } yield UnexpectedBlockException(ex)
@@ -690,7 +702,7 @@ object MultiParentCasperImpl {
           for {
             _ <- addToState(block, transforms)
             _ <- Log[F].info(
-                  s"Added ${PrettyPrinter.buildString(block.blockHash) -> "block"}"
+                  s"Added ${PrettyPrinter.buildString(block.blockHash) -> "message"}"
                 )
           } yield ()
 
@@ -701,7 +713,7 @@ object MultiParentCasperImpl {
           for {
             _ <- addToState(block, transforms)
             _ <- Log[F].info(
-                  s"Added equivocated ${PrettyPrinter.buildString(block.blockHash) -> "block"}"
+                  s"Added equivocated ${PrettyPrinter.buildString(block.blockHash) -> "message"}"
                 )
           } yield ()
 
@@ -711,15 +723,16 @@ object MultiParentCasperImpl {
             InvalidDeployHash | InvalidDeploySignature | InvalidPreStateHash |
             InvalidPostStateHash | InvalidTargetHash | InvalidDeployHeader |
             InvalidDeployChainName | DeployDependencyNotMet | DeployExpired | DeployFromFuture |
-            SwimlaneMerged =>
+            SwimlaneMerged | TooExpensive =>
           handleInvalidBlockEffect(status, block)
 
         case Processing | Processed =>
           throw new RuntimeException(s"A block should not be processing at this stage.")
 
         case UnexpectedBlockException(ex) =>
-          Log[F].error(s"Encountered exception in while processing ${PrettyPrinter
-            .buildString(block.blockHash) -> "block"}: $ex")
+          Log[F].error(
+            s"Encountered exception in while processing ${block.blockHash.show -> "message"}: $ex"
+          )
       }
 
     /** Remember a block as being invalid, then save it to storage. */
@@ -729,7 +742,7 @@ object MultiParentCasperImpl {
     )(implicit state: Cell[F, CasperState]): F[Unit] =
       for {
         _ <- Log[F].warn(
-              s"Recording invalid ${PrettyPrinter.buildString(block.blockHash) -> "block"} for $status."
+              s"Recording invalid ${block.blockHash.show -> "message"} for $status."
             )
         // TODO: Slash block for status except InvalidUnslashableBlock
         // TODO: Persist invalidBlockTracker into Dag
@@ -818,7 +831,7 @@ object MultiParentCasperImpl {
     /** Network access using the new RPC style gossiping. */
     def fromGossipServices[F[_]: Applicative](
         validatorId: Option[ValidatorIdentity],
-        relaying: gossiping.Relaying[F]
+        relaying: gossiping.relaying.BlockRelaying[F]
     ): Broadcaster[F] = new Broadcaster[F] {
 
       private val maybeOwnPublicKey = validatorId map {
@@ -834,7 +847,7 @@ object MultiParentCasperImpl {
           case Valid | EquivocatedBlock =>
             maybeOwnPublicKey match {
               case Some(key) if key == block.getHeader.validatorPublicKey =>
-                relaying.relay(List(block.blockHash)).void
+                relaying.relay(block).void
               case _ =>
                 // We were adding somebody else's block. The DownloadManager did the gossiping.
                 ().pure[F]
@@ -853,7 +866,7 @@ object MultiParentCasperImpl {
               InvalidSequenceNumber | InvalidPrevBlockHash | NeglectedInvalidBlock |
               InvalidTransaction | InvalidBondsCache | InvalidChainName | InvalidBlockHash |
               InvalidDeployCount | InvalidPreStateHash | InvalidPostStateHash | SwimlaneMerged |
-              InvalidTargetHash | Processing | Processed =>
+              InvalidTargetHash | TooExpensive | Processing | Processed =>
             ().pure[F]
 
           case InvalidRepeatDeploy | InvalidChainName | InvalidDeployHash | InvalidDeploySignature |

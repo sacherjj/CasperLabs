@@ -29,8 +29,8 @@ class ForkchoiceTest
     with BlockGenerator
     with StorageFixture {
 
-  "Estimator on empty latestMessages" should "return the genesis regardless of DAG" in withStorage {
-    implicit blockStorage => implicit dagStorage => implicit deployStorage => _ =>
+  "Estimator on empty latestMessages" should "return the genesis regardless of DAG" in withCombinedStorage() {
+    implicit storage =>
       val v1     = generateValidator("V1")
       val v2     = generateValidator("V2")
       val v1Bond = Bond(v1, 2)
@@ -80,7 +80,7 @@ class ForkchoiceTest
                bonds,
                HashMap(v1 -> b7.blockHash, v2 -> b4.blockHash)
              )
-        dag          <- dagStorage.getRepresentation
+        dag          <- storage.getRepresentation
         equivocators <- dag.getEquivocators
         forkchoice <- Estimator.tips[Task](
                        dag,
@@ -91,8 +91,8 @@ class ForkchoiceTest
       } yield forkchoice.head should be(genesis.blockHash)
   }
 
-  "Estimator" should "not consider messages older than LFB" in withStorage {
-    implicit blockStorage => implicit dagStorage => implicit deployStorage => _ =>
+  "Estimator" should "not consider messages older than LFB" in withCombinedStorage() {
+    implicit storage =>
       val v1     = generateValidator("V1")
       val v2     = generateValidator("V2")
       val v3     = generateValidator("V3")
@@ -120,7 +120,7 @@ class ForkchoiceTest
                bonds,
                keyBlockHash = genesis.blockHash
              )
-        dag          <- dagStorage.getRepresentation
+        dag          <- storage.getRepresentation
         latestBlocks <- dag.latestMessageHashes
         equivocators <- dag.getEquivocators
         forkchoice <- Estimator.tips[Task](
@@ -134,8 +134,8 @@ class ForkchoiceTest
   }
 
   // See https://docs.google.com/presentation/d/1znz01SF1ljriPzbMoFV0J127ryPglUYLFyhvsb-ftQk/edit?usp=sharing slide 29 for diagram
-  "Estimator on Simple DAG" should "return the appropriate score map and forkchoice" in withStorage {
-    implicit blockStorage => implicit dagStorage => implicit deployStorage => _ =>
+  "Estimator on Simple DAG" should "return the appropriate score map and forkchoice" in withCombinedStorage() {
+    implicit storage =>
       val v1     = generateValidator("V1")
       val v2     = generateValidator("V2")
       val v1Bond = Bond(v1, 2)
@@ -185,7 +185,7 @@ class ForkchoiceTest
                bonds,
                HashMap(v1 -> b7.blockHash, v2 -> b4.blockHash)
              )
-        dag          <- dagStorage.getRepresentation
+        dag          <- storage.getRepresentation
         latestBlocks <- dag.latestMessageHashes
         equivocators <- dag.getEquivocators
         forkchoice <- Estimator.tips[Task](
@@ -200,8 +200,8 @@ class ForkchoiceTest
   }
 
   // See [[/docs/casper/images/no_finalizable_block_mistake_with_no_disagreement_check.png]]
-  "Estimator on flipping forkchoice DAG" should "return the appropriate score map and forkchoice" in withStorage {
-    implicit blockStorage => implicit dagStorage => implicit deployStorage => _ =>
+  "Estimator on flipping forkchoice DAG" should "return the appropriate score map and forkchoice" in withCombinedStorage() {
+    implicit storage =>
       val v1     = generateValidator("V1")
       val v2     = generateValidator("V2")
       val v3     = generateValidator("V3")
@@ -253,7 +253,7 @@ class ForkchoiceTest
                bonds,
                HashMap(v1 -> b6.blockHash, v2 -> b5.blockHash, v3 -> b4.blockHash)
              )
-        dag          <- dagStorage.getRepresentation
+        dag          <- storage.getRepresentation
         latestBlocks <- dag.latestMessageHashes
         equivocators <- dag.getEquivocators
         forkchoice <- Estimator.tips[Task](
@@ -268,8 +268,8 @@ class ForkchoiceTest
   }
 
   // See [[casper/src/test/resources/casper/tipsHavingEquivocating.png]]
-  "Estimator on DAG having validators equivocated" should "return the appropriate score map and main parent" in withStorage {
-    implicit blockStorage => implicit dagStorage => _ => _ =>
+  "Estimator on DAG having validators equivocated" should "return the appropriate score map and main parent" in withCombinedStorage() {
+    implicit storage =>
       val v1     = generateValidator("V1")
       val v2     = generateValidator("V2")
       val v1Bond = Bond(v1, 5)
@@ -282,7 +282,7 @@ class ForkchoiceTest
         a2      <- createAndStoreMessage[Task](Seq(genesis.blockHash), v1, bonds)
         b       <- createAndStoreMessage[Task](Seq(a2.blockHash), v2, bonds, Map(v1 -> a2.blockHash))
         c       <- createAndStoreMessage[Task](Seq(b.blockHash), v1, bonds, Map(v1 -> a1.blockHash))
-        dag     <- dagStorage.getRepresentation
+        dag     <- storage.getRepresentation
 
         latestMessageHashes <- dag.latestMessageHashes
         equivocatingValidators <- EquivocationDetector.detectVisibleFromJustifications(
@@ -312,8 +312,8 @@ class ForkchoiceTest
       } yield ()
   }
 
-  it should "not use blocks from equivocators as secondary parents" in withStorage {
-    implicit blockStorage => implicit dagStorage => implicit deployStorage => _ =>
+  it should "not use blocks from equivocators as secondary parents" in withCombinedStorage() {
+    implicit storage =>
       val v1    = generateValidator("v1")
       val v2    = generateValidator("v2")
       val bonds = Seq(Bond(v1, 10), Bond(v2, 10))
@@ -324,7 +324,7 @@ class ForkchoiceTest
         a1                  <- createAndStoreMessage[Task](Seq(genesis.blockHash), v1, bonds)
         a2                  <- createAndStoreMessage[Task](Seq(genesis.blockHash), v1, bonds)
         b                   <- createAndStoreMessage[Task](Seq(genesis.blockHash), v2, bonds)
-        dag                 <- dagStorage.getRepresentation
+        dag                 <- storage.getRepresentation
         equivocators        <- dag.getEquivocators
         latestMessageHashes <- dag.latestMessageHashes
         tips                <- Estimator.tips(dag, genesis.blockHash, latestMessageHashes, equivocators)
@@ -332,8 +332,8 @@ class ForkchoiceTest
       } yield ()
   }
 
-  "Estimator on DAG with latest messages having secondary parents in the path (NODE-943)" should "propagate 0 scores to secondary parents and choose the right tips" in withStorage {
-    implicit blockStorage => implicit dagStorage => implicit deployStorage => _ =>
+  "Estimator on DAG with latest messages having secondary parents in the path (NODE-943)" should "propagate 0 scores to secondary parents and choose the right tips" in withCombinedStorage() {
+    implicit storage =>
       val v1 = generateValidator("V1")
       val v2 = generateValidator("V2")
       val v3 = generateValidator("V3")
@@ -378,7 +378,7 @@ class ForkchoiceTest
                bonds,
                HashMap(v1 -> b1.blockHash, v2 -> b2.blockHash, v3 -> b3.blockHash)
              )
-        dag          <- dagStorage.getRepresentation
+        dag          <- storage.getRepresentation
         latestBlocks <- dag.latestMessageHashes
         equivocators <- dag.getEquivocators
         forkchoice <- Estimator.tips[Task](
@@ -441,220 +441,215 @@ class ForkchoiceTest
     }
   }
 
-  "lmdScoring" should "propagate fixed weights on a tree" in withStorage {
-    implicit blockStorage => implicit dagStorage => implicit deployStorage =>
-      _ =>
-        /* The DAG looks like (|| is a main parent)
-         *
-         *
-         *      // ---- e
-         *   d  ||  f   |
-         *   \\//  ||   |
-         *     a    b   c
-         *      \\ ||  //
-         *       genesis
-         */
+  "lmdScoring" should "propagate fixed weights on a tree" in withCombinedStorage() {
+    implicit storage =>
+      /* The DAG looks like (|| is a main parent)
+       *
+       *
+       *      // ---- e
+       *   d  ||  f   |
+       *   \\//  ||   |
+       *     a    b   c
+       *      \\ ||  //
+       *       genesis
+       */
 
-        val v1     = generateValidator("V1")
-        val v2     = generateValidator("V2")
-        val v3     = generateValidator("V3")
-        val v1Bond = Bond(v1, 7)
-        val v2Bond = Bond(v2, 5)
-        val v3Bond = Bond(v3, 3)
-        val bonds  = Seq(v1Bond, v2Bond, v3Bond)
-        for {
-          genesis      <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bonds)
-          a            <- createAndStoreMessage[Task](Seq(genesis.blockHash), v1, bonds)
-          b            <- createAndStoreMessage[Task](Seq(genesis.blockHash), v2, bonds)
-          c            <- createAndStoreMessage[Task](Seq(genesis.blockHash), v3, bonds)
-          d            <- createAndStoreMessage[Task](Seq(a.blockHash), v1, bonds)
-          e            <- createAndStoreMessage[Task](Seq(a.blockHash, c.blockHash), v3, bonds)
-          f            <- createAndStoreMessage[Task](Seq(b.blockHash), v2, bonds)
-          dag          <- dagStorage.getRepresentation
-          latestBlocks <- dag.latestMessageHashes
-          supportersWithoutEquivocating = Map(
-            genesis.blockHash -> Seq(v1, v2, v3),
-            a.blockHash       -> Seq(v1, v3),
-            b.blockHash       -> Seq(v2),
-            d.blockHash       -> Seq(v1),
-            e.blockHash       -> Seq(v3),
-            f.blockHash       -> Seq(v2)
-          )
-          _ = testLmdScoringWithEquivocation(
-            dag,
-            bonds,
-            supportersWithoutEquivocating,
-            latestBlocks
-          )
-        } yield ()
+      val v1     = generateValidator("V1")
+      val v2     = generateValidator("V2")
+      val v3     = generateValidator("V3")
+      val v1Bond = Bond(v1, 7)
+      val v2Bond = Bond(v2, 5)
+      val v3Bond = Bond(v3, 3)
+      val bonds  = Seq(v1Bond, v2Bond, v3Bond)
+      for {
+        genesis      <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bonds)
+        a            <- createAndStoreMessage[Task](Seq(genesis.blockHash), v1, bonds)
+        b            <- createAndStoreMessage[Task](Seq(genesis.blockHash), v2, bonds)
+        c            <- createAndStoreMessage[Task](Seq(genesis.blockHash), v3, bonds)
+        d            <- createAndStoreMessage[Task](Seq(a.blockHash), v1, bonds)
+        e            <- createAndStoreMessage[Task](Seq(a.blockHash, c.blockHash), v3, bonds)
+        f            <- createAndStoreMessage[Task](Seq(b.blockHash), v2, bonds)
+        dag          <- storage.getRepresentation
+        latestBlocks <- dag.latestMessageHashes
+        supportersWithoutEquivocating = Map(
+          genesis.blockHash -> Seq(v1, v2, v3),
+          a.blockHash       -> Seq(v1, v3),
+          b.blockHash       -> Seq(v2),
+          d.blockHash       -> Seq(v1),
+          e.blockHash       -> Seq(v3),
+          f.blockHash       -> Seq(v2)
+        )
+        _ = testLmdScoringWithEquivocation(
+          dag,
+          bonds,
+          supportersWithoutEquivocating,
+          latestBlocks
+        )
+      } yield ()
   }
 
-  it should "propagate fixed weights on a DAG" in withStorage {
-    implicit blockStorage => implicit dagStorage => implicit deployStorage =>
-      _ =>
-        /* The DAG looks like:
-         *
-         *
-         *            ---i
-         *          /    |
-         *        g   h  |
-         *       | \ /  \|
-         *       d  e   f
-         *      / \/   /
-         *     a  b   c
-         *      \ |  /
-         *       genesis
-         */
-        val v1     = generateValidator("V1")
-        val v2     = generateValidator("V2")
-        val v3     = generateValidator("V3")
-        val v1Bond = Bond(v1, 7)
-        val v2Bond = Bond(v2, 5)
-        val v3Bond = Bond(v3, 3)
-        val bonds  = Seq(v1Bond, v2Bond, v3Bond)
+  it should "propagate fixed weights on a DAG" in withCombinedStorage() { implicit storage =>
+    /* The DAG looks like:
+     *
+     *
+     *            ---i
+     *          /    |
+     *        g   h  |
+     *       | \ /  \|
+     *       d  e   f
+     *      / \/   /
+     *     a  b   c
+     *      \ |  /
+     *       genesis
+     */
+    val v1     = generateValidator("V1")
+    val v2     = generateValidator("V2")
+    val v3     = generateValidator("V3")
+    val v1Bond = Bond(v1, 7)
+    val v2Bond = Bond(v2, 5)
+    val v3Bond = Bond(v3, 3)
+    val bonds  = Seq(v1Bond, v2Bond, v3Bond)
 
-        for {
-          genesis      <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bonds)
-          a            <- createAndStoreMessage[Task](Seq(genesis.blockHash), v1, bonds)
-          b            <- createAndStoreMessage[Task](Seq(genesis.blockHash), v2, bonds)
-          c            <- createAndStoreMessage[Task](Seq(genesis.blockHash), v3, bonds)
-          d            <- createAndStoreMessage[Task](Seq(a.blockHash, b.blockHash), v1, bonds)
-          e            <- createAndStoreMessage[Task](Seq(b.blockHash), v2, bonds)
-          f            <- createAndStoreMessage[Task](Seq(c.blockHash), v3, bonds)
-          g            <- createAndStoreMessage[Task](Seq(d.blockHash, e.blockHash), v1, bonds)
-          h            <- createAndStoreMessage[Task](Seq(e.blockHash, f.blockHash), v2, bonds)
-          i            <- createAndStoreMessage[Task](Seq(g.blockHash, f.blockHash), v3, bonds)
-          dag          <- dagStorage.getRepresentation
-          latestBlocks <- dag.latestMessageHashes
+    for {
+      genesis      <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bonds)
+      a            <- createAndStoreMessage[Task](Seq(genesis.blockHash), v1, bonds)
+      b            <- createAndStoreMessage[Task](Seq(genesis.blockHash), v2, bonds)
+      c            <- createAndStoreMessage[Task](Seq(genesis.blockHash), v3, bonds)
+      d            <- createAndStoreMessage[Task](Seq(a.blockHash, b.blockHash), v1, bonds)
+      e            <- createAndStoreMessage[Task](Seq(b.blockHash), v2, bonds)
+      f            <- createAndStoreMessage[Task](Seq(c.blockHash), v3, bonds)
+      g            <- createAndStoreMessage[Task](Seq(d.blockHash, e.blockHash), v1, bonds)
+      h            <- createAndStoreMessage[Task](Seq(e.blockHash, f.blockHash), v2, bonds)
+      i            <- createAndStoreMessage[Task](Seq(g.blockHash, f.blockHash), v3, bonds)
+      dag          <- storage.getRepresentation
+      latestBlocks <- dag.latestMessageHashes
 
-          supportersWithoutEquivocating = Map(
-            genesis.blockHash -> Seq(v1, v2, v3),
-            a.blockHash       -> Seq(v1, v3),
-            b.blockHash       -> Seq(v2),
-            d.blockHash       -> Seq(v1, v3),
-            e.blockHash       -> Seq(v2),
-            g.blockHash       -> Seq(v1, v3),
-            h.blockHash       -> Seq(v2),
-            i.blockHash       -> Seq(v3)
-          )
-          _ = testLmdScoringWithEquivocation(
-            dag,
-            bonds,
-            supportersWithoutEquivocating,
-            latestBlocks
-          )
-        } yield ()
+      supportersWithoutEquivocating = Map(
+        genesis.blockHash -> Seq(v1, v2, v3),
+        a.blockHash       -> Seq(v1, v3),
+        b.blockHash       -> Seq(v2),
+        d.blockHash       -> Seq(v1, v3),
+        e.blockHash       -> Seq(v2),
+        g.blockHash       -> Seq(v1, v3),
+        h.blockHash       -> Seq(v2),
+        i.blockHash       -> Seq(v3)
+      )
+      _ = testLmdScoringWithEquivocation(
+        dag,
+        bonds,
+        supportersWithoutEquivocating,
+        latestBlocks
+      )
+    } yield ()
   }
 
-  it should "stop traversing DAG when reaches the stop hash" in withStorage {
-    implicit blockStorage => implicit dagStorage => implicit deployStorage =>
-      _ =>
-        /* The DAG looks like:
-         *
-         *          m
-         *        / | \
-         *       j  k  l
-         *      / \/   |
-         *     g  h   i
-         *      \ |  /
-         *        f
-         *      / |
-         *     d  e
-         *    |   | \
-         *    a   b  c
-         *     \  | /
-         *     genesis
-         *
-         */
+  it should "stop traversing DAG when reaches the stop hash" in withCombinedStorage() {
+    implicit storage =>
+      /* The DAG looks like:
+       *
+       *          m
+       *        / | \
+       *       j  k  l
+       *      / \/   |
+       *     g  h   i
+       *      \ |  /
+       *        f
+       *      / |
+       *     d  e
+       *    |   | \
+       *    a   b  c
+       *     \  | /
+       *     genesis
+       *
+       */
 
-        val v1     = generateValidator("One")
-        val v2     = generateValidator("Two")
-        val v3     = generateValidator("Three")
-        val v1Bond = Bond(v1, 7)
-        val v2Bond = Bond(v2, 5)
-        val v3Bond = Bond(v3, 3)
-        val bonds  = Seq(v1Bond, v2Bond, v3Bond)
+      val v1     = generateValidator("One")
+      val v2     = generateValidator("Two")
+      val v3     = generateValidator("Three")
+      val v1Bond = Bond(v1, 7)
+      val v2Bond = Bond(v2, 5)
+      val v3Bond = Bond(v3, 3)
+      val bonds  = Seq(v1Bond, v2Bond, v3Bond)
 
-        for {
-          genesis <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY)
-          a       <- createAndStoreMessage[Task](Seq(genesis.blockHash), v1, bonds)
-          b       <- createAndStoreMessage[Task](Seq(genesis.blockHash), v2, bonds)
-          c       <- createAndStoreMessage[Task](Seq(genesis.blockHash), v3, bonds)
-          d       <- createAndStoreMessage[Task](Seq(a.blockHash), v1, bonds)
-          e       <- createAndStoreMessage[Task](Seq(b.blockHash, c.blockHash), v2, bonds)
-          f       <- createAndStoreMessage[Task](Seq(d.blockHash, e.blockHash), v2, bonds)
-          g       <- createAndStoreMessage[Task](Seq(f.blockHash), v1, bonds, Map(v1 -> d.blockHash))
-          h       <- createAndStoreMessage[Task](Seq(f.blockHash), v2, bonds)
-          i       <- createAndStoreMessage[Task](Seq(f.blockHash), v3, bonds, Map(v3 -> c.blockHash))
-          j       <- createAndStoreMessage[Task](Seq(g.blockHash, h.blockHash), v1, bonds)
-          k       <- createAndStoreMessage[Task](Seq(h.blockHash), v2, bonds)
-          l <- createAndStoreMessage[Task](
-                Seq(i.blockHash),
-                v3,
-                bonds,
-                justifications = Map(v3 -> i.blockHash)
-              )
-          m            <- createAndStoreMessage[Task](Seq(j.blockHash, k.blockHash, l.blockHash), v2, bonds)
-          dag          <- dagStorage.getRepresentation
-          latestBlocks <- dag.latestMessageHashes
-          supportersWithoutEquivocating = Map(
-            f.blockHash -> Seq(v1, v2, v3),
-            g.blockHash -> Seq(v1, v2),
-            i.blockHash -> Seq(v3),
-            j.blockHash -> Seq(v1, v2),
-            l.blockHash -> Seq(v3),
-            m.blockHash -> Seq(v2)
-          )
-          _ = testLmdScoringWithEquivocation(
-            dag,
-            bonds,
-            supportersWithoutEquivocating,
-            latestBlocks
-          )
-        } yield ()
+      for {
+        genesis <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY)
+        a       <- createAndStoreMessage[Task](Seq(genesis.blockHash), v1, bonds)
+        b       <- createAndStoreMessage[Task](Seq(genesis.blockHash), v2, bonds)
+        c       <- createAndStoreMessage[Task](Seq(genesis.blockHash), v3, bonds)
+        d       <- createAndStoreMessage[Task](Seq(a.blockHash), v1, bonds)
+        e       <- createAndStoreMessage[Task](Seq(b.blockHash, c.blockHash), v2, bonds)
+        f       <- createAndStoreMessage[Task](Seq(d.blockHash, e.blockHash), v2, bonds)
+        g       <- createAndStoreMessage[Task](Seq(f.blockHash), v1, bonds, Map(v1 -> d.blockHash))
+        h       <- createAndStoreMessage[Task](Seq(f.blockHash), v2, bonds)
+        i       <- createAndStoreMessage[Task](Seq(f.blockHash), v3, bonds, Map(v3 -> c.blockHash))
+        j       <- createAndStoreMessage[Task](Seq(g.blockHash, h.blockHash), v1, bonds)
+        k       <- createAndStoreMessage[Task](Seq(h.blockHash), v2, bonds)
+        l <- createAndStoreMessage[Task](
+              Seq(i.blockHash),
+              v3,
+              bonds,
+              justifications = Map(v3 -> i.blockHash)
+            )
+        m            <- createAndStoreMessage[Task](Seq(j.blockHash, k.blockHash, l.blockHash), v2, bonds)
+        dag          <- storage.getRepresentation
+        latestBlocks <- dag.latestMessageHashes
+        supportersWithoutEquivocating = Map(
+          f.blockHash -> Seq(v1, v2, v3),
+          g.blockHash -> Seq(v1, v2),
+          i.blockHash -> Seq(v3),
+          j.blockHash -> Seq(v1, v2),
+          l.blockHash -> Seq(v3),
+          m.blockHash -> Seq(v2)
+        )
+        _ = testLmdScoringWithEquivocation(
+          dag,
+          bonds,
+          supportersWithoutEquivocating,
+          latestBlocks
+        )
+      } yield ()
   }
 
-  "lmdMainchainGhost" should "pick the correct fork choice tip" in withStorage {
-    implicit blockStorage => implicit dagStorage => implicit deployStorage =>
-      _ =>
-        /* The DAG looks like:
-         *
-         *
-         *            ---i
-         *          /    |
-         *        g   h  |
-         *       | \ /  \|
-         *       d  e   f
-         *      / \/   /
-         *     a  b   c
-         *      \ |  /
-         *       genesis
-         */
-        val v1     = generateValidator("V1")
-        val v2     = generateValidator("V2")
-        val v3     = generateValidator("V3")
-        val v1Bond = Bond(v1, 7)
-        val v2Bond = Bond(v2, 5)
-        val v3Bond = Bond(v3, 3)
-        val bonds  = Seq(v1Bond, v2Bond, v3Bond)
+  "lmdMainchainGhost" should "pick the correct fork choice tip" in withCombinedStorage() {
+    implicit storage =>
+      /* The DAG looks like:
+       *
+       *
+       *            ---i
+       *          /    |
+       *        g   h  |
+       *       | \ /  \|
+       *       d  e   f
+       *      / \/   /
+       *     a  b   c
+       *      \ |  /
+       *       genesis
+       */
+      val v1     = generateValidator("V1")
+      val v2     = generateValidator("V2")
+      val v3     = generateValidator("V3")
+      val v1Bond = Bond(v1, 7)
+      val v2Bond = Bond(v2, 5)
+      val v3Bond = Bond(v3, 3)
+      val bonds  = Seq(v1Bond, v2Bond, v3Bond)
 
-        for {
-          genesis      <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bonds)
-          a            <- createAndStoreMessage[Task](Seq(genesis.blockHash), v1, bonds)
-          b            <- createAndStoreMessage[Task](Seq(genesis.blockHash), v2, bonds)
-          c            <- createAndStoreMessage[Task](Seq(genesis.blockHash), v3, bonds)
-          d            <- createAndStoreMessage[Task](Seq(a.blockHash, b.blockHash), v1, bonds)
-          e            <- createAndStoreMessage[Task](Seq(b.blockHash), v2, bonds)
-          f            <- createAndStoreMessage[Task](Seq(c.blockHash), v3, bonds)
-          g            <- createAndStoreMessage[Task](Seq(d.blockHash, e.blockHash), v1, bonds)
-          h            <- createAndStoreMessage[Task](Seq(e.blockHash, f.blockHash), v2, bonds)
-          i            <- createAndStoreMessage[Task](Seq(g.blockHash, f.blockHash), v3, bonds)
-          dag          <- dagStorage.getRepresentation
-          latestBlocks <- dag.latestMessageHashes
-          equivocators <- dag.getEquivocators
-          tips         <- Estimator.tips(dag, genesis.blockHash, latestBlocks, equivocators)
-          _            = tips.head shouldEqual i.blockHash
-        } yield ()
+      for {
+        genesis      <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bonds)
+        a            <- createAndStoreMessage[Task](Seq(genesis.blockHash), v1, bonds)
+        b            <- createAndStoreMessage[Task](Seq(genesis.blockHash), v2, bonds)
+        c            <- createAndStoreMessage[Task](Seq(genesis.blockHash), v3, bonds)
+        d            <- createAndStoreMessage[Task](Seq(a.blockHash, b.blockHash), v1, bonds)
+        e            <- createAndStoreMessage[Task](Seq(b.blockHash), v2, bonds)
+        f            <- createAndStoreMessage[Task](Seq(c.blockHash), v3, bonds)
+        g            <- createAndStoreMessage[Task](Seq(d.blockHash, e.blockHash), v1, bonds)
+        h            <- createAndStoreMessage[Task](Seq(e.blockHash, f.blockHash), v2, bonds)
+        i            <- createAndStoreMessage[Task](Seq(g.blockHash, f.blockHash), v3, bonds)
+        dag          <- storage.getRepresentation
+        latestBlocks <- dag.latestMessageHashes
+        equivocators <- dag.getEquivocators
+        tips         <- Estimator.tips(dag, genesis.blockHash, latestBlocks, equivocators)
+        _            = tips.head shouldEqual i.blockHash
+      } yield ()
   }
 
 }

@@ -24,11 +24,10 @@ import io.casperlabs.p2p.EffectsTestInstances.LogicalTime
 import io.casperlabs.shared.{Log, Time}
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.block.BlockStorage
-import io.casperlabs.storage.dag.{DagRepresentation, IndexedDagStorage}
+import io.casperlabs.storage.dag.DagRepresentation
 import io.casperlabs.storage.deploy.{DeployStorage, DeployStorageWriter}
 import io.casperlabs.storage.era.EraStorage
 import monix.eval.Task
-import io.casperlabs.shared.Sorting._
 
 import scala.collection.immutable.HashMap
 import scala.language.higherKinds
@@ -37,41 +36,6 @@ import io.casperlabs.storage.dag.DagStorage
 object BlockGenerator {
   implicit val timeEff = new LogicalTime[Task]()
   implicit val emitter = NoOpsEventEmitter.create[Task]
-
-  def updateChainWithBlockStateUpdate[F[_]: Sync: BlockStorage: IndexedDagStorage: DeployStorage: DeployBuffer: ExecutionEngineService: Log: Metrics](
-      id: Int
-  ): F[Block] =
-    for {
-      b   <- IndexedDagStorage[F].lookupByIdUnsafe(id)
-      dag <- IndexedDagStorage[F].getRepresentation
-      blockCheckpoint <- computeBlockCheckpointFromDeploys[F](
-                          b,
-                          dag
-                        )
-      _ <- injectPostStateHash[F](
-            id,
-            b,
-            blockCheckpoint.postStateHash,
-            blockCheckpoint.deploysForBlock
-          )
-    } yield b
-
-  def injectPostStateHash[F[_]: Monad: BlockStorage: IndexedDagStorage](
-      id: Int,
-      b: Block,
-      postGenStateHash: StateHash,
-      processedDeploys: Seq[ProcessedDeploy]
-  ): F[Unit] = {
-    val updatedBlockPostState = b.getHeader.getState.withPostStateHash(postGenStateHash)
-    val updatedBlockHeader =
-      b.getHeader.withState(updatedBlockPostState)
-    val updatedBlockBody = b.getBody.withDeploys(processedDeploys)
-    // NOTE: Storing this under the original block hash.
-    val updatedBlock =
-      ProtoUtil.unsignedBlockProto(updatedBlockBody, updatedBlockHeader).withBlockHash(b.blockHash)
-    BlockStorage[F].put(b.blockHash, updatedBlock, Map.empty) *>
-      IndexedDagStorage[F].inject(id, updatedBlock)
-  }
 
   private[casper] def computeBlockCheckpointFromDeploys[F[_]: Sync: BlockStorage: DeployStorage: DeployBuffer: Log: ExecutionEngineService: Metrics](
       b: Block,
@@ -91,6 +55,7 @@ object BlockGenerator {
                  ProtocolVersion(1),
                  mainRank = Message.asMainRank(0),
                  maxBlockSizeBytes = 5 * 1024 * 1024,
+                 maxBlockCost = 0,
                  upgrades = Nil
                )
     } yield result
@@ -98,7 +63,7 @@ object BlockGenerator {
 }
 
 trait BlockGenerator {
-  def createMessage[F[_]: MonadThrowable: Time: IndexedDagStorage](
+  def createMessage[F[_]: MonadThrowable: Time: DagStorage](
       parentsHashList: Seq[BlockHash],
       keyBlockHash: ByteString = ByteString.EMPTY,
       creator: Validator = ByteString.EMPTY,
@@ -123,7 +88,7 @@ trait BlockGenerator {
       messageType
     )
 
-  def createMessageNew[F[_]: MonadThrowable: Time: IndexedDagStorage](
+  def createMessageNew[F[_]: MonadThrowable: Time: DagStorage](
       parentsHashList: Seq[BlockHash],
       keyBlockHash: BlockHash,
       creator: Validator = ByteString.EMPTY,
@@ -147,7 +112,7 @@ trait BlockGenerator {
         .withPostStateHash(postStateHash)
         .withBonds(bonds)
       body = Block.Body().withDeploys(deploys)
-      dag  <- IndexedDagStorage[F].getRepresentation
+      dag  <- DagStorage[F].getRepresentation
       // Every parent should also be included in the justifications;
       // By doing this we can avoid passing parameter justifications when creating block in test
       updatedJustifications <- parentsHashList.toList.foldLeftM(justifications) {
@@ -215,11 +180,10 @@ trait BlockGenerator {
         )
         .withMessageType(messageType)
       block = ProtoUtil.unsignedBlockProto(body, header)
-      _     <- IndexedDagStorage[F].index(block)
     } yield block
   }
 
-  def createAndStoreMessage[F[_]: MonadThrowable: Time: BlockStorage: IndexedDagStorage](
+  def createAndStoreMessage[F[_]: MonadThrowable: Time: BlockStorage: DagStorage](
       parentsHashList: Seq[BlockHash],
       creator: Validator = ByteString.EMPTY,
       bonds: Seq[Bond] = Seq.empty[Bond],
@@ -251,7 +215,7 @@ trait BlockGenerator {
     )
   }
 
-  def createAndStoreMessageNew[F[_]: MonadThrowable: Time: BlockStorage: IndexedDagStorage](
+  def createAndStoreMessageNew[F[_]: MonadThrowable: Time: BlockStorage: DagStorage](
       parentsHashList: Seq[BlockHash],
       keyBlockHash: ByteString,
       creator: Validator = ByteString.EMPTY,
@@ -284,7 +248,7 @@ trait BlockGenerator {
     } yield block
 
   // Same as createAndStoreBlock but works with full models for building DAGs easier.
-  def createAndStoreBlockFull[F[_]: MonadThrowable: Time: BlockStorage: IndexedDagStorage](
+  def createAndStoreBlockFull[F[_]: MonadThrowable: Time: BlockStorage: DagStorage](
       creator: Validator,
       parents: Seq[Block],
       justifications: Seq[Block],

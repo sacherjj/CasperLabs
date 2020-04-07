@@ -14,6 +14,7 @@ kademlia-port = 1
 dynamic-host-address = false
 no-upnp = false
 default-timeout = "1second"
+shutdown-timeout = "1second"
 standalone = false
 map-size = 1
 bootstrap = "casperlabs://de6eed5d00cf080fc587eeb412cb31a75fd10358@52.119.8.109?protocol=1&discovery=1 casperlabs://de6eed5d00cf080fc587eeb412cb31a75fd10358@127.0.0.1?protocol=1&discovery=1"
@@ -42,6 +43,7 @@ init-sync-round-period = "1second"
 init-sync-max-block-count = 1
 periodic-sync-round-period = "1second"
 download-max-parallel-blocks = 1
+download-max-parallel-deploys = 1
 download-max-retries = 1
 download-retry-initial-backoff-period = "1second"
 download-retry-backoff-factor = 1.0
@@ -51,6 +53,11 @@ clean-block-storage = false
 block-upload-rate-max-requests = 0
 block-upload-rate-period = "0s"
 block-upload-rate-max-throttled = 0
+main-threads=1
+ingress-threads=1
+db-threads=1
+parallelism-cpu-multiplier = 1.0
+min-parallelism = 1
 
 [grpc]
 socket = "/tmp/test"

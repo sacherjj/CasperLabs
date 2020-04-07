@@ -19,7 +19,7 @@ const APP_NAME: &str = "cargo-casperlabs";
 const ABOUT: &str =
     "A command line tool for creating a Wasm contract and tests at <path> for use on the \
      CasperLabs Platform.";
-const TOOLCHAIN: &str = "nightly-2020-02-14";
+const TOOLCHAIN: &str = "nightly-2020-03-19";
 
 const ROOT_PATH_ARG_NAME: &str = "path";
 const ROOT_PATH_ARG_VALUE_NAME: &str = "path";

@@ -33,7 +33,7 @@ start-background-scala-compiler: stop-background-scala-compiler .make/run/backgr
 	@sleep 1; while ! grep --silent "Monitoring source files for casperlabs" .make/run/sbt.log; do sleep 1; done
 	@echo "Starting bloop server..."
 	@bloop server &> .make/run/bloop.log &
-	@sleep 1; while ! grep -E --silent "(started on address)|(A bloop server is already running in port)" .make/run/bloop.log; do sleep 1; done
+	@sleep 1; while ! grep -E --silent "(started on address)|(A bloop server is already running in port)|(Starting bloop server at)" .make/run/bloop.log; do sleep 1; done
 	@echo Done
 	@mkdir -p $(dir $@) && touch $@
 

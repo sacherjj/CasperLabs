@@ -30,8 +30,7 @@ const contractKeys =
 // Faucet contract and deploy factory.
 const faucet = new Contracts.BoundContract(
   new Contracts.Contract(
-    process.env.FAUCET_CONTRACT_PATH!,
-    process.env.PAYMENT_CONTRACT_PATH!
+    process.env.FAUCET_CONTRACT_PATH!
   ),
   contractKeys);
 
@@ -40,11 +39,14 @@ const paymentAmount = BigInt(process.env.PAYMENT_AMOUNT!);
 // How much to send to a user in a faucet request.
 const transferAmount = BigInt(process.env.TRANSFER_AMOUNT)!;
 
-// Constant gas price.
-const gasPrice = parseInt(process.env.GAS_PRICE!, 10);
+const urls = process.env.CASPER_SERVICE_URL!;
+
+const nodeUrls = urls.split(';')
+  .map((u) => u.trim())
+  .filter((u) => u);
 
 // gRPC client to the node.
-const deployService = new DeployService(process.env.CASPER_SERVICE_URL!);
+const deployService = new DeployService(nodeUrls);
 
 const app = express();
 
@@ -70,14 +72,17 @@ const checkJwt: express.RequestHandler = isMock ?
       cache: true,
       jwksRequestsPerMinute: 5,
       jwksUri: `https://${config.auth0.domain}/.well-known/jwks.json`,
-      rateLimit: true,
-    }),
+      rateLimit: true
+    })
   });
 
 // Render the `config.js` file dynamically.
 app.get("/config.js", (_, res) => {
   const conf = {
     auth0: config.auth0,
+    graphql: {
+      url: process.env.UI_GRAPHQL_URL
+    },
     auth: {
       mock: {
         enabled: isMock
@@ -120,7 +125,7 @@ app.post("/api/faucet", checkJwt, (req, res) => {
 
   // Prepare the signed deploy.
   const accountPublicKey = decodeBase64(accountPublicKeyBase64);
-  const deploy = faucet.deploy(Faucet.args(accountPublicKey, transferAmount), paymentAmount, gasPrice);
+  const deploy = faucet.deploy(Faucet.args(accountPublicKey, transferAmount), paymentAmount);
 
   // Send the deploy to the node and return the deploy hash to the browser.
   deployService
@@ -156,7 +161,7 @@ if (process.env.SERVER_USE_TLS === "true") {
   const key = process.env.SERVER_TLS_KEY_PATH!;
   https.createServer({
     key: fs.readFileSync(key),
-    cert: fs.readFileSync(cert),
+    cert: fs.readFileSync(cert)
   }, app)
     .listen(port, () => {
       // tslint:disable-next-line:no-console

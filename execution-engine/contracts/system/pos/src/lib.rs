@@ -167,7 +167,7 @@ pub fn delegate() {
     match method_name.as_str() {
         // Type of this method: `fn bond(amount: U512, purse: URef)`
         METHOD_BOND => {
-            if cfg!(feature = "highway") {
+            if !cfg!(feature = "enable-bonding") {
                 runtime::revert(ApiError::Unhandled)
             }
 
@@ -184,7 +184,7 @@ pub fn delegate() {
         }
         // Type of this method: `fn unbond(amount: Option<U512>)`
         METHOD_UNBOND => {
-            if cfg!(feature = "highway") {
+            if !cfg!(feature = "enable-bonding") {
                 runtime::revert(ApiError::Unhandled)
             }
 

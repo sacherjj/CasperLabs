@@ -11,7 +11,6 @@ enum Args {
 enum CustomError {
   MissingExpectedMainPurseArg = 86,
   InvalidExpectedMainPurseArg = 97,
-  UnableToGetMainPurse = 108,
   EqualityAssertionFailed = 139
 }
 
@@ -28,10 +27,7 @@ export function call(): void {
   }
   const expectedMainPurse = purseResult.value;
   const actualMainPurse = getMainPurse();
-  if (actualMainPurse === null){
-    Error.fromUserError(<u16>CustomError.UnableToGetMainPurse).revert();
-    return;
-  }
+
   if (<URef>expectedMainPurse != <URef>actualMainPurse)
     Error.fromUserError(<u16>CustomError.EqualityAssertionFailed).revert();
 }

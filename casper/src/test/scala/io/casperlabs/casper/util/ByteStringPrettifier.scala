@@ -7,7 +7,6 @@ import com.google.protobuf.ByteString
 import scala.util.Success
 import scala.collection.{mutable, GenMap}
 import scala.collection.GenTraversable
-import _root_.cats.instances.`package`.byte
 
 trait ByteStringPrettifier {
   // Shameless copy-paste of Scalactic's Prettifier that injects special pretty-printer for ByteString.

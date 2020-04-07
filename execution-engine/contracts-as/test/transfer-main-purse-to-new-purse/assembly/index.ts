@@ -18,9 +18,7 @@ enum CustomError{
     MissingAmountArg = 1,
     InvalidAmountArg = 2,
     MissingDestinationArg = 3,
-    InvalidDestinationArg = 4,
-    UnableToGetMainPurse = 5,
-    FailedToCreateDestinationPurse = 6
+    InvalidDestinationArg = 4
 }
 
 export function call(): void {
@@ -46,19 +44,9 @@ export function call(): void {
         return;
     }
     let destinationPurseName = destinationPurseNameResult.value;
-    const maybeMainPurse = getMainPurse();
-    if (maybeMainPurse === null) {
-        Error.fromUserError(<u16>CustomError.UnableToGetMainPurse).revert();
-        return;
-    }
-    const mainPurse = <URef>maybeMainPurse;
-    const maybeDestinationPurse = createPurse();
-    if (maybeDestinationPurse === null){
-        Error.fromUserError(<u16>CustomError.FailedToCreateDestinationPurse).revert();
-        return;
-    }
-    const destinationPurse = <URef>maybeDestinationPurse;
-    const result = transferFromPurseToPurse(mainPurse,destinationPurse, <U512>amount);
+    const mainPurse = getMainPurse();
+    const destinationPurse = createPurse();
+    const result = transferFromPurseToPurse(mainPurse, destinationPurse, <U512>amount);
     const error = Error.fromResult(result);
     if (error !== null) {
         error.revert();

@@ -34,6 +34,7 @@ import scala.concurrent.duration._
 import scala.util.Try
 import io.casperlabs.storage.dag.DagLookup
 import io.casperlabs.shared.Sorting._
+import io.casperlabs.shared.ByteStringPrettyPrinter._
 
 object ProtoUtil {
   import Weight._
@@ -84,41 +85,6 @@ object ProtoUtil {
                  case b: Message.Block  => isInMainChain(dag, b, targetBlockHash)
                }
     } yield result
-
-  // calculate which branch of latestFinalizedBlockHash that the newBlockHash vote for
-  def votedBranch[F[_]: Monad](
-      dag: DagRepresentation[F],
-      latestFinalizeBlockHash: BlockHash,
-      newBlockHash: BlockHash
-  ): F[Option[BlockHash]] =
-    for {
-      newBlock             <- dag.lookup(newBlockHash)
-      latestFinalizedBlock <- dag.lookup(latestFinalizeBlockHash)
-      r                    <- votedBranch(dag, latestFinalizedBlock.get, newBlock.get)
-    } yield r
-
-  def votedBranch[F[_]: Monad](
-      dag: DagRepresentation[F],
-      latestFinalizedBlock: Message,
-      newBlock: Message
-  ): F[Option[BlockHash]] =
-    if (newBlock.jRank <= latestFinalizedBlock.jRank) {
-      none[BlockHash].pure[F]
-    } else {
-      for {
-        result <- newBlock.parents.headOption match {
-                   case Some(mainParentHash) =>
-                     if (mainParentHash == latestFinalizedBlock.messageHash) {
-                       newBlock.messageHash.some.pure[F]
-                     } else {
-                       dag
-                         .lookup(mainParentHash)
-                         .flatMap(b => votedBranch(dag, latestFinalizedBlock, b.get))
-                     }
-                   case None => none[BlockHash].pure[F]
-                 }
-      } yield result
-    }
 
   def getMainChainUntilDepth[F[_]: MonadThrowable: BlockStorage](
       estimate: Block,
@@ -181,7 +147,7 @@ object ProtoUtil {
         case None =>
           MonadThrowable[F].raiseError[Int](
             new NoSuchElementException(
-              s"DagStorage is missing previous block hash ${PrettyPrinter.buildString(validatorPrevBlockHash)}"
+              s"DagStorage is missing previous block hash ${validatorPrevBlockHash.show}"
             )
           )
       }
@@ -373,7 +339,7 @@ object ProtoUtil {
           case None =>
             MonadThrowable[F].raiseError(
               new NoSuchElementException(
-                s"DagStorage is missing hash ${PrettyPrinter.buildString(hash)}"
+                s"DagStorage is missing hash ${hash.show}"
               )
             )
         }
@@ -680,7 +646,7 @@ object ProtoUtil {
         case Deploy.Code.Contract.Uref(uref) =>
           ipc.DeployPayload.Payload.StoredContractUref(ipc.StoredContractURef(uref, args))
         case Deploy.Code.Contract.Empty =>
-          ipc.DeployPayload.Payload.Empty
+          ipc.DeployPayload.Payload.DeployCode(ipc.DeployCode(ByteString.EMPTY, args))
       }
       ipc.DeployPayload(payload)
     }

@@ -12,7 +12,7 @@ import eu.timepit.refined.numeric._
 import io.casperlabs.casper.consensus.state
 import io.casperlabs.configuration.SubConfig
 import io.casperlabs.crypto.Keys.PublicKey
-import io.casperlabs.crypto.codec.Base64
+import io.casperlabs.crypto.codec.StringSyntax
 import io.casperlabs.ipc
 import java.io.{ByteArrayOutputStream, File}
 import java.nio.file.{Files, Path, Paths}
@@ -65,7 +65,8 @@ object ChainSpec extends ParserImplicits {
   final case class Deploy(
       maxTtlMillis: Int Refined NonNegative,
       maxDependencies: Int Refined NonNegative,
-      maxBlockSizeBytes: Int Refined NonNegative
+      maxBlockSizeBytes: Int Refined Positive,
+      maxBlockCost: Long Refined NonNegative
   ) extends SubConfig
 
   /** The first set of changes should define the Genesis section and the costs. */
@@ -154,9 +155,9 @@ object ChainSpec extends ParserImplicits {
         .filterNot(_.isEmpty)
         .map { line =>
           line.split(',') match {
-            case Array(publicKeyBase64, balanceStr, bondedAmountStr) =>
+            case Array(publicKeyStr, balanceStr, bondedAmountStr) =>
               for {
-                publicKey    <- parsePublicKey(publicKeyBase64)
+                publicKey    <- parsePublicKey(publicKeyStr)
                 balance      <- parseBigInt(balanceStr)
                 bondedAmount <- parseBigInt(bondedAmountStr)
               } yield Account(publicKey, balance, bondedAmount)
@@ -168,10 +169,14 @@ object ChainSpec extends ParserImplicits {
         .toList
         .sequence
 
-    private def parsePublicKey(publicKeyBase64: String) =
-      Base64.tryDecode(publicKeyBase64) match {
-        case None        => s"Could not decode public key as Base64: $publicKeyBase64".asLeft[PublicKey]
-        case Some(bytes) => PublicKey(bytes).asRight[String]
+    private def parsePublicKey(publicKey: String) =
+      publicKey.tryBase64AndBase16Decode match {
+        case None =>
+          s"Could not decode public key as Base16 or Base64: $publicKey".asLeft[PublicKey]
+        case Some(key) if key.length != 32 =>
+          s"Unexpected key size ${key.size}: $publicKey".asLeft[PublicKey]
+        case Some(key) =>
+          PublicKey(key).asRight[String]
       }
 
     private def parseBigInt(amount: String) =
@@ -410,7 +415,9 @@ object ChainSpecReader {
   private def toDeployConfig(deployConfig: Deploy): ipc.ChainSpec.DeployConfig =
     ipc.ChainSpec.DeployConfig(
       deployConfig.maxTtlMillis.value,
-      deployConfig.maxDependencies.value
+      deployConfig.maxDependencies.value,
+      deployConfig.maxBlockSizeBytes.value,
+      deployConfig.maxBlockCost.value
     )
 
   private def toHighwayConfig(highwayConfig: Highway): ipc.ChainSpec.HighwayConfig =

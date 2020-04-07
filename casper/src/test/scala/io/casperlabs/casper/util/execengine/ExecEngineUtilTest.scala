@@ -37,8 +37,10 @@ import monix.eval.Task
 import monix.execution.Scheduler
 import monix.execution.atomic.{AtomicInt, AtomicLong}
 import org.scalatest.{Assertion, FlatSpec, Matchers}
+
 import scala.concurrent.duration._
 import io.casperlabs.models.BlockImplicits._
+import io.casperlabs.storage.SQLiteStorage.CombinedStorage
 
 class ExecEngineUtilTest
     extends FlatSpec
@@ -53,9 +55,7 @@ class ExecEngineUtilTest
 
   implicit def deployBuffer(
       implicit
-      blockStorage: BlockStorage[Task],
-      dagStorage: DagStorage[Task],
-      deployStorage: DeployStorage[Task]
+      combinedStorage: CombinedStorage[Task]
   ): DeployBuffer[Task] =
     DeployBuffer.create[Task]("casperlabs", Duration.Zero)
 
@@ -79,13 +79,14 @@ class ExecEngineUtilTest
                           protocolVersion,
                           mainRank = Message.asMainRank(0),
                           maxBlockSizeBytes = 5 * 1024 * 1024,
+                          maxBlockCost = 0,
                           upgrades = Nil
                         )
       DeploysCheckpoint(_, _, _, result, _, _) = computeResult
     } yield result
 
-  "computeDeploysCheckpoint" should "aggregate the result of deploying multiple programs within the block" in withStorage {
-    implicit blockStorage => implicit dagStorage => implicit deployStorage => _ =>
+  "computeDeploysCheckpoint" should "aggregate the result of deploying multiple programs within the block" in withCombinedStorage() {
+    implicit storage =>
       implicit val executionEngineService: ExecutionEngineService[Task] =
         HashSetCasperTestNode.simpleEEApi[Task](Map.empty)
 
@@ -115,48 +116,47 @@ class ExecEngineUtilTest
       } yield batchResult should contain theSameElementsAs singleResults
   }
 
-  it should "throw exception when EE Service Failed" in withStorage {
-    implicit blockStorage => implicit dagStorage => implicit deployStorage => _ =>
-      val failedExecEEService: ExecutionEngineService[Task] =
-        ExecutionEngineServiceStub.failExec[Task]()
+  it should "throw exception when EE Service Failed" in withCombinedStorage() { implicit storage =>
+    val failedExecEEService: ExecutionEngineService[Task] =
+      ExecutionEngineServiceStub.failExec[Task]()
 
-      val failedCommitEEService: ExecutionEngineService[Task] =
-        ExecutionEngineServiceStub.failCommit[Task]()
+    val failedCommitEEService: ExecutionEngineService[Task] =
+      ExecutionEngineServiceStub.failCommit[Task]()
 
-      val genesisDeploysWithCost = prepareDeploys(Vector.empty, 1L)
-      val b1DeploysWithCost      = prepareDeploys(Vector(ByteString.EMPTY), 1L)
-      val b2DeploysWithCost      = prepareDeploys(Vector(ByteString.EMPTY), 1L)
+    val genesisDeploysWithCost = prepareDeploys(Vector.empty, 1L)
+    val b1DeploysWithCost      = prepareDeploys(Vector(ByteString.EMPTY), 1L)
+    val b2DeploysWithCost      = prepareDeploys(Vector(ByteString.EMPTY), 1L)
 
-      // An intermediate method for better UX when overriding ExecutionEngineService
-      def computeCheckpoint(block: Block)(implicit ec: ExecutionEngineService[Task]) =
-        for {
-          dag    <- dagStorage.getRepresentation
-          result <- computeBlockCheckpointFromDeploys(block, dag)
-        } yield result
-
+    // An intermediate method for better UX when overriding ExecutionEngineService
+    def computeCheckpoint(block: Block)(implicit ec: ExecutionEngineService[Task]) =
       for {
-        genesis <- createAndStoreMessage[Task](Seq.empty, deploys = genesisDeploysWithCost)
-        b1      <- createAndStoreMessage[Task](Seq(genesis.blockHash), deploys = b1DeploysWithCost)
-        b2      <- createAndStoreMessage[Task](Seq(genesis.blockHash), deploys = b2DeploysWithCost)
-        _ <- computeCheckpoint(b1)(failedExecEEService).attempt.map { error =>
-              assert(error.isLeft)
-              assert(
-                error.left.get.getLocalizedMessage().contains("Failed ExecutionEngineService.exec")
-              )
-            }
-        _ <- computeCheckpoint(b2)(failedCommitEEService).attempt.map { error =>
-              assert(error.isLeft)
-              assert(
-                error.left.get
-                  .getLocalizedMessage()
-                  .contains("Failed ExecutionEngineService.commit")
-              )
-            }
-      } yield ()
+        dag    <- storage.getRepresentation
+        result <- computeBlockCheckpointFromDeploys(block, dag)
+      } yield result
+
+    for {
+      genesis <- createAndStoreMessage[Task](Seq.empty, deploys = genesisDeploysWithCost)
+      b1      <- createAndStoreMessage[Task](Seq(genesis.blockHash), deploys = b1DeploysWithCost)
+      b2      <- createAndStoreMessage[Task](Seq(genesis.blockHash), deploys = b2DeploysWithCost)
+      _ <- computeCheckpoint(b1)(failedExecEEService).attempt.map { error =>
+            assert(error.isLeft)
+            assert(
+              error.left.get.getLocalizedMessage().contains("Failed ExecutionEngineService.exec")
+            )
+          }
+      _ <- computeCheckpoint(b2)(failedCommitEEService).attempt.map { error =>
+            assert(error.isLeft)
+            assert(
+              error.left.get
+                .getLocalizedMessage()
+                .contains("Failed ExecutionEngineService.commit")
+            )
+          }
+    } yield ()
   }
 
-  it should "include conflicting deploys in the result" in withStorage {
-    implicit blockStorage => implicit dagStorage => implicit deployStorage => _ =>
+  it should "include conflicting deploys in the result" in withCombinedStorage() {
+    implicit storage =>
       val nonConflictingDeploys = List.fill(5)(ProtoUtil.basicDeploy[Task]()).sequence
       implicit val executionEngineService: ExecutionEngineService[Task] =
         HashSetCasperTestNode.simpleEEApi[Task](Map.empty)
@@ -173,8 +173,8 @@ class ExecEngineUtilTest
       }
   }
 
-  it should "use post-state hash and bonded validators values of the last deploy execution" in withStorage {
-    implicit blockStorage => implicit dagStorage => implicit deployStorage => _ =>
+  it should "use post-state hash and bonded validators values of the last deploy execution" in withCombinedStorage() {
+    implicit storage =>
       import cats.implicits._
 
       import monix.execution.Scheduler.Implicits.global
@@ -285,16 +285,17 @@ class ExecEngineUtilTest
           ProtocolVersion(1),
           mainRank = Message.asMainRank(0),
           maxBlockSizeBytes = 5 * 1024 * 1024,
+          maxBlockCost = 0,
           upgrades = Nil
-        )(Sync[Task], deployStorage, deployBuffer, logEff, ee, deploySelection, Metrics[Task])
+        )(Sync[Task], storage, deployBuffer, logEff, ee, deploySelection, Metrics[Task])
         .map { result =>
           assert(result.postStateHash == lastPostStateHash)
           assert(result.bondedValidators == lastBondedValidators)
         }
   }
 
-  "effectsForBlock" should "extract block's effects properly" in withStorage {
-    implicit bs => _ => _ => _ =>
+  "effectsForBlock" should "extract block's effects properly" in withCombinedStorage() {
+    implicit storage =>
       import io.casperlabs.catscontrib.effect.implicits._
       import cats.implicits._
 
@@ -322,7 +323,19 @@ class ExecEngineUtilTest
         .map(_.mapValues(_.toSet))
         .foldLeft(Map.empty[Int, Set[TransformEntry]])(_ |+| _)
 
-      implicit val cl = CasperLabsProtocol.unsafe[Task]((0, ProtocolVersion(1), None))
+      implicit val cl = CasperLabsProtocol.unsafe[Task](
+        (
+          0,
+          ProtocolVersion(1),
+          Some(
+            DeployConfig()
+              .withMaxTtlMillis(24 * 60 * 60 * 1000) // 1 day
+              .withMaxDependencies(10)
+              .withMaxBlockSizeBytes(10 * 1024 * 1024)
+              .withMaxBlockCost(0)
+          )
+        )
+      )
 
       val stageCounter = AtomicInt(0)
 
@@ -365,7 +378,7 @@ class ExecEngineUtilTest
                          .effectsForBlock[Task](block, ByteString.EMPTY)(
                            Sync[Task],
                            ee,
-                           bs,
+                           storage,
                            cl
                          )
         _ <- Task {
@@ -822,6 +835,10 @@ object ExecEngineUtilTest {
 
         def requeueOrphanedDeploys(
             tips: Set[BlockHash]
+        ): F[Set[DeployHash]] = ???
+
+        def requeueOrphanedDeploysInBlocks(
+            orphanedBlockHashes: Set[BlockHash]
         ): F[Set[DeployHash]] = ???
 
         def removeFinalizedDeploys(

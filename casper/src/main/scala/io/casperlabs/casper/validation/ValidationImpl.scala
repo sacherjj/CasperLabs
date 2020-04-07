@@ -139,6 +139,7 @@ abstract class ValidationImpl[F[_]: Sync: FunctorRaise[*[_], InvalidBlock]: Log:
       _ <- Validation.deploySignatures[F](block)
       _ <- Validation.deployHeaders[F](block, dag, chainName)
       _ <- Validation.deployUniqueness[F](block, dag)
+      _ <- Validation.totalCost[F](block)
     } yield ()
   }
 
@@ -224,7 +225,7 @@ abstract class ValidationImpl[F[_]: Sync: FunctorRaise[*[_], InvalidBlock]: Log:
         _ <- possibleCommitResult match {
               case Left(ex) =>
                 Log[F].error(
-                  s"Could not commit effects of ${PrettyPrinter.buildString(block.blockHash) -> "block"}: $ex"
+                  s"Could not commit effects of ${PrettyPrinter.buildString(block.blockHash) -> "message"}: $ex"
                 ) *>
                   raise(InvalidTransaction)
               case Right(commitResult) =>
