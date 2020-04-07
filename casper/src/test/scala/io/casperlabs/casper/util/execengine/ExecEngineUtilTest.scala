@@ -837,6 +837,10 @@ object ExecEngineUtilTest {
             tips: Set[BlockHash]
         ): F[Set[DeployHash]] = ???
 
+        def requeueOrphanedDeploysInBlocks(
+            orphanedBlockHashes: Set[BlockHash]
+        ): F[Set[DeployHash]] = ???
+
         def removeFinalizedDeploys(
             lfbs: Set[BlockHash]
         ): F[Unit] = ???

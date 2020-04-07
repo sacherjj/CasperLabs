@@ -106,10 +106,15 @@ object VotingMatrix {
         weights,
         validators
       )
+
       implicit0(votingMatrix: VotingMatrix[F]) <- of[F](state)
       // Apply the incremental update step to update voting matrix by taking M := V(i)latest
       _ <- latestMessagesToUpdated.values.toList.traverse { b =>
-            updateVotingMatrixOnNewBlock[F](dag, b, isHighway)
+            for {
+              panorama <- FinalityDetectorUtil
+                           .panoramaOfBlockByValidators[F](dag, b, lfb, validators.toSet)
+              _ <- updateVotingMatrixOnNewBlock[F](dag, b, panorama, isHighway)
+            } yield ()
           }
     } yield votingMatrix
 }

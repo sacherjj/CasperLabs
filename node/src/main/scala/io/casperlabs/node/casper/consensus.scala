@@ -7,6 +7,17 @@ import cats.effect._
 import cats.effect.concurrent._
 import cats.implicits._
 import cats.mtl.FunctorRaise
+import io.casperlabs.casper.consensus._
+import io.casperlabs.casper.{
+  BlockStatus,
+  CasperState,
+  EventEmitter,
+  MultiParentCasper,
+  MultiParentCasperImpl,
+  MultiParentCasperRef,
+  ValidatorIdentity
+}
+import io.casperlabs.casper.{EquivocatedBlock, InvalidBlock, Processed, SelfEquivocatedBlock, Valid}
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.DeploySelection.DeploySelection
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
@@ -29,10 +40,13 @@ import io.casperlabs.comm.ServiceError.{NotFound, Unavailable}
 import io.casperlabs.comm.gossiping.relaying.BlockRelaying
 import io.casperlabs.crypto.Keys.PublicKey
 import io.casperlabs.ipc.ChainSpec
+import io.casperlabs.metrics.Metrics
 import io.casperlabs.mempool.DeployBuffer
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.node.api.EventStream
 import io.casperlabs.node.configuration.Configuration
+import io.casperlabs.shared.{Cell, FatalError, Log, Sorting, Time}
+import io.casperlabs.storage.deploy.DeployStorage
 import io.casperlabs.shared.ByteStringPrettyPrinter._
 import io.casperlabs.shared.Sorting.jRankOrder
 import io.casperlabs.shared.{Cell, FatalError, Log, Time}
@@ -44,6 +58,9 @@ import io.casperlabs.storage.era.EraStorage
 import simulacrum.typeclass
 
 import scala.concurrent.duration._
+import cats.Parallel
+import io.casperlabs.casper.finality.MultiParentFinalizer.MeteredMultiParentFinalizer
+
 import scala.util.control.NoStackTrace
 
 // Stuff we need to pass to gossiping.
@@ -204,7 +221,7 @@ object NCB {
             .values
             .flatMap(_.map(_.jRank))
             .toList
-            .minimumOption
+            .minimumOption(Sorting.jRankOrder)
             .getOrElse(0L)
         } yield minRank
 
@@ -222,7 +239,7 @@ object NCB {
 }
 
 object Highway {
-  def apply[F[_]: Concurrent: Time: Timer: Clock: Log: Metrics: DagStorage: BlockStorage: DeployBuffer: DeployStorage: EraStorage: FinalityStorage: AncestorsStorage: CasperLabsProtocol: ExecutionEngineService: DeploySelection: EventEmitter: BlockRelaying](
+  def apply[F[_]: Parallel: Concurrent: Time: Timer: Clock: Log: Metrics: DagStorage: BlockStorage: DeployBuffer: DeployStorage: EraStorage: FinalityStorage: AncestorsStorage: CasperLabsProtocol: ExecutionEngineService: DeploySelection: EventEmitter: BlockRelaying](
       conf: Configuration,
       chainSpec: ChainSpec,
       maybeValidatorId: Option[ValidatorIdentity],
@@ -249,8 +266,7 @@ object Highway {
             finalizer <- MultiParentFinalizer.create[F](
                           dag,
                           lfb,
-                          finalityDetector,
-                          isHighway = true
+                          finalityDetector
                         )
             meteredFinalized = MeteredMultiParentFinalizer.of[F](finalizer)
           } yield meteredFinalized
@@ -280,7 +296,8 @@ object Highway {
             .FixedLength(hc.votingPeriodDurationMillis.millis)
         },
         omegaMessageTimeStart = conf.highway.omegaMessageTimeStart.value,
-        omegaMessageTimeEnd = conf.highway.omegaMessageTimeEnd.value
+        omegaMessageTimeEnd = conf.highway.omegaMessageTimeEnd.value,
+        omegaBlocksEnabled = conf.highway.omegaBlocksEnabled
       )
 
       _ <- Resource.liftF {
@@ -293,6 +310,9 @@ object Highway {
               Log[F].info(s"Voting duration is ${hwConf.postEraVotingDuration}") >>
               Log[F].info(
                 s"Initial round exponent is ${conf.highway.initRoundExponent.value -> "exponent"}"
+              ) >>
+              Log[F].info(
+                s"Omega message time ${hwConf.omegaMessageTimeStart} to ${hwConf.omegaMessageTimeEnd}; blocks ${hwConf.omegaBlocksEnabled}"
               )
           }
 
@@ -306,7 +326,7 @@ object Highway {
                          upgrades = chainSpec.upgrades
                        )
                      },
-                     messageExecutor = new MessageExecutor(
+                     messageExecutor = new MessageExecutor[F](
                        chainName = chainSpec.getGenesis.name,
                        genesis = genesis,
                        upgrades = chainSpec.upgrades,
@@ -341,7 +361,7 @@ object Highway {
             keyBlocks       <- keyBlocksHashes.traverse(dag.lookupUnsafe)
             // Take the latest, to allow eras to be killed without causing
             // initial sync to start from their keyblock forever.
-            maxRank = keyBlocks.map(_.jRank).max
+            maxRank = keyBlocks.map(_.jRank).max(Sorting.jRankOrdering)
           } yield maxRank
 
         /** Serve the latest messages from childless eras and their parents,

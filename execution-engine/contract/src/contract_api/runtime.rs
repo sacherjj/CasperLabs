@@ -72,9 +72,10 @@ pub fn call_contract<A: ArgsParser, T: CLTyped + FromBytes>(c_ptr: ContractRef, 
     } else {
         // NOTE: this is a copy of the contents of `read_host_buffer()`.  Calling that directly from
         // here causes several contracts to fail with a Wasmi `Unreachable` error.
-        let bytes_ptr = contract_api::alloc_bytes(bytes_written);
-        let mut dest: Vec<u8> =
-            unsafe { Vec::from_raw_parts(bytes_ptr, bytes_written, bytes_written) };
+        let bytes_non_null_ptr = contract_api::alloc_bytes(bytes_written);
+        let mut dest: Vec<u8> = unsafe {
+            Vec::from_raw_parts(bytes_non_null_ptr.as_ptr(), bytes_written, bytes_written)
+        };
         read_host_buffer_into(&mut dest).unwrap_or_revert();
         dest
     };
@@ -116,16 +117,19 @@ fn get_arg_size(i: u32) -> Option<usize> {
 /// is not invoked with any arguments.
 pub fn get_arg<T: FromBytes>(i: u32) -> Option<Result<T, bytesrepr::Error>> {
     let arg_size = get_arg_size(i)?;
-
-    let arg_bytes = {
+    let arg_bytes = if arg_size > 0 {
         let res = {
-            let data_ptr = contract_api::alloc_bytes(arg_size);
-            let ret = unsafe { ext_ffi::get_arg(i as usize, data_ptr, arg_size) };
-            let data = unsafe { Vec::from_raw_parts(data_ptr, arg_size, arg_size) };
+            let data_non_null_ptr = contract_api::alloc_bytes(arg_size);
+            let ret = unsafe { ext_ffi::get_arg(i as usize, data_non_null_ptr.as_ptr(), arg_size) };
+            let data =
+                unsafe { Vec::from_raw_parts(data_non_null_ptr.as_ptr(), arg_size, arg_size) };
             api_error::result_from(ret).map(|_| data)
         };
         // Assumed to be safe as `get_arg_size` checks the argument already
         res.unwrap_or_revert()
+    } else {
+        // Avoids allocation with 0 bytes and a call to get_arg
+        Vec::new()
     };
     Some(bytesrepr::deserialize(arg_bytes))
 }
@@ -145,11 +149,11 @@ pub fn get_caller() -> PublicKey {
 
 /// Returns the current [`BlockTime`].
 pub fn get_blocktime() -> BlockTime {
-    let dest_ptr = contract_api::alloc_bytes(BLOCKTIME_SERIALIZED_LENGTH);
+    let dest_non_null_ptr = contract_api::alloc_bytes(BLOCKTIME_SERIALIZED_LENGTH);
     let bytes = unsafe {
-        ext_ffi::get_blocktime(dest_ptr);
+        ext_ffi::get_blocktime(dest_non_null_ptr.as_ptr());
         Vec::from_raw_parts(
-            dest_ptr,
+            dest_non_null_ptr.as_ptr(),
             BLOCKTIME_SERIALIZED_LENGTH,
             BLOCKTIME_SERIALIZED_LENGTH,
         )
@@ -159,10 +163,15 @@ pub fn get_blocktime() -> BlockTime {
 
 /// Returns the current [`Phase`].
 pub fn get_phase() -> Phase {
-    let dest_ptr = contract_api::alloc_bytes(PHASE_SERIALIZED_LENGTH);
-    unsafe { ext_ffi::get_phase(dest_ptr) };
-    let bytes =
-        unsafe { Vec::from_raw_parts(dest_ptr, PHASE_SERIALIZED_LENGTH, PHASE_SERIALIZED_LENGTH) };
+    let dest_non_null_ptr = contract_api::alloc_bytes(PHASE_SERIALIZED_LENGTH);
+    unsafe { ext_ffi::get_phase(dest_non_null_ptr.as_ptr()) };
+    let bytes = unsafe {
+        Vec::from_raw_parts(
+            dest_non_null_ptr.as_ptr(),
+            PHASE_SERIALIZED_LENGTH,
+            PHASE_SERIALIZED_LENGTH,
+        )
+    };
     bytesrepr::deserialize(bytes).unwrap_or_revert()
 }
 
@@ -264,8 +273,19 @@ fn read_host_buffer_into(dest: &mut [u8]) -> Result<usize, ApiError> {
 }
 
 pub(crate) fn read_host_buffer(size: usize) -> Result<Vec<u8>, ApiError> {
-    let bytes_ptr = contract_api::alloc_bytes(size);
-    let mut dest: Vec<u8> = unsafe { Vec::from_raw_parts(bytes_ptr, size, size) };
+    let mut dest: Vec<u8> = if size == 0 {
+        Vec::new()
+    } else {
+        let bytes_non_null_ptr = contract_api::alloc_bytes(size);
+        unsafe { Vec::from_raw_parts(bytes_non_null_ptr.as_ptr(), size, size) }
+    };
     read_host_buffer_into(&mut dest)?;
     Ok(dest)
+}
+
+#[cfg(feature = "test-support")]
+/// Prints a debug message
+pub fn print(text: &str) {
+    let (text_ptr, text_size, _bytes) = contract_api::to_ptr(text);
+    unsafe { ext_ffi::print(text_ptr, text_size) }
 }

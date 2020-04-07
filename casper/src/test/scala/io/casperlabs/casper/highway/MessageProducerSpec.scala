@@ -7,6 +7,7 @@ import io.casperlabs.crypto.Keys.PublicKey
 import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
 import io.casperlabs.casper.{DeploySelection, ValidatorIdentity}
 import io.casperlabs.casper.consensus.{Bond, Era}
+import io.casperlabs.casper.consensus.Block.MessageRole
 import io.casperlabs.casper.consensus.state
 import io.casperlabs.casper.highway.mocks.MockMessageProducer
 import io.casperlabs.storage.BlockHash
@@ -55,14 +56,16 @@ class MessageProducerSpec extends FlatSpec with Matchers with Inspectors with Hi
                   roundId = Ticks(era.startTick),
                   mainParent = genesis,
                   justifications = justifications,
-                  isBookingBlock = false
+                  isBookingBlock = false,
+                  messageRole = MessageRole.PROPOSAL
                 )
             _ <- mp
                   .ballot(
                     era.keyBlockHash,
                     roundId = Ticks(era.endTick),
                     target = genesis,
-                    justifications = justifications
+                    justifications = justifications,
+                    messageRole = MessageRole.WITNESS
                   )
                   .whenA(withEquivocation)
           } yield b.messageHash
@@ -145,7 +148,8 @@ class MessageProducerSpec extends FlatSpec with Matchers with Inspectors with Hi
                    e0.keyBlockHash,
                    roundId = Ticks(e0.startTick),
                    target = genesis,
-                   justifications = Map.empty
+                   justifications = Map.empty,
+                   messageRole = MessageRole.WITNESS
                  )
 
             _ = b1.validatorId shouldBe validatorId
@@ -159,7 +163,8 @@ class MessageProducerSpec extends FlatSpec with Matchers with Inspectors with Hi
                    e0.keyBlockHash,
                    roundId = Ticks(e0.endTick),
                    target = genesis,
-                   justifications = Map(validatorId -> Set(b1))
+                   justifications = Map(validatorId -> Set(b1)),
+                   messageRole = MessageRole.WITNESS
                  )
 
             _ = b2.jRank shouldBe 2
@@ -172,7 +177,8 @@ class MessageProducerSpec extends FlatSpec with Matchers with Inspectors with Hi
                    e1.keyBlockHash,
                    roundId = Ticks(e1.startTick),
                    target = genesis,
-                   justifications = Map(validatorId -> Set(b2))
+                   justifications = Map(validatorId -> Set(b2)),
+                   messageRole = MessageRole.WITNESS
                  )
 
             _ = b3.jRank shouldBe 3
@@ -184,7 +190,8 @@ class MessageProducerSpec extends FlatSpec with Matchers with Inspectors with Hi
                    e1.keyBlockHash,
                    roundId = Ticks(e1.endTick),
                    target = genesis,
-                   justifications = Map(validatorId -> Set(b2, b3))
+                   justifications = Map(validatorId -> Set(b2, b3)),
+                   messageRole = MessageRole.WITNESS
                  )
 
             _ = b4.jRank shouldBe 4
@@ -237,7 +244,8 @@ class MessageProducerSpec extends FlatSpec with Matchers with Inspectors with Hi
                    roundId = Ticks(e0.startTick),
                    mainParent = genesis,
                    justifications = Map.empty,
-                   isBookingBlock = false
+                   isBookingBlock = false,
+                   messageRole = MessageRole.PROPOSAL
                  )
 
             _ = b1.validatorId shouldBe validatorId
@@ -253,7 +261,8 @@ class MessageProducerSpec extends FlatSpec with Matchers with Inspectors with Hi
                    roundId = Ticks(e0.endTick),
                    mainParent = b1,
                    justifications = Map(validatorId -> Set(b1)),
-                   isBookingBlock = false
+                   isBookingBlock = false,
+                   messageRole = MessageRole.PROPOSAL
                  )
 
             _ = b2.jRank shouldBe 2
@@ -267,7 +276,8 @@ class MessageProducerSpec extends FlatSpec with Matchers with Inspectors with Hi
                    roundId = Ticks(e1.startTick),
                    mainParent = b2,
                    justifications = Map(validatorId -> Set(b2)),
-                   isBookingBlock = false
+                   isBookingBlock = false,
+                   messageRole = MessageRole.PROPOSAL
                  )
 
             _ = b3.jRank shouldBe 3
@@ -280,7 +290,8 @@ class MessageProducerSpec extends FlatSpec with Matchers with Inspectors with Hi
                    roundId = Ticks(e1.endTick),
                    mainParent = b3,
                    justifications = Map(validatorId -> Set(b2, b3)),
-                   isBookingBlock = false
+                   isBookingBlock = false,
+                   messageRole = MessageRole.PROPOSAL
                  )
 
             _ = b4.jRank shouldBe 4

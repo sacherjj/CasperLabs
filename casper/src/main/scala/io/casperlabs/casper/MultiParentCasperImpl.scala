@@ -168,7 +168,8 @@ class MultiParentCasperImpl[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: 
   private def updateLastFinalizedBlock(message: Message, dag: DagRepresentation[F]): F[Unit] =
     Metrics[F].timer("updateLastFinalizedBlock") {
       for {
-        result <- MultiParentFinalizer[F].onNewMessageAdded(message)
+        _      <- MultiParentFinalizer[F].addMessage(message)
+        result <- MultiParentFinalizer[F].checkFinality()
         _ <- result.toList
               .traverse {
                 case fb @ FinalizedBlocks(newLFB, _, finalized, orphaned) => {
@@ -560,8 +561,7 @@ object MultiParentCasperImpl {
       implicit0(multiParentFinalizer: MultiParentFinalizer[F]) <- MultiParentFinalizer.create[F](
                                                                    dag,
                                                                    lfb,
-                                                                   finalityDetector,
-                                                                   isHighway = false
+                                                                   finalityDetector
                                                                  )
     } yield new MultiParentCasperImpl[F](
       semaphoreMap,

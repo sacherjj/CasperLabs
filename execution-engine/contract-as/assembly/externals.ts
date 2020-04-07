@@ -18,7 +18,7 @@ export declare function add(key_ptr: usize, key_size: usize, value_ptr: usize, v
 export declare function add_local(key_ptr: usize, key_size: usize, value_ptr: usize, value_size: usize): void;
 /** @hidden */
 @external("env", "new_uref")
-export declare function new_uref(key_ptr: usize, value_ptr: usize, value_size: usize): void;
+export declare function new_uref(uref_ptr: usize, value_ptr: usize, value_size: usize): void;
 /** @hidden */
 @external("env", "store_function")
 export declare function store_function(function_name_ptr: usize, function_name_size: usize, named_keys_ptr: usize, named_keys_size: usize, uref_addr_ptr: usize): void;

@@ -63,10 +63,6 @@ class EraSupervisor[F[_]: Concurrent: Timer: Log: Metrics: EraStorage: BlockRela
                   .validateAndAddBlock(messageExecutor, block)
                   .timerGauge("incoming_validateAndAddBlock")
 
-      _ <- messageExecutor
-            .effectsAfterAdded(message)
-            .timerGauge("incoming_effectsAfterAdded")
-
       // Tell descendant eras for the next time they create a block that this era received a message.
       // NOTE: If the events create an era it will only be loaded later, so the first time
       // the fork choice will be asked about that era it will not have been notified about
@@ -74,6 +70,10 @@ class EraSupervisor[F[_]: Concurrent: Timer: Log: Metrics: EraStorage: BlockRela
       // parent era the first time it's asked, and only rely on incremental updates later.
       _ <- propagateLatestMessageToDescendantEras(message)
             .timerGauge("incoming_propagateLatestMessage")
+
+      _ <- messageExecutor
+            .effectsAfterAdded(message)
+            .timerGauge("incoming_effectsAfterAdded")
 
       // See what reactions the protocol dictates.
       (events, ()) <- entry.runtime
@@ -146,15 +146,15 @@ class EraSupervisor[F[_]: Concurrent: Timer: Log: Metrics: EraStorage: BlockRela
                     val era = runtime.era.keyBlockHash.show
                     val exec = for {
                       _ <- Log[F].info(s"Executing $action scheduled to $instant in $era")
-                      (events, agenda) <- runtime
-                                           .handleAgenda(action)
-                                           .run
-                                           .timerGauge("schedule_handleAgenda")
 
-                      isScheduleEmpty <- scheduleRef.modify { sch =>
-                                          val rem = sch - key
-                                          rem -> rem.isEmpty
-                                        }
+                      (events, agenda) <- Sync[F].guarantee {
+                                           runtime
+                                             .handleAgenda(action)
+                                             .run
+                                             .timerGauge("schedule_handleAgenda")
+                                         }(scheduleRef.update(_ - key))
+
+                      isScheduleEmpty <- scheduleRef.get.map(_.isEmpty)
                       _ <- Log[F]
                             .warn(s"There are no more actions scheduled for any of the active eras")
                             .whenA(isScheduleEmpty && agenda.isEmpty)
@@ -230,7 +230,10 @@ class EraSupervisor[F[_]: Concurrent: Timer: Log: Metrics: EraStorage: BlockRela
 
       case HighwayEvent.CreatedLambdaMessage(m)  => handleCreatedMessage(m, "lambda-message")
       case HighwayEvent.CreatedLambdaResponse(m) => handleCreatedMessage(m, "lambda-response")
-      case HighwayEvent.CreatedOmegaMessage(m)   => handleCreatedMessage(m, "omega-message")
+      case HighwayEvent.CreatedOmegaMessage(m) =>
+        handleCreatedMessage(m, "omega-message")
+      case HighwayEvent.HandledLambdaMessage =>
+        messageExecutor.checkFinality().void
     } void
   }
 

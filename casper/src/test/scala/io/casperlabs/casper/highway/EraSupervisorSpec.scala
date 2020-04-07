@@ -3,6 +3,7 @@ package io.casperlabs.casper.highway
 import cats.effect.Resource
 import cats.effect.concurrent.Ref
 import cats.implicits._
+import io.casperlabs.casper.consensus.Block.MessageRole
 import io.casperlabs.comm.gossiping.WaitHandle
 import io.casperlabs.comm.gossiping.relaying.BlockRelaying
 import io.casperlabs.crypto.Keys.PublicKeyBS
@@ -10,8 +11,10 @@ import io.casperlabs.models.Message
 import io.casperlabs.storage.{BlockHash, SQLiteStorage}
 import monix.eval.Task
 import org.scalatest._
-
 import scala.concurrent.duration._
+import io.casperlabs.casper.highway.mocks.MockMessageProducer
+import io.casperlabs.crypto.Keys
+import io.casperlabs.shared.Log
 
 class EraSupervisorSpec extends FlatSpec with Matchers with Inspectors with HighwayFixture {
 
@@ -60,6 +63,38 @@ class EraSupervisorSpec extends FlatSpec with Matchers with Inspectors with High
             }
           }
       }
+  }
+
+  it should "not show active eras after errors" in testFixture { implicit timer => implicit db =>
+    new Fixture(
+      length = 1.hour,
+      initRoundExponent = 10, // ~20 minutes,
+      printLevel = Log.Level.Crit
+    ) {
+      // Create a message producer that will raise errors so the agenda will fail.
+      override lazy val messageProducer: MessageProducer[Task] =
+        new MockMessageProducer[Task](validator) {
+          override def block(
+              keyBlockHash: BlockHash,
+              roundId: Ticks,
+              mainParent: Message.Block,
+              justifications: Map[PublicKeyBS, Set[Message]],
+              isBookingBlock: Boolean,
+              messageRole: MessageRole
+          ) = Task.raiseError(new RuntimeException("Stop the agenda!"))
+        }
+
+      override def test =
+        makeSupervisor().use { supervisor =>
+          for {
+            active0 <- supervisor.activeEras
+            _       = active0 should not be empty
+            _       <- Task.sleep(30.minutes)
+            active1 <- supervisor.activeEras
+            _       = active1 shouldBe empty
+          } yield ()
+        }
+    }
   }
 
   it should "relay created messages to other nodes" in testFixtures(

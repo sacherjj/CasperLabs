@@ -576,6 +576,12 @@ private[configuration] final case class Options private (
       )
 
     @scallop
+    val highwayOmegaBlocksEnabled =
+      gen[Flag](
+        "Enable the creating blocks instead of ballots as omega-messages."
+      )
+
+    @scallop
     val highwayInitRoundExponent =
       gen[Int](
         "Initial round exponent to start the node with, before auto-adjustment takes over; corresponds to the tick unit of the chain."

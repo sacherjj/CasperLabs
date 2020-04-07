@@ -117,6 +117,7 @@ steps:
   - "make build CARGO_FLAGS=--all-targets"
   - "make build-contracts-rs"
   image: "casperlabs/buildenv:latest"
+  failure: "ignore"
   when:
     event:
     - pull_request

@@ -6,10 +6,14 @@ import io.casperlabs.storage.dag.DagRepresentation
 
 trait FinalityDetector[F[_]] {
 
-  /** Signal whether any block is finalized when `block` is added to the DAG. */
-  def onNewMessageAddedToTheBlockDag(
+  /** Adds message to the internal finalizer but does not run detection loop.
+    */
+  def addMessage(
       dag: DagRepresentation[F],
       message: Message,
       latestFinalizedBlock: BlockHash
-  ): F[Seq[CommitteeWithConsensusValue]]
+  ): F[Unit]
+
+  /** Runs finality detection loop using current finalizer state. */
+  def checkFinality(dag: DagRepresentation[F]): F[Seq[CommitteeWithConsensusValue]]
 }
