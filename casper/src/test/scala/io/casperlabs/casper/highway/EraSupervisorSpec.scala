@@ -3,6 +3,7 @@ package io.casperlabs.casper.highway
 import cats.effect.Resource
 import cats.effect.concurrent.Ref
 import cats.implicits._
+import io.casperlabs.casper.consensus.Block.MessageRole
 import io.casperlabs.comm.gossiping.WaitHandle
 import io.casperlabs.comm.gossiping.relaying.BlockRelaying
 import io.casperlabs.crypto.Keys.PublicKeyBS
@@ -78,7 +79,8 @@ class EraSupervisorSpec extends FlatSpec with Matchers with Inspectors with High
               roundId: Ticks,
               mainParent: Message.Block,
               justifications: Map[PublicKeyBS, Set[Message]],
-              isBookingBlock: Boolean
+              isBookingBlock: Boolean,
+              messageRole: MessageRole
           ) = Task.raiseError(new RuntimeException("Stop the agenda!"))
         }
 

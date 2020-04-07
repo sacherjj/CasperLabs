@@ -1077,11 +1077,17 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
                   )
                 )
 
-              assertEvent(handle.written) {
+              val events = handle.written
+
+              assertEvent(events) {
                 case HighwayEvent.CreatedLambdaMessage(ballot: Message.Ballot) =>
                   ballot.roundId shouldBe roundId
                   ballot.parentBlock shouldBe switch.messageHash
                   ballot.messageRole shouldBe Block.MessageRole.PROPOSAL
+              }
+
+              assertEvent(events) {
+                case HighwayEvent.HandledLambdaMessage =>
               }
             }
           }
