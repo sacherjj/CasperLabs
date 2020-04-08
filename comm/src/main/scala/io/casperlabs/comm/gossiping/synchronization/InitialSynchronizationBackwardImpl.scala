@@ -71,7 +71,7 @@ class InitialSynchronizationBackwardImpl[F[_]: Concurrent: Log: Timer](
               val newFailed              = failed ++ failedE.map(_._1)
 
               if (successful.size >= minSuccessful) {
-                Log[F].debug(
+                Log[F].info(
                   s"Successfully synced with ${successful.size} nodes, required: $minSuccessful"
                 )
               } else {
@@ -88,11 +88,11 @@ class InitialSynchronizationBackwardImpl[F[_]: Concurrent: Log: Timer](
                       }
                     }
                   }
-                Log[F].debug(
+                Log[F].info(
                   s"Haven't reached required $minSuccessful amount of nodes, retrying in $roundPeriod"
                 ) >>
-                  Timer[F].sleep(roundPeriod) >> nextRoundNodes >>= { ns =>
-                  loop(ns, newFailed)
+                  Timer[F].sleep(roundPeriod) >> nextRoundNodes >>= {
+                  loop(_, newFailed)
                 }
               }
             }
