@@ -229,8 +229,16 @@ class MockDeployStorage[F[_]: Sync: Log](
         case (deploy, Metadata(`status`, _, _, _, _)) => deploy
       }.toList)
 
-    override def sizePendingOrProcessed(): F[Long] =
-      (readProcessed, readPending).mapN(_.size + _.size).map(_.toLong)
+    override def countsByBufferedStates(states: DeployInfo.State*): F[Map[DeployInfo.State, Long]] =
+      for {
+        processed <- readProcessed
+        pending   <- readPending
+        discarded <- readByStatus(DiscardedStatusCode)
+      } yield Map(
+        DeployInfo.State.PENDING   -> pending.size.toLong,
+        DeployInfo.State.PROCESSED -> processed.size.toLong,
+        DeployInfo.State.DISCARDED -> discarded.size.toLong
+      ).filterKeys(x => states.contains(x) || states.isEmpty)
 
     override def getPendingOrProcessed(hash: ByteString): F[Option[Deploy]] =
       deploysWithMetadataRef.get.map(_.collectFirst {
