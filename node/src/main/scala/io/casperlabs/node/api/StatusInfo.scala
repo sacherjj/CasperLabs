@@ -92,11 +92,16 @@ object StatusInfo {
           )
         )
     }
+    case class GenesisDetails(
+        genesisBlockHash: String,
+        genesisLikeBlocks: List[BlockDetails]
+    )
 
     type Basic     = Check[Unit]
     type LastBlock = Check[BlockDetails]
     type Peers     = Check[PeerDetails]
     type Eras      = Check[ErasDetails]
+    type Genesis   = Check[GenesisDetails]
   }
 
   case class CheckList(
@@ -109,7 +114,8 @@ object StatusInfo {
       lastCreatedBlock: Check.Basic,
       activeEras: Check.Eras,
       bondedEras: Check.Eras,
-      genesisEra: Check.Eras
+      genesisEra: Check.Eras,
+      genesisBlock: Check.Genesis
   )
   object CheckList {
     import Check._
@@ -133,6 +139,7 @@ object StatusInfo {
         activeEras             <- activeEras[F](conf)
         bondedEras             <- bondedEras[F](conf, maybeValidatorId)
         genesisEra             <- genesisEra[F](conf, genesis)
+        genesisBlock           <- genesisBlock[F](genesis)
         checklist = CheckList(
           database = database,
           peers = peers,
@@ -143,7 +150,8 @@ object StatusInfo {
           lastCreatedBlock = lastCreatedBlock,
           activeEras = activeEras,
           bondedEras = bondedEras,
-          genesisEra = genesisEra
+          genesisEra = genesisEra,
+          genesisBlock = genesisBlock
         )
       } yield checklist
 
@@ -354,6 +362,34 @@ object StatusInfo {
           }
 
       }
+    }
+
+    def genesisBlock[F[_]: Sync: DagStorage](genesis: Block) = Check {
+      for {
+        dag <- DagStorage[F].getRepresentation
+        genesisLike <- dag
+                        .topoSort(startBlockNumber = 0, endBlockNumber = 0)
+                        .compile
+                        .toList
+                        .map(_.flatten.map(_.getSummary))
+      } yield Check(
+        ok = genesisLike.size == 1 && genesisLike.head.blockHash == genesis.blockHash,
+        message = Some {
+          genesisLike match {
+            case List(g) if g.blockHash == genesis.blockHash => ""
+            case List(_) =>
+              "There's a genesis block but it's not the expected one!"
+            case Nil => "There's no genesis block!"
+            case _   => "There are multiple genesis blocks!"
+          }
+        },
+        details = GenesisDetails(
+          genesis.blockHash.show,
+          genesisLike.map { s =>
+            BlockDetails(Message.fromBlockSummary(s).get)
+          }
+        ).some
+      )
     }
 
   }
