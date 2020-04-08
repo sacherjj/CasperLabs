@@ -235,10 +235,9 @@ object DeployBuffer {
           block           <- ProtoUtil.unsafeGetBlock[F](blockHash)
           deploysToRemove = block.body.get.deploys.map(_.deploy.get).toList
           // NOTE: Do we really need this metric? It will make unncessary calls to the DB.
-          initialHistorySize <- DeployStorageReader[F].sizePendingOrProcessed()
+          initialHistorySize <- DeployStorageReader[F].sizePendingOrProcessed
           _                  <- DeployStorageWriter[F].markAsFinalized(deploysToRemove)
-          deploysRemoved <- DeployStorageReader[F]
-                             .sizePendingOrProcessed()
+          deploysRemoved <- DeployStorageReader[F].sizePendingOrProcessed
                              .map(after => initialHistorySize - after)
         } yield deploysRemoved
 
