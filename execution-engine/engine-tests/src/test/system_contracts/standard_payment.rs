@@ -7,7 +7,7 @@ use engine_test_support::{
     },
     DEFAULT_ACCOUNT_ADDR, DEFAULT_ACCOUNT_INITIAL_BALANCE,
 };
-use types::{account::PublicKey, Key, URef, U512};
+use types::{account::PublicKey, ApiError, Key, URef, U512};
 
 const ACCOUNT_1_ADDR: PublicKey = PublicKey::ed25519_from([42u8; 32]);
 const DO_NOTHING_WASM: &str = "do_nothing.wasm";
@@ -272,8 +272,9 @@ fn should_forward_payment_execution_runtime_error() {
     let error_message = format!("{}", execution_result.error().expect("should have error"));
 
     assert!(
-        error_message.contains("Revert(65636)"),
-        "expected payment error",
+        error_message.contains(&format!("{:?}", ApiError::User(100))),
+        "expected payment error but received {}",
+        error_message,
     );
 }
 

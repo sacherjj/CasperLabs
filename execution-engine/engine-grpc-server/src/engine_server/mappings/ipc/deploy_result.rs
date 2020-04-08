@@ -62,7 +62,7 @@ impl From<(ExecutionError, ExecutionEffect, Gas)> for DeployResult {
                 detail::execution_error(format!("Key {:?} not found.", key), effect, cost)
             }
             ExecutionError::Revert(status) => {
-                detail::execution_error(format!("Exit code: {}", status), effect, cost)
+                detail::execution_error(status.to_string(), effect, cost)
             }
             ExecutionError::Interpreter(error) => {
                 // If the error happens during contract execution it's mapped to HostError and
@@ -75,7 +75,7 @@ impl From<(ExecutionError, ExecutionEffect, Gas)> for DeployResult {
                     .as_host_error()
                     .and_then(|host_error| host_error.downcast_ref::<ExecutionError>())
                 {
-                    Some(&ExecutionError::Revert(status)) => format!("Exit code: {}", status),
+                    Some(&ExecutionError::Revert(status)) => status.to_string(),
                     Some(&ExecutionError::KeyNotFound(key)) => format!("Key {:?} not found.", key),
                     Some(&ExecutionError::InvalidContext) => {
                         // TODO: https://casperlabs.atlassian.net/browse/EE-771
@@ -164,7 +164,7 @@ mod tests {
     use std::convert::TryInto;
 
     use engine_shared::{additive_map::AdditiveMap, transform::Transform};
-    use types::{bytesrepr::Error as BytesReprError, AccessRights, Key, URef, U512};
+    use types::{bytesrepr::Error as BytesReprError, AccessRights, ApiError, Key, URef, U512};
 
     use super::*;
 
@@ -244,8 +244,8 @@ mod tests {
 
     #[test]
     fn revert_error_maps_to_execution_error() {
-        const REVERT: u32 = 10;
-        let revert_error = ExecutionError::Revert(REVERT);
+        let expected_revert = ApiError::UnexpectedContractRefVariant;
+        let revert_error = ExecutionError::Revert(expected_revert);
         let amount = U512::from(15);
         let exec_result = ExecutionResult::Failure {
             error: EngineStateError::Exec(revert_error),
@@ -268,7 +268,7 @@ mod tests {
                 .get_error()
                 .get_exec_error()
                 .get_message(),
-            format!("Exit code: {}", REVERT)
+            expected_revert.to_string(),
         );
     }
 }

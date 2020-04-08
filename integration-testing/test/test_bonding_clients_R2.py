@@ -260,7 +260,7 @@ def test_invalid_bonding_amount(one_node_network_fn, acct_num, cli_method):
 
     r = node1.d_client.show_deploys(block_hash)[0]
     assert r.is_error is True
-    assert r.error_message == "Exit code: 65286"
+    assert r.error_message == "PoS error: 6"
 
 
 @pytest.mark.parametrize(
@@ -296,7 +296,7 @@ def test_unbonding_without_bonding(one_node_network_fn, acct_num, cli_method):
 
     r = node0.client.show_deploys(block_hash)[0]
     assert r.is_error is True
-    assert r.error_message == "Exit code: 65280"
+    assert r.error_message == "PoS error: 0"
 
     block = node1.client.show_block(block_hash)
     block_ds = parse_show_block(block)
