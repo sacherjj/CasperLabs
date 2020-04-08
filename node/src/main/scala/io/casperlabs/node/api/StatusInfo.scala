@@ -298,16 +298,19 @@ object StatusInfo {
         Check[ErasDetails](ok = true, message = "Not in highway mode.").pure[F]
       else
         for {
-          active       <- Consensus[F].activeEras
-          now          <- Time[F].currentMillis
-          (past, curr) = active.partition(era => era.startTick < now)
-          maybeError = if (active.isEmpty) "There are no active eras."
-          else if (curr.size > 1) "There are more than 1 current eras."
-          else ""
+          active <- Consensus[F].activeEras
+          now    <- Time[F].currentMillis
+          // Select the subset which is not in the voting period.
+          (voting, current) = active.partition(era => era.endTick <= now)
         } yield {
           Check(
-            ok = maybeError.isEmpty,
-            message = maybeError,
+            ok = current.size == 1 || current.isEmpty && voting.nonEmpty,
+            message = current.size match {
+              case n if n > 1           => s"There are $n current eras! There should be only one."
+              case 1                    => "There is 1 current era."
+              case 0 if voting.nonEmpty => "There are no current eras but some are still voting."
+              case _                    => "There are no active eras!"
+            },
             details = ErasDetails(active).some
           )
         }
