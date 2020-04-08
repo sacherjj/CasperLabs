@@ -94,6 +94,7 @@ object StatusInfo {
     }
     case class GenesisDetails(
         genesisBlockHash: String,
+        chainName: String,
         genesisLikeBlocks: List[BlockDetails]
     )
 
@@ -374,7 +375,8 @@ object StatusInfo {
           case _   => "There are multiple genesis blocks!"
         },
         details = GenesisDetails(
-          genesis.blockHash.show,
+          genesisBlockHash = genesis.blockHash.show,
+          chainName = genesis.getHeader.chainName,
           genesisLike.map { s =>
             BlockDetails(Message.fromBlockSummary(s).get)
           }
