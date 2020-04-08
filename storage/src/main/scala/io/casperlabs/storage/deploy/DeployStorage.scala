@@ -92,7 +92,7 @@ import cats.mtl.ApplicativeAsk
 
   def getPendingOrProcessed(deployHash: DeployHash): F[Option[Deploy]]
 
-  def sizePendingOrProcessed(implicit A: Applicative[F]): F[Long] =
+  def countPendingOrProcessed(implicit A: Applicative[F]): F[Long] =
     countsByBufferedStates(DeployInfo.State.PENDING, DeployInfo.State.PROCESSED).map(_.values.sum)
 
   /** Count the deploys in the buffer per state. If `states` are passed, filter by them, otherwise return all. */
