@@ -42,7 +42,7 @@ const MINT_ERROR_MAX: u32 = POS_ERROR_OFFSET - 1;
 /// Minimum value of Proof of Stake error's inclusive range.
 const POS_ERROR_MIN: u32 = POS_ERROR_OFFSET;
 
-/// Maximum value of Prof of Stake error's inclusive range.
+/// Maximum value of Proof of Stake error's inclusive range.
 const POS_ERROR_MAX: u32 = RESERVED_ERROR_MAX;
 
 /// Errors which can be encountered while running a smart contract.
@@ -579,17 +579,10 @@ impl From<u32> for ApiError {
             33 => ApiError::HostBufferEmpty,
             34 => ApiError::HostBufferFull,
             35 => ApiError::AllocLayout,
-            _ => {
-                if (USER_ERROR_MIN..=USER_ERROR_MAX).contains(&value) {
-                    ApiError::User(value as u16)
-                } else if (POS_ERROR_MIN..=POS_ERROR_MAX).contains(&value) {
-                    ApiError::ProofOfStake(value as u8)
-                } else if (MINT_ERROR_MIN..=MINT_ERROR_MAX).contains(&value) {
-                    ApiError::Mint(value as u8)
-                } else {
-                    ApiError::Unhandled
-                }
-            }
+            USER_ERROR_MIN..=USER_ERROR_MAX => ApiError::User(value as u16),
+            POS_ERROR_MIN..=POS_ERROR_MAX => ApiError::ProofOfStake(value as u8),
+            MINT_ERROR_MIN..=MINT_ERROR_MAX => ApiError::Mint(value as u8),
+            _ => ApiError::Unhandled,
         }
     }
 }
@@ -648,7 +641,7 @@ impl fmt::Display for ApiError {
             ApiError::User(value) => write!(f, "User error: {}", value),
             ApiError::Mint(value) => write!(f, "Mint error: {}", value),
             ApiError::ProofOfStake(value) => write!(f, "PoS error: {}", value),
-            _ => write!(f, "Exit code: {}", u32::from(*self)),
+            _ => <Self as Debug>::fmt(&self, f),
         }
     }
 }
@@ -693,7 +686,7 @@ mod tests {
         assert_eq!(131_071_u32, ApiError::User(u16::MAX).into()); // 2 * u16::MAX + 1
 
         assert_eq!("ApiError::GetKey [8]", &format!("{:?}", ApiError::GetKey));
-        assert_eq!("Exit code: 8", &format!("{}", ApiError::GetKey));
+        assert_eq!("ApiError::GetKey [8]", &format!("{}", ApiError::GetKey));
         assert_eq!(
             "ApiError::Mint(0) [65024]",
             &format!("{:?}", ApiError::Mint(0))
