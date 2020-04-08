@@ -51,7 +51,6 @@ lazy_static! {
 #[derive(Debug)]
 struct Args {
     root_path: PathBuf,
-    use_system_contracts: bool,
     workspace_path: Option<PathBuf>,
 }
 
@@ -103,25 +102,18 @@ impl Args {
             .expect("expected path")
             .into();
 
-        let use_system_contracts = arg_matches.is_present(USE_SYSTEM_CONTRACTS_ARG_NAME);
-
         let workspace_path = arg_matches
             .value_of(WORKSPACE_PATH_ARG_NAME)
             .map(PathBuf::from);
 
         Args {
             root_path,
-            use_system_contracts,
             workspace_path,
         }
     }
 
     pub fn root_path(&self) -> &Path {
         &self.root_path
-    }
-
-    pub fn use_system_contracts(&self) -> bool {
-        self.use_system_contracts
     }
 
     pub fn workspace_path(&self) -> Option<&Path> {
