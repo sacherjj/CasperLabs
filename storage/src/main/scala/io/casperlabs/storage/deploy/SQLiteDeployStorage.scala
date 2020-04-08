@@ -47,6 +47,8 @@ class SQLiteDeployStorage[F[_]: Time: Sync](
     DiscardedStatusCode -> DeployInfo.State.DISCARDED
   ).withDefaultValue(DeployInfo.State.UNDEFINED)
 
+  private val StateToStatusCode = StatusCodeToState.toSeq.map(_.swap).toMap.withDefaultValue(-1)
+
   private val readers: TrieMap[DeployInfo.View, DeployStorageReader[F]] = TrieMap.empty
 
   override val writer = new SQLiteDeployStorageWriter
@@ -363,11 +365,26 @@ class SQLiteDeployStorage[F[_]: Time: Sync](
         .to[List]
         .transact(readXa)
 
-    override def sizePendingOrProcessed(): F[Long] =
-      sql"SELECT COUNT(hash) FROM buffered_deploys WHERE status=$PendingStatusCode OR status=$ProcessedStatusCode"
-        .query[Long]
-        .unique
+    override def countsByBufferedStates(
+        states: DeployInfo.State*
+    ): F[Map[DeployInfo.State, Long]] = {
+      val q = fr"""
+        SELECT status, COUNT(hash)
+        FROM   buffered_deploys
+        """ ++ NonEmptyList.fromList(states.toList.map(StateToStatusCode)).fold(fr"") { ss =>
+        fr"WHERE " ++ Fragments.in(fr"status", ss)
+      } ++ fr"""
+        GROUP BY status
+        """
+
+      q.query[(Int, Long)]
+        .map {
+          case (status, count) => StatusCodeToState(status) -> count
+        }
+        .to[List]
         .transact(readXa)
+        .map(_.toMap)
+    }
 
     override def getPendingOrProcessed(deployHash: DeployHash): F[Option[Deploy]] =
       (fr"SELECT summary, " ++ bodyCol() ++ fr"""

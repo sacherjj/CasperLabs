@@ -35,6 +35,7 @@ import io.casperlabs.casper.dag.DagOperations
 import io.casperlabs.models.Message.{asMainRank, JRank, MainRank}
 import io.casperlabs.shared.Sorting._
 import scala.concurrent.duration._
+import io.casperlabs.casper.consensus.info.DeployInfo
 
 /** Produce a signed message, persisted message.
   * The producer should the thread safe, so that when it's
@@ -83,7 +84,7 @@ object MessageProducer {
         PublicKey(ByteString.copyFrom(validatorIdentity.publicKey))
 
       override def hasPendingDeploys: F[Boolean] =
-        DeployStorage[F].reader.readPendingHashes.map(_.nonEmpty)
+        DeployStorage[F].reader.countByBufferedState(DeployInfo.State.PENDING).map(_ > 0)
 
       override def ballot(
           keyBlockHash: BlockHash,
