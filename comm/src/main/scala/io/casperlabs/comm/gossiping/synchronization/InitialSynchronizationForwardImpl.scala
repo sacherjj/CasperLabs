@@ -189,29 +189,25 @@ class InitialSynchronizationForwardImpl[F[_]: Parallel: Log: Timer](
                 s"Successfully synced with $fullSyncs nodes, required: $minSuccessful"
               )
             } else {
-              for {
-                nextRoundNodes <- if (memoizeNodes) {
-                                   F.pure(if (skipFailedNodesInNextRounds) successful else nodes)
-                                 } else {
-                                   nodeDiscovery.recentlyAlivePeersAscendingDistance.map { peers =>
-                                     val nodes = selectNodes(peers)
-                                     if (skipFailedNodesInNextRounds) {
-                                       nodes.filterNot(newFailed)
-                                     } else {
-                                       nodes
-                                     }
-                                   }
-                                 }
-                _ <- Log[F].info(
-                      s"Haven't reached required $minSuccessful amount of fully synced nodes, currently at $fullSyncs, continuing initial synchronization."
-                    )
-                _ <- Timer[F].sleep(roundPeriod)
-                _ <- loop(
-                      nextRoundNodes,
-                      if (skipFailedNodesInNextRounds) newFailed else Set.empty,
-                      prevRoundRank
-                    )
-              } yield ()
+              val nextRoundNodes =
+                if (memoizeNodes) {
+                  F.pure(if (skipFailedNodesInNextRounds) successful else nodes)
+                } else {
+                  nodeDiscovery.recentlyAlivePeersAscendingDistance.map { peers =>
+                    val nodes = selectNodes(peers)
+                    if (skipFailedNodesInNextRounds) {
+                      nodes.filterNot(newFailed)
+                    } else {
+                      nodes
+                    }
+                  }
+                }
+              Log[F].info(
+                s"Haven't reached required $minSuccessful amount of fully synced nodes, currently at $fullSyncs, continuing initial synchronization."
+              ) >>
+                Timer[F].sleep(roundPeriod) >> nextRoundNodes >>= {
+                loop(_, if (skipFailedNodesInNextRounds) newFailed else Set.empty, prevRoundRank)
+              }
             }
       } yield ()
     }
