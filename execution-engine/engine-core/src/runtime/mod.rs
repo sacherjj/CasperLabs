@@ -2305,17 +2305,6 @@ where
         Ok((value, access_key))
     }
 
-    fn create_contract(&mut self) -> Result<([u8; 32], [u8; 32]), Error> {
-        let (stored_value, access_key) = self.create_contract_value()?;
-        let key = self.context.new_uref(stored_value)?;
-
-        let addr = key
-            .into_uref()
-            .map(|u| u.addr())
-            .expect("new_uref must always produce a Key::URef");
-        Ok((addr, access_key.addr()))
-    }
-
     fn create_contract_at_hash(&mut self) -> Result<([u8; 32], [u8; 32]), Error> {
         let addr = self.context.new_function_address()?;
         let key = Key::Hash(addr);

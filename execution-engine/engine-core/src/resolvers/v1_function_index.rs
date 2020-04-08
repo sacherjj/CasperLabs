@@ -43,7 +43,6 @@ pub enum FunctionIndex {
     GetMainPurseIndex,
     GetArgSizeFuncIndex,
     ReadHostBufferIndex,
-    CreateContract,
     CreateContractAtHash,
     AddContractVersion,
     RemoveContractVersion,
