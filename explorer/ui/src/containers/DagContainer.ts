@@ -69,7 +69,11 @@ export class DagContainer {
     private casperService: CasperService
   ) {
     this.toggleableSubscriber = new ToggleableSubscriber(
-      casperService,
+      {
+        blockAdded: true,
+        blockFinalized: true
+      },
+      this.casperService,
       (e) => this.subscriberHandler(e),
       () => this.isLatestDag,
       () => this.refreshBlockDag()

@@ -2,7 +2,7 @@ import { action, observable, reaction } from 'mobx';
 import { ToggleStore } from '../components/ToggleButton';
 import { Subscription } from 'rxjs';
 import { Event } from 'casperlabs-grpc/io/casperlabs/casper/consensus/info_pb';
-import { CasperService } from 'casperlabs-sdk';
+import { CasperService, SubscribeTopics } from 'casperlabs-sdk';
 
 enum SubscribeState {
   UN_INIT,
@@ -22,6 +22,7 @@ export class ToggleableSubscriber {
    * @param forceRefresh: a force refresh when toggle button switch from OFF to ON, so that it is deal with the latest state
    */
   constructor(
+    private subscribeTopics: SubscribeTopics,
     private casperService: CasperService,
     private eventHandler: (event: Event) => void,
     private additionalEnable: () => boolean,
@@ -38,7 +39,6 @@ export class ToggleableSubscriber {
 
   unsubscribe() {
     if (this.subscriberState === SubscribeState.ON) {
-      console.log("clean");
       this.eventsSubscriber!.unsubscribe();
     }
   }
@@ -69,17 +69,11 @@ export class ToggleableSubscriber {
           this.forceRefresh();
         }
 
-        let subscribeTopics = {
-          blockAdded: true,
-          blockFinalized: true
-        };
-        console.log("set up");
-        let obs = this.casperService.subscribeEvents(subscribeTopics);
+        let obs = this.casperService.subscribeEvents(this.subscribeTopics);
 
         this.eventsSubscriber = obs.subscribe({
           next: e => {
-            console.log("new event");
-            this.eventHandler(e)
+            this.eventHandler(e);
           }
         });
       }

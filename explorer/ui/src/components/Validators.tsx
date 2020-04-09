@@ -18,14 +18,21 @@ class Validators extends RefreshableComponent<Props, {}> {
     super(props);
   }
 
+  componentWillUnmount(): void {
+    this.props.validatorsContainer.toggleableSubscriber.unsubscribe();
+  }
+
   refresh(): void {
     this.props.validatorsContainer.refresh();
+    this.props.validatorsContainer.toggleableSubscriber.setUpSubscriber();
   }
 
   render() {
     return (
       <DataTable title="Validators" headers={['Validator ID', 'Latest Block Hash', 'JRank', 'Timestamp']}
                  rows={this.props.validatorsContainer.validatorInfos}
+                 subscribeToggleStore={this.props.validatorsContainer.toggleableSubscriber.subscribeToggleStore}
+                 refresh={() => this.refresh()}
                  renderRow={(validatorInfo: ValidatorInfo, idx) => {
                    const blockHashBase16 = encodeBase16(validatorInfo.latestBlockHash);
                    return (
