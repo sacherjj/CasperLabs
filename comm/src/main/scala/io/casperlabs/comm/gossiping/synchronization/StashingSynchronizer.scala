@@ -59,7 +59,7 @@ class StashingSynchronizer[F[_]: Concurrent: Parallel](
   private def run: F[Unit] =
     for {
       _               <- semaphore.withPermit(transitionedRef.set(true))
-      stashedRequests <- stashedRequestsRef.get
+      stashedRequests <- stashedRequestsRef.modify(Map.empty -> _)
       _ <- stashedRequests.toList.parTraverse {
             case (source, (deferred, hashes)) =>
               underlying.syncDag(source, hashes).attempt >>= deferred.complete
