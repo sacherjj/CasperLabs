@@ -55,8 +55,9 @@ block-upload-rate-period = "0s"
 block-upload-rate-max-throttled = 0
 main-threads=1
 ingress-threads=1
-db-threads=1
-db-read-pool-size=1
+db-write-threads=1
+db-read-threads=1
+db-read-connections=1
 parallelism-cpu-multiplier = 1.0
 min-parallelism = 1
 

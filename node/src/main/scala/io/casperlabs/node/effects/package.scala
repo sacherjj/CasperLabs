@@ -9,6 +9,7 @@ import cats.mtl._
 import doobie.hikari.HikariTransactor
 import doobie.implicits._
 import doobie.util.transactor.Transactor
+import io.casperlabs.node.configuration.Configuration
 import io.casperlabs.comm._
 import io.casperlabs.comm.discovery._
 import io.casperlabs.comm.rp.Connect._
@@ -79,9 +80,6 @@ package object effects {
       def ask: Task[List[Node]]          = state.get.map(_.bootstraps)
     }
 
-  // Make an execution context based on the name and size of the pool.
-  type DatabaseExecutionContextMaker = (String, Int) => ExecutionContext
-
   /**
     * @see https://tpolecat.github.io/doobie/docs/14-Managing-Connections.html#about-threading
     * @param connectEC for waiting on connections, should be bounded
@@ -89,11 +87,16 @@ package object effects {
     * @return Write and read Transactors
     */
   def doobieTransactors(
-      connectEC: DatabaseExecutionContextMaker,
-      transactEC: DatabaseExecutionContextMaker,
-      serverDataDir: Path,
-      readPoolSize: Int
+      conf: Configuration,
+      connectEC: (String, Int, Int) => ExecutionContext,
+      transactEC: (String, Int) => ExecutionContext
   ): Resource[Task, (Transactor[Task], Transactor[Task])] = {
+    val serverDataDir = conf.server.dataDir
+    val readThreads   = conf.server.dbReadThreads.value
+    val writeThreads  = conf.server.dbWriteThreads.value
+    val readPoolSize  = conf.server.dbReadConnections.value
+    val writePoolSize = 1
+
     def mkConfig(poolSize: Int, foreignKeys: Boolean) = {
       val config = new HikariConfig()
       config.setDriverClassName("org.sqlite.JDBC")
@@ -119,7 +122,6 @@ package object effects {
     // Using a connection pool with maximum size of 1 for writers because with the default settings we got SQLITE_BUSY errors.
     // The SQLite docs say the driver is thread safe, but only one connection should be made per process
     // (the file locking mechanism depends on process IDs, closing one connection would invalidate the locks for all of them).
-    val writePoolSize = 1
     val writeXaconfig = mkConfig(writePoolSize, foreignKeys = true)
 
     // Using a separate Transactor for read operations because
@@ -132,13 +134,13 @@ package object effects {
       writeXa <- HikariTransactor
                   .fromHikariConfig[Task](
                     writeXaconfig,
-                    connectEC("write", writePoolSize),
+                    connectEC("write", writePoolSize, writeThreads),
                     Blocker.liftExecutionContext(transactEC("write", writePoolSize))
                   )
       readXa <- HikariTransactor
                  .fromHikariConfig[Task](
                    readXaconfig,
-                   connectEC("read", readPoolSize),
+                   connectEC("read", readPoolSize, readThreads),
                    Blocker.liftExecutionContext(transactEC("read", readPoolSize))
                  )
     } yield (writeXa, readXa)
