@@ -109,6 +109,7 @@ class ConfigurationSpec
       mainThreads = 1,
       ingressThreads = 1,
       dbThreads = 1,
+      dbReadPoolSize = 1,
       parallelismCpuMultiplier = 1.0,
       minParallelism = 1
     )

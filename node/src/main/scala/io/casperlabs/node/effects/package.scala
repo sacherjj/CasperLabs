@@ -88,7 +88,8 @@ package object effects {
   def doobieTransactors(
       connectEC: ExecutionContext,
       transactEC: ExecutionContext,
-      serverDataDir: Path
+      serverDataDir: Path,
+      readPoolSize: Int
   ): Resource[Task, (Transactor[Task], Transactor[Task])] = {
     def mkConfig(poolSize: Int, foreignKeys: Boolean) = {
       val config = new HikariConfig()
@@ -120,7 +121,7 @@ package object effects {
     // Using a separate Transactor for read operations because
     // we use fs2.Stream as a return type in some places which hold an opened connection
     // preventing acquiring a connection in other places if we use a connection pool with size of 1.
-    val readXaconfig = mkConfig(poolSize = 10, foreignKeys = false)
+    val readXaconfig = mkConfig(poolSize = readPoolSize, foreignKeys = false)
 
     // Hint: Use config.setLeakDetectionThreshold(10000) to detect connection leaking
     for {
