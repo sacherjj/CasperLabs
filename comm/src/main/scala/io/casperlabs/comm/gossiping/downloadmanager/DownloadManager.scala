@@ -25,6 +25,7 @@ import monix.execution.Scheduler
 import scala.concurrent.duration.{Duration, FiniteDuration}
 import scala.util.control.NonFatal
 import scala.collection.immutable.Queue
+import scala.annotation.tailrec
 
 trait DownloadManagerTypes {
 
@@ -150,14 +151,17 @@ trait DownloadManagerCompanion extends DownloadManagerTypes {
       id: Identifier,
       source: Node
   ): Set[Identifier] = {
+
+    @tailrec
     def loop(
         acc: Set[Identifier],
         queue: Queue[Identifier]
     ): Set[Identifier] =
-      queue.dequeueOption.fold(acc) {
-        case (id, queue) if acc(id) =>
+      queue.dequeueOption match {
+        case None => acc
+        case Some((id, queue)) if acc(id) =>
           loop(acc, queue)
-        case (id, queue) =>
+        case Some((id, queue)) =>
           items.get(id) match {
             case Some(item) if item.isError || !item.sources(source) =>
               loop(acc + id, queue ++ item.dependencies)
@@ -176,15 +180,18 @@ trait DownloadManagerCompanion extends DownloadManagerTypes {
       items: Map[Identifier, Item[F]],
       id: Identifier
   ): Set[Identifier] = {
+
+    @tailrec
     def loop(
         acc: Set[Identifier],
         queue: Queue[Identifier]
     ): Set[Identifier] =
-      queue.dequeueOption.fold(acc) {
-        case (id, queue) if acc(id) =>
+      queue.dequeueOption match {
+        case None => acc
+        case Some((id, queue)) if acc(id) =>
           loop(acc, queue)
 
-        case (id, queue) =>
+        case Some((id, queue)) =>
           val dependants = items.collect {
             case (hash, dep) if dep.dependencies contains id => hash
           }
