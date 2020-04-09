@@ -243,8 +243,16 @@ private[configuration] final case class Options private (
       gen[Int]("Size of the thread pool used to handle incoming requests.")
 
     @scallop
-    val serverDbThreads =
-      gen[Int]("Size of the thread pool for database connections.")
+    val serverDbWriteThreads =
+      gen[Int]("Size of the thread pool waiting for the database writer connection.")
+
+    @scallop
+    val serverDbReadThreads =
+      gen[Int]("Size of the thread pool waiting for a database reader connection.")
+
+    @scallop
+    val serverDbReadConnections =
+      gen[Int]("Number of database connections in the reader pool.")
 
     @scallop
     val serverParallelismCpuMultiplier =
