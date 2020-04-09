@@ -79,6 +79,9 @@ package object effects {
       def ask: Task[List[Node]]          = state.get.map(_.bootstraps)
     }
 
+  // Make an execution context based on the name and size of the pool.
+  type DatabaseExecutionContextMaker = (String, Int) => ExecutionContext
+
   /**
     * @see https://tpolecat.github.io/doobie/docs/14-Managing-Connections.html#about-threading
     * @param connectEC for waiting on connections, should be bounded
@@ -86,8 +89,8 @@ package object effects {
     * @return Write and read Transactors
     */
   def doobieTransactors(
-      connectEC: ExecutionContext,
-      transactEC: ExecutionContext,
+      connectEC: DatabaseExecutionContextMaker,
+      transactEC: DatabaseExecutionContextMaker,
       serverDataDir: Path,
       readPoolSize: Int
   ): Resource[Task, (Transactor[Task], Transactor[Task])] = {
@@ -116,26 +119,27 @@ package object effects {
     // Using a connection pool with maximum size of 1 for writers because with the default settings we got SQLITE_BUSY errors.
     // The SQLite docs say the driver is thread safe, but only one connection should be made per process
     // (the file locking mechanism depends on process IDs, closing one connection would invalidate the locks for all of them).
-    val writeXaconfig = mkConfig(poolSize = 1, foreignKeys = true)
+    val writePoolSize = 1
+    val writeXaconfig = mkConfig(writePoolSize, foreignKeys = true)
 
     // Using a separate Transactor for read operations because
     // we use fs2.Stream as a return type in some places which hold an opened connection
     // preventing acquiring a connection in other places if we use a connection pool with size of 1.
-    val readXaconfig = mkConfig(poolSize = readPoolSize, foreignKeys = false)
+    val readXaconfig = mkConfig(readPoolSize, foreignKeys = false)
 
     // Hint: Use config.setLeakDetectionThreshold(10000) to detect connection leaking
     for {
       writeXa <- HikariTransactor
                   .fromHikariConfig[Task](
                     writeXaconfig,
-                    connectEC,
-                    Blocker.liftExecutionContext(transactEC)
+                    connectEC("write", writePoolSize),
+                    Blocker.liftExecutionContext(transactEC("write", writePoolSize))
                   )
       readXa <- HikariTransactor
                  .fromHikariConfig[Task](
                    readXaconfig,
-                   connectEC,
-                   Blocker.liftExecutionContext(transactEC)
+                   connectEC("read", readPoolSize),
+                   Blocker.liftExecutionContext(transactEC("read", readPoolSize))
                  )
     } yield (writeXa, readXa)
   }
