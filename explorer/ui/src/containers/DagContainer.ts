@@ -1,10 +1,10 @@
-import { action, IObservableArray, observable, reaction, runInAction } from 'mobx';
+import { action, IObservableArray, observable, runInAction } from 'mobx';
 
 import ErrorContainer from './ErrorContainer';
 import { CasperService, encodeBase16 } from 'casperlabs-sdk';
 import { BlockInfo, Event } from 'casperlabs-grpc/io/casperlabs/casper/consensus/info_pb';
-import { Subscription } from 'rxjs';
 import { ToggleStore } from '../components/ToggleButton';
+import { ToggleableSubscriber } from './ToggleableSubscriber';
 
 export class DagStep {
   constructor(private container: DagContainer) {
@@ -53,12 +53,6 @@ export class DagStep {
   last = this.step(() => 0);
 }
 
-enum SubscribeState {
-  UN_INIT,
-  ON,
-  OFF
-}
-
 export class DagContainer {
   @observable blocks: IObservableArray<BlockInfo> = observable.array([], { deep: true });
   @observable selectedBlock: BlockInfo | undefined = undefined;
@@ -66,22 +60,20 @@ export class DagContainer {
   @observable maxRank = 0;
   @observable validatorsListToggleStore: ToggleStore = new ToggleStore(false);
   @observable lastFinalizedBlock: BlockInfo | undefined = undefined;
-  @observable eventsSubscriber: Subscription | null = null;
-  @observable subscribeToggleStore: ToggleStore = new ToggleStore(true);
   @observable hideBallotsToggleStore: ToggleStore = new ToggleStore(false);
   @observable hideBlockHashToggleStore: ToggleStore = new ToggleStore(false);
+  toggleableSubscriber: ToggleableSubscriber;
 
   constructor(
     private errors: ErrorContainer,
     private casperService: CasperService
   ) {
-    // so that change of subscribeToggleStore can trigger `setUpSubscriber`
-    reaction(() => this.subscribeToggleStore.isPressed, (isPressed, reaction) => {
-      this.setUpSubscriber(isPressed);
-    }, {
-      fireImmediately: false,
-      delay: 100
-    });
+    this.toggleableSubscriber = new ToggleableSubscriber(
+      casperService,
+      (e) => this.subscriberHandler(e),
+      () => this.isLatestDag,
+      () => this.refreshBlockDag()
+    );
   }
 
   @action
@@ -102,16 +94,6 @@ export class DagContainer {
     return this.maxRank === 0;
   }
 
-  private get subscriberState(): SubscribeState {
-    if (!this.eventsSubscriber) {
-      return SubscribeState.UN_INIT;
-    } else if (!this.eventsSubscriber.closed) {
-      return SubscribeState.ON;
-    } else {
-      return SubscribeState.OFF;
-    }
-  }
-
   async selectByBlockHashBase16(blockHashBase16: string) {
     let selectedBlock = this.blocks!.find(
       x =>
@@ -129,7 +111,7 @@ export class DagContainer {
               encodeBase16(x.getSummary()!.getBlockHash_asU8()) ===
               blockHashBase16
           );
-          if(!contained){
+          if (!contained) {
             this.blocks!.push(block);
           }
         })
@@ -139,99 +121,66 @@ export class DagContainer {
 
   step = new DagStep(this);
 
-  unsubscribe() {
-    if (this.subscriberState === SubscribeState.ON) {
-      this.eventsSubscriber!.unsubscribe();
-    }
-  }
+  @action.bound
+  private subscriberHandler(event: Event) {
+    if (event.hasBlockAdded()) {
+      let block = event.getBlockAdded()?.getBlock();
+      if (block) {
+        let index: number | undefined = this.blocks?.findIndex(
+          b =>
+            b.getSummary()?.getBlockHash_asB64() ===
+            block!.getSummary()?.getBlockHash_asB64()
+        );
 
-  @action
-  setUpSubscriber(subscribeToggleEnabled: boolean) {
-    if (this.isLatestDag && subscribeToggleEnabled) {
-      // enable subscriber
-      if (this.subscriberState === SubscribeState.ON) {
-        // when clicking refresh button, we can reused the web socket.
-        return;
-      } else {
-        if (this.subscriberState === SubscribeState.OFF) {
-          // Refresh when switching from OFF to ON
-          this.refreshBlockDag();
-        }
-
-        let subscribeTopics = {
-          blockAdded: true,
-          blockFinalized: true
-        };
-        let obs = this.casperService.subscribeEvents(subscribeTopics);
-
-        this.eventsSubscriber = obs.subscribe({
-          next: (event: Event) => {
-            if (event.hasBlockAdded()) {
-              let block = event.getBlockAdded()?.getBlock();
-              if (block) {
-                let index: number | undefined = this.blocks?.findIndex(
-                  b =>
-                    b.getSummary()?.getBlockHash_asB64() ===
-                    block!.getSummary()?.getBlockHash_asB64()
-                );
-
-                if (index === -1) {
-                  // blocks with rank < N+1-depth will be culled
-                  let culledThreshold = block!.getSummary()!.getHeader()!.getJRank() + 1 - this.depth;
-                  let remainingBlocks: BlockInfo[] = [];
-                  if (this.blocks !== null) {
-                    remainingBlocks = this.blocks.filter(b => {
-                      let rank = b.getSummary()?.getHeader()?.getJRank();
-                      if (rank !== undefined) {
-                        return rank >= culledThreshold;
-                      }
-                      return false;
-                    });
-                  }
-                  remainingBlocks.splice(0, 0, block!);
-                  runInAction(() => {
-                    this.blocks.replace(remainingBlocks);
-                  });
-                }
+        if (index === -1) {
+          // blocks with rank < N+1-depth will be culled
+          let culledThreshold = block!.getSummary()!.getHeader()!.getJRank() + 1 - this.depth;
+          let remainingBlocks: BlockInfo[] = [];
+          if (this.blocks !== null) {
+            remainingBlocks = this.blocks.filter(b => {
+              let rank = b.getSummary()?.getHeader()?.getJRank();
+              if (rank !== undefined) {
+                return rank >= culledThreshold;
               }
-            } else if (event.hasNewFinalizedBlock()) {
-              const directFinalizedBlockHash = event.getNewFinalizedBlock()!.getBlockHash_asB64();
-
-              let finalizedBlocks = new Set(event.getNewFinalizedBlock()!.getIndirectlyFinalizedBlockHashesList_asB64());
-              finalizedBlocks.add(directFinalizedBlockHash);
-
-              let updatedLastFinalizedBlock = false;
-              this.blocks?.forEach(block => {
-                let bh = block.getSummary()!.getBlockHash_asB64();
-                if (finalizedBlocks.has(bh)) {
-                  block.getStatus()?.setFinality(BlockInfo.Status.Finality.FINALIZED)
-                }
-                if (!updatedLastFinalizedBlock && bh === directFinalizedBlockHash) {
-                  this.lastFinalizedBlock = block;
-                  updatedLastFinalizedBlock = true;
-                }
-              });
-              if (!updatedLastFinalizedBlock) {
-                this.errors.capture(
-                  this.casperService.getBlockInfo(event.getNewFinalizedBlock()!.getBlockHash()).then(block => {
-                    this.lastFinalizedBlock = block;
-                  })
-                );
-              }
-            }
+              return false;
+            });
           }
-        });
-
+          remainingBlocks.splice(0, 0, block!);
+          runInAction(() => {
+            this.blocks.replace(remainingBlocks);
+          });
+        }
       }
-    } else {
-      // disable subscriber
-      this.unsubscribe();
+    } else if (event.hasNewFinalizedBlock()) {
+      const directFinalizedBlockHash = event.getNewFinalizedBlock()!.getBlockHash_asB64();
+
+      let finalizedBlocks = new Set(event.getNewFinalizedBlock()!.getIndirectlyFinalizedBlockHashesList_asB64());
+      finalizedBlocks.add(directFinalizedBlockHash);
+
+      let updatedLastFinalizedBlock = false;
+      this.blocks?.forEach(block => {
+        let bh = block.getSummary()!.getBlockHash_asB64();
+        if (finalizedBlocks.has(bh)) {
+          block.getStatus()?.setFinality(BlockInfo.Status.Finality.FINALIZED);
+        }
+        if (!updatedLastFinalizedBlock && bh === directFinalizedBlockHash) {
+          this.lastFinalizedBlock = block;
+          updatedLastFinalizedBlock = true;
+        }
+      });
+      if (!updatedLastFinalizedBlock) {
+        this.errors.capture(
+          this.casperService.getBlockInfo(event.getNewFinalizedBlock()!.getBlockHash()).then(block => {
+            this.lastFinalizedBlock = block;
+          })
+        );
+      }
     }
   }
 
   async refreshBlockDagAndSetupSubscriber() {
     await this.refreshBlockDag();
-    this.setUpSubscriber(this.subscribeToggleStore.isPressed);
+    this.toggleableSubscriber.setUpSubscriber();
   }
 
   private async refreshBlockDag() {
