@@ -83,15 +83,15 @@ class NodeRuntime private[node] (
   private[this] val egressScheduler =
     Scheduler.cached("egress-io", 2, Int.MaxValue, reporter = uncaughtExceptionHandler)
 
-  private[this] val dbConnScheduler =
+  private[this] def dbConnScheduler(name: String, connections: Int, threads: Int) =
     Scheduler.cached(
-      "db-conn",
-      1,
-      conf.server.dbThreads.value,
+      s"db-conn-$name",
+      connections,
+      math.max(connections, threads),
       reporter = uncaughtExceptionHandler
     )
-  private[this] val dbIOScheduler =
-    Scheduler.cached("db-io", 1, Int.MaxValue, reporter = uncaughtExceptionHandler)
+  private[this] def dbIOScheduler(name: String, connections: Int) =
+    Scheduler.cached(s"db-io-$name", connections, Int.MaxValue, reporter = uncaughtExceptionHandler)
 
   implicit val raiseIOError: RaiseIOError[Task] = IOError.raiseIOErrorThroughSync[Task]
 
@@ -133,9 +133,9 @@ class NodeRuntime private[node] (
                                                                         )
       //TODO: We may want to adjust threading model for better performance
       (writeTransactor, readTransactor) <- effects.doobieTransactors(
+                                            conf,
                                             connectEC = dbConnScheduler,
-                                            transactEC = dbIOScheduler,
-                                            conf.server.dataDir
+                                            transactEC = dbIOScheduler
                                           )
       _ <- Resource.liftF(runRdmbsMigrations(conf.server.dataDir))
 

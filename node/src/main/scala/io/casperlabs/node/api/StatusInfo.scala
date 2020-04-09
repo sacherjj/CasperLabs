@@ -30,7 +30,7 @@ object StatusInfo {
 
   case class Check[T](
       ok: Boolean,
-      message: Option[String] = None,
+      message: String,
       details: Option[T] = None
   )
   object Check {
@@ -47,7 +47,7 @@ object StatusInfo {
       */
     def apply[F[_]: Sync, T](f: F[Check[T]]): StateT[F, Boolean, Check[T]] = StateT { acc =>
       f.attempt.map {
-        case Left(ex) => (false, Check[T](ok = false, message = ex.getMessage.some, details = None))
+        case Left(ex) => (false, Check[T](ok = false, message = ex.getMessage, details = None))
         case Right(x) => (acc && x.ok, x)
       }
     }
@@ -92,11 +92,17 @@ object StatusInfo {
           )
         )
     }
+    case class GenesisDetails(
+        genesisBlockHash: String,
+        chainName: String,
+        genesisLikeBlocks: List[BlockDetails]
+    )
 
     type Basic     = Check[Unit]
     type LastBlock = Check[BlockDetails]
     type Peers     = Check[PeerDetails]
     type Eras      = Check[ErasDetails]
+    type Genesis   = Check[GenesisDetails]
   }
 
   case class CheckList(
@@ -109,7 +115,8 @@ object StatusInfo {
       lastCreatedBlock: Check.Basic,
       activeEras: Check.Eras,
       bondedEras: Check.Eras,
-      genesisEra: Check.Eras
+      genesisEra: Check.Eras,
+      genesisBlock: Check.Genesis
   )
   object CheckList {
     import Check._
@@ -133,6 +140,7 @@ object StatusInfo {
         activeEras             <- activeEras[F](conf)
         bondedEras             <- bondedEras[F](conf, maybeValidatorId)
         genesisEra             <- genesisEra[F](conf, genesis)
+        genesisBlock           <- genesisBlock[F](genesis)
         checklist = CheckList(
           database = database,
           peers = peers,
@@ -143,7 +151,8 @@ object StatusInfo {
           lastCreatedBlock = lastCreatedBlock,
           activeEras = activeEras,
           bondedEras = bondedEras,
-          genesisEra = genesisEra
+          genesisEra = genesisEra,
+          genesisBlock = genesisBlock
         )
       } yield checklist
 
@@ -151,7 +160,7 @@ object StatusInfo {
       import doobie._
       import doobie.implicits._
       sql"""select 1""".query[Int].unique.transact(readXa).map { _ =>
-        Check[Unit](ok = true)
+        Check[Unit](ok = true, message = "Database is readable.")
       }
     }
 
@@ -159,10 +168,9 @@ object StatusInfo {
       NodeDiscovery[F].recentlyAlivePeersAscendingDistance.map { nodes =>
         Check(
           ok = conf.casper.standalone || nodes.nonEmpty,
-          message = Some {
+          message =
             if (conf.casper.standalone) s"Standalone mode, connected to ${nodes.length} peer(s)."
-            else s"Connected to ${nodes.length} recently alive peer(s)."
-          },
+            else s"Connected to ${nodes.length} recently alive peer(s).",
           details = PeerDetails(count = nodes.size).some
         )
       }
@@ -174,12 +182,11 @@ object StatusInfo {
         val connected = bootstrapNodes.filter(nodes)
         Check(
           ok = bootstrapNodes.isEmpty || connected.nonEmpty,
-          message = Some {
+          message =
             if (bootstrapNodes.nonEmpty)
               s"Connected to ${connected.size} of the bootstrap node(s) out of the ${bootstrapNodes.size} configured."
             else
-              "No bootstraps configured."
-          },
+              "No bootstraps configured.",
           details = PeerDetails(count = connected.size).some
         )
       }
@@ -190,10 +197,9 @@ object StatusInfo {
         getIsSynced.map { synced =>
           Check[Unit](
             ok = synced,
-            message = Option(
+            message =
               if (synced) "Initial synchronization complete."
               else "Initial synchronization running."
-            )
           )
         }
       }.withoutAccumulation
@@ -227,11 +233,10 @@ object StatusInfo {
           isTooOld <- isTooOld(chainSpec, lfb.some)
         } yield Check(
           ok = !isTooOld,
-          message = Some {
+          message =
             if (isTooOld) "Last block was finalized too long ago."
             else if (lfbHash == genesis.blockHash) "The last finalized block is the Genesis."
-            else "The last finalized block was moved not too long ago."
-          },
+            else "The last finalized block was moved not too long ago.",
           details = BlockDetails(lfb).some
         )
       }
@@ -255,12 +260,11 @@ object StatusInfo {
 
       } yield Check[Unit](
         ok = !isTooOld,
-        message = Some {
+        message =
           if (isTooOld) "Last block was received too long ago."
           else if (latest.nonEmpty) "Received a block not too long ago."
           else if (conf.casper.standalone) "Running in standalone mode."
           else "Haven't received a block yet."
-        }
       )
     }
 
@@ -281,30 +285,32 @@ object StatusInfo {
         isTooOld <- isTooOld(chainSpec, latest)
       } yield Check[Unit](
         ok = !isTooOld,
-        message = Some {
+        message =
           if (isTooOld) "The last created block was too long ago."
           else if (maybeValidatorId.isEmpty) "Running in read-only mode."
           else if (latest.isEmpty) "Haven't created any blocks yet."
           else "Created a block not too long ago."
-        }
       )
     }
 
     def activeEras[F[_]: Sync: Time: Consensus](conf: Configuration) = Check {
       if (!conf.highway.enabled)
-        Check[ErasDetails](ok = true, message = "Not in highway mode.".some).pure[F]
+        Check[ErasDetails](ok = true, message = "Not in highway mode.").pure[F]
       else
         for {
-          active       <- Consensus[F].activeEras
-          now          <- Time[F].currentMillis
-          (past, curr) = active.partition(era => era.startTick < now)
-          maybeError = if (active.isEmpty) "There are no active eras.".some
-          else if (curr.size > 1) "There are more than 1 current eras.".some
-          else none
+          active <- Consensus[F].activeEras
+          now    <- Time[F].currentMillis
+          // Select the subset which is not in the voting period.
+          (voting, current) = active.partition(era => era.endTick <= now)
         } yield {
           Check(
-            ok = maybeError.isEmpty,
-            message = maybeError,
+            ok = current.size == 1 || current.isEmpty && voting.nonEmpty,
+            message = current.size match {
+              case n if n > 1           => s"There are $n current eras! There should be only one."
+              case 1                    => "There is 1 current era."
+              case 0 if voting.nonEmpty => "There are no current eras but some are still voting."
+              case _                    => "There are no active eras!"
+            },
             details = ErasDetails(active).some
           )
         }
@@ -312,7 +318,7 @@ object StatusInfo {
 
     def genesisEra[F[_]: Sync: Time: EraStorage](conf: Configuration, genesis: Block) = Check {
       if (!conf.highway.enabled)
-        Check[ErasDetails](ok = true, message = "Not in highway mode.".some).pure[F]
+        Check[ErasDetails](ok = true, message = "Not in highway mode.").pure[F]
       else
         for {
           now        <- Time[F].currentMillis
@@ -320,8 +326,7 @@ object StatusInfo {
         } yield {
           Check(
             ok = true,
-            message =
-              if (genesisEra.startTick > now) "Genesis era hasn't started yet.".some else none,
+            message = if (genesisEra.startTick > now) "Genesis era hasn't started yet." else "",
             details = ErasDetails(Set(genesisEra)).some
           )
         }
@@ -333,10 +338,10 @@ object StatusInfo {
     ) = Check {
       maybeValidatorId match {
         case _ if !conf.highway.enabled =>
-          Check[ErasDetails](ok = true, message = "Not in highway mode.".some)
+          Check[ErasDetails](ok = true, message = "Not in highway mode.")
             .pure[F]
         case None =>
-          Check[ErasDetails](ok = true, message = "Running in read-only mode".some)
+          Check[ErasDetails](ok = true, message = "Running in read-only mode")
             .pure[F]
         case Some(id) =>
           for {
@@ -345,15 +350,41 @@ object StatusInfo {
           } yield {
             Check(
               ok = bonded.nonEmpty,
-              message = Some {
+              message =
                 if (bonded.isEmpty) "Not bonded in any active era."
-                else s"Bonded in ${bonded.size} active era(s)."
-              },
+                else s"Bonded in ${bonded.size} active era(s).",
               details = ErasDetails(bonded).some
             )
           }
 
       }
+    }
+
+    def genesisBlock[F[_]: Sync: DagStorage](genesis: Block) = Check {
+      for {
+        dag <- DagStorage[F].getRepresentation
+        genesisLike <- dag
+                        .topoSort(startBlockNumber = 0, endBlockNumber = 0)
+                        .compile
+                        .toList
+                        .map(_.flatten.map(_.getSummary))
+      } yield Check(
+        ok = genesisLike.size == 1 && genesisLike.head.blockHash == genesis.blockHash,
+        message = genesisLike match {
+          case List(g) if g.blockHash == genesis.blockHash => ""
+          case List(_) =>
+            "There's a genesis block but it's not the expected one!"
+          case Nil => "There's no genesis block!"
+          case _   => "There are multiple genesis blocks!"
+        },
+        details = GenesisDetails(
+          genesisBlockHash = genesis.blockHash.show,
+          chainName = genesis.getHeader.chainName,
+          genesisLike.map { s =>
+            BlockDetails(Message.fromBlockSummary(s).get)
+          }
+        ).some
+      )
     }
 
   }
