@@ -83,14 +83,14 @@ class NodeRuntime private[node] (
   private[this] val egressScheduler =
     Scheduler.cached("egress-io", 2, Int.MaxValue, reporter = uncaughtExceptionHandler)
 
-  private[this] val dbConnScheduler = (name: String, connections: Int, threads: Int) =>
+  private[this] def dbConnScheduler(name: String, connections: Int, threads: Int) =
     Scheduler.cached(
       s"db-conn-$name",
       connections,
       math.max(connections, threads),
       reporter = uncaughtExceptionHandler
     )
-  private[this] val dbIOScheduler = (name: String, connections: Int) =>
+  private[this] def dbIOScheduler(name: String, connections: Int) =
     Scheduler.cached(s"db-io-$name", connections, Int.MaxValue, reporter = uncaughtExceptionHandler)
 
   implicit val raiseIOError: RaiseIOError[Task] = IOError.raiseIOErrorThroughSync[Task]
