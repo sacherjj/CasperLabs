@@ -135,7 +135,8 @@ class NodeRuntime private[node] (
       (writeTransactor, readTransactor) <- effects.doobieTransactors(
                                             connectEC = dbConnScheduler,
                                             transactEC = dbIOScheduler,
-                                            conf.server.dataDir
+                                            serverDataDir = conf.server.dataDir,
+                                            readPoolSize = conf.server.dbReadPoolSize.value
                                           )
       _ <- Resource.liftF(runRdmbsMigrations(conf.server.dataDir))
 

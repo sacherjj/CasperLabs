@@ -105,6 +105,7 @@ object Configuration extends ParserImplicits {
       mainThreads: Int Refined Positive,
       ingressThreads: Int Refined Positive,
       dbThreads: Int Refined Positive,
+      dbReadPoolSize: Int Refined Positive,
       parallelismCpuMultiplier: Double Refined Positive,
       minParallelism: Int Refined Positive
   ) extends SubConfig
