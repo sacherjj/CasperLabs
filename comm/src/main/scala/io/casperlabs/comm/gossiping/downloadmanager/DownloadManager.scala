@@ -22,7 +22,6 @@ import io.casperlabs.catscontrib.effect.implicits.fiberSyntax
 import io.casperlabs.comm.gossiping.relaying.Relaying
 import monix.tail.Iterant
 import monix.execution.Scheduler
-
 import scala.concurrent.duration.{Duration, FiniteDuration}
 import scala.util.control.NonFatal
 import scala.collection.immutable.Queue
