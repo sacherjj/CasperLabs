@@ -145,7 +145,7 @@ def test_error_in_session_contract(payment_node_network):
     )
     deploy = node0.d_client.show_deploys(block_hash)[0]
     assert deploy.is_error is True
-    assert deploy.error_message == "Exit code: 65537"
+    assert deploy.error_message == "User error: 1"
     cost_of_execution = deploy.cost
     assert cost_of_execution > 0
     genesis_balance_after_transfer = node0.d_client.get_balance(

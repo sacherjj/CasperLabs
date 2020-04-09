@@ -1,4 +1,4 @@
-import { action, IObservableArray, observable, runInAction } from 'mobx';
+import { action, IObservableArray, observable, reaction, runInAction } from 'mobx';
 
 import ErrorContainer from './ErrorContainer';
 import { CasperService, encodeBase16 } from 'casperlabs-sdk';
@@ -137,22 +137,35 @@ export class DagContainer {
         );
 
         if (index === -1) {
-          // blocks with rank < N+1-depth will be culled
-          let culledThreshold = block!.getSummary()!.getHeader()!.getJRank() + 1 - this.depth;
-          let remainingBlocks: BlockInfo[] = [];
-          if (this.blocks !== null) {
-            remainingBlocks = this.blocks.filter(b => {
+          // blocks with rank < maxRank+1-depth will be culled
+          let blockRank = block!.getSummary()!.getHeader()!.getJRank();
+          let oldMaxRank = this.blocks ? this.blocks[0].getSummary()!.getHeader()!.getJRank() : 0;
+          let maxRank = Math.max(oldMaxRank, blockRank);
+          let culledThreshold = maxRank + 1 - this.depth;
+          if (blockRank >= culledThreshold) {
+            // The new block should be added to DAG.
+            let remainingBlocks = this.blocks ? this.blocks.filter(b => {
               let rank = b.getSummary()?.getHeader()?.getJRank();
               if (rank !== undefined) {
                 return rank >= culledThreshold;
               }
               return false;
+            }) : [];
+            // insert item to an ordered array
+            // find first index I so that the newAddedBlock.jRank >= remainingBlocks[i].jRank
+            let i = 0;
+            for (; i < remainingBlocks.length; i++) {
+              if (blockRank >= remainingBlocks[i].getSummary()!.getHeader()!.getJRank()) {
+                break;
+              }
+            }
+            remainingBlocks.splice(i, 0, block);
+            runInAction(() => {
+              this.blocks.replace(remainingBlocks);
             });
+          } else {
+            // otherwise ignore the new block and do nothing
           }
-          remainingBlocks.splice(0, 0, block!);
-          runInAction(() => {
-            this.blocks.replace(remainingBlocks);
-          });
         }
       }
     } else if (event.hasNewFinalizedBlock()) {

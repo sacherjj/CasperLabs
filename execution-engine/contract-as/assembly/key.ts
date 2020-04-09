@@ -1,6 +1,6 @@
 import * as externals from "./externals";
 import {readHostBuffer} from ".";
-import {KEY_UREF_SERIALIZED_LENGTH} from "./constants";
+import {UREF_SERIALIZED_LENGTH} from "./constants";
 import {URef} from "./uref";
 import {CLValue} from "./clvalue";
 import {Error, ErrorCode} from "./error";
@@ -105,21 +105,17 @@ export class Key {
      */
     static create(value: CLValue): Key | null {
         const valueBytes = value.toBytes();
-        let keyBytes = new Uint8Array(KEY_UREF_SERIALIZED_LENGTH);
+        let urefBytes = new Uint8Array(UREF_SERIALIZED_LENGTH);
         externals.new_uref(
-            keyBytes.dataStart,
+            urefBytes.dataStart,
             valueBytes.dataStart,
             valueBytes.length
         );
-        const keyResult = Key.fromBytes(keyBytes);
-        if (keyResult.hasError()) {
+        const urefResult = URef.fromBytes(urefBytes);
+        if (urefResult.hasError()) {
             return null;
         }
-        let key = keyResult.value;
-        if (key.variant != KeyVariant.UREF_ID) {
-            return null;
-        }
-        return key;
+        return Key.fromURef(urefResult.value);
     }
 
     /** Deserializes a `Key` from an array of bytes. */

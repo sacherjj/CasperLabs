@@ -393,7 +393,8 @@ object ProtoUtil {
       sigAlgorithm: SignatureAlgorithm,
       keyBlockHash: ByteString,
       roundId: Long,
-      magicBit: Boolean
+      magicBit: Boolean,
+      messageRole: Block.MessageRole = Block.MessageRole.UNDEFINED
   ): Block = {
     val body = Block.Body().withDeploys(deploys)
     val postState = Block
@@ -418,7 +419,7 @@ object ProtoUtil {
       keyBlockHash = keyBlockHash,
       roundId = roundId,
       magicBit = magicBit
-    )
+    ).withMessageRole(messageRole)
 
     val unsigned = unsignedBlockProto(body, header)
 
@@ -446,7 +447,8 @@ object ProtoUtil {
       privateKey: Keys.PrivateKey,
       sigAlgorithm: SignatureAlgorithm,
       keyBlockHash: ByteString,
-      roundId: Long
+      roundId: Long,
+      messageRole: Block.MessageRole = Block.MessageRole.UNDEFINED
   ): Block = {
     val body = Block.Body()
 
@@ -471,7 +473,7 @@ object ProtoUtil {
       validatorPrevBlockHash = validatorPrevBlockHash,
       keyBlockHash = keyBlockHash,
       roundId = roundId
-    ).withMessageType(Block.MessageType.BALLOT)
+    ).withMessageRole(messageRole).withMessageType(Block.MessageType.BALLOT)
 
     val unsigned = unsignedBlockProto(body, header)
 

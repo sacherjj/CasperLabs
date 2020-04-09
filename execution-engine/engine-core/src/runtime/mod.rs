@@ -1671,14 +1671,14 @@ where
         let arg: CLValue = args
             .get(index)
             .cloned()
-            .ok_or_else(|| Error::Revert(ApiError::MissingArgument.into()))?;
+            .ok_or_else(|| Error::Revert(ApiError::MissingArgument))?;
         arg.into_t()
-            .map_err(|_| Error::Revert(ApiError::InvalidArgument.into()))
+            .map_err(|_| Error::Revert(ApiError::InvalidArgument))
     }
 
     fn reverter<T: Into<ApiError>>(error: T) -> Error {
         let api_error: ApiError = error.into();
-        Error::Revert(api_error.into())
+        Error::Revert(api_error)
     }
 
     pub fn call_host_mint(
@@ -1839,7 +1839,7 @@ where
         let ret: CLValue = match method_name.as_str() {
             METHOD_BOND => {
                 if !self.config.enable_bonding() {
-                    let err = Error::Revert(ApiError::Unhandled.into());
+                    let err = Error::Revert(ApiError::Unhandled);
                     return Err(err);
                 }
 
@@ -1853,7 +1853,7 @@ where
             }
             METHOD_UNBOND => {
                 if !self.config.enable_bonding() {
-                    let err = Error::Revert(ApiError::Unhandled.into());
+                    let err = Error::Revert(ApiError::Unhandled);
                     return Err(err);
                 }
 
@@ -2165,11 +2165,11 @@ where
 
     /// Generates new unforgable reference and adds it to the context's
     /// access_rights set.
-    fn new_uref(&mut self, key_ptr: u32, value_ptr: u32, value_size: u32) -> Result<(), Trap> {
+    fn new_uref(&mut self, uref_ptr: u32, value_ptr: u32, value_size: u32) -> Result<(), Trap> {
         let cl_value = self.cl_value_from_mem(value_ptr, value_size)?; // read initial value from memory
-        let key = self.context.new_uref(StoredValue::CLValue(cl_value))?;
+        let uref = self.context.new_uref(StoredValue::CLValue(cl_value))?;
         self.memory
-            .set(key_ptr, &key.into_bytes().map_err(Error::BytesRepr)?)
+            .set(uref_ptr, &uref.into_bytes().map_err(Error::BytesRepr)?)
             .map_err(|e| Error::Interpreter(e).into())
     }
 
@@ -2305,7 +2305,7 @@ where
 
     /// Reverts contract execution with a status specified.
     fn revert(&mut self, status: u32) -> Trap {
-        Error::Revert(status).into()
+        Error::Revert(status.into()).into()
     }
 
     fn add_associated_key(
@@ -2796,6 +2796,13 @@ where
         }
 
         Ok(Ok(()))
+    }
+
+    #[cfg(feature = "test-support")]
+    fn print(&mut self, text_ptr: u32, text_size: u32) -> Result<(), Trap> {
+        let text = self.string_from_mem(text_ptr, text_size)?;
+        println!("{}", text);
+        Ok(())
     }
 }
 

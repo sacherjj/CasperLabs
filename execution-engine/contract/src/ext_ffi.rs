@@ -14,7 +14,7 @@ extern "C" {
     );
     pub fn add(key_ptr: *const u8, key_size: usize, value_ptr: *const u8, value_size: usize);
     pub fn add_local(key_ptr: *const u8, key_size: usize, value_ptr: *const u8, value_size: usize);
-    pub fn new_uref(key_ptr: *mut u8, value_ptr: *const u8, value_size: usize);
+    pub fn new_uref(uref_ptr: *mut u8, value_ptr: *const u8, value_size: usize);
     pub fn store_function(
         function_name_ptr: *const u8,
         function_name_size: usize,
@@ -104,4 +104,6 @@ extern "C" {
     ) -> i32;
     pub fn get_main_purse(dest_ptr: *mut u8);
     pub fn read_host_buffer(dest_ptr: *mut u8, dest_size: usize, bytes_written: *mut usize) -> i32;
+    #[cfg(feature = "test-support")]
+    pub fn print(text_ptr: *const u8, text_size: usize);
 }

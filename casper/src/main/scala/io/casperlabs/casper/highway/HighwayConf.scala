@@ -20,7 +20,10 @@ final case class HighwayConf(
     /** Fraction of time through the round after which we can create an omega message. */
     omegaMessageTimeStart: Double,
     /** Fraction of time through the round before which we must have created the omega message. */
-    omegaMessageTimeEnd: Double
+    omegaMessageTimeEnd: Double,
+    /** Enable the creation of blocks instead of ballots for omega messages, thus increasing the
+      * potential number of blocks per round with N validators from 1 to 1+N. */
+    omegaBlocksEnabled: Boolean
 ) {
   import HighwayConf._
 

@@ -139,6 +139,7 @@ class ConfigurationSpec
       enabled = false,
       omegaMessageTimeStart = 1.0,
       omegaMessageTimeEnd = 1.0,
+      omegaBlocksEnabled = false,
       initRoundExponent = 0
     )
     val tls = Tls(

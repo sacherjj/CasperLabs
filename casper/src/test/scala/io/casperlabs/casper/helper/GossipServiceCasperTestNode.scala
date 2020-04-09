@@ -164,6 +164,8 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
         implicit val gs: DagStorage[F]       = dagStorage
         implicit val as: AncestorsStorage[F] = ancestorsStorage
         for {
+          implicit0(fs: FinalityStorage[F]) <- MockFinalityStorage[F](genesis.blockHash)
+
           casperState  <- Cell.mvarCell[F, CasperState](CasperState())
           semaphoreMap <- SemaphoreMap[F, ByteString](1)
           semaphore    <- Semaphore[F](1)
@@ -179,12 +181,10 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
                                  faultToleranceThreshold,
                                  isHighway = false
                                )
-          implicit0(fs: FinalityStorage[F]) <- MockFinalityStorage[F](genesis.blockHash)
           multiParentFinalizer <- MultiParentFinalizer.create(
                                    dag,
                                    genesis.blockHash,
-                                   finalityDetector,
-                                   isHighway = false
+                                   finalityDetector
                                  )
           node = new GossipServiceCasperTestNode[F](
             identity,
@@ -291,8 +291,7 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
                 multiParentFinalizer <- MultiParentFinalizer.create(
                                          dag,
                                          genesis.blockHash,
-                                         finalityDetector,
-                                         isHighway = false
+                                         finalityDetector
                                        )
                 chainName    = "casperlabs"
                 minTTL       = 1.minute

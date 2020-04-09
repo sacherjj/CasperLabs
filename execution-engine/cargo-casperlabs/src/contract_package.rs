@@ -72,7 +72,7 @@ doctest = false
 test = false
 
 [features]
-default = ["casperlabs-contract/std", "casperlabs-types/std"]
+default = ["casperlabs-contract/std", "casperlabs-types/std", "casperlabs-contract/test-support"]
 "#,
         *CL_CONTRACT, *CL_TYPES,
     );

@@ -53,7 +53,7 @@ class _BlockList extends RefreshableComponent<Props, {}> {
         }
         refresh={() => this.refresh()}
         subscribeToggleStore={dag.toggleableSubscriber.subscribeToggleStore}
-        headers={['Block Hash', 'j-Rank', 'm-Rank', 'Timestamp', 'Validator', 'Type', 'Key Block Hash']}
+        headers={['Block Hash', 'j-Rank', 'm-Rank', 'Timestamp', 'Validator', 'Type', 'Role', 'Key Block Hash']}
         rows={dag.blocks}
         renderRow={(block: BlockInfo) => {
           const header = block.getSummary()!.getHeader()!;

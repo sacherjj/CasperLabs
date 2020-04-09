@@ -1376,6 +1376,7 @@ class ValidationTest
         storage,
         storage,
         storage,
+        storage,
         DeployEventEmitter[Task]
       )
 

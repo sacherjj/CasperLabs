@@ -558,7 +558,7 @@ trait DownloadManagerImpl[F[_]] extends DownloadManager[F] { self =>
                         Metrics[F].incrementCounter("downloads_failed") *>
                           Log[F].warn(
                             s"Retrying download of ${kind} ${id.show -> "id"} from other sources, failed source: ${source.show -> "peer"}, prev $attempt: $ex"
-                          ) *>
+                          ) >>
                           loop(counterPerSource.updated(source, nextAttempt), ex.some)
                     }
                 case _: Duration.Infinite => sys.error("Unreachable")

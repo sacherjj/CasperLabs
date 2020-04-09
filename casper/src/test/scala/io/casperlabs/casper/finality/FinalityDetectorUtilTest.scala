@@ -58,8 +58,7 @@ class FinalityDetectorUtilTest
                                                             )
         finalizedIndirectly <- FinalityDetectorUtil.finalizedIndirectly[Task](
                                 dag,
-                                b.blockHash,
-                                isHighway = false
+                                b.blockHash
                               )(Sync[Task], finalityStorage)
         finalizedIndirectlyHash = finalizedIndirectly.map(_.messageHash)
       } yield assert(finalizedIndirectlyHash == Set(a1.blockHash))
@@ -110,8 +109,7 @@ class FinalityDetectorUtilTest
         (nodesVisited, finalizedIndirectly) <- FinalityDetectorUtil
                                                 .finalizedIndirectly[G](
                                                   stateTDag,
-                                                  c.blockHash,
-                                                  isHighway = false
+                                                  c.blockHash
                                                 )(Sync[G], finalityStorage)
                                                 .run(Map.empty)
         _ = nodesVisited shouldBe expectedNodesVisitedA
@@ -137,8 +135,7 @@ class FinalityDetectorUtilTest
         (nodeVisitedB, finalizedIndirectlyB) <- FinalityDetectorUtil
                                                  .finalizedIndirectly[G](
                                                    stateTDag,
-                                                   f.blockHash,
-                                                   isHighway = false
+                                                   f.blockHash
                                                  )
                                                  .run(Map.empty)
         _ = nodeVisitedB shouldBe expectedNodesVisitedB
@@ -173,13 +170,44 @@ class FinalityDetectorUtilTest
         orphanedIndirectly <- FinalityDetectorUtil.orphanedIndirectly[Task](
                                dag,
                                e.blockHash,
-                               finalizedIndirectly = Set(d.blockHash),
-                               isHighway = false
+                               finalizedIndirectly = Set(d.blockHash)
                              )(Sync[Task], finalityStorage)
         orphanedHashes = orphanedIndirectly.map(_.messageHash)
       } yield {
         assert(orphanedHashes == Set(b.blockHash, c.blockHash))
       }
+  }
+
+  it should "find orphans across eras" in withCombinedStorage() { implicit storage =>
+    // The switch block doesn't have B in its justification, but later
+    // when another block is finalized in the child era, C should be
+    // marked as an orphan.
+    //
+    // G = A = | S
+    //  \\     |  \\
+    //    B    |    C*
+    for {
+      g   <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bonds)
+      a   <- createAndStoreBlockFull[Task](v1, Seq(g), Seq.empty, bonds, keyBlockHash = g.blockHash)
+      b   <- createAndStoreBlockFull[Task](v2, Seq(g), Seq.empty, bonds, keyBlockHash = g.blockHash)
+      s   <- createAndStoreBlockFull[Task](v1, Seq(a), Seq(a), bonds, keyBlockHash = a.blockHash)
+      c   <- createAndStoreBlockFull[Task](v2, Seq(s), Seq(s, b), bonds, keyBlockHash = a.blockHash)
+      dag <- storage.getRepresentation
+      implicit0(finalityStorage: FinalityStorage[Task]) <- MockFinalityStorage[Task](
+                                                            g.blockHash,
+                                                            a.blockHash,
+                                                            s.blockHash,
+                                                            c.blockHash
+                                                          )
+      orphanedIndirectly <- FinalityDetectorUtil.orphanedIndirectly[Task](
+                             dag,
+                             c.blockHash,
+                             finalizedIndirectly = Set.empty
+                           )(Sync[Task], finalityStorage)
+      orphanedHashes = orphanedIndirectly.map(_.messageHash)
+    } yield {
+      assert(orphanedHashes == Set(b.blockHash))
+    }
   }
 
 }

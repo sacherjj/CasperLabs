@@ -84,7 +84,8 @@ trait HighwayFixture
     entropyDuration = hours(3),
     postEraVotingDuration = VotingDuration.FixedLength(postEraVotingDuration),
     omegaMessageTimeStart = 0.5,
-    omegaMessageTimeEnd = 0.75
+    omegaMessageTimeEnd = 0.75,
+    omegaBlocksEnabled = false
   )
 
   trait FixtureLike {
@@ -153,9 +154,11 @@ trait HighwayFixture
     implicit lazy val forkchoice = MockForkChoice.unsafe[Task](genesis)
 
     implicit lazy val finalizer = new MultiParentFinalizer[Task] {
-      override def onNewMessageAdded(
-          message: Message
-      ): Task[Seq[MultiParentFinalizer.FinalizedBlocks]] = Seq.empty.pure[Task]
+
+      override def addMessage(message: Message): Task[Unit] = Task.unit
+
+      override def checkFinality(): Task[Seq[MultiParentFinalizer.FinalizedBlocks]] =
+        Task(Seq.empty)
     }
 
     implicit lazy val deployBuffer = DeployBuffer.create[Task](chainName, minTtl = Duration.Zero)
@@ -229,7 +232,8 @@ trait HighwayFixture
                 era.keyBlockHash,
                 roundId = Ticks(era.startTick),
                 target = parentBlock,
-                justifications = justifications
+                justifications = justifications,
+                messageRole = Block.MessageRole.WITNESS
               )
         } yield b.messageHash
 
@@ -247,7 +251,8 @@ trait HighwayFixture
                 roundId = Ticks(era.startTick),
                 mainParent = parentBlock,
                 justifications = justifications,
-                isBookingBlock = false
+                isBookingBlock = false,
+                messageRole = Block.MessageRole.PROPOSAL
               )
         } yield b.messageHash
     }

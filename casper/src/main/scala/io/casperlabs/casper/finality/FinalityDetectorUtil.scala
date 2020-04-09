@@ -35,6 +35,7 @@ object FinalityDetectorUtil {
   private[casper] def panoramaOfBlockByValidators[F[_]: Monad](
       dag: DagRepresentation[F],
       block: Message,
+      lfb: Message,
       validators: Set[Validator]
   ): F[Map[Validator, Message]] = {
     implicit val blockTopoOrdering: Ordering[Message] =
@@ -43,12 +44,15 @@ object FinalityDetectorUtil {
     val stream = DagOperations.bfToposortTraverseF(List(block)) { b =>
       b.justifications.toList
         .traverse(justification => {
-          dag.lookup(justification.latestBlockHash)
+          dag
+            .lookup(justification.latestBlockHash)
+            .map(_.filter(_.eraId == block.eraId)) // We want only panorama from the same era as the message.
         })
         .map(_.flatten)
     }
 
     stream
+      .takeWhile(_.jRank > lfb.jRank) // No need to go past the LFB.
       .foldWhileLeft((validators, Map.empty[Validator, Message])) {
         case ((remainingValidators, acc), b) =>
           if (remainingValidators.isEmpty) {
@@ -67,14 +71,6 @@ object FinalityDetectorUtil {
       }
       .map(_._2)
   }
-
-  private[casper] def panoramaDagLevelsOfBlock[F[_]: Monad](
-      blockDag: DagRepresentation[F],
-      block: Message,
-      validators: Set[Validator]
-  ): F[Map[Validator, Level]] =
-    panoramaOfBlockByValidators(blockDag, block, validators)
-      .map(_.mapValues(_.jRank))
 
   /**
     * Get level zero messages of the specified validator and specified candidateBlock
@@ -144,17 +140,13 @@ object FinalityDetectorUtil {
       dag: DagRepresentation[F],
       validatorsToIndex: Map[Validator, Int],
       blockSummary: Message,
+      messagePanorama: Map[Validator, Message],
       isHighway: Boolean
   ): F[MutableSeq[Level]] =
     for {
       equivocators <- if (isHighway) dag.getEquivocatorsInEra(blockSummary.eraId)
                      else dag.getEquivocators
-      latestBlockDagLevelAsMap <- FinalityDetectorUtil
-                                   .panoramaDagLevelsOfBlock(
-                                     dag,
-                                     blockSummary,
-                                     validatorsToIndex.keySet
-                                   )
+      latestBlockDagLevelAsMap = messagePanorama.mapValues(_.jRank)
     } yield fromMapToArray(
       validatorsToIndex,
       validator => {
@@ -186,9 +178,6 @@ object FinalityDetectorUtil {
   private def collectUndecided[F[_]: Sync: FinalityStorage](
       dag: DagRepresentation[F],
       lfbHash: BlockHash,
-      // In Highway we want to stay within the same era, since parent era blocks should only be finalized
-      // by parent era validators, e.g. the switch block by the voting ballots.
-      isHighway: Boolean,
       // Which dependencies to follow.
       next: Message => Seq[BlockHash]
   ): F[List[Message]] =
@@ -200,9 +189,6 @@ object FinalityDetectorUtil {
                         .traverse(dag.lookupUnsafe(_))
                         .flatMap { deps =>
                           deps
-                            .filter { dep =>
-                              !isHighway || dep.eraId == lfb.eraId
-                            }
                             .filterA(
                               message =>
                                 FinalityStorage[F]
@@ -217,11 +203,10 @@ object FinalityDetectorUtil {
   /** Returns a set of blocks that were finalized indirectly when a block from the main chain is finalized. */
   def finalizedIndirectly[F[_]: Sync: FinalityStorage](
       dag: DagRepresentation[F],
-      lfbHash: BlockHash,
-      isHighway: Boolean
+      lfbHash: BlockHash
   ): F[Set[Message]] =
     for {
-      messagesFinalizedImplicitly <- collectUndecided[F](dag, lfbHash, isHighway, _.parents)
+      messagesFinalizedImplicitly <- collectUndecided[F](dag, lfbHash, _.parents)
     } yield messagesFinalizedImplicitly
       .filterNot(_.messageHash == lfbHash) // LFB is directly finalized.
       .toSet
@@ -233,14 +218,12 @@ object FinalityDetectorUtil {
   def orphanedIndirectly[F[_]: Sync: FinalityStorage](
       dag: DagRepresentation[F],
       lfbHash: BlockHash,
-      finalizedIndirectly: Set[BlockHash],
-      isHighway: Boolean
+      finalizedIndirectly: Set[BlockHash]
   ): F[Set[Message]] =
     for {
       undecided <- collectUndecided(
                     dag,
                     lfbHash,
-                    isHighway,
                     m => m.parents ++ m.justifications.map(_.latestBlockHash)
                   )
       finalizedSet = finalizedIndirectly + lfbHash

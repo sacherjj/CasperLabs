@@ -16,7 +16,7 @@ import Pages from './Pages';
 import { encodeBase16 } from 'casperlabs-sdk';
 import { BondedValidatorsTable } from './BondedValidatorsTable';
 import { ToggleButton } from './ToggleButton';
-import { BlockType, FinalityIcon } from './BlockDetails';
+import { BlockType, BlockRole, FinalityIcon } from './BlockDetails';
 
 /** Show the tips of the DAG. */
 @observer
@@ -164,6 +164,7 @@ class BlockDetails extends React.Component<
         ['m-Rank', header.getMainRank()],
         ['Round ID', header.getRoundId()],
         ['Type', <BlockType header={header} />],
+        ['Role', <BlockRole header={header} />],
         ['Timestamp', new Date(header.getTimestamp()).toISOString()],
         ['Deploy Count', header.getDeployCount()],
         ['Validator', shortHash(validatorId)],
