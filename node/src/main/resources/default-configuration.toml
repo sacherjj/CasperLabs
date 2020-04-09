@@ -154,11 +154,14 @@ main-threads = 50
 # Size of the thread pool used to handle incoming requests.
 ingress-threads = 60
 
-# Size of the thread pool for database connections.
-db-threads = 70
+# Size of the thread pool waiting for the database writer connection.
+db-write-threads = 70
+
+# Size of the thread pool waiting for a database reader connection.
+db-read-threads = 75
 
 # Number of database connections in the reader pool.
-db-read-pool-size = 10
+db-read-connections = 10
 
 # Parallelism per CPU core.
 parallelism-cpu-multiplier = 1.0

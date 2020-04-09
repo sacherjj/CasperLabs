@@ -104,8 +104,9 @@ object Configuration extends ParserImplicits {
       blockUploadRateMaxThrottled: Int Refined NonNegative,
       mainThreads: Int Refined Positive,
       ingressThreads: Int Refined Positive,
-      dbThreads: Int Refined Positive,
-      dbReadPoolSize: Int Refined Positive,
+      dbWriteThreads: Int Refined Positive,
+      dbReadThreads: Int Refined Positive,
+      dbReadConnections: Int Refined Positive,
       parallelismCpuMultiplier: Double Refined Positive,
       minParallelism: Int Refined Positive
   ) extends SubConfig
