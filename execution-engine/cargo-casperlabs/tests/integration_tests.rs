@@ -7,8 +7,7 @@ use tempdir::TempDir;
 const FAILURE_EXIT_CODE: i32 = 101;
 const SUCCESS_EXIT_CODE: i32 = 0;
 const USE_SYSTEM_CONTRACTS: &str = "--use-system-contracts";
-const OUTPUT_DIR: &str = "output";
-const OUTPUT_DIR_ALT: &str = "output_turbo";
+const TURBO: &str = "turbo";
 
 lazy_static! {
     static ref WORKSPACE_PATH_ARG: String =
@@ -49,19 +48,15 @@ fn output_from_command(mut command: Command) -> Output {
     }
 }
 
-fn run_tool_and_resulting_tests(use_system_contracts: bool) {
+fn run_tool_and_resulting_tests(turbo: bool) {
     // Run 'cargo-casperlabs <test dir>/<subdir> --workspace-path=<path to EE root>'
-    let subdir = if use_system_contracts {
-        OUTPUT_DIR
-    } else {
-        OUTPUT_DIR_ALT
-    };
+    let subdir = if turbo { TURBO } else { USE_SYSTEM_CONTRACTS };
     let test_dir = TEST_DIR.path().join(subdir);
     let mut tool_cmd = Command::cargo_bin(env!("CARGO_PKG_NAME")).unwrap();
     tool_cmd.arg(&test_dir);
     tool_cmd.arg(&*WORKSPACE_PATH_ARG);
     // Also pass '--use-system-contracts' for non-turbo mode
-    if use_system_contracts {
+    if !turbo {
         tool_cmd.arg(&*USE_SYSTEM_CONTRACTS);
     }
     // The CI environment doesn't have a Git user configured, so we can set the env var `USER` for
@@ -79,11 +74,11 @@ fn run_tool_and_resulting_tests(use_system_contracts: bool) {
 }
 
 #[test]
-fn should_succeed_using_system_contracts() {
+fn should_succeed_without_using_system_contracts() {
     run_tool_and_resulting_tests(true);
 }
 
 #[test]
-fn should_succeed_without_using_system_contracts() {
+fn should_succeed_using_system_contracts() {
     run_tool_and_resulting_tests(false);
 }
