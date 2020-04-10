@@ -64,28 +64,7 @@ impl From<(ExecutionError, ExecutionEffect, Gas)> for DeployResult {
             ExecutionError::Revert(status) => {
                 detail::execution_error(status.to_string(), effect, cost)
             }
-            ExecutionError::Interpreter(error) => {
-                // If the error happens during contract execution it's mapped to HostError and
-                // wrapped in Interpreter error, so we may end up with
-                // InterpreterError(HostError(InterpreterError))).  In order to provide clear error
-                // messages we have to downcast and match on the inner error, otherwise we end up
-                // with `Host(Trap(Trap(TrapKind:InterpreterError)))`.
-                // TODO: This really should be happening in the `Executor::exec`.
-                let msg = match error
-                    .as_host_error()
-                    .and_then(|host_error| host_error.downcast_ref::<ExecutionError>())
-                {
-                    Some(&ExecutionError::Revert(status)) => status.to_string(),
-                    Some(&ExecutionError::KeyNotFound(key)) => format!("Key {:?} not found.", key),
-                    Some(&ExecutionError::InvalidContext) => {
-                        // TODO: https://casperlabs.atlassian.net/browse/EE-771
-                        "Invalid execution context.".to_string()
-                    }
-                    Some(other) => format!("{:?}", other),
-                    None => format!("{:?}", error),
-                };
-                detail::execution_error(msg, effect, cost)
-            }
+            ExecutionError::Interpreter(error) => detail::execution_error(error, effect, cost),
             // TODO(mateusz.gorski): Be more specific about execution errors
             other => detail::execution_error(format!("{:?}", other), effect, cost),
         }

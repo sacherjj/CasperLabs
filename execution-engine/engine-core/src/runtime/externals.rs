@@ -227,7 +227,7 @@ where
                 let uref_bytes = self
                     .memory
                     .get(urefs_ptr, urefs_size as usize)
-                    .map_err(Error::Interpreter)?;
+                    .map_err(|e| Error::Interpreter(e.into()))?;
                 let urefs = bytesrepr::deserialize(uref_bytes).map_err(Error::BytesRepr)?;
                 let contract_hash = self.store_function(fn_bytes, urefs)?;
                 self.function_address(contract_hash, hash_ptr)?;
@@ -248,7 +248,7 @@ where
                 let uref_bytes = self
                     .memory
                     .get(urefs_ptr, urefs_size as usize)
-                    .map_err(Error::Interpreter)?;
+                    .map_err(|e| Error::Interpreter(e.into()))?;
                 let urefs = bytesrepr::deserialize(uref_bytes).map_err(Error::BytesRepr)?;
                 let contract_hash = self.store_function_at_hash(fn_bytes, urefs)?;
                 self.function_address(contract_hash, hash_ptr)?;
@@ -325,7 +325,7 @@ where
                 assert_eq!(dest_size, purse_bytes.len() as u32);
                 self.memory
                     .set(dest_ptr, &purse_bytes)
-                    .map_err(Error::Interpreter)?;
+                    .map_err(|e| Error::Interpreter(e.into()))?;
                 Ok(Some(RuntimeValue::I32(0)))
             }
 

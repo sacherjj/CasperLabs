@@ -1473,7 +1473,7 @@ where
         let arg_size_bytes = arg_size.to_le_bytes(); // Wasm is little-endian
 
         if let Err(e) = self.memory.set(size_ptr, &arg_size_bytes) {
-            return Err(Error::Interpreter(e).into());
+            return Err(Error::Interpreter(e.into()).into());
         }
 
         Ok(Ok(()))
@@ -1498,7 +1498,7 @@ where
             .memory
             .set(output_ptr, &arg.inner_bytes()[..output_size])
         {
-            return Err(Error::Interpreter(e).into());
+            return Err(Error::Interpreter(e.into()).into());
         }
 
         Ok(Ok(()))
@@ -1533,14 +1533,14 @@ where
 
         // Set serialized Key bytes into the output buffer
         if let Err(error) = self.memory.set(output_ptr, &key_bytes) {
-            return Err(Error::Interpreter(error).into());
+            return Err(Error::Interpreter(error.into()).into());
         }
 
         // For all practical purposes following cast is assumed to be safe
         let bytes_size = key_bytes.len() as u32;
         let size_bytes = bytes_size.to_le_bytes(); // Wasm is little-endian
         if let Err(error) = self.memory.set(bytes_written_ptr, &size_bytes) {
-            return Err(Error::Interpreter(error).into());
+            return Err(Error::Interpreter(error.into()).into());
         }
 
         Ok(Ok(()))
@@ -1579,7 +1579,7 @@ where
         let purse_bytes = purse.into_bytes().map_err(Error::BytesRepr)?;
         self.memory
             .set(dest_ptr, &purse_bytes)
-            .map_err(|e| Error::Interpreter(e).into())
+            .map_err(|e| Error::Interpreter(e.into()).into())
     }
 
     /// Writes caller (deploy) account public key to [dest_ptr] in the Wasm
@@ -1600,7 +1600,7 @@ where
         // Write output
         let output_size_bytes = value_size.to_le_bytes(); // Wasm is little-endian
         if let Err(error) = self.memory.set(output_size, &output_size_bytes) {
-            return Err(Error::Interpreter(error).into());
+            return Err(Error::Interpreter(error.into()).into());
         }
         Ok(Ok(()))
     }
@@ -1611,7 +1611,7 @@ where
         let bytes = phase.into_bytes().map_err(Error::BytesRepr)?;
         self.memory
             .set(dest_ptr, &bytes)
-            .map_err(|e| Error::Interpreter(e).into())
+            .map_err(|e| Error::Interpreter(e.into()).into())
     }
 
     /// Writes current blocktime to [dest_ptr] in Wasm memory.
@@ -1623,7 +1623,7 @@ where
             .map_err(Error::BytesRepr)?;
         self.memory
             .set(dest_ptr, &blocktime)
-            .map_err(|e| Error::Interpreter(e).into())
+            .map_err(|e| Error::Interpreter(e.into()).into())
     }
 
     /// Return some bytes from the memory and terminate the current `sub_call`. Note that the return
@@ -1633,7 +1633,7 @@ where
         let mem_get = self
             .memory
             .get(value_ptr, value_size)
-            .map_err(Error::Interpreter);
+            .map_err(|e| Error::Interpreter(e.into()));
         match mem_get {
             Ok(buf) => {
                 // Set the result field in the runtime and return the proper element of the `Error`
@@ -2045,21 +2045,12 @@ where
                     self.context.access_rights_extend(ret_urefs_map);
                     // if ret has not set host_buffer consider it programmer error
                     return runtime.take_host_buffer().ok_or(Error::ExpectedReturnValue);
-                }
-                Error::Revert(status) => {
-                    // Propagate revert as revert, instead of passing it as
-                    // InterpreterError.
-                    return Err(Error::Revert(*status));
-                }
-                Error::InvalidContext => {
-                    // TODO: https://casperlabs.atlassian.net/browse/EE-771
-                    return Err(Error::InvalidContext);
-                }
-                _ => {}
+                },
+                error => return Err(error.clone()),
             }
         }
 
-        Err(Error::Interpreter(error))
+        Err(Error::Interpreter(error.into()))
     }
 
     fn call_contract_host_buffer(
@@ -2085,7 +2076,7 @@ where
 
         let result_size_bytes = result_size.to_le_bytes(); // Wasm is little-endian
         if let Err(error) = self.memory.set(result_size_ptr, &result_size_bytes) {
-            return Err(Error::Interpreter(error));
+            return Err(Error::Interpreter(error.into()));
         }
 
         Ok(Ok(()))
@@ -2104,7 +2095,7 @@ where
         let total_keys = self.context.named_keys().len() as u32;
         let total_keys_bytes = total_keys.to_le_bytes();
         if let Err(error) = self.memory.set(total_keys_ptr, &total_keys_bytes) {
-            return Err(Error::Interpreter(error).into());
+            return Err(Error::Interpreter(error.into()).into());
         }
 
         if total_keys == 0 {
@@ -2122,7 +2113,7 @@ where
 
         let length_bytes = length.to_le_bytes();
         if let Err(error) = self.memory.set(result_size_ptr, &length_bytes) {
-            return Err(Error::Interpreter(error).into());
+            return Err(Error::Interpreter(error.into()).into());
         }
 
         Ok(Ok(()))
@@ -2160,7 +2151,7 @@ where
     fn function_address(&mut self, hash_bytes: [u8; 32], dest_ptr: u32) -> Result<(), Trap> {
         self.memory
             .set(dest_ptr, &hash_bytes)
-            .map_err(|e| Error::Interpreter(e).into())
+            .map_err(|e| Error::Interpreter(e.into()).into())
     }
 
     /// Generates new unforgable reference and adds it to the context's
@@ -2170,7 +2161,7 @@ where
         let uref = self.context.new_uref(StoredValue::CLValue(cl_value))?;
         self.memory
             .set(uref_ptr, &uref.into_bytes().map_err(Error::BytesRepr)?)
-            .map_err(|e| Error::Interpreter(e).into())
+            .map_err(|e| Error::Interpreter(e.into()).into())
     }
 
     /// Writes `value` under `key` in GlobalState.
@@ -2264,7 +2255,7 @@ where
 
         let value_bytes = value_size.to_le_bytes(); // Wasm is little-endian
         if let Err(error) = self.memory.set(output_size_ptr, &value_bytes) {
-            return Err(Error::Interpreter(error).into());
+            return Err(Error::Interpreter(error.into()).into());
         }
 
         Ok(Ok(()))
@@ -2297,7 +2288,7 @@ where
 
         let value_bytes = value_size.to_le_bytes(); // Wasm is little-endian
         if let Err(error) = self.memory.set(output_size_ptr, &value_bytes) {
-            return Err(Error::Interpreter(error).into());
+            return Err(Error::Interpreter(error.into()).into());
         }
 
         Ok(Ok(()))
@@ -2687,7 +2678,7 @@ where
 
         let balance_size_bytes = balance_size.to_le_bytes(); // Wasm is little-endian
         if let Err(error) = self.memory.set(output_size_ptr, &balance_size_bytes) {
-            return Err(Error::Interpreter(error));
+            return Err(Error::Interpreter(error.into()));
         }
 
         Ok(Ok(()))
@@ -2738,7 +2729,7 @@ where
         let attenuated_uref_bytes = attenuated_uref.into_bytes().map_err(Error::BytesRepr)?;
         match self.memory.set(dest_ptr, &attenuated_uref_bytes) {
             Ok(_) => Ok(Ok(())),
-            Err(error) => Err(Error::Interpreter(error).into()),
+            Err(error) => Err(Error::Interpreter(error.into()).into()),
         }
     }
 
@@ -2785,14 +2776,14 @@ where
         // as whole.
         let sliced_buf = &serialized_value[..cmp::min(dest_size, serialized_value.len())];
         if let Err(error) = self.memory.set(dest_ptr, sliced_buf) {
-            return Err(Error::Interpreter(error));
+            return Err(Error::Interpreter(error.into()));
         }
 
         let bytes_written = sliced_buf.len() as u32;
         let bytes_written_data = bytes_written.to_le_bytes();
 
         if let Err(error) = self.memory.set(bytes_written_ptr, &bytes_written_data) {
-            return Err(Error::Interpreter(error));
+            return Err(Error::Interpreter(error.into()));
         }
 
         Ok(Ok(()))

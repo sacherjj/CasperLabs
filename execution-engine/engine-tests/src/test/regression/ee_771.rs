@@ -24,10 +24,9 @@ fn should_run_ee_771_regression() {
         .expect("should have a response")
         .to_owned();
 
-    // let error_message = utils::get_error_message(response);
     let error = response[0].error().expect("should have error");
     assert_eq!(
         format!("{}", error),
-        "Function not found: functiondoesnotexist."
+        "Function not found: functiondoesnotexist"
     );
 }
