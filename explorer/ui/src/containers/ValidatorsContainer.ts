@@ -84,12 +84,21 @@ export class ValidatorsContainer {
 
   @action.bound
   private async getValidatorInfos() {
-    let bondedValidators = this.bondedValidators;
     let latestRankNMsgs = await this.casperService.getBlockInfos(N, 0);
 
     this.upsert(latestRankNMsgs);
 
-    // for every validator that still doesn't have any info, use the justifications in the LFB, get the block info for those (there will be multiple, in current setting 3, one for each era up to the key block), use the latest by rank
+    await this.getValidationInfoByJustifications();
+  };
+
+  /**
+   * for every validator that still doesn't have any info, use the justifications in the LFB,
+   * get the block info for those (there will be multiple, in current setting 3,
+   * one for each era up to the key block), use the latest by rank
+   */
+  private async getValidationInfoByJustifications() {
+    let bondedValidators = this.bondedValidators;
+
     let justifications: Array<Block.Justification> = this.latestFinalizedBlock?.getSummary()?.getHeader()?.getJustificationsList() ?? new Array<Block.Justification>();
     let promises = justifications.filter(j => {
       // only request BlockInfo for those validators who has bonded but still don't have any info
@@ -102,20 +111,28 @@ export class ValidatorsContainer {
     let blockInfos: BlockInfo[] = await Promise.all(promises);
 
     this.upsert(blockInfos);
-  };
+  }
 
   private subscriberHandler(e: Event) {
     if (e.hasBlockAdded()) {
       let block = e.getBlockAdded()?.getBlock();
-      let candidates = this.bondedValidators;
       if (block) {
         this.upsert([block]);
       }
     } else if (e.hasNewFinalizedBlock()) {
       this.errors.capture(
-        this.casperService.getBlockInfo(e.getNewFinalizedBlock()!.getBlockHash()).then(_ => {
-          // when receive a new finalized block, we need to recompute
-          this.refresh();
+        this.casperService.getBlockInfo(e.getNewFinalizedBlock()!.getBlockHash()).then(LFB => {
+          this.latestFinalizedBlock = LFB;
+          let bondedValidators = this.bondedValidators;
+          let forceRequestByJustification = false;
+          bondedValidators.forEach(vId => {
+            if (!this.validatorInfoMaps.has(vId)) {
+              forceRequestByJustification = true;
+            }
+          });
+          if (forceRequestByJustification) {
+            this.getValidationInfoByJustifications();
+          }
         })
       );
     }
