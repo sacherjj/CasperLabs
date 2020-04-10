@@ -48,8 +48,8 @@ export class ValidatorsContainer {
   }
 
   @computed
-  get validatorInfos(){
-    return Array.from(this.validatorInfoMaps.values());
+  get validatorInfos() {
+    return Array.from(this.validatorInfoMaps.values()).filter((info) => this.bondedValidators.has(info.id));
   }
 
   /*
@@ -66,13 +66,10 @@ export class ValidatorsContainer {
 
   // insert or update accMap when giving a list of blockInfo
   @action.bound
-  private async upsert(blockInfos: BlockInfo[], candidates: Set<ValidatorIdBase64>) {
+  private async upsert(blockInfos: BlockInfo[]) {
     blockInfos.forEach(b => {
       const header = b.getSummary()!.getHeader()!;
       let validatorId = header.getValidatorPublicKey_asB64();
-      if (!candidates.has(validatorId)) {
-        return;
-      }
       let item = this.validatorInfoMaps.get(validatorId);
       if (!item || item.rank < header.getJRank()) {
         this.validatorInfoMaps.set(validatorId, {
@@ -90,7 +87,7 @@ export class ValidatorsContainer {
     let bondedValidators = this.bondedValidators;
     let latestRankNMsgs = await this.casperService.getBlockInfos(N, 0);
 
-    this.upsert(latestRankNMsgs, bondedValidators);
+    this.upsert(latestRankNMsgs);
 
     // for every validator that still doesn't have any info, use the justifications in the LFB, get the block info for those (there will be multiple, in current setting 3, one for each era up to the key block), use the latest by rank
     let justifications: Array<Block.Justification> = this.latestFinalizedBlock?.getSummary()?.getHeader()?.getJustificationsList() ?? new Array<Block.Justification>();
@@ -104,7 +101,7 @@ export class ValidatorsContainer {
 
     let blockInfos: BlockInfo[] = await Promise.all(promises);
 
-    this.upsert(blockInfos, bondedValidators);
+    this.upsert(blockInfos);
   };
 
   private subscriberHandler(e: Event) {
@@ -112,7 +109,7 @@ export class ValidatorsContainer {
       let block = e.getBlockAdded()?.getBlock();
       let candidates = this.bondedValidators;
       if (block) {
-        this.upsert([block], candidates);
+        this.upsert([block]);
       }
     } else if (e.hasNewFinalizedBlock()) {
       this.errors.capture(
