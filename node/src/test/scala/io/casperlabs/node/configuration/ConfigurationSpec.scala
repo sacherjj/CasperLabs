@@ -108,7 +108,9 @@ class ConfigurationSpec
       blockUploadRateMaxThrottled = 0,
       mainThreads = 1,
       ingressThreads = 1,
-      dbThreads = 1,
+      dbWriteThreads = 1,
+      dbReadThreads = 1,
+      dbReadConnections = 1,
       parallelismCpuMultiplier = 1.0,
       minParallelism = 1
     )

@@ -166,7 +166,8 @@ package object gossiping {
       stashingSynchronizer <- Resource.liftF {
                                StashingSynchronizer.wrap(
                                  synchronizer,
-                                 awaitApproval >> awaitSynchronization
+                                 awaitApproval >> awaitSynchronization,
+                                 isInDag[F](_)
                                )
                              }
 
