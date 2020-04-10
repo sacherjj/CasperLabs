@@ -2045,7 +2045,7 @@ where
                     self.context.access_rights_extend(ret_urefs_map);
                     // if ret has not set host_buffer consider it programmer error
                     return runtime.take_host_buffer().ok_or(Error::ExpectedReturnValue);
-                },
+                }
                 error => return Err(error.clone()),
             }
         }

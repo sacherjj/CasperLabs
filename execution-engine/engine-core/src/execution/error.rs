@@ -63,7 +63,7 @@ pub enum Error {
     #[fail(display = "Invalid context")]
     InvalidContext,
     #[fail(
-        display = "Incompatible protocol major version. Current version {} but version {} is expected",
+        display = "Incompatible protocol major version. Expected version {} but actual version is {}",
         expected, actual
     )]
     IncompatibleProtocolMajorVersion { expected: u32, actual: u32 },

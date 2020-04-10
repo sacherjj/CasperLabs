@@ -574,6 +574,10 @@ where
         &self.engine_state
     }
 
+    pub fn get_exec_responses(&self) -> &Vec<Vec<Rc<ExecutionResult>>> {
+        &self.exec_responses
+    }
+
     pub fn get_exec_response(&self, index: usize) -> Option<&Vec<Rc<ExecutionResult>>> {
         self.exec_responses.get(index)
     }
