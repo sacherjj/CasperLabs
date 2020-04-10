@@ -33,6 +33,7 @@ import AccountSelectorContainer from './containers/AccountSelectorContainer';
 import ConnectedPeersContainer from './containers/ConnectedPeersContainer';
 import { VestingContainer } from './contracts/Vesting/container/VestingContainer';
 import { DeployContractsContainer } from './containers/DeployContractsContainer';
+import ValidatorsContainer from './containers/ValidatorsContainer';
 
 let w = window as any;
 w.$ = w.jQuery = jQuery;
@@ -74,6 +75,7 @@ const search = new SearchContainer(errors, casperService);
 const accountSelectorContainer = new AccountSelectorContainer();
 const connectedPeersContainer = new ConnectedPeersContainer(errors, diagnosticsService);
 const deployContractsContainer = new DeployContractsContainer(errors, casperService);
+const validatorsContainer = new ValidatorsContainer(errors, casperService);
 
 ReactDOM.render(
   <HashRouter>
@@ -83,6 +85,7 @@ ReactDOM.render(
       faucet={faucet}
       vesting={vesting}
       dag={dag}
+      validatorsContainer={validatorsContainer}
       block={block}
       deploy={deploy}
       deployInfoList={deployInfoList}
