@@ -6,7 +6,9 @@ import { Block } from 'casperlabs-grpc/io/casperlabs/casper/consensus/consensus_
 import { ToggleableSubscriber } from './ToggleableSubscriber';
 
 // Last N ranks to construct latest messages of validators
-const N = 10;
+const computeN = (validatorSize: number) => {
+  return 2 * validatorSize;
+};
 
 type ValidatorIdBase64 = string;
 
@@ -84,7 +86,7 @@ export class ValidatorsContainer {
 
   @action.bound
   private async getValidatorInfos() {
-    let latestRankNMsgs = await this.casperService.getBlockInfos(N, 0);
+    let latestRankNMsgs = await this.casperService.getBlockInfos(computeN(this.bondedValidators.size), 0);
 
     this.upsert(latestRankNMsgs);
 
