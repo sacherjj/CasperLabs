@@ -30,6 +30,7 @@ use engine_shared::{
     newtypes::{Blake2bHash, CorrelationId},
     stored_value::StoredValue,
     transform::Transform,
+    wasm,
 };
 use engine_storage::{
     global_state::{CommitResult, StateProvider, StateReader},
@@ -37,8 +38,9 @@ use engine_storage::{
 };
 use engine_wasm_prep::{wasm_costs::WasmCosts, Preprocessor};
 use types::{
-    account::PublicKey, bytesrepr::ToBytes, system_contract_errors::mint, AccessRights, BlockTime,
-    Key, Phase, ProtocolVersion, URef, KEY_HASH_LENGTH, U512, UREF_ADDR_LENGTH,
+    account::PublicKey, bytesrepr::ToBytes, system_contract_errors::mint,
+    system_contract_type::PROOF_OF_STAKE, AccessRights, BlockTime, Key, Phase, ProtocolVersion,
+    URef, KEY_HASH_LENGTH, U512, UREF_ADDR_LENGTH,
 };
 
 pub use self::{
@@ -931,65 +933,119 @@ where
             // payment_code_spec_6: system contract validity
             let mint_reference = protocol_data.mint();
 
-            let mint_contract = match tracking_copy
-                .borrow_mut()
-                .get_contract(correlation_id, Key::URef(mint_reference))
-            {
-                Ok(contract) => contract,
-                Err(error) => return Ok(ExecutionResult::precondition_failure(error.into())),
-            };
-
             if !self.system_contract_cache.has(&mint_reference) {
-                let module = match engine_wasm_prep::deserialize(mint_contract.bytes()) {
+                let mint_module = match {
+                    if self.config.use_system_contracts() {
+                        let mint_contract = match tracking_copy
+                            .borrow_mut()
+                            .get_contract(correlation_id, Key::URef(mint_reference))
+                        {
+                            Ok(contract) => contract,
+                            Err(error) => {
+                                return Ok(ExecutionResult::precondition_failure(error.into()))
+                            }
+                        };
+                        engine_wasm_prep::deserialize(mint_contract.bytes())
+                    } else {
+                        wasm::do_nothing_module(preprocessor)
+                    }
+                } {
                     Ok(module) => module,
-                    Err(error) => return Ok(ExecutionResult::precondition_failure(error.into())),
+                    Err(error) => {
+                        return Ok(ExecutionResult::precondition_failure(error.into()));
+                    }
                 };
-                self.system_contract_cache.insert(mint_reference, module);
+                self.system_contract_cache
+                    .insert(mint_reference, mint_module);
             }
-
             mint_reference
         };
 
         // Get proof of stake system contract URef from account (an account on a
         // different network may have a pos contract other than the CLPoS)
         // payment_code_spec_6: system contract validity
-        let proof_of_stake_reference = protocol_data.proof_of_stake();
+        let (
+            proof_of_stake_reference,
+            proof_of_stake_module,
+            rewards_purse_balance_key,
+            payment_purse_key,
+        ) = {
+            let proof_of_stake_reference = protocol_data.proof_of_stake();
 
-        // Get proof of stake system contract details
-        // payment_code_spec_6: system contract validity
-        let proof_of_stake_contract = match tracking_copy
-            .borrow_mut()
-            .get_contract(correlation_id, Key::from(proof_of_stake_reference))
-        {
-            Ok(contract) => contract,
-            Err(error) => {
-                return Ok(ExecutionResult::precondition_failure(error.into()));
-            }
-        };
-
-        // Get rewards purse balance key
-        // payment_code_spec_6: system contract validity
-        let rewards_purse_balance_key: Key = {
-            // Get reward purse Key from proof of stake contract
+            // Get proof of stake system contract details
             // payment_code_spec_6: system contract validity
-            let rewards_purse_key: Key =
-                match proof_of_stake_contract.named_keys().get(POS_REWARDS_PURSE) {
-                    Some(key) => *key,
-                    None => {
-                        return Ok(ExecutionResult::precondition_failure(Error::Deploy));
-                    }
-                };
-
-            match tracking_copy.borrow_mut().get_purse_balance_key(
-                correlation_id,
-                mint_reference,
-                rewards_purse_key,
-            ) {
-                Ok(key) => key,
+            let proof_of_stake_contract = match tracking_copy
+                .borrow_mut()
+                .get_contract(correlation_id, Key::from(proof_of_stake_reference))
+            {
+                Ok(contract) => contract,
                 Err(error) => {
                     return Ok(ExecutionResult::precondition_failure(error.into()));
                 }
-            }
+            };
+
+            let proof_of_stake_module =
+                match self.system_contract_cache.get(&proof_of_stake_reference) {
+                    Some(module) => module,
+                    None => {
+                        match {
+                            if self.config.use_system_contracts() {
+                                engine_wasm_prep::deserialize(proof_of_stake_contract.bytes())
+                            } else {
+                                wasm::do_nothing_module(preprocessor)
+                            }
+                        } {
+                            Ok(module) => {
+                                self.system_contract_cache
+                                    .insert(proof_of_stake_reference, module.clone());
+                                module
+                            }
+                            Err(error) => {
+                                return Ok(ExecutionResult::precondition_failure(error.into()));
+                            }
+                        }
+                    }
+                };
+
+            // Get rewards purse balance key
+            // payment_code_spec_6: system contract validity
+            let rewards_purse_balance_key: Key = {
+                // Get reward purse Key from proof of stake contract
+                // payment_code_spec_6: system contract validity
+                let rewards_purse_key: Key =
+                    match proof_of_stake_contract.named_keys().get(POS_REWARDS_PURSE) {
+                        Some(key) => *key,
+                        None => {
+                            return Ok(ExecutionResult::precondition_failure(Error::Deploy));
+                        }
+                    };
+
+                match tracking_copy.borrow_mut().get_purse_balance_key(
+                    correlation_id,
+                    mint_reference,
+                    rewards_purse_key,
+                ) {
+                    Ok(key) => key,
+                    Err(error) => {
+                        return Ok(ExecutionResult::precondition_failure(error.into()));
+                    }
+                }
+            };
+
+            // Get payment purse Key from proof of stake contract
+            // payment_code_spec_6: system contract validity
+            let payment_purse_key: Key =
+                match proof_of_stake_contract.named_keys().get(POS_PAYMENT_PURSE) {
+                    Some(key) => *key,
+                    None => return Ok(ExecutionResult::precondition_failure(Error::Deploy)),
+                };
+
+            (
+                proof_of_stake_reference,
+                proof_of_stake_module,
+                rewards_purse_balance_key,
+                payment_purse_key,
+            )
         };
 
         // Get account main purse balance key
@@ -1160,18 +1216,10 @@ where
         // payment_code_spec_3: fork based upon payment purse balance and cost of
         // payment code execution
         let payment_purse_balance: Motes = {
-            // Get payment purse Key from proof of stake contract
-            // payment_code_spec_6: system contract validity
-            let payment_purse: Key =
-                match proof_of_stake_contract.named_keys().get(POS_PAYMENT_PURSE) {
-                    Some(key) => *key,
-                    None => return Ok(ExecutionResult::precondition_failure(Error::Deploy)),
-                };
-
             let purse_balance_key = match tracking_copy.borrow_mut().get_purse_balance_key(
                 correlation_id,
                 mint_reference,
-                payment_purse,
+                payment_purse_key,
             ) {
                 Ok(key) => key,
                 Err(error) => {
@@ -1254,24 +1302,6 @@ where
         let finalize_result = {
             let post_session_tc = post_session_rc.borrow();
             let finalization_tc = Rc::new(RefCell::new(post_session_tc.fork()));
-
-            // validation_spec_1: valid wasm bytes
-            let proof_of_stake_module =
-                match self.system_contract_cache.get(&proof_of_stake_reference) {
-                    Some(module) => module,
-                    None => {
-                        let module =
-                            match engine_wasm_prep::deserialize(proof_of_stake_contract.bytes()) {
-                                Ok(module) => module,
-                                Err(error) => {
-                                    return Ok(ExecutionResult::precondition_failure(error.into()))
-                                }
-                            };
-                        self.system_contract_cache
-                            .insert(proof_of_stake_reference, module.clone());
-                        module
-                    }
-                };
 
             let proof_of_stake_args = {
                 //((gas spent during payment code execution) + (gas spent during session code execution)) * conv_rate
@@ -1384,7 +1414,7 @@ where
 
         let contract = match reader.read(correlation_id, &proof_of_stake)? {
             Some(StoredValue::Contract(contract)) => contract,
-            _ => return Err(MissingSystemContract("proof of stake".to_string())),
+            _ => return Err(MissingSystemContract(PROOF_OF_STAKE.to_string())),
         };
 
         let bonded_validators = contract
