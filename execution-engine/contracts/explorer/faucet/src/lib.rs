@@ -6,12 +6,16 @@ use contract::{
 };
 use types::{account::PublicKey, ApiError, U512};
 
-/// Executes token transfer to supplied public key.
+#[repr(u32)]
+enum CustomError {
+    AlreadyFunded = 1,
+}
 
+/// Executes token transfer to supplied public key.
 /// Revert status codes:
 /// 1 - requested transfer to already funded public key.
 #[no_mangle]
-pub extern "C" fn call() {
+pub fn delegate() {
     let public_key: PublicKey = runtime::get_arg(0)
         .unwrap_or_revert_with(ApiError::MissingArgument)
         .unwrap_or_revert_with(ApiError::InvalidArgument);
@@ -26,10 +30,16 @@ pub extern "C" fn call() {
         .is_some();
 
     if already_funded {
-        runtime::revert(ApiError::User(1));
+        runtime::revert(ApiError::User(CustomError::AlreadyFunded as u16));
     } else {
         system::transfer_to_account(public_key, amount).unwrap_or_revert();
         // Transfer successful; Store the fact of funding in the local state.
         storage::write_local(public_key, amount);
     }
+}
+
+#[cfg(not(feature = "lib"))]
+#[no_mangle]
+pub extern "C" fn call() {
+    delegate();
 }
