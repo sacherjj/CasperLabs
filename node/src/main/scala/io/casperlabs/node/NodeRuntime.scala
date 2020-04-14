@@ -475,7 +475,8 @@ class NodeRuntime private[node] (
         conf.server.port,
         conf.server.kademliaPort,
         conf.server.noUpnp,
-        id
+        id,
+        BuildInfo.version
       )
 
   private def initPeers[F[_]: MonadThrowable]: F[List[NodeWithoutChainId]] =

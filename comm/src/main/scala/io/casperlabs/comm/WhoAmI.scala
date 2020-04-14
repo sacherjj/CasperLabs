@@ -21,12 +21,15 @@ object WhoAmI {
       protocolPort: Int,
       discoveryPort: Int,
       noUpnp: Boolean,
-      id: NodeIdentifier
+      id: NodeIdentifier,
+      version: String
   ): F[NodeWithoutChainId] =
     for {
       externalAddress <- retrieveExternalAddress(noUpnp, protocolPort)
       host            <- fetchHost(host, externalAddress)
-      peerNode        = NodeWithoutChainId(Node(id.asByteString, host, protocolPort, discoveryPort))
+      peerNode = NodeWithoutChainId(
+        Node(id.asByteString, host, protocolPort, discoveryPort, version = version)
+      )
     } yield peerNode
 
   /** TODO: Unused at the moment, might be useful for dynamic IPs tracking: NODE-496
