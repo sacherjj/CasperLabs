@@ -19,8 +19,8 @@ import io.casperlabs.casper.validation.{NCBValidationImpl, Validation}
 import io.casperlabs.casper.{consensus, _}
 import io.casperlabs.comm.discovery.{Node, NodeDiscovery, NodeIdentifier}
 import io.casperlabs.comm.gossiping._
-import io.casperlabs.comm.gossiping.relaying._
 import io.casperlabs.comm.gossiping.downloadmanager._
+import io.casperlabs.comm.gossiping.relaying._
 import io.casperlabs.comm.gossiping.synchronization._
 import io.casperlabs.crypto.Keys.PrivateKey
 import io.casperlabs.mempool.DeployBuffer
@@ -384,7 +384,7 @@ object GossipServiceCasperTestNodeFactory {
         blockDownloadManagerR <- BlockDownloadManagerImpl[F](
                                   maxParallelDownloads = 10,
                                   connectToGossip = connectToGossip,
-                                  backend = new BlockDownloadManagerImpl.Backend[F] {
+                                  backend = new BlockDownloadManagerImpl.EnrichedBackend[F] {
                                     override def contains(blockHash: ByteString): F[Boolean] =
                                       isInDag(blockHash)
 
@@ -449,6 +449,13 @@ object GossipServiceCasperTestNodeFactory {
                                       Log[F].debug(
                                         s"Download failed for ${blockHash.show -> "message" -> null}"
                                       )
+
+                                    override def readDeploys(deployHashes: Seq[DeployHash]) =
+                                      deployStorage
+                                        .reader(DeployInfo.View.FULL)
+                                        .getByHashes(deployHashes.toSet)
+                                        .compile
+                                        .toList
                                   },
                                   relaying = relaying,
                                   retriesConf = BlockDownloadManagerImpl.RetriesConf.noRetries,

@@ -21,8 +21,8 @@ import io.casperlabs.comm.ServiceError.{InvalidArgument, Unavailable}
 import io.casperlabs.comm.discovery.NodeUtils._
 import io.casperlabs.comm.discovery.{Node, NodeDiscovery}
 import io.casperlabs.comm.gossiping._
-import io.casperlabs.comm.gossiping.relaying._
 import io.casperlabs.comm.gossiping.downloadmanager._
+import io.casperlabs.comm.gossiping.relaying._
 import io.casperlabs.comm.gossiping.synchronization._
 import io.casperlabs.comm.grpc._
 import io.casperlabs.comm.{CachedConnections, NodeAsk}
@@ -324,7 +324,7 @@ package object gossiping {
                         )
     } yield downloadManager
 
-  private def makeBlockDownloadManager[F[_]: ContextShift: Concurrent: Log: Time: Timer: Metrics: DagStorage: Consensus](
+  private def makeBlockDownloadManager[F[_]: ContextShift: Concurrent: Log: Time: Timer: Metrics: DagStorage: Consensus: DeployStorage](
       conf: Configuration,
       connectToGossip: GossipService.Connector[F],
       relaying: BlockRelaying[F],
@@ -341,7 +341,7 @@ package object gossiping {
       downloadManager <- BlockDownloadManagerImpl[F](
                           maxParallelDownloads = conf.server.downloadMaxParallelBlocks,
                           connectToGossip = connectToGossip,
-                          backend = new BlockDownloadManagerImpl.Backend[F] {
+                          backend = new BlockDownloadManagerImpl.EnrichedBackend[F] {
                             override def contains(blockHash: ByteString): F[Boolean] =
                               isInDag(blockHash)
 
@@ -377,6 +377,13 @@ package object gossiping {
 
                             override def onFailed(blockHash: ByteString): F[Unit] =
                               synchronizer.onFailed(blockHash)
+
+                            override def readDeploys(deployHashes: Seq[DeployHash]) =
+                              DeployStorage[F]
+                                .reader(DeployInfo.View.FULL)
+                                .getByHashes(deployHashes.toSet)
+                                .compile
+                                .toList
                           },
                           relaying = relaying,
                           retriesConf = BlockDownloadManagerImpl.RetriesConf(

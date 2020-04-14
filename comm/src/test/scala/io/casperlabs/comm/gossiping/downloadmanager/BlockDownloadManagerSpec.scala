@@ -6,14 +6,13 @@ import cats.effect.concurrent.Semaphore
 import cats.implicits._
 import com.google.protobuf.ByteString
 import eu.timepit.refined.auto._
-import io.casperlabs.casper.consensus.{Approval, Block, BlockSummary, DeploySummary}
+import io.casperlabs.casper.consensus.{Block, BlockSummary, Deploy}
 import io.casperlabs.comm.GossipError
 import io.casperlabs.comm.discovery.Node
 import io.casperlabs.comm.discovery.NodeUtils.showNode
+import io.casperlabs.comm.gossiping._
 import io.casperlabs.comm.gossiping.downloadmanager.BlockDownloadManagerImpl._
 import io.casperlabs.comm.gossiping.relaying.BlockRelaying
-import io.casperlabs.comm.gossiping.synchronization.Synchronizer
-import io.casperlabs.comm.gossiping._
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.models.BlockImplicits.BlockOps
 import io.casperlabs.shared.{Log, LogStub}
@@ -671,7 +670,7 @@ object BlockDownloadManagerSpec {
   }
 
   class MockBackend(validationFunction: Block => Task[Unit] = _ => Task.unit)
-      extends BlockDownloadManagerImpl.Backend[Task] {
+      extends BlockDownloadManagerImpl.EnrichedBackend[Task] {
     // Record what we have been called with.
     @volatile var validations = Vector.empty[ByteString]
     @volatile var blocks      = Vector.empty[ByteString]
@@ -705,6 +704,8 @@ object BlockDownloadManagerSpec {
     }
 
     def onFailed(blockHash: ByteString): Task[Unit] = Task.unit
+
+    def readDeploys(deployHashes: Seq[ByteString]) = Task.pure(Nil)
   }
   object MockBackend {
     def default                                               = apply()
@@ -738,6 +739,8 @@ object BlockDownloadManagerSpec {
         backend = new NoOpsGossipServiceServerBackend[Task] {
           override def getBlock(blockHash: ByteString, deploysBodiesExcluded: Boolean) =
             Task.now(None)
+
+          override def getDeploys(deployHashes: Set[ByteString]) = Iterant.empty[Task, Deploy]
         },
         synchronizer = emptySynchronizer,
         connector = _ => ???,
@@ -772,6 +775,13 @@ object BlockDownloadManagerSpec {
                 }
               }))
 
+            override def getDeploys(deployHashes: Set[ByteString]) =
+              Iterant.fromIterable(
+                blocks
+                  .flatMap(_.getBody.deploys.map(_.getDeploy))
+                  .toSet
+                  .filter(d => deployHashes(d.deployHash))
+              )
           },
           synchronizer = emptySynchronizer,
           connector = _ => ???,

@@ -3,7 +3,7 @@ package io.casperlabs.models
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.Block.{GlobalState, Justification}
 import io.casperlabs.casper.consensus.state.ProtocolVersion
-import io.casperlabs.casper.consensus.{Block, BlockSummary}
+import io.casperlabs.casper.consensus.{Block, BlockSummary, Deploy}
 import io.casperlabs.models.Message._
 
 object BlockImplicits {
@@ -40,6 +40,10 @@ object BlockImplicits {
           processedDeploy => processedDeploy.withDeploy(processedDeploy.getDeploy.clearBody)
         )
     )
+    def withDeploys(deploys: List[Deploy]): Block =
+      block.update(_.body.deploys := block.getBody.deploys.zip(deploys).map {
+        case (processedDeploy, deploy) => processedDeploy.withDeploy(deploy)
+      })
   }
 
   implicit class BlockSummaryOps(val summary: BlockSummary) extends AnyVal {

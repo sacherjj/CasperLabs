@@ -115,6 +115,11 @@ message StreamDeploysChunkedRequest {
     repeated string accepted_compression_algorithms = 3;
 }
 
+// Workaround to parse a list of deploys when 'StreamDeploysChunked'
+message DeploysList {
+    repeated io.casperlabs.casper.consensus.Deploy deploys = 1; 
+}
+
 message GetGenesisCandidateRequest {}
 
 message AddApprovalRequest {
