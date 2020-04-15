@@ -320,7 +320,7 @@ def test_revert_subcall(client, node):
     block_hash = deploy_from_genesis(node, Contract.SUBCALL_REVERT_CALL)
     r = client.show_deploys(block_hash)[0]
     assert r.is_error
-    assert r.error_message == "Exit code: 65538"
+    assert r.error_message == "User error: 2"
 
 
 def test_revert_direct(client, node):
@@ -329,7 +329,7 @@ def test_revert_direct(client, node):
 
     r = client.show_deploys(block_hash)[0]
     assert r.is_error
-    assert r.error_message == "Exit code: 65537"
+    assert r.error_message == "User error: 1"
 
 
 def test_deploy_with_valid_signature(one_node_network):
@@ -425,9 +425,8 @@ def test_deploy_with_args(one_node_network, genesis_public_signing_key):
             )
 
             for deploy_info in client.showDeploys(block_hash):
-                exit_code = number + USER_ERROR_MIN
                 assert deploy_info.is_error is True
-                assert deploy_info.error_message == f"Exit code: {exit_code}"
+                assert deploy_info.error_message == f"User error: {number}"
 
     wasm = resources_path() / Contract.ARGS_MULTI
     account_hex = "0101010102020202030303030404040405050505060606060707070708080808"
@@ -444,9 +443,8 @@ def test_deploy_with_args(one_node_network, genesis_public_signing_key):
     )
 
     for deploy_info in client.showDeploys(block_hash):
-        exit_code = total_sum + USER_ERROR_MIN
         assert deploy_info.is_error is True
-        assert deploy_info.error_message == f"Exit code: {exit_code}"
+        assert deploy_info.error_message == f"User error: {total_sum}"
 
     for blockInfo in client.showBlocks(10):
         assert blockInfo.status.stats.block_size_bytes > 0
@@ -600,9 +598,8 @@ def check_cli_abi_unsigned(cli, unsigned_type, value, test_contract):
 
         cli.node.wait_for_deploy_processed_and_get_block_hash(deploy_hash, on_error_raise=False)
         deploy_info = cli("show-deploy", deploy_hash)
-        exit_code = number + USER_ERROR_MIN
         assert deploy_info.processing_results[0].is_error is True
-        assert deploy_info.processing_results[0].error_message == f"Exit code: {exit_code}"
+        assert deploy_info.processing_results[0].error_message == f"User error: {number}"
 
 
 def test_cli_abi_multiple(cli):
@@ -623,9 +620,8 @@ def test_cli_abi_multiple(cli):
                       '--payment-args', cli.payment_json)
     cli.node.wait_for_deploy_processed_and_get_block_hash(deploy_hash, on_error_raise=False)
     deploy_info = cli("show-deploy", deploy_hash)
-    exit_code = total_sum + USER_ERROR_MIN
     assert deploy_info.processing_results[0].is_error is True
-    assert deploy_info.processing_results[0].error_message == f"Exit code: {exit_code}"
+    assert deploy_info.processing_results[0].error_message == f"User error: {total_sum}"
 
 
 def test_cli_scala_help(scala_cli):
@@ -725,7 +721,7 @@ def check_cli_direct_call_by_hash_and_name(cli):
     deploys = cli("show-deploys", block_hash)
     for deploy_info in deploys:
         assert deploy_info.deploy.deploy_hash == deploy_hash
-        assert deploy_info.error_message == 'Exit code: 65538'  # Expected: contract called revert(2)
+        assert deploy_info.error_message == 'User error: 2'  # Expected: contract called revert(2)
 
     # Call by function address
     revert_test_addr = contract_address(first_deploy_hash, 0).hex()  # assume fn_store_id starts from 0
@@ -736,7 +732,7 @@ def check_cli_direct_call_by_hash_and_name(cli):
     deploys = cli("show-deploys", block_hash)
     for deploy_info in deploys:
         assert deploy_info.deploy.deploy_hash == deploy_hash
-        assert deploy_info.error_message == 'Exit code: 65538'
+        assert deploy_info.error_message == 'User error: 2'
 
 
 def check_no_errors(cli, deploy_hash):
@@ -1052,4 +1048,4 @@ def test_invalid_bigint(one_node_network):
 
     # User(code) in revert adds 65536 to the 1000
     assert result.status.state == "PROCESSED"
-    assert result.processing_results.error_message == f"Exit code: {1000 + 65536}"
+    assert result.processing_results.error_message == f"User error: 1000"

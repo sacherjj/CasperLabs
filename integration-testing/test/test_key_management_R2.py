@@ -166,7 +166,7 @@ def test_deploy_threshold_cannot_exceed_key_management_threshold(account_setup):
     )
 
     # If set for deploy fails, contract will revert(200)
-    assert_deploy_is_error(node, block_hash, "Exit code: 65736")
+    assert_deploy_is_error(node, block_hash, "User error: 200")
 
 
 def test_key_cannot_deploy_with_weight_below_threshold(account_setup):
@@ -222,21 +222,21 @@ def test_key_cannot_manage_with_weight_below_threshold(account_setup):
         node, KEY_MGMT_KEY, KEY_MGMT_KEY_WEIGHT, DEPLOY_KEY_WEIGHT
     )
     # First process of contract fails with a revert(100)
-    assert_deploy_is_error(node, block_hash, "Exit code: 65636")
+    assert_deploy_is_error(node, block_hash, "User error: 100")
 
     # Remove key should fail
     block_hash = remove_associated_key(node, KEY_MGMT_KEY, DEPLOY_KEY)
-    assert_deploy_is_error(node, block_hash, "Exit code: 65536")
+    assert_deploy_is_error(node, block_hash, "User error: 0")
 
     # Add key should fail
     block_hash = add_associated_key(node, KEY_MGMT_KEY, IDENTITY_KEY, 10)
-    assert_deploy_is_error(node, block_hash, "Exit code: 65636")
+    assert_deploy_is_error(node, block_hash, "User error: 100")
 
     # Update key should fail
     block_hash = update_associated_key(
         node, weight_key=KEY_MGMT_KEY, key=DEPLOY_KEY, weight=11
     )
-    assert_deploy_is_error(node, block_hash, "Exit code: 65636")
+    assert_deploy_is_error(node, block_hash, "User error: 100")
 
     # Reset thresholds
     block_hash = set_key_thresholds(

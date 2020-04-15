@@ -47,7 +47,7 @@ class _Explorer extends RefreshableComponent<Props, {}> {
   componentWillUnmount() {
     super.componentWillUnmount();
     // release websocket if necessary
-    this.props.dag.unsubscribe();
+    this.props.dag.toggleableSubscriber.unsubscribe();
   }
 
   render() {
@@ -64,7 +64,7 @@ class _Explorer extends RefreshableComponent<Props, {}> {
               }
               blocks={dag.blocks}
               refresh={() => this.refresh()}
-              subscribeToggleStore={dag.subscribeToggleStore}
+              subscribeToggleStore={dag.toggleableSubscriber.subscribeToggleStore}
               hideBallotsToggleStore={dag.hideBallotsToggleStore}
               hideBlockHashToggleStore={dag.hideBlockHashToggleStore}
               footerMessage={

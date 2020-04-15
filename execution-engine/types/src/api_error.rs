@@ -27,6 +27,24 @@ const POS_ERROR_OFFSET: u32 = RESERVED_ERROR_MAX - u8::MAX as u32; // 65280..=65
 /// added to them when being converted to a `u32`.
 const MINT_ERROR_OFFSET: u32 = (POS_ERROR_OFFSET - 1) - u8::MAX as u32; // 65024..=65279
 
+/// Minimum value of user error's inclusive range.
+const USER_ERROR_MIN: u32 = RESERVED_ERROR_MAX + 1;
+
+/// Maximum value of user error's inclusive range.
+const USER_ERROR_MAX: u32 = 2 * RESERVED_ERROR_MAX + 1;
+
+/// Minimum value of Mint error's inclusive range.
+const MINT_ERROR_MIN: u32 = MINT_ERROR_OFFSET;
+
+/// Maximum value of Mint error's inclusive range.
+const MINT_ERROR_MAX: u32 = POS_ERROR_OFFSET - 1;
+
+/// Minimum value of Proof of Stake error's inclusive range.
+const POS_ERROR_MIN: u32 = POS_ERROR_OFFSET;
+
+/// Maximum value of Proof of Stake error's inclusive range.
+const POS_ERROR_MAX: u32 = RESERVED_ERROR_MAX;
+
 /// Errors which can be encountered while running a smart contract.
 ///
 /// An `ApiError` can be converted to a `u32` in order to be passed via the execution engine's
@@ -523,6 +541,52 @@ impl From<ApiError> for u32 {
     }
 }
 
+impl From<u32> for ApiError {
+    fn from(value: u32) -> ApiError {
+        match value {
+            1 => ApiError::None,
+            2 => ApiError::MissingArgument,
+            3 => ApiError::InvalidArgument,
+            4 => ApiError::Deserialize,
+            5 => ApiError::Read,
+            6 => ApiError::ValueNotFound,
+            7 => ApiError::ContractNotFound,
+            8 => ApiError::GetKey,
+            9 => ApiError::UnexpectedKeyVariant,
+            10 => ApiError::UnexpectedContractRefVariant,
+            11 => ApiError::InvalidPurseName,
+            12 => ApiError::InvalidPurse,
+            13 => ApiError::UpgradeContractAtURef,
+            14 => ApiError::Transfer,
+            15 => ApiError::NoAccessRights,
+            16 => ApiError::CLTypeMismatch,
+            17 => ApiError::EarlyEndOfStream,
+            18 => ApiError::Formatting,
+            19 => ApiError::LeftOverBytes,
+            20 => ApiError::OutOfMemory,
+            21 => ApiError::MaxKeysLimit,
+            22 => ApiError::DuplicateKey,
+            23 => ApiError::PermissionDenied,
+            24 => ApiError::MissingKey,
+            25 => ApiError::ThresholdViolation,
+            26 => ApiError::KeyManagementThreshold,
+            27 => ApiError::DeploymentThreshold,
+            28 => ApiError::InsufficientTotalWeight,
+            29 => ApiError::InvalidSystemContract,
+            30 => ApiError::PurseNotCreated,
+            31 => ApiError::Unhandled,
+            32 => ApiError::BufferTooSmall,
+            33 => ApiError::HostBufferEmpty,
+            34 => ApiError::HostBufferFull,
+            35 => ApiError::AllocLayout,
+            USER_ERROR_MIN..=USER_ERROR_MAX => ApiError::User(value as u16),
+            POS_ERROR_MIN..=POS_ERROR_MAX => ApiError::ProofOfStake(value as u8),
+            MINT_ERROR_MIN..=MINT_ERROR_MAX => ApiError::Mint(value as u8),
+            _ => ApiError::Unhandled,
+        }
+    }
+}
+
 impl Debug for ApiError {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match self {
@@ -571,6 +635,17 @@ impl Debug for ApiError {
     }
 }
 
+impl fmt::Display for ApiError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            ApiError::User(value) => write!(f, "User error: {}", value),
+            ApiError::Mint(value) => write!(f, "Mint error: {}", value),
+            ApiError::ProofOfStake(value) => write!(f, "PoS error: {}", value),
+            _ => <Self as Debug>::fmt(&self, f),
+        }
+    }
+}
+
 // This function is not intended to be used by third party crates.
 #[doc(hidden)]
 pub fn i32_from(result: Result<(), ApiError>) -> i32 {
@@ -586,52 +661,7 @@ pub fn i32_from(result: Result<(), ApiError>) -> i32 {
 pub fn result_from(value: i32) -> Result<(), ApiError> {
     match value {
         0 => Ok(()),
-        1 => Err(ApiError::None),
-        2 => Err(ApiError::MissingArgument),
-        3 => Err(ApiError::InvalidArgument),
-        4 => Err(ApiError::Deserialize),
-        5 => Err(ApiError::Read),
-        6 => Err(ApiError::ValueNotFound),
-        7 => Err(ApiError::ContractNotFound),
-        8 => Err(ApiError::GetKey),
-        9 => Err(ApiError::UnexpectedKeyVariant),
-        10 => Err(ApiError::UnexpectedContractRefVariant),
-        11 => Err(ApiError::InvalidPurseName),
-        12 => Err(ApiError::InvalidPurse),
-        13 => Err(ApiError::UpgradeContractAtURef),
-        14 => Err(ApiError::Transfer),
-        15 => Err(ApiError::NoAccessRights),
-        16 => Err(ApiError::CLTypeMismatch),
-        17 => Err(ApiError::EarlyEndOfStream),
-        18 => Err(ApiError::Formatting),
-        19 => Err(ApiError::LeftOverBytes),
-        20 => Err(ApiError::OutOfMemory),
-        21 => Err(ApiError::MaxKeysLimit),
-        22 => Err(ApiError::DuplicateKey),
-        23 => Err(ApiError::PermissionDenied),
-        24 => Err(ApiError::MissingKey),
-        25 => Err(ApiError::ThresholdViolation),
-        26 => Err(ApiError::KeyManagementThreshold),
-        27 => Err(ApiError::DeploymentThreshold),
-        28 => Err(ApiError::InsufficientTotalWeight),
-        29 => Err(ApiError::InvalidSystemContract),
-        30 => Err(ApiError::PurseNotCreated),
-        31 => Err(ApiError::Unhandled),
-        32 => Err(ApiError::BufferTooSmall),
-        33 => Err(ApiError::HostBufferEmpty),
-        34 => Err(ApiError::HostBufferFull),
-        35 => Err(ApiError::AllocLayout),
-        _ => {
-            if value > RESERVED_ERROR_MAX as i32 && value <= (2 * RESERVED_ERROR_MAX + 1) as i32 {
-                Err(ApiError::User(value as u16))
-            } else if value >= POS_ERROR_OFFSET as i32 && value <= RESERVED_ERROR_MAX as i32 {
-                Err(ApiError::ProofOfStake(value as u8))
-            } else if value >= MINT_ERROR_OFFSET as i32 && value < POS_ERROR_OFFSET as i32 {
-                Err(ApiError::Mint(value as u8))
-            } else {
-                Err(ApiError::Unhandled)
-            }
-        }
+        _ => Err(ApiError::from(value as u32)),
     }
 }
 
@@ -656,18 +686,18 @@ mod tests {
         assert_eq!(131_071_u32, ApiError::User(u16::MAX).into()); // 2 * u16::MAX + 1
 
         assert_eq!("ApiError::GetKey [8]", &format!("{:?}", ApiError::GetKey));
+        assert_eq!("ApiError::GetKey [8]", &format!("{}", ApiError::GetKey));
         assert_eq!(
             "ApiError::Mint(0) [65024]",
             &format!("{:?}", ApiError::Mint(0))
         );
-        assert_eq!(
-            "ApiError::Mint(255) [65279]",
-            &format!("{:?}", ApiError::Mint(u8::MAX))
-        );
+        assert_eq!("Mint error: 0", &format!("{}", ApiError::Mint(0)));
+        assert_eq!("Mint error: 255", &format!("{}", ApiError::Mint(u8::MAX)));
         assert_eq!(
             "ApiError::ProofOfStake(0) [65280]",
             &format!("{:?}", ApiError::ProofOfStake(0))
         );
+        assert_eq!("PoS error: 0", &format!("{}", ApiError::ProofOfStake(0)));
         assert_eq!(
             "ApiError::ProofOfStake(255) [65535]",
             &format!("{:?}", ApiError::ProofOfStake(u8::MAX))
@@ -676,9 +706,14 @@ mod tests {
             "ApiError::User(0) [65536]",
             &format!("{:?}", ApiError::User(0))
         );
+        assert_eq!("User error: 0", &format!("{}", ApiError::User(0)));
         assert_eq!(
             "ApiError::User(65535) [131071]",
             &format!("{:?}", ApiError::User(u16::MAX))
+        );
+        assert_eq!(
+            "User error: 65535",
+            &format!("{}", ApiError::User(u16::MAX))
         );
 
         assert_eq!(Err(ApiError::Unhandled), result_from(i32::MAX));

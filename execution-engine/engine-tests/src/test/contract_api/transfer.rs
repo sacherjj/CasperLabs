@@ -9,7 +9,7 @@ use engine_test_support::{
     },
     DEFAULT_ACCOUNT_ADDR, DEFAULT_ACCOUNT_INITIAL_BALANCE,
 };
-use types::{account::PublicKey, U512};
+use types::{account::PublicKey, ApiError, U512};
 
 const CONTRACT_TRANSFER_PURSE_TO_ACCOUNT: &str = "transfer_purse_to_account.wasm";
 const CONTRACT_TRANSFER_TO_ACCOUNT: &str = "transfer_to_account_u512.wasm";
@@ -312,11 +312,14 @@ fn should_fail_when_insufficient_funds() {
         .commit()
         .finish();
 
-    assert!(result
+    let error_msg = result
         .builder()
         .exec_error_message(2)
-        .expect("should have error message")
-        .contains("Trap(Trap { kind: Host(Revert(14)) })"))
+        .expect("should have error message");
+    assert!(
+        error_msg.contains(&format!("{:?}", ApiError::Transfer)),
+        error_msg
+    );
 }
 
 #[ignore]
