@@ -6,7 +6,6 @@ import { Redirect } from 'react-router-dom';
 import { Form, TextField } from './Forms';
 import { UnlockPageContainer } from '../container/UnlockPageContainer';
 import AccountManager from '../container/AccountManager';
-import { NoPreviousVaultError } from '../../lib/Errors';
 import Pages from './Pages';
 
 interface Props {

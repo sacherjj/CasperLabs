@@ -2,7 +2,6 @@
   "manifest_version": 2,
   "version": "0.0.1",
   "name": "CasperLabs Clarity Sign Helper",
-  "key": "ofbochmmkkolmbdmoaimaahdodjifajm",
   "icons": {
     "16": "favicon.ico",
     "48": "logo192.png",
@@ -27,15 +26,8 @@
   "web_accessible_resources": [
     "scripts/content/inject.js"
   ],
-  "default_locale": "en",
   "browser_action": {
     "default_popup": "index.html",
     "default_title": "CasperLabs Sign Helper"
-  },
-  "externally_connectable": {
-    "matches": [
-      "*://clarity.casperlabs.io/*",
-      "*://localhost:*/*"
-    ]
   }
 }
