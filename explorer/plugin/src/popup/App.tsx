@@ -19,34 +19,60 @@ import SignMessageContainer from './container/SignMessageContainer';
 
 export interface AppProps {
   errors: ErrorContainer;
-  unlockPageContainer: UnlockPageContainer,
-  authContainer: AccountManager,
-  homeContainer: HomeContainer,
-  importAccountContainer: ImportAccountContainer,
-  signMessageContainer: SignMessageContainer
+  unlockPageContainer: UnlockPageContainer;
+  authContainer: AccountManager;
+  homeContainer: HomeContainer;
+  importAccountContainer: ImportAccountContainer;
+  signMessageContainer: SignMessageContainer;
 }
 
 const App = (props: AppProps) => {
   return (
     <div>
-      <Menu authContainer={props.authContainer}/>
+      <Menu authContainer={props.authContainer} />
       <div>
         <div className="container-fluid">
-          <Alerts {...props}/>
+          <Alerts {...props} />
           <Switch>
-            <Route exact path={Pages.Home} render={_ => <Home authContainer={props.authContainer}
-                                                              homeContainer={props.homeContainer}/>}/>
-            <Route path={Pages.UnlockPage}
-                   exact
-                   render={_ =>
-                     <UnlockPage unlockPageContainer={props.unlockPageContainer}
-                                 authContainer={props.authContainer}/>
-                   }/>
-            <Route path={Pages.ImportAccount} exact
-                   render={_ => <ImportAccountPage importAccountContainer={props.importAccountContainer}
-                                                   authContainer={props.authContainer}/>}/>
-            <Route path={Pages.SignMessage} exact
-                   render={_ => <SignMessagePage signMessageContainer={props.signMessageContainer}/>}/>
+            <Route
+              exact
+              path={Pages.Home}
+              render={_ => (
+                <Home
+                  authContainer={props.authContainer}
+                  homeContainer={props.homeContainer}
+                />
+              )}
+            />
+            <Route
+              path={Pages.UnlockPage}
+              exact
+              render={_ => (
+                <UnlockPage
+                  unlockPageContainer={props.unlockPageContainer}
+                  authContainer={props.authContainer}
+                />
+              )}
+            />
+            <Route
+              path={Pages.ImportAccount}
+              exact
+              render={_ => (
+                <ImportAccountPage
+                  importAccountContainer={props.importAccountContainer}
+                  authContainer={props.authContainer}
+                />
+              )}
+            />
+            <Route
+              path={Pages.SignMessage}
+              exact
+              render={_ => (
+                <SignMessagePage
+                  signMessageContainer={props.signMessageContainer}
+                />
+              )}
+            />
           </Switch>
         </div>
       </div>

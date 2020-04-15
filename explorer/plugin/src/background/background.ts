@@ -8,7 +8,6 @@ import * as nacl from 'tweetnacl-ts';
 import { updateBadge } from './utils';
 import { setupInjectPageAPIServer } from '../lib/rpc/Provider';
 
-
 const appState = new AppState();
 const accountController = new AccountController(appState);
 const signMessageManager = new SignMessageManager(appState);
@@ -34,12 +33,27 @@ async function setupPopupAPIServer() {
     rpc.call<void>('popup.updateState', appState);
     updateBadge(appState);
   });
-  rpc.register('account.unlock', accountController.unlock.bind(accountController));
-  rpc.register('account.createNewVault', accountController.createNewVault.bind(accountController));
-  rpc.register('account.hasCreatedVault', accountController.hasCreatedVault.bind(accountController));
+  rpc.register(
+    'account.unlock',
+    accountController.unlock.bind(accountController)
+  );
+  rpc.register(
+    'account.createNewVault',
+    accountController.createNewVault.bind(accountController)
+  );
+  rpc.register(
+    'account.hasCreatedVault',
+    accountController.hasCreatedVault.bind(accountController)
+  );
   rpc.register('account.lock', accountController.lock.bind(accountController));
-  rpc.register('account.importUserAccount', accountController.importUserAccount.bind(accountController));
-  rpc.register('account.switchToAccount', accountController.switchToAccount.bind(accountController));
+  rpc.register(
+    'account.importUserAccount',
+    accountController.importUserAccount.bind(accountController)
+  );
+  rpc.register(
+    'account.switchToAccount',
+    accountController.switchToAccount.bind(accountController)
+  );
   rpc.register('background.getState', () => {
     return appState;
   });
@@ -47,8 +61,14 @@ async function setupPopupAPIServer() {
     if (!appState.selectedUserAccount) {
       throw new Error(`Please select the account firstly`);
     }
-    let sig = nacl.sign_detached(nacl.decodeBase64(msg.data), appState.selectedUserAccount.signKeyPair.secretKey);
+    let sig = nacl.sign_detached(
+      nacl.decodeBase64(msg.data),
+      appState.selectedUserAccount.signKeyPair.secretKey
+    );
     return signMessageManager.approveMsg(msg.id, nacl.encodeBase64(sig));
   });
-  rpc.register('sign.rejectMessage', signMessageManager.rejectMsg.bind(signMessageManager));
+  rpc.register(
+    'sign.rejectMessage',
+    signMessageManager.rejectMsg.bind(signMessageManager)
+  );
 }

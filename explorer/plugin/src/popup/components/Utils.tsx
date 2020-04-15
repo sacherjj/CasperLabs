@@ -2,21 +2,14 @@ import { useHistory } from 'react-router-dom';
 import { Button } from 'react-bootstrap';
 import React from 'react';
 
-export const LinkButton = (props: {
-  title: string,
-  path: string
-}) => {
+export const LinkButton = (props: { title: string; path: string }) => {
   let history = useHistory();
 
   function handleClick() {
     history.push(props.path);
   }
 
-  return (
-    <Button onClick={handleClick}>
-      {props.title}
-    </Button>
-  );
+  return <Button onClick={handleClick}>{props.title}</Button>;
 };
 
 export const ListInline = (props: { children: any }) => {
@@ -42,7 +35,7 @@ export const IconButton = (props: {
     title={props.title}
     className="link icon-button"
   >
-    <Icon name={props.icon}/>
+    <Icon name={props.icon} />
   </button>
 );
 

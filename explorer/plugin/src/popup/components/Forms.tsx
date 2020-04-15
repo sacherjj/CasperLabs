@@ -39,12 +39,11 @@ function controlClass(props: FieldProps<any>) {
   if (props.readonly) {
     return 'form-control';
   }
-  let validity =
-    !props.fieldState.hasBeenValidated ?
-      ''
-      : props.fieldState.hasError
-      ? 'is-invalid'
-      : '';
+  let validity = !props.fieldState.hasBeenValidated
+    ? ''
+    : props.fieldState.hasError
+    ? 'is-invalid'
+    : '';
   return ['form-control', validity].join(' ');
 }
 
@@ -70,38 +69,31 @@ export const TextField = observer((props: TextProps) => {
           (props.fieldState as FieldState<string>).onChange(e.target.value);
         }
       }}
-      onBlur={
-        () => {
-          if (!props.readonly || props.fieldState instanceof String) {
-            (props.fieldState as FieldState<string>).enableAutoValidationAndValidate();
-          }
+      onBlur={() => {
+        if (!props.readonly || props.fieldState instanceof String) {
+          (props.fieldState as FieldState<
+            string
+          >).enableAutoValidationAndValidate();
         }
-      }
+      }}
     />
   );
   let cu = (props.unit && 'has-unit') || '';
   let cn = (props.numeric && 'numeric') || '';
   return (
     <div className={[cu, cn].filter(x => x !== '').join(' ')}>
-      {props.label && (
-        <label htmlFor={props.id}>{props.label}</label>
-      )}
+      {props.label && <label htmlFor={props.id}>{props.label}</label>}
       {(props.unit && (
         <div className="input-group">
           {input}
           <div className="input-group-addon">{props.unit}</div>
         </div>
       )) ||
-      input}
-      {errorMsg &&
-      <div className="invalid-feedback">
-        {errorMsg}
-      </div>
-      }
+        input}
+      {errorMsg && <div className="invalid-feedback">{errorMsg}</div>}
     </div>
   );
 });
-
 
 export const NumberField = observer((props: NumberInputProps) => {
   let input = (
@@ -130,10 +122,12 @@ export const NumberField = observer((props: NumberInputProps) => {
           <div className="input-group-addon">{props.unit}</div>
         </div>
       )) ||
-      input}
-      {(props.fieldState as FieldState<number>).hasError && <div className="invalid-feedback">
-        {(props.fieldState as FieldState<number>).error}
-      </div>}
+        input}
+      {(props.fieldState as FieldState<number>).hasError && (
+        <div className="invalid-feedback">
+          {(props.fieldState as FieldState<number>).error}
+        </div>
+      )}
     </div>
   );
 });
@@ -175,7 +169,11 @@ export const Form = (props: FormProps) => {
 
 export const ErrorMessage = (props: { error: string | null }) =>
   props.error ? (
-    <div className="alert alert-danger" role="alert" style={{ 'fontSize': 'small' }}>
+    <div
+      className="alert alert-danger"
+      role="alert"
+      style={{ fontSize: 'small' }}
+    >
       {props.error}
     </div>
   ) : null;

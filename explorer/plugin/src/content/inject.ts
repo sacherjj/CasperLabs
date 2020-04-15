@@ -2,7 +2,10 @@ import { registerClient } from '../lib/rpc/client';
 
 // See README.md for details
 class CasperLabsPluginHelper {
-  private readonly call: <RESULT>(method: string, ...params: any[]) => Promise<RESULT>;
+  private readonly call: <RESULT>(
+    method: string,
+    ...params: any[]
+  ) => Promise<RESULT>;
 
   constructor() {
     this.call = registerClient();
@@ -16,7 +19,7 @@ class CasperLabsPluginHelper {
     return this.call<string>('sign', message);
   }
 
-  async getSelectedPublicKey(){
+  async getSelectedPublicKey() {
     return this.call<string>('getSelectedPublicKey');
   }
 }

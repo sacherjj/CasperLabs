@@ -10,8 +10,8 @@ import { NoPreviousVaultError } from '../../lib/Errors';
 import Pages from './Pages';
 
 interface Props {
-  authContainer: AccountManager,
-  unlockPageContainer: UnlockPageContainer
+  authContainer: AccountManager;
+  unlockPageContainer: UnlockPageContainer;
 }
 
 @observer
@@ -32,24 +32,33 @@ export default class UnlockPage extends React.Component<Props, {}> {
   }
 
   render() {
-    return this.props.authContainer.isUnLocked ? <Redirect to={Pages.Home}/> : (
+    return this.props.authContainer.isUnLocked ? (
+      <Redirect to={Pages.Home} />
+    ) : (
       <div>
         <div className="mt-5 mb-4 text-center">
-          <img src={logo} alt="logo" width={120}/>
+          <img src={logo} alt="logo" width={120} />
         </div>
-        <h2 className="text-center mb-5">
-          Welcome Back
-        </h2>
+        <h2 className="text-center mb-5">Welcome Back</h2>
         <div>
-          <Form onSubmit={() => {
-            this.onSubmit();
-          }}>
-            <TextField type="password" placeholder="Password" id="unlock-password"
-                       fieldState={this.props.unlockPageContainer.password}/>
+          <Form
+            onSubmit={() => {
+              this.onSubmit();
+            }}
+          >
+            <TextField
+              type="password"
+              placeholder="Password"
+              id="unlock-password"
+              fieldState={this.props.unlockPageContainer.password}
+            />
             <Button
               disabled={this.props.unlockPageContainer.submitDisabled}
-              type='submit'
-              block={true}>Unlock</Button>
+              type="submit"
+              block={true}
+            >
+              Unlock
+            </Button>
           </Form>
         </div>
       </div>

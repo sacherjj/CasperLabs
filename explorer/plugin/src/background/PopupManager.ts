@@ -12,9 +12,7 @@ const height = 460;
 export class PopupManager {
   private popupId: number | null = null;
 
-
-  constructor() {
-  }
+  constructor() {}
 
   public async show() {
     let popup = await this.findPopup();
@@ -37,7 +35,7 @@ export class PopupManager {
       windowTypes: ['popup']
     });
 
-    const ownWindows = windows.filter((w) => w.id === this.popupId);
+    const ownWindows = windows.filter(w => w.id === this.popupId);
 
     if (ownWindows.length > 0) {
       return ownWindows[0];

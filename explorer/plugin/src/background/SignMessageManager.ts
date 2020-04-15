@@ -9,7 +9,7 @@ export interface SignMessage {
   data: string;
   rawSig?: string;
   time: number;
-  status: SignMessageStatus
+  status: SignMessageStatus;
 }
 
 /**
@@ -36,7 +36,7 @@ export default class SignMessageManager extends events.EventEmitter {
     return new Promise((resolve, reject) => {
       const msgId = this.addUnsignedMessage(data);
       // await finished, listen to finish event, which will be fired by `rejectMsg` or `signMsg`.
-      this.once(`${msgId}:finished`, (data) => {
+      this.once(`${msgId}:finished`, data => {
         switch (data.status) {
           case 'signed':
             console.log('haha signed');
@@ -44,7 +44,11 @@ export default class SignMessageManager extends events.EventEmitter {
           case 'rejected':
             return reject(new Error('User denied message signature.'));
           default:
-            return reject(new Error(`MetaMask Message Signature: Unknown problem: ${data.toString()}`));
+            return reject(
+              new Error(
+                `MetaMask Message Signature: Unknown problem: ${data.toString()}`
+              )
+            );
         }
       });
     });
@@ -77,7 +81,7 @@ export default class SignMessageManager extends events.EventEmitter {
   }
 
   private getUnsignedMsgs() {
-    return this.messages.filter((msg) => msg.status === 'unsigned');
+    return this.messages.filter(msg => msg.status === 'unsigned');
   }
 
   private createId() {
@@ -99,7 +103,7 @@ export default class SignMessageManager extends events.EventEmitter {
   }
 
   private updateMsg(msg: SignMessage) {
-    const index = this.messages.findIndex((message) => message.id === msg.id);
+    const index = this.messages.findIndex(message => message.id === msg.id);
     if (index !== -1) {
       this.messages[index] = msg;
     }
@@ -111,7 +115,7 @@ export default class SignMessageManager extends events.EventEmitter {
    * @param data
    */
   private addUnsignedMessage(data: string) {
-    const time = (new Date()).getTime();
+    const time = new Date().getTime();
     const msgId = this.createId();
     const msgData: SignMessage = {
       id: msgId,
@@ -140,6 +144,6 @@ export default class SignMessageManager extends events.EventEmitter {
    * @param msgId
    */
   private getMsg(msgId: number): SignMessage | undefined {
-    return this.messages.find((msg) => msg.id === msgId);
+    return this.messages.find(msg => msg.id === msgId);
   }
 }

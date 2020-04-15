@@ -12,9 +12,7 @@ import { Request } from './tunnel';
  *
  * @param logMessages
  */
-export function registerClient(
-  logMessages = false
-) {
+export function registerClient(logMessages = false) {
   // A unique message ID that is used to ensure responses are sent to the correct requests
   let _messageId = 0;
   let generateNewMessageId = () => ++_messageId;
@@ -25,15 +23,21 @@ export function registerClient(
     destination: 'background',
     logMessages,
     postMessage: (msg: Request) => {
-
       return new Promise((resolve, reject) => {
         const msgId = generateNewMessageId();
         // inspired by postmate
         // https://github.com/dollarshaveclub/postmate/blob/master/src/postmate.js#L136
-        window.postMessage({ type: 'request', pageId: PAGE_ID, msgId, payload: msg }, '*');
+        window.postMessage(
+          { type: 'request', pageId: PAGE_ID, msgId, payload: msg },
+          '*'
+        );
 
         let transact = (e: MessageEvent) => {
-          if (e.data.pageId === PAGE_ID && e.data.msgId === msgId && e.data.type === 'reply') {
+          if (
+            e.data.pageId === PAGE_ID &&
+            e.data.msgId === msgId &&
+            e.data.type === 'reply'
+          ) {
             window.removeEventListener('message', transact, false);
             resolve(e.data.value);
           }

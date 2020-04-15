@@ -6,8 +6,7 @@ import { ImportAccountContainer } from '../container/ImportAccountContainer';
 import AccountManager from '../container/AccountManager';
 import { RouteComponentProps, withRouter } from 'react-router';
 
-
-interface Props extends RouteComponentProps{
+interface Props extends RouteComponentProps {
   importAccountContainer: ImportAccountContainer;
   authContainer: AccountManager;
 }
@@ -15,7 +14,10 @@ interface Props extends RouteComponentProps{
 @observer
 class ImportAccountPage extends React.Component<Props, {}> {
   async onSubmit() {
-    await this.props.authContainer.importUserAccount(this.props.importAccountContainer.name.$, this.props.importAccountContainer.privateKey.$);
+    await this.props.authContainer.importUserAccount(
+      this.props.importAccountContainer.name.$,
+      this.props.importAccountContainer.privateKey.$
+    );
     this.props.importAccountContainer.resetFields();
     this.props.history.goBack();
   }
@@ -24,18 +26,31 @@ class ImportAccountPage extends React.Component<Props, {}> {
     return (
       <div>
         <div className="mt-5 mb-4">
-          <Form onSubmit={() => {
-            this.onSubmit();
-          }}>
-            <TextField label="Private Key" placeholder="" id="import-private-key"
-                       fieldState={this.props.importAccountContainer.privateKey}/>
-            <TextField label="Name" placeholder="Human Readable Alias" id="import-name"
-                       fieldState={this.props.importAccountContainer.name}/>
+          <Form
+            onSubmit={() => {
+              this.onSubmit();
+            }}
+          >
+            <TextField
+              label="Private Key"
+              placeholder=""
+              id="import-private-key"
+              fieldState={this.props.importAccountContainer.privateKey}
+            />
+            <TextField
+              label="Name"
+              placeholder="Human Readable Alias"
+              id="import-name"
+              fieldState={this.props.importAccountContainer.name}
+            />
             <Button
-              className='mt-5'
+              className="mt-5"
               disabled={this.props.importAccountContainer.submitDisabled}
-              type='submit'
-              block={true}>Import</Button>
+              type="submit"
+              block={true}
+            >
+              Import
+            </Button>
           </Form>
         </div>
       </div>

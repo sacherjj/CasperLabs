@@ -10,9 +10,7 @@ import SignMessageManager from '../../background/SignMessageManager';
  *             <--------------------
  *              window.addEventListener
  */
-export function registerContentProxy(
-  logMessages = false
-) {
+export function registerContentProxy(logMessages = false) {
   // forward messages from inpage to background
   window.addEventListener('message', receiveMessage, false);
 
@@ -34,7 +32,10 @@ let rpc: Rpc;
 
 // Setup RPC server for inject page
 // used in background.ts
-export function setupInjectPageAPIServer(provider: SignMessageManager, logMessages: boolean = false) {
+export function setupInjectPageAPIServer(
+  provider: SignMessageManager,
+  logMessages: boolean = false
+) {
   rpc = new Rpc({
     addListener: browser.runtime.onMessage.addListener,
     logMessages,
@@ -42,5 +43,8 @@ export function setupInjectPageAPIServer(provider: SignMessageManager, logMessag
     source: 'background'
   });
   rpc.register('sign', provider.addUnsignedMessageAsync.bind(provider));
-  rpc.register('getSelectedPublicKey', provider.getSelectedPublicKey.bind(provider));
+  rpc.register(
+    'getSelectedPublicKey',
+    provider.getSelectedPublicKey.bind(provider)
+  );
 }

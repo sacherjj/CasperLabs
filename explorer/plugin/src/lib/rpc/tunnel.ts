@@ -3,7 +3,10 @@
  */
 import { Runtime } from 'webextension-polyfill-ts';
 
-export type CallbackType = (msg: Request, sender: Runtime.MessageSender) => Promise<Response> | void;
+export type CallbackType = (
+  msg: Request,
+  sender: Runtime.MessageSender
+) => Promise<Response> | void;
 export type PostMessageType = (msg: Request) => Promise<Response>;
 
 export type AddListenerType = (callback: CallbackType) => void;
@@ -54,11 +57,16 @@ export class Tunnel<T = any> {
     this.messageHandler = options.messageHandler;
     this.logMessages = options.logMessages;
 
-    if (options.addListener === undefined && options.postMessage === undefined) {
+    if (
+      options.addListener === undefined &&
+      options.postMessage === undefined
+    ) {
       throw new Error('Either addListener or postMessage must be present.');
     } else if (options.addListener !== undefined) {
       if (options.messageHandler === undefined) {
-        throw new Error('MessageHandler must be specified if addListener present.');
+        throw new Error(
+          'MessageHandler must be specified if addListener present.'
+        );
       }
 
       options.addListener(this.onMessage.bind(this));
@@ -80,7 +88,10 @@ export class Tunnel<T = any> {
     if (this.logMessages) {
       // tslint:disable-next-line:max-line-length
       // tslint:disable-next-line:no-console
-      console.warn(`Tunnel: (${this.source}): Sending`, JSON.stringify(msg, null, '  '));
+      console.warn(
+        `Tunnel: (${this.source}): Sending`,
+        JSON.stringify(msg, null, '  ')
+      );
     }
 
     const response: Response<RESULT> = await this.postMessage(request);
@@ -92,8 +103,14 @@ export class Tunnel<T = any> {
     }
   }
 
-  private onMessage(request: Request, sender: Runtime.MessageSender): Promise<Response> | void {
-    if (request.destination === this.source && request.source === this.destination) {
+  private onMessage(
+    request: Request,
+    sender: Runtime.MessageSender
+  ): Promise<Response> | void {
+    if (
+      request.destination === this.source &&
+      request.source === this.destination
+    ) {
       let promise: Promise<any>;
 
       try {
@@ -104,7 +121,10 @@ export class Tunnel<T = any> {
         if (this.logMessages) {
           // tslint:disable-next-line:max-line-length
           // tslint:disable-next-line:no-console
-          console.warn(`Tunnel: (${this.source}): Receiving`, JSON.stringify(request.payload, null, '  '));
+          console.warn(
+            `Tunnel: (${this.source}): Receiving`,
+            JSON.stringify(request.payload, null, '  ')
+          );
         }
 
         const caller: Caller = {
@@ -119,26 +139,22 @@ export class Tunnel<T = any> {
       }
 
       return promise
-        .then(
-          (result) => {
-            return ({
-              destination: request.source,
-              payload: result,
-              source: request.destination,
-              type: 'casperlabs-plugin'
-            } as Response);
-          }
-        )
-        .catch(
-          (error) => {
-            return ({
-              destination: request.source,
-              error: error.message,
-              source: request.destination,
-              type: 'casperlabs-plugin'
-            } as Response);
-          }
-        );
+        .then(result => {
+          return {
+            destination: request.source,
+            payload: result,
+            source: request.destination,
+            type: 'casperlabs-plugin'
+          } as Response;
+        })
+        .catch(error => {
+          return {
+            destination: request.source,
+            error: error.message,
+            source: request.destination,
+            type: 'casperlabs-plugin'
+          } as Response;
+        });
     }
   }
 }

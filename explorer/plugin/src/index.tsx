@@ -20,8 +20,16 @@ const errorsContainer = new ErrorContainer();
 const importAccountContainer = new ImportAccountContainer();
 const backgroundManager = new BackgroundManager(appState, errorsContainer);
 const unlockPageContainer = new UnlockPageContainer();
-const authContainer = new AccountManager(errorsContainer, backgroundManager, appState);
-const signMessageContainer = new SignMessageContainer(errorsContainer, backgroundManager, appState);
+const authContainer = new AccountManager(
+  errorsContainer,
+  backgroundManager,
+  appState
+);
+const signMessageContainer = new SignMessageContainer(
+  errorsContainer,
+  backgroundManager,
+  appState
+);
 const homeContainer = new HomeContainer();
 
 ReactDOM.render(
@@ -35,7 +43,8 @@ ReactDOM.render(
       signMessageContainer={signMessageContainer}
     />
   </HashRouter>,
-  document.getElementById('root'));
+  document.getElementById('root')
+);
 
 // If you want your app to work offline and load faster, you can change
 // unregister() to register() below. Note this comes with some pitfalls.

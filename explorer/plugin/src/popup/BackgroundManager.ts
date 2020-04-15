@@ -19,12 +19,11 @@ export class BackgroundManager {
     });
 
     this.rpc.register('popup.updateState', this.onStateUpdate.bind(this));
-    this.rpc.call<AppState>('background.getState').then((appState) => {
+    this.rpc.call<AppState>('background.getState').then(appState => {
       this.onStateUpdate(appState);
       console.log(this.appState.toSignMessages.length);
     });
   }
-
 
   @action.bound
   private onStateUpdate(appState: AppState) {
@@ -36,7 +35,9 @@ export class BackgroundManager {
   }
 
   public unlock(password: string) {
-    return this.errors.withCapture(this.rpc.call<void>('account.unlock', password));
+    return this.errors.withCapture(
+      this.rpc.call<void>('account.unlock', password)
+    );
   }
 
   public createNewVault(password: string) {
@@ -52,18 +53,26 @@ export class BackgroundManager {
   }
 
   public importUserAccount(name: string, privateKey: string) {
-    return this.errors.withCapture(this.rpc.call<void>('account.importUserAccount', name, privateKey));
+    return this.errors.withCapture(
+      this.rpc.call<void>('account.importUserAccount', name, privateKey)
+    );
   }
 
   public signMessage(msg: SignMessage) {
-    return this.errors.withCapture(this.rpc.call<void>('sign.signMessage', msg));
+    return this.errors.withCapture(
+      this.rpc.call<void>('sign.signMessage', msg)
+    );
   }
 
   public rejectSignMessage(msg: SignMessage) {
-    return this.errors.withCapture(this.rpc.call<void>('sign.rejectMessage', msg));
+    return this.errors.withCapture(
+      this.rpc.call<void>('sign.rejectMessage', msg)
+    );
   }
 
   public switchToAccount(account: SignKeyPairWithAlias) {
-    return this.errors.withCapture(this.rpc.call<void>('account.switchToAccount', account));
+    return this.errors.withCapture(
+      this.rpc.call<void>('account.switchToAccount', account)
+    );
   }
 }

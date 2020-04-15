@@ -26,22 +26,30 @@ class Home extends React.Component<Props, {}> {
     return (
       <div>
         <div className="mt-5 mb-4 text-center">
-          <img src={logo} alt="logo" width={120}/>
+          <img src={logo} alt="logo" width={120} />
         </div>
-        <h2 className="text-center mb-5">
-          Welcome
-        </h2>
+        <h2 className="text-center mb-5">Welcome</h2>
 
         <div>
-          <Form onSubmit={() => {
-            this.onSubmit();
-          }}>
-            <TextField label="Set Password" type="password" placeholder="Password" id="set-password"
-                       fieldState={this.props.homeContainer.password}/>
+          <Form
+            onSubmit={() => {
+              this.onSubmit();
+            }}
+          >
+            <TextField
+              label="Set Password"
+              type="password"
+              placeholder="Password"
+              id="set-password"
+              fieldState={this.props.homeContainer.password}
+            />
             <Button
               disabled={this.props.homeContainer.submitDisabled}
-              type='submit'
-              block={true}>Creating</Button>
+              type="submit"
+              block={true}
+            >
+              Creating
+            </Button>
           </Form>
         </div>
       </div>
@@ -52,13 +60,13 @@ class Home extends React.Component<Props, {}> {
     return (
       <div>
         <div className="mt-5 mb-4 text-center">
-          <img src={logo} alt="logo" width={120}/>
+          <img src={logo} alt="logo" width={120} />
         </div>
         <h5 className="mt-4 mb-3 text-center">
           You have {this.props.authContainer.userAccounts.length} account key(s)
         </h5>
         <div className="text-center" style={{ marginTop: '100px' }}>
-          <LinkButton title="Import Account" path={Pages.ImportAccount}/>
+          <LinkButton title="Import Account" path={Pages.ImportAccount} />
         </div>
       </div>
     );
@@ -68,12 +76,12 @@ class Home extends React.Component<Props, {}> {
     if (this.props.authContainer.hasCreatedVault) {
       if (this.props.authContainer.isUnLocked) {
         if (this.props.authContainer.toSignMessages.length > 0) {
-          return <Redirect to={Pages.SignMessage}/>;
+          return <Redirect to={Pages.SignMessage} />;
         } else {
           return this.renderAccountLists();
         }
       } else {
-        return <Redirect to={Pages.UnlockPage}/>;
+        return <Redirect to={Pages.UnlockPage} />;
       }
     } else {
       return this.renderCreateNewVault();
