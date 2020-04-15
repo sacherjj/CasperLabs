@@ -46,7 +46,7 @@ export default class SignMessageManager extends events.EventEmitter {
           default:
             return reject(
               new Error(
-                `MetaMask Message Signature: Unknown problem: ${data.toString()}`
+                `Message Signature: Unknown problem: ${data.toString()}`
               )
             );
         }
@@ -57,7 +57,6 @@ export default class SignMessageManager extends events.EventEmitter {
   // return public key of the current selected account
   public getSelectedPublicKey() {
     let pk = this.appState.selectedUserAccount?.signKeyPair.publicKey;
-    console.log(pk);
     if (pk) {
       return encodeBase64(pk);
     }

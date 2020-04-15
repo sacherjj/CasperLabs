@@ -22,12 +22,7 @@ export default class UnlockPage extends React.Component<Props, {}> {
       await this.props.authContainer.unlock(password);
       this.props.unlockPageContainer.password.reset();
     } catch (e) {
-      console.log(e);
-      if (e instanceof NoPreviousVaultError) {
-        this.props.unlockPageContainer.password.setError(e.message);
-      } else {
-        this.props.unlockPageContainer.password.setError('Incorrect Password');
-      }
+      this.props.unlockPageContainer.password.setError(e.message);
     }
   }
 

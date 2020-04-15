@@ -5,7 +5,6 @@ import AuthContainer from '../containers/AuthContainer';
 import { encodeBase16 } from 'casperlabs-sdk';
 import { Helmet } from 'react-helmet';
 
-
 export const Spinner = (msg: String) => (
   <div className="text-center">
     <i className="fa fa-fw fa-spin fa-spinner"/>
@@ -35,7 +34,6 @@ export const Icon = (props: {
 
 export const SuccessIcon = () => <Icon name="check-circle" color="green"/>;
 export const FailIcon = () => <Icon name="times-circle" color="red"/>;
-
 
 export const IconButton = (props: {
   onClick: () => void;
