@@ -29,7 +29,12 @@ Inject script run inside the context of Clarity, which is injected by content sc
 
 ## Develop locally
 
+To build the client and the server you'll need npm.
+
 Here we provide some useful npm command for developing.
+
+### `npm install`
+It will install all dependencies for you.
 
 ### `npm run watch`
 
