@@ -24,7 +24,7 @@ class AuthController {
     const hash = this.hash(password);
     this.passwordHash = hash;
     await this.clearAccount();
-    await this.persistVault(this.passwordHash!);
+    await this.persistVault();
     this.appState.hasCreatedVault = true;
     this.appState.isUnlocked = true;
   }
@@ -72,16 +72,15 @@ class AuthController {
     this.appState.selectedUserAccount = this.appState.userAccounts[
       this.appState.userAccounts.length - 1
     ];
-    this.persistVault(this.passwordHash!);
+    this.persistVault();
   }
 
   /**
-   *
-   * @param passwordHash hashed password
+   * encrypted userAccounts by using passwordHash, and save it to local storage.
    */
-  private async persistVault(passwordHash: string) {
+  private async persistVault() {
     const encryptedVault = await passworder.encrypt(
-      passwordHash,
+      this.passwordHash!,
       this.appState.userAccounts
     );
     this.saveEncryptedVault(encryptedVault);
