@@ -20,7 +20,7 @@ pub enum Error {
     WasmPreprocessing(engine_wasm_prep::PreprocessingError),
     #[fail(display = "Wasm serialization error: {:?}", _0)]
     WasmSerialization(parity_wasm::SerializationError),
-    #[fail(display = "Execution error: {}", _0)]
+    #[fail(display = "{}", _0)]
     Exec(execution::Error),
     #[fail(display = "Storage error: {}", _0)]
     Storage(engine_storage::error::Error),

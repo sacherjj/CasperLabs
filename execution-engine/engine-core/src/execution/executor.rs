@@ -352,12 +352,18 @@ impl Executor {
                         cost: runtime.context().gas_counter(),
                     };
                 }
-                _ => {}
+                error => {
+                    return ExecutionResult::Failure {
+                        error: error.clone().into(),
+                        effect: effects_snapshot,
+                        cost: runtime.context().gas_counter(),
+                    }
+                }
             }
         }
 
         ExecutionResult::Failure {
-            error: Error::Interpreter(error).into(),
+            error: Error::Interpreter(error.into()).into(),
             effect: effects_snapshot,
             cost: runtime.context().gas_counter(),
         }
@@ -502,7 +508,8 @@ impl Executor {
                 .take_host_buffer()
                 .ok_or(Error::ExpectedReturnValue)?,
             Some(Error::Revert(code)) => return Err(Error::Revert(*code)),
-            _ => return Err(Error::Interpreter(error)),
+            Some(error) => return Err(error.clone()),
+            _ => return Err(Error::Interpreter(error.into())),
         };
 
         let ret = return_value.into_t()?;

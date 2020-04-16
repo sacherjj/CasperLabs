@@ -1,4 +1,9 @@
-use engine_core::engine_state::{genesis::POS_REWARDS_PURSE, CONV_RATE, MAX_PAYMENT};
+use assert_matches::assert_matches;
+
+use engine_core::{
+    engine_state::{genesis::POS_REWARDS_PURSE, Error, CONV_RATE, MAX_PAYMENT},
+    execution,
+};
 use engine_shared::{motes::Motes, transform::Transform};
 use engine_test_support::{
     internal::{
@@ -127,7 +132,10 @@ fn should_raise_insufficient_payment_when_payment_code_does_not_pay_enough() {
         .expect("there should be a response");
 
     let execution_result = utils::get_success_result(response);
-    let error_message = format!("{}", execution_result.error().expect("should have error"));
+    let error_message = format!(
+        "{}",
+        execution_result.as_error().expect("should have error")
+    );
 
     assert_eq!(
         error_message, "Insufficient payment",
@@ -199,7 +207,10 @@ fn should_raise_insufficient_payment_error_when_out_of_gas() {
         .expect("there should be a response");
 
     let execution_result = utils::get_success_result(response);
-    let error_message = format!("{}", execution_result.error().expect("should have error"));
+    let error_message = format!(
+        "{}",
+        execution_result.as_error().expect("should have error")
+    );
 
     assert_eq!(
         error_message, "Insufficient payment",
@@ -269,12 +280,10 @@ fn should_forward_payment_execution_runtime_error() {
         .expect("there should be a response");
 
     let execution_result = utils::get_success_result(response);
-    let error_message = format!("{}", execution_result.error().expect("should have error"));
-
-    assert!(
-        error_message.contains(&format!("{:?}", ApiError::User(100))),
-        "expected payment error but received {}",
-        error_message,
+    let error = execution_result.as_error().expect("should have error");
+    assert_matches!(
+        error,
+        Error::Exec(execution::Error::Revert(ApiError::User(100)))
     );
 }
 
@@ -340,12 +349,8 @@ fn should_forward_payment_execution_gas_limit_error() {
         .expect("there should be a response");
 
     let execution_result = utils::get_success_result(response);
-    let error_message = format!("{}", execution_result.error().expect("should have error"));
-
-    assert!(
-        error_message.contains("GasLimit"),
-        "expected gas limit error"
-    );
+    let error = execution_result.as_error().expect("should have error");
+    assert_matches!(error, Error::Exec(execution::Error::GasLimit));
 }
 
 #[ignore]
@@ -384,13 +389,8 @@ fn should_run_out_of_gas_when_session_code_exceeds_gas_limit() {
         .expect("there should be a response");
 
     let execution_result = utils::get_success_result(response);
-    let error_message = format!("{}", execution_result.error().expect("should have error"));
-
-    assert!(
-        error_message.contains("GasLimit"),
-        "expected gas limit, got {}",
-        error_message
-    );
+    let error = execution_result.as_error().expect("should have error");
+    assert_matches!(error, Error::Exec(execution::Error::GasLimit));
 }
 
 #[ignore]
@@ -445,9 +445,8 @@ fn should_correctly_charge_when_session_code_runs_out_of_gas() {
     );
 
     let execution_result = utils::get_success_result(response);
-    let error_message = format!("{}", execution_result.error().expect("should have error"));
-
-    assert!(error_message.contains("GasLimit"), "expected gas limit");
+    let error = execution_result.as_error().expect("should have error");
+    assert_matches!(error, Error::Exec(execution::Error::GasLimit));
 }
 
 #[ignore]
