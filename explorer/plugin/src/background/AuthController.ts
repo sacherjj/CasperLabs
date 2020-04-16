@@ -6,26 +6,25 @@ import { decodeBase64, encodeBase64 } from 'tweetnacl-util';
 import { AppState } from '../lib/MemStore';
 
 class AuthController {
-  private encryptedVaultStr: string | null = null;
-  private password: string | null = null;
+  // we store hashed password instead of original password
+  private passwordHash: string | null = null;
+
+  // we will use the passwordHash above to encrypt the valut object
+  // and then using this key to store it in local storage
   private encryptedVaultKey = 'encryptedVault';
 
   constructor(private appState: AppState) {
   }
 
-  hasCreatedVault() {
-    return this.encryptedVaultStr !== null;
-  }
-
   @action.bound
   async createNewVault(password: string): Promise<void> {
-    if (this.encryptedVaultStr) {
+    if (this.getEncryptedVault() !== null) {
       throw new Error('There is a vault already');
     }
     const hash = this.hash(password);
-    this.password = hash;
+    this.passwordHash = hash;
     await this.clearAccount();
-    await this.persistVault(this.password!);
+    await this.persistVault(this.passwordHash!);
     this.appState.hasCreatedVault = true;
     this.appState.isUnlocked = true;
   }
@@ -34,7 +33,9 @@ class AuthController {
   switchToAccount(account: SignKeyPairWithAlias) {
     let i = this.appState.userAccounts.findIndex(a => a.name === account.name);
     if (i === -1) {
-      throw new Error('Couldn\'t switch to this account because it doesn\'t exist');
+      throw new Error(
+        "Couldn't switch to this account because it doesn't exist"
+      );
     }
     this.appState.selectedUserAccount = this.appState.userAccounts[i];
   }
@@ -47,11 +48,19 @@ class AuthController {
 
     const keyPair = nacl.sign.keyPair.fromSecretKey(decodeBase64(privateKey));
     let account = this.appState.userAccounts.find(account => {
-      return account.name === name || encodeBase64(account.signKeyPair.secretKey) === encodeBase64(keyPair.secretKey);
+      return (
+        account.name === name ||
+        encodeBase64(account.signKeyPair.secretKey) ===
+          encodeBase64(keyPair.secretKey)
+      );
     });
 
     if (account) {
-      throw new Error(`A account with same ${account.name === name ? 'name' : 'private key'} already exists`);
+      throw new Error(
+        `A account with same ${
+          account.name === name ? 'name' : 'private key'
+        } already exists`
+      );
     }
 
     this.appState.userAccounts.push({
@@ -61,18 +70,32 @@ class AuthController {
     if (this.appState.selectedUserAccount === null) {
       this.appState.selectedUserAccount = this.appState.userAccounts[0];
     }
-    this.persistVault(this.password!);
+    this.persistVault(this.passwordHash!);
   }
 
-  private async persistVault(password: string) {
-    const encryptedVault = await passworder.encrypt(password, this.appState.userAccounts);
+  /**
+   *
+   * @param passwordHash hashed password
+   */
+  private async persistVault(passwordHash: string) {
+    const encryptedVault = await passworder.encrypt(
+      passwordHash,
+      this.appState.userAccounts
+    );
+  }
+
+  private getEncryptedVault() {
+    return store.get(this.encryptedVaultKey);
+  }
+
+  private saveEncryptedVault(encryptedVault: string) {
     store.set(this.encryptedVaultKey, encryptedVault);
-    this.encryptedVaultStr = encryptedVault; // for unlock in future
   }
 
   private async restoreVault(password: string) {
-    if (!this.encryptedVaultStr) {
-      throw new Error();
+    let encryptedVault = this.getEncryptedVault();
+    if (!encryptedVault) {
+      throw new Error('There is no vault');
     }
     const vault = await passworder.decrypt(password, this.encryptedVaultStr);
     return vault as unknown as SignKeyPairWithAlias[];
@@ -88,23 +111,26 @@ class AuthController {
     return encodeBase64(h);
   }
 
+  /*
+   * user can lock the plugin manually, and then user need to use
+   * password to unlock, so that the plugin won't be used by others
+   */
+  @action.bound
+  async lock() {
+    this.passwordHash = null;
+    this.appState.isUnlocked = false;
+    await this.clearAccount();
+  }
+
   /**
+   * Using the password to unlock
    * @param {string} password
    */
   @action.bound
   async unlock(password: string) {
     const vault = await this.restoreVault(this.hash(password));
-    await this.clearAccount();
     this.appState.isUnlocked = true;
     this.appState.userAccounts.replace(vault);
-  }
-
-  // user can lock the plugin manually
-  @action.bound
-  async lock() {
-    this.password = null;
-    this.appState.isUnlocked = false;
-    this.appState.userAccounts.clear();
   }
 
   @computed

@@ -41,10 +41,6 @@ async function setupPopupAPIServer() {
     'account.createNewVault',
     accountController.createNewVault.bind(accountController)
   );
-  rpc.register(
-    'account.hasCreatedVault',
-    accountController.hasCreatedVault.bind(accountController)
-  );
   rpc.register('account.lock', accountController.lock.bind(accountController));
   rpc.register(
     'account.importUserAccount',

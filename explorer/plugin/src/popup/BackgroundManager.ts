@@ -44,10 +44,6 @@ export class BackgroundManager {
     return this.rpc.call<void>('account.createNewVault', password);
   }
 
-  public hasCreatedVault() {
-    return this.rpc.call<boolean>('account.hasCreatedVault');
-  }
-
   public lock() {
     return this.rpc.call<void>('account.lock');
   }
