@@ -4,8 +4,9 @@ version = "0.1.0"
 authors = ["Ed Hastings <ed@casperlabs.io>"]
 edition = "2018"
 
-[lib]
-crate-type = ["cdylib"]
+[[bin]]
+name = "do_nothing_stored_upgrader"
+path = "src/main.rs"
 bench = false
 doctest = false
 test = false
@@ -15,5 +16,5 @@ std = ["contract/std", "types/std"]
 
 [dependencies]
 contract = { path = "../../../contract", package = "casperlabs-contract" }
-create-purse-01 = { path = "../create-purse-01", default-features = false, features = ["lib"] }
+create-purse-01 = { path = "../create-purse-01" }
 types = { path = "../../../types", package = "casperlabs-types" }

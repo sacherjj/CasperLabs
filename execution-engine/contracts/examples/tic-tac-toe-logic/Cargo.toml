@@ -5,7 +5,6 @@ authors = ["Michael Birch <birchmd@casperlabs.io>", "Maciej Zielinski <maciej@ca
 edition = "2018"
 
 [lib]
-name = "tic_tac_toe_logic"
 doctest = false
 bench = false
 

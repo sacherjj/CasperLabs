@@ -49,9 +49,3 @@ pub fn delegate() {
 
     standard_payment_contract.pay(amount).unwrap_or_revert();
 }
-
-#[cfg(not(feature = "lib"))]
-#[no_mangle]
-pub extern "C" fn call() {
-    delegate();
-}

@@ -4,8 +4,9 @@ version = "0.1.0"
 authors = ["Michael Birch <birchmd@casperlabs.io>"]
 edition = "2018"
 
-[lib]
-crate-type = ["cdylib"]
+[[bin]]
+name = "transfer_to_account_u512_stored"
+path = "src/main.rs"
 bench = false
 doctest = false
 test = false
@@ -15,5 +16,5 @@ std = ["contract/std", "types/std"]
 
 [dependencies]
 contract = { path = "../../../contract", package = "casperlabs-contract" }
-transfer-to-account = { path = "../transfer-to-account-u512", package = "transfer-to-account-u512",  default-features = false, features = ["lib"] }
+transfer-to-account-u512 = { path = "../transfer-to-account-u512", package = "transfer-to-account-u512" }
 types = { path = "../../../types", package = "casperlabs-types" }

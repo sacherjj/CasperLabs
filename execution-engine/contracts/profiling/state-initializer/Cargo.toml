@@ -4,8 +4,9 @@ version = "0.1.0"
 authors = ["Fraser Hutchison <fraser@casperlabs.io>"]
 edition = "2018"
 
-[lib]
-crate-type = ["cdylib"]
+[[bin]]
+name = "state_initializer"
+path = "src/main.rs"
 bench = false
 doctest = false
 test = false

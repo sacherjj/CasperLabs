@@ -1,3 +1,6 @@
+# Override parent's bin ignore
+!bin
+
 # Rust build artifacts
 target/
 Cargo.lock

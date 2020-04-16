@@ -4,8 +4,9 @@ version = "0.1.0"
 authors = ["Michael Birch <birchmd@casperlabs.io>"]
 edition = "2018"
 
-[lib]
-crate-type = ["cdylib"]
+[[bin]]
+name = "mint_install"
+path = "src/main.rs"
 bench = false
 doctest = false
 test = false
@@ -16,4 +17,4 @@ std = ["contract/std", "types/std"]
 [dependencies]
 contract = { path = "../../../contract", package = "casperlabs-contract" }
 types = { path = "../../../types", package = "casperlabs-types" }
-mint-token = { path = "../mint-token", default-features = false, features = ["lib"] }
+mint-token = { path = "../mint-token" }
