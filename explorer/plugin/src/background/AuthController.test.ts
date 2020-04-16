@@ -65,6 +65,16 @@ describe('AuthController', () => {
     await expect(authController.unlock(wrongPassword)).rejects.toThrow();
     await authController.unlock(password);
     expect(authController.isUnlocked).toBeTruthy();
+
+    // make sure we have fixed https://github.com/CasperLabs/CasperLabs/pull/1821#discussion_r409650020
+    await authController.importUserAccount(
+      'account1',
+      encodeBase64(nacl.sign_keyPair().secretKey)
+    );
+
+    await authController.lock();
+    await authController.unlock(password);
+    expect(authController.isUnlocked).toBeTruthy();
   });
 
   it('should be able to add new account and failed when either name or private key duplicated', async () => {
