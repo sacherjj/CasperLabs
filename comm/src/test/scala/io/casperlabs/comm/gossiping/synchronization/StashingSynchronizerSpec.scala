@@ -69,6 +69,27 @@ class StashingSynchronizerSpec
             }
           }
         }
+      "not send targets that have been acquired in the meantime" in
+        forAll(requestsGen) { requests =>
+          val targets  = requests.map(_._2).flatten
+          val acquired = requests.map(_._2.head).toSet
+          TestFixture(
+            isInDag = h => Task.now(acquired(h))
+          ) { (synchronizer, deferred, mock) =>
+            for {
+              fiber <- requests.traverse {
+                        case (source, hashes) => synchronizer.syncDag(source, hashes)
+                      }.start
+              _ <- Task.sleep(100.milliseconds)
+              _ <- deferred.complete(())
+              _ <- fiber.join
+            } yield {
+              val requested: Set[ByteString] = mock.requests.get().values.toSet.flatten
+              // Some may slip through due to the timing, if they are requested after the approval deferred is set.
+              requested.size should be < targets.size
+            }
+          }
+        }
       "propagate SyncError errors" in
         forAll(requestsGen) { requests =>
           val syncError =
@@ -169,13 +190,16 @@ object StashingSynchronizerSpec {
   }
 
   object TestFixture {
-    def apply(error: Option[Either[Throwable, SyncError]] = None)(
+    def apply(
+        error: Option[Either[Throwable, SyncError]] = None,
+        isInDag: ByteString => Task[Boolean] = _ => Task.now(false)
+    )(
         test: (Synchronizer[Task], Deferred[Task, Unit], MockSynchronizer) => Task[Unit]
     ): Unit = {
       val run = for {
         deferred <- Deferred[Task, Unit]
         mock     <- Task(new MockSynchronizer(error))
-        stashed  <- StashingSynchronizer.wrap(mock, deferred.get)
+        stashed  <- StashingSynchronizer.wrap(mock, deferred.get, isInDag)
         _        <- test(stashed, deferred, mock)
       } yield ()
       implicit val scheduler: SchedulerService =

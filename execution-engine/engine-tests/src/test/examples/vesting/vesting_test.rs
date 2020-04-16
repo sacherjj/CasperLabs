@@ -5,7 +5,7 @@ use engine_shared::motes::Motes;
 use engine_test_support::internal::{
     utils, ExecuteRequestBuilder, InMemoryWasmTestBuilder as TestBuilder, DEFAULT_GENESIS_CONFIG,
 };
-use types::{account::PublicKey, bytesrepr::FromBytes, CLTyped, CLValue, Key, U512};
+use types::{account::PublicKey, bytesrepr::FromBytes, ApiError, CLTyped, CLValue, Key, U512};
 
 const TRANFER_TO_ACCOUNT_WASM: &str = "transfer_to_account_u512.wasm";
 const VESTING_CONTRACT_WASM: &str = "vesting_smart_contract.wasm";
@@ -94,7 +94,7 @@ impl VestingTest {
             .builder
             .exec_error_message(last_deploy_index - 1)
             .unwrap();
-        let expected_message = format!("Revert({:?})", code);
+        let expected_message = format!("{:?}", ApiError::from(code));
         assert!(deploy_error.contains(&expected_message));
         self
     }

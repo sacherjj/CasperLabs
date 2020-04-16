@@ -6,11 +6,12 @@ import cats.effect.concurrent._
 import cats.effect.implicits._
 import cats.implicits._
 import com.google.protobuf.ByteString
-import io.casperlabs.casper.consensus.{Block, BlockSummary, Deploy, GenesisCandidate}
+import io.casperlabs.casper.consensus.{Block, BlockSummary, Deploy, DeploySummary, GenesisCandidate}
 import io.casperlabs.comm.ServiceError.NotFound
+import io.casperlabs.catscontrib.effect.implicits._
 import io.casperlabs.comm.discovery.Node
 import io.casperlabs.comm.discovery.NodeUtils.showNode
-import io.casperlabs.comm.gossiping.downloadmanager.BlockDownloadManager
+import io.casperlabs.comm.gossiping.downloadmanager.{BlockDownloadManager, DeployDownloadManager}
 import io.casperlabs.comm.gossiping.synchronization.Synchronizer
 import io.casperlabs.comm.gossiping.synchronization.Synchronizer.SyncError
 import io.casperlabs.metrics.Metrics
@@ -25,16 +26,57 @@ import scala.util.control.NonFatal
 class GossipServiceServer[F[_]: Concurrent: Parallel: Log: Metrics](
     backend: GossipServiceServer.Backend[F],
     synchronizer: Synchronizer[F],
-    downloadManager: BlockDownloadManager[F],
+    connector: GossipService.Connector[F],
+    deployDownloadManager: DeployDownloadManager[F],
+    blockDownloadManager: BlockDownloadManager[F],
     genesisApprover: GenesisApprover[F],
     maxChunkSize: Int,
     blockDownloadSemaphore: Semaphore[F]
 ) extends GossipService[F] {
   import GossipServiceServer._
 
+  case class NewBlocksInfo(
+      blockHash: ByteString,
+      isScheduled: Boolean,
+      isDownloaded: Boolean
+  )
+
+  //TODO: Rate limit here as well?
+  def newDeploys(request: NewDeploysRequest): F[NewDeploysResponse] =
+    // Filter out the deploys which we don't have yet;
+    // reply about those that we are going to download and relay them,
+    // then schedule the downloads.
+    request.deployHashes.distinct.toList
+      .filterA { deployHash =>
+        backend.hasDeploy(deployHash).map(!_)
+      }
+      .flatMap { newDeployHashes =>
+        if (newDeployHashes.isEmpty) {
+          NewDeploysResponse(isNew = false).pure[F]
+        } else {
+          for {
+            remoteService <- connector(request.getSender)
+            // TODO: Defend against malicious nodes similar to Synchronizer
+            // Runs in background asynchronously
+            _ <- (remoteService
+                  .streamDeploySummaries(
+                    StreamDeploySummariesRequest(newDeployHashes)
+                  )
+                  .toListL >>= { deploySummaries =>
+                  deploySummaries
+                    .traverse(
+                      deploySummary =>
+                        deployDownloadManager
+                          .scheduleDownload(deploySummary, request.getSender, relay = true)
+                    )
+                }).forkAndLog
+          } yield NewDeploysResponse(isNew = true)
+        }
+      }
+
   //TODO: Rate limit here as well?
   override def newBlocks(request: NewBlocksRequest): F[NewBlocksResponse] =
-    // Collect the blocks which we don't have yet;
+    // Filter out the blocks which we don't have yet;
     // reply about those that we are going to download and relay them,
     // then asynchronously sync the DAG, and schedule the downloads.
     newBlocks(
@@ -71,15 +113,19 @@ class GossipServiceServer[F[_]: Concurrent: Parallel: Log: Metrics](
       start: (Option[F[Either[SyncError, Vector[WaitHandle[F]]]]], NewBlocksResponse) => F[T]
   ): F[T] =
     request.blockHashes.distinct.toList
-      .filterA { blockHash =>
-        backend.hasBlock(blockHash).map(!_)
+      .traverse { blockHash =>
+        for {
+          isScheduled  <- blockDownloadManager.isScheduled(blockHash)
+          isDownloaded <- if (isScheduled) false.pure[F] else backend.hasBlock(blockHash)
+        } yield NewBlocksInfo(blockHash, isScheduled, isDownloaded)
       }
-      .flatMap { newBlockHashes =>
-        if (newBlockHashes.isEmpty) {
+      .map(_.filterNot(_.isDownloaded))
+      .flatMap { newBlocks =>
+        if (newBlocks.isEmpty) {
           start(none, NewBlocksResponse(isNew = false))
         } else {
           start(
-            sync(request.getSender, newBlockHashes.toSet, skipRelaying).some,
+            sync(request.getSender, newBlocks.toSet, skipRelaying).some,
             NewBlocksResponse(isNew = true)
           )
         }
@@ -92,38 +138,53 @@ class GossipServiceServer[F[_]: Concurrent: Parallel: Log: Metrics](
     * asynchronously in the background. */
   private def sync(
       source: Node,
-      newBlockHashes: Set[ByteString],
+      newBlocks: Set[NewBlocksInfo],
       skipRelaying: Boolean
   ): F[Either[SyncError, Vector[WaitHandle[F]]]] = {
     def logSyncError(syncError: SyncError) = {
       val prefix  = s"Failed to sync DAG, source: ${source.show -> "peer"}."
       val message = syncError.getMessage
-      Log[F].warn(s"$prefix $message").as(syncError.asLeft)
+      Log[F].warn(s"$prefix $message").as(syncError.asLeft[Vector[WaitHandle[F]]])
     }
 
     val trySync: F[Either[SyncError, Vector[WaitHandle[F]]]] = for {
       _ <- Log[F].debug(
-            s"Received notification about ${newBlockHashes.size} new block(s) from ${source.show -> "peer"}: ${newBlockHashes
+            s"Received notification about ${newBlocks.size} new block(s) from ${source.show -> "peer"}: ${newBlocks
+              .map(_.blockHash)
               .map(Utils.hex)
               .mkString(", ") -> "blocks"}"
           )
-      errorOrDag <- synchronizer.syncDag(
-                     source = source,
-                     targetBlockHashes = newBlockHashes
-                   )
+
+      newBlockHashes           = newBlocks.map(_.blockHash)
+      (scheduled, unscheduled) = newBlocks.partition(_.isScheduled)
+
+      // Add the source as alternatives for already scheduled items.
+      oldWaiters <- scheduled
+                     .map(_.blockHash)
+                     .toVector
+                     .traverse(blockDownloadManager.addSource(_, source))
+
+      // Sync only what hasn't been scheduled yet.
+      errorOrDag <- if (unscheduled.nonEmpty)
+                     synchronizer.syncDag(
+                       source = source,
+                       targetBlockHashes = unscheduled.map(_.blockHash)
+                     )
+                   else Vector.empty[BlockSummary].asRight[Synchronizer.SyncError].pure[F]
+
       errorOrWaiters <- errorOrDag.fold(
                          syncError => logSyncError(syncError), { dag =>
                            Log[F].debug(
-                             s"Syncing ${dag.size} blocks with ${source.show -> "peer"}"
+                             s"Synced ${dag.size} blocks with ${source.show -> "peer"}"
                            ) *>
                              dag.traverse { summary =>
-                               downloadManager.scheduleDownload(
+                               blockDownloadManager.scheduleDownload(
                                  summary,
                                  source = source,
                                  relay = !skipRelaying && newBlockHashes(summary.blockHash)
                                )
-                             } map { waiters =>
-                             waiters.asRight[SyncError]
+                             } map { newWaiters =>
+                             (oldWaiters ++ newWaiters).asRight[SyncError]
                            }
                          }
                        )
@@ -221,6 +282,14 @@ class GossipServiceServer[F[_]: Concurrent: Parallel: Log: Metrics](
       .mapEval(backend.getBlockSummary(_))
       .flatMap(Iterant.fromIterable(_))
 
+  override def streamDeploySummaries(
+      request: StreamDeploySummariesRequest
+  ): Iterant[F, DeploySummary] =
+    Iterant[F]
+      .fromSeq(request.deployHashes)
+      .mapEval(backend.getDeploySummary(_))
+      .flatMap(Iterant.fromIterable(_))
+
   override def getBlockChunked(request: GetBlockChunkedRequest): Iterant[F, Chunk] =
     Iterant.resource(blockDownloadSemaphore.acquire)(
       _ => blockDownloadSemaphore.release
@@ -310,7 +379,9 @@ object GossipServiceServer {
 
   /** Interface to storage and consensus. */
   trait Backend[F[_]] {
+    def getDeploySummary(deployHash: ByteString): F[Option[DeploySummary]]
     def hasBlock(blockHash: ByteString): F[Boolean]
+    def hasDeploy(deployHash: ByteString): F[Boolean]
     def getBlockSummary(blockHash: ByteString): F[Option[BlockSummary]]
     def getBlock(blockHash: ByteString, deploysBodiesExcluded: Boolean): F[Option[Block]]
     def getDeploys(deployHashes: Set[ByteString]): Iterant[F, Deploy]
@@ -327,7 +398,9 @@ object GossipServiceServer {
   def apply[F[_]: Concurrent: Parallel: Log: Metrics](
       backend: GossipServiceServer.Backend[F],
       synchronizer: Synchronizer[F],
-      downloadManager: BlockDownloadManager[F],
+      connector: GossipService.Connector[F],
+      deployDownloadManager: DeployDownloadManager[F],
+      blockDownloadManager: BlockDownloadManager[F],
       genesisApprover: GenesisApprover[F],
       maxChunkSize: Int,
       maxParallelBlockDownloads: Int
@@ -337,7 +410,9 @@ object GossipServiceServer {
     } yield new GossipServiceServer(
       backend,
       synchronizer,
-      downloadManager,
+      connector,
+      deployDownloadManager,
+      blockDownloadManager,
       genesisApprover,
       maxChunkSize,
       blockDownloadSemaphore

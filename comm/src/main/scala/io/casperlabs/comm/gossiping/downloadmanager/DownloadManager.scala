@@ -13,15 +13,19 @@ import eu.timepit.refined.numeric._
 import io.casperlabs.comm.GossipError
 import io.casperlabs.comm.discovery.Node
 import io.casperlabs.comm.discovery.NodeUtils.showNode
-import io.casperlabs.comm.gossiping.{Chunk, GossipService, Relaying, WaitHandle}
+import io.casperlabs.comm.gossiping.{Chunk, GossipService, WaitHandle}
 import io.casperlabs.metrics.Metrics
+import io.casperlabs.metrics.implicits._
 import io.casperlabs.shared.Log._
 import io.casperlabs.shared.{Compression, Log}
 import io.casperlabs.catscontrib.effect.implicits.fiberSyntax
+import io.casperlabs.comm.gossiping.relaying.Relaying
 import monix.tail.Iterant
 import monix.execution.Scheduler
 import scala.concurrent.duration.{Duration, FiniteDuration}
 import scala.util.control.NonFatal
+import scala.collection.immutable.Queue
+import scala.annotation.tailrec
 
 trait DownloadManagerTypes {
 
@@ -131,6 +135,72 @@ trait DownloadManagerCompanion extends DownloadManagerTypes {
 
   /** All dependencies that need to be downloaded before a downloadable. */
   def dependencies(handle: Handle): Seq[Identifier]
+
+  /** When we first get a notificaton about a new item, we add it as new.
+    * Subsequent sources can be added with `scheduleDownload` individually,
+    * however that would require first syncing with them to the their dependencies
+    * as well, so the new source can be added to all missing items, not just the tip.
+    * The `addSource` method makes this easier when we know the item is already scheduled
+    * by recursively adding the new source to all dependencies we already know about.
+    *
+    * This method collects the the ancestors of an item we already have where the
+    * peer that is now telling us about it was not yet available as a source.
+    */
+  def collectAncestorsForNewSource[F[_]](
+      items: Map[Identifier, Item[F]],
+      id: Identifier,
+      source: Node
+  ): Set[Identifier] = {
+
+    @tailrec
+    def loop(
+        acc: Set[Identifier],
+        queue: Queue[Identifier]
+    ): Set[Identifier] =
+      queue.dequeueOption match {
+        case None => acc
+        case Some((id, queue)) if acc(id) =>
+          loop(acc, queue)
+        case Some((id, queue)) =>
+          items.get(id) match {
+            case Some(item) if item.isError || !item.sources(source) =>
+              loop(acc + id, queue ++ item.dependencies)
+            case _ =>
+              loop(acc, queue)
+          }
+      }
+
+    loop(Set.empty, Queue(id)) - id
+  }
+
+  /** Collect every scheduled item that depends on something.
+    * This is used only rarely, when an item fails to download completely.
+    */
+  def collectDescendants[F[_]](
+      items: Map[Identifier, Item[F]],
+      id: Identifier
+  ): Set[Identifier] = {
+
+    @tailrec
+    def loop(
+        acc: Set[Identifier],
+        queue: Queue[Identifier]
+    ): Set[Identifier] =
+      queue.dequeueOption match {
+        case None => acc
+        case Some((id, queue)) if acc(id) =>
+          loop(acc, queue)
+
+        case Some((id, queue)) =>
+          val dependants = items.collect {
+            case (hash, dep) if dep.dependencies contains id => hash
+          }
+          loop(acc + id, queue ++ dependants)
+      }
+
+    loop(Set.empty, Queue(id)) - id
+  }
+
 }
 
 /** Manages the download, validation, storing and gossiping of [[DownloadManagerTypes#Downloadable]].*/
@@ -147,6 +217,12 @@ trait DownloadManager[F[_]] extends DownloadManagerTypes {
     * The unwrapped `F[Unit]` _inside_ the `F[F[Unit]]` can be used to
     * wait until the actual download finishes, or results in an error. */
   def scheduleDownload(handle: Handle, source: Node, relay: Boolean): F[WaitHandle[F]]
+
+  /** Check if an item has already been scheduled for download. */
+  def isScheduled(id: Identifier): F[Boolean]
+
+  /** Add a new source to an existing schedule and all of its dependencies. */
+  def addSource(id: Identifier, source: Node): F[WaitHandle[F]]
 }
 
 trait DownloadManagerImpl[F[_]] extends DownloadManager[F] { self =>
@@ -229,7 +305,7 @@ trait DownloadManagerImpl[F[_]] extends DownloadManager[F] { self =>
     *
     * The unwrapped `F[Unit]` _inside_ the `F[F[Unit]]` can be used to
     * wait until the actual download finishes, or results in an error. */
-  def scheduleDownload(handle: Handle, source: Node, relay: Boolean): F[WaitHandle[F]] =
+  override def scheduleDownload(handle: Handle, source: Node, relay: Boolean): F[WaitHandle[F]] =
     for {
       // Fail rather than block forever.
       _ <- ensureNotShutdown
@@ -238,6 +314,25 @@ trait DownloadManagerImpl[F[_]] extends DownloadManager[F] { self =>
       _  <- signal.put(Signal.Download(handle, source, relay, sf))
       df <- Sync[F].rethrow(sf.get)
     } yield Sync[F].rethrow(df.get)
+
+  /** Try to add an alternative source to an existing download.
+    * The caller is supposed to check before with `isScheduled` whether this makes sense.
+    * If the item is no longer scheduled (because it has been downloaded),
+    * then return a completed wait handle.
+    */
+  override def addSource(id: Identifier, source: Node): F[WaitHandle[F]] =
+    itemsRef.get.flatMap {
+      case items if !items.contains(id) =>
+        ().pure[F].pure[F]
+
+      case items =>
+        def schedule(id: Identifier) =
+          scheduleDownload(items(id).handle, source, relay = false)
+
+        val ancestors = collectAncestorsForNewSource(items, id, source)
+
+        ancestors.toList.traverse(schedule) >> schedule(id)
+    }
 
   /** Run the manager loop which listens to signals and starts workers when it can. */
   def run: F[Unit] =
@@ -306,14 +401,19 @@ trait DownloadManagerImpl[F[_]] extends DownloadManager[F] { self =>
       case Signal.DownloadFailure(id, ex) =>
         val finish = for {
           _ <- workersRef.update(_ - id)
-          // Keep item so its dependencies are not downloaded.
-          // If it's scheduled again we'll try once more.
-          // Old stuff will be forgotten when the node is restarted.
           watchers <- itemsRef.modify { items =>
-                       val item = items(id)
-                       val tombstone: Item[F] =
-                         item.copy(isDownloading = false, isError = true, maybeWatcher = None)
-                       (items + (id -> tombstone), item.maybeWatcher.toList)
+                       // Mark every descendant as faulty, so we know we have to retry them if re-scheduled.
+                       val descendants = collectDescendants(items, id)
+                       val tombstones: Seq[(Identifier, Item[F])] =
+                         (descendants + id).toSeq.map { id =>
+                           val tombstone: Item[F] = items(id).copy(
+                             isDownloading = false,
+                             isError = true,
+                             maybeWatcher = None
+                           )
+                           id -> tombstone
+                         }
+                       (items ++ tombstones, items(id).maybeWatcher.toList)
                      }
           // Tell whoever scheduled it before that it's over.
           _ <- watchers.traverse(_.complete(Left(ex)).attempt.void)
@@ -384,7 +484,7 @@ trait DownloadManagerImpl[F[_]] extends DownloadManager[F] { self =>
         )
     }
 
-  private def isScheduled(id: Identifier): F[Boolean] =
+  override def isScheduled(id: Identifier): F[Boolean] =
     itemsRef.get.map(_ contains id)
 
   private def isDownloaded(id: Identifier): F[Boolean] =
@@ -396,9 +496,7 @@ trait DownloadManagerImpl[F[_]] extends DownloadManager[F] { self =>
       _ <- itemsRef.update(_ + (item.handle.id -> item.copy(isDownloading = true)))
       worker <- Concurrent[F].start {
                  // Indicate how many items are currently being attempted, including their retry wait time.
-                 Metrics[F].gauge("downloads_ongoing") {
-                   download(item.handle.id)
-                 }
+                 download(item.handle.id).timerGauge("downloads")
                }
       _ <- workersRef.update(_ + (item.handle.id -> worker))
     } yield ()
@@ -466,7 +564,7 @@ trait DownloadManagerImpl[F[_]] extends DownloadManager[F] { self =>
                         Metrics[F].incrementCounter("downloads_failed") *>
                           Log[F].warn(
                             s"Retrying download of ${kind} ${id.show -> "id"} from other sources, failed source: ${source.show -> "peer"}, prev $attempt: $ex"
-                          ) *>
+                          ) >>
                           loop(counterPerSource.updated(source, nextAttempt), ex.some)
                     }
                 case _: Duration.Infinite => sys.error("Unreachable")
@@ -561,10 +659,10 @@ trait DownloadManagerImpl[F[_]] extends DownloadManager[F] { self =>
 
     // Indicate how many fetches we are trying to do at a time. If it's larger then the semaphore
     // we configured we'd know where we'd have to raise it to allow maximum throughput.
-    Metrics[F].gauge("fetches_ongoing") {
-      semaphore.withPermit {
-        ContextShift[F].evalOn(egressScheduler)(effect)
+    semaphore
+      .withPermit {
+        ContextShift[F].evalOn(egressScheduler)(effect.timerGauge("restore"))
       }
-    }
+      .timerGauge("fetches")
   }
 }

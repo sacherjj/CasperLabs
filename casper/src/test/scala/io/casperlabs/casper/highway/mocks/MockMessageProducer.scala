@@ -21,6 +21,8 @@ class MockMessageProducer[F[_]: Sync: BlockStorageWriter: DagStorage](
     val validatorId: PublicKeyBS
 ) extends MessageProducer[F] {
 
+  override def hasPendingDeploys = false.pure[F]
+
   private def insert(message: Message): F[Unit] = {
     val summary = message.blockSummary
     for {
@@ -64,13 +66,15 @@ class MockMessageProducer[F[_]: Sync: BlockStorageWriter: DagStorage](
       keyBlockHash: BlockHash,
       roundId: Ticks,
       target: Message.Block,
-      justifications: Map[PublicKeyBS, Set[Message]]
+      justifications: Map[PublicKeyBS, Set[Message]],
+      messageRole: Block.MessageRole
   ): F[Message.Ballot] = withParent(target) { _ =>
     val unsigned = BlockSummary()
       .withHeader(
         Block
           .Header()
           .withMessageType(Block.MessageType.BALLOT)
+          .withMessageRole(messageRole)
           .withValidatorPublicKey(validatorId)
           .withParentHashes(List(target.messageHash))
           .withJustifications(
@@ -98,13 +102,15 @@ class MockMessageProducer[F[_]: Sync: BlockStorageWriter: DagStorage](
       roundId: Ticks,
       mainParent: Message.Block,
       justifications: Map[PublicKeyBS, Set[Message]],
-      isBookingBlock: Boolean
+      isBookingBlock: Boolean,
+      messageRole: Block.MessageRole
   ): F[Message.Block] =
     withParent(mainParent) { _ =>
       val unsigned = BlockSummary()
         .withHeader(
           Block
             .Header()
+            .withMessageRole(messageRole)
             .withValidatorPublicKey(validatorId)
             .withParentHashes(List(mainParent.messageHash))
             .withJustifications(

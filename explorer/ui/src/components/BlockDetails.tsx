@@ -190,6 +190,7 @@ const blockAttrs: (block: BlockInfo) => Array<[string, any]> = (
     ['Round ID', header.getRoundId()],
     ['Timestamp', new Date(header.getTimestamp()).toISOString()],
     ['Type', <BlockType header={header} />],
+    ['Role', <BlockRole header={header} />],
     ['Validator', validatorId],
     ['Validator Block Number', header.getValidatorBlockSeqNum()],
     [
@@ -259,6 +260,16 @@ export const Balance = observer(
 export const BlockType = (props: { header: Block.Header }) => {
   let typ = props.header.getMessageType();
   let lbl = typ === Block.MessageType.BLOCK ? "Block" : typ === Block.MessageType.BALLOT ? "Ballot" : "n/a"
+  return <span>{lbl}</span>;
+}
+
+export const BlockRole = (props: { header: Block.Header }) => {
+  let role = props.header.getMessageRole()
+  let lbl =
+    role === Block.MessageRole.PROPOSAL ? "Proposal" :
+      role === Block.MessageRole.CONFIRMATION ? "Confirmation" :
+        role === Block.MessageRole.WITNESS ? "Witness" :
+          "n/a";
   return <span>{lbl}</span>;
 }
 

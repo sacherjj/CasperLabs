@@ -4,7 +4,7 @@ import cats.effect._
 import cats.implicits._
 import com.google.protobuf.ByteString
 import com.google.protobuf.empty.Empty
-import io.casperlabs.casper.consensus.{Block, BlockSummary, GenesisCandidate}
+import io.casperlabs.casper.consensus.{Block, BlockSummary, DeploySummary, GenesisCandidate}
 import io.casperlabs.comm.ServiceError.{DeadlineExceeded, Unauthenticated}
 import io.casperlabs.comm.auth.Principal
 import io.casperlabs.comm.discovery.{Node, NodeIdentifier}
@@ -64,6 +64,9 @@ object GrpcGossipService {
       def newBlocks(request: NewBlocksRequest): Task[NewBlocksResponse] =
         verifySender(request.sender) >> TaskLike[F].apply(service.newBlocks(request))
 
+      def newDeploys(request: NewDeploysRequest): Task[NewDeploysResponse] =
+        verifySender(request.sender) >> TaskLike[F].apply(service.newDeploys(request))
+
       def streamAncestorBlockSummaries(
           request: StreamAncestorBlockSummariesRequest
       ): Observable[BlockSummary] =
@@ -78,6 +81,9 @@ object GrpcGossipService {
           request: StreamBlockSummariesRequest
       ): Observable[BlockSummary] =
         service.streamBlockSummaries(request).toObservable
+
+      def streamDeploySummaries(request: StreamDeploySummariesRequest): Observable[DeploySummary] =
+        service.streamDeploySummaries(request).toObservable
 
       def getBlockChunked(request: GetBlockChunkedRequest): Observable[Chunk] =
         Observable
@@ -144,6 +150,10 @@ object GrpcGossipService {
       def newBlocks(request: NewBlocksRequest): F[NewBlocksResponse] =
         withErrorCallback(stub.newBlocks(request))
 
+      /** Notify the callee about new deploys. */
+      def newDeploys(request: NewDeploysRequest): F[NewDeploysResponse] =
+        withErrorCallback(stub.newDeploys(request))
+
       def streamAncestorBlockSummaries(
           request: StreamAncestorBlockSummariesRequest
       ): Iterant[F, BlockSummary] =
@@ -158,6 +168,10 @@ object GrpcGossipService {
           request: StreamBlockSummariesRequest
       ): Iterant[F, BlockSummary] =
         withErrorCallback(stub.streamBlockSummaries(request))
+
+      def streamDeploySummaries(
+          request: StreamDeploySummariesRequest
+      ): Iterant[F, DeploySummary] = withErrorCallback(stub.streamDeploySummaries(request))
 
       def getBlockChunked(request: GetBlockChunkedRequest): Iterant[F, Chunk] =
         withErrorCallback(stub.getBlockChunked(request))

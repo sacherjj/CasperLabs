@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { Component } from 'react';
 import { observer } from 'mobx-react';
 import DagContainer, { DagStep } from '../containers/DagContainer';
 import {
@@ -39,7 +39,7 @@ class _BlockList extends RefreshableComponent<Props, {}> {
   componentWillUnmount() {
     super.componentWillUnmount();
     // release websocket if necessary
-    this.props.dag.unsubscribe();
+    this.props.dag.toggleableSubscriber.unsubscribe();
   }
 
   render() {
@@ -52,7 +52,7 @@ class _BlockList extends RefreshableComponent<Props, {}> {
             : `Blocks from rank ${dag.minRank} to ${dag.maxRank}`
         }
         refresh={() => this.refresh()}
-        subscribeToggleStore={dag.subscribeToggleStore}
+        subscribeToggleStore={dag.toggleableSubscriber.subscribeToggleStore}
         headers={['Block Hash', 'j-Rank', 'm-Rank', 'Timestamp', 'Validator', 'Type', 'Key Block Hash']}
         rows={dag.blocks}
         renderRow={(block: BlockInfo) => {

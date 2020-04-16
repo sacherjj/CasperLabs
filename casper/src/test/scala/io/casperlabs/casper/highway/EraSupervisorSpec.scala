@@ -1,29 +1,20 @@
 package io.casperlabs.casper.highway
 
-import cats._
+import cats.effect.Resource
+import cats.effect.concurrent.Ref
 import cats.implicits._
-import cats.effect.{ContextShift, Resource, Sync, Timer}
-import cats.effect.concurrent.{Ref}
-import com.google.protobuf.ByteString
-import io.casperlabs.casper.consensus.{Block, BlockSummary, Bond, Era}
-import io.casperlabs.casper.consensus.state
-import io.casperlabs.casper.helper.StorageFixture
-import io.casperlabs.comm.gossiping.{Relaying, WaitHandle}
-import io.casperlabs.crypto.Keys.{PublicKey, PublicKeyBS}
-import io.casperlabs.shared.{Log, LogStub}
-import io.casperlabs.storage.BlockMsgWithTransform
-import io.casperlabs.storage.block.BlockStorageWriter
-import io.casperlabs.storage.era.EraStorage
-import io.casperlabs.storage.dag.DagStorage
-import io.casperlabs.storage.{BlockHash, SQLiteStorage}
+import io.casperlabs.casper.consensus.Block.MessageRole
+import io.casperlabs.comm.gossiping.WaitHandle
+import io.casperlabs.comm.gossiping.relaying.BlockRelaying
+import io.casperlabs.crypto.Keys.PublicKeyBS
 import io.casperlabs.models.Message
-import java.time.Instant
-import java.util.concurrent.TimeUnit
+import io.casperlabs.storage.{BlockHash, SQLiteStorage}
 import monix.eval.Task
-import monix.execution.Scheduler
 import org.scalatest._
 import scala.concurrent.duration._
-import io.casperlabs.casper.PrettyPrinter
+import io.casperlabs.casper.highway.mocks.MockMessageProducer
+import io.casperlabs.crypto.Keys
+import io.casperlabs.shared.Log
 
 class EraSupervisorSpec extends FlatSpec with Matchers with Inspectors with HighwayFixture {
 
@@ -74,6 +65,38 @@ class EraSupervisorSpec extends FlatSpec with Matchers with Inspectors with High
       }
   }
 
+  it should "not show active eras after errors" in testFixture { implicit timer => implicit db =>
+    new Fixture(
+      length = 1.hour,
+      initRoundExponent = 10, // ~20 minutes,
+      printLevel = Log.Level.Crit
+    ) {
+      // Create a message producer that will raise errors so the agenda will fail.
+      override lazy val messageProducer: MessageProducer[Task] =
+        new MockMessageProducer[Task](validator) {
+          override def block(
+              keyBlockHash: BlockHash,
+              roundId: Ticks,
+              mainParent: Message.Block,
+              justifications: Map[PublicKeyBS, Set[Message]],
+              isBookingBlock: Boolean,
+              messageRole: MessageRole
+          ) = Task.raiseError(new RuntimeException("Stop the agenda!"))
+        }
+
+      override def test =
+        makeSupervisor().use { supervisor =>
+          for {
+            active0 <- supervisor.activeEras
+            _       = active0 should not be empty
+            _       <- Task.sleep(30.minutes)
+            active1 <- supervisor.activeEras
+            _       = active1 shouldBe empty
+          } yield ()
+        }
+    }
+  }
+
   it should "relay created messages to other nodes" in testFixtures(
     validators = List("Alice", "Bob", "Charlie")
   ) { implicit timer => validatorDatabases =>
@@ -96,7 +119,7 @@ class EraSupervisorSpec extends FlatSpec with Matchers with Inspectors with High
         val validatorId: PublicKeyBS              = validator
         val relayedRef: Ref[Task, Set[BlockHash]] = Ref.unsafe(Set.empty)
 
-        override lazy val relaying = new Relaying[Task] {
+        override lazy val blockRelaying = new BlockRelaying[Task] {
           override def relay(hashes: List[BlockHash]): Task[WaitHandle[Task]] =
             for {
               _           <- relayedRef.update(_ ++ hashes)

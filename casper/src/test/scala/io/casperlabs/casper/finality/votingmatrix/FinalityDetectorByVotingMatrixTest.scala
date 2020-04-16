@@ -18,9 +18,10 @@ import io.casperlabs.models.Message
 import io.casperlabs.shared.LogStub
 import io.casperlabs.shared.{Log, Time}
 import io.casperlabs.storage.block.BlockStorage
-import io.casperlabs.storage.dag.{DagRepresentation, DagStorage}
+import io.casperlabs.storage.dag.{AncestorsStorage, DagRepresentation, DagStorage}
 import monix.eval.Task
 import org.scalatest.{FlatSpec, Matchers}
+import io.casperlabs.shared.ByteStringPrettyPrinter._
 
 import scala.collection.immutable.HashMap
 
@@ -37,7 +38,9 @@ class FinalityDetectorByVotingMatrixTest
   implicit val raiseValidateErr: FunctorRaise[Task, InvalidBlock] =
     validation.raiseValidateErrorThroughApplicativeError[Task]
 
-  def mkVotingMatrix(dag: DagRepresentation[Task], genesis: Block, isHighway: Boolean = false) =
+  def mkVotingMatrix(dag: DagRepresentation[Task], genesis: Block, isHighway: Boolean = false)(
+      implicit AS: AncestorsStorage[Task]
+  ) =
     FinalityDetectorVotingMatrix
       .of[Task](
         dag,
@@ -133,7 +136,7 @@ class FinalityDetectorByVotingMatrixTest
                    genesis.blockHash,
                    v1,
                    bonds,
-                   HashMap(v1 -> genesis.blockHash),
+                   HashMap(ByteString.EMPTY -> genesis.blockHash),
                    lfb = genesis
                  )
       _ = c1 shouldBe Seq(CommitteeWithConsensusValue(Set(v1), 20, b1.blockHash))
@@ -296,7 +299,7 @@ class FinalityDetectorByVotingMatrixTest
         _ = c4 shouldBe Seq(CommitteeWithConsensusValue(Set(v1, v2, v3), 30, b1.blockHash))
         (b5, c5) <- createBlockAndUpdateFinalityDetector[Task](
                      Seq(b4.blockHash),
-                     b1.blockHash,
+                     genesis.blockHash,
                      v2,
                      bonds,
                      HashMap(v1 -> b4.blockHash, v2 -> b2.blockHash, v3 -> b3.blockHash),
@@ -305,7 +308,7 @@ class FinalityDetectorByVotingMatrixTest
         _ = c5 shouldBe Seq(CommitteeWithConsensusValue(Set(v1, v2, v3), 30, b2.blockHash))
         (b6, c6) <- createBlockAndUpdateFinalityDetector[Task](
                      Seq(b5.blockHash),
-                     b2.blockHash,
+                     genesis.blockHash,
                      v3,
                      bonds,
                      HashMap(v1 -> b4.blockHash, v2 -> b5.blockHash, v3 -> b3.blockHash),
@@ -314,7 +317,7 @@ class FinalityDetectorByVotingMatrixTest
         _ = c6 shouldBe Seq(CommitteeWithConsensusValue(Set(v1, v2, v3), 30, b3.blockHash))
         (b7, c7) <- createBlockAndUpdateFinalityDetector[Task](
                      Seq(b6.blockHash),
-                     b3.blockHash,
+                     genesis.blockHash,
                      v1,
                      bonds,
                      HashMap(v1 -> b4.blockHash, v2 -> b5.blockHash, v3 -> b6.blockHash),
@@ -644,12 +647,9 @@ class FinalityDetectorByVotingMatrixTest
             EquivocationDetector
               .checkEquivocation(dag, message, isHighway = false)
           )
-      _   <- BlockStorage[F].put(block.blockHash, block, Map.empty)
-      msg <- Sync[F].fromTry(Message.fromBlock(block))
-      finalizedBlockOpt <- FinalityDetectorVotingMatrix[F].onNewMessageAddedToTheBlockDag(
-                            dag,
-                            msg,
-                            lfb.blockHash
-                          )
+      _                 <- BlockStorage[F].put(block.blockHash, block, Map.empty)
+      msg               <- Sync[F].fromTry(Message.fromBlock(block))
+      _                 <- FinalityDetectorVotingMatrix[F].addMessage(dag, msg, lfb.blockHash)
+      finalizedBlockOpt <- FinalityDetectorVotingMatrix[F].checkFinality(dag)
     } yield block -> finalizedBlockOpt
 }

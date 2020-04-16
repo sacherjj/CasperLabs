@@ -170,6 +170,7 @@ message Block {
         // This is a rank based on the justifications of the message.
         uint64 j_rank = 11;
         MessageType message_type = 12;
+        MessageRole message_role = 19;
         // A block from where the fork choice is calculated.
         // Corresponds to the era the block belongs to.
         bytes key_block_hash = 15;
@@ -193,6 +194,17 @@ message Block {
         // targets one block (no secondary parents),
         // and cannot be used as a parent (is a leaf in the DAG).
         BALLOT = 1;
+    }
+
+    // Highway specific role of a message.
+    enum MessageRole {
+        UNDEFINED = 0;
+        // Message from the round leader; a.k.a. lambda-message. Can be a block or ballot (during the voting period).
+        PROPOSAL = 1;
+        // Message in response to leader messages, with no other justification except the validator's own last message; a.k.a. lambda-response.
+        CONFIRMATION = 2;
+        // Message created during the round to form summits, a.k.a. omega-message.
+        WITNESS = 3;
     }
 
     message Body {

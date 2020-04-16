@@ -115,6 +115,9 @@ periodic-sync-round-period = "60second"
 # Maximum number of parallel block downloads initiated by the download manager.
 download-max-parallel-blocks = 10
 
+# Maximum number of parallel deploy downloads initiated by the download manager.
+download-max-parallel-deploys = 10
+
 # Maximum number of times to retry to download a block from the same node.
 download-max-retries = 0
 
@@ -146,13 +149,19 @@ block-upload-rate-period = "0s"
 block-upload-rate-max-throttled = 0
 
 # Size of the main thread pool.
-main-threads = 64
+main-threads = 50
 
 # Size of the thread pool used to handle incoming requests.
-ingress-threads = 32
+ingress-threads = 60
 
-# Size of the thread pool for database connections.
-db-threads = 48
+# Size of the thread pool waiting for the database writer connection.
+db-write-threads = 70
+
+# Size of the thread pool waiting for a database reader connection.
+db-read-threads = 75
+
+# Number of database connections in the reader pool.
+db-read-connections = 10
 
 # Parallelism per CPU core.
 parallelism-cpu-multiplier = 1.0
@@ -278,6 +287,9 @@ omega-message-time-start = 0.5
 
 # Fraction of time through the round before which we must have created the omega message.
 omega-message-time-end = 0.75
+
+# Enable the creating blocks instead of ballots as omega-messages.
+omega-blocks-enabled = false
 
 # Initial round exponent to start the node with, before auto-adjustment takes over; corresponds to the tick unit of the chain.
 init-round-exponent = 14

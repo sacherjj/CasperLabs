@@ -94,11 +94,11 @@ where
             }
 
             FunctionIndex::NewFuncIndex => {
-                // args(0) = pointer to key destination in Wasm memory
+                // args(0) = pointer to uref destination in Wasm memory
                 // args(1) = pointer to initial value
                 // args(2) = size of initial value
-                let (key_ptr, value_ptr, value_size) = Args::parse(args)?;
-                self.new_uref(key_ptr, value_ptr, value_size)?;
+                let (uref_ptr, value_ptr, value_size) = Args::parse(args)?;
+                self.new_uref(uref_ptr, value_ptr, value_size)?;
                 Ok(None)
             }
 
@@ -447,6 +447,13 @@ where
                 let (dest_ptr, dest_size, bytes_written_ptr): (_, u32, _) = Args::parse(args)?;
                 let ret = self.read_host_buffer(dest_ptr, dest_size as usize, bytes_written_ptr)?;
                 Ok(Some(RuntimeValue::I32(api_error::i32_from(ret))))
+            }
+
+            #[cfg(feature = "test-support")]
+            FunctionIndex::PrintIndex => {
+                let (text_ptr, text_size) = Args::parse(args)?;
+                self.print(text_ptr, text_size)?;
+                Ok(None)
             }
         }
     }

@@ -3,6 +3,7 @@ package io.casperlabs.models
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus
 import io.casperlabs.casper.consensus.Block.MessageType.{BALLOT, BLOCK, Unrecognized}
+import io.casperlabs.casper.consensus.Block.MessageRole
 import io.casperlabs.casper.consensus.{BlockSummary, Bond}
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.models.BlockImplicits._
@@ -41,6 +42,7 @@ sealed trait Message {
   val blockSummary: BlockSummary
 
   val validatorPrevMessageHash: Id
+  val messageRole: consensus.Block.MessageRole
 
   def isBlock: Boolean
   def isBallot: Boolean = !isBlock
@@ -74,7 +76,8 @@ object Message {
       validatorMsgSeqNum: Int,
       signature: consensus.Signature,
       blockSummary: BlockSummary,
-      validatorPrevMessageHash: Message#Id
+      validatorPrevMessageHash: Message#Id,
+      messageRole: MessageRole
   ) extends Message {
     // For Genesis block we expect it to have no parents.
     // We could either encode it as separate ADT variant or keep the assumptions.
@@ -105,7 +108,8 @@ object Message {
       validatorMsgSeqNum: Int,
       signature: consensus.Signature,
       blockSummary: BlockSummary,
-      validatorPrevMessageHash: Message#Id
+      validatorPrevMessageHash: Message#Id,
+      messageRole: MessageRole
   ) extends Message {
     override val parents: Seq[Id] = Seq(parentBlock)
     def isBlock: Boolean          = false
@@ -124,11 +128,12 @@ object Message {
       val jRank              = asJRank(header.jRank)
       val mainRank           = asMainRank(header.mainRank)
       val validatorMsgSeqNum = header.validatorBlockSeqNum
-      val role               = header.messageType
+      val messageType        = header.messageType
       val signature          = b.getSignature
       val prevMsgHash        = header.validatorPrevBlockHash
+      val messageRole        = header.messageRole
 
-      role match {
+      messageType match {
         case BALLOT =>
           Success(
             Ballot(
@@ -144,7 +149,8 @@ object Message {
               validatorMsgSeqNum,
               signature,
               b,
-              prevMsgHash
+              prevMsgHash,
+              messageRole
             )
           )
         case BLOCK =>
@@ -162,7 +168,8 @@ object Message {
               validatorMsgSeqNum,
               signature,
               b,
-              prevMsgHash
+              prevMsgHash,
+              messageRole
             )
           )
         case Unrecognized(_) =>

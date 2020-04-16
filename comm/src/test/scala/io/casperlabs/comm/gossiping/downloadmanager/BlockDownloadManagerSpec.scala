@@ -1,4 +1,4 @@
-package io.casperlabs.comm.gossiping
+package io.casperlabs.comm.gossiping.downloadmanager
 
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -6,13 +6,14 @@ import cats.effect.concurrent.Semaphore
 import cats.implicits._
 import com.google.protobuf.ByteString
 import eu.timepit.refined.auto._
-import io.casperlabs.casper.consensus.{Approval, Block, BlockSummary}
+import io.casperlabs.casper.consensus.{Approval, Block, BlockSummary, DeploySummary}
 import io.casperlabs.comm.GossipError
 import io.casperlabs.comm.discovery.Node
 import io.casperlabs.comm.discovery.NodeUtils.showNode
 import io.casperlabs.comm.gossiping.downloadmanager.BlockDownloadManagerImpl._
-import io.casperlabs.comm.gossiping.downloadmanager._
+import io.casperlabs.comm.gossiping.relaying.BlockRelaying
 import io.casperlabs.comm.gossiping.synchronization.Synchronizer
+import io.casperlabs.comm.gossiping._
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.models.BlockImplicits.BlockOps
 import io.casperlabs.shared.{Log, LogStub}
@@ -26,6 +27,11 @@ import org.scalatest._
 import scala.concurrent.TimeoutException
 import scala.concurrent.duration._
 
+/**
+  * TODO: Uses [[BlockDownloadManagerImpl]] for testing.
+  * It's ok for now, because the most of the code shared between [[DeployDownloadManagerImpl]].
+  * However, if it's going to change, then we'll need to revisit this.
+  */
 class BlockDownloadManagerSpec
     extends WordSpecLike
     with Matchers
@@ -705,7 +711,7 @@ object BlockDownloadManagerSpec {
     def apply(validate: Block => Task[Unit] = _ => Task.unit) = new MockBackend(validate)
   }
 
-  class MockRelaying extends Relaying[Task] {
+  class MockRelaying extends BlockRelaying[Task] {
     @volatile var relayed = Vector.empty[ByteString]
 
     override def relay(hashes: List[ByteString]): Task[Task[Unit]] = Task.delay {
@@ -720,35 +726,23 @@ object BlockDownloadManagerSpec {
 
   /** Test implementation of the remote GossipService to download the blocks from. */
   object MockGossipService {
-    private val emptySynchronizer = new Synchronizer[Task] {
-      def syncDag(source: Node, targetBlockHashes: Set[ByteString])    = ???
-      def onDownloaded(blockHash: ByteString): Task[Unit]              = ???
-      def onFailed(blockHash: ByteString): Task[Unit]                  = ???
-      def onScheduled(summary: BlockSummary, source: Node): Task[Unit] = ???
-    }
-    private val emptyDownloadManager = new BlockDownloadManager[Task] {
-      def scheduleDownload(summary: BlockSummary, source: Node, relay: Boolean) = ???
-    }
-    private val emptyGenesisApprover = new GenesisApprover[Task] {
-      def getCandidate                                           = ???
-      def addApproval(blockHash: ByteString, approval: Approval) = ???
-      def awaitApproval                                          = ???
-    }
+    private val emptySynchronizer          = new NoOpsSynchronizer[Task]          {}
+    private val emptyDeployDownloadManager = new NoOpsDeployDownloadManager[Task] {}
+    private val emptyBlockDownloadManager  = new NoOpsBlockDownloadManager[Task]  {}
+    private val emptyGenesisApprover       = new NoOpsGenesisApprover[Task]       {}
 
     // Used only as a default argument for when we aren't touching the remote service in a test.
     val default = {
       implicit val log = Log.NOPLog[Task]
       GossipServiceServer[Task](
-        backend = new GossipServiceServer.Backend[Task] {
-          def hasBlock(blockHash: ByteString)                                 = ???
-          def getBlock(blockHash: ByteString, deploysBodiesExcluded: Boolean) = Task.now(None)
-          def getBlockSummary(blockHash: ByteString)                          = ???
-          def getDeploys(deployHashes: Set[ByteString])                       = ???
-          def latestMessages: Task[Set[Block.Justification]]                  = ???
-          def dagTopoSort(startRank: Long, endRank: Long)                     = ???
+        backend = new NoOpsGossipServiceServerBackend[Task] {
+          override def getBlock(blockHash: ByteString, deploysBodiesExcluded: Boolean) =
+            Task.now(None)
         },
         synchronizer = emptySynchronizer,
-        downloadManager = emptyDownloadManager,
+        connector = _ => ???,
+        deployDownloadManager = emptyDeployDownloadManager,
+        blockDownloadManager = emptyBlockDownloadManager,
         genesisApprover = emptyGenesisApprover,
         maxChunkSize = 100 * 1024,
         maxParallelBlockDownloads = 100
@@ -768,8 +762,7 @@ object BlockDownloadManagerSpec {
       } yield {
         // Using `new` because I want to override `getBlockChunked`.
         new GossipServiceServer[Task](
-          backend = new GossipServiceServer.Backend[Task] {
-            override def hasBlock(blockHash: ByteString) = ???
+          backend = new NoOpsGossipServiceServerBackend[Task] {
             override def getBlock(blockHash: ByteString, deploysBodiesExcluded: Boolean) =
               regetter(Task.delay(blockMap.get(blockHash).map { block =>
                 if (deploysBodiesExcluded) {
@@ -778,14 +771,12 @@ object BlockDownloadManagerSpec {
                   block
                 }
               }))
-            override def getDeploys(deployHashes: Set[ByteString])      = ???
-            override def getBlockSummary(blockHash: ByteString)         = ???
-            override def latestMessages: Task[Set[Block.Justification]] = ???
-            override def dagTopoSort(startRank: Long, endRank: Long)    = ???
 
           },
           synchronizer = emptySynchronizer,
-          downloadManager = emptyDownloadManager,
+          connector = _ => ???,
+          deployDownloadManager = emptyDeployDownloadManager,
+          blockDownloadManager = emptyBlockDownloadManager,
           genesisApprover = emptyGenesisApprover,
           maxChunkSize = 100 * 1024,
           blockDownloadSemaphore = semaphore
