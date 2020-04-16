@@ -18,7 +18,7 @@ class AuthController {
 
   @action.bound
   async createNewVault(password: string): Promise<void> {
-    if (this.getEncryptedVault() !== null) {
+    if (this.getEncryptedVault()) {
       throw new Error('There is a vault already');
     }
     const hash = this.hash(password);
@@ -30,8 +30,8 @@ class AuthController {
   }
 
   @action
-  switchToAccount(account: SignKeyPairWithAlias) {
-    let i = this.appState.userAccounts.findIndex(a => a.name === account.name);
+  switchToAccount(accountName: string) {
+    let i = this.appState.userAccounts.findIndex(a => a.name === accountName);
     if (i === -1) {
       throw new Error(
         "Couldn't switch to this account because it doesn't exist"
@@ -41,17 +41,15 @@ class AuthController {
   }
 
   @action
-  async importUserAccount(name: string, privateKey: string) {
+  async importUserAccount(name: string, privateKeyBase64: string) {
     if (!this.appState.isUnlocked) {
       throw new Error('Unlock it before adding new account');
     }
 
-    const keyPair = nacl.sign.keyPair.fromSecretKey(decodeBase64(privateKey));
     let account = this.appState.userAccounts.find(account => {
       return (
         account.name === name ||
-        encodeBase64(account.signKeyPair.secretKey) ===
-          encodeBase64(keyPair.secretKey)
+        encodeBase64(account.signKeyPair.secretKey) === privateKeyBase64
       );
     });
 
@@ -63,13 +61,17 @@ class AuthController {
       );
     }
 
+    const keyPair = nacl.sign.keyPair.fromSecretKey(
+      decodeBase64(privateKeyBase64)
+    );
+
     this.appState.userAccounts.push({
       name: name,
       signKeyPair: keyPair
     });
-    if (this.appState.selectedUserAccount === null) {
-      this.appState.selectedUserAccount = this.appState.userAccounts[0];
-    }
+    this.appState.selectedUserAccount = this.appState.userAccounts[
+      this.appState.userAccounts.length - 1
+    ];
     this.persistVault(this.passwordHash!);
   }
 
@@ -82,6 +84,7 @@ class AuthController {
       passwordHash,
       this.appState.userAccounts
     );
+    this.saveEncryptedVault(encryptedVault);
   }
 
   private getEncryptedVault() {

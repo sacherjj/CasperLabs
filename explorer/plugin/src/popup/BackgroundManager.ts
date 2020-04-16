@@ -66,9 +66,9 @@ export class BackgroundManager {
     );
   }
 
-  public switchToAccount(account: SignKeyPairWithAlias) {
+  public switchToAccount(accountName: string) {
     return this.errors.withCapture(
-      this.rpc.call<void>('account.switchToAccount', account)
+      this.rpc.call<void>('account.switchToAccount', accountName)
     );
   }
 }

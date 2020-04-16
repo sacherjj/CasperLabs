@@ -47,7 +47,7 @@ export default class Menu extends React.Component<Props, any> {
                   <Dropdown.Item
                     key={i}
                     onClick={() => {
-                      this.props.authContainer.switchToAccount(account);
+                      this.props.authContainer.switchToAccount(account.name);
                     }}
                   >
                     {account.name ===
