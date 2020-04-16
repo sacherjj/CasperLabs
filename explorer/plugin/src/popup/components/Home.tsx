@@ -28,7 +28,7 @@ class Home extends React.Component<Props, {}> {
         <div className="mt-5 mb-4 text-center">
           <img src={logo} alt="logo" width={120} />
         </div>
-        <h2 className="text-center mb-5">Welcome</h2>
+        <h2 className="text-center mb-5">New Vault</h2>
 
         <div>
           <Form
@@ -48,7 +48,7 @@ class Home extends React.Component<Props, {}> {
               type="submit"
               block={true}
             >
-              Creating
+              Creating Vault
             </Button>
           </Form>
         </div>

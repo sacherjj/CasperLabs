@@ -33,7 +33,7 @@ class ImportAccountPage extends React.Component<Props, {}> {
           >
             <TextField
               label="Private Key"
-              placeholder=""
+              placeholder="Base64 encoded Ed25519 secret key"
               id="import-private-key"
               fieldState={this.props.importAccountContainer.privateKey}
             />

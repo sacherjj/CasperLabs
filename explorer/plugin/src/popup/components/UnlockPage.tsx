@@ -33,7 +33,7 @@ export default class UnlockPage extends React.Component<Props, {}> {
         <div className="mt-5 mb-4 text-center">
           <img src={logo} alt="logo" width={120} />
         </div>
-        <h2 className="text-center mb-5">Welcome Back</h2>
+        <h2 className="text-center mb-5">Unlock Vault</h2>
         <div>
           <Form
             onSubmit={() => {

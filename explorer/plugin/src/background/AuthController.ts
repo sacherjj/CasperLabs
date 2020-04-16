@@ -108,7 +108,7 @@ class AuthController {
   }
 
   @computed
-  get isUnLocked(): boolean {
+  get isUnlocked(): boolean {
     return this.appState.isUnlocked;
   }
 
