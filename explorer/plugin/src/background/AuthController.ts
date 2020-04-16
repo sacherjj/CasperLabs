@@ -107,8 +107,8 @@ class AuthController {
     if (!encryptedVault) {
       throw new Error('There is no vault');
     }
-    const vault = await passworder.decrypt(password, this.encryptedVaultStr);
-    return vault as unknown as SignKeyPairWithAlias[];
+    const vault = await passworder.decrypt(password, encryptedVault);
+    return vault as PersistentVaultData;
   }
 
   /**
@@ -138,7 +138,9 @@ class AuthController {
    */
   @action.bound
   async unlock(password: string) {
-    const vault = await this.restoreVault(this.hash(password));
+    const passwordHash = this.hash(password);
+    const vault = await this.restoreVault(passwordHash);
+    this.passwordHash = passwordHash;
     this.appState.isUnlocked = true;
     this.appState.userAccounts.replace(vault.userAccounts);
     this.appState.selectedUserAccount = vault.selectedUserAccount;
