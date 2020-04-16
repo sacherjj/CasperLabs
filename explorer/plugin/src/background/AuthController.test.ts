@@ -2,6 +2,7 @@ import AuthController from './AuthController';
 import { AppState } from '../lib/MemStore';
 import * as nacl from 'tweetnacl-ts';
 import { encodeBase64 } from 'tweetnacl-ts';
+import store from 'store';
 
 jest.mock('store', () => {
   const memoryStore = new Map();
@@ -12,6 +13,9 @@ jest.mock('store', () => {
     },
     set: (key: string, value: any): any => {
       memoryStore.set(key, value);
+    },
+    remove: (key: string): void => {
+      memoryStore.delete(key);
     }
   };
 });
@@ -37,15 +41,20 @@ jest.mock('browser-passworder', () => {
 });
 
 describe('AuthController', () => {
-  const appState = new AppState();
-  const authController = new AuthController(appState);
+  let appState: AppState;
+  let authController: AuthController;
   const password = 'correct_password';
   const wrongPassword = 'wrong_password';
-
-  test('it should be able to create a new vault only once with password', async () => {
+  beforeEach(async () => {
+    appState = new AppState();
+    authController = new AuthController(appState);
+    store.remove('encryptedVault');
     await expect(
       authController.createNewVault(password)
     ).resolves.toBeUndefined();
+  });
+
+  test('it should be able to create a new vault only once with password', async () => {
     await expect(authController.createNewVault(password)).rejects.toThrow();
   });
 
@@ -102,5 +111,25 @@ describe('AuthController', () => {
     expect(() => {
       authController.switchToAccount('not_exist');
     }).toThrow(/doesn't exist/g);
+  });
+
+  it('should be able to save and restore userAccounts and selectUserAccount information', async () => {
+    await authController.importUserAccount(
+      'account1',
+      encodeBase64(nacl.sign_keyPair().secretKey)
+    );
+    await authController.importUserAccount(
+      'account2',
+      encodeBase64(nacl.sign_keyPair().secretKey)
+    );
+
+    // restore from storage
+    const anotherState = new AppState();
+    const anotherAuthContainer = new AuthController(anotherState);
+    await anotherAuthContainer.unlock(password);
+    expect(anotherState.userAccounts.length).toBe(2);
+    expect(anotherState.selectedUserAccount?.name).toBe(
+      appState.selectedUserAccount?.name
+    );
   });
 });

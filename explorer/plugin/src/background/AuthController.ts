@@ -5,6 +5,11 @@ import * as nacl from 'tweetnacl';
 import { decodeBase64, encodeBase64 } from 'tweetnacl-util';
 import { AppState } from '../lib/MemStore';
 
+interface PersistentVaultData {
+  userAccounts: SignKeyPairWithAlias[];
+  selectedUserAccount: SignKeyPairWithAlias;
+}
+
 class AuthController {
   // we store hashed password instead of original password
   private passwordHash: string | null = null;
@@ -14,6 +19,9 @@ class AuthController {
   private encryptedVaultKey = 'encryptedVault';
 
   constructor(private appState: AppState) {
+    if (this.getEncryptedVault()) {
+      this.appState.hasCreatedVault = true;
+    }
   }
 
   @action.bound
@@ -79,10 +87,10 @@ class AuthController {
    * encrypted userAccounts by using passwordHash, and save it to local storage.
    */
   private async persistVault() {
-    const encryptedVault = await passworder.encrypt(
-      this.passwordHash!,
-      this.appState.userAccounts
-    );
+    const encryptedVault = await passworder.encrypt(this.passwordHash!, {
+      userAccounts: this.appState.userAccounts,
+      selectedUserAccount: this.appState.selectedUserAccount
+    });
     this.saveEncryptedVault(encryptedVault);
   }
 
@@ -94,7 +102,7 @@ class AuthController {
     store.set(this.encryptedVaultKey, encryptedVault);
   }
 
-  private async restoreVault(password: string) {
+  private async restoreVault(password: string): Promise<PersistentVaultData> {
     let encryptedVault = this.getEncryptedVault();
     if (!encryptedVault) {
       throw new Error('There is no vault');
@@ -132,7 +140,8 @@ class AuthController {
   async unlock(password: string) {
     const vault = await this.restoreVault(this.hash(password));
     this.appState.isUnlocked = true;
-    this.appState.userAccounts.replace(vault);
+    this.appState.userAccounts.replace(vault.userAccounts);
+    this.appState.selectedUserAccount = vault.selectedUserAccount;
   }
 
   @computed
