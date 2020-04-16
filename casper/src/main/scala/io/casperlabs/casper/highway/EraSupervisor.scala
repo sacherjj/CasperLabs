@@ -215,7 +215,7 @@ class EraSupervisor[F[_]: Concurrent: Timer: Log: Metrics: EraStorage: BlockRela
         val eraHash      = era.keyBlockHash.show
         val parentHash   = era.parentKeyBlockHash.show
         val startTick    = era.startTick
-        val startInstant = conf.toInstant(Ticks(era.endTick))
+        val startInstant = conf.toInstant(Ticks(era.startTick))
         val endTick      = era.endTick
         val endInstant   = conf.toInstant(Ticks(era.endTick))
         for {

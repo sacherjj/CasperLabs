@@ -22,10 +22,10 @@ import io.casperlabs.catscontrib.effect.implicits.fiberSyntax
 import io.casperlabs.comm.gossiping.relaying.Relaying
 import monix.tail.Iterant
 import monix.execution.Scheduler
-
 import scala.concurrent.duration.{Duration, FiniteDuration}
 import scala.util.control.NonFatal
 import scala.collection.immutable.Queue
+import scala.annotation.tailrec
 
 trait DownloadManagerTypes {
 
@@ -151,14 +151,17 @@ trait DownloadManagerCompanion extends DownloadManagerTypes {
       id: Identifier,
       source: Node
   ): Set[Identifier] = {
+
+    @tailrec
     def loop(
         acc: Set[Identifier],
         queue: Queue[Identifier]
     ): Set[Identifier] =
-      queue.dequeueOption.fold(acc) {
-        case (id, queue) if acc(id) =>
+      queue.dequeueOption match {
+        case None => acc
+        case Some((id, queue)) if acc(id) =>
           loop(acc, queue)
-        case (id, queue) =>
+        case Some((id, queue)) =>
           items.get(id) match {
             case Some(item) if item.isError || !item.sources(source) =>
               loop(acc + id, queue ++ item.dependencies)
@@ -177,15 +180,18 @@ trait DownloadManagerCompanion extends DownloadManagerTypes {
       items: Map[Identifier, Item[F]],
       id: Identifier
   ): Set[Identifier] = {
+
+    @tailrec
     def loop(
         acc: Set[Identifier],
         queue: Queue[Identifier]
     ): Set[Identifier] =
-      queue.dequeueOption.fold(acc) {
-        case (id, queue) if acc(id) =>
+      queue.dequeueOption match {
+        case None => acc
+        case Some((id, queue)) if acc(id) =>
           loop(acc, queue)
 
-        case (id, queue) =>
+        case Some((id, queue)) =>
           val dependants = items.collect {
             case (hash, dep) if dep.dependencies contains id => hash
           }
@@ -442,7 +448,10 @@ trait DownloadManagerImpl[F[_]] extends DownloadManager[F] { self =>
           existing.copy(
             sources = existing.sources + source,
             relay = existing.relay || relay,
-            maybeWatcher = Some(downloadFeedback)
+            maybeWatcher = Some(downloadFeedback),
+            // A new ping should mean this item can now be considered again;
+            // also stops `addSource` from traversing it repeatedly.
+            isError = false
           ) -> downloadFeedback
         }
       } getOrElse {
@@ -558,7 +567,7 @@ trait DownloadManagerImpl[F[_]] extends DownloadManager[F] { self =>
                         Metrics[F].incrementCounter("downloads_failed") *>
                           Log[F].warn(
                             s"Retrying download of ${kind} ${id.show -> "id"} from other sources, failed source: ${source.show -> "peer"}, prev $attempt: $ex"
-                          ) *>
+                          ) >>
                           loop(counterPerSource.updated(source, nextAttempt), ex.some)
                     }
                 case _: Duration.Infinite => sys.error("Unreachable")
