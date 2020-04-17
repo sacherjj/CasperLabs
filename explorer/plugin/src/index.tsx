@@ -4,7 +4,6 @@ import './index.css';
 import './popup/styles/sb-admin/sb-admin.scss';
 import App from './popup/App';
 import * as serviceWorker from './serviceWorker';
-import { UnlockPageContainer } from './popup/container/UnlockPageContainer';
 import AccountManager from './popup/container/AccountManager';
 import { HomeContainer } from './popup/container/HomeContainer';
 import { HashRouter } from 'react-router-dom';
@@ -19,7 +18,6 @@ const appState = new AppState();
 const errorsContainer = new ErrorContainer();
 const importAccountContainer = new ImportAccountContainer();
 const backgroundManager = new BackgroundManager(appState, errorsContainer);
-const unlockPageContainer = new UnlockPageContainer();
 const authContainer = new AccountManager(
   errorsContainer,
   backgroundManager,
@@ -36,7 +34,6 @@ ReactDOM.render(
   <HashRouter>
     <App
       errors={errorsContainer}
-      unlockPageContainer={unlockPageContainer}
       importAccountContainer={importAccountContainer}
       authContainer={authContainer}
       homeContainer={homeContainer}

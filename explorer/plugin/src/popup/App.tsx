@@ -5,8 +5,6 @@ import Pages from './components/Pages';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import '@fortawesome/fontawesome-free/css/all.min.css';
 import Home from './components/Home';
-import UnlockPage from './components/UnlockPage';
-import { UnlockPageContainer } from './container/UnlockPageContainer';
 import AccountManager from './container/AccountManager';
 import { HomeContainer } from './container/HomeContainer';
 import Menu from './components/Menu';
@@ -19,7 +17,6 @@ import SignMessageContainer from './container/SignMessageContainer';
 
 export interface AppProps {
   errors: ErrorContainer;
-  unlockPageContainer: UnlockPageContainer;
   authContainer: AccountManager;
   homeContainer: HomeContainer;
   importAccountContainer: ImportAccountContainer;
@@ -41,16 +38,6 @@ const App = (props: AppProps) => {
                 <Home
                   authContainer={props.authContainer}
                   homeContainer={props.homeContainer}
-                />
-              )}
-            />
-            <Route
-              path={Pages.UnlockPage}
-              exact
-              render={_ => (
-                <UnlockPage
-                  unlockPageContainer={props.unlockPageContainer}
-                  authContainer={props.authContainer}
                 />
               )}
             />

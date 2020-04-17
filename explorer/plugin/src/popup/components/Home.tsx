@@ -17,11 +17,6 @@ interface Props extends RouteComponentProps {
 
 @observer
 class Home extends React.Component<Props, {}> {
-  onSubmit() {
-    const password = this.props.homeContainer.password.$;
-    this.props.authContainer.createNewVault(password);
-  }
-
   renderCreateNewVault() {
     return (
       <div>
@@ -32,8 +27,10 @@ class Home extends React.Component<Props, {}> {
 
         <div>
           <Form
-            onSubmit={() => {
-              this.onSubmit();
+            onSubmit={async () => {
+              const password = this.props.homeContainer.password.$;
+              await this.props.authContainer.createNewVault(password);
+              this.props.homeContainer.password.reset();
             }}
           >
             <TextField
@@ -72,6 +69,44 @@ class Home extends React.Component<Props, {}> {
     );
   }
 
+  renderUnlock() {
+    return (
+      <div>
+        <div className="mt-5 mb-4 text-center">
+          <img src={logo} alt="logo" width={120} />
+        </div>
+        <h2 className="text-center mb-5">Unlock Vault</h2>
+        <div>
+          <Form
+            onSubmit={async () => {
+              let password = this.props.homeContainer.password.$;
+              try {
+                await this.props.authContainer.unlock(password);
+                this.props.homeContainer.password.reset();
+              } catch (e) {
+                this.props.homeContainer.password.setError(e.message);
+              }
+            }}
+          >
+            <TextField
+              type="password"
+              placeholder="Password"
+              id="unlock-password"
+              fieldState={this.props.homeContainer.password}
+            />
+            <Button
+              disabled={this.props.homeContainer.submitDisabled}
+              type="submit"
+              block={true}
+            >
+              Unlock
+            </Button>
+          </Form>
+        </div>
+      </div>
+    );
+  }
+
   render() {
     if (this.props.authContainer.hasCreatedVault) {
       if (this.props.authContainer.isUnLocked) {
@@ -81,7 +116,7 @@ class Home extends React.Component<Props, {}> {
           return this.renderAccountLists();
         }
       } else {
-        return <Redirect to={Pages.UnlockPage} />;
+        return this.renderUnlock();
       }
     } else {
       return this.renderCreateNewVault();
