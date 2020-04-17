@@ -26,7 +26,7 @@ const CustomToggle = React.forwardRef<HTMLButtonElement, ButtonProps>(
       className="link icon-button"
     >
       {children}
-      <Icon name="sliders-h"></Icon>
+      <Icon name="bars"></Icon>
     </button>
   )
 );

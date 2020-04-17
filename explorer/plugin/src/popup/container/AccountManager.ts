@@ -4,21 +4,25 @@ import ErrorContainer from '../../../../ui/src/containers/ErrorContainer';
 import { AppState } from '../../lib/MemStore';
 
 class AccountManager {
-  constructor(private errors: ErrorContainer, private backgroundManager: BackgroundManager, private appState: AppState) {
-  }
+  constructor(
+    private errors: ErrorContainer,
+    private backgroundManager: BackgroundManager,
+    private appState: AppState
+  ) {}
 
   async createNewVault(password: string) {
-    await this.errors.withCapture(this.backgroundManager.createNewVault(password));
+    await this.errors.withCapture(
+      this.backgroundManager.createNewVault(password)
+    );
   }
 
   async importUserAccount(name: string, privateKey: string) {
     return this.backgroundManager.importUserAccount(name, privateKey);
   }
 
-  switchToAccount(account: SignKeyPairWithAlias){
-    return this.backgroundManager.switchToAccount(account);
+  switchToAccount(accountName: string) {
+    return this.backgroundManager.switchToAccount(accountName);
   }
-
 
   @computed
   get userAccounts(): IObservableArray<SignKeyPairWithAlias> {
@@ -50,15 +54,14 @@ class AccountManager {
   }
 
   @computed
-  get selectedUserAccount(){
+  get selectedUserAccount() {
     return this.appState.selectedUserAccount;
   }
 
   @computed
-  get toSignMessages(){
+  get toSignMessages() {
     return this.appState.toSignMessages;
   }
-
 }
 
 export default AccountManager;
