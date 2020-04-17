@@ -243,12 +243,12 @@ export class DeployContractsContainer {
   async _onSubmit() {
     this.deployedHash = null;
     if (!window.casperlabsHelper?.isConnected()) {
-      throw new Error('Please Install the CasperLabs Sign Helper Plugin firstly');
+      throw new Error('Please install the CasperLabs Sign Helper Plugin first!');
     }
 
     const publicKeyBase64 = await window.casperlabsHelper!.getSelectedPublicKey();
     if (!publicKeyBase64) {
-      throw new Error('Please create account in the Plugin firstly');
+      throw new Error('Please an create account in the Plugin first!');
     }
     const publicKey = decodeBase64(publicKeyBase64);
     let deploy = await this.makeDeploy(publicKey);

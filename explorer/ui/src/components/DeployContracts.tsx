@@ -48,7 +48,7 @@ export class DeployContractsForm extends React.Component<Props, {}> {
     ) : (
       <p>
         <FailIcon/>
-        Please install CasperLabs Sign Helper plugin
+        Please install the CasperLabs Sign Helper plugin
       </p>
     );
     let modalAccountForm = (
