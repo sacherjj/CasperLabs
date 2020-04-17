@@ -28,9 +28,9 @@ class Home extends React.Component<Props, {}> {
         <div>
           <Form
             onSubmit={async () => {
-              const password = this.props.homeContainer.password.$;
+              const password = this.props.homeContainer.passwordField.$;
               await this.props.authContainer.createNewVault(password);
-              this.props.homeContainer.password.reset();
+              this.props.homeContainer.passwordField.reset();
             }}
           >
             <TextField
@@ -38,7 +38,7 @@ class Home extends React.Component<Props, {}> {
               type="password"
               placeholder="Password"
               id="set-password"
-              fieldState={this.props.homeContainer.password}
+              fieldState={this.props.homeContainer.passwordField}
             />
             <Button
               disabled={this.props.homeContainer.submitDisabled}
@@ -79,12 +79,12 @@ class Home extends React.Component<Props, {}> {
         <div>
           <Form
             onSubmit={async () => {
-              let password = this.props.homeContainer.password.$;
+              let password = this.props.homeContainer.passwordField.$;
               try {
                 await this.props.authContainer.unlock(password);
-                this.props.homeContainer.password.reset();
+                this.props.homeContainer.passwordField.reset();
               } catch (e) {
-                this.props.homeContainer.password.setError(e.message);
+                this.props.homeContainer.passwordField.setError(e.message);
               }
             }}
           >
@@ -92,7 +92,7 @@ class Home extends React.Component<Props, {}> {
               type="password"
               placeholder="Password"
               id="unlock-password"
-              fieldState={this.props.homeContainer.password}
+              fieldState={this.props.homeContainer.passwordField}
             />
             <Button
               disabled={this.props.homeContainer.submitDisabled}

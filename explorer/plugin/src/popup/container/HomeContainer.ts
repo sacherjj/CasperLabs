@@ -3,15 +3,16 @@ import { valueRequired } from '../../lib/FormValidator';
 import { computed } from 'mobx';
 
 export class HomeContainer {
-  password: FieldState<string> = new FieldState<string>('').validators(
+  // The text field for storing user input password, used in 'Create Vault' and 'Unlock Vault' page.
+  passwordField: FieldState<string> = new FieldState<string>('').validators(
     valueRequired
   );
 
   @computed
   get submitDisabled(): boolean {
     return (
-      !this.password.hasBeenValidated ||
-      (this.password.hasBeenValidated && this.password.hasError)
+      !this.passwordField.hasBeenValidated ||
+      (this.passwordField.hasBeenValidated && this.passwordField.hasError)
     );
   }
 }
