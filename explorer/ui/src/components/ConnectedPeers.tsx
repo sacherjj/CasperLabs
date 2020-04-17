@@ -32,7 +32,7 @@ export default class ConnectedPeers extends RefreshableComponent<Props, {}> {
               <td>{node.getHost()}</td>
               <td>{node.getProtocolPort()} </td>
               <td>{node.getChainId_asB64()}</td>
-              <td>{node.getVersion()}</td>
+              <td>{node.getNodeVersion()}</td>
             </tr>
           );
         }}

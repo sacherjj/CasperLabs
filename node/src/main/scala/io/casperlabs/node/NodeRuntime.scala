@@ -36,7 +36,7 @@ import io.casperlabs.comm.rp._
 import io.casperlabs.ipc.ChainSpec
 import io.casperlabs.mempool.DeployBuffer
 import io.casperlabs.metrics.Metrics
-import io.casperlabs.node.api.EventStream
+import io.casperlabs.node.api.{EventStream, VersionInfo}
 import io.casperlabs.node.api.graphql.FinalizedBlocksStream
 import io.casperlabs.node.casper.consensus.Consensus
 import io.casperlabs.node.configuration.Configuration
@@ -476,7 +476,7 @@ class NodeRuntime private[node] (
         conf.server.kademliaPort,
         conf.server.noUpnp,
         id,
-        BuildInfo.version
+        VersionInfo.get
       )
 
   private def initPeers[F[_]: MonadThrowable]: F[List[NodeWithoutChainId]] =

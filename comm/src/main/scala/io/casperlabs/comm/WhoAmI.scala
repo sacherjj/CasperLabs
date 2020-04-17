@@ -22,13 +22,13 @@ object WhoAmI {
       discoveryPort: Int,
       noUpnp: Boolean,
       id: NodeIdentifier,
-      version: String
+      nodeVersion: String
   ): F[NodeWithoutChainId] =
     for {
       externalAddress <- retrieveExternalAddress(noUpnp, protocolPort)
       host            <- fetchHost(host, externalAddress)
       peerNode = NodeWithoutChainId(
-        Node(id.asByteString, host, protocolPort, discoveryPort, version = version)
+        Node(id.asByteString, host, protocolPort, discoveryPort, nodeVersion = nodeVersion)
       )
     } yield peerNode
 
