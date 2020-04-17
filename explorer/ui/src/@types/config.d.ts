@@ -3,7 +3,7 @@
 interface CasperLabsHelper {
   isConnected: () => boolean;
   sign: (string) => Promise<string>;
-  getSelectedPublicKey: () => Promise<string | undefined>;
+  getSelectedPublicKeyBase64: () => Promise<string | undefined>;
 }
 
 interface Window {

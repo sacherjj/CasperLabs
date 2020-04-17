@@ -44,7 +44,7 @@ export function setupInjectPageAPIServer(
   });
   rpc.register('sign', provider.addUnsignedMessageAsync.bind(provider));
   rpc.register(
-    'getSelectedPublicKey',
-    provider.getSelectedPublicKey.bind(provider)
+    'getSelectedPublicKeyBase64',
+    provider.getSelectedPublicKeyBase64.bind(provider)
   );
 }
