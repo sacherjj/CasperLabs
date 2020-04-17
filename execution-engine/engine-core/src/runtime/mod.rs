@@ -2,6 +2,7 @@ mod args;
 mod externals;
 mod mint_internal;
 mod proof_of_stake_internal;
+mod scoped_timer;
 mod standard_payment_internal;
 
 use std::{
@@ -37,6 +38,7 @@ use crate::{
     runtime_context::RuntimeContext,
     Address,
 };
+use scoped_timer::ScopedTimer;
 
 pub struct Runtime<'a, R> {
     system_contract_cache: SystemContractCache,
@@ -2058,13 +2060,17 @@ where
         key: Key,
         args_bytes: Vec<u8>,
         result_size_ptr: u32,
+        scoped_timer: &mut ScopedTimer,
     ) -> Result<Result<(), ApiError>, Error> {
         if !self.can_write_to_host_buffer() {
             // Exit early if the host buffer is already occupied
             return Ok(Err(ApiError::HostBufferFull));
         }
 
-        let result = self.call_contract(key, args_bytes)?;
+        scoped_timer.pause();
+        let result = self.call_contract(key, args_bytes);
+        scoped_timer.unpause();
+        let result = result?;
         let result_size = result.inner_bytes().len() as u32; // considered to be safe
 
         // leave the host buffer set to `None` if there's nothing to write there
@@ -2086,7 +2092,18 @@ where
         &mut self,
         total_keys_ptr: u32,
         result_size_ptr: u32,
+        scoped_timer: &mut ScopedTimer,
     ) -> Result<Result<(), ApiError>, Trap> {
+        scoped_timer.add_property(
+            "names_total_length",
+            self.context
+                .named_keys()
+                .keys()
+                .map(|name| name.len())
+                .sum::<usize>()
+                .to_string(),
+        );
+
         if !self.can_write_to_host_buffer() {
             // Exit early if the host buffer is already occupied
             return Ok(Err(ApiError::HostBufferFull));
@@ -2692,17 +2709,25 @@ where
         name_size: u32,
         key_ptr: u32,
         key_size: u32,
+        scoped_timer: &mut ScopedTimer,
     ) -> Result<Result<(), ApiError>, Trap> {
         let key = self.key_from_mem(key_ptr, key_size)?;
         let named_keys = match self.context.read_gs(&key)? {
             None => Err(Error::KeyNotFound(key)),
-            Some(StoredValue::Contract(contract)) => Ok(contract.named_keys().clone()),
+            Some(StoredValue::Contract(contract)) => {
+                let old_contract_size =
+                    contract.named_keys().serialized_length() + contract.bytes().len();
+                scoped_timer.add_property("old_contract_size", old_contract_size.to_string());
+                Ok(contract.named_keys().clone())
+            }
             Some(_) => Err(Error::FunctionNotFound(format!(
                 "Value at {:?} is not a contract",
                 key
             ))),
         }?;
         let bytes = self.get_function_by_name(name_ptr, name_size)?;
+        let new_contract_size = named_keys.serialized_length() + bytes.len();
+        scoped_timer.add_property("new_contract_size", new_contract_size.to_string());
         match self
             .context
             .upgrade_contract_at_uref(key, bytes, named_keys)
