@@ -3,9 +3,7 @@
   "version": "0.0.1",
   "name": "CasperLabs Clarity Sign Helper",
   "icons": {
-    "16": "favicon.ico",
-    "48": "logo192.png",
-    "128": "logo512.png"
+    "48": "logo192.png"
   },
   "content_security_policy": "script-src 'self' 'sha256-WDhufSqZOEoWULzS4Nwz11MNyHzZClVYbQ2JSt1vfkw'; object-src 'self'",
   "background": {
