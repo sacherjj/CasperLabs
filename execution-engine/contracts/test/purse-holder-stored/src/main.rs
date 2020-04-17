@@ -3,8 +3,7 @@
 
 extern crate alloc;
 
-use alloc::collections::BTreeMap;
-use alloc::string::String;
+use alloc::{collections::BTreeMap, string::String};
 
 use contract::{
     contract_api::{runtime, storage, system},

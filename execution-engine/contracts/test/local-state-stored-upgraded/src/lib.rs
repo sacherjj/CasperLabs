@@ -47,9 +47,9 @@ pub extern "C" fn delegate() {
 
 pub fn install() {
     let key = storage::store_function(ENTRY_FUNCTION_NAME, Default::default())
-    .into_uref()
-    .unwrap_or_revert_with(ApiError::UnexpectedContractRefVariant)
-    .into();
+        .into_uref()
+        .unwrap_or_revert_with(ApiError::UnexpectedContractRefVariant)
+        .into();
 
     contract::contract_api::runtime::put_key(CONTRACT_NAME, key);
 }
