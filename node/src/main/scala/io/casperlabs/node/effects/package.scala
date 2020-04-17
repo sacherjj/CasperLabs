@@ -137,7 +137,7 @@ package object effects {
     // The SQLite docs say the driver is thread safe, but only one connection should be made per process
     // (the file locking mechanism depends on process IDs, closing one connection would invalidate the locks for all of them).
     val writeXaConfig =
-      mkConfig("write", poolSize = 1, foreignKeys = true, connectionTimeout = 60.seconds)
+      mkConfig("write", poolSize = 1, foreignKeys = true, connectionTimeout = 30.seconds)
 
     // Using a separate Transactor for read operations because
     // we use fs2.Stream as a return type in some places which hold an opened connection
