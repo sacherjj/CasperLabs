@@ -1,3 +1,6 @@
+use assert_matches::assert_matches;
+
+use engine_core::engine_state::Error;
 use engine_test_support::{
     internal::{
         utils, DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder,
@@ -44,11 +47,7 @@ fn should_raise_precondition_authorization_failure_invalid_account() {
         .expect("there should be a response");
 
     let precondition_failure = utils::get_precondition_failure(response);
-
-    assert_eq!(
-        precondition_failure, "Authorization failure: not authorized.",
-        "expected authorization failure"
-    );
+    assert_matches!(precondition_failure, Error::Authorization);
 }
 
 #[ignore]
@@ -79,11 +78,7 @@ fn should_raise_precondition_authorization_failure_empty_authorized_keys() {
         .expect("there should be a response");
 
     let precondition_failure = utils::get_precondition_failure(response);
-
-    assert_eq!(
-        precondition_failure, "Authorization failure: not authorized.",
-        "expected authorization failure"
-    );
+    assert_matches!(precondition_failure, Error::Authorization);
 }
 
 #[ignore]
@@ -121,9 +116,5 @@ fn should_raise_precondition_authorization_failure_invalid_authorized_keys() {
         .expect("there should be a response");
 
     let precondition_failure = utils::get_precondition_failure(response);
-
-    assert_eq!(
-        precondition_failure, "Authorization failure: not authorized.",
-        "expected authorization failure"
-    );
+    assert_matches!(precondition_failure, Error::Authorization);
 }

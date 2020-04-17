@@ -254,7 +254,7 @@ where
                 let named_keys_bytes = self
                     .memory
                     .get(named_keys_ptr, named_keys_size as usize)
-                    .map_err(Error::Interpreter)?;
+                    .map_err(|e| Error::Interpreter(e.into()))?;
                 let named_keys =
                     bytesrepr::deserialize(named_keys_bytes).map_err(Error::BytesRepr)?;
                 let contract_hash = self.store_function(fn_bytes, named_keys)?;
@@ -283,7 +283,7 @@ where
                 let named_keys_bytes = self
                     .memory
                     .get(named_keys_ptr, named_keys_size as usize)
-                    .map_err(Error::Interpreter)?;
+                    .map_err(|e| Error::Interpreter(e.into()))?;
                 let named_keys =
                     bytesrepr::deserialize(named_keys_bytes).map_err(Error::BytesRepr)?;
                 let contract_hash = self.store_function_at_hash(fn_bytes, named_keys)?;
@@ -361,7 +361,7 @@ where
                 assert_eq!(dest_size, purse_bytes.len() as u32);
                 self.memory
                     .set(dest_ptr, &purse_bytes)
-                    .map_err(Error::Interpreter)?;
+                    .map_err(|e| Error::Interpreter(e.into()))?;
                 Ok(Some(RuntimeValue::I32(0)))
             }
 
