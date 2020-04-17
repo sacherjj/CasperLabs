@@ -53,16 +53,10 @@ async function setupPopupAPIServer() {
   rpc.register('background.getState', () => {
     return appState;
   });
-  rpc.register('sign.signMessage', (msg: SignMessage) => {
-    if (!appState.selectedUserAccount) {
-      throw new Error(`Please select the account firstly`);
-    }
-    let sig = nacl.sign_detached(
-      nacl.decodeBase64(msg.data),
-      appState.selectedUserAccount.signKeyPair.secretKey
-    );
-    return signMessageManager.approveMsg(msg.id, nacl.encodeBase64(sig));
-  });
+  rpc.register(
+    'sign.signMessage',
+    signMessageManager.approveMsg.bind(signMessageManager)
+  );
   rpc.register(
     'sign.rejectMessage',
     signMessageManager.rejectMsg.bind(signMessageManager)

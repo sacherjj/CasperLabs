@@ -1,6 +1,7 @@
 import * as events from 'events';
 import { AppState } from '../lib/MemStore';
 import { encodeBase64 } from 'tweetnacl-ts';
+import * as nacl from 'tweetnacl-ts';
 
 type SignMessageStatus = 'unsigned' | 'signed' | 'rejected';
 
@@ -32,9 +33,9 @@ export default class SignMessageManager extends events.EventEmitter {
     this.nextId = Math.round(Math.random() * Number.MAX_SAFE_INTEGER);
   }
 
-  public addUnsignedMessageAsync(rawMessage: string) {
+  public addUnsignedMessageBase16Async(rawMessageBase16: string) {
     return new Promise((resolve, reject) => {
-      const msgId = this.addUnsignedMessage(rawMessage);
+      const msgId = this.addUnsignedMessage(rawMessageBase16);
       // await finished, listen to finish event, which will be fired by `rejectMsg` or `signMsg`.
       this.once(`${msgId}:finished`, data => {
         switch (data.status) {
@@ -70,9 +71,17 @@ export default class SignMessageManager extends events.EventEmitter {
   }
 
   // Approve signature request
-  public approveMsg(msgId: number, rawSig: string) {
+  public approveMsg(msgId: number) {
     const msg = this.getMsg(msgId);
-    msg.rawSig = rawSig;
+    if (!this.appState.selectedUserAccount) {
+      throw new Error(`Please select the account firstly`);
+    }
+    let sig = nacl.sign_detached(
+      nacl.decodeHex(msg.data),
+      this.appState.selectedUserAccount.signKeyPair.secretKey
+    );
+
+    msg.rawSig = nacl.encodeBase64(sig);
     msg.status = 'signed';
     this.saveAndEmitEventIfNeeded(msg);
   }
@@ -102,14 +111,14 @@ export default class SignMessageManager extends events.EventEmitter {
 
   /**
    * Construct a SignMessage and add it to AppState.toSignMessages
-   * @param rawMessage: the raw message plugin received to sign
+   * @param rawMessageBase16: the base16 encoded message that plugin received to sign
    */
-  private addUnsignedMessage(rawMessage: string) {
+  private addUnsignedMessage(rawMessageBase16: string) {
     const time = new Date().getTime();
     const msgId = this.createId();
     const msg: SignMessage = {
       id: msgId,
-      data: rawMessage,
+      data: rawMessageBase16,
       time: time,
       status: 'unsigned'
     };

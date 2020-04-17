@@ -5,9 +5,11 @@ import { browser } from 'webextension-polyfill-ts';
 import { computed } from 'mobx';
 
 class SignMessageContainer {
-  constructor(private errors: ErrorContainer, private backgroundManager: BackgroundManager, private appState: AppState) {
-
-  }
+  constructor(
+    private errors: ErrorContainer,
+    private backgroundManager: BackgroundManager,
+    private appState: AppState
+  ) {}
 
   @computed
   get toSignMessage() {
@@ -18,18 +20,20 @@ class SignMessageContainer {
   }
 
   async signMessage() {
-    if (!this.toSignMessage) {
+    let msg = this.toSignMessage;
+    if (msg === null) {
       throw new Error('No message to Sign');
     }
-    await this.backgroundManager.signMessage(this.toSignMessage);
+    await this.backgroundManager.signMessage(msg.id);
     this.closeWindow();
   }
 
   async cancel() {
-    if (!this.toSignMessage) {
+    const msg = this.toSignMessage;
+    if (msg === null) {
       throw new Error('No message to Sign');
     }
-    await this.backgroundManager.rejectSignMessage(this.toSignMessage);
+    await this.backgroundManager.rejectSignMessage(msg.id);
     this.closeWindow();
   }
 
@@ -39,7 +43,6 @@ class SignMessageContainer {
       await browser.windows.remove(w.id!);
     }
   }
-
 }
 
 export default SignMessageContainer;

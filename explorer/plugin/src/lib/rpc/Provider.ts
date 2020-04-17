@@ -42,7 +42,7 @@ export function setupInjectPageAPIServer(
     destination: 'page',
     source: 'background'
   });
-  rpc.register('sign', provider.addUnsignedMessageAsync.bind(provider));
+  rpc.register('sign', provider.addUnsignedMessageBase16Async.bind(provider));
   rpc.register(
     'getSelectedPublicKeyBase64',
     provider.getSelectedPublicKeyBase64.bind(provider)

@@ -54,15 +54,15 @@ export class BackgroundManager {
     );
   }
 
-  public signMessage(msg: SignMessage) {
+  public signMessage(msgId: number) {
     return this.errors.withCapture(
-      this.rpc.call<void>('sign.signMessage', msg)
+      this.rpc.call<void>('sign.signMessage', msgId)
     );
   }
 
-  public rejectSignMessage(msg: SignMessage) {
+  public rejectSignMessage(msgId: number) {
     return this.errors.withCapture(
-      this.rpc.call<void>('sign.rejectMessage', msg)
+      this.rpc.call<void>('sign.rejectMessage', msgId)
     );
   }
 

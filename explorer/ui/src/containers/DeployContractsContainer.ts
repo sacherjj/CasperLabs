@@ -259,7 +259,7 @@ export class DeployContractsContainer {
     this.signing = true;
     let sigBase64;
     try {
-      sigBase64 = await window.casperlabsHelper!.sign(deploy!.getDeployHash_asB64());
+      sigBase64 = await window.casperlabsHelper!.sign(encodeBase16(deploy!.getDeployHash_asU8()));
       this.signing = false;
       let signedDeploy = DeployUtil.setSignature(deploy, decodeBase64(sigBase64), publicKey);
       await this.casperService.deploy(signedDeploy);

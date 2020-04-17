@@ -19,8 +19,8 @@ class CasperLabsPluginHelper {
     return this.call<string>('sign', message);
   }
 
-  async getSelectedPublicKey() {
-    return this.call<string>('getSelectedPublicKey');
+  async getSelectedPublicKeyBase64() {
+    return this.call<string>('getSelectedPublicKeyBase64');
   }
 }
 

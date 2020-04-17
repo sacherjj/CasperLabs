@@ -31,7 +31,7 @@ class SignMessagePage extends React.Component<Props, {}> {
           </div>
 
           <div className="mt-5 mb-3">
-            <p>Message:</p>
+            <p>Deploy hash (base16):</p>
             <p>{this.props.signMessageContainer.toSignMessage!.data}</p>
           </div>
           <div className="text-center mt-5">
