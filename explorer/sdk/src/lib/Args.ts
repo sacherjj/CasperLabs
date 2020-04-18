@@ -1,5 +1,8 @@
 import { Deploy } from 'casperlabs-grpc/io/casperlabs/casper/consensus/consensus_pb';
-import { CLType, CLValueInstance } from 'casperlabs-grpc/io/casperlabs/casper/consensus/state_pb';
+import {
+  CLType,
+  CLValueInstance
+} from 'casperlabs-grpc/io/casperlabs/casper/consensus/state_pb';
 import JSBI from 'jsbi';
 import { ByteArray } from '../index';
 

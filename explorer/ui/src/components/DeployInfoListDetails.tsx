@@ -1,6 +1,6 @@
 import React from 'react';
 import { observer } from 'mobx-react';
-import { Icon, IconButton, ListInline, RefreshableComponent } from './Utils';
+import { FailIcon, Icon, IconButton, ListInline, RefreshableComponent, SuccessIcon } from './Utils';
 import DataTable from './DataTable';
 import { DeployInfo } from 'casperlabs-grpc/io/casperlabs/casper/consensus/info_pb';
 import { Link, RouteComponentProps, withRouter } from 'react-router-dom';
@@ -80,9 +80,9 @@ class _DeployInfoListDetails extends RefreshableComponent<Props, {}> {
                 {status === 0 ? (
                   <Icon name="clock" />
                 ) : status === 1 ? (
-                  <Icon name="times-circle" color="red" />
+                  <FailIcon/>
                 ) : (
-                  <Icon name="check-circle" color="green" />
+                  <SuccessIcon/>
                 )}
               </td>
             </tr>

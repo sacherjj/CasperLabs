@@ -98,8 +98,7 @@ const SideMenuItems: (MenuItem | GroupedMenuItem)[] = [
   new MenuItem(Pages.Home, 'Home', 'home', true),
   new MenuItem(Pages.Accounts, 'Account Keys', 'address-book'),
   new MenuItem(Pages.Faucet, 'Faucet', 'coins'),
-  // TODO (ECO-313) Open it when we have implement the plugin()
-  // new MenuItem(Pages.DeployContracts, 'Deploy Contract', 'rocket'),
+  new MenuItem(Pages.DeployContracts, 'Deploy Contract', 'rocket'),
   new MenuItem(Pages.Explorer, 'Explorer', 'project-diagram'),
   new MenuItem(Pages.Blocks, 'Blocks', 'th-large'),
   new MenuItem(Pages.Deploys, 'Deploys', 'tasks'),

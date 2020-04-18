@@ -1,4 +1,8 @@
-import { Approval, Deploy, Signature } from 'casperlabs-grpc/io/casperlabs/casper/consensus/consensus_pb';
+import {
+  Approval,
+  Deploy,
+  Signature
+} from 'casperlabs-grpc/io/casperlabs/casper/consensus/consensus_pb';
 import JSBI from 'jsbi';
 import * as nacl from 'tweetnacl-ts';
 import { ByteArray } from '../index';
@@ -21,14 +25,14 @@ export const makeDeploy = (
   accountPublicKey: ByteArray
 ): Deploy => {
   const sessionCode = new Deploy.Code();
-  if(type === ContractType.WASM){
+  if (type === ContractType.WASM) {
     sessionCode.setWasm(session);
-  }else{
+  } else {
     sessionCode.setHash(session);
   }
   sessionCode.setArgsList(args);
-  if(paymentWasm === null) {
-    paymentWasm = Buffer.from("");
+  if (paymentWasm === null) {
+    paymentWasm = Buffer.from('');
   }
   const payment = new Deploy.Code();
   payment.setWasm(paymentWasm);
@@ -64,6 +68,24 @@ export const signDeploy = (
 
   const approval = new Approval();
   approval.setApproverPublicKey(signingKeyPair.publicKey);
+  approval.setSignature(signature);
+
+  deploy.setApprovalsList([approval]);
+
+  return deploy;
+};
+
+export const setSignature = (
+  deploy: Deploy,
+  sig: ByteArray,
+  publicKey: ByteArray
+): Deploy => {
+  const signature = new Signature();
+  signature.setSigAlgorithm('ed25519');
+  signature.setSig(sig);
+
+  const approval = new Approval();
+  approval.setApproverPublicKey(publicKey);
   approval.setSignature(signature);
 
   deploy.setApprovalsList([approval]);
