@@ -27,13 +27,26 @@ class SQLiteEventStorage[F[_]: Sync: Time](
     } yield events
   }
 
-  override def getEvents(minId: Long): fs2.Stream[F, Event] =
-    sql"""
+  override def getEvents(minId: Long, maxId: Long): fs2.Stream[F, Event] = {
+    val fromQuery   = sql"""
     SELECT id, value
     FROM   events
     WHERE  id >= $minId
     ORDER BY id
     """
+    val fromToQuery = sql"""
+    SELECT id, value
+    FROM   events
+    WHERE  id >= $minId AND id <= $maxId
+    ORDER BY id
+    """
+
+    val query =
+      if (maxId > 0)
+        fromToQuery
+      else fromQuery
+
+    query
       .query[(Long, Event.Value)]
       .map {
         case (id, value) =>
@@ -41,6 +54,8 @@ class SQLiteEventStorage[F[_]: Sync: Time](
       }
       .stream
       .transact(readXa)
+  }
+
 }
 
 object SQLiteEventStorage {
