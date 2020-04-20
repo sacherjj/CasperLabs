@@ -116,11 +116,10 @@ class DeployDownloadManagerImpl[F[_]](
 
   override def extractIdFromDownloadable(deploy: Deploy) = deploy.deployHash
 
-  // TODO: Inefficient, because asking only for 1 deploy at time
-  override def streamChunks(source: Node, bs: ByteString) = {
+  override def fetch(source: Node, deployHash: ByteString) = {
     val itF = connectToGossip(source).map { stub =>
       val req = StreamDeploysChunkedRequest(
-        deployHashes = List(bs),
+        deployHashes = List(deployHash),
         acceptedCompressionAlgorithms = Seq("lz4")
       )
       stub.streamDeploysChunked(req)
@@ -128,5 +127,6 @@ class DeployDownloadManagerImpl[F[_]](
     Iterant.liftF(itF).flatten
   }
 
-  override def parseDownloadable(bytes: Array[Byte]) = Deploy.parseFrom(bytes)
+  override def parse(bytes: Array[Byte]): F[Deploy] =
+    Sync[F].delay(Deploy.parseFrom(bytes))
 }

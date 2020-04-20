@@ -655,43 +655,42 @@ class GrpcGossipServiceSpec
       "called with a list of deploy hashes and compression" should {
         "return a stream of compressed chunks" in {
           val data = for {
-            block <- arbitrary[Block]
-            deployHashes <- Gen
-                             .someOf(block.getBody.deploys.map(_.getDeploy.deployHash))
-                             .suchThat(_.nonEmpty)
-            randomHashes <- Gen.nonEmptyListOf(genHash)
-          } yield (block, deployHashes, randomHashes)
+            block        <- arbitrary[Block]
+            deploys      = block.getBody.deploys.map(_.getDeploy).map(d => d.deployHash -> d).toMap
+            deployHashes <- Gen.someOf(deploys.keys)
+            randomHashes <- Gen.listOf(genHash)
+          } yield (block, deploys, deployHashes, randomHashes)
 
           forAll(data) {
-            case (block, existingHashes, nonExistingHashes) =>
+            case (block, deploys, existingHashes, nonExistingHashes) =>
               runTestUnsafe(TestData.fromBlock(block), timeout = 5.seconds) {
                 val req = StreamDeploysChunkedRequest(
                   deployHashes = nonExistingHashes ++ existingHashes,
                   acceptedCompressionAlgorithms = Seq("lz4")
                 )
                 stub.streamDeploysChunked(req).toListL.map { chunks =>
-                  val (Some(header), array) =
-                    chunks.foldLeft((none[Chunk.Header], Array.emptyByteArray)) {
-                      case ((None, acc), chunk) if chunk.content.isHeader =>
-                        val header = chunk.getHeader
-                        header.compressionAlgorithm shouldBe "lz4"
-                        (header.some, acc)
+                  val items = chunks.foldLeft(List.empty[(Chunk.Header, Array[Byte])]) {
+                    case (acc, chunk) if chunk.content.isHeader =>
+                      val header = chunk.getHeader
+                      header.compressionAlgorithm shouldBe "lz4"
+                      (header, Array.empty[Byte]) :: acc
 
-                      case ((h @ Some(_), acc), chunk) if chunk.content.isData =>
-                        val data = chunk.getData.toByteArray
-                        (h, acc ++ data)
+                    case ((h, arr) :: acc, chunk) if chunk.content.isData =>
+                      val data = chunk.getData.toByteArray
+                      (h, arr ++ data) :: acc
 
-                      case _ =>
-                        fail("Unexpected data in stream.")
-                    }
-                  header.contentLength shouldBe array.length
-                  val data = Compression.decompress(array, header.originalContentLength).get
-                  header.originalContentLength shouldBe data.length
-                  val receivedDeploys       = DeploysList.parseFrom(data).deploys
-                  val receivedDeploysHashes = receivedDeploys.map(_.deployHash).toSet
-                  receivedDeploys.length shouldBe existingHashes.length
-                  Inspectors.forAll(existingHashes) { hash =>
-                    receivedDeploysHashes(hash) shouldBe true
+                    case _ =>
+                      fail("Unexpected data in stream.")
+                  }
+                  items should have size (existingHashes.size.toLong)
+
+                  Inspectors.forAll(items) {
+                    case (header, data) =>
+                      val decompressed =
+                        Compression.decompress(data, header.originalContentLength).get
+                      val deploy   = Deploy.parseFrom(decompressed)
+                      val original = deploys(deploy.deployHash)
+                      (deploy == original) shouldBe true
                   }
                 }
               }

@@ -384,7 +384,7 @@ object GossipServiceCasperTestNodeFactory {
         blockDownloadManagerR <- BlockDownloadManagerImpl[F](
                                   maxParallelDownloads = 10,
                                   connectToGossip = connectToGossip,
-                                  backend = new BlockDownloadManagerImpl.EnrichedBackend[F] {
+                                  backend = new BlockDownloadManagerImpl.Backend[F] {
                                     override def contains(blockHash: ByteString): F[Boolean] =
                                       isInDag(blockHash)
 

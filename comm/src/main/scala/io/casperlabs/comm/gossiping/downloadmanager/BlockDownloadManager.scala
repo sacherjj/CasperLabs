@@ -31,7 +31,7 @@ object BlockDownloadManagerImpl extends DownloadManagerCompanion {
   override type Identifier   = ByteString
   override type Downloadable = Block
 
-  trait EnrichedBackend[F[_]] extends Backend[F] {
+  trait Backend[F[_]] extends super.Backend[F] {
     def readDeploys(deployHashes: Seq[ByteString]): F[List[Deploy]]
   }
 
@@ -42,7 +42,7 @@ object BlockDownloadManagerImpl extends DownloadManagerCompanion {
   def apply[F[_]: ContextShift: Concurrent: Log: Timer: Metrics](
       maxParallelDownloads: Int,
       connectToGossip: GossipService.Connector[F],
-      backend: EnrichedBackend[F],
+      backend: Backend[F],
       relaying: BlockRelaying[F],
       retriesConf: RetriesConf,
       egressScheduler: Scheduler
@@ -99,7 +99,7 @@ class BlockDownloadManagerImpl[F[_]](
     val signal: MVar[F, BlockDownloadManagerImpl.Signal[F]],
     // Establish gRPC connection to another node.
     val connectToGossip: GossipService.Connector[F],
-    val backend: BlockDownloadManagerImpl.EnrichedBackend[F],
+    val backend: BlockDownloadManagerImpl.Backend[F],
     val relaying: BlockRelaying[F],
     val retriesConf: RetriesConf,
     val egressScheduler: Scheduler
@@ -123,36 +123,26 @@ class BlockDownloadManagerImpl[F[_]](
 
   override def extractIdFromDownloadable(block: Block) = block.blockHash
 
+  override def parse(bytes: Array[Byte]): F[Block] =
+    Sync[F].delay(Block.parseFrom(bytes))
+
   /**
     * 1. Downloads a partial block without deploy bodies.
     * 2. Downloads missing deploys from the same peer.
     * 3. Restores full block by combining downloaded deploys and existing ones from the database.
-    *
-    * TODO: Quick and dirty solution possibly causes performance penalty.
-    *       Reads existing deploys from the database only for writing them back wasting storage I/O resources.
-    *       Decided to go this way because of the deadline, must be optimized later.
-    *       Optimization will cause significant and complex changes:
-    *       a) Validation of a partial block
-    *       b) Storing the partial block
-    *       c) Filling the partial block with missing deploys
-    *       *) Invalidation of the partial block and removing from the database if it hasn't been fully filled after some time.
     */
-  override protected def doFetchAndRestore(source: Node, blockHash: ByteString): F[Block] =
+  override protected def fetchAndRestore(source: Node, blockHash: ByteString): F[Block] =
     for {
-      blockBytes          <- fetch(source, streamBlock(source, blockHash))
-      partialBlock        <- Sync[F].delay(Block.parseFrom(blockBytes))
-      _                   <- checkId(source, partialBlock, blockHash)
+      partialBlock        <- super.fetchAndRestore(source, blockHash)
       allDeployHashes     = partialBlock.getBody.deploys.map(_.getDeploy.deployHash)
-      hash2Index          = allDeployHashes.zipWithIndex.toMap
       existingDeploys     <- backend.readDeploys(allDeployHashes)
       missingDeployHashes = allDeployHashes.diff(existingDeploys.map(_.deployHash))
-      deploysBytes        <- fetch(source, streamDeploys(source, missingDeployHashes))
-      missingDeploys      <- Sync[F].delay(DeploysList.parseFrom(deploysBytes).deploys)
-      allDeploys          = (existingDeploys ++ missingDeploys).sortBy(d => hash2Index(d.deployHash))
-      fullBlock           = partialBlock.withDeploys(allDeploys)
+      missingDeploys      <- fetchAndRestoreDeploys(source, missingDeployHashes)
+      fullBlock           = partialBlock.withDeploys(existingDeploys ++ missingDeploys)
     } yield fullBlock
 
-  private def streamBlock(
+  /** Stream the chunks of a block without deploy bodies. */
+  override def fetch(
       source: Node,
       blockHash: ByteString
   ): Iterant[F, Chunk] = {
@@ -167,7 +157,14 @@ class BlockDownloadManagerImpl[F[_]](
     Iterant.liftF(itF).flatten
   }
 
-  private def streamDeploys(source: Node, deployHashes: Seq[ByteString]): Iterant[F, Chunk] = {
+  private def fetchAndRestoreDeploys(source: Node, deployHashes: Seq[ByteString]): F[List[Deploy]] =
+    for {
+      deployBytes <- restoreDeploys(source, fetchDeploys(source, deployHashes))
+      deploys     <- deployBytes.traverse(parseDeploy)
+    } yield deploys
+
+  /** Ask for all deploys from the source in a stream of chunks alternating headers and content. */
+  private def fetchDeploys(source: Node, deployHashes: Seq[ByteString]): Iterant[F, Chunk] = {
     val itF = connectToGossip(source).map { stub =>
       val req = StreamDeploysChunkedRequest(
         deployHashes = deployHashes,
@@ -178,9 +175,30 @@ class BlockDownloadManagerImpl[F[_]](
     Iterant.liftF(itF).flatten
   }
 
-  override def streamChunks(source: Node, blockHash: ByteString): Iterant[F, Chunk] =
-    throw new IllegalArgumentException("Shouldn't be called")
+  /** Restore individual deploys from a stream of altnating header and content chunks. */
+  private def restoreDeploys(source: Node, chunks: Iterant[F, Chunk]): F[List[Array[Byte]]] = {
+    type Acc = (List[Array[Byte]], List[Chunk])
 
-  override def parseDownloadable(bytes: Array[Byte]) =
-    throw new IllegalArgumentException("Shouldn't be called")
+    chunks.foldWhileLeftEvalL((List.empty[Array[Byte]] -> List.empty[Chunk]).pure[F]) {
+      case ((bytesAcc, chunksAcc), chunk) if chunk.content.isHeader && chunksAcc.nonEmpty =>
+        // Try to restore whatever we have accumulated so far, to see if it's legit.
+        restore(source, Iterant.fromList(chunksAcc.reverse)) map { bytes =>
+          ((bytes :: bytesAcc) -> List(chunk)).asLeft[Acc]
+        }
+      case ((bytesAcc, chunksAcc), chunk) =>
+        (bytesAcc -> (chunk :: chunksAcc)).asLeft[Acc].pure[F]
+    } flatMap {
+      case (bytesAcc, chunksAcc) if chunksAcc.nonEmpty =>
+        // Try to restore the last set of chunks. There should always be one that doesn't end with a header.
+        restore(source, Iterant.fromList(chunksAcc.reverse)) map { bytes =>
+          (bytes :: bytesAcc)
+        }
+      case (bytesAcc, _) =>
+        bytesAcc.pure[F]
+    } map (_.reverse)
+  }
+
+  private def parseDeploy(bytes: Array[Byte]): F[Deploy] =
+    Sync[F].delay(Deploy.parseFrom(bytes))
+
 }

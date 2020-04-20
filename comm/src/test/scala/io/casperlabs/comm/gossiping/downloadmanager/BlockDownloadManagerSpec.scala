@@ -670,7 +670,7 @@ object BlockDownloadManagerSpec {
   }
 
   class MockBackend(validationFunction: Block => Task[Unit] = _ => Task.unit)
-      extends BlockDownloadManagerImpl.EnrichedBackend[Task] {
+      extends BlockDownloadManagerImpl.Backend[Task] {
     // Record what we have been called with.
     @volatile var validations = Vector.empty[ByteString]
     @volatile var blocks      = Vector.empty[ByteString]

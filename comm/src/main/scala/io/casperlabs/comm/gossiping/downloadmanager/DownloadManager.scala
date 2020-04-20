@@ -279,8 +279,12 @@ trait DownloadManagerImpl[F[_]] extends DownloadManager[F] { self =>
   implicit class DownloadableOps(d: Downloadable) {
     def id: Identifier = extractIdFromDownloadable(d)
   }
-  def streamChunks(source: Node, id: Identifier): Iterant[F, Chunk]
-  def parseDownloadable(bytes: Array[Byte]): Downloadable
+
+  /** Get one downloadable as a stream of chunks from a source. */
+  def fetch(source: Node, id: Identifier): Iterant[F, Chunk]
+
+  /** Parse the downloaded and restored bytes into an Downloadable. */
+  def parse(bytes: Array[Byte]): F[Downloadable]
 
   private def ensureNotShutdown: F[Unit] =
     isShutdown.get.ifM(
@@ -506,9 +510,21 @@ trait DownloadManagerImpl[F[_]] extends DownloadManager[F] { self =>
     val success                = signal.put(Signal.DownloadSuccess(id))
     def failure(ex: Throwable) = signal.put(Signal.DownloadFailure(id, ex))
 
+    def throttledFetchAndRestore(source: Node, id: Identifier): F[Downloadable] =
+      // Indicate how many fetches we are trying to do at a time. If it's larger then the semaphore
+      // we configured we'd know where we'd have to raise it to allow maximum throughput.
+      semaphore
+        .withPermit {
+          ContextShift[F].evalOn(egressScheduler) {
+            // Measure an individual download.
+            fetchAndRestore(source, id).timerGauge("restore")
+          }
+        }
+        .timerGauge("fetches") // Measure with wait time.
+
     def tryDownload(handle: Handle, source: Node, relay: Boolean) =
       for {
-        downloadable <- fetchAndRestore(source, id)
+        downloadable <- throttledFetchAndRestore(source, id)
         _            <- backend.validate(downloadable)
         _            <- backend.store(downloadable)
         _            <- relaying.relay(List(handle.id.toByteString)).whenA(relay)
@@ -582,24 +598,15 @@ trait DownloadManagerImpl[F[_]] extends DownloadManager[F] { self =>
   }
 
   /** Download from the source node and decompress it. */
-  private def fetchAndRestore(source: Node, id: Identifier): F[Downloadable] =
-    // Indicate how many fetches we are trying to do at a time. If it's larger then the semaphore
-    // we configured we'd know where we'd have to raise it to allow maximum throughput.
-    semaphore
-      .withPermit {
-        ContextShift[F].evalOn(egressScheduler)(doFetchAndRestore(source, id).timerGauge("restore"))
-      }
-      .timerGauge("fetches")
-
-  protected def doFetchAndRestore(source: Node, id: Identifier): F[Downloadable] =
+  protected def fetchAndRestore(source: Node, id: Identifier): F[Downloadable] =
     for {
-      content      <- fetch(source, streamChunks(source, id))
-      downloadable <- Sync[F].delay(parseDownloadable(content))
+      content      <- restore(source, fetch(source, id))
+      downloadable <- parse(content)
       _            <- checkId(source, downloadable, id)
     } yield downloadable
 
   /** Fetches specified chunks, accumulates and validates them. */
-  protected def fetch(source: Node, chunks: Iterant[F, Chunk]): F[Array[Byte]] =
+  protected def restore(source: Node, chunks: Iterant[F, Chunk]): F[Array[Byte]] =
     for {
       acc <- chunks.foldWhileLeftL(ChunksAcc(None, 0, Nil, None)) {
               case (acc, chunk) if acc.header.isEmpty && chunk.content.isHeader =>

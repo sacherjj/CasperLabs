@@ -34,16 +34,22 @@ object BlockImplicits {
 
     def getSummary: BlockSummary =
       BlockSummary(block.blockHash, block.header, block.signature)
+
+    /** Serve the block without deploys in it. Used when deploy gossiping is enabled. */
     def clearDeployBodies: Block = block.update(
       _.body.deploys := block.getBody.deploys
         .map(
           processedDeploy => processedDeploy.withDeploy(processedDeploy.getDeploy.clearBody)
         )
     )
-    def withDeploys(deploys: List[Deploy]): Block =
-      block.update(_.body.deploys := block.getBody.deploys.zip(deploys).map {
-        case (processedDeploy, deploy) => processedDeploy.withDeploy(deploy)
+
+    /** Fill in the deploy bodies from a list of deploys fetched separately. */
+    def withDeploys(deploys: List[Deploy]): Block = {
+      val deployMap = deploys.map(d => d.deployHash -> d).toMap
+      block.update(_.body.deploys := block.getBody.deploys.map { pd =>
+        pd.withDeploy(deployMap(pd.getDeploy.deployHash))
       })
+    }
   }
 
   implicit class BlockSummaryOps(val summary: BlockSummary) extends AnyVal {

@@ -312,23 +312,14 @@ class GossipServiceServer[F[_]: Concurrent: Parallel: Log: Metrics](
       }
     }
 
-  /** TODO: An OOM possibility if a peer asks for many deploys. */
-  override def streamDeploysChunked(request: StreamDeploysChunkedRequest): Iterant[F, Chunk] =
-    Iterant
-      .liftF(
-        backend
-          .getDeploys(request.deployHashes.toSet)
-          .toListL
-          .map(
-            deploys =>
-              chunkIt(
-                DeploysList(deploys = deploys).toByteArray,
-                effectiveChunkSize(request.chunkSize),
-                request.acceptedCompressionAlgorithms
-              )
-          )
-      )
-      .flatMap(Iterant.fromIterator[F, Chunk])
+  override def streamDeploysChunked(request: StreamDeploysChunkedRequest): Iterant[F, Chunk] = {
+    val chunkSize = effectiveChunkSize(request.chunkSize)
+    backend.getDeploys(request.deployHashes.toSet).flatMap { deploy =>
+      Iterant.fromIterator {
+        chunkIt(deploy.toByteArray, chunkSize, request.acceptedCompressionAlgorithms)
+      }
+    }
+  }
 
   override def getGenesisCandidate(request: GetGenesisCandidateRequest): F[GenesisCandidate] =
     rethrow(genesisApprover.getCandidate)
