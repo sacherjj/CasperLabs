@@ -4,6 +4,9 @@ import cats.effect.Sync
 import cats.implicits._
 import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
+import cats.Show
+import cats.syntax.show
+import io.casperlabs.shared.ByteStringPrettyPrinter._
 import io.casperlabs.casper.MultiParentCasperImpl.Broadcaster
 import io.casperlabs.casper.consensus.Block.{Justification, ProcessedDeploy}
 import io.casperlabs.casper.consensus._
@@ -1040,84 +1043,6 @@ abstract class HashSetCasperTest
     } yield ()
   }
 
-  it should "increment last finalized block as appropriate in round robin" in effectTest {
-    val stake      = 10L
-    val equalBonds = validators.map(_ -> stake).toMap
-    val BlockMsgWithTransform(Some(genesisWithEqualBonds), _) =
-      buildGenesis(Map.empty, equalBonds, 0L)
-
-    for {
-      nodes <- networkEff(
-                validatorKeys.take(3),
-                genesisWithEqualBonds,
-                faultToleranceThreshold = 0f // With equal bonds this should allow the final block to move as expected.
-              )
-      deployDatas <- (1L to 10L).toList.traverse(_ => ProtoUtil.basicDeploy[Task]())
-
-      _ <- nodes(0).deployAndPropose(deployDatas(0))
-      _ <- nodes(1).receive()
-      _ <- nodes(2).receive()
-
-      block2 <- nodes(1).deployAndPropose(deployDatas(1))
-      _      <- nodes(0).receive()
-      _      <- nodes(2).receive()
-
-      block3 <- nodes(2).deployAndPropose(deployDatas(2))
-      _      <- nodes(0).receive()
-      _      <- nodes(1).receive()
-
-      block4 <- nodes(0).deployAndPropose(deployDatas(3))
-      _      <- nodes(1).receive()
-      _      <- nodes(2).receive()
-
-      block5 <- nodes(1).deployAndPropose(deployDatas(4))
-      _      <- nodes(0).receive()
-      _      <- nodes(2).receive()
-
-      block6 <- nodes(2).deployAndPropose(deployDatas(5))
-      _      <- nodes(0).receive()
-      _      <- nodes(1).receive()
-
-      _                     <- nodes(0).casperEff.lastFinalizedBlock shouldBeF block2
-      pendingOrProcessedNum <- nodes(0).deployStorage.reader.sizePendingOrProcessed()
-      _                     = pendingOrProcessedNum should be(1)
-
-      _ <- nodes(0).deployBuffer.addDeploy(deployDatas(6)) *> nodes(0).propose()
-      _ <- nodes(1).receive()
-      _ <- nodes(2).receive()
-
-      _                     <- nodes(0).casperEff.lastFinalizedBlock shouldBeF block3
-      pendingOrProcessedNum <- nodes(0).deployStorage.reader.sizePendingOrProcessed()
-      _                     = pendingOrProcessedNum should be(2) // deploys contained in block 4 and block 7
-
-      _ <- nodes(1).deployBuffer.addDeploy(deployDatas(7)) *> nodes(1).propose()
-      _ <- nodes(0).receive()
-      _ <- nodes(2).receive()
-
-      _                     <- nodes(0).casperEff.lastFinalizedBlock shouldBeF block4
-      pendingOrProcessedNum <- nodes(0).deployStorage.reader.sizePendingOrProcessed()
-      _                     = pendingOrProcessedNum should be(1) // deploys contained in block 7
-
-      _ <- nodes(2).deployBuffer.addDeploy(deployDatas(8)) *> nodes(2).propose()
-      _ <- nodes(0).receive()
-      _ <- nodes(1).receive()
-
-      _                     <- nodes(0).casperEff.lastFinalizedBlock shouldBeF block5
-      pendingOrProcessedNum <- nodes(0).deployStorage.reader.sizePendingOrProcessed()
-      _                     = pendingOrProcessedNum should be(1) // deploys contained in block 7
-
-      _ <- nodes(0).deployBuffer.addDeploy(deployDatas(9)) *> nodes(0).propose()
-      _ <- nodes(1).receive()
-      _ <- nodes(2).receive()
-
-      _                     <- nodes(0).casperEff.lastFinalizedBlock shouldBeF block6
-      pendingOrProcessedNum <- nodes(0).deployStorage.reader.sizePendingOrProcessed()
-      _                     = pendingOrProcessedNum should be(2) // deploys contained in block 7 and block 10
-
-      _ <- nodes.map(_.tearDown()).toList.sequence
-    } yield ()
-  }
-
   it should "put orphaned deploys back into the pending deploy buffer" in effectTest {
     for {
       nodes <- networkEff(
@@ -1462,7 +1387,8 @@ object HashSetCasperTest {
             implicit0(blockStorage: BlockStorage[Task]),
             _,
             _,
-            implicit0(fs: FinalityStorage[Task])
+            implicit0(fs: FinalityStorage[Task]),
+            _
             ) =>
           Genesis.fromChainSpec[Task](spec)
       }

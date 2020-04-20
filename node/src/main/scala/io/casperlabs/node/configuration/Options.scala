@@ -243,8 +243,24 @@ private[configuration] final case class Options private (
       gen[Int]("Size of the thread pool used to handle incoming requests.")
 
     @scallop
-    val serverDbThreads =
-      gen[Int]("Size of the thread pool for database connections.")
+    val serverDbWriteThreads =
+      gen[Int]("Size of the thread pool waiting for the database writer connection.")
+
+    @scallop
+    val serverDbReadThreads =
+      gen[Int]("Size of the thread pool waiting for a database reader connection.")
+
+    @scallop
+    val serverDbReadConnections =
+      gen[Int]("Number of database connections in the reader pool.")
+
+    @scallop
+    val serverParallelismCpuMultiplier =
+      gen[Double]("Parallelism per CPU core.")
+
+    @scallop
+    val serverMinParallelism =
+      gen[Int]("Minimum parallelism.")
 
     @scallop
     val tlsCertificate =
@@ -419,6 +435,11 @@ private[configuration] final case class Options private (
     @scallop
     val serverDownloadMaxParallelBlocks =
       gen[Int]("Maximum number of parallel block downloads initiated by the download manager.")
+
+    @scallop
+    val serverDownloadMaxParallelDeploys =
+      gen[Int]("Maximum number of parallel deploy downloads initiated by the download manager.")
+
     @scallop
     val serverDownloadMaxRetries =
       gen[Int]("Maximum number of times to retry to download a block from the same node.")
@@ -560,6 +581,12 @@ private[configuration] final case class Options private (
     val highwayOmegaMessageTimeEnd =
       gen[Double](
         "Fraction of time through the round before which we must have created the omega message."
+      )
+
+    @scallop
+    val highwayOmegaBlocksEnabled =
+      gen[Flag](
+        "Enable the creating blocks instead of ballots as omega-messages."
       )
 
     @scallop

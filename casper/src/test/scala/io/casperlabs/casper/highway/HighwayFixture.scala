@@ -1,42 +1,36 @@
 package io.casperlabs.casper.highway
 
-import cats.implicits._
-import cats.effect.{Resource, Timer}
-import cats.effect.concurrent.Ref
-import com.google.protobuf.ByteString
-import io.casperlabs.casper.helper.StorageFixture
-import io.casperlabs.storage.{BlockHash, SQLiteStorage}
-import io.casperlabs.casper.consensus.{Block, BlockSummary, Bond, Era}
-import io.casperlabs.casper.consensus.state
-import io.casperlabs.casper.consensus.state.ProtocolVersion
-import io.casperlabs.casper.util.CasperLabsProtocol
-import io.casperlabs.casper.highway.mocks.{MockForkChoice, MockMessageProducer}
-import io.casperlabs.casper.mocks.NoOpValidation
-import io.casperlabs.casper.helper.NoOpsEventEmitter
-import io.casperlabs.casper.validation.raiseValidateErrorThroughApplicativeError
-import io.casperlabs.casper.validation.{Validation, ValidationImpl}
-import io.casperlabs.casper.DeploySelection
-import io.casperlabs.crypto.Keys.{PublicKey, PublicKeyBS}
-import io.casperlabs.comm.gossiping.{Relaying, WaitHandle}
-import io.casperlabs.mempool.DeployBuffer
-import io.casperlabs.models.ArbitraryConsensus
-import io.casperlabs.models.Message
-import io.casperlabs.shared.{Log, LogStub}
-import io.casperlabs.storage.BlockMsgWithTransform
 import java.time.Instant
 import java.util.concurrent.TimeUnit
 
+import cats.effect.concurrent.Ref
+import cats.effect.{Resource, Timer}
+import cats.implicits._
+import com.google.protobuf.ByteString
+import io.casperlabs.casper.DeploySelection
+import io.casperlabs.casper.consensus.state.ProtocolVersion
+import io.casperlabs.casper.consensus.{state, Block, Bond, Era}
+import io.casperlabs.casper.finality.MultiParentFinalizer
+import io.casperlabs.casper.helper.{NoOpsEventEmitter, StorageFixture}
+import io.casperlabs.casper.highway.mocks.{MockForkChoice, MockMessageProducer}
+import io.casperlabs.casper.mocks.NoOpValidation
+import io.casperlabs.casper.util.{ByteStringPrettifier, CasperLabsProtocol}
+import io.casperlabs.casper.util.execengine.ExecutionEngineServiceStub
+import io.casperlabs.casper.validation.{raiseValidateErrorThroughApplicativeError, Validation}
+import io.casperlabs.comm.gossiping.WaitHandle
+import io.casperlabs.comm.gossiping.relaying.BlockRelaying
+import io.casperlabs.crypto.Keys.{PublicKey, PublicKeyBS}
+import io.casperlabs.ipc.ChainSpec.DeployConfig
+import io.casperlabs.mempool.DeployBuffer
+import io.casperlabs.models.{ArbitraryConsensus, Message}
+import io.casperlabs.shared.{Log, LogStub}
+import io.casperlabs.storage.{BlockHash, BlockMsgWithTransform, SQLiteStorage}
 import monix.catnap.SchedulerEffect
 import monix.eval.Task
 import monix.execution.schedulers.TestScheduler
+import org.scalatest.Suite
 
 import scala.concurrent.duration._
-import org.scalatest.Suite
-import io.casperlabs.casper.util.execengine.ExecutionEngineServiceStub
-import io.casperlabs.casper.finality.MultiParentFinalizer
-import io.casperlabs.casper.util.ByteStringPrettifier
-import io.casperlabs.ipc.ChainSpec.DeployConfig
-import io.casperlabs.storage.dag.DagStorage
 
 trait HighwayFixture
     extends StorageFixture
@@ -90,7 +84,8 @@ trait HighwayFixture
     entropyDuration = hours(3),
     postEraVotingDuration = VotingDuration.FixedLength(postEraVotingDuration),
     omegaMessageTimeStart = 0.5,
-    omegaMessageTimeEnd = 0.75
+    omegaMessageTimeEnd = 0.75,
+    omegaBlocksEnabled = false
   )
 
   trait FixtureLike {
@@ -159,9 +154,11 @@ trait HighwayFixture
     implicit lazy val forkchoice = MockForkChoice.unsafe[Task](genesis)
 
     implicit lazy val finalizer = new MultiParentFinalizer[Task] {
-      override def onNewMessageAdded(
-          message: Message
-      ): Task[Seq[MultiParentFinalizer.FinalizedBlocks]] = Seq.empty.pure[Task]
+
+      override def addMessage(message: Message): Task[Unit] = Task.unit
+
+      override def checkFinality(): Task[Seq[MultiParentFinalizer.FinalizedBlocks]] =
+        Task(Seq.empty)
     }
 
     implicit lazy val deployBuffer = DeployBuffer.create[Task](chainName, minTtl = Duration.Zero)
@@ -199,7 +196,7 @@ trait HighwayFixture
       maybeValidatorId = Some(validator: PublicKeyBS)
     )
 
-    implicit lazy val relaying = new Relaying[Task] {
+    implicit lazy val blockRelaying = new BlockRelaying[Task] {
       override def relay(hashes: List[BlockHash]): Task[WaitHandle[Task]] = ().pure[Task].pure[Task]
     }
 
@@ -235,7 +232,8 @@ trait HighwayFixture
                 era.keyBlockHash,
                 roundId = Ticks(era.startTick),
                 target = parentBlock,
-                justifications = justifications
+                justifications = justifications,
+                messageRole = Block.MessageRole.WITNESS
               )
         } yield b.messageHash
 
@@ -253,7 +251,8 @@ trait HighwayFixture
                 roundId = Ticks(era.startTick),
                 mainParent = parentBlock,
                 justifications = justifications,
-                isBookingBlock = false
+                isBookingBlock = false,
+                messageRole = Block.MessageRole.PROPOSAL
               )
         } yield b.messageHash
     }

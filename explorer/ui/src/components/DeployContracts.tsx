@@ -1,6 +1,6 @@
 import { observer } from 'mobx-react';
 import { FileSelect, Form, NumberField, SelectField, TextField } from './Forms';
-import { Button, Card, ListInline } from './Utils';
+import { Button, Card, FailIcon, ListInline, Spinner, SuccessIcon } from './Utils';
 import React from 'react';
 import {
   BitWidth,
@@ -41,23 +41,27 @@ export class DeployContractsForm extends React.Component<Props, {}> {
 
   render() {
     const { deployContractsContainer } = this.props;
+    let hint = (window as any).casperlabsHelper?.isConnected() ? (
+      <p>
+        <SuccessIcon/> We will use CasperLabs Sign Helper plugin to sign the deploy
+      </p>
+    ) : (
+      <p>
+        <FailIcon/>
+        Please install the CasperLabs Sign Helper plugin
+      </p>
+    );
     let modalAccountForm = (
       <Modal
-        id="id-private-key-modal"
-        title="Input Private Key"
-        submitLabel="Deploy"
+        id="id-sign-modal"
+        title="Sign Deploy"
+        submitLabel="Sign & Deploy"
         onSubmit={deployContractsContainer.onSubmit}
         onClose={() => {
           deployContractsContainer.signDeployModal = false;
         }}
       >
-        <Form>
-          <TextField
-            id="id-private-key"
-            label="Private Key (Base64)"
-            fieldState={deployContractsContainer.privateKey}
-          />
-        </Form>
+        {deployContractsContainer.signing ? Spinner('Please open the plugin to sign the deploy') : hint}
       </Modal>
     );
     return (

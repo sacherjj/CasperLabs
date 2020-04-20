@@ -1,14 +1,15 @@
 import { action, observable } from 'mobx';
 
 import ErrorContainer from './ErrorContainer';
-import { CasperService, decodeBase16, decodeBase64, DeployUtil, encodeBase16 } from 'casperlabs-sdk';
+import { CasperService, decodeBase16, DeployUtil, encodeBase16 } from 'casperlabs-sdk';
 import { FieldState, FormState } from 'formstate';
-import { validateBase16, validateInt, numberGreaterThan, valueRequired } from '../lib/FormsValidator';
+import { numberGreaterThan, validateBase16, validateInt, valueRequired } from '../lib/FormsValidator';
 import validator from 'validator';
-import * as nacl from 'tweetnacl-ts';
 import $ from 'jquery';
 import { Deploy } from 'casperlabs-grpc/io/casperlabs/casper/consensus/consensus_pb';
 import { CLType, CLValueInstance, Key } from 'casperlabs-grpc/io/casperlabs/casper/consensus/state_pb';
+import { decodeBase64 } from 'tweetnacl-ts';
+import JSBI from 'jsbi';
 
 type SupportedType = CLType.SimpleMap[keyof CLType.SimpleMap] | 'Bytes';
 
@@ -25,25 +26,21 @@ export enum BitWidth {
   B_512 = 512
 }
 
-const powerOf2 = (n: number): bigint => {
-  let res = BigInt(1);
-  for (let i = 0; i < n; i++) {
-    res *= BigInt(2);
-  }
-  return res;
+const powerOf2 = (n: number): JSBI => {
+  return JSBI.exponentiate(JSBI.BigInt(2), JSBI.BigInt(n));
 };
 
 const numberLimitForUnsigned = (bit: number) => {
   return {
-    min: BigInt(0),
-    max: powerOf2(bit) - BigInt(1)
+    min: JSBI.BigInt(0),
+    max: JSBI.subtract(powerOf2(bit), JSBI.BigInt(1))
   };
 };
 
 const numberLimitForSigned = (bit: number) => {
   return {
-    min: BigInt(-1) * powerOf2(bit - 1),
-    max: powerOf2(bit - 1) - BigInt(1)
+    min: JSBI.multiply(JSBI.BigInt(-1), powerOf2(bit - 1)),
+    max: JSBI.subtract(powerOf2(bit - 1), JSBI.BigInt(1))
   };
 };
 
@@ -111,7 +108,7 @@ export class DeployContractsContainer {
     ),
     fromAddress: new FieldState<string>('')
   }).compose().validators(deployConfiguration => {
-    if (deployConfiguration.contractType.$ ===DeployUtil.ContractType.Hash) {
+    if (deployConfiguration.contractType.$ === DeployUtil.ContractType.Hash) {
       let value = deployConfiguration.contractHash.value;
       let v = validateBase16(value) || valueRequired(value);
       if (v !== false) {
@@ -130,10 +127,11 @@ export class DeployContractsContainer {
   });
   @observable deployArguments: FormDeployArguments = new FormState<FormDeployArgument[]>([]);
   @observable editingDeployArguments: FormDeployArguments = new FormState<FormDeployArgument[]>([]);
-  @observable privateKey = new FieldState<string>('').validators(valueRequired);
   @observable selectedFile: File | null = null;
   @observable editing: boolean = false;
   @observable signDeployModal: boolean = false;
+  // indicate whether we are waiting for signing from plugin
+  @observable signing: boolean = false;
   // hash of deploy result
   @observable deployedHash: string | null = null;
   private selectedFileContent: null | ByteArray = null;
@@ -236,18 +234,41 @@ export class DeployContractsContainer {
 
   @action.bound
   async onSubmit() {
+    return this.errors.withCapture(this._onSubmit()).catch(() => {
+      return false;
+    });
+  }
+
+  @action.bound
+  async _onSubmit() {
     this.deployedHash = null;
-    let privateKey = decodeBase64(this.privateKey.$);
-    let keyPair = nacl.sign_keyPair_fromSecretKey(privateKey);
-    let deploy = await this.makeDeploy(keyPair.publicKey);
-    let signedDeploy = DeployUtil.signDeploy(deploy!, keyPair);
+    if (!window.casperlabsHelper?.isConnected()) {
+      throw new Error('Please install the CasperLabs Sign Helper Plugin first!');
+    }
+
+    const publicKeyBase64 = await window.casperlabsHelper!.getSelectedPublicKeyBase64();
+    if (!publicKeyBase64) {
+      throw new Error('Please create an account in the Plugin first!');
+    }
+    const publicKey = decodeBase64(publicKeyBase64);
+    let deploy = await this.makeDeploy(publicKey);
+    if (!deploy) {
+      return false;
+    }
+
+    this.signing = true;
+    let sigBase64;
     try {
-      await this.errors.withCapture(this.casperService.deploy(signedDeploy));
+      sigBase64 = await window.casperlabsHelper!.sign(encodeBase16(deploy!.getDeployHash_asU8()));
+      this.signing = false;
+      let signedDeploy = DeployUtil.setSignature(deploy, decodeBase64(sigBase64), publicKey);
+      await this.casperService.deploy(signedDeploy);
       ($(`#${this.accordionId}`) as any).collapse('hide');
       this.deployedHash = encodeBase16(signedDeploy.getDeployHash_asU8());
       return true;
-    } catch {
-      return false;
+    } catch (e) {
+      this.signing = false;
+      throw e;
     }
   }
 
@@ -261,7 +282,7 @@ export class DeployContractsContainer {
       const args = deployArguments.value;
       let type: DeployUtil.ContractType;
       let session: ByteArray;
-      if (config.contractType.value ===DeployUtil.ContractType.Hash) {
+      if (config.contractType.value === DeployUtil.ContractType.Hash) {
         type = DeployUtil.ContractType.Hash;
         session = decodeBase16(config.contractHash.value);
       } else {
@@ -273,7 +294,7 @@ export class DeployContractsContainer {
       });
       const paymentAmount = config.paymentAmount.value;
 
-      return DeployUtil.makeDeploy(argsProto, type, session, null, BigInt(paymentAmount), publicKey);
+      return DeployUtil.makeDeploy(argsProto, type, session, null, JSBI.BigInt(paymentAmount), publicKey);
     }
   }
 
@@ -414,11 +435,11 @@ export class DeployContractsContainer {
       case CLType.Simple.U128:
       case CLType.Simple.U256:
       case CLType.Simple.U512:
-        let limit: { min: bigint, max: bigint } = (NumberLimit as any)[deployArgument.type.value];
+        let limit: { min: JSBI, max: JSBI } = (NumberLimit as any)[deployArgument.type.value];
         if (!validator.isNumeric(value)) {
           return `Value should be a number`;
         }
-        const v = BigInt(value);
+        const v = JSBI.BigInt(value);
         if (v < limit.min || v > limit.max) {
           return `Value should be in [${limit.min.toString(10)}, ${limit.max.toString(10)}]`;
         }

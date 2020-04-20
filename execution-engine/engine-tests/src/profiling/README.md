@@ -27,7 +27,7 @@ To profile `simple-transfer` using `perf` and open the flamegraph in Firefox, fo
 * Run:
     ```bash
     cd CasperLabs/execution-engine/
-    make build-contracts
+    make build-contracts-rs
     cd engine-tests/
     cargo build --release --bin state-initializer
     cargo build --release --bin simple-transfer
@@ -119,4 +119,21 @@ For logging, again set the `RUST_LOG` env var:
 
 ```bash
 RUST_LOG=concurrent_executor=info ./concurrent_executor.sh 8 8 200
+```
+
+---
+
+# `host-function-metrics`
+
+This tool generates CSV files containing metrics for the host functions callable by Wasm smart contracts and which are currently unmetered.
+
+Note that running the tool with the default 10,000 repetitions can take in excess of half an hour to complete.
+
+```bash
+cd CasperLabs/execution-engine/
+make build-contracts-rs
+cd engine-tests/
+cargo build --release --bin state-initializer
+cargo build --release --bin host-function-metrics
+../target/release/state-initializer --data-dir=../target | ../target/release/host-function-metrics --data-dir=../target --output-dir=../target/host-function-metrics
 ```

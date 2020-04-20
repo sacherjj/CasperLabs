@@ -1,0 +1,85 @@
+[genesis]
+
+# Human readable name for convenience; the genesis_hash is the true identifier.
+# The name influences the genesis hash by contributing to the seeding of the pseudo-
+# random number generator used in execution engine for computing genesis post-state.
+name = "casperlabs-testnet-alpha"
+
+# Timestamp for the genesis block, also used in seeding the pseudo-random number
+# generator used in execution engine for computing genesis post-state.
+timestamp = 1586372400000
+
+# Later will be replaced by semver.
+protocol-version = "1.0.0"
+
+# Path (absolute, or relative to the manifest) to the file containing wasm bytecode for installing the mint system contract.
+mint-code-path = "mint_install.wasm"
+
+# Path (absolute, or relative to the manifest) to the file containing wasm bytecode for installing the PoS system contract.
+pos-code-path = "pos_install.wasm"
+
+# Path (absolute, or relative to the manifest) to the CSV file containing initial account balances and bonds.
+# To override the default values, create a file at ~/.casperlabs/chainspec/genesis/accounts.csv
+initial-accounts-path = "accounts.csv"
+
+[highway]
+
+# Tick unit is milliseconds.
+
+# Unix timestamp for the genesis era. At least one node has to be started when the genesis era
+# is active in order to make key blocks for the upcoming eras. If the era is over by the time
+# we start the nodes, they'll not be able to produce blocks in it, and there won't be a new
+# era build either. That means when a completely new network is started, the genesis era
+# start time has to be adjusted to be active at the time.
+genesis-era-start = 1586372400000
+
+# Era duration defined as a fixed amount of time.
+era-duration = "60minutes"
+
+# Amount of time to go back before the start of the era for picking the booking block.
+booking-duration = "80minutes"
+
+# Amount of time to wait after the booking before we pick the key block, collecting the magic bits along the way.
+entropy-duration = "10minutes"
+
+# Keep voting on the switch block for a fixed amount of time; effective if the summit level is zero.
+voting-period-duration = "2days"
+
+# Alternative voting duration based on the finality level of the switch block; effective if it's non-zero.
+voting-period-summit-level = 1
+
+# Relative fault tolerance thresholds used by the internal finalizer.
+# Has to be between 0 and 0.5
+ftt = 0.01
+
+[deploys]
+# 1 day
+max-ttl-millis = 86400000
+max-dependencies = 10
+
+# Maximum block size in bytes
+max-block-size-bytes = 10485760
+
+# Maximum total gas cost of deploys in a block. 0 means unlimited.
+max-block-cost = 0
+
+[wasm-costs]
+# Default opcode cost
+regular = 1
+# Div operations multiplier.
+div-multiplier = 16
+# Mul operations multiplier.
+mul-multiplier = 4
+# Memory (load/store) operations multiplier.
+mem-multiplier = 2
+# Amount of free memory (in 64kb pages) each contract can use for stack.
+mem-initial-pages = 4096
+# Grow memory cost, per page (64kb)
+mem-grow-per-page = 8192
+# Memory copy cost, per byte
+mem-copy-per-byte = 1
+# Max stack height (native WebAssembly stack limiter)
+max-stack-height = 65536
+# Cost of wasm opcode is calculated as TABLE_ENTRY_COST * `opcodes_mul` / `opcodes_div`
+opcodes-multiplier = 3
+opcodes-divisor = 8

@@ -10,7 +10,7 @@ import doobie.implicits._
 import io.casperlabs.casper.consensus.Block.ProcessedDeploy
 import io.casperlabs.casper.consensus.info.DeployInfo
 import io.casperlabs.casper.consensus.info.DeployInfo.ProcessingResult
-import io.casperlabs.casper.consensus.{Block, Deploy}
+import io.casperlabs.casper.consensus.{Block, Deploy, DeploySummary}
 import io.casperlabs.crypto.Keys.PublicKeyBS
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.Metrics.Source
@@ -46,6 +46,8 @@ class SQLiteDeployStorage[F[_]: Time: Sync](
     ProcessedStatusCode -> DeployInfo.State.PROCESSED,
     DiscardedStatusCode -> DeployInfo.State.DISCARDED
   ).withDefaultValue(DeployInfo.State.UNDEFINED)
+
+  private val StateToStatusCode = StatusCodeToState.toSeq.map(_.swap).toMap.withDefaultValue(-1)
 
   private val readers: TrieMap[DeployInfo.View, DeployStorageReader[F]] = TrieMap.empty
 
@@ -287,6 +289,19 @@ class SQLiteDeployStorage[F[_]: Time: Sync](
         Fragment.const(s"${alias}.body")
       }
 
+    override def contains(deployHash: DeployHash) =
+      sql"SELECT 1 FROM deploys WHERE hash=${deployHash}"
+        .query[Int]
+        .option
+        .map(_.isDefined)
+        .transact(readXa)
+
+    override def getDeploySummary(deployHash: DeployHash): F[Option[DeploySummary]] =
+      sql"SELECT summary FROM deploys WHERE hash=${deployHash}"
+        .query[DeploySummary]
+        .option
+        .transact(readXa)
+
     override def readProcessed: F[List[Deploy]] =
       readByStatus(ProcessedStatusCode)
 
@@ -350,11 +365,26 @@ class SQLiteDeployStorage[F[_]: Time: Sync](
         .to[List]
         .transact(readXa)
 
-    override def sizePendingOrProcessed(): F[Long] =
-      sql"SELECT COUNT(hash) FROM buffered_deploys WHERE status=$PendingStatusCode OR status=$ProcessedStatusCode"
-        .query[Long]
-        .unique
+    override def countsByBufferedStates(
+        states: DeployInfo.State*
+    ): F[Map[DeployInfo.State, Long]] = {
+      val q = fr"""
+        SELECT status, COUNT(hash)
+        FROM   buffered_deploys
+        """ ++ NonEmptyList.fromList(states.toList.map(StateToStatusCode)).fold(fr"") { ss =>
+        fr"WHERE " ++ Fragments.in(fr"status", ss)
+      } ++ fr"""
+        GROUP BY status
+        """
+
+      q.query[(Int, Long)]
+        .map {
+          case (status, count) => StatusCodeToState(status) -> count
+        }
+        .to[List]
         .transact(readXa)
+        .map(_.toMap)
+    }
 
     override def getPendingOrProcessed(deployHash: DeployHash): F[Option[Deploy]] =
       (fr"SELECT summary, " ++ bodyCol() ++ fr"""

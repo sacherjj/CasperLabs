@@ -3,7 +3,7 @@ use std::convert::TryFrom;
 use num_derive::{FromPrimitive, ToPrimitive};
 use num_traits::{FromPrimitive, ToPrimitive};
 
-#[derive(Debug, PartialEq, FromPrimitive, ToPrimitive)]
+#[derive(Debug, PartialEq, FromPrimitive, ToPrimitive, Clone, Copy)]
 #[repr(usize)]
 pub enum FunctionIndex {
     WriteFuncIndex,
@@ -48,6 +48,8 @@ pub enum FunctionIndex {
     RemoveContractVersion,
     CallVersionedContract,
     CreateContractUserGroup,
+    #[cfg(feature = "test-support")]
+    PrintIndex,
 }
 
 impl Into<usize> for FunctionIndex {

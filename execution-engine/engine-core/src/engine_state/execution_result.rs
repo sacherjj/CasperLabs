@@ -128,7 +128,7 @@ impl ExecutionResult {
         }
     }
 
-    pub fn error(&self) -> Option<&error::Error> {
+    pub fn as_error(&self) -> Option<&error::Error> {
         match self {
             ExecutionResult::Failure { error, .. } => Some(error),
             ExecutionResult::Success { .. } => None,

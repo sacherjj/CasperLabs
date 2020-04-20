@@ -43,6 +43,7 @@ init-sync-round-period = "1second"
 init-sync-max-block-count = 1
 periodic-sync-round-period = "1second"
 download-max-parallel-blocks = 1
+download-max-parallel-deploys = 1
 download-max-retries = 1
 download-retry-initial-backoff-period = "1second"
 download-retry-backoff-factor = 1.0
@@ -54,7 +55,11 @@ block-upload-rate-period = "0s"
 block-upload-rate-max-throttled = 0
 main-threads=1
 ingress-threads=1
-db-threads=1
+db-write-threads=1
+db-read-threads=1
+db-read-connections=1
+parallelism-cpu-multiplier = 1.0
+min-parallelism = 1
 
 [grpc]
 socket = "/tmp/test"
@@ -90,6 +95,7 @@ min-ttl = "1hour"
 enabled = false
 omega-message-time-start = 1.0
 omega-message-time-end = 1.0
+omega-blocks-enabled = false
 init-round-exponent = 0
 
 [blockstorage]

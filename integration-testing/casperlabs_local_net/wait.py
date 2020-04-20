@@ -41,10 +41,19 @@ class LogsContainOneOf:
 
     def __str__(self) -> str:
         args = ", ".join(repr(a) for a in (self.node.name, str(self.messages)))
-        return "<{}({})>".format(self.__class__.__name__, args)
+        return "<{}>".format(self.__class__.__name__)
 
     def is_satisfied(self) -> bool:
         return any(m in self.node.logs() for m in self.messages)
+
+
+LISTENING_FOR_TRAFFIC = "Listening for traffic on peer=casperlabs://"
+FAILED_TO_BIND = "java.io.IOException: Failed to bind"
+
+
+class NodeStartedOrFailedToBind(LogsContainOneOf):
+    def __init__(self, node: DockerNode):
+        super().__init__(node, [LISTENING_FOR_TRAFFIC, FAILED_TO_BIND])
 
 
 class NodeStarted(LogsContainMessage):
@@ -192,11 +201,11 @@ class NodeDidNotGossip:
     def is_satisfied(self) -> bool:
         _, data = self.node.get_metrics()
         relay_accepted_total = re.compile(
-            r"^casperlabs_comm_gossiping_Relaying_relay_accepted_total (\d+).0\s*$",
+            r"^casperlabs_comm_gossiping_blocks_Relaying_relay_accepted_total (\d+).0\s*$",
             re.MULTILINE | re.DOTALL,
         )
         relay_rejected_total = re.compile(
-            r"^casperlabs_comm_gossiping_Relaying_relay_rejected_total (\d+).0\s*$",
+            r"^casperlabs_comm_gossiping_blocks_Relaying_relay_rejected_total (\d+).0\s*$",
             re.MULTILINE | re.DOTALL,
         )
         accepted_blocks = relay_accepted_total.search(data)
@@ -411,16 +420,6 @@ def wait_for_new_fork_choice_tip_block(
     wait_on_using_wall_clock_time(predicate, timeout_seconds)
 
 
-def wait_for_finished_adding_block(node: DockerNode, block: str, timeout_seconds: int):
-    predicate = FinishedAddingBlock(node, block)
-    wait_on_using_wall_clock_time(predicate, timeout_seconds)
-
-
-def wait_for_added_block(node: DockerNode, block: str, timeout_seconds: int):
-    predicate = AddedBlock(node, block)
-    wait_on_using_wall_clock_time(predicate, timeout_seconds)
-
-
 def wait_for_genesis_block(node: DockerNode, timeout_seconds: int = 60):
     predicate = BlocksCountAtLeast(node, 1, 1)
     wait_using_wall_clock_time_or_fail(predicate, timeout_seconds)
@@ -445,6 +444,11 @@ def wait_for_block_hashes_propagated_to_all_nodes(
 def wait_for_node_started(node: DockerNode, startup_timeout: int, times: int = 1):
     predicate = NodeStarted(node, times)
     wait_on_using_wall_clock_time(predicate, startup_timeout)
+
+
+def node_started_and_not_failed_to_bind(node: DockerNode, startup_timeout: int = 60):
+    wait_on_using_wall_clock_time(NodeStartedOrFailedToBind(node), startup_timeout)
+    return FAILED_TO_BIND not in node.logs()
 
 
 def wait_for_approved_block_received_handler_state(

@@ -21,8 +21,8 @@ import scala.util.Random
 @silent("deprecated")
 class ManyValidatorsTest extends FlatSpec with Matchers with BlockGenerator with StorageFixture {
 
-  "Show blocks" should "be processed quickly for a node with 300 validators" in withCombinedStorageIndexed {
-    implicit storage => indexedDagStorage =>
+  "Show blocks" should "be processed quickly for a node with 300 validators" in withCombinedStorage() {
+    implicit storage =>
       val bonds = Seq
         .fill(300)(
           ByteString.copyFromUtf8(Random.nextString(20)).substring(0, 32)
@@ -34,11 +34,11 @@ class ManyValidatorsTest extends FlatSpec with Matchers with BlockGenerator with
                     MonadThrowable[Task],
                     Time[Task],
                     storage,
-                    indexedDagStorage
+                    storage
                   )
         _ <- createAndStoreMessage[Task](Seq(genesis.blockHash), v1, bonds, bonds.map {
               case Bond(validator, _) => validator -> genesis.blockHash
-            }.toMap)(MonadThrowable[Task], Time[Task], storage, indexedDagStorage)
+            }.toMap)(MonadThrowable[Task], Time[Task], storage, storage)
         dag                 <- storage.getRepresentation
         latestMessageHashes <- dag.latestMessageHashes
         equivocators        <- dag.getEquivocators

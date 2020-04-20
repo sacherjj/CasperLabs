@@ -30,6 +30,7 @@ package object votingmatrix {
   def updateVoterPerspective[F[_]: Monad](
       dag: DagRepresentation[F],
       msg: Message,
+      messagePanorama: Map[Validator, Message],
       lfbChild: BlockHash,
       isHighway: Boolean
   )(implicit matrix: VotingMatrix[F]): F[Unit] =
@@ -42,7 +43,7 @@ package object votingmatrix {
             ().pure[F]
           } else {
             for {
-              _ <- updateVotingMatrixOnNewBlock[F](dag, msg, isHighway)
+              _ <- updateVotingMatrixOnNewBlock[F](dag, msg, messagePanorama, isHighway)
               _ <- updateFirstZeroLevelVote[F](voter, lfbChild, msg.mainRank)
             } yield ()
           }
@@ -101,12 +102,13 @@ package object votingmatrix {
   private[votingmatrix] def updateVotingMatrixOnNewBlock[F[_]: Monad](
       dag: DagRepresentation[F],
       msg: Message,
+      messagePanorama: Map[Validator, Message],
       isHighway: Boolean
   )(implicit matrix: VotingMatrix[F]): F[Unit] =
     for {
       validatorToIndex <- (matrix >> 'validatorToIdx).get
       panoramaM <- FinalityDetectorUtil
-                    .panoramaM[F](dag, validatorToIndex, msg, isHighway)
+                    .panoramaM[F](dag, validatorToIndex, msg, messagePanorama, isHighway)
       // Replace row i in voting-matrix by panoramaM
       _ <- (matrix >> 'votingMatrix).modify(
             _.updated(validatorToIndex(msg.validatorId), panoramaM)

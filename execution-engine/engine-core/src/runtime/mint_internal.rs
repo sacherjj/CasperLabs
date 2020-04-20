@@ -33,10 +33,8 @@ where
 {
     fn new_uref<T: CLTyped + ToBytes>(&mut self, init: T) -> URef {
         let cl_value: CLValue = CLValue::from_t(init).expect("should convert value");
-        match self.new_uref(StoredValue::CLValue(cl_value)) {
-            Ok(Key::URef(uref)) => uref,
-            _ => unimplemented!(),
-        }
+        self.new_uref(StoredValue::CLValue(cl_value))
+            .expect("should create new uref")
     }
 
     fn write_local<K: ToBytes, V: CLTyped + ToBytes>(&mut self, key: K, value: V) {

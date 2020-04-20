@@ -1,10 +1,12 @@
 package io.casperlabs.comm.gossiping
 
-import io.casperlabs.casper.consensus.{Block, BlockSummary, GenesisCandidate}
+import io.casperlabs.casper.consensus.{Block, BlockSummary, DeploySummary, GenesisCandidate}
 import monix.tail.Iterant
 
 /** Intra-node gossiping based on the gRPC service definition in gossiping.proto. */
 trait GossipService[F[_]] {
+  def newDeploys(request: NewDeploysRequest): F[NewDeploysResponse]
+
   def newBlocks(request: NewBlocksRequest): F[NewBlocksResponse]
 
   def streamAncestorBlockSummaries(
@@ -18,6 +20,10 @@ trait GossipService[F[_]] {
   def streamBlockSummaries(
       request: StreamBlockSummariesRequest
   ): Iterant[F, BlockSummary]
+
+  def streamDeploySummaries(
+      request: StreamDeploySummariesRequest
+  ): Iterant[F, DeploySummary]
 
   /** Get a full block in chunks, optionally compressed, so that it can be transferred over the wire. */
   def getBlockChunked(request: GetBlockChunkedRequest): Iterant[F, Chunk]

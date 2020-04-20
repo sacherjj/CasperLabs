@@ -162,3 +162,27 @@ pub fn log_metric(
 
     logger.log(&record);
 }
+
+/// Logs the metrics associated with the specified host function.
+pub fn log_host_function_metrics(host_function: &str, mut properties: BTreeMap<&str, String>) {
+    let logger = log::logger();
+
+    let metadata = Metadata::builder()
+        .target(METRIC_METADATA_TARGET)
+        .level(Level::Info)
+        .build();
+
+    if !logger.enabled(&metadata) {
+        return;
+    }
+
+    let default_message = format!("{} {:?}", host_function, properties);
+    properties.insert(DEFAULT_MESSAGE_KEY, default_message);
+
+    let record = Record::builder()
+        .metadata(metadata)
+        .key_values(&properties)
+        .build();
+
+    logger.log(&record);
+}

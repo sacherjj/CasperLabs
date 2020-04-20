@@ -301,7 +301,7 @@ where
         Ok(hash_bytes)
     }
 
-    pub fn new_uref(&mut self, value: StoredValue) -> Result<Key, Error> {
+    pub fn new_uref(&mut self, value: StoredValue) -> Result<URef, Error> {
         let uref = {
             let addr = self.address_generator.borrow_mut().create_address();
             URef::new(addr, AccessRights::READ_ADD_WRITE)
@@ -309,17 +309,13 @@ where
         let key = Key::URef(uref);
         self.insert_uref(uref);
         self.write_gs(key, value)?;
-        Ok(key)
+        Ok(uref)
     }
 
     /// Creates a new URef where the value it stores is CLType::Unit.
     pub fn new_unit_uref(&mut self) -> Result<URef, Error> {
         let cl_unit = CLValue::from_components(CLType::Unit, Vec::new());
-        let uref = self
-            .new_uref(StoredValue::CLValue(cl_unit))?
-            .into_uref()
-            .expect("new_uref must always produce a Key::URef");
-        Ok(uref)
+        self.new_uref(StoredValue::CLValue(cl_unit))
     }
 
     /// Puts `key` to the map of named keys of current context.
@@ -441,12 +437,7 @@ where
 
     pub fn store_function(&mut self, contract: StoredValue) -> Result<[u8; 32], Error> {
         self.validate_value(&contract)?;
-        if let Key::URef(contract_ref) = self.new_uref(contract)? {
-            Ok(contract_ref.addr())
-        } else {
-            // TODO: make new_uref return only a URef
-            panic!("new_uref should never return anything other than a Key::URef")
-        }
+        self.new_uref(contract).map(|uref| uref.addr())
     }
 
     pub fn store_function_at_hash(&mut self, contract: StoredValue) -> Result<[u8; 32], Error> {

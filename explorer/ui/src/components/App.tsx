@@ -35,6 +35,8 @@ import { DeployContractsForm } from './DeployContracts';
 import { DeployContractsContainer } from '../containers/DeployContractsContainer';
 import { useEffect } from 'react';
 import ReactGA from 'react-ga';
+import Validators from './Validators';
+import ValidatorsContainer from '../containers/ValidatorsContainer';
 
 // https://medium.com/@pshrmn/a-simple-react-router-v4-tutorial-7f23ff27adf
 
@@ -96,12 +98,12 @@ const SideMenuItems: (MenuItem | GroupedMenuItem)[] = [
   new MenuItem(Pages.Home, 'Home', 'home', true),
   new MenuItem(Pages.Accounts, 'Account Keys', 'address-book'),
   new MenuItem(Pages.Faucet, 'Faucet', 'coins'),
-  // TODO (ECO-313) Open it when we have implement the plugin()
-  // new MenuItem(Pages.DeployContracts, 'Deploy Contract', 'rocket'),
+  new MenuItem(Pages.DeployContracts, 'Deploy Contract', 'rocket'),
   new MenuItem(Pages.Explorer, 'Explorer', 'project-diagram'),
   new MenuItem(Pages.Blocks, 'Blocks', 'th-large'),
   new MenuItem(Pages.Deploys, 'Deploys', 'tasks'),
   new MenuItem(Pages.Search, 'Search', 'search'),
+  new MenuItem(Pages.Validators, 'Validators', 'users'),
   new MenuItem(Pages.ConnectedPeers, 'Connected Peers', 'network-wired'),
   new GroupedMenuItem('clarityContracts', 'Contracts', 'file-contract', [
     new MenuItem(Pages.Vesting, 'Vesting')
@@ -114,6 +116,7 @@ export interface AppProps {
   faucet: FaucetContainer;
   vesting: VestingContainer;
   dag: DagContainer;
+  validatorsContainer: ValidatorsContainer;
   block: BlockContainer;
   deploy: DeployContainer;
   deployInfoList: DeployInfoListContainer;
@@ -390,6 +393,10 @@ const Content = (props: AppProps) => {
             <Route path={Pages.Search}>
               <Title title="Search" />
               <Search {...props} />
+            </Route>
+            <Route path={Pages.Validators}>
+              <Title title="Validators"/>
+              <Validators validatorsContainer={props.validatorsContainer}/>
             </Route>
             <Route path={Pages.ConnectedPeers}>
               <Title title="Connected Peers" />

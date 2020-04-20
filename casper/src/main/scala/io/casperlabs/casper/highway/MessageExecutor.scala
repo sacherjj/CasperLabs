@@ -4,9 +4,8 @@ import cats.implicits._
 import cats.effect.{Concurrent, Sync}
 import cats.mtl.FunctorRaise
 import cats.effect.concurrent.Semaphore
-import io.casperlabs.casper.api.BlockAPI
+import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.consensus.Block
-import io.casperlabs.casper.consensus.info.BlockInfo
 import io.casperlabs.casper.finality.MultiParentFinalizer
 import io.casperlabs.casper.validation.Validation
 import io.casperlabs.casper.validation.Validation.BlockEffects
@@ -15,9 +14,7 @@ import io.casperlabs.casper.util.CasperLabsProtocol
 import io.casperlabs.casper._
 import io.casperlabs.casper.util.execengine.ExecEngineUtil
 import io.casperlabs.catscontrib.Fs2Compiler
-import io.casperlabs.catscontrib.{Fs2Compiler, MonadThrowable}
 import io.casperlabs.catscontrib.effect.implicits.fiberSyntax
-import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.Keys.PublicKeyBS
 import io.casperlabs.ipc
 import io.casperlabs.mempool.DeployBuffer
@@ -27,7 +24,6 @@ import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.Metrics.Source
 import io.casperlabs.metrics.implicits._
 import io.casperlabs.shared.{FatalError, Log, Time}
-import io.casperlabs.storage.BlockHash
 import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.storage.deploy.{DeployStorage, DeployStorageWriter}
 import io.casperlabs.storage.dag.{DagStorage, FinalityStorage}
@@ -93,48 +89,67 @@ class MessageExecutor[F[_]: Concurrent: Log: Time: Metrics: BlockStorage: DagSto
     */
   def effectsAfterAdded(message: ValidatedMessage): F[F[Unit]] =
     for {
-      _ <- markDeploysAsProcessed(message).timer("markDeploysAsProcessed")
+      _ <- markDeploysAsProcessed(message)
+            .timer("markDeploysAsProcessed")
+            .whenA(message.isBlock)
+      _ <- MultiParentFinalizer[F].addMessage(message)
       // Forking event emissions so as not to hold up block processing.
       w1 <- BlockEventEmitter[F].blockAdded(message.messageHash).timer("emitBlockAdded").forkAndLog
-      w2 <- updateLastFinalizedBlock(message).timer("updateLastFinalizedBlock")
-    } yield w1 *> w2
+    } yield w1
 
-  private def updateLastFinalizedBlock(message: Message): F[F[Unit]] =
-    for {
-      results <- MultiParentFinalizer[F].onNewMessageAdded(message)
-      w <- results.toList
-            .traverse {
-              case MultiParentFinalizer.FinalizedBlocks(newLFB, _, finalized, orphaned) => {
-                val lfbStr = newLFB.show
-                val finalizedStr = finalized
-                  .filter(_.isBlock)
-                  .map(_.messageHash)
-                  .map(PrettyPrinter.buildString)
-                  .mkString("{", ", ", "}")
-                for {
-                  _ <- Log[F].info(
-                        s"New last finalized block hashes are ${lfbStr -> null}, ${finalizedStr -> null}. Orphaned ${orphaned.size} messages."
-                      )
-                  finalizedBlockHashes = finalized.filter(_.isBlock).map(_.messageHash)
-                  _ <- DeployBuffer[F]
-                        .removeFinalizedDeploys(finalizedBlockHashes + newLFB)
-                  // Ballots cannot be really finalized but we mark them as such in the DAG
-                  // to improve the performance of the finalizer (that has to follow all justifications).
-                  // Send out notification about blocks ONLY.
-                  orphanedBlockHashes = orphaned.filter(_.isBlock).map(_.messageHash)
-                  _ <- BlockEventEmitter[F]
-                        .newLastFinalizedBlock(
-                          newLFB,
-                          finalizedBlockHashes,
-                          orphanedBlockHashes
+  def checkFinality(): F[F[Unit]] =
+    Metrics[F].timer("checkFinality") {
+      for {
+        results <- MultiParentFinalizer[F].checkFinality()
+        h <- results.toList
+              .traverse {
+                case MultiParentFinalizer.FinalizedBlocks(newLFB, _, finalized, orphaned) => {
+                  val lfbStr = newLFB.show
+                  val finalizedStr = finalized
+                    .filter(_.isBlock)
+                    .map(_.messageHash)
+                    .map(PrettyPrinter.buildString)
+                    .mkString("{", ", ", "}")
+
+                  val orphanedBlockHashes  = orphaned.filter(_.isBlock).map(_.messageHash)
+                  val finalizedBlockHashes = finalized.filter(_.isBlock).map(_.messageHash)
+
+                  for {
+                    _ <- Log[F].info(
+                          s"New last finalized block hashes are ${lfbStr -> null}, ${finalizedStr -> null}. Orphaned ${orphaned.size} messages."
                         )
-                        .timer("emitNewLFB")
-                } yield ()
+                    _ <- DeployBuffer[F]
+                          .removeFinalizedDeploys(finalizedBlockHashes + newLFB)
+                    // Ballots cannot be really finalized but we mark them as such in the DAG
+                    // to improve the performance of the finalizer (that has to follow all justifications).
+                    // Send out notification about blocks ONLY.
+                    _ <- BlockEventEmitter[F]
+                          .newLastFinalizedBlock(
+                            newLFB,
+                            finalizedBlockHashes,
+                            orphanedBlockHashes
+                          )
+                          .timer("emitNewLFB")
+                    // Return all orphaned blocks to check for deploys we need to put back to pending.
+                    // These blocks can be made by others, but if this node has the same deploy in its
+                    // buffer it might re-propose it before the others, which is what users would want.
+                  } yield orphanedBlockHashes
+                }
               }
-            }
-            .void
-            .forkAndLog
-    } yield w
+              .map(_.flatten.toSet)
+              .flatMap(requeueOrphanedDeploys)
+              .forkAndLog
+      } yield h
+    }
+
+  private def requeueOrphanedDeploys(orphanedBlockHashes: Set[BlockHash]): F[Unit] = {
+    val effect = for {
+      requeued <- DeployBuffer[F].requeueOrphanedDeploysInBlocks(orphanedBlockHashes)
+      _        <- Log[F].info(s"Re-queued ${requeued.size} orphaned deploys.").whenA(requeued.nonEmpty)
+    } yield ()
+
+    effect.timer("requeueOrphanedDeploys").whenA(orphanedBlockHashes.nonEmpty)
+  }
 
   private def markDeploysAsProcessed(message: Message): F[Unit] =
     for {

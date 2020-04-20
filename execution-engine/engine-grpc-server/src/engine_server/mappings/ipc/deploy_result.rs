@@ -62,30 +62,9 @@ impl From<(ExecutionError, ExecutionEffect, Gas)> for DeployResult {
                 detail::execution_error(format!("Key {:?} not found.", key), effect, cost)
             }
             ExecutionError::Revert(status) => {
-                detail::execution_error(format!("Exit code: {}", status), effect, cost)
+                detail::execution_error(status.to_string(), effect, cost)
             }
-            ExecutionError::Interpreter(error) => {
-                // If the error happens during contract execution it's mapped to HostError and
-                // wrapped in Interpreter error, so we may end up with
-                // InterpreterError(HostError(InterpreterError))).  In order to provide clear error
-                // messages we have to downcast and match on the inner error, otherwise we end up
-                // with `Host(Trap(Trap(TrapKind:InterpreterError)))`.
-                // TODO: This really should be happening in the `Executor::exec`.
-                let msg = match error
-                    .as_host_error()
-                    .and_then(|host_error| host_error.downcast_ref::<ExecutionError>())
-                {
-                    Some(&ExecutionError::Revert(status)) => format!("Exit code: {}", status),
-                    Some(&ExecutionError::KeyNotFound(key)) => format!("Key {:?} not found.", key),
-                    Some(&ExecutionError::InvalidContext) => {
-                        // TODO: https://casperlabs.atlassian.net/browse/EE-771
-                        "Invalid execution context.".to_string()
-                    }
-                    Some(other) => format!("{:?}", other),
-                    None => format!("{:?}", error),
-                };
-                detail::execution_error(msg, effect, cost)
-            }
+            ExecutionError::Interpreter(error) => detail::execution_error(error, effect, cost),
             // TODO(mateusz.gorski): Be more specific about execution errors
             other => detail::execution_error(format!("{:?}", other), effect, cost),
         }
@@ -164,7 +143,7 @@ mod tests {
     use std::convert::TryInto;
 
     use engine_shared::{additive_map::AdditiveMap, transform::Transform};
-    use types::{bytesrepr::Error as BytesReprError, AccessRights, Key, URef, U512};
+    use types::{bytesrepr::Error as BytesReprError, AccessRights, ApiError, Key, URef, U512};
 
     use super::*;
 
@@ -244,8 +223,8 @@ mod tests {
 
     #[test]
     fn revert_error_maps_to_execution_error() {
-        const REVERT: u32 = 10;
-        let revert_error = ExecutionError::Revert(REVERT);
+        let expected_revert = ApiError::UnexpectedContractRefVariant;
+        let revert_error = ExecutionError::Revert(expected_revert);
         let amount = U512::from(15);
         let exec_result = ExecutionResult::Failure {
             error: EngineStateError::Exec(revert_error),
@@ -268,7 +247,7 @@ mod tests {
                 .get_error()
                 .get_exec_error()
                 .get_message(),
-            format!("Exit code: {}", REVERT)
+            expected_revert.to_string(),
         );
     }
 }

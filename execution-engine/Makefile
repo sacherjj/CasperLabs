@@ -5,6 +5,8 @@ NPM    = $(or $(shell which npm),    /usr/bin/npm)
 
 RUST_TOOLCHAIN := $(shell cat rust-toolchain)
 
+CARGO := $(CARGO) $(CARGO_OPTS)
+
 EE_DIR     = $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
 IT_RES_DIR = $(realpath $(EE_DIR)/../integration-testing/resources)
 
@@ -259,6 +261,10 @@ setup-rs: rust-toolchain
 	$(RUSTUP) update
 	$(RUSTUP) toolchain install $(RUST_TOOLCHAIN)
 	$(RUSTUP) target add --toolchain $(RUST_TOOLCHAIN) wasm32-unknown-unknown
+
+.PHONY: setup-nightly-rs
+setup-nightly-rs: RUST_TOOLCHAIN := nightly
+setup-nightly-rs: setup-rs
 
 .PHONY: setup-as
 setup-as: contract-as/package.json
