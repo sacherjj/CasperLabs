@@ -12,6 +12,7 @@ import com.google.protobuf.ByteString
 import eu.timepit.refined.auto._
 import fs2.interop.reactivestreams._
 import io.casperlabs.casper._
+import io.casperlabs.casper.api.BlockAPI
 import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.consensus.info.DeployInfo
 import io.casperlabs.casper.util.CasperLabsProtocol
@@ -20,15 +21,18 @@ import io.casperlabs.comm.ServiceError.{InvalidArgument, Unavailable}
 import io.casperlabs.comm.discovery.NodeUtils._
 import io.casperlabs.comm.discovery.{Node, NodeDiscovery}
 import io.casperlabs.comm.gossiping._
+import io.casperlabs.comm.gossiping.relaying._
 import io.casperlabs.comm.gossiping.downloadmanager._
 import io.casperlabs.comm.gossiping.synchronization._
 import io.casperlabs.comm.grpc._
 import io.casperlabs.comm.{CachedConnections, NodeAsk}
 import io.casperlabs.crypto.Keys.PublicKey
 import io.casperlabs.crypto.codec.Base16
+import io.casperlabs.mempool.DeployBuffer
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.node.casper.consensus.Consensus
 import io.casperlabs.node.configuration.Configuration
+import io.casperlabs.shared.ByteStringPrettyPrinter._
 import io.casperlabs.shared.{Log, Time}
 import io.casperlabs.storage.block._
 import io.casperlabs.storage.dag._
@@ -50,7 +54,7 @@ package object gossiping {
   private implicit val metricsSource: Metrics.Source =
     Metrics.Source(Metrics.Source(Metrics.BaseSource, "node"), "gossiping")
 
-  def apply[F[_]: Parallel: ConcurrentEffect: Log: Metrics: Time: Timer: BlockStorage: DagStorage: DeployStorage: NodeDiscovery: NodeAsk: CasperLabsProtocol: Consensus](
+  def apply[F[_]: ContextShift: Parallel: ConcurrentEffect: Log: Metrics: Time: Timer: BlockStorage: DagStorage: DeployStorage: NodeDiscovery: NodeAsk: CasperLabsProtocol: Consensus: DeployBuffer](
       port: Int,
       conf: Configuration,
       maybeValidatorId: Option[ValidatorIdentity],
@@ -61,7 +65,7 @@ package object gossiping {
   )(
       implicit logId: Log[Id],
       metricsId: Metrics[Id]
-  ): Resource[F, Relaying[F]] = {
+  ): Resource[F, BlockRelaying[F]] = {
 
     val (cert, key) = conf.tls.readIntraNodeCertAndKey
 
@@ -96,7 +100,7 @@ package object gossiping {
         }
       }
 
-      relaying <- makeRelaying(conf, connectToGossip)
+      relaying <- makeRelaying(conf, connectToGossip, egressScheduler)
 
       synchronizer <- makeSynchronizer(
                        conf,
@@ -105,20 +109,27 @@ package object gossiping {
 
       isInitialSyncDoneRef <- Resource.liftF(Ref.of[F, Boolean](false))
 
-      downloadManager <- makeDownloadManager(
-                          conf,
-                          connectToGossip,
-                          relaying,
-                          synchronizer,
-                          maybeValidatorId,
-                          isInitialSyncDoneRef
-                        )
+      deployDownloadManager <- makeDeployDownloadManager(
+                                conf,
+                                connectToGossip,
+                                egressScheduler
+                              )
+
+      blockDownloadManager <- makeBlockDownloadManager(
+                               conf,
+                               connectToGossip,
+                               relaying,
+                               synchronizer,
+                               maybeValidatorId,
+                               isInitialSyncDoneRef,
+                               egressScheduler
+                             )
 
       genesisApprover <- makeGenesisApprover(
                           conf,
                           maybeValidatorId,
                           connectToGossip,
-                          downloadManager,
+                          blockDownloadManager,
                           genesis
                         )
 
@@ -135,7 +146,7 @@ package object gossiping {
                                .ifM(
                                  makeInitialSynchronizer(
                                    conf,
-                                   downloadManager,
+                                   blockDownloadManager,
                                    synchronizer,
                                    connectToGossip,
                                    awaitApproval
@@ -155,7 +166,8 @@ package object gossiping {
       stashingSynchronizer <- Resource.liftF {
                                StashingSynchronizer.wrap(
                                  synchronizer,
-                                 awaitApproval >> awaitSynchronization
+                                 awaitApproval >> awaitSynchronization,
+                                 isInDag[F](_)
                                )
                              }
 
@@ -164,7 +176,9 @@ package object gossiping {
       gossipServiceServer <- makeGossipServiceServer(
                               conf,
                               stashingSynchronizer,
-                              downloadManager,
+                              connectToGossip,
+                              deployDownloadManager,
+                              blockDownloadManager,
                               genesisApprover
                             )
 
@@ -252,14 +266,16 @@ package object gossiping {
       } yield s.copy(connections = s.connections - peer)
     }
 
-  def makeRelaying[F[_]: Concurrent: Parallel: Log: Metrics: NodeDiscovery: NodeAsk](
+  def makeRelaying[F[_]: ContextShift: Concurrent: Parallel: Log: Metrics: NodeDiscovery: NodeAsk](
       conf: Configuration,
-      connectToGossip: GossipService.Connector[F]
-  ): Resource[F, Relaying[F]] =
+      connectToGossip: GossipService.Connector[F],
+      egressScheduler: Scheduler
+  ): Resource[F, BlockRelaying[F]] =
     Resource
-      .liftF(RelayingImpl.establishMetrics[F])
+      .liftF(BlockRelayingImpl.establishMetrics[F])
       .as(
-        RelayingImpl(
+        BlockRelayingImpl(
+          egressScheduler,
           NodeDiscovery[F],
           connectToGossip = connectToGossip,
           relayFactor = conf.server.relayFactor,
@@ -267,13 +283,55 @@ package object gossiping {
         )
       )
 
-  private def makeDownloadManager[F[_]: Concurrent: Log: Time: Timer: Metrics: DagStorage: Consensus](
+  private def makeDeployDownloadManager[F[_]: ContextShift: Concurrent: Log: Time: Timer: Metrics: DagStorage: Consensus: DeployStorage: DeployBuffer](
       conf: Configuration,
       connectToGossip: GossipService.Connector[F],
-      relaying: Relaying[F],
+      egressScheduler: Scheduler
+  ): Resource[F, DeployDownloadManager[F]] =
+    for {
+      _ <- Resource.liftF(DeployDownloadManagerImpl.establishMetrics[F])
+      downloadManager <- DeployDownloadManagerImpl[F](
+                          maxParallelDownloads = conf.server.downloadMaxParallelDeploys,
+                          connectToGossip = connectToGossip,
+                          backend = new DeployDownloadManagerImpl.Backend[F] {
+                            override def contains(deployHash: ByteString): F[Boolean] =
+                              DeployStorage[F].reader.contains(deployHash)
+
+                            // Empty because deploy validated during adding into the DeployBuffer anyway
+                            override def validate(deploy: Deploy): F[Unit] = ().pure[F]
+
+                            override def store(deploy: Deploy): F[Unit] = BlockAPI.deploy[F](deploy)
+
+                            override def onScheduled(summary: DeploySummary): F[Unit] = ().pure[F]
+
+                            override def onScheduled(
+                                summary: DeploySummary,
+                                source: Node
+                            ): F[Unit] = ().pure[F]
+
+                            override def onDownloaded(deployHash: ByteString): F[Unit] = ().pure[F]
+
+                            override def onFailed(deployHash: ByteString): F[Unit] = ().pure[F]
+                          },
+                          //TODO: Relaying, NODE-1178
+                          relaying = (_: List[DeployHash]) => ???,
+                          retriesConf = DeployDownloadManagerImpl.RetriesConf(
+                            maxRetries = conf.server.downloadMaxRetries,
+                            initialBackoffPeriod = conf.server.downloadRetryInitialBackoffPeriod,
+                            backoffFactor = conf.server.downloadRetryBackoffFactor
+                          ),
+                          egressScheduler
+                        )
+    } yield downloadManager
+
+  private def makeBlockDownloadManager[F[_]: ContextShift: Concurrent: Log: Time: Timer: Metrics: DagStorage: Consensus](
+      conf: Configuration,
+      connectToGossip: GossipService.Connector[F],
+      relaying: BlockRelaying[F],
       synchronizer: Synchronizer[F],
       maybeValidatorId: Option[ValidatorIdentity],
-      isInitialSyncDoneRef: Ref[F, Boolean]
+      isInitialSyncDoneRef: Ref[F, Boolean],
+      egressScheduler: Scheduler
   ): Resource[F, BlockDownloadManager[F]] =
     for {
       _ <- Resource.liftF(BlockDownloadManagerImpl.establishMetrics[F])
@@ -296,7 +354,7 @@ package object gossiping {
                                   .fold(().pure[F]) { _ =>
                                     Log[F]
                                       .warn(
-                                        s"${PrettyPrinter.buildString(block) -> "block" -> null} seems to be created by a doppelganger using the same validator key!"
+                                        s"${block -> "message" -> null} seems to be created by a doppelganger using the same validator key!"
                                       )
                                   }
                               } *>
@@ -325,7 +383,8 @@ package object gossiping {
                             maxRetries = conf.server.downloadMaxRetries,
                             initialBackoffPeriod = conf.server.downloadRetryInitialBackoffPeriod,
                             backoffFactor = conf.server.downloadRetryBackoffFactor
-                          )
+                          ),
+                          egressScheduler = egressScheduler
                         )
     } yield downloadManager
 
@@ -355,7 +414,7 @@ package object gossiping {
             for {
               // Validate it to make sure that code path is exercised.
               _ <- Log[F].info(
-                    s"Trying to validate and run the Genesis ${show(genesis.blockHash) -> "candidate"}"
+                    s"Trying to validate and run the Genesis ${genesis.blockHash.show -> "candidate"}"
                   )
               _ <- Consensus[F].validateAndAddBlock(genesis)
             } yield ()
@@ -388,11 +447,11 @@ package object gossiping {
             block: Block
         ): F[Either[Throwable, Option[Approval]]] =
           if (block.blockHash == genesis.blockHash) {
-            maybeApproveBlock(block).asRight.pure[F]
+            maybeApproveBlock(block).asRight[Throwable].pure[F]
           } else {
             InvalidArgument(
-              s"${show(block.blockHash) -> "candidate"} did not equal the expected Genesis ${show(genesis.blockHash) -> "genesis"}"
-            ).asLeft.pure[F].widen
+              s"${block.blockHash.show -> "candidate"} did not equal the expected Genesis ${genesis.blockHash.show -> "genesis"}"
+            ).asLeft[Option[Approval]].pure[F].widen
           }
 
         override def canTransition(
@@ -438,9 +497,6 @@ package object gossiping {
                  )
     } yield approver
 
-  private def show(hash: ByteString) =
-    PrettyPrinter.buildString(hash)
-
   def makeSynchronizer[F[_]: Concurrent: Parallel: Log: Metrics: DagStorage: Consensus: CasperLabsProtocol](
       conf: Configuration,
       connectToGossip: GossipService.Connector[F]
@@ -483,12 +539,23 @@ package object gossiping {
   def makeGossipServiceServer[F[_]: ConcurrentEffect: Parallel: Log: Metrics: BlockStorage: DagStorage: DeployStorage: Consensus](
       conf: Configuration,
       synchronizer: Synchronizer[F],
-      downloadManager: BlockDownloadManager[F],
+      connector: GossipService.Connector[F],
+      deployDownloadManager: DeployDownloadManager[F],
+      blockDownloadManager: BlockDownloadManager[F],
       genesisApprover: GenesisApprover[F]
   ): Resource[F, GossipServiceServer[F]] =
     for {
       backend <- Resource.pure[F, GossipServiceServer.Backend[F]] {
                   new GossipServiceServer.Backend[F] {
+
+                    override def getDeploySummary(
+                        deployHash: DeployHash
+                    ): F[Option[DeploySummary]] =
+                      DeployStorage[F].reader.getDeploySummary(deployHash)
+
+                    override def hasDeploy(deployHash: DeployHash): F[Boolean] =
+                      DeployStorage[F].reader.contains(deployHash)
+
                     override def hasBlock(blockHash: ByteString): F[Boolean] =
                       isInDag(blockHash)
 
@@ -543,7 +610,9 @@ package object gossiping {
                  GossipServiceServer[F](
                    backend,
                    synchronizer,
-                   downloadManager,
+                   connector,
+                   deployDownloadManager,
+                   blockDownloadManager,
                    genesisApprover,
                    maxChunkSize = conf.server.chunkSize,
                    maxParallelBlockDownloads = conf.server.relayMaxParallelBlocks
@@ -703,7 +772,7 @@ package object gossiping {
       services = List(
         (scheduler: Scheduler) =>
           Sync[F].delay {
-            val svc = GrpcGossipService.fromGossipService(
+            val svc = GrpcGossipService.fromGossipService[F](
               server,
               rateLimiter,
               chainId,

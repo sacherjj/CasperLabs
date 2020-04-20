@@ -66,7 +66,7 @@ fn should_raise_auth_failure_with_invalid_key() {
         "{:?}",
         deploy_result
     );
-    let message = format!("{}", deploy_result.error().unwrap());
+    let message = format!("{}", deploy_result.as_error().unwrap());
 
     assert_eq!(message, format!("{}", engine_state::Error::Authorization))
 }
@@ -109,7 +109,7 @@ fn should_raise_auth_failure_with_invalid_keys() {
         .expect("should have at least one deploy result");
 
     assert!(deploy_result.has_precondition_failure());
-    let message = format!("{}", deploy_result.error().unwrap());
+    let message = format!("{}", deploy_result.as_error().unwrap());
 
     assert_eq!(message, format!("{}", engine_state::Error::Authorization))
 }
@@ -197,7 +197,7 @@ fn should_raise_deploy_authorization_failure() {
             .expect("should have at least one deploy result");
 
         assert!(deploy_result.has_precondition_failure());
-        let message = format!("{}", deploy_result.error().unwrap());
+        let message = format!("{}", deploy_result.as_error().unwrap());
         assert!(message.contains(&format!(
             "{}",
             execution::Error::DeploymentAuthorizationFailure
@@ -244,7 +244,7 @@ fn should_raise_deploy_authorization_failure() {
             .expect("should have at least one deploy result");
 
         assert!(deploy_result.has_precondition_failure());
-        let message = format!("{}", deploy_result.error().unwrap());
+        let message = format!("{}", deploy_result.as_error().unwrap());
         assert!(message.contains(&format!(
             "{}",
             execution::Error::DeploymentAuthorizationFailure
@@ -387,7 +387,7 @@ fn should_not_authorize_deploy_with_duplicated_keys() {
         "{:?}",
         deploy_result
     );
-    let message = format!("{}", deploy_result.error().unwrap());
+    let message = format!("{}", deploy_result.as_error().unwrap());
     assert!(message.contains(&format!(
         "{}",
         execution::Error::DeploymentAuthorizationFailure

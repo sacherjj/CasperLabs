@@ -10,6 +10,7 @@ use engine_core::engine_state::{
     execution_result::ExecutionResult,
     genesis::{ExecConfig, GenesisAccount, GenesisConfig},
     run_genesis_request::RunGenesisRequest,
+    Error,
 };
 use engine_shared::{
     account::Account, additive_map::AdditiveMap, gas::Gas, stored_value::StoredValue,
@@ -148,13 +149,13 @@ pub fn get_success_result(response: &[Rc<ExecutionResult>]) -> &ExecutionResult 
     &*response.get(0).expect("should have a result")
 }
 
-pub fn get_precondition_failure(response: &[Rc<ExecutionResult>]) -> String {
+pub fn get_precondition_failure(response: &[Rc<ExecutionResult>]) -> &Error {
     let result = response.get(0).expect("should have a result");
     assert!(
         result.has_precondition_failure(),
         "should be a precondition failure"
     );
-    format!("{}", result.error().expect("should have an error"))
+    result.as_error().expect("should have an error")
 }
 
 pub fn get_error_message<T: AsRef<ExecutionResult>, I: IntoIterator<Item = T>>(

@@ -16,17 +16,28 @@ import Pages from './Pages';
 import { encodeBase16 } from 'casperlabs-sdk';
 import { BondedValidatorsTable } from './BondedValidatorsTable';
 import { ToggleButton } from './ToggleButton';
-import { BlockType, FinalityIcon } from './BlockDetails';
+import { BlockType, BlockRole, FinalityIcon } from './BlockDetails';
 
 /** Show the tips of the DAG. */
 @observer
 class _Explorer extends RefreshableComponent<Props, {}> {
   constructor(props: Props) {
     super(props);
-    let maxRank = parseInt(props.maxRank || '') || 0;
-    let depth = parseInt(props.depth || '') || 10;
+    this.refreshWithDepthAndMaxRank(props.maxRank, props.depth);
+  }
+
+  refreshWithDepthAndMaxRank(maxRankStr: string | null, depthStr: string | null) {
+    let maxRank = parseInt(maxRankStr || '') || 0;
+    let depth = parseInt(depthStr || '') || 10;
     this.props.dag.updateMaxRankAndDepth(maxRank, depth);
     this.props.dag.refreshBlockDagAndSetupSubscriber();
+  }
+
+  componentWillReceiveProps(nextProps: Props) {
+    if (this.props.depth === nextProps.depth && this.props.maxRank === nextProps.maxRank) {
+      return;
+    }
+    this.refreshWithDepthAndMaxRank(nextProps.maxRank, nextProps.depth);
   }
 
   async refresh() {
@@ -36,7 +47,7 @@ class _Explorer extends RefreshableComponent<Props, {}> {
   componentWillUnmount() {
     super.componentWillUnmount();
     // release websocket if necessary
-    this.props.dag.unsubscribe();
+    this.props.dag.toggleableSubscriber.unsubscribe();
   }
 
   render() {
@@ -53,8 +64,9 @@ class _Explorer extends RefreshableComponent<Props, {}> {
               }
               blocks={dag.blocks}
               refresh={() => this.refresh()}
-              subscribeToggleStore={dag.subscribeToggleStore}
+              subscribeToggleStore={dag.toggleableSubscriber.subscribeToggleStore}
               hideBallotsToggleStore={dag.hideBallotsToggleStore}
+              hideBlockHashToggleStore={dag.hideBlockHashToggleStore}
               footerMessage={
                 <ListInline>
                   <DagStepButtons
@@ -152,6 +164,36 @@ class BlockDetails extends React.Component<
         ['m-Rank', header.getMainRank()],
         ['Round ID', header.getRoundId()],
         ['Type', <BlockType header={header} />],
+        ['Role', <BlockRole header={header} />],
+        ['Timestamp', new Date(header.getTimestamp()).toISOString()],
+        ['Deploy Count', header.getDeployCount()],
+        ['Validator', shortHash(validatorId)],
+        ['Validator Block Number', header.getValidatorBlockSeqNum()],
+        [
+          'Validator Stake',
+          (() => {
+            let validatorBond = header
+              .getState()!
+              .getBondsList()
+              .find(
+                x =>
+                  encodeBase16(x.getValidatorPublicKey_asU8()) === validatorId
+              );
+            // Genesis doesn't have a validator.
+            return (
+              (validatorBond &&
+                validatorBond.getStake() &&
+                Number(
+                  validatorBond.getStake()!.getValue()
+                ).toLocaleString()) ||
+              null
+            );
+          })()
+        ],
+        [
+          'Finality',
+          <FinalityIcon block={block} />
+        ],
         [
           'Parents',
           <ul>
@@ -184,35 +226,6 @@ class BlockDetails extends React.Component<
               ))}
           </ul>
         ],
-        ['Timestamp', new Date(header.getTimestamp()).toISOString()],
-        ['Deploy Count', header.getDeployCount()],
-        ['Validator', shortHash(validatorId)],
-        ['Validator Block Number', header.getValidatorBlockSeqNum()],
-        [
-          'Validator Stake',
-          (() => {
-            let validatorBond = header
-              .getState()!
-              .getBondsList()
-              .find(
-                x =>
-                  encodeBase16(x.getValidatorPublicKey_asU8()) === validatorId
-              );
-            // Genesis doesn't have a validator.
-            return (
-              (validatorBond &&
-                validatorBond.getStake() &&
-                Number(
-                  validatorBond.getStake()!.getValue()
-                ).toLocaleString()) ||
-              null
-            );
-          })()
-        ],
-        [
-          'Finality',
-          <FinalityIcon block={block} />
-        ]
       ];
     return (
       <div

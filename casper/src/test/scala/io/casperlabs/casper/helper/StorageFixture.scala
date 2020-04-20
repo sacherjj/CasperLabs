@@ -7,17 +7,19 @@ import cats.implicits._
 import doobie.util.ExecutionContexts
 import doobie.util.transactor.Transactor
 import io.casperlabs.catscontrib.Fs2Compiler
-import io.casperlabs.catscontrib.TaskContrib.TaskOps
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.Metrics.MetricsNOP
 import io.casperlabs.shared.{Log, Time}
 import io.casperlabs.storage.SQLiteStorage
 import io.casperlabs.storage.block.BlockStorage
-import io.casperlabs.storage.dag.{FinalityStorage, IndexedDagStorage}
+import io.casperlabs.storage.dag.{AncestorsStorage, DagStorage, FinalityStorage}
 import io.casperlabs.storage.deploy.DeployStorage
 import java.sql.Connection
+
 import javax.sql.DataSource
 import java.util.Properties
+
+import io.casperlabs.storage.SQLiteStorage.CombinedStorage
 import monix.eval.Task
 import monix.execution.Scheduler
 import monix.execution.schedulers.SchedulerService
@@ -25,6 +27,7 @@ import org.flywaydb.core.Flyway
 import org.flywaydb.core.api.Location
 import org.scalatest.Suite
 import org.sqlite.{SQLiteConnection, SQLiteDataSource}
+
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration.FiniteDuration
 import scala.concurrent.duration._
@@ -33,24 +36,6 @@ trait StorageFixture { self: Suite =>
   val scheduler: SchedulerService     = Scheduler.fixedPool("storage-fixture-scheduler", 4)
   implicit val metrics: Metrics[Task] = new MetricsNOP[Task]()
   implicit val log: Log[Task]         = Log.NOPLog[Task]
-
-  def withStorage[R](
-      f: BlockStorage[Task] => IndexedDagStorage[Task] => DeployStorage[Task] => FinalityStorage[
-        Task
-      ] => Task[R]
-  ): R = {
-    val testProgram = StorageFixture.createMemoryStorages[Task](scheduler).use {
-      case (blockStorage, dagStorage, deployStorage, finalityStorage) =>
-        f(blockStorage)(dagStorage)(deployStorage)(finalityStorage).recover {
-          case ex: org.sqlite.SQLiteException
-              if ex.getMessage.contains("SQL error or missing database") && sys.env.contains(
-                "DRONE_BRANCH"
-              ) =>
-            cancel("NODE-1231")
-        }
-    }
-    testProgram.unsafeRunSync(scheduler)
-  }
 
   /** Create a number of in-memory storages and run a test against them. */
   def withCombinedStorages(
@@ -85,20 +70,18 @@ trait StorageFixture { self: Suite =>
   )(f: SQLiteStorage.CombinedStorage[Task] => Task[_]): Unit =
     withCombinedStorages(ec, timeout, numStorages = 1)(dbs => f(dbs.head))
 
-  def withCombinedStorageIndexed(
-      f: SQLiteStorage.CombinedStorage[Task] => IndexedDagStorage[Task] => Task[_]
-  ): Unit =
-    withCombinedStorage() { db =>
-      IndexedDagStorage.create[Task](db).flatMap { ids =>
-        f(db)(ids)
-      }
-    }
 }
 
 object StorageFixture {
 
   type Storages[F[_]] =
-    (BlockStorage[F], IndexedDagStorage[F], DeployStorage[F], FinalityStorage[F])
+    (
+        BlockStorage[F],
+        DagStorage[F],
+        DeployStorage[F],
+        FinalityStorage[F],
+        AncestorsStorage[F]
+    )
 
   // The HashSetCasperTests are not closing the connections properly, so we are better off
   // storing data in temporary files, rather than fill up the memory with unclosed databases.
@@ -141,13 +124,12 @@ object StorageFixture {
   private def createStorages[F[_]: Metrics: Concurrent: ContextShift: Fs2Compiler: Time](
       ds: DataSource,
       connectEC: ExecutionContext
-  ) =
+  ): F[Storages[F]] =
     for {
-      _                 <- initTables(ds)
-      xa                = createTransactor(ds, connectEC)
-      storage           <- SQLiteStorage.create[F](readXa = xa, writeXa = xa)
-      indexedDagStorage <- IndexedDagStorage.create[F](storage)
-    } yield (storage, indexedDagStorage, storage, storage)
+      _       <- initTables(ds)
+      xa      = createTransactor(ds, connectEC)
+      storage <- SQLiteStorage.create[F](readXa = xa, writeXa = xa)
+    } yield (storage, storage, storage, storage, storage)
 
   private def initTables[F[_]: Concurrent](ds: DataSource): F[Unit] =
     Concurrent[F].delay {

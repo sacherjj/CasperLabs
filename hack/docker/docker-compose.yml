@@ -64,7 +64,7 @@ services:
       - ${PWD}/grpcwebproxy/key.pem:/etc/tls/key.pem
     command:
       - /grpcwebproxy
-      - --backend_addr=node-0:40401
+      - --backend_addr=${CL_EXPLORER_BACKEND_HOST}:40401
       - --backend_tls=false
       - --backend_tls_noverify
       - --backend_max_call_recv_msg_size=16777216

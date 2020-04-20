@@ -1,4 +1,4 @@
-package io.casperlabs.casper.dag
+package io.casperlabs.models
 
 import cats.Functor
 

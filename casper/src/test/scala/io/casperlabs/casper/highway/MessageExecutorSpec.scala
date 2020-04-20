@@ -1,6 +1,7 @@
 package io.casperlabs.casper.highway
 
-import cats._
+import java.util.concurrent.atomic.AtomicReference
+
 import cats.implicits._
 import cats.effect.{Clock, Timer}
 import cats.effect.concurrent.{Ref, Semaphore}
@@ -29,6 +30,7 @@ import io.casperlabs.storage.deploy.DeployStorage
 import io.casperlabs.shared.Log
 import monix.eval.Task
 import org.scalatest._
+
 import scala.concurrent.duration._
 import io.casperlabs.storage.dag.DagRepresentation
 import io.casperlabs.storage.dag.FinalityStorage
@@ -96,9 +98,7 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
           signatureAlgorithm = Ed25519
         ),
         chainName = chainName,
-        upgrades = Seq.empty,
-        // Tests might be torn down before this step is done.
-        asyncRequeueOrphans = false
+        upgrades = Seq.empty
       )
     }
 
@@ -115,7 +115,8 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
                     roundId = conf.toTicks(conf.genesisEraStart),
                     mainParent = genesis,
                     justifications = Map.empty,
-                    isBookingBlock = false
+                    isBookingBlock = false,
+                    messageRole = Block.MessageRole.PROPOSAL
                   )
         _     <- forkchoice.set(message)
         block <- BlockStorage[Task].getBlockUnsafe(message.messageHash)
@@ -359,23 +360,18 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
     }
   }
 
-  it should "update the last finalized block" in executorFixture { implicit db =>
+  it should "update the finalizer state" in executorFixture { implicit db =>
     new ExecutorFixture(db) {
 
       val messageAddedRef = Ref.unsafe[Task, Option[Message]](none)
 
       override lazy val finalizer = new MultiParentFinalizer[Task] {
-        override def onNewMessageAdded(
-            message: Message
-        ) =
-          messageAddedRef
-            .set(Some(message))
-            .as(
-              Some(
-                MultiParentFinalizer
-                  .FinalizedBlocks(message.messageHash, BigInt(0), Set.empty, Set.empty)
-              )
-            )
+
+        override def addMessage(message: Message): Task[Unit] =
+          messageAddedRef.set(Some(message))
+
+        override def checkFinality(): Task[Seq[MultiParentFinalizer.FinalizedBlocks]] =
+          Task(Seq.empty)
       }
 
       override def test =
@@ -385,13 +381,7 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
           wait    <- messageExecutor.effectsAfterAdded(message)
           _       <- wait
           _       <- messageAddedRef.get shouldBeF Some(message)
-          _       <- FinalityStorage[Task].isFinalized(block.blockHash) shouldBeF true
-          events  <- eventEmitter.events
-        } yield {
-          forExactly(1, events) { event =>
-            event.value.isNewFinalizedBlock shouldBe true
-          }
-        }
+        } yield ()
     }
   }
 
@@ -413,6 +403,139 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
           forAll(statuses) { maybeStatus =>
             maybeStatus should not be empty
             maybeStatus.get.state shouldBe DeployInfo.State.PROCESSED
+          }
+        }
+    }
+  }
+
+  it should "requeue orphaned deploys in blocks" in executorFixture { implicit db =>
+    new ExecutorFixture(db) {
+      // Mock finalizer that marks anything as orphaned.
+      override lazy val finalizer = new MultiParentFinalizer[Task] {
+        private val messageRef = new AtomicReference[Message]()
+
+        override def addMessage(message: Message): Task[Unit] = Task(messageRef.set(message))
+
+        override def checkFinality(): Task[Seq[MultiParentFinalizer.FinalizedBlocks]] =
+          for {
+            _ <- FinalityStorage[Task].markAsFinalized(
+                  ByteString.EMPTY,
+                  Set.empty,
+                  Set(messageRef.get.messageHash)
+                )
+          } yield List(
+            MultiParentFinalizer
+              .FinalizedBlocks(
+                ByteString.EMPTY,
+                BigInt(0),
+                Set.empty,
+                indirectlyOrphaned = Set(messageRef.get)
+              )
+          )
+      }
+
+      def makeOrphan(own: Boolean) = {
+        val block = {
+          val randomBlock = sample(arbBlock.arbitrary.filter(_.getBody.deploys.size > 0))
+          if (!own)
+            randomBlock
+          else
+            randomBlock.withHeader(
+              randomBlock.getHeader.withValidatorPublicKey(validator)
+            )
+        }
+        val deploys = block.getBody.deploys.map(_.getDeploy).toList
+        val message = Message.fromBlock(block).get
+        for {
+          _    <- DeployStorage[Task].writer.addAsProcessed(deploys)
+          _    <- BlockStorage[Task].put(block, BlockEffects.empty.effects)
+          wait <- messageExecutor.effectsAfterAdded(message)
+          _    <- wait
+          _    <- messageExecutor.checkFinality().flatMap(identity)
+          statuses <- deploys.traverse { d =>
+                       DeployStorage[Task].reader.getBufferedStatus(d.deployHash)
+                     }
+        } yield statuses
+      }
+
+      override def test =
+        for {
+          ownStatuses   <- makeOrphan(own = true)
+          otherStatuses <- makeOrphan(own = false)
+        } yield {
+          forAll(ownStatuses) { maybeStatus =>
+            maybeStatus should not be empty
+            maybeStatus.get.state shouldBe DeployInfo.State.PENDING
+          }
+          // Requeue deploys processed by others if we have them in the buffer too,
+          // so that it's consistent across all nodes and all of them can re-propose.
+          forAll(otherStatuses) { maybeStatus =>
+            maybeStatus should not be empty
+            maybeStatus.get.state shouldBe DeployInfo.State.PENDING
+          }
+        }
+    }
+  }
+
+  it should "remove finalized deploys" in executorFixture { implicit db =>
+    new ExecutorFixture(db) {
+      @volatile var messagesMade = Set.empty[Message]
+
+      // Mock finalizer that marks anything as final.
+      override lazy val finalizer = new MultiParentFinalizer[Task] {
+        private val messageRef                                = new AtomicReference[Message]()
+        override def addMessage(message: Message): Task[Unit] = Task(messageRef.set(message))
+
+        override def checkFinality(): Task[Seq[MultiParentFinalizer.FinalizedBlocks]] =
+          for {
+            _ <- FinalityStorage[Task].markAsFinalized(
+                  messageRef.get.messageHash,
+                  (messagesMade - messageRef.get).map(_.messageHash),
+                  Set.empty
+                )
+          } yield List(
+            MultiParentFinalizer
+              .FinalizedBlocks(
+                messageRef.get.messageHash,
+                BigInt(0),
+                indirectlyFinalized = messagesMade - messageRef.get,
+                indirectlyOrphaned = Set.empty
+              )
+          )
+      }
+
+      def makeBlock(): Task[Message] = {
+        val block   = sample(arbBlock.arbitrary.filter(_.getBody.deploys.size > 0))
+        val deploys = block.getBody.deploys.map(_.getDeploy).toList
+        val message = Message.fromBlock(block).get
+        messagesMade = messagesMade + message
+        for {
+          _ <- DeployStorage[Task].writer.addAsProcessed(deploys)
+          _ <- BlockStorage[Task].put(block, BlockEffects.empty.effects)
+        } yield message
+      }
+
+      def getStatuses(message: Message) =
+        for {
+          block   <- BlockStorage[Task].getBlockUnsafe(message.messageHash)
+          deploys = block.getBody.deploys.map(_.getDeploy).toList
+          statuses <- deploys.traverse { d =>
+                       DeployStorage[Task].reader.getBufferedStatus(d.deployHash)
+                     }
+        } yield statuses
+
+      override def test =
+        for {
+          indirectMsg       <- makeBlock()
+          finalizedMsg      <- makeBlock()
+          wait              <- messageExecutor.effectsAfterAdded(finalizedMsg)
+          _                 <- wait
+          _                 <- messageExecutor.checkFinality().flatMap(identity)
+          indirectStatuses  <- getStatuses(indirectMsg)
+          finalizedStatuses <- getStatuses(finalizedMsg)
+        } yield {
+          forAll(indirectStatuses ++ finalizedStatuses) { maybeStatus =>
+            maybeStatus shouldBe empty
           }
         }
     }

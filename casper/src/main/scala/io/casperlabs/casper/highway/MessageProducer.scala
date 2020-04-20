@@ -35,6 +35,7 @@ import io.casperlabs.casper.dag.DagOperations
 import io.casperlabs.models.Message.{asMainRank, JRank, MainRank}
 import io.casperlabs.shared.Sorting._
 import scala.concurrent.duration._
+import io.casperlabs.casper.consensus.info.DeployInfo
 
 /** Produce a signed message, persisted message.
   * The producer should the thread safe, so that when it's
@@ -49,7 +50,8 @@ trait MessageProducer[F[_]] {
       roundId: Ticks,
       target: Message.Block,
       // For lambda responses we want to limit the justifications to just direct ones.
-      justifications: Map[PublicKeyBS, Set[Message]]
+      justifications: Map[PublicKeyBS, Set[Message]],
+      messageRole: Block.MessageRole
   ): F[Message.Ballot]
 
   /** Pick whatever secondary parents are compatible with the chosen main parent
@@ -62,8 +64,12 @@ trait MessageProducer[F[_]] {
       roundId: Ticks,
       mainParent: Message.Block,
       justifications: Map[PublicKeyBS, Set[Message]],
-      isBookingBlock: Boolean
+      isBookingBlock: Boolean,
+      messageRole: Block.MessageRole
   ): F[Message.Block]
+
+  /** Check if we can produce a block, when there's a choice between a ballot or a block. */
+  def hasPendingDeploys: F[Boolean]
 }
 
 object MessageProducer {
@@ -71,18 +77,21 @@ object MessageProducer {
       validatorIdentity: ValidatorIdentity,
       chainName: String,
       upgrades: Seq[ipc.ChainSpec.UpgradePoint],
-      onlyTakeOwnLatestFromJustifications: Boolean = false,
-      asyncRequeueOrphans: Boolean = true
+      onlyTakeOwnLatestFromJustifications: Boolean = false
   ): MessageProducer[F] =
     new MessageProducer[F] {
       override val validatorId =
         PublicKey(ByteString.copyFrom(validatorIdentity.publicKey))
 
+      override def hasPendingDeploys: F[Boolean] =
+        DeployStorage[F].reader.countByBufferedState(DeployInfo.State.PENDING).map(_ > 0)
+
       override def ballot(
           keyBlockHash: BlockHash,
           roundId: Ticks,
           target: Message.Block,
-          justifications: Map[PublicKeyBS, Set[Message]]
+          justifications: Map[PublicKeyBS, Set[Message]],
+          messageRole: Block.MessageRole
       ): F[Message.Ballot] =
         for {
           props     <- messageProps(keyBlockHash, List(target), justifications)
@@ -104,7 +113,8 @@ object MessageProducer {
             validatorIdentity.privateKey,
             validatorIdentity.signatureAlgorithm,
             keyBlockHash,
-            roundId
+            roundId,
+            messageRole
           )
 
           message <- MonadThrowable[F].fromTry(Message.fromBlock(signed))
@@ -118,13 +128,13 @@ object MessageProducer {
           roundId: Ticks,
           mainParent: Message.Block,
           justifications: Map[PublicKeyBS, Set[Message]],
-          isBookingBlock: Boolean
+          isBookingBlock: Boolean,
+          messageRole: Block.MessageRole
       ): F[Message.Block] =
         for {
           dag          <- DagStorage[F].getRepresentation
           merged       <- selectParents(dag, keyBlockHash, mainParent, justifications)
           parentHashes = merged.parents.map(_.blockHash).toSet
-          _            <- startRequeueingOrphanedDeploys(parentHashes)
           parentMessages <- MonadThrowable[F].fromTry {
                              merged.parents.toList.traverse(Message.fromBlock(_))
                            }
@@ -152,6 +162,7 @@ object MessageProducer {
                            props.protocolVersion,
                            props.mainRank,
                            props.configuration.deployConfig.maxBlockSizeBytes,
+                           props.configuration.deployConfig.maxBlockCost,
                            upgrades
                          )
 
@@ -176,7 +187,8 @@ object MessageProducer {
             validatorIdentity.signatureAlgorithm,
             keyBlockHash,
             roundId,
-            magicBit
+            magicBit,
+            messageRole
           )
 
           message <- MonadThrowable[F].fromTry(Message.fromBlock(signed))
@@ -184,17 +196,6 @@ object MessageProducer {
           _ <- BlockStorage[F].put(signed, transforms = checkpoint.stageEffects)
 
         } yield message.asInstanceOf[Message.Block]
-
-      // NOTE: Currently this will requeue deploys in the background, some will make it, some won't.
-      // This made sense with the AutoProposer, since a new block could be proposed any time;
-      // in Highway that's going to the next round, whenever that is.
-      private def startRequeueingOrphanedDeploys(parentHashes: Set[BlockHash]): F[Unit] = {
-        val requeue =
-          DeployBuffer[F].requeueOrphanedDeploys(parentHashes) >>= { requeued =>
-            Log[F].info(s"Re-queued ${requeued.size} orphaned deploys.").whenA(requeued.nonEmpty)
-          }
-        if (asyncRequeueOrphans) requeue.forkAndLog.void else requeue
-      }
 
       private def messageProps(
           keyBlockHash: BlockHash,

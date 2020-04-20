@@ -72,7 +72,7 @@ const VestingHashesManageForm = observer(
       >
         <Form>
           <TextField
-            id="id-import-vesting-hash-base64"
+            id="id-import-vesting-hash-base16"
             label="Hash of vesting contract (Base16)"
             fieldState={vestingContainer.importVestingForm!.hashBase16}
           />

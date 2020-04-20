@@ -326,13 +326,15 @@ class DockerNode(LoggingDockerBase):
             # Give the initial motes to the genesis account, so that tests which use
             # this way of creating accounts work. But the accounts could be just
             # created this way, without having to do a transfer.
-            f.write(f"{GENESIS_ACCOUNT.public_key},{self.cl_network.initial_motes},0\n")
+            f.write(
+                f"{GENESIS_ACCOUNT.public_key_hex},{self.cl_network.initial_motes},0\n"
+            )
             for i, pair in enumerate(
                 Account(i)
                 for i in range(FIRST_VALIDATOR_ACCOUNT, FIRST_VALIDATOR_ACCOUNT + N)
             ):
                 bond = bond_amount(i, N)
-                f.write(f"{pair.public_key},0,{bond}\n")
+                f.write(f"{pair.public_key_hex},0,{bond}\n")
 
     def cleanup(self):
         super().cleanup()

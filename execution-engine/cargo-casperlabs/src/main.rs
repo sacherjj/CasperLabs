@@ -150,9 +150,7 @@ fn main() {
     tests_package::add_rust_toolchain();
     tests_package::add_build_rs();
     tests_package::replace_main_rs();
-    if ARGS.use_system_contracts() {
-        tests_package::copy_wasm_files();
-    }
+    tests_package::copy_wasm_files();
 }
 
 #[cfg(test)]

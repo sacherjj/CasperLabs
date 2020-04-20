@@ -49,7 +49,7 @@ fn bootstrap(data_dir: &Path, accounts: &[PublicKey], amount: U512) -> LmdbWasmT
 
     let engine_config = EngineConfig::new()
         .with_use_system_contracts(cfg!(feature = "use-system-contracts"))
-        .with_highway(cfg!(feature = "highway"));
+        .with_enable_bonding(cfg!(feature = "enable-bonding"));
 
     let mut builder = LmdbWasmTestBuilder::new_with_config(data_dir, engine_config);
 

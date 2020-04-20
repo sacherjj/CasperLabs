@@ -79,7 +79,7 @@ fn should_run_successful_bond_and_unbond() {
     let mut builder = InMemoryWasmTestBuilder::from_result(result);
 
     let result = builder.exec(exec_request_1);
-    if cfg!(feature = "highway") && result.is_error() {
+    if !cfg!(feature = "enable-bonding") && result.is_error() {
         return;
     }
 
@@ -470,13 +470,11 @@ fn should_fail_bonding_with_insufficient_funds() {
 
     let error_message = utils::get_error_message(response);
 
-    if cfg!(feature = "highway") {
-        assert!(error_message.contains(&format!("Revert({})", u32::from(ApiError::Unhandled))));
+    if !cfg!(feature = "enable-bonding") {
+        assert!(error_message.contains(&format!("{:?}", ApiError::Unhandled)));
     } else {
         // pos::Error::BondTransferFailed => 8
-        assert!(
-            error_message.contains(&format!("Revert({})", u32::from(ApiError::ProofOfStake(8))))
-        );
+        assert!(error_message.contains(&format!("{:?}", ApiError::ProofOfStake(8))));
     }
 }
 
@@ -517,12 +515,10 @@ fn should_fail_unbonding_validator_without_bonding_first() {
 
     let error_message = utils::get_error_message(response);
 
-    if cfg!(feature = "highway") {
-        assert!(error_message.contains(&format!("Revert({})", u32::from(ApiError::Unhandled))));
+    if !cfg!(feature = "enable-bonding") {
+        assert!(error_message.contains(&format!("{:?}", ApiError::Unhandled)));
     } else {
         // pos::Error::NotBonded => 0
-        assert!(
-            error_message.contains(&format!("Revert({})", u32::from(ApiError::ProofOfStake(0))))
-        );
+        assert!(error_message.contains(&format!("{:?}", ApiError::ProofOfStake(0))));
     }
 }

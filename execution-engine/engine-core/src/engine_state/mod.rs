@@ -26,7 +26,6 @@ use contract::args_parser::ArgsParser;
 use engine_shared::{
     account::Account,
     additive_map::AdditiveMap,
-    contract::Contract,
     gas::Gas,
     motes::Motes,
     newtypes::{Blake2bHash, CorrelationId},
@@ -39,10 +38,10 @@ use engine_storage::{
     protocol_data::ProtocolData,
 };
 use engine_wasm_prep::{wasm_costs::WasmCosts, Preprocessor};
-use proof_of_stake::Stakes;
 use types::{
-    account::PublicKey, bytesrepr::ToBytes, system_contract_errors::mint, AccessRights, BlockTime,
-    Key, Phase, ProtocolVersion, URef, KEY_HASH_LENGTH, U512, UREF_ADDR_LENGTH,
+    account::PublicKey, bytesrepr::ToBytes, system_contract_errors::mint,
+    system_contract_type::PROOF_OF_STAKE, AccessRights, BlockTime, Key, Phase, ProtocolVersion,
+    URef, KEY_HASH_LENGTH, U512, UREF_ADDR_LENGTH,
 };
 
 pub use self::{
@@ -57,8 +56,7 @@ use crate::{
         execute_request::ExecuteRequest,
         execution_result::{ExecutionResult, ForcedTransferResult},
         genesis::{
-            ExecConfig, GenesisAccount, GenesisResult, PLACEHOLDER_KEY, POS_BONDING_PURSE,
-            POS_PAYMENT_PURSE, POS_REWARDS_PURSE,
+            ExecConfig, GenesisAccount, GenesisResult, POS_PAYMENT_PURSE, POS_REWARDS_PURSE,
         },
         query::{QueryRequest, QueryResult},
         system_contract_cache::SystemContractCache,
@@ -176,62 +174,36 @@ where
             Rc::new(RefCell::new(generator))
         };
 
-        // Closure used to store a contract with no named keys and which does nothing.  Used in
-        // place of the mint and standard payment contracts when these system contracts aren't
-        // required (i.e. "use-system-contracts" is false).
-        let store_do_nothing_contract = || -> Result<URef, Error> {
-            let uref = {
-                let addr = address_generator.borrow_mut().create_address();
-                URef::new(addr, AccessRights::READ_ADD_WRITE)
-            };
-            let contract = {
-                let do_nothing = {
-                    let do_nothing_bytes = wasm::do_nothing_bytes();
-                    preprocessor.preprocess(&do_nothing_bytes)?
-                };
-                let bytes = parity_wasm::serialize(do_nothing).expect("failed to serialize");
-                Contract::new(bytes, BTreeMap::default(), protocol_version)
-            };
-            let key = Key::URef(uref);
-            let value = StoredValue::Contract(contract);
-            tracking_copy.borrow_mut().write(key, value);
-            Ok(uref)
-        };
-
         // Spec #5: Execute the wasm code from the mint installer bytes
         let mint_reference: URef = {
-            if !self.config.use_system_contracts() {
-                store_do_nothing_contract()?
-            } else {
-                let mint_installer_bytes = ee_config.mint_installer_bytes();
-                let mint_installer_module = preprocessor.preprocess(mint_installer_bytes)?;
-                let args = Vec::new();
-                let mut named_keys = BTreeMap::new();
-                let authorization_keys: BTreeSet<PublicKey> = BTreeSet::new();
-                let install_deploy_hash = genesis_config_hash.into();
-                let address_generator = Rc::clone(&address_generator);
-                let tracking_copy = Rc::clone(&tracking_copy);
-                let system_contract_cache = SystemContractCache::clone(&self.system_contract_cache);
+            let mint_installer_bytes = ee_config.mint_installer_bytes();
+            let mint_installer_module = preprocessor.preprocess(mint_installer_bytes)?;
+            let args = Vec::new();
+            let mut named_keys = BTreeMap::new();
+            let authorization_keys: BTreeSet<PublicKey> = BTreeSet::new();
+            let install_deploy_hash = genesis_config_hash.into();
+            let address_generator = Rc::clone(&address_generator);
+            let tracking_copy = Rc::clone(&tracking_copy);
+            let system_contract_cache = SystemContractCache::clone(&self.system_contract_cache);
 
-                executor.exec_system(
-                    mint_installer_module,
-                    args,
-                    &mut named_keys,
-                    initial_base_key,
-                    &virtual_system_account,
-                    authorization_keys,
-                    blocktime,
-                    install_deploy_hash,
-                    gas_limit,
-                    address_generator,
-                    protocol_version,
-                    correlation_id,
-                    tracking_copy,
-                    phase,
-                    ProtocolData::default(),
-                    system_contract_cache,
-                )?
-            }
+            executor.exec_system(
+                mint_installer_module,
+                args,
+                &mut named_keys,
+                initial_base_key,
+                &virtual_system_account,
+                authorization_keys,
+                blocktime,
+                install_deploy_hash,
+                gas_limit,
+                address_generator,
+                protocol_version,
+                correlation_id,
+                tracking_copy,
+                phase,
+                ProtocolData::default(),
+                system_contract_cache,
+            )?
         };
 
         // Spec #7: Execute pos installer wasm code, passing the initially bonded validators as an
@@ -253,125 +225,37 @@ where
             // step
             let partial_protocol_data = ProtocolData::partial_with_mint(mint_reference);
 
-            if !self.config.use_system_contracts() {
-                let uref = {
-                    let addr = address_generator.borrow_mut().create_address();
-                    URef::new(addr, AccessRights::READ_ADD_WRITE)
-                };
-                let do_nothing = {
-                    let do_nothing_bytes = wasm::do_nothing_bytes();
-                    preprocessor.preprocess(&do_nothing_bytes)?
-                };
-                let args = Vec::default();
-                let mut dummy_named_keys = BTreeMap::default();
-                let dummy_authorization_keys: BTreeSet<PublicKey> = BTreeSet::new();
-                let (_instance, mut runtime) = executor.create_runtime(
-                    do_nothing.clone(),
-                    args,
-                    &mut dummy_named_keys,
-                    initial_base_key,
-                    &virtual_system_account,
-                    dummy_authorization_keys,
-                    blocktime,
-                    install_deploy_hash,
-                    gas_limit,
-                    address_generator,
-                    protocol_version,
-                    correlation_id,
-                    Rc::clone(&tracking_copy),
-                    phase,
-                    partial_protocol_data,
-                    system_contract_cache,
-                )?;
+            let proof_of_stake_installer_bytes = ee_config.proof_of_stake_installer_bytes();
+            let proof_of_stake_installer_module =
+                preprocessor.preprocess(proof_of_stake_installer_bytes)?;
+            let args = {
+                let args = (mint_reference, bonded_validators);
+                ArgsParser::parse(args)
+                    .expect("args should convert to `Vec<CLValue>`")
+                    .into_bytes()
+                    .expect("args should serialize")
+            };
+            let mut named_keys = BTreeMap::new();
+            let authorization_keys: BTreeSet<PublicKey> = BTreeSet::new();
 
-                let stakes = Stakes::new(bonded_validators);
-                let mint_reference = mint_reference.with_access_rights(AccessRights::READ);
-                let total_bonds_args = {
-                    let total_bonds: U512 = stakes.total_bonds();
-                    let args = ("mint", total_bonds);
-                    ArgsParser::parse(args)
-                        .expect("args should convert to `Vec<CLValue>`")
-                        .into_bytes()
-                        .expect("args should serialize")
-                };
-                let zero_args = {
-                    let args = ("mint", U512::zero());
-                    ArgsParser::parse(args)
-                        .expect("args should convert to `Vec<CLValue>`")
-                        .into_bytes()
-                        .expect("args should serialize")
-                };
-                let bonding_purse = runtime
-                    .call_contract(mint_reference.into(), total_bonds_args)?
-                    .into_t::<Result<URef, mint::Error>>()
-                    .expect("should convert")
-                    .expect("should convert");
-                let payment_purse: URef = runtime
-                    .call_contract(mint_reference.into(), zero_args.clone())?
-                    .into_t::<Result<URef, mint::Error>>()
-                    .expect("should convert")
-                    .expect("should convert");
-                let rewards_purse: URef = runtime
-                    .call_contract(mint_reference.into(), zero_args)?
-                    .into_t::<Result<URef, mint::Error>>()
-                    .expect("should convert")
-                    .expect("should convert");
-
-                let named_keys = {
-                    let mut tmp: BTreeMap<String, Key> =
-                        stakes.strings().map(|key| (key, PLACEHOLDER_KEY)).collect();
-                    [
-                        (POS_BONDING_PURSE, bonding_purse),
-                        (POS_PAYMENT_PURSE, payment_purse),
-                        (POS_REWARDS_PURSE, rewards_purse),
-                    ]
-                    .iter()
-                    .for_each(|(name, uref)| {
-                        tmp.insert(String::from(*name), Key::URef(*uref));
-                    });
-                    tmp
-                };
-                let contract = {
-                    let bytes = parity_wasm::serialize(do_nothing).expect("failed to serialize");
-                    Contract::new(bytes, named_keys, protocol_version)
-                };
-                let key = Key::URef(uref);
-                let value = StoredValue::Contract(contract);
-                tracking_copy.borrow_mut().write(key, value);
-                uref
-            } else {
-                let proof_of_stake_installer_bytes = ee_config.proof_of_stake_installer_bytes();
-                let proof_of_stake_installer_module =
-                    preprocessor.preprocess(proof_of_stake_installer_bytes)?;
-                let args = {
-                    let args = (mint_reference, bonded_validators);
-                    ArgsParser::parse(args)
-                        .expect("args should convert to `Vec<CLValue>`")
-                        .into_bytes()
-                        .expect("args should serialize")
-                };
-                let mut named_keys = BTreeMap::new();
-                let authorization_keys: BTreeSet<PublicKey> = BTreeSet::new();
-
-                executor.exec_system(
-                    proof_of_stake_installer_module,
-                    args,
-                    &mut named_keys,
-                    initial_base_key,
-                    &virtual_system_account,
-                    authorization_keys,
-                    blocktime,
-                    install_deploy_hash,
-                    gas_limit,
-                    address_generator,
-                    protocol_version,
-                    correlation_id,
-                    tracking_copy,
-                    phase,
-                    partial_protocol_data,
-                    system_contract_cache,
-                )?
-            }
+            executor.exec_system(
+                proof_of_stake_installer_module,
+                args,
+                &mut named_keys,
+                initial_base_key,
+                &virtual_system_account,
+                authorization_keys,
+                blocktime,
+                install_deploy_hash,
+                gas_limit,
+                address_generator,
+                protocol_version,
+                correlation_id,
+                tracking_copy,
+                phase,
+                partial_protocol_data,
+                system_contract_cache,
+            )?
         };
 
         // Execute standard payment installer wasm code
@@ -385,50 +269,45 @@ where
         );
 
         let standard_payment_reference: URef = {
-            let standard_payment_installer_bytes = if self.config.use_system_contracts()
-                && ee_config.standard_payment_installer_bytes().is_empty()
-            {
-                // TODO - remove this once Node has been updated to pass the required bytes
-                include_bytes!(concat!(
-                    env!("CARGO_MANIFEST_DIR"),
-                    "/wasm/standard_payment_install.wasm"
-                ))
-            } else {
-                ee_config.standard_payment_installer_bytes()
-            };
+            let standard_payment_installer_bytes =
+                if ee_config.standard_payment_installer_bytes().is_empty() {
+                    // TODO - remove this once Node has been updated to pass the required bytes
+                    include_bytes!(concat!(
+                        env!("CARGO_MANIFEST_DIR"),
+                        "/wasm/standard_payment_install.wasm"
+                    ))
+                } else {
+                    ee_config.standard_payment_installer_bytes()
+                };
 
-            if !self.config.use_system_contracts() {
-                store_do_nothing_contract()?
-            } else {
-                let standard_payment_installer_module =
-                    preprocessor.preprocess(standard_payment_installer_bytes)?;
-                let args = Vec::new();
-                let mut named_keys = BTreeMap::new();
-                let authorization_keys = BTreeSet::new();
-                let install_deploy_hash = genesis_config_hash.into();
-                let address_generator = Rc::clone(&address_generator);
-                let tracking_copy = Rc::clone(&tracking_copy);
-                let system_contract_cache = SystemContractCache::clone(&self.system_contract_cache);
+            let standard_payment_installer_module =
+                preprocessor.preprocess(standard_payment_installer_bytes)?;
+            let args = Vec::new();
+            let mut named_keys = BTreeMap::new();
+            let authorization_keys = BTreeSet::new();
+            let install_deploy_hash = genesis_config_hash.into();
+            let address_generator = Rc::clone(&address_generator);
+            let tracking_copy = Rc::clone(&tracking_copy);
+            let system_contract_cache = SystemContractCache::clone(&self.system_contract_cache);
 
-                executor.exec_system(
-                    standard_payment_installer_module,
-                    args,
-                    &mut named_keys,
-                    initial_base_key,
-                    &virtual_system_account,
-                    authorization_keys,
-                    blocktime,
-                    install_deploy_hash,
-                    gas_limit,
-                    address_generator,
-                    protocol_version,
-                    correlation_id,
-                    tracking_copy,
-                    phase,
-                    protocol_data,
-                    system_contract_cache,
-                )?
-            }
+            executor.exec_system(
+                standard_payment_installer_module,
+                args,
+                &mut named_keys,
+                initial_base_key,
+                &virtual_system_account,
+                authorization_keys,
+                blocktime,
+                install_deploy_hash,
+                gas_limit,
+                address_generator,
+                protocol_version,
+                correlation_id,
+                tracking_copy,
+                phase,
+                protocol_data,
+                system_contract_cache,
+            )?
         };
 
         // Spec #2: Associate given CostTable with given ProtocolVersion.
@@ -532,8 +411,7 @@ where
 
                 let mint_reference = mint_reference.with_access_rights(AccessRights::READ);
 
-                let mint_result: Result<URef, mint::Error> = if !self.config.use_system_contracts()
-                {
+                let mint_result: Result<URef, mint::Error> = {
                     // ...call the Mint's "mint" endpoint to create purse with tokens...
                     let (_instance, mut runtime) = executor.create_runtime(
                         module,
@@ -558,26 +436,6 @@ where
                         .call_contract(mint_reference.into(), args)?
                         .into_t::<Result<URef, mint::Error>>()
                         .expect("should convert")
-                } else {
-                    // ...call the Mint's "mint" endpoint to create purse with tokens...
-                    executor.exec_system(
-                        module,
-                        args,
-                        &mut named_keys_exec,
-                        base_key,
-                        &virtual_system_account,
-                        authorization_keys,
-                        blocktime,
-                        purse_creation_deploy_hash,
-                        gas_limit,
-                        address_generator,
-                        protocol_version,
-                        correlation_id,
-                        tracking_copy_exec,
-                        phase,
-                        protocol_data,
-                        system_contract_cache,
-                    )?
                 };
 
                 // ...and write that account to global state...
@@ -1064,65 +922,119 @@ where
             // payment_code_spec_6: system contract validity
             let mint_reference = protocol_data.mint();
 
-            let mint_contract = match tracking_copy
-                .borrow_mut()
-                .get_contract(correlation_id, Key::URef(mint_reference))
-            {
-                Ok(contract) => contract,
-                Err(error) => return Ok(ExecutionResult::precondition_failure(error.into())),
-            };
-
             if !self.system_contract_cache.has(&mint_reference) {
-                let module = match engine_wasm_prep::deserialize(mint_contract.bytes()) {
+                let mint_module = match {
+                    if self.config.use_system_contracts() {
+                        let mint_contract = match tracking_copy
+                            .borrow_mut()
+                            .get_contract(correlation_id, Key::URef(mint_reference))
+                        {
+                            Ok(contract) => contract,
+                            Err(error) => {
+                                return Ok(ExecutionResult::precondition_failure(error.into()))
+                            }
+                        };
+                        engine_wasm_prep::deserialize(mint_contract.bytes())
+                    } else {
+                        wasm::do_nothing_module(preprocessor)
+                    }
+                } {
                     Ok(module) => module,
-                    Err(error) => return Ok(ExecutionResult::precondition_failure(error.into())),
+                    Err(error) => {
+                        return Ok(ExecutionResult::precondition_failure(error.into()));
+                    }
                 };
-                self.system_contract_cache.insert(mint_reference, module);
+                self.system_contract_cache
+                    .insert(mint_reference, mint_module);
             }
-
             mint_reference
         };
 
         // Get proof of stake system contract URef from account (an account on a
         // different network may have a pos contract other than the CLPoS)
         // payment_code_spec_6: system contract validity
-        let proof_of_stake_reference = protocol_data.proof_of_stake();
+        let (
+            proof_of_stake_reference,
+            proof_of_stake_module,
+            rewards_purse_balance_key,
+            payment_purse_key,
+        ) = {
+            let proof_of_stake_reference = protocol_data.proof_of_stake();
 
-        // Get proof of stake system contract details
-        // payment_code_spec_6: system contract validity
-        let proof_of_stake_contract = match tracking_copy
-            .borrow_mut()
-            .get_contract(correlation_id, Key::from(proof_of_stake_reference))
-        {
-            Ok(contract) => contract,
-            Err(error) => {
-                return Ok(ExecutionResult::precondition_failure(error.into()));
-            }
-        };
-
-        // Get rewards purse balance key
-        // payment_code_spec_6: system contract validity
-        let rewards_purse_balance_key: Key = {
-            // Get reward purse Key from proof of stake contract
+            // Get proof of stake system contract details
             // payment_code_spec_6: system contract validity
-            let rewards_purse_key: Key =
-                match proof_of_stake_contract.named_keys().get(POS_REWARDS_PURSE) {
-                    Some(key) => *key,
-                    None => {
-                        return Ok(ExecutionResult::precondition_failure(Error::Deploy));
-                    }
-                };
-
-            match tracking_copy.borrow_mut().get_purse_balance_key(
-                correlation_id,
-                mint_reference,
-                rewards_purse_key,
-            ) {
-                Ok(key) => key,
+            let proof_of_stake_contract = match tracking_copy
+                .borrow_mut()
+                .get_contract(correlation_id, Key::from(proof_of_stake_reference))
+            {
+                Ok(contract) => contract,
                 Err(error) => {
                     return Ok(ExecutionResult::precondition_failure(error.into()));
                 }
-            }
+            };
+
+            let proof_of_stake_module =
+                match self.system_contract_cache.get(&proof_of_stake_reference) {
+                    Some(module) => module,
+                    None => {
+                        match {
+                            if self.config.use_system_contracts() {
+                                engine_wasm_prep::deserialize(proof_of_stake_contract.bytes())
+                            } else {
+                                wasm::do_nothing_module(preprocessor)
+                            }
+                        } {
+                            Ok(module) => {
+                                self.system_contract_cache
+                                    .insert(proof_of_stake_reference, module.clone());
+                                module
+                            }
+                            Err(error) => {
+                                return Ok(ExecutionResult::precondition_failure(error.into()));
+                            }
+                        }
+                    }
+                };
+
+            // Get rewards purse balance key
+            // payment_code_spec_6: system contract validity
+            let rewards_purse_balance_key: Key = {
+                // Get reward purse Key from proof of stake contract
+                // payment_code_spec_6: system contract validity
+                let rewards_purse_key: Key =
+                    match proof_of_stake_contract.named_keys().get(POS_REWARDS_PURSE) {
+                        Some(key) => *key,
+                        None => {
+                            return Ok(ExecutionResult::precondition_failure(Error::Deploy));
+                        }
+                    };
+
+                match tracking_copy.borrow_mut().get_purse_balance_key(
+                    correlation_id,
+                    mint_reference,
+                    rewards_purse_key,
+                ) {
+                    Ok(key) => key,
+                    Err(error) => {
+                        return Ok(ExecutionResult::precondition_failure(error.into()));
+                    }
+                }
+            };
+
+            // Get payment purse Key from proof of stake contract
+            // payment_code_spec_6: system contract validity
+            let payment_purse_key: Key =
+                match proof_of_stake_contract.named_keys().get(POS_PAYMENT_PURSE) {
+                    Some(key) => *key,
+                    None => return Ok(ExecutionResult::precondition_failure(Error::Deploy)),
+                };
+
+            (
+                proof_of_stake_reference,
+                proof_of_stake_module,
+                rewards_purse_balance_key,
+                payment_purse_key,
+            )
         };
 
         // Get account main purse balance key
@@ -1293,18 +1205,10 @@ where
         // payment_code_spec_3: fork based upon payment purse balance and cost of
         // payment code execution
         let payment_purse_balance: Motes = {
-            // Get payment purse Key from proof of stake contract
-            // payment_code_spec_6: system contract validity
-            let payment_purse: Key =
-                match proof_of_stake_contract.named_keys().get(POS_PAYMENT_PURSE) {
-                    Some(key) => *key,
-                    None => return Ok(ExecutionResult::precondition_failure(Error::Deploy)),
-                };
-
             let purse_balance_key = match tracking_copy.borrow_mut().get_purse_balance_key(
                 correlation_id,
                 mint_reference,
-                payment_purse,
+                payment_purse_key,
             ) {
                 Ok(key) => key,
                 Err(error) => {
@@ -1387,24 +1291,6 @@ where
         let finalize_result = {
             let post_session_tc = post_session_rc.borrow();
             let finalization_tc = Rc::new(RefCell::new(post_session_tc.fork()));
-
-            // validation_spec_1: valid wasm bytes
-            let proof_of_stake_module =
-                match self.system_contract_cache.get(&proof_of_stake_reference) {
-                    Some(module) => module,
-                    None => {
-                        let module =
-                            match engine_wasm_prep::deserialize(proof_of_stake_contract.bytes()) {
-                                Ok(module) => module,
-                                Err(error) => {
-                                    return Ok(ExecutionResult::precondition_failure(error.into()))
-                                }
-                            };
-                        self.system_contract_cache
-                            .insert(proof_of_stake_reference, module.clone());
-                        module
-                    }
-                };
 
             let proof_of_stake_args = {
                 //((gas spent during payment code execution) + (gas spent during session code execution)) * conv_rate
@@ -1517,7 +1403,7 @@ where
 
         let contract = match reader.read(correlation_id, &proof_of_stake)? {
             Some(StoredValue::Contract(contract)) => contract,
-            _ => return Err(MissingSystemContract("proof of stake".to_string())),
+            _ => return Err(MissingSystemContract(PROOF_OF_STAKE.to_string())),
         };
 
         let bonded_validators = contract

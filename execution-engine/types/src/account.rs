@@ -54,7 +54,7 @@ impl TryFrom<u32> for ActionType {
 /// Errors that can occur while changing action thresholds (i.e. the total [`Weight`]s of signing
 /// [`PublicKey`]s required to perform various actions) on an account.
 #[repr(i32)]
-#[derive(Debug, Fail, PartialEq, Eq)]
+#[derive(Debug, Fail, PartialEq, Eq, Copy, Clone)]
 pub enum SetThresholdFailure {
     /// Setting the key-management threshold to a value lower than the deployment threshold is
     /// disallowed.
@@ -281,7 +281,7 @@ impl FromBytes for PublicKey {
 }
 
 /// Errors that can occur while adding a new [`PublicKey`] to an account's associated keys map.
-#[derive(PartialEq, Eq, Fail, Debug)]
+#[derive(PartialEq, Eq, Fail, Debug, Copy, Clone)]
 #[repr(i32)]
 pub enum AddKeyFailure {
     /// There are already [`MAX_ASSOCIATED_KEYS`] [`PublicKey`]s associated with the given account.
@@ -312,7 +312,7 @@ impl TryFrom<i32> for AddKeyFailure {
 }
 
 /// Errors that can occur while removing a [`PublicKey`] from an account's associated keys map.
-#[derive(Fail, Debug, Eq, PartialEq)]
+#[derive(Fail, Debug, Eq, PartialEq, Copy, Clone)]
 #[repr(i32)]
 pub enum RemoveKeyFailure {
     /// The given [`PublicKey`] is not associated with the given account.
@@ -349,7 +349,7 @@ impl TryFrom<i32> for RemoveKeyFailure {
 
 /// Errors that can occur while updating the [`Weight`] of a [`PublicKey`] in an account's
 /// associated keys map.
-#[derive(PartialEq, Eq, Fail, Debug)]
+#[derive(PartialEq, Eq, Fail, Debug, Copy, Clone)]
 #[repr(i32)]
 pub enum UpdateKeyFailure {
     /// The given [`PublicKey`] is not associated with the given account.

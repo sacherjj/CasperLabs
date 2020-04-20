@@ -1,8 +1,10 @@
 package io.casperlabs.storage.deploy
 
+import cats._
+import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.Block.ProcessedDeploy
-import io.casperlabs.casper.consensus.{Block, Deploy}
+import io.casperlabs.casper.consensus.{Block, Deploy, DeploySummary}
 import io.casperlabs.casper.consensus.info.DeployInfo
 import io.casperlabs.crypto.Keys.PublicKeyBS
 import io.casperlabs.metrics.Metered
@@ -12,9 +14,7 @@ import simulacrum.typeclass
 import scala.concurrent.duration._
 import cats.mtl.ApplicativeAsk
 
-@typeclass trait DeployStorageWriter[F[_]] {
-  private[storage] def addAsExecuted(block: Block): F[Unit]
-
+@typeclass trait DeployBufferWriter[F[_]] {
   /* Should not fail if the same deploy added twice */
   def addAsPending(deploys: List[Deploy]): F[Unit]
 
@@ -64,12 +64,18 @@ import cats.mtl.ApplicativeAsk
     * Otherwise all the data will be deleted.
     * @return Number of deleted deploys from buffer minus those who [[addAsExecuted]] */
   def cleanupDiscarded(expirationPeriod: FiniteDuration): F[Int]
+}
+
+@typeclass trait DeployStorageWriter[F[_]] extends DeployBufferWriter[F] {
+
+  private[storage] def addAsExecuted(block: Block): F[Unit]
 
   def clear(): F[Unit]
 
   def close(): F[Unit]
 }
-@typeclass trait DeployStorageReader[F[_]] {
+
+@typeclass trait DeployBufferReader[F[_]] {
   def readProcessed: F[List[Deploy]]
 
   def readProcessedByAccount(account: ByteString): F[List[Deploy]]
@@ -86,7 +92,23 @@ import cats.mtl.ApplicativeAsk
 
   def getPendingOrProcessed(deployHash: DeployHash): F[Option[Deploy]]
 
-  def sizePendingOrProcessed(): F[Long]
+  def countPendingOrProcessed(implicit A: Applicative[F]): F[Long] =
+    countsByBufferedStates(DeployInfo.State.PENDING, DeployInfo.State.PROCESSED).map(_.values.sum)
+
+  /** Count the deploys in the buffer per state. If `states` are passed, filter by them, otherwise return all. */
+  def countsByBufferedStates(states: DeployInfo.State*): F[Map[DeployInfo.State, Long]]
+
+  def countByBufferedState(state: DeployInfo.State)(implicit A: Applicative[F]): F[Long] =
+    countsByBufferedStates(state).map(_.getOrElse(state, 0))
+
+  /** Read the status of a deploy from the buffer, if it's still in it. */
+  def getBufferedStatus(deployHash: DeployHash): F[Option[DeployInfo.Status]]
+}
+
+@typeclass trait DeployStorageReader[F[_]] extends DeployBufferReader[F] {
+  def contains(deployHash: DeployHash): F[Boolean]
+
+  def getDeploySummary(deployHash: DeployHash): F[Option[DeploySummary]]
 
   def getByHash(deployHash: DeployHash): F[Option[Deploy]]
 
@@ -97,9 +119,6 @@ import cats.mtl.ApplicativeAsk
 
   /** Read all the processsed deploys in a block. */
   def getProcessedDeploys(blockHash: BlockHash): F[List[ProcessedDeploy]]
-
-  /** Read the status of a deploy from the buffer, if it's still in it. */
-  def getBufferedStatus(deployHash: DeployHash): F[Option[DeployInfo.Status]]
 
   def getDeployInfo(deployHash: DeployHash): F[Option[DeployInfo]]
 
@@ -169,6 +188,9 @@ object DeployStorageReader {
     ev.reader
 
   trait MeteredDeployStorageReader[F[_]] extends DeployStorageReader[F] with Metered[F] {
+    abstract override def contains(deployHash: DeployHash) =
+      incAndMeasure("contains", super.contains(deployHash))
+
     abstract override def readProcessed =
       incAndMeasure("readProcessed", super.readProcessed)
 
@@ -193,8 +215,8 @@ object DeployStorageReader {
     abstract override def getPendingOrProcessed(deployHash: DeployHash) =
       incAndMeasure("getPendingOrProcessed", super.getPendingOrProcessed(deployHash))
 
-    abstract override def sizePendingOrProcessed() =
-      incAndMeasure("sizePendingOrProcessed", super.sizePendingOrProcessed())
+    abstract override def countsByBufferedStates(states: DeployInfo.State*) =
+      incAndMeasure("countsByBufferedStates", super.countsByBufferedStates(states: _*))
 
     abstract override def getByHash(deployHash: DeployHash) =
       incAndMeasure("getByHash", super.getByHash(deployHash))
@@ -234,5 +256,8 @@ object DeployStorageReader {
           next
         )
       )
+
+    abstract override def getDeploySummary(deployHash: DeployHash): F[Option[DeploySummary]] =
+      incAndMeasure("getDeploySummary", super.getDeploySummary(deployHash))
   }
 }

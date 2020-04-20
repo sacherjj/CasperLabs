@@ -35,7 +35,8 @@ class ScoresSpec extends FlatSpec with Matchers {
       1,
       Signature(),
       BlockSummary(),
-      randomBlockHash
+      randomBlockHash,
+      Block.MessageRole.PROPOSAL
     )
 
   def randomBlockHash = ByteString.copyFromUtf8(scala.util.Random.nextString(20))

@@ -105,7 +105,7 @@ lazy_static! {
         .join("src/integration_tests.rs");
     static ref ENGINE_TEST_SUPPORT: Dependency = Dependency::new(
         "casperlabs-engine-test-support",
-        "0.5.0",
+        "0.6.3",
         "engine-test-support"
     );
     static ref CARGO_TOML_ADDITIONAL_CONTENTS: String = format!(
@@ -120,7 +120,7 @@ name = "integration-tests"
 path = "src/integration_tests.rs"
 
 [features]
-default = ["casperlabs-contract/std", "casperlabs-types/std""#,
+default = ["casperlabs-contract/std", "casperlabs-types/std", "casperlabs-engine-test-support/test-support", "casperlabs-contract/test-support""#,
         *CL_CONTRACT, *CL_TYPES, *ENGINE_TEST_SUPPORT,
     );
     static ref WASM_SRC_DIR: PathBuf = Path::new(env!("CARGO_MANIFEST_DIR")).join("wasm");

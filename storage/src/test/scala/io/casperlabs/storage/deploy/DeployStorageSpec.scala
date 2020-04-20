@@ -153,6 +153,49 @@ trait DeployStorageSpec
       }
     }
 
+    "countsByBufferedStates" should {
+      val data = for {
+        deploys   <- Arbitrary.arbitrary[List[Deploy]]
+        pending   <- Gen.choose(0, deploys.length)
+        processed <- Gen.choose(0, math.max(0, deploys.length - pending))
+        discarded <- Gen.choose(0, deploys.length - pending - processed)
+      } yield (deploys, pending, processed, discarded)
+
+      "return the statuses from the buffer" in forAll(data) {
+        case (deploys, a, b, c) =>
+          val pending   = deploys.take(a)
+          val processed = deploys.drop(a).take(b)
+          val discarded = deploys.drop(a + b).take(c)
+
+          testFixture { (reader, writer) =>
+            for {
+              _ <- writer.addAsPending(pending)
+              _ <- writer.addAsProcessed(processed)
+              _ <- writer.addAsPending(discarded)
+              _ <- writer.markAsDiscarded(discarded.map(_ -> ""))
+
+              countsAll <- reader.countsByBufferedStates().map(_.withDefaultValue(0))
+              _         = countsAll(DeployInfo.State.PENDING) shouldBe pending.length
+              _         = countsAll(DeployInfo.State.PROCESSED) shouldBe processed.length
+              _         = countsAll(DeployInfo.State.DISCARDED) shouldBe discarded.length
+
+              countSome <- reader
+                            .countsByBufferedStates(
+                              DeployInfo.State.PENDING,
+                              DeployInfo.State.PROCESSED
+                            )
+                            .map(_.withDefaultValue(0))
+              _ = countSome(DeployInfo.State.PENDING) shouldBe pending.length
+              _ = countSome(DeployInfo.State.PROCESSED) shouldBe processed.length
+              _ = countSome should not contain key(DeployInfo.State.DISCARDED)
+
+              p <- reader.countByBufferedState(DeployInfo.State.PENDING)
+              _ = p shouldBe pending.length
+            } yield ()
+          }
+      }
+    }
+
     "readProcessedByAccount" should {
       "return only processed deploys with appropriate account" in testFixture { (reader, writer) =>
         val pending   = sample(arbDeploy.arbitrary)

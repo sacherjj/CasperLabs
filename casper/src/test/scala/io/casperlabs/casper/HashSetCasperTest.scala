@@ -4,6 +4,9 @@ import cats.effect.Sync
 import cats.implicits._
 import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
+import cats.Show
+import cats.syntax.show
+import io.casperlabs.shared.ByteStringPrettyPrinter._
 import io.casperlabs.casper.MultiParentCasperImpl.Broadcaster
 import io.casperlabs.casper.consensus.Block.{Justification, ProcessedDeploy}
 import io.casperlabs.casper.consensus._
@@ -338,7 +341,7 @@ abstract class HashSetCasperTest
       Created(signedBlock) = createBlockResult
       status               <- node.casperEff.addBlock(signedBlock)
       _                    = assert(status == InvalidUnslashableBlock)
-      _                    = exactly(1, node.logEff.warns) should include("Ignoring block")
+      _                    = exactly(1, node.logEff.warns) should include("Ignoring message")
       _                    <- node.tearDownNode()
       result <- node.validateBlockStorage { blockStorage =>
                  blockStorage.getBlockMessage(signedBlock.blockHash) shouldBeF None
@@ -647,7 +650,7 @@ abstract class HashSetCasperTest
       _ <- nodes(2).casperEff.contains(signedBlock2) shouldBeF true
       // TransportLayer gets 1 block, 1 is missing. GossipService gets 1 hash, 2 block missing.
       _ = nodes(2).logEff.infos
-        .count(_ startsWith "Requested missing block") should (be >= 1 and be <= 2)
+        .count(_ startsWith "Requested missing message") should (be >= 1 and be <= 2)
       // TransportLayer controlled by .receive calls, only node(1) responds. GossipService has unlimited retrieve, goes to node(0).
       result = (0 to 1)
         .flatMap(nodes(_).logEff.infos)
@@ -952,7 +955,7 @@ abstract class HashSetCasperTest
       _ <- nodes(1).casperEff
             .addBlock(signedInvalidBlock)
 
-      _ = nodes(1).logEff.warns.count(_ startsWith "Recording invalid block") should be(1)
+      _ = nodes(1).logEff.warns.count(_ startsWith "Recording invalid message") should be(1)
       _ <- nodes(1).casperEff.contains(signedInvalidBlock) shouldBeF false
       _ <- nodes.map(_.tearDown()).toList.sequence
     } yield ()
@@ -985,7 +988,7 @@ abstract class HashSetCasperTest
       // We simulate a network failure here by not allowing block #10 to get passed to nodes(1)
       _ <- nodes(0).receive()
 
-      reqCnt = nodes(1).logEff.infos.count(_ startsWith "Requested missing block")
+      reqCnt = nodes(1).logEff.infos.count(_ startsWith "Requested missing message")
       _      = reqCnt should be >= 10 // TransportLayer
       _      = reqCnt should be <= 11 // GossipService
 
@@ -1015,7 +1018,7 @@ abstract class HashSetCasperTest
       _ <- nodes(0).casperEff
             .addBlock(invalidBlock1)
             .flatTap(nodes(0).broadcaster.networkEffects(invalidBlock1, _))
-      _ = nodes(0).logEff.warns.count(_ startsWith "Recording invalid block") should be(1)
+      _ = nodes(0).logEff.warns.count(_ startsWith "Recording invalid message") should be(1)
       // nodes(0) won't send invalid blocks
       _ <- nodes(1).receive()
       _ <- nodes(1).casperEff
@@ -1037,84 +1040,6 @@ abstract class HashSetCasperTest
               } yield result
             }
           }
-    } yield ()
-  }
-
-  it should "increment last finalized block as appropriate in round robin" in effectTest {
-    val stake      = 10L
-    val equalBonds = validators.map(_ -> stake).toMap
-    val BlockMsgWithTransform(Some(genesisWithEqualBonds), _) =
-      buildGenesis(Map.empty, equalBonds, 0L)
-
-    for {
-      nodes <- networkEff(
-                validatorKeys.take(3),
-                genesisWithEqualBonds,
-                faultToleranceThreshold = 0f // With equal bonds this should allow the final block to move as expected.
-              )
-      deployDatas <- (1L to 10L).toList.traverse(_ => ProtoUtil.basicDeploy[Task]())
-
-      _ <- nodes(0).deployAndPropose(deployDatas(0))
-      _ <- nodes(1).receive()
-      _ <- nodes(2).receive()
-
-      block2 <- nodes(1).deployAndPropose(deployDatas(1))
-      _      <- nodes(0).receive()
-      _      <- nodes(2).receive()
-
-      block3 <- nodes(2).deployAndPropose(deployDatas(2))
-      _      <- nodes(0).receive()
-      _      <- nodes(1).receive()
-
-      block4 <- nodes(0).deployAndPropose(deployDatas(3))
-      _      <- nodes(1).receive()
-      _      <- nodes(2).receive()
-
-      block5 <- nodes(1).deployAndPropose(deployDatas(4))
-      _      <- nodes(0).receive()
-      _      <- nodes(2).receive()
-
-      block6 <- nodes(2).deployAndPropose(deployDatas(5))
-      _      <- nodes(0).receive()
-      _      <- nodes(1).receive()
-
-      _                     <- nodes(0).casperEff.lastFinalizedBlock shouldBeF block2
-      pendingOrProcessedNum <- nodes(0).deployStorage.reader.sizePendingOrProcessed()
-      _                     = pendingOrProcessedNum should be(1)
-
-      _ <- nodes(0).deployBuffer.addDeploy(deployDatas(6)) *> nodes(0).propose()
-      _ <- nodes(1).receive()
-      _ <- nodes(2).receive()
-
-      _                     <- nodes(0).casperEff.lastFinalizedBlock shouldBeF block3
-      pendingOrProcessedNum <- nodes(0).deployStorage.reader.sizePendingOrProcessed()
-      _                     = pendingOrProcessedNum should be(2) // deploys contained in block 4 and block 7
-
-      _ <- nodes(1).deployBuffer.addDeploy(deployDatas(7)) *> nodes(1).propose()
-      _ <- nodes(0).receive()
-      _ <- nodes(2).receive()
-
-      _                     <- nodes(0).casperEff.lastFinalizedBlock shouldBeF block4
-      pendingOrProcessedNum <- nodes(0).deployStorage.reader.sizePendingOrProcessed()
-      _                     = pendingOrProcessedNum should be(1) // deploys contained in block 7
-
-      _ <- nodes(2).deployBuffer.addDeploy(deployDatas(8)) *> nodes(2).propose()
-      _ <- nodes(0).receive()
-      _ <- nodes(1).receive()
-
-      _                     <- nodes(0).casperEff.lastFinalizedBlock shouldBeF block5
-      pendingOrProcessedNum <- nodes(0).deployStorage.reader.sizePendingOrProcessed()
-      _                     = pendingOrProcessedNum should be(1) // deploys contained in block 7
-
-      _ <- nodes(0).deployBuffer.addDeploy(deployDatas(9)) *> nodes(0).propose()
-      _ <- nodes(1).receive()
-      _ <- nodes(2).receive()
-
-      _                     <- nodes(0).casperEff.lastFinalizedBlock shouldBeF block6
-      pendingOrProcessedNum <- nodes(0).deployStorage.reader.sizePendingOrProcessed()
-      _                     = pendingOrProcessedNum should be(2) // deploys contained in block 7 and block 10
-
-      _ <- nodes.map(_.tearDown()).toList.sequence
     } yield ()
   }
 
@@ -1466,7 +1391,8 @@ object HashSetCasperTest {
             implicit0(blockStorage: BlockStorage[Task]),
             _,
             _,
-            implicit0(fs: FinalityStorage[Task])
+            implicit0(fs: FinalityStorage[Task]),
+            _
             ) =>
           Genesis.fromChainSpec[Task](spec)
       }

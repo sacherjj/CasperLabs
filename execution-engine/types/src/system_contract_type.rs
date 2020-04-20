@@ -1,3 +1,5 @@
+//! Home of system contract type enum.
+
 use core::{
     convert::TryFrom,
     fmt::{self, Display, Formatter},
@@ -18,6 +20,13 @@ pub enum SystemContractType {
     /// Standard Payment contract.
     StandardPayment,
 }
+
+/// Name of mint system contract
+pub const MINT: &str = "mint";
+/// Name of proof of stake system contract
+pub const PROOF_OF_STAKE: &str = "proof of stake";
+/// Name of standard payment system contract
+pub const STANDARD_PAYMENT: &str = "standard payment";
 
 impl From<SystemContractType> for u32 {
     fn from(system_contract_type: SystemContractType) -> u32 {
@@ -46,9 +55,9 @@ impl TryFrom<u32> for SystemContractType {
 impl Display for SystemContractType {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match *self {
-            SystemContractType::Mint => write!(f, "mint"),
-            SystemContractType::ProofOfStake => write!(f, "pos"),
-            SystemContractType::StandardPayment => write!(f, "standard payment"),
+            SystemContractType::Mint => write!(f, "{}", MINT),
+            SystemContractType::ProofOfStake => write!(f, "{}", PROOF_OF_STAKE),
+            SystemContractType::StandardPayment => write!(f, "{}", STANDARD_PAYMENT),
         }
     }
 }
@@ -63,14 +72,14 @@ mod tests {
     fn get_index_of_mint_contract() {
         let index: u32 = SystemContractType::Mint.into();
         assert_eq!(index, 0u32);
-        assert_eq!(SystemContractType::Mint.to_string(), "mint");
+        assert_eq!(SystemContractType::Mint.to_string(), MINT);
     }
 
     #[test]
     fn get_index_of_pos_contract() {
         let index: u32 = SystemContractType::ProofOfStake.into();
         assert_eq!(index, 1u32);
-        assert_eq!(SystemContractType::ProofOfStake.to_string(), "pos");
+        assert_eq!(SystemContractType::ProofOfStake.to_string(), PROOF_OF_STAKE);
     }
 
     #[test]
@@ -79,7 +88,7 @@ mod tests {
         assert_eq!(index, 2u32);
         assert_eq!(
             SystemContractType::StandardPayment.to_string(),
-            "standard payment"
+            STANDARD_PAYMENT
         );
     }
 

@@ -181,15 +181,16 @@ Running `make up` will also start a local instance of Clarity at https://localho
 You can save snapshots of the DAG as it evolves, like a slide show, by starting the the client in a mode which saves a new image every time it changes. You have to give it a target directory (which will be available as `/data` in the container) and start it, then perform your deploy and propose actions in a different terminal. The `images` directory in the example below will accumulate files like `sample_1.png`, `sample_2.png`, etc.
 
 ```console
-./client.sh node-0 vdag $PWD/images --show-justification-lines --depth 25 \
-    --out /data/sample.png --stream multiple-outputs
+mkdir -p images
+casperlabs-client --host localhost --port 40401 vdag images --show-justification-lines --depth 25 \
+  --out /data/sample.png --stream multiple-outputs
 ```
 
 As you make blocks, you should see feedback about a new image written to the output. You can stop the client using `Ctrl+C`:
 
 ```
-Wrote /data/sample_0.png
-Wrote /data/sample_1.png
+Wrote images/sample_0.png
+Wrote images/sample_1.png
 ^C
 ```
 
@@ -214,7 +215,7 @@ sudo rm -rf images
 On Debian/Ubuntu you can also run `sudo apt-get install graphviz` and visualize the DAG like so:
 
 ```console
-./client.sh node-0 vdag --show-justification-lines --depth 25 \
+casperlabs-client --host localhost --port 40401 vdag --show-justification-lines --depth 25 \
     | dot -Tpng -o /tmp/cl-dag.png \
     && xdg-open /tmp/cl-dag.png
 ```
@@ -223,7 +224,7 @@ Alternatively you can even use the browser:
 
 ```console
 google-chrome --new-window \
-    $(python -c "import urllib; print 'https://dreampuf.github.io/GraphvizOnline/#' + urllib.quote('''$(./client.sh node-0 vdag --show-justification-lines --depth 25)''')")
+    $(python -c "import urllib; print 'https://dreampuf.github.io/GraphvizOnline/#' + urllib.quote('''$(casperlabs-client --host localhost --port 40401 --show-justification-lines --depth 25)''')")
 ```
 
 ## Execute GraphQL Queries
@@ -347,7 +348,7 @@ When stests is up and running then the testing workflow becomes something like:
 
 ```bash
 # Launch a generator
-stests-wg-100 poc1 --user-accounts 5 --run 1
+stests-wg-100 poc1 --user-accounts 5
 # Check it is running
 stests-ls-runs poc1
 # Check what stage it is at

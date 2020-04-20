@@ -24,6 +24,7 @@ import io.casperlabs.shared.SemaphoreMap
 
 import scala.util.Random
 import scala.util.control.NoStackTrace
+import io.casperlabs.shared.ByteStringPrettyPrinter._
 
 /** Class to encapsulate the message handling logic of messages in an era.
   *
@@ -137,6 +138,9 @@ class EraRuntime[F[_]: Sync: Clock: Metrics: Log: EraStorage: FinalityStorageRea
           case b: Message.Ballot => isLambdaLikeBallot(dag, b, endTick)
         }
       else false.pure[F]
+
+    def isBallotLike: Boolean =
+      isBallotLikeMessage(msg)
   }
 
   private implicit class MessageProducerOps(mp: MessageProducer[F]) {
@@ -256,7 +260,8 @@ class EraRuntime[F[_]: Sync: Clock: Metrics: Log: EraStorage: FinalityStorageRea
                                        keyBlockHash = era.keyBlockHash,
                                        roundId = Ticks(lambdaMessage.roundId),
                                        target = choice.block,
-                                       justifications = choice.justificationsMap
+                                       justifications = choice.justificationsMap,
+                                       messageRole = Block.MessageRole.CONFIRMATION
                                      )
                                      .timerGauge("response_ballot")
                                  }
@@ -266,6 +271,7 @@ class EraRuntime[F[_]: Sync: Clock: Metrics: Log: EraStorage: FinalityStorageRea
           }
       _ <- m.fold(noop) { msg =>
             HighwayLog.tell[F](HighwayEvent.CreatedLambdaResponse(msg)) >>
+              handleCriticalMessages(msg) >>
               recordJustificationsDistance(msg)
           }
     } yield ()
@@ -295,7 +301,8 @@ class EraRuntime[F[_]: Sync: Clock: Metrics: Log: EraStorage: FinalityStorageRea
                           isBookingBlock = isBookingBoundary(
                             choice.block.roundInstant,
                             conf.toInstant(roundId)
-                          )
+                          ),
+                          messageRole = Block.MessageRole.PROPOSAL
                         )
                         .timerGauge("lambda_block")
                         .widen[Message]
@@ -305,7 +312,8 @@ class EraRuntime[F[_]: Sync: Clock: Metrics: Log: EraStorage: FinalityStorageRea
                           keyBlockHash = era.keyBlockHash,
                           roundId = roundId,
                           target = choice.block,
-                          justifications = choice.justificationsMap
+                          justifications = choice.justificationsMap,
+                          messageRole = Block.MessageRole.PROPOSAL
                         )
                         .timerGauge("lambda_ballot")
                         .widen[Message]
@@ -322,8 +330,8 @@ class EraRuntime[F[_]: Sync: Clock: Metrics: Log: EraStorage: FinalityStorageRea
           }
       _ <- m.fold(noop) { msg =>
             HighwayLog.tell[F](HighwayEvent.CreatedLambdaMessage(msg)) >>
-              recordJustificationsDistance(msg) >>
-              handleCriticalMessages(msg)
+              handleCriticalMessages(msg) >>
+              recordJustificationsDistance(msg)
           }
     } yield ()
   }
@@ -341,22 +349,56 @@ class EraRuntime[F[_]: Sync: Clock: Metrics: Log: EraStorage: FinalityStorageRea
                   .timerGauge("omega_forkchoice")
                   .flatMap { choice =>
                     ifCanBuildOn(choice) {
-                      messageProducer
+
+                      // The protocol allows us to create a block instead of a ballot,
+                      // which we can take advantage of if we have to slow down the rounds
+                      // a lot due to the high number of validators. The omega messages
+                      // are spread out in time, so they could form a chain of blocks,
+                      // and achieve finality less often.
+                      val block = messageProducer
+                        .block(
+                          keyBlockHash = era.keyBlockHash,
+                          roundId = roundId,
+                          mainParent = choice.block,
+                          justifications = choice.justificationsMap,
+                          isBookingBlock = isBookingBoundary(
+                            choice.block.roundInstant,
+                            conf.toInstant(roundId)
+                          ),
+                          messageRole = Block.MessageRole.WITNESS
+                        )
+                        .timerGauge("omega_block")
+                        .widen[Message]
+
+                      val ballot = messageProducer
                         .ballot(
                           keyBlockHash = era.keyBlockHash,
                           roundId = roundId,
                           target = choice.block,
-                          justifications = choice.justificationsMap
+                          justifications = choice.justificationsMap,
+                          messageRole = Block.MessageRole.WITNESS
                         )
                         .timerGauge("omega_ballot")
+                        .widen[Message]
+
+                      val ifHasDeploysBlockElseBallot =
+                        messageProducer.hasPendingDeploys.ifM(block, ballot)
+
+                      if (!conf.omegaBlocksEnabled)
+                        ballot
+                      else if (roundId < endTick)
+                        ifHasDeploysBlockElseBallot
+                      else
+                        choice.block.isSwitchBlock.ifM(ballot, ifHasDeploysBlockElseBallot)
                     }
                   }
               }
               .timerGauge("create_omega")
           }
       _ <- m.fold(noop)(msg => {
-            recordJustificationsDistance(msg) >>
-              HighwayLog.tell[F](HighwayEvent.CreatedOmegaMessage(msg))
+            HighwayLog.tell[F](HighwayEvent.CreatedOmegaMessage(msg)) >>
+              handleCriticalMessages(msg) >>
+              recordJustificationsDistance(msg)
           })
     } yield ()
   }
@@ -489,18 +531,25 @@ class EraRuntime[F[_]: Sync: Clock: Metrics: Log: EraStorage: FinalityStorageRea
         case b: Message.Block =>
           check(
             "The block is not coming from the leader of the round.",
-            leaderFunction(Ticks(message.roundId)) != message.validatorId
+            !b.isBallotLike && leaderFunction(Ticks(message.roundId)) != message.validatorId
           ) >>
             checkF(
               "The leader has already sent a lambda message in this round.",
               // Not going to check this for ballots: two lambda-like ballots
               // can only be an equivocation, otherwise the 2nd one cites the first
               // and that means it's not lambda-like.
-              hasOtherLambdaMessageInSameRound[F](dag, b, endTick)
+              // Also not relevant for non-lambda blocks.
+              if (b.isBallotLike) false.pure[F]
+              else hasOtherLambdaMessageInSameRound[F](dag, b, endTick)
             ) >>
             checkF(
-              "Only ballots should be build on top of a switch block in the current era.",
+              "Only ballots should be built on top of a switch block in the current era.",
               dag.lookupUnsafe(message.parentBlock).flatMap(_.isSwitchBlock)
+            ) >>
+            checkF(
+              "Blocks during the voting-only period can only be switch blocks.",
+              if (message.roundId < endTick) false.pure[F]
+              else message.isSwitchBlock.map(!_)
             )
 
         case b: Message.Ballot if b.roundId >= endTick =>
@@ -522,14 +571,17 @@ class EraRuntime[F[_]: Sync: Clock: Metrics: Log: EraStorage: FinalityStorageRea
   def initAgenda: F[Agenda] =
     maybeMessageProducer.fold(Agenda.empty.pure[F]) { _ =>
       currentTick flatMap { tick =>
-        isEraOverAt(tick).ifM(
-          Agenda.empty.pure[F],
-          roundBoundariesAt(tick) flatMap {
-            case (from, to) =>
-              val roundId = if (from >= tick) from else to
-              Agenda(roundId -> StartRound(roundId)).pure[F]
-          }
-        )
+        if (tick < startTick)
+          Agenda(startTick -> StartRound(startTick)).pure[F]
+        else
+          isEraOverAt(tick).ifM(
+            Agenda.empty.pure[F],
+            roundBoundariesAt(tick) flatMap {
+              case (from, to) =>
+                val roundId = if (from >= tick) from else to
+                Agenda(roundId -> StartRound(roundId)).pure[F]
+            }
+          )
       }
     }
 
@@ -641,13 +693,22 @@ class EraRuntime[F[_]: Sync: Clock: Metrics: Log: EraStorage: FinalityStorageRea
     * - key blocks don't need special handling when they are made
     * - switch blocks might be the ones that grant the rewards,
     *   according to how many blocks were finalized on time during the era
+    * - if it's a lambda message, propagate this information to higher layers
+    *   so that the finalizer can be updated.
     */
   private def handleCriticalMessages(message: Message): HWL[Unit] =
-    message match {
-      case _: Message.Ballot =>
+    HighwayLog
+      .liftF(message.isLambdaMessage)
+      .ifM(
+        HighwayLog.tell[F](HighwayEvent.HandledLambdaMessage),
         noop
-      case block: Message.Block =>
-        HighwayLog.liftF(block.isSwitchBlock).ifM(createEra(block), noop)
+      ) >> {
+      message match {
+        case _: Message.Ballot =>
+          noop
+        case block: Message.Block =>
+          HighwayLog.liftF(block.isSwitchBlock).ifM(createEra(block), noop)
+      }
     }
 
   /** Perform the validation and persistence of an incoming block.
@@ -819,6 +880,14 @@ object EraRuntime {
     if (ballot.roundId < eraEndTick) false.pure[F]
     else citesOwnMessageInSameRound(dag, ballot).map(!_)
 
+  def isBallotLikeMessage(message: Message): Boolean = {
+    import Block.MessageRole._
+    message.messageRole match {
+      case CONFIRMATION | WITNESS => true
+      case _                      => message.isBallot
+    }
+  }
+
   /** Given a lambda message from the leader of a round, check if the validator has sent
     * another lambda message already in the same round. Ignores equivocations, just the
     * checks the legal j-DAG.
@@ -840,14 +909,15 @@ object EraRuntime {
       .takeWhile(isSameRoundAs(message))
       // Try to find a lambda message.
       .findF {
-        case _: Message.Block =>
-          // We established that this validator is the lead, so a block from them is a lambda.
-          true.pure[F]
+        case b: Message.Block =>
+          // We established that this validator is the lead, but a block may not be a lambda.
+          (!isBallotLikeMessage(b)).pure[F]
         case b: Message.Ballot =>
           // The era is over, so this is a voting only period message.
           // In the active period, it's easy to know that a ballot is either a lambda response or an omega.
           // In the voting only period, however, lambda messages are ballots too.
           // The only way to tell if a ballot might be a lambda message is that it cites nothing from this round.
+          // We could also look at the `messageRole` now that it's been added, but it's not validated.
           isLambdaLikeBallot(dag, b, eraEndTick)
         case _ =>
           false.pure[F]

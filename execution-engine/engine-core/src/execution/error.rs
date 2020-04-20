@@ -1,58 +1,78 @@
-use core::fmt;
-
+use failure::Fail;
 use parity_wasm::elements;
 
 use engine_shared::TypeMismatch;
 use types::{
     account::{AddKeyFailure, RemoveKeyFailure, SetThresholdFailure, UpdateKeyFailure},
-    bytesrepr, system_contract_errors, AccessRights, CLValueError, Key, URef,
+    bytesrepr, system_contract_errors, AccessRights, ApiError, CLValueError, Key, URef,
 };
 
 use crate::resolvers::error::ResolverError;
 
-#[derive(Debug)]
+#[derive(Fail, Debug, Clone)]
 pub enum Error {
-    Interpreter(wasmi::Error),
+    #[fail(display = "Interpreter error: {}", _0)]
+    Interpreter(String),
+    #[fail(display = "Storage error: {}", _0)]
     Storage(engine_storage::error::Error),
+    #[fail(display = "Serialization error: {}", _0)]
     BytesRepr(bytesrepr::Error),
+    #[fail(display = "Key {} not found", _0)]
     KeyNotFound(Key),
+    #[fail(display = "Account {:?} not found", _0)]
     AccountNotFound(Key),
+    #[fail(display = "{}", _0)]
     TypeMismatch(TypeMismatch),
-    InvalidAccess {
-        required: AccessRights,
-    },
+    #[fail(display = "Invalid access rights: {}", required)]
+    InvalidAccess { required: AccessRights },
+    #[fail(display = "Forged reference: {}", _0)]
     ForgedReference(URef),
+    #[fail(display = "URef not found: {}", _0)]
     URefNotFound(String),
+    #[fail(display = "Function not found: {}", _0)]
     FunctionNotFound(String),
+    #[fail(display = "{}", _0)]
     ParityWasm(elements::Error),
+    #[fail(display = "Out of gas error")]
     GasLimit,
+    #[fail(display = "Return")]
     Ret(Vec<URef>),
-    Rng(rand::Error),
+    #[fail(display = "{}", _0)]
+    Rng(String),
+    #[fail(display = "Resolver error: {}", _0)]
     Resolver(ResolverError),
     /// Reverts execution with a provided status
-    Revert(u32),
+    #[fail(display = "{}", _0)]
+    Revert(ApiError),
+    #[fail(display = "{}", _0)]
     AddKeyFailure(AddKeyFailure),
+    #[fail(display = "{}", _0)]
     RemoveKeyFailure(RemoveKeyFailure),
+    #[fail(display = "{}", _0)]
     UpdateKeyFailure(UpdateKeyFailure),
+    #[fail(display = "{}", _0)]
     SetThresholdFailure(SetThresholdFailure),
+    #[fail(display = "{}", _0)]
     SystemContract(system_contract_errors::Error),
+    #[fail(display = "Deployment authorization failure")]
     DeploymentAuthorizationFailure,
+    #[fail(display = "Expected return value")]
     ExpectedReturnValue,
+    #[fail(display = "Unexpected return value")]
     UnexpectedReturnValue,
+    #[fail(display = "Invalid context")]
     InvalidContext,
-    IncompatibleProtocolMajorVersion {
-        expected: u32,
-        actual: u32,
-    },
+    #[fail(
+        display = "Incompatible protocol major version. Expected version {} but actual version is {}",
+        expected, actual
+    )]
+    IncompatibleProtocolMajorVersion { expected: u32, actual: u32 },
+    #[fail(display = "{}", _0)]
     CLValue(CLValueError),
+    #[fail(display = "Host buffer is empty")]
     HostBufferEmpty,
+    #[fail(display = "Unsupported WASM start")]
     UnsupportedWasmStart,
-}
-
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{:?}", self)
-    }
 }
 
 impl wasmi::HostError for Error {}
@@ -64,8 +84,14 @@ impl From<!> for Error {
 }
 
 impl From<wasmi::Error> for Error {
-    fn from(e: wasmi::Error) -> Self {
-        Error::Interpreter(e)
+    fn from(error: wasmi::Error) -> Self {
+        match error
+            .as_host_error()
+            .and_then(|host_error| host_error.downcast_ref::<Error>())
+        {
+            Some(error) => error.clone(),
+            None => Error::Interpreter(error.into()),
+        }
     }
 }
 

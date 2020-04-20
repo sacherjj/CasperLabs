@@ -1,6 +1,6 @@
 use std::{cell::Cell, collections::BTreeMap, iter, rc::Rc};
 
-use matches::assert_matches;
+use assert_matches::assert_matches;
 use proptest::{collection::vec, prelude::*};
 
 use engine_shared::{

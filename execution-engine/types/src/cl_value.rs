@@ -1,4 +1,7 @@
 use alloc::vec::Vec;
+use core::fmt;
+
+use failure::Fail;
 
 use crate::{
     bytesrepr::{self, FromBytes, ToBytes, U32_SERIALIZED_LENGTH},
@@ -15,12 +18,24 @@ pub struct CLTypeMismatch {
     pub found: CLType,
 }
 
+impl fmt::Display for CLTypeMismatch {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        write!(
+            f,
+            "Expected {:?} but found {:?}.",
+            self.expected, self.found
+        )
+    }
+}
+
 /// Error relating to [`CLValue`] operations.
-#[derive(PartialEq, Eq, Clone, Debug)]
+#[derive(Fail, PartialEq, Eq, Clone, Debug)]
 pub enum CLValueError {
     /// An error while serializing or deserializing the underlying data.
+    #[fail(display = "CLValue error: {}", _0)]
     Serialization(bytesrepr::Error),
     /// A type mismatch while trying to convert a [`CLValue`] into a given type.
+    #[fail(display = "Type mismatch: {}", _0)]
     Type(CLTypeMismatch),
 }
 

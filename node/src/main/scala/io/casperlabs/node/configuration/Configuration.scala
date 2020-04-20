@@ -92,6 +92,7 @@ object Configuration extends ParserImplicits {
       initSyncMaxBlockCount: Int Refined Positive,
       periodicSyncRoundPeriod: FiniteDuration,
       downloadMaxParallelBlocks: Int,
+      downloadMaxParallelDeploys: Int,
       downloadMaxRetries: Int Refined NonNegative,
       downloadRetryInitialBackoffPeriod: FiniteDuration,
       downloadRetryBackoffFactor: Double Refined GreaterEqual[W.`1.0`.T],
@@ -100,7 +101,14 @@ object Configuration extends ParserImplicits {
       cleanBlockStorage: Boolean,
       blockUploadRateMaxRequests: Int Refined NonNegative,
       blockUploadRatePeriod: FiniteDuration,
-      blockUploadRateMaxThrottled: Int Refined NonNegative
+      blockUploadRateMaxThrottled: Int Refined NonNegative,
+      mainThreads: Int Refined Positive,
+      ingressThreads: Int Refined Positive,
+      dbWriteThreads: Int Refined Positive,
+      dbReadThreads: Int Refined Positive,
+      dbReadConnections: Int Refined Positive,
+      parallelismCpuMultiplier: Double Refined Positive,
+      minParallelism: Int Refined Positive
   ) extends SubConfig
 
   case class BlockStorage(
@@ -121,6 +129,7 @@ object Configuration extends ParserImplicits {
       enabled: Boolean,
       omegaMessageTimeStart: Double Refined Interval.OpenClosed[W.`0.0`.T, W.`1.0`.T],
       omegaMessageTimeEnd: Double Refined Interval.OpenClosed[W.`0.0`.T, W.`1.0`.T],
+      omegaBlocksEnabled: Boolean,
       initRoundExponent: Int Refined NonNegative
   ) extends SubConfig
 

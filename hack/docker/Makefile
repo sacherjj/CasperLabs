@@ -79,6 +79,9 @@ node-%/down: $(HIGHWAY_ENV)
 node-%/metrics:
 	docker run --rm --network casperlabs appropriate/curl -s http://node-$*:$(CL_SERVER_HTTP_PORT)/metrics
 
+node-%/status:
+	docker run --rm --network casperlabs appropriate/curl -s http://node-$*:$(CL_SERVER_HTTP_PORT)/status | jq
+
 
 # Start common components.
 up: \
@@ -141,7 +144,8 @@ slow:
 	@# Create a `faucet-account` to hold some initial tokens to distribute.
 	mkdir -p keys/faucet-account
 	../key-management/docker-gen-account-keys.sh keys/faucet-account
-	(cat keys/faucet-account/account-id; echo ",1000000000000000000,0") > .casperlabs/chainspec/genesis/accounts.csv
+	FAUCET_ID="$$(cat keys/faucet-account/account-id-hex)" ; \
+	echo "$$FAUCET_ID,1000000000000000000,0" > .casperlabs/chainspec/genesis/accounts.csv
 
 	@# Create bonded validators with 0 balance.
 	bash -c 'i=0 ; while [[ $$i -lt $(CL_CASPER_NUM_VALIDATORS) ]] ; do \
@@ -151,7 +155,8 @@ slow:
 		../key-management/docker-gen-keys.sh .casperlabs/nodes/node-$$i ; \
 		../key-management/docker-gen-account-keys.sh keys/account-$$i ; \
 		BOND=$$(( $(CL_CASPER_NUM_VALIDATORS)*10+$$i )) ; \
-		(cat .casperlabs/nodes/node-$$i/validator-id; echo ",0,$$BOND") >> .casperlabs/chainspec/genesis/accounts.csv ; \
+		VALIDATOR_ID="$$(cat .casperlabs/nodes/node-$$i/validator-id-hex)" ; \
+		echo "$$VALIDATOR_ID,0,$$BOND" >> .casperlabs/chainspec/genesis/accounts.csv ; \
 		((i = i + 1)) ; \
 	done'
 

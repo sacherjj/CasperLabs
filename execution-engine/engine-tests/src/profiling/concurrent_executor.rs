@@ -96,18 +96,6 @@ fn request_count_arg() -> Arg<'static, 'static> {
         .help(REQUEST_COUNT_ARG_HELP)
 }
 
-fn parse_hash(encoded_hash: &str) -> Vec<u8> {
-    base16::decode(encoded_hash).expect("Expected a valid, hex-encoded hash")
-}
-
-fn parse_count(encoded_thread_count: &str) -> usize {
-    let count: usize = encoded_thread_count
-        .parse()
-        .expect("Expected an integral count");
-    assert!(count > 0, "Expected count > 0");
-    count
-}
-
 struct Args {
     socket: String,
     pre_state_hash: Vec<u8>,
@@ -132,15 +120,15 @@ impl Args {
             .to_string();
         let pre_state_hash = arg_matches
             .value_of(PRE_STATE_HASH_ARG_NAME)
-            .map(parse_hash)
+            .map(profiling::parse_hash)
             .expect("Expected a pre-state hash");
         let thread_count = arg_matches
             .value_of(THREAD_COUNT_ARG_NAME)
-            .map(parse_count)
+            .map(profiling::parse_count)
             .expect("Expected thread count");
         let request_count = arg_matches
             .value_of(REQUEST_COUNT_ARG_NAME)
-            .map(parse_count)
+            .map(profiling::parse_count)
             .expect("Expected request count");
 
         Args {

@@ -1,13 +1,11 @@
 package io.casperlabs.casper.finality
 
-import cats.Applicative
-import cats.syntax.functor._
-import cats.syntax.flatMap._
+import cats.implicits._
 import cats.effect.Concurrent
 import cats.effect.concurrent.{Ref, Semaphore}
 import io.casperlabs.casper.Estimator.BlockHash
-import io.casperlabs.casper.finality.MultiParentFinalizer.FinalizedBlocks
 import io.casperlabs.casper.CasperMetricsSource
+import io.casperlabs.casper.finality.MultiParentFinalizer.FinalizedBlocks
 import io.casperlabs.metrics.implicits._
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.models.Message
@@ -16,13 +14,9 @@ import simulacrum.typeclass
 import io.casperlabs.storage.dag.FinalityStorage
 
 @typeclass trait MultiParentFinalizer[F[_]] {
+  def addMessage(message: Message): F[Unit]
 
-  /** Returns set of finalized blocks.
-    *
-    * NOTE: This mimicks [[io.casperlabs.casper.finality.votingmatrix.FinalityDetectorVotingMatrix]] API because we are working with the multi-parent
-    * fork choice.
-    */
-  def onNewMessageAdded(message: Message): F[Option[FinalizedBlocks]]
+  def checkFinality(): F[Seq[FinalizedBlocks]]
 }
 
 object MultiParentFinalizer {
@@ -33,8 +27,12 @@ object MultiParentFinalizer {
       metrics: Metrics[F]
   ) extends MultiParentFinalizer[F] {
 
-    override def onNewMessageAdded(message: Message): F[Option[FinalizedBlocks]] =
-      metrics.timer("onNewMessageAdded")(finalizer.onNewMessageAdded(message))
+    override def addMessage(message: Message): F[Unit] =
+      metrics.timer("addMessage")(finalizer.addMessage(message))
+
+    override def checkFinality(): F[Seq[FinalizedBlocks]] =
+      metrics.timer("checkFinality")(finalizer.checkFinality())
+
   }
 
   object MeteredMultiParentFinalizer {
@@ -55,44 +53,49 @@ object MultiParentFinalizer {
   def create[F[_]: Concurrent: FinalityStorage: Metrics](
       dag: DagRepresentation[F],
       latestLFB: BlockHash, // Last LFB from the main chain
-      finalityDetector: FinalityDetector[F],
-      isHighway: Boolean
+      finalityDetector: FinalityDetector[F]
   ): F[MultiParentFinalizer[F]] =
     for {
       lfbCache  <- Ref[F].of[BlockHash](latestLFB)
       semaphore <- Semaphore[F](1)
     } yield new MultiParentFinalizer[F] {
 
-      /** Returns set of finalized blocks */
-      override def onNewMessageAdded(message: Message): F[Option[FinalizedBlocks]] =
+      override def addMessage(message: Message): F[Unit] =
         semaphore.withPermit(for {
           previousLFB <- lfbCache.get
-          finalizedBlock <- finalityDetector
-                             .onNewMessageAddedToTheBlockDag(dag, message, previousLFB)
-                             .timer("onNewMessageAddedToTheBlockDag")
-          finalized <- finalizedBlock.fold(Applicative[F].pure(None: Option[FinalizedBlocks])) {
-                        case CommitteeWithConsensusValue(_, quorum, newLFB) =>
-                          for {
-                            _ <- lfbCache.set(newLFB)
-                            justFinalized <- FinalityDetectorUtil
-                                              .finalizedIndirectly[F](
-                                                dag,
-                                                newLFB,
-                                                isHighway
-                                              )
-                                              .timer("finalizedIndirectly")
-                            justOrphaned <- FinalityDetectorUtil
-                                             .orphanedIndirectly(
-                                               dag,
-                                               newLFB,
-                                               justFinalized.map(_.messageHash),
-                                               isHighway
-                                             )
-                                             .timer("orphanedIndirectly")
-                          } yield Some(
-                            FinalizedBlocks(newLFB, quorum, justFinalized, justOrphaned)
-                          )
-                      }
-        } yield finalized)
+          _ <- finalityDetector
+                .addMessage(dag, message, previousLFB)
+        } yield ())
+
+      override def checkFinality(): F[Seq[FinalizedBlocks]] =
+        semaphore.withPermit {
+          for {
+            finalizedBlocks <- finalityDetector.checkFinality(dag)
+            finalized <- finalizedBlocks.toList.traverse {
+                          case CommitteeWithConsensusValue(_, quorum, newLFB) =>
+                            for {
+                              _ <- lfbCache.set(newLFB)
+                              justFinalized <- FinalityDetectorUtil
+                                                .finalizedIndirectly[F](
+                                                  dag,
+                                                  newLFB
+                                                )
+                                                .timer("finalizedIndirectly")
+                              justOrphaned <- FinalityDetectorUtil
+                                               .orphanedIndirectly(
+                                                 dag,
+                                                 newLFB,
+                                                 justFinalized.map(_.messageHash)
+                                               )
+                                               .timer("orphanedIndirectly")
+                              _ <- FinalityStorage[F].markAsFinalized(
+                                    newLFB,
+                                    justFinalized.map(_.messageHash),
+                                    justOrphaned.map(_.messageHash)
+                                  )
+                            } yield FinalizedBlocks(newLFB, quorum, justFinalized, justOrphaned)
+                        }
+          } yield finalized
+        }
     }
 }

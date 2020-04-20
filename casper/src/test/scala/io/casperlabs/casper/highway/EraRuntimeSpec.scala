@@ -8,6 +8,7 @@ import cats.effect.{Clock, Sync}
 import cats.effect.concurrent.{Ref, Semaphore}
 import com.google.protobuf.ByteString
 import java.util.concurrent.TimeUnit
+
 import io.casperlabs.casper.consensus.{Block, BlockSummary, Bond, Era}
 import io.casperlabs.casper.consensus.state
 import io.casperlabs.crypto.Keys.{PublicKey, PublicKeyBS}
@@ -19,7 +20,7 @@ import io.casperlabs.storage.BlockHash
 import io.casperlabs.storage.block.BlockStorageWriter
 import io.casperlabs.storage.dag.{DagStorage, FinalityStorage}
 import io.casperlabs.storage.era.EraStorage
-import io.casperlabs.casper.mocks.{MockFinalityStorage}
+import io.casperlabs.casper.mocks.MockFinalityStorage
 import io.casperlabs.casper.highway.mocks.{
   MockBlockDagStorage,
   MockEraStorage,
@@ -31,8 +32,11 @@ import org.scalactic.source
 import org.scalactic.Prettifier
 import org.scalatest.prop.GeneratorDrivenPropertyChecks.{forAll => forAllGen}
 import org.scalacheck._
+
 import scala.concurrent.duration._
 import java.time.temporal.ChronoUnit
+
+import io.casperlabs.casper.highway.HighwayEvent.HandledLambdaMessage
 
 class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUtils {
   import EraRuntimeSpec._
@@ -61,7 +65,8 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
     entropyDuration = hours(3),
     postEraVotingDuration = VotingDuration.FixedLength(postEraVotingDuration),
     omegaMessageTimeStart = 0.5,
-    omegaMessageTimeEnd = 0.75
+    omegaMessageTimeEnd = 0.75,
+    omegaBlocksEnabled = true
   )
 
   val genesis = Message
@@ -92,7 +97,8 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
       era: Era,
       roundId: Ticks,
       mainParent: ByteString = genesis.messageHash,
-      justifications: Map[ByteString, ByteString] = Map.empty
+      justifications: Map[ByteString, ByteString] = Map.empty,
+      messageRole: Block.MessageRole = Block.MessageRole.PROPOSAL
   ) =
     Message
       .fromBlockSummary {
@@ -100,6 +106,7 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
           .withHeader(
             Block
               .Header()
+              .withMessageRole(messageRole)
               .withValidatorPublicKey(validator)
               .withKeyBlockHash(era.keyBlockHash)
               .withRoundId(roundId)
@@ -122,7 +129,8 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
       era: Era,
       roundId: Ticks,
       target: ByteString = genesis.messageHash,
-      justifications: Map[ByteString, ByteString] = Map.empty
+      justifications: Map[ByteString, ByteString] = Map.empty,
+      messageRole: Block.MessageRole = Block.MessageRole.WITNESS
   ) =
     Message
       .fromBlockSummary {
@@ -131,6 +139,7 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
             Block
               .Header()
               .withMessageType(Block.MessageType.BALLOT)
+              .withMessageRole(messageRole)
               .withKeyBlockHash(era.keyBlockHash)
               .withRoundId(roundId)
               .withValidatorPublicKey(validator)
@@ -155,6 +164,13 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
   )(st: BlockDagStorage[Id]): MockMessageProducer[Id] = {
     implicit val store = st
     new MockMessageProducer[Id](validator)
+  }
+
+  val messageProducerWithPendingDeploys: String => BlockDagStorage[Id] => MessageProducer[Id] = {
+    validator => implicit bds =>
+      new MockMessageProducer[Id](validator) {
+        override def hasPendingDeploys = true
+      }
   }
 
   def genesisEraRuntime(
@@ -449,7 +465,7 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
       val msg2 = insert(build(runtime.endTick, msg1.messageHash))
       val msg3 = build(Ticks(runtime.endTick + 1), msg2.messageHash)
       runtime.validate(msg3).value shouldBe Left(
-        "Only ballots should be build on top of a switch block in the current era."
+        "Only ballots should be built on top of a switch block in the current era."
       )
     }
 
@@ -583,6 +599,17 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
         genesisEraRuntime(validator = "Alice".some).initAgenda shouldBe empty
       }
     }
+
+    "the era hasn't started yet" should {
+      "schedule the first round for the beginning" in {
+        implicit val clock = TestClock.frozen[Id](conf.genesisEraStart minus 8.hours)
+        val runtime        = genesisEraRuntime(validator = "Alice".some)
+        val agenda         = runtime.initAgenda
+        agenda should have size 1
+        agenda.head.tick shouldBe runtime.startTick
+        agenda.head.action shouldBe Agenda.StartRound(runtime.startTick)
+      }
+    }
   }
 
   "handleMessage" when {
@@ -601,9 +628,12 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
           "create a lambda response" in {
             val msg    = makeBlock(leader, runtime.era, runtime.startTick)
             val events = runtime.handleMessage(msg).written
-            events should have size 1
+            events should have size 2
             assertEvent(events) {
               case HighwayEvent.CreatedLambdaResponse(_) =>
+            }
+            assertEvent(events) {
+              case HighwayEvent.HandledLambdaMessage =>
             }
           }
 
@@ -677,7 +707,7 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
 
               FC.set(insert(makeBlock(leader, parentRuntime.era, parentRuntime.startTick)))
 
-              childRuntime.handleMessage(msg).written shouldBe empty
+              childRuntime.handleMessage(msg).written shouldBe Vector(HandledLambdaMessage)
             }
           }
         }
@@ -747,10 +777,10 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
         }
 
         "in a round which is not corresponding to the validator's current round ID" should {
-          "not respond" in {
+          "not respond but trigger an updated of the finalizer state" in {
             val msg =
               makeBlock(leader, runtime.era, roundId = Ticks(runtime.startTick + 1))
-            runtime.handleMessage(msg).written shouldBe empty
+            runtime.handleMessage(msg).written shouldBe Vector(HandledLambdaMessage)
           }
         }
 
@@ -781,12 +811,14 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
 
           "coming from the leader" should {
             "create a lambda response" in {
-              val msg = makeBallot("Bob", runtime.era, runtime.endTick)
-              assertEvent(runtime.handleMessage(msg).written) {
+              val msg    = makeBallot("Bob", runtime.era, runtime.endTick)
+              val events = runtime.handleMessage(msg).written
+              assertEvent(events) {
                 case HighwayEvent.CreatedLambdaResponse(ballot: Message.Ballot) =>
                   ballot.roundId shouldBe msg.roundId
                   ballot.parentBlock shouldBe switch.messageHash
               }
+              assertEvent(events) { case HighwayEvent.HandledLambdaMessage => }
             }
           }
           "coming from a non-leader" should {
@@ -810,7 +842,7 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
 
       "given a lambda message" should {
         "not respond" in {
-          runtime.handleMessage(blocks.head).written shouldBe empty
+          runtime.handleMessage(blocks.head).written shouldBe Vector(HandledLambdaMessage)
         }
       }
 
@@ -833,7 +865,7 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
           leaderSequencer = mockSequencer(leader)
         )
         val msg = makeBlock(leader, runtime.era, runtime.startTick)
-        runtime.handleMessage(msg).written shouldBe empty
+        runtime.handleMessage(msg).written shouldBe Vector(HandledLambdaMessage)
         isSyncedRef.set(true) // Works with `Id` only because of the `=> F[Boolean]`
         runtime.handleMessage(msg).written should not be empty
       }
@@ -862,10 +894,13 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
           val (events, agenda) = runtime.handleAgenda(Agenda.StartRound(roundId)).run
 
           "create a lambda message" in {
-            events should have size 1
+            events should have size 2
             assertEvent(events) {
               case event: HighwayEvent.CreatedLambdaMessage =>
                 event.message.roundId shouldBe roundId
+            }
+            assertEvent(events) {
+              case HighwayEvent.HandledLambdaMessage =>
             }
           }
 
@@ -1028,6 +1063,34 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
               }
             }
           }
+          "create a ballot even if the switch block was an omega-block" in {
+            new PostEraFixture(isLeader = true) {
+              val switch =
+                fc.set(
+                  insert(
+                    makeBlock(
+                      validator,
+                      runtime.era,
+                      runtime.endTick,
+                      messageRole = Block.MessageRole.WITNESS
+                    )
+                  )
+                )
+
+              val events = handle.written
+
+              assertEvent(events) {
+                case HighwayEvent.CreatedLambdaMessage(ballot: Message.Ballot) =>
+                  ballot.roundId shouldBe roundId
+                  ballot.parentBlock shouldBe switch.messageHash
+                  ballot.messageRole shouldBe Block.MessageRole.PROPOSAL
+              }
+
+              assertEvent(events) {
+                case HighwayEvent.HandledLambdaMessage =>
+              }
+            }
+          }
         }
         "the voting is still going" should {
           "schedule an omega message" in {
@@ -1168,13 +1231,14 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
                 roundId: Ticks,
                 mainParent: Message.Block,
                 justifications: Map[PublicKeyBS, Set[Message]],
-                isBookingBlock: Boolean
+                isBookingBlock: Boolean,
+                messageRole: Block.MessageRole
             ): Id[Message.Block] = {
               isBookingBlock shouldBe true
               mainParent.messageHash shouldBe fc.fromKeyBlock(eraId).block.messageHash
               justifications shouldBe fc.fromKeyBlock(eraId).justificationsMap
 
-              super.block(eraId, roundId, mainParent, justifications, isBookingBlock)
+              super.block(eraId, roundId, mainParent, justifications, isBookingBlock, messageRole)
             }
           }
 
@@ -1217,18 +1281,59 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
           val events =
             runtime.handleAgenda(Agenda.CreateOmegaMessage(runtime.startTick)).written
           assertEvent(events) {
-            case HighwayEvent.CreatedOmegaMessage(_) =>
+            case HighwayEvent.CreatedOmegaMessage(msg) =>
+              msg.isBallot shouldBe true
+          }
+        }
+        "create a block if there are pending deploys in the buffer" in {
+          val runtime =
+            genesisEraRuntime("Alice".some, messageProducer = messageProducerWithPendingDeploys)
+          val events =
+            runtime.handleAgenda(Agenda.CreateOmegaMessage(runtime.startTick)).written
+
+          assertEvent(events) {
+            case HighwayEvent.CreatedOmegaMessage(msg) =>
+              msg.isBlock shouldBe true
+              msg.messageRole shouldBe Block.MessageRole.WITNESS
           }
         }
       }
       "in the post-era voting period" should {
+        implicit val clock = TestClock.frozen(conf.genesisEraEnd)
         "create an omega message" in {
-          implicit val clock = TestClock.frozen(conf.genesisEraEnd)
-          val runtime        = genesisEraRuntime("Alice".some)
+          val runtime = genesisEraRuntime("Alice".some)
           val events =
             runtime.handleAgenda(Agenda.CreateOmegaMessage(runtime.endTick)).written
           assertEvent(events) {
             case HighwayEvent.CreatedOmegaMessage(_) =>
+          }
+        }
+        "create a switch block if there are pending deploys in the buffer" in {
+          val runtime =
+            genesisEraRuntime("Alice".some, messageProducer = messageProducerWithPendingDeploys)
+          val events =
+            runtime.handleAgenda(Agenda.CreateOmegaMessage(runtime.endTick)).written
+
+          assertEvent(events) {
+            case HighwayEvent.CreatedOmegaMessage(msg) =>
+              msg.isBlock shouldBe true
+              msg.messageRole shouldBe Block.MessageRole.WITNESS
+          }
+        }
+        "create a ballot if there are deploys but a switch block has been created before" in {
+          implicit val ds = defaultBlockDagStorage
+          implicit val fc = defaultForkChoice
+
+          val runtime =
+            genesisEraRuntime("Alice".some, messageProducer = messageProducerWithPendingDeploys)
+
+          fc.set(insert(makeBlock("Alice", runtime.era, runtime.endTick)))
+
+          val events =
+            runtime.handleAgenda(Agenda.CreateOmegaMessage(runtime.endTick)).written
+
+          assertEvent(events) {
+            case HighwayEvent.CreatedOmegaMessage(_: Message.Ballot) =>
           }
         }
       }

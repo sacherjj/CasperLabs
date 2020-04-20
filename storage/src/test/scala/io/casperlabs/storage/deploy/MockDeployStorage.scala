@@ -4,14 +4,14 @@ import cats.effect.Sync
 import cats.effect.concurrent.Ref
 import cats.implicits._
 import com.google.protobuf.ByteString
-import io.casperlabs.casper.consensus.{Block, Deploy}
 import io.casperlabs.casper.consensus.info.DeployInfo
+import io.casperlabs.casper.consensus.{Block, Deploy, DeploySummary}
+import io.casperlabs.crypto.Keys.PublicKeyBS
 import io.casperlabs.crypto.codec.Base16
-import io.casperlabs.crypto.Keys.{PublicKey, PublicKeyBS}
+import io.casperlabs.models.DeployImplicits.DeployOps
 import io.casperlabs.shared.Log
-import io.casperlabs.storage.{BlockHash, DeployHash}
 import io.casperlabs.storage.deploy.MockDeployStorage.Metadata
-import io.casperlabs.shared.Sorting.byteStringOrdering
+import io.casperlabs.storage.{BlockHash, DeployHash}
 
 import scala.concurrent.duration.FiniteDuration
 
@@ -166,6 +166,11 @@ class MockDeployStorage[F[_]: Sync: Log](
 
   override def reader(implicit dv: DeployInfo.View) = new DeployStorageReader[F] {
 
+    override def contains(deployHash: DeployHash) = getByHash(deployHash).map(_.isDefined)
+
+    override def getDeploySummary(deployHash: DeployHash): F[Option[DeploySummary]] =
+      getByHash(deployHash).map(_.map(_.getSummary))
+
     override def getProcessingResults(
         hash: ByteString
     ): F[List[(BlockHash, Block.ProcessedDeploy)]] =
@@ -224,8 +229,16 @@ class MockDeployStorage[F[_]: Sync: Log](
         case (deploy, Metadata(`status`, _, _, _, _)) => deploy
       }.toList)
 
-    override def sizePendingOrProcessed(): F[Long] =
-      (readProcessed, readPending).mapN(_.size + _.size).map(_.toLong)
+    override def countsByBufferedStates(states: DeployInfo.State*): F[Map[DeployInfo.State, Long]] =
+      for {
+        processed <- readProcessed
+        pending   <- readPending
+        discarded <- readByStatus(DiscardedStatusCode)
+      } yield Map(
+        DeployInfo.State.PENDING   -> pending.size.toLong,
+        DeployInfo.State.PROCESSED -> processed.size.toLong,
+        DeployInfo.State.DISCARDED -> discarded.size.toLong
+      ).filterKeys(x => states.contains(x) || states.isEmpty)
 
     override def getPendingOrProcessed(hash: ByteString): F[Option[Deploy]] =
       deploysWithMetadataRef.get.map(_.collectFirst {
