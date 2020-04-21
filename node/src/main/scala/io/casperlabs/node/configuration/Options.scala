@@ -465,6 +465,10 @@ private[configuration] final case class Options private (
       gen[FiniteDuration]("Maximum time to allow a peer downloading a block to consume each chunk.")
 
     @scallop
+    val serverDeployGossipEnabled =
+      gen[Flag]("Gossip deploys upon receipt to other peers or not.")
+
+    @scallop
     val casperStandalone =
       gen[Flag](
         "Start a stand-alone node (no bootstrapping).",

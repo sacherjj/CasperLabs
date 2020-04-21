@@ -341,7 +341,7 @@ package object gossiping {
       downloadManager <- BlockDownloadManagerImpl[F](
                           maxParallelDownloads = conf.server.downloadMaxParallelBlocks,
                           connectToGossip = connectToGossip,
-                          backend = new BlockDownloadManagerImpl.EnrichedBackend[F] {
+                          backend = new BlockDownloadManagerImpl.Backend[F] {
                             override def contains(blockHash: ByteString): F[Boolean] =
                               isInDag(blockHash)
 

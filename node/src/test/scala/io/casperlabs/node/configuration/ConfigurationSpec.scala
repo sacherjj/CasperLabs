@@ -112,7 +112,8 @@ class ConfigurationSpec
       dbReadThreads = 1,
       dbReadConnections = 1,
       parallelismCpuMultiplier = 1.0,
-      minParallelism = 1
+      minParallelism = 1,
+      deployGossipEnabled = false
     )
     val grpcServer = Configuration.Grpc(
       socket = Paths.get("/tmp/test"),

@@ -169,6 +169,10 @@ parallelism-cpu-multiplier = 1.0
 # Minimum parallelism.
 min-parallelism = 4
 
+# With deploy gossiping enabled, nodes will share deploys among each other as soon as they received them,
+# and try to optimize block downloads by fetching missing deploys separately.
+deploy-gossip-enabled = false
+
 # io.casperlabs.node.configuration.Configuration.BlockStorage
 [blockstorage]
 

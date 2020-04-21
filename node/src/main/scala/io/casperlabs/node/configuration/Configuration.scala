@@ -108,7 +108,8 @@ object Configuration extends ParserImplicits {
       dbReadThreads: Int Refined Positive,
       dbReadConnections: Int Refined Positive,
       parallelismCpuMultiplier: Double Refined Positive,
-      minParallelism: Int Refined Positive
+      minParallelism: Int Refined Positive,
+      deployGossipEnabled: Boolean
   ) extends SubConfig
 
   case class BlockStorage(
