@@ -1,5 +1,7 @@
 use alloc::vec::Vec;
-use core::fmt;
+use core::{convert::TryFrom, fmt, num::ParseIntError};
+
+use failure::Fail;
 
 use crate::bytesrepr::{self, Error, FromBytes, ToBytes, U32_SERIALIZED_LENGTH};
 
@@ -64,9 +66,40 @@ impl fmt::Display for SemVer {
     }
 }
 
+#[derive(Fail, Debug, Clone, PartialEq, Eq)]
+pub enum ParseSemVerError {
+    #[fail(display = "Invalid version format")]
+    InvalidVersionFormat,
+    #[fail(display = "{}", _0)]
+    ParseIntError(ParseIntError),
+}
+
+impl From<ParseIntError> for ParseSemVerError {
+    fn from(error: ParseIntError) -> ParseSemVerError {
+        ParseSemVerError::ParseIntError(error)
+    }
+}
+
+impl TryFrom<&str> for SemVer {
+    type Error = ParseSemVerError;
+    fn try_from(value: &str) -> Result<SemVer, Self::Error> {
+        let tokens: Vec<&str> = value.split('.').collect();
+        if tokens.len() != 3 {
+            return Err(ParseSemVerError::InvalidVersionFormat);
+        }
+
+        Ok(SemVer {
+            major: tokens[0].parse()?,
+            minor: tokens[1].parse()?,
+            patch: tokens[2].parse()?,
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use core::convert::TryInto;
 
     #[test]
     fn should_compare_semver_versions() {
@@ -80,5 +113,21 @@ mod tests {
         assert!(SemVer::new(1, 2, 3) <= SemVer::new(1, 2, 3));
         assert!(SemVer::new(2, 0, 0) >= SemVer::new(1, 99, 99));
         assert!(SemVer::new(2, 0, 0) > SemVer::new(1, 99, 99));
+    }
+
+    #[test]
+    fn parse_from_string() {
+        let foo: SemVer = "100.20.3".try_into().expect("should parse");
+        assert_eq!(foo, SemVer::new(100, 20, 3));
+        let bar: SemVer = "0.0.1".try_into().expect("should parse");
+        assert_eq!(bar, SemVer::new(0, 0, 1));
+
+        assert!(SemVer::try_from("1.a.2.3").is_err());
+        assert!(SemVer::try_from("1. 2.3").is_err());
+        assert!(SemVer::try_from("12345124361461.0.1").is_err());
+        assert!(SemVer::try_from("1.2.3.4").is_err());
+        assert!(SemVer::try_from("1.2").is_err());
+        assert!(SemVer::try_from("1").is_err());
+        assert!(SemVer::try_from("0").is_err());
     }
 }

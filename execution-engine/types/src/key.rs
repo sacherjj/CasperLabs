@@ -170,6 +170,16 @@ impl Key {
             _ => None,
         }
     }
+
+    /// Creates the seed of a local key for a context with the given base key.
+    pub fn into_seed(self) -> [u8; KEY_LOCAL_SEED_LENGTH] {
+        match self {
+            Key::Account(PublicKey::Ed25519(bytes)) => bytes.value(),
+            Key::Hash(bytes) => bytes,
+            Key::URef(uref) => uref.addr(),
+            Key::Local { seed, .. } => seed,
+        }
+    }
 }
 
 impl Display for Key {

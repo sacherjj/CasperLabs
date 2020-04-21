@@ -36,7 +36,7 @@ use crate::{
     engine_state::{system_contract_cache::SystemContractCache, EngineConfig},
     execution::{Error, MINT_NAME, POS_NAME},
     resolvers::{create_module_resolver, memory_resolver::MemoryResolver},
-    runtime_context::{self, RuntimeContext},
+    runtime_context::RuntimeContext,
     Address,
 };
 use scoped_timer::ScopedTimer;
@@ -1999,7 +1999,7 @@ where
                     }
                 }
 
-                let seed = runtime_context::key_into_seed(key);
+                let seed = key.into_seed();
                 let version_bytes = version.to_bytes()?;
                 let contract_key = Key::local(seed, &version_bytes);
                 let contract = self
@@ -2419,13 +2419,13 @@ where
             return Ok(Some(contract_header::Error::InvalidAccessKey));
         }
 
-        if let Err(err) = metadata.with_version(version, header.clone()) {
+        if let Err(err) = metadata.add_version(version, header.clone()) {
             return Ok(Some(err));
         }
 
         let module_bytes = self.get_module_by_header(&header)?;
         let contract = Contract::new(module_bytes, named_keys, header.protocol_version());
-        let seed = runtime_context::key_into_seed(metadata_key);
+        let seed = metadata_key.into_seed();
         let version_bytes = version.to_bytes()?;
         let contract_key = Key::local(seed, &version_bytes); // TODO: Does this actually work? Using local key as base could be risky.
 

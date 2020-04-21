@@ -6,7 +6,7 @@ mod tests;
 
 use std::{
     collections::{HashMap, HashSet, VecDeque},
-    convert::From,
+    convert::{From, TryInto},
     iter,
 };
 
@@ -20,7 +20,10 @@ use engine_shared::{
     TypeMismatch,
 };
 use engine_storage::global_state::StateReader;
-use types::{bytesrepr, CLType, CLValueError, Key};
+use types::{
+    bytesrepr::{self, ToBytes},
+    CLType, CLValueError, Key, SemVer,
+};
 
 use crate::engine_state::{execution_effect::ExecutionEffect, op::Op};
 
@@ -395,8 +398,38 @@ impl<R: StateReader<Key, StoredValue>> TrackingCopy<R> {
                     return Ok(query.into_not_found_result(&msg_prefix));
                 }
 
-                // TODO: maybe parse name into version and continue?
-                StoredValue::ContractMetadata(_metadata) => unimplemented!(),
+                StoredValue::ContractMetadata(metadata) => {
+                    let name = query.next_name();
+                    let sem_ver: SemVer = match name.as_str().try_into() {
+                        Ok(sem_ver) => sem_ver,
+                        Err(_error) => {
+                            let msg_prefix = format!(
+                                "Query cannot continue as {} is not a valid version string",
+                                name
+                            );
+                            return Ok(query.into_not_found_result(&msg_prefix));
+                        }
+                    };
+                    // Inactive versions are returning errors without going deeper through
+                    // reconstructed local key.
+                    if metadata.is_version_removed(&sem_ver) {
+                        let msg_prefix =
+                            format!("Query cannot continue as version {} is removed", name);
+                        return Ok(query.into_not_found_result(&msg_prefix));
+                    }
+
+                    // Check if given version is contained active versions before going deeper
+                    // through local key.
+                    if !metadata.is_version_active(&sem_ver) {
+                        let msg_prefix =
+                            format!("Query cannot continue as version {} does not exists", name);
+                        return Ok(query.into_not_found_result(&msg_prefix));
+                    }
+
+                    let version_bytes = sem_ver.into_bytes().expect("should serialize");
+                    let contract_key = Key::local(query.current_key.into_seed(), &version_bytes);
+                    query.current_key = contract_key
+                }
             }
         }
     }

@@ -135,8 +135,18 @@ impl ContractMetadata {
         self.active_versions.remove(version)
     }
 
+    /// Checks if the given version is active
+    pub fn is_version_active(&self, version: &SemVer) -> bool {
+        self.active_versions.contains_key(version)
+    }
+
+    /// Checks if the given version is removed
+    pub fn is_version_removed(&self, version: &SemVer) -> bool {
+        self.removed_versions.contains(version)
+    }
+
     /// Modify the collection of active versions to include the given one.
-    pub fn with_version(&mut self, version: SemVer, header: ContractHeader) -> Result<(), Error> {
+    pub fn add_version(&mut self, version: SemVer, header: ContractHeader) -> Result<(), Error> {
         if self.removed_versions.contains(&version) || self.active_versions.contains_key(&version) {
             return Err(Error::PreviouslyUsedVersion);
         }
