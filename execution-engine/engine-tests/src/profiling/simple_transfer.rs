@@ -50,10 +50,6 @@ fn verbose_arg() -> Arg<'static, 'static> {
         .help(VERBOSE_ARG_HELP)
 }
 
-fn parse_hash(encoded_hash: &str) -> Vec<u8> {
-    base16::decode(encoded_hash).expect("Expected a valid, hex-encoded hash")
-}
-
 #[derive(Debug)]
 struct Args {
     root_hash: Option<Vec<u8>>,
@@ -72,7 +68,9 @@ impl Args {
             .arg(data_dir_arg)
             .arg(verbose_arg())
             .get_matches();
-        let root_hash = arg_matches.value_of(ROOT_HASH_ARG_NAME).map(parse_hash);
+        let root_hash = arg_matches
+            .value_of(ROOT_HASH_ARG_NAME)
+            .map(profiling::parse_hash);
         let data_dir = profiling::data_dir(&arg_matches);
         let verbose = arg_matches.is_present(VERBOSE_ARG_NAME);
         Args {
@@ -91,7 +89,7 @@ fn main() {
     let root_hash = args.root_hash.unwrap_or_else(|| {
         let mut input = String::new();
         let _ = io::stdin().read_line(&mut input);
-        parse_hash(input.trim_end())
+        profiling::parse_hash(input.trim_end())
     });
 
     let account_1_public_key = profiling::account_1_public_key();

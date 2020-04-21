@@ -448,7 +448,10 @@ trait DownloadManagerImpl[F[_]] extends DownloadManager[F] { self =>
           existing.copy(
             sources = existing.sources + source,
             relay = existing.relay || relay,
-            maybeWatcher = Some(downloadFeedback)
+            maybeWatcher = Some(downloadFeedback),
+            // A new ping should mean this item can now be considered again;
+            // also stops `addSource` from traversing it repeatedly.
+            isError = false
           ) -> downloadFeedback
         }
       } getOrElse {

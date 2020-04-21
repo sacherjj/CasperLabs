@@ -478,6 +478,7 @@ steps:
   depends_on:
   - docker-build-key-bors
 
+# Release Branch Only
 - name: run-integration-tests-parallel-0
   commands:
   - "cd integration-testing"
@@ -492,12 +493,12 @@ steps:
     path: "/tmp"
   when:
     branch:
-    - staging
-    - trying
+    - release-*
   depends_on:
   - docker-build-ee-int-bors
   - docker-build-explorer-bors
 
+# Release Branch Only
 - name: run-integration-tests-parallel-1
   commands:
   - "cd integration-testing"
@@ -512,12 +513,12 @@ steps:
     path: "/tmp"
   when:
     branch:
-    - staging
-    - trying
+    - release-*
   depends_on:
   - docker-build-ee-int-bors
   - docker-build-explorer-bors
 
+# Release Branch Only
 - name: run-integration-tests-parallel-2
   commands:
   - "cd integration-testing"
@@ -532,12 +533,12 @@ steps:
     path: "/tmp"
   when:
     branch:
-    - staging
-    - trying
+    - release-*
   depends_on:
   - docker-build-ee-int-bors
   - docker-build-explorer-bors
 
+# Release Branch Only
 - name: run-integration-tests-serial-3
   commands:
   - "cd integration-testing"
@@ -552,12 +553,32 @@ steps:
     path: "/tmp"
   when:
     branch:
-    - staging
-    - trying
+    - release-*
   depends_on:
   - run-integration-tests-parallel-0
   - run-integration-tests-parallel-1
   - run-integration-tests-parallel-2
+
+# Dev branch only
+- name: run-integration-tests
+  commands:
+  - "cd integration-testing"
+  - "./docker_run_tests.sh --unique_run_num 5"
+  environment:
+    _JAVA_OPTIONS: "-Xms2G -Xmx2G -XX:MaxMetaspaceSize=1G"
+  image: "casperlabs/buildenv:latest"
+  volumes:
+  - name: docker_sock
+    path: "/var/run/docker.sock"
+  - name: temp
+    path: "/tmp"
+  when:
+    branch:
+    - staging
+    - trying
+  depends_on:
+  - docker-build-ee-int-bors
+  - docker-build-explorer-bors
 
 # The below section is for post-bors push webhooks
 - name: rust-compile-for-make

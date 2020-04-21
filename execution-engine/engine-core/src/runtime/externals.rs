@@ -12,7 +12,7 @@ use types::{
 use engine_shared::{gas::Gas, stored_value::StoredValue};
 use engine_storage::global_state::StateReader;
 
-use super::{args::Args, Error, Runtime};
+use super::{args::Args, scoped_timer::ScopedTimer, Error, Runtime};
 use crate::resolvers::v1_function_index::FunctionIndex;
 
 impl<'a, R> Externals for Runtime<'a, R>
@@ -26,6 +26,7 @@ where
         args: RuntimeArgs,
     ) -> Result<Option<RuntimeValue>, Trap> {
         let func = FunctionIndex::try_from(index).expect("unknown function index");
+        let mut scoped_timer = ScopedTimer::new(func);
         match func {
             FunctionIndex::ReadFuncIndex => {
                 // args(0) = pointer to key in Wasm memory
@@ -40,7 +41,8 @@ where
                 // args(0) = pointer to key in Wasm memory
                 // args(1) = size of key in Wasm memory
                 // args(2) = pointer to output size (output param)
-                let (key_ptr, key_size, output_size_ptr) = Args::parse(args)?;
+                let (key_ptr, key_size, output_size_ptr): (_, u32, _) = Args::parse(args)?;
+                scoped_timer.add_property("key_size", key_size.to_string());
                 let ret = self.read_local(key_ptr, key_size, output_size_ptr)?;
                 Ok(Some(RuntimeValue::I32(api_error::i32_from(ret))))
             }
@@ -49,7 +51,8 @@ where
                 // args(0) = pointer to amount of keys (output)
                 // args(1) = pointer to amount of serialized bytes (output)
                 let (total_keys_ptr, result_size_ptr) = Args::parse(args)?;
-                let ret = self.load_named_keys(total_keys_ptr, result_size_ptr)?;
+                let ret =
+                    self.load_named_keys(total_keys_ptr, result_size_ptr, &mut scoped_timer)?;
                 Ok(Some(RuntimeValue::I32(api_error::i32_from(ret))))
             }
 
@@ -58,7 +61,8 @@ where
                 // args(1) = size of key
                 // args(2) = pointer to value
                 // args(3) = size of value
-                let (key_ptr, key_size, value_ptr, value_size) = Args::parse(args)?;
+                let (key_ptr, key_size, value_ptr, value_size): (_, _, _, u32) = Args::parse(args)?;
+                scoped_timer.add_property("value_size", value_size.to_string());
                 self.write(key_ptr, key_size, value_ptr, value_size)?;
                 Ok(None)
             }
@@ -68,7 +72,10 @@ where
                 // args(1) = size of key
                 // args(2) = pointer to value
                 // args(3) = size of value
-                let (key_bytes_ptr, key_bytes_size, value_ptr, value_size) = Args::parse(args)?;
+                let (key_bytes_ptr, key_bytes_size, value_ptr, value_size): (_, u32, _, u32) =
+                    Args::parse(args)?;
+                scoped_timer.add_property("key_bytes_size", key_bytes_size.to_string());
+                scoped_timer.add_property("value_size", value_size.to_string());
                 self.write_local(key_bytes_ptr, key_bytes_size, value_ptr, value_size)?;
                 Ok(None)
             }
@@ -88,7 +95,9 @@ where
                 // args(1) = size of key
                 // args(2) = pointer to value
                 // args(3) = size of value
-                let (key_bytes_ptr, key_bytes_size, value_ptr, value_size) = Args::parse(args)?;
+                let (key_bytes_ptr, key_bytes_size, value_ptr, value_size): (_, u32, _, _) =
+                    Args::parse(args)?;
+                scoped_timer.add_property("key_bytes_size", key_bytes_size.to_string());
                 self.add_local(key_bytes_ptr, key_bytes_size, value_ptr, value_size)?;
                 Ok(None)
             }
@@ -97,7 +106,8 @@ where
                 // args(0) = pointer to uref destination in Wasm memory
                 // args(1) = pointer to initial value
                 // args(2) = size of initial value
-                let (uref_ptr, value_ptr, value_size) = Args::parse(args)?;
+                let (uref_ptr, value_ptr, value_size): (_, _, u32) = Args::parse(args)?;
+                scoped_timer.add_property("value_size", value_size.to_string());
                 self.new_uref(uref_ptr, value_ptr, value_size)?;
                 Ok(None)
             }
@@ -115,6 +125,7 @@ where
                 // args(1) = pointer to destination in Wasm memory
                 // args(2) = size of destination pointer memory
                 let (index, dest_ptr, dest_size): (u32, _, u32) = Args::parse(args)?;
+                scoped_timer.add_property("dest_size", dest_size.to_string());
                 let ret = self.get_arg(index as usize, dest_ptr, dest_size as usize)?;
                 Ok(Some(RuntimeValue::I32(api_error::i32_from(ret))))
             }
@@ -123,7 +134,7 @@ where
                 // args(0) = pointer to value
                 // args(1) = size of value
                 let (value_ptr, value_size): (_, u32) = Args::parse(args)?;
-
+                scoped_timer.add_property("value_size", value_size.to_string());
                 Err(self.ret(value_ptr, value_size as usize))
             }
 
@@ -135,12 +146,17 @@ where
                 // args(4) = pointer to result size (output)
                 let (key_ptr, key_size, args_ptr, args_size, result_size_ptr): (_, _, _, u32, _) =
                     Args::parse(args)?;
+                scoped_timer.add_property("args_size", args_size.to_string());
 
                 let key_contract: Key = self.key_from_mem(key_ptr, key_size)?;
                 let args_bytes: Vec<u8> = self.bytes_from_mem(args_ptr, args_size as usize)?;
 
-                let ret =
-                    self.call_contract_host_buffer(key_contract, args_bytes, result_size_ptr)?;
+                let ret = self.call_contract_host_buffer(
+                    key_contract,
+                    args_bytes,
+                    result_size_ptr,
+                    &mut scoped_timer,
+                )?;
                 Ok(Some(RuntimeValue::I32(api_error::i32_from(ret))))
             }
 
@@ -157,6 +173,7 @@ where
                     u32,
                     u32,
                 ) = Args::parse(args)?;
+                scoped_timer.add_property("name_size", name_size.to_string());
                 let ret = self.load_key(
                     name_ptr,
                     name_size,
@@ -170,7 +187,8 @@ where
             FunctionIndex::HasKeyFuncIndex => {
                 // args(0) = pointer to key name in Wasm memory
                 // args(1) = size of key name
-                let (name_ptr, name_size) = Args::parse(args)?;
+                let (name_ptr, name_size): (_, u32) = Args::parse(args)?;
+                scoped_timer.add_property("name_size", name_size.to_string());
                 let result = self.has_key(name_ptr, name_size)?;
                 Ok(Some(RuntimeValue::I32(result)))
             }
@@ -180,7 +198,8 @@ where
                 // args(1) = size of key name
                 // args(2) = pointer to key in Wasm memory
                 // args(3) = size of key
-                let (name_ptr, name_size, key_ptr, key_size) = Args::parse(args)?;
+                let (name_ptr, name_size, key_ptr, key_size): (_, u32, _, _) = Args::parse(args)?;
+                scoped_timer.add_property("name_size", name_size.to_string());
                 self.put_key(name_ptr, name_size, key_ptr, key_size)?;
                 Ok(None)
             }
@@ -188,7 +207,8 @@ where
             FunctionIndex::RemoveKeyFuncIndex => {
                 // args(0) = pointer to key name in Wasm memory
                 // args(1) = size of key name
-                let (name_ptr, name_size) = Args::parse(args)?;
+                let (name_ptr, name_size): (_, u32) = Args::parse(args)?;
+                scoped_timer.add_property("name_size", name_size.to_string());
                 self.remove_key(name_ptr, name_size)?;
                 Ok(None)
             }
@@ -216,41 +236,57 @@ where
             FunctionIndex::StoreFnIndex => {
                 // args(0) = pointer to function name in Wasm memory
                 // args(1) = size of the name
-                // args(2) = pointer to additional unforgable names
-                //           to be saved with the function body
-                // args(3) = size of the additional unforgable names
+                // args(2) = pointer to named keys to be saved with the function body
+                // args(3) = size of the named keys
                 // args(4) = pointer to a Wasm memory where we will save
                 //           uref address of the new function
-                let (name_ptr, name_size, urefs_ptr, urefs_size, hash_ptr) = Args::parse(args)?;
-                let _uref_type: u32 = urefs_size;
+                let (name_ptr, name_size, named_keys_ptr, named_keys_size, uref_addr_ptr): (
+                    _,
+                    u32,
+                    _,
+                    u32,
+                    _,
+                ) = Args::parse(args)?;
+                scoped_timer.add_property("name_size", name_size.to_string());
                 let fn_bytes = self.get_function_by_name(name_ptr, name_size)?;
-                let uref_bytes = self
+                let contract_size = named_keys_size as usize + fn_bytes.len();
+                scoped_timer.add_property("contract_size", contract_size.to_string());
+                let named_keys_bytes = self
                     .memory
-                    .get(urefs_ptr, urefs_size as usize)
-                    .map_err(Error::Interpreter)?;
-                let urefs = bytesrepr::deserialize(uref_bytes).map_err(Error::BytesRepr)?;
-                let contract_hash = self.store_function(fn_bytes, urefs)?;
-                self.function_address(contract_hash, hash_ptr)?;
+                    .get(named_keys_ptr, named_keys_size as usize)
+                    .map_err(|e| Error::Interpreter(e.into()))?;
+                let named_keys =
+                    bytesrepr::deserialize(named_keys_bytes).map_err(Error::BytesRepr)?;
+                let contract_hash = self.store_function(fn_bytes, named_keys)?;
+                self.function_address(contract_hash, uref_addr_ptr)?;
                 Ok(None)
             }
 
             FunctionIndex::StoreFnAtHashIndex => {
                 // args(0) = pointer to function name in Wasm memory
                 // args(1) = size of the name
-                // args(2) = pointer to additional unforgable names
-                //           to be saved with the function body
-                // args(3) = size of the additional unforgable names
+                // args(2) = pointer to named keys to be saved with the function body
+                // args(3) = size of the named keys
                 // args(4) = pointer to a Wasm memory where we will save
                 //           hash of the new function
-                let (name_ptr, name_size, urefs_ptr, urefs_size, hash_ptr) = Args::parse(args)?;
-                let _uref_type: u32 = urefs_size;
+                let (name_ptr, name_size, named_keys_ptr, named_keys_size, hash_ptr): (
+                    _,
+                    u32,
+                    _,
+                    u32,
+                    _,
+                ) = Args::parse(args)?;
+                scoped_timer.add_property("name_size", name_size.to_string());
                 let fn_bytes = self.get_function_by_name(name_ptr, name_size)?;
-                let uref_bytes = self
+                let contract_size = named_keys_size as usize + fn_bytes.len();
+                scoped_timer.add_property("contract_size", contract_size.to_string());
+                let named_keys_bytes = self
                     .memory
-                    .get(urefs_ptr, urefs_size as usize)
-                    .map_err(Error::Interpreter)?;
-                let urefs = bytesrepr::deserialize(uref_bytes).map_err(Error::BytesRepr)?;
-                let contract_hash = self.store_function_at_hash(fn_bytes, urefs)?;
+                    .get(named_keys_ptr, named_keys_size as usize)
+                    .map_err(|e| Error::Interpreter(e.into()))?;
+                let named_keys =
+                    bytesrepr::deserialize(named_keys_bytes).map_err(Error::BytesRepr)?;
+                let contract_hash = self.store_function_at_hash(fn_bytes, named_keys)?;
                 self.function_address(contract_hash, hash_ptr)?;
                 Ok(None)
             }
@@ -325,7 +361,7 @@ where
                 assert_eq!(dest_size, purse_bytes.len() as u32);
                 self.memory
                     .set(dest_ptr, &purse_bytes)
-                    .map_err(Error::Interpreter)?;
+                    .map_err(|e| Error::Interpreter(e.into()))?;
                 Ok(Some(RuntimeValue::I32(0)))
             }
 
@@ -421,8 +457,15 @@ where
                 // args(1) = size of name in Wasm memory
                 // args(2) = pointer to key in Wasm memory
                 // args(3) = size of key
-                let (name_ptr, name_size, key_ptr, key_size) = Args::parse(args)?;
-                let ret = self.upgrade_contract_at_uref(name_ptr, name_size, key_ptr, key_size)?;
+                let (name_ptr, name_size, key_ptr, key_size): (_, u32, _, _) = Args::parse(args)?;
+                scoped_timer.add_property("name_size", name_size.to_string());
+                let ret = self.upgrade_contract_at_uref(
+                    name_ptr,
+                    name_size,
+                    key_ptr,
+                    key_size,
+                    &mut scoped_timer,
+                )?;
                 Ok(Some(RuntimeValue::I32(api_error::i32_from(ret))))
             }
 
@@ -445,13 +488,15 @@ where
             FunctionIndex::ReadHostBufferIndex => {
                 // args(0) = pointer to Wasm memory where to write size.
                 let (dest_ptr, dest_size, bytes_written_ptr): (_, u32, _) = Args::parse(args)?;
+                scoped_timer.add_property("dest_size", dest_size.to_string());
                 let ret = self.read_host_buffer(dest_ptr, dest_size as usize, bytes_written_ptr)?;
                 Ok(Some(RuntimeValue::I32(api_error::i32_from(ret))))
             }
 
             #[cfg(feature = "test-support")]
             FunctionIndex::PrintIndex => {
-                let (text_ptr, text_size) = Args::parse(args)?;
+                let (text_ptr, text_size): (_, u32) = Args::parse(args)?;
+                scoped_timer.add_property("text_size", text_size.to_string());
                 self.print(text_ptr, text_size)?;
                 Ok(None)
             }

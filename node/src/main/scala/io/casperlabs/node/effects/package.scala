@@ -95,9 +95,13 @@ package object effects {
     val readThreads   = conf.server.dbReadThreads.value
     val writeThreads  = conf.server.dbWriteThreads.value
     val readPoolSize  = conf.server.dbReadConnections.value
-    val writePoolSize = 1
 
-    def mkConfig(poolSize: Int, foreignKeys: Boolean) = {
+    def mkConfig(
+        poolName: String,
+        poolSize: Int,
+        foreignKeys: Boolean,
+        connectionTimeout: FiniteDuration
+    ) = {
       val config = new HikariConfig()
       config.setDriverClassName("org.sqlite.JDBC")
       config.setJdbcUrl(s"jdbc:sqlite:${serverDataDir.resolve("sqlite.db")}")
@@ -116,33 +120,35 @@ package object effects {
       // NODE-1019 will add logging, maybe we'll learn more.
       config.addDataSourceProperty("busy_timeout", "5000")
       config.addDataSourceProperty("journal_mode", "WAL")
+      config.setConnectionTimeout(connectionTimeout.toMillis)
+      config.setPoolName(s"${poolName}-pool")
       config
     }
+
+    def mkTransactor(config: HikariConfig, threads: Int) =
+      HikariTransactor
+        .fromHikariConfig[Task](
+          config,
+          connectEC(config.getPoolName, config.getMaximumPoolSize, threads),
+          Blocker.liftExecutionContext(transactEC(config.getPoolName, config.getMaximumPoolSize))
+        )
 
     // Using a connection pool with maximum size of 1 for writers because with the default settings we got SQLITE_BUSY errors.
     // The SQLite docs say the driver is thread safe, but only one connection should be made per process
     // (the file locking mechanism depends on process IDs, closing one connection would invalidate the locks for all of them).
-    val writeXaconfig = mkConfig(writePoolSize, foreignKeys = true)
+    val writeXaConfig =
+      mkConfig("write", poolSize = 1, foreignKeys = true, connectionTimeout = 30.seconds)
 
     // Using a separate Transactor for read operations because
     // we use fs2.Stream as a return type in some places which hold an opened connection
     // preventing acquiring a connection in other places if we use a connection pool with size of 1.
-    val readXaconfig = mkConfig(readPoolSize, foreignKeys = false)
+    val readXaConfig =
+      mkConfig("read", poolSize = readPoolSize, foreignKeys = false, connectionTimeout = 30.seconds)
 
     // Hint: Use config.setLeakDetectionThreshold(10000) to detect connection leaking
     for {
-      writeXa <- HikariTransactor
-                  .fromHikariConfig[Task](
-                    writeXaconfig,
-                    connectEC("write", writePoolSize, writeThreads),
-                    Blocker.liftExecutionContext(transactEC("write", writePoolSize))
-                  )
-      readXa <- HikariTransactor
-                 .fromHikariConfig[Task](
-                   readXaconfig,
-                   connectEC("read", readPoolSize, readThreads),
-                   Blocker.liftExecutionContext(transactEC("read", readPoolSize))
-                 )
+      writeXa <- mkTransactor(writeXaConfig, writeThreads)
+      readXa  <- mkTransactor(readXaConfig, readThreads)
     } yield (writeXa, readXa)
   }
 }

@@ -35,7 +35,7 @@ mod phase;
 mod protocol_version;
 mod semver;
 pub mod system_contract_errors;
-mod system_contract_type;
+pub mod system_contract_type;
 mod transfer_result;
 mod uint;
 mod uref;

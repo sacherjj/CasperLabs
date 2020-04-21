@@ -39,6 +39,10 @@ case ${UNIQUE_RUN_NUM} in
   [3])
   pipenv run pytest -k "not R0 and not R1 and not R2" ${PYTEST_ARGS} ${TEST_RUN_ARGS}
   ;;
+  [5])
+  # Using 5 as special code for dev CI to only run one test
+  pipenv run pytest -k "test_clarity" ${PYTEST_ARGS} ${TEST_RUN_ARGS}
+  ;;
   *)
   pipenv run pytest ${PYTEST_ARGS} ${TEST_RUN_ARGS}
   ;;
