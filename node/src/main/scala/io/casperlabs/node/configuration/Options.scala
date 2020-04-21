@@ -457,6 +457,12 @@ private[configuration] final case class Options private (
       )
 
     @scallop
+    val serverDownloadPartialBlocks =
+      gen[Flag](
+        "Try downloading blocks without deploys in them first, fetching the missing deploys as a separate step."
+      )
+
+    @scallop
     val serverRelayMaxParallelBlocks =
       gen[Int]("Maximum number of parallel block downloads allowed to peers.")
 

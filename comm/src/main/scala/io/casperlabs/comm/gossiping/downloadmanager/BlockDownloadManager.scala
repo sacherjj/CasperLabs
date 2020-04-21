@@ -41,6 +41,7 @@ object BlockDownloadManagerImpl extends DownloadManagerCompanion {
   /** Start the download manager. */
   def apply[F[_]: ContextShift: Concurrent: Log: Timer: Metrics](
       maxParallelDownloads: Int,
+      partialBlocksEnabled: Boolean,
       connectToGossip: GossipService.Connector[F],
       backend: Backend[F],
       relaying: BlockRelaying[F],
@@ -65,7 +66,8 @@ object BlockDownloadManagerImpl extends DownloadManagerCompanion {
           backend,
           relaying,
           retriesConf,
-          egressScheduler
+          egressScheduler,
+          partialBlocksEnabled
         )
         managerLoop <- manager.run.start
       } yield (isShutdown, workersRef, managerLoop, manager)
@@ -102,7 +104,8 @@ class BlockDownloadManagerImpl[F[_]](
     val backend: BlockDownloadManagerImpl.Backend[F],
     val relaying: BlockRelaying[F],
     val retriesConf: RetriesConf,
-    val egressScheduler: Scheduler
+    val egressScheduler: Scheduler,
+    partialBlocksEnabled: Boolean
 )(
     implicit
     override val H: ContextShift[F],
@@ -153,7 +156,7 @@ class BlockDownloadManagerImpl[F[_]](
       val req = GetBlockChunkedRequest(
         blockHash = blockHash,
         acceptedCompressionAlgorithms = Seq("lz4"),
-        excludeDeployBodies = true
+        excludeDeployBodies = partialBlocksEnabled
       )
       stub.getBlockChunked(req)
     }

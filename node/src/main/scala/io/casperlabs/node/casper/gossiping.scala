@@ -340,6 +340,7 @@ package object gossiping {
         .filterNot(_.isEmpty)
       downloadManager <- BlockDownloadManagerImpl[F](
                           maxParallelDownloads = conf.server.downloadMaxParallelBlocks,
+                          partialBlocksEnabled = conf.server.downloadPartialBlocks,
                           connectToGossip = connectToGossip,
                           backend = new BlockDownloadManagerImpl.Backend[F] {
                             override def contains(blockHash: ByteString): F[Boolean] =

@@ -127,6 +127,9 @@ download-retry-initial-backoff-period = "5second"
 # Exponential factor to apply on subsequent wait times before trying to download again.
 download-retry-backoff-factor = 2.0
 
+# Try downloading blocks without deploys in them first, fetching the missing deploys as a separate step.
+download-partial-blocks = true
+
 # Maximum number of parallel block downloads allowed to peers.
 relay-max-parallel-blocks = 5
 
