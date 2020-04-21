@@ -53,7 +53,7 @@ const POS_ERROR_MAX: u32 = RESERVED_ERROR_MAX;
 const HEADER_ERROR_MIN: u32 = HEADER_ERROR_OFFSET;
 
 /// Maximum value of contract header error's inclusive range.
-const HEADER_ERROR_MAX: u32 = RESERVED_ERROR_MAX;
+const HEADER_ERROR_MAX: u32 = HEADER_ERROR_OFFSET + u8::MAX as u32;
 
 /// Errors which can be encountered while running a smart contract.
 ///
@@ -739,7 +739,7 @@ mod tests {
 
         assert_eq!(Err(ApiError::Unhandled), result_from(i32::MAX));
         assert_eq!(
-            Err(ApiError::Unhandled),
+            Err(ApiError::ContractHeader(255)),
             result_from(MINT_ERROR_OFFSET as i32 - 1)
         );
         assert_eq!(Err(ApiError::Unhandled), result_from(-1));
