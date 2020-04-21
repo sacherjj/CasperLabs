@@ -41,14 +41,18 @@ class GenesisTest extends FlatSpec with Matchers with StorageFixture {
       .withName("casperlabs")
       .withTimestamp(1234567890L)
       .withProtocolVersion(state.ProtocolVersion(1))
-      .withAccounts(accounts map {
-        case (key, balance, bond) =>
-          ipc.ChainSpec
-            .GenesisAccount()
-            .withPublicKey(ByteString.copyFrom(java.util.Base64.getDecoder.decode(key)))
-            .withBalance(state.BigInt(balance.toString, bitWidth = 512))
-            .withBondedAmount(state.BigInt(bond.toString, bitWidth = 512))
-      })
+      .withEeConfig(
+        ipc.ChainSpec.GenesisConfig
+          .ExecConfig()
+          .withAccounts(accounts map {
+            case (key, balance, bond) =>
+              ipc.ChainSpec.GenesisConfig.ExecConfig
+                .GenesisAccount()
+                .withPublicKey(ByteString.copyFrom(java.util.Base64.getDecoder.decode(key)))
+                .withBalance(state.BigInt(balance.toString, bitWidth = 512))
+                .withBondedAmount(state.BigInt(bond.toString, bitWidth = 512))
+          })
+      )
       .withDeployConfig(
         ipc.ChainSpec
           .DeployConfig()

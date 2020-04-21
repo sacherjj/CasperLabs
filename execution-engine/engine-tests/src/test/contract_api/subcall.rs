@@ -3,7 +3,8 @@ use num_traits::cast::AsPrimitive;
 use engine_core::engine_state::CONV_RATE;
 use engine_test_support::{
     internal::{
-        ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT,
+        ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_PAYMENT,
+        DEFAULT_RUN_GENESIS_REQUEST,
     },
     DEFAULT_ACCOUNT_ADDR,
 };
@@ -30,7 +31,7 @@ fn should_charge_gas_for_subcall() {
     let mut builder = InMemoryWasmTestBuilder::default();
 
     builder
-        .run_genesis(&DEFAULT_GENESIS_CONFIG)
+        .run_genesis(&DEFAULT_RUN_GENESIS_REQUEST)
         .exec(do_nothing_request)
         .expect_success()
         .commit()
@@ -113,7 +114,7 @@ fn should_add_all_gas_for_subcall() {
     let mut builder = InMemoryWasmTestBuilder::default();
 
     builder
-        .run_genesis(&DEFAULT_GENESIS_CONFIG)
+        .run_genesis(&DEFAULT_RUN_GENESIS_REQUEST)
         .exec(add_zero_gas_from_session_request)
         .expect_success()
         .commit()
@@ -167,7 +168,7 @@ fn expensive_subcall_should_cost_more() {
 
     // store the contracts first
     builder
-        .run_genesis(&DEFAULT_GENESIS_CONFIG)
+        .run_genesis(&DEFAULT_RUN_GENESIS_REQUEST)
         .exec(store_do_nothing_request)
         .expect_success()
         .commit()

@@ -4,8 +4,8 @@ use engine_core::engine_state::CONV_RATE;
 use engine_shared::motes::Motes;
 use engine_test_support::{
     internal::{
-        utils, ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_GENESIS_CONFIG,
-        DEFAULT_PAYMENT,
+        utils, ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_PAYMENT,
+        DEFAULT_RUN_GENESIS_REQUEST,
     },
     DEFAULT_ACCOUNT_ADDR,
 };
@@ -38,7 +38,7 @@ fn setup() -> InMemoryWasmTestBuilder {
     };
 
     let result = InMemoryWasmTestBuilder::default()
-        .run_genesis(&DEFAULT_GENESIS_CONFIG)
+        .run_genesis(&DEFAULT_RUN_GENESIS_REQUEST)
         .exec(exec_request_1)
         .expect_success()
         .commit()

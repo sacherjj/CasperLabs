@@ -1,11 +1,8 @@
 use std::convert::{TryFrom, TryInto};
 
-use engine_core::engine_state::genesis::{GenesisAccount, GenesisConfig};
+use engine_core::engine_state::genesis::GenesisConfig;
 
-use crate::engine_server::{
-    ipc::{ChainSpec_GenesisAccount, ChainSpec_GenesisConfig},
-    mappings::MappingError,
-};
+use crate::engine_server::{ipc::ChainSpec_GenesisConfig, mappings::MappingError};
 
 impl From<GenesisConfig> for ChainSpec_GenesisConfig {
     fn from(genesis_config: GenesisConfig) -> Self {
@@ -14,24 +11,7 @@ impl From<GenesisConfig> for ChainSpec_GenesisConfig {
         pb_genesis_config.set_name(genesis_config.name().to_string());
         pb_genesis_config.set_timestamp(genesis_config.timestamp());
         pb_genesis_config.set_protocol_version(genesis_config.protocol_version().into());
-        pb_genesis_config.set_mint_installer(genesis_config.mint_installer_bytes().to_vec());
-        pb_genesis_config
-            .set_pos_installer(genesis_config.proof_of_stake_installer_bytes().to_vec());
-        pb_genesis_config.set_standard_payment_installer(
-            genesis_config.standard_payment_installer_bytes().to_vec(),
-        );
-        {
-            let accounts = genesis_config
-                .accounts()
-                .iter()
-                .cloned()
-                .map(Into::into)
-                .collect::<Vec<ChainSpec_GenesisAccount>>();
-            pb_genesis_config.set_accounts(accounts.into());
-        }
-        pb_genesis_config
-            .mut_costs()
-            .set_wasm(genesis_config.wasm_costs().into());
+        pb_genesis_config.set_ee_config(genesis_config.take_ee_config().into());
         pb_genesis_config
     }
 }
@@ -43,24 +23,12 @@ impl TryFrom<ChainSpec_GenesisConfig> for GenesisConfig {
         let name = pb_genesis_config.take_name();
         let timestamp = pb_genesis_config.get_timestamp();
         let protocol_version = pb_genesis_config.take_protocol_version().into();
-        let accounts = pb_genesis_config
-            .take_accounts()
-            .into_iter()
-            .map(TryInto::try_into)
-            .collect::<Result<Vec<GenesisAccount>, Self::Error>>()?;
-        let wasm_costs = pb_genesis_config.take_costs().take_wasm().into();
-        let mint_initializer_bytes = pb_genesis_config.mint_installer;
-        let proof_of_stake_initializer_bytes = pb_genesis_config.pos_installer;
-        let standard_payment_installer_bytes = pb_genesis_config.standard_payment_installer;
+        let ee_config = pb_genesis_config.take_ee_config().try_into()?;
         Ok(GenesisConfig::new(
             name,
             timestamp,
             protocol_version,
-            mint_initializer_bytes,
-            proof_of_stake_initializer_bytes,
-            standard_payment_installer_bytes,
-            accounts,
-            wasm_costs,
+            ee_config,
         ))
     }
 }

@@ -1,7 +1,7 @@
 use engine_test_support::{
     internal::{
-        DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_GENESIS_CONFIG,
-        DEFAULT_PAYMENT, STANDARD_PAYMENT_CONTRACT,
+        DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_PAYMENT,
+        DEFAULT_RUN_GENESIS_REQUEST, STANDARD_PAYMENT_CONTRACT,
     },
     DEFAULT_ACCOUNT_ADDR,
 };
@@ -36,7 +36,7 @@ fn should_run_ee_890_gracefully_reject_start_node_in_session() {
     let exec_request_1 = ExecuteRequestBuilder::new().push_deploy(deploy_1).build();
 
     let result = InMemoryWasmTestBuilder::default()
-        .run_genesis(&DEFAULT_GENESIS_CONFIG)
+        .run_genesis(&DEFAULT_RUN_GENESIS_REQUEST)
         .exec(exec_request_1)
         .commit()
         .finish();
@@ -64,7 +64,7 @@ fn should_run_ee_890_gracefully_reject_start_node_in_payment() {
     let exec_request_1 = ExecuteRequestBuilder::new().push_deploy(deploy_1).build();
 
     let result = InMemoryWasmTestBuilder::default()
-        .run_genesis(&DEFAULT_GENESIS_CONFIG)
+        .run_genesis(&DEFAULT_RUN_GENESIS_REQUEST)
         .exec(exec_request_1)
         .commit()
         .finish();

@@ -1372,13 +1372,17 @@ object HashSetCasperTest {
       .withName("casperlabs")
       .withTimestamp(timestamp)
       .withProtocolVersion(state.ProtocolVersion(1))
-      .withAccounts((bonds.keySet ++ wallets.keySet).toSeq.map { key =>
-        ipc.ChainSpec
-          .GenesisAccount()
-          .withPublicKey(ByteString.copyFrom(key))
-          .withBalance(state.BigInt(wallets.getOrElse(key, 0L).toString, bitWidth = 512))
-          .withBondedAmount(state.BigInt(bonds.getOrElse(key, 0L).toString, bitWidth = 512))
-      })
+      .withEeConfig(
+        ipc.ChainSpec.GenesisConfig
+          .ExecConfig()
+          .withAccounts((bonds.keySet ++ wallets.keySet).toSeq.map { key =>
+            ipc.ChainSpec.GenesisConfig.ExecConfig
+              .GenesisAccount()
+              .withPublicKey(ByteString.copyFrom(key))
+              .withBalance(state.BigInt(wallets.getOrElse(key, 0L).toString, bitWidth = 512))
+              .withBondedAmount(state.BigInt(bonds.getOrElse(key, 0L).toString, bitWidth = 512))
+          })
+      )
 
     StorageFixture
       .createMemoryStorages[Task]()

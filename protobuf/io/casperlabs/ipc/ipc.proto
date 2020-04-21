@@ -232,6 +232,11 @@ message ChainSpec {
     repeated UpgradePoint upgrades = 2;
 
     message GenesisConfig {
+        reserved 4; // mint_installer
+        reserved 5; // pos_installer
+        reserved 10; // standard_payment_installer
+        reserved 6; // genesis accounts
+        reserved 7; // WASM costs table
         // Human readable name for convenience; the genesis_hash is the true identifier.
         // The name influences the genesis hash by contributing to the seeding of the pseudo-
         // random number generator used in execution engine for computing genesis post-state.
@@ -240,24 +245,28 @@ message ChainSpec {
         // generator used in execution engine for computing genesis post-state.
         uint64 timestamp = 2;
         io.casperlabs.casper.consensus.state.ProtocolVersion protocol_version = 3;
-        // wasm bytecode for installing the mint system contract
-        bytes mint_installer = 4;
-        // wasm bytes for installing the pos system contract
-        bytes pos_installer = 5;
-        // wasm bytes for installing the standard payment system contract
-        bytes standard_payment_installer = 10;
-        // genesis account information
-        repeated GenesisAccount accounts = 6;
-        // costs at genesis
-        CostTable costs = 7;
         DeployConfig deploy_config = 8;
         HighwayConfig highway_config = 9;
-    }
+        ExecConfig ee_config = 11;
 
-    message GenesisAccount {
-        bytes public_key = 1;
-        io.casperlabs.casper.consensus.state.BigInt balance = 2; // in motes
-        io.casperlabs.casper.consensus.state.BigInt bonded_amount = 3; // in motes, 0 means "not bonded"
+        message ExecConfig {
+            // wasm bytecode for installing the mint system contract
+            bytes mint_installer = 1;
+            // wasm bytes for installing the pos system contract
+            bytes pos_installer = 2;
+            // wasm bytes for installing the standard payment system contract
+            bytes standard_payment_installer = 3;
+            // genesis account information
+            repeated GenesisAccount accounts = 4;
+            // costs at genesis
+            CostTable costs = 5;
+    
+            message GenesisAccount {
+                bytes public_key = 1;
+                io.casperlabs.casper.consensus.state.BigInt balance = 2; // in motes
+                io.casperlabs.casper.consensus.state.BigInt bonded_amount = 3; // in motes, 0 means "not bonded"
+            }
+        }
     }
 
     message DeployConfig {
@@ -446,6 +455,14 @@ message UnbondPayoutResponse {
     }
 }
 
+message RunGenesisRequest {
+    // Hash of the Genesis configuration.
+    bytes genesis_config_hash = 1;
+    io.casperlabs.casper.consensus.state.ProtocolVersion protocol_version = 2;
+    // Genesis configuration for the ExecutionEngine.
+    ChainSpec.GenesisConfig.ExecConfig ee_config = 3;
+}
+
 // --- END PROOF-OF-STAKE SERVICE DEFINITION --- //
 
 // Definition of the service.
@@ -455,7 +472,7 @@ service ExecutionEngineService {
     rpc commit (CommitRequest) returns (CommitResponse) {}
     rpc query (QueryRequest) returns (QueryResponse) {}
     rpc execute (ExecuteRequest) returns (ExecuteResponse) {}
-    rpc run_genesis (ChainSpec.GenesisConfig) returns (GenesisResponse) {}
+    rpc run_genesis (RunGenesisRequest) returns (GenesisResponse) {}
     rpc upgrade (UpgradeRequest) returns (UpgradeResponse) {}
     // proof-of-stake endpoints
     rpc bid_state(BidStateRequest) returns (BidStateResponse) {}

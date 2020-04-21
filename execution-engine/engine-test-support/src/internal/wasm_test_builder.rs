@@ -14,8 +14,8 @@ use log::LevelFilter;
 
 use engine_core::{
     engine_state::{
-        execute_request::ExecuteRequest, execution_result::ExecutionResult, genesis::GenesisConfig,
-        EngineConfig, EngineState, SYSTEM_ACCOUNT_ADDR,
+        execute_request::ExecuteRequest, execution_result::ExecutionResult,
+        run_genesis_request::RunGenesisRequest, EngineConfig, EngineState, SYSTEM_ACCOUNT_ADDR,
     },
     execution,
 };
@@ -309,19 +309,18 @@ where
         }
     }
 
-    pub fn run_genesis(&mut self, genesis_config: &GenesisConfig) -> &mut Self {
+    pub fn run_genesis(&mut self, run_genesis_request: &RunGenesisRequest) -> &mut Self {
         let system_account = Key::Account(SYSTEM_ACCOUNT_ADDR);
-        let genesis_config_proto = genesis_config
+        let run_genesis_request_proto = run_genesis_request
             .to_owned()
             .try_into()
             .expect("could not parse");
 
         let genesis_response = self
             .engine_state
-            .run_genesis(RequestOptions::new(), genesis_config_proto)
+            .run_genesis(RequestOptions::new(), run_genesis_request_proto)
             .wait_drop_metadata()
             .expect("Unable to get genesis response");
-
         if genesis_response.has_failed_deploy() {
             panic!(
                 "genesis failure: {:?}",
@@ -342,7 +341,7 @@ where
 
         let maybe_protocol_data = self
             .engine_state
-            .get_protocol_data(genesis_config.protocol_version())
+            .get_protocol_data(run_genesis_request.protocol_version())
             .expect("should read protocol data");
         let protocol_data = maybe_protocol_data.expect("should have protocol data stored");
 

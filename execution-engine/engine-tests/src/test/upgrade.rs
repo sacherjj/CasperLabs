@@ -1,6 +1,6 @@
 use engine_shared::{stored_value::StoredValue, transform::Transform};
 use engine_test_support::{
-    internal::{ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_GENESIS_CONFIG},
+    internal::{ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_RUN_GENESIS_REQUEST},
     DEFAULT_ACCOUNT_ADDR,
 };
 use types::CLValue;
@@ -27,7 +27,7 @@ const TOTAL_PURSES: usize = 3;
 fn should_upgrade_do_nothing_to_do_something() {
     let mut builder = InMemoryWasmTestBuilder::default();
 
-    builder.run_genesis(&*DEFAULT_GENESIS_CONFIG);
+    builder.run_genesis(&DEFAULT_RUN_GENESIS_REQUEST);
 
     {
         let exec_request = {
@@ -109,7 +109,7 @@ fn should_upgrade_do_nothing_to_do_something() {
 fn should_be_able_to_observe_state_transition_across_upgrade() {
     let mut builder = InMemoryWasmTestBuilder::default();
 
-    builder.run_genesis(&*DEFAULT_GENESIS_CONFIG);
+    builder.run_genesis(&DEFAULT_RUN_GENESIS_REQUEST);
 
     // store do-nothing-stored
     {
@@ -194,7 +194,7 @@ fn should_be_able_to_observe_state_transition_across_upgrade() {
 fn should_support_extending_functionality() {
     let mut builder = InMemoryWasmTestBuilder::default();
 
-    builder.run_genesis(&*DEFAULT_GENESIS_CONFIG);
+    builder.run_genesis(&DEFAULT_RUN_GENESIS_REQUEST);
 
     // store do-nothing-stored
     {
@@ -293,7 +293,7 @@ fn should_support_extending_functionality() {
 fn should_maintain_named_keys_across_upgrade() {
     let mut builder = InMemoryWasmTestBuilder::default();
 
-    builder.run_genesis(&*DEFAULT_GENESIS_CONFIG);
+    builder.run_genesis(&DEFAULT_RUN_GENESIS_REQUEST);
 
     // store contract
     {
@@ -375,7 +375,7 @@ fn should_maintain_named_keys_across_upgrade() {
 fn should_maintain_local_state_across_upgrade() {
     let mut builder = InMemoryWasmTestBuilder::default();
 
-    builder.run_genesis(&*DEFAULT_GENESIS_CONFIG);
+    builder.run_genesis(&DEFAULT_RUN_GENESIS_REQUEST);
 
     // store local_state_stored contract
     {

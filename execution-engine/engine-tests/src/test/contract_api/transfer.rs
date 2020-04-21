@@ -4,8 +4,8 @@ use engine_core::engine_state::CONV_RATE;
 use engine_shared::motes::Motes;
 use engine_test_support::{
     internal::{
-        utils, ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_GENESIS_CONFIG,
-        DEFAULT_PAYMENT,
+        utils, ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_PAYMENT,
+        DEFAULT_RUN_GENESIS_REQUEST,
     },
     DEFAULT_ACCOUNT_ADDR, DEFAULT_ACCOUNT_INITIAL_BALANCE,
 };
@@ -34,7 +34,7 @@ fn should_transfer_to_account() {
     // Run genesis
     let mut builder = InMemoryWasmTestBuilder::default();
 
-    let builder = builder.run_genesis(&DEFAULT_GENESIS_CONFIG);
+    let builder = builder.run_genesis(&DEFAULT_RUN_GENESIS_REQUEST);
 
     let default_account = builder
         .get_account(DEFAULT_ACCOUNT_ADDR)
@@ -92,7 +92,7 @@ fn should_transfer_from_account_to_account() {
     // Run genesis
     let mut builder = InMemoryWasmTestBuilder::default();
 
-    let builder = builder.run_genesis(&DEFAULT_GENESIS_CONFIG);
+    let builder = builder.run_genesis(&DEFAULT_RUN_GENESIS_REQUEST);
 
     let default_account = builder
         .get_account(DEFAULT_ACCOUNT_ADDR)
@@ -187,7 +187,7 @@ fn should_transfer_to_existing_account() {
     // Run genesis
     let mut builder = InMemoryWasmTestBuilder::default();
 
-    let builder = builder.run_genesis(&DEFAULT_GENESIS_CONFIG);
+    let builder = builder.run_genesis(&DEFAULT_RUN_GENESIS_REQUEST);
 
     let default_account = builder
         .get_account(DEFAULT_ACCOUNT_ADDR)
@@ -298,7 +298,7 @@ fn should_fail_when_insufficient_funds() {
     .build();
 
     let result = InMemoryWasmTestBuilder::default()
-        .run_genesis(&DEFAULT_GENESIS_CONFIG)
+        .run_genesis(&DEFAULT_RUN_GENESIS_REQUEST)
         // Exec transfer contract
         .exec(exec_request_1)
         .expect_success()
@@ -341,7 +341,7 @@ fn should_transfer_total_amount() {
     )
     .build();
     builder
-        .run_genesis(&DEFAULT_GENESIS_CONFIG)
+        .run_genesis(&DEFAULT_RUN_GENESIS_REQUEST)
         .exec(exec_request_1)
         .expect_success()
         .commit()

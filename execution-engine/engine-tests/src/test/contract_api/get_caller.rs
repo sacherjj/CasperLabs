@@ -1,6 +1,7 @@
 use engine_test_support::{
     internal::{
-        ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT,
+        ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_PAYMENT,
+        DEFAULT_RUN_GENESIS_REQUEST,
     },
     DEFAULT_ACCOUNT_ADDR,
 };
@@ -21,7 +22,7 @@ fn should_run_get_caller_contract() {
     )
     .build();
     InMemoryWasmTestBuilder::default()
-        .run_genesis(&DEFAULT_GENESIS_CONFIG)
+        .run_genesis(&DEFAULT_RUN_GENESIS_REQUEST)
         .exec(exec_request_1)
         .commit()
         .expect_success();
@@ -36,7 +37,7 @@ fn should_run_get_caller_contract() {
         ExecuteRequestBuilder::standard(ACCOUNT_1_ADDR, CONTRACT_GET_CALLER, (ACCOUNT_1_ADDR,))
             .build();
     InMemoryWasmTestBuilder::default()
-        .run_genesis(&DEFAULT_GENESIS_CONFIG)
+        .run_genesis(&DEFAULT_RUN_GENESIS_REQUEST)
         .exec(exec_request_2)
         .commit()
         .expect_success()
@@ -55,7 +56,7 @@ fn should_run_get_caller_subcall_contract() {
     )
     .build();
     InMemoryWasmTestBuilder::default()
-        .run_genesis(&DEFAULT_GENESIS_CONFIG)
+        .run_genesis(&DEFAULT_RUN_GENESIS_REQUEST)
         .exec(exec_request_1)
         .commit()
         .expect_success();
@@ -73,7 +74,7 @@ fn should_run_get_caller_subcall_contract() {
     )
     .build();
     InMemoryWasmTestBuilder::default()
-        .run_genesis(&DEFAULT_GENESIS_CONFIG)
+        .run_genesis(&DEFAULT_RUN_GENESIS_REQUEST)
         .exec(exec_request_2)
         .commit()
         .expect_success()

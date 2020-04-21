@@ -1,5 +1,6 @@
 use engine_core::engine_state::{
-    genesis::{GenesisAccount, GenesisConfig},
+    genesis::{ExecConfig, GenesisAccount},
+    run_genesis_request::RunGenesisRequest,
     SYSTEM_ACCOUNT_ADDR,
 };
 use engine_shared::{motes::Motes, stored_value::StoredValue};
@@ -12,8 +13,7 @@ use types::{account::PublicKey, Key, ProtocolVersion, U512};
 #[cfg(feature = "use-system-contracts")]
 const BAD_INSTALL: &str = "standard_payment.wasm";
 
-const CHAIN_NAME: &str = "Jeremiah";
-const TIMESTAMP: u64 = 0;
+const GENESIS_CONFIG_HASH: [u8; 32] = [127; 32];
 const ACCOUNT_1_ADDR: PublicKey = PublicKey::ed25519_from([1u8; 32]);
 const ACCOUNT_2_ADDR: PublicKey = PublicKey::ed25519_from([2u8; 32]);
 const ACCOUNT_1_BONDED_AMOUNT: u64 = 1_000_000;
@@ -46,7 +46,6 @@ fn should_run_genesis() {
         )
     };
 
-    let name = CHAIN_NAME.to_string();
     let mint_installer_bytes = utils::read_wasm_file_bytes(MINT_INSTALL_CONTRACT);
     let pos_installer_bytes = utils::read_wasm_file_bytes(POS_INSTALL_CONTRACT);
     let standard_payment_installer_bytes =
@@ -55,20 +54,19 @@ fn should_run_genesis() {
     let protocol_version = ProtocolVersion::V1_0_0;
     let wasm_costs = *DEFAULT_WASM_COSTS;
 
-    let genesis_config = GenesisConfig::new(
-        name,
-        TIMESTAMP,
-        protocol_version,
+    let exec_config = ExecConfig::new(
         mint_installer_bytes,
         pos_installer_bytes,
         standard_payment_installer_bytes,
         accounts,
         wasm_costs,
     );
+    let run_genesis_request =
+        RunGenesisRequest::new(GENESIS_CONFIG_HASH.into(), protocol_version, exec_config);
 
     let mut builder = InMemoryWasmTestBuilder::default();
 
-    builder.run_genesis(&genesis_config);
+    builder.run_genesis(&run_genesis_request);
 
     let system_account = builder
         .get_account(SYSTEM_ACCOUNT_ADDR)
@@ -111,7 +109,7 @@ fn should_run_genesis() {
 #[should_panic]
 #[test]
 fn should_fail_if_bad_mint_install_contract_is_provided() {
-    let genesis_config = {
+    let run_genesis_request = {
         let account_1 = {
             let account_1_public_key = ACCOUNT_1_ADDR;
             let account_1_balance = Motes::new(ACCOUNT_1_BALANCE.into());
@@ -132,7 +130,6 @@ fn should_fail_if_bad_mint_install_contract_is_provided() {
                 account_2_bonded_amount,
             )
         };
-        let name = CHAIN_NAME.to_string();
         let mint_installer_bytes = utils::read_wasm_file_bytes(BAD_INSTALL);
         let pos_installer_bytes = utils::read_wasm_file_bytes(POS_INSTALL_CONTRACT);
         let standard_payment_installer_bytes =
@@ -141,21 +138,19 @@ fn should_fail_if_bad_mint_install_contract_is_provided() {
         let protocol_version = ProtocolVersion::V1_0_0;
         let wasm_costs = *DEFAULT_WASM_COSTS;
 
-        GenesisConfig::new(
-            name,
-            TIMESTAMP,
-            protocol_version,
+        let exec_config = ExecConfig::new(
             mint_installer_bytes,
             pos_installer_bytes,
             standard_payment_installer_bytes,
             accounts,
             wasm_costs,
-        )
+        );
+        RunGenesisRequest::new(GENESIS_CONFIG_HASH.into(), protocol_version, exec_config)
     };
 
     let mut builder = InMemoryWasmTestBuilder::default();
 
-    builder.run_genesis(&genesis_config);
+    builder.run_genesis(&run_genesis_request);
 }
 
 #[cfg(feature = "use-system-contracts")]
@@ -163,7 +158,7 @@ fn should_fail_if_bad_mint_install_contract_is_provided() {
 #[should_panic]
 #[test]
 fn should_fail_if_bad_pos_install_contract_is_provided() {
-    let genesis_config = {
+    let run_genesis_request = {
         let account_1 = {
             let account_1_public_key = ACCOUNT_1_ADDR;
             let account_1_balance = Motes::new(ACCOUNT_1_BALANCE.into());
@@ -184,7 +179,6 @@ fn should_fail_if_bad_pos_install_contract_is_provided() {
                 account_2_bonded_amount,
             )
         };
-        let name = CHAIN_NAME.to_string();
         let mint_installer_bytes = utils::read_wasm_file_bytes(MINT_INSTALL_CONTRACT);
         let pos_installer_bytes = utils::read_wasm_file_bytes(BAD_INSTALL);
         let standard_payment_installer_bytes =
@@ -192,20 +186,17 @@ fn should_fail_if_bad_pos_install_contract_is_provided() {
         let accounts = vec![account_1, account_2];
         let protocol_version = ProtocolVersion::V1_0_0;
         let wasm_costs = *DEFAULT_WASM_COSTS;
-
-        GenesisConfig::new(
-            name,
-            TIMESTAMP,
-            protocol_version,
+        let exec_config = ExecConfig::new(
             mint_installer_bytes,
             pos_installer_bytes,
             standard_payment_installer_bytes,
             accounts,
             wasm_costs,
-        )
+        );
+        RunGenesisRequest::new(GENESIS_CONFIG_HASH.into(), protocol_version, exec_config)
     };
 
     let mut builder = InMemoryWasmTestBuilder::default();
 
-    builder.run_genesis(&genesis_config);
+    builder.run_genesis(&run_genesis_request);
 }

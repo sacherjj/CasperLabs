@@ -1,7 +1,7 @@
 use std::convert::TryFrom;
 
 use engine_test_support::{
-    internal::{ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_GENESIS_CONFIG},
+    internal::{ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_RUN_GENESIS_REQUEST},
     DEFAULT_ACCOUNT_ADDR,
 };
 use types::{bytesrepr::FromBytes, CLTyped, CLValue, Key, U512};
@@ -44,7 +44,7 @@ fn read_value<T: CLTyped + FromBytes>(builder: &mut InMemoryWasmTestBuilder, key
 fn should_run_named_keys_contract() {
     let mut builder = InMemoryWasmTestBuilder::default();
 
-    builder.run_genesis(&DEFAULT_GENESIS_CONFIG);
+    builder.run_genesis(&DEFAULT_RUN_GENESIS_REQUEST);
 
     run_command(&mut builder, COMMAND_CREATE_UREF1);
 

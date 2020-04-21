@@ -1,5 +1,5 @@
 use engine_test_support::{
-    internal::{ExecuteRequestBuilder, WasmTestBuilder, DEFAULT_GENESIS_CONFIG},
+    internal::{ExecuteRequestBuilder, WasmTestBuilder, DEFAULT_RUN_GENESIS_REQUEST},
     DEFAULT_ACCOUNT_ADDR,
 };
 use types::{account::PublicKey, U512};
@@ -22,7 +22,7 @@ fn should_run_mint_purse_contract() {
         ExecuteRequestBuilder::standard(SYSTEM_ADDR, CONTRACT_MINT_PURSE, ()).build();
 
     WasmTestBuilder::default()
-        .run_genesis(&DEFAULT_GENESIS_CONFIG)
+        .run_genesis(&DEFAULT_RUN_GENESIS_REQUEST)
         .exec(exec_request_1)
         .commit()
         .expect_success()
@@ -38,7 +38,7 @@ fn should_not_allow_non_system_accounts_to_mint() {
         ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, CONTRACT_MINT_PURSE, ()).build();
 
     assert!(WasmTestBuilder::default()
-        .run_genesis(&DEFAULT_GENESIS_CONFIG)
+        .run_genesis(&DEFAULT_RUN_GENESIS_REQUEST)
         .exec(exec_request)
         .commit()
         .is_error());

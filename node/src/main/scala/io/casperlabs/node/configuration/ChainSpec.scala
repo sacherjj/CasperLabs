@@ -312,28 +312,33 @@ object ChainSpecReader {
             posCodeBytes  <- resolver.asBytes(resolvePath(path, genesis.posCodePath))
             accountsCsv   <- resolver.asString(resolvePath(path, genesis.initialAccountsPath))
             accounts      <- Accounts.parseCsv(accountsCsv, skipHeader = false)
+            protocolVersion = (state.ProtocolVersion.apply _).tupled(
+              ProtocolVersion.unapply(genesis.protocolVersion).get
+            )
           } yield {
             ipc.ChainSpec
               .GenesisConfig()
               .withName(genesis.name)
               .withTimestamp(genesis.timestamp)
               .withProtocolVersion(
-                (state.ProtocolVersion.apply _).tupled(
-                  ProtocolVersion.unapply(genesis.protocolVersion).get
-                )
+                protocolVersion
               )
-              .withMintInstaller(ByteString.copyFrom(mintCodeBytes))
-              .withPosInstaller(ByteString.copyFrom(posCodeBytes))
-              .withAccounts(accounts.map { account =>
-                ipc.ChainSpec
-                  .GenesisAccount()
-                  .withPublicKey(ByteString.copyFrom(account.publicKey))
-                  .withBalance(state.BigInt(account.initialBalance.toString, bitWidth = 512))
-                  .withBondedAmount(
-                    state.BigInt(account.initialBondedAmount.toString, bitWidth = 512)
-                  )
-              })
-              .withCosts(toCostTable(wasmCosts))
+              .withEeConfig(
+                ipc.ChainSpec.GenesisConfig
+                  .ExecConfig()
+                  .withMintInstaller(ByteString.copyFrom(mintCodeBytes))
+                  .withPosInstaller(ByteString.copyFrom(posCodeBytes))
+                  .withAccounts(accounts.map { account =>
+                    ipc.ChainSpec.GenesisConfig.ExecConfig
+                      .GenesisAccount()
+                      .withPublicKey(ByteString.copyFrom(account.publicKey))
+                      .withBalance(state.BigInt(account.initialBalance.toString, bitWidth = 512))
+                      .withBondedAmount(
+                        state.BigInt(account.initialBondedAmount.toString, bitWidth = 512)
+                      )
+                  })
+                  .withCosts(toCostTable(wasmCosts))
+              )
               .withDeployConfig(toDeployConfig(deployConfig))
               .withHighwayConfig(toHighwayConfig(highwayConfig))
           }

@@ -1,7 +1,7 @@
 use engine_test_support::{
     internal::{
         utils, DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder,
-        DEFAULT_ACCOUNT_KEY, DEFAULT_GENESIS_CONFIG,
+        DEFAULT_ACCOUNT_KEY, DEFAULT_RUN_GENESIS_REQUEST,
     },
     DEFAULT_ACCOUNT_ADDR,
 };
@@ -23,7 +23,7 @@ fn get_builder() -> InMemoryWasmTestBuilder {
         )
         .build();
 
-        builder.run_genesis(&*DEFAULT_GENESIS_CONFIG);
+        builder.run_genesis(&*DEFAULT_RUN_GENESIS_REQUEST);
         builder.exec_commit_finish(store_request);
     }
     builder

@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use contract::contract_api::system::{MINT_NAME, POS_NAME};
 use engine_test_support::{
-    internal::{ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_GENESIS_CONFIG},
+    internal::{ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_RUN_GENESIS_REQUEST},
     DEFAULT_ACCOUNT_ADDR,
 };
 use types::{account::PublicKey, Key};
@@ -15,7 +15,7 @@ const NEW_NAME_HASH: &str = "Hash";
 #[test]
 fn should_list_named_keys() {
     let mut builder = InMemoryWasmTestBuilder::default();
-    builder.run_genesis(&DEFAULT_GENESIS_CONFIG);
+    builder.run_genesis(&DEFAULT_RUN_GENESIS_REQUEST);
 
     let mint_uref = builder.get_mint_contract_uref().into_read();
     let pos_uref = builder.get_pos_contract_uref().into_read();

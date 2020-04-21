@@ -31,8 +31,9 @@ use log::{info, warn, Level};
 
 use engine_core::engine_state::{
     execute_request::ExecuteRequest,
-    genesis::{GenesisConfig, GenesisResult},
+    genesis::GenesisResult,
     query::{QueryRequest, QueryResult},
+    run_genesis_request::RunGenesisRequest,
     upgrade::{UpgradeConfig, UpgradeResult},
     EngineState, Error as EngineError,
 };
@@ -45,10 +46,9 @@ use types::{bytesrepr::ToBytes, ProtocolVersion};
 
 use self::{
     ipc::{
-        BidStateRequest, BidStateResponse, ChainSpec_GenesisConfig, CommitRequest, CommitResponse,
-        DistributeRewardsRequest, DistributeRewardsResponse, ExecuteResponse, GenesisResponse,
-        QueryResponse, SlashRequest, SlashResponse, UnbondPayoutRequest, UnbondPayoutResponse,
-        UpgradeRequest, UpgradeResponse,
+        BidStateRequest, BidStateResponse, CommitRequest, CommitResponse, DistributeRewardsRequest,
+        DistributeRewardsResponse, ExecuteResponse, GenesisResponse, QueryResponse, SlashRequest,
+        SlashResponse, UnbondPayoutRequest, UnbondPayoutResponse, UpgradeRequest, UpgradeResponse,
     },
     ipc_grpc::{ExecutionEngineService, ExecutionEngineServiceServer},
     mappings::{ParsingError, TransformMap},
@@ -318,12 +318,12 @@ where
     fn run_genesis(
         &self,
         _request_options: RequestOptions,
-        genesis_config: ChainSpec_GenesisConfig,
+        run_genesis_request: ipc::RunGenesisRequest,
     ) -> SingleResponse<GenesisResponse> {
         let start = Instant::now();
         let correlation_id = CorrelationId::new();
 
-        let genesis_config: GenesisConfig = match genesis_config.try_into() {
+        let run_genesis_request: RunGenesisRequest = match run_genesis_request.try_into() {
             Ok(genesis_config) => genesis_config,
             Err(error) => {
                 let err_msg = error.to_string();
@@ -334,8 +334,16 @@ where
                 return SingleResponse::completed(genesis_response);
             }
         };
+        let genesis_config_hash = run_genesis_request.genesis_config_hash();
+        let protocol_version = run_genesis_request.protocol_version();
+        let ee_config = run_genesis_request.ee_config();
 
-        let genesis_response = match self.commit_genesis(correlation_id, genesis_config) {
+        let genesis_response = match self.commit_genesis(
+            correlation_id,
+            genesis_config_hash,
+            protocol_version,
+            ee_config,
+        ) {
             Ok(GenesisResult::Success {
                 post_state_hash,
                 effect,
