@@ -37,9 +37,3 @@ pub fn delegate() {
         storage::write_local(public_key, amount);
     }
 }
-
-#[cfg(not(feature = "lib"))]
-#[no_mangle]
-pub extern "C" fn call() {
-    delegate();
-}

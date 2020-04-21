@@ -4,8 +4,9 @@ version = "0.1.0"
 authors = ["Joe Sacher <joe@casperlabs.io>"]
 edition = "2018"
 
-[lib]
-crate-type = ["cdylib"]
+[[bin]]
+name = "args_multi"
+path = "src/main.rs"
 bench = false
 doctest = false
 test = false

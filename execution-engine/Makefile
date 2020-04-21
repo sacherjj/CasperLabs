@@ -220,7 +220,8 @@ clean:
 
 .PHONY: deb
 deb:
-	cd engine-grpc-server && $(CARGO) deb
+	$(CARGO) build --release -p casperlabs-engine-grpc-server
+	cd engine-grpc-server && $(CARGO) deb -p casperlabs-engine-grpc-server --no-build
 
 engine-grpc-server/.rpm:
 	cd engine-grpc-server && $(CARGO) rpm init

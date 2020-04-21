@@ -4,8 +4,9 @@ version = "0.1.0"
 authors = ["Ed Hastings <ed@gmail.com>"]
 edition = "2018"
 
-[lib]
-crate-type = ["cdylib"]
+[[bin]]
+name = "named_purse_payment"
+path = "src/main.rs"
 bench = false
 doctest = false
 test = false

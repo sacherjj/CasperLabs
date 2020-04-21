@@ -22,9 +22,3 @@ pub fn delegate() {
     let purse = system::create_purse();
     runtime::put_key(&purse_name, purse.into());
 }
-
-#[cfg(not(feature = "lib"))]
-#[no_mangle]
-pub extern "C" fn call() {
-    delegate()
-}

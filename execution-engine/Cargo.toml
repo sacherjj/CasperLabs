@@ -1,4 +1,7 @@
-cargo-features = ["profile-overrides"]
+cargo-features = [
+    "profile-overrides",
+    "named-profiles",
+]
 
 [workspace]
 
@@ -42,3 +45,9 @@ default-members = [
 # perf data.
 [profile.release.package.casperlabs-engine-tests]
 debug = true
+
+[profile.release]
+lto = true
+
+[profile.bench]
+lto = true

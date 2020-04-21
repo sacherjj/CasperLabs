@@ -23,9 +23,3 @@ pub fn delegate() {
     let u512_motes = U512::from(transfer_amount);
     system::transfer_to_account(public_key, u512_motes).unwrap_or_revert();
 }
-
-#[cfg(not(feature = "lib"))]
-#[no_mangle]
-pub extern "C" fn call() {
-    delegate();
-}

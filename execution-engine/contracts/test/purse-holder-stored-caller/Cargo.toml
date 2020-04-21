@@ -4,8 +4,9 @@ version = "0.1.0"
 authors = ["Ed Hastings <ed@casperlabs.io>"]
 edition = "2018"
 
-[lib]
-crate-type = ["cdylib"]
+[[bin]]
+name = "purse_holder_stored_caller"
+path = "src/main.rs"
 bench = false
 doctest = false
 test = false

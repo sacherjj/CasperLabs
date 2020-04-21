@@ -4,8 +4,9 @@ version = "0.1.0"
 authors = ["Michał Papierski <michal@casperlabs.io>"]
 edition = "2018"
 
-[lib]
-crate-type = ["cdylib"]
+[[bin]]
+name = "modified_system_upgrader"
+path = "src/main.rs"
 bench = false
 doctest = false
 test = false
@@ -15,7 +16,7 @@ std = ["contract/std", "types/std"]
 
 [dependencies]
 contract = { path = "../../../contract", package = "casperlabs-contract" }
-modified-mint = { path = "../modified-mint", default-features = false, features = ["lib"] }
-pos = { path = "../../system/pos", default-features = false, features = ["lib"] }
-standard-payment = { path = "../../system/standard-payment", default-features = false, features = ["lib"] }
+modified-mint = { path = "../modified-mint" }
+pos = { path = "../../system/pos" }
+standard-payment = { path = "../../system/standard-payment" }
 types = { path = "../../../types", package = "casperlabs-types" }

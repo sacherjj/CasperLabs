@@ -45,9 +45,7 @@ pub extern "C" fn delegate() {
     )
 }
 
-#[cfg(not(feature = "lib"))]
-#[no_mangle]
-pub extern "C" fn call() {
+pub fn install() {
     let key = storage::store_function(ENTRY_FUNCTION_NAME, Default::default())
         .into_uref()
         .unwrap_or_revert_with(ApiError::UnexpectedContractRefVariant)

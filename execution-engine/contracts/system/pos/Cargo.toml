@@ -4,14 +4,8 @@ version = "0.1.0"
 authors = ["Andreas Fackler <andreas@casperlabs.io>"]
 edition = "2018"
 
-[lib]
-crate-type = ["lib", "cdylib"]
-bench = false
-doctest = false
-
 [features]
 std = ["contract/std", "types/std"]
-lib = []
 enable-bonding = []
 
 [dependencies]
