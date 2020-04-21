@@ -67,9 +67,3 @@ pub fn delegate() {
         _ => panic!("Unknown method name!"),
     }
 }
-
-#[cfg(not(feature = "lib"))]
-#[no_mangle]
-pub extern "C" fn call() {
-    delegate();
-}

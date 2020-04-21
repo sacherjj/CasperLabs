@@ -235,9 +235,3 @@ pub fn delegate() {
         _ => {}
     }
 }
-
-#[cfg(not(feature = "lib"))]
-#[no_mangle]
-pub extern "C" fn call() {
-    delegate();
-}

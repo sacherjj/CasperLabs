@@ -24,7 +24,7 @@ export default class ConnectedPeers extends RefreshableComponent<Props, {}> {
       <DataTable
         title= "Connected Peers"
         refresh={() => this.refresh()}
-        headers={['Host', 'Protocol Port', 'Chain Id']}
+        headers={['Host', 'Protocol Port', 'Chain Id', 'Version']}
         rows={connectedPeersContainer.peers}
         renderRow={(node: Node) => {
           return (
@@ -32,6 +32,7 @@ export default class ConnectedPeers extends RefreshableComponent<Props, {}> {
               <td>{node.getHost()}</td>
               <td>{node.getProtocolPort()} </td>
               <td>{node.getChainId_asB64()}</td>
+              <td>{node.getNodeVersion()}</td>
             </tr>
           );
         }}

@@ -442,6 +442,7 @@ const Footer = () => (
         <div className="text-center">
           <small>
             Get in touch on{' '}
+            <a href="https://discordapp.com/invite/Q38s3Vh">Discord</a> or {}
             <a
               href="https://t.me/casperlabs"
               target="_blank"

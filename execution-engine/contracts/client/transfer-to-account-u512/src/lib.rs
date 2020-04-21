@@ -32,9 +32,3 @@ pub fn delegate() {
         .unwrap_or_revert_with(ApiError::User(CustomError::InvalidAmount as u16));
     system::transfer_to_account(public_key, transfer_amount).unwrap_or_revert();
 }
-
-#[cfg(not(feature = "lib"))]
-#[no_mangle]
-pub extern "C" fn call() {
-    delegate();
-}

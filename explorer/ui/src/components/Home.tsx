@@ -21,6 +21,7 @@ const Home = observer((props: Props) => {
             for yourself, fund them with some free tokens to play with, and
             explore the blockchain. If you're having an issue then don't
             hesitate to let us know on{' '}
+            <a href="https://discordapp.com/invite/Q38s3Vh">Discord</a>,{' '}
             <a href="https://t.me/casperlabs">Telegram</a> or{' '}
             <a href="https://github.com/CasperLabs/CasperLabs/issues">Github</a>
           </p>
@@ -51,6 +52,10 @@ const Home = observer((props: Props) => {
         <h3>Looking for help?</h3>
         <p>
           To write contracts have a look at the{' '}
+          <a href="https://techspec.casperlabs.io/en/latest/dapp/index.html">
+            dApp Developer Guide
+          </a>
+          , the{' '}
           <a href="https://github.com/CasperLabs/CasperLabs/tree/dev/execution-engine/contracts/examples">
             contract examples
           </a>

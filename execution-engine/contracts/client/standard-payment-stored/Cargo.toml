@@ -4,8 +4,9 @@ version = "0.1.0"
 authors = ["Henry Till <henrytill@gmail.com>", "Ed Hastings <ed@casperlabs.io>"]
 edition = "2018"
 
-[lib]
-crate-type = ["cdylib"]
+[[bin]]
+name = "standard_payment_stored"
+path = "src/main.rs"
 bench = false
 doctest = false
 test = false
@@ -15,5 +16,5 @@ std = ["contract/std", "types/std"]
 
 [dependencies]
 contract = { path = "../../../contract", package = "casperlabs-contract" }
-standard-payment = { path = "../../system/standard-payment", default-features = false, features = ["lib"] }
+standard-payment = { path = "../../system/standard-payment" }
 types = { path = "../../../types", package = "casperlabs-types" }

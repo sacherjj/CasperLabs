@@ -5,7 +5,6 @@ authors = ["Maciej Zielinski <maciej@casperlabs.io>"]
 edition = "2018"
 
 [lib]
-name = "vesting_logic"
 doctest = false
 bench = false
 

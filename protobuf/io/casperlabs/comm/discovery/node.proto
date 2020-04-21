@@ -8,4 +8,5 @@ message Node {
     uint32 protocol_port = 3;
     uint32 discovery_port = 4;
     bytes chain_id = 5;
+    string node_version = 6;
 }

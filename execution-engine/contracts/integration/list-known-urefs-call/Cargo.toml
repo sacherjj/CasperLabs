@@ -4,8 +4,9 @@ version = "0.1.0"
 authors = ["Mateusz Górski <mateusz@casperlabs.io>"]
 edition = "2018"
 
-[lib]
-crate-type = ["cdylib"]
+[[bin]]
+name = "list_known_urefs_call"
+path = "src/main.rs"
 bench = false
 doctest = false
 test = false

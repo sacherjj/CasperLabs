@@ -5,7 +5,6 @@ authors = ["Maciej Zieliński <maciej@casperlabs.io>"]
 edition = "2018"
 
 [lib]
-name = "erc20_logic"
 doctest = false
 
 [features]

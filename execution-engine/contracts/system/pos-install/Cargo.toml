@@ -4,8 +4,9 @@ version = "0.1.0"
 authors = ["Michael Birch <birchmd@casperlabs.io>"]
 edition = "2018"
 
-[lib]
-crate-type = ["cdylib"]
+[[bin]]
+name = "pos_install"
+path = "src/main.rs"
 bench = false
 doctest = false
 test = false
@@ -17,6 +18,6 @@ enable-bonding = ["pos/enable-bonding"]
 [dependencies]
 base16 = { version = "0.2.1", default-features = false }
 contract = { path = "../../../contract", package = "casperlabs-contract" }
-pos = { path = "../pos", default-features = false, features = ["lib"] }
+pos = { path = "../pos" }
 proof-of-stake = { path = "../../../proof-of-stake", package = "casperlabs-proof-of-stake" }
 types = { path = "../../../types", package = "casperlabs-types" }

@@ -93,8 +93,8 @@ def test_max_block_size_bytes(chainspec_upgrades_network_minor):
     block_info = client.showBlock(block_hash)
     assert block_info.status.stats.block_size_bytes < MAX_BLOCK_SIZE_BYTES
 
-    # Scenario 2. Deploy 20 deploys, not all will fit into a block.
-    number_of_deploys = 20
+    # Scenario 2. Deploy 55 deploys, not all will fit into a block.
+    number_of_deploys = 55
 
     deploy_hash, deploy_hashes = make_transfers(
         client, account, target_account, amount, number_of_deploys
