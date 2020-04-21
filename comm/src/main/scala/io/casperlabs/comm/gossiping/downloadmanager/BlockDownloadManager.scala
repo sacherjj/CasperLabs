@@ -133,12 +133,15 @@ class BlockDownloadManagerImpl[F[_]](
     */
   override protected def fetchAndRestore(source: Node, blockHash: ByteString): F[Block] =
     for {
-      partialBlock        <- super.fetchAndRestore(source, blockHash)
-      allDeployHashes     = partialBlock.getBody.deploys.map(_.getDeploy.deployHash)
-      existingDeploys     <- backend.readDeploys(allDeployHashes)
-      missingDeployHashes = allDeployHashes.diff(existingDeploys.map(_.deployHash))
-      missingDeploys      <- fetchAndRestoreDeploys(source, missingDeployHashes)
-      fullBlock           = partialBlock.withDeploys(existingDeploys ++ missingDeploys)
+      partialBlock         <- super.fetchAndRestore(source, blockHash)
+      fullDeploys          = partialBlock.getBody.deploys.map(_.getDeploy).filter(_.body.nonEmpty).toList
+      fullDeployHashes     = fullDeploys.map(_.deployHash).toSet
+      allDeployHashes      = partialBlock.getBody.deploys.map(_.getDeploy.deployHash).toSet
+      existingDeploys      <- backend.readDeploys((allDeployHashes diff fullDeployHashes).toList)
+      existingDeployHashes = existingDeploys.map(_.deployHash).toSet
+      missingDeployHashes  = allDeployHashes diff fullDeployHashes diff existingDeployHashes
+      missingDeploys       <- fetchAndRestoreDeploys(source, missingDeployHashes.toList)
+      fullBlock            = partialBlock.withDeploys(fullDeploys ++ existingDeploys ++ missingDeploys)
     } yield fullBlock
 
   /** Stream the chunks of a block without deploy bodies. */
