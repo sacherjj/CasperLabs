@@ -160,7 +160,7 @@ class CasperLabsNetwork:
             logging.info(f"Docker network {network_name} created.")
             return network_name
 
-    def _add_cl_node(self, config: DockerConfig, number_of_retries = 3) -> None:
+    def _add_cl_node(self, config: DockerConfig, number_of_retries=3) -> None:
         with self._lock:
             config.number = self.node_count
             for _ in range(number_of_retries):
@@ -170,7 +170,9 @@ class CasperLabsNetwork:
                     return
                 else:
                     logging.warning(f"Node failed to bind")
-            raise Exception(f"Node started {number_of_retries} times but failed to bind each time")
+            raise Exception(
+                f"Node started {number_of_retries} times but failed to bind each time"
+            )
 
     def add_new_node_to_network(
         self, generate_config=None, account: Account = None
@@ -559,12 +561,21 @@ class InterceptedTwoNodeNetwork(TwoNodeNetwork):
     grpc_encryption = True
     behind_proxy = True
 
+    NODE_ENV = {
+        **DEFAULT_NODE_ENV,
+        **dict(
+            # Don't use partial blocks because the interceptor doesn't handle the API
+            CL_SERVER_DOWNLOAD_PARTIAL_BLOCKS="false"
+        ),
+    }
+
     def create_cl_network(self):
         kp = self.get_key()
         config = DockerConfig(
             self.docker_client,
             node_private_key=kp.private_key,
             node_public_key=kp.public_key,
+            node_env=self.NODE_ENV,
             network=self.create_docker_network(),
             node_account=kp,
             grpc_encryption=self.grpc_encryption,

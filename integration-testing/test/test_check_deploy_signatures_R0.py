@@ -135,7 +135,7 @@ class GenerateBlockWithNoSignaturesGossipInterceptor(grpc_proxy.GossipIntercepto
 #   c. Sends the 'StreamDeploysChunked' request with hashes of missing deploys
 # 4. Node B sends the chunked 'DeploysList' message.
 # 5. Node A restores the full block, validates and saves it as usual.
-def ignore_test_check_deploy_signatures(intercepted_two_node_network):
+def test_check_deploy_signatures(intercepted_two_node_network):
     """
     Test node reject block with deploys that have no signatures.
     """
