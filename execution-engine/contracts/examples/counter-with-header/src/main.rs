@@ -4,7 +4,11 @@
 #[macro_use]
 extern crate alloc;
 
-use alloc::{collections::BTreeMap, string::String, vec::Vec};
+use alloc::{
+    collections::BTreeMap,
+    string::{String, ToString},
+    vec::Vec,
+};
 use core::convert::TryInto;
 
 use contract::{
@@ -12,8 +16,8 @@ use contract::{
     unwrap_or_revert::UnwrapOrRevert,
 };
 use types::{
-    contract_header::{Arg, ContractHeader, EntryPoint, EntryPointAccess},
-    ApiError, CLType, CLValue, Key, ProtocolVersion, SemVer, URef,
+    contract_header::{Arg, EntryPoint, EntryPointAccess, EntryPointType},
+    ApiError, CLType, CLValue, Key, SemVer, URef,
 };
 
 const COUNT_KEY: &str = "count";
@@ -78,47 +82,40 @@ pub extern "C" fn counter_increment() {
 /// main session code which stores the contract and convenience session code
 #[no_mangle]
 pub extern "C" fn call() {
-    let (contract_pointer, access_key) = storage::create_contract_at_hash();
-    runtime::put_key(COUNTER_KEY, contract_pointer.clone().into());
-    runtime::put_key(COUNTER_ACCESS, access_key.into());
+    let (contract_hash, access_uref) = storage::create_contract_at_hash();
+    runtime::put_key(COUNTER_KEY, contract_hash.into());
+    runtime::put_key(COUNTER_ACCESS, access_uref.into());
 
-    let header = ContractHeader::new(
-        [
-            (
-                String::from(GET_METHOD),
-                EntryPoint::new(EntryPointAccess::public(), Vec::new(), CLType::I32),
-            ),
-            (
-                String::from(INC_METHOD),
-                EntryPoint::new(
-                    EntryPointAccess::public(),
-                    vec![Arg::new(String::from("step"), CLType::I32)],
-                    CLType::Unit,
-                ),
-            ),
-        ]
-        .iter()
-        .cloned()
-        .collect(),
-        ProtocolVersion::new(SemVer::new(1, 0, 0)),
+    let mut methods = BTreeMap::new();
+
+    let entrypoint_get = EntryPoint::new(
+        Vec::new(),
+        CLType::I32,
+        EntryPointAccess::Public,
+        EntryPointType::Contract,
     );
+    methods.insert(GET_METHOD.to_string(), entrypoint_get);
+
+    let entrypoint_inc = EntryPoint::new(
+        vec![Arg::new(String::from("step"), CLType::I32)],
+        CLType::Unit,
+        EntryPointAccess::Public,
+        EntryPointType::Contract,
+    );
+    methods.insert(INC_METHOD.to_string(), entrypoint_inc);
 
     let counter_variable = storage::new_uref(0); //initialize counter
 
     //create map of references for stored contract
     let mut counter_named_keys: BTreeMap<String, Key> = BTreeMap::new();
-    let key_name = String::from(COUNT_KEY);
-    counter_named_keys.insert(key_name, counter_variable.into());
+    counter_named_keys.insert(COUNT_KEY.to_string(), counter_variable.into());
 
-    let _ = storage::add_contract_version(
-        contract_pointer,
-        access_key,
+    storage::add_contract_version(
+        contract_hash,
+        access_uref,
         VERSION,
-        header,
+        methods,
         counter_named_keys,
     )
     .unwrap_or_revert();
-
-    let inc_pointer = storage::store_function_at_hash(COUNTER_INCREMENT, Default::default());
-    runtime::put_key(COUNTER_INC_KEY, inc_pointer.into());
 }

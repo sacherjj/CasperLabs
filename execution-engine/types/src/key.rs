@@ -43,6 +43,8 @@ fn hash(bytes: &[u8]) -> [u8; BLAKE2B_DIGEST_LENGTH] {
     ret
 }
 
+pub type Hash = [u8; KEY_HASH_LENGTH];
+
 /// The type under which data (e.g. [`CLValue`](crate::CLValue)s, smart contracts, user accounts)
 /// are indexed on the network.
 #[repr(C)]
@@ -52,7 +54,7 @@ pub enum Key {
     Account(PublicKey),
     /// A `Key` under which a smart contract is stored and which is the pseudo-hash of the
     /// contract.
-    Hash([u8; KEY_HASH_LENGTH]),
+    Hash(Hash),
     /// A `Key` which is a [`URef`], under which most types of data can be stored.
     URef(URef),
     /// A `Key` to data (normally a [`CLValue`](crate::CLValue)) which is held in local-storage

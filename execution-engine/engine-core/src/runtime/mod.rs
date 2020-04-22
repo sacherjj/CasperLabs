@@ -25,7 +25,9 @@ use standard_payment::StandardPayment;
 use types::{
     account::{ActionType, PublicKey, Weight},
     bytesrepr::{self, FromBytes, ToBytes},
-    contract_header::{self, ContractHeader, ContractMetadata, EntryPointAccess, Group},
+    contract_header::{
+        self, ContractHeader, ContractMetadata, EntryPoint, EntryPointAccess, Group,
+    },
     system_contract_errors,
     system_contract_errors::mint,
     AccessRights, ApiError, CLType, CLTyped, CLValue, Key, ProtocolVersion, SemVer,
@@ -1965,7 +1967,7 @@ where
         args: Vec<CLValue>,
     ) -> Result<CLValue, Error> {
         let contract = match self.context.read_gs(&key)? {
-            Some(StoredValue::ContractMetadata(mut metadata)) => {
+            Some(StoredValue::ContractMetadata(metadata)) => {
                 let header = metadata
                     .get_version(&version)
                     .ok_or_else(|| Error::InvalidContractVersion)?;
@@ -2305,9 +2307,9 @@ where
 
     fn create_contract_value(&mut self) -> Result<(StoredValue, URef), Error> {
         let access_key = self.context.new_unit_uref()?;
-        let contract = ContractMetadata::new(access_key);
+        let contract_metadata = ContractMetadata::new(access_key);
 
-        let value = StoredValue::ContractMetadata(contract);
+        let value = StoredValue::ContractMetadata(contract_metadata);
 
         Ok((value, access_key))
     }
@@ -2407,27 +2409,31 @@ where
         metadata_key: Key,
         access_key: URef,
         version: SemVer,
-        header: ContractHeader,
+        methods: BTreeMap<String, EntryPoint>,
         named_keys: BTreeMap<String, Key>,
-    ) -> Result<Option<contract_header::Error>, Error> {
+    ) -> Result<Result<(), ApiError>, Error> {
         self.context.validate_key(&metadata_key)?;
         self.context.validate_uref(&access_key)?;
 
         let mut metadata: ContractMetadata = self.context.read_gs_typed(&metadata_key)?;
 
         if metadata.access_key() != access_key {
-            return Ok(Some(contract_header::Error::InvalidAccessKey));
+            return Ok(Err(contract_header::Error::InvalidAccessKey.into()));
         }
 
+        // TODO: Add contract key to contract header after removing local key
+        let seed = metadata_key.into_seed();
+        let version_bytes = version.to_bytes()?;
+        let contract_key = Key::local(seed, &version_bytes); // Replace with new_function_address and store it with header
+
+        let header = ContractHeader::new(methods, contract_key, self.context.protocol_version());
+
         if let Err(err) = metadata.add_version(version, header.clone()) {
-            return Ok(Some(err));
+            return Ok(Err(err.into()));
         }
 
         let module_bytes = self.get_module_by_header(&header)?;
         let contract = Contract::new(module_bytes, named_keys, header.protocol_version());
-        let seed = metadata_key.into_seed();
-        let version_bytes = version.to_bytes()?;
-        let contract_key = Key::local(seed, &version_bytes); // TODO: Does this actually work? Using local key as base could be risky.
 
         self.context
             .state()
@@ -2439,7 +2445,7 @@ where
             .borrow_mut()
             .write(metadata_key, StoredValue::ContractMetadata(metadata));
 
-        Ok(None)
+        Ok(Ok(()))
     }
 
     fn remove_contract_version(

@@ -5,7 +5,7 @@ use engine_core::{
     engine_state::{deploy_item::DeployItem, executable_deploy_item::ExecutableDeployItem},
     DeployHash,
 };
-use types::{account::PublicKey, bytesrepr::ToBytes, URef};
+use types::{account::PublicKey, bytesrepr::ToBytes, SemVer, URef};
 
 use crate::internal::utils;
 
@@ -132,6 +132,23 @@ impl DeployItemBuilder {
         let args = Self::serialize_args(args);
         self.deploy_item.session_code = Some(ExecutableDeployItem::StoredContractByName {
             name: uref_name.to_owned(),
+            args,
+        });
+        self
+    }
+
+    pub fn with_stored_entry_point_at_version(
+        mut self,
+        key_name: &str,
+        version: SemVer,
+        entry_point: &str,
+        args: impl ArgsParser,
+    ) -> Self {
+        let args = Self::serialize_args(args);
+        self.deploy_item.session_code = Some(ExecutableDeployItem::StoredVersionedContractByName {
+            name: key_name.to_owned(),
+            version,
+            entry_point: entry_point.to_owned(),
             args,
         });
         self

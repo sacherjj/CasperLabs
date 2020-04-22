@@ -5,7 +5,7 @@ use engine_test_support::{
     },
     DEFAULT_ACCOUNT_ADDR,
 };
-use types::Key;
+use types::{Key, SemVer};
 
 const CONTRACT_COUNTER_CALL: &str = "counter_call.wasm";
 const CONTRACT_COUNTER_DEFINE: &str = "counter_define.wasm";
@@ -70,7 +70,7 @@ fn should_run_counter_with_headers_example_contract() {
     let exec_request_2 = {
         let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
-            .with_stored_session_named_key("counter_inc", ())
+            .with_stored_entry_point_at_version("counter", SemVer::new(1, 0, 0), "increment", (5,))
             .with_empty_payment_bytes((*DEFAULT_PAYMENT,))
             .with_authorization_keys(&[DEFAULT_ACCOUNT_ADDR])
             .with_deploy_hash([3; 32])
@@ -82,7 +82,7 @@ fn should_run_counter_with_headers_example_contract() {
     let exec_request_3 = {
         let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
-            .with_stored_session_named_key("counter_inc", ())
+            .with_stored_entry_point_at_version("counter", SemVer::new(1, 0, 0), "increment", (5,))
             .with_empty_payment_bytes((*DEFAULT_PAYMENT,))
             .with_authorization_keys(&[DEFAULT_ACCOUNT_ADDR])
             .with_deploy_hash([4; 32])
@@ -90,7 +90,6 @@ fn should_run_counter_with_headers_example_contract() {
 
         ExecuteRequestBuilder::new().push_deploy(deploy).build()
     };
-
     let mut builder = InMemoryWasmTestBuilder::default();
 
     builder

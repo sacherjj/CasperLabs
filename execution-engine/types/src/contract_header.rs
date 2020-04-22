@@ -3,7 +3,7 @@
 use crate::{
     bytesrepr::{self, FromBytes, ToBytes},
     uref::URef,
-    CLType, CLTyped, ProtocolVersion, SemVer,
+    CLType, CLTyped, Key, ProtocolVersion, SemVer,
 };
 use alloc::{
     collections::{BTreeMap, BTreeSet},
@@ -131,8 +131,8 @@ impl ContractMetadata {
     }
 
     /// Get the contract header for the given version (if present)
-    pub fn get_version(&mut self, version: &SemVer) -> Option<ContractHeader> {
-        self.active_versions.remove(version)
+    pub fn get_version(&self, version: &SemVer) -> Option<&ContractHeader> {
+        self.active_versions.get(version)
     }
 
     /// Checks if the given version is active
@@ -209,15 +209,21 @@ impl FromBytes for ContractMetadata {
 /// Methods and type signatures supported by a contract.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ContractHeader {
+    contract_key: Key,
     methods: BTreeMap<String, EntryPoint>,
     protocol_version: ProtocolVersion,
 }
 
 impl ContractHeader {
     /// `ContractHeader` constructor.
-    pub fn new(methods: BTreeMap<String, EntryPoint>, protocol_version: ProtocolVersion) -> Self {
+    pub fn new(
+        methods: BTreeMap<String, EntryPoint>,
+        contract_key: Key,
+        protocol_version: ProtocolVersion,
+    ) -> Self {
         ContractHeader {
             methods,
+            contract_key,
             protocol_version,
         }
     }
@@ -227,19 +233,28 @@ impl ContractHeader {
         self.methods.contains_key(name)
     }
 
-    /// Returns the list of method names
+    /// Returns the list of method namesget_version
     pub fn method_names(&self) -> Vec<&str> {
         self.methods.keys().map(|s| s.as_str()).collect()
     }
 
     /// Returns the type signature for the given `method`.
-    pub fn get_method(mut self, method: &String) -> Option<EntryPoint> {
-        self.methods.remove(method)
+    pub fn get_method(&self, method: &str) -> Option<&EntryPoint> {
+        self.methods.get(method)
     }
 
     /// Get the protocol version this header is targeting.
     pub fn protocol_version(&self) -> ProtocolVersion {
         self.protocol_version
+    }
+
+    /// Adds new entry point
+    pub fn add_entrypoint<T: Into<String>>(&mut self, name: T, entrypoint: EntryPoint) {
+        self.methods.insert(name.into(), entrypoint);
+    }
+
+    pub fn contract_key(&self) -> Key {
+        self.contract_key
     }
 }
 
@@ -252,12 +267,14 @@ impl CLTyped for ContractHeader {
 impl ToBytes for ContractHeader {
     fn to_bytes(&self) -> Result<Vec<u8>, bytesrepr::Error> {
         let mut result = ToBytes::to_bytes(&self.methods)?;
+        result.append(&mut self.contract_key.to_bytes()?);
         result.append(&mut self.protocol_version.to_bytes()?);
         Ok(result)
     }
 
     fn serialized_length(&self) -> usize {
         ToBytes::serialized_length(&self.methods)
+            + ToBytes::serialized_length(&self.contract_key)
             + ToBytes::serialized_length(&self.protocol_version)
     }
 }
@@ -265,10 +282,12 @@ impl ToBytes for ContractHeader {
 impl FromBytes for ContractHeader {
     fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), bytesrepr::Error> {
         let (methods, bytes) = BTreeMap::<String, EntryPoint>::from_bytes(bytes)?;
+        let (contract_key, bytes) = Key::from_bytes(bytes)?;
         let (protocol_version, bytes) = ProtocolVersion::from_bytes(bytes)?;
         Ok((
             ContractHeader {
                 methods,
+                contract_key,
                 protocol_version,
             },
             bytes,
@@ -276,19 +295,62 @@ impl FromBytes for ContractHeader {
     }
 }
 
+#[repr(u8)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum EntryPointType {
+    /// Runs as session code
+    Session = 0,
+    /// Runs within contract's context
+    Contract = 1,
+}
+
+impl ToBytes for EntryPointType {
+    fn to_bytes(&self) -> Result<Vec<u8>, bytesrepr::Error> {
+        let mut result = bytesrepr::allocate_buffer(self)?;
+        result.push(*self as u8);
+        Ok(result)
+    }
+
+    fn serialized_length(&self) -> usize {
+        1
+    }
+}
+
+impl FromBytes for EntryPointType {
+    fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), bytesrepr::Error> {
+        let (value, bytes) = u8::from_bytes(bytes)?;
+        match value {
+            0 => Ok((EntryPointType::Session, bytes)),
+            1 => Ok((EntryPointType::Contract, bytes)),
+            _ => Err(bytesrepr::Error::Formatting),
+        }
+    }
+}
+
 /// Type signature of a method. Order of arguments matter since can be
 /// referenced by index as well as name.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EntryPoint {
-    access: EntryPointAccess,
     args: Vec<Arg>,
     ret: CLType,
+    access: EntryPointAccess,
+    entry_point_type: EntryPointType,
 }
 
 impl EntryPoint {
     /// `EntryPoint` constructor.
-    pub fn new(access: EntryPointAccess, args: Vec<Arg>, ret: CLType) -> Self {
-        EntryPoint { access, args, ret }
+    pub fn new(
+        args: Vec<Arg>,
+        ret: CLType,
+        access: EntryPointAccess,
+        entry_point_type: EntryPointType,
+    ) -> Self {
+        EntryPoint {
+            args,
+            ret,
+            access,
+            entry_point_type,
+        }
     }
 
     /// Get access enum.
@@ -300,15 +362,20 @@ impl EntryPoint {
     pub fn args(&self) -> &[Arg] {
         self.args.as_slice()
     }
+
+    pub fn entry_point_type(&self) -> EntryPointType {
+        self.entry_point_type
+    }
 }
 
 impl ToBytes for EntryPoint {
     fn to_bytes(&self) -> Result<Vec<u8>, bytesrepr::Error> {
         let mut result = bytesrepr::allocate_buffer(self)?;
 
-        result.append(&mut self.access.to_bytes()?);
         result.append(&mut self.args.to_bytes()?);
         self.ret.append_bytes(&mut result);
+        result.append(&mut self.access.to_bytes()?);
+        result.append(&mut self.entry_point_type.to_bytes()?);
 
         Ok(result)
     }
@@ -317,16 +384,26 @@ impl ToBytes for EntryPoint {
         self.access.serialized_length()
             + self.args.serialized_length()
             + self.ret.serialized_length()
+            + self.entry_point_type.serialized_length()
     }
 }
 
 impl FromBytes for EntryPoint {
     fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), bytesrepr::Error> {
-        let (access, bytes) = EntryPointAccess::from_bytes(bytes)?;
         let (args, bytes) = Vec::<Arg>::from_bytes(bytes)?;
         let (ret, bytes) = CLType::from_bytes(bytes)?;
+        let (access, bytes) = EntryPointAccess::from_bytes(bytes)?;
+        let (entry_point_type, bytes) = EntryPointType::from_bytes(bytes)?;
 
-        Ok((EntryPoint { access, args, ret }, bytes))
+        Ok((
+            EntryPoint {
+                args,
+                ret,
+                access,
+                entry_point_type,
+            },
+            bytes,
+        ))
     }
 }
 
@@ -343,11 +420,6 @@ pub enum EntryPointAccess {
 }
 
 impl EntryPointAccess {
-    /// Constructor for public access.
-    pub fn public() -> Self {
-        EntryPointAccess::Public
-    }
-
     /// Constructor for access granted to only listed groups.
     pub fn groups(labels: &[&str]) -> Self {
         let list: Vec<Group> = labels.iter().map(|s| Group(String::from(*s))).collect();

@@ -4,7 +4,12 @@
 #[macro_use]
 extern crate alloc;
 
-use alloc::{boxed::Box, collections::BTreeMap, string::String, vec::Vec};
+use alloc::{
+    boxed::Box,
+    collections::BTreeMap,
+    string::{String, ToString},
+    vec::Vec,
+};
 use core::convert::TryInto;
 
 use contract::{
@@ -12,8 +17,8 @@ use contract::{
     unwrap_or_revert::UnwrapOrRevert,
 };
 use types::{
-    contract_header::{Arg, ContractHeader, EntryPoint, EntryPointAccess},
-    AccessRights, ApiError, CLType, CLValue, Key, ProtocolVersion, SemVer, URef,
+    contract_header::{Arg, EntryPoint, EntryPointAccess, EntryPointType},
+    AccessRights, ApiError, CLType, CLValue, Key, SemVer, URef,
 };
 
 const COUNT_KEY: &str = "count";
@@ -84,25 +89,24 @@ pub extern "C" fn create_counter() -> ! {
     let (contract_pointer, access_key) = storage::create_contract_at_hash();
     let contract_key: Key = contract_pointer.clone().into();
 
-    let header = ContractHeader::new(
-        [
-            (
-                String::from(GET_METHOD),
-                EntryPoint::new(EntryPointAccess::public(), Vec::new(), CLType::I32),
-            ),
-            (
-                String::from(INC_METHOD),
-                EntryPoint::new(
-                    EntryPointAccess::public(),
-                    vec![Arg::new(String::from("step"), CLType::I32)],
-                    CLType::Unit,
-                ),
-            ),
-        ]
-        .iter()
-        .cloned()
-        .collect(),
-        ProtocolVersion::new(SemVer::new(1, 0, 0)),
+    let mut methods = BTreeMap::new();
+    methods.insert(
+        String::from(GET_METHOD),
+        EntryPoint::new(
+            Vec::new(),
+            CLType::I32,
+            EntryPointAccess::Public,
+            EntryPointType::Contract,
+        ),
+    );
+    methods.insert(
+        String::from(INC_METHOD),
+        EntryPoint::new(
+            vec![Arg::new(String::from("step"), CLType::I32)],
+            CLType::Unit,
+            EntryPointAccess::Public,
+            EntryPointType::Contract,
+        ),
     );
 
     let counter_variable = storage::new_uref(0); //initialize counter
@@ -116,7 +120,7 @@ pub extern "C" fn create_counter() -> ! {
         contract_pointer,
         access_key.clone(),
         VERSION,
-        header,
+        methods,
         counter_named_keys,
     )
     .unwrap_or_revert();
@@ -161,55 +165,52 @@ pub extern "C" fn call() {
     runtime::put_key(FACTORY_ACCESS, access_key.into());
 
     // define contract header
-    let header = ContractHeader::new(
-        [
-            (
-                String::from(GET_METHOD),
-                EntryPoint::new(
-                    // These first two methods need to be stored so they are
-                    // available to the factory. But they are not supposed to be
-                    // called from here, only from the contracts that the
-                    // factory produces, so we mark them as being callable by no
-                    // security groups.
-                    EntryPointAccess::groups(&[]),
-                    Vec::new(),
-                    CLType::I32,
-                ),
-            ),
-            (
-                String::from(INC_METHOD),
-                EntryPoint::new(
-                    EntryPointAccess::groups(&[]),
-                    vec![Arg::new(String::from("step"), CLType::I32)],
-                    CLType::Unit,
-                ),
-            ),
-            (
-                String::from(CREATE_COUNTER_METHOD),
-                EntryPoint::new(
-                    // This method is public so anyone can create counters
-                    EntryPointAccess::public(),
-                    Vec::new(),
-                    // Returns the key for the new contract, and
-                    // a read-only uref for the counter variable itself (for
-                    // query convenience until querying versioned contracts is
-                    // possible).
-                    CLType::Tuple2([Box::new(CLType::Key), Box::new(CLType::URef)]),
-                ),
-            ),
-        ]
-        .iter()
-        .cloned()
-        .collect(),
-        ProtocolVersion::new(SemVer::new(1, 0, 0)),
+    let mut entrypoints = BTreeMap::new();
+
+    let entrypoint_get = EntryPoint::new(
+        Vec::new(),
+        CLType::I32,
+        // These first two methods need to be stored so they are
+        // available to the factory. But they are not supposed to be
+        // called from here, only from the contracts that the
+        // factory produces, so we mark them as being callable by no
+        // security groups.
+        EntryPointAccess::Groups(Vec::new()),
+        EntryPointType::Contract,
     );
+
+    entrypoints.insert(GET_METHOD.to_string(), entrypoint_get);
+
+    let entrypoint_inc = EntryPoint::new(
+        vec![Arg::new(String::from("step"), CLType::I32)],
+        CLType::Unit,
+        EntryPointAccess::Groups(vec![]),
+        EntryPointType::Contract,
+    );
+
+    entrypoints.insert(INC_METHOD.to_string(), entrypoint_inc);
+
+    let entrypoint_create_counter = EntryPoint::new(
+        Vec::new(),
+        // Returns the key for the new contract, and
+        // a read-only uref for the counter variable itself (for
+        // query convenience until querying versioned contracts is
+        // possible).
+        CLType::Tuple2([Box::new(CLType::Key), Box::new(CLType::URef)]),
+        // This method is public so anyone can create counters
+        EntryPointAccess::Public,
+        // This method is called from within accounts's context
+        EntryPointType::Session,
+    );
+
+    entrypoints.insert(CREATE_COUNTER_METHOD.to_string(), entrypoint_create_counter);
 
     // push version 1.0.0 to the contract
     storage::add_contract_version(
         contract_pointer,
         access_key,
         VERSION,
-        header,
+        entrypoints,
         BTreeMap::new(),
     )
     .unwrap_or_revert();

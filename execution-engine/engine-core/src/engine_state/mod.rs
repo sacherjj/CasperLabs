@@ -25,6 +25,7 @@ use contract::args_parser::ArgsParser;
 use engine_shared::{
     account::Account,
     additive_map::AdditiveMap,
+    contract::Contract,
     gas::Gas,
     motes::Motes,
     newtypes::{Blake2bHash, CorrelationId},
@@ -39,8 +40,8 @@ use engine_storage::{
 use engine_wasm_prep::{wasm_costs::WasmCosts, Preprocessor};
 use types::{
     account::PublicKey, bytesrepr::ToBytes, system_contract_errors::mint,
-    system_contract_type::PROOF_OF_STAKE, AccessRights, BlockTime, Key, Phase, ProtocolVersion,
-    URef, KEY_HASH_LENGTH, U512, UREF_ADDR_LENGTH,
+    system_contract_type::PROOF_OF_STAKE, AccessRights, BlockTime, EntryPointAccess,
+    EntryPointType, Key, Phase, ProtocolVersion, URef, KEY_HASH_LENGTH, U512, UREF_ADDR_LENGTH,
 };
 
 pub use self::{
@@ -81,6 +82,25 @@ pub struct EngineState<S> {
     config: EngineConfig,
     system_contract_cache: SystemContractCache,
     state: S,
+}
+
+#[derive(Clone)]
+pub enum GetModuleResult {
+    Session(Module),
+    Contract {
+        module: Module,
+        base_key: Key,
+        named_keys: BTreeMap<String, Key>,
+    },
+}
+
+impl GetModuleResult {
+    pub fn take_module(self) -> Module {
+        match self {
+            GetModuleResult::Session(module) => module,
+            GetModuleResult::Contract { module, .. } => module,
+        }
+    }
 }
 
 impl<S> EngineState<S>
@@ -717,11 +737,11 @@ where
         correlation_id: CorrelationId,
         preprocessor: &Preprocessor,
         protocol_version: &ProtocolVersion,
-    ) -> Result<Module, error::Error> {
-        let stored_contract_key = match deploy_item {
+    ) -> Result<GetModuleResult, error::Error> {
+        match deploy_item {
             ExecutableDeployItem::ModuleBytes { module_bytes, .. } => {
                 let module = preprocessor.preprocess(&module_bytes)?;
-                return Ok(module);
+                return Ok(GetModuleResult::Session(module));
             }
             ExecutableDeployItem::StoredContractByHash { hash, .. } => {
                 let hash_len = hash.len();
@@ -733,7 +753,13 @@ where
                 }
                 let mut arr = [0u8; KEY_HASH_LENGTH];
                 arr.copy_from_slice(&hash);
-                Key::Hash(arr)
+                let (module, _contract) = self.get_module_from_key(
+                    tracking_copy,
+                    Key::Hash(arr),
+                    correlation_id,
+                    protocol_version,
+                )?;
+                Ok(GetModuleResult::Session(module))
             }
             ExecutableDeployItem::StoredContractByName { name, .. } => {
                 let stored_contract_key = account.named_keys().get(name).ok_or_else(|| {
@@ -744,7 +770,13 @@ where
                         return Err(error::Error::Exec(execution::Error::ForgedReference(*uref)));
                     }
                 }
-                *stored_contract_key
+                let (module, _contract) = self.get_module_from_key(
+                    tracking_copy,
+                    *stored_contract_key,
+                    correlation_id,
+                    protocol_version,
+                )?;
+                Ok(GetModuleResult::Session(module))
             }
             ExecutableDeployItem::StoredContractByURef { uref, .. } => {
                 let len = uref.len();
@@ -764,7 +796,7 @@ where
                     .named_keys()
                     .values()
                     .find(|&named_key| named_key.normalize() == normalized_uref);
-                match maybe_named_key {
+                let normalized_uref = match maybe_named_key {
                     Some(Key::URef(uref)) if uref.is_readable() => normalized_uref,
                     Some(Key::URef(_)) => {
                         return Err(error::Error::Exec(execution::Error::ForgedReference(
@@ -784,15 +816,52 @@ where
                             Key::URef(read_only_uref),
                         )));
                     }
-                }
+                };
+                let (module, _contract) = self.get_module_from_key(
+                    tracking_copy,
+                    normalized_uref,
+                    correlation_id,
+                    protocol_version,
+                )?;
+                Ok(GetModuleResult::Session(module))
             }
-        };
-        self.get_module_from_key(
-            tracking_copy,
-            stored_contract_key,
-            correlation_id,
-            protocol_version,
-        )
+            ExecutableDeployItem::StoredVersionedContractByName {
+                name,
+                entry_point,
+                version,
+                ..
+            } => {
+                let stored_metadata_key = account.named_keys().get(name).ok_or_else(|| {
+                    error::Error::Exec(execution::Error::URefNotFound(name.to_string()))
+                })?;
+                let contract_metadata = tracking_copy
+                    .borrow_mut()
+                    .get_contract_metadata(correlation_id, *stored_metadata_key)?;
+
+                // TODO: cleanup
+                assert!(contract_metadata.is_version_active(version));
+
+                let contract_header = contract_metadata
+                    .get_version(&version)
+                    .expect("should get version");
+
+                let method_entrypoint = contract_header
+                    .get_method(entry_point)
+                    .expect("should get method");
+                assert!(method_entrypoint.access() == &EntryPointAccess::Public);
+                let (module, contract) = self.get_module_from_key(
+                    tracking_copy,
+                    contract_header.contract_key(),
+                    correlation_id,
+                    protocol_version,
+                )?;
+                Ok(GetModuleResult::Contract {
+                    module,
+                    base_key: contract_header.contract_key(),
+                    named_keys: contract.take_named_keys(),
+                })
+            }
+        }
     }
 
     fn get_module_from_key(
@@ -801,14 +870,14 @@ where
         stored_contract_key: Key,
         correlation_id: CorrelationId,
         protocol_version: &ProtocolVersion,
-    ) -> Result<Module, error::Error> {
+    ) -> Result<(Module, Contract), error::Error> {
         let contract = tracking_copy
             .borrow_mut()
             .get_contract(correlation_id, stored_contract_key)?;
 
         // A contract may only call a stored contract that has the same protocol major version
         // number.
-        let contract_version = contract.protocol_version();
+        let contract_version = contract.clone().protocol_version();
         if !contract_version.is_compatible_with(&protocol_version) {
             let exec_error = execution::Error::IncompatibleProtocolMajorVersion {
                 expected: protocol_version.value().major,
@@ -817,9 +886,10 @@ where
             return Err(error::Error::Exec(exec_error));
         }
 
-        let (ret, _, _) = contract.destructure();
+        let (ret, _, _) = contract.clone().destructure();
         let module = engine_wasm_prep::deserialize(&ret)?;
-        Ok(module)
+
+        Ok((module, contract))
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -837,10 +907,9 @@ where
 
         let session = deploy_item.session;
         let payment = deploy_item.payment;
-        let address = Key::Account(deploy_item.address);
         let authorization_keys = deploy_item.authorization_keys;
         let deploy_hash = deploy_item.deploy_hash;
-
+        let base_key = Key::Account(deploy_item.address);
         // Create tracking copy (which functions as a deploy context)
         // validation_spec_2: prestate_hash check
         let tracking_copy = match self.tracking_copy(prestate_hash) {
@@ -851,7 +920,7 @@ where
 
         // Get addr bytes from `address` (which is actually a Key)
         // validation_spec_3: account validity
-        let account_addr = match address.into_account() {
+        let account_addr = match base_key.into_account() {
             Some(account_addr) => account_addr,
             None => {
                 return Ok(ExecutionResult::precondition_failure(
@@ -1128,6 +1197,7 @@ where
                     correlation_id,
                     &protocol_version,
                 )
+                .map(|(module, _contract)| GetModuleResult::Session(module))
             } else {
                 self.get_module(
                     Rc::clone(&tracking_copy),
@@ -1149,15 +1219,27 @@ where
 
             // payment_code_spec_2: execute payment code
             let phase = Phase::Payment;
+
+            let (payment_module, payment_context, mut payment_named_keys) = match payment_module {
+                GetModuleResult::Session(module) => {
+                    (module, base_key, account.named_keys().clone())
+                }
+                GetModuleResult::Contract {
+                    module,
+                    base_key,
+                    named_keys,
+                } => (module, base_key, named_keys),
+            };
+
             if !self.config.use_system_contracts() && module_bytes_is_empty {
-                let mut named_keys = account.named_keys().clone();
+                // let mut named_keys = account.named_keys().clone();
                 let address_generator = AddressGenerator::new(&deploy_hash, phase);
 
                 let mut runtime = match executor.create_runtime(
                     payment_module,
                     payment.take_args(),
-                    &mut named_keys,
-                    address,
+                    &mut payment_named_keys,
+                    payment_context,
                     &account,
                     authorization_keys.clone(),
                     blocktime,
@@ -1190,11 +1272,14 @@ where
                     },
                 }
             } else {
+                let payment_entry_point = payment.entry_point_name().to_owned();
                 executor.exec(
                     payment_module,
+                    &payment_entry_point,
                     payment.take_args(),
-                    address,
+                    payment_context,
                     &account,
+                    payment_named_keys,
                     authorization_keys.clone(),
                     blocktime,
                     deploy_hash,
@@ -1256,6 +1341,16 @@ where
         let session_tc = Rc::new(RefCell::new(post_payment_tc.fork()));
 
         // session_code_spec_2: execute session code
+
+        let (session_module, session_context, session_named_keys) = match session_module {
+            GetModuleResult::Session(module) => (module, base_key, account.named_keys().clone()),
+            GetModuleResult::Contract {
+                module,
+                base_key,
+                named_keys,
+            } => (module, base_key, named_keys),
+        };
+
         let session_result = {
             // payment_code_spec_3_b_i: if (balance of PoS pay purse) >= (gas spent during
             // payment code execution) * conv_rate, yes session
@@ -1266,11 +1361,15 @@ where
                 - payment_result_cost;
             let system_contract_cache = SystemContractCache::clone(&self.system_contract_cache);
 
+            let session_entry_point = session.entry_point_name().to_owned();
+
             executor.exec(
                 session_module,
+                &session_entry_point,
                 session.take_args(),
-                address,
+                session_context,
                 &account,
+                session_named_keys,
                 authorization_keys.clone(),
                 blocktime,
                 deploy_hash,

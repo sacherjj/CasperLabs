@@ -85,9 +85,11 @@ impl Executor {
     pub fn exec<R>(
         &self,
         parity_module: Module,
+        entry_point_name: &str,
         args: Vec<u8>,
         base_key: Key,
         account: &Account,
+        mut named_keys: BTreeMap<String, Key>,
         authorized_keys: BTreeSet<PublicKey>,
         blocktime: BlockTime,
         deploy_hash: [u8; 32],
@@ -105,8 +107,6 @@ impl Executor {
     {
         let (instance, memory) =
             on_fail_charge!(instance_and_memory(parity_module.clone(), protocol_version));
-
-        let mut named_keys = account.named_keys().clone();
 
         let access_rights =
             {
@@ -208,7 +208,7 @@ impl Executor {
         }
 
         on_fail_charge!(
-            instance.invoke_export("call", &[], &mut runtime),
+            instance.invoke_export(entry_point_name, &[], &mut runtime),
             runtime.context().gas_counter(),
             effects_snapshot
         );

@@ -10,7 +10,7 @@ use core::{convert::From, mem::MaybeUninit};
 use casperlabs_types::{
     api_error,
     bytesrepr::{self, FromBytes, ToBytes},
-    contract_header::{self, ContractHeader},
+    contract_header::{self, EntryPoint},
     AccessRights, ApiError, CLTyped, CLValue, ContractRef, Key, SemVer, URef,
     UREF_SERIALIZED_LENGTH,
 };
@@ -123,16 +123,16 @@ pub fn add_local<K: ToBytes, V: CLTyped + ToBytes>(key: K, value: V) {
 /// Create a new (versioned) contract stored under a Key::Hash. Initially there
 /// are no versions; a version must be added via `add_contract_version` before
 /// the contract can be executed.
-pub fn create_contract_at_hash() -> (ContractRef, URef) {
+pub fn create_contract_at_hash() -> (Key, URef) {
     let mut hash_addr = [0u8; 32];
     let mut access_addr = [0u8; 32];
     unsafe {
         ext_ffi::create_contract_at_hash(hash_addr.as_mut_ptr(), access_addr.as_mut_ptr());
     }
-    let contract_ref = ContractRef::Hash(hash_addr);
-    let access_key = URef::new(access_addr, AccessRights::READ_ADD_WRITE);
+    let contract_key = Key::Hash(hash_addr);
+    let access_uref = URef::new(access_addr, AccessRights::READ_ADD_WRITE);
 
-    (contract_ref, access_key)
+    (contract_key, access_uref)
 }
 
 /// Create a new "user group" for a (versioned) contract. User groups associate
@@ -186,16 +186,16 @@ pub fn create_contract_user_group(
 /// `ContractRef`. Note that this contract must have been created by
 /// `create_contract` or `create_contract_at_hash` first.
 pub fn add_contract_version(
-    contract: ContractRef,
+    contract: Key,
     access_key: URef,
     version: SemVer,
-    header: ContractHeader,
+    methods: BTreeMap<String, EntryPoint>,
     named_keys: BTreeMap<String, Key>,
 ) -> Result<(), contract_header::Error> {
-    let (meta_ptr, meta_size, _bytes1) = contract_api::to_ptr(Key::from(contract));
+    let (meta_ptr, meta_size, _bytes1) = contract_api::to_ptr(contract);
     let (access_ptr, _access_size, _bytes2) = contract_api::to_ptr(access_key);
     let (version_ptr, _version_size, _bytes3) = contract_api::to_ptr(version);
-    let (header_ptr, header_size, _bytes4) = contract_api::to_ptr(header);
+    let (methods_ptr, methods_size, _bytes4) = contract_api::to_ptr(methods);
     let (keys_ptr, keys_size, _bytes5) = contract_api::to_ptr(named_keys);
 
     let result = unsafe {
@@ -204,8 +204,8 @@ pub fn add_contract_version(
             meta_size,
             access_ptr,
             version_ptr,
-            header_ptr,
-            header_size,
+            methods_ptr,
+            methods_size,
             keys_ptr,
             keys_size,
         )

@@ -9,7 +9,7 @@ use types::{
     account::PublicKey,
     api_error,
     bytesrepr::{self, ToBytes},
-    contract_header::ContractHeader,
+    contract_header::EntryPoint,
     Key, TransferredTo, URef, SEM_VER_SERIALIZED_LENGTH, U512, UREF_SERIALIZED_LENGTH,
 };
 
@@ -558,13 +558,15 @@ where
                 // args(5) = size of contract header in wasm memory
                 // args(6) = pointer to named keys in wasm memory
                 // args(7) = size of named keys in wasm memory
+                // args(8) = pointer to contract header key memory
+                // args(9) = pointer to contract header key size
                 let (
                     meta_key_ptr,
                     meta_key_size,
                     access_key_ptr,
                     version_ptr,
-                    header_ptr,
-                    header_size,
+                    methods_ptr,
+                    methods_size,
                     named_keys_ptr,
                     named_keys_size,
                 ) = Args::parse(args)?;
@@ -578,15 +580,19 @@ where
                     let bytes = self.bytes_from_mem(version_ptr, SEM_VER_SERIALIZED_LENGTH)?;
                     bytesrepr::deserialize(bytes).map_err(Error::BytesRepr)?
                 };
-                let header: ContractHeader = self.t_from_mem(header_ptr, header_size)?;
+                let methods: BTreeMap<String, EntryPoint> =
+                    self.t_from_mem(methods_ptr, methods_size)?;
                 let named_keys: BTreeMap<String, Key> =
                     self.t_from_mem(named_keys_ptr, named_keys_size)?;
 
-                let result = self
-                    .add_contract_version(metadata_key, access_key, version, header, named_keys)?
-                    .map(|err| err.to_u8())
-                    .unwrap_or(0);
-                Ok(Some(RuntimeValue::I32(result as i32)))
+                let ret = self.add_contract_version(
+                    metadata_key,
+                    access_key,
+                    version,
+                    methods,
+                    named_keys,
+                )?;
+                Ok(Some(RuntimeValue::I32(api_error::i32_from(ret))))
             }
 
             FunctionIndex::RemoveContractVersion => {

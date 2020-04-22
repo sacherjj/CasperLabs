@@ -57,6 +57,9 @@ impl From<ExecutableDeployItem> for DeployPayload {
                 inner.set_uref(uref);
                 inner.set_args(args);
             }
+            ExecutableDeployItem::StoredVersionedContractByName { .. } => {
+                todo!("mapping for StoredVersionedContractByName")
+            }
         }
         result
     }
