@@ -296,15 +296,17 @@ class GossipServiceServer[F[_]: Concurrent: Parallel: Log: Metrics](
       _ => blockDownloadSemaphore.release
     ) flatMap { _ =>
       Iterant.liftF {
-        backend.getBlock(request.blockHash, request.excludeDeployBodies)
+        backend.getBlock(
+          request.blockHash,
+          request.excludeDeployBodies || request.onlyIncludeDeployHashes
+        )
       } flatMap {
         case Some(block) =>
           val it = chunkIt(
-            block.toByteArray,
+            (if (request.onlyIncludeDeployHashes) block.clearDeploysExceptHash else block).toByteArray,
             effectiveChunkSize(request.chunkSize),
             request.acceptedCompressionAlgorithms
           )
-
           Iterant.fromIterator(it)
 
         case None =>
@@ -315,9 +317,8 @@ class GossipServiceServer[F[_]: Concurrent: Parallel: Log: Metrics](
   override def streamDeploysChunked(request: StreamDeploysChunkedRequest): Iterant[F, Chunk] = {
     val chunkSize = effectiveChunkSize(request.chunkSize)
     backend.getDeploys(request.deployHashes.toSet).flatMap { deploy =>
-      Iterant.fromIterator {
-        chunkIt(deploy.toByteArray, chunkSize, request.acceptedCompressionAlgorithms)
-      }
+      val it = chunkIt(deploy.toByteArray, chunkSize, request.acceptedCompressionAlgorithms)
+      Iterant.fromIterator(it)
     }
   }
 

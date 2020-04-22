@@ -157,7 +157,7 @@ class BlockDownloadManagerImpl[F[_]](
       val req = GetBlockChunkedRequest(
         blockHash = blockHash,
         acceptedCompressionAlgorithms = Seq("lz4"),
-        excludeDeployBodies = partialBlocksEnabled
+        onlyIncludeDeployHashes = partialBlocksEnabled
       )
       stub.getBlockChunked(req)
     }
