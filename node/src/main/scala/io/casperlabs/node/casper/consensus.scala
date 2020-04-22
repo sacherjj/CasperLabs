@@ -23,7 +23,6 @@ import io.casperlabs.casper.DeploySelection.DeploySelection
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.finality.MultiParentFinalizer
-import io.casperlabs.casper.finality.MultiParentFinalizer.MeteredMultiParentFinalizer
 import io.casperlabs.casper.finality.votingmatrix.FinalityDetectorVotingMatrix
 import io.casperlabs.casper.highway.{
   EraSupervisor,
@@ -59,7 +58,10 @@ import simulacrum.typeclass
 
 import scala.concurrent.duration._
 import cats.Parallel
+import io.casperlabs.casper.consensus.info.Event.Value.{BlockAdded, NewFinalizedBlock}
 import io.casperlabs.casper.finality.MultiParentFinalizer.MeteredMultiParentFinalizer
+import io.casperlabs.storage.BlockHash
+import io.casperlabs.storage.event.EventStorage
 
 import scala.util.control.NoStackTrace
 
@@ -239,7 +241,7 @@ object NCB {
 }
 
 object Highway {
-  def apply[F[_]: Parallel: Concurrent: Time: Timer: Clock: Log: Metrics: DagStorage: BlockStorage: DeployBuffer: DeployStorage: EraStorage: FinalityStorage: AncestorsStorage: CasperLabsProtocol: ExecutionEngineService: DeploySelection: EventEmitter: BlockRelaying](
+  def apply[F[_]: Parallel: Concurrent: Time: Timer: Clock: Log: Metrics: DagStorage: BlockStorage: DeployBuffer: DeployStorage: EraStorage: FinalityStorage: AncestorsStorage: CasperLabsProtocol: ExecutionEngineService: DeploySelection: EventEmitter: EventStorage: BlockRelaying](
       conf: Configuration,
       chainSpec: ChainSpec,
       maybeValidatorId: Option[ValidatorIdentity],
@@ -345,8 +347,36 @@ object Highway {
           supervisor.validateAndAddBlock(block).whenA(block != genesis)
 
         override def onGenesisApproved(genesisBlockHash: ByteString): F[Unit] =
-          // This is for the integration tests, they are looking for this.
-          Log[F].info(s"Making the transition to block processing.")
+          emitGenesis(genesisBlockHash) >>
+            // This is for the integration tests, they are looking for this.
+            Log[F].info(s"Making the transition to block processing.")
+
+        // Check whether we have already emitted the Genesis to the stream in the past.
+        // Genesis should always be the first block.
+        private def emitGenesis(genesisBlockHash: BlockHash): F[Unit] =
+          EventStorage[F]
+            .getEvents(minId = 1L, maxId = 2L) // BlockAdded & NewFinalizedBlock
+            .take(2)
+            .compile
+            .toVector
+            .map(
+              _.toList
+                .map(_.value)
+                .collect {
+                  case ba: BlockAdded        => ba.value.getBlock.getSummary.blockHash
+                  case bf: NewFinalizedBlock => bf.value.blockHash
+                }
+                .toSet
+                .contains(genesisBlockHash)
+            )
+            .ifM(
+              ().pure[F],
+              EventEmitter[F].blockAdded(genesisBlockHash) >> EventEmitter[F].newLastFinalizedBlock(
+                genesisBlockHash,
+                Set.empty,
+                Set.empty
+              )
+            )
 
         override def onScheduled(summary: BlockSummary): F[Unit] =
           ().pure[F]
