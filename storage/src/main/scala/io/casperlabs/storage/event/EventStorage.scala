@@ -17,5 +17,5 @@ trait EventStorage[F[_]] {
   def storeEvents(values: Seq[Event.Value]): F[List[Event]]
 
   /** Retrieve events from a given ID onwards to replay them to a client. */
-  def getEvents(minId: Long): fs2.Stream[F, Event]
+  def getEvents(minId: Long, maxId: Long): fs2.Stream[F, Event]
 }

@@ -662,6 +662,7 @@ class CasperLabsClient:
         account_public_keys=None,
         deploy_hashes=None,
         min_event_id: int = 0,
+        max_event_id: int = 0,
     ):
         """
         See StreamEventsRequest in
@@ -698,6 +699,7 @@ class CasperLabsClient:
                     deploy_hashes=[bytes.fromhex(h) for h in deploy_hashes or []],
                 ),
                 min_event_id=min_event_id,
+                max_event_id=max_event_id,
             )
         )
 

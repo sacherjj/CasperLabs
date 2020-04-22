@@ -378,6 +378,7 @@ def stream_events_command(casperlabs_client, args):
         account_public_keys=args.account_public_key,
         deploy_hashes=args.deploy_hash,
         min_event_id=args.min_event_id,
+        max_event_id=args.max_event_id,
         **subscribed_events,
     )
     for event in stream:
@@ -628,6 +629,7 @@ def cli(*arguments) -> int:
         [('-k', '--account-public-key'), dict(action='append', help='Filter by (possibly multiple) account public key(s)')],
         [('-d', '--deploy-hash'), dict(action='append', help='Filter by (possibly multiple) deploy hash(es)')],
         [('--min-event-id',), dict(required=False, default=0, type=int, help="Supports replaying events from a given ID. If the value is 0, it it will subscribe to future events; if it's non-zero, it will replay all past events from that ID, without subscribing to new. To catch up with events from the beginning, start from 1.")],
+        [('--max-event-id',), dict(required=False, default=0, type=int, help="Supports replaying events to a given ID.")],
     ])
     # fmt:on
     return parser.run([str(a) for a in arguments])

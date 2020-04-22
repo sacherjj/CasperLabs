@@ -39,11 +39,29 @@ trait EventStorageTest extends FlatSpecLike with Matchers with ArbitraryConsensu
     val values = events.map(_.value)
     for {
       _   <- db.storeEvents(values)
-      evs <- db.getEvents(minId = 3).compile.toList
+      evs <- db.getEvents(minId = 3, maxId = 0).compile.toList
     } yield {
       evs.head.eventId shouldBe 3L
       evs.last.eventId shouldBe 4L
       evs.map(_.value) shouldBe values.drop(2)
+    }
+  }
+
+  it should "retrieve events from a given ID onwards until upper limit" in withStorage { db =>
+    val values = events.map(_.value)
+    for {
+      _     <- db.storeEvents(values)
+      from  = 2
+      until = events.size
+      evs   <- db.getEvents(minId = from.toLong, maxId = until.toLong).compile.toList
+    } yield {
+      evs.last.eventId shouldBe until
+      evs.last.value shouldBe events(until - 1).value
+      // Remove event IDs, they're added when inserting to the DB.
+      evs.map(_.update(_.eventId := 0)) should contain theSameElementsInOrderAs events.slice(
+        from - 1, // Storage indexes from 1, scala collections index from 0.
+        until
+      )
     }
   }
 }
