@@ -18,7 +18,7 @@ from casperlabs_client import (
     DEFAULT_INTERNAL_PORT,
     bundled_contract,
 )
-from casperlabs_client.utils import hexify
+from casperlabs_client.utils import hexify, jsonify
 from casperlabs_client.abi import ABI
 from casperlabs_client.crypto import (
     read_pem_key,
@@ -382,9 +382,12 @@ def stream_events_command(casperlabs_client, args):
         **subscribed_events,
     )
     for event in stream:
-        now = datetime.datetime.now()
-        print(f"------------- {now.strftime('%Y-%m-%d %H:%M:%S')} -------------")
-        print(hexify(event))
+        if args.format == "binary":
+            print(base64.b64encode(event.SerializeToString()).decode())
+        elif args.format == "json":
+            print(jsonify(event))
+        else:
+            print(hexify(event))
 
 
 def check_directory(path):
@@ -628,6 +631,7 @@ def cli(*arguments) -> int:
         [('--deploy-orphaned',), dict(action='store_true', help='Deploy orphaned')],
         [('-k', '--account-public-key'), dict(action='append', help='Filter by (possibly multiple) account public key(s)')],
         [('-d', '--deploy-hash'), dict(action='append', help='Filter by (possibly multiple) deploy hash(es)')],
+        [('-f', '--format'), dict(required=False, default='text', choices=('json', 'binary', 'text') ,help='Choose output format. Defaults to text representation.')],
         [('--min-event-id',), dict(required=False, default=0, type=int, help="Supports replaying events from a given ID. If the value is 0, it it will subscribe to future events; if it's non-zero, it will replay all past events from that ID, without subscribing to new. To catch up with events from the beginning, start from 1.")],
         [('--max-event-id',), dict(required=False, default=0, type=int, help="Supports replaying events to a given ID.")],
     ])

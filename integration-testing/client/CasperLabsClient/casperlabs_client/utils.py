@@ -3,6 +3,7 @@ import time
 import ssl
 import pkg_resources
 import google.protobuf.text_format
+import google.protobuf.json_format
 from . import abi
 from . import casper_pb2 as casper
 from . import consensus_pb2 as consensus
@@ -19,6 +20,10 @@ def hexify(o):
     Convert protobuf message to text format with cryptographic keys and signatures in base 16.
     """
     return google.protobuf.text_format.MessageToString(o)
+
+
+def jsonify(o):
+    return google.protobuf.json_format.MessageToJson(o)
 
 
 def bundled_contract(file_name):
