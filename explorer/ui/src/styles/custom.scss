@@ -88,9 +88,14 @@ div.svg-hint {
   height: 28px;
 }
 
-#mainNav.navbar-dark .navbar-collapse .navbar-sidenav li.active a {
-  color: white !important;
-  background-color: #b70404;
+#mainNav.navbar-dark .navbar-collapse .navbar-sidenav {
+  li.nav-item.active a {
+    color: white !important;
+    background-color: #962521;
+  }
+  li.nav-item:hover{
+    background-color: #E1372D;
+  }
 }
 
 .jumbotron {
