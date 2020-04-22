@@ -13,8 +13,8 @@ $font-family-base: 'Sarabun', sans-serif;
 }
 
 .navbar .navbar-brand {
-  padding-top: 1rem;
-  padding-bottom: .5rem;
+  padding-top: 0.8rem;
+  padding-bottom: 0.8rem;
   img {
     height: 40px;
   }
@@ -124,4 +124,8 @@ footer.sticky-footer {
 
 .accordion .card-header.collapsed>div:after {
   content: "\f067";
+}
+
+.navbar-nav.ml-auto>.nav-item:last-child{
+  margin-right: 33px!important;
 }
