@@ -856,7 +856,7 @@ trigger:
   - "testing*"
   - trying
   - staging
-  - NODE-659-rdbms-epic # temporary, remove after NODE-659-rdbms-epic merged to dev
+  - "feature-*"
 
 ---
 kind: pipeline
@@ -894,6 +894,7 @@ trigger:
   - "testing*"
   - trying
   - staging
+  - "feature-*"
 
 depends_on:
 - build-bors-merge
@@ -958,6 +959,7 @@ trigger:
   - "testing*"
   - trying
   - staging
+  - "feature-*"
 
 depends_on:
 - build-bors-merge
