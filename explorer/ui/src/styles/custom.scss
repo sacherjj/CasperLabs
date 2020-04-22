@@ -1,4 +1,7 @@
-@import 'sb-admin/variables.scss';
+$font-family-base: 'Sarabun', sans-serif;
+// https://startbootstrap.com/template-overviews/sb-admin/
+@import 'sb-admin/sb-admin.scss';
+@import "~bootstrap/scss/bootstrap";
 @import 'account-selector';
 @import 'toggle-button';
 
