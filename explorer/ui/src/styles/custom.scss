@@ -12,8 +12,12 @@ $font-family-base: 'Sarabun', sans-serif;
   }
 }
 
-.navbar-brand img {
-  height: 36px;
+.navbar .navbar-brand {
+  padding-top: 1rem;
+  padding-bottom: .5rem;
+  img {
+    height: 40px;
+  }
 }
 
 #alert-message {
