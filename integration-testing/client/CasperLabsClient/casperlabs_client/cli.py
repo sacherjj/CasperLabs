@@ -383,7 +383,7 @@ def stream_events_command(casperlabs_client, args):
     for event in stream:
         if args.format == "binary":
             print(base64.b64encode(event.SerializeToString()).decode())
-        if args.format == "json":
+        elif args.format == "json":
             print(jsonify(event))
         else:
             print(hexify(event))
@@ -630,7 +630,7 @@ def cli(*arguments) -> int:
         [('--deploy-orphaned',), dict(action='store_true', help='Deploy orphaned')],
         [('-k', '--account-public-key'), dict(action='append', help='Filter by (possibly multiple) account public key(s)')],
         [('-d', '--deploy-hash'), dict(action='append', help='Filter by (possibly multiple) deploy hash(es)')],
-        [('-f', '--format'), dict(  required=False, default='json', choices=('json', 'binary') ,help='Choose output format (binary, json). Defaults to hex representation.')],
+        [('-f', '--format'), dict(required=False, default='hexify', choices=('json', 'binary', 'hexify') ,help='Choose output format. Defaults to hex representation.')],
         [('--min-event-id',), dict(required=False, default=0, type=int, help="Supports replaying events from a given ID. If the value is 0, it it will subscribe to future events; if it's non-zero, it will replay all past events from that ID, without subscribing to new. To catch up with events from the beginning, start from 1.")],
     ])
     # fmt:on
