@@ -383,6 +383,7 @@ object GossipServiceCasperTestNodeFactory {
       for {
         blockDownloadManagerR <- BlockDownloadManagerImpl[F](
                                   maxParallelDownloads = 10,
+                                  partialBlocksEnabled = true,
                                   connectToGossip = connectToGossip,
                                   backend = new BlockDownloadManagerImpl.Backend[F] {
                                     override def contains(blockHash: ByteString): F[Boolean] =

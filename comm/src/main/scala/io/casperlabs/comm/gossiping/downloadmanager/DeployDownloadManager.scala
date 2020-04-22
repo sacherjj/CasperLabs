@@ -127,6 +127,6 @@ class DeployDownloadManagerImpl[F[_]](
     Iterant.liftF(itF).flatten
   }
 
-  override def parse(bytes: Array[Byte]): F[Deploy] =
+  override def parseDownloadable(bytes: Array[Byte]): F[Deploy] =
     Sync[F].delay(Deploy.parseFrom(bytes))
 }

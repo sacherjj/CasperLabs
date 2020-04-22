@@ -252,6 +252,7 @@ class BlockDownloadManagerSpec
         val test = for {
           alloc <- BlockDownloadManagerImpl[Task](
                     maxParallelDownloads = 1,
+                    partialBlocksEnabled = true,
                     connectToGossip = _ => remote,
                     backend = backend,
                     relaying = MockRelaying.default,
@@ -281,6 +282,7 @@ class BlockDownloadManagerSpec
         val test = for {
           alloc <- BlockDownloadManagerImpl[Task](
                     maxParallelDownloads = 1,
+                    partialBlocksEnabled = true,
                     connectToGossip = _ => MockGossipService(),
                     backend = MockBackend(),
                     relaying = MockRelaying.default,
@@ -654,6 +656,7 @@ object BlockDownloadManagerSpec {
 
       val managerR = BlockDownloadManagerImpl[Task](
         maxParallelDownloads = maxParallelDownloads,
+        partialBlocksEnabled = true,
         connectToGossip = remote(_),
         backend = backend,
         relaying = relaying,

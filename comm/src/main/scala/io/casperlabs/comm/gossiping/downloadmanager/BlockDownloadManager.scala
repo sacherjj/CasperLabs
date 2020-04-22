@@ -126,7 +126,7 @@ class BlockDownloadManagerImpl[F[_]](
 
   override def extractIdFromDownloadable(block: Block) = block.blockHash
 
-  override def parse(bytes: Array[Byte]): F[Block] =
+  override def parseDownloadable(bytes: Array[Byte]): F[Block] =
     Sync[F].delay(Block.parseFrom(bytes))
 
   /**

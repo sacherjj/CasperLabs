@@ -284,7 +284,7 @@ trait DownloadManagerImpl[F[_]] extends DownloadManager[F] { self =>
   def fetch(source: Node, id: Identifier): Iterant[F, Chunk]
 
   /** Parse the downloaded and restored bytes into an Downloadable. */
-  def parse(bytes: Array[Byte]): F[Downloadable]
+  def parseDownloadable(bytes: Array[Byte]): F[Downloadable]
 
   private def ensureNotShutdown: F[Unit] =
     isShutdown.get.ifM(
@@ -601,7 +601,7 @@ trait DownloadManagerImpl[F[_]] extends DownloadManager[F] { self =>
   protected def fetchAndRestore(source: Node, id: Identifier): F[Downloadable] =
     for {
       content      <- restore(source, fetch(source, id))
-      downloadable <- parse(content)
+      downloadable <- parseDownloadable(content)
       _            <- checkId(source, downloadable, id)
     } yield downloadable
 
