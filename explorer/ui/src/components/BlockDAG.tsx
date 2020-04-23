@@ -40,32 +40,27 @@ export class BlockDAG extends React.Component<Props, {}> {
   initialized = false;
   renderedBlocks: BlockInfo[] | null;
   hideBlockHash: boolean | undefined;
-
+  hideBallot: boolean | undefined;
 
   constructor(props: Props) {
     super(props);
-    reaction(() => {
+    reaction(
+      () => {
         // Needed for "Hide Ballots" to work.
-        return { blocks: this.filteredBlocks(), isPressed: this.props.hideBlockHashToggleStore?.isPressed };
-      }, ({ blocks, isPressed }) => {
-        this.renderGraph(blocks, isPressed);
-      }, {
+        return {
+          hideBallots: this.props.hideBallotsToggleStore?.isPressed,
+          hideBlockHash: this.props.hideBlockHashToggleStore?.isPressed
+        };
+      },
+      ({ hideBallots, hideBlockHash }) => {
+        this.renderGraph(hideBallots, hideBlockHash);
+      },
+      {
         fireImmediately: false,
-        delay: 100
+        // the animation of toggleButton takes 250ms, set delay larger than 250ms so that render of DAG don't affect the animation of toggleButton
+        delay: 400
       }
     );
-  }
-
-  private filteredBlocks() {
-    if (this.props.blocks === null) {
-      return null;
-    } else {
-      if (this.props.hideBallotsToggleStore?.isPressed) {
-        return this.props.blocks.filter(b => isBlock(b));
-      } else {
-        return this.props.blocks.map(b => b);
-      }
-    }
   }
 
   render() {
@@ -128,18 +123,18 @@ export class BlockDAG extends React.Component<Props, {}> {
               {this.props.emptyMessage || 'No blocks to show.'}
             </div>
           ) : (
-                <div className="svg-container">
-                  <svg
-                    width={this.props.width}
-                    height={this.props.height}
-                    ref={(ref: SVGSVGElement) => (this.svg = ref)}
-                  ></svg>
-                  <div
-                    className="svg-hint"
-                    ref={(ref: HTMLDivElement) => (this.hint = ref)}
-                  ></div>
-                </div>
-              )}
+            <div className="svg-container">
+              <svg
+                width={this.props.width}
+                height={this.props.height}
+                ref={(ref: SVGSVGElement) => (this.svg = ref)}
+              ></svg>
+              <div
+                className="svg-hint"
+                ref={(ref: HTMLDivElement) => (this.hint = ref)}
+              ></div>
+            </div>
+          )}
         </div>
         {this.props.footerMessage && (
           <div className="card-footer small text-muted">
@@ -153,7 +148,7 @@ export class BlockDAG extends React.Component<Props, {}> {
   /** Called so that the SVG is added when the component has been rendered,
    * however data will most likely still be uninitialized. */
   componentDidMount() {
-    this.renderGraph(this.filteredBlocks(), this.props.hideBlockHashToggleStore?.isPressed);
+    this.renderGraph(this.props.hideBallotsToggleStore?.isPressed, this.props.hideBlockHashToggleStore?.isPressed);
   }
 
   /** Called when the data is refreshed, when we get the blocks if they were null to begin with.
@@ -161,10 +156,11 @@ export class BlockDAG extends React.Component<Props, {}> {
    * would re-render with no SVG at all.
    */
   componentDidUpdate() {
-    this.renderGraph(this.filteredBlocks(), this.props.hideBlockHashToggleStore?.isPressed);
+    this.renderGraph(this.props.hideBlockHashToggleStore?.isPressed, this.props.hideBlockHashToggleStore?.isPressed);
   }
 
-  renderGraph(blocks: BlockInfo[] | null, hideBlockHash?: boolean) {
+  renderGraph(hideBallot?: boolean, hideBlockHash?: boolean) {
+    let blocks = this.props.blocks;
     if (blocks == null || blocks.length === 0) {
       // The renderer will have removed the svg.
       this.initialized = false;
@@ -172,9 +168,10 @@ export class BlockDAG extends React.Component<Props, {}> {
     }
 
     // Avoid double rendering by componentDidUpdate and reaction.
-    if (arraysEqual(blocks, this.renderedBlocks) && this.hideBlockHash === hideBlockHash) return;
+    if (arraysEqual(blocks, this.renderedBlocks) && this.hideBlockHash === hideBlockHash && this.hideBallot === hideBallot) return;
     this.renderedBlocks = blocks;
     this.hideBlockHash = hideBlockHash;
+    this.hideBallot = hideBallot;
 
     const svg = d3.select(this.svg);
     const hint = d3.select(this.hint);
@@ -244,10 +241,18 @@ export class BlockDAG extends React.Component<Props, {}> {
       .append('g')
       .attr('class', 'links')
       .selectAll('line')
-      .data(graph.links)
+      .data(graph.links.filter((d:d3Link) => {
+        if (hideBallot) {
+          return isBlock(d.source.block) && isBlock(d.target.block);
+        } else {
+          return true;
+        }
+      }))
       .enter()
       .append('line')
-      .attr('stroke', (d: d3Link) => d.isFinalized ? FinalizedLineColor : LineColor)
+      .attr('stroke', (d: d3Link) =>
+        d.isFinalized ? FinalizedLineColor : LineColor
+      )
       .attr('stroke-width', (d: d3Link) => (d.isMainParent ? 3 : 1))
       .attr('marker-end', 'url(#arrow)') // use the Arrow created above
       .attr('stroke-dasharray', (d: d3Link) =>
@@ -259,7 +264,15 @@ export class BlockDAG extends React.Component<Props, {}> {
       .append('g')
       .attr('class', 'nodes')
       .selectAll('g')
-      .data(graph.nodes)
+      .data(
+        graph.nodes.filter(node => {
+          if (hideBallot) {
+            return isBlock(node.block);
+          } else {
+            return true;
+          }
+        })
+      )
       .enter()
       .append('g');
 
@@ -286,7 +299,6 @@ export class BlockDAG extends React.Component<Props, {}> {
       .style('pointer-events', 'none') // to prevent mouseover/drag capture
       .style('text-anchor', 'start')
       .attr('display', hideBlockHash ? 'none' : 'block');
-
 
     const focus = (d: any) => {
       let datum = d3.select(d3.event.target).datum() as d3Node;
@@ -533,12 +545,10 @@ const keyBlockHash = (block: BlockInfo) =>
 const isBlock = (block: BlockInfo) =>
   block.getSummary()!.getHeader()!.getMessageType() === Block.MessageType.BLOCK;
 
-const isBallot = (block: BlockInfo) =>
-  !isBlock(block);
+const isBallot = (block: BlockInfo) => !isBlock(block);
 
 const isFinalized = (block: BlockInfo) =>
-  block.getStatus()!.getFinality() === BlockInfo.Status.Finality.FINALIZED
-
+  block.getStatus()!.getFinality() === BlockInfo.Status.Finality.FINALIZED;
 
 const validatorHash = (block: BlockInfo) =>
   encodeBase16(
@@ -584,7 +594,6 @@ const consistentColor = (colors: readonly string[]) => {
     return colors[c];
   };
 };
-
 
 function arraysEqual<T>(a: T[] | null, b: T[] | null) {
   if (a === b) return true;
