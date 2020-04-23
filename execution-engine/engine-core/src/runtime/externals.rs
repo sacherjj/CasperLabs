@@ -497,11 +497,11 @@ where
                 Ok(Some(RuntimeValue::I32(api_error::i32_from(ret))))
             }
 
-            FunctionIndex::CreateContractAtHash => {
+            FunctionIndex::CreateContractMetadataAtHash => {
                 // args(0) = pointer to wasm memory where to write 32-byte Hash address
                 // args(1) = pointer to wasm memory where to write 32-byte access key address
                 let (hash_dest_ptr, access_dest_ptr) = Args::parse(args)?;
-                let (hash_addr, access_addr) = self.create_contract_at_hash()?;
+                let (hash_addr, access_addr) = self.create_contract_metadata_at_hash()?;
                 self.function_address(hash_addr, hash_dest_ptr)?;
                 self.function_address(access_addr, access_dest_ptr)?;
                 Ok(None)

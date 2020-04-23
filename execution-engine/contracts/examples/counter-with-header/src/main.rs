@@ -82,7 +82,7 @@ pub extern "C" fn counter_increment() {
 /// main session code which stores the contract and convenience session code
 #[no_mangle]
 pub extern "C" fn call() {
-    let (contract_hash, access_uref) = storage::create_contract_at_hash();
+    let (contract_hash, access_uref) = storage::create_contract_metadata_at_hash();
     runtime::put_key(COUNTER_KEY, contract_hash.into());
     runtime::put_key(COUNTER_ACCESS, access_uref.into());
 

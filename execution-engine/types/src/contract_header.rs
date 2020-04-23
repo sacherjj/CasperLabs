@@ -253,6 +253,7 @@ impl ContractHeader {
         self.methods.insert(name.into(), entrypoint);
     }
 
+    /// Hash for accessing contract version
     pub fn contract_key(&self) -> Key {
         self.contract_key
     }
@@ -295,6 +296,7 @@ impl FromBytes for ContractHeader {
     }
 }
 
+/// Context of method execution
 #[repr(u8)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum EntryPointType {

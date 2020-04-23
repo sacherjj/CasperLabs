@@ -123,11 +123,11 @@ pub fn add_local<K: ToBytes, V: CLTyped + ToBytes>(key: K, value: V) {
 /// Create a new (versioned) contract stored under a Key::Hash. Initially there
 /// are no versions; a version must be added via `add_contract_version` before
 /// the contract can be executed.
-pub fn create_contract_at_hash() -> (Key, URef) {
+pub fn create_contract_metadata_at_hash() -> (Key, URef) {
     let mut hash_addr = [0u8; 32];
     let mut access_addr = [0u8; 32];
     unsafe {
-        ext_ffi::create_contract_at_hash(hash_addr.as_mut_ptr(), access_addr.as_mut_ptr());
+        ext_ffi::create_contract_metadata_at_hash(hash_addr.as_mut_ptr(), access_addr.as_mut_ptr());
     }
     let contract_key = Key::Hash(hash_addr);
     let access_uref = URef::new(access_addr, AccessRights::READ_ADD_WRITE);
@@ -184,7 +184,7 @@ pub fn create_contract_user_group(
 
 /// Add a new version of a contract to the contract stored at the given
 /// `ContractRef`. Note that this contract must have been created by
-/// `create_contract` or `create_contract_at_hash` first.
+/// `create_contract` or `create_contract_metadata_at_hash` first.
 pub fn add_contract_version(
     contract: Key,
     access_key: URef,
@@ -220,7 +220,7 @@ pub fn add_contract_version(
 /// Remove a version of a contract to the contract stored at the given
 /// `ContractRef`. That version of the contract will no longer be callable by
 /// `call_versioned_contract`. Note that this contract must have been created by
-/// `create_contract` or `create_contract_at_hash` first.
+/// `create_contract` or `create_contract_metadata_at_hash` first.
 pub fn remove_contract_version(
     contract: ContractRef,
     access_key: URef,

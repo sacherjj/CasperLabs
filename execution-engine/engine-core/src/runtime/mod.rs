@@ -2314,7 +2314,7 @@ where
         Ok((value, access_key))
     }
 
-    fn create_contract_at_hash(&mut self) -> Result<([u8; 32], [u8; 32]), Error> {
+    fn create_contract_metadata_at_hash(&mut self) -> Result<([u8; 32], [u8; 32]), Error> {
         let addr = self.context.new_function_address()?;
         let key = Key::Hash(addr);
         let (stored_value, access_key) = self.create_contract_value()?;

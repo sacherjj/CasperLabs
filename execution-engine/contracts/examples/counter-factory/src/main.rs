@@ -86,7 +86,7 @@ pub extern "C" fn counter_increment() {
 /// function which creates counter contracts
 #[no_mangle]
 pub extern "C" fn create_counter() -> ! {
-    let (contract_pointer, access_key) = storage::create_contract_at_hash();
+    let (contract_pointer, access_key) = storage::create_contract_metadata_at_hash();
     let contract_key: Key = contract_pointer.clone().into();
 
     let mut methods = BTreeMap::new();
@@ -160,7 +160,7 @@ pub extern "C" fn factory_session() {
 #[no_mangle]
 pub extern "C" fn call() {
     // create new versioned contract
-    let (contract_pointer, access_key) = storage::create_contract_at_hash();
+    let (contract_pointer, access_key) = storage::create_contract_metadata_at_hash();
     runtime::put_key(FACTORY_KEY, contract_pointer.clone().into());
     runtime::put_key(FACTORY_ACCESS, access_key.into());
 
