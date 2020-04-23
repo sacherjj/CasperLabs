@@ -106,7 +106,10 @@ message GetBlockChunkedRequest {
     bytes block_hash = 1;
     uint32 chunk_size = 2;
     repeated string accepted_compression_algorithms = 3;
+    // Download the processed deploys without their bodies.
     bool exclude_deploy_bodies = 4;
+    // Download the processed deploys with only the hash, no body, header and approvals.
+    bool only_include_deploy_hashes = 5;
 }
 
 message StreamDeploysChunkedRequest {
