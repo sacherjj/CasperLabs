@@ -18,6 +18,7 @@ import io.casperlabs.models.DeployImplicits._
 import io.casperlabs.shared.Log
 import monix.execution.Scheduler
 import monix.tail.Iterant
+import scala.util.Try
 
 /** Manages the download, validation, storing and gossiping of blocks. */
 trait BlockDownloadManager[F[_]] extends DownloadManager[F] {
@@ -126,8 +127,8 @@ class BlockDownloadManagerImpl[F[_]](
 
   override def extractIdFromDownloadable(block: Block) = block.blockHash
 
-  override def parseDownloadable(bytes: Array[Byte]): F[Block] =
-    Sync[F].delay(Block.parseFrom(bytes))
+  override def tryParseDownloadable(bytes: Array[Byte]) =
+    Try(Block.parseFrom(bytes))
 
   /**
     * 1. Downloads a partial block without deploy bodies.

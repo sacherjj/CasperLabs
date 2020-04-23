@@ -16,6 +16,7 @@ import io.casperlabs.metrics.Metrics
 import io.casperlabs.shared.Log
 import monix.execution.Scheduler
 import monix.tail.Iterant
+import scala.util.Try
 
 trait DeployDownloadManager[F[_]] extends DownloadManager[F] {
   override type Handle       = DeploySummary
@@ -127,6 +128,6 @@ class DeployDownloadManagerImpl[F[_]](
     Iterant.liftF(itF).flatten
   }
 
-  override def parseDownloadable(bytes: Array[Byte]): F[Deploy] =
-    Sync[F].delay(Deploy.parseFrom(bytes))
+  override def tryParseDownloadable(bytes: Array[Byte]) =
+    Try(Deploy.parseFrom(bytes))
 }

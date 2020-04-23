@@ -26,6 +26,7 @@ import scala.annotation.tailrec
 import scala.collection.immutable.Queue
 import scala.concurrent.duration.{Duration, FiniteDuration}
 import scala.util.control.NonFatal
+import scala.util.Try
 
 trait DownloadManagerTypes {
 
@@ -284,7 +285,7 @@ trait DownloadManagerImpl[F[_]] extends DownloadManager[F] { self =>
   def fetch(source: Node, id: Identifier): Iterant[F, Chunk]
 
   /** Parse the downloaded and restored bytes into an Downloadable. */
-  def parseDownloadable(bytes: Array[Byte]): F[Downloadable]
+  def tryParseDownloadable(bytes: Array[Byte]): Try[Downloadable]
 
   private def ensureNotShutdown: F[Unit] =
     isShutdown.get.ifM(
@@ -601,7 +602,7 @@ trait DownloadManagerImpl[F[_]] extends DownloadManager[F] { self =>
   protected def fetchAndRestore(source: Node, id: Identifier): F[Downloadable] =
     for {
       content      <- restore(source, fetch(source, id))
-      downloadable <- parseDownloadable(content)
+      downloadable <- Sync[F].fromTry(tryParseDownloadable(content))
       _            <- checkId(source, downloadable, id)
     } yield downloadable
 
