@@ -40,8 +40,8 @@ use engine_storage::{
 use engine_wasm_prep::{wasm_costs::WasmCosts, Preprocessor};
 use types::{
     account::PublicKey, bytesrepr::ToBytes, system_contract_errors::mint,
-    system_contract_type::PROOF_OF_STAKE, AccessRights, BlockTime, EntryPointAccess,
-    EntryPointType, Key, Phase, ProtocolVersion, URef, KEY_HASH_LENGTH, U512, UREF_ADDR_LENGTH,
+    system_contract_type::PROOF_OF_STAKE, AccessRights, BlockTime, EntryPointAccess, Key, Phase,
+    ProtocolVersion, URef, KEY_HASH_LENGTH, U512, UREF_ADDR_LENGTH,
 };
 
 pub use self::{
@@ -741,7 +741,7 @@ where
         match deploy_item {
             ExecutableDeployItem::ModuleBytes { module_bytes, .. } => {
                 let module = preprocessor.preprocess(&module_bytes)?;
-                return Ok(GetModuleResult::Session(module));
+                Ok(GetModuleResult::Session(module))
             }
             ExecutableDeployItem::StoredContractByHash { hash, .. } => {
                 let hash_len = hash.len();
@@ -877,7 +877,7 @@ where
 
         // A contract may only call a stored contract that has the same protocol major version
         // number.
-        let contract_version = contract.clone().protocol_version();
+        let contract_version = contract.protocol_version();
         if !contract_version.is_compatible_with(&protocol_version) {
             let exec_error = execution::Error::IncompatibleProtocolMajorVersion {
                 expected: protocol_version.value().major,

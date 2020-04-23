@@ -80,14 +80,13 @@ pub extern "C" fn counter_increment() {
         .unwrap_or_revert_with(ApiError::UnexpectedKeyVariant);
 
     let args = (5,);
-    let _: () = runtime::call_versioned_contract(contract_ref, VERSION, INC_METHOD, args);
+    runtime::call_versioned_contract::<_, ()>(contract_ref, VERSION, INC_METHOD, args);
 }
 
 /// function which creates counter contracts
 #[no_mangle]
 pub extern "C" fn create_counter() -> ! {
-    let (contract_pointer, access_key) = storage::create_contract_metadata_at_hash();
-    let contract_key: Key = contract_pointer.clone().into();
+    let (contract_metadata_hash, access_key) = storage::create_contract_metadata_at_hash();
 
     let mut methods = BTreeMap::new();
     methods.insert(
@@ -116,9 +115,9 @@ pub extern "C" fn create_counter() -> ! {
     let key_name = String::from(COUNT_KEY);
     counter_named_keys.insert(key_name, counter_variable.into());
 
-    let _ = storage::add_contract_version(
-        contract_pointer,
-        access_key.clone(),
+    storage::add_contract_version(
+        contract_metadata_hash,
+        access_key,
         VERSION,
         methods,
         counter_named_keys,
@@ -129,7 +128,7 @@ pub extern "C" fn create_counter() -> ! {
     // tuple3 (at least until we stop returning the counter variable uref, i.e. fix query for
     // versioned contracts)
     let return_value = CLValue::from_t((
-        contract_key,
+        contract_metadata_hash,
         counter_variable.with_access_rights(AccessRights::READ),
     ))
     .unwrap_or_revert();
@@ -160,8 +159,8 @@ pub extern "C" fn factory_session() {
 #[no_mangle]
 pub extern "C" fn call() {
     // create new versioned contract
-    let (contract_pointer, access_key) = storage::create_contract_metadata_at_hash();
-    runtime::put_key(FACTORY_KEY, contract_pointer.clone().into());
+    let (contract_metadata_hash, access_key) = storage::create_contract_metadata_at_hash();
+    runtime::put_key(FACTORY_KEY, contract_metadata_hash);
     runtime::put_key(FACTORY_ACCESS, access_key.into());
 
     // define contract header
@@ -207,7 +206,7 @@ pub extern "C" fn call() {
 
     // push version 1.0.0 to the contract
     storage::add_contract_version(
-        contract_pointer,
+        contract_metadata_hash,
         access_key,
         VERSION,
         entrypoints,

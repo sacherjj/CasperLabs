@@ -44,7 +44,7 @@ pub enum Error {
 
 impl Error {
     /// Convert to byte for serialization purposes.
-    pub fn to_u8(self) -> u8 {
+    pub fn into_u8(self) -> u8 {
         ToPrimitive::to_u8(&self).unwrap()
     }
 
@@ -365,6 +365,7 @@ impl EntryPoint {
         self.args.as_slice()
     }
 
+    /// Get the entry point type.
     pub fn entry_point_type(&self) -> EntryPointType {
         self.entry_point_type
     }
@@ -444,8 +445,8 @@ enum EntryPointAccessTag {
 }
 
 impl EntryPointAccessTag {
-    fn to_u8(&self) -> u8 {
-        *self as u8
+    fn to_u8(self) -> u8 {
+        self as u8
     }
 }
 

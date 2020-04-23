@@ -46,16 +46,9 @@ impl StoredValue {
         }
     }
 
-    pub fn to_contract(self) -> Option<Contract> {
+    pub fn as_contract_metadata(&self) -> Option<&ContractMetadata> {
         match self {
-            StoredValue::Contract(contract) => Some(contract),
-            _ => None,
-        }
-    }
-
-    pub fn to_contract_metadata(self) -> Option<ContractMetadata> {
-        match self {
-            StoredValue::ContractMetadata(metadata) => Some(metadata),
+            StoredValue::ContractMetadata(metadata) => Some(&metadata),
             _ => None,
         }
     }

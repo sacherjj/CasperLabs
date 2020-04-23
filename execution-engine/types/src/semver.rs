@@ -117,10 +117,10 @@ mod tests {
 
     #[test]
     fn parse_from_string() {
-        let foo: SemVer = "100.20.3".try_into().expect("should parse");
-        assert_eq!(foo, SemVer::new(100, 20, 3));
-        let bar: SemVer = "0.0.1".try_into().expect("should parse");
-        assert_eq!(bar, SemVer::new(0, 0, 1));
+        let ver1: SemVer = "100.20.3".try_into().expect("should parse");
+        assert_eq!(ver1, SemVer::new(100, 20, 3));
+        let ver2: SemVer = "0.0.1".try_into().expect("should parse");
+        assert_eq!(ver2, SemVer::new(0, 0, 1));
 
         assert!(SemVer::try_from("1.a.2.3").is_err());
         assert!(SemVer::try_from("1. 2.3").is_err());

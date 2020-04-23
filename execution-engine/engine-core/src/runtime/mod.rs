@@ -1485,11 +1485,11 @@ where
             .map(|s| String::from(*s));
 
         if let Some(missing_name) = maybe_missing_name {
-            Err(Error::FunctionNotFound(missing_name).into())
+            Err(Error::FunctionNotFound(missing_name))
         } else {
             let mut module = self.module.clone();
             pwasm_utils::optimize(&mut module, header.method_names()).unwrap();
-            parity_wasm::serialize(module).map_err(|e| Error::ParityWasm(e).into())
+            parity_wasm::serialize(module).map_err(Error::ParityWasm)
         }
     }
 
@@ -1976,7 +1976,7 @@ where
                     .ok_or_else(|| Error::NoSuchMethod)?;
 
                 if let EntryPointAccess::Groups(groups) = entry_point.access() {
-                    if let None = groups.iter().find(|g| {
+                    let find_result = groups.iter().find(|g| {
                         metadata
                             .groups()
                             .get(g)
@@ -1984,7 +1984,9 @@ where
                                 set.iter().find(|u| self.context.validate_uref(u).is_ok())
                             })
                             .is_some()
-                    }) {
+                    });
+
+                    if find_result.is_none() {
                         return Err(Error::InvalidContext);
                     }
                 }
@@ -2004,13 +2006,10 @@ where
                 let seed = key.into_seed();
                 let version_bytes = version.to_bytes()?;
                 let contract_key = Key::local(seed, &version_bytes);
-                let contract = self
-                    .context
+                self.context
                     .read_gs_direct(&contract_key)?
-                    .and_then(|sv| sv.to_contract())
-                    .ok_or_else(|| Error::InvalidContractVersion)?;
-
-                contract
+                    .and_then(|sv| sv.as_contract().cloned())
+                    .ok_or_else(|| Error::InvalidContractVersion)?
             }
             Some(_) => {
                 return Err(Error::FunctionNotFound(format!(
@@ -2338,23 +2337,20 @@ where
         let mut metadata: ContractMetadata = self.context.read_gs_typed(&metadata_key)?;
 
         if metadata.access_key() != access_key {
-            let err = contract_header::Error::InvalidAccessKey;
-            return Ok(Err(ApiError::ContractHeader(err.to_u8())));
+            return Ok(Err(contract_header::Error::InvalidAccessKey.into()));
         }
 
         let groups = metadata.groups_mut();
         let new_group = Group::new(label);
 
         // Ensure group does not already exist
-        if let Some(_) = groups.get(&new_group) {
-            let err = contract_header::Error::GroupAlreadyExists;
-            return Ok(Err(ApiError::ContractHeader(err.to_u8())));
+        if groups.get(&new_group).is_some() {
+            return Ok(Err(contract_header::Error::GroupAlreadyExists.into()));
         }
 
         // Ensure there are not too many groups
         if groups.len() >= (contract_header::MAX_GROUPS as usize) {
-            let err = contract_header::Error::MaxGroupsExceeded;
-            return Ok(Err(ApiError::ContractHeader(err.to_u8())));
+            return Ok(Err(contract_header::Error::MaxGroupsExceeded.into()));
         }
 
         // Ensure there are not too many urefs
@@ -2363,7 +2359,7 @@ where
             + existing_urefs.len();
         if total_urefs > (contract_header::MAX_TOTAL_UREFS as usize) {
             let err = contract_header::Error::MaxTotalURefsExceeded;
-            return Ok(Err(ApiError::ContractHeader(err.to_u8())));
+            return Ok(Err(ApiError::ContractHeader(err.into_u8())));
         }
 
         // Proceed with creating user group
@@ -2392,7 +2388,7 @@ where
         // Write return value size to output location
         let output_size_bytes = value_size.to_le_bytes(); // Wasm is little-endian
         if let Err(error) = self.memory.set(output_size_ptr, &output_size_bytes) {
-            return Err(Error::Interpreter(error.into()).into());
+            return Err(Error::Interpreter(error.into()));
         }
 
         // Write updated metadata to the global state

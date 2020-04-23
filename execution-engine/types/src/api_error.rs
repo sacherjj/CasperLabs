@@ -484,7 +484,7 @@ impl From<CLValueError> for ApiError {
 
 impl From<contract_header::Error> for ApiError {
     fn from(error: contract_header::Error) -> Self {
-        ApiError::ContractHeader(error.to_u8())
+        ApiError::ContractHeader(error.into_u8())
     }
 }
 

@@ -1,4 +1,4 @@
-use types::{EntryPointType, SemVer};
+use types::SemVer;
 
 #[derive(Clone, PartialEq, Eq)]
 pub enum ExecutableDeployItem {

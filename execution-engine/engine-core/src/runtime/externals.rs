@@ -614,7 +614,7 @@ where
 
                 let result = self
                     .remove_contract_version(metadata_key, access_key, version)?
-                    .map(|err| err.to_u8())
+                    .map(|err| err.into_u8())
                     .unwrap_or(0);
                 Ok(Some(RuntimeValue::I32(result as i32)))
             }

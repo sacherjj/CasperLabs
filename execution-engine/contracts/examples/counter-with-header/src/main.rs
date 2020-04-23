@@ -22,9 +22,7 @@ use types::{
 
 const COUNT_KEY: &str = "count";
 const COUNTER_ACCESS: &str = "counter_access";
-const COUNTER_INCREMENT: &str = "counter_increment";
 const COUNTER_KEY: &str = "counter";
-const COUNTER_INC_KEY: &str = "counter_inc";
 const GET_METHOD: &str = "get";
 const INC_METHOD: &str = "increment";
 const VERSION: SemVer = SemVer {
@@ -76,14 +74,14 @@ pub extern "C" fn counter_increment() {
         .unwrap_or_revert_with(ApiError::UnexpectedKeyVariant);
 
     let args = (5,);
-    let _: () = runtime::call_versioned_contract(contract_ref, VERSION, INC_METHOD, args);
+    runtime::call_versioned_contract::<_, ()>(contract_ref, VERSION, INC_METHOD, args);
 }
 
 /// main session code which stores the contract and convenience session code
 #[no_mangle]
 pub extern "C" fn call() {
     let (contract_hash, access_uref) = storage::create_contract_metadata_at_hash();
-    runtime::put_key(COUNTER_KEY, contract_hash.into());
+    runtime::put_key(COUNTER_KEY, contract_hash);
     runtime::put_key(COUNTER_ACCESS, access_uref.into());
 
     let mut methods = BTreeMap::new();

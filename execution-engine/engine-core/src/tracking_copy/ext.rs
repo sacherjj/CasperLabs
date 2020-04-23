@@ -5,10 +5,7 @@ use engine_shared::{
     stored_value::StoredValue, TypeMismatch,
 };
 use engine_storage::global_state::StateReader;
-use types::{
-    account::PublicKey, bytesrepr::ToBytes, CLValue, ContractHeader, ContractMetadata, Key, URef,
-    U512,
-};
+use types::{account::PublicKey, bytesrepr::ToBytes, CLValue, ContractMetadata, Key, URef, U512};
 
 use crate::{execution, tracking_copy::TrackingCopy};
 
