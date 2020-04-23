@@ -156,7 +156,7 @@ export class BlockDAG extends React.Component<Props, {}> {
    * would re-render with no SVG at all.
    */
   componentDidUpdate() {
-    this.renderGraph(this.props.hideBlockHashToggleStore?.isPressed, this.props.hideBlockHashToggleStore?.isPressed);
+    this.renderGraph(this.props.hideBallotsToggleStore?.isPressed, this.props.hideBlockHashToggleStore?.isPressed);
   }
 
   renderGraph(hideBallot?: boolean, hideBlockHash?: boolean) {
