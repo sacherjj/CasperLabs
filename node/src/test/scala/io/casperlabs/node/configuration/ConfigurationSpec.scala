@@ -100,6 +100,7 @@ class ConfigurationSpec
       downloadMaxRetries = 1,
       downloadRetryInitialBackoffPeriod = FiniteDuration(1, TimeUnit.SECONDS),
       downloadRetryBackoffFactor = 1.0,
+      downloadPartialBlocks = false,
       relayMaxParallelBlocks = 1,
       relayBlockChunkConsumerTimeout = FiniteDuration(1, TimeUnit.SECONDS),
       cleanBlockStorage = false,
@@ -112,7 +113,8 @@ class ConfigurationSpec
       dbReadThreads = 1,
       dbReadConnections = 1,
       parallelismCpuMultiplier = 1.0,
-      minParallelism = 1
+      minParallelism = 1,
+      deployGossipEnabled = false
     )
     val grpcServer = Configuration.Grpc(
       socket = Paths.get("/tmp/test"),

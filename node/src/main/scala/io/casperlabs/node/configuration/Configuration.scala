@@ -96,6 +96,7 @@ object Configuration extends ParserImplicits {
       downloadMaxRetries: Int Refined NonNegative,
       downloadRetryInitialBackoffPeriod: FiniteDuration,
       downloadRetryBackoffFactor: Double Refined GreaterEqual[W.`1.0`.T],
+      downloadPartialBlocks: Boolean,
       relayMaxParallelBlocks: Int,
       relayBlockChunkConsumerTimeout: FiniteDuration,
       cleanBlockStorage: Boolean,
@@ -108,7 +109,8 @@ object Configuration extends ParserImplicits {
       dbReadThreads: Int Refined Positive,
       dbReadConnections: Int Refined Positive,
       parallelismCpuMultiplier: Double Refined Positive,
-      minParallelism: Int Refined Positive
+      minParallelism: Int Refined Positive,
+      deployGossipEnabled: Boolean
   ) extends SubConfig
 
   case class BlockStorage(

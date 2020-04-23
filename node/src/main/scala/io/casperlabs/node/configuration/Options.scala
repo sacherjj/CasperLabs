@@ -457,12 +457,22 @@ private[configuration] final case class Options private (
       )
 
     @scallop
+    val serverDownloadPartialBlocks =
+      gen[Flag](
+        "Try downloading blocks without deploys in them first, fetching the missing deploys as a separate step."
+      )
+
+    @scallop
     val serverRelayMaxParallelBlocks =
       gen[Int]("Maximum number of parallel block downloads allowed to peers.")
 
     @scallop
     val serverRelayBlockChunkConsumerTimeout =
       gen[FiniteDuration]("Maximum time to allow a peer downloading a block to consume each chunk.")
+
+    @scallop
+    val serverDeployGossipEnabled =
+      gen[Flag]("Gossip deploys upon receipt to other peers or not.")
 
     @scallop
     val casperStandalone =

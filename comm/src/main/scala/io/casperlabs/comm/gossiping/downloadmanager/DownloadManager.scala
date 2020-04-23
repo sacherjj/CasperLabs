@@ -3,29 +3,30 @@ package io.casperlabs.comm.gossiping.downloadmanager
 import cats._
 import cats.effect._
 import cats.effect.concurrent._
-import cats.effect.implicits._
 import cats.implicits._
 import com.google.protobuf.ByteString
 import eu.timepit.refined._
 import eu.timepit.refined.api.Refined
 import eu.timepit.refined.auto._
 import eu.timepit.refined.numeric._
+import io.casperlabs.catscontrib.effect.implicits.fiberSyntax
 import io.casperlabs.comm.GossipError
 import io.casperlabs.comm.discovery.Node
 import io.casperlabs.comm.discovery.NodeUtils.showNode
+import io.casperlabs.comm.gossiping.relaying.Relaying
 import io.casperlabs.comm.gossiping.{Chunk, GossipService, WaitHandle}
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.implicits._
 import io.casperlabs.shared.Log._
 import io.casperlabs.shared.{Compression, Log}
-import io.casperlabs.catscontrib.effect.implicits.fiberSyntax
-import io.casperlabs.comm.gossiping.relaying.Relaying
-import monix.tail.Iterant
 import monix.execution.Scheduler
+import monix.tail.Iterant
+
+import scala.annotation.tailrec
+import scala.collection.immutable.Queue
 import scala.concurrent.duration.{Duration, FiniteDuration}
 import scala.util.control.NonFatal
-import scala.collection.immutable.Queue
-import scala.annotation.tailrec
+import scala.util.Try
 
 trait DownloadManagerTypes {
 
@@ -279,8 +280,12 @@ trait DownloadManagerImpl[F[_]] extends DownloadManager[F] { self =>
   implicit class DownloadableOps(d: Downloadable) {
     def id: Identifier = extractIdFromDownloadable(d)
   }
-  def streamChunks(source: Node, id: Identifier): Iterant[F, Chunk]
-  def parseDownloadable(bytes: Array[Byte]): Downloadable
+
+  /** Get one downloadable as a stream of chunks from a source. */
+  def fetch(source: Node, id: Identifier): Iterant[F, Chunk]
+
+  /** Parse the downloaded and restored bytes into an Downloadable. */
+  def tryParseDownloadable(bytes: Array[Byte]): Try[Downloadable]
 
   private def ensureNotShutdown: F[Unit] =
     isShutdown.get.ifM(
@@ -509,9 +514,21 @@ trait DownloadManagerImpl[F[_]] extends DownloadManager[F] { self =>
     val success                = signal.put(Signal.DownloadSuccess(id))
     def failure(ex: Throwable) = signal.put(Signal.DownloadFailure(id, ex))
 
+    def throttledFetchAndRestore(source: Node, id: Identifier): F[Downloadable] =
+      // Indicate how many fetches we are trying to do at a time. If it's larger then the semaphore
+      // we configured we'd know where we'd have to raise it to allow maximum throughput.
+      semaphore
+        .withPermit {
+          ContextShift[F].evalOn(egressScheduler) {
+            // Measure an individual download.
+            fetchAndRestore(source, id).timerGauge("restore")
+          }
+        }
+        .timerGauge("fetches") // Measure with wait time.
+
     def tryDownload(handle: Handle, source: Node, relay: Boolean) =
       for {
-        downloadable <- fetchAndRestore(source, id)
+        downloadable <- throttledFetchAndRestore(source, id)
         _            <- backend.validate(downloadable)
         _            <- backend.store(downloadable)
         _            <- relaying.relay(List(handle.id.toByteString)).whenA(relay)
@@ -585,87 +602,91 @@ trait DownloadManagerImpl[F[_]] extends DownloadManager[F] { self =>
   }
 
   /** Download from the source node and decompress it. */
-  private def fetchAndRestore(source: Node, id: Identifier): F[Downloadable] = {
-    def invalid(msg: String) =
-      GossipError.InvalidChunks(msg, source)
+  protected def fetchAndRestore(source: Node, id: Identifier): F[Downloadable] =
+    for {
+      content      <- restore(source, fetch(source, id))
+      downloadable <- Sync[F].fromTry(tryParseDownloadable(content))
+      _            <- checkId(source, downloadable, id)
+    } yield downloadable
 
-    // Keep track of how much we have downloaded so far and cancel the stream if it goes over the promised size.
-    case class Acc(
-        header: Option[Chunk.Header],
-        totalSizeSoFar: Int,
-        chunks: List[ByteString],
-        error: Option[GossipError]
-    ) {
-      def invalid(msg: String): Acc =
-        copy(error = Some(GossipError.InvalidChunks(msg, source)))
+  /** Fetches specified chunks, accumulates and validates them. */
+  protected def restore(source: Node, chunks: Iterant[F, Chunk]): F[Array[Byte]] =
+    for {
+      acc <- chunks.foldWhileLeftL(ChunksAcc(None, 0, Nil, None)) {
+              case (acc, chunk) if acc.header.isEmpty && chunk.content.isHeader =>
+                val header = chunk.getHeader
+                header.compressionAlgorithm match {
+                  case "" | "lz4" =>
+                    Left(acc.copy(header = Some(header)))
+                  case other =>
+                    Right(
+                      acc.invalid(source, s"Chunks compressed with unexpected algorithm: $other")
+                    )
+                }
 
-      def append(data: ByteString): Acc =
-        copy(totalSizeSoFar = totalSizeSoFar + data.size, chunks = data :: chunks)
-    }
+              case (acc, chunk) if acc.header.nonEmpty && chunk.content.isHeader =>
+                Right(acc.invalid(source, "Chunks contained a second header."))
 
-    val effect =
-      for {
-        acc <- streamChunks(source, id).foldWhileLeftL(Acc(None, 0, Nil, None)) {
-                case (acc, chunk) if acc.header.isEmpty && chunk.content.isHeader =>
-                  val header = chunk.getHeader
-                  header.compressionAlgorithm match {
-                    case "" | "lz4" =>
-                      Left(acc.copy(header = Some(header)))
-                    case other =>
-                      Right(
-                        acc.invalid(s"Chunks compressed with unexpected algorithm: $other")
-                      )
-                  }
+              case (acc, _) if acc.header.isEmpty =>
+                Right(acc.invalid(source, "Chunks did not start with a header."))
 
-                case (acc, chunk) if acc.header.nonEmpty && chunk.content.isHeader =>
-                  Right(acc.invalid("Chunks contained a second header."))
+              case (acc, chunk) if chunk.getData.isEmpty =>
+                Right(acc.invalid(source, "Chunks contained empty data frame."))
 
-                case (acc, _) if acc.header.isEmpty =>
-                  Right(acc.invalid("Chunks did not start with a header."))
+              case (acc, chunk)
+                  if acc.totalSizeSoFar + chunk.getData.size > acc.header.get.contentLength =>
+                Right(acc.invalid(source, "Chunks are exceeding the promised content length."))
 
-                case (acc, chunk) if chunk.getData.isEmpty =>
-                  Right(acc.invalid("Chunks contained empty data frame."))
-
-                case (acc, chunk)
-                    if acc.totalSizeSoFar + chunk.getData.size > acc.header.get.contentLength =>
-                  Right(acc.invalid("Chunks are exceeding the promised content length."))
-
-                case (acc, chunk) =>
-                  Left(acc.append(chunk.getData))
-              }
-
-        content <- if (acc.error.nonEmpty) {
-                    Sync[F].raiseError[Array[Byte]](acc.error.get)
-                  } else if (acc.header.isEmpty) {
-                    Sync[F].raiseError[Array[Byte]](invalid("Did not receive a header."))
+              case (acc, chunk) =>
+                Left(acc.append(chunk.getData))
+            }
+      content <- if (acc.error.nonEmpty) {
+                  Sync[F].raiseError[Array[Byte]](acc.error.get)
+                } else if (acc.header.isEmpty) {
+                  Sync[F]
+                    .raiseError[Array[Byte]](invalidChunks(source, "Did not receive a header."))
+                } else {
+                  val header  = acc.header.get
+                  val content = acc.chunks.toArray.reverse.flatMap(_.toByteArray)
+                  if (header.compressionAlgorithm.isEmpty) {
+                    Sync[F].pure(content)
                   } else {
-                    val header  = acc.header.get
-                    val content = acc.chunks.toArray.reverse.flatMap(_.toByteArray)
-                    if (header.compressionAlgorithm.isEmpty) {
-                      Sync[F].pure(content)
-                    } else {
-                      Compression
-                        .decompress(content, header.originalContentLength)
-                        .fold(
-                          Sync[F].raiseError[Array[Byte]](invalid("Could not decompress chunks."))
-                        )(Sync[F].pure(_))
-                    }
+                    Compression
+                      .decompress(content, header.originalContentLength)
+                      .fold(
+                        Sync[F]
+                          .raiseError[Array[Byte]](
+                            invalidChunks(source, "Could not decompress chunks.")
+                          )
+                      )(Sync[F].pure(_))
                   }
+                }
+    } yield content
 
-        downloadable <- Sync[F].delay(parseDownloadable(content))
-        _ <- Sync[F]
-              .raiseError(
-                invalid(s"Retrieved ${kind} has unexpected ${downloadable.id.show -> "id"}.")
-              )
-              .whenA(downloadable.id =!= id)
-      } yield downloadable
+  /** Keep track of how much we have downloaded so far and cancel the stream if it goes over the promised size. */
+  case class ChunksAcc(
+      header: Option[Chunk.Header],
+      totalSizeSoFar: Int,
+      chunks: List[ByteString],
+      error: Option[GossipError]
+  ) {
+    def invalid(source: Node, msg: String): ChunksAcc =
+      copy(error = Some(GossipError.InvalidChunks(msg, source)))
 
-    // Indicate how many fetches we are trying to do at a time. If it's larger then the semaphore
-    // we configured we'd know where we'd have to raise it to allow maximum throughput.
-    semaphore
-      .withPermit {
-        ContextShift[F].evalOn(egressScheduler)(effect.timerGauge("restore"))
-      }
-      .timerGauge("fetches")
+    def append(data: ByteString): ChunksAcc =
+      copy(totalSizeSoFar = totalSizeSoFar + data.size, chunks = data :: chunks)
   }
+
+  protected def checkId(source: Node, downloadable: Downloadable, id: Identifier) =
+    Sync[F]
+      .raiseError(
+        invalidChunks(
+          source,
+          s"Retrieved ${kind} has unexpected ${downloadable.id.show -> "id"}."
+        )
+      )
+      .whenA(downloadable.id =!= id)
+
+  protected def invalidChunks(source: Node, msg: String) =
+    GossipError.InvalidChunks(msg, source)
 }
