@@ -164,7 +164,7 @@ class BlockDownloadManagerSpec
             } yield {
               fetchedDeploys should not be empty
               // Since the mock is returning partial blocks, and we verified the manager is asking for
-              // partical blocks, the only way it could have downloaded and restored all the blocks
+              // partial blocks, the only way it could have downloaded and restored all the blocks
               // is if it asked for all the deploys as well.
               backend.fullBlocks should contain theSameElementsAs dag
             }
