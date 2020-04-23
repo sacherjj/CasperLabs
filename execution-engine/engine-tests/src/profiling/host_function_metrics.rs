@@ -260,13 +260,9 @@ fn generate_csv(function_name: String, metrics_vec: Vec<Metrics>, output_dir: &P
 
     for metrics in metrics_vec {
         write!(file, "\"(").unwrap_or_else(|_| panic!("should write to {}", file_path.display()));
-        let no_other_metrics = metrics.others.is_empty();
         for (_metric_key, metric_value) in metrics.others {
             write!(file, "{},", metric_value)
                 .unwrap_or_else(|_| panic!("should write to {}", file_path.display()));
-        }
-        if no_other_metrics {
-            write!(file, ",").unwrap_or_else(|_| panic!("should write to {}", file_path.display()));
         }
         writeln!(file, ")\",1,{}", metrics.duration)
             .unwrap_or_else(|_| panic!("should write to {}", file_path.display()));
