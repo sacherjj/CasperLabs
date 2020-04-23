@@ -779,6 +779,7 @@ class FinalityDetectorByVotingMatrixTest
       } yield ()
     }
 
+  // see [casper/src/test/resources/casper/CON-654_finalizer_bug_2.jpg]
   it should "replay history from the file with events" in replayedDag(
     "/con-654_event_stream.txt"
   ) { implicit storage => fixture =>
