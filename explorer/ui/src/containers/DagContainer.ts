@@ -54,7 +54,7 @@ export class DagStep {
 }
 
 export class DagContainer {
-  @observable blocks: IObservableArray<BlockInfo> = observable.array([], { deep: true });
+  @observable blocks: IObservableArray<BlockInfo> | null = null;
   @observable selectedBlock: BlockInfo | undefined = undefined;
   @observable depth = 10;
   @observable maxRank = 0;
@@ -161,7 +161,7 @@ export class DagContainer {
             }
             remainingBlocks.splice(i, 0, block);
             runInAction(() => {
-              this.blocks.replace(remainingBlocks);
+              this.blocks = observable.array(remainingBlocks);
             });
           } else {
             // otherwise ignore the new block and do nothing
@@ -201,11 +201,13 @@ export class DagContainer {
   }
 
   private async refreshBlockDag() {
+    // show loading spinner
+    this.blocks = null;
     await this.errors.capture(
       this.casperService
         .getBlockInfos(this.depth, this.maxRank)
         .then(blocks => {
-          this.blocks.replace(blocks);
+          this.blocks = observable.array(blocks);
         })
     );
 
