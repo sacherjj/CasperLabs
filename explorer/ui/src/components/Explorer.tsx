@@ -18,9 +18,11 @@ import { BondedValidatorsTable } from './BondedValidatorsTable';
 import { ToggleButton } from './ToggleButton';
 import { BlockType, BlockRole, FinalityIcon } from './BlockDetails';
 
+const DEFAULT_DEPTH = 100;
+
 /** Show the tips of the DAG. */
 @observer
-class _Explorer extends RefreshableComponent<Props, {}> {
+class _Explorer extends React.Component<Props, {}> {
   constructor(props: Props) {
     super(props);
     this.refreshWithDepthAndMaxRank(props.maxRank, props.depth);
@@ -28,7 +30,7 @@ class _Explorer extends RefreshableComponent<Props, {}> {
 
   refreshWithDepthAndMaxRank(maxRankStr: string | null, depthStr: string | null) {
     let maxRank = parseInt(maxRankStr || '') || 0;
-    let depth = parseInt(depthStr || '') || 10;
+    let depth = parseInt(depthStr || '') || DEFAULT_DEPTH;
     this.props.dag.updateMaxRankAndDepth(maxRank, depth);
     this.props.dag.refreshBlockDagAndSetupSubscriber();
   }
@@ -45,7 +47,6 @@ class _Explorer extends RefreshableComponent<Props, {}> {
   }
 
   componentWillUnmount() {
-    super.componentWillUnmount();
     // release websocket if necessary
     this.props.dag.toggleableSubscriber.unsubscribe();
   }
@@ -102,7 +103,9 @@ class _Explorer extends RefreshableComponent<Props, {}> {
               depth={dag.depth}
               onDepthChange={d => {
                 dag.depth = d;
-                this.refresh();
+                this.props.history.push(
+                  Pages.explorerWithMaxRankAndDepth(dag.maxRank, dag.depth)
+                );
               }}
               width="100%"
               height="600"
