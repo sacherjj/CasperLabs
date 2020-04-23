@@ -30,7 +30,7 @@ use types::{
     },
     system_contract_errors,
     system_contract_errors::mint,
-    AccessRights, ApiError, CLType, CLTyped, CLValue, Key, ProtocolVersion, SemVer,
+    AccessRights, ApiError, CLType, CLTyped, CLValue, Key, ProtocolVersion, RuntimeArgs, SemVer,
     SystemContractType, TransferResult, TransferredTo, URef, U128, U256, U512,
 };
 
@@ -1500,7 +1500,7 @@ where
     }
 
     fn get_arg_size(&mut self, index: usize, size_ptr: u32) -> Result<Result<(), ApiError>, Trap> {
-        let arg_size = match self.context.args().get(index) {
+        let arg_size = match self.context.args().get_positional(index) {
             Some(arg) if arg.inner_bytes().len() > u32::max_value() as usize => {
                 return Ok(Err(ApiError::OutOfMemory))
             }
@@ -1523,7 +1523,7 @@ where
         output_ptr: u32,
         output_size: usize,
     ) -> Result<Result<(), ApiError>, Trap> {
-        let arg = match self.context.args().get(index) {
+        let arg = match self.context.args().get_positional(index) {
             Some(arg) => arg,
             None => return Ok(Err(ApiError::MissingArgument)),
         };
@@ -1705,9 +1705,9 @@ where
         }
     }
 
-    fn get_argument<T: FromBytes + CLTyped>(args: &[CLValue], index: usize) -> Result<T, Error> {
+    fn get_argument<T: FromBytes + CLTyped>(args: &RuntimeArgs, index: usize) -> Result<T, Error> {
         let arg: CLValue = args
-            .get(index)
+            .get_positional(index)
             .cloned()
             .ok_or_else(|| Error::Revert(ApiError::MissingArgument))?;
         arg.into_t()
@@ -1723,7 +1723,7 @@ where
         &mut self,
         protocol_version: ProtocolVersion,
         mut named_keys: BTreeMap<String, Key>,
-        args: &[CLValue],
+        args: &RuntimeArgs,
         extra_urefs: &[Key],
     ) -> Result<CLValue, Error> {
         const METHOD_MINT: &str = "mint";
@@ -1813,7 +1813,7 @@ where
         &mut self,
         protocol_version: ProtocolVersion,
         mut named_keys: BTreeMap<String, Key>,
-        args: &[CLValue],
+        args: &RuntimeArgs,
         extra_urefs: &[Key],
     ) -> Result<CLValue, Error> {
         const METHOD_BOND: &str = "bond";
@@ -1933,7 +1933,7 @@ where
     }
 
     pub fn call_host_standard_payment(&mut self) -> Result<(), Error> {
-        let first_arg = match self.context.args().first() {
+        let first_arg = match self.context.args().get_positional(0) {
             Some(cl_value) => cl_value.clone(),
             None => return Err(Error::InvalidContext),
         };
@@ -1942,7 +1942,7 @@ where
     }
 
     /// Calls contract living under a `key`, with supplied `args`.
-    pub fn call_contract(&mut self, key: Key, args: Vec<CLValue>) -> Result<CLValue, Error> {
+    pub fn call_contract(&mut self, key: Key, args: RuntimeArgs) -> Result<CLValue, Error> {
         let contract = match self.context.read_gs(&key)? {
             Some(StoredValue::Contract(contract)) => contract,
             Some(_) => {
@@ -1964,7 +1964,7 @@ where
         key: Key,
         version: SemVer,
         method: String,
-        args: Vec<CLValue>,
+        args: RuntimeArgs,
     ) -> Result<CLValue, Error> {
         let contract = match self.context.read_gs(&key)? {
             Some(StoredValue::ContractMetadata(metadata)) => {
@@ -1996,7 +1996,7 @@ where
                     .iter()
                     .map(|a| a.cl_type())
                     .cloned()
-                    .zip(args.iter().map(|v| v.cl_type()).cloned())
+                    .zip(args.values().map(|v| v.cl_type()).cloned())
                 {
                     if expected != found {
                         return Err(Error::type_mismatch(expected, found));
@@ -2026,7 +2026,7 @@ where
         &mut self,
         key: Key,
         contract: Contract,
-        args: Vec<CLValue>,
+        args: RuntimeArgs,
         entry_point: &str,
     ) -> Result<CLValue, Error> {
         // Check for major version compatibility before calling
@@ -2041,7 +2041,7 @@ where
 
         let mut extra_urefs = vec![];
         // A loop is needed to be able to use the '?' operator
-        for arg in &args {
+        for arg in args.values() {
             extra_urefs.extend(
                 extract_urefs(arg)?
                     .into_iter()
@@ -2176,6 +2176,7 @@ where
             return Ok(Err(err));
         }
         let args: Vec<CLValue> = bytesrepr::deserialize(args_bytes)?;
+        let args = RuntimeArgs::from(args);
         scoped_timer.pause();
         let result = self.call_contract(key, args)?;
         scoped_timer.unpause();
@@ -2194,7 +2195,7 @@ where
         if let Err(err) = self.check_host_buffer() {
             return Ok(Err(err));
         }
-        let args: Vec<CLValue> = bytesrepr::deserialize(args_bytes)?;
+        let args: RuntimeArgs = bytesrepr::deserialize(args_bytes)?;
         let result = self.call_versioned_contract(key, version, method, args)?;
         self.manage_call_contract_host_buffer(result_size_ptr, result)
     }
@@ -2750,7 +2751,7 @@ where
             ArgsParser::parse(args)?
         };
 
-        let result = self.call_contract(mint_contract_key, args_values)?;
+        let result = self.call_contract(mint_contract_key, args_values.into())?;
         let purse = result.into_t()?;
 
         Ok(purse)
@@ -2772,7 +2773,8 @@ where
     ) -> Result<(), Error> {
         let args_values = {
             let args = ("transfer", source, target, amount);
-            ArgsParser::parse(args)?
+            let args = ArgsParser::parse(args)?;
+            args.into()
         };
 
         let result = self.call_contract(mint_contract_key, args_values)?;
@@ -3127,6 +3129,61 @@ where
         let text = self.string_from_mem(text_ptr, text_size)?;
         println!("{}", text);
         Ok(())
+    }
+
+    fn get_named_arg_size(
+        &mut self,
+        name_ptr: u32,
+        name_size: usize,
+        size_ptr: u32,
+    ) -> Result<Result<(), ApiError>, Trap> {
+        let name_bytes = self.bytes_from_mem(name_ptr, name_size)?;
+        let name = String::from_utf8_lossy(&name_bytes);
+
+        let arg_size = match self.context.args().get(&name) {
+            Some(arg) if arg.inner_bytes().len() > u32::max_value() as usize => {
+                return Ok(Err(ApiError::OutOfMemory))
+            }
+            None => return Ok(Err(ApiError::MissingArgument)),
+            Some(arg) => arg.inner_bytes().len() as u32,
+        };
+
+        let arg_size_bytes = arg_size.to_le_bytes(); // Wasm is little-endian
+
+        if let Err(e) = self.memory.set(size_ptr, &arg_size_bytes) {
+            return Err(Error::Interpreter(e.into()).into());
+        }
+
+        Ok(Ok(()))
+    }
+
+    fn get_named_arg(
+        &mut self,
+        name_ptr: u32,
+        name_size: usize,
+        output_ptr: u32,
+        output_size: usize,
+    ) -> Result<Result<(), ApiError>, Trap> {
+        let name_bytes = self.bytes_from_mem(name_ptr, name_size)?;
+        let name = String::from_utf8_lossy(&name_bytes);
+
+        let arg = match self.context.args().get(&name) {
+            Some(arg) => arg,
+            None => return Ok(Err(ApiError::MissingArgument)),
+        };
+
+        if arg.inner_bytes().len() > output_size {
+            return Ok(Err(ApiError::OutOfMemory));
+        }
+
+        if let Err(e) = self
+            .memory
+            .set(output_ptr, &arg.inner_bytes()[..output_size])
+        {
+            return Err(Error::Interpreter(e.into()).into());
+        }
+
+        Ok(Ok(()))
     }
 }
 

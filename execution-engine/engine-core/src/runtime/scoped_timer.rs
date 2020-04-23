@@ -135,6 +135,8 @@ impl Drop for ScopedTimer {
             FunctionIndex::CreateContractUserGroup => "create_contract_user_group",
             #[cfg(feature = "test-support")]
             FunctionIndex::PrintIndex => "host_function_print",
+            FunctionIndex::GetRuntimeArgsizeIndex => "host_get_named_arg_size",
+            FunctionIndex::GetRuntimeArgIndex => "host_get_named_arg",
         };
 
         let mut properties = mem::take(&mut self.properties);

@@ -4,13 +4,16 @@ use contract::args_parser::ArgsParser;
 use engine_shared::stored_value::StoredValue;
 use engine_storage::global_state::StateReader;
 use standard_payment::{AccountProvider, MintProvider, ProofOfStakeProvider, StandardPayment};
-use types::{system_contract_errors, ApiError, CLValue, Key, URef, U512};
+use types::{system_contract_errors, ApiError, Key, RuntimeArgs, URef, U512};
 
 use crate::{execution, runtime::Runtime};
 
 lazy_static! {
-    static ref SERIALIZED_GET_PAYMENT_PURSE: Vec<CLValue> =
-        ArgsParser::parse(("get_payment_purse",)).expect("args should convert to `Vec<CLValue>`");
+    static ref SERIALIZED_GET_PAYMENT_PURSE: RuntimeArgs = {
+        let args = ArgsParser::parse(("get_payment_purse",))
+            .expect("args should convert to `Vec<CLValue>`");
+        RuntimeArgs::from(args)
+    };
 }
 
 impl<'a, R> AccountProvider for Runtime<'a, R>

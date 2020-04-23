@@ -50,6 +50,8 @@ pub enum FunctionIndex {
     CreateContractUserGroup,
     #[cfg(feature = "test-support")]
     PrintIndex,
+    GetRuntimeArgsizeIndex,
+    GetRuntimeArgIndex,
 }
 
 impl Into<usize> for FunctionIndex {

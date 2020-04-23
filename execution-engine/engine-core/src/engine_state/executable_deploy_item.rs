@@ -1,4 +1,4 @@
-use types::SemVer;
+use types::{bytesrepr, CLValue, RuntimeArgs, SemVer};
 
 #[derive(Clone, PartialEq, Eq)]
 pub enum ExecutableDeployItem {
@@ -31,13 +31,19 @@ pub enum ExecutableDeployItem {
 }
 
 impl ExecutableDeployItem {
-    pub fn take_args(self) -> Vec<u8> {
+    pub fn take_args(self) -> Result<RuntimeArgs, bytesrepr::Error> {
         match self {
-            ExecutableDeployItem::ModuleBytes { args, .. } => args,
-            ExecutableDeployItem::StoredContractByHash { args, .. } => args,
-            ExecutableDeployItem::StoredContractByName { args, .. } => args,
-            ExecutableDeployItem::StoredContractByURef { args, .. } => args,
-            ExecutableDeployItem::StoredVersionedContractByName { args, .. } => args,
+            ExecutableDeployItem::ModuleBytes { args, .. }
+            | ExecutableDeployItem::StoredContractByHash { args, .. }
+            | ExecutableDeployItem::StoredContractByName { args, .. }
+            | ExecutableDeployItem::StoredContractByURef { args, .. } => {
+                let vec: Vec<CLValue> = bytesrepr::deserialize(args)?;
+                Ok(vec.into())
+            }
+            ExecutableDeployItem::StoredVersionedContractByName { args, .. } => {
+                let runtime_args: RuntimeArgs = bytesrepr::deserialize(args)?;
+                Ok(runtime_args)
+            }
         }
     }
 

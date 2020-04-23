@@ -92,7 +92,7 @@ where
         Rc::clone(&tracking_copy),
         &mut named_keys,
         access_rights,
-        arguments,
+        arguments.into(),
         BTreeSet::new(),
         &account,
         base_key,

@@ -138,10 +138,17 @@ extern "C" {
         version_ptr: *const u8,
         method_ptr: *const u8,
         method_size: usize,
-        args_ptr: *const u8,
-        args_size: usize,
+        named_args_ptr: *const u8,
+        named_args_size: usize,
         result_size: *mut usize,
     ) -> i32;
     #[cfg(feature = "test-support")]
     pub fn print(text_ptr: *const u8, text_size: usize);
+    pub fn get_named_arg_size(name_ptr: *const u8, name_size: usize, dest_size: *mut usize) -> i32;
+    pub fn get_named_arg(
+        name_ptr: *const u8,
+        name_size: usize,
+        dest_ptr: *mut u8,
+        dest_size: usize,
+    ) -> i32;
 }

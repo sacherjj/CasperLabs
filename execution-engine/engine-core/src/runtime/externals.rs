@@ -667,6 +667,27 @@ where
                 self.print(text_ptr, text_size)?;
                 Ok(None)
             }
+
+            FunctionIndex::GetRuntimeArgsizeIndex => {
+                // args(0) = pointer to name of host runtime arg to load
+                // args(1) = size of name of the host runtime arg
+                // args(2) = pointer to a argument size (output)
+                let (name_ptr, name_size, size_ptr): (u32, u32, u32) = Args::parse(args)?;
+                let ret = self.get_named_arg_size(name_ptr, name_size as usize, size_ptr)?;
+                Ok(Some(RuntimeValue::I32(api_error::i32_from(ret))))
+            }
+
+            FunctionIndex::GetRuntimeArgIndex => {
+                // args(0) = index of host runtime arg to load
+                // args(1) = pointer to destination in Wasm memory
+                // args(2) = size of destination pointer memory
+                let (name_ptr, name_size, dest_ptr, dest_size): (u32, u32, u32, u32) =
+                    Args::parse(args)?;
+                scoped_timer.add_property("dest_size", dest_size.to_string());
+                let ret =
+                    self.get_named_arg(name_ptr, name_size as usize, dest_ptr, dest_size as usize)?;
+                Ok(Some(RuntimeValue::I32(api_error::i32_from(ret))))
+            }
         }
     }
 }

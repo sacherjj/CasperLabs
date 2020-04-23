@@ -39,9 +39,12 @@ use engine_storage::{
 };
 use engine_wasm_prep::{wasm_costs::WasmCosts, Preprocessor};
 use types::{
-    account::PublicKey, bytesrepr::ToBytes, system_contract_errors::mint,
-    system_contract_type::PROOF_OF_STAKE, AccessRights, BlockTime, EntryPointAccess, Key, Phase,
-    ProtocolVersion, URef, KEY_HASH_LENGTH, U512, UREF_ADDR_LENGTH,
+    account::PublicKey,
+    bytesrepr::{self, ToBytes},
+    system_contract_errors::mint,
+    system_contract_type::PROOF_OF_STAKE,
+    AccessRights, BlockTime, CLValue, EntryPointAccess, EntryPointType, Key, Phase,
+    ProtocolVersion, RuntimeArgs, URef, KEY_HASH_LENGTH, U512, UREF_ADDR_LENGTH,
 };
 
 pub use self::{
@@ -212,7 +215,7 @@ where
         let mint_reference: URef = {
             let mint_installer_bytes = genesis_config.mint_installer_bytes();
             let mint_installer_module = preprocessor.preprocess(mint_installer_bytes)?;
-            let args = Vec::new();
+            let args = RuntimeArgs::new();
             let mut named_keys = BTreeMap::new();
             let authorization_keys: BTreeSet<PublicKey> = BTreeSet::new();
             let install_deploy_hash = install_deploy_hash.into();
@@ -264,10 +267,9 @@ where
                 preprocessor.preprocess(proof_of_stake_installer_bytes)?;
             let args = {
                 let args = (mint_reference, bonded_validators);
-                ArgsParser::parse(args)
-                    .expect("args should convert to `Vec<CLValue>`")
-                    .into_bytes()
-                    .expect("args should serialize")
+                let parsed_args =
+                    ArgsParser::parse(args).expect("args should convert to `Vec<CLValue>`");
+                parsed_args.into() // compatibility
             };
             let mut named_keys = BTreeMap::new();
             let authorization_keys: BTreeSet<PublicKey> = BTreeSet::new();
@@ -316,7 +318,7 @@ where
 
             let standard_payment_installer_module =
                 preprocessor.preprocess(standard_payment_installer_bytes)?;
-            let args = Vec::new();
+            let args = RuntimeArgs::new();
             let mut named_keys = BTreeMap::new();
             let authorization_keys = BTreeSet::new();
             let install_deploy_hash = install_deploy_hash.into();
@@ -419,9 +421,10 @@ where
                 let args = {
                     let motes = account.balance().value();
                     let args = (MINT_METHOD_NAME, motes);
-                    ArgsParser::parse(args).expect("args should convert to `Vec<CLValue>`")
+                    let args =
+                        ArgsParser::parse(args).expect("args should convert to `Vec<CLValue>`");
+                    RuntimeArgs::from(args) // compatibility
                 };
-                let args_bytes = args.to_bytes().expect("args should serialize");
                 let tracking_copy_exec = Rc::clone(&tracking_copy);
                 let tracking_copy_write = Rc::clone(&tracking_copy);
                 let mut named_keys_exec = BTreeMap::new();
@@ -443,7 +446,7 @@ where
                     // ...call the Mint's "mint" endpoint to create purse with tokens...
                     let (_instance, mut runtime) = executor.create_runtime(
                         module,
-                        args_bytes,
+                        args.clone(),
                         &mut named_keys_exec,
                         base_key,
                         &virtual_system_account,
@@ -577,8 +580,12 @@ where
                 // currently there are no expected args for an upgrade installer but args are
                 // supported
                 let args = match upgrade_config.upgrade_installer_args() {
-                    Some(args) => args.to_vec(),
-                    None => vec![],
+                    Some(args) => {
+                        let args: Vec<CLValue> =
+                            bytesrepr::deserialize(args.to_vec()).expect("should deserialize");
+                        RuntimeArgs::from(args)
+                    }
+                    None => RuntimeArgs::new(),
                 };
 
                 // execute as system account
@@ -855,11 +862,15 @@ where
                     correlation_id,
                     protocol_version,
                 )?;
-                Ok(GetModuleResult::Contract {
-                    module,
-                    base_key: contract_header.contract_key(),
-                    named_keys: contract.take_named_keys(),
-                })
+
+                match method_entrypoint.entry_point_type() {
+                    EntryPointType::Session => Ok(GetModuleResult::Session(module)),
+                    EntryPointType::Contract => Ok(GetModuleResult::Contract {
+                        module,
+                        base_key: contract_header.contract_key(),
+                        named_keys: contract.take_named_keys(),
+                    }),
+                }
             }
         }
     }
@@ -1231,13 +1242,22 @@ where
                 } => (module, base_key, named_keys),
             };
 
+            let payment_args = match payment.clone().take_args() {
+                Ok(args) => args,
+                Err(e) => {
+                    let exec_err: crate::execution::Error = e.into();
+                    log::warn!("Unable to deserialize arguments: {:?}", exec_err);
+                    return Ok(ExecutionResult::precondition_failure(exec_err.into()));
+                }
+            };
+
             if !self.config.use_system_contracts() && module_bytes_is_empty {
                 // let mut named_keys = account.named_keys().clone();
                 let address_generator = AddressGenerator::new(&deploy_hash, phase);
 
                 let mut runtime = match executor.create_runtime(
                     payment_module,
-                    payment.take_args(),
+                    payment_args,
                     &mut payment_named_keys,
                     payment_context,
                     &account,
@@ -1276,7 +1296,7 @@ where
                 executor.exec(
                     payment_module,
                     &payment_entry_point,
-                    payment.take_args(),
+                    payment_args,
                     payment_context,
                     &account,
                     payment_named_keys,
@@ -1351,6 +1371,15 @@ where
             } => (module, base_key, named_keys),
         };
 
+        let session_args = match session.clone().take_args() {
+            Ok(args) => args,
+            Err(e) => {
+                let exec_err: crate::execution::Error = e.into();
+                log::warn!("Unable to deserialize session arguments: {:?}", exec_err);
+                return Ok(ExecutionResult::precondition_failure(exec_err.into()));
+            }
+        };
+
         let session_result = {
             // payment_code_spec_3_b_i: if (balance of PoS pay purse) >= (gas spent during
             // payment code execution) * conv_rate, yes session
@@ -1366,7 +1395,7 @@ where
             executor.exec(
                 session_module,
                 &session_entry_point,
-                session.take_args(),
+                session_args,
                 session_context,
                 &account,
                 session_named_keys,
@@ -1404,10 +1433,9 @@ where
                 //((gas spent during payment code execution) + (gas spent during session code execution)) * conv_rate
                 let finalize_cost_motes: Motes = Motes::from_gas(execution_result_builder.total_cost(), CONV_RATE).expect("motes overflow");
                 let args = ("finalize_payment", finalize_cost_motes.value(), account_addr);
-                ArgsParser::parse(args)
-                    .expect("args should convert to `Vec<CLValue>`")
-                    .into_bytes()
-                    .expect("args should serialize")
+                let args = ArgsParser::parse(args)
+                    .expect("args should convert to `Vec<CLValue>`");
+                args.into() // compatibility
             };
 
             // The PoS keys may have changed because of effects during payment and/or

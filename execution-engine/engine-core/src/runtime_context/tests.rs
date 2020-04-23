@@ -24,7 +24,8 @@ use types::{
     account::{
         ActionType, AddKeyFailure, PublicKey, RemoveKeyFailure, SetThresholdFailure, Weight,
     },
-    AccessRights, BlockTime, CLValue, Key, Phase, ProtocolVersion, URef, KEY_LOCAL_SEED_LENGTH,
+    AccessRights, BlockTime, CLValue, Key, Phase, ProtocolVersion, RuntimeArgs, URef,
+    KEY_LOCAL_SEED_LENGTH,
 };
 
 use super::{attenuate_uref_for_account, Address, Error, RuntimeContext};
@@ -117,7 +118,7 @@ fn mock_runtime_context<'a>(
         Rc::new(RefCell::new(tc)),
         named_keys,
         access_rights,
-        Vec::new(),
+        RuntimeArgs::new(),
         BTreeSet::from_iter(vec![PublicKey::ed25519_from([0; 32])]),
         &account,
         base_key,
@@ -448,7 +449,7 @@ fn contract_key_addable_valid() {
         Rc::clone(&tc),
         &mut uref_map,
         access_rights,
-        Vec::new(),
+        RuntimeArgs::new(),
         BTreeSet::from_iter(vec![PublicKey::ed25519_from(base_acc_addr)]),
         &account,
         contract_key,
@@ -510,7 +511,7 @@ fn contract_key_addable_invalid() {
         Rc::clone(&tc),
         &mut uref_map,
         access_rights,
-        Vec::new(),
+        RuntimeArgs::new(),
         BTreeSet::from_iter(vec![PublicKey::ed25519_from(base_acc_addr)]),
         &account,
         other_contract_key,

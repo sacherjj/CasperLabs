@@ -22,7 +22,7 @@ use types::{
         UpdateKeyFailure, Weight,
     },
     bytesrepr::{self, ToBytes},
-    AccessRights, BlockTime, CLType, CLValue, Key, Phase, ProtocolVersion, URef,
+    AccessRights, BlockTime, CLType, CLValue, Key, Phase, ProtocolVersion, RuntimeArgs, URef,
     KEY_LOCAL_SEED_LENGTH,
 };
 
@@ -59,7 +59,7 @@ pub struct RuntimeContext<'a, R> {
     access_rights: HashMap<Address, HashSet<AccessRights>>,
     // Original account for read only tasks taken before execution
     account: &'a Account,
-    args: Vec<CLValue>,
+    args: RuntimeArgs,
     authorization_keys: BTreeSet<PublicKey>,
     // Key pointing to the entity we are currently running
     //(could point at an account or contract in the global state)
@@ -86,7 +86,7 @@ where
         state: Rc<RefCell<TrackingCopy<R>>>,
         named_keys: &'a mut BTreeMap<String, Key>,
         access_rights: HashMap<Address, HashSet<AccessRights>>,
-        args: Vec<CLValue>,
+        args: RuntimeArgs,
         authorization_keys: BTreeSet<PublicKey>,
         account: &'a Account,
         base_key: Key,
@@ -223,7 +223,7 @@ where
         &self.account
     }
 
-    pub fn args(&self) -> &Vec<CLValue> {
+    pub fn args(&self) -> &RuntimeArgs {
         &self.args
     }
 

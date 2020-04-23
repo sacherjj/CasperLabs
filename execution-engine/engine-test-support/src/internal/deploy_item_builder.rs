@@ -5,7 +5,7 @@ use engine_core::{
     engine_state::{deploy_item::DeployItem, executable_deploy_item::ExecutableDeployItem},
     DeployHash,
 };
-use types::{account::PublicKey, bytesrepr::ToBytes, SemVer, URef};
+use types::{account::PublicKey, bytesrepr::ToBytes, RuntimeArgs, SemVer, URef};
 
 use crate::internal::utils;
 
@@ -142,14 +142,13 @@ impl DeployItemBuilder {
         key_name: &str,
         version: SemVer,
         entry_point: &str,
-        args: impl ArgsParser,
+        args: RuntimeArgs,
     ) -> Self {
-        let args = Self::serialize_args(args);
         self.deploy_item.session_code = Some(ExecutableDeployItem::StoredVersionedContractByName {
             name: key_name.to_owned(),
             version,
             entry_point: entry_point.to_owned(),
-            args,
+            args: args.to_bytes().expect("should serialize runtime args"),
         });
         self
     }

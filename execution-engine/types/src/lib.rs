@@ -34,6 +34,7 @@ pub mod gens;
 mod key;
 mod phase;
 mod protocol_version;
+mod runtime_args;
 mod semver;
 pub mod system_contract_errors;
 pub mod system_contract_type;
@@ -58,6 +59,7 @@ pub use key::{
 };
 pub use phase::{Phase, PHASE_SERIALIZED_LENGTH};
 pub use protocol_version::{ProtocolVersion, VersionCheckResult};
+pub use runtime_args::{RuntimeArg, RuntimeArgs};
 pub use semver::{SemVer, SEM_VER_SERIALIZED_LENGTH};
 pub use system_contract_type::SystemContractType;
 pub use transfer_result::{TransferResult, TransferredTo};

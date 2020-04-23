@@ -18,7 +18,7 @@ use contract::{
 };
 use types::{
     contract_header::{Arg, EntryPoint, EntryPointAccess, EntryPointType},
-    AccessRights, ApiError, CLType, CLValue, Key, SemVer, URef,
+    runtime_args, AccessRights, ApiError, CLType, CLValue, Key, RuntimeArgs, SemVer, URef,
 };
 
 const COUNT_KEY: &str = "count";
@@ -79,8 +79,8 @@ pub extern "C" fn counter_increment() {
         .to_contract_ref()
         .unwrap_or_revert_with(ApiError::UnexpectedKeyVariant);
 
-    let args = (5,);
-    runtime::call_versioned_contract::<_, ()>(contract_ref, VERSION, INC_METHOD, args);
+    let args = runtime_args! {};
+    runtime::call_versioned_contract::<()>(contract_ref, VERSION, INC_METHOD, args);
 }
 
 /// function which creates counter contracts
@@ -147,8 +147,12 @@ pub extern "C" fn factory_session() {
         .to_contract_ref()
         .unwrap_or_revert_with(ApiError::UnexpectedKeyVariant);
 
-    let (counter_contract, count_var): (Key, URef) =
-        runtime::call_versioned_contract(contract_ref, VERSION, CREATE_COUNTER_METHOD, ());
+    let (counter_contract, count_var): (Key, URef) = runtime::call_versioned_contract(
+        contract_ref,
+        VERSION,
+        CREATE_COUNTER_METHOD,
+        RuntimeArgs::new(),
+    );
 
     runtime::put_key(COUNTER_KEY, counter_contract);
     // store counter variable in account too for easier query

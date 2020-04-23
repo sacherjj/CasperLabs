@@ -5,13 +5,16 @@ use engine_test_support::{
     },
     DEFAULT_ACCOUNT_ADDR,
 };
-use types::{Key, SemVer};
+use types::{runtime_args, Key, RuntimeArgs, SemVer};
 
 const CONTRACT_COUNTER_CALL: &str = "counter_call.wasm";
 const CONTRACT_COUNTER_DEFINE: &str = "counter_define.wasm";
 const CONTRACT_COUNTER_WITH_HEADER: &str = "counter_with_header.wasm";
 const COUNTER_KEY: &str = "counter";
 const COUNT_KEY: &str = "count";
+const STEP_1: i32 = 5;
+const STEP_2: i32 = 6;
+const STEP_3: i32 = 42;
 
 #[ignore]
 #[test]
@@ -68,9 +71,12 @@ fn should_run_counter_with_headers_example_contract() {
             .build();
 
     let exec_request_2 = {
+        let args = runtime_args! {
+            "step" => STEP_1,
+        };
         let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
-            .with_stored_entry_point_at_version("counter", SemVer::new(1, 0, 0), "increment", (5,))
+            .with_stored_entry_point_at_version("counter", SemVer::new(1, 0, 0), "increment", args)
             .with_empty_payment_bytes((*DEFAULT_PAYMENT,))
             .with_authorization_keys(&[DEFAULT_ACCOUNT_ADDR])
             .with_deploy_hash([3; 32])
@@ -80,9 +86,13 @@ fn should_run_counter_with_headers_example_contract() {
     };
 
     let exec_request_3 = {
+        let args = runtime_args! {
+            "step" => STEP_2,
+        };
+        // args.insert("step".to_owned(), CLValue::from_t(5i32).unwrap());
         let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
-            .with_stored_entry_point_at_version("counter", SemVer::new(1, 0, 0), "increment", (5,))
+            .with_stored_entry_point_at_version("counter", SemVer::new(1, 0, 0), "increment", args)
             .with_empty_payment_bytes((*DEFAULT_PAYMENT,))
             .with_authorization_keys(&[DEFAULT_ACCOUNT_ADDR])
             .with_deploy_hash([4; 32])
@@ -90,6 +100,28 @@ fn should_run_counter_with_headers_example_contract() {
 
         ExecuteRequestBuilder::new().push_deploy(deploy).build()
     };
+
+    let exec_request_4 = {
+        let args = runtime_args! {
+            "this parameter is unused" => 0,
+            "step" => STEP_3,
+        };
+        let deploy = DeployItemBuilder::new()
+            .with_address(DEFAULT_ACCOUNT_ADDR)
+            .with_stored_entry_point_at_version(
+                "counter",
+                SemVer::new(1, 0, 0),
+                "counter_caller",
+                args,
+            )
+            .with_empty_payment_bytes((*DEFAULT_PAYMENT,))
+            .with_authorization_keys(&[DEFAULT_ACCOUNT_ADDR])
+            .with_deploy_hash([4; 32])
+            .build();
+
+        ExecuteRequestBuilder::new().push_deploy(deploy).build()
+    };
+
     let mut builder = InMemoryWasmTestBuilder::default();
 
     builder
@@ -101,6 +133,8 @@ fn should_run_counter_with_headers_example_contract() {
     builder.exec(exec_request_2).expect_success().commit();
 
     builder.exec(exec_request_3).expect_success().commit();
+
+    builder.exec(exec_request_4).expect_success().commit();
 
     let account_value = builder
         .query(None, Key::Account(DEFAULT_ACCOUNT_ADDR), &[])
@@ -120,7 +154,7 @@ fn should_run_counter_with_headers_example_contract() {
         .clone()
         .into_t()
         .expect("should cast CLValue to integer");
-    assert_eq!(value, 10);
+    assert_eq!(value, STEP_1 + STEP_2 + STEP_3);
 
     // Query non-existing version
     assert!(builder
