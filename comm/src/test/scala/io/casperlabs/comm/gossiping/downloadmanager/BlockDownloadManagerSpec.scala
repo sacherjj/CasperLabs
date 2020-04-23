@@ -103,7 +103,7 @@ class BlockDownloadManagerSpec
           MockGossipService(
             dag,
             // Delay just the genesis block a little so we can schedule everything before the first download finishes.
-            regetter = _ flatMap {
+            alterBlock = _ flatMap {
               case Some(block) if block == dag.head =>
                 Task.pure(Some(block)).delayResult(500.millis)
               case other => Task.pure(other)
@@ -171,6 +171,27 @@ class BlockDownloadManagerSpec
         }
       }
 
+      "reject download if there are duplicate deploys" in {
+        TestFixture(
+          remote = _ =>
+            MockGossipService(
+              dag,
+              alterDeployChunks = chunks => chunks ++ chunks
+            )
+        ) {
+          case (manager, _) =>
+            for {
+              watch  <- manager.scheduleDownload(summaryOf(dag.head), source, false)
+              result <- watch.attempt
+            } yield {
+              result match {
+                case Left(ex) => ex.getMessage shouldBe "Duplicate deploy in stream."
+                case Right(_) => fail("Should have failed with duplicate deploy.")
+              }
+            }
+        }
+      }
+
       def checkParallel(maxParallelDownloads: Int)(test: Int => Unit): Unit = {
         val parallelNow = new AtomicInteger(0)
         val parallelMax = new AtomicInteger(0)
@@ -178,11 +199,11 @@ class BlockDownloadManagerSpec
           remote = _ =>
             MockGossipService(
               dag,
-              regetter = task => {
+              alterBlock = task => {
                 // Draw it out a little bit so it can start multiple downloads.
                 Task.delay(parallelNow.incrementAndGet()) *> task.delayResult(100.millis)
               },
-              rechunker = _.map { chunk =>
+              alterBlockChunks = _.map { chunk =>
                 parallelMax.set(math.max(parallelNow.get, parallelMax.get))
                 chunk
               }
@@ -256,7 +277,7 @@ class BlockDownloadManagerSpec
     "scheduled to download a block which is already downloading" should {
       val block = arbitrary[Block].sample.map(withoutDependencies(_)).get
       // Delay a little so it can start two downloads if it's buggy.
-      val remote = MockGossipService(Seq(block), regetter = _.delayResult(100.millis))
+      val remote = MockGossipService(Seq(block), alterBlock = _.delayResult(100.millis))
 
       "not download twice" in TestFixture(remote = _ => remote) {
         case (manager, backend) =>
@@ -282,7 +303,7 @@ class BlockDownloadManagerSpec
         val remote =
           MockGossipService(
             Seq(block),
-            regetter = { get =>
+            alterBlock = { get =>
               for {
                 _ <- Task.delay({ started = true })
                 _ <- Task.sleep(1.second)
@@ -355,7 +376,7 @@ class BlockDownloadManagerSpec
           case `nodeA` =>
             MockGossipService(
               Seq(block),
-              regetter = _.delayResult(100.millis) *> Task.raiseError(
+              alterBlock = _.delayResult(100.millis) *> Task.raiseError(
                 new Exception("Node A is dying!")
               )
             )
@@ -598,7 +619,7 @@ class BlockDownloadManagerSpec
         }
 
       def withRechunking(f: Iterant[Task, Chunk] => Iterant[Task, Chunk]) = { _: Node =>
-        MockGossipService(Seq(block), rechunker = f)
+        MockGossipService(Seq(block), alterBlockChunks = f)
       }
 
       def rewriteHeader(
@@ -797,10 +818,11 @@ object BlockDownloadManagerSpec {
 
     def apply(
         blocks: Seq[Block] = Seq.empty,
-        // Pass in a `rechunker` method to alter the stream of block chunks returned by `getBlockChunked`.
-        rechunker: Iterant[Task, Chunk] => Iterant[Task, Chunk] = identity,
-        // Pass in a `regetter` method to alter the behaviour of the `getBlock`, for example to add delays.
-        regetter: Task[Option[Block]] => Task[Option[Block]] = identity,
+        // Pass in a `alterBlockChunks` method to alter the stream of block chunks returned by `getBlockChunked`.
+        alterBlockChunks: Iterant[Task, Chunk] => Iterant[Task, Chunk] = identity,
+        alterDeployChunks: Iterant[Task, Chunk] => Iterant[Task, Chunk] = identity,
+        // Pass in a `alterBlock` method to alter the behaviour of the `getBlock`, for example to add delays.
+        alterBlock: Task[Option[Block]] => Task[Option[Block]] = identity,
         interceptGetBlock: (ByteString, Boolean) => Unit = (_, _) => (),
         interceptGetDeploys: (Set[ByteString]) => Unit = _ => ()
     )(implicit log: Log[Task]) =
@@ -813,7 +835,7 @@ object BlockDownloadManagerSpec {
           backend = new NoOpsGossipServiceServerBackend[Task] {
             override def getBlock(blockHash: ByteString, deploysBodiesExcluded: Boolean) =
               Task.delay(interceptGetBlock(blockHash, deploysBodiesExcluded)) *>
-                regetter(Task.delay(blockMap.get(blockHash).map { block =>
+                alterBlock(Task.delay(blockMap.get(blockHash).map { block =>
                   if (deploysBodiesExcluded) {
                     block.clearDeployBodies
                   } else {
@@ -840,7 +862,10 @@ object BlockDownloadManagerSpec {
           blockDownloadSemaphore = semaphore
         ) {
           override def getBlockChunked(request: GetBlockChunkedRequest) =
-            rechunker(super.getBlockChunked(request))
+            alterBlockChunks(super.getBlockChunked(request))
+
+          override def streamDeploysChunked(request: StreamDeploysChunkedRequest) =
+            alterDeployChunks(super.streamDeploysChunked(request))
         }
       }
   }
