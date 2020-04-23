@@ -143,7 +143,7 @@ class BlockDownloadManagerImpl[F[_]](
       existingDeploys      <- backend.readDeploys((allDeployHashes diff fullDeployHashes).toList)
       existingDeployHashes = existingDeploys.map(_.deployHash).toSet
       missingDeployHashes  = allDeployHashes diff fullDeployHashes diff existingDeployHashes
-      missingDeploys       <- fetchAndRestoreDeploys(source, missingDeployHashes.toList)
+      missingDeploys       <- fetchAndRestoreDeploys(source, missingDeployHashes)
       fullBlock            = partialBlock.withDeploys(fullDeploys ++ existingDeploys ++ missingDeploys)
     } yield fullBlock
 
@@ -163,12 +163,6 @@ class BlockDownloadManagerImpl[F[_]](
     Iterant.liftF(itF).flatten
   }
 
-  private def fetchAndRestoreDeploys(source: Node, deployHashes: Seq[ByteString]): F[List[Deploy]] =
-    for {
-      deployBytes <- restoreDeploys(source, fetchDeploys(source, deployHashes))
-      deploys     <- deployBytes.traverse(parseDeploy)
-    } yield deploys
-
   /** Ask for all deploys from the source in a stream of chunks alternating headers and content. */
   private def fetchDeploys(source: Node, deployHashes: Seq[ByteString]): Iterant[F, Chunk] = {
     val itF = connectToGossip(source).map { stub =>
@@ -182,29 +176,46 @@ class BlockDownloadManagerImpl[F[_]](
   }
 
   /** Restore individual deploys from a stream of altnating header and content chunks. */
-  private def restoreDeploys(source: Node, chunks: Iterant[F, Chunk]): F[List[Array[Byte]]] = {
-    type Acc = (List[Array[Byte]], List[Chunk])
+  private def fetchAndRestoreDeploys(
+      source: Node,
+      deployHashes: Set[ByteString]
+  ): F[List[Deploy]] = {
 
-    chunks.foldWhileLeftEvalL((List.empty[Array[Byte]] -> List.empty[Chunk]).pure[F]) {
-      case ((bytesAcc, chunksAcc), chunk) if chunk.content.isHeader && chunksAcc.nonEmpty =>
-        // Try to restore whatever we have accumulated so far, to see if it's legit.
-        restore(source, Iterant.fromList(chunksAcc.reverse)) map { bytes =>
-          ((bytes :: bytesAcc) -> List(chunk)).asLeft[Acc]
-        }
-      case ((bytesAcc, chunksAcc), chunk) =>
-        (bytesAcc -> (chunk :: chunksAcc)).asLeft[Acc].pure[F]
-    } flatMap {
-      case (bytesAcc, chunksAcc) if chunksAcc.nonEmpty =>
+    def parseBuffered(acc: DeploysAcc): F[DeploysAcc] =
+      for {
+        bytes  <- restore(source, Iterant.fromList(acc.chunks.reverse))
+        deploy <- Sync[F].delay(Deploy.parseFrom(bytes))
+        _ <- Sync[F]
+              .raiseError(invalidChunks(source, "Duplicate deploy in stream."))
+              .whenA(acc.deployHashes(deploy.deployHash))
+        _ <- Sync[F]
+              .raiseError(invalidChunks(source, "Unexpected deploy in stream."))
+              .whenA(!deployHashes(deploy.deployHash))
+      } yield acc.copy(
+        deploys = deploy :: acc.deploys,
+        deployHashes = acc.deployHashes + deploy.deployHash,
+        chunks = Nil
+      )
+
+    fetchDeploys(source, deployHashes.toList)
+      .foldWhileLeftEvalL(DeploysAcc(Nil, Set.empty, Nil).pure[F]) {
+        case (acc, chunk) if chunk.content.isHeader && acc.chunks.nonEmpty =>
+          // Try to restore whatever we have accumulated so far, to see if it's legit.
+          parseBuffered(acc).map(_.copy(chunks = List(chunk)).asLeft[DeploysAcc])
+        case (acc, chunk) =>
+          acc.copy(chunks = chunk :: acc.chunks).asLeft[DeploysAcc].pure[F]
+      } flatMap {
+      case acc if acc.chunks.nonEmpty =>
         // Try to restore the last set of chunks. There should always be one that doesn't end with a header.
-        restore(source, Iterant.fromList(chunksAcc.reverse)) map { bytes =>
-          (bytes :: bytesAcc)
-        }
-      case (bytesAcc, _) =>
-        bytesAcc.pure[F]
-    } map (_.reverse)
+        parseBuffered(acc)
+      case acc =>
+        acc.pure[F]
+    } map (_.deploys.reverse)
   }
 
-  private def parseDeploy(bytes: Array[Byte]): F[Deploy] =
-    Sync[F].delay(Deploy.parseFrom(bytes))
-
+  case class DeploysAcc(
+      deploys: List[Deploy],
+      deployHashes: Set[ByteString],
+      chunks: List[Chunk]
+  )
 }

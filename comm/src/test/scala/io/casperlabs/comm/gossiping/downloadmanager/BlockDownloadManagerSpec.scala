@@ -105,7 +105,7 @@ class BlockDownloadManagerSpec
             // Delay just the genesis block a little so we can schedule everything before the first download finishes.
             regetter = _ flatMap {
               case Some(block) if block == dag.head =>
-                Task.pure(Some(block)).delayResult(250.millis)
+                Task.pure(Some(block)).delayResult(500.millis)
               case other => Task.pure(other)
             }
           ),
