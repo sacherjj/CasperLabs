@@ -29,15 +29,19 @@ export class ToggleableSubscriber {
     private forceRefresh: () => void
   ) {
     // so that change of subscribeToggleStore can trigger `setUpSubscriber`
-    reaction(() => this.subscribeToggleStore.isPressed && this.additionalEnable(), () => {
-      this.setUpSubscriber();
-    }, {
-      fireImmediately: false,
-      delay: 100
-    });
+    reaction(
+      () => this.subscribeToggleStore.isPressed && this.additionalEnable(),
+      () => {
+        this.setUpSubscriber();
+      },
+      {
+        fireImmediately: false,
+        delay: 100
+      }
+    );
   }
 
-  unsubscribe(){
+  unsubscribe() {
     if (this.subscriberState === SubscribeState.ON) {
       this.eventsSubscriber!.unsubscribe();
     }
@@ -53,7 +57,6 @@ export class ToggleableSubscriber {
     }
   }
 
-
   private get subscriberState(): SubscribeState {
     if (!this.eventsSubscriber) {
       return SubscribeState.UN_INIT;
@@ -66,7 +69,8 @@ export class ToggleableSubscriber {
 
   @action
   setUpSubscriber() {
-    let subscribeToggleEnabled = this.subscribeToggleStore.isPressed && this.additionalEnable();
+    let subscribeToggleEnabled =
+      this.subscribeToggleStore.isPressed && this.additionalEnable();
     if (subscribeToggleEnabled) {
       // enable subscriber
       const subscriberState = this.subscriberState;
