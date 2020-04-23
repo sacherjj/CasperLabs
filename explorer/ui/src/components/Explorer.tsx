@@ -28,7 +28,10 @@ class _Explorer extends React.Component<Props, {}> {
     this.refreshWithDepthAndMaxRank(props.maxRank, props.depth);
   }
 
-  refreshWithDepthAndMaxRank(maxRankStr: string | null, depthStr: string | null) {
+  refreshWithDepthAndMaxRank(
+    maxRankStr: string | null,
+    depthStr: string | null
+  ) {
     let maxRank = parseInt(maxRankStr || '') || 0;
     let depth = parseInt(depthStr || '') || DEFAULT_DEPTH;
     this.props.dag.updateMaxRankAndDepth(maxRank, depth);
@@ -48,7 +51,7 @@ class _Explorer extends React.Component<Props, {}> {
 
   componentWillUnmount() {
     // release websocket if necessary
-    this.props.dag.toggleableSubscriber.unsubscribe();
+    this.props.dag.toggleableSubscriber.unsubscribeAndFree();
   }
 
   render() {
@@ -65,7 +68,9 @@ class _Explorer extends React.Component<Props, {}> {
               }
               blocks={dag.blocks}
               refresh={() => this.refresh()}
-              subscribeToggleStore={dag.toggleableSubscriber.subscribeToggleStore}
+              subscribeToggleStore={
+                dag.toggleableSubscriber.subscribeToggleStore
+              }
               hideBallotsToggleStore={dag.hideBallotsToggleStore}
               hideBlockHashToggleStore={dag.hideBlockHashToggleStore}
               footerMessage={
@@ -92,7 +97,7 @@ class _Explorer extends React.Component<Props, {}> {
                 if (
                   current &&
                   current.getSummary()!.getBlockHash_asB64() ===
-                  block.getSummary()!.getBlockHash_asB64()
+                    block.getSummary()!.getBlockHash_asB64()
                 ) {
                   dag.selectedBlock = undefined;
                 } else {
@@ -240,12 +245,12 @@ class BlockDetails extends React.Component<
           title={`Block ${shortHash(id)}`}
           headers={[]}
           rows={attrs}
-          renderRow={(attr, i) =>
+          renderRow={(attr, i) => (
             <tr key={i}>
               <th>{attr[0]}</th>
               <td>{attr[1]}</td>
             </tr>
-          }
+          )}
           footerMessage="Click the links to select the parents and children."
         />
       </div>

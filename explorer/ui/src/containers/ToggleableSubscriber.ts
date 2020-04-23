@@ -37,9 +37,19 @@ export class ToggleableSubscriber {
     });
   }
 
-  unsubscribe() {
+  unsubscribe(){
     if (this.subscriberState === SubscribeState.ON) {
       this.eventsSubscriber!.unsubscribe();
+    }
+  }
+
+  unsubscribeAndFree() {
+    if (this.subscriberState === SubscribeState.ON) {
+      this.eventsSubscriber!.unsubscribe();
+      // free eventsSubscriber before unmount component
+      // so that when user re-visit the page from other page,
+      // it won't call this.forceRefresh
+      this.eventsSubscriber = null;
     }
   }
 
