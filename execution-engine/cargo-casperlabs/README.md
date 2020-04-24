@@ -43,7 +43,7 @@ my_project/
 │   ├── Cargo.toml
 │   ├── rust-toolchain
 │   └── src
-│       └── lib.rs
+│       └── main.rs
 ├── tests
 │   ├── build.rs
 │   ├── Cargo.toml
