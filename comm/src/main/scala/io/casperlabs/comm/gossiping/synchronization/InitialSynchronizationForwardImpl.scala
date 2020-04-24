@@ -97,7 +97,7 @@ class InitialSynchronizationForwardImpl[F[_]: Parallel: Log: Timer](
       // 2. wait handles from DownloadManager
       // 3. max rank from a batch
       type S = (Set[ByteString], Vector[WaitHandle[F]], Long)
-      val emptyS: S = (Set.empty, Vector.empty, -1)
+      val emptyS: S = (Set.empty, Vector.empty, jRank.toLong)
 
       for {
         gossipService <- connector(peer)
@@ -164,7 +164,7 @@ class InitialSynchronizationForwardImpl[F[_]: Parallel: Log: Timer](
       // 3. nodes failed to respond
       // 4. max synced rank from the previous round
       type S = (Int, List[Node], Set[Node], Int)
-      val emptyS: S = (0, Nil, failed, -1)
+      val emptyS: S = (0, Nil, failed, rank)
       for {
         _ <- F.whenA(nodes.isEmpty && failed.nonEmpty)(
               Log[F].error("Failed to run initial sync - no more nodes to try") >>
