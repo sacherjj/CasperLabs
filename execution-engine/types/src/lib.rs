@@ -50,7 +50,7 @@ pub use block_time::{BlockTime, BLOCKTIME_SERIALIZED_LENGTH};
 pub use cl_type::{named_key_type, CLType, CLTyped};
 pub use cl_value::{CLTypeMismatch, CLValue, CLValueError};
 pub use contract_header::{
-    ContractHeader, ContractMetadata, EntryPoint, EntryPointAccess, EntryPointType, Group,
+    Arg, ContractHeader, ContractMetadata, EntryPoint, EntryPointAccess, EntryPointType, Group,
 };
 pub use contract_ref::ContractRef;
 #[doc(inline)]

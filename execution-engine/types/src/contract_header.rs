@@ -495,8 +495,11 @@ pub struct Arg {
 
 impl Arg {
     /// `Arg` constructor.
-    pub fn new(name: String, cl_type: CLType) -> Self {
-        Arg { name, cl_type }
+    pub fn new<T: Into<String>>(name: T, cl_type: CLType) -> Self {
+        Arg {
+            name: name.into(),
+            cl_type,
+        }
     }
 
     /// Get the type of this argument.
