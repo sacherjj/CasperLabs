@@ -70,6 +70,17 @@ impl Group {
     pub fn new(s: String) -> Self {
         Group(s)
     }
+
+    /// Retrieves underlying name.
+    pub fn value(&self) -> &str {
+        &self.0
+    }
+}
+
+impl Into<String> for Group {
+    fn into(self) -> String {
+        self.0
+    }
 }
 
 impl ToBytes for Group {
@@ -167,6 +178,26 @@ impl ContractMetadata {
         self.removed_versions.insert(version);
         Ok(())
     }
+
+    /// Returns mutable reference to active versions.
+    pub fn active_versions_mut(&mut self) -> &mut BTreeMap<SemVer, ContractHeader> {
+        &mut self.active_versions
+    }
+
+    /// Consumes contract header and returns a map of active versions.
+    pub fn take_active_versions(self) -> BTreeMap<SemVer, ContractHeader> {
+        self.active_versions
+    }
+
+    /// Get removed versions set.
+    pub fn removed_versions(&self) -> &BTreeSet<SemVer> {
+        &self.removed_versions
+    }
+
+    /// Returns mutable versions
+    pub fn removed_versions_mut(&mut self) -> &mut BTreeSet<SemVer> {
+        &mut self.removed_versions
+    }
 }
 
 impl ToBytes for ContractMetadata {
@@ -257,6 +288,11 @@ impl ContractHeader {
     pub fn contract_key(&self) -> Key {
         self.contract_key
     }
+
+    /// Hash for accessing contract version
+    pub fn take_methods(self) -> BTreeMap<String, EntryPoint> {
+        self.methods
+    }
 }
 
 impl CLTyped for ContractHeader {
@@ -339,6 +375,12 @@ pub struct EntryPoint {
     entry_point_type: EntryPointType,
 }
 
+impl Into<(Vec<Arg>, CLType, EntryPointAccess, EntryPointType)> for EntryPoint {
+    fn into(self) -> (Vec<Arg>, CLType, EntryPointAccess, EntryPointType) {
+        (self.args, self.ret, self.access, self.entry_point_type)
+    }
+}
+
 impl EntryPoint {
     /// `EntryPoint` constructor.
     pub fn new(
@@ -365,7 +407,7 @@ impl EntryPoint {
         self.args.as_slice()
     }
 
-    /// Get the entry point type.
+    /// Obtains entry point
     pub fn entry_point_type(&self) -> EntryPointType {
         self.entry_point_type
     }
@@ -505,6 +547,12 @@ impl Arg {
     /// Get the type of this argument.
     pub fn cl_type(&self) -> &CLType {
         &self.cl_type
+    }
+}
+
+impl Into<(String, CLType)> for Arg {
+    fn into(self) -> (String, CLType) {
+        (self.name, self.cl_type)
     }
 }
 

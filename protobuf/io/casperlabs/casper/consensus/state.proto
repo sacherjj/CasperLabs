@@ -10,25 +10,38 @@ message SemVer {
 message ContractHeader {
     message EntryPoint {
 
-        bytes args = 1;
-        CLType ret = 2;
-
+        message Arg {
+            string name = 1;
+            CLType cl_type = 2;
+        }
         message Public {} // Tag
         message Group {
             string name = 1;
         }
+
+        message Session {}
+        message Contract {}
+
         message Groups {
             repeated Group groups = 1;
         }
 
+        repeated Arg args = 1;
+        CLType ret = 2;
         oneof access {
             Public public = 3;
             Groups groups = 4;
         }
+
+
+        oneof entry_point_type {
+            Session session = 5;
+            Contract contract = 6;
+        }
     }
     
-    Key.URef access_key = 1;
-    map<string, EntryPoint> methods = 2;
+    map<string, EntryPoint> methods = 1;
+    Key contract_key = 2;
     ProtocolVersion protocol_version = 3;
 }
 
@@ -38,14 +51,14 @@ message ContractMetadata {
         SemVer version = 1;
         ContractHeader contract_header = 2;
     }
-    message Groups {
+    message Group {
         ContractHeader.EntryPoint.Group group = 1;
         repeated Key.URef urefs = 2;
     }
     Key.URef access_key = 1;
     repeated ActiveVersion active_versions = 2;
     repeated SemVer removed_versions = 3;
-    Groups groups = 4;
+    repeated Group groups = 4;
 }
 
 
