@@ -1966,7 +1966,7 @@ where
         method: String,
         args: RuntimeArgs,
     ) -> Result<CLValue, Error> {
-        let contract = match self.context.read_gs(&key)? {
+        let (contract, contract_key) = match self.context.read_gs(&key)? {
             Some(StoredValue::ContractMetadata(metadata)) => {
                 let header = metadata
                     .get_version(&version)
@@ -2003,10 +2003,14 @@ where
                     }
                 }
 
-                self.context
+                let contract_key = header.contract_key();
+
+                let contract = self
+                    .context
                     .read_gs_direct(&header.contract_key())?
                     .and_then(|sv| sv.as_contract().cloned())
-                    .ok_or_else(|| Error::InvalidContractVersion)?
+                    .ok_or_else(|| Error::InvalidContractVersion)?;
+                (contract, contract_key)
             }
             Some(_) => {
                 return Err(Error::FunctionNotFound(format!(
@@ -2016,7 +2020,7 @@ where
             }
             None => return Err(Error::KeyNotFound(key)),
         };
-        self.execute_contract(key, contract, args, method.as_str())
+        self.execute_contract(contract_key, contract, args, method.as_str())
     }
 
     fn execute_contract(
