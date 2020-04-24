@@ -14,6 +14,7 @@ pub mod common;
 mod contract_package;
 pub mod dependency;
 mod tests_package;
+mod travis_yml;
 
 const APP_NAME: &str = "cargo-casperlabs";
 const ABOUT: &str =
@@ -151,6 +152,8 @@ fn main() {
     tests_package::add_build_rs();
     tests_package::replace_main_rs();
     tests_package::copy_wasm_files();
+
+    travis_yml::create();
 }
 
 #[cfg(test)]
