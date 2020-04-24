@@ -24,6 +24,7 @@ const COUNT_KEY: &str = "count";
 const COUNTER_ACCESS: &str = "counter_access";
 const COUNTER_KEY: &str = "counter";
 const COUNTER_CALLER: &str = "counter_caller";
+const COUNTER_REMOVER: &str = "counter_remover";
 const GET_METHOD: &str = "get";
 const INC_METHOD: &str = "increment";
 const VERSION: SemVer = SemVer {
@@ -85,6 +86,25 @@ pub extern "C" fn counter_caller() {
     runtime::call_versioned_contract::<()>(contract_ref, VERSION, INC_METHOD, args);
 }
 
+/// convenience session code to remove contract version
+#[no_mangle]
+pub extern "C" fn counter_remover() {
+    let counter_metadata_key =
+        runtime::get_key(COUNTER_KEY).unwrap_or_revert_with(ApiError::GetKey);
+    let counter_access_key = runtime::get_key(COUNTER_ACCESS)
+        .unwrap_or_revert_with(ApiError::GetKey)
+        .as_uref()
+        .cloned()
+        .unwrap_or_revert();
+    let counter_metadata_ref = counter_metadata_key.to_contract_ref().unwrap();
+    storage::remove_contract_version(
+        counter_metadata_ref,
+        counter_access_key,
+        SemVer::new(1, 0, 0),
+    )
+    .unwrap_or_revert();
+}
+
 /// main session code which stores the contract and convenience session code
 #[no_mangle]
 pub extern "C" fn call() {
@@ -117,6 +137,14 @@ pub extern "C" fn call() {
         EntryPointType::Session,
     );
     methods.insert(COUNTER_CALLER.to_string(), entrypoint_caller);
+
+    let entrypoint_caller = EntryPoint::new(
+        vec![],
+        CLType::Unit,
+        EntryPointAccess::Public,
+        EntryPointType::Session,
+    );
+    methods.insert(COUNTER_REMOVER.to_string(), entrypoint_caller);
 
     let counter_variable = storage::new_uref(0); //initialize counter
 

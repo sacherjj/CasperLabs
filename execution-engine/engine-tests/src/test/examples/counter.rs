@@ -122,6 +122,24 @@ fn should_run_counter_with_headers_example_contract() {
         ExecuteRequestBuilder::new().push_deploy(deploy).build()
     };
 
+    let exec_request_5 = {
+        let args = runtime_args! {};
+        let deploy = DeployItemBuilder::new()
+            .with_address(DEFAULT_ACCOUNT_ADDR)
+            .with_stored_entry_point_at_version(
+                "counter",
+                SemVer::new(1, 0, 0),
+                "counter_remover",
+                args,
+            )
+            .with_empty_payment_bytes((*DEFAULT_PAYMENT,))
+            .with_authorization_keys(&[DEFAULT_ACCOUNT_ADDR])
+            .with_deploy_hash([5; 32])
+            .build();
+
+        ExecuteRequestBuilder::new().push_deploy(deploy).build()
+    };
+
     let mut builder = InMemoryWasmTestBuilder::default();
 
     builder
@@ -159,5 +177,12 @@ fn should_run_counter_with_headers_example_contract() {
     // Query non-existing version
     assert!(builder
         .query(None, *counter_key, &["100.200.300", COUNT_KEY])
+        .is_err());
+
+    builder.exec(exec_request_5).expect_success().commit();
+
+    // Querying removed version should raise error
+    assert!(builder
+        .query(None, *counter_key, &["1.0.0", COUNT_KEY])
         .is_err());
 }
