@@ -2003,11 +2003,8 @@ where
                     }
                 }
 
-                let seed = key.into_seed();
-                let version_bytes = version.to_bytes()?;
-                let contract_key = Key::local(seed, &version_bytes);
                 self.context
-                    .read_gs_direct(&contract_key)?
+                    .read_gs_direct(&header.contract_key())?
                     .and_then(|sv| sv.as_contract().cloned())
                     .ok_or_else(|| Error::InvalidContractVersion)?
             }
@@ -2418,10 +2415,7 @@ where
             return Ok(Err(contract_header::Error::InvalidAccessKey.into()));
         }
 
-        // TODO: Add contract key to contract header after removing local key
-        let seed = metadata_key.into_seed();
-        let version_bytes = version.to_bytes()?;
-        let contract_key = Key::local(seed, &version_bytes); // Replace with new_function_address and store it with header
+        let contract_key = Key::Hash(self.context.new_function_address()?);
 
         let header = ContractHeader::new(methods, contract_key, self.context.protocol_version());
 

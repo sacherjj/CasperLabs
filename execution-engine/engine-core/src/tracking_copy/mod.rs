@@ -20,10 +20,7 @@ use engine_shared::{
     TypeMismatch,
 };
 use engine_storage::global_state::StateReader;
-use types::{
-    bytesrepr::{self, ToBytes},
-    CLType, CLValueError, Key, SemVer,
-};
+use types::{bytesrepr, CLType, CLValueError, Key, SemVer};
 
 use crate::engine_state::{execution_effect::ExecutionEffect, op::Op};
 
@@ -420,15 +417,22 @@ impl<R: StateReader<Key, StoredValue>> TrackingCopy<R> {
 
                     // Check if given version is contained active versions before going deeper
                     // through local key.
-                    if !metadata.is_version_active(&sem_ver) {
+                    if metadata.is_version_removed(&sem_ver) {
                         let msg_prefix =
-                            format!("Query cannot continue as version {} does not exists", name);
+                            format!("Query cannot continue as version {} is removed", name);
                         return Ok(query.into_not_found_result(&msg_prefix));
                     }
-
-                    let version_bytes = sem_ver.into_bytes().expect("should serialize");
-                    let contract_key = Key::local(query.current_key.into_seed(), &version_bytes);
-                    query.current_key = contract_key
+                    let contract_header = match metadata.get_version(&sem_ver) {
+                        Some(contract_header) => contract_header,
+                        None => {
+                            let msg_prefix = format!(
+                                "Query cannot continue as version {} does not exists",
+                                name
+                            );
+                            return Ok(query.into_not_found_result(&msg_prefix));
+                        }
+                    };
+                    query.current_key = contract_header.contract_key()
                 }
             }
         }
