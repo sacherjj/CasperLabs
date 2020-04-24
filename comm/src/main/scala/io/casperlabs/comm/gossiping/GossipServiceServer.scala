@@ -32,6 +32,7 @@ class GossipServiceServer[F[_]: Concurrent: Parallel: Log: Metrics](
     blockDownloadManager: BlockDownloadManager[F],
     genesisApprover: GenesisApprover[F],
     maxChunkSize: Int,
+    deployGossipEnabled: Boolean,
     blockDownloadSemaphore: Semaphore[F]
 ) extends GossipService[F] {
   import GossipServiceServer._
@@ -70,7 +71,7 @@ class GossipServiceServer[F[_]: Concurrent: Parallel: Log: Metrics](
                         deployDownloadManager
                           .scheduleDownload(deploySummary, request.getSender, relay = true)
                     )
-                }).forkAndLog
+                }).forkAndLog.whenA(deployGossipEnabled)
           } yield NewDeploysResponse(isNew = true)
         }
       }
@@ -402,7 +403,8 @@ object GossipServiceServer {
       blockDownloadManager: BlockDownloadManager[F],
       genesisApprover: GenesisApprover[F],
       maxChunkSize: Int,
-      maxParallelBlockDownloads: Int
+      maxParallelBlockDownloads: Int,
+      deployGossipEnabled: Boolean
   ): F[GossipServiceServer[F]] =
     for {
       blockDownloadSemaphore <- Semaphore[F](maxParallelBlockDownloads.toLong)
@@ -414,6 +416,7 @@ object GossipServiceServer {
       blockDownloadManager,
       genesisApprover,
       maxChunkSize,
+      deployGossipEnabled,
       blockDownloadSemaphore
     )
 }

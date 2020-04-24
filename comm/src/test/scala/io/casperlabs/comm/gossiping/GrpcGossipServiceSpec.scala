@@ -1683,7 +1683,8 @@ object GrpcGossipServiceSpec extends TestRuntime with ArbitraryConsensusAndComm 
               blockDownloadManager = blockDownloadManager,
               genesisApprover = genesisApprover,
               maxChunkSize = DefaultMaxChunkSize,
-              maxParallelBlockDownloads = maxParallelBlockDownloads
+              maxParallelBlockDownloads = maxParallelBlockDownloads,
+              deployGossipEnabled = false
             ) map { gss =>
               val svc = GrpcGossipService
                 .fromGossipService(gss, rateLimiter, chainId, blockChunkConsumerTimeout)

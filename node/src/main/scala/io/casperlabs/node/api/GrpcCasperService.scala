@@ -12,6 +12,7 @@ import io.casperlabs.casper.consensus.state.ProtocolVersion
 import io.casperlabs.casper.MultiParentCasperRef
 import io.casperlabs.catscontrib.{Fs2Compiler, MonadThrowable}
 import io.casperlabs.comm.ServiceError.{FailedPrecondition, InvalidArgument, Unavailable}
+import io.casperlabs.comm.gossiping.relaying.DeployRelaying
 import io.casperlabs.crypto.Keys.PublicKey
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.mempool.DeployBuffer
@@ -35,7 +36,7 @@ import monix.reactive.Observable
 
 object GrpcCasperService {
 
-  def apply[F[_]: Concurrent: TaskLike: Log: Metrics: FinalityStorage: BlockStorage: ExecutionEngineService: DeployStorage: Fs2Compiler: DeployBuffer: DagStorage: EventStream](
+  def apply[F[_]: Concurrent: TaskLike: Log: Metrics: FinalityStorage: BlockStorage: ExecutionEngineService: DeployStorage: Fs2Compiler: DeployBuffer: DeployRelaying: DagStorage: EventStream](
       isReadOnlyNode: Boolean
   ): F[CasperGrpcMonix.CasperService] =
     BlockAPI.establishMetrics[F] *> Sync[F].delay {

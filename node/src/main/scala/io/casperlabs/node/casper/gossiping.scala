@@ -12,7 +12,6 @@ import com.google.protobuf.ByteString
 import eu.timepit.refined.auto._
 import fs2.interop.reactivestreams._
 import io.casperlabs.casper._
-import io.casperlabs.casper.api.BlockAPI
 import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.consensus.info.DeployInfo
 import io.casperlabs.casper.util.CasperLabsProtocol
@@ -65,7 +64,7 @@ package object gossiping {
   )(
       implicit logId: Log[Id],
       metricsId: Metrics[Id]
-  ): Resource[F, BlockRelaying[F]] = {
+  ): Resource[F, (BlockRelaying[F], DeployRelaying[F])] = {
 
     val (cert, key) = conf.tls.readIntraNodeCertAndKey
 
@@ -100,7 +99,8 @@ package object gossiping {
         }
       }
 
-      relaying <- makeRelaying(conf, connectToGossip, egressScheduler)
+      blockRelaying  <- makeBlockRelaying(conf, connectToGossip, egressScheduler)
+      deployRelaying <- makeDeployRelaying(conf, connectToGossip, egressScheduler)
 
       synchronizer <- makeSynchronizer(
                        conf,
@@ -112,13 +112,14 @@ package object gossiping {
       deployDownloadManager <- makeDeployDownloadManager(
                                 conf,
                                 connectToGossip,
+                                deployRelaying,
                                 egressScheduler
                               )
 
       blockDownloadManager <- makeBlockDownloadManager(
                                conf,
                                connectToGossip,
-                               relaying,
+                               blockRelaying,
                                synchronizer,
                                maybeValidatorId,
                                isInitialSyncDoneRef,
@@ -202,7 +203,7 @@ package object gossiping {
       // Start a loop to periodically print peer count, new and disconnected peers, based on NodeDiscovery.
       _ <- makePeerCountPrinter
 
-    } yield relaying
+    } yield (blockRelaying, deployRelaying)
   }
 
   /** Cached connection resources, closed at the end. */
@@ -266,7 +267,7 @@ package object gossiping {
       } yield s.copy(connections = s.connections - peer)
     }
 
-  def makeRelaying[F[_]: ContextShift: Concurrent: Parallel: Log: Metrics: NodeDiscovery: NodeAsk](
+  def makeBlockRelaying[F[_]: ContextShift: Concurrent: Parallel: Log: Metrics: NodeDiscovery: NodeAsk](
       conf: Configuration,
       connectToGossip: GossipService.Connector[F],
       egressScheduler: Scheduler
@@ -283,9 +284,30 @@ package object gossiping {
         )
       )
 
+  def makeDeployRelaying[F[_]: ContextShift: Concurrent: Parallel: Log: Metrics: NodeDiscovery: NodeAsk](
+      conf: Configuration,
+      connectToGossip: GossipService.Connector[F],
+      egressScheduler: Scheduler
+  ): Resource[F, DeployRelaying[F]] =
+    Resource
+      .liftF(DeployRelayingImpl.establishMetrics[F])
+      .as(
+        if (conf.server.deployGossipEnabled)
+          DeployRelayingImpl(
+            egressScheduler,
+            NodeDiscovery[F],
+            connectToGossip = connectToGossip,
+            relayFactor = conf.server.relayFactor,
+            relaySaturation = conf.server.relaySaturation
+          )
+        else
+          new NoOpsDeployRelaying[F]
+      )
+
   private def makeDeployDownloadManager[F[_]: ContextShift: Concurrent: Log: Time: Timer: Metrics: DagStorage: Consensus: DeployStorage: DeployBuffer](
       conf: Configuration,
       connectToGossip: GossipService.Connector[F],
+      relaying: DeployRelaying[F],
       egressScheduler: Scheduler
   ): Resource[F, DeployDownloadManager[F]] =
     for {
@@ -298,9 +320,12 @@ package object gossiping {
                               DeployStorage[F].reader.contains(deployHash)
 
                             // Empty because deploy validated during adding into the DeployBuffer anyway
-                            override def validate(deploy: Deploy): F[Unit] = ().pure[F]
+                            override def validate(deploy: Deploy): F[Unit] =
+                              DeployBuffer[F].addDeploy(deploy).rethrow
 
-                            override def store(deploy: Deploy): F[Unit] = BlockAPI.deploy[F](deploy)
+                            override def store(deploy: Deploy): F[Unit] =
+                              // Validation has already stored it.
+                              ().pure[F]
 
                             override def onScheduled(summary: DeploySummary): F[Unit] = ().pure[F]
 
@@ -313,8 +338,7 @@ package object gossiping {
 
                             override def onFailed(deployHash: ByteString): F[Unit] = ().pure[F]
                           },
-                          //TODO: Relaying, NODE-1178
-                          relaying = (_: List[DeployHash]) => ???,
+                          relaying = relaying,
                           retriesConf = DeployDownloadManagerImpl.RetriesConf(
                             maxRetries = conf.server.downloadMaxRetries,
                             initialBackoffPeriod = conf.server.downloadRetryInitialBackoffPeriod,
@@ -623,7 +647,8 @@ package object gossiping {
                    blockDownloadManager,
                    genesisApprover,
                    maxChunkSize = conf.server.chunkSize,
-                   maxParallelBlockDownloads = conf.server.relayMaxParallelBlocks
+                   maxParallelBlockDownloads = conf.server.relayMaxParallelBlocks,
+                   deployGossipEnabled = conf.server.deployGossipEnabled
                  )
                }
 

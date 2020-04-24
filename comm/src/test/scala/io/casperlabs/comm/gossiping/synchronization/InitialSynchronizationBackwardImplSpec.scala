@@ -231,6 +231,7 @@ object InitialSynchronizationBackwardImplSpec extends ArbitraryConsensus {
         MockBlockDownloadManager,
         MockGenesisApprover,
         0,
+        false,
         MockSemaphore
       ) {
     val asked = Atomic(Vector.empty[Node])
