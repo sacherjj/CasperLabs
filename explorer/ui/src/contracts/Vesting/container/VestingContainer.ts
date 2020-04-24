@@ -118,29 +118,36 @@ export class VestingContainer {
     }
   }
 
+  private isSimpleTypeOf(
+    clType: CLType,
+    expectSimpleType: CLType.SimpleMap[keyof CLType.SimpleMap]
+  ) {
+    return (
+      clType.hasSimpleType() && clType.getSimpleType() === expectSimpleType
+    );
+  }
+
+  private isTypeOfU8FixedList(value: CLType) {
+    return (
+      value.hasFixedListType() &&
+      this.isSimpleTypeOf(
+        value.getFixedListType()!.getInner()!,
+        CLType.Simple.U8
+      )
+    );
+  }
+
   private parseStoredValues(storedValues: StoredValueInstance[]) {
     return storedValues.map(v => {
       let value: number | ByteArray | boolean | null = null;
       let clType = v.getClValue()!.getClType()!;
-      if (clType.hasFixedListType()) {
+      if (this.isTypeOfU8FixedList(clType)) {
         // parse publicKey
-        const inner = clType.getFixedListType()!.getInner();
-        if (
-          inner!.hasSimpleType() &&
-          inner!.getSimpleType() === CLType.Simple.U8
-        ) {
-          value = v.getClValue()!.getValue()!.getBytesValue_asU8();
-        }
-      } else if (
-        clType.hasSimpleType() &&
-        clType.getSimpleType() === CLType.Simple.BOOL
-      ) {
+        value = v.getClValue()!.getValue()!.getBytesValue_asU8();
+      } else if (this.isSimpleTypeOf(clType, CLType.Simple.BOOL)) {
         // parse Boolean
         value = v.getClValue()!.getValue()!.getBoolValue();
-      } else if (
-        clType?.hasSimpleType() &&
-        clType.getSimpleType() === CLType.Simple.U512
-      ) {
+      } else if (this.isSimpleTypeOf(clType, CLType.Simple.U512)) {
         // parse U512
         let u512 = v.getClValue()!.getValue()!.getU512()!;
         value = Number(u512.getValue());
