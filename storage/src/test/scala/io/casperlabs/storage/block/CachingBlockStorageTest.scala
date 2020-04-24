@@ -258,5 +258,7 @@ object CachingBlockStorageTest {
       override def clear(): Task[Unit] = ???
 
       override def close(): Task[Unit] = ???
+
+      override def blockCount: Task[Long] = underlyingBlockStorage.blockCount
     }
 }

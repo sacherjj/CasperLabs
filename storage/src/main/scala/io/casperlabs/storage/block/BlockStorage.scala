@@ -54,6 +54,8 @@ trait BlockStorageReader[F[_]] extends BlockStorageWriter[F] {
 
   def isEmpty: F[Boolean]
 
+  def blockCount: F[Long]
+
   def apply(
       blockHash: BlockHash
   )(
@@ -157,7 +159,11 @@ object BlockStorage {
         blockHash: BlockHash,
         blockMsgWithTransform: BlockMsgWithTransform
     ): F[Unit] =
-      incAndMeasure("put", super.put(blockHash, blockMsgWithTransform))
+      incrementTotalBlocksCount() *>
+        incAndMeasure("put", super.put(blockHash, blockMsgWithTransform))
+
+    protected[storage] def incrementTotalBlocksCount(delta: Long = 1): F[Unit] =
+      m.incrementCounter("blocks", delta)
 
     abstract override def checkpoint(): F[Unit] =
       incAndMeasure("checkpoint", super.checkpoint())

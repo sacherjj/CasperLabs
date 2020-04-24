@@ -97,6 +97,8 @@ class CachingBlockStorage[F[_]: Sync](
 
   override def close(): F[Unit] =
     underlying.close()
+
+  override def blockCount: F[Long] = underlying.blockCount
 }
 
 object CachingBlockStorage {

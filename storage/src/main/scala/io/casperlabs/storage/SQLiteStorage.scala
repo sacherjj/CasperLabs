@@ -214,5 +214,6 @@ object SQLiteStorage {
       override def getEvents(minId: Long, maxId: Long): fs2.Stream[F, Event] =
         eventStorage.getEvents(minId, maxId)
 
+      override def blockCount: F[Long] = blockStorage.blockCount
     }
 }
