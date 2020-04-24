@@ -2,14 +2,16 @@ import React from 'react';
 import { observer } from 'mobx-react';
 import { RefreshableComponent, shortHash } from './Utils';
 import DataTable from './DataTable';
-import ValidatorsContainer, { ValidatorInfo } from '../containers/ValidatorsContainer';
+import ValidatorsContainer, {
+  ValidatorInfo
+} from '../containers/ValidatorsContainer';
 import { base64to16, encodeBase16 } from 'casperlabs-sdk';
 import { Link } from 'react-router-dom';
 import Pages from './Pages';
 import Timestamp from './TimeStamp';
 
 interface Props {
-  validatorsContainer: ValidatorsContainer
+  validatorsContainer: ValidatorsContainer;
 }
 
 @observer
@@ -19,7 +21,7 @@ class Validators extends RefreshableComponent<Props, {}> {
   }
 
   componentWillUnmount(): void {
-    this.props.validatorsContainer.toggleableSubscriber.unsubscribe();
+    this.props.validatorsContainer.toggleableSubscriber.unsubscribeAndFree();
   }
 
   refresh(): void {

@@ -23,7 +23,7 @@ export interface Props extends RouteComponentProps<{}> {
 }
 
 @observer
-class _BlockList extends RefreshableComponent<Props, {}> {
+class _BlockList extends React.Component<Props, {}> {
   constructor(props: Props) {
     super(props);
     let maxRank = parseInt(props.maxRank || '') || 0;
@@ -37,9 +37,8 @@ class _BlockList extends RefreshableComponent<Props, {}> {
   }
 
   componentWillUnmount() {
-    super.componentWillUnmount();
     // release websocket if necessary
-    this.props.dag.toggleableSubscriber.unsubscribe();
+    this.props.dag.toggleableSubscriber.unsubscribeAndFree();
   }
 
   render() {
@@ -53,7 +52,15 @@ class _BlockList extends RefreshableComponent<Props, {}> {
         }
         refresh={() => this.refresh()}
         subscribeToggleStore={dag.toggleableSubscriber.subscribeToggleStore}
-        headers={['Block Hash', 'j-Rank', 'm-Rank', 'Timestamp', 'Validator', 'Type', 'Key Block Hash']}
+        headers={[
+          'Block Hash',
+          'j-Rank',
+          'm-Rank',
+          'Timestamp',
+          'Validator',
+          'Type',
+          'Key Block Hash'
+        ]}
         rows={dag.blocks}
         renderRow={(block: BlockInfo) => {
           const header = block.getSummary()!.getHeader()!;
@@ -69,9 +76,13 @@ class _BlockList extends RefreshableComponent<Props, {}> {
                 <Timestamp timestamp={header.getTimestamp()} />
               </td>
               <td>{shortHash(header.getValidatorPublicKey_asU8())}</td>
-              <td><BlockType header={header} /></td>
               <td>
-                <Link to={Pages.block(encodeBase16(header.getKeyBlockHash_asU8()))}>
+                <BlockType header={header} />
+              </td>
+              <td>
+                <Link
+                  to={Pages.block(encodeBase16(header.getKeyBlockHash_asU8()))}
+                >
                   {shortHash(header.getKeyBlockHash_asU8())}
                 </Link>
               </td>
