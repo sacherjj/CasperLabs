@@ -845,17 +845,20 @@ where
                     .borrow_mut()
                     .get_contract_metadata(correlation_id, *stored_metadata_key)?;
 
-                // TODO: cleanup
-                assert!(contract_metadata.is_version_active(version));
-
                 let contract_header = contract_metadata
                     .get_version(&version)
-                    .expect("should get version");
+                    .ok_or_else(|| error::Error::Exec(execution::Error::InvalidContractVersion))?;
 
                 let method_entrypoint = contract_header
                     .get_method(entry_point)
-                    .expect("should get method");
-                assert!(method_entrypoint.access() == &EntryPointAccess::Public);
+                    .ok_or_else(|| error::Error::Exec(execution::Error::NoSuchMethod))?;
+
+                if method_entrypoint.access() != &EntryPointAccess::Public {
+                    // TODO(mpapierski): Support `EntryPointAccess::Group` and unify validation from
+                    // `call_versioned_contract`
+                    return Err(error::Error::Exec(execution::Error::NoSuchMethod));
+                }
+
                 let (module, contract) = self.get_module_from_key(
                     tracking_copy,
                     contract_header.contract_key(),
