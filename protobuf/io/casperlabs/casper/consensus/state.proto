@@ -1,6 +1,54 @@
 syntax = "proto3";
 package io.casperlabs.casper.consensus.state;
 
+message SemVer {
+    uint32 major = 1;
+    uint32 minor = 2;
+    uint32 patch = 3;
+}
+
+message ContractHeader {
+    message EntryPoint {
+
+        bytes args = 1;
+        CLType ret = 2;
+
+        message Public {} // Tag
+        message Group {
+            string name = 1;
+        }
+        message Groups {
+            repeated Group groups = 1;
+        }
+
+        oneof access {
+            Public public = 3;
+            Groups groups = 4;
+        }
+    }
+    
+    Key.URef access_key = 1;
+    map<string, EntryPoint> methods = 2;
+    ProtocolVersion protocol_version = 3;
+}
+
+message ContractMetadata {
+    
+    message ActiveVersion {
+        SemVer version = 1;
+        ContractHeader contract_header = 2;
+    }
+    message Groups {
+        ContractHeader.EntryPoint.Group group = 1;
+        repeated Key.URef urefs = 2;
+    }
+    Key.URef access_key = 1;
+    repeated ActiveVersion active_versions = 2;
+    repeated SemVer removed_versions = 3;
+    Groups groups = 4;
+}
+
+
 // Fundamental type of a user-facing value stored under a key in global state.
 message CLType {
     enum Simple {
@@ -17,6 +65,7 @@ message CLType {
         STRING = 10;
         KEY = 11;
         UREF = 12;
+        CONTRACT_HEADER = 13;
     }
 
     message Option {
@@ -110,6 +159,7 @@ message CLValueInstance {
             Tuple2 tuple2_value = 20;
             Tuple3 tuple3_value = 21;
             bytes bytes_value = 22; // convenience for representing List(U8) / FixedList(U8)
+            ContractHeader contract_header = 23;
         }
     }
 
@@ -164,6 +214,7 @@ message CLValueInstance {
         Value value_2 = 2;
         Value value_3 = 3;
     }
+
 }
 
 // Value stored under a key in global state.
@@ -172,7 +223,7 @@ message StoredValue {
         CLValue cl_value = 1;
         Account account = 2;
         Contract contract = 3;
-	bytes contract_metadata = 4; // TODO: make proper protobuf representation
+	    ContractMetadata contract_metadata = 4;
     }
 }
 

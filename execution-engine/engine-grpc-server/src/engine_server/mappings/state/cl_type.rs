@@ -67,7 +67,7 @@ impl From<CLType> for state::CLType {
             CLType::Any => {
                 let _pb_any = pb_type.mut_any_type();
             }
-            CLType::ContractHeader => unimplemented!(), // TODO: push out to ipc layer
+            CLType::ContractHeader => {}
         };
         pb_type
     }
@@ -95,6 +95,9 @@ impl TryFrom<state::CLType> for CLType {
             CLType_oneof_variants::simple_type(CLType_Simple::STRING) => CLType::String,
             CLType_oneof_variants::simple_type(CLType_Simple::KEY) => CLType::Key,
             CLType_oneof_variants::simple_type(CLType_Simple::UREF) => CLType::URef,
+            CLType_oneof_variants::simple_type(CLType_Simple::CONTRACT_HEADER) => {
+                CLType::ContractHeader
+            }
             CLType_oneof_variants::option_type(mut pb_option) => {
                 let inner = pb_option.take_inner().try_into()?;
                 CLType::Option(Box::new(inner))

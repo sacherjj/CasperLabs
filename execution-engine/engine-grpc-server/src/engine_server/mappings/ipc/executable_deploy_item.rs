@@ -29,6 +29,14 @@ impl From<DeployPayload_oneof_payload> for ExecutableDeployItem {
                     args: pb_stored_contract_uref.args,
                 }
             }
+            DeployPayload_oneof_payload::stored_versioned_contract_by_name(
+                mut pb_stored_versioned_contract_by_name,
+            ) => ExecutableDeployItem::StoredVersionedContractByName {
+                name: pb_stored_versioned_contract_by_name.take_name(),
+                version: pb_stored_versioned_contract_by_name.take_version().into(),
+                entry_point: pb_stored_versioned_contract_by_name.entry_point,
+                args: pb_stored_versioned_contract_by_name.args,
+            },
         }
     }
 }
@@ -57,8 +65,17 @@ impl From<ExecutableDeployItem> for DeployPayload {
                 inner.set_uref(uref);
                 inner.set_args(args);
             }
-            ExecutableDeployItem::StoredVersionedContractByName { .. } => {
-                todo!("mapping for StoredVersionedContractByName")
+            ExecutableDeployItem::StoredVersionedContractByName {
+                name,
+                version,
+                entry_point,
+                args,
+            } => {
+                let inner = result.mut_stored_versioned_contract_by_name();
+                inner.set_name(name);
+                inner.set_version(version.into());
+                inner.set_entry_point(entry_point);
+                inner.set_args(args);
             }
         }
         result
