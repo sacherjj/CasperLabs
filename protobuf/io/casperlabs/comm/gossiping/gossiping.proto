@@ -145,7 +145,7 @@ message Chunk {
 }
 
 message StreamDagSliceBlockSummariesRequest {
-    uint32 start_rank = 1;
+    uint64 start_rank = 1;
     // Inclusive
-    uint32 end_rank   = 2;
+    uint64 end_rank   = 2;
 }

@@ -92,12 +92,12 @@ class InitialSynchronizationForwardImpl[F[_]: Parallel: Log: Timer](
     /** Returns
       * - max returned rank
       * - 'true' if the DAG is fully synced with the peer or 'false' otherwise */
-    def syncDagSlice(peer: Node, jRank: Int): F[(Int, Boolean)] = {
+    def syncDagSlice(peer: Node, jRank: Long): F[(Long, Boolean)] = {
       // 1. previously seen hashes
       // 2. wait handles from DownloadManager
       // 3. max rank from a batch
       type S = (Set[ByteString], Vector[WaitHandle[F]], Long)
-      val emptyS: S = (Set.empty, Vector.empty, jRank.toLong)
+      val emptyS: S = (Set.empty, Vector.empty, jRank)
 
       for {
         gossipService <- connector(peer)
@@ -146,24 +146,15 @@ class InitialSynchronizationForwardImpl[F[_]: Parallel: Log: Timer](
                 )
             }
 
-        //TODO: Maybe use int64 protobuf type for StreamDagSliceBlockSummariesRequest to use Long everywhere?
-        //      Or start dealing with complex specifics of protobuf unsigned numbers encodings in Java?
-        //      https://developers.google.com/protocol-buffers/docs/proto3#scalar
-        //      Unsafe and dirty hack is used now here.
-        _ <- F.whenA(maxRank > Int.MaxValue) {
-              Log[F].error(
-                s"Failed to sync with ${peer.show -> "peer"}, returned rank $maxRank is higher than Int.MaxValue"
-              ) >> F.raiseError(SynchronizationError())
-            }
-      } yield (maxRank.toInt, fullySynced)
+      } yield (maxRank, fullySynced)
     }
 
-    def loop(nodes: List[Node], failed: Set[Node], rank: Int): F[Unit] = {
+    def loop(nodes: List[Node], failed: Set[Node], rank: Long): F[Unit] = {
       // 1. fully synced nodes num
       // 2. successfully responded nodes
       // 3. nodes failed to respond
       // 4. max synced rank from the previous round
-      type S = (Int, List[Node], Set[Node], Int)
+      type S = (Int, List[Node], Set[Node], Long)
       val emptyS: S = (0, Nil, failed, rank)
       for {
         _ <- F.whenA(nodes.isEmpty && failed.nonEmpty)(
@@ -216,7 +207,7 @@ class InitialSynchronizationForwardImpl[F[_]: Parallel: Log: Timer](
       .flatMap { peers =>
         val nodesToSyncWith = selectNodes(peers)
         //TODO: Another unsafe cast to Int
-        loop(nodesToSyncWith, failed = Set.empty, rank = rankStartFrom.toInt)
+        loop(nodesToSyncWith, failed = Set.empty, rank = rankStartFrom)
       }
       .start
       .map(_.join)
