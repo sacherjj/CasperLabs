@@ -812,7 +812,8 @@ object BlockDownloadManagerSpec {
         blockDownloadManager = emptyBlockDownloadManager,
         genesisApprover = emptyGenesisApprover,
         maxChunkSize = 100 * 1024,
-        maxParallelBlockDownloads = 100
+        maxParallelBlockDownloads = 100,
+        deployGossipEnabled = false
       )
     }
 
@@ -859,6 +860,7 @@ object BlockDownloadManagerSpec {
           blockDownloadManager = emptyBlockDownloadManager,
           genesisApprover = emptyGenesisApprover,
           maxChunkSize = 100 * 1024,
+          deployGossipEnabled = false,
           blockDownloadSemaphore = semaphore
         ) {
           override def getBlockChunked(request: GetBlockChunkedRequest) =

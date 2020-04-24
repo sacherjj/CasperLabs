@@ -557,7 +557,8 @@ object GossipServiceCasperTestNodeFactory {
                      override def awaitApproval = ???
                    },
                    maxChunkSize = 1024 * 1024,
-                   maxParallelBlockDownloads = 10
+                   maxParallelBlockDownloads = 10,
+                   deployGossipEnabled = false
                  )
       } yield {
         underlying = server
