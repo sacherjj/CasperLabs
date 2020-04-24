@@ -61,7 +61,7 @@ const BUILD_RS_CONTENTS: &str = r#"use std::{env, fs, path::PathBuf, process::Co
 
 const CONTRACT_ROOT: &str = "../contract";
 const CONTRACT_CARGO_TOML: &str = "../contract/Cargo.toml";
-const CONTRACT_LIB_RS: &str = "../contract/src/lib.rs";
+const CONTRACT_MAIN_RS: &str = "../contract/src/main.rs";
 const BUILD_ARGS: [&str; 2] = ["build", "--release"];
 const WASM_FILENAME: &str = "contract.wasm";
 const ORIGINAL_WASM_DIR: &str = "../contract/target/wasm32-unknown-unknown/release";
@@ -70,7 +70,7 @@ const NEW_WASM_DIR: &str = "wasm";
 fn main() {
     // Watch contract source files for changes.
     println!("cargo:rerun-if-changed={}", CONTRACT_CARGO_TOML);
-    println!("cargo:rerun-if-changed={}", CONTRACT_LIB_RS);
+    println!("cargo:rerun-if-changed={}", CONTRACT_MAIN_RS);
 
     // Build the contract.
     let output = Command::new("cargo")

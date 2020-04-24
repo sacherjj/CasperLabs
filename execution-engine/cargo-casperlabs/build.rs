@@ -7,7 +7,7 @@ use std::{
 trait Package {
     const ROOT: &'static str;
     const CARGO_TOML: &'static str;
-    const LIB_RS: &'static str;
+    const MAIN_RS: &'static str;
     const WASM_FILENAME: &'static str;
 }
 
@@ -16,7 +16,7 @@ struct MintInstall;
 impl Package for MintInstall {
     const ROOT: &'static str = "../contracts/system/mint-install";
     const CARGO_TOML: &'static str = "../contracts/system/mint-install/Cargo.toml";
-    const LIB_RS: &'static str = "../contracts/system/mint-install/src/lib.rs";
+    const MAIN_RS: &'static str = "../contracts/system/mint-install/src/main.rs";
     const WASM_FILENAME: &'static str = "mint_install.wasm";
 }
 
@@ -25,7 +25,7 @@ struct PosInstall;
 impl Package for PosInstall {
     const ROOT: &'static str = "../contracts/system/pos-install";
     const CARGO_TOML: &'static str = "../contracts/system/pos-install/Cargo.toml";
-    const LIB_RS: &'static str = "../contracts/system/pos-install/src/lib.rs";
+    const MAIN_RS: &'static str = "../contracts/system/pos-install/src/main.rs";
     const WASM_FILENAME: &'static str = "pos_install.wasm";
 }
 
@@ -34,7 +34,7 @@ struct StandardPayment;
 impl Package for StandardPayment {
     const ROOT: &'static str = "../contracts/system/standard-payment";
     const CARGO_TOML: &'static str = "../contracts/system/standard-payment/Cargo.toml";
-    const LIB_RS: &'static str = "../contracts/system/standard-payment/src/lib.rs";
+    const MAIN_RS: &'static str = "../contracts/system/standard-payment/src/bin/main.rs";
     const WASM_FILENAME: &'static str = "standard_payment.wasm";
 }
 
@@ -43,7 +43,7 @@ struct StandardPaymentInstall;
 impl Package for StandardPaymentInstall {
     const ROOT: &'static str = "../contracts/system/standard-payment-install";
     const CARGO_TOML: &'static str = "../contracts/system/standard-payment-install/Cargo.toml";
-    const LIB_RS: &'static str = "../contracts/system/standard-payment-install/src/lib.rs";
+    const MAIN_RS: &'static str = "../contracts/system/standard-payment-install/src/main.rs";
     const WASM_FILENAME: &'static str = "standard_payment_install.wasm";
 }
 
@@ -54,7 +54,7 @@ const NEW_WASM_DIR: &str = "wasm";
 fn build_package<T: Package>() {
     // Watch contract source files for changes.
     println!("cargo:rerun-if-changed={}", T::CARGO_TOML);
-    println!("cargo:rerun-if-changed={}", T::LIB_RS);
+    println!("cargo:rerun-if-changed={}", T::MAIN_RS);
 
     // Full path to the cargo binary.
     let cargo = env::var("CARGO").expect("env var 'CARGO' should be set");
