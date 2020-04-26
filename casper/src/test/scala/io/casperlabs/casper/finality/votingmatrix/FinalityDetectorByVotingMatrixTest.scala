@@ -19,7 +19,7 @@ import io.casperlabs.casper.util.BondingUtil.Bond
 import io.casperlabs.casper.util.EventStreamParser
 import io.casperlabs.casper.{validation, InvalidBlock}
 import io.casperlabs.models.Message
-import io.casperlabs.shared.{FilesAPI, Log, LogStub, StreamT, Time}
+import io.casperlabs.shared.{FilesAPI, Log, LogStub, Time}
 import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.storage.dag.{AncestorsStorage, DagRepresentation, DagStorage}
 import monix.eval.Task
@@ -709,7 +709,7 @@ class FinalityDetectorByVotingMatrixTest
           b66a <- createAndAdvanceTheLFB(v1, b994, List(bc7e, b707))
           bb9b <- createAndAdvanceTheLFB(v4, b707, List(b707))
           b6e2 <- createAndAdvanceTheLFB(v2, b994, List(bo8a, b206, bb9b))
-          b1ee <- createAndAdvanceTheLFB(v4, b707, List(bb9b))
+          b1ee <- createAndAdvanceTheLFB(v4, b707, List(bb9b, bo8a))
           b5d6 <- createAndAdvanceTheLFB(v2, b994, List(b6e2, b1ee, b8a1))
           b7f0 <- createAndAdvanceTheLFB(v5, b994, List(b8a1, bb9b, bc38, bo8a))
           be2f <- createAndAdvanceTheLFB(v2, b994, List(b5d6, b7f0))
