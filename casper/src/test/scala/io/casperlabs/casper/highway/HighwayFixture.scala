@@ -44,7 +44,7 @@ trait HighwayFixture
   ): Unit = {
     val ctx   = TestScheduler()
     val timer = SchedulerEffect.timer[Task](ctx)
-    withCombinedStorages(ctx, numStorages = validators.size) { dbs =>
+    withCombinedStorages(numStorages = validators.size) { dbs =>
       Task.async[Unit] { cb =>
         val fix = f(timer)(validators zip dbs)
         // TestScheduler allows us to manually forward time.
