@@ -125,7 +125,7 @@ package object effects {
       config
     }
 
-    def mkTransactor(config: HikariConfig, threads: Int) =
+    def mkTransactor(config: HikariConfig, threads: Int): Resource[Task, HikariTransactor[Task]] =
       HikariTransactor
         .fromHikariConfig[Task](
           config,

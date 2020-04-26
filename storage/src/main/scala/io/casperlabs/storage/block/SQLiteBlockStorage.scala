@@ -150,8 +150,10 @@ class SQLiteBlockStorage[F[_]: Bracket[*[_], Throwable]: Fs2Compiler](
       case _ => none[A].pure[F]
     }
 
-  override def isEmpty: F[Boolean] =
-    sql"SELECT COUNT(*) FROM blocks".query[Long].unique.map(_ == 0L).transact(readXa)
+  override def blockCount: F[Long] =
+    sql"SELECT COUNT(*) FROM block_metadata".query[Long].unique.transact(readXa)
+
+  override def isEmpty: F[Boolean] = blockCount.map(_ == 0L)
 
   override def put(blockHash: BlockHash, blockMsg: BlockMsgWithTransform): F[Unit] =
     Update[(BlockHash, Int, TransformEntry)]("""|INSERT OR IGNORE INTO transforms
@@ -226,7 +228,14 @@ object SQLiteBlockStorage {
                          override implicit val a: Apply[F] = syncF
                        }
                      )
+      _ <- establishMetrics[F](blockStorage)
     } yield blockStorage: BlockStorage[F]
+
+  private def establishMetrics[F[_]: Monad](bs: MeteredBlockStorage[F]): F[Unit] =
+    for {
+      blockCount <- bs.blockCount
+      _          <- bs.incrementTotalBlocksCount(blockCount)
+    } yield ()
 
   // Helper function to avoid having to duplicate the list of columns of `BlockInfo` to read it from the `block_metadata` table.
   private[storage] def blockInfoCols(alias: String = "") = {
