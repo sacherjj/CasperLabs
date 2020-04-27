@@ -11,7 +11,7 @@ use std::{
 };
 
 use engine_core::{engine_state, DEPLOY_HASH_LENGTH};
-use types::account::ED25519_LENGTH;
+use types::{account::ED25519_LENGTH, KEY_HASH_LENGTH};
 
 pub use transforms::TransformMap;
 
@@ -38,6 +38,7 @@ pub enum MappingError {
     InvalidStateHashLength { expected: usize, actual: usize },
     InvalidPublicKeyLength { expected: usize, actual: usize },
     InvalidDeployHashLength { expected: usize, actual: usize },
+    InvalidHashLength { expected: usize, actual: usize },
     Parsing(ParsingError),
     InvalidStateHash(String),
     MissingPayload,
@@ -51,8 +52,13 @@ impl MappingError {
     }
 
     pub fn invalid_deploy_hash_length(actual: usize) -> Self {
-        let expected = DEPLOY_HASH_LENGTH;
+        let expected = KEY_HASH_LENGTH;
         MappingError::InvalidDeployHashLength { expected, actual }
+    }
+
+    pub fn invalid_hash_length(actual: usize) -> Self {
+        let expected = DEPLOY_HASH_LENGTH;
+        MappingError::InvalidHashLength { expected, actual }
     }
 }
 
@@ -96,6 +102,11 @@ impl Display for MappingError {
             MappingError::InvalidStateHash(message) => write!(f, "Invalid hash: {}", message),
             MappingError::MissingPayload => write!(f, "Missing payload"),
             MappingError::TryFromSlice => write!(f, "Unable to convert from slice"),
+            MappingError::InvalidHashLength { expected, actual } => write!(
+                f,
+                "Invalid hash length: expected {}, actual {}",
+                expected, actual
+            ),
         }
     }
 }

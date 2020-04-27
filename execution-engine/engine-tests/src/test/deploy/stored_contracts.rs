@@ -1122,7 +1122,7 @@ fn should_fail_session_stored_at_named_key_with_incompatible_major_version() {
     let exec_request_stored_payment = {
         let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
-            .with_stored_entry_point_at_version(
+            .with_stored_versioned_contract_by_name(
                 DO_NOTHING_HASH_KEY_NAME,
                 INITIAL_VERSION,
                 ENTRY_FUNCTION_NAME,
@@ -1195,7 +1195,7 @@ fn should_fail_session_stored_at_hash_with_incompatible_major_version() {
     let exec_request_stored_payment = {
         let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
-            .with_stored_entry_point_at_version(
+            .with_stored_versioned_contract_by_name(
                 DO_NOTHING_HASH_KEY_NAME,
                 INITIAL_VERSION,
                 ENTRY_FUNCTION_NAME,
@@ -1268,7 +1268,7 @@ fn should_fail_session_stored_at_uref_with_incompatible_major_version() {
     let exec_request_stored_payment = {
         let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
-            .with_stored_entry_point_at_version(
+            .with_stored_versioned_contract_by_name(
                 DO_NOTHING_HASH_KEY_NAME,
                 INITIAL_VERSION,
                 ENTRY_FUNCTION_NAME,
@@ -1374,7 +1374,7 @@ fn should_execute_stored_payment_and_session_code_with_new_major_version() {
     let exec_request_stored_payment = {
         let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
-            .with_stored_entry_point_at_version(
+            .with_stored_versioned_contract_by_name(
                 DO_NOTHING_HASH_KEY_NAME,
                 INITIAL_VERSION,
                 ENTRY_FUNCTION_NAME,

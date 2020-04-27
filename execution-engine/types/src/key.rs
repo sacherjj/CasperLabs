@@ -43,6 +43,7 @@ fn hash(bytes: &[u8]) -> [u8; BLAKE2B_DIGEST_LENGTH] {
     ret
 }
 
+/// An alias for [`Key`]s hash variant.
 pub type Hash = [u8; KEY_HASH_LENGTH];
 
 /// The type under which data (e.g. [`CLValue`](crate::CLValue)s, smart contracts, user accounts)

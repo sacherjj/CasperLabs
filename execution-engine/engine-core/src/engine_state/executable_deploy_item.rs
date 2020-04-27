@@ -1,4 +1,4 @@
-use types::{bytesrepr, CLValue, RuntimeArgs, SemVer};
+use types::{bytesrepr, CLValue, Hash, RuntimeArgs, SemVer};
 
 #[derive(Clone, PartialEq, Eq)]
 pub enum ExecutableDeployItem {
@@ -28,6 +28,12 @@ pub enum ExecutableDeployItem {
         entry_point: String, // finds header by entry point name
         args: Vec<u8>,
     },
+    StoredVersionedContractByHash {
+        hash: Hash,          // named key storing contract metadata hash
+        version: SemVer,     // finds active version
+        entry_point: String, // finds header by entry point name
+        args: Vec<u8>,
+    },
 }
 
 impl ExecutableDeployItem {
@@ -40,7 +46,8 @@ impl ExecutableDeployItem {
                 let vec: Vec<CLValue> = bytesrepr::deserialize(args)?;
                 Ok(vec.into())
             }
-            ExecutableDeployItem::StoredVersionedContractByName { args, .. } => {
+            ExecutableDeployItem::StoredVersionedContractByHash { args, .. }
+            | ExecutableDeployItem::StoredVersionedContractByName { args, .. } => {
                 let runtime_args: RuntimeArgs = bytesrepr::deserialize(args)?;
                 Ok(runtime_args)
             }
@@ -49,8 +56,14 @@ impl ExecutableDeployItem {
 
     pub fn entry_point_name(&self) -> &str {
         match self {
-            ExecutableDeployItem::StoredVersionedContractByName { entry_point, .. } => &entry_point,
-            _ => "call",
+            ExecutableDeployItem::StoredVersionedContractByName { entry_point, .. }
+            | ExecutableDeployItem::StoredVersionedContractByHash { entry_point, .. } => {
+                &entry_point
+            }
+            ExecutableDeployItem::ModuleBytes { .. }
+            | ExecutableDeployItem::StoredContractByHash { .. }
+            | ExecutableDeployItem::StoredContractByName { .. }
+            | ExecutableDeployItem::StoredContractByURef { .. } => "call",
         }
     }
 }

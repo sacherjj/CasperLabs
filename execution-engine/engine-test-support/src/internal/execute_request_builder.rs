@@ -96,7 +96,7 @@ impl ExecuteRequestBuilder {
 
         let deploy = DeployItemBuilder::new()
             .with_address(sender)
-            .with_stored_entry_point_at_version(hash_key_name, version, entry_point_name, args)
+            .with_stored_versioned_contract_by_name(hash_key_name, version, entry_point_name, args)
             .with_empty_payment_bytes((*DEFAULT_PAYMENT,))
             .with_authorization_keys(&[sender])
             .with_deploy_hash(deploy_hash)

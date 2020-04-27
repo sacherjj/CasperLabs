@@ -1,10 +1,16 @@
+use std::convert::{TryFrom, TryInto};
+
 use engine_core::engine_state::executable_deploy_item::ExecutableDeployItem;
 
-use crate::engine_server::ipc::{DeployPayload, DeployPayload_oneof_payload};
+use crate::engine_server::{
+    ipc::{DeployPayload, DeployPayload_oneof_payload},
+    mappings::MappingError,
+};
 
-impl From<DeployPayload_oneof_payload> for ExecutableDeployItem {
-    fn from(pb_deploy_payload: DeployPayload_oneof_payload) -> Self {
-        match pb_deploy_payload {
+impl TryFrom<DeployPayload_oneof_payload> for ExecutableDeployItem {
+    type Error = MappingError;
+    fn try_from(pb_deploy_payload: DeployPayload_oneof_payload) -> Result<Self, Self::Error> {
+        Ok(match pb_deploy_payload {
             DeployPayload_oneof_payload::deploy_code(pb_deploy_code) => {
                 ExecutableDeployItem::ModuleBytes {
                     module_bytes: pb_deploy_code.code,
@@ -37,7 +43,22 @@ impl From<DeployPayload_oneof_payload> for ExecutableDeployItem {
                 entry_point: pb_stored_versioned_contract_by_name.entry_point,
                 args: pb_stored_versioned_contract_by_name.args,
             },
-        }
+            DeployPayload_oneof_payload::stored_versioned_contract_by_hash(
+                mut pb_stored_versioned_contract_by_hash,
+            ) => {
+                let hash_bytes = pb_stored_versioned_contract_by_hash.take_hash();
+                let hash = hash_bytes
+                    .as_slice()
+                    .try_into()
+                    .map_err(|_| MappingError::invalid_hash_length(hash_bytes.len()))?;
+                ExecutableDeployItem::StoredVersionedContractByHash {
+                    hash,
+                    version: pb_stored_versioned_contract_by_hash.take_version().into(),
+                    entry_point: pb_stored_versioned_contract_by_hash.entry_point,
+                    args: pb_stored_versioned_contract_by_hash.args,
+                }
+            }
+        })
     }
 }
 
@@ -73,6 +94,18 @@ impl From<ExecutableDeployItem> for DeployPayload {
             } => {
                 let inner = result.mut_stored_versioned_contract_by_name();
                 inner.set_name(name);
+                inner.set_version(version.into());
+                inner.set_entry_point(entry_point);
+                inner.set_args(args);
+            }
+            ExecutableDeployItem::StoredVersionedContractByHash {
+                hash,
+                version,
+                entry_point,
+                args,
+            } => {
+                let inner = result.mut_stored_versioned_contract_by_hash();
+                inner.set_hash(hash.to_vec());
                 inner.set_version(version.into());
                 inner.set_entry_point(entry_point);
                 inner.set_args(args);

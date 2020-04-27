@@ -875,6 +875,48 @@ where
                     }),
                 }
             }
+            ExecutableDeployItem::StoredVersionedContractByHash {
+                hash,
+                version,
+                entry_point,
+                ..
+            } => {
+                let contract_metadata_key = Key::Hash(*hash);
+                let contract_metadata = tracking_copy
+                    .borrow_mut()
+                    .get_contract_metadata(correlation_id, contract_metadata_key)?;
+
+                let contract_header = contract_metadata
+                    .get_version(&version)
+                    .ok_or_else(|| error::Error::Exec(execution::Error::InvalidContractVersion))?;
+
+                let method_entrypoint = contract_header
+                    .get_method(entry_point)
+                    .ok_or_else(|| error::Error::Exec(execution::Error::NoSuchMethod))?;
+
+                if method_entrypoint.access() != &EntryPointAccess::Public {
+                    // TODO(mpapierski): Support `EntryPointAccess::Group` and unify validation from
+                    // `call_versioned_contract`
+                    return Err(error::Error::Exec(execution::Error::NoSuchMethod));
+                }
+
+                let (module, contract) = self.get_module_from_key(
+                    tracking_copy,
+                    contract_header.contract_key(),
+                    correlation_id,
+                    protocol_version,
+                )?;
+
+                println!("method entrypoint by hash {:?}", method_entrypoint);
+                match method_entrypoint.entry_point_type() {
+                    EntryPointType::Session => Ok(GetModuleResult::Session(module)),
+                    EntryPointType::Contract => Ok(GetModuleResult::Contract {
+                        module,
+                        base_key: contract_header.contract_key(),
+                        named_keys: contract.take_named_keys(),
+                    }),
+                }
+            }
         }
     }
 
