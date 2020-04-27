@@ -27,11 +27,7 @@ const COUNTER_CALLER: &str = "counter_caller";
 const COUNTER_REMOVER: &str = "counter_remover";
 const GET_METHOD: &str = "get";
 const INC_METHOD: &str = "increment";
-const VERSION: SemVer = SemVer {
-    major: 1,
-    minor: 0,
-    patch: 0,
-};
+const VERSION: SemVer = SemVer::new(1, 0, 0);
 
 fn get_counter_variable() -> URef {
     runtime::get_key(COUNT_KEY)

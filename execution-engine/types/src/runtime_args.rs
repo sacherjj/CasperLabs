@@ -1,3 +1,5 @@
+//! Home of RuntimeArgs for calling contracts
+
 use alloc::{collections::BTreeMap, string::String, vec::Vec};
 
 use crate::{
@@ -5,6 +7,7 @@ use crate::{
     CLTyped, CLValue,
 };
 
+/// Named arguments to a contract
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub struct Named(String, CLValue);
 

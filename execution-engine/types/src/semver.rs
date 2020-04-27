@@ -28,7 +28,7 @@ impl SemVer {
     };
 
     /// Constructs a new `SemVer` from the given semver parts.
-    pub fn new(major: u32, minor: u32, patch: u32) -> SemVer {
+    pub const fn new(major: u32, minor: u32, patch: u32) -> SemVer {
         SemVer {
             major,
             minor,

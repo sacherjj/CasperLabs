@@ -23,9 +23,9 @@ pub enum ExecutableDeployItem {
         args: Vec<u8>,
     },
     StoredVersionedContractByName {
-        name: String,        // named key for metadata?
+        name: String,        // named key storing contract metadata hash
         version: SemVer,     // finds active version
-        entry_point: String, // finds header by entrypoint name
+        entry_point: String, // finds header by entry point name
         args: Vec<u8>,
     },
 }

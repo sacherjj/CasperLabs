@@ -4,7 +4,7 @@ use rand::Rng;
 
 use contract::args_parser::ArgsParser;
 use engine_core::engine_state::{deploy_item::DeployItem, execute_request::ExecuteRequest};
-use types::{account::PublicKey, ProtocolVersion};
+use types::{account::PublicKey, ProtocolVersion, RuntimeArgs, SemVer};
 
 use crate::internal::{DeployItemBuilder, DEFAULT_BLOCK_TIME, DEFAULT_PAYMENT};
 
@@ -75,6 +75,28 @@ impl ExecuteRequestBuilder {
         let deploy = DeployItemBuilder::new()
             .with_address(sender)
             .with_stored_session_hash(contract_hash.to_vec(), args)
+            .with_empty_payment_bytes((*DEFAULT_PAYMENT,))
+            .with_authorization_keys(&[sender])
+            .with_deploy_hash(deploy_hash)
+            .build();
+
+        ExecuteRequestBuilder::new().push_deploy(deploy)
+    }
+
+    /// Calls a versioned contract from contract metadata hash key_name
+    pub fn versioned_contract_call_by_hash_key_name(
+        sender: PublicKey,
+        hash_key_name: &str,
+        version: SemVer,
+        entry_point_name: &str,
+        args: RuntimeArgs,
+    ) -> Self {
+        let mut rng = rand::thread_rng();
+        let deploy_hash: [u8; 32] = rng.gen();
+
+        let deploy = DeployItemBuilder::new()
+            .with_address(sender)
+            .with_stored_entry_point_at_version(hash_key_name, version, entry_point_name, args)
             .with_empty_payment_bytes((*DEFAULT_PAYMENT,))
             .with_authorization_keys(&[sender])
             .with_deploy_hash(deploy_hash)
