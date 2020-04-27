@@ -92,6 +92,7 @@ object FinalityDetectorUtil {
               validator
             )
           )
+          .toList
       case None => List.empty[Message].pure[F]
     }
 
