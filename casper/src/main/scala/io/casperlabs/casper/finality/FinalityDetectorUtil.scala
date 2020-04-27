@@ -152,10 +152,10 @@ object FinalityDetectorUtil {
       validator => {
         // When V(j) happens to be an equivocator, put 0L in the corresponding cell
         if (equivocators.contains(validator)) {
-          0L
+          Message.asJRank(0L)
         } else {
           // When V(j)-swimlane is empty, put 0L in the corresponding cell
-          latestBlockDagLevelAsMap.getOrElse(validator, 0L)
+          latestBlockDagLevelAsMap.getOrElse(validator, Message.asJRank(0L))
         }
       }
     )

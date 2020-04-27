@@ -243,13 +243,13 @@ object FinalityDetectorUtilTest {
 
       /** Return block summaries with ranks in the DAG between start and end, inclusive. */
       override def topoSort(
-          startBlockNumber: Level,
-          endBlockNumber: Level
+          startBlockNumber: Long,
+          endBlockNumber: Long
       ): fs2.Stream[StateT[F, Map[BlockHash, Int], *], Vector[BlockInfo]] = ???
 
       /** Return block summaries with ranks of blocks in the DAG from a start index to the end. */
       override def topoSort(
-          startBlockNumber: Level
+          startBlockNumber: Long
       ): fs2.Stream[StateT[F, Map[BlockHash, Int], *], Vector[BlockInfo]] = ???
 
       override def topoSortTail(
@@ -259,7 +259,7 @@ object FinalityDetectorUtilTest {
       override def getBlockInfosByValidator(
           validator: Validator,
           limit: Int,
-          lastTimeStamp: Level,
+          lastTimeStamp: Long,
           lastBlockHash: BlockHash
       ) = ???
 
