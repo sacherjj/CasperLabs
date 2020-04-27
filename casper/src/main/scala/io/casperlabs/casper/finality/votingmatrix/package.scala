@@ -222,7 +222,7 @@ package object votingmatrix {
       .foldLeft((mask, false, Zero)) {
         case ((newMask, prunedValidator, maxTotalWeight), (row, rowIndex)) =>
           val voteSum = row.zipWithIndex
-            .filter { case (_, columnIndex) => newMask(columnIndex) }
+            .filter { case (_, columnIndex) => mask(columnIndex) }
             .map {
               case (latestDagLevelSeen, columnIndex) =>
                 firstLevelZeroVotes(columnIndex).fold(Zero) {
