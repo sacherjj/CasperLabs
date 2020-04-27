@@ -10,12 +10,14 @@ use engine_test_support::{
     },
     DEFAULT_ACCOUNT_ADDR, DEFAULT_ACCOUNT_INITIAL_BALANCE,
 };
-use types::{account::PublicKey, Key, ProtocolVersion, U512};
+use types::{account::PublicKey, runtime_args::RuntimeArgs, Key, ProtocolVersion, SemVer, U512};
 
 const ACCOUNT_1_ADDR: PublicKey = PublicKey::ed25519_from([42u8; 32]);
 const DEFAULT_ACTIVATION_POINT: ActivationPoint = 1;
 const DO_NOTHING_NAME: &str = "do_nothing";
-const DO_NOTHING_STORED_CONTRACT_NAME: &str = "do_nothing_stored";
+const DO_NOTHING_HASH_KEY_NAME: &str = "do_nothing_hash";
+const INITIAL_VERSION: SemVer = SemVer::new(1, 0, 0);
+const ENTRY_FUNCTION_NAME: &str = "delegate";
 const MODIFIED_MINT_UPGRADER_CONTRACT_NAME: &str = "modified_mint_upgrader.wasm";
 const MODIFIED_SYSTEM_UPGRADER_CONTRACT_NAME: &str = "modified_system_upgrader.wasm";
 const PROTOCOL_VERSION: ProtocolVersion = ProtocolVersion::V1_0_0;
@@ -1093,7 +1095,7 @@ fn should_fail_session_stored_at_named_key_with_incompatible_major_version() {
     assert!(
         default_account
             .named_keys()
-            .contains_key(DO_NOTHING_STORED_CONTRACT_NAME),
+            .contains_key(DO_NOTHING_HASH_KEY_NAME),
         "do_nothing should be present in named keys"
     );
 
@@ -1120,7 +1122,12 @@ fn should_fail_session_stored_at_named_key_with_incompatible_major_version() {
     let exec_request_stored_payment = {
         let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
-            .with_stored_session_named_key(DO_NOTHING_STORED_CONTRACT_NAME, ())
+            .with_stored_entry_point_at_version(
+                DO_NOTHING_HASH_KEY_NAME,
+                INITIAL_VERSION,
+                ENTRY_FUNCTION_NAME,
+                RuntimeArgs::new(),
+            )
             .with_payment_code(
                 &format!("{}.wasm", STANDARD_PAYMENT_CONTRACT_NAME),
                 (U512::from(payment_purse_amount),),
@@ -1165,19 +1172,6 @@ fn should_fail_session_stored_at_hash_with_incompatible_major_version() {
 
     builder.exec_commit_finish(exec_request_1);
 
-    let query_result = builder
-        .query(None, Key::Account(DEFAULT_ACCOUNT_ADDR), &[])
-        .expect("should query default account");
-    let default_account = query_result
-        .as_account()
-        .expect("query result should be an account");
-    let do_nothing_contract_hash = default_account
-        .named_keys()
-        .get(DO_NOTHING_STORED_CONTRACT_NAME)
-        .expect("do_nothing should be present in named keys")
-        .into_hash()
-        .expect("do_nothing named key should be hash");
-
     //
     // upgrade with new wasm costs with modified mint for given version
     //
@@ -1201,7 +1195,12 @@ fn should_fail_session_stored_at_hash_with_incompatible_major_version() {
     let exec_request_stored_payment = {
         let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
-            .with_stored_session_hash(do_nothing_contract_hash.to_vec(), ())
+            .with_stored_entry_point_at_version(
+                DO_NOTHING_HASH_KEY_NAME,
+                INITIAL_VERSION,
+                ENTRY_FUNCTION_NAME,
+                RuntimeArgs::new(),
+            )
             .with_payment_code(
                 &format!("{}.wasm", STANDARD_PAYMENT_CONTRACT_NAME),
                 (U512::from(payment_purse_amount),),
@@ -1246,20 +1245,6 @@ fn should_fail_session_stored_at_uref_with_incompatible_major_version() {
 
     builder.exec_commit_finish(exec_request_1);
 
-    let query_result = builder
-        .query(None, Key::Account(DEFAULT_ACCOUNT_ADDR), &[])
-        .expect("should query default account");
-    let default_account = query_result
-        .as_account()
-        .expect("query result should be an account");
-    let do_nothing_contract_uref = default_account
-        .named_keys()
-        .get(DO_NOTHING_STORED_CONTRACT_NAME)
-        .expect("do_nothing should be present in named keys")
-        .as_uref()
-        .cloned()
-        .expect("do_nothing named key should be hash");
-
     //
     // upgrade with new wasm costs with modified mint for given version
     //
@@ -1283,7 +1268,12 @@ fn should_fail_session_stored_at_uref_with_incompatible_major_version() {
     let exec_request_stored_payment = {
         let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
-            .with_stored_session_uref(do_nothing_contract_uref, ())
+            .with_stored_entry_point_at_version(
+                DO_NOTHING_HASH_KEY_NAME,
+                INITIAL_VERSION,
+                ENTRY_FUNCTION_NAME,
+                RuntimeArgs::new(),
+            )
             .with_payment_code(
                 &format!("{}.wasm", STANDARD_PAYMENT_CONTRACT_NAME),
                 (U512::from(payment_purse_amount),),
@@ -1378,20 +1368,18 @@ fn should_execute_stored_payment_and_session_code_with_new_major_version() {
         .expect("standard_payment should be present in named keys")
         .into_hash()
         .expect("standard_payment named key should be hash");
-    let do_nothing_stored_uref = default_account
-        .named_keys()
-        .get(DO_NOTHING_STORED_CONTRACT_NAME)
-        .expect("do_nothing should be present in named keys")
-        .as_uref()
-        .cloned()
-        .expect("do_nothing named key should be hash");
 
     // Call stored session code
 
     let exec_request_stored_payment = {
         let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
-            .with_stored_session_uref(do_nothing_stored_uref, ())
+            .with_stored_entry_point_at_version(
+                DO_NOTHING_HASH_KEY_NAME,
+                INITIAL_VERSION,
+                ENTRY_FUNCTION_NAME,
+                RuntimeArgs::new(),
+            )
             .with_stored_payment_hash(
                 standard_payment_stored_hash.to_vec(),
                 (U512::from(payment_purse_amount),),
