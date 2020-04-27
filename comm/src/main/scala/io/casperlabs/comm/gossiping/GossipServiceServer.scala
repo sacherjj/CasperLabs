@@ -6,9 +6,9 @@ import cats.effect.concurrent._
 import cats.effect.implicits._
 import cats.implicits._
 import com.google.protobuf.ByteString
-import io.casperlabs.casper.consensus.{Block, BlockSummary, Deploy, DeploySummary, GenesisCandidate}
-import io.casperlabs.comm.ServiceError.NotFound
+import io.casperlabs.casper.consensus._
 import io.casperlabs.catscontrib.effect.implicits._
+import io.casperlabs.comm.ServiceError.NotFound
 import io.casperlabs.comm.discovery.Node
 import io.casperlabs.comm.discovery.NodeUtils.showNode
 import io.casperlabs.comm.gossiping.downloadmanager.{BlockDownloadManager, DeployDownloadManager}
@@ -16,6 +16,7 @@ import io.casperlabs.comm.gossiping.synchronization.Synchronizer
 import io.casperlabs.comm.gossiping.synchronization.Synchronizer.SyncError
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.models.BlockImplicits._
+import io.casperlabs.models.DeployImplicits._
 import io.casperlabs.shared.{Compression, Log}
 import monix.tail.Iterant
 
@@ -31,6 +32,7 @@ class GossipServiceServer[F[_]: Concurrent: Parallel: Log: Metrics](
     blockDownloadManager: BlockDownloadManager[F],
     genesisApprover: GenesisApprover[F],
     maxChunkSize: Int,
+    deployGossipEnabled: Boolean,
     blockDownloadSemaphore: Semaphore[F]
 ) extends GossipService[F] {
   import GossipServiceServer._
@@ -69,7 +71,7 @@ class GossipServiceServer[F[_]: Concurrent: Parallel: Log: Metrics](
                         deployDownloadManager
                           .scheduleDownload(deploySummary, request.getSender, relay = true)
                     )
-                }).forkAndLog
+                }).forkAndLog.whenA(deployGossipEnabled)
           } yield NewDeploysResponse(isNew = true)
         }
       }
@@ -279,7 +281,7 @@ class GossipServiceServer[F[_]: Concurrent: Parallel: Log: Metrics](
   ): Iterant[F, BlockSummary] =
     Iterant[F]
       .fromSeq(request.blockHashes)
-      .mapEval(backend.getBlockSummary(_))
+      .mapEval(backend.getBlockSummary)
       .flatMap(Iterant.fromIterable(_))
 
   override def streamDeploySummaries(
@@ -287,7 +289,7 @@ class GossipServiceServer[F[_]: Concurrent: Parallel: Log: Metrics](
   ): Iterant[F, DeploySummary] =
     Iterant[F]
       .fromSeq(request.deployHashes)
-      .mapEval(backend.getDeploySummary(_))
+      .mapEval(backend.getDeploySummary)
       .flatMap(Iterant.fromIterable(_))
 
   override def getBlockChunked(request: GetBlockChunkedRequest): Iterant[F, Chunk] =
@@ -295,15 +297,17 @@ class GossipServiceServer[F[_]: Concurrent: Parallel: Log: Metrics](
       _ => blockDownloadSemaphore.release
     ) flatMap { _ =>
       Iterant.liftF {
-        backend.getBlock(request.blockHash, request.excludeDeployBodies)
+        backend.getBlock(
+          request.blockHash,
+          request.excludeDeployBodies || request.onlyIncludeDeployHashes
+        )
       } flatMap {
         case Some(block) =>
           val it = chunkIt(
-            block.toByteArray,
+            (if (request.onlyIncludeDeployHashes) block.clearDeploysExceptHash else block).toByteArray,
             effectiveChunkSize(request.chunkSize),
             request.acceptedCompressionAlgorithms
           )
-
           Iterant.fromIterator(it)
 
         case None =>
@@ -314,11 +318,7 @@ class GossipServiceServer[F[_]: Concurrent: Parallel: Log: Metrics](
   override def streamDeploysChunked(request: StreamDeploysChunkedRequest): Iterant[F, Chunk] = {
     val chunkSize = effectiveChunkSize(request.chunkSize)
     backend.getDeploys(request.deployHashes.toSet).flatMap { deploy =>
-      val it = chunkIt(
-        deploy.toByteArray,
-        chunkSize,
-        request.acceptedCompressionAlgorithms
-      )
+      val it = chunkIt(deploy.toByteArray, chunkSize, request.acceptedCompressionAlgorithms)
       Iterant.fromIterator(it)
     }
   }
@@ -403,7 +403,8 @@ object GossipServiceServer {
       blockDownloadManager: BlockDownloadManager[F],
       genesisApprover: GenesisApprover[F],
       maxChunkSize: Int,
-      maxParallelBlockDownloads: Int
+      maxParallelBlockDownloads: Int,
+      deployGossipEnabled: Boolean
   ): F[GossipServiceServer[F]] =
     for {
       blockDownloadSemaphore <- Semaphore[F](maxParallelBlockDownloads.toLong)
@@ -415,6 +416,7 @@ object GossipServiceServer {
       blockDownloadManager,
       genesisApprover,
       maxChunkSize,
+      deployGossipEnabled,
       blockDownloadSemaphore
     )
 }

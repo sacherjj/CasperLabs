@@ -7,7 +7,10 @@ import { snakeCase } from 'change-case';
 import { AsyncCleanableFormData } from '../../../containers/FormData';
 import AuthContainer from '../../../containers/AuthContainer';
 import { FieldState } from 'formstate';
-
+import {
+  CLType,
+  StoredValueInstance
+} from 'casperlabs-grpc/io/casperlabs/casper/consensus/state_pb';
 
 export class VestingContainer {
   @observable vestingDetails: VestingDetail | null = null;
@@ -18,8 +21,7 @@ export class VestingContainer {
     private errors: ErrorContainer,
     private auth: AuthContainer,
     private casperService: CasperService
-  ) {
-  }
+  ) {}
 
   /** Call whenever the page switches to a new vesting contract. */
   async init(hash: string, showLoading: boolean = false) {
@@ -39,7 +41,10 @@ export class VestingContainer {
   configureImportVestingHash() {
     let vestingHashes = this.auth.getContracts('vestingContracts');
     if (vestingHashes !== undefined) {
-      this.importVestingForm = new ImportVestingFormData(vestingHashes, this.casperService);
+      this.importVestingForm = new ImportVestingFormData(
+        vestingHashes,
+        this.casperService
+      );
     }
   }
 
@@ -68,7 +73,7 @@ export class VestingContainer {
   }
 
   public async addVestingHash(vestingHash: NamedHash) {
-    await this.auth.updateContracts("vestingContracts", vestingHashes=> {
+    await this.auth.updateContracts('vestingContracts', vestingHashes => {
       let d = vestingHashes || [];
       d.push(vestingHash);
       return d;
@@ -76,10 +81,8 @@ export class VestingContainer {
   }
 
   public async removeVestingHash(hash: string) {
-    await this.auth.updateContracts("vestingContracts", vestingHashes => {
-      return (vestingHashes || []).filter(
-        x => x.hashBase16 !== hash
-      );
+    await this.auth.updateContracts('vestingContracts', vestingHashes => {
+      return (vestingHashes || []).filter(x => x.hashBase16 !== hash);
     });
   }
 
@@ -99,15 +102,58 @@ export class VestingContainer {
   }
 
   selectVestingHashByName(name: string) {
-    this.selectedVestingHash = (this.auth.getContracts('vestingContracts') || []).find(x => x.name === name) || null;
+    this.selectedVestingHash =
+      (this.auth.getContracts('vestingContracts') || []).find(
+        x => x.name === name
+      ) || null;
   }
 
   async deleteVestingHash(vestingHash: string, msg?: string) {
-    msg = msg || `Are you sure you want to delete the stored vesting contract hash '${vestingHash}'?`;
+    msg =
+      msg ||
+      `Are you sure you want to delete the stored vesting contract hash '${vestingHash}'?`;
     if (window.confirm(msg)) {
       await this.removeVestingHash(vestingHash);
       this.selectedVestingHash = null;
     }
+  }
+
+  private isSimpleTypeOf(
+    clType: CLType,
+    expectSimpleType: CLType.SimpleMap[keyof CLType.SimpleMap]
+  ) {
+    return (
+      clType.hasSimpleType() && clType.getSimpleType() === expectSimpleType
+    );
+  }
+
+  private isTypeOfU8FixedList(value: CLType) {
+    return (
+      value.hasFixedListType() &&
+      this.isSimpleTypeOf(
+        value.getFixedListType()!.getInner()!,
+        CLType.Simple.U8
+      )
+    );
+  }
+
+  private parseStoredValues(storedValues: StoredValueInstance[]) {
+    return storedValues.map(v => {
+      let value: number | ByteArray | boolean | null = null;
+      let clType = v.getClValue()!.getClType()!;
+      if (this.isTypeOfU8FixedList(clType)) {
+        // parse publicKey
+        value = v.getClValue()!.getValue()!.getBytesValue_asU8();
+      } else if (this.isSimpleTypeOf(clType, CLType.Simple.BOOL)) {
+        // parse Boolean
+        value = v.getClValue()!.getValue()!.getBoolValue();
+      } else if (this.isSimpleTypeOf(clType, CLType.Simple.U512)) {
+        // parse U512
+        let u512 = v.getClValue()!.getValue()!.getU512()!;
+        value = Number(u512.getValue());
+      }
+      return value;
+    });
   }
 
   private async getVestingDetails(keyBase16: string) {
@@ -121,16 +167,22 @@ export class VestingContainer {
       return s;
     });
     let lastFinalizedBlockInfo = await this.casperService.getLastFinalizedBlockInfo();
-    let values = await this.casperService.batchGetBlockState(lastFinalizedBlockInfo.getSummary()!.getBlockHash_asU8(), stateQueries);
-    for (let i = 0; i < values.length; i++) {
-      let u512 = values[i].getClValue()!.getValue()!.getU512()!;
-      let value = Number(u512.getValue());
+    let storedValues: StoredValueInstance[] = await this.casperService.batchGetBlockState(
+      lastFinalizedBlockInfo.getSummary()!.getBlockHash_asU8(),
+      stateQueries
+    );
+    let parsedValues = this.parseStoredValues(storedValues);
+    for (let i = 0; i < storedValues.length; i++) {
+      if (parsedValues[i] === null) {
+        continue;
+      }
       // The vesting contract use seconds based timestamp/duration
       // multiple 1000 to be milliseconds based timestamp/duration
       if (paths[i].endsWith('Timestamp') || paths[i].endsWith('Duration')) {
-        value = value * 1000;
+        (res as any)[paths[i]] = (parsedValues[i] as number) * 1000;
+      } else {
+        (res as any)[paths[i]] = parsedValues[i];
       }
-      (res as any)[paths[i]] = value;
     }
     return res;
   }
@@ -147,21 +199,9 @@ export class VestingDetail {
   dripDuration: number;
   dripAmount: number;
   adminReleaseDuration: number;
-
-  // Todo(ECO-321): fetching from global state storage once the parsing bug is fixed.
-  get adminAccount(): string {
-    return 'ad1ce8c63f6439c12a6c57f8d797e2a1ea7af76ccdcc08b83baa5f84ffc180f1';
-  }
-
-  // Todo(ECO-321): fetching from global state storage once the parsing bug is fixed.
-  get recipientAccount(): string {
-    return '400ceb75b8ad14a395edd03a285cc2de745cc61bef22e5a8e214a9783505409c';
-  }
-
-  // Todo(ECO-321): fetching from global state storage once the parsing bug is fixed.
-  get isPaused(): boolean {
-    return false;
-  }
+  isPaused: boolean;
+  adminAccount: ByteArray;
+  recipientAccount: ByteArray;
 
   // Check whether the contract is releasable by admin account
   get isReleasable(): boolean {
@@ -246,10 +286,13 @@ export class VestingDetail {
 }
 
 class ImportVestingFormData extends AsyncCleanableFormData {
-  name: FieldState<string> = new FieldState<string>("");
-  hashBase16: FieldState<string> = new FieldState<string>("");
+  name: FieldState<string> = new FieldState<string>('');
+  hashBase16: FieldState<string> = new FieldState<string>('');
 
-  constructor(private vestingHashes: NamedHash[], private casperService: CasperService) {
+  constructor(
+    private vestingHashes: NamedHash[],
+    private casperService: CasperService
+  ) {
     super();
   }
 
@@ -270,7 +313,10 @@ class ImportVestingFormData extends AsyncCleanableFormData {
     stateQuery.setPathSegmentsList(['cliff_timestamp']);
     let lastFinalizedBlockInfo = await this.casperService.getLastFinalizedBlockInfo();
     try {
-      await this.casperService.getBlockState(lastFinalizedBlockInfo.getSummary()!.getBlockHash_asU8(), stateQuery);
+      await this.casperService.getBlockState(
+        lastFinalizedBlockInfo.getSummary()!.getBlockHash_asU8(),
+        stateQuery
+      );
     } catch (error) {
       return 'Could not find the vesting contract with the hash';
     }

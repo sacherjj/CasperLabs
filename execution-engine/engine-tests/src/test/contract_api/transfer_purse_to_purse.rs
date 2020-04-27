@@ -4,7 +4,8 @@ use types::{ApiError, CLValue, Key, U512};
 
 use engine_test_support::{
     internal::{
-        ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT,
+        ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_PAYMENT,
+        DEFAULT_RUN_GENESIS_REQUEST,
     },
     DEFAULT_ACCOUNT_ADDR, DEFAULT_ACCOUNT_INITIAL_BALANCE,
 };
@@ -27,7 +28,7 @@ fn should_run_purse_to_purse_transfer() {
 
     let mut builder = InMemoryWasmTestBuilder::default();
     builder
-        .run_genesis(&DEFAULT_GENESIS_CONFIG)
+        .run_genesis(&DEFAULT_RUN_GENESIS_REQUEST)
         .exec(exec_request_1)
         .expect_success()
         .commit()
@@ -116,7 +117,7 @@ fn should_run_purse_to_purse_transfer_with_error() {
     .build();
     let mut builder = InMemoryWasmTestBuilder::default();
     builder
-        .run_genesis(&DEFAULT_GENESIS_CONFIG)
+        .run_genesis(&DEFAULT_RUN_GENESIS_REQUEST)
         .exec(exec_request_1)
         .expect_success()
         .commit()

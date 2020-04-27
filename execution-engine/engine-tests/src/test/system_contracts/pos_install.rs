@@ -4,7 +4,7 @@ use engine_core::engine_state::EngineConfig;
 use engine_test_support::{
     internal::{
         exec_with_return, ExecuteRequestBuilder, WasmTestBuilder, DEFAULT_BLOCK_TIME,
-        DEFAULT_GENESIS_CONFIG,
+        DEFAULT_RUN_GENESIS_REQUEST,
     },
     DEFAULT_ACCOUNT_ADDR,
 };
@@ -38,7 +38,7 @@ fn should_run_pos_install_contract() {
     )
     .build();
     builder
-        .run_genesis(&DEFAULT_GENESIS_CONFIG)
+        .run_genesis(&DEFAULT_RUN_GENESIS_REQUEST)
         .exec(exec_request)
         .commit()
         .expect_success();

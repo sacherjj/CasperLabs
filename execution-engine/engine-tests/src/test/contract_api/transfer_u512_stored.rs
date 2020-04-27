@@ -3,7 +3,7 @@ use engine_shared::motes::Motes;
 use engine_test_support::{
     internal::{
         utils, DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder,
-        DEFAULT_ACCOUNT_KEY, DEFAULT_GENESIS_CONFIG,
+        DEFAULT_ACCOUNT_KEY, DEFAULT_RUN_GENESIS_REQUEST,
     },
     DEFAULT_ACCOUNT_ADDR, DEFAULT_ACCOUNT_INITIAL_BALANCE,
 };
@@ -28,7 +28,7 @@ fn should_transfer_to_account_stored() {
             (STORE_AT_HASH.to_string(),),
         )
         .build();
-        builder.run_genesis(&*DEFAULT_GENESIS_CONFIG);
+        builder.run_genesis(&DEFAULT_RUN_GENESIS_REQUEST);
         builder.exec_commit_finish(exec_request);
     }
 

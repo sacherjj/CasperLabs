@@ -12,10 +12,11 @@ use crate::{
 
 const PACKAGE_NAME: &str = "contract";
 
-const LIB_RS_CONTENTS: &str = r#"#![cfg_attr(
+const MAIN_RS_CONTENTS: &str = r#"#![cfg_attr(
     not(target_arch = "wasm32"),
     crate_type = "target arch should be wasm32"
 )]
+#![no_main]
 
 use casperlabs_contract::{
     contract_api::{runtime, storage},
@@ -59,22 +60,25 @@ lazy_static! {
     static ref CARGO_TOML: PathBuf = ARGS.root_path().join(PACKAGE_NAME).join("Cargo.toml");
     static ref RUST_TOOLCHAIN: PathBuf = ARGS.root_path().join(PACKAGE_NAME).join("rust-toolchain");
     static ref MAIN_RS: PathBuf = ARGS.root_path().join(PACKAGE_NAME).join("src/main.rs");
-    static ref LIB_RS: PathBuf = ARGS.root_path().join(PACKAGE_NAME).join("src/lib.rs");
     static ref CONFIG: PathBuf = ARGS.root_path().join(PACKAGE_NAME).join(".cargo/config");
     static ref CARGO_TOML_ADDITIONAL_CONTENTS: String = format!(
         r#"{}
 {}
 
-[lib]
-crate-type = ["cdylib"]
+[[bin]]
+name = "{}"
+path = "src/main.rs"
 bench = false
 doctest = false
 test = false
 
 [features]
 default = ["casperlabs-contract/std", "casperlabs-types/std", "casperlabs-contract/test-support"]
+
+[profile.release]
+lto = true
 "#,
-        *CL_CONTRACT, *CL_TYPES,
+        *CL_CONTRACT, *CL_TYPES, PACKAGE_NAME
     );
 }
 
@@ -90,9 +94,8 @@ pub fn add_rust_toolchain() {
     common::write_file(&*RUST_TOOLCHAIN, format!("{}\n", TOOLCHAIN));
 }
 
-pub fn replace_main_rs() {
-    common::remove_file(&*MAIN_RS);
-    common::write_file(&*LIB_RS, LIB_RS_CONTENTS);
+pub fn update_main_rs() {
+    common::write_file(&*MAIN_RS, MAIN_RS_CONTENTS);
 }
 
 pub fn add_config() {

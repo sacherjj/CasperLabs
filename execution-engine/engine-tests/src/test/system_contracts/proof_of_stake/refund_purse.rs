@@ -1,7 +1,7 @@
 use engine_test_support::{
     internal::{
-        DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_GENESIS_CONFIG,
-        DEFAULT_PAYMENT,
+        DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_PAYMENT,
+        DEFAULT_RUN_GENESIS_REQUEST,
     },
     DEFAULT_ACCOUNT_ADDR,
 };
@@ -28,7 +28,7 @@ fn should_run_pos_refund_purse_contract_account_1() {
 fn initialize() -> InMemoryWasmTestBuilder {
     let mut builder = InMemoryWasmTestBuilder::default();
 
-    builder.run_genesis(&DEFAULT_GENESIS_CONFIG);
+    builder.run_genesis(&DEFAULT_RUN_GENESIS_REQUEST);
 
     builder
 }

@@ -5,7 +5,8 @@ use lazy_static::lazy_static;
 use engine_shared::{stored_value::StoredValue, transform::Transform};
 use engine_test_support::{
     internal::{
-        ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT,
+        ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_PAYMENT,
+        DEFAULT_RUN_GENESIS_REQUEST,
     },
     DEFAULT_ACCOUNT_ADDR, DEFAULT_ACCOUNT_INITIAL_BALANCE,
 };
@@ -41,7 +42,7 @@ fn should_run_purse_to_account_transfer() {
     //
 
     builder
-        .run_genesis(&DEFAULT_GENESIS_CONFIG)
+        .run_genesis(&DEFAULT_RUN_GENESIS_REQUEST)
         .exec(exec_request_1)
         .expect_success()
         .commit();
@@ -203,7 +204,7 @@ fn should_fail_when_sending_too_much_from_purse_to_account() {
     let mut builder = InMemoryWasmTestBuilder::default();
 
     builder
-        .run_genesis(&DEFAULT_GENESIS_CONFIG)
+        .run_genesis(&DEFAULT_RUN_GENESIS_REQUEST)
         .exec(exec_request_1)
         .expect_success()
         .commit()

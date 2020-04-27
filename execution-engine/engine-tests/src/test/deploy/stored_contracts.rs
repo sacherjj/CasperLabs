@@ -6,7 +6,7 @@ use engine_shared::{motes::Motes, stored_value::StoredValue, transform::Transfor
 use engine_test_support::{
     internal::{
         utils, AdditiveMapDiff, DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder,
-        UpgradeRequestBuilder, DEFAULT_ACCOUNT_KEY, DEFAULT_GENESIS_CONFIG,
+        UpgradeRequestBuilder, DEFAULT_ACCOUNT_KEY, DEFAULT_RUN_GENESIS_REQUEST,
     },
     DEFAULT_ACCOUNT_ADDR, DEFAULT_ACCOUNT_INITIAL_BALANCE,
 };
@@ -77,7 +77,7 @@ fn should_exec_non_stored_code() {
     };
 
     let mut builder = InMemoryWasmTestBuilder::default();
-    builder.run_genesis(&*DEFAULT_GENESIS_CONFIG);
+    builder.run_genesis(&DEFAULT_RUN_GENESIS_REQUEST);
 
     let test_result = builder.exec_commit_finish(exec_request);
 
@@ -124,7 +124,7 @@ fn should_exec_stored_code_by_hash() {
     .build();
 
     let mut builder = InMemoryWasmTestBuilder::default();
-    builder.run_genesis(&*DEFAULT_GENESIS_CONFIG);
+    builder.run_genesis(&DEFAULT_RUN_GENESIS_REQUEST);
 
     builder.exec_commit_finish(exec_request);
 
@@ -220,7 +220,7 @@ fn should_exec_stored_code_by_named_hash() {
     .build();
 
     let mut builder = InMemoryWasmTestBuilder::default();
-    builder.run_genesis(&*DEFAULT_GENESIS_CONFIG);
+    builder.run_genesis(&DEFAULT_RUN_GENESIS_REQUEST);
 
     let test_result = builder.exec_commit_finish(exec_request);
 
@@ -326,7 +326,7 @@ fn should_exec_stored_code_by_named_uref() {
     };
 
     let mut builder = InMemoryWasmTestBuilder::default();
-    builder.run_genesis(&*DEFAULT_GENESIS_CONFIG);
+    builder.run_genesis(&DEFAULT_RUN_GENESIS_REQUEST);
 
     let test_result = builder.exec_commit_finish(exec_request);
 
@@ -418,7 +418,7 @@ fn should_exec_payment_and_session_stored_code() {
     .build();
 
     let mut builder = InMemoryWasmTestBuilder::default();
-    builder.run_genesis(&*DEFAULT_GENESIS_CONFIG);
+    builder.run_genesis(&DEFAULT_RUN_GENESIS_REQUEST);
 
     let test_result = builder.exec_commit_finish(exec_request);
 
@@ -546,7 +546,7 @@ fn should_produce_same_transforms_by_uref_or_named_uref() {
     };
 
     let mut builder_by_uref = InMemoryWasmTestBuilder::default();
-    builder_by_uref.run_genesis(&*DEFAULT_GENESIS_CONFIG);
+    builder_by_uref.run_genesis(&DEFAULT_RUN_GENESIS_REQUEST);
 
     builder_by_uref.exec_commit_finish(exec_request_genesis);
 
@@ -603,7 +603,7 @@ fn should_produce_same_transforms_by_uref_or_named_uref() {
     };
 
     let mut builder_by_named_uref = InMemoryWasmTestBuilder::default();
-    builder_by_named_uref.run_genesis(&*DEFAULT_GENESIS_CONFIG);
+    builder_by_named_uref.run_genesis(&DEFAULT_RUN_GENESIS_REQUEST);
     let _ = builder_by_named_uref.exec_commit_finish(exec_request_genesis);
 
     // named uref exec
@@ -685,7 +685,7 @@ fn should_have_equivalent_transforms_with_stored_contract_pointers() {
         };
 
         builder
-            .run_genesis(&*DEFAULT_GENESIS_CONFIG)
+            .run_genesis(&DEFAULT_RUN_GENESIS_REQUEST)
             .exec(exec_request_1)
             .expect_success()
             .commit()
@@ -765,7 +765,7 @@ fn should_have_equivalent_transforms_with_stored_contract_pointers() {
         };
 
         InMemoryWasmTestBuilder::default()
-            .run_genesis(&*DEFAULT_GENESIS_CONFIG)
+            .run_genesis(&DEFAULT_RUN_GENESIS_REQUEST)
             .exec(do_nothing_request([1; 32]))
             .expect_success()
             .commit()
@@ -837,7 +837,7 @@ fn should_fail_payment_stored_at_named_key_with_incompatible_major_version() {
     .build();
 
     let mut builder = InMemoryWasmTestBuilder::default();
-    builder.run_genesis(&*DEFAULT_GENESIS_CONFIG);
+    builder.run_genesis(&DEFAULT_RUN_GENESIS_REQUEST);
 
     builder.exec_commit_finish(exec_request);
 
@@ -919,7 +919,7 @@ fn should_fail_payment_stored_at_hash_with_incompatible_major_version() {
     .build();
 
     let mut builder = InMemoryWasmTestBuilder::default();
-    builder.run_genesis(&*DEFAULT_GENESIS_CONFIG);
+    builder.run_genesis(&DEFAULT_RUN_GENESIS_REQUEST);
 
     builder.exec_commit_finish(exec_request);
 
@@ -1000,7 +1000,7 @@ fn should_fail_payment_stored_at_uref_with_incompatible_major_version() {
     .build();
 
     let mut builder = InMemoryWasmTestBuilder::default();
-    builder.run_genesis(&*DEFAULT_GENESIS_CONFIG);
+    builder.run_genesis(&DEFAULT_RUN_GENESIS_REQUEST);
 
     builder.exec_commit_finish(exec_request);
 
@@ -1082,7 +1082,7 @@ fn should_fail_session_stored_at_named_key_with_incompatible_major_version() {
     .build();
 
     let mut builder = InMemoryWasmTestBuilder::default();
-    builder.run_genesis(&*DEFAULT_GENESIS_CONFIG);
+    builder.run_genesis(&DEFAULT_RUN_GENESIS_REQUEST);
 
     builder.exec_commit_finish(exec_request_1);
 
@@ -1168,7 +1168,7 @@ fn should_fail_session_stored_at_hash_with_incompatible_major_version() {
     .build();
 
     let mut builder = InMemoryWasmTestBuilder::default();
-    builder.run_genesis(&*DEFAULT_GENESIS_CONFIG);
+    builder.run_genesis(&DEFAULT_RUN_GENESIS_REQUEST);
 
     builder.exec_commit_finish(exec_request_1);
 
@@ -1241,7 +1241,7 @@ fn should_fail_session_stored_at_uref_with_incompatible_major_version() {
     .build();
 
     let mut builder = InMemoryWasmTestBuilder::default();
-    builder.run_genesis(&*DEFAULT_GENESIS_CONFIG);
+    builder.run_genesis(&DEFAULT_RUN_GENESIS_REQUEST);
 
     builder.exec_commit_finish(exec_request_1);
 
@@ -1306,7 +1306,7 @@ fn should_execute_stored_payment_and_session_code_with_new_major_version() {
     let payment_purse_amount = 10_000_000;
 
     let mut builder = InMemoryWasmTestBuilder::default();
-    builder.run_genesis(&*DEFAULT_GENESIS_CONFIG);
+    builder.run_genesis(&DEFAULT_RUN_GENESIS_REQUEST);
 
     //
     // upgrade with new wasm costs with modified mint for given version

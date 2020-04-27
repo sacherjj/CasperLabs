@@ -101,10 +101,12 @@ class ChainSpecTest extends WordSpecLike with Matchers with Inspectors {
           genesis.timestamp shouldBe 1568805354071L
           genesis.getProtocolVersion shouldBe state.ProtocolVersion(0, 1)
 
-          new String(genesis.mintInstaller.toByteArray).trim shouldBe "mint contract bytes"
-          new String(genesis.posInstaller.toByteArray).trim shouldBe "pos contract bytes"
+          val eeGenesisConfig = genesis.getEeConfig
 
-          val accounts = genesis.accounts
+          new String(eeGenesisConfig.mintInstaller.toByteArray).trim shouldBe "mint contract bytes"
+          new String(eeGenesisConfig.posInstaller.toByteArray).trim shouldBe "pos contract bytes"
+
+          val accounts = eeGenesisConfig.accounts
           accounts should have size 4
 
           // The parser should handle Base64 and Base16 as well; the file has a mixture of both.
@@ -128,7 +130,7 @@ class ChainSpecTest extends WordSpecLike with Matchers with Inspectors {
           accounts(0).getBondedAmount.bitWidth shouldBe 512
           accounts(3).getBalance.value shouldBe "2"
 
-          val wasmCosts = genesis.getCosts.getWasm
+          val wasmCosts = eeGenesisConfig.getCosts.getWasm
           wasmCosts.regular shouldBe 1
           wasmCosts.div shouldBe 2
           wasmCosts.mul shouldBe 3
@@ -198,7 +200,7 @@ class ChainSpecTest extends WordSpecLike with Matchers with Inspectors {
 
       "apply file overrides" in {
         check(readSpec) { spec =>
-          val accounts = spec.getGenesis.accounts
+          val accounts = spec.getGenesis.getEeConfig.accounts
           accounts should have size 1
           accounts(0).getBalance.value shouldBe "1000"
           accounts(0).getBondedAmount.value shouldBe "100"

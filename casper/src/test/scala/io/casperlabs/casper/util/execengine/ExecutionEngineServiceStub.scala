@@ -81,7 +81,7 @@ object ExecutionEngineServiceStub {
 
   def mock[F[_]](
       runGenesisWithChainSpecFunc: (
-          ChainSpec.GenesisConfig
+          RunGenesisRequest
       ) => F[Either[Throwable, GenesisResult]],
       upgradeFunc: (
           ByteString,
@@ -102,7 +102,7 @@ object ExecutionEngineServiceStub {
   ): ExecutionEngineService[F] = new ExecutionEngineService[F] {
     override def emptyStateHash: ByteString = ByteString.EMPTY
     override def runGenesis(
-        genesisConfig: ChainSpec.GenesisConfig
+        genesisConfig: RunGenesisRequest
     ): F[Either[Throwable, GenesisResult]] =
       runGenesisWithChainSpecFunc(genesisConfig)
 
@@ -174,7 +174,7 @@ object ExecutionEngineServiceStub {
     override def emptyStateHash: ByteString = ByteString.EMPTY
 
     override def runGenesis(
-        genesisConfig: ChainSpec.GenesisConfig
+        genesisConfig: RunGenesisRequest
     ): F[Either[Throwable, GenesisResult]] =
       GenesisResult().asRight[Throwable].pure[F]
 

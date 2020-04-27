@@ -16,6 +16,7 @@ import io.casperlabs.casper.consensus.info._
 import io.casperlabs.catscontrib.{Fs2Compiler, MonadThrowable}
 import io.casperlabs.comm.ServiceError
 import io.casperlabs.comm.ServiceError._
+import io.casperlabs.comm.gossiping.relaying.DeployRelaying
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.hash.Blake2b256
 import io.casperlabs.mempool.DeployBuffer
@@ -56,7 +57,7 @@ object BlockAPI {
       _ <- Metrics[F].incrementCounter("create-blocks-success", 0)
     } yield ()
 
-  def deploy[F[_]: MonadThrowable: DeployBuffer: Metrics](
+  def deploy[F[_]: MonadThrowable: Metrics: DeployBuffer: DeployRelaying](
       d: Deploy
   ): F[Unit] =
     for {
@@ -72,6 +73,7 @@ object BlockAPI {
             case Left(ex) =>
               MonadThrowable[F].raiseError[Unit](ex)
           }
+      _ <- DeployRelaying[F].relay(List(d.deployHash))
     } yield ()
 
   def propose[F[_]: Concurrent: MultiParentCasperRef: Log: Metrics: Broadcaster](

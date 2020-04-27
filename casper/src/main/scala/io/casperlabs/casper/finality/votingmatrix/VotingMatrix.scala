@@ -8,17 +8,16 @@ import cats.mtl.{DefaultMonadState, MonadState}
 import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.PrettyPrinter
 import io.casperlabs.casper.finality.FinalityDetectorUtil
-import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.models.Message
-import io.casperlabs.models.Message.MainRank
+import io.casperlabs.models.Message.{JRank, MainRank}
 import io.casperlabs.storage.dag.{AncestorsStorage, DagRepresentation}
 
 import scala.collection.mutable.{IndexedSeq => MutableSeq}
 
 object VotingMatrix {
   // (Consensus value, DagLevel of the block)
-  type Vote               = (BlockHash, MainRank)
+  type Vote               = (BlockHash, JRank)
   type VotingMatrix[F[_]] = MonadState[F, VotingMatrixState]
 
   private[votingmatrix] def of[F[_]: Sync](
@@ -88,7 +87,7 @@ object VotingMatrix {
                                     .levelZeroMsgsOfValidator(dag, v, voteValue.messageHash)
                                     .map(
                                       _.lastOption
-                                        .map(b => (v, (voteValue.messageHash, b.mainRank)))
+                                        .map(b => (v, (voteValue.messageHash, b.jRank)))
                                     )
                               }
                               .map(_.flatten.toMap)
@@ -100,7 +99,7 @@ object VotingMatrix {
         firstLevelZeroVotes.contains(k) && validatorsToIndex.contains(k)
       }
       state = VotingMatrixState(
-        MutableSeq.fill(n, n)(0),
+        MutableSeq.fill(n, n)(Message.asJRank(0L)),
         firstLevelZeroVotesArray,
         validatorsToIndex,
         weights,

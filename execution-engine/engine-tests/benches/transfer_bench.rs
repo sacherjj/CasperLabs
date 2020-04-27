@@ -8,8 +8,8 @@ use tempfile::TempDir;
 use engine_core::engine_state::EngineConfig;
 use engine_test_support::{
     internal::{
-        DeployItemBuilder, ExecuteRequestBuilder, LmdbWasmTestBuilder, DEFAULT_GENESIS_CONFIG,
-        DEFAULT_PAYMENT,
+        DeployItemBuilder, ExecuteRequestBuilder, LmdbWasmTestBuilder, DEFAULT_PAYMENT,
+        DEFAULT_RUN_GENESIS_REQUEST,
     },
     DEFAULT_ACCOUNT_ADDR,
 };
@@ -54,7 +54,7 @@ fn bootstrap(data_dir: &Path, accounts: &[PublicKey], amount: U512) -> LmdbWasmT
     let mut builder = LmdbWasmTestBuilder::new_with_config(data_dir, engine_config);
 
     builder
-        .run_genesis(&DEFAULT_GENESIS_CONFIG)
+        .run_genesis(&DEFAULT_RUN_GENESIS_REQUEST)
         .exec(exec_request)
         .expect_success()
         .commit();

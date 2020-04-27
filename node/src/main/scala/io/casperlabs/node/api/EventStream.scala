@@ -64,7 +64,7 @@ object EventStream {
         if (request.minEventId > 0) {
           // TODO (NODE-1302): Move filtering to the storage.
           EventStorage[F]
-            .getEvents(request.minEventId)
+            .getEvents(request.minEventId, request.maxEventId)
             .filter(subscriptionFilter(request))
             .toMonixObservable
         } else {

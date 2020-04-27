@@ -1,8 +1,8 @@
 use engine_core::{engine_state, execution};
 use engine_test_support::{
     internal::{
-        DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_GENESIS_CONFIG,
-        DEFAULT_PAYMENT, STANDARD_PAYMENT_CONTRACT,
+        DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_PAYMENT,
+        DEFAULT_RUN_GENESIS_REQUEST, STANDARD_PAYMENT_CONTRACT,
     },
     DEFAULT_ACCOUNT_ADDR,
 };
@@ -22,7 +22,7 @@ fn should_deploy_with_authorized_identity_key() {
     .build();
     // Basic deploy with single key
     InMemoryWasmTestBuilder::default()
-        .run_genesis(&DEFAULT_GENESIS_CONFIG)
+        .run_genesis(&DEFAULT_RUN_GENESIS_REQUEST)
         .exec(exec_request)
         .commit()
         .expect_success();
@@ -49,7 +49,7 @@ fn should_raise_auth_failure_with_invalid_key() {
 
     // Basic deploy with single key
     let result = InMemoryWasmTestBuilder::default()
-        .run_genesis(&DEFAULT_GENESIS_CONFIG)
+        .run_genesis(&DEFAULT_RUN_GENESIS_REQUEST)
         .exec(exec_request)
         .commit()
         .finish();
@@ -96,7 +96,7 @@ fn should_raise_auth_failure_with_invalid_keys() {
 
     // Basic deploy with single key
     let result = InMemoryWasmTestBuilder::default()
-        .run_genesis(&DEFAULT_GENESIS_CONFIG)
+        .run_genesis(&DEFAULT_RUN_GENESIS_REQUEST)
         .exec(exec_request)
         .commit()
         .finish();
@@ -156,7 +156,7 @@ fn should_raise_deploy_authorization_failure() {
     .build();
     // Basic deploy with single key
     let result1 = InMemoryWasmTestBuilder::default()
-        .run_genesis(&DEFAULT_GENESIS_CONFIG)
+        .run_genesis(&DEFAULT_RUN_GENESIS_REQUEST)
         // Reusing a test contract that would add new key
         .exec(exec_request_1)
         .expect_success()
@@ -300,7 +300,7 @@ fn should_authorize_deploy_with_multiple_keys() {
     .build();
     // Basic deploy with single key
     let result1 = InMemoryWasmTestBuilder::default()
-        .run_genesis(&DEFAULT_GENESIS_CONFIG)
+        .run_genesis(&DEFAULT_RUN_GENESIS_REQUEST)
         // Reusing a test contract that would add new key
         .exec(exec_request_1)
         .expect_success()
@@ -347,7 +347,7 @@ fn should_not_authorize_deploy_with_duplicated_keys() {
     .build();
     // Basic deploy with single key
     let result1 = InMemoryWasmTestBuilder::default()
-        .run_genesis(&DEFAULT_GENESIS_CONFIG)
+        .run_genesis(&DEFAULT_RUN_GENESIS_REQUEST)
         // Reusing a test contract that would add new key
         .exec(exec_request_1)
         .expect_success()

@@ -1,7 +1,7 @@
 use engine_test_support::{
     internal::{
-        DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_GENESIS_CONFIG,
-        DEFAULT_PAYMENT,
+        DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_PAYMENT,
+        DEFAULT_RUN_GENESIS_REQUEST,
     },
     DEFAULT_ACCOUNT_ADDR,
 };
@@ -33,7 +33,7 @@ fn should_run_counter_example_contract() {
     let mut builder = InMemoryWasmTestBuilder::default();
 
     builder
-        .run_genesis(&DEFAULT_GENESIS_CONFIG)
+        .run_genesis(&DEFAULT_RUN_GENESIS_REQUEST)
         .exec(exec_request_1)
         .expect_success()
         .commit();
@@ -143,7 +143,7 @@ fn should_run_counter_with_headers_example_contract() {
     let mut builder = InMemoryWasmTestBuilder::default();
 
     builder
-        .run_genesis(&DEFAULT_GENESIS_CONFIG)
+        .run_genesis(&DEFAULT_RUN_GENESIS_REQUEST)
         .exec(exec_request_1)
         .expect_success()
         .commit();
@@ -199,7 +199,7 @@ fn should_run_counter_with_headers_example_contract_by_hash() {
     let mut builder = InMemoryWasmTestBuilder::default();
 
     builder
-        .run_genesis(&DEFAULT_GENESIS_CONFIG)
+        .run_genesis(&DEFAULT_RUN_GENESIS_REQUEST)
         .exec(exec_request_1)
         .expect_success()
         .commit();

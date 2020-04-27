@@ -6,12 +6,14 @@ use std::{env, path::PathBuf};
 
 use clap::{crate_version, App};
 
-use engine_core::engine_state::{engine_config::EngineConfig, genesis::GenesisConfig};
+use engine_core::engine_state::{
+    engine_config::EngineConfig, genesis::ExecConfig, run_genesis_request::RunGenesisRequest,
+};
 use engine_test_support::{
     internal::{
         utils, DeployItemBuilder, ExecuteRequestBuilder, LmdbWasmTestBuilder, DEFAULT_ACCOUNTS,
-        DEFAULT_CHAIN_NAME, DEFAULT_GENESIS_TIMESTAMP, DEFAULT_PAYMENT, DEFAULT_PROTOCOL_VERSION,
-        DEFAULT_WASM_COSTS, MINT_INSTALL_CONTRACT, POS_INSTALL_CONTRACT, STANDARD_PAYMENT_CONTRACT,
+        DEFAULT_GENESIS_CONFIG_HASH, DEFAULT_PAYMENT, DEFAULT_PROTOCOL_VERSION, DEFAULT_WASM_COSTS,
+        MINT_INSTALL_CONTRACT, POS_INSTALL_CONTRACT, STANDARD_PAYMENT_CONTRACT,
         STANDARD_PAYMENT_INSTALL_CONTRACT,
     },
     DEFAULT_ACCOUNT_ADDR,
@@ -68,19 +70,21 @@ fn main() {
     let pos_installer_bytes = utils::read_wasm_file_bytes(POS_INSTALL_CONTRACT);
     let standard_payment_installer_bytes =
         utils::read_wasm_file_bytes(STANDARD_PAYMENT_INSTALL_CONTRACT);
-    let genesis_config = GenesisConfig::new(
-        DEFAULT_CHAIN_NAME.to_string(),
-        DEFAULT_GENESIS_TIMESTAMP,
-        *DEFAULT_PROTOCOL_VERSION,
+    let exec_config = ExecConfig::new(
         mint_installer_bytes,
         pos_installer_bytes,
         standard_payment_installer_bytes,
         DEFAULT_ACCOUNTS.clone(),
         *DEFAULT_WASM_COSTS,
     );
+    let run_genesis_request = RunGenesisRequest::new(
+        *DEFAULT_GENESIS_CONFIG_HASH,
+        *DEFAULT_PROTOCOL_VERSION,
+        exec_config,
+    );
 
     let post_state_hash = builder
-        .run_genesis(&genesis_config)
+        .run_genesis(&run_genesis_request)
         .exec(exec_request)
         .expect_success()
         .commit()

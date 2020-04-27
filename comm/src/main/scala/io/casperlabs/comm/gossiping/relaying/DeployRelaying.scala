@@ -2,7 +2,7 @@ package io.casperlabs.comm.gossiping.relaying
 
 import cats.effect._
 import cats.implicits._
-import cats.{Monad, Parallel}
+import cats.{Applicative, Monad, Parallel}
 import com.google.protobuf.ByteString
 import io.casperlabs.comm.NodeAsk
 import io.casperlabs.comm.discovery.{Node, NodeDiscovery}
@@ -14,6 +14,10 @@ import simulacrum.typeclass
 
 @typeclass
 trait DeployRelaying[F[_]] extends Relaying[F]
+
+class NoOpsDeployRelaying[F[_]: Applicative] extends DeployRelaying[F] {
+  override def relay(hashes: List[ByteString]) = ().pure[F].pure[F]
+}
 
 object DeployRelayingImpl {
   implicit val metricsSource: Metrics.Source =

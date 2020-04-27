@@ -2,7 +2,7 @@ use std::convert::TryInto;
 
 use engine_shared::{stored_value::StoredValue, transform::Transform};
 use engine_test_support::{
-    internal::{ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_GENESIS_CONFIG},
+    internal::{ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_RUN_GENESIS_REQUEST},
     DEFAULT_ACCOUNT_ADDR,
 };
 use types::{bytesrepr::ToBytes, CLValue, Key};
@@ -25,7 +25,7 @@ fn should_run_local_state_contract() {
     // This test runs a contract that's after every call extends the same key with
     // more data
     let result = InMemoryWasmTestBuilder::default()
-        .run_genesis(&DEFAULT_GENESIS_CONFIG)
+        .run_genesis(&DEFAULT_RUN_GENESIS_REQUEST)
         .exec(exec_request_1)
         .expect_success()
         .commit()
@@ -79,7 +79,7 @@ fn should_add_to_local_state() {
             .build();
 
     let result = InMemoryWasmTestBuilder::default()
-        .run_genesis(&DEFAULT_GENESIS_CONFIG)
+        .run_genesis(&DEFAULT_RUN_GENESIS_REQUEST)
         .exec(exec_request_1)
         .expect_success()
         .commit()

@@ -321,42 +321,67 @@ class GrpcGossipServiceSpec
     "getBlocksChunked" when {
       "called with a valid sender" when {
         "no compression is supported" when {
-          def test(excludeDeployBodies: Boolean): Unit = forAll { block: Block =>
-            runTestUnsafe(TestData.fromBlock(block), timeout = 15.seconds) {
-              val req = GetBlockChunkedRequest(
-                blockHash = block.blockHash,
-                excludeDeployBodies = excludeDeployBodies
-              )
-              stub.getBlockChunked(req).toListL.map { chunks =>
-                chunks.head.content.isHeader shouldBe true
-                val header = chunks.head.getHeader
-                header.compressionAlgorithm shouldBe ""
-                chunks.size should be > 1
+          def test(excludeDeployBodies: Boolean, onlyIncludeDeployHashes: Boolean): Unit = forAll {
+            block: Block =>
+              runTestUnsafe(TestData.fromBlock(block), timeout = 15.seconds) {
+                val req = GetBlockChunkedRequest(
+                  blockHash = block.blockHash,
+                  excludeDeployBodies = excludeDeployBodies,
+                  onlyIncludeDeployHashes = onlyIncludeDeployHashes
+                )
+                stub.getBlockChunked(req).toListL.map { chunks =>
+                  chunks.head.content.isHeader shouldBe true
+                  val header = chunks.head.getHeader
+                  header.compressionAlgorithm shouldBe ""
+                  chunks.size should be > 1
 
-                Inspectors.forAll(chunks.tail) { chunk =>
-                  chunk.content.isData shouldBe true
-                  chunk.getData.size should be <= DefaultMaxChunkSize
+                  Inspectors.forAll(chunks.tail) { chunk =>
+                    chunk.content.isData shouldBe true
+                    chunk.getData.size should be <= DefaultMaxChunkSize
+                  }
+
+                  val content = chunks.tail.flatMap(_.getData.toByteArray).toArray
+
+                  val expectedDeploys =
+                    if (onlyIncludeDeployHashes) {
+                      block.getBody.deploys.map { pd =>
+                        pd.withDeploy(Deploy(pd.getDeploy.deployHash))
+                      }
+                    } else if (excludeDeployBodies) {
+                      block.getBody.deploys.map { pd =>
+                        pd.withDeploy(pd.getDeploy.clearBody)
+                      }
+                    } else block.getBody.deploys
+
+                  val expectedBlock = block.withBody(block.getBody.withDeploys(expectedDeploys))
+
+                  val expected = expectedBlock.toByteArray
+
+                  header.contentLength shouldBe content.length
+                  header.originalContentLength shouldBe expected.length
+                  md5(content) shouldBe md5(expected)
                 }
-
-                val content = chunks.tail.flatMap(_.getData.toByteArray).toArray
-                val original =
-                  (if (excludeDeployBodies) block.clearDeployBodies else block).toByteArray
-                header.contentLength shouldBe content.length
-                header.originalContentLength shouldBe original.length
-                md5(content) shouldBe md5(original)
               }
-            }
           }
 
           "specified to exclude deploys bodies" should {
             "return a stream of uncompressed chunks with deploys bodies excluded" in test(
-              excludeDeployBodies = true
+              excludeDeployBodies = true,
+              onlyIncludeDeployHashes = false
+            )
+          }
+
+          "specified to only include deploys hashes" should {
+            "return a stream of uncompressed chunks with only deploy hashes" in test(
+              excludeDeployBodies = false,
+              onlyIncludeDeployHashes = true
             )
           }
 
           "specified to return full blocks" should {
             "return a stream of uncompressed chunks with deploys bodies included" in test(
-              excludeDeployBodies = false
+              excludeDeployBodies = false,
+              onlyIncludeDeployHashes = false
             )
           }
         }
@@ -1453,13 +1478,13 @@ class GrpcGossipServiceSpec
     "streamDagSliceBlockSummariesSpec" when {
       "called with a min and max rank" should {
         /* Abstracts over streamDagSlice RPC test, parameters are dag, start and end ranks */
-        def test(task: (Vector[BlockSummary], Int, Int) => Task[Unit]): Unit =
+        def test(task: (Vector[BlockSummary], Long, Long) => Task[Unit]): Unit =
           forAll(genSummaryDagFromGenesis) { dag =>
-            val minRank = dag.map(_.jRank).min.toInt
-            val maxRank = dag.map(_.jRank).max.toInt
+            val minRank = dag.map(_.jRank).min
+            val maxRank = dag.map(_.jRank).max
 
-            val startGen: Gen[Int] = Gen.choose(minRank, math.max(maxRank - 1, minRank))
-            val endGen: Gen[Int]   = startGen.flatMap(start => Gen.choose(start, maxRank))
+            val startGen: Gen[Long] = Gen.choose(minRank, math.max(maxRank - 1, minRank))
+            val endGen: Gen[Long]   = startGen.flatMap(start => Gen.choose(start, maxRank))
 
             forAll(startGen, endGen) { (startRank, endRank) =>
               runTestUnsafe(TestData(dag))(task(dag, startRank, endRank))
@@ -1658,7 +1683,8 @@ object GrpcGossipServiceSpec extends TestRuntime with ArbitraryConsensusAndComm 
               blockDownloadManager = blockDownloadManager,
               genesisApprover = genesisApprover,
               maxChunkSize = DefaultMaxChunkSize,
-              maxParallelBlockDownloads = maxParallelBlockDownloads
+              maxParallelBlockDownloads = maxParallelBlockDownloads,
+              deployGossipEnabled = false
             ) map { gss =>
               val svc = GrpcGossipService
                 .fromGossipService(gss, rateLimiter, chainId, blockChunkConsumerTimeout)

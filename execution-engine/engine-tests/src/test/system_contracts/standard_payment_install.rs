@@ -1,7 +1,9 @@
 use engine_core::engine_state::EngineConfig;
 use engine_shared::{stored_value::StoredValue, transform::Transform};
 use engine_test_support::{
-    internal::{exec_with_return, WasmTestBuilder, DEFAULT_BLOCK_TIME, DEFAULT_GENESIS_CONFIG},
+    internal::{
+        exec_with_return, WasmTestBuilder, DEFAULT_BLOCK_TIME, DEFAULT_RUN_GENESIS_REQUEST,
+    },
     DEFAULT_ACCOUNT_ADDR,
 };
 use types::{Key, URef};
@@ -15,7 +17,7 @@ fn should_run_standard_payment_install_contract() {
     let engine_config =
         EngineConfig::new().with_use_system_contracts(cfg!(feature = "use-system-contracts"));
 
-    builder.run_genesis(&DEFAULT_GENESIS_CONFIG);
+    builder.run_genesis(&DEFAULT_RUN_GENESIS_REQUEST);
 
     let (ret_value, ret_urefs, effect): (URef, _, _) = exec_with_return::exec(
         engine_config,

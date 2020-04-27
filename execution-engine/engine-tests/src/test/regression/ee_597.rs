@@ -1,5 +1,7 @@
 use engine_test_support::{
-    internal::{utils, ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_GENESIS_CONFIG},
+    internal::{
+        utils, ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_RUN_GENESIS_REQUEST,
+    },
     DEFAULT_ACCOUNT_ADDR,
 };
 use types::ApiError;
@@ -14,7 +16,7 @@ fn should_fail_when_bonding_amount_is_zero_ee_597_regression() {
             .build();
 
     let result = InMemoryWasmTestBuilder::default()
-        .run_genesis(&DEFAULT_GENESIS_CONFIG)
+        .run_genesis(&DEFAULT_RUN_GENESIS_REQUEST)
         .exec(exec_request)
         .commit()
         .finish();

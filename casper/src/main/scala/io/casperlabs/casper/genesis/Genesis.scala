@@ -18,10 +18,10 @@ import io.casperlabs.casper.util.{CasperLabsProtocol, ProtoUtil}
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.crypto.Keys
 import io.casperlabs.crypto.Keys.PublicKey
-import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
 import io.casperlabs.ipc
+import io.casperlabs.ipc.RunGenesisRequest
 import io.casperlabs.shared.Sorting._
-import io.casperlabs.shared.{FilesAPI, Log, LogSource, Sorting}
+import io.casperlabs.shared.{Log, Sorting}
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.BlockMsgWithTransform
 import io.casperlabs.storage.dag.FinalityStorage
@@ -29,6 +29,7 @@ import io.casperlabs.storage.dag.FinalityStorage
 import scala.util._
 import scala.util.control.NoStackTrace
 import io.casperlabs.models.Message
+import io.casperlabs.crypto.hash.Blake2b256
 
 object Genesis {
   import Sorting.byteArrayOrdering
@@ -42,14 +43,17 @@ object Genesis {
       // The results are already going to be committed.
       genesisResult <- ExecutionEngineService[F]
                         .runGenesis(
-                          genesisConfig
+                          RunGenesisRequest()
+                            .withGenesisConfigHash(ProtoUtil.protoHash(genesisConfig))
+                            .withProtocolVersion(genesisConfig.getProtocolVersion)
+                            .withEeConfig(genesisConfig.getEeConfig)
                         )
                         .rethrow
       transforms    = genesisResult.getEffect.transformMap
       postStateHash = genesisResult.poststateHash
 
       // Sorted list of bonded validators.
-      bonds = genesisConfig.accounts
+      bonds = genesisConfig.getEeConfig.accounts
         .sortBy { x =>
           x.publicKey -> x.getBondedAmount.value
         }

@@ -9,10 +9,11 @@ import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.dag.DagOperations
 import io.casperlabs.models.Message
+import io.casperlabs.models.Message.JRank
 import io.casperlabs.storage.dag.{AncestorsStorage, DagRepresentation}
 
 package object finality {
-  type Level = Long
+  type Level = JRank
 
   /**
     * Returns a child of previous LFB that the `message` votes for

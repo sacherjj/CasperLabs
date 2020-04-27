@@ -1,5 +1,6 @@
 package io.casperlabs.casper.finality.votingmatrix
 
+import cats.data.StateT
 import cats.effect.Sync
 import cats.implicits._
 import cats.mtl.FunctorRaise
@@ -7,21 +8,25 @@ import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.consensus.Block
+import io.casperlabs.casper.consensus.Block.MessageType
+import io.casperlabs.casper.consensus.info.Event.Value.{BlockAdded, NewFinalizedBlock}
 import io.casperlabs.casper.equivocations.EquivocationDetector
 import io.casperlabs.casper.finality.CommitteeWithConsensusValue
 import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.helper.BlockUtil.generateValidator
 import io.casperlabs.casper.helper.{BlockGenerator, StorageFixture}
 import io.casperlabs.casper.util.BondingUtil.Bond
+import io.casperlabs.casper.util.EventStreamParser
 import io.casperlabs.casper.{validation, InvalidBlock}
 import io.casperlabs.models.Message
-import io.casperlabs.shared.LogStub
-import io.casperlabs.shared.{Log, Time}
+import io.casperlabs.shared.{FilesAPI, Log, LogStub, Time}
 import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.storage.dag.{AncestorsStorage, DagRepresentation, DagStorage}
 import monix.eval.Task
 import org.scalatest.{FlatSpec, Matchers}
 import io.casperlabs.shared.ByteStringPrettyPrinter._
+import io.casperlabs.storage.SQLiteStorage.CombinedStorage
+import monix.tail.Iterant
 
 import scala.collection.immutable.HashMap
 
@@ -38,13 +43,17 @@ class FinalityDetectorByVotingMatrixTest
   implicit val raiseValidateErr: FunctorRaise[Task, InvalidBlock] =
     validation.raiseValidateErrorThroughApplicativeError[Task]
 
-  def mkVotingMatrix(dag: DagRepresentation[Task], genesis: Block, isHighway: Boolean = false)(
+  def mkVotingMatrix(
+      dag: DagRepresentation[Task],
+      genesisHash: BlockHash,
+      isHighway: Boolean = false
+  )(
       implicit AS: AncestorsStorage[Task]
   ) =
     FinalityDetectorVotingMatrix
       .of[Task](
         dag,
-        genesis.blockHash,
+        genesisHash,
         rFTT = 0.1,
         isHighway
       )
@@ -71,9 +80,12 @@ class FinalityDetectorByVotingMatrixTest
     val bonds  = Seq(v1Bond, v2Bond)
 
     for {
-      genesis                                                 <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bonds)
-      dag                                                     <- storage.getRepresentation
-      implicit0(detector: FinalityDetectorVotingMatrix[Task]) <- mkVotingMatrix(dag, genesis)
+      genesis <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bonds)
+      dag     <- storage.getRepresentation
+      implicit0(detector: FinalityDetectorVotingMatrix[Task]) <- mkVotingMatrix(
+                                                                  dag,
+                                                                  genesis.blockHash
+                                                                )
       (a1, c1) <- createBlockAndUpdateFinalityDetector[Task](
                    Seq(genesis.blockHash),
                    genesis.blockHash,
@@ -128,9 +140,12 @@ class FinalityDetectorByVotingMatrixTest
     val bonds  = Seq(v1Bond, v2Bond)
 
     for {
-      genesis                                                 <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bonds)
-      dag                                                     <- storage.getRepresentation
-      implicit0(detector: FinalityDetectorVotingMatrix[Task]) <- mkVotingMatrix(dag, genesis)
+      genesis <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bonds)
+      dag     <- storage.getRepresentation
+      implicit0(detector: FinalityDetectorVotingMatrix[Task]) <- mkVotingMatrix(
+                                                                  dag,
+                                                                  genesis.blockHash
+                                                                )
       (b1, c1) <- createBlockAndUpdateFinalityDetector[Task](
                    Seq(genesis.blockHash),
                    genesis.blockHash,
@@ -188,9 +203,12 @@ class FinalityDetectorByVotingMatrixTest
       val v1Bond = Bond(v1, 10)
       val bonds  = Seq(v1Bond)
       for {
-        genesis                                                 <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bonds)
-        dag                                                     <- storage.getRepresentation
-        implicit0(detector: FinalityDetectorVotingMatrix[Task]) <- mkVotingMatrix(dag, genesis)
+        genesis <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bonds)
+        dag     <- storage.getRepresentation
+        implicit0(detector: FinalityDetectorVotingMatrix[Task]) <- mkVotingMatrix(
+                                                                    dag,
+                                                                    genesis.blockHash
+                                                                  )
         (b1, c1) <- createBlockAndUpdateFinalityDetector[Task](
                      Seq(genesis.blockHash),
                      genesis.blockHash,
@@ -259,9 +277,12 @@ class FinalityDetectorByVotingMatrixTest
       val v3Bond = Bond(v3, 10)
       val bonds  = Seq(v1Bond, v2Bond, v3Bond)
       for {
-        genesis                                                 <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bonds)
-        dag                                                     <- storage.getRepresentation
-        implicit0(detector: FinalityDetectorVotingMatrix[Task]) <- mkVotingMatrix(dag, genesis)
+        genesis <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bonds)
+        dag     <- storage.getRepresentation
+        implicit0(detector: FinalityDetectorVotingMatrix[Task]) <- mkVotingMatrix(
+                                                                    dag,
+                                                                    genesis.blockHash
+                                                                  )
         (b1, c1) <- createBlockAndUpdateFinalityDetector[Task](
                      Seq(genesis.blockHash),
                      genesis.blockHash,
@@ -339,9 +360,12 @@ class FinalityDetectorByVotingMatrixTest
       val bonds  = Seq(v1Bond, v2Bond, v3Bond)
 
       for {
-        genesis                                                 <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bonds)
-        dag                                                     <- storage.getRepresentation
-        implicit0(detector: FinalityDetectorVotingMatrix[Task]) <- mkVotingMatrix(dag, genesis)
+        genesis <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bonds)
+        dag     <- storage.getRepresentation
+        implicit0(detector: FinalityDetectorVotingMatrix[Task]) <- mkVotingMatrix(
+                                                                    dag,
+                                                                    genesis.blockHash
+                                                                  )
         (b1, c1) <- createBlockAndUpdateFinalityDetector[Task](
                      Seq(genesis.blockHash),
                      genesis.blockHash,
@@ -406,9 +430,12 @@ class FinalityDetectorByVotingMatrixTest
       val bonds  = Seq(v1Bond, v2Bond, v3Bond)
 
       for {
-        genesis                                                 <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bonds)
-        dag                                                     <- storage.getRepresentation
-        implicit0(detector: FinalityDetectorVotingMatrix[Task]) <- mkVotingMatrix(dag, genesis)
+        genesis <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bonds)
+        dag     <- storage.getRepresentation
+        implicit0(detector: FinalityDetectorVotingMatrix[Task]) <- mkVotingMatrix(
+                                                                    dag,
+                                                                    genesis.blockHash
+                                                                  )
         (b1, c1) <- createBlockAndUpdateFinalityDetector[Task](
                      Seq(genesis.blockHash),
                      genesis.blockHash,
@@ -475,9 +502,12 @@ class FinalityDetectorByVotingMatrixTest
       val v3Bond = Bond(v3, 10)
       val bonds  = Seq(v1Bond, v2Bond, v3Bond)
       for {
-        genesis                                                 <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bonds)
-        dag                                                     <- storage.getRepresentation
-        implicit0(detector: FinalityDetectorVotingMatrix[Task]) <- mkVotingMatrix(dag, genesis)
+        genesis <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bonds)
+        dag     <- storage.getRepresentation
+        implicit0(detector: FinalityDetectorVotingMatrix[Task]) <- mkVotingMatrix(
+                                                                    dag,
+                                                                    genesis.blockHash
+                                                                  )
         (b1, c1) <- createBlockAndUpdateFinalityDetector[Task](
                      Seq(genesis.blockHash),
                      genesis.blockHash,
@@ -576,7 +606,7 @@ class FinalityDetectorByVotingMatrixTest
         dag     <- storage.getRepresentation
         implicit0(detector: FinalityDetectorVotingMatrix[Task]) <- mkVotingMatrix(
                                                                     dag,
-                                                                    genesis,
+                                                                    genesis.blockHash,
                                                                     isHighway = true
                                                                   )
         (a0, c1) <- createBlockAndUpdateFinalityDetector[Task](
@@ -615,6 +645,186 @@ class FinalityDetectorByVotingMatrixTest
                    )
         _ = c4 shouldBe empty
       } yield ()
+  }
+
+  // see [casper/src/test/resources/casper/CON-654_testnet_finalizer_bug.jpg]
+  it should "not detect finality when there's none (a test case from the CON-654 bug)" in withCombinedStorage() {
+    implicit storage =>
+      val v1     = generateValidator("V1")
+      val v2     = generateValidator("V2")
+      val v3     = generateValidator("V3")
+      val v4     = generateValidator("V4")
+      val v5     = generateValidator("V5")
+      val v1Bond = Bond(v1, 52)
+      val v2Bond = Bond(v2, 51)
+      val v3Bond = Bond(v3, 50)
+      val v4Bond = Bond(v4, 54)
+      val v5Bond = Bond(v5, 53)
+      val bonds  = Seq(v1Bond, v2Bond, v3Bond, v4Bond, v5Bond)
+      import monix.execution.Scheduler.Implicits.global
+      val genesis = createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bonds).runSyncUnsafe()
+
+      type LFB = Block
+
+      def createAndAdvanceTheLFB(v: Validator, parent: Block, justifications: List[Block])(
+          implicit detector: FinalityDetectorVotingMatrix[Task]
+      ): StateT[Task, LFB, Block] =
+        StateT { lfb =>
+          createBlockAndUpdateFinalityDetector[Task](
+            Seq(parent.blockHash),
+            genesis.blockHash,
+            v,
+            bonds,
+            justifications.map(b => b.getHeader.validatorPublicKey -> b.blockHash).toMap,
+            lfb = lfb
+          ).map {
+            case (block, finalizedBlocks) =>
+              val finalizedBlocksHashes =
+                finalizedBlocks.map(_.consensusValue.show).mkString("[", ", ", "]")
+              assert(
+                finalizedBlocks.isEmpty,
+                s"No blocks should be finalized. ${block.blockHash} finalized $finalizedBlocksHashes."
+              )
+              (lfb, block) //We know that in this specific test LFB should not change
+          }
+        }
+
+      for {
+
+        dag <- storage.getRepresentation
+        implicit0(detector: FinalityDetectorVotingMatrix[Task]) <- mkVotingMatrix(
+                                                                    dag,
+                                                                    genesis.blockHash,
+                                                                    isHighway = true
+                                                                  )
+        test = for {
+          b994 <- createAndAdvanceTheLFB(v3, genesis, List.empty)
+          b707 <- createAndAdvanceTheLFB(v5, genesis, List.empty)
+          b296 <- createAndAdvanceTheLFB(v1, b994, List(b994))
+          bo8a <- createAndAdvanceTheLFB(v1, b994, List(b296, b994))
+          b206 <- createAndAdvanceTheLFB(v3, b994, List(b994))
+          b8a1 <- createAndAdvanceTheLFB(v5, b994, List(b994, b296, b206, b707))
+          bc7e <- createAndAdvanceTheLFB(v1, b994, List(bo8a, b206))
+          bc38 <- createAndAdvanceTheLFB(v3, b994, List(b206))
+          b66a <- createAndAdvanceTheLFB(v1, b994, List(bc7e, b707))
+          bb9b <- createAndAdvanceTheLFB(v4, b707, List(b707))
+          b6e2 <- createAndAdvanceTheLFB(v2, b994, List(bo8a, b206, bb9b))
+          b1ee <- createAndAdvanceTheLFB(v4, b707, List(bb9b, bo8a))
+          b5d6 <- createAndAdvanceTheLFB(v2, b994, List(b6e2, b1ee, b8a1))
+          b7f0 <- createAndAdvanceTheLFB(v5, b994, List(b8a1, bb9b, bc38, bo8a))
+          be2f <- createAndAdvanceTheLFB(v2, b994, List(b5d6, b7f0))
+          b5e4 <- createAndAdvanceTheLFB(v4, b707, List(bc7e, b206, b1ee, b707))
+        } yield ()
+        (lfb, _) <- test.run(genesis)
+        _        = assert(lfb == genesis)
+      } yield ()
+  }
+
+  case class ReplayedDagFixture(
+      genesis: Message,
+      messagesAdded: List[Message],
+      lfbChain: List[BlockHash]
+  )
+
+  implicit def `Message => Block`(m: Message): Block =
+    Block()
+      .withBlockHash(m.messageHash)
+      .withHeader(
+        Block
+          .Header()
+          .withTimestamp(m.timestamp)
+          .withRoundId(m.roundId)
+          .withParentHashes(m.parents)
+          .withKeyBlockHash(m.eraId)
+          .withJRank(m.jRank)
+          .withMainRank(m.mainRank)
+          .withJustifications(m.justifications)
+          .withMessageType {
+            if (m.isBallot) MessageType.BALLOT
+            else MessageType.BLOCK
+          }
+          .withMessageRole(m.messageRole)
+          .withValidatorBlockSeqNum(m.validatorMsgSeqNum)
+          .withValidatorPrevBlockHash(m.validatorPrevMessageHash)
+          .withValidatorPublicKey(m.validatorId)
+          .withState(
+            m.blockSummary.getHeader.getState
+          )
+      )
+
+  def replayedDag(
+      fileName: String
+  )(f: CombinedStorage[Task] => ReplayedDagFixture => Task[Unit]) =
+    withCombinedStorage() { implicit storage =>
+      implicit val filesAPI = FilesAPI.create[Task]
+
+      for {
+        events <- EventStreamParser.fromFile[Task](fileName)
+        (messagesInv, lfbInv) = events
+          .map(_.value)
+          .foldLeft((List.empty[Message], List.empty[BlockHash])) {
+            case ((messages, lfb), m) =>
+              m match {
+                case ba: BlockAdded =>
+                  (Message.fromBlockSummary(ba.value.getBlock.getSummary).get :: messages, lfb)
+                case nf: NewFinalizedBlock => (messages, nf.value.blockHash :: lfb)
+                case _                     => (messages, lfb)
+              }
+          }
+        messages = messagesInv.reverse
+        lfb      = lfbInv.reverse
+        genesis  = messages.head
+        _        <- messages.traverse(m => storage.put(m.messageHash, m, Map.empty))
+        _        <- f(storage)(ReplayedDagFixture(genesis, messages.tail, lfb))
+      } yield ()
+    }
+
+  // see [casper/src/test/resources/casper/CON-654_finalizer_bug_2.jpg]
+  it should "replay history from the file with events" in replayedDag(
+    "/con-654_event_stream.txt"
+  ) { implicit storage => fixture =>
+    val genesis = fixture.genesis
+
+    for {
+      dag <- storage.getRepresentation
+      implicit0(detector: FinalityDetectorVotingMatrix[Task]) <- mkVotingMatrix(
+                                                                  dag,
+                                                                  genesis.messageHash,
+                                                                  isHighway = true
+                                                                )
+
+      // We now that the last block shouldn't be finalized.
+      incorrectLFB = fixture.lfbChain.last
+
+      (lastLfb, _) <- fixture.messagesAdded.foldLeftM((genesis.messageHash, 0)) {
+                       case ((lfbHash, idx), m) =>
+                         for {
+                           _         <- detector.addMessage(dag, m, lfbHash)
+                           finalized <- detector.checkFinality(dag)
+                         } yield finalized match {
+                           case Nil => (lfbHash, idx)
+                           case lfb =>
+                             lfb
+                               .map(_.consensusValue)
+                               .zipWithIndex
+                               .map(tuple => (tuple._1, tuple._2 + idx))
+                               .foreach {
+                                 case (hash, idx) =>
+                                   assert(
+                                     hash == fixture.lfbChain(idx + 1),
+                                     "Finalized different hash than expected."
+                                   )
+                               }
+                             (lfb.last.consensusValue, idx + lfb.size)
+                         }
+                     }
+      _ <- Task(
+            assert(
+              lastLfb != incorrectLFB,
+              s"${incorrectLFB.show} should never be finalized."
+            )
+          )
+    } yield ()
   }
 
   def createBlockAndUpdateFinalityDetector[F[_]: Sync: Time: Log: BlockStorage: DagStorage: FinalityDetectorVotingMatrix: FunctorRaise[

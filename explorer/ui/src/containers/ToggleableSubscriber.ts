@@ -29,12 +29,16 @@ export class ToggleableSubscriber {
     private forceRefresh: () => void
   ) {
     // so that change of subscribeToggleStore can trigger `setUpSubscriber`
-    reaction(() => this.subscribeToggleStore.isPressed && this.additionalEnable(), () => {
-      this.setUpSubscriber();
-    }, {
-      fireImmediately: false,
-      delay: 100
-    });
+    reaction(
+      () => this.subscribeToggleStore.isPressed && this.additionalEnable(),
+      () => {
+        this.setUpSubscriber();
+      },
+      {
+        fireImmediately: false,
+        delay: 100
+      }
+    );
   }
 
   unsubscribe() {
@@ -43,6 +47,15 @@ export class ToggleableSubscriber {
     }
   }
 
+  unsubscribeAndFree() {
+    if (this.subscriberState === SubscribeState.ON) {
+      this.eventsSubscriber!.unsubscribe();
+      // free eventsSubscriber before unmount component
+      // so that when user re-visit the page from other page,
+      // it won't call this.forceRefresh
+      this.eventsSubscriber = null;
+    }
+  }
 
   private get subscriberState(): SubscribeState {
     if (!this.eventsSubscriber) {
@@ -56,7 +69,8 @@ export class ToggleableSubscriber {
 
   @action
   setUpSubscriber() {
-    let subscribeToggleEnabled = this.subscribeToggleStore.isPressed && this.additionalEnable();
+    let subscribeToggleEnabled =
+      this.subscribeToggleStore.isPressed && this.additionalEnable();
     if (subscribeToggleEnabled) {
       // enable subscriber
       const subscriberState = this.subscriberState;

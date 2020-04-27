@@ -1,5 +1,5 @@
 use engine_test_support::{
-    internal::{ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_GENESIS_CONFIG},
+    internal::{ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_RUN_GENESIS_REQUEST},
     DEFAULT_ACCOUNT_ADDR,
 };
 
@@ -15,7 +15,7 @@ fn should_run_ee_549_set_refund_regression() {
     let mut builder = InMemoryWasmTestBuilder::default();
 
     builder
-        .run_genesis(&DEFAULT_GENESIS_CONFIG)
+        .run_genesis(&DEFAULT_RUN_GENESIS_REQUEST)
         .exec(exec_request);
 
     // Execution should encounter an error because set_refund

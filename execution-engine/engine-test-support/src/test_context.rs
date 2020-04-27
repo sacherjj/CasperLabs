@@ -1,11 +1,14 @@
 use num_traits::identities::Zero;
 
-use engine_core::engine_state::genesis::{GenesisAccount, GenesisConfig};
+use engine_core::engine_state::{
+    genesis::{GenesisAccount, GenesisConfig},
+    run_genesis_request::RunGenesisRequest,
+};
 use engine_shared::motes::Motes;
 use types::{AccessRights, Key, URef, U512};
 
 use crate::{
-    internal::{InMemoryWasmTestBuilder, DEFAULT_GENESIS_CONFIG},
+    internal::{InMemoryWasmTestBuilder, DEFAULT_GENESIS_CONFIG, DEFAULT_GENESIS_CONFIG_HASH},
     Error, PublicKey, Result, Session, URefAddr, Value,
 };
 
@@ -68,14 +71,21 @@ impl TestContextBuilder {
     /// Note: `initial_balance` represents the number of motes.
     pub fn with_account(mut self, address: PublicKey, initial_balance: U512) -> Self {
         let new_account = GenesisAccount::new(address, Motes::new(initial_balance), Motes::zero());
-        self.genesis_config.push_account(new_account);
+        self.genesis_config
+            .ee_config_mut()
+            .push_account(new_account);
         self
     }
 
     /// Builds the [`TestContext`].
     pub fn build(self) -> TestContext {
         let mut inner = InMemoryWasmTestBuilder::default();
-        inner.run_genesis(&self.genesis_config);
+        let run_genesis_request = RunGenesisRequest::new(
+            *DEFAULT_GENESIS_CONFIG_HASH,
+            self.genesis_config.protocol_version(),
+            self.genesis_config.take_ee_config(),
+        );
+        inner.run_genesis(&run_genesis_request);
         TestContext { inner }
     }
 }

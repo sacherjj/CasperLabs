@@ -1,6 +1,6 @@
 use engine_test_support::{
     internal::{
-        ExecuteRequestBuilder, InMemoryWasmTestBuilder as TestBuilder, DEFAULT_GENESIS_CONFIG,
+        ExecuteRequestBuilder, InMemoryWasmTestBuilder as TestBuilder, DEFAULT_RUN_GENESIS_REQUEST,
     },
     DEFAULT_ACCOUNT_ADDR,
 };
@@ -22,7 +22,7 @@ struct KeysManagerTest {
 impl KeysManagerTest {
     pub fn new(sender: PublicKey) -> KeysManagerTest {
         let mut builder = TestBuilder::default();
-        builder.run_genesis(&DEFAULT_GENESIS_CONFIG).commit();
+        builder.run_genesis(&DEFAULT_RUN_GENESIS_REQUEST).commit();
         KeysManagerTest { builder, sender }
     }
 

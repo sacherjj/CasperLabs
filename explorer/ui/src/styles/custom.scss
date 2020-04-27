@@ -1,4 +1,7 @@
-@import 'sb-admin/variables.scss';
+$font-family-base: 'Sarabun', sans-serif;
+// https://startbootstrap.com/template-overviews/sb-admin/
+@import 'sb-admin/sb-admin.scss';
+@import "~bootstrap/scss/bootstrap";
 @import 'account-selector';
 @import 'toggle-button';
 
@@ -9,8 +12,12 @@
   }
 }
 
-.navbar-brand img {
-  height: 36px;
+.navbar .navbar-brand {
+  padding-top: 0.8rem;
+  padding-bottom: 0.8rem;
+  img {
+    height: 40px;
+  }
 }
 
 #alert-message {
@@ -81,9 +88,14 @@ div.svg-hint {
   height: 28px;
 }
 
-#mainNav.navbar-dark .navbar-collapse .navbar-sidenav li.active a {
-  color: white !important;
-  background-color: #b70404;
+#mainNav.navbar-dark .navbar-collapse .navbar-sidenav {
+  li.nav-item.active a {
+    color: white !important;
+    background-color: #962521;
+  }
+  li.nav-item:hover{
+    background-color: #E1372D;
+  }
 }
 
 .jumbotron {
@@ -112,4 +124,8 @@ footer.sticky-footer {
 
 .accordion .card-header.collapsed>div:after {
   content: "\f067";
+}
+
+.navbar-nav.ml-auto>.nav-item:last-child{
+  margin-right: 33px!important;
 }

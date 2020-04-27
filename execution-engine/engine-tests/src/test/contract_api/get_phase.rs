@@ -1,6 +1,7 @@
 use engine_test_support::{
     internal::{
-        DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_GENESIS_CONFIG,
+        DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder,
+        DEFAULT_RUN_GENESIS_REQUEST,
     },
     DEFAULT_ACCOUNT_ADDR,
 };
@@ -24,7 +25,7 @@ fn should_run_get_phase_contract() {
     };
 
     InMemoryWasmTestBuilder::default()
-        .run_genesis(&DEFAULT_GENESIS_CONFIG)
+        .run_genesis(&DEFAULT_RUN_GENESIS_REQUEST)
         .exec(exec_request)
         .commit()
         .expect_success();

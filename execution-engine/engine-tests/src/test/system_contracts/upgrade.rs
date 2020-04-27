@@ -3,7 +3,7 @@ use engine_grpc_server::engine_server::ipc::DeployCode;
 #[cfg(feature = "use-system-contracts")]
 use engine_shared::{stored_value::StoredValue, transform::Transform};
 use engine_test_support::internal::{
-    utils, InMemoryWasmTestBuilder, UpgradeRequestBuilder, DEFAULT_GENESIS_CONFIG,
+    utils, InMemoryWasmTestBuilder, UpgradeRequestBuilder, DEFAULT_RUN_GENESIS_REQUEST,
     DEFAULT_WASM_COSTS,
 };
 #[cfg(feature = "use-system-contracts")]
@@ -41,7 +41,7 @@ fn get_upgraded_wasm_costs() -> WasmCosts {
 fn should_upgrade_only_protocol_version() {
     let mut builder = InMemoryWasmTestBuilder::default();
 
-    builder.run_genesis(&*DEFAULT_GENESIS_CONFIG);
+    builder.run_genesis(&DEFAULT_RUN_GENESIS_REQUEST);
 
     let sem_ver = PROTOCOL_VERSION.value();
     let new_protocol_version =
@@ -83,7 +83,7 @@ fn should_upgrade_system_contract() {
 
     let new_protocol_version = ProtocolVersion::from_parts(2, 0, 0);
 
-    builder.run_genesis(&*DEFAULT_GENESIS_CONFIG);
+    builder.run_genesis(&DEFAULT_RUN_GENESIS_REQUEST);
 
     let mut upgrade_request = {
         let bytes = utils::read_wasm_file_bytes(MODIFIED_SYSTEM_UPGRADER_CONTRACT_NAME);
@@ -162,7 +162,7 @@ fn should_upgrade_system_contract_on_patch_bump() {
     let new_protocol_version =
         ProtocolVersion::from_parts(sem_ver.major, sem_ver.minor, sem_ver.patch + 123);
 
-    builder.run_genesis(&*DEFAULT_GENESIS_CONFIG);
+    builder.run_genesis(&DEFAULT_RUN_GENESIS_REQUEST);
 
     let mut upgrade_request = {
         let bytes = utils::read_wasm_file_bytes(MODIFIED_SYSTEM_UPGRADER_CONTRACT_NAME);
@@ -241,7 +241,7 @@ fn should_upgrade_system_contract_on_minor_bump() {
     let new_protocol_version =
         ProtocolVersion::from_parts(sem_ver.major, sem_ver.minor + 1, sem_ver.patch);
 
-    builder.run_genesis(&*DEFAULT_GENESIS_CONFIG);
+    builder.run_genesis(&DEFAULT_RUN_GENESIS_REQUEST);
 
     let mut upgrade_request = {
         let bytes = utils::read_wasm_file_bytes(MODIFIED_SYSTEM_UPGRADER_CONTRACT_NAME);
@@ -314,7 +314,7 @@ fn should_upgrade_system_contract_on_minor_bump() {
 fn should_allow_only_wasm_costs_patch_version() {
     let mut builder = InMemoryWasmTestBuilder::default();
 
-    builder.run_genesis(&*DEFAULT_GENESIS_CONFIG);
+    builder.run_genesis(&DEFAULT_RUN_GENESIS_REQUEST);
 
     let sem_ver = PROTOCOL_VERSION.value();
     let new_protocol_version =
@@ -356,7 +356,7 @@ fn should_allow_only_wasm_costs_patch_version() {
 fn should_allow_only_wasm_costs_minor_version() {
     let mut builder = InMemoryWasmTestBuilder::default();
 
-    builder.run_genesis(&*DEFAULT_GENESIS_CONFIG);
+    builder.run_genesis(&DEFAULT_RUN_GENESIS_REQUEST);
 
     let sem_ver = PROTOCOL_VERSION.value();
     let new_protocol_version =
@@ -403,7 +403,7 @@ fn should_allow_only_wasm_costs_minor_version() {
 fn should_upgrade_system_contract_and_wasm_costs_major() {
     let mut builder = InMemoryWasmTestBuilder::default();
 
-    builder.run_genesis(&*DEFAULT_GENESIS_CONFIG);
+    builder.run_genesis(&DEFAULT_RUN_GENESIS_REQUEST);
 
     let new_protocol_version = ProtocolVersion::from_parts(2, 0, 0);
 
@@ -489,7 +489,7 @@ fn should_upgrade_system_contract_and_wasm_costs_major() {
 fn should_not_downgrade() {
     let mut builder = InMemoryWasmTestBuilder::default();
 
-    builder.run_genesis(&*DEFAULT_GENESIS_CONFIG);
+    builder.run_genesis(&DEFAULT_RUN_GENESIS_REQUEST);
 
     let new_protocol_version = ProtocolVersion::from_parts(2, 0, 0);
 
@@ -546,7 +546,7 @@ fn should_not_downgrade() {
 fn should_not_skip_major_versions() {
     let mut builder = InMemoryWasmTestBuilder::default();
 
-    builder.run_genesis(&*DEFAULT_GENESIS_CONFIG);
+    builder.run_genesis(&DEFAULT_RUN_GENESIS_REQUEST);
 
     let sem_ver = PROTOCOL_VERSION.value();
 
@@ -575,7 +575,7 @@ fn should_not_skip_major_versions() {
 fn should_not_skip_minor_versions() {
     let mut builder = InMemoryWasmTestBuilder::default();
 
-    builder.run_genesis(&*DEFAULT_GENESIS_CONFIG);
+    builder.run_genesis(&DEFAULT_RUN_GENESIS_REQUEST);
 
     let sem_ver = PROTOCOL_VERSION.value();
 
@@ -604,7 +604,7 @@ fn should_not_skip_minor_versions() {
 fn should_fail_major_upgrade_without_installer() {
     let mut builder = InMemoryWasmTestBuilder::default();
 
-    builder.run_genesis(&*DEFAULT_GENESIS_CONFIG);
+    builder.run_genesis(&DEFAULT_RUN_GENESIS_REQUEST);
 
     let sem_ver = PROTOCOL_VERSION.value();
 

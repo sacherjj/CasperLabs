@@ -8,6 +8,7 @@ pub mod execution_result;
 pub mod genesis;
 pub mod op;
 pub mod query;
+pub mod run_genesis_request;
 pub mod system_contract_cache;
 pub mod upgrade;
 pub mod utils;
@@ -59,13 +60,13 @@ use crate::{
         execute_request::ExecuteRequest,
         execution_result::{ExecutionResult, ForcedTransferResult},
         genesis::{
-            GenesisAccount, GenesisConfig, GenesisResult, POS_PAYMENT_PURSE, POS_REWARDS_PURSE,
+            ExecConfig, GenesisAccount, GenesisResult, POS_PAYMENT_PURSE, POS_REWARDS_PURSE,
         },
         query::{QueryRequest, QueryResult},
         system_contract_cache::SystemContractCache,
         upgrade::{UpgradeConfig, UpgradeResult},
     },
-    execution::{self, AddressGenerator, Executor, MINT_NAME, POS_NAME},
+    execution::{self, AddressGenerator, AddressGeneratorBuilder, Executor, MINT_NAME, POS_NAME},
     tracking_copy::{TrackingCopy, TrackingCopyExt},
     KnownKeys,
 };
@@ -148,7 +149,9 @@ where
     pub fn commit_genesis(
         &self,
         correlation_id: CorrelationId,
-        genesis_config: GenesisConfig,
+        genesis_config_hash: Blake2bHash,
+        protocol_version: ProtocolVersion,
+        ee_config: &ExecConfig,
     ) -> Result<GenesisResult, Error> {
         // Preliminaries
         let executor = Executor::new(self.config);
@@ -158,8 +161,7 @@ where
 
         let initial_base_key = Key::Account(SYSTEM_ACCOUNT_ADDR);
         let initial_root_hash = self.state.empty_root();
-        let protocol_version = genesis_config.protocol_version();
-        let wasm_costs = genesis_config.wasm_costs();
+        let wasm_costs = ee_config.wasm_costs();
         let preprocessor = Preprocessor::new(wasm_costs);
 
         // Spec #3: Create "virtual system account" object.
@@ -187,38 +189,22 @@ where
         tracking_copy.borrow_mut().write(key, value);
 
         // Spec #4A: random number generator is seeded from the hash of GenesisConfig.name
-        // concatenated with GenesisConfig.timestamp (aka "deploy hash").
-        //
-        // @birchmd adds: "Probably we will want to include the hash of the cost table in there
-        // as well actually. Otherwise it has no direct effect on the genesis post
-        // state hash either."
-        let install_deploy_hash = {
-            let name: &[u8] = genesis_config.name().as_bytes();
-            let timestamp: &[u8] = &genesis_config.timestamp().to_le_bytes();
-            let wasm_costs_bytes: &[u8] = &wasm_costs.into_bytes()?;
-            let bytes: Vec<u8> = {
-                let mut ret = Vec::new();
-                ret.extend_from_slice(name);
-                ret.extend_from_slice(timestamp);
-                ret.extend_from_slice(wasm_costs_bytes);
-                ret
-            };
-            Blake2bHash::new(&bytes)
-        };
+        // Updated: random number generator is seeded from genesis_config_hash from the RunGenesis
+        // RPC call
 
         let address_generator = {
-            let generator = AddressGenerator::new(&install_deploy_hash.value(), phase);
+            let generator = AddressGenerator::new(&genesis_config_hash.value(), phase);
             Rc::new(RefCell::new(generator))
         };
 
         // Spec #5: Execute the wasm code from the mint installer bytes
         let mint_reference: URef = {
-            let mint_installer_bytes = genesis_config.mint_installer_bytes();
+            let mint_installer_bytes = ee_config.mint_installer_bytes();
             let mint_installer_module = preprocessor.preprocess(mint_installer_bytes)?;
             let args = RuntimeArgs::new();
             let mut named_keys = BTreeMap::new();
             let authorization_keys: BTreeSet<PublicKey> = BTreeSet::new();
-            let install_deploy_hash = install_deploy_hash.into();
+            let install_deploy_hash = genesis_config_hash.into();
             let address_generator = Rc::clone(&address_generator);
             let tracking_copy = Rc::clone(&tracking_copy);
             let system_contract_cache = SystemContractCache::clone(&self.system_contract_cache);
@@ -248,21 +234,21 @@ where
         let proof_of_stake_reference: URef = {
             // Spec #6: Compute initially bonded validators as the contents of accounts_path
             // filtered to non-zero staked amounts.
-            let bonded_validators: BTreeMap<PublicKey, U512> = genesis_config
+            let bonded_validators: BTreeMap<PublicKey, U512> = ee_config
                 .get_bonded_validators()
                 .map(|(k, v)| (k, v.value()))
                 .collect();
 
             let tracking_copy = Rc::clone(&tracking_copy);
             let address_generator = Rc::clone(&address_generator);
-            let install_deploy_hash = install_deploy_hash.into();
+            let install_deploy_hash = genesis_config_hash.into();
             let system_contract_cache = SystemContractCache::clone(&self.system_contract_cache);
 
             // Constructs a partial protocol data with already known uref to pass the validation
             // step
             let partial_protocol_data = ProtocolData::partial_with_mint(mint_reference);
 
-            let proof_of_stake_installer_bytes = genesis_config.proof_of_stake_installer_bytes();
+            let proof_of_stake_installer_bytes = ee_config.proof_of_stake_installer_bytes();
             let proof_of_stake_installer_module =
                 preprocessor.preprocess(proof_of_stake_installer_bytes)?;
             let args = {
@@ -306,14 +292,14 @@ where
 
         let standard_payment_reference: URef = {
             let standard_payment_installer_bytes =
-                if genesis_config.standard_payment_installer_bytes().is_empty() {
+                if ee_config.standard_payment_installer_bytes().is_empty() {
                     // TODO - remove this once Node has been updated to pass the required bytes
                     include_bytes!(concat!(
                         env!("CARGO_MANIFEST_DIR"),
                         "/wasm/standard_payment_install.wasm"
                     ))
                 } else {
-                    genesis_config.standard_payment_installer_bytes()
+                    ee_config.standard_payment_installer_bytes()
                 };
 
             let standard_payment_installer_module =
@@ -321,7 +307,7 @@ where
             let args = RuntimeArgs::new();
             let mut named_keys = BTreeMap::new();
             let authorization_keys = BTreeSet::new();
-            let install_deploy_hash = install_deploy_hash.into();
+            let install_deploy_hash = genesis_config_hash.into();
             let address_generator = Rc::clone(&address_generator);
             let tracking_copy = Rc::clone(&tracking_copy);
             let system_contract_cache = SystemContractCache::clone(&self.system_contract_cache);
@@ -394,7 +380,7 @@ where
             // Collect chainspec accounts and their known keys with the genesis account and its
             // known keys
             let accounts = {
-                let mut ret: Vec<(GenesisAccount, KnownKeys)> = genesis_config
+                let mut ret: Vec<(GenesisAccount, KnownKeys)> = ee_config
                     .accounts()
                     .to_vec()
                     .into_iter()
@@ -435,7 +421,11 @@ where
                 // returns raw bytes of it
                 let purse_creation_deploy_hash = account_public_key.value();
                 let address_generator = {
-                    let generator = AddressGenerator::new(&account_public_key.to_bytes()?, phase);
+                    let generator = AddressGeneratorBuilder::new()
+                        .seed_with(&genesis_config_hash.value())
+                        .seed_with(&account_public_key.to_bytes()?)
+                        .seed_with(&[phase as u8])
+                        .build();
                     Rc::new(RefCell::new(generator))
                 };
                 let system_contract_cache = SystemContractCache::clone(&self.system_contract_cache);
@@ -483,7 +473,6 @@ where
                 tracking_copy_write.borrow_mut().write(key, value);
             }
         }
-
         // Spec #15: Commit the transforms.
         let effects = tracking_copy.borrow().effect();
 

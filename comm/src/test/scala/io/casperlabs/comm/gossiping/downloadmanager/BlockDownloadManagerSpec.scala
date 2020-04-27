@@ -6,14 +6,13 @@ import cats.effect.concurrent.Semaphore
 import cats.implicits._
 import com.google.protobuf.ByteString
 import eu.timepit.refined.auto._
-import io.casperlabs.casper.consensus.{Approval, Block, BlockSummary, DeploySummary}
+import io.casperlabs.casper.consensus.{Block, BlockSummary, Deploy}
 import io.casperlabs.comm.GossipError
 import io.casperlabs.comm.discovery.Node
 import io.casperlabs.comm.discovery.NodeUtils.showNode
+import io.casperlabs.comm.gossiping._
 import io.casperlabs.comm.gossiping.downloadmanager.BlockDownloadManagerImpl._
 import io.casperlabs.comm.gossiping.relaying.BlockRelaying
-import io.casperlabs.comm.gossiping.synchronization.Synchronizer
-import io.casperlabs.comm.gossiping._
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.models.BlockImplicits.BlockOps
 import io.casperlabs.shared.{Log, LogStub}
@@ -104,9 +103,9 @@ class BlockDownloadManagerSpec
           MockGossipService(
             dag,
             // Delay just the genesis block a little so we can schedule everything before the first download finishes.
-            regetter = _ flatMap {
+            alterBlock = _ flatMap {
               case Some(block) if block == dag.head =>
-                Task.pure(Some(block)).delayResult(250.millis)
+                Task.pure(Some(block)).delayResult(500.millis)
               case other => Task.pure(other)
             }
           ),
@@ -128,6 +127,71 @@ class BlockDownloadManagerSpec
           }
       }
 
+      "only download missing deploys" in {
+        // Say we already have the first deploy of each block.
+        val deployMap: Map[ByteString, Deploy] = (for {
+          block  <- dag
+          deploy <- block.getBody.deploys.take(1).map(_.getDeploy)
+        } yield (deploy.deployHash -> deploy)).toMap
+
+        @volatile var fetchedDeploys = Set.empty[ByteString]
+
+        TestFixture(
+          backend = new MockBackend() {
+            override def readDeploys(deployHashes: Seq[ByteString]) = Task.delay {
+              deployHashes.flatMap(deployMap.get).toList
+            }
+          },
+          remote = _ =>
+            MockGossipService(
+              dag,
+              interceptGetBlock = (_, deployBodiesExcluded) =>
+                assert(deployBodiesExcluded, "Should not ask for full blocks."),
+              interceptGetDeploys = deployHashes =>
+                synchronized {
+                  fetchedDeploys = fetchedDeploys union deployHashes
+                  assert(
+                    deployHashes.forall(h => !deployMap.contains(h)),
+                    "Should not ask for existing deploys."
+                  )
+                }
+            )
+        ) {
+          case (manager, backend) =>
+            for {
+              watches <- scheduleAll(manager)
+              _       <- awaitAll(watches)
+            } yield {
+              fetchedDeploys should not be empty
+              // Since the mock is returning partial blocks, and we verified the manager is asking for
+              // partial blocks, the only way it could have downloaded and restored all the blocks
+              // is if it asked for all the deploys as well.
+              backend.fullBlocks should contain theSameElementsAs dag
+            }
+        }
+      }
+
+      "reject download if there are duplicate deploys" in {
+        TestFixture(
+          remote = _ =>
+            MockGossipService(
+              dag,
+              alterDeployChunks = chunks => chunks ++ chunks
+            )
+        ) {
+          case (manager, _) =>
+            for {
+              watch  <- manager.scheduleDownload(summaryOf(dag.head), source, false)
+              result <- watch.attempt
+            } yield {
+              result match {
+                case Left(ex) => ex.getMessage shouldBe "Duplicate deploy in stream."
+                case Right(_) => fail("Should have failed with duplicate deploy.")
+              }
+            }
+        }
+      }
+
       def checkParallel(maxParallelDownloads: Int)(test: Int => Unit): Unit = {
         val parallelNow = new AtomicInteger(0)
         val parallelMax = new AtomicInteger(0)
@@ -135,11 +199,11 @@ class BlockDownloadManagerSpec
           remote = _ =>
             MockGossipService(
               dag,
-              regetter = task => {
+              alterBlock = task => {
                 // Draw it out a little bit so it can start multiple downloads.
                 Task.delay(parallelNow.incrementAndGet()) *> task.delayResult(100.millis)
               },
-              rechunker = _.map { chunk =>
+              alterBlockChunks = _.map { chunk =>
                 parallelMax.set(math.max(parallelNow.get, parallelMax.get))
                 chunk
               }
@@ -213,7 +277,7 @@ class BlockDownloadManagerSpec
     "scheduled to download a block which is already downloading" should {
       val block = arbitrary[Block].sample.map(withoutDependencies(_)).get
       // Delay a little so it can start two downloads if it's buggy.
-      val remote = MockGossipService(Seq(block), regetter = _.delayResult(100.millis))
+      val remote = MockGossipService(Seq(block), alterBlock = _.delayResult(100.millis))
 
       "not download twice" in TestFixture(remote = _ => remote) {
         case (manager, backend) =>
@@ -239,7 +303,7 @@ class BlockDownloadManagerSpec
         val remote =
           MockGossipService(
             Seq(block),
-            regetter = { get =>
+            alterBlock = { get =>
               for {
                 _ <- Task.delay({ started = true })
                 _ <- Task.sleep(1.second)
@@ -253,6 +317,7 @@ class BlockDownloadManagerSpec
         val test = for {
           alloc <- BlockDownloadManagerImpl[Task](
                     maxParallelDownloads = 1,
+                    partialBlocksEnabled = true,
                     connectToGossip = _ => remote,
                     backend = backend,
                     relaying = MockRelaying.default,
@@ -272,7 +337,7 @@ class BlockDownloadManagerSpec
           r.left.get shouldBe a[TimeoutException]
           started shouldBe true
           finished shouldBe false
-          backend.summaries should not contain (block.blockHash)
+          backend.blocks should not contain (block.blockHash)
         }
 
         test.runSyncUnsafe(5.seconds)
@@ -282,6 +347,7 @@ class BlockDownloadManagerSpec
         val test = for {
           alloc <- BlockDownloadManagerImpl[Task](
                     maxParallelDownloads = 1,
+                    partialBlocksEnabled = true,
                     connectToGossip = _ => MockGossipService(),
                     backend = MockBackend(),
                     relaying = MockRelaying.default,
@@ -310,7 +376,7 @@ class BlockDownloadManagerSpec
           case `nodeA` =>
             MockGossipService(
               Seq(block),
-              regetter = _.delayResult(100.millis) *> Task.raiseError(
+              alterBlock = _.delayResult(100.millis) *> Task.raiseError(
                 new Exception("Node A is dying!")
               )
             )
@@ -360,10 +426,6 @@ class BlockDownloadManagerSpec
 
       "store the block" in TestFixture(backend, _ => remote) {
         check(_.blocks should contain(block.blockHash))
-      }
-
-      "store the block summary" in TestFixture(backend, _ => remote) {
-        check(_.summaries should contain(block.blockHash))
       }
     }
 
@@ -557,7 +619,7 @@ class BlockDownloadManagerSpec
         }
 
       def withRechunking(f: Iterant[Task, Chunk] => Iterant[Task, Chunk]) = { _: Node =>
-        MockGossipService(Seq(block), rechunker = f)
+        MockGossipService(Seq(block), alterBlockChunks = f)
       }
 
       def rewriteHeader(
@@ -655,6 +717,7 @@ object BlockDownloadManagerSpec {
 
       val managerR = BlockDownloadManagerImpl[Task](
         maxParallelDownloads = maxParallelDownloads,
+        partialBlocksEnabled = true,
         connectToGossip = remote(_),
         backend = backend,
         relaying = relaying,
@@ -674,10 +737,10 @@ object BlockDownloadManagerSpec {
       extends BlockDownloadManagerImpl.Backend[Task] {
     // Record what we have been called with.
     @volatile var validations = Vector.empty[ByteString]
-    @volatile var blocks      = Vector.empty[ByteString]
-    @volatile var summaries   = Vector.empty[ByteString]
     @volatile var scheduled   = Vector.empty[ByteString]
     @volatile var downloaded  = Vector.empty[ByteString]
+    @volatile var blocks      = Vector.empty[ByteString]
+    @volatile var fullBlocks  = Vector.empty[Block]
 
     def contains(blockHash: ByteString): Task[Boolean] =
       Task.now(blocks.contains(blockHash))
@@ -690,7 +753,7 @@ object BlockDownloadManagerSpec {
     def store(block: Block): Task[Unit] = Task.delay {
       synchronized {
         blocks = blocks :+ block.blockHash
-        summaries = summaries :+ block.blockHash
+        fullBlocks = fullBlocks :+ block
       }
     }
 
@@ -705,6 +768,8 @@ object BlockDownloadManagerSpec {
     }
 
     def onFailed(blockHash: ByteString): Task[Unit] = Task.unit
+
+    def readDeploys(deployHashes: Seq[ByteString]): Task[List[Deploy]] = Task.pure(Nil)
   }
   object MockBackend {
     def default                                               = apply()
@@ -738,6 +803,8 @@ object BlockDownloadManagerSpec {
         backend = new NoOpsGossipServiceServerBackend[Task] {
           override def getBlock(blockHash: ByteString, deploysBodiesExcluded: Boolean) =
             Task.now(None)
+
+          override def getDeploys(deployHashes: Set[ByteString]) = Iterant.empty[Task, Deploy]
         },
         synchronizer = emptySynchronizer,
         connector = _ => ???,
@@ -745,16 +812,20 @@ object BlockDownloadManagerSpec {
         blockDownloadManager = emptyBlockDownloadManager,
         genesisApprover = emptyGenesisApprover,
         maxChunkSize = 100 * 1024,
-        maxParallelBlockDownloads = 100
+        maxParallelBlockDownloads = 100,
+        deployGossipEnabled = false
       )
     }
 
     def apply(
         blocks: Seq[Block] = Seq.empty,
-        // Pass in a `rechunker` method to alter the stream of block chunks returned by `getBlockChunked`.
-        rechunker: Iterant[Task, Chunk] => Iterant[Task, Chunk] = identity,
-        // Pass in a `regetter` method to alter the behaviour of the `getBlock`, for example to add delays.
-        regetter: Task[Option[Block]] => Task[Option[Block]] = identity
+        // Pass in a `alterBlockChunks` method to alter the stream of block chunks returned by `getBlockChunked`.
+        alterBlockChunks: Iterant[Task, Chunk] => Iterant[Task, Chunk] = identity,
+        alterDeployChunks: Iterant[Task, Chunk] => Iterant[Task, Chunk] = identity,
+        // Pass in a `alterBlock` method to alter the behaviour of the `getBlock`, for example to add delays.
+        alterBlock: Task[Option[Block]] => Task[Option[Block]] = identity,
+        interceptGetBlock: (ByteString, Boolean) => Unit = (_, _) => (),
+        interceptGetDeploys: (Set[ByteString]) => Unit = _ => ()
     )(implicit log: Log[Task]) =
       for {
         blockMap  <- Task.now(toBlockMap(blocks))
@@ -764,14 +835,24 @@ object BlockDownloadManagerSpec {
         new GossipServiceServer[Task](
           backend = new NoOpsGossipServiceServerBackend[Task] {
             override def getBlock(blockHash: ByteString, deploysBodiesExcluded: Boolean) =
-              regetter(Task.delay(blockMap.get(blockHash).map { block =>
-                if (deploysBodiesExcluded) {
-                  block.clearDeployBodies
-                } else {
-                  block
-                }
-              }))
+              Task.delay(interceptGetBlock(blockHash, deploysBodiesExcluded)) *>
+                alterBlock(Task.delay(blockMap.get(blockHash).map { block =>
+                  if (deploysBodiesExcluded) {
+                    block.clearDeployBodies
+                  } else {
+                    block
+                  }
+                }))
 
+            override def getDeploys(deployHashes: Set[ByteString]) =
+              Iterant.pure(interceptGetDeploys(deployHashes)).flatMap { _ =>
+                Iterant.fromIterable(
+                  blocks
+                    .flatMap(_.getBody.deploys.map(_.getDeploy))
+                    .toSet
+                    .filter(d => deployHashes(d.deployHash))
+                )
+              }
           },
           synchronizer = emptySynchronizer,
           connector = _ => ???,
@@ -779,10 +860,14 @@ object BlockDownloadManagerSpec {
           blockDownloadManager = emptyBlockDownloadManager,
           genesisApprover = emptyGenesisApprover,
           maxChunkSize = 100 * 1024,
+          deployGossipEnabled = false,
           blockDownloadSemaphore = semaphore
         ) {
           override def getBlockChunked(request: GetBlockChunkedRequest) =
-            rechunker(super.getBlockChunked(request))
+            alterBlockChunks(super.getBlockChunked(request))
+
+          override def streamDeploysChunked(request: StreamDeploysChunkedRequest) =
+            alterDeployChunks(super.streamDeploysChunked(request))
         }
       }
   }

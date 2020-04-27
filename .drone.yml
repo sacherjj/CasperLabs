@@ -856,7 +856,7 @@ trigger:
   - "testing*"
   - trying
   - staging
-  - NODE-659-rdbms-epic # temporary, remove after NODE-659-rdbms-epic merged to dev
+  - "feature-*"
 
 ---
 kind: pipeline
@@ -894,6 +894,7 @@ trigger:
   - "testing*"
   - trying
   - staging
+  - "feature-*"
 
 depends_on:
 - build-bors-merge
@@ -958,6 +959,7 @@ trigger:
   - "testing*"
   - trying
   - staging
+  - "feature-*"
 
 depends_on:
 - build-bors-merge
@@ -1016,12 +1018,8 @@ steps:
   - "pipenv run python3 setup.py sdist"
   - "cp dist/casperlabs* ../../../artifacts/${DRONE_BRANCH}"
   when:
-    branch:
-    - dev
-    - release-*
-    - master
-    event:
-    - push
+    ref:
+    - refs/tags/v*
   depends_on:
     - package-ee-tag
 
@@ -1097,8 +1095,26 @@ steps:
   - rsync-mac-tarball-tag
   - package-python-client-tag
 
+- name: pypi-publish
+  image: tvasile1012/pypi:latest
+  failure: "ignore"
+  settings:
+    username:
+      from_secret: pypi_user
+    password:
+      from_secret: pypi_pass
+    setupfile: "integration-testing/client/CasperLabsClient/setup.py"
+    dist_dir: "integration-testing/client/CasperLabsClient/dist/"
+    skip_build: true
+  when:
+    ref:
+    - refs/tags/v*
+  depends_on:
+  - github_publish_release_artifacts
+
 - name: npm-publish
   image: plugins/npm
+  failure: "ignore"
   settings:
     username:
       from_secret: npm_user

@@ -39,6 +39,7 @@ import monix.execution.Scheduler
 import org.scalatest.{FlatSpec, Inspectors, Matchers}
 import io.casperlabs.casper.helper.DeployOps._
 import io.casperlabs.comm.ServiceError.OutOfRange
+import io.casperlabs.comm.gossiping.relaying.NoOpsDeployRelaying
 import io.casperlabs.shared.LogStub
 
 import scala.concurrent.duration._
@@ -55,10 +56,11 @@ class CreateBlockAPITest
   implicit val metrics              = new Metrics.MetricsNOP[Task]
   implicit val raiseValidateErr =
     casper.validation.raiseValidateErrorThroughApplicativeError[Task]
-  implicit val logEff        = LogStub[Task]()
-  implicit val broadcaster   = Broadcaster.noop[Task]
-  implicit val eventEmitter  = NoOpsEventEmitter.create[Task]
-  implicit val validationEff = new NCBValidationImpl[Task]
+  implicit val logEff         = LogStub[Task]()
+  implicit val broadcaster    = Broadcaster.noop[Task]
+  implicit val eventEmitter   = NoOpsEventEmitter.create[Task]
+  implicit val validationEff  = new NCBValidationImpl[Task]
+  implicit val deployRelaying = new NoOpsDeployRelaying[Task]
 
   private val (validatorKeys, validators)             = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
   private val bonds                                   = createBonds(validators)

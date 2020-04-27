@@ -61,8 +61,8 @@ fn should_not_be_able_to_unbond_reward() {
         tmp
     };
 
-    let genesis_config = utils::create_genesis_config(accounts);
-    builder.run_genesis(&genesis_config);
+    let run_genesis_request = utils::create_run_genesis_request(accounts);
+    builder.run_genesis(&run_genesis_request);
 
     // First request to put some funds in the reward purse
     let exec_request_0 =

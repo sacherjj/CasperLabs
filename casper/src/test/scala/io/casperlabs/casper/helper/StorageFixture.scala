@@ -39,15 +39,11 @@ trait StorageFixture { self: Suite =>
 
   /** Create a number of in-memory storages and run a test against them. */
   def withCombinedStorages(
-      ec: Scheduler = scheduler,
       timeout: FiniteDuration = 10.seconds,
       numStorages: Int = 1
   )(f: List[SQLiteStorage.CombinedStorage[Task]] => Task[_]): Unit = {
-    // NOTE: When using the TestScheduler, we have to pass it as `ec` so that
-    // the transactors use the same execution as the one we're exercising in
-    // the test. Otherwise the tests will wait on the SQL queries until they time out.
     val testProgram = StorageFixture
-      .createMemoryStorage[Task](ec)
+      .createMemoryStorage[Task]()
       .replicateA(numStorages)
       .use { storages =>
         f(storages).recover {
@@ -65,10 +61,9 @@ trait StorageFixture { self: Suite =>
   }
 
   def withCombinedStorage(
-      ec: Scheduler = scheduler,
       timeout: FiniteDuration = 10.seconds
   )(f: SQLiteStorage.CombinedStorage[Task] => Task[_]): Unit =
-    withCombinedStorages(ec, timeout, numStorages = 1)(dbs => f(dbs.head))
+    withCombinedStorages(timeout, numStorages = 1)(dbs => f(dbs.head))
 
 }
 
@@ -86,48 +81,44 @@ object StorageFixture {
   // The HashSetCasperTests are not closing the connections properly, so we are better off
   // storing data in temporary files, rather than fill up the memory with unclosed databases.
   def createFileStorages[F[_]: Metrics: Concurrent: ContextShift: Fs2Compiler: Time](
-      connectEC: ExecutionContext = Scheduler.Implicits.global
-  ): F[Storages[F]] = {
+      ): F[Storages[F]] = {
     val createDbFile = Concurrent[F].delay(Files.createTempFile("casperlabs-storages-test-", ".db"))
 
     for {
       db       <- createDbFile
       ds       = new org.sqlite.SQLiteDataSource()
       _        = ds.setUrl(s"jdbc:sqlite:$db")
-      storages <- createStorages[F](ds, connectEC)
+      storages <- createStorages[F](ds)
     } yield storages
   }
 
   // Tests using in-memory storage are faster.
-  def createMemoryStorages[F[_]: Metrics: Concurrent: ContextShift: Fs2Compiler: Time](
-      connectEC: ExecutionContext = Scheduler.Implicits.global
-  ): Resource[F, Storages[F]] =
+  def createMemoryStorages[F[_]: Metrics: Concurrent: ContextShift: Fs2Compiler: Time]()
+      : Resource[F, Storages[F]] =
     for {
       ds       <- inMemoryDataSource
-      storages <- Resource.liftF(createStorages[F](ds, connectEC))
+      storages <- Resource.liftF(createStorages[F](ds))
     } yield storages
 
-  def createMemoryStorage[F[_]: Metrics: Concurrent: ContextShift: Fs2Compiler: Time](
-      connectEC: ExecutionContext = Scheduler.Implicits.global
-  ): Resource[F, SQLiteStorage.CombinedStorage[F]] =
+  def createMemoryStorage[F[_]: Metrics: Concurrent: ContextShift: Fs2Compiler: Time]()
+      : Resource[F, SQLiteStorage.CombinedStorage[F]] =
     for {
       ds <- inMemoryDataSource
       storage <- Resource.liftF {
                   for {
                     _       <- initTables(ds)
-                    xa      = createTransactor(ds, connectEC)
+                    xa      = createTransactor(ds)
                     storage <- SQLiteStorage.create[F](readXa = xa, writeXa = xa)
                   } yield storage
                 }
     } yield storage
 
   private def createStorages[F[_]: Metrics: Concurrent: ContextShift: Fs2Compiler: Time](
-      ds: DataSource,
-      connectEC: ExecutionContext
+      ds: DataSource
   ): F[Storages[F]] =
     for {
       _       <- initTables(ds)
-      xa      = createTransactor(ds, connectEC)
+      xa      = createTransactor(ds)
       storage <- SQLiteStorage.create[F](readXa = xa, writeXa = xa)
     } yield (storage, storage, storage, storage, storage)
 
@@ -144,9 +135,13 @@ object StorageFixture {
       flyway.migrate()
     }.void
 
-  private def createTransactor[F[_]: Async: ContextShift](ds: DataSource, ec: ExecutionContext) =
+  private def createTransactor[F[_]: Async: ContextShift](ds: DataSource) =
     Transactor
-      .fromDataSource[F](ds, ec, Blocker.liftExecutionContext(ExecutionContexts.synchronous))
+      .fromDataSource[F](
+        ds,
+        ExecutionContexts.synchronous,
+        Blocker.liftExecutionContext(ExecutionContexts.synchronous)
+      )
 
   private def inMemoryDataSource[F[_]: Concurrent] =
     Resource[F, DataSource] {

@@ -1,7 +1,7 @@
 use engine_test_support::{
     internal::{
-        DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_GENESIS_CONFIG,
-        DEFAULT_PAYMENT, STANDARD_PAYMENT_CONTRACT,
+        DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_PAYMENT,
+        DEFAULT_RUN_GENESIS_REQUEST, STANDARD_PAYMENT_CONTRACT,
     },
     DEFAULT_ACCOUNT_ADDR,
 };
@@ -44,7 +44,7 @@ fn should_run_ee_550_remove_with_saturated_threshold_regression() {
     let mut builder = InMemoryWasmTestBuilder::default();
 
     builder
-        .run_genesis(&DEFAULT_GENESIS_CONFIG)
+        .run_genesis(&DEFAULT_RUN_GENESIS_REQUEST)
         .exec(exec_request_1)
         .expect_success()
         .commit()
@@ -81,7 +81,7 @@ fn should_run_ee_550_update_with_saturated_threshold_regression() {
     let mut builder = InMemoryWasmTestBuilder::default();
 
     builder
-        .run_genesis(&DEFAULT_GENESIS_CONFIG)
+        .run_genesis(&DEFAULT_RUN_GENESIS_REQUEST)
         .exec(exec_request_1)
         .expect_success()
         .commit()

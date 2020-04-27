@@ -127,6 +127,9 @@ download-retry-initial-backoff-period = "5second"
 # Exponential factor to apply on subsequent wait times before trying to download again.
 download-retry-backoff-factor = 2.0
 
+# Try downloading blocks without deploys in them first, fetching the missing deploys as a separate step.
+download-partial-blocks = true
+
 # Maximum number of parallel block downloads allowed to peers.
 relay-max-parallel-blocks = 5
 
@@ -168,6 +171,10 @@ parallelism-cpu-multiplier = 1.0
 
 # Minimum parallelism.
 min-parallelism = 4
+
+# With deploy gossiping enabled, nodes will share deploys among each other as soon as they received them,
+# and try to optimize block downloads by fetching missing deploys separately.
+deploy-gossip-enabled = false
 
 # io.casperlabs.node.configuration.Configuration.BlockStorage
 [blockstorage]

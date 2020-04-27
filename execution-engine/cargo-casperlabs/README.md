@@ -43,17 +43,19 @@ my_project/
 │   ├── Cargo.toml
 │   ├── rust-toolchain
 │   └── src
-│       └── lib.rs
-└── tests
-    ├── build.rs
-    ├── Cargo.toml
-    ├── rust-toolchain
-    ├── src
-    │   └── integration_tests.rs
-    └── wasm
-        ├── mint_install.wasm
-        ├── pos_install.wasm
-        └── standard_payment.wasm
+│       └── main.rs
+├── tests
+│   ├── build.rs
+│   ├── Cargo.toml
+│   ├── rust-toolchain
+│   ├── src
+│   │   └── integration_tests.rs
+│   └── wasm
+│       ├── mint_install.wasm
+│       ├── pos_install.wasm
+│       ├── standard_payment_install.wasm
+│       └── standard_payment.wasm
+└── .travis.yml
 ```
 
 ### Building the contract
