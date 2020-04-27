@@ -774,7 +774,7 @@ class FinalityDetectorByVotingMatrixTest
         messages = messagesInv.reverse
         lfb      = lfbInv.reverse
         genesis  = messages.head
-        _        <- storage.put(genesis.messageHash, genesis, Map.empty)
+        _        <- messages.traverse(m => storage.put(m.messageHash, m, Map.empty))
         _        <- f(storage)(ReplayedDagFixture(genesis, messages.tail, lfb))
       } yield ()
     }
@@ -793,29 +793,37 @@ class FinalityDetectorByVotingMatrixTest
                                                                   isHighway = true
                                                                 )
 
-      _ <- fixture.messagesAdded.foldLeftM((genesis.messageHash, 0)) {
-            case ((lfbHash, idx), m) =>
-              for {
-                _         <- storage.put(m.messageHash, m, Map.empty)
-                _         <- detector.addMessage(dag, m, lfbHash)
-                finalized <- detector.checkFinality(dag)
-              } yield finalized match {
-                case Nil => (lfbHash, idx)
-                case lfb =>
-                  lfb
-                    .map(_.consensusValue)
-                    .zipWithIndex
-                    .map(tuple => (tuple._1, tuple._2 + idx))
-                    .foreach {
-                      case (hash, idx) =>
-                        assert(
-                          hash == fixture.lfbChain(idx + 1),
-                          "Finalized different hash than expected."
-                        )
-                    }
-                  (lfb.last.consensusValue, idx + lfb.size)
-              }
-          }
+      // We now that the last block shouldn't be finalized.
+      incorrectLFB = fixture.lfbChain.last
+
+      (lastLfb, _) <- fixture.messagesAdded.foldLeftM((genesis.messageHash, 0)) {
+                       case ((lfbHash, idx), m) =>
+                         for {
+                           _         <- detector.addMessage(dag, m, lfbHash)
+                           finalized <- detector.checkFinality(dag)
+                         } yield finalized match {
+                           case Nil => (lfbHash, idx)
+                           case lfb =>
+                             lfb
+                               .map(_.consensusValue)
+                               .zipWithIndex
+                               .map(tuple => (tuple._1, tuple._2 + idx))
+                               .foreach {
+                                 case (hash, idx) =>
+                                   assert(
+                                     hash == fixture.lfbChain(idx + 1),
+                                     "Finalized different hash than expected."
+                                   )
+                               }
+                             (lfb.last.consensusValue, idx + lfb.size)
+                         }
+                     }
+      _ <- Task(
+            assert(
+              lastLfb != incorrectLFB,
+              s"${incorrectLFB.show} should never be finalized."
+            )
+          )
     } yield ()
   }
 
