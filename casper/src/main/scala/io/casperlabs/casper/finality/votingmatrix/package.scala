@@ -5,7 +5,7 @@ import cats.implicits._
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.finality.votingmatrix.VotingMatrix.{Vote, VotingMatrix}
 import io.casperlabs.catscontrib.MonadStateOps._
-import io.casperlabs.models.Message.MainRank
+import io.casperlabs.models.Message.{JRank, MainRank}
 import io.casperlabs.models.{Message, Weight}
 import io.casperlabs.storage.dag.DagRepresentation
 import io.casperlabs.casper.validation.Validation
@@ -44,7 +44,7 @@ package object votingmatrix {
           } else {
             for {
               _ <- updateVotingMatrixOnNewBlock[F](dag, msg, messagePanorama, isHighway)
-              _ <- updateFirstZeroLevelVote[F](voter, lfbChild, msg.mainRank)
+              _ <- updateFirstZeroLevelVote[F](voter, lfbChild, msg.jRank)
             } yield ()
           }
     } yield ()
@@ -62,7 +62,7 @@ package object votingmatrix {
       implicit matrix: VotingMatrix[F]
   ): F[Option[CommitteeWithConsensusValue]] =
     for {
-      weightMap   <- (matrix >> 'weightMap).get
+      weightMap   <- matrix.get.map(_.weightMap)
       totalWeight = weightMap.values.sum
       quorum      = totalWeight * (rFTT + 0.5)
       committee <- findCommitteeApproximation[F](dag, quorum, isHighway)
@@ -71,9 +71,9 @@ package object votingmatrix {
                           CommitteeWithConsensusValue(committeeApproximation, _, consensusValue)
                           ) =>
                         for {
-                          votingMatrix        <- (matrix >> 'votingMatrix).get
-                          firstLevelZeroVotes <- (matrix >> 'firstLevelZeroVotes).get
-                          validatorToIndex    <- (matrix >> 'validatorToIdx).get
+                          votingMatrix        <- matrix.get.map(_.votingMatrix)
+                          firstLevelZeroVotes <- matrix.get.map(_.firstLevelZeroVotes)
+                          validatorToIndex    <- matrix.get.map(_.validatorToIdx)
                           // A sequence of bits where 1 represents an i-th validator present
                           // in the committee approximation.
                           validatorsMask = FinalityDetectorUtil
@@ -118,7 +118,7 @@ package object votingmatrix {
   private[votingmatrix] def updateFirstZeroLevelVote[F[_]: Monad](
       validator: Validator,
       newVote: BlockHash,
-      dagLevel: MainRank
+      dagLevel: JRank
   )(implicit matrix: VotingMatrix[F]): F[Unit] =
     for {
       firstLevelZeroMsgs <- (matrix >> 'firstLevelZeroVotes).get
@@ -152,9 +152,9 @@ package object votingmatrix {
       isHighway: Boolean
   )(implicit matrix: VotingMatrix[F]): F[Option[CommitteeWithConsensusValue]] =
     for {
-      weightMap           <- (matrix >> 'weightMap).get
-      validators          <- (matrix >> 'validators).get
-      firstLevelZeroVotes <- (matrix >> 'firstLevelZeroVotes).get
+      weightMap           <- matrix.get.map(_.weightMap)
+      validators          <- matrix.get.map(_.validators)
+      firstLevelZeroVotes <- matrix.get.map(_.firstLevelZeroVotes)
       // Get Map[VoteBranch, List[Validator]] directly from firstLevelZeroVotes
       committee <- if (firstLevelZeroVotes.isEmpty) {
                     // No one voted on anything in the current b-game
@@ -210,19 +210,19 @@ package object votingmatrix {
 
   @tailrec
   private[votingmatrix] def pruneLoop(
-      matrix: MutableSeq[MutableSeq[Level]],
+      validatorsViews: MutableSeq[MutableSeq[Level]],
       firstLevelZeroVotes: MutableSeq[Option[Vote]],
       candidateBlockHash: BlockHash,
       mask: MutableSeq[Boolean],
       q: Weight,
       weight: MutableSeq[Weight]
   ): Option[(MutableSeq[Boolean], Weight)] = {
-    val (newMask, prunedValidator, maxTotalWeight) = matrix.zipWithIndex
+    val (newMask, prunedValidator, maxTotalWeight) = validatorsViews.zipWithIndex
       .filter { case (_, rowIndex) => mask(rowIndex) }
       .foldLeft((mask, false, Zero)) {
         case ((newMask, prunedValidator, maxTotalWeight), (row, rowIndex)) =>
           val voteSum = row.zipWithIndex
-            .filter { case (_, columnIndex) => mask(columnIndex) }
+            .filter { case (_, columnIndex) => newMask(columnIndex) }
             .map {
               case (latestDagLevelSeen, columnIndex) =>
                 firstLevelZeroVotes(columnIndex).fold(Zero) {
@@ -244,7 +244,7 @@ package object votingmatrix {
         // Terminate finality detection, finality is not reached yet.
         None
       else
-        pruneLoop(matrix, firstLevelZeroVotes, candidateBlockHash, newMask, q, weight)
+        pruneLoop(validatorsViews, firstLevelZeroVotes, candidateBlockHash, newMask, q, weight)
     } else {
       (mask, maxTotalWeight).some
     }
