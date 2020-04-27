@@ -7,6 +7,7 @@ import VestingChart from './VestingChart';
 import moment from 'moment';
 import { VestingContainer, VestingDetail } from '../container/VestingContainer';
 import Modal from '../../../components/Modal';
+import { encodeBase16 } from 'casperlabs-sdk';
 
 interface Props {
   auth: AuthContainer;
@@ -220,10 +221,10 @@ const VestingDetails = observer(
               {duration(vestingDetail.onPauseDuration)}
             </TableRow>
             <TableRow title="Admin Account">
-              {vestingDetail.adminAccount}
+              {encodeBase16(vestingDetail.adminAccount)}
             </TableRow>
             <TableRow title="Recipient Account">
-              {vestingDetail.recipientAccount}
+              {encodeBase16(vestingDetail.recipientAccount)}
             </TableRow>
             <TableRow title="Available Amount">
               <CLX amount={vestingDetail.available_amount} />
