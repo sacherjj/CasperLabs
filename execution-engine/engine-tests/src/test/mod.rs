@@ -5,4 +5,3 @@ mod explorer;
 mod regression;
 mod system_contracts;
 mod upgrade;
-mod upgrade_versioned;
