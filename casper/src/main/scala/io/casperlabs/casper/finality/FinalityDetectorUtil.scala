@@ -73,7 +73,8 @@ object FinalityDetectorUtil {
   }
 
   /**
-    * Get level zero messages of the specified validator and specified candidateBlock
+    * Returns list of messages (ordered from latest to oldest) from `validator`
+    * that are descendant (along the main-tree path) of the `candidateBlockHash`.
     */
   private[casper] def levelZeroMsgsOfValidator[F[_]: Monad](
       dag: DagRepresentation[F],
@@ -91,7 +92,6 @@ object FinalityDetectorUtil {
               validator
             )
           )
-          .toList
       case None => List.empty[Message].pure[F]
     }
 
