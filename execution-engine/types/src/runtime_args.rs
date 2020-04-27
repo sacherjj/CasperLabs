@@ -177,8 +177,8 @@ impl From<CLValue> for RuntimeArg {
 ///
 /// # Example usage
 /// ```
-/// use casperlabs_types::runtime_args;
-/// let named_args = runtime_args! {
+/// use casperlabs_types::{RuntimeArgs, runtime_args};
+/// let _named_args = runtime_args! {
 ///   "foo" => 42,
 ///   "bar" => "Hello, world!"
 /// };
