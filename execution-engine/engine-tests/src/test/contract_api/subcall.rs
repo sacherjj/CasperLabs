@@ -183,14 +183,6 @@ fn expensive_subcall_should_cost_more() {
         .get_account(DEFAULT_ACCOUNT_ADDR)
         .expect("should get account");
 
-    // // get the contract hashes so that we can pass them to the caller contract
-    // let do_nothing_contract_hash = account
-    //     .named_keys()
-    //     .get(DO_NOTHING_KEY)
-    //     .expect("should get do_nothing contract hash")
-    //     .into_hash()
-    //     .expect("should get hash");
-
     let expensive_calculation_contract_hash = account
         .named_keys()
         .get(EXPENSIVE_CALCULATION_KEY)
