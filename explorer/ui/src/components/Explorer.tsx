@@ -3,7 +3,6 @@ import { observer } from 'mobx-react';
 import {
   LinkButton,
   ListInline,
-  RefreshableComponent,
   shortHash
 } from './Utils';
 import { BlockDAG } from './BlockDAG';
@@ -255,25 +254,6 @@ class BlockDetails extends React.Component<
         />
       </div>
     );
-  }
-
-  componentDidMount() {
-    // Scroll into view so people realize it's there.
-    this.scrollToBlockDetails();
-  }
-
-  scrollToBlockDetails() {
-    let container = $(this.ref!);
-    let offset = container.offset()!;
-    let height = container.height()!;
-    $('html, body')
-      .stop()
-      .animate(
-        {
-          scrollTop: offset.top + height
-        },
-        1000
-      );
   }
 }
 
