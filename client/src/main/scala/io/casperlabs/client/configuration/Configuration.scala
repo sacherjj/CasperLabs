@@ -1,9 +1,13 @@
 package io.casperlabs.client.configuration
 import com.google.protobuf.ByteString
-import java.io.{ByteArrayInputStream, ByteArrayOutputStream, File, InputStream}
+import java.io.{ByteArrayOutputStream, File, InputStream}
 import java.nio.file.Files
+
 import io.casperlabs.client.configuration.Options.DeployOptions
-import io.casperlabs.casper.consensus.Deploy.{Arg, Code}, Code.Contract
+import io.casperlabs.casper.consensus.Deploy.{Arg, Code}
+import Code.{Contract, StoredContract}
+import io.casperlabs.casper.consensus.Deploy.Code.StoredContract.Address.{Hash, Name}
+import io.casperlabs.casper.consensus.state.SemVer
 import io.casperlabs.crypto.Keys.PublicKey
 import io.casperlabs.crypto.codec.Base16
 import org.apache.commons.io._
@@ -25,15 +29,18 @@ final case class CodeConfig(
     hash: Option[String],
     // Name of a stored contract.
     name: Option[String],
-    // URef of a stored contract.
-    uref: Option[String],
     // Arguments parsed from JSON
     args: Option[Seq[Arg]],
+    // Entry point to the contract.
+    // Name of the method that will be called during execution of the contract.
+    entryPoint: Option[String],
+    // Semantic version of the contract that is being called.
+    version: Option[String],
     // Name of a pre-packaged contract in the client JAR.
     resource: Option[String] = None
 )
 object CodeConfig {
-  val empty = CodeConfig(None, None, None, None, None, None)
+  val empty = CodeConfig(None, None, None, None, None, None, None)
 }
 
 /** Encapsulate reading session and payment contracts from disk or resources
@@ -64,15 +71,17 @@ object DeployConfig {
         file = args.session.toOption,
         hash = args.sessionHash.toOption,
         name = args.sessionName.toOption,
-        uref = args.sessionUref.toOption,
-        args = args.sessionArgs.toOption.map(_.args)
+        args = args.sessionArgs.toOption.map(_.args),
+        entryPoint = args.sessionEntryPoint.toOption,
+        version = args.sessionSemVer.toOption
       ),
       paymentOptions = CodeConfig(
         file = args.payment.toOption,
         hash = args.paymentHash.toOption,
         name = args.paymentName.toOption,
-        uref = args.paymentUref.toOption,
-        args = args.paymentArgs.toOption.map(_.args)
+        args = args.paymentArgs.toOption.map(_.args),
+        entryPoint = args.paymentEntryPoint.toOption,
+        version = args.paymentSemVer.toOption
       ),
       gasPrice = args.gasPrice(),
       paymentAmount = args.paymentAmount.toOption,
@@ -92,20 +101,36 @@ object DeployConfig {
     * they take precedence. This allows overriding the built-in contracts with custom ones.
     */
   private def toCode(opts: CodeConfig, defaultArgs: Seq[Arg]): Code = {
+    val semVerRegex = """(\d+).(\d+).(\d+)""".r
+    val semVer = opts.version
+      .flatMap { semVerArg =>
+        semVerRegex.findFirstMatchIn(semVerArg).map {
+          case semVerRegex(major, minor, patch) => SemVer(major.toInt, minor.toInt, patch.toInt)
+        }
+      }
+      .getOrElse(
+        throw new IllegalArgumentException(
+          s"${opts.version.get} is not a valid semantic version that matches the pattern `major.minor.patch`."
+        )
+      )
     val contract = opts.file.map { f =>
       val wasm = ByteString.copyFrom(Files.readAllBytes(f.toPath))
       Contract.Wasm(wasm)
     } orElse {
       opts.hash.map { x =>
-        Contract.Hash(ByteString.copyFrom(Base16.decode(x)))
+        Contract.StoredContract(
+          StoredContract()
+            .withContractVersion(semVer)
+            .withAddress(Hash(ByteString.copyFrom(Base16.decode(x))))
+        )
       }
     } orElse {
       opts.name.map { x =>
-        Contract.Name(x)
-      }
-    } orElse {
-      opts.uref.map { x =>
-        Contract.Uref(ByteString.copyFrom(Base16.decode(x)))
+        Contract.StoredContract(
+          StoredContract()
+            .withContractVersion(semVer)
+            .withAddress(Name(x))
+        )
       }
     } orElse {
       opts.resource.map { x =>
@@ -119,7 +144,7 @@ object DeployConfig {
 
     val args = opts.args getOrElse defaultArgs
 
-    Code(contract = contract, args = args)
+    Code(contract = contract, args = args, entryPoint = opts.entryPoint.getOrElse(""))
   }
 
   private def consumeInputStream(is: InputStream): Array[Byte] = {

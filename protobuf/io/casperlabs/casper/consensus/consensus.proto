@@ -73,19 +73,28 @@ message Deploy {
         // Previously was ABI encoded args (directly as bytes); no longer
         // supported, use `args` instead.
         reserved 2;
+        // Previously, how contract was reference (prior contract headers).
+        reserved 3, 4, 5;
         oneof contract {
             // Wasm byte code.
             bytes wasm = 1;
-            // Public hash address of an already stored contract.
-            bytes hash = 3;
-            // Name of a stored contract associated with the executing account (uref or hash).
-            string name = 4;
-            // URef of a stored contract.
-            bytes uref = 5;
+            StoredContract stored_contract = 7;
         }
         // Keyword arguments. Note that while the execution engine works with the original
         // positional argument passing style, the order of the arguments matters.
         repeated Arg args = 6;
+        // Name of the entry method in the contract.
+        string entry_point = 8;
+
+        message StoredContract {
+            oneof address {
+                // Public hash address of an already stored contract.
+                bytes hash = 1;
+                // Name of a stored contract associated with the executing account (uref or hash).
+                string name = 2;
+            }
+            io.casperlabs.casper.consensus.state.SemVer contract_version = 4;
+        }
     }
 
     message Arg {

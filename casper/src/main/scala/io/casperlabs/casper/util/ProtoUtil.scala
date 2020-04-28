@@ -8,6 +8,7 @@ import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.consensus.Block.{GlobalState, Justification, MessageType}
+import io.casperlabs.casper.consensus.Deploy.Code.StoredContract
 import io.casperlabs.casper.consensus.state.ProtocolVersion
 import io.casperlabs.casper.consensus.{BlockSummary, _}
 import io.casperlabs.casper.{PrettyPrinter, ValidatorIdentity}
@@ -28,10 +29,11 @@ import io.casperlabs.models.bytesrepr._
 import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.storage.dag.DagRepresentation
 import io.casperlabs.models.Message.{asJRank, asMainRank, JRank, MainRank}
+
 import scala.collection.immutable
 import scala.concurrent.duration.FiniteDuration
 import scala.concurrent.duration._
-import scala.util.Try
+import scala.util.{Success, Try}
 import io.casperlabs.storage.dag.DagLookup
 import io.casperlabs.shared.Sorting._
 import io.casperlabs.shared.ByteStringPrettyPrinter._
@@ -637,20 +639,53 @@ object ProtoUtil {
         )
     }
 
-    argsF.map { args =>
-      val payload = code.contract match {
+    argsF.flatMap { args =>
+      val payload: Try[io.casperlabs.ipc.DeployPayload.Payload] = code.contract match {
         case Deploy.Code.Contract.Wasm(wasm) =>
-          ipc.DeployPayload.Payload.DeployCode(ipc.DeployCode(wasm, args))
-        case Deploy.Code.Contract.Hash(hash) =>
-          ipc.DeployPayload.Payload.StoredContractHash(ipc.StoredContractHash(hash, args))
-        case Deploy.Code.Contract.Name(name) =>
-          ipc.DeployPayload.Payload.StoredContractName(ipc.StoredContractName(name, args))
-        case Deploy.Code.Contract.Uref(uref) =>
-          ipc.DeployPayload.Payload.StoredContractUref(ipc.StoredContractURef(uref, args))
+          Success(ipc.DeployPayload.Payload.DeployCode(ipc.DeployCode(wasm, args)))
+        case Deploy.Code.Contract.StoredContract(StoredContract(contractVersion, address)) =>
+          contractVersion.fold[Try[io.casperlabs.ipc.DeployPayload.Payload]](
+            Try[io.casperlabs.ipc.DeployPayload.Payload](
+              throw new SmartContractEngineError("Missing version of the called contract.")
+            )
+          )(
+            semver => {
+              if (address.isHash) {
+                Try(
+                  ipc.DeployPayload.Payload.StoredVersionedContractByHash(
+                    io.casperlabs.ipc
+                      .StoredVersionedContractByHash(
+                        address.hash.get,
+                        Some(semver),
+                        code.entryPoint,
+                        args
+                      )
+                  )
+                )
+              } else if (address.isName) {
+                Try(
+                  ipc.DeployPayload.Payload.StoredVersionedContractByName(
+                    io.casperlabs.ipc
+                      .StoredVersionedContractByName(
+                        address.name.get,
+                        Some(semver),
+                        code.entryPoint,
+                        args
+                      )
+                  )
+                )
+              } else
+                Try(
+                  throw new SmartContractEngineError(
+                    s"$address is not valid contract pointer. Only hash and named key label are supported."
+                  )
+                )
+            }
+          )
         case Deploy.Code.Contract.Empty =>
-          ipc.DeployPayload.Payload.DeployCode(ipc.DeployCode(ByteString.EMPTY, args))
+          Success(ipc.DeployPayload.Payload.DeployCode(ipc.DeployCode(ByteString.EMPTY, args)))
       }
-      ipc.DeployPayload(payload)
+      payload.map(ipc.DeployPayload(_))
     }
   }
 

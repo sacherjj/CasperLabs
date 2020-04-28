@@ -25,6 +25,8 @@ object Options {
 
   val directoryCheck: File => Boolean = dir => dir.exists() && dir.canWrite && dir.isDirectory
 
+  val semVerCheck: String => Boolean = _.matches("\\d+\\.\\d+\\.\\d+")
+
   trait DeployOptions { self: Subcommand =>
     def sessionRequired: Boolean = true
     def paymentPathName: String  = "payment"
@@ -51,18 +53,25 @@ object Options {
           "Name of the stored contract (associated with the executing account) to be called in the session."
       )
 
-    val sessionUref =
-      opt[String](
-        required = false,
-        descr = "URef of the stored contract to be called in the session; base16 encoded.",
-        validate = hashCheck
-      )
-
     val sessionArgs =
       opt[Args](
         required = false,
         descr =
           """JSON encoded list of Deploy.Arg protobuf messages for the session, e.g. '[{"name": "amount", "value": {"long_value": 123456}}]'"""
+      )
+
+    val sessionEntryPoint =
+      opt[String](
+        required = false,
+        descr = "Name of the method that will be used when calling the contract.",
+        default = Some("call")
+      )
+
+    val sessionSemVer =
+      opt[String](
+        required = true,
+        descr = "Semantic version of the called contract. Matches the pattern `major.minor.patch`.",
+        validate = semVerCheck
       )
 
     val payment =
@@ -99,6 +108,20 @@ object Options {
         required = false,
         descr =
           """JSON encoded list of Deploy.Arg protobuf messages for the payment, e.g. '[{"name": "amount", "value": {"big_int": {"value": "123456", "bit_width": 512}}}]'"""
+      )
+
+    val paymentEntryPoint =
+      opt[String](
+        required = false,
+        descr = "Name of the method that will be used when calling the contract.",
+        default = Some("call")
+      )
+
+    val paymentSemVer =
+      opt[String](
+        required = true,
+        descr = "Semantic version of the payment contract. Matches the pattern `major.minor.patch`.",
+        validate = semVerCheck
       )
 
     val gasPrice = opt[Long](
@@ -148,10 +171,10 @@ object Options {
 
     addValidation {
       val sessionsProvided =
-        List(session.isDefined, sessionHash.isDefined, sessionName.isDefined, sessionUref.isDefined)
+        List(session.isDefined, sessionHash.isDefined, sessionName.isDefined)
           .count(identity)
       val paymentsProvided =
-        List(payment.isDefined, paymentHash.isDefined, paymentName.isDefined, paymentUref.isDefined)
+        List(payment.isDefined, paymentHash.isDefined, paymentName.isDefined)
           .count(identity)
       if (sessionRequired && sessionsProvided == 0)
         Left("No session contract options provided; please specify exactly one.")
