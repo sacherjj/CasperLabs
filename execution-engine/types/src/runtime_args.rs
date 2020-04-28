@@ -223,9 +223,9 @@ mod tests {
         let arg3 = CLValue::from_t(Some(1)).unwrap();
         let args = {
             let mut map = BTreeMap::new();
-            map.insert("bar".to_owned(), arg2.clone());
-            map.insert("foo".to_owned(), arg1.clone());
-            map.insert("qwer".to_owned(), arg3.clone());
+            map.insert("bar".into(), arg2.clone());
+            map.insert("foo".into(), arg1.clone());
+            map.insert("qwer".into(), arg3.clone());
             map
         };
         let runtime_args = RuntimeArgs::from(args);
@@ -264,9 +264,9 @@ mod tests {
             "qwer" => Some(1i32),
         };
         let mut runtime_args_2 = BTreeMap::new();
-        runtime_args_2.insert("bar".to_owned(), CLValue::from_t("Foo").unwrap());
-        runtime_args_2.insert("foo".to_owned(), CLValue::from_t(1i32).unwrap());
-        runtime_args_2.insert("qwer".to_owned(), CLValue::from_t(Some(1i32)).unwrap());
+        runtime_args_2.insert(String::from("bar"), CLValue::from_t("Foo").unwrap());
+        runtime_args_2.insert(String::from("foo"), CLValue::from_t(1i32).unwrap());
+        runtime_args_2.insert(String::from("qwer"), CLValue::from_t(Some(1i32)).unwrap());
 
         assert_eq!(
             runtime_args_1.to_bytes().unwrap(),
