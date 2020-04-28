@@ -15,6 +15,8 @@ The following commands should be run from the root directory of the CasperLabs r
 #### Build the node
 
 ```
+git clone https://github.com/CasperLabs/CasperLabs.git
+cd CasperLabs
 make build-node
 ```
 
