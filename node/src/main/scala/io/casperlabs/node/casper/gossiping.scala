@@ -787,7 +787,7 @@ package object gossiping {
         ErrorInterceptor.default
       ),
       sslContext = serverSslContext.some,
-      maxMessageSize = conf.server.maxMessageSize.some
+      maxMessageSize = conf.server.maxMessageSize.value.some
     )
   }
 }

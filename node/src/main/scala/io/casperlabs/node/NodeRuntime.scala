@@ -128,7 +128,7 @@ class NodeRuntime private[node] (
                                                                           Task
                                                                         ](
                                                                           conf.grpc.socket,
-                                                                          conf.server.maxMessageSize,
+                                                                          conf.server.maxMessageSize.value,
                                                                           conf.server.engineParallelism.value
                                                                         )
       //TODO: We may want to adjust threading model for better performance
@@ -228,8 +228,8 @@ class NodeRuntime private[node] (
                                                         kademliaPort,
                                                         conf.server.defaultTimeout,
                                                         conf.server.alivePeersCacheExpirationPeriod,
-                                                        conf.server.relayFactor,
-                                                        conf.server.relaySaturation,
+                                                        conf.server.relayFactor.value,
+                                                        conf.server.relaySaturation.value,
                                                         ingressScheduler,
                                                         egressScheduler
                                                       )
@@ -328,7 +328,7 @@ class NodeRuntime private[node] (
       _ <- api.Servers
             .internalServersR(
               conf.grpc.portInternal,
-              conf.server.maxMessageSize,
+              conf.server.maxMessageSize.value,
               conf.server.shutdownTimeout,
               ingressScheduler,
               blockApiLock,
@@ -337,7 +337,7 @@ class NodeRuntime private[node] (
 
       _ <- api.Servers.externalServersR[Task](
             conf.grpc.portExternal,
-            conf.server.maxMessageSize,
+            conf.server.maxMessageSize.value,
             conf.server.shutdownTimeout,
             ingressScheduler,
             maybeApiSslContext,
@@ -461,7 +461,7 @@ class NodeRuntime private[node] (
         bootstraps,
         conf.server.defaultTimeout,
         ClearConnectionsConf(
-          conf.server.maxNumOfConnections,
+          conf.server.maxNumOfConnections.value,
           // TODO read from conf
           numOfConnectionsPinged = 10
         )

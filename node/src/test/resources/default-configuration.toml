@@ -49,6 +49,7 @@ download-retry-initial-backoff-period = "1second"
 download-retry-backoff-factor = 1.0
 relay-max-parallel-blocks = 1
 relay-block-chunk-consumer-timeout = "1second"
+validate-max-parallel-blocks = 1
 clean-block-storage = false
 block-upload-rate-max-requests = 0
 block-upload-rate-period = "0s"

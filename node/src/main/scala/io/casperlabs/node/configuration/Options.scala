@@ -465,6 +465,10 @@ private[configuration] final case class Options private (
       gen[FiniteDuration]("Maximum time to allow a peer downloading a block to consume each chunk.")
 
     @scallop
+    val serverValidateMaxParallelBlocks =
+      gen[Int]("Maximum number of blocks to try to validate at any time.")
+
+    @scallop
     val casperStandalone =
       gen[Flag](
         "Start a stand-alone node (no bootstrapping).",

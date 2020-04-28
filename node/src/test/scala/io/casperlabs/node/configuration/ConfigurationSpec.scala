@@ -102,6 +102,7 @@ class ConfigurationSpec
       downloadRetryBackoffFactor = 1.0,
       relayMaxParallelBlocks = 1,
       relayBlockChunkConsumerTimeout = FiniteDuration(1, TimeUnit.SECONDS),
+      validateMaxParallelBlocks = 1,
       cleanBlockStorage = false,
       blockUploadRateMaxRequests = 0,
       blockUploadRatePeriod = Duration.Zero,

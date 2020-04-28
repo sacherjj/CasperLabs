@@ -113,10 +113,10 @@ init-sync-max-block-count = 1000000
 periodic-sync-round-period = "60second"
 
 # Maximum number of parallel block downloads initiated by the download manager.
-download-max-parallel-blocks = 10
+download-max-parallel-blocks = 2
 
 # Maximum number of parallel deploy downloads initiated by the download manager.
-download-max-parallel-deploys = 10
+download-max-parallel-deploys = 2
 
 # Maximum number of times to retry to download a block from the same node.
 download-max-retries = 0
@@ -132,6 +132,9 @@ relay-max-parallel-blocks = 5
 
 # Maximum time to allow a peer downloading a block to consume each chunk.
 relay-block-chunk-consumer-timeout = "10second"
+
+# Maximum number of blocks to try to validate at any time.
+validate-max-parallel-blocks = 2
 
 # Use this flag to clear the blockStorage and dagStorage
 clean-block-storage = false
