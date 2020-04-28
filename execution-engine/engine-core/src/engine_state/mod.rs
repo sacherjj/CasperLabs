@@ -95,6 +95,7 @@ pub enum GetModuleResult {
         module: Module,
         base_key: Key,
         named_keys: BTreeMap<String, Key>,
+        entry_point_type: EntryPointType,
     },
 }
 
@@ -451,6 +452,7 @@ where
                         phase,
                         protocol_data,
                         system_contract_cache,
+                        EntryPointType::Session,
                     )?;
 
                     runtime
@@ -861,6 +863,7 @@ where
                         module,
                         base_key: contract_header.contract_key(),
                         named_keys: contract.take_named_keys(),
+                        entry_point_type: method_entrypoint.entry_point_type(),
                     }),
                 }
             }
@@ -896,13 +899,13 @@ where
                     protocol_version,
                 )?;
 
-                println!("method entrypoint by hash {:?}", method_entrypoint);
                 match method_entrypoint.entry_point_type() {
                     EntryPointType::Session => Ok(GetModuleResult::Session(module)),
                     EntryPointType::Contract => Ok(GetModuleResult::Contract {
                         module,
                         base_key: contract_header.contract_key(),
                         named_keys: contract.take_named_keys(),
+                        entry_point_type: method_entrypoint.entry_point_type(),
                     }),
                 }
             }
@@ -1265,16 +1268,21 @@ where
             // payment_code_spec_2: execute payment code
             let phase = Phase::Payment;
 
-            let (payment_module, payment_context, mut payment_named_keys) = match payment_module {
-                GetModuleResult::Session(module) => {
-                    (module, base_key, account.named_keys().clone())
-                }
-                GetModuleResult::Contract {
-                    module,
-                    base_key,
-                    named_keys,
-                } => (module, base_key, named_keys),
-            };
+            let (payment_module, payment_context, mut payment_named_keys, entry_point_type) =
+                match payment_module {
+                    GetModuleResult::Session(module) => (
+                        module,
+                        base_key,
+                        account.named_keys().clone(),
+                        EntryPointType::Session,
+                    ),
+                    GetModuleResult::Contract {
+                        module,
+                        base_key,
+                        named_keys,
+                        entry_point_type,
+                    } => (module, base_key, named_keys, entry_point_type),
+                };
 
             let payment_args = match payment.clone().take_args() {
                 Ok(args) => args,
@@ -1306,6 +1314,7 @@ where
                     phase,
                     protocol_data,
                     system_contract_cache,
+                    entry_point_type,
                 ) {
                     Ok((_instance, runtime)) => runtime,
                     Err(error) => {
@@ -1344,6 +1353,7 @@ where
                     phase,
                     protocol_data,
                     system_contract_cache,
+                    EntryPointType::Session,
                 )
             }
         };
@@ -1396,14 +1406,21 @@ where
 
         // session_code_spec_2: execute session code
 
-        let (session_module, session_context, session_named_keys) = match session_module {
-            GetModuleResult::Session(module) => (module, base_key, account.named_keys().clone()),
-            GetModuleResult::Contract {
-                module,
-                base_key,
-                named_keys,
-            } => (module, base_key, named_keys),
-        };
+        let (session_module, session_context, session_named_keys, session_entry_point_type) =
+            match session_module {
+                GetModuleResult::Session(module) => (
+                    module,
+                    base_key,
+                    account.named_keys().clone(),
+                    EntryPointType::Session,
+                ),
+                GetModuleResult::Contract {
+                    module,
+                    base_key,
+                    named_keys,
+                    entry_point_type,
+                } => (module, base_key, named_keys, entry_point_type),
+            };
 
         let session_args = match session.clone().take_args() {
             Ok(args) => args,
@@ -1443,6 +1460,7 @@ where
                 Phase::Session,
                 protocol_data,
                 system_contract_cache,
+                session_entry_point_type,
             )
         };
 

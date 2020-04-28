@@ -108,12 +108,9 @@ fn should_upgrade_do_nothing_to_do_something_version_hash_call() {
     );
 }
 
-// TODO This does not work currently.  It is a new test trying to call versioned from inside
-// contract.
 /// Performs define and execution of versioned contracts, calling them from a contract
 #[ignore]
 #[test]
-#[should_panic]
 fn should_upgrade_do_nothing_to_do_something_contract_call() {
     let mut builder = InMemoryWasmTestBuilder::default();
 

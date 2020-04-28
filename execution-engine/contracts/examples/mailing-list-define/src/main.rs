@@ -121,7 +121,7 @@ pub extern "C" fn call() {
             ],
             CLType::Option(Box::new(CLType::Key)),
             EntryPointAccess::Public,
-            EntryPointType::Session,
+            EntryPointType::Contract,
         );
         methods.insert(MAILING_LIST_EXT.to_string(), entrypoint_hello);
         methods

@@ -30,8 +30,8 @@ use types::{
     },
     system_contract_errors,
     system_contract_errors::mint,
-    AccessRights, ApiError, CLType, CLTyped, CLValue, Key, ProtocolVersion, RuntimeArgs, SemVer,
-    SystemContractType, TransferResult, TransferredTo, URef, U128, U256, U512,
+    AccessRights, ApiError, CLType, CLTyped, CLValue, EntryPointType, Key, ProtocolVersion,
+    RuntimeArgs, SemVer, SystemContractType, TransferResult, TransferredTo, URef, U128, U256, U512,
 };
 
 use crate::{
@@ -1769,6 +1769,7 @@ where
             correlation_id,
             phase,
             protocol_data,
+            EntryPointType::Session,
         );
 
         let method_name: String = Self::get_argument(&args, 0)?;
@@ -1861,6 +1862,7 @@ where
             correlation_id,
             phase,
             protocol_data,
+            EntryPointType::Session,
         );
 
         let mut runtime = Runtime::new(
@@ -1952,7 +1954,7 @@ where
             }
             None => return Err(Error::KeyNotFound(key)),
         };
-        self.execute_contract(key, contract, args, "call")
+        self.execute_contract(key, contract, args, "call", EntryPointType::Contract)
     }
 
     /// Calls `version` of the contract living at `key`, invoking `method` with
@@ -1965,7 +1967,7 @@ where
         method: String,
         args: RuntimeArgs,
     ) -> Result<CLValue, Error> {
-        let (contract, contract_key) = match self.context.read_gs(&key)? {
+        let (contract, context, entry_point_type) = match self.context.read_gs(&key)? {
             Some(StoredValue::ContractMetadata(metadata)) => {
                 let header = metadata
                     .get_version(&version)
@@ -2002,14 +2004,31 @@ where
                     }
                 }
 
-                let contract_key = header.contract_key();
-
                 let contract = self
                     .context
                     .read_gs_direct(&header.contract_key())?
                     .and_then(|sv| sv.as_contract().cloned())
                     .ok_or_else(|| Error::InvalidContractVersion)?;
-                (contract, contract_key)
+
+                let (context, entry_point_type) = match entry_point.entry_point_type() {
+                    EntryPointType::Session
+                        if self.context.entry_point_type() == EntryPointType::Contract =>
+                    {
+                        // Session code can't be called from Contract code for security reasons.
+                        return Err(Error::InvalidContext);
+                    }
+                    EntryPointType::Session => {
+                        assert_eq!(self.context.entry_point_type(), EntryPointType::Session);
+                        // Session code called from session reuses current base key
+                        (self.context.base_key(), entry_point.entry_point_type())
+                    }
+                    EntryPointType::Contract => {
+                        // Contract code from entrypoint -> contract context
+                        (header.contract_key(), entry_point.entry_point_type())
+                    }
+                };
+
+                (contract, context, entry_point_type)
             }
             Some(_) => {
                 return Err(Error::FunctionNotFound(format!(
@@ -2019,7 +2038,7 @@ where
             }
             None => return Err(Error::KeyNotFound(key)),
         };
-        self.execute_contract(contract_key, contract, args, method.as_str())
+        self.execute_contract(context, contract, args, method.as_str(), entry_point_type)
     }
 
     fn execute_contract(
@@ -2028,6 +2047,7 @@ where
         contract: Contract,
         args: RuntimeArgs,
         entry_point: &str,
+        entry_point_type: EntryPointType,
     ) -> Result<CLValue, Error> {
         // Check for major version compatibility before calling
         let contract_version = contract.protocol_version();
@@ -2080,7 +2100,10 @@ where
             None => parity_wasm::deserialize_buffer(contract.bytes())?,
         };
 
-        let mut named_keys = contract.take_named_keys();
+        let mut named_keys = match entry_point_type {
+            EntryPointType::Session => self.context.account().named_keys().clone(),
+            EntryPointType::Contract => contract.take_named_keys(),
+        };
 
         let (instance, memory) = instance_and_memory(module.clone(), contract_version)?;
 
@@ -2116,6 +2139,7 @@ where
             self.context.correlation_id(),
             self.context.phase(),
             self.context.protocol_data(),
+            entry_point_type,
         );
 
         let mut runtime = Runtime {
@@ -2140,7 +2164,16 @@ where
             // not explicitly call `runtime::ret()`.  Treat as though the execution
             // returned the unit type `()` as per Rust functions which don't specify a
             // return value.
-            Ok(_) => return Ok(runtime.take_host_buffer().unwrap_or(CLValue::from_t(())?)),
+            Ok(_) => {
+                if self.context.entry_point_type() == EntryPointType::Session
+                    && runtime.context.entry_point_type() == EntryPointType::Session
+                {
+                    // Overwrites parent's named keys with child's new named key but only when
+                    // running session code
+                    *self.context.named_keys_mut() = runtime.context.named_keys().clone();
+                }
+                return Ok(runtime.take_host_buffer().unwrap_or(CLValue::from_t(())?));
+            }
         };
 
         if let Some(host_error) = error.as_host_error() {
@@ -2155,6 +2188,13 @@ where
                         extract_access_rights_from_urefs(ret_urefs.clone());
                     self.context.access_rights_extend(ret_urefs_map);
                     // if ret has not set host_buffer consider it programmer error
+                    if self.context.entry_point_type() == EntryPointType::Session
+                        && runtime.context.entry_point_type() == EntryPointType::Session
+                    {
+                        // Overwrites parent's named keys with child's new named key but only when
+                        // running session code
+                        *self.context.named_keys_mut() = runtime.context.named_keys().clone();
+                    }
                     return runtime.take_host_buffer().ok_or(Error::ExpectedReturnValue);
                 }
                 error => return Err(error.clone()),

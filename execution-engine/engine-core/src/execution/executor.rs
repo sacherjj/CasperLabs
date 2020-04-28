@@ -12,8 +12,8 @@ use engine_shared::{
 };
 use engine_storage::{global_state::StateReader, protocol_data::ProtocolData};
 use types::{
-    account::PublicKey, bytesrepr::FromBytes, BlockTime, CLTyped, CLValue, Key, Phase,
-    ProtocolVersion, RuntimeArgs,
+    account::PublicKey, bytesrepr::FromBytes, BlockTime, CLTyped, CLValue, EntryPointType, Key,
+    Phase, ProtocolVersion, RuntimeArgs,
 };
 
 use crate::{
@@ -99,6 +99,7 @@ impl Executor {
         phase: Phase,
         protocol_data: ProtocolData,
         system_contract_cache: SystemContractCache,
+        entry_point_type: EntryPointType,
     ) -> ExecutionResult
     where
         R: StateReader<Key, StoredValue>,
@@ -141,6 +142,7 @@ impl Executor {
             correlation_id,
             phase,
             protocol_data,
+            entry_point_type,
         );
 
         let mut runtime = Runtime::new(
@@ -273,6 +275,7 @@ impl Executor {
             correlation_id,
             phase,
             protocol_data,
+            EntryPointType::Session,
         );
 
         let (instance, memory) =
@@ -370,6 +373,7 @@ impl Executor {
         phase: Phase,
         protocol_data: ProtocolData,
         system_contract_cache: SystemContractCache,
+        entry_point_type: EntryPointType,
     ) -> Result<(ModuleRef, Runtime<'a, R>), Error>
     where
         R: StateReader<Key, StoredValue>,
@@ -404,6 +408,7 @@ impl Executor {
             correlation_id,
             phase,
             protocol_data,
+            entry_point_type,
         );
 
         let (instance, memory) = instance_and_memory(module.clone(), protocol_version)?;
@@ -460,6 +465,7 @@ impl Executor {
             phase,
             protocol_data,
             system_contract_cache,
+            EntryPointType::Session,
         )?;
 
         let error: wasmi::Error = match instance.invoke_export("call", &[], &mut runtime) {

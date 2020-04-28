@@ -143,13 +143,13 @@ pub fn create_contract_metadata_at_hash() -> (Key, URef) {
 /// function returns the list of new URefs created for the group (the list will
 /// contain `num_new_urefs` elements).
 pub fn create_contract_user_group(
-    contract: ContractRef,
+    contract: Key,
     access_key: URef,
     group_label: &str,
     num_new_urefs: u8, // number of new urefs to populate the group with
     existing_urefs: BTreeSet<URef>, // also include these existing urefs in the group
 ) -> Result<Vec<URef>, ApiError> {
-    let (meta_ptr, meta_size, _bytes1) = contract_api::to_ptr(Key::from(contract));
+    let (meta_ptr, meta_size, _bytes1) = contract_api::to_ptr(contract);
     let (access_ptr, _access_size, _bytes2) = contract_api::to_ptr(access_key);
     let (label_ptr, label_size, _bytes3) = contract_api::to_ptr(group_label);
     let (existing_urefs_ptr, existing_urefs_size, _bytes4) = contract_api::to_ptr(existing_urefs);

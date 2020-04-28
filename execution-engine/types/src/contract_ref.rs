@@ -1,3 +1,5 @@
+use core::convert::TryFrom;
+
 use crate::{Key, URef};
 
 /// A reference to a smart contract stored on the network.
@@ -24,6 +26,20 @@ impl From<ContractRef> for Key {
         match contract_ref {
             ContractRef::Hash(h) => Key::Hash(h),
             ContractRef::URef(uref) => uref.into(),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct TryFromKeyForContractRef(());
+
+impl TryFrom<Key> for ContractRef {
+    type Error = TryFromKeyForContractRef;
+    fn try_from(value: Key) -> Result<Self, Self::Error> {
+        match value {
+            Key::Hash(hash) => Ok(ContractRef::Hash(hash)),
+            Key::URef(uref) => Ok(ContractRef::URef(uref)),
+            _ => Err(TryFromKeyForContractRef(())),
         }
     }
 }

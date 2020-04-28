@@ -22,8 +22,8 @@ use types::{
         UpdateKeyFailure, Weight,
     },
     bytesrepr::{self, ToBytes},
-    AccessRights, BlockTime, CLType, CLValue, Key, Phase, ProtocolVersion, RuntimeArgs, URef,
-    KEY_LOCAL_SEED_LENGTH,
+    AccessRights, BlockTime, CLType, CLValue, EntryPointType, Key, Phase, ProtocolVersion,
+    RuntimeArgs, URef, KEY_LOCAL_SEED_LENGTH,
 };
 
 use crate::{
@@ -74,6 +74,7 @@ pub struct RuntimeContext<'a, R> {
     correlation_id: CorrelationId,
     phase: Phase,
     protocol_data: ProtocolData,
+    entry_point_type: EntryPointType,
 }
 
 impl<'a, R> RuntimeContext<'a, R>
@@ -100,6 +101,7 @@ where
         correlation_id: CorrelationId,
         phase: Phase,
         protocol_data: ProtocolData,
+        entry_point_type: EntryPointType,
     ) -> Self {
         RuntimeContext {
             state,
@@ -119,6 +121,7 @@ where
             correlation_id,
             phase,
             protocol_data,
+            entry_point_type,
         }
     }
 
@@ -132,6 +135,10 @@ where
 
     pub fn named_keys(&self) -> &BTreeMap<String, Key> {
         &self.named_keys
+    }
+
+    pub fn named_keys_mut(&mut self) -> &mut BTreeMap<String, Key> {
+        &mut self.named_keys
     }
 
     pub fn fn_store_id(&self) -> u32 {
@@ -849,5 +856,10 @@ where
             return Err(Error::InvalidContext);
         }
         Ok(self.account().main_purse())
+    }
+
+    /// Gets entry point type.
+    pub fn entry_point_type(&self) -> EntryPointType {
+        self.entry_point_type
     }
 }
