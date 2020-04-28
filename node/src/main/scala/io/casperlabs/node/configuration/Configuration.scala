@@ -83,6 +83,7 @@ object Configuration extends ParserImplicits {
       syncMaxBondingRate: Double Refined GreaterEqual[W.`0.0`.T],
       syncMaxDepthAncestorsRequest: Int Refined Positive,
       syncDisableValidations: Boolean,
+      syncMaxParallel: Int Refined Positive,
       initSyncMaxNodes: Int Refined NonNegative,
       initSyncMinSuccessful: Int Refined Positive,
       initSyncMemoizeNodes: Boolean,

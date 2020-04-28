@@ -87,6 +87,7 @@ class ConfigurationSpec
       syncMaxBondingRate = 1.0,
       syncMaxDepthAncestorsRequest = 1,
       syncDisableValidations = false,
+      syncMaxParallel = 1,
       initSyncMaxNodes = 1,
       initSyncMinSuccessful = 1,
       initSyncMemoizeNodes = false,

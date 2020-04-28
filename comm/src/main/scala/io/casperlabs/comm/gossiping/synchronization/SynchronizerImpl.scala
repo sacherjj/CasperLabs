@@ -31,6 +31,8 @@ class SynchronizerImpl[F[_]: Concurrent: Log: Metrics](
     maxDepthAncestorsRequest: Int,
     // Only allow 1 sync per node at a time to not traverse the same thing twice.
     sourceSemaphoreMap: SemaphoreMap[F, Node],
+    // Limit the overall number of syncs.
+    parallelSemaphore: Semaphore[F],
     // Keep the synced DAG in memory so we can avoid traversing them repeatedly.
     syncedSummariesRef: Ref[F, Map[ByteString, SynchronizerImpl.SyncedSummary]],
     disableValidations: Boolean
@@ -83,10 +85,12 @@ class SynchronizerImpl[F[_]: Concurrent: Log: Metrics](
 
     Metrics[F].gauge("syncs_ongoing") {
       sourceSemaphoreMap.withPermit(source) {
-        effect.onError {
-          case NonFatal(ex) =>
-            Log[F].error(s"Failed to sync a DAG, source: ${source.show -> "peer"}: $ex") *>
-              Metrics[F].incrementCounter("syncs_failed")
+        parallelSemaphore.withPermit {
+          effect.onError {
+            case NonFatal(ex) =>
+              Log[F].error(s"Failed to sync a DAG, source: ${source.show -> "peer"}: $ex") *>
+                Metrics[F].incrementCounter("syncs_failed")
+          }
         }
       }
     }
@@ -414,10 +418,12 @@ object SynchronizerImpl {
       minBlockCountToCheckWidth: Int,
       maxBondingRate: Double,
       maxDepthAncestorsRequest: Int,
-      disableValidations: Boolean
+      disableValidations: Boolean,
+      maxParallel: Int
   ) =
     for {
-      semaphoreMap       <- SemaphoreMap[F, Node](1)
+      sourceSemaphoreMap <- SemaphoreMap[F, Node](1)
+      parallelSemaphore  <- Semaphore[F](maxParallel.toLong)
       syncedSummariesRef <- Ref[F].of(Map.empty[ByteString, SyncedSummary])
       _                  <- Log[F].warn("Not going to perform DAG shape validations.").whenA(disableValidations)
     } yield {
@@ -428,7 +434,8 @@ object SynchronizerImpl {
         minBlockCountToCheckWidth,
         maxBondingRate,
         maxDepthAncestorsRequest,
-        semaphoreMap,
+        sourceSemaphoreMap,
+        parallelSemaphore,
         syncedSummariesRef,
         disableValidations
       )
