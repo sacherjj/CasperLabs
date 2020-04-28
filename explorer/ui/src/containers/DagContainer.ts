@@ -171,7 +171,16 @@ export class DagContainer {
     } else if (event.hasNewFinalizedBlock()) {
       const directFinalizedBlockHash = event.getNewFinalizedBlock()!.getBlockHash_asB64();
 
-      let finalizedBlocks = new Set(event.getNewFinalizedBlock()!.getIndirectlyFinalizedBlockHashesList_asB64());
+      const orphanedBlocks = new Set(
+        event
+          .getNewFinalizedBlock()!
+          .getIndirectlyOrphanedBlockHashesList_asB64()
+      );
+      const finalizedBlocks = new Set(
+        event
+          .getNewFinalizedBlock()!
+          .getIndirectlyFinalizedBlockHashesList_asB64()
+      );
       finalizedBlocks.add(directFinalizedBlockHash);
 
       let updatedLastFinalizedBlock = false;
@@ -179,6 +188,8 @@ export class DagContainer {
         let bh = block.getSummary()!.getBlockHash_asB64();
         if (finalizedBlocks.has(bh)) {
           block.getStatus()?.setFinality(BlockInfo.Status.Finality.FINALIZED);
+        } else if (orphanedBlocks.has(bh)) {
+          block.getStatus()?.setFinality(BlockInfo.Status.Finality.ORPHANED);
         }
         if (!updatedLastFinalizedBlock && bh === directFinalizedBlockHash) {
           this.lastFinalizedBlock = block;

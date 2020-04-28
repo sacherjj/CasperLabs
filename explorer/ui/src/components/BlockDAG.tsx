@@ -13,6 +13,7 @@ import { observer } from 'mobx-react';
 const CircleRadius = 12;
 const LineColor = '#AAA';
 const FinalizedLineColor = '#83f2a1';
+const OrphanedLineColor = '#FF0000';
 
 export interface Props {
   title: string;
@@ -225,7 +226,7 @@ export class BlockDAG extends React.Component<Props, {}> {
       .enter()
       .append('line')
       .attr('stroke', (d: d3Link) =>
-        d.isFinalized ? FinalizedLineColor : LineColor
+        d.isOrphaned ? OrphanedLineColor : (d.isFinalized ? FinalizedLineColor : LineColor)
       )
       .attr('stroke-width', (d: d3Link) => (d.isMainParent ? 3 : 1))
       .attr('marker-end', 'url(#arrow)') // use the Arrow created above
@@ -368,6 +369,7 @@ interface d3Link {
   isMainParent: boolean;
   isJustification: boolean;
   isFinalized: boolean;
+  isOrphaned: boolean;
 }
 
 class Graph {
@@ -411,6 +413,7 @@ const toGraph = (blocks: BlockInfo[]) => {
     let child = blockHash(block);
 
     let isChildFinalized = isFinalized(block);
+    let isChildOrphaned = isOrphaned(block);
     let isChildBallot = isBallot(block);
 
     let parents = block
@@ -438,7 +441,9 @@ const toGraph = (blocks: BlockInfo[]) => {
           target: target,
           isMainParent: p === parents[0],
           isJustification: false,
-          isFinalized: (isChildFinalized || isChildBallot) && isFinalized(target.block)
+          isFinalized: (isChildFinalized || isChildBallot) && isFinalized(target.block),
+          // if child is an orphaned block, the link should be highlighted with OrphanedLineColor
+          isOrphaned: !isChildBallot && isChildOrphaned
         };
       });
 
@@ -452,7 +457,9 @@ const toGraph = (blocks: BlockInfo[]) => {
           target: target,
           isMainParent: false,
           isJustification: true,
-          isFinalized: (isChildFinalized || isChildBallot) && isFinalized(target.block)
+          isFinalized: (isChildFinalized || isChildBallot) && isFinalized(target.block),
+          // if child is an orphaned block, the link should be highlighted with OrphanedLineColor
+          isOrphaned: !isChildBallot && isChildOrphaned
         };
       });
 
@@ -523,6 +530,9 @@ const isBallot = (block: BlockInfo) => !isBlock(block);
 
 const isFinalized = (block: BlockInfo) =>
   block.getStatus()!.getFinality() === BlockInfo.Status.Finality.FINALIZED;
+
+const isOrphaned = (block: BlockInfo) =>
+  block.getStatus()!.getFinality() === BlockInfo.Status.Finality.ORPHANED;
 
 const validatorHash = (block: BlockInfo) =>
   encodeBase16(
