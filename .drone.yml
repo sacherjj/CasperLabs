@@ -1103,8 +1103,8 @@ steps:
       from_secret: pypi_user
     password:
       from_secret: pypi_pass
-    setupfile: "integration-testing/client/CasperLabsClient/setup.py"
-    dist_dir: "integration-testing/client/CasperLabsClient/dist/"
+    setupfile: "client-py/CasperLabsClient/setup.py"
+    dist_dir: "client-py/CasperLabsClient/dist/"
     skip_build: true
   when:
     ref:
