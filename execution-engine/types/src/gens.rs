@@ -120,7 +120,6 @@ pub fn cl_value_arb() -> impl Strategy<Value = CLValue> {
             | CLType::Tuple1(_)
             | CLType::Tuple2(_)
             | CLType::Tuple3(_)
-            | CLType::ContractHeader // TODO: add real generator
             | CLType::Any => (),
         }
     };

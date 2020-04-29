@@ -10,7 +10,7 @@ use engine_test_support::{
     },
     DEFAULT_ACCOUNT_ADDR, DEFAULT_ACCOUNT_INITIAL_BALANCE,
 };
-use types::{account::PublicKey, runtime_args::RuntimeArgs, Key, ProtocolVersion, SemVer, U512};
+use types::{account::PublicKey, Key, ProtocolVersion, RuntimeArgs, SemVer, U512};
 
 const ACCOUNT_1_ADDR: PublicKey = PublicKey::ed25519_from([42u8; 32]);
 const DEFAULT_ACTIVATION_POINT: ActivationPoint = 1;

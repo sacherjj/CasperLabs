@@ -3,7 +3,8 @@ use std::{
     convert::{TryFrom, TryInto},
 };
 use types::{
-    Arg, ContractHeader, ContractMetadata, EntryPoint, EntryPointAccess, EntryPointType, Group,
+    ContractHeader, ContractMetadata, EntryPoint, EntryPointAccess, EntryPointType, Group,
+    Parameter,
 };
 
 use crate::engine_server::{mappings::ParsingError, state};
@@ -156,7 +157,10 @@ impl TryFrom<state::ContractHeader_EntryPoint> for EntryPoint {
         let ret = value.take_ret().try_into()?;
 
         for mut arg in value.take_args().into_iter() {
-            args.push(Arg::new(arg.take_name(), arg.take_cl_type().try_into()?));
+            args.push(Parameter::new(
+                arg.take_name(),
+                arg.take_cl_type().try_into()?,
+            ));
         }
 
         let entry_point_access = match value.access {

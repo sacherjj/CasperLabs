@@ -32,14 +32,14 @@ message StoredVersionedContractByName {
     string name = 1; // key name
     io.casperlabs.casper.consensus.state.SemVer version = 2;     // finds active version
     string entry_point = 3; // finds header by entrypoint name
-    bytes args = 4; // Serialized BTreeMap<String, CLValue>
+    bytes args = 4; // Serialized runtime arguments
 }
 
 message StoredVersionedContractByHash {
     bytes hash = 1; // hash of the metadata
     io.casperlabs.casper.consensus.state.SemVer version = 2;     // finds active version
     string entry_point = 3; // finds header by entrypoint name
-    bytes args = 4; // Serialized BTreeMap<String, CLValue>
+    bytes args = 4; // Serialized runtime arguments
 }
 
 message DeployPayload {

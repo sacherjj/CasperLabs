@@ -50,7 +50,8 @@ pub use block_time::{BlockTime, BLOCKTIME_SERIALIZED_LENGTH};
 pub use cl_type::{named_key_type, CLType, CLTyped};
 pub use cl_value::{CLTypeMismatch, CLValue, CLValueError};
 pub use contract_header::{
-    Arg, ContractHeader, ContractMetadata, EntryPoint, EntryPointAccess, EntryPointType, Group,
+    ContractHeader, ContractMetadata, EntryPoint, EntryPointAccess, EntryPointType, Group,
+    Parameter,
 };
 pub use contract_ref::ContractRef;
 #[doc(inline)]
@@ -59,7 +60,7 @@ pub use key::{
 };
 pub use phase::{Phase, PHASE_SERIALIZED_LENGTH};
 pub use protocol_version::{ProtocolVersion, VersionCheckResult};
-pub use runtime_args::{RuntimeArg, RuntimeArgs};
+pub use runtime_args::RuntimeArgs;
 pub use semver::{SemVer, SEM_VER_SERIALIZED_LENGTH};
 pub use system_contract_type::SystemContractType;
 pub use transfer_result::{TransferResult, TransferredTo};

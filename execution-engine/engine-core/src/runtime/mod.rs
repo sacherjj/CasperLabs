@@ -151,7 +151,6 @@ fn extract_urefs(cl_value: &CLValue) -> Result<Vec<URef>, Error> {
         | CLType::U512
         | CLType::Unit
         | CLType::String
-        | CLType::ContractHeader
         | CLType::Any => Ok(vec![]),
         CLType::Option(ty) => match **ty {
             CLType::URef => {
@@ -1996,7 +1995,7 @@ where
                     .iter()
                     .map(|a| a.cl_type())
                     .cloned()
-                    .zip(args.values().map(|v| v.cl_type()).cloned())
+                    .zip(args.to_values().into_iter().map(|v| v.cl_type()).cloned())
                 {
                     if expected != found {
                         return Err(Error::type_mismatch(expected, found));
@@ -2042,7 +2041,7 @@ where
 
         let mut extra_urefs = vec![];
         // A loop is needed to be able to use the '?' operator
-        for arg in args.values() {
+        for arg in args.to_values() {
             extra_urefs.extend(
                 extract_urefs(arg)?
                     .into_iter()
@@ -2361,7 +2360,7 @@ where
             + existing_urefs.len();
         if total_urefs > (contract_header::MAX_TOTAL_UREFS as usize) {
             let err = contract_header::Error::MaxTotalURefsExceeded;
-            return Ok(Err(ApiError::ContractHeader(err.into_u8())));
+            return Ok(Err(ApiError::ContractHeader(err as u8)));
         }
 
         // Proceed with creating user group
@@ -2448,18 +2447,18 @@ where
         metadata_key: Key,
         access_key: URef,
         version: SemVer,
-    ) -> Result<Option<contract_header::Error>, Error> {
+    ) -> Result<Result<(), ApiError>, Error> {
         self.context.validate_key(&metadata_key)?;
         self.context.validate_uref(&access_key)?;
 
         let mut metadata: ContractMetadata = self.context.read_gs_typed(&metadata_key)?;
 
         if metadata.access_key() != access_key {
-            return Ok(Some(contract_header::Error::InvalidAccessKey));
+            return Ok(Err(contract_header::Error::InvalidAccessKey.into()));
         }
 
         if let Err(err) = metadata.remove_version(version) {
-            return Ok(Some(err));
+            return Ok(Err(err.into()));
         }
 
         self.context
@@ -2467,7 +2466,7 @@ where
             .borrow_mut()
             .write(metadata_key, StoredValue::ContractMetadata(metadata));
 
-        Ok(None)
+        Ok(Ok(()))
     }
 
     /// Writes function address (`hash_bytes`) into the Wasm memory (at
@@ -3226,7 +3225,6 @@ mod tests {
                 | CLType::Tuple1(_)
                 | CLType::Tuple2(_)
                 | CLType::Tuple3(_)
-                | CLType::ContractHeader
                 | CLType::Any => (),
             }
         };

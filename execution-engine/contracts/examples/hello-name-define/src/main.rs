@@ -13,7 +13,9 @@ use contract::{
     contract_api::{runtime, storage},
     unwrap_or_revert::UnwrapOrRevert,
 };
-use types::{ApiError, Arg, CLType, CLValue, EntryPoint, EntryPointAccess, EntryPointType, SemVer};
+use types::{
+    ApiError, CLType, CLValue, EntryPoint, EntryPointAccess, EntryPointType, Parameter, SemVer,
+};
 
 const HELLO_NAME_METADATA_KEY: &str = "hello_name_metadata";
 const HELLO_NAME_EXT: &str = "hello_name_ext";
@@ -42,7 +44,7 @@ pub extern "C" fn call() {
     let methods = {
         let mut methods = BTreeMap::new();
         let entrypoint_hello = EntryPoint::new(
-            vec![Arg::new(ARG_NAME, CLType::String)],
+            vec![Parameter::new(ARG_NAME, CLType::String)],
             CLType::String,
             EntryPointAccess::Public,
             EntryPointType::Contract,

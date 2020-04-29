@@ -33,7 +33,6 @@ const CL_TYPE_TAG_TUPLE1: u8 = 18;
 const CL_TYPE_TAG_TUPLE2: u8 = 19;
 const CL_TYPE_TAG_TUPLE3: u8 = 20;
 const CL_TYPE_TAG_ANY: u8 = 21;
-const CL_TYPE_TAG_CONTRACT: u8 = 22;
 
 /// CasperLabs types, i.e. types which can be stored and manipulated by smart contracts.
 ///
@@ -89,8 +88,6 @@ pub enum CLType {
     Tuple3([Box<CLType>; 3]),
     /// Unspecified type.
     Any,
-    /// Smart contract type signature.
-    ContractHeader,
 }
 
 impl CLType {
@@ -111,7 +108,6 @@ impl CLType {
                 | CLType::String
                 | CLType::Key
                 | CLType::URef
-                | CLType::ContractHeader
                 | CLType::Any => 0,
                 CLType::Option(cl_type) | CLType::List(cl_type) => cl_type.serialized_length(),
                 CLType::FixedList(cl_type, list_len) => {
@@ -180,7 +176,6 @@ impl CLType {
                 serialize_cl_tuple_type(CL_TYPE_TAG_TUPLE3, cl_type_array, stream)
             }
             CLType::Any => stream.push(CL_TYPE_TAG_ANY),
-            CLType::ContractHeader => stream.push(CL_TYPE_TAG_CONTRACT),
         }
     }
 }

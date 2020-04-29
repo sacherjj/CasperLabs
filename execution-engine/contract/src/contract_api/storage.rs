@@ -10,7 +10,7 @@ use core::{convert::From, mem::MaybeUninit};
 use casperlabs_types::{
     api_error,
     bytesrepr::{self, FromBytes, ToBytes},
-    contract_header::{self, EntryPoint},
+    contract_header::EntryPoint,
     AccessRights, ApiError, CLTyped, CLValue, ContractRef, Key, SemVer, URef,
     UREF_SERIALIZED_LENGTH,
 };
@@ -148,7 +148,7 @@ pub fn create_contract_user_group(
     group_label: &str,
     num_new_urefs: u8, // number of new urefs to populate the group with
     existing_urefs: BTreeSet<URef>, // also include these existing urefs in the group
-) -> Result<Vec<URef>, contract_header::Error> {
+) -> Result<Vec<URef>, ApiError> {
     let (meta_ptr, meta_size, _bytes1) = contract_api::to_ptr(Key::from(contract));
     let (access_ptr, _access_size, _bytes2) = contract_api::to_ptr(access_key);
     let (label_ptr, label_size, _bytes3) = contract_api::to_ptr(group_label);
@@ -169,11 +169,8 @@ pub fn create_contract_user_group(
                 value_size.as_mut_ptr(),
             )
         };
-        match api_error::result_from(ret) {
-            Ok(_) => unsafe { value_size.assume_init() },
-            Err(ApiError::ContractHeader(id)) => return Err(contract_header::Error::from_u8(id)),
-            Err(e) => runtime::revert(e),
-        }
+        api_error::result_from(ret).unwrap_or_revert();
+        unsafe { value_size.assume_init() }
     };
 
     let value_bytes = runtime::read_host_buffer(value_size).unwrap_or_revert();
@@ -191,7 +188,7 @@ pub fn add_contract_version(
     version: SemVer,
     methods: BTreeMap<String, EntryPoint>,
     named_keys: BTreeMap<String, Key>,
-) -> Result<(), contract_header::Error> {
+) -> Result<(), ApiError> {
     let (meta_ptr, meta_size, _bytes1) = contract_api::to_ptr(contract);
     let (access_ptr, _access_size, _bytes2) = contract_api::to_ptr(access_key);
     let (version_ptr, _version_size, _bytes3) = contract_api::to_ptr(version);
@@ -210,11 +207,7 @@ pub fn add_contract_version(
             keys_size,
         )
     };
-
-    match contract_header::Error::from_i32(result) {
-        None => Ok(()),
-        Some(err) => Err(err),
-    }
+    api_error::result_from(result)
 }
 
 /// Remove a version of a contract from the contract stored at the given
@@ -225,7 +218,7 @@ pub fn remove_contract_version(
     contract: ContractRef,
     access_key: URef,
     version: SemVer,
-) -> Result<(), contract_header::Error> {
+) -> Result<(), ApiError> {
     let (meta_ptr, meta_size, _bytes1) = contract_api::to_ptr(Key::from(contract));
     let (access_ptr, _access_size, _bytes2) = contract_api::to_ptr(access_key);
     let (version_ptr, _version_size, _bytes3) = contract_api::to_ptr(version);
@@ -233,10 +226,7 @@ pub fn remove_contract_version(
     let result =
         unsafe { ext_ffi::remove_contract_version(meta_ptr, meta_size, access_ptr, version_ptr) };
 
-    match contract_header::Error::from_i32(result) {
-        None => Ok(()),
-        Some(err) => Err(err),
-    }
+    api_error::result_from(result)
 }
 
 /// Stores the serialized bytes of an exported, non-mangled `extern "C"` function as a new contract

@@ -612,11 +612,9 @@ where
                     bytesrepr::deserialize(bytes).map_err(Error::BytesRepr)?
                 };
 
-                let result = self
-                    .remove_contract_version(metadata_key, access_key, version)?
-                    .map(|err| err.into_u8())
-                    .unwrap_or(0);
-                Ok(Some(RuntimeValue::I32(result as i32)))
+                let result = self.remove_contract_version(metadata_key, access_key, version)?;
+
+                Ok(Some(RuntimeValue::I32(api_error::i32_from(result))))
             }
 
             FunctionIndex::CallVersionedContract => {

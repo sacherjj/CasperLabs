@@ -19,7 +19,8 @@ use contract::{
     unwrap_or_revert::UnwrapOrRevert,
 };
 use types::{
-    ApiError, Arg, CLType, CLValue, EntryPoint, EntryPointAccess, EntryPointType, Key, SemVer, URef,
+    ApiError, CLType, CLValue, EntryPoint, EntryPointAccess, EntryPointType, Key, Parameter,
+    SemVer, URef,
 };
 
 const LIST_KEY: &str = "list";
@@ -115,8 +116,8 @@ pub extern "C" fn call() {
         let mut methods = BTreeMap::new();
         let entrypoint_hello = EntryPoint::new(
             vec![
-                Arg::new(ARG_METHOD_NAME, CLType::String),
-                Arg::new(ARG_ARG1, CLType::String),
+                Parameter::new(ARG_METHOD_NAME, CLType::String),
+                Parameter::new(ARG_ARG1, CLType::String),
             ],
             CLType::Option(Box::new(CLType::Key)),
             EntryPointAccess::Public,

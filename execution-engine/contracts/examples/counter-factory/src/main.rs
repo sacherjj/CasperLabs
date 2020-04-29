@@ -17,7 +17,7 @@ use contract::{
     unwrap_or_revert::UnwrapOrRevert,
 };
 use types::{
-    contract_header::{Arg, EntryPoint, EntryPointAccess, EntryPointType},
+    contract_header::{EntryPoint, EntryPointAccess, EntryPointType, Parameter},
     runtime_args, AccessRights, ApiError, CLType, CLValue, Key, RuntimeArgs, SemVer, URef,
 };
 
@@ -101,7 +101,7 @@ pub extern "C" fn create_counter() -> ! {
     methods.insert(
         String::from(INC_METHOD),
         EntryPoint::new(
-            vec![Arg::new(String::from("step"), CLType::I32)],
+            vec![Parameter::new(String::from("step"), CLType::I32)],
             CLType::Unit,
             EntryPointAccess::Public,
             EntryPointType::Contract,
@@ -185,7 +185,7 @@ pub extern "C" fn call() {
     entrypoints.insert(GET_METHOD.to_string(), entrypoint_get);
 
     let entrypoint_inc = EntryPoint::new(
-        vec![Arg::new(String::from("step"), CLType::I32)],
+        vec![Parameter::new(String::from("step"), CLType::I32)],
         CLType::Unit,
         EntryPointAccess::Groups(vec![]),
         EntryPointType::Contract,

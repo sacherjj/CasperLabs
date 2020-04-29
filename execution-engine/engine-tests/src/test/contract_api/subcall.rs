@@ -8,7 +8,7 @@ use engine_test_support::{
     },
     DEFAULT_ACCOUNT_ADDR,
 };
-use types::{runtime_args::RuntimeArgs, SemVer, U512};
+use types::{RuntimeArgs, SemVer, U512};
 
 #[ignore]
 #[test]

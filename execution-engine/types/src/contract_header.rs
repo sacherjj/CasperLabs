@@ -3,16 +3,13 @@
 use crate::{
     bytesrepr::{self, FromBytes, ToBytes},
     uref::URef,
-    CLType, CLTyped, Key, ProtocolVersion, SemVer,
+    CLType, Key, ProtocolVersion, SemVer,
 };
 use alloc::{
     collections::{BTreeMap, BTreeSet},
     string::String,
     vec::Vec,
 };
-use core::convert::TryInto;
-use num_derive::{FromPrimitive, ToPrimitive};
-use num_traits::{FromPrimitive, ToPrimitive};
 
 /// Maximum number of distinct user groups.
 pub const MAX_GROUPS: u8 = 10;
@@ -20,7 +17,7 @@ pub const MAX_GROUPS: u8 = 10;
 pub const MAX_TOTAL_UREFS: u8 = 100;
 
 /// Set of errors which may happen when working with contract headers.
-#[derive(Debug, PartialEq, FromPrimitive, ToPrimitive)]
+#[derive(Debug, PartialEq)]
 #[repr(u8)]
 pub enum Error {
     /// Attempt to add/remove contract versions without the right access key.
@@ -40,24 +37,6 @@ pub enum Error {
     /// Attempted to add a new URef to a group, which resulted in the total
     /// number of URefs across all user groups to exceed the allowed maximum.
     MaxTotalURefsExceeded = 6,
-}
-
-impl Error {
-    /// Convert to byte for serialization purposes.
-    pub fn into_u8(self) -> u8 {
-        ToPrimitive::to_u8(&self).unwrap()
-    }
-
-    /// Construct from byte (for serialization purposes).
-    pub fn from_u8(x: u8) -> Self {
-        FromPrimitive::from_u8(x).unwrap()
-    }
-
-    /// Construct from integer (for return from host purposes).
-    pub fn from_i32(x: i32) -> Option<Self> {
-        let y: u8 = x.try_into().ok()?;
-        FromPrimitive::from_u8(y)
-    }
 }
 
 /// A (labelled) "user group". Each method of a versioned contract may be
@@ -295,12 +274,6 @@ impl ContractHeader {
     }
 }
 
-impl CLTyped for ContractHeader {
-    fn cl_type() -> CLType {
-        CLType::ContractHeader
-    }
-}
-
 impl ToBytes for ContractHeader {
     fn to_bytes(&self) -> Result<Vec<u8>, bytesrepr::Error> {
         let mut result = ToBytes::to_bytes(&self.methods)?;
@@ -369,14 +342,14 @@ impl FromBytes for EntryPointType {
 /// referenced by index as well as name.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EntryPoint {
-    args: Vec<Arg>,
+    args: Vec<Parameter>,
     ret: CLType,
     access: EntryPointAccess,
     entry_point_type: EntryPointType,
 }
 
-impl Into<(Vec<Arg>, CLType, EntryPointAccess, EntryPointType)> for EntryPoint {
-    fn into(self) -> (Vec<Arg>, CLType, EntryPointAccess, EntryPointType) {
+impl Into<(Vec<Parameter>, CLType, EntryPointAccess, EntryPointType)> for EntryPoint {
+    fn into(self) -> (Vec<Parameter>, CLType, EntryPointAccess, EntryPointType) {
         (self.args, self.ret, self.access, self.entry_point_type)
     }
 }
@@ -384,7 +357,7 @@ impl Into<(Vec<Arg>, CLType, EntryPointAccess, EntryPointType)> for EntryPoint {
 impl EntryPoint {
     /// `EntryPoint` constructor.
     pub fn new(
-        args: Vec<Arg>,
+        args: Vec<Parameter>,
         ret: CLType,
         access: EntryPointAccess,
         entry_point_type: EntryPointType,
@@ -403,7 +376,7 @@ impl EntryPoint {
     }
 
     /// Get the arguments for this method.
-    pub fn args(&self) -> &[Arg] {
+    pub fn args(&self) -> &[Parameter] {
         self.args.as_slice()
     }
 
@@ -435,7 +408,7 @@ impl ToBytes for EntryPoint {
 
 impl FromBytes for EntryPoint {
     fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), bytesrepr::Error> {
-        let (args, bytes) = Vec::<Arg>::from_bytes(bytes)?;
+        let (args, bytes) = Vec::<Parameter>::from_bytes(bytes)?;
         let (ret, bytes) = CLType::from_bytes(bytes)?;
         let (access, bytes) = EntryPointAccess::from_bytes(bytes)?;
         let (entry_point_type, bytes) = EntryPointType::from_bytes(bytes)?;
@@ -464,31 +437,14 @@ pub enum EntryPointAccess {
     Groups(Vec<Group>),
 }
 
+const ENTRYPOINTACCESS_PUBLIC_TAG: u8 = 1;
+const ENTRYPOINTACCESS_GROUPS_TAG: u8 = 2;
+
 impl EntryPointAccess {
     /// Constructor for access granted to only listed groups.
     pub fn groups(labels: &[&str]) -> Self {
         let list: Vec<Group> = labels.iter().map(|s| Group(String::from(*s))).collect();
         EntryPointAccess::Groups(list)
-    }
-
-    fn tag(&self) -> EntryPointAccessTag {
-        match self {
-            EntryPointAccess::Public => EntryPointAccessTag::Public,
-            EntryPointAccess::Groups(_) => EntryPointAccessTag::Groups,
-        }
-    }
-}
-
-#[derive(Debug, PartialEq, Clone, Copy, FromPrimitive)]
-#[repr(u8)]
-enum EntryPointAccessTag {
-    Public = 0,
-    Groups = 1,
-}
-
-impl EntryPointAccessTag {
-    fn to_u8(self) -> u8 {
-        self as u8
     }
 }
 
@@ -496,11 +452,15 @@ impl ToBytes for EntryPointAccess {
     fn to_bytes(&self) -> Result<Vec<u8>, bytesrepr::Error> {
         let mut result = bytesrepr::allocate_buffer(self)?;
 
-        result.push(self.tag().to_u8());
-        if let EntryPointAccess::Groups(groups) = self {
-            result.append(&mut groups.to_bytes()?);
+        match self {
+            EntryPointAccess::Public => {
+                result.push(ENTRYPOINTACCESS_PUBLIC_TAG);
+            }
+            EntryPointAccess::Groups(groups) => {
+                result.push(ENTRYPOINTACCESS_PUBLIC_TAG);
+                result.append(&mut groups.to_bytes()?);
+            }
         }
-
         Ok(result)
     }
 
@@ -516,29 +476,29 @@ impl FromBytes for EntryPointAccess {
     fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), bytesrepr::Error> {
         let (tag, bytes) = u8::from_bytes(bytes)?;
 
-        match EntryPointAccessTag::from_u8(tag) {
-            None => Err(bytesrepr::Error::Formatting),
-            Some(EntryPointAccessTag::Public) => Ok((EntryPointAccess::Public, bytes)),
-            Some(EntryPointAccessTag::Groups) => {
+        match tag {
+            ENTRYPOINTACCESS_PUBLIC_TAG => Ok((EntryPointAccess::Public, bytes)),
+            ENTRYPOINTACCESS_GROUPS_TAG => {
                 let (groups, bytes) = Vec::<Group>::from_bytes(bytes)?;
                 let result = EntryPointAccess::Groups(groups);
                 Ok((result, bytes))
             }
+            _ => Err(bytesrepr::Error::Formatting),
         }
     }
 }
 
 /// Argument to a method
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Arg {
+pub struct Parameter {
     name: String,
     cl_type: CLType,
 }
 
-impl Arg {
-    /// `Arg` constructor.
+impl Parameter {
+    /// `Parameter` constructor.
     pub fn new<T: Into<String>>(name: T, cl_type: CLType) -> Self {
-        Arg {
+        Parameter {
             name: name.into(),
             cl_type,
         }
@@ -550,13 +510,13 @@ impl Arg {
     }
 }
 
-impl Into<(String, CLType)> for Arg {
+impl Into<(String, CLType)> for Parameter {
     fn into(self) -> (String, CLType) {
         (self.name, self.cl_type)
     }
 }
 
-impl ToBytes for Arg {
+impl ToBytes for Parameter {
     fn to_bytes(&self) -> Result<Vec<u8>, bytesrepr::Error> {
         let mut result = ToBytes::to_bytes(&self.name)?;
         self.cl_type.append_bytes(&mut result);
@@ -569,11 +529,11 @@ impl ToBytes for Arg {
     }
 }
 
-impl FromBytes for Arg {
+impl FromBytes for Parameter {
     fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), bytesrepr::Error> {
         let (name, bytes) = String::from_bytes(bytes)?;
         let (cl_type, bytes) = CLType::from_bytes(bytes)?;
 
-        Ok((Arg { name, cl_type }, bytes))
+        Ok((Parameter { name, cl_type }, bytes))
     }
 }
