@@ -56,7 +56,7 @@ pub extern "C" fn increment() {
     storage::add(counter_variable, step);
 }
 
-/// get method for couner
+/// get method for counter
 #[no_mangle]
 pub extern "C" fn get() -> ! {
     let counter_variable = get_counter_variable();

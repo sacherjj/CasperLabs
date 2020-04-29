@@ -136,7 +136,7 @@ pub fn create_contract_metadata_at_hash() -> (Key, URef) {
 }
 
 /// Create a new "user group" for a (versioned) contract. User groups associate
-/// a set of URefs with a label. Methods on a contracts can be given a list of
+/// a set of URefs with a label. Methods on a contract can be given a list of
 /// labels they accept and the runtime will check that a URef from at least one
 /// of the allowed groups is present in the caller's context before
 /// execution. This allows access control for methods of a contract. This
@@ -217,7 +217,7 @@ pub fn add_contract_version(
     }
 }
 
-/// Remove a version of a contract to the contract stored at the given
+/// Remove a version of a contract from the contract stored at the given
 /// `ContractRef`. That version of the contract will no longer be callable by
 /// `call_versioned_contract`. Note that this contract must have been created by
 /// `create_contract` or `create_contract_metadata_at_hash` first.
