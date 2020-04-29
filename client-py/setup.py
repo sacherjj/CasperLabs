@@ -20,8 +20,8 @@ THIS_DIRECTORY = os.path.dirname(os.path.realpath(__file__))
 
 # Directory with Scala client's bundled contracts
 
-CONTRACTS_DIR = f"{THIS_DIRECTORY}/../../client/src/main/resources"
-PROTOBUF_DIR = f"{THIS_DIRECTORY}/../../protobuf"
+CONTRACTS_DIR = f"{THIS_DIRECTORY}/../client/src/main/resources"
+PROTOBUF_DIR = f"{THIS_DIRECTORY}/../protobuf"
 PROTO_DIR = f"{THIS_DIRECTORY}/casperlabs_client/proto"
 PACKAGE_DIR = f"{THIS_DIRECTORY}/casperlabs_client"
 NAME = "casperlabs_client"
@@ -39,7 +39,7 @@ def proto_compiler_check():
 
 def python_compiler_check():
     if sys.version < "3.6":
-        sys.stderr.write(f"{NAME} is onl./y supported on Python versions 3.6+.\n")
+        sys.stderr.write(f"{NAME} is only supported on Python versions 3.6+.\n")
         sys.exit(-1)
 
 

@@ -10,7 +10,7 @@ import os
 import functools
 import logging
 from pathlib import Path
-import datetime
+
 from casperlabs_client import (
     CasperLabsClient,
     DEFAULT_HOST,
@@ -631,7 +631,7 @@ def cli(*arguments) -> int:
         [('--deploy-orphaned',), dict(action='store_true', help='Deploy orphaned')],
         [('-k', '--account-public-key'), dict(action='append', help='Filter by (possibly multiple) account public key(s)')],
         [('-d', '--deploy-hash'), dict(action='append', help='Filter by (possibly multiple) deploy hash(es)')],
-        [('-f', '--format'), dict(required=False, default='text', choices=('json', 'binary', 'text') ,help='Choose output format. Defaults to text representation.')],
+        [('-f', '--format'), dict(required=False, default='text', choices=('json', 'binary', 'text'), help='Choose output format. Defaults to text representation.')],
         [('--min-event-id',), dict(required=False, default=0, type=int, help="Supports replaying events from a given ID. If the value is 0, it it will subscribe to future events; if it's non-zero, it will replay all past events from that ID, without subscribing to new. To catch up with events from the beginning, start from 1.")],
         [('--max-event-id',), dict(required=False, default=0, type=int, help="Supports replaying events to a given ID.")],
     ])
