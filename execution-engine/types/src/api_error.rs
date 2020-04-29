@@ -725,7 +725,6 @@ mod tests {
         assert_eq!(65_535_u32, ApiError::ProofOfStake(u8::MAX).into());
         assert_eq!(65_536_u32, ApiError::User(0).into()); // u16::MAX + 1
         assert_eq!(131_071_u32, ApiError::User(u16::MAX).into()); // 2 * u16::MAX + 1
-    
     }
 
     #[test]
