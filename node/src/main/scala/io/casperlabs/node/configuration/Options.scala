@@ -395,6 +395,10 @@ private[configuration] final case class Options private (
       gen[Flag]("Disable DAG shape validations during synchronization.")
 
     @scallop
+    val serverSyncMaxParallel =
+      gen[Int]("Maximum number of parallel synchronizations to run at any time.")
+
+    @scallop
     val serverInitSyncMaxNodes =
       gen[Int]("Maximum number of nodes to try to sync with initially in a round.")
 
@@ -463,6 +467,10 @@ private[configuration] final case class Options private (
     @scallop
     val serverRelayBlockChunkConsumerTimeout =
       gen[FiniteDuration]("Maximum time to allow a peer downloading a block to consume each chunk.")
+
+    @scallop
+    val serverValidateMaxParallelBlocks =
+      gen[Int]("Maximum number of blocks to try to validate at any time.")
 
     @scallop
     val casperStandalone =

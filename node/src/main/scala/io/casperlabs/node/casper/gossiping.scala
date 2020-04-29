@@ -523,7 +523,8 @@ package object gossiping {
                        minBlockCountToCheckWidth = conf.server.syncMinBlockCountToCheckWidth,
                        maxBondingRate = conf.server.syncMaxBondingRate,
                        maxDepthAncestorsRequest = conf.server.syncMaxDepthAncestorsRequest,
-                       disableValidations = conf.server.syncDisableValidations
+                       disableValidations = conf.server.syncDisableValidations,
+                       maxParallel = conf.server.syncMaxParallel.value
                      )
     } yield synchronizer
   }
@@ -787,7 +788,7 @@ package object gossiping {
         ErrorInterceptor.default
       ),
       sslContext = serverSslContext.some,
-      maxMessageSize = conf.server.maxMessageSize.some
+      maxMessageSize = conf.server.maxMessageSize.value.some
     )
   }
 }
