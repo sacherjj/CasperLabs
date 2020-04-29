@@ -736,11 +736,11 @@ steps:
   image: "casperlabs/buildenv:latest"
   commands:
   - "make build-client-contracts"
-  - "cd integration-testing"
+  - "cd client-py"
   - "pipenv sync"
-  - "cd client/CasperLabsClient"
+  - "cd CasperLabsClient"
   - "pipenv run python3 setup.py sdist"
-  - "cp dist/casperlabs* ../../../artifacts/${DRONE_BRANCH}"
+  - "cp dist/casperlabs* ../../artifacts/${DRONE_BRANCH}"
   when:
     branch:
     - dev
