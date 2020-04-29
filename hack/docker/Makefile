@@ -183,20 +183,16 @@ maybe-reset-highway-env:
 
 # https://github.com/CasperLabs/stests
 stests/build:
-	# Build contracts stests will want to use.
-	cd ../../execution-engine && \
-	  make build-contract-rs/transfer-to-account-u512-stored
-	# Copy them over under the python client; it's where stests will look for them at the moment.
-	cp ../../execution-engine/target/wasm32-unknown-unknown/release/transfer_to_account_u512_stored.wasm \
-	   ../../integration-testing/client/CasperLabsClient/casperlabs_client/
-
-	# Package a the latest Python client; the one on pypi might be older than the latest and greatest; plus lacks some of the wasms.
+	# Package the latest Python client; the one on pypi might be older than the latest and greatest.
+	# This might cause issues as python client breaks with TestNet
+	# Since at least 0.17, PyPi version has the .wasm, one of the main reasons we manually built and included.
+	# If problems come up, we should most likely pull from PyPi version 0.18.1.
 	cd ../.. &&	make build-python-client
 
 	# Make the client available to the docker deamon here (smaller context.).
 	rm -rf stests/.build
 	mkdir -p stests/.build
-	cp ../../integration-testing/client/CasperLabsClient/dist/casperlabs_client*.tar.gz stests/.build/
+	cp ../../client-py/dist/casperlabs_client*.tar.gz stests/.build/
 
 	docker build \
 	  --build-arg CACHEBUST=$$(date +%s) \
