@@ -6,6 +6,7 @@ import java.util.concurrent.TimeUnit
 
 import cats.syntax.option._
 import guru.nidi.graphviz.engine.Format
+import io.casperlabs.casper.consensus.state.SemVer
 import io.casperlabs.client.BuildInfo
 import io.casperlabs.crypto.Keys.PublicKey
 import io.casperlabs.crypto.codec.{Base16, Base64}
@@ -25,11 +26,26 @@ object Options {
 
   val directoryCheck: File => Boolean = dir => dir.exists() && dir.canWrite && dir.isDirectory
 
-  val semVerCheck: String => Boolean = _.matches("\\d+\\.\\d+\\.\\d+")
-
   trait DeployOptions { self: Subcommand =>
     def sessionRequired: Boolean = true
     def paymentPathName: String  = "payment"
+
+    implicit val semVerConverter: ValueConverter[SemVer] = {
+      val semVerRegex = """(\d+)\.(\d+)\.(\d+)""".r
+
+      implicitly[ValueConverter[String]].flatMap { semVerStr =>
+        semVerRegex
+          .findFirstMatchIn(semVerStr)
+          .map {
+            case semVerRegex(major, minor, patch) => SemVer(major.toInt, minor.toInt, patch.toInt)
+          }
+          .fold[Either[String, Option[SemVer]]](
+            Left(
+              s"$semVerStr is not a valid semantic version that matches the pattern `major.minor.patch`."
+            )
+          )(semVer => Right(Option(semVer)))
+      }
+    }
 
     // Session code on disk.
     val session =
@@ -68,10 +84,9 @@ object Options {
       )
 
     val sessionSemVer =
-      opt[String](
+      opt[SemVer](
         required = true,
-        descr = "Semantic version of the called contract. Matches the pattern `major.minor.patch`.",
-        validate = semVerCheck
+        descr = "Semantic version of the called contract. Matches the pattern `major.minor.patch`."
       )
 
     val payment =
@@ -118,10 +133,9 @@ object Options {
       )
 
     val paymentSemVer =
-      opt[String](
+      opt[SemVer](
         required = true,
-        descr = "Semantic version of the payment contract. Matches the pattern `major.minor.patch`.",
-        validate = semVerCheck
+        descr = "Semantic version of the payment contract. Matches the pattern `major.minor.patch`."
       )
 
     val gasPrice = opt[Long](

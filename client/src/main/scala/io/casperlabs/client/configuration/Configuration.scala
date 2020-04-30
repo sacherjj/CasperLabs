@@ -35,7 +35,7 @@ final case class CodeConfig(
     // Name of the method that will be called during execution of the contract.
     entryPoint: Option[String],
     // Semantic version of the contract that is being called.
-    version: Option[String],
+    version: Option[SemVer],
     // Name of a pre-packaged contract in the client JAR.
     resource: Option[String] = None
 )
@@ -101,34 +101,20 @@ object DeployConfig {
     * they take precedence. This allows overriding the built-in contracts with custom ones.
     */
   private def toCode(opts: CodeConfig, defaultArgs: Seq[Arg]): Code = {
-    val semVerRegex = """(\d+)\.(\d+)\.(\d+)""".r
-    val semVer = opts.version
-      .flatMap { semVerArg =>
-        semVerRegex.findFirstMatchIn(semVerArg).map {
-          case semVerRegex(major, minor, patch) => SemVer(major.toInt, minor.toInt, patch.toInt)
-        }
-      }
-      .getOrElse(
-        throw new IllegalArgumentException(
-          s"${opts.version.get} is not a valid semantic version that matches the pattern `major.minor.patch`."
-        )
-      )
     val contract = opts.file.map { f =>
       val wasm = ByteString.copyFrom(Files.readAllBytes(f.toPath))
       Contract.Wasm(wasm)
     } orElse {
       opts.hash.map { x =>
         Contract.StoredContract(
-          StoredContract()
-            .withContractVersion(semVer)
+          StoredContract(contractVersion = opts.version)
             .withAddress(Hash(ByteString.copyFrom(Base16.decode(x))))
         )
       }
     } orElse {
       opts.name.map { x =>
         Contract.StoredContract(
-          StoredContract()
-            .withContractVersion(semVer)
+          StoredContract(contractVersion = opts.version)
             .withAddress(Name(x))
         )
       }
