@@ -3,39 +3,56 @@ use engine_test_support::{
     internal::{ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_RUN_GENESIS_REQUEST},
     DEFAULT_ACCOUNT_ADDR,
 };
-use types::CLValue;
+use types::{runtime_args, CLValue, RuntimeArgs, SemVer};
 
-const DO_NOTHING_STORED_CALLER_CONTRACT_NAME: &str = "do_nothing_stored_caller";
 const DO_NOTHING_STORED_CONTRACT_NAME: &str = "do_nothing_stored";
 const DO_NOTHING_STORED_UPGRADER_CONTRACT_NAME: &str = "do_nothing_stored_upgrader";
+const DO_NOTHING_STORED_CALLER_CONTRACT_NAME: &str = "do_nothing_stored_caller";
+const ENTRY_FUNCTION_NAME: &str = "delegate";
+const DO_NOTHING_HASH_KEY_NAME: &str = "do_nothing_hash";
+const INITIAL_VERSION: SemVer = SemVer::new(1, 0, 0);
+const UPGRADED_VERSION: SemVer = SemVer::new(2, 0, 0);
+const PURSE_NAME_ARG_NAME: &str = "purse_name";
 const HELLO: &str = "Hello";
+const PURSE_1: &str = "purse_1";
 const LOCAL_STATE_STORED_CALLER_CONTRACT_NAME: &str = "local_state_stored_caller";
 const LOCAL_STATE_STORED_CONTRACT_NAME: &str = "local_state_stored";
 const LOCAL_STATE_STORED_UPGRADER_CONTRACT_NAME: &str = "local_state_stored_upgrader";
 const METHOD_ADD: &str = "add";
 const METHOD_REMOVE: &str = "remove";
 const METHOD_VERSION: &str = "version";
-const PURSE_1: &str = "purse_1";
 const PURSE_HOLDER_STORED_CALLER_CONTRACT_NAME: &str = "purse_holder_stored_caller";
 const PURSE_HOLDER_STORED_CONTRACT_NAME: &str = "purse_holder_stored";
 const PURSE_HOLDER_STORED_UPGRADER_CONTRACT_NAME: &str = "purse_holder_stored_upgrader";
-const STORE_AT_UREF: &str = "uref";
 const TOTAL_PURSES: usize = 3;
 
+/// Performs define and execution of versioned contracts, calling them directly from hash
 #[ignore]
 #[test]
-fn should_upgrade_do_nothing_to_do_something() {
+fn should_upgrade_do_nothing_to_do_something_version_hash_call() {
     let mut builder = InMemoryWasmTestBuilder::default();
 
     builder.run_genesis(&DEFAULT_RUN_GENESIS_REQUEST);
 
+    // Create contract metadata and store contract ver: 1.0.0 with "delegate" entry function
     {
         let exec_request = {
             let contract_name = format!("{}.wasm", DO_NOTHING_STORED_CONTRACT_NAME);
-            ExecuteRequestBuilder::standard(
+            ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, &contract_name, ()).build()
+        };
+
+        builder.exec(exec_request).expect_success().commit();
+    }
+
+    // Calling initial version from contract metadata hash, should have no effects
+    {
+        let exec_request = {
+            ExecuteRequestBuilder::versioned_contract_call_by_hash_key_name(
                 DEFAULT_ACCOUNT_ADDR,
-                &contract_name,
-                (STORE_AT_UREF.to_string(),),
+                DO_NOTHING_HASH_KEY_NAME,
+                INITIAL_VERSION,
+                ENTRY_FUNCTION_NAME,
+                RuntimeArgs::new(),
             )
             .build()
         };
@@ -43,32 +60,37 @@ fn should_upgrade_do_nothing_to_do_something() {
         builder.exec(exec_request).expect_success().commit();
     }
 
-    // call stored do nothing, passing a purse name as an arg
-    // which should have no affect as do nothing does nothing
-    let account_1_transformed = builder
+    let account_1 = builder
         .get_account(DEFAULT_ACCOUNT_ADDR)
         .expect("should get account 1");
 
     assert!(
-        account_1_transformed.named_keys().get(PURSE_1).is_none(),
+        account_1.named_keys().get(PURSE_1).is_none(),
         "purse should not exist",
     );
 
-    let do_nothing_stored_uref = account_1_transformed
-        .named_keys()
-        .get(DO_NOTHING_STORED_CONTRACT_NAME)
-        .expect("should have do_nothing_stored uref")
-        .as_uref()
-        .expect("should have uref");
-
-    // do upgrade
+    // Upgrade version having call to create_purse_01
     {
         let exec_request = {
             let contract_name = format!("{}.wasm", DO_NOTHING_STORED_UPGRADER_CONTRACT_NAME);
-            ExecuteRequestBuilder::standard(
+            ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, &contract_name, ()).build()
+        };
+
+        builder.exec(exec_request).expect_success().commit();
+    }
+
+    // Calling upgraded version, expecting purse creation
+    {
+        let args = runtime_args! {
+            PURSE_NAME_ARG_NAME => PURSE_1,
+        };
+        let exec_request = {
+            ExecuteRequestBuilder::versioned_contract_call_by_hash_key_name(
                 DEFAULT_ACCOUNT_ADDR,
-                &contract_name,
-                (*do_nothing_stored_uref,),
+                DO_NOTHING_HASH_KEY_NAME,
+                UPGRADED_VERSION,
+                ENTRY_FUNCTION_NAME,
+                args,
             )
             .build()
         };
@@ -76,31 +98,100 @@ fn should_upgrade_do_nothing_to_do_something() {
         builder.exec(exec_request).expect_success().commit();
     }
 
-    // call upgraded contract
+    let account_1 = builder
+        .get_account(DEFAULT_ACCOUNT_ADDR)
+        .expect("should get account 1");
+
+    assert!(
+        account_1.named_keys().get(PURSE_1).is_some(),
+        "purse should exist",
+    );
+}
+
+/// Performs define and execution of versioned contracts, calling them from a contract
+#[ignore]
+#[test]
+fn should_upgrade_do_nothing_to_do_something_contract_call() {
+    let mut builder = InMemoryWasmTestBuilder::default();
+
+    builder.run_genesis(&*DEFAULT_RUN_GENESIS_REQUEST);
+
+    // Create contract metadata and store contract ver: 1.0.0
     {
         let exec_request = {
-            let contract_name = format!("{}.wasm", DO_NOTHING_STORED_CALLER_CONTRACT_NAME);
-            ExecuteRequestBuilder::standard(
-                DEFAULT_ACCOUNT_ADDR,
-                &contract_name,
-                (*do_nothing_stored_uref, PURSE_1),
-            )
-            .build()
+            let contract_name = format!("{}.wasm", DO_NOTHING_STORED_CONTRACT_NAME);
+            ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, &contract_name, ()).build()
         };
 
         builder.exec(exec_request).expect_success().commit();
     }
 
-    let contract = builder
-        .get_contract(*do_nothing_stored_uref)
-        .expect("should have contract");
+    let account_1 = builder
+        .get_account(DEFAULT_ACCOUNT_ADDR)
+        .expect("should get account 1");
 
-    // currently as the system is designed the new uref for the purse is added to the
-    // caller contract instead of the account...ideally the account would get the uref
-    // but that's beyond the scope of this upgrade specific test
+    let stored_contract_hash = account_1
+        .named_keys()
+        .get(DO_NOTHING_HASH_KEY_NAME)
+        .expect("should have key of do_nothing_hash");
+
+    // TODO This does not seem to call properly
+    // Calling initial stored version from contract metadata hash, should have no effects
+    {
+        let contract_name = format!("{}.wasm", DO_NOTHING_STORED_CALLER_CONTRACT_NAME);
+        // TODO update to pass SemVer once supported into contracts, instead of
+        // INITIAL_VERSION.major
+        let args = (*stored_contract_hash, INITIAL_VERSION.major, PURSE_1);
+        let exec_request =
+            { ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, &contract_name, args).build() };
+
+        builder.exec(exec_request).expect_success().commit();
+    }
+
+    let account_1 = builder
+        .get_account(DEFAULT_ACCOUNT_ADDR)
+        .expect("should get account 1");
+
     assert!(
-        contract.named_keys().contains_key(PURSE_1),
-        "should have new purse uref"
+        account_1.named_keys().get(PURSE_1).is_none(),
+        "purse should not exist",
+    );
+
+    // Upgrade stored contract to version: 2.0.0, having call to create_purse_01
+    {
+        let exec_request = {
+            let contract_name = format!("{}.wasm", DO_NOTHING_STORED_UPGRADER_CONTRACT_NAME);
+            ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, &contract_name, ()).build()
+        };
+
+        builder.exec(exec_request).expect_success().commit();
+    }
+
+    let stored_contract_hash = account_1
+        .named_keys()
+        .get(DO_NOTHING_HASH_KEY_NAME)
+        .expect("should have key of do_nothing_hash");
+
+    // TODO This does not seem to call properly
+    // Calling upgraded stored version, expecting purse creation
+    {
+        let contract_name = format!("{}.wasm", DO_NOTHING_STORED_CALLER_CONTRACT_NAME);
+        // TODO update to pass SemVer once supported into contracts, instead of
+        // UPGRADED_VERSION.major
+        let args = (*stored_contract_hash, UPGRADED_VERSION.major, PURSE_1);
+        let exec_request =
+            { ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, &contract_name, args).build() };
+
+        builder.exec(exec_request).expect_success().commit();
+    }
+
+    let account_1 = builder
+        .get_account(DEFAULT_ACCOUNT_ADDR)
+        .expect("should get account 1");
+
+    assert!(
+        account_1.named_keys().get(PURSE_1).is_some(),
+        "purse should exist",
     );
 }
 

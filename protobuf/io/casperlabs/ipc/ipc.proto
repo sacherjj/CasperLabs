@@ -28,12 +28,28 @@ message StoredContractURef{
   bytes args = 2; // ABI-encoded arguments
 }
 
+message StoredVersionedContractByName {
+    string name = 1; // key name
+    io.casperlabs.casper.consensus.state.SemVer version = 2;     // finds active version
+    string entry_point = 3; // finds header by entrypoint name
+    bytes args = 4; // Serialized runtime arguments
+}
+
+message StoredVersionedContractByHash {
+    bytes hash = 1; // hash of the metadata
+    io.casperlabs.casper.consensus.state.SemVer version = 2;     // finds active version
+    string entry_point = 3; // finds header by entrypoint name
+    bytes args = 4; // Serialized runtime arguments
+}
+
 message DeployPayload {
   oneof payload {
     DeployCode deploy_code = 1;
     StoredContractHash stored_contract_hash = 2;
     StoredContractName stored_contract_name = 3;
     StoredContractURef stored_contract_uref = 4;
+    StoredVersionedContractByName stored_versioned_contract_by_name = 5;
+    StoredVersionedContractByHash stored_versioned_contract_by_hash = 6;
   }
 }
 

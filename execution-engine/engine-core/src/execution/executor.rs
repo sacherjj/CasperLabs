@@ -12,9 +12,8 @@ use engine_shared::{
 };
 use engine_storage::{global_state::StateReader, protocol_data::ProtocolData};
 use types::{
-    account::PublicKey,
-    bytesrepr::{self, FromBytes},
-    BlockTime, CLTyped, CLValue, Key, Phase, ProtocolVersion,
+    account::PublicKey, bytesrepr::FromBytes, BlockTime, CLTyped, CLValue, EntryPointType, Key,
+    Phase, ProtocolVersion, RuntimeArgs,
 };
 
 use crate::{
@@ -85,9 +84,11 @@ impl Executor {
     pub fn exec<R>(
         &self,
         parity_module: Module,
-        args: Vec<u8>,
+        entry_point_name: &str,
+        args: RuntimeArgs,
         base_key: Key,
         account: &Account,
+        mut named_keys: BTreeMap<String, Key>,
         authorized_keys: BTreeSet<PublicKey>,
         blocktime: BlockTime,
         deploy_hash: [u8; 32],
@@ -98,6 +99,7 @@ impl Executor {
         phase: Phase,
         protocol_data: ProtocolData,
         system_contract_cache: SystemContractCache,
+        entry_point_type: EntryPointType,
     ) -> ExecutionResult
     where
         R: StateReader<Key, StoredValue>,
@@ -105,8 +107,6 @@ impl Executor {
     {
         let (instance, memory) =
             on_fail_charge!(instance_and_memory(parity_module.clone(), protocol_version));
-
-        let mut named_keys = account.named_keys().clone();
 
         let access_rights =
             {
@@ -123,15 +123,6 @@ impl Executor {
         // Snapshot of effects before execution, so in case of error
         // only nonce update can be returned.
         let effects_snapshot = tc.borrow().effect();
-
-        let args: Vec<CLValue> = if args.is_empty() {
-            Vec::new()
-        } else {
-            // TODO: figure out how this works with the cost model
-            // https://casperlabs.atlassian.net/browse/EE-239
-            let gas = Gas::new(args.len().into());
-            on_fail_charge!(bytesrepr::deserialize(args), gas, effects_snapshot)
-        };
 
         let context = RuntimeContext::new(
             tc,
@@ -151,6 +142,7 @@ impl Executor {
             correlation_id,
             phase,
             protocol_data,
+            entry_point_type,
         );
 
         let mut runtime = Runtime::new(
@@ -208,7 +200,7 @@ impl Executor {
         }
 
         on_fail_charge!(
-            instance.invoke_export("call", &[], &mut runtime),
+            instance.invoke_export(entry_point_name, &[], &mut runtime),
             runtime.context().gas_counter(),
             effects_snapshot
         );
@@ -222,7 +214,7 @@ impl Executor {
     pub fn exec_finalize<R>(
         &self,
         parity_module: Module,
-        args: Vec<u8>,
+        args: RuntimeArgs,
         named_keys: &mut BTreeMap<String, Key>,
         base_key: Key,
         account: &Account,
@@ -265,13 +257,6 @@ impl Executor {
         // can be returned.
         let effects_snapshot = state.borrow().effect();
 
-        let args: Vec<CLValue> = if args.is_empty() {
-            Vec::new()
-        } else {
-            let gas = Gas::new(args.len().into());
-            on_fail_charge!(bytesrepr::deserialize(args), gas, effects_snapshot)
-        };
-
         let context = RuntimeContext::new(
             state,
             &mut named_keys,
@@ -290,6 +275,7 @@ impl Executor {
             correlation_id,
             phase,
             protocol_data,
+            EntryPointType::Session,
         );
 
         let (instance, memory) =
@@ -372,7 +358,7 @@ impl Executor {
     pub fn create_runtime<'a, R>(
         &self,
         module: Module,
-        args: Vec<u8>,
+        args: RuntimeArgs,
         keys: &'a mut BTreeMap<String, Key>,
         base_key: Key,
         account: &'a Account,
@@ -387,6 +373,7 @@ impl Executor {
         phase: Phase,
         protocol_data: ProtocolData,
         system_contract_cache: SystemContractCache,
+        entry_point_type: EntryPointType,
     ) -> Result<(ModuleRef, Runtime<'a, R>), Error>
     where
         R: StateReader<Key, StoredValue>,
@@ -400,12 +387,6 @@ impl Executor {
                 }));
                 extract_access_rights_from_keys(keys)
             };
-
-        let args: Vec<CLValue> = if args.is_empty() {
-            Vec::new()
-        } else {
-            bytesrepr::deserialize(args)?
-        };
 
         let gas_counter = Gas::default();
 
@@ -427,6 +408,7 @@ impl Executor {
             correlation_id,
             phase,
             protocol_data,
+            entry_point_type,
         );
 
         let (instance, memory) = instance_and_memory(module.clone(), protocol_version)?;
@@ -445,7 +427,7 @@ impl Executor {
     pub fn exec_system<R, T>(
         &self,
         module: Module,
-        args: Vec<u8>,
+        args: RuntimeArgs,
         keys: &mut BTreeMap<String, Key>,
         base_key: Key,
         account: &Account,
@@ -483,6 +465,7 @@ impl Executor {
             phase,
             protocol_data,
             system_contract_cache,
+            EntryPointType::Session,
         )?;
 
         let error: wasmi::Error = match instance.invoke_export("call", &[], &mut runtime) {

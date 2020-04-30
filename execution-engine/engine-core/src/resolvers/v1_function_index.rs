@@ -43,8 +43,15 @@ pub enum FunctionIndex {
     GetMainPurseIndex,
     GetArgSizeFuncIndex,
     ReadHostBufferIndex,
+    CreateContractMetadataAtHash,
+    AddContractVersion,
+    RemoveContractVersion,
+    CallVersionedContract,
+    CreateContractUserGroup,
     #[cfg(feature = "test-support")]
     PrintIndex,
+    GetRuntimeArgsizeIndex,
+    GetRuntimeArgIndex,
 }
 
 impl Into<usize> for FunctionIndex {

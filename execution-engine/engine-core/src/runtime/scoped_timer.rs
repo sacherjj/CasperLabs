@@ -126,8 +126,17 @@ impl Drop for ScopedTimer {
             FunctionIndex::GetMainPurseIndex => "host_function_get_main_purse",
             FunctionIndex::GetArgSizeFuncIndex => "host_function_get_arg_size",
             FunctionIndex::ReadHostBufferIndex => "host_function_read_host_buffer",
+            FunctionIndex::CreateContractMetadataAtHash => {
+                "host_function_create_contract_metadata_at_hash"
+            }
+            FunctionIndex::AddContractVersion => "host_function_add_contract_version",
+            FunctionIndex::RemoveContractVersion => "host_remove_contract_version",
+            FunctionIndex::CallVersionedContract => "host_call_versioned_contract",
+            FunctionIndex::CreateContractUserGroup => "create_contract_user_group",
             #[cfg(feature = "test-support")]
             FunctionIndex::PrintIndex => "host_function_print",
+            FunctionIndex::GetRuntimeArgsizeIndex => "host_get_named_arg_size",
+            FunctionIndex::GetRuntimeArgIndex => "host_get_named_arg",
         };
 
         let mut properties = mem::take(&mut self.properties);

@@ -4,7 +4,7 @@ use parity_wasm::elements;
 use engine_shared::TypeMismatch;
 use types::{
     account::{AddKeyFailure, RemoveKeyFailure, SetThresholdFailure, UpdateKeyFailure},
-    bytesrepr, system_contract_errors, AccessRights, ApiError, CLValueError, Key, URef,
+    bytesrepr, system_contract_errors, AccessRights, ApiError, CLType, CLValueError, Key, URef,
 };
 
 use crate::resolvers::error::ResolverError;
@@ -73,6 +73,19 @@ pub enum Error {
     HostBufferEmpty,
     #[fail(display = "Unsupported WASM start")]
     UnsupportedWasmStart,
+    #[fail(display = "Invalid contract version")]
+    InvalidContractVersion,
+    #[fail(display = "No such method")]
+    NoSuchMethod,
+}
+
+impl Error {
+    pub fn type_mismatch(expected: CLType, found: CLType) -> Error {
+        Error::TypeMismatch(TypeMismatch {
+            expected: format!("{:?}", expected),
+            found: format!("{:?}", found),
+        })
+    }
 }
 
 impl wasmi::HostError for Error {}

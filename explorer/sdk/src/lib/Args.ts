@@ -59,7 +59,7 @@ export const BigIntValue = toValue<bigint | JSBI>((value, x) => {
   return value;
 });
 
-export function Args(...args: Array<[string, CLValueInstance]>): Deploy.Arg[] {
+export function Args(...args: [string, CLValueInstance][]): Deploy.Arg[] {
   return args.map(x => {
     const [name, value] = x;
     const arg = new Deploy.Arg();

@@ -10,7 +10,7 @@ use crate::{
         AddKeyFailure, RemoveKeyFailure, SetThresholdFailure, TryFromIntError,
         TryFromSliceForPublicKeyError, UpdateKeyFailure,
     },
-    bytesrepr,
+    bytesrepr, contract_header,
     system_contract_errors::{mint, pos},
     CLValueError,
 };
@@ -26,6 +26,10 @@ const POS_ERROR_OFFSET: u32 = RESERVED_ERROR_MAX - u8::MAX as u32; // 65280..=65
 /// Mint errors (defined in "contracts/system/mint/src/error.rs") will have this value
 /// added to them when being converted to a `u32`.
 const MINT_ERROR_OFFSET: u32 = (POS_ERROR_OFFSET - 1) - u8::MAX as u32; // 65024..=65279
+
+/// Contract header errors (defined in "types/src/contract_header.rs") will have this value
+/// added to them when being converted to a `u32`.
+const HEADER_ERROR_OFFSET: u32 = (MINT_ERROR_OFFSET - 1) - u8::MAX as u32; // 64768..=65023
 
 /// Minimum value of user error's inclusive range.
 const USER_ERROR_MIN: u32 = RESERVED_ERROR_MAX + 1;
@@ -44,6 +48,12 @@ const POS_ERROR_MIN: u32 = POS_ERROR_OFFSET;
 
 /// Maximum value of Proof of Stake error's inclusive range.
 const POS_ERROR_MAX: u32 = RESERVED_ERROR_MAX;
+
+/// Minimum value of contract header error's inclusive range.
+const HEADER_ERROR_MIN: u32 = HEADER_ERROR_OFFSET;
+
+/// Maximum value of contract header error's inclusive range.
+const HEADER_ERROR_MAX: u32 = HEADER_ERROR_OFFSET + u8::MAX as u32;
 
 /// Errors which can be encountered while running a smart contract.
 ///
@@ -172,7 +182,26 @@ const POS_ERROR_MAX: u32 = RESERVED_ERROR_MAX;
 /// # show_and_check!(
 /// 34 => HostBufferFull
 /// # );
-///
+/// // Contract header errors:
+/// use casperlabs_types::contract_header::Error as ContractHeaderError;
+/// # show_and_check!(
+/// 64_769 => ContractHeaderError::InvalidAccessKey
+/// # );
+/// # show_and_check!(
+/// 64_770 => ContractHeaderError::PreviouslyUsedVersion
+/// # );
+/// # show_and_check!(
+/// 64_771 => ContractHeaderError::VersionNotFound
+/// # );
+/// # show_and_check!(
+/// 64_772 => ContractHeaderError::GroupAlreadyExists
+/// # );
+/// # show_and_check!(
+/// 64_773 => ContractHeaderError::MaxGroupsExceeded
+/// # );
+/// # show_and_check!(
+/// 64_774 => ContractHeaderError::MaxTotalURefsExceeded
+/// # );
 /// // Mint errors:
 /// use casperlabs_types::system_contract_errors::mint::Error as MintError;
 /// # show_and_check!(
@@ -400,6 +429,8 @@ pub enum ApiError {
     HostBufferFull,
     /// Could not lay out an array in memory
     AllocLayout,
+    /// Contract header errors.
+    ContractHeader(u8),
     /// Error specific to Mint contract.
     Mint(u8),
     /// Error specific to Proof of Stake contract.
@@ -470,6 +501,12 @@ impl From<CLValueError> for ApiError {
     }
 }
 
+impl From<contract_header::Error> for ApiError {
+    fn from(error: contract_header::Error) -> Self {
+        ApiError::ContractHeader(error as u8)
+    }
+}
+
 // This conversion is not intended to be used by third party crates.
 #[doc(hidden)]
 impl From<TryFromIntError> for ApiError {
@@ -534,6 +571,7 @@ impl From<ApiError> for u32 {
             ApiError::HostBufferEmpty => 33,
             ApiError::HostBufferFull => 34,
             ApiError::AllocLayout => 35,
+            ApiError::ContractHeader(value) => HEADER_ERROR_OFFSET + u32::from(value),
             ApiError::Mint(value) => MINT_ERROR_OFFSET + u32::from(value),
             ApiError::ProofOfStake(value) => POS_ERROR_OFFSET + u32::from(value),
             ApiError::User(value) => RESERVED_ERROR_MAX + 1 + u32::from(value),
@@ -582,6 +620,7 @@ impl From<u32> for ApiError {
             USER_ERROR_MIN..=USER_ERROR_MAX => ApiError::User(value as u16),
             POS_ERROR_MIN..=POS_ERROR_MAX => ApiError::ProofOfStake(value as u8),
             MINT_ERROR_MIN..=MINT_ERROR_MAX => ApiError::Mint(value as u8),
+            HEADER_ERROR_MIN..=HEADER_ERROR_MAX => ApiError::ContractHeader(value as u8),
             _ => ApiError::Unhandled,
         }
     }
@@ -627,6 +666,7 @@ impl Debug for ApiError {
             ApiError::HostBufferEmpty => write!(f, "ApiError::HostBufferEmpty")?,
             ApiError::HostBufferFull => write!(f, "ApiError::HostBufferFull")?,
             ApiError::AllocLayout => write!(f, "ApiError::AllocLayout")?,
+            ApiError::ContractHeader(value) => write!(f, "ApiError::ContractHeader({})", value)?,
             ApiError::Mint(value) => write!(f, "ApiError::Mint({})", value)?,
             ApiError::ProofOfStake(value) => write!(f, "ApiError::ProofOfStake({})", value)?,
             ApiError::User(value) => write!(f, "ApiError::User({})", value)?,
@@ -639,6 +679,7 @@ impl fmt::Display for ApiError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             ApiError::User(value) => write!(f, "User error: {}", value),
+            ApiError::ContractHeader(value) => write!(f, "Contract header error: {}", value),
             ApiError::Mint(value) => write!(f, "Mint error: {}", value),
             ApiError::ProofOfStake(value) => write!(f, "PoS error: {}", value),
             _ => <Self as Debug>::fmt(&self, f),
@@ -677,16 +718,33 @@ mod tests {
     }
 
     #[test]
-    fn error() {
+    fn error_values() {
         assert_eq!(65_024_u32, ApiError::Mint(0).into()); // MINT_ERROR_OFFSET == 65,024
         assert_eq!(65_279_u32, ApiError::Mint(u8::MAX).into());
         assert_eq!(65_280_u32, ApiError::ProofOfStake(0).into()); // POS_ERROR_OFFSET == 65,280
         assert_eq!(65_535_u32, ApiError::ProofOfStake(u8::MAX).into());
         assert_eq!(65_536_u32, ApiError::User(0).into()); // u16::MAX + 1
         assert_eq!(131_071_u32, ApiError::User(u16::MAX).into()); // 2 * u16::MAX + 1
+    }
 
+    #[test]
+    fn error_descriptions() {
         assert_eq!("ApiError::GetKey [8]", &format!("{:?}", ApiError::GetKey));
         assert_eq!("ApiError::GetKey [8]", &format!("{}", ApiError::GetKey));
+
+        assert_eq!(
+            "ApiError::ContractHeader(0) [64768]",
+            &format!("{:?}", ApiError::ContractHeader(0))
+        );
+        assert_eq!(
+            "Contract header error: 0",
+            &format!("{}", ApiError::ContractHeader(0))
+        );
+        assert_eq!(
+            "Contract header error: 255",
+            &format!("{}", ApiError::ContractHeader(u8::MAX))
+        );
+
         assert_eq!(
             "ApiError::Mint(0) [65024]",
             &format!("{:?}", ApiError::Mint(0))
@@ -715,15 +773,21 @@ mod tests {
             "User error: 65535",
             &format!("{}", ApiError::User(u16::MAX))
         );
+    }
 
+    #[test]
+    fn error_edge_cases() {
         assert_eq!(Err(ApiError::Unhandled), result_from(i32::MAX));
         assert_eq!(
-            Err(ApiError::Unhandled),
+            Err(ApiError::ContractHeader(255)),
             result_from(MINT_ERROR_OFFSET as i32 - 1)
         );
         assert_eq!(Err(ApiError::Unhandled), result_from(-1));
         assert_eq!(Err(ApiError::Unhandled), result_from(i32::MIN));
+    }
 
+    #[test]
+    fn error_round_trips() {
         round_trip(Ok(()));
         round_trip(Err(ApiError::None));
         round_trip(Err(ApiError::MissingArgument));
@@ -760,6 +824,8 @@ mod tests {
         round_trip(Err(ApiError::HostBufferEmpty));
         round_trip(Err(ApiError::HostBufferFull));
         round_trip(Err(ApiError::AllocLayout));
+        round_trip(Err(ApiError::ContractHeader(0)));
+        round_trip(Err(ApiError::ContractHeader(u8::MAX)));
         round_trip(Err(ApiError::Mint(0)));
         round_trip(Err(ApiError::Mint(u8::MAX)));
         round_trip(Err(ApiError::ProofOfStake(0)));

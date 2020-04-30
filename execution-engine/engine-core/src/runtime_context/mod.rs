@@ -22,8 +22,8 @@ use types::{
         UpdateKeyFailure, Weight,
     },
     bytesrepr::{self, ToBytes},
-    AccessRights, BlockTime, CLType, CLValue, Key, Phase, ProtocolVersion, URef,
-    KEY_LOCAL_SEED_LENGTH,
+    AccessRights, BlockTime, CLType, CLValue, EntryPointType, Key, Phase, ProtocolVersion,
+    RuntimeArgs, URef, KEY_LOCAL_SEED_LENGTH,
 };
 
 use crate::{
@@ -59,7 +59,7 @@ pub struct RuntimeContext<'a, R> {
     access_rights: HashMap<Address, HashSet<AccessRights>>,
     // Original account for read only tasks taken before execution
     account: &'a Account,
-    args: Vec<CLValue>,
+    args: RuntimeArgs,
     authorization_keys: BTreeSet<PublicKey>,
     // Key pointing to the entity we are currently running
     //(could point at an account or contract in the global state)
@@ -74,6 +74,7 @@ pub struct RuntimeContext<'a, R> {
     correlation_id: CorrelationId,
     phase: Phase,
     protocol_data: ProtocolData,
+    entry_point_type: EntryPointType,
 }
 
 impl<'a, R> RuntimeContext<'a, R>
@@ -86,7 +87,7 @@ where
         state: Rc<RefCell<TrackingCopy<R>>>,
         named_keys: &'a mut BTreeMap<String, Key>,
         access_rights: HashMap<Address, HashSet<AccessRights>>,
-        args: Vec<CLValue>,
+        args: RuntimeArgs,
         authorization_keys: BTreeSet<PublicKey>,
         account: &'a Account,
         base_key: Key,
@@ -100,6 +101,7 @@ where
         correlation_id: CorrelationId,
         phase: Phase,
         protocol_data: ProtocolData,
+        entry_point_type: EntryPointType,
     ) -> Self {
         RuntimeContext {
             state,
@@ -119,6 +121,7 @@ where
             correlation_id,
             phase,
             protocol_data,
+            entry_point_type,
         }
     }
 
@@ -132,6 +135,10 @@ where
 
     pub fn named_keys(&self) -> &BTreeMap<String, Key> {
         &self.named_keys
+    }
+
+    pub fn named_keys_mut(&mut self) -> &mut BTreeMap<String, Key> {
+        &mut self.named_keys
     }
 
     pub fn fn_store_id(&self) -> u32 {
@@ -223,7 +230,7 @@ where
         &self.account
     }
 
-    pub fn args(&self) -> &Vec<CLValue> {
+    pub fn args(&self) -> &RuntimeArgs {
         &self.args
     }
 
@@ -256,12 +263,7 @@ where
     }
 
     pub fn seed(&self) -> [u8; KEY_LOCAL_SEED_LENGTH] {
-        match self.base_key {
-            Key::Account(PublicKey::Ed25519(bytes)) => bytes.value(),
-            Key::Hash(bytes) => bytes,
-            Key::URef(uref) => uref.addr(),
-            Key::Local { seed, .. } => seed,
-        }
+        self.base_key.into_seed()
     }
 
     pub fn protocol_version(&self) -> ProtocolVersion {
@@ -305,6 +307,12 @@ where
         self.insert_uref(uref);
         self.write_gs(key, value)?;
         Ok(uref)
+    }
+
+    /// Creates a new URef where the value it stores is CLType::Unit.
+    pub fn new_unit_uref(&mut self) -> Result<URef, Error> {
+        let cl_unit = CLValue::from_components(CLType::Unit, Vec::new());
+        self.new_uref(StoredValue::CLValue(cl_unit))
     }
 
     /// Puts `key` to the map of named keys of current context.
@@ -506,6 +514,8 @@ where
                 .named_keys()
                 .values()
                 .try_for_each(|key| self.validate_key(key)),
+            // TODO: anything to validate here?
+            StoredValue::ContractMetadata(_) => Ok(()),
         }
     }
 
@@ -846,5 +856,10 @@ where
             return Err(Error::InvalidContext);
         }
         Ok(self.account().main_purse())
+    }
+
+    /// Gets entry point type.
+    pub fn entry_point_type(&self) -> EntryPointType {
+        self.entry_point_type
     }
 }

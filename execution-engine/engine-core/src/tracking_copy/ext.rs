@@ -5,7 +5,7 @@ use engine_shared::{
     stored_value::StoredValue, TypeMismatch,
 };
 use engine_storage::global_state::StateReader;
-use types::{account::PublicKey, bytesrepr::ToBytes, CLValue, Key, URef, U512};
+use types::{account::PublicKey, bytesrepr::ToBytes, CLValue, ContractMetadata, Key, URef, U512};
 
 use crate::{execution, tracking_copy::TrackingCopy};
 
@@ -40,6 +40,13 @@ pub trait TrackingCopyExt<R> {
         correlation_id: CorrelationId,
         key: Key,
     ) -> Result<Contract, Self::Error>;
+
+    /// Gets a contract metadata by Key
+    fn get_contract_metadata(
+        &mut self,
+        correlation_id: CorrelationId,
+        key: Key,
+    ) -> Result<ContractMetadata, Self::Error>;
 }
 
 impl<R> TrackingCopyExt<R> for TrackingCopy<R>
@@ -125,6 +132,24 @@ where
             Some(StoredValue::Contract(contract)) => Ok(contract),
             Some(other) => Err(execution::Error::TypeMismatch(TypeMismatch::new(
                 "Contract".to_string(),
+                other.type_name(),
+            ))),
+            None => Err(execution::Error::KeyNotFound(key)),
+        }
+    }
+
+    fn get_contract_metadata(
+        &mut self,
+        correlation_id: CorrelationId,
+        key: Key,
+    ) -> Result<ContractMetadata, Self::Error> {
+        match self
+            .get(correlation_id, &key.normalize())
+            .map_err(Into::into)?
+        {
+            Some(StoredValue::ContractMetadata(contract_metadata)) => Ok(contract_metadata),
+            Some(other) => Err(execution::Error::TypeMismatch(TypeMismatch::new(
+                "ContractMetadata".to_string(),
                 other.type_name(),
             ))),
             None => Err(execution::Error::KeyNotFound(key)),

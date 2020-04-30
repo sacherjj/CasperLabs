@@ -1,12 +1,18 @@
 //! Functions for accessing and mutating local and global state.
 
-use alloc::{collections::BTreeMap, string::String, vec::Vec};
+use alloc::{
+    collections::{BTreeMap, BTreeSet},
+    string::String,
+    vec::Vec,
+};
 use core::{convert::From, mem::MaybeUninit};
 
 use casperlabs_types::{
     api_error,
     bytesrepr::{self, FromBytes, ToBytes},
-    AccessRights, ApiError, CLTyped, CLValue, ContractRef, Key, URef, UREF_SERIALIZED_LENGTH,
+    contract_header::EntryPoint,
+    AccessRights, ApiError, CLTyped, CLValue, ContractRef, Key, SemVer, URef,
+    UREF_SERIALIZED_LENGTH,
 };
 
 use crate::{
@@ -112,6 +118,115 @@ pub fn add_local<K: ToBytes, V: CLTyped + ToBytes>(key: K, value: V) {
     unsafe {
         ext_ffi::add_local(key_ptr, key_size, cl_value_ptr, cl_value_size);
     }
+}
+
+/// Create a new (versioned) contract stored under a Key::Hash. Initially there
+/// are no versions; a version must be added via `add_contract_version` before
+/// the contract can be executed.
+pub fn create_contract_metadata_at_hash() -> (Key, URef) {
+    let mut hash_addr = [0u8; 32];
+    let mut access_addr = [0u8; 32];
+    unsafe {
+        ext_ffi::create_contract_metadata_at_hash(hash_addr.as_mut_ptr(), access_addr.as_mut_ptr());
+    }
+    let contract_key = Key::Hash(hash_addr);
+    let access_uref = URef::new(access_addr, AccessRights::READ_ADD_WRITE);
+
+    (contract_key, access_uref)
+}
+
+/// Create a new "user group" for a (versioned) contract. User groups associate
+/// a set of URefs with a label. Methods on a contract can be given a list of
+/// labels they accept and the runtime will check that a URef from at least one
+/// of the allowed groups is present in the caller's context before
+/// execution. This allows access control for methods of a contract. This
+/// function returns the list of new URefs created for the group (the list will
+/// contain `num_new_urefs` elements).
+pub fn create_contract_user_group(
+    contract: Key,
+    access_key: URef,
+    group_label: &str,
+    num_new_urefs: u8, // number of new urefs to populate the group with
+    existing_urefs: BTreeSet<URef>, // also include these existing urefs in the group
+) -> Result<Vec<URef>, ApiError> {
+    let (meta_ptr, meta_size, _bytes1) = contract_api::to_ptr(contract);
+    let (access_ptr, _access_size, _bytes2) = contract_api::to_ptr(access_key);
+    let (label_ptr, label_size, _bytes3) = contract_api::to_ptr(group_label);
+    let (existing_urefs_ptr, existing_urefs_size, _bytes4) = contract_api::to_ptr(existing_urefs);
+
+    let value_size = {
+        let mut value_size = MaybeUninit::uninit();
+        let ret = unsafe {
+            ext_ffi::create_contract_user_group(
+                meta_ptr,
+                meta_size,
+                access_ptr,
+                label_ptr,
+                label_size,
+                num_new_urefs,
+                existing_urefs_ptr,
+                existing_urefs_size,
+                value_size.as_mut_ptr(),
+            )
+        };
+        api_error::result_from(ret).unwrap_or_revert();
+        unsafe { value_size.assume_init() }
+    };
+
+    let value_bytes = runtime::read_host_buffer(value_size).unwrap_or_revert();
+    Ok(bytesrepr::deserialize(value_bytes).unwrap_or_revert())
+}
+
+// TODO: functions for removing user groups, adding/removing urefs from an existing group
+
+/// Add a new version of a contract to the contract stored at the given
+/// `ContractRef`. Note that this contract must have been created by
+/// `create_contract` or `create_contract_metadata_at_hash` first.
+pub fn add_contract_version(
+    contract: Key,
+    access_key: URef,
+    version: SemVer,
+    methods: BTreeMap<String, EntryPoint>,
+    named_keys: BTreeMap<String, Key>,
+) -> Result<(), ApiError> {
+    let (meta_ptr, meta_size, _bytes1) = contract_api::to_ptr(contract);
+    let (access_ptr, _access_size, _bytes2) = contract_api::to_ptr(access_key);
+    let (version_ptr, _version_size, _bytes3) = contract_api::to_ptr(version);
+    let (methods_ptr, methods_size, _bytes4) = contract_api::to_ptr(methods);
+    let (keys_ptr, keys_size, _bytes5) = contract_api::to_ptr(named_keys);
+
+    let result = unsafe {
+        ext_ffi::add_contract_version(
+            meta_ptr,
+            meta_size,
+            access_ptr,
+            version_ptr,
+            methods_ptr,
+            methods_size,
+            keys_ptr,
+            keys_size,
+        )
+    };
+    api_error::result_from(result)
+}
+
+/// Remove a version of a contract from the contract stored at the given
+/// `ContractRef`. That version of the contract will no longer be callable by
+/// `call_versioned_contract`. Note that this contract must have been created by
+/// `create_contract` or `create_contract_metadata_at_hash` first.
+pub fn remove_contract_version(
+    contract: ContractRef,
+    access_key: URef,
+    version: SemVer,
+) -> Result<(), ApiError> {
+    let (meta_ptr, meta_size, _bytes1) = contract_api::to_ptr(Key::from(contract));
+    let (access_ptr, _access_size, _bytes2) = contract_api::to_ptr(access_key);
+    let (version_ptr, _version_size, _bytes3) = contract_api::to_ptr(version);
+
+    let result =
+        unsafe { ext_ffi::remove_contract_version(meta_ptr, meta_size, access_ptr, version_ptr) };
+
+    api_error::result_from(result)
 }
 
 /// Stores the serialized bytes of an exported, non-mangled `extern "C"` function as a new contract

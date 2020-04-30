@@ -1,6 +1,67 @@
 syntax = "proto3";
 package io.casperlabs.casper.consensus.state;
 
+message SemVer {
+    uint32 major = 1;
+    uint32 minor = 2;
+    uint32 patch = 3;
+}
+
+message ContractHeader {
+    message EntryPoint {
+
+        message Arg {
+            string name = 1;
+            CLType cl_type = 2;
+        }
+        message Public {} // Tag
+        message Group {
+            string name = 1;
+        }
+
+        message Session {}
+        message Contract {}
+
+        message Groups {
+            repeated Group groups = 1;
+        }
+
+        repeated Arg args = 1;
+        CLType ret = 2;
+        oneof access {
+            Public public = 3;
+            Groups groups = 4;
+        }
+
+
+        oneof entry_point_type {
+            Session session = 5;
+            Contract contract = 6;
+        }
+    }
+    
+    map<string, EntryPoint> methods = 1;
+    Key contract_key = 2;
+    ProtocolVersion protocol_version = 3;
+}
+
+message ContractMetadata {
+    
+    message ActiveVersion {
+        SemVer version = 1;
+        ContractHeader contract_header = 2;
+    }
+    message Group {
+        ContractHeader.EntryPoint.Group group = 1;
+        repeated Key.URef urefs = 2;
+    }
+    Key.URef access_key = 1;
+    repeated ActiveVersion active_versions = 2;
+    repeated SemVer removed_versions = 3;
+    repeated Group groups = 4;
+}
+
+
 // Fundamental type of a user-facing value stored under a key in global state.
 message CLType {
     enum Simple {
@@ -164,6 +225,7 @@ message CLValueInstance {
         Value value_2 = 2;
         Value value_3 = 3;
     }
+
 }
 
 // Value stored under a key in global state.
@@ -172,6 +234,7 @@ message StoredValue {
         CLValue cl_value = 1;
         Account account = 2;
         Contract contract = 3;
+	    ContractMetadata contract_metadata = 4;
     }
 }
 

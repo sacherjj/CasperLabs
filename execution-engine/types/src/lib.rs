@@ -27,12 +27,14 @@ mod block_time;
 pub mod bytesrepr;
 mod cl_type;
 mod cl_value;
+pub mod contract_header;
 mod contract_ref;
 #[cfg(any(feature = "gens", test))]
 pub mod gens;
 mod key;
 mod phase;
 mod protocol_version;
+mod runtime_args;
 mod semver;
 pub mod system_contract_errors;
 pub mod system_contract_type;
@@ -47,14 +49,19 @@ pub use api_error::ApiError;
 pub use block_time::{BlockTime, BLOCKTIME_SERIALIZED_LENGTH};
 pub use cl_type::{named_key_type, CLType, CLTyped};
 pub use cl_value::{CLTypeMismatch, CLValue, CLValueError};
+pub use contract_header::{
+    ContractHeader, ContractMetadata, EntryPoint, EntryPointAccess, EntryPointType, Group,
+    Parameter,
+};
 pub use contract_ref::ContractRef;
 #[doc(inline)]
 pub use key::{
-    Key, BLAKE2B_DIGEST_LENGTH, KEY_HASH_LENGTH, KEY_LOCAL_LENGTH, KEY_LOCAL_SEED_LENGTH,
+    Hash, Key, BLAKE2B_DIGEST_LENGTH, KEY_HASH_LENGTH, KEY_LOCAL_LENGTH, KEY_LOCAL_SEED_LENGTH,
 };
 pub use phase::{Phase, PHASE_SERIALIZED_LENGTH};
 pub use protocol_version::{ProtocolVersion, VersionCheckResult};
-pub use semver::SemVer;
+pub use runtime_args::RuntimeArgs;
+pub use semver::{SemVer, SEM_VER_SERIALIZED_LENGTH};
 pub use system_contract_type::SystemContractType;
 pub use transfer_result::{TransferResult, TransferredTo};
 pub use uref::{URef, UREF_ADDR_LENGTH, UREF_SERIALIZED_LENGTH};

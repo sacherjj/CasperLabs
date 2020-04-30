@@ -6,7 +6,7 @@ mod tests;
 
 use std::{
     collections::{HashMap, HashSet, VecDeque},
-    convert::From,
+    convert::{From, TryInto},
     iter,
 };
 
@@ -20,7 +20,7 @@ use engine_shared::{
     TypeMismatch,
 };
 use engine_storage::global_state::StateReader;
-use types::{bytesrepr, CLType, CLValueError, Key};
+use types::{bytesrepr, CLType, CLValueError, Key, SemVer};
 
 use crate::engine_state::{execution_effect::ExecutionEffect, op::Op};
 
@@ -393,6 +393,39 @@ impl<R: StateReader<Key, StoredValue>> TrackingCopy<R> {
                         cl_value
                     );
                     return Ok(query.into_not_found_result(&msg_prefix));
+                }
+
+                StoredValue::ContractMetadata(metadata) => {
+                    let name = query.next_name();
+                    let sem_ver: SemVer = match name.as_str().try_into() {
+                        Ok(sem_ver) => sem_ver,
+                        Err(_error) => {
+                            let msg_prefix = format!(
+                                "Query cannot continue as {} is not a valid version string",
+                                name
+                            );
+                            return Ok(query.into_not_found_result(&msg_prefix));
+                        }
+                    };
+                    // Inactive versions are returning errors without going deeper through
+                    // reconstructed local key.
+                    if metadata.is_version_removed(&sem_ver) {
+                        let msg_prefix =
+                            format!("Query cannot continue as version {} is removed", name);
+                        return Ok(query.into_not_found_result(&msg_prefix));
+                    }
+
+                    let contract_header = match metadata.get_version(&sem_ver) {
+                        Some(contract_header) => contract_header,
+                        None => {
+                            let msg_prefix = format!(
+                                "Query cannot continue as version {} does not exists",
+                                name
+                            );
+                            return Ok(query.into_not_found_result(&msg_prefix));
+                        }
+                    };
+                    query.current_key = contract_header.contract_key()
                 }
             }
         }

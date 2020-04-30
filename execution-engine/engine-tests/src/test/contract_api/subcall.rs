@@ -8,7 +8,7 @@ use engine_test_support::{
     },
     DEFAULT_ACCOUNT_ADDR,
 };
-use types::U512;
+use types::{RuntimeArgs, SemVer, U512};
 
 #[ignore]
 #[test]
@@ -155,8 +155,10 @@ fn expensive_subcall_should_cost_more() {
     const CONTRACT_NAME: &str = "measure_gas_subcall_2.wasm";
     const DO_NOTHING: &str = "do_nothing_stored.wasm";
     const EXPENSIVE_CALCULATION: &str = "expensive_calculation.wasm";
-    const DO_NOTHING_KEY: &str = "do_nothing_stored";
+    const DO_NOTHING_HASH_KEY_NAME: &str = "do_nothing_hash";
     const EXPENSIVE_CALCULATION_KEY: &str = "expensive-calculation";
+    const INITIAL_VERSION: SemVer = SemVer::new(1, 0, 0);
+    const ENTRY_FUNCTION_NAME: &str = "delegate";
 
     let store_do_nothing_request =
         ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, DO_NOTHING, ("hash",)).build();
@@ -181,14 +183,6 @@ fn expensive_subcall_should_cost_more() {
         .get_account(DEFAULT_ACCOUNT_ADDR)
         .expect("should get account");
 
-    // get the contract hashes so that we can pass them to the caller contract
-    let do_nothing_contract_hash = account
-        .named_keys()
-        .get(DO_NOTHING_KEY)
-        .expect("should get do_nothing contract hash")
-        .into_hash()
-        .expect("should get hash");
-
     let expensive_calculation_contract_hash = account
         .named_keys()
         .get(EXPENSIVE_CALCULATION_KEY)
@@ -198,10 +192,12 @@ fn expensive_subcall_should_cost_more() {
 
     // execute the contracts via subcalls
 
-    let call_do_nothing_request = ExecuteRequestBuilder::standard(
+    let call_do_nothing_request = ExecuteRequestBuilder::versioned_contract_call_by_hash_key_name(
         DEFAULT_ACCOUNT_ADDR,
-        CONTRACT_NAME,
-        (do_nothing_contract_hash,),
+        DO_NOTHING_HASH_KEY_NAME,
+        INITIAL_VERSION,
+        ENTRY_FUNCTION_NAME,
+        RuntimeArgs::new(),
     )
     .build();
 

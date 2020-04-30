@@ -15,3 +15,6 @@ pub mod vesting;
 
 #[cfg(test)]
 pub mod tic_tac_toe;
+
+#[cfg(test)]
+pub mod hello;

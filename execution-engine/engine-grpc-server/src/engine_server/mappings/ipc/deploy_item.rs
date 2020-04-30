@@ -18,14 +18,14 @@ impl TryFrom<ipc::DeployItem> for DeployItem {
         let session = pb_deploy_item
             .take_session()
             .payload
-            .map(Into::into)
-            .ok_or_else(|| MappingError::MissingPayload)?;
+            .ok_or_else(|| MappingError::MissingPayload)?
+            .try_into()?;
 
         let payment = pb_deploy_item
             .take_payment()
             .payload
-            .map(Into::into)
-            .ok_or_else(|| MappingError::MissingPayload)?;
+            .ok_or_else(|| MappingError::MissingPayload)?
+            .try_into()?;
 
         let gas_price = pb_deploy_item.get_gas_price();
 

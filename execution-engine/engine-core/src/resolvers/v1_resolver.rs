@@ -188,10 +188,38 @@ impl ModuleImportResolver for RuntimeModuleImportResolver {
                 Signature::new(&[ValueType::I32; 3][..], Some(ValueType::I32)),
                 FunctionIndex::ReadHostBufferIndex.into(),
             ),
+            "create_contract_metadata_at_hash" => FuncInstance::alloc_host(
+                Signature::new(&[ValueType::I32; 2][..], None),
+                FunctionIndex::CreateContractMetadataAtHash.into(),
+            ),
+            "create_contract_user_group" => FuncInstance::alloc_host(
+                Signature::new(&[ValueType::I32; 9][..], Some(ValueType::I32)),
+                FunctionIndex::CreateContractUserGroup.into(),
+            ),
+            "add_contract_version" => FuncInstance::alloc_host(
+                Signature::new(&[ValueType::I32; 8][..], Some(ValueType::I32)),
+                FunctionIndex::AddContractVersion.into(),
+            ),
+            "remove_contract_version" => FuncInstance::alloc_host(
+                Signature::new(&[ValueType::I32; 4][..], Some(ValueType::I32)),
+                FunctionIndex::RemoveContractVersion.into(),
+            ),
+            "call_versioned_contract" => FuncInstance::alloc_host(
+                Signature::new(&[ValueType::I32; 8][..], Some(ValueType::I32)),
+                FunctionIndex::CallVersionedContract.into(),
+            ),
             #[cfg(feature = "test-support")]
             "print" => FuncInstance::alloc_host(
                 Signature::new(&[ValueType::I32; 2][..], None),
                 FunctionIndex::PrintIndex.into(),
+            ),
+            "get_named_arg_size" => FuncInstance::alloc_host(
+                Signature::new(&[ValueType::I32; 3][..], Some(ValueType::I32)),
+                FunctionIndex::GetRuntimeArgsizeIndex.into(),
+            ),
+            "get_named_arg" => FuncInstance::alloc_host(
+                Signature::new(&[ValueType::I32; 4][..], Some(ValueType::I32)),
+                FunctionIndex::GetRuntimeArgIndex.into(),
             ),
             _ => {
                 return Err(InterpreterError::Function(format!(

@@ -104,6 +104,51 @@ extern "C" {
     ) -> i32;
     pub fn get_main_purse(dest_ptr: *mut u8);
     pub fn read_host_buffer(dest_ptr: *mut u8, dest_size: usize, bytes_written: *mut usize) -> i32;
+    pub fn create_contract_metadata_at_hash(hash_addr_ptr: *mut u8, access_addr_ptr: *mut u8);
+    pub fn create_contract_user_group(
+        meta_ptr: *const u8,
+        meta_size: usize,
+        access_ptr: *const u8,
+        label_ptr: *const u8,
+        leabel_size: usize,
+        num_new_urefs: u8,
+        existing_urefs_ptr: *const u8,
+        existing_urefs_size: usize,
+        output_size_ptr: *mut usize,
+    ) -> i32;
+    pub fn add_contract_version(
+        meta_ptr: *const u8,
+        meta_size: usize,
+        access_ptr: *const u8,
+        version_ptr: *const u8,
+        header_ptr: *const u8,
+        header_size: usize,
+        named_keys_ptr: *const u8,
+        named_keys_size: usize,
+    ) -> i32;
+    pub fn remove_contract_version(
+        meta_ptr: *const u8,
+        meta_size: usize,
+        access_ptr: *const u8,
+        version_ptr: *const u8,
+    ) -> i32;
+    pub fn call_versioned_contract(
+        key_ptr: *const u8,
+        key_size: usize,
+        version_ptr: *const u8,
+        method_ptr: *const u8,
+        method_size: usize,
+        named_args_ptr: *const u8,
+        named_args_size: usize,
+        result_size: *mut usize,
+    ) -> i32;
     #[cfg(feature = "test-support")]
     pub fn print(text_ptr: *const u8, text_size: usize);
+    pub fn get_named_arg_size(name_ptr: *const u8, name_size: usize, dest_size: *mut usize) -> i32;
+    pub fn get_named_arg(
+        name_ptr: *const u8,
+        name_size: usize,
+        dest_ptr: *mut u8,
+        dest_size: usize,
+    ) -> i32;
 }

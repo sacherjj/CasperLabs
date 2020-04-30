@@ -1,4 +1,7 @@
-use std::convert::TryFrom;
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    convert::TryFrom,
+};
 
 use wasmi::{Externals, RuntimeArgs, RuntimeValue, Trap};
 
@@ -6,7 +9,8 @@ use types::{
     account::PublicKey,
     api_error,
     bytesrepr::{self, ToBytes},
-    Key, TransferredTo, U512,
+    contract_header::EntryPoint,
+    Key, TransferredTo, URef, SEM_VER_SERIALIZED_LENGTH, U512, UREF_SERIALIZED_LENGTH,
 };
 
 use engine_shared::{gas::Gas, stored_value::StoredValue};
@@ -493,12 +497,194 @@ where
                 Ok(Some(RuntimeValue::I32(api_error::i32_from(ret))))
             }
 
+            FunctionIndex::CreateContractMetadataAtHash => {
+                // args(0) = pointer to wasm memory where to write 32-byte Hash address
+                // args(1) = pointer to wasm memory where to write 32-byte access key address
+                let (hash_dest_ptr, access_dest_ptr) = Args::parse(args)?;
+                let (hash_addr, access_addr) = self.create_contract_metadata_at_hash()?;
+                self.function_address(hash_addr, hash_dest_ptr)?;
+                self.function_address(access_addr, access_dest_ptr)?;
+                Ok(None)
+            }
+
+            FunctionIndex::CreateContractUserGroup => {
+                // args(0) = pointer to metadata key in wasm memory
+                // args(1) = size of metadata key in wasm memory
+                // args(2) = pointer to access key in wasm memory
+                // args(3) = pointer to group label in wasm memory
+                // args(4) = size of group label in wasm memory
+                // args(5) = number of new urefs to generate for the group
+                // args(6) = pointer to existing_urefs in wasm memory
+                // args(7) = size of existing_urefs in wasm memory
+                // args(8) = pointer to location to write size of output (written to host buffer)
+                let (
+                    meta_key_ptr,
+                    meta_key_size,
+                    access_key_ptr,
+                    label_ptr,
+                    label_size,
+                    num_new_urefs,
+                    existing_urefs_ptr,
+                    existing_urefs_size,
+                    output_size_ptr,
+                ) = Args::parse(args)?;
+
+                let metadata_key = self.key_from_mem(meta_key_ptr, meta_key_size)?;
+                let access_key = {
+                    let bytes = self.bytes_from_mem(access_key_ptr, UREF_SERIALIZED_LENGTH)?;
+                    bytesrepr::deserialize(bytes).map_err(Error::BytesRepr)?
+                };
+                let label: String = self.t_from_mem(label_ptr, label_size)?;
+                let existing_urefs: BTreeSet<URef> =
+                    self.t_from_mem(existing_urefs_ptr, existing_urefs_size)?;
+
+                let ret = self.create_contract_user_group(
+                    metadata_key,
+                    access_key,
+                    label,
+                    num_new_urefs,
+                    existing_urefs,
+                    output_size_ptr,
+                )?;
+                Ok(Some(RuntimeValue::I32(api_error::i32_from(ret))))
+            }
+
+            FunctionIndex::AddContractVersion => {
+                // args(0) = pointer to metadata key in wasm memory
+                // args(1) = size of metadata key in wasm memory
+                // args(2) = pointer to access key in wasm memory
+                // args(3) = pointer to contract version in wasm memory
+                // args(4) = pointer to contract header in wasm memory
+                // args(5) = size of contract header in wasm memory
+                // args(6) = pointer to named keys in wasm memory
+                // args(7) = size of named keys in wasm memory
+                // args(8) = pointer to contract header key memory
+                // args(9) = pointer to contract header key size
+                let (
+                    meta_key_ptr,
+                    meta_key_size,
+                    access_key_ptr,
+                    version_ptr,
+                    methods_ptr,
+                    methods_size,
+                    named_keys_ptr,
+                    named_keys_size,
+                ) = Args::parse(args)?;
+
+                let metadata_key = self.key_from_mem(meta_key_ptr, meta_key_size)?;
+                let access_key = {
+                    let bytes = self.bytes_from_mem(access_key_ptr, UREF_SERIALIZED_LENGTH)?;
+                    bytesrepr::deserialize(bytes).map_err(Error::BytesRepr)?
+                };
+                let version = {
+                    let bytes = self.bytes_from_mem(version_ptr, SEM_VER_SERIALIZED_LENGTH)?;
+                    bytesrepr::deserialize(bytes).map_err(Error::BytesRepr)?
+                };
+                let methods: BTreeMap<String, EntryPoint> =
+                    self.t_from_mem(methods_ptr, methods_size)?;
+                let named_keys: BTreeMap<String, Key> =
+                    self.t_from_mem(named_keys_ptr, named_keys_size)?;
+
+                let ret = self.add_contract_version(
+                    metadata_key,
+                    access_key,
+                    version,
+                    methods,
+                    named_keys,
+                )?;
+                Ok(Some(RuntimeValue::I32(api_error::i32_from(ret))))
+            }
+
+            FunctionIndex::RemoveContractVersion => {
+                // args(0) = pointer to metadata key in wasm memory
+                // args(1) = size of metadata key in wasm memory
+                // args(2) = pointer to access key in wasm memory
+                // args(3) = pointer to contract version in wasm memory
+                let (meta_key_ptr, meta_key_size, access_key_ptr, version_ptr) = Args::parse(args)?;
+
+                let metadata_key = self.key_from_mem(meta_key_ptr, meta_key_size)?;
+                let access_key = {
+                    let bytes = self.bytes_from_mem(access_key_ptr, UREF_SERIALIZED_LENGTH)?;
+                    bytesrepr::deserialize(bytes).map_err(Error::BytesRepr)?
+                };
+                let version = {
+                    let bytes = self.bytes_from_mem(version_ptr, SEM_VER_SERIALIZED_LENGTH)?;
+                    bytesrepr::deserialize(bytes).map_err(Error::BytesRepr)?
+                };
+
+                let result = self.remove_contract_version(metadata_key, access_key, version)?;
+
+                Ok(Some(RuntimeValue::I32(api_error::i32_from(result))))
+            }
+
+            FunctionIndex::CallVersionedContract => {
+                // args(0) = pointer to key where contract is at in global state
+                // args(1) = size of key
+                // args(2) = pointer to contract version in wasm memory
+                // args(3) = pointer to method name in wasm memory
+                // args(4) = size of method name in wasm memory
+                // args(5) = pointer to function arguments in Wasm memory
+                // args(6) = size of arguments
+                // args(7) = pointer to result size (output)
+                let (
+                    key_ptr,
+                    key_size,
+                    version_ptr,
+                    method_ptr,
+                    method_size,
+                    args_ptr,
+                    args_size,
+                    result_size_ptr,
+                ) = Args::parse(args)?;
+
+                let key_contract: Key = self.key_from_mem(key_ptr, key_size)?;
+                let version = {
+                    let bytes = self.bytes_from_mem(version_ptr, SEM_VER_SERIALIZED_LENGTH)?;
+                    bytesrepr::deserialize(bytes).map_err(Error::BytesRepr)?
+                };
+                let method: String = self.t_from_mem(method_ptr, method_size)?;
+                let args_bytes: Vec<u8> = {
+                    let args_size: u32 = args_size;
+                    self.bytes_from_mem(args_ptr, args_size as usize)?
+                };
+
+                let ret = self.call_versioned_contract_host_buffer(
+                    key_contract,
+                    version,
+                    method,
+                    args_bytes,
+                    result_size_ptr,
+                )?;
+                Ok(Some(RuntimeValue::I32(api_error::i32_from(ret))))
+            }
+
             #[cfg(feature = "test-support")]
             FunctionIndex::PrintIndex => {
                 let (text_ptr, text_size): (_, u32) = Args::parse(args)?;
                 scoped_timer.add_property("text_size", text_size.to_string());
                 self.print(text_ptr, text_size)?;
                 Ok(None)
+            }
+
+            FunctionIndex::GetRuntimeArgsizeIndex => {
+                // args(0) = pointer to name of host runtime arg to load
+                // args(1) = size of name of the host runtime arg
+                // args(2) = pointer to a argument size (output)
+                let (name_ptr, name_size, size_ptr): (u32, u32, u32) = Args::parse(args)?;
+                let ret = self.get_named_arg_size(name_ptr, name_size as usize, size_ptr)?;
+                Ok(Some(RuntimeValue::I32(api_error::i32_from(ret))))
+            }
+
+            FunctionIndex::GetRuntimeArgIndex => {
+                // args(0) = index of host runtime arg to load
+                // args(1) = pointer to destination in Wasm memory
+                // args(2) = size of destination pointer memory
+                let (name_ptr, name_size, dest_ptr, dest_size): (u32, u32, u32, u32) =
+                    Args::parse(args)?;
+                scoped_timer.add_property("dest_size", dest_size.to_string());
+                let ret =
+                    self.get_named_arg(name_ptr, name_size as usize, dest_ptr, dest_size as usize)?;
+                Ok(Some(RuntimeValue::I32(api_error::i32_from(ret))))
             }
         }
     }

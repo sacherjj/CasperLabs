@@ -2,7 +2,7 @@ use engine_test_support::{
     internal::{ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_RUN_GENESIS_REQUEST},
     DEFAULT_ACCOUNT_ADDR,
 };
-use types::Key;
+use types::{Key, SemVer};
 
 const MAILING_CALL: &str = "mailing_list_call.wasm";
 const MAILING_DEFINE: &str = "mailing_list_define.wasm";
@@ -42,7 +42,6 @@ fn should_run_mailing_example_contract() {
     let account = account_value.as_account().expect("should be account");
 
     // Mail feed
-
     let mail_feed_key = account
         .named_keys()
         .get(MAIL_FEED_KEY)
@@ -63,7 +62,7 @@ fn should_run_mailing_example_contract() {
         .get(MAILING_KEY)
         .expect("should have counter key");
     let stored_value = builder
-        .query(None, *mailing_key, &[LIST_KEY])
+        .query(None, *mailing_key, &[&SemVer::V1_0_0.to_string(), LIST_KEY])
         .expect("should have counter value");
     let cl_value = stored_value.as_cl_value().expect("should be CLValue");
     let value: Vec<String> = cl_value
@@ -75,7 +74,11 @@ fn should_run_mailing_example_contract() {
     // List key
 
     let stored_value = builder
-        .query(None, *mailing_key, &["CasperLabs"])
+        .query(
+            None,
+            *mailing_key,
+            &[&SemVer::V1_0_0.to_string(), "CasperLabs"],
+        )
         .expect("should have list value");
     let cl_value = stored_value.as_cl_value().expect("should be CLValue");
     let value: Vec<String> = cl_value
