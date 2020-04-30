@@ -22,8 +22,8 @@ use types::{
         UpdateKeyFailure, Weight,
     },
     bytesrepr::{self, ToBytes},
-    AccessRights, BlockTime, CLType, CLValue, EntryPointType, Key, Phase, ProtocolVersion,
-    RuntimeArgs, URef, KEY_LOCAL_SEED_LENGTH,
+    AccessRights, BlockTime, CLType, CLValue, ContractMetadata, EntryPoint, EntryPointAccess,
+    EntryPointType, Key, Phase, ProtocolVersion, RuntimeArgs, URef, KEY_LOCAL_SEED_LENGTH,
 };
 
 use crate::{
@@ -50,6 +50,44 @@ pub(crate) fn attenuate_uref_for_account(account: &Account, uref: URef) -> URef 
     }
 }
 
+/// Checks whether given uref has enough access rights.
+pub(crate) fn uref_has_access_rights(
+    uref: &URef,
+    access_rights: &HashMap<Address, HashSet<AccessRights>>,
+) -> bool {
+    if let Some(known_rights) = access_rights.get(&uref.addr()) {
+        let new_rights = uref.access_rights();
+        // check if we have sufficient access rights
+        known_rights
+            .iter()
+            .any(|right| *right & new_rights == new_rights)
+    } else {
+        // URef is not known
+        false
+    }
+}
+
+pub fn validate_entry_point_access_with(
+    metadata: &ContractMetadata,
+    access: &EntryPointAccess,
+    validator: impl Fn(&URef) -> bool,
+) -> Result<(), Error> {
+    if let EntryPointAccess::Groups(groups) = access {
+        let find_result = groups.iter().find(|g| {
+            metadata
+                .groups()
+                .get(g)
+                .and_then(|set| set.iter().find(|u| validator(u)))
+                .is_some()
+        });
+
+        if find_result.is_none() {
+            return Err(Error::InvalidContext);
+        }
+    }
+    Ok(())
+}
+
 /// Holds information specific to the deployed contract.
 pub struct RuntimeContext<'a, R> {
     state: Rc<RefCell<TrackingCopy<R>>>,
@@ -74,7 +112,8 @@ pub struct RuntimeContext<'a, R> {
     correlation_id: CorrelationId,
     phase: Phase,
     protocol_data: ProtocolData,
-    entry_point_type: EntryPointType,
+    _metadata: ContractMetadata,
+    entrypoint: EntryPoint,
 }
 
 impl<'a, R> RuntimeContext<'a, R>
@@ -101,7 +140,8 @@ where
         correlation_id: CorrelationId,
         phase: Phase,
         protocol_data: ProtocolData,
-        entry_point_type: EntryPointType,
+        metadata: ContractMetadata,
+        entrypoint: EntryPoint,
     ) -> Self {
         RuntimeContext {
             state,
@@ -121,7 +161,8 @@ where
             correlation_id,
             phase,
             protocol_data,
-            entry_point_type,
+            _metadata: metadata,
+            entrypoint,
         }
     }
 
@@ -544,19 +585,9 @@ where
         }
 
         // Check if the `key` is known
-        if let Some(known_rights) = self.access_rights.get(&uref.addr()) {
-            let new_rights = uref.access_rights();
-            // check if we have sufficient access rights
-            if known_rights
-                .iter()
-                .any(|right| *right & new_rights == new_rights)
-            {
-                Ok(())
-            } else {
-                Err(Error::ForgedReference(*uref))
-            }
+        if uref_has_access_rights(uref, &self.access_rights) {
+            Ok(())
         } else {
-            // uref is not known
             Err(Error::ForgedReference(*uref))
         }
     }
@@ -860,6 +891,6 @@ where
 
     /// Gets entry point type.
     pub fn entry_point_type(&self) -> EntryPointType {
-        self.entry_point_type
+        self.entrypoint.entry_point_type()
     }
 }

@@ -3,6 +3,7 @@ mod contract_context;
 mod deploy;
 mod examples;
 mod explorer;
+mod groups;
 mod regression;
 mod system_contracts;
 mod upgrade;

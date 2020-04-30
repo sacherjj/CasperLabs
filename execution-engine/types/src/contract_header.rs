@@ -3,7 +3,7 @@
 use crate::{
     bytesrepr::{self, FromBytes, ToBytes},
     uref::URef,
-    CLType, Key, ProtocolVersion, SemVer,
+    AccessRights, CLType, Key, ProtocolVersion, SemVer,
 };
 use alloc::{
     collections::{BTreeMap, BTreeSet},
@@ -46,8 +46,8 @@ pub struct Group(String);
 
 impl Group {
     /// Basic constructor
-    pub fn new(s: String) -> Self {
-        Group(s)
+    pub fn new<T: Into<String>>(s: T) -> Self {
+        Group(s.into())
     }
 
     /// Retrieves underlying name.
@@ -92,6 +92,20 @@ pub struct ContractMetadata {
     /// version of the contract. A method is callable by any context which
     /// "knows" any of the URefs assoicated with the mthod's user group.
     groups: BTreeMap<Group, BTreeSet<URef>>,
+}
+
+impl Default for ContractMetadata {
+    fn default() -> Self {
+        // Default impl used for temporary backwards compatibility
+        let mut active_versions = BTreeMap::new();
+        active_versions.insert(SemVer::V1_0_0, ContractHeader::default());
+        ContractMetadata {
+            access_key: URef::new([0; 32], AccessRights::NONE),
+            active_versions,
+            removed_versions: BTreeSet::new(),
+            groups: BTreeMap::new(),
+        }
+    }
 }
 
 impl ContractMetadata {
@@ -274,6 +288,18 @@ impl ContractHeader {
     }
 }
 
+impl Default for ContractHeader {
+    fn default() -> Self {
+        let mut methods = BTreeMap::new();
+        methods.insert("call".into(), EntryPoint::default());
+        ContractHeader {
+            contract_key: Key::Hash([0; 32]),
+            methods,
+            protocol_version: ProtocolVersion::V1_0_0,
+        }
+    }
+}
+
 impl ToBytes for ContractHeader {
     fn to_bytes(&self) -> Result<Vec<u8>, bytesrepr::Error> {
         let mut result = ToBytes::to_bytes(&self.methods)?;
@@ -370,6 +396,16 @@ impl EntryPoint {
         }
     }
 
+    /// Creates default entry point for a contract.
+    pub fn default_for_contract() -> Self {
+        EntryPoint {
+            args: Vec::new(),
+            ret: CLType::Unit,
+            access: EntryPointAccess::Public,
+            entry_point_type: EntryPointType::Contract,
+        }
+    }
+
     /// Get access enum.
     pub fn access(&self) -> &EntryPointAccess {
         &self.access
@@ -386,6 +422,17 @@ impl EntryPoint {
     }
 }
 
+impl Default for EntryPoint {
+    fn default() -> Self {
+        EntryPoint {
+            args: Vec::new(),
+            ret: CLType::Unit,
+            access: EntryPointAccess::Public,
+            entry_point_type: EntryPointType::Session,
+        }
+    }
+}
+
 impl ToBytes for EntryPoint {
     fn to_bytes(&self) -> Result<Vec<u8>, bytesrepr::Error> {
         let mut result = bytesrepr::allocate_buffer(self)?;
@@ -399,9 +446,9 @@ impl ToBytes for EntryPoint {
     }
 
     fn serialized_length(&self) -> usize {
-        self.access.serialized_length()
-            + self.args.serialized_length()
+        self.args.serialized_length()
             + self.ret.serialized_length()
+            + self.access.serialized_length()
             + self.entry_point_type.serialized_length()
     }
 }
@@ -457,7 +504,7 @@ impl ToBytes for EntryPointAccess {
                 result.push(ENTRYPOINTACCESS_PUBLIC_TAG);
             }
             EntryPointAccess::Groups(groups) => {
-                result.push(ENTRYPOINTACCESS_PUBLIC_TAG);
+                result.push(ENTRYPOINTACCESS_GROUPS_TAG);
                 result.append(&mut groups.to_bytes()?);
             }
         }
@@ -535,5 +582,43 @@ impl FromBytes for Parameter {
         let (cl_type, bytes) = CLType::from_bytes(bytes)?;
 
         Ok((Parameter { name, cl_type }, bytes))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{AccessRights, URef};
+    #[test]
+    fn roundtrip_serialization() {
+        let mut contract_metadata = ContractMetadata::new(URef::new([0; 32], AccessRights::NONE));
+
+        let uref1 = URef::new([1; 32], AccessRights::READ);
+
+        let mut set = BTreeSet::new();
+        set.insert(uref1);
+        contract_metadata
+            .groups_mut()
+            .insert(Group::new("Foo"), set);
+
+        let entrypoint = EntryPoint::new(
+            vec![Parameter::new("Foo", CLType::U32)],
+            CLType::U32,
+            EntryPointAccess::groups(&["Group 1"]),
+            EntryPointType::Session,
+        );
+        let mut methods = BTreeMap::new();
+        methods.insert("method1".into(), entrypoint);
+
+        let header = ContractHeader::new(methods, Key::Hash([42; 32]), ProtocolVersion::V1_0_0);
+        contract_metadata
+            .add_version(SemVer::V1_0_0, header)
+            .expect("should add version");
+
+        let bytes = contract_metadata.to_bytes().expect("should serialize");
+        let (decoded_metadata, rem) =
+            ContractMetadata::from_bytes(&bytes).expect("should deserialize");
+        assert_eq!(contract_metadata, decoded_metadata);
+        assert_eq!(rem.len(), 0);
     }
 }

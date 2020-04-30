@@ -38,7 +38,7 @@ use crate::{
     engine_state::{system_contract_cache::SystemContractCache, EngineConfig},
     execution::{Error, MINT_NAME, POS_NAME},
     resolvers::{create_module_resolver, memory_resolver::MemoryResolver},
-    runtime_context::RuntimeContext,
+    runtime_context::{self, RuntimeContext},
     Address,
 };
 use scoped_timer::ScopedTimer;
@@ -1769,7 +1769,8 @@ where
             correlation_id,
             phase,
             protocol_data,
-            EntryPointType::Session,
+            ContractMetadata::default(),
+            EntryPoint::default(),
         );
 
         let method_name: String = Self::get_argument(&args, 0)?;
@@ -1862,7 +1863,8 @@ where
             correlation_id,
             phase,
             protocol_data,
-            EntryPointType::Session,
+            ContractMetadata::default(),
+            EntryPoint::default(),
         );
 
         let mut runtime = Runtime::new(
@@ -1954,7 +1956,14 @@ where
             }
             None => return Err(Error::KeyNotFound(key)),
         };
-        self.execute_contract(key, contract, args, "call", EntryPointType::Contract)
+        self.execute_contract(
+            key,
+            contract,
+            args,
+            "call",
+            ContractMetadata::default(),
+            EntryPoint::default_for_contract(),
+        )
     }
 
     /// Calls `version` of the contract living at `key`, invoking `method` with
@@ -1967,7 +1976,7 @@ where
         method: String,
         args: RuntimeArgs,
     ) -> Result<CLValue, Error> {
-        let (contract, context, entry_point_type) = match self.context.read_gs(&key)? {
+        let (contract, context, metadata, entrypoint) = match self.context.read_gs(&key)? {
             Some(StoredValue::ContractMetadata(metadata)) => {
                 let header = metadata
                     .get_version(&version)
@@ -1976,21 +1985,7 @@ where
                     .get_method(&method)
                     .ok_or_else(|| Error::NoSuchMethod)?;
 
-                if let EntryPointAccess::Groups(groups) = entry_point.access() {
-                    let find_result = groups.iter().find(|g| {
-                        metadata
-                            .groups()
-                            .get(g)
-                            .and_then(|set| {
-                                set.iter().find(|u| self.context.validate_uref(u).is_ok())
-                            })
-                            .is_some()
-                    });
-
-                    if find_result.is_none() {
-                        return Err(Error::InvalidContext);
-                    }
-                }
+                self.validate_entry_point_access(&metadata, entry_point.access())?;
 
                 for (expected, found) in entry_point
                     .args()
@@ -2010,7 +2005,7 @@ where
                     .and_then(|sv| sv.as_contract().cloned())
                     .ok_or_else(|| Error::InvalidContractVersion)?;
 
-                let (context, entry_point_type) = match entry_point.entry_point_type() {
+                let context = match entry_point.entry_point_type() {
                     EntryPointType::Session
                         if self.context.entry_point_type() == EntryPointType::Contract =>
                     {
@@ -2020,15 +2015,15 @@ where
                     EntryPointType::Session => {
                         assert_eq!(self.context.entry_point_type(), EntryPointType::Session);
                         // Session code called from session reuses current base key
-                        (self.context.base_key(), entry_point.entry_point_type())
+                        self.context.base_key()
                     }
                     EntryPointType::Contract => {
                         // Contract code from entrypoint -> contract context
-                        (header.contract_key(), entry_point.entry_point_type())
+                        header.contract_key()
                     }
                 };
 
-                (contract, context, entry_point_type)
+                (contract, context, metadata.clone(), entry_point.clone())
             }
             Some(_) => {
                 return Err(Error::FunctionNotFound(format!(
@@ -2038,7 +2033,14 @@ where
             }
             None => return Err(Error::KeyNotFound(key)),
         };
-        self.execute_contract(context, contract, args, method.as_str(), entry_point_type)
+        self.execute_contract(
+            context,
+            contract,
+            args,
+            method.as_str(),
+            metadata,
+            entrypoint,
+        )
     }
 
     fn execute_contract(
@@ -2047,7 +2049,8 @@ where
         contract: Contract,
         args: RuntimeArgs,
         entry_point: &str,
-        entry_point_type: EntryPointType,
+        metadata: ContractMetadata,
+        entrypoint: EntryPoint,
     ) -> Result<CLValue, Error> {
         // Check for major version compatibility before calling
         let contract_version = contract.protocol_version();
@@ -2100,7 +2103,7 @@ where
             None => parity_wasm::deserialize_buffer(contract.bytes())?,
         };
 
-        let mut named_keys = match entry_point_type {
+        let mut named_keys = match entrypoint.entry_point_type() {
             EntryPointType::Session => self.context.account().named_keys().clone(),
             EntryPointType::Contract => contract.take_named_keys(),
         };
@@ -2139,7 +2142,8 @@ where
             self.context.correlation_id(),
             self.context.phase(),
             self.context.protocol_data(),
-            entry_point_type,
+            metadata,
+            entrypoint,
         );
 
         let mut runtime = Runtime {
@@ -2759,7 +2763,7 @@ where
     /// Looks up the public mint contract key in the context's protocol data.
     ///
     /// Returned URef is already attenuated depending on the calling account.
-    fn get_mint_contract_uref(&self) -> URef {
+    pub(crate) fn get_mint_contract_uref(&self) -> URef {
         let mint = self.context.protocol_data().mint();
         self.context.attenuate_uref(mint)
     }
@@ -2767,7 +2771,7 @@ where
     /// Looks up the public PoS contract key in the context's protocol data.
     ///
     /// Returned URef is already attenuated depending on the calling account.
-    fn get_pos_contract_uref(&self) -> URef {
+    pub(crate) fn get_pos_contract_uref(&self) -> URef {
         let pos = self.context.protocol_data().proof_of_stake();
         self.context.attenuate_uref(pos)
     }
@@ -3221,6 +3225,15 @@ where
         }
 
         Ok(Ok(()))
+    }
+    pub fn validate_entry_point_access(
+        &self,
+        metadata: &ContractMetadata,
+        access: &EntryPointAccess,
+    ) -> Result<(), Error> {
+        runtime_context::validate_entry_point_access_with(metadata, access, |uref| {
+            self.context.validate_uref(uref).is_ok()
+        })
     }
 }
 
