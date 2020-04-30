@@ -16,7 +16,7 @@ struct StandardPayment;
 impl Package for StandardPayment {
     const ROOT: &'static str = "../contracts/system/standard-payment-install";
     const CARGO_TOML: &'static str = "../contracts/system/standard-payment-install/Cargo.toml";
-    const MAIN_RS: &'static str = "../contracts/system/standard-payment-install/src/min.rs";
+    const MAIN_RS: &'static str = "../contracts/system/standard-payment-install/src/main.rs";
     const WASM_FILENAME: &'static str = "standard_payment_install.wasm";
 }
 

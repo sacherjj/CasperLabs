@@ -735,12 +735,8 @@ steps:
 - name: package-python-client
   image: "casperlabs/buildenv:latest"
   commands:
-  - "make build-client-contracts"
-  - "cd integration-testing"
-  - "pipenv sync"
-  - "cd client/CasperLabsClient"
-  - "pipenv run python3 setup.py sdist"
-  - "cp dist/casperlabs* ../../../artifacts/${DRONE_BRANCH}"
+  - "make build-python-client"
+  - "cp client-py/dist/casperlabs* ../artifacts/${DRONE_BRANCH}"
   when:
     branch:
     - dev
@@ -1011,12 +1007,8 @@ steps:
 - name: package-python-client-tag
   image: "casperlabs/buildenv:latest"
   commands:
-  - "make build-client-contracts"
-  - "cd integration-testing"
-  - "pipenv sync"
-  - "cd client/CasperLabsClient"
-  - "pipenv run python3 setup.py sdist"
-  - "cp dist/casperlabs* ../../../artifacts/${DRONE_BRANCH}"
+  - "make build-python-client"
+  - "cp client-py/dist/casperlabs* ../artifacts/${DRONE_BRANCH}"
   when:
     ref:
     - refs/tags/v*
@@ -1103,8 +1095,8 @@ steps:
       from_secret: pypi_user
     password:
       from_secret: pypi_pass
-    setupfile: "integration-testing/client/CasperLabsClient/setup.py"
-    dist_dir: "integration-testing/client/CasperLabsClient/dist/"
+    setupfile: "client-py/setup.py"
+    dist_dir: "client-py/dist/"
     skip_build: true
   when:
     ref:
