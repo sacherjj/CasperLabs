@@ -33,7 +33,7 @@ import io.casperlabs.models.Message.{asJRank, asMainRank, JRank, MainRank}
 import scala.collection.immutable
 import scala.concurrent.duration.FiniteDuration
 import scala.concurrent.duration._
-import scala.util.{Success, Try}
+import scala.util.{Failure, Success, Try}
 import io.casperlabs.storage.dag.DagLookup
 import io.casperlabs.shared.Sorting._
 import io.casperlabs.shared.ByteStringPrettyPrinter._
@@ -640,18 +640,18 @@ object ProtoUtil {
     }
 
     argsF.flatMap { args =>
-      val payload: Try[io.casperlabs.ipc.DeployPayload.Payload] = code.contract match {
+      val payload = code.contract match {
         case Deploy.Code.Contract.Wasm(wasm) =>
           Success(ipc.DeployPayload.Payload.DeployCode(ipc.DeployCode(wasm, args)))
         case Deploy.Code.Contract.StoredContract(StoredContract(contractVersion, address)) =>
           contractVersion.fold[Try[io.casperlabs.ipc.DeployPayload.Payload]](
-            Try[io.casperlabs.ipc.DeployPayload.Payload](
-              throw new SmartContractEngineError("Missing version of the called contract.")
+            Failure(
+              new SmartContractEngineError("Missing version of the called contract.")
             )
           )(
             semver => {
               if (address.isHash) {
-                Try(
+                Success(
                   ipc.DeployPayload.Payload.StoredVersionedContractByHash(
                     io.casperlabs.ipc
                       .StoredVersionedContractByHash(
@@ -663,7 +663,7 @@ object ProtoUtil {
                   )
                 )
               } else if (address.isName) {
-                Try(
+                Success(
                   ipc.DeployPayload.Payload.StoredVersionedContractByName(
                     io.casperlabs.ipc
                       .StoredVersionedContractByName(
@@ -675,8 +675,8 @@ object ProtoUtil {
                   )
                 )
               } else
-                Try(
-                  throw new SmartContractEngineError(
+                Failure(
+                  new SmartContractEngineError(
                     s"$address is not valid contract pointer. Only hash and named key label are supported."
                   )
                 )
