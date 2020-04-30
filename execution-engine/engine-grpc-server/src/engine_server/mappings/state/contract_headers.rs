@@ -78,9 +78,12 @@ impl From<ContractHeader> for state::ContractHeader {
         res.set_contract_key(value.contract_key().into());
         res.set_protocol_version(value.protocol_version().into());
 
-        for (name, entry_point) in value.take_methods().into_iter() {
+        for (name, entrypoint) in value.take_methods().into_iter() {
+            let mut method_entry = state::ContractHeader_MethodEntry::new();
+            method_entry.set_name(name.to_string());
+            method_entry.set_entrypoint(entrypoint.into());
             res.mut_methods()
-                .insert(name.to_string(), entry_point.into());
+                .push(method_entry);
         }
         res
     }
@@ -90,8 +93,8 @@ impl TryFrom<state::ContractHeader> for ContractHeader {
     type Error = ParsingError;
     fn try_from(mut value: state::ContractHeader) -> Result<ContractHeader, Self::Error> {
         let mut methods = BTreeMap::new();
-        for (method_name, entry_point) in value.take_methods() {
-            methods.insert(method_name, entry_point.try_into()?);
+        for mut method_entry in value.take_methods().into_iter() {
+            methods.insert(method_entry.take_name(), method_entry.take_entrypoint().try_into()?);
         }
 
         let contract_key = value.take_contract_key().try_into()?;
