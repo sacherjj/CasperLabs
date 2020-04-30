@@ -45,6 +45,9 @@ message StoredVersionedContractByHash {
 message DeployPayload {
   oneof payload {
     DeployCode deploy_code = 1;
+    StoredContractHash stored_contract_hash = 2;
+    StoredContractName stored_contract_name = 3;
+    StoredContractURef stored_contract_uref = 4;
     StoredVersionedContractByName stored_versioned_contract_by_name = 5;
     StoredVersionedContractByHash stored_versioned_contract_by_hash = 6;
   }
