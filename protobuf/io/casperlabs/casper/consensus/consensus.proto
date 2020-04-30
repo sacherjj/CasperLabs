@@ -73,7 +73,7 @@ message Deploy {
         // Previously was ABI encoded args (directly as bytes); no longer
         // supported, use `args` instead.
         reserved 2;
-        // Previously, how contract was reference (prior contract headers).
+        // How contract was referenced prior to contract headers.
         reserved 3, 4, 5;
         oneof contract {
             // Wasm byte code.
