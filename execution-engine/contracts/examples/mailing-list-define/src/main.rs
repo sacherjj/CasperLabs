@@ -104,7 +104,7 @@ pub extern "C" fn call() {
             vec![Parameter::new(ARG_MESSAGE, CLType::String)],
             CLType::Option(Box::new(CLType::Key)),
             EntryPointAccess::Public,
-            EntryPointType::Session,
+            EntryPointType::Contract,
         );
         methods.insert(SUBSCRIBE_ENTRYPOINT.to_string(), subscribe_entrypoint);
 
