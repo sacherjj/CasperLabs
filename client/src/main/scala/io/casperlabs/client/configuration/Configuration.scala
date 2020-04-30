@@ -101,7 +101,7 @@ object DeployConfig {
     * they take precedence. This allows overriding the built-in contracts with custom ones.
     */
   private def toCode(opts: CodeConfig, defaultArgs: Seq[Arg]): Code = {
-    val semVerRegex = """(\d+).(\d+).(\d+)""".r
+    val semVerRegex = """(\d+)\.(\d+)\.(\d+)""".r
     val semVer = opts.version
       .flatMap { semVerArg =>
         semVerRegex.findFirstMatchIn(semVerArg).map {
