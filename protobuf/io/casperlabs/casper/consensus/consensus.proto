@@ -93,7 +93,7 @@ message Deploy {
                 // Name of a stored contract associated with the executing account (uref or hash).
                 string name = 2;
             }
-            io.casperlabs.casper.consensus.state.SemVer contract_version = 4;
+            io.casperlabs.casper.consensus.state.SemVer contract_version = 3;
         }
     }
 
