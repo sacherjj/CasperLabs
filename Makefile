@@ -305,8 +305,8 @@ build-client: \
 build-python-client: \
 	build-client-contracts \
 	$(PROTO_SRC) \
-	$(shell find ./integration-testing/client/CasperLabsClient/ -name "*.py"|grep -v _grpc.py)
-	cd integration-testing && pipenv run client/CasperLabsClient/build.sh
+	$(shell find ./client-py/ -name "*.py"|grep -v _grpc.py)
+	cd client-py && pipenv run ./build.sh
 
 build-client-contracts: \
 	client/src/main/resources/bonding.wasm \
