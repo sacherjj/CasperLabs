@@ -39,8 +39,12 @@ message ContractHeader {
             Contract contract = 6;
         }
     }
-    
-    map<string, EntryPoint> methods = 1;
+
+    message MethodEntry {
+        string name = 1;
+        EntryPoint entrypoint = 2;
+    }
+    repeated MethodEntry methods = 1;
     Key contract_key = 2;
     ProtocolVersion protocol_version = 3;
 }
