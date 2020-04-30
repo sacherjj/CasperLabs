@@ -634,7 +634,7 @@ object ProtoUtil {
       case Right(args) =>
         Try(
           ByteString.copyFrom(
-            ToBytes[Seq[cltype.CLValue]].toBytes(args)
+            ToBytes[Map[String, cltype.CLValue]].toBytes(args.toMap)
           )
         )
     }
