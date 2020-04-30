@@ -306,7 +306,7 @@ build-python-client: \
 	build-client-contracts \
 	$(PROTO_SRC) \
 	$(shell find ./client-py/ -name "*.py"|grep -v _grpc.py)
-	cd client-py && pipenv run ./build.sh
+	cd client-py && pipenv sync && pipenv run ./build.sh
 
 build-client-contracts: \
 	client/src/main/resources/bonding.wasm \
