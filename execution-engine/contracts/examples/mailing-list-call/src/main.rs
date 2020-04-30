@@ -14,9 +14,10 @@ use types::{runtime_args, ApiError, Key, RuntimeArgs, SemVer, URef};
 
 const MAIL_FEED_KEY: &str = "mail_feed";
 const MAILING_KEY: &str = "mailing";
-const PUB_METHOD: &str = "pub";
-const SUB_METHOD: &str = "sub";
-const MAILING_LIST_EXT: &str = "mailing_list_ext";
+const SUBSCRIBE_ENTRYPOINT: &str = "subscribe";
+const PUBLISH_ENTRYPOINT: &str = "publish";
+const ARG_MESSAGE: &str = "message";
+const ARG_NAME: &str = "name";
 
 #[repr(u16)]
 enum Error {
@@ -43,13 +44,12 @@ pub extern "C" fn call() {
 
     let name = "CasperLabs";
     let args = runtime_args! {
-        "method_name" => SUB_METHOD,
-        "arg1" => name,
+        ARG_NAME => name,
     };
     let sub_key = runtime::call_versioned_contract::<Option<Key>>(
         contract_ref.clone(),
         SemVer::V1_0_0,
-        MAILING_LIST_EXT,
+        SUBSCRIBE_ENTRYPOINT,
         args,
     )
     .unwrap_or_revert_with(Error::NoSubKey);
@@ -64,10 +64,9 @@ pub extern "C" fn call() {
 
     let message = "Hello, World!";
     let args = runtime_args! {
-        "method_name" => PUB_METHOD,
-        "arg1" => message,
+        ARG_MESSAGE => message,
     };
-    runtime::call_versioned_contract::<()>(contract_ref, SemVer::V1_0_0, MAILING_LIST_EXT, args);
+    runtime::call_versioned_contract::<()>(contract_ref, SemVer::V1_0_0, PUBLISH_ENTRYPOINT, args);
 
     let list_uref: URef = sub_key.try_into().unwrap_or_revert();
     let messages: Vec<String> = storage::read(list_uref)

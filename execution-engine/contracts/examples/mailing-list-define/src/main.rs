@@ -25,21 +25,10 @@ use types::{
 
 const LIST_KEY: &str = "list";
 const MAILING_KEY: &str = "mailing";
-const MAILING_LIST_EXT: &str = "mailing_list_ext";
-
-const ARG_METHOD_NAME: &str = "method_name";
-const ARG_ARG1: &str = "arg1";
-
-#[repr(u16)]
-enum Error {
-    UnknownMethodName = 0,
-}
-
-impl Into<ApiError> for Error {
-    fn into(self) -> ApiError {
-        ApiError::User(self as u16)
-    }
-}
+const SUBSCRIBE_ENTRYPOINT: &str = "subscribe";
+const PUBLISH_ENTRYPOINT: &str = "publish";
+const ARG_MESSAGE: &str = "message";
+const ARG_NAME: &str = "name";
 
 fn get_list_key(name: &str) -> URef {
     let key = runtime::get_key(name).unwrap_or_revert_with(ApiError::GetKey);
@@ -66,7 +55,15 @@ fn sub(name: String) -> Option<URef> {
     }
 }
 
-fn publish(msg: String) {
+#[no_mangle]
+pub extern "C" fn publish() {
+    // Note that this is totally insecure. In reality
+    // the pub method would be only available under an
+    // unforgable reference because otherwise anyone could
+    // spam the mailing list.
+    let msg: String = runtime::get_named_arg(ARG_MESSAGE)
+        .unwrap_or_revert_with(ApiError::MissingArgument)
+        .unwrap_or_revert_with(ApiError::InvalidArgument);
     let curr_list: Vec<String> = storage::read_or_revert(get_list_key(LIST_KEY));
     for name in curr_list.iter() {
         let uref: URef = get_list_key(name);
@@ -77,30 +74,19 @@ fn publish(msg: String) {
 }
 
 #[no_mangle]
-pub extern "C" fn mailing_list_ext() {
-    let method_name: String = runtime::get_named_arg(ARG_METHOD_NAME)
+pub extern "C" fn subscribe() {
+    let name: String = runtime::get_named_arg(ARG_NAME)
         .unwrap_or_revert_with(ApiError::MissingArgument)
         .unwrap_or_revert_with(ApiError::InvalidArgument);
-    let arg1: String = runtime::get_named_arg(ARG_ARG1)
-        .unwrap_or_revert_with(ApiError::MissingArgument)
-        .unwrap_or_revert_with(ApiError::InvalidArgument);
-    match method_name.as_str() {
-        "sub" => match sub(arg1) {
-            Some(uref) => {
-                let return_value = CLValue::from_t(Some(Key::from(uref))).unwrap_or_revert();
-                runtime::ret(return_value);
-            }
-            _ => {
-                let return_value = CLValue::from_t(Option::<Key>::None).unwrap_or_revert();
-                runtime::ret(return_value)
-            }
-        },
-        // Note that this is totally insecure. In reality
-        // the pub method would be only available under an
-        // unforgable reference because otherwise anyone could
-        // spam the mailing list.
-        "pub" => publish(arg1),
-        _ => runtime::revert(Error::UnknownMethodName),
+    match sub(name) {
+        Some(uref) => {
+            let return_value = CLValue::from_t(Some(Key::from(uref))).unwrap_or_revert();
+            runtime::ret(return_value);
+        }
+        _ => {
+            let return_value = CLValue::from_t(Option::<Key>::None).unwrap_or_revert();
+            runtime::ret(return_value)
+        }
     }
 }
 
@@ -114,16 +100,22 @@ pub extern "C" fn call() {
 
     let methods = {
         let mut methods = BTreeMap::new();
-        let entrypoint_hello = EntryPoint::new(
-            vec![
-                Parameter::new(ARG_METHOD_NAME, CLType::String),
-                Parameter::new(ARG_ARG1, CLType::String),
-            ],
+        let subscribe_entrypoint = EntryPoint::new(
+            vec![Parameter::new(ARG_MESSAGE, CLType::String)],
+            CLType::Option(Box::new(CLType::Key)),
+            EntryPointAccess::Public,
+            EntryPointType::Session,
+        );
+        methods.insert(SUBSCRIBE_ENTRYPOINT.to_string(), subscribe_entrypoint);
+
+        let publish_entrypoint = EntryPoint::new(
+            vec![Parameter::new(ARG_NAME, CLType::String)],
             CLType::Option(Box::new(CLType::Key)),
             EntryPointAccess::Public,
             EntryPointType::Contract,
         );
-        methods.insert(MAILING_LIST_EXT.to_string(), entrypoint_hello);
+        methods.insert(PUBLISH_ENTRYPOINT.to_string(), publish_entrypoint);
+
         methods
     };
 

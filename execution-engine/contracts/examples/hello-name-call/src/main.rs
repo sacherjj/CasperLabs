@@ -13,6 +13,8 @@ use types::{runtime_args, ApiError, RuntimeArgs, SemVer};
 
 const HELLO_NAME_METADATA_KEY: &str = "hello_name_metadata";
 const HELLOWORLD_KEY: &str = "helloworld";
+const HELLO_ENTRYPOINT: &str = "hello";
+const HELLO_ARG: &str = "name";
 
 #[no_mangle]
 pub extern "C" fn call() {
@@ -23,11 +25,11 @@ pub extern "C" fn call() {
         .unwrap_or_revert_with(ApiError::UnexpectedKeyVariant);
 
     let args = runtime_args! {
-        "name" => "World",
+        HELLO_ARG => "World",
     };
 
     let result: String =
-        runtime::call_versioned_contract(contract_ref, SemVer::V1_0_0, "hello_name_ext", args);
+        runtime::call_versioned_contract(contract_ref, SemVer::V1_0_0, HELLO_ENTRYPOINT, args);
     assert_eq!("Hello, World", result);
 
     // Store the result at a uref so it can be seen as an effect on the global state

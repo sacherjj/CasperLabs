@@ -415,13 +415,6 @@ impl<R: StateReader<Key, StoredValue>> TrackingCopy<R> {
                         return Ok(query.into_not_found_result(&msg_prefix));
                     }
 
-                    // Check if given version is contained active versions before going deeper
-                    // through local key.
-                    if metadata.is_version_removed(&sem_ver) {
-                        let msg_prefix =
-                            format!("Query cannot continue as version {} is removed", name);
-                        return Ok(query.into_not_found_result(&msg_prefix));
-                    }
                     let contract_header = match metadata.get_version(&sem_ver) {
                         Some(contract_header) => contract_header,
                         None => {

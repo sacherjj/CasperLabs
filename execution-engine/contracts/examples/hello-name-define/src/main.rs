@@ -18,7 +18,7 @@ use types::{
 };
 
 const HELLO_NAME_METADATA_KEY: &str = "hello_name_metadata";
-const HELLO_NAME_EXT: &str = "hello_name_ext";
+const HELLO_ENTRYPOINT: &str = "hello";
 const ARG_NAME: &str = "name";
 
 fn hello_name(name: &str) -> String {
@@ -28,7 +28,7 @@ fn hello_name(name: &str) -> String {
 }
 
 #[no_mangle]
-pub extern "C" fn hello_name_ext() {
+pub extern "C" fn hello() {
     let name: String = runtime::get_named_arg(ARG_NAME)
         .unwrap_or_revert_with(ApiError::MissingArgument)
         .unwrap_or_revert_with(ApiError::InvalidArgument);
@@ -49,7 +49,7 @@ pub extern "C" fn call() {
             EntryPointAccess::Public,
             EntryPointType::Contract,
         );
-        methods.insert(HELLO_NAME_EXT.to_string(), entrypoint_hello);
+        methods.insert(HELLO_ENTRYPOINT.to_string(), entrypoint_hello);
         methods
     };
 
