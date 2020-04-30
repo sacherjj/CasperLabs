@@ -1,11 +1,11 @@
 [package]
-name = "contract-headers"
+name = "contract-context"
 version = "0.1.0"
 authors = ["Michał Papierski <michal@casperlabs.io>"]
 edition = "2018"
 
 [[bin]]
-name = "contract_headers"
+name = "contract_context"
 path = "src/main.rs"
 bench = false
 doctest = false

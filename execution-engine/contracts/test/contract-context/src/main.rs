@@ -117,6 +117,17 @@ fn create_entrypoints_1() -> BTreeMap<String, EntryPoint> {
         session_code_caller_as_session,
     );
 
+    let session_code_caller_as_contract = EntryPoint::new(
+        Vec::new(),
+        CLType::I32,
+        EntryPointAccess::Public,
+        EntryPointType::Contract,
+    );
+    entrypoints.insert(
+        "session_code_caller_as_contract".to_string(),
+        session_code_caller_as_contract,
+    );
+
     let add_new_key = EntryPoint::new(
         Vec::new(),
         CLType::I32,

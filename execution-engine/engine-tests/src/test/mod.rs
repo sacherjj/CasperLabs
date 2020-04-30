@@ -1,5 +1,5 @@
 mod contract_api;
-mod contract_headers;
+mod contract_context;
 mod deploy;
 mod examples;
 mod explorer;
