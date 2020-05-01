@@ -100,9 +100,7 @@ export class DagContainer {
 
   async selectByBlockHashBase16(blockHashBase16: string) {
     let selectedBlock = this.blocks!.find(
-      x =>
-        encodeBase16(x.getSummary()!.getBlockHash_asU8()) ===
-        blockHashBase16
+      x => encodeBase16(x.getSummary()!.getBlockHash_asU8()) === blockHashBase16
     );
     if (selectedBlock) {
       this.selectedBlock = selectedBlock;
@@ -212,8 +210,8 @@ export class DagContainer {
   }
 
   private async refreshBlockDag() {
-    // show loading spinner
-    this.blocks = null;
+    // todo: (ECO-399) Use a more elegant loading style to indicate it is loading
+    // or maybe spin the loading button so that the user can know it is refreshing.
     await this.errors.capture(
       this.casperService
         .getBlockInfos(this.depth, this.maxRank)

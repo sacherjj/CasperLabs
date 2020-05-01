@@ -115,11 +115,11 @@ class _Explorer extends React.Component<Props, {}> {
               height="600"
             />
           </div>
-          {dag.selectedBlock && (
+          {dag.selectedBlock && dag.blocks != null && (
             <div className="col-sm-12 col-lg-4">
               <BlockDetails
                 block={dag.selectedBlock}
-                blocks={dag.blocks!}
+                blocks={dag.blocks}
                 onSelect={blockHashBase16 => {
                   dag.selectByBlockHashBase16(blockHashBase16);
                 }}
