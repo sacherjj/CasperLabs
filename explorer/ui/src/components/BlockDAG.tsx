@@ -443,7 +443,7 @@ const toGraph = (blocks: BlockInfo[]) => {
           isJustification: false,
           isFinalized: (isChildFinalized || isChildBallot) && isFinalized(target.block),
           // if child is an orphaned block, the link should be highlighted with OrphanedLineColor
-          isOrphaned: !isChildBallot && isChildOrphaned
+          isOrphaned: isChildOrphaned
         };
       });
 
@@ -458,8 +458,7 @@ const toGraph = (blocks: BlockInfo[]) => {
           isMainParent: false,
           isJustification: true,
           isFinalized: (isChildFinalized || isChildBallot) && isFinalized(target.block),
-          // if child is an orphaned block, the link should be highlighted with OrphanedLineColor
-          isOrphaned: !isChildBallot && isChildOrphaned
+          isOrphaned: false
         };
       });
 
@@ -532,7 +531,7 @@ const isFinalized = (block: BlockInfo) =>
   block.getStatus()!.getFinality() === BlockInfo.Status.Finality.FINALIZED;
 
 const isOrphaned = (block: BlockInfo) =>
-  block.getStatus()!.getFinality() === BlockInfo.Status.Finality.ORPHANED;
+  isBlock(block) && block.getStatus()!.getFinality() === BlockInfo.Status.Finality.ORPHANED;
 
 const validatorHash = (block: BlockInfo) =>
   encodeBase16(
