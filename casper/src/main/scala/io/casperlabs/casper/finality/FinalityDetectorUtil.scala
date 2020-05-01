@@ -73,7 +73,8 @@ object FinalityDetectorUtil {
   }
 
   /**
-    * Get level zero messages of the specified validator and specified candidateBlock
+    * Returns list of messages (ordered from latest to oldest) from `validator`
+    * that are descendant (along the main-tree path) of the `candidateBlockHash`.
     */
   private[casper] def levelZeroMsgsOfValidator[F[_]: Monad](
       dag: DagRepresentation[F],
@@ -152,10 +153,10 @@ object FinalityDetectorUtil {
       validator => {
         // When V(j) happens to be an equivocator, put 0L in the corresponding cell
         if (equivocators.contains(validator)) {
-          0L
+          Message.asJRank(0L)
         } else {
           // When V(j)-swimlane is empty, put 0L in the corresponding cell
-          latestBlockDagLevelAsMap.getOrElse(validator, 0L)
+          latestBlockDagLevelAsMap.getOrElse(validator, Message.asJRank(0L))
         }
       }
     )
