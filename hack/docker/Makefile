@@ -183,6 +183,16 @@ maybe-reset-highway-env:
 
 # https://github.com/CasperLabs/stests
 stests/build:
+	# Build contracts stests will want to use.
+	$(eval CONTRACTS_FROM = ../../execution-engine/target/wasm32-unknown-unknown/release)
+	$(eval CONTRACTS_TO = ../../client-py/casperlabs_client/)
+	cd ../../execution-engine && \
+	  make build-contract-rs/transfer-to-account-u512-stored \
+		     build-contract-rs/counter-define
+	# Copy them over under the python client; it's where stests will look for them at the moment.
+	cp $(CONTRACTS_FROM)/transfer_to_account_u512_stored.wasm $(CONTRACTS_TO)
+	cp $(CONTRACTS_FROM)/counter_define.wasm $(CONTRACTS_TO)
+
 	# Package the latest Python client; the one on pypi might be older than the latest and greatest.
 	# This might cause issues as python client breaks with TestNet
 	# Since at least 0.17, PyPi version has the .wasm, one of the main reasons we manually built and included.
