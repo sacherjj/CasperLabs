@@ -169,6 +169,38 @@ impl DeployItemBuilder {
         self
     }
 
+    pub fn with_stored_versioned_payment_contract_by_name(
+        mut self,
+        key_name: &str,
+        version: SemVer,
+        entry_point: &str,
+        args: RuntimeArgs,
+    ) -> Self {
+        self.deploy_item.payment_code = Some(ExecutableDeployItem::StoredVersionedContractByName {
+            name: key_name.to_owned(),
+            version,
+            entry_point: entry_point.to_owned(),
+            args: args.to_bytes().expect("should serialize runtime args"),
+        });
+        self
+    }
+
+    pub fn with_stored_versioned_payment_contract_by_hash(
+        mut self,
+        hash: Hash,
+        version: SemVer,
+        entry_point: &str,
+        args: RuntimeArgs,
+    ) -> Self {
+        self.deploy_item.payment_code = Some(ExecutableDeployItem::StoredVersionedContractByHash {
+            hash,
+            version,
+            entry_point: entry_point.to_owned(),
+            args: args.to_bytes().expect("should serialize runtime args"),
+        });
+        self
+    }
+
     pub fn with_authorization_keys<T: Clone + Into<PublicKey>>(
         mut self,
         authorization_keys: &[T],

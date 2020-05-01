@@ -370,6 +370,16 @@ impl EntryPoint {
         }
     }
 
+    /// constructor for a public session `EntryPoint` that takes no args and returns `Unit`
+    pub fn thunk() -> Self {
+        EntryPoint {
+            args: Vec::new(),
+            ret: CLType::Unit,
+            access: EntryPointAccess::Public,
+            entry_point_type: EntryPointType::Session,
+        }
+    }
+
     /// Get access enum.
     pub fn access(&self) -> &EntryPointAccess {
         &self.access

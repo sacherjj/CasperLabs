@@ -829,6 +829,7 @@ where
                 version,
                 ..
             } => {
+                // TODO: URefNotFound is not the correct error variant
                 let stored_metadata_key = account.named_keys().get(name).ok_or_else(|| {
                     error::Error::Exec(execution::Error::URefNotFound(name.to_string()))
                 })?;

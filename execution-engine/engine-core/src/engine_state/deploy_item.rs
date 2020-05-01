@@ -7,7 +7,7 @@ use crate::{engine_state::executable_deploy_item::ExecutableDeployItem, DeployHa
 type GasPrice = u64;
 
 /// Represents a deploy to be executed.  Corresponds to the similarly-named ipc protobuf message.
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub struct DeployItem {
     pub address: PublicKey,
     pub session: ExecutableDeployItem,

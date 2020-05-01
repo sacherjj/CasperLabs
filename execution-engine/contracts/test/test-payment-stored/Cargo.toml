@@ -1,11 +1,11 @@
 [package]
-name = "standard-payment-stored"
+name = "test-payment-stored"
 version = "0.1.0"
 authors = ["Henry Till <henrytill@gmail.com>", "Ed Hastings <ed@casperlabs.io>"]
 edition = "2018"
 
 [[bin]]
-name = "standard_payment_stored"
+name = "test_payment_stored"
 path = "src/main.rs"
 bench = false
 doctest = false

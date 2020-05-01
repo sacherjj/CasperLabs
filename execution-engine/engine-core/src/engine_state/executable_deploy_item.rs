@@ -1,6 +1,6 @@
 use types::{bytesrepr, CLValue, Hash, RuntimeArgs, SemVer};
 
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub enum ExecutableDeployItem {
     ModuleBytes {
         module_bytes: Vec<u8>,

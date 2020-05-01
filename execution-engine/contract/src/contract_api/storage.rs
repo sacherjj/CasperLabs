@@ -120,6 +120,40 @@ pub fn add_local<K: ToBytes, V: CLTyped + ToBytes>(key: K, value: V) {
     }
 }
 
+/// Create a new contract stored under a Key::Hash at version 1.0.0
+/// if `named_keys` are provided, will apply them
+/// if `hash_name` is provided, puts contract hash in current context's named keys under `hash_name`
+/// if `uref_name` is provided, puts access_uref in current context's named keys under `uref_name`
+pub fn new_contract(
+    methods: BTreeMap<String, EntryPoint>,
+    named_keys: Option<BTreeMap<String, Key>>,
+    hash_name: Option<String>,
+    uref_name: Option<String>,
+) -> Result<(), ApiError> {
+    let (contract_key, access_uref) = create_contract_metadata_at_hash();
+
+    if let Some(hash_name) = hash_name {
+        runtime::put_key(&hash_name, contract_key);
+    };
+
+    if let Some(uref_name) = uref_name {
+        runtime::put_key(&uref_name, access_uref.into());
+    };
+
+    let named_keys = match named_keys {
+        Some(named_keys) => named_keys,
+        None => BTreeMap::new(),
+    };
+
+    add_contract_version(
+        contract_key,
+        access_uref,
+        SemVer::V1_0_0,
+        methods,
+        named_keys,
+    )
+}
+
 /// Create a new (versioned) contract stored under a Key::Hash. Initially there
 /// are no versions; a version must be added via `add_contract_version` before
 /// the contract can be executed.
@@ -143,14 +177,14 @@ pub fn create_contract_metadata_at_hash() -> (Key, URef) {
 /// function returns the list of new URefs created for the group (the list will
 /// contain `num_new_urefs` elements).
 pub fn create_contract_user_group(
-    contract: Key,
-    access_key: URef,
+    contract_key: Key,
+    access_uref: URef,
     group_label: &str,
     num_new_urefs: u8, // number of new urefs to populate the group with
     existing_urefs: BTreeSet<URef>, // also include these existing urefs in the group
 ) -> Result<Vec<URef>, ApiError> {
-    let (meta_ptr, meta_size, _bytes1) = contract_api::to_ptr(contract);
-    let (access_ptr, _access_size, _bytes2) = contract_api::to_ptr(access_key);
+    let (meta_ptr, meta_size, _bytes1) = contract_api::to_ptr(contract_key);
+    let (access_ptr, _access_size, _bytes2) = contract_api::to_ptr(access_uref);
     let (label_ptr, label_size, _bytes3) = contract_api::to_ptr(group_label);
     let (existing_urefs_ptr, existing_urefs_size, _bytes4) = contract_api::to_ptr(existing_urefs);
 

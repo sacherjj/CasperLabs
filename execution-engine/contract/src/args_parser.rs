@@ -5,7 +5,7 @@
 use alloc::vec;
 use alloc::vec::Vec;
 
-use casperlabs_types::{bytesrepr::ToBytes, CLTyped, CLValue, CLValueError};
+use casperlabs_types::{bytesrepr::ToBytes, CLTyped, CLValue, CLValueError, RuntimeArgs};
 
 /// Types which implement [`ArgsParser`] can be parsed into an ABI-compliant byte representation
 /// suitable for passing as arguments to a contract.
@@ -21,6 +21,12 @@ impl ArgsParser for () {
     fn parse(self) -> Result<Vec<CLValue>, CLValueError> {
         Ok(Vec::new())
     }
+}
+
+///
+pub fn fix_this(args: impl ArgsParser) -> RuntimeArgs {
+    let args = args.parse().expect("should pass valid input");
+    RuntimeArgs::Positional(args)
 }
 
 macro_rules! impl_argsparser_tuple {

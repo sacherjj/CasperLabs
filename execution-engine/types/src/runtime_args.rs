@@ -26,6 +26,12 @@ impl From<(String, CLValue)> for Named {
     }
 }
 
+#[repr(u8)]
+enum Tag {
+    Positional = 3,
+    Named = 1,
+}
+
 /// Represents a collection of arguments passed to a smart contract.
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub enum RuntimeArgs {
@@ -118,9 +124,9 @@ impl RuntimeArgs {
 }
 
 impl From<Vec<CLValue>> for RuntimeArgs {
-    fn from(clvalues: Vec<CLValue>) -> Self {
+    fn from(cl_values: Vec<CLValue>) -> Self {
         // Temporary compatibility with positional arguments
-        RuntimeArgs::Positional(clvalues)
+        RuntimeArgs::Positional(cl_values)
     }
 }
 
@@ -131,9 +137,9 @@ impl From<Vec<Named>> for RuntimeArgs {
 }
 
 impl From<BTreeMap<String, CLValue>> for RuntimeArgs {
-    fn from(clvalues: BTreeMap<String, CLValue>) -> RuntimeArgs {
+    fn from(cl_values: BTreeMap<String, CLValue>) -> RuntimeArgs {
         // Temporary compatibility with positional arguments
-        RuntimeArgs::Named(clvalues.into_iter().map(Named::from).collect())
+        RuntimeArgs::Named(cl_values.into_iter().map(Named::from).collect())
     }
 }
 
@@ -141,31 +147,34 @@ impl ToBytes for RuntimeArgs {
     fn to_bytes(&self) -> Result<Vec<u8>, Error> {
         let mut result = bytesrepr::allocate_buffer(self)?;
 
-        let num_keys = self.len() as u32;
-        result.append(&mut num_keys.to_bytes()?);
-
         match self {
             RuntimeArgs::Positional(values) => {
-                for value in values {
-                    result.append(&mut value.to_bytes()?);
+                result.push(Tag::Positional as u8);
+                let num_values = values.len() as u32;
+                result.append(&mut num_values.to_bytes()?);
+                for cl_value in values {
+                    result.append(&mut cl_value.to_bytes()?);
                 }
             }
             RuntimeArgs::Named(named_values) => {
+                result.push(Tag::Named as u8);
+                let num_keys = named_values.len() as u32;
+                result.append(&mut num_keys.to_bytes()?);
                 for named_value in named_values {
                     result.append(&mut named_value.name().to_bytes()?);
                     result.append(&mut named_value.cl_value().to_bytes()?);
                 }
             }
         }
-
         Ok(result)
     }
 
     fn serialized_length(&self) -> usize {
         match self {
-            RuntimeArgs::Positional(values) => values.serialized_length(),
+            RuntimeArgs::Positional(values) => values.serialized_length() + 1,
             RuntimeArgs::Named(named_values) => {
                 U32_SERIALIZED_LENGTH
+                    + 1
                     + named_values
                         .iter()
                         .map(|Named(name, value)| {
@@ -179,16 +188,33 @@ impl ToBytes for RuntimeArgs {
 
 impl FromBytes for RuntimeArgs {
     fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
-        let (num_keys, mut stream) = u32::from_bytes(bytes)?;
-        // let mut result = RuntimeArgs::new();
-        let mut named_args = Vec::with_capacity(num_keys as usize);
-        for _ in 0..num_keys {
-            let (k, rem) = String::from_bytes(stream)?;
-            let (v, rem) = CLValue::from_bytes(rem)?;
-            named_args.push(Named(k, v));
-            stream = rem;
+        let (tag, remainder): (u8, &[u8]) = FromBytes::from_bytes(bytes)?;
+        match tag {
+            tag if tag == Tag::Positional as u8 => {
+                let (num_values, mut stream) = u32::from_bytes(remainder)?;
+                let mut positional_args = Vec::with_capacity(num_values as usize);
+                for _ in 0..num_values {
+                    let (cl_value, remainder) = CLValue::from_bytes(stream)?;
+                    positional_args.push(cl_value);
+                    stream = remainder;
+                }
+                debug_assert!(stream.is_empty(), "stream should be empty {:?}", stream);
+                Ok((positional_args.into(), stream))
+            }
+            tag if tag == Tag::Named as u8 => {
+                let (num_keys, mut stream) = u32::from_bytes(remainder)?;
+                let mut named_args = Vec::with_capacity(num_keys as usize);
+                for _ in 0..num_keys {
+                    let (k, remainder) = String::from_bytes(stream)?;
+                    let (v, remainder) = CLValue::from_bytes(remainder)?;
+                    named_args.push(Named(k, v));
+                    stream = remainder;
+                }
+                debug_assert!(stream.is_empty(), "stream should be empty {:?}", stream);
+                Ok((named_args.into(), stream))
+            }
+            _ => Err(bytesrepr::Error::Formatting),
         }
-        Ok((named_args.into(), stream))
     }
 }
 
@@ -291,5 +317,20 @@ mod tests {
             runtime_args_1.to_bytes().unwrap(),
             runtime_args_2.to_bytes().unwrap()
         );
+    }
+
+    #[test]
+    fn named_serialization_roundtrip() {
+        let args = runtime_args! {
+            "foo" => 1i32,
+        };
+        bytesrepr::test_serialization_roundtrip(&args);
+    }
+
+    #[test]
+    fn positional_serialization_roundtrip() {
+        let cl_value = CLValue::from_t(8i32).expect("should convert");
+        let args = RuntimeArgs::Positional(vec![cl_value]);
+        bytesrepr::test_serialization_roundtrip(&args);
     }
 }
