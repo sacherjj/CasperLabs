@@ -655,7 +655,7 @@ steps:
   image: "casperlabs/buildenv:latest"
   commands:
   - "make build-python-client"
-  - "cp client-py/dist/casperlabs* ../artifacts/${DRONE_BRANCH}"
+  - "cp client-py/dist/casperlabs* artifacts/${DRONE_BRANCH}"
   when:
     branch:
     - dev
@@ -927,7 +927,7 @@ steps:
   image: "casperlabs/buildenv:latest"
   commands:
   - "make build-python-client"
-  - "cp client-py/dist/casperlabs* ../artifacts/${DRONE_BRANCH}"
+  - "cp client-py/dist/casperlabs* artifacts/${DRONE_BRANCH}"
   when:
     ref:
     - refs/tags/v*
