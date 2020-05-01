@@ -78,12 +78,13 @@ object Options {
 
     val sessionEntryPoint =
       opt[String](
-        descr = "Name of the method that will be used when calling the contract.",
-        default = Some("call")
+        required = false,
+        descr = "Name of the method that will be used when calling the contract."
       )
 
     val sessionSemVer =
       opt[SemVer](
+        required = false,
         descr = "Semantic version of the called contract. Matches the pattern `major.minor.patch`."
       )
 
@@ -125,11 +126,13 @@ object Options {
 
     val paymentEntryPoint =
       opt[String](
+        required = false,
         descr = "Name of the method that will be used when calling the contract."
       )
 
     val paymentSemVer =
       opt[SemVer](
+        required = false,
         descr = "Semantic version of the payment contract. Matches the pattern `major.minor.patch`."
       )
 
