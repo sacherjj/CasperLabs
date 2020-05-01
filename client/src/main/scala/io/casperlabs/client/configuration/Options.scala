@@ -78,14 +78,12 @@ object Options {
 
     val sessionEntryPoint =
       opt[String](
-        required = false,
         descr = "Name of the method that will be used when calling the contract.",
         default = Some("call")
       )
 
     val sessionSemVer =
       opt[SemVer](
-        required = true,
         descr = "Semantic version of the called contract. Matches the pattern `major.minor.patch`."
       )
 
@@ -127,14 +125,11 @@ object Options {
 
     val paymentEntryPoint =
       opt[String](
-        required = false,
-        descr = "Name of the method that will be used when calling the contract.",
-        default = Some("call")
+        descr = "Name of the method that will be used when calling the contract."
       )
 
     val paymentSemVer =
       opt[SemVer](
-        required = true,
         descr = "Semantic version of the payment contract. Matches the pattern `major.minor.patch`."
       )
 
@@ -184,6 +179,14 @@ object Options {
       opt[Long](descr = "Timeout in seconds.", default = Option(TIMEOUT_SECONDS_DEFAULT.toSeconds))
 
     addValidation {
+      val missingSemVer: String => Either[String, Unit] =
+        what => Left(s"Missing semver for $what.")
+
+      val missingEntrypoint: String => Either[String, Unit] =
+        what => Left(s"Missing entrpoint for $what")
+
+      val storedPaymentCode = paymentHash.isDefined || paymentName.isDefined
+      val storedSessionCode = sessionSemVer.isDefined || sessionSemVer.isDefined
       val sessionsProvided =
         List(session.isDefined, sessionHash.isDefined, sessionName.isDefined)
           .count(identity)
@@ -200,6 +203,14 @@ object Options {
         Left(
           "No payment contract options provided; please specify --payment-amount for the standard payment."
         )
+      else if (storedPaymentCode && paymentSemVer.isEmpty)
+        missingSemVer("payment contract")
+      else if (storedSessionCode && sessionSemVer.isEmpty)
+        missingSemVer("session contract")
+      else if (storedPaymentCode && paymentEntryPoint.isEmpty)
+        missingEntrypoint("payment contract")
+      else if (storedSessionCode && sessionEntryPoint.isEmpty)
+        missingEntrypoint("stored contract")
       else Right(())
     }
   }
