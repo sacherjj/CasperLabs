@@ -12,7 +12,6 @@ import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.models.Message
 import io.casperlabs.models.Message.{JRank, MainRank}
 import io.casperlabs.storage.dag.{AncestorsStorage, DagRepresentation}
-import io.casperlabs.shared.ByteStringPrettyPrinter.byteStringShow
 import scala.collection.mutable.{IndexedSeq => MutableSeq}
 
 object VotingMatrix {
