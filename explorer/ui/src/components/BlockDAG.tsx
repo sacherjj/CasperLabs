@@ -6,6 +6,7 @@ import * as d3 from 'd3';
 import { encodeBase16 } from 'casperlabs-sdk';
 import { ToggleButton, ToggleStore } from './ToggleButton';
 import { reaction } from 'mobx';
+import * as d3xyzoom from 'd3-xyzoom';
 import { observer } from 'mobx-react';
 
 // https://bl.ocks.org/mapio/53fed7d84cd1812d6a6639ed7aa83868
@@ -183,11 +184,11 @@ export class BlockDAG extends React.Component<Props, {}> {
 
     // see https://www.d3-graph-gallery.com/graph/interactivity_zoom.html#axisZoom
     // using axis transform function to simplify transform
-    const initXTrans: d3.ScaleLinear<number, number> = d3
+    let initXTrans: d3.ScaleLinear<number, number> = d3
       .scaleLinear()
       .domain([0, width])
       .range([0, width]);
-    const initYTrans: d3.ScaleLinear<number, number> = d3
+    let initYTrans: d3.ScaleLinear<number, number> = d3
       .scaleLinear()
       .domain([0, height])
       .range([0, height]);
@@ -199,13 +200,42 @@ export class BlockDAG extends React.Component<Props, {}> {
       // Add the zoomable container.
       svg.append('g').attr('class', 'container');
 
-      const zoom: any = d3
-        .zoom()
-        .scaleExtent([0.1, 4])
+      // whether it is under horizontal only zoom mode
+      let isHorizontal = false;
+      const zoom = d3xyzoom
+        .xyzoom()
+        .extent([
+          [0, 0],
+          [width, height]
+        ])
+        .scaleExtent([
+          [0.4, 4],
+          [0.4, 4]
+        ])
+        .on('start', () => {
+          // The first wheel event emits a start event; an end event is emitted when no wheel events are received for 150ms.
+          // So if user press MetaKey(Windows button on Windows system or Command button on Mac)
+          // when fire first wheel event, it enters the horizontal only zoom mode.
+          isHorizontal = d3.event.sourceEvent && d3.event.sourceEvent.metaKey;
+        })
         .on('zoom', () => {
-          this.xTrans = d3.event.transform.rescaleX(initXTrans);
-          this.yTrans = d3.event.transform.rescaleY(initYTrans);
+          let t = d3.event.transform;
+          this.xTrans = t.rescaleX(initXTrans);
+          if (!isHorizontal) {
+            this.yTrans = t.rescaleY(initYTrans);
+          }
           updatePositions();
+        })
+        .on('end', () => {
+          // reset
+          isHorizontal = false;
+          // see https://github.com/d3/d3-zoom/issues/48
+          // Stored the current axis of x and y, and set the transform to be the identity transform,
+          // where kx = 1, ky = 1, tx = ty = 0, so when switching between zoom mode,
+          // both of them won't interleave.
+          initXTrans = this.xTrans ?? initXTrans;
+          initYTrans = this.yTrans ?? initYTrans;
+          svg.property('__zoom', d3xyzoom.xyzoomIdentity);
         });
 
       svg.call(zoom);
