@@ -59,7 +59,8 @@ class FinalityDetectorVotingMatrix[F[_]: Concurrent: Log: AncestorsStorage] priv
                   for {
                     _ <- if (votedBranchIsDifferentEra)
                           Log[F].debug(
-                            s"${PrettyPrinter.buildString(message.messageHash) -> "Message"} from ${message.eraId -> "era"} votes on an LFB child ${PrettyPrinter
+                            s"${PrettyPrinter.buildString(message.messageHash) -> "Message"} from ${PrettyPrinter
+                              .buildString(message.eraId)                      -> "era"} votes on an LFB child ${PrettyPrinter
                               .buildString(lfbChildHash)                       -> "hash"} from a different era."
                           )
                         else

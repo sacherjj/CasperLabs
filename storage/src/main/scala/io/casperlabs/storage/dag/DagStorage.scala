@@ -110,6 +110,15 @@ trait TipRepresentation[F[_]] {
   def latestMessage(validator: Validator): F[Set[Message]]
   def latestMessageHashes: F[Map[Validator, Set[BlockHash]]]
   def latestMessages: F[Map[Validator, Set[Message]]]
+
+  // Returns latest messages from honest validators
+  def latestMessagesHonestValidators(implicit A: Applicative[F]): F[Map[Validator, Message]] =
+    latestMessages.map { latestMessages =>
+      latestMessages.collect {
+        case (v, messages) if messages.size == 1 =>
+          (v, messages.head)
+      }
+    }
 }
 
 trait EraTipRepresentation[F[_]] extends TipRepresentation[F] {
