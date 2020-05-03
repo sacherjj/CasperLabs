@@ -454,6 +454,12 @@ def deploy_options(private_key_accepted=True):
 # fmt:on
 
 
+def read_version() -> str:
+    version_path = f"{os.path.dirname(os.path.realpath(__file__))}/VERSION"
+    with open(version_path, 'r') as f:
+        return f.read().strip()
+
+
 def cli(*arguments) -> int:
     """
     Parse list of command line arguments and call appropriate command.
@@ -506,6 +512,11 @@ def cli(*arguments) -> int:
                 required=False,
                 type=str,
                 help="Certificate file for TLS connection",
+            )
+            self.parser.add_argument(
+                "--version",
+                action="version",
+                version=read_version(),
             )
             self.sp = self.parser.add_subparsers(help="Choose a request")
 
