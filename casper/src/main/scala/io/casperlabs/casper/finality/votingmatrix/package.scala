@@ -9,7 +9,7 @@ import io.casperlabs.models.Message.{JRank, MainRank}
 import io.casperlabs.models.{Message, Weight}
 import io.casperlabs.storage.dag.DagRepresentation
 import io.casperlabs.casper.validation.Validation
-
+import io.casperlabs.shared.ByteStringPrettyPrinter.byteStringShow
 import scala.annotation.tailrec
 import scala.collection.mutable.{IndexedSeq => MutableSeq}
 
@@ -184,14 +184,15 @@ package object votingmatrix {
                       }
                       .map(_.groupBy(_._1).mapValues(_.map(_._2)))
                       .map { consensusValueToHonestValidators =>
-                        if (consensusValueToHonestValidators.isEmpty)
+                        if (consensusValueToHonestValidators.isEmpty) {
                           // After filtering out equivocators we don't have any honest votes.
                           none[CommitteeWithConsensusValue]
-                        else {
+                        } else {
                           // Get most support voteBranch and its support weight
                           val mostSupport = consensusValueToHonestValidators
                             .mapValues(_.map(weightMap.getOrElse(_, Zero)).sum)
                             .maxBy(_._2)
+
                           val (voteValue, supportingWeight) = mostSupport
                           // Get the voteBranch's supporters
                           val supporters = consensusValueToHonestValidators(voteValue)

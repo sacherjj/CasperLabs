@@ -12,7 +12,6 @@ import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.models.Message
 import io.casperlabs.models.Message.{JRank, MainRank}
 import io.casperlabs.storage.dag.{AncestorsStorage, DagRepresentation}
-
 import scala.collection.mutable.{IndexedSeq => MutableSeq}
 
 object VotingMatrix {
@@ -57,9 +56,30 @@ object VotingMatrix {
       weights    = block.weightMap
       validators = weights.keySet.toArray
       // Assigns numeric identifiers 0, ..., N-1 to all validators
-      validatorsToIndex            = validators.zipWithIndex.toMap
-      n                            = validators.size
-      latestMessagesOfHonestVoters <- dag.latestMessagesHonestValidators
+      validatorsToIndex = validators.zipWithIndex.toMap
+      n                 = validators.size
+      latestMessagesOfHonestVoters <- if (!isHighway)
+                                       dag.latestMessagesHonestValidators.map(_.toSeq)
+                                     else {
+                                       // Get the honest votes in eras that vote on a child of the LFB.
+                                       for {
+                                         childHashes <- dag.getMainChildren(lfbHash)
+                                         childMessages <- childHashes.toList.traverse(
+                                                           dag.lookupUnsafe(_)
+                                                         )
+                                         childEraIds = childMessages
+                                           .filter(_.isBlock)
+                                           .map(_.eraId)
+                                           .distinct
+                                         honestVoters <- childEraIds.traverse { eraId =>
+                                                          dag
+                                                            .latestInEra(eraId)
+                                                            .flatMap(
+                                                              _.latestMessagesHonestValidators
+                                                            )
+                                                        }
+                                       } yield honestVoters.map(_.toSeq).flatten
+                                     }
       // On which child of LFB validators vote on.
       voteOnLFBChild <- latestMessagesOfHonestVoters.toList
                          .traverse {
@@ -84,7 +104,7 @@ object VotingMatrix {
                               .traverse {
                                 case (v, voteValue) =>
                                   FinalityDetectorUtil
-                                    .levelZeroMsgsOfValidator(dag, v, voteValue.messageHash)
+                                    .levelZeroMsgsOfValidator(dag, v, voteValue, isHighway)
                                     .map(
                                       _.lastOption
                                         .map(b => (v, (voteValue.messageHash, b.jRank)))
@@ -95,8 +115,8 @@ object VotingMatrix {
         validatorsToIndex,
         firstLevelZeroVotes.get
       )
-      latestMessagesToUpdated = latestMessagesOfHonestVoters.filterKeys { k =>
-        firstLevelZeroVotes.contains(k) && validatorsToIndex.contains(k)
+      latestMessagesToUpdated = latestMessagesOfHonestVoters.collect {
+        case (v, m) if firstLevelZeroVotes.contains(v) && validatorsToIndex.contains(v) => m
       }
       state = VotingMatrixState(
         MutableSeq.fill(n, n)(Message.asJRank(0L)),
@@ -108,7 +128,7 @@ object VotingMatrix {
 
       implicit0(votingMatrix: VotingMatrix[F]) <- of[F](state)
       // Apply the incremental update step to update voting matrix by taking M := V(i)latest
-      _ <- latestMessagesToUpdated.values.toList.traverse { b =>
+      _ <- latestMessagesToUpdated.toList.traverse { b =>
             for {
               panorama <- FinalityDetectorUtil
                            .panoramaOfBlockByValidators[F](dag, b, lfb, validators.toSet)

@@ -3,7 +3,6 @@ import { observer } from 'mobx-react';
 import {
   LinkButton,
   ListInline,
-  RefreshableComponent,
   shortHash
 } from './Utils';
 import { BlockDAG } from './BlockDAG';
@@ -116,11 +115,11 @@ class _Explorer extends React.Component<Props, {}> {
               height="600"
             />
           </div>
-          {dag.selectedBlock && (
+          {dag.selectedBlock && dag.blocks != null && (
             <div className="col-sm-12 col-lg-4">
               <BlockDetails
                 block={dag.selectedBlock}
-                blocks={dag.blocks!}
+                blocks={dag.blocks}
                 onSelect={blockHashBase16 => {
                   dag.selectByBlockHashBase16(blockHashBase16);
                 }}
@@ -255,25 +254,6 @@ class BlockDetails extends React.Component<
         />
       </div>
     );
-  }
-
-  componentDidMount() {
-    // Scroll into view so people realize it's there.
-    this.scrollToBlockDetails();
-  }
-
-  scrollToBlockDetails() {
-    let container = $(this.ref!);
-    let offset = container.offset()!;
-    let height = container.height()!;
-    $('html, body')
-      .stop()
-      .animate(
-        {
-          scrollTop: offset.top + height
-        },
-        1000
-      );
   }
 }
 

@@ -5,7 +5,7 @@ import { ListInline, Loading, RefreshButton, shortHash } from './Utils';
 import * as d3 from 'd3';
 import { encodeBase16 } from 'casperlabs-sdk';
 import { ToggleButton, ToggleStore } from './ToggleButton';
-import { reaction } from 'mobx';
+import { autorun } from 'mobx';
 import * as d3xyzoom from 'd3-xyzoom';
 import { observer } from 'mobx-react';
 
@@ -14,6 +14,7 @@ import { observer } from 'mobx-react';
 const CircleRadius = 12;
 const LineColor = '#AAA';
 const FinalizedLineColor = '#83f2a1';
+const OrphanedLineColor = '#FF0000';
 
 export interface Props {
   title: string;
@@ -39,29 +40,14 @@ export class BlockDAG extends React.Component<Props, {}> {
   xTrans: d3.ScaleLinear<number, number> | null = null;
   yTrans: d3.ScaleLinear<number, number> | null = null;
   initialized = false;
-  renderedBlocks: BlockInfo[] | null;
-  hideBlockHash: boolean | undefined;
-  hideBallot: boolean | undefined;
 
   constructor(props: Props) {
     super(props);
-    reaction(
-      () => {
-        // Needed for "Hide Ballots" to work.
-        return {
-          hideBallots: this.props.hideBallotsToggleStore?.isPressed,
-          hideBlockHash: this.props.hideBlockHashToggleStore?.isPressed
-        };
-      },
-      ({ hideBallots, hideBlockHash }) => {
-        this.renderGraph(hideBallots, hideBlockHash);
-      },
-      {
-        fireImmediately: false,
-        // the animation of toggleButton takes 250ms, set delay larger than 250ms so that render of DAG don't affect the animation of toggleButton
-        delay: 400
-      }
-    );
+    autorun(() => {
+      this.renderGraph();
+    }, {
+      delay: 400
+    })
   }
 
   render() {
@@ -149,30 +135,19 @@ export class BlockDAG extends React.Component<Props, {}> {
   /** Called so that the SVG is added when the component has been rendered,
    * however data will most likely still be uninitialized. */
   componentDidMount() {
-    this.renderGraph(this.props.hideBallotsToggleStore?.isPressed, this.props.hideBlockHashToggleStore?.isPressed);
+    this.renderGraph();
   }
 
-  /** Called when the data is refreshed, when we get the blocks if they were null to begin with.
-   * Also required for navigating between nodes on block details view, otherwise the component
-   * would re-render with no SVG at all.
-   */
-  componentDidUpdate() {
-    this.renderGraph(this.props.hideBallotsToggleStore?.isPressed, this.props.hideBlockHashToggleStore?.isPressed);
-  }
+  renderGraph() {
+    const hideBallot = this.props.hideBallotsToggleStore?.isPressed;
+    const hideBlockHash = this.props.hideBlockHashToggleStore?.isPressed;
 
-  renderGraph(hideBallot?: boolean, hideBlockHash?: boolean) {
     let blocks = this.props.blocks;
     if (blocks == null || blocks.length === 0) {
       // The renderer will have removed the svg.
       this.initialized = false;
       return;
     }
-
-    // Avoid double rendering by componentDidUpdate and reaction.
-    if (arraysEqual(blocks, this.renderedBlocks) && this.hideBlockHash === hideBlockHash && this.hideBallot === hideBallot) return;
-    this.renderedBlocks = blocks;
-    this.hideBlockHash = hideBlockHash;
-    this.hideBallot = hideBallot;
 
     const svg = d3.select(this.svg);
     const hint = d3.select(this.hint);
@@ -292,7 +267,7 @@ export class BlockDAG extends React.Component<Props, {}> {
       .enter()
       .append('line')
       .attr('stroke', (d: d3Link) =>
-        d.isFinalized ? FinalizedLineColor : LineColor
+        d.isOrphaned ? OrphanedLineColor : (d.isFinalized ? FinalizedLineColor : LineColor)
       )
       .attr('stroke-width', (d: d3Link) => (d.isMainParent ? 3 : 1))
       .attr('marker-end', 'url(#arrow)') // use the Arrow created above
@@ -435,6 +410,7 @@ interface d3Link {
   isMainParent: boolean;
   isJustification: boolean;
   isFinalized: boolean;
+  isOrphaned: boolean;
 }
 
 class Graph {
@@ -478,6 +454,7 @@ const toGraph = (blocks: BlockInfo[]) => {
     let child = blockHash(block);
 
     let isChildFinalized = isFinalized(block);
+    let isChildOrphaned = isOrphaned(block);
     let isChildBallot = isBallot(block);
 
     let parents = block
@@ -505,7 +482,9 @@ const toGraph = (blocks: BlockInfo[]) => {
           target: target,
           isMainParent: p === parents[0],
           isJustification: false,
-          isFinalized: (isChildFinalized || isChildBallot) && isFinalized(target.block)
+          isFinalized: (isChildFinalized || isChildBallot) && isFinalized(target.block),
+          // if child is an orphaned block, the link should be highlighted with OrphanedLineColor
+          isOrphaned: isChildOrphaned
         };
       });
 
@@ -519,7 +498,8 @@ const toGraph = (blocks: BlockInfo[]) => {
           target: target,
           isMainParent: false,
           isJustification: true,
-          isFinalized: (isChildFinalized || isChildBallot) && isFinalized(target.block)
+          isFinalized: (isChildFinalized || isChildBallot) && isFinalized(target.block),
+          isOrphaned: false
         };
       });
 
@@ -590,6 +570,9 @@ const isBallot = (block: BlockInfo) => !isBlock(block);
 
 const isFinalized = (block: BlockInfo) =>
   block.getStatus()!.getFinality() === BlockInfo.Status.Finality.FINALIZED;
+
+const isOrphaned = (block: BlockInfo) =>
+  isBlock(block) && block.getStatus()!.getFinality() === BlockInfo.Status.Finality.ORPHANED;
 
 const validatorHash = (block: BlockInfo) =>
   encodeBase16(
