@@ -548,6 +548,12 @@ object DagOperations {
     import ObservedValidatorBehavior._
     import EraObservedBehavior._
 
+    // The code here can handle indirect justifications by traversing the swimlane but it can be slow
+    // if validator A hasn't seen a block from validator B and we need to traverse full eras to find that there
+    // was nothing in A's j-past pointing at B. Since we are at the moment using direct jusitifications in blocks,
+    // we can just  assume that if they aren't present then they haven't seen anything and move on.
+    val usingDirectJustifications = true
+
     // Map a message's direct justifications to a map that represents its j-past-cone view.
     val toEraMap: List[Message] => Map[EraId, Map[ByteString, Set[Message]]] =
       _.groupBy(_.eraId).mapValues(_.groupBy(_.validatorId).mapValues(_.toSet))
@@ -583,15 +589,21 @@ object DagOperations {
                     MonadThrowable[F].raiseError[(ByteString, Set[Message])](
                       new IllegalStateException(msg) with NoStackTrace
                     )
+
                   case Some(Empty) =>
                     // We haven't seen any messages from that validator in this era.
                     // There can't be any in the justifications either.
                     empty(validator).pure[F]
+
                   case Some(Honest(_)) =>
                     if (messages.nonEmpty) {
                       import io.casperlabs.shared.Sorting.jRankOrdering
                       // Since we know that validator is honest we can pick the newest message.
                       honest(validator, messages.maxBy(_.jRank)).pure[F]
+                    } else if (usingDirectJustifications) {
+                      // Since we aren't using indirect justifications, we can trust that the
+                      // creator of this block hasn't seen anything from this validator in this era.
+                      empty(validator).pure[F]
                     } else {
                       // There are no messages in the direct justifications
                       // but we know that local DAG has seen messages from that validator.
@@ -607,6 +619,7 @@ object DagOperations {
                         .headOption
                         .map(_.fold(empty(validator))(honest(validator, _)))
                     }
+
                   case Some(Equivocated(_, _)) =>
                     if (messages.size > 1)
                       // `messages` should be the latest messages by that validator in this era.
