@@ -189,10 +189,10 @@ export class BlockDAG extends React.Component<Props, {}> {
         ])
         .on('start', () => {
           // The first wheel event emits a start event; an end event is emitted when no wheel events are received for 150ms.
-          // So if user press MetaKey(Windows button on Windows system or Command button on Mac)
-          // when fire first wheel event, it enters the horizontal only zoom mode.
+          // So if user press ctrlKey when fire first wheel event,
+          // it enters the horizontal only zoom mode.
           if(d3.event.sourceEvent && d3.event.sourceEvent.type === 'wheel'){
-            isHorizontal = d3.event.sourceEvent.metaKey;
+            isHorizontal = d3.event.sourceEvent.ctrlKey;
             if(isHorizontal){
               svg.attr('cursor', 'ew-resize');
             }else{
