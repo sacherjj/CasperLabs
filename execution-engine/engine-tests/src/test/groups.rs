@@ -22,6 +22,9 @@ const METADATA_HASH_ARG: &str = "metadata_hash";
 const ACCOUNT_1_ADDR: PublicKey = PublicKey::ed25519_from([1u8; 32]);
 const CONTRACT_TRANSFER_TO_ACCOUNT: &str = "transfer_to_account_u512.wasm";
 const RESTRICTED_CONTRACT_CALLER_AS_SESSION: &str = "restricted_contract_caller_as_session";
+const UNCALLABLE_SESSION: &str = "uncallable_session";
+const UNCALLABLE_CONTRACT: &str = "uncallable_contract";
+const CALL_RESTRICTED_ENTRYPOINTS: &str = "call_restricted_entrypoints";
 
 lazy_static! {
     static ref TRANSFER_1_AMOUNT: U512 = U512::from(250_000_000) + 1000;
@@ -694,4 +697,175 @@ fn should_call_group_restricted_contract_as_session_from_wrong_account() {
     let exec_response = response.last().expect("should have response");
     let error = exec_response.as_error().expect("should have error");
     assert_matches!(error, Error::Exec(execution::Error::InvalidContext));
+}
+
+#[ignore]
+#[test]
+fn should_not_call_uncallable_contract_from_deploy() {
+    // This test runs a contract that's after every call extends the same key with
+    // more data
+    let exec_request_1 =
+        ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, CONTRACT_GROUPS, ()).build();
+
+    let mut builder = InMemoryWasmTestBuilder::default();
+
+    builder.run_genesis(&DEFAULT_RUN_GENESIS_REQUEST);
+
+    builder.exec(exec_request_1).expect_success().commit();
+
+    let account = builder
+        .query(None, Key::Account(DEFAULT_ACCOUNT_ADDR), &[])
+        .expect("should query account")
+        .as_account()
+        .cloned()
+        .expect("should be account");
+
+    let metadata_hash = account
+        .named_keys()
+        .get(METADATA_HASH_KEY)
+        .expect("should have contract metadata");
+    let _access_uref = account
+        .named_keys()
+        .get(METADATA_ACCESS_KEY)
+        .expect("should have metadata hash");
+
+    let exec_request_2 = {
+        // This inserts metadata as an argument because this test
+        // can work from different accounts which might not have the same keys in their session
+        // code.
+        let args = runtime_args! {
+            METADATA_HASH_ARG => *metadata_hash,
+        };
+        let deploy = DeployItemBuilder::new()
+            .with_address(DEFAULT_ACCOUNT_ADDR)
+            .with_stored_versioned_contract_by_name(
+                METADATA_HASH_KEY,
+                SemVer::V1_0_0,
+                UNCALLABLE_SESSION,
+                args,
+            )
+            .with_empty_payment_bytes((*DEFAULT_PAYMENT,))
+            .with_authorization_keys(&[DEFAULT_ACCOUNT_ADDR])
+            .with_deploy_hash([3; 32])
+            .build();
+
+        ExecuteRequestBuilder::new().push_deploy(deploy).build()
+    };
+
+    builder.exec(exec_request_2).commit();
+    let response = builder
+        .get_exec_responses()
+        .last()
+        .expect("should have last response");
+    assert_eq!(response.len(), 1);
+    let exec_response = response.last().expect("should have response");
+    let error = exec_response.as_error().expect("should have error");
+    assert_matches!(error, Error::Exec(execution::Error::InvalidContext));
+
+    let exec_request_3 = {
+        let args = runtime_args! {
+            METADATA_HASH_ARG => *metadata_hash,
+        };
+        let deploy = DeployItemBuilder::new()
+            .with_address(DEFAULT_ACCOUNT_ADDR)
+            .with_stored_versioned_contract_by_name(
+                METADATA_HASH_KEY,
+                SemVer::V1_0_0,
+                CALL_RESTRICTED_ENTRYPOINTS,
+                args,
+            )
+            .with_empty_payment_bytes((*DEFAULT_PAYMENT,))
+            .with_authorization_keys(&[DEFAULT_ACCOUNT_ADDR])
+            .with_deploy_hash([6; 32])
+            .build();
+
+        ExecuteRequestBuilder::new().push_deploy(deploy).build()
+    };
+
+    builder.exec(exec_request_3).expect_success().commit();
+}
+
+#[ignore]
+#[test]
+fn should_not_call_uncallable_session_from_deploy() {
+    // This test runs a contract that's after every call extends the same key with
+    // more data
+    let exec_request_1 =
+        ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, CONTRACT_GROUPS, ()).build();
+
+    let mut builder = InMemoryWasmTestBuilder::default();
+
+    builder.run_genesis(&DEFAULT_RUN_GENESIS_REQUEST);
+
+    builder.exec(exec_request_1).expect_success().commit();
+
+    let account = builder
+        .query(None, Key::Account(DEFAULT_ACCOUNT_ADDR), &[])
+        .expect("should query account")
+        .as_account()
+        .cloned()
+        .expect("should be account");
+
+    let metadata_hash = account
+        .named_keys()
+        .get(METADATA_HASH_KEY)
+        .expect("should have contract metadata");
+    let _access_uref = account
+        .named_keys()
+        .get(METADATA_ACCESS_KEY)
+        .expect("should have metadata hash");
+
+    let exec_request_2 = {
+        // This inserts metadata as an argument because this test
+        // can work from different accounts which might not have the same keys in their session
+        // code.
+        let args = runtime_args! {
+            METADATA_HASH_ARG => *metadata_hash,
+        };
+        let deploy = DeployItemBuilder::new()
+            .with_address(DEFAULT_ACCOUNT_ADDR)
+            .with_stored_versioned_contract_by_name(
+                METADATA_HASH_KEY,
+                SemVer::V1_0_0,
+                UNCALLABLE_CONTRACT,
+                args,
+            )
+            .with_empty_payment_bytes((*DEFAULT_PAYMENT,))
+            .with_authorization_keys(&[DEFAULT_ACCOUNT_ADDR])
+            .with_deploy_hash([3; 32])
+            .build();
+
+        ExecuteRequestBuilder::new().push_deploy(deploy).build()
+    };
+
+    builder.exec(exec_request_2).commit();
+    let response = builder
+        .get_exec_responses()
+        .last()
+        .expect("should have last response");
+    assert_eq!(response.len(), 1);
+    let exec_response = response.last().expect("should have response");
+    let error = exec_response.as_error().expect("should have error");
+    assert_matches!(error, Error::Exec(execution::Error::InvalidContext));
+
+    let exec_request_3 = {
+        let args = runtime_args! {
+            METADATA_HASH_ARG => *metadata_hash,
+        };
+        let deploy = DeployItemBuilder::new()
+            .with_address(DEFAULT_ACCOUNT_ADDR)
+            .with_stored_versioned_contract_by_name(
+                METADATA_HASH_KEY,
+                SemVer::V1_0_0,
+                CALL_RESTRICTED_ENTRYPOINTS,
+                args,
+            )
+            .with_empty_payment_bytes((*DEFAULT_PAYMENT,))
+            .with_authorization_keys(&[DEFAULT_ACCOUNT_ADDR])
+            .with_deploy_hash([6; 32])
+            .build();
+
+        ExecuteRequestBuilder::new().push_deploy(deploy).build()
+    };
+    builder.exec(exec_request_3).expect_success().commit();
 }

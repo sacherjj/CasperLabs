@@ -73,6 +73,12 @@ pub fn validate_entry_point_access_with(
     validator: impl Fn(&URef) -> bool,
 ) -> Result<(), Error> {
     if let EntryPointAccess::Groups(groups) = access {
+        if groups.is_empty() {
+            // Exits early in a special case of empty list of groups regardless of the group
+            // checking logic below it.
+            return Err(Error::InvalidContext);
+        }
+
         let find_result = groups.iter().find(|g| {
             metadata
                 .groups()

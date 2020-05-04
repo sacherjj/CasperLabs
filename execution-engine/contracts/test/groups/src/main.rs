@@ -29,6 +29,9 @@ const RESTRICTED_SESSION: &str = "restricted_session";
 const RESTRICTED_SESSION_CALLER: &str = "restricted_session_caller";
 const UNRESTRICTED_CONTRACT_CALLER: &str = "unrestricted_contract_caller";
 const RESTRICTED_CONTRACT_CALLER_AS_SESSION: &str = "restricted_contract_caller_as_session";
+const UNCALLABLE_SESSION: &str = "uncallable_session";
+const UNCALLABLE_CONTRACT: &str = "uncallable_contract";
+const CALL_RESTRICTED_ENTRYPOINTS: &str = "call_restricted_entrypoints";
 
 #[no_mangle]
 pub extern "C" fn restricted_session() {}
@@ -71,6 +74,20 @@ pub extern "C" fn unrestricted_contract_caller() {
 #[no_mangle]
 pub extern "C" fn restricted_contract_caller_as_session() {
     contract_caller();
+}
+
+#[no_mangle]
+pub extern "C" fn uncallable_session() {}
+
+#[no_mangle]
+pub extern "C" fn uncallable_contract() {}
+
+#[no_mangle]
+pub extern "C" fn call_restricted_entrypoints() {
+    // We're aggresively removing exports that aren't exposed through contract header so test
+    // ensures that those exports are still inside WASM.
+    uncallable_session();
+    uncallable_contract();
 }
 
 fn create_group(metadata_hash: Key, access_uref: URef) -> URef {
@@ -158,6 +175,47 @@ fn create_entrypoints_1() -> BTreeMap<String, EntryPoint> {
     entrypoints.insert(
         RESTRICTED_CONTRACT_CALLER_AS_SESSION.to_string(),
         unrestricted_contract_caller_as_session,
+    );
+
+    let uncallable_session = EntryPoint::new(
+        Vec::new(),
+        CLType::I32,
+        // Made public because we've tested deploy level auth into a contract in
+        // RESTRICTED_CONTRACT entrypoint
+        EntryPointAccess::groups(&[]),
+        // NOTE: Public contract authorizes any contract call, because this contract has groups
+        // uref in its named keys
+        EntryPointType::Session,
+    );
+    entrypoints.insert(UNCALLABLE_SESSION.to_string(), uncallable_session);
+
+    let uncallable_contract = EntryPoint::new(
+        Vec::new(),
+        CLType::I32,
+        // Made public because we've tested deploy level auth into a contract in
+        // RESTRICTED_CONTRACT entrypoint
+        EntryPointAccess::groups(&[]),
+        // NOTE: Public contract authorizes any contract call, because this contract has groups
+        // uref in its named keys
+        EntryPointType::Session,
+    );
+    entrypoints.insert(UNCALLABLE_CONTRACT.to_string(), uncallable_contract);
+
+    // Directly calls entrypoints that are protected with empty group of lists to verify that even
+    // though they're not callable externally, they're still visible in the WASM.
+    let call_restricted_entrypoints = EntryPoint::new(
+        Vec::new(),
+        CLType::I32,
+        // Made public because we've tested deploy level auth into a contract in
+        // RESTRICTED_CONTRACT entrypoint
+        EntryPointAccess::Public,
+        // NOTE: Public contract authorizes any contract call, because this contract has groups
+        // uref in its named keys
+        EntryPointType::Session,
+    );
+    entrypoints.insert(
+        CALL_RESTRICTED_ENTRYPOINTS.to_string(),
+        call_restricted_entrypoints,
     );
 
     entrypoints
