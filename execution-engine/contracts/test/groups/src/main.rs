@@ -27,7 +27,8 @@ const METADATA_ACCESS_KEY: &str = "metadata_access_key";
 const RESTRICTED_CONTRACT: &str = "restricted_contract";
 const RESTRICTED_SESSION: &str = "restricted_session";
 const RESTRICTED_SESSION_CALLER: &str = "restricted_session_caller";
-const RESTRICTED_CONTRACT_CALLER: &str = "restricted_contract_caller";
+const UNRESTRICTED_CONTRACT_CALLER: &str = "unrestricted_contract_caller";
+const RESTRICTED_CONTRACT_CALLER_AS_SESSION: &str = "restricted_contract_caller_as_session";
 
 #[no_mangle]
 pub extern "C" fn restricted_session() {}
@@ -50,8 +51,7 @@ pub extern "C" fn restricted_session_caller() {
     );
 }
 
-#[no_mangle]
-pub extern "C" fn restricted_contract_caller() {
+fn contract_caller() {
     let metadata_hash: Key = runtime::get_named_arg("metadata_hash")
         .unwrap_or_revert_with(ApiError::MissingArgument)
         .unwrap_or_revert_with(ApiError::InvalidArgument);
@@ -61,6 +61,16 @@ pub extern "C" fn restricted_contract_caller() {
         RESTRICTED_CONTRACT,
         runtime_args! {},
     );
+}
+
+#[no_mangle]
+pub extern "C" fn unrestricted_contract_caller() {
+    contract_caller();
+}
+
+#[no_mangle]
+pub extern "C" fn restricted_contract_caller_as_session() {
+    contract_caller();
 }
 
 fn create_group(metadata_hash: Key, access_uref: URef) -> URef {
@@ -120,15 +130,34 @@ fn create_entrypoints_1() -> BTreeMap<String, EntryPoint> {
     );
     entrypoints.insert(RESTRICTED_CONTRACT.to_string(), restricted_contract);
 
-    let restricted_contract_caller = EntryPoint::new(
+    let unrestricted_contract_caller = EntryPoint::new(
         Vec::new(),
         CLType::I32,
-        EntryPointAccess::groups(&["Group 1"]),
+        // Made public because we've tested deploy level auth into a contract in
+        // RESTRICTED_CONTRACT entrypoint
+        EntryPointAccess::Public,
+        // NOTE: Public contract authorizes any contract call, because this contract has groups
+        // uref in its named keys
         EntryPointType::Contract,
     );
     entrypoints.insert(
-        RESTRICTED_CONTRACT_CALLER.to_string(),
-        restricted_contract_caller,
+        UNRESTRICTED_CONTRACT_CALLER.to_string(),
+        unrestricted_contract_caller,
+    );
+
+    let unrestricted_contract_caller_as_session = EntryPoint::new(
+        Vec::new(),
+        CLType::I32,
+        // Made public because we've tested deploy level auth into a contract in
+        // RESTRICTED_CONTRACT entrypoint
+        EntryPointAccess::Public,
+        // NOTE: Public contract authorizes any contract call, because this contract has groups
+        // uref in its named keys
+        EntryPointType::Session,
+    );
+    entrypoints.insert(
+        RESTRICTED_CONTRACT_CALLER_AS_SESSION.to_string(),
+        unrestricted_contract_caller_as_session,
     );
 
     entrypoints
