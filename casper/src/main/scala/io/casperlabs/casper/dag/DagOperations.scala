@@ -515,12 +515,13 @@ object DagOperations {
   def panoramaOfMessage[F[_]: MonadThrowable](
       dag: DagLookup[F],
       message: Message,
-      erasObservedBehavior: LocalDagView[Message]
+      erasObservedBehavior: LocalDagView[Message],
+      usingIndirectJustifications: Boolean = false
   ): F[MessageJPast[Message]] =
     message.justifications.toList
       .map(_.latestBlockHash)
       .traverse(dag.lookupUnsafe(_))
-      .flatMap(messageJPast[F](dag, _, erasObservedBehavior))
+      .flatMap(messageJPast[F](dag, _, erasObservedBehavior, usingIndirectJustifications))
 
   /**
     * Calculates panorama of a set of justifications.
@@ -540,19 +541,18 @@ object DagOperations {
   def messageJPast[F[_]: MonadThrowable](
       dag: DagLookup[F],
       justifications: List[Message],
-      erasObservedBehavior: LocalDagView[Message]
+      erasObservedBehavior: LocalDagView[Message],
+      // The code here can handle indirect justifications by traversing the swimlane but it can be slow
+      // if validator A hasn't seen a block from validator B and we need to traverse full eras to find that there
+      // was nothing in A's j-past pointing at B. Since we are at the moment using direct jusitifications in blocks,
+      // we can just  assume that if they aren't present then they haven't seen anything and move on.
+      usingIndirectJustifications: Boolean = false
   ): F[MessageJPast[Message]] = {
 
     type EraId = ByteString
 
     import ObservedValidatorBehavior._
     import EraObservedBehavior._
-
-    // The code here can handle indirect justifications by traversing the swimlane but it can be slow
-    // if validator A hasn't seen a block from validator B and we need to traverse full eras to find that there
-    // was nothing in A's j-past pointing at B. Since we are at the moment using direct jusitifications in blocks,
-    // we can just  assume that if they aren't present then they haven't seen anything and move on.
-    val usingDirectJustifications = true
 
     // Map a message's direct justifications to a map that represents its j-past-cone view.
     val toEraMap: List[Message] => Map[EraId, Map[ByteString, Set[Message]]] =
@@ -600,7 +600,7 @@ object DagOperations {
                       import io.casperlabs.shared.Sorting.jRankOrdering
                       // Since we know that validator is honest we can pick the newest message.
                       honest(validator, messages.maxBy(_.jRank)).pure[F]
-                    } else if (usingDirectJustifications) {
+                    } else if (!usingIndirectJustifications) {
                       // Since we aren't using indirect justifications, we can trust that the
                       // creator of this block hasn't seen anything from this validator in this era.
                       empty(validator).pure[F]
