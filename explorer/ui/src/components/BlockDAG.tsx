@@ -216,7 +216,16 @@ export class BlockDAG extends React.Component<Props, {}> {
           // The first wheel event emits a start event; an end event is emitted when no wheel events are received for 150ms.
           // So if user press MetaKey(Windows button on Windows system or Command button on Mac)
           // when fire first wheel event, it enters the horizontal only zoom mode.
-          isHorizontal = d3.event.sourceEvent && d3.event.sourceEvent.metaKey;
+          if(d3.event.sourceEvent && d3.event.sourceEvent.type === 'wheel'){
+            isHorizontal = d3.event.sourceEvent.metaKey;
+            if(isHorizontal){
+              svg.attr('cursor', 'ew-resize');
+            }else{
+              svg.attr('cursor', 'nesw-resize');
+            }
+          }else if(d3.event.sourceEvent && d3.event.sourceEvent.type === "mousedown"){
+            svg.attr('cursor', 'grab');
+          }
         })
         .on('zoom', () => {
           let t = d3.event.transform;
@@ -229,6 +238,8 @@ export class BlockDAG extends React.Component<Props, {}> {
         .on('end', () => {
           // reset
           isHorizontal = false;
+          // set null to remove the attribute
+          svg.attr('cursor', null);
           // see https://github.com/d3/d3-zoom/issues/48
           // Stored the current axis of x and y, and set the transform to be the identity transform,
           // where kx = 1, ky = 1, tx = ty = 0, so when switching between zoom mode,
