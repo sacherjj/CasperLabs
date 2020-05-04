@@ -707,6 +707,51 @@ where
                 let ret = self.remove_contract_user_group(metadata_key, access_key, label)?;
                 Ok(Some(RuntimeValue::I32(api_error::i32_from(ret))))
             }
+
+            FunctionIndex::ExtendContractUserGroupURefsIndex => {
+                // args(0) = pointer to metadata key in wasm memory
+                // args(1) = size of metadata key in wasm memory
+                // args(2) = pointer to access key in wasm memory
+                // args(3) = pointer to label name
+                // args(4) = label size bytes
+                // args(5) = number of new urefs to be created
+                // args(6) = output of size value of host bytes data
+                let (
+                    meta_ptr,
+                    meta_size,
+                    access_ptr,
+                    label_ptr,
+                    label_size,
+                    new_urefs_count,
+                    value_size_ptr,
+                ) = Args::parse(args)?;
+                let ret = self.extend_contract_user_group_urefs(
+                    meta_ptr,
+                    meta_size,
+                    access_ptr,
+                    label_ptr,
+                    label_size,
+                    new_urefs_count,
+                    value_size_ptr,
+                )?;
+                Ok(Some(RuntimeValue::I32(api_error::i32_from(ret))))
+            }
+
+            FunctionIndex::RemoveContractUserGroupURefsIndex => {
+                // args(0) = pointer to metadata key in wasm memory
+                // args(1) = size of metadata key in wasm memory
+                // args(2) = pointer to access key in wasm memory
+                // args(3) = pointer to label name
+                // args(4) = label size bytes
+                // args(5) = pointer to urefs
+                // args(6) = size of urefs pointer
+                let (meta_ptr, meta_size, access_ptr, label_ptr, label_size, urefs_ptr, urefs_size) =
+                    Args::parse(args)?;
+                let ret = self.remove_contract_user_group_urefs(
+                    meta_ptr, meta_size, access_ptr, label_ptr, label_size, urefs_ptr, urefs_size,
+                )?;
+                Ok(Some(RuntimeValue::I32(api_error::i32_from(ret))))
+            }
         }
     }
 }

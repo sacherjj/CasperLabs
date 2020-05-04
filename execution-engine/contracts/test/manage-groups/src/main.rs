@@ -5,6 +5,7 @@
 extern crate alloc;
 
 use alloc::{
+    boxed::Box,
     collections::{BTreeMap, BTreeSet},
     string::{String, ToString},
     vec::Vec,
@@ -25,7 +26,10 @@ const METADATA_HASH_KEY: &str = "metadata_hash_key";
 const METADATA_ACCESS_KEY: &str = "metadata_access_key";
 const CREATE_GROUPS: &str = "create_groups";
 const REMOVE_GROUP: &str = "remove_group";
+const EXTEND_GROUP_UREFS: &str = "extend_group_urefs";
+const REMOVE_GROUP_UREFS: &str = "remove_group_urefs";
 const GROUP_NAME_ARG: &str = "group_name";
+const UREFS_ARG: &str = "urefs";
 
 #[no_mangle]
 pub extern "C" fn create_groups() {
@@ -69,6 +73,57 @@ pub extern "C" fn remove_group() {
         .unwrap_or_revert();
 }
 
+#[no_mangle]
+pub extern "C" fn extend_group_urefs() {
+    let metadata_hash_key: Key = runtime::get_key(METADATA_HASH_KEY)
+        .unwrap_or_revert()
+        .try_into()
+        .unwrap();
+    let metadata_access_key: URef = runtime::get_key(METADATA_ACCESS_KEY)
+        .unwrap_or_revert()
+        .try_into()
+        .unwrap();
+    let group_name: String = runtime::get_named_arg(GROUP_NAME_ARG)
+        .unwrap_or_revert_with(ApiError::MissingArgument)
+        .unwrap_or_revert_with(ApiError::InvalidArgument);
+    // Creates 1 additional uref inside group
+    let new_urefs = storage::extend_contract_user_group_urefs(
+        metadata_hash_key,
+        metadata_access_key,
+        &group_name,
+        1,
+    )
+    .unwrap_or_revert();
+    assert_eq!(new_urefs.len(), 1);
+    let _uref = new_urefs.iter().next().expect("should get first uref");
+}
+
+#[no_mangle]
+pub extern "C" fn remove_group_urefs() {
+    let metadata_hash_key: Key = runtime::get_key(METADATA_HASH_KEY)
+        .unwrap_or_revert()
+        .try_into()
+        .unwrap();
+    let metadata_access_key: URef = runtime::get_key(METADATA_ACCESS_KEY)
+        .unwrap_or_revert()
+        .try_into()
+        .unwrap();
+    let group_name: String = runtime::get_named_arg(GROUP_NAME_ARG)
+        .unwrap_or_revert_with(ApiError::MissingArgument)
+        .unwrap_or_revert_with(ApiError::InvalidArgument);
+    let urefs: Vec<URef> = runtime::get_named_arg(UREFS_ARG)
+        .unwrap_or_revert_with(ApiError::MissingArgument)
+        .unwrap_or_revert_with(ApiError::InvalidArgument);
+    // Creates 1 additional uref inside group
+    storage::remove_contract_user_group_urefs(
+        metadata_hash_key,
+        metadata_access_key,
+        &group_name,
+        BTreeSet::from_iter(urefs),
+    )
+    .unwrap_or_revert();
+}
+
 /// Restricted uref comes from creating a group and will be assigned to a smart contract
 fn create_entrypoints_1() -> BTreeMap<String, EntryPoint> {
     let mut entrypoints = BTreeMap::new();
@@ -88,6 +143,24 @@ fn create_entrypoints_1() -> BTreeMap<String, EntryPoint> {
     );
     entrypoints.insert(REMOVE_GROUP.to_string(), remove_group);
 
+    let extend_group_urefs = EntryPoint::new(
+        vec![Parameter::new(GROUP_NAME_ARG, CLType::String)],
+        CLType::Unit,
+        EntryPointAccess::Public,
+        EntryPointType::Session,
+    );
+    entrypoints.insert(EXTEND_GROUP_UREFS.to_string(), extend_group_urefs);
+
+    let remove_group_urefs = EntryPoint::new(
+        vec![
+            Parameter::new(GROUP_NAME_ARG, CLType::String),
+            Parameter::new(UREFS_ARG, CLType::List(Box::new(CLType::URef))),
+        ],
+        CLType::Unit,
+        EntryPointAccess::Public,
+        EntryPointType::Session,
+    );
+    entrypoints.insert(REMOVE_GROUP_UREFS.to_string(), remove_group_urefs);
     entrypoints
 }
 

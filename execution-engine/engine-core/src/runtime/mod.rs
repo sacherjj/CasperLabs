@@ -3273,6 +3273,34 @@ where
             .write(metadata_key, StoredValue::ContractMetadata(metadata));
         Ok(Ok(()))
     }
+
+    fn extend_contract_user_group_urefs(
+        &self,
+        _meta_ptr: u32,
+        _meta_size: u32,
+        _access_ptr: u32,
+        _label_ptr: u32,
+        _label_size: u32,
+        _new_urefs_count: u32,
+        _value_size_ptr: u32,
+    ) -> Result<Result<(), ApiError>, Error> {
+        // TODO: implement extend_contract_user_group_urefs
+        Ok(Ok(()))
+    }
+
+    fn remove_contract_user_group_urefs(
+        &self,
+        _meta_ptr: u32,
+        _meta_size: u32,
+        _access_ptr: u32,
+        _label_ptr: u32,
+        _label_size: u32,
+        _new_urefs_count: u32,
+        _value_size_ptr: u32,
+    ) -> Result<Result<(), ApiError>, Error> {
+        // TODO: implement remove_contract_user_group_urefs
+        Ok(Ok(()))
+    }
 }
 
 #[cfg(test)]

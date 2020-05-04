@@ -138,6 +138,12 @@ impl Drop for ScopedTimer {
             FunctionIndex::GetRuntimeArgsizeIndex => "host_get_named_arg_size",
             FunctionIndex::GetRuntimeArgIndex => "host_get_named_arg",
             FunctionIndex::RemoveContractUserGroupIndex => "host_remove_contract_user_group",
+            FunctionIndex::ExtendContractUserGroupURefsIndex => {
+                "host_extend_contract_user_group_urefs"
+            }
+            FunctionIndex::RemoveContractUserGroupURefsIndex => {
+                "host_remove_contract_user_group_urefs"
+            }
         };
 
         let mut properties = mem::take(&mut self.properties);
