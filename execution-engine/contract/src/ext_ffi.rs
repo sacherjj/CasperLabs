@@ -151,4 +151,11 @@ extern "C" {
         dest_ptr: *mut u8,
         dest_size: usize,
     ) -> i32;
+    pub fn remove_contract_user_group(
+        meta_ptr: *const u8,
+        meta_size: usize,
+        access_ptr: *const u8,
+        label_ptr: *const u8,
+        label_size: usize,
+    ) -> i32;
 }

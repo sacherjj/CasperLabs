@@ -686,6 +686,21 @@ where
                     self.get_named_arg(name_ptr, name_size as usize, dest_ptr, dest_size as usize)?;
                 Ok(Some(RuntimeValue::I32(api_error::i32_from(ret))))
             }
+
+            FunctionIndex::RemoveContractUserGroupIndex => {
+                // args(0) = pointer to metadata key in wasm memory
+                // args(1) = size of metadata key in wasm memory
+                // args(2) = pointer to access key in wasm memory
+                // args(3) = pointer to contract version in wasm memory
+                // args(4) = pointer to label
+                // args(5) = label size
+                let (key_ptr, key_size, access_ptr, label_ptr, label_size) = Args::parse(args)?;
+
+                let ret = self.remove_contract_user_group(
+                    key_ptr, key_size, access_ptr, label_ptr, label_size,
+                )?;
+                Ok(Some(RuntimeValue::I32(api_error::i32_from(ret))))
+            }
         }
     }
 }

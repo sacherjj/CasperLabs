@@ -3235,6 +3235,18 @@ where
             self.context.validate_uref(uref).is_ok()
         })
     }
+
+    fn remove_contract_user_group(
+        &self,
+        _key_ptr: u32,
+        _key_size: u32,
+        _access_ptr: u32,
+        _label_ptr: u32,
+        _label_name: u32,
+    ) -> Result<Result<(), ApiError>, Error> {
+        // TODO: implement remove_contract_user_group
+        Ok(Ok(()))
+    }
 }
 
 #[cfg(test)]

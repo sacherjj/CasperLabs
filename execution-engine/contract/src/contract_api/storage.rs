@@ -177,7 +177,27 @@ pub fn create_contract_user_group(
     Ok(bytesrepr::deserialize(value_bytes).unwrap_or_revert())
 }
 
-// TODO: functions for removing user groups, adding/removing urefs from an existing group
+// TODO: functions for adding/removing urefs from an existing group
+
+/// Remove a named group from given contract.
+pub fn remove_contract_user_group(
+    contract: Key,
+    access_key: URef,
+    label: &str,
+) -> Result<(), ApiError> {
+    let (meta_ptr, meta_size, _bytes1) = contract_api::to_ptr(contract);
+    let (access_ptr, _access_size, _bytes2) = contract_api::to_ptr(access_key);
+    let ret = unsafe {
+        ext_ffi::remove_contract_user_group(
+            meta_ptr,
+            meta_size,
+            access_ptr,
+            label.as_ptr(),
+            label.len(),
+        )
+    };
+    api_error::result_from(ret)
+}
 
 /// Add a new version of a contract to the contract stored at the given
 /// `ContractRef`. Note that this contract must have been created by

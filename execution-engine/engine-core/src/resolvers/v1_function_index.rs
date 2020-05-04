@@ -52,6 +52,7 @@ pub enum FunctionIndex {
     PrintIndex,
     GetRuntimeArgsizeIndex,
     GetRuntimeArgIndex,
+    RemoveContractUserGroupIndex,
 }
 
 impl Into<usize> for FunctionIndex {
