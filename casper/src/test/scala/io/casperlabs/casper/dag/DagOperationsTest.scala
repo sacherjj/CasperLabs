@@ -572,7 +572,8 @@ class DagOperationsTest
         latestMessages <- DagOperations.panoramaOfMessage[Task](
                            dag,
                            b2Message,
-                           localDagView
+                           localDagView,
+                           usingIndirectJustifications = true
                          )
         latestGenesisMessageHashes = latestMessages
           .latestMessagesInEra(genesis.blockHash)
@@ -678,7 +679,8 @@ class DagOperationsTest
         latestMessages <- DagOperations.panoramaOfMessage[Task](
                            dag,
                            c3Message,
-                           localDagView
+                           localDagView,
+                           usingIndirectJustifications = true
                          )
         latestGenesisMessageHashes = latestMessages
           .latestMessagesInEra(genesis.blockHash)
@@ -980,7 +982,8 @@ class DagOperationsTest
         jpastCone <- DagOperations.panoramaOfMessage[Task](
                       dag,
                       d1Message,
-                      localDagView
+                      localDagView,
+                      usingIndirectJustifications = true
                     )
         latestGenesisMessageHashes = jpastCone
           .latestMessagesInEra(genesis.blockHash)
@@ -1101,7 +1104,8 @@ class DagOperationsTest
         jpastCone <- DagOperations.panoramaOfMessage[Task](
                       dag,
                       d1Message,
-                      localDagView
+                      localDagView,
+                      usingIndirectJustifications = true
                     )
 
         latestGenesisMessageHashes = jpastCone
