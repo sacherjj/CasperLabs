@@ -24,8 +24,8 @@ use types::{
     account::{
         ActionType, AddKeyFailure, PublicKey, RemoveKeyFailure, SetThresholdFailure, Weight,
     },
-    AccessRights, BlockTime, CLValue, EntryPointType, Key, Phase, ProtocolVersion, RuntimeArgs,
-    URef, KEY_LOCAL_SEED_LENGTH,
+    AccessRights, BlockTime, CLValue, ContractMetadata, EntryPoint, Key, Phase, ProtocolVersion,
+    RuntimeArgs, URef, KEY_LOCAL_SEED_LENGTH,
 };
 
 use super::{attenuate_uref_for_account, Address, Error, RuntimeContext};
@@ -132,7 +132,8 @@ fn mock_runtime_context<'a>(
         CorrelationId::new(),
         Phase::Session,
         Default::default(),
-        EntryPointType::Session,
+        ContractMetadata::default(),
+        EntryPoint::default(),
     )
 }
 
@@ -464,7 +465,8 @@ fn contract_key_addable_valid() {
         CorrelationId::new(),
         PHASE,
         Default::default(),
-        EntryPointType::Session,
+        ContractMetadata::default(),
+        EntryPoint::default(),
     );
 
     let uref_name = "NewURef".to_owned();
@@ -527,7 +529,8 @@ fn contract_key_addable_invalid() {
         CorrelationId::new(),
         PHASE,
         Default::default(),
-        EntryPointType::Session,
+        ContractMetadata::default(),
+        EntryPoint::default(),
     );
 
     let uref_name = "NewURef".to_owned();

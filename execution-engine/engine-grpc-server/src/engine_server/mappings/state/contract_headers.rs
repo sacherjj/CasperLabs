@@ -82,8 +82,7 @@ impl From<ContractHeader> for state::ContractHeader {
             let mut method_entry = state::ContractHeader_MethodEntry::new();
             method_entry.set_name(name.to_string());
             method_entry.set_entrypoint(entrypoint.into());
-            res.mut_methods()
-                .push(method_entry);
+            res.mut_methods().push(method_entry);
         }
         res
     }
@@ -94,7 +93,10 @@ impl TryFrom<state::ContractHeader> for ContractHeader {
     fn try_from(mut value: state::ContractHeader) -> Result<ContractHeader, Self::Error> {
         let mut methods = BTreeMap::new();
         for mut method_entry in value.take_methods().into_iter() {
-            methods.insert(method_entry.take_name(), method_entry.take_entrypoint().try_into()?);
+            methods.insert(
+                method_entry.take_name(),
+                method_entry.take_entrypoint().try_into()?,
+            );
         }
 
         let contract_key = value.take_contract_key().try_into()?;
