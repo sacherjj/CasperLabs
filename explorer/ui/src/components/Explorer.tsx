@@ -80,7 +80,7 @@ class _Explorer extends React.Component<Props, {}> {
                     urlWithRankAndDepth={Pages.explorerWithMaxRankAndDepth}
                   />
                   {dag.hasBlocks && (
-                    <span>Select a block to see its details.</span>
+                    <span>Select a block to see its details. Press Ctrl before zooming to enable horizontal only zoom mode.</span>
                   )}
                   {dag.selectedBlock && (
                     <ToggleButton
