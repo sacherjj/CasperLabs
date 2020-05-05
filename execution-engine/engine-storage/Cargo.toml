@@ -17,7 +17,7 @@ failure = "0.1.6"
 lmdb = "0.8.0"
 parking_lot = "0.10.0"
 types = { version = "0.4.1", path = "../types", package = "casperlabs-types", features = ["std", "gens"] }
-wasmi = "0.4.2"
+wasmi = "0.6.2"
 
 [dev-dependencies]
 lazy_static = "1"

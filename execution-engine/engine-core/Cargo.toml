@@ -32,13 +32,13 @@ mint = { version = "0.2.1", path = "../mint", package = "casperlabs-mint" }
 proof-of-stake = { version = "0.2.1", path = "../proof-of-stake", package = "casperlabs-proof-of-stake" }
 num-derive = "0.3.0"
 num-traits = "0.2.10"
-parity-wasm = "0.31.3"
-pwasm-utils = "0.6.2"
+parity-wasm = "0.41.0"
+pwasm-utils = "0.12.0"
 rand = "0.7.2"
 rand_chacha = "0.2.1"
 standard-payment = { version = "0.2.1", path = "../standard-payment", package = "casperlabs-standard-payment" }
 types = { version = "0.4.1", path = "../types", package = "casperlabs-types", features = ["std", "gens"] }
-wasmi = "0.4.2"
+wasmi = "0.6.2"
 
 [dev-dependencies]
 lazy_static = "1"
