@@ -43,7 +43,7 @@ mod tests {
     use std::sync::Mutex;
 
     use lazy_static::lazy_static;
-    use parity_wasm::elements::{Module, ModuleNameSection, NameSection, Section};
+    use parity_wasm::elements::{Module, ModuleNameSubsection, NameSection, Section};
 
     use crate::{
         engine_state::system_contract_cache::SystemContractCache,
@@ -221,7 +221,7 @@ mod tests {
         };
         let initial_module = Module::default();
         let updated_module = {
-            let section = NameSection::Module(ModuleNameSection::new("a_mod"));
+            let section = NameSection::new(Some(ModuleNameSubsection::new("a_mod")), None, None);
             let sections = vec![Section::Name(section)];
             Module::new(sections)
         };
@@ -251,7 +251,7 @@ mod tests {
         };
         let initial_module = Module::default();
         let updated_module = {
-            let section = NameSection::Module(ModuleNameSection::new("a_mod"));
+            let section = NameSection::new(Some(ModuleNameSubsection::new("a_mod")), None, None);
             let sections = vec![Section::Name(section)];
             Module::new(sections)
         };
