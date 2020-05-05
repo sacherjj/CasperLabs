@@ -37,6 +37,9 @@ pub enum Error {
     /// Attempted to add a new URef to a group, which resulted in the total
     /// number of URefs across all user groups to exceed the allowed maximum.
     MaxTotalURefsExceeded = 6,
+    /// Attempted to remove a URef from a group, which does not exist in the
+    /// group.
+    GroupDoesNotExist = 7,
 }
 
 /// A (labelled) "user group". Each method of a versioned contract may be

@@ -694,11 +694,17 @@ where
                 // args(3) = pointer to contract version in wasm memory
                 // args(4) = pointer to label
                 // args(5) = label size
-                let (key_ptr, key_size, access_ptr, label_ptr, label_size) = Args::parse(args)?;
+                let (meta_key_ptr, meta_key_size, access_key_ptr, label_ptr, label_size) =
+                    Args::parse(args)?;
 
-                let ret = self.remove_contract_user_group(
-                    key_ptr, key_size, access_ptr, label_ptr, label_size,
-                )?;
+                let metadata_key = self.key_from_mem(meta_key_ptr, meta_key_size)?;
+                let access_key = {
+                    let bytes = self.bytes_from_mem(access_key_ptr, UREF_SERIALIZED_LENGTH)?;
+                    bytesrepr::deserialize(bytes).map_err(Error::BytesRepr)?
+                };
+                let label: String = self.t_from_mem(label_ptr, label_size)?;
+
+                let ret = self.remove_contract_user_group(metadata_key, access_key, label)?;
                 Ok(Some(RuntimeValue::I32(api_error::i32_from(ret))))
             }
         }

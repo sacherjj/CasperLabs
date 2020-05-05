@@ -3236,15 +3236,41 @@ where
         })
     }
 
+    /// Remove a user group from access to a contract
     fn remove_contract_user_group(
-        &self,
-        _key_ptr: u32,
-        _key_size: u32,
-        _access_ptr: u32,
-        _label_ptr: u32,
-        _label_name: u32,
+        &mut self,
+        metadata_key: Key,
+        access_key: URef,
+        label: String,
     ) -> Result<Result<(), ApiError>, Error> {
-        // TODO: implement remove_contract_user_group
+        self.context.validate_key(&metadata_key)?;
+        self.context.validate_uref(&access_key)?;
+
+        let mut metadata: ContractMetadata = self.context.read_gs_typed(&metadata_key)?;
+
+        if metadata.access_key() != access_key {
+            return Ok(Err(contract_header::Error::InvalidAccessKey.into()));
+        }
+
+        let group_to_remove = Group::new(label);
+        let groups = metadata.groups_mut();
+
+        // Ensure group exists in groups
+        if groups.get(&group_to_remove).is_none() {
+            return Ok(Err(contract_header::Error::GroupDoesNotExist.into()));
+        }
+
+        // TODO: Validate group does not have access to a method in some active version of the
+        // contract
+
+        // Remove group
+        groups.remove(&group_to_remove);
+
+        // Write updated metadata to the global state
+        self.context
+            .state()
+            .borrow_mut()
+            .write(metadata_key, StoredValue::ContractMetadata(metadata));
         Ok(Ok(()))
     }
 }
