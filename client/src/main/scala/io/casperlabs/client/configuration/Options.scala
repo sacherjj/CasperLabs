@@ -6,6 +6,7 @@ import java.util.concurrent.TimeUnit
 
 import cats.syntax.option._
 import guru.nidi.graphviz.engine.Format
+import io.casperlabs.casper.consensus.state.SemVer
 import io.casperlabs.client.BuildInfo
 import io.casperlabs.crypto.Keys.PublicKey
 import io.casperlabs.crypto.codec.{Base16, Base64}
@@ -29,6 +30,23 @@ object Options {
     def sessionRequired: Boolean = true
     def paymentPathName: String  = "payment"
 
+    implicit val semVerConverter: ValueConverter[SemVer] = {
+      val semVerRegex = """(\d+)\.(\d+)\.(\d+)""".r
+
+      implicitly[ValueConverter[String]].flatMap { semVerStr =>
+        semVerRegex
+          .findFirstMatchIn(semVerStr)
+          .map {
+            case semVerRegex(major, minor, patch) => SemVer(major.toInt, minor.toInt, patch.toInt)
+          }
+          .fold[Either[String, Option[SemVer]]](
+            Left(
+              s"$semVerStr is not a valid semantic version that matches the pattern `major.minor.patch`."
+            )
+          )(semVer => Right(Option(semVer)))
+      }
+    }
+
     // Session code on disk.
     val session =
       opt[File](
@@ -51,18 +69,23 @@ object Options {
           "Name of the stored contract (associated with the executing account) to be called in the session."
       )
 
-    val sessionUref =
-      opt[String](
-        required = false,
-        descr = "URef of the stored contract to be called in the session; base16 encoded.",
-        validate = hashCheck
-      )
-
     val sessionArgs =
       opt[Args](
         required = false,
         descr =
           """JSON encoded list of Deploy.Arg protobuf messages for the session, e.g. '[{"name": "amount", "value": {"long_value": 123456}}]'"""
+      )
+
+    val sessionEntryPoint =
+      opt[String](
+        required = false,
+        descr = "Name of the method that will be used when calling the contract."
+      )
+
+    val sessionSemVer =
+      opt[SemVer](
+        required = false,
+        descr = "Semantic version of the called contract. Matches the pattern `major.minor.patch`."
       )
 
     val payment =
@@ -99,6 +122,18 @@ object Options {
         required = false,
         descr =
           """JSON encoded list of Deploy.Arg protobuf messages for the payment, e.g. '[{"name": "amount", "value": {"big_int": {"value": "123456", "bit_width": 512}}}]'"""
+      )
+
+    val paymentEntryPoint =
+      opt[String](
+        required = false,
+        descr = "Name of the method that will be used when calling the contract."
+      )
+
+    val paymentSemVer =
+      opt[SemVer](
+        required = false,
+        descr = "Semantic version of the payment contract. Matches the pattern `major.minor.patch`."
       )
 
     val gasPrice = opt[Long](
@@ -147,11 +182,19 @@ object Options {
       opt[Long](descr = "Timeout in seconds.", default = Option(TIMEOUT_SECONDS_DEFAULT.toSeconds))
 
     addValidation {
+      val missingSemVer: String => Either[String, Unit] =
+        what => Left(s"Missing semver for $what.")
+
+      val missingEntrypoint: String => Either[String, Unit] =
+        what => Left(s"Missing entrpoint for $what")
+
+      val storedPaymentCode = paymentHash.isDefined || paymentName.isDefined
+      val storedSessionCode = sessionSemVer.isDefined || sessionSemVer.isDefined
       val sessionsProvided =
-        List(session.isDefined, sessionHash.isDefined, sessionName.isDefined, sessionUref.isDefined)
+        List(session.isDefined, sessionHash.isDefined, sessionName.isDefined)
           .count(identity)
       val paymentsProvided =
-        List(payment.isDefined, paymentHash.isDefined, paymentName.isDefined, paymentUref.isDefined)
+        List(payment.isDefined, paymentHash.isDefined, paymentName.isDefined)
           .count(identity)
       if (sessionRequired && sessionsProvided == 0)
         Left("No session contract options provided; please specify exactly one.")
@@ -163,6 +206,14 @@ object Options {
         Left(
           "No payment contract options provided; please specify --payment-amount for the standard payment."
         )
+      else if (storedPaymentCode && paymentSemVer.isEmpty)
+        missingSemVer("payment contract")
+      else if (storedSessionCode && sessionSemVer.isEmpty)
+        missingSemVer("session contract")
+      else if (storedPaymentCode && paymentEntryPoint.isEmpty)
+        missingEntrypoint("payment contract")
+      else if (storedSessionCode && sessionEntryPoint.isEmpty)
+        missingEntrypoint("stored contract")
       else Right(())
     }
   }

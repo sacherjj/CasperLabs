@@ -88,7 +88,7 @@ object DeployBuffer {
 
         for {
           _ <- deploy.getBody.session match {
-                case None | Some(Deploy.Code(_, Deploy.Code.Contract.Empty)) =>
+                case None | Some(Deploy.Code(_, _, Deploy.Code.Contract.Empty)) =>
                   illegal(s"Deploy was missing session code.")
                 case _ => ().pure[F]
               }
