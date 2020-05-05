@@ -28,6 +28,7 @@ const PROTOCOL_VERSION: ProtocolVersion = ProtocolVersion::V1_0_0;
 const STORED_PAYMENT_CONTRACT_NAME: &str = "test_payment_stored.wasm";
 const STORED_PAYMENT_CONTRACT_HASH_NAME: &str = "test_payment_hash";
 const PAY: &str = "pay";
+const TRANSFER: &str = "transfer";
 const TRANSFER_PURSE_TO_ACCOUNT_CONTRACT_NAME: &str = "transfer_purse_to_account";
 // Currently Error enum that holds this variant is private and can't be used otherwise to compare
 // message
@@ -331,28 +332,27 @@ fn should_exec_stored_code_by_named_hash() {
 fn should_exec_payment_and_session_stored_code() {
     let payment_purse_amount = 100_000_000; // <- seems like a lot, but it gets spent fast!
 
-    // first, store payment contract
-    let exec_request = ExecuteRequestBuilder::standard(
-        DEFAULT_ACCOUNT_ADDR,
-        &format!("{}_stored.wasm", STORED_PAYMENT_CONTRACT_NAME),
-        (),
-    )
-    .build();
-
+    // genesis
     let mut builder = InMemoryWasmTestBuilder::default();
     builder.run_genesis(&DEFAULT_RUN_GENESIS_REQUEST);
 
-    let test_result = builder.exec_commit_finish(exec_request);
+    // store payment
+    store_payment_to_account_context(&mut builder);
 
-    let response = test_result
-        .builder()
-        .get_exec_response(0)
-        .expect("there should be a response")
-        .clone();
+    // verify stored contract functions as expected by checking all the maths
 
-    let mut result = utils::get_success_result(&response);
-    let gas = result.cost();
-    let motes_alpha = Motes::from_gas(gas, CONV_RATE).expect("should have motes");
+    let motes_alpha = {
+        // get modified balance
+
+        // get cost
+        let response = builder
+            .get_exec_response(0)
+            .expect("there should be a response")
+            .clone();
+        let result = utils::get_success_result(&response);
+        let gas = result.cost();
+        Motes::from_gas(gas, CONV_RATE).expect("should have motes")
+    };
 
     // next store transfer contract
     let exec_request_store_transfer = {
@@ -362,8 +362,8 @@ fn should_exec_payment_and_session_stored_code() {
                 &format!("{}_stored.wasm", TRANSFER_PURSE_TO_ACCOUNT_CONTRACT_NAME),
                 (),
             )
-            .with_stored_versioned_contract_by_name(
-                STORED_PAYMENT_CONTRACT_NAME,
+            .with_stored_versioned_payment_contract_by_name(
+                STORED_PAYMENT_CONTRACT_HASH_NAME,
                 SemVer::V1_0_0,
                 PAY,
                 fix_this((U512::from(payment_purse_amount),)),
@@ -377,17 +377,18 @@ fn should_exec_payment_and_session_stored_code() {
 
     let test_result = builder.exec_commit_finish(exec_request_store_transfer);
 
-    let response = test_result
-        .builder()
-        .get_exec_response(1)
-        .expect("there should be a response")
-        .clone();
+    let motes_bravo = {
+        let response = test_result
+            .builder()
+            .get_exec_response(1)
+            .expect("there should be a response")
+            .clone();
 
-    result = utils::get_success_result(&response);
-    let gas = result.cost();
-    let motes_bravo = Motes::from_gas(gas, CONV_RATE).expect("should have motes");
+        let result = utils::get_success_result(&response);
+        let gas = result.cost();
+        Motes::from_gas(gas, CONV_RATE).expect("should have motes")
+    };
 
-    let account_1_public_key = ACCOUNT_1_ADDR;
     let transferred_amount = 1;
 
     // next make another deploy that USES stored payment logic & stored transfer
@@ -395,11 +396,13 @@ fn should_exec_payment_and_session_stored_code() {
     let exec_request_stored_only = {
         let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
-            .with_stored_session_named_key(
-                TRANSFER_PURSE_TO_ACCOUNT_CONTRACT_NAME,
-                (account_1_public_key, U512::from(transferred_amount)),
-            )
             .with_stored_versioned_contract_by_name(
+                TRANSFER_PURSE_TO_ACCOUNT_CONTRACT_NAME,
+                SemVer::V1_0_0,
+                TRANSFER,
+                fix_this((ACCOUNT_1_ADDR, U512::from(transferred_amount))),
+            )
+            .with_stored_versioned_payment_contract_by_name(
                 STORED_PAYMENT_CONTRACT_NAME,
                 SemVer::V1_0_0,
                 PAY,
@@ -414,20 +417,24 @@ fn should_exec_payment_and_session_stored_code() {
 
     let test_result = builder.exec_commit_finish(exec_request_stored_only);
 
-    let response = test_result
-        .builder()
-        .get_exec_response(2)
-        .expect("there should be a response")
-        .clone();
+    let motes_charlie = {
+        let response = test_result
+            .builder()
+            .get_exec_response(2)
+            .expect("there should be a response")
+            .clone();
 
-    result = utils::get_success_result(&response);
-    let gas = result.cost();
-    let motes_charlie = Motes::from_gas(gas, CONV_RATE).expect("should have motes");
+        let result = utils::get_success_result(&response);
+        let gas = result.cost();
+        Motes::from_gas(gas, CONV_RATE).expect("should have motes")
+    };
 
-    let default_account = builder
-        .get_account(DEFAULT_ACCOUNT_ADDR)
-        .expect("should get genesis account");
-    let modified_balance: U512 = builder.get_purse_balance(default_account.main_purse());
+    let modified_balance: U512 = {
+        let default_account = builder
+            .get_account(DEFAULT_ACCOUNT_ADDR)
+            .expect("should get genesis account");
+        builder.get_purse_balance(default_account.main_purse())
+    };
 
     let initial_balance: U512 = U512::from(DEFAULT_ACCOUNT_INITIAL_BALANCE);
 
