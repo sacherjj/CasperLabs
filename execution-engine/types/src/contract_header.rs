@@ -12,9 +12,9 @@ use alloc::{
 };
 
 /// Maximum number of distinct user groups.
-pub const MAX_GROUPS: u8 = 10;
+pub const MAX_GROUP_UREFS: u8 = 10;
 /// Maximum number of URefs which can be assigned across all user groups.
-pub const MAX_TOTAL_UREFS: u8 = 100;
+pub const MAX_TOTAL_UREFS: usize = 100;
 
 /// Set of errors which may happen when working with contract headers.
 #[derive(Debug, PartialEq)]
@@ -40,6 +40,8 @@ pub enum Error {
     /// Attempted to remove a URef from a group, which does not exist in the
     /// group.
     GroupDoesNotExist = 7,
+    /// Attempted to remove unknown URef from the group.
+    UnableToRemoveURef = 8,
 }
 
 /// A (labelled) "user group". Each method of a versioned contract may be

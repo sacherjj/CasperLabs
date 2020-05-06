@@ -724,14 +724,14 @@ where
                     label_size,
                     new_urefs_count,
                     value_size_ptr,
-                ) = Args::parse(args)?;
+                ): (_, _, _, _, _, u32, _) = Args::parse(args)?;
                 let ret = self.extend_contract_user_group_urefs(
                     meta_ptr,
                     meta_size,
                     access_ptr,
                     label_ptr,
                     label_size,
-                    new_urefs_count,
+                    new_urefs_count as usize,
                     value_size_ptr,
                 )?;
                 Ok(Some(RuntimeValue::I32(api_error::i32_from(ret))))

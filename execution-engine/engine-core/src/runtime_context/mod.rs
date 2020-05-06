@@ -899,4 +899,18 @@ where
     pub fn entry_point_type(&self) -> EntryPointType {
         self.entrypoint.entry_point_type()
     }
+
+    /// Extends given user group with new urefs
+    // pub fn extend_contract_user_group_urefs(&self, metadata_key: Key, access_key: URef, label:
+    // String, new_urefs_count: usize) ->  {
+    pub fn get_contract_metadata(
+        &mut self,
+        metadata_key: Key,
+        access_key: URef,
+    ) -> Result<ContractMetadata, Error> {
+        self.validate_key(&metadata_key)?;
+        self.validate_uref(&access_key)?;
+        let metadata: ContractMetadata = self.read_gs_typed(&metadata_key)?;
+        Ok(metadata)
+    }
 }
