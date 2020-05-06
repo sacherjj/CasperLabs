@@ -328,7 +328,7 @@ impl ContractHeader {
 
     /// Returns immutable reference to methods
     pub fn methods(&self) -> &BTreeMap<String, EntryPoint> {
-        return &self.methods;
+        &self.methods
     }
 }
 
@@ -643,7 +643,11 @@ mod tests {
         set.insert(uref1);
         contract_metadata
             .groups_mut()
-            .insert(Group::new("Foo"), set);
+            .insert(Group::new("Group 1"), set.clone());
+
+        contract_metadata
+            .groups_mut()
+            .insert(Group::new("Group 2"), set);
 
         let mut methods = BTreeMap::new();
 
