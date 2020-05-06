@@ -234,14 +234,9 @@ pub fn remove_contract_user_group(
 ) -> Result<(), ApiError> {
     let (meta_ptr, meta_size, _bytes1) = contract_api::to_ptr(contract);
     let (access_ptr, _access_size, _bytes2) = contract_api::to_ptr(access_key);
+    let (label_ptr, label_size, _bytes3) = contract_api::to_ptr(label);
     let ret = unsafe {
-        ext_ffi::remove_contract_user_group(
-            meta_ptr,
-            meta_size,
-            access_ptr,
-            label.as_ptr(),
-            label.len(),
-        )
+        ext_ffi::remove_contract_user_group(meta_ptr, meta_size, access_ptr, label_ptr, label_size)
     };
     api_error::result_from(ret)
 }
