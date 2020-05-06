@@ -126,7 +126,6 @@ pub extern "C" fn remove_group_urefs() {
     let urefs: Vec<URef> = runtime::get_named_arg(UREFS_ARG)
         .unwrap_or_revert_with(ApiError::MissingArgument)
         .unwrap_or_revert_with(ApiError::InvalidArgument);
-    // Creates 1 additional uref inside group
     storage::remove_contract_user_group_urefs(
         metadata_hash_key,
         metadata_access_key,
@@ -184,7 +183,7 @@ fn create_entrypoints_1() -> BTreeMap<String, EntryPoint> {
 }
 
 fn install_version_1(metadata_hash: Key, access_uref: URef) {
-    let contract_named_keys = { BTreeMap::new() };
+    let contract_named_keys = BTreeMap::new();
 
     let entrypoints = create_entrypoints_1();
     storage::add_contract_version(
@@ -199,7 +198,6 @@ fn install_version_1(metadata_hash: Key, access_uref: URef) {
 
 #[no_mangle]
 pub extern "C" fn call() {
-    // Session contract
     let (metadata_hash, access_uref) = storage::create_contract_metadata_at_hash();
 
     runtime::put_key(METADATA_HASH_KEY, metadata_hash);
