@@ -9,29 +9,38 @@ from glob import glob
 from pathlib import Path
 from shutil import copyfile
 from setuptools import setup, find_packages
-from os import path
-from os.path import basename, dirname, join
+from os.path import basename, dirname, realpath, join
 
 from setuptools.command.develop import develop as DevelopCommand
 from setuptools.command.install import install as InstallCommand
 from distutils.spawn import find_executable
 
 
-THIS_DIRECTORY = os.path.dirname(os.path.realpath(__file__))
+THIS_DIRECTORY = Path(dirname(realpath(__file__)))
+PACKAGE_DIR = THIS_DIRECTORY / "casperlabs_client"
 
-# Directory with Scala client's bundled contracts
+PROTOBUF_DIR = THIS_DIRECTORY.parent / "protobuf"
+PROTO_DIR = PACKAGE_DIR / "proto"
+PROTO_IO_DIR = PROTOBUF_DIR / "io"
 
-CONTRACTS_DIR = f"{THIS_DIRECTORY}/../client/src/main/resources"
-PROTOBUF_DIR = f"{THIS_DIRECTORY}/../protobuf"
-PROTO_DIR = f"{THIS_DIRECTORY}/casperlabs_client/proto"
-PACKAGE_DIR = f"{THIS_DIRECTORY}/casperlabs_client"
-VERSION_FILE = f"{PACKAGE_DIR}/VERSION"
+CONTRACTS_DIR = THIS_DIRECTORY.parent / "client" / "src" / "main" / "resources"
+CONTRACT_FILENAMES = ("bonding.wasm", "transfer_to_account_u512.wasm", "unbonding.wasm")
+VERSION_FILE = PACKAGE_DIR / "VERSION"
+README_FILE = THIS_DIRECTORY / "README.md"
+
 NAME = "casperlabs_client"
 
 
 def read_version() -> str:
-    with open(VERSION_FILE, 'r') as f:
+    """ Pull in release version from file """
+    with open(VERSION_FILE, encoding="utf-8") as f:
         return f.read().strip()
+
+
+def read_long_description() -> str:
+    """ Read in README.md file for description """
+    with open(README_FILE, encoding="utf-8") as f:
+        return f.read()
 
 
 def proto_compiler_check():
@@ -58,28 +67,34 @@ def make_dirs(path):
             raise
 
 
-def download(url, directory):
-    make_dirs(directory)
-    urllib.request.urlretrieve(url, join(directory, basename(url)))
-
-
-def replace_in_place(pairs, file_name):
-    import in_place
-
-    with in_place.InPlace(file_name) as f:
-        for line in f:
-            for r, s in pairs:
-                line = re.sub(r, s, line)
-            f.write(line)
+def clean_up():
+    try:
+        shutil.rmtree(f"{PROTO_DIR}")
+    except FileNotFoundError:
+        pass
+    for file_name in glob(f"{PACKAGE_DIR}/*pb2*py"):
+        os.remove(file_name)
 
 
 def modify_files(description, pairs, files):
+    """ Patching the bad Python files google generates """
+
+    def replace_in_place(pairs, file_name):
+        import in_place
+
+        with in_place.InPlace(file_name) as f:
+            for line in f:
+                for r, s in pairs:
+                    line = re.sub(r, s, line)
+                f.write(line)
+
     print(description, ":", files)
     for file_name in files:
         replace_in_place(pairs, file_name)
 
 
 def run_protoc(file_names, PROTO_DIR=PROTO_DIR):
+    """ protobuf generation """
     import grpc_tools
     from grpc_tools import protoc
 
@@ -100,7 +115,12 @@ def run_protoc(file_names, PROTO_DIR=PROTO_DIR):
 
 
 def collect_proto_files():
+    """ copy and download required proto files """
     import grpc_tools
+
+    def download(url, directory):
+        make_dirs(directory)
+        urllib.request.urlretrieve(url, join(directory, basename(url)))
 
     print("Collect files...")
 
@@ -109,67 +129,48 @@ def collect_proto_files():
         f"{PROTO_DIR}",
     )
 
-    copyfile(
-        join(dirname(grpc_tools.__file__), "_proto/google/protobuf/empty.proto"),
-        f"{PROTO_DIR}/empty.proto",
-    )
-    copyfile(
-        join(dirname(grpc_tools.__file__), "_proto/google/protobuf/descriptor.proto"),
-        f"{PROTO_DIR}/descriptor.proto",
-    )
-    copyfile(
-        join(dirname(grpc_tools.__file__), "_proto/google/protobuf/wrappers.proto"),
-        f"{PROTO_DIR}/wrappers.proto",
-    )
+    for filename in ("empty.proto", "descriptor.proto", "wrappers.proto"):
+        copyfile(
+            join(dirname(grpc_tools.__file__), f"_proto/google/protobuf/{filename}"),
+            PROTO_DIR / filename,
+        )
 
+    # TODO: Why are these not coming from local versions?
     download(
         "https://raw.githubusercontent.com/CasperLabs/CasperLabs/dev/protobuf/google/api/annotations.proto",
-        f"{PROTO_DIR}",
+        PROTO_DIR,
     )
     download(
         "https://raw.githubusercontent.com/CasperLabs/CasperLabs/dev/protobuf/google/api/http.proto",
-        f"{PROTO_DIR}",
+        PROTO_DIR,
     )
 
-    for file_name in Path(f"{PROTOBUF_DIR}/io/").glob("**/*.proto"):
-        copyfile(file_name, f"{PROTO_DIR}/{basename(file_name)}")
+    for file_name in PROTO_IO_DIR.glob("**/*.proto"):
+        copyfile(file_name, PROTO_DIR / basename(file_name))
     print("Finished collecting files...")
-
-
-def clean_up():
-    try:
-        shutil.rmtree(f"{PROTO_DIR}")
-    except FileNotFoundError:
-        pass
-    for file_name in glob(f"{PACKAGE_DIR}/*pb2*py"):
-        os.remove(file_name)
 
 
 def run_codegen():
     python_compiler_check()
     proto_compiler_check()
     clean_up()
-    make_dirs(f"{PROTO_DIR}")
+    make_dirs(PROTO_DIR)
     collect_proto_files()
     modify_files(
-        "Patch proto files' imports", [(r'".+/', '"')], glob(f"{PROTO_DIR}/*.proto")
+        "Patch proto files' imports", [(r'".+/', '"')], glob(PROTO_DIR / "*.proto")
     )
-    run_protoc(glob(f"{PROTO_DIR}/*.proto"))
+    run_protoc(glob(PROTO_DIR / "*.proto"))
     modify_files(
         "Patch generated Python gRPC modules",
-        [(r"(import .*_pb2)", r"from . \1")],
-        glob(f"{PACKAGE_DIR}/*pb2*py"),
+        pairs=[(r"(import .*_pb2)", r"from . \1")],
+        files=glob(f"{PACKAGE_DIR}/*pb2*py"),
     )
     modify_files(
         "Patch generated Python gRPC modules (for asyncio)",
-        [(r"(import .*_pb2)", r"from . \1")],
-        [fn for fn in glob(f"{PACKAGE_DIR}/*_grpc[.]py") if "_pb2_" not in fn],
+        pairs=[(r"(import .*_pb2)", r"from . \1")],
+        files=[fn for fn in glob(PACKAGE_DIR / "*_grpc[.]py") if "_pb2_" not in fn],
     )
-    pattern = (
-        os.environ.get("TAG_NAME")
-        and "/root/bundled_contracts/*.wasm"
-        or os.path.join(CONTRACTS_DIR, "*.wasm")
-    )
+    pattern = CONTRACTS_DIR / "*.wasm"
     bundled_contracts = list(glob(pattern))
     if len(bundled_contracts) == 0:
         raise Exception(
@@ -180,28 +181,14 @@ def run_codegen():
 
 
 def prepare_sdist():
-    contracts_dir = (
-        os.environ.get("TAG_NAME") and "/root/bundled_contracts" or CONTRACTS_DIR
-    )
-    bundled_contracts = [
-        f"{contracts_dir}/{f}"
-        for f in ["bonding.wasm", "transfer_to_account_u512.wasm", "unbonding.wasm"]
-    ]
-    for file_name in bundled_contracts:
-        if not os.path.exists(file_name):
-            raise Exception(f"Contract file {file_name} does not exit")
-        base_name = os.path.basename(file_name)
-        copyfile(file_name, os.path.join(PACKAGE_DIR, base_name))
-        print(f"Copied contract {base_name}")
+    bundled_contracts = [(f, CONTRACTS_DIR / f) for f in CONTRACT_FILENAMES]
+    # TODO: Build contracts from ee make
+    for file_name, file_path in bundled_contracts:
+        if not os.path.exists(file_path):
+            raise Exception(f"Contract file {file_path} does not exit")
+        copyfile(file_path, PACKAGE_DIR / file_name)
+        print(f"Copied contract {file_name}")
     run_codegen()
-
-
-if len(sys.argv) > 1 and sys.argv[1] == "sdist":
-    prepare_sdist()
-
-
-with open(path.join(THIS_DIRECTORY, "README.md"), encoding="utf-8") as fh:
-    long_description = fh.read()
 
 
 class CInstall(InstallCommand):
@@ -214,6 +201,10 @@ class CDevelop(DevelopCommand):
         run_codegen()
         super().run()
 
+
+# TODO: Is there a cleaner way to do this rather than inlined?
+if len(sys.argv) > 1 and sys.argv[1] in ("sdist", "develop"):
+    prepare_sdist()
 
 setup(
     name=NAME,
@@ -236,10 +227,10 @@ setup(
     ],
     cmdclass={"install": CInstall, "develop": CDevelop},
     description="Python Client for interacting with a CasperLabs Node",
-    long_description=long_description,
+    long_description=read_long_description(),
     long_description_content_type="text/markdown",
     include_package_data=True,
-    package_data={NAME: [f"{THIS_DIRECTORY}/casperlabs_client/*.wasm"]},
+    package_data={NAME: [PACKAGE_DIR / "*.wasm", VERSION_FILE]},
     keywords="casperlabs blockchain ethereum smart-contracts",
     author="CasperLabs LLC",
     author_email="testing@casperlabs.io",
